@@ -2572,101 +2572,96 @@ if (/[?&]autoplay=/.test(location.search)) {
                <% if(!IsOldWindows) { %>
 
 <script>
-const AMvideo = document.getElementById("video")
-const oddCanvas = document.getElementById("ambient-canvas-1")
-const evenCanvas = document.getElementById("ambient-canvas-2")
-const oddCtx = oddCanvas.getContext("2d")
-const evenCtx = evenCanvas.getContext("2d")
+const AMvideo = document.getElementById("video");
+const canvases = [
+  document.getElementById("ambient-canvas-1"),
+  document.getElementById("ambient-canvas-2")
+];
+const contexts = canvases.map(c => c.getContext("2d", { alpha: false })); // alpha: false improves performance
 
-const frameIntervalMs = 998
-const canvasOpacity = "0.4"
-
-let intervalId
-let oddFrame = true
-let numWorkers = navigator.hardwareConcurrency || 4
-let workers = []
-let originalParentOdd, originalParentEven // store original parent nodes
-
-const drawFrame = (workerId) => {
-  if (workers[workerId].oddFrame) {
-    workers[workerId].ctx.drawImage(AMvideo, 0, 0, workers[workerId].canvas.width, workers[workerId].canvas.height)
-    transitionToOddCanvas(workerId)
-  } else {
-    workers[workerId].ctx.drawImage(AMvideo, 0, 0, workers[workerId].canvas.width, workers[workerId].canvas.height)
-    transitionToEvenCanvas(workerId)
-  }
-  workers[workerId].oddFrame = !workers[workerId].oddFrame
+const CONFIG = {
+  baseInterval: 998,
+  opacity: "0.4",
+  // Determine update speed based on cores, keeping original logic's frequency
+  updateRate: 998 / (navigator.hardwareConcurrency || 4) 
 };
 
-const transitionToOddCanvas = (workerId) => {
-  workers[workerId].canvas.style.opacity = canvasOpacity
-  workers[(workerId + 1) % numWorkers].canvas.style.opacity = "0"
-}
+let activeIndex = 0;
+let drawInterval = null;
 
-const transitionToEvenCanvas = (workerId) => {
-  workers[workerId].canvas.style.opacity = canvasOpacity
-  workers[(workerId - 1 + numWorkers) % numWorkers].canvas.style.opacity = "0"
-}
+// Initialize Transition Styles Once
+canvases.forEach(c => {
+  c.style.transition = `opacity ${CONFIG.updateRate}ms linear`;
+  c.style.opacity = "0";
+});
+
+const drawFrame = () => {
+  if (AMvideo.paused || AMvideo.ended) return;
+
+  const currentCtx = contexts[activeIndex];
+  const currentCanvas = canvases[activeIndex];
+  const nextCanvas = canvases[activeIndex ^ 1]; // Bitwise XOR to flip between 0 and 1
+
+  // Draw current video frame
+  currentCtx.drawImage(AMvideo, 0, 0, currentCanvas.width, currentCanvas.height);
+
+  // Cross-fade
+  currentCanvas.style.opacity = CONFIG.opacity;
+  nextCanvas.style.opacity = "0";
+
+  // Flip index for next frame
+  activeIndex ^= 1;
+};
 
 const drawStart = () => {
-  for (let i = 0; i < numWorkers; i++) {
-    workers[i] = {
-      canvas: i % 2 === 0 ? oddCanvas : evenCanvas,
-      ctx: i % 2 === 0 ? oddCtx : evenCtx,
-      oddFrame: i % 2 === 0
-    }
-    workers[i].canvas.style.transition = `opacity ${frameIntervalMs / numWorkers}ms`
-    intervalId = window.setInterval(() => drawFrame(i), frameIntervalMs / numWorkers)
-  }
-}
+  if (drawInterval) return; // Prevent duplicate loops
+  drawFrame(); // Draw immediately so we don't wait for first interval
+  drawInterval = window.setInterval(drawFrame, CONFIG.updateRate);
+};
 
 const drawPause = () => {
-  if (intervalId) window.clearInterval(intervalId)
-}
+  if (drawInterval) {
+    window.clearInterval(drawInterval);
+    drawInterval = null;
+  }
+};
+
+const handleFullscreen = () => {
+  const isFullscreen = !!document.fullscreenElement;
+  // Use display toggle instead of DOM removal to save performance
+  canvases.forEach(c => c.style.display = isFullscreen ? 'none' : 'block');
+};
 
 const init = () => {
-  // Fixes an issue where Firefox/Chromium fails to load ambient mode and doesn't load it.
-  video.pause(); video.play(); 
-  // DO NOT REMOVE
+  // Check for reduced motion preference
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-  // Check if ambient mode should load
-  if (numWorkers < 2 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    return; 
+  // "Jump start" hack - wrapped in safety check
+  if (AMvideo.paused) {
+    try {
+      AMvideo.play().then(() => AMvideo.pause());
+    } catch (e) { /* Ignore autoplay blocks */ }
   }
 
-  AMvideo.addEventListener("play", drawStart, false)
-  AMvideo.addEventListener("pause", drawPause, false)
-  AMvideo.addEventListener("ended", drawPause, false)
-
-  // store original parents
-  originalParentOdd = oddCanvas.parentNode
-  originalParentEven = evenCanvas.parentNode
-}
+  AMvideo.addEventListener("play", drawStart, { passive: true });
+  AMvideo.addEventListener("pause", drawPause, { passive: true });
+  AMvideo.addEventListener("ended", drawPause, { passive: true });
+  
+  // Start if already playing
+  if (!AMvideo.paused) drawStart();
+};
 
 const cleanup = () => {
-  AMvideo.removeEventListener("play", drawStart)
-  AMvideo.removeEventListener("pause", drawPause)
-  AMvideo.removeEventListener("ended", drawPause)
+  AMvideo.removeEventListener("play", drawStart);
+  AMvideo.removeEventListener("pause", drawPause);
+  AMvideo.removeEventListener("ended", drawPause);
+  document.removeEventListener("fullscreenchange", handleFullscreen);
   drawPause();
-}
+};
 
-window.addEventListener("load", init)
-window.addEventListener("unload", cleanup)
-
-// Hide ambient canvases when fullscreen and restore them back after exit
-document.addEventListener("fullscreenchange", () => {
-  const isFullscreen = !!document.fullscreenElement
-  if (isFullscreen) {
-    if (oddCanvas.parentNode) oddCanvas.parentNode.removeChild(oddCanvas)
-    if (evenCanvas.parentNode) evenCanvas.parentNode.removeChild(evenCanvas)
-  } else {
-    if (!document.getElementById("ambient-canvas-1") && originalParentOdd)
-      originalParentOdd.appendChild(oddCanvas)
-    if (!document.getElementById("ambient-canvas-2") && originalParentEven)
-      originalParentEven.appendChild(evenCanvas)
-  }
-})
-
+window.addEventListener("load", init);
+window.addEventListener("unload", cleanup);
+document.addEventListener("fullscreenchange", handleFullscreen);
 
 </script>
 <style>
