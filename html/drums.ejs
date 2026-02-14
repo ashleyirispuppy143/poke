@@ -2,7 +2,7 @@
 
     This Source Code Form is subject to the terms of the GNU General Public License:
 
-    Copyright (C) 2021-2025 Poke (https://codeberg.org/ashley/poke)
+    Copyright (C) 2021-2026 Poke (https://codeberg.org/ashley/poke)
     
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -16,7 +16,7 @@
 
     You should have received a copy of the GNU General Public License
     along with this program. If not, see https://www.gnu.org/licenses/.
---->
+-->
 
 <!DOCTYPE html>
 <html lang="en">
@@ -26,458 +26,679 @@
   <title>Poke Drums</title>
      <meta content="website" property="og:type">
     <meta content="PokeDrums" property="og:title">
-    <meta content="8-voice drum synth with 16/32-step sequencer" property="twitter:description">
-       <meta content="https://cdn.glitch.me/d68d17bb-f2c0-4bc3-993f-50902734f652/aa70111e-5bcd-4379-8b23-332a33012b78.image.png?v=1701898829884" property="og:image"  />
+    <meta content="8-void drum synth with 16/32-step sequencer" property="twitter:description">
+  <meta property="og:image" content="/static/poke.webp">
   <meta content="summary_large_image" name="twitter:card">
 
   <meta name="theme-color" content="#111111" />
-   <style>
-    
+  <style>
+    :root {
+      --bg-app: #09090b;
+      --bg-panel: #141417;
+      --bg-panel-border: #27272a;
+      --bg-darker: #0c0c0e;
 
-    :root{
-      --bg:#0d0f12;--bg-soft:#141820;--fg:#f3f5f7;--muted:#9aa4b2;
-      --brand:#7a5cff;--accent:#00d3a7;--danger:#ff5577;
-      --key-outline:#1a2030;--radius:16px;
-      --shadow:0 12px 34px rgba(0,0,0,.40),0 2px 10px rgba(0,0,0,.25);
-      --glass:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));
-      --step-on:#4a70ff;--step-accent:#00c9aa;
-    }
-    .light{
-      --bg:#f7f8fb;--bg-soft:#ffffff;--fg:#0e1116;--muted:#4a5568;
-      --brand:#6a5cff;--accent:#00b394;--key-outline:#cfd8e3;
-      --shadow:0 12px 30px rgba(0,0,0,.12),0 2px 10px rgba(0,0,0,.08);
-      --glass:linear-gradient(180deg,rgba(255,255,255,.7),rgba(255,255,255,.6));
-      --step-on:#6a5cff;--step-accent:#00b394;
-    }
+      --primary: #8b5cf6;
+      --accent: #06b6d4;
+      --danger: #f43f5e;
+      --success: #10b981;
 
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{
-      margin:0;
-      background:
-        radial-gradient(1200px 600px at 15% -10%, rgba(122,92,255,.18), transparent 60%),
-        radial-gradient(1200px 700px at 100% 0%, rgba(0,211,167,.12), transparent 45%),
-        linear-gradient(180deg,var(--bg),var(--bg-soft));
-      color:var(--fg);
-      font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,"Noto Sans",Arial,"Apple Color Emoji","Segoe UI Emoji";
-      display:grid;grid-template-rows:auto auto 1fr auto;gap:14px;
+      --gradient-brand: linear-gradient(135deg, var(--primary), var(--accent));
+      --text-main: #e4e4e7;
+      --text-muted: #a1a1aa;
+
+      --radius: 8px; /* Sharper corners for pro feel */
+      --header-height: 64px;
     }
 
-    header{
-      padding:10px 16px 0;
-      display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      margin: 0;
+      background-color: var(--bg-app);
+      /* Technical Grid Background */
+      background-image:
+        linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+      background-size: 20px 20px;
+      color: var(--text-main);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
-    .brand{display:flex;align-items:center;gap:10px}
-    .logo{width:28px;height:28px;border-radius:10px;background:conic-gradient(from 220deg,var(--brand),var(--accent),var(--brand));box-shadow:0 6px 18px rgba(122,92,255,.28);border:1px solid var(--key-outline)}
-    h1{margin:0;font-size:18px;letter-spacing:.2px}
-    .header-actions{display:flex;gap:6px}
 
-    .toolbar{display:grid;gap:8px;grid-template-columns:repeat(12,1fr);padding:0 16px}
-    .card{
-      background:var(--bg-soft);border:1px solid var(--key-outline);border-radius:var(--radius);
-      box-shadow:var(--shadow);padding:12px;min-width:0;position:relative;overflow:hidden;
+    /* --- PROFESSIONAL HEADER --- */
+    header {
+      height: var(--header-height);
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #141417;
+      border-bottom: 1px solid var(--bg-panel-border);
+      z-index: 50;
+      user-select: none;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
     }
-    .card::after{content:"";position:absolute;inset:0;pointer-events:none;background:
-      radial-gradient(600px 160px at 10% 0%, rgba(255,255,255,.06), transparent 60%),
-      radial-gradient(500px 140px at 90% 0%, rgba(122,92,255,.12), transparent 50%);mix-blend-mode:overlay}
-    .title{font-size:12px;color:var(--muted);margin-bottom:8px;letter-spacing:.3px;text-transform:uppercase}
-    .group{display:grid;gap:10px}
 
-    .row{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:12px;align-items:end}
-    .pair{display:grid;grid-template-columns:max-content 1fr;gap:8px;align-items:center;min-width:0}
-    .pair>label{color:var(--muted);font-size:12px}
+    .brand { display: flex; align-items: center; gap: 16px; }
 
-    select,input[type="range"],input[type="number"],button{
-      width:100%;border-radius:12px;border:1px solid var(--key-outline);background:#0f131b;color:var(--fg);
-      padding:8px 10px;outline:none;transition:transform .06s ease,box-shadow .06s ease,border-color .12s ease;min-height:32px
+    .logo-img {
+      height: 32px;
+      width: auto;
+      display: block;
+      filter: drop-shadow(0 0 8px rgba(139, 92, 246, 0.4));
     }
-    .light select,.light input[type="range"],.light input[type="number"],.light button{background:#fff}
-    input[type="range"]{height:28px}
-    input[type="number"]{text-align:center}
-    button{cursor:pointer;background:linear-gradient(180deg,var(--brand),#4a3aff);border:none;color:#fff;font-weight:700;letter-spacing:.2px}
-    button.secondary{background:var(--bg-soft);color:var(--fg);border:1px solid var(--key-outline)}
-    button.danger{background:var(--danger)}
-    button:active{transform:translateY(1px)}
-    button:focus-visible,select:focus-visible,input:focus-visible{box-shadow:0 0 0 3px rgba(122,92,255,.35);border-color:var(--brand)}
 
-    .pads{display:grid;grid-template-columns:repeat(8,1fr);gap:10px}
-    .pad{
-      user-select:none;text-align:center;border:1px solid var(--key-outline);border-radius:14px;padding:14px 8px;
-      background:linear-gradient(180deg,#111723,#0f131b);box-shadow:inset 0 -10px 0 rgba(255,255,255,.02),0 10px 24px rgba(0,0,0,.25);
-      font-weight:700;letter-spacing:.3px
+    .header-controls {
+      display: flex; align-items: center; gap: 20px;
+      background: #09090b;
+      padding: 6px 8px 6px 20px;
+      border: 1px solid var(--bg-panel-border);
+      border-radius: 6px;
     }
-    .pad:active,.pad.playing{transform:translateY(1px);filter:brightness(1.08);box-shadow:0 6px 18px rgba(0,0,0,.35)}
-    .pad .sub{display:block;color:var(--muted);font-size:11px;margin-top:4px}
 
-    .seq{--cols:16;display:grid;grid-template-columns:180px repeat(var(--cols),1fr);gap:6px}
-    .seq .rowlab{display:flex;align-items:center;justify-content:space-between;background:#0f131b;border:1px solid var(--key-outline);border-radius:12px;padding:8px 10px;font-weight:700}
-    .seq .steps{display:grid;grid-template-columns:repeat(var(--cols),1fr);gap:6px}
-    .cell{
-      height:28px;border-radius:8px;border:1px solid var(--key-outline);background:#0e1219;box-shadow:inset 0 -6px 0 rgba(255,255,255,.02);
-      cursor:pointer;position:relative;transition:transform .06s ease, background .12s ease, border-color .12s ease
+    .bpm-box { display: flex; flex-direction: column; align-items: flex-end; line-height: 1; }
+    .bpm-val { font-family: 'Courier New', monospace; font-weight: 700; font-size: 16px; color: var(--accent); }
+    .bpm-label { font-size: 9px; font-weight: 600; color: var(--text-muted); letter-spacing: 1px; margin-top: 2px; }
+
+    /* --- LAYOUT --- */
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      grid-template-rows: auto 1fr;
+      gap: 1px; /* Gap creates the border lines */
+      background: var(--bg-panel-border); /* Lines color */
+      overflow: hidden;
     }
-    .cell.on{background:var(--step-on);border-color:transparent}
-    .cell.on.acc{background:var(--step-accent)}
-    .cell.playhead::after{content:"";position:absolute;inset:-3px -2px;outline:2px dashed rgba(122,92,255,.55);border-radius:10px;pointer-events:none}
-    .footer{display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;padding:0 16px 16px}
-    .chip{padding:8px 12px;border-radius:999px;border:1px solid var(--key-outline);background:var(--bg-soft);display:inline-flex;gap:8px;align-items:center}
 
-    .grid-col-3{grid-column:span 3}.grid-col-4{grid-column:span 4}.grid-col-5{grid-column:span 5}
-    .grid-col-6{grid-column:span 6}.grid-col-7{grid-column:span 7}.grid-col-8{grid-column:span 8}.grid-col-12{grid-column:span 12}
+    .panel {
+      background: var(--bg-panel);
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+      overflow: hidden;
+    }
 
-    @media (max-width:1000px){
-      .toolbar{grid-template-columns:repeat(6,1fr)}
-      .grid-col-8,.grid-col-7,.grid-col-6,.grid-col-5{grid-column:span 6}
-      .grid-col-4{grid-column:span 3}.grid-col-3{grid-column:span 3}
-      .pads{grid-template-columns:repeat(4,1fr)}
-      .seq{grid-template-columns:140px repeat(var(--cols),1fr)}
+    /* --- CONTROLS --- */
+    h2 {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+      color: var(--text-muted); margin: 0 0 12px 0; font-weight: 700;
+      display: flex; align-items: center; gap: 8px;
+    }
+    h2::after { content:''; flex:1; height:1px; background: var(--bg-panel-border); }
+
+    label { font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 6px; font-weight: 600; text-transform: uppercase; }
+
+    button {
+      cursor: pointer; border: none; border-radius: 4px;
+      padding: 0 16px; height: 32px; font-size: 12px; font-weight: 600;
+      transition: all 0.1s; display: inline-flex; align-items: center; justify-content: center;
+      font-family: inherit; letter-spacing: 0.3px; text-transform: uppercase;
+    }
+
+    button.primary {
+      background: var(--primary); color: white;
+    }
+    button.primary:hover { background: #7c3aed; }
+    button.primary:active { transform: translateY(1px); }
+
+    button.secondary { background: #27272a; color: var(--text-main); border: 1px solid #3f3f46; }
+    button.secondary:hover { background: #3f3f46; border-color: #52525b; }
+
+    button.danger { background: rgba(244, 63, 94, 0.1); color: var(--danger); border: 1px solid rgba(244, 63, 94, 0.3); }
+    button.danger:hover { background: rgba(244, 63, 94, 0.2); }
+
+    button.toggle { background: #27272a; color: var(--text-muted); border: 1px solid #3f3f46; }
+    button.toggle.active { background: var(--success); color: #000; border-color: var(--success); }
+
+    button.rec-active {
+        background: var(--danger) !important; color: white !important;
+        box-shadow: 0 0 15px var(--danger); animation: pulse 1.5s infinite; border: none;
+    }
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+
+    /* --- SLIDERS --- */
+    input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; height: 20px; cursor: pointer; margin: 0; }
+    input[type=range]:focus { outline: none; }
+    input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; background: #3f3f46; border-radius: 2px; }
+    input[type=range]::-moz-range-track { width: 100%; height: 4px; background: #3f3f46; border-radius: 2px; }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; height: 12px; width: 12px; border-radius: 50%;
+      background: #e4e4e7; margin-top: -4px; box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+      transition: transform 0.1s;
+    }
+    input[type=range]:hover::-webkit-slider-thumb { transform: scale(1.2); background: var(--primary); }
+    input[type=range]::-moz-range-thumb {
+      height: 12px; width: 12px; border-radius: 50%; background: #e4e4e7; border: none;
+    }
+
+    select, input[type="number"] {
+      background: #09090b; color: white; border: 1px solid #3f3f46;
+      padding: 0 10px; height: 32px; border-radius: 4px; font-family: inherit; font-size: 12px; outline: none; width: 100%;
+    }
+    select:focus, input:focus { border-color: var(--primary); }
+
+    /* --- PANELS --- */
+    .controls-panel { grid-column: 1; grid-row: 1; gap: 16px; min-height: 240px; }
+    .row { display: flex; gap: 12px; }
+    .col { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+
+    .mixer-panel { grid-column: 1; grid-row: 2; overflow-y: auto; background: #111113; }
+    .fader-row {
+      display: grid; grid-template-columns: 40px 1fr; align-items: center; gap: 12px;
+      padding: 6px 0; border-bottom: 1px solid #1f1f22;
+    }
+    .fader-row span { font-size: 10px; font-weight: 700; color: var(--text-muted); font-family: monospace; }
+    .fader-row span.lit { color: var(--accent); text-shadow: 0 0 8px var(--accent); }
+
+    .stage-panel {
+      grid-column: 2; grid-row: 1 / 3;
+      display: grid; grid-template-rows: auto 1fr; gap: 1px;
+      background: var(--bg-panel-border); padding: 0;
+    }
+
+    .pads-area { padding: 20px; background: #141417; display: flex; justify-content: center; }
+    .pads-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; max-width: 800px; width: 100%; }
+
+    .pad {
+      aspect-ratio: 1; background: #1f1f22;
+      border: 1px solid #27272a; border-radius: 4px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      cursor: pointer; user-select: none; position: relative; overflow: hidden;
+      transition: all 0.05s;
+    }
+    .pad:hover { background: #27272a; border-color: #3f3f46; }
+    .pad.hit { background: var(--primary); border-color: var(--primary); box-shadow: 0 0 15px var(--primary); transform: translateY(2px); }
+    .pad span.n { font-size: 12px; font-weight: 700; color: #fff; }
+    .pad span.k { font-size: 9px; color: rgba(255,255,255,0.5); margin-top: 2px; }
+
+    /* --- SEQUENCER --- */
+    .sequencer-area {
+      position: relative;
+      background: #0c0c0e;
+      overflow: hidden;
+      display: flex; flex-direction: column;
+    }
+
+    /* Toolbar for Sequencer */
+    .seq-toolbar {
+      height: 40px; background: #141417; border-bottom: 1px solid var(--bg-panel-border);
+      display: flex; align-items: center; justify-content: flex-end; padding: 0 16px;
+    }
+
+    .seq-scroll {
+      flex: 1; overflow: auto; padding: 20px;
+      scrollbar-width: thin; scrollbar-color: #333 #0c0c0e;
+      scroll-behavior: smooth; /* Smooth scrolling for auto-follow */
+    }
+
+    .seq-grid {
+      display: grid; grid-template-columns: 80px repeat(var(--steps, 16), 30px); gap: 2px;
+    }
+
+    .track-head {
+      position: sticky; left: 0; z-index: 10; background: #0c0c0e;
+      display: flex; align-items: center; font-size: 10px; font-weight: 700; color: var(--text-muted);
+      text-transform: uppercase; border-right: 1px solid var(--bg-panel-border); margin-right: 6px;
+      height: 28px; font-family: monospace;
+    }
+    .track-head.lit { color: var(--accent); }
+
+    .step {
+      height: 28px; background: #1a1a1d; border-radius: 2px; cursor: pointer;
+      border: 1px solid transparent;
+    }
+    /* Bar Markers (every 4) */
+    .step:nth-child(4n + 2), .step:nth-child(4n + 3), .step:nth-child(4n + 4), .step:nth-child(4n + 5) { background: #202024; }
+
+    .step:hover { border-color: #555; }
+    .step.active { background: var(--accent); box-shadow: 0 0 8px rgba(6, 182, 212, 0.3); }
+    .step.playing { border: 1px solid #fff; z-index: 5; }
+    .step.active.playing { background: #fff; filter: brightness(1.2); }
+
+    /* FOOTER */
+    footer {
+      height: 48px; background: #000; border-top: 1px solid var(--bg-panel-border);
+      position: relative; flex-shrink: 0;
+    }
+    canvas#vis { width: 100%; height: 100%; opacity: 0.6; }
+    .status-badge {
+      position: absolute; bottom: 14px; right: 24px;
+      font-family: monospace; font-size: 10px; color: var(--text-muted);
+      background: #111; padding: 2px 8px; border-radius: 4px; border: 1px solid #333;
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px);
+      display: none; align-items: center; justify-content: center; z-index: 100;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: #18181b; border: 1px solid #3f3f46;
+      padding: 24px; border-radius: 8px; width: 340px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+    }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; }
+
+    @media (max-width: 1000px) {
+      main { grid-template-columns: 1fr; grid-template-rows: auto auto auto; overflow-y: auto; padding: 0; gap: 0; }
+      .stage-panel { grid-row: 1; grid-column: 1; min-height: 400px; border-bottom: 1px solid #333; }
+      .controls-panel { grid-row: 2; padding: 24px; border-bottom: 1px solid #333; }
+      .mixer-panel { grid-row: 3; padding: 24px; }
+      header { padding: 0 16px; }
     }
   </style>
 </head>
 <body>
+
   <header>
     <div class="brand">
-      <div class="logo"></div>
-      <h1>Poke Drums BETA!!</h1>
+      <img src="https://poketube.fun/css/logo-poke.svg?v=5" alt="Poke" class="logo-img">
     </div>
-    <div class="header-actions">
-      <button id="power">Start Audio</button>
-      <button id="theme" style="display:none" class="secondary">Theme</button>
+
+    <div class="header-controls">
+      <div class="bpm-box">
+        <div class="bpm-val" id="bpmDisplay">120</div>
+        <div class="bpm-label">BPM</div>
+      </div>
+      <div style="width:1px; height:24px; background:#333; margin:0 4px;"></div>
+      <button id="playBtn" class="primary" style="width: 100px;">
+        <span style="margin-right:6px;">▶</span> PLAY
+      </button>
     </div>
   </header>
 
-  <section class="toolbar">
-    <div class="card grid-col-4 group">
-      <div class="title">Transport</div>
+  <main>
+    <section class="panel controls-panel">
+      <h2>Project Settings</h2>
       <div class="row">
-        <div class="pair"><label for="playBtn">State</label><button id="playBtn" class="secondary">Play</button></div>
-        <div class="pair"><label for="bpm">BPM</label><input id="bpm" type="range" min="40" max="240" step="1" value="120"></div>
-      </div>
-      <div class="row">
-        <div class="pair"><label for="swing">Swing</label><input id="swing" type="range" min="0" max="0.6" step="0.01" value="0"></div>
-        <div class="pair"><label for="clear">Pattern</label>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <button id="clear" class="secondary">Clear</button>
-            <button id="random" class="secondary">Random</button>
-          </div>
+        <div class="col">
+          <label>Tempo</label>
+          <input id="bpm" type="range" min="40" max="300" value="120">
+        </div>
+        <div class="col">
+          <label>Swing</label>
+          <input id="swing" type="range" min="0" max="0.5" step="0.01" value="0">
         </div>
       </div>
-    </div>
 
-    <div class="card grid-col-4 group">
-      <div class="title">Kit Mixer</div>
       <div class="row">
-        <div class="pair"><label for="vol-kick">Kick</label><input id="vol-kick" type="range" min="0" max="1" step="0.01" value="0.9"></div>
-        <div class="pair"><label for="vol-snare">Snare</label><input id="vol-snare" type="range" min="0" max="1" step="0.01" value="0.9"></div>
-      </div>
-      <div class="row">
-        <div class="pair"><label for="vol-hh">Hi-Hat</label><input id="vol-hh" type="range" min="0" max="1" step="0.01" value="0.8"></div>
-        <div class="pair"><label for="vol-oh">Open Hat</label><input id="vol-oh" type="range" min="0" max="1" step="0.01" value="0.7"></div>
-      </div>
-      <div class="row">
-        <div class="pair"><label for="vol-clap">Clap</label><input id="vol-clap" type="range" min="0" max="1" step="0.01" value="0.9"></div>
-        <div class="pair"><label for="vol-tom">Tom</label><input id="vol-tom" type="range" min="0" max="1" step="0.01" value="0.8"></div>
-      </div>
-      <div class="row">
-        <div class="pair"><label for="vol-rim">Rim</label><input id="vol-rim" type="range" min="0" max="1" step="0.01" value="0.7"></div>
-        <div class="pair"><label for="vol-crash">Crash</label><input id="vol-crash" type="range" min="0" max="1" step="0.01" value="0.7"></div>
-      </div>
-    </div>
-
-    <div class="card grid-col-4 group">
-      <div class="title">Utilities</div>
-      <div class="row">
-        <div class="pair"><label for="rec">Record</label><button id="rec" class="secondary">Start</button></div>
-        <div class="pair"><label for="panic">Panic</label><button id="panic" class="danger">All Off</button></div>
-      </div>
-      <div class="row">
-        <div class="pair"><label for="length">Steps</label>
-          <select id="length">
-            <option selected>16</option><option>8</option><option>12</option><option>32</option>
+        <div class="col">
+          <label>Pattern Length</label>
+          <select id="lengthSelector">
+            <option value="8">8 Steps</option>
+            <option value="16" selected>16 Steps</option>
+            <option value="32">32 Steps</option>
+            <option value="64">64 Steps</option>
+            <option value="custom" style="color:var(--accent)">Custom...</option>
           </select>
         </div>
-        <div class="pair"><label for="shuf">Shuffle Seed</label><input id="shuf" type="number" min="0" max="9999" value="0"></div>
+      </div>
+
+      <div class="row" style="margin-top:auto">
+        <button id="clearBtn" class="secondary" style="flex:1">Clear</button>
+        <button id="randomBtn" class="secondary" style="flex:1">Random</button>
+        <button id="recBtn" class="secondary" style="width:40px; color:var(--danger); font-size:16px;" title="Record">●</button>
+      </div>
+    </section>
+
+    <section class="panel mixer-panel">
+      <h2>Mixer</h2>
+      <div id="mixerList"></div>
+    </section>
+
+    <section class="panel stage-panel">
+      <div class="pads-area">
+        <div class="pads-grid" id="pads"></div>
+      </div>
+      <div class="sequencer-area">
+        <div class="seq-toolbar">
+           <button id="autoFollowBtn" class="toggle active" style="height:24px; font-size:10px;">
+             Auto-Follow: ON
+           </button>
+        </div>
+        <div class="seq-scroll" id="seqContainer">
+          <div class="seq-grid" id="seq"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <canvas id="vis"></canvas>
+    <div class="status-badge" id="status">READY</div>
+  </footer>
+
+  <div class="modal-overlay" id="customModal">
+    <div class="modal">
+      <h2 style="color:white; border:none; margin-bottom: 8px;">Custom Grid Size</h2>
+      <p style="font-size:12px; color:var(--text-muted); margin-bottom:20px;">Enter total steps (4 - 512):</p>
+      <input type="number" id="customStepsInput" min="4" max="512" value="48">
+      <div class="modal-actions">
+        <button class="secondary" id="cancelCustom">Cancel</button>
+        <button class="primary" id="confirmCustom">Set Grid</button>
       </div>
     </div>
+  </div>
 
-    <div class="card grid-col-12 group">
-      <div class="title">Pads (keyboard: Q W E R T Y U I)</div>
-      <div class="pads" id="pads"></div>
-    </div>
-
-    <div class="card grid-col-12 group">
-      <div class="title">Sequencer</div>
-      <div class="seq" id="seq"></div>
-    </div>
-  </section>
-
-  <section class="footer">
-    <div></div>
-    <div class="chip"><span id="status">Ready</span></div>
-  </section>
-
-  <script>
+<script>
     ;(() => {
       const $ = s => document.querySelector(s)
-      const $$ = s => Array.from(document.querySelectorAll(s))
+
+      const state = {
+        bpm: 120,
+        swing: 0,
+        steps: 16,
+        playing: false,
+        recording: false,
+        autoFollow: true,
+        voices: ['kick', 'snare', 'hh', 'oh', 'clap', 'tom', 'rim', 'crash'],
+        keyMap: {q:'kick',w:'snare',e:'clap',r:'hh',t:'oh',y:'tom',u:'rim',i:'crash'},
+        vol: {kick:.9, snare:.9, hh:.8, oh:.7, clap:.9, tom:.8, rim:.7, crash:.7},
+        grid: {}
+      }
+
+      // Init Grid
+      state.voices.forEach(v => state.grid[v] = Array(512).fill(false))
+
+      // Audio Ctx
+      let ctx, master, analyser, limiter
+      let nextTime = 0, currentStep = 0, timerID = null
+      let recorder = null, chunks = []
+      const gains = {}
 
       const els = {
-        power: $('#power'), theme: $('#theme'), playBtn: $('#playBtn'),
-        bpm: $('#bpm'), swing: $('#swing'), clear: $('#clear'), random: $('#random'),
-        recBtn: $('#rec'), panic: $('#panic'), lenSel: $('#length'), shuf: $('#shuf'),
-        pads: $('#pads'), seq: $('#seq'), status: $('#status'),
-        v: {
-          kick: $('#vol-kick'), snare: $('#vol-snare'), hh: $('#vol-hh'), oh: $('#vol-oh'),
-          clap: $('#vol-clap'), tom: $('#vol-tom'), rim: $('#vol-rim'), crash: $('#vol-crash')
-        }
+        bpm: $('#bpm'), swing: $('#swing'), len: $('#lengthSelector'),
+        mixer: $('#mixerList'), pads: $('#pads'), seq: $('#seq'), seqCont: $('#seqContainer'),
+        play: $('#playBtn'), bpmDisp: $('#bpmDisplay'), status: $('#status'),
+        modal: $('#customModal'), customIn: $('#customStepsInput'),
+        confirmCust: $('#confirmCustom'), cancelCust: $('#cancelCustom'),
+        rec: $('#recBtn'), follow: $('#autoFollowBtn')
       }
 
-      const storageKey = 'pokedrums-v1'
-      const defaults = {
-        theme:'dark', bpm:120, swing:0, length:16, seed:0,
-        vol:{kick:.9,snare:.9,hh:.8,oh:.7,clap:.9,tom:.8,rim:.7,crash:.7},
-        grid:{} // filled per voice
-      }
-      const voices = ['kick','snare','hh','oh','clap','tom','rim','crash']
-      let conf = JSON.parse(localStorage.getItem(storageKey)||'null') || structuredClone(defaults)
-
-      function save(){ localStorage.setItem(storageKey, JSON.stringify(conf)) }
-      function setStatus(t){ els.status.textContent = t }
-
-      if (!conf.grid || Object.keys(conf.grid).length===0){
-        conf.grid = Object.fromEntries(voices.map(v => [v, Array(conf.length).fill(false)]))
-      }
-
-      // AUDIO
-      let ctx, master, comp, limiter, recDest, recorder, recChunks=[]
-      const trackGains = Object.fromEntries(voices.map(v=>[v,null]))
-      let transportTimer=null, scheduleAhead=0.12, lookaheadMs=25, nextTime=0, step=0, playing=false
-
-      function initAudio(){
+      // --- AUDIO ENGINE ---
+      function initAudio() {
         if (ctx) return
-        ctx = new (window.AudioContext||window.webkitAudioContext)()
-        master = ctx.createGain(); master.gain.value = 0.95
-        comp = ctx.createDynamicsCompressor()
-        comp.threshold.value = -14; comp.knee.value = 24; comp.ratio.value = 6
-        limiter = ctx.createDynamicsCompressor(); limiter.threshold.value = -1; limiter.knee.value = 0; limiter.ratio.value = 20; limiter.attack.value=0.003; limiter.release.value=0.05
-        recDest = ctx.createMediaStreamDestination()
-        master.connect(comp); comp.connect(limiter); limiter.connect(ctx.destination); limiter.connect(recDest)
+        ctx = new (window.AudioContext || window.webkitAudioContext)()
 
-        voices.forEach(v => { trackGains[v] = ctx.createGain(); trackGains[v].gain.value = conf.vol[v]; trackGains[v].connect(master) })
-        buildPads()
-        buildSeq()
-        setStatus('Audio ready')
+        master = ctx.createGain(); master.gain.value = 0.9
+        limiter = ctx.createDynamicsCompressor()
+        limiter.threshold.value = -1; limiter.ratio.value = 20
+        analyser = ctx.createAnalyser(); analyser.fftSize = 128
+
+        master.connect(limiter); limiter.connect(analyser); analyser.connect(ctx.destination)
+
+        state.voices.forEach(v => {
+          gains[v] = ctx.createGain()
+          gains[v].gain.value = state.vol[v]
+          gains[v].connect(master)
+        })
+        visualize()
       }
 
-      function noiseBuffer(){
-        const len = ctx.sampleRate * 2
-        const buf = ctx.createBuffer(1, len, ctx.sampleRate)
-        const data = buf.getChannelData(0)
-        for(let i=0;i<len;i++) data[i] = Math.random()*2-1
-        return buf
+      function ensureNoise() {
+        if(window._n) return window._n
+        const b=ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate)
+        const d=b.getChannelData(0)
+        for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1
+        return window._n=b
       }
-      let _noise
-      function ensureNoise(){ if(!_noise) _noise = noiseBuffer(); return _noise }
 
-      function hit(name, time){
-        if (!ctx) initAudio()
-        const out = trackGains[name]
-        if (name==='kick'){
-          const o = ctx.createOscillator(), g = ctx.createGain()
-          o.type='sine'; o.frequency.setValueAtTime(150,time); o.frequency.exponentialRampToValueAtTime(50,time+0.12)
-          g.gain.setValueAtTime(0.0001,time); g.gain.exponentialRampToValueAtTime(1,time+0.002); g.gain.exponentialRampToValueAtTime(0.0001,time+0.35)
-          o.connect(g); g.connect(out); o.start(time); o.stop(time+0.4)
-        } else if (name==='snare'){
-          const n = ctx.createBufferSource(); n.buffer = ensureNoise()
-          const nf = ctx.createBiquadFilter(); nf.type='bandpass'; nf.frequency.setValueAtTime(1800,time); nf.Q.value=0.8
-          const ng = ctx.createGain(); ng.gain.setValueAtTime(0.0001,time); ng.gain.exponentialRampToValueAtTime(1,time+0.002); ng.gain.exponentialRampToValueAtTime(0.0001,time+0.18)
-          n.connect(nf); nf.connect(ng); ng.connect(out); n.start(time); n.stop(time+0.2)
-          const tone = ctx.createOscillator(), tg = ctx.createGain()
-          tone.type='triangle'; tone.frequency.setValueAtTime(200,time); tg.gain.setValueAtTime(0.0001,time); tg.gain.exponentialRampToValueAtTime(0.3,time+0.01); tg.gain.exponentialRampToValueAtTime(0.0001,time+0.12)
-          tone.connect(tg); tg.connect(out); tone.start(time); tone.stop(time+0.13)
-        } else if (name==='hh'){
-          const n = ctx.createBufferSource(); n.buffer = ensureNoise()
-          const hp = ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=6000
-          const g = ctx.createGain(); g.gain.setValueAtTime(0.7,time); g.gain.exponentialRampToValueAtTime(0.0001,time+0.06)
-          n.connect(hp); hp.connect(g); g.connect(out); n.start(time); n.stop(time+0.07)
-        } else if (name==='oh'){
-          const n = ctx.createBufferSource(); n.buffer = ensureNoise()
-          const hp = ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=5000
-          const g = ctx.createGain(); g.gain.setValueAtTime(0.6,time); g.gain.exponentialRampToValueAtTime(0.0001,time+0.35)
-          n.connect(hp); hp.connect(g); g.connect(out); n.start(time); n.stop(time+0.4)
-        } else if (name==='clap'){
-          for(let k=0;k<3;k++){
-            const n = ctx.createBufferSource(); n.buffer = ensureNoise()
-            const bp = ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1500; bp.Q.value=0.8
-            const g = ctx.createGain(); const t = time + k*0.012
-            g.gain.setValueAtTime(0.5,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.18)
-            n.connect(bp); bp.connect(g); g.connect(out); n.start(t); n.stop(t+0.2)
-          }
-        } else if (name==='tom'){
-          const o = ctx.createOscillator(), g = ctx.createGain()
-          o.type='sine'; o.frequency.setValueAtTime(180,time); o.frequency.exponentialRampToValueAtTime(110,time+0.18)
-          g.gain.setValueAtTime(0.0001,time); g.gain.exponentialRampToValueAtTime(1,time+0.003); g.gain.exponentialRampToValueAtTime(0.0001,time+0.28)
-          o.connect(g); g.connect(out); o.start(time); o.stop(time+0.3)
-        } else if (name==='rim'){
-          const o = ctx.createOscillator(), g = ctx.createGain()
-          o.type='square'; o.frequency.value=1200
-          g.gain.setValueAtTime(0.8,time); g.gain.exponentialRampToValueAtTime(0.0001,time+0.04)
-          o.connect(g); g.connect(out); o.start(time); o.stop(time+0.05)
-        } else if (name==='crash'){
-          const n = ctx.createBufferSource(); n.buffer = ensureNoise()
-          const hp = ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=3000
-          const g = ctx.createGain(); g.gain.setValueAtTime(0.5,time); g.gain.exponentialRampToValueAtTime(0.0001,time+1.2)
-          n.connect(hp); hp.connect(g); g.connect(out); n.start(time); n.stop(time+1.25)
+      function playVoice(v, t) {
+        if(!ctx) initAudio()
+        t = t || ctx.currentTime
+        const out = gains[v]
+
+        // Flash UI (Visual Feedback)
+        if(t - ctx.currentTime < 0.1) requestAnimationFrame(() => flashTrack(v))
+        else setTimeout(() => requestAnimationFrame(() => flashTrack(v)), (t - ctx.currentTime)*1000)
+
+        // Simple Synth Models
+        if(v==='kick'){
+          const o=ctx.createOscillator(), g=ctx.createGain()
+          o.frequency.setValueAtTime(150,t); o.frequency.exponentialRampToValueAtTime(50,t+0.1)
+          g.gain.setValueAtTime(1,t); g.gain.exponentialRampToValueAtTime(0.01,t+0.4)
+          o.connect(g); g.connect(out); o.start(t); o.stop(t+0.4)
+        } else if(v==='snare'){
+          const n=ctx.createBufferSource(), f=ctx.createBiquadFilter(), g=ctx.createGain()
+          n.buffer=ensureNoise(); f.type='highpass'; f.frequency.value=1000
+          g.gain.setValueAtTime(1,t); g.gain.exponentialRampToValueAtTime(0.01,t+0.2)
+          n.connect(f); f.connect(g); g.connect(out); n.start(t); n.stop(t+0.2)
+          const o=ctx.createOscillator(), og=ctx.createGain()
+          o.type='triangle'; o.frequency.setValueAtTime(180,t)
+          og.gain.setValueAtTime(0.5,t); og.gain.exponentialRampToValueAtTime(0.01,t+0.1)
+          o.connect(og); og.connect(out); o.start(t); o.stop(t+0.1)
+        } else if(v==='hh'){
+          const n=ctx.createBufferSource(), f=ctx.createBiquadFilter(), g=ctx.createGain()
+          n.buffer=ensureNoise(); f.type='highpass'; f.frequency.value=7000
+          g.gain.setValueAtTime(0.7,t); g.gain.exponentialRampToValueAtTime(0.01,t+0.05)
+          n.connect(f); f.connect(g); g.connect(out); n.start(t); n.stop(t+0.06)
+        } else {
+          const n=ctx.createBufferSource(), f=ctx.createBiquadFilter(), g=ctx.createGain()
+          n.buffer=ensureNoise(); f.type='lowpass'; f.frequency.value = v==='tom'?400:3000
+          g.gain.setValueAtTime(0.6,t); g.gain.exponentialRampToValueAtTime(0.01,t+0.25)
+          n.connect(f); f.connect(g); g.connect(out); n.start(t); n.stop(t+0.26)
         }
       }
 
-      // UI BUILD
-      function buildPads(){
+      function flashTrack(v) {
+        const ids = [`lab-${v}`, `mix-${v}`, `pad-${v}`]
+        ids.forEach(id => {
+            const el = document.getElementById(id)
+            if(el) {
+                const cls = id.startsWith('pad') ? 'hit' : 'lit'
+                el.classList.add(cls)
+                setTimeout(()=>el.classList.remove(cls), 100)
+            }
+        })
+      }
+
+      function visualize() {
+        const c = $('#vis'), cc = c.getContext('2d')
+        const w = c.width = c.offsetWidth, h = c.height = c.offsetHeight
+        const d = new Uint8Array(analyser.frequencyBinCount)
+        function loop() {
+          requestAnimationFrame(loop)
+          analyser.getByteFrequencyData(d)
+          cc.clearRect(0,0,w,h)
+          const bw = (w/d.length)*2.5; let x=0
+          for(let i=0; i<d.length; i++){
+             const bh = (d[i]/255)*h
+             cc.fillStyle = `hsl(${i*4 + 250}, 80%, 60%)`
+             cc.fillRect(x, h-bh, bw, bh)
+             x+=bw+1
+          }
+        }
+        loop()
+      }
+
+      function scheduler() {
+        const secPerBeat = 60 / state.bpm
+        const stepTime = secPerBeat / 4
+        const lookahead = 0.1
+
+        while (nextTime < ctx.currentTime + lookahead) {
+          const s = currentStep % state.steps
+          state.voices.forEach(v => { if(state.grid[v][s]) playVoice(v, nextTime) })
+
+          const drawStep = s
+          requestAnimationFrame(() => {
+            // UI Updates
+            document.querySelectorAll('.step.playing').forEach(el => el.classList.remove('playing'))
+            const cols = document.querySelectorAll(`.step[data-col="${drawStep}"]`)
+            cols.forEach(el => el.classList.add('playing'))
+
+            // Auto Follow Logic
+            if(state.autoFollow && state.playing) {
+                // Find the column element
+                const colEl = cols[0]
+                if(colEl) {
+                    const container = els.seqCont
+                    const elLeft = colEl.offsetLeft
+                    const elRight = elLeft + colEl.offsetWidth
+                    const viewLeft = container.scrollLeft
+                    const viewRight = viewLeft + container.offsetWidth
+
+                    // If element is out of view (or close to edge)
+                    if (elRight > viewRight || elLeft < viewLeft) {
+                        // Scroll to center it if possible
+                        container.scrollLeft = elLeft - 20
+                    }
+                }
+            }
+          })
+
+          let swing = 0
+          if(state.swing > 0 && s % 2 !== 0) swing = stepTime * state.swing
+          nextTime += stepTime + swing
+          currentStep++
+        }
+      }
+
+      function togglePlay() {
+        if(!ctx) initAudio()
+        state.playing = !state.playing
+        if(state.playing) {
+           nextTime = ctx.currentTime
+           currentStep = 0
+           timerID = setInterval(scheduler, 25)
+           els.play.innerHTML = '<span style="margin-right:6px;">■</span> STOP'
+           els.play.classList.add('danger')
+           els.status.textContent = state.recording ? "RECORDING..." : "PLAYING"
+        } else {
+           clearInterval(timerID)
+           els.play.innerHTML = '<span style="margin-right:6px;">▶</span> PLAY'
+           els.play.classList.remove('danger')
+           els.status.textContent = "STOPPED"
+           document.querySelectorAll('.step.playing').forEach(el => el.classList.remove('playing'))
+        }
+      }
+
+      // --- RECORDING ---
+      els.rec.onclick = () => {
+         if(!ctx) initAudio()
+         if(!state.recording) {
+            const dest = ctx.createMediaStreamDestination()
+            master.connect(dest)
+            try { recorder = new MediaRecorder(dest.stream) } catch { alert("Not supported"); return }
+
+            recorder.ondataavailable = e => chunks.push(e.data)
+            recorder.onstop = () => {
+                const blob = new Blob(chunks, {'type': 'audio/webm; codecs=opus'})
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url; a.download = 'pokedrums-record.webm'; a.click()
+                chunks = []
+            }
+            recorder.start()
+            state.recording = true
+            els.rec.classList.add('rec-active')
+            els.rec.innerHTML = '■'
+            els.status.textContent = "RECORDING..."
+         } else {
+            if(recorder) recorder.stop()
+            state.recording = false
+            els.rec.classList.remove('rec-active')
+            els.rec.innerHTML = '●'
+            els.status.textContent = "RECORDING SAVED"
+         }
+      }
+
+      // --- AUTO FOLLOW TOGGLE ---
+      els.follow.onclick = () => {
+          state.autoFollow = !state.autoFollow
+          els.follow.classList.toggle('active', state.autoFollow)
+          els.follow.textContent = `Auto-Follow: ${state.autoFollow ? 'ON' : 'OFF'}`
+      }
+
+      function buildUI() {
+        els.mixer.innerHTML = ''
+        state.voices.forEach(v => {
+           const r = document.createElement('div'); r.className='fader-row'
+           r.innerHTML = `<span id="mix-${v}">${v.substring(0,3)}</span>
+                          <input type="range" min="0" max="1" step="0.05" value="${state.vol[v]}">`
+           r.querySelector('input').oninput = function() {
+               state.vol[v] = +this.value
+               if(gains[v]) gains[v].gain.value = state.vol[v]
+           }
+           els.mixer.appendChild(r)
+        })
+
         els.pads.innerHTML = ''
-        const map = ['Q','W','E','R','T','Y','U','I']
-        voices.forEach((v,i)=>{
-          const b = document.createElement('button')
-          b.className='pad'; b.dataset.name=v
-          b.innerHTML = v.toUpperCase() + `<span style="display:none" class="sub">${map[i]}</span>`
-          b.onclick=()=>{ if(!ctx) initAudio(); const t = ctx.currentTime+0.001; b.classList.add('playing'); setTimeout(()=>b.classList.remove('playing'),80); hit(v,t) }
-          els.pads.appendChild(b)
+        state.voices.forEach(v => {
+           const p = document.createElement('div'); p.className='pad'; p.id=`pad-${v}`
+           const k = Object.keys(state.keyMap).find(key => state.keyMap[key]===v) || ''
+           p.innerHTML = `<span class="n">${v.toUpperCase()}</span><span class="k">${k.toUpperCase()}</span>`
+           p.onmousedown = () => playVoice(v)
+           els.pads.appendChild(p)
         })
+        renderSeq()
       }
 
-      function buildSeq(){
-        els.seq.style.setProperty('--cols', conf.length)
+      function renderSeq() {
+        els.seq.style.setProperty('--steps', state.steps)
         els.seq.innerHTML = ''
-        voices.forEach((v,ri)=>{
-          const lab = document.createElement('div'); lab.className='rowlab'; lab.textContent=v.toUpperCase()
-          const row = document.createElement('div'); row.className='steps'; row.dataset.voice=v
-          for(let i=0;i<conf.length;i++){
-            const c = document.createElement('div'); c.className='cell'; c.dataset.step=String(i); if (conf.grid[v][i]) c.classList.add('on')
-            if ((i%4)===0) c.classList.add('bar')
-            c.onclick=()=>{ conf.grid[v][i] = !conf.grid[v][i]; c.classList.toggle('on'); save() }
-            row.appendChild(c)
-          }
-          els.seq.appendChild(lab); els.seq.appendChild(row)
-        })
-      }
 
-      // PLAYBACK
-      function calcStepDur(){ return 60 / conf.bpm / 4 }
-      function schedule(){
-        const stepDur = calcStepDur()
-        while(nextTime < ctx.currentTime + scheduleAhead){
-          const col = step % conf.length
-          // trigger
-          voices.forEach(v => { if(conf.grid[v][col]) hit(v, nextTime) })
-          // UI playhead
-          const rows = $$('.steps')
-          rows.forEach(r=>{
-            const children = r.children
-            for(let i=0;i<children.length;i++) children[i].classList.toggle('playhead', i===col)
-          })
-          // advance with swing
-          if (conf.swing>0){
-            const sw = stepDur*conf.swing
-            if (step%2===0) nextTime += stepDur + sw; else nextTime += stepDur - sw
-          } else nextTime += stepDur
-          step = (step+1) % conf.length
+        // Header Row
+        const corner = document.createElement('div'); corner.className='track-head'; corner.style.border='none'; els.seq.appendChild(corner)
+        for(let i=0; i<state.steps; i++){
+            const n = document.createElement('div')
+            n.style.textAlign='center'; n.style.fontSize='9px'; n.style.color='#444'; n.textContent = i+1
+            els.seq.appendChild(n)
         }
-      }
-      function start(){
-        if (!ctx) initAudio()
-        if (playing) return
-        playing = true
-        nextTime = ctx.currentTime + 0.06
-        step = 0
-        transportTimer = setInterval(schedule, lookaheadMs)
-        els.playBtn.textContent='Stop'
-        setStatus(`Playing @ ${conf.bpm} BPM`)
-      }
-      function stop(){
-        if (!playing) return
-        playing = false
-        clearInterval(transportTimer); transportTimer=null
-        $$('.cell.playhead').forEach(c=>c.classList.remove('playhead'))
-        els.playBtn.textContent='Play'
-        setStatus('Stopped')
-      }
 
-      // EVENTS
-      els.power.onclick = () => { initAudio(); els.power.textContent='Audio On' }
-      els.theme.onclick = () => { document.body.classList.toggle('light'); conf.theme = document.body.classList.contains('light')?'light':'dark'; save() }
-      if (conf.theme==='light') document.body.classList.add('light')
+        state.voices.forEach(v => {
+           const lab = document.createElement('div'); lab.className='track-head'; lab.id=`lab-${v}`; lab.textContent=v
+           els.seq.appendChild(lab)
 
-      els.playBtn.onclick = () => playing ? stop() : start()
-      els.bpm.oninput = e => { conf.bpm = +e.target.value; save(); if (playing){ stop(); start() } }
-      els.swing.oninput = e => { conf.swing = +e.target.value; save(); if (playing){ stop(); start() } }
-      els.clear.onclick = () => { voices.forEach(v=>conf.grid[v].fill(false)); buildSeq(); save() }
-      els.random.onclick = () => {
-        const seed = conf.seed|0
-        let x = seed || Math.floor(Math.random()*1e6)
-        function rnd(){ x ^= x<<13; x ^= x>>17; x ^= x<<5; return (x>>>0)/4294967295 }
-        const dens = {kick:.35,snare:.3,hh:.6,oh:.18,clap:.22,tom:.18,rim:.15,crash:.1}
-        voices.forEach(v=>{
-          conf.grid[v] = conf.grid[v].map((_,i)=>{
-            const base = dens[v] * ( (i%4===0 && (v==='kick'||v==='snare')) ? 1.2 : 1 )
-            return rnd() < base
-          })
+           for(let i=0; i<state.steps; i++){
+              const s = document.createElement('div'); s.className='step'
+              if(state.grid[v][i]) s.classList.add('active')
+              s.dataset.col = i
+              s.onclick = () => {
+                 state.grid[v][i] = !state.grid[v][i]
+                 s.classList.toggle('active')
+              }
+              els.seq.appendChild(s)
+           }
         })
-        buildSeq(); save()
-      }
-      els.lenSel.oninput = e => {
-        const n = Math.max(4, Math.min(32, +e.target.value|0))
-        conf.length = n
-        voices.forEach(v=>{
-          const old = conf.grid[v]; const next = Array(n).fill(false)
-          for(let i=0;i<Math.min(old.length,n);i++) next[i]=old[i]
-          conf.grid[v]=next
-        })
-        buildSeq(); if (playing){ stop(); start() } save()
-      }
-      els.shuf.oninput = e => { conf.seed = Math.max(0, +e.target.value|0); save() }
-
-      voices.forEach(v => { els.v[v].oninput = e => { conf.vol[v] = +e.target.value; if (trackGains[v]) trackGains[v].gain.value = conf.vol[v]; save() } })
-
-      els.panic.onclick = () => { stop(); setStatus('All off') }
-
-      // RECORD
-      let recording=false
-      els.recBtn.onclick = () => {
-        if (!ctx) initAudio()
-        if (!recording){
-          try{ recorder = new MediaRecorder(recDest.stream) }catch{ alert('Recording not supported in this browser.'); return }
-          recChunks=[]; recorder.ondataavailable=e=>{ if(e.data.size>0) recChunks.push(e.data) }
-          recorder.onstop=()=>{
-            const blob=new Blob(recChunks,{type:recorder.mimeType||'audio/webm'})
-            const url=URL.createObjectURL(blob)
-            const a=document.createElement('a'); a.href=url; a.download=`pokedrums-${Date.now()}.webm`; a.textContent='Download recording'; a.className='chip'
-            els.recBtn.replaceWith(a); setTimeout(()=>URL.revokeObjectURL(url),60000)
-          }
-          recorder.start(); recording=true; els.recBtn.textContent='Stop'; setStatus('Recording…')
-        } else { recorder.stop(); recording=false; setStatus('Recording saved') }
       }
 
-       const keyMap = {q:'kick',w:'snare',e:'clap',r:'hh',t:'oh',y:'tom',u:'rim',i:'crash'}
-      window.addEventListener('keydown',e=>{
-        if (e.repeat) return
-        const k = e.key.toLowerCase()
-        if (k===' ') { e.preventDefault(); playing?stop():start(); return }
-        const v = keyMap[k]; if (!v) return
-        const pad = [...els.pads.children].find(x=>x.dataset.name===v)
-        if (pad){ pad.classList.add('playing'); setTimeout(()=>pad.classList.remove('playing'),90) }
-        hit(v, ctx?ctx.currentTime+0.001:0)
+      els.play.onclick = togglePlay
+      els.bpm.oninput = function() { state.bpm = +this.value; els.bpmDisp.innerText = state.bpm }
+      els.swing.oninput = function() { state.swing = +this.value }
+
+      els.len.onchange = (e) => {
+         if(e.target.value === 'custom') els.modal.classList.add('open')
+         else { state.steps = +e.target.value; renderSeq() }
+      }
+
+      els.cancelCust.onclick = () => { els.modal.classList.remove('open'); els.len.value = state.steps }
+      els.confirmCust.onclick = () => {
+         let val = +els.customIn.value
+         if(val < 4) val=4; if(val>512) val=512
+         state.steps = val
+         els.modal.classList.remove('open')
+         renderSeq()
+      }
+
+      $('#clearBtn').onclick = () => { state.voices.forEach(v => state.grid[v].fill(false)); renderSeq() }
+      $('#randomBtn').onclick = () => { state.voices.forEach(v => { for(let i=0; i<state.steps; i++) state.grid[v][i] = Math.random() > 0.85 }); renderSeq() }
+
+      window.addEventListener('keydown', e => {
+         if(e.repeat) return
+         if(e.key === ' ') { e.preventDefault(); togglePlay(); return }
+         const v = state.keyMap[e.key.toLowerCase()]
+         if(v) playVoice(v)
       })
 
-      // INIT
-      ;(() => {
-        if (conf.theme==='light') document.body.classList.add('light')
-        els.bpm.value = conf.bpm
-        els.swing.value = conf.swing
-        els.lenSel.value = conf.length
-        els.shuf.value = conf.seed
-        Object.entries(conf.vol).forEach(([k,v])=>{ els.v[k].value = v })
-        buildPads(); buildSeq()
-      })()
+      buildUI()
     })()
-  </script>
+</script>
 </body>
 </html>
