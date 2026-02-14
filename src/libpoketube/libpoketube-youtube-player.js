@@ -318,7 +318,7 @@ class InnerTubePokeVidious {
 }
 
 const pokeTubeApiCore = new InnerTubePokeVidious({
-  invapi: "https://invid-api.poketube.fun/bHj665PpYhUdPWuKPfZuQGoX/api/v1",
+  invapi: config.invapi,
   inv_fallback: "https://poketube.duti.dev/api/v1/videos/",
   useragent: config.useragent,
 });
