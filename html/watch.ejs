@@ -2639,7 +2639,7 @@ const init = () => {
   // "Jump start" hack - wrapped in safety check
   if (AMvideo.paused) {
     try {
-      AMvideo.play().then(() => AMvideo.pause());
+      AMvideo.pause().then(() => AMvideo.play());
     } catch (e) { /* Ignore autoplay blocks */ }
   }
 
