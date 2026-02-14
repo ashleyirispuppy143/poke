@@ -4200,7 +4200,26 @@ const vid = document.getElementById("video");
 
 <% } catch (error) { %>
   
-   <p>"Error while communicating with Invidious companion: Error connecting to 'gluetun:8282': Host is unreachable"</p>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f0f0f; color: #f1f1f1; display: flex; align-items: center; justify-content: center; height: 100vh;">
 
+    <div style="max-width: 500px; width: 90%; background: #1e1e1e; padding: 40px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; border: 1px solid #333;">
+        
+        <div style="font-size: 50px; margin-bottom: 20px;">⚠️</div>
+
+        <h1 style="font-size: 24px; margin-bottom: 15px; color: #ff4e4e;">Video Loading Failed</h1>
+        
+        <p style="font-size: 16px; line-height: 1.6; color: #aaa; margin-bottom: 20px;">
+            It looks like YouTube might be blocking the request, or the connection to the companion service was interrupted.
+        </p>
+
+      
+
+        <p style="font-size: 14px; margin-bottom: 25px;">Refreshing the page might resolve the issue.</p>
+
+        <button onclick="window.location.reload();" style="background-color: #f1f1f1; color: #0f0f0f; border: none; padding: 12px 30px; font-size: 16px; font-weight: bold; border-radius: 30px; cursor: pointer; transition: opacity 0.2s; box-shadow: 0 4px 15px rgba(255,255,255,0.1);">
+            Refresh Page
+        </button>
+
+    </div>
  <% } %>
  <!-- PHTML END -->
