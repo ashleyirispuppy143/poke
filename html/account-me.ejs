@@ -3,424 +3,437 @@
 <head>
   <meta charset="utf-8">
   <title>My Poke | Subscriptions</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="librejs-license" content="GPL-3.0-or-later">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="/css/yt-ukraine.svg?v=6" rel="icon">
-  <link href="/css/app.main.css?v=44600" rel="stylesheet">
-
+    <meta name="librejs-license" content="GPL-3.0-or-later">
   <style>
     :root {
-      --bg1:#10081e; --bg2:#1a0b28; --bg3:#06131a; --bg4:#0f132b;
-      --glass:rgba(255,255,255,0.06);
-      --border:rgba(255,255,255,0.1);
-      --accent:#66ccff;
-      --muted:#c9c9c9;
-      --ink:#fff;
-      --blur:24px;
-      --radius:18px;
-      --shadow:0 4px 30px rgba(0,0,0,0.3);
-      --hover-glow:0 0 8px rgba(102,204,255,0.35);
+      --bg-body: #121212;
+      --bg-sidebar: #181818;
+      --bg-element: #252525;
+      --bg-hover: #333333;
+      --border: #333333;
+      --text-main: #e0e0e0;
+      --text-muted: #a0a0a0;
+      --accent: #3ea6ff; 
+      --danger: #ff4e45;
     }
 
-    *{box-sizing:border-box}
-    html,body{margin:0;padding:0;height:100%}
-    body{
-      font-family:system-ui,-apple-system,"Segoe UI",Roboto,Ubuntu;
-      color:var(--ink);
-      background:radial-gradient(circle at 20% 20%,var(--bg1),var(--bg2),var(--bg3),var(--bg4));
-      background-size:400% 400%;
-      animation:bg-pan 60s ease infinite;
-      overflow:hidden;
-    }
-    @keyframes bg-pan{
-      0%{background-position:0 50%}
-      50%{background-position:100% 50%}
-      100%{background-position:0 50%}
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg-body);
+      color: var(--text-main);
+      display: flex;
+      overflow: hidden;
     }
 
-    a{color:inherit;text-decoration:none !important;outline:none}
+    a { text-decoration: none; color: inherit; }
+    button, input { font-family: inherit; }
 
-    .layout{
-      display:grid;
-      grid-template-columns:320px 1fr;
-      height:100vh;
-    }
-    @media(max-width:780px){
-      .layout{grid-template-columns:1fr}
-      aside{height:45vh}
-      main{height:55vh}
-    }
-
-    aside{
-      background:var(--glass);
-      backdrop-filter:blur(var(--blur)) saturate(180%);
-      -webkit-backdrop-filter:blur(var(--blur)) saturate(180%);
-      border-right:1px solid var(--border);
-      display:flex;
-      flex-direction:column;
-      justify-content:space-between;
-      box-shadow:var(--shadow);
+     aside {
+      width: 320px;
+      background-color: var(--bg-sidebar);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
     }
 
-    header{
-      padding:16px;
-      border-bottom:1px solid var(--border);
-      display:flex;
-      flex-direction:column;
-      gap:4px;
-    }
-    h1{
-      font-family:"poketube flex",system-ui;
-      font-size:1.6rem;
-      font-weight:800;
-      background:linear-gradient(90deg,#9fe6ff,#66ccff 70%);
-      -webkit-background-clip:text;
-      -webkit-text-fill-color:transparent;
-      margin:0;
+    header {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
     }
 
-    .search-bar{
-      display:flex;
-      align-items:center;
-      gap:8px;
-      background:rgba(255,255,255,0.07);
-      border:1px solid var(--border);
-      border-radius:12px;
-      margin:14px 12px;
-      padding:6px 10px;
-      transition:border .2s ease;
-    }
-    .search-bar:focus-within{
-      border-color:var(--accent);
-      box-shadow:var(--hover-glow);
-    }
-    .search-bar input{
-      all:unset;
-      flex:1;
-      font-size:14px;
-    }
-    .search-bar button{
-      all:unset;
-      cursor:pointer;
-      font-size:12px;
-      padding:4px 8px;
-      border-radius:8px;
-      background:rgba(255,255,255,0.1);
-      border:1px solid var(--border);
-      transition:background .2s ease;
-    }
-    .search-bar button:hover{background:rgba(255,255,255,0.25)}
-
-    .sort{
-      display:flex;
-      justify-content:center;
-      gap:8px;
-      margin:0 12px 10px;
-    }
-    .sort button{
-      all:unset;
-      padding:6px 10px;
-      border-radius:8px;
-      background:rgba(255,255,255,0.08);
-      border:1px solid var(--border);
-      font-size:13px;
-      cursor:pointer;
-      transition:background .2s ease, box-shadow .2s ease;
-    }
-    .sort button:hover{background:rgba(255,255,255,0.15)}
-    .sort button.active{
-      background:rgba(255,255,255,0.25);
-      border-color:var(--accent);
-      box-shadow:var(--hover-glow);
+    h1 {
+      margin: 0;
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
 
-    .channel-list{
-      flex:1;
-      overflow-y:auto;
-      padding:6px 8px;
-      display:flex;
-      flex-direction:column;
-      gap:6px;
-    }
-    .channel{
-      display:flex;
-      align-items:center;
-      gap:10px;
-      padding:8px 10px;
-      border-radius:12px;
-      background:rgba(255,255,255,0.05);
-      border:1px solid transparent;
-      transition:all .25s ease;
-    }
-    .channel:hover{
-      background:rgba(255,255,255,0.15);
-      box-shadow:var(--hover-glow);
-    }
-    .channel.active{
-      border-color:var(--accent);
-      background:linear-gradient(135deg,rgba(102,204,255,0.18),rgba(102,204,255,0.08));
-      box-shadow:var(--hover-glow);
-    }
-    .channel img{
-      width:36px;
-      height:36px;
-      border-radius:50%;
-      object-fit:cover;
-    }
-    .channel-name{
-      flex:1;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      white-space:nowrap;
-      font-size:14px;
+    /* Controls (Search & Sort) */
+    .controls {
+      padding: 10px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
 
-    .pill--unsub{
-      font-size:12px;
-      color:var(--ink);
-      background:rgba(255,255,255,0.08);
-      padding:4px 10px;
-      border-radius:999px;
-      border:1px solid var(--border);
-      transition:background .2s ease, color .2s ease;
-      white-space:nowrap;
-    }
-    .pill--unsub:hover{
-      background:rgba(255,80,80,0.2);
-      border-color:#ff7777;
-      color:#ffaaaa;
+    .search-wrapper {
+      display: flex;
+      gap: 5px;
     }
 
-    .sidebar-footer{
-      border-top:1px solid var(--border);
-      padding:14px;
-      display:flex;
-      flex-direction:column;
-      gap:8px;
-      background:rgba(255,255,255,0.04);
+    input[type="text"] {
+      flex: 1;
+      background: var(--bg-body);
+      border: 1px solid var(--border);
+      padding: 8px 10px;
+      border-radius: 4px;
+      color: var(--text-main);
+      font-size: 14px;
     }
-    .uid{
-      font-size:12px;
-      color:var(--muted);
-      background:rgba(255,255,255,0.08);
-      padding:4px 10px;
-      border-radius:999px;
-      border:1px solid var(--border);
-      align-self:flex-start;
-    }
-    .privacy-link{
-      font-size:12.5px;
-      color:var(--accent);
-      text-decoration:none !important;
-      transition:opacity .2s ease;
-    }
-    .privacy-link:hover{opacity:0.7}
-
-    main{
-      position:relative;
-      display:flex;
-      flex-direction:column;
-      background:rgba(255,255,255,0.03);
-      backdrop-filter:blur(var(--blur));
-      -webkit-backdrop-filter:blur(var(--blur));
-      height:100%;
+    input[type="text"]:focus {
+      outline: 2px solid var(--accent);
+      border-color: transparent;
     }
 
-    .toolbar{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      padding:12px 16px;
-      border-bottom:1px solid var(--border);
-      background:rgba(255,255,255,0.04);
-      z-index:5;
+    .btn {
+      padding: 6px 12px;
+      background: var(--bg-element);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      cursor: pointer;
+      border-radius: 4px;
+      font-size: 13px;
     }
-    .toolbar .btn{
-      all:unset;
-      padding:6px 12px;
-      border-radius:8px;
-      background:rgba(255,255,255,0.08);
-      border:1px solid var(--border);
-      font-size:13px;
-      cursor:pointer;
-      transition:background .2s ease, transform .2s ease;
+    .btn:hover { background: var(--bg-hover); }
+    .btn.active { background: var(--accent); color: #000; font-weight: bold; border-color: var(--accent); }
+
+    .sort-buttons {
+      display: flex;
+      gap: 5px;
     }
-    .toolbar .btn:hover{
-      background:rgba(255,255,255,0.2);
-      transform:translateY(-1px);
+    .sort-buttons button { flex: 1; }
+
+    /* Channel List */
+    .channel-list {
+      flex: 1;
+      overflow-y: auto;
     }
 
-    .viewer{
-      flex:1;
-      overflow:hidden;
-      position:relative;
-      display:flex;
-      align-items:center;
-      justify-content:center;
+    .channel {
+      display: flex;
+      align-items: center;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.15s;
     }
 
-    iframe{
-      width:100%;
-      height:100%;
-      border:none;
-      border-radius:0;
-      opacity:0;
-      animation:fadein .4s forwards ease;
-    }
-    @keyframes fadein{
-      from{opacity:0;transform:scale(0.98);}
-      to{opacity:1;transform:scale(1);}
+    .channel:hover { background-color: var(--bg-hover); }
+    .channel.selected {
+      background-color: var(--bg-element);
+      border-left: 4px solid var(--accent);
+      padding-left: 12px; /* compensate for border */
     }
 
-    .placeholder{
-      color:var(--muted);
-      font-size:15px;
-      text-align:center;
-      padding:20px;
+    .channel img {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      margin-right: 12px;
+      background: var(--bg-element);
     }
 
-    .close-view{
-      position:absolute;
-      top:14px;
-      right:14px;
-      z-index:10;
-      background:rgba(255,255,255,0.08);
-      border:1px solid var(--border);
-      border-radius:50%;
-      width:32px;
-      height:32px;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      cursor:pointer;
-      backdrop-filter:blur(10px);
-      font-size:16px;
-      transition:background .2s ease, transform .2s ease;
-    }
-    .close-view:hover{
-      background:rgba(255,255,255,0.2);
-      transform:rotate(90deg);
+    .channel-info {
+      flex: 1;
+      overflow: hidden;
     }
 
-    noscript{
-      display:block;
-      background:#1a101e;
-      color:#fff;
-      text-align:center;
-      padding:16px;
-      border-top:2px solid var(--accent);
-      border-bottom:2px solid var(--accent);
-      font-size:14px;
-      line-height:1.6;
+    .channel-name {
+      font-size: 14px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .unsub-btn {
+      font-size: 11px;
+      color: var(--danger);
+      border: 1px solid var(--border);
+      padding: 4px 8px;
+      border-radius: 4px;
+      margin-left: 10px;
+      opacity: 0.6;
+      transition: 0.2s;
+    }
+    .unsub-btn:hover {
+      opacity: 1;
+      background: rgba(255, 78, 69, 0.1);
+      border-color: var(--danger);
+    }
+
+    .sidebar-footer {
+      padding: 12px;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      background: var(--bg-body);
+    }
+
+    /* --- Main Content --- */
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background-color: var(--bg-body);
+      position: relative;
+    }
+
+    .toolbar {
+      height: 50px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      background: var(--bg-sidebar);
+    }
+
+    .current-channel { font-weight: 600; font-size: 14px; }
+
+    .viewer-container {
+      flex: 1;
+      position: relative;
+      background: #000;
+    }
+
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: none; /* Hidden by default */
+    }
+    iframe.active { display: block; }
+
+    .empty-state {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    .close-btn {
+      display: none; /* Only show on mobile if needed, or controlled via JS */
+      background: none; border: none; font-size: 20px; color: var(--text-muted); cursor: pointer;
+    }
+    .close-btn:hover { color: var(--text-main); }
+
+    /* Mobile Responsive */
+    @media(max-width: 768px) {
+      body { flex-direction: column; }
+      aside { width: 100%; height: 40vh; }
+      main { height: 60vh; }
+    }
+
+    /* --- No JS Alert (Floating Toast) --- */
+    noscript {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 9999;
+      width: 300px;
+
+      background-color: var(--bg-element);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--danger);
+      border-radius: 8px;
+
+      padding: 16px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+
+      color: var(--text-main);
+      font-size: 13px;
+      line-height: 1.5;
+
+      /* Animation for flair */
+      animation: slideIn 0.5s ease-out;
+    }
+
+    noscript strong {
+      display: block;
+      color: var(--danger);
+      margin-bottom: 4px;
+      font-size: 14px;
+    }
+
+    @keyframes slideIn {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
     }
   </style>
 </head>
 <body>
+
   <noscript>
-    JavaScript seems to be disabled.<br>
-    This page won’t show your subscriptions without it.<br>
-    You can still open channels directly by clicking their names below.
+    <strong>JavaScript Disabled</strong>
+    Search and sorting features are unavailable. You can still click channel names to open them.
   </noscript>
 
-  <div class="layout">
-    <aside>
+  <aside>
+    <header>
+      <h1>My Poke</h1>
+    </header>
+
+    <div class="controls">
+      <div class="search-wrapper">
+        <input type="text" id="searchInput" placeholder="Search ur channels..." autocomplete="off">
+        <button class="btn" id="clearSearch" title="Clear">X</button>
+      </div>
+      <div class="sort-buttons">
+        <button class="btn active" data-sort="asc">A-Z</button>
+        <button class="btn" data-sort="desc">Z-A</button>
+      </div>
+    </div>
+
+    <%
+      // Safely grab subs from EJS context
+      const subKeys = (userSubs && Object.keys(userSubs)) || [];
+      const subs = subKeys.map(id => ({
+        id,
+        name: userSubs[id]?.channelName || "Unknown Channel",
+        avatar: userSubs[id]?.avatar || ""
+      }));
+      // Initial server-side sort
+      subs.sort((a,b) => a.name.localeCompare(b.name, 'en', {sensitivity:'base'}));
+    %>
+
+    <div class="channel-list" id="channelList">
+      <% subs.forEach(c => { %>
+        <div class="channel" data-id="<%= c.id %>" data-name="<%= c.name.toLowerCase() %>">
+          <img src="<%= c.avatar %>" alt="" loading="lazy">
+          <div class="channel-info">
+            <div class="channel-name"><%= c.name %></div>
+          </div>
+          <a class="unsub-btn"
+             href="/api/remove-channel-sub?ID=<%= encodeURIComponent(userid) %>&channelID=<%= c.id %>"
+             onclick="event.stopPropagation();"
+             title="Unsubscribe">
+            Unsub
+          </a>
+        </div>
+      <% }) %>
+    </div>
+
+    <div class="sidebar-footer">
+      <span>User: <%= userid %></span>
+      <a href="/privacy" style="text-decoration: underline;">Privacy</a>
+    </div>
+  </aside>
+
+  <main>
+    <div class="toolbar">
+      <span class="current-channel" id="toolbarTitle">Select a channel</span>
       <div>
-        <header>
-          <h1>my poke</h1>
-        </header>
-
-        <div class="search-bar js-only">
-          <input id="search" type="text" placeholder="search ur channels">
-          <button id="clearSearch">clear</button>
-        </div>
-
-        <div class="sort js-only">
-          <button id="sortAZ" class="active">a → z</button>
-          <button id="sortZA">z → a</button>
-        </div>
-
-        <% 
-          const subKeys = (userSubs && Object.keys(userSubs)) || [];
-          const subs = subKeys.map(id => ({
-            id,
-            name: userSubs[id]?.channelName || "unknown channel",
-            avatar: userSubs[id]?.avatar
-          }));
-          subs.sort((a,b)=>a.name.localeCompare(b.name,'en',{sensitivity:'base'}));
-        %>
-
-        <div class="channel-list" id="channelList">
-          <% subs.forEach(c => { %>
-            <div class="channel" data-id="<%= c.id %>" data-name="<%= c.name.toLowerCase() %>">
-              <a href="/channel?id=<%= c.id %>" target="_blank" class="channel-name-link" style="display:flex;align-items:center;gap:10px;flex:1;">
-                <img src="<%= c.avatar %>" alt="">
-                <div class="channel-name"><%= c.name %></div>
-              </a>
-              <a class="pill--unsub" href="/api/remove-channel-sub?ID=<%= encodeURIComponent(userid) %>&channelID=<%= c.id %>" aria-label="Unsubscribe from <%= c.name %>">unsub</a>
-            </div>
-          <% }) %>
-        </div>
+        <button class="btn close-btn" id="closeViewer" title="Close View">✖</button>
+        <a href="/api/get-channel-subs?ID=<%= encodeURIComponent(userid) %>" target="_blank" class="btn">JSON</a>
       </div>
+    </div>
 
-      <div class="sidebar-footer">
-        <span class="uid">logged in as <%= userid %></span>
-        <a href="/privacy" class="privacy-link">privacy policy</a>
+    <div class="viewer-container">
+      <div class="empty-state" id="emptyState">
+        <p>Select a channel from the list to view feed.</p>
       </div>
-    </aside>
-
-    <main class="js-only">
-      <div class="toolbar">
-        <span id="channelTitle">nothing selected yet</span>
-        <a href="/api/get-channel-subs?ID=<%= encodeURIComponent(userid) %>" class="btn">view json</a>
-      </div>
-      <div class="viewer" id="viewer">
-        <div class="placeholder">select a channel on the left to view it</div>
-      </div>
-    </main>
-  </div>
+      <iframe id="mainFrame" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>
+    </div>
+  </main>
 
 <script>
-document.addEventListener("DOMContentLoaded",()=>{
-  const channels=document.querySelectorAll(".channel");
-  const viewer=document.getElementById("viewer");
-  const title=document.getElementById("channelTitle");
+document.addEventListener("DOMContentLoaded", () => {
+  // DOM Elements
+  const searchInput = document.getElementById('searchInput');
+  const clearBtn = document.getElementById('clearSearch');
+  const sortBtns = document.querySelectorAll('.sort-buttons .btn');
+  const channelList = document.getElementById('channelList');
+  const channels = document.querySelectorAll('.channel');
+  const iframe = document.getElementById('mainFrame');
+  const emptyState = document.getElementById('emptyState');
+  const toolbarTitle = document.getElementById('toolbarTitle');
+  const closeViewer = document.getElementById('closeViewer');
 
-  document.querySelectorAll(".channel-name-link").forEach(link=>{
-    link.addEventListener("click",e=>{
-      e.preventDefault();
-      const parent=link.closest(".channel");
-      const id=parent.dataset.id;
-      const name=parent.querySelector(".channel-name").textContent;
-      channels.forEach(c=>c.classList.remove("active"));
-      parent.classList.add("active");
-      renderIframe(id,name);
+  // --- 1. Search Functionality ---
+  function filterChannels() {
+    const term = searchInput.value.toLowerCase();
+    channels.forEach(ch => {
+      const name = ch.dataset.name;
+      ch.style.display = name.includes(term) ? 'flex' : 'none';
+    });
+  }
+
+  searchInput.addEventListener('input', filterChannels);
+
+  clearBtn.addEventListener('click', () => {
+    searchInput.value = '';
+    filterChannels();
+    searchInput.focus();
+  });
+
+  // --- 2. Sort Functionality ---
+  sortBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      // Toggle UI
+      sortBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      // Sort Nodes
+      const dir = btn.dataset.sort;
+      const itemsArray = Array.from(channels);
+
+      itemsArray.sort((a, b) => {
+        const na = a.dataset.name;
+        const nb = b.dataset.name;
+        return dir === 'asc' ? na.localeCompare(nb) : nb.localeCompare(na);
+      });
+
+      // Re-append to DOM
+      itemsArray.forEach(node => channelList.appendChild(node));
     });
   });
 
-  function renderIframe(id,name){
-    viewer.innerHTML=`
-      <div class="close-view" title="close">✖</div>
-      <iframe id="chanframe" sandbox="allow-scripts allow-same-origin allow-popups" src="/channel?id=${encodeURIComponent(id)}&embedchannelsubsfeed=true" loading="lazy"></iframe>`;
-    title.textContent=name;
+  // --- 3. Selection & Iframe ---
+  channels.forEach(ch => {
+    ch.addEventListener('click', () => {
+      // UI Updates
+      channels.forEach(c => c.classList.remove('selected'));
+      ch.classList.add('selected');
 
-    const frame=document.getElementById("chanframe");
-    const closeBtn=viewer.querySelector(".close-view");
-    closeBtn.addEventListener("click",()=>{
-      viewer.innerHTML='<div class="placeholder">select a channel on the left to view it</div>';
-      channels.forEach(c=>c.classList.remove("active"));
-      title.textContent="nothing selected yet";
-    });
+      const id = ch.dataset.id;
+      const realName = ch.querySelector('.channel-name').textContent;
 
-    // ensure inside links open in new tabs
-    frame.addEventListener("load",()=>{
-      try{
-        const doc=frame.contentDocument||frame.contentWindow.document;
-        doc.querySelectorAll("a").forEach(a=>{
-          a.setAttribute("target","_blank");
-        });
-      }catch{}
+      // Update Toolbar
+      toolbarTitle.textContent = realName;
+      closeViewer.style.display = 'inline-block';
+
+      // Update Iframe
+      emptyState.style.display = 'none';
+      iframe.src = `/channel?id=${encodeURIComponent(id)}&embedchannelsubsfeed=true`;
+      iframe.classList.add('active');
     });
-  }
+  });
+
+  // --- 4. Close/Reset View ---
+  closeViewer.addEventListener('click', () => {
+    iframe.src = '';
+    iframe.classList.remove('active');
+    emptyState.style.display = 'block';
+    toolbarTitle.textContent = 'Select a channel';
+    closeViewer.style.display = 'none';
+    channels.forEach(c => c.classList.remove('selected'));
+  });
+
+  // Prevent link clicks inside iframe from navigating the iframe itself
+  iframe.addEventListener("load", () => {
+    try {
+      const doc = iframe.contentDocument || iframe.contentWindow.document;
+      doc.querySelectorAll("a").forEach(a => a.setAttribute("target", "_blank"));
+    } catch(e) {
+      // Ignore cross-origin errors
+    }
+  });
+
 });
 </script>
 </body>
