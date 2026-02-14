@@ -18,27 +18,28 @@
       --accent-hover: #2563eb;
       --bg: #ffffff;
       --surface: #f8fafc;
-      --panel-bg: rgba(255, 255, 255, 0.9);
-      --border: #e2e8f0;
-      --text-main: #0f172a;
-      --text-sub: #64748b;
+      --panel-bg: rgba(15, 23, 42, 0.95); /* Darker default for contrast */
+      --border: #334155;
+      --text-main: #f8fafc;
+      --text-sub: #94a3b8;
       --danger: #ef4444;
       
       /* Dimensions */
-      --sidebar-width: 340px;
-      --radius: 14px;
-      --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-      --glass: blur(12px);
+      --sidebar-width: 320px;
+      --radius: 12px;
+      --shadow: 0 8px 16px -4px rgb(0 0 0 / 0.2);
+      --glass: blur(16px);
     }
 
-    @media (prefers-color-scheme: dark) {
+    /* Light Mode Overrides */
+    @media (prefers-color-scheme: light) {
       :root {
-        --bg: #0f172a;
-        --surface: #1e293b;
-        --panel-bg: rgba(15, 23, 42, 0.9);
-        --border: #334155;
-        --text-main: #f8fafc;
-        --text-sub: #94a3b8;
+        --bg: #e2e8f0;
+        --surface: #ffffff;
+        --panel-bg: rgba(255, 255, 255, 0.9);
+        --border: #e2e8f0;
+        --text-main: #0f172a;
+        --text-sub: #64748b;
       }
     }
 
@@ -56,12 +57,12 @@
     iframe#map { width: 100%; height: 100%; border: 0; display: block; }
 
     .brand {
-      position: absolute; bottom: 24px; left: 12px;
-      padding: 6px 10px; font-size: 14px; font-weight: 600;
+      position: absolute; bottom: 24px; left: 16px;
+      padding: 6px 12px; font-size: 13px; font-weight: 700; letter-spacing: 0.5px;
       background: var(--panel-bg); backdrop-filter: var(--glass);
       border-radius: 8px; border: 1px solid var(--border);
       pointer-events: none; z-index: 5;
-      color: var(--text-main);
+      color: var(--text-main); box-shadow: var(--shadow);
     }
 
     /* Marker */
@@ -81,126 +82,137 @@
     .btn {
       display: flex; align-items: center; justify-content: center; gap: 6px;
       border: 1px solid var(--border); background: var(--surface); color: var(--text-main);
-      border-radius: 8px; padding: 8px 12px; font-size: 13px; font-weight: 500;
-      cursor: pointer; transition: background 0.15s;
+      border-radius: 8px; padding: 10px 14px; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all 0.15s;
     }
-    .btn:hover { background: var(--border); }
+    .btn:hover { background: var(--border); transform: translateY(-1px); }
     .btn.primary { background: var(--accent); color: white; border-color: transparent; }
     .btn.primary:hover { background: var(--accent-hover); }
-    .btn-icon { width: 40px; height: 40px; padding: 0; border-radius: 50%; box-shadow: var(--shadow); background: var(--panel-bg); }
+    .btn-icon { width: 44px; height: 44px; padding: 0; border-radius: 12px; box-shadow: var(--shadow); background: var(--panel-bg); }
 
     .input-group { position: relative; width: 100%; }
     .search-input {
-      width: 100%; height: 44px; padding: 0 14px 0 40px;
-      border-radius: 10px; border: 1px solid var(--border);
+      width: 100%; height: 48px; padding: 0 16px 0 44px;
+      border-radius: 12px; border: 1px solid var(--border);
       background: var(--panel-bg); backdrop-filter: var(--glass);
       color: var(--text-main); font-size: 15px; outline: none;
-      box-shadow: var(--shadow);
+      box-shadow: var(--shadow); transition: border-color 0.2s;
     }
-    .search-input:focus { border-color: var(--accent); }
-    .search-icon { position: absolute; left: 12px; top: 13px; color: var(--text-sub); pointer-events: none; }
+    .search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
+    .search-icon { position: absolute; left: 14px; top: 15px; color: var(--text-sub); pointer-events: none; }
 
     /* Suggestions */
     .suggestions {
-      position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+      position: absolute; top: calc(100% + 8px); left: 0; right: 0;
       background: var(--surface); border: 1px solid var(--border);
-      border-radius: 10px; margin: 0; padding: 0; list-style: none;
-      box-shadow: var(--shadow); max-height: 250px; overflow-y: auto; display: none;
+      border-radius: 12px; margin: 0; padding: 0; list-style: none;
+      box-shadow: var(--shadow); max-height: 280px; overflow-y: auto; display: none;
     }
-    .suggestions li { padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer; font-size: 13px; display: block; }
+    .suggestions li { padding: 12px 16px; border-bottom: 1px solid var(--border); cursor: pointer; font-size: 14px; display: block; color: var(--text-main); }
     .suggestions li:last-child { border-bottom: 0; }
-    .suggestions li:hover { background: rgba(0,0,0,0.05); }
+    .suggestions li:hover { background: rgba(127,127,127,0.1); }
 
     /* --- DESKTOP SIDEBAR --- */
     @media (min-width: 769px) {
       .mobile-only { display: none !important; }
       .desktop-sidebar {
-        position: absolute; top: 16px; left: 16px;
+        position: absolute; top: 20px; left: 20px;
         width: var(--sidebar-width);
-        max-height: calc(100vh - 32px);
-        display: flex; flex-direction: column; gap: 10px;
+        max-height: calc(100vh - 40px);
+        display: flex; flex-direction: column; gap: 12px;
+        transition: opacity 0.2s;
       }
       
+      /* HIDE other cards when searching */
+      .desktop-sidebar.searching .card:not(.static) { display: none; }
+
       .card {
         background: var(--panel-bg); backdrop-filter: var(--glass);
         border: 1px solid var(--border); border-radius: 12px;
         box-shadow: var(--shadow); overflow: hidden;
         display: flex; flex-direction: column;
+        transition: transform 0.2s;
       }
 
       .card-header {
-        padding: 10px 12px; font-size: 13px; font-weight: 600;
+        padding: 12px 16px; font-size: 13px; font-weight: 700;
         display: flex; justify-content: space-between; align-items: center;
-        background: rgba(0,0,0,0.02); border-bottom: 1px solid var(--border);
+        background: rgba(127,127,127,0.05); border-bottom: 1px solid var(--border);
         cursor: pointer; user-select: none;
       }
-      .card-header:hover { background: rgba(0,0,0,0.04); }
-      .card-body { padding: 12px; display: none; flex-direction: column; gap: 10px; }
+      .card-header:hover { background: rgba(127,127,127,0.1); }
+      .card-body { padding: 16px; display: none; flex-direction: column; gap: 12px; }
       .card.open .card-body { display: flex; }
-      /* Always open the main search/pins body if needed, or toggle */
-      .card.static .card-header { cursor: default; background: transparent; border-bottom: 0; padding-bottom: 0; }
-      .card.static .card-body { display: flex; padding-top: 10px; }
+      
+      /* Static card (search) has no header */
+      .card.static .card-header { display: none; }
+      .card.static .card-body { display: flex; padding: 12px; }
 
-      .row { display: flex; gap: 8px; align-items: center; }
+      .row { display: flex; gap: 10px; align-items: center; }
       
-      /* Desktop Tools (Top Right) */
-      .desktop-tools { position: absolute; top: 16px; right: 16px; display: flex; flex-direction: column; gap: 10px; }
-      
-      .link-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-      .link-pill {
-        font-size: 10px; text-decoration: none; color: var(--text-sub);
-        border: 1px solid var(--border); padding: 4px 8px; border-radius: 12px;
-        transition: color 0.2s;
+      /* Desktop Tools (Moved to Bottom Right to avoid Zoom Buttons) */
+      .desktop-tools { 
+        position: absolute; bottom: 30px; right: 20px; 
+        display: flex; flex-direction: column; gap: 12px; 
       }
-      .link-pill:hover { color: var(--accent); border-color: var(--accent); }
+      
+      .link-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+      .link-pill {
+        font-size: 11px; text-decoration: none; color: var(--text-sub);
+        border: 1px solid var(--border); padding: 4px 10px; border-radius: 99px;
+        transition: all 0.2s; background: rgba(0,0,0,0.2);
+      }
+      .link-pill:hover { color: var(--accent); border-color: var(--accent); background: var(--surface); }
     }
 
     /* --- MOBILE --- */
     @media (max-width: 768px) {
       .desktop-only { display: none !important; }
-      .brand { bottom: 80px; font-size: 12px; }
+      .brand { bottom: 84px; font-size: 12px; }
 
       .mobile-header { position: absolute; top: 12px; left: 12px; right: 12px; z-index: 30; }
       
       .mobile-dock {
         position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
-        display: flex; gap: 16px; align-items: center;
+        display: flex; gap: 20px; align-items: center;
         background: var(--panel-bg); backdrop-filter: var(--glass);
-        padding: 8px 16px; border-radius: 24px; border: 1px solid var(--border);
+        padding: 10px 24px; border-radius: 32px; border: 1px solid var(--border);
         box-shadow: var(--shadow); z-index: 30;
       }
 
       .bottom-sheet {
         position: fixed; left: 0; right: 0; bottom: 0;
         background: var(--surface);
-        border-radius: 20px 20px 0 0;
-        box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
+        border-radius: 24px 24px 0 0;
+        box-shadow: 0 -8px 32px rgba(0,0,0,0.3);
         z-index: 40; transform: translateY(110%);
-        transition: transform 0.3s ease;
-        max-height: 80vh; display: flex; flex-direction: column;
+        transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+        max-height: 85vh; display: flex; flex-direction: column; border-top: 1px solid var(--border);
       }
       .bottom-sheet.open { transform: translateY(0); }
-      .sheet-handle { width: 40px; height: 5px; background: var(--border); border-radius: 10px; margin: 12px auto; }
-      .sheet-content { padding: 0 16px 20px; overflow-y: auto; }
+      .sheet-handle { width: 48px; height: 6px; background: var(--border); border-radius: 10px; margin: 12px auto; opacity: 0.5; }
+      .sheet-content { padding: 0 20px 30px; overflow-y: auto; }
       
-      .link-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+      .link-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); }
     }
 
     /* Common Utility */
     .pin-item {
-      padding: 10px; background: rgba(0,0,0,0.03); border: 1px solid var(--border); border-radius: 8px;
+      padding: 12px; background: rgba(127,127,127,0.05); border: 1px solid var(--border); border-radius: 10px;
       display: flex; justify-content: space-between; align-items: center;
     }
-    .pin-info strong { display: block; font-size: 13px; margin-bottom: 2px; }
+    .pin-info strong { display: block; font-size: 14px; margin-bottom: 3px; }
     .pin-info span { font-size: 11px; color: var(--text-sub); font-family: monospace; }
-    .pin-actions { display: flex; gap: 8px; }
-    .pin-btn { background: none; border: none; cursor: pointer; padding: 4px; color: var(--text-sub); }
+    .pin-actions { display: flex; gap: 12px; }
+    .pin-btn { background: none; border: none; cursor: pointer; padding: 4px; color: var(--text-sub); transition: color 0.2s; }
     .pin-btn:hover { color: var(--accent); }
 
     select.std-select {
-      width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border);
-      background: var(--surface); color: var(--text-main);
+      width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text-main); font-size: 14px;
+      appearance: none;
     }
+    label { font-size: 13px; font-weight: 500; color: var(--text-sub); margin-bottom: 4px; display: block; }
   </style>
 </head>
 <body>
@@ -245,7 +257,7 @@
         </div>
       </div>
 
-      <div class="card open">
+      <div class="card">
         <div class="card-header" onclick="this.parentElement.classList.toggle('open')">
           <span>Saved Pins</span>
           <small>▼</small>
@@ -261,18 +273,21 @@
           <small>▼</small>
         </div>
         <div class="card-body">
-          <label>Layer <select id="d-layer" class="std-select">
-            <option value="mapnik">Standard</option>
-            <option value="cyclemap">Cyclist</option>
-            <option value="transportmap">Transport</option>
-          </select></label>
+          <div>
+            <label>Map Layer</label>
+            <select id="d-layer" class="std-select">
+              <option value="mapnik">Standard</option>
+              <option value="cyclemap">Cyclist</option>
+              <option value="transportmap">Transport</option>
+            </select>
+          </div>
           <div class="row" style="justify-content:space-between">
-            <label>Follow Location</label>
+            <label style="margin:0">Follow Location</label>
             <input type="checkbox" id="d-follow">
           </div>
            <div class="row" style="justify-content:space-between">
-            <label>Dark Mode</label>
-            <select id="d-theme" class="std-select" style="width:auto; padding:4px">
+            <label style="margin:0">Dark Mode</label>
+            <select id="d-theme" class="std-select" style="width:auto; padding:4px 8px">
               <option value="auto">Auto</option><option value="dark">Dark</option><option value="light">Light</option>
             </select>
           </div>
@@ -285,10 +300,9 @@
           <small>▼</small>
         </div>
         <div class="card-body" style="font-size:12px; line-height:1.5; color:var(--text-sub)">
-          <p><strong>What is this?</strong> PokeMaps Public Beta is a lightweight viewer for exploring and sharing map positions with quick pin management.</p>
-          <p><strong>Map credits:</strong> © <a href="https://www.openstreetmap.org/" target="_blank">OpenStreetMap.org</a> contributors.</p>
-          <p><strong>Disclaimer:</strong> Geographic names and borders are for reference only and do not imply political endorsement. Always verify details.</p>
-          <p><strong>Privacy:</strong> Search uses public OSM services. No personal data is stored on our servers.</p>
+          <p><strong>PokeMaps Public Beta</strong> is a lightweight viewer for exploring and sharing map positions.</p>
+          <p><strong>Map credits:</strong> © <a href="https://www.openstreetmap.org/" target="_blank" style="color:var(--accent)">OpenStreetMap.org</a> contributors.</p>
+          <p><strong>Disclaimer:</strong> Geographic names and borders are for reference only.</p>
           
           <div class="link-row">
             <a class="link-pill" href="https://wiki.osmfoundation.org/wiki/Terms_of_Use" target="_blank">OSM Terms</a>
@@ -302,7 +316,7 @@
     </div>
 
     <div class="desktop-only desktop-tools">
-      <button class="btn btn-icon" id="d-share" title="Share"><svg class="icon"><use href="#icon-share"/></svg></button>
+      <button class="btn btn-icon" id="d-share" title="Share Link"><svg class="icon"><use href="#icon-share"/></svg></button>
       <button class="btn btn-icon" onclick="window.open('https://www.openstreetmap.org','_blank')" title="Open OSM"><strong style="font-size:10px">OSM</strong></button>
     </div>
 
@@ -317,7 +331,7 @@
 
     <div class="mobile-only mobile-dock">
       <button class="btn btn-icon" id="m-btn-pins"><svg class="icon"><use href="#icon-pin"/></svg></button>
-      <button class="btn btn-icon primary" id="m-btn-locate" style="width:56px; height:56px"><svg class="icon"><use href="#icon-nav"/></svg></button>
+      <button class="btn btn-icon primary" id="m-btn-locate" style="width:60px; height:60px"><svg class="icon"><use href="#icon-nav"/></svg></button>
       <button class="btn btn-icon" id="m-btn-menu"><svg class="icon"><use href="#icon-menu"/></svg></button>
     </div>
 
@@ -325,7 +339,7 @@
       <div class="sheet-handle"></div>
       <div class="sheet-content">
         <div class="row" style="justify-content:space-between; margin-bottom:16px">
-          <strong>Saved Pins</strong>
+          <strong style="font-size:18px">Saved Pins</strong>
           <button class="btn primary" id="m-save-curr" style="font-size:12px">+ Save Current</button>
         </div>
         <div id="m-pin-list" style="display:flex; flex-direction:column; gap:10px; padding-bottom:60px"></div>
@@ -335,7 +349,7 @@
     <div class="mobile-only bottom-sheet" id="sheet-menu">
       <div class="sheet-handle"></div>
       <div class="sheet-content">
-        <div style="margin-bottom:20px">
+        <div style="margin-bottom:24px">
           <label style="display:block; margin-bottom:8px; font-weight:600">Map Layer</label>
           <select id="m-layer" class="std-select">
             <option value="mapnik">Standard</option>
@@ -344,11 +358,11 @@
           </select>
         </div>
         
-        <div class="row" style="justify-content:space-between; padding:10px 0; border-top:1px solid var(--border)">
+        <div class="row" style="justify-content:space-between; padding:12px 0; border-top:1px solid var(--border)">
           <span>Follow Location</span>
           <input type="checkbox" id="m-follow">
         </div>
-        <div class="row" style="justify-content:space-between; padding:10px 0; border-top:1px solid var(--border)">
+        <div class="row" style="justify-content:space-between; padding:12px 0; border-top:1px solid var(--border)">
           <span>Theme</span>
           <select id="m-theme" class="std-select" style="width:auto">
             <option value="auto">Auto</option><option value="dark">Dark</option><option value="light">Light</option>
@@ -389,6 +403,7 @@
     d_search: EL('#d-search'), d_sug: EL('#d-suggestions'),
     m_search: EL('#m-search'), m_sug: EL('#m-suggestions'),
     // Desktop
+    sidebar: EL('.desktop-sidebar'),
     d_locate: EL('#d-locate'), d_save: EL('#d-save-pin'), d_pinList: EL('#d-pin-list'),
     d_layer: EL('#d-layer'), d_follow: EL('#d-follow'), d_theme: EL('#d-theme'), d_share: EL('#d-share'),
     // Mobile
@@ -532,6 +547,10 @@
   ui.d_search.oninput = (e) => doSearch(e.target.value, ui.d_sug);
   ui.m_search.oninput = (e) => doSearch(e.target.value, ui.m_sug);
   
+  // Auto-hide Sidebar on focus
+  ui.d_search.onfocus = () => ui.sidebar.classList.add('searching');
+  ui.d_search.onblur = () => setTimeout(() => ui.sidebar.classList.remove('searching'), 200);
+
   ui.d_locate.onclick = locateOnce;
   ui.m_locate.onclick = locateOnce;
   ui.d_save.onclick = savePin;
