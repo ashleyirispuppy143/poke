@@ -2636,13 +2636,8 @@ const init = () => {
   // Check for reduced motion preference
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-  // "Jump start" hack - wrapped in safety check
-  if (AMvideo.paused) {
-    try {
-      AMvideo.pause().then(() => AMvideo.play());
-    } catch (e) { /* Ignore autoplay blocks */ }
-  }
-
+  // Fixes an issue where Firefox/Chromium fails to load ambient mode and doesn't load it. video.pause(); video.play(); // DO NOT REMOVE
+  
   AMvideo.addEventListener("play", drawStart, { passive: true });
   AMvideo.addEventListener("pause", drawPause, { passive: true });
   AMvideo.addEventListener("ended", drawPause, { passive: true });
