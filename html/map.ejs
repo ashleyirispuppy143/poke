@@ -18,34 +18,37 @@
       --accent-hover: #2563eb;
       --bg: #ffffff;
       --surface: #f8fafc;
-      --panel-bg: rgba(15, 23, 42, 0.95); /* Darker default for contrast */
-      --border: #334155;
-      --text-main: #f8fafc;
+      --panel-bg: rgba(22, 26, 35, 0.85); /* Defaulting to a dark glass for better contrast on maps */
+      --border: rgba(255, 255, 255, 0.1);
+      --text-main: #ffffff;
       --text-sub: #94a3b8;
       --danger: #ef4444;
       
       /* Dimensions */
       --sidebar-width: 320px;
-      --radius: 12px;
-      --shadow: 0 8px 16px -4px rgb(0 0 0 / 0.2);
-      --glass: blur(16px);
+      --radius: 16px;
+      --shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      --glass: blur(16px) saturate(180%);
+      
+      /* User Settings Defaults */
+      --marker-size: 20px;
+      --marker-color: #ef4444;
     }
 
-    /* Light Mode Overrides */
+    /* Light Mode Override if system prefers, but map UI often looks best dark */
     @media (prefers-color-scheme: light) {
-      :root {
-        --bg: #e2e8f0;
-        --surface: #ffffff;
+      body.light-mode {
         --panel-bg: rgba(255, 255, 255, 0.9);
         --border: #e2e8f0;
         --text-main: #0f172a;
         --text-sub: #64748b;
+        --shadow: 0 4px 12px rgba(0,0,0,0.1);
       }
     }
 
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
-    body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text-main); }
+    body { font-family: 'Inter', system-ui, sans-serif; background: #000; color: var(--text-main); }
     button { font-family: inherit; }
 
     /* --- ICONS --- */
@@ -53,14 +56,15 @@
 
     /* --- MAP --- */
     .app-shell { position: relative; width: 100%; height: 100%; }
-    #map-container { position: absolute; inset: 0; z-index: 0; background: #e5e5e5; }
+    #map-container { position: absolute; inset: 0; z-index: 0; background: #222; }
     iframe#map { width: 100%; height: 100%; border: 0; display: block; }
 
+    /* Brand Tag */
     .brand {
-      position: absolute; bottom: 24px; left: 16px;
-      padding: 6px 12px; font-size: 13px; font-weight: 700; letter-spacing: 0.5px;
+      position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+      padding: 6px 12px; font-size: 13px; font-weight: 600;
       background: var(--panel-bg); backdrop-filter: var(--glass);
-      border-radius: 8px; border: 1px solid var(--border);
+      border-radius: 20px; border: 1px solid var(--border);
       pointer-events: none; z-index: 5;
       color: var(--text-main); box-shadow: var(--shadow);
     }
@@ -68,10 +72,14 @@
     /* Marker */
     .marker-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 10; display: flex; align-items: center; justify-content: center; }
     .center-marker {
-      width: 20px; height: 20px; border-radius: 50%;
-      background: var(--danger);
-      box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.25);
-      transition: all 0.2s ease;
+      width: var(--marker-size); height: var(--marker-size); border-radius: 50%;
+      background: var(--marker-color);
+      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.2);
+      transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .center-marker::after {
+      content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 4px; height: 4px; background: rgba(0,0,0,0.5); border-radius: 50%;
     }
 
     /* --- UI LAYER --- */
@@ -81,141 +89,170 @@
     /* Shared Components */
     .btn {
       display: flex; align-items: center; justify-content: center; gap: 6px;
-      border: 1px solid var(--border); background: var(--surface); color: var(--text-main);
-      border-radius: 8px; padding: 10px 14px; font-size: 13px; font-weight: 600;
-      cursor: pointer; transition: all 0.15s;
+      border: 1px solid var(--border); background: rgba(255,255,255,0.05); color: var(--text-main);
+      border-radius: 8px; padding: 10px 14px; font-size: 13px; font-weight: 500;
+      cursor: pointer; transition: all 0.2s;
     }
-    .btn:hover { background: var(--border); transform: translateY(-1px); }
+    .btn:hover { background: rgba(255,255,255,0.1); transform: translateY(-1px); }
     .btn.primary { background: var(--accent); color: white; border-color: transparent; }
     .btn.primary:hover { background: var(--accent-hover); }
-    .btn-icon { width: 44px; height: 44px; padding: 0; border-radius: 12px; box-shadow: var(--shadow); background: var(--panel-bg); }
+    
+    .btn-icon { width: 42px; height: 42px; padding: 0; border-radius: 12px; box-shadow: var(--shadow); background: var(--panel-bg); backdrop-filter: var(--glass); border: 1px solid var(--border); }
 
-    .input-group { position: relative; width: 100%; }
+    .input-group { position: relative; width: 100%; transition: all 0.3s ease; }
     .search-input {
-      width: 100%; height: 48px; padding: 0 16px 0 44px;
-      border-radius: 12px; border: 1px solid var(--border);
-      background: var(--panel-bg); backdrop-filter: var(--glass);
+      width: 100%; height: 50px; padding: 0 16px 0 48px;
+      border-radius: 14px; border: 1px solid var(--border);
+      background: rgba(0,0,0,0.2); 
       color: var(--text-main); font-size: 15px; outline: none;
-      box-shadow: var(--shadow); transition: border-color 0.2s;
+      transition: all 0.2s;
     }
-    .search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
-    .search-icon { position: absolute; left: 14px; top: 15px; color: var(--text-sub); pointer-events: none; }
+    .search-input::placeholder { color: var(--text-sub); opacity: 0.7; }
+    .search-input:focus { background: rgba(0,0,0,0.4); border-color: var(--accent); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3); }
+    .search-icon { position: absolute; left: 16px; top: 16px; color: var(--text-sub); pointer-events: none; }
 
-    /* Suggestions */
+    /* --- RICH AUTOCOMPLETE DROPDOWN --- */
     .suggestions {
       position: absolute; top: calc(100% + 8px); left: 0; right: 0;
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 12px; margin: 0; padding: 0; list-style: none;
-      box-shadow: var(--shadow); max-height: 280px; overflow-y: auto; display: none;
+      background: var(--panel-bg); backdrop-filter: var(--glass);
+      border: 1px solid var(--border);
+      border-radius: 14px; margin: 0; padding: 6px; list-style: none;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+      max-height: 320px; overflow-y: auto; display: none;
+      animation: slideDown 0.2s ease-out;
     }
-    .suggestions li { padding: 12px 16px; border-bottom: 1px solid var(--border); cursor: pointer; font-size: 14px; display: block; color: var(--text-main); }
+    @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+    .suggestions li {
+      padding: 10px 12px; border-radius: 8px;
+      cursor: pointer; display: flex; align-items: center; gap: 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+      transition: background 0.15s;
+    }
     .suggestions li:last-child { border-bottom: 0; }
-    .suggestions li:hover { background: rgba(127,127,127,0.1); }
+    .suggestions li:hover { background: rgba(255,255,255,0.1); }
+    
+    .sug-icon {
+      width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+      background: rgba(59, 130, 246, 0.15); color: var(--accent);
+      border-radius: 8px; flex-shrink: 0;
+    }
+    .sug-text { display: flex; flex-direction: column; overflow: hidden; }
+    .sug-title { font-weight: 600; font-size: 14px; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sug-sub { font-size: 12px; color: var(--text-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
 
     /* --- DESKTOP SIDEBAR --- */
     @media (min-width: 769px) {
       .mobile-only { display: none !important; }
+      
       .desktop-sidebar {
         position: absolute; top: 20px; left: 20px;
         width: var(--sidebar-width);
         max-height: calc(100vh - 40px);
         display: flex; flex-direction: column; gap: 12px;
-        transition: opacity 0.2s;
+        transition: opacity 0.3s ease;
       }
       
-      /* HIDE other cards when searching */
-      .desktop-sidebar.searching .card:not(.static) { display: none; }
+      /* Hide non-search items when searching */
+      .desktop-sidebar.searching .card:not(.search-card) {
+        display: none;
+      }
 
       .card {
         background: var(--panel-bg); backdrop-filter: var(--glass);
-        border: 1px solid var(--border); border-radius: 12px;
+        border: 1px solid var(--border); border-radius: 16px;
         box-shadow: var(--shadow); overflow: hidden;
         display: flex; flex-direction: column;
         transition: transform 0.2s;
       }
 
       .card-header {
-        padding: 12px 16px; font-size: 13px; font-weight: 700;
+        padding: 14px 16px; font-size: 13px; font-weight: 600;
         display: flex; justify-content: space-between; align-items: center;
-        background: rgba(127,127,127,0.05); border-bottom: 1px solid var(--border);
-        cursor: pointer; user-select: none;
+        background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--border);
+        cursor: pointer; user-select: none; color: var(--text-sub);
       }
-      .card-header:hover { background: rgba(127,127,127,0.1); }
-      .card-body { padding: 16px; display: none; flex-direction: column; gap: 12px; }
-      .card.open .card-body { display: flex; }
-      
-      /* Static card (search) has no header */
+      .card-header:hover { color: var(--text-main); background: rgba(255,255,255,0.05); }
+      .card-body { padding: 16px; display: none; flex-direction: column; gap: 14px; }
+      .card.open .card-body { display: flex; animation: fadeIn 0.3s; }
+      @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+      /* Static card (Search) */
       .card.static .card-header { display: none; }
-      .card.static .card-body { display: flex; padding: 12px; }
+      .card.static .card-body { display: flex; padding: 12px; gap: 12px; }
 
       .row { display: flex; gap: 10px; align-items: center; }
+      .row.between { justify-content: space-between; }
       
-      /* Desktop Tools (Moved to Bottom Right to avoid Zoom Buttons) */
-      .desktop-tools { 
-        position: absolute; bottom: 30px; right: 20px; 
-        display: flex; flex-direction: column; gap: 12px; 
-      }
+      /* Desktop Tools (Top Right) */
+      .desktop-tools { position: absolute; top: 20px; right: 20px; display: flex; flex-direction: column; gap: 12px; }
       
-      .link-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+      .link-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
       .link-pill {
-        font-size: 11px; text-decoration: none; color: var(--text-sub);
-        border: 1px solid var(--border); padding: 4px 10px; border-radius: 99px;
-        transition: all 0.2s; background: rgba(0,0,0,0.2);
+        font-size: 10px; text-decoration: none; color: var(--text-sub);
+        border: 1px solid var(--border); padding: 4px 10px; border-radius: 12px;
+        transition: all 0.2s;
       }
-      .link-pill:hover { color: var(--accent); border-color: var(--accent); background: var(--surface); }
+      .link-pill:hover { color: var(--accent); border-color: var(--accent); background: rgba(59, 130, 246, 0.1); }
     }
 
     /* --- MOBILE --- */
     @media (max-width: 768px) {
       .desktop-only { display: none !important; }
-      .brand { bottom: 84px; font-size: 12px; }
+      .brand { bottom: 90px; font-size: 11px; opacity: 0.8; }
 
       .mobile-header { position: absolute; top: 12px; left: 12px; right: 12px; z-index: 30; }
       
       .mobile-dock {
-        position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+        position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
         display: flex; gap: 20px; align-items: center;
         background: var(--panel-bg); backdrop-filter: var(--glass);
-        padding: 10px 24px; border-radius: 32px; border: 1px solid var(--border);
+        padding: 10px 24px; border-radius: 30px; border: 1px solid var(--border);
         box-shadow: var(--shadow); z-index: 30;
       }
+      .mobile-dock .btn-icon { width: 48px; height: 48px; border-radius: 20px; background: transparent; border: 0; box-shadow: none; }
+      .mobile-dock .btn-icon:active { transform: scale(0.9); background: rgba(255,255,255,0.1); }
 
       .bottom-sheet {
         position: fixed; left: 0; right: 0; bottom: 0;
-        background: var(--surface);
+        background: #111; /* Opaque for mobile perf */
+        border-top: 1px solid var(--border);
         border-radius: 24px 24px 0 0;
-        box-shadow: 0 -8px 32px rgba(0,0,0,0.3);
+        box-shadow: 0 -10px 40px rgba(0,0,0,0.5);
         z-index: 40; transform: translateY(110%);
-        transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-        max-height: 85vh; display: flex; flex-direction: column; border-top: 1px solid var(--border);
+        transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+        max-height: 85vh; display: flex; flex-direction: column;
       }
       .bottom-sheet.open { transform: translateY(0); }
-      .sheet-handle { width: 48px; height: 6px; background: var(--border); border-radius: 10px; margin: 12px auto; opacity: 0.5; }
-      .sheet-content { padding: 0 20px 30px; overflow-y: auto; }
+      .sheet-handle { width: 40px; height: 4px; background: var(--border); border-radius: 10px; margin: 12px auto; opacity: 0.5; }
+      .sheet-content { padding: 10px 20px 40px; overflow-y: auto; }
       
       .link-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); }
     }
 
     /* Common Utility */
     .pin-item {
-      padding: 12px; background: rgba(127,127,127,0.05); border: 1px solid var(--border); border-radius: 10px;
-      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 10px;
+      display: flex; justify-content: space-between; align-items: center; transition: background 0.2s;
     }
-    .pin-info strong { display: block; font-size: 14px; margin-bottom: 3px; }
-    .pin-info span { font-size: 11px; color: var(--text-sub); font-family: monospace; }
-    .pin-actions { display: flex; gap: 12px; }
-    .pin-btn { background: none; border: none; cursor: pointer; padding: 4px; color: var(--text-sub); transition: color 0.2s; }
-    .pin-btn:hover { color: var(--accent); }
+    .pin-item:hover { background: rgba(255,255,255,0.06); }
+    .pin-info strong { display: block; font-size: 13px; margin-bottom: 4px; color: var(--text-main); }
+    .pin-info span { font-size: 11px; color: var(--text-sub); font-family: monospace; background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; }
+    .pin-actions { display: flex; gap: 8px; }
+    .pin-btn { background: none; border: none; cursor: pointer; padding: 6px; color: var(--text-sub); border-radius: 6px; }
+    .pin-btn:hover { color: var(--accent); background: rgba(255,255,255,0.05); }
 
     select.std-select {
       width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border);
-      background: var(--surface); color: var(--text-main); font-size: 14px;
-      appearance: none;
+      background: rgba(0,0,0,0.3); color: var(--text-main); outline: none;
+      cursor: pointer;
     }
-    label { font-size: 13px; font-weight: 500; color: var(--text-sub); margin-bottom: 4px; display: block; }
+    input[type="color"] { width: 40px; height: 30px; border: 0; background: none; cursor: pointer; }
+    input[type="range"] { accent-color: var(--accent); width: 100px; }
+    label { font-size: 13px; font-weight: 500; color: var(--text-sub); }
   </style>
 </head>
-<body>
+<body class="">
 
 <div style="display:none">
   <svg id="icons">
@@ -226,6 +263,7 @@
     <symbol id="icon-trash" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></symbol>
     <symbol id="icon-go" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 16 16 12 12 8"></polyline><line x1="8" y1="12" x2="16" y2="12"></line></symbol>
     <symbol id="icon-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></symbol>
+    <symbol id="icon-loc" viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7z"></path><circle cx="12" cy="9" r="2.5"></circle></symbol>
   </svg>
 </div>
 
@@ -241,9 +279,9 @@
 
   <div class="ui-layer">
 
-    <div class="desktop-only desktop-sidebar">
+    <div class="desktop-only desktop-sidebar" id="sidebar">
       
-      <div class="card static">
+      <div class="card search-card static">
         <div class="card-body">
           <div class="input-group">
             <svg class="icon search-icon"><use href="#icon-search"/></svg>
@@ -252,15 +290,15 @@
           </div>
           <div class="row">
             <button class="btn" style="flex:1" id="d-locate"><svg class="icon"><use href="#icon-nav"/></svg> Locate</button>
-            <button class="btn" style="flex:1" id="d-save-pin"><svg class="icon"><use href="#icon-pin"/></svg> Save Pin</button>
+            <button class="btn" style="flex:1" id="d-save-pin"><svg class="icon"><use href="#icon-pin"/></svg> Save</button>
           </div>
         </div>
       </div>
 
-      <div class="card">
+      <div class="card open">
         <div class="card-header" onclick="this.parentElement.classList.toggle('open')">
           <span>Saved Pins</span>
-          <small>▼</small>
+          <svg class="icon" style="opacity:0.5; width:14px; height:14px"><use href="#icon-pin"/></svg>
         </div>
         <div class="card-body">
           <div id="d-pin-list" style="display:flex; flex-direction:column; gap:8px;"></div>
@@ -270,45 +308,57 @@
       <div class="card">
         <div class="card-header" onclick="this.parentElement.classList.toggle('open')">
           <span>Settings</span>
-          <small>▼</small>
+          <svg class="icon" style="opacity:0.5; width:14px; height:14px"><use href="#icon-menu"/></svg>
         </div>
         <div class="card-body">
-          <div>
-            <label>Map Layer</label>
-            <select id="d-layer" class="std-select">
-              <option value="mapnik">Standard</option>
-              <option value="cyclemap">Cyclist</option>
-              <option value="transportmap">Transport</option>
-            </select>
+          <label>Layer</label>
+          <select id="d-layer" class="std-select">
+            <option value="mapnik">Standard</option>
+            <option value="cyclemap">Cyclist</option>
+            <option value="transportmap">Transport</option>
+            <option value="hot">Humanitarian</option>
+          </select>
+          
+          <div class="row between" style="margin-top:4px">
+            <label>Auto-Follow</label>
+            <input type="checkbox" id="d-follow" style="width:16px; height:16px; accent-color:var(--accent)">
           </div>
-          <div class="row" style="justify-content:space-between">
-            <label style="margin:0">Follow Location</label>
-            <input type="checkbox" id="d-follow">
+          
+          <div class="row between">
+             <label>Theme</label>
+             <select id="d-theme" class="std-select" style="width:auto; padding:4px 8px; font-size:12px">
+               <option value="auto">Auto</option><option value="dark">Dark</option><option value="light">Light</option>
+             </select>
           </div>
-           <div class="row" style="justify-content:space-between">
-            <label style="margin:0">Dark Mode</label>
-            <select id="d-theme" class="std-select" style="width:auto; padding:4px 8px">
-              <option value="auto">Auto</option><option value="dark">Dark</option><option value="light">Light</option>
-            </select>
+
+          <hr style="border:0; border-top:1px solid var(--border); width:100%; margin:4px 0;">
+          
+          <div class="row between">
+            <label>Marker Size</label>
+            <input type="range" id="d-marker-size" min="10" max="50" value="20">
           </div>
+          <div class="row between">
+            <label>Marker Color</label>
+            <input type="color" id="d-marker-color" value="#ef4444">
+          </div>
+
         </div>
       </div>
 
       <div class="card">
         <div class="card-header" onclick="this.parentElement.classList.toggle('open')">
           <span>About</span>
-          <small>▼</small>
+          <small style="opacity:0.5">ℹ</small>
         </div>
-        <div class="card-body" style="font-size:12px; line-height:1.5; color:var(--text-sub)">
-          <p><strong>PokeMaps Public Beta</strong> is a lightweight viewer for exploring and sharing map positions.</p>
-          <p><strong>Map credits:</strong> © <a href="https://www.openstreetmap.org/" target="_blank" style="color:var(--accent)">OpenStreetMap.org</a> contributors.</p>
-          <p><strong>Disclaimer:</strong> Geographic names and borders are for reference only.</p>
+        <div class="card-body" style="font-size:12px; line-height:1.6; color:var(--text-sub)">
+          <p><strong>PokeMaps Public Beta</strong><br>Lightweight, fast, and privacy-focused map viewer.</p>
+          <p>Data © <a href="https://www.openstreetmap.org/" target="_blank" style="color:var(--accent)">OpenStreetMap</a>.</p>
           
           <div class="link-row">
             <a class="link-pill" href="https://wiki.osmfoundation.org/wiki/Terms_of_Use" target="_blank">OSM Terms</a>
             <a class="link-pill" href="https://www.openstreetmap.org/copyright" target="_blank">Copyright</a>
-            <a class="link-pill" href="https://operations.osmfoundation.org/policies/nominatim/" target="_blank">Nominatim Policy</a>
-            <a class="link-pill" href="/privacy" target="_blank">Privacy Policy</a>
+            <a class="link-pill" href="https://operations.osmfoundation.org/policies/nominatim/" target="_blank">Data Policy</a>
+            <a class="link-pill" href="/privacy" target="_blank">Privacy</a>
           </div>
         </div>
       </div>
@@ -317,7 +367,7 @@
 
     <div class="desktop-only desktop-tools">
       <button class="btn btn-icon" id="d-share" title="Share Link"><svg class="icon"><use href="#icon-share"/></svg></button>
-      <button class="btn btn-icon" onclick="window.open('https://www.openstreetmap.org','_blank')" title="Open OSM"><strong style="font-size:10px">OSM</strong></button>
+      <button class="btn btn-icon" onclick="window.open('https://www.openstreetmap.org','_blank')" title="Open in OSM"><strong style="font-size:10px; color:var(--accent)">OSM</strong></button>
     </div>
 
 
@@ -330,17 +380,17 @@
     </div>
 
     <div class="mobile-only mobile-dock">
-      <button class="btn btn-icon" id="m-btn-pins"><svg class="icon"><use href="#icon-pin"/></svg></button>
-      <button class="btn btn-icon primary" id="m-btn-locate" style="width:60px; height:60px"><svg class="icon"><use href="#icon-nav"/></svg></button>
-      <button class="btn btn-icon" id="m-btn-menu"><svg class="icon"><use href="#icon-menu"/></svg></button>
+      <button class="btn-icon" id="m-btn-pins"><svg class="icon"><use href="#icon-pin"/></svg></button>
+      <button class="btn-icon primary" id="m-btn-locate" style="width:64px; height:64px; border-radius:24px; background:var(--accent); color:#fff"><svg class="icon" style="width:24px; height:24px"><use href="#icon-nav"/></svg></button>
+      <button class="btn-icon" id="m-btn-menu"><svg class="icon"><use href="#icon-menu"/></svg></button>
     </div>
 
     <div class="mobile-only bottom-sheet" id="sheet-pins">
       <div class="sheet-handle"></div>
       <div class="sheet-content">
-        <div class="row" style="justify-content:space-between; margin-bottom:16px">
+        <div class="row" style="justify-content:space-between; margin-bottom:16px; align-items:center;">
           <strong style="font-size:18px">Saved Pins</strong>
-          <button class="btn primary" id="m-save-curr" style="font-size:12px">+ Save Current</button>
+          <button class="btn primary" id="m-save-curr" style="font-size:12px; padding:6px 12px">+ Save Current</button>
         </div>
         <div id="m-pin-list" style="display:flex; flex-direction:column; gap:10px; padding-bottom:60px"></div>
       </div>
@@ -349,20 +399,23 @@
     <div class="mobile-only bottom-sheet" id="sheet-menu">
       <div class="sheet-handle"></div>
       <div class="sheet-content">
-        <div style="margin-bottom:24px">
-          <label style="display:block; margin-bottom:8px; font-weight:600">Map Layer</label>
+        <strong style="font-size:18px; display:block; margin-bottom:20px">Map Settings</strong>
+        
+        <div style="margin-bottom:20px">
+          <label style="display:block; margin-bottom:8px">Map Layer</label>
           <select id="m-layer" class="std-select">
             <option value="mapnik">Standard</option>
             <option value="cyclemap">Cyclist</option>
             <option value="transportmap">Transport</option>
+            <option value="hot">Humanitarian</option>
           </select>
         </div>
         
-        <div class="row" style="justify-content:space-between; padding:12px 0; border-top:1px solid var(--border)">
+        <div class="row between" style="padding:14px 0; border-top:1px solid var(--border)">
           <span>Follow Location</span>
-          <input type="checkbox" id="m-follow">
+          <input type="checkbox" id="m-follow" style="width:20px; height:20px; accent-color:var(--accent)">
         </div>
-        <div class="row" style="justify-content:space-between; padding:12px 0; border-top:1px solid var(--border)">
+        <div class="row between" style="padding:14px 0; border-top:1px solid var(--border)">
           <span>Theme</span>
           <select id="m-theme" class="std-select" style="width:auto">
             <option value="auto">Auto</option><option value="dark">Dark</option><option value="light">Light</option>
@@ -370,13 +423,8 @@
         </div>
 
         <div style="margin-top:20px; padding-top:20px; border-top:1px solid var(--border)">
-          <strong style="display:block; margin-bottom:10px">About PokeMaps</strong>
-          <p style="font-size:13px; color:var(--text-sub); line-height:1.5">
-            A lightweight map viewer. Search provided by Nominatim/OSM. Tiles by OpenStreetMap.
-          </p>
           <div class="link-row">
             <a class="link-pill" href="https://wiki.osmfoundation.org/wiki/Terms_of_Use">OSM Terms</a>
-            <a class="link-pill" href="https://www.openstreetmap.org/copyright">Copyright</a>
             <a class="link-pill" href="/privacy">Privacy Policy</a>
           </div>
         </div>
@@ -400,13 +448,14 @@
   const ui = {
     map: EL('#map'),
     marker: EL('#center-marker'),
+    sidebar: EL('#sidebar'),
     d_search: EL('#d-search'), d_sug: EL('#d-suggestions'),
     m_search: EL('#m-search'), m_sug: EL('#m-suggestions'),
-    // Desktop
-    sidebar: EL('.desktop-sidebar'),
+    // Desktop Inputs
     d_locate: EL('#d-locate'), d_save: EL('#d-save-pin'), d_pinList: EL('#d-pin-list'),
     d_layer: EL('#d-layer'), d_follow: EL('#d-follow'), d_theme: EL('#d-theme'), d_share: EL('#d-share'),
-    // Mobile
+    d_mSize: EL('#d-marker-size'), d_mColor: EL('#d-marker-color'),
+    // Mobile Inputs
     m_locate: EL('#m-btn-locate'), m_pinsBtn: EL('#m-btn-pins'), m_menuBtn: EL('#m-btn-menu'),
     m_save: EL('#m-save-curr'), m_pinList: EL('#m-pin-list'),
     m_layer: EL('#m-layer'), m_follow: EL('#m-follow'), m_theme: EL('#m-theme'),
@@ -437,35 +486,22 @@
     // Sync Inputs
     if(ui.d_layer.value !== STATE.layer) ui.d_layer.value = STATE.layer;
     if(ui.m_layer.value !== STATE.layer) ui.m_layer.value = STATE.layer;
-    ui.marker.style.background = STATE.following ? 'var(--accent)' : 'var(--danger)';
-    ui.marker.style.boxShadow = STATE.following ? '0 0 0 4px var(--accent-hover)' : '0 0 0 4px rgba(239, 68, 68, 0.25)';
+    
+    // Follow State
+    ui.d_follow.checked = STATE.following;
+    ui.m_follow.checked = STATE.following;
   };
 
-  // --- LOCATION ---
-  let watchId = null;
-  const toggleFollow = () => {
-    if (STATE.following) {
-      STATE.following = false;
-      if (watchId) navigator.geolocation.clearWatch(watchId);
-      ui.d_follow.checked = false; ui.m_follow.checked = false;
-      updateMap();
-    } else {
-      if (!navigator.geolocation) return alert("Geolocation not supported");
-      STATE.following = true;
-      ui.d_follow.checked = true; ui.m_follow.checked = true;
-      watchId = navigator.geolocation.watchPosition(
-        p => { STATE.lat = p.coords.latitude; STATE.lon = p.coords.longitude; updateMap(); },
-        e => { alert("Location access denied"); toggleFollow(); },
-        { enableHighAccuracy: true }
-      );
+  // --- FOCUS MODE (Sidebar invisible while searching) ---
+  const setFocusMode = (isFocused) => {
+    if(window.innerWidth > 768) {
+      if(isFocused) ui.sidebar.classList.add('searching');
+      else ui.sidebar.classList.remove('searching');
     }
   };
-  const locateOnce = () => {
-    navigator.geolocation.getCurrentPosition(p => {
-      STATE.lat = p.coords.latitude; STATE.lon = p.coords.longitude; STATE.delta = 0.01;
-      updateMap(true);
-    }, e => alert("Could not locate"));
-  };
+  ui.d_search.addEventListener('focus', () => setFocusMode(true));
+  // Delay blur to allow clicking suggestions
+  ui.d_search.addEventListener('blur', () => setTimeout(() => setFocusMode(false), 200));
 
   // --- SEARCH ---
   let timer;
@@ -476,7 +512,14 @@
     const m = val.match(/([+-]?\d+\.?\d*)\s*,\s*([+-]?\d+\.?\d*)/);
     if(m) {
       const lat = parseFloat(m[1]), lon = parseFloat(m[2]);
-      list.innerHTML = `<li onclick="goTo(${lat},${lon})">📍 ${lat.toFixed(4)}, ${lon.toFixed(4)}</li>`;
+      list.innerHTML = `
+        <li onclick="goTo(${lat},${lon})">
+          <div class="sug-icon"><svg class="icon"><use href="#icon-loc"/></svg></div>
+          <div class="sug-text">
+            <span class="sug-title">${lat.toFixed(4)}, ${lon.toFixed(4)}</span>
+            <span class="sug-sub">Coordinates</span>
+          </div>
+        </li>`;
       list.style.display = 'block';
       return;
     }
@@ -488,14 +531,27 @@
         const d = await r.json();
         list.innerHTML = '';
         if(!d.length) { list.style.display = 'none'; return; }
+        
         d.slice(0,5).forEach(i => {
+          // Parse Name vs Address
+          let parts = i.display_name.split(',');
+          let main = parts[0];
+          let sub = parts.slice(1).join(',').trim();
+
           const li = document.createElement('li');
-          li.textContent = i.display_name;
+          li.innerHTML = `
+            <div class="sug-icon"><svg class="icon"><use href="#icon-loc"/></svg></div>
+            <div class="sug-text">
+              <span class="sug-title">${main}</span>
+              <span class="sug-sub">${sub}</span>
+            </div>
+          `;
           li.onclick = () => { 
             goTo(parseFloat(i.lat), parseFloat(i.lon)); 
             list.style.display = 'none'; 
-            ui.d_search.value = i.display_name.split(',')[0];
-            ui.m_search.value = ui.d_search.value;
+            ui.d_search.value = main;
+            ui.m_search.value = main;
+            ui.d_search.blur(); ui.m_search.blur();
           };
           list.appendChild(li);
         });
@@ -504,29 +560,55 @@
     }, 400);
   };
   
-  window.goTo = (lat, lon) => { STATE.lat = lat; STATE.lon = lon; updateMap(true); };
+  window.goTo = (lat, lon) => { 
+    STATE.lat = lat; STATE.lon = lon; STATE.following = false; updateMap(true); 
+  };
 
-  // --- PINS ---
+  // --- LOCATION & PINS ---
+  let watchId = null;
+  const toggleFollow = () => {
+    if (STATE.following) {
+      STATE.following = false;
+      if (watchId) navigator.geolocation.clearWatch(watchId);
+      updateMap();
+    } else {
+      if (!navigator.geolocation) return alert("Geolocation not supported");
+      STATE.following = true;
+      watchId = navigator.geolocation.watchPosition(
+        p => { STATE.lat = p.coords.latitude; STATE.lon = p.coords.longitude; updateMap(); },
+        e => { STATE.following = false; updateMap(); alert("Location access denied"); },
+        { enableHighAccuracy: true }
+      );
+      updateMap(); // update UI immediately
+    }
+  };
+  const locateOnce = () => {
+    navigator.geolocation.getCurrentPosition(p => {
+      STATE.lat = p.coords.latitude; STATE.lon = p.coords.longitude; STATE.delta = 0.01;
+      updateMap(true);
+    }, e => alert("Could not locate"));
+  };
+
   const renderPins = () => {
     const html = PINS.length ? PINS.map((p, i) => `
       <div class="pin-item">
         <div class="pin-info"><strong>${p.name}</strong><span>${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</span></div>
         <div class="pin-actions">
-          <button class="pin-btn" onclick="loadPin(${i})"><svg class="icon"><use href="#icon-go"/></svg></button>
-          <button class="pin-btn" onclick="delPin(${i})"><svg class="icon"><use href="#icon-trash"/></svg></button>
+          <button class="pin-btn" onclick="loadPin(${i})" title="Go"><svg class="icon"><use href="#icon-go"/></svg></button>
+          <button class="pin-btn" onclick="delPin(${i})" title="Delete"><svg class="icon"><use href="#icon-trash"/></svg></button>
         </div>
       </div>
-    `).join('') : '<div style="text-align:center; opacity:0.6; padding:10px; font-size:12px">No pins yet</div>';
+    `).join('') : '<div style="text-align:center; opacity:0.5; padding:20px; font-size:13px">No saved pins</div>';
     
     ui.d_pinList.innerHTML = html;
     ui.m_pinList.innerHTML = html;
   };
 
-  window.loadPin = (i) => { STATE.lat = PINS[i].lat; STATE.lon = PINS[i].lon; STATE.layer = PINS[i].layer; updateMap(true); closeSheets(); };
-  window.delPin = (i) => { if(confirm("Delete pin?")){ PINS.splice(i,1); localStorage.setItem('pm_pins', JSON.stringify(PINS)); renderPins(); } };
+  window.loadPin = (i) => { STATE.lat = PINS[i].lat; STATE.lon = PINS[i].lon; STATE.layer = PINS[i].layer || 'mapnik'; updateMap(true); closeSheets(); };
+  window.delPin = (i) => { if(confirm("Remove this pin?")){ PINS.splice(i,1); localStorage.setItem('pm_pins', JSON.stringify(PINS)); renderPins(); } };
   
   const savePin = () => {
-    const name = prompt("Name this location:", "New Pin");
+    const name = prompt("Name this location:", "New Place");
     if(name) {
       PINS.unshift({ name, lat: STATE.lat, lon: STATE.lon, layer: STATE.layer });
       localStorage.setItem('pm_pins', JSON.stringify(PINS));
@@ -534,37 +616,39 @@
     }
   };
 
-  // --- MISC ---
-  const closeSheets = () => document.querySelectorAll('.bottom-sheet').forEach(s => s.classList.remove('open'));
-  const toggleSheet = (s) => { const o = s.classList.contains('open'); closeSheets(); if(!o) s.classList.add('open'); };
-  
+  // --- MARKER & THEME SETTINGS ---
+  const updateMarker = () => {
+    const size = ui.d_mSize.value + 'px';
+    const color = ui.d_mColor.value;
+    document.documentElement.style.setProperty('--marker-size', size);
+    document.documentElement.style.setProperty('--marker-color', color);
+  };
+  ui.d_mSize.oninput = updateMarker;
+  ui.d_mColor.oninput = updateMarker;
+
   const applyTheme = (t) => {
-    document.documentElement.style.colorScheme = t === 'auto' ? 'dark light' : t;
+    document.body.classList.toggle('light-mode', t === 'light');
+    if(t === 'auto') document.body.classList.remove('light-mode'); // simplified logic
     ui.d_theme.value = t; ui.m_theme.value = t;
   };
 
+  // --- MOBILE SHEETS ---
+  const closeSheets = () => document.querySelectorAll('.bottom-sheet').forEach(s => s.classList.remove('open'));
+  const toggleSheet = (s) => { const o = s.classList.contains('open'); closeSheets(); if(!o) s.classList.add('open'); };
+  
   // --- LISTENERS ---
   ui.d_search.oninput = (e) => doSearch(e.target.value, ui.d_sug);
   ui.m_search.oninput = (e) => doSearch(e.target.value, ui.m_sug);
   
-  // Auto-hide Sidebar on focus
-  ui.d_search.onfocus = () => ui.sidebar.classList.add('searching');
-  ui.d_search.onblur = () => setTimeout(() => ui.sidebar.classList.remove('searching'), 200);
-
-  ui.d_locate.onclick = locateOnce;
-  ui.m_locate.onclick = locateOnce;
-  ui.d_save.onclick = savePin;
-  ui.m_save.onclick = savePin;
-  ui.d_share.onclick = () => { navigator.clipboard.writeText(location.href); alert("Copied to clipboard!"); };
+  ui.d_locate.onclick = locateOnce; ui.m_locate.onclick = locateOnce;
+  ui.d_save.onclick = savePin; ui.m_save.onclick = savePin;
+  ui.d_share.onclick = () => { navigator.clipboard.writeText(location.href); alert("Link copied!"); };
   
   ui.d_layer.onchange = (e) => { STATE.layer = e.target.value; updateMap(true); };
   ui.m_layer.onchange = (e) => { STATE.layer = e.target.value; updateMap(true); };
   
-  ui.d_follow.onchange = toggleFollow;
-  ui.m_follow.onchange = toggleFollow;
-  
-  ui.d_theme.onchange = (e) => applyTheme(e.target.value);
-  ui.m_theme.onchange = (e) => applyTheme(e.target.value);
+  ui.d_follow.onchange = toggleFollow; ui.m_follow.onchange = toggleFollow;
+  ui.d_theme.onchange = (e) => applyTheme(e.target.value); ui.m_theme.onchange = (e) => applyTheme(e.target.value);
   
   ui.m_pinsBtn.onclick = () => toggleSheet(ui.sheetPins);
   ui.m_menuBtn.onclick = () => toggleSheet(ui.sheetMenu);
@@ -581,6 +665,7 @@
   
   renderPins();
   updateMap();
+  updateMarker();
 })();
 </script>
 </body>
