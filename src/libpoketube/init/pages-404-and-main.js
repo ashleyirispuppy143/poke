@@ -49,8 +49,12 @@ module.exports = function (app, config, renderTemplate) {
     tab = `/?type=${capitalizeFirstLetter(req.query.tab)}`;
   }
  
-  const t = " ";
+const invtrend = await fetch(`${config.invapi}/trending${tab}`, {
+    headers: { "User-Agent": config.useragent },
+  });
+  const t = getJson(await invtrend.text());
 
+   
   const p = "";
 
   let j = { results: [], meta: {} };
@@ -156,7 +160,7 @@ module.exports = function (app, config, renderTemplate) {
 
 
     const officialHost = "poketube.fun";
-    const officialApi ="https://invid-api.poketube.fun/bHj665PpYhUdPWuKPfZuQGoX/api/v1";
+    const officialApi = config.invapi
 
    if (req.hostname !== officialHost && config.invapi === officialApi) {
     const message = `
