@@ -2572,17 +2572,18 @@ if (/[?&]autoplay=/.test(location.search)) {
                <% if(!IsOldWindows) { %>
 
 <script>
-const AMvideo = document.getElementById("video");
+cconst AMvideo = document.getElementById("video");
 const canvases = [
   document.getElementById("ambient-canvas-1"),
   document.getElementById("ambient-canvas-2")
 ];
-const contexts = canvases.map(c => c.getContext("2d", { alpha: false })); // alpha: false improves performance
+// alpha: false tells browser the background is opaque (faster)
+const contexts = canvases.map(c => c.getContext("2d", { alpha: false })); 
 
 const CONFIG = {
   baseInterval: 998,
   opacity: "0.4",
-  // Determine update speed based on cores, keeping original logic's frequency
+  // Determine update speed based on cores
   updateRate: 998 / (navigator.hardwareConcurrency || 4) 
 };
 
@@ -2636,13 +2637,17 @@ const init = () => {
   // Check for reduced motion preference
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-  // Fixes an issue where Firefox/Chromium fails to load ambient mode and doesn't load it. video.pause(); video.play(); // DO NOT REMOVE
-  
+  // fix Firefox/Chromium loading issues.
+  // We pause then play to force the state. 
+  // We catch errors to prevent console warnings if autoplay is blocked by browser policy.
+  AMvideo.pause();
+  AMvideo.play().catch(() => { /* Autoplay blocked, user interaction required */ });
+
   AMvideo.addEventListener("play", drawStart, { passive: true });
   AMvideo.addEventListener("pause", drawPause, { passive: true });
   AMvideo.addEventListener("ended", drawPause, { passive: true });
   
-  // Start if already playing
+  // Start drawing loop if video successfully started playing
   if (!AMvideo.paused) drawStart();
 };
 
