@@ -400,7 +400,7 @@ module.exports = function (app, config, renderTemplate) {
     let invidious = null;
     try {
       const invTxt = await modules
-        .fetch("https://invid-api.poketube.fun/bHj665PpYhUdPWuKPfZuQGoX/api/v1/stats", { headers })
+        .fetch(cnf.invapi + "/stats", { headers })
         .then(r => r.text());
       invidious = getJson(invTxt);
     } catch {
@@ -420,8 +420,7 @@ module.exports = function (app, config, renderTemplate) {
       relaseunixdate,
       vernum: versionnumber,
       codename,
-      config: configWithoutUA,
-      system: {
+       system: {
         os_name: osr?.pretty_name || osr?.name || (platform === "linux" ? "GNU/Linux" : os.type()),
         distro: osr ? {
           pretty_name: osr.pretty_name,
