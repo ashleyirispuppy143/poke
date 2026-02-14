@@ -1,23 +1,3 @@
-<!--
-
-    This Source Code Form is subject to the terms of the GNU General Public License:
-
-    Copyright (C) 2021-2025 Poke (https://codeberg.org/ashley/poke)
-    
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program. If not, see https://www.gnu.org/licenses/.
---->
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -25,350 +5,383 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Poke — Apps</title>
   <meta name="description" content="Poke is free software: a privacy-first suite with a player, translator, maps, notes, calendar, and more." />
-  <meta name="theme-color" content="#0d0f14" id="themeColorMeta" />
-  <meta property="og:type" content="website" />
-  <meta property="og:title" content="Poke — Apps" />
-  <meta property="og:description" content="Explore the Poke suite: watch, translate, map, take notes, and more — all privacy-first." />
-  <link rel="icon" href="/css/yt-ukraine.svg?v=3" />
+  <meta name="theme-color" content="#0b0e14" />
+  
   <link href="https://p.poketube.fun/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css" rel="stylesheet" />
-
+  
   <style>
-    :root{
-      --ink:#eef2f8;
-      --muted:#c4cede;
-      --accent:#0ea5e9;
-      --accent-2:#7dd3fc;
-      --glass:rgba(13,15,20,.52);
-      --glass-2:rgba(13,15,20,.64);
-      --ring:0 0 0 3px rgba(14,165,233,.35);
-      --radius:16px;
-      --shadow:0 20px 60px rgba(0,0,0,.35);
-      --maxw:1120px;
+    :root {
+      /* Palette */
+      --bg-deep: #050608;
+      --bg-card: #11141d;
+      --bg-card-hover: #1a1f2b;
+      
+      --ink: #f1f5f9;
+      --muted: #94a3b8;
+      
+      --accent: #0ea5e9;       /* Sky Blue */
+      --accent-glow: rgba(14, 165, 233, 0.4);
+      --border: rgba(255, 255, 255, 0.1);
+      --border-hover: rgba(255, 255, 255, 0.25);
+      
+      /* Layout */
+      --maxw: 1080px;
+      --radius: 16px;
+      --transition: 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
     }
 
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{
-      margin:0;
-      color:var(--ink);
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, "Noto Sans", Arial, "Apple Color Emoji", "Segoe UI Emoji";
-      background:#0b0e14;
-      overflow-x:hidden;
+    * { box-sizing: border-box; }
+    
+    html, body { height: 100%; }
+    
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg-deep);
+      overflow-x: hidden;
     }
 
-    /* === Background video === */
-    .bg{
-      position:fixed; inset:0; z-index:-2;
-      background:#0b0e14;
+    /* === Background Video === */
+    .bg {
+      position: fixed; inset: 0; z-index: -2;
+      background: var(--bg-deep);
     }
-    .bg video{
-      position:absolute; inset:0; width:100%; height:100%;
-      object-fit:cover; object-position:center;
-      filter:saturate(105%) contrast(102%) brightness(70%);
+    .bg video {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      object-fit: cover;
+      opacity: 0.4; /* Dimmed for readability */
+      filter: saturate(110%);
     }
-    .bg::after{
-      /* soft vignette + gradient tint so text is readable */
-      content:""; position:absolute; inset:0; z-index:1;
-      background:
-        radial-gradient(1200px 700px at 20% 10%, rgba(14,165,233,.18), transparent 60%),
-        linear-gradient(180deg, rgba(7,10,16,.75) 0%, rgba(7,10,16,.35) 40%, rgba(7,10,16,.8) 100%),
-        radial-gradient(80% 60% at 80% 20%, rgba(124,58,237,.12), transparent 60%);
-      pointer-events:none;
+    .bg::after {
+      /* Gradient overlay to fade video into bottom/edges */
+      content: ""; position: absolute; inset: 0; z-index: 1;
+      background: radial-gradient(circle at 50% 30%, transparent 0%, var(--bg-deep) 90%);
     }
 
-    /* === Layout === */
-    .page{
-      min-height:100dvh;
-      display:flex; flex-direction:column;
+    /* === Layout Wrapper === */
+    .page {
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+      max-width: var(--maxw);
+      margin: 0 auto;
     }
 
-    /* === Top nav === */
-    .nav{
-      position:sticky; top:0; z-index:10;
-      display:flex; align-items:center; justify-content:space-between;
-      padding:12px 18px;
-      max-width:var(--maxw); margin-inline:auto;
-      backdrop-filter: blur(10px);
-      background:linear-gradient(180deg, var(--glass-2), transparent);
-      border-radius:0 0 var(--radius) var(--radius);
-    }
-    .brand{
-      display:flex; align-items:center; gap:10px; font-weight:900; letter-spacing:.2px;
-    }
-    .brand img{ width:26px; height:26px; border-radius:6px }
-    .nav .right{ display:flex; align-items:center; gap:10px }
-    .search{
-      display:flex; align-items:center; gap:10px;
-      background:rgba(255,255,255,.06);
-      border:1px solid rgba(255,255,255,.13);
-      border-radius:999px; padding:8px 12px; min-width:260px;
-      transition:background .2s ease, border-color .2s ease;
-    }
-    .search:focus-within{ background:rgba(255,255,255,.10); border-color:rgba(255,255,255,.24); box-shadow:var(--ring) }
-    .search input{
-      flex:1; background:transparent; border:0; outline:0; color:var(--ink);
-      font-size:.95rem
-    }
-    .icon-btn{
-      display:grid; place-items:center; width:38px; height:38px; border-radius:10px;
-      background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.13);
-      color:var(--ink); text-decoration:none; transition:transform .15s ease, background .2s ease, border-color .2s ease;
-    }
-    .icon-btn:hover{ transform:translateY(-2px); background:rgba(255,255,255,.1); border-color:rgba(255,255,255,.22) }
-
-    /* === Hero === */
-    .hero{
-      max-width:var(--maxw);
-      margin: clamp(18px, 5dvh, 56px) auto 0;
-      padding: clamp(16px, 2.8vw, 28px);
-      display:grid; gap:18px;
-      background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
-      border:1px solid rgba(255,255,255,.14);
-      border-radius:var(--radius);
-      box-shadow:var(--shadow);
-      backdrop-filter: blur(8px);
-    }
-    .kicker{
-      display:inline-flex; align-items:center; gap:8px;
-      font-size:12px; letter-spacing:.35px; text-transform:uppercase; color:var(--muted);
-      background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.18);
-      padding:8px 12px; border-radius:999px; width:max-content
-    }
-    h1.title{
-      margin:0; line-height:1.04; letter-spacing:.4px;
-      font-weight:1000; font-size:clamp(30px, 5.6vw, 56px);
-      text-wrap:balance;
-    }
-    .subtitle{
-      margin:0; color:var(--muted); max-width:70ch; font-size:clamp(15px, 1.7vw, 18px);
-    }
-    .cta-row{
-      display:flex; flex-wrap:wrap; gap:10px; margin-top:6px;
-    }
-    .cta{
-      display:inline-flex; align-items:center; gap:10px; text-decoration:none;
-      padding:12px 16px; border-radius:12px; font-weight:800; letter-spacing:.2px;
-      border:1px solid rgba(255,255,255,.22);
-      background:linear-gradient(180deg, color-mix(in oklab, var(--accent) 88%, #fff), color-mix(in oklab, var(--accent-2) 88%, #fff));
-      color:#0b0f14;
-      transition:transform .15s ease, filter .15s ease;
-    }
-    .cta:hover{ transform:translateY(-2px); filter:saturate(1.04) }
-    .ghost{
-      background:rgba(255,255,255,.06); color:var(--ink);
-      border:1px solid rgba(255,255,255,.18); font-weight:700;
+    /* === Hero Section === */
+    .hero {
+      margin-top: clamp(40px, 10vh, 100px);
+      margin-bottom: 40px;
+      text-align: center;
+      position: relative;
     }
 
-    /* === App grid === */
-    .apps{
-      max-width:var(--maxw);
-      margin: 18px auto clamp(24px, 6dvh, 64px);
-      padding: clamp(10px, 2.4vw, 18px);
-      display:grid; gap:14px;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    }
-    .card{
-      position:relative;
-      display:flex; flex-direction:column; gap:8px;
-      text-decoration:none; color:var(--ink);
-      background:rgba(255,255,255,.06);
-      border:1px solid rgba(255,255,255,.14);
-      border-radius:var(--radius);
-      padding:16px;
-      transition:transform .15s ease, background .2s ease, border-color .2s ease;
-      outline: none;
-      min-height:120px;
-      backdrop-filter: blur(6px);
-    }
-    .card:hover{ transform:translateY(-4px); background:rgba(255,255,255,.1); border-color:rgba(255,255,255,.24) }
-    .card:focus-visible{ box-shadow:var(--ring) }
-
-    .row{ display:flex; align-items:center; gap:12px }
-    .badge{
-      display:grid; place-items:center; width:42px; height:42px; border-radius:12px;
-      background:linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,.06));
-      border:1px solid rgba(255,255,255,.22);
-      color:var(--ink); font-size:20px
-    }
-    .name{ font-weight:800; letter-spacing:.2px }
-    .hint{ color:var(--muted); font-size:.9rem }
-    .ext{ position:absolute; right:12px; top:12px; color:var(--muted); font-size:.85rem }
-
-    /* === Footer === */
-    footer{
-      max-width:var(--maxw); margin: 0 auto 28px; padding:12px 18px;
-      color:var(--muted); text-align:center;
-      background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,0));
-      border:1px solid rgba(255,255,255,.12);
-      border-radius:var(--radius);
-      backdrop-filter: blur(6px);
+    h1.title {
+      margin: 0 0 16px 0;
+      font-weight: 900;
+      font-size: clamp(36px, 5vw, 64px);
+      letter-spacing: -1px;
+      background: linear-gradient(to bottom right, #fff 30%, #cbd5e1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: 0 0 30px rgba(255,255,255,0.1);
     }
 
-    /* Mobile tweaks */
-    @media (max-width:720px){
-      .nav{ padding-inline:12px }
-      .search{ min-width:0; width:min(58vw, 300px) }
-      .cta-row{ gap:8px }
-      .hero{ padding:16px }
+    .subtitle {
+      margin: 0 auto 32px auto;
+      color: var(--muted);
+      font-size: clamp(16px, 2vw, 19px);
+      max-width: 600px;
+      line-height: 1.6;
     }
 
-    /* Respect reduced motion */
-    @media (prefers-reduced-motion: reduce){
-      *{animation:none !important; transition:none !important}
-      .bg video{ filter:brightness(.85) }
+    .cta-row {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
     }
+
+    .cta {
+      display: inline-flex; align-items: center; gap: 10px;
+      text-decoration: none;
+      padding: 14px 24px;
+      border-radius: 50px;
+      font-weight: 700;
+      font-size: 15px;
+      transition: var(--transition);
+    }
+
+    /* Primary Button */
+    .cta.primary {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 4px 20px var(--accent-glow);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .cta.primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px var(--accent-glow);
+    }
+
+    /* Secondary Button */
+    .cta.ghost {
+      background: rgba(255,255,255,0.05);
+      color: var(--ink);
+      border: 1px solid var(--border);
+    }
+    .cta.ghost:hover {
+      background: rgba(255,255,255,0.1);
+      border-color: #fff;
+    }
+
+    /* === App Grid === */
+    .apps {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 20px;
+      padding-bottom: 60px;
+    }
+
+    .card {
+      position: relative;
+      display: flex; flex-direction: column; gap: 12px;
+      text-decoration: none; color: var(--ink);
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      transition: var(--transition);
+      overflow: hidden;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+    }
+
+    /* Hover Effects */
+    .card:hover {
+      transform: translateY(-5px);
+      background: var(--bg-card-hover);
+      border-color: var(--border-hover);
+      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+    }
+    .card:hover .badge {
+      background: var(--accent);
+      color: white;
+      border-color: transparent;
+      transform: scale(1.1) rotate(-5deg);
+    }
+
+    /* Focus State */
+    .card:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    /* Card Content */
+    .row { display: flex; align-items: center; gap: 16px; margin-bottom: 4px; }
+    
+    .badge {
+      display: grid; place-items: center;
+      width: 48px; height: 48px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: var(--ink);
+      font-size: 20px;
+      transition: var(--transition);
+    }
+
+    .name {
+      font-weight: 700;
+      font-size: 1.1rem;
+      letter-spacing: 0.3px;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+
+    /* Special Badges */
+    .ext {
+      position: absolute; top: 16px; right: 16px;
+      color: var(--muted); opacity: 0.5;
+      transition: var(--transition);
+    }
+    .card:hover .ext { opacity: 1; color: var(--accent); }
 
     .e2e-badge {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  background: linear-gradient(135deg, #22c55e, #16a34a);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: .5px;
-  padding: 4px 8px;
-  border-radius: 8px;
-  box-shadow: 0 2px 6px rgba(0,0,0,.25);
-}
-.wip-banner {
-  text-align: center;
-  background: linear-gradient(90deg, #facc15, #f59e0b);
-  color: #1f2937;
-  font-weight: 700;
-  font-size: 14px;
-  padding: 10px 14px;
-  border-bottom: 1px solid rgba(0,0,0,.1);
-  letter-spacing: .3px;
-}
-.wip-banner strong {
-  color: #111827;
-}
+      position: absolute; top: 12px; right: 12px;
+      background: rgba(34, 197, 94, 0.2);
+      color: #4ade80;
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      font-size: 10px; font-weight: 800;
+      letter-spacing: 0.5px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      text-transform: uppercase;
+    }
 
+    /* Reduced Motion */
+    @media (prefers-reduced-motion: reduce) {
+      *, ::after, ::before { animation: none !important; transition: none !important; }
+    }
+    
+    /* Mobile Adjustments */
+    @media (max-width: 600px) {
+      .hero { margin-top: 40px; }
+      .apps { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
-<div class="wip-banner">
-  This page is <strong>WIP</strong> !!! nothing is final!!
-</div>
 
-   <div class="bg" aria-hidden="true">
-   <video id="bgvid" playsinline muted paused><source src="/bg-480.webm" type="video/webm"/></video>
+  <div class="bg" aria-hidden="true">
+    <video id="bgvid" playsinline muted loop autoplay>
+      <source src="/bg-480.webm" type="video/webm"/>
+    </video>
   </div>
 
   <div class="page">
-    <!-- Top navigation -->
- 
-
-    <!-- Hero -->
+    
     <section class="hero" aria-labelledby="title">
-       <h1 id="title" class="title">Poke Apps</h1>
+      <h1 id="title" class="title">Poke Apps</h1>
       <p class="subtitle">Youtube Front-end, translator, maps, notes, calendar, and moar! and they are cool as heck!!</p>
+      
       <div class="cta-row">
-        <a class="cta" href="/app"><i class="fa-regular fa-compass"></i>Discover!</a>
-        <a class="cta ghost" href="#apps"><i class="fa-regular fa-grid-2"></i> Browse Apps</a>
+        <a class="cta primary" href="/app">
+          <i class="fa-regular fa-compass"></i> Discover!
+        </a>
+        <a class="cta ghost" href="#apps">
+          <i class="fa-regular fa-grid-2"></i> Browse Apps
+        </a>
       </div>
     </section>
 
-    <!-- Apps grid -->
     <nav id="apps" class="apps" aria-label="Apps">
+      
       <a class="card" href="/game-hub" aria-label="Games">
-        <div class="row"><span class="badge"><i class="fa-light fa-gamepad"></i></span><span class="name">Games</span></div>
+        <div class="row">
+          <span class="badge"><i class="fa-light fa-gamepad"></i></span>
+          <span class="name">Games</span>
+        </div>
         <span class="hint">Amazing games :3</span>
       </a>
 
       <a class="card" href="/translate" aria-label="Translate">
-        <div class="row"><span class="badge"><i class="fa-light fa-language"></i></span><span class="name">Translate</span></div>
+        <div class="row">
+          <span class="badge"><i class="fa-light fa-language"></i></span>
+          <span class="name">Translate</span>
+        </div>
         <span class="hint">fast & accurate and free software translation!!</span>
       </a>
 
       <a class="card" href="/map" aria-label="Maps">
-        <div class="row"><span class="badge"><i class="fa-light fa-map-location-dot"></i></span><span class="name">Maps</span></div>
+        <div class="row">
+          <span class="badge"><i class="fa-light fa-map-location-dot"></i></span>
+          <span class="name">Maps</span>
+        </div>
         <span class="hint">A good map-view for web!</span>
       </a>
 
-      <a class="card" href="https://social.poketube.fun" target="_blank" rel="noopener" aria-label="Fediverse (opens in new tab)">
+      <a class="card" href="https://social.poketube.fun" target="_blank" rel="noopener" aria-label="Fediverse">
         <span class="ext"><i class="fa-regular fa-arrow-up-right-from-square"></i></span>
-        <div class="row"><span class="badge"><i class="fa-brands fa-mastodon"></i></span><span class="name">Fediverse</span></div>
+        <div class="row">
+          <span class="badge"><i class="fa-brands fa-mastodon"></i></span>
+          <span class="name">Fediverse</span>
+        </div>
         <span class="hint">Poke Social community</span>
       </a>
 
       <a class="card" href="/calendar" aria-label="Calendar">
-        <div class="row"><span class="badge"><i class="fa-light fa-calendar"></i></span><span class="name">Calendar</span></div>
+        <div class="row">
+          <span class="badge"><i class="fa-light fa-calendar"></i></span>
+          <span class="name">Calendar</span>
+        </div>
         <span class="hint">NO javascript!!! calendar :3</span>
       </a>
 
-     <a class="card" href="/notepad" aria-label="Pokepad">
-  <span class="e2e-badge">E2E</span>
-  <div class="row">
-    <span class="badge"><i class="fa-light fa-memo-pad"></i></span>
-    <span class="name">Pokepad!</span>
-  </div>
-  <span class="hint">End-to-End Encrypted Feature rich web Notepad!</span>
-</a>
-
+      <a class="card" href="/notepad" aria-label="Pokepad">
+        <span class="e2e-badge">E2E</span>
+        <div class="row">
+          <span class="badge"><i class="fa-light fa-memo-pad"></i></span>
+          <span class="name">Pokepad!</span>
+        </div>
+        <span class="hint">End-to-End Encrypted Feature rich web Notepad!</span>
+      </a>
 
       <a class="card" href="/app" aria-label="Watch">
-        <div class="row"><span class="badge"><i class="fa-light fa-play"></i></span><span class="name">Watch</span></div>
+        <div class="row">
+          <span class="badge"><i class="fa-light fa-play"></i></span>
+          <span class="name">Watch</span>
+        </div>
         <span class="hint">the biggest part of poke - the best-looking youtube front end ever!</span>
       </a>
 
       <a class="card" href="/settings" aria-label="Settings">
-        <div class="row"><span class="badge"><i class="fa-light fa-gear"></i></span><span class="name">Settings</span></div>
+        <div class="row">
+          <span class="badge"><i class="fa-light fa-gear"></i></span>
+          <span class="name">Settings</span>
+        </div>
         <span class="hint">settings lol idk wha to tell ya mate </span>
       </a>
+
     </nav>
- 
   </div>
 
   <script>
-    // Respect reduced motion  silent autoplay on mobile
-    (function(){
-      const meta = document.getElementById('themeColorMeta');
-      const mql = window.matchMedia('(prefers-color-scheme: dark)');
-      const setBar = () => meta && (meta.content = mql.matches ? '#0b0e14' : '#0b0e14');
-      setBar(); mql.addEventListener?.('change', setBar);
-    })();
-
-    (function(){
-      const v = document.getElementById('bgvid');
-      if(!v) return;
-      const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-      if(reduce){ v.pause(); v.removeAttribute('autoplay'); v.currentTime = 0; }
-       v.muted = true; v.playsInline = true; v.setAttribute('playsinline','');
-      
-    })();
-
-    // Keyboard focus order for cards
+    // Keyboard navigation logic
     (function(){
       const cards = Array.from(document.querySelectorAll('.card'));
       cards.forEach(c => c.tabIndex = 0);
-      const gridCols = () => getComputedStyle(document.querySelector('.apps')).gridTemplateColumns.split(' ').length;
+      
+      const getGridCols = () => {
+        const grid = document.querySelector('.apps');
+        if (!grid) return 1;
+        const colWidth = 280; // Min-width from CSS
+        const gap = 20;
+        const available = grid.clientWidth;
+        return Math.floor((available + gap) / (colWidth + gap)) || 1;
+      };
+
       cards.forEach((el, idx) => {
-        el.addEventListener('keydown', e=>{
-          const cols = gridCols();
-          let t=null;
-          if(e.key==='ArrowRight') t=(idx+1)%cards.length;
-          else if(e.key==='ArrowLeft') t=(idx-1+cards.length)%cards.length;
-          else if(e.key==='ArrowDown') t=Math.min(cards.length-1, idx+cols);
-          else if(e.key==='ArrowUp') t=Math.max(0, idx-cols);
-          else if(e.key==='Home') t=0;
-          else if(e.key==='End') t=cards.length-1;
-          else if(e.key==='Enter'||e.key===' '){ e.preventDefault(); el.click(); return; }
-          if(t!=null){ e.preventDefault(); cards[t].focus(); }
-        }, {passive:false});
+        el.addEventListener('keydown', e => {
+          const cols = getGridCols();
+          let t = null;
+          
+          if(e.key === 'ArrowRight') t = (idx + 1) % cards.length;
+          else if(e.key === 'ArrowLeft') t = (idx - 1 + cards.length) % cards.length;
+          else if(e.key === 'ArrowDown') t = Math.min(cards.length - 1, idx + cols);
+          else if(e.key === 'ArrowUp') t = Math.max(0, idx - cols);
+          else if(e.key === 'Home') t = 0;
+          else if(e.key === 'End') t = cards.length - 1;
+          else if(e.key === 'Enter' || e.key === ' ') { 
+            e.preventDefault(); el.click(); return; 
+          }
+          
+          if(t !== null){ 
+            e.preventDefault(); 
+            cards[t].focus(); 
+          }
+        });
       });
     })();
 
-    // Quick "/" to focus search
+    // Video handling for reduced motion/performance
     (function(){
-      const input = document.querySelector('.search input');
-      if(!input) return;
-      window.addEventListener('keydown', e=>{
-        if (e.key === '/' && document.activeElement !== input){
-          e.preventDefault(); input.focus();
-        }
-      });
+      const v = document.getElementById('bgvid');
+      if(!v) return;
+      
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if(reduce){ 
+        v.pause(); 
+        v.removeAttribute('autoplay'); 
+        v.currentTime = 0; 
+      } else {
+        // Ensure playback
+        v.play().catch(() => {});
+      }
     })();
   </script>
 </body>
