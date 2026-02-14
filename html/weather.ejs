@@ -1,7 +1,7 @@
 <!--
     This Source Code Form is subject to the terms of the GNU General Public License:
    
-    Copyright (C) 2021-2025 PokeWeather Of Poke Project, a part of The Poke Project Initiative (initiative.poketube.fun) 
+    Copyright (C) 2021-2026 PokeWeather Of Poke Project, a part of The Poke Project Initiative (initiative.poketube.fun) 
     source code :https://codeberg.org/ashley/poke
 
     This program is free software: you can redistribute it and/or modify
@@ -30,325 +30,6 @@
 <meta content="/static/poke-weather.png" property="og:image" />
 <meta content="summary_large_image" name="twitter:card">
 <style>
- :root {
-  --bg: #0b0f16;
-  --fg: #eef3ff;
-  --muted: #a7b4cc;
-  --card: #0f1624;
-  --ring: #ffffff22;
-  --accent: #0ea5e9;
-  --good: #7ee787;
-  --bad: #f97373;
-  --warn: #fbbf24;
-  --br: 16px;
-}
-
-* {
-  box-sizing: border-box;
-}
-html,
-body {
-  height: 100%;
-}
-body {
-  margin: 0;
-  background: radial-gradient(1200px 800px at 20% 10%, #0c1528, var(--bg));
-  color: var(--fg);
-  font: 15px/1.4 ui-sans-serif, system-ui, Segoe UI, Roboto, Inter, Arial;
-}
-
-@font-face {
-  src: url("https://p.poketube.fun/https://cdn.glitch.global/43b6691a-c8db-41d4-921c-8cf6aa0d9108/robotoflex.ttf?v=16683434286881");
-  font-family: "PokeTube Flex";
-  font-style: normal;
-  font-stretch: 1% 800%;
-  font-display: swap;
-}
-
-/* Improved, stable navbar (no weird pill stretching) */
-header {
-  position: sticky;
-  top: 0;
-  z-index: 40;
-}
-.navwrap {
-  backdrop-filter: saturate(1.4) blur(10px);
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.15));
-  border-bottom: 1px solid var(--ring);
-}
-.wrap {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 12px 14px;
-}
-.top {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  justify-content: space-between;
-  min-height: 56px;
-}
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.brand .logo {
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #00d2ff, #3a7bd5);
-  display: grid;
-  place-items: center;
-  box-shadow: 0 6px 20px #00d2ff44;
-  flex: 0 0 36px;
-}
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid var(--ring);
-  border-radius: 999px;
-  padding: 6px 10px;
-  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.03));
-  white-space: nowrap;
-  max-width: 58vw;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.controls {
-  display: flex;
-  gap: 8px;
-  flex-wrap: nowrap;
-}
-button,
-.btn {
-  border: 1px solid var(--ring);
-  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.03));
-  color: var(--fg);
-  padding: 10px 12px;
-  border-radius: 12px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-button:active {
-  transform: translateY(1px);
-}
-.subnav {
-  border-top: 1px solid var(--ring);
-}
-.subrow {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  padding-top: 8px;
-}
-.tabs {
-  display: flex;
-  gap: 8px;
-}
-.tab {
-  padding: 8px 12px;
-  border: 1px solid var(--ring);
-  border-radius: 999px;
-  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.03));
-  font-weight: 700;
-  text-decoration: none;
-  color: inherit;
-}
-
-/* Search (works with & without JS) */
-.search {
-  display: flex;
-  gap: 8px;
-  position: relative;
-  flex: 1;
-  min-width: 220px;
-}
-.search input[type="search"] {
-  flex: 1;
-  min-width: 140px;
-  border: 1px solid var(--ring);
-  background: var(--card);
-  color: var(--fg);
-  padding: 12px 14px;
-  border-radius: 12px;
-  outline: none;
-}
-.search button[type="submit"] {
-  padding: 10px 12px;
-}
-.search .suggest {
-  position: absolute;
-  background: var(--card);
-  border: 1px solid var(--ring);
-  border-radius: 12px;
-  margin-top: 4px;
-  overflow: hidden;
-  display: none;
-  z-index: 30;
-  max-height: 300px;
-  overflow: auto;
-  top: 100%;
-  left: 0;
-  right: auto;
-}
-.search .suggest button {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 10px 12px;
-  border: 0;
-  border-bottom: 1px solid var(--ring);
-  background: none;
-  color: inherit;
-}
-.search .suggest button:last-child {
-  border-bottom: 0;
-}
-
-main {
-  max-width: 1100px;
-  margin: 14px auto;
-  padding: 0 14px;
-  display: grid;
-  gap: 14px;
-}
-.grid {
-  display: grid;
-  gap: 14px;
-  grid-template-columns: repeat(12, 1fr);
-}
-.card {
-  background: var(--card);
-  border: 1px solid var(--ring);
-  border-radius: var(--br);
-  padding: 14px;
-}
-.current {
-  grid-column: span 12;
-  display: grid;
-  gap: 12px;
-}
-.curr-top {
-  display: flex;
-  gap: 14px;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-}
-.temp {
-  font-size: 52px;
-  font-weight: 700;
-  letter-spacing: -1px;
-  font-family: poketube flex;
-  font-stretch: ultra-expanded;
-}
-.desc {
-  color: var(--muted);
-  font-weight: 600;
-}
-.details {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-}
-.stat {
-  border: 1px dashed var(--ring);
-  border-radius: 12px;
-  padding: 10px;
-}
-.stat h4 {
-  margin: 0 0 6px 0;
-  font-size: 12px;
-  color: var(--muted);
-  font-weight: 700;
-}
-.stat div {
-  font-weight: 800;
-}
-.row {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-.bigicon {
-  font-size: 42px;
-}
-.section-title {
-  font-size: 14px;
-  color: var(--muted);
-  margin: 0 0 8px 4px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-family: "poketube flex", sans-serif;
-  font-stretch: ultra-expanded;
-}
-.scrollx {
-  display: flex;
-  gap: 10px;
-  overflow: auto;
-  scroll-snap-type: x mandatory;
-  padding-bottom: 4px;
-}
-.hour {
-  min-width: 84px;
-  scroll-snap-align: start;
-  border: 1px solid var(--ring);
-  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.02));
-  border-radius: 12px;
-  padding: 10px;
-  text-align: center;
-}
-.hour .t {
-  font-weight: 800;
-}
-.day {
-  display: grid;
-  grid-template-columns: 1.2fr 2fr 0.8fr;
-  gap: 10px;
-  align-items: center;
-  border: 1px solid var(--ring);
-  border-radius: 12px;
-  padding: 10px;
-}
-.day .hi {
-  font-weight: 800;
-}
-.day .lo {
-  color: var(--muted);
-}
-.panel {
-  grid-column: span 12;
-}
-canvas {
-  width: 100%;
-  height: 120px;
-  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.02));
-  border-radius: 12px;
-  border: 1px solid var(--ring);
-}
-footer {
-  opacity: 0.8;
-  text-align: center;
-  padding: 18px;
-  color: var(--muted);
-}
-.hidden {
-  display: none;
-}
-@media (min-width: 780px) {
-  .current {
-    grid-column: span 7;
-  }
-  .panel {
-    grid-column: span 5;
-  }
-}
-
 /* Default: show JS UI; hide SSR block */
 .ssr {
   display: none;
@@ -358,7 +39,533 @@ main {
 }
 
 </style>
+<style>
+/* --- 1. CONFIGURATION & VARIABLES --- */
+:root {
+  /* Core Palette */
+  --bg-dark: #020617;
+  --accent-primary: #38bdf8; /* Sky Blue */
+  --accent-secondary: #818cf8; /* Indigo */
+  
+  /* Text Colors */
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-dim: #475569;
 
+  /* Glassmorphism Layers */
+  --glass-bg: rgba(15, 23, 42, 0.6);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-highlight: rgba(255, 255, 255, 0.15);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  
+  /* Dimensions */
+  --radius-lg: 24px;
+  --radius-md: 16px;
+  --nav-height: 70px;
+}
+
+/* --- 2. GLOBAL RESET & BODY --- */
+* { box-sizing: border-box; }
+
+html, body { height: 100%; margin: 0; }
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--bg-dark);
+  /* Rich, deep animated background */
+  background-image: 
+    radial-gradient(circle at 15% 50%, rgba(56, 189, 248, 0.15), transparent 25%),
+    radial-gradient(circle at 85% 30%, rgba(129, 140, 248, 0.15), transparent 25%);
+  color: var(--text-main);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+}
+
+/* Custom Font */
+@font-face {
+  src: url("https://p.poketube.fun/https://cdn.glitch.global/43b6691a-c8db-41d4-921c-8cf6aa0d9108/robotoflex.ttf?v=16683434286881");
+  font-family: "PokeTube Flex";
+  font-style: normal;
+  font-display: swap;
+}
+
+h1, h2, h3, h4 { margin: 0; font-weight: 600; }
+a { color: inherit; text-decoration: none; transition: 0.2s; }
+
+/* --- 3. STABILIZED NAVBAR --- */
+header {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  width: 100%;
+}
+
+.navwrap {
+  background: rgba(2, 6, 23, 0.85); /* Darker for better contrast */
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+}
+
+.wrap {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+/* Top Row */
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px; /* Fixed height prevents jumping */
+  gap: 16px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.brand .logo {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  box-shadow: 0 0 15px rgba(56, 189, 248, 0.3);
+  transition: transform 0.2s ease;
+}
+
+.brand:hover .logo { transform: scale(1.1) rotate(5deg); }
+
+.chip {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Navigation Buttons */
+button, .btn {
+  height: 36px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+button:hover, .btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+button:active { transform: translateY(1px); }
+
+/* Subnav & Tabs */
+.subnav {
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 12px 0 14px 0;
+}
+
+.subrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.tab {
+  padding: 6px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: 0.2s;
+}
+
+.tab:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-main);
+}
+
+/* Search Bar */
+.search {
+  position: relative;
+  flex: 1;
+  display: flex;
+  min-width: 260px;
+  max-width: 450px;
+}
+
+.search input[type="search"] {
+  width: 100%;
+  height: 40px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 0 46px 0 16px;
+  color: white;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.search input[type="search"]:focus {
+  background: rgba(0, 0, 0, 0.5);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15);
+}
+
+.search button[type="submit"] {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  height: 32px;
+  padding: 0 12px;
+  background: var(--accent-primary);
+  color: #0f172a;
+  border: none;
+  border-radius: 7px;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.search button[type="submit"]:hover {
+  background: #7dd3fc;
+  border: none;
+  transform: none;
+}
+
+/* Search Suggestions */
+.search .suggest {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: #1e293b;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+  z-index: 2000;
+  display: none;
+}
+
+.search .suggest button {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 0;
+  padding: 12px 16px;
+  height: auto;
+  color: var(--text-muted);
+}
+.search .suggest button:last-child { border-bottom: none; }
+.search .suggest button:hover { background: rgba(255, 255, 255, 0.05); color: white; }
+
+/* Mobile Nav Adjustments */
+@media (max-width: 600px) {
+  .top { padding: 10px 0; height: auto; flex-wrap: wrap; }
+  .search { order: 3; width: 100%; min-width: 100%; margin-top: 8px; }
+  .tabs { flex: 1; justify-content: center; }
+}
+
+/* --- 4. MAIN LAYOUT (BENTO GRID) --- */
+main {
+  max-width: 1100px;
+  margin: 30px auto;
+  padding: 0 20px;
+  display: grid;
+  gap: 24px;
+}
+
+.grid {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: repeat(12, 1fr);
+}
+
+.card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-top: 1px solid var(--glass-highlight);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: var(--glass-shadow);
+  overflow: hidden;
+  position: relative;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.card:hover {
+  box-shadow: 0 20px 40px -10px rgba(0,0,0,0.4);
+}
+
+.section-title {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--accent-primary);
+  margin-bottom: 16px;
+  opacity: 0.9;
+  font-weight: 700;
+}
+
+/* --- 5. CURRENT WEATHER MODULE --- */
+.current {
+  grid-column: span 12;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 300px;
+  background: linear-gradient(160deg, rgba(56, 189, 248, 0.05), rgba(15, 23, 42, 0.8));
+}
+
+@media (min-width: 900px) {
+  .current { grid-column: span 8; }
+  .panel { grid-column: span 4; }
+}
+
+.curr-top {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.bigicon {
+  font-size: 80px;
+  filter: drop-shadow(0 10px 20px rgba(0,0,0,0.3));
+  animation: float 6s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+.temp {
+  font-family: "PokeTube Flex", sans-serif;
+  font-size: 84px;
+  font-weight: 800;
+  letter-spacing: -3px;
+  line-height: 0.9;
+  background: linear-gradient(180deg, #fff 20%, #94a3b8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.desc {
+  font-size: 20px;
+  color: var(--accent-primary);
+  font-weight: 500;
+  margin-top: 4px;
+}
+
+/* Stats */
+.current .row:last-child, .details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: 12px;
+  width: 100%;
+  margin-top: auto;
+  padding-top: 20px;
+}
+
+.stat {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  padding: 12px 16px;
+  text-align: center;
+  transition: background 0.2s;
+}
+
+.stat:hover { background: rgba(255, 255, 255, 0.05); }
+
+.stat h4 {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  letter-spacing: 0.5px;
+}
+
+.stat div {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+}
+
+/* --- 6. CHARTS & LISTS --- */
+.panel {
+  grid-column: span 12;
+}
+@media (min-width: 900px) { .panel { grid-column: span 4; } }
+
+.scrollx {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--glass-border) transparent;
+}
+
+.hour {
+  min-width: 70px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid transparent;
+  border-radius: 16px;
+  padding: 12px 8px;
+  text-align: center;
+  transition: 0.2s;
+}
+
+.hour:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--glass-border);
+}
+
+.hour .t {
+  font-weight: 700;
+  font-size: 18px;
+  margin: 4px 0;
+}
+
+canvas {
+  width: 100%;
+  height: 140px;
+  margin-top: 16px;
+  filter: drop-shadow(0 4px 10px rgba(56, 189, 248, 0.2));
+}
+
+#daily .grid {
+  grid-template-columns: 1fr;
+}
+@media (min-width: 700px) {
+  #daily .grid { grid-template-columns: 1fr 1fr; }
+}
+
+.day {
+  display: grid;
+  grid-template-columns: 50px 1fr auto auto;
+  align-items: center;
+  gap: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid transparent;
+  border-radius: 16px;
+  padding: 12px 20px;
+  transition: all 0.2s;
+}
+
+.day:hover {
+  background: rgba(255, 255, 255, 0.06);
+  transform: scale(1.01);
+  border-color: var(--glass-border);
+}
+
+.day .row { margin: 0; }
+
+.day .hi {
+  font-weight: 700;
+  color: #fff;
+  font-size: 16px;
+  width: 40px;
+  text-align: right;
+}
+
+.day .lo {
+  font-weight: 500;
+  color: var(--text-muted);
+  width: 40px;
+  text-align: right;
+}
+
+/* --- 7. FOOTER & UTILS --- */
+footer {
+  margin-top: 40px;
+  padding: 30px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-dim);
+  border-top: 1px solid var(--glass-border);
+}
+
+footer a {
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-decoration-color: rgba(255,255,255,0.2);
+}
+
+footer a:hover {
+  color: var(--accent-primary);
+  text-decoration-color: var(--accent-primary);
+}
+
+.hidden { display: none !important; }
+.ssr { display: none; }
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+.loading {
+  opacity: 0.6;
+  pointer-events: none;
+  filter: grayscale(1);
+}
+</style>
 <!-- When JS is disabled/blocked, show SSR block and hide main -->
 <noscript>
   <style>
