@@ -2,945 +2,730 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>PokeMaps Public Beta</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>PokeMaps Pro</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
   <meta name="color-scheme" content="dark light" />
-  <meta name="theme-color" content="#0ea5e9" id="themeColorMeta"/>
-  <link rel="icon" href="/css/yt-ukraine.svg" />
+  <meta name="theme-color" content="#0f172a" />
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
   <style>
-    :root{
-      --vh:100vh;--pad:12px;--radius:14px;--fg:#fff;--bg:rgba(0,0,0,.6);--glass:blur(12px);
-      --marker-size:20px;--marker-color:#e53935;--marker-ring:rgba(229,57,53,.35);--ring-width:3px;
-      --panel:rgba(0,0,0,.85);--accent:#0ea5e9;--chip:#111;--chipb:#222;--tip:#888;
-      --surface:#0b0b0b;--border:#333;
-      --sidebar-w:320px;         /* default; will be overridden from prefs */
-      --sidebar-min:260px;
-      --sidebar-max:60vw;
+    :root {
+      /* Colors */
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --bg: #ffffff;
+      --surface: #f8fafc;
+      --panel-bg: rgba(255, 255, 255, 0.85);
+      --border: #e2e8f0;
+      --text-main: #0f172a;
+      --text-sub: #64748b;
+      --danger: #ef4444;
+      
+      /* Dimensions */
+      --sidebar-width: 360px;
+      --header-height: 60px;
+      --radius: 16px;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+      --glass: blur(12px);
     }
-    *{box-sizing:border-box}
-    html,body{height:100%;margin:0}
-    body{background:#000;color:var(--fg);font:14px/1.4 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial}
-    .app{position:fixed;inset:0;display:grid;grid-template-rows:auto 1fr}
-    .bar{position:relative;z-index:5;display:flex;gap:8px;align-items:center;padding:8px var(--pad);backdrop-filter:var(--glass);-webkit-backdrop-filter:var(--glass);background:var(--bg)}
-    .search{position:relative;flex:1;min-width:0}
-    .search input{width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:#fff;outline:none}
-    .search input:focus{border-color:#444;box-shadow:0 0 0 3px color-mix(in oklab, var(--accent) 20%, transparent)}
 
-    /* Suggestions with sticky head + close button */
-    .suggest{position:absolute;top:calc(100% + 6px);left:0;right:0;max-height:46vh;overflow:auto;margin:0;padding:0;list-style:none;border:1px solid var(--border);border-radius:12px;background:var(--surface);display:none}
-    .suggest .head{position:sticky;top:0;background:#0d0d0d;border-bottom:1px solid #1a1a1a;padding:6px 8px;display:flex;justify-content:space-between;align-items:center;z-index:1}
-    .suggest .head strong{font-size:12px;opacity:.8}
-    .suggest .head button{border:0;border-radius:8px;background:#1a1a1a;color:#fff;padding:6px 8px;cursor:pointer}
-    .suggest li{padding:10px 12px;cursor:pointer;border-top:1px solid #111;display:flex;gap:8px;align-items:center}
-    .suggest li:first-child{border-top:none}
-    .suggest li.active{background:#141414}
-    .suggest .pill{font-size:11px;border:1px solid #333;border-radius:999px;padding:2px 6px;opacity:.85}
-    .suggest mark{background:transparent;color:var(--accent);font-weight:600}
-
-    .iconbtn{border:0;border-radius:10px;background:#222;color:#fff;padding:10px 12px;min-width:44px}
-    .mapwrap{position:relative;height:calc(var(--vh) - 56px);overflow:hidden}
-    iframe#map{position:absolute;inset:0;border:0;width:100%;height:100%}
-    .marker{position:absolute;left:50%;top:50%;width:var(--marker-size);height:var(--marker-size);border-radius:50%;transform:translate(-50%,-50%);background:var(--marker-color);box-shadow:0 0 0 var(--ring-width) var(--marker-ring);z-index:3;pointer-events:none}
-    .marker.hidden{display:none}
-    .marker.crosshair{background:transparent;border-radius:0;box-shadow:0 0 0 var(--ring-width) var(--marker-ring)}
-    .marker.crosshair::before,.marker.crosshair::after{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:var(--marker-color)}
-    .marker.crosshair::before{width:calc(var(--marker-size) * 1.6);height:2px}
-    .marker.crosshair::after{width:2px;height:calc(var(--marker-size) * 1.6)}
-    .marker .dot{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:calc(var(--marker-size) * .35);height:calc(var(--marker-size) * .35);background:var(--marker-color);border-radius:50%}
-    .brand{position:absolute;bottom:10px;left:10px;padding:6px 10px;font-size:18px;font-weight:600;background:var(--bg);backdrop-filter:var(--glass);-webkit-backdrop-filter:var(--glass);border-radius:10px;z-index:4;pointer-events:none}
-    .dock{position:absolute;left:10px;bottom:52px;z-index:7;display:flex;flex-direction:column;gap:8px}
-    .dock button{border:0;border-radius:10px;background:#111;color:#fff;padding:8px 10px}
-    .coords{position:absolute;bottom:10px;right:10px;z-index:5;padding:6px 10px;border-radius:10px;background:var(--bg);backdrop-filter:var(--glass);-webkit-backdrop-filter:var(--glass);border:1px solid var(--border);display:none;min-width:260px;text-align:right;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","DejaVu Sans Mono",monospace}
-
-    /* Popovers (mobile/tablet) */
-    .menu{position:fixed;top:56px;right:10px;z-index:8;min-width:290px;max-width:92vw;background:var(--panel);backdrop-filter:var(--glass);-webkit-backdrop-filter:var(--glass);border:1px solid var(--border);border-radius:12px;display:none;overflow:hidden}
-    .menu header{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid #222}
-    .menu .row{display:flex;gap:8px;align-items:center;padding:8px 12px;border-top:1px solid #111;flex-wrap:wrap}
-    .menu .row:first-of-type{border-top:0}
-    .menu .row button,.menu .row select,.menu .row input{flex:1}
-    .select{appearance:none;-webkit-appearance:none;border:1px solid var(--border);background:#111;color:#fff;border-radius:10px;padding:10px 12px}
-    .pins{position:fixed;left:10px;bottom:110px;z-index:8;min-width:260px;max-width:92vw;max-height:50vh;overflow:auto;background:var(--panel);backdrop-filter:var(--glass);-webkit-backdrop-filter:var(--glass);border:1px solid var(--border);border-radius:12px;display:none}
-    .pins header{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid #222}
-    .pins ul{list-style:none;margin:0;padding:0}
-    .pins li{display:flex;flex-direction:column;gap:8px;padding:10px;border-top:1px solid #111}
-    .pins .row{display:flex;gap:8px;flex-wrap:wrap}
-
-    .settings{position:fixed;left:10px;bottom:110px;z-index:8;min-width:320px;max-width:92vw;background:var(--panel);backdrop-filter:var(--glass);-webkit-backdrop-filter:var(--glass);border:1px solid var(--border);border-radius:12px;display:none}
-    .settings header{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid #222}
-    .settings .badge{font-size:11px;opacity:.8;border:1px solid #444;border-radius:999px;padding:2px 8px;margin-left:8px}
-    .settings .group{border-top:1px solid #111}
-    .settings .ghead{display:flex;justify-content:space-between;align-items:center;padding:10px 12px}
-    .settings .ghead button{background:#111;border:1px solid var(--border);border-radius:8px;padding:6px 10px}
-    .settings .section{display:none;padding:10px 12px;border-top:1px solid #111}
-    .settings .row{display:flex;gap:10px;align-items:center;padding:8px 0}
-    .settings label{flex:1}
-    .settings input[type="range"]{flex:1}
-    .settings input[type="color"]{width:42px;height:32px;border:0;background:none}
-    .settings textarea{width:100%;min-height:120px;border-radius:10px;border:1px solid var(--border);background:#0a0a0a;color:#eee;padding:8px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-    .settings .about{font-size:13px;opacity:.92;line-height:1.5}
-
-    /* Desktop layout — with resizable, scrollable sidebar */
-    .desktop .bar{grid-column:2}
-    .desktop .app{grid-template-columns:var(--sidebar-w) 1fr;grid-template-rows:auto 1fr}
-    .desktop .sidebar{
-      position:fixed;left:0;top:0;bottom:0;
-      width:var(--sidebar-w);
-      min-width:var(--sidebar-min);max-width:var(--sidebar-max);
-      background:var(--panel);border-right:1px solid var(--border);
-      display:flex;flex-direction:column;gap:12px;padding:12px;z-index:9;
-      overflow:auto; /* scrollable */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f172a;
+        --surface: #1e293b;
+        --panel-bg: rgba(15, 23, 42, 0.85);
+        --border: #334155;
+        --text-main: #f8fafc;
+        --text-sub: #94a3b8;
+      }
     }
-    .desktop .sidecard{border:1px solid #222;border-radius:12px;overflow:hidden}
-    .desktop .sidecard header{padding:10px 12px;border-bottom:1px solid #222;font-weight:600;display:flex;justify-content:space-between;align-items:center}
-    .desktop .sidecard .row{display:flex;gap:8px;align-items:center;padding:8px 12px;border-top:1px solid #111;flex-wrap:wrap}
-    .desktop .sidecard .row:first-of-type{border-top:0}
-    .desktop .sidecard .hint{font-size:12px;opacity:.75;padding:8px 12px}
-    .desktop .mapwrap{grid-column:2}
-    /* Suppress popovers and dock on desktop (sidebar replaces them) */
-    .desktop .menu,.desktop .pins,.desktop .settings{display:none !important}
-    .desktop .dock{display:none !important}
 
-    /* Sidebar resizer handle */
-    .desktop .side-resizer{
-      position:fixed; top:0; bottom:0; left:calc(var(--sidebar-w) - 4px);
-      width:8px; cursor:col-resize; z-index:10;
-      background:linear-gradient(to right, transparent 0 6px, #ffffff14 6px 7px, transparent 7px 100%);
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text-main);
     }
-    .side-resizer.dragging{background:linear-gradient(to right, transparent 0 6px, #ffffff33 6px 7px, transparent 7px 100%)}
 
-    /* Pro detail rows subtly toned down */
-    .pro-only{display:none;}
-    .pro-enabled .pro-only{display:flex;}
+    /* --- ICON SYSTEM --- */
+    svg.icon { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    
+    /* --- LAYOUT SHELL --- */
+    .app-shell {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+    }
 
-    @media (min-width:768px){ .bar{padding:10px 14px} .brand{font-size:20px} }
-    @media (prefers-reduced-motion:reduce){ *{animation:none !important;transition:none !important} }
+    /* --- MAP LAYER --- */
+    #map-container {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      background: #e5e5e5;
+    }
+    iframe#map { width: 100%; height: 100%; border: 0; display: block; }
+
+    /* Map Markers */
+    .marker-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
+    .center-marker {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      background: var(--danger);
+      box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.3);
+      transition: all 0.2s ease;
+    }
+    .center-marker.hidden { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+    .center-marker.crosshair {
+      background: transparent; border-radius: 0; box-shadow: none;
+    }
+    .center-marker.crosshair::before, .center-marker.crosshair::after {
+      content: ''; position: absolute; background: var(--danger);
+      top: 50%; left: 50%; transform: translate(-50%, -50%);
+    }
+    .center-marker.crosshair::before { width: 40px; height: 2px; }
+    .center-marker.crosshair::after { width: 2px; height: 40px; }
+
+    /* --- UI LAYER --- */
+    .ui-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 20;
+      pointer-events: none; /* Let clicks pass to map where there is no UI */
+    }
+    .ui-layer > * { pointer-events: auto; }
+
+    /* Common Components */
+    .btn {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      border: 1px solid var(--border);
+      background: var(--panel-bg);
+      backdrop-filter: var(--glass); -webkit-backdrop-filter: var(--glass);
+      color: var(--text-main);
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-size: 14px; font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      box-shadow: var(--shadow-sm);
+    }
+    .btn:hover { background: var(--surface); border-color: var(--text-sub); }
+    .btn:active { transform: scale(0.96); }
+    .btn-primary { background: var(--accent); color: #fff; border: 0; }
+    .btn-primary:hover { background: var(--accent-hover); border: 0; }
+    .btn-icon { width: 44px; height: 44px; padding: 0; border-radius: 50%; }
+
+    .input-group { position: relative; width: 100%; }
+    .search-input {
+      width: 100%;
+      height: 48px;
+      padding: 0 16px 0 48px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: var(--panel-bg);
+      backdrop-filter: var(--glass); -webkit-backdrop-filter: var(--glass);
+      color: var(--text-main);
+      font-size: 16px;
+      box-shadow: var(--shadow-lg);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3); }
+    .search-icon { position: absolute; left: 14px; top: 14px; color: var(--text-sub); pointer-events: none; }
+
+    /* Suggestions List */
+    .suggestions {
+      position: absolute; top: calc(100% + 8px); left: 0; right: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      display: none;
+      box-shadow: var(--shadow-lg);
+      max-height: 300px; overflow-y: auto;
+    }
+    .suggestions li {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      display: flex; align-items: center; gap: 10px;
+      font-size: 14px;
+    }
+    .suggestions li:last-child { border-bottom: none; }
+    .suggestions li:hover, .suggestions li.active { background: rgba(125,125,125,0.1); }
+    .suggestions mark { background: transparent; color: var(--accent); font-weight: 600; }
+
+    /* --- DESKTOP SPECIFIC UI --- */
+    @media (min-width: 769px) {
+      .mobile-only { display: none !important; }
+      
+      .desktop-sidebar {
+        position: absolute; top: 16px; left: 16px; bottom: 16px;
+        width: var(--sidebar-width);
+        display: flex; flex-direction: column; gap: 16px;
+        z-index: 30;
+      }
+
+      /* Floating Card Style for Sidebar */
+      .sidebar-card {
+        background: var(--panel-bg);
+        backdrop-filter: var(--glass); -webkit-backdrop-filter: var(--glass);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-lg);
+        overflow: hidden;
+        display: flex; flex-direction: column;
+      }
+      
+      .scroll-container { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 20px; }
+
+      .section-title { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-sub); margin-bottom: 8px; font-weight: 700; }
+      .row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+      .row.wrap { flex-wrap: wrap; }
+      
+      /* Right Side Tools */
+      .desktop-tools {
+        position: absolute; top: 16px; right: 16px;
+        display: flex; flex-direction: column; gap: 12px;
+      }
+      
+      /* Bottom Info */
+      .desktop-footer {
+        position: absolute; bottom: 16px; right: 16px;
+        background: var(--panel-bg);
+        backdrop-filter: var(--glass);
+        padding: 6px 12px;
+        border-radius: 8px;
+        font-family: monospace;
+        font-size: 12px;
+        border: 1px solid var(--border);
+        pointer-events: none;
+      }
+    }
+
+    /* --- MOBILE SPECIFIC UI --- */
+    @media (max-width: 768px) {
+      .desktop-only { display: none !important; }
+
+      /* Top Search Bar (Floating) */
+      .mobile-header {
+        position: absolute; top: 12px; left: 12px; right: 12px;
+        z-index: 30;
+      }
+
+      /* Bottom Navigation Dock */
+      .mobile-dock {
+        position: absolute; bottom: 24px; left: 50%;
+        transform: translateX(-50%);
+        display: flex; align-items: center; gap: 12px;
+        background: var(--panel-bg);
+        backdrop-filter: var(--glass); -webkit-backdrop-filter: var(--glass);
+        padding: 8px 12px;
+        border-radius: 24px;
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow-lg);
+        z-index: 30;
+      }
+      
+      /* Bottom Sheet (Settings/Pins/Details) */
+      .bottom-sheet {
+        position: fixed; left: 0; right: 0; bottom: 0;
+        background: var(--surface);
+        border-top-left-radius: 24px; border-top-right-radius: 24px;
+        box-shadow: 0 -4px 20px rgba(0,0,0,0.2);
+        z-index: 100;
+        transform: translateY(110%);
+        transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        max-height: 85vh;
+        display: flex; flex-direction: column;
+      }
+      .bottom-sheet.open { transform: translateY(0); }
+      
+      .sheet-handle {
+        width: 100%; height: 24px;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0; cursor: grab;
+      }
+      .sheet-handle::after { content: ''; width: 40px; height: 5px; background: var(--border); border-radius: 10px; }
+      
+      .sheet-content {
+        overflow-y: auto;
+        padding: 0 20px 20px 20px;
+      }
+
+      .mobile-btn-label { font-size: 10px; margin-top: 2px; }
+      .dock-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+    }
+
+    /* --- FORM ELEMENTS --- */
+    select.styled-select {
+      appearance: none; background: var(--surface);
+      border: 1px solid var(--border); color: var(--text-main);
+      padding: 10px 12px; border-radius: 8px; width: 100%;
+      background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23999%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+      background-repeat: no-repeat; background-position: right .7em top 50%; background-size: .65em auto;
+    }
+    .toggle-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+    .toggle-row:last-child { border-bottom: 0; }
+    
+    input[type="range"] { width: 100%; accent-color: var(--accent); }
+    input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); }
+    
+    .pin-card {
+      background: rgba(127,127,127,0.05);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 8px;
+    }
+    .pin-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-weight: 600; }
+    .pin-coords { font-family: monospace; font-size: 11px; color: var(--text-sub); }
   </style>
 </head>
 <body>
-  <div class="app" id="app">
-    <div class="bar">
-      <div class="search">
-        <form id="form" autocomplete="off">
-          <input id="q" type="text" inputmode="search" placeholder="Search places, or paste lat,lon…" aria-autocomplete="list" aria-expanded="false" aria-controls="suggestions" />
-        </form>
-        <ul id="suggestions" class="suggest" role="listbox">
-          <li class="head" aria-hidden="true">
-            <strong>Suggestions</strong>
-            <button type="button" id="closeSuggestBtn" title="Close suggestions">✕</button>
-          </li>
-        </ul>
+
+<div style="display:none">
+  <svg id="icons">
+    <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></symbol>
+    <symbol id="icon-map-pin" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></symbol>
+    <symbol id="icon-navigation" viewBox="0 0 24 24"><polygon points="3 11 22 2 13 21 11 13 3 11"></polygon></symbol>
+    <symbol id="icon-layers" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></symbol>
+    <symbol id="icon-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></symbol>
+    <symbol id="icon-star" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></symbol>
+    <symbol id="icon-x" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></symbol>
+    <symbol id="icon-plus" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></symbol>
+    <symbol id="icon-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></symbol>
+  </svg>
+</div>
+
+<div class="app-shell">
+  
+  <div id="map-container">
+    <iframe id="map" title="Map View"></iframe>
+    <div class="marker-overlay">
+      <div id="center-marker" class="center-marker"></div>
+    </div>
+  </div>
+
+  <div class="ui-layer">
+
+    <div class="mobile-only mobile-header">
+      <div class="input-group">
+        <svg class="icon search-icon"><use href="#icon-search"/></svg>
+        <input type="text" id="m-search" class="search-input" placeholder="Search places..." autocomplete="off">
+        <ul id="m-suggestions" class="suggestions"></ul>
       </div>
-      <button class="iconbtn" id="locate" title="Locate">📍</button>
-      <button class="iconbtn" id="menuBtn" title="Menu">⋯</button>
     </div>
 
-    <div class="mapwrap" id="mapwrap">
-      <iframe id="map" title="Map"></iframe>
-      <div id="marker" class="marker" aria-hidden="true"><div class="dot"></div></div>
-      <div class="brand">PokeMaps Public Beta</div>
-      <div class="dock">
-        <button id="savepin">⭐ Save Pin</button>
-        <button id="showpins" title="Show saved pins">📒 Pins</button>
-        <button id="opensettings" title="Marker & display settings">⚙ Settings</button>
+    <div class="mobile-only mobile-dock">
+      <div class="dock-item">
+        <button class="btn btn-icon" id="m-btn-pins"><svg class="icon"><use href="#icon-star"/></svg></button>
       </div>
-      <div class="coords" id="coords"></div>
+      <div class="dock-item">
+        <button class="btn btn-icon btn-primary" id="m-btn-locate"><svg class="icon"><use href="#icon-navigation"/></svg></button>
+      </div>
+      <div class="dock-item">
+        <button class="btn btn-icon" id="m-btn-menu"><svg class="icon"><use href="#icon-settings"/></svg></button>
+      </div>
     </div>
-  </div>
 
-  <!-- Mobile/Tablet popover menu -->
-  <div class="menu" id="menu">
-    <header><strong>Menu</strong><button class="iconbtn" id="closeMenu" title="Close">✕</button></header>
-    <div class="row">
-      <select class="select" id="layer">
-        <option value="mapnik">Standard</option>
-        <option value="cyclemap">Cycle</option>
-        <option value="transportmap">Transport</option>
-        <option value="hot">Humanitarian</option>
-      </select>
-    </div>
-    <div class="row">
-      <button class="iconbtn" id="follow">🛰️ Follow</button>
-      <button class="iconbtn" id="reset">🔁 Reset</button>
-    </div>
-    <div class="row">
-      <button class="iconbtn" id="quick-near">📍 Near me</button>
-      <button class="iconbtn" id="quick-clear">🧹 Clear search</button>
-    </div>
-    <div class="row">
-      <button class="iconbtn" id="copy">📋 Copy Link</button>
-      <button class="iconbtn" id="copycoords">📐 Coords</button>
-    </div>
-    <div class="row">
-      <button class="iconbtn" id="share">🔗 Share</button>
-      <button class="iconbtn" id="openosm">🌐 Open OSM</button>
-    </div>
-    <div class="row">
-      <button class="iconbtn" id="openGmaps">🛰️ Google Maps (not recommended)</button>
-    </div>
-    <div class="row">
-      <a class="iconbtn" href="https://wiki.osmfoundation.org/wiki/Terms_of_Use" target="_blank" rel="noopener">OSM Terms</a>
-      <a class="iconbtn" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">Copyright</a>
-      <a class="iconbtn" href="https://operations.osmfoundation.org/policies/nominatim/" target="_blank" rel="noopener">Nominatim Policy</a>
-    </div>
-  </div>
-
-  <!-- Mobile/Tablet pins popover -->
-  <div class="pins" id="pins">
-    <header>
-      <strong>Saved Pins</strong>
-      <button id="closepins" class="iconbtn" type="button">✕</button>
-    </header>
-    <ul id="pinlist"></ul>
-  </div>
-
-  <!-- Mobile/Tablet settings popover -->
-  <div class="settings" id="settings">
-    <header><strong>Settings</strong> <span class="badge">Beta</span><button id="closesettings" class="iconbtn">✕</button></header>
-
-    <div class="group">
-      <div class="ghead"><div><strong>General</strong></div><button data-t="gen">Toggle</button></div>
-      <div class="section" data-sec="gen">
-        <div class="row"><label><input type="checkbox" id="autoFollow"> Auto-follow on load</label></div>
-        <div class="row"><label><input type="checkbox" id="toggleCoords"> Always show coordinates</label></div>
-        <div class="row"><label>Coordinates format</label>
-          <select id="coordFmt" class="select">
-            <option value="dec">DD (Decimal)</option>
-            <option value="dms">DMS</option>
+    <div class="mobile-only bottom-sheet" id="sheet-settings">
+      <div class="sheet-handle"></div>
+      <div class="sheet-content">
+        <div class="section-title" style="margin: 10px 0; font-weight:700;">Settings & Layers</div>
+        <div class="row">
+          <select id="m-layer-select" class="styled-select">
+             <option value="mapnik">Standard</option>
+             <option value="cyclemap">Cyclist</option>
+             <option value="transportmap">Transport</option>
+             <option value="hot">Humanitarian</option>
           </select>
         </div>
-        <div class="row"><label>Coordinate precision</label><input type="range" id="coordPrec" min="0" max="8" step="1" value="6"><span id="coordPrecVal">6</span></div>
-        <div class="row"><label>Theme</label>
-          <select id="themeMode" class="select">
-            <option value="auto">Auto</option>
-            <option value="dark">Dark</option>
-            <option value="light">Light</option>
-          </select>
+        <div class="toggle-row">
+           <span>Follow Location</span>
+           <input type="checkbox" id="m-toggle-follow">
+        </div>
+        <div class="toggle-row">
+           <span>Show Coordinates</span>
+           <input type="checkbox" id="m-toggle-coords">
+        </div>
+        <div class="toggle-row">
+           <span>Dark Mode</span>
+           <select id="m-theme-select" class="styled-select" style="width:auto">
+             <option value="auto">Auto</option><option value="dark">Dark</option><option value="light">Light</option>
+           </select>
+        </div>
+        <div class="row" style="margin-top:20px">
+           <button class="btn" style="flex:1" id="m-share">Share Loc</button>
+           <button class="btn" style="flex:1" id="m-reset">Reset</button>
         </div>
       </div>
     </div>
 
-    <div class="group">
-      <div class="ghead"><div><strong>Marker</strong></div><button data-t="mrk">Toggle</button></div>
-      <div class="section" data-sec="mrk">
-        <div class="row"><label>Marker visible</label><input type="checkbox" id="markerVisible" checked></div>
-        <div class="row"><label>Marker style</label>
-          <select id="markerStyle" class="select">
-            <option value="dot">Dot</option>
-            <option value="crosshair">Crosshair</option>
-          </select>
+    <div class="mobile-only bottom-sheet" id="sheet-pins">
+      <div class="sheet-handle"></div>
+      <div class="sheet-content">
+        <div class="row" style="justify-content:space-between; align-items:center;">
+          <div class="section-title" style="margin:15px 0;">Saved Pins</div>
+          <button class="btn btn-primary" id="m-save-curr" style="padding: 6px 12px; font-size:12px;">+ Save Here</button>
         </div>
-        <div class="row"><label>Marker size</label><input type="range" id="markerSize" min="8" max="64" step="1" value="20"><span id="markerSizeVal">20px</span></div>
-        <div class="row"><label>Marker color</label><input type="color" id="markerColor" value="#e53935"></div>
-        <div class="row"><label>Ring glow</label><input type="checkbox" id="markerRing" checked></div>
-        <div class="row"><label>Ring width</label><input type="range" id="ringWidth" min="0" max="16" step="1" value="3"><span id="ringWidthVal">3px</span></div>
+        <div id="m-pin-list"></div>
       </div>
     </div>
 
-    <div class="group">
-      <div class="ghead"><div><strong>View & Links</strong></div><button data-t="view">Toggle</button></div>
-      <div class="section" data-sec="view">
-        <div class="row"><label><input type="checkbox" id="shareDelta" checked> Include Δ in shared links</label></div>
-        <div class="row"><label><input type="checkbox" id="confirmDelete" checked> Confirm before deleting pins</label></div>
-        <div class="row"><label>Accent color</label><input type="color" id="accentColor" value="#0ea5e9"><button class="iconbtn" id="accentReset">Reset</button></div>
-      </div>
-    </div>
 
-    <div class="group">
-      <div class="ghead"><div><strong>Custom CSS</strong></div><button data-t="css">Toggle</button></div>
-      <div class="section" data-sec="css">
-        <div class="row" style="flex-direction:column;align-items:stretch">
-          <textarea id="customCSS" placeholder="/* Write CSS that will be injected into the page. Example:
-.brand{font-weight:800}
-*/"></textarea>
-          <div style="display:flex;gap:8px;margin-top:8px">
-            <button class="iconbtn" id="applyCSS">Apply</button>
-            <button class="iconbtn" id="clearCSS">Clear</button>
-          </div>
+    <div class="desktop-only desktop-sidebar">
+      <div class="sidebar-card" style="flex: 0 0 auto; margin-bottom: 12px; padding: 12px;">
+        <div class="input-group">
+          <svg class="icon search-icon"><use href="#icon-search"/></svg>
+          <input type="text" id="d-search" class="search-input" placeholder="Search places..." autocomplete="off">
+          <ul id="d-suggestions" class="suggestions"></ul>
         </div>
       </div>
-    </div>
 
-    <div class="group">
-      <div class="ghead"><div><strong>About PokeMaps (Public Beta)</strong></div><button data-t="about">Toggle</button></div>
-      <div class="section" data-sec="about">
-        <div class="about">
-          <p><strong>What is this?</strong> PokeMaps Public Beta is a lightweight viewer for exploring and sharing map positions with quick pin management. It focuses on speed, privacy-friendly defaults, and portability of links.</p>
-          <p><strong>Map credits:</strong> © <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener">OpenStreetMap.org</a> contributors. Tiles/data from the OSM community. <em>Powered by openstreetmap.org.</em></p>
-          <p><strong>Important disclaimer:</strong> Geographic names, boundaries, labels, and depictions may be incomplete, outdated, or disputed. Displayed borders and place names are for reference only and must not be interpreted as statements of recognition or endorsement. The map does <em>not</em> reflect the politics of the Poke project nor the opinions of its contributors. Always verify critical details independently.</p>
-          <p><strong>Privacy & usage:</strong> If you enable location, your browser may share approximate GPS/Wi-Fi data with the page via standard Web APIs. Search uses public OSM services (subject to their policies and rate limits).</p>
-          <p><strong>Interoperability:</strong> A convenience action is provided to open the same view in Google Maps for satellite imagery (not recommended) and may have different data policies.</p>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <script>
-  ;(()=> {
-    const OSM_EMBED="https://www.openstreetmap.org/export/embed.html";
-    const OSM_VIEW ="https://www.openstreetmap.org";
-    const NOMINATIM="https://nominatim.openstreetmap.org/search";
-    const LAYERS=["mapnik","cyclemap","transportmap","hot"];
-    const DEFAULT={lat:30.410156,lon:72.448792,delta:.25,layer:"mapnik"};
-    const LIMITS={deltaMin:0.01, deltaMax:45};
-
-    const S=sel=>document.querySelector(sel);
-    const map=S("#map"), q=S("#q"), sug=S("#suggestions");
-    const closeSuggestBtn=S("#closeSuggestBtn");
-    const locateBtn=S("#locate"), menuBtn=S("#menuBtn"), menu=S("#menu"), closeMenu=S("#closeMenu");
-    const layerSel=S("#layer"), followBtn=S("#follow"), resetBtn=S("#reset"), shareBtn=S("#share");
-    const copyBtn=S("#copy"), copyCoordsBtn=S("#copycoords"), openBtn=S("#openosm"), openGmapsBtn=S("#openGmaps");
-    const pinsPane=S("#pins"), pinlist=S("#pinlist"), showpins=S("#showpins"), closepins=S("#closepins"), savepin=S("#savepin");
-    const opensettings=S("#opensettings"), settings=S("#settings"), closesettings=S("#closesettings");
-    const coordsEl=S("#coords");
-    const quickNear=S("#quick-near"), quickClear=S("#quick-clear");
-    const themeColorMeta=S("#themeColorMeta");
-
-    const autoFollowEl=S("#autoFollow");
-    const toggleCoords=S("#toggleCoords");
-    const coordFmtEl=S("#coordFmt");
-    const coordPrecEl=S("#coordPrec");
-    const coordPrecVal=S("#coordPrecVal");
-    const themeModeEl=S("#themeMode");
-
-    const markerEl=S("#marker"), markerVisibleEl=S("#markerVisible"), markerSizeEl=S("#markerSize"), markerSizeVal=S("#markerSizeVal"),
-          markerColorEl=S("#markerColor"), markerRingEl=S("#markerRing"), ringWidthEl=S("#ringWidth"), ringWidthVal=S("#ringWidthVal"),
-          markerStyleEl=S("#markerStyle");
-
-    const shareDeltaEl=S("#shareDelta"), confirmDeleteEl=S("#confirmDelete");
-    const accentColorEl=S("#accentColor"), accentResetEl=S("#accentReset");
-    const customCSSEl=S("#customCSS"), applyCSSEl=S("#applyCSS"), clearCSSEl=S("#clearCSS");
-
-    /* Prefs */
-    const PREFS_KEY="pokemaps_prefs_v7"; // bump version for new sidebar width
-    const LS_PINS="pokemaps_pins_v1";
-    const LS_SEARCH="pokemaps_search_hist_v1";
-
-    let aborter=null, lastQuery="", watchId=null, activeIndex=-1, lastCoordsStr="";
-    let state={...DEFAULT};
-    const prefs=loadPrefs(); applyPrefs();
-
-    const isDesktop=()=> matchMedia("(min-width: 1024px)").matches && matchMedia("(pointer: fine)").matches;
-    const applyDesktopClass=()=>{ document.body.classList.toggle("desktop", isDesktop()) };
-    applyDesktopClass(); addEventListener("resize",applyDesktopClass,{passive:true});
-
-    const setVH=()=>{const vh=window.innerHeight*0.01;document.documentElement.style.setProperty("--vh",`${vh*100}px`)};
-    setVH(); addEventListener("resize",setVH,{passive:true});
-
-    const clamp=(n,min,max)=>Math.min(Math.max(n,min),max);
-    const clampDelta=d=>clamp(d, LIMITS.deltaMin, LIMITS.deltaMax);
-    const cleanStr=s=>s.replace(/\s+/g," ").trim();
-
-    const bboxFrom=(lat,lon,d)=>({left:(lon-d).toFixed(6),bottom:(lat-d).toFixed(6),right:(lon+d).toFixed(6),top:(lat+d).toFixed(6)});
-    const embedURL=({lat,lon,delta,layer})=>{
-      const b=bboxFrom(lat,lon,clampDelta(delta));
-      const lyr = LAYERS.includes(layer)?layer:DEFAULT.layer;
-      return `${OSM_EMBED}?bbox=${b.left}%2C${b.bottom}%2C${b.right}%2C${b.top}&layer=${encodeURIComponent(lyr)}`;
-    };
-    const appURL=({lat,lon,delta,layer})=>{
-      const p=new URLSearchParams({
-        lat:lat.toFixed(prefs.prec??6),
-        lon:lon.toFixed(prefs.prec??6),
-        delta:(prefs.includeDelta!==false?clampDelta(delta).toFixed(4):undefined),
-        layer
-      });
-      if(p.get("delta")==="undefined") p.delete("delta");
-      return `${location.origin}${location.pathname}?${p.toString()}`;
-    };
-    const osmViewURL=({lat,lon,delta,layer})=>{
-      const z = deltaToZoom(clampDelta(delta));
-      return `${OSM_VIEW}/?mlat=${lat.toFixed(6)}&mlon=${lon.toFixed(6)}#map=${z}/${lat.toFixed(6)}/${lon.toFixed(6)}&layers=${layer}`;
-    };
-    const gmapsURL=({lat,lon,delta})=>{
-      const z = deltaToZoom(clampDelta(delta));
-      return `https://www.google.com/maps/@${lat.toFixed(6)},${lon.toFixed(6)},${Math.max(3,Math.min(20,z))}z`;
-    };
-
-    const parseURL=()=>{
-      const sp=new URLSearchParams(location.search);
-      const lat=parseFloat(sp.get("lat")), lon=parseFloat(sp.get("lon")), delta=parseFloat(sp.get("delta"));
-      const layer=sp.get("layer");
-      if(Number.isFinite(lat)&&Number.isFinite(lon)) state.lat=clamp(lat,-90,90), state.lon=clamp(lon,-180,180);
-      if(Number.isFinite(delta)&&delta>0) state.delta=clampDelta(delta);
-      if(layer && LAYERS.includes(layer)) state.layer=layer;
-      if(layerSel) layerSel.value=state.layer;
-    };
-
-    const apply=(push)=>{
-      map.src=embedURL(state);
-      if(push) history.pushState(state,"",appURL(state));
-    };
-
-    const toDMS=(v,isLat)=>{
-      const dir=isLat?(v>=0?"N":"S"):(v>=0?"E":"W");
-      const av=Math.abs(v); const d=Math.floor(av); const m=Math.floor((av-d)*60); const s=((av-d)*60 - m)*60;
-      return `${d}°${m}′${s.toFixed(2)}″ ${dir}`;
-    };
-
-    const coordString=()=>{
-      const fmt=prefs.coordFmt||"dec";
-      const pr=prefs.prec??6;
-      const dec=`${state.lat.toFixed(pr)}, ${state.lon.toFixed(pr)}`;
-      const dms=toDMS(state.lat,true)+" "+toDMS(state.lon,false);
-      return fmt==="dms"?dms:dec;
-    };
-
-    const updateCoordsFast=()=>{
-      if(!prefs.showCoords) return;
-      const s=coordString()+` · Δ ${state.delta.toFixed(4)} · ${state.layer}`;
-      if(s!==lastCoordsStr){ coordsEl.textContent=s; lastCoordsStr=s }
-    };
-
-    const centerOn=(lat,lon,{push=true}={})=>{ state.lat=clamp(lat,-90,90); state.lon=clamp(lon,-180,180); apply(push) };
-    const setLayer=(layer)=>{ state.layer = LAYERS.includes(layer)?layer:DEFAULT.layer; apply(true) };
-    const setDelta=(delta,{push=true}={})=>{ state.delta = clampDelta(delta); apply(push) };
-
-    const zoomToDelta=z=>Math.min(LIMITS.deltaMax, Math.max(LIMITS.deltaMin, Math.pow(2,(10 - z)) * 0.02));
-    const deltaToZoom=d=>Math.round(10 - Math.log2(d/0.02));
-
-    const locate=()=>{
-      if(!("geolocation" in navigator)){ alert("Geolocation not supported."); return }
-      navigator.geolocation.getCurrentPosition(
-        pos=>centerOn(pos.coords.latitude,pos.coords.longitude,{push:true}),
-        err=>alert("Unable to retrieve location: "+err.message),
-        {enableHighAccuracy:true,timeout:10000,maximumAge:0}
-      )
-    };
-    const startFollow=()=>{
-      if(!("geolocation" in navigator)){ alert("Geolocation not supported."); return }
-      if(watchId!==null) return;
-      followBtn && (followBtn.textContent="🛰️ Following");
-      const d_follow = document.querySelector("#d_follow");
-      d_follow && (d_follow.textContent="Following");
-      watchId = navigator.geolocation.watchPosition(
-        pos=>{ centerOn(pos.coords.latitude,pos.coords.longitude,{push:false}) },
-        _=>stopFollow(),
-        {enableHighAccuracy:true,timeout:15000,maximumAge:1000}
-      )
-    };
-    const stopFollow=()=>{ if(watchId!==null){ navigator.geolocation.clearWatch(watchId); watchId=null } ; followBtn && (followBtn.textContent="🛰️ Follow"); const d_follow=document.querySelector("#d_follow"); d_follow && (d_follow.textContent="Follow") };
-    const toggleFollow=()=> watchId===null ? startFollow() : stopFollow();
-
-    const copyLink=async()=>{ try{ await navigator.clipboard.writeText(appURL(state)); alert("Link copied!") }catch{ alert("Could not copy.") } };
-    const copyCoords=async()=>{ const msg=coordString(); try{ await navigator.clipboard.writeText(msg); alert("Coordinates copied!") }catch{ alert(msg) } };
-    const shareLink=async()=>{ const url = appURL(state); if(navigator.share){ try{ await navigator.share({title:"PokeMaps Public Beta", url}) }catch{} } else { copyLink() } };
-    const reset=()=>{ stopFollow(); state={...DEFAULT}; q.value=""; hideSuggest(true); layerSel && (layerSel.value=state.layer); apply(true) };
-
-    const debounced=(fn,ms=250)=>{let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms)}};
-
-    const parseCoordInput=(str)=>{
-      str=str.trim();
-      const m=str.match(/^\s*([+-]?\d+(?:\.\d+)?)\s*[, ]\s*([+-]?\d+(?:\.\d+)?)\s*$/);
-      if(!m) return null;
-      const lat=parseFloat(m[1]), lon=parseFloat(m[2]);
-      if(!Number.isFinite(lat)||!Number.isFinite(lon)) return null;
-      if(Math.abs(lat)>90||Math.abs(lon)>180) return null;
-      return {lat,lon};
-    };
-
-    const highlight=(text,term)=>{
-      term=term.trim(); if(!term) return text;
-      const esc=term.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
-      return text.replace(new RegExp(esc,"ig"),m=>`<mark>${m}</mark>`);
-    };
-
-    const loadSearchHist=()=>{ try{ return JSON.parse(localStorage.getItem(LS_SEARCH)||"[]") }catch{ return [] } };
-    const saveSearchHist=(arr)=>{ localStorage.setItem(LS_SEARCH, JSON.stringify(arr.slice(0,12))) };
-    const pushSearchHist=(label)=>{ const h=loadSearchHist(); const i=h.indexOf(label); if(i!==-1) h.splice(i,1); h.unshift(label); saveSearchHist(h) };
-
-    const renderSuggest=(items, term="")=>{
-      if(!sug) return;
-      const head = sug.querySelector(".head");
-      sug.innerHTML="";
-      if(head) sug.appendChild(head);
-      if(!items.length){ sug.style.display="none"; q.setAttribute("aria-expanded","false"); activeIndex=-1; return }
-      items.forEach((it,i)=>{
-        const li=document.createElement("li");
-        li.role="option"; li.id="opt"+i;
-        li.innerHTML=`<span class="pill">${it.type}</span><span class="txt">${highlight(it.label,term)}</span>`;
-        li.addEventListener("mousedown",e=>{ e.preventDefault(); chooseItem(it) });
-        sug.appendChild(li);
-      });
-      sug.style.display="block"; q.setAttribute("aria-expanded","true");
-    };
-
-    const hideSuggest=(force=false)=>{
-      if(force){ sug.style.display="none"; q.setAttribute("aria-expanded","false"); activeIndex=-1; return }
-      sug.style.display="none"; q.setAttribute("aria-expanded","false"); activeIndex=-1;
-    };
-
-    const chooseItem=(it)=>{
-      if(it.type==="history"){ q.value=it.label; searchNow(it.label); return }
-      if(it.type==="coords"){ centerOn(it.lat,it.lon,{push:true}); pushSearchHist(it.label); hideSuggest(true); return }
-      if(it.type==="place"){ q.value=it.label; centerOn(it.lat,it.lon,{push:true}); pushSearchHist(it.label); hideSuggest(true); return }
-    };
-
-    const searchPlaces=debounced(async term=>{
-      term=cleanStr(term); activeIndex=-1;
-      if(!term){ const hist=loadSearchHist(); renderSuggest(hist.map(x=>({type:"history",label:x}))); return }
-      const coord=parseCoordInput(term);
-      if(coord){ renderSuggest([{type:"coords",label:`${coord.lat}, ${coord.lon}`, lat:coord.lat, lon:coord.lon}]); return }
-
-      if(aborter) aborter.abort(); aborter=new AbortController();
-      try{
-        const url=`${NOMINATIM}?q=${encodeURIComponent(term)}&format=json&limit=8&addressdetails=0&accept-language=en`;
-        const r=await fetch(url,{signal:aborter.signal});
-        if(!r.ok) throw new Error("HTTP "+r.status);
-        const data=await r.json();
-        renderSuggest(data.map(p=>({type:"place",label:p.display_name,lat:+p.lat,lon:+p.lon,raw:p})), term);
-      }catch(e){
-        const hist=loadSearchHist();
-        renderSuggest(hist.map(x=>({type:"history",label:x})), "");
-      }
-    },140);
-
-    const searchNow=async term=>{
-      term=cleanStr(term); if(!term) return;
-      const coord=parseCoordInput(term);
-      if(coord){ centerOn(coord.lat,coord.lon,{push:true}); pushSearchHist(`${coord.lat}, ${coord.lon}`); return }
-      try{
-        const r=await fetch(`${NOMINATIM}?q=${encodeURIComponent(term)}&format=json&limit=1`);
-        const d=await r.json();
-        if(d[0]){ centerOn(parseFloat(d[0].lat),parseFloat(d[0].lon),{push:true}); pushSearchHist(term) }
-      }catch{}
-    };
-
-    // Suggestion UX
-    q.addEventListener("input",e=>{
-      const v=e.target.value;
-      if(v===lastQuery) return;
-      lastQuery=v;
-      searchPlaces(v);
-    },{passive:true});
-
-    q.addEventListener("focus",()=>{
-      if(!q.value){ const hist=loadSearchHist(); renderSuggest(hist.map(x=>({type:"history",label:x}))) }
-      else { searchPlaces(q.value) }
-    });
-
-    document.addEventListener("click",e=>{
-      const within = e.target.closest(".search") || e.target.closest("#suggestions");
-      if(!within) hideSuggest(true);
-    });
-
-    closeSuggestBtn?.addEventListener("click",()=>hideSuggest(true));
-
-    q.addEventListener("keydown",e=>{
-      const visible = sug.style.display==="block";
-      if(e.key==="Escape"){ hideSuggest(true); return }
-      if(!visible) return;
-      const items=[...sug.querySelectorAll("li")].filter(li=>!li.classList.contains("head"));
-      if(!items.length) return;
-      if(e.key==="ArrowDown"){ e.preventDefault(); activeIndex=(activeIndex+1)%items.length; activate(items) }
-      if(e.key==="ArrowUp"){ e.preventDefault(); activeIndex=(activeIndex-1+items.length)%items.length; activate(items) }
-      if(e.key==="Enter"){ e.preventDefault(); if(activeIndex>=0) items[activeIndex].dispatchEvent(new MouseEvent("mousedown")); else searchNow(q.value) }
-    });
-
-    const activate=(items)=>{ items.forEach(x=>x.classList.remove("active")); if(activeIndex>=0){ items[activeIndex].classList.add("active"); items[activeIndex].scrollIntoView({block:"nearest"}) } };
-
-    S("#form").addEventListener("submit",async e=>{ e.preventDefault(); await searchNow(q.value); hideSuggest(true) });
-
-    // Quick actions (Menu)
-    quickNear && (quickNear.onclick=locate);
-    quickClear && (quickClear.onclick=()=>{ q.value=""; searchPlaces(""); q.focus() });
-
-    locateBtn.onclick=locate;
-    layerSel && (layerSel.onchange=()=>setLayer(layerSel.value));
-    followBtn && (followBtn.onclick=toggleFollow);
-    resetBtn && (resetBtn.onclick=reset);
-    shareBtn && (shareBtn.onclick=shareLink);
-    copyBtn && (copyBtn.onclick=copyLink);
-    copyCoordsBtn && (copyCoordsBtn.onclick=copyCoords);
-    openBtn && (openBtn.onclick=()=>window.open(osmViewURL(state), "_blank"));
-    openGmapsBtn && (openGmapsBtn.onclick=()=>window.open(gmapsURL(state), "_blank"));
-
-    // Pins
-    const loadPins=()=>{ try{ return JSON.parse(localStorage.getItem(LS_PINS)||"[]") }catch{ return [] } };
-    const savePins=(pins)=>{ localStorage.setItem(LS_PINS, JSON.stringify(pins.slice(0,100))) };
-    const renderPins=()=>{
-      const pins=loadPins();
-      pinlist.innerHTML="";
-      if(!pins.length){ const li=document.createElement("li"); li.textContent="No pins yet."; pinlist.appendChild(li); return }
-      pins.forEach((p,idx)=>{
-        const li=document.createElement("li");
-        const head=document.createElement("div");
-        head.innerHTML=`<strong>${p.name}</strong><div class="tag">${p.lat.toFixed(5)}, ${p.lon.toFixed(5)} · ${p.layer}</div>`;
-        const actions=document.createElement("div"); actions.className="row";
-        const go=button("Go",()=>{ pinsPane.style.display="none"; state.lat=p.lat; state.lon=p.lon; state.delta=p.delta; state.layer=p.layer; layerSel && (layerSel.value=p.layer); apply(true) });
-        const share=button("Share",async()=>{ const url=appURL(p); if(navigator.share){ try{ await navigator.share({title:"PokeMaps Public Beta",url}) }catch{} } else { try{ await navigator.clipboard.writeText(url); alert("Link copied!") }catch{} } });
-        const copyc=button("Copy Coords",()=>navigator.clipboard.writeText(`${p.lat.toFixed(6)},${p.lon.toFixed(6)}`).then(()=>alert("Copied!")));
-        const ren=button("Rename",()=>{ const nv=prompt("New name:", p.name||""); if(nv!==null){ const arr=loadPins(); arr[idx].name=(nv||"").trim()||new Date().toLocaleString(); savePins(arr); renderPins() } });
-        const del=button("Del",()=>{ if(confirmDeleteEl.checked){ if(!confirm("Delete pin?")) return } const arr=loadPins(); arr.splice(idx,1); savePins(arr); renderPins() });
-        actions.append(go,share,copyc,ren,del);
-        li.append(head,actions); pinlist.appendChild(li);
-      });
-    };
-    function button(t,fn){ const b=document.createElement("button"); b.textContent=t; b.className="iconbtn"; b.onclick=fn; return b }
-    const nameFromState=()=> q.value?.trim() || new Date().toLocaleString();
-    savepin.onclick=()=>{ const pins=loadPins(); pins.unshift({name:nameFromState(), lat:state.lat, lon:state.lon, delta:state.delta, layer:state.layer}); savePins(pins); renderPins(); pinsPane.style.display="block" };
-    showpins.onclick=()=>{ renderPins(); pinsPane.style.display="block" };
-    closepins.onclick=()=>{ pinsPane.style.display="none" };
-
-    // Panels (mobile/tablet only; desktop has sidebar)
-    menuBtn.onclick=()=>{ if(isDesktop()) return; menu.style.display="block" };
-    closeMenu && (closeMenu.onclick=()=>{ menu.style.display="none" });
-    opensettings.onclick=()=>{ if(isDesktop()) return; settings.style.display="block" };
-    closesettings.onclick=()=>{ settings.style.display="none" };
-
-    // Prefs -> UI
-    toggleCoords.checked = !!prefs.showCoords;
-    coordsEl.style.display = prefs.showCoords ? "block" : "none";
-    coordFmtEl.value = prefs.coordFmt || "dec";
-    coordPrecEl.value = prefs.prec ?? 6;
-    coordPrecVal.textContent = String(prefs.prec ?? 6);
-    themeModeEl.value = prefs.theme || "auto";
-
-    autoFollowEl.checked = !!prefs.autoFollow;
-    shareDeltaEl.checked = prefs.includeDelta!==false;
-    confirmDeleteEl.checked = prefs.confirmDelete!==false;
-
-    markerVisibleEl.checked = !prefs.markerHidden;
-    markerSizeEl.value = prefs.markerSize || 20;
-    markerSizeVal.textContent = markerSizeEl.value + "px";
-    markerColorEl.value = prefs.markerColor || "#e53935";
-    markerRingEl.checked = prefs.markerRing !== false;
-    ringWidthEl.value = prefs.ringWidth != null ? prefs.ringWidth : 3;
-    ringWidthVal.textContent = ringWidthEl.value + "px";
-    markerStyleEl.value = prefs.markerStyle || "dot";
-    applyMarkerStyle(markerStyleEl.value);
-
-    accentColorEl.value = prefs.accent || "#0ea5e9";
-    setAccent(prefs.accent || "#0ea5e9");
-
-    customCSSEl.value = prefs.userCSS || "";
-    applyUserCSS(prefs.userCSS||"");
-
-    document.querySelectorAll(".settings .ghead button").forEach(b=>{
-      b.onclick=()=>{ const t=b.getAttribute("data-t"); const sec=document.querySelector(`.settings .section[data-sec="${t}"]`); sec.style.display=sec.style.display==="block"?"none":"block" }
-    });
-
-    // Pref listeners
-    markerVisibleEl.onchange=()=>{ markerEl.classList.toggle("hidden", !markerVisibleEl.checked); prefs.markerHidden = !markerVisibleEl.checked; savePrefs() };
-    markerSizeEl.oninput=()=>{ document.documentElement.style.setProperty("--marker-size", markerSizeEl.value+"px"); markerSizeVal.textContent=markerSizeEl.value+"px"; prefs.markerSize=+markerSizeEl.value; savePrefs() };
-    markerColorEl.oninput=()=>{ document.documentElement.style.setProperty("--marker-color", markerColorEl.value); prefs.markerColor=markerColorEl.value; savePrefs() };
-    markerRingEl.onchange=()=>{ document.documentElement.style.setProperty("--marker-ring", markerRingEl.checked ? "rgba(229,57,53,.35)" : "transparent"); prefs.markerRing = markerRingEl.checked; savePrefs() };
-    ringWidthEl.oninput=()=>{ document.documentElement.style.setProperty("--ring-width", ringWidthEl.value+"px"); ringWidthVal.textContent=ringWidthEl.value+"px"; prefs.ringWidth=+ringWidthEl.value; savePrefs() };
-    markerStyleEl.onchange=()=>{ applyMarkerStyle(markerStyleEl.value); prefs.markerStyle=markerStyleEl.value; savePrefs() };
-
-    toggleCoords.onchange=()=>{ prefs.showCoords = toggleCoords.checked; coordsEl.style.display = prefs.showCoords ? "block" : "none"; savePrefs() };
-    coordFmtEl.onchange=()=>{ prefs.coordFmt = coordFmtEl.value; savePrefs() };
-    coordPrecEl.oninput=()=>{ prefs.prec = +coordPrecEl.value; coordPrecVal.textContent = String(prefs.prec); savePrefs() };
-    autoFollowEl.onchange=()=>{ prefs.autoFollow = autoFollowEl.checked; savePrefs() };
-    shareDeltaEl.onchange=()=>{ prefs.includeDelta = shareDeltaEl.checked; savePrefs() };
-    confirmDeleteEl.onchange=()=>{ prefs.confirmDelete = confirmDeleteEl.checked; savePrefs() };
-    themeModeEl.onchange=()=>{ prefs.theme = themeModeEl.value; applyTheme(prefs.theme); savePrefs() };
-
-    accentColorEl.oninput=()=>{ setAccent(accentColorEl.value); prefs.accent=accentColorEl.value; savePrefs() };
-    accentResetEl.onclick=()=>{ const def="#0ea5e9"; accentColorEl.value=def; setAccent(def); prefs.accent=def; savePrefs() };
-
-    applyCSSEl.onclick=()=>{ const css=customCSSEl.value||""; prefs.userCSS=css; applyUserCSS(css); savePrefs() };
-    clearCSSEl.onclick=()=>{ customCSSEl.value=""; prefs.userCSS=""; applyUserCSS(""); savePrefs() };
-
-    addEventListener("keydown",(e)=>{
-      if(e.target.matches("input, textarea")) return;
-      if(e.key.toLowerCase()==="l"){ e.preventDefault(); locate() }
-      if(e.key.toLowerCase()==="s"){ e.preventDefault(); savepin.click() }
-      if(e.key.toLowerCase()==="h"){ e.preventDefault(); toggleFollow() }
-      if(e.key.toLowerCase()==="r"){ e.preventDefault(); reset() }
-      if(e.key.toLowerCase()==="1"){ e.preventDefault(); setLayer("mapnik") }
-      if(e.key.toLowerCase()==="2"){ e.preventDefault(); setLayer("cyclemap") }
-      if(e.key.toLowerCase()==="3"){ e.preventDefault(); setLayer("transportmap") }
-      if(e.key.toLowerCase()==="4"){ e.preventDefault(); setLayer("hot") }
-      if(e.key==="/"){ e.preventDefault(); q.focus() }
-      if(e.key==="Escape"){ menu.style.display="none"; settings.style.display="none"; pinsPane.style.display="none"; hideSuggest(true) }
-    });
-
-    addEventListener("popstate",e=>{
-      stopFollow();
-      if(e.state && typeof e.state.lat==="number"){ state=e.state; layerSel && (layerSel.value=state.layer); apply(false) }
-      else { parseURL(); layerSel && (layerSel.value=state.layer); apply(false) }
-    });
-
-    function loadPrefs(){ try{ return JSON.parse(localStorage.getItem(PREFS_KEY)||"{}") }catch{ return {} } }
-    function savePrefs(){ localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)) }
-
-    function applyPrefs(){
-      if(prefs.markerSize) document.documentElement.style.setProperty("--marker-size", prefs.markerSize+"px");
-      if(prefs.markerColor) document.documentElement.style.setProperty("--marker-color", prefs.markerColor);
-      document.documentElement.style.setProperty("--marker-ring", (prefs.markerRing===false) ? "transparent" : "rgba(229,57,53,.35)");
-      document.documentElement.style.setProperty("--ring-width", (prefs.ringWidth!=null?prefs.ringWidth:3)+"px");
-      if(prefs.markerHidden) markerEl.classList.add("hidden");
-      applyMarkerStyle(prefs.markerStyle||"dot");
-      setAccent(prefs.accent||"#0ea5e9");
-      applyTheme(prefs.theme||"auto");
-      // sidebar width
-      if(prefs.sidebarW){
-        const w = clamp(prefs.sidebarW, parseSize(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-min')), window.innerWidth*0.6);
-        document.documentElement.style.setProperty('--sidebar-w', w + 'px');
-      }
-      document.body.classList.toggle("pro-enabled", !!prefs.proMode);
-    }
-    function applyMarkerStyle(style){ markerEl.classList.toggle("crosshair", style==="crosshair") }
-    function setAccent(hex){ document.documentElement.style.setProperty("--accent",hex); themeColorMeta?.setAttribute("content",hex) }
-    function parseSize(v){ return Math.max(0, parseFloat(String(v).replace(/[^\d.]/g,'')) || 0) }
-
-    function applyTheme(mode){
-      if(mode==="dark"){ document.documentElement.style.colorScheme="dark" }
-      else if(mode==="light"){ document.documentElement.style.colorScheme="light" }
-      else { document.documentElement.style.colorScheme="" }
-    }
-
-    // PWA manifest (runtime-injected, no service worker)
-    (function injectManifest(){
-      const manifest={
-        name:"PokeMaps Public Beta",
-        short_name:"PokeMaps",
-        start_url: location.pathname,
-        display:"standalone",
-        background_color:"#000000",
-        theme_color:getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#0ea5e9",
-        icons:[ { src:"/css/yt-ukraine.svg", sizes:"any", type:"image/svg+xml", purpose:"any" } ]
-      };
-      const blob=new Blob([JSON.stringify(manifest)],{type:"application/manifest+json"});
-      const url=URL.createObjectURL(blob);
-      const link=document.createElement("link");
-      link.rel="manifest"; link.href=url;
-      document.head.appendChild(link);
-    })();
-
-    // Custom CSS injector
-    function applyUserCSS(css){
-      let tag=document.getElementById("user-css");
-      if(!tag){ tag=document.createElement("style"); tag.id="user-css"; document.head.appendChild(tag) }
-      tag.textContent=css||"";
-    }
-
-    // Init navigation
-    parseURL(); apply(false);
-    const urlHasLat = new URLSearchParams(location.search).has("lat");
-    if(!urlHasLat){ locate() }
-    if(prefs.autoFollow)
-      startFollow();
-
-    // Desktop sidebar builder + resizer
-    if(isDesktop()){
-      buildDesktopSidebar();
-      setupSidebarResizer();
-    }
-
-    function setupSidebarResizer(){
-      let handle=document.querySelector(".side-resizer");
-      if(!handle){
-        handle=document.createElement("div");
-        handle.className="side-resizer";
-        document.body.appendChild(handle);
-      }
-
-      const minPx = ()=> parseSize(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-min'));
-      const maxPx = ()=> Math.min(window.innerWidth*0.6, parseSize(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-max')) || window.innerWidth*0.6);
-
-      let dragging=false, startX=0, startW=0;
-
-      const onDown=(e)=>{
-        if(!isDesktop()) return;
-        dragging=true;
-        startX = e.clientX ?? (e.touches?.[0]?.clientX || 0);
-        startW = parseSize(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w')) || 320;
-        handle.classList.add("dragging");
-        document.addEventListener("pointermove", onMove);
-        document.addEventListener("pointerup", onUp);
-        e.preventDefault();
-      };
-      const onMove=(e)=>{
-        if(!dragging) return;
-        const x = e.clientX ?? (e.touches?.[0]?.clientX || 0);
-        const raw = startW + (x - startX);
-        const clamped = clamp(raw, minPx(), maxPx());
-        document.documentElement.style.setProperty('--sidebar-w', clamped + 'px');
-      };
-      const onUp=()=>{
-        if(!dragging) return;
-        dragging=false;
-        handle.classList.remove("dragging");
-        // persist
-        const w = parseSize(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w')) || 320;
-        prefs.sidebarW = Math.round(clamp(w, minPx(), maxPx()));
-        savePrefs();
-        document.removeEventListener("pointermove", onMove);
-        document.removeEventListener("pointerup", onUp);
-      };
-
-      handle.addEventListener("pointerdown", onDown);
-      addEventListener("resize", ()=>{
-        if(!isDesktop()) return;
-        // ensure width stays in bounds on resize
-        const w = parseSize(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w')) || 320;
-        const clamped = clamp(w, minPx(), maxPx());
-        document.documentElement.style.setProperty('--sidebar-w', clamped + 'px');
-      }, {passive:true});
-    }
-
-    // Desktop sidebar (mirrors mobile features)
-    function buildDesktopSidebar(){
-      const side=document.createElement("div"); side.className="sidebar";
-      side.innerHTML=`
-        <div class="sidecard">
-          <header>
-            <span>Overview</span>
-            <label style="font-weight:400;font-size:12px;display:flex;align-items:center;gap:6px;">
-              <input type="checkbox" id="pro_toggle" ${prefs.proMode?'checked':''}/> Pro
-            </label>
-          </header>
-          <div class="row"><input id="d_searchmirror" type="text" placeholder="Search or lat,lon…" class="select" style="width:100%;background:#111;border:1px solid var(--border);border-radius:10px;padding:10px 12px"></div>
-          <div class="row"><select class="select" id="d_layer">
-            <option value="mapnik">Standard</option>
-            <option value="cyclemap">Cycle</option>
-            <option value="transportmap">Transport</option>
-            <option value="hot">Humanitarian</option>
-          </select></div>
-          <div class="row"><button class="iconbtn" id="d_locate">Locate</button><button class="iconbtn" id="d_follow">Follow</button><button class="iconbtn" id="d_reset">Reset</button></div>
-          <div class="row"><button class="iconbtn" id="d_copy">Copy Link</button><button class="iconbtn" id="d_copyc">Copy Coords</button></div>
-          <div class="row"><button class="iconbtn" id="d_osm">Open in OSM</button><button class="iconbtn" id="d_gmaps">Google Maps</button></div>
-          <div class="hint">Tip: / focus • 1–4 layers • S save pin • R reset</div>
-        </div>
-
-        <div class="sidecard">
-          <header>Marker</header>
-          <div class="row"><label style="flex:1">Visible</label><input type="checkbox" id="d_markerv"></div>
-          <div class="row"><label style="flex:1">Style</label><select class="select" id="d_style"><option value="dot">Dot</option><option value="crosshair">Crosshair</option></select></div>
-          <div class="row"><label style="flex:1">Size</label><input type="range" id="d_ms" min="8" max="64"><span id="d_msv"></span></div>
-          <div class="row"><label style="flex:1">Color</label><input type="color" id="d_mc"></div>
-          <div class="row pro-only"><label style="flex:1">Glow</label><input type="checkbox" id="d_mr"></div>
-          <div class="row pro-only"><label style="flex:1">Ring width</label><input type="range" id="d_rw" min="0" max="16"><span id="d_rwv"></span></div>
-        </div>
-
-        <div class="sidecard">
-          <header>Pins</header>
-          <div class="row"><button class="iconbtn" id="d_save">Save current</button><button class="iconbtn" id="d_showpins">Manage</button></div>
-          <div class="row" id="d_pinpeek" style="flex-direction:column;align-items:stretch;gap:6px">
-            <small style="opacity:.75">Recent:</small>
-            <div id="d_pinlistmini" style="display:flex;flex-direction:column;gap:6px"></div>
-          </div>
-        </div>
-
-        <div class="sidecard">
-          <header>Display</header>
-          <div class="row"><label style="flex:1">Always show coords</label><input type="checkbox" id="d_showc"></div>
-          <div class="row"><select class="select" id="d_fmt"><option value="dec">DD (Decimal)</option><option value="dms">DMS</option></select></div>
-          <div class="row pro-only"><label style="flex:1">Precision</label><input type="range" id="d_prec" min="0" max="8"><span id="d_precv"></span></div>
-          <div class="row"><label style="flex:1">Accent</label><input type="color" id="d_accent"><button class="iconbtn" id="d_accent_reset">Reset</button></div>
-          <div class="row pro-only"><button class="iconbtn" id="d_share">Share</button><button class="iconbtn" id="d_copy2">Copy Link</button></div>
-        </div>
-
-        <div class="sidecard pro-only">
-          <header>Custom CSS</header>
-          <div class="row" style="flex-direction:column;align-items:stretch">
-            <textarea id="d_usercss" style="width:100%;min-height:100px;border-radius:10px;border:1px solid var(--border);background:#0a0a0a;color:#eee;padding:8px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" placeholder="/* Your CSS here */"></textarea>
-            <div style="display:flex;gap:8px;margin-top:8px">
-              <button class="iconbtn" id="d_applycss">Apply</button>
-              <button class="iconbtn" id="d_clearcss">Clear</button>
+      <div class="sidebar-card" style="flex: 1; min-height: 0;">
+        <div class="scroll-container">
+          
+          <div>
+            <div class="section-title">Quick Actions</div>
+            <div class="row">
+              <button class="btn" id="d-btn-locate" style="flex:1"><svg class="icon"><use href="#icon-navigation"/></svg> Locate Me</button>
+              <button class="btn" id="d-btn-follow" style="flex:1">Follow</button>
+            </div>
+            <div class="row">
+              <button class="btn" id="d-btn-share" style="flex:1"><svg class="icon"><use href="#icon-share"/></svg> Share</button>
+              <button class="btn" id="d-btn-reset" style="flex:1">Reset</button>
             </div>
           </div>
+
+          <hr style="border:0; border-top:1px solid var(--border); width:100%; margin:0;">
+
+          <div>
+            <div class="section-title" style="display:flex; justify-content:space-between;">
+              <span>Saved Pins</span>
+              <button id="d-save-pin" style="background:none; border:none; color:var(--accent); cursor:pointer; font-size:11px; font-weight:700;">+ SAVE CURRENT</button>
+            </div>
+            <div id="d-pin-list">
+              </div>
+          </div>
+
+          <hr style="border:0; border-top:1px solid var(--border); width:100%; margin:0;">
+
+          <div>
+            <div class="section-title">Map Settings</div>
+            <div class="row">
+               <label style="flex:1; font-size:14px">Map Layer</label>
+               <select id="d-layer-select" class="styled-select" style="width:140px; padding:6px;">
+                 <option value="mapnik">Standard</option>
+                 <option value="cyclemap">Cyclist</option>
+                 <option value="transportmap">Transport</option>
+                 <option value="hot">Humanitarian</option>
+               </select>
+            </div>
+            <div class="toggle-row">
+               <label>Show Coordinates</label>
+               <input type="checkbox" id="d-check-coords">
+            </div>
+            <div class="toggle-row">
+               <label>Theme</label>
+               <select id="d-theme-select" class="styled-select" style="width:100px; padding:4px;">
+                 <option value="auto">Auto</option><option value="dark">Dark</option><option value="light">Light</option>
+               </select>
+            </div>
+          </div>
+          
         </div>
+      </div>
+    </div>
 
-        <div class="sidecard">
-          <header>About</header>
-          <div class="row"><small>Powered by openstreetmap.org • Data © OSM contributors • Public Beta</small></div>
-        </div>
-      `;
-      document.body.appendChild(side);
+    <div class="desktop-only desktop-tools">
+      <button class="btn btn-icon" onclick="window.open('https://www.openstreetmap.org','_blank')" title="Open OSM Website"><svg class="icon"><use href="#icon-map-pin"/></svg></button>
+      <button class="btn btn-icon" onclick="window.open('https://maps.google.com','_blank')" title="Compare Google Maps"><span style="font-weight:700; font-size:18px">G</span></button>
+    </div>
 
-      // Mirror search
-      const d_searchmirror=side.querySelector("#d_searchmirror");
-      d_searchmirror.value=q.value||"";
-      d_searchmirror.addEventListener("input",()=>{ q.value=d_searchmirror.value; q.dispatchEvent(new Event("input",{bubbles:true})) });
+    <div class="desktop-only desktop-footer" id="d-coords-display">
+      0.0000, 0.0000
+    </div>
 
-      // Pro toggle
-      const proToggle=side.querySelector("#pro_toggle");
-      const updatePro=()=>{ prefs.proMode = proToggle.checked; savePrefs(); document.body.classList.toggle("pro-enabled", !!prefs.proMode) };
-      proToggle.addEventListener("change",updatePro);
-      document.body.classList.toggle("pro-enabled", !!prefs.proMode);
+  </div>
+</div>
 
-      const d_layer=side.querySelector("#d_layer");
-      side.querySelector("#d_osm").onclick=()=>window.open(osmViewURL(state),"_blank");
-      side.querySelector("#d_copy").onclick=copyLink;
-      side.querySelector("#d_copy2").onclick=copyLink;
-      side.querySelector("#d_share").onclick=shareLink;
-      side.querySelector("#d_locate").onclick=locate;
-      side.querySelector("#d_follow").onclick=toggleFollow;
-      side.querySelector("#d_reset").onclick=reset;
-      side.querySelector("#d_gmaps").onclick=()=>window.open(gmapsURL(state), "_blank");
-      d_layer.value=state.layer;
-      d_layer.onchange=()=>setLayer(d_layer.value);
+<script>
+;(() => {
+  // --- STATE & CONFIG ---
+  const STATE = { lat: 30.41, lon: 72.44, delta: 0.25, layer: 'mapnik', following: false };
+  const PREFS = JSON.parse(localStorage.getItem('pm_prefs') || '{}');
+  const PINS = JSON.parse(localStorage.getItem('pm_pins') || '[]');
+  
+  const LAYERS = ["mapnik","cyclemap","transportmap","hot"];
+  const EL = (sel) => document.querySelector(sel);
+  
+  // --- DOM ELEMENTS ---
+  const ui = {
+    map: EL('#map'),
+    marker: EL('#center-marker'),
+    d_search: EL('#d-search'), d_sug: EL('#d-suggestions'),
+    m_search: EL('#m-search'), m_sug: EL('#m-suggestions'),
+    d_coords: EL('#d-coords-display'),
+    
+    // Desktop Inputs
+    d_locate: EL('#d-btn-locate'), d_follow: EL('#d-btn-follow'),
+    d_share: EL('#d-btn-share'), d_reset: EL('#d-btn-reset'),
+    d_layer: EL('#d-layer-select'), d_theme: EL('#d-theme-select'),
+    d_coordsCheck: EL('#d-check-coords'), d_save: EL('#d-save-pin'),
+    d_pinList: EL('#d-pin-list'),
 
-      // Marker group
-      const d_markerv=side.querySelector("#d_markerv");
-      const d_style=side.querySelector("#d_style");
-      const d_ms=side.querySelector("#d_ms"), d_msv=side.querySelector("#d_msv");
-      const d_mc=side.querySelector("#d_mc");
-      const d_mr=side.querySelector("#d_mr");
-      const d_rw=side.querySelector("#d_rw"), d_rwv=side.querySelector("#d_rwv");
+    // Mobile Inputs
+    m_menuBtn: EL('#m-btn-menu'), m_locateBtn: EL('#m-btn-locate'), m_pinsBtn: EL('#m-btn-pins'),
+    m_sheetSettings: EL('#sheet-settings'), m_sheetPins: EL('#sheet-pins'),
+    m_layer: EL('#m-layer-select'), m_theme: EL('#m-theme-select'),
+    m_followCheck: EL('#m-toggle-follow'), m_coordsCheck: EL('#m-toggle-coords'),
+    m_save: EL('#m-save-curr'), m_pinList: EL('#m-pin-list'),
+    m_share: EL('#m-share'), m_reset: EL('#m-reset')
+  };
 
-      d_markerv.checked=!prefs.markerHidden;
-      d_style.value=prefs.markerStyle||"dot";
-      d_ms.value=markerSizeEl.value; d_msv.textContent=d_ms.value+"px";
-      d_mc.value=markerColorEl.value;
-      if(d_mr) d_mr.checked=markerRingEl.checked;
-      if(d_rw){ d_rw.value=ringWidthEl.value; d_rwv.textContent=d_rw.value+"px" }
+  // --- CORE MAP LOGIC ---
+  const updateMap = (pushState = false) => {
+    // Clamping
+    STATE.delta = Math.max(0.0005, Math.min(45, STATE.delta));
+    
+    // Construct Embed URL
+    const bbox = {
+      left: (STATE.lon - STATE.delta).toFixed(6),
+      bottom: (STATE.lat - STATE.delta).toFixed(6),
+      right: (STATE.lon + STATE.delta).toFixed(6),
+      top: (STATE.lat + STATE.delta).toFixed(6)
+    };
+    const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox.left}%2C${bbox.bottom}%2C${bbox.right}%2C${bbox.top}&layer=${STATE.layer}`;
+    
+    if (ui.map.src !== src) ui.map.src = src;
 
-      d_markerv.onchange=()=>{ markerVisibleEl.checked=d_markerv.checked; markerVisibleEl.onchange() };
-      d_style.onchange=()=>{ markerStyleEl.value=d_style.value; markerStyleEl.onchange() };
-      d_ms.oninput=()=>{ markerSizeEl.value=d_ms.value; markerSizeEl.oninput(); d_msv.textContent=d_ms.value+"px" };
-      d_mc.oninput=()=>{ markerColorEl.value=d_mc.value; markerColorEl.oninput() };
-      if(d_mr) d_mr.onchange=()=>{ markerRingEl.checked=d_mr.checked; markerRingEl.onchange() };
-      if(d_rw) d_rw.oninput=()=>{ ringWidthEl.value=d_rw.value; ringWidthEl.oninput(); d_rwv.textContent=d_rw.value+"px" };
+    // Update URL
+    if (pushState) {
+      const url = new URL(window.location);
+      url.searchParams.set('lat', STATE.lat.toFixed(5));
+      url.searchParams.set('lon', STATE.lon.toFixed(5));
+      url.searchParams.set('d', STATE.delta.toFixed(4));
+      url.searchParams.set('l', STATE.layer);
+      history.pushState(STATE, '', url);
+    }
+    
+    updateUI();
+  };
 
-      // Pins mini
-      const d_save=side.querySelector("#d_save");
-      const d_showpins=side.querySelector("#d_showpins");
-      const d_pinlistmini=side.querySelector("#d_pinlistmini");
-      d_save.onclick=()=>savepin.click();
-      d_showpins.onclick=()=>{ renderPins(); pinsPane.style.display="block" };
+  const updateUI = () => {
+    const coordText = `${STATE.lat.toFixed(5)}, ${STATE.lon.toFixed(5)}`;
+    ui.d_coords.textContent = coordText;
+    
+    // Sync Inputs
+    if(ui.d_layer.value !== STATE.layer) ui.d_layer.value = STATE.layer;
+    if(ui.m_layer.value !== STATE.layer) ui.m_layer.value = STATE.layer;
+    
+    // Marker Pulse if following
+    ui.marker.style.boxShadow = STATE.following ? '0 0 0 8px rgba(59, 130, 246, 0.4)' : '';
+    ui.marker.style.background = STATE.following ? 'var(--accent)' : 'var(--danger)';
+  };
 
-      const renderPinsMini=()=>{
-        d_pinlistmini.innerHTML="";
-        const pins=loadPins().slice(0,6);
-        if(!pins.length){ d_pinlistmini.innerHTML='<small style="opacity:.6">No pins yet.</small>'; return }
-        pins.forEach((p)=>{
-          const row=document.createElement("div");
-          row.style.display="flex"; row.style.gap="6px"; row.style.alignItems="center"; row.style.justifyContent="space-between";
-          const txt=document.createElement("div");
-          txt.innerHTML=`<strong style="font-size:12px">${p.name}</strong><br><span style="opacity:.7;font-size:11px">${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}</span>`;
-          const go=document.createElement("button"); go.className="iconbtn"; go.textContent="Go"; go.onclick=()=>{ state.lat=p.lat; state.lon=p.lon; state.delta=p.delta; state.layer=p.layer; layerSel && (layerSel.value=p.layer); apply(true) };
-          row.append(txt,go); d_pinlistmini.appendChild(row);
-        });
-      };
-      renderPinsMini();
+  // --- LOCATION SERVICES ---
+  let watchId = null;
+  const toggleFollow = () => {
+    if (STATE.following) {
+      STATE.following = false;
+      if (watchId) navigator.geolocation.clearWatch(watchId);
+      ui.d_follow.textContent = "Follow";
+      ui.m_followCheck.checked = false;
+      updateUI();
+    } else {
+      if (!navigator.geolocation) return alert("Geo not supported");
+      STATE.following = true;
+      ui.d_follow.textContent = "Stop Following";
+      ui.m_followCheck.checked = true;
+      
+      watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+           STATE.lat = pos.coords.latitude;
+           STATE.lon = pos.coords.longitude;
+           updateMap();
+        }, 
+        (err) => { alert("Loc Error"); toggleFollow(); },
+        { enableHighAccuracy: true }
+      );
+      updateUI();
+    }
+  };
 
-      // Display group
-      const d_showc=side.querySelector("#d_showc");
-      const d_fmt=side.querySelector("#d_fmt");
-      const d_prec=side.querySelector("#d_prec"), d_precv=side.querySelector("#d_precv");
-      const d_accent=side.querySelector("#d_accent"), d_accent_reset=side.querySelector("#d_accent_reset");
-      d_showc.checked=!!prefs.showCoords;
-      d_fmt.value=prefs.coordFmt||"dec";
-      if(d_prec){ d_prec.value=prefs.prec??6; d_precv.textContent=String(prefs.prec??6) }
-      d_accent.value=prefs.accent||"#0ea5e9";
-      d_showc.onchange=()=>{ toggleCoords.checked=d_showc.checked; toggleCoords.onchange() };
-      d_fmt.onchange=()=>{ coordFmtEl.value=d_fmt.value; coordFmtEl.onchange() };
-      if(d_prec) d_prec.oninput=()=>{ coordPrecEl.value=d_prec.value; coordPrecEl.oninput(); d_precv.textContent=d_prec.value };
-      d_accent.oninput=()=>{ accentColorEl.value=d_accent.value; accentColorEl.oninput() };
-      d_accent_reset.onclick=()=>{ accentResetEl.click(); d_accent.value=accentColorEl.value };
+  const locateOnce = () => {
+    navigator.geolocation.getCurrentPosition(pos => {
+      STATE.lat = pos.coords.latitude;
+      STATE.lon = pos.coords.longitude;
+      STATE.delta = 0.01; // Zoom in
+      updateMap(true);
+    }, err => alert(err.message));
+  };
 
-      // Custom CSS
-      const d_usercss=side.querySelector("#d_usercss");
-      const d_applycss=side.querySelector("#d_applycss");
-      const d_clearcss=side.querySelector("#d_clearcss");
-      if(d_usercss){ d_usercss.value=prefs.userCSS||""; d_applycss.onclick=()=>applyCSSEl.onclick(); d_clearcss.onclick=()=>clearCSSEl.onclick() }
+  // --- SEARCH ---
+  let debounceTimer;
+  const handleSearch = async (val, suggestionEl) => {
+    if (!val || val.length < 3) { suggestionEl.style.display = 'none'; return; }
+    
+    // Check if lat,lon
+    const coordMatch = val.match(/([+-]?\d+\.?\d*)\s*,\s*([+-]?\d+\.?\d*)/);
+    if(coordMatch) {
+      const lat = parseFloat(coordMatch[1]), lon = parseFloat(coordMatch[2]);
+      suggestionEl.innerHTML = `<li data-lat="${lat}" data-lon="${lon}">📍 Go to ${lat}, ${lon}</li>`;
+      suggestionEl.style.display = 'block';
+      return;
     }
 
-    function tickCoords(){ updateCoordsFast(); setTimeout(tickCoords,120) }
-    tickCoords();
-  })();
-  </script>
- </body>
+    // Nominatim
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(async () => {
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(val)}`);
+        const data = await res.json();
+        suggestionEl.innerHTML = '';
+        if (data.length === 0) { suggestionEl.style.display='none'; return; }
+        
+        data.slice(0, 5).forEach(item => {
+          const li = document.createElement('li');
+          li.innerHTML = `<span>${item.display_name}</span>`;
+          li.onclick = () => {
+             STATE.lat = parseFloat(item.lat);
+             STATE.lon = parseFloat(item.lon);
+             updateMap(true);
+             suggestionEl.style.display = 'none';
+             ui.d_search.value = item.display_name.split(',')[0];
+             ui.m_search.value = item.display_name.split(',')[0];
+          };
+          suggestionEl.appendChild(li);
+        });
+        suggestionEl.style.display = 'block';
+      } catch(e) {}
+    }, 300);
+  };
+
+  // --- PINS SYSTEM ---
+  const renderPins = () => {
+    const html = PINS.map((pin, idx) => `
+      <div class="pin-card">
+        <div class="pin-header">
+           <span>${pin.name}</span>
+           <div style="display:flex; gap:8px">
+             <button onclick="gotoPin(${idx})" style="border:0;background:none;cursor:pointer;color:var(--accent)">Go</button>
+             <button onclick="deletePin(${idx})" style="border:0;background:none;cursor:pointer;color:var(--text-sub)">✕</button>
+           </div>
+        </div>
+        <div class="pin-coords">${pin.lat.toFixed(4)}, ${pin.lon.toFixed(4)}</div>
+      </div>
+    `).join('');
+    
+    if(PINS.length === 0) {
+      const empty = '<div style="padding:10px; opacity:0.6; font-size:13px; text-align:center">No pins saved yet</div>';
+      ui.d_pinList.innerHTML = empty;
+      ui.m_pinList.innerHTML = empty;
+    } else {
+      ui.d_pinList.innerHTML = html;
+      ui.m_pinList.innerHTML = html;
+    }
+  };
+  
+  window.gotoPin = (i) => {
+    STATE.lat = PINS[i].lat; STATE.lon = PINS[i].lon; STATE.layer = PINS[i].layer;
+    updateMap(true);
+    // If mobile, close sheet
+    ui.m_sheetPins.classList.remove('open');
+  };
+  window.deletePin = (i) => {
+    if(!confirm('Remove pin?')) return;
+    PINS.splice(i, 1);
+    localStorage.setItem('pm_pins', JSON.stringify(PINS));
+    renderPins();
+  };
+  
+  const saveCurrentPin = () => {
+    const name = prompt("Name this location:", "New Pin");
+    if(!name) return;
+    PINS.unshift({ name, lat: STATE.lat, lon: STATE.lon, layer: STATE.layer });
+    localStorage.setItem('pm_pins', JSON.stringify(PINS));
+    renderPins();
+  };
+
+  // --- MOBILE SHEET HANDLERS ---
+  const toggleSheet = (sheet) => {
+    const isOpen = sheet.classList.contains('open');
+    // Close all first
+    document.querySelectorAll('.bottom-sheet').forEach(s => s.classList.remove('open'));
+    if (!isOpen) sheet.classList.add('open');
+  };
+  
+  // Close sheets when clicking map (UI layer passes through, but we detect clicks on the layer wrapper if needed, 
+  // actually better to just listen to map interaction blocker)
+  document.body.addEventListener('click', (e) => {
+     if (e.target.closest('.bottom-sheet') || e.target.closest('.mobile-dock')) return;
+     document.querySelectorAll('.bottom-sheet').forEach(s => s.classList.remove('open'));
+  });
+
+  // --- EVENT LISTENERS ---
+  
+  // Search
+  ui.d_search.addEventListener('input', (e) => handleSearch(e.target.value, ui.d_sug));
+  ui.m_search.addEventListener('input', (e) => handleSearch(e.target.value, ui.m_sug));
+  
+  // Desktop Actions
+  ui.d_locate.onclick = locateOnce;
+  ui.d_follow.onclick = toggleFollow;
+  ui.d_reset.onclick = () => { STATE.lat=30; STATE.lon=10; STATE.delta=10; updateMap(true); };
+  ui.d_share.onclick = () => { navigator.clipboard.writeText(window.location.href); alert("Link copied!"); };
+  ui.d_layer.onchange = (e) => { STATE.layer = e.target.value; updateMap(true); };
+  ui.d_save.onclick = saveCurrentPin;
+  ui.d_theme.onchange = (e) => applyTheme(e.target.value);
+  ui.d_coordsCheck.onchange = (e) => { ui.d_coords.style.display = e.target.checked ? 'block' : 'none'; };
+  
+  // Mobile Actions
+  ui.m_menuBtn.onclick = () => toggleSheet(ui.m_sheetSettings);
+  ui.m_pinsBtn.onclick = () => toggleSheet(ui.m_sheetPins);
+  ui.m_locateBtn.onclick = locateOnce;
+  ui.m_layer.onchange = (e) => { STATE.layer = e.target.value; updateMap(true); };
+  ui.m_save.onclick = saveCurrentPin;
+  ui.m_followCheck.onchange = toggleFollow;
+  ui.m_theme.onchange = (e) => applyTheme(e.target.value);
+  ui.m_share.onclick = ui.d_share.onclick;
+  ui.m_reset.onclick = ui.d_reset.onclick;
+
+  // --- INITIALIZATION ---
+  const applyTheme = (t) => {
+    document.documentElement.style.colorScheme = t === 'auto' ? 'dark light' : t;
+    // Persist
+    PREFS.theme = t; localStorage.setItem('pm_prefs', JSON.stringify(PREFS));
+    ui.d_theme.value = t; ui.m_theme.value = t;
+  };
+  
+  const init = () => {
+    // URL Params
+    const q = new URLSearchParams(location.search);
+    if(q.has('lat')) STATE.lat = parseFloat(q.get('lat'));
+    if(q.has('lon')) STATE.lon = parseFloat(q.get('lon'));
+    if(q.has('d')) STATE.delta = parseFloat(q.get('d'));
+    if(q.has('l')) STATE.layer = q.get('l');
+    
+    // Load Prefs
+    if(PREFS.theme) applyTheme(PREFS.theme);
+    
+    renderPins();
+    updateMap();
+  };
+
+  init();
+
+})();
+</script>
+</body>
 </html>
