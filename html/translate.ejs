@@ -1,7 +1,7 @@
  <!--
     This Source Code Form is subject to the terms of the GNU General Public License:
 
-    Copyright (C) 2021-2024 PokeTube (https://codeberg.org/Ashley/poketube)
+    Copyright (C) 2021-2026 PokeTube (https://codeberg.org/Ashley/poketube)
     
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
 -->
 
 <% const languageOptions = [
-  { code: 'autodetect', name: 'Autodetect' },
+  { code: 'autodetect', name: 'Detect Language' },
   { code: 'af', name: 'Afrikaans' },
   { code: 'sq', name: 'Albanian' },
   { code: 'am', name: 'Amharic' },
@@ -122,227 +122,374 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta content="PokeTranslate" property=og:title>
     <meta content="Translate text - Anonymously!" property=twitter:description>
-    <meta content="https://cdn.glitch.global/d68d17bb-f2c0-4bc3-993f-50902734f652/aa70111e-5bcd-4379-8b23-332a33012b78.image.png?v=1701898829884" property="og:image" />
-    <meta content=summary_large_image name=twitter:card>
     <meta charset="UTF-8">
     <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline'">
     <meta name="referrer" content="no-referrer">
     <link rel="manifest" href="/manifest.json">
-   <link href="https://fonts.bunny.net/css?family=poppins:400,500,600" rel="stylesheet">
-   <link href="https://fonts.bunny.net/icon?family=Material+Icons" rel="stylesheet">
-   
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.bunny.net/icon?family=Material+Icons" rel="stylesheet">
+    
   <style>
     :root {
-      --accent-1: #ff6b6b;
-      --accent-2: #f7d794;
-      --bg-light: #fafafa;
-      --bg-dark: #202027;
-      --card-light: rgba(255,255,255,0.55);
-      --card-dark: rgba(18,18,24,0.55);
-      --radius: 20px;
-      --transition: 0.3s ease;
+      /* Light Mode Variables */
+      --primary: #1a73e8; /* Google Blue */
+      --primary-hover: #1765cc;
+      --bg-body: #f1f3f4;
+      --surface: #ffffff;
+      --border: #dadce0;
+      --text-main: #202124;
+      --text-muted: #5f6368;
+      --divider: #e8eaed;
+      --shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+      
+      --radius: 8px;
+      --nav-height: 64px;
     }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        /* Dark Mode Variables */
+        --primary: #8ab4f8;
+        --primary-hover: #aecbfa;
+        --bg-body: #202124;
+        --surface: #303134;
+        --border: #5f6368;
+        --text-main: #e8eaed;
+        --text-muted: #9aa0a6;
+        --divider: #3c4043;
+        --shadow: 0 1px 3px 0 rgba(0,0,0,0.4);
+      }
+    }
+
     * { margin:0; padding:0; box-sizing:border-box; }
+
     body {
-      font-family:'Poppins',sans-serif;
-      background: var(--bg-light);
-      color: #fff;
-      display:flex; align-items:center; justify-content:center;
-      min-height:100vh; padding:20px;
-      transition: background var(--transition), color var(--transition);
-      overflow:hidden;
-    }
-    @media (prefers-color-scheme: dark) {
-      body { background: var(--bg-dark); }
+      font-family: 'Roboto', sans-serif;
+      background: var(--bg-body);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      transition: background 0.3s, color 0.3s;
     }
 
-    .glass {
-      position: relative;
-      background: var(--card-light);
-      backdrop-filter: blur(30px) saturate(200%);
-      border-radius: var(--radius);
-      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
-      width:100%; max-width:840px; overflow:hidden;
-      transition: background var(--transition), box-shadow var(--transition);
-    }
-    @media (prefers-color-scheme: dark) {
-      .glass {
-        background: var(--card-dark);
-        box-shadow: 0 8px 32px rgba(0,0,0,0.7);
-      }
-    }
-
-    .blob {
-      position:absolute; width:300px; height:300px;
-      background: linear-gradient(45deg,var(--accent-1),var(--accent-2));
-      border-radius: 45% 55% 70% 30%/30% 60% 40% 70%;
-      animation: blobMove 8s infinite; opacity:0.3; z-index:0;
-    }
-    .blob:nth-child(1){ top:-80px; left:-60px; }
-    .blob:nth-child(2){ bottom:-100px; right:-80px; animation-duration:10s; }
-    @keyframes blobMove {
-      0%,100% { transform:translate(0,0) scale(1); }
-      50% { transform:translate(20px,20px) scale(1.1); }
-    }
-
+    /* Navbar */
     header {
-      position:relative; padding:28px; text-align:center;
-      background: linear-gradient(60deg,var(--accent-1),var(--accent-2));
-      background-size:200% 200%; animation:gradientAnimation 6s ease infinite;
-      z-index:1;
-    }
-    @keyframes gradientAnimation {
-      0%{ background-position:0% 50%; }
-      50%{ background-position:100% 50%; }
-      100%{ background-position:0% 50%; }
-    }
-
-    /* Rainbow title unless user prefers reduced motion */
-    @media (prefers-reduced-motion: no-preference) {
-      header h1 {
-        font-size:2.4rem; font-weight:600; letter-spacing:1.5px;
-        background: conic-gradient(red,orange,yellow,green,blue,indigo,violet,red);
-        background-size:300%;
-        -webkit-background-clip:text;
-        -webkit-text-fill-color:transparent;
-        animation: rainbow 4s linear infinite;
-      }
-      @keyframes rainbow {
-        0%   { background-position: 0%   50%; }
-        50%  { background-position: 100% 50%; }
-        100% { background-position: 0%   50%; }
-      }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      header h1 {
-        font-size:2.4rem; font-weight:600; letter-spacing:1.5px;
-        color:#fff;
-      }
+      background: var(--surface);
+      height: var(--nav-height);
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      border-bottom: 1px solid var(--divider);
+      position: sticky;
+      top: 0;
+      z-index: 10;
     }
 
-    form { position:relative; z-index:2; }
-    .language-bar { display:flex; align-items:center; gap:12px; padding:16px 24px; }
-    .language-select { flex:1; }
-    .language-select select {
-      width:100%; padding:14px 18px; border-radius:var(--radius);
-      border:1px solid rgba(255,255,255,0.5); background:transparent;
-      font-size:1rem; appearance:none; cursor:pointer; color:#fff;
-      transition:border-color var(--transition);
+    header h1 {
+      font-size: 22px;
+      font-weight: 500;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
-    .language-select select:focus { border-color:var(--accent-1); outline:none; }
-    .swap-button {
-      font-size:2rem; color:var(--accent-1); text-decoration:none;
-      transition:transform var(--transition),color var(--transition);
-    }
-    .swap-button:hover {
-      transform:rotate(180deg) scale(1.1);
-      color:var(--accent-2);
+    
+    header h1 span {
+        color: var(--text-main);
     }
 
-    .panels {
-      display:grid; grid-template-columns:1fr 1fr; gap:20px;
-      padding:0 24px 24px;
+    /* Main Container */
+    main {
+      flex: 1;
+      width: 100%;
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 24px;
     }
-    .panel { position:relative; }
-    .panel label {
-      display:block; margin-bottom:8px; font-weight:500; font-size:0.95rem;
-      color:#fff;
+
+    .translate-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      border: 1px solid var(--divider);
+      overflow: hidden;
+      min-height: 300px;
+      display: flex;
+      flex-direction: column;
     }
-    .panel textarea {
-      width:100%; min-height:160px; padding:16px; border-radius:var(--radius);
-      border:1px solid rgba(255,255,255,0.5); resize:vertical; font-size:1rem;
-      line-height:1.5; background:rgba(255,255,255,0.2); color:#fff;
-      transition:border-color var(--transition),box-shadow var(--transition);
+
+    /* Language Toolbar */
+    .language-toolbar {
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid var(--divider);
+      height: 56px;
+      padding: 0 8px;
+      background: var(--surface);
     }
-    .panel textarea::placeholder { color:rgba(255,255,255,0.7); }
+
+    .lang-group {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      position: relative;
+    }
+
+    /* Custom Select Styling */
+    .select-wrapper {
+        position: relative;
+        display: inline-block;
+        width: 100%;
+        max-width: 200px;
+    }
+
+    .select-wrapper select {
+      appearance: none;
+      background: transparent;
+      border: none;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--primary);
+      padding: 12px 32px 12px 16px;
+      width: 100%;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: background 0.2s;
+    }
+
+    .select-wrapper select:hover {
+      background: rgba(26, 115, 232, 0.04);
+    }
+    
     @media (prefers-color-scheme: dark) {
-      .panel textarea { background:rgba(20,20,25,0.5); }
-    }
-    .panel textarea:focus {
-      border-color:var(--accent-1);
-      box-shadow:0 0 8px var(--accent-1);
-      outline:none;
+        .select-wrapper select:hover { background: rgba(138, 180, 248, 0.08); }
     }
 
-    .actions { display:none; justify-content:center; padding-bottom:24px; }
-    .actions button {
-      padding:16px 36px; font-size:1.1rem; font-weight:600; border:none;
-      border-radius:var(--radius); cursor:pointer;
-      background:linear-gradient(60deg,var(--accent-1),var(--accent-2));
-      background-size:200% 200%; animation:gradientAnimation 6s ease infinite;
-      color:#fff; box-shadow:0 4px 14px rgba(0,0,0,0.2);
-      transition:transform var(--transition),opacity var(--transition);
+    /* Arrow icon for select */
+    .select-wrapper::after {
+      content: '▼';
+      font-size: 10px;
+      color: var(--text-muted);
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      pointer-events: none;
     }
-    .actions button:hover { transform:scale(1.03); opacity:0.9; }
 
-    @media (max-width:768px) { .panels { grid-template-columns:1fr; } }
+    .swap-btn {
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: background 0.2s, transform 0.2s;
+      margin: 0 8px;
+    }
+
+    .swap-btn:hover {
+      background: rgba(60, 64, 67, 0.08);
+      color: var(--text-main);
+    }
+
+    /* Input/Output Grid */
+    .editor-grid {
+      display: grid;
+      grid-template-columns: 1fr 1px 1fr;
+      flex: 1;
+      position: relative;
+    }
+
+    .vertical-divider {
+      background: var(--divider);
+      width: 1px;
+      height: 100%;
+    }
+
+    .editor-panel {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .editor-panel textarea {
+      width: 100%;
+      border: none;
+      resize: none;
+      background: transparent;
+      font-family: inherit;
+      font-size: 24px;
+      line-height: 1.4;
+      color: var(--text-main);
+      outline: none;
+      min-height: 150px;
+      overflow: hidden;
+    }
+
+    .editor-panel textarea::placeholder {
+      color: var(--text-muted);
+    }
+
+    .output-panel {
+      background: rgba(241, 243, 244, 0.5); /* Slight tint for output area like old GT */
+    }
+    @media (prefers-color-scheme: dark) {
+        .output-panel { background: rgba(0,0,0,0.1); }
+    }
+
+    /* Actions Footer inside card */
+    .card-footer {
+        padding: 12px 24px;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        background: var(--surface);
+    }
+
+    .translate-submit {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      padding: 10px 24px;
+      border-radius: 4px;
+      font-weight: 500;
+      font-size: 14px;
+      cursor: pointer;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+      transition: background 0.2s, box-shadow 0.2s;
+    }
+
+    .translate-submit:hover {
+      background: var(--primary-hover);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+    
+    /* Footer/Credits */
+    .site-footer {
+        text-align: center;
+        padding: 24px;
+        color: var(--text-muted);
+        font-size: 0.85rem;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      main { padding: 12px; }
+      
+      .translate-card {
+        height: auto;
+      }
+
+      .editor-grid {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1px auto;
+      }
+
+      .vertical-divider {
+        width: 100%;
+        height: 1px;
+      }
+      
+      .language-toolbar {
+          height: auto;
+          flex-wrap: wrap;
+          padding: 12px;
+          gap: 12px;
+      }
+      
+      .lang-group {
+          min-width: 40%;
+          justify-content: center;
+      }
+      
+      .select-wrapper { max-width: 100%; }
+      
+      .editor-panel textarea { font-size: 20px; }
+    }
   </style>
 
-  <!-- ADD BUTTON IF NOJS -->
   <noscript>
-  <style>
-  .actions {
-    display:flex;
-  }
-  </style>>
+    <style>
+      .card-footer { display: flex !important; }
+    </style>
   </noscript>
 </head>
 <body>
-  <div class="glass">
-    <div class="blob"></div>
-    <div class="blob"></div>
 
-    <header><h1>PokeTranslate</h1></header>
+  <header>
+    <h1>
+       <span class="material-icons" style="font-size: 32px; color: var(--primary); margin-right: 8px;">translate</span>
+       <span>Poke</span>Translate
+    </h1>
+  </header>
 
-    <form action="/translate" method="GET">
-      <div class="language-bar">
-        <div class="language-select">
-          <select name="from_language" id="from_language">
-            <% languageOptions.forEach(lang => { %>
-              <option value="<%= lang.code %>" <%= lang.code === (from_language||'autodetect')?'selected':''%>>
-                <%= lang.name %>
-              </option>
-            <% }); %>
-          </select>
+  <main>
+    <form action="/translate" method="GET" class="translate-card">
+      
+      <div class="language-toolbar">
+        <div class="lang-group">
+          <div class="select-wrapper">
+            <select name="from_language" id="from_language">
+              <% languageOptions.forEach(lang => { %>
+                <option value="<%= lang.code %>" <%= lang.code === (from_language||'autodetect')?'selected':''%>>
+                  <%= lang.name %>
+                </option>
+              <% }); %>
+            </select>
+          </div>
         </div>
 
-        <a
-          href="?from_language=<%= to_language %>&to_language=<%= from_language %>&input=<%= encodeURIComponent(text) %>"
-          id="swapBtn"
-          class="material-icons swap-button"
-        >swap_horiz</a>
+        <a href="?from_language=<%= to_language %>&to_language=<%= from_language %>&input=<%= encodeURIComponent(text) %>"
+           id="swapBtn"
+           class="material-icons swap-btn"
+           title="Swap languages">
+           swap_horiz
+        </a>
 
-        <div class="language-select">
-          <select name="to_language" id="to_language">
-            <% languageOptions.slice(1).forEach(lang => { %>
-              <option value="<%= lang.code %>" <%= lang.code===to_language?'selected':''%>>
-                <%= lang.name %>
-              </option>
-            <% }); %>
-          </select>
-        </div>
-      </div>
-
-      <div class="panels">
-        <div class="panel input">
-          <label for="input">Input</label>
-          <textarea id="input" name="input" placeholder="Enter text…"><%= text %></textarea>
-        </div>
-        <div class="panel output">
-          <label for="output">Translation</label>
-          <textarea id="output" readonly placeholder="Translated text…"><%= translation %></textarea>
+        <div class="lang-group" style="justify-content: flex-end;">
+          <div class="select-wrapper">
+             <select name="to_language" id="to_language">
+              <% languageOptions.slice(1).forEach(lang => { %>
+                <option value="<%= lang.code %>" <%= lang.code===to_language?'selected':''%>>
+                  <%= lang.name %>
+                </option>
+              <% }); %>
+            </select>
+          </div>
         </div>
       </div>
 
-      <div class="actions">
-        <button type="submit">Translate :3</button>
+      <div class="editor-grid">
+        <div class="editor-panel input-panel">
+          <textarea id="input" name="input" placeholder="Enter text" spellcheck="false"><%= text %></textarea>
+        </div>
+        
+        <div class="vertical-divider"></div>
+
+        <div class="editor-panel output-panel">
+          <textarea id="output" readonly placeholder="Translation"><%= translation %></textarea>
+        </div>
       </div>
+
+      <div class="card-footer">
+        <button type="submit" class="translate-submit">Translate</button>
+      </div>
+      
     </form>
+  </main>
+  
+  <div class="site-footer">
+    <p>&copy; 2021-2026 PokeTranslate </p>
   </div>
 
   <script>
   (function(){
-    // swap button
+    // swap button logic
     const swapBtn = document.getElementById('swapBtn');
     if(swapBtn){
       swapBtn.addEventListener('click', function(e){
@@ -351,19 +498,32 @@
         const to   = document.getElementById('to_language');
         const inp  = document.getElementById('input');
         const out  = document.getElementById('output');
+        
+        // Value swap
         [from.value, to.value] = [to.value, from.value];
         [inp.value, out.value] = [out.value, inp.value];
+        
+        // Trigger change events for logic hooks
+        from.dispatchEvent(new Event('change'));
+        to.dispatchEvent(new Event('change'));
+        inp.dispatchEvent(new Event('input'));
       });
     }
 
-    // auto-resize all textareas
-    document.querySelectorAll('textarea').forEach(el=>{
-      const resize = ()=>{ el.style.height='auto'; el.style.height=el.scrollHeight+'px'; };
-      el.addEventListener('input', resize);
-      resize();
+    // auto-resize textareas
+    const textareas = document.querySelectorAll('textarea');
+    const resize = (el) => {
+        el.style.height = 'auto';
+        el.style.height = el.scrollHeight + 'px';
+    };
+    
+    textareas.forEach(el => {
+      el.addEventListener('input', () => resize(el));
+      // initial resize
+      resize(el);
     });
 
-    // live-translate if JS available
+    // live-translate logic
     if(window.fetch){
       const from  = document.getElementById('from_language');
       const to    = document.getElementById('to_language');
@@ -372,11 +532,18 @@
       let timer;
 
       function translateNow(){
+        // Don't translate empty text
+        if(!input.value.trim()) {
+            output.value = "";
+            return;
+        }
+
         const q = new URLSearchParams({
           from_language: from.value,
           to_language: to.value,
           input: input.value
         });
+        
         fetch(`/translate?${q}`)
           .then(r => r.text())
           .then(html => {
@@ -384,18 +551,18 @@
             const newOut = doc.getElementById('output');
             if(newOut){
               output.value = newOut.value;
-              output.dispatchEvent(new Event('input'));
+              resize(output);
             }
           })
           .catch(() => {/* ignore */});
       }
 
-      // debounce on typing
+      // Debounce typing (Wait 800ms after typing stops)
       input.addEventListener('input', ()=>{
         clearTimeout(timer);
-        timer = setTimeout(translateNow, 500);
+        timer = setTimeout(translateNow, 800);
       });
-      // re-translate on language change
+      
       from.addEventListener('change', translateNow);
       to.addEventListener('change', translateNow);
     }
