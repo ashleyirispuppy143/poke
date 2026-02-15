@@ -1,130 +1,204 @@
 <% try { %>
-<!--
-  This Source Code Form is subject to the terms of the GNU General Public License:
-
-  Copyright (C) 2021-2025 POKETUBE (https://codeberg.org/Ashley/poketube)
-
-  This program is free software: you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
-
-  You should have received a copy of the GNU General Public License
-  along with this program. If not, see https://www.gnu.org/licenses/.
--->
 <!DOCTYPE html>
-<html lang="en" class="poketube_lite_discontinued">
+<html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <title>Lite mode is discontinued — PokeTube</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>410 Gone - PokeTube</title>
   <link rel="icon" href="/css/yt-ukraine.svg">
   <style>
-    :root{
-      --bg: #0b0f16; --fg:#eef3ff; --muted:#a7b4cc; --card:#0f1624; --ring:#ffffff22; --accent:#0ea5e9; --good:#7ee787;
-      --bad:#f97373; --warn:#fbbf24; --br:18px;
+    :root {
+      --bg: #f1f1f1;
+      --text-main: #222;
+      --text-muted: #555;
+      --link: #065fd4;
+      --btn-bg: #065fd4;
+      --btn-text: #fff;
+      --code-bg: #e2e2e2;
     }
-    @media (prefers-color-scheme: light){
-      :root{ --bg:#fbfbfe; --fg:#0b1020; --muted:#445063; --card:#ffffff; --ring:#0b102016; --accent:#0ea5e9 }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f0f0f;
+        --text-main: #f1f1f1;
+        --text-muted: #aaa;
+        --link: #3ea6ff;
+        --btn-bg: #3ea6ff;
+        --btn-text: #0f0f0f;
+        --code-bg: #272727;
+      }
     }
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{
-      margin:0; background:
-        radial-gradient(1200px 800px at 20% 10%, #10182a 0%, #0b1226 40%, var(--bg) 100%);
-      color:var(--fg);
-      font:15.5px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Noto Sans", "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
-      display:grid; place-items:center; padding:24px;
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: "Roboto", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
     }
-    .wrap{
-      width:min(920px, 100%); background:var(--card); border:1px solid var(--ring);
-      border-radius:var(--br); padding:28px; box-shadow:0 20px 60px #00000055;
+
+    /* Header / Logo Area */
+    header {
+      padding: 15px 25px;
+      border-bottom: 1px solid rgba(0,0,0,0.1);
+      display: flex;
+      align-items: center;
     }
-    header{
-      display:flex; align-items:center; gap:14px; margin-bottom:6px;
+    
+    .logo-img {
+      height: 28px;
+      width: auto;
+      display: block;
     }
-    header img{height:28px}
-    header .pill{
-      margin-left:auto; font-weight:700; font-size:12px; letter-spacing:.08em; text-transform:uppercase;
-      background:#ffffff10; color:#fff; border:1px solid var(--ring); border-radius:999px; padding:6px 10px;
+
+    /* Main Content */
+    .main-wrap {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 40px 20px;
     }
-    h1{
-      margin:.2rem 0 0; font-size:clamp(22px, 3.4vw, 36px); line-height:1.1; letter-spacing:-.02em;
+
+    .container {
+      display: flex;
+      flex-direction: column-reverse;
+      max-width: 800px;
+      width: 100%;
+      gap: 50px;
     }
-    p.lede{
-      margin:.75rem 0 1.25rem; color:var(--muted); font-size:clamp(14px, 2.4vw, 16.5px);
+
+    @media (min-width: 700px) {
+      .container {
+        flex-direction: row;
+        align-items: center;
+      }
     }
-    .card{
-      background:#0b1226; border:1px solid var(--ring); border-radius:16px; padding:16px 16px;
-      display:grid; gap:12px; margin:14px 0 18px;
+
+    .content-side {
+      flex: 1;
     }
-    .row{
-      display:grid; grid-template-columns: 1fr; gap:12px;
+
+    .image-side {
+      flex: 0 0 200px;
+      display: flex;
+      justify-content: center;
     }
-    @media (min-width: 700px){
-      .row{ grid-template-columns: 1fr 1fr; }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 400;
+      margin: 0 0 15px 0;
     }
-    .fact{
-      display:flex; gap:12px; align-items:flex-start; background:#ffffff06; border:1px dashed var(--ring);
-      border-radius:14px; padding:12px 12px;
+
+    p {
+      font-size: 15px;
+      line-height: 1.5;
+      color: var(--text-muted);
+      margin-bottom: 20px;
     }
-    .fact i{
-      display:inline-grid; place-items:center; width:28px; height:28px; border-radius:9px; background:#ffffff14; font-style:normal;
-      font-weight:900; font-size:14px;
+
+    /* Action Buttons */
+    .actions {
+      display: flex;
+      gap: 15px;
+      margin-top: 25px;
     }
-    .cta{
-      display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-top:4px;
+
+    .btn {
+      text-decoration: none;
+      padding: 10px 24px;
+      border-radius: 2px;
+      font-size: 14px;
+      font-weight: 500;
+      text-transform: uppercase;
+      transition: opacity 0.2s;
     }
-    .btn{
-      appearance:none; -webkit-appearance:none; text-decoration:none; cursor:pointer; user-select:none;
-      border:1px solid var(--ring); border-radius:12px; padding:12px 16px; font-weight:700;
-      background:linear-gradient(180deg, #0ea5e9, #0284c7); color:white; box-shadow:0 8px 24px #0284c766;
+
+    .btn-primary {
+      background-color: var(--btn-bg);
+      color: var(--btn-text);
     }
-    .btn:hover{ filter:brightness(1.05) }
-    .btn.alt{
-      background:#121a30; color:var(--fg); font-weight:600;
+
+    .btn-secondary {
+      color: var(--link);
+      padding-left: 0;
     }
-    .small{ color:var(--muted); font-size:13px }
-    .hr{ height:1px; background:var(--ring); margin:14px 0 10px; border-radius:99px }
-    .kbd{
-      font:600 12px/1.2 ui-monospace, SFMono-Regular, Menlo, Monaco, "Cascadia Mono","Roboto Mono","Fira Code", monospace;
-      padding:6px 8px; border-radius:8px; border:1px solid var(--ring); background:#ffffff10;
+
+    .btn:hover {
+      opacity: 0.9;
+    }
+
+    /* Code Snippet styling */
+    code {
+      font-family: monospace;
+      background: var(--code-bg);
+      padding: 2px 5px;
+      border-radius: 3px;
+    }
+
+    /* SVG Styling */
+    .illustration {
+      width: 100%;
+      max-width: 180px;
+      opacity: 0.8;
+      color: var(--text-muted);
+    }
+    
+    /* Dark mode adjustments */
+    @media (prefers-color-scheme: dark) {
+      header { border-bottom: 1px solid rgba(255,255,255,0.1); }
     }
   </style>
 </head>
 <body>
-  <main class="wrap" role="main" aria-labelledby="page-title">
-    <header>
-      <img src="/css/logo-poke.svg?v=5" alt="PokeTube">
-      <span class="pill">Announcement</span>
-    </header>
 
-    <h1 id="page-title">Lite mode has been discontinued.</h1>
-    <p class="lede">
-      Thanks for using Lite! Recent performance and bandwidth optimizations to our normal watch page make Lite unnecessary.
-      You’ll get the same (or better) speed, with full features and privacy protections.
-    </p>
- 
-    <div class="cta">
-      <a class="btn" href="/watch?v=<%= videoid %>">
-        Open this video on the main watch page
-      </a>
-      <a class="btn alt" href="/">
-        Go to Home
-      </a>
+  <header>
+    <a href="/">
+      <img src="/css/logo-poke.svg?v=5" alt="PokeTube" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-wrap">
+    <div class="container">
+      
+      <div class="content-side">
+        <h1>Lite mode discontinued</h1>
+        <p>
+          We've made significant performance updates to the main experience, making the separate Lite player unnecessary. You now get the same speed with better privacy and features.
+        </p>
+        
+        <p class="small">
+          <b>Please update your bookmarks:</b><br>
+          Change <code>/lite?v=<%= videoid %></code> to <code>/watch?v=<%= videoid %></code>
+        </p>
+
+        <div class="actions">
+          <a class="btn btn-primary" href="/watch?v=<%= videoid %>">
+            Watch Video
+          </a>
+          <a class="btn btn-secondary" href="/">
+            Return Home
+          </a>
+        </div>
+      </div>
+
+      <div class="image-side">
+        <svg class="illustration" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+          <rect x="20" y="40" width="160" height="110" rx="10" fill="none" stroke="currentColor" stroke-width="4"/>
+          <path d="M40 150 L30 170 H170 L160 150" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M70 95 H130 M100 95 V70 L130 95 L100 120 V95" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <circle cx="160" cy="55" r="3" fill="currentColor"/>
+          <circle cx="150" cy="55" r="3" fill="currentColor"/>
+        </svg>
+      </div>
+
     </div>
-
-    <div class="hr"></div>
-
-    <p class="small">
-      Tip: If you bookmarked <span class="kbd">/lite?v=…</span>, update it to <span class="kbd">/watch?v=…</span>.
-    </p>
   </main>
+
 </body>
 </html>
 <% } catch (error) { %>
