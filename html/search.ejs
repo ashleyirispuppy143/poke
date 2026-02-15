@@ -1163,39 +1163,177 @@ function extractQueryFromUpsellMessage(message) {
 </div>
 <% } %>
 
-<!-- self harm -->
-<% 
-const searchStrings = [
-    "\\bsuicide\\b", "\\bself harm\\b", "\\bself-harm\\b", "\\bsupport\\b", "\\bmurder\\b", 
-    "\\bhow to murder\\b", "\\bkill myself\\b", "\\bend my life\\b", "\\bdepressed\\b", 
-    "\\bdepression\\b", "\\blonely\\b", "\\bhurt myself\\b", "\\bselfharm\\b", "\\bdying\\b", 
-    "\\bwant to die\\b", "\\bkill\\b", "\\bdie\\b", "\\bfamily problems\\b", "\\bfamily issues\\b", 
-    "\\babuse\\b", "\\bdomestic violence\\b", "\\babusive parents\\b", "\\bfamily conflict\\b", 
-    "\\bestranged\\b", "\\bdisowned\\b", "\\brun away\\b", "\\brunaway\\b", "\\b.full stop punctuation.\\b"
+<%
+// --- CONFIGURATION ---
+
+  const safePhrases = [
+    "die for you",
+    "ride or die",
+    "die hard",
+    "to die for",
+    "kill time",
+    "killing it",
+    "kill the lights",
+    "murder mystery",
+    "murder on the dancefloor"
 ];
-if (searchStrings.some(str => new RegExp(str, 'i').test(q))) { 
+
+ const criticalTriggers = [
+    /suicid/i, 
+    /kill myself/i,
+    /end my life/i,
+    /hurt myself/i,
+    /self[\s-]?harm/i, 
+    /take my own life/i,
+    /full stop punctuation/i 
+];
+
+// 3. CONTEXTUAL KEYWORDS (The "Point System")
+// Suspicious words that accumulate risk points.
+const ambiguousKeywords = [
+    { word: "die", score: 2 },
+    { word: "kill", score: 2 },
+    { word: "death", score: 1 },
+    { word: "gone", score: 1 },
+    { word: "end it", score: 3 },
+    { word: "pain", score: 1 },
+    { word: "abuse", score: 3 },
+    { word: "run away", score: 3 }
+];
+
+// 4. INTENT INDICATORS (Amplifiers)
+// Words that suggest personal intent/feeling.
+const intentIndicators = [
+    "i want to",
+    "i'm going to",
+    "im going to",
+    "i need to",
+    "wish i",
+    "feel like",
+    "tired of",
+    "can't take it"
+];
+
+ 
+function analyzeContent(text) {
+    if (!text) return false;
+    
+    // Normalize: lowercase, remove extra spaces
+    const cleanText = text.toLowerCase().trim().replace(/\s+/g, ' ');
+
+    // 1. Check Whitelist first
+    for (const safe of safePhrases) {
+        if (cleanText.includes(safe)) {
+            return false; // Safe phrase found, stop checking.
+        }
+    }
+
+    // 2. Check Critical Triggers
+    for (const trigger of criticalTriggers) {
+        if (trigger.test(cleanText)) return true;
+    }
+
+    // 3. Contextual Scoring
+    let score = 0;
+    let hasAmbiguousWord = false;
+
+    // Check for ambiguous words (using word boundaries \b)
+    ambiguousKeywords.forEach(item => {
+        const regex = new RegExp(`\\b${item.word}\\b`, 'i');
+        if (regex.test(cleanText)) {
+            score += item.score;
+            hasAmbiguousWord = true;
+        }
+    });
+
+    // Check for Intent if an ambiguous word exists
+    if (hasAmbiguousWord) {
+        intentIndicators.forEach(indicator => {
+            if (cleanText.includes(indicator)) {
+                score += 5; // Massive boost if intent is linked to keywords
+            }
+        });
+    }
+
+    // Threshold: 4
+    return score >= 4;
+}
+
+ const isFlagged = analyzeContent(typeof q !== 'undefined' ? q : "");
 %>
 
-<div class="container">          
-<span style="font-size: 7em; color: pink;margin-bottom: 3em;">❤️</span><br>
-    <h2 style="font-family: 'PokeTube Flex';font-size: large;text-align: left;font-stretch: ultra-expanded;
-font-weight: 1000;">You are not alone</h2>
-    <p>
-        If you're having a tough time or know someone who is, reaching out and talking to someone can really help.
-    </p>
-    <p>
-        In the US? Call <strong>988</strong> for support. Not in the US? <a href="https://www.psychologytoday.com/us/basics/suicide/suicide-prevention-hotlines-resources-worldwide">Check out this link</a> for worldwide help.
-    </p>
-    <p>
-        LGBTQ+ and need someone to talk to? Try the <a href="https://www.thetrevorproject.org/">Trevor Project</a> at <strong>1-866-488-7386</strong> or text <strong>START</strong> to <strong>678-678</strong>. For more options, <a href="https://www.imalive.org/">IMAlive</a> is also available.
-    </p>
-    <p>
-        Remember, ur not alone. u matter, and there's always someone who cares. and you are really important btw! <span style="font-family: 'PokeTube Flex';">❤️</span>
-    </p>
-        <p>wrong filter? <a href="https://codeberg.org/ashley/poke/issues/new?template=issue_template%2fsearch-filter.yml">Report :3</p>
+<% if (isFlagged) { %>
+    <div class="safety-container" style="
+        background-color: #fff0f5; 
+        border: 2px solid #ffb6c1; 
+        border-radius: 15px; 
+        padding: 25px; 
+        margin: 20px 0; 
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        font-family: sans-serif;
+    ">
+        
+        <div style="display: flex; align-items: flex-start; gap: 20px;">
+            <div style="flex-shrink: 0;">
+                <span style="font-size: 5em; line-height: 1;">❤️</span>
+            </div>
+            
+            <div>
+                <h2 style="
+                    font-family: 'PokeTube Flex', sans-serif; 
+                    font-size: 2em; 
+                    margin-top: 0; 
+                    margin-bottom: 10px; 
+                    color: #333;
+                    font-weight: 1000;
+                    font-stretch: ultra-expanded;
+                ">
+                    You are not alone
+                </h2>
+                
+                <p style="font-size: 1.1em; line-height: 1.5; margin-bottom: 20px; color: #444;">
+                    If you're going through a difficult time, there are people who want to support you. You don't have to carry this heavy weight by yourself.
+                </p>
 
-</div>
-<% } %>
+                <div style="
+                    display: grid; 
+                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
+                    gap: 15px;
+                    margin-bottom: 20px;
+                ">
+                    <div style="background: white; padding: 15px; border-radius: 10px; border: 1px solid #eee;">
+                        <strong style="display:block; margin-bottom:5px; color:#d63384;">📞 Call for Help</strong>
+                        US: <strong>988</strong> (Suicide & Crisis Lifeline)<br>
+                        <a href="https://www.psychologytoday.com/us/basics/suicide/suicide-prevention-hotlines-resources-worldwide" target="_blank" style="color: #007bff; text-decoration: none;">Find numbers worldwide &rarr;</a>
+                    </div>
+
+                    <div style="background: white; padding: 15px; border-radius: 10px; border: 1px solid #eee;">
+                        <strong style="display:block; margin-bottom:5px; color:#d63384;">💬 Text Support</strong>
+                        Text <strong>HOME</strong> to <strong>741741</strong><br>
+                        (Free, 24/7 Crisis Text Line)
+                    </div>
+
+                    <div style="background: white; padding: 15px; border-radius: 10px; border: 1px solid #eee;">
+                        <strong style="display:block; margin-bottom:5px; color:#d63384;">🏳️‍🌈 LGBTQ+ Support</strong>
+                        <a href="https://www.thetrevorproject.org/" style="color: #007bff;">The Trevor Project</a><br>
+                        Call: <strong>1-866-488-7386</strong><br>
+                        Text: <strong>START</strong> to <strong>678-678</strong>
+                    </div>
+                </div>
+
+                <p style="font-size: 0.9em; color: #666; margin-top: 20px;">
+                    Remember, u matter, and you are really important btw! <span style="font-family: 'PokeTube Flex';">❤️</span>
+                </p>
+                
+                <p style="font-size: 0.8em; color: #999; margin-top: 10px;">
+                    Flagged by mistake? <a href="https://codeberg.org/ashley/poke/issues/new?template=issue_template%2fsearch-filter.yml" style="color: #999;">Report :3</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+<% } else { %>
+    <% } %>
 <% 
 const fakeNewsSources = {
     "InfoWars": { 
