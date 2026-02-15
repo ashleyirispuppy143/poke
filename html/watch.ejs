@@ -4205,29 +4205,64 @@ const vid = document.getElementById("video");
   <% } %>
 
   <% } %>
-
 <% } catch (error) { %>
   
 <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f0f0f; color: #f1f1f1; display: flex; align-items: center; justify-content: center; height: 100vh;">
 
-    <div style="max-width: 500px; width: 90%; background: #1e1e1e; padding: 40px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; border: 1px solid #333;">
+    <script>
+        (function() {
+            // 1. Get the current retry count from session storage (default to 0)
+            let retries = parseInt(sessionStorage.getItem('videoErrorRetries') || '0');
+
+            // 2. Check if this page load is a "Reload" or a fresh visit
+            const navEntry = performance.getEntriesByType("navigation")[0];
+            if (navEntry && navEntry.type !== 'reload') {
+                retries = 0;
+            }
+
+            // 3. The Logic
+            if (retries < 4) {
+                // Increment and Save
+                sessionStorage.setItem('videoErrorRetries', retries + 1);
+                // Refresh immediately
+                window.location.reload();
+            } else {
+                // We have tried 4 times. Stop refreshing. 
+                sessionStorage.removeItem('videoErrorRetries');
+                
+                // Show the error message via JS
+                document.addEventListener("DOMContentLoaded", function() {
+                    document.getElementById('error-container').style.display = 'block';
+                });
+            }
+        })();
+    </script>
+
+    <noscript>
+        <style>
+            #error-container { display: block !important; }
+        </style>
+    </noscript>
+
+    <div id="error-container" style="display: none; max-width: 500px; width: 90%; background: #1e1e1e; padding: 40px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; border: 1px solid #333;">
         
         <div style="font-size: 50px; margin-bottom: 20px;">⚠️</div>
 
         <h1 style="font-size: 24px; margin-bottom: 15px; color: #ff4e4e;">Video Loading Failed</h1>
         
         <p style="font-size: 16px; line-height: 1.6; color: #aaa; margin-bottom: 20px;">
-            It looks like YouTube might be blocking the request, or the connection to the companion service was interrupted.
+            We attempted to reload the connection automatically but were unsuccessful.
         </p>
 
-      
+        <p style="font-size: 14px; margin-bottom: 25px;">Please check your connection and try again.</p>
 
-        <p style="font-size: 14px; margin-bottom: 25px;">Refreshing the page might resolve the issue.</p>
-
-        <button onclick="window.location.reload();" style="background-color: #f1f1f1; color: #0f0f0f; border: none; padding: 12px 30px; font-size: 16px; font-weight: bold; border-radius: 30px; cursor: pointer; transition: opacity 0.2s; box-shadow: 0 4px 15px rgba(255,255,255,0.1);">
-            Refresh Page
-        </button>
+        <form action="" method="get">
+            <button type="submit" style="background-color: #f1f1f1; color: #0f0f0f; border: none; padding: 12px 30px; font-size: 16px; font-weight: bold; border-radius: 30px; cursor: pointer; transition: opacity 0.2s; box-shadow: 0 4px 15px rgba(255,255,255,0.1);">
+                Try Again
+            </button>
+        </form>
 
     </div>
- <% } %>
+</body>
+<% } %>
  <!-- PHTML END -->
