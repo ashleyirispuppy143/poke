@@ -39,6 +39,15 @@
     <meta content="#1a1a1a" name="theme-color">
   </head>
   <style> 
+  
+    @font-face {
+  font-family: "PokeTube Flex";
+  src: url("/static/robotoflex.ttf");
+  font-style: normal;
+  font-stretch: 1% 800%;
+  font-display: swap;
+}
+
     .mn {
      background: #181818;
           border-radius: 26px;
@@ -361,12 +370,10 @@ border:solid #ff0033;
 
      <div class="tabs tabs-center">
             
-                <a href="" class="tab active"><i class="fa-light fa-fire" style="margin-right: 4px;"></i> Now</a>          
-                <a href="?tab=music"class="tab"><i class="fa-light fa-music" style="margin-right: 4px;"></i> Music</a>
+                <a href="" class="tab active"><i class="fa-light fa-fire" style="margin-right: 4px;"></i> Live</a>          
                 <a href="?tab=gaming" class="tab"><i class="fa-light fa-gamepad-modern" style="margin-right: 4px;"></i> Gaming</a>
                       <% if (!isMobile) { %> 
-                 <a href="?tab=movies" class="tab"><i class="fa-light fa-film" style="margin-right: 4px;"></i> Movie Trailers</a>
-
+ 
            		 	               <% } %>   
 
             </div>    
@@ -376,12 +383,10 @@ border:solid #ff0033;
      <div class="tabs tabs-center">
             
               
-                <a href="/app" class="tab"><i class="fa-light fa-fire" style="margin-right: 4px;"></i> Now</a>      
-                <a href="" class="tab active "><i class="fa-light fa-music" style="margin-right: 4px;"></i> Music</a>
+                <a href="/app" class="tab"><i class="fa-light fa-fire" style="margin-right: 4px;"></i> Live</a>      
                 <a  href="?tab=gaming" class="tab"><i class="fa-light fa-gamepad-modern" style="margin-right: 4px;"></i> Gaming</a>
                 <% if (!isMobile) { %> 
-                 <a href="?tab=movies" class="tab"><i class="fa-light fa-film" style="margin-right: 4px;"></i> Movie Trailers</a>
-           		 <% } %> 
+            		 <% } %> 
 
                        
 
@@ -392,11 +397,9 @@ border:solid #ff0033;
      <div class="tabs tabs-center">
             
               
-                <a href="/app" class="tab"><i class="fa-light fa-fire" style="margin-right: 4px;"></i> Now</a>     
-                <a href="?tab=music" class="tab"><i class="fa-light fa-music" style="margin-right: 4px;"></i> Music</a>
+                <a href="/app" class="tab"><i class="fa-light fa-fire" style="margin-right: 4px;"></i> Live</a>     
                 <% if (!isMobile) { %> 
                 <a href="" class="tab active"><i class="fa-light fa-gamepad-modern" style="margin-right: 4px;"></i> Gaming</a>
-                 <a href="?tab=movies" class="tab"><i class="fa-light fa-film" style="margin-right: 4px;"></i> Movie Trailers</a>
            		 	               <% } %>   
 
                        
@@ -407,10 +410,8 @@ border:solid #ff0033;
                                                                    <% if (tab === "movies") { %> 
 
      <div class="tabs tabs-center">
-                <a href="/app" class="tab"><i class="fa-light fa-fire" style="margin-right: 4px;"></i> Now</a>
-                <a href="?tab=music" class="tab"><i class="fa-light fa-music" style="margin-right: 4px;"></i> Music</a>
+                <a href="/app" class="tab"><i class="fa-light fa-fire" style="margin-right: 4px;"></i> Live</a>
                 <a href="?tab=gaming" class="tab"><i class="fa-light fa-gamepad-modern" style="margin-right: 4px;"></i> Gaming</a>
-                 <a href="" class="tab active"><i class="fa-light fa-film" style="margin-right: 4px;"></i> Movie Trailers</a>
             </div>    
            		 	               <% } %>   
 
