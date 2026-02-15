@@ -1162,11 +1162,12 @@ function extractQueryFromUpsellMessage(message) {
     </span>
 </div>
 <% } %>
-
 <%
 // --- CONFIGURATION ---
 
-  const safePhrases = [
+// 1. THE SAFE LIST (Whitelist)
+// Phrases that contain trigger words but are safe (idioms, song titles).
+const safePhrases = [
     "die for you",
     "ride or die",
     "die hard",
@@ -1178,7 +1179,9 @@ function extractQueryFromUpsellMessage(message) {
     "murder on the dancefloor"
 ];
 
- const criticalTriggers = [
+// 2. CRITICAL TRIGGERS (Immediate Flag)
+// Phrases that trigger the warning immediately.
+const criticalTriggers = [
     /suicid/i, 
     /kill myself/i,
     /end my life/i,
@@ -1195,7 +1198,9 @@ const ambiguousKeywords = [
     { word: "kill", score: 2 },
     { word: "death", score: 1 },
     { word: "gone", score: 1 },
-    { word: "end it", score: 3 },
+    // "end it" is tricky with regex word boundaries if "it" is followed by punctuation
+    // we handle it here as a regex to catch "end it", "ending it", "end things"
+    { regex: /end(ing)?\s+(it|things|everything|life)/i, score: 3 }, 
     { word: "pain", score: 1 },
     { word: "abuse", score: 3 },
     { word: "run away", score: 3 }
@@ -1214,7 +1219,8 @@ const intentIndicators = [
     "can't take it"
 ];
 
- 
+// --- THE LOGIC ENGINE ---
+
 function analyzeContent(text) {
     if (!text) return false;
     
@@ -1237,12 +1243,20 @@ function analyzeContent(text) {
     let score = 0;
     let hasAmbiguousWord = false;
 
-    // Check for ambiguous words (using word boundaries \b)
+    // Check for ambiguous words 
     ambiguousKeywords.forEach(item => {
-        const regex = new RegExp(`\\b${item.word}\\b`, 'i');
-        if (regex.test(cleanText)) {
-            score += item.score;
-            hasAmbiguousWord = true;
+        if (item.regex) {
+             if (item.regex.test(cleanText)) {
+                score += item.score;
+                hasAmbiguousWord = true;
+            }
+        } else {
+            // Standard word check
+            const regex = new RegExp(`\\b${item.word}\\b`, 'i');
+            if (regex.test(cleanText)) {
+                score += item.score;
+                hasAmbiguousWord = true;
+            }
         }
     });
 
@@ -1259,18 +1273,21 @@ function analyzeContent(text) {
     return score >= 4;
 }
 
- const isFlagged = analyzeContent(typeof q !== 'undefined' ? q : "");
+// --- EXECUTION ---
+const isFlagged = analyzeContent(typeof q !== 'undefined' ? q : "");
 %>
 
 <% if (isFlagged) { %>
     <div class="safety-container" style="
-        background-color: #fff0f5; 
-        border: 2px solid #ffb6c1; 
+        background-color: #1a1a1a; 
+        border: 2px solid #ff6b8b; 
         border-radius: 15px; 
         padding: 25px; 
-        margin: 20px 0; 
-        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        margin: 20px auto; 
+        max-width: 800px; /* Maximum width constraint */
+        box-shadow: 0 4px 12px rgba(0,0,0,0.5);
         font-family: sans-serif;
+        color: #e0e0e0;
     ">
         
         <div style="display: flex; align-items: flex-start; gap: 20px;">
@@ -1278,55 +1295,59 @@ function analyzeContent(text) {
                 <span style="font-size: 5em; line-height: 1;">❤️</span>
             </div>
             
-            <div>
+            <div style="flex: 1;">
                 <h2 style="
                     font-family: 'PokeTube Flex', sans-serif; 
                     font-size: 2em; 
                     margin-top: 0; 
                     margin-bottom: 10px; 
-                    color: #333;
+                    color: #fff;
                     font-weight: 1000;
                     font-stretch: ultra-expanded;
                 ">
                     You are not alone
                 </h2>
                 
-                <p style="font-size: 1.1em; line-height: 1.5; margin-bottom: 20px; color: #444;">
+                <p style="font-size: 1.1em; line-height: 1.5; margin-bottom: 15px; color: #ccc;">
                     If you're going through a difficult time, there are people who want to support you. You don't have to carry this heavy weight by yourself.
+                </p>
+
+                <p style="font-size: 1.1em; line-height: 1.5; margin-bottom: 25px; color: #fff; border-left: 3px solid #ff6b8b; padding-left: 15px;">
+                    <strong>Why you matter:</strong> Even when it feels dark, your presence brings something unique to this world that no one else can replace. There is hope, there is help, and your story isn't over yet. <span style="color:#ff6b8b;">&lt;3</span>
                 </p>
 
                 <div style="
                     display: grid; 
-                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
+                    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); 
                     gap: 15px;
                     margin-bottom: 20px;
                 ">
-                    <div style="background: white; padding: 15px; border-radius: 10px; border: 1px solid #eee;">
-                        <strong style="display:block; margin-bottom:5px; color:#d63384;">📞 Call for Help</strong>
+                    <div style="background: #2d2d2d; padding: 15px; border-radius: 10px; border: 1px solid #444;">
+                        <strong style="display:block; margin-bottom:5px; color:#ff8fa3;">📞 Call for Help</strong>
                         US: <strong>988</strong> (Suicide & Crisis Lifeline)<br>
-                        <a href="https://www.psychologytoday.com/us/basics/suicide/suicide-prevention-hotlines-resources-worldwide" target="_blank" style="color: #007bff; text-decoration: none;">Find numbers worldwide &rarr;</a>
+                        <a href="https://www.psychologytoday.com/us/basics/suicide/suicide-prevention-hotlines-resources-worldwide" target="_blank" style="color: #64b5f6; text-decoration: none;">Find numbers worldwide &rarr;</a>
                     </div>
 
-                    <div style="background: white; padding: 15px; border-radius: 10px; border: 1px solid #eee;">
-                        <strong style="display:block; margin-bottom:5px; color:#d63384;">💬 Text Support</strong>
+                    <div style="background: #2d2d2d; padding: 15px; border-radius: 10px; border: 1px solid #444;">
+                        <strong style="display:block; margin-bottom:5px; color:#ff8fa3;">💬 Text Support</strong>
                         Text <strong>HOME</strong> to <strong>741741</strong><br>
                         (Free, 24/7 Crisis Text Line)
                     </div>
 
-                    <div style="background: white; padding: 15px; border-radius: 10px; border: 1px solid #eee;">
-                        <strong style="display:block; margin-bottom:5px; color:#d63384;">🏳️‍🌈 LGBTQ+ Support</strong>
-                        <a href="https://www.thetrevorproject.org/" style="color: #007bff;">The Trevor Project</a><br>
+                    <div style="background: #2d2d2d; padding: 15px; border-radius: 10px; border: 1px solid #444;">
+                        <strong style="display:block; margin-bottom:5px; color:#ff8fa3;">🏳️‍🌈 LGBTQ+ Support</strong>
+                        <a href="https://www.thetrevorproject.org/" style="color: #64b5f6;">The Trevor Project</a><br>
                         Call: <strong>1-866-488-7386</strong><br>
                         Text: <strong>START</strong> to <strong>678-678</strong>
                     </div>
                 </div>
 
-                <p style="font-size: 0.9em; color: #666; margin-top: 20px;">
-                    Remember, u matter, and you are really important btw! <span style="font-family: 'PokeTube Flex';">❤️</span>
+                <p style="font-size: 0.9em; color: #aaa; margin-top: 20px;">
+                    Remember, u matter, and you are really important btw! <span style="font-family: 'PokeTube Flex'; color: #ff6b8b;">❤️</span>
                 </p>
                 
-                <p style="font-size: 0.8em; color: #999; margin-top: 10px;">
-                    Flagged by mistake? <a href="https://codeberg.org/ashley/poke/issues/new?template=issue_template%2fsearch-filter.yml" style="color: #999;">Report :3</a>
+                <p style="font-size: 0.8em; color: #666; margin-top: 10px;">
+                    Flagged by mistake? <a href="https://codeberg.org/ashley/poke/issues/new?template=issue_template%2fsearch-filter.yml" style="color: #888;">Report :3</a>
                 </p>
             </div>
         </div>
