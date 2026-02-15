@@ -64,14 +64,14 @@ class InnerTubePokeVidious {
       "User-Agent": this.useragent,
     };
 
-    const fetchWithRetry = async (url, options = {}, maxRetryTime = 3500) => {
+    const fetchWithRetry = async (url, options = {}, maxRetryTime = 2500) => {
       let lastError;
 
       const isTrigger = (s) => (s === 500 || s === 502);
       const RETRYABLE = new Set([429, 500, 502, 503, 504]);
       const MIN_DELAY_MS = 150;
       const BASE_DELAY_MS = 250;
-      const MAX_DELAY_MS = 2000;
+      const MAX_DELAY_MS = 1500; // Reduced max delay for snappier fallbacks
       const JITTER_FACTOR = 3;
       const PER_TRY_TIMEOUT_MS = 2000;
       const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -197,10 +197,10 @@ class InnerTubePokeVidious {
     // pattern for each 2-hour block
     const pattern = ["normal", "normal", "normal", "normal", "normal", "normal"];
     const twoHourIndex = Math.floor(hour / 2) % pattern.length;
-    const currentPreference = pattern[twoHourIndex]; 
-    const inFallbackWindow = minute % 20 >= 10; 
+    const currentPreference = pattern[twoHourIndex];
+    const inFallbackWindow = minute % 20 >= 10;
 
-    // build the URLs 
+    // build the URLs
     const primaryUrl = `${this.config.invapi}/videos/${v}?hl=${contentlang}&region=${contentregion}&h=${this.toBase64(Date.now())}`;
     const fallbackUrl = `${this.config.inv_fallback}${v}?hl=${contentlang}&region=${contentregion}&h=${this.toBase64(Date.now())}`;
 
@@ -209,67 +209,87 @@ class InnerTubePokeVidious {
     const chooseFirst = preferFallbackPrimary ? inFallbackWindow ? fallbackUrl : primaryUrl : inFallbackWindow ? primaryUrl : fallbackUrl;
     const chooseSecond = chooseFirst === primaryUrl ? fallbackUrl : primaryUrl;
 
-    // TRY HARD STRATEGY: Define a sequence of attempts. 
-    // We alternate between the first choice and second choice multiple times.
+    // TRY HARD STRATEGY
     const attemptSequence = [
-        chooseFirst, 
-        chooseSecond, 
-        chooseFirst, 
-        chooseSecond, 
-        chooseFirst 
+        chooseFirst,
+        chooseSecond,
+        chooseFirst,
+        chooseSecond,
+        chooseFirst
     ];
 
     try {
-      const [invComments, vidObj] = await Promise.all([
+      // PERF: Execute all fetches in parallel using Promise.all
+      // This prevents the "waterfall" effect where we wait for video -> then dislikes -> then colors.
+      const [invComments, vidObj, dislikesData, colorData] = await Promise.all([
+        // 1. Comments
         fetchWithRetry(
           `${config.invapi}/comments/${v}?hl=${contentlang}&region=${contentregion}&h=${this.toBase64(
             Date.now()
           )}`
         ).then((res) => res?.text()),
+
+        // 2. Video Info (Logic preserved, but cleaned of artificial delays)
         (async () => {
-          // Robust loop: Try multiple times to get VALID JSON
           let fetchError = null;
           for (const url of attemptSequence) {
             try {
-              const r = await fetchWithRetry(url);
+              // Reduced maxRetryTime here to 2000ms to failover faster to the next URL in sequence
+              const r = await fetchWithRetry(url, {}, 2000);
               if (!r.ok) {
                  throw new Error(`HTTP Error ${r.status}`);
               }
               const text = await r.text();
-              
-              // Validate JSON immediately
+
               try {
                 const parsed = JSON.parse(text);
-                // CRITICAL: Check if it actually looks like a video object.
-                // If the server returns valid JSON but it's an error message or empty, we treat it as a failure so we retry.
                 if (this.checkUnexistingObject(parsed)) {
-                    return parsed; // SUCCESS: Return the Object directly
+                    return parsed; // SUCCESS
                 }
-                // If we are here, we got JSON, but it didn't have 'authorId', likely a soft error or captcha
                 console.log(`[LIBPT INFO] Soft fail on ${url}: Valid JSON but missing authorId. Retrying...`);
               } catch (parseErr) {
-                 // JSON parse failed (e.g. got HTML)
                  // console.log(`[LIBPT INFO] Parse fail on ${url}. Retrying...`);
               }
             } catch (err) {
               fetchError = err;
-              // this.initError(`Attempt failed on ${url}`, err);
             }
-            
-            // Wait slightly before the next desperate attempt to avoid instant spam
-            await new Promise(r => setTimeout(r, 800)); 
+            // PERF REMOVAL: Removed await new Promise(r => setTimeout(r, 800));
+            // If the request fails, we want to hit the fallback immediately, not wait nearly a second.
           }
-          
-          // If we exhausted all attempts in the sequence
+
           if (fetchError) {
              this.initError("All video info fetch attempts failed", fetchError);
           }
           return null;
         })(),
+
+        // 3. Dislikes (Optimistic fetch)
+        (async () => {
+            try {
+                return await getdislikes(v);
+            } catch (err) {
+                this.initError("Dislike API error", err);
+                return { engagement: null };
+            }
+        })(),
+
+        // 4. Colors (Optimistic fetch)
+        (async () => {
+            try {
+                const palette = await getColors(
+                    `https://i.ytimg.com/vi/${v}/hqdefault.jpg?sqp=${this.sqp}`
+                );
+                if (Array.isArray(palette) && palette[0] && palette[1]) {
+                    return { color: palette[0].hex(), color2: palette[1].hex() };
+                }
+            } catch (err) {
+                this.initError("Thumbnail color extraction error", err);
+            }
+            return { color: "#0ea5e9", color2: "#111827" }; // Defaults
+        })()
       ]);
 
       const comments = this.getJson(invComments);
-      // vidObj is already an object now (or null), no need to parse
       const vid = vidObj;
 
       if (!vid) {
@@ -281,38 +301,19 @@ class InnerTubePokeVidious {
         };
       }
 
+      // If we are here, we have the video object.
+      // Dislikes and colors are already fetched (or defaulted) in parallel.
       if (this.checkUnexistingObject(vid)) {
-        let returnyoutubedislikesapi = { engagement: null };
-        try {
-          returnyoutubedislikesapi = await getdislikes(v);
-        } catch (err) {
-          this.initError("Dislike API error", err);
-        }
-
-        let color = "#0ea5e9";
-        let color2 = "#111827";
-        try {
-          const palette = await getColors(
-            `https://i.ytimg.com/vi/${v}/hqdefault.jpg?sqp=${this.sqp}`
-          );
-          if (Array.isArray(palette) && palette[0] && palette[1]) {
-            color = palette[0].hex();
-            color2 = palette[1].hex();
-          }
-        } catch (err) {
-          this.initError("Thumbnail color extraction error", err);
-        }
-
         this.cache[v] = {
           result: {
             vid,
             comments,
             channel_uploads: " ",
-            engagement: returnyoutubedislikesapi.engagement,
+            engagement: dislikesData.engagement,
             wiki: "",
             desc: "",
-            color,
-            color2,
+            color: colorData.color,
+            color2: colorData.color2,
           },
           timestamp: Date.now(),
         };
