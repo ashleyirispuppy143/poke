@@ -58,7 +58,7 @@
     #map-container { position: absolute; inset: 0; z-index: 0; background: #222; }
     iframe#map { width: 100%; height: 100%; border: 0; display: block; }
 
-    /* Brand Tag (Bottom Center) */
+    /* Brand Tag (Bottom Center) - Hidden on Mobile via Media Query below */
     .brand {
       position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
       padding: 6px 12px; font-size: 12px; font-weight: 600; opacity: 0.8;
@@ -173,7 +173,7 @@
       
       .row { display: flex; justify-content: space-between; align-items: center; }
       
-      /* Tools (Zoom is usually top left, so we keep right area clean or add specific tools) */
+      /* Tools */
       .desktop-tools { position: absolute; bottom: 30px; right: 30px; display: flex; flex-direction: column; gap: 10px; }
       .tool-btn {
         width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--border);
@@ -186,10 +186,22 @@
     /* --- MOBILE LAYOUT --- */
     @media (max-width: 768px) {
       .desktop-only { display: none !important; }
+      
+      /* Hide Brand on Mobile */
+      .brand { display: none !important; }
 
-      .mobile-header { position: absolute; top: 12px; left: 12px; right: 12px; z-index: 30; }
-      .mobile-header .search-input { height: 48px; background: var(--panel-bg); backdrop-filter: var(--glass); box-shadow: var(--shadow); }
+      /* Search FAB (Top Right) */
+      .mobile-search-fab {
+        position: absolute; top: 16px; right: 16px; z-index: 30;
+        width: 48px; height: 48px; border-radius: 50%;
+        background: var(--panel-bg); backdrop-filter: var(--glass);
+        border: 1px solid var(--border); box-shadow: var(--shadow);
+        display: flex; align-items: center; justify-content: center;
+        color: var(--text-main); cursor: pointer;
+      }
+      .mobile-search-fab:active { transform: scale(0.95); }
 
+      /* Mobile Dock (Bottom) */
       .mobile-dock {
         position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
         display: flex; gap: 24px; align-items: center;
@@ -203,9 +215,10 @@
         display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4); margin: -20px 0 0 0;
       }
       
+      /* Bottom Sheets */
       .bottom-sheet {
         position: fixed; left: 0; right: 0; bottom: 0;
-        background: #1e293b; /* Opaque fallback */
+        background: #1e293b;
         border-top: 1px solid var(--border); border-radius: 24px 24px 0 0;
         box-shadow: 0 -10px 40px rgba(0,0,0,0.5);
         z-index: 40; transform: translateY(110%);
@@ -215,6 +228,14 @@
       .bottom-sheet.open { transform: translateY(0); }
       .sheet-handle { width: 40px; height: 4px; background: var(--border); border-radius: 10px; margin: 12px auto; opacity: 0.5; }
       .sheet-content { padding: 10px 20px 40px; overflow-y: auto; }
+
+      /* Mobile Suggestions Fix */
+      #m-suggestions {
+        position: relative; top: 0; left: 0; width: 100%;
+        background: transparent; border: none; box-shadow: none;
+        max-height: none; padding: 0; margin-top: 10px;
+        animation: none;
+      }
     }
 
     /* Utility */
@@ -301,7 +322,6 @@
 
       <div class="popover" id="pop-settings">
         <div class="popover-header">Map Settings</div>
-        
         <div style="display:flex; flex-direction:column; gap:12px;">
           <div>
             <label>Map Layer</label>
@@ -312,30 +332,19 @@
               <option value="hot">Humanitarian</option>
             </select>
           </div>
-
           <div class="row">
             <label>Follow Location</label>
             <input type="checkbox" id="d-follow" style="width:16px; height:16px; accent-color:var(--accent);">
           </div>
-
           <div class="row">
             <label>Theme</label>
             <select id="d-theme" class="std-select" style="width:100px; padding:4px;">
               <option value="auto">Auto</option><option value="dark">Dark</option><option value="light">Light</option>
             </select>
           </div>
-          
           <hr style="border:0; border-top:1px solid var(--border); margin:0;">
-          
-          <div class="row">
-             <label>Marker Size</label>
-             <input type="range" id="d-m-size" min="10" max="50" value="20">
-          </div>
-          <div class="row">
-             <label>Marker Color</label>
-             <input type="color" id="d-m-color" value="#ef4444">
-          </div>
-
+          <div class="row"><label>Marker Size</label><input type="range" id="d-m-size" min="10" max="50" value="20"></div>
+          <div class="row"><label>Marker Color</label><input type="color" id="d-m-color" value="#ef4444"></div>
           <div class="link-row" style="margin-top:8px; padding-top:8px; border-top:1px solid var(--border);">
             <a href="/privacy" class="link-pill">Privacy</a>
             <a href="https://wiki.osmfoundation.org/wiki/Terms_of_Use" target="_blank" class="link-pill">Terms</a>
@@ -350,18 +359,25 @@
     </div>
 
 
-    <div class="mobile-only mobile-header">
-      <div class="input-group">
-        <svg class="icon search-icon"><use href="#icon-search"/></svg>
-        <input type="text" id="m-search" class="search-input" placeholder="Search places..." autocomplete="off">
-        <ul id="m-suggestions" class="suggestions"></ul>
-      </div>
-    </div>
+    <button class="mobile-only mobile-search-fab" id="m-btn-search">
+      <svg class="icon"><use href="#icon-search"/></svg>
+    </button>
 
     <div class="mobile-only mobile-dock">
       <button class="dock-btn" id="m-btn-pins"><svg class="icon" style="width:28px; height:28px"><use href="#icon-pin"/></svg></button>
       <button class="dock-btn main" id="m-btn-locate"><svg class="icon" style="width:24px; height:24px"><use href="#icon-nav"/></svg></button>
       <button class="dock-btn" id="m-btn-menu"><svg class="icon" style="width:28px; height:28px"><use href="#icon-menu"/></svg></button>
+    </div>
+
+    <div class="mobile-only bottom-sheet" id="sheet-search">
+      <div class="sheet-handle"></div>
+      <div class="sheet-content">
+        <div class="input-group">
+          <svg class="icon search-icon"><use href="#icon-search"/></svg>
+          <input type="text" id="m-search" class="search-input" placeholder="Search places..." autocomplete="off">
+        </div>
+        <ul id="m-suggestions" class="suggestions"></ul>
+      </div>
     </div>
 
     <div class="mobile-only bottom-sheet" id="sheet-pins">
@@ -379,7 +395,6 @@
       <div class="sheet-handle"></div>
       <div class="sheet-content">
         <strong style="font-size:18px; display:block; margin-bottom:20px">Map Settings</strong>
-        
         <div style="margin-bottom:20px">
           <label style="display:block; margin-bottom:8px">Map Layer</label>
           <select id="m-layer" class="std-select">
@@ -389,7 +404,6 @@
             <option value="hot">Humanitarian</option>
           </select>
         </div>
-        
         <div class="row" style="justify-content:space-between; padding:14px 0; border-top:1px solid var(--border)">
           <span>Follow Location</span>
           <input type="checkbox" id="m-follow" style="width:20px; height:20px; accent-color:var(--accent)">
@@ -400,7 +414,6 @@
             <option value="auto">Auto</option><option value="dark">Dark</option><option value="light">Light</option>
           </select>
         </div>
-
         <div style="margin-top:20px; padding-top:20px; border-top:1px solid var(--border)">
           <div class="link-row">
             <a class="link-pill" href="https://wiki.osmfoundation.org/wiki/Terms_of_Use">OSM Terms</a>
@@ -435,11 +448,12 @@
     d_btnPins: EL('#d-btn-pins'), d_btnSet: EL('#d-btn-settings'),
     popPins: EL('#pop-pins'), popSet: EL('#pop-settings'),
     // Mobile
+    m_btnSearch: EL('#m-btn-search'),
     m_search: EL('#m-search'), m_sug: EL('#m-suggestions'),
     m_locate: EL('#m-btn-locate'), m_pinsBtn: EL('#m-btn-pins'), m_menuBtn: EL('#m-btn-menu'),
     m_save: EL('#m-save-curr'), m_pinList: EL('#m-pin-list'),
     m_layer: EL('#m-layer'), m_follow: EL('#m-follow'), m_theme: EL('#m-theme'),
-    sheetPins: EL('#sheet-pins'), sheetMenu: EL('#sheet-menu')
+    sheetSearch: EL('#sheet-search'), sheetPins: EL('#sheet-pins'), sheetMenu: EL('#sheet-menu')
   };
 
   // --- MAP CORE ---
@@ -515,6 +529,7 @@
             goTo(parseFloat(i.lat), parseFloat(i.lon)); 
             list.style.display = 'none'; 
             ui.d_search.value = main; ui.m_search.value = main;
+            closeSheets();
           };
           list.appendChild(li);
         });
@@ -623,13 +638,14 @@
   ui.d_btnPins.onclick = () => togglePop(ui.popPins, ui.d_btnPins);
   ui.d_btnSet.onclick = () => togglePop(ui.popSet, ui.d_btnSet);
 
-  // Mobile Dock Toggles
+  // Mobile Toggles
+  ui.m_btnSearch.onclick = () => { toggleSheet(ui.sheetSearch); setTimeout(() => ui.m_search.focus(), 100); };
   ui.m_pinsBtn.onclick = () => toggleSheet(ui.sheetPins);
   ui.m_menuBtn.onclick = () => toggleSheet(ui.sheetMenu);
   
   document.body.onclick = (e) => {
-    if(!e.target.closest('.bottom-sheet') && !e.target.closest('.mobile-dock') && !e.target.closest('.desktop-navbar')) closeSheets();
-    if(!e.target.closest('.input-group')) { ui.d_sug.style.display='none'; ui.m_sug.style.display='none'; }
+    if(!e.target.closest('.bottom-sheet') && !e.target.closest('.mobile-dock') && !e.target.closest('.mobile-search-fab') && !e.target.closest('.desktop-navbar')) closeSheets();
+    if(!e.target.closest('.input-group')) { ui.d_sug.style.display='none'; }
   };
 
   // Init
