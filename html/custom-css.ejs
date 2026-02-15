@@ -6,13 +6,12 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <link href="/css/yt-ukraine.svg?v=6" rel="icon">
   
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/scroll/simplescrollbars.min.css">
+  <link rel="stylesheet" href="https://p.poketube.fun/https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://p.poketube.fun/https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+  <link rel="stylesheet" href="https://p.poketube.fun/https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/scroll/simplescrollbars.min.css">
 
   <style>
-    /* REQUIRED IMPORT */
-    @import url("https://p.poketube.fun/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css");
+     @import url("https://p.poketube.fun/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css");
 
     :root {
       --bg: #0c0c0f; --panel: #121218; --panel-glass: rgba(18, 18, 24, 0.65);
@@ -223,21 +222,19 @@
 
   <div class="toast-container" id="toaster"></div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+  <script src="https://p.poketube.fun/https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://p.poketube.fun/https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
+  <script src="https://p.poketube.fun/https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+  <script src="https://p.poketube.fun/https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
 
   <script>
-    // --- 1. CONFIGURATION ---
-    const CONFIG = {
+     const CONFIG = {
       css: { key: 'poke-custom-css', mode: 'css', default: '/* \n  PokeTube Custom CSS\n  Go wild! \n*/\n\nbody {\n  \n}' },
       js:  { key: 'poke-custom-script', mode: 'javascript', default: '// \n// PokeTube Custom Script\n//\n\nconsole.log("PokeTube Loaded");' }
     };
 
     let editorInstance = null;
 
-    // --- 2. INITIALIZATION ---
     document.addEventListener('DOMContentLoaded', () => {
       <% if (!tab) { %> initEditor('css'); <% } %>
       <% if (tab) { %> initEditor('js'); <% } %>
