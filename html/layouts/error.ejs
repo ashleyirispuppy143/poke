@@ -1,95 +1,307 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <title>Poke - <%=error%> !!!</title>
-        <meta content="#111111" name="theme-color" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no, viewport-fit=cover" />
-        <meta name="darkreader-lock" />
-        <link href="/css/yt-ukraine.svg?v=3" rel="icon" />
-        <link rel="manifest" href="/manifest.json" />
-        <style>
-            body {
-                margin: auto;
-                background: #111111;
-                color: white;
-                font-family: arial;
-                max-width: 600px;
-            }
-            body::before {
-                background: linear-gradient(0deg, rgba(115, 32, 67, 1), rgba(17, 17, 17, 1));
-                background-repeat: no-repeat;
-                content: "";
-                position: fixed;
-                bottom: 0px;
-                left: 0px;
-                width: 100%;
-                height: 100%;
-                z-index: -1;
-                pointer-events: none;
-                transition: 1s height;
-            }
+<head>
+    <meta charset="UTF-8">
+    <title>404 Not Found</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="/css/yt-ukraine.svg?v=3" />
+    <style>
+        /* --- MATERIAL DESIGN 3 (Material You) VARIABLES --- */
+        :root {
+            /* Palette: Dark Mode (YouTube/Google inspired) */
+            --md-sys-color-background: #0f0f0f;
+            --md-sys-color-surface: #1f1f1f;
+            --md-sys-color-on-surface: #e2e2e2;
+            --md-sys-color-on-surface-variant: #c4c7c5;
 
-            h2 {
-                font-size: 42px;
-            }
+            /* Primary (YouTube Blue / Material Blue) */
+            --md-sys-color-primary: #a8c7fa;
+            --md-sys-color-on-primary: #062e6f;
+            --md-sys-color-primary-container: #0842a0;
 
-            p#abstract {
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                font-size: 500px;
-                margin: 0px;
-                font-weight: bold;
-                opacity: 0.005;
-                pointer-events: none;
-                transition: 1s transform;
-            }
+            /* Shapes & Type */
+            --md-sys-shape-corner-extra-large: 28px;
+            --md-sys-shape-corner-full: 9999px;
+            --font-family: "Roboto", "Google Sans", sans-serif;
+        }
 
-            @media only screen and (max-width: 790px) {
-                p#abstract {
-                    transform: translate(-50%, -50%) rotate(90deg) !important;
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--md-sys-color-background);
+            color: var(--md-sys-color-on-surface);
+            font-family: var(--font-family);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            user-select: none; /* Prevents highlighting text while clicking */
+        }
+
+        a { text-decoration: none; color: inherit; }
+
+        /* --- CARD CONTAINER --- */
+        .error-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            max-width: 480px;
+            padding: 40px;
+            /* Subtle entry animation */
+            animation: fadeUp 0.8s cubic-bezier(0.2, 0, 0, 1);
+        }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* --- THE TRIGGER (HUGE 404) --- */
+        .error-code {
+            font-size: 120px;
+            font-weight: 700; /* Bold Google Sans vibe */
+            line-height: 1;
+            margin: 0;
+            letter-spacing: -2px;
+            color: var(--md-sys-color-on-surface);
+            cursor: pointer;
+            transition: color 0.2s, transform 0.1s;
+            position: relative;
+        }
+
+        /* Feedback when clicking the secret */
+        .error-code:active {
+            transform: scale(0.95);
+            color: var(--md-sys-color-primary);
+        }
+
+        .error-code.shake {
+            animation: glitch-anim 0.3s cubic-bezier(.25, .46, .45, .94) both infinite;
+            color: #ff5252;
+        }
+
+        .error-title {
+            font-size: 22px;
+            font-weight: 400;
+            margin: 16px 0 8px 0;
+            color: var(--md-sys-color-on-surface);
+        }
+
+        .error-desc {
+            font-size: 16px;
+            color: var(--md-sys-color-on-surface-variant);
+            margin-bottom: 32px;
+            line-height: 1.5;
+        }
+
+        /* --- MATERIAL CHIP LINKS --- */
+        .action-row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            height: 40px;
+            padding: 0 24px;
+            border-radius: var(--md-sys-shape-corner-full);
+            border: 1px solid #3f3f3f;
+            background-color: transparent;
+            color: var(--md-sys-color-primary);
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .chip:hover {
+            background-color: rgba(168, 199, 250, 0.08); /* Primary opacity 8% */
+            border-color: var(--md-sys-color-primary);
+        }
+
+        .chip-filled {
+            background-color: var(--md-sys-color-primary);
+            color: var(--md-sys-color-on-primary);
+            border: none;
+        }
+
+        .chip-filled:hover {
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            background-color: #b8d3fc; /* Slightly lighter */
+        }
+
+        /* --- ARCADE OVERLAY --- */
+        #arcade-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+
+        #arcade-overlay.active {
+            opacity: 1;
+        }
+
+        .arcade-cabinet {
+            position: relative;
+            width: 90%;
+            max-width: 800px;
+            height: 70vh;
+            background: #121212;
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow:
+                0 0 0 1px #333,
+                0 20px 50px rgba(0,0,0,0.5);
+        }
+
+        .arcade-screen {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: block;
+        }
+
+        /* Scanlines for retro feel */
+        .scanlines {
+            position: absolute;
+            inset: 0;
+            background: repeating-linear-gradient(
+                to bottom,
+                transparent 0px,
+                transparent 2px,
+                rgba(0, 0, 0, 0.1) 3px
+            );
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        /* Material Close FAB */
+        .close-fab {
+            margin-top: 24px;
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            background-color: #303030;
+            color: white;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            transition: transform 0.2s, background-color 0.2s;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+
+        .close-fab:hover {
+            background-color: #424242;
+            transform: scale(1.1);
+        }
+
+        /* Glitch Animation for Trigger */
+        @keyframes glitch-anim {
+            0% { transform: translate(0) }
+            20% { transform: translate(-2px, 2px) }
+            40% { transform: translate(-2px, -2px) }
+            60% { transform: translate(2px, 2px) }
+            80% { transform: translate(2px, -2px) }
+            100% { transform: translate(0) }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="error-card">
+        <h1 class="error-code" id="secret-trigger" title="?"><%= error || '404' %></h1>
+
+        <h2 class="error-title">Page not found</h2>
+        <p class="error-desc">The page you are looking for doesn't exist or has been moved. Try searching or check the links below.</p>
+
+        <div class="action-row">
+            <a href="/" class="chip chip-filled">Landing Page</a>
+
+            <a href="https://codeberg.org/ashley/poke/" class="chip">Source Code</a>
+            <a href="https://status.poketube.fun/" class="chip">Status</a>
+        </div>
+    </div>
+
+    <div id="arcade-overlay">
+        <div class="arcade-cabinet">
+            <div class="scanlines"></div>
+            <iframe id="game-frame" class="arcade-screen" src="" frameborder="0"></iframe>
+        </div>
+        <button id="close-game-btn" class="close-fab" title="Close Game">✕</button>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const overlay = document.getElementById('arcade-overlay');
+            const closeBtn = document.getElementById('close-game-btn');
+            const gameFrame = document.getElementById('game-frame');
+            const trigger = document.getElementById('secret-trigger');
+
+            const gameUrl = "/game-hub?game=snake";
+            let clickCount = 0;
+            let clickTimer;
+
+            // SECRET TRIGGER LOGIC
+            trigger.addEventListener('click', function() {
+                clickCount++;
+
+                // Visual feedback (shake) on clicks 3 and 4
+                if(clickCount > 2) {
+                    trigger.classList.add('shake');
+                    setTimeout(() => trigger.classList.remove('shake'), 200);
                 }
+
+                // Activate on 5th click
+                if (clickCount >= 5) {
+                    launchGame();
+                    clickCount = 0;
+                }
+
+                // Reset counter if user stops clicking for 1 second
+                clearTimeout(clickTimer);
+                clickTimer = setTimeout(() => {
+                    clickCount = 0;
+                }, 1000);
+            });
+
+            function launchGame() {
+                gameFrame.src = gameUrl;
+                overlay.style.display = 'flex';
+                // Small delay to allow display:flex to apply before opacity transition
+                setTimeout(() => {
+                    overlay.classList.add('active');
+                }, 10);
             }
 
-            .error {
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                text-align: center;
-                cursor: default;
-                max-width: 600px;
-                width: 100%;
-            }
-
-            .error-footer {
-                position: fixed;
-                bottom: 24px;
-                width: 100%;
-                max-width: 600px;
-                text-align: center;
-            }
-            .error-footer a {
-                color: #ac8fa5;
-                text-decoration: none;
-                margin: 0px 12px;
-            }
-            .error-footer a:hover {
-                color: #d69cc8;
-            }
-        </style>
-    </head>
-    <body>
-        <p id="abstract">404</p>
-        <div class="error">
-            <h2><%=error%></h2>
-            <p><%=description%></p>
-        </div>
-        <div class="error-footer">
-            <a href="/game-hub">Games</a>
-            <a href="https://codeberg.org/ashley/poke/">Source Code</a>
-            <a href="https://status.poketube.fun/">Status</a>
-        </div>
-    </body>
+            // CLOSE LOGIC
+            closeBtn.addEventListener('click', function() {
+                overlay.classList.remove('active');
+                setTimeout(() => {
+                    overlay.style.display = 'none';
+                    gameFrame.src = ""; // Stop game
+                }, 500); // Wait for fade out
+            });
+        });
+    </script>
+</body>
 </html>
