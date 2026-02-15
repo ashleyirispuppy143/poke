@@ -5,238 +5,332 @@
   <title>PokeTube | Customize</title>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <link href="/css/yt-ukraine.svg?v=6" rel="icon">
-  <meta content="Poke | Customize" property="og:title">
-  <meta content="Theme Poke and add custom scripts — go wild!" property="twitter:description">
-  <meta content="https://cdn.glitch.global/d68d17bb-f2c0-4bc3-993f-50902734f652/aa70111e-5bcd-4379-8b23-332a33012b78.image.png?v=1701898829884" property="og:image" />
-  <meta content="summary_large_image" name="twitter:card" />
-  <meta content="#f97794" name="theme-color" />
-
-  <link href="/css/app-cdn.min.css" rel="stylesheet">
-  <link href="/css/app.main.css?v=44600" rel="stylesheet">
-  <link href="/css/search.main.css?v=57" rel="stylesheet">
-  <link href="/css/watch.main.css" rel="stylesheet">
+  
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/scroll/simplescrollbars.min.css">
 
   <style>
+    /* REQUIRED IMPORT */
     @import url("https://p.poketube.fun/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css");
 
-    :root{
-      --bg:#0c0c0f; --panel:#121218; --panel-2:#0f0f15; --text:#e9ecf1; --muted:#aab2c0;
-      --accent:#7cc7ff; --accent-2:#f97794; --ok:#20c997; --warn:#ffb400; --err:#ef476f;
-      --border:#212230; --chip:#161824; --chipb:#0f111a; --ring:0 0 0 2px rgba(124,199,255,.25);
-      --radius:16px; --radius-lg:22px; --shadow:0 10px 30px rgba(0,0,0,.35);
-      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, "Ubuntu Mono", Consolas, "Liberation Mono", monospace;
-      --sans: Inter, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, "Helvetica Neue", Arial, "Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol", sans-serif;
-      --code-size:13.5px;
+    :root {
+      --bg: #0c0c0f; --panel: #121218; --panel-glass: rgba(18, 18, 24, 0.65);
+      --text: #e9ecf1; --muted: #aab2c0;
+      --accent: #7cc7ff; --accent-glow: rgba(124,199,255,0.4);
+      --border: rgba(255,255,255,0.08);
+      --radius: 16px; --radius-sm: 8px;
+      --font-main: 'Inter', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
     }
 
-    html.gradient-bg{
-      min-height:100%;
+    /* Base Setup */
+    * { box-sizing: border-box; outline: none; }
+    body {
+      margin: 0; color: var(--text); font-family: var(--font-main);
+      background: #0a0a0f; overflow-x: hidden; min-height: 100vh;
+    }
+
+    /* Advanced Background */
+    html.gradient-bg {
       background:
-        radial-gradient(1200px 800px at 10% 10%, rgba(249,119,148,.22), transparent 60%),
-        radial-gradient(1200px 800px at 90% 20%, rgba(124,199,255,.18), transparent 60%),
-        radial-gradient(800px 600px at 30% 80%, rgba(124,255,208,.12), transparent 60%),
-        linear-gradient(135deg, #0a0a0f, #0b0b12 60%, #0c0c15);
+        radial-gradient(circle at 15% 10%, rgba(249, 119, 148, 0.15), transparent 40%),
+        radial-gradient(circle at 85% 30%, rgba(124, 199, 255, 0.12), transparent 40%),
+        linear-gradient(180deg, #0a0a0f 0%, #0d0e15 100%);
       background-attachment: fixed;
     }
 
-    *{box-sizing:border-box}
-    body{margin:0;color:var(--text);font-family:var(--sans);background:transparent;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overflow-x:hidden}
-
-    /* -------- NAVBAR -------- */
-    .customize-navbar{
-      display:flex; align-items:center; gap:16px; padding:12px 20px;
-      position:sticky; top:0; z-index:2000; min-height:62px;
-      backdrop-filter:blur(12px) saturate(120%);
-      background:linear-gradient(180deg, rgba(14,14,24,.78), rgba(14,14,24,.45));
-      border-bottom:1px solid rgba(255,255,255,.06);
+    /* Navbar */
+    .navbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 24px; height: 70px;
+      position: sticky; top: 0; z-index: 100;
+      backdrop-filter: blur(16px) saturate(180%);
+      background: rgba(10, 10, 15, 0.7);
+      border-bottom: 1px solid var(--border);
     }
-    .customize-navbar__left{display:flex;align-items:center}
-    .customize-navbar__logo{width:124px;display:block}
-    .customize-navbar__middle{flex:1; display:flex; justify-content:center; align-items:center}
-    .customize-navbar__search{position:relative; width:100%; max-width:640px}
-    .customize-navbar__input{
-      width:100%; height:40px; padding:0 44px 0 16px;
-      border-radius:14px; border:1px solid rgba(255,255,255,.12); outline:none;
-      background:#151720;
-      color:var(--text); box-shadow:inset 0 0 0 1px rgba(255,255,255,.02);
+    .navbar__logo { height: 28px; display: block; filter: drop-shadow(0 0 8px rgba(255,255,255,0.2)); }
+    
+    .navbar__search {
+      flex: 1; max-width: 500px; margin: 0 20px; position: relative;
     }
-    .customize-navbar__input::placeholder{color:#8b93a6}
-    .customize-navbar__btn{
-      position:absolute; right:6px; top:50%;
-      transform:translateY(-50%);
-      border:0; border-radius:10px; width:36px; height:36px; cursor:pointer;
-      background:linear-gradient(180deg,#1b2231,#151b27); color:var(--text);
-      display:grid; place-items:center;
+    .search-input {
+      width: 100%; background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border); border-radius: 99px;
+      padding: 10px 45px 10px 20px; color: #fff; transition: 0.2s;
     }
-    .customize-navbar__right{display:flex;align-items:center;gap:10px;padding-left:8px;height:40px}
-    .customize-navbar__icon{
-      display:grid; place-items:center; width:34px; height:34px; border-radius:10px;
-      color:#cfd6e6; border:1px solid rgba(255,255,255,.07);
-      background:linear-gradient(180deg,#161925,#121521);
+    .search-input:focus { background: rgba(0,0,0,0.4); border-color: var(--accent); box-shadow: 0 0 0 4px rgba(124,199,255,0.1); }
+    .search-btn {
+      position: absolute; right: 5px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; color: var(--muted); cursor: pointer; padding: 8px;
     }
 
-    /* -------- PAGE LAYOUT -------- */
-    .container{max-width:1200px;margin:22px auto 64px;padding:0 16px}
-    .hero{display:grid;grid-template-columns:1fr;gap:16px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;box-shadow:var(--shadow)}
-    .title{text-align:left;font-weight:900;font-size:clamp(22px,3vw,34px)}
-    .subtitle{text-align:left;color:var(--muted);margin-top:6px}
-    .tabs{display:flex;justify-content:center;gap:8px;padding:14px;margin-top:14px;background:var(--panel-2);border:1px solid var(--border);border-radius:var(--radius)}
-    .tab{padding:10px 14px;border-radius:10px;cursor:pointer;text-transform:uppercase;font-size:12px;color:var(--muted);text-decoration:none}
-    .tab.active{color:var(--text);background:rgba(124,199,255,.06)}
-
-    .work{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px}
-    @media (max-width:1000px){.work{grid-template-columns:1fr}}
-    .panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
-    .panel .head{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border)}
-    .panel .head .title{font-weight:700;font-size:14px}
-    .panel .head .hint{color:var(--muted);font-size:12px}
-    .btns{display:flex;gap:8px;flex-wrap:wrap}
-    .btn{border:1px solid var(--border);background:var(--chip);color:var(--text);padding:8px 10px;border-radius:10px;font-size:12px;cursor:pointer}
-
-    /* -------- Editors (no syntax highlighting) -------- */
-    .editor-wrap{position:relative;height:min(70vh,680px);overflow:auto;background:#0a0b12}
-    .ln{
-      position:absolute; left:0; top:0; bottom:0; width:40px;
-      background:#08090f; color:#6272a4; border-right:1px solid #0d0f1a;
-      text-align:right; padding:18px 6px; font:500 var(--code-size)/1.6 var(--mono);
+    .navbar__actions { display: flex; gap: 12px; }
+    .nav-icon {
+      width: 40px; height: 40px; border-radius: 12px;
+      display: grid; place-items: center; color: var(--text);
+      background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+      text-decoration: none; transition: 0.2s;
     }
-    .live-editor{
-      margin:0; outline:0; border:0; background:transparent;
-      font:500 var(--code-size)/1.6 var(--mono);
-      color:var(--text);
-      white-space:pre; tab-size:2; -moz-tab-size:2;
-      padding:18px 18px 18px 54px;
-      min-height:100%;
+    .nav-icon:hover { background: rgba(255,255,255,0.1); color: var(--accent); }
+
+    /* Layout */
+    .container { max-width: 1200px; margin: 40px auto; padding: 0 20px; }
+    
+    .header { margin-bottom: 30px; }
+    .header h1 { font-size: 32px; margin: 0; font-weight: 800; letter-spacing: -0.5px; }
+    .header p { color: var(--muted); margin: 8px 0 0; }
+
+    /* Tabs */
+    .tabs {
+      display: inline-flex; background: rgba(0,0,0,0.3);
+      padding: 4px; border-radius: 12px; border: 1px solid var(--border);
+      margin-bottom: 24px;
     }
+    .tab {
+      padding: 8px 24px; border-radius: 8px; color: var(--muted);
+      text-decoration: none; font-size: 14px; font-weight: 600;
+      transition: 0.2s;
+    }
+    .tab:hover { color: #fff; }
+    .tab.active { background: var(--accent); color: #000; box-shadow: 0 4px 12px var(--accent-glow); }
+
+    /* Editor Panel */
+    .editor-card {
+      background: var(--panel-glass); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+      display: flex; flex-direction: column; height: 75vh;
+    }
+
+    .editor-toolbar {
+      padding: 12px 20px; background: rgba(0,0,0,0.2);
+      border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .editor-info { font-size: 13px; color: var(--muted); display: flex; gap: 10px; align-items: center; }
+    .badge { background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; font-family: var(--font-mono); font-size: 11px; }
+
+    .btn-group { display: flex; gap: 8px; }
+    .btn {
+      border: 1px solid var(--border); background: rgba(255,255,255,0.05);
+      color: #fff; padding: 6px 14px; border-radius: 6px;
+      font-size: 13px; cursor: pointer; transition: 0.2s; display: flex; align-items: center; gap: 6px;
+    }
+    .btn:hover { background: rgba(255,255,255,0.1); }
+    .btn.primary { background: var(--accent); color: #000; border-color: transparent; font-weight: 600; }
+    .btn.primary:hover { filter: brightness(1.1); }
+    .btn.danger { color: #ff5b5b; border-color: rgba(255,91,91,0.3); }
+    .btn.danger:hover { background: rgba(255,91,91,0.1); }
+
+    /* CodeMirror Overrides */
+    .CodeMirror {
+      flex: 1; height: auto !important;
+      font-family: var(--font-mono) !important; font-size: 14px;
+      background: transparent !important;
+    }
+    .cm-s-dracula.CodeMirror { background: rgba(0,0,0,0.2) !important; }
+    .CodeMirror-gutters { background: rgba(0,0,0,0.3) !important; border-right: 1px solid var(--border) !important; }
+
+    /* Toast Notification */
+    .toast-container {
+      position: fixed; bottom: 30px; right: 30px; z-index: 2000;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .toast {
+      background: #1a1b26; color: #fff; padding: 12px 20px;
+      border-radius: 8px; border: 1px solid var(--border);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+      font-size: 14px; display: flex; align-items: center; gap: 10px;
+      animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .toast i { color: var(--accent); }
+    @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
   </style>
 </head>
 <body>
-  <div class="app gradient-bg">
-    <!-- NAVBAR -->
-    <nav class="customize-navbar">
-      <div class="customize-navbar__left">
-        <a href="/143"><img class="customize-navbar__logo" src="/css/logo.svg?v=5" alt="PokeTube"></a>
-      </div>
-      <div class="customize-navbar__middle">
-        <form class="customize-navbar__search" action="/search">
-          <input id="fname" name="query" class="customize-navbar__input" type="search" placeholder="Search videos, channels…" />
-          <button class="customize-navbar__btn" type="submit"><i class="fa-light fa-search"></i></button>
-        </form>
-      </div>
-      <div class="customize-navbar__right">
-        <a class="customize-navbar__icon" href="/domains"><i class="fa-light fa-server"></i></a>
-        <a class="customize-navbar__icon" href="/privacy"><i class="fa-light fa-shield"></i></a>
-        <a class="customize-navbar__icon" href="/video/upload?from="><i class="fa-light fa-video"></i></a>
-        <a class="customize-navbar__icon" href="https://codeberg.org/Ashley/poketube/issues"><i class="fa-light fa-bug"></i></a>
-      </div>
-    </nav>
 
-    <div class="container">
-      <section class="hero">
-        <div>
-          <div class="title">Customize Poke</div>
-         </div>
-      </section>
+  <nav class="navbar">
+    <div class="navbar__left">
+      <a href="/143"><img class="navbar__logo" src="/css/logo.svg?v=5" alt="PokeTube"></a>
+    </div>
+    <form class="navbar__search" action="/search">
+      <input name="query" class="search-input" type="search" placeholder="Search videos, channels…" />
+      <button class="search-btn" type="submit"><i class="fa-light fa-search"></i></button>
+    </form>
+    <div class="navbar__actions">
+      <a class="nav-icon" href="/domains" title="Domains"><i class="fa-light fa-server"></i></a>
+      <a class="nav-icon" href="/privacy" title="Privacy"><i class="fa-light fa-shield"></i></a>
+      <a class="nav-icon" href="/video/upload" title="Upload"><i class="fa-light fa-video"></i></a>
+    </div>
+  </nav>
 
-      <div class="tabs">
-        <% if (!tab) { %>
-          <a class="tab active" href="/customize">Custom CSS</a>
-          <a class="tab" href="/customize?tab=js">Custom JS</a>
-        <% } else { %>
-          <a class="tab" href="/customize">Custom CSS</a>
-          <a class="tab active" href="/customize?tab=js">Custom JS</a>
-        <% } %>
-      </div>
+  <div class="container">
+    <div class="header">
+      <h1>Customize Poke</h1>
+      <p>Theme your experience with custom scripts and styles.</p>
+    </div>
 
+    <div class="tabs">
       <% if (!tab) { %>
-      <section class="work">
-        <div class="panel" style="  min-width: 73em;">
-          <div class="head">
-            <div><div class="title">Custom CSS Editor</div><div class="hint">Saved to <code>localStorage['poke-custom-css']</code></div></div>
-            <div class="btns">
-              <button class="btn ok" id="saveCssBtn">Save</button>
-              <button class="btn" id="formatCssBtn" style="display:none" >Format</button>
-              <button class="btn" id="wrapCssBtn" style="display:none" data-wrap="1">Wrap: On</button>
-              <button class="btn" id="copyCssBtn">Copy</button>
-              <button class="btn warn" id="exportCssBtn">Export</button>
-               <button class="btn err" id="resetCssBtn">Reset</button>
-            </div>
-          </div>
-          <div class="editor-wrap"><pre class="ln" id="cssLines">1</pre><pre id="cssEd" class="live-editor" contenteditable></pre></div>
-        </div>
-  
-      </section>
-      <% } %>
-
-      <% if (tab) { %>
-      <section class="work">
-        <div class="panel" style="  min-width: 73em;">
-          <div class="head"><div class="title">Custom JS Editor</div><div class="hint">Saved to <code>localStorage['poke-custom-script']</code></div></div>
-          <div class="btns">
-            <button class="btn ok" id="saveJsBtn">Save</button>
-            <button class="btn" style="display:none"  id="formatJsBtn">Format</button>
-            <button class="btn" id="wrapJsBtn" style="display:none"  data-wrap="1">Wrap: On</button>
-            <button class="btn" id="copyJsBtn">Copy</button>
-            <button class="btn warn" id="exportJsBtn">Export</button>
-             <button class="btn err" id="resetJsBtn">Reset</button>
-          </div>
-          <div class="editor-wrap"><pre class="ln" id="jsLines">1</pre><pre id="jsEd" class="live-editor" contenteditable></pre></div>
-        </div>
-      </section>
+        <a class="tab active" href="/customize">CSS Styles</a>
+        <a class="tab" href="/customize?tab=js">JS Scripts</a>
+      <% } else { %>
+        <a class="tab" href="/customize">CSS Styles</a>
+        <a class="tab active" href="/customize?tab=js">JS Scripts</a>
       <% } %>
     </div>
 
-   </div>
-
-  <!-- ================= SCRIPTS ================ -->
-  <script>
-    const $ = s => document.querySelector(s);
-    const on = (el, ev, fn) => el && el.addEventListener(ev, fn, { passive:true });
-    const saveFile = (name, content, type='text/plain') => {
-      const blob = new Blob([content], { type });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = name;
-      document.body.appendChild(a); a.click(); URL.revokeObjectURL(url); a.remove();
-    };
-    const copyText = async (txt) => { try { await navigator.clipboard.writeText(txt); } catch {} };
-    const debounce = (fn,ms=120)=>{ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; };
-
-    function setLines(preEl, lnEl){
-      const lines = preEl.textContent.split('\n').length || 1;
-      let out=''; for (let i=1;i<=lines;i++) out += i + (i<lines?'\n':'');
-      lnEl.textContent = out;
-    }
-    function setWrap(preEl, onwrap){
-      preEl.style.whiteSpace = onwrap ? 'pre-wrap' : 'pre';
-      preEl.style.overflowWrap = onwrap ? 'anywhere' : 'normal';
-    }
-    function loadEditor(preEl, storageKey, fallback){
-      const saved = localStorage.getItem(storageKey);
-      preEl.textContent = saved ?? fallback;
-      setLines(preEl, preEl.previousElementSibling);
-    }
-    function saveEditor(preEl, storageKey){
-      localStorage.setItem(storageKey, preEl.textContent);
-    }
-
     <% if (!tab) { %>
-      const cssEd = $('#cssEd'), cssLines = $('#cssLines');
-      loadEditor(cssEd, 'poke-custom-css', "/* Custom CSS */");
-      const cssPreviewStyle = document.createElement('style'); document.body.appendChild(cssPreviewStyle);
-      const applyCssPreview = ()=>{ cssPreviewStyle.textContent = cssEd.textContent || ''; };
-      on(cssEd,'input',debounce(()=>{setLines(cssEd,cssLines);applyCssPreview()},50));
-      on($('#saveCssBtn'),'click',()=> saveEditor(cssEd,'poke-custom-css'));
-      on($('#exportCssBtn'),'click',()=> saveFile('poke-custom-css.css', cssEd.textContent,'text/css'));
+    <div class="editor-card">
+      <div class="editor-toolbar">
+        <div class="editor-info">
+          <i class="fa-brands fa-css3 text-accent"></i>
+          <span>Global CSS</span>
+          <span class="badge">localStorage['poke-custom-css']</span>
+        </div>
+        <div class="btn-group">
+          <button class="btn primary" onclick="saveEditor('css')"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+          <button class="btn" onclick="copyEditor('css')"><i class="fa-regular fa-copy"></i> Copy</button>
+          <button class="btn" onclick="downloadEditor('css')"><i class="fa-solid fa-download"></i> Export</button>
+          <button class="btn danger" onclick="resetEditor('css')"><i class="fa-solid fa-trash"></i> Reset</button>
+        </div>
+      </div>
+      <textarea id="css-area"></textarea>
+    </div>
     <% } %>
 
     <% if (tab) { %>
-      const jsEd = $('#jsEd'), jsLines = $('#jsLines');
-      loadEditor(jsEd, 'poke-custom-script', "// Custom JS");
-      on(jsEd,'input',debounce(()=> setLines(jsEd,jsLines),50));
-      on($('#saveJsBtn'),'click',()=> saveEditor(jsEd,'poke-custom-script'));
-      on($('#exportJsBtn'),'click',()=> saveFile('poke-custom-script.js', jsEd.textContent,'application/javascript'));
+    <div class="editor-card">
+      <div class="editor-toolbar">
+        <div class="editor-info">
+          <i class="fa-brands fa-js text-accent"></i>
+          <span>Global Script</span>
+          <span class="badge">localStorage['poke-custom-script']</span>
+        </div>
+        <div class="btn-group">
+          <button class="btn primary" onclick="saveEditor('js')"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+          <button class="btn" onclick="copyEditor('js')"><i class="fa-regular fa-copy"></i> Copy</button>
+          <button class="btn" onclick="downloadEditor('js')"><i class="fa-solid fa-download"></i> Export</button>
+          <button class="btn danger" onclick="resetEditor('js')"><i class="fa-solid fa-trash"></i> Reset</button>
+        </div>
+      </div>
+      <textarea id="js-area"></textarea>
+    </div>
     <% } %>
+  </div>
+
+  <div class="toast-container" id="toaster"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+
+  <script>
+    // --- 1. CONFIGURATION ---
+    const CONFIG = {
+      css: { key: 'poke-custom-css', mode: 'css', default: '/* \n  PokeTube Custom CSS\n  Go wild! \n*/\n\nbody {\n  \n}' },
+      js:  { key: 'poke-custom-script', mode: 'javascript', default: '// \n// PokeTube Custom Script\n//\n\nconsole.log("PokeTube Loaded");' }
+    };
+
+    let editorInstance = null;
+
+    // --- 2. INITIALIZATION ---
+    document.addEventListener('DOMContentLoaded', () => {
+      <% if (!tab) { %> initEditor('css'); <% } %>
+      <% if (tab) { %> initEditor('js'); <% } %>
+    });
+
+    function initEditor(type) {
+      const textarea = document.getElementById(type + '-area');
+      const savedContent = localStorage.getItem(CONFIG[type].key) || CONFIG[type].default;
+      
+      textarea.value = savedContent;
+
+      editorInstance = CodeMirror.fromTextArea(textarea, {
+        mode: CONFIG[type].mode,
+        theme: 'dracula',
+        lineNumbers: true,
+        autoCloseBrackets: true,
+        tabSize: 2,
+        lineWrapping: true,
+        extraKeys: {"Ctrl-Space": "autocomplete"}
+      });
+
+      // Live CSS Preview
+      if (type === 'css') {
+        const previewStyle = document.createElement('style');
+        previewStyle.id = 'live-preview-style';
+        document.body.appendChild(previewStyle);
+        
+        // Initial load
+        previewStyle.textContent = savedContent;
+
+        editorInstance.on('change', () => {
+          previewStyle.textContent = editorInstance.getValue();
+        });
+      }
+    }
+
+    // --- 3. ACTIONS ---
+
+    function saveEditor(type) {
+      const content = editorInstance.getValue();
+      localStorage.setItem(CONFIG[type].key, content);
+      showToast('success', 'Settings Saved Successfully');
+    }
+
+    function resetEditor(type) {
+      if(confirm('Are you sure you want to reset code? This cannot be undone.')) {
+        editorInstance.setValue(CONFIG[type].default);
+        saveEditor(type); // Save the reset state
+        showToast('warn', 'Editor Reset to Default');
+      }
+    }
+
+    function copyEditor(type) {
+      const content = editorInstance.getValue();
+      navigator.clipboard.writeText(content).then(() => {
+        showToast('info', 'Code Copied to Clipboard');
+      });
+    }
+
+    function downloadEditor(type) {
+      const content = editorInstance.getValue();
+      const ext = type === 'css' ? 'css' : 'js';
+      const blob = new Blob([content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `poke-custom.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      showToast('info', 'Download Started');
+    }
+
+    // --- 4. UTILS ---
+
+    function showToast(type, msg) {
+      const container = document.getElementById('toaster');
+      const el = document.createElement('div');
+      el.className = 'toast';
+      
+      let icon = 'fa-check-circle';
+      if(type === 'warn') icon = 'fa-exclamation-triangle';
+      if(type === 'info') icon = 'fa-info-circle';
+
+      el.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${msg}</span>`;
+      container.appendChild(el);
+
+      setTimeout(() => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(20px)';
+        setTimeout(() => el.remove(), 300);
+      }, 3000);
+    }
   </script>
-  <script src="/css/custom-css.js"></script>
 </body>
 </html>
