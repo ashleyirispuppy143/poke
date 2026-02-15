@@ -1,8 +1,8 @@
-<!--
+ <!--
 
     This Source Code Form is subject to the terms of the GNU General Public License:
 
-    Copyright (C) 2021-2025 Poke (https://codeberg.org/ashley/poke)
+    Copyright (C) 2021-2026 Poke (https://codeberg.org/ashley/poke)
     
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -21,7 +21,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <link rel="manifest" href="/manifest.json" />
   <link rel="icon" href="css/yt-ukraine.svg" type="image/svg+xml" />
@@ -29,375 +29,511 @@
   <meta name="description" content="Poke! Calendar — zero-JS calendar" />
   <meta property="og:title" content="Poke! Calendar" />
   <meta property="og:description" content="Navigate months without JavaScript needed" />
-  <meta property="og:image" content="https://cdn.glitch.global/d68d17bb-f2c0-4bc3-993f-50902734f652/aa70111e-5bcd-4379-8b23-332a33012b78.image.png?v=1701898829884" />
+  <meta property="og:image" content="/static/poke.webp" />
   <meta property="og:type" content="website" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Poke! Calendar" />
-  <meta name="twitter:image" content="https://cdn.glitch.global/d68d17bb-f2c0-4bc3-993f-50902734f652/aa70111e-5bcd-4379-8b23-332a33012b78.image.png?v=1701898829884" />
+  <meta name="twitter:image" content="/static/poke.webp" />
   <title>Poke! Calendar</title>
 
   <style>
     :root {
-      /* Color system */
-      --bg: #0c0c0c;
-      --panel: #141414;
-      --panel-2: #1a1a1a;
-      --border: #2a2a2a;
-      --text: #ececec;
-      --text-dim: #b8b8b8;
-      --accent: #b388ff;         /* Accessible on dark (~4.8:1 on #141414) */
-      --accent-strong: #a071ff;
-      --accent-weak: #d1baff;
-      --today: #2a1a5e;          /* Indigo-ish base to avoid pure black crush */
-      --today-ring: #c8a8ff;
-      --weekend: #121212;
-      --shadow: 0 10px 30px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.02);
+      /* Palette */
+      --bg: #050505;
+      --surface-1: #121212;
+      --surface-2: #1e1e1e;
+      --surface-glass: rgba(30, 30, 30, 0.65);
+      --border: #333;
+      
+      --text-main: #f0f0f0;
+      --text-muted: #a0a0a0;
+      
+      --accent: #8b5cf6; /* Violet */
+      --accent-glow: rgba(139, 92, 246, 0.4);
+      --accent-dark: #6d28d9;
+      
+      --today-bg: #2e1065;
+      --today-border: #a78bfa;
 
-      /* Radii & spacing */
-      --r-sm: 8px;
-      --r-md: 12px;
-      --r-lg: 16px;
-      --space-1: .25rem;
-      --space-2: .5rem;
-      --space-3: .75rem;
-      --space-4: 1rem;
-      --space-5: 1.25rem;
-      --space-6: 1.5rem;
-      --space-7: 2rem;
-
-      /* Typography */
-      --font: system-ui, -apple-system, Segoe UI, Roboto, Inter, Ubuntu, Cantarell, Noto Sans, Arial, "Apple Color Emoji","Segoe UI Emoji";
-      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-
-      /* Effects */
-      --blur: 14px;
-      --glass-bg: rgba(18,18,18,.75);
-      --glass-edge: rgba(255,255,255,.06);
-
-      color-scheme: dark;
+      /* Spacing & Layout */
+      --radius: 12px;
+      --shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      --font-body: system-ui, -apple-system, sans-serif;
     }
 
     @media (prefers-color-scheme: light) {
       :root {
-        --bg: #f6f6f7;
-        --panel: #ffffff;
-        --panel-2: #fafafa;
-        --border: #e7e7ea;
-        --text: #1b1b1f;
-        --text-dim: #565662;
-        --accent: #6b4bff;
-        --accent-strong: #5b3cf4;
-        --accent-weak: #bfb6ff;
-        --today: #e8e5ff;
-        --today-ring: #5b3cf4;
-        --weekend: #fbfbfe;
-        --shadow: 0 8px 24px rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.8);
-        --glass-bg: rgba(255,255,255,.75);
-        --glass-edge: rgba(0,0,0,.06);
+        --bg: #f8f9fa;
+        --surface-1: #ffffff;
+        --surface-2: #f1f3f5;
+        --surface-glass: rgba(255, 255, 255, 0.7);
+        --border: #dee2e6;
+        --text-main: #212529;
+        --text-muted: #6c757d;
+        --accent: #6200ee;
+        --accent-glow: rgba(98, 0, 238, 0.2);
+        --accent-dark: #3700b3;
+        --today-bg: #ede9fe;
+        --today-border: #6200ee;
       }
     }
 
-    /* Reset-ish */
+    /* Base Reset */
     *, *::before, *::after { box-sizing: border-box; }
-    html, body { height: 100%; }
     body {
       margin: 0;
-      background: var(--bg) url('/css/background.jpg') center/cover fixed no-repeat;
-      color: var(--text);
-      font-family: var(--font);
-      line-height: 1.5;
+      background: var(--bg);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(139, 92, 246, 0.15) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(56, 189, 248, 0.1) 0px, transparent 50%);
+      background-attachment: fixed;
+      color: var(--text-main);
+      font-family: var(--font-body);
       min-height: 100vh;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-      text-rendering: optimizeLegibility;
+      display: flex;
+      flex-direction: column;
     }
 
-    /* Frosted back layer with graceful fallback */
-    body::before {
-      content: "";
-      position: fixed;
-      inset: 0;
-      background: var(--bg) radial-gradient(1200px 800px at 10% -10%, rgba(255,255,255,.06), transparent 60%) no-repeat;
-      filter: brightness(.9) blur(16px);
-      z-index: -2;
-    }
-    @supports (backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px)) {
-      body::after {
-        content: "";
-        position: fixed;
-        inset: 0;
-        background: var(--glass-bg);
-        -webkit-backdrop-filter: blur(var(--blur)) saturate(130%);
-        backdrop-filter: blur(var(--blur)) saturate(130%);
-        border: 1px solid var(--glass-edge);
-        z-index: -1;
-      }
-      body::before { filter: none; }
-    }
-
-    /* Motion preferences */
-    @media (prefers-reduced-motion: reduce) {
-      * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
-    }
-
-    /* Top nav */
+    /* Navbar */
     .navbar {
-      position: sticky; top: 0; z-index: 10;
-      display: flex; align-items: center; justify-content: space-between;
-      padding: var(--space-4) var(--space-7);
-      background: linear-gradient(to bottom, rgba(0,0,0,.45), rgba(0,0,0,.25));
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 2rem;
+      background: var(--surface-glass);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--border);
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-    }
-    .navbar img { width: 8.5rem; height: auto; display: block; }
-
-    .years {
-      display: flex; gap: var(--space-5); flex-wrap: wrap; align-items: center;
-      font-feature-settings: "tnum" 1, "cv02" 1;
-    }
-    .years h2 {
-      font-size: .95rem; font-weight: 600; color: var(--accent);
-      letter-spacing: .2px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
     }
 
-    /* Shell */
-    .container {
-      width: min(100% - 2*var(--space-7), 980px);
-      margin: var(--space-7) auto;
-      padding: clamp(1rem, 2vw + .5rem, 2rem);
-      background: linear-gradient(180deg, var(--panel), var(--panel-2));
+    .brand img { height: 2rem; width: auto; display: block; }
+    
+    .year-info {
+      display: flex;
+      gap: 1.5rem;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    .year-info span strong { color: var(--accent); }
+
+    /* Main Container */
+    .main-wrapper {
+      width: min(100% - 2rem, 1000px);
+      margin: 2rem auto;
+      flex: 1;
+    }
+
+    .calendar-card {
+      background: var(--surface-1);
       border: 1px solid var(--border);
-      border-radius: var(--r-lg);
+      border-radius: var(--radius);
       box-shadow: var(--shadow);
+      padding: 1.5rem;
+      position: relative;
+      overflow: hidden;
     }
 
-    .header-row {
-      display: flex; flex-wrap: wrap; gap: var(--space-4);
-      align-items: center; justify-content: space-between;
-      margin-bottom: var(--space-6);
+    /* Controls Header */
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+      gap: 1rem;
     }
 
     .month-title {
-      font-size: clamp(1.25rem, 2.4vw, 2rem);
-      color: var(--accent);
+      font-size: 2rem;
       font-weight: 800;
-      letter-spacing: .2px;
-      text-shadow: 0 0 1px rgba(0,0,0,.12);
+      margin: 0;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, var(--text-main), var(--text-muted));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
     }
 
-    /* Form controls */
-    .month-picker {
-      padding: .55rem .8rem;
-      font-size: 1rem;
-      color: var(--text);
-      background: var(--panel-2);
+    .date-form {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .picker-input {
+      background: var(--surface-2);
       border: 1px solid var(--border);
-      border-radius: var(--r-md);
-      outline: none;
-      min-width: 12ch;
-      transition: border-color .2s ease, box-shadow .2s ease, transform .08s ease;
-    }
-    .month-picker:hover { border-color: var(--accent-weak); }
-    .month-picker:focus-visible {
-      border-color: var(--accent-strong);
-      box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent-strong) 28%, transparent);
+      color: var(--text-main);
+      padding: 0.5rem 0.75rem;
+      border-radius: 6px;
+      font-family: inherit;
     }
 
-    .month-button, .button {
-      padding: .65rem 1.1rem;
-      background: linear-gradient(180deg, var(--accent), var(--accent-strong));
-      color: #fff; text-decoration: none;
-      border-radius: var(--r-md);
-      border: 1px solid color-mix(in oklab, var(--accent-strong) 60%, #000);
-      cursor: pointer; font-weight: 700; letter-spacing: .15px;
-      transition: transform .08s ease, box-shadow .2s ease, filter .2s ease;
-      box-shadow: 0 6px 18px rgba(0,0,0,.25);
-      will-change: transform;
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      border: none;
+      font-size: 0.9rem;
     }
-    .month-button:hover, .button:hover { filter: brightness(1.05); }
-    .month-button:active, .button:active { transform: translateY(1px); }
-    .month-button:focus-visible, .button:focus-visible {
-      outline: none;
-      box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent-strong) 28%, transparent), 0 6px 18px rgba(0,0,0,.25);
-    }
-    .month-button { margin-left: var(--space-3); }
 
-    /* Calendar table */
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+      box-shadow: 0 4px 12px var(--accent-glow);
+    }
+    .btn-primary:hover { background: var(--accent-dark); transform: translateY(-1px); }
+
+    .btn-secondary {
+      background: var(--surface-2);
+      color: var(--text-main);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { border-color: var(--accent); }
+
+    /* Calendar Grid */
     .calendar-table {
       width: 100%;
       border-collapse: separate;
-      border-spacing: 0;
+      border-spacing: 4px; /* Creates the gap */
       table-layout: fixed;
-      overflow: clip;
-      border-radius: var(--r-md);
-      border: 1px solid var(--border);
-      background: var(--panel);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.03);
     }
-    .calendar-table th,
-    .calendar-table td {
-      padding: clamp(.6rem, 1.4vw, 1rem);
-      text-align: center;
-      border-right: 1px solid var(--border);
-      border-bottom: 1px solid var(--border);
-      vertical-align: middle;
-    }
-    .calendar-table thead th {
-      position: sticky; top: 0; z-index: 1;
-      background: linear-gradient(180deg, var(--panel-2), var(--panel));
-      color: var(--accent-weak);
-      font-weight: 700;
+
+    .calendar-table th {
+      padding: 1rem 0;
+      color: var(--text-muted);
+      font-size: 0.75rem;
       text-transform: uppercase;
-      font-size: .82rem;
-      letter-spacing: .12em;
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
+      letter-spacing: 0.1em;
     }
-    .calendar-table tr:last-child td { border-bottom: 0; }
-    .calendar-table th:last-child, .calendar-table td:last-child { border-right: 0; }
 
     .calendar-table td {
-      color: var(--text);
-      background: linear-gradient(180deg, color-mix(in oklab, var(--panel) 94%, #000), var(--panel));
-      font-variant-numeric: tabular-nums;
-      transition: background-color .15s ease, color .15s ease, box-shadow .15s ease;
-    }
-
-    /* Weekend tint */
-    .calendar-table td:nth-child(1),
-    .calendar-table td:nth-child(7) {
-      background: linear-gradient(180deg, var(--weekend), var(--panel));
-    }
-
-    /* Empty day cells */
-    .calendar-table td:empty {
-      background: repeating-linear-gradient(45deg, transparent, transparent 6px, rgba(255,255,255,.02) 6px, rgba(255,255,255,.02) 12px);
-      color: transparent;
-    }
-
-    /* Today highlight: fill + halo ring for accessibility */
-    .calendar-table td.today {
+      height: clamp(80px, 10vw, 120px);
+      vertical-align: top;
+      background: var(--surface-2);
+      border-radius: 8px;
+      padding: 8px;
+      transition: all 0.15s ease;
       position: relative;
-      background: linear-gradient(180deg, color-mix(in oklab, var(--today) 85%, #000), var(--today));
-      color: #fff;
-      font-weight: 800;
-      text-shadow: 0 1px 0 rgba(0,0,0,.35);
-      box-shadow: inset 0 0 0 1px var(--accent-weak);
+      border: 1px solid transparent;
     }
-    .calendar-table td.today::after {
-      content: "";
-      position: absolute; inset: -3px;
-      border-radius: 10px;
-      box-shadow: 0 0 0 3px color-mix(in oklab, var(--today-ring) 55%, transparent);
+
+    /* Day Number */
+    .day-num {
+      display: block;
+      font-weight: 600;
+      font-size: 1rem;
+      margin-bottom: 4px;
+    }
+
+    /* Empty Cells */
+    .calendar-table td:empty {
+      background: transparent;
       pointer-events: none;
     }
 
-    /* Hover affordance for interactive feel (non-empty cells) */
+    /* Interactive States (Only if has date) */
+    .calendar-table td:not(:empty) { cursor: pointer; }
     .calendar-table td:not(:empty):hover {
-      background: color-mix(in oklab, var(--panel) 85%, var(--accent) 15%);
-      box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent-weak) 40%, transparent);
+      background: var(--surface-1);
+      border-color: var(--accent);
+      transform: scale(1.02);
+      z-index: 2;
     }
 
-    /* Navigation row */
-    .nav-links {
-      display: flex; justify-content: center; gap: var(--space-4);
-      margin-top: var(--space-6);
-      flex-wrap: wrap;
+    /* Today Modifier */
+    .calendar-table td.today {
+      background: var(--today-bg);
+      border: 1px solid var(--today-border);
+      color: var(--accent);
     }
-    .nav-links .button {
-      min-width: 10rem; text-align: center;
+    .calendar-table td.today .day-num { color: var(--accent); }
+
+    /* Note Indicator (JS Feature) */
+    .note-indicator {
+      display: none; /* Hidden by default, shown by JS */
+      width: 6px;
+      height: 6px;
+      background-color: var(--accent);
+      border-radius: 50%;
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      box-shadow: 0 0 8px var(--accent);
+    }
+    
+    .calendar-table td.has-note .note-indicator { display: block; }
+    
+    /* Small text preview for no-js fallbacks if rendered server side (optional) */
+    .note-preview {
+        font-size: 0.7em;
+        color: var(--text-muted);
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
     }
 
-    /* Focus-visible for all links/buttons for keyboard users */
-    a:focus-visible {
-      outline: none;
-      box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent-strong) 28%, transparent);
-      border-radius: var(--r-md);
+    /* Navigation Footer */
+    .nav-footer {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 1.5rem;
     }
 
-    /* Compact & mobile tuning */
-    @media (max-width: 840px) {
-      .navbar { padding: var(--space-3) var(--space-4); }
-      .years { gap: var(--space-3); }
-      .years h2 { font-size: .9rem; }
-      .container { width: calc(100% - 2*var(--space-4)); margin: var(--space-6) auto; }
+    /* Modal (Hidden by default, used for JS) */
+    #note-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
     }
-    @media (max-width: 720px) {
-      .calendar-table th, .calendar-table td { padding: .75rem .4rem; font-size: .9rem; }
-      .month-title { font-size: 1.4rem; }
-      .nav-links .button { width: 100%; }
-    }
-    @media (max-width: 420px) {
-      .years h2 { font-size: .82rem; }
-      .calendar-table th { font-size: .75rem; letter-spacing: .1em; }
-      .calendar-table td { padding: .6rem .25rem; }
-    }
+    #note-modal.open { opacity: 1; pointer-events: auto; }
 
-    /* Print-friendly: clean sheet */
-    @media print {
-      body::before, body::after, .navbar { display: none !important; }
-      body { background: #fff; color: #000; }
-      .container {
-        box-shadow: none; border: 1px solid #000; border-radius: 0;
-      }
-      .calendar-table { border-color: #000; }
-      .calendar-table th, .calendar-table td { border-color: #000; color: #000; }
-      .calendar-table td.today { outline: 2px solid #000; background: #fff; color: #000; text-shadow: none; }
-      .button, .month-button { display: none; }
+    .modal-content {
+      background: var(--surface-1);
+      border: 1px solid var(--border);
+      padding: 2rem;
+      border-radius: var(--radius);
+      width: min(90%, 400px);
+      box-shadow: var(--shadow);
+    }
+    .modal-header { font-size: 1.25rem; font-weight: bold; margin-bottom: 1rem; color: var(--accent); }
+    .modal-textarea {
+      width: 100%;
+      height: 120px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      padding: 0.5rem;
+      border-radius: 6px;
+      margin-bottom: 1rem;
+      resize: vertical;
+    }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
+
+    /* Mobile Adjustments */
+    @media (max-width: 600px) {
+      .year-info { width: 100%; justify-content: space-between; margin-top: 0.5rem; }
+      .calendar-table td { height: 70px; padding: 4px; }
+      .day-num { font-size: 0.85rem; }
+      .month-title { font-size: 1.5rem; }
     }
   </style>
 </head>
 <body>
-  <div class="navbar">
-    <a href="/143"><img src="/css/logo-poke.svg?v=5" alt="Poke Calendar Logo"></a>
+
+  <nav class="navbar">
+    <a href="/" class="brand">
+      <img src="/css/logo-poke.svg?v=5" alt="Poke Calendar Logo">
+    </a>
     <div class="years">
-      <h2>Gregorian Year: <%= year %></h2>
-      <h2>Islamic Year: <%= islamicYear %></h2>
-      <h2>Persian Year: <%= persianYear %></h2>
+      <div class="year-info">
+        <span>Gregorian: <strong><%= year %></strong></span>
+        <span>Islamic: <strong><%= islamicYear %></strong></span>
+        <span>Persian: <strong><%= persianYear %></strong></span>
+      </div>
+    </div>
+  </nav>
+
+  <div class="main-wrapper">
+    <div class="calendar-card">
+      
+      <div class="controls">
+        <h2 class="month-title">
+          <%= queryDate.toLocaleString('default', { month: 'long' }) %> <%= year %>
+        </h2>
+        
+        <form action="/calendar" method="get" class="date-form">
+          <input 
+            type="month" 
+            name="date" 
+            value="<%= currentDate.toISOString().slice(0,7) %>" 
+            class="picker-input" 
+            aria-label="Select Month"
+          />
+          <button type="submit" class="btn btn-primary">Go</button>
+        </form>
+      </div>
+
+      <table class="calendar-table" role="grid" aria-label="Monthly calendar">
+        <thead>
+          <tr>
+            <th scope="col" abbr="Sunday">Sun</th>
+            <th scope="col" abbr="Monday">Mon</th>
+            <th scope="col" abbr="Tuesday">Tue</th>
+            <th scope="col" abbr="Wednesday">Wed</th>
+            <th scope="col" abbr="Thursday">Thu</th>
+            <th scope="col" abbr="Friday">Fri</th>
+            <th scope="col" abbr="Saturday">Sat</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% days.forEach((day, idx) => { %>
+            <% if (idx % 7 === 0) { %><tr><% } %>
+              
+              <% 
+                const today = new Date();
+                const isToday = day &&
+                  day.getDate() === today.getDate() &&
+                  day.getMonth() === today.getMonth() &&
+                  day.getFullYear() === today.getFullYear();
+                
+                // Format date for JS Data Attribute (YYYY-MM-DD)
+                // Use local time offset handling or simple string manipulation ensures ID consistency
+                const dateStr = day ? 
+                   day.getFullYear() + '-' + 
+                   String(day.getMonth() + 1).padStart(2, '0') + '-' + 
+                   String(day.getDate()).padStart(2, '0') 
+                   : '';
+              %>
+
+              <td 
+                class="<%= isToday ? 'today' : '' %>" 
+                data-date="<%= dateStr %>"
+                <% if (day) { %> tabindex="0" role="gridcell" <% } %>
+              >
+                <% if (day) { %>
+                  <span class="day-num"><%= day.getDate() %></span>
+                  <div class="note-indicator" title="Has note"></div>
+                  <% } %>
+              </td>
+
+            <% if (idx % 7 === 6) { %></tr><% } %>
+          <% }); %>
+        </tbody>
+      </table>
+
+      <div class="nav-footer">
+        <a href="/calendar?date=<%= new Date(year, month - 1, 1).toISOString() %>" class="btn btn-secondary">
+          &larr; Previous
+        </a>
+        <a href="/calendar?date=<%= new Date(year, month + 1, 1).toISOString() %>" class="btn btn-secondary">
+          Next &rarr;
+        </a>
+      </div>
+
     </div>
   </div>
 
-  <div class="container">
-    <div class="header-row">
-      <h2 class="month-title"><%= queryDate.toLocaleString('default', { month: 'long' }) %> <%= year %></h2>
-      <form action="/calendar" method="get" style="display:flex; align-items:center;">
-        <input type="month" name="date" value="<%= currentDate.toISOString().slice(0,7) %>" class="month-picker" />
-        <button type="submit" class="month-button">Go</button>
-      </form>
-    </div>
-
-    <table class="calendar-table" role="grid" aria-label="Monthly calendar">
-      <thead>
-        <tr>
-          <th scope="col">Sun</th>
-          <th scope="col">Mon</th>
-          <th scope="col">Tue</th>
-          <th scope="col">Wed</th>
-          <th scope="col">Thu</th>
-          <th scope="col">Fri</th>
-          <th scope="col">Sat</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% days.forEach((day, idx) => { %>
-          <% if (idx % 7 === 0) { %><tr><% } %>
-            <% const today = new Date(); %>
-            <% const isToday = day &&
-               day.getDate() === today.getDate() &&
-               day.getMonth() === today.getMonth() &&
-               day.getFullYear() === today.getFullYear(); %>
-            <td class="<%= isToday ? 'today' : '' %>"><%= day ? day.getDate() : '' %></td>
-          <% if (idx % 7 === 6) { %></tr><% } %>
-        <% }); %>
-      </tbody>
-    </table>
-
-    <div class="nav-links">
-      <a href="/calendar?date=<%= new Date(year, month - 1, 1).toISOString() %>" class="button" aria-label="Previous month">← Prev</a>
-      <a href="/calendar?date=<%= new Date(year, month + 1, 1).toISOString() %>" class="button" aria-label="Next month">Next →</a>
+  <div id="note-modal" aria-hidden="true">
+    <div class="modal-content">
+      <div class="modal-header" id="modal-date-display">Date</div>
+      <textarea id="note-text" class="modal-textarea" placeholder="Add a reminder or note for this day..."></textarea>
+      <div class="modal-actions">
+        <button id="close-modal" class="btn btn-secondary">Cancel</button>
+        <button id="save-note" class="btn btn-primary">Save Note</button>
+      </div>
     </div>
   </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // Elements
+      const modal = document.getElementById('note-modal');
+      const textarea = document.getElementById('note-text');
+      const dateDisplay = document.getElementById('modal-date-display');
+      const saveBtn = document.getElementById('save-note');
+      const closeBtn = document.getElementById('close-modal');
+      let activeDateKey = null;
+
+       const updateIndicators = () => {
+        document.querySelectorAll('td[data-date]').forEach(td => {
+          const date = td.getAttribute('data-date');
+          if (!date) return;
+          
+          const note = localStorage.getItem('poke_note_' + date);
+          if (note && note.trim() !== "") {
+            td.classList.add('has-note');
+          } else {
+            td.classList.remove('has-note');
+          }
+        });
+      };
+      
+      updateIndicators();
+
+      // 2. Event Delegation for Cell Clicks
+      document.querySelector('.calendar-table tbody').addEventListener('click', (e) => {
+        // Find closest TD
+        const td = e.target.closest('td');
+        if (!td || !td.getAttribute('data-date')) return;
+
+        activeDateKey = td.getAttribute('data-date');
+        
+        // Load existing note
+        const existingNote = localStorage.getItem('poke_note_' + activeDateKey) || '';
+        textarea.value = existingNote;
+        
+        // Format Date for Header
+        const dateObj = new Date(activeDateKey);
+        dateDisplay.textContent = dateObj.toLocaleDateString(undefined, { 
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+        });
+
+        // Show Modal
+        modal.classList.add('open');
+        modal.setAttribute('aria-hidden', 'false');
+        textarea.focus();
+      });
+
+      // 3. Save Logic
+      saveBtn.addEventListener('click', () => {
+        if (activeDateKey) {
+          const text = textarea.value;
+          if (text.trim() === "") {
+            localStorage.removeItem('poke_note_' + activeDateKey);
+          } else {
+            localStorage.setItem('poke_note_' + activeDateKey, text);
+          }
+          updateIndicators();
+          closeModal();
+        }
+      });
+
+      // 4. Close Logic
+      const closeModal = () => {
+        modal.classList.remove('open');
+        modal.setAttribute('aria-hidden', 'true');
+        activeDateKey = null;
+      };
+
+      closeBtn.addEventListener('click', closeModal);
+      
+      // Close on background click
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+      });
+
+      // Keyboard Accessibility
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.classList.contains('open')) {
+          closeModal();
+        }
+      });
+      
+      // Allow 'Enter' key on grid cells to open modal
+      document.querySelectorAll('td[data-date]').forEach(td => {
+        td.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') td.click();
+        });
+      });
+    });
+  </script>
 </body>
 </html>
