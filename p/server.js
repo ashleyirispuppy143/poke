@@ -7,7 +7,8 @@ const { Readable } = require("node:stream");
 const URL_WHITELIST = [
   "i.ytimg.com",
   "yt3.googleusercontent.com",
-  "cdn.glitch.global",    "cdn.glitch.me",
+  "cdn.glitch.global",  
+  "cdn.glitch.me",
   "cdn.statically.io",
   "site-assets.fontawesome.com",
   "fonts.gstatic.com",
@@ -23,6 +24,7 @@ const URL_WHITELIST = [
   "is5-ssl.mzstatic.com",
   "is3-ssl.mzstatic.com",
   "twemoji.maxcdn.com",
+  "cdnjs.cloudflare.com",
   "unpkg.com",
   "lite.duckduckgo.com",
   "youtube.com",
@@ -102,7 +104,7 @@ const listener = (req, res) => {
 app.get("/", (req, res) => {
   var json = {
     status: "200",
-    version: "1.3.2",
+      version: "1.3.332a-b3-9e",
     URL_WHITELIST,
     cache: "max-age-864000",
   };
