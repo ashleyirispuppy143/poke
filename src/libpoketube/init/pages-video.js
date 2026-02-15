@@ -218,9 +218,8 @@ module.exports = function (app, config, renderTemplate) {
     const verify = req.hostname === "poketube.sudovanilla.com";
 
     const officialHost = "poketube.fun";
-    const officialApi ="https://invid-api.poketube.fun/bHj665PpYhUdPWuKPfZuQGoX/api/v1";
-
-   if (req.hostname !== officialHost && config.invapi === officialApi) {
+ 
+   if (req.hostname !== officialHost && config.invapi === config.invapi) {
     const message = `
       <style>
         body {
