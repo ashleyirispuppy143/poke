@@ -228,7 +228,7 @@ class InnerTubePokeVidious {
     try {
       const [invComments, videoInfo] = await Promise.all([
         fetchWithRetry(
-          `${this.config.invapi}/comments/${v}?hl=${contentlang}&region=${contentregion}&h=${this.toBase64(
+          `${config.invapi}/comments/${v}?hl=${contentlang}&region=${contentregion}&h=${this.toBase64(
             Date.now()
           )}`
         ).then((res) => res?.text()),
