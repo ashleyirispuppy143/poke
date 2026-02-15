@@ -1355,168 +1355,222 @@ const isFlagged = analyzeContent(typeof q !== 'undefined' ? q : "");
 
 <% } else { %>
     <% } %>
-<% 
-const fakeNewsSources = {
+ <%
+// --- CONFIGURATION ---
+
+const sourceData = {
     "InfoWars": { 
-        category: "conspiracy", 
-        reason: "InfoWars has been widely criticized for promoting conspiracy theories and false information, such as falsely claiming that the Sandy Hook Elementary School shooting was a hoax.", 
-        search: "Is it true that InfoWars promotes conspiracy theories and false information?" 
+        type: "Conspiracy / Pseudoscience", 
+        reason: "This outlet is widely criticized for promoting conspiracy theories and false information (e.g., Sandy Hook hoaxes).", 
+        citation_url: "https://mediabiasfactcheck.com/?s=infowars"
     },
     "Breitbart": { 
-        category: "conservative", 
-        reason: "Breitbart is known for its extreme political bias and spreading misleading information, including downplaying the severity of COVID-19.", 
-        search: "Is it true that Breitbart spreads misleading information about COVID-19?" 
+        type: "Extreme Right / Propaganda", 
+        reason: "Known for extreme political bias, questionable sourcing, and spreading misleading information regarding science and public health.", 
+        citation_url: "https://mediabiasfactcheck.com/?s=breitbart" 
     },
     "Daily Mail": { 
-        category: "tabloid", 
-        reason: "The Daily Mail is frequently criticized for sensationalism and misinformation, such as publishing misleading health and science stories.", 
-        search: "Is it true that the Daily Mail publishes misleading health and science stories?" 
+        type: "Tabloid / Sensationalism", 
+        reason: "Frequently criticized for sensationalism, misleading headlines, and publishing unverified science/health stories.", 
+        citation_url: "https://mediabiasfactcheck.com/?s=daily+mail" 
     },
     "Natural News": { 
-        category: "pseudoscience", 
-        reason: "Natural News promotes pseudoscience and conspiracy theories, including false vaccine claims and unverified health information.", 
-        search: "Is it true that Natural News promotes pseudoscience and false vaccine claims?" 
+        type: "Pseudoscience / Anti-Vax", 
+        reason: "Promotes pseudoscience, conspiracy theories, and rejected medical claims.", 
+        citation_url: "https://mediabiasfactcheck.com/?s=natural+news" 
     },
-    "RT news": { 
-        category: "state-sponsored", 
-        reason: "RT is a state-funded media outlet known for promoting Russian government perspectives and biased reporting on international issues.", 
-        search: "Is it true that RT promotes Russian government perspectives and biased reporting?" 
+    "RT": { 
+        type: "State-Controlled (Russia)", 
+        reason: "Funded by the Russian government. Labeled as a foreign agent/propaganda outlet by multiple international bodies.", 
+        citation_url: "https://mediabiasfactcheck.com/?s=rt+news" 
     },
     "Sputnik": { 
-        category: "state-sponsored", 
-        reason: "Sputnik spreads Russian state propaganda and publishes misleading information about Western countries.", 
-        search: "Is it true that Sputnik spreads Russian state propaganda?" 
+        type: "State-Controlled (Russia)", 
+        reason: "Russian state-owned news agency known for publishing misleading information favorable to the Kremlin.", 
+        citation_url: "https://mediabiasfactcheck.com/?s=sputnik" 
     },
     "Before It's News": { 
-        category: "conspiracy", 
-        reason: "Before It's News is known for spreading conspiracy theories and fake news, including fabricated stories about global events.", 
-        search: "Is it true that Before It's News spreads conspiracy theories and fake news?" 
+        type: "Conspiracy", 
+        reason: "A platform allowing anyone to post unverified stories; known for spreading significant amounts of fake news.", 
+        citation_url: "https://mediabiasfactcheck.com/?s=before+its+news" 
     },
     "Your News Wire": { 
-        category: "conspiracy", 
-        reason: "Your News Wire publishes false information and conspiracy theories, including fabricated reports on various topics.", 
-        search: "Is it true that Your News Wire publishes false information and conspiracy theories?" 
+        type: "Clickbait / Fake News", 
+        reason: "Historically known for publishing fabricated reports and hoaxes to generate clicks.", 
+        citation_url: "https://mediabiasfactcheck.com/?s=yournewswire" 
     },
     "WorldTruth.TV": { 
-        category: "conspiracy", 
-        reason: "WorldTruth.TV spreads conspiracy theories and pseudoscience, including false health information and other dubious claims.", 
-        search: "Is it true that WorldTruth.TV spreads conspiracy theories and pseudoscience?" 
+        type: "Conspiracy", 
+        reason: "Spreads unfounded conspiracy theories and pseudoscience regarding health and global events.", 
+        citation_url: "https://mediabiasfactcheck.com/?s=worldtruth" 
     },
     "NewsPunch": { 
-        category: "conspiracy", 
-        reason: "NewsPunch publishes false information and conspiracy theories, including unsubstantiated claims about political figures.", 
-        search: "Is it true that NewsPunch publishes false information and conspiracy theories?" 
-    },
-    "Civic Tribune": { 
-        category: "fake-news", 
-        reason: "Civic Tribune is known for hoaxes and misinformation, including fabricated stories about political events.", 
-        search: "Is it true that Civic Tribune is known for hoaxes and misinformation?" 
+        type: "Conspiracy / Fake News", 
+        reason: "Known for publishing false information and unsubstantiated claims about political figures.", 
+        citation_url: "https://mediabiasfactcheck.com/?s=newspunch" 
     },
     "The Daily Stormer": { 
-        category: "extremist", 
-        reason: "The Daily Stormer promotes hate speech and extremist views, including anti-Semitic and other hateful content.", 
-        search: "Is it true that The Daily Stormer promotes hate speech and extremist views?" 
-    },
-    "Times of Israel": { 
-        category: "state-sponsored", 
-        reason: "Times of Israel has faced criticism for biased reporting and spreading propaganda, especially regarding the Israel-Palestine conflict.", 
-        search: "Is it true that Times of Israel has biased reporting on the Israel-Palestine conflict?" 
+        type: "Hate Group / Extremist", 
+        reason: "A neo-Nazi, white supremacist website promoting hate speech and extremist views.", 
+        citation_url: "https://www.splcenter.org/fighting-hate/extremist-files/group/daily-stormer" 
     },
     "Zero Hedge": { 
-        category: "conspiracy", 
-        reason: "Zero Hedge promotes conspiracy theories and financial misinformation, including false claims about market events.", 
-        search: "Is it true that Zero Hedge promotes conspiracy theories and financial misinformation?" 
+        type: "Conspiracy / Financial", 
+        reason: "Promotes conspiracy theories and non-mainstream economics; has been banned from some platforms for policy violations.", 
+        citation_url: "https://mediabiasfactcheck.com/?s=zero+hedge" 
     },
     "Pravda": { 
-        category: "state-sponsored", 
-        reason: "Pravda is a state-run media outlet known for spreading Russian government propaganda with a history of biased reporting on international events.", 
-        search: "Is it true that Pravda spreads Russian government propaganda?" 
+        type: "State-Controlled", 
+        reason: "Associated with Russian state propaganda with a history of biased reporting.", 
+        citation_url: "https://mediabiasfactcheck.com/?s=pravda" 
     },
     "Press TV": { 
-        category: "state-sponsored", 
-        reason: "Press TV promotes Iranian government propaganda and often spreads biased information about Western countries.", 
-        search: "Is it true that Press TV promotes Iranian government propaganda?" 
+        type: "State-Controlled (Iran)", 
+        reason: "Iranian state-funded media, often spreads anti-Western propaganda and biased reporting.", 
+        citation_url: "https://mediabiasfactcheck.com/?s=press+tv" 
     },
     "Fox News": { 
-        category: "conservative", 
-        reason: "Fox News is often criticized for extreme political bias and misinformation, such as its reporting on the 2020 US election.", 
-        search: "Is it true that Fox News has extreme political bias and misinformation?" 
+        type: "Right-Wing Bias", 
+        reason: "A mainstream outlet with a strong right-wing editorial bias; some opinion hosts have been criticized for misinformation.", 
+        citation_url: "https://mediabiasfactcheck.com/?s=fox+news" 
     },
     "The Blaze": { 
-        category: "conservative", 
-        reason: "The Blaze promotes right-wing viewpoints and sometimes misleading information, including false claims about political figures.", 
-        search: "Is it true that The Blaze promotes misleading information?" 
+        type: "Right-Wing Bias", 
+        reason: "Promotes right-wing viewpoints and has failed fact checks regarding political figures.", 
+        citation_url: "https://mediabiasfactcheck.com/?s=the+blaze" 
     },
     "OANN": { 
-        category: "conservative", 
-        reason: "OANN spreads far-right viewpoints and conspiracy theories, including false claims about election fraud.", 
-        search: "Is it true that OANN spreads far-right viewpoints and conspiracy theories?" 
+        type: "Far-Right / Conspiracy", 
+        reason: "One America News Network is known for promoting far-right viewpoints and false claims about election fraud.", 
+        citation_url: "https://mediabiasfactcheck.com/?s=oann" 
     },
     "Newsmax": { 
-        category: "conservative", 
-        reason: "Newsmax promotes extreme right-wing perspectives and misinformation, including false claims about the COVID-19 pandemic.", 
-        search: "Is it true that Newsmax promotes extreme right-wing perspectives and misinformation?" 
+        type: "Right-Wing Bias", 
+        reason: "Promotes right-wing perspectives and has faced lawsuits regarding election misinformation.", 
+        citation_url: "https://mediabiasfactcheck.com/?s=newsmax" 
     },
     "Al Jazeera": { 
-        category: "state-sponsored", 
-        reason: "Al Jazeera, a Qatar state-funded media outlet, has a history of promoting government viewpoints and biased reporting on Middle Eastern conflicts.", 
-        search: "Is it true that Al Jazeera promotes government viewpoints and biased reporting?" 
+        type: "State-Funded (Qatar)", 
+        reason: "Owned by the government of Qatar; while winning awards for reporting, it reflects the geopolitical interests of its funder.", 
+        citation_url: "https://mediabiasfactcheck.com/?s=al+jazeera" 
     },
     "The Sun": { 
-        category: "tabloid", 
-        reason: "The Sun is known for sensationalism and often publishes exaggerated or false stories, particularly about celebrities and high-profile topics.", 
-        search: "Is it true that The Sun publishes exaggerated or false stories?" 
+        type: "Tabloid", 
+        reason: "Known for sensationalism, exaggeration, and paying for stories, often prioritizing entertainment over factual accuracy.", 
+        citation_url: "https://mediabiasfactcheck.com/?s=the+sun" 
     }
 };
 
-const normalizedQuery = q.toLowerCase().replace(/\s+/g, '');
-const matchedSource = Object.keys(fakeNewsSources).find(source => normalizedQuery.includes(source.toLowerCase().replace(/\s+/g, '')));
+// --- LOGIC ENGINE ---
 
-if (q.includes('-debug-news')) {
+function identifySource(text) {
+    if (!text) return null;
+    const cleanText = text.toLowerCase().trim();
+
+    // Iterate through sources
+    for (const [name, data] of Object.entries(sourceData)) {
+        // Create a regex with word boundaries (\b) to avoid partial matches
+        // e.g. prevents "Sun" matching "Sunday"
+        const regex = new RegExp(`\\b${name}\\b`, 'i');
+        
+        if (regex.test(cleanText)) {
+            return { name: name, ...data };
+        }
+    }
+    return null;
+}
+
+const match = identifySource(typeof q !== 'undefined' ? q : "");
+const isDebug = (typeof q !== 'undefined' && q.includes('-debug-news'));
 %>
 
-<div class="container">          
-    <h2 class="debug-title">
-        <span class="debug-icon">🔍</span> Debug Info
-    </h2>
-    <p class="debug-intro">
-        Here are all the sources and their details:
-    </p>
-    <ul class="debug-list">
-        <% Object.keys(fakeNewsSources).forEach(source => { %>
-            <li class="debug-item">
-                <strong><%= source %></strong> - <%= fakeNewsSources[source].reason %> <br>
-                <a class="debug-link" href="https://www.google.com/search?q=<%= fakeNewsSources[source].search %>">Find more info</a>
-            </li>
+<% if (isDebug) { %>
+    <div class="debug-container" style="background:#222; color:#0f0; padding:20px; font-family:monospace; border:1px solid #0f0;">
+        <h3>[DEBUG] Source Database</h3>
+        <ul>
+        <% Object.keys(sourceData).forEach(key => { %>
+            <li><strong><%= key %></strong>: <%= sourceData[key].type %></li>
         <% }); %>
-    </ul>
-</div>
+        </ul>
+    </div>
+<% } else if (match) { %>
+    
+    <div class="context-container" style="
+        background-color: #1a1a1a; 
+        border: 2px solid #ffd700; /* Gold/Yellow for Caution */
+        border-radius: 15px; 
+        padding: 25px; 
+        margin: 20px auto; 
+        max-width: 800px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        font-family: sans-serif;
+        color: #e0e0e0;
+        text-align: left;
+    ">
+        
+        <div style="display: flex; align-items: flex-start; gap: 20px;">
+            <div style="flex-shrink: 0;">
+                <span style="font-size: 4em; line-height: 1;">⚠️</span>
+            </div>
+            
+            <div style="flex: 1;">
+                <h2 style="
+                    font-family: 'PokeTube Flex', sans-serif; 
+                    font-size: 1.8em; 
+                    margin-top: 0; 
+                    margin-bottom: 10px; 
+                    color: #ffd700;
+                    font-weight: 1000;
+                    font-stretch: ultra-expanded;
+                    text-transform: uppercase;
+                ">
+                    Editorial Context Warning
+                </h2>
+                
+                <p style="font-size: 1.1em; line-height: 1.5; margin-bottom: 15px; color: #fff;">
+                    You are searching for <strong><%= match.name %></strong>.
+                </p>
 
-<% } else if (matchedSource) { %>
+                <div style="
+                    background: #2d2d2d; 
+                    border-left: 4px solid #ffd700; 
+                    padding: 15px; 
+                    margin-bottom: 20px;
+                    border-radius: 4px;
+                ">
+                    <strong style="display:block; color: #ffd700; margin-bottom: 5px;">
+                        Category: <%= match.type %>
+                    </strong>
+                    <span style="color: #ccc;">
+                        <%= match.reason %>
+                    </span>
+                </div>
 
-<div class="container">          
-    <h2 class="warning-title">
-        <span class="warning-icon">🚫</span> 
-        <br> Be Cautious with This Source 
-    </h2>
-    <p class="warning-intro">
-        Hai there! It looks like you might be looking at info from <strong><%= matchedSource %></strong>, which is known for spreading fake news or propaganda.
-    </p>
-    <p class="warning-tips">
-        Here are some tips to check if what you're reading is legit:
-    </p>
-    <ul class="tips-list">
-        <li class="tips-item"><strong>Check the source's rep:</strong> Reliable sites usually have a good track record for being accurate and fair.</li>
-        <li class="tips-item"><strong>See if other reputable sites are reporting the same news:</strong> If it's just one place, be cautious.</li>
-        <li class="tips-item"><strong>Use fact-checking sites:</strong> Try <a href="https://www.snopes.com/" class="fact-check-link">Snopes</a> or <a href="https://www.factcheck.org/" class="fact-check-link">FactCheck.org</a>.</li>
-        <li class="tips-item"><strong>Look at the publication date:</strong> Make sure it's current and not out of context.</li>
-        <li class="tips-item"><strong>Check for links and citations:</strong> Good articles usually back up their claims with evidence.</li>
-    </ul>
-     
-    <p>wrong filter? <a href="https://codeberg.org/ashley/poke/issues/new?template=issue_template%2fsearch-filter.yml">Report :3</p>
-</div>
+                <div style="margin-bottom: 20px;">
+                    <strong style="color: #fff;">Verify this source:</strong><br>
+                    <a href="<%= match.citation_url %>" target="_blank" style="color: #64b5f6; text-decoration: none; border-bottom: 1px dashed #64b5f6;">
+                        View Media Bias/Fact Check Report &rarr;
+                    </a>
+                </div>
 
-<% } %>
+                <div style="background: rgba(255, 215, 0, 0.1); padding: 15px; border-radius: 10px;">
+                    <strong style="color: #ffd700;">Safety Tips:</strong>
+                    <ul style="margin: 5px 0 0 20px; padding: 0; color: #ccc; font-size: 0.95em;">
+                        <li>Check if other major outlets are reporting the same story.</li>
+                        <li>Look for original sources (primary documents, raw video).</li>
+                        <li>Beware of emotionally charged headlines designed to make you angry.</li>
+                    </ul>
+                </div>
+                
+                <p style="font-size: 0.8em; color: #666; margin-top: 15px;">
+                    Flagged by mistake? <a href="https://codeberg.org/ashley/poke/issues/new?template=issue_template%2fsearch-filter.yml" style="color: #888;">Report :3</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+<% } else { %>
+    <% } %>
 
 <style>
     .container {
