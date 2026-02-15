@@ -581,11 +581,11 @@ video[counter].classList.add("shake");
 					<div class="filter-options">
  <% const selectedSort = sort || "relevance"; %>
 
-<% ['relevance', 'rating', 'date', 'views'].forEach(option => { %>
+<% ['relevance', 'rating', 'views'].forEach(option => { %>
   <div>
     <input type="radio" name="sort" id="filter-sort-<%= option %>" value="<%= option %>" <%= selectedSort === option ? 'checked' : '' %>>
     <label for="filter-sort-<%= option %>">
-      <%= option === 'relevance' ? 'Relevance' : option === 'rating' ? 'Rating' : option === 'date' ? 'Upload Date' : 'View count' %>
+      <%= option === 'relevance' ? 'Relevance' : option === 'rating' ? 'Rating' : 'View count' %>
     </label>
   </div>
 <% }) %>
