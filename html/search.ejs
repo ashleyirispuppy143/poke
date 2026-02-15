@@ -1355,49 +1355,24 @@ const isFlagged = analyzeContent(typeof q !== 'undefined' ? q : "");
 
 <% } else { %>
     <% } %>
- <%
+<%
 // --- CONFIGURATION ---
 
 const sourceData = {
-    "InfoWars": { 
+     "InfoWars": { 
         type: "Conspiracy / Pseudoscience", 
-        reason: "This outlet is widely criticized for promoting conspiracy theories and false information (e.g., Sandy Hook hoaxes).", 
+        reason: "Widely criticized for promoting conspiracy theories and false information (e.g., Sandy Hook hoaxes).", 
         citation_url: "https://mediabiasfactcheck.com/?s=infowars"
-    },
-    "Breitbart": { 
-        type: "Extreme Right / Propaganda", 
-        reason: "Known for extreme political bias, questionable sourcing, and spreading misleading information regarding science and public health.", 
-        citation_url: "https://mediabiasfactcheck.com/?s=breitbart" 
-    },
-    "Daily Mail": { 
-        type: "Tabloid / Sensationalism", 
-        reason: "Frequently criticized for sensationalism, misleading headlines, and publishing unverified science/health stories.", 
-        citation_url: "https://mediabiasfactcheck.com/?s=daily+mail" 
     },
     "Natural News": { 
         type: "Pseudoscience / Anti-Vax", 
         reason: "Promotes pseudoscience, conspiracy theories, and rejected medical claims.", 
         citation_url: "https://mediabiasfactcheck.com/?s=natural+news" 
     },
-    "RT": { 
-        type: "State-Controlled (Russia)", 
-        reason: "Funded by the Russian government. Labeled as a foreign agent/propaganda outlet by multiple international bodies.", 
-        citation_url: "https://mediabiasfactcheck.com/?s=rt+news" 
-    },
-    "Sputnik": { 
-        type: "State-Controlled (Russia)", 
-        reason: "Russian state-owned news agency known for publishing misleading information favorable to the Kremlin.", 
-        citation_url: "https://mediabiasfactcheck.com/?s=sputnik" 
-    },
     "Before It's News": { 
         type: "Conspiracy", 
         reason: "A platform allowing anyone to post unverified stories; known for spreading significant amounts of fake news.", 
         citation_url: "https://mediabiasfactcheck.com/?s=before+its+news" 
-    },
-    "Your News Wire": { 
-        type: "Clickbait / Fake News", 
-        reason: "Historically known for publishing fabricated reports and hoaxes to generate clicks.", 
-        citation_url: "https://mediabiasfactcheck.com/?s=yournewswire" 
     },
     "WorldTruth.TV": { 
         type: "Conspiracy", 
@@ -1409,56 +1384,134 @@ const sourceData = {
         reason: "Known for publishing false information and unsubstantiated claims about political figures.", 
         citation_url: "https://mediabiasfactcheck.com/?s=newspunch" 
     },
-    "The Daily Stormer": { 
-        type: "Hate Group / Extremist", 
-        reason: "A neo-Nazi, white supremacist website promoting hate speech and extremist views.", 
-        citation_url: "https://www.splcenter.org/fighting-hate/extremist-files/group/daily-stormer" 
-    },
     "Zero Hedge": { 
         type: "Conspiracy / Financial", 
-        reason: "Promotes conspiracy theories and non-mainstream economics; has been banned from some platforms for policy violations.", 
+        reason: "Promotes conspiracy theories and non-mainstream economics; flagged for pro-Russia propaganda.", 
         citation_url: "https://mediabiasfactcheck.com/?s=zero+hedge" 
     },
-    "Pravda": { 
-        type: "State-Controlled", 
-        reason: "Associated with Russian state propaganda with a history of biased reporting.", 
-        citation_url: "https://mediabiasfactcheck.com/?s=pravda" 
+    "The Gateway Pundit": {
+        type: "Far-Right / Conspiracy",
+        reason: "Identified as a reliable source of false information and conspiracy theories, particularly regarding US elections.",
+        citation_url: "https://mediabiasfactcheck.com/?s=gateway+pundit"
     },
-    "Press TV": { 
-        type: "State-Controlled (Iran)", 
-        reason: "Iranian state-funded media, often spreads anti-Western propaganda and biased reporting.", 
-        citation_url: "https://mediabiasfactcheck.com/?s=press+tv" 
+    "X22 Report": {
+        type: "Extreme Conspiracy (QAnon)",
+        reason: "Promotes extreme conspiracy theories including QAnon and deep state narratives with zero factual basis.",
+        citation_url: "https://mediabiasfactcheck.com/?s=x22+report"
     },
-    "Fox News": { 
-        type: "Right-Wing Bias", 
-        reason: "A mainstream outlet with a strong right-wing editorial bias; some opinion hosts have been criticized for misinformation.", 
-        citation_url: "https://mediabiasfactcheck.com/?s=fox+news" 
+
+    "Breitbart": { 
+        type: "Extreme Right / Propaganda", 
+        reason: "Known for extreme political bias, questionable sourcing, and misleading info on science/public health.", 
+        citation_url: "https://mediabiasfactcheck.com/?s=breitbart" 
     },
-    "The Blaze": { 
-        type: "Right-Wing Bias", 
-        reason: "Promotes right-wing viewpoints and has failed fact checks regarding political figures.", 
-        citation_url: "https://mediabiasfactcheck.com/?s=the+blaze" 
+    "The Daily Stormer": { 
+        type: "Neo-Nazi / Hate Group", 
+        reason: "A white supremacist website promoting hate speech, antisemitism, and extremist views.", 
+        citation_url: "https://www.splcenter.org/fighting-hate/extremist-files/group/daily-stormer" 
+    },
+    "VDARE": {
+        type: "White Nationalist / Extremist",
+        reason: "Designated as a hate group by the SPLC; promotes white nationalist and anti-immigration extremism.",
+        citation_url: "https://mediabiasfactcheck.com/?s=vdare"
     },
     "OANN": { 
         type: "Far-Right / Conspiracy", 
         reason: "One America News Network is known for promoting far-right viewpoints and false claims about election fraud.", 
         citation_url: "https://mediabiasfactcheck.com/?s=oann" 
     },
+    "Project Veritas": {
+        type: "Right-Wing / Deceptive",
+        reason: "Known for producing deceptively edited videos to mislead viewers and promote specific political agendas.",
+        citation_url: "https://mediabiasfactcheck.com/?s=project+veritas"
+    },
+    "American Thinker": {
+        type: "Conspiracy / Right-Wing",
+        reason: "Publishes extreme right-wing opinions and has a track record of promoting conspiracy theories.",
+        citation_url: "https://mediabiasfactcheck.com/?s=american+thinker"
+    },
+    "Revolver News": {
+        type: "Far-Right / Conspiracy",
+        reason: "Promotes unverified theories regarding US politics and domestic events.",
+        citation_url: "https://mediabiasfactcheck.com/?s=revolver+news"
+    },
+    
+     "Fox News": { 
+        type: "Right-Wing Bias", 
+        reason: "Mainstream outlet with strong right-wing editorial bias; opinion hosts frequently criticized for misinformation.", 
+        citation_url: "https://mediabiasfactcheck.com/?s=fox+news" 
+    },
     "Newsmax": { 
         type: "Right-Wing Bias", 
         reason: "Promotes right-wing perspectives and has faced lawsuits regarding election misinformation.", 
         citation_url: "https://mediabiasfactcheck.com/?s=newsmax" 
     },
-    "Al Jazeera": { 
-        type: "State-Funded (Qatar)", 
-        reason: "Owned by the government of Qatar; while winning awards for reporting, it reflects the geopolitical interests of its funder.", 
-        citation_url: "https://mediabiasfactcheck.com/?s=al+jazeera" 
+    "The Blaze": { 
+        type: "Right-Wing Bias", 
+        reason: "Promotes right-wing viewpoints and has failed fact checks regarding political figures.", 
+        citation_url: "https://mediabiasfactcheck.com/?s=the+blaze" 
+    },
+    "Daily Mail": { 
+        type: "Tabloid / Sensationalism", 
+        reason: "Criticized for sensationalism, misleading headlines, and unverified science/health stories.", 
+        citation_url: "https://mediabiasfactcheck.com/?s=daily+mail" 
     },
     "The Sun": { 
         type: "Tabloid", 
-        reason: "Known for sensationalism, exaggeration, and paying for stories, often prioritizing entertainment over factual accuracy.", 
+        reason: "Known for sensationalism, exaggeration, and prioritizing entertainment over factual accuracy.", 
         citation_url: "https://mediabiasfactcheck.com/?s=the+sun" 
-    }
+    },
+    "Your News Wire": { 
+        type: "Clickbait / Fake News", 
+        reason: "Historically known for publishing fabricated reports and hoaxes to generate clicks.", 
+        citation_url: "https://mediabiasfactcheck.com/?s=yournewswire" 
+    },
+
+    "RT": { 
+        type: "State-Controlled (Russia)", 
+        reason: "Funded by the Russian government. Labeled as a foreign agent/propaganda outlet.", 
+        citation_url: "https://mediabiasfactcheck.com/?s=rt+news" 
+    },
+    "Sputnik": { 
+        type: "State-Controlled (Russia)", 
+        reason: "Russian state-owned news agency known for publishing misleading information favorable to the Kremlin.", 
+        citation_url: "https://mediabiasfactcheck.com/?s=sputnik" 
+    },
+    "Pravda": { 
+        type: "State-Controlled (Russia)", 
+        reason: "Associated with Russian state propaganda with a history of biased reporting.", 
+        citation_url: "https://mediabiasfactcheck.com/?s=pravda" 
+    },
+    "Press TV": { 
+        type: "State-Controlled (Iran)", 
+        reason: "Iranian state-funded media, spreads anti-Western propaganda and biased reporting.", 
+        citation_url: "https://mediabiasfactcheck.com/?s=press+tv" 
+    },
+    "Al Jazeera": { 
+        type: "State-Funded (Qatar)", 
+        reason: "Owned by the government of Qatar; reflects the geopolitical interests of its funder.", 
+        citation_url: "https://mediabiasfactcheck.com/?s=al+jazeera" 
+    },
+    "Anadolu Agency": {
+        type: "State-Run (Turkey)",
+        reason: "The state-run news agency of Turkey; reporting is strictly aligned with government narratives.",
+        citation_url: "https://mediabiasfactcheck.com/?s=anadolu+agency"
+    },
+    "A Haber": {
+        type: "Pro-Government (Turkey)",
+        reason: "Turkish news channel known for strong pro-government bias and sensationalist reporting.",
+        citation_url: "https://en.wikipedia.org/wiki/A_Haber" 
+    },
+    "The Epoch Times": {
+        type: "Right-Wing / Anti-CCP",
+        reason: "Opposes the Chinese Communist Party and promotes pro-Trump conspiracy theories and pseudoscience in the West.",
+        citation_url: "https://mediabiasfactcheck.com/?s=the+epoch+times"
+    },
+    "Radio Free Asia": {
+        type: "US State-Funded / Propaganda",
+        reason: "USA biased outlet funded by the US government; historically established by the CIA to broadcast anti-communist propaganda.",
+        citation_url: "https://en.wikipedia.org/wiki/Radio_Free_Asia#History"
+    },
 };
 
 // --- LOGIC ENGINE ---
@@ -1470,7 +1523,6 @@ function identifySource(text) {
     // Iterate through sources
     for (const [name, data] of Object.entries(sourceData)) {
         // Create a regex with word boundaries (\b) to avoid partial matches
-        // e.g. prevents "Sun" matching "Sunday"
         const regex = new RegExp(`\\b${name}\\b`, 'i');
         
         if (regex.test(cleanText)) {
@@ -1486,7 +1538,7 @@ const isDebug = (typeof q !== 'undefined' && q.includes('-debug-news'));
 
 <% if (isDebug) { %>
     <div class="debug-container" style="background:#222; color:#0f0; padding:20px; font-family:monospace; border:1px solid #0f0;">
-        <h3>[DEBUG] Source Database</h3>
+        <h3>[DEBUG] Source Database (<%= Object.keys(sourceData).length %> entries)</h3>
         <ul>
         <% Object.keys(sourceData).forEach(key => { %>
             <li><strong><%= key %></strong>: <%= sourceData[key].type %></li>
@@ -1497,7 +1549,7 @@ const isDebug = (typeof q !== 'undefined' && q.includes('-debug-news'));
     
     <div class="context-container" style="
         background-color: #1a1a1a; 
-        border: 2px solid #ffd700; /* Gold/Yellow for Caution */
+        border: 2px solid #ffd700; 
         border-radius: 15px; 
         padding: 25px; 
         margin: 20px auto; 
@@ -1528,7 +1580,7 @@ const isDebug = (typeof q !== 'undefined' && q.includes('-debug-news'));
                 </h2>
                 
                 <p style="font-size: 1.1em; line-height: 1.5; margin-bottom: 15px; color: #fff;">
-                    You are searching for <strong><%= match.name %></strong>.
+                    You are searching for content from <strong><%= match.name %></strong>.
                 </p>
 
                 <div style="
@@ -1545,20 +1597,24 @@ const isDebug = (typeof q !== 'undefined' && q.includes('-debug-news'));
                         <%= match.reason %>
                     </span>
                 </div>
+                
+                <p style="font-size: 1em; color: #ffeb3b; margin-bottom: 20px; font-weight: bold;">
+                    Please think critically before accepting this content as fact. Independent analysis has shown this source often contains conspiracy theories, propaganda, or significant bias.
+                </p>
 
                 <div style="margin-bottom: 20px;">
-                    <strong style="color: #fff;">Verify this source:</strong><br>
+                    <strong style="color: #fff;">See the proof (Bias Report):</strong><br>
                     <a href="<%= match.citation_url %>" target="_blank" style="color: #64b5f6; text-decoration: none; border-bottom: 1px dashed #64b5f6;">
-                        View Media Bias/Fact Check Report &rarr;
+                        View Media Bias/Fact Check Data &rarr;
                     </a>
                 </div>
 
                 <div style="background: rgba(255, 215, 0, 0.1); padding: 15px; border-radius: 10px;">
-                    <strong style="color: #ffd700;">Safety Tips:</strong>
-                    <ul style="margin: 5px 0 0 20px; padding: 0; color: #ccc; font-size: 0.95em;">
-                        <li>Check if other major outlets are reporting the same story.</li>
-                        <li>Look for original sources (primary documents, raw video).</li>
-                        <li>Beware of emotionally charged headlines designed to make you angry.</li>
+                    <strong style="color: #ffd700;">How to find reliable alternatives:</strong>
+                    <ul style="margin: 5px 0 0 20px; padding: 0; color: #ccc; font-size: 0.95em; line-height: 1.6;">
+                        <li><strong>Cross-Check:</strong> Search the same headline on Reuters, AP News, or BBC. If they aren't covering it, be skeptical.</li>
+                        <li><strong>Check the Date:</strong> Old footage is often recycled to look like new "breaking news."</li>
+                        <li><strong>Reverse Image Search:</strong> Take a screenshot of shocking images to see where they really came from.</li>
                     </ul>
                 </div>
                 
@@ -1571,7 +1627,6 @@ const isDebug = (typeof q !== 'undefined' && q.includes('-debug-news'));
 
 <% } else { %>
     <% } %>
-
 <style>
     .container {
         max-width: 800px;
