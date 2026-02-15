@@ -191,62 +191,86 @@ class InnerTubePokeVidious {
     };
 
     // --- scheduling logic ---
-    // Rotate which window
-    // prefers fallback/primary every 2 hours using a custom sequence.
-    //
-    // Sequence: fallback, normal, fallback, normal, normal, fallback
-    // each element = which API is preferred *for that 2-hour block*.
-    //
-    // Within the chosen preference, the 10-minute switching (minute % 20 >= 10)
-    // still applies, but which side corresponds to the inFallbackWindow is flipped
-    // depending on the 2-hour preference.
-
     const minute = new Date().getMinutes();
     const hour = new Date().getHours();
 
-    // pattern for each 2-hour block (6 blocks to cover 12 hours; repeats every 12 hours)
+    // pattern for each 2-hour block
     const pattern = ["normal", "normal", "normal", "normal", "normal", "normal"];
-
-    // determine which 2-hour slot we're in (0..11 hours cover repeating pattern every 12 hours)
     const twoHourIndex = Math.floor(hour / 2) % pattern.length;
-    const currentPreference = pattern[twoHourIndex]; // 'fallback' or 'normal'
-
-    // 10-minute toggle windows 
+    const currentPreference = pattern[twoHourIndex]; 
     const inFallbackWindow = minute % 20 >= 10; 
 
     // build the URLs 
     const primaryUrl = `${this.config.invapi}/videos/${v}?hl=${contentlang}&region=${contentregion}&h=${this.toBase64(Date.now())}`;
     const fallbackUrl = `${this.config.inv_fallback}${v}?hl=${contentlang}&region=${contentregion}&h=${this.toBase64(Date.now())}`;
 
-    // decide which URL is chosen first based on 2-hour preference and 10-minute window
-    // If currentPreference === 'fallback', we bias the schedule so the inFallbackWindow
-    // maps to fallback being primary. If it's 'normal', we map inFallbackWindow to primary.
+    // Select order
     const preferFallbackPrimary = currentPreference === "fallback";
     const chooseFirst = preferFallbackPrimary ? inFallbackWindow ? fallbackUrl : primaryUrl : inFallbackWindow ? primaryUrl : fallbackUrl;
     const chooseSecond = chooseFirst === primaryUrl ? fallbackUrl : primaryUrl;
 
+    // TRY HARD STRATEGY: Define a sequence of attempts. 
+    // We alternate between the first choice and second choice multiple times.
+    const attemptSequence = [
+        chooseFirst, 
+        chooseSecond, 
+        chooseFirst, 
+        chooseSecond, 
+        chooseFirst 
+    ];
+
     try {
-      const [invComments, videoInfo] = await Promise.all([
+      const [invComments, vidObj] = await Promise.all([
         fetchWithRetry(
           `${config.invapi}/comments/${v}?hl=${contentlang}&region=${contentregion}&h=${this.toBase64(
             Date.now()
           )}`
         ).then((res) => res?.text()),
         (async () => {
-          try {
-            const r = await fetchWithRetry(chooseFirst);
-            if (r.ok) return await r.text();
-            throw new Error(`First API ${chooseFirst} failed with ${r.status}`);
-          } catch (err) {
-            this.initError("Primary choice failed, trying secondary", err);
-            const r2 = await fetchWithRetry(chooseSecond);
-            return await r2.text();
+          // Robust loop: Try multiple times to get VALID JSON
+          let fetchError = null;
+          for (const url of attemptSequence) {
+            try {
+              const r = await fetchWithRetry(url);
+              if (!r.ok) {
+                 throw new Error(`HTTP Error ${r.status}`);
+              }
+              const text = await r.text();
+              
+              // Validate JSON immediately
+              try {
+                const parsed = JSON.parse(text);
+                // CRITICAL: Check if it actually looks like a video object.
+                // If the server returns valid JSON but it's an error message or empty, we treat it as a failure so we retry.
+                if (this.checkUnexistingObject(parsed)) {
+                    return parsed; // SUCCESS: Return the Object directly
+                }
+                // If we are here, we got JSON, but it didn't have 'authorId', likely a soft error or captcha
+                console.log(`[LIBPT INFO] Soft fail on ${url}: Valid JSON but missing authorId. Retrying...`);
+              } catch (parseErr) {
+                 // JSON parse failed (e.g. got HTML)
+                 // console.log(`[LIBPT INFO] Parse fail on ${url}. Retrying...`);
+              }
+            } catch (err) {
+              fetchError = err;
+              // this.initError(`Attempt failed on ${url}`, err);
+            }
+            
+            // Wait slightly before the next desperate attempt to avoid instant spam
+            await new Promise(r => setTimeout(r, 800)); 
           }
+          
+          // If we exhausted all attempts in the sequence
+          if (fetchError) {
+             this.initError("All video info fetch attempts failed", fetchError);
+          }
+          return null;
         })(),
       ]);
 
       const comments = this.getJson(invComments);
-      const vid = this.getJson(videoInfo);
+      // vidObj is already an object now (or null), no need to parse
+      const vid = vidObj;
 
       if (!vid) {
         this.initError("Video info missing/unparsable", v);
@@ -268,9 +292,6 @@ class InnerTubePokeVidious {
         let color = "#0ea5e9";
         let color2 = "#111827";
         try {
-           // `sqp` is a URL parameter used by YouTube thumbnail/image servers
-          // to request a specific scale, crop or quality profile (base64-encoded),
-          // controlling how the thumbnail is sized or compressed.
           const palette = await getColors(
             `https://i.ytimg.com/vi/${v}/hqdefault.jpg?sqp=${this.sqp}`
           );
