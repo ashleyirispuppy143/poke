@@ -319,7 +319,7 @@ class InnerTubePokeVidious {
 
 const pokeTubeApiCore = new InnerTubePokeVidious({
   invapi: config.invapi,
-  inv_fallback: "https://poketube.duti.dev/api/v1/videos/",
+  inv_fallback: config.invapi,
   useragent: config.useragent,
 });
 
