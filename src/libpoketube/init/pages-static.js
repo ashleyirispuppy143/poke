@@ -66,6 +66,9 @@ app.get("/policies/code-of-conduct", (req, res) => {
 app.get("/policies", (req, res) => {
   renderTemplate(res, req, "terms.ejs");
 });
+app.get("/request", (req, res) => {
+  renderTemplate(res, req, "legal.ejs");
+});
 
   app.get("/502", function (req, res) {
     renderTemplate(res, req, "502.ejs");
