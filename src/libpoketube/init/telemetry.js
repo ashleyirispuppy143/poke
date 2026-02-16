@@ -3,13 +3,20 @@ const path = require("path")
 
 const telemetryConfig = { telemetry: true }
 
+// Define file paths
 const statsFile = path.join(__dirname, "stats.json")
+const statsFileV2 = path.join(__dirname, "stats-v2.json")
 
+// Limit for the JSON file (e.g., 5MB). 
+// If stats.json exceeds this, we switch writing to stats-v2.json
+const MAX_FILE_SIZE = 5 * 1024 * 1024 
+
+// Helper for empty structure
+const getEmptyStats = () => ({ videos: {}, browsers: {}, os: {}, users: {} })
+
+// Ensure legacy stats file exists to prevent errors
 if (!fs.existsSync(statsFile)) {
-  fs.writeFileSync(
-    statsFile,
-    JSON.stringify({ videos: {}, browsers: {}, os: {}, users: {} }, null, 2)
-  )
+  fs.writeFileSync(statsFile, JSON.stringify(getEmptyStats(), null, 2))
 }
 
 function parseUA(ua) {
@@ -30,7 +37,19 @@ function parseUA(ua) {
   return { browser, os }
 }
 
+// Helper: Safely read a JSON file, returning null if missing or corrupt
+function safeRead(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) return null
+    return JSON.parse(fs.readFileSync(filePath, "utf8"))
+  } catch (e) {
+    return null
+  }
+}
+
 module.exports = function (app, config, renderTemplate) {
+  
+  // POST: Write stats
   app.post("/api/stats", (req, res) => {
     if (!telemetryConfig.telemetry) return res.status(200).json({ ok: true })
 
@@ -41,10 +60,38 @@ module.exports = function (app, config, renderTemplate) {
     const ua = req.headers["user-agent"] || ""
     const { browser, os } = parseUA(ua)
 
-    const raw = fs.readFileSync(statsFile, "utf8")
-    const data = JSON.parse(raw)
-    if (!data.users) data.users = {}
+    // Determine which file to write to
+    let targetFile = statsFile
 
+    // 1. If v2 already exists, we always use it for new writes
+    if (fs.existsSync(statsFileV2)) {
+      targetFile = statsFileV2
+    } 
+    // 2. If v2 doesn't exist, check if v1 is too big
+    else {
+      try {
+        const stats = fs.statSync(statsFile)
+        if (stats.size > MAX_FILE_SIZE) {
+          // Initialize v2 and switch target
+          fs.writeFileSync(statsFileV2, JSON.stringify(getEmptyStats(), null, 2))
+          targetFile = statsFileV2
+        }
+      } catch (e) {
+        // If file access fails, default to statsFile
+      }
+    }
+
+    // Read current data from the target file
+    let data = safeRead(targetFile)
+    if (!data) data = getEmptyStats()
+
+    // Ensure structure exists
+    if (!data.users) data.users = {}
+    if (!data.videos) data.videos = {}
+    if (!data.browsers) data.browsers = {}
+    if (!data.os) data.os = {}
+
+    // Update counts
     if (!data.videos[videoId]) data.videos[videoId] = 0
     data.videos[videoId]++
 
@@ -56,10 +103,12 @@ module.exports = function (app, config, renderTemplate) {
 
     if (!data.users[userId]) data.users[userId] = true
 
-    fs.writeFileSync(statsFile, JSON.stringify(data, null, 2))
+    // Write back to the target file
+    fs.writeFileSync(targetFile, JSON.stringify(data, null, 2))
     res.json({ ok: true })
   })
 
+  // OPT-OUT Page
   app.get("/api/stats/optout", (req, res) => {
     res.send(`<!DOCTYPE html>
 <html lang="en">
@@ -198,6 +247,7 @@ module.exports = function (app, config, renderTemplate) {
 </html>`)
   })
 
+  // GET Stats (JSON & Human)
   app.get("/api/stats", (req, res) => {
     const view = (req.query.view || "").toString()
 
@@ -206,15 +256,47 @@ module.exports = function (app, config, renderTemplate) {
         return res.json({ videos: {}, browsers: {}, os: {}, totalUsers: 0 })
       }
 
-      const raw = fs.readFileSync(statsFile, "utf8")
-      const data = JSON.parse(raw)
+      // Load both files
+      const v1 = safeRead(statsFile)
+      const v2 = safeRead(statsFileV2)
 
-      if (!data.videos) data.videos = {}
-      if (!data.browsers) data.browsers = {}
-      if (!data.os) data.os = {}
-      if (!data.users) data.users = {}
+      // Initialize combined object
+      const combined = getEmptyStats()
 
-      const sortedVideos = Object.entries(data.videos)
+      // Helper to merge data
+      const mergeData = (source) => {
+        if (!source) return
+        
+        // Merge Videos
+        if (source.videos) {
+            for (const [id, count] of Object.entries(source.videos)) {
+                combined.videos[id] = (combined.videos[id] || 0) + count
+            }
+        }
+        // Merge Browsers
+        if (source.browsers) {
+            for (const [name, count] of Object.entries(source.browsers)) {
+                combined.browsers[name] = (combined.browsers[name] || 0) + count
+            }
+        }
+        // Merge OS
+        if (source.os) {
+            for (const [name, count] of Object.entries(source.os)) {
+                combined.os[name] = (combined.os[name] || 0) + count
+            }
+        }
+        // Merge Users (Set Union)
+        if (source.users) {
+            Object.assign(combined.users, source.users)
+        }
+      }
+
+      // Merge both sources
+      mergeData(v1)
+      mergeData(v2)
+
+      // Calculate Top Videos
+      const sortedVideos = Object.entries(combined.videos)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 10)
 
@@ -222,15 +304,17 @@ module.exports = function (app, config, renderTemplate) {
 
       return res.json({
         videos: topVideos,
-        browsers: data.browsers,
-        os: data.os,
-        totalUsers: Object.keys(data.users).length
+        browsers: combined.browsers,
+        os: combined.os,
+        totalUsers: Object.keys(combined.users).length
       })
     }
 
     if (view === "human") {
       const telemetryOn = telemetryConfig.telemetry
 
+      // Note: The HTML/JS below fetches ?view=json, so it will automatically 
+      // display the combined data we calculated above.
       return res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
