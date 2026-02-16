@@ -84,8 +84,10 @@
     }
 
     h2 {
-      font-size: 18px;
-      margin: 25px 0 10px 0;
+      font-size: 16px;
+      font-weight: 600;
+      margin: 20px 0 10px 0;
+      color: var(--text-main);
     }
 
     p {
@@ -107,6 +109,18 @@
     .legal-text ul {
       padding-left: 20px;
       margin: 10px 0;
+    }
+
+    .privacy-box {
+      background-color: rgba(6, 95, 212, 0.05);
+      border-left: 3px solid var(--link);
+      padding: 10px 15px;
+      margin: 15px 0;
+      border-radius: 0 4px 4px 0;
+    }
+    
+    @media (prefers-color-scheme: dark) {
+      .privacy-box { background-color: rgba(62, 166, 255, 0.1); }
     }
 
     /* Form Styling */
@@ -232,19 +246,25 @@
       <h1>Legal Request</h1>
 
       <div class="legal-text">
-         
         <p>Poke operates as a privacy-friendly frontend for YouTube and does not host or store video content. All material viewed through Poke originates directly from YouTube’s servers. As such, copyright claims concerning specific videos or media should be directed to YouTube, not Poke.</p>
 
-        <p>Poke does not modify, rehost, or alter YouTube content in any way. Our systems act purely as a transient intermediary under <strong>17 U.S.C. § 512(a)</strong>, transmitting publicly accessible data. Therefore, any DMCA claim directed at Poke itself would not be valid, as we do not control or store the material.</p>         See our <a href="https://poketube.fun/policies/">Policies Page</a> for more info.
-
+        <p>Poke does not modify, rehost, or alter YouTube content in any way. Our systems act purely as a transient intermediary under <strong>17 U.S.C. § 512(a)</strong>, transmitting publicly accessible data.</p>
+        
         <p>If you believe that Poke has improperly displayed or proxied material in a way that violates your copyright, please first confirm whether the material appears directly on YouTube. If it does, the proper channel for resolution is <a href="https://www.youtube.com/copyright_complaint_form" style="color:var(--link)">YouTube’s DMCA takedown form</a>.</p>
+
+        <div class="privacy-box">
+          <h2>Privacy of Submitted Information</h2>
+          <p style="margin-bottom:0">
+            When you submit this request, your local email client will open to send the message. Poke does not store this form data on its servers prior to sending. The information is sent directly from your email address to our legal team. We retain these emails solely for legal compliance and do not share personal details with third parties unless compelled by a court order.
+          </p>
+        </div>
       </div>
 
       <noscript>
         <div class="no-js-alert">
           <strong>Note:</strong> JavaScript is disabled. You are using the basic email form. Validation and advanced features are unavailable.
         </div>
-        <form action="mailto:legal@poketube.fun" method="post" enctype="text/plain">
+        <form action="mailto:&#108;&#101;&#103;&#97;&#108;&#64;&#112;&#111;&#107;&#101;&#116;&#117;&#98;&#101;&#46;&#102;&#117;&#110;" method="post" enctype="text/plain">
           <div class="form-group">
             <label for="nj_type">Request Type:</label>
             <select id="nj_type" name="Request Type" class="form-control">
@@ -323,8 +343,12 @@
   </main>
 
   <script>
-    // Enable the JS form and hide NoScript behavior if JS is loaded
+    // Reveal Form
     document.getElementById('legalForm').style.display = 'block';
+
+    /* --- EMAIL DECODING --- */
+    // "legal@poketube.fun" encoded in Base64
+    const contactB64 = "bGVnYWxAcG9rZXR1YmUuZnVu";
 
     /* --- CAPTCHA LOGIC --- */
     let captchaCode = "";
@@ -332,12 +356,10 @@
     const ctx = canvas.getContext('2d');
 
     function generateCaptcha() {
-      // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = '#f9f9f9';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Generate random string
       const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
       let result = "";
       for (let i = 0; i < 6; i++) {
@@ -345,7 +367,7 @@
       }
       captchaCode = result;
 
-      // Add noise (lines)
+      // Lines
       for(let i=0; i<7; i++) {
         ctx.strokeStyle = getRandomColor();
         ctx.beginPath();
@@ -354,7 +376,7 @@
         ctx.stroke();
       }
 
-      // Add noise (dots)
+      // Dots
       for(let i=0; i<30; i++) {
         ctx.fillStyle = getRandomColor();
         ctx.beginPath();
@@ -362,17 +384,16 @@
         ctx.fill();
       }
 
-      // Draw text
+      // Text
       ctx.font = 'bold 28px monospace';
       ctx.textBaseline = 'middle';
       let x = 20;
       for (let i = 0; i < result.length; i++) {
         ctx.save();
-        // Random rotation for difficulty
         let angle = (Math.random() - 0.5) * 0.4;
         ctx.translate(x, 25);
         ctx.rotate(angle);
-        ctx.fillStyle = "#222"; // Dark text for contrast
+        ctx.fillStyle = "#222";
         ctx.fillText(result[i], 0, 0);
         ctx.restore();
         x += 24;
@@ -388,13 +409,10 @@
       return color;
     }
 
-    // Refresh captcha on click
     canvas.addEventListener('click', generateCaptcha);
-
-    // Initial generation
     generateCaptcha();
 
-    /* --- FORM SUBMISSION LOGIC --- */
+    /* --- SUBMISSION LOGIC --- */
     document.getElementById('legalForm').addEventListener('submit', function(e) {
       e.preventDefault();
       
@@ -403,21 +421,22 @@
 
       if (userEntry !== captchaCode) {
         errorMsg.style.display = 'block';
-        generateCaptcha(); // Regenerate to prevent brute force
+        generateCaptcha();
         document.getElementById('captchaInput').value = '';
         return;
       }
 
       errorMsg.style.display = 'none';
 
-      // Collect Data
+      // Decode email address
+      const destEmail = atob(contactB64);
+
       const type = document.getElementById('requestType').value;
       const name = document.getElementById('contactName').value;
       const pokeUrl = document.getElementById('pokeLink').value || "N/A";
       const ytUrl = document.getElementById('ytLink').value || "N/A";
       const desc = document.getElementById('description').value;
 
-      // Format Email Body
       const subject = encodeURIComponent(`[${type}] Legal Request: ${name}`);
       const body = encodeURIComponent(
 `REQUEST TYPE: ${type}
@@ -434,8 +453,8 @@ Sent via Poke Legal Portal
 User Agent: ${navigator.userAgent}`
       );
 
-      // Trigger Mailto
-      window.location.href = `mailto:legal@poketube.fun?subject=${subject}&body=${body}`;
+      // Trigger Mailto with decoded address
+      window.location.href = `mailto:${destEmail}?subject=${subject}&body=${body}`;
     });
   </script>
 
