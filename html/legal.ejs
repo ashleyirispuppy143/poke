@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Legal Request - Poke</title>
+  <link rel="icon" href="/css/yt-ukraine.svg">
+  <style>
+    :root {
+      --bg: #f1f1f1;
+      --card-bg: #ffffff;
+      --text-main: #222;
+      --text-muted: #555;
+      --link: #065fd4;
+      --btn-bg: #065fd4;
+      --btn-text: #fff;
+      --border: #ccc;
+      --input-bg: #fff;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f0f0f;
+        --card-bg: #1f1f1f;
+        --text-main: #f1f1f1;
+        --text-muted: #aaa;
+        --link: #3ea6ff;
+        --btn-bg: #3ea6ff;
+        --btn-text: #0f0f0f;
+        --border: #444;
+        --input-bg: #121212;
+      }
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: "Roboto", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    /* Header */
+    header {
+      padding: 15px 25px;
+      border-bottom: 1px solid rgba(0,0,0,0.1);
+      display: flex;
+      align-items: center;
+      background: var(--card-bg);
+    }
+    
+    .logo-img {
+      height: 28px;
+      width: auto;
+      display: block;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      header { border-bottom: 1px solid rgba(255,255,255,0.1); }
+    }
+
+    /* Main Layout */
+    .main-wrap {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 700px;
+      width: 100%;
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 400;
+      margin: 0 0 20px 0;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 15px;
+    }
+
+    h2 {
+      font-size: 18px;
+      margin: 25px 0 10px 0;
+    }
+
+    p {
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--text-muted);
+      margin-bottom: 15px;
+    }
+
+    .legal-text {
+      background: var(--card-bg);
+      padding: 20px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      margin-bottom: 30px;
+      font-size: 13px;
+    }
+
+    .legal-text ul {
+      padding-left: 20px;
+      margin: 10px 0;
+    }
+
+    /* Form Styling */
+    form {
+      background: var(--card-bg);
+      padding: 25px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      font-weight: 500;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 10px;
+      box-sizing: border-box;
+      border: 1px solid var(--border);
+      background: var(--input-bg);
+      color: var(--text-main);
+      border-radius: 2px;
+      font-family: inherit;
+    }
+
+    textarea.form-control {
+      resize: vertical;
+      min-height: 100px;
+    }
+
+    .form-control:focus {
+      outline: 2px solid var(--link);
+      border-color: transparent;
+    }
+
+    /* Captcha Styling */
+    .captcha-container {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+
+    #captchaCanvas {
+      background-color: #fff; /* Always white for readability */
+      border: 1px solid var(--border);
+      cursor: pointer;
+    }
+
+    .captcha-refresh {
+      font-size: 12px;
+      color: var(--link);
+      cursor: pointer;
+      text-decoration: underline;
+      border: none;
+      background: none;
+      padding: 0;
+    }
+
+    /* Buttons */
+    .btn {
+      background-color: var(--btn-bg);
+      color: var(--btn-text);
+      border: none;
+      padding: 12px 24px;
+      font-size: 14px;
+      font-weight: 500;
+      text-transform: uppercase;
+      border-radius: 2px;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    .btn:hover {
+      opacity: 0.9;
+    }
+
+    /* Disclaimer Footer */
+    .disclaimer {
+      margin-top: 30px;
+      font-size: 12px;
+      color: var(--text-muted);
+      text-align: center;
+      border-top: 1px solid var(--border);
+      padding-top: 20px;
+    }
+
+    .disclaimer a {
+      color: var(--link);
+      text-decoration: none;
+    }
+
+    /* No-JS Specific */
+    .no-js-alert {
+      padding: 15px;
+      background: #ffecb3;
+      color: #333;
+      margin-bottom: 20px;
+      border: 1px solid #ffcc80;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <a href="/">
+      <img src="/css/logo-poke.svg?v=5" alt="PokeTube" class="logo-img">
+    </a>
+  </header>
+
+  <main class="main-wrap">
+    <div class="container">
+      
+      <h1>Legal Request</h1>
+
+      <div class="legal-text">
+         
+        <p>Poke operates as a privacy-friendly frontend for YouTube and does not host or store video content. All material viewed through Poke originates directly from YouTube’s servers. As such, copyright claims concerning specific videos or media should be directed to YouTube, not Poke.</p>
+
+        <p>Poke does not modify, rehost, or alter YouTube content in any way. Our systems act purely as a transient intermediary under <strong>17 U.S.C. § 512(a)</strong>, transmitting publicly accessible data. Therefore, any DMCA claim directed at Poke itself would not be valid, as we do not control or store the material.</p>         See our <a href="https://poketube.fun/policies/">Policies Page</a> for more info.
+
+        <p>If you believe that Poke has improperly displayed or proxied material in a way that violates your copyright, please first confirm whether the material appears directly on YouTube. If it does, the proper channel for resolution is <a href="https://www.youtube.com/copyright_complaint_form" style="color:var(--link)">YouTube’s DMCA takedown form</a>.</p>
+      </div>
+
+      <noscript>
+        <div class="no-js-alert">
+          <strong>Note:</strong> JavaScript is disabled. You are using the basic email form. Validation and advanced features are unavailable.
+        </div>
+        <form action="mailto:legal@poketube.fun" method="post" enctype="text/plain">
+          <div class="form-group">
+            <label for="nj_type">Request Type:</label>
+            <select id="nj_type" name="Request Type" class="form-control">
+              <option value="DMCA">DMCA / Copyright</option>
+              <option value="Content Blocking">Content Blocking</option>
+              <option value="Privacy">Privacy Claim</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="nj_body">Description & Details (Include Links):</label>
+            <textarea id="nj_body" name="Message Body" class="form-control"></textarea>
+          </div>
+          <div class="form-group">
+            <label>Human Check: What is 5 + 2?</label>
+            <input type="text" name="Captcha_Answer" class="form-control" placeholder="Enter number">
+          </div>
+          <button type="submit" class="btn">Open Email Client</button>
+        </form>
+      </noscript>
+
+      <form id="legalForm" style="display:none;">
+        <div class="form-group">
+          <label for="requestType">Select Request Type</label>
+          <select id="requestType" class="form-control" required>
+            <option value="" disabled selected>-- Select an option --</option>
+            <option value="DMCA">DMCA Takedown Request</option>
+            <option value="Content Blocking">Content Blocking / Filter Request</option>
+            <option value="Privacy">Privacy Violation</option>
+            <option value="Other">Other Legal Inquiry</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="contactName">Your Name / Organization</label>
+          <input type="text" id="contactName" class="form-control" placeholder="Jane Doe / Acme Corp" required>
+        </div>
+
+        <div class="form-group">
+          <label for="pokeLink">Link to Content on Poke (optional)</label>
+          <input type="url" id="pokeLink" class="form-control" placeholder="https://poketube.fun/watch?v=...">
+        </div>
+
+        <div class="form-group">
+          <label for="ytLink">Link to Original YouTube Video (required for DMCA)</label>
+          <input type="url" id="ytLink" class="form-control" placeholder="https://youtube.com/watch?v=...">
+        </div>
+
+        <div class="form-group">
+          <label for="description">Description of Claim</label>
+          <textarea id="description" class="form-control" placeholder="Please describe the alleged infringement or legal issue..." required></textarea>
+        </div>
+
+        <div class="form-group">
+          <label>Security Check</label>
+          <div class="captcha-container">
+            <canvas id="captchaCanvas" width="180" height="50" title="Click to refresh image"></canvas>
+            <button type="button" class="captcha-refresh" onclick="generateCaptcha()">Refresh Image</button>
+          </div>
+          <input type="text" id="captchaInput" class="form-control" style="margin-top:10px; max-width: 200px;" placeholder="Type the characters above" required>
+          <small style="color:red; display:none;" id="captchaError">Incorrect characters. Please try again.</small>
+        </div>
+
+        <button type="submit" class="btn">Generate Request Email</button>
+      </form>
+
+      <div class="disclaimer">
+        <p>
+          Poke acts purely as a transient intermediary. 
+          See our <a href="https://poketube.fun/policies/">Policies Page</a> for more info.
+        </p>
+        <p>For technical bugs, please use our <a href="https://codeberg.org/ashley/poke/issues">Issue Tracker</a>.</p>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    // Enable the JS form and hide NoScript behavior if JS is loaded
+    document.getElementById('legalForm').style.display = 'block';
+
+    /* --- CAPTCHA LOGIC --- */
+    let captchaCode = "";
+    const canvas = document.getElementById('captchaCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function generateCaptcha() {
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#f9f9f9';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Generate random string
+      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+      let result = "";
+      for (let i = 0; i < 6; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      captchaCode = result;
+
+      // Add noise (lines)
+      for(let i=0; i<7; i++) {
+        ctx.strokeStyle = getRandomColor();
+        ctx.beginPath();
+        ctx.moveTo(Math.random() * canvas.width, Math.random() * canvas.height);
+        ctx.lineTo(Math.random() * canvas.width, Math.random() * canvas.height);
+        ctx.stroke();
+      }
+
+      // Add noise (dots)
+      for(let i=0; i<30; i++) {
+        ctx.fillStyle = getRandomColor();
+        ctx.beginPath();
+        ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, 1.5, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+
+      // Draw text
+      ctx.font = 'bold 28px monospace';
+      ctx.textBaseline = 'middle';
+      let x = 20;
+      for (let i = 0; i < result.length; i++) {
+        ctx.save();
+        // Random rotation for difficulty
+        let angle = (Math.random() - 0.5) * 0.4;
+        ctx.translate(x, 25);
+        ctx.rotate(angle);
+        ctx.fillStyle = "#222"; // Dark text for contrast
+        ctx.fillText(result[i], 0, 0);
+        ctx.restore();
+        x += 24;
+      }
+    }
+
+    function getRandomColor() {
+      const letters = '0123456789ABCDEF';
+      let color = '#';
+      for (let i = 0; i < 6; i++) {
+        color += letters[Math.floor(Math.random() * 16)];
+      }
+      return color;
+    }
+
+    // Refresh captcha on click
+    canvas.addEventListener('click', generateCaptcha);
+
+    // Initial generation
+    generateCaptcha();
+
+    /* --- FORM SUBMISSION LOGIC --- */
+    document.getElementById('legalForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      
+      const userEntry = document.getElementById('captchaInput').value.toUpperCase();
+      const errorMsg = document.getElementById('captchaError');
+
+      if (userEntry !== captchaCode) {
+        errorMsg.style.display = 'block';
+        generateCaptcha(); // Regenerate to prevent brute force
+        document.getElementById('captchaInput').value = '';
+        return;
+      }
+
+      errorMsg.style.display = 'none';
+
+      // Collect Data
+      const type = document.getElementById('requestType').value;
+      const name = document.getElementById('contactName').value;
+      const pokeUrl = document.getElementById('pokeLink').value || "N/A";
+      const ytUrl = document.getElementById('ytLink').value || "N/A";
+      const desc = document.getElementById('description').value;
+
+      // Format Email Body
+      const subject = encodeURIComponent(`[${type}] Legal Request: ${name}`);
+      const body = encodeURIComponent(
+`REQUEST TYPE: ${type}
+NAME/ORG: ${name}
+
+POKE URL: ${pokeUrl}
+ORIGINAL YOUTUBE URL: ${ytUrl}
+
+DESCRIPTION:
+${desc}
+
+---
+Sent via Poke Legal Portal
+User Agent: ${navigator.userAgent}`
+      );
+
+      // Trigger Mailto
+      window.location.href = `mailto:legal@poketube.fun?subject=${subject}&body=${body}`;
+    });
+  </script>
+
+</body>
+</html>
