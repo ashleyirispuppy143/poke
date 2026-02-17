@@ -769,10 +769,14 @@ function authorVerifiedChecker3000() {
 
  <span style="font-size: 10px;color: gray;">@<%- cinv.authorId %>@youtube.com</span>
 </p>           
-<% if (pronoun === "no pronouns :c") { %>
-  <p style="margin-bottom: -17px;" class="subs"><%= subs %> subscribers</p>
+<% if (cinv.pronouns) { %>
+  <p style="margin-bottom: -17px;" class="subs">
+    <%= subs %> subscribers - <%= cinv.pronouns %>
+  </p>
 <% } else { %>
-  <p style="margin-bottom: -17px;" class="subs"><%= subs %> subscribers - <%- pronoun %></p>
+  <p style="margin-bottom: -17px;" class="subs">
+    <%= subs %> subscribers
+  </p>
 <% } %>
  
 <p style="padding:0;font-weight:bold;max-inline-size: 37em;display: -webkit-box;-webkit-line-clamp: 3;-webkit-box-orient: vertical;"> 
