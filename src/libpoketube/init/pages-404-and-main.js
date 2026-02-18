@@ -40,9 +40,7 @@ module.exports = function (app, config, renderTemplate) {
    const isMobile = req.useragent?.isMobile;
   const currentTab = req.query.tab;
    
-const activeTab = currentTab?.toLowerCase().trim();
-
-if (isMobile && activeTab !== "search") {
+if (isMobile && currentTab !== "search" && !req.query.mobilesearch) {
   return res.redirect("/app?tab=search");
 }
 
