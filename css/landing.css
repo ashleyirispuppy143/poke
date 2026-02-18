@@ -814,7 +814,7 @@ img[src="/static/poke-chan-2.webp"] {
 
 .new-feature-set {
   display: grid;
-  margin: 54px 0px 24px 0px;
+  margin: 54px 0px 24px;
   max-width: 1200px;
   grid-template-columns: repeat(auto-fit,minmax(350px,1fr));
   text-align: left;

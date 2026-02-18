@@ -350,7 +350,6 @@ a.icon-button > img {
 }
 .channel-info__bordered {
   border: 1px solid var(--border-color);
-  border-radius: 4px;
   display: grid;
   grid-template-columns: 48px max-content 1fr min-content;
   grid-template-rows: 16px 16px;
@@ -810,7 +809,7 @@ a.icon-button > img {
   grid-auto-columns: 1fr;
   grid-template-columns: 360px 1fr;
   grid-template-rows: 1fr;
-  gap: 0 0;
+  gap: 0;
   grid-template-areas: "info content";
 }
 .playlist-info > .thumbnail {

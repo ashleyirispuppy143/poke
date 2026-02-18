@@ -828,7 +828,7 @@ a.icon-button > img {
     grid-auto-columns: 1fr;
     grid-template-columns: 360px 1fr;
     grid-template-rows: 1fr;
-    gap: 0 0;
+    gap: 0;
     grid-template-areas: "info content";
 }
 .playlist-info > .thumbnail {

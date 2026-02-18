@@ -271,10 +271,8 @@ a.avatar {
     white-space: -pre-wrap;      /* Opera 4-6 */
     white-space: -o-pre-wrap;    /* Opera 7 */
     white-space: pre-wrap;       /* css-3 */
-    word-wrap: break-word;       /* Internet Explorer 5.5+ */
-    white-space: -webkit-pre-wrap; /* Newer versions of Chrome/Safari*/
+    word-wrap: break-word;       /* Internet Explorer 5.5+ */ /* Newer versions of Chrome/Safari*/
     word-break: break-all;
-    white-space: normal;
 }
 
 .video-info-panel.gradient {
@@ -293,7 +291,6 @@ a.avatar {
   font-weight: 1000;
   font-stretch: ultra-expanded;
   overflow: hidden;
-  display: -webkit-box;
   -webkit-line-clamp: 3;
   line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -324,9 +321,7 @@ a.avatar {
   white-space: -o-pre-wrap;
   white-space: pre-wrap;
   word-wrap: anywhere;
-  white-space: -webkit-pre-wrap;
   word-break: break-all;
-  white-space: normal;
   background: #4a4a4a;
   padding: 4px;
   border-radius: 6px;
@@ -336,9 +331,6 @@ a.avatar {
 }
 
 .video-chnl-info-pill {
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  display: grid;
   grid-template-columns: 48px max-content 1fr min-content;
   grid-template-rows: 16px 16px;
   grid-auto-columns: 1fr;
@@ -346,16 +338,11 @@ a.avatar {
   row-gap: 4px;
   grid-auto-flow: row;
   grid-template-areas: "avatar name . subscribe-button" "avatar subs . subscribe-button";
-  padding: 8px;
-  border-radius: 35px;
   font-family: Inter;
   clear: both;
   margin-top: 1.1em;
   padding: 5px 0;
   background: #0009;
-  margin-right: -13px;
-  width: fit-content;
-  height: fit-content;
   width: -moz-fit-content;
   height: -moz-fit-content;
   border-radius: 43px;
@@ -398,9 +385,7 @@ a.avatar {
   white-space: -o-pre-wrap;
   white-space: pre-wrap;
   word-wrap: anywhere;
-  white-space: -webkit-pre-wrap;
   word-break: break-all;
-  white-space: normal;
 }
 
 .comments-class-or-something-i-cant-find-a-name-lol {
@@ -753,7 +738,6 @@ a.new-button:hover {
   text-align:left;
   background:#0009;
   border-radius:10px;
-  height:fit-content;
   padding:10px;
   font-family:ubuntu,sans-serif;
   width:43em;
@@ -763,10 +747,7 @@ a.new-button:hover {
   white-space:-o-pre-wrap;
   white-space:pre-wrap;
   word-wrap:break-word;
-  white-space:-webkit-pre-wrap;
   word-break:break-all;
-  white-space:normal;
-  height:-moz-fit-content;
   height:-webkit-fit-content;
   max-width:708px;
   max-height:185.6px;
@@ -856,9 +837,7 @@ a.new-button:hover {
   white-space: -o-pre-wrap;
   white-space: pre-wrap;
   word-wrap: break-word;
-  white-space: -webkit-pre-wrap;
   word-break: break-all;
-  white-space: normal;
   max-width: 913px;
 }
 

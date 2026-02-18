@@ -1203,7 +1203,7 @@ nav .middle button {
   transform: translate(22em, -1.25em);
   background: none !important;
   color: #999;
-  padding: 10px 10px;
+  padding: 10px;
   border: 1px;
   border-radius: 50%;
 }
@@ -1235,7 +1235,7 @@ nav .middle input {
   transform: translate(11.5em, -0.75em);
   background: #454545;
   color: #999;
-  padding: 10px 10px;
+  padding: 10px;
   border: 1px;
   border-radius: 50%;
 }
