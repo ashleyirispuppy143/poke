@@ -776,8 +776,8 @@ function authorVerifiedChecker3000() {
 <p style="padding:0;font-weight:bold;max-inline-size: 37em;display: -webkit-box;-webkit-line-clamp: 3;-webkit-box-orient: vertical;"> 
  
 <% try { %>
-  <%- getFirstLine(cinv.description).slice(0, 60) || "See More from this channel..."%>
-  <a href="/channel?id=<%=ID%>&tab=about&legacy=true" id="popup-trigger">
+<%- getFirstLine(cinv.description).substring(0, 50) + "..." || "See More from this channel..." %>
+<a href="/channel?id=<%=ID%>&tab=about&legacy=true" id="popup-trigger">
 <% } catch (error) { %>
   <!-- Handle the error here, if it occurs -->
   <p>Error: <%= error.message %></p>
@@ -1579,6 +1579,13 @@ function authorVerifiedChecker4000() {
 }
 .shorts-video {
   display: block;
+}
+.shorts-title {
+    overflow-wrap: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: clip;
 }
 </style>
 
