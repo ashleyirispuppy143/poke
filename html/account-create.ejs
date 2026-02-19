@@ -119,10 +119,10 @@ function yeast() {
       width: 100vw;
     }
 
-    /* Left Side: Branding */
+    /* Left Side Branding */
     .branding-pane {
       flex: 1.2;
-      /* Brighter premium static gradient without animation */
+      /* Brighter pink gradient */
       background: linear-gradient(135deg, #a83258 0%, #ffabbc 80%);
       display: flex;
       flex-direction: column;
@@ -138,49 +138,47 @@ function yeast() {
     /* Background Text Container */
     .hype-container {
       position: absolute;
-      top: 60px; /* Space from top */
-      bottom: 60px; /* Space from bottom */
-      left: -10%;
-      right: -10%;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(-8deg);
       display: flex;
       flex-direction: column;
-      justify-content: space-between;
+      justify-content: center;
       align-items: center;
+      gap: 35px;
       z-index: 0;
       pointer-events: none;
+      width: 150%;
+      height: 90%; /* Leaves breathing room at top and bottom */
     }
 
     .hype-text {
-      font-size: clamp(24px, 4vw, 55px);
+      font-size: clamp(35px, 5vw, 75px);
       font-family: "PokeTube Flex", sans-serif;
       font-weight: 1000;
       color: #fff;
       white-space: nowrap;
       letter-spacing: 3px;
-      transform: rotate(-6deg);
-      text-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      text-shadow: 0 4px 15px rgba(0,0,0,0.2);
     }
     
-    /* Alternating opacities for a cooler effect */
-    .hype-text:nth-child(odd) { opacity: 0.15; transform: rotate(-6deg) translateX(-5%); }
-    .hype-text:nth-child(even) { opacity: 0.08; transform: rotate(-6deg) translateX(5%); }
+    .hype-text:nth-child(odd) { opacity: 0.12; margin-left: -5%; }
+    .hype-text:nth-child(even) { opacity: 0.08; margin-left: 5%; }
     
     .branding-wrapper {
       position: relative;
       display: flex;
       flex-direction: column;
       align-items: center;
-      max-width: 650px;
-      width: 100%;
-      margin-top: 60px; /* Room for mascot */
+      width: max-content; /* Hugs the text to anchor mascot properly */
       z-index: 1;
     }
     
     .mascot {
       position: absolute;
-      top: -150px; /* Sits nicely on the top right */
-      right: -20px; 
-      max-height: 280px;
+      top: -30px; /* Aligns horizontally with the Poke logo */
+      right: -110px; /* Sits exactly on the top right edge of the text block */
+      max-height: 290px;
       object-fit: contain;
       z-index: 2;
       filter: drop-shadow(0 15px 25px rgba(0,0,0,0.4));
@@ -191,20 +189,22 @@ function yeast() {
       position: relative;
       z-index: 1;
       background: transparent;
-      padding: 20px 0; 
+      padding: 0; 
       border: none;
       box-shadow: none;
-      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
 
     .branding-content img.logo {
-      max-width: 200px;
-      margin-bottom: 24px;
-      filter: drop-shadow(0 6px 16px rgba(0,0,0,0.3));
+      max-width: 170px;
+      margin-bottom: 12px;
+      filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3));
     }
 
     .branding-content h1 {
-      font-size: clamp(40px, 6vw, 80px); /* Adjusted size to be perfectly balanced */
+      font-size: clamp(40px, 7vw, 95px); /* Balanced Size */
       line-height: 1.05;
       letter-spacing: -0.02em;
       color: #fff;
@@ -212,7 +212,7 @@ function yeast() {
       text-shadow: 0 8px 25px rgba(0,0,0,0.4);
     }
 
-    /* Right Side: Form */
+    /* Right Side Form */
     .form-pane {
       flex: 1;
       display: flex;
@@ -244,7 +244,7 @@ function yeast() {
     a { color: var(--accent); text-decoration: none; font-weight: 500; }
     a:hover { color: var(--accent-hover); text-decoration: underline; }
 
-    /* Forms & Inputs */
+    /* Forms Inputs */
     .form-group { margin-top: 16px; }
     .form-group label { display: block; font-size: 13px; margin-bottom: 6px; color: var(--fg); font-weight: 500; }
     input[type="text"] { width: 100%; padding: 12px; border: 1px solid #333; border-radius: 8px; background: #0a0a0a; color: var(--fg); font-family: inherit; font-size: 14px; transition: border-color 0.2s; }
@@ -286,7 +286,7 @@ function yeast() {
     .a11y-menu label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--fg); margin: 0 !important; }
     .a11y-menu input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; }
 
-    /* Alerts & Disclaimers */
+    /* Alerts Disclaimers */
     .error-msg { color: var(--danger); font-size: 13px; margin-top: 12px; display: none; padding: 10px; background: rgba(255, 107, 107, 0.08); border-radius: 8px; border: 1px solid rgba(255, 107, 107, 0.2); line-height: 1.4; }
     .disclaimer { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--surface-border); text-align: left; color: #777; font-size: 11px; line-height: 1.5; }
 
@@ -304,9 +304,8 @@ function yeast() {
       html, body { overflow-y: auto; }
       .split-layout { flex-direction: column; height: auto; min-height: 100vh; }
       .branding-pane { padding: 40px 20px 20px; border-right: none; border-bottom: 1px solid #2b111e; }
-      .branding-wrapper { margin-top: 100px; }
-      .mascot { max-height: 180px; top: -140px; right: 0; }
-      .branding-content h1 { font-size: clamp(36px, 10vw, 60px); }
+      .branding-wrapper { margin-top: 80px; }
+      .mascot { max-height: 160px; top: -30px; right: -40px; }
       .form-pane { padding: 30px 20px; align-items: flex-start; }
     }
   </style>
@@ -328,6 +327,7 @@ function yeast() {
     
     <div class="branding-pane">
       <div class="hype-container">
+        <div class="hype-text">YOUR PRIVACY APP OF YOUR DREAMS</div>
         <div class="hype-text">YOUR PRIVACY APP OF YOUR DREAMS</div>
         <div class="hype-text">YOUR PRIVACY APP OF YOUR DREAMS</div>
         <div class="hype-text">YOUR PRIVACY APP OF YOUR DREAMS</div>
@@ -495,7 +495,7 @@ function yeast() {
       }
 
       for (let i = 0; i < 15; i++) {
-        ctx.strokeStyle = `rgba(${Math.random()*255},${Math.random()*255},${Math.random()*255},0.4)`;
+        ctx.strokeStyle = `rgba(255,255,255,0.4)`; /* Fixed syntax */
         ctx.lineWidth = Math.random() * 2;
         ctx.beginPath();
         ctx.moveTo(Math.random() * canvas.width, Math.random() * canvas.height);
@@ -510,13 +510,13 @@ function yeast() {
         
         ctx.translate(25 + (i * 45), 45 + (Math.random() * 10 - 5)); 
         ctx.rotate((Math.random() - 0.5) * 0.6);
-        ctx.fillStyle = `hsl(${Math.random() * 360}, 70%, 75%)`;
+        ctx.fillStyle = `hsl(${Math.random() * 360}, 70%, 75%)`; /* Fixed syntax */
         ctx.fillText(currentCaptchaText[i], 0, 0);
         ctx.restore();
       }
 
       for (let i = 0; i < 80; i++) {
-        ctx.fillStyle = `rgba(255,255,255,0.2)`;
+        ctx.fillStyle = `rgba(255,255,255,0.2)`; /* Fixed syntax */
         ctx.beginPath();
         ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, Math.random() * 2, 0, 2 * Math.PI);
         ctx.fill();
