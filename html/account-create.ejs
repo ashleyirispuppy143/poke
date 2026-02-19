@@ -100,8 +100,8 @@ function yeast() {
     html, body { 
       margin: 0; padding: 0; height: 100%; 
       background: var(--bg); color: var(--fg); 
-      font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Noto Sans", sans-serif; 
-      overflow-x: hidden;
+      font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Noto Sans", sans-serif; 
+      overflow: hidden; /* Prevent global scrolling if possible */
     }
 
     /* Titles */
@@ -117,195 +117,163 @@ function yeast() {
       display: flex;
       height: 100vh;
       width: 100vw;
-      overflow: hidden;
     }
 
-    /* Left Side: Branding (Very Cool) */
-    @keyframes gradientShift {
-      0% { background-position: 0% 50%; }
-      50% { background-position: 100% 50%; }
-      100% { background-position: 0% 50%; }
-    }
-
+    /* Left Side: Branding (Plain, No Blur) */
     .branding-pane {
       flex: 1.2;
-      background: linear-gradient(-45deg, #11050a, #2b111e, #ffabcc, #3a1626);
-      background-size: 400% 400%;
-      animation: gradientShift 15s ease infinite;
+      background: #11050a; /* Plain, solid dark background */
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
-      padding: 40px;
+      padding: 20px;
       text-align: center;
       position: relative;
-      overflow: hidden;
-      box-shadow: inset -10px 0 30px rgba(0,0,0,0.5);
+      border-right: 1px solid #2b111e;
     }
     
-    .branding-pane::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.6) 100%);
-      pointer-events: none;
-      z-index: 1;
+    .branding-wrapper {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      max-width: 400px;
+      width: 100%;
     }
 
     .mascot {
-      position: absolute;
-      bottom: 0;
-      left: 50%;
-      transform: translateX(-50%);
-      max-height: 65vh;
-      max-width: 90%;
+      max-height: 200px;
       object-fit: contain;
-      object-position: bottom center;
       z-index: 2;
-      pointer-events: none;
-      filter: drop-shadow(0 -10px 25px rgba(0,0,0,0.5));
+      position: relative;
+      margin-bottom: -15px; /* Pulls her down to visually sit on the box */
+      filter: drop-shadow(0 -5px 15px rgba(0,0,0,0.6));
     }
 
     .branding-content {
       position: relative;
-      z-index: 3;
-      background: rgba(15, 15, 15, 0.4);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      padding: 40px;
-      border-radius: 24px;
+      z-index: 1;
+      background: #1a0a11; /* Solid dark box, no blur */
+      padding: 32px;
+      border-radius: 20px;
       border: 1px solid rgba(255, 171, 204, 0.2);
-      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-      animation: fadeUp 0.8s ease-out;
-      margin-bottom: 15vh; /* Space to not completely cover the mascot */
+      box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+      width: 100%;
     }
 
     .branding-content img.logo {
-      max-width: 160px;
-      margin-bottom: 24px;
-      filter: drop-shadow(0 4px 12px rgba(0,0,0,0.4));
+      max-width: 140px;
+      margin-bottom: 16px;
     }
 
     .branding-content h1 {
-      font-size: clamp(36px, 4vw, 64px);
+      font-size: clamp(28px, 3.5vw, 54px);
       line-height: 1.1;
       color: #fff;
-      text-shadow: 0 4px 16px rgba(0,0,0,0.6);
-      margin-bottom: 12px;
+      margin-bottom: 8px;
     }
     
     .branding-content p {
-      color: rgba(255, 255, 255, 0.9);
-      font-size: 17px;
-      max-width: 380px;
+      color: var(--muted);
+      font-size: 15px;
       margin: 0 auto;
     }
 
-    /* Right Side: Form (Non-floating) */
+    /* Right Side: Form */
     .form-pane {
       flex: 1;
       display: flex;
       justify-content: center;
       align-items: center;
       background: var(--bg);
-      padding: 40px 24px;
+      padding: 20px;
       overflow-y: auto;
-      overflow-x: hidden;
     }
 
     .card { 
       width: 100%; 
-      max-width: 420px; 
-      /* Removed floating/box styling */
+      max-width: 400px; 
       background: transparent;
       border: none;
       box-shadow: none;
       padding: 0;
-      animation: fadeUp 0.6s ease-out 0.2s both;
     }
 
-    .card h2 { font-size: 32px; margin-bottom: 8px; color: var(--fg); }
-    p { margin: 8px 0 0; color: var(--muted); }
+    .card h2 { font-size: 26px; margin-bottom: 6px; color: var(--fg); }
+    p { margin: 6px 0 0; color: var(--muted); }
     
-    .row { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
-    .spinner { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #333; border-top-color: var(--accent); animation: spin 0.8s linear infinite; }
+    .row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+    .spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid #333; border-top-color: var(--accent); animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
-    .small { font-size: 13px; color: var(--muted); line-height: 1.5; }
+    .small { font-size: 12px; color: var(--muted); line-height: 1.4; }
     .hidden { display: none !important; }
-    a { color: var(--accent); text-decoration: none; transition: color 0.2s; font-weight: 500; }
+    a { color: var(--accent); text-decoration: none; font-weight: 500; }
     a:hover { color: var(--accent-hover); text-decoration: underline; }
 
-    /* Forms & Inputs */
-    .form-group { margin-top: 24px; }
-    .form-group label { display: block; font-size: 14px; margin-bottom: 8px; color: var(--fg); font-weight: 500; }
-    input[type="text"] { width: 100%; padding: 14px 16px; border: 1px solid #333; border-radius: 8px; background: #0a0a0a; color: var(--fg); font-family: inherit; font-size: 15px; transition: border-color 0.2s, box-shadow 0.2s; }
-    input[type="text"]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255, 171, 204, 0.15); }
+    /* Forms & Inputs (Compacted to fix zoom issue) */
+    .form-group { margin-top: 16px; }
+    .form-group label { display: block; font-size: 13px; margin-bottom: 6px; color: var(--fg); font-weight: 500; }
+    input[type="text"] { width: 100%; padding: 12px; border: 1px solid #333; border-radius: 8px; background: #0a0a0a; color: var(--fg); font-family: inherit; font-size: 14px; transition: border-color 0.2s; }
+    input[type="text"]:focus { outline: none; border-color: var(--accent); }
     input[type="text"]::placeholder { color: #555; }
 
     /* Buttons */
-    button.btn { width: 100%; padding: 14px; margin-top: 24px; border: none; border-radius: 8px; background: var(--accent); color: #000; font-weight: bold; cursor: pointer; font-family: inherit; font-size: 15px; transition: background-color 0.2s, transform 0.1s; }
+    button.btn { width: 100%; padding: 12px; margin-top: 20px; border: none; border-radius: 8px; background: var(--accent); color: #000; font-weight: bold; cursor: pointer; font-family: inherit; font-size: 14px; transition: background 0.2s; }
     button.btn:hover { background: var(--accent-hover); }
-    button.btn:active { transform: scale(0.98); }
 
-    button.btn-text { background: transparent; color: var(--muted); border: none; font-size: 14px; cursor: pointer; padding: 8px; width: auto; margin: 16px auto 0; display: block; text-decoration: underline; transition: color 0.2s; }
+    button.btn-text { background: transparent; color: var(--muted); border: none; font-size: 13px; cursor: pointer; padding: 6px; width: auto; margin: 12px auto 0; display: block; text-decoration: underline; transition: color 0.2s; }
     button.btn-text:hover { color: var(--fg); }
 
     /* Captcha UI */
-    .captcha-container { background: #0a0a0a; border: 1px solid #333; border-radius: 8px; overflow: hidden; margin-bottom: 12px; display: flex; flex-direction: column; }
-    #captchaCanvas { width: 100%; height: 90px; display: block; }
-    .captcha-toolbar { display: flex; justify-content: flex-end; gap: 8px; padding: 8px 12px; background: #111; border-top: 1px solid #222; }
-    .btn-tool { background: none; border: none; color: var(--accent); font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 6px; transition: background 0.2s; font-weight: 500; }
+    .captcha-container { background: #0a0a0a; border: 1px solid #333; border-radius: 8px; margin-bottom: 8px; display: flex; flex-direction: column; position: relative; }
+    #captchaCanvas { width: 100%; height: 70px; display: block; border-top-left-radius: 8px; border-top-right-radius: 8px; }
+    .captcha-toolbar { display: flex; justify-content: flex-end; gap: 6px; padding: 6px 10px; background: #111; border-top: 1px solid #222; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; }
+    .btn-tool { background: none; border: none; color: var(--accent); font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 4px 6px; border-radius: 4px; transition: background 0.2s; font-weight: 500; }
     .btn-tool:hover { background: rgba(255, 171, 204, 0.15); }
 
-    /* TTS Controls */
-    .tts-settings {
-      display: flex;
-      justify-content: space-between;
-      gap: 16px;
-      padding: 12px;
-      background: #0f0f0f;
-      border: 1px solid #222;
+    /* A11y Popup Menu */
+    .a11y-menu {
+      position: absolute;
+      bottom: 100%;
+      right: 0;
+      margin-bottom: 6px;
+      background: #1a1a1a;
+      border: 1px solid #333;
       border-radius: 8px;
-      margin-bottom: 12px;
-    }
-    .tts-settings label {
+      padding: 12px;
+      width: 220px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.8);
+      z-index: 10;
       display: flex;
       flex-direction: column;
-      gap: 6px;
-      font-size: 12px;
-      color: var(--muted);
-      flex: 1;
-      margin: 0 !important; 
+      gap: 12px;
     }
-    .tts-settings input[type="range"] {
-      width: 100%;
-      accent-color: var(--accent);
-      cursor: pointer;
-    }
-    
+    .a11y-menu.hidden { display: none; }
+    .a11y-menu label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--fg); margin: 0 !important; }
+    .a11y-menu input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+
     /* Alerts & Disclaimers */
-    .error-msg { color: var(--danger); font-size: 13px; margin-top: 16px; display: none; padding: 12px; background: rgba(255, 107, 107, 0.08); border-radius: 8px; border: 1px solid rgba(255, 107, 107, 0.2); line-height: 1.4; }
-    .disclaimer { margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--surface-border); text-align: left; color: #777; font-size: 12px; line-height: 1.6; }
+    .error-msg { color: var(--danger); font-size: 13px; margin-top: 12px; display: none; padding: 10px; background: rgba(255, 107, 107, 0.08); border-radius: 8px; border: 1px solid rgba(255, 107, 107, 0.2); line-height: 1.4; }
+    .disclaimer { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--surface-border); text-align: left; color: #777; font-size: 11px; line-height: 1.5; }
 
     /* Modal */
-    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; padding: 20px; }
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; padding: 20px; }
     .modal-overlay.active { opacity: 1; pointer-events: all; }
     .modal-content { background: var(--surface); border: 1px solid var(--surface-border); border-radius: 16px; width: 100%; max-width: 400px; padding: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.8); transform: translateY(10px); transition: transform 0.2s ease; }
     .modal-overlay.active .modal-content { transform: translateY(0); }
     .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-    .close-modal { background: none; border: none; color: var(--muted); font-size: 24px; cursor: pointer; line-height: 1; padding: 0; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; transition: background 0.2s, color 0.2s; }
-    .close-modal:hover { background: #222; color: var(--fg); }
+    .close-modal { background: none; border: none; color: var(--muted); font-size: 24px; cursor: pointer; padding: 0; width: 32px; height: 32px; border-radius: 50%; }
+    .close-modal:hover { color: var(--fg); background: #222; }
 
     /* Responsive */
     @media (max-width: 800px) {
-      .split-layout { flex-direction: column; height: auto; min-height: 100vh; overflow-y: auto; overflow-x: hidden; }
-      .branding-pane { padding: 40px 20px 60px; flex: none; min-height: 50vh; }
-      .branding-content img.logo { max-width: 120px; }
-      .branding-content { margin-bottom: 0; padding: 24px; }
-      .mascot { opacity: 0.3; filter: blur(2px); } /* Fade mascot on mobile so text is legible */
-      .form-pane { padding: 40px 20px; align-items: flex-start; }
+      html, body { overflow-y: auto; }
+      .split-layout { flex-direction: column; height: auto; min-height: 100vh; }
+      .branding-pane { padding: 40px 20px; border-right: none; border-bottom: 1px solid #2b111e; }
+      .mascot { max-height: 160px; }
+      .form-pane { padding: 30px 20px; align-items: flex-start; }
     }
   </style>
 </head>
@@ -325,11 +293,14 @@ function yeast() {
   <div class="split-layout" id="app">
     
     <div class="branding-pane">
-      <img src="/static/poke-chan-2.webp" alt="Poke-chan Mascot" class="mascot" />
-      <div class="branding-content">
-        <img src="/css/logo-poke.svg?v=5" alt="Poke Logo" class="logo" />
-        <h1>Welcome<br>to Poke</h1>
-       </div>
+      <div class="branding-wrapper">
+        <img src="/static/poke-chan-2.webp" alt="Poke-chan Mascot" class="mascot" />
+        <div class="branding-content">
+          <img src="/css/logo-poke.svg?v=5" alt="Poke Logo" class="logo" />
+          <h1>Welcome<br>to Poke</h1>
+          <p>A fast, secure, and private way to connect.</p>
+        </div>
+      </div>
     </div>
 
     <div class="form-pane">
@@ -347,28 +318,33 @@ function yeast() {
           <div class="form-group">
             <label for="captchaInput">Enter the text shown below:</label>
             <div class="captcha-container">
-              <canvas id="captchaCanvas" width="300" height="90" role="img" aria-label="Captcha image containing distorted letters and numbers."></canvas>
+              
+              <div class="a11y-menu hidden" id="a11yMenu">
+                <label>Speech Speed
+                  <input type="range" id="ttsSpeed" min="0.3" max="1.5" step="0.1" value="0.8" aria-label="Adjust TTS Speed">
+                </label>
+                <label>Speech Pitch
+                  <input type="range" id="ttsPitch" min="0" max="2" step="0.1" value="1.0" aria-label="Adjust TTS Pitch">
+                </label>
+              </div>
+
+              <canvas id="captchaCanvas" width="300" height="70" role="img" aria-label="Captcha image containing distorted letters and numbers."></canvas>
               <div class="captcha-toolbar">
+                <button type="button" class="btn-tool" onclick="toggleA11yMenu()" aria-label="Accessibility Settings">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                  Settings
+                </button>
                 <button type="button" class="btn-tool" onclick="playCaptchaAudio()" aria-label="Listen to captcha">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
                   Listen
                 </button>
                 <button type="button" class="btn-tool" onclick="generateCaptcha()" aria-label="Generate a new captcha image">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.5l5.67 5.67"/></svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.5l5.67 5.67"/></svg>
                   Refresh
                 </button>
               </div>
             </div>
             
-            <div class="tts-settings">
-              <label>Speech Speed
-                <input type="range" id="ttsSpeed" min="0.3" max="1.5" step="0.1" value="0.8" aria-label="Adjust TTS Speed">
-              </label>
-              <label>Speech Pitch
-                <input type="range" id="ttsPitch" min="0" max="2" step="0.1" value="1.0" aria-label="Adjust TTS Pitch">
-              </label>
-            </div>
-
             <input type="text" id="captchaInput" autocomplete="off" placeholder="Type captcha here (case-sensitive)..." required aria-required="true" />
           </div>
 
@@ -418,15 +394,25 @@ function yeast() {
     var currentCaptchaText = "";
     var policiesRead = false;
 
-    // Track if user clicked policies link
     function markPoliciesRead() {
       policiesRead = true;
     }
 
-    // TTS Function with Pitch and Rate Controls
+    function toggleA11yMenu() {
+      document.getElementById('a11yMenu').classList.toggle('hidden');
+    }
+
+    // Close A11y menu if clicked outside
+    document.addEventListener('click', function(e) {
+      const menu = document.getElementById('a11yMenu');
+      if (!menu.classList.contains('hidden') && !e.target.closest('.captcha-container')) {
+        menu.classList.add('hidden');
+      }
+    });
+
     function playCaptchaAudio() {
       if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel(); // Stop any current speech
+        window.speechSynthesis.cancel();
         
         var speed = parseFloat(document.getElementById('ttsSpeed').value);
         var pitch = parseFloat(document.getElementById('ttsPitch').value);
@@ -442,24 +428,20 @@ function yeast() {
       }
     }
 
-    // Generate a hard, distorted canvas captcha
     function generateCaptcha() {
       const canvas = document.getElementById('captchaCanvas');
       const ctx = canvas.getContext('2d');
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Background noise
       ctx.fillStyle = '#111';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Random characters
       const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
       currentCaptchaText = '';
       for (let i = 0; i < 6; i++) {
         currentCaptchaText += chars.charAt(Math.floor(Math.random() * chars.length));
       }
 
-      // Draw intersecting noise lines
       for (let i = 0; i < 15; i++) {
         ctx.strokeStyle = `rgba(${Math.random()*255},${Math.random()*255},${Math.random()*255},0.4)`;
         ctx.lineWidth = Math.random() * 2;
@@ -469,21 +451,18 @@ function yeast() {
         ctx.stroke();
       }
 
-      // Draw text with random size, position, rotation, and color using OpenDyslexic3
       for (let i = 0; i < currentCaptchaText.length; i++) {
         ctx.save();
-        const fontSize = 35 + Math.random() * 15;
-        // Apply the requested accessibility font
+        const fontSize = 35 + Math.random() * 10;
         ctx.font = `bold ${fontSize}px "OpenDyslexic3", sans-serif`;
         
-        ctx.translate(25 + (i * 45), 55 + (Math.random() * 10 - 5)); 
+        ctx.translate(25 + (i * 45), 45 + (Math.random() * 10 - 5)); 
         ctx.rotate((Math.random() - 0.5) * 0.6);
         ctx.fillStyle = `hsl(${Math.random() * 360}, 70%, 75%)`;
         ctx.fillText(currentCaptchaText[i], 0, 0);
         ctx.restore();
       }
 
-      // Add foreground noise dots
       for (let i = 0; i < 80; i++) {
         ctx.fillStyle = `rgba(255,255,255,0.2)`;
         ctx.beginPath();
@@ -491,39 +470,31 @@ function yeast() {
         ctx.fill();
       }
       
-      // Clear input on refresh
       document.getElementById('captchaInput').value = '';
       document.getElementById('captchaInput').focus();
     }
 
-    // Main execution
     if (currentUserId) {
-      // User is already logged in, redirect normally
       location.href = "/my-acc?ID=" + currentUserId + "&rparam=1";
     } else {
-      // User is not logged in, show captcha form
       document.getElementById('loading-state').classList.add('hidden');
       document.getElementById('setup-state').classList.remove('hidden');
       
-      // Wait a tiny bit to ensure custom fonts have loaded before drawing to canvas
       document.fonts.ready.then(function() {
         generateCaptcha();
       });
     }
 
-    // Validate form and proceed with original logic
     function verifyAndProceed() {
       var captchaInput = document.getElementById('captchaInput').value;
       var agreeInput = document.getElementById('agreeInput').value.trim().toUpperCase();
       var errorMsg = document.getElementById('error-msg');
 
-      // Check for DISAGREE first
       if (agreeInput === 'DISAGREE') {
         window.location.href = '/';
         return;
       }
 
-      // Verify Policies Click, Captcha, and AGREE
       if (!policiesRead) {
         showError('You must click and read the Policies link before continuing.');
       } else if (captchaInput !== currentCaptchaText) {
@@ -532,10 +503,8 @@ function yeast() {
       } else if (agreeInput !== 'AGREE') {
         showError('You must type AGREE to accept the policies, or DISAGREE to exit.');
       } else {
-        // Success verification
         errorMsg.style.display = 'none';
         
-        // Execute the original assignment, DB set, and redirect
         localStorage.setItem('UserID', `<%- userid %>`);
         <% db.set(`user.${userid}`, userid) %>
         location.href = "/my-acc?ID=" + `<%- userid %>` + "&rparam=1";
@@ -548,7 +517,6 @@ function yeast() {
       errorMsg.style.display = 'block';
     }
 
-    // Modal Logic
     const modal = document.getElementById('loginModal');
     
     function openLoginModal() {
@@ -560,7 +528,6 @@ function yeast() {
       modal.classList.remove('active');
     }
     
-    // Close modal on overlay click
     modal.addEventListener('click', function(e) {
       if (e.target === modal) {
         closeLoginModal();
