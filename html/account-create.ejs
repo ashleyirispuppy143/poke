@@ -122,8 +122,8 @@ function yeast() {
     /* Left Side: Branding */
     .branding-pane {
       flex: 1.2;
-      /* Smooth, premium static gradient without animation */
-      background: linear-gradient(135deg, #0b0306 0%, #240e16 45%, #ffabbc 200%);
+      /* Brighter premium static gradient without animation */
+      background: linear-gradient(135deg, #a83258 0%, #ffabbc 80%);
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -131,7 +131,25 @@ function yeast() {
       padding: 40px;
       text-align: center;
       position: relative;
-      border-right: 1px solid rgba(255, 171, 188, 0.05);
+      border-right: 1px solid rgba(255, 171, 188, 0.2);
+      overflow: hidden;
+    }
+
+    .hype-text {
+      position: absolute;
+      top: 40%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(-8deg);
+      font-size: clamp(30px, 5vw, 60px);
+      font-family: "PokeTube Flex", sans-serif;
+      font-weight: 1000;
+      color: #fff;
+      opacity: 0.15;
+      white-space: nowrap;
+      z-index: 0;
+      pointer-events: none;
+      letter-spacing: 2px;
+      text-shadow: 0 4px 15px rgba(0,0,0,0.5);
     }
     
     .branding-wrapper {
@@ -142,16 +160,18 @@ function yeast() {
       max-width: 650px; /* Much bigger wrapper */
       width: 100%;
       margin-top: 60px; /* Room for mascot */
+      z-index: 1;
     }
-
+    
     .mascot {
       position: absolute;
-      top: -150px; /* Sits nicely on the top right */
-      right: 20px;
-      max-height: 240px;
+      top: -160px; /* Sits nicely on the top right */
+      right: -20px; 
+      max-height: 280px;
       object-fit: contain;
       z-index: 2;
-      filter: drop-shadow(0 10px 20px rgba(0,0,0,0.6));
+      filter: drop-shadow(0 15px 25px rgba(0,0,0,0.4));
+      pointer-events: none;
     }
 
     .branding-content {
@@ -167,16 +187,16 @@ function yeast() {
     .branding-content img.logo {
       max-width: 220px; /* Bigger logo */
       margin-bottom: 24px;
-      filter: drop-shadow(0 6px 16px rgba(0,0,0,0.5));
+      filter: drop-shadow(0 6px 16px rgba(0,0,0,0.3));
     }
 
     .branding-content h1 {
-      font-size: clamp(48px, 6vw, 90px); /* EXTRA LARGE TEXT */
-      line-height: 1.05;
-      letter-spacing: -0.02em;
+      font-size: clamp(60px, 9vw, 140px); /* EXTRA LARGE TEXT */
+      line-height: 0.95;
+      letter-spacing: -0.03em;
       color: #fff;
       margin-bottom: 0;
-      text-shadow: 0 8px 30px rgba(0,0,0,0.7); /* Depth shadow to pop off gradient */
+      text-shadow: 0 8px 30px rgba(0,0,0,0.4); /* Depth shadow to pop off gradient */
     }
 
     /* Right Side: Form */
@@ -271,9 +291,9 @@ function yeast() {
       html, body { overflow-y: auto; }
       .split-layout { flex-direction: column; height: auto; min-height: 100vh; }
       .branding-pane { padding: 40px 20px 20px; border-right: none; border-bottom: 1px solid #2b111e; }
-      .branding-wrapper { margin-top: 80px; }
-      .mascot { max-height: 160px; top: -110px; right: 0; }
-      .branding-content h1 { font-size: clamp(38px, 8vw, 60px); }
+      .branding-wrapper { margin-top: 100px; }
+      .mascot { max-height: 180px; top: -140px; right: 0; }
+      .branding-content h1 { font-size: clamp(48px, 12vw, 80px); }
       .form-pane { padding: 30px 20px; align-items: flex-start; }
     }
   </style>
@@ -294,6 +314,7 @@ function yeast() {
   <div class="split-layout" id="app">
     
     <div class="branding-pane">
+      <div class="hype-text">YOUR PRIVACY APP OF YOUR DREAMS</div>
       <div class="branding-wrapper">
         <img src="/static/poke-chan-2.webp" alt="Poke-chan Mascot" class="mascot" />
         <div class="branding-content">
@@ -345,7 +366,7 @@ function yeast() {
               </div>
             </div>
             
-            <input type="text" id="captchaInput" autocomplete="off" placeholder="Type captcha here (case-sensitive)..." required aria-required="true" />
+            <input type="text" id="captchaInput" autocomplete="off" placeholder="Type captcha here case-sensitive..." required aria-required="true" />
           </div>
 
           <div class="form-group">
