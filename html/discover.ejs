@@ -366,54 +366,25 @@ border:solid #ff0033;
  <div class="channel-page" >   
 <h1 style="font-size: 2em;margin-left: auto;margin-right: auto;text-align: center;font-family: poketube flex;font-weight: 1000;font-stretch: ultra-expanded;color: #fff;margin-bottom: 7px;margin-top: 31px;">Discover Popular Videos On Poke :3</h1>
 <p style="text-align: center;margin-top: -9px;color: gray;font-family: &quot;poketube flex&quot;;font-weight: 400;font-stretch: extra-expanded;"> uses the united states trending page(s) from youtube!!</p>
-        <% if (!tab) { %> 
+<% 
+   const availableTabs = [ { id: "live", label: "Live", icon: "fa-fire", url: "/app" }, { id: "gaming", label: "Gaming", icon: "fa-gamepad-modern", url: "?tab=gaming" } ];
+   const activeTabId = tab || "live";  %>
 
-     <div class="tabs tabs-center">
-            
-                <a href="" class="tab active"><i class="fa-light fa-fire" style="margin-right: 4px;"></i> Live</a>          
-                <a href="?tab=gaming" class="tab"><i class="fa-light fa-gamepad-modern" style="margin-right: 4px;"></i> Gaming</a>
-                      <% if (!isMobile) { %> 
- 
-           		 	               <% } %>   
-
-            </div>    
-           		 	               <% } %>   
-  <% if (tab === "music") { %> 
-
-     <div class="tabs tabs-center">
-            
-              
-                <a href="/app" class="tab"><i class="fa-light fa-fire" style="margin-right: 4px;"></i> Live</a>      
-                <a  href="?tab=gaming" class="tab"><i class="fa-light fa-gamepad-modern" style="margin-right: 4px;"></i> Gaming</a>
-                <% if (!isMobile) { %> 
-            		 <% } %> 
-
-                       
-
-            </div>    
-           		 	               <% } %>   
-                                  <% if (tab === "gaming") { %> 
-
-     <div class="tabs tabs-center">
-            
-              
-                <a href="/app" class="tab"><i class="fa-light fa-fire" style="margin-right: 4px;"></i> Live</a>     
-                <% if (!isMobile) { %> 
-                <a href="" class="tab active"><i class="fa-light fa-gamepad-modern" style="margin-right: 4px;"></i> Gaming</a>
-           		 	               <% } %>   
-
-                       
-
-            </div>    
-           		 	               <% } %>   
-                                 
-                                                                   <% if (tab === "movies") { %> 
-
-     <div class="tabs tabs-center">
-                <a href="/app" class="tab"><i class="fa-light fa-fire" style="margin-right: 4px;"></i> Live</a>
-                <a href="?tab=gaming" class="tab"><i class="fa-light fa-gamepad-modern" style="margin-right: 4px;"></i> Gaming</a>
-            </div>    
-           		 	               <% } %>   
+<div class="tabs tabs-center">
+  <% availableTabs.forEach(function(t) { %>
+    
+    <%       
+      const isActive = (activeTabId === t.id);
+      
+       const link = isActive ? "" : t.url; 
+    %>
+    
+    <a href="<%= link %>" class="tab <%= isActive ? 'active' : '' %>">
+      <i class="fa-light <%= t.icon %>" style="margin-right: 4px;"></i> <%= t.label %>
+    </a>
+    
+  <% }); %>
+</div>
 
 
                                  
