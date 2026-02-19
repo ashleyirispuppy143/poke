@@ -119,9 +119,11 @@ function yeast() {
       width: 100vw;
     }
 
-     .branding-pane {
-      flex: 1.8; 
-      background: linear-gradient(135deg, #11050a 0%, #ffabbc 100%);  
+    /* Left Side: Branding */
+    .branding-pane {
+      flex: 1.2;
+      /* Static gradient background */
+      background: linear-gradient(135deg, #11050a 0%, #2b111e 40%, #ffabbc 150%);
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -129,17 +131,7 @@ function yeast() {
       padding: 20px;
       text-align: center;
       position: relative;
-      border-right: 1px solid #2b111e;
-    }
-
-    .mascot {
-      position: absolute;
-      top: 0px;
-      right: 15px; /* Sits top right of the branding pane */
-      max-height: 260px;
-      object-fit: contain;
-      z-index: 2;
-      filter: drop-shadow(0 8px 15px rgba(0,0,0,0.5));
+      border-right: 1px solid rgba(255, 171, 188, 0.1);
     }
     
     .branding-wrapper {
@@ -147,16 +139,27 @@ function yeast() {
       display: flex;
       flex-direction: column;
       align-items: center;
-      max-width: 400px;
+      max-width: 520px; /* Made bigger */
       width: 100%;
-      z-index: 3;
+      margin-top: 100px; /* Give room for mascot to overflow top */
+    }
+
+    .mascot {
+      position: absolute;
+      bottom: 100%; /* Sits exactly on top of the wrapper */
+      right: 20px; /* Positioned to the right */
+      margin-bottom: -24px; /* Slight overlap with the box */
+      max-height: 220px;
+      object-fit: contain;
+      z-index: 2;
+      filter: drop-shadow(0 -5px 15px rgba(0,0,0,0.5));
     }
 
     .branding-content {
       position: relative;
       z-index: 1;
-      background: #1a0a11; /* Solid dark box, no blur */
-      padding: 32px;
+      background: #1a0a11;
+      padding: 48px; /* Bigger padding */
       border-radius: 20px;
       border: 1px solid rgba(255, 171, 204, 0.2);
       box-shadow: 0 20px 50px rgba(0,0,0,0.6);
@@ -164,15 +167,15 @@ function yeast() {
     }
 
     .branding-content img.logo {
-      max-width: 140px;
-      margin-bottom: 16px;
+      max-width: 160px;
+      margin-bottom: 20px;
     }
 
     .branding-content h1 {
-      font-size: clamp(28px, 3.5vw, 54px);
+      font-size: clamp(32px, 4vw, 60px);
       line-height: 1.1;
       color: #fff;
-      margin-bottom: 0px;
+      margin-bottom: 0;
     }
 
     /* Right Side: Form */
@@ -207,7 +210,8 @@ function yeast() {
     a { color: var(--accent); text-decoration: none; font-weight: 500; }
     a:hover { color: var(--accent-hover); text-decoration: underline; }
 
-     .form-group { margin-top: 16px; }
+    /* Forms & Inputs */
+    .form-group { margin-top: 16px; }
     .form-group label { display: block; font-size: 13px; margin-bottom: 6px; color: var(--fg); font-weight: 500; }
     input[type="text"] { width: 100%; padding: 12px; border: 1px solid #333; border-radius: 8px; background: #0a0a0a; color: var(--fg); font-family: inherit; font-size: 14px; transition: border-color 0.2s; }
     input[type="text"]:focus { outline: none; border-color: var(--accent); }
@@ -265,8 +269,8 @@ function yeast() {
     @media (max-width: 800px) {
       html, body { overflow-y: auto; }
       .split-layout { flex-direction: column; height: auto; min-height: 100vh; }
-      .branding-pane { padding: 40px 20px; border-right: none; border-bottom: 1px solid #2b111e; }
-      .mascot { max-height: 160px; right: 10px; }
+      .branding-pane { padding: 40px 20px 20px; border-right: none; border-bottom: 1px solid #2b111e; }
+      .mascot { max-height: 180px; margin-bottom: -15px; right: 10px; }
       .form-pane { padding: 30px 20px; align-items: flex-start; }
     }
   </style>
@@ -287,8 +291,8 @@ function yeast() {
   <div class="split-layout" id="app">
     
     <div class="branding-pane">
-      <img src="/static/poke-chan-2.webp" alt="Poke-chan Mascot" class="mascot" />
       <div class="branding-wrapper">
+        <img src="/static/poke-chan-2.webp" alt="Poke-chan Mascot" class="mascot" />
         <div class="branding-content">
           <img src="/css/logo-poke.svg?v=5" alt="Poke Logo" class="logo" />
           <h1>Welcome<br>to Poke</h1>
@@ -409,7 +413,17 @@ function yeast() {
         
         var speed = parseFloat(document.getElementById('ttsSpeed').value);
         var pitch = parseFloat(document.getElementById('ttsPitch').value);
-        var spacedText = currentCaptchaText.split('').join(' ');
+        
+        // Convert characters to words, prefixing uppercase with "Big "
+        var ttsChars = currentCaptchaText.split('').map(function(char) {
+          if (char >= 'A' && char <= 'Z') {
+            return 'Big ' + char;
+          }
+          return char;
+        });
+        
+        // Join with a comma to force a small pause between characters in TTS
+        var spacedText = ttsChars.join(', ');
         
         var msg = new SpeechSynthesisUtterance("The captcha characters are: " + spacedText);
         msg.rate = speed; 
