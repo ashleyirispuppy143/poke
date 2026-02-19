@@ -355,8 +355,8 @@ function yeast() {
         </div>
 
         <div class="hidden" id="setup-state">
-          <h2>Log in</h2>
-          <p>Solve the captcha and review our policies to log in and create your unique user ID.</p>
+          <h2>Sign up</h2>
+          <p>Do the steps below to jump in to the world of poke!</p>
           
           <div class="form-group">
             <label for="captchaInput">Enter the text shown below:</label>
@@ -375,7 +375,7 @@ function yeast() {
               <div class="captcha-toolbar">
                 <button type="button" class="btn-tool" onclick="toggleA11yMenu()" aria-label="Accessibility Settings">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-                  Settings
+                  Accessibility
                 </button>
                 <button type="button" class="btn-tool" onclick="playCaptchaAudio()" aria-label="Listen to captcha">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
@@ -388,21 +388,21 @@ function yeast() {
               </div>
             </div>
             
-            <input type="text" id="captchaInput" autocomplete="off" placeholder="Type captcha here case-sensitive..." required aria-required="true" />
+            <input type="text" id="captchaInput" autocomplete="off" placeholder="Type captcha here (case-sensitive)..." required aria-required="true" />
           </div>
 
           <div class="form-group">
             <label for="agreeInput">
-              Click and read our <a href="https://poketube.fun/policies/" target="_blank" id="policies-link" onclick="markPoliciesRead()">Policies</a>.<br>Then type <strong>AGREE</strong> to accept, or <strong>DISAGREE</strong> to exit:
+              Click and read our <a href="https://poketube.fun/policies/" target="_blank" id="policies-link" onclick="markPoliciesRead()">Policies</a>.<br>Then type <strong>AGREE</strong> to accept, or <strong>DISAGREE</strong> to yk...disagree for some reason:
             </label>
             <input type="text" id="agreeInput" autocomplete="off" placeholder="AGREE or DISAGREE" required aria-required="true" />
           </div>
 
           <div class="error-msg" id="error-msg" role="alert"></div>
 
-          <button class="btn" onclick="verifyAndProceed()">Verify & Create Account</button>
+            <button class="btn" onclick="verifyAndProceed()">Jump in!</button>
           
-          <button class="btn-text" onclick="openLoginModal()">I already have an account</button>
+          <button class="btn-text" onclick="openLoginModal()">I already have one....</button>
 
           <div class="disclaimer">
             You cannot use Poke for spamming or abuse. Poke accounts are for this single instance only and are not federated.<br><br>
@@ -417,15 +417,15 @@ function yeast() {
   <div class="modal-overlay" id="loginModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <div class="modal-content">
       <div class="modal-header">
-        <h2 id="modalTitle">Sign In</h2>
+        <h2 id="modalTitle">Log In</h2>
         <button class="close-modal" onclick="closeLoginModal()" aria-label="Close modal">&times;</button>
       </div>
-      <p style="margin-top: 0; margin-bottom: 16px;">Enter your existing User ID to access your account.</p>
+      <p style="margin-top: 0; margin-bottom: 16px;">Enter your existing User ID to access ur account</p>
       <div class="form-group" style="margin-top: 0;">
         <label for="existingUserId">User ID:</label>
         <input type="text" id="existingUserId" placeholder="e.g. A1b2C3d4..." autocomplete="off" />
       </div>
-      <button class="btn" onclick="loginExistingUser()">Sign In</button>
+      <button class="btn" onclick="loginExistingUser()">Log In</button>
     </div>
   </div>
 
