@@ -119,10 +119,9 @@ function yeast() {
       width: 100vw;
     }
 
-    /* Left Side: Branding (Plain, No Blur) */
-    .branding-pane {
-      flex: 1.2;
-      background: #11050a; /* Plain, solid dark background */
+     .branding-pane {
+      flex: 1.8; 
+      background: linear-gradient(135deg, #11050a 0%, #ffabbc 100%);  
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -132,6 +131,16 @@ function yeast() {
       position: relative;
       border-right: 1px solid #2b111e;
     }
+
+    .mascot {
+      position: absolute;
+      top: 0px;
+      right: 15px; /* Sits top right of the branding pane */
+      max-height: 260px;
+      object-fit: contain;
+      z-index: 2;
+      filter: drop-shadow(0 8px 15px rgba(0,0,0,0.5));
+    }
     
     .branding-wrapper {
       position: relative;
@@ -140,15 +149,7 @@ function yeast() {
       align-items: center;
       max-width: 400px;
       width: 100%;
-    }
-
-    .mascot {
-      max-height: 200px;
-      object-fit: contain;
-      z-index: 2;
-      position: relative;
-      margin-bottom: -15px; /* Pulls her down to visually sit on the box */
-      filter: drop-shadow(0 -5px 15px rgba(0,0,0,0.6));
+      z-index: 3;
     }
 
     .branding-content {
@@ -171,13 +172,7 @@ function yeast() {
       font-size: clamp(28px, 3.5vw, 54px);
       line-height: 1.1;
       color: #fff;
-      margin-bottom: 8px;
-    }
-    
-    .branding-content p {
-      color: var(--muted);
-      font-size: 15px;
-      margin: 0 auto;
+      margin-bottom: 0px;
     }
 
     /* Right Side: Form */
@@ -212,8 +207,7 @@ function yeast() {
     a { color: var(--accent); text-decoration: none; font-weight: 500; }
     a:hover { color: var(--accent-hover); text-decoration: underline; }
 
-    /* Forms & Inputs (Compacted to fix zoom issue) */
-    .form-group { margin-top: 16px; }
+     .form-group { margin-top: 16px; }
     .form-group label { display: block; font-size: 13px; margin-bottom: 6px; color: var(--fg); font-weight: 500; }
     input[type="text"] { width: 100%; padding: 12px; border: 1px solid #333; border-radius: 8px; background: #0a0a0a; color: var(--fg); font-family: inherit; font-size: 14px; transition: border-color 0.2s; }
     input[type="text"]:focus { outline: none; border-color: var(--accent); }
@@ -272,7 +266,7 @@ function yeast() {
       html, body { overflow-y: auto; }
       .split-layout { flex-direction: column; height: auto; min-height: 100vh; }
       .branding-pane { padding: 40px 20px; border-right: none; border-bottom: 1px solid #2b111e; }
-      .mascot { max-height: 160px; }
+      .mascot { max-height: 160px; right: 10px; }
       .form-pane { padding: 30px 20px; align-items: flex-start; }
     }
   </style>
@@ -293,12 +287,11 @@ function yeast() {
   <div class="split-layout" id="app">
     
     <div class="branding-pane">
+      <img src="/static/poke-chan-2.webp" alt="Poke-chan Mascot" class="mascot" />
       <div class="branding-wrapper">
-        <img src="/static/poke-chan-2.webp" alt="Poke-chan Mascot" class="mascot" />
         <div class="branding-content">
           <img src="/css/logo-poke.svg?v=5" alt="Poke Logo" class="logo" />
           <h1>Welcome<br>to Poke</h1>
-          <p>A fast, secure, and private way to connect.</p>
         </div>
       </div>
     </div>
