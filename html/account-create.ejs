@@ -101,7 +101,7 @@ function yeast() {
       margin: 0; padding: 0; height: 100%; 
       background: var(--bg); color: var(--fg); 
       font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Noto Sans", sans-serif; 
-      overflow: hidden; /* Prevent global scrolling if possible */
+      overflow: hidden; /* Prevent global scrolling */
     }
 
     /* Titles */
@@ -122,16 +122,16 @@ function yeast() {
     /* Left Side: Branding */
     .branding-pane {
       flex: 1.2;
-      /* Static gradient background */
-      background: linear-gradient(135deg, #11050a 0%, #2b111e 40%, #ffabbc 150%);
+      /* Smooth, premium static gradient without animation */
+      background: linear-gradient(135deg, #0b0306 0%, #240e16 45%, #ffabbc 200%);
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
-      padding: 20px;
+      padding: 40px;
       text-align: center;
       position: relative;
-      border-right: 1px solid rgba(255, 171, 188, 0.1);
+      border-right: 1px solid rgba(255, 171, 188, 0.05);
     }
     
     .branding-wrapper {
@@ -139,43 +139,44 @@ function yeast() {
       display: flex;
       flex-direction: column;
       align-items: center;
-      max-width: 520px; /* Made bigger */
+      max-width: 650px; /* Much bigger wrapper */
       width: 100%;
-      margin-top: 100px; /* Give room for mascot to overflow top */
+      margin-top: 60px; /* Room for mascot */
     }
-    
+
     .mascot {
       position: absolute;
-      bottom: 90%; /* Sits exactly on top of the wrapper */
-      right: -43px; /* Positioned to the right */
-      margin-bottom: -62px; /* Slight overlap with the box */
-      max-height: 300px;
+      top: -150px; /* Sits nicely on the top right */
+      right: 20px;
+      max-height: 240px;
       object-fit: contain;
       z-index: 2;
-      filter: drop-shadow(0 -5px 15px rgba(0,0,0,0.5));
+      filter: drop-shadow(0 10px 20px rgba(0,0,0,0.6));
     }
 
     .branding-content {
       position: relative;
       z-index: 1;
-      background: #1a0a11;
-      padding: 48px; /* Bigger padding */
-      border-radius: 20px;
-      border: 1px solid rgba(255, 171, 204, 0.2);
-      box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+      background: transparent; /* Removed the ugly background box */
+      padding: 20px 0; 
+      border: none;
+      box-shadow: none;
       width: 100%;
     }
 
     .branding-content img.logo {
-      max-width: 160px;
-      margin-bottom: 20px;
+      max-width: 220px; /* Bigger logo */
+      margin-bottom: 24px;
+      filter: drop-shadow(0 6px 16px rgba(0,0,0,0.5));
     }
 
     .branding-content h1 {
-      font-size: clamp(32px, 4vw, 60px);
-      line-height: 1.1;
+      font-size: clamp(48px, 6vw, 90px); /* EXTRA LARGE TEXT */
+      line-height: 1.05;
+      letter-spacing: -0.02em;
       color: #fff;
       margin-bottom: 0;
+      text-shadow: 0 8px 30px rgba(0,0,0,0.7); /* Depth shadow to pop off gradient */
     }
 
     /* Right Side: Form */
@@ -270,7 +271,9 @@ function yeast() {
       html, body { overflow-y: auto; }
       .split-layout { flex-direction: column; height: auto; min-height: 100vh; }
       .branding-pane { padding: 40px 20px 20px; border-right: none; border-bottom: 1px solid #2b111e; }
-      .mascot { max-height: 180px; margin-bottom: -15px; right: 10px; }
+      .branding-wrapper { margin-top: 80px; }
+      .mascot { max-height: 160px; top: -110px; right: 0; }
+      .branding-content h1 { font-size: clamp(38px, 8vw, 60px); }
       .form-pane { padding: 30px 20px; align-items: flex-start; }
     }
   </style>
