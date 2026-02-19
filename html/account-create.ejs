@@ -65,31 +65,67 @@ function yeast() {
   <meta name="theme-color" content="#000000" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://poketube.fun; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; base-uri 'self'; form-action 'self'">
   <style>
-    :root { --bg:#0b0b0b; --fg:#e8e8e8; --muted:#9a9a9a; --accent:#71c7ff; }
-    html,body { margin:0; padding:0; height:100%; background:var(--bg); color:var(--fg); font:14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Noto Sans", "Helvetica Neue", Arial, "Apple Color Emoji", "Noto Color Emoji", "Segoe UI Emoji"; }
-    .wrap { min-height:100%; display:grid; place-items:center; padding:24px; }
-    .card { width:100%; max-width:520px; border:1px solid #1c1c1c; border-radius:12px; background:#0f0f0f; box-shadow:0 0 0 1px #121212 inset, 0 8px 32px rgba(0,0,0,.5); }
-    .inner { padding:20px 22px; }
-    h1 { font-size:18px; margin:0 0 8px; }
-    p { margin:8px 0 0; color:var(--muted); }
-    .row { display:flex; align-items:center; gap:12px; margin-top:14px; }
-    .spinner { width:16px; height:16px; border-radius:50%; border:2px solid var(--muted); border-top-color:var(--accent); animation:spin 0.9s linear infinite; }
-    kbd { background:#171717; color:#dcdcdc; padding:2px 6px; border:1px solid #232323; border-radius:6px; font-size:12px; }
-    @keyframes spin { to { transform:rotate(360deg); } }
-    .small { font-size:12px; color:#7b7b7b; }
-    .hidden { display:none !important; }
-    a { color:var(--accent); text-decoration:none; }
-    a:hover { text-decoration:underline; }
+    :root { 
+      --bg: #0b0b0b; 
+      --surface: #141414; 
+      --surface-border: #2a2a2a;
+      --fg: #f3f3f3; 
+      --muted: #a1a1a1; 
+      --accent: #71c7ff; 
+      --accent-hover: #5bb8f6;
+      --danger: #ff6b6b;
+    }
+    html,body { margin:0; padding:0; height:100%; background:var(--bg); color:var(--fg); font:14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Noto Sans", "Helvetica Neue", Arial, sans-serif; }
+    .wrap { min-height:100%; display:grid; place-items:center; padding:24px; box-sizing: border-box; }
+    .card { width:100%; max-width:480px; border:1px solid var(--surface-border); border-radius:16px; background:var(--surface); box-shadow:0 12px 40px rgba(0,0,0,0.6); overflow: hidden; }
+    .inner { padding:32px 28px; }
     
-    /* New styles for forms */
-    .form-group { margin-top: 16px; }
-    .form-group label { display: block; font-size: 13px; margin-bottom: 6px; color: var(--fg); }
-    input[type="text"] { width: 100%; padding: 10px; border: 1px solid #333; border-radius: 6px; background: #1a1a1a; color: var(--fg); font-family: inherit; box-sizing: border-box; }
-    input[type="text"]:focus { outline: 2px solid var(--accent); border-color: transparent; }
-    button.btn { width: 100%; padding: 12px; margin-top: 20px; border: none; border-radius: 6px; background: var(--accent); color: #000; font-weight: bold; cursor: pointer; font-family: inherit; font-size: 14px; transition: opacity 0.2s; }
-    button.btn:hover { opacity: 0.9; }
-    #captchaCanvas { width: 100%; height: 80px; background: #111; border: 1px solid #333; border-radius: 6px; margin-bottom: 8px; }
-    .error-msg { color: #ff6b6b; font-size: 13px; margin-top: 10px; display: none; padding: 8px; background: rgba(255, 107, 107, 0.1); border-radius: 6px; border: 1px solid rgba(255, 107, 107, 0.2); }
+    h1 { font-size:22px; margin:0 0 8px; font-weight: 600; letter-spacing: -0.02em; }
+    p { margin:8px 0 0; color:var(--muted); font-size: 14px; }
+    .row { display:flex; align-items:center; gap:12px; margin-top:16px; }
+    .spinner { width:18px; height:18px; border-radius:50%; border:2px solid #333; border-top-color:var(--accent); animation:spin 0.8s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    
+    .small { font-size:13px; color:var(--muted); line-height: 1.5; }
+    .hidden { display:none !important; }
+    a { color:var(--accent); text-decoration:none; transition: color 0.2s; }
+    a:hover { color:var(--accent-hover); text-decoration:underline; }
+    
+    /* Forms & Inputs */
+    .form-group { margin-top: 20px; }
+    .form-group label { display: block; font-size: 14px; margin-bottom: 8px; color: var(--fg); font-weight: 500; }
+    input[type="text"] { width: 100%; padding: 12px 14px; border: 1px solid #333; border-radius: 8px; background: #0a0a0a; color: var(--fg); font-family: inherit; font-size: 14px; box-sizing: border-box; transition: border-color 0.2s; }
+    input[type="text"]:focus { outline: none; border-color: var(--accent); }
+    input[type="text"]::placeholder { color: #555; }
+    
+    /* Buttons */
+    button.btn { width: 100%; padding: 14px; margin-top: 24px; border: none; border-radius: 8px; background: var(--accent); color: #000; font-weight: 600; cursor: pointer; font-family: inherit; font-size: 15px; transition: background-color 0.2s, transform 0.1s; }
+    button.btn:hover { background: var(--accent-hover); }
+    button.btn:active { transform: scale(0.98); }
+    
+    button.btn-text { background: transparent; color: var(--muted); border: none; font-size: 13px; cursor: pointer; padding: 8px; width: auto; margin: 16px auto 0; display: block; text-decoration: underline; transition: color 0.2s; }
+    button.btn-text:hover { color: var(--fg); }
+
+    /* Captcha UI */
+    .captcha-container { background: #0a0a0a; border: 1px solid #333; border-radius: 8px; overflow: hidden; margin-bottom: 12px; display: flex; flex-direction: column; }
+    #captchaCanvas { width: 100%; height: 80px; display: block; }
+    .captcha-toolbar { display: flex; justify-content: flex-end; padding: 6px 12px; background: #111; border-top: 1px solid #222; }
+    .btn-refresh { background: none; border: none; color: var(--accent); font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 4px; border-radius: 4px; transition: background 0.2s; }
+    .btn-refresh:hover { background: rgba(113, 199, 255, 0.1); }
+    
+    /* Alerts */
+    .error-msg { color: var(--danger); font-size: 13px; margin-top: 16px; display: none; padding: 12px; background: rgba(255, 107, 107, 0.08); border-radius: 8px; border: 1px solid rgba(255, 107, 107, 0.2); line-height: 1.4; }
+    .disclaimer { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--surface-border); text-align: center; }
+
+    /* Modal */
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; padding: 20px; }
+    .modal-overlay.active { opacity: 1; pointer-events: all; }
+    .modal-content { background: var(--surface); border: 1px solid var(--surface-border); border-radius: 16px; width: 100%; max-width: 400px; padding: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.8); transform: translateY(10px); transition: transform 0.2s ease; }
+    .modal-overlay.active .modal-content { transform: translateY(0); }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .modal-header h2 { margin: 0; font-size: 18px; }
+    .close-modal { background: none; border: none; color: var(--muted); font-size: 24px; cursor: pointer; line-height: 1; padding: 0; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; transition: background 0.2s, color 0.2s; }
+    .close-modal:hover { background: #222; color: var(--fg); }
   </style>
 </head>
 <body>
@@ -114,25 +150,54 @@ function yeast() {
       </div>
 
       <div class="inner hidden" id="setup-state">
-        <h1>Human Verification Required</h1>
+        <h1>Security Verification</h1>
         <p>Before generating your user ID, please solve the captcha and agree to our <a href="https://poketube.fun/policies/" target="_blank">policies</a>.</p>
         
         <div class="form-group">
-          <canvas id="captchaCanvas" width="300" height="80"></canvas>
-          <label for="captchaInput">Enter the text shown above (case-sensitive):</label>
-          <input type="text" id="captchaInput" autocomplete="off" placeholder="Type captcha here..." />
+          <label for="captchaInput">Enter the text shown in the image:</label>
+          <div class="captcha-container">
+            <canvas id="captchaCanvas" width="300" height="80" role="img" aria-label="Captcha image containing distorted letters and numbers. Click the refresh button below if it is unreadable."></canvas>
+            <div class="captcha-toolbar">
+              <button type="button" class="btn-refresh" onclick="generateCaptcha()" aria-label="Generate a new captcha image">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.5l5.67 5.67"/></svg>
+                Refresh Captcha
+              </button>
+            </div>
+          </div>
+          <input type="text" id="captchaInput" autocomplete="off" placeholder="Type captcha here (case-sensitive)..." required aria-required="true" />
         </div>
 
         <div class="form-group">
-          <label for="agreeInput">Type <strong>AGREE</strong> to accept all policies:</label>
-          <input type="text" id="agreeInput" autocomplete="off" placeholder="AGREE" />
+          <label for="agreeInput">Type <strong>AGREE</strong> to accept all policies, or <strong>DISAGREE</strong> to exit:</label>
+          <input type="text" id="agreeInput" autocomplete="off" placeholder="AGREE or DISAGREE" required aria-required="true" />
         </div>
 
-        <div class="error-msg" id="error-msg">Incorrect captcha or agreement text. Please try again.</div>
+        <div class="error-msg" id="error-msg" role="alert"></div>
 
         <button class="btn" onclick="verifyAndProceed()">Verify & Create Account</button>
+        
+        <button class="btn-text" onclick="openLoginModal()">I already have an account</button>
+
+        <div class="disclaimer">
+          <p class="small">Poke is provided as is without warranty. <br><a href="/policies/privacy#warranty" target="_blank">Read Warranty Policy</a>.</p>
+        </div>
       </div>
 
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="loginModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modalTitle">Sign In</h2>
+        <button class="close-modal" onclick="closeLoginModal()" aria-label="Close modal">&times;</button>
+      </div>
+      <p style="margin-top: 0; margin-bottom: 16px;">Enter your existing User ID to access your account.</p>
+      <div class="form-group" style="margin-top: 0;">
+        <label for="existingUserId">User ID:</label>
+        <input type="text" id="existingUserId" placeholder="e.g. A1b2C3d4..." autocomplete="off" />
+      </div>
+      <button class="btn" onclick="loginExistingUser()">Sign In</button>
     </div>
   </div>
 
@@ -143,7 +208,8 @@ function yeast() {
     var currentUserId = localStorage.getItem("UserID");
     var currentCaptchaText = "";
 
-     function generateCaptcha() {
+    // Generate a hard, distorted canvas captcha
+    function generateCaptcha() {
       const canvas = document.getElementById('captchaCanvas');
       const ctx = canvas.getContext('2d');
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -190,6 +256,10 @@ function yeast() {
         ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, Math.random() * 2, 0, 2 * Math.PI);
         ctx.fill();
       }
+      
+      // Clear input on refresh
+      document.getElementById('captchaInput').value = '';
+      document.getElementById('captchaInput').focus();
     }
 
     // Main execution
@@ -206,14 +276,21 @@ function yeast() {
     // Validate form and proceed with original logic
     function verifyAndProceed() {
       var captchaInput = document.getElementById('captchaInput').value;
-      var agreeInput = document.getElementById('agreeInput').value;
+      var agreeInput = document.getElementById('agreeInput').value.trim().toUpperCase();
       var errorMsg = document.getElementById('error-msg');
 
-      if (captchaInput !== currentCaptchaText || agreeInput !== 'AGREE') {
-        // Failed verification
-        errorMsg.style.display = 'block';
-        document.getElementById('captchaInput').value = '';
-        generateCaptcha(); // Regenerate a new captcha to prevent brute-forcing
+      // Check for DISAGREE first
+      if (agreeInput === 'DISAGREE') {
+        window.location.href = '/';
+        return;
+      }
+
+      // Verify Captcha and AGREE
+      if (captchaInput !== currentCaptchaText) {
+        showError('Incorrect captcha. Please try again.');
+        generateCaptcha(); 
+      } else if (agreeInput !== 'AGREE') {
+        showError('You must type AGREE to accept the policies, or DISAGREE to exit.');
       } else {
         // Success verification
         errorMsg.style.display = 'none';
@@ -223,6 +300,42 @@ function yeast() {
         <% db.set(`user.${userid}`, userid) %>
         location.href = "/my-acc?ID=" + `<%- userid %>` + "&rparam=1";
       }
+    }
+    
+    function showError(message) {
+      var errorMsg = document.getElementById('error-msg');
+      errorMsg.textContent = message;
+      errorMsg.style.display = 'block';
+    }
+
+    // Modal Logic
+    const modal = document.getElementById('loginModal');
+    
+    function openLoginModal() {
+      modal.classList.add('active');
+      document.getElementById('existingUserId').focus();
+    }
+    
+    function closeLoginModal() {
+      modal.classList.remove('active');
+    }
+    
+    // Close modal on overlay click
+    modal.addEventListener('click', function(e) {
+      if (e.target === modal) {
+        closeLoginModal();
+      }
+    });
+
+    function loginExistingUser() {
+      var inputId = document.getElementById('existingUserId').value.trim();
+      if (!inputId) {
+        alert("Please enter a valid User ID.");
+        return;
+      }
+      
+      localStorage.setItem("UserID", inputId);
+      location.href = "/my-acc?ID=" + inputId + "&rparam=1";
     }
   </script>
 </body>
