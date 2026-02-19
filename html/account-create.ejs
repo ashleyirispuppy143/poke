@@ -93,10 +93,15 @@ function yeast() {
       --danger: #ff6b6b;
     }
 
+    * {
+      box-sizing: border-box;
+    }
+
     html, body { 
       margin: 0; padding: 0; height: 100%; 
       background: var(--bg); color: var(--fg); 
       font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Noto Sans", sans-serif; 
+      overflow-x: hidden;
     }
 
     /* Titles */
@@ -115,10 +120,18 @@ function yeast() {
       overflow: hidden;
     }
 
-    /* Left Side: Branding */
+    /* Left Side: Branding (Very Cool) */
+    @keyframes gradientShift {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
     .branding-pane {
-      flex: 1;
-      background: linear-gradient(135deg, #2b111e, #ffabcc);
+      flex: 1.2;
+      background: linear-gradient(-45deg, #11050a, #2b111e, #ffabcc, #3a1626);
+      background-size: 400% 400%;
+      animation: gradientShift 15s ease infinite;
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -127,68 +140,91 @@ function yeast() {
       text-align: center;
       position: relative;
       overflow: hidden;
+      box-shadow: inset -10px 0 30px rgba(0,0,0,0.5);
     }
     
     .branding-pane::before {
       content: '';
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
-      background: radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.4) 100%);
+      background: radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.6) 100%);
       pointer-events: none;
+      z-index: 1;
+    }
+
+    .mascot {
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      max-height: 65vh;
+      max-width: 90%;
+      object-fit: contain;
+      object-position: bottom center;
+      z-index: 2;
+      pointer-events: none;
+      filter: drop-shadow(0 -10px 25px rgba(0,0,0,0.5));
     }
 
     .branding-content {
       position: relative;
-      z-index: 2;
+      z-index: 3;
+      background: rgba(15, 15, 15, 0.4);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      padding: 40px;
+      border-radius: 24px;
+      border: 1px solid rgba(255, 171, 204, 0.2);
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
       animation: fadeUp 0.8s ease-out;
+      margin-bottom: 15vh; /* Space to not completely cover the mascot */
     }
 
-    .branding-content img {
-      max-width: 180px;
+    .branding-content img.logo {
+      max-width: 160px;
       margin-bottom: 24px;
-      filter: drop-shadow(0 10px 20px rgba(0,0,0,0.4));
+      filter: drop-shadow(0 4px 12px rgba(0,0,0,0.4));
     }
 
     .branding-content h1 {
-      font-size: clamp(40px, 5vw, 70px);
+      font-size: clamp(36px, 4vw, 64px);
       line-height: 1.1;
       color: #fff;
-      text-shadow: 0 8px 24px rgba(0,0,0,0.5);
-      margin-bottom: 16px;
+      text-shadow: 0 4px 16px rgba(0,0,0,0.6);
+      margin-bottom: 12px;
     }
     
     .branding-content p {
       color: rgba(255, 255, 255, 0.9);
-      font-size: 18px;
-      max-width: 400px;
+      font-size: 17px;
+      max-width: 380px;
       margin: 0 auto;
-      text-shadow: 0 2px 8px rgba(0,0,0,0.5);
     }
 
-    /* Right Side: Form */
+    /* Right Side: Form (Non-floating) */
     .form-pane {
       flex: 1;
       display: flex;
       justify-content: center;
       align-items: center;
       background: var(--bg);
-      padding: 24px;
+      padding: 40px 24px;
       overflow-y: auto;
+      overflow-x: hidden;
     }
 
     .card { 
       width: 100%; 
-      max-width: 460px; 
-      border: 1px solid var(--surface-border); 
-      border-radius: 16px; 
-      background: var(--surface); 
-      box-shadow: 0 12px 40px rgba(0,0,0,0.6); 
-      padding: 32px;
-      box-sizing: border-box;
+      max-width: 420px; 
+      /* Removed floating/box styling */
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      padding: 0;
       animation: fadeUp 0.6s ease-out 0.2s both;
     }
 
-    .card h2 { font-size: 24px; margin-bottom: 8px; }
+    .card h2 { font-size: 32px; margin-bottom: 8px; color: var(--fg); }
     p { margin: 8px 0 0; color: var(--muted); }
     
     .row { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
@@ -204,7 +240,7 @@ function yeast() {
     /* Forms & Inputs */
     .form-group { margin-top: 24px; }
     .form-group label { display: block; font-size: 14px; margin-bottom: 8px; color: var(--fg); font-weight: 500; }
-    input[type="text"] { width: 100%; padding: 14px 16px; border: 1px solid #333; border-radius: 8px; background: #0a0a0a; color: var(--fg); font-family: inherit; font-size: 15px; box-sizing: border-box; transition: border-color 0.2s, box-shadow 0.2s; }
+    input[type="text"] { width: 100%; padding: 14px 16px; border: 1px solid #333; border-radius: 8px; background: #0a0a0a; color: var(--fg); font-family: inherit; font-size: 15px; transition: border-color 0.2s, box-shadow 0.2s; }
     input[type="text"]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255, 171, 204, 0.15); }
     input[type="text"]::placeholder { color: #555; }
 
@@ -222,10 +258,36 @@ function yeast() {
     .captcha-toolbar { display: flex; justify-content: flex-end; gap: 8px; padding: 8px 12px; background: #111; border-top: 1px solid #222; }
     .btn-tool { background: none; border: none; color: var(--accent); font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 6px; transition: background 0.2s; font-weight: 500; }
     .btn-tool:hover { background: rgba(255, 171, 204, 0.15); }
+
+    /* TTS Controls */
+    .tts-settings {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px;
+      background: #0f0f0f;
+      border: 1px solid #222;
+      border-radius: 8px;
+      margin-bottom: 12px;
+    }
+    .tts-settings label {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+      flex: 1;
+      margin: 0 !important; 
+    }
+    .tts-settings input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
     
     /* Alerts & Disclaimers */
     .error-msg { color: var(--danger); font-size: 13px; margin-top: 16px; display: none; padding: 12px; background: rgba(255, 107, 107, 0.08); border-radius: 8px; border: 1px solid rgba(255, 107, 107, 0.2); line-height: 1.4; }
-    .disclaimer { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--surface-border); text-align: center; color: #777; font-size: 12px; line-height: 1.6; }
+    .disclaimer { margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--surface-border); text-align: left; color: #777; font-size: 12px; line-height: 1.6; }
 
     /* Modal */
     .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; padding: 20px; }
@@ -238,11 +300,12 @@ function yeast() {
 
     /* Responsive */
     @media (max-width: 800px) {
-      .split-layout { flex-direction: column; height: auto; min-height: 100vh; overflow-y: auto; }
-      .branding-pane { padding: 40px 20px; flex: none; }
-      .branding-content img { max-width: 120px; }
-      .form-pane { padding: 20px; align-items: flex-start; }
-      .card { box-shadow: none; border: none; background: transparent; padding: 0; }
+      .split-layout { flex-direction: column; height: auto; min-height: 100vh; overflow-y: auto; overflow-x: hidden; }
+      .branding-pane { padding: 40px 20px 60px; flex: none; min-height: 50vh; }
+      .branding-content img.logo { max-width: 120px; }
+      .branding-content { margin-bottom: 0; padding: 24px; }
+      .mascot { opacity: 0.3; filter: blur(2px); } /* Fade mascot on mobile so text is legible */
+      .form-pane { padding: 40px 20px; align-items: flex-start; }
     }
   </style>
 </head>
@@ -262,8 +325,9 @@ function yeast() {
   <div class="split-layout" id="app">
     
     <div class="branding-pane">
+      <img src="/static/poke-chan-2.webp" alt="Poke-chan Mascot" class="mascot" />
       <div class="branding-content">
-        <img src="/css/logo-poke.svg?v=5" alt="Poke Logo" />
+        <img src="/css/logo-poke.svg?v=5" alt="Poke Logo" class="logo" />
         <h1>Welcome<br>to Poke</h1>
        </div>
     </div>
@@ -277,8 +341,8 @@ function yeast() {
         </div>
 
         <div class="hidden" id="setup-state">
-          <h2>Security Verification</h2>
-          <p>Solve the captcha and review our policies to create your unique user ID.</p>
+          <h2>Log in</h2>
+          <p>Solve the captcha and review our policies to log in and create your unique user ID.</p>
           
           <div class="form-group">
             <label for="captchaInput">Enter the text shown below:</label>
@@ -295,6 +359,16 @@ function yeast() {
                 </button>
               </div>
             </div>
+            
+            <div class="tts-settings">
+              <label>Speech Speed
+                <input type="range" id="ttsSpeed" min="0.3" max="1.5" step="0.1" value="0.8" aria-label="Adjust TTS Speed">
+              </label>
+              <label>Speech Pitch
+                <input type="range" id="ttsPitch" min="0" max="2" step="0.1" value="1.0" aria-label="Adjust TTS Pitch">
+              </label>
+            </div>
+
             <input type="text" id="captchaInput" autocomplete="off" placeholder="Type captcha here (case-sensitive)..." required aria-required="true" />
           </div>
 
@@ -312,7 +386,7 @@ function yeast() {
           <button class="btn-text" onclick="openLoginModal()">I already have an account</button>
 
           <div class="disclaimer">
-            You cannot use Poke for spamming or abuse. Poke accounts are for this single instance only and are not federated.<br>
+            You cannot use Poke for spamming or abuse. Poke accounts are for this single instance only and are not federated.<br><br>
             Poke is provided as is without warranty. <a href="/policies/privacy#warranty" target="_blank">Read Warranty Policy</a>.
           </div>
         </div>
@@ -349,15 +423,19 @@ function yeast() {
       policiesRead = true;
     }
 
-    // TTS Function
+    // TTS Function with Pitch and Rate Controls
     function playCaptchaAudio() {
       if ('speechSynthesis' in window) {
-        // Stop any current speech
-        window.speechSynthesis.cancel();
-        // Add spaces between characters so the TTS reads letters individually
+        window.speechSynthesis.cancel(); // Stop any current speech
+        
+        var speed = parseFloat(document.getElementById('ttsSpeed').value);
+        var pitch = parseFloat(document.getElementById('ttsPitch').value);
         var spacedText = currentCaptchaText.split('').join(' ');
+        
         var msg = new SpeechSynthesisUtterance("The captcha characters are: " + spacedText);
-        msg.rate = 0.8; // Slightly slower for clarity
+        msg.rate = speed; 
+        msg.pitch = pitch;
+        
         window.speechSynthesis.speak(msg);
       } else {
         alert("Text-to-speech is not supported in your browser.");
