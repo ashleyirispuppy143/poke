@@ -2657,14 +2657,14 @@ const drawPause = () => {
   }
 };
 
-// Aggressive Autoplay Logic
-const forcePlay = async () => {
+ const forcePlay = async () => {
+   AMvideo.currentTime = 0;
+  
   try {
     await AMvideo.play();
   } catch (err) {
-    // If blocked, mute and try again (Browsers allow muted autoplay)
-     try {
-      await AMvideo.play();
+      try {
+       await AMvideo.play();
     } catch (e) {
       console.error("Autoplay failed completely.");
     }
