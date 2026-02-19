@@ -2663,9 +2663,7 @@ const forcePlay = async () => {
     await AMvideo.play();
   } catch (err) {
     // If blocked, mute and try again (Browsers allow muted autoplay)
-    console.warn("Autoplay blocked. Muting to force play.");
-    AMvideo.muted = true;
-    try {
+     try {
       await AMvideo.play();
     } catch (e) {
       console.error("Autoplay failed completely.");
