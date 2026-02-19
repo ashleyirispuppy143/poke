@@ -4227,7 +4227,7 @@ const vid = document.getElementById("video");
         }
 
         #error-container {
-            display: none; 
+            display: block; 
             max-width: 500px;
             width: 90%;
             text-align: center;
@@ -4337,26 +4337,7 @@ const vid = document.getElementById("video");
 </head>
 <body>
 
-    <script>
-        (function() {
-            let retries = parseInt(sessionStorage.getItem('videoErrorRetries') || '0');
-
-            const navEntry = performance.getEntriesByType("navigation")[0];
-            if (navEntry && navEntry.type !== 'reload') {
-                retries = 0;
-            }
-
-            if (retries < 4) {
-                sessionStorage.setItem('videoErrorRetries', retries + 1);
-                window.location.reload();
-            } else {
-                sessionStorage.removeItem('videoErrorRetries');
-                document.addEventListener("DOMContentLoaded", function() {
-                    document.getElementById('error-container').style.display = 'block';
-                });
-            }
-        })();
-    </script>
+ 
 
     <noscript>
         <style>
@@ -4373,7 +4354,7 @@ const vid = document.getElementById("video");
         <h1>Video unavailable</h1>
         
         <p class="subtitle">
-            We attempted to reload the connection automatically but were unsuccessful. Please check ur network. (╥﹏╥)
+            We cannot Load this video (╥﹏╥)
         </p>
 
         <div class="might-be">It might be because...</div>
