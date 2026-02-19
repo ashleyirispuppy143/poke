@@ -58,64 +58,174 @@ function yeast() {
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Redirecting…</title>
+  <title>Welcome to Poke | Redirecting…</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="color-scheme" content="dark light" />
-  <meta name="theme-color" content="#000000" />
+  <meta name="theme-color" content="#ffabcc" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://poketube.fun; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; base-uri 'self'; form-action 'self'">
   <style>
+    /* Custom Fonts */
+    @font-face {
+      src: url("/css/OpenDyslexic3-Regular.ttf");
+      font-family: "OpenDyslexic3";
+      font-style: normal;
+      font-stretch: 1% 800%;
+      font-display: swap;
+    }
+
+    @font-face {
+      font-family: "PokeTube Flex";
+      src: url("/static/robotoflex.ttf");
+      font-style: normal;
+      font-stretch: 1% 800%;
+      font-display: swap;
+    }
+
     :root { 
       --bg: #0b0b0b; 
       --surface: #141414; 
       --surface-border: #2a2a2a;
       --fg: #f3f3f3; 
       --muted: #a1a1a1; 
-      --accent: #71c7ff; 
-      --accent-hover: #5bb8f6;
+      --accent: #ffabcc; 
+      --accent-hover: #ff8cb6;
       --danger: #ff6b6b;
     }
-    html,body { margin:0; padding:0; height:100%; background:var(--bg); color:var(--fg); font:14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Noto Sans", "Helvetica Neue", Arial, sans-serif; }
-    .wrap { min-height:100%; display:grid; place-items:center; padding:24px; box-sizing: border-box; }
-    .card { width:100%; max-width:480px; border:1px solid var(--surface-border); border-radius:16px; background:var(--surface); box-shadow:0 12px 40px rgba(0,0,0,0.6); overflow: hidden; }
-    .inner { padding:32px 28px; }
+
+    html, body { 
+      margin: 0; padding: 0; height: 100%; 
+      background: var(--bg); color: var(--fg); 
+      font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Noto Sans", sans-serif; 
+    }
+
+    /* Titles */
+    h1, h2 {
+      font-family: "PokeTube Flex", sans-serif;
+      font-stretch: ultra-expanded;
+      font-weight: 1000;
+      margin: 0px;
+    }
+
+    /* Split UI Layout */
+    .split-layout {
+      display: flex;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+    }
+
+    /* Left Side: Branding */
+    .branding-pane {
+      flex: 1;
+      background: linear-gradient(135deg, #2b111e, #ffabcc);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 40px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
     
-    h1 { font-size:22px; margin:0 0 8px; font-weight: 600; letter-spacing: -0.02em; }
-    p { margin:8px 0 0; color:var(--muted); font-size: 14px; }
-    .row { display:flex; align-items:center; gap:12px; margin-top:16px; }
-    .spinner { width:18px; height:18px; border-radius:50%; border:2px solid #333; border-top-color:var(--accent); animation:spin 0.8s linear infinite; }
-    @keyframes spin { to { transform:rotate(360deg); } }
+    .branding-pane::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.4) 100%);
+      pointer-events: none;
+    }
+
+    .branding-content {
+      position: relative;
+      z-index: 2;
+      animation: fadeUp 0.8s ease-out;
+    }
+
+    .branding-content img {
+      max-width: 180px;
+      margin-bottom: 24px;
+      filter: drop-shadow(0 10px 20px rgba(0,0,0,0.4));
+    }
+
+    .branding-content h1 {
+      font-size: clamp(40px, 5vw, 70px);
+      line-height: 1.1;
+      color: #fff;
+      text-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      margin-bottom: 16px;
+    }
     
-    .small { font-size:13px; color:var(--muted); line-height: 1.5; }
-    .hidden { display:none !important; }
-    a { color:var(--accent); text-decoration:none; transition: color 0.2s; }
-    a:hover { color:var(--accent-hover); text-decoration:underline; }
+    .branding-content p {
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 18px;
+      max-width: 400px;
+      margin: 0 auto;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    }
+
+    /* Right Side: Form */
+    .form-pane {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: var(--bg);
+      padding: 24px;
+      overflow-y: auto;
+    }
+
+    .card { 
+      width: 100%; 
+      max-width: 460px; 
+      border: 1px solid var(--surface-border); 
+      border-radius: 16px; 
+      background: var(--surface); 
+      box-shadow: 0 12px 40px rgba(0,0,0,0.6); 
+      padding: 32px;
+      box-sizing: border-box;
+      animation: fadeUp 0.6s ease-out 0.2s both;
+    }
+
+    .card h2 { font-size: 24px; margin-bottom: 8px; }
+    p { margin: 8px 0 0; color: var(--muted); }
     
+    .row { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+    .spinner { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #333; border-top-color: var(--accent); animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+    .small { font-size: 13px; color: var(--muted); line-height: 1.5; }
+    .hidden { display: none !important; }
+    a { color: var(--accent); text-decoration: none; transition: color 0.2s; font-weight: 500; }
+    a:hover { color: var(--accent-hover); text-decoration: underline; }
+
     /* Forms & Inputs */
-    .form-group { margin-top: 20px; }
+    .form-group { margin-top: 24px; }
     .form-group label { display: block; font-size: 14px; margin-bottom: 8px; color: var(--fg); font-weight: 500; }
-    input[type="text"] { width: 100%; padding: 12px 14px; border: 1px solid #333; border-radius: 8px; background: #0a0a0a; color: var(--fg); font-family: inherit; font-size: 14px; box-sizing: border-box; transition: border-color 0.2s; }
-    input[type="text"]:focus { outline: none; border-color: var(--accent); }
+    input[type="text"] { width: 100%; padding: 14px 16px; border: 1px solid #333; border-radius: 8px; background: #0a0a0a; color: var(--fg); font-family: inherit; font-size: 15px; box-sizing: border-box; transition: border-color 0.2s, box-shadow 0.2s; }
+    input[type="text"]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255, 171, 204, 0.15); }
     input[type="text"]::placeholder { color: #555; }
-    
+
     /* Buttons */
-    button.btn { width: 100%; padding: 14px; margin-top: 24px; border: none; border-radius: 8px; background: var(--accent); color: #000; font-weight: 600; cursor: pointer; font-family: inherit; font-size: 15px; transition: background-color 0.2s, transform 0.1s; }
+    button.btn { width: 100%; padding: 14px; margin-top: 24px; border: none; border-radius: 8px; background: var(--accent); color: #000; font-weight: bold; cursor: pointer; font-family: inherit; font-size: 15px; transition: background-color 0.2s, transform 0.1s; }
     button.btn:hover { background: var(--accent-hover); }
     button.btn:active { transform: scale(0.98); }
-    
-    button.btn-text { background: transparent; color: var(--muted); border: none; font-size: 13px; cursor: pointer; padding: 8px; width: auto; margin: 16px auto 0; display: block; text-decoration: underline; transition: color 0.2s; }
+
+    button.btn-text { background: transparent; color: var(--muted); border: none; font-size: 14px; cursor: pointer; padding: 8px; width: auto; margin: 16px auto 0; display: block; text-decoration: underline; transition: color 0.2s; }
     button.btn-text:hover { color: var(--fg); }
 
     /* Captcha UI */
     .captcha-container { background: #0a0a0a; border: 1px solid #333; border-radius: 8px; overflow: hidden; margin-bottom: 12px; display: flex; flex-direction: column; }
-    #captchaCanvas { width: 100%; height: 80px; display: block; }
-    .captcha-toolbar { display: flex; justify-content: flex-end; padding: 6px 12px; background: #111; border-top: 1px solid #222; }
-    .btn-refresh { background: none; border: none; color: var(--accent); font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 4px; border-radius: 4px; transition: background 0.2s; }
-    .btn-refresh:hover { background: rgba(113, 199, 255, 0.1); }
+    #captchaCanvas { width: 100%; height: 90px; display: block; }
+    .captcha-toolbar { display: flex; justify-content: flex-end; gap: 8px; padding: 8px 12px; background: #111; border-top: 1px solid #222; }
+    .btn-tool { background: none; border: none; color: var(--accent); font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 6px; transition: background 0.2s; font-weight: 500; }
+    .btn-tool:hover { background: rgba(255, 171, 204, 0.15); }
     
-    /* Alerts */
+    /* Alerts & Disclaimers */
     .error-msg { color: var(--danger); font-size: 13px; margin-top: 16px; display: none; padding: 12px; background: rgba(255, 107, 107, 0.08); border-radius: 8px; border: 1px solid rgba(255, 107, 107, 0.2); line-height: 1.4; }
-    .disclaimer { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--surface-border); text-align: center; }
+    .disclaimer { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--surface-border); text-align: center; color: #777; font-size: 12px; line-height: 1.6; }
 
     /* Modal */
     .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; padding: 20px; }
@@ -123,17 +233,25 @@ function yeast() {
     .modal-content { background: var(--surface); border: 1px solid var(--surface-border); border-radius: 16px; width: 100%; max-width: 400px; padding: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.8); transform: translateY(10px); transition: transform 0.2s ease; }
     .modal-overlay.active .modal-content { transform: translateY(0); }
     .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-    .modal-header h2 { margin: 0; font-size: 18px; }
     .close-modal { background: none; border: none; color: var(--muted); font-size: 24px; cursor: pointer; line-height: 1; padding: 0; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; transition: background 0.2s, color 0.2s; }
     .close-modal:hover { background: #222; color: var(--fg); }
+
+    /* Responsive */
+    @media (max-width: 800px) {
+      .split-layout { flex-direction: column; height: auto; min-height: 100vh; overflow-y: auto; }
+      .branding-pane { padding: 40px 20px; flex: none; }
+      .branding-content img { max-width: 120px; }
+      .form-pane { padding: 20px; align-items: flex-start; }
+      .card { box-shadow: none; border: none; background: transparent; padding: 0; }
+    }
   </style>
 </head>
 <body>
   <noscript>
-    <div class="wrap">
-      <div class="card">
-        <div class="inner">
-          <h1>JavaScript required</h1>
+    <div class="split-layout">
+      <div class="form-pane" style="width: 100%; justify-content: center;">
+        <div class="card">
+          <h2>JavaScript required</h2>
           <p>This page assigns you a user ID and redirects to your account.</p>
           <p class="small">Enable JavaScript and refresh, or go to <a href="/my-acc">/my-acc</a> and sign in manually.</p>
         </div>
@@ -141,48 +259,65 @@ function yeast() {
     </div>
   </noscript>
 
-  <div class="wrap" id="app">
-    <div class="card">
-      
-      <div class="inner" id="loading-state">
-        <h1>Preparing your account…</h1>
-        <div class="row"><div class="spinner" aria-hidden="true"></div><p>Checking authorization securely.</p></div>
-      </div>
+  <div class="split-layout" id="app">
+    
+    <div class="branding-pane">
+      <div class="branding-content">
+        <img src="/css/logo-poke.svg?v=5" alt="Poke Logo" />
+        <h1>Welcome<br>to Poke</h1>
+       </div>
+    </div>
 
-      <div class="inner hidden" id="setup-state">
-        <h1>Security Verification</h1>
-        <p>Before generating your user ID, please solve the captcha and agree to our <a href="https://poketube.fun/policies/" target="_blank">policies</a>.</p>
+    <div class="form-pane">
+      <div class="card">
         
-        <div class="form-group">
-          <label for="captchaInput">Enter the text shown in the image:</label>
-          <div class="captcha-container">
-            <canvas id="captchaCanvas" width="300" height="80" role="img" aria-label="Captcha image containing distorted letters and numbers. Click the refresh button below if it is unreadable."></canvas>
-            <div class="captcha-toolbar">
-              <button type="button" class="btn-refresh" onclick="generateCaptcha()" aria-label="Generate a new captcha image">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.5l5.67 5.67"/></svg>
-                Refresh Captcha
-              </button>
+        <div id="loading-state">
+          <h2>Preparing account…</h2>
+          <div class="row"><div class="spinner" aria-hidden="true"></div><p>Checking authorization securely.</p></div>
+        </div>
+
+        <div class="hidden" id="setup-state">
+          <h2>Security Verification</h2>
+          <p>Solve the captcha and review our policies to create your unique user ID.</p>
+          
+          <div class="form-group">
+            <label for="captchaInput">Enter the text shown below:</label>
+            <div class="captcha-container">
+              <canvas id="captchaCanvas" width="300" height="90" role="img" aria-label="Captcha image containing distorted letters and numbers."></canvas>
+              <div class="captcha-toolbar">
+                <button type="button" class="btn-tool" onclick="playCaptchaAudio()" aria-label="Listen to captcha">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+                  Listen
+                </button>
+                <button type="button" class="btn-tool" onclick="generateCaptcha()" aria-label="Generate a new captcha image">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.5l5.67 5.67"/></svg>
+                  Refresh
+                </button>
+              </div>
             </div>
+            <input type="text" id="captchaInput" autocomplete="off" placeholder="Type captcha here (case-sensitive)..." required aria-required="true" />
           </div>
-          <input type="text" id="captchaInput" autocomplete="off" placeholder="Type captcha here (case-sensitive)..." required aria-required="true" />
+
+          <div class="form-group">
+            <label for="agreeInput">
+              Click and read our <a href="https://poketube.fun/policies/" target="_blank" id="policies-link" onclick="markPoliciesRead()">Policies</a>.<br>Then type <strong>AGREE</strong> to accept, or <strong>DISAGREE</strong> to exit:
+            </label>
+            <input type="text" id="agreeInput" autocomplete="off" placeholder="AGREE or DISAGREE" required aria-required="true" />
+          </div>
+
+          <div class="error-msg" id="error-msg" role="alert"></div>
+
+          <button class="btn" onclick="verifyAndProceed()">Verify & Create Account</button>
+          
+          <button class="btn-text" onclick="openLoginModal()">I already have an account</button>
+
+          <div class="disclaimer">
+            You cannot use Poke for spamming or abuse. Poke accounts are for this single instance only and are not federated.<br>
+            Poke is provided as is without warranty. <a href="/policies/privacy#warranty" target="_blank">Read Warranty Policy</a>.
+          </div>
         </div>
 
-        <div class="form-group">
-          <label for="agreeInput">Type <strong>AGREE</strong> to accept all policies, or <strong>DISAGREE</strong> to exit:</label>
-          <input type="text" id="agreeInput" autocomplete="off" placeholder="AGREE or DISAGREE" required aria-required="true" />
-        </div>
-
-        <div class="error-msg" id="error-msg" role="alert"></div>
-
-        <button class="btn" onclick="verifyAndProceed()">Verify & Create Account</button>
-        
-        <button class="btn-text" onclick="openLoginModal()">I already have an account</button>
-
-        <div class="disclaimer">
-          <p class="small">Poke is provided as is without warranty. <br><a href="/policies/privacy#warranty" target="_blank">Read Warranty Policy</a>.</p>
-        </div>
       </div>
-
     </div>
   </div>
 
@@ -207,6 +342,27 @@ function yeast() {
     
     var currentUserId = localStorage.getItem("UserID");
     var currentCaptchaText = "";
+    var policiesRead = false;
+
+    // Track if user clicked policies link
+    function markPoliciesRead() {
+      policiesRead = true;
+    }
+
+    // TTS Function
+    function playCaptchaAudio() {
+      if ('speechSynthesis' in window) {
+        // Stop any current speech
+        window.speechSynthesis.cancel();
+        // Add spaces between characters so the TTS reads letters individually
+        var spacedText = currentCaptchaText.split('').join(' ');
+        var msg = new SpeechSynthesisUtterance("The captcha characters are: " + spacedText);
+        msg.rate = 0.8; // Slightly slower for clarity
+        window.speechSynthesis.speak(msg);
+      } else {
+        alert("Text-to-speech is not supported in your browser.");
+      }
+    }
 
     // Generate a hard, distorted canvas captcha
     function generateCaptcha() {
@@ -218,7 +374,7 @@ function yeast() {
       ctx.fillStyle = '#111';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Random characters (removed visually ambiguous ones like I, l, 1, O, 0)
+      // Random characters
       const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
       currentCaptchaText = '';
       for (let i = 0; i < 6; i++) {
@@ -235,16 +391,16 @@ function yeast() {
         ctx.stroke();
       }
 
-      // Draw text with random size, position, rotation, and color
+      // Draw text with random size, position, rotation, and color using OpenDyslexic3
       for (let i = 0; i < currentCaptchaText.length; i++) {
         ctx.save();
-        const fontSize = 30 + Math.random() * 15;
-        ctx.font = `bold ${fontSize}px sans-serif`;
-        // Position text evenly across width but random heights
-        ctx.translate(20 + (i * 45), 45 + (Math.random() * 15 - 7)); 
-        // Random rotation
-        ctx.rotate((Math.random() - 0.5) * 0.8);
-        ctx.fillStyle = `hsl(${Math.random() * 360}, 70%, 65%)`;
+        const fontSize = 35 + Math.random() * 15;
+        // Apply the requested accessibility font
+        ctx.font = `bold ${fontSize}px "OpenDyslexic3", sans-serif`;
+        
+        ctx.translate(25 + (i * 45), 55 + (Math.random() * 10 - 5)); 
+        ctx.rotate((Math.random() - 0.5) * 0.6);
+        ctx.fillStyle = `hsl(${Math.random() * 360}, 70%, 75%)`;
         ctx.fillText(currentCaptchaText[i], 0, 0);
         ctx.restore();
       }
@@ -270,7 +426,11 @@ function yeast() {
       // User is not logged in, show captcha form
       document.getElementById('loading-state').classList.add('hidden');
       document.getElementById('setup-state').classList.remove('hidden');
-      generateCaptcha();
+      
+      // Wait a tiny bit to ensure custom fonts have loaded before drawing to canvas
+      document.fonts.ready.then(function() {
+        generateCaptcha();
+      });
     }
 
     // Validate form and proceed with original logic
@@ -285,8 +445,10 @@ function yeast() {
         return;
       }
 
-      // Verify Captcha and AGREE
-      if (captchaInput !== currentCaptchaText) {
+      // Verify Policies Click, Captcha, and AGREE
+      if (!policiesRead) {
+        showError('You must click and read the Policies link before continuing.');
+      } else if (captchaInput !== currentCaptchaText) {
         showError('Incorrect captcha. Please try again.');
         generateCaptcha(); 
       } else if (agreeInput !== 'AGREE') {
@@ -304,7 +466,7 @@ function yeast() {
     
     function showError(message) {
       var errorMsg = document.getElementById('error-msg');
-      errorMsg.textContent = message;
+      errorMsg.innerHTML = message;
       errorMsg.style.display = 'block';
     }
 
