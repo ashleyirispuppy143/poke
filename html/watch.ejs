@@ -4207,30 +4207,152 @@ const vid = document.getElementById("video");
   <% } %>
 <% } catch (error) { %>
   
-<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f0f0f; color: #f1f1f1; display: flex; align-items: center; justify-content: center; height: 100vh;">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Loading Failed</title>
+    <style>
+         @import url('https://p.poketube.fun/https://fonts.bunny.net/css?family=roboto:400,500&display=swap');
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Roboto', Arial, sans-serif;
+            background-color: #000000;  
+            color: #f1f1f1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        #error-container {
+            display: none; 
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+        }
+
+        .error-icon {
+            width: 64px;
+            height: 64px;
+            fill: #ffffff;
+            margin-bottom: 24px;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 400; 
+            margin: 0 0 12px 0;
+            color: #ffffff;
+        }
+
+        .subtitle {
+            font-size: 15px;
+            color: #aaaaaa;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+
+        .might-be {
+            font-size: 15px;
+            color: #f1f1f1;
+            margin-bottom: 16px;
+        }
+
+        .reasons-list {
+            text-align: left;
+            display: inline-block; 
+            padding: 0;
+            margin: 0 auto 36px auto;
+            font-size: 14px;
+            color: #aaaaaa;
+            line-height: 1.6;
+            list-style-type: none;  
+        }
+
+        .reasons-list li {
+            margin-bottom: 10px;
+            position: relative;
+            padding-left: 18px;
+        }
+
+        .reasons-list li:last-child {
+            margin-bottom: 0;
+        }
+
+         .reasons-list li::before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: #717171; 
+        }
+
+        a {
+            color: #3ea6ff; 
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .btn-try-again {
+            background-color: #f1f1f1;
+            color: #0f0f0f;
+            border: none;
+            padding: 9px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            border-radius: 18px; 
+            cursor: pointer;
+            transition: background-color 0.2s, opacity 0.2s;
+            font-family: 'Roboto', Arial, sans-serif;
+            margin-bottom: 32px;
+        }
+
+        .btn-try-again:hover {
+            background-color: #d9d9d9;
+        }
+
+        .btn-try-again:active {
+            opacity: 0.8;
+        }
+
+        .report-issue {
+            font-size: 13px;
+            color: #717171;
+            line-height: 1.6;
+        }
+
+        .report-issue a {
+            font-weight: 500;
+            color: #aaaaaa; 
+        }
+        
+        .report-issue a:hover {
+            color: #f1f1f1;
+        }
+    </style>
+</head>
+<body>
 
     <script>
         (function() {
-            // 1. Get the current retry count from session storage (default to 0)
             let retries = parseInt(sessionStorage.getItem('videoErrorRetries') || '0');
 
-            // 2. Check if this page load is a "Reload" or a fresh visit
             const navEntry = performance.getEntriesByType("navigation")[0];
             if (navEntry && navEntry.type !== 'reload') {
                 retries = 0;
             }
 
-            // 3. The Logic
             if (retries < 4) {
-                // Increment and Save
                 sessionStorage.setItem('videoErrorRetries', retries + 1);
-                // Refresh immediately
                 window.location.reload();
             } else {
-                // We have tried 4 times. Stop refreshing. 
                 sessionStorage.removeItem('videoErrorRetries');
-                
-                // Show the error message via JS
                 document.addEventListener("DOMContentLoaded", function() {
                     document.getElementById('error-container').style.display = 'block';
                 });
@@ -4244,25 +4366,43 @@ const vid = document.getElementById("video");
         </style>
     </noscript>
 
-    <div id="error-container" style="display: none; max-width: 500px; width: 90%; background: #1e1e1e; padding: 40px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; border: 1px solid #333;">
+    <div id="error-container">
         
-        <div style="font-size: 50px; margin-bottom: 20px;">⚠️</div>
+        <svg class="error-icon" viewBox="0 0 24 24">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+        </svg>
 
-        <h1 style="font-size: 24px; margin-bottom: 15px; color: #ff4e4e;">Video Loading Failed</h1>
+        <h1>Video unavailable</h1>
         
-        <p style="font-size: 16px; line-height: 1.6; color: #aaa; margin-bottom: 20px;">
-            We attempted to reload the connection automatically but were unsuccessful.
+        <p class="subtitle">
+            We attempted to reload the connection automatically but were unsuccessful. Please check ur network. (╥﹏╥)
         </p>
 
-        <p style="font-size: 14px; margin-bottom: 25px;">Please check your connection and try again.</p>
+        <div class="might-be">It might be because...</div>
 
-        <form action="" method="get">
-            <button type="submit" style="background-color: #f1f1f1; color: #0f0f0f; border: none; padding: 12px 30px; font-size: 16px; font-weight: bold; border-radius: 30px; cursor: pointer; transition: opacity 0.2s; box-shadow: 0 4px 15px rgba(255,255,255,0.1);">
+        <ul class="reasons-list">
+            <li>YouTube may be down (check <a href="https://downdetector.com/status/youtube/" target="_blank">Downdetector</a>).</li>
+            <li>This video might be private or members-only.</li>
+            <li>This video might be a Premiere that hasn't happened yet.</li>
+            <li>Companion may be restarting.</li>
+            <li>YouTube may have blocked Poke.</li>
+            <li>Upstream bug (check <a href="https://github.com/iv-org/invidious/issues" target="_blank">Invidious</a> or <a href="https://github.com/LuanRT/YouTube.js/issues" target="_blank">YouTube.js</a> issues).</li>
+        </ul>
+
+        <div>
+            <button class="btn-try-again" onclick="window.location.reload();">
                 Try Again
             </button>
-        </form>
+        </div>
+
+        <div class="report-issue">
+            This incident has been auto-reported.<br>
+            Still none of these somehow? <a href="https://codeberg.org/ashleyirispuppy/poke/issues/new/choose" target="_blank">Report an issue here</a>.
+        </div>
 
     </div>
+
 </body>
+</html>
 <% } %>
  <!-- PHTML END -->
