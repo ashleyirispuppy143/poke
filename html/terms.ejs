@@ -15,8 +15,7 @@
   You should have received a copy of the GNU General Public License
   along with this program. If not, see https://www.gnu.org/licenses/.
 -->
-
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -28,369 +27,495 @@
   <meta name="twitter:card" content="summary_large_image">
   <link href="/css/yt-ukraine.svg?v=7" rel="icon">
   <style>
+    /* Custom Fonts */
     @font-face {
-   src: url("/static/robotoflex.ttf");
-   font-family: "PokeTube Flex";
+      src: url("/static/robotoflex.ttf");
+      font-family: "PokeTube Flex";
       font-style: normal;
       font-stretch: 1% 800%;
       font-display: swap;
     }
 
-    *,*::before,*::after{box-sizing:border-box}
-    html,body{margin:0;padding:0}
-    body{
-      font-family:"poketube flex",sans-serif;
-      line-height:1.6;
-      color:#eaeaea;
-      background:
-        radial-gradient(1200px 600px at 0% 0%,#0ea5e9 0%,#0ea5e900 60%),
-        radial-gradient(1000px 700px at 100% 0%,#8b5cf6 0%,#8b5cf600 65%),
-        radial-gradient(1000px 700px at 0% 100%,#14b8a6 0%,#14b8a600 65%),
-        #0b0b0b;
+    :root { 
+      --bg: #0b0b0b; 
+      --surface: #141414; 
+      --surface-border: #2a2a2a;
+      --fg: #f3f3f3; 
+      --muted: #a1a1a1; 
+      --accent: #ffabcc; 
+      --accent-hover: #ff8cb6;
     }
 
-    a{color:#7dd3fc;text-decoration:none}
-    a:hover{text-decoration:underline}
-    .wrap{max-width:980px;margin:0 auto;padding:20px}
-    header.site{
-      position:sticky;top:0;z-index:10;
-      background:rgba(17,17,18,.8);
-      backdrop-filter:blur(8px);
-      border-bottom:1px solid #232323;
-    }
-    .nav-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px}
-    .brand{display:inline-flex;align-items:center;gap:10px;color:#fff;font-weight:800;text-decoration:none}
-    .brand img{height:32px}
+    * { box-sizing: border-box; }
 
-    h1{font-size:2.6rem;font-weight:900;margin:20px 0 8px 0;letter-spacing:.2px}
-    h2{font-size:1.5rem;font-weight:800;margin:20px 0 6px 0;color:#f0f6ff}
-    p{margin:10px 0;color:#e6e6e6}
-    ul{margin:10px 0 10px 24px}
-    footer.site{text-align:center;color:#bdbdbd;margin:40px 0 60px}
-    .legal{font-size:0.9rem;color:#ccc;border-top:1px solid #333;margin-top:30px;padding-top:20px}
-    .date{color:#9ca3af;font-size:0.9rem;margin-top:-6px}
-    details{background:#0f1012;border:1px solid #1d2024;border-radius:10px;padding:10px 12px;margin:10px 0}
-    details summary{cursor:pointer;font-weight:600}
+    html, body { 
+      margin: 0; padding: 0; height: 100%; 
+      background: var(--bg); color: var(--fg); 
+      font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Noto Sans", sans-serif; 
+      overflow-x: hidden;
+    }
+
+    a { color: var(--accent); text-decoration: none; transition: color 0.2s; font-weight: 500; }
+    a:hover { color: var(--accent-hover); text-decoration: underline; }
+
+    /* Header */
+    header.site {
+      position: sticky; top: 0; z-index: 50;
+      background: rgba(11, 11, 11, 0.8);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(255, 171, 204, 0.1);
+    }
+    .nav-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 24px; max-width: 1200px; margin: 0 auto; }
+    .brand { display: inline-flex; align-items: center; gap: 10px; color: #fff; font-weight: 800; text-decoration: none; }
+    .brand img { height: 32px; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.5)); }
+
+    /* Hero Branding Area */
+    .hero-branding {
+      position: relative;
+      background: linear-gradient(135deg, #a83258 0%, #ffabbc 80%);
+      padding: 100px 20px 140px;
+      text-align: center;
+      overflow: hidden;
+      border-bottom: 1px solid rgba(255, 171, 204, 0.2);
+    }
+ 
+     .hype-container {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%) rotate(-8deg);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 35px;
+      z-index: 0;
+      pointer-events: none;
+      width: 150%;
+      height: 90%; /* Leaves breathing room at top and bottom */
+    }
+
+    .hype-text {
+      font-size: clamp(35px, 5vw, 75px);
+      font-family: "PokeTube Flex", sans-serif;
+      font-weight: 1000;
+      color: #fff;
+      white-space: nowrap;
+      letter-spacing: 3px;
+      text-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    }
+    
+    .hype-text:nth-child(odd) { opacity: 0.12; margin-left: -5%; }
+    .hype-text:nth-child(even) { opacity: 0.08; margin-left: 5%; }
+
+    /* Mascot */
+    .mascot {
+      position: absolute;
+      bottom: 0; 
+      right: 5%;
+      max-height: 280px;
+      object-fit: contain;
+      z-index: 2;
+      filter: drop-shadow(0 -10px 20px rgba(0,0,0,0.4));
+      pointer-events: none;
+    }
+
+    /* Hero Content without background */
+    .hero-content {
+      position: relative;
+      z-index: 3;
+      max-width: 800px;
+      margin: 0 auto;
+      /* Background removed as requested */
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      padding: 0;
+    }
+
+    .doc-title {
+      font-family: "PokeTube Flex", sans-serif;
+      font-size: clamp(45px, 8vw, 90px);
+      font-weight: 1000;
+      font-stretch: extra-expanded;
+      color: #fff;
+      margin: 0 0 16px 0;
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+      text-shadow: 0 8px 25px rgba(0,0,0,0.5);
+    }
+
+    .doc-lede { 
+      font-size: 1.2rem; 
+      color: #fff; 
+      text-shadow: 0 4px 12px rgba(0,0,0,0.6); 
+      margin: 0 auto; 
+      max-width: 600px; 
+      font-weight: 500;
+    }
+
+    /* Main Container */
+    .wrap {
+      max-width: 1200px;
+      margin: -60px auto 60px;
+      padding: 0 20px;
+      position: relative;
+      z-index: 10;
+    }
+
+    /* Featured Cards Row */
+    .featured-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+      margin-bottom: 40px;
+    }
+
+    .featured-card {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 20px;
+      padding: 32px;
+      box-shadow: 0 15px 35px rgba(0,0,0,0.6);
+      transition: transform 0.2s ease, border-color 0.2s ease;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .featured-card:hover {
+      transform: translateY(-5px);
+      border-color: rgba(255, 171, 204, 0.4);
+    }
+
+    .featured-card h2 {
+      font-family: "PokeTube Flex", sans-serif;
+      font-size: 1.8rem;
+      font-stretch: expanded;
+      color: #fff;
+      margin: 0 0 8px 0;
+    }
+
+    .update-badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #2b1e72, #4a35cc);
+      color: #fff;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 10px rgba(74, 53, 204, 0.3);
+      width: max-content;
+    }
+
+    .date { color: var(--muted); font-size: 0.9rem; margin-bottom: 16px; font-weight: 500; }
+    .featured-card p { color: #d1d1d1; margin: 0 0 24px 0; flex-grow: 1; }
+    
+    .btn-link {
+      display: inline-block;
+      background: rgba(255, 171, 204, 0.1);
+      color: var(--accent);
+      border: 1px solid rgba(255, 171, 204, 0.3);
+      padding: 10px 20px;
+      border-radius: 10px;
+      font-weight: bold;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .btn-link:hover { background: var(--accent); color: #000; text-decoration: none; }
+
+     .section-title {
+      font-family: "PokeTube Flex", sans-serif;
+      font-size: 2.2rem;
+      font-stretch: expanded;
+      color: #fff;
+      text-align: center;
+      margin: 60px 0 30px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--surface-border);
+    }
+
+     .policies-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 24px;
+      align-items: start; /* Prevents cards from stretching vertically together */
+    }
+
+    details.policy-card {
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      transition: background 0.3s, border-color 0.3s;
+    }
+
+    details.policy-card:hover { background: #161616; border-color: #333; }
+    details.policy-card[open] { background: var(--surface); border-color: rgba(255, 171, 204, 0.2); }
+
+    details.policy-card summary {
+      font-family: "PokeTube Flex", sans-serif;
+      font-size: 1.3rem;
+      font-stretch: expanded;
+      color: var(--accent);
+      cursor: pointer;
+      list-style: none; /* Hide default arrow */
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      outline: none;
+    }
+
+     details.policy-card summary::after {
+      content: "↓";
+      font-family: system-ui, sans-serif;
+      font-size: 1.2rem;
+      transition: transform 0.3s ease;
+      color: var(--muted);
+    }
+    details.policy-card[open] summary::after { transform: rotate(180deg); color: var(--accent); }
+
+    details.policy-card .content-inner {
+      padding-top: 16px;
+      margin-top: 16px;
+      border-top: 1px solid #2a2a2a;
+      animation: slideDown 0.3s ease-out;
+    }
+
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    details.policy-card p { margin: 12px 0; color: #cfcfcf; }
+    details.policy-card ul { margin: 12px 0 12px 24px; color: #cfcfcf; }
+    details.policy-card li { margin-bottom: 6px; }
+    
+    .legal-block {
+      background: #080808;
+      border: 1px solid #1f1f1f;
+      padding: 16px;
+      border-radius: 12px;
+      margin-top: 16px;
+    }
+    .legal-block p { color: #888 !important; font-size: 0.85rem; margin: 4px 0 !important; }
+    .legal-block strong { color: #aaa; }
+
+    /* Nested Details fix */
+    details.policy-card details { background: #0a0a0a; border: 1px solid #222; border-radius: 12px; padding: 12px 16px; margin: 16px 0; }
+    details.policy-card details summary { font-size: 1.1rem; color: #fff; font-family: system-ui, sans-serif; font-stretch: normal; }
+    details.policy-card details summary::after { content: "+"; }
+    details.policy-card details[open] summary::after { content: "−"; }
+
+    .outro-text {
+      text-align: center;
+      margin: 60px auto 0;
+      max-width: 800px;
+      color: var(--muted);
+      font-size: 1.05rem;
+      padding: 24px;
+      background: rgba(255, 171, 204, 0.03);
+      border-radius: 16px;
+      border: 1px solid rgba(255, 171, 204, 0.1);
+    }
+
+    footer.site { text-align: center; color: #666; margin: 40px 0 60px; font-weight: 500; }
+    
+    @media (max-width: 800px) {
+      .hero-branding { padding: 80px 20px 100px; }
+      .mascot { max-height: 180px; right: -10px; }
+      .doc-title { font-size: clamp(38px, 10vw, 60px); }
+      .wrap { margin-top: -30px; }
+      .featured-card { padding: 24px; }
+    }
   </style>
 </head>
 <body>
+
   <header class="site" role="banner">
-    <div class="nav-row wrap">
+    <div class="nav-row">
       <a class="brand" href="/" aria-label="Poke home">
         <img src="/css/logo-poke.svg?v=5" alt="Poke logo">
       </a>
     </div>
   </header>
 
+  <section class="hero-branding">
+    <div class="hype-container">
+      <div class="hype-text">YOUR PRIVACY APP OF YOUR DREAMS</div>
+      <div class="hype-text">YOUR PRIVACY APP OF YOUR DREAMS</div>
+      <div class="hype-text">YOUR PRIVACY APP OF YOUR DREAMS</div>
+      <div class="hype-text">YOUR PRIVACY APP OF YOUR DREAMS</div>
+      <div class="hype-text">YOUR PRIVACY APP OF YOUR DREAMS</div>
+      <div class="hype-text">YOUR PRIVACY APP OF YOUR DREAMS</div>
+      <div class="hype-text">YOUR PRIVACY APP OF YOUR DREAMS</div>
+      <div class="hype-text">YOUR PRIVACY APP OF YOUR DREAMS</div>
+    </div>
+    
+     
+    <div class="hero-content">
+      <h1 class="doc-title">Terms &amp; Policies</h1>
+      <p class="doc-lede">All the legal and community documents for the Poke Project in one place.</p>
+    </div>
+  </section>
+
   <main class="wrap">
-    <h1>Poke — Terms & Policies</h1>
-    <p>
-      This page lists all legal and community-related documents for the Poke Project!!
-    </p>
-
-
-    <h2 id="privacy">Privacy Policy</h2><div style="
-  display:inline-block;
-  background:#2b1e72;
-  color:#c8baff;
-  padding:5px 12px;
-  border-radius:6px;
-  font-size:.9rem;
-  margin-bottom:8px;
-  border:1px solid #4a35cc;
-  font-weight:700;
-  text-transform:uppercase;
-">
-  ✨ Recently Updated! ✨
-</div>
-    <p class="date">Last updated: November 7, 2025</p>
-    <p>
-      Learn how Poke handles user data and what information (if any) is stored.
-      Spoiler: we don’t collect personal data at all.
-      <br>
-      → <a href="/policies/privacy">Read the Privacy Policy</a>
-    </p>
-
-    <h2 id="conduct">Community Rules / Code of Conduct</h2>
-    <p class="date">Last updated: October 11, 2025</p>
-    <p>
-      Our Code of Conduct explains how we keep Poke a safe, queer-friendly, and inclusive space.
-      <br>
-      → <a href="/policies/code-of-conduct">Read the Code of Conduct</a>
-    </p>
-
-    <h2 id="licenses">Licenses & Legal Notes</h2>
-    <p>
-      Poke is Free Software — licensed under the <strong>GNU GPL v3.0 or later</strong>.  
-      All text, art, and content across the project are likewise licensed under
-      free culture terms such as <strong>CC BY-SA 4.0</strong>.
-      <br>
-      → <a href="/license">View Licenses</a>
-    </p>
-
-    <h2 id="extra">Extra Policies</h2>
-
-  
-  <details>
-      <summary>DMCA Policy</summary>
-      <p class="date">Last updated: October 17, 2025</p>
-      <p>
-        Poke operates as a <strong>privacy-friendly frontend for YouTube</strong> and does not host or store video content.  
-        All material viewed through Poke originates directly from YouTube’s servers.  
-        As such, copyright claims concerning specific videos or media should be directed to YouTube, not Poke.
-      </p>
-      <p>
-        If you believe that Poke has improperly displayed or proxied material in a way that violates your copyright,  
-        please first confirm whether the material appears directly on YouTube.  
-        If it does, the proper channel for resolution is YouTube’s <a href="https://support.google.com/youtube/answer/2807622" target="_blank">DMCA takedown form</a>.  
-        YouTube has the authority and mechanisms to process copyright claims under the Digital Millennium Copyright Act (DMCA).
-      </p>
-      <p>
-        Poke does not modify, rehost, or alter YouTube content in any way.  
-        Our systems act purely as a <strong>transient intermediary</strong> under 17 U.S.C. § 512(a), transmitting publicly accessible data.  
-        Therefore, any DMCA claim directed at Poke itself would not be valid, as we do not control or store the material.
-      </p>
-      <p>
-        In rare cases where Poke’s systems display mislinked or erroneously proxied material not present on YouTube,  
-        you may contact us via our issue tracker at  
-        <a href="https://codeberg.org/ashley/poke/issues" target="_blank">https://codeberg.org/ashley/poke/issues</a>  
-        and provide:
-      </p>
-      <ul>
-        <li>Your name and contact information</li>
-        <li>A link to the infringing content as displayed on Poke</li>
-        <li>A link to the corresponding YouTube video (if applicable)</li>
-        <li>A brief description of your claim and the nature of the alleged infringement</li>
-      </ul>
-      <details>
-        <summary>Privacy of Submitted DMCA Information</summary>
-         <p>
-          Any personal information you submit in a DMCA-related report (such as your name, contact details, or legal documentation)  
-          will be used <strong>solely</strong> for the purpose of evaluating and responding to your claim.  
-          This data will not be shared publicly, sold, or reused for any other purpose.
-        </p>
-        <p>
-          Poke does not maintain permanent user accounts or personal databases,  
-          and any DMCA submission data is handled manually, reviewed, and deleted after the issue has been resolved.  
-          We strongly recommend that you avoid submitting unnecessary personal details.
-        </p>
-        <p>
-          Submissions through our Codeberg issue tracker are governed by Codeberg’s own privacy policy.  
-          Please ensure that any sensitive or identifying information is shared privately and only when essential  
-          for resolving the reported issue.
-        </p>
-        <p>
-          By submitting a DMCA-related request, you consent to the temporary processing of your contact data  
-          for communication regarding your claim, after which it will be securely discarded.
-        </p>
-      </details>
-      <p>
-        Once received, we will review and, if applicable, adjust how the data is proxied to ensure accuracy and compliance.  
-        However, as Poke does not host or control the content, permanent takedown requests must be directed to YouTube itself.
-      </p>
-      <p>
-        Poke respects the rights of content creators and copyright holders,  
-        and we comply with all applicable provisions of the DMCA and EU Directive 2001/29/EC.  
-        Our mission remains focused on providing a privacy-conscious viewing experience, not redistributing copyrighted works.
-      </p>
-    </details>
-
-    <details>
-      <summary>Content Source & Legal Basis</summary>
-      <p class="date">Last updated: October 17, 2025</p>
-      <p>
-        Poke functions as a <strong>privacy-friendly frontend for YouTube</strong>, providing an alternative interface  
-        to publicly available YouTube content. It allows users to watch videos, view metadata, and explore channels  
-        without being tracked, profiled, or exposed to intrusive advertisements.
-      </p>
-      <p>
-        All videos, thumbnails, and metadata are retrieved from YouTube’s public endpoints using  
-        reverse-engineered, community-understood protocols such as <strong>youtubei</strong> (used internally by YouTube’s own clients).  
-        We <strong>do not</strong> use the official <strong>YouTube Data API v3</strong>, nor have we ever agreed  
-        to Google’s API Terms of Service. Therefore, we are not contractually bound by those terms.  
-        A similar case involving the Invidious project was raised by YouTube’s legal team in 2023  
-        (<a href="https://github.com/iv-org/invidious/issues/3872" target="_blank">GitHub Issue #3872</a>),  
-        and no legal action was taken, as such usage is within lawful grounds.
-      </p>
-      <p>
-        Under <strong>United States law (17 U.S.C. § 512(a))</strong>, part of the Digital Millennium Copyright Act (DMCA),  
-        intermediaries that “transmit material through a system or network without modification of its content” are lawful.  
-        Poke qualifies under this protection because it only passes data between YouTube and the user without altering content.
-      </p>
-      <p>
-        In the <strong>European Union</strong>, the project is protected under Directive <strong>2001/29/EC</strong>  
-        of the European Parliament, which permits “temporary acts of reproduction that are transient or incidental  
-        and an integral part of a technological process” enabling network transmission.  
-        Poke’s operation — fetching, parsing, and displaying transient data — fully complies with this legal definition.
-      </p>
-      <p>
-        <strong>Poke is not illegal</strong>. It does not redistribute or rehost copyrighted material,  
-        nor does it bypass technological protection measures. It simply acts as a neutral layer  
-        for viewing publicly available YouTube data in a privacy-focused way.
-      </p>
-      <p>
-        Poke <strong>does not endorse, agree with, or moderate</strong> the videos, channels, or comments it displays.  
-        All such content originates directly from YouTube and remains under the control of its creators and YouTube itself.  
-        The Poke Project cannot verify, censor, or selectively remove content, as it merely provides a client-side proxy  
-        to what YouTube already serves publicly. Opinions expressed in YouTube videos do not represent the views  
-        of the Poke Project, its maintainers, or contributors.
-      </p>
-      <p>
-        If you encounter unlawful or infringing content, please report it directly to YouTube via their official tools.  
-        If you believe Poke is displaying something incorrectly, you may reach out to us at our issue tracker:  
-        <a href="https://codeberg.org/ashley/poke/issues" target="_blank">https://codeberg.org/ashley/poke/issues</a>
-      </p>
-    </details>
-
-    <details>
-      <summary>AI Training Policy</summary>
-      <p class="date">Last updated: October 17, 2025</p>
-      <p>
-        The Poke Project <strong>strictly prohibits</strong> the use of its content, data, or media streams  
-        for training, fine-tuning, or feeding any form of artificial intelligence or machine learning models.  
-        This includes, but is not limited to, video content, metadata, comments, thumbnails, transcripts,  
-        and other data accessed through the Poke interface.
-      </p>
-      <p>
-        The materials displayed through Poke are subject to copyright owned by their respective creators  
-        and may not be reproduced or processed for automated learning systems.  
-        Using YouTube data or Poke’s interface for AI dataset creation would constitute unauthorized reuse  
-        of copyrighted works and therefore violates this policy.
-        Any organization or individual found scraping, aggregating, or storing Poke content for AI training  
-        purposes will be considered in direct violation of this policy and may face reporting or blocking  
-        from our network services.
-      </p>
-    </details>
-
-    <details>
-      <summary>Coding Policy</summary>
-      <p class="date">Last updated: October 17, 2025</p>
-      <p>
-        Contributors to the Poke Project are welcome to use <strong>AI-assisted coding tools</strong>  
-        such as code autocompletion, linters, or assistants — provided that they understand and verify  
-        the code being submitted. Automated or unverified contributions that contain insecure, unclear,  
-        or copied proprietary code are <strong>not acceptable</strong>.
-      </p>
-      <p>
-        AI-assisted coding is allowed, but all contributors are responsible for ensuring their changes  
-        meet the project’s quality, security, and licensing requirements.  
-        The Poke maintainers cannot guarantee that AI-generated code will always be correct, safe,  
-        or efficient — contributors are expected to review and test thoroughly.
+    
+    <div class="featured-grid">
       
-       AI-assisted coding is <strong>OK</strong> — but use it wisely, understand your code,  
-        and never rely on it blindly.
-      </p>
-    </details>
-
-    <details>
-      <summary>Coding Style Policy</summary>
-      <p class="date">Last updated: October 17, 2025</p>
-      <p>
-        The Poke Project values clean, readable, and consistent code across all modules and languages.  
-        Contributors are encouraged to:
-      </p>
-      <ul>
-        <li>Use <strong>two spaces</strong> for indentation (no tabs).</li>
-        <li>Keep lines under 100 characters when possible.</li>
-        <li>Write <strong>clear variable names</strong> — no cryptic one-letter identifiers.</li>
-        <li>Follow the existing structure and naming conventions of the project.</li>
-        <li>Use comments sparingly but meaningfully — explain <em>why</em> something happens, not what it does.</li>
-        <li>Keep code GPL-compliant and avoid importing non-free dependencies.</li>
-      </ul>
-      <p>
-        Code consistency helps keep Poke maintainable, accessible, and true to its free software ideals.  
-        Before submitting a pull request, contributors are encouraged to test their changes  
-        and make sure they integrate smoothly with the existing codebase.
-      </p>
-    </details>
-
-    <details>
-      <summary>Poke Free Software Policy</summary>
-      <p class="date">Last updated: October 17, 2025</p>
-      <p>
-        Poke is and shall always remain <strong>Free Software</strong> as defined by the  
-        <a href="https://www.gnu.org/philosophy/free-sw.html" target="_blank">Free Software Foundation</a>.  
-        The project is permanently licensed under the <strong>GNU General Public License version 3 (or later)</strong>,  
-        ensuring users’ rights to use, study, modify, and share the software freely.
-      </p>
-      <p>
-        The core philosophy of Poke is freedom — not monetization. Poke will never include proprietary components,  
-        paywalls, or tracking scripts. The software and all its source code shall remain fully accessible  
-        to the public for all time.
-      </p>
-      <p>
-        Community mirrors, forks, and rehosts of Poke are <strong>explicitly allowed and encouraged</strong>,  
-        provided they follow the terms of the GNU GPLv3 license and maintain proper attribution to the Poke Project.  
-        These mirrors strengthen software freedom and accessibility.
-      </p>
-    </details>
-
-    <details>
-      <summary>Warranty Policy</summary>
-      <p class="date">Last updated: October 17, 2025</p>
-      <p>
-        Poke is developed and maintained with love and care, but it is still provided entirely “as is.”  
-        We do not guarantee perfect performance, uninterrupted uptime, or freedom from bugs and technical glitches.
-      </p>
-      <p>
-        Poke is primarily developed and tested on <strong>Firefox</strong> and other standards-compliant browsers.  
-        While it should function on most modern browsers, full compatibility on Chromium-based or alternative browsers  
-        cannot be guaranteed.
-      </p>
-      <p>
-        The Poke team cannot promise that every feature will always function as expected or remain available in the future.  
-        Servers may experience downtime, network issues, or maintenance breaks without notice.
-      </p>
-      <p>
-        While we do our best to maintain stable service, no warranty is provided for uptime, speed, or data integrity.  
-        Your usage of Poke implies acceptance that unexpected behavior or interruptions may occur.
-      </p>
-      <p>
-        The project maintainers, contributors, and distributors are not liable for any damages, losses, or inconvenience  
-        caused directly or indirectly by using Poke, its APIs, or related software.
-      </p>
-      <p>
-        Poke does not offer any commercial guarantees, technical support, or service-level agreements.  
-        It is a volunteer-driven, community-based project made freely available for everyone.
-      </p>
-      <div class="legal">
-        <p><strong>LEGAL VERSION (WARRANTY POLICY):</strong></p>
-        <p>
-          THE POKE PROJECT IS PROVIDED “AS IS” WITHOUT ANY EXPRESS OR IMPLIED WARRANTY OF ANY KIND.  
-          THIS INCLUDES, BUT IS NOT LIMITED TO, WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE,  
-          AND NON-INFRINGEMENT. THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE PROGRAM IS WITH YOU.  
-          SHOULD THE PROGRAM PROVE DEFECTIVE, YOU ASSUME THE COST OF ALL NECESSARY SERVICING, REPAIR, OR CORRECTION.  
-          IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY,  
-          WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE  
-          OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. NO GUARANTEES OF UPTIME, PERFORMANCE, OR FUNCTIONALITY ARE PROVIDED.
-        </p>
+      <div class="featured-card">
+        <h2>Privacy Policy</h2>
+        <div class="update-badge">✨ Recently Updated!</div>
+        <p class="date">Last updated: February 20, 2026</p>
+        <p>Learn how Poke handles user data and what information if any is stored. Spoiler: we don’t collect personal data at all.</p>
+        <a href="/policies/privacy" class="btn-link">Read Privacy Policy</a>
       </div>
-    </details>
 
-    <details>
-      <summary>Fake News Policy</summary>
-      <p class="date">Last updated: October 17, 2025</p>
-      <p>
-        Poke includes an internal filter system that identifies commonly known disinformation and conspiracy sources  
-        such as InfoWars, Breitbart, Daily Mail, RT, and others.  
-        This system serves only as a <strong>warning mechanism</strong> to encourage users to verify what they read.  
-        You are free to access or view such content — the warning does not restrict access, censor, or block anything.  
-        It merely provides informational context based on publicly available fact-checking records.
-      </p>
-      <p>
-        Users are encouraged to cross-reference claims, verify sources through reliable outlets,  
-        and remain mindful of misinformation when browsing external links or content.  
-        The Poke Project does not control, filter, or prevent access to these domains;  
-        the warnings are purely educational in nature.
-      </p>
-    </details>
+      <div class="featured-card">
+        <h2>Code of Conduct</h2>
+        <p class="date">Last updated: October 11, 2025</p>
+        <p>Our Code of Conduct explains how we keep Poke a safe, queer-friendly, and inclusive space for the entire community.</p>
+        <a href="/policies/code-of-conduct" class="btn-link">Read Code of Conduct</a>
+      </div>
 
-    <p style="margin-top:28px;color:#d1d1d1">
-      By continuing to use Poke, you confirm that you’ve read and understood these terms.  
-      These documents exist not to restrict you, but to protect your rights, our contributors, and the long-term health of the project.  
-      Poke’s policies may evolve over time to reflect legal updates, infrastructure changes, or community feedback.  
-      We encourage you to revisit this page occasionally to stay informed about the latest updates.
-    </p>
+      <div class="featured-card">
+        <h2>Licenses &amp; Legal</h2>
+        <p class="date">Always Free Software</p>
+        <p>Poke is licensed under the <strong>GNU GPL v3.0 or later</strong>. All text, art, and content across the project are under free culture terms like CC BY-SA 4.0.</p>
+        <a href="/license" class="btn-link">View Licenses</a>
+      </div>
+
+    </div>
+
+    <h2 class="section-title">Extra Policies &amp; Details</h2>
+    
+    <div class="policies-grid">
+      
+      <details class="policy-card">
+        <summary>DMCA Policy</summary>
+        <div class="content-inner">
+          <p class="date">Last updated: October 17, 2025</p>
+          <p>Poke operates as a <strong>privacy-friendly frontend for YouTube</strong> and does not host or store video content. All material viewed through Poke originates directly from YouTube’s servers. As such, copyright claims concerning specific videos or media should be directed to YouTube, not Poke.</p>
+          <p>If you believe that Poke has improperly displayed or proxied material in a way that violates your copyright, please first confirm whether the material appears directly on YouTube. If it does, the proper channel for resolution is YouTube’s <a href="https://support.google.com/youtube/answer/2807622" target="_blank">DMCA takedown form</a>.</p>
+          <p>Poke does not modify, rehost, or alter YouTube content in any way. Our systems act purely as a <strong>transient intermediary</strong> under 17 U.S.C. § 512 a, transmitting publicly accessible data. Therefore, any DMCA claim directed at Poke itself would not be valid, as we do not control or store the material.</p>
+          <p>In rare cases where Poke’s systems display mislinked or erroneously proxied material not present on YouTube, you may contact us via our issue tracker at <a href="https://codeberg.org/ashley/poke/issues" target="_blank">https://codeberg.org/ashley/poke/issues</a> and provide:</p>
+          <ul>
+            <li>Your name and contact information</li>
+            <li>A link to the infringing content as displayed on Poke</li>
+            <li>A link to the corresponding YouTube video if applicable</li>
+            <li>A brief description of your claim and the nature of the alleged infringement</li>
+          </ul>
+          <details>
+            <summary>Privacy of Submitted DMCA Information</summary> 
+             <p>Any personal information you submit in a DMCA-related report will be used <strong>solely</strong> for the purpose of evaluating and responding to your claim. This data will not be shared publicly, sold, or reused for any other purpose.</p>
+             <p>Poke does not maintain permanent user accounts or personal databases, and any DMCA submission data is handled manually, reviewed, and deleted after the issue has been resolved. We strongly recommend that you avoid submitting unnecessary personal details.</p>
+          </details>
+          <p>Once received, we will review and, if applicable, adjust how the data is proxied to ensure accuracy and compliance. However, as Poke does not host or control the content, permanent takedown requests must be directed to YouTube itself.</p>
+        </div>
+      </details>
+
+      <details class="policy-card">
+        <summary>Content Source &amp; Legal Basis</summary>
+        <div class="content-inner">
+          <p class="date">Last updated: October 17, 2025</p>
+          <p>Poke functions as a <strong>privacy-friendly frontend for YouTube</strong>, providing an alternative interface to publicly available YouTube content. It allows users to watch videos, view metadata, and explore channels without being tracked, profiled, or exposed to intrusive advertisements.</p>
+          <p>All videos, thumbnails, and metadata are retrieved from YouTube’s public endpoints using reverse-engineered, community-understood protocols. We <strong>do not</strong> use the official YouTube Data API v3, nor have we ever agreed to Google’s API Terms of Service.</p>
+          <p>Under <strong>United States law 17 U.S.C. § 512 a</strong>, part of the Digital Millennium Copyright Act DMCA, intermediaries that “transmit material through a system or network without modification of its content” are lawful. Poke qualifies under this protection.</p>
+          <p>In the <strong>European Union</strong>, the project is protected under Directive <strong>2001/29/EC</strong> which permits “temporary acts of reproduction that are transient or incidental.” Poke’s operation fully complies with this legal definition.</p>
+          <p><strong>Poke is not illegal</strong>. It does not redistribute or rehost copyrighted material. It simply acts as a neutral layer for viewing publicly available YouTube data in a privacy-focused way.</p>
+          <p>Poke <strong>does not endorse, agree with, or moderate</strong> the videos, channels, or comments it displays. If you encounter unlawful or infringing content, please report it directly to YouTube.</p>
+        </div>
+      </details>
+
+      <details class="policy-card">
+        <summary>AI Training Policy</summary>
+        <div class="content-inner">
+          <p class="date">Last updated: October 17, 2025</p>
+          <p>The Poke Project <strong>strictly prohibits</strong> the use of its content, data, or media streams for training, fine-tuning, or feeding any form of artificial intelligence or machine learning models. This includes, but is not limited to, video content, metadata, comments, thumbnails, and transcripts.</p>
+          <p>The materials displayed through Poke are subject to copyright owned by their respective creators and may not be reproduced or processed for automated learning systems. Using YouTube data or Poke’s interface for AI dataset creation would constitute unauthorized reuse of copyrighted works.</p>
+          <p>Any organization or individual found scraping, aggregating, or storing Poke content for AI training purposes will be considered in direct violation of this policy and may face reporting or blocking from our network services.</p>
+        </div>
+      </details>
+
+      <details class="policy-card">
+        <summary>Coding Policy</summary>
+        <div class="content-inner">
+          <p class="date">Last updated: October 17, 2025</p>
+          <p>Contributors to the Poke Project are welcome to use <strong>AI-assisted coding tools</strong> such as code autocompletion, linters, or assistants — provided that they understand and verify the code being submitted. Automated or unverified contributions that contain insecure, unclear, or copied proprietary code are <strong>not acceptable</strong>.</p>
+          <p>AI-assisted coding is allowed, but all contributors are responsible for ensuring their changes meet the project’s quality, security, and licensing requirements. The Poke maintainers cannot guarantee that AI-generated code will always be correct or safe.</p>
+          <p>AI-assisted coding is <strong>OK</strong> — but use it wisely, understand your code, and never rely on it blindly.</p>
+        </div>
+      </details>
+
+      <details class="policy-card">
+        <summary>Coding Style Policy</summary>
+        <div class="content-inner">
+          <p class="date">Last updated: October 17, 2025</p>
+          <p>The Poke Project values clean, readable, and consistent code across all modules and languages. Contributors are encouraged to:</p>
+          <ul>
+            <li>Use <strong>two spaces</strong> for indentation no tabs.</li>
+            <li>Keep lines under 100 characters when possible.</li>
+            <li>Write <strong>clear variable names</strong> — no cryptic one-letter identifiers.</li>
+            <li>Follow the existing structure and naming conventions of the project.</li>
+            <li>Use comments sparingly but meaningfully — explain <em>why</em> something happens, not what it does.</li>
+            <li>Keep code GPL-compliant and avoid importing non-free dependencies.</li>
+          </ul>
+          <p>Code consistency helps keep Poke maintainable, accessible, and true to its free software ideals.</p>
+        </div>
+      </details>
+
+      <details class="policy-card">
+        <summary>Free Software Policy</summary>
+        <div class="content-inner">
+          <p class="date">Last updated: October 17, 2025</p>
+          <p>Poke is and shall always remain <strong>Free Software</strong> as defined by the Free Software Foundation. The project is permanently licensed under the <strong>GNU General Public License version 3 or later</strong>, ensuring users’ rights to use, study, modify, and share the software freely.</p>
+          <p>The core philosophy of Poke is freedom — not monetization. Poke will never include proprietary components, paywalls, or tracking scripts. The software and all its source code shall remain fully accessible to the public for all time.</p>
+          <p>Community mirrors, forks, and rehosts of Poke are <strong>explicitly allowed and encouraged</strong>, provided they follow the terms of the GNU GPLv3 license and maintain proper attribution to the Poke Project.</p>
+        </div>
+      </details>
+
+      <details class="policy-card">
+        <summary>Warranty Policy</summary>
+        <div class="content-inner">
+          <p class="date">Last updated: October 17, 2025</p>
+          <p>Poke is developed and maintained with love and care, but it is still provided entirely “as is.” We do not guarantee perfect performance, uninterrupted uptime, or freedom from bugs and technical glitches.</p>
+          <p>Poke is primarily developed and tested on <strong>Firefox</strong> and other standards-compliant browsers. While it should function on most modern browsers, full compatibility on Chromium-based or alternative browsers cannot be guaranteed.</p>
+          <p>The project maintainers, contributors, and distributors are not liable for any damages, losses, or inconvenience caused directly or indirectly by using Poke, its APIs, or related software.</p>
+          <div class="legal-block">
+            <p><strong>LEGAL VERSION:</strong></p>
+            <p>THE POKE PROJECT IS PROVIDED “AS IS” WITHOUT ANY EXPRESS OR IMPLIED WARRANTY OF ANY KIND. THIS INCLUDES, BUT IS NOT LIMITED TO, WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE PROGRAM IS WITH YOU. NO GUARANTEES OF UPTIME, PERFORMANCE, OR FUNCTIONALITY ARE PROVIDED.</p>
+          </div>
+        </div>
+      </details>
+
+      <details class="policy-card">
+        <summary>Fake News Policy</summary>
+        <div class="content-inner">
+          <p class="date">Last updated: October 17, 2025</p>
+          <p>Poke includes an internal filter system that identifies commonly known disinformation and conspiracy sources such as InfoWars, Breitbart, Daily Mail, RT, and others. This system serves only as a <strong>warning mechanism</strong> to encourage users to verify what they read.</p>
+          <p>You are free to access or view such content — the warning does not restrict access, censor, or block anything. It merely provides informational context based on publicly available fact-checking records.</p>
+          <p>The Poke Project does not control, filter, or prevent access to these domains; the warnings are purely educational in nature.</p>
+        </div>
+      </details>
+
+    </div>
+
+    <div class="outro-text">
+      <p>
+        By continuing to use Poke, you confirm that you’ve read and understood these terms. 
+        These documents exist not to restrict you, but to protect your rights, our contributors, and the long-term health of the project. 
+        Poke’s policies may evolve over time to reflect legal updates, infrastructure changes, or community feedback. 
+        We encourage you to revisit this page occasionally to stay informed about the latest updates.
+      </p>
+    </div>
+
   </main>
+
+  <footer class="site small">
+    <p><a href="#top">Return to Top</a></p>
+  </footer>
+
 </body>
 </html>
