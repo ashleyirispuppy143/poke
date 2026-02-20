@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html class="gradient-bg" lang="en">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <title>PokeTube | Customize</title>
@@ -11,33 +11,46 @@
   <link rel="stylesheet" href="https://p.poketube.fun/https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/scroll/simplescrollbars.min.css">
 
   <style>
-     @import url("https://p.poketube.fun/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css");
+    @import url("https://p.poketube.fun/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css");
+
+     @font-face {
+      src: url("/css/OpenDyslexic3-Regular.ttf");
+      font-family: "OpenDyslexic3";
+      font-style: normal;
+      font-stretch: 1% 800%;
+      font-display: swap;
+    }
+
+    @font-face {
+      font-family: "PokeTube Flex";
+      src: url("/static/robotoflex.ttf");
+      font-style: normal;
+      font-stretch: 1% 800%;
+      font-display: swap;
+    }
 
     :root {
-      --bg: #0c0c0f; --panel: #121218; --panel-glass: rgba(18, 18, 24, 0.65);
-      --text: #e9ecf1; --muted: #aab2c0;
-      --accent: #7cc7ff; --accent-glow: rgba(124,199,255,0.4);
-      --border: rgba(255,255,255,0.08);
-      --radius: 16px; --radius-sm: 8px;
-      --font-main: 'Inter', system-ui, -apple-system, sans-serif;
-      --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+      --bg: #0b0b0b; 
+      --surface: #141414; 
+      --surface-border: #2a2a2a;
+      --text: #f3f3f3; 
+      --muted: #a1a1a1;
+      --accent: #ffabcc; 
+      --accent-hover: #ff8cb6;
+      --accent-glow: rgba(255, 171, 204, 0.4);
+      --font-main: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Noto Sans", sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Consolas, monospace;
     }
 
-    /* Base Setup */
     * { box-sizing: border-box; outline: none; }
+    
     body {
-      margin: 0; color: var(--text); font-family: var(--font-main);
-      background: #0a0a0f; overflow-x: hidden; min-height: 100vh;
+      margin: 0; padding: 0; color: var(--text); font-family: var(--font-main);
+      background: var(--bg); overflow-x: hidden; min-height: 100vh;
     }
 
-    /* Advanced Background */
-    html.gradient-bg {
-      background:
-        radial-gradient(circle at 15% 10%, rgba(249, 119, 148, 0.15), transparent 40%),
-        radial-gradient(circle at 85% 30%, rgba(124, 199, 255, 0.12), transparent 40%),
-        linear-gradient(180deg, #0a0a0f 0%, #0d0e15 100%);
-      background-attachment: fixed;
-    }
+    a { color: var(--accent); text-decoration: none; transition: color 0.2s; }
+    a:hover { color: var(--accent-hover); text-decoration: underline; }
 
     /* Navbar */
     .navbar {
@@ -45,20 +58,20 @@
       padding: 0 24px; height: 70px;
       position: sticky; top: 0; z-index: 100;
       backdrop-filter: blur(16px) saturate(180%);
-      background: rgba(10, 10, 15, 0.7);
-      border-bottom: 1px solid var(--border);
+      background: rgba(11, 11, 11, 0.8);
+      border-bottom: 1px solid rgba(255, 171, 204, 0.1);
     }
-    .navbar__logo { height: 28px; display: block; filter: drop-shadow(0 0 8px rgba(255,255,255,0.2)); }
+    .navbar__logo { height: 28px; display: block; filter: drop-shadow(0 0 8px rgba(0,0,0,0.5)); }
     
     .navbar__search {
       flex: 1; max-width: 500px; margin: 0 20px; position: relative;
     }
     .search-input {
       width: 100%; background: rgba(255,255,255,0.05);
-      border: 1px solid var(--border); border-radius: 99px;
+      border: 1px solid var(--surface-border); border-radius: 99px;
       padding: 10px 45px 10px 20px; color: #fff; transition: 0.2s;
     }
-    .search-input:focus { background: rgba(0,0,0,0.4); border-color: var(--accent); box-shadow: 0 0 0 4px rgba(124,199,255,0.1); }
+    .search-input:focus { background: rgba(0,0,0,0.4); border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255,171,204,0.15); }
     .search-btn {
       position: absolute; right: 5px; top: 50%; transform: translateY(-50%);
       background: none; border: none; color: var(--muted); cursor: pointer; padding: 8px;
@@ -68,68 +81,230 @@
     .nav-icon {
       width: 40px; height: 40px; border-radius: 12px;
       display: grid; place-items: center; color: var(--text);
-      background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03); border: 1px solid var(--surface-border);
       text-decoration: none; transition: 0.2s;
     }
     .nav-icon:hover { background: rgba(255,255,255,0.1); color: var(--accent); }
 
-    /* Layout */
-    .container { max-width: 1200px; margin: 40px auto; padding: 0 20px; }
+    /* Hero Branding Area */
+    .hero-branding {
+      position: relative;
+      background: linear-gradient(135deg, #a83258 0%, #ffabbc 80%);
+      padding: 100px 20px 160px;
+      text-align: center;
+      overflow: hidden;
+      border-bottom: 1px solid rgba(255, 171, 188, 0.2);
+    }
+
+    /* Background Text Container */
+    .hype-container {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%) rotate(-8deg);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 35px;
+      z-index: 0;
+      pointer-events: none;
+      width: 150%;
+      height: 90%;
+    }
+
+    .hype-text {
+      font-size: clamp(35px, 5vw, 75px);
+      font-family: "PokeTube Flex", sans-serif;
+      font-weight: 1000;
+      color: #fff;
+      white-space: nowrap;
+      letter-spacing: 3px;
+      text-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    }
     
-    .header { margin-bottom: 30px; }
-    .header h1 { font-size: 32px; margin: 0; font-weight: 800; letter-spacing: -0.5px; }
-    .header p { color: var(--muted); margin: 8px 0 0; }
+    .hype-text:nth-child(odd) { opacity: 0.12; margin-left: -5%; }
+    .hype-text:nth-child(even) { opacity: 0.08; margin-left: 5%; }
 
-    /* Tabs */
-    .tabs {
-      display: inline-flex; background: rgba(0,0,0,0.3);
-      padding: 4px; border-radius: 12px; border: 1px solid var(--border);
-      margin-bottom: 24px;
+    /* Mascot */
+    .mascot {
+      position: absolute;
+      bottom: 0; 
+      right: 10%;
+      max-height: 280px;
+      object-fit: contain;
+      z-index: 2;
+      filter: drop-shadow(0 -10px 20px rgba(0,0,0,0.4));
+      pointer-events: none;
     }
+
+    /* Hero Content */
+    .hero-content {
+      position: relative;
+      z-index: 3;
+      max-width: 800px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .doc-title {
+      font-family: "PokeTube Flex", sans-serif;
+      font-size: clamp(45px, 8vw, 100px);
+      font-weight: 1000;
+      font-stretch: extra-expanded;
+      color: #fff;
+      margin: 0 0 16px 0;
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+      text-shadow: 0 8px 25px rgba(0,0,0,0.5);
+    }
+
+    .doc-lede { 
+      font-size: 1.2rem; 
+      color: #fff; 
+      text-shadow: 0 4px 12px rgba(0,0,0,0.6); 
+      margin: 0 auto; 
+      max-width: 600px; 
+      font-weight: 500;
+    }
+
+    /* Main Container */
+    .container { 
+      max-width: 1300px; 
+      margin: -80px auto 60px; 
+      padding: 0 20px; 
+      position: relative;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* Modern Tabs */
+    .tabs-wrapper {
+      background: rgba(15, 15, 15, 0.8);
+      backdrop-filter: blur(12px);
+      padding: 6px;
+      border-radius: 100px;
+      border: 1px solid var(--surface-border);
+      display: inline-flex;
+      margin-bottom: 30px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    
     .tab {
-      padding: 8px 24px; border-radius: 8px; color: var(--muted);
-      text-decoration: none; font-size: 14px; font-weight: 600;
-      transition: 0.2s;
+      padding: 10px 32px; 
+      border-radius: 100px; 
+      color: var(--muted);
+      text-decoration: none; 
+      font-size: 15px; 
+      font-weight: 700;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
-    .tab:hover { color: #fff; }
-    .tab.active { background: var(--accent); color: #000; box-shadow: 0 4px 12px var(--accent-glow); }
+    .tab i { font-size: 16px; }
+    .tab:hover { color: #fff; text-decoration: none; }
+    .tab.active { 
+      background: var(--accent); 
+      color: #000; 
+      box-shadow: 0 4px 15px var(--accent-glow); 
+    }
 
-    /* Editor Panel */
+    /* New Improved Editor Panel */
     .editor-card {
-      background: var(--panel-glass); border: 1px solid var(--border);
-      border-radius: var(--radius); overflow: hidden;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
-      display: flex; flex-direction: column; height: 75vh;
+      background: #0a0a0a; 
+      border: 1px solid #222;
+      border-radius: 20px; 
+      overflow: hidden;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(255, 171, 204, 0.1);
+      display: flex; 
+      flex-direction: column; 
+      height: 65vh;
+      width: 100%;
     }
 
     .editor-toolbar {
-      padding: 12px 20px; background: rgba(0,0,0,0.2);
-      border-bottom: 1px solid var(--border);
-      display: flex; justify-content: space-between; align-items: center;
+      padding: 14px 24px; 
+      background: #111;
+      border-bottom: 1px solid #222;
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center;
     }
-    .editor-info { font-size: 13px; color: var(--muted); display: flex; gap: 10px; align-items: center; }
-    .badge { background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; font-family: var(--font-mono); font-size: 11px; }
+    
+    .editor-info { 
+      font-size: 14px; 
+      color: var(--text); 
+      display: flex; 
+      gap: 12px; 
+      align-items: center; 
+      font-weight: 600;
+    }
+    
+    .editor-info i { color: var(--accent); font-size: 18px; }
+    .badge { 
+      background: rgba(255,255,255,0.08); 
+      padding: 4px 10px; 
+      border-radius: 6px; 
+      font-family: var(--font-mono); 
+      font-size: 12px; 
+      font-weight: normal;
+      color: var(--muted);
+    }
 
-    .btn-group { display: flex; gap: 8px; }
+    .btn-group { display: flex; gap: 10px; }
+    
     .btn {
-      border: 1px solid var(--border); background: rgba(255,255,255,0.05);
-      color: #fff; padding: 6px 14px; border-radius: 6px;
-      font-size: 13px; cursor: pointer; transition: 0.2s; display: flex; align-items: center; gap: 6px;
+      border: 1px solid #333; 
+      background: #1a1a1a;
+      color: #fff; 
+      padding: 8px 16px; 
+      border-radius: 8px;
+      font-size: 13px; 
+      font-weight: 600;
+      cursor: pointer; 
+      transition: all 0.2s; 
+      display: flex; 
+      align-items: center; 
+      gap: 8px;
     }
-    .btn:hover { background: rgba(255,255,255,0.1); }
-    .btn.primary { background: var(--accent); color: #000; border-color: transparent; font-weight: 600; }
-    .btn.primary:hover { filter: brightness(1.1); }
-    .btn.danger { color: #ff5b5b; border-color: rgba(255,91,91,0.3); }
-    .btn.danger:hover { background: rgba(255,91,91,0.1); }
+    .btn i { font-size: 14px; }
+    .btn:hover { background: #2a2a2a; border-color: #444; }
+    
+    .btn.primary { 
+      background: var(--accent); 
+      color: #000; 
+      border-color: transparent; 
+      box-shadow: 0 2px 10px var(--accent-glow);
+    }
+    .btn.primary:hover { 
+      background: var(--accent-hover); 
+      transform: translateY(-1px);
+    }
+    
+    .btn.danger { color: #ff6b6b; border-color: rgba(255,107,107,0.3); }
+    .btn.danger:hover { background: rgba(255,107,107,0.1); }
 
     /* CodeMirror Overrides */
     .CodeMirror {
-      flex: 1; height: auto !important;
-      font-family: var(--font-mono) !important; font-size: 14px;
+      flex: 1; 
+      height: auto !important;
+      font-family: var(--font-mono) !important; 
+      font-size: 15px;
+      line-height: 1.6;
       background: transparent !important;
+      padding: 10px 0;
     }
-    .cm-s-dracula.CodeMirror { background: rgba(0,0,0,0.2) !important; }
-    .CodeMirror-gutters { background: rgba(0,0,0,0.3) !important; border-right: 1px solid var(--border) !important; }
+    .cm-s-dracula.CodeMirror { background: #0a0a0a !important; }
+    .CodeMirror-gutters { 
+      background: #0f0f0f !important; 
+      border-right: 1px solid #222 !important; 
+      padding-right: 5px;
+    }
+    .CodeMirror-linenumber { color: #555 !important; }
+    .CodeMirror-cursor { border-left: 2px solid var(--accent) !important; }
+    .CodeMirror-selected { background: rgba(255, 171, 204, 0.2) !important; }
 
     /* Toast Notification */
     .toast-container {
@@ -137,22 +312,34 @@
       display: flex; flex-direction: column; gap: 10px;
     }
     .toast {
-      background: #1a1b26; color: #fff; padding: 12px 20px;
-      border-radius: 8px; border: 1px solid var(--border);
-      box-shadow: 0 8px 20px rgba(0,0,0,0.5);
-      font-size: 14px; display: flex; align-items: center; gap: 10px;
-      animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      background: #111; color: #fff; padding: 14px 24px;
+      border-radius: 12px; border: 1px solid rgba(255, 171, 204, 0.3);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+      font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 12px;
+      animation: slideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    .toast i { color: var(--accent); }
-    @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .toast i { color: var(--accent); font-size: 18px; }
+    @keyframes slideIn { 
+      from { transform: translateY(30px) scale(0.95); opacity: 0; } 
+      to { transform: translateY(0) scale(1); opacity: 1; } 
+    }
 
+    @media (max-width: 800px) {
+      .hero-branding { padding: 80px 20px 120px; }
+      .doc-title { font-size: clamp(38px, 10vw, 60px); }
+      .mascot { max-height: 180px; right: -10px; }
+      .container { margin-top: -40px; }
+      .editor-toolbar { flex-direction: column; gap: 16px; align-items: flex-start; }
+      .btn-group { width: 100%; flex-wrap: wrap; }
+      .btn { flex: 1; justify-content: center; }
+    }
   </style>
 </head>
 <body>
 
   <nav class="navbar">
     <div class="navbar__left">
-      <a href="/143"><img class="navbar__logo" src="/css/logo.svg?v=5" alt="PokeTube"></a>
+      <a href="/"><img class="navbar__logo" src="/css/logo-poke.svg?v=5" alt="PokeTube"></a>
     </div>
     <form class="navbar__search" action="/search">
       <input name="query" class="search-input" type="search" placeholder="Search videos, channels…" />
@@ -160,24 +347,38 @@
     </form>
     <div class="navbar__actions">
       <a class="nav-icon" href="/domains" title="Domains"><i class="fa-light fa-server"></i></a>
-      <a class="nav-icon" href="/privacy" title="Privacy"><i class="fa-light fa-shield"></i></a>
+      <a class="nav-icon" href="/policies/privacy" title="Privacy"><i class="fa-light fa-shield"></i></a>
       <a class="nav-icon" href="/video/upload" title="Upload"><i class="fa-light fa-video"></i></a>
     </div>
   </nav>
 
-  <div class="container">
-    <div class="header">
-      <h1>Customize Poke</h1>
-      <p>Theme your experience with custom scripts and styles.</p>
+  <section class="hero-branding">
+    <div class="hype-container">
+      <div class="hype-text">YOUR PRIVACY APP OF YOUR DREAMS</div>
+      <div class="hype-text">YOUR PRIVACY APP OF YOUR DREAMS</div>
+      <div class="hype-text">YOUR PRIVACY APP OF YOUR DREAMS</div>
+      <div class="hype-text">YOUR PRIVACY APP OF YOUR DREAMS</div>
+      <div class="hype-text">YOUR PRIVACY APP OF YOUR DREAMS</div>
+      <div class="hype-text">YOUR PRIVACY APP OF YOUR DREAMS</div>
+      <div class="hype-text">YOUR PRIVACY APP OF YOUR DREAMS</div>
     </div>
+    
+     
+    <div class="hero-content">
+      <h1 class="doc-title">Customize Poke</h1>
+      <p class="doc-lede">Theme your experience with custom scripts and styles. Go wild!</p>
+    </div>
+  </section>
 
-    <div class="tabs">
+  <div class="container">
+    
+    <div class="tabs-wrapper">
       <% if (!tab) { %>
-        <a class="tab active" href="/customize">CSS Styles</a>
-        <a class="tab" href="/customize?tab=js">JS Scripts</a>
+        <a class="tab active" href="/customize"><i class="fa-brands fa-css3"></i> Styles</a>
+        <a class="tab" href="/customize?tab=js"><i class="fa-brands fa-js"></i> Scripts</a>
       <% } else { %>
-        <a class="tab" href="/customize">CSS Styles</a>
-        <a class="tab active" href="/customize?tab=js">JS Scripts</a>
+        <a class="tab" href="/customize"><i class="fa-brands fa-css3"></i> Styles</a>
+        <a class="tab active" href="/customize?tab=js"><i class="fa-brands fa-js"></i> Scripts</a>
       <% } %>
     </div>
 
@@ -185,7 +386,7 @@
     <div class="editor-card">
       <div class="editor-toolbar">
         <div class="editor-info">
-          <i class="fa-brands fa-css3 text-accent"></i>
+          <i class="fa-brands fa-css3-alt"></i>
           <span>Global CSS</span>
           <span class="badge">localStorage['poke-custom-css']</span>
         </div>
@@ -193,7 +394,7 @@
           <button class="btn primary" onclick="saveEditor('css')"><i class="fa-solid fa-floppy-disk"></i> Save</button>
           <button class="btn" onclick="copyEditor('css')"><i class="fa-regular fa-copy"></i> Copy</button>
           <button class="btn" onclick="downloadEditor('css')"><i class="fa-solid fa-download"></i> Export</button>
-          <button class="btn danger" onclick="resetEditor('css')"><i class="fa-solid fa-trash"></i> Reset</button>
+          <button class="btn danger" onclick="resetEditor('css')"><i class="fa-solid fa-trash-can"></i> Reset</button>
         </div>
       </div>
       <textarea id="css-area"></textarea>
@@ -204,7 +405,7 @@
     <div class="editor-card">
       <div class="editor-toolbar">
         <div class="editor-info">
-          <i class="fa-brands fa-js text-accent"></i>
+          <i class="fa-brands fa-js"></i>
           <span>Global Script</span>
           <span class="badge">localStorage['poke-custom-script']</span>
         </div>
@@ -212,7 +413,7 @@
           <button class="btn primary" onclick="saveEditor('js')"><i class="fa-solid fa-floppy-disk"></i> Save</button>
           <button class="btn" onclick="copyEditor('js')"><i class="fa-regular fa-copy"></i> Copy</button>
           <button class="btn" onclick="downloadEditor('js')"><i class="fa-solid fa-download"></i> Export</button>
-          <button class="btn danger" onclick="resetEditor('js')"><i class="fa-solid fa-trash"></i> Reset</button>
+          <button class="btn danger" onclick="resetEditor('js')"><i class="fa-solid fa-trash-can"></i> Reset</button>
         </div>
       </div>
       <textarea id="js-area"></textarea>
@@ -230,7 +431,7 @@
   <script>
      const CONFIG = {
       css: { key: 'poke-custom-css', mode: 'css', default: '/* \n  PokeTube Custom CSS\n  Go wild! \n*/\n\nbody {\n  \n}' },
-      js:  { key: 'poke-custom-script', mode: 'javascript', default: '// \n// PokeTube Custom Script\n//\n\nconsole.log("PokeTube Loaded");' }
+      js:  { key: 'poke-custom-script', mode: 'javascript', default: '/* \n PokeTube Custom Script\n Go wild! \n*/\n\nconsole.log("PokeTube Loaded");' }
     };
 
     let editorInstance = null;
@@ -256,13 +457,13 @@
         extraKeys: {"Ctrl-Space": "autocomplete"}
       });
 
-      // Live CSS Preview
+      /* Live CSS Preview */
       if (type === 'css') {
         const previewStyle = document.createElement('style');
         previewStyle.id = 'live-preview-style';
         document.body.appendChild(previewStyle);
         
-        // Initial load
+        /* Initial load */
         previewStyle.textContent = savedContent;
 
         editorInstance.on('change', () => {
@@ -271,7 +472,7 @@
       }
     }
 
-    // --- 3. ACTIONS ---
+    /* ACTIONS */
 
     function saveEditor(type) {
       const content = editorInstance.getValue();
@@ -282,7 +483,7 @@
     function resetEditor(type) {
       if(confirm('Are you sure you want to reset code? This cannot be undone.')) {
         editorInstance.setValue(CONFIG[type].default);
-        saveEditor(type); // Save the reset state
+        saveEditor(type); /* Save the reset state */
         showToast('warn', 'Editor Reset to Default');
       }
     }
@@ -308,24 +509,23 @@
       showToast('info', 'Download Started');
     }
 
-    // --- 4. UTILS ---
-
+ 
     function showToast(type, msg) {
       const container = document.getElementById('toaster');
       const el = document.createElement('div');
       el.className = 'toast';
       
       let icon = 'fa-check-circle';
-      if(type === 'warn') icon = 'fa-exclamation-triangle';
-      if(type === 'info') icon = 'fa-info-circle';
+      if(type === 'warn') icon = 'fa-triangle-exclamation';
+      if(type === 'info') icon = 'fa-circle-info';
 
       el.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${msg}</span>`;
       container.appendChild(el);
 
       setTimeout(() => {
         el.style.opacity = '0';
-        el.style.transform = 'translateY(20px)';
-        setTimeout(() => el.remove(), 300);
+        el.style.transform = 'translateY(30px) scale(0.95)';
+        setTimeout(() => el.remove(), 400);
       }, 3000);
     }
   </script>
