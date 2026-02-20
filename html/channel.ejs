@@ -1180,7 +1180,7 @@ function authorVerifiedChecker4000() {
     </a>
 <% } %> </p>
           <p style="margin: -9px;margin-left: -4em;margin-top:-1em">
-            			<%= subs %> subscribers 
+            			<%= subs %> subscribers <%- cinv.pronouns ? ` - ${cinv.pronouns} <a href="https://support.google.com/youtube/answer/13871472" target="_blank" title="Learn more" style="text-decoration: none; font-size: 0.9em;">ⓘ</a>` : '' %>
 
         </p>
         <p style="margin-left: 2em;margin-bottom: -3em;font-size: 0.8em;color: gray;">@<%=ID%></p>
@@ -1864,6 +1864,8 @@ function authorVerifiedChecker4000() {
 
  <p style="color:#fff;margin-left: 10px;font-weight: bold;"><%-cinv.descriptionHtml%></p>
   <% } %>
+  <p style="text-align: left;margin-left: 13px;">  <i class="fa-light fa-circle-info"></i> Joined <%= createdAccountGetDate.published %> </p>
+
       <%  if (Array.isArray(cinv?.tags)) { %> 
 <div class="video-title" style=";font-stretch: extra-expanded;margin-top: 10px;margin-bottom: -10px;padding: 10px;border-top-left-radius: 11px;border-top-right-radius: 11px;font-family: &quot;poketube flex&quot; , sans-serif;font-weight: 1000;text-align: left;">Tags</div>	    
     <div class="tags-channel" style="padding: 10px;margin-top: 10px;border-radius: 11px;">
