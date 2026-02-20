@@ -572,7 +572,13 @@ element.addEventListener('wheel', (e) => {
         
  <style>
        @import url("https://p.poketube.fun/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css");
-
+   @font-face {
+  font-family: "PokeTube Flex";
+  src: url("/static/robotoflex.ttf");
+  font-style: normal;
+  font-stretch: 1% 800%;
+  font-display: swap;
+}
    a.class:hover {
     text-decoration:underline;
     font-weight:bold
@@ -1006,9 +1012,10 @@ Privacy
                                   
                                           
                       		 	                                         <% if (tab == "search") { %> 
-                             <span style="display:none">
- Search videos on poke!!!
-                                                                     </span>
+                             <span>
+<h1 style="text-align: center;font-size: xxx-large;font-family: &quot;PokeTube flex&quot;;font-stretch: ultra-expanded;font-weight: 1000;">WELCOME TO POKE!</h1>
+<p style="max-width: 800px;text-align: center;margin: auto;margin-bottom: 3em;">Poke is a free software AD-FREE ! YouTube front-end, translator, weather app, and more!!1! Watch videos and explore without a trace in this all-in-one privacy app!!1! :3</p>
+</span>
                                <div class=search>
         
         <form action="/app">
@@ -1034,14 +1041,12 @@ Privacy
         
           <button class="btn btn-success" type=submit>
             <i class="fa-light fa-search" style="margin: auto;"></i></button></form>
-                               <img src="https://t.poketube.fun/t/rep.gif"  style="border:0;width: 0;visibility: hidden;"> 
- 
+  
       </div>
                                    </div>
           
-              	<div class="video-grid" style="background-color: var(--app-background);margin-top: -4em;">
-                     <span style="margin-bottom: -8em;margin-top: 8px;">
-  </span>
+              	<div class="video-grid" style="background-color: var(--app-background);margin-top: -1em;">
+
 <% (j && Array.isArray(j.results) ? j.results : []).forEach(x => { %>
      		<a href="/watch?v=<%- x.videoId %>"  class="video">
 				<div class="thumbnail" style="background-image: url('https://p.poketube.fun/https://i.ytimg.com/vi/<%= x.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw');border-radius: 16px;">  </div>
