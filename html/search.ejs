@@ -1,7 +1,7 @@
  <!--
     This Source Code Form is subject to the terms of the GNU General Public License:
    
-    Copyright (C) 2021-2025 PokeTube Of Poke Project, a part of The Poke Project Initiative (initiative.poketube.fun) 
+    Copyright (C) 2021-2026 PokeTube Of Poke Project, a part of The Poke Project Initiative (initiative.poketube.fun) 
     source code :https://codeberg.org/ashley/poke
 
     This program is free software: you can redistribute it and/or modify
@@ -543,59 +543,87 @@ video[counter].classList.add("shake");
        </div>
   <div class="channel-page"   style="background-color: var(--channel-contents-background);">   
     <div class="search-options">
-      
-    <div id="filters">
-	<details id="filters-collapse">		<summary>Filters</summary>
-    <div id="filters-box"><form action="/search" method="get">
-			<input type="hidden" name="query" value="<%- q %>">
-			<input type="hidden" name="continuation" value="<%- continuation %>">
-			<div id="filters-flex" style="display: flex;gap: 18px;background: #111;border-radius: 1em;margin-top: 6px;padding: 6px;width: fit-content;margin-left: auto;margin-right: auto;">				<div class="filter-column"><fieldset>
-					<legend><div class="filter-name underlined">Upload date</div></legend>
-					<div class="filter-options">
-<% const selectedDate = date || "none"; %>
+      <div id="filters" style="font-family: system-ui, -apple-system, sans-serif;">
+    <details id="filters-collapse" style="margin-bottom: 20px;">
+        <summary style="cursor: pointer; padding: 10px 24px; font-weight: 600; background: #222; color: #fff; border-radius: 20px; text-align: center; width: fit-content; margin: 0 auto; border: 1px solid #444; user-select: none; box-shadow: 0 2px 6px rgba(0,0,0,0.2);">
+            Filters
+        </summary>
+        
+        <div id="filters-box" style="margin-top: 16px;">
+            <form action="/search" method="get" style="margin: 0;">
+                <input type="hidden" name="query" value="<%- q %>">
+                <input type="hidden" name="continuation" value="<%- continuation %>">
+                
+                <div id="filters-flex" style="display: flex; flex-wrap: wrap; gap: 32px; background: #1a1a1a; border: 1px solid #333; border-radius: 16px; padding: 24px 32px; width: fit-content; margin: 0 auto; box-shadow: 0 8px 24px rgba(0,0,0,0.5); color: #eaeaea;">
+                    
+                    <div class="filter-column" style="display: flex; flex-direction: column;">
+                        <fieldset style="border: none; padding: 0; margin: 0;">
+                            <legend style="margin-bottom: 16px; padding: 0;">
+                                <div class="filter-name underlined" style="font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; border-bottom: 2px solid #444; padding-bottom: 6px; color: #fff;">
+                                    Upload date
+                                </div>
+                            </legend>
+                            <div class="filter-options" style="display: flex; flex-direction: column; gap: 12px;">
+                                <% const selectedDate = date || "none"; %>
+                                <% ['none', 'hour', 'today', 'week', 'month', 'year'].forEach(option => { %>
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <input type="radio" name="date" id="filter-date-<%= option %>" value="<%= option %>" <%= selectedDate === option ? 'checked' : '' %> style="margin: 0; width: 16px; height: 16px; cursor: pointer; accent-color: #3ea6ff;">
+                                        <label for="filter-date-<%= option %>" style="cursor: pointer; font-size: 14px; color: #aaa;"><%= option === 'none' ? 'Any date' : option === 'hour' ? 'Last Hour' : option === 'today' ? 'Today' : option === 'week' ? 'This week' : option === 'month' ? 'This month' : 'This year' %></label>
+                                    </div>
+                                <% }) %>
+                            </div>
+                        </fieldset>
+                    </div>
+                    
+                    <div class="filter-column" style="display: flex; flex-direction: column;">
+                        <fieldset style="border: none; padding: 0; margin: 0;">
+                            <legend style="margin-bottom: 16px; padding: 0;">
+                                <div class="filter-name underlined" style="font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; border-bottom: 2px solid #444; padding-bottom: 6px; color: #fff;">
+                                    Duration
+                                </div>
+                            </legend>
+                            <div class="filter-options" style="display: flex; flex-direction: column; gap: 12px;">
+                                <% const selectedDuration = duration || "none"; %>
+                                <% ['none', 'short', 'long', 'medium'].forEach(option => { %>
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <input type="radio" name="duration" id="filter-duration-<%= option %>" value="<%= option %>" <%= selectedDuration === option ? 'checked' : '' %> style="margin: 0; width: 16px; height: 16px; cursor: pointer; accent-color: #3ea6ff;">
+                                        <label for="filter-duration-<%= option %>" style="cursor: pointer; font-size: 14px; color: #aaa;"><%= option === 'none' ? 'Any duration' : option === 'short' ? 'Short (< 4 minutes)' : option === 'long' ? 'Long (> 20 minutes)' : 'Medium (4 - 20 minutes)' %></label>
+                                    </div>
+                                <% }) %>
+                            </div>
+                        </fieldset>
+                    </div>
+                    
+                    <div class="filter-column" style="display: flex; flex-direction: column;">
+                        <fieldset style="border: none; padding: 0; margin: 0;">
+                            <legend style="margin-bottom: 16px; padding: 0;">
+                                <div class="filter-name underlined" style="font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; border-bottom: 2px solid #444; padding-bottom: 6px; color: #fff;">
+                                    Sort By
+                                </div>
+                            </legend>
+                            <div class="filter-options" style="display: flex; flex-direction: column; gap: 12px;">
+                                <% const selectedSort = sort || "relevance"; %>
+                                <% ['relevance', 'rating', 'views'].forEach(option => { %>
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <input type="radio" name="sort" id="filter-sort-<%= option %>" value="<%= option %>" <%= selectedSort === option ? 'checked' : '' %> style="margin: 0; width: 16px; height: 16px; cursor: pointer; accent-color: #3ea6ff;">
+                                        <label for="filter-sort-<%= option %>" style="cursor: pointer; font-size: 14px; color: #aaa;"><%= option === 'relevance' ? 'Relevance' : option === 'rating' ? 'Rating' : 'View count' %></label>
+                                    </div>
+                                <% }) %>
+                            </div>
+                        </fieldset>
+                    </div>
 
-<% ['none', 'hour', 'today', 'week', 'month', 'year'].forEach(option => { %>
-  <div>
-    <input type="radio" name="date" id="filter-date-<%= option %>" value="<%= option %>" <%= selectedDate === option ? 'checked' : '' %>>
-    <label for="filter-date-<%= option %>"><%= option === 'none' ? 'Any date' : option === 'hour' ? 'Last Hour' : option === 'today' ? 'Today' : option === 'week' ? 'This week' : option === 'month' ? 'This month' : 'This year' %></label>
-  </div>
-<% }) %>					</div>				</fieldset></div>
- 				<div class="filter-column"><fieldset>
-					<legend><div class="filter-name underlined">Duration</div></legend>
-					<div class="filter-options">
- <% const selectedDuration = duration || "none"; %>
+                    <div id="filters-apply" style="display: flex; align-items: center; justify-content: flex-end; width: 100%; margin-top: 8px; padding-top: 20px; border-top: 1px solid #333;">
+                        <button type="submit" style="color: #111; background: #3ea6ff; padding: 10px 24px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; font-size: 14px; transition: opacity 0.2s;">
+                            Apply Filters
+                        </button>
+                    </div>
 
-<% ['none', 'short', 'long', 'medium'].forEach(option => { %>
-  <div>
-    <input type="radio" name="duration" id="filter-duration-<%= option %>" value="<%= option %>" <%= selectedDuration === option ? 'checked' : '' %>>
-    <label for="filter-duration-<%= option %>">
-      <%= option === 'none' ? 'Any duration' : option === 'short' ? 'Short (< 4 minutes)' : option === 'long' ? 'Long (> 20 minutes)' : 'Medium (4 - 20 minutes)' %>
-    </label>
-  </div>
-<% }) %>
-
-          </div>				</fieldset></div>
-				 
-				<div class="filter-column"><fieldset>
-					<legend><div class="filter-name underlined">Sort By</div></legend>
-					<div class="filter-options">
- <% const selectedSort = sort || "relevance"; %>
-
-<% ['relevance', 'rating', 'views'].forEach(option => { %>
-  <div>
-    <input type="radio" name="sort" id="filter-sort-<%= option %>" value="<%= option %>" <%= selectedSort === option ? 'checked' : '' %>>
-    <label for="filter-sort-<%= option %>">
-      <%= option === 'relevance' ? 'Relevance' : option === 'rating' ? 'Rating' : 'View count' %>
-    </label>
-  </div>
-<% }) %>
-
-          </div>				</fieldset></div>
-  <br> 			<div id="filters-apply">
-<button type="submit" style="color:#fff;background:#333;padding:6px;border-radius:9px;margin-top: 6em;border: 1px solid gray;">Apply!</button></div>
-
-			</div>
-            </form></div>   </details></div>    
+                </div>
+            </form>
+        </div>
+    </details>
+</div>   
     <div class="tags rec">
                   
                                 <a style=" background: #111;" class="tag">
