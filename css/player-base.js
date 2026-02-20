@@ -14,6 +14,8 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  * Available under Apache License Version 2.0
  * <https://github.com/mozilla/vtt.js/blob/main/LICENSE>
  */
+
+
  document.addEventListener("DOMContentLoaded", () => {
   const video = videojs('video', {
     controls: true,
@@ -788,6 +790,50 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
   
  // https://codeberg.org/ashley/poke/src/branch/main/src/libpoketube/libpoketube-youtubei-objects.json
 
+document.addEventListener('keydown', function(event) {
+    // Ignore key presses if the user is typing in an input or textarea
+    if (event.target.tagName.toLowerCase() === 'input' || event.target.tagName.toLowerCase() === 'textarea') {
+        return;
+    }
+
+    // Check if the pressed key is 'f' or 'F'
+    if (event.key.toLowerCase() === 'f') {
+        const video = document.querySelector('video');
+        
+        // Exit if there is no video element on the page
+        if (!video) return; 
+
+        // Check if the document is currently in fullscreen mode
+        const isFullscreen = document.fullscreenElement || 
+                             document.webkitFullscreenElement || 
+                             document.mozFullScreenElement || 
+                             document.msFullscreenElement;
+
+        if (!isFullscreen) {
+            // Enter Fullscreen
+            if (video.requestFullscreen) {
+                video.requestFullscreen();
+            } else if (video.webkitRequestFullscreen) { /* Safari */
+                video.webkitRequestFullscreen();
+            } else if (video.mozRequestFullScreen) { /* Firefox */
+                video.mozRequestFullScreen();
+            } else if (video.msRequestFullscreen) { /* IE11/Edge */
+                video.msRequestFullscreen();
+            }
+        } else {
+            // Exit Fullscreen
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) { /* Safari */
+                document.webkitExitFullscreen();
+            } else if (document.mozCancelFullScreen) { /* Firefox */
+                document.mozCancelFullScreen();
+            } else if (document.msExitFullscreen) { /* IE11/Edge */
+                document.msExitFullscreen();
+            }
+        }
+    }
+});
   
 const FORMATS = {
     "5": { ext: "flv", width: 400, height: 240, acodec: "mp3", abr: 64, vcodec: "h263" },
