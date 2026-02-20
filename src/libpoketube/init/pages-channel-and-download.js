@@ -108,28 +108,33 @@ module.exports = function (app, config, renderTemplate) {
       IsOldWindows = false;
     }
 
-    if (query) {
-      let redirectTo = null;
-      let splitParam = ":";
+if (typeof query === 'string') {
+  const trimmedQuery = query.trim();
+  let redirectUrl = null;
 
-      if (query.includes("youtube.com/watch?v=")) {
-        redirectTo = "/watch";
-        splitParam = "?v=";
-      } else if (query.includes("channel")) {
-        redirectTo = "/channel?id=";
-      } else if (query.includes("video")) {
-        redirectTo = "/watch?v=";
-      }
+   const ytUrlMatch = trimmedQuery.match(/(?:youtube\.com\/watch\?.*v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
 
-      if (redirectTo) {
-        try {
-          const id = query.split(splitParam)[1];
-          res.redirect(`${redirectTo}${splitParam}${id}`);
-        } catch {
-          return;
-        }
-      }
+    const prefixMatch = trimmedQuery.match(/^(channel|video|watch):([a-zA-Z0-9_\-@]+)$/);
+
+  if (ytUrlMatch) {
+     redirectUrl = `/watch?v=${ytUrlMatch[1]}`;
+    
+  } else if (prefixMatch) {
+    const type = prefixMatch[1];  
+    const id = prefixMatch[2];    
+
+    if (type === 'channel') {
+       redirectUrl = `/channel?id=${id}`;
+      
+    } else if ((type === 'video' || type === 'watch') && id.length === 11) {
+       redirectUrl = `/watch?v=${id}`;
     }
+  }
+
+   if (redirectUrl) {
+    return res.redirect(redirectUrl);
+  }
+}
 
     if (query && query.startsWith("!") && query.length > 2) {
       res.redirect("https://lite.duckduckgo.com/lite/?q=" + query);
