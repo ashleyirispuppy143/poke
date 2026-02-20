@@ -543,87 +543,100 @@ video[counter].classList.add("shake");
        </div>
   <div class="channel-page"   style="background-color: var(--channel-contents-background);">   
     <div class="search-options">
-      <div id="filters" style="font-family: system-ui, -apple-system, sans-serif;">
-    <details id="filters-collapse" style="margin-bottom: 20px;">
-        <summary style="cursor: pointer; padding: 10px 24px; font-weight: 600; background: #222; color: #fff; border-radius: 20px; text-align: center; width: fit-content; margin: 0 auto; border: 1px solid #444; user-select: none; box-shadow: 0 2px 6px rgba(0,0,0,0.2);">
-            Filters
-        </summary>
+    <div id="filters" style="
+  --bg-primary: #181818; 
+  --bg-secondary: #212121; 
+  --border-color: #3d3d3d; 
+  --text-primary: #f1f1f1; 
+  --text-secondary: #aaaaaa; 
+  --accent-color: #3ea6ff; 
+  font-family: system-ui, -apple-system, sans-serif; 
+  color: var(--text-primary); 
+  max-width: 900px; 
+  margin: 0 auto;
+">
+  <details id="filters-collapse" style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;">
+    <summary style="padding: 12px 16px; cursor: pointer; font-weight: 500; background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); user-select: none; display: flex; gap: 8px; align-items: center;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+      Filters
+    </summary>
+    
+    <div id="filters-box" style="padding: 20px;">
+      <form action="/search" method="get" style="margin: 0;">
+        <input type="hidden" name="query" value="<%- q %>">
+        <input type="hidden" name="continuation" value="<%- continuation %>">
         
-        <div id="filters-box" style="margin-top: 16px;">
-            <form action="/search" method="get" style="margin: 0;">
-                <input type="hidden" name="query" value="<%- q %>">
-                <input type="hidden" name="continuation" value="<%- continuation %>">
-                
-                <div id="filters-flex" style="display: flex; flex-wrap: wrap; gap: 32px; background: #1a1a1a; border: 1px solid #333; border-radius: 16px; padding: 24px 32px; width: fit-content; margin: 0 auto; box-shadow: 0 8px 24px rgba(0,0,0,0.5); color: #eaeaea;">
-                    
-                    <div class="filter-column" style="display: flex; flex-direction: column;">
-                        <fieldset style="border: none; padding: 0; margin: 0;">
-                            <legend style="margin-bottom: 16px; padding: 0;">
-                                <div class="filter-name underlined" style="font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; border-bottom: 2px solid #444; padding-bottom: 6px; color: #fff;">
-                                    Upload date
-                                </div>
-                            </legend>
-                            <div class="filter-options" style="display: flex; flex-direction: column; gap: 12px;">
-                                <% const selectedDate = date || "none"; %>
-                                <% ['none', 'hour', 'today', 'week', 'month', 'year'].forEach(option => { %>
-                                    <div style="display: flex; align-items: center; gap: 10px;">
-                                        <input type="radio" name="date" id="filter-date-<%= option %>" value="<%= option %>" <%= selectedDate === option ? 'checked' : '' %> style="margin: 0; width: 16px; height: 16px; cursor: pointer; accent-color: #3ea6ff;">
-                                        <label for="filter-date-<%= option %>" style="cursor: pointer; font-size: 14px; color: #aaa;"><%= option === 'none' ? 'Any date' : option === 'hour' ? 'Last Hour' : option === 'today' ? 'Today' : option === 'week' ? 'This week' : option === 'month' ? 'This month' : 'This year' %></label>
-                                    </div>
-                                <% }) %>
-                            </div>
-                        </fieldset>
-                    </div>
-                    
-                    <div class="filter-column" style="display: flex; flex-direction: column;">
-                        <fieldset style="border: none; padding: 0; margin: 0;">
-                            <legend style="margin-bottom: 16px; padding: 0;">
-                                <div class="filter-name underlined" style="font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; border-bottom: 2px solid #444; padding-bottom: 6px; color: #fff;">
-                                    Duration
-                                </div>
-                            </legend>
-                            <div class="filter-options" style="display: flex; flex-direction: column; gap: 12px;">
-                                <% const selectedDuration = duration || "none"; %>
-                                <% ['none', 'short', 'long', 'medium'].forEach(option => { %>
-                                    <div style="display: flex; align-items: center; gap: 10px;">
-                                        <input type="radio" name="duration" id="filter-duration-<%= option %>" value="<%= option %>" <%= selectedDuration === option ? 'checked' : '' %> style="margin: 0; width: 16px; height: 16px; cursor: pointer; accent-color: #3ea6ff;">
-                                        <label for="filter-duration-<%= option %>" style="cursor: pointer; font-size: 14px; color: #aaa;"><%= option === 'none' ? 'Any duration' : option === 'short' ? 'Short (< 4 minutes)' : option === 'long' ? 'Long (> 20 minutes)' : 'Medium (4 - 20 minutes)' %></label>
-                                    </div>
-                                <% }) %>
-                            </div>
-                        </fieldset>
-                    </div>
-                    
-                    <div class="filter-column" style="display: flex; flex-direction: column;">
-                        <fieldset style="border: none; padding: 0; margin: 0;">
-                            <legend style="margin-bottom: 16px; padding: 0;">
-                                <div class="filter-name underlined" style="font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; border-bottom: 2px solid #444; padding-bottom: 6px; color: #fff;">
-                                    Sort By
-                                </div>
-                            </legend>
-                            <div class="filter-options" style="display: flex; flex-direction: column; gap: 12px;">
-                                <% const selectedSort = sort || "relevance"; %>
-                                <% ['relevance', 'rating', 'views'].forEach(option => { %>
-                                    <div style="display: flex; align-items: center; gap: 10px;">
-                                        <input type="radio" name="sort" id="filter-sort-<%= option %>" value="<%= option %>" <%= selectedSort === option ? 'checked' : '' %> style="margin: 0; width: 16px; height: 16px; cursor: pointer; accent-color: #3ea6ff;">
-                                        <label for="filter-sort-<%= option %>" style="cursor: pointer; font-size: 14px; color: #aaa;"><%= option === 'relevance' ? 'Relevance' : option === 'rating' ? 'Rating' : 'View count' %></label>
-                                    </div>
-                                <% }) %>
-                            </div>
-                        </fieldset>
-                    </div>
+        <div id="filters-flex" style="display: flex; flex-wrap: wrap; gap: 32px;">
+          
+          <div class="filter-column" style="flex: 1; min-width: 180px;">
+            <fieldset style="border: none; padding: 0; margin: 0;">
+              <legend style="padding: 0; margin-bottom: 16px; width: 100%;">
+                <div class="filter-name" style="font-weight: 600; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">Upload date</div>
+              </legend>
+              <div class="filter-options" style="display: flex; flex-direction: column; gap: 12px;">
+                <% const selectedDate = date || "none"; %>
+                <% ['none', 'hour', 'today', 'week', 'month', 'year'].forEach(option => { %>
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <input type="radio" name="date" id="filter-date-<%= option %>" value="<%= option %>" <%= selectedDate === option ? 'checked' : '' %> style="margin: 0; width: 16px; height: 16px; accent-color: var(--accent-color); cursor: pointer;">
+                    <label for="filter-date-<%= option %>" style="cursor: pointer; font-size: 0.95em; color: <%= selectedDate === option ? 'var(--text-primary)' : 'var(--text-secondary)' %>;">
+                      <%= option === 'none' ? 'Any date' : option === 'hour' ? 'Last Hour' : option === 'today' ? 'Today' : option === 'week' ? 'This week' : option === 'month' ? 'This month' : 'This year' %>
+                    </label>
+                  </div>
+                <% }) %>
+              </div>
+            </fieldset>
+          </div>
 
-                    <div id="filters-apply" style="display: flex; align-items: center; justify-content: flex-end; width: 100%; margin-top: 8px; padding-top: 20px; border-top: 1px solid #333;">
-                        <button type="submit" style="color: #111; background: #3ea6ff; padding: 10px 24px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; font-size: 14px; transition: opacity 0.2s;">
-                            Apply Filters
-                        </button>
-                    </div>
+          <div class="filter-column" style="flex: 1; min-width: 180px;">
+            <fieldset style="border: none; padding: 0; margin: 0;">
+              <legend style="padding: 0; margin-bottom: 16px; width: 100%;">
+                <div class="filter-name" style="font-weight: 600; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">Duration</div>
+              </legend>
+              <div class="filter-options" style="display: flex; flex-direction: column; gap: 12px;">
+                <% const selectedDuration = duration || "none"; %>
+                <% ['none', 'short', 'long', 'medium'].forEach(option => { %>
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <input type="radio" name="duration" id="filter-duration-<%= option %>" value="<%= option %>" <%= selectedDuration === option ? 'checked' : '' %> style="margin: 0; width: 16px; height: 16px; accent-color: var(--accent-color); cursor: pointer;">
+                    <label for="filter-duration-<%= option %>" style="cursor: pointer; font-size: 0.95em; color: <%= selectedDuration === option ? 'var(--text-primary)' : 'var(--text-secondary)' %>;">
+                      <%= option === 'none' ? 'Any duration' : option === 'short' ? 'Short (< 4 minutes)' : option === 'long' ? 'Long (> 20 minutes)' : 'Medium (4 - 20 minutes)' %>
+                    </label>
+                  </div>
+                <% }) %>
+              </div>
+            </fieldset>
+          </div>
 
-                </div>
-            </form>
+          <div class="filter-column" style="flex: 1; min-width: 180px;">
+            <fieldset style="border: none; padding: 0; margin: 0;">
+              <legend style="padding: 0; margin-bottom: 16px; width: 100%;">
+                <div class="filter-name" style="font-weight: 600; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">Sort By</div>
+              </legend>
+              <div class="filter-options" style="display: flex; flex-direction: column; gap: 12px;">
+                <% const selectedSort = sort || "relevance"; %>
+                <% ['relevance', 'rating', 'views'].forEach(option => { %>
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <input type="radio" name="sort" id="filter-sort-<%= option %>" value="<%= option %>" <%= selectedSort === option ? 'checked' : '' %> style="margin: 0; width: 16px; height: 16px; accent-color: var(--accent-color); cursor: pointer;">
+                    <label for="filter-sort-<%= option %>" style="cursor: pointer; font-size: 0.95em; color: <%= selectedSort === option ? 'var(--text-primary)' : 'var(--text-secondary)' %>;">
+                      <%= option === 'relevance' ? 'Relevance' : option === 'rating' ? 'Rating' : 'View count' %>
+                    </label>
+                  </div>
+                <% }) %>
+              </div>
+            </fieldset>
+          </div>
+
         </div>
-    </details>
-</div>   
+
+        <div id="filters-apply" style="margin-top: 24px; display: flex; justify-content: flex-end; border-top: 1px solid var(--border-color); padding-top: 16px;">
+          <button type="submit" style="background: var(--text-primary); color: var(--bg-primary); padding: 8px 24px; border-radius: 24px; border: none; font-weight: 600; font-size: 0.95em; cursor: pointer; transition: opacity 0.2s;">
+            Apply Filters
+          </button>
+        </div>
+
+      </form>
+    </div>
+  </details>
+</div>
     <div class="tags rec">
                   
                                 <a style=" background: #111;" class="tag">
