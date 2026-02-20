@@ -788,29 +788,67 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  
  
   
- // https://codeberg.org/ashley/poke/src/branch/main/src/libpoketube/libpoketube-youtubei-objects.json
+
 document.addEventListener('keydown', function(event) {
-     if (event.target.tagName.toLowerCase() === 'input' || event.target.tagName.toLowerCase() === 'textarea') {
+    // Ignore key presses if typing in an input or textarea
+    if (event.target.tagName.toLowerCase() === 'input' || event.target.tagName.toLowerCase() === 'textarea') {
         return;
     }
 
-    // Check if the pressed key is 'f' or 'F'
-    if (event.key.toLowerCase() === 'f') {
-        // Find the video.js wrapper element
-        const videoElement = document.querySelector('.video-js');
-        if (!videoElement) return;
+     const videoElement = document.querySelector('.video-js');
+    if (!videoElement) return;
+    const player = videojs(videoElement);
 
-        // Get the active Video.js player instance
-        const player = videojs(videoElement);
+    // Handle the shortcuts
+    switch (event.key.toLowerCase()) {
+        case 'f': // Fullscreen
+            if (!player.isFullscreen()) {
+                player.requestFullscreen();
+            } else {
+                player.exitFullscreen();
+            }
+            break;
 
-        // Use Video.js's native API to toggle fullscreen
-        if (!player.isFullscreen()) {
-            player.requestFullscreen();
-        } else {
-            player.exitFullscreen();
-        }
+        case ' ': // Spacebar
+        case 'k': 
+            event.preventDefault(); // Stops the page from scrolling down
+            if (player.paused()) {
+                player.play();
+            } else {
+                player.pause();
+            }
+            break;
+
+        case 'm': // Mute toggle
+            player.muted(!player.muted());
+            break;
+
+        case 'arrowright':
+        case 'l': 
+            player.currentTime(player.currentTime() + 10); // Skip forward 10s
+            break;
+
+        case 'arrowleft':
+        case 'j': 
+            player.currentTime(player.currentTime() - 10); // Skip back 10s
+            break;
+
+        case 'arrowup': 
+            event.preventDefault(); // Stops the page from scrolling up
+            // Increase volume by 0.1 (max 1.0)
+            player.volume(Math.min(1, player.volume() + 0.1)); 
+            break;
+
+        case 'arrowdown': 
+            event.preventDefault(); // Stops the page from scrolling down
+            // Decrease volume by 0.1 (min 0)
+            player.volume(Math.max(0, player.volume() - 0.1)); 
+            break;
     }
 });
+
+
+ // https://codeberg.org/ashley/poke/src/branch/main/src/libpoketube/libpoketube-youtubei-objects.json
 
 
  const FORMATS = {
