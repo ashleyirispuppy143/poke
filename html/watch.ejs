@@ -4204,8 +4204,7 @@ const vid = document.getElementById("video");
 
   <% } %>
 <% } catch (error) { %>
-  
-<!DOCTYPE html>
+  <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -4297,9 +4296,9 @@ const vid = document.getElementById("video");
             text-decoration: underline;
         }
 
-        .btn-try-again {
-            background-color: #f1f1f1;
-            color: #0f0f0f;
+        /* Shared button styles */
+        .btn {
+            display: inline-block;
             border: none;
             padding: 9px 16px;
             font-size: 14px;
@@ -4308,15 +4307,33 @@ const vid = document.getElementById("video");
             cursor: pointer;
             transition: background-color 0.2s, opacity 0.2s;
             font-family: 'Roboto', Arial, sans-serif;
-            margin-bottom: 32px;
+            margin: 0 6px 32px 6px;
+            text-decoration: none;
+            box-sizing: border-box;
         }
 
-        .btn-try-again:hover {
+        .btn:active {
+            opacity: 0.8;
+        }
+
+        /* Primary Button (White) */
+        .btn-primary {
+            background-color: #f1f1f1;
+            color: #0f0f0f;
+        }
+
+        .btn-primary:hover {
             background-color: #d9d9d9;
         }
 
-        .btn-try-again:active {
-            opacity: 0.8;
+        /* Secondary Button (Translucent dark mode style) */
+        .btn-secondary {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: #f1f1f1;
+        }
+
+        .btn-secondary:hover {
+            background-color: rgba(255, 255, 255, 0.2);
         }
 
         .report-issue {
@@ -4337,8 +4354,6 @@ const vid = document.getElementById("video");
 </head>
 <body>
 
- 
-
     <noscript>
         <style>
             #error-container { display: block !important; }
@@ -4354,7 +4369,7 @@ const vid = document.getElementById("video");
         <h1>Video unavailable</h1>
         
         <p class="subtitle">
-            We cannot Load this video (╥﹏╥)
+            We cannot load this video (╥﹏╥)
         </p>
 
         <div class="might-be">It might be because...</div>
@@ -4370,9 +4385,13 @@ const vid = document.getElementById("video");
         </ul>
 
         <div>
-            <button class="btn-try-again" onclick="window.location.reload();">
+            <button class="btn btn-primary" onclick="window.location.reload();">
                 Try Again
             </button>
+            
+            <a href="https://www.youtube.com/watch?v=<%queryid>" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">
+                Try on YouTube
+            </a>
         </div>
 
         <div class="report-issue">
