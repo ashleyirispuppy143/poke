@@ -15,7 +15,6 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  * <https://github.com/mozilla/vtt.js/blob/main/LICENSE>
  */
 
-
  document.addEventListener("DOMContentLoaded", () => {
   const video = videojs('video', {
     controls: true,
@@ -110,7 +109,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
   const clamp01 = v => Math.max(0, Math.min(1, Number(v)));
   const EPS = 0.15;
   const MICRO_DRIFT = 0.05;
-  const BIG_DRIFT = 0.5;
+  const BIG_DRIFT = 1.2; // Increased from 0.5 to prevent noticeable hard-sync jumps
   const RESYNC_DRIFT_LIMIT = 3.5;
   const SYNC_INTERVAL_MS = 250;
 
@@ -252,9 +251,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
       if (isFinite(vt) && isFinite(at)) {
         const delta = vt - at;
         if (Math.abs(delta) > BIG_DRIFT) {
-          softAlignAudioTo(vt, 20, 60);
+          softAlignAudioTo(vt, 15, 40); // Faster align for seeking
         } else if (Math.abs(delta) > MICRO_DRIFT) {
-          const targetRate = 1 + (delta * 0.12);
+          // Unnoticeable syncer: smoothly stretch audio up to 10% speed
+          const targetRate = 1 + (delta * 0.20); 
           try { audio.playbackRate = Math.max(0.9, Math.min(1.1, targetRate)); } catch {}
         } else {
           try { audio.playbackRate = 1; } catch {}
@@ -273,6 +273,12 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
       if (!isFinite(vt) || !isFinite(at)) return;
 
       if (intendedPlaying) {
+        // Buffering Watchdog: If intended to play but stuck paused, resume the exact moment both buffer fully.
+        if (video.paused() && bothPlayableAt(vt) && !restarting) {
+            hideError();
+            ensureUnmutedIfNotUserMuted().then(() => playTogether({ allowMutedRetry: true }));
+        }
+        
         if (video.paused() && !audio.paused) {
           try {
             internalPlayRequest++;
@@ -627,7 +633,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
 
     // ————— User play: treat video as the source of truth —————
     video.on('play', () => {
-      if (internalPlayRequest > 0) return; // ignore our own programmatic play()
+      if (internalPlayRequest > 0) return; // ignore our own problematic play()
       hideError();
       intendedPlaying = true;
       updateMediaSessionPlaybackState();
@@ -656,6 +662,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
       wasPlayingBeforeSeek = intendedPlaying && !video.paused();
       seekStartTime = Number(video.currentTime());
       suppressMirrorUntil = performance.now() + MUTE_SQUELCH_MS;
+      safeSetCT(audio, seekStartTime); // Pre-fetch audio immediately on seek start
     });
 
     video.on('seeked', async () => {
@@ -664,7 +671,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
       const diff = Math.abs(newTime - seekStartTime);
       const { small, large, huge } = computeSeekThresholds();
 
-      if (diff > 0.12) await softAlignAudioTo(newTime, 30, 80);
+      if (diff > 0.12) await softAlignAudioTo(newTime, 20, 50); // Faster seek alignment
       else safeSetCT(audio, newTime);
 
       if (!firstSeekDone) { firstSeekDone = true; seekingActive = false; return; }
@@ -785,9 +792,6 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     setupMediaSession();
   }
 });
- 
- 
-  
 
 document.addEventListener('keydown', function(event) {
     // Ignore key presses if typing in an input or textarea
