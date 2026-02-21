@@ -272,38 +272,41 @@ function fetchUrls(urls) {
   }
   }
 
-var popupMenu = document.getElementById("popupMenu");
+ var popupMenu = document.getElementById("popupMenu");
 var loopOption = document.getElementById("loopOption");
 var speedOption = document.getElementById("speedOption");
- var boostOption = document.getElementById("boostOption");
+var boostOption = document.getElementById("boostOption");
 var normalizeOption = document.getElementById("normalizeOption");
 var loopedIndicator = document.getElementById("loopedIndicator");
-var aud = document.getElementById("aud");
+var video = document.querySelector("video"); // Ensure video is targeted dynamically
 
 loopedIndicator.style.display = "none";
 
- let audioCtx, source, gainNode, compressorNode;
-
- let audioState = localStorage.getItem("audioMode") || "none"; // can be "none", "boost", or "normalize"
+let audioCtx, source, gainNode, compressorNode;
+let audioState = localStorage.getItem("audioMode") || "none"; 
 
 function initAudio() {
-    if (audioCtx || !aud) return; // Prevent duplicate context creation
+    var currentAud = document.getElementById("aud"); // Fetch dynamically to prevent stale "wrong file" bug
+    if (audioCtx || !currentAud) return; 
 
-     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    
-     source = audioCtx.createMediaElementSource(aud);
-    gainNode = audioCtx.createGain();
-    compressorNode = audioCtx.createDynamicsCompressor();
+    try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        source = audioCtx.createMediaElementSource(currentAud);
+        gainNode = audioCtx.createGain();
+        compressorNode = audioCtx.createDynamicsCompressor();
 
-     compressorNode.threshold.value = -24; // dB
-    compressorNode.knee.value = 30;
-    compressorNode.ratio.value = 12;
-    compressorNode.attack.value = 0.003;
-    compressorNode.release.value = 0.25;
+        compressorNode.threshold.value = -24; 
+        compressorNode.knee.value = 30;
+        compressorNode.ratio.value = 12;
+        compressorNode.attack.value = 0.003;
+        compressorNode.release.value = 0.25;
+    } catch (e) {
+        console.error("Audio API bypassed:", e);
+    }
 }
 
 function applyAudioState(isUserInteraction = false) {
-    // 1. Update UI
+    // 1. Update UI Instantly
     if (audioState === "normalize") {
         normalizeOption.innerHTML = "<i class='fa-light fa-check'></i> Normalization On";
         boostOption.innerHTML = "<i class='fa-light fa-volume-high'></i> Audio Boost";
@@ -317,19 +320,17 @@ function applyAudioState(isUserInteraction = false) {
 
     localStorage.setItem("audioMode", audioState);
 
-    // 2. ULTRA OPTIMIZATION: If 'none' and never initialized, do absolutely nothing (saves memory/CPU)
+    // 2. Do nothing if disabled and uninitialized
     if (audioState === "none" && !audioCtx) return;
 
-    // 🚨 BUG FIX: Do not hijack audio into the Web Audio API until a user interaction occurs.
-    // This prevents the browser from muting the audio element on initial page load.
+    // 3. STRICT GUARD: Never hijack audio until a trusted interaction
     if (!isUserInteraction) return;
 
-    // 3. Initialize Audio API ONLY if actually needed
     initAudio();
     if (!audioCtx) return;
 
-    // Reset routing
-    source.disconnect();
+    // Reset routing safely
+    try { source.disconnect(); } catch(e){}
     try { compressorNode.disconnect(); } catch(e){}
     try { gainNode.disconnect(); } catch(e){}
 
@@ -343,51 +344,54 @@ function applyAudioState(isUserInteraction = false) {
         gainNode.connect(audioCtx.destination);
         gainNode.gain.value = 2.5; 
     } else {
-        // ZERO-CPU BYPASS: Routes audio directly to speakers, bypassing effects processing entirely
         source.connect(audioCtx.destination);
     }
 
-    // Ensure context resumes if the browser auto-suspended it
+    // Wake up context if browser suspended it
     if (audioCtx.state === 'suspended') audioCtx.resume();
 }
 
-// On page load: Instantly update UI, but do NOT initialize Web Audio yet (false)
+// On page load: Only update visual UI
 applyAudioState(false);
  
-// If user has a saved preset, initialize audio safely on the first PLAY event
-if (aud && audioState !== "none") {
-    aud.addEventListener('play', () => {
-        if (!audioCtx) applyAudioState(true); // true = safe to initialize
-    }, { once: true });
-}
+ document.addEventListener('play', function(event) {
+    // Only trigger if the element playing is our video or audio
+    if (event.target.id === 'aud' || event.target.tagName === 'VIDEO') {
+        
+        // Fix for leaving the page and coming back (wakes up frozen audio)
+        if (audioCtx && audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+
+        // Apply saved preset if user has one, safely after play event
+        if (audioState !== "none" && !audioCtx) {
+            applyAudioState(true); 
+        }
+    }
+}, true); // Use capture phase to ensure it catches all media events
 
  
 boostOption.addEventListener("click", function() {
-     audioState = (audioState === "boost") ? "none" : "boost";
-    applyAudioState(true); // true = safe to initialize
-    
-     popupMenu.style.display = "none"; 
+    audioState = (audioState === "boost") ? "none" : "boost";
+    applyAudioState(true); 
+    popupMenu.style.display = "none"; 
 });
 
 normalizeOption.addEventListener("click", function() {
-     audioState = (audioState === "normalize") ? "none" : "normalize";
-    applyAudioState(true); // true = safe to initialize
-    
-     popupMenu.style.display = "none";
+    audioState = (audioState === "normalize") ? "none" : "normalize";
+    applyAudioState(true); 
+    popupMenu.style.display = "none";
 });
 
 video.addEventListener("contextmenu", function(event) {
-    // Check if the video is in fullscreen mode
     if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.mozFullScreenElement && !document.msFullscreenElement) {
         event.preventDefault();
-
         popupMenu.style.display = "block";
         popupMenu.style.left = event.pageX + "px";
         popupMenu.style.top = event.pageY + "px";
     }
 });
 
-// Hide the popup menu when clicking outside of it
 window.addEventListener("click", function(event) {
     if (event.target !== video) {
         popupMenu.style.display = "none";
@@ -398,10 +402,11 @@ loopOption.addEventListener("click", function() {
     const quaindt = new URLSearchParams(window.location.search).get("quality") || "";
     var looped = video.loop;
     video.loop = !looped;
+    var currentAud = document.getElementById("aud");
 
     if (quaindt !== "medium") {
-        if (aud) {
-            aud.loop = !looped;
+        if (currentAud) {
+            currentAud.loop = !looped;
         }
     }
 
@@ -416,23 +421,23 @@ loopOption.addEventListener("click", function() {
     
     loopedIndicator.style.display = "block";
 
-    // Hide the indicator after 2 seconds
     setTimeout(function() {
         loopedIndicator.style.display = "none";
     }, 2000);
     
-    popupMenu.style.display = "none"; // Closes menu optionally on loop click
+    popupMenu.style.display = "none"; 
 });
 
 speedOption.addEventListener("click", function() {
     var currentSpeed = video.playbackRate;
     var newSpeed = getNextSpeed(currentSpeed);
+    var currentAud = document.getElementById("aud");
 
     video.playbackRate = newSpeed;
-    if (aud) aud.playbackRate = newSpeed;
+    if (currentAud) currentAud.playbackRate = newSpeed;
     
     speedOption.innerHTML = "<i class='fa-light fa-gauge'></i> Speed: " + newSpeed.toFixed(2) + "x";
-    popupMenu.style.display = "none"; // Closes menu optionally on speed click
+    popupMenu.style.display = "none"; 
 });
 
 function getNextSpeed(currentSpeed) {
@@ -450,5 +455,6 @@ function getNextSpeed(currentSpeed) {
         return maxSpeed;
     }
 }
+
 const GoogleTranslateEndpoint = "https://translate.google.com/_/TranslateWebserverUi/data/batchexecute?rpcids=MkEWBc&rt=c"
 // @license-end
