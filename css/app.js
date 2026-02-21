@@ -278,8 +278,7 @@ var speedOption = document.getElementById("speedOption");
 var boostOption = document.getElementById("boostOption");
 var normalizeOption = document.getElementById("normalizeOption");
 var loopedIndicator = document.getElementById("loopedIndicator");
-var video = document.querySelector("video"); // Ensure video is targeted dynamically
-
+ 
 loopedIndicator.style.display = "none";
 
 let audioCtx, source, gainNode, compressorNode;
