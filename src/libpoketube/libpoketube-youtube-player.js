@@ -21,9 +21,7 @@ class InnerTubePokeVidious {
     this.ANDROID_API_KEY = "AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w";
     this.ANDROID_APP_VERSION = "20.20.41";
     this.ANDROID_VERSION = "16";
-    this.useragent =
-      config.useragent ||
-      "PokeTube/2.0.0 (GNU/Linux; Android 14; Trisquel 11; poketube-vidious; like FreeTube)";
+    this.useragent = config.useragent
     this.INNERTUBE_CONTEXT_CLIENT_VERSION = "1";
     this.region = "region=US";
     this.sqp =
@@ -229,7 +227,7 @@ class InnerTubePokeVidious {
           )}`
         ).then((res) => res?.text()),
 
-        // 2. Video Info (Logic preserved, but cleaned of artificial delays)
+        // 2. Video Info  
         (async () => {
           let fetchError = null;
           for (const url of attemptSequence) {
@@ -253,8 +251,7 @@ class InnerTubePokeVidious {
             } catch (err) {
               fetchError = err;
             }
-            // PERF REMOVAL: Removed await new Promise(r => setTimeout(r, 800));
-            // If the request fails, we want to hit the fallback immediately, not wait nearly a second.
+             // If the request fails, we want to hit the fallback immediately, not wait nearly a second.
           }
 
           if (fetchError) {
@@ -263,8 +260,7 @@ class InnerTubePokeVidious {
           return null;
         })(),
 
-        // 3. Dislikes (Optimistic fetch)
-        (async () => {
+         (async () => {
             try {
                 return await getdislikes(v);
             } catch (err) {
@@ -273,8 +269,7 @@ class InnerTubePokeVidious {
             }
         })(),
 
-        // 4. Colors (Optimistic fetch)
-        (async () => {
+         (async () => {
             try {
                 const palette = await getColors(
                     `https://i.ytimg.com/vi/${v}/hqdefault.jpg?sqp=${this.sqp}`
