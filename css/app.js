@@ -271,11 +271,11 @@ function fetchUrls(urls) {
   
   }
   }
+
 var popupMenu = document.getElementById("popupMenu");
 var loopOption = document.getElementById("loopOption");
 var speedOption = document.getElementById("speedOption");
-// New DOM elements for Audio
-var boostOption = document.getElementById("boostOption");
+ var boostOption = document.getElementById("boostOption");
 var normalizeOption = document.getElementById("normalizeOption");
 var loopedIndicator = document.getElementById("loopedIndicator");
 var aud = document.getElementById("aud");
@@ -306,30 +306,29 @@ function initAudio() {
 
     audioInitialized = true;
 }
-
 function applyAudioState() {
     if (!audioInitialized) initAudio();
     if (!audioCtx) return;
 
-     source.disconnect();
+    source.disconnect();
     compressorNode.disconnect();
     gainNode.disconnect();
 
     if (audioState === "normalize") {
-         source.connect(compressorNode);
+        source.connect(compressorNode);
         compressorNode.connect(gainNode);
         gainNode.connect(audioCtx.destination);
         gainNode.gain.value = 1.0;
         
         normalizeOption.innerHTML = "<i class='fa-light fa-check'></i> Normalization On";
-        boostOption.innerHTML = "Audio Boost";
+        boostOption.innerHTML = "<i class='fa-light fa-volume-high'></i> Audio Boost";
     } else if (audioState === "boost") {
         // Route: Source -> Gain(at 2.5x) -> Destination
         source.connect(gainNode);
         gainNode.connect(audioCtx.destination);
-        gainNode.gain.value = 2.5; // Adjust this number to increase/decrease boost level
+        gainNode.gain.value = 2.5; 
 
-        normalizeOption.innerHTML = "Audio Normalization";
+        normalizeOption.innerHTML = "<i class='fa-light fa-wave-square'></i> Audio Normalization";
         boostOption.innerHTML = "<i class='fa-light fa-check'></i> Boost On";
     } else {
         // Route: Source -> Gain(at 1x) -> Destination (Normal behavior)
@@ -337,8 +336,8 @@ function applyAudioState() {
         gainNode.connect(audioCtx.destination);
         gainNode.gain.value = 1.0;
 
-        normalizeOption.innerHTML = "Audio Normalization";
-        boostOption.innerHTML = "Audio Boost";
+        normalizeOption.innerHTML = "<i class='fa-light fa-wave-square'></i> Audio Normalization";
+        boostOption.innerHTML = "<i class='fa-light fa-volume-high'></i> Audio Boost";
     }
 
     // Save to LocalStorage
