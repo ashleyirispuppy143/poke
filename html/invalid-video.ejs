@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Unavailable</title>
+    <style>
+         @import url('https://p.poketube.fun/https://fonts.bunny.net/css?family=roboto:400,500&display=swap');
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Roboto', Arial, sans-serif;
+            background-color: #000000;  
+            color: #f1f1f1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        #error-container {
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+        }
+
+        .error-icon {
+            width: 64px;
+            height: 64px;
+            fill: #ffffff;
+            margin-bottom: 24px;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 400;  
+            margin: 0 0 12px 0;
+            color: #ffffff;
+        }
+
+        .subtitle {
+            font-size: 15px;
+            color: #aaaaaa;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+
+        .might-be {
+            font-size: 15px;
+            color: #f1f1f1;
+            margin-bottom: 16px;
+        }
+
+        .reasons-list {
+            text-align: left;
+            display: inline-block;  
+            padding: 0;
+            margin: 0 auto 36px auto;
+            font-size: 14px;
+            color: #aaaaaa;
+            line-height: 1.6;
+            list-style-type: none; 
+        }
+
+        .reasons-list li {
+            margin-bottom: 10px;
+            position: relative;
+            padding-left: 18px;
+        }
+
+        .reasons-list li:last-child {
+            margin-bottom: 0;
+        }
+
+         .reasons-list li::before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: #717171; 
+        }
+
+        a {
+            color: #3ea6ff;  
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .btn-home {
+            background-color: #f1f1f1;
+            color: #0f0f0f;
+            border: none;
+            padding: 9px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            border-radius: 18px; 
+            cursor: pointer;
+            transition: background-color 0.2s, opacity 0.2s;
+            font-family: 'Roboto', Arial, sans-serif;
+            margin-bottom: 32px;
+        }
+
+        .btn-home:hover {
+            background-color: #d9d9d9;
+        }
+
+        .btn-home:active {
+            opacity: 0.8;
+        }
+
+        .report-issue {
+            font-size: 13px;
+            color: #717171;
+            line-height: 1.6;
+        }
+
+        .report-issue a {
+            font-weight: 500;
+            color: #aaaaaa; 
+        }
+        
+        .report-issue a:hover {
+            color: #f1f1f1;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="error-container">
+        
+        <svg class="error-icon" viewBox="0 0 24 24">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+        </svg>
+
+        <h1>Video unavailable</h1>
+        
+        <p class="subtitle">
+            This video isn't available any more. (╥﹏╥)
+        </p>
+
+        <div class="might-be">This usually happens because...</div>
+
+        <ul class="reasons-list">
+            <li>The video was removed by the uploader.</li>
+            <li>The uploader closed their account.</li>
+            <li>The video was taken down for Terms of Service violations.</li>
+            <li>The video ID provided is invalid.</li>
+        </ul>
+
+        <div>
+            <button class="btn-home" onclick="window.location.href='/';">
+                Go Home
+            </button>
+        </div>
+
+        <div class="report-issue">
+            Think this is a Poke mistake?<br>
+            <a href="https://codeberg.org/ashleyirispuppy/poke/issues/new/choose" target="_blank">Report an issue here</a>.
+        </div>
+
+    </div>
+
+</body>
+</html>
