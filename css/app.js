@@ -283,16 +283,13 @@ var aud = document.getElementById("aud");
 loopedIndicator.style.display = "none";
 
  let audioCtx, source, gainNode, compressorNode;
-let audioInitialized = false;
 
  let audioState = localStorage.getItem("audioMode") || "none"; // can be "none", "boost", or "normalize"
 
 function initAudio() {
-    if (audioInitialized) return;
-    if (!aud) return;
+    if (audioCtx || !aud) return; // Prevent duplicate context creation
 
-    // Standard cross-browser audio context
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     
      source = audioCtx.createMediaElementSource(aud);
     gainNode = audioCtx.createGain();
@@ -303,91 +300,83 @@ function initAudio() {
     compressorNode.ratio.value = 12;
     compressorNode.attack.value = 0.003;
     compressorNode.release.value = 0.25;
-
-    audioInitialized = true;
 }
+
 function applyAudioState() {
-    if (!audioInitialized) initAudio();
+    // 1. Update UI
+    if (audioState === "normalize") {
+        normalizeOption.innerHTML = "<i class='fa-light fa-check'></i> Normalization On";
+        boostOption.innerHTML = "<i class='fa-light fa-volume-high'></i> Audio Boost";
+    } else if (audioState === "boost") {
+        normalizeOption.innerHTML = "<i class='fa-light fa-wave-square'></i> Audio Normalization";
+        boostOption.innerHTML = "<i class='fa-light fa-check'></i> Boost On";
+    } else {
+        normalizeOption.innerHTML = "<i class='fa-light fa-wave-square'></i> Audio Normalization";
+        boostOption.innerHTML = "<i class='fa-light fa-volume-high'></i> Audio Boost";
+    }
+
+    localStorage.setItem("audioMode", audioState);
+
+    // 2. ULTRA OPTIMIZATION: If 'none' and never initialized, do absolutely nothing (saves memory/CPU)
+    if (audioState === "none" && !audioCtx) return;
+
+    // 3. Initialize Audio API ONLY if actually needed
+    initAudio();
     if (!audioCtx) return;
 
+    // Reset routing
     source.disconnect();
-    compressorNode.disconnect();
-    gainNode.disconnect();
+    try { compressorNode.disconnect(); } catch(e){}
+    try { gainNode.disconnect(); } catch(e){}
 
     if (audioState === "normalize") {
         source.connect(compressorNode);
         compressorNode.connect(gainNode);
         gainNode.connect(audioCtx.destination);
         gainNode.gain.value = 1.0;
-        
-        normalizeOption.innerHTML = "<i class='fa-light fa-check'></i> Normalization On";
-        boostOption.innerHTML = "<i class='fa-light fa-volume-high'></i> Audio Boost";
     } else if (audioState === "boost") {
-        // Route: Source -> Gain(at 2.5x) -> Destination
         source.connect(gainNode);
         gainNode.connect(audioCtx.destination);
         gainNode.gain.value = 2.5; 
-
-        normalizeOption.innerHTML = "<i class='fa-light fa-wave-square'></i> Audio Normalization";
-        boostOption.innerHTML = "<i class='fa-light fa-check'></i> Boost On";
     } else {
-        // Route: Source -> Gain(at 1x) -> Destination (Normal behavior)
-        source.connect(gainNode);
-        gainNode.connect(audioCtx.destination);
-        gainNode.gain.value = 1.0;
-
-        normalizeOption.innerHTML = "<i class='fa-light fa-wave-square'></i> Audio Normalization";
-        boostOption.innerHTML = "<i class='fa-light fa-volume-high'></i> Audio Boost";
+        // ZERO-CPU BYPASS: Routes audio directly to speakers, bypassing effects processing entirely
+        source.connect(audioCtx.destination);
     }
-
-    // Save to LocalStorage
-    localStorage.setItem("audioMode", audioState);
 }
 
-// Browsers require a user interaction before AudioContext can start.
-// We initialize it the first time the audio plays.
-if (aud) {
+// Ensure correct UI loads instantly
+applyAudioState();
+ 
+// OPTIMIZATION: Only listen for play if the user actually has an active preset saved
+if (aud && audioState !== "none") {
     aud.addEventListener('play', () => {
-        if (!audioInitialized) {
-            initAudio();
-            applyAudioState();
-        }
-    });
+        if (!audioCtx) applyAudioState();
+    }, { once: true }); // Automatically destroys listener after firing once
 }
 
-// --- EVENT LISTENERS ---
-
+ 
 boostOption.addEventListener("click", function() {
-    // Toggle logic
-    audioState = (audioState === "boost") ? "none" : "boost";
+     audioState = (audioState === "boost") ? "none" : "boost";
     applyAudioState();
     
-    // Resume context if browser suspended it
-    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+     if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
     
-    // Close the popup menu
-    popupMenu.style.display = "none"; 
+     popupMenu.style.display = "none"; 
 });
 
 normalizeOption.addEventListener("click", function() {
-    // Toggle logic
-    audioState = (audioState === "normalize") ? "none" : "normalize";
+     audioState = (audioState === "normalize") ? "none" : "normalize";
     applyAudioState();
     
-    // Resume context if browser suspended it
-    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+     if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
     
-    // Close the popup menu
-    popupMenu.style.display = "none";
+     popupMenu.style.display = "none";
 });
 
 video.addEventListener("contextmenu", function(event) {
     // Check if the video is in fullscreen mode
     if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.mozFullScreenElement && !document.msFullscreenElement) {
         event.preventDefault();
-
-        // Ensure the UI matches the current state before showing
-        if (audioInitialized) applyAudioState();
 
         popupMenu.style.display = "block";
         popupMenu.style.left = event.pageX + "px";
@@ -458,6 +447,5 @@ function getNextSpeed(currentSpeed) {
         return maxSpeed;
     }
 }
-
 const GoogleTranslateEndpoint = "https://translate.google.com/_/TranslateWebserverUi/data/batchexecute?rpcids=MkEWBc&rt=c"
 // @license-end
