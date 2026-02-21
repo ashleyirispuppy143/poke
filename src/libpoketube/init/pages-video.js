@@ -203,7 +203,7 @@ module.exports = function (app, config, renderTemplate) {
     if (!isMatch) {
               res.status(500); 
               res.header('X-Robots-Tag', 'noindex, nofollow');
-              renderTemplate(res, req, "video-error.ejs", {
+              renderTemplate(res, req, "invalid-video.ejs", {
               v,
               err_reason:"not found"
               });
@@ -214,7 +214,12 @@ module.exports = function (app, config, renderTemplate) {
 
     const isVideoValid = await INNERTUBE.isvalidvideo(v);
     if (!isVideoValid) {
-      return res.redirect("/?fromerror=21_video_not_valid");
+   res.status(500); 
+              res.header('X-Robots-Tag', 'noindex, nofollow');
+              renderTemplate(res, req, "invalid-video.ejs", {
+              v,
+              err_reason:"not found"
+              });
     }
 
     const u = await media_proxy(v);
