@@ -271,14 +271,14 @@ function fetchUrls(urls) {
   
   }
   }
-
- var popupMenu = document.getElementById("popupMenu");
+var popupMenu = document.getElementById("popupMenu");
 var loopOption = document.getElementById("loopOption");
 var speedOption = document.getElementById("speedOption");
 var boostOption = document.getElementById("boostOption");
 var normalizeOption = document.getElementById("normalizeOption");
 var loopedIndicator = document.getElementById("loopedIndicator");
- 
+var video = document.querySelector("video"); // Ensure video is targeted dynamically
+
 loopedIndicator.style.display = "none";
 
 let audioCtx, source, gainNode, compressorNode;
@@ -294,7 +294,13 @@ function initAudio() {
         gainNode = audioCtx.createGain();
         compressorNode = audioCtx.createDynamicsCompressor();
 
-        compressorNode.threshold.value = -24; 
+        // STATIC GRAPH FIX: Connect everything in a permanent line once. 
+        // This removes the need to run heavy disconnect() functions and prevents routing pops.
+        source.connect(compressorNode);
+        compressorNode.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+
+        // Default static parameters
         compressorNode.knee.value = 30;
         compressorNode.ratio.value = 12;
         compressorNode.attack.value = 0.003;
@@ -328,22 +334,21 @@ function applyAudioState(isUserInteraction = false) {
     initAudio();
     if (!audioCtx) return;
 
-    // Reset routing safely
-    try { source.disconnect(); } catch(e){}
-    try { compressorNode.disconnect(); } catch(e){}
-    try { gainNode.disconnect(); } catch(e){}
+    const now = audioCtx.currentTime;
+    const smoothTime = 0.05; // 50 milliseconds to smoothly glide to new values (removes pops!)
 
     if (audioState === "normalize") {
-        source.connect(compressorNode);
-        compressorNode.connect(gainNode);
-        gainNode.connect(audioCtx.destination);
-        gainNode.gain.value = 1.0;
+        // Turn compressor on (-24dB), normal volume
+        compressorNode.threshold.setTargetAtTime(-24, now, smoothTime);
+        gainNode.gain.setTargetAtTime(1.0, now, smoothTime);
     } else if (audioState === "boost") {
-        source.connect(gainNode);
-        gainNode.connect(audioCtx.destination);
-        gainNode.gain.value = 2.5; 
+        // Bypass compressor (0dB), boost volume
+        compressorNode.threshold.setTargetAtTime(0, now, smoothTime); 
+        gainNode.gain.setTargetAtTime(2.5, now, smoothTime); 
     } else {
-        source.connect(audioCtx.destination);
+        // Bypass compressor (0dB), normal volume
+        compressorNode.threshold.setTargetAtTime(0, now, smoothTime);
+        gainNode.gain.setTargetAtTime(1.0, now, smoothTime); 
     }
 
     // Wake up context if browser suspended it
@@ -367,7 +372,7 @@ applyAudioState(false);
             applyAudioState(true); 
         }
     }
-}, true); // Use capture phase to ensure it catches all media events
+}, true); // Use capture phase to make sure it catches all media events
 
  
 boostOption.addEventListener("click", function() {
@@ -454,6 +459,5 @@ function getNextSpeed(currentSpeed) {
         return maxSpeed;
     }
 }
-
 const GoogleTranslateEndpoint = "https://translate.google.com/_/TranslateWebserverUi/data/batchexecute?rpcids=MkEWBc&rt=c"
 // @license-end
