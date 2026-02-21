@@ -271,7 +271,7 @@ function fetchUrls(urls) {
   
   }
   }
-var popupMenu = document.getElementById("popupMenu");
+ var popupMenu = document.getElementById("popupMenu");
 var loopOption = document.getElementById("loopOption");
 var speedOption = document.getElementById("speedOption");
 var boostOption = document.getElementById("boostOption");
@@ -284,7 +284,7 @@ let audioCtx, source, gainNode, compressorNode;
 let audioState = localStorage.getItem("audioMode") || "none"; 
 
 function initAudio() {
-    var currentAud = document.getElementById("aud"); // Fetch dynamically to prevent stale "wrong file" bug
+    var currentAud = document.getElementById("aud");  
     if (audioCtx || !currentAud) return; 
 
     try {
@@ -293,15 +293,13 @@ function initAudio() {
         gainNode = audioCtx.createGain();
         compressorNode = audioCtx.createDynamicsCompressor();
 
-        // STATIC GRAPH FIX: Connect everything in a permanent line once. 
-        // This removes the need to run heavy disconnect() functions and prevents routing pops.
-        source.connect(compressorNode);
-        compressorNode.connect(gainNode);
-        gainNode.connect(audioCtx.destination);
+         // We put the Gain BEFORE the Compressor. This lets us force quiet audio 
+        // up into the threshold natively without writing heavy JS math loops.
+        source.connect(gainNode);
+        gainNode.connect(compressorNode);
+        compressorNode.connect(audioCtx.destination);
 
-        // Default static parameters
-        compressorNode.knee.value = 30;
-        compressorNode.ratio.value = 12;
+         compressorNode.knee.value = 0; 
         compressorNode.attack.value = 0.003;
         compressorNode.release.value = 0.25;
     } catch (e) {
@@ -334,21 +332,31 @@ function applyAudioState(isUserInteraction = false) {
     const smoothTime = 0.05;  
 
     if (audioState === "normalize") {
-         compressorNode.threshold.setTargetAtTime(-24, now, smoothTime);
-        gainNode.gain.setTargetAtTime(1.0, now, smoothTime);
+         // Boost everything by 3.5x so quiet sounds become audible...
+        gainNode.gain.setTargetAtTime(3.5, now, smoothTime);
+        // ...then aggressively squash the loud sounds back down to -24dB.
+        compressorNode.threshold.setTargetAtTime(-24, now, smoothTime);
+        compressorNode.ratio.setTargetAtTime(12, now, smoothTime);
     } else if (audioState === "boost") {
-         compressorNode.threshold.setTargetAtTime(0, now, smoothTime); 
+        // BOOST MODE 
+        // Boost volume, but set compressor as a safety net just below 0dB
+        // to prevent the user's speakers from crackling on loud videos.
         gainNode.gain.setTargetAtTime(2.5, now, smoothTime); 
+        compressorNode.threshold.setTargetAtTime(-2, now, smoothTime); 
+        compressorNode.ratio.setTargetAtTime(20, now, smoothTime);
     } else {
-         compressorNode.threshold.setTargetAtTime(0, now, smoothTime);
+        // NORMAL / BYPASS MODE:
+        // Set volume to normal (1x) and turn off compression (Ratio 1 = completely transparent)
         gainNode.gain.setTargetAtTime(1.0, now, smoothTime); 
+        compressorNode.threshold.setTargetAtTime(0, now, smoothTime);
+        compressorNode.ratio.setTargetAtTime(1, now, smoothTime); 
     }
 
-     if (audioCtx.state === 'suspended') audioCtx.resume();
+    // Wake up context if browser suspended it
+    if (audioCtx.state === 'suspended') audioCtx.resume();
 }
 
-// On page load: Only update visual UI
-applyAudioState(false);
+ applyAudioState(false);
  
  document.addEventListener('play', function(event) {
     // Only trigger if the element playing is our video or audio
@@ -364,7 +372,7 @@ applyAudioState(false);
             applyAudioState(true); 
         }
     }
-}, true); // Use capture phase to make sure it catches all media events
+}, true); // Use capture phase to ensure it catches all media events
 
  
 boostOption.addEventListener("click", function() {
@@ -451,5 +459,6 @@ function getNextSpeed(currentSpeed) {
         return maxSpeed;
     }
 }
+ 
 const GoogleTranslateEndpoint = "https://translate.google.com/_/TranslateWebserverUi/data/batchexecute?rpcids=MkEWBc&rt=c"
 // @license-end
