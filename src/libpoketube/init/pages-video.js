@@ -206,7 +206,7 @@ module.exports = function (app, config, renderTemplate) {
               renderTemplate(res, req, "video-error.ejs", {
               v,
               err_reason:"not found"
-              )}
+              });
  }
     
     var contentlang = hl || "en-US";
