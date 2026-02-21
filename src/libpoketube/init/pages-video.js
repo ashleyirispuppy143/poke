@@ -379,6 +379,7 @@ module.exports = function (app, config, renderTemplate) {
               support,
               dyx,
               shortsui,
+              queryid:v,
               u: vidurl,
               isvidious: isvidious,
               video: json,
