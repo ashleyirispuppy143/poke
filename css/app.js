@@ -277,8 +277,7 @@ var speedOption = document.getElementById("speedOption");
 var boostOption = document.getElementById("boostOption");
 var normalizeOption = document.getElementById("normalizeOption");
 var loopedIndicator = document.getElementById("loopedIndicator");
-var video = document.querySelector("video"); // Ensure video is targeted dynamically
-
+ 
 loopedIndicator.style.display = "none";
 
 let audioCtx, source, gainNode, compressorNode;
@@ -311,8 +310,7 @@ function initAudio() {
 }
 
 function applyAudioState(isUserInteraction = false) {
-    // 1. Update UI Instantly
-    if (audioState === "normalize") {
+     if (audioState === "normalize") {
         normalizeOption.innerHTML = "<i class='fa-light fa-check'></i> Normalization On";
         boostOption.innerHTML = "<i class='fa-light fa-volume-high'></i> Audio Boost";
     } else if (audioState === "boost") {
@@ -325,34 +323,28 @@ function applyAudioState(isUserInteraction = false) {
 
     localStorage.setItem("audioMode", audioState);
 
-    // 2. Do nothing if disabled and uninitialized
-    if (audioState === "none" && !audioCtx) return;
+     if (audioState === "none" && !audioCtx) return;
 
-    // 3. STRICT GUARD: Never hijack audio until a trusted interaction
-    if (!isUserInteraction) return;
+     if (!isUserInteraction) return;
 
     initAudio();
     if (!audioCtx) return;
 
     const now = audioCtx.currentTime;
-    const smoothTime = 0.05; // 50 milliseconds to smoothly glide to new values (removes pops!)
+    const smoothTime = 0.05;  
 
     if (audioState === "normalize") {
-        // Turn compressor on (-24dB), normal volume
-        compressorNode.threshold.setTargetAtTime(-24, now, smoothTime);
+         compressorNode.threshold.setTargetAtTime(-24, now, smoothTime);
         gainNode.gain.setTargetAtTime(1.0, now, smoothTime);
     } else if (audioState === "boost") {
-        // Bypass compressor (0dB), boost volume
-        compressorNode.threshold.setTargetAtTime(0, now, smoothTime); 
+         compressorNode.threshold.setTargetAtTime(0, now, smoothTime); 
         gainNode.gain.setTargetAtTime(2.5, now, smoothTime); 
     } else {
-        // Bypass compressor (0dB), normal volume
-        compressorNode.threshold.setTargetAtTime(0, now, smoothTime);
+         compressorNode.threshold.setTargetAtTime(0, now, smoothTime);
         gainNode.gain.setTargetAtTime(1.0, now, smoothTime); 
     }
 
-    // Wake up context if browser suspended it
-    if (audioCtx.state === 'suspended') audioCtx.resume();
+     if (audioCtx.state === 'suspended') audioCtx.resume();
 }
 
 // On page load: Only update visual UI
