@@ -5,7 +5,7 @@ const telemetryConfig = { telemetry: true }
 
 // Define file paths
 const statsFile = path.join(__dirname, "stats.json")
-const statsFileV2 = path.join(__dirname, "stats-v2.json") // Kept for legacy cleanup
+const statsFileV2 = path.join(__dirname, "stats-v2.json") 
 
 // Helper for empty structure
 const getEmptyStats = () => ({ videos: {}, browsers: {}, os: {}, users: {} })
@@ -130,9 +130,9 @@ module.exports = function (app, config, renderTemplate) {
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="icon" href="/favicon.ico">
   <style>
-  @font-face {
+    @font-face {
   font-family: "PokeTube Flex";
-  src: url("https://p.poketube.fun/https://cdn.glitch.global/43b6691a-c8db-41d4-921c-8cf6aa0d9108/robotoflex.ttf?v=16683434286881");
+  src: url("/static/robotoflex.ttf");
   font-style: normal;
   font-stretch: 1% 800%;
   font-display: swap;
@@ -294,9 +294,9 @@ module.exports = function (app, config, renderTemplate) {
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="icon" href="/favicon.ico">
   <style>
-  @font-face {
+    @font-face {
   font-family: "PokeTube Flex";
-  src: url("https://p.poketube.fun/https://cdn.glitch.global/43b6691a-c8db-41d4-921c-8cf6aa0d9108/robotoflex.ttf?v=16683434286881");
+  src: url("/static/robotoflex.ttf");
   font-style: normal;
   font-stretch: 1% 800%;
   font-display: swap;
@@ -461,9 +461,9 @@ module.exports = function (app, config, renderTemplate) {
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="icon" href="/favicon.ico">
   <style>
-  @font-face {
+    @font-face {
   font-family: "PokeTube Flex";
-  src: url("https://p.poketube.fun/https://cdn.glitch.global/43b6691a-c8db-41d4-921c-8cf6aa0d9108/robotoflex.ttf?v=16683434286881");
+  src: url("/static/robotoflex.ttf");
   font-style: normal;
   font-stretch: 1% 800%;
   font-display: swap;
