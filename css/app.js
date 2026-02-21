@@ -302,7 +302,7 @@ function initAudio() {
     compressorNode.release.value = 0.25;
 }
 
-function applyAudioState() {
+function applyAudioState(isUserInteraction = false) {
     // 1. Update UI
     if (audioState === "normalize") {
         normalizeOption.innerHTML = "<i class='fa-light fa-check'></i> Normalization On";
@@ -319,6 +319,10 @@ function applyAudioState() {
 
     // 2. ULTRA OPTIMIZATION: If 'none' and never initialized, do absolutely nothing (saves memory/CPU)
     if (audioState === "none" && !audioCtx) return;
+
+    // 🚨 BUG FIX: Do not hijack audio into the Web Audio API until a user interaction occurs.
+    // This prevents the browser from muting the audio element on initial page load.
+    if (!isUserInteraction) return;
 
     // 3. Initialize Audio API ONLY if actually needed
     initAudio();
@@ -342,33 +346,32 @@ function applyAudioState() {
         // ZERO-CPU BYPASS: Routes audio directly to speakers, bypassing effects processing entirely
         source.connect(audioCtx.destination);
     }
+
+    // Ensure context resumes if the browser auto-suspended it
+    if (audioCtx.state === 'suspended') audioCtx.resume();
 }
 
-// Ensure correct UI loads instantly
-applyAudioState();
+// On page load: Instantly update UI, but do NOT initialize Web Audio yet (false)
+applyAudioState(false);
  
-// OPTIMIZATION: Only listen for play if the user actually has an active preset saved
+// If user has a saved preset, initialize audio safely on the first PLAY event
 if (aud && audioState !== "none") {
     aud.addEventListener('play', () => {
-        if (!audioCtx) applyAudioState();
-    }, { once: true }); // Automatically destroys listener after firing once
+        if (!audioCtx) applyAudioState(true); // true = safe to initialize
+    }, { once: true });
 }
 
  
 boostOption.addEventListener("click", function() {
      audioState = (audioState === "boost") ? "none" : "boost";
-    applyAudioState();
-    
-     if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    applyAudioState(true); // true = safe to initialize
     
      popupMenu.style.display = "none"; 
 });
 
 normalizeOption.addEventListener("click", function() {
      audioState = (audioState === "normalize") ? "none" : "normalize";
-    applyAudioState();
-    
-     if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    applyAudioState(true); // true = safe to initialize
     
      popupMenu.style.display = "none";
 });
