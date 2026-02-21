@@ -22,7 +22,7 @@
   } catch (e) {
     }
 
-   const url = "/static/improving-poke.js";
+   const url = "/static/improving-poke.js?v=4";
   if (document.querySelector(`script[src="${url}"]`)) return;
 
   const s = document.createElement("script");
