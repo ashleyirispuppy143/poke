@@ -271,49 +271,150 @@ function fetchUrls(urls) {
   
   }
   }
+var popupMenu = document.getElementById("popupMenu");
+var loopOption = document.getElementById("loopOption");
+var speedOption = document.getElementById("speedOption");
+// New DOM elements for Audio
+var boostOption = document.getElementById("boostOption");
+var normalizeOption = document.getElementById("normalizeOption");
+var loopedIndicator = document.getElementById("loopedIndicator");
+var aud = document.getElementById("aud");
 
- var popupMenu = document.getElementById("popupMenu");
-        var loopOption = document.getElementById("loopOption");
-        var speedOption = document.getElementById("speedOption");
- 
+loopedIndicator.style.display = "none";
+
+ let audioCtx, source, gainNode, compressorNode;
+let audioInitialized = false;
+
+ let audioState = localStorage.getItem("audioMode") || "none"; // can be "none", "boost", or "normalize"
+
+function initAudio() {
+    if (audioInitialized) return;
+    if (!aud) return;
+
+    // Standard cross-browser audio context
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    
+     source = audioCtx.createMediaElementSource(aud);
+    gainNode = audioCtx.createGain();
+    compressorNode = audioCtx.createDynamicsCompressor();
+
+     compressorNode.threshold.value = -24; // dB
+    compressorNode.knee.value = 30;
+    compressorNode.ratio.value = 12;
+    compressorNode.attack.value = 0.003;
+    compressorNode.release.value = 0.25;
+
+    audioInitialized = true;
+}
+
+function applyAudioState() {
+    if (!audioInitialized) initAudio();
+    if (!audioCtx) return;
+
+     source.disconnect();
+    compressorNode.disconnect();
+    gainNode.disconnect();
+
+    if (audioState === "normalize") {
+         source.connect(compressorNode);
+        compressorNode.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        gainNode.gain.value = 1.0;
+        
+        normalizeOption.innerHTML = "<i class='fa-light fa-check'></i> Normalization On";
+        boostOption.innerHTML = "Audio Boost";
+    } else if (audioState === "boost") {
+        // Route: Source -> Gain(at 2.5x) -> Destination
+        source.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        gainNode.gain.value = 2.5; // Adjust this number to increase/decrease boost level
+
+        normalizeOption.innerHTML = "Audio Normalization";
+        boostOption.innerHTML = "<i class='fa-light fa-check'></i> Boost On";
+    } else {
+        // Route: Source -> Gain(at 1x) -> Destination (Normal behavior)
+        source.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        gainNode.gain.value = 1.0;
+
+        normalizeOption.innerHTML = "Audio Normalization";
+        boostOption.innerHTML = "Audio Boost";
+    }
+
+    // Save to LocalStorage
+    localStorage.setItem("audioMode", audioState);
+}
+
+// Browsers require a user interaction before AudioContext can start.
+// We initialize it the first time the audio plays.
+if (aud) {
+    aud.addEventListener('play', () => {
+        if (!audioInitialized) {
+            initAudio();
+            applyAudioState();
+        }
+    });
+}
+
+// --- EVENT LISTENERS ---
+
+boostOption.addEventListener("click", function() {
+    // Toggle logic
+    audioState = (audioState === "boost") ? "none" : "boost";
+    applyAudioState();
+    
+    // Resume context if browser suspended it
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    
+    // Close the popup menu
+    popupMenu.style.display = "none"; 
+});
+
+normalizeOption.addEventListener("click", function() {
+    // Toggle logic
+    audioState = (audioState === "normalize") ? "none" : "normalize";
+    applyAudioState();
+    
+    // Resume context if browser suspended it
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    
+    // Close the popup menu
+    popupMenu.style.display = "none";
+});
 
 video.addEventListener("contextmenu", function(event) {
     // Check if the video is in fullscreen mode
     if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.mozFullScreenElement && !document.msFullscreenElement) {
-         event.preventDefault();
+        event.preventDefault();
 
-         popupMenu.style.display = "block";
+        // Ensure the UI matches the current state before showing
+        if (audioInitialized) applyAudioState();
+
+        popupMenu.style.display = "block";
         popupMenu.style.left = event.pageX + "px";
         popupMenu.style.top = event.pageY + "px";
     }
 });
 
-
-        // Hide the popup menu when clicking outside of it
-        window.addEventListener("click", function(event) {
-            if (event.target !== video) {
-                popupMenu.style.display = "none";
-            }
-        });
-
-    var loopedIndicator = document.getElementById("loopedIndicator");
-
-    loopedIndicator.style.display = "none"; // Initially hide the indicator
+// Hide the popup menu when clicking outside of it
+window.addEventListener("click", function(event) {
+    if (event.target !== video) {
+        popupMenu.style.display = "none";
+    }
+});
 
 loopOption.addEventListener("click", function() {
-  const quaindt = new URLSearchParams(window.location.search).get("quality") || "";
-
+    const quaindt = new URLSearchParams(window.location.search).get("quality") || "";
     var looped = video.loop;
     video.loop = !looped;
 
     if (quaindt !== "medium") {
-    var loopedaudioelement = document.getElementById("aud");
-    if (loopedaudioelement) {
-        loopedaudioelement.loop = !looped;
-    }
+        if (aud) {
+            aud.loop = !looped;
+        }
     }
 
-     var displaySpecialText = Math.random() < 0.5;
+    var displaySpecialText = Math.random() < 0.5;
 
     if (displaySpecialText) {
         var specialText = looped ? "Unlooped >.<" : "Looped~ :3 >~<";
@@ -321,12 +422,15 @@ loopOption.addEventListener("click", function() {
     } else {
         loopedIndicator.textContent = looped ? "Unlooped!" : "Looped!";
     }
+    
     loopedIndicator.style.display = "block";
 
     // Hide the indicator after 2 seconds
     setTimeout(function() {
         loopedIndicator.style.display = "none";
     }, 2000);
+    
+    popupMenu.style.display = "none"; // Closes menu optionally on loop click
 });
 
 speedOption.addEventListener("click", function() {
@@ -334,12 +438,14 @@ speedOption.addEventListener("click", function() {
     var newSpeed = getNextSpeed(currentSpeed);
 
     video.playbackRate = newSpeed;
-    document.getElementById("aud").playbackRate = newSpeed;
+    if (aud) aud.playbackRate = newSpeed;
+    
     speedOption.innerHTML = "<i class='fa-light fa-gauge'></i> Speed: " + newSpeed.toFixed(2) + "x";
+    popupMenu.style.display = "none"; // Closes menu optionally on speed click
 });
 
 function getNextSpeed(currentSpeed) {
-    var maxSpeed = (navigator.hardwareConcurrency < 3) ? 1 : 2; // Limit max speed based on CPU cores - for optimization 
+    var maxSpeed = (navigator.hardwareConcurrency < 3) ? 1 : 2; 
 
     if (currentSpeed === maxSpeed) {
         return 0.25;
@@ -353,7 +459,6 @@ function getNextSpeed(currentSpeed) {
         return maxSpeed;
     }
 }
-
 
 const GoogleTranslateEndpoint = "https://translate.google.com/_/TranslateWebserverUi/data/batchexecute?rpcids=MkEWBc&rt=c"
 // @license-end
