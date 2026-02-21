@@ -201,9 +201,14 @@ module.exports = function (app, config, renderTemplate) {
     const isMatch = regex.test(v);
 
     if (!isMatch) {
-      return res.redirect("/");
-    }
-
+              res.status(500); 
+              res.header('X-Robots-Tag', 'noindex, nofollow');
+              renderTemplate(res, req, "video-error.ejs", {
+              v,
+              err_reason:"not found"
+              }
+ }
+    
     var contentlang = hl || "en-US";
     var contentregion = region || "US";
 
