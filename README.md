@@ -10,6 +10,8 @@
 </h1>
 
 <div align="center">
+  <p> <a href="https://twitter.com/PeylsX/status/2025285418330058882"> Certified trans-aids-Libtard-Ukraine software!</a> whatever that means...
+</p>
   <p>Be anonymous while watching  videos, gaming, and listening to music on Poke - the free privacy front-end!</p>
 </div>
 
