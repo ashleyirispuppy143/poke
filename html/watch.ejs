@@ -1125,7 +1125,9 @@ Offical Discord Server! :3
 <div id="normalizeOption">
     <i class="fa-light fa-wave-square"></i> Audio Normalization
 </div>                                                                       
- 
+ <div id="whisperOption">
+    <i class="fa-light fa-volume-low"></i> Whisper Mode
+</div>
                    
                                                                              <hr style="clear: both;display: block;border: none;border-bottom: 0.5px solid #1a1111;/*! width: 4.5em; */height: 0;">
 <div >
@@ -2504,21 +2506,41 @@ if (/[?&]autoplay=/.test(location.search)) {
  
 </script>
      <script>
-      function toggleTheaterMode() {
+function toggleTheaterMode() {
     var videoPlayerContainer = document.querySelector('.video-player-container');
-    if (videoPlayerContainer.classList.contains('theatermodeon')) {
-        videoPlayerContainer.classList.remove('theatermodeon');
-    } else {
-        videoPlayerContainer.classList.add('theatermodeon');
-    }
-    
     var watchPage = document.querySelector('.watch-page');
-    if (watchPage.style.display === 'grid') {
-        watchPage.style.display = 'flex';
-    } else {
+
+    if (!videoPlayerContainer || !watchPage) return; 
+
+    var isTheaterMode = videoPlayerContainer.classList.toggle('theatermodeon');
+
+    // Update the display style based on the new state
+    if (isTheaterMode) {
         watchPage.style.display = 'grid';
+    } else {
+        watchPage.style.display = 'flex';
+    }
+
+    localStorage.setItem('theaterMode', isTheaterMode);
+}
+
+function checkTheaterMode() {
+    var isTheaterMode = localStorage.getItem('theaterMode') === 'true';
+    var videoPlayerContainer = document.querySelector('.video-player-container');
+    var watchPage = document.querySelector('.watch-page');
+
+    if (!videoPlayerContainer || !watchPage) return;
+
+    if (isTheaterMode) {
+        videoPlayerContainer.classList.add('theatermodeon');
+        watchPage.style.display = 'grid';
+    } else {
+        videoPlayerContainer.classList.remove('theatermodeon');
+        watchPage.style.display = 'flex';
     }
 }
+
+document.addEventListener('DOMContentLoaded', checkTheaterMode);
 
 	const languageCode = localStorage.getItem("Language");
 	const regionCode = localStorage.getItem("Region");
@@ -2768,7 +2790,7 @@ document.addEventListener("fullscreenchange", handleFullscreen);
 <!-- BUNDLE VERSION 31.08.2025 -->
 <!-- BUNDLE VERSION 31.08.2025 -->
 <!-- BUNDLE VERSION 31.08.2025 -->
-<!-- BUNDLE --><script src="/static/app.bundle.js?version=31.08.2025&bundledate=3451082025_0143ab454493_video3s5" > </script><!-- BUNDLE -->
+<!-- BUNDLE --><script src="/static/app.bundle.js?version=31.08.2025&bundledate=3451082025_0143ab454493_virdeo3s5" > </script><!-- BUNDLE -->
 <!-- BUNDLE VERSION 31.08.2025 -->
 <!-- BUNDLE VERSION 31.08.2025 -->
 <!-- BUNDLE VERSION 31.08.2025 -->
