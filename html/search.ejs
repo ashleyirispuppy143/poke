@@ -1806,9 +1806,32 @@ no results found :c	u can try <a href="https://youtube.com/results?search_query=
 </p>
 </div>
                                    <% } %>   
-                                   
+                   <% 
+   const todownrank = [
+    "UCoMdktPbSTixAyNGwb-UYkQ", "UCXIJgqnII2ZOINSWNOGFThA", "UCknLrEdhRCp1aegoMqRaCZg",
+    "UCaXkIU1QidjPwiAYu6GcHjg", "UCfdNM3NAhaBOXCafH7krzrA", "UCdC0An4ZPNr_YiFiYoVbwaw",
+    "UC16niRr50-MSBwiO3YDb3RA", "UC3XTzVzaHQEd30rQbuvCtTQ", "UC52X5wxOL_s5yw0dQk7NtgA",
+    "UCIALMKvObZNtJ6AmdCLP7Lg", "UChqUTb7kYRX8-EiaN3XFrSQ", "UCg40OxZ1GYh3u3jBntB6DLg",
+    "UCvJJ_dzjViJCoLf5uKUTwoA", "UCqoAEDirJPjEUFcF2FklnBA", "UCQeRaTukNYft1_6AZPACnog",
+    "UChirEOpgFCupRAk5etXqPaA", "UCSrZ3UV4jOidv8ppoVuvW9Q", "UChLtXXpo4Ge1ReTEboVvTDg",
+    "UC86dbj-lbDks_hZ5gRKL49Q", "UC6ZFN9Tx6xh-skXCuRHCDpQ", "UCrM7B7SL_g1edFOnmj-SDKg",
+    "UCK7tptUDHh-RYDsdxO1-5QQ", "UCW39zufHfsuGgpLviKh297Q", "UCUMZ7gohGI9HcU9VNsr2FJQ",
+    "UCpa-Zb0ZcQjTCPP1Dx_1M8Q"
+  ];
+
+   function downrank(arr) {
+    return arr.sort((a, b) => {
+      const isASpam = todownrank.includes(a.authorId);
+      const isBSpam = todownrank.includes(b.authorId);
+      if (isASpam && !isBSpam) return 1;  // Move 'a' down
+      if (!isASpam && isBSpam) return -1; // Move 'b' down
+      return 0; // Keep normal order for everything else
+    });
+  }
+%>
+
 <% if (invresults?.results) { %>
-  <% invresults.results.forEach(x => { %>
+  <% downrank(invresults.results).forEach(x => { %>
   <div class="video-list">
     <div class="video">
       <a href="/watch?v=<%= x.videoId %>"
@@ -1818,13 +1841,12 @@ no results found :c	u can try <a href="https://youtube.com/results?search_query=
         <span class="video-length"><%= turntomins(x.lengthSeconds) %></span>
       </a>
       <div class="info" style="color:#fff;text-align: left;font-weight: 1000;">
-        <a style="font-family: 'PokeTube Flex';font-size: large;text-align: left;font-stretch: extra-expanded;
-font-weight: 1000;" href="/watch?v=<%= x.videoId %>" class="title max-lines-2"><%= x.title %></a>
+        <a style="font-family: 'PokeTube Flex';font-size: large;text-align: left;font-stretch: extra-expanded;font-weight: 1000;" href="/watch?v=<%= x.videoId %>" class="title max-lines-2"><%= x.title %></a>
         <div style="display: flex; flex-direction: column; row-gap: 8px;font-weight:bold">
           <a href="/watch?v=<%= x.videoId %>"><span><%= x.viewCountText %></span> <span>•</span> <span><%= x.publishedText %></span></a>
              <img src="<%- media_proxy_url %>/proxy?url=<%= x.authorThumbnails[1].url %>" style="width: fit-content;height: 23px;border-radius: 1em;">
-     <a href="/channel?id=<%= x.authorId %>"><%= x.author %><% if (x?.authorVerified) { %> 
-            <i class="icon ion ion-md-checkmark-circle" title="verified channel"></i><% } %></a>
+      <a href="/channel?id=<%= x.authorId %>"><%= x.author %><% if (x?.authorVerified) { %> 
+             <i class="icon ion ion-md-checkmark-circle" title="verified channel"></i><% } %></a>
 
 <div class="badges">
   <% 
@@ -1843,7 +1865,6 @@ font-weight: 1000;" href="/watch?v=<%= x.videoId %>" class="title max-lines-2"><
   <% } }) %>
 </div>
 
-
           <div style="display: inline-flex;flex-direction: row;min-width: 6em;gap: 4px;">
         <a href="/download?v=<%= x.videoId %>" class="new-button">
     <span class="icon"><i class="fa-light fa-download"></i></span>
@@ -1855,15 +1876,13 @@ font-weight: 1000;" href="/watch?v=<%= x.videoId %>" class="title max-lines-2"><
     <span class="label">Open on YouTube :/</span>
   </a>
           </div>
-
-          
         </div>
       </div>
     </div>
   </div>
   <% }) %>
 <% } else if (invresults) { %>
-  <% invresults.forEach(x => { %>
+  <% downrank(invresults).forEach(x => { %>
   <div class="video-list">
     <div class="video">
       <a href="/watch?v=<%= x.videoId %>"
@@ -1873,14 +1892,13 @@ font-weight: 1000;" href="/watch?v=<%= x.videoId %>" class="title max-lines-2"><
         <span class="video-length"><%= turntomins(x.lengthSeconds) %></span>
       </a>
       <div class="info" style="color:#fff;text-align: left;font-weight: 1000;">
-        <a style="font-family: 'PokeTube Flex';font-size: large;text-align: left;font-stretch: extra-expanded;
-font-weight: 1000;" href="/watch?v=<%= x.videoId %>" class="title max-lines-2"><%= x.title %></a>
+        <a style="font-family: 'PokeTube Flex';font-size: large;text-align: left;font-stretch: extra-expanded;font-weight: 1000;" href="/watch?v=<%= x.videoId %>" class="title max-lines-2"><%= x.title %></a>
         <div style="display: flex; flex-direction: column; row-gap: 8px;font-weight:bold">
           <a href="/watch?v=<%= x.videoId %>"><span><%= x.viewCountText %></span> <span>•</span> <span><%= x.publishedText %></span></a>
           <div style="display: flex;margin-bottom: 0px;">
              <img src="<%- media_proxy_url %>/proxy?url=<%= x.authorThumbnails[1].url %>" style="width: fit-content;height: 23px;border-radius: 1em;">
-     <a href="/channel?id=<%= x.authorId %>" style="margin:4px"><%= x.author %><% if (x?.authorVerified) { %> 
-            <i class="icon ion ion-md-checkmark-circle" title="verified channel"></i><% } %></a>
+      <a href="/channel?id=<%= x.authorId %>" style="margin:4px"><%= x.author %><% if (x?.authorVerified) { %> 
+             <i class="icon ion ion-md-checkmark-circle" title="verified channel"></i><% } %></a>
             </div>
 <div class="badges">
   <% 
@@ -1916,7 +1934,6 @@ font-weight: 1000;" href="/watch?v=<%= x.videoId %>" class="title max-lines-2"><
   </div>
   <% }) %>
 <% } %>
-    
         <audio id="audio" style="display:none;" loop autoplay></audio>
    
                    <%  if (invresults?.length >= 1) { %>
