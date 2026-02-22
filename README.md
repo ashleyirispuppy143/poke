@@ -86,7 +86,11 @@ Poke uses Free Software codecs! No non-free components included :3
    - `$ node server.js`
 
    Congrats! Poke should now be running on `localhost:6003`! 🎉
- 
+
+Whats next?
+Setup invidious and set companion (proxy) and the invidious api url. see https://docs.invidious.io/installation
+
+
 ## Poke Community
 
 Join us on [Discord](https://discord.poketube.fun/) ! I promise we're cool! <3
