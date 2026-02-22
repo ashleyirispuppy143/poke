@@ -396,12 +396,12 @@ function applyAudioState(isUserInteraction = false) {
         compressorNode.threshold.setTargetAtTime(-2, now, smoothTime); 
         compressorNode.ratio.setTargetAtTime(20, now, smoothTime);
     } else if (audioState === "whisper") {
-         gainNode.gain.setTargetAtTime(0.10, now, smoothTime); 
+         // 1. Human hearing is logarithmic. We drop this to a tiny 2.5% (0.025) multiplier.
+        gainNode.gain.setTargetAtTime(0.025, now, smoothTime); 
         
-        // 2. Brickwall Compressor: Instantly squashes anything that spikes above a whisper.
-        // -30dB threshold means it starts compressing almost immediately.
-        // Ratio 20 is a harsh limiter that refuses to let loud noises pass.
-        compressorNode.threshold.setTargetAtTime(-30, now, smoothTime); 
+        // 2. Absolute brickwall at -40dB. Any sudden loud bass drops or 
+        // screaming will be instantly flattened out.
+        compressorNode.threshold.setTargetAtTime(-40, now, smoothTime); 
         compressorNode.ratio.setTargetAtTime(20, now, smoothTime);
     } else {
         // NORMAL / BYPASS MODE:
