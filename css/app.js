@@ -397,9 +397,9 @@ function applyAudioState(isUserInteraction = false) {
         compressorNode.ratio.setTargetAtTime(20, now, smoothTime);
     } else if (audioState === "whisper") {
         // WHISPER MODE: 
-        // Drops overall volume drastically (35%), but adds a mild compressor 
+        // Drops overall volume drastically (50%), but adds a mild compressor 
         // so dialogue remains clear while loud noises stay muffled. (Zero math CPU loop).
-        gainNode.gain.setTargetAtTime(0.35, now, smoothTime); 
+        gainNode.gain.setTargetAtTime(0.50, now, smoothTime); 
         compressorNode.threshold.setTargetAtTime(-15, now, smoothTime); 
         compressorNode.ratio.setTargetAtTime(4, now, smoothTime);
     } else {
