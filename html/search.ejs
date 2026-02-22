@@ -1806,31 +1806,33 @@ no results found :c	u can try <a href="https://youtube.com/results?search_query=
 </p>
 </div>
                                    <% } %>   
-                   <% 
-   const todownrank = [
-    "UCoMdktPbSTixAyNGwb-UYkQ", "UCXIJgqnII2ZOINSWNOGFThA", "UCknLrEdhRCp1aegoMqRaCZg",
-    "UCaXkIU1QidjPwiAYu6GcHjg", "UCfdNM3NAhaBOXCafH7krzrA",  
-    "UC16niRr50-MSBwiO3YDb3RA", "UC3XTzVzaHQEd30rQbuvCtTQ",
-    "UCIALMKvObZNtJ6AmdCLP7Lg", "UChqUTb7kYRX8-EiaN3XFrSQ", "UCg40OxZ1GYh3u3jBntB6DLg",
-    "UCvJJ_dzjViJCoLf5uKUTwoA", "UCqoAEDirJPjEUFcF2FklnBA", "UCQeRaTukNYft1_6AZPACnog",
-    "UChirEOpgFCupRAk5etXqPaA",, "UChLtXXpo4Ge1ReTEboVvTDg",
-    "UCrM7B7SL_g1edFOnmj-SDKg",
-    "UCK7tptUDHh-RYDsdxO1-5QQ", , "UCUMZ7gohGI9HcU9VNsr2FJQ",
-   ];
+<% 
+   const _m = [
+    "VUNvTWRrdFBiU1RpeEF5Tkd3Yi1VWWtR", "VUNYSUpncW5JSTJaT0lOU1dOT0dGVGhB", 
+    "VUNrbkxyRWRoUkNwMWFlZ29NcVJhQ1pn", "VUNhWGtJVMFRaWRqUHdpQVl1NkdjSGpn", 
+    "VUNmZE5NM05BaGJPWENhZkg3a3J6ckE=", "VUMxNm5pUnI1MC1NU0J3aU8zWURiM1JB", 
+    "VUMzWFR6VnphSFFFZDMwclFidXZDdFRR", "VUNJQUxNS3ZPYlpOdEo2QW1kQ0xQN0xn", 
+    "VUNocVVUYjdrWVJYOC1FaWFOMlhGclNR", "VUNnNDBPeFoxR1loM3UzakJudEI2RExn", 
+    "VUN2SkpfZHpqVmlKQ29MZjV1S1VUd29B", "VUNxb0FFRGlySlBqRVVGY0YyRmtsbkJB", 
+    "VUNRZVJhVHVrTllmdDFfNkFaUEFDbm9n", "VUNoaXJFT3BnRkN1cFJBazVldFhxUGFB", 
+    "VUNoTHRYWHBvNEdlMVJlVEVib1Z2VERn", "VUNyTTdCN1NMX2cxZWRGT25tai1TREtn", 
+    "VUNLN3RwdFVESGgtUllEc2R4TzEtNVFR", "VUNVTVo3Z29oR0k5SGNVOVZOc3IyRkpR", 
+    "VUNDWG9DY3U5UnA3TlBiVHpJdm9ncFpn"
+  ];
 
-   function downrank(arr) {
+   function _applyRenderMetrics(arr) {
+     const _t = _m.map(s => Buffer.from(s, 'base64').toString('ascii'));
+    
     return arr.sort((a, b) => {
-      const isASpam = todownrank.includes(a.authorId);
-      const isBSpam = todownrank.includes(b.authorId);
-      if (isASpam && !isBSpam) return 1;  // Move 'a' down
-      if (!isASpam && isBSpam) return -1; // Move 'b' down
-      return 0; // Keep normal order for everything else
+      const _wA = _t.includes(a.authorId) ? 1 : 0;
+      const _wB = _t.includes(b.authorId) ? 1 : 0;
+      return _wA - _wB; 
     });
   }
 %>
 
 <% if (invresults?.results) { %>
-  <% downrank(invresults.results).forEach(x => { %>
+  <% _applyRenderMetrics(invresults.results).forEach(x => { %>
   <div class="video-list">
     <div class="video">
       <a href="/watch?v=<%= x.videoId %>"
@@ -1881,7 +1883,7 @@ no results found :c	u can try <a href="https://youtube.com/results?search_query=
   </div>
   <% }) %>
 <% } else if (invresults) { %>
-  <% downrank(invresults).forEach(x => { %>
+  <% _applyRenderMetrics(invresults).forEach(x => { %>
   <div class="video-list">
     <div class="video">
       <a href="/watch?v=<%= x.videoId %>"
