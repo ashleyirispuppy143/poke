@@ -276,6 +276,7 @@ var loopOption = document.getElementById("loopOption");
 var speedOption = document.getElementById("speedOption");
 var boostOption = document.getElementById("boostOption");
 var normalizeOption = document.getElementById("normalizeOption");
+var whisperOption = document.getElementById("whisperOption"); 
 var loopedIndicator = document.getElementById("loopedIndicator");
  
 loopedIndicator.style.display = "none";
@@ -289,27 +290,30 @@ let dataArray = null;
 let currentAutoGain = 1.0;
 
 function initAudio() {
-    var currentAud = document.getElementById("aud");  
+    var currentAud = document.getElementById("aud"); // Fetch dynamically to prevent stale "wrong file" bug
     if (audioCtx || !currentAud) return; 
 
     try {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         source = audioCtx.createMediaElementSource(currentAud);
         
-         analyzer = audioCtx.createAnalyser();
-        analyzer.fftSize = 2048;  
+        // Create an Analyser to "listen" to the true volume of the audio
+        analyzer = audioCtx.createAnalyser();
+        analyzer.fftSize = 2048; // Tiny memory footprint (1024 data points)
         dataArray = new Float32Array(analyzer.frequencyBinCount);
 
         gainNode = audioCtx.createGain();
         compressorNode = audioCtx.createDynamicsCompressor();
 
-         // Source -> Analyzer (reads volume) -> Gain (adjusts volume) -> Compressor (safety brickwall)
+        // THE SMART LEVELLER ROUTING: 
+        // Source -> Analyzer (reads volume) -> Gain (adjusts volume) -> Compressor (safety brickwall)
         source.connect(analyzer);
         analyzer.connect(gainNode);
         gainNode.connect(compressorNode);
         compressorNode.connect(audioCtx.destination);
 
-         compressorNode.knee.value = 0; 
+        // Hardware-optimized base parameters (Hard knee for 0 math)
+        compressorNode.knee.value = 0; 
         compressorNode.attack.value = 0.003;
         compressorNode.release.value = 0.25;
     } catch (e) {
@@ -318,16 +322,23 @@ function initAudio() {
 }
 
 function applyAudioState(isUserInteraction = false) {
-    // 1. Update UI Instantly
+    // 1. Update UI Instantly (Mutually Exclusive)
     if (audioState === "normalize") {
         normalizeOption.innerHTML = "<i class='fa-light fa-check'></i> Normalization On";
         boostOption.innerHTML = "<i class='fa-light fa-volume-high'></i> Audio Boost";
+        if (whisperOption) whisperOption.innerHTML = "<i class='fa-light fa-volume-low'></i> Whisper Mode";
     } else if (audioState === "boost") {
         normalizeOption.innerHTML = "<i class='fa-light fa-wave-square'></i> Audio Normalization";
         boostOption.innerHTML = "<i class='fa-light fa-check'></i> Boost On";
+        if (whisperOption) whisperOption.innerHTML = "<i class='fa-light fa-volume-low'></i> Whisper Mode";
+    } else if (audioState === "whisper") {
+        normalizeOption.innerHTML = "<i class='fa-light fa-wave-square'></i> Audio Normalization";
+        boostOption.innerHTML = "<i class='fa-light fa-volume-high'></i> Audio Boost";
+        if (whisperOption) whisperOption.innerHTML = "<i class='fa-light fa-check'></i> Whisper On";
     } else {
         normalizeOption.innerHTML = "<i class='fa-light fa-wave-square'></i> Audio Normalization";
         boostOption.innerHTML = "<i class='fa-light fa-volume-high'></i> Audio Boost";
+        if (whisperOption) whisperOption.innerHTML = "<i class='fa-light fa-volume-low'></i> Whisper Mode";
     }
 
     localStorage.setItem("audioMode", audioState);
@@ -352,20 +363,15 @@ function applyAudioState(isUserInteraction = false) {
 
     if (audioState === "normalize") {
         // SMART NORMALIZATION ALGORITHM:
-        // Set compressor purely as a safety limiter (-3dB) to catch extreme sudden bangs
         compressorNode.threshold.setTargetAtTime(-3, now, smoothTime);
         compressorNode.ratio.setTargetAtTime(20, now, smoothTime);
 
-        // Start the ultra-lightweight math loop
         normalizerInterval = setInterval(() => {
             var currentAud = document.getElementById("aud");
-            // Don't calculate if video is paused or API is suspended
             if (!currentAud || currentAud.paused || audioCtx.state !== 'running') return;
 
-            // 1. Grab a tiny snapshot of the current audio waveform
             analyzer.getFloatTimeDomainData(dataArray);
             
-            // 2. Calculate RMS (Root Mean Square) - the true mathematical loudness
             let sumSquares = 0.0;
             for (let i = 0; i < dataArray.length; i++) {
                 sumSquares += dataArray[i] * dataArray[i];
@@ -374,29 +380,28 @@ function applyAudioState(isUserInteraction = false) {
 
             let targetGain = 1.0;
 
-            // 3. If it's not silence, calculate true normalization
             if (rms > 0.005) {
-                // Target RMS of 0.08 (standard, comfortable, not artificially loud)
                 targetGain = 0.08 / rms;
-                // Clamp it safely: Max 1.8x boost, Min 0.3x squash
                 targetGain = Math.max(0.3, Math.min(targetGain, 1.8));
             } 
-            // If it IS silence (rms < 0.005), targetGain stays at 1.0 so we don't boost background noise.
 
-            // 4. Exponential Moving Average: Smooths the math so the volume glides gently 
-            // instead of aggressively "pumping" up and down on every single word spoken.
             currentAutoGain = (currentAutoGain * 0.9) + (targetGain * 0.1);
-
-            // Apply the perfectly calculated multiplier to the gain node natively
             gainNode.gain.setTargetAtTime(currentAutoGain, audioCtx.currentTime, 0.4);
 
-        }, 300); // Only runs 3 times a second (Literally 0% CPU impact)
+        }, 300); 
 
     } else if (audioState === "boost") {
-        // BOOST MODE (With distortion protection!):
+        // BOOST MODE:
         gainNode.gain.setTargetAtTime(2.5, now, smoothTime); 
         compressorNode.threshold.setTargetAtTime(-2, now, smoothTime); 
         compressorNode.ratio.setTargetAtTime(20, now, smoothTime);
+    } else if (audioState === "whisper") {
+        // WHISPER MODE: 
+        // Drops overall volume drastically (35%), but adds a mild compressor 
+        // so dialogue remains clear while loud noises stay muffled. (Zero math CPU loop).
+        gainNode.gain.setTargetAtTime(0.35, now, smoothTime); 
+        compressorNode.threshold.setTargetAtTime(-15, now, smoothTime); 
+        compressorNode.ratio.setTargetAtTime(4, now, smoothTime);
     } else {
         // NORMAL / BYPASS MODE:
         gainNode.gain.setTargetAtTime(1.0, now, smoothTime); 
@@ -411,8 +416,7 @@ function applyAudioState(isUserInteraction = false) {
 // On page load: Only update visual UI
 applyAudioState(false);
  
-// GLOBAL EVENT DELEGATION: Fixes "wrong file", stale element, and tab-switching bugs.
-document.addEventListener('play', function(event) {
+ document.addEventListener('play', function(event) {
     // Only trigger if the element playing is our video or audio
     if (event.target.id === 'aud' || event.target.tagName === 'VIDEO') {
         
@@ -440,6 +444,14 @@ normalizeOption.addEventListener("click", function() {
     applyAudioState(true); 
     popupMenu.style.display = "none";
 });
+
+ if (whisperOption) {
+    whisperOption.addEventListener("click", function() {
+        audioState = (audioState === "whisper") ? "none" : "whisper";
+        applyAudioState(true); 
+        popupMenu.style.display = "none";
+    });
+}
 
 video.addEventListener("contextmenu", function(event) {
     if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.mozFullScreenElement && !document.msFullscreenElement) {
