@@ -296,22 +296,20 @@ function initAudio() {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         source = audioCtx.createMediaElementSource(currentAud);
         
-        // Create an Analyser to "listen" to the true volume of the audio
-        analyzer = audioCtx.createAnalyser();
-        analyzer.fftSize = 2048; // Tiny memory footprint (1024 data points)
+         analyzer = audioCtx.createAnalyser();
+        analyzer.fftSize = 2048;  
         dataArray = new Float32Array(analyzer.frequencyBinCount);
 
         gainNode = audioCtx.createGain();
         compressorNode = audioCtx.createDynamicsCompressor();
 
-        // THE SMART LEVELLER ROUTING: 
-         source.connect(analyzer);
+         // Source -> Analyzer (reads volume) -> Gain (adjusts volume) -> Compressor (safety brickwall)
+        source.connect(analyzer);
         analyzer.connect(gainNode);
         gainNode.connect(compressorNode);
         compressorNode.connect(audioCtx.destination);
 
-        // Hardware-optimized base parameters (Hard knee for 0 math)
-        compressorNode.knee.value = 0; 
+         compressorNode.knee.value = 0; 
         compressorNode.attack.value = 0.003;
         compressorNode.release.value = 0.25;
     } catch (e) {
@@ -320,7 +318,8 @@ function initAudio() {
 }
 
 function applyAudioState(isUserInteraction = false) {
-     if (audioState === "normalize") {
+    // 1. Update UI Instantly
+    if (audioState === "normalize") {
         normalizeOption.innerHTML = "<i class='fa-light fa-check'></i> Normalization On";
         boostOption.innerHTML = "<i class='fa-light fa-volume-high'></i> Audio Boost";
     } else if (audioState === "boost") {
@@ -373,19 +372,20 @@ function applyAudioState(isUserInteraction = false) {
             }
             let rms = Math.sqrt(sumSquares / dataArray.length);
 
-            // Ignore total silence (don't boost background hiss by 400%)
-            if (rms < 0.002) return; 
+            let targetGain = 1.0;
 
-            // 3. Calculate exact multiplier needed. 
-            // Target RMS is 0.15 (A highly comfortable viewing volume, ~ -16 LUFS)
-            let targetGain = 0.15 / rms;
+            // 3. If it's not silence, calculate true normalization
+            if (rms > 0.005) {
+                // Target RMS of 0.08 (standard, comfortable, not artificially loud)
+                targetGain = 0.08 / rms;
+                // Clamp it safely: Max 1.8x boost, Min 0.3x squash
+                targetGain = Math.max(0.3, Math.min(targetGain, 1.8));
+            } 
+            // If it IS silence (rms < 0.005), targetGain stays at 1.0 so we don't boost background noise.
 
-            // 4. Clamp it: Max 3.5x boost for quiet stuff, Min 0.3x reduction for loud stuff
-            targetGain = Math.max(0.3, Math.min(targetGain, 3.5));
-
-            // 5. Exponential Moving Average: Smooths the math so the volume glides gently 
+            // 4. Exponential Moving Average: Smooths the math so the volume glides gently 
             // instead of aggressively "pumping" up and down on every single word spoken.
-            currentAutoGain = (currentAutoGain * 0.85) + (targetGain * 0.15);
+            currentAutoGain = (currentAutoGain * 0.9) + (targetGain * 0.1);
 
             // Apply the perfectly calculated multiplier to the gain node natively
             gainNode.gain.setTargetAtTime(currentAutoGain, audioCtx.currentTime, 0.4);
@@ -408,9 +408,11 @@ function applyAudioState(isUserInteraction = false) {
     if (audioCtx.state === 'suspended') audioCtx.resume();
 }
 
- applyAudioState(false);
+// On page load: Only update visual UI
+applyAudioState(false);
  
- document.addEventListener('play', function(event) {
+// GLOBAL EVENT DELEGATION: Fixes "wrong file", stale element, and tab-switching bugs.
+document.addEventListener('play', function(event) {
     // Only trigger if the element playing is our video or audio
     if (event.target.id === 'aud' || event.target.tagName === 'VIDEO') {
         
