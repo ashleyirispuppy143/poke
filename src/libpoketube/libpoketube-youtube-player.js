@@ -69,7 +69,7 @@ class InnerTubePokeVidious {
       const RETRYABLE = new Set([429, 500, 502, 503, 504]);
       const MIN_DELAY_MS = 150;
       const BASE_DELAY_MS = 250;
-      const MAX_DELAY_MS = 1500; // Reduced max delay for snappier fallbacks
+      const MAX_DELAY_MS = 1500;  
       const JITTER_FACTOR = 3;
       const PER_TRY_TIMEOUT_MS = 2000;
       const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
