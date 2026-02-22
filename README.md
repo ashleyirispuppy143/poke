@@ -50,7 +50,7 @@ Welcome to Poke (formerly PokeTube), the privacy-friendly YouTube front-end buil
 | - | - |
 | <div style="text-align: right"><h3>📱 PWA Support</h3>With PWA Support, you can install Poke on your mobile device. Now you can pretend to be productive while watching cat videos on the go, mreoww! :3</div> | <img width="100%" style="border-radius: 24px" src="./css/README_PWA.jpg"> |
 | <h3>🎨 Customize</h3>Customize Poke however you want. Make it as unique as your taste in memes. | <h3>📥 Accounts</h3>Suscribe (yes Suscribe hehe sussy baka) to whaever channel you want! </div> |
-| <h3>☁️ PokeWeather</h3>Check The weather privately on PokeWeather!!! | <h3>🎶 And...</h3>Ambient mode, HQ audio, and even more! :3 |
+| <h3>☁️ PokeWeather</h3>Check The weather privately on PokeWeather!!! | <h3>🎶 And...</h3>Ambient mode, audio boost/normalization, and even more! :3 |
 
 ## No Non-Free Codec Needed
 
