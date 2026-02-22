@@ -271,7 +271,7 @@ function fetchUrls(urls) {
   
   }
   }
- var popupMenu = document.getElementById("popupMenu");
+var popupMenu = document.getElementById("popupMenu");
 var loopOption = document.getElementById("loopOption");
 var speedOption = document.getElementById("speedOption");
 var boostOption = document.getElementById("boostOption");
@@ -280,8 +280,13 @@ var loopedIndicator = document.getElementById("loopedIndicator");
  
 loopedIndicator.style.display = "none";
 
-let audioCtx, source, gainNode, compressorNode;
+let audioCtx, source, gainNode, compressorNode, analyzer;
 let audioState = localStorage.getItem("audioMode") || "none"; 
+
+// Normalizer state variables
+let normalizerInterval = null;
+let dataArray = null;
+let currentAutoGain = 1.0;
 
 function initAudio() {
     var currentAud = document.getElementById("aud");  
@@ -290,16 +295,23 @@ function initAudio() {
     try {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         source = audioCtx.createMediaElementSource(currentAud);
+        
+        // Create an Analyser to "listen" to the true volume of the audio
+        analyzer = audioCtx.createAnalyser();
+        analyzer.fftSize = 2048; // Tiny memory footprint (1024 data points)
+        dataArray = new Float32Array(analyzer.frequencyBinCount);
+
         gainNode = audioCtx.createGain();
         compressorNode = audioCtx.createDynamicsCompressor();
 
-         // We put the Gain BEFORE the Compressor. This lets us force quiet audio 
-        // up into the threshold natively without writing heavy JS math loops.
-        source.connect(gainNode);
+        // THE SMART LEVELLER ROUTING: 
+         source.connect(analyzer);
+        analyzer.connect(gainNode);
         gainNode.connect(compressorNode);
         compressorNode.connect(audioCtx.destination);
 
-         compressorNode.knee.value = 0; 
+        // Hardware-optimized base parameters (Hard knee for 0 math)
+        compressorNode.knee.value = 0; 
         compressorNode.attack.value = 0.003;
         compressorNode.release.value = 0.25;
     } catch (e) {
@@ -321,32 +333,72 @@ function applyAudioState(isUserInteraction = false) {
 
     localStorage.setItem("audioMode", audioState);
 
-     if (audioState === "none" && !audioCtx) return;
+    // Stop the background normalizer loop if it was running
+    if (normalizerInterval) {
+        clearInterval(normalizerInterval);
+        normalizerInterval = null;
+    }
 
-     if (!isUserInteraction) return;
+    // 2. Do nothing if disabled and uninitialized
+    if (audioState === "none" && !audioCtx) return;
+
+    // 3. STRICT GUARD: Never hijack audio until a trusted interaction
+    if (!isUserInteraction) return;
 
     initAudio();
     if (!audioCtx) return;
 
     const now = audioCtx.currentTime;
-    const smoothTime = 0.05;  
+    const smoothTime = 0.05; // 50 milliseconds to smoothly glide to new values (removes pops!)
 
     if (audioState === "normalize") {
-         // Boost everything by 3.5x so quiet sounds become audible...
-        gainNode.gain.setTargetAtTime(3.5, now, smoothTime);
-        // ...then aggressively squash the loud sounds back down to -24dB.
-        compressorNode.threshold.setTargetAtTime(-24, now, smoothTime);
-        compressorNode.ratio.setTargetAtTime(12, now, smoothTime);
+        // SMART NORMALIZATION ALGORITHM:
+        // Set compressor purely as a safety limiter (-3dB) to catch extreme sudden bangs
+        compressorNode.threshold.setTargetAtTime(-3, now, smoothTime);
+        compressorNode.ratio.setTargetAtTime(20, now, smoothTime);
+
+        // Start the ultra-lightweight math loop
+        normalizerInterval = setInterval(() => {
+            var currentAud = document.getElementById("aud");
+            // Don't calculate if video is paused or API is suspended
+            if (!currentAud || currentAud.paused || audioCtx.state !== 'running') return;
+
+            // 1. Grab a tiny snapshot of the current audio waveform
+            analyzer.getFloatTimeDomainData(dataArray);
+            
+            // 2. Calculate RMS (Root Mean Square) - the true mathematical loudness
+            let sumSquares = 0.0;
+            for (let i = 0; i < dataArray.length; i++) {
+                sumSquares += dataArray[i] * dataArray[i];
+            }
+            let rms = Math.sqrt(sumSquares / dataArray.length);
+
+            // Ignore total silence (don't boost background hiss by 400%)
+            if (rms < 0.002) return; 
+
+            // 3. Calculate exact multiplier needed. 
+            // Target RMS is 0.15 (A highly comfortable viewing volume, ~ -16 LUFS)
+            let targetGain = 0.15 / rms;
+
+            // 4. Clamp it: Max 3.5x boost for quiet stuff, Min 0.3x reduction for loud stuff
+            targetGain = Math.max(0.3, Math.min(targetGain, 3.5));
+
+            // 5. Exponential Moving Average: Smooths the math so the volume glides gently 
+            // instead of aggressively "pumping" up and down on every single word spoken.
+            currentAutoGain = (currentAutoGain * 0.85) + (targetGain * 0.15);
+
+            // Apply the perfectly calculated multiplier to the gain node natively
+            gainNode.gain.setTargetAtTime(currentAutoGain, audioCtx.currentTime, 0.4);
+
+        }, 300); // Only runs 3 times a second (Literally 0% CPU impact)
+
     } else if (audioState === "boost") {
-        // BOOST MODE 
-        // Boost volume, but set compressor as a safety net just below 0dB
-        // to prevent the user's speakers from crackling on loud videos.
+        // BOOST MODE (With distortion protection!):
         gainNode.gain.setTargetAtTime(2.5, now, smoothTime); 
         compressorNode.threshold.setTargetAtTime(-2, now, smoothTime); 
         compressorNode.ratio.setTargetAtTime(20, now, smoothTime);
     } else {
         // NORMAL / BYPASS MODE:
-        // Set volume to normal (1x) and turn off compression (Ratio 1 = completely transparent)
         gainNode.gain.setTargetAtTime(1.0, now, smoothTime); 
         compressorNode.threshold.setTargetAtTime(0, now, smoothTime);
         compressorNode.ratio.setTargetAtTime(1, now, smoothTime); 
@@ -459,6 +511,5 @@ function getNextSpeed(currentSpeed) {
         return maxSpeed;
     }
 }
- 
 const GoogleTranslateEndpoint = "https://translate.google.com/_/TranslateWebserverUi/data/batchexecute?rpcids=MkEWBc&rt=c"
 // @license-end
