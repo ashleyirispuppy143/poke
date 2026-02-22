@@ -16,7 +16,7 @@
 	
 	    You should have received a copy of the GNU General Public License
 	    along with this program. If not, see https://www.gnu.org/licenses/.
-	--><!DOCTYPE html>
+	--> <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
@@ -91,9 +91,6 @@ body {
 a { color: inherit; text-decoration: none; transition: 0.2s; }
 h1, h2, h3, h4 { margin: 0; font-weight: 600; }
 
-.ssr { display: none; }
-.hidden { display: none !important; }
-
 header {
   display: flex;
   flex-direction: column;
@@ -104,7 +101,7 @@ header {
 .top-bar {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
 }
 
 .loc-chip {
@@ -154,9 +151,7 @@ button:hover, .btn:hover {
 .search input[type="search"] {
   flex: 1;
   height: 44px;
-  background: rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: #0f172a;
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-input);
   padding: 0 16px;
@@ -168,8 +163,8 @@ button:hover, .btn:hover {
 
 .search input[type="search"]::placeholder { color: rgba(255,255,255,0.5); }
 .search input[type="search"]:focus {
-  background: rgba(0, 0, 0, 0.5);
-  border-color: rgba(255,255,255,0.4);
+  background: #1e293b;
+  border-color: #38bdf8;
 }
 
 .icon-btn {
@@ -184,9 +179,7 @@ button:hover, .btn:hover {
   top: calc(100% + 4px);
   left: 0;
   width: 100%;
-  background: rgba(15, 15, 15, 0.9);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: #0f172a;
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-card);
   overflow: hidden;
@@ -208,7 +201,7 @@ button:hover, .btn:hover {
   height: auto;
 }
 .search .suggest button:last-child { border-bottom: none; }
-.search .suggest button:hover { background: rgba(255, 255, 255, 0.1); }
+.search .suggest button:hover { background: rgba(255, 255, 255, 0.05); }
 
 .glass-panel {
   background: var(--glass-bg);
@@ -356,6 +349,8 @@ footer {
 footer a { text-decoration: underline; text-decoration-color: rgba(255,255,255,0.2); }
 footer a:hover { color: var(--text-main); }
 
+/* Visibility States */
+.ssr-block { display: none; }
 #app-content { display: none; flex-direction: column; gap: 20px; }
 #empty-state {
   display: flex;
@@ -370,7 +365,7 @@ footer a:hover { color: var(--text-main); }
 
 <noscript>
   <style>
-    .ssr { display: flex !important; flex-direction: column; gap: 20px; }
+    .ssr-block { display: flex !important; flex-direction: column; gap: 20px; }
     #dynamic-content { display: none !important; }
   </style>
 </noscript>
@@ -402,7 +397,7 @@ footer a:hover { color: var(--text-main); }
       </form>
     </header>
 
-    <section class="ssr">
+    <section class="ssr-block">
       <% if (ssr && ssr.current) { %>
       <div class="glass-panel">
         <div class="hero-weather">
@@ -698,7 +693,7 @@ footer a:hover { color: var(--text-main); }
   }
 
   function render(d){
-    if (!d.current || !d.hourly || !d.daily) return;
+    if (!d || !d.current || !d.hourly || !d.daily) return;
     const c = d.current; const daily = d.daily; const hourly = d.hourly;
     
     updateBackground(c.weather_code, c.is_day);
@@ -711,35 +706,40 @@ footer a:hover { color: var(--text-main); }
     $('#currWind').textContent = `${fmt(c.wind_speed_10m)} ${state.units==='metric'?'km/h':'mph'}`;
     $('#currHum').textContent = fmt(c.relative_humidity_2m, '%');
     $('#currPress').textContent = fmt(c.pressure_msl, ' hPa');
-    $('#sunrise').textContent = fmtTime(daily.sunrise[0]);
-    $('#sunset').textContent = fmtTime(daily.sunset[0]);
-    $('#uv').textContent = (daily.uv_index_max?.[0] ?? '—');
+    $('#sunrise').textContent = daily.sunrise ? fmtTime(daily.sunrise[0]) : '—';
+    $('#sunset').textContent = daily.sunset ? fmtTime(daily.sunset[0]) : '—';
+    $('#uv').textContent = (daily.uv_index_max && daily.uv_index_max[0] != null) ? daily.uv_index_max[0] : '—';
     
-    const nowIndex = hourly.time.findIndex(t => Date.parse(t) > Date.now());
+    const nowIndex = (hourly.time || []).findIndex(t => Date.parse(t) > Date.now());
     const safeIndex = nowIndex === -1 ? 0 : nowIndex;
-    const popNext = hourly.precipitation_probability?.[safeIndex] ?? hourly.precipitation_probability?.[0] ?? null;
+    const popNext = (hourly.precipitation_probability && hourly.precipitation_probability[safeIndex] != null) 
+      ? hourly.precipitation_probability[safeIndex] 
+      : (hourly.precipitation_probability ? hourly.precipitation_probability[0] : null);
     $('#pop').textContent = popNext==null ? '—' : popNext + "%";
 
     const H = $('#hours'); H.innerHTML = '';
     const start = safeIndex > 0 ? safeIndex - 1 : 0; 
-    const end = Math.min(start + 24, hourly.time.length);
+    const end = Math.min(start + 24, (hourly.time || []).length);
     for(let i=start; i<end; i++){
       const el = document.createElement('div');
       el.className = 'hour-item';
       const t = new Date(hourly.time[i]).toLocaleTimeString([], {hour:'numeric', hour12:true}).replace(/\s/g,'');
+      const prob = hourly.precipitation_probability ? hourly.precipitation_probability[i] : '';
       el.innerHTML = `
         <div class="time">${t}</div>
         <div class="icon">${weatherIcon(hourly.weather_code[i], 1)}</div>
         <div class="temp">${fmt(hourly.temperature_2m[i], '°')}</div>
-        <div class="pop">${(hourly.precipitation_probability?.[i] || '') ? hourly.precipitation_probability[i]+'%' : ''}</div>
+        <div class="pop">${prob ? prob+'%' : ''}</div>
       `;
       H.appendChild(el);
     }
 
-    drawChart($('#chart'), hourly.temperature_2m.slice(start, end));
+    if (hourly.temperature_2m) {
+      drawChart($('#chart'), hourly.temperature_2m.slice(start, end));
+    }
 
     const D = $('#days'); D.innerHTML = '';
-    for(let i=0; i<daily.time.length; i++){
+    for(let i=0; i<(daily.time || []).length; i++){
       const row = document.createElement('div'); row.className = 'day-row';
       const dt = i===0 ? 'Today' : fmtDay(daily.time[i]);
       row.innerHTML = `
@@ -754,6 +754,7 @@ footer a:hover { color: var(--text-main); }
   }
 
   function drawChart(canvas, ys){
+    if(!ys || ys.length === 0) return;
     const ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
@@ -886,20 +887,19 @@ footer a:hover { color: var(--text-main); }
     const uHidden = document.getElementById('unitsHidden');
     if(uHidden) uHidden.value = state.units;
 
+    // IMMEDIATE SSR MOUNT - PREVENTS THE BUG
     if (window.__SSR__ && window.__SSR__.current) {
-        updateBackground(window.__SSR__.current.weather_code, window.__SSR__.current.is_day);
-    }
-
-    if (window.__SSR__ && typeof window.__SSR__.lat === "number") {
-      try {
-        localStorage.setItem('pokeweather:last', JSON.stringify({
-          when: Date.now(),
-          state: { lat: window.__SSR__.lat, lon: window.__SSR__.lon, name: window.__SSR__.name, units: state.units },
-          data: { current: window.__SSR__.current || {}, daily: window.__SSR__.daily || {}, hourly: window.__SSR__.hourly || {} }
-        }));
-      } catch {}
-      loadWeather(window.__SSR__.lat, window.__SSR__.lon, window.__SSR__.name);
-      return;
+        state.lat = window.__SSR__.lat;
+        state.lon = window.__SSR__.lon;
+        state.name = window.__SSR__.name;
+        
+        // Hide empty state & show the content immediately 
+        $('#empty-state').style.display = 'none';
+        $('#app-content').style.display = 'flex';
+        
+        // Populate the data instantly
+        render(window.__SSR__);
+        return; // STOP EXECUTION HERE. NO DOUBLE FETCH!
     }
 
     const sp = new URLSearchParams(location.search);
