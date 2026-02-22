@@ -10,7 +10,7 @@
 </h1>
 
 <div align="center">
-  <p> <a href="https://twitter.com/PeylsX/status/2025285418330058882"> Certified trans-aids-Libtard-Ukraine software!</a> whatever that means...
+  <p> <a href="https://twitter.com/PeylsX/status/2025285418330058882"> Certified trans-aids-Libtard-Ukraine software!</a> by a user from x, the everything app owned by elon musket! whatever that means...
 </p>
   <p>Be anonymous while watching  videos, gaming, and listening to music on Poke - the free privacy front-end!</p>
 </div>
@@ -18,9 +18,11 @@
 <div align="center">
   <a href="#welcome">Welcome!</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#features">Features</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#no-non-free-codec-needed">No Non-Free Codec</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#hosting-poke">Hosting</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#poke-community">Community</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#legal">Legal</a>
   <br><br>
-  <img src="https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/badges/StandWithUkraine.svg" alt="Stand with Ukraine">
-  <img src="https://codeberg.org/ashley/pages/raw/branch/main/images/trans-badge.svg">
-  <img src="https://codeberg.org/ashley/pages/raw/branch/main/images/free-Palestine.svg"><br>
+  
+  <img src="https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/badges/StandWithUkraine.svg" alt="Stand with Ukraine">    <img src="https://codeberg.org/ashleyirispuppy/pages/raw/branch/main/images/pr.svg?v=5">
+  <img src="https://codeberg.org/ashleyirispuppy/pages/raw/branch/main/images/trans-badge.svg">
+  <img src="https://codeberg.org/ashleyirispuppy/pages/raw/branch/main/images/free-Palestine.svg"><br>
+
   <a href="https://codeberg.org/ashley/poke/src/branch/main/LICENSE">
 <img src="https://img.shields.io/badge/License-GPL--3.0--or--later-FF6666" alt="GPL-3.0-or-later SPDX License">
   </a>
