@@ -1918,13 +1918,12 @@ var userID = localStorage.getItem("UserID");
 
 if (userID) {
     // If user ID exists in localStorage, set the href attribute
-    anchor.href = `/api/set-channel-subs?ID=${userID}&channelName=<%=cinv.author%>&avatar=<%- media_proxy_url %>/proxy?url=<%- cinv.authorThumbnails[5].url %>&channelID=<%= ID %>`;
+    anchor.href = `/api/set-channel-subs?ID=${userID}&channelName=<%=cinv?.author%>&avatar=<%- media_proxy_url %>/proxy?url=<%- cinv?.authorThumbnails?.[5]?.url %>&channelID=<%= ID %>`;
 } else {
     // If user ID doesn't exist in localStorage, you can handle it as needed
      anchor.href = "/account-create"
      // Optionally, you can set a default href or display an error message.
 }
-
 // this is how the search bar works :3    
 document.getElementById('search').addEventListener('keyup', function () {
   var value = this.value.toLowerCase();
