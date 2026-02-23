@@ -1991,5 +1991,26 @@ document.getElementById('popup-trigger').addEventListener('click', function (eve
 </html>
 
 <% } catch (error) { %>
+<style>
+
+body {
+background: #111 !important;
+height: 100%;
+}
+.banned-user {
+	border-radius: 50%;
+	margin-bottom: -2em;
+	pointer-events: none;
+}
+.ban-reason {
+    background:  #b91f1f;
+  border-radius: 2em;
+  padding: 10px;
+  margin-top: 4em;
+} 
+
+</style>
+<img class="banned-user" src="<%- media_proxy_url %>/proxy?url=https://yt3.googleusercontent.com/a/default-user=s100-c-k-c0x00ffffff-no-rj">
+<p class="ban-reason"> <%- cinv.error %> </p>
  <% } %>
  
