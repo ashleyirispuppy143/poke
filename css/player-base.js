@@ -261,20 +261,25 @@ document.addEventListener("DOMContentLoaded", () => {
   function startSyncLoop() {
     clearSyncLoop();
     syncInterval = setInterval(() => {
-      const vt = Number(video.currentTime());
+      let vt = Number(video.currentTime());
       const at = Number(audio.currentTime);
       if (!isFinite(vt) || !isFinite(at)) return;
 
       const isHidden = document.visibilityState === 'hidden';
 
       if (intendedPlaying) {
-        if (video.paused() && bothPlayableAt(vt) && !restarting && !isHidden) {
-            hideError();
-            ensureUnmutedIfNotUserMuted().then(() => playTogether({ allowMutedRetry: true }));
-        }
         
-        if (video.paused() && !audio.paused) {
-          if (!isHidden) {
+        // Background Throttling & Desync Fix
+        // If audio is successfully playing, aggressively force video to stay synced
+        if (!audio.paused) {
+          // If video drifts significantly (e.g. background tab throttling), snap it manually
+          if (Math.abs(at - vt) > 0.25) {
+            video.currentTime(at);
+            vt = at; 
+          }
+          
+          // Never let the video remain paused if the audio is playing
+          if (video.paused()) {
             try {
               internalPlayRequest++;
               video.play();
@@ -282,6 +287,12 @@ document.addEventListener("DOMContentLoaded", () => {
             internalPlayRequest = Math.max(0, internalPlayRequest - 1);
           }
         }
+
+        if (video.paused() && bothPlayableAt(vt) && !restarting && !isHidden) {
+            hideError();
+            ensureUnmutedIfNotUserMuted().then(() => playTogether({ allowMutedRetry: true }));
+        }
+        
         if (!video.paused() && audio.paused) {
           try {
             squelchAudioEvents();
@@ -309,7 +320,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         if (!intendedPlaying || restarting) return;
-        if (isHidden) return; // Prevent pausing audio loop when Chromium throttles the video in the background
+        if (isHidden) return; // Prevent hard sync cycle if Chromium is just lagging the tab
 
         pauseHard();
         setTimeout(() => { if (intendedPlaying) playTogether({ allowMutedRetry: true }); }, 120);
@@ -764,7 +775,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             
             if (video.paused() && !audio.paused) {
-               playTogether();
+               playTogether({ allowMutedRetry: true });
             } else {
                tryAutoResume();
             }
@@ -790,7 +801,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {}
     setupMediaSession();
   }
-});
+}); 
 document.addEventListener('keydown', function(event) {
     // Ignore key presses if typing in an input or textarea
     if (event.target.tagName.toLowerCase() === 'input' || event.target.tagName.toLowerCase() === 'textarea') {
