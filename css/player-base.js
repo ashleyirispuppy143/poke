@@ -105,7 +105,6 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
   const MICRO_DRIFT = 0.05;
   const BIG_DRIFT = 1.2; 
   const SYNC_INTERVAL_MS = 300;
-  const PLAYABILITY_CHECK_MS = 250;
 
   const pickAudioSrc = () => {
     const s = audio?.getAttribute?.('src');
@@ -121,7 +120,6 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
   const hasExternalAudio = !!audio && audio.tagName === 'AUDIO' && !!pickAudioSrc();
 
   let syncInterval = null;
-  let playabilityCheckInterval = null;
   let lastAT = 0, lastATts = 0;
   let aligning = false;
   let internalPlayRequest = 0; 
@@ -215,8 +213,6 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
   }
   
   function bothPlayableAt(t) { return canPlayAt(videoEl, t) && canPlayAt(audio, t); }
-  function videoPlayableAt(t) { return canPlayAt(videoEl, t); }
-  function audioPlayableAt(t) { return canPlayAt(audio, t); }
   function safeSetCT(media, t) { try { if (isFinite(t) && t >= 0) media.currentTime = t; } catch {} }
 
   function clearSyncLoop() {
@@ -228,43 +224,9 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     }
   }
 
-  function clearPlayabilityCheckLoop() {
-    if (playabilityCheckInterval) { clearInterval(playabilityCheckInterval); playabilityCheckInterval = null; }
-  }
-
   async function ensureUnmutedIfNotUserMuted() {
     if (startupPhase) { updateAudioGainImmediate(); return; }
     await softUnmuteAudio(80);
-  }
-
-  // ———————————————————————— Playability Check Loop —————————————————————————
-  function startPlayabilityCheckLoop() {
-    clearPlayabilityCheckInterval();
-    playabilityCheckInterval = setInterval(() => {
-      if (!hasExternalAudio || !intendedPlaying || restarting || seekingActive) return;
-
-      const vt = Number(video.currentTime());
-      const at = Number(audio.currentTime);
-      if (!isFinite(vt) || !isFinite(at)) return;
-
-      const videoIsPlayable = videoPlayableAt(vt);
-      const audioIsPlayable = audioPlayableAt(at);
-      const vPaused = videoEl.paused;
-      const aPaused = audio.paused;
-
-      if (!videoIsPlayable && !aPaused) {
-        squelchAudioEvents();
-        audio.pause();
-      }
-
-      if (!audioIsPlayable && !vPaused) {
-        try { video.pause(); } catch {}
-      }
-
-      if (videoIsPlayable && audioIsPlayable && vPaused && aPaused && intendedPlaying) {
-        ensureUnmutedIfNotUserMuted().then(() => playTogether({ allowMutedRetry: true }));
-      }
-    }, PLAYABILITY_CHECK_MS);
   }
 
   // ———————————————————————— Sync loops —————————————————————————
@@ -483,7 +445,6 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
       if (cancelled()) { updateMediaSessionPlaybackState(); return; }
 
       if (!syncInterval) startSyncLoop();
-      if (!playabilityCheckInterval) startPlayabilityCheckLoop();
 
       if (!firstPlayCommitted) {
         firstPlayCommitted = true;
@@ -504,7 +465,6 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
       audio.pause();
     } catch {}
     clearSyncLoop();
-    clearPlayabilityCheckLoop();
   }
 
   function pauseTogether() {
@@ -639,6 +599,35 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     oneShotReady(audio, () => { audioReady = true; });
     oneShotReady(videoEl, () => { videoReady = true; });
 
+    // Buffering & Playability Enforcement Interval
+    setInterval(() => {
+      if (!hasExternalAudio || !intendedPlaying || restarting || seekingActive || internalPlayRequest > 0) return;
+
+      const vReady = videoEl.readyState >= 3;
+      const vPaused = videoEl.paused;
+      const aPaused = audio.paused;
+
+      if (!aPaused && (!vReady || vPaused)) {
+        squelchAudioEvents();
+        audio.pause();
+        if (!vReady) showError("Video buffering…");
+      }
+
+      if (vReady && !vPaused && aPaused) {
+        hideError();
+        const vt = Number(video.currentTime());
+        const at = Number(audio.currentTime);
+        if (Math.abs(at - vt) > 0.25) safeSetCT(audio, vt);
+        squelchAudioEvents();
+        audio.play().catch(() => {});
+      }
+
+      if (vReady && vPaused && aPaused) {
+        hideError();
+        playTogether({ allowMutedRetry: true });
+      }
+    }, 250);
+
     video.on('volumechange', () => {
       if (squelchMuteEvents) return;
       if (performance.now() < suppressMirrorUntil || seekingActive || restarting) {
@@ -669,12 +658,6 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
         audio.pause();
         return;
       }
-      const vt = Number(video.currentTime());
-      if (!videoPlayableAt(vt)) {
-        squelchAudioEvents();
-        audio.pause();
-        return;
-      }
       intendedPlaying = true;
       updateMediaSessionPlaybackState();
       if (video.paused() && videoEl.readyState >= 3) {
@@ -695,12 +678,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     video.on('ratechange', () => { try { audio.playbackRate = video.playbackRate(); } catch {} });
 
     video.on('play', () => {
-      if (internalPlayRequest > 0) return;
-      const vt = Number(video.currentTime());
-      if (!videoPlayableAt(vt)) {
-        try { video.pause(); } catch {}
-        return;
-      }
+      if (internalPlayRequest > 0) return; 
       hideError();
       intendedPlaying = true;
       updateMediaSessionPlaybackState();
@@ -783,7 +761,6 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
       restarting = true;
       try {
         clearSyncLoop();
-        clearPlayabilityCheckLoop();
         pauseHard();
         const startAt = 0; 
         suppressEndedUntil = performance.now() + 1000;
@@ -834,7 +811,6 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
 
           if (intendedPlaying) {
             if (!syncInterval) startSyncLoop();
-            if (!playabilityCheckInterval) startPlayabilityCheckLoop();
             
             const at = Number(audio.currentTime);
             safeSetCT(videoEl, at);
@@ -868,7 +844,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     } catch {}
     setupMediaSession();
   }
-}); 
+});
 document.addEventListener('keydown', function(event) {
     // Ignore key presses if typing in an input or textarea
     if (event.target.tagName.toLowerCase() === 'input' || event.target.tagName.toLowerCase() === 'textarea') {
