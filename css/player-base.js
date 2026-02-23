@@ -272,53 +272,41 @@ document.addEventListener("DOMContentLoaded", () => {
         const vPlayable = canPlayAt(videoEl, vt);
         const aPlayable = canPlayAt(audio, at);
 
-        const vBuffering = !vPaused && (video.hasClass('vjs-waiting') || (videoEl.readyState < 3 && !vPlayable));
-        const aBuffering = !aPaused && (audio.readyState < 3 && !aPlayable);
+        const vBuffering = video.hasClass('vjs-waiting') || (!vPaused && videoEl.readyState < 3 && !vPlayable);
+        const aBuffering = !aPaused && audio.readyState < 3 && !aPlayable;
 
-        if (vBuffering && !aPaused) {
-          if (internalPlayRequest === 0) {
-            squelchAudioEvents();
-            audio.pause();
-            showError("Video buffering…");
-          }
-        } 
-        else if (aBuffering && !vPaused) {
-          if (internalPlayRequest === 0) {
+        if (vBuffering || aBuffering) {
+          if (!aPaused) { squelchAudioEvents(); audio.pause(); }
+          if (!vPaused) {
             internalPlayRequest++;
             try { video.pause(); } catch {}
             setTimeout(() => { internalPlayRequest = Math.max(0, internalPlayRequest - 1); }, 50);
-            showError("Audio buffering…");
           }
-        } 
-        else if (!aPaused && vPaused && !vBuffering) {
-          if (internalPlayRequest === 0) {
-            squelchAudioEvents();
-            audio.pause();
-          }
-        } 
-        else if (!vPaused && aPaused && !aBuffering) {
-          if (internalPlayRequest === 0) {
-            squelchAudioEvents();
-            safeSetCT(audio, vt);
-            audio.play().catch(() => {});
-          }
-        } 
-        else if (vPaused && aPaused && vPlayable && aPlayable) {
-          ensureUnmutedIfNotUserMuted().then(() => playTogether({ allowMutedRetry: true }));
-        } 
-        else if (!vPaused && !aPaused && !vBuffering && !aBuffering) {
+          showError(vBuffering ? "Video buffering…" : "Audio buffering…");
+        } else {
           hideError();
           if (video.hasClass('vjs-waiting')) video.removeClass('vjs-waiting');
-          if (Math.abs(at - vt) > 0.4) safeSetCT(videoEl, at);
-        }
 
-      } else if (!intendedPlaying) {
+          if (vPaused || aPaused) {
+            if (vPlayable && aPlayable && internalPlayRequest === 0) {
+              playTogether({ allowMutedRetry: true });
+            }
+          } else {
+            if (Math.abs(at - vt) > 0.3) {
+              safeSetCT(audio, vt); 
+            }
+          }
+        }
+      } else if (!intendedPlaying && !restarting) {
         if (!videoEl.paused) { 
           internalPlayRequest++;
           try { video.pause(); } catch {}
           setTimeout(() => { internalPlayRequest = Math.max(0, internalPlayRequest - 1); }, 50);
         }
-        if (!audio.paused) { try { squelchAudioEvents(); audio.pause(); } catch {} }
+        if (!audio.paused) { 
+          squelchAudioEvents(); 
+          audio.pause(); 
+        }
       }
 
       try {
@@ -454,7 +442,11 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function pauseHard() {
-    try { video.pause(); } catch {}
+    try { 
+      internalPlayRequest++;
+      video.pause(); 
+      setTimeout(() => { internalPlayRequest = Math.max(0, internalPlayRequest - 1); }, 50);
+    } catch {}
     try {
       squelchAudioEvents();
       audio.pause();
@@ -531,18 +523,14 @@ document.addEventListener("DOMContentLoaded", () => {
       if (startupPhase || restarting || !intendedPlaying || seekingActive) return;
       if (performance.now() - lastPlayKickTs < STARTUP_GRACE_MS) return;
       
-      if (document.visibilityState === 'hidden') return;
-
-      if (!bothPlayableAt(Number(video.currentTime()))) {
-        showError(`${label} buffering…`);
-        if (label === 'Video') {
-           squelchAudioEvents();
-           audio.pause();
-        } else if (label === 'Audio') {
-           internalPlayRequest++;
-           try { video.pause(); } catch {}
-           setTimeout(() => { internalPlayRequest = Math.max(0, internalPlayRequest - 1); }, 50);
-        }
+      showError(`${label} buffering…`);
+      if (label === 'Video') {
+         squelchAudioEvents();
+         audio.pause();
+      } else if (label === 'Audio') {
+         internalPlayRequest++;
+         try { video.pause(); } catch {}
+         setTimeout(() => { internalPlayRequest = Math.max(0, internalPlayRequest - 1); }, 50);
       }
     };
 
@@ -615,9 +603,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     audio.addEventListener('play', () => {
-      if (audioEventsSquelched()) return;
-      if (restarting) return;
-      if (!hasExternalAudio) return;
+      if (audioEventsSquelched() || restarting || internalPlayRequest > 0) return;
       if (videoEl.readyState < 2) {
         squelchAudioEvents();
         audio.pause();
@@ -625,7 +611,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       intendedPlaying = true;
       updateMediaSessionPlaybackState();
-      if (video.paused() && videoEl.readyState >= 3) {
+      if (video.paused()) {
         playTogether({ allowMutedRetry: true });
       }
     });
@@ -643,7 +629,7 @@ document.addEventListener("DOMContentLoaded", () => {
     video.on('ratechange', () => { try { audio.playbackRate = video.playbackRate(); } catch {} });
 
     video.on('play', () => {
-      if (internalPlayRequest > 0) return; 
+      if (internalPlayRequest > 0 || restarting) return; 
       hideError();
       intendedPlaying = true;
       updateMediaSessionPlaybackState();
@@ -653,7 +639,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     video.on('pause', () => {
       if (restarting || internalPlayRequest > 0) return;
-      if (document.visibilityState === 'visible' && intendedPlaying) {
+      if (document.visibilityState === 'visible') {
          pauseTogether();
       }
     });
@@ -695,11 +681,8 @@ document.addEventListener("DOMContentLoaded", () => {
     video.on('seeked', async () => {
       if (restarting) return;
       const newTime = Number(video.currentTime());
-      const at = Number(audio.currentTime);
-
-      if (isFinite(newTime) && isFinite(at) && Math.abs(at - newTime) > 0.25) {
-         safeSetCT(audio, newTime);
-      }
+      
+      safeSetCT(audio, newTime);
 
       if (!firstSeekDone) { firstSeekDone = true; seekingActive = false; return; }
 
@@ -778,8 +761,8 @@ document.addEventListener("DOMContentLoaded", () => {
           if (intendedPlaying) {
             if (!syncInterval) startSyncLoop();
             
-            const at = Number(audio.currentTime);
-            safeSetCT(videoEl, at);
+            const vt = Number(video.currentTime());
+            safeSetCT(audio, vt);
             updateAudioGainImmediate();
             
             internalPlayRequest++;
@@ -810,7 +793,8 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {}
     setupMediaSession();
   }
-}); 
+});
+
  document.addEventListener('keydown', function(event) {
     // Ignore key presses if typing in an input or textarea
     if (event.target.tagName.toLowerCase() === 'input' || event.target.tagName.toLowerCase() === 'textarea') {
