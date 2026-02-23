@@ -40,12 +40,10 @@ function safeRead(filePath) {
 
 module.exports = function (app, config, renderTemplate) {
   
-  // --- IN-MEMORY CACHE FOR PERFORMANCE & RELIABILITY ---
-  let memoryStats = getEmptyStats()
+   let memoryStats = getEmptyStats()
   let needsSave = false
 
-  // 1. Load legacy and current stats into memory on startup
-  const v1 = safeRead(statsFile)
+   const v1 = safeRead(statsFile)
   const v2 = safeRead(statsFileV2)
 
   const mergeData = (source) => {
@@ -73,11 +71,9 @@ module.exports = function (app, config, renderTemplate) {
   mergeData(v1)
   mergeData(v2)
 
-  // 2. Ensure merged data is safely saved right away
-  fs.writeFileSync(statsFile, JSON.stringify(memoryStats, null, 2))
+   fs.writeFileSync(statsFile, JSON.stringify(memoryStats, null, 2))
 
-  // 3. Clean up the legacy v2 file so we don't double-count next time the server restarts
-  if (fs.existsSync(statsFileV2)) {
+   if (fs.existsSync(statsFileV2)) {
     try {
       fs.unlinkSync(statsFileV2)
     } catch (e) {
@@ -99,8 +95,8 @@ module.exports = function (app, config, renderTemplate) {
   }, 5000)
 
   // POST: Write stats
-  app.post("/api/stats", (req, res) => {
-    if (!telemetryConfig.telemetry) return res.status(200).json({ ok: true })
+app.post(["/api/stats", "/api/nexus"], (req, res) => {
+  if (!telemetryConfig.telemetry) return res.status(200).json({ ok: true })
 
     const { videoId, userId } = req.body
     if (!videoId) return res.status(400).json({ error: "missing videoId" })
