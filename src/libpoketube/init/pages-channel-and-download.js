@@ -231,11 +231,14 @@ function channelurlfixer(text) {
 
       const tab = req.query.tab;
       const cache = {};
-
+      
 async function fetchChannelPublishedJSON(id) {
   const url = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(id)}`;
   const res = await fetch(url, { headers: { accept: "application/atom+xml" } });
-  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+  
+   if (res.status === 404) return null;
+  
+   if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
 
   const xml = await res.text();
   const match = xml.match(/<feed[\s\S]*?<published>([^<]+)<\/published>/i);
