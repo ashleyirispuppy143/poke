@@ -280,7 +280,7 @@ document.addEventListener("DOMContentLoaded", () => {
               const p = video.play();
               if (p && p.catch) {
                 p.catch(() => {
-                  if (videoEl.paused && !audio.paused) {
+                  if (videoEl.paused && !audio.paused && document.visibilityState === 'visible') {
                     squelchAudioEvents();
                     audio.pause();
                   }
@@ -288,7 +288,7 @@ document.addEventListener("DOMContentLoaded", () => {
               }
               internalPlayRequest = Math.max(0, internalPlayRequest - 1);
           } catch {
-             if (!audio.paused) { squelchAudioEvents(); audio.pause(); }
+             if (!audio.paused && document.visibilityState === 'visible') { squelchAudioEvents(); audio.pause(); }
           }
           hideError();
         }
@@ -307,10 +307,13 @@ document.addEventListener("DOMContentLoaded", () => {
            safeSetCT(videoEl, at); 
         }
 
-        // Strict Enforcement: If video is paused for ANY reason while audio plays, pause audio.
-        if (videoEl.paused && !audio.paused && document.visibilityState === 'visible') {
-           squelchAudioEvents();
-           audio.pause();
+        // Strict Enforcement: Only pause audio if video is paused AND we're visible AND we don't "intend" to play.
+        if (videoEl.paused && !audio.paused && document.visibilityState === 'visible' && !syncing) {
+           const timeSinceLastKick = performance.now() - lastPlayKickTs;
+           if (timeSinceLastKick > 1000) {
+               squelchAudioEvents();
+               audio.pause();
+           }
         }
 
         // Startup / Buffering Watchdog
@@ -615,7 +618,11 @@ document.addEventListener("DOMContentLoaded", () => {
     audio.addEventListener('pause', () => {
       if (audioEventsSquelched()) return;
       if (restarting) return;
-      pauseTogether();
+      // Nuclear fix: If audio is paused but it's not by user (intendedPlaying is still true), 
+      // don't immediately call pauseTogether. Only pause if tab is visible and intended is false.
+      if (!intendedPlaying && document.visibilityState === 'visible') {
+         pauseTogether();
+      }
     });
 
     videoEl.addEventListener('playing', hideError);
@@ -633,11 +640,17 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     video.on('pause', () => {
-      if (!restarting && !intendedPlaying) pauseTogether();
-      else if (!restarting && intendedPlaying && document.visibilityState === 'visible') {
-         // Logic Safeguard: If audio is still active, this pause is likely a sync artifact from tab return.
-         if (!audio.paused) return;
-         pauseTogether();
+      // Logic fix: Only trigger global pause if intendedPlaying is explicitly false OR tab is visible and it's a real pause.
+      if (!restarting) {
+        if (!intendedPlaying) {
+          pauseTogether();
+        } else if (document.visibilityState === 'visible') {
+          // If we are visible and the video pauses while we intended to play, it might be a stall or user click.
+          // To prevent the "return to tab pause" bug, we check if audio is still going.
+          if (audio.paused) {
+            pauseTogether();
+          }
+        }
       }
     });
 
@@ -751,23 +764,21 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       window.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
-          // Absolute Enforcement: If the audio is currently playing, we definitely intend to be playing.
-          // This overrides Chromium background throttling artifacts.
+          // Robust Background-to-Foreground Check
           if (!audio.paused) {
              intendedPlaying = true;
           }
 
           if (intendedPlaying) {
+            lastPlayKickTs = performance.now(); // Reset watchdog
             if (!syncInterval) startSyncLoop();
             
             const at = Number(audio.currentTime);
-            // Snap video to audio immediately on return to tab to prevent drift logic from thinking a pause happened
             safeSetCT(videoEl, at);
             updateAudioGainImmediate();
             
-            if (videoEl.paused) {
-               playTogether({ allowMutedRetry: true });
-            }
+            // Force resume without triggering global pause state
+            playTogether({ allowMutedRetry: true });
           }
         }
       }, { passive: true });
@@ -790,13 +801,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {}
     setupMediaSession();
   }
-});
-
-
-
-
-
-
+}); 
 document.addEventListener('keydown', function(event) {
     // Ignore key presses if typing in an input or textarea
     if (event.target.tagName.toLowerCase() === 'input' || event.target.tagName.toLowerCase() === 'textarea') {
