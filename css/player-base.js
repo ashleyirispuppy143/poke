@@ -104,8 +104,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const EPS = 0.15;
   const MICRO_DRIFT = 0.05;
   const BIG_DRIFT = 1.2; 
-  const RESYNC_DRIFT_LIMIT = 3.5;
-  const SYNC_INTERVAL_MS = 250;
+  const SYNC_INTERVAL_MS = 300;
 
   const pickAudioSrc = () => {
     const s = audio?.getAttribute?.('src');
@@ -177,7 +176,7 @@ document.addEventListener("DOMContentLoaded", () => {
   async function softUnmuteAudio(ms = 60) { await rampVolumeTo(targetVolFromVideo(), ms); }
   function updateAudioGainImmediate() { setImmediateVolume(targetVolFromVideo()); }
 
-  async function softAlignAudioTo(t, fadeDown = 40, fadeUp = 60) {
+  async function softAlignAudioTo(t) {
     if (aligning) return;
     aligning = true;
     try {
@@ -261,70 +260,53 @@ document.addEventListener("DOMContentLoaded", () => {
   function startSyncLoop() {
     clearSyncLoop();
     syncInterval = setInterval(() => {
-      let vt = Number(video.currentTime());
+      if (!hasExternalAudio) return;
+      
+      const vt = Number(video.currentTime());
       const at = Number(audio.currentTime);
       if (!isFinite(vt) || !isFinite(at)) return;
 
-      const isHidden = document.visibilityState === 'hidden';
+      if (intendedPlaying && !restarting && !seekingActive) {
+        const aPaused = audio.paused;
+        const vPaused = videoEl.paused;
 
-      if (intendedPlaying) {
-        
-        // Background Throttling & Desync Fix
-        // If audio is successfully playing, aggressively force video to stay synced
-        if (!audio.paused) {
-          // If video drifts significantly (e.g. background tab throttling), snap it manually
-          if (Math.abs(at - vt) > 0.25) {
-            video.currentTime(at);
-            vt = at; 
+        // SCENARIO 1: Audio is playing, but video got paused (Tab Switch or Media Keys)
+        if (!aPaused && vPaused) {
+          // Audio is the master clock. Snap the video to the audio so it catches up seamlessly.
+          if (Math.abs(at - vt) > 0.15) {
+             safeSetCT(videoEl, at);
           }
-          
-          // Never let the video remain paused if the audio is playing
-          if (video.paused()) {
-            try {
-              internalPlayRequest++;
-              video.play();
-            } catch {}
-            internalPlayRequest = Math.max(0, internalPlayRequest - 1);
-          }
-        }
-
-        if (video.paused() && bothPlayableAt(vt) && !restarting && !isHidden) {
-            hideError();
-            ensureUnmutedIfNotUserMuted().then(() => playTogether({ allowMutedRetry: true }));
-        }
-        
-        if (!video.paused() && audio.paused) {
           try {
-            squelchAudioEvents();
-            const pa = audio.play();
-            if (pa && pa.then) pa.catch(() => {});
+             internalPlayRequest++;
+             video.play();
+             internalPlayRequest = Math.max(0, internalPlayRequest - 1);
+          } catch {}
+          hideError();
+        }
+
+        // SCENARIO 2: Video is playing, but Audio is paused 
+        if (!vPaused && aPaused) {
+          try {
+             squelchAudioEvents();
+             safeSetCT(audio, vt);
+             audio.play().catch(() => {});
           } catch {}
         }
-      } else {
-        if (!video.paused()) { try { video.pause(); } catch {} }
-        if (!audio.paused) {
-          try {
-            squelchAudioEvents();
-            audio.pause();
-          } catch {}
-        }
-      }
 
-      const delta = vt - at;
-
-      if (Math.abs(delta) > RESYNC_DRIFT_LIMIT) {
-        const dur = Number(video.duration()) || 0;
-        if (dur > 2 && at > dur - 2 && vt < 2) {
-           safeSetCT(audio, vt); 
-           return;
+        // SCENARIO 3: Both are playing but heavily desynced (Chromium background throttling fix)
+        if (!aPaused && !vPaused && Math.abs(at - vt) > 0.4) {
+           safeSetCT(videoEl, at); // Audio is master, force video to snap
         }
 
-        if (!intendedPlaying || restarting) return;
-        if (isHidden) return; // Prevent hard sync cycle if Chromium is just lagging the tab
+        // Startup / Buffering Watchdog
+        if (vPaused && aPaused && bothPlayableAt(vt)) {
+           ensureUnmutedIfNotUserMuted().then(() => playTogether({ allowMutedRetry: true }));
+        }
 
-        pauseHard();
-        setTimeout(() => { if (intendedPlaying) playTogether({ allowMutedRetry: true }); }, 120);
-        return;
+      } else if (!intendedPlaying) {
+        // Enforce pause completely
+        if (!videoEl.paused) { try { video.pause(); } catch {} }
+        if (!audio.paused) { try { squelchAudioEvents(); audio.pause(); } catch {} }
       }
 
       try {
@@ -375,14 +357,6 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {}
   }
 
-  async function tryPlay(el) {
-    try {
-      const p = el.play();
-      if (p && p.then) await p;
-      return true;
-    } catch { return false; }
-  }
-
   // ———————————————————— MediaSession playbackState ————————————————————
   function updateMediaSessionPlaybackState() {
     if (!('mediaSession' in navigator)) return;
@@ -409,8 +383,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const at = Number(audio.currentTime);
       
       if (isFinite(vt) && Math.abs(at - vt) > 0.15) {
-        await softAlignAudioTo(vt, 25, 70);
-        if (cancelled()) { updateMediaSessionPlaybackState(); return; }
+        safeSetCT(videoEl, at); // ALWAYS snap video to audio to prevent alignment muting
       }
 
       if (cancelled()) { updateMediaSessionPlaybackState(); return; }
@@ -687,11 +660,8 @@ document.addEventListener("DOMContentLoaded", () => {
          return; 
       }
 
-      const { small, large, huge } = computeSeekThresholds();
-
       if (Math.abs(at - newTime) > 0.25) {
-         if (diff > 0.12) await softAlignAudioTo(newTime, 20, 50); 
-         else safeSetCT(audio, newTime);
+         safeSetCT(audio, newTime);
       }
 
       if (!firstSeekDone) { firstSeekDone = true; seekingActive = false; return; }
@@ -723,7 +693,7 @@ document.addEventListener("DOMContentLoaded", () => {
         suppressEndedUntil = performance.now() + 1000;
         
         safeSetCT(videoEl, startAt);
-        await softAlignAudioTo(startAt, 10, 40); 
+        await softAlignAudioTo(startAt); 
         
         intendedPlaying = true;
         updateMediaSessionPlaybackState();
@@ -760,24 +730,17 @@ document.addEventListener("DOMContentLoaded", () => {
     audio.addEventListener('canplay', tryAutoResume);
 
     try {
-      window.addEventListener('pagehide', () => { clearSyncLoop(); }, { passive: true });
       window.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
           if (intendedPlaying) {
             if (!syncInterval) startSyncLoop();
             
-            const vt = Number(video.currentTime());
             const at = Number(audio.currentTime);
+            safeSetCT(videoEl, at);
+            updateAudioGainImmediate();
             
-            if (isFinite(vt) && isFinite(at) && Math.abs(at - vt) > 0.15) {
-               video.currentTime(at);
-               updateAudioGainImmediate();
-            }
-            
-            if (video.paused() && !audio.paused) {
+            if (videoEl.paused) {
                playTogether({ allowMutedRetry: true });
-            } else {
-               tryAutoResume();
             }
           }
         }
@@ -801,7 +764,10 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {}
     setupMediaSession();
   }
-}); 
+});
+
+
+
 document.addEventListener('keydown', function(event) {
     // Ignore key presses if typing in an input or textarea
     if (event.target.tagName.toLowerCase() === 'input' || event.target.tagName.toLowerCase() === 'textarea') {
