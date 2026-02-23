@@ -265,34 +265,22 @@ document.addEventListener("DOMContentLoaded", () => {
       const at = Number(audio.currentTime);
       if (!isFinite(vt) || !isFinite(at)) return;
 
-      const delta = vt - at;
-
-      // Make audio the master stream during background tabs to fix the Chromium pause/desync bug
-      if (document.visibilityState === 'hidden') {
-        if (intendedPlaying && !audio.paused) {
-          if (Math.abs(delta) > 0.8) {
-             safeSetCT(videoEl, at);
-             if (video.paused()) { try { video.play(); } catch {} }
-          }
-        }
-        
-        lastAT = at;
-        lastATts = performance.now();
-        return; 
-      }
+      const isHidden = document.visibilityState === 'hidden';
 
       if (intendedPlaying) {
-        if (video.paused() && bothPlayableAt(vt) && !restarting) {
+        if (video.paused() && bothPlayableAt(vt) && !restarting && !isHidden) {
             hideError();
             ensureUnmutedIfNotUserMuted().then(() => playTogether({ allowMutedRetry: true }));
         }
         
         if (video.paused() && !audio.paused) {
-          try {
-            internalPlayRequest++;
-            video.play();
-          } catch {}
-          internalPlayRequest = Math.max(0, internalPlayRequest - 1);
+          if (!isHidden) {
+            try {
+              internalPlayRequest++;
+              video.play();
+            } catch {}
+            internalPlayRequest = Math.max(0, internalPlayRequest - 1);
+          }
         }
         if (!video.paused() && audio.paused) {
           try {
@@ -311,6 +299,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
 
+      const delta = vt - at;
+
       if (Math.abs(delta) > RESYNC_DRIFT_LIMIT) {
         const dur = Number(video.duration()) || 0;
         if (dur > 2 && at > dur - 2 && vt < 2) {
@@ -319,6 +309,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         if (!intendedPlaying || restarting) return;
+        if (isHidden) return; // Prevent pausing audio loop when Chromium throttles the video in the background
+
         pauseHard();
         setTimeout(() => { if (intendedPlaying) playTogether({ allowMutedRetry: true }); }, 120);
         return;
@@ -402,9 +394,11 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       if (cancelled()) { updateMediaSessionPlaybackState(); return; }
 
-      const t = Number(video.currentTime());
-      if (isFinite(t) && Math.abs(Number(audio.currentTime) - t) > 0.05) {
-        await softAlignAudioTo(t, 25, 70);
+      const vt = Number(video.currentTime());
+      const at = Number(audio.currentTime);
+      
+      if (isFinite(vt) && Math.abs(at - vt) > 0.15) {
+        await softAlignAudioTo(vt, 25, 70);
         if (cancelled()) { updateMediaSessionPlaybackState(); return; }
       }
 
@@ -412,24 +406,28 @@ document.addEventListener("DOMContentLoaded", () => {
 
       let vOk = true, aOk = true;
 
-      try {
-        internalPlayRequest++;
-        const p = video.play();
-        if (p && p.then) await p;
-      } catch {
-        vOk = false;
-      } finally {
-        internalPlayRequest = Math.max(0, internalPlayRequest - 1);
+      if (video.paused()) {
+        try {
+          internalPlayRequest++;
+          const p = video.play();
+          if (p && p.then) await p;
+        } catch {
+          vOk = false;
+        } finally {
+          internalPlayRequest = Math.max(0, internalPlayRequest - 1);
+        }
       }
 
       if (cancelled()) { updateMediaSessionPlaybackState(); return; }
 
-      try {
-        squelchAudioEvents();
-        const pa = audio.play();
-        if (pa && pa.then) await pa;
-      } catch {
-        aOk = false;
+      if (audio.paused) {
+        try {
+          squelchAudioEvents();
+          const pa = audio.play();
+          if (pa && pa.then) await pa;
+        } catch {
+          aOk = false;
+        }
       }
 
       if (cancelled()) { updateMediaSessionPlaybackState(); return; }
@@ -532,6 +530,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const pauseIfRealStall = () => {
       if (startupPhase || restarting || !intendedPlaying || seekingActive) return;
       if (performance.now() - lastPlayKickTs < STARTUP_GRACE_MS) return;
+      if (document.visibilityState === 'hidden') return;
 
       if (!bothPlayableAt(Number(video.currentTime()))) {
         showError(`${label} buffering…`);
@@ -653,10 +652,14 @@ document.addEventListener("DOMContentLoaded", () => {
     video.on('seeking', () => {
       if (restarting) return;
       seekingActive = true;
-      wasPlayingBeforeSeek = intendedPlaying && !video.paused();
+      wasPlayingBeforeSeek = intendedPlaying && (!video.paused() || document.visibilityState === 'hidden');
       seekStartTime = Number(video.currentTime());
       suppressMirrorUntil = performance.now() + MUTE_SQUELCH_MS;
-      safeSetCT(audio, seekStartTime); 
+      
+      const at = Number(audio.currentTime);
+      if (Math.abs(at - seekStartTime) > 0.25) {
+         safeSetCT(audio, seekStartTime); 
+      }
     });
 
     video.on('seeked', async () => {
@@ -664,9 +667,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const newTime = Number(video.currentTime());
       const diff = Math.abs(newTime - seekStartTime);
       const dur = Number(video.duration()) || 0;
+      const at = Number(audio.currentTime);
 
       if (dur > 2 && seekStartTime > dur - 2 && newTime < 2) {
-         safeSetCT(audio, newTime); 
+         if (Math.abs(at - newTime) > 0.25) safeSetCT(audio, newTime); 
          seekingActive = false;
          firstSeekDone = true;
          return; 
@@ -674,39 +678,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const { small, large, huge } = computeSeekThresholds();
 
-      if (diff > 0.12) await softAlignAudioTo(newTime, 20, 50); 
-      else safeSetCT(audio, newTime);
+      if (Math.abs(at - newTime) > 0.25) {
+         if (diff > 0.12) await softAlignAudioTo(newTime, 20, 50); 
+         else safeSetCT(audio, newTime);
+      }
 
       if (!firstSeekDone) { firstSeekDone = true; seekingActive = false; return; }
 
       await ensureUnmutedIfNotUserMuted();
 
-      if (diff <= small) {
-        if (wasPlayingBeforeSeek && bothPlayableAt(newTime)) {
-          intendedPlaying = true;
-          updateMediaSessionPlaybackState();
-          playTogether({ allowMutedRetry: true });
-        }
-      } else if (diff <= large) {
-        if (wasPlayingBeforeSeek) {
-          intendedPlaying = true;
-          updateMediaSessionPlaybackState();
-          if (bothPlayableAt(newTime)) playTogether({ allowMutedRetry: true });
-        } else {
-          pauseTogether();
-        }
-      } else if (diff <= huge) {
-        pauseTogether();
-      } else {
-        pauseTogether();
-        setTimeout(async () => {
-          if (wasPlayingBeforeSeek) {
-            intendedPlaying = true;
-            updateMediaSessionPlaybackState();
-            await ensureUnmutedIfNotUserMuted();
+      if (wasPlayingBeforeSeek || document.visibilityState === 'visible') {
+         intendedPlaying = true;
+         updateMediaSessionPlaybackState();
+         if (bothPlayableAt(newTime)) {
             playTogether({ allowMutedRetry: true });
-          }
-        }, 160);
+         }
+      } else {
+         pauseTogether();
       }
       seekingActive = false;
     });
@@ -761,18 +749,25 @@ document.addEventListener("DOMContentLoaded", () => {
     audio.addEventListener('canplay', tryAutoResume);
 
     try {
-      window.addEventListener('pagehide', () => { }, { passive: true });
+      window.addEventListener('pagehide', () => { clearSyncLoop(); }, { passive: true });
       window.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
           if (intendedPlaying) {
             if (!syncInterval) startSyncLoop();
+            
+            const vt = Number(video.currentTime());
             const at = Number(audio.currentTime);
-            if (isFinite(at)) {
-               safeSetCT(videoEl, at);
+            
+            if (isFinite(vt) && isFinite(at) && Math.abs(at - vt) > 0.15) {
+               video.currentTime(at);
                updateAudioGainImmediate();
             }
-            tryAutoResume();
-            if (video.paused()) { try { video.play(); } catch {} }
+            
+            if (video.paused() && !audio.paused) {
+               playTogether();
+            } else {
+               tryAutoResume();
+            }
           }
         }
       }, { passive: true });
