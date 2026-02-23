@@ -680,11 +680,12 @@ height: 100%;
  } 
 
 </style>
-<p class="ban-reason"> <%- cinv.error %> </p>
-
-                         <% if (cinv.error == "Could not get channel info.") { %>  
-                                <meta http-equiv="refresh" content="1"> 
-                                                                                           <% } %>
+<p class="ban-reason"> 
+  <%- cinv?.error %> 
+  <% if (cinv?.error === "Could not get channel info.") { %>  
+    <a href="">Refresh?</a>
+  <% } %>
+</p>
 
                                                                                            <% } %>
 
