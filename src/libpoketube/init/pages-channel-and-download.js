@@ -406,7 +406,7 @@ const createdAccountGetDate = await fetchChannelPublishedJSON(ID);
        });
     } catch (error) {
       console.error("Failed to render channel page:", error);
-      res.send(`error: ${error}`)
+      res.send(`error: ${cinv.error}`)
     }
   });
 };
