@@ -245,9 +245,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const baseRate = Number(video.playbackRate()) || 1;
 
         if (Math.abs(delta) > BIG_DRIFT) {
-          // Seamless catchup: if video lagged (background tab), snap video forward. Otherwise snap audio.
-          if (vt < at) video.currentTime(at);
-          else softAlignAudioTo(vt); 
+          softAlignAudioTo(vt); 
         } else if (Math.abs(delta) > MICRO_DRIFT) {
           const targetRate = baseRate + (delta * (0.20 * baseRate)); 
           try { audio.playbackRate = Math.max(baseRate * 0.85, Math.min(baseRate * 1.15, targetRate)); } catch {}
@@ -267,21 +265,32 @@ document.addEventListener("DOMContentLoaded", () => {
       const at = Number(audio.currentTime);
       if (!isFinite(vt) || !isFinite(at)) return;
 
+      const delta = vt - at;
+
+      // Make audio the master stream during background tabs to fix the Chromium pause/desync bug
+      if (document.visibilityState === 'hidden') {
+        if (intendedPlaying && !audio.paused) {
+          if (Math.abs(delta) > 0.8) {
+             safeSetCT(videoEl, at);
+             if (video.paused()) { try { video.play(); } catch {} }
+          }
+        }
+        
+        lastAT = at;
+        lastATts = performance.now();
+        return; 
+      }
+
       if (intendedPlaying) {
         if (video.paused() && bothPlayableAt(vt) && !restarting) {
             hideError();
-            if (document.visibilityState === 'visible') {
-                ensureUnmutedIfNotUserMuted().then(() => playTogether({ allowMutedRetry: true }));
-            } else {
-                internalPlayRequest++;
-                video.play().catch(() => {});
-            }
+            ensureUnmutedIfNotUserMuted().then(() => playTogether({ allowMutedRetry: true }));
         }
         
         if (video.paused() && !audio.paused) {
           try {
             internalPlayRequest++;
-            video.play().catch(() => {});
+            video.play();
           } catch {}
           internalPlayRequest = Math.max(0, internalPlayRequest - 1);
         }
@@ -302,8 +311,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
 
-      const delta = vt - at;
-
       if (Math.abs(delta) > RESYNC_DRIFT_LIMIT) {
         const dur = Number(video.duration()) || 0;
         if (dur > 2 && at > dur - 2 && vt < 2) {
@@ -312,13 +319,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         if (!intendedPlaying || restarting) return;
-        
-        // Zero-pause seamless resync: No more pauseHard() interruptions
-        if (vt < at) {
-            video.currentTime(at);
-        } else {
-            safeSetCT(audio, vt);
-        }
+        pauseHard();
+        setTimeout(() => { if (intendedPlaying) playTogether({ allowMutedRetry: true }); }, 120);
         return;
       }
 
@@ -759,22 +761,22 @@ document.addEventListener("DOMContentLoaded", () => {
     audio.addEventListener('canplay', tryAutoResume);
 
     try {
+      window.addEventListener('pagehide', () => { }, { passive: true });
       window.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
           if (intendedPlaying) {
-            const vt = Number(video.currentTime());
+            if (!syncInterval) startSyncLoop();
             const at = Number(audio.currentTime);
-            // Seamlessly snap throttled video forward to background audio
-            if (isFinite(vt) && isFinite(at) && Math.abs(vt - at) > 0.15) {
-               if (vt < at) video.currentTime(at);
-               else safeSetCT(audio, vt); 
+            if (isFinite(at)) {
+               safeSetCT(videoEl, at);
                updateAudioGainImmediate();
             }
             tryAutoResume();
-            if (!syncInterval) startSyncLoop();
+            if (video.paused()) { try { video.play(); } catch {} }
           }
         }
       }, { passive: true });
+      window.addEventListener('beforeunload', () => {});
     } catch {}
   } else {
     try {
@@ -793,7 +795,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {}
     setupMediaSession();
   }
-}); 
+});
 document.addEventListener('keydown', function(event) {
     // Ignore key presses if typing in an input or textarea
     if (event.target.tagName.toLowerCase() === 'input' || event.target.tagName.toLowerCase() === 'textarea') {
