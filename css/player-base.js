@@ -270,16 +270,29 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
         const aPaused = audio.paused;
         const vPaused = videoEl.paused;
 
-        // SCENARIO 1: Audio is playing, but video got paused (Tab Switch, Chromium background throttling, or Media Keys)
+        // SCENARIO 1: Audio is playing, but video got paused
         if (!aPaused && vPaused) {
+          // Snap video to audio
           if (Math.abs(at - vt) > 0.15) {
                safeSetCT(videoEl, at);
           }
           try {
               internalPlayRequest++;
-              video.play();
+              const p = video.play();
+              // If video.play fails or is stuck, and audio is still going, we must ensure audio stops
+              // because "audio doesn't play without video".
+              if (p && p.catch) {
+                p.catch(() => {
+                  if (videoEl.paused && !audio.paused) {
+                    squelchAudioEvents();
+                    audio.pause();
+                  }
+                });
+              }
               internalPlayRequest = Math.max(0, internalPlayRequest - 1);
-          } catch {}
+          } catch {
+             if (!audio.paused) { squelchAudioEvents(); audio.pause(); }
+          }
           hideError();
         }
 
@@ -295,6 +308,12 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
         // SCENARIO 3: Both are playing but heavily desynced
         if (!aPaused && !vPaused && Math.abs(at - vt) > 0.4) {
            safeSetCT(videoEl, at); 
+        }
+
+        // Strict Enforcement: If video is paused for ANY reason while audio plays, pause audio.
+        if (videoEl.paused && !audio.paused) {
+           squelchAudioEvents();
+           audio.pause();
         }
 
         // Startup / Buffering Watchdog
@@ -599,8 +618,6 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     audio.addEventListener('pause', () => {
       if (audioEventsSquelched()) return;
       if (restarting) return;
-      // Background Tab Check: If audio is paused but it's not "intended", Chromium might have throttled it
-      // or the user paused from the media hub.
       pauseTogether();
     });
 
@@ -619,12 +636,8 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     });
 
     video.on('pause', () => {
-      // FIX: Chromium background pause fix. 
-      // If the tab is hidden and intendedPlaying is true, Chromium often force-pauses the video element.
-      // We do NOT want to trigger pauseTogether() because that would kill the audio which is playing fine.
       if (!restarting && !intendedPlaying) pauseTogether();
       else if (!restarting && intendedPlaying && document.visibilityState === 'visible') {
-         // Only pause everything if the user actually clicked pause while looking at the tab
          pauseTogether();
       }
     });
@@ -771,7 +784,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     } catch {}
     setupMediaSession();
   }
-});
+}); 
 document.addEventListener('keydown', function(event) {
     // Ignore key presses if typing in an input or textarea
     if (event.target.tagName.toLowerCase() === 'input' || event.target.tagName.toLowerCase() === 'textarea') {
