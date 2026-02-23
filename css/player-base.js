@@ -295,11 +295,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // SCENARIO 2: Video is playing, but Audio is paused 
         if (!vPaused && aPaused) {
-          try {
-              squelchAudioEvents();
-              safeSetCT(audio, vt);
-              audio.play().catch(() => {});
-          } catch {}
+          // Verify video isn't actually buffering before resuming audio
+          if (videoEl.readyState >= 3) {
+            try {
+                squelchAudioEvents();
+                safeSetCT(audio, vt);
+                audio.play().catch(() => {});
+            } catch {}
+          }
         }
 
         // SCENARIO 3: Both are playing but heavily desynced
@@ -307,10 +310,14 @@ document.addEventListener("DOMContentLoaded", () => {
            safeSetCT(videoEl, at); 
         }
 
-        // Strict Enforcement: If video is paused for ANY reason while audio plays, pause audio.
-        if (videoEl.paused && !audio.paused && document.visibilityState === 'visible' && internalPlayRequest === 0) {
-           squelchAudioEvents();
-           audio.pause();
+        // Strict Enforcement: If video is paused or buffering while audio plays, pause audio.
+        // We check readyState < 3 as a direct indicator of insufficient data (buffering).
+        if ((videoEl.paused || videoEl.readyState < 3) && !audio.paused && internalPlayRequest === 0) {
+           // We only enforce this pause if the tab is visible OR if it's a genuine buffer stall
+           if (document.visibilityState === 'visible' || videoEl.readyState < 2) {
+             squelchAudioEvents();
+             audio.pause();
+           }
         }
 
         // Startup / Buffering Watchdog
@@ -385,6 +392,12 @@ document.addEventListener("DOMContentLoaded", () => {
       updateMediaSessionPlaybackState();
       return;
     }
+    
+    // GUARD: Never play together if video is currently buffering
+    if (videoEl.readyState < 3) {
+      return;
+    }
+
     syncing = true;
     lastPlayKickTs = performance.now();
 
@@ -528,11 +541,21 @@ document.addEventListener("DOMContentLoaded", () => {
     const pauseIfRealStall = () => {
       if (startupPhase || restarting || !intendedPlaying || seekingActive) return;
       if (performance.now() - lastPlayKickTs < STARTUP_GRACE_MS) return;
+      
+      // If video stalls, stop audio immediately
+      if (label === 'Video') {
+        squelchAudioEvents();
+        audio.pause();
+      }
+
       if (document.visibilityState === 'hidden') return;
 
       if (!bothPlayableAt(Number(video.currentTime()))) {
         showError(`${label} buffering…`);
-        pauseHard();
+        if (label === 'Video') {
+           squelchAudioEvents();
+           audio.pause();
+        }
       }
     };
 
@@ -540,6 +563,7 @@ document.addEventListener("DOMContentLoaded", () => {
       hideError();
       if (!intendedPlaying || restarting || seekingActive) return;
       const t = Number(video.currentTime());
+      // Wait for BOTH to be ready before resuming
       if (bothPlayableAt(t)) {
         await ensureUnmutedIfNotUserMuted();
         playTogether({ allowMutedRetry: true });
@@ -607,15 +631,18 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!hasExternalAudio) return;
       intendedPlaying = true;
       updateMediaSessionPlaybackState();
-      if (video.paused()) {
+      // Only trigger group play if video is actually ready
+      if (video.paused() && videoEl.readyState >= 3) {
         playTogether({ allowMutedRetry: true });
+      } else if (videoEl.readyState < 3) {
+        // Video is buffering, force audio to stay paused
+        squelchAudioEvents();
+        audio.pause();
       }
     });
 
     audio.addEventListener('pause', () => {
       if (audioEventsSquelched() || restarting || internalPlayRequest > 0) return;
-      // Audio pausing is usually deliberate (media hub or user action).
-      // We must treat it as a hard pause regardless of visibility to prevent sync-looping background restarts.
       pauseTogether();
     });
 
@@ -635,10 +662,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
     video.on('pause', () => {
       if (restarting || internalPlayRequest > 0) return;
-      // Only call pauseTogether if the tab is visible.
-      // If hidden, Chromium likely throttled the video; we ignore that pause to keep audio going.
       if (document.visibilityState === 'visible' && intendedPlaying) {
          pauseTogether();
+      }
+    });
+
+    // Buffering guards using Video.js events
+    video.on('waiting', () => {
+      if (intendedPlaying && !restarting) {
+        squelchAudioEvents();
+        audio.pause();
+      }
+    });
+
+    video.on('playing', () => {
+      if (intendedPlaying && !restarting && audio.paused) {
+        playTogether({ allowMutedRetry: true });
       }
     });
 
@@ -664,21 +703,15 @@ document.addEventListener("DOMContentLoaded", () => {
       if (Math.abs(at - seekStartTime) > 0.25) {
          safeSetCT(audio, seekStartTime); 
       }
+      // Pause audio during seek to prevent audio playing while video buffers new position
+      squelchAudioEvents();
+      audio.pause();
     });
 
     video.on('seeked', async () => {
       if (restarting) return;
       const newTime = Number(video.currentTime());
-      const diff = Math.abs(newTime - seekStartTime);
-      const dur = Number(video.duration()) || 0;
       const at = Number(audio.currentTime);
-
-      if (dur > 2 && seekStartTime > dur - 2 && newTime < 2) {
-         if (Math.abs(at - newTime) > 0.25) safeSetCT(audio, newTime); 
-         seekingActive = false;
-         firstSeekDone = true;
-         return; 
-      }
 
       if (Math.abs(at - newTime) > 0.25) {
          safeSetCT(audio, newTime);
@@ -691,6 +724,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (wasPlayingBeforeSeek || document.visibilityState === 'visible') {
           intendedPlaying = true;
           updateMediaSessionPlaybackState();
+          // Only play if both are ready; wireResilience will handle the 'canplay' trigger if not
           if (bothPlayableAt(newTime)) {
              playTogether({ allowMutedRetry: true });
           }
@@ -752,7 +786,6 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       window.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
-          // If audio is playing in the background, we MUST intend to play everything
           if (audio && !audio.paused) {
              intendedPlaying = true;
           }
@@ -761,14 +794,11 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!syncInterval) startSyncLoop();
             
             const at = Number(audio.currentTime);
-            // Force snap video to audio master clock
             safeSetCT(videoEl, at);
             updateAudioGainImmediate();
             
-            // Increment internalPlayRequest to protect against 'pause' event noise during tab transition
             internalPlayRequest++;
             playTogether({ allowMutedRetry: true }).finally(() => {
-                // Short delay to ensure browser events settle
                 setTimeout(() => {
                     internalPlayRequest = Math.max(0, internalPlayRequest - 1);
                 }, 150);
@@ -796,8 +826,6 @@ document.addEventListener("DOMContentLoaded", () => {
     setupMediaSession();
   }
 });
-
-
 document.addEventListener('keydown', function(event) {
     // Ignore key presses if typing in an input or textarea
     if (event.target.tagName.toLowerCase() === 'input' || event.target.tagName.toLowerCase() === 'textarea') {
