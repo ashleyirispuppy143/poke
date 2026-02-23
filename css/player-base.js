@@ -14,7 +14,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  * Available under Apache License Version 2.0
  * <https://github.com/mozilla/vtt.js/blob/main/LICENSE>
  */
-document.addEventListener("DOMContentLoaded", () => {
+ document.addEventListener("DOMContentLoaded", () => {
   const video = videojs('video', {
     controls: true,
     autoplay: false,
@@ -38,6 +38,7 @@ document.addEventListener("DOMContentLoaded", () => {
   video.ready(() => {
     const metaTitle = document.querySelector('meta[name="title"]')?.content || "";
     const metaDesc = document.querySelector('meta[name="twitter:description"]')?.content || "";
+    const metaAuthor = document.querySelector('meta[name="twitter:author"]')?.content || "";
 
     let stats = "";
     const match = metaDesc.match(/👍\s*[^|]+\|\s*👎\s*[^|]+\|\s*📈\s*[^💬]+/);
@@ -46,7 +47,7 @@ document.addEventListener("DOMContentLoaded", () => {
         .replace(/👍/g, "👍")
         .replace(/👎/g, "• 👎")
         .replace(/📈/g, "• 📈")
-        .replace(/\s*\|\s*/g, "    ");
+        .replace(/\s*\|\s*/g, "   ");
     }
 
     const createTitleBar = () => {
@@ -115,6 +116,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const srcObj = video.src();
+  const videoSrc = Array.isArray(srcObj) ? (srcObj[0] && srcObj[0].src) : srcObj;
   const hasExternalAudio = !!audio && audio.tagName === 'AUDIO' && !!pickAudioSrc();
 
   let syncInterval = null;
@@ -268,18 +270,20 @@ document.addEventListener("DOMContentLoaded", () => {
         const aPaused = audio.paused;
         const vPaused = videoEl.paused;
 
+        // SCENARIO 1: Audio is playing, but video got paused (Tab Switch, Chromium background throttling, or Media Keys)
         if (!aPaused && vPaused) {
           if (Math.abs(at - vt) > 0.15) {
-              safeSetCT(videoEl, at);
+               safeSetCT(videoEl, at);
           }
           try {
               internalPlayRequest++;
-              video.play().catch(() => {});
+              video.play();
               internalPlayRequest = Math.max(0, internalPlayRequest - 1);
           } catch {}
           hideError();
         }
 
+        // SCENARIO 2: Video is playing, but Audio is paused 
         if (!vPaused && aPaused) {
           try {
               squelchAudioEvents();
@@ -288,12 +292,14 @@ document.addEventListener("DOMContentLoaded", () => {
           } catch {}
         }
 
+        // SCENARIO 3: Both are playing but heavily desynced
         if (!aPaused && !vPaused && Math.abs(at - vt) > 0.4) {
-           safeSetCT(videoEl, at);
+           safeSetCT(videoEl, at); 
         }
 
+        // Startup / Buffering Watchdog
         if (vPaused && aPaused && bothPlayableAt(vt)) {
-           ensureUnmutedIfNotUserMuted().then(() => playTogether({ allowMutedRetry: true }));
+            ensureUnmutedIfNotUserMuted().then(() => playTogether({ allowMutedRetry: true }));
         }
 
       } else if (!intendedPlaying) {
@@ -349,6 +355,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {}
   }
 
+  // ———————————————————— MediaSession playbackState ————————————————————
   function updateMediaSessionPlaybackState() {
     if (!('mediaSession' in navigator)) return;
     try {
@@ -356,6 +363,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {}
   }
 
+  // ———————————————————— playTogether: programmatic resume ————————————————————
   async function playTogether({ allowMutedRetry = true } = {}) {
     if (syncing || restarting || !intendedPlaying) {
       updateMediaSessionPlaybackState();
@@ -364,8 +372,10 @@ document.addEventListener("DOMContentLoaded", () => {
     syncing = true;
     lastPlayKickTs = performance.now();
 
+    const cancelled = () => !intendedPlaying;
+
     try {
-      if (!intendedPlaying) { updateMediaSessionPlaybackState(); return; }
+      if (cancelled()) { updateMediaSessionPlaybackState(); return; }
 
       const vt = Number(video.currentTime());
       const at = Number(audio.currentTime);
@@ -374,7 +384,7 @@ document.addEventListener("DOMContentLoaded", () => {
         safeSetCT(videoEl, at);
       }
 
-      if (!intendedPlaying) { updateMediaSessionPlaybackState(); return; }
+      if (cancelled()) { updateMediaSessionPlaybackState(); return; }
 
       let vOk = true, aOk = true;
 
@@ -390,6 +400,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
 
+      if (cancelled()) { updateMediaSessionPlaybackState(); return; }
+
       if (audio.paused) {
         try {
           squelchAudioEvents();
@@ -400,9 +412,16 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
 
-      if (!intendedPlaying) { updateMediaSessionPlaybackState(); return; }
+      if (cancelled()) { updateMediaSessionPlaybackState(); return; }
+
+      if (!vOk && !aOk) {
+        updateMediaSessionPlaybackState();
+        return;
+      }
 
       updateAudioGainImmediate();
+      if (cancelled()) { updateMediaSessionPlaybackState(); return; }
+
       if (!syncInterval) startSyncLoop();
 
       if (!firstPlayCommitted) {
@@ -431,20 +450,27 @@ document.addEventListener("DOMContentLoaded", () => {
     pauseHard();
   }
 
+  // ——————————————————————————— UI error box ————————————————————————————
   const errorBox = document.getElementById('loopedIndicator');
   const showError = (msg) => {
     if (!errorBox) return;
     errorBox.textContent = msg;
     errorBox.style.display = 'block';
+    errorBox.style.width = 'fit-content';
   };
   const hideError = () => { if (errorBox) errorBox.style.display = 'none'; };
 
+  // ——————————————————————————— Media Session ————————————————————————————
   function setupMediaSession() {
     if (!('mediaSession' in navigator)) return;
     try {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: document.title || 'Video',
+        artist: typeof authorchannelname !== "undefined" ? authorchannelname : "",
         artwork: vidKey ? [
+          { src: `https://i.ytimg.com/vi/${vidKey}/default.jpg`, sizes: "120x90", type: "image/jpeg" },
+          { src: `https://i.ytimg.com/vi/${vidKey}/mqdefault.jpg`, sizes: "320x180", type: "image/jpeg" },
+          { src: `https://i.ytimg.com/vi/${vidKey}/hqdefault.jpg`, sizes: "480x360", type: "image/jpeg" },
           { src: `https://i.ytimg.com/vi/${vidKey}/maxresdefault.jpg`, sizes: "1280x720", type: "image/jpeg" }
         ] : []
       });
@@ -454,7 +480,7 @@ document.addEventListener("DOMContentLoaded", () => {
       navigator.mediaSession.setActionHandler('play', () => {
         intendedPlaying = true;
         updateMediaSessionPlaybackState();
-        playTogether();
+        ensureUnmutedIfNotUserMuted().then(() => playTogether());
       });
       navigator.mediaSession.setActionHandler('pause', () => {
         pauseTogether();
@@ -474,6 +500,14 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {}
   }
 
+  function restoreProgress() {
+    firstSeekDone = true;
+  }
+  
+  function saveProgressThrottled() {
+  }
+
+  // ——————————————————————————— Resilience (Ultra-Optimized) ————————————————————————————
   function wireResilience(el, label) {
     const pauseIfRealStall = () => {
       if (startupPhase || restarting || !intendedPlaying || seekingActive) return;
@@ -500,8 +534,10 @@ document.addEventListener("DOMContentLoaded", () => {
     el.addEventListener('stalled', pauseIfRealStall);
     el.addEventListener('playing', hideError);
     el.addEventListener('canplay', tryResume);
+    el.addEventListener('canplaythrough', tryResume);
   }
 
+  // ———————————————————————— Main wiring ————————————————————————————
   if (qua !== "medium" && hasExternalAudio) {
     let audioReady = false, videoReady = false;
 
@@ -509,17 +545,20 @@ document.addEventListener("DOMContentLoaded", () => {
       let done = false;
       const onLoaded = () => { if (done) return; done = true; markReady(); maybeStart(); };
       elm.addEventListener('loadeddata', onLoaded, { once: true });
+      elm.addEventListener('loadedmetadata', onLoaded, { once: true });
       elm.addEventListener('canplay', onLoaded, { once: true });
     };
 
     const maybeStart = () => {
       if (!audioReady || !videoReady || restarting) return;
+      restoreProgress();
       const t = Number(video.currentTime());
       if (isFinite(t) && Math.abs(Number(audio.currentTime) - t) > 0.1) {
         safeSetCT(audio, t);
       }
       setupMediaSession();
       updateAudioGainImmediate();
+      setTimeout(() => { if (!firstPlayCommitted) startupPhase = false; }, 2500);
     };
 
     oneShotReady(audio, () => { audioReady = true; });
@@ -527,46 +566,89 @@ document.addEventListener("DOMContentLoaded", () => {
 
     video.on('volumechange', () => {
       if (squelchMuteEvents) return;
+      if (performance.now() < suppressMirrorUntil || seekingActive || restarting) {
+        rampVolumeTo(targetVolFromVideo(), 80);
+        return;
+      }
       rampVolumeTo(targetVolFromVideo(), 120);
       userMutedVideo = !!video.muted();
+    });
+
+    videoEl.addEventListener('volumechange', () => {
+      if (squelchMuteEvents) return;
+      userMutedVideo = !!video.muted();
+      rampVolumeTo(targetVolFromVideo(), 120);
+    });
+
+    audio.addEventListener('volumechange', () => {
+      if (squelchMuteEvents) return;
+      userMutedAudio = !!audio.muted;
     });
 
     audio.addEventListener('play', () => {
       if (audioEventsSquelched()) return;
       if (restarting) return;
+      if (!hasExternalAudio) return;
       intendedPlaying = true;
       updateMediaSessionPlaybackState();
-      if (video.paused()) playTogether();
+      if (video.paused()) {
+        playTogether({ allowMutedRetry: true });
+      }
     });
 
     audio.addEventListener('pause', () => {
-      if (audioEventsSquelched() || restarting) return;
-      if (document.visibilityState === 'hidden' && intendedPlaying) return; 
+      if (audioEventsSquelched()) return;
+      if (restarting) return;
+      // Background Tab Check: If audio is paused but it's not "intended", Chromium might have throttled it
+      // or the user paused from the media hub.
       pauseTogether();
     });
+
+    videoEl.addEventListener('playing', hideError);
+    audio.addEventListener('playing', hideError);
 
     video.on('ratechange', () => { try { audio.playbackRate = video.playbackRate(); } catch {} });
 
     video.on('play', () => {
       if (internalPlayRequest > 0) return; 
+      hideError();
       intendedPlaying = true;
       updateMediaSessionPlaybackState();
-      playTogether();
+      ensureUnmutedIfNotUserMuted();
+      playTogether({ allowMutedRetry: true });
     });
 
     video.on('pause', () => {
-      if (!restarting && !(document.visibilityState === 'hidden' && intendedPlaying)) {
-        pauseTogether();
+      // FIX: Chromium background pause fix. 
+      // If the tab is hidden and intendedPlaying is true, Chromium often force-pauses the video element.
+      // We do NOT want to trigger pauseTogether() because that would kill the audio which is playing fine.
+      if (!restarting && !intendedPlaying) pauseTogether();
+      else if (!restarting && intendedPlaying && document.visibilityState === 'visible') {
+         // Only pause everything if the user actually clicked pause while looking at the tab
+         pauseTogether();
       }
     });
 
+    let wasPlayingBeforeSeek = false;
     let seekStartTime = 0;
+
+    function computeSeekThresholds() {
+      const dur = Number(video.duration()) || 300;
+      const small = Math.max(0.4, Math.min(5, dur * 0.01));
+      const large = Math.max(5, Math.min(45, dur * 0.12));
+      const huge  = Math.max(10, Math.min(60, dur * 0.33));
+      return { small, large, huge };
+    }
+
     video.on('seeking', () => {
       if (restarting) return;
       seekingActive = true;
+      wasPlayingBeforeSeek = intendedPlaying && (!video.paused() || document.visibilityState === 'hidden');
       seekStartTime = Number(video.currentTime());
       suppressMirrorUntil = performance.now() + MUTE_SQUELCH_MS;
-      if (Math.abs(Number(audio.currentTime) - seekStartTime) > 0.25) {
+      
+      const at = Number(audio.currentTime);
+      if (Math.abs(at - seekStartTime) > 0.25) {
          safeSetCT(audio, seekStartTime); 
       }
     });
@@ -574,11 +656,34 @@ document.addEventListener("DOMContentLoaded", () => {
     video.on('seeked', async () => {
       if (restarting) return;
       const newTime = Number(video.currentTime());
-      if (Math.abs(Number(audio.currentTime) - newTime) > 0.25) {
-          safeSetCT(audio, newTime);
+      const diff = Math.abs(newTime - seekStartTime);
+      const dur = Number(video.duration()) || 0;
+      const at = Number(audio.currentTime);
+
+      if (dur > 2 && seekStartTime > dur - 2 && newTime < 2) {
+         if (Math.abs(at - newTime) > 0.25) safeSetCT(audio, newTime); 
+         seekingActive = false;
+         firstSeekDone = true;
+         return; 
       }
-      firstSeekDone = true;
-      if (intendedPlaying) playTogether();
+
+      if (Math.abs(at - newTime) > 0.25) {
+         safeSetCT(audio, newTime);
+      }
+
+      if (!firstSeekDone) { firstSeekDone = true; seekingActive = false; return; }
+
+      await ensureUnmutedIfNotUserMuted();
+
+      if (wasPlayingBeforeSeek || document.visibilityState === 'visible') {
+          intendedPlaying = true;
+          updateMediaSessionPlaybackState();
+          if (bothPlayableAt(newTime)) {
+             playTogether({ allowMutedRetry: true });
+          }
+      } else {
+          pauseTogether();
+      }
       seekingActive = false;
     });
 
@@ -591,29 +696,79 @@ document.addEventListener("DOMContentLoaded", () => {
       try {
         clearSyncLoop();
         pauseHard();
-        safeSetCT(videoEl, 0);
-        await softAlignAudioTo(0); 
+        const startAt = 0; 
+        suppressEndedUntil = performance.now() + 1000;
+        
+        safeSetCT(videoEl, startAt);
+        await softAlignAudioTo(startAt); 
+        
         intendedPlaying = true;
         updateMediaSessionPlaybackState();
-        await playTogether();
+        await ensureUnmutedIfNotUserMuted();
+        
+        await new Promise(r => requestAnimationFrame(r));
+        await playTogether({ allowMutedRetry: true });
       } finally { restarting = false; }
     }
 
     video.on('ended', () => {
-      if (restarting || performance.now() < suppressEndedUntil) return;
+      if (restarting) return;
+      if (performance.now() < suppressEndedUntil) return;
+      if (isLoopDesired()) restartLoop();
+      else pauseTogether();
+    });
+    audio.addEventListener('ended', () => {
+      if (restarting) return;
+      if (performance.now() < suppressEndedUntil) return;
       if (isLoopDesired()) restartLoop();
       else pauseTogether();
     });
 
-    window.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && intendedPlaying) {
-        if (!syncInterval) startSyncLoop();
-        safeSetCT(videoEl, Number(audio.currentTime));
-        if (videoEl.paused) playTogether();
+    const tryAutoResume = async () => {
+      if (!intendedPlaying) return;
+      const t = Number(video.currentTime());
+      if (bothPlayableAt(t)) {
+        hideError();
+        await ensureUnmutedIfNotUserMuted();
+        playTogether({ allowMutedRetry: true });
       }
-    }, { passive: true });
+    };
+    videoEl.addEventListener('canplay', tryAutoResume);
+    audio.addEventListener('canplay', tryAutoResume);
 
+    try {
+      window.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          if (intendedPlaying) {
+            if (!syncInterval) startSyncLoop();
+            
+            const at = Number(audio.currentTime);
+            safeSetCT(videoEl, at);
+            updateAudioGainImmediate();
+            
+            if (videoEl.paused) {
+               playTogether({ allowMutedRetry: true });
+            }
+          }
+        }
+      }, { passive: true });
+      window.addEventListener('beforeunload', () => {});
+    } catch {}
   } else {
+    try {
+      video.on('timeupdate', () => {});
+
+      if ('mediaSession' in navigator) {
+        video.on('play', () => {
+          intendedPlaying = true;
+          updateMediaSessionPlaybackState();
+        });
+        video.on('pause', () => {
+          intendedPlaying = false;
+          updateMediaSessionPlaybackState();
+        });
+      }
+    } catch {}
     setupMediaSession();
   }
 });
