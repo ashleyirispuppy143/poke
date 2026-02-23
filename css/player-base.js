@@ -14,393 +14,861 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  * Available under Apache License Version 2.0
  * <https://github.com/mozilla/vtt.js/blob/main/LICENSE>
  */
- document.addEventListener("DOMContentLoaded", () => {
-  // —————————————————————————————— Initialization ——————————————————————————————
-  const video = videojs('video', {
-    controls: true,
-    autoplay: false,
-    preload: 'auto',
-    errorDisplay: false,
-  });
-
-  const qs = new URLSearchParams(window.location.search);
-  const qua = qs.get("quality") || "";
-  const vidKey = qs.get('v');
-  const PROGRESS_KEY = `progress-${vidKey}`;
-
-  try { 
-    if (!localStorage.getItem(PROGRESS_KEY)) {
-      localStorage.setItem(PROGRESS_KEY, 0); 
-    }
-  } catch {}
-
-  const videoEl = document.getElementById('video');
-  const audio = document.getElementById('aud');
-
-  try {
-    videoEl.setAttribute('playsinline', '');
-    videoEl.setAttribute('webkit-playsinline', '');
-  } catch {}
-
-  // ——————————————————————— TitleBar on Fullscreen ——————————————————————
-  video.ready(() => {
-    const metaTitle = document.querySelector('meta[name="title"]')?.content || "";
-    const metaDesc = document.querySelector('meta[name="twitter:description"]')?.content || "";
-    
-    let stats = "";
-    const match = metaDesc.match(/👍\s*[^|]+\|\s*👎\s*[^|]+\|\s*📈\s*[^💬]+/);
-    if (match) {
-      stats = match[0]
-        .replace(/👍/g, "👍")
-        .replace(/👎/g, "• 👎")
-        .replace(/📈/g, "• 📈")
-        .replace(/\s*\|\s*/g, "   ");
-    }
-
-    const createTitleBar = () => {
-      const existing = video.getChild("TitleBar");
-      if (!existing) {
-        const titleBar = video.addChild("TitleBar");
-        titleBar.update({ title: metaTitle, description: stats });
-      }
-    };
-    const removeTitleBar = () => {
-      const existing = video.getChild("TitleBar");
-      if (existing) video.removeChild(existing);
-    };
-    const handleFullscreen = () => {
-      const fs = document.fullscreenElement || document.webkitFullscreenElement;
-      if (fs) createTitleBar();
-      else removeTitleBar();
-    };
-    document.addEventListener("fullscreenchange", handleFullscreen, { passive: true });
-    document.addEventListener("webkitfullscreenchange", handleFullscreen, { passive: true });
-    handleFullscreen();
-  });
-
-  // —————————————————————————————— Core State ——————————————————————————————
-  const srcObj = video.src();
-  const hasExternalAudio = !!audio && audio.tagName === 'AUDIO';
   
-  let intendedPlaying = false;
-  let seekingActive = false;
-  let isBuffering = false;
-  let syncInterval = null;
-  let bufferPollInterval = null;
+document.addEventListener("DOMContentLoaded", () => {
+    // ==========================================
+    // 1. CONFIGURATION & CONSTANTS
+    // ==========================================
+    const CONFIG = {
+        SYNC: {
+            MAX_DRIFT_TOLERANCE_SEC: 0.1,    // Max allowed drift before correction
+            CRITICAL_DRIFT_SEC: 0.35,        // Drift requiring immediate hard-snap
+            SYNC_INTERVAL_MS: 150,           // Fallback interval for drift checking
+            SEEK_FADE_DOWN_MS: 30,           // Audio fade out duration on seek
+            SEEK_FADE_UP_MS: 60,             // Audio fade in duration after seek
+            DRIFT_FADE_MS: 20                // Audio fade during mid-playback drift correction
+        },
+        BUFFER: {
+            MIN_PLAYABLE_SECONDS: 1.5,       // Minimum buffered audio/video needed to resume
+            STARTUP_GRACE_PERIOD_MS: 2500,   // Time to ignore stalls after initial play
+            STALL_TIMEOUT_MS: 800            // Time before showing buffering indicator
+        },
+        VOLUME: {
+            DEFAULT_RAMP_MS: 100,            // Standard volume crossfade
+            MIRROR_THROTTLE_MS: 100          // Throttle volume mirroring to prevent loops
+        },
+        STATE: {
+            PROGRESS_SAVE_INTERVAL_MS: 1000,
+            LOCAL_STORAGE_PREFIX: 'progress-'
+        }
+    };
 
-  // Error UI
-  const errorBox = document.getElementById('loopedIndicator');
-  const showError = (msg) => {
-    if (!errorBox) return;
-    errorBox.textContent = msg;
-    errorBox.style.display = 'block';
-    errorBox.style.width = 'fit-content';
-  };
-  const hideError = () => { if (errorBox) errorBox.style.display = 'none'; };
+    // ==========================================
+    // 2. CORE UTILITIES
+    // ==========================================
+    const Utils = {
+        clamp: (val, min, max) => Math.max(min, Math.min(max, Number(val))),
+        isFiniteNum: (val) => typeof val === 'number' && isFinite(val) && !isNaN(val),
+        sleep: (ms) => new Promise(resolve => setTimeout(resolve, ms)),
+        
+        // Debounce for high-frequency events
+        debounce: (func, wait) => {
+            let timeout;
+            return function (...args) {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(this, args), wait);
+            };
+        },
 
-  function isLoopDesired() {
-    return !!videoEl.loop || videoEl.hasAttribute('loop') || qs.get("loop") === "1" || qs.get("loop") === "true" || window.forceLoop === true;
-  }
+        // Safely set currentTime without throwing
+        safeSetTime: (mediaEl, time) => {
+            try {
+                if (Utils.isFiniteNum(time) && time >= 0) {
+                    mediaEl.currentTime = time;
+                }
+            } catch (e) {
+                console.warn("[SyncEngine] Failed to set time:", e);
+            }
+        },
 
-  // Remove native DOM loop flags so our custom sync loop logic takes over cleanly
-  try { videoEl.loop = false; videoEl.removeAttribute?.('loop'); } catch {}
-  try { audio.loop = false; audio.removeAttribute?.('loop'); } catch {}
+        // Check if a specific time is within the media's buffered ranges
+        isTimeBuffered: (mediaEl, time) => {
+            try {
+                const b = mediaEl.buffered;
+                if (!b || b.length === 0 || !Utils.isFiniteNum(time)) return false;
+                for (let i = 0; i < b.length; i++) {
+                    // Add small epsilon for floating point inaccuracies
+                    if (time >= b.start(i) - 0.2 && time <= b.end(i) + 0.2) {
+                        return true;
+                    }
+                }
+            } catch (e) { return false; }
+            return false;
+        },
 
-  // ——————————————————————— MediaSession API ———————————————————————
-  function updateMediaSessionPlaybackState() {
-    if (!('mediaSession' in navigator)) return;
-    try {
-      navigator.mediaSession.playbackState = intendedPlaying ? 'playing' : 'paused';
-    } catch {}
-  }
+        // Sophisticated readiness check covering readyState and buffered ranges
+        canPlayAt: (mediaEl, time) => {
+            try {
+                const rs = Number(mediaEl.readyState || 0);
+                if (!Utils.isFiniteNum(time)) return false;
+                if (rs >= 3) return true; // HAVE_FUTURE_DATA
+                if (time < 0.5 && rs >= 2) return true; // Start of file exception
+                return Utils.isTimeBuffered(mediaEl, time);
+            } catch (e) { return false; }
+        },
 
-  function setupMediaSession() {
-    if (!('mediaSession' in navigator)) return;
-    try {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: document.title || 'Video',
-        artist: typeof authorchannelname !== "undefined" ? authorchannelname : "",
-        artwork: vidKey ? [{ src: `https://i.ytimg.com/vi/${vidKey}/maxresdefault.jpg`, sizes: "1280x720", type: "image/jpeg" }] : []
-      });
-    } catch {}
+        // Centralized logging (muted for production, but structured for easy debugging)
+        log: (...args) => { /* console.log("[SyncEngine]", ...args); */ },
+        error: (...args) => console.error("[SyncEngine Error]", ...args)
+    };
+
+    // ==========================================
+    // 3. INITIALIZATION & DOM SELECTION
+    // ==========================================
+    const qs = new URLSearchParams(window.location.search);
+    const quality = qs.get("quality") || "";
+    const vidKey = qs.get('v');
+    const isLoopDesired = () => !!document.getElementById('video')?.loop || qs.get("loop") === "1" || qs.get("loop") === "true" || window.forceLoop === true;
+
+    const progressKey = `${CONFIG.STATE.LOCAL_STORAGE_PREFIX}${vidKey}`;
+    try { if (!localStorage.getItem(progressKey)) localStorage.setItem(progressKey, 0); } catch {}
+
+    const videoEl = document.getElementById('video');
+    const audioEl = document.getElementById('aud');
     
-    updateMediaSessionPlaybackState();
-    
+    // Safety check for critical elements
+    if (!videoEl) return Utils.error("Critical: Video element missing.");
+
+    // Initialize VideoJS
+    const videoJsPlayer = videojs('video', {
+        controls: true,
+        autoplay: false,
+        preload: 'auto',
+        errorDisplay: false,
+        html5: {
+            vhs: { overrideNative: true },
+            nativeAudioTracks: false,
+            nativeVideoTracks: false
+        }
+    });
+
     try {
-      navigator.mediaSession.setActionHandler('play', () => {
-        intendedPlaying = true;
-        playBoth();
-      });
-      navigator.mediaSession.setActionHandler('pause', () => {
-        intendedPlaying = false;
-        pauseBoth();
-      });
-      navigator.mediaSession.setActionHandler('seekforward', (d) => {
-        const inc = Number(d?.seekOffset) || 10;
-        videoEl.currentTime = Math.min(videoEl.currentTime + inc, videoEl.duration || 0);
-      });
-      navigator.mediaSession.setActionHandler('seekbackward', (d) => {
-        const dec = Number(d?.seekOffset) || 10;
-        videoEl.currentTime = Math.max(videoEl.currentTime - dec, 0);
-      });
-      navigator.mediaSession.setActionHandler('seekto', (d) => {
-        if (!d || typeof d.seekTime !== 'number') return;
-        videoEl.currentTime = Math.max(0, Math.min(videoEl.duration || 0, d.seekTime));
-      });
+        videoEl.setAttribute('playsinline', '');
+        videoEl.setAttribute('webkit-playsinline', '');
+        // Strip DOM looping to manage it strictly in memory
+        videoEl.loop = false;
+        videoEl.removeAttribute('loop');
+        if (audioEl) {
+            audioEl.loop = false;
+            audioEl.removeAttribute('loop');
+        }
     } catch {}
-  }
 
-  // ——————————————————————— Progress Save/Restore ———————————————————————
-  function restoreProgress() {
-    try {
-      const saved = Number(localStorage.getItem(PROGRESS_KEY));
-      const dur = Number(videoEl.duration) || 0;
-      if (isFinite(saved) && saved > 3 && dur && saved < (dur - 10)) {
-        videoEl.currentTime = saved;
-        if (hasExternalAudio) audio.currentTime = saved;
-      }
-    } catch {}
-  }
+    const getAudioSource = () => {
+        if (!audioEl) return null;
+        if (audioEl.getAttribute('src')) return audioEl.getAttribute('src');
+        const child = audioEl.querySelector('source');
+        if (child?.getAttribute('src')) return child.getAttribute('src');
+        if (audioEl.currentSrc) return audioEl.currentSrc;
+        return null;
+    };
 
-  function saveProgress() {
-    try {
-      const t = Math.floor(videoEl.currentTime || 0);
-      if ((t & 1) === 0) localStorage.setItem(PROGRESS_KEY, String(t));
-    } catch {}
-  }
+    const hasExternalAudio = !!audioEl && audioEl.tagName === 'AUDIO' && !!getAudioSource();
 
-  // ——————————————————————— Playback Controllers ———————————————————————
-  async function playBoth() {
-    intendedPlaying = true;
-    updateMediaSessionPlaybackState();
-    
-    if (isBuffering || seekingActive) return;
+    // UI Box
+    const errorBox = document.getElementById('loopedIndicator');
+    const UI = {
+        showError: (msg) => {
+            if (!errorBox) return;
+            errorBox.textContent = msg;
+            errorBox.style.display = 'block';
+            errorBox.style.width = 'fit-content';
+        },
+        hideError: () => {
+            if (errorBox) errorBox.style.display = 'none';
+        }
+    };
 
-    try {
-      // Always ensure audio is exactly at video's timestamp before kicking off play
-      if (hasExternalAudio && Math.abs(audio.currentTime - videoEl.currentTime) > 0.05) {
-        audio.currentTime = videoEl.currentTime;
-      }
+    // ==========================================
+    // 4. TITLE BAR MANAGER (Fullscreen)
+    // ==========================================
+    class TitleBarManager {
+        constructor(player) {
+            this.player = player;
+            this.metaTitle = document.querySelector('meta[name="title"]')?.content || "";
+            this.metaDesc = document.querySelector('meta[name="twitter:description"]')?.content || "";
+            
+            this.stats = "";
+            const match = this.metaDesc.match(/👍\s*[^|]+\|\s*👎\s*[^|]+\|\s*📈\s*[^💬]+/);
+            if (match) {
+                this.stats = match[0]
+                    .replace(/👍/g, "👍")
+                    .replace(/👎/g, "• 👎")
+                    .replace(/📈/g, "• 📈")
+                    .replace(/\s*\|\s*/g, "   ");
+            }
 
-      const promises = [videoEl.play()];
-      if (hasExternalAudio) {
-        promises.push(audio.play());
-      }
-      
-      await Promise.all(promises.map(p => p && p.catch ? p.catch(e => console.warn(e)) : p));
-      hideError();
-    } catch (e) {
-      console.warn("Play interrupted", e);
+            this.bindEvents();
+        }
+
+        create() {
+            if (!this.player.getChild("TitleBar")) {
+                const titleBar = this.player.addChild("TitleBar");
+                titleBar.update({ title: this.metaTitle, description: this.stats });
+            }
+        }
+
+        remove() {
+            const existing = this.player.getChild("TitleBar");
+            if (existing) this.player.removeChild(existing);
+        }
+
+        handleFullscreen() {
+            const fs = document.fullscreenElement || document.webkitFullscreenElement;
+            if (fs) this.create();
+            else this.remove();
+        }
+
+        bindEvents() {
+            this.player.ready(() => {
+                document.addEventListener("fullscreenchange", () => this.handleFullscreen(), { passive: true });
+                document.addEventListener("webkitfullscreenchange", () => this.handleFullscreen(), { passive: true });
+                this.handleFullscreen();
+            });
+        }
     }
-  }
+    new TitleBarManager(videoJsPlayer);
 
-  function pauseBoth() {
-    intendedPlaying = false;
-    updateMediaSessionPlaybackState();
-    try { videoEl.pause(); } catch {}
-    if (hasExternalAudio) {
-      try { audio.pause(); } catch {}
+    // ==========================================
+    // 5. AUDIO VOLUME & CROSSFADE ENGINE
+    // ==========================================
+    class VolumeController {
+        constructor(audio, videoJs) {
+            this.audio = audio;
+            this.videoJs = videoJs;
+            this.animation = null;
+            this.userMutedVideo = false;
+            this.userMutedAudio = false;
+            this.squelchMuteEvents = false;
+        }
+
+        getTargetVolume() {
+            const vVol = Utils.clamp(typeof this.videoJs.volume === 'function' ? this.videoJs.volume() : (videoEl.volume ?? 1), 0, 1);
+            const vMuted = !!(typeof this.videoJs.muted === 'function' ? this.videoJs.muted() : videoEl.muted);
+            const hardMuted = vMuted || this.userMutedVideo;
+            return hardMuted ? 0 : vVol;
+        }
+
+        setImmediate(val) {
+            try { 
+                if (this.audio) this.audio.volume = Utils.clamp(val, 0, 1); 
+            } catch (e) { Utils.error("Failed to set audio volume", e); }
+        }
+
+        async rampTo(target, ms = CONFIG.VOLUME.DEFAULT_RAMP_MS) {
+            if (!this.audio) return Promise.resolve();
+            
+            target = Utils.clamp(target, 0, 1);
+            const from = Utils.clamp(this.audio.volume, 0, 1);
+            
+            if (!Utils.isFiniteNum(from) || ms <= 0 || Math.abs(target - from) < 0.005) {
+                this.setImmediate(target);
+                return Promise.resolve();
+            }
+
+            if (this.animation) this.animation.cancel();
+
+            let cancelFlag = false;
+            this.animation = { cancel: () => { cancelFlag = true; } };
+
+            const start = performance.now();
+            return new Promise(resolve => {
+                const step = () => {
+                    if (cancelFlag) return resolve();
+                    const now = performance.now();
+                    const t = Math.min(1, (now - start) / ms);
+                    
+                    // Smooth easing (ease-in-out)
+                    const easeT = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+                    const val = from + (target - from) * easeT;
+                    
+                    this.setImmediate(val);
+                    
+                    if (t < 1) requestAnimationFrame(step);
+                    else resolve();
+                };
+                requestAnimationFrame(step);
+            });
+        }
+
+        async softMute(ms = 40) { await this.rampTo(0, ms); }
+        async softUnmute(ms = 80) { await this.rampTo(this.getTargetVolume(), ms); }
+        syncImmediate() { this.setImmediate(this.getTargetVolume()); }
     }
-  }
 
-  // ——————————————————————— Advanced Sync & Buffering Engine ———————————————————————
-  // We completely abandon flaky event listeners (waiting/stalled) and use strictly polled ReadyState.
-  // This completely eliminates Chromium "random pause" false positives.
-  
-  function checkBufferingState() {
-    if (!intendedPlaying || seekingActive) return;
+    const volCtrl = hasExternalAudio ? new VolumeController(audioEl, videoJsPlayer) : null;
 
-    // readyState >= 3 (HAVE_FUTURE_DATA) means the browser has enough data to play at least a little bit.
-    const videoReady = videoEl.readyState >= 3;
-    const audioReady = !hasExternalAudio || audio.readyState >= 3;
+    // ==========================================
+    // 6. CONCURRENCY & PLAYBACK STATE MANAGER
+    // ==========================================
+    class PlaybackEngine {
+        constructor(videoPlayer, videoNode, audioNode, volumeCtrl) {
+            this.vp = videoPlayer;
+            this.vNode = videoNode;
+            this.aNode = audioNode;
+            this.vol = volumeCtrl;
 
-    if (!videoReady || !audioReady) {
-      if (!isBuffering) {
-        isBuffering = true;
-        showError("Buffering...");
-        // Pause playback mechanically, but maintain intendedPlaying state
-        try { videoEl.pause(); } catch {}
-        if (hasExternalAudio) { try { audio.pause(); } catch {} }
-      }
+            this.intendedPlaying = false;
+            this.isSyncing = false;
+            this.isRestarting = false;
+            this.isSeeking = false;
+            this.startupPhase = true;
+            this.firstPlayCommitted = false;
+            this.firstSeekDone = false;
+            this.lastPlayKickTs = 0;
+            this.internalPlayRequestCounter = 0;
+            this.squelchAudioEventsUntil = 0;
+            
+            this.stallTimers = { video: null, audio: null };
+            this.syncLoopHandle = null;
+            this.useRVFC = !!this.vNode.requestVideoFrameCallback;
+
+            this.setupMediaSession();
+        }
+
+        get vTime() { return Utils.isFiniteNum(this.vp.currentTime()) ? this.vp.currentTime() : 0; }
+        get aTime() { return this.aNode && Utils.isFiniteNum(this.aNode.currentTime) ? this.aNode.currentTime : 0; }
+
+        isAudioSquelched() {
+            return performance.now() < this.squelchAudioEventsUntil;
+        }
+
+        squelchAudio(ms = 400) {
+            this.squelchAudioEventsUntil = performance.now() + ms;
+        }
+
+        bothPlayable(t) {
+            const vOk = Utils.canPlayAt(this.vNode, t);
+            const aOk = this.aNode ? Utils.canPlayAt(this.aNode, t) : true;
+            return vOk && aOk;
+        }
+
+        // Extremely safe play wrapper catching Chromium AbortErrors
+        async safePlay(element) {
+            try {
+                const promise = element.play();
+                if (promise !== undefined) {
+                    await promise;
+                }
+                return true;
+            } catch (error) {
+                if (error.name !== 'AbortError' && error.name !== 'NotAllowedError') {
+                    Utils.error(`Play failed for ${element.tagName}:`, error);
+                }
+                return false;
+            }
+        }
+
+        async hardPause() {
+            try { this.vp.pause(); } catch {}
+            if (this.aNode) {
+                try {
+                    this.squelchAudio();
+                    this.aNode.pause();
+                } catch {}
+            }
+            this.stopSyncLoop();
+        }
+
+        async pauseTogether() {
+            this.intendedPlaying = false;
+            this.updateMediaSession();
+            await this.hardPause();
+        }
+
+        async playTogether() {
+            if (this.isSyncing || this.isRestarting || !this.intendedPlaying) {
+                this.updateMediaSession();
+                return;
+            }
+
+            this.isSyncing = true;
+            this.lastPlayKickTs = performance.now();
+            const checkCancel = () => !this.intendedPlaying;
+
+            try {
+                if (checkCancel()) return;
+
+                // 1. Initial drift check before playing
+                if (this.aNode) {
+                    const drift = Math.abs(this.aTime - this.vTime);
+                    if (drift > 0.05) {
+                        await this.vol.softMute(20);
+                        Utils.safeSetTime(this.aNode, this.vTime);
+                    }
+                }
+
+                if (checkCancel()) return;
+
+                // 2. Mute during startup sequence to avoid popping
+                if (this.aNode) this.vol.setImmediate(0);
+
+                // 3. Fire Video Play
+                this.internalPlayRequestCounter++;
+                const vSuccess = await this.safePlay(this.vNode);
+                this.internalPlayRequestCounter = Math.max(0, this.internalPlayRequestCounter - 1);
+
+                if (checkCancel()) return;
+
+                // 4. Fire Audio Play
+                let aSuccess = true;
+                if (this.aNode) {
+                    this.squelchAudio();
+                    aSuccess = await this.safePlay(this.aNode);
+                }
+
+                if (checkCancel()) return;
+
+                // 5. Evaluate Success
+                if (!vSuccess && (!aSuccess && this.aNode)) {
+                    // Both failed (likely NotAllowedError due to missing user interaction)
+                    this.intendedPlaying = false;
+                    this.updateMediaSession();
+                    return;
+                }
+
+                // 6. Crossfade audio back in smoothly
+                if (this.aNode) await this.vol.softUnmute(120);
+
+                if (checkCancel()) return;
+
+                // 7. Engage core loop
+                this.startSyncLoop();
+
+                if (!this.firstPlayCommitted) {
+                    this.firstPlayCommitted = true;
+                    setTimeout(() => { this.startupPhase = false; }, 800);
+                }
+
+                this.updateMediaSession();
+
+            } finally {
+                this.isSyncing = false;
+            }
+        }
+
+        // Instead of modifying playbackRate, we use a sophisticated crossfade-snap approach
+        async resolveDrift(vt, at) {
+            if (!this.aNode || this.isSeeking || this.isRestarting) return;
+            
+            const drift = vt - at;
+            const absDrift = Math.abs(drift);
+
+            if (absDrift > CONFIG.SYNC.CRITICAL_DRIFT_SEC) {
+                // Severe desync (e.g. background tab suspended). Requires hard reset.
+                Utils.log("Critical drift detected, hard realigning...");
+                await this.pauseTogether();
+                Utils.safeSetTime(this.aNode, this.vTime);
+                if (this.intendedPlaying) {
+                    setTimeout(() => this.playTogether(), 50);
+                }
+            } else if (absDrift > CONFIG.SYNC.MAX_DRIFT_TOLERANCE_SEC) {
+                // Noticeable desync, fix invisibly without playbackRate shifting
+                Utils.log(`Soft drift correction: ${drift.toFixed(3)}s`);
+                
+                // Quick dip in volume
+                await this.vol.softMute(CONFIG.SYNC.DRIFT_FADE_MS);
+                
+                // Snap audio precisely to video time plus a tiny offset to account for execution time
+                Utils.safeSetTime(this.aNode, this.vTime + 0.015); 
+                
+                // Bring volume back up seamlessly
+                if (this.intendedPlaying) await this.vol.softUnmute(CONFIG.SYNC.DRIFT_FADE_MS * 2);
+            }
+        }
+
+        syncStep() {
+            if (!this.intendedPlaying) return;
+
+            const vt = this.vTime;
+            const at = this.aTime;
+
+            if (this.aNode) {
+                // Chromium Watchdog: If intended to play but stuck paused, resume the exact moment both buffer fully.
+                if (this.vp.paused() && this.bothPlayable(vt) && !this.isRestarting && !this.isSeeking) {
+                    UI.hideError();
+                    this.playTogether();
+                }
+
+                // Catch mismatched play states
+                if (this.vp.paused() && !this.aNode.paused && !this.isSeeking) {
+                    this.internalPlayRequestCounter++;
+                    this.safePlay(this.vNode).finally(() => {
+                        this.internalPlayRequestCounter = Math.max(0, this.internalPlayRequestCounter - 1);
+                    });
+                } else if (!this.vp.paused() && this.aNode.paused && !this.isSeeking) {
+                    this.squelchAudio();
+                    this.safePlay(this.aNode);
+                }
+
+                // Analyze and resolve drift (replaces the old playbackRate micro-stretching)
+                this.resolveDrift(vt, at);
+            }
+
+            // Sync MediaSession position state strictly to video
+            try {
+                if ('mediaSession' in navigator && navigator.mediaSession.setPositionState) {
+                    navigator.mediaSession.setPositionState({
+                        duration: Number(this.vp.duration()) || 0,
+                        playbackRate: Number(this.vp.playbackRate()) || 1,
+                        position: vt
+                    });
+                }
+            } catch {}
+        }
+
+        startSyncLoop() {
+            this.stopSyncLoop();
+            
+            // Lock playback rates immediately (no dynamic drifting)
+            if (this.aNode) {
+                try { this.aNode.playbackRate = this.vp.playbackRate(); } catch {}
+            }
+
+            if (this.useRVFC) {
+                const loop = () => {
+                    this.syncStep();
+                    if (this.intendedPlaying) {
+                        this.syncLoopHandle = this.vNode.requestVideoFrameCallback(loop);
+                    }
+                };
+                this.syncLoopHandle = this.vNode.requestVideoFrameCallback(loop);
+            } else {
+                this.syncLoopHandle = setInterval(() => this.syncStep(), CONFIG.SYNC.SYNC_INTERVAL_MS);
+            }
+        }
+
+        stopSyncLoop() {
+            if (this.syncLoopHandle !== null) {
+                if (this.useRVFC) this.vNode.cancelVideoFrameCallback(this.syncLoopHandle);
+                else clearInterval(this.syncLoopHandle);
+                this.syncLoopHandle = null;
+            }
+        }
+
+        async restartLoop() {
+            if (this.isRestarting) return;
+            this.isRestarting = true;
+            Utils.log("Native Loop Restart triggered.");
+
+            try {
+                this.stopSyncLoop();
+                await this.hardPause();
+                
+                Utils.safeSetTime(this.vNode, 0);
+                if (this.aNode) {
+                    await this.vol.softMute(10);
+                    Utils.safeSetTime(this.aNode, 0);
+                }
+
+                this.intendedPlaying = true;
+                this.updateMediaSession();
+                
+                // Allow DOM to process the time update
+                await new Promise(r => requestAnimationFrame(r));
+                
+                await this.playTogether();
+            } finally {
+                this.isRestarting = false;
+            }
+        }
+
+        setupMediaSession() {
+            if (!('mediaSession' in navigator)) return;
+            try {
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: document.title || 'Video',
+                    artist: typeof authorchannelname !== "undefined" ? authorchannelname : "",
+                    artwork: vidKey ? [{ src: `https://i.ytimg.com/vi/${vidKey}/maxresdefault.jpg`, sizes: "1280x720", type: "image/jpeg" }] : []
+                });
+
+                navigator.mediaSession.setActionHandler('play', () => {
+                    this.intendedPlaying = true;
+                    this.updateMediaSession();
+                    if (this.aNode && this.startupPhase) this.vol.syncImmediate();
+                    this.playTogether();
+                });
+                
+                navigator.mediaSession.setActionHandler('pause', () => {
+                    this.pauseTogether();
+                });
+                
+                navigator.mediaSession.setActionHandler('seekforward', (d) => {
+                    const inc = Number(d?.seekOffset) || 10;
+                    this.vp.currentTime(Math.min(this.vTime + inc, Number(this.vp.duration()) || 0));
+                });
+                
+                navigator.mediaSession.setActionHandler('seekbackward', (d) => {
+                    const dec = Number(d?.seekOffset) || 10;
+                    this.vp.currentTime(Math.max(this.vTime - dec, 0));
+                });
+                
+                navigator.mediaSession.setActionHandler('seekto', (d) => {
+                    if (!d || typeof d.seekTime !== 'number') return;
+                    this.vp.currentTime(Math.max(0, Math.min(Number(this.vp.duration()) || 0, d.seekTime)));
+                });
+            } catch {}
+            this.updateMediaSession();
+        }
+
+        updateMediaSession() {
+            if (!('mediaSession' in navigator)) return;
+            try { navigator.mediaSession.playbackState = this.intendedPlaying ? 'playing' : 'paused'; } catch {}
+        }
+    }
+
+    // ==========================================
+    // 7. EVENT WIRING & LOGIC BINDING
+    // ==========================================
+    const engine = new PlaybackEngine(videoJsPlayer, videoEl, hasExternalAudio ? audioEl : null, volCtrl);
+
+    // --- State Recovery (Progress) ---
+    const restoreProgress = () => {
+        try {
+            const saved = Number(localStorage.getItem(progressKey));
+            const dur = Number(videoJsPlayer.duration()) || 0;
+            if (Utils.isFiniteNum(saved) && saved > 3 && dur && saved < (dur - 10)) {
+                videoJsPlayer.currentTime(saved);
+                if (hasExternalAudio) Utils.safeSetTime(audioEl, saved);
+                engine.firstSeekDone = true;
+                if (volCtrl) volCtrl.syncImmediate();
+            }
+        } catch {}
+    };
+
+    const saveProgressThrottled = Utils.debounce(() => {
+        try {
+            const t = Math.floor(engine.vTime);
+            if (t > 0) localStorage.setItem(progressKey, String(t));
+        } catch {}
+    }, CONFIG.STATE.PROGRESS_SAVE_INTERVAL_MS);
+
+
+    // --- Advanced Seek Handling ---
+    let wasPlayingBeforeSeek = false;
+    let seekStartTime = 0;
+
+    const onSeekStart = async () => {
+        if (engine.isRestarting) return;
+        engine.isSeeking = true;
+        wasPlayingBeforeSeek = engine.intendedPlaying && !videoJsPlayer.paused();
+        seekStartTime = engine.vTime;
+
+        if (hasExternalAudio) {
+            // Rapidly mute audio to prevent glitching during timeline scrub
+            await volCtrl.softMute(CONFIG.SYNC.SEEK_FADE_DOWN_MS);
+            Utils.safeSetTime(audioEl, seekStartTime);
+        }
+    };
+
+    const onSeekEnd = async () => {
+        if (engine.isRestarting) return;
+        const newTime = engine.vTime;
+        const dur = Number(videoJsPlayer.duration()) || 0;
+
+        // Native Loop Detector Check
+        if (dur > 2 && seekStartTime > dur - 2 && newTime < 2) {
+            if (hasExternalAudio) Utils.safeSetTime(audioEl, newTime);
+            engine.isSeeking = false;
+            engine.firstSeekDone = true;
+            return;
+        }
+
+        if (hasExternalAudio) {
+            Utils.safeSetTime(audioEl, newTime);
+        }
+
+        if (!engine.firstSeekDone) {
+            engine.firstSeekDone = true;
+            engine.isSeeking = false;
+            return;
+        }
+
+        engine.isSeeking = false;
+
+        if (wasPlayingBeforeSeek) {
+            engine.intendedPlaying = true;
+            engine.updateMediaSession();
+            
+            // Wait precisely for buffers to fill before resuming
+            const checkResume = setInterval(() => {
+                if (engine.bothPlayable(engine.vTime)) {
+                    clearInterval(checkResume);
+                    engine.playTogether();
+                }
+            }, 50);
+            
+            // Failsafe timeout for the resume check
+            setTimeout(() => clearInterval(checkResume), 2000);
+        } else {
+            engine.pauseTogether();
+        }
+    };
+
+
+    // --- Resilience & Buffering Observer ---
+    const wireResilience = (el, label) => {
+        const pauseIfStall = () => {
+            if (engine.startupPhase || engine.isRestarting || !engine.intendedPlaying || engine.isSeeking) return;
+            if (performance.now() - engine.lastPlayKickTs < CONFIG.BUFFER.STARTUP_GRACE_PERIOD_MS) return;
+
+            if (!engine.stallTimers[label]) {
+                engine.stallTimers[label] = setTimeout(() => {
+                    if (!engine.intendedPlaying || engine.isRestarting || engine.isSeeking) {
+                        engine.stallTimers[label] = null; return;
+                    }
+                    if (engine.bothPlayable(engine.vTime)) {
+                        engine.stallTimers[label] = null; return; 
+                    }
+                    UI.showError(`${label} buffering…`);
+                    engine.hardPause();
+                    engine.stallTimers[label] = null;
+                }, CONFIG.BUFFER.STALL_TIMEOUT_MS); 
+            }
+        };
+
+        const clearStall = async () => {
+            if (engine.stallTimers[label]) {
+                clearTimeout(engine.stallTimers[label]);
+                engine.stallTimers[label] = null;
+            }
+            UI.hideError();
+
+            if (!engine.intendedPlaying || engine.isRestarting || engine.isSeeking) return;
+            
+            if (engine.bothPlayable(engine.vTime)) {
+                await engine.playTogether();
+            }
+        };
+
+        el.addEventListener('waiting', pauseIfStall);
+        el.addEventListener('stalled', pauseIfStall);
+        el.addEventListener('playing', clearStall);
+        el.addEventListener('canplay', clearStall);
+        el.addEventListener('canplaythrough', clearStall);
+    };
+
+    // ==========================================
+    // 8. EXECUTION & ROUTING
+    // ==========================================
+    if (quality !== "medium" && hasExternalAudio) {
+        let audioReady = false, videoReady = false;
+
+        const checkInitReady = () => {
+            if (!audioReady || !videoReady || engine.isRestarting) return;
+            restoreProgress();
+            
+            const t = engine.vTime;
+            if (Math.abs(engine.aTime - t) > 0.1) Utils.safeSetTime(audioEl, t);
+            
+            volCtrl.syncImmediate();
+            setTimeout(() => { if (!engine.firstPlayCommitted) engine.startupPhase = false; }, CONFIG.BUFFER.STARTUP_GRACE_PERIOD_MS);
+        };
+
+        const onAudioLoaded = () => { audioReady = true; checkInitReady(); };
+        const onVideoLoaded = () => { videoReady = true; checkInitReady(); };
+
+        audioEl.addEventListener('loadedmetadata', onAudioLoaded, { once: true });
+        videoEl.addEventListener('loadedmetadata', onVideoLoaded, { once: true });
+
+        // Volume synchronization logic
+        videoJsPlayer.on('volumechange', () => {
+            if (engine.isSeeking || engine.isRestarting) return;
+            volCtrl.userMutedVideo = !!videoJsPlayer.muted();
+            volCtrl.rampTo(volCtrl.getTargetVolume(), CONFIG.VOLUME.MIRROR_THROTTLE_MS);
+        });
+
+        audioEl.addEventListener('volumechange', () => {
+            volCtrl.userMutedAudio = !!audioEl.muted;
+        });
+
+        // Robust Playback Rate syncing (Locks audio 1:1 with video speed)
+        videoJsPlayer.on('ratechange', () => {
+            try { 
+                const targetRate = videoJsPlayer.playbackRate();
+                audioEl.playbackRate = targetRate;
+                // Preserve pitch natively to avoid distortion on speed up
+                if ('preservesPitch' in audioEl) audioEl.preservesPitch = true;
+            } catch (e) { Utils.error("Rate change failed", e); }
+        });
+
+        // Two-way pause/play binding
+        audioEl.addEventListener('play', () => {
+            if (engine.isAudioSquelched() || engine.isRestarting) return;
+            engine.intendedPlaying = true;
+            engine.updateMediaSession();
+            if (videoJsPlayer.paused()) engine.playTogether();
+        });
+
+        audioEl.addEventListener('pause', () => {
+            if (engine.isAudioSquelched() || engine.isRestarting) return;
+            engine.pauseTogether();
+        });
+
+        videoJsPlayer.on('play', () => {
+            if (engine.internalPlayRequestCounter > 0) return;
+            UI.hideError();
+            engine.intendedPlaying = true;
+            engine.updateMediaSession();
+            engine.playTogether();
+        });
+
+        videoJsPlayer.on('pause', () => {
+            if (!engine.isRestarting) engine.pauseTogether();
+        });
+
+        // Seeking bindings
+        videoJsPlayer.on('seeking', onSeekStart);
+        videoJsPlayer.on('seeked', onSeekEnd);
+        videoJsPlayer.on('timeupdate', saveProgressThrottled);
+
+        // Loop / End bindings
+        let suppressEndedUntil = 0;
+        const onMediaEnded = () => {
+            if (engine.isRestarting || performance.now() < suppressEndedUntil) return;
+            if (isLoopDesired()) {
+                suppressEndedUntil = performance.now() + 1000;
+                engine.restartLoop();
+            } else {
+                engine.pauseTogether();
+            }
+        };
+
+        videoJsPlayer.on('ended', onMediaEnded);
+        audioEl.addEventListener('ended', onMediaEnded);
+
+        // Wire resilience for Chromium specific background throttling
+        wireResilience(videoEl, 'Video');
+        wireResilience(audioEl, 'Audio');
+
+        // Page Visibility (Prevents background desyncs gracefully)
+        try {
+            window.addEventListener('pagehide', () => engine.stopSyncLoop(), { passive: true });
+            window.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'hidden') {
+                    // Reduce sync frequency to save CPU, but keep checking buffer
+                    if (engine.syncLoopHandle && !engine.useRVFC) {
+                        clearInterval(engine.syncLoopHandle);
+                        engine.syncLoopHandle = setInterval(() => engine.syncStep(), 500);
+                    }
+                } else if (engine.intendedPlaying) {
+                    engine.startSyncLoop();
+                    if (engine.bothPlayable(engine.vTime)) {
+                        engine.playTogether();
+                    }
+                }
+            }, { passive: true });
+            
+            window.addEventListener('beforeunload', () => saveProgressThrottled());
+        } catch {}
+
     } else {
-      if (isBuffering) {
-        isBuffering = false;
-        hideError();
-        // Both streams have recovered. Re-sync and resume.
-        if (hasExternalAudio) audio.currentTime = videoEl.currentTime;
-        playBoth();
-      }
+        // Fallback for single-element media (No external audio)
+        try {
+            videoJsPlayer.on('timeupdate', saveProgressThrottled);
+            if ('mediaSession' in navigator) {
+                videoJsPlayer.on('play', () => {
+                    engine.intendedPlaying = true;
+                    engine.updateMediaSession();
+                });
+                videoJsPlayer.on('pause', () => {
+                    engine.intendedPlaying = false;
+                    engine.updateMediaSession();
+                });
+            }
+        } catch {}
     }
-  }
-
-  function enforceSync() {
-    if (!hasExternalAudio || seekingActive || isBuffering || videoEl.paused) return;
-
-    const vTime = videoEl.currentTime;
-    const aTime = audio.currentTime;
-    const drift = Math.abs(vTime - aTime);
-
-    // 1. Playback Rate Synchronization (Crucial for 2x speed)
-    // Instantly lock audio speed to video speed. No "soft drifting" pitch distortions.
-    if (audio.playbackRate !== videoEl.playbackRate) {
-      audio.playbackRate = videoEl.playbackRate;
-    }
-
-    // 2. Volume/Mute Synchronization (Strict Lock)
-    const targetVolume = video.muted() ? 0 : video.volume();
-    if (audio.volume !== targetVolume) audio.volume = targetVolume;
-    if (audio.muted !== video.muted()) audio.muted = video.muted();
-
-    // 3. Drift Correction
-    // If drift exceeds 0.25s, firmly snap the audio to the video timestamp.
-    // This is entirely invisible to the user compared to tweaking playback speed.
-    if (drift > 0.25) {
-      audio.currentTime = vTime;
-    }
-
-    // 4. Deadlock Watchdog
-    // If UI thinks it's playing, but audio element halted due to browser glitch, force it back.
-    if (!videoEl.paused && audio.paused && !isBuffering) {
-        audio.play().catch(()=>{});
-    }
-  }
-
-  function startEngines() {
-    if (bufferPollInterval) clearInterval(bufferPollInterval);
-    if (syncInterval) clearInterval(syncInterval);
-
-    // Poll buffering state at 200ms
-    bufferPollInterval = setInterval(checkBufferingState, 200);
-    
-    // Poll sync state extremely aggressively (100ms) for pixel-perfect audio mapping
-    if (hasExternalAudio) {
-      syncInterval = setInterval(enforceSync, 100);
-    }
-  }
-
-  // ——————————————————————— Setup External Audio Flow ———————————————————————
-  if (qua !== "medium" && hasExternalAudio) {
-    let audioReady = false, videoReady = false;
-
-    const oneShotReady = (elm, markReady) => {
-      let done = false;
-      const onLoaded = () => { if (done) return; done = true; markReady(); maybeStart(); };
-      elm.addEventListener('loadeddata', onLoaded, { once: true });
-      elm.addEventListener('loadedmetadata', onLoaded, { once: true });
-      elm.addEventListener('canplay', onLoaded, { once: true });
-    };
-
-    const maybeStart = () => {
-      if (!audioReady || !videoReady) return;
-      restoreProgress();
-      setupMediaSession();
-      startEngines();
-      
-      // Match volume instantly on load
-      audio.volume = video.muted() ? 0 : video.volume();
-      audio.muted = video.muted();
-      audio.playbackRate = videoEl.playbackRate;
-    };
-
-    oneShotReady(audio, () => { audioReady = true; });
-    oneShotReady(videoEl, () => { videoReady = true; });
-
-    // --- Volume UI Control ---
-    video.on('volumechange', () => {
-      audio.volume = video.muted() ? 0 : video.volume();
-      audio.muted = video.muted();
-    });
-
-    video.on('ratechange', () => { 
-      audio.playbackRate = videoEl.playbackRate; 
-    });
-
-    // --- Core Video Events ---
-    videoEl.addEventListener('play', () => {
-      if (!intendedPlaying) playBoth();
-    });
-
-    videoEl.addEventListener('pause', () => {
-      if (intendedPlaying && !isBuffering && !seekingActive) {
-        pauseBoth();
-      }
-    });
-
-    // --- Seeking Logic ---
-    videoEl.addEventListener('seeking', () => {
-      seekingActive = true;
-      isBuffering = false; // Reset buffer state on new seek
-      // Mute audio instantly during seek to prevent audio fragments (cleaner than softMute)
-      audio.muted = true; 
-    });
-
-    videoEl.addEventListener('seeked', () => {
-      seekingActive = false;
-      
-      const dur = videoEl.duration || 0;
-      // Loop Detection
-      if (dur > 2 && videoEl.currentTime < 2 && audio.currentTime > dur - 2) {
-        audio.currentTime = videoEl.currentTime;
-      } else {
-        audio.currentTime = videoEl.currentTime;
-      }
-
-      // Restore user's actual mute state
-      audio.muted = video.muted();
-
-      if (intendedPlaying) {
-        playBoth();
-      }
-    });
-
-    videoEl.addEventListener('timeupdate', saveProgress);
-
-    // --- End / Loop Logic ---
-    const handleEnded = () => {
-      if (isLoopDesired()) {
-        videoEl.currentTime = 0;
-        audio.currentTime = 0;
-        playBoth();
-      } else {
-        pauseBoth();
-      }
-    };
-
-    videoEl.addEventListener('ended', handleEnded);
-    
-    // --- Page Visibility & Background Handling ---
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') {
-         // Some browsers throttle setInterval when hidden. 
-         // Force an immediate sync check just in case.
-         enforceSync();
-      }
-    });
-
-    window.addEventListener('beforeunload', () => {
-      saveProgress();
-    });
-
-  } else {
-    // ——————————————————————— Fallback (No External Audio) ———————————————————————
-    video.on('timeupdate', saveProgress);
-
-    if ('mediaSession' in navigator) {
-      video.on('play', () => {
-        intendedPlaying = true;
-        updateMediaSessionPlaybackState();
-      });
-      video.on('pause', () => {
-        intendedPlaying = false;
-        updateMediaSessionPlaybackState();
-      });
-    }
-    setupMediaSession();
-    restoreProgress();
-  }
 });
-
-
 
 
 
