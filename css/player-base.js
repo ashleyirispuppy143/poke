@@ -280,8 +280,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
               const p = video.play();
               if (p && p.catch) {
                 p.catch(() => {
-                  // Only kill audio if we are NOT trying to play (intendedPlaying became false)
-                  if (videoEl.paused && !audio.paused && !intendedPlaying) {
+                  if (videoEl.paused && !audio.paused) {
                     squelchAudioEvents();
                     audio.pause();
                   }
@@ -289,7 +288,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
               }
               internalPlayRequest = Math.max(0, internalPlayRequest - 1);
           } catch {
-             if (!intendedPlaying && !audio.paused) { squelchAudioEvents(); audio.pause(); }
+             if (!audio.paused) { squelchAudioEvents(); audio.pause(); }
           }
           hideError();
         }
@@ -308,10 +307,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
            safeSetCT(videoEl, at); 
         }
 
-        // enforcement: If user intended to pause, kill everything.
-        if (!intendedPlaying) {
-           if (!videoEl.paused) video.pause();
-           if (!audio.paused) { squelchAudioEvents(); audio.pause(); }
+        // Strict Enforcement: If video is paused for ANY reason while audio plays, pause audio.
+        if (videoEl.paused && !audio.paused && document.visibilityState === 'visible') {
+           squelchAudioEvents();
+           audio.pause();
         }
 
         // Startup / Buffering Watchdog
@@ -616,9 +615,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     audio.addEventListener('pause', () => {
       if (audioEventsSquelched()) return;
       if (restarting) return;
-      // If intendedPlaying is true, Chromium likely throttled audio in the background.
-      // Do NOT kill the state unless we are sure it's a user action.
-      if (!intendedPlaying) pauseTogether();
+      pauseTogether();
     });
 
     videoEl.addEventListener('playing', hideError);
@@ -636,13 +633,8 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     });
 
     video.on('pause', () => {
-      if (restarting) return;
-      // CRITICAL FIX: If Chromium paused the video because the tab was backgrounded,
-      // but intendedPlaying is still TRUE, we do NOT trigger a hard pause.
-      if (!intendedPlaying) {
-         pauseTogether();
-      } else if (document.visibilityState === 'visible') {
-         // If we are looking at the tab and it pauses, it's likely a user action.
+      if (!restarting && !intendedPlaying) pauseTogether();
+      else if (!restarting && intendedPlaying && document.visibilityState === 'visible') {
          pauseTogether();
       }
     });
@@ -674,6 +666,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     video.on('seeked', async () => {
       if (restarting) return;
       const newTime = Number(video.currentTime());
+      const diff = Math.abs(newTime - seekStartTime);
       const dur = Number(video.duration()) || 0;
       const at = Number(audio.currentTime);
 
@@ -756,25 +749,32 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     try {
       window.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
+          // If the audio is currently playing, we definitely intend to be playing.
+          // Chromium often force-pauses background video but leaves audio alive.
+          if (!audio.paused) {
+             intendedPlaying = true;
+          }
+
           if (intendedPlaying) {
             if (!syncInterval) startSyncLoop();
             
             const at = Number(audio.currentTime);
-            // Snap video to audio immediately when coming back
+            // Snap video to audio immediately on return to tab
             safeSetCT(videoEl, at);
             updateAudioGainImmediate();
             
-            // Force play video if it got throttled
             if (videoEl.paused) {
                playTogether({ allowMutedRetry: true });
             }
           }
         }
       }, { passive: true });
+      window.addEventListener('beforeunload', () => {});
     } catch {}
   } else {
     try {
       video.on('timeupdate', () => {});
+
       if ('mediaSession' in navigator) {
         video.on('play', () => {
           intendedPlaying = true;
