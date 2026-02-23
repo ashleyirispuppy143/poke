@@ -14,7 +14,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  * Available under Apache License Version 2.0
  * <https://github.com/mozilla/vtt.js/blob/main/LICENSE>
  */
- document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", () => {
   const video = videojs('video', {
     controls: true,
     autoplay: false,
@@ -635,6 +635,8 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     video.on('pause', () => {
       if (!restarting && !intendedPlaying) pauseTogether();
       else if (!restarting && intendedPlaying && document.visibilityState === 'visible') {
+         // Logic Safeguard: If audio is still active, this pause is likely a sync artifact from tab return.
+         if (!audio.paused) return;
          pauseTogether();
       }
     });
@@ -749,8 +751,8 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     try {
       window.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
-          // If the audio is currently playing, we definitely intend to be playing.
-          // Chromium often force-pauses background video but leaves audio alive.
+          // Absolute Enforcement: If the audio is currently playing, we definitely intend to be playing.
+          // This overrides Chromium background throttling artifacts.
           if (!audio.paused) {
              intendedPlaying = true;
           }
@@ -759,7 +761,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
             if (!syncInterval) startSyncLoop();
             
             const at = Number(audio.currentTime);
-            // Snap video to audio immediately on return to tab
+            // Snap video to audio immediately on return to tab to prevent drift logic from thinking a pause happened
             safeSetCT(videoEl, at);
             updateAudioGainImmediate();
             
@@ -789,6 +791,12 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     setupMediaSession();
   }
 });
+
+
+
+
+
+
 document.addEventListener('keydown', function(event) {
     // Ignore key presses if typing in an input or textarea
     if (event.target.tagName.toLowerCase() === 'input' || event.target.tagName.toLowerCase() === 'textarea') {
