@@ -538,16 +538,33 @@ document.addEventListener("DOMContentLoaded", () => {
         intendedPlaying = true;
         updateMediaSessionPlaybackState();
 
-        // IMPORTANT FIX:
-        // Route MediaSession play through the same unified sync path as the player UI.
-        // This prevents "audio-only resume" after a system/media-control pause.
-        playTogether({ allowMutedRetry: false }).catch(() => {});
-        ensureUnmutedIfNotUserMuted().catch(() => {});
+        // FIX: consume the media-control action immediately on the VIDEO element
+        // so the browser doesn't resume only the audio.
+        let videoPlayPromise = null;
+        try {
+          if (videoEl.paused) {
+            videoPlayPromise = execProgrammaticVideoPlay();
+          }
+        } catch {}
+
+        Promise.resolve(videoPlayPromise)
+          .catch(() => {})
+          .finally(async () => {
+            if (!intendedPlaying) return;
+
+            await ensureUnmutedIfNotUserMuted().catch(() => {});
+            await playTogether({ allowMutedRetry: false }).catch(() => {});
+
+            // Hard guard: never allow audio-only playback after media key play
+            if (intendedPlaying && videoEl.paused && !audio.paused) {
+              squelchAudioEvents();
+              audio.pause();
+              safeSetCT(audio, Number(video.currentTime()) || 0);
+            }
+          });
       });
 
       navigator.mediaSession.setActionHandler('pause', () => {
-        // IMPORTANT FIX:
-        // Route MediaSession pause through the same unified pause path.
         pauseTogether();
       });
 
@@ -841,8 +858,6 @@ document.addEventListener("DOMContentLoaded", () => {
     setupMediaSession();
   }
 });
-
-
 document.addEventListener('keydown', function(event) {
     // Ignore key presses if typing in an input or textarea
     if (event.target.tagName.toLowerCase() === 'input' || event.target.tagName.toLowerCase() === 'textarea') {
