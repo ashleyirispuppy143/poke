@@ -268,30 +268,13 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!isFinite(vt) || !isFinite(at)) return;
 
       if (intendedPlaying && !restarting && !seekingActive && !syncing) {
-        const vPaused = videoEl.paused;
-        const aPaused = audio.paused;
-
-        const vBuffering = video.hasClass('vjs-waiting') || (!vPaused && videoEl.readyState < 3);
-        const aBuffering = !aPaused && audio.readyState < 3;
-
-        if (vBuffering || aBuffering) {
-          if (!aPaused) { squelchAudioEvents(); audio.pause(); }
-          if (!vPaused) {
-            internalPlayRequest++;
-            try { video.pause(); } catch {}
-            setTimeout(() => { internalPlayRequest = Math.max(0, internalPlayRequest - 1); }, 150);
+        if (videoEl.paused || audio.paused) {
+          if (internalPlayRequest === 0 && !video.hasClass('vjs-waiting')) {
+            playTogether({ allowMutedRetry: true });
           }
         } else {
-          if (video.hasClass('vjs-waiting')) video.removeClass('vjs-waiting');
-
-          if (vPaused || aPaused) {
-            if (internalPlayRequest === 0) {
-              playTogether({ allowMutedRetry: true });
-            }
-          } else {
-            if (Math.abs(at - vt) > 0.3) {
-              safeSetCT(audio, vt); 
-            }
+          if (Math.abs(at - vt) > 0.3) {
+            safeSetCT(audio, vt); 
           }
         }
       } else if (!intendedPlaying && !restarting) {
@@ -378,8 +361,6 @@ document.addEventListener("DOMContentLoaded", () => {
       updateMediaSessionPlaybackState();
       return;
     }
-    
-    if (videoEl.readyState < 2) return;
 
     syncing = true;
     lastPlayKickTs = performance.now();
@@ -405,8 +386,8 @@ document.addEventListener("DOMContentLoaded", () => {
           internalPlayRequest++;
           const p = video.play();
           if (p && p.then) await p;
-        } catch {
-          vOk = false;
+        } catch (err) {
+          if (err.name !== 'AbortError') vOk = false;
         } finally {
           setTimeout(() => { internalPlayRequest = Math.max(0, internalPlayRequest - 1); }, 150);
         }
@@ -420,17 +401,22 @@ document.addEventListener("DOMContentLoaded", () => {
           const pa = audio.play();
           if (pa && pa.then) await pa;
         } catch (err) {
-          aOk = false;
-          // Handle Chromium Autoplay Block 
-          if (allowMutedRetry && (err.name === 'NotAllowedError' || err.message.toLowerCase().includes('play') || err.message.includes('interact'))) { 
-            audio.muted = true;
-            try {
-              const paRetry = audio.play();
-              if (paRetry && paRetry.then) await paRetry;
-              aOk = true; 
-            } catch (retryErr) {
-               aOk = false;
-            }
+          if (err.name === 'AbortError') {
+             aOk = true; 
+          } else {
+             aOk = false;
+             // Handle Chromium Autoplay Block 
+             if (allowMutedRetry && (err.name === 'NotAllowedError' || err.message.toLowerCase().includes('play') || err.message.includes('interact'))) { 
+               audio.muted = true;
+               try {
+                 const paRetry = audio.play();
+                 if (paRetry && paRetry.then) await paRetry;
+                 aOk = true; 
+               } catch (retryErr) {
+                 if (retryErr.name === 'AbortError') aOk = true;
+                 else aOk = false;
+               }
+             }
           }
         }
       }
@@ -621,11 +607,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     audio.addEventListener('play', () => {
       if (audioEventsSquelched() || restarting || internalPlayRequest > 0) return;
-      if (videoEl.readyState < 2) {
-        squelchAudioEvents();
-        audio.pause();
-        return;
-      }
       intendedPlaying = true;
       updateMediaSessionPlaybackState();
       if (video.paused()) {
