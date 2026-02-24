@@ -14,7 +14,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  * Available under Apache License Version 2.0
  * <https://github.com/mozilla/vtt.js/blob/main/LICENSE>
  */ 
-document.addEventListener("DOMContentLoaded", () => {
+ document.addEventListener("DOMContentLoaded", () => {
   const video = videojs('video', {
     controls: true,
     autoplay: false,
@@ -272,12 +272,19 @@ document.addEventListener("DOMContentLoaded", () => {
         const vPlayable = canPlayAt(videoEl, vt);
         const aPlayable = canPlayAt(audio, at);
 
-        const vBuffering = video.hasClass('vjs-waiting') || (!vPaused && !vPlayable);
-        const aBuffering = !aPaused && !aPlayable;
+        const vBuffering = video.hasClass('vjs-waiting') || (!vPaused && videoEl.readyState < 3);
+        const aBuffering = !aPaused && audio.readyState < 3;
 
         if (vBuffering || aBuffering) {
-          if (!aPaused) { squelchAudioEvents(); audio.pause(); }
-          // Do not pause the video intentionally here, letting it buffer naturally allows recovery.
+          if (vBuffering && !aBuffering && !aPaused) { 
+            squelchAudioEvents(); 
+            audio.pause(); 
+          }
+          if (aBuffering && !vBuffering && !vPaused) {
+            internalPlayRequest++;
+            try { video.pause(); } catch {}
+            setTimeout(() => { internalPlayRequest = Math.max(0, internalPlayRequest - 1); }, 50);
+          }
         } else {
           if (video.hasClass('vjs-waiting')) video.removeClass('vjs-waiting');
 
@@ -346,7 +353,8 @@ document.addEventListener("DOMContentLoaded", () => {
       audio.pause();
       safeSetCT(audio, t + 0.001);
       squelchAudioEvents();
-      await audio.play().catch(() => {});
+      const p = audio.play();
+      if (p && p.catch) p.catch(() => {});
       updateAudioGainImmediate();
     } catch {}
   }
@@ -366,6 +374,8 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     
+    if (videoEl.readyState < 2) return;
+
     syncing = true;
     lastPlayKickTs = performance.now();
 
@@ -383,40 +393,30 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (cancelled()) { updateMediaSessionPlaybackState(); return; }
 
-      let vOk = true, aOk = true;
-
-      // Always trigger video.play() to ensure buffering continues
       if (video.paused()) {
         try {
           internalPlayRequest++;
           const p = video.play();
-          if (p && p.then) await p;
-        } catch {
-          vOk = false;
+          if (p && p.catch) p.catch(() => {});
         } finally {
-          internalPlayRequest = Math.max(0, internalPlayRequest - 1);
+          setTimeout(() => { internalPlayRequest = Math.max(0, internalPlayRequest - 1); }, 50);
         }
       }
 
       if (cancelled()) { updateMediaSessionPlaybackState(); return; }
 
-      // Only play audio if the video actually has enough data buffered
-      if (audio.paused && canPlayAt(videoEl, video.currentTime())) {
+      if (audio.paused) {
         try {
           squelchAudioEvents();
           const pa = audio.play();
-          if (pa && pa.then) await pa;
-        } catch {
-          aOk = false;
-        }
-      } else if (!canPlayAt(videoEl, video.currentTime()) && !audio.paused) {
-        squelchAudioEvents();
-        audio.pause();
+          if (pa && pa.catch) pa.catch(() => {});
+        } catch {}
       }
 
       if (cancelled()) { updateMediaSessionPlaybackState(); return; }
 
       updateAudioGainImmediate();
+      if (cancelled()) { updateMediaSessionPlaybackState(); return; }
 
       if (!syncInterval) startSyncLoop();
 
@@ -585,7 +585,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     audio.addEventListener('play', () => {
       if (audioEventsSquelched() || restarting || internalPlayRequest > 0) return;
-      if (!canPlayAt(videoEl, video.currentTime())) {
+      if (videoEl.readyState < 2) {
         squelchAudioEvents();
         audio.pause();
         return;
@@ -617,7 +617,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     video.on('pause', () => {
-      if (restarting || internalPlayRequest > 0 || seekingActive) return;
+      if (restarting || internalPlayRequest > 0) return;
       if (document.visibilityState === 'visible') {
          pauseTogether();
       }
@@ -637,11 +637,13 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
+    let wasPlayingBeforeSeek = false;
     let seekStartTime = 0;
 
     video.on('seeking', () => {
       if (restarting) return;
       seekingActive = true;
+      wasPlayingBeforeSeek = intendedPlaying && (!video.paused() || document.visibilityState === 'hidden');
       seekStartTime = Number(video.currentTime());
       suppressMirrorUntil = performance.now() + MUTE_SQUELCH_MS;
       
@@ -661,14 +663,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (!firstSeekDone) { firstSeekDone = true; seekingActive = false; return; }
 
-      seekingActive = false;
       await ensureUnmutedIfNotUserMuted();
 
-      if (intendedPlaying || !video.paused()) {
+      if (wasPlayingBeforeSeek) {
           intendedPlaying = true;
           updateMediaSessionPlaybackState();
           playTogether({ allowMutedRetry: true });
+      } else {
+          pauseHard();
+          pauseTogether();
       }
+      seekingActive = false;
     });
 
     wireResilience(videoEl, 'Video');
@@ -722,14 +727,33 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       window.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
+          if (audio && !audio.paused) {
+             intendedPlaying = true;
+          }
+
           if (intendedPlaying) {
             if (!syncInterval) startSyncLoop();
+            
+            const vt = Number(video.currentTime());
+            const at = Number(audio.currentTime);
+            
+            if (Math.abs(at - vt) > 0.4) {
+               safeSetCT(audio, vt);
+            }
+            updateAudioGainImmediate();
+            
             if (videoEl.paused || audio.paused) {
-               playTogether({ allowMutedRetry: true });
+               internalPlayRequest++;
+               playTogether({ allowMutedRetry: true }).finally(() => {
+                   setTimeout(() => {
+                       internalPlayRequest = Math.max(0, internalPlayRequest - 1);
+                   }, 150);
+               });
             }
           }
         }
       }, { passive: true });
+      window.addEventListener('beforeunload', () => {});
     } catch {}
   } else {
     try {
@@ -749,7 +773,6 @@ document.addEventListener("DOMContentLoaded", () => {
     setupMediaSession();
   }
 });
-
  document.addEventListener('keydown', function(event) {
     // Ignore key presses if typing in an input or textarea
     if (event.target.tagName.toLowerCase() === 'input' || event.target.tagName.toLowerCase() === 'textarea') {
