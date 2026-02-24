@@ -83,7 +83,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let suppressEndedUntil = 0;
   let intendedPlaying = false;
-  let pauseGuard = 0; // State Machine: Blocks ghost pauses from Chromium tab-throttling
+  let pauseGuard = 0; 
+
+  // Absolute Time-Based Event Guard (Replaces the leaky integer counter)
+  let internalEventGuardUntil = 0;
+  function setInternalGuard(ms = 150) {
+      internalEventGuardUntil = performance.now() + ms;
+  }
+  function isInternalGuardActive() {
+      return performance.now() < internalEventGuardUntil;
+  }
 
   let userMutedVideo = false;
   let userMutedAudio = false;
@@ -124,7 +133,6 @@ document.addEventListener("DOMContentLoaded", () => {
   let syncInterval = null;
   let lastAT = 0, lastATts = 0;
   let aligning = false;
-  let internalPlayRequest = 0; 
 
   let squelchAudioEventsUntil = 0;
   const AUDIO_EVENT_SQUELCH_MS = 400;
@@ -154,8 +162,12 @@ document.addEventListener("DOMContentLoaded", () => {
   function rampVolumeTo(target, ms = 60) {
     target = clamp01(target);
     const from = clamp01(audio.volume);
-    if (!isFinite(from)) { setImmediateVolume(target); return Promise.resolve(); }
-    if (ms <= 0 || Math.abs(target - from) < 0.001) { setImmediateVolume(target); return Promise.resolve(); }
+    
+    // Fix: Insta-resolve if the tab is hidden to prevent requestAnimationFrame background deadlocks on Firefox.
+    if (!isFinite(from) || ms <= 0 || Math.abs(target - from) < 0.001 || document.visibilityState === 'hidden') { 
+      setImmediateVolume(target); 
+      return Promise.resolve(); 
+    }
 
     if (volAnim && volAnim.cancel) volAnim.cancel(true);
     let cancelFlag = false;
@@ -271,7 +283,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (intendedPlaying && !restarting && !seekingActive && !syncing) {
         if (videoEl.paused || audio.paused) {
-          if (internalPlayRequest === 0 && !video.hasClass('vjs-waiting')) {
+          if (!isInternalGuardActive() && !video.hasClass('vjs-waiting')) {
             playTogether({ allowMutedRetry: true });
           }
         } else {
@@ -281,9 +293,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       } else if (!intendedPlaying && !restarting && !seekingActive && !syncing) {
         if (!videoEl.paused) {
-            internalPlayRequest++; 
+            setInternalGuard(150); 
             try { video.pause(); } catch {}
-            setTimeout(() => { internalPlayRequest = Math.max(0, internalPlayRequest - 1); }, 150);
         }
         if (!audio.paused) { 
           squelchAudioEvents(); 
@@ -354,8 +365,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // ———————————————————— playTogether: programmatic resume ————————————————————
   async function playTogether({ allowMutedRetry = true } = {}) {
     if (syncing || restarting) return;
-    if (videoEl.readyState < 2) return;
-
+    
     syncing = true;
     lastPlayKickTs = performance.now();
 
@@ -375,13 +385,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (video.paused()) {
         try {
-          internalPlayRequest++;
+          setInternalGuard(200);
           const p = video.play();
           if (p && p.then) await p;
         } catch (err) {
           if (err.name !== 'AbortError') vOk = false;
-        } finally {
-          setTimeout(() => { internalPlayRequest = Math.max(0, internalPlayRequest - 1); }, 150);
         }
       }
 
@@ -416,7 +424,8 @@ document.addEventListener("DOMContentLoaded", () => {
       // Hardline fail-safe: Make sure audio always plays if video is playing.
       if (!aOk && vOk && intendedPlaying) {
          try {
-            audio.currentTime = video.currentTime();
+            safeSetCT(audio, Number(video.currentTime()));
+            squelchAudioEvents();
             const p = audio.play();
             if (p && p.then) await p;
             aOk = true;
@@ -460,9 +469,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function pauseHard() {
     try { 
-      internalPlayRequest++;
+      setInternalGuard(150);
       video.pause(); 
-      setTimeout(() => { internalPlayRequest = Math.max(0, internalPlayRequest - 1); }, 150);
     } catch {}
     try {
       squelchAudioEvents();
@@ -542,9 +550,8 @@ document.addEventListener("DOMContentLoaded", () => {
          squelchAudioEvents();
          audio.pause();
       } else if (label === 'Audio') {
-         internalPlayRequest++;
+         setInternalGuard(150);
          try { video.pause(); } catch {}
-         setTimeout(() => { internalPlayRequest = Math.max(0, internalPlayRequest - 1); }, 150);
       }
     };
 
@@ -615,7 +622,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     audio.addEventListener('play', () => {
-      if (audioEventsSquelched() || restarting || internalPlayRequest > 0) return;
+      if (audioEventsSquelched() || restarting || isInternalGuardActive()) return;
       intendedPlaying = true;
       updateMediaSessionPlaybackState();
       if (!syncing && !seekingActive && video.paused()) {
@@ -624,7 +631,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     audio.addEventListener('pause', () => {
-      if (audioEventsSquelched() || restarting || internalPlayRequest > 0) return;
+      if (audioEventsSquelched() || restarting || isInternalGuardActive()) return;
       pauseTogether();
     });
 
@@ -635,7 +642,7 @@ document.addEventListener("DOMContentLoaded", () => {
     video.on('ratechange', () => { try { audio.playbackRate = video.playbackRate(); } catch {} });
 
     video.on('play', () => {
-      if (restarting || internalPlayRequest > 0) return; 
+      if (restarting || isInternalGuardActive()) return; 
       intendedPlaying = true;
       updateMediaSessionPlaybackState();
       ensureUnmutedIfNotUserMuted();
@@ -645,12 +652,11 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     video.on('pause', () => {
-      if (restarting || internalPlayRequest > 0) return;
+      if (restarting || isInternalGuardActive()) return;
       // Guard against Chromium tab background-throttle ghost events
       if (performance.now() < pauseGuard && intendedPlaying) {
-          internalPlayRequest++;
+          setInternalGuard(150);
           video.play().catch(()=>{});
-          setTimeout(() => { internalPlayRequest = Math.max(0, internalPlayRequest - 1); }, 150);
           return;
       }
       pauseTogether(); 
@@ -760,6 +766,7 @@ document.addEventListener("DOMContentLoaded", () => {
           pauseGuard = performance.now() + 800; 
           
           if (intendedPlaying) {
+            syncing = false; // Immediately clear lock to prevent deadlocks from Firefox background throttling
             if (!syncInterval) startSyncLoop();
             
             const vt = Number(video.currentTime());
@@ -796,6 +803,7 @@ document.addEventListener("DOMContentLoaded", () => {
     setupMediaSession();
   }
 });
+
 document.addEventListener('keydown', function(event) {
     // Ignore key presses if typing in an input or textarea
     if (event.target.tagName.toLowerCase() === 'input' || event.target.tagName.toLowerCase() === 'textarea') {
