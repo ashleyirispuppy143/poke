@@ -66,6 +66,17 @@ document.addEventListener("DOMContentLoaded", () => {
     return true;
   }
 
+  function isAndroidChromium() {
+    try {
+      const ua = navigator.userAgent || "";
+      const isAndroid = /Android/i.test(ua);
+      const isChromium = /Chrome|Chromium|CriOS/i.test(ua) && !/EdgA|Firefox|FxiOS|SamsungBrowser/i.test(ua);
+      return isAndroid && isChromium;
+    } catch {
+      return false;
+    }
+  }
+
   // ——————————————————————— TitleBar on fullscreen ——————————————————————
   video.ready(() => {
     const metaTitle = document.querySelector('meta[name="title"]')?.content || "";
@@ -119,6 +130,25 @@ document.addEventListener("DOMContentLoaded", () => {
   let isProgrammaticPause = false;
   let isProgrammaticPlay = false;
 
+  let androidMediaSessionResumeGuardUntil = 0;
+  let androidResumeRepairTimer = null;
+
+  function setAndroidResumeGuard(ms = 1400) {
+    if (!isAndroidChromium()) return;
+    androidMediaSessionResumeGuardUntil = performance.now() + ms;
+  }
+
+  function androidResumeGuardActive() {
+    return isAndroidChromium() && performance.now() < androidMediaSessionResumeGuardUntil;
+  }
+
+  function clearAndroidResumeRepairTimer() {
+    if (androidResumeRepairTimer) {
+      clearTimeout(androidResumeRepairTimer);
+      androidResumeRepairTimer = null;
+    }
+  }
+
   function execProgrammaticVideoPause() {
     isProgrammaticPause = true;
     try { video.pause(); } catch {}
@@ -133,11 +163,18 @@ document.addEventListener("DOMContentLoaded", () => {
     isProgrammaticPlay = true;
     try {
       let p = null;
-      try { p = video.play(); } catch {}
-      if (!p) {
+
+      // Prefer waking the real tech element first
+      try {
         const v = getPlayableVideoEl();
         if (v) p = v.play();
-      }
+      } catch {}
+
+      // Also poke Video.js player layer
+      try {
+        const p2 = video.play();
+        if (!p && p2) p = p2;
+      } catch {}
 
       if (p && p.finally) {
         p.finally(() => { setTimeout(() => { isProgrammaticPlay = false; }, 120); });
@@ -350,10 +387,13 @@ document.addEventListener("DOMContentLoaded", () => {
             safeSetCT(audio, vt);
           }
         } else if (!vPaused && aPaused) {
-          squelchAudioEvents();
-          audio.play().catch(()=>{});
-          updateAudioGainImmediate();
-          if (Math.abs(at - vt) > 0.8) safeSetCT(audio, vt);
+          // Android media-key resume guard: never let audio restart alone while the video tech is still paused
+          if (!androidResumeGuardActive() || !isVideoPaused()) {
+            squelchAudioEvents();
+            audio.play().catch(()=>{});
+            updateAudioGainImmediate();
+            if (Math.abs(at - vt) > 0.8) safeSetCT(audio, vt);
+          }
         } else if (vPaused && !aPaused) {
           if (!isHidden) {
             squelchAudioEvents();
@@ -478,10 +518,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (audio.paused) {
         try {
-          squelchAudioEvents();
-          const pa = audio.play();
-          if (pa && pa.then) await pa;
-          aOk = !audio.paused;
+          // Never start audio alone during Android media-key resume guard if video still paused
+          if (androidResumeGuardActive() && isVideoPaused()) {
+            aOk = false;
+          } else {
+            squelchAudioEvents();
+            const pa = audio.play();
+            if (pa && pa.then) await pa;
+            aOk = !audio.paused;
+          }
         } catch (err) {
           if (err.name === 'AbortError') aOk = true;
           else aOk = false;
@@ -542,6 +587,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function pauseHard() {
+    clearAndroidResumeRepairTimer();
     execProgrammaticVideoPause();
     try {
       squelchAudioEvents();
@@ -583,37 +629,99 @@ document.addEventListener("DOMContentLoaded", () => {
       navigator.mediaSession.setActionHandler('play', () => {
         intendedPlaying = true;
         updateMediaSessionPlaybackState();
+        clearAndroidResumeRepairTimer();
+        setAndroidResumeGuard(1800);
 
-        // Force the actual Video.js tech video to resume first (not just audio)
+        // CRITICAL ANDROID FIX:
+        // Do all resume calls synchronously in the media-session callback tick.
+        // Wake raw Video.js tech video first, then player layer, then audio.
         isProgrammaticPlay = true;
 
-        let p1 = null;
-        let p2 = null;
+        let techPlay = null;
+        let playerPlay = null;
+        let audioPlay = null;
 
-        try { p1 = video.play(); } catch {}
         try {
           const v = getPlayableVideoEl();
-          if (v && v.paused) p2 = v.play();
+          if (v && v.paused) techPlay = v.play();
         } catch {}
 
-        Promise.allSettled([p1, p2]).finally(async () => {
+        try {
+          playerPlay = video.play();
+        } catch {}
+
+        try {
+          if (audio.paused) {
+            squelchAudioEvents(700);
+            audioPlay = audio.play();
+          }
+        } catch {}
+
+        Promise.allSettled([techPlay, playerPlay, audioPlay]).finally(() => {
           setTimeout(() => { isProgrammaticPlay = false; }, 120);
 
-          if (!intendedPlaying) return;
+          // Reconcile in next task/frame (not in the activation path)
+          setTimeout(async () => {
+            if (!intendedPlaying) return;
 
-          await ensureUnmutedIfNotUserMuted().catch(() => {});
-          await playTogether({ allowMutedRetry: false }).catch(() => {});
+            await ensureUnmutedIfNotUserMuted().catch(() => {});
+            await playTogether({ allowMutedRetry: false }).catch(() => {});
 
-          // Final guard: if video is still paused, kill audio-only playback
-          if (intendedPlaying && isVideoPaused() && !audio.paused) {
-            squelchAudioEvents();
-            audio.pause();
-            safeSetCT(audio, Number(video.currentTime()) || 0);
-          }
+            // Android Chromium retry: if video still failed to resume, try once more and prevent audio-only loop.
+            if (isAndroidChromium()) {
+              clearAndroidResumeRepairTimer();
+              androidResumeRepairTimer = setTimeout(async () => {
+                if (!intendedPlaying) return;
+
+                if (isVideoPaused()) {
+                  try {
+                    squelchAudioEvents(700);
+                    audio.pause();
+                  } catch {}
+                  try {
+                    const v = getPlayableVideoEl();
+                    if (v && v.paused) await Promise.resolve(v.play());
+                  } catch {}
+                  try { await Promise.resolve(video.play()); } catch {}
+                  await playTogether({ allowMutedRetry: false }).catch(() => {});
+                }
+
+                // Final hard guard: never allow audio-only loop after media key play
+                if (intendedPlaying && isVideoPaused() && !audio.paused) {
+                  squelchAudioEvents(700);
+                  audio.pause();
+                  safeSetCT(audio, Number(video.currentTime()) || 0);
+                }
+              }, 250);
+            } else {
+              // Desktop final guard (safe/no-op unless something weird happens)
+              if (intendedPlaying && isVideoPaused() && !audio.paused) {
+                squelchAudioEvents(700);
+                audio.pause();
+                safeSetCT(audio, Number(video.currentTime()) || 0);
+              }
+            }
+          }, 0);
         });
       });
 
       navigator.mediaSession.setActionHandler('pause', () => {
+        clearAndroidResumeRepairTimer();
+        intendedPlaying = false;
+        updateMediaSessionPlaybackState();
+
+        isProgrammaticPause = true;
+        try { video.pause(); } catch {}
+        try {
+          const v = getPlayableVideoEl();
+          if (v && !v.paused) v.pause();
+        } catch {}
+        try {
+          squelchAudioEvents(700);
+          audio.pause();
+        } catch {}
+        setTimeout(() => { isProgrammaticPause = false; }, 120);
+
         pauseTogether();
       });
 
@@ -912,6 +1020,7 @@ document.addEventListener("DOMContentLoaded", () => {
     setupMediaSession();
   }
 });
+
 document.addEventListener('keydown', function(event) {
     // Ignore key presses if typing in an input or textarea
     if (event.target.tagName.toLowerCase() === 'input' || event.target.tagName.toLowerCase() === 'textarea') {
