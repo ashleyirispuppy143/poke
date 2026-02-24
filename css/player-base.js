@@ -85,7 +85,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let intendedPlaying = false;
   let pauseGuard = 0; 
 
-  // Absolute Time-Based Event Guard (Replaces the leaky integer counter)
+  // Absolute Time-Based Event Guard
   let internalEventGuardUntil = 0;
   function setInternalGuard(ms = 150) {
       internalEventGuardUntil = performance.now() + ms;
@@ -163,7 +163,6 @@ document.addEventListener("DOMContentLoaded", () => {
     target = clamp01(target);
     const from = clamp01(audio.volume);
     
-    // Fix: Insta-resolve if the tab is hidden to prevent requestAnimationFrame background deadlocks on Firefox.
     if (!isFinite(from) || ms <= 0 || Math.abs(target - from) < 0.001 || document.visibilityState === 'hidden') { 
       setImmediateVolume(target); 
       return Promise.resolve(); 
@@ -282,15 +281,35 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!isFinite(vt) || !isFinite(at)) return;
 
       if (intendedPlaying && !restarting && !seekingActive && !syncing) {
-        if (videoEl.paused || audio.paused) {
-          if (!isInternalGuardActive() && !video.hasClass('vjs-waiting')) {
+        
+        if (!videoEl.paused && audio.paused) {
+          // Video is playing, audio is paused. Critical desync! Force play.
+          if (!isInternalGuardActive()) playTogether({ allowMutedRetry: true });
+        } 
+        else if (videoEl.paused && audio.paused) {
+          // Both are paused. Attempt to play ONLY if video has buffered enough.
+          if (!isInternalGuardActive() && videoEl.readyState >= 3) {
             playTogether({ allowMutedRetry: true });
           }
-        } else {
+        } 
+        else if (videoEl.paused && !audio.paused) {
+           // Audio is playing but video is buffering/paused.
+           if (!isInternalGuardActive()) {
+              if (videoEl.readyState >= 3) {
+                 playTogether({ allowMutedRetry: true });
+              } else {
+                 squelchAudioEvents();
+                 audio.pause(); 
+              }
+           }
+        } 
+        else if (!videoEl.paused && !audio.paused) {
+          // Normal playback state. Align offsets if needed.
           if (Math.abs(at - vt) > 0.3) {
             safeSetCT(audio, vt); 
           }
         }
+
       } else if (!intendedPlaying && !restarting && !seekingActive && !syncing) {
         if (!videoEl.paused) {
             setInternalGuard(150); 
@@ -421,7 +440,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
 
-      // Hardline fail-safe: Make sure audio always plays if video is playing.
+      // Hardline fail-safe: Force audio execution again if it was somehow bypassed
       if (!aOk && vOk && intendedPlaying) {
          try {
             safeSetCT(audio, Number(video.currentTime()));
@@ -463,6 +482,12 @@ document.addEventListener("DOMContentLoaded", () => {
       // Post-Op State Check prevents race-conditions and ping-ponging
       if (!intendedPlaying && !videoEl.paused) {
          pauseHard();
+      }
+      // Absolute guarantee: Never let the video play silently if the audio completely rejected the play request
+      if (intendedPlaying && !videoEl.paused && audio.paused) {
+         intendedPlaying = false;
+         pauseHard();
+         updateMediaSessionPlaybackState();
       }
     }
   }
@@ -559,7 +584,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!intendedPlaying || restarting || seekingActive) return;
       const t = Number(video.currentTime());
       if (bothPlayableAt(t)) {
-        await ensureUnmutedIfNotUserMuted();
+        ensureUnmutedIfNotUserMuted();
         playTogether({ allowMutedRetry: true });
       }
     };
@@ -701,11 +726,12 @@ document.addEventListener("DOMContentLoaded", () => {
       seekingActive = false;
       firstSeekDone = true;
 
-      await ensureUnmutedIfNotUserMuted();
-
+      // Notice: Removed 'await' here to prevent 80ms race-condition blocks where playTogether was delayed.
       if (intendedPlaying) {
+          ensureUnmutedIfNotUserMuted();
           playTogether({ allowMutedRetry: true });
       } else {
+          await ensureUnmutedIfNotUserMuted();
           squelchAudioEvents();
           audio.pause();
       }
@@ -752,7 +778,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!intendedPlaying) return;
       const t = Number(video.currentTime());
       if (bothPlayableAt(t)) {
-        await ensureUnmutedIfNotUserMuted();
+        ensureUnmutedIfNotUserMuted();
         playTogether({ allowMutedRetry: true });
       }
     };
