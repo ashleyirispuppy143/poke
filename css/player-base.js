@@ -91,18 +91,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const isMobileUA = /Mobi|Mobile|iPhone|iPad|iPod|Android/i.test(ua);
       const mobile = mobileHint || isMobileUA || isiOS || isAndroid;
 
-      return {
-        mobile: !!mobile,
-        ios: !!isiOS,
-        android: !!isAndroid
-      };
+      return { mobile: !!mobile, ios: !!isiOS, android: !!isAndroid };
     } catch {
       return { mobile: false, ios: false, android: false };
     }
-  }
-
-  function isMobileDevice() {
-    return getMobilePlatform().mobile;
   }
 
   function isAndroidChromium() {
@@ -110,7 +102,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const { android } = getMobilePlatform();
       if (!android) return false;
       const ua = navigator.userAgent || "";
-      const isChromium = /Chrome|Chromium/i.test(ua);
+      const isChromium = /Chrome|Chromium|CriOS/i.test(ua);
       const excluded = /EdgA|Firefox|FxiOS|SamsungBrowser|OPR|Opera/i.test(ua);
       return isChromium && !excluded;
     } catch {
@@ -194,8 +186,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let mediaPlayTxnUntil = 0;
   let mediaPauseTxnUntil = 0;
 
-  let reconcileTimer = null;
-  let reconcileQueued = false;
+  let bgResumeRetryTimer = null;
 
   function setAndroidResumeGuard(ms = 1800) {
     if (!isAndroidChromium()) return;
@@ -222,9 +213,9 @@ document.addEventListener("DOMContentLoaded", () => {
     return performance.now() < mediaActionLockUntil;
   }
 
-  function setMediaPlayTxn(ms = 2000) {
+  function setMediaPlayTxn(ms = 1600) {
     mediaPlayTxnUntil = Math.max(mediaPlayTxnUntil, performance.now() + ms);
-    setMediaActionLock(Math.min(ms, 1400));
+    setMediaActionLock(Math.min(ms, 1200));
   }
 
   function mediaPlayTxnActive() {
@@ -233,7 +224,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function setMediaPauseTxn(ms = 1000) {
     mediaPauseTxnUntil = Math.max(mediaPauseTxnUntil, performance.now() + ms);
-    setMediaActionLock(Math.min(ms, 1000));
+    setMediaActionLock(Math.min(ms, 900));
   }
 
   function mediaPauseTxnActive() {
@@ -247,27 +238,18 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  function clearReconcileTimer() {
-    if (reconcileTimer) {
-      clearTimeout(reconcileTimer);
-      reconcileTimer = null;
+  function clearBgResumeRetryTimer() {
+    if (bgResumeRetryTimer) {
+      clearTimeout(bgResumeRetryTimer);
+      bgResumeRetryTimer = null;
     }
-    reconcileQueued = false;
   }
 
-  function queuePlaybackReconcile(delay = 0) {
-    if (reconcileQueued) return;
-    reconcileQueued = true;
-    reconcileTimer = setTimeout(async () => {
-      reconcileQueued = false;
-      reconcileTimer = null;
-      if (!intendedPlaying) return;
-      try {
-        await ensureUnmutedIfNotUserMuted();
-      } catch {}
-      try {
-        await playTogether();
-      } catch {}
+  function scheduleBgResumeRetry(delay = 450) {
+    clearBgResumeRetryTimer();
+    bgResumeRetryTimer = setTimeout(() => {
+      if (!intendedPlaying || restarting || seekingActive || syncing) return;
+      playTogether().catch(() => {});
     }, delay);
   }
 
@@ -278,7 +260,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const v = getPlayableVideoEl();
       if (v && !v.paused) v.pause();
     } catch {}
-    setTimeout(() => { isProgrammaticPause = false; }, 180);
+    setTimeout(() => { isProgrammaticPause = false; }, 160);
   }
 
   function execProgrammaticVideoPlay() {
@@ -295,9 +277,9 @@ document.addEventListener("DOMContentLoaded", () => {
       } catch {}
 
       if (p && p.finally) {
-        p.finally(() => { setTimeout(() => { isProgrammaticPlay = false; }, 180); });
+        p.finally(() => { setTimeout(() => { isProgrammaticPlay = false; }, 160); });
       } else {
-        setTimeout(() => { isProgrammaticPlay = false; }, 180);
+        setTimeout(() => { isProgrammaticPlay = false; }, 160);
       }
       return p;
     } catch (e) {
@@ -476,10 +458,9 @@ document.addEventListener("DOMContentLoaded", () => {
   async function kickVideo() {
     if (videoRepairing) return;
     if (performance.now() < videoRepairCooldownUntil) return;
-    if (document.visibilityState !== "visible") return;
 
     videoRepairing = true;
-    videoRepairCooldownUntil = performance.now() + 3500;
+    videoRepairCooldownUntil = performance.now() + 3000;
 
     try {
       const v = getPlayableVideoEl();
@@ -490,9 +471,7 @@ document.addEventListener("DOMContentLoaded", () => {
         audio.pause();
       } catch {}
 
-      try {
-        execProgrammaticVideoPause();
-      } catch {}
+      try { execProgrammaticVideoPause(); } catch {}
 
       const nudge = Math.max(0, t + 0.001);
       try {
@@ -500,7 +479,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (v && v !== videoEl) safeSetCT(v, nudge);
       } catch {}
 
-      await new Promise(r => setTimeout(r, 90));
+      await new Promise(r => setTimeout(r, 80));
 
       try { await Promise.resolve(execProgrammaticVideoPlay()); } catch {}
 
@@ -576,7 +555,11 @@ document.addEventListener("DOMContentLoaded", () => {
             safeSetCT(audio, vt);
           }
         } else if (!vPaused && aPaused) {
-          if (!(androidResumeGuardActive() && isVideoPaused())) {
+          const mustHoldAudio =
+            (androidResumeGuardActive() && isVideoPaused()) ||
+            (isHidden && isVideoPaused());
+
+          if (!mustHoldAudio) {
             squelchAudioEvents();
             audio.play().catch(() => {});
             updateAudioGainImmediate();
@@ -586,18 +569,12 @@ document.addEventListener("DOMContentLoaded", () => {
           squelchAudioEvents();
           audio.pause();
           if (Math.abs(at - vt) > 0.8) safeSetCT(audio, vt);
-
-          if (!isHidden && !videoRepairing && mobileProblem && !vWaiting) {
-            queuePlaybackReconcile(20);
-          }
         } else if (vPaused && aPaused) {
           if (!vWaiting) {
-            if (isHidden) {
-              if (mediaPlayTxnActive() || intendedPlaying) {
-                queuePlaybackReconcile(30);
-              }
-            } else if (!(mobileProblem && isHidden)) {
-              queuePlaybackReconcile(0);
+            if (!(mobileProblem && isHidden)) {
+              playTogether().catch(() => {});
+            } else {
+              scheduleBgResumeRetry(550);
             }
           }
         } else {
@@ -640,7 +617,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (intendedPlaying && !vPaused) {
         if (Math.abs(vt - lastVT) < 0.001) {
-          const shouldRepair = now - lastVTts > 2400 && !videoRepairing && !vWaiting && getVideoReadyState() >= 2;
+          const shouldRepair = now - lastVTts > 2200 && !videoRepairing && !vWaiting && getVideoReadyState() >= 2;
           if (shouldRepair && isProblemMobileBrowser() && document.visibilityState === "visible") {
             kickVideo().catch(() => {});
             lastVTts = now;
@@ -727,7 +704,7 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
           const shouldHoldAudio =
             (androidResumeGuardActive() && isVideoPaused()) ||
-            (mobileProblem && isHidden && isVideoPaused());
+            (isHidden && isVideoPaused());
 
           if (shouldHoldAudio) {
             aOk = false;
@@ -757,15 +734,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (!vOk && !aOk) {
         if (!isHidden || !mobileProblem) {
-          intendedPlaying = false;
-          pauseHard();
-          updateMediaSessionPlaybackState();
-          return;
+          if (isHidden) {
+            scheduleBgResumeRetry(500);
+          } else {
+            intendedPlaying = false;
+            pauseHard();
+            updateMediaSessionPlaybackState();
+            return;
+          }
         }
       } else if (!vOk && aOk) {
         squelchAudioEvents();
         audio.pause();
         aOk = false;
+        if (isHidden) scheduleBgResumeRetry(500);
       }
 
       updateAudioGainImmediate();
@@ -792,7 +774,9 @@ document.addEventListener("DOMContentLoaded", () => {
       } else if (intendedPlaying && isVideoPaused() && !audio.paused) {
         squelchAudioEvents();
         audio.pause();
-        if (!isHidden && isProblemMobileBrowser() && !videoRepairing) {
+        if (isHidden) {
+          scheduleBgResumeRetry(500);
+        } else if (isProblemMobileBrowser() && !videoRepairing) {
           kickVideo().catch(() => {});
         }
       }
@@ -801,7 +785,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function pauseHard() {
     clearAndroidResumeRepairTimer();
-    clearReconcileTimer();
+    clearBgResumeRetryTimer();
     execProgrammaticVideoPause();
     try {
       squelchAudioEvents(700);
@@ -843,11 +827,11 @@ document.addEventListener("DOMContentLoaded", () => {
         updateMediaSessionPlaybackState();
 
         clearAndroidResumeRepairTimer();
-        clearReconcileTimer();
+        clearBgResumeRetryTimer();
 
         setAndroidResumeGuard(1800);
-        setPauseEventGuard(1800);
-        setMediaPlayTxn(2400);
+        setPauseEventGuard(1600);
+        setMediaPlayTxn(1800);
 
         isProgrammaticPlay = true;
 
@@ -864,58 +848,59 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch {}
 
         Promise.allSettled([techPlay, playerPlay]).finally(() => {
-          setTimeout(() => { isProgrammaticPlay = false; }, 180);
+          setTimeout(() => { isProgrammaticPlay = false; }, 160);
 
-          queuePlaybackReconcile(0);
+          setTimeout(async () => {
+            if (!intendedPlaying) return;
 
-          if (isAndroidChromium()) {
-            clearAndroidResumeRepairTimer();
-            androidResumeRepairTimer = setTimeout(async () => {
-              if (!intendedPlaying) return;
+            await ensureUnmutedIfNotUserMuted().catch(() => {});
+            await playTogether().catch(() => {});
 
-              if (isVideoPaused()) {
-                try {
+            if (isAndroidChromium()) {
+              clearAndroidResumeRepairTimer();
+              androidResumeRepairTimer = setTimeout(async () => {
+                if (!intendedPlaying) return;
+
+                if (isVideoPaused()) {
+                  try {
+                    squelchAudioEvents(700);
+                    audio.pause();
+                  } catch {}
+
+                  try {
+                    const v = getPlayableVideoEl();
+                    if (v && v.paused) await Promise.resolve(v.play());
+                  } catch {}
+
+                  try { await Promise.resolve(video.play()); } catch {}
+
+                  await playTogether().catch(() => {});
+                }
+
+                if (intendedPlaying && isVideoPaused() && !audio.paused) {
                   squelchAudioEvents(700);
                   audio.pause();
-                } catch {}
-
-                try {
-                  const v = getPlayableVideoEl();
-                  if (v && v.paused) await Promise.resolve(v.play());
-                } catch {}
-
-                try { await Promise.resolve(video.play()); } catch {}
-
-                queuePlaybackReconcile(10);
-              }
-
+                  safeSetCT(audio, Number(video.currentTime()) || 0);
+                }
+              }, 320);
+            } else {
               if (intendedPlaying && isVideoPaused() && !audio.paused) {
                 squelchAudioEvents(700);
                 audio.pause();
                 safeSetCT(audio, Number(video.currentTime()) || 0);
+                scheduleBgResumeRetry(450);
               }
-            }, 320);
-          } else {
-            setTimeout(() => {
-              if (intendedPlaying && isVideoPaused() && !audio.paused) {
-                squelchAudioEvents(700);
-                audio.pause();
-                safeSetCT(audio, Number(video.currentTime()) || 0);
-              }
-              if (intendedPlaying && (isVideoPaused() || audio.paused)) {
-                queuePlaybackReconcile(20);
-              }
-            }, 220);
-          }
+            }
+          }, 0);
         });
       });
 
       navigator.mediaSession.setActionHandler("pause", () => {
         clearAndroidResumeRepairTimer();
-        clearReconcileTimer();
+        clearBgResumeRetryTimer();
 
-        setPauseEventGuard(1200);
-        setMediaPauseTxn(1200);
+        setPauseEventGuard(1000);
+        setMediaPauseTxn(1000);
 
         intendedPlaying = false;
         updateMediaSessionPlaybackState();
@@ -932,7 +917,7 @@ document.addEventListener("DOMContentLoaded", () => {
           audio.pause();
         } catch {}
 
-        setTimeout(() => { isProgrammaticPause = false; }, 180);
+        setTimeout(() => { isProgrammaticPause = false; }, 160);
 
         pauseTogether();
       });
@@ -979,12 +964,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (bothPlayableAt(t)) {
         await ensureUnmutedIfNotUserMuted();
         if (!(isProblemMobileBrowser() && document.visibilityState === "hidden")) {
-          queuePlaybackReconcile(0);
-        } else if (document.visibilityState === "hidden" && !isVideoPaused()) {
-          try {
-            squelchAudioEvents();
-            audio.play().catch(() => {});
-          } catch {}
+          playTogether().catch(() => {});
+        } else {
+          scheduleBgResumeRetry(550);
         }
       }
     };
@@ -1057,26 +1039,19 @@ document.addEventListener("DOMContentLoaded", () => {
       if (audioEventsSquelched() || restarting || isProgrammaticPlay) return;
       intendedPlaying = true;
       updateMediaSessionPlaybackState();
-      if (!syncing && !seekingActive && isVideoPaused()) queuePlaybackReconcile(0);
+      if (!syncing && !seekingActive && isVideoPaused()) playTogether().catch(() => {});
     });
 
     audio.addEventListener("pause", () => {
       if (audioEventsSquelched() || restarting || isProgrammaticPause) return;
+      if (mediaActionLocked() || mediaPlayTxnActive() || mediaPauseTxnActive()) return;
 
-      if (mediaActionLocked() || mediaPlayTxnActive() || mediaPauseTxnActive()) {
-        if (intendedPlaying && mediaPlayTxnActive()) {
-          queuePlaybackReconcile(40);
-        }
+      if (document.visibilityState === "hidden" && intendedPlaying) {
+        scheduleBgResumeRetry(500);
         return;
       }
 
       if (shouldIgnorePauseEvents() && androidResumeGuardActive()) return;
-
-      if (document.visibilityState === "hidden" && intendedPlaying) {
-        queuePlaybackReconcile(50);
-        return;
-      }
-
       pauseTogether();
     });
 
@@ -1093,16 +1068,15 @@ document.addEventListener("DOMContentLoaded", () => {
       intendedPlaying = true;
       updateMediaSessionPlaybackState();
       ensureUnmutedIfNotUserMuted();
-      if (!syncing && !seekingActive) queuePlaybackReconcile(0);
+      if (!syncing && !seekingActive) playTogether().catch(() => {});
     });
 
     video.on("pause", () => {
       if (restarting || isProgrammaticPause) return;
+      if (mediaActionLocked() || mediaPlayTxnActive() || mediaPauseTxnActive()) return;
 
-      if (mediaActionLocked() || mediaPlayTxnActive() || mediaPauseTxnActive()) {
-        if (intendedPlaying && mediaPlayTxnActive()) {
-          queuePlaybackReconcile(40);
-        }
+      if (document.visibilityState === "hidden" && intendedPlaying) {
+        scheduleBgResumeRetry(500);
         return;
       }
 
@@ -1110,11 +1084,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (performance.now() < pauseGuard && intendedPlaying) {
         execProgrammaticVideoPlay();
-        return;
-      }
-
-      if (document.visibilityState === "hidden" && intendedPlaying) {
-        queuePlaybackReconcile(50);
         return;
       }
 
@@ -1131,7 +1100,7 @@ document.addEventListener("DOMContentLoaded", () => {
     video.on("playing", () => {
       if (video.hasClass("vjs-waiting")) video.removeClass("vjs-waiting");
       if (intendedPlaying && !restarting && audio.paused && !seekingActive && !syncing) {
-        queuePlaybackReconcile(0);
+        playTogether().catch(() => {});
       }
     });
 
@@ -1164,11 +1133,11 @@ document.addEventListener("DOMContentLoaded", () => {
       await ensureUnmutedIfNotUserMuted();
 
       if (intendedPlaying) {
-        if (audio.paused && !(androidResumeGuardActive() && isVideoPaused())) {
+        if (audio.paused && !(androidResumeGuardActive() && isVideoPaused()) && !(document.visibilityState === "hidden" && isVideoPaused())) {
           squelchAudioEvents();
           audio.play().catch(() => {});
         }
-        queuePlaybackReconcile(0);
+        playTogether().catch(() => {});
       } else {
         squelchAudioEvents();
         audio.pause();
@@ -1222,12 +1191,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (bothPlayableAt(t)) {
         await ensureUnmutedIfNotUserMuted();
         if (!(isProblemMobileBrowser() && document.visibilityState === "hidden")) {
-          queuePlaybackReconcile(0);
-        } else if (!isVideoPaused()) {
-          try {
-            squelchAudioEvents();
-            audio.play().catch(() => {});
-          } catch {}
+          playTogether().catch(() => {});
+        } else {
+          scheduleBgResumeRetry(550);
         }
       }
     };
@@ -1241,6 +1207,7 @@ document.addEventListener("DOMContentLoaded", () => {
           pauseGuard = performance.now() + 800;
           setPauseEventGuard(900);
           setMediaActionLock(500);
+          clearBgResumeRetryTimer();
 
           if (intendedPlaying) {
             syncing = false;
@@ -1261,7 +1228,7 @@ document.addEventListener("DOMContentLoaded", () => {
             updateAudioGainImmediate();
 
             if (isVideoPaused() || audio.paused) {
-              queuePlaybackReconcile(0);
+              playTogether().catch(() => {});
             }
 
             if (isProblemMobileBrowser() && getVideoReadyState() < 2) {
@@ -1269,16 +1236,14 @@ document.addEventListener("DOMContentLoaded", () => {
             }
           }
         } else {
-          setMediaActionLock(450);
-
-          if (intendedPlaying) {
-            if (!syncInterval) startSyncLoop();
-            queuePlaybackReconcile(60);
-          }
+          setMediaActionLock(350);
+          if (intendedPlaying) scheduleBgResumeRetry(700);
         }
       }, { passive: true });
 
-      window.addEventListener("beforeunload", () => {});
+      window.addEventListener("beforeunload", () => {
+        clearBgResumeRetryTimer();
+      });
     } catch {}
   } else {
     try {
