@@ -514,7 +514,6 @@ document.addEventListener("DOMContentLoaded", () => {
       const aBuffering = audio.readyState < 3;
       
       if (vBuffering || aBuffering) {
-        showError(vBuffering ? "Video buffering…" : "Audio buffering…");
         if (!audio.paused) {
            squelchAudioEvents();
            audio.pause();
@@ -644,8 +643,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (intendedPlaying && !restarting) {
         squelchAudioEvents();
         audio.pause();
-        showError("Video buffering…");
-      }
+       }
     });
 
     video.on('playing', () => {
@@ -692,7 +690,7 @@ document.addEventListener("DOMContentLoaded", () => {
           if (bothPlayableAt()) {
               playTogether({ allowMutedRetry: true });
           } else {
-              showError(videoEl.readyState < 3 ? "Video buffering…" : "Audio buffering…");
+ 
           }
       } else {
           pauseTogether();
