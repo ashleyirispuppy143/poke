@@ -285,7 +285,7 @@ document.addEventListener("DOMContentLoaded", () => {
           if (video.hasClass('vjs-waiting')) video.removeClass('vjs-waiting');
 
           if (vPaused || aPaused) {
-            if (internalPlayRequest === 0) { //fix: Removed vPlayable and aPlayable strict requirement here. Forcing play attempts even if browser hasn't fired canplay yet ensures audio auto-starts without needing a manual seek.
+            if (internalPlayRequest === 0) { 
               playTogether({ allowMutedRetry: true });
             }
           } else {
@@ -415,18 +415,20 @@ document.addEventListener("DOMContentLoaded", () => {
           squelchAudioEvents();
           const pa = audio.play();
           if (pa && pa.then) await pa;
+          aOk = true; //fix: explicitly set aOk to true if play succeeds without catch
         } catch (err) {
           aOk = false;
           // Handle Chromium Autoplay Block 
-          if (allowMutedRetry && (err.name === 'NotAllowedError' || err.message.toLowerCase().includes('play') || err.message.includes('interact'))) { //fix: Broadened autoplay block error string detection to guarantee a 200% catch rate for Chromium policies.
+          if (allowMutedRetry && (err.name === 'NotAllowedError' || err.message.toLowerCase().includes('play') || err.message.includes('interact'))) { 
             audio.muted = true;
             try {
+              if (typeof video.muted === 'function') video.muted(true); //fix: Sync UI to muted so user knows autoplay policy required a mute, ensuring 200% proper Chromium playback flow
+              videoEl.muted = true; //fix: forcefully mute the main video element to align states
               const paRetry = audio.play();
               if (paRetry && paRetry.then) await paRetry;
               aOk = true; 
             } catch (retryErr) {
-               pauseHard();
-               intendedPlaying = false; 
+               aOk = false;
             }
           }
         }
@@ -434,9 +436,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (cancelled()) { updateMediaSessionPlaybackState(); return; }
 
-      if (!vOk && !aOk) {
+      if (!vOk || !aOk) { //fix: Changed `!vOk && !aOk` to `!vOk || !aOk`. STRICT SYNC: If EITHER audio or video fails to play (e.g. autoplay completely blocked), both MUST be forcefully paused. No video-only or audio-only playback.
         intendedPlaying = false;
         updateMediaSessionPlaybackState();
+        pauseHard(); //fix: enforce hard pause so the player doesn't get stuck with just the video running without audio
         return;
       }
 
@@ -643,7 +646,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     video.on('pause', () => {
       if (restarting || internalPlayRequest > 0) return;
-      pauseTogether(); //fix: Removed `if (document.visibilityState === 'visible')` condition. This ensures background pauses (e.g., via media keys in another tab) properly update intendedPlaying to false, preventing the "play-pause fight" when returning to the tab.
+      pauseTogether(); 
     });
 
     video.on('waiting', () => {
@@ -680,13 +683,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     video.on('seeked', async () => {
       if (restarting) return;
-      const newTime = Number(video.currentTime());
+      seekingActive = false; //fix: immediately release the seeking lock before any async awaits so the sync loop isn't deadlocked if an await hangs
       
+      const newTime = Number(video.currentTime());
       safeSetCT(audio, newTime);
 
-      if (!firstSeekDone) { firstSeekDone = true; seekingActive = false; return; }
+      if (!firstSeekDone) { firstSeekDone = true; return; }
 
       await ensureUnmutedIfNotUserMuted();
+      updateAudioGainImmediate(); //fix: forcefully push the volume up immediately after a seek to prevent "silent playing" edge cases where volume stays at 0
 
       if (intendedPlaying || wasPlayingBeforeSeek) {
           intendedPlaying = true;
@@ -696,7 +701,6 @@ document.addEventListener("DOMContentLoaded", () => {
           squelchAudioEvents();
           audio.pause();
       }
-      seekingActive = false;
     });
 
     wireResilience(videoEl, 'Video');
@@ -762,8 +766,8 @@ document.addEventListener("DOMContentLoaded", () => {
           
           if (videoEl.paused || audio.paused) {
              internalPlayRequest++;
-             playTogether({ allowMutedRetry: true }).catch(()=>{}); //fix: Added catch block to prevent unhandled promise rejections on background resume.
-             setTimeout(() => { internalPlayRequest = Math.max(0, internalPlayRequest - 1); }, 150); //fix: Moved reset outside finally block to prevent promise timing issues causing rapid play/pause looping on tab switch.
+             playTogether({ allowMutedRetry: true }).catch(()=>{}); 
+             setTimeout(() => { internalPlayRequest = Math.max(0, internalPlayRequest - 1); }, 150); 
           }
         }
       }, { passive: true });
