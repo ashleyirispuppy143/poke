@@ -267,7 +267,6 @@ document.addEventListener("DOMContentLoaded", () => {
             try { video.pause(); } catch {}
             setTimeout(() => { internalPlayRequest = Math.max(0, internalPlayRequest - 1); }, 50);
           }
-          showError(vBuffering ? "Video buffering…" : "Audio buffering…");
           if (vBuffering && !video.hasClass('vjs-waiting')) {
             video.addClass('vjs-waiting');
           }
