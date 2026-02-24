@@ -285,7 +285,7 @@ document.addEventListener("DOMContentLoaded", () => {
           if (video.hasClass('vjs-waiting')) video.removeClass('vjs-waiting');
 
           if (vPaused || aPaused) {
-            if (internalPlayRequest === 0) { 
+            if (internalPlayRequest === 0) {
               playTogether({ allowMutedRetry: true });
             }
           } else {
@@ -338,7 +338,11 @@ document.addEventListener("DOMContentLoaded", () => {
         lastATts = now;
       }
 
-      if (intendedPlaying && !audio.paused && !audio.muted && !userMutedVideo && !userMutedAudio) {
+      // Auto-unmute Chromium recovery
+      if (intendedPlaying && !audio.paused && !userMutedVideo && !userMutedAudio) {
+        if (audio.muted) {
+           try { audio.muted = false; } catch {}
+        }
         if (audio.volume <= 0.001 && (performance.now() - suppressMirrorUntil) > 400) {
           softUnmuteAudio(140);
         }
@@ -415,15 +419,12 @@ document.addEventListener("DOMContentLoaded", () => {
           squelchAudioEvents();
           const pa = audio.play();
           if (pa && pa.then) await pa;
-          aOk = true; //fix: explicitly set aOk to true if play succeeds without catch
         } catch (err) {
           aOk = false;
           // Handle Chromium Autoplay Block 
           if (allowMutedRetry && (err.name === 'NotAllowedError' || err.message.toLowerCase().includes('play') || err.message.includes('interact'))) { 
             audio.muted = true;
             try {
-              if (typeof video.muted === 'function') video.muted(true); //fix: Sync UI to muted so user knows autoplay policy required a mute, ensuring 200% proper Chromium playback flow
-              videoEl.muted = true; //fix: forcefully mute the main video element to align states
               const paRetry = audio.play();
               if (paRetry && paRetry.then) await paRetry;
               aOk = true; 
@@ -436,10 +437,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (cancelled()) { updateMediaSessionPlaybackState(); return; }
 
-      if (!vOk || !aOk) { //fix: Changed `!vOk && !aOk` to `!vOk || !aOk`. STRICT SYNC: If EITHER audio or video fails to play (e.g. autoplay completely blocked), both MUST be forcefully paused. No video-only or audio-only playback.
+      // Crucial: Make sure audio always plays if video is playing.
+      if (!aOk && vOk) {
+        intendedPlaying = false;
+        pauseHard();
+        updateMediaSessionPlaybackState();
+        return;
+      }
+
+      if (!vOk && !aOk) {
         intendedPlaying = false;
         updateMediaSessionPlaybackState();
-        pauseHard(); //fix: enforce hard pause so the player doesn't get stuck with just the video running without audio
         return;
       }
 
@@ -637,7 +645,7 @@ document.addEventListener("DOMContentLoaded", () => {
     video.on('ratechange', () => { try { audio.playbackRate = video.playbackRate(); } catch {} });
 
     video.on('play', () => {
-      if (internalPlayRequest > 0 || restarting) return; 
+      if (restarting || internalPlayRequest > 0 || syncing) return; 
       intendedPlaying = true;
       updateMediaSessionPlaybackState();
       ensureUnmutedIfNotUserMuted();
@@ -645,7 +653,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     video.on('pause', () => {
-      if (restarting || internalPlayRequest > 0) return;
+      if (restarting || internalPlayRequest > 0 || syncing) return;
       pauseTogether(); 
     });
 
@@ -683,15 +691,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     video.on('seeked', async () => {
       if (restarting) return;
-      seekingActive = false; //fix: immediately release the seeking lock before any async awaits so the sync loop isn't deadlocked if an await hangs
-      
       const newTime = Number(video.currentTime());
+      
       safeSetCT(audio, newTime);
 
-      if (!firstSeekDone) { firstSeekDone = true; return; }
+      seekingActive = false;
+      firstSeekDone = true;
 
       await ensureUnmutedIfNotUserMuted();
-      updateAudioGainImmediate(); //fix: forcefully push the volume up immediately after a seek to prevent "silent playing" edge cases where volume stays at 0
 
       if (intendedPlaying || wasPlayingBeforeSeek) {
           intendedPlaying = true;
@@ -765,9 +772,7 @@ document.addEventListener("DOMContentLoaded", () => {
           updateAudioGainImmediate();
           
           if (videoEl.paused || audio.paused) {
-             internalPlayRequest++;
              playTogether({ allowMutedRetry: true }).catch(()=>{}); 
-             setTimeout(() => { internalPlayRequest = Math.max(0, internalPlayRequest - 1); }, 150); 
           }
         }
       }, { passive: true });
