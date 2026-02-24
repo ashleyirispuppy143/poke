@@ -194,9 +194,14 @@ document.addEventListener("DOMContentLoaded", () => {
       const rs = Number(media.readyState || 0);
       if (!isFinite(t)) return false;
       if (rs >= 3) return true;
-      if (t < 0.5 && rs >= 2) return true; 
-      return false;
-    } catch { return false; }
+      if (rs === 2 && t < 0.5) return true;
+      const br = media.buffered;
+      if (!br || br.length === 0) return false;
+      for (let i = 0; i < br.length; i++) {
+        if (t >= br.start(i) - 0.5 && t <= br.end(i) + 0.5) return true;
+      }
+    } catch {}
+    return false;
   }
   
   function bothPlayableAt(t) { return canPlayAt(videoEl, t) && canPlayAt(audio, t); }
@@ -254,28 +259,28 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!isFinite(vt) || !isFinite(at)) return;
 
       if (intendedPlaying && !restarting && !seekingActive && !syncing) {
-        const vPaused = videoEl.paused;
-        const aPaused = audio.paused;
-        const vPlayable = canPlayAt(videoEl, vt);
-        const aPlayable = canPlayAt(audio, at);
+        const vReady = canPlayAt(videoEl, vt) && !video.hasClass('vjs-waiting');
+        const aReady = canPlayAt(audio, at);
 
-        const vBuffering = video.hasClass('vjs-waiting') || (!vPaused && videoEl.readyState < 3);
-        const aBuffering = !aPaused && audio.readyState < 3;
-
-        if (vBuffering || aBuffering) {
-          if (!aPaused) { squelchAudioEvents(); audio.pause(); }
-          if (!vPaused) {
+        if (!vReady) {
+          if (!audio.paused) {
+            squelchAudioEvents();
+            audio.pause();
+          }
+          showError("Video buffering…");
+        } else if (!aReady) {
+          if (!videoEl.paused) {
             internalPlayRequest++;
             try { video.pause(); } catch {}
             setTimeout(() => { internalPlayRequest = Math.max(0, internalPlayRequest - 1); }, 50);
           }
-          showError(vBuffering ? "Video buffering…" : "Audio buffering…");
+          showError("Audio buffering…");
         } else {
           hideError();
           if (video.hasClass('vjs-waiting')) video.removeClass('vjs-waiting');
 
-          if (vPaused || aPaused) {
-            if (vPlayable && aPlayable && internalPlayRequest === 0) {
+          if (videoEl.paused || audio.paused) {
+            if (internalPlayRequest === 0) {
               playTogether({ allowMutedRetry: true });
             }
           } else {
@@ -510,14 +515,16 @@ document.addEventListener("DOMContentLoaded", () => {
       if (startupPhase || restarting || !intendedPlaying || seekingActive) return;
       if (performance.now() - lastPlayKickTs < STARTUP_GRACE_MS) return;
       
-      showError(`${label} buffering…`);
-      if (label === 'Video') {
-         squelchAudioEvents();
-         audio.pause();
-      } else if (label === 'Audio') {
-         internalPlayRequest++;
-         try { video.pause(); } catch {}
-         setTimeout(() => { internalPlayRequest = Math.max(0, internalPlayRequest - 1); }, 50);
+      if (!bothPlayableAt(Number(video.currentTime()))) {
+        showError(`${label} buffering…`);
+        if (label === 'Video') {
+           squelchAudioEvents();
+           audio.pause();
+        } else if (label === 'Audio') {
+           internalPlayRequest++;
+           try { video.pause(); } catch {}
+           setTimeout(() => { internalPlayRequest = Math.max(0, internalPlayRequest - 1); }, 50);
+        }
       }
     };
 
@@ -534,7 +541,7 @@ document.addEventListener("DOMContentLoaded", () => {
     el.addEventListener('waiting', pauseIfRealStall);
     el.addEventListener('stalled', pauseIfRealStall);
     el.addEventListener('playing', () => {
-        hideError();
+        if (bothPlayableAt(Number(video.currentTime()))) hideError();
         if (label === 'Video' && video.hasClass('vjs-waiting')) video.removeClass('vjs-waiting');
     });
     el.addEventListener('canplay', tryResume);
@@ -609,7 +616,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     videoEl.addEventListener('playing', () => {
-        hideError();
+        if (bothPlayableAt(Number(video.currentTime()))) hideError();
         if (video.hasClass('vjs-waiting')) video.removeClass('vjs-waiting');
     });
 
@@ -638,7 +645,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     video.on('playing', () => {
-      hideError();
+      if (bothPlayableAt(Number(video.currentTime()))) hideError();
       if (video.hasClass('vjs-waiting')) video.removeClass('vjs-waiting');
       if (intendedPlaying && !restarting && audio.paused) {
         playTogether({ allowMutedRetry: true });
@@ -673,20 +680,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
       await ensureUnmutedIfNotUserMuted();
 
-      if (wasPlayingBeforeSeek || intendedPlaying) {
+      if (wasPlayingBeforeSeek) {
           intendedPlaying = true;
           updateMediaSessionPlaybackState();
           if (bothPlayableAt(newTime)) {
               playTogether({ allowMutedRetry: true });
           } else {
               showError("Video buffering…");
-              try { 
-                  internalPlayRequest++;
-                  video.pause(); 
-                  setTimeout(() => { internalPlayRequest = Math.max(0, internalPlayRequest - 1); }, 50);
-              } catch {}
-              squelchAudioEvents();
-              audio.pause();
+              pauseHard();
           }
       } else {
           pauseTogether();
