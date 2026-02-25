@@ -207,8 +207,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let bgControllerPlayGuardUntil = 0;
 
-  let seekResumeToken = 0;
-
   function setBgControllerPlayGuard(ms = 2400) {
     bgControllerPlayGuardUntil = Math.max(bgControllerPlayGuardUntil, performance.now() + ms);
   }
@@ -315,48 +313,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }, delay);
   }
 
-  function queueSeekResumeBurst() {
-    const token = ++seekResumeToken;
-    const delays = [0, 60, 140, 260, 420, 700, 1100];
-    for (const delay of delays) {
-      setTimeout(async () => {
-        if (token !== seekResumeToken) return;
-        if (!intendedPlaying || restarting || seekingActive) return;
-
-        const vt = Number(video.currentTime());
-        const at = Number(audio.currentTime);
-        if (!isFinite(vt) || !isFinite(at)) return;
-
-        if (Math.abs(at - vt) > 0.12) {
-          safeSetCT(audio, vt);
-        }
-
-        try { audio.playbackRate = Number(video.playbackRate()) || 1; } catch {}
-
-        const shouldHoldAudio =
-          (androidResumeGuardActive() && isVideoPaused()) ||
-          (document.visibilityState === "hidden" && shouldUseBgControllerRetry() && isVideoPaused());
-
-        if (!shouldHoldAudio && audio.paused) {
-          try {
-            squelchAudioEvents(250);
-            await audio.play().catch(() => {});
-          } catch {}
-        }
-
-        if (!syncing) {
-          await playTogether().catch(() => {});
-        }
-
-        const vt2 = Number(video.currentTime());
-        const at2 = Number(audio.currentTime);
-        if (isFinite(vt2) && isFinite(at2) && Math.abs(at2 - vt2) > 0.2) {
-          safeSetCT(audio, vt2);
-        }
-      }, delay);
-    }
-  }
-
   function execProgrammaticVideoPause() {
     isProgrammaticPause = true;
     try { video.pause(); } catch {}
@@ -407,6 +363,9 @@ document.addEventListener("DOMContentLoaded", () => {
   let suppressMirrorUntil = 0;
   const MUTE_SQUELCH_MS = 500;
 
+  let seekRecoveryToken = 0;
+  const seekRecoveryTimers = new Set();
+
   let startupPhase = true;
   let firstPlayCommitted = false;
 
@@ -443,6 +402,62 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function audioEventsSquelched() {
     return performance.now() < squelchAudioEventsUntil;
+  }
+
+  function clearSeekRecoveryTimers() {
+    for (const t of seekRecoveryTimers) clearTimeout(t);
+    seekRecoveryTimers.clear();
+  }
+
+  function queuePostSeekRecovery() {
+    if (!hasExternalAudio) return;
+
+    const token = ++seekRecoveryToken;
+    clearSeekRecoveryTimers();
+
+    const steps = [0, 80, 180, 360];
+
+    for (const delay of steps) {
+      const tid = setTimeout(async () => {
+        seekRecoveryTimers.delete(tid);
+
+        if (token !== seekRecoveryToken) return;
+        if (restarting || seekingActive || syncing || !intendedPlaying) return;
+
+        const vt = Number(video.currentTime());
+        const at = Number(audio.currentTime);
+        if (!isFinite(vt)) return;
+
+        const holdAudio =
+          (androidResumeGuardActive() && isVideoPaused()) ||
+          (document.visibilityState === "hidden" && shouldUseBgControllerRetry() && isVideoPaused());
+
+        if (!isFinite(at) || Math.abs(at - vt) > 0.08) {
+          squelchAudioEvents(220);
+          safeSetCT(audio, vt);
+        }
+
+        if (!holdAudio && audio.paused) {
+          try {
+            squelchAudioEvents(220);
+            await Promise.resolve(audio.play());
+          } catch {}
+        }
+
+        const vt2 = Number(video.currentTime());
+        const at2 = Number(audio.currentTime);
+        if (isFinite(vt2) && (!isFinite(at2) || Math.abs(at2 - vt2) > 0.08)) {
+          squelchAudioEvents(220);
+          safeSetCT(audio, vt2);
+        }
+
+        if (!syncing && !seekingActive) {
+          playTogether().catch(() => {});
+        }
+      }, delay);
+
+      seekRecoveryTimers.add(tid);
+    }
   }
 
   let volAnim = null;
@@ -906,6 +921,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function pauseHard() {
     clearAndroidResumeRepairTimer();
     clearBgResumeRetryTimer();
+    clearSeekRecoveryTimers();
     execProgrammaticVideoPause();
     try {
       squelchAudioEvents(700);
@@ -1055,7 +1071,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const pauseIfRealStall = () => {
       if (restarting || !intendedPlaying || seekingActive) return;
       if (performance.now() - lastPlayKickTs < STARTUP_GRACE_MS) return;
-      if (document.visibilityState === "hidden") return;
 
       if (label === "Video") {
         squelchAudioEvents();
@@ -1159,7 +1174,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       if (document.visibilityState === "hidden" && intendedPlaying) {
-        if (shouldUseBgControllerRetry()) {
+        if (shouldUseBgControllerRetry() && (mediaActionRecently("play", 2600) || bgControllerPlayGuardActive())) {
           scheduleBgResumeRetry(220);
           return;
         }
@@ -1195,7 +1210,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       if (document.visibilityState === "hidden" && intendedPlaying) {
-        if (shouldUseBgControllerRetry()) {
+        if (shouldUseBgControllerRetry() && (mediaActionRecently("play", 2600) || bgControllerPlayGuardActive())) {
           scheduleBgResumeRetry(220);
           return;
         }
@@ -1231,7 +1246,9 @@ document.addEventListener("DOMContentLoaded", () => {
       seekingActive = true;
       seekStartTime = Number(video.currentTime());
       suppressMirrorUntil = performance.now() + MUTE_SQUELCH_MS;
-      seekResumeToken++;
+
+      seekRecoveryToken++;
+      clearSeekRecoveryTimers();
 
       const at = Number(audio.currentTime);
       if (isFinite(seekStartTime) && isFinite(at) && Math.abs(at - seekStartTime) > 0.25) {
@@ -1246,31 +1263,36 @@ document.addEventListener("DOMContentLoaded", () => {
       if (restarting) return;
 
       const newTime = Number(video.currentTime());
+      const shouldHoldAudioAfterSeek =
+        (androidResumeGuardActive() && isVideoPaused()) ||
+        (document.visibilityState === "hidden" && shouldUseBgControllerRetry() && isVideoPaused());
+
+      squelchAudioEvents(320);
       safeSetCT(audio, newTime);
-      try { audio.playbackRate = Number(video.playbackRate()) || 1; } catch {}
+
+      await ensureUnmutedIfNotUserMuted();
+
+      if (intendedPlaying && !shouldHoldAudioAfterSeek) {
+        try {
+          squelchAudioEvents(320);
+          await Promise.resolve(audio.play());
+        } catch {}
+
+        const vtNow = Number(video.currentTime());
+        if (isFinite(vtNow)) safeSetCT(audio, vtNow);
+
+        await new Promise(r => requestAnimationFrame(r));
+
+        const vtFrame = Number(video.currentTime());
+        if (isFinite(vtFrame)) safeSetCT(audio, vtFrame);
+      }
 
       seekingActive = false;
       firstSeekDone = true;
 
-      setPauseEventGuard(900);
-      setMediaActionLock(700);
-
-      await ensureUnmutedIfNotUserMuted();
-
       if (intendedPlaying) {
-        const holdAudio =
-          (androidResumeGuardActive() && isVideoPaused()) ||
-          (document.visibilityState === "hidden" && shouldUseBgControllerRetry() && isVideoPaused());
-
-        if (!holdAudio) {
-          try {
-            squelchAudioEvents(700);
-            await audio.play().catch(() => {});
-          } catch {}
-        }
-
-        await playTogether().catch(() => {});
-        queueSeekResumeBurst();
+        playTogether().catch(() => {});
+        queuePostSeekRecovery();
       } else {
         squelchAudioEvents();
         audio.pause();
@@ -1369,20 +1391,17 @@ document.addEventListener("DOMContentLoaded", () => {
             }
           }
         } else {
-          setPauseEventGuard(3000);
-          setMediaActionLock(1200);
-
-          if (intendedPlaying) {
-            setBgControllerPlayGuard(3500);
-            if (shouldUseBgControllerRetry()) {
-              scheduleBgResumeRetry(180);
-            }
+          setMediaActionLock(350);
+          if (intendedPlaying && shouldUseBgControllerRetry()) {
+            setBgControllerPlayGuard(1200);
+            scheduleBgResumeRetry(350);
           }
         }
       }, { passive: true });
 
       window.addEventListener("beforeunload", () => {
         clearBgResumeRetryTimer();
+        clearSeekRecoveryTimers();
       });
     } catch {}
   } else {
@@ -1402,7 +1421,6 @@ document.addEventListener("DOMContentLoaded", () => {
     setupMediaSession();
   }
 });
-
 
 
 
