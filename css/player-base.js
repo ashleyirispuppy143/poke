@@ -463,6 +463,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let startupPhase = true;
   let firstPlayCommitted = false;
+  let startupAutoplayKickDone = false;
+  let startupAutoplayKickInFlight = false;
 
   try { videoEl.loop = false; videoEl.removeAttribute?.("loop"); } catch {}
   try { audio.loop = false; audio.removeAttribute?.("loop"); } catch {}
@@ -1033,6 +1035,75 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {}
   }
 
+  function wantsStartupAutoplay() {
+    try {
+      const q = (qs.get("autoplay") || "").toLowerCase();
+      if (q === "1" || q === "true" || q === "yes") return true;
+    } catch {}
+
+    try {
+      if (window.forceAutoplay === true) return true;
+    } catch {}
+
+    try {
+      if (videoEl?.autoplay || videoEl?.hasAttribute?.("autoplay")) return true;
+    } catch {}
+
+    try {
+      if (typeof video.autoplay === "function") {
+        const a = video.autoplay();
+        if (a === true || a === "play" || a === "muted" || a === "any") return true;
+      }
+    } catch {}
+
+    return false;
+  }
+
+  function scheduleStartupAutoplayKick() {
+    if (!hasExternalAudio || qua === "medium") return;
+    if (startupAutoplayKickDone || startupAutoplayKickInFlight) return;
+    if (!startupBufferPrimed) return;
+    if (!wantsStartupAutoplay() && !intendedPlaying) return;
+    if (mediaSessionForcedPauseActive()) return;
+
+    startupAutoplayKickInFlight = true;
+
+    setTimeout(async () => {
+      try {
+        if (!startupBufferPrimed || mediaSessionForcedPauseActive()) return;
+
+        clearMediaSessionForcedPause();
+        intendedPlaying = true;
+        strictBufferHold = false;
+        strictBufferHoldReason = "";
+        updateMediaSessionPlaybackState();
+
+        setPauseEventGuard(1400);
+        setMediaPlayTxn(2200);
+        setBgControllerPlayGuard(1600);
+
+        const vt = Number(video.currentTime()) || 0;
+        safeSetCT(audio, vt);
+
+        try {
+          const vp = execProgrammaticVideoPlay();
+          if (vp && vp.then) await vp;
+        } catch {}
+
+        if (isVideoPaused()) return;
+
+        queuePlayRetryBurst();
+        await playTogether().catch(() => {});
+
+        if (!isVideoPaused()) {
+          startupAutoplayKickDone = true;
+        }
+      } finally {
+        startupAutoplayKickInFlight = false;
+      }
+    }, 0);
+  }
+
   async function playTogether() {
     if (syncing || restarting) return;
     if (mediaSessionForcedPauseActive()) return;
@@ -1045,17 +1116,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (hasExternalAudio && startupPhase && !startupBufferPrimed) {
         const t0 = Number(video.currentTime()) || 0;
-        if (!bothStartupBufferedAt(t0)) {
-          strictBufferHold = true;
-          strictBufferHoldReason = "startup-prime";
-          if (!isVideoPaused()) execProgrammaticVideoPause();
-          if (!audio.paused) execProgrammaticAudioPause(420);
-          safeSetCT(audio, t0);
-          return;
-        }
-        startupBufferPrimed = true;
-        strictBufferHold = false;
-        strictBufferHoldReason = "";
+        strictBufferHold = true;
+        strictBufferHoldReason = "startup-prime";
+        safeSetCT(audio, t0);
+        if (!audio.paused) execProgrammaticAudioPause(420);
+        return;
       }
 
       if (hasExternalAudio) {
@@ -1354,6 +1419,8 @@ document.addEventListener("DOMContentLoaded", () => {
   function wireResilience(el, label) {
     const pauseIfRealStall = () => {
       if (restarting || !intendedPlaying || seekingActive) return;
+      if (!startupBufferPrimed || (startupPhase && !firstPlayCommitted)) return;
+      if ((performance.now() - lastPlayKickTs) < 350) return;
 
       strictBufferHold = true;
       strictBufferHoldReason = `${label.toLowerCase()}-buffering`;
@@ -1368,6 +1435,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const tryResume = async () => {
       if (!intendedPlaying || restarting || seekingActive) return;
       if (mediaSessionForcedPauseActive()) return;
+      if (!startupBufferPrimed) return;
 
       enforceStrictBufferSync(`${label.toLowerCase()}-resume`);
       if (strictBufferHold) return;
@@ -1446,6 +1514,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       setupMediaSession();
       updateAudioGainImmediate();
+      scheduleStartupAutoplayKick();
       setTimeout(() => { if (!firstPlayCommitted) startupPhase = false; }, 2500);
     };
 
@@ -1493,6 +1562,10 @@ document.addEventListener("DOMContentLoaded", () => {
       clearMediaSessionForcedPause();
       intendedPlaying = true;
       updateMediaSessionPlaybackState();
+      if (!startupBufferPrimed) {
+        queueStartupReadyPoll();
+        return;
+      }
       if (!syncing && !seekingActive && isVideoPaused()) playTogether().catch(() => {});
     });
 
@@ -1506,6 +1579,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
+      if (!startupBufferPrimed && startupAutoplayKickInFlight) return;
       if (mediaSessionForcedPauseActive()) return;
 
       if (document.visibilityState === "hidden" && intendedPlaying && shouldUseBgControllerRetry()) {
@@ -1536,6 +1610,10 @@ document.addEventListener("DOMContentLoaded", () => {
       intendedPlaying = true;
       updateMediaSessionPlaybackState();
       ensureUnmutedIfNotUserMuted().catch(() => {});
+      if (!startupBufferPrimed) {
+        queueStartupReadyPoll();
+        return;
+      }
       if (!syncing && !seekingActive) playTogether().catch(() => {});
     });
 
@@ -1548,6 +1626,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
+      if (!startupBufferPrimed && startupAutoplayKickInFlight) return;
       if (mediaSessionForcedPauseActive()) return;
 
       if (document.visibilityState === "hidden" && intendedPlaying && shouldUseBgControllerRetry()) {
@@ -1570,6 +1649,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     video.on("waiting", () => {
       if (intendedPlaying && !restarting) {
+        if (!startupBufferPrimed || startupAutoplayKickInFlight || (startupPhase && !firstPlayCommitted)) return;
+        if ((performance.now() - lastPlayKickTs) < 350) return;
         strictBufferHold = true;
         strictBufferHoldReason = "video-waiting";
         execProgrammaticVideoPause();
@@ -1693,6 +1774,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const tryAutoResume = async () => {
       if (!intendedPlaying) return;
       if (mediaSessionForcedPauseActive()) return;
+      if (!startupBufferPrimed) return;
 
       enforceStrictBufferSync("auto-resume");
       if (strictBufferHold) return;
