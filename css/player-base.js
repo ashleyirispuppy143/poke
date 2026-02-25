@@ -217,6 +217,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let bgControllerPlayGuardUntil = 0;
 
+  // ————— Chromium background smooth resume state —————
+  let bgHiddenSnapAt = 0;
+  let bgHiddenSnapVT = 0;
+  let bgHiddenSnapAT = 0;
+  let bgHiddenSnapRate = 1;
+  let bgHiddenSnapIntended = false;
+  let bgHiddenSnapAudioPlaying = false;
+  let bgResumePending = false;
+  let bgResumeInFlight = false;
+  let bgResumeSerial = 0;
+  let bgLastBlurAt = 0;
+
   let audioPlayInFlightPromise = null;
   let audioPlayInFlightUntil = 0;
   let audioPauseInFlightUntil = 0;
@@ -250,11 +262,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let resumeAfterBufferToken = 0;
   let resumeAfterBufferTimer = null;
-
-  // ————— DESKTOP CHROMIUM BG SMOOTH: track when Chromium suspends/pauses the video while audio keeps playing —————
-  let bgVideoSuspended = false;
-  let bgVideoSuspendAt = 0;
-  let bgFollowNextAt = 0;
 
   function markExplicitPlay(ms = 15000) {
     explicitPlayUntil = Math.max(explicitPlayUntil, performance.now() + ms);
@@ -706,6 +713,219 @@ document.addEventListener("DOMContentLoaded", () => {
   const hasExternalAudio = !!audio && audio.tagName === "AUDIO" && !!pickAudioSrc();
   let startupBufferPrimed = !hasExternalAudio;
 
+  // ————— Chromium background smooth resume helpers —————
+  function captureBackgroundSnapshot(tag = "") {
+    try {
+      bgHiddenSnapAt = performance.now();
+    } catch {
+      bgHiddenSnapAt = 0;
+    }
+
+    try {
+      bgHiddenSnapVT = Number(video.currentTime()) || 0;
+    } catch {
+      bgHiddenSnapVT = 0;
+    }
+
+    try {
+      bgHiddenSnapRate = Number(video.playbackRate()) || 1;
+    } catch {
+      bgHiddenSnapRate = 1;
+    }
+
+    try {
+      bgHiddenSnapAT = Number(audio.currentTime);
+      if (!isFinite(bgHiddenSnapAT)) bgHiddenSnapAT = 0;
+    } catch {
+      bgHiddenSnapAT = 0;
+    }
+
+    try {
+      bgHiddenSnapIntended = !!intendedPlaying && !mediaSessionForcedPauseActive();
+    } catch {
+      bgHiddenSnapIntended = false;
+    }
+
+    try {
+      bgHiddenSnapAudioPlaying = !!hasExternalAudio && !audio.paused;
+    } catch {
+      bgHiddenSnapAudioPlaying = false;
+    }
+
+    if (bgHiddenSnapIntended) {
+      bgResumePending = true;
+    }
+  }
+
+  function computeBackgroundCatchUpTarget() {
+    let vtNow = NaN;
+    let atNow = NaN;
+    let dur = 0;
+    let rate = 1;
+
+    try { vtNow = Number(video.currentTime()); } catch {}
+    try { atNow = Number(audio.currentTime); } catch {}
+    try { dur = Number(video.duration()) || 0; } catch {}
+    try { rate = Number(video.playbackRate()) || 1; } catch {}
+
+    let expected = vtNow;
+    try {
+      if (bgHiddenSnapAt > 0) {
+        const dt = Math.max(0, (performance.now() - bgHiddenSnapAt) / 1000);
+        expected = (Number(bgHiddenSnapVT) || 0) + dt * (Number(bgHiddenSnapRate) || rate || 1);
+      }
+    } catch {}
+
+    let target = vtNow;
+    let fromAudio = false;
+
+    try {
+      const aLive = !!hasExternalAudio && !audio.paused && isFinite(atNow);
+      if (aLive && isFinite(bgHiddenSnapAT) && atNow > (Number(bgHiddenSnapAT) || 0) + 0.12) {
+        target = atNow;
+        fromAudio = true;
+      } else if (isFinite(expected) && (!isFinite(target) || expected > target + 0.06)) {
+        target = expected;
+      } else if (!isFinite(target)) {
+        target = 0;
+      }
+    } catch {
+      if (!isFinite(target)) target = 0;
+    }
+
+    if (dur > 0) {
+      const maxT = Math.max(0, dur - 0.25);
+      target = Math.max(0, Math.min(maxT, target));
+    } else {
+      target = Math.max(0, target);
+    }
+
+    return { target, vtNow, atNow, expected, fromAudio };
+  }
+
+  function shouldLetAudioRunWhileHiddenWhenVideoPaused() {
+    try {
+      if (!hasExternalAudio || qua === "medium") return false;
+      if (!intendedPlaying) return false;
+      if (mediaSessionForcedPauseActive()) return false;
+      if (strictBufferHold) return false;
+      if (document.visibilityState !== "hidden") return false;
+      if (!shouldUseBgControllerRetry()) return false;
+      if (audio.paused) return false;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function seamlessResumeFromBackground(tag = "") {
+    if (bgResumeInFlight) return;
+    if (!hasExternalAudio || qua === "medium") return;
+    if (!intendedPlaying) { bgResumePending = false; return; }
+    if (mediaSessionForcedPauseActive()) return;
+
+    const token = ++bgResumeSerial;
+    bgResumeInFlight = true;
+
+    try {
+      const info = computeBackgroundCatchUpTarget();
+      const vPaused0 = isVideoPaused();
+      const aPaused0 = !!audio.paused;
+
+      let vtNow = NaN;
+      let atNow = NaN;
+      try { vtNow = Number(video.currentTime()); } catch {}
+      try { atNow = Number(audio.currentTime); } catch {}
+
+      const driftV = (isFinite(info.target) && isFinite(vtNow)) ? Math.abs(vtNow - info.target) : 0;
+      const driftA = (isFinite(info.target) && isFinite(atNow)) ? Math.abs(atNow - info.target) : 0;
+
+      if (!bgResumePending && !resumeOnVisible && !vPaused0 && !aPaused0 && driftV < 0.15 && driftA < 0.15) {
+        return;
+      }
+
+      bgResumePending = false;
+      resumeOnVisible = false;
+
+      setPauseEventGuard(2400);
+      setMediaPlayTxn(2800);
+      setBgControllerPlayGuard(2800);
+      setResumeWarm(1800);
+      setSmoothNoHold(1300);
+      setPostSeekSmooth(900);
+
+      const audioIsMaster = !!hasExternalAudio && !audio.paused && isFinite(Number(audio.currentTime));
+      let t = info.target;
+
+      if (audioIsMaster) {
+        try { t = Number(audio.currentTime); } catch {}
+      }
+
+      const vTech = getPlayableVideoEl() || videoEl;
+
+      if (!audioIsMaster) {
+        try { execProgrammaticAudioPause(520); } catch {}
+      }
+
+      try { execProgrammaticVideoPause(); } catch {}
+
+      try {
+        if (isFinite(t)) {
+          safeSetCT(videoEl, t);
+          if (vTech && vTech !== videoEl) safeSetCT(vTech, t);
+        }
+      } catch {}
+
+      if (!audioIsMaster) {
+        try {
+          squelchAudioEvents(520);
+          safeSetCT(audio, t);
+        } catch {}
+      }
+
+      await Promise.allSettled([
+        waitForReadyStateOrCanPlay(vTech, 2, 2000),
+        audioIsMaster ? Promise.resolve(true) : waitForReadyStateOrCanPlay(audio, 2, 2000)
+      ]);
+
+      if (token !== bgResumeSerial) return;
+      if (!intendedPlaying) return;
+      if (mediaSessionForcedPauseActive()) return;
+
+      forceUnmuteForPlaybackIfAllowed();
+      updateAudioGainImmediate();
+
+      let vp = null;
+      try { vp = execProgrammaticVideoPlay(); } catch {}
+
+      if (!audioIsMaster) {
+        try {
+          await execProgrammaticAudioPlay({ squelchMs: 520, minGapMs: 0, force: true });
+        } catch {}
+      }
+
+      try { await Promise.allSettled([vp]); } catch {}
+
+      try {
+        if (!userMutedAudio && !userMutedVideo) {
+          if (!audioIsMaster) {
+            setImmediateVolume(0);
+            await rampVolumeTo(targetVolFromVideo(), 140);
+          } else {
+            await rampVolumeTo(targetVolFromVideo(), 80);
+          }
+        } else {
+          updateAudioGainImmediate();
+        }
+      } catch {}
+
+      if (!syncInterval) startSyncLoop();
+      queuePlayRetryBurst();
+    } finally {
+      bgResumeInFlight = false;
+    }
+  }
+
   let syncInterval = null;
   let lastAT = 0, lastATts = 0;
   let audioLastProgressTs = 0;
@@ -759,7 +979,12 @@ document.addEventListener("DOMContentLoaded", () => {
           (androidResumeGuardActive() && isVideoPaused()) ||
           (document.visibilityState === "hidden" && shouldUseBgControllerRetry() && isVideoPaused());
 
-        if (!isFinite(at) || Math.abs(at - vt) > 0.18) {
+        if (isFinite(at)) {
+          if (Math.abs(at - vt) > 0.18) {
+            squelchAudioEvents(220);
+            safeSetCT(audio, vt);
+          }
+        } else {
           squelchAudioEvents(220);
           safeSetCT(audio, vt);
         }
@@ -1181,17 +1406,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!hasExternalAudio || qua === "medium") return;
     if (restarting || seekingActive || syncing) return;
 
-    // ————— DESKTOP CHROMIUM BG SMOOTH: if audio is playing in a hidden desktop Chromium tab and video got paused/suspended, don't force holds that pause audio —————
-    try {
-      if (document.visibilityState === "hidden" && isDesktopChromiumLike()) {
-        if (intendedPlaying && !audio.paused && isVideoPaused()) {
-          bgVideoSuspended = true;
-          bgVideoSuspendAt = performance.now();
-          return;
-        }
-      }
-    } catch {}
-
     const now = performance.now();
     if (now < strictBufferCoolDownUntil && !strictBufferHold) return;
     if (smoothNoHoldActive() && !strictBufferHold) return;
@@ -1406,7 +1620,7 @@ document.addEventListener("DOMContentLoaded", () => {
             safeSetCT(audio, vt);
           }
         } else if (vWaiting && (audioEverStarted || !canStartAudioAt(vt))) {
-          if (!smoothNoHoldActive() && !aPaused && !(isHidden && isDesktopChromiumLike())) {
+          if (!smoothNoHoldActive() && !aPaused) {
             execProgrammaticAudioPause();
             safeSetCT(audio, vt);
           }
@@ -1430,26 +1644,13 @@ document.addEventListener("DOMContentLoaded", () => {
             }
           }
         } else if (vPaused && !aPaused) {
-          // ————— DESKTOP CHROMIUM BG SMOOTH: Chromium may pause/suspend video in background tabs; don't pause audio (audible glitch). Keep video warm and snap on return. —————
-          if (isHidden && isDesktopChromiumLike() && intendedPlaying && !strictBufferHold && !mediaSessionForcedPauseActive()) {
-            bgVideoSuspended = true;
-            bgVideoSuspendAt = performance.now();
+          // ————— Chromium background tab quirk: video may be paused while audio continues —————
+          // If we're hidden on Chromium-like browsers, do NOT force-pause audio (it makes the pause obvious).
+          // We'll catch video up to audio on resume.
+          const allowAudioWhileHidden = shouldLetAudioRunWhileHiddenWhenVideoPaused();
+          if (allowAudioWhileHidden) {
             resumeOnVisible = true;
-
-            // keep the paused video near the audio time so resume has minimal wait (throttled)
-            if (isFinite(at) && performance.now() >= bgFollowNextAt) {
-              bgFollowNextAt = performance.now() + 1400;
-              const dur = Number(video.duration()) || 0;
-              const tgt = dur > 0 ? Math.max(0, Math.min(at, dur - 0.25)) : Math.max(0, at);
-              try { video.currentTime(tgt); } catch {}
-              try { safeSetCT(videoEl, tgt); } catch {}
-              try {
-                const vv = getPlayableVideoEl();
-                if (vv) safeSetCT(vv, tgt);
-              } catch {}
-            }
-
-            armResumeAfterBuffer(8000);
+            captureBackgroundSnapshot("hidden-video-paused");
           } else {
             execProgrammaticAudioPause();
             if (Math.abs(at - vt) > 0.8) safeSetCT(audio, vt);
@@ -1871,21 +2072,19 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         }
       } else if (intendedPlaying && isVideoPaused() && !audio.paused) {
-        // ————— DESKTOP CHROMIUM BG SMOOTH: don't pause audio if video is paused in background desktop Chromium —————
-        if (isHidden && isDesktopChromiumLike() && intendedPlaying && !strictBufferHold && !mediaSessionForcedPauseActive()) {
-          bgVideoSuspended = true;
-          bgVideoSuspendAt = performance.now();
-          resumeOnVisible = true;
-          armResumeAfterBuffer(8000);
-        } else {
+        // If audio is playing and video is paused, don't hard-pause audio in hidden Chromium tabs.
+        if (!(shouldLetAudioRunWhileHiddenWhenVideoPaused())) {
           execProgrammaticAudioPause();
-          if (isHidden && shouldUseBgControllerRetry()) {
-            scheduleBgResumeRetry(250);
-          } else if (!isHidden && isProblemMobileBrowser() && !videoRepairing) {
-            kickVideo().catch(() => {});
-          } else if (!isHidden) {
-            playTogether().catch(() => {});
-          }
+        } else {
+          resumeOnVisible = true;
+          captureBackgroundSnapshot("hidden-video-paused-finally");
+        }
+        if (isHidden && shouldUseBgControllerRetry()) {
+          scheduleBgResumeRetry(250);
+        } else if (!isHidden && isProblemMobileBrowser() && !videoRepairing) {
+          kickVideo().catch(() => {});
+        } else if (!isHidden) {
+          playTogether().catch(() => {});
         }
       }
     }
@@ -1960,6 +2159,7 @@ document.addEventListener("DOMContentLoaded", () => {
         startupAudioHoldUntil = 0;
         syncing = false;
         resumeOnVisible = false;
+        bgResumePending = false;
 
         updateMediaSessionPlaybackState();
         pauseHard();
@@ -2077,12 +2277,6 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!startupBufferPrimed || (startupPhase && !firstPlayCommitted)) return;
       if ((performance.now() - lastPlayKickTs) < 700) return;
       if (smoothNoHoldActive() || postSeekSmoothActive()) return;
-
-      // ————— DESKTOP CHROMIUM BG SMOOTH: ignore background "stall" signals that would pause audio (Chromium may suspend video) —————
-      if (document.visibilityState === "hidden" && isDesktopChromiumLike()) {
-        armResumeAfterBuffer(8000);
-        return;
-      }
 
       strictBufferHold = true;
       strictBufferHoldReason = `${label.toLowerCase()}-buffering`;
@@ -2286,6 +2480,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (shouldIgnorePauseAsTransient()) {
         if (intendedPlaying && document.visibilityState === "hidden" && shouldUseBgControllerRetry()) {
           resumeOnVisible = true;
+          captureBackgroundSnapshot("audio-pause-hidden-transient");
           if (explicitPlayActive() || mediaActionRecently("play", 2500)) scheduleBgResumeRetry(220);
         }
         return;
@@ -2297,6 +2492,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (document.visibilityState === "hidden" && intendedPlaying && shouldUseBgControllerRetry()) {
         setBgControllerPlayGuard(explicitPlayActive() ? 20000 : 1200);
         resumeOnVisible = true;
+        captureBackgroundSnapshot("audio-pause-hidden");
         if (explicitPlayActive() || mediaActionRecently("play", 2500)) scheduleBgResumeRetry(220);
         return;
       }
@@ -2345,6 +2541,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (shouldIgnorePauseAsTransient()) {
         if (intendedPlaying && document.visibilityState === "hidden" && shouldUseBgControllerRetry()) {
           resumeOnVisible = true;
+          captureBackgroundSnapshot("video-pause-hidden-transient");
           if (explicitPlayActive() || mediaActionRecently("play", 2500)) scheduleBgResumeRetry(220);
         }
         return;
@@ -2356,6 +2553,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (document.visibilityState === "hidden" && intendedPlaying && shouldUseBgControllerRetry()) {
         setBgControllerPlayGuard(explicitPlayActive() ? 20000 : 1200);
         resumeOnVisible = true;
+        captureBackgroundSnapshot("video-pause-hidden");
         if (explicitPlayActive() || mediaActionRecently("play", 2500)) scheduleBgResumeRetry(220);
         return;
       }
@@ -2376,16 +2574,6 @@ document.addEventListener("DOMContentLoaded", () => {
       if (intendedPlaying && !restarting) {
         if (!startupBufferPrimed || startupAutoplayKickInFlight || (startupPhase && !firstPlayCommitted)) return;
         if ((performance.now() - lastPlayKickTs) < 700) return;
-
-        // ————— DESKTOP CHROMIUM BG SMOOTH: avoid pausing audio when waiting happens in a hidden desktop Chromium tab —————
-        if (document.visibilityState === "hidden" && isDesktopChromiumLike()) {
-          bgVideoSuspended = true;
-          bgVideoSuspendAt = performance.now();
-          resumeOnVisible = true;
-          armResumeAfterBuffer(8000);
-          return;
-        }
-
         if (smoothNoHoldActive() || postSeekSmoothActive()) {
           armResumeAfterBuffer(8000);
           return;
@@ -2566,35 +2754,13 @@ document.addEventListener("DOMContentLoaded", () => {
               }
             }
 
-            // ————— DESKTOP CHROMIUM BG SMOOTH: if video got suspended in background while audio kept running, snap video to audio immediately (no audible gap) —————
-            if (isDesktopChromiumLike() && intendedPlaying && bgVideoSuspended && !audio.paused) {
-              bgVideoSuspended = false;
-              const atNow = Number(audio.currentTime);
-              if (isFinite(atNow)) {
-                const durNow = Number(video.duration()) || 0;
-                const tgtNow = durNow > 0 ? Math.max(0, Math.min(atNow, durNow - 0.25)) : Math.max(0, atNow);
-                try { video.currentTime(tgtNow); } catch {}
-                try { safeSetCT(videoEl, tgtNow); } catch {}
-                try {
-                  const vvNow = getPlayableVideoEl();
-                  if (vvNow) safeSetCT(vvNow, tgtNow);
-                } catch {}
-              }
-
-              setResumeWarm(2400);
-              setSmoothNoHold(1700);
-              setPostSeekSmooth(0);
-
-              // Keep audio running; just restart the video immediately.
-              if (isVideoPaused()) {
-                try { execProgrammaticVideoPlay(); } catch {}
-              }
-
-              armResumeAfterBuffer(8000);
-            }
-
             forceUnmuteForPlaybackIfAllowed();
             updateAudioGainImmediate();
+
+            // ————— Chromium smooth resume: do a single clean catch-up on visibility return —————
+            if (bgResumePending || resumeOnVisible || (shouldUseBgControllerRetry() && isVideoPaused())) {
+              seamlessResumeFromBackground("visibility-visible").catch(() => {});
+            }
 
             if ((isVideoPaused() || audio.paused) && !inMediaTxnWindow()) {
               playTogether().catch(() => {});
@@ -2610,11 +2776,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
           if (intendedPlaying) resumeOnVisible = true;
 
-          // ————— DESKTOP CHROMIUM BG SMOOTH: assume video may be suspended while hidden; we'll snap on return —————
-          if (intendedPlaying && isDesktopChromiumLike() && !audio.paused) {
-            bgVideoSuspended = true;
-            bgVideoSuspendAt = performance.now();
-          }
+          // ————— Chromium smooth resume: snapshot times when going hidden —————
+          captureBackgroundSnapshot("visibility-hidden");
 
           setMediaActionLock(350);
           if (intendedPlaying && shouldUseBgControllerRetry() && !mediaSessionForcedPauseActive()) {
@@ -2624,6 +2787,68 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         }
       }, { passive: true });
+
+      // ————— Page Lifecycle API: detect freeze/resume (Chromium) —————
+      try {
+        document.addEventListener("freeze", () => {
+          if (intendedPlaying) resumeOnVisible = true;
+          captureBackgroundSnapshot("freeze");
+        }, { passive: true });
+      } catch {}
+
+      try {
+        document.addEventListener("resume", () => {
+          if (!intendedPlaying) return;
+          bgAutoResumeSuppressed = false;
+          setResumeWarm(1800);
+          setSmoothNoHold(1100);
+          seamlessResumeFromBackground("resume").catch(() => {});
+        }, { passive: true });
+      } catch {}
+
+      // ————— Focus/blur: catches cases where visibility doesn't flip but playback still gets clamped —————
+      try {
+        window.addEventListener("blur", () => {
+          bgLastBlurAt = performance.now();
+          if (intendedPlaying) {
+            resumeOnVisible = true;
+            captureBackgroundSnapshot("blur");
+          }
+        }, { passive: true });
+      } catch {}
+
+      try {
+        window.addEventListener("focus", () => {
+          if (!intendedPlaying) return;
+          const now = performance.now();
+          if (bgLastBlurAt && (now - bgLastBlurAt) > 120) {
+            bgAutoResumeSuppressed = false;
+            setResumeWarm(1800);
+            setSmoothNoHold(1100);
+            seamlessResumeFromBackground("focus").catch(() => {});
+          }
+        }, { passive: true });
+      } catch {}
+
+      // ————— BFCache restore cases —————
+      try {
+        window.addEventListener("pagehide", () => {
+          if (intendedPlaying) resumeOnVisible = true;
+          captureBackgroundSnapshot("pagehide");
+        }, { passive: true });
+      } catch {}
+
+      try {
+        window.addEventListener("pageshow", (e) => {
+          if (!intendedPlaying) return;
+          if (e && e.persisted) {
+            bgAutoResumeSuppressed = false;
+            setResumeWarm(1800);
+            setSmoothNoHold(1100);
+            seamlessResumeFromBackground("pageshow").catch(() => {});
+          }
+        }, { passive: true });
+      } catch {}
 
       window.addEventListener("beforeunload", () => {
         if (startupReadyPollTimer) clearTimeout(startupReadyPollTimer);
@@ -2651,7 +2876,6 @@ document.addEventListener("DOMContentLoaded", () => {
     setupMediaSession();
   }
 });
-
 document.addEventListener('keydown', function(event) {
     // Ignore key presses if typing in an input or textarea
     if (event.target.tagName.toLowerCase() === 'input' || event.target.tagName.toLowerCase() === 'textarea') {
