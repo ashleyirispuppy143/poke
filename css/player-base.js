@@ -233,6 +233,10 @@ document.addEventListener("DOMContentLoaded", () => {
   let seekSyncFinishing = false;
   let seekSyncFinishTimer = null;
 
+  // ————— SEEKING FIX: retry window so we don't get stuck if audio seeked is delayed/missed —————
+  let seekSyncRetryUntil = 0;
+  let seekSyncRetryTimer = null;
+
   let strictBufferMissCount = 0;
   let strictBufferHoldMinUntil = 0;
   let strictBufferCoolDownUntil = 0;
@@ -1007,6 +1011,22 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // ————— SEEKING FIX: retry timer for finalize when audio seeked is late/missed —————
+  function clearSeekSyncRetryTimer() {
+    if (seekSyncRetryTimer) {
+      clearTimeout(seekSyncRetryTimer);
+      seekSyncRetryTimer = null;
+    }
+  }
+
+  function scheduleSeekSyncRetry(delay = 60) {
+    clearSeekSyncRetryTimer();
+    seekSyncRetryTimer = setTimeout(() => {
+      seekSyncRetryTimer = null;
+      finalizeSeekSync().catch(() => {});
+    }, Math.max(0, Number(delay) || 0));
+  }
+
   function scheduleSeekSyncFinalize(delay = 0) {
     clearSeekSyncFinishTimer();
     seekSyncFinishTimer = setTimeout(() => {
@@ -1023,12 +1043,58 @@ document.addEventListener("DOMContentLoaded", () => {
     const token = seekSyncToken;
     if (!seekSyncVideoSeeked) return;
 
+    // ————— SEEKING FIX: keep retrying finalize until audio catches up or timeout —————
+    const now0 = performance.now();
+    if (!seekSyncRetryUntil) seekSyncRetryUntil = now0 + 2600;
+
     try {
       if (!seekSyncAudioSeeked) {
-        const vt0 = Number(video.currentTime());
-        const at0 = Number(audio.currentTime);
-        if (!audio.seeking && isFinite(vt0) && isFinite(at0) && Math.abs(at0 - vt0) < 0.03) {
-          seekSyncAudioSeeked = true;
+        let vt0 = NaN;
+        let at0 = NaN;
+        let aSeeking = false;
+
+        try { vt0 = Number(video.currentTime()); } catch {}
+        try { at0 = Number(audio.currentTime); } catch {}
+        try { aSeeking = !!audio.seeking; } catch {}
+
+        if (isFinite(vt0)) {
+          try {
+            if (!isFinite(at0) || Math.abs(at0 - vt0) > 0.03) {
+              squelchAudioEvents(520);
+              safeSetCT(audio, vt0);
+            }
+          } catch {}
+        }
+
+        // If audio is still seeking OR not close yet, retry for a short window.
+        if (performance.now() < seekSyncRetryUntil) {
+          if (aSeeking || !isFinite(vt0) || !isFinite(at0) || Math.abs(at0 - vt0) > 0.06) {
+            scheduleSeekSyncRetry(60);
+            return;
+          }
+        }
+
+        // Fallback acceptance: if we're close enough (or timeout), proceed.
+        try {
+          const vt1 = Number(video.currentTime());
+          const at1 = Number(audio.currentTime);
+          const aSeeking2 = !!audio.seeking;
+
+          if (!aSeeking2 && isFinite(vt1) && isFinite(at1) && Math.abs(at1 - vt1) < 0.25) {
+            seekSyncAudioSeeked = true;
+          } else if (performance.now() >= seekSyncRetryUntil) {
+            seekSyncAudioSeeked = true;
+          } else {
+            scheduleSeekSyncRetry(60);
+            return;
+          }
+        } catch {
+          if (performance.now() >= seekSyncRetryUntil) {
+            seekSyncAudioSeeked = true;
+          } else {
+            scheduleSeekSyncRetry(60);
+            return;
+          }
         }
       }
     } catch {}
@@ -1041,8 +1107,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const vt = Number(video.currentTime());
       if (isFinite(vt)) safeSetCT(audio, vt);
 
-      execProgrammaticVideoPause();
-      execProgrammaticAudioPause(420);
+      // ————— SEEKING FIX: don't force extra pause toggles if already paused —————
+      if (!isVideoPaused()) execProgrammaticVideoPause();
+      if (!audio.paused) execProgrammaticAudioPause(420);
 
       const vReady = await waitForReadyStateOrCanPlay(v, 3, 3200);
       const aReady = await waitForReadyStateOrCanPlay(audio, 3, 3200);
@@ -1052,8 +1119,18 @@ document.addEventListener("DOMContentLoaded", () => {
       strictBufferCoolDownUntil = Math.max(strictBufferCoolDownUntil, performance.now() + 900);
       strictBufferMissCount = 0;
 
+      // ————— SEEKING FIX: allow immediate resume attempts after seek —————
+      try {
+        audioPlayAttemptUntil = 0;
+        audioPauseInFlightUntil = 0;
+      } catch {}
+
       seekingActive = false;
       firstSeekDone = true;
+
+      // clear seek retry window once we're leaving seek mode
+      seekSyncRetryUntil = 0;
+      clearSeekSyncRetryTimer();
 
       const shouldHoldAfterSeek =
         (androidResumeGuardActive() && isVideoPaused()) ||
@@ -1777,6 +1854,7 @@ document.addEventListener("DOMContentLoaded", () => {
     clearBgResumeRetryTimer();
     clearSeekRecoveryTimers();
     clearSeekSyncFinishTimer();
+    clearSeekSyncRetryTimer(); // SEEKING FIX
     clearResumeAfterBufferTimer();
     execProgrammaticVideoPause();
     try {
@@ -2149,6 +2227,10 @@ document.addEventListener("DOMContentLoaded", () => {
     audio.addEventListener("pause", () => {
       if (audioEventsSquelched() || restarting || isProgrammaticAudioPause || isProgrammaticPause) return;
       if (performance.now() < audioPauseInFlightUntil || performance.now() < audioPlayInFlightUntil) return;
+
+      // ————— SEEKING FIX: ignore pauses that occur during seek (prevents intendedPlaying flipping off) —————
+      if (seekingActive || seekSyncFinishing) return;
+
       if (shouldIgnorePauseAsTransient()) {
         if (intendedPlaying && document.visibilityState === "hidden" && shouldUseBgControllerRetry()) {
           resumeOnVisible = true;
@@ -2204,6 +2286,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     video.on("pause", () => {
       if (restarting || isProgrammaticPause) return;
+
+      // ————— SEEKING FIX: ignore pauses that occur during seek (prevents ping-pong) —————
+      if (seekingActive || seekSyncFinishing) return;
+
       if (shouldIgnorePauseAsTransient()) {
         if (intendedPlaying && document.visibilityState === "hidden" && shouldUseBgControllerRetry()) {
           resumeOnVisible = true;
@@ -2270,6 +2356,10 @@ document.addEventListener("DOMContentLoaded", () => {
       strictBufferHoldReason = "";
       strictBufferMissCount = 0;
       seekingActive = true;
+
+      // ————— SEEKING FIX: start retry window and clear retry timer —————
+      seekSyncRetryUntil = performance.now() + 2600;
+      clearSeekSyncRetryTimer();
 
       seekSyncToken++;
       seekSyncWantedPlaying = intendedPlaying;
@@ -2445,6 +2535,7 @@ document.addEventListener("DOMContentLoaded", () => {
         clearBgResumeRetryTimer();
         clearSeekRecoveryTimers();
         clearSeekSyncFinishTimer();
+        clearSeekSyncRetryTimer(); // SEEKING FIX
         clearResumeAfterBufferTimer();
       });
     } catch {}
