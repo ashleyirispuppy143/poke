@@ -2690,17 +2690,44 @@ const drawPause = () => {
   }
 };
 
-const forcePlay = async () => {
-   AMvideo.currentTime = 0;
+let isPlayPending = false; // Tracks if a play promise is currently unresolved
 
-   try {
+// 1. Save a reference to the browser's original, built-in pause function
+const originalPause = AMvideo.pause;
+
+// 2. Override the video's pause function
+AMvideo.pause = function() {
+  // If forcePlay is currently trying to start the video, block the pause attempt
+  if (isPlayPending) {
+    console.log("A pause() call was blocked to prevent interrupting forcePlay.");
+    return; // Exit without pausing
+  }
+  
+  // Otherwise, run the original pause function normally
+  return originalPause.apply(this, arguments);
+};
+
+const forcePlay = async () => {
+  if (isPlayPending) {
+    return; 
+  }
+
+  AMvideo.currentTime = 0;
+  isPlayPending = true; // This automatically disables AMvideo.pause()
+
+  try {
     await AMvideo.play();
     
-    if (AMvideo.currentTime > 0.5) { 
-        AMvideo.currentTime = 0;
+    if (AMvideo.currentTime > 0.5) {
+      AMvideo.currentTime = 0;
     }
   } catch (error) {
-    console.warn("Video playback was blocked:", error);
+    if (error.name !== "AbortError") {
+      console.warn("Video playback was blocked:", error);
+    }
+  } finally {
+    // This automatically re-enables AMvideo.pause()
+    isPlayPending = false; 
   }
 };
 
