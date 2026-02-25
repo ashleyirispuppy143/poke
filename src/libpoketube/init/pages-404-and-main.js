@@ -161,14 +161,14 @@ const invtrend = await fetch(`${config.invapi}/trending${tab}`, {
 
     const officialHost = "poketube.fun";
     const officialApi = config.invapi
-if (req.hostname !== officialHost && config.invapi === officialApi) {
+ if (req.hostname !== officialHost && config.invapi === officialApi) {
     const message = `
       <!DOCTYPE html>
       <html lang="en">
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Configuration Error</title>
+        <title>Configuration Error - PokeTube</title>
         <style>
           @font-face {  
             font-family: "PokeTube Flex";  
@@ -181,42 +181,71 @@ if (req.hostname !== officialHost && config.invapi === officialApi) {
           body {
             background-color: #0f0f0f;
             color: #f1f1f1;
-            font-family: "PokeTube Flex", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
+            font-family: "PokeTube Flex", Roboto, Arial, sans-serif;
             margin: 0;
-            padding: 20px;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+          }
+
+          /* Mock YouTube Header */
+          .yt-header {
+            height: 56px;
+            padding: 0 16px;
+            display: flex;
+            align-items: center;
+            position: fixed;
+            top: 0;
+            width: 100%;
             box-sizing: border-box;
+            background-color: #0f0f0f;
           }
-          
-          .error-container {
-            background-color: #212121;
-            border-radius: 12px;
-            padding: 40px;
-            max-width: 480px;
+
+          .yt-logo {
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+            outline: none;
+          }
+
+          .yt-logo img {
+            height: 24px; /* Standard YouTube logo height */
+            width: auto;
+            display: block;
+          }
+
+          /* Main Error Content */
+          .error-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
             text-align: center;
-            box-shadow: 0 4px 32px rgba(0, 0, 0, 0.5);
+            padding: 20px;
+            margin-top: 56px; /* Offset for header */
           }
-          
-          .icon {
-            font-size: 48px;
-            margin-bottom: 16px;
+
+          .monkey-emoji {
+            font-size: 72px;
+            margin-bottom: 24px;
+            user-select: none;
           }
-          
+
           h1 { 
             color: #f1f1f1; 
             font-size: 24px; 
-            font-weight: 500;
-            margin: 0 0 16px 0; 
+            font-weight: 400; 
+            margin: 0 0 24px 0; 
           }
           
           p {
             color: #aaaaaa;
-            font-size: 15px;
+            font-size: 16px;
             line-height: 1.5;
-            margin-bottom: 20px;
+            margin: 0 0 16px 0;
+            max-width: 500px;
           }
           
           b {
@@ -225,43 +254,40 @@ if (req.hostname !== officialHost && config.invapi === officialApi) {
           }
           
           code { 
-            background: #000000; 
+            background: rgba(255, 255, 255, 0.1); 
             color: #f1f1f1; 
-            padding: 4px 8px; 
-            border-radius: 6px; 
+            padding: 2px 6px; 
+            border-radius: 4px; 
             font-family: 'Courier New', Courier, monospace;
-            font-size: 13px;
-          }
-          
-          .btn {
-            display: inline-block;
-            background-color: #3ea6ff;
-            color: #0f0f0f;
-            text-decoration: none;
-            padding: 10px 24px;
-            border-radius: 18px;
-            font-weight: 500;
             font-size: 14px;
-            margin-top: 8px;
-            transition: background-color 0.2s ease;
           }
           
-          .btn:hover { 
-            background-color: #65b8ff; 
+          a {
+            color: #3ea6ff;
+            text-decoration: none;
           }
           
-          .footer-text {
+          a:hover { 
+            text-decoration: underline; 
+          }
+
+          .footer-note {
             margin-top: 32px;
-            margin-bottom: 0;
-            font-size: 13px;
+            font-size: 14px;
             color: #717171;
           }
         </style>
       </head>
       <body>
-        <div class="error-container">
-          <div class="icon">⚠️</div>
-          <h1>Configuration Error</h1>
+        
+        <div class="yt-header">
+          <a href="/" class="yt-logo" title="PokeTube Home">
+            <img src="/css/logo-poke.svg" alt="PokeTube Logo">
+          </a>
+        </div>
+
+        <div class="error-content">
+           <h1>Configuration Error</h1>
           
           <p>
             It looks like you're using <code>Poke</code>'s own Invidious API endpoint
@@ -269,23 +295,28 @@ if (req.hostname !== officialHost && config.invapi === officialApi) {
           </p>
           
           <p>
-            Please edit your <code>config.json</code> to match your own setup. Using
-            Poke’s shared API rate-limits <b>poketube.fun</b> itself when too many people use it.
+            Please edit your <code>config.json</code> to match your own setup — using
+            Poke’s shared API is kinda lame 😅 since it also rate-limits <b>poketube.fun</b>
+            itself when too many people use it.
           </p>
           
-          <a href="https://docs.invidious.io" target="_blank" class="btn">View Setup Guide</a>
+          <p>
+            Set up your own Invidious instance instead — it’s easy! <br>
+            See the official setup guide: 
+            <a href="https://docs.invidious.io" target="_blank">docs.invidious.io</a>
+          </p>
           
-          <p class="footer-text">
-            Once you've updated <code>config.json</code>, restart your server to apply the changes.
+          <p class="footer-note">
+            Once you've updated <code>config.json</code>, restart your server and everything will work fine.
           </p>
         </div>
+
       </body>
       </html>
     `;
 
     return res.status(500).send(message);
-  }
-     
+  }     
   const rendermainpage = () => {
   // Check if skiplandingpage query exists AND is not something like 0/false/no/off
   const shouldSkip = ('skiplandingpage' in req.query) && !['0','false','no','off'].includes(String(req.query.skiplandingpage).toLowerCase());
