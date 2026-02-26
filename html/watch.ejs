@@ -25,7 +25,7 @@
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+    GNU General Publifc License for more details.
 
     You should have received a copy of the GNU General Public License
     along with this program. If not, see https://www.gnu.org/licenses/.
@@ -2698,54 +2698,58 @@ const forcePlay = async () => {
   const AMaudio = document.getElementById('aud');
   let playInterval;
 
-  const triggerPlay = async () => {
+  const trigger = () => {
     try {
-      if (AMvideo.paused) AMvideo.currentTime = 0;
-      if (AMaudio && AMaudio.paused) AMaudio.currentTime = 0;
+      if (typeof videojs !== 'undefined') {
+        const players = videojs.getPlayers();
+        Object.values(players).forEach(player => {
+          if (player && player.paused()) player.play();
+        });
+      }
 
-      const promises = [AMvideo.play()];
-      if (AMaudio) promises.push(AMaudio.play());
-      
-      await Promise.all(promises);
+      if (AMvideo && AMvideo.paused) AMvideo.play().catch(() => {});
+      if (AMaudio && AMaudio.paused) AMaudio.play().catch(() => {});
 
-      if (AMaudio && Math.abs(AMvideo.currentTime - AMaudio.currentTime) > 0.05) {
+      if (AMvideo && AMaudio && !AMvideo.paused && Math.abs(AMvideo.currentTime - AMaudio.currentTime) > 0.05) {
         AMaudio.currentTime = AMvideo.currentTime;
       }
-    } catch (err) {
-      const vjsBtn = document.querySelector('.vjs-play-control.vjs-paused') || 
-                     document.querySelector('.vjs-big-play-button');
-                     
-      if (vjsBtn) {
-        vjsBtn.dispatchEvent(new MouseEvent('click', { 
-          bubbles: true, 
-          cancelable: true, 
-          view: window 
-        }));
-      }
+    } catch (e) {}
+
+    const btn = document.querySelector('.vjs-play-control.vjs-paused') || 
+                document.querySelector('.vjs-big-play-button');
+                
+    if (btn) {
+      btn.click();
+      btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+      btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+      btn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+      btn.dispatchEvent(new TouchEvent('touchstart', { bubbles: true }));
+      btn.dispatchEvent(new TouchEvent('touchend', { bubbles: true }));
     }
 
-    if (!AMvideo.paused && (!AMaudio || !AMaudio.paused)) {
+    if (AMvideo && !AMvideo.paused) {
       clearInterval(playInterval);
       isPlayPending = false;
     }
   };
 
-  playInterval = setInterval(triggerPlay, 250);
+  playInterval = setInterval(trigger, 150);
 
-  const interactionTrap = () => {
-    if (AMvideo.paused) triggerPlay();
-    ['mousemove', 'touchstart', 'keydown', 'scroll', 'click'].forEach(evt => {
-      document.removeEventListener(evt, interactionTrap);
-    });
+  const trap = () => {
+    if (AMvideo && AMvideo.paused) trigger();
+    if (AMvideo && !AMvideo.paused) {
+      ['click', 'touchstart', 'mousemove', 'keydown', 'scroll', 'pointerdown'].forEach(e => {
+        document.removeEventListener(e, trap, true);
+      });
+    }
   };
 
-  ['mousemove', 'touchstart', 'keydown', 'scroll', 'click'].forEach(evt => {
-    document.addEventListener(evt, interactionTrap, { once: true, passive: true });
+  ['click', 'touchstart', 'mousemove', 'keydown', 'scroll', 'pointerdown'].forEach(e => {
+    document.addEventListener(e, trap, { capture: true, passive: true });
   });
 
-  triggerPlay();
-};
-
+  trigger();
+}; 
 const handleFullscreen = () => {
   const isFullscreen = !!document.fullscreenElement;
   canvases.forEach(c => c.style.display = isFullscreen ? 'none' : 'block');
