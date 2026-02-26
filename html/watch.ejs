@@ -2690,105 +2690,474 @@ const drawPause = () => {
   }
 }; 
 let isPlayPending = false;
+let autoplayBootPending = true;
+let autoplayBlockedByPolicy = false;
+let autoplayRetryTimer = 0;
+let autoplayBootstrapInterval = 0;
+let autoplayRetryIndex = 0;
+let autoplayUnlockBound = false;
+let mediaSessionBound = false;
+const wiredMediaEls = new WeakSet();
 
-// Track user interaction so we don’t have to refresh
-let hasUserInteracted = false;
+const getAMaudio = () => document.getElementById("aud");
 
-// Wait for first real interaction
-const initUserInteraction = () => {
-  const markInteracted = () => {
-    hasUserInteracted = true;
-    document.body.removeEventListener("click", markInteracted);
-    document.body.removeEventListener("keydown", markInteracted);
-    document.body.removeEventListener("touchstart", markInteracted);
-  }
-  document.body.addEventListener("click", markInteracted, true);
-  document.body.addEventListener("keydown", markInteracted, true);
-  document.body.addEventListener("touchstart", markInteracted, true);
-};
-
-// Call this once on page load
-initUserInteraction();
-
-const forcePlay = async () => {
-  if (isPlayPending) return;
-  if (!hasUserInteracted) {
-    // If user hasn’t interacted yet, just bail
-    return;
-  }
-
-  isPlayPending = true;
-  const AMaudio = document.getElementById("aud");
-
-  if (AMvideo) AMvideo.setAttribute("preload", "auto");
-  if (AMaudio) AMaudio.setAttribute("preload", "auto");
-
-  const getVjsPlayer = () =>
-    new Promise((resolve) => {
-      if (!window.videojs || !AMvideo) return resolve(null);
-      let p = AMvideo.id ? window.videojs.getPlayer(AMvideo.id) : null;
-      if (!p && AMvideo.closest(".video-js")) {
-        p = AMvideo.closest(".video-js").player;
-      }
-      if (p) {
-        if (p.isReady_) resolve(p);
-        else p.ready(() => resolve(p));
-      } else {
-        resolve(null);
-      }
-    });
-
-  const waitForMeta = (media) =>
-    new Promise((resolve) => {
-      if (!media || media.readyState > 0) return resolve();
-      const done = () => {
-        media.removeEventListener("loadedmetadata", done);
-        resolve();
-      };
-      media.addEventListener("loadedmetadata", done);
-      setTimeout(done, 500);
-    });
+const getVjsPlayer = () => {
+  if (!window.videojs || !AMvideo) return null;
 
   try {
-    const vjsPlayer = await getVjsPlayer();
-
-    await Promise.all([waitForMeta(AMvideo), waitForMeta(AMaudio)]);
-
-    if (vjsPlayer) vjsPlayer.currentTime(0.001);
-    else AMvideo.currentTime = 0.001;
-    if (AMaudio) AMaudio.currentTime = 0.001;
-
-    const promises = [];
-    if (vjsPlayer) {
-      const p = vjsPlayer.play();
-      if (p !== undefined) promises.push(p);
-    } else {
-      promises.push(AMvideo.play());
+    if (AMvideo.id) {
+      const p = window.videojs.getPlayer(AMvideo.id);
+      if (p) return p;
     }
-    if (AMaudio) promises.push(AMaudio.play());
+  } catch {}
 
-    await Promise.all(promises);
+  try {
+    const host = AMvideo.closest(".video-js");
+    if (host && host.player) return host.player;
+  } catch {}
 
-    if (AMaudio && Math.abs(AMvideo.currentTime - AMaudio.currentTime) > 0.05) {
-      AMaudio.currentTime = AMvideo.currentTime;
+  try {
+    if (typeof window.videojs.getPlayers === "function") {
+      const players = window.videojs.getPlayers();
+      if (AMvideo.id && players && players[AMvideo.id]) return players[AMvideo.id];
     }
-  } catch (err) {
-    // fallback: re-request after next interaction
-    const unlock = () => {
-      ["click", "keydown", "touchstart"].forEach((evt) =>
-        document.removeEventListener(evt, unlock)
-      );
-      isPlayPending = false;
-      forcePlay();
+  } catch {}
+
+  return null;
+};
+
+const getNativeVideoEl = () => {
+  if (AMvideo && typeof AMvideo.play === "function") return AMvideo;
+
+  const player = getVjsPlayer();
+
+  try {
+    const techEl = player && typeof player.tech === "function" ? player.tech(true)?.el?.() : null;
+    if (techEl && typeof techEl.play === "function") return techEl;
+  } catch {}
+
+  try {
+    const inner = player?.el?.()?.querySelector?.("video");
+    if (inner && typeof inner.play === "function") return inner;
+  } catch {}
+
+  return null;
+};
+
+const clearAutoplayRetry = () => {
+  if (autoplayRetryTimer) {
+    clearTimeout(autoplayRetryTimer);
+    autoplayRetryTimer = 0;
+  }
+};
+
+const clearAutoplayBootstrapInterval = () => {
+  if (autoplayBootstrapInterval) {
+    clearInterval(autoplayBootstrapInterval);
+    autoplayBootstrapInterval = 0;
+  }
+};
+
+const nextRetryDelay = () => {
+  const delays = [0, 80, 180, 320, 500, 800, 1200, 1800, 2500];
+  const delay = delays[Math.min(autoplayRetryIndex, delays.length - 1)];
+  autoplayRetryIndex += 1;
+  return delay;
+};
+
+const resetRetryBackoff = () => {
+  autoplayRetryIndex = 0;
+};
+
+const setMediaSessionState = (state) => {
+  try {
+    if ("mediaSession" in navigator) {
+      navigator.mediaSession.playbackState = state;
+    }
+  } catch {}
+};
+
+const ensureLoadStarted = (media) => {
+  if (!media) return;
+
+  try {
+    media.preload = "auto";
+  } catch {}
+
+  try {
+    const hasSource = !!(media.currentSrc || media.src);
+    if (hasSource && media.networkState === HTMLMediaElement.NETWORK_EMPTY) {
+      media.load();
+    }
+  } catch {}
+};
+
+const waitForPlayable = (media, timeout = 2500) => {
+  return new Promise((resolve) => {
+    if (!media) {
+      resolve(true);
+      return;
+    }
+
+    try {
+      if (media.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+        resolve(true);
+        return;
+      }
+    } catch {}
+
+    let done = false;
+
+    const finish = (ok) => {
+      if (done) return;
+      done = true;
+
+      media.removeEventListener("loadeddata", onReady);
+      media.removeEventListener("canplay", onReady);
+      media.removeEventListener("canplaythrough", onReady);
+      media.removeEventListener("playing", onReady);
+      media.removeEventListener("error", onFail);
+      media.removeEventListener("emptied", onFail);
+
+      resolve(ok);
     };
-    ["click", "keydown", "touchstart"].forEach((evt) =>
-      document.addEventListener(evt, unlock, { once: true })
-    );
+
+    const onReady = () => finish(true);
+    const onFail = () => finish(false);
+
+    media.addEventListener("loadeddata", onReady, { once: true });
+    media.addEventListener("canplay", onReady, { once: true });
+    media.addEventListener("canplaythrough", onReady, { once: true });
+    media.addEventListener("playing", onReady, { once: true });
+    media.addEventListener("error", onFail, { once: true });
+    media.addEventListener("emptied", onFail, { once: true });
+
+    setTimeout(() => {
+      try {
+        finish(media.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA);
+      } catch {
+        finish(false);
+      }
+    }, timeout);
+  });
+};
+
+const safeSetCurrentTime = (media, time) => {
+  if (!media) return;
+
+  try {
+    if (!Number.isFinite(media.duration) || media.duration <= 0) return;
+    media.currentTime = Math.max(0, Math.min(time, Math.max(0, media.duration - 0.001)));
+  } catch {}
+};
+
+const syncAudioToVideo = () => {
+  const videoEl = getNativeVideoEl();
+  const audioEl = getAMaudio();
+
+  if (!videoEl || !audioEl) return;
+
+  try {
+    if (
+      Number.isFinite(videoEl.currentTime) &&
+      Number.isFinite(audioEl.currentTime) &&
+      !videoEl.seeking &&
+      !audioEl.seeking
+    ) {
+      const drift = Math.abs(videoEl.currentTime - audioEl.currentTime);
+      if (drift > 0.04) {
+        audioEl.currentTime = videoEl.currentTime;
+      }
+    }
+  } catch {}
+};
+
+const pauseBoth = () => {
+  const videoEl = getNativeVideoEl();
+  const audioEl = getAMaudio();
+  const player = getVjsPlayer();
+
+  try {
+    if (player && typeof player.pause === "function") player.pause();
+    else if (videoEl && typeof videoEl.pause === "function") videoEl.pause();
+  } catch {}
+
+  try {
+    if (audioEl && typeof audioEl.pause === "function") audioEl.pause();
+  } catch {}
+
+  setMediaSessionState("paused");
+};
+
+const scheduleForcePlay = (delay = 0, isBootstrap = true, fromUserGesture = false) => {
+  if (isPlayPending) return;
+  if (isBootstrap && !autoplayBootPending) return;
+  if (isBootstrap && autoplayBlockedByPolicy && !fromUserGesture) return;
+
+  clearAutoplayRetry();
+
+  autoplayRetryTimer = window.setTimeout(() => {
+    autoplayRetryTimer = 0;
+    forcePlay({ isBootstrap, fromUserGesture });
+  }, Math.max(0, delay));
+};
+
+const installOneTimeUnlock = () => {
+  if (autoplayUnlockBound) return;
+  autoplayUnlockBound = true;
+
+  const unlock = () => {
+    autoplayUnlockBound = false;
+    autoplayBlockedByPolicy = false;
+    resetRetryBackoff();
+    forcePlay({ isBootstrap: true, fromUserGesture: true });
+  };
+
+  const opts = { once: true, capture: true, passive: true };
+
+  window.addEventListener("pointerdown", unlock, opts);
+  window.addEventListener("touchstart", unlock, opts);
+  window.addEventListener("keydown", unlock, opts);
+  window.addEventListener("click", unlock, opts);
+};
+
+const playMediaPair = async () => {
+  const videoEl = getNativeVideoEl();
+  const audioEl = getAMaudio();
+  const player = getVjsPlayer();
+
+  if (!videoEl) {
+    throw new Error("No playable video element found");
+  }
+
+  ensureLoadStarted(videoEl);
+  ensureLoadStarted(audioEl);
+
+  const [videoReady, audioReady] = await Promise.all([
+    waitForPlayable(videoEl, 2500),
+    waitForPlayable(audioEl, 2500)
+  ]);
+
+  if (!videoReady) {
+    throw new Error("Video is not ready yet");
+  }
+
+  if (audioEl && !audioReady) {
+    throw new Error("Audio is not ready yet");
+  }
+
+  try {
+    if (Number.isFinite(videoEl.duration) && videoEl.duration > 0 && videoEl.currentTime >= videoEl.duration - 0.05) {
+      safeSetCurrentTime(videoEl, 0);
+    }
+  } catch {}
+
+  try {
+    if (audioEl && Number.isFinite(audioEl.duration) && audioEl.duration > 0 && audioEl.currentTime >= audioEl.duration - 0.05) {
+      safeSetCurrentTime(audioEl, 0);
+    }
+  } catch {}
+
+  syncAudioToVideo();
+
+  const playPromises = [];
+
+  try {
+    const videoPlay = player && typeof player.play === "function" ? player.play() : videoEl.play();
+    playPromises.push(Promise.resolve(videoPlay));
+  } catch (err) {
+    playPromises.push(Promise.reject(err));
+  }
+
+  if (audioEl) {
+    try {
+      playPromises.push(Promise.resolve(audioEl.play()));
+    } catch (err) {
+      playPromises.push(Promise.reject(err));
+    }
+  }
+
+  const results = await Promise.allSettled(playPromises);
+  const rejected = results.find((r) => r.status === "rejected");
+
+  if (rejected) {
+    throw rejected.reason;
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, 60));
+
+  if (videoEl.paused || (audioEl && audioEl.paused)) {
+    throw new DOMException("Playback did not remain started", "AbortError");
+  }
+
+  syncAudioToVideo();
+  setMediaSessionState("playing");
+};
+
+async function forcePlay({ isBootstrap = true, fromUserGesture = false } = {}) {
+  if (isPlayPending) return;
+  if (isBootstrap && !autoplayBootPending) return;
+  if (isBootstrap && autoplayBlockedByPolicy && !fromUserGesture) return;
+
+  isPlayPending = true;
+
+  try {
+    await playMediaPair();
+
+    if (isBootstrap) {
+      autoplayBootPending = false;
+      autoplayBlockedByPolicy = false;
+      clearAutoplayRetry();
+      clearAutoplayBootstrapInterval();
+    }
+
+    resetRetryBackoff();
+  } catch (err) {
+    pauseBoth();
+
+    const name = err && err.name ? String(err.name) : "";
+    const message = err && err.message ? String(err.message) : "";
+    const text = `${name} ${message}`.toLowerCase();
+
+    const blocked =
+      name === "NotAllowedError" ||
+      text.includes("notallowederror") ||
+      text.includes("user gesture") ||
+      text.includes("play() failed") ||
+      text.includes("permission") ||
+      text.includes("autoplay");
+
+    if (blocked) {
+      autoplayBlockedByPolicy = true;
+      installOneTimeUnlock();
+    } else if (isBootstrap) {
+      autoplayBlockedByPolicy = false;
+      scheduleForcePlay(nextRetryDelay(), true, false);
+    }
   } finally {
     isPlayPending = false;
   }
+}
+
+const wireMediaElement = (media) => {
+  if (!media || wiredMediaEls.has(media)) return;
+  wiredMediaEls.add(media);
+
+  const eagerRetry = () => {
+    if (autoplayBootPending && !autoplayBlockedByPolicy) {
+      scheduleForcePlay(0, true, false);
+    }
+  };
+
+  const softerRetry = () => {
+    if (autoplayBootPending && !autoplayBlockedByPolicy) {
+      scheduleForcePlay(120, true, false);
+    }
+  };
+
+  media.addEventListener("loadedmetadata", eagerRetry, { passive: true });
+  media.addEventListener("loadeddata", eagerRetry, { passive: true });
+  media.addEventListener("canplay", eagerRetry, { passive: true });
+  media.addEventListener("canplaythrough", eagerRetry, { passive: true });
+  media.addEventListener("playing", syncAudioToVideo, { passive: true });
+  media.addEventListener("timeupdate", syncAudioToVideo, { passive: true });
+  media.addEventListener("waiting", softerRetry, { passive: true });
+  media.addEventListener("stalled", softerRetry, { passive: true });
+  media.addEventListener("suspend", softerRetry, { passive: true });
 };
 
+const bindMediaSession = () => {
+  if (mediaSessionBound) return;
+  if (!("mediaSession" in navigator)) return;
+
+  mediaSessionBound = true;
+
+  try {
+    navigator.mediaSession.setActionHandler("play", () => {
+      forcePlay({ isBootstrap: false, fromUserGesture: true });
+    });
+  } catch {}
+
+  try {
+    navigator.mediaSession.setActionHandler("pause", () => {
+      pauseBoth();
+    });
+  } catch {}
+
+  try {
+    navigator.mediaSession.setActionHandler("stop", () => {
+      pauseBoth();
+    });
+  } catch {}
+};
+
+const bindAutoplayRecovery = () => {
+  wireMediaElement(getNativeVideoEl());
+  wireMediaElement(getAMaudio());
+
+  const player = getVjsPlayer();
+
+  try {
+    if (player && !player.__pokeAutoplayBound) {
+      player.__pokeAutoplayBound = true;
+
+      player.ready(() => {
+        scheduleForcePlay(0, true, false);
+      });
+
+      player.on("loadedmetadata", () => scheduleForcePlay(0, true, false));
+      player.on("loadeddata", () => scheduleForcePlay(0, true, false));
+      player.on("canplay", () => scheduleForcePlay(0, true, false));
+      player.on("canplaythrough", () => scheduleForcePlay(0, true, false));
+      player.on("playing", () => {
+        syncAudioToVideo();
+        setMediaSessionState("playing");
+      });
+      player.on("pause", () => {
+        setMediaSessionState("paused");
+      });
+    }
+  } catch {}
+
+  bindMediaSession();
+};
+
+const initAutoplayRecovery = () => {
+  bindAutoplayRecovery();
+
+  window.addEventListener("load", () => {
+    bindAutoplayRecovery();
+    scheduleForcePlay(0, true, false);
+  }, { passive: true });
+
+  window.addEventListener("pageshow", () => {
+    bindAutoplayRecovery();
+    scheduleForcePlay(0, true, false);
+  }, { passive: true });
+
+  document.addEventListener("visibilitychange", () => {
+    bindAutoplayRecovery();
+
+    if (!document.hidden && autoplayBootPending && !autoplayBlockedByPolicy) {
+      scheduleForcePlay(0, true, false);
+    }
+  }, { passive: true });
+
+  autoplayBootstrapInterval = window.setInterval(() => {
+    bindAutoplayRecovery();
+
+    if (!autoplayBootPending || autoplayBlockedByPolicy) {
+      clearAutoplayBootstrapInterval();
+      return;
+    }
+
+    scheduleForcePlay(0, true, false);
+  }, 500);
+
+  scheduleForcePlay(0, true, false);
+};
+
+initAutoplayRecovery();
 const handleFullscreen = () => {
   const isFullscreen = !!document.fullscreenElement;
   canvases.forEach(c => c.style.display = isFullscreen ? 'none' : 'block');
