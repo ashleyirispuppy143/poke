@@ -2690,7 +2690,6 @@ const drawPause = () => {
   }
 }; 
 
-
 let isPlayPending = false;
 
 const forcePlay = async () => {
@@ -2699,8 +2698,11 @@ const forcePlay = async () => {
 
   const AMaudio = document.getElementById('aud');
   let success = false;
+  let masterAttempts = 0;
 
-  while (!success) {
+  while (!success && masterAttempts < 10) {
+    masterAttempts++;
+
     try {
       AMvideo.currentTime = 0;
       if (AMaudio) AMaudio.currentTime = 0;
@@ -2719,23 +2721,46 @@ const forcePlay = async () => {
       success = !AMvideo.paused;
 
     } catch (error) {
-      const vjsPlayButton = document.querySelector('.vjs-play-control.vjs-paused') || 
-                            document.querySelector('.vjs-big-play-button');
-      
-      if (vjsPlayButton) {
-        vjsPlayButton.click();
-      }
-
-      success = !AMvideo.paused;
+      success = false;
     }
 
     if (!success) {
-      await new Promise(resolve => setTimeout(resolve, 250));
+      for (let i = 0; i < 3; i++) {
+        if (!AMvideo.paused) {
+          success = true;
+          break;
+        }
+
+        const vjsPlayButton = document.querySelector('.vjs-play-control.vjs-paused') || 
+                              document.querySelector('.vjs-big-play-button');
+
+        if (vjsPlayButton) {
+          vjsPlayButton.click();
+
+          const mousedown = new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window });
+          const mouseup = new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window });
+          vjsPlayButton.dispatchEvent(mousedown);
+          vjsPlayButton.dispatchEvent(mouseup);
+        }
+
+        const videoContainer = document.querySelector('.video-js');
+        if (videoContainer && i === 2) {
+            videoContainer.click();
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 400));
+      }
+    }
+
+    success = !AMvideo.paused;
+
+    if (!success) {
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
   }
 
   isPlayPending = false; 
-};
+}; 
 
 const handleFullscreen = () => {
   const isFullscreen = !!document.fullscreenElement;
