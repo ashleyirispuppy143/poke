@@ -447,7 +447,7 @@ app.get("/game-hub", function (req, res) {
         res.send(
           "// @license magnet:?xt=urn:btih:1f739d935676111cfff4b4693e3816e664797050&dn=gpl-3.0.txt GPL-3.0-or-later" +
             `\n` +
-            `// Includes app.js and custom-css.js. Source code can be found for these two files in https://codeberg.org/ashley/poke/src/branch/main/css/` +
+            `// Includes app.js and custom-css.js. Source code can be found for these two files in https://codeberg.org/ashleyirispuppy/poke/src/branch/main/css/` +
             `\n` +
             minimizedJs +
             `\n` +
@@ -469,7 +469,7 @@ app.get("/game-hub", function (req, res) {
         res.send(
           "// @license magnet:?xt=urn:btih:1f739d935676111cfff4b4693e3816e664797050&dn=gpl-3.0.txt GPL-3.0-or-later" +
             `\n` +
-            `// Source code can be found in: https://codeberg.org/ashley/poke/src/branch/main/css/${id}` +
+            `// Source code can be found in: https://codeberg.org/ashleyirispuppy/poke/src/branch/main/css/${id}` +
             `\n` +
             minimizedJs +
             `\n` +

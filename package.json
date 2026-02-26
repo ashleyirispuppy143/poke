@@ -42,7 +42,7 @@
     "node": ">=18"
   },
   "repository": {
-    "url": "https://codeberg.org/Ashley/poketube"
+    "url": "https://codeberg.org/ashleyirispuppy/poketube"
   },
   "license": "GPL-3.0-or-later",
   "keywords": [

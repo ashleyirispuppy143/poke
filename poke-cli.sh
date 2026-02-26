@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-#    Copyright (C) 2024-20xx Poke! (https://codeberg.org/ashley/poke)
+#    Copyright (C) 2024-20xx Poke! (https://codeberg.org/ashleyirispuppy/poke)
 #
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -27,7 +27,7 @@ function display_version {
 echo "poke-cli version 1.2
 
 Play videos from your terminal!
-https://codeberg.org/ashley/poke
+https://codeberg.org/ashleyirispuppy/poke
 
 Copyright (C) 2024-202x Poke
 License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.
