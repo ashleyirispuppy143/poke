@@ -3348,32 +3348,385 @@ try {
 
 
 // custom video.js ui for POKE PLAYER 
- const customVideoJsUI = document.createElement('style');
+ const customVideoJsUI = document.createElement("style");
 customVideoJsUI.innerHTML = `
+/* ---------------------------------------------
+   PokeTube Video.js UI — improved for bright/white scenes
+   - Uses adaptive “glass” surfaces that stay readable on light frames
+   - Adds subtle borders + shadows + text outlines
+   - Keeps your gradient brand progress color
+---------------------------------------------- */
 
-.vjs-title-bar-description {
-  background: #0007;
-  width: fit-content;
-  border-radius: 1em;
-  padding: 1em;
-  font-family: "poketube flex";
-  font-weight: 600;
-  font-stretch: semi-expanded;
+:root{
+  /* Brand */
+  --poke-accent-1: #ff0045;
+  --poke-accent-2: #ff0e55;
+  --poke-accent-3: #ff1d79;
+
+  /* Adaptive glass (works on bright scenes too) */
+  --glass-bg: rgba(20, 20, 20, 0.38);
+  --glass-bg-hover: rgba(20, 20, 20, 0.46);
+  --glass-border: rgba(255, 255, 255, 0.22);
+  --glass-border-strong: rgba(255, 255, 255, 0.30);
+  --glass-shadow: 0 10px 30px rgba(0,0,0,0.32), inset 0 0 0 1px rgba(255,255,255,0.10);
+
+  /* “Light scene rescue” layer (a tiny dark wash that helps on whites) */
+  --scene-contrast-wash: rgba(0,0,0,0.10);
+
+  /* Text */
+  --ui-text: rgba(255,255,255,0.96);
+  --ui-text-soft: rgba(255,255,255,0.86);
+  --ui-text-shadow: 0 1px 2px rgba(0,0,0,0.65);
+  --ui-text-outline: 0 0 1px rgba(0,0,0,0.70);
+
+  /* Radii */
+  --r-outer: 16px;
+  --r-pill: 999px;
+  --r-bubble: 1em;
+
+  /* Sizes */
+  --btn: 38px;
+  --btn-mobile: 34px;
+  --bar-bottom: 12px;
+  --bar-bottom-mobile: 10px;
 }
 
-.vjs-title-bar {
+/* Keep the whole player rounded */
+.video-js,
+.video-js .vjs-tech,
+.video-js .vjs-poster,
+.video-js .vjs-poster img{
+  border-radius: var(--r-outer) !important;
+}
+
+/* Title bar container */
+.vjs-title-bar{
   background: none !important;
-  border-radius: 16px;
+  border-radius: var(--r-outer);
   overflow: hidden;
 }
-.vjs-title-bar-title {
+
+/* Title text readability on bright frames */
+.vjs-title-bar-title{
   font-family: "PokeTube Flex", sans-serif !important;
   font-stretch: ultra-expanded;
   font-weight: 1000;
   font-size: 1.5em;
+  color: var(--ui-text) !important;
+  text-shadow: var(--ui-text-shadow);
+  -webkit-text-stroke: 0.35px rgba(0,0,0,0.35);
 }
-.vjs-play-progress{background-image:linear-gradient(to right,#ff0045,#ff0e55,#ff1d79)}.video-js .vjs-control-bar{bottom:12px!important}.vjs-poster{border-radius:16px}.vjs-poster img{border-radius:16px}.vjs-control-bar{background:transparent!important;border:none!important;box-shadow:none!important;display:flex!important;align-items:center!important;gap:2px;padding:6px 10px;border-radius:16px}.vjs-fullscreen-control,.vjs-remaining-time{background-color:transparent!important}.vjs-control-bar .vjs-button{width:38px;height:38px;min-width:38px;border-radius:50%;background:linear-gradient(180deg,rgba(255,255,255,.18),rgba(255,255,255,.08));-webkit-backdrop-filter:blur(12px) saturate(160%);backdrop-filter:blur(12px) saturate(160%);border:1px solid rgba(255,255,255,.18);box-shadow:0 8px 24px rgba(0,0,0,.35),inset 0 0 0 1px rgba(255,255,255,.10);display:inline-flex;align-items:center;justify-content:center;margin:0 6px;transition:transform 0.12s ease,box-shadow 0.2s ease,background 0.2s ease;vertical-align:middle}.vjs-control-bar .vjs-button:hover{background:linear-gradient(180deg,rgba(255,255,255,.24),rgba(255,255,255,.12));box-shadow:0 10px 28px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,255,255,.16);transform:translateY(-1px)}.vjs-control-bar .vjs-button:active{transform:translateY(0)}.vjs-control-bar .vjs-button:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(255,0,90,.35),inset 0 0 0 1px rgba(255,255,255,.2)}.vjs-control-bar .vjs-icon-placeholder:before{font-size:18px;line-height:38px}.vjs-current-time,.vjs-duration,.vjs-remaining-time,.vjs-time-divider{background:transparent;padding:0 8px;border-radius:999px;box-shadow:none;margin:0;height:38px;line-height:1;display:inline-flex;align-items:center}.vjs-progress-control{flex:1 1 auto;display:flex!important;align-items:center!important;margin:0 6px;padding:0;height:38px}.vjs-progress-control .vjs-progress-holder{height:8px!important;border-radius:999px!important;background:transparent!important;border:none;box-shadow:none;position:relative;margin:0;width:100%}.vjs-progress-control .vjs-progress-holder::before{position:absolute;inset:0;border-radius:inherit;background:linear-gradient(180deg,rgba(255,255,255,.18),rgba(255,255,255,.08));-webkit-backdrop-filter:blur(12px) saturate(160%);backdrop-filter:blur(12px) saturate(160%);border:1px solid rgba(255,255,255,.18);box-shadow:0 8px 24px rgba(0,0,0,.35),inset 0 0 0 1px rgba(255,255,255,.10);pointer-events:none}.vjs-progress-control .vjs-load-progress,.vjs-progress-control .vjs-play-progress{position:relative;z-index:1;border-radius:inherit!important}.vjs-progress-control .vjs-play-progress{background-image:linear-gradient(to right,#ff0045,#ff0e55,#ff1d79)!important}.vjs-progress-control .vjs-slider-handle{width:14px!important;height:14px!important;border-radius:50%!important;background:#fff!important;border:1px solid rgba(255,255,255,.9);box-shadow:0 6px 18px rgba(0,0,0,.35),0 0 0 3px rgba(255,0,90,.20);top:-4px!important;z-index:2}.vjs-volume-panel{gap:8px;align-items:center!important;padding:0;height:38px}.vjs-volume-bar{height:6px!important;border-radius:999px!important;background:#2c2c2c!important;border:none;box-shadow:none;position:relative}.vjs-volume-level{border-radius:inherit!important;background-image:linear-gradient(to right,#ff0045,#ff1d79)!important}.vjs-volume-bar .vjs-slider-handle{width:12px!important;height:12px!important;border-radius:50%!important;background:#fff!important;border:1px solid rgba(255,255,255,.9);top:-3px!important;box-shadow:0 4px 14px rgba(0,0,0,.3),0 0 0 3px rgba(255,0,90,.18)}@media (max-width:640px){.video-js .vjs-control-bar{bottom:10px!important}.vjs-control-bar{gap:8px;padding:6px 8px}.vjs-control-bar .vjs-button{width:34px;height:34px;min-width:34px}.vjs-control-bar .vjs-icon-placeholder:before{font-size:16px;line-height:34px}.vjs-current-time,.vjs-duration,.vjs-remaining-time,.vjs-time-divider{height:34px}.vjs-progress-control{height:34px}.vjs-progress-control .vjs-slider-handle{width:12px!important;height:12px!important;top:-3px!important}}
-`; 
+
+/* Description bubble: more readable on white frames */
+.vjs-title-bar-description{
+  width: fit-content;
+  border-radius: var(--r-bubble);
+  padding: 1em;
+
+  font-family: "PokeTube Flex", "poketube flex", sans-serif;
+  font-weight: 600;
+  font-stretch: semi-expanded;
+
+  color: var(--ui-text);
+  text-shadow: var(--ui-text-shadow);
+  filter: drop-shadow(0 8px 22px rgba(0,0,0,0.25));
+
+  /* layered glass + wash for bright scenes */
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.06)),
+    linear-gradient(180deg, var(--scene-contrast-wash), var(--scene-contrast-wash)),
+    var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  -webkit-backdrop-filter: blur(14px) saturate(170%);
+  backdrop-filter: blur(14px) saturate(170%);
+}
+
+/* Control bar placement */
+.video-js .vjs-control-bar{
+  bottom: var(--bar-bottom) !important;
+}
+
+/* Control bar glass container */
+.vjs-control-bar{
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  display: flex !important;
+  align-items: center !important;
+
+  gap: 2px;
+  padding: 6px 10px;
+  border-radius: var(--r-outer);
+
+  /* A faint wash behind the whole bar to survive white frames */
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.05)),
+    linear-gradient(180deg, var(--scene-contrast-wash), var(--scene-contrast-wash)) !important;
+
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  backdrop-filter: blur(12px) saturate(160%);
+  border: 1px solid rgba(255,255,255,0.12) !important;
+  box-shadow: 0 12px 34px rgba(0,0,0,0.26) !important;
+}
+
+/* Buttons */
+.vjs-control-bar .vjs-button{
+  width: var(--btn);
+  height: var(--btn);
+  min-width: var(--btn);
+  border-radius: 50%;
+
+  /* Slightly darker glass base so it reads on white frames */
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.08)),
+    linear-gradient(180deg, var(--scene-contrast-wash), var(--scene-contrast-wash)),
+    var(--glass-bg);
+
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  backdrop-filter: blur(12px) saturate(160%);
+
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  margin: 0 6px;
+  transition: transform 0.12s ease, box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+  vertical-align: middle;
+}
+
+.vjs-control-bar .vjs-button:hover{
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.24), rgba(255,255,255,0.12)),
+    linear-gradient(180deg, rgba(0,0,0,0.12), rgba(0,0,0,0.12)),
+    var(--glass-bg-hover);
+
+  border-color: var(--glass-border-strong);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.36), inset 0 0 0 1px rgba(255,255,255,0.16);
+  transform: translateY(-1px);
+}
+
+.vjs-control-bar .vjs-button:active{
+  transform: translateY(0);
+}
+
+.vjs-control-bar .vjs-button:focus-visible{
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(255,0,90,0.35),
+    inset 0 0 0 1px rgba(255,255,255,0.20),
+    0 12px 34px rgba(0,0,0,0.32);
+  border-color: rgba(255,255,255,0.30);
+}
+
+/* Icons: keep them readable on white frames */
+.vjs-control-bar .vjs-icon-placeholder:before{
+  font-size: 18px;
+  line-height: var(--btn);
+  color: var(--ui-text);
+  text-shadow: var(--ui-text-shadow);
+  filter: drop-shadow(var(--ui-text-outline));
+}
+
+/* Time text pills */
+.vjs-current-time,
+.vjs-duration,
+.vjs-remaining-time,
+.vjs-time-divider{
+  background: transparent;
+  padding: 0 8px;
+  border-radius: var(--r-pill);
+  box-shadow: none;
+  margin: 0;
+
+  height: var(--btn);
+  line-height: 1;
+
+  display: inline-flex;
+  align-items: center;
+
+  color: var(--ui-text-soft) !important;
+  text-shadow: var(--ui-text-shadow);
+}
+
+/* Ensure remaining time / fullscreen control doesn't add its own background */
+.vjs-fullscreen-control,
+.vjs-remaining-time{
+  background-color: transparent !important;
+}
+
+/* Progress control layout */
+.vjs-progress-control{
+  flex: 1 1 auto;
+  display: flex !important;
+  align-items: center !important;
+  margin: 0 6px;
+  padding: 0;
+  height: var(--btn);
+}
+
+/* Progress bar glass track */
+.vjs-progress-control .vjs-progress-holder{
+  height: 8px !important;
+  border-radius: var(--r-pill) !important;
+  background: transparent !important;
+  border: none;
+  box-shadow: none;
+  position: relative;
+  margin: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* Track surface (stronger contrast for white scenes) */
+.vjs-progress-control .vjs-progress-holder::before{
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.08)),
+    linear-gradient(180deg, rgba(0,0,0,0.14), rgba(0,0,0,0.14)),
+    rgba(20,20,20,0.34);
+
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  backdrop-filter: blur(12px) saturate(160%);
+
+  border: 1px solid rgba(255,255,255,0.18);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.25), inset 0 0 0 1px rgba(255,255,255,0.10);
+  pointer-events: none;
+}
+
+/* Load + play layers */
+.vjs-progress-control .vjs-load-progress,
+.vjs-progress-control .vjs-play-progress{
+  position: relative;
+  z-index: 1;
+  border-radius: inherit !important;
+}
+
+.vjs-progress-control .vjs-play-progress,
+.vjs-play-progress{
+  background-image: linear-gradient(to right, var(--poke-accent-1), var(--poke-accent-2), var(--poke-accent-3)) !important;
+}
+
+/* Scrubber handle */
+.vjs-progress-control .vjs-slider-handle{
+  width: 14px !important;
+  height: 14px !important;
+  border-radius: 50% !important;
+
+  background: rgba(255,255,255,0.95) !important;
+  border: 1px solid rgba(255,255,255,0.95);
+
+  box-shadow:
+    0 8px 20px rgba(0,0,0,0.35),
+    0 0 0 3px rgba(255,0,90,0.22);
+
+  top: -4px !important;
+  z-index: 2;
+}
+
+/* Volume panel */
+.vjs-volume-panel{
+  gap: 8px;
+  align-items: center !important;
+  padding: 0;
+  height: var(--btn);
+}
+
+/* Volume track: make it readable on white frames too */
+.vjs-volume-bar{
+  height: 6px !important;
+  border-radius: var(--r-pill) !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06)),
+    linear-gradient(180deg, rgba(0,0,0,0.18), rgba(0,0,0,0.18)),
+    rgba(18,18,18,0.40) !important;
+
+  border: 1px solid rgba(255,255,255,0.16);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.20);
+  position: relative;
+  overflow: hidden;
+}
+
+.vjs-volume-level{
+  border-radius: inherit !important;
+  background-image: linear-gradient(to right, var(--poke-accent-1), var(--poke-accent-3)) !important;
+}
+
+.vjs-volume-bar .vjs-slider-handle{
+  width: 12px !important;
+  height: 12px !important;
+  border-radius: 50% !important;
+
+  background: rgba(255,255,255,0.95) !important;
+  border: 1px solid rgba(255,255,255,0.95);
+
+  top: -3px !important;
+
+  box-shadow:
+    0 6px 16px rgba(0,0,0,0.28),
+    0 0 0 3px rgba(255,0,90,0.20);
+}
+
+/* Mobile tweaks */
+@media (max-width: 640px){
+  .video-js .vjs-control-bar{
+    bottom: var(--bar-bottom-mobile) !important;
+  }
+
+  .vjs-control-bar{
+    gap: 8px;
+    padding: 6px 8px;
+  }
+
+  .vjs-control-bar .vjs-button{
+    width: var(--btn-mobile);
+    height: var(--btn-mobile);
+    min-width: var(--btn-mobile);
+  }
+
+  .vjs-control-bar .vjs-icon-placeholder:before{
+    font-size: 16px;
+    line-height: var(--btn-mobile);
+  }
+
+  .vjs-current-time,
+  .vjs-duration,
+  .vjs-remaining-time,
+  .vjs-time-divider{
+    height: var(--btn-mobile);
+  }
+
+  .vjs-progress-control{
+    height: var(--btn-mobile);
+  }
+
+  .vjs-progress-control .vjs-slider-handle{
+    width: 12px !important;
+    height: 12px !important;
+    top: -3px !important;
+  }
+}
+
+/* If backdrop-filter isn't supported, fall back to solid-ish surfaces */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))){
+  .vjs-control-bar,
+  .vjs-control-bar .vjs-button,
+  .vjs-title-bar-description,
+  .vjs-progress-control .vjs-progress-holder::before,
+  .vjs-volume-bar{
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background: rgba(18,18,18,0.72) !important;
+    border-color: rgba(255,255,255,0.18) !important;
+  }
+}
+`;
 document.head.appendChild(customVideoJsUI);
 
 
