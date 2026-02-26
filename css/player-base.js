@@ -262,6 +262,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let chromiumAudioStartLockUntil = 0;
   let chromiumPauseToggleGuardUntil = 0;
   let chromiumBgSettlingUntil = 0;
+  let chromiumToggleAudioRepairSerial = 0;
 
   function markExplicitPlay(ms = 15000) {
     explicitPlayUntil = Math.max(explicitPlayUntil, performance.now() + ms);
@@ -322,6 +323,58 @@ document.addEventListener("DOMContentLoaded", () => {
     return isChromiumOnlyBrowser() && performance.now() < chromiumBgSettlingUntil;
   }
 
+  function cancelChromiumToggleAudioRepair() {
+    chromiumToggleAudioRepairSerial += 1;
+  }
+
+  function queueChromiumToggleAudioRepair(reason = "") {
+    if (!hasExternalAudio || qua === "medium") return;
+    if (!isChromiumOnlyBrowser()) return;
+    if (document.visibilityState !== "visible") return;
+    if (mediaSessionForcedPauseActive()) return;
+
+    const serial = ++chromiumToggleAudioRepairSerial;
+    const delays = [0, 90, 180, 320, 520];
+
+    for (const delay of delays) {
+      setTimeout(async () => {
+        if (serial !== chromiumToggleAudioRepairSerial) return;
+        if (!intendedPlaying || restarting || seekingActive || syncing) return;
+        if (document.visibilityState !== "visible") return;
+        if (mediaSessionForcedPauseActive() || userPauseLockActive()) return;
+        if (strictBufferHold || isVideoPaused()) return;
+        if (!audio.paused) return;
+
+        try {
+          audioPauseInFlightUntil = 0;
+          audioPlayAttemptUntil = 0;
+          startupAudioHoldUntil = 0;
+        } catch {}
+
+        const vt = Number(video.currentTime());
+        const at = Number(audio.currentTime);
+        if (isFinite(vt) && (!isFinite(at) || Math.abs(at - vt) > 0.18)) {
+          squelchAudioEvents(260);
+          safeSetCT(audio, vt);
+        }
+
+        forceUnmuteForPlaybackIfAllowed();
+        updateAudioGainImmediate();
+
+        const started = await execProgrammaticAudioPlay({
+          squelchMs: 280,
+          minGapMs: 0,
+          force: true
+        }).catch(() => false);
+
+        if (started && !audio.paused) {
+          audioEverStarted = true;
+          updateAudioGainImmediate();
+        }
+      }, delay);
+    }
+  }
+
   function shouldBlockNewAudioStart() {
     if (!hasExternalAudio || qua === "medium") return false;
     if (!intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) return true;
@@ -345,6 +398,7 @@ document.addEventListener("DOMContentLoaded", () => {
     userPlayIntentUntil = 0;
 
     if (isChromiumOnlyBrowser()) {
+      cancelChromiumToggleAudioRepair();
       cancelBackgroundResumeState();
       intendedPlaying = false;
       setMediaPauseTxn(900);
@@ -364,6 +418,9 @@ document.addEventListener("DOMContentLoaded", () => {
       setChromiumPauseToggleGuard(0);
       setChromiumBgSettling(0);
       setChromiumAudioStartLock(260);
+      audioPauseInFlightUntil = 0;
+      audioPlayAttemptUntil = 0;
+      startupAudioHoldUntil = 0;
     }
   }
 
@@ -1213,6 +1270,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function commitUserPause() {
     markMediaAction("pause");
     clearUserIntents();
+    cancelChromiumToggleAudioRepair();
     cancelBackgroundResumeState();
     strictBufferHold = false;
     strictBufferHoldReason = "";
@@ -2276,6 +2334,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (vOk && intendedPlaying) {
         setSmoothNoHold(900);
         if (isChromiumOnlyBrowser()) setChromiumAudioStartLock(220);
+        if (isChromiumOnlyBrowser() && audio.paused) queueChromiumToggleAudioRepair("play-together-video-ok");
       }
 
       if (!intendedPlaying) return;
@@ -2383,6 +2442,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }).catch(() => false);
           }
         }
+        if (isChromiumOnlyBrowser()) queueChromiumToggleAudioRepair("play-together-finally");
       } else if (intendedPlaying && isVideoPaused() && !audio.paused) {
         if (isHidden && shouldUseBgControllerRetry()) {
           resumeOnVisible = true;
@@ -2400,6 +2460,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function pauseHard() {
+    cancelChromiumToggleAudioRepair();
     strictBufferHold = false;
     strictBufferHoldReason = "";
     strictBufferMissCount = 0;
@@ -2419,6 +2480,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function pauseTogether() {
+    cancelChromiumToggleAudioRepair();
     intendedPlaying = false;
     strictBufferHold = false;
     strictBufferHoldReason = "";
@@ -2549,6 +2611,7 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
           playPromise = execProgrammaticVideoPlay();
         } catch {}
+        if (isChromiumOnlyBrowser()) queueChromiumToggleAudioRepair("media-session-play");
 
         Promise.allSettled([playPromise]).finally(() => {
           if (!mediaSessionActionIsCurrent(actionSerial)) return;
@@ -2560,6 +2623,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             await ensureUnmutedIfNotUserMuted().catch(() => {});
             await playTogether().catch(() => {});
+            if (isChromiumOnlyBrowser()) queueChromiumToggleAudioRepair("media-session-play-confirmed");
 
             if (!mediaSessionActionIsCurrent(actionSerial)) return;
             queuePlayRetryBurst();
@@ -2885,6 +2949,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (isChromiumOnlyBrowser()) {
         chromiumAudioStartLockUntil = 0;
         setChromiumBgSettling(320);
+        queueChromiumToggleAudioRepair("native-video-playing");
       }
     });
 
@@ -2904,8 +2969,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (isChromiumOnlyBrowser()) setChromiumAudioStartLock(260);
       forceUnmuteForPlaybackIfAllowed();
       updateAudioGainImmediate();
-      updateMediaSessionPlaybackState();
       ensureUnmutedIfNotUserMuted().catch(() => {});
+      if (isChromiumOnlyBrowser()) queueChromiumToggleAudioRepair("video-play");
+      updateMediaSessionPlaybackState();
       if (!startupBufferPrimed) {
         queueStartupReadyPoll();
         return;
@@ -2978,6 +3044,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (isChromiumOnlyBrowser()) {
         chromiumAudioStartLockUntil = 0;
         setChromiumBgSettling(320);
+        queueChromiumToggleAudioRepair("videojs-playing");
       }
       if (intendedPlaying && !restarting && audio.paused && !seekingActive && !syncing && !strictBufferHold && !shouldBlockNewAudioStart()) {
         setSmoothNoHold(900);
