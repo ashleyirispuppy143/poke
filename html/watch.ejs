@@ -2691,59 +2691,58 @@ const drawPause = () => {
 };
  
  const AMaudio = document.getElementById("aud");
+let isPlayPending = false;
 
-let isPlayPending = false; 
-
- const originalVideoPause = AMvideo.pause;
-AMvideo.pause = function() {
-  if (isPlayPending) {
-    return; 
-  }
-  return originalVideoPause.apply(this, arguments);
-};
-
- if (AMaudio) {
-  const originalAudioPause = AMaudio.pause;
-  AMaudio.pause = function() {
-    if (isPlayPending) {
-      return;  
-    }
-    return originalAudioPause.apply(this, arguments);
-  };
-}
- 
- 
 const forcePlay = async () => {
   if (isPlayPending) return;
   isPlayPending = true;
 
-  try {
-    // 1. Reset times BEFORE calling play() to prevent interruption errors
-    AMvideo.currentTime = 0;
-    if (AMaudio) AMaudio.currentTime = 0;
+  const maxTries = 3;
+  let attempt = 0;
+  let success = false;
 
-    // 2. Trigger play(). The browser automatically waits for enough data internally.
-    const playPromises = [AMvideo.play()];
-    if (AMaudio) {
-      playPromises.push(AMaudio.play());
+  while (attempt < maxTries && !success) {
+    attempt++;
+    
+    try {
+      // 1. Reset times BEFORE calling play()
+      AMvideo.currentTime = 0;
+      if (AMaudio) AMaudio.currentTime = 0;
+
+      // 2. Fire the play requests
+      const playPromises = [AMvideo.play()];
+      if (AMaudio) {
+        playPromises.push(AMaudio.play());
+      }
+
+      // 3. Wait for them to resolve
+      await Promise.all(playPromises);
+
+      // If we made it to this line, the promises resolved successfully!
+      success = true;
+
+      // 4. Graceful drift correction
+      if (AMaudio && Math.abs(AMvideo.currentTime - AMaudio.currentTime) > 0.05) {
+        AMaudio.currentTime = AMvideo.currentTime;
+      }
+
+    } catch (error) {
+      console.warn(`Play attempt ${attempt} failed:`, error.name, error.message);
+      
+      if (attempt >= maxTries) {
+        // Only log the final hard failure if it's not a standard interrupt
+        if (error.name !== "AbortError" && error.name !== "NotAllowedError") {
+          console.error("Play failed completely after 3 tries:", error.name, error.message);
+        }
+      } else {
+        // Wait 200ms before trying again to let the browser catch its breath
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
     }
-
-    // Await native browser loading and playback start
-    await Promise.all(playPromises);
-
-    // 3. Graceful drift correction (fixes the issue your old 0.5 check was trying to solve)
-    if (AMaudio && Math.abs(AMvideo.currentTime - AMaudio.currentTime) > 0.05) {
-      AMaudio.currentTime = AMvideo.currentTime;
-    }
-
-  } catch (error) {
-    // Ignore harmless DOM exceptions
-    if (error.name !== "AbortError" && error.name !== "NotAllowedError") {
-      console.error("Play failed for another reason:", error.name, error.message);
-    }
-  } finally {
-    isPlayPending = false; 
   }
+
+  // Release the lock whether we succeeded or failed 3 times
+  isPlayPending = false; 
 };
 
 const handleFullscreen = () => {
