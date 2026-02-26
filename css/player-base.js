@@ -14,7 +14,6 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  * Available under Apache License Version 2.0
  * <https://github.com/mozilla/vtt.js/blob/main/LICENSE>
  */ 
-
 document.addEventListener("DOMContentLoaded", () => {
   const video = videojs("video", {
     controls: true,
@@ -263,6 +262,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let chromiumPauseToggleGuardUntil = 0;
   let chromiumBgSettlingUntil = 0;
   let chromiumToggleAudioRepairSerial = 0;
+  let hiddenMediaSessionPlayUntil = 0;
 
   function markExplicitPlay(ms = 15000) {
     explicitPlayUntil = Math.max(explicitPlayUntil, performance.now() + ms);
@@ -323,6 +323,19 @@ document.addEventListener("DOMContentLoaded", () => {
     return isChromiumOnlyBrowser() && performance.now() < chromiumBgSettlingUntil;
   }
 
+  function armHiddenMediaSessionPlay(ms = 5000) {
+    if (!isChromiumOnlyBrowser()) return;
+    hiddenMediaSessionPlayUntil = Math.max(hiddenMediaSessionPlayUntil, performance.now() + Math.max(0, Number(ms) || 0));
+  }
+
+  function hiddenMediaSessionPlayActive() {
+    return isChromiumOnlyBrowser() && performance.now() < hiddenMediaSessionPlayUntil;
+  }
+
+  function clearHiddenMediaSessionPlay() {
+    hiddenMediaSessionPlayUntil = 0;
+  }
+
   function cancelChromiumToggleAudioRepair() {
     chromiumToggleAudioRepairSerial += 1;
   }
@@ -330,7 +343,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function queueChromiumToggleAudioRepair(reason = "") {
     if (!hasExternalAudio || qua === "medium") return;
     if (!isChromiumOnlyBrowser()) return;
-    if (document.visibilityState !== "visible") return;
+    if (document.visibilityState !== "visible" && !hiddenMediaSessionPlayActive()) return;
     if (mediaSessionForcedPauseActive()) return;
 
     const serial = ++chromiumToggleAudioRepairSerial;
@@ -340,9 +353,10 @@ document.addEventListener("DOMContentLoaded", () => {
       setTimeout(async () => {
         if (serial !== chromiumToggleAudioRepairSerial) return;
         if (!intendedPlaying || restarting || seekingActive || syncing) return;
-        if (document.visibilityState !== "visible") return;
+        if (document.visibilityState !== "visible" && !hiddenMediaSessionPlayActive()) return;
         if (mediaSessionForcedPauseActive() || userPauseLockActive()) return;
-        if (strictBufferHold || isVideoPaused()) return;
+        if (strictBufferHold) return;
+        if (!hiddenMediaSessionPlayActive() && isVideoPaused()) return;
         if (!audio.paused) return;
 
         try {
@@ -379,15 +393,27 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!hasExternalAudio || qua === "medium") return false;
     if (!intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) return true;
     if (!isChromiumOnlyBrowser()) return false;
-    if (document.visibilityState === "hidden") return true;
-    if (chromiumPauseToggleGuardActive()) return true;
-    if (chromiumAudioStartLocked()) return true;
-    if (chromiumBgSettlingActive() && isVideoPaused()) return true;
-    if (isVideoPaused()) return true;
-    if (getVideoReadyState() < 3) return true;
-    try {
-      if (video.hasClass("vjs-waiting")) return true;
-    } catch {}
+
+    const allowHiddenBootstrap =
+      document.visibilityState === "hidden" &&
+      hiddenMediaSessionPlayActive();
+
+    if (document.visibilityState === "hidden" && !allowHiddenBootstrap) return true;
+    if (chromiumPauseToggleGuardActive() && !allowHiddenBootstrap) return true;
+    if (chromiumAudioStartLocked() && !allowHiddenBootstrap) return true;
+    if (chromiumBgSettlingActive() && isVideoPaused() && !allowHiddenBootstrap) return true;
+
+    if (!allowHiddenBootstrap) {
+      if (isVideoPaused()) return true;
+      if (getVideoReadyState() < 3) return true;
+      try {
+        if (video.hasClass("vjs-waiting")) return true;
+      } catch {}
+      return false;
+    }
+
+    const t = Number(video.currentTime());
+    if (!canStartAudioAt(t)) return true;
     return false;
   }
 
@@ -1271,6 +1297,7 @@ document.addEventListener("DOMContentLoaded", () => {
     markMediaAction("pause");
     clearUserIntents();
     cancelChromiumToggleAudioRepair();
+    clearHiddenMediaSessionPlay();
     cancelBackgroundResumeState();
     strictBufferHold = false;
     strictBufferHoldReason = "";
@@ -2461,6 +2488,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function pauseHard() {
     cancelChromiumToggleAudioRepair();
+    clearHiddenMediaSessionPlay();
     strictBufferHold = false;
     strictBufferHoldReason = "";
     strictBufferMissCount = 0;
@@ -2481,6 +2509,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function pauseTogether() {
     cancelChromiumToggleAudioRepair();
+    clearHiddenMediaSessionPlay();
     intendedPlaying = false;
     strictBufferHold = false;
     strictBufferHoldReason = "";
@@ -2654,6 +2683,7 @@ document.addEventListener("DOMContentLoaded", () => {
         syncing = false;
         resumeOnVisible = false;
         clearUserIntents();
+        clearHiddenMediaSessionPlay();
         cancelBackgroundResumeState();
 
         updateMediaSessionPlaybackState();
@@ -2663,6 +2693,12 @@ document.addEventListener("DOMContentLoaded", () => {
       navigator.mediaSession.setActionHandler("play", () => {
         const actionSerial = nextMediaSessionActionSerial();
         clearMediaSessionForcedPause();
+
+        if (document.visibilityState === "hidden") {
+          armHiddenMediaSessionPlay(5000);
+        } else {
+          clearHiddenMediaSessionPlay();
+        }
 
         markMediaAction("play");
         markUserPlayIntent(1400);
@@ -2690,12 +2726,27 @@ document.addEventListener("DOMContentLoaded", () => {
         updateAudioGainImmediate();
 
         let playPromise = null;
+        let audioBootstrapPromise = null;
+
         try {
           playPromise = execProgrammaticVideoPlay();
         } catch {}
+
+        try {
+          if (hiddenMediaSessionPlayActive() && hasExternalAudio && qua !== "medium") {
+            const vt = Number(video.currentTime()) || 0;
+            safeSetCT(audio, vt);
+            audioBootstrapPromise = execProgrammaticAudioPlay({
+              squelchMs: 520,
+              minGapMs: 0,
+              force: true
+            });
+          }
+        } catch {}
+
         if (isChromiumOnlyBrowser()) queueChromiumToggleAudioRepair("media-session-play");
 
-        Promise.allSettled([playPromise]).finally(() => {
+        Promise.allSettled([playPromise, audioBootstrapPromise]).finally(() => {
           if (!mediaSessionActionIsCurrent(actionSerial)) return;
 
           setTimeout(async () => {
@@ -3297,6 +3348,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       window.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible") {
+          clearHiddenMediaSessionPlay();
           bgAutoResumeSuppressed = false;
 
           strictBufferCoolDownUntil = Math.max(strictBufferCoolDownUntil, performance.now() + 1200);
@@ -3416,7 +3468,8 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {}
     setupMediaSession();
   }
-}); 
+});
+
 document.addEventListener('keydown', function(event) {
     // Ignore key presses if typing in an input or textarea
     if (event.target.tagName.toLowerCase() === 'input' || event.target.tagName.toLowerCase() === 'textarea') {
