@@ -2729,9 +2729,9 @@ const forcePlay = async () => {
     
     await Promise.all([waitForMeta(AMvideo), waitForMeta(AMaudio)]);
 
-    if (vjsPlayer) vjsPlayer.currentTime(0);
-    else AMvideo.currentTime = 0;
-    if (AMaudio) AMaudio.currentTime = 0;
+    if (vjsPlayer) vjsPlayer.currentTime(0.001);
+    else AMvideo.currentTime = 0.001;
+    if (AMaudio) AMaudio.currentTime = 0.001;
 
     const promises = [];
     if (vjsPlayer) {
@@ -2758,7 +2758,6 @@ const forcePlay = async () => {
     isPlayPending = false;
   }
 };
-
 
 const handleFullscreen = () => {
   const isFullscreen = !!document.fullscreenElement;
