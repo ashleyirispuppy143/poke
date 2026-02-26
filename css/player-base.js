@@ -2953,7 +2953,7 @@ document.addEventListener('keydown', function(event) {
 });
 
 
- // https://codeberg.org/ashley/poke/src/branch/main/src/libpoketube/libpoketube-youtubei-objects.json
+ // https://codeberg.org/ashleyirispuppy/poke/src/branch/main/src/libpoketube/libpoketube-youtubei-objects.json
 
 
  const FORMATS = {
@@ -3225,7 +3225,7 @@ const base_player_old_old = "https://www.youtube.com/s/player/a87a9450/player_ia
 const base_player_old = "https://www.youtube.com/s/player/2d24ba15/player_ias.vflset/en_US/base.js";
 const base_player_broken = "https://www.youtube.com/s/player/6740c111/player_ias.vflset/en_US/base.js";
 const hey = " please dont use the above player base stuff!! tyyyyyyyy <3 "
-const youtubeobjects = "https://codeberg.org/ashley/poke/raw/branch/main/src/libpoketube/libpoketube-youtubei-objects.json"
+const youtubeobjects = "https://codeberg.org/ashleyirispuppy/poke/raw/branch/main/src/libpoketube/libpoketube-youtubei-objects.json"
 const watchURl = "https://youtube.com/watch"
 const base_player = "https://www.youtube.com/s/player/0004de42/player_ias.vflset/en_US/base.js";
 const base_player_poketube = "https://poketube.fun/s/player/0004de42/player_ias.vflset/en_US/base.js";
@@ -3309,7 +3309,7 @@ const POKEPLAYEROBJECTS = {
   base_player_broken: "https://www.youtube.com/s/player/6740c111/player_ias.vflset/en_US/base.js",
   base_player: "https://www.youtube.com/s/player/0004de42/player_ias.vflset/en_US/base.js",
   base_player_poketube: "https://poketube.fun/s/player/0004de42/player_ias.vflset/en_US/base.js",
-  youtubeobjects: "https://codeberg.org/ashley/poke/raw/branch/main/src/libpoketube/libpoketube-youtubei-objects.json",
+  youtubeobjects: "https://codeberg.org/ashleyirispuppy/poke/raw/branch/main/src/libpoketube/libpoketube-youtubei-objects.json",
   watchURL: "https://youtube.com/watch",
   youtube_home: "https://www.youtube.com/",
   youtube_trending: "https://www.youtube.com/feed/trending",

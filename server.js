@@ -2,7 +2,7 @@
 
     PokeTube is an Free/Libre youtube front-end. this is our main file.
   
-    Copyright (C) 2021-2024 POKETUBE (https://codeberg.org/Ashley/poketube)
+    Copyright (C) 2021-2024 POKETUBE (https://codeberg.org/ashleyirispuppy/poketube)
     
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -166,7 +166,7 @@ const limiter = rateLimit({
       );
       res.header(
         "Hey-there",
-        "Do u wanna help poke? contributions are welcome :3 https://codeberg.org/Ashley/poke"
+        "Do u wanna help poke? contributions are welcome :3 https://codeberg.org/ashleyirispuppy/poke"
       );
      
       res.header(

@@ -67,7 +67,7 @@ Poke uses Free Software codecs! No non-free components included :3
      
  
 2. **Clone Repo**
-   - Codeberg: `$ git clone https://codeberg.org/ashley/poke.git`
+   - Codeberg: `$ git clone https://codeberg.org/ashleyirispuppy/poke.git`
    - GitHub: `$ git clone https://github.com/ashley0143/poke.git`
     
    reccomended unoffical mirrors:
@@ -115,7 +115,7 @@ poke proudly does not support the ["source first"](https://sourcefirst.com/) or 
 please dont use the term "open source", see gnu.org/not-open-source for more information on why its a wrong term to use!
 
 
-[Code Of conduct](https://codeberg.org/Ashley/poke/src/branch/main/CODE_OF_CONDUCT.md)
+[Code Of conduct](https://codeberg.org/ashleyirispuppy/poke/src/branch/main/CODE_OF_CONDUCT.md)
 
 <hr>
 
@@ -124,4 +124,4 @@ please dont use the term "open source", see gnu.org/not-open-source for more inf
 TL;DR: we dont collect or share your personal info that's it lol
 <hr>
 
-<p align="center"> <a href="https://www.amd.com/en/products/processors/server/epyc/7003-series/amd-epyc-7543.html"> <img width="65" height="65" src="https://codeberg.org/ashley/pages/raw/branch/main/amd.jpeg" alt="AMD EPYC"> </a> <a href="https://ubuntu.com/server"> <img width="65" height="65" src="https://res.cloudinary.com/canonical/image/fetch/f_auto,q_auto,fl_sanitize,w_317/https%3A%2F%2Fassets.ubuntu.com%2Fv1%2Ff76dd871-ubuntu-certified.png" alt="Ubuntu Certified"> </a> </p> <p align="center"> <small>Poke is proudly powered by AMD + Ubuntu servers!!!!!!!!!! (via Skrime Hosting). Parts of Poke ran on Glitch.com from <i>2021–2023</i>.</small> </p> <p align="center"> <a href="https://glitch.com/"> <img src="https://cdn.glitch.global/d68d17bb-f2c0-4bc3-993f-50902734f652/glitch-fastly-lock-up.svg" alt="Glitch logo"> </a> </p>
+<p align="center"> <a href="https://www.amd.com/en/products/processors/server/epyc/7003-series/amd-epyc-7543.html"> <img width="65" height="65" src="https://codeberg.org/ashleyirispuppy/pages/raw/branch/main/amd.jpeg" alt="AMD EPYC"> </a> <a href="https://ubuntu.com/server"> <img width="65" height="65" src="https://res.cloudinary.com/canonical/image/fetch/f_auto,q_auto,fl_sanitize,w_317/https%3A%2F%2Fassets.ubuntu.com%2Fv1%2Ff76dd871-ubuntu-certified.png" alt="Ubuntu Certified"> </a> </p> <p align="center"> <small>Poke is proudly powered by AMD + Ubuntu servers!!!!!!!!!! (via Skrime Hosting). Parts of Poke ran on Glitch.com from <i>2021–2023</i>.</small> </p> <p align="center"> <a href="https://glitch.com/"> <img src="https://cdn.glitch.global/d68d17bb-f2c0-4bc3-993f-50902734f652/glitch-fastly-lock-up.svg" alt="Glitch logo"> </a> </p>

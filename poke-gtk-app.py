@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-#    Copyright (C) 2024-20xx Poke! (https://codeberg.org/ashley/poke)
+#    Copyright (C) 2024-20xx Poke! (https://codeberg.org/ashleyirispuppy/poke)
 #
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
