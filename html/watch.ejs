@@ -2691,53 +2691,99 @@ const drawPause = () => {
 }; 
 let isPlayPending = false;
 
+// Track user interaction so we don’t have to refresh
+let hasUserInteracted = false;
+
+// Wait for first real interaction
+const initUserInteraction = () => {
+  const markInteracted = () => {
+    hasUserInteracted = true;
+    document.body.removeEventListener("click", markInteracted);
+    document.body.removeEventListener("keydown", markInteracted);
+    document.body.removeEventListener("touchstart", markInteracted);
+  }
+  document.body.addEventListener("click", markInteracted, true);
+  document.body.addEventListener("keydown", markInteracted, true);
+  document.body.addEventListener("touchstart", markInteracted, true);
+};
+
+// Call this once on page load
+initUserInteraction();
+
 const forcePlay = async () => {
   if (isPlayPending) return;
+  if (!hasUserInteracted) {
+    // If user hasn’t interacted yet, just bail
+    return;
+  }
+
   isPlayPending = true;
+  const AMaudio = document.getElementById("aud");
 
-  const AMaudio = document.getElementById('aud');
+  if (AMvideo) AMvideo.setAttribute("preload", "auto");
+  if (AMaudio) AMaudio.setAttribute("preload", "auto");
 
-  // Force preloading
-  if (AMvideo) AMvideo.setAttribute('preload', 'auto');
-  if (AMaudio) AMaudio.setAttribute('preload', 'auto');
+  const getVjsPlayer = () =>
+    new Promise((resolve) => {
+      if (!window.videojs || !AMvideo) return resolve(null);
+      let p = AMvideo.id ? window.videojs.getPlayer(AMvideo.id) : null;
+      if (!p && AMvideo.closest(".video-js")) {
+        p = AMvideo.closest(".video-js").player;
+      }
+      if (p) {
+        if (p.isReady_) resolve(p);
+        else p.ready(() => resolve(p));
+      } else {
+        resolve(null);
+      }
+    });
+
+  const waitForMeta = (media) =>
+    new Promise((resolve) => {
+      if (!media || media.readyState > 0) return resolve();
+      const done = () => {
+        media.removeEventListener("loadedmetadata", done);
+        resolve();
+      };
+      media.addEventListener("loadedmetadata", done);
+      setTimeout(done, 500);
+    });
 
   try {
-    // 1. TEMPORARILY MUTE EVERYTHING to bypass the browser's first-load block
-    let originalVideoMuteState = AMvideo.muted;
-    AMvideo.muted = true;
-    
-    if (AMaudio) {
-      AMaudio.muted = true;
-    }
+    const vjsPlayer = await getVjsPlayer();
 
-    // 2. Apply the micro-seek hack
-    AMvideo.currentTime = 0.001;
+    await Promise.all([waitForMeta(AMvideo), waitForMeta(AMaudio)]);
+
+    if (vjsPlayer) vjsPlayer.currentTime(0.001);
+    else AMvideo.currentTime = 0.001;
     if (AMaudio) AMaudio.currentTime = 0.001;
 
-    // 3. Fire the play commands (The browser will allow this because it's muted)
-    const promises = [AMvideo.play()];
+    const promises = [];
+    if (vjsPlayer) {
+      const p = vjsPlayer.play();
+      if (p !== undefined) promises.push(p);
+    } else {
+      promises.push(AMvideo.play());
+    }
     if (AMaudio) promises.push(AMaudio.play());
 
     await Promise.all(promises);
 
-    // 4. THE INSTANT it successfully starts playing, UNMUTE IT.
-    AMvideo.muted = originalVideoMuteState;
-    if (AMaudio) {
-      AMaudio.muted = false;
-      // Final sync check
-      if (Math.abs(AMvideo.currentTime - AMaudio.currentTime) > 0.05) {
-        AMaudio.currentTime = AMvideo.currentTime;
-      }
+    if (AMaudio && Math.abs(AMvideo.currentTime - AMaudio.currentTime) > 0.05) {
+      AMaudio.currentTime = AMvideo.currentTime;
     }
-
   } catch (err) {
-    // If even the muted trick fails, fall back to the invisible interaction trap
+    // fallback: re-request after next interaction
     const unlock = () => {
-      ['click', 'keydown', 'touchstart'].forEach(evt => document.removeEventListener(evt, unlock));
+      ["click", "keydown", "touchstart"].forEach((evt) =>
+        document.removeEventListener(evt, unlock)
+      );
       isPlayPending = false;
       forcePlay();
     };
-    ['click', 'keydown', 'touchstart'].forEach(evt => document.addEventListener(evt, unlock, { once: true }));
+    ["click", "keydown", "touchstart"].forEach((evt) =>
+      document.addEventListener(evt, unlock, { once: true })
+    );
   } finally {
     isPlayPending = false;
   }
