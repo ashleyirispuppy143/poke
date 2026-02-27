@@ -1240,6 +1240,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (token !== seekRecoveryToken) return;
         if (restarting || seekingActive || syncing || !intendedPlaying) return;
+        if (userPauseIntentActive() || userPauseLockActive()) return;
 
         const vt = Number(video.currentTime());
         const at = Number(audio.currentTime);
@@ -1296,6 +1297,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (token !== seekRecoveryToken) return;
         if (restarting || syncing || seekingActive || !intendedPlaying) return;
+        if (userPauseIntentActive() || userPauseLockActive()) return;
 
         const isHidden = document.visibilityState === "hidden";
         const vPaused = isVideoPaused();
@@ -2257,9 +2259,6 @@ document.addEventListener("DOMContentLoaded", () => {
       const vt = Number(video.currentTime());
       if (isFinite(vt)) safeSetCT(audio, vt);
 
-      if (!isVideoPaused()) execProgrammaticVideoPause();
-      if (!audio.paused) execProgrammaticAudioPause(300);
-
       const vReady = await waitForReadyStateOrCanPlay(v, 3, 3200);
       const aReady = await waitForReadyStateOrCanPlay(audio, 3, 3200);
 
@@ -2284,8 +2283,8 @@ document.addEventListener("DOMContentLoaded", () => {
         (document.visibilityState === "hidden" && shouldUseBgControllerRetry() && isVideoPaused());
 
       if (!seekSyncWantedPlaying || !intendedPlaying || mediaSessionForcedPauseActive()) {
-        execProgrammaticVideoPause();
-        execProgrammaticAudioPause(300);
+        if (!isVideoPaused()) execProgrammaticVideoPause();
+        if (!audio.paused) execProgrammaticAudioPause(300);
         return;
       }
 
@@ -2294,6 +2293,7 @@ document.addEventListener("DOMContentLoaded", () => {
         strictBufferHoldReason = "seek-buffer";
         strictBufferHoldMinUntil = Math.max(strictBufferHoldMinUntil, performance.now() + 450);
         armResumeAfterBuffer(8000);
+        if (!audio.paused) execProgrammaticAudioPause(300);
         return;
       }
 
@@ -2371,7 +2371,7 @@ document.addEventListener("DOMContentLoaded", () => {
       strictBufferHoldReason = reason || (videoNeedsBuffer ? "video" : "audio");
       strictBufferHoldMinUntil = Math.max(strictBufferHoldMinUntil, now + 520);
 
-      if (!isVideoPaused()) execProgrammaticVideoPause();
+      if (!userPlayIntentActive() && !isVideoPaused()) execProgrammaticVideoPause();
       if (!audio.paused) execProgrammaticAudioPause(300);
 
       safeSetCT(audio, vt);
@@ -2894,7 +2894,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const tStrict = Number(video.currentTime()) || 0;
 
         const vTech = getPlayableVideoEl() || videoEl;
-        const warmGate = resumeWarmActive() || (document.visibilityState === "hidden" && explicitPlayActive());
+        const warmGate = resumeWarmActive() || explicitPlayActive() || userPlayIntentActive() || (document.visibilityState === "hidden" && explicitPlayActive());
         const gateOk = warmGate
           ? (canPlayAt(vTech, tStrict) && canStartAudioAt(tStrict))
           : bothPlayableAt(tStrict);
@@ -2903,7 +2903,7 @@ document.addEventListener("DOMContentLoaded", () => {
           strictBufferHold = true;
           strictBufferHoldReason = "strict-play-gate";
           strictBufferHoldMinUntil = Math.max(strictBufferHoldMinUntil, performance.now() + 520);
-          if (!isVideoPaused()) execProgrammaticVideoPause();
+          if (!userPlayIntentActive() && !isVideoPaused()) execProgrammaticVideoPause();
           if (!audio.paused) execProgrammaticAudioPause(300);
           safeSetCT(audio, tStrict);
           armResumeAfterBuffer(8000);
@@ -3200,132 +3200,38 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function setupUserPauseIntentDetection() {
     const root = video?.el?.() || videoEl || document;
-    let pendingTechTogglePausedState = null;
 
-    const getTargetEl = (target) => {
-      try {
-        return target && target.nodeType === 1 ? target : null;
-      } catch {}
-      return null;
-    };
-
-    const isPrimaryActivation = (event) => {
-      try {
-        if (event?.type === "pointerdown") {
-          if (event.isPrimary === false) return false;
-          if (event.pointerType === "mouse" && typeof event.button === "number" && event.button !== 0) return false;
-        } else if (event?.type === "mousedown") {
-          if (typeof event.button === "number" && event.button !== 0) return false;
-        }
-      } catch {}
-      return true;
-    };
-
-    const isPlayControlTarget = (target) => {
-      try {
-        const el = getTargetEl(target);
-        return !!el?.closest?.(".vjs-play-control, .vjs-big-play-button");
-      } catch {}
-      return false;
-    };
-
-    const isTechSurfaceTarget = (target) => {
-      try {
-        const el = getTargetEl(target);
-        if (!el) return false;
-        if (el.closest?.(".vjs-control-bar, .vjs-menu, .vjs-menu-content, .vjs-slider, .vjs-control")) return false;
-        return !!el.closest?.(".vjs-tech, video");
-      } catch {}
-      return false;
-    };
-
-    const onPressStart = (event) => {
-      if (document.visibilityState !== "visible") return;
-      if (!isPrimaryActivation(event)) return;
-
-      if (isPlayControlTarget(event.target)) {
-        pendingTechTogglePausedState = null;
-        if (isVideoPaused()) {
-          markUserPlayIntent();
-        } else {
-          markUserPauseIntent();
-          lockPauseIntent(2200);
-        }
-        return;
+    const onInteraction = (e) => {
+      if (!e.isTrusted) return;
+      const target = e.target;
+      if (target && target.closest && target.closest('.vjs-tech, video, .vjs-control-bar, .vjs-big-play-button, .vjs-play-control')) {
+         const now = performance.now();
+         userPauseIntentUntil = now + 800;
+         userPlayIntentUntil = now + 800;
+         userPauseLockUntil = now + 800;
       }
-
-      if (isTechSurfaceTarget(event.target)) {
-        pendingTechTogglePausedState = isVideoPaused();
-        return;
-      }
-
-      pendingTechTogglePausedState = null;
-    };
-
-    const onClick = (event) => {
-      if (document.visibilityState !== "visible") return;
-
-      if (isPlayControlTarget(event.target)) {
-        pendingTechTogglePausedState = null;
-        return;
-      }
-
-      if (!isTechSurfaceTarget(event.target)) {
-        pendingTechTogglePausedState = null;
-        return;
-      }
-
-      const wasPaused = pendingTechTogglePausedState;
-      pendingTechTogglePausedState = null;
-
-      if (typeof wasPaused !== "boolean") return;
-
-      requestAnimationFrame(() => {
-        const nowPaused = isVideoPaused();
-        if (wasPaused && !nowPaused) {
-          markUserPlayIntent(900);
-        } else if (!wasPaused && nowPaused) {
-          markUserPauseIntent(900);
-          lockPauseIntent(2200);
-        }
-      });
-    };
-
-    const onKeyDown = (event) => {
-      if (document.visibilityState !== "visible") return;
-      const code = event.code || event.key || "";
-      if (code === "Space" || code === "KeyK" || code === "MediaPlayPause") {
-        if (isVideoPaused()) {
-          markUserPlayIntent();
-        } else {
-          markUserPauseIntent();
-          lockPauseIntent(2200);
-        }
-        return;
-      }
-      if (code === "MediaPause" || code === "MediaStop") {
-        markUserPauseIntent();
-        lockPauseIntent(2200);
-      }
-    };
-
-    const clearPendingTechToggle = () => {
-      pendingTechTogglePausedState = null;
     };
 
     try {
-      if ("PointerEvent" in window) {
-        root.addEventListener("pointerdown", onPressStart, true);
-      } else {
-        root.addEventListener("mousedown", onPressStart, true);
-        root.addEventListener("touchstart", onPressStart, true);
-      }
+       if ("PointerEvent" in window) {
+           root.addEventListener("pointerup", onInteraction, true);
+       } else {
+           root.addEventListener("mouseup", onInteraction, true);
+           root.addEventListener("touchend", onInteraction, true);
+       }
+       root.addEventListener("click", onInteraction, true);
     } catch {}
 
-    try { root.addEventListener("click", onClick, true); } catch {}
-    try { root.addEventListener("pointercancel", clearPendingTechToggle, true); } catch {}
-    try { root.addEventListener("touchcancel", clearPendingTechToggle, true); } catch {}
-    try { root.addEventListener("dragstart", clearPendingTechToggle, true); } catch {}
+    const onKeyDown = (e) => {
+      if (!e.isTrusted) return;
+      const code = e.code || e.key || "";
+      if (["Space", "KeyK", "MediaPlayPause", "MediaPause", "MediaStop", "MediaPlay"].includes(code)) {
+         const now = performance.now();
+         userPauseIntentUntil = now + 800;
+         userPlayIntentUntil = now + 800;
+         userPauseLockUntil = now + 800;
+      }
+    };
     try { document.addEventListener("keydown", onKeyDown, true); } catch {}
   }
 
@@ -3832,12 +3738,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (seekingActive || seekSyncFinishing) return;
 
-      if (hardPauseLatchActive()) {
-        commitUserPause();
-        return;
-      }
-
-      if (shouldTreatVisiblePauseAsUserPause()) {
+      if (hardPauseLatchActive() || userPauseIntentActive() || shouldTreatVisiblePauseAsUserPause()) {
         commitUserPause();
         return;
       }
@@ -3925,6 +3826,11 @@ document.addEventListener("DOMContentLoaded", () => {
     video.on("play", () => {
       if (restarting || isProgrammaticPlay) return;
 
+      if (userPlayIntentActive()) {
+        clearUserIntents();
+        intendedPlaying = true;
+      }
+
       if ((!intendedPlaying || userPauseLockActive() || hardPauseLatchActive() || mediaSessionForcedPauseActive()) && !userPlayIntentActive() && !startupAutoplayKickInFlight && !wantsStartupAutoplay()) {
         execProgrammaticVideoPause();
         return;
@@ -3955,17 +3861,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
     video.on("pause", () => {
       if (restarting || isProgrammaticPause) return;
-
       if (seekingActive || seekSyncFinishing) return;
 
-      if (hardPauseLatchActive()) {
+      if (userPauseIntentActive() || hardPauseLatchActive() || shouldTreatVisiblePauseAsUserPause()) {
         commitUserPause();
         return;
       }
 
-      if (shouldTreatVisiblePauseAsUserPause()) {
-        commitUserPause();
-        return;
+      if (document.visibilityState === "visible" &&
+          !video.hasClass("vjs-waiting") &&
+          getVideoReadyState() >= 2 &&
+          !inMediaTxnWindow() &&
+          !resumeWarmActive()) {
+          commitUserPause();
+          return;
       }
 
       if (shouldRepairUnexpectedPause("video")) {
@@ -4138,8 +4047,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       strictBufferCoolDownUntil = Math.max(strictBufferCoolDownUntil, performance.now() + 900);
 
-      execProgrammaticVideoPause();
-      execProgrammaticAudioPause(300);
+      if (!audio.paused) execProgrammaticAudioPause(300);
 
       const at0 = Number(audio.currentTime);
       if (isFinite(seekStartTime)) {
@@ -4453,7 +4361,8 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {}
     setupMediaSession();
   }
-}); 
+});
+
 
 document.addEventListener('keydown', function(event) {
     // Ignore key presses if typing in an input or textarea
