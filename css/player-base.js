@@ -65,42 +65,101 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   const platform = (() => {
     try {
-      const ua = navigator.userAgent || "";
-      const uaData = navigator.userAgentData;
-      const mobileHint = !!uaData?.mobile;
-      const ios =
-        /iPhone|iPad|iPod/i.test(ua) ||
-        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-      const android = /Android/i.test(ua);
-      const mobileUA = /Mobi|Mobile|iPhone|iPad|iPod|Android/i.test(ua);
-      const mobile = mobileHint || mobileUA || ios || android;
+      // -------------------------------------------------------------------
+      // Feature-based detection — no UA sniffing, not affected by spoofing.
+      //
+      // Firefox:  Only Firefox supports the -moz-orient CSS property and
+      //           exposes InstallTrigger. CSS.supports is unforgeable at
+      //           runtime (it reflects the actual rendering engine).
+      //
+      // Chromium: Only Chromium exposes window.chrome AND supports the
+      //           non-standard CSS 'overlay' property (added in Chromium 99,
+      //           never in Firefox/Safari). We require BOTH to avoid false
+      //           positives from partial polyfills.
+      //
+      // iOS WebKit: GestureEvent is a WebKit-only touch API. Combined with
+      //             maxTouchPoints > 1 it reliably identifies iOS devices
+      //             regardless of what the UA string claims.
+      //
+      // Mobile:   navigator.userAgentData.mobile is the standards-track API
+      //           and is not considered UA spoofing (it's a structured hint).
+      //           We combine it with the touch heuristic as a fallback.
+      // -------------------------------------------------------------------
 
-      // Detect Firefox explicitly — Firefox does NOT need bg-retry logic
-      const isFirefox = /Firefox|FxiOS/i.test(ua) && !/Seamonkey/i.test(ua);
+      // Firefox: -moz-orient is Gecko-only; no other engine supports it.
+      const isFirefox = (() => {
+        try {
+          return CSS.supports("-moz-orient", "horizontal");
+        } catch {
+          return false;
+        }
+      })();
 
-      const androidChromium = !isFirefox &&
-        android &&
-        /Chrome|Chromium|CriOS/i.test(ua) &&
-        !/EdgA|Firefox|FxiOS|SamsungBrowser|OPR|Opera/i.test(ua);
-      const iosWebKitLike = !isFirefox &&
-        ios &&
-        /Safari|CriOS|FxiOS|EdgiOS/i.test(ua);
-      const desktopChromiumLike = !isFirefox &&
-        !mobile &&
-        /Chrome|Chromium|Edg|OPR/i.test(ua) &&
-        !/Firefox/i.test(ua);
+      // Chromium: window.chrome object + CSS overlay property (Chromium-only).
+      // Edge, Opera, Brave etc. all share the Chromium engine and pass both.
+      const isChromium = (() => {
+        if (isFirefox) return false;
+        try {
+          const hasChrome = typeof window.chrome !== "undefined" && window.chrome !== null;
+          // 'overlay' as a value for the 'overflow' property is Chromium-specific
+          const hasChromeCSS = CSS.supports("overflow", "overlay");
+          return hasChrome && hasChromeCSS;
+        } catch {
+          return false;
+        }
+      })();
+
+      // iOS WebKit: GestureEvent is only defined in WebKit (Safari/WKWebView/CriOS/FxiOS).
+      // maxTouchPoints > 1 rules out non-touch desktops claiming MacIntel.
+      const isIosWebKit = (() => {
+        if (isFirefox) return false;
+        try {
+          return (
+            typeof GestureEvent !== "undefined" &&
+            navigator.maxTouchPoints > 1
+          );
+        } catch {
+          return false;
+        }
+      })();
+
+      // Mobile: prefer the structured UA-Client-Hints API (can't be spoofed
+      // without also affecting the hints), fall back to touch heuristic.
+      const mobile = (() => {
+        try {
+          if (typeof navigator.userAgentData?.mobile === "boolean") {
+            return navigator.userAgentData.mobile;
+          }
+        } catch {}
+        // Coarse heuristic: touch screen with limited pointer precision
+        try {
+          return navigator.maxTouchPoints > 0 && window.matchMedia("(pointer: coarse)").matches;
+        } catch {}
+        return false;
+      })();
+
+      // For our purposes:
+      //   chromiumOnlyBrowser  = needs Chromium-specific play/pause guards
+      //   problemMobileBrowser = mobile browsers with aggressive bg throttling
+      //   useBgControllerRetry = needs the background resume controller
+      //
+      // Firefox handles bg audio natively → never gets retry logic.
+      const chromiumOnlyBrowser = isChromium;
+      const problemMobileBrowser = (isChromium && mobile) || isIosWebKit;
+      const useBgControllerRetry = !isFirefox && (isChromium || isIosWebKit);
+
       return {
         mobile: !!mobile,
-        ios: !!ios,
-        android: !!android,
+        ios: !!isIosWebKit,
+        android: !!(isChromium && mobile && !isIosWebKit), // best-effort, not used for critical logic
         isFirefox: !!isFirefox,
-        androidChromium: !!androidChromium,
-        iosWebKitLike: !!iosWebKitLike,
-        problemMobileBrowser: !!(androidChromium || iosWebKitLike),
-        desktopChromiumLike: !!desktopChromiumLike,
-        chromiumOnlyBrowser: !!(androidChromium || desktopChromiumLike),
-        // Firefox never gets bg retry — it handles background audio natively
-        useBgControllerRetry: !isFirefox && !!(androidChromium || iosWebKitLike || desktopChromiumLike)
+        isChromium: !!isChromium,
+        androidChromium: !!(isChromium && mobile && !isIosWebKit),
+        iosWebKitLike: !!isIosWebKit,
+        problemMobileBrowser: !!problemMobileBrowser,
+        desktopChromiumLike: !!(isChromium && !mobile),
+        chromiumOnlyBrowser: !!chromiumOnlyBrowser,
+        useBgControllerRetry: !!useBgControllerRetry
       };
     } catch {
       return {
@@ -108,6 +167,7 @@ document.addEventListener("DOMContentLoaded", () => {
         ios: false,
         android: false,
         isFirefox: false,
+        isChromium: false,
         androidChromium: false,
         iosWebKitLike: false,
         problemMobileBrowser: false,
@@ -2242,6 +2302,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   scheduleSync(0);
 });
+
 document.addEventListener('keydown', function(event) {
     // Ignore key presses if typing in an input or textarea
     if (event.target.tagName.toLowerCase() === 'input' || event.target.tagName.toLowerCase() === 'textarea') {
