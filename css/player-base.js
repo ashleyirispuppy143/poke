@@ -278,6 +278,20 @@ document.addEventListener("DOMContentLoaded", () => {
   let jointMismatchCooldownUntil = 0;
   let jointMismatchReason = "";
 
+  let hiddenAudioWatchdogTimer = null;
+  let hiddenAudioWatchdogCooldownUntil = 0;
+  let hiddenAudioRepairInFlight = false;
+
+  let playBurstSerial = 0;
+  let playBurstCooldownUntil = 0;
+
+  let autoplayRecoveryInFlight = false;
+  let autoplayRecoveryDone = false;
+  let autoplayMutedBootstrap = false;
+  let autoplayMutedBootstrapEver = false;
+  let autoplayGestureUnlockBound = false;
+  let lastVisibleAt = performance.now();
+
   function setJointStartGrace(ms = 1200) {
     jointStartGraceUntil = Math.max(jointStartGraceUntil, performance.now() + Math.max(0, Number(ms) || 0));
   }
@@ -371,6 +385,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  function clearHiddenAudioWatchdogTimer() {
+    if (hiddenAudioWatchdogTimer) {
+      clearTimeout(hiddenAudioWatchdogTimer);
+      hiddenAudioWatchdogTimer = null;
+    }
+  }
+
   function clearPendingPlayResumesForPause() {
     cancelChromiumToggleAudioRepair();
     cancelHiddenTransientResume();
@@ -436,15 +457,6 @@ document.addEventListener("DOMContentLoaded", () => {
   let hiddenMediaSessionPlayUntil = 0;
   let hiddenTransitionAt = 0;
   let hiddenTransientResumeSerial = 0;
-
-  let hiddenAudioWatchdogTimer = null;
-  let playBurstSerial = 0;
-  let autoplayRecoveryInFlight = false;
-  let autoplayRecoveryDone = false;
-  let autoplayMutedBootstrap = false;
-  let autoplayMutedBootstrapEver = false;
-  let autoplayGestureUnlockBound = false;
-  let lastVisibleAt = performance.now();
 
   function markExplicitPlay(ms = 15000) {
     explicitPlayUntil = Math.max(explicitPlayUntil, performance.now() + ms);
@@ -526,18 +538,6 @@ document.addEventListener("DOMContentLoaded", () => {
     return document.visibilityState === "visible" && (performance.now() - lastVisibleAt) < Math.max(0, Number(ms) || 0);
   }
 
-  function clearHiddenAudioWatchdogTimer() {
-    if (hiddenAudioWatchdogTimer) {
-      clearTimeout(hiddenAudioWatchdogTimer);
-      hiddenAudioWatchdogTimer = null;
-    }
-  }
-
-  function cancelHiddenTransientResume() {
-    hiddenTransientResumeSerial += 1;
-    clearHiddenAudioWatchdogTimer();
-  }
-
   function safeGetAutoplayPolicy(target) {
     try {
       if (!navigator || typeof navigator.getAutoplayPolicy !== "function") return "";
@@ -564,7 +564,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (intendedPlaying) {
       forceUnmuteForPlaybackIfAllowed();
       updateAudioGainImmediate();
-      queueImmediatePlayBurst("autoplay-unlock");
+      queueImmediatePlayBurst("autoplay-unlock", { force: true });
     }
   }
 
@@ -583,7 +583,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (autoplayMutedBootstrapActive()) {
         releaseAutoplayMutedBootstrap();
       } else if (intendedPlaying) {
-        queueImmediatePlayBurst("gesture-rekick");
+        queueImmediatePlayBurst("gesture-rekick", { force: true });
       }
       cleanup();
     };
@@ -594,34 +594,54 @@ document.addEventListener("DOMContentLoaded", () => {
     try { document.addEventListener("mousedown", unlock, true); } catch {}
   }
 
-  function queueImmediatePlayBurst(reason = "") {
+  function queueImmediatePlayBurst(reason = "", opts = {}) {
+    const { force = false, allowHidden = false } = opts || {};
+    const hidden = document.visibilityState === "hidden";
+    const now = performance.now();
+
+    if (!force && now < playBurstCooldownUntil) return;
+    playBurstCooldownUntil = now + (hidden ? 900 : 260);
+
     const serial = ++playBurstSerial;
-    const delays = [0, 50, 120, 220, 360];
+
+    if (hidden && !allowHidden) {
+      queueHiddenTransientResume(reason || "play-burst-hidden");
+      return;
+    }
+
+    const delays = hidden ? [0] : [0, 80, 180];
 
     for (const delay of delays) {
-      setTimeout(() => {
+      setTimeout(async () => {
         if (serial !== playBurstSerial) return;
         if (!intendedPlaying || restarting || seekingActive || syncing) return;
         if (mediaSessionForcedPauseActive() || userPauseLockActive() || hardPauseLatchActive()) return;
-
-        if (document.visibilityState === "hidden" && shouldUseBgControllerRetry()) {
-          queueHiddenTransientResume(reason || "play-burst-hidden");
-          return;
-        }
+        if (document.visibilityState === "hidden" && !allowHidden) return;
 
         clearPlayStartFriction();
 
         const vt = Number(video.currentTime()) || 0;
-        safeSetCT(audio, vt);
+        const at = Number(audio.currentTime);
 
-        try { execProgrammaticVideoPlay(); } catch {}
+        if (isFinite(vt) && (!isFinite(at) || Math.abs(at - vt) > 0.16)) {
+          squelchAudioEvents(160);
+          safeSetCT(audio, vt);
+        }
 
-        if (!strictBufferHold && !shouldBlockNewAudioStart()) {
-          execProgrammaticAudioPlay({
-            squelchMs: 180,
-            minGapMs: 0,
-            force: true
-          }).catch(() => false);
+        try {
+          if (isVideoPaused()) {
+            await settlePlaybackKick(execProgrammaticVideoPlay(), 90);
+          }
+        } catch {}
+
+        if (!strictBufferHold && !shouldBlockNewAudioStart() && audio.paused) {
+          try {
+            await execProgrammaticAudioPlay({
+              squelchMs: 160,
+              minGapMs: 0,
+              force: true
+            });
+          } catch {}
         }
 
         updateAudioGainImmediate();
@@ -674,20 +694,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
       try {
         const p = execProgrammaticVideoPlay();
-        if (p && p.then) await settlePlaybackKick(p, 140);
+        if (p && p.then) await settlePlaybackKick(p, 120);
       } catch {}
 
       if (!shouldBlockNewAudioStart()) {
         try {
           await execProgrammaticAudioPlay({
-            squelchMs: 180,
+            squelchMs: 160,
             minGapMs: 0,
             force: true
           });
         } catch {}
       }
 
-      queueImmediatePlayBurst(`autoplay-recovery:${reason || "generic"}`);
+      queueImmediatePlayBurst(`autoplay-recovery:${reason || "generic"}`, { force: true });
 
       const ok = !isVideoPaused() || (hasExternalAudio && !audio.paused);
       if (ok) autoplayRecoveryDone = true;
@@ -704,65 +724,97 @@ document.addEventListener("DOMContentLoaded", () => {
     if (document.visibilityState !== "hidden") return;
     if (!intendedPlaying || restarting || seekingActive || syncing) return;
     if (mediaSessionForcedPauseActive() || userPauseLockActive() || hardPauseLatchActive()) return;
+    if (hiddenAudioRepairInFlight) return;
     if (hiddenAudioWatchdogTimer) return;
+    if (performance.now() < hiddenAudioWatchdogCooldownUntil) return;
+
+    hiddenAudioWatchdogCooldownUntil = performance.now() + 1100;
 
     hiddenAudioWatchdogTimer = setTimeout(async () => {
       hiddenAudioWatchdogTimer = null;
 
+      if (!shouldUseBgControllerRetry()) return;
       if (document.visibilityState !== "hidden") return;
       if (!intendedPlaying || restarting || seekingActive || syncing) return;
       if (mediaSessionForcedPauseActive() || userPauseLockActive() || hardPauseLatchActive()) return;
 
+      const vt = Number(video.currentTime());
+      const at = Number(audio.currentTime);
+      const vPaused = isVideoPaused();
+      const aPaused = !!audio.paused;
+
       resumeOnVisible = true;
       bgHiddenWasPlaying = true;
 
-      const vt = Number(video.currentTime());
-      const at = Number(audio.currentTime);
-
-      if (isFinite(vt) && (!isFinite(at) || Math.abs(at - vt) > 0.20)) {
-        squelchAudioEvents(160);
-        safeSetCT(audio, vt);
-      }
-
-      if (!audio.paused) {
+      if (!aPaused) {
         bgAudioMasterMode = true;
+        if (isFinite(vt) && isFinite(at) && Math.abs(at - vt) > 0.20) {
+          squelchAudioEvents(120);
+          safeSetCT(audio, vt);
+        }
         updateAudioGainImmediate();
         return;
       }
 
-      armHiddenMediaSessionPlay(2600);
-      clearPlayStartFriction();
-
-      try {
-        audioPauseInFlightUntil = 0;
-        audioPlayAttemptUntil = 0;
-        startupAudioHoldUntil = 0;
-      } catch {}
-
-      if (!shouldBlockNewAudioStart()) {
+      if (!vPaused && aPaused) {
+        hiddenAudioRepairInFlight = true;
         try {
-          await execProgrammaticAudioPlay({
-            squelchMs: 160,
-            minGapMs: 0,
-            force: true
-          });
-        } catch {}
-      }
+          armHiddenMediaSessionPlay(2200);
+          clearPlayStartFriction();
 
-      if (!audio.paused) {
-        audioEverStarted = true;
-        bgAudioMasterMode = true;
-        updateAudioGainImmediate();
+          if (isFinite(vt)) {
+            squelchAudioEvents(140);
+            safeSetCT(audio, vt);
+          }
+
+          if (!shouldBlockNewAudioStart()) {
+            await execProgrammaticAudioPlay({
+              squelchMs: 140,
+              minGapMs: 0,
+              force: true
+            }).catch(() => false);
+          }
+
+          if (!audio.paused) {
+            audioEverStarted = true;
+            bgAudioMasterMode = true;
+            updateAudioGainImmediate();
+          }
+        } finally {
+          hiddenAudioRepairInFlight = false;
+        }
         return;
       }
 
-      setTimeout(() => {
-        scheduleHiddenAudioWatchdog(reason || "hidden-watchdog-retry");
-      }, 180);
-    }, 45);
+      if (vPaused && aPaused) {
+        armHiddenMediaSessionPlay(2200);
+        return;
+      }
+    }, 260);
+  }
+
+  function cancelHiddenTransientResume() {
+    hiddenTransientResumeSerial += 1;
+    clearHiddenAudioWatchdogTimer();
   }
 
   function queueHiddenTransientResume(reason = "") {
+    if (!shouldUseBgControllerRetry()) return;
+    if (!hasExternalAudio || qua === "medium") return;
+    if (document.visibilityState !== "hidden") return;
+    if (!intendedPlaying || restarting || seekingActive || syncing) return;
+    if (mediaSessionForcedPauseActive() || userPauseLockActive() || hardPauseLatchActive()) return;
+
+    armHiddenMediaSessionPlay(2400);
+    setPauseEventGuard(900);
+    setMediaPlayTxn(1200);
+    setBgControllerPlayGuard(2400);
+    setResumeWarm(1400);
+    setSmoothNoHold(900);
+    if (isChromiumOnlyBrowser()) setChromiumAudioStartLock(80);
+
+    resumeOnVisible = true;
+    bgHiddenWasPlaying = true;
     scheduleHiddenAudioWatchdog(reason || "hidden-transient");
   }
 
@@ -777,7 +829,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (mediaSessionForcedPauseActive()) return;
 
     const serial = ++chromiumToggleAudioRepairSerial;
-    const delays = [0, 90, 180, 320, 520];
+    const delays = [0, 90, 180, 320];
 
     for (const delay of delays) {
       setTimeout(async () => {
@@ -903,7 +955,7 @@ document.addEventListener("DOMContentLoaded", () => {
       startupAudioHoldUntil = 0;
     }
 
-    queueImmediatePlayBurst("user-play-intent");
+    queueImmediatePlayBurst("user-play-intent", { force: true });
   }
 
   function clearUserIntents() {
@@ -1137,11 +1189,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!isHidden) {
       if (resumeWarmActive()) return true;
-      if (visibleRecently(1400)) return true;
-      if ((now - lastPlayKickTs) < 900) return true;
+      if (visibleRecently(1800)) return true;
+      if ((now - lastPlayKickTs) < 1100) return true;
       if (now < audioPlayInFlightUntil) return true;
+      if (now < audioPauseInFlightUntil && intendedPlaying) return true;
       if (isProgrammaticPlay) return true;
-      if (mediaActionRecently("play", 900)) return true;
+      if (mediaActionRecently("play", 1100)) return true;
       return false;
     }
 
@@ -1149,8 +1202,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (bgControllerPlayGuardActive()) return true;
     if (resumeWarmActive()) return true;
     if (now < audioPlayInFlightUntil) return true;
-    if (mediaActionRecently("play", 2400)) return true;
-    if (hiddenRecently(2000)) return true;
+    if (mediaActionRecently("play", 2600)) return true;
+    if (hiddenRecently(2200)) return true;
     if (shouldIgnorePauseEvents() && androidResumeGuardActive()) return true;
     return false;
   }
@@ -1227,6 +1280,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!intendedPlaying || restarting || seekingActive || syncing || mediaSessionForcedPauseActive()) return;
       if (document.visibilityState !== "visible") return;
       if (userPauseLockActive() || hardPauseLatchActive()) return;
+      queueImmediatePlayBurst("bg-resume-retry");
       playTogether().catch(() => {});
     }, delay);
   }
@@ -2017,7 +2071,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         armBgRateBoost(target);
-        queueImmediatePlayBurst("visible-catchup-audio-master");
+        queueImmediatePlayBurst("visible-catchup-audio-master", { force: true });
         scheduleResumeSyncRestart(60);
 
         bgHiddenWasPlaying = false;
@@ -2075,7 +2129,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (userPauseLockActive()) return;
 
       armBgRateBoost(expected);
-      queueImmediatePlayBurst("visible-catchup");
+      queueImmediatePlayBurst("visible-catchup", { force: true });
 
       if (doFadeIn) {
         setTimeout(() => {
@@ -2297,6 +2351,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (isFinite(vt2)) safeSetCT(audio, vt2);
 
       if (!shouldHoldAfterSeek) {
+        queueImmediatePlayBurst("seek-finalize", { force: true });
         playTogether().catch(() => {});
         queuePostSeekRecovery();
       } else {
@@ -2597,13 +2652,8 @@ document.addEventListener("DOMContentLoaded", () => {
             resumeOnVisible = true;
             bgAudioMasterMode = true;
           } else {
-            execProgrammaticAudioPause();
-            if (Math.abs(at - vt) > 0.8) safeSetCT(audio, vt);
-
-            if (intendedPlaying && !vWaiting && !strictBufferHold) {
-              if (!inMediaTxnWindow() && !userPauseLockActive() && !chromiumPauseToggleGuardActive()) {
-                queueImmediatePlayBurst("video-paused-visible");
-              }
+            if (intendedPlaying && !vWaiting && !strictBufferHold && !userPauseLockActive() && !chromiumPauseToggleGuardActive()) {
+              queueImmediatePlayBurst("video-paused-visible");
             }
           }
         } else if (vPaused && aPaused) {
@@ -2794,7 +2844,7 @@ document.addEventListener("DOMContentLoaded", () => {
           if (vp && vp.then) await settlePlaybackKick(vp, 120);
         } catch {}
 
-        queueImmediatePlayBurst("startup-autoplay-kick");
+        queueImmediatePlayBurst("startup-autoplay-kick", { force: true });
 
         if (!isVideoPaused()) {
           await playTogether().catch(() => {});
@@ -3341,7 +3391,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (isChromiumOnlyBrowser()) setChromiumAudioStartLock(80);
 
         queuePlayRetryBurst();
-        queueImmediatePlayBurst("media-session-play");
+        queueImmediatePlayBurst("media-session-play", { force: true, allowHidden: false });
 
         forceUnmuteForPlaybackIfAllowed();
         updateAudioGainImmediate();
@@ -3388,7 +3438,7 @@ document.addEventListener("DOMContentLoaded", () => {
           if (!mediaSessionActionIsCurrent(actionSerial)) return;
 
           queuePlayRetryBurst();
-          queueImmediatePlayBurst("media-session-play-confirmed");
+          queueImmediatePlayBurst("media-session-play-confirmed", { force: true });
 
           if (isAndroidChromium()) {
             clearAndroidResumeRepairTimer();
@@ -3492,7 +3542,10 @@ document.addEventListener("DOMContentLoaded", () => {
       if (bothPlayableAt(t) || (!audioEverStarted && canStartAudioAt(t))) {
         await ensureUnmutedIfNotUserMuted();
         if (!(shouldUseBgControllerRetry() && document.visibilityState === "hidden")) {
-          if (!inMediaTxnWindow()) playTogether().catch(() => {});
+          if (!inMediaTxnWindow()) {
+            queueImmediatePlayBurst(`${label.toLowerCase()}-resume`);
+            playTogether().catch(() => {});
+          }
         } else if (document.visibilityState === "visible") {
           scheduleBgResumeRetry(60);
         }
@@ -3669,7 +3722,6 @@ document.addEventListener("DOMContentLoaded", () => {
       setSmoothNoHold(1100);
       clearPlayStartFriction();
       forceUnmuteForPlaybackIfAllowed();
-      updateMediaGainImmediate?.();
       updateAudioGainImmediate();
       updateMediaSessionPlaybackState();
       if (!startupBufferPrimed) {
@@ -3705,6 +3757,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (intendedPlaying && document.visibilityState === "hidden" && shouldUseBgControllerRetry()) {
           resumeOnVisible = true;
           queueHiddenTransientResume("ignore-audio-pause-hidden");
+        } else if (intendedPlaying && document.visibilityState === "visible") {
+          queueImmediatePlayBurst("ignore-audio-pause-visible");
+          scheduleBgResumeRetry(0);
         }
         return;
       }
@@ -3721,6 +3776,12 @@ document.addEventListener("DOMContentLoaded", () => {
         try { noteBackgroundEntry("hidden-audio-pause"); } catch {}
         resumeOnVisible = true;
         queueHiddenTransientResume("hidden-audio-pause");
+        return;
+      }
+
+      if (intendedPlaying && !userPauseLockActive() && !hardPauseLatchActive()) {
+        queueImmediatePlayBurst("unexpected-audio-pause", { force: true });
+        scheduleBgResumeRetry(0);
         return;
       }
 
@@ -3809,6 +3870,7 @@ document.addEventListener("DOMContentLoaded", () => {
           resumeOnVisible = true;
           queueHiddenTransientResume("ignore-video-pause-hidden");
         } else if (intendedPlaying && document.visibilityState === "visible") {
+          queueImmediatePlayBurst("ignore-video-pause-visible");
           scheduleBgResumeRetry(0);
         }
         return;
@@ -3834,7 +3896,8 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      if (intendedPlaying && !audio.paused && document.visibilityState === "visible" && !userPauseLockActive() && !hardPauseLatchActive()) {
+      if (intendedPlaying && !userPauseLockActive() && !hardPauseLatchActive()) {
+        queueImmediatePlayBurst("unexpected-video-pause", { force: true });
         scheduleBgResumeRetry(0);
         return;
       }
@@ -3978,7 +4041,7 @@ document.addEventListener("DOMContentLoaded", () => {
         await ensureUnmutedIfNotUserMuted();
 
         await new Promise(r => requestAnimationFrame(r));
-        queueImmediatePlayBurst("loop-restart");
+        queueImmediatePlayBurst("loop-restart", { force: true });
         await playTogether();
       } finally {
         restarting = false;
@@ -4107,7 +4170,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 seamlessBgCatchUp("visibility-visible")
                   .catch(() => {})
                   .finally(() => {
-                    queueImmediatePlayBurst("visible-catchup");
+                    queueImmediatePlayBurst("visible-catchup", { force: true });
                     scheduleResumeSyncRestart(60);
                   });
               } else {
@@ -4128,6 +4191,10 @@ document.addEventListener("DOMContentLoaded", () => {
           if (!shouldUseBgControllerRetry()) {
             bgAudioMasterMode = false;
             bgHiddenStoppedSyncLoop = false;
+          }
+
+          if (wantsStartupAutoplay() && !firstPlayCommitted && (isVideoPaused() || (hasExternalAudio && audio.paused))) {
+            recoverAutoplayIfNeeded("visibility-visible").catch(() => {});
           }
         } else {
           hiddenTransitionAt = performance.now();
@@ -4197,6 +4264,10 @@ document.addEventListener("DOMContentLoaded", () => {
             commitUserPause();
             return;
           }
+          if (intendedPlaying && !userPauseLockActive() && !hardPauseLatchActive()) {
+            queueImmediatePlayBurst("video-only-unexpected-pause", { force: true });
+            return;
+          }
           intendedPlaying = false;
           updateMediaSessionPlaybackState();
           queueHardPauseVerification();
@@ -4206,6 +4277,7 @@ document.addEventListener("DOMContentLoaded", () => {
     setupMediaSession();
   }
 });
+
 
 
 document.addEventListener('keydown', function(event) {
