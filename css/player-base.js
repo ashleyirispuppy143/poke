@@ -502,6 +502,19 @@ document.addEventListener("DOMContentLoaded", () => {
       if (media && isFinite(t) && t >= 0) media.currentTime = t;
     } catch {}
   }
+
+  // Reset audio playback rate to match video's base rate.
+  // Must be called whenever audio is paused, seeked, or catch-up ops run,
+  // to prevent a stuck non-1.0 rate from making audio sound sped-up or slow.
+  function resetAudioPlaybackRate() {
+    if (!audio) return;
+    try {
+      const baseRate = Number(video.playbackRate()) || 1;
+      if (Math.abs((audio.playbackRate || baseRate) - baseRate) > 0.001) {
+        audio.playbackRate = baseRate;
+      }
+    } catch {}
+  }
   function safeSetVideoTime(t) {
     try {
       if (isFinite(t) && t >= 0) video.currentTime(t);
@@ -708,6 +721,10 @@ document.addEventListener("DOMContentLoaded", () => {
       squelchAudioEvents(ms);
     } catch {}
     try {
+      // Always reset rate before pausing so it can never be "stuck" on resume
+      resetAudioPlaybackRate();
+    } catch {}
+    try {
       if (!audio.paused) audio.pause();
     } catch {}
     setTimeout(() => {
@@ -844,10 +861,11 @@ document.addEventListener("DOMContentLoaded", () => {
       const vt = Number(video.currentTime());
       const at = Number(audio.currentTime);
       const target = isFinite(vt) ? vt : (isFinite(at) ? at : 0);
-      execProgrammaticAudioPause(420);
+      execProgrammaticAudioPause(420); // resets rate inside
       safeSetCT(audio, target);
       await new Promise(r => setTimeout(r, 30));
       if (state.intendedPlaying && !getVideoPaused() && !userPauseLockActive() && !shouldBlockNewAudioStart()) {
+        resetAudioPlaybackRate(); // ensure clean rate before play
         await execProgrammaticAudioPlay({ squelchMs: 420, force: true, minGapMs: 0 }).catch(() => false);
         updateAudioGainImmediate();
       }
@@ -1059,6 +1077,7 @@ document.addEventListener("DOMContentLoaded", () => {
       state.silentBgSync = false;
       state.bgHiddenWasPlaying = false;
       state.resumeOnVisible = false;
+      resetAudioPlaybackRate(); // catch-up seeks can leave a stale rate
       setFastSync(1200);
       scheduleSync(0);
     }
@@ -1698,6 +1717,7 @@ document.addEventListener("DOMContentLoaded", () => {
       } else if (state.strictBufferHold) {
         state.strictBufferHold = false;
         state.strictBufferReason = "";
+        resetAudioPlaybackRate(); // rate may be dirty from before the buffer stall
         setFastSync(900);
       }
     }
@@ -1748,21 +1768,23 @@ document.addEventListener("DOMContentLoaded", () => {
       } else {
         const drift = vt - at;
         if (Math.abs(drift) > BIG_DRIFT) {
+          // Large drift: hard snap audio position and reset rate immediately
+          resetAudioPlaybackRate();
           safeSetCT(audio, vt);
           setFastSync(1200);
         } else if (Math.abs(drift) > MICRO_DRIFT) {
+          // Small drift: nudge playback rate very gently to converge.
+          // Clamp much tighter (±1.5%) so it can never cause audible
+          // quality/speed degradation even if corrections compound.
           const baseRate = Number(video.playbackRate()) || 1;
-          const targetRate = baseRate + (drift * 0.08);
+          // Scale: 0.08 * drift, hard-capped at ±0.015 of base rate
+          const nudge = Math.max(-0.015, Math.min(0.015, drift * 0.08));
           try {
-            audio.playbackRate = Math.max(baseRate * 0.97, Math.min(baseRate * 1.03, targetRate));
+            audio.playbackRate = baseRate + nudge;
           } catch {}
         } else {
-          try {
-            const baseRate = Number(video.playbackRate()) || 1;
-            if (Math.abs((audio.playbackRate || baseRate) - baseRate) > 0.01) {
-              audio.playbackRate = baseRate;
-            }
-          } catch {}
+          // In sync: always snap rate back to baseline to undo any lingering nudge
+          resetAudioPlaybackRate();
         }
       }
     } else if (!state.intendedPlaying && !state.restarting && !state.seeking && !state.syncing) {
@@ -2058,6 +2080,7 @@ document.addEventListener("DOMContentLoaded", () => {
     video.on("ratechange", () => {
       if (!coupledMode) return;
       try {
+        // Sync audio playback rate to video and clear any drift correction
         audio.playbackRate = video.playbackRate();
       } catch {}
     });
@@ -2460,8 +2483,10 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {}
   }
   scheduleSync(0);
-}); 
- document.addEventListener('keydown', function(event) {
+});
+
+
+document.addEventListener('keydown', function(event) {
      const active = document.activeElement;
     if (active && (active.tagName.toLowerCase() === 'input' || active.tagName.toLowerCase() === 'textarea')) {
         return;
