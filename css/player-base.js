@@ -275,12 +275,6 @@ document.addEventListener("DOMContentLoaded", () => {
     // FIX: startup autoplay retry state for Chromium
     startupAutoplayRetryTimer: null,
     startupAutoplayRetryCount: 0,
-    // Drift correction: track last micro-seek timestamp to avoid over-correcting
-    lastDriftCorrectionTs: 0,
-    lastDriftSample: 0,
-    consecutiveDriftCount: 0,
-    // Set true during a drift micro-seek so audio seeking/seeked/pause events are ignored
-    isDriftCorrection: false,
   };
   const EPS = 1.0;
   const HAVE_FUTURE_DATA = 3;
@@ -521,14 +515,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     } catch {}
   }
-
-  // Reset drift correction state — call whenever audio position changes discontinuously
-  // (seek, pause, catch-up) so stale drift samples don't produce a wrong correction.
-  function resetDriftState() {
-    state.lastDriftSample = 0;
-    state.consecutiveDriftCount = 0;
-    state.lastDriftCorrectionTs = now();
-  }
   function safeSetVideoTime(t) {
     try {
       if (isFinite(t) && t >= 0) video.currentTime(t);
@@ -735,9 +721,8 @@ document.addEventListener("DOMContentLoaded", () => {
       squelchAudioEvents(ms);
     } catch {}
     try {
-      // Always reset rate and drift state before pausing so neither can be "stuck" on resume
+      // Always reset rate before pausing so it can never be "stuck" on resume
       resetAudioPlaybackRate();
-      resetDriftState();
     } catch {}
     try {
       if (!audio.paused) audio.pause();
@@ -881,7 +866,6 @@ document.addEventListener("DOMContentLoaded", () => {
       await new Promise(r => setTimeout(r, 30));
       if (state.intendedPlaying && !getVideoPaused() && !userPauseLockActive() && !shouldBlockNewAudioStart()) {
         resetAudioPlaybackRate(); // ensure clean rate before play
-        resetDriftState();
         await execProgrammaticAudioPlay({ squelchMs: 420, force: true, minGapMs: 0 }).catch(() => false);
         updateAudioGainImmediate();
       }
@@ -1055,20 +1039,6 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
           await execProgrammaticAudioPlay({ squelchMs: 500, force: true, minGapMs: 0 });
         } catch {}
-        // On Chromium, the browser may throttle and pause video shortly after
-        // we read vPaused=false. If video gets paused while audio is playing,
-        // we'd have audio-only playback. Detect and correct after a short delay.
-        if (platform.chromiumOnlyBrowser) {
-          setTimeout(() => {
-            if (!state.intendedPlaying || mediaSessionForcedPauseActive() || userPauseLockActive()) return;
-            if (document.visibilityState !== "hidden") return;
-            if (getVideoPaused() && !audio.paused) {
-              // Video was throttled — pause audio to avoid audio-only playback
-              execProgrammaticAudioPause(400);
-              state.resumeOnVisible = true;
-            }
-          }, 350);
-        }
         updateAudioGainImmediate();
         return;
       }
@@ -1108,7 +1078,6 @@ document.addEventListener("DOMContentLoaded", () => {
       state.bgHiddenWasPlaying = false;
       state.resumeOnVisible = false;
       resetAudioPlaybackRate(); // catch-up seeks can leave a stale rate
-      resetDriftState();
       setFastSync(1200);
       scheduleSync(0);
     }
@@ -1748,8 +1717,7 @@ document.addEventListener("DOMContentLoaded", () => {
       } else if (state.strictBufferHold) {
         state.strictBufferHold = false;
         state.strictBufferReason = "";
-        resetAudioPlaybackRate();
-        resetDriftState();
+        resetAudioPlaybackRate(); // rate may be dirty from before the buffer stall
         setFastSync(900);
       }
     }
@@ -1800,57 +1768,22 @@ document.addEventListener("DOMContentLoaded", () => {
       } else {
         const drift = vt - at;
         if (Math.abs(drift) > BIG_DRIFT) {
-          // Very large drift: hard snap audio position and reset rate
+          // Large drift: hard snap audio position and reset rate immediately
           resetAudioPlaybackRate();
           safeSetCT(audio, vt);
-          state.lastDriftCorrectionTs = now();
-          state.lastDriftSample = 0;
-          state.consecutiveDriftCount = 0;
           setFastSync(1200);
         } else if (Math.abs(drift) > MICRO_DRIFT) {
-          // Small persistent drift: correct by nudging audio.currentTime by a
-          // tiny fraction of the error. Completely inaudible — no pitch/speed
-          // change whatsoever. We require the drift to appear in 2 consecutive
-          // sync cycles with the same sign before acting, and enforce a minimum
-          // 800ms cooldown between corrections, so we never spam micro-seeks.
-          const sameSinceLastSample = (drift * state.lastDriftSample) > 0; // same sign
-          state.lastDriftSample = drift;
-          if (sameSinceLastSample) {
-            state.consecutiveDriftCount = Math.min(state.consecutiveDriftCount + 1, 8);
-          } else {
-            state.consecutiveDriftCount = 1; // sign flip — wait for stability
-          }
-          const cooldownOk = (now() - state.lastDriftCorrectionTs) > 800;
-          if (state.consecutiveDriftCount >= 2 && cooldownOk) {
-            // Nudge by 12% of drift, capped at 30ms max per correction
-            const MAX_NUDGE_SEC = 0.030;
-            const nudge = Math.max(-MAX_NUDGE_SEC, Math.min(MAX_NUDGE_SEC, drift * 0.12));
-            const targetAT = at + nudge;
-            if (isFinite(targetAT) && targetAT >= 0 && timeInBuffered(audio, targetAT)) {
-              try {
-                state.isDriftCorrection = true;
-                audio.currentTime = targetAT;
-                state.lastDriftCorrectionTs = now();
-              } catch {
-              } finally {
-                setTimeout(() => { state.isDriftCorrection = false; }, 150);
-              }
-            } else {
-              // Target not buffered — hard snap instead
-              resetAudioPlaybackRate();
-              safeSetCT(audio, vt);
-              state.lastDriftCorrectionTs = now();
-              state.lastDriftSample = 0;
-              state.consecutiveDriftCount = 0;
-              setFastSync(800);
-            }
-          }
-          // Always ensure rate is at baseline — never drift-correct via speed
-          resetAudioPlaybackRate();
+          // Small drift: nudge playback rate very gently to converge.
+          // Clamp much tighter (±1.5%) so it can never cause audible
+          // quality/speed degradation even if corrections compound.
+          const baseRate = Number(video.playbackRate()) || 1;
+          // Scale: 0.08 * drift, hard-capped at ±0.015 of base rate
+          const nudge = Math.max(-0.015, Math.min(0.015, drift * 0.08));
+          try {
+            audio.playbackRate = baseRate + nudge;
+          } catch {}
         } else {
-          // In sync — reset correction state and ensure clean rate
-          state.lastDriftSample = 0;
-          state.consecutiveDriftCount = 0;
+          // In sync: always snap rate back to baseline to undo any lingering nudge
           resetAudioPlaybackRate();
         }
       }
@@ -2121,25 +2054,8 @@ document.addEventListener("DOMContentLoaded", () => {
           setTimeout(() => {
             if (serial !== state.mediaSessionActionSerial) return;
             if (!state.intendedPlaying || userPauseLockActive()) return;
-
-            // On Chromium, video.play() may silently fail while hidden (browser
-            // throttles the video element). If audio started but video didn't,
-            // pause audio too so we never have audio-only playback. We'll resume
-            // properly via seamlessBgCatchUp when the tab becomes visible.
-            if (coupledMode && platform.chromiumOnlyBrowser && document.visibilityState === "hidden") {
-              const vGoing = !getVideoPaused();
-              const aGoing = !audio.paused;
-              if (!vGoing && aGoing) {
-                execProgrammaticAudioPause(400);
-                state.resumeOnVisible = true;
-                return;
-              }
-              // Video is going — all good, just let seamlessBgCatchUp handle sync on return
-              return;
-            }
-
             playTogether().catch(() => {});
-          }, 300); // 300ms gives Chromium time to settle its throttle decision
+          }, 0);
         });
       });
       navigator.mediaSession.setActionHandler("pause", handlePauseLike);
@@ -2274,7 +2190,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     if (!coupledMode) return;
     const onAudioPlay = () => {
-      if (state.isDriftCorrection) return;
       if (audioEventsSquelched() || state.restarting || state.isProgrammaticAudioPlay || state.isProgrammaticVideoPlay) return;
       if (now() < state.audioPlayUntil || now() < state.audioPauseUntil) return;
       if ((!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive() || shouldBlockNewAudioStart()) && !userPlayIntentActive()) {
@@ -2306,7 +2221,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     };
     const onAudioPause = () => {
-      if (state.isDriftCorrection) return;
       if (audioEventsSquelched() || state.restarting || state.isProgrammaticAudioPause || state.isProgrammaticVideoPause) return;
       if (now() < state.audioPauseUntil || now() < state.audioPlayUntil) return;
       if (state.seeking) return;
@@ -2570,6 +2484,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   scheduleSync(0);
 });
+
+
 document.addEventListener('keydown', function(event) {
      const active = document.activeElement;
     if (active && (active.tagName.toLowerCase() === 'input' || active.tagName.toLowerCase() === 'textarea')) {
