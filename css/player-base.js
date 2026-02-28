@@ -2380,17 +2380,14 @@ document.addEventListener("DOMContentLoaded", () => {
   scheduleSync(0);
 });
 document.addEventListener("keydown", function(event) {
-    const target = event.target;
     const active = document.activeElement;
 
-    const isInSearchBar =
-        (target instanceof Element && target.closest(".search-bar")) ||
-        (active instanceof Element && active.closest(".search-bar"));
-
-    if (isInSearchBar) {
+    // Skip shortcuts if the focused element is inside .search-bar
+    if (active instanceof Element && active.closest(".search-bar")) {
         return;
     }
 
+    // Skip if modifier keys are down
     if (event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) {
         return;
     }
@@ -2401,26 +2398,20 @@ document.addEventListener("keydown", function(event) {
     const player = videojs(videoElement);
     if (!player) return;
 
-    const key = typeof event.key === "string" ? event.key.toLowerCase() : "";
+    const key = event.key?.toLowerCase();
 
     switch (key) {
         case "f":
             event.preventDefault();
-            if (!player.isFullscreen()) {
-                player.requestFullscreen();
-            } else {
-                player.exitFullscreen();
-            }
+            if (!player.isFullscreen()) player.requestFullscreen();
+            else player.exitFullscreen();
             break;
 
         case " ":
         case "k":
             event.preventDefault();
-            if (player.paused()) {
-                player.play();
-            } else {
-                player.pause();
-            }
+            if (player.paused()) player.play();
+            else player.pause();
             break;
 
         case "m":
