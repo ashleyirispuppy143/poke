@@ -2380,9 +2380,15 @@ document.addEventListener("DOMContentLoaded", () => {
   scheduleSync(0);
 });
 
- document.addEventListener('keydown', function(event) {
-     const active = document.activeElement;
-    if (active && (active.tagName.toLowerCase() === 'input' || active.tagName.toLowerCase() === 'textarea')) {
+document.addEventListener('keydown', function(event) {
+    const active = document.activeElement;
+
+     if (active && (
+        active.tagName.toLowerCase() === 'input' ||
+        active.tagName.toLowerCase() === 'textarea' ||
+        active.isContentEditable ||
+        active.closest('.search-bar')  
+    )) {
         return;
     }
 
