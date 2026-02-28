@@ -2379,23 +2379,43 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   scheduleSync(0);
 });
-document.addEventListener('keydown', function(event) {
-    // Ignore key presses if typing in an input or textarea
-    if (event.target.tagName.toLowerCase() === 'input' || event.target.tagName.toLowerCase() === 'textarea') {
+document.addEventListener("keydown", function(event) {
+    const target = event.target;
+    const active = document.activeElement;
+
+    function isEditableElement(el) {
+        if (!el || el.nodeType !== 1) return false;
+
+        if (el.isContentEditable) return true;
+
+        if (el.matches("input, textarea, select")) return true;
+
+        if (el.closest("input, textarea, select, [contenteditable='true'], [contenteditable='plaintext-only'], [contenteditable='']")) {
+            return true;
+        }
+
+        return false;
+    }
+
+     if (isEditableElement(target) || isEditableElement(active)) {
         return;
     }
 
-    // DON’T run shortcuts if any modifier key is pressed
-    if (event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) {
+     if (event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) {
         return;
     }
 
-    const videoElement = document.querySelector('.video-js');
+    const videoElement = document.querySelector(".video-js");
     if (!videoElement) return;
-    const player = videojs(videoElement);
 
-    switch (event.key.toLowerCase()) {
-        case 'f': // Fullscreen
+    const player = videojs(videoElement);
+    if (!player) return;
+
+    const key = typeof event.key === "string" ? event.key.toLowerCase() : "";
+
+    switch (key) {
+        case "f":
+            event.preventDefault();
             if (!player.isFullscreen()) {
                 player.requestFullscreen();
             } else {
@@ -2403,9 +2423,9 @@ document.addEventListener('keydown', function(event) {
             }
             break;
 
-        case ' ': // Spacebar
-        case 'k': 
-            event.preventDefault(); // Stops page scroll
+        case " ":
+        case "k":
+            event.preventDefault();
             if (player.paused()) {
                 player.play();
             } else {
@@ -2413,32 +2433,34 @@ document.addEventListener('keydown', function(event) {
             }
             break;
 
-        case 'm': // Mute toggle
+        case "m":
+            event.preventDefault();
             player.muted(!player.muted());
             break;
 
-        case 'arrowright':
-        case 'l': 
-            player.currentTime(player.currentTime() + 10); // Skip forward 10s
+        case "arrowright":
+        case "l":
+            event.preventDefault();
+            player.currentTime(player.currentTime() + 10);
             break;
 
-        case 'arrowleft':
-        case 'j': 
-            player.currentTime(player.currentTime() - 10); // Skip back 10s
+        case "arrowleft":
+        case "j":
+            event.preventDefault();
+            player.currentTime(player.currentTime() - 10);
             break;
 
-        case 'arrowup': 
-            event.preventDefault(); // Stops scroll up
-            player.volume(Math.min(1, player.volume() + 0.1)); 
+        case "arrowup":
+            event.preventDefault();
+            player.volume(Math.min(1, player.volume() + 0.1));
             break;
 
-        case 'arrowdown': 
-            event.preventDefault(); // Stops scroll down
-            player.volume(Math.max(0, player.volume() - 0.1)); 
+        case "arrowdown":
+            event.preventDefault();
+            player.volume(Math.max(0, player.volume() - 0.1));
             break;
     }
 });
-
  // https://codeberg.org/ashleyirispuppy/poke/src/branch/main/src/libpoketube/libpoketube-youtubei-objects.json
 
 
