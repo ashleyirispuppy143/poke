@@ -717,9 +717,17 @@ height: 100%;
 
 
 <div class="channel-info" style="margin-bottom: 3em;margin-left:2em;margin-top: -11em;">
-		<a href="/avatars/<%=cinv.authorThumbnails[5].url.replace("https://yt3.googleusercontent.com/", "")%>" class="avatar">
-				<img src="/avatars/<%=cinv.authorThumbnails[5].url.replace("https://yt3.googleusercontent.com/", "")%>" alt="Channel Avatar" style="border: 1px solid gray;border-radius: 50%;">
-			</a>
+<a
+  href="/avatars/<%= cinv.authorThumbnails[5].url.replace('https://yt3.googleusercontent.com/', '') %>"
+  class="avatar"
+  onclick="event.preventDefault();(function(src){var old=document.getElementById('avatar-lightbox');if(old) old.remove();var overlay=document.createElement('div');overlay.id='avatar-lightbox';overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.82);display:flex;align-items:center;justify-content:center;z-index:999999;padding:24px;cursor:pointer;';overlay.onclick=function(){overlay.remove();};var img=document.createElement('img');img.src=src;img.alt='Channel Avatar';img.style.cssText='display:block;max-width:min(90vw,900px);max-height:90vh;width:auto;height:auto;object-fit:contain;border-radius:18px;box-shadow:0 12px 40px rgba(0,0,0,0.45);cursor:pointer;';img.onclick=function(){overlay.remove();};overlay.appendChild(img);document.body.appendChild(overlay);})(this.href);return false;"
+>
+  <img
+    src="/avatars/<%= cinv.authorThumbnails[5].url.replace('https://yt3.googleusercontent.com/', '') %>"
+    alt="Channel Avatar"
+    style="border: 1px solid gray; border-radius: 50%;"
+  >
+</a>
 
 <!-- yeah i know very funny name lol -->      
     <% 
