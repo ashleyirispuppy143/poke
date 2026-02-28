@@ -275,6 +275,10 @@ document.addEventListener("DOMContentLoaded", () => {
     // FIX: startup autoplay retry state for Chromium
     startupAutoplayRetryTimer: null,
     startupAutoplayRetryCount: 0,
+    // Drift correction: track last micro-seek timestamp to avoid over-correcting
+    lastDriftCorrectionTs: 0,
+    lastDriftSample: 0,
+    consecutiveDriftCount: 0,
   };
   const EPS = 1.0;
   const HAVE_FUTURE_DATA = 3;
@@ -515,6 +519,14 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     } catch {}
   }
+
+  // Reset drift correction state — call whenever audio position changes discontinuously
+  // (seek, pause, catch-up) so stale drift samples don't produce a wrong correction.
+  function resetDriftState() {
+    state.lastDriftSample = 0;
+    state.consecutiveDriftCount = 0;
+    state.lastDriftCorrectionTs = now();
+  }
   function safeSetVideoTime(t) {
     try {
       if (isFinite(t) && t >= 0) video.currentTime(t);
@@ -721,8 +733,9 @@ document.addEventListener("DOMContentLoaded", () => {
       squelchAudioEvents(ms);
     } catch {}
     try {
-      // Always reset rate before pausing so it can never be "stuck" on resume
+      // Always reset rate and drift state before pausing so neither can be "stuck" on resume
       resetAudioPlaybackRate();
+      resetDriftState();
     } catch {}
     try {
       if (!audio.paused) audio.pause();
@@ -866,6 +879,7 @@ document.addEventListener("DOMContentLoaded", () => {
       await new Promise(r => setTimeout(r, 30));
       if (state.intendedPlaying && !getVideoPaused() && !userPauseLockActive() && !shouldBlockNewAudioStart()) {
         resetAudioPlaybackRate(); // ensure clean rate before play
+        resetDriftState();
         await execProgrammaticAudioPlay({ squelchMs: 420, force: true, minGapMs: 0 }).catch(() => false);
         updateAudioGainImmediate();
       }
@@ -1078,6 +1092,7 @@ document.addEventListener("DOMContentLoaded", () => {
       state.bgHiddenWasPlaying = false;
       state.resumeOnVisible = false;
       resetAudioPlaybackRate(); // catch-up seeks can leave a stale rate
+      resetDriftState();
       setFastSync(1200);
       scheduleSync(0);
     }
@@ -1194,6 +1209,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   function armResumeAfterBuffer(timeoutMs = 7000) {
     if (!coupledMode) return;
+    // Firefox never has audio paused by buffer holds — nothing to re-arm
+    if (platform.isFirefox) return;
     if (!state.intendedPlaying || state.restarting || state.seeking || state.syncing) return;
     if (mediaSessionForcedPauseActive()) return;
     clearResumeAfterBufferTimer();
@@ -1331,10 +1348,13 @@ document.addEventListener("DOMContentLoaded", () => {
       if ((state.startupPrimed || state.audioEverStarted) && !bothPlayableAt(vtStart)) {
         state.strictBufferHold = true;
         state.strictBufferReason = "strict-play-gate";
-        execProgrammaticVideoPause();
-        execProgrammaticAudioPause(420);
-        safeSetCT(audio, vtStart);
-        armResumeAfterBuffer(8000);
+        // Firefox handles buffering natively — never pause audio here
+        if (!platform.isFirefox) {
+          execProgrammaticVideoPause();
+          execProgrammaticAudioPause(420);
+          safeSetCT(audio, vtStart);
+          armResumeAfterBuffer(8000);
+        }
         return;
       }
       state.strictBufferHold = false;
@@ -1708,16 +1728,25 @@ document.addEventListener("DOMContentLoaded", () => {
         state.strictBufferHold = false;
         state.strictBufferReason = "";
       } else if (vNeedsBuffer || aNeedsBuffer) {
-        state.strictBufferHold = true;
-        state.strictBufferReason = vNeedsBuffer ? "video" : "audio";
-        if (!getVideoPaused()) execProgrammaticVideoPause();
-        if (!audio.paused) execProgrammaticAudioPause(420);
-        safeSetCT(audio, vt);
-        armResumeAfterBuffer(8000);
+        // Firefox handles buffer stalls natively — never pause/restart audio on it.
+        // Doing so causes audible glitches. Just flag the hold and let Firefox recover.
+        if (platform.isFirefox) {
+          state.strictBufferHold = true;
+          state.strictBufferReason = vNeedsBuffer ? "video" : "audio";
+          // Don't pause audio or call armResumeAfterBuffer — Firefox doesn't need it
+        } else {
+          state.strictBufferHold = true;
+          state.strictBufferReason = vNeedsBuffer ? "video" : "audio";
+          if (!getVideoPaused()) execProgrammaticVideoPause();
+          if (!audio.paused) execProgrammaticAudioPause(420);
+          safeSetCT(audio, vt);
+          armResumeAfterBuffer(8000);
+        }
       } else if (state.strictBufferHold) {
         state.strictBufferHold = false;
         state.strictBufferReason = "";
         resetAudioPlaybackRate(); // rate may be dirty from before the buffer stall
+        resetDriftState();
         setFastSync(900);
       }
     }
@@ -1726,13 +1755,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const vWaiting = getVideoReadyState() < 3 || state.videoWaiting;
     if (state.intendedPlaying && !state.restarting && !state.seeking && !state.syncing) {
       if (state.strictBufferHold) {
-        if (!vPaused) execProgrammaticVideoPause();
-        if (!aPaused) {
+        if (!vPaused && !platform.isFirefox) execProgrammaticVideoPause();
+        if (!aPaused && !platform.isFirefox) {
           execProgrammaticAudioPause(300);
           safeSetCT(audio, vt);
         }
       } else if (vWaiting && (state.audioEverStarted || !canStartAudioAt(vt))) {
-        if (!aPaused) {
+        // Firefox: never pause audio on video waiting — it recovers on its own
+        if (!aPaused && !platform.isFirefox) {
           execProgrammaticAudioPause(260);
           safeSetCT(audio, vt);
         }
@@ -1768,22 +1798,53 @@ document.addEventListener("DOMContentLoaded", () => {
       } else {
         const drift = vt - at;
         if (Math.abs(drift) > BIG_DRIFT) {
-          // Large drift: hard snap audio position and reset rate immediately
+          // Very large drift: hard snap audio position and reset rate
           resetAudioPlaybackRate();
           safeSetCT(audio, vt);
+          state.lastDriftCorrectionTs = now();
+          state.lastDriftSample = 0;
+          state.consecutiveDriftCount = 0;
           setFastSync(1200);
         } else if (Math.abs(drift) > MICRO_DRIFT) {
-          // Small drift: nudge playback rate very gently to converge.
-          // Clamp much tighter (±1.5%) so it can never cause audible
-          // quality/speed degradation even if corrections compound.
-          const baseRate = Number(video.playbackRate()) || 1;
-          // Scale: 0.08 * drift, hard-capped at ±0.015 of base rate
-          const nudge = Math.max(-0.015, Math.min(0.015, drift * 0.08));
-          try {
-            audio.playbackRate = baseRate + nudge;
-          } catch {}
+          // Small persistent drift: correct by nudging audio.currentTime by a
+          // tiny fraction of the error. Completely inaudible — no pitch/speed
+          // change whatsoever. We require the drift to appear in 2 consecutive
+          // sync cycles with the same sign before acting, and enforce a minimum
+          // 800ms cooldown between corrections, so we never spam micro-seeks.
+          const sameSinceLastSample = (drift * state.lastDriftSample) > 0; // same sign
+          state.lastDriftSample = drift;
+          if (sameSinceLastSample) {
+            state.consecutiveDriftCount = Math.min(state.consecutiveDriftCount + 1, 8);
+          } else {
+            state.consecutiveDriftCount = 1; // sign flip — wait for stability
+          }
+          const cooldownOk = (now() - state.lastDriftCorrectionTs) > 800;
+          if (state.consecutiveDriftCount >= 2 && cooldownOk) {
+            // Nudge by 12% of drift, capped at 30ms max per correction
+            const MAX_NUDGE_SEC = 0.030;
+            const nudge = Math.max(-MAX_NUDGE_SEC, Math.min(MAX_NUDGE_SEC, drift * 0.12));
+            const targetAT = at + nudge;
+            if (isFinite(targetAT) && targetAT >= 0 && timeInBuffered(audio, targetAT)) {
+              try {
+                audio.currentTime = targetAT;
+                state.lastDriftCorrectionTs = now();
+              } catch {}
+            } else {
+              // Target not buffered — hard snap instead
+              resetAudioPlaybackRate();
+              safeSetCT(audio, vt);
+              state.lastDriftCorrectionTs = now();
+              state.lastDriftSample = 0;
+              state.consecutiveDriftCount = 0;
+              setFastSync(800);
+            }
+          }
+          // Always ensure rate is at baseline — never drift-correct via speed
+          resetAudioPlaybackRate();
         } else {
-          // In sync: always snap rate back to baseline to undo any lingering nudge
+          // In sync — reset correction state and ensure clean rate
+          state.lastDriftSample = 0;
+          state.consecutiveDriftCount = 0;
           resetAudioPlaybackRate();
         }
       }
@@ -2146,6 +2207,15 @@ document.addEventListener("DOMContentLoaded", () => {
         state.resumeOnVisible = true;
         return;
       }
+      // Firefox handles buffering natively — pausing/restarting audio here causes
+      // audible glitches with no benefit. Let Firefox recover on its own.
+      if (platform.isFirefox) {
+        state.strictBufferHold = true;
+        state.strictBufferReason = "video-waiting";
+        // Don't touch audio — just wait for the "playing" event
+        scheduleSync(0);
+        return;
+      }
       state.strictBufferHold = true;
       state.strictBufferReason = "video-waiting";
       execProgrammaticVideoPause();
@@ -2484,7 +2554,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   scheduleSync(0);
 });
-
 
 document.addEventListener('keydown', function(event) {
      const active = document.activeElement;
