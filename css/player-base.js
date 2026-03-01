@@ -32,7 +32,7 @@ document.addEventListener("DOMContentLoaded", () => {
     videoEl.setAttribute("webkit-playsinline", "");
   } catch {}
 
-  // ─── Audio context for pop-free fading ───────────────────────────────────
+  // ─── Audio context for pop‑free fading ───────────────────────────────────
   let audioCtx = null;
   let gainNode = null;
   let audioSourceNode = null;
@@ -184,9 +184,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const HAVE_ENOUGH_DATA = 4;
   const STRICT_BUFFER_AHEAD_SEC = 0.18;
   const STARTUP_BUFFER_AHEAD_SEC = 0.9;
-  // Sync thresholds — never adjust playback rate, use time-nudge instead
+  // Sync thresholds — never adjust playback rate, use time‑nudge instead
   const SNAP_DRIFT = 0.5;      // hard snap if drift > this
-  const CORRECT_DRIFT = 0.12;  // soft-correct drift if > this
+  const CORRECT_DRIFT = 0.12;  // soft‑correct drift if > this
   const BIG_DRIFT = 1.5;
   const BG_SILENT_SNAP_THRESHOLD = 0.5;
   // How many consecutive sync cycles drift must be present before we correct
@@ -270,13 +270,13 @@ document.addEventListener("DOMContentLoaded", () => {
     lastKnownGoodVTts: 0,
     startupAutoplayRetryTimer: null,
     startupAutoplayRetryCount: 0,
-    // Drift tracking — NO rate adjustments, only time-nudge
+    // Drift tracking — NO rate adjustments, only time‑nudge
     driftStableFrames: 0,
     lastDrift: 0,
     bgTransitionInProgress: false,
     // For startup desync prevention: track if audio was aligned at start
     startupAudioAligned: false,
-    // Loop-breaker: track last corrective action timestamp to prevent feedback
+    // Loop‑breaker: track last corrective action timestamp to prevent feedback
     lastCorrectiveActionTs: 0,
     inPlayPauseLoop: false,
     playPauseLoopCount: 0,
@@ -428,7 +428,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return false;
   }
 
-  // ─── Loop-break detection ─────────────────────────────────────────────────
+  // ─── Loop‑break detection ─────────────────────────────────────────────────
   // Prevents rapid play/pause feedback loops that can lock up playback.
   function recordCorrectiveAction() {
     const t = now();
@@ -445,7 +445,7 @@ document.addEventListener("DOMContentLoaded", () => {
         state.inPlayPauseLoop = false;
         state.playPauseLoopCount = 0;
         state.playPauseLoopResetTimer = null;
-        // Force a clean resync after loop-break timeout
+        // Force a clean resync after loop‑break timeout
         if (state.intendedPlaying) {
           resetDriftTracking();
           setFastSync(1200);
@@ -487,7 +487,7 @@ document.addEventListener("DOMContentLoaded", () => {
     try { if (audio && !state.userMutedAudio && audio.muted) audio.muted = false; } catch {}
   }
 
-  // Pop-free fade helpers using Web Audio API
+  // Pop‑free fade helpers using Web Audio API
   async function fadeOutAudio(ms = 40) {
     if (!gainNode || !audioCtx) {
       if (audio) try { audio.volume = 0; } catch {}
@@ -715,7 +715,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (e) { state.isProgrammaticVideoPlay = false; throw e; }
   }
 
-  // Pop-free audio pause: fade out then pause
+  // Pop‑free audio pause: fade out then pause
   function execProgrammaticAudioPause(ms = 320, fadeDuration = 30) {
     if (!coupledMode || !audio) return;
     const until = now() + Math.max(180, Number(ms) || 0);
@@ -859,7 +859,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ─── Kick helpers ─────────────────────────────────────────────────────────
   // Audio kick: realign audio time to video time and restart playback.
-  // Does a fade-out/fade-in around the seek to prevent pops.
+  // Does a fade‑out/fade‑in around the seek to prevent pops.
   async function kickAudio() {
     if (!coupledMode) return;
     if (inLoopBreak()) return;
@@ -873,7 +873,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // Fade out before seek
       if (!audio.paused && gainNode && audioCtx) await fadeOutAudio(25);
 
-      execProgrammaticAudioPause(420, 0); // already faded, no re-fade
+      execProgrammaticAudioPause(420, 0); // already faded, no re‑fade
       safeSetCT(audio, target);
       ensureAudioPlaybackRate();
       resetDriftTracking();
@@ -967,7 +967,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return base + elapsed * rate;
   }
 
-  // ─── Silent background catch-up ───────────────────────────────────────────
+  // ─── Silent background catch‑up ───────────────────────────────────────────
   async function silentBgCatchUp() {
     if (!coupledMode) return;
     if (!state.intendedPlaying || state.restarting || state.seeking) return;
@@ -1021,7 +1021,7 @@ document.addEventListener("DOMContentLoaded", () => {
           try { await execProgrammaticAudioPlay({ squelchMs: 400, force: true, minGapMs: 0 }); } catch {}
           updateAudioGainImmediate();
           state.strictBufferHold = true;
-          state.strictBufferReason = "bg-resume-buffer";
+          state.strictBufferReason = "bg‑resume‑buffer";
           armResumeAfterBuffer(7000);
         }
         return;
@@ -1061,7 +1061,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const aReady = canStartAudioAt(target) || Number(audio.readyState || 0) >= 2;
       if (!(vReady && aReady)) {
         state.strictBufferHold = true;
-        state.strictBufferReason = "bg-resume-buffer";
+        state.strictBufferReason = "bg‑resume‑buffer";
         armResumeAfterBuffer(7000);
         return false;
       }
@@ -1264,7 +1264,7 @@ document.addEventListener("DOMContentLoaded", () => {
         safeSetCT(audio, vtStart);
         ensureAudioPlaybackRate();
       } else if (!state.startupAudioAligned) {
-        // First play: hard-align audio to video time
+        // First play: hard‑align audio to video time
         const at = Number(audio.currentTime);
         if (!isFinite(at) || Math.abs(at - vtStart) > 0.05) {
           safeSetCT(audio, vtStart);
@@ -1279,7 +1279,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if ((state.startupPrimed || state.audioEverStarted) && !bothPlayableAt(vtStart)) {
         state.strictBufferHold = true;
-        state.strictBufferReason = "strict-play-gate";
+        state.strictBufferReason = "strict‑play‑gate";
         execProgrammaticVideoPause();
         execProgrammaticAudioPause(420);
         safeSetCT(audio, vtStart);
@@ -1432,7 +1432,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const alreadyReady = isFinite(vtCheck) && bothPlayableAt(vtCheck);
       if (!alreadyReady) {
         state.strictBufferHold = true;
-        state.strictBufferReason = "seek-buffer";
+        state.strictBufferReason = "seek‑buffer";
         armResumeAfterBuffer(8000);
         return;
       }
@@ -1508,7 +1508,7 @@ document.addEventListener("DOMContentLoaded", () => {
         setMediaPlayTxn(1800);
         setFastSync(2200);
 
-        // Hard-align audio to video at startup
+        // Hard‑align audio to video at startup
         const vt = Number(video.currentTime()) || 0;
         safeSetCT(audio, vt);
         ensureAudioPlaybackRate();
@@ -1582,7 +1582,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const looseReady = canPlayAt(getVideoNode(), t0) && canStartAudioAt(t0);
       if (!(looseReady && primeWait > 1400)) {
         state.strictBufferHold = true;
-        state.strictBufferReason = "startup-buffer";
+        state.strictBufferReason = "startup‑buffer";
         return;
       }
     }
@@ -1592,7 +1592,7 @@ document.addEventListener("DOMContentLoaded", () => {
     state.strictBufferHoldFrames = 0;
     state.firstSeekDone = true;
 
-    // Hard-align audio to video at startup prime
+    // Hard‑align audio to video at startup prime
     const t = Number(video.currentTime());
     if (isFinite(t)) {
       safeSetCT(audio, t);
@@ -1644,20 +1644,27 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const hidden = document.visibilityState === "hidden";
 
-    // On Chromium/WebKit hidden tabs, don't issue pause commands —
-    // just mark for resume and wait until tab becomes visible.
+    // ─── Critical fix for background media controls ─────────────────────────
+    // If we are hidden but have an active media session play request,
+    // do NOT set resumeOnVisible and return; instead continue the sync loop
+    // to allow playback attempts while hidden.
     if (hidden && platform.useBgControllerRetry && state.intendedPlaying && !mediaSessionForcedPauseActive()) {
-      state.resumeOnVisible = true;
-      if (!state.bgHiddenSince) noteBackgroundEntry();
-      scheduleSync();
-      return;
+      if (!hiddenMediaSessionPlayActive()) {
+        // No active media session play request – defer to visible
+        state.resumeOnVisible = true;
+        if (!state.bgHiddenSince) noteBackgroundEntry();
+        scheduleSync();
+        return;
+      }
+      // Otherwise, we have hiddenMediaSessionPlayActive, so continue sync loop
+      // (do not return early) to attempt playback now.
     }
 
     if (state.intendedPlaying && !state.seeking && !state.syncing) {
       const needsHold = evaluateBufferHoldNeed(vt);
       if (needsHold && !state.strictBufferHold) {
         state.strictBufferHold = true;
-        state.strictBufferReason = state.videoWaiting ? "video-waiting" : (
+        state.strictBufferReason = state.videoWaiting ? "video‑waiting" : (
           !canPlaySmoothAt(getVideoNode(), vt, STRICT_BUFFER_AHEAD_SEC) ? "video" : "audio"
         );
         if (!getVideoPaused()) execProgrammaticVideoPause();
@@ -2030,8 +2037,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
         Promise.allSettled([playPromise, audioPromise]).finally(() => {
           if (serial !== state.mediaSessionActionSerial) return;
-          // Use requestAnimationFrame for immediate response, no artificial delay
-          requestAnimationFrame(() => {
+          // Use a microtask instead of requestAnimationFrame to avoid throttling in background
+          Promise.resolve().then(() => {
             if (serial !== state.mediaSessionActionSerial) return;
             if (!state.intendedPlaying || userPauseLockActive()) return;
             playTogether().catch(() => {});
@@ -2318,7 +2325,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (coupledMode) await softAlignAudioTo(startAt);
       ensureAudioPlaybackRate();
       resetDriftTracking();
-      state.startupAudioAligned = false; // will be re-aligned on next play
+      state.startupAudioAligned = false; // will be re‑aligned on next play
       state.intendedPlaying = true;
       markMediaAction("play");
       setFastSync(2000);
@@ -2375,7 +2382,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (state.intendedPlaying) {
           if (platform.useBgControllerRetry) {
             if (state.bgHiddenWasPlaying || state.resumeOnVisible) {
-              // Use seamless catch-up for Chromium/WebKit — avoids visible pause/play
+              // Use seamless catch‑up for Chromium/WebKit — avoids visible pause/play
               seamlessBgCatchUp().catch(() => {});
             } else {
               silentBgCatchUp().catch(() => {});
@@ -2421,7 +2428,7 @@ document.addEventListener("DOMContentLoaded", () => {
   bindCommonMediaEvents();
   setupVisibilityLifecycle();
 
-  // Setup Web Audio API for pop-free audio control
+  // Setup Web Audio API for pop‑free audio control
   if (coupledMode && audio) {
     try {
       ensureAudioContext();
@@ -2503,7 +2510,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   scheduleSync(0);
 });
-
 document.addEventListener('keydown', function(event) {
      const active = document.activeElement;
     if (active && (active.tagName.toLowerCase() === 'input' || active.tagName.toLowerCase() === 'textarea')) {
