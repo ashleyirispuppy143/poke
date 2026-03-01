@@ -299,7 +299,10 @@ visibilityStableUntil: 0,
 focusStableUntil: 0,
 mediaSessionOverrideActive: false,
 audioVolumeLocked: false,
-audioSafeMuteUntil: 0
+audioSafeMuteUntil: 0,
+seekAudioSyncPending: false,
+seekAudioSyncTime: 0,
+seekAudioSyncUntil: 0
 };
 const EPS = 1.0;
 const HAVE_FUTURE_DATA = 3;
@@ -326,6 +329,8 @@ const CHROMIUM_PAUSE_EVENT_SUPPRESS_MS = 8000;
 const PAUSE_EVENT_RESET_MS = 20000;
 const MAX_PAUSE_EVENTS_BEFORE_BLOCK = 3;
 const AUDIO_POP_PREVENT_MS = 500;
+const SEEK_AUDIO_SYNC_DELAY_MS = 150;
+const SEEK_AUDIO_RESUME_DELAY_MS = 100;
 const clamp01 = v => Math.max(0, Math.min(1, Number(v)));
 function now() { return performance.now(); }
 function markMediaAction(type) {
@@ -1475,10 +1480,23 @@ return;
 if (state.restarting || !state.seeking) return;
 const v = getVideoNode();
 const vt = Number(video.currentTime());
-if (isFinite(vt)) safeSetAudioTime(vt);
+// FIX: Immediately sync audio time to video time on seek finalize
+if (isFinite(vt)) {
+safeSetAudioTime(vt);
+state.seekAudioSyncTime = vt;
+state.seekAudioSyncPending = true;
+state.seekAudioSyncUntil = now() + SEEK_AUDIO_SYNC_DELAY_MS;
+}
 if (!state.seekWantedPlaying || !state.intendedPlaying) {
 execProgrammaticVideoPause();
 execProgrammaticAudioPause(500);
+state.seeking = false;
+state.firstSeekDone = true;
+state.seekCompleted = true;
+state.audioPlayUntil = 0;
+state.audioPauseUntil = 0;
+state.pendingSeekTarget = null;
+return;
 }
 const[vReady, aReady] = await Promise.all([
 waitForReadyStateOrCanPlay(v, 3, SEEK_READY_TIMEOUT_MS),
@@ -2302,13 +2320,14 @@ state.seekCompleted = false;
 clearSeekSyncFinalizeTimer();
 const seekTime = Number(video.currentTime());
 state.pendingSeekTarget = seekTime;
+// FIX: Immediately set audio time when video seeking starts (not wait for seeked)
+if (isFinite(seekTime) && coupledMode && audio) {
+squelchAudioEvents(300);
+safeSetAudioTime(seekTime);
+}
 if (!state.intendedPlaying) {
 execProgrammaticVideoPause();
 execProgrammaticAudioPause(400);
-}
-if (isFinite(seekTime)) {
-squelchAudioEvents(500);
-safeSetAudioTime(seekTime);
 }
 state.driftStableFrames = 0;
 state.lastDrift = 0;
@@ -2318,11 +2337,13 @@ scheduleSync(0);
 video.on("seeked", () => {
 if (state.restarting) return;
 const newTime = Number(video.currentTime());
-squelchAudioEvents(500);
+// FIX: Reduced squelch from 500ms to 200ms for faster audio resume after seek
+squelchAudioEvents(200);
 safeSetAudioTime(newTime);
 state.driftStableFrames = 0;
 state.lastDrift = 0;
-scheduleSeekFinalize(0);
+// FIX: Schedule seek finalize with minimal delay for faster audio sync
+scheduleSeekFinalize(50);
 });
 video.on("ended", () => {
 if (state.restarting) return;
@@ -2548,7 +2569,6 @@ queueHardPauseVerification();
 }
 scheduleSync(0);
 });
-
 
 
 
