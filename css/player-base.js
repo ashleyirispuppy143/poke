@@ -42,7 +42,12 @@ document.addEventListener("DOMContentLoaded", () => {
   function ensureAudioContext() {
     if (!audio || audioCtx) return;
     try {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      // If another script or previous run already bound it, don't try again.
+      if (audio.dataset.waConnected === "true") return;
+
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      audioCtx = new Ctx();
       gainNode = audioCtx.createGain();
       gainNode.connect(audioCtx.destination);
     } catch {
@@ -53,19 +58,31 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function connectAudioToContext() {
     if (!audioCtx || !gainNode || !audio || audioContextConnected) return;
+    
+    // Prevent DOM Exception: element already connected to another context
+    if (audio.dataset.waConnected === "true") {
+      audioCtx = null;
+      gainNode = null;
+      return;
+    }
+
     try {
       audioSourceNode = audioCtx.createMediaElementSource(audio);
       audioSourceNode.connect(gainNode);
       audioContextConnected = true;
-    } catch {
+      audio.dataset.waConnected = "true"; // Mark as connected for page lifecycle
+    } catch (e) {
+      // If connection fails, gracefully fallback to standard volume manipulation
       audioContextConnected = false;
+      audioCtx = null;
+      gainNode = null;
     }
   }
 
   // Smooth gain change to prevent pops. duration in seconds.
   function rampGain(targetValue, durationSec = 0.04) {
     const clamped = Math.max(0, Math.min(1, targetValue));
-    if (!gainNode || !audioCtx) {
+    if (!gainNode || !gainNode.gain || !audioCtx) {
       // fallback: direct volume
       if (audio) try { audio.volume = clamped; } catch {}
       return;
@@ -478,7 +495,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function updateAudioGainImmediate() {
     if (!audio) return;
     const target = clamp01(targetVolFromVideo());
-    if (gainNode && audioCtx) {
+    if (gainNode && gainNode.gain && audioCtx) {
       rampGain(target, 0.02);
     } else {
       try { audio.volume = target; } catch {}
@@ -492,8 +509,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Pop-free fade helpers using Web Audio API
   async function fadeOutAudio(ms = 40) {
-    if (!gainNode || !audioCtx) {
+    if (!gainNode || !gainNode.gain || !audioCtx) {
       if (audio) try { audio.volume = 0; } catch {}
+      await new Promise(r => setTimeout(r, ms + 5));
       return;
     }
     resumeAudioContext();
@@ -508,8 +526,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function fadeInAudio(targetVol, ms = 40) {
     const clamped = clamp01(targetVol);
-    if (!gainNode || !audioCtx) {
+    if (!gainNode || !gainNode.gain || !audioCtx) {
       if (audio) try { audio.volume = clamped; } catch {}
+      await new Promise(r => setTimeout(r, ms + 5));
       return;
     }
     resumeAudioContext();
@@ -529,7 +548,7 @@ document.addEventListener("DOMContentLoaded", () => {
       updateAudioGainImmediate();
       return;
     }
-    if (gainNode && audioCtx) {
+    if (gainNode && gainNode.gain && audioCtx) {
       resumeAudioContext();
       rampGain(target, ms / 1000);
     } else {
@@ -747,7 +766,7 @@ document.addEventListener("DOMContentLoaded", () => {
       try { if (!audio.paused) audio.pause(); } catch {}
     };
 
-    if (!audio.paused && (gainNode && audioCtx)) {
+    if (!audio.paused) {
       // Fade out before pausing to eliminate pop
       fadeOutAudio(fadeDuration).then(doPause).catch(doPause);
     } else {
@@ -776,7 +795,7 @@ document.addEventListener("DOMContentLoaded", () => {
     resetDriftTracking();
 
     // Ensure gain is at 0 before play so there's no pop on start
-    if (gainNode && audioCtx) {
+    if (gainNode && gainNode.gain && audioCtx) {
       try {
         resumeAudioContext();
         const ct = audioCtx.currentTime;
@@ -892,7 +911,7 @@ document.addEventListener("DOMContentLoaded", () => {
       recordCorrectiveAction();
 
       // Fade out before seek
-      if (!audio.paused && gainNode && audioCtx) await fadeOutAudio(25);
+      if (!audio.paused) await fadeOutAudio(25);
 
       execProgrammaticAudioPause(420, 0); // already faded, no re-fade
       safeSetCT(audio, target);
@@ -1766,7 +1785,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (state.intendedPlaying && !aPaused && !state.userMutedVideo && !state.userMutedAudio) {
       try { if (audio.muted && !state.seeking) audio.muted = false; } catch {}
       const targetVol = clamp01(targetVolFromVideo());
-      if (!gainNode || !audioCtx) {
+      if (!gainNode || !gainNode.gain || !audioCtx) {
         if (audio.volume <= 0.001 && !state.seeking) softUnmuteAudio(120).catch(() => {});
       } else {
         try {
@@ -1970,7 +1989,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const applyMediaSessionSeek = (newTime) => {
         if (coupledMode && audio) {
           try { audio.muted = true; } catch {}
-          if (gainNode && audioCtx) {
+          if (gainNode && gainNode.gain && audioCtx) {
             try { gainNode.gain.setTargetAtTime(0, audioCtx.currentTime, 0.001); actualGainTarget = 0; } catch {}
           }
           squelchAudioEvents(400);
@@ -2212,7 +2231,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // MUTE INSTANTLY TO PREVENT AUDIO POP
       if (coupledMode && audio) {
           try { audio.muted = true; } catch {}
-          if (gainNode && audioCtx) {
+          if (gainNode && gainNode.gain && audioCtx) {
               try {
                   gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
                   gainNode.gain.setTargetAtTime(0, audioCtx.currentTime, 0.001);
@@ -2333,7 +2352,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
              if (!vPausedNow && !aPausedNow) {
                  if (Math.abs(vtNow - atNow) > 0.15) {
-                     if (gainNode && audioCtx) {
+                     if (gainNode && gainNode.gain && audioCtx) {
                          try { gainNode.gain.setTargetAtTime(0, audioCtx.currentTime, 0.001); actualGainTarget = 0; } catch {}
                      }
                      safeSetCT(audio, vtNow);
@@ -2468,6 +2487,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   scheduleSync(0);
 });
+
 
 document.addEventListener('keydown', function(event) {
      const active = document.activeElement;
