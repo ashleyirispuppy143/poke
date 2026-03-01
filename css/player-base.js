@@ -37,6 +37,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let gainNode = null;
   let audioSourceNode = null;
   let audioContextConnected = false;
+  let actualGainTarget = 1;
 
   function ensureAudioContext() {
     if (!audio || audioCtx) return;
@@ -63,18 +64,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Smooth gain change to prevent pops. duration in seconds.
   function rampGain(targetValue, durationSec = 0.04) {
+    const clamped = Math.max(0, Math.min(1, targetValue));
     if (!gainNode || !audioCtx) {
       // fallback: direct volume
-      if (audio) try { audio.volume = Math.max(0, Math.min(1, targetValue)); } catch {}
+      if (audio) try { audio.volume = clamped; } catch {}
       return;
     }
     try {
       const t = audioCtx.currentTime;
       gainNode.gain.cancelScheduledValues(t);
-      gainNode.gain.setValueAtTime(gainNode.gain.value, t);
-      gainNode.gain.linearRampToValueAtTime(Math.max(0, Math.min(1, targetValue)), t + durationSec);
+      gainNode.gain.setTargetAtTime(clamped, t, Math.max(0.001, durationSec / 3));
+      actualGainTarget = clamped;
+      gainNode.gain.value = clamped;
     } catch {
-      if (audio) try { audio.volume = Math.max(0, Math.min(1, targetValue)); } catch {}
+      if (audio) try { audio.volume = clamped; } catch {}
     }
   }
 
@@ -498,23 +501,26 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const t = audioCtx.currentTime;
       gainNode.gain.cancelScheduledValues(t);
-      gainNode.gain.setValueAtTime(gainNode.gain.value, t);
-      gainNode.gain.linearRampToValueAtTime(0, t + ms / 1000);
+      gainNode.gain.setTargetAtTime(0, t, Math.max(0.001, (ms / 1000) / 3));
+      actualGainTarget = 0;
+      gainNode.gain.value = 0;
     } catch {}
     await new Promise(r => setTimeout(r, ms + 5));
   }
 
   async function fadeInAudio(targetVol, ms = 40) {
+    const clamped = clamp01(targetVol);
     if (!gainNode || !audioCtx) {
-      if (audio) try { audio.volume = clamp01(targetVol); } catch {}
+      if (audio) try { audio.volume = clamped; } catch {}
       return;
     }
     resumeAudioContext();
     try {
       const t = audioCtx.currentTime;
       gainNode.gain.cancelScheduledValues(t);
-      gainNode.gain.setValueAtTime(0, t);
-      gainNode.gain.linearRampToValueAtTime(clamp01(targetVol), t + ms / 1000);
+      gainNode.gain.setTargetAtTime(clamped, t, Math.max(0.001, (ms / 1000) / 3));
+      actualGainTarget = clamped;
+      gainNode.gain.value = clamped;
     } catch {}
     await new Promise(r => setTimeout(r, ms + 5));
   }
@@ -766,6 +772,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const ct = audioCtx.currentTime;
         gainNode.gain.cancelScheduledValues(ct);
         gainNode.gain.setValueAtTime(0, ct);
+        actualGainTarget = 0;
+        gainNode.gain.value = 0;
       } catch {}
     } else {
       try { audio.volume = 0; } catch {}
@@ -1138,8 +1146,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let cleaned = false, pollTimer = null;
     const cleanup = () => {
       if (cleaned) return; cleaned = true;
-      if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
-      ["canplay", "playing"].forEach(ev => {
+      if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }["canplay", "playing"].forEach(ev => {
         try { v.removeEventListener(ev, onReady); } catch {}
         try { audio.removeEventListener(ev, onReady); } catch {}
       });
@@ -1157,8 +1164,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!inMediaTxnWindow()) playTogether().catch(() => {});
       else scheduleSync(160);
     };
-    const onReady = () => { requestAnimationFrame(tryKick); };
-    ["canplay", "playing"].forEach(ev => {
+    const onReady = () => { requestAnimationFrame(tryKick); };["canplay", "playing"].forEach(ev => {
       try { v.addEventListener(ev, onReady, { passive: true }); } catch {}
       try { audio.addEventListener(ev, onReady, { passive: true }); } catch {}
     });
@@ -1858,7 +1864,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (audio.volume <= 0.001) softUnmuteAudio(120).catch(() => {});
       } else {
         try {
-          if (gainNode.gain.value <= 0.001) rampGain(targetVol, 0.1);
+          if (actualGainTarget <= 0.001 && targetVol > 0.001) rampGain(targetVol, 0.1);
         } catch {}
       }
     }
@@ -2514,7 +2520,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   scheduleSync(0);
 });
-
 document.addEventListener('keydown', function(event) {
      const active = document.activeElement;
     if (active && (active.tagName.toLowerCase() === 'input' || active.tagName.toLowerCase() === 'textarea')) {
