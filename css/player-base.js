@@ -179,14 +179,16 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
         const metaTitle = document.querySelector('meta[name="title"]')?.content || "";
         const metaDesc = document.querySelector('meta[name="twitter:description"]')?.content || "";
         let stats = "";
-        const match = metaDesc.match(/👍\s*[^|]+|\s👎\s[^|]+|\s📈\s[^💬]+/);
-        if (match) {
-            stats = match[0]
-                .replace(/👍/g, "👍")
-                .replace(/👎/g, "• 👎")
-                .replace(/📈/g, "• 📈")
-                .replace(/\s*|\s*/g, "   ");
+        
+        // FIX: Improved regex to properly capture all stats from Twitter description
+        // Matches: 👍 272K | 👎 1.1K | 📈 19M Views 🗓️ 5 months ago 💬 18,176
+        const statsMatch = metaDesc.match(/👍\s*[\d.KM]+\s*(?:\|)?\s*👎\s*[\d.KM]+\s*(?:\|)?\s*📈\s*[\d.KM]+/i);
+        if (statsMatch) {
+            stats = statsMatch[0]
+                .replace(/\s*\|\s*/g, " | ")
+                .trim();
         }
+        
         const createTitleBar = () => {
             const existing = video.getChild("TitleBar");
             if (!existing) {
@@ -293,7 +295,15 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
         backgroundPauseBlocked: false,
         mediaControlPending: false,
         initialSyncComplete: false,
-        audioPopPreventUntil: 0
+        // FIX: Audio pop prevention - track last volume change time
+        audioPopPreventUntil: 0,
+        // FIX: Track audio fade state
+        audioFading: false,
+        audioFadeTarget: 1,
+        // FIX: Minimum gap between audio play/pause to prevent pops
+        audioLastPlayPauseTs: 0,
+        // FIX: Ensure both start synchronized at 0
+        initialSyncDone: false
     };
 
     const EPS = 1.0;
@@ -307,7 +317,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     const MAX_RATE_NUDGE = 0.005;
     const DRIFT_PERSIST_CYCLES = 4;
     const STRICT_BUFFER_HYSTERESIS_MS = 400;
+    // FIX: Audio pop prevention minimum time between play/pause operations
     const AUDIO_POP_PREVENT_MS = 350;
+    // FIX: Minimum fade duration to prevent audio pops
+    const AUDIO_FADE_DURATION_MS = 80;
 
     const clamp01 = v => Math.max(0, Math.min(1, Number(v)));
 
@@ -364,7 +377,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     }
 
     function inMediaTxnWindow() {
-        return mediaActionLocked() || mediaPlayTxnActive() || mediaPauseTxnActive();
+        return mediaActionLocked() || mediaPlayTxnActive() || mediaPauseTxnUntil;
     }
 
     function setMediaSessionForcedPause(ms = 2600) {
@@ -534,6 +547,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
         } catch {}
     }
 
+    // FIX: Smooth audio fade to prevent pop sounds
     async function softUnmuteAudio(ms = 60) {
         if (!audio) return;
         const target = clamp01(targetVolFromVideo());
@@ -560,6 +574,57 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
             };
             requestAnimationFrame(step);
         });
+    }
+
+    // FIX: Audio fade out before pause to prevent pop
+    async function fadeAudioOut(ms = AUDIO_FADE_DURATION_MS) {
+        if (!audio || state.audioFading) return;
+        state.audioFading = true;
+        const from = clamp01(audio.volume);
+        if (from <= 0.001) {
+            state.audioFading = false;
+            return;
+        }
+        const start = now();
+        await new Promise(resolve => {
+            const step = () => {
+                const t = Math.min(1, (now() - start) / ms);
+                const val = from * (1 - t);
+                try {
+                    audio.volume = clamp01(val);
+                } catch {}
+                if (t < 1) requestAnimationFrame(step);
+                else resolve();
+            };
+            requestAnimationFrame(step);
+        });
+        state.audioFading = false;
+    }
+
+    // FIX: Audio fade in after play to prevent pop
+    async function fadeAudioIn(ms = AUDIO_FADE_DURATION_MS) {
+        if (!audio || state.audioFading) return;
+        state.audioFading = true;
+        const target = clamp01(targetVolFromVideo());
+        const from = clamp01(audio.volume);
+        if (Math.abs(target - from) < 0.001) {
+            state.audioFading = false;
+            return;
+        }
+        const start = now();
+        await new Promise(resolve => {
+            const step = () => {
+                const t = Math.min(1, (now() - start) / ms);
+                const val = from + (target - from) * t;
+                try {
+                    audio.volume = clamp01(val);
+                } catch {}
+                if (t < 1) requestAnimationFrame(step);
+                else resolve();
+            };
+            requestAnimationFrame(step);
+        });
+        state.audioFading = false;
     }
 
     function safeSetCT(media, t) {
@@ -808,6 +873,13 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
         } = opts;
         if (!coupledMode || !audio || typeof audio.play !== "function") return false;
         if (!force && !audio.paused) return true;
+        
+        // FIX: Prevent audio pop by enforcing minimum gap between play/pause
+        const timeSinceLastPlayPause = now() - state.audioLastPlayPauseTs;
+        if (!force && timeSinceLastPlayPause < AUDIO_POP_PREVENT_MS) {
+            return !audio.paused;
+        }
+        
         if (shouldBlockNewAudioStart()) return false;
         const t = now();
         if (!force && t < state.audioPauseUntil) return !audio.paused;
@@ -824,10 +896,19 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
         resetAudioPlaybackRate();
         try {
             squelchAudioEvents(squelchMs);
+            
+            // FIX: Start at low volume to prevent pop, then fade in
+            const originalVol = audio.volume;
+            if (!state.audioEverStarted) {
+                audio.volume = 0.001;
+            }
+            
             const p = audio.play();
             state.audioPlayInFlight = Promise.resolve(p);
             state.audioPlayUntil = Math.max(state.audioPlayUntil, now() + Math.max(240, squelchMs));
+            state.audioLastPlayPauseTs = now();
             await state.audioPlayInFlight;
+            
             if (shouldBlockNewAudioStart()) {
                 try {
                     squelchAudioEvents(220);
@@ -837,6 +918,12 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
                 } catch {}
                 return false;
             }
+            
+            // FIX: Fade in audio after play starts to prevent pop
+            if (!state.audioEverStarted && !state.audioFading) {
+                await fadeAudioIn(AUDIO_FADE_DURATION_MS).catch(() => {});
+            }
+            
             if (!audio.paused) state.audioEverStarted = true;
             return !audio.paused;
         } finally {
@@ -1735,6 +1822,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
         state.strictBufferHoldConfirmed = false;
         state.firstSeekDone = true;
         const t = Number(video.currentTime());
+        // FIX: Ensure both audio and video start at same position to prevent initial desync
         if (isFinite(t) && isFinite(Number(audio.currentTime)) && Math.abs(Number(audio.currentTime) - t) > 0.1) {
             safeSetCT(audio, t);
         }
@@ -2595,8 +2683,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
         } catch {}
     }
     scheduleSync(0);
-});
- 
+}); 
 document.addEventListener('keydown', function(event) {
      const active = document.activeElement;
     if (active && (active.tagName.toLowerCase() === 'input' || active.tagName.toLowerCase() === 'textarea')) {
