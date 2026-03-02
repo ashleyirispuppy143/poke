@@ -16,6 +16,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  
  
 
+ 
 document.addEventListener("DOMContentLoaded", () => {
   const video = videojs("video", {
     controls: true,
@@ -414,7 +415,6 @@ document.addEventListener("DOMContentLoaded", () => {
     state.audioPlayUntil = 0;
     state.startupAudioHoldUntil = 0;
     
-    // Directly and synchronously play the audio to bypass browser block protections!
     if (coupledMode && audio) {
       audio.play().catch(()=>{});
       state.audioEverStarted = true;
@@ -1065,7 +1065,6 @@ document.addEventListener("DOMContentLoaded", () => {
     try { state.bgHiddenBaseRate = Number(video.playbackRate()) || 1; } catch { state.bgHiddenBaseRate = 1; }
   }
   
-  // Purely wakes up the video element silently without touching the audio.
   async function seamlessBgCatchUp() {
     if (!coupledMode || !platform.useBgControllerRetry) return;
     if (!state.intendedPlaying) return;
@@ -1079,11 +1078,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const aPausedNow = !!audio.paused;
     
     if (!aPausedNow && isFinite(atNow)) {
-      // Audio is playing completely natively. NEVER pause it.
-      // Just snap video to current audio time and quietly request play.
-      safeSetVideoTime(atNow);
+      safeSetVideoTime(atNow); 
       if (getVideoPaused() && !state.isProgrammaticVideoPlay) {
-        execProgrammaticVideoPlay(); // fire and forget
+        execProgrammaticVideoPlay(); 
       }
       state.bgHiddenWasPlaying = false;
       state.resumeOnVisible = false;
@@ -1092,7 +1089,6 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     
-    // Fallback: If Chromium completely paused both tracks in the background, carefully spin both up.
     playTogether().catch(()=>{});
   }
   
@@ -1120,8 +1116,11 @@ document.addEventListener("DOMContentLoaded", () => {
       if (mediaSessionForcedPauseActive() || userPauseLockActive()) {
         cleanup(); return;
       }
-      const vt = Number(video.currentTime());
-      const ready = isFinite(vt) && bothPlayableAt(vt);
+      const vtNow = Number(video.currentTime());
+      const atNow = Number(audio.currentTime);
+      const checkTime = Math.max(vtNow, atNow || 0);
+      
+      const ready = bothPlayableAt(checkTime);
       if (!ready) return;
       state.strictBufferHold = false;
       state.strictBufferReason = "";
@@ -1147,8 +1146,10 @@ document.addEventListener("DOMContentLoaded", () => {
           cleanup();
           state.resumeAfterBufferTimer = null;
           if (state.intendedPlaying && !state.restarting && !state.seeking && !userPauseLockActive()) {
-            const vt = Number(video.currentTime());
-            if (isFinite(vt) && bothPlayableAt(vt)) {
+            const vtNow = Number(video.currentTime());
+            const atNow = Number(audio.currentTime);
+            const checkTime = Math.max(vtNow, atNow || 0);
+            if (bothPlayableAt(checkTime)) {
               state.strictBufferHold = false;
               state.strictBufferReason = "";
               state.strictBufferHoldFrames = 0;
@@ -1249,8 +1250,8 @@ document.addEventListener("DOMContentLoaded", () => {
       const vt = Number(video.currentTime());
       const at = Number(audio.currentTime);
       if (isFinite(vt) && isFinite(at) && Math.abs(at - vt) > 0.25) {
-        if (!audio.paused && state.audioEverStarted) {
-          // AUDIO IS MASTER: If audio is already happily playing, bring video to it. Do NOT jut the audio!
+        if (state.audioEverStarted) {
+          // AUDIO IS MASTER CLOCK
           safeSetVideoTime(at);
         } else {
           safeSetAudioTime(vt);
@@ -1360,7 +1361,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const v = getVideoNode();
     const vt = Number(video.currentTime());
     if (isFinite(vt)) {
-      safeSetAudioTime(vt);
+      const at = Number(audio.currentTime);
+      if (Math.abs(at - vt) > 0.5) safeSetAudioTime(vt);
       state.seekAudioSyncTime = vt;
       state.seekAudioSyncPending = true;
       state.seekAudioSyncUntil = now() + SEEK_AUDIO_SYNC_DELAY_MS;
@@ -1410,7 +1412,10 @@ document.addEventListener("DOMContentLoaded", () => {
     state.strictBufferHoldConfirmed = false;
     await ensureUnmutedIfNotUserMuted().catch(() => {});
     const vt2 = Number(video.currentTime());
-    if (isFinite(vt2)) safeSetAudioTime(vt2);
+    if (isFinite(vt2)) {
+      const at2 = Number(audio.currentTime);
+      if (Math.abs(at2 - vt2) > 0.5) safeSetAudioTime(vt2);
+    }
     setFastSync(2600);
     if (state.playRequestedDuringSeek || state.seekWantedPlaying) {
       state.playRequestedDuringSeek = false;
@@ -1575,24 +1580,23 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!state.firstPlayCommitted) state.startupPhase = false;
     }, 3500);
   }
-  function evaluateBufferHoldNeed(vt) {
+  function evaluateBufferHoldNeed(vt, at) {
     if (!state.intendedPlaying || state.seeking || state.syncing) return false;
     if (!state.audioEverStarted && state.startupPhase) return false;
     
+    // Always check for buffer at the furthest advanced point to prevent audio running away natively
+    const checkTime = Math.max(vt, at || 0);
+    
     const vNode = getVideoNode();
-    const aNeedsBuffer = !canPlaySmoothAt(audio, vt, STRICT_BUFFER_AHEAD_SEC);
+    const aNeedsBuffer = !canPlaySmoothAt(audio, checkTime, STRICT_BUFFER_AHEAD_SEC);
     
-    // Check actual network starvation.
-    const vLacksData = !canPlaySmoothAt(vNode, vt, STRICT_BUFFER_AHEAD_SEC);
-    
-    // Ignore native 'waiting' events if we are backgrounded because browsers fake them,
-    // BUT NEVER ignore a real lack of network data (vLacksData). This fixes audio outrunning video.
+    const vLacksData = !canPlaySmoothAt(vNode, checkTime, STRICT_BUFFER_AHEAD_SEC);
     const isSuspended = document.visibilityState === "hidden" || !isWindowFocused() || getVideoPaused();
+    
     const vNeedsBuffer = vLacksData || (!isSuspended && state.videoWaiting);
     
     if (vNeedsBuffer || aNeedsBuffer) {
       state.strictBufferHoldFrames = (state.strictBufferHoldFrames || 0) + 1;
-      // Triggers very fast (2 frames / ~400ms) to prevent audio running away into the sunset
       if (state.strictBufferHoldFrames >= 2) {
         state.strictBufferHoldConfirmed = true;
         return true;
@@ -1617,26 +1621,40 @@ document.addEventListener("DOMContentLoaded", () => {
     if (state.restarting) {
       scheduleSync(); return;
     }
-    const vt = Number(video.currentTime());
-    const at = Number(audio.currentTime);
-    if (!isFinite(vt) || !isFinite(at)) {
+    const vtRaw = Number(video.currentTime());
+    const atRaw = Number(audio.currentTime);
+    if (!isFinite(vtRaw) || !isFinite(atRaw)) {
       scheduleSync(); return;
     }
+    
+    let vt = vtRaw;
+    let at = atRaw;
+    
+    if (state.intendedPlaying && !state.restarting && !state.seeking && !state.syncing) {
+      // AUDIO IS MASTER CLOCK: Keep video instantly synced to audio without jutting the audio track
+      if (state.audioEverStarted && !audio.paused) {
+        if (Math.abs(at - vt) > 0.25) {
+          safeSetVideoTime(at);
+          vt = at; 
+        }
+      }
+    }
+    
     if (state.intendedPlaying && !getVideoPaused() && vt > 0.1) {
       updateLastKnownGoodVT();
     }
     
-    // 1. HARD NETWORK HOLD CHECK (Applies equally to foreground AND background)
-    const needsHold = evaluateBufferHoldNeed(vt);
+    const vPaused = getVideoPaused();
+    const aPaused = !!audio.paused;
+    
+    // HARD NETWORK HOLD CHECK (Always checks furthest playhead to avoid audio running into sunset)
+    const needsHold = evaluateBufferHoldNeed(vt, at);
     if (needsHold && !state.strictBufferHold) {
       state.strictBufferHold = true;
       state.strictBufferReason = "buffer-starved";
       state.bufferHoldIntendedPlaying = state.intendedPlaying;
       if (!getVideoPaused()) execProgrammaticVideoPause();
-      if (!audio.paused) {
-        execProgrammaticAudioPause(600);
-        safeSetAudioTime(vt);
-      }
+      if (!audio.paused) execProgrammaticAudioPause(600); // Do NOT pull audio backwards here. Just pause.
       resetAudioPlaybackRate();
       armResumeAfterBuffer(10000);
     } else if (!needsHold && state.strictBufferHold) {
@@ -1648,32 +1666,19 @@ document.addEventListener("DOMContentLoaded", () => {
       setFastSync(1200);
     }
     
-    // Check if we are hidden or actively transitioning between tabs
     const isTransientState = document.visibilityState === "hidden" ||
     !isWindowFocused() ||
     isVisibilityTransitionActive() ||
     isAltTabTransitionActive() ||
     (platform.chromiumOnlyBrowser && chromiumBgPauseBlocked());
     
-    const vPaused = getVideoPaused();
-    const aPaused = !!audio.paused;
-    
     if (state.intendedPlaying && !state.restarting && !state.seeking && !state.syncing) {
       if (state.strictBufferHold) {
         if (!vPaused) execProgrammaticVideoPause();
-        if (!aPaused) {
-          execProgrammaticAudioPause(500);
-          safeSetAudioTime(vt);
-        }
+        if (!aPaused) execProgrammaticAudioPause(500);
       } else if (isTransientState) {
-        // --- TRUE ULTRA UNNOTICEABLE BACKGROUND FIX ---
-        // If we are alt-tabbing or in the background, DO NOT execute any play/pause corrections!
-        // Chromium naturally suspends the video track to save battery. Let it.
-        // We simply passively leash the video's frozen time to the playing audio quietly.
-        if (Math.abs(vt - at) > 0.25) {
-          if (!aPaused) safeSetVideoTime(at);
-          else if (!vPaused) safeSetAudioTime(vt);
-        }
+        // Video is already leashed to audio via Master Clock sync above. 
+        // No active play/pause interventions to protect battery state.
       } else {
         // --- ACTIVE FOREGROUND CORRECTIONS ---
         if (!vPaused && aPaused) {
@@ -1687,10 +1692,8 @@ document.addEventListener("DOMContentLoaded", () => {
             }
           }
         } else if (vPaused && !aPaused) {
-          // --- MEGA JUT FIX FOR ALT-TAB RECOVERY ---
-          // Video is paused but audio is perfectly playing (and we aren't network starved).
-          // NEVER pause the audio here! Bring the video to the audio time and gently ask it to wake up.
-          if (Math.abs(vt - at) > 0.25) safeSetVideoTime(at); 
+          // Audio playing beautifully but video is paused.
+          // Video time was already snapped to audio above. Just softly wake up the video.
           if (!state.isProgrammaticVideoPlay && !mediaPlayTxnActive() && !chromiumPauseGuardActive()) {
             execProgrammaticVideoPlay();
           }
@@ -1704,7 +1707,7 @@ document.addEventListener("DOMContentLoaded", () => {
           const absDrift = Math.abs(drift);
           if (absDrift > BIG_DRIFT) {
             resetAudioPlaybackRate();
-            safeSetVideoTime(at); // ALWAYS snap video to audio! Audio is the master track. Never stutter the audio!
+            safeSetVideoTime(at); // AUDIO IS MASTER
             setFastSync(1600);
           } else if (absDrift > MICRO_DRIFT) {
             const sameDirection = (drift > 0) === (state.lastDrift > 0);
@@ -2014,15 +2017,12 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
           }
           
-          // --- SECONDARY MEGA JUT FIX ---
-          // If the browser natively unpauses the video when returning from Alt-Tab,
-          // do NOT trigger a heavy restart if the audio is perfectly fine.
           if (coupledMode && !audio.paused && state.audioEverStarted) {
             const vt = Number(video.currentTime());
             const at = Number(audio.currentTime);
-            if (Math.abs(vt - at) > 0.25) safeSetVideoTime(at);
+            if (Math.abs(vt - at) > 0.25) safeSetVideoTime(at); 
             scheduleSync(0);
-            return;
+            return; 
           }
           
           playTogether().catch(() => {});
@@ -2211,12 +2211,19 @@ document.addEventListener("DOMContentLoaded", () => {
           state.playRequestedDuringSeek = state.intendedPlaying;
           state.seekCompleted = false;
           clearSeekSyncFinalizeTimer();
+          
           const seekTime = Number(video.currentTime());
           state.pendingSeekTarget = seekTime;
           if (isFinite(seekTime) && coupledMode && audio) {
-            squelchAudioEvents(400);
-            safeSetAudioTime(seekTime);
+            const at = Number(audio.currentTime);
+            // ONLY FORCE AUDIO TO SEEK IF IT'S A TRUE USER SCRUB (Difference > 0.5s)
+            // This massively prevents "echoes" when the script aligns video to audio seamlessly.
+            if (Math.abs(at - seekTime) > 0.5) {
+              squelchAudioEvents(400);
+              safeSetAudioTime(seekTime);
+            }
           }
+          
           if (!state.intendedPlaying) {
             execProgrammaticVideoPause();
             execProgrammaticAudioPause(500);
@@ -2229,8 +2236,13 @@ document.addEventListener("DOMContentLoaded", () => {
         video.on("seeked", () => {
           if (state.restarting) return;
           const newTime = Number(video.currentTime());
-          squelchAudioEvents(300);
-          safeSetAudioTime(newTime);
+          if (coupledMode && audio) {
+            const at = Number(audio.currentTime);
+            if (Math.abs(at - newTime) > 0.5) {
+              squelchAudioEvents(300);
+              safeSetAudioTime(newTime);
+            }
+          }
           state.driftStableFrames = 0;
           state.lastDrift = 0;
           scheduleSeekFinalize(80);
@@ -2371,7 +2383,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!platform.chromiumOnlyBrowser) return;
         state.focusStableUntil = now() + 300;
         
-        // Let the state settle shortly before recovering
         setTimeout(() => {
           state.altTabTransitionActive = false;
           executeSeamlessWakeup();
