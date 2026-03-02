@@ -582,6 +582,14 @@ window.__SSR__ = <%- JSON.stringify(ssr || {}) %>;
 window.__SSR_ROUTE__ = "/weather";
   </script>
   <script>
+      document.documentElement.style.setProperty('--bg', '#f8f9fa');
+    document.documentElement.style.setProperty('--fg', '#202124');
+    document.documentElement.style.setProperty('--muted', '#5f6368');
+    document.documentElement.style.setProperty('--card', '#ffffff');
+    document.documentElement.style.setProperty('--ring', '#e0e0e0');
+    document.documentElement.style.setProperty('--surface-hover', '#f1f3f4');
+
+    
   const $=s=>document.querySelector(s);const $$=s=>[...document.querySelectorAll(s)];
   const units=JSON.parse(localStorage.getItem('pokeweather:units')||'{}');
   let state={lat:null,lon:null,name:null,units:units.units||'<%= (ssr && ssr.units) || "metric" %>'};
