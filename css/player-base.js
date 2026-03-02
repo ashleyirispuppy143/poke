@@ -15,7 +15,8 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */ 
  
  
- document.addEventListener("DOMContentLoaded", () => {
+
+document.addEventListener("DOMContentLoaded", () => {
   const video = videojs("video", {
     controls: true,
     autoplay: true,
@@ -346,7 +347,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
   const AUDIO_PLAY_ATTEMPT_RESET_MS = 5000;
   const AUDIO_STARTUP_PLAY_RETRY_MS = 300;
   const MAX_AUDIO_STARTUP_RETRIES = 8;
+  
   const clamp01 = v => Math.max(0, Math.min(1, Number(v)));
+  function isWindowFocused() { try { return typeof document.hasFocus === "function" ? document.hasFocus() : true; } catch { return true; } }
+  
   function now() { return performance.now(); }
   function markMediaAction(type) {
     state.lastMediaAction = type;
@@ -502,6 +506,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     
     if (isVisibilityTransitionActive()) return true;
     if (isAltTabTransitionActive()) return true;
+    if (!isWindowFocused()) return true; // Fix: Treat ANY unfocused pause as transient
     if (!isVisibilityStable()) return true;
     if (!isFocusStable()) return true;
     if (now() < state.tabVisibilityChangeUntil) return true;
@@ -1301,7 +1306,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
           updateMediaSessionPlaybackState();
           return;
         }
-      } else if (!videoOk && audioOk && document.visibilityState !== "hidden") {
+      } else if (!videoOk && audioOk && document.visibilityState !== "hidden" && isWindowFocused()) {
         execProgrammaticAudioPause(600);
       }
       const vp = getVideoPaused();
@@ -1320,7 +1325,11 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
         }
       }
       if (vp && !ap) {
-        execProgrammaticAudioPause(600);
+        if (document.visibilityState === "hidden" || !isWindowFocused()) {
+          safeSetVideoTime(Number(audio.currentTime));
+        } else {
+          execProgrammaticAudioPause(600);
+        }
       }
       softUnmuteAudio(AUDIO_SAFE_FADE_DURATION_MS).catch(()=>{});
       if (!state.firstPlayCommitted) {
@@ -1565,12 +1574,18 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
   function evaluateBufferHoldNeed(vt) {
     if (!state.intendedPlaying || state.seeking || state.syncing) return false;
     if (!state.audioEverStarted && state.startupPhase) return false;
+    
+    // Fixed: If the video is backgrounded, occluded, unfocused, or natively suspended, 
+    // DO NOT allow its empty buffer to forcibly pause the playing audio!
+    const isSuspended = document.visibilityState === "hidden" || !isWindowFocused() || getVideoPaused();
+    
     const vNode = getVideoNode();
-    const vNeedsBuffer = state.videoWaiting || !canPlaySmoothAt(vNode, vt, STRICT_BUFFER_AHEAD_SEC);
+    const vNeedsBuffer = !isSuspended && (state.videoWaiting || !canPlaySmoothAt(vNode, vt, STRICT_BUFFER_AHEAD_SEC));
     const aNeedsBuffer = !canPlaySmoothAt(audio, vt, STRICT_BUFFER_AHEAD_SEC);
+    
     if (vNeedsBuffer || aNeedsBuffer) {
       state.strictBufferHoldFrames = (state.strictBufferHoldFrames || 0) + 1;
-      if (state.videoWaiting || state.strictBufferHoldFrames >= 4) {
+      if ((!isSuspended && state.videoWaiting) || state.strictBufferHoldFrames >= 4) {
         state.strictBufferHoldConfirmed = true;
         return true;
       }
@@ -1609,18 +1624,20 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     isAltTabTransitionActive() ||
     (platform.chromiumOnlyBrowser && chromiumBgPauseBlocked());
     
+    const vPaused = getVideoPaused();
+    const aPaused = !!audio.paused;
+    const vWaiting = getVideoReadyState() < 3 || state.videoWaiting;
+    
     if (state.intendedPlaying && !state.seeking && !state.syncing) {
       if (isTransientState) {
         // --- TRUE ULTRA UNNOTICEABLE BACKGROUND FIX ---
         // If we are alt-tabbing or in the background, absolutely DO NOT touch the media pause/play states!
         // Chromium naturally suspends the video track to save battery. Let it.
         // We simply act passively: keep the video's time leashed to the audio silently.
-        
         if (Math.abs(vt - at) > 0.25) {
           if (!audio.paused) safeSetVideoTime(at);
           else if (!getVideoPaused()) safeSetAudioTime(vt);
         }
-        
       } else {
         // --- NORMAL FRONT-TAB BEHAVIOR ---
         const needsHold = evaluateBufferHoldNeed(vt);
@@ -1648,12 +1665,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
       }
     }
     
-    const vPaused = getVideoPaused();
-    const aPaused = !!audio.paused;
-    const vWaiting = getVideoReadyState() < 3 || state.videoWaiting;
-    
     if (state.intendedPlaying && !state.restarting && !state.seeking && !state.syncing) {
-      
       // We explicitly branch out the corrections if it's NOT a transient background state
       if (!isTransientState) {
         if (state.strictBufferHold) {
@@ -1663,7 +1675,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
             safeSetAudioTime(vt);
           }
         } else if (vWaiting && (state.audioEverStarted || !canStartAudioAt(vt))) {
-          if (!aPaused) {
+          // If unfocused/hidden, completely ignore the video waiting state!
+          if (document.visibilityState === "hidden" || !isWindowFocused()) {
+            safeSetVideoTime(at);
+          } else if (!aPaused) {
             execProgrammaticAudioPause(450);
             safeSetAudioTime(vt);
           }
@@ -1678,10 +1693,26 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
             }
           }
         } else if (vPaused && !aPaused) {
-          execProgrammaticAudioPause(450);
+          // --- ULTRA MEGA BACKGROUND/ALT-TAB FIX ---
+          // If the video is paused but audio is playing, and we INTEND to play:
+          // Chromium forcefully suspended the video due to backgrounding/occlusion!
+          // NEVER pause the audio here. Just silently sync the video time to it.
           if (state.intendedPlaying && !vWaiting && !state.strictBufferHold) {
-            if (!inMediaTxnWindow() && !userPauseLockActive() && !chromiumPauseGuardActive()) {
-              playTogether().catch(() => {});
+            safeSetVideoTime(at); 
+            // Only try to natively wake the video up if we are actually fully visible and focused
+            if (document.visibilityState === "visible" && isWindowFocused() && !inMediaTxnWindow() && !userPauseLockActive() && !chromiumPauseGuardActive()) {
+              try {
+                const p = execProgrammaticVideoPlay();
+                if (p && p.catch) p.catch(()=>{});
+              } catch {}
+            }
+          } else {
+            // A legitimate stop requirement triggered
+            execProgrammaticAudioPause(450);
+            if (state.intendedPlaying && !vWaiting && !state.strictBufferHold) {
+              if (!inMediaTxnWindow() && !userPauseLockActive() && !chromiumPauseGuardActive()) {
+                playTogether().catch(() => {});
+              }
             }
           }
         } else if (vPaused && aPaused) {
@@ -2498,7 +2529,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     }, 100);
     scheduleSync(0);
   });
-  
+   
 document.addEventListener('keydown', function(event) {
      const active = document.activeElement;
     if (active && (active.tagName.toLowerCase() === 'input' || active.tagName.toLowerCase() === 'textarea')) {
