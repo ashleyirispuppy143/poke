@@ -885,9 +885,6 @@ document.addEventListener("DOMContentLoaded", () => {
       squelchAudioEvents(squelchMs);
 
       // FIX (audio pop): Always start audio at volume 0 before play().
-      // The browser's audio pipeline fires the first decoded samples immediately
-      // on play(); setting volume=0 first means those samples are silent.
-      // We then fade in after the promise resolves so there is no click.
       cancelActiveFade();
       audio.volume = 0;
 
@@ -902,7 +899,6 @@ document.addEventListener("DOMContentLoaded", () => {
         try { audio.pause(); } catch {}
         return false;
       }
-      // Always fade in - eliminates pop regardless of whether audio was previously playing
       fadeAudioIn(AUDIO_SAFE_FADE_DURATION_MS).catch(() => {});
       if (!audio.paused) state.audioEverStarted = true;
       return !audio.paused;
@@ -1214,8 +1210,7 @@ document.addEventListener("DOMContentLoaded", () => {
     else queueHardPauseVerification();
   }
   // FIX (0.175s startup offset): Force video.currentTime and audio.currentTime both to
-  // exactly 0.0 before the very first play. We bypass safeSetAudioTime's 0.05s threshold
-  // by writing directly so even a tiny preload offset is eliminated.
+  // exactly 0.0 before the very first play.
   function ensureStartupZeroed() {
     if (state.startupZeroed) return;
     state.startupZeroed = true;
@@ -1226,7 +1221,7 @@ document.addEventListener("DOMContentLoaded", () => {
       try { video.currentTime(0); } catch {}
     } catch {}
     try {
-      if (audio) audio.currentTime = 0; // direct write, no threshold
+      if (audio) audio.currentTime = 0;
     } catch {}
   }
   async function playTogether() {
@@ -2008,6 +2003,11 @@ document.addEventListener("DOMContentLoaded", () => {
       } catch {}
     });
     video.on("play", () => {
+      // FIX (medium quality): non-coupled mode has its own dedicated play/pause handlers
+      // registered below. Returning here prevents the coupled-mode logic (with its
+      // audio-sync guards and transient-state suppression) from interfering.
+      if (!coupledMode) return;
+
       if (state.restarting || state.isProgrammaticVideoPlay) return;
       if ((!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) &&
         !userPlayIntentActive() && !state.startupKickInFlight && !wantsStartupAutoplay()) {
@@ -2038,6 +2038,12 @@ document.addEventListener("DOMContentLoaded", () => {
       playTogether().catch(() => {});
     });
     video.on("pause", () => {
+      // FIX (medium quality): non-coupled mode has its own dedicated play/pause handlers
+      // registered below. The coupled-mode pause handler uses shouldIgnorePauseAsTransient()
+      // which includes mediaActionRecently("play", 2200) — this would swallow the user's
+      // pause for 2+ seconds in non-coupled mode, making the button appear broken.
+      if (!coupledMode) return;
+
       if (state.restarting || state.isProgrammaticVideoPause) return;
       if (state.seeking) return;
       trackPauseEvent();
@@ -2537,7 +2543,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }, 100);
   scheduleSync(0);
 });
-
 document.addEventListener('keydown', function(event) {
      const active = document.activeElement;
     if (active && (active.tagName.toLowerCase() === 'input' || active.tagName.toLowerCase() === 'textarea')) {
