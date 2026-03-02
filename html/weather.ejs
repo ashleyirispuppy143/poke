@@ -30,678 +30,423 @@
 <meta content="/static/poke-weather.png" property="og:image" />
 <meta content="summary_large_image" name="twitter:card">
 <style>
-/* --- 1. CONFIGURATION & VARIABLES --- */
 :root {
-  /* Core Palette & Neon Accents */
-  --bg-dark: #020617;
-  --bg-deep: #0f172a;
-  --accent-primary: #38bdf8; /* Sky Blue */
-  --accent-secondary: #818cf8; /* Indigo */
-  --accent-glow: rgba(56, 189, 248, 0.5);
-  --accent: #38bdf8; /* Added so JS canvas stroke draws correctly! */
-  
-  /* Text Colors */
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --text-dim: #475569;
-
-  /* Glassmorphism Layers */
-  --glass-bg: rgba(15, 23, 42, 0.45);
-  --glass-border: rgba(255, 255, 255, 0.1);
-  --glass-highlight: rgba(255, 255, 255, 0.15);
-  --glass-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.5);
-  
-  /* Dimensions */
-  --radius-xl: 32px;
-  --radius-lg: 24px;
-  --radius-md: 16px;
+  --bg: #f8f9fa;
+  --fg: #202124;
+  --muted: #5f6368;
+  --card: #ffffff;
+  --ring: #e0e0e0;
+  --accent: #1a73e8;
+  --surface-hover: #f1f3f4;
 }
-
-/* --- 2. GLOBAL RESET & ANIMATED BODY --- */
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; scroll-behavior: smooth; }
-
 body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background-color: var(--bg-dark);
-  color: var(--text-main);
+  font-family: 'Roboto', 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--bg);
+  color: var(--fg);
   -webkit-font-smoothing: antialiased;
   line-height: 1.5;
-  
-  /* Breathtaking Animated Parallax Gradient Background */
-  background-image: 
-    radial-gradient(circle at 15% 50%, rgba(56, 189, 248, 0.15), transparent 40%),
-    radial-gradient(circle at 85% 30%, rgba(129, 140, 248, 0.15), transparent 40%),
-    radial-gradient(circle at 50% 100%, rgba(14, 165, 233, 0.1), transparent 50%);
-  background-size: 200% 200%;
-  animation: ambient-bg-shift 20s ease-in-out infinite alternate;
-  overflow-x: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
-
-@keyframes ambient-bg-shift {
-  0% { background-position: 0% 0%; }
-  100% { background-position: 100% 100%; }
-}
-
 @font-face {
   src: url("https://p.poketube.fun/https://cdn.glitch.global/43b6691a-c8db-41d4-921c-8cf6aa0d9108/robotoflex.ttf?v=16683434286881");
   font-family: "PokeTube Flex";
   font-style: normal;
   font-display: swap;
 }
-
-h1, h2, h3, h4 { margin: 0; font-weight: 600; }
-a { color: inherit; text-decoration: none; transition: 0.3s; }
-
-/* Default: show JS UI; hide SSR block */
+h1, h2, h3, h4 { margin: 0; font-weight: 500; }
+a { color: inherit; text-decoration: none; transition: 0.2s; }
 .ssr { display: none; }
 main { 
   display: grid; 
-  animation: slide-up-fade 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; 
+  animation: fade-in 0.4s cubic-bezier(0.4, 0, 0.2, 1); 
 }
-
-@keyframes slide-up-fade {
-  from { opacity: 0; transform: translateY(30px); }
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
-
-/* --- 3. STABILIZED & FLOATING NAVBAR --- */
 header {
   position: sticky;
   top: 0;
   z-index: 1000;
   width: 100%;
-  padding: 16px 20px 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--ring);
+  transition: background-color 0.3s ease;
 }
-
-.navwrap {
-  background: rgba(15, 23, 42, 0.65);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-xl);
-  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
-  transition: all 0.3s ease;
-}
-
+.navwrap { padding: 8px 0; }
 .wrap {
-  max-width: 1100px;
+  max-width: 1000px;
   margin: 0 auto;
-  padding: 0 20px;
+  padding: 0 16px;
 }
-
 .top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 64px;
+  min-height: 56px;
   gap: 16px;
-  padding: 10px 0;
 }
-
 .brand {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-width: 0;
 }
-
-.brand .logo {
-  width: 38px;
-  height: 38px;
-  flex-shrink: 0;
-  border-radius: 12px;
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  box-shadow: 0 0 20px rgba(56, 189, 248, 0.5);
-  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.brand:hover .logo { transform: scale(1.15) rotate(10deg); }
-
 .chip {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 20px;
-  padding: 6px 16px;
+  background: var(--card);
+  border: 1px solid var(--ring);
+  border-radius: 24px;
+  padding: 8px 16px;
   font-size: 14px;
-  font-weight: 700;
-  color: var(--text-main);
+  font-weight: 500;
+  color: var(--fg);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 200px;
-  letter-spacing: 0.5px;
-  transition: 0.3s;
+  max-width: 220px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
-
-.chip:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: var(--accent-primary);
-  box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
-}
-
 .controls {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
+  gap: 8px;
 }
-
-/* Beautiful Buttons */
 button, .btn {
-  height: 38px;
+  height: 40px;
   padding: 0 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 700;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--text-main);
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 20px;
+  border: 1px solid var(--ring);
+  background: var(--card);
+  color: var(--fg);
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-  white-space: nowrap;
+  transition: background 0.2s, box-shadow 0.2s;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
-
-button:hover, .btn:hover {
-  background: var(--accent-primary);
-  color: #020617;
-  border-color: var(--accent-primary);
-  box-shadow: 0 0 20px rgba(56, 189, 248, 0.4);
-  transform: translateY(-2px);
-}
-button:active { transform: translateY(1px); }
-
-/* Subnav & Tabs */
-.subnav {
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  padding: 14px 0 16px 0;
-}
-
+button:hover, .btn:hover { background: var(--surface-hover); }
+button:active { box-shadow: none; }
+.subnav { padding: 12px 0; }
 .subrow {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 12px;
 }
-
 .tabs {
   display: flex;
   gap: 8px;
-  background: rgba(0, 0, 0, 0.4);
-  padding: 6px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
 }
-
 .tab {
-  padding: 8px 18px;
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-muted);
-  transition: 0.3s;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--muted);
+  border: 1px solid transparent;
 }
-
 .tab:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--text-main);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  background: var(--surface-hover);
+  color: var(--fg);
 }
-
-/* Sleek Search Bar */
 .search {
   position: relative;
   flex: 1;
   display: flex;
   min-width: 280px;
-  max-width: 450px;
+  max-width: 480px;
   gap: 8px;
 }
-
 .search input[type="search"] {
   width: 100%;
-  height: 42px;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 14px;
+  height: 48px;
+  background: var(--card);
+  border: 1px solid var(--ring);
+  border-radius: 24px;
   padding: 0 16px;
-  color: white;
-  font-size: 14px;
-  outline: none;
-  transition: all 0.3s;
-  box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
-}
-
-.search input[type="search"]:focus {
-  background: rgba(0, 0, 0, 0.6);
-  border-color: var(--accent-primary);
-  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2), inset 0 2px 4px rgba(0,0,0,0.2);
-}
-
-/* Redesigned Search / Geo buttons */
-.search button[type="submit"] {
-  position: static;
-  height: 42px;
-  padding: 0 18px;
-  background: linear-gradient(135deg, var(--accent-primary), #60a5fa);
-  color: #0f172a;
-  border: none;
-  border-radius: 14px;
-}
-.search button[type="submit"]:hover {
-  box-shadow: 0 0 20px rgba(56, 189, 248, 0.5);
-  transform: translateY(-2px);
-}
-
-#btnGeo {
-  height: 42px;
-  width: 42px;
-  padding: 0;
-  border-radius: 14px;
+  color: var(--fg);
   font-size: 16px;
+  outline: none;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  transition: box-shadow 0.2s, border-color 0.2s;
 }
-
-/* Search Suggestions Glass Menu */
+.search input[type="search"]:focus {
+  border-color: var(--accent);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.1);
+}
+.search button[type="submit"] {
+  height: 48px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 24px;
+  padding: 0 20px;
+  font-weight: 500;
+}
+.search button[type="submit"]:hover { background: #1557b0; filter: brightness(1.1); }
+#btnGeo { height: 48px; width: 48px; padding: 0; border-radius: 24px; }
 .search .suggest {
   position: absolute;
-  top: calc(100% + 12px);
+  top: calc(100% + 8px);
   left: 0;
   right: 0;
-  background: rgba(15, 23, 42, 0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--glass-highlight);
+  background: var(--card);
+  border: 1px solid var(--ring);
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
   z-index: 2000;
   display: none;
-  animation: slide-down 0.2s ease-out;
 }
-
-@keyframes slide-down {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
 .search .suggest button {
   width: 100%;
   text-align: left;
   background: transparent;
   border: none;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--ring);
   border-radius: 0;
-  padding: 14px 20px;
+  padding: 16px;
   height: auto;
-  color: var(--text-muted);
-  font-weight: 500;
+  color: var(--fg);
+  font-size: 14px;
+  box-shadow: none;
 }
 .search .suggest button:last-child { border-bottom: none; }
-.search .suggest button:hover { background: rgba(255, 255, 255, 0.08); color: white; padding-left: 24px; }
-
-/* Mobile Nav Adjustments */
+.search .suggest button:hover { background: var(--surface-hover); }
 @media (max-width: 768px) {
-  header { padding: 10px 10px 0; }
-  .top { padding: 10px; flex-wrap: wrap; }
-  .search { order: 3; width: 100%; min-width: 100%; margin-top: 4px; }
-  .tabs { flex: 1; justify-content: center; }
-  .chip { max-width: 130px; }
+  .subrow { flex-direction: column-reverse; align-items: stretch; }
+  .search { width: 100%; max-width: 100%; }
+  .tabs { justify-content: center; }
 }
-
-/* --- 4. MAIN LAYOUT (BENTO GRID) --- */
 main {
-  max-width: 1100px;
-  margin: 40px auto;
-  padding: 0 20px;
+  max-width: 1000px;
+  margin: 24px auto;
+  padding: 0 16px;
   display: grid;
-  gap: 24px;
+  gap: 20px;
 }
-
 .grid {
   display: grid;
-  gap: 24px;
+  gap: 20px;
   grid-template-columns: repeat(12, 1fr);
 }
-
 .card {
-  background: var(--glass-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--glass-border);
-  border-top: 1px solid var(--glass-highlight);
-  border-radius: var(--radius-xl);
-  padding: 28px;
-  box-shadow: var(--glass-shadow);
-  overflow: hidden;
-  position: relative;
-  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.4s ease;
+  background: var(--card);
+  border: 1px solid var(--ring);
+  border-radius: 28px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
-
-.card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 25px 50px -12px rgba(0,0,0,0.6), 0 0 20px rgba(56, 189, 248, 0.1);
-  border-color: rgba(255, 255, 255, 0.15);
-}
-
 .section-title {
-  font-size: 14px;
-  text-transform: uppercase;
-  letter-spacing: 2px;
-  color: var(--accent-primary);
+  font-size: 18px;
+  color: var(--fg);
   margin-bottom: 20px;
-  opacity: 0.9;
-  font-weight: 800;
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
-.section-title::before {
-  content: ''; display: block; width: 8px; height: 8px;
-  background: var(--accent-primary); border-radius: 50%;
-  box-shadow: 0 0 10px var(--accent-primary);
-}
-
-/* --- 5. CURRENT WEATHER MODULE (WITH PURE CSS AMBIENT WEATHER ANIMATIONS) --- */
 .current {
   grid-column: span 12;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-height: 340px;
-  background: linear-gradient(145deg, rgba(15, 23, 42, 0.8), rgba(2, 6, 23, 0.9));
+  min-height: 380px;
+  background: var(--w-bg, #4285f4);
+  color: #fff;
+  border: none;
   position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
-
-/* 
-  PURE CSS AMBIENT WEATHER PARTICLE SYSTEM
-  Creates a stunning, dynamic raining/falling particle effect 
-  that looks like magical weather drops or snow/dust 
-*/
-.current::before {
-  content: '';
+body.weather-clear.is-day .current { --w-bg: linear-gradient(180deg, #4fc3f7, #0288d1); }
+body.weather-clear.is-night .current { --w-bg: linear-gradient(180deg, #3949ab, #1a237e); }
+body.weather-cloudy.is-day .current { --w-bg: linear-gradient(180deg, #90a4ae, #546e7a); }
+body.weather-cloudy.is-night .current { --w-bg: linear-gradient(180deg, #455a64, #263238); }
+body.weather-fog .current { --w-bg: linear-gradient(180deg, #b0bec5, #78909c); }
+body.weather-rain .current { --w-bg: linear-gradient(180deg, #5c6bc0, #283593); }
+body.weather-snow .current { --w-bg: linear-gradient(180deg, #cfd8dc, #90a4ae); color: #202124; }
+body.weather-storm .current { --w-bg: linear-gradient(180deg, #37474f, #212121); }
+#effects-container {
   position: absolute;
-  top: -100px; left: 0; right: 0; bottom: -100px;
-  background-image: 
-    radial-gradient(2px 6px at 10% 10%, rgba(255,255,255,0.4), transparent),
-    radial-gradient(1px 4px at 25% 35%, rgba(56,189,248,0.5), transparent),
-    radial-gradient(3px 8px at 40% 60%, rgba(255,255,255,0.3), transparent),
-    radial-gradient(2px 5px at 60% 20%, rgba(129,140,248,0.4), transparent),
-    radial-gradient(1.5px 7px at 80% 80%, rgba(255,255,255,0.5), transparent),
-    radial-gradient(2.5px 5px at 90% 40%, rgba(56,189,248,0.3), transparent);
-  background-size: 120px 180px;
-  animation: magical-weather-fall 12s linear infinite;
+  top: 0; left: 0; right: 0; bottom: 0;
   pointer-events: none;
   z-index: 0;
-  opacity: 0.7;
 }
-
-@keyframes magical-weather-fall {
-  0% { transform: translateY(0) rotate(10deg); }
-  100% { transform: translateY(180px) rotate(10deg); }
-}
-
-/* Inner glowing orb for a premium feel */
-.current::after {
-  content: '';
+.effect-rain {
   position: absolute;
-  top: -10%; right: -5%;
-  width: 250px; height: 250px;
-  background: radial-gradient(circle, rgba(56,189,248,0.15) 0%, transparent 70%);
+  width: 2px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.4);
+  animation: drop linear infinite;
+}
+.effect-snow {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: #fff;
   border-radius: 50%;
-  pointer-events: none;
-  animation: pulse-orb 6s infinite alternate ease-in-out;
-  z-index: 0;
+  animation: fall linear infinite;
+  box-shadow: 0 0 4px rgba(255,255,255,0.8);
 }
-@keyframes pulse-orb {
-  0% { transform: scale(1) translate(0, 0); opacity: 0.6; }
-  100% { transform: scale(1.4) translate(-20px, 20px); opacity: 1; }
+.effect-cloud {
+  position: absolute;
+  width: 120px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  animation: drift linear infinite;
+  filter: blur(8px);
 }
-
+@keyframes drop {
+  0% { transform: translateY(-50px); }
+  100% { transform: translateY(400px); }
+}
+@keyframes fall {
+  0% { transform: translateY(-20px) translateX(0); }
+  50% { transform: translateY(180px) translateX(20px); }
+  100% { transform: translateY(400px) translateX(-10px); }
+}
+@keyframes drift {
+  0% { transform: translateX(-150px); }
+  100% { transform: translateX(100vw); }
+}
 @media (min-width: 900px) {
   .current { grid-column: span 8; }
   .panel { grid-column: span 4; }
 }
-
 .curr-top {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 20px;
-  position: relative;
-  z-index: 1; /* Above weather particles */
-}
-
-/* Animated Big Weather Icon */
-.bigicon {
-  font-size: 96px;
-  line-height: 1;
-  filter: drop-shadow(0 10px 20px rgba(0,0,0,0.4)) drop-shadow(0 0 15px rgba(255,255,255,0.2));
-  animation: 
-    float-icon 5s ease-in-out infinite, 
-    glow-pulse 3s infinite alternate;
-}
-
-@keyframes float-icon {
-  0%, 100% { transform: translateY(0) rotate(-3deg); }
-  50% { transform: translateY(-12px) rotate(3deg); }
-}
-@keyframes glow-pulse {
-  0% { filter: drop-shadow(0 10px 20px rgba(0,0,0,0.4)) drop-shadow(0 0 10px rgba(255,255,255,0.1)); }
-  100% { filter: drop-shadow(0 10px 20px rgba(0,0,0,0.4)) drop-shadow(0 0 25px rgba(255,255,255,0.4)); }
-}
-
-/* Temperature Text Styling */
-.temp {
-  font-family: "PokeTube Flex", sans-serif;
-  font-size: 96px;
-  font-weight: 900;
-  letter-spacing: -4px;
-  line-height: 1;
-  background: linear-gradient(135deg, #ffffff 10%, #7dd3fc 90%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 4px 10px rgba(0,0,0,0.4));
-  margin-top: -10px;
-}
-
-.desc {
-  font-size: 22px;
-  color: var(--accent-primary);
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
-  margin-top: 4px;
-}
-
-/* Glassy Stat Boxes */
-.current .row:last-child, .details {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-  gap: 16px;
-  width: 100%;
-  margin-top: auto;
-  padding-top: 24px;
+  gap: 24px;
   position: relative;
   z-index: 1;
 }
-
+.curr-top .row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.bigicon {
+  font-size: 88px;
+  line-height: 1;
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.2));
+}
+.temp {
+  font-family: "PokeTube Flex", "Roboto", sans-serif;
+  font-size: 88px;
+  font-weight: 400;
+  letter-spacing: -3px;
+  line-height: 1;
+}
+.desc {
+  font-size: 24px;
+  font-weight: 500;
+  margin-top: 4px;
+  opacity: 0.9;
+}
+.current .row:last-child, .details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 12px;
+  width: 100%;
+  margin-top: auto;
+  padding-top: 32px;
+  position: relative;
+  z-index: 1;
+}
 .stat {
-  background: rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
   padding: 16px;
-  text-align: center;
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  text-align: left;
 }
-
-.stat:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: var(--accent-primary);
-  transform: translateY(-5px) scale(1.02);
-  box-shadow: 0 10px 20px rgba(0,0,0,0.3), inset 0 0 15px rgba(56,189,248,0.1);
-}
-
+body.weather-snow .stat { background: rgba(0,0,0,0.06); }
 .stat h4 {
-  font-size: 11px;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  margin-bottom: 6px;
-  letter-spacing: 1px;
-  font-weight: 700;
+  font-size: 13px;
+  color: inherit;
+  opacity: 0.8;
+  margin-bottom: 8px;
+  font-weight: 500;
 }
-
 .stat div {
   font-size: 18px;
-  font-weight: 800;
-  color: #fff;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  font-weight: 500;
+  color: inherit;
 }
-
-/* --- 6. CHARTS & LISTS --- */
-.panel {
-  grid-column: span 12;
-}
+.panel { grid-column: span 12; }
 @media (min-width: 900px) { .panel { grid-column: span 4; } }
-
 .scrollx {
   display: flex;
-  gap: 16px;
+  gap: 12px;
   overflow-x: auto;
-  padding-bottom: 20px;
-  /* Beautiful fade-out mask for the scroll area */
-  mask-image: linear-gradient(to right, black 85%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
-  scrollbar-width: none; /* Hide standard scrollbar for sleekness */
+  padding-bottom: 16px;
+  scrollbar-width: none;
 }
 .scrollx::-webkit-scrollbar { display: none; }
-
 .hour {
-  min-width: 80px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 20px;
-  padding: 16px 12px;
+  min-width: 72px;
+  background: var(--bg);
+  border-radius: 24px;
+  padding: 16px 8px;
   text-align: center;
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
-
-.hour:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: var(--accent-primary);
-  transform: translateY(-6px);
-  box-shadow: 0 10px 20px rgba(0,0,0,0.2);
-}
-
 .hour .t {
-  font-weight: 800;
-  font-size: 20px;
-  margin: 8px 0 4px;
-  color: #fff;
+  font-weight: 500;
+  font-size: 18px;
+  margin: 8px 0;
+  color: var(--fg);
 }
-
 canvas {
   width: 100%;
   height: 140px;
-  margin-top: 16px;
-  filter: drop-shadow(0 8px 16px rgba(56, 189, 248, 0.5));
+  margin-top: 20px;
 }
-
-#daily .grid {
-  grid-template-columns: 1fr;
-}
-@media (min-width: 768px) {
-  #daily .grid { grid-template-columns: 1fr 1fr; }
-}
-
+#daily .grid { grid-template-columns: 1fr; gap: 8px; }
+@media (min-width: 768px) { #daily .grid { grid-template-columns: 1fr 1fr; } }
 .day {
   display: grid;
-  grid-template-columns: 60px 1fr auto auto;
+  grid-template-columns: 80px 1fr auto auto;
   align-items: center;
   gap: 16px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 20px;
-  padding: 16px 24px;
-  transition: all 0.3s ease;
+  background: var(--bg);
+  border-radius: 16px;
+  padding: 16px 20px;
 }
-
-.day:hover {
-  background: rgba(255, 255, 255, 0.06);
-  transform: translateX(6px) scale(1.01);
-  border-color: rgba(56, 189, 248, 0.3);
-  box-shadow: -4px 10px 20px rgba(0,0,0,0.2);
-}
-
 .day .row { margin: 0; display: flex; align-items: center; }
-
 .day .hi {
-  font-weight: 800;
-  color: #fff;
-  font-size: 18px;
-  width: 45px;
+  font-weight: 500;
+  color: var(--fg);
+  font-size: 16px;
+  width: 40px;
   text-align: right;
 }
-
 .day .lo {
-  font-weight: 600;
-  color: var(--text-muted);
-  width: 45px;
+  font-weight: 400;
+  color: var(--muted);
+  width: 40px;
   text-align: right;
 }
-
-/* --- 7. FOOTER & UTILS --- */
 footer {
-  margin-top: 60px;
-  padding: 40px 20px;
+  margin-top: 48px;
+  padding: 32px 16px;
   text-align: center;
   font-size: 14px;
-  font-weight: 500;
-  color: var(--text-dim);
-  border-top: 1px solid var(--glass-border);
-  background: linear-gradient(to top, rgba(0,0,0,0.5), transparent);
+  color: var(--muted);
 }
-
-footer a {
-  color: var(--text-muted);
-  text-decoration: underline;
-  text-decoration-color: rgba(255,255,255,0.1);
-  text-underline-offset: 4px;
-  margin: 0 8px;
-}
-
-footer a:hover {
-  color: var(--accent-primary);
-  text-decoration-color: var(--accent-primary);
-}
-
+footer a { color: var(--muted); margin: 0 8px; }
+footer a:hover { color: var(--accent); }
 .hidden { display: none !important; }
-
-/* Scrollbars */
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: var(--bg-dark); }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 5px; border: 2px solid var(--bg-dark); }
-::-webkit-scrollbar-thumb:hover { background: var(--accent-primary); }
-
-.loading {
-  opacity: 0.6;
-  pointer-events: none;
-  filter: grayscale(0.5) blur(2px);
-  transition: filter 0.3s;
-}
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--ring); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+.loading { opacity: 0.5; pointer-events: none; }
 </style>
-<!-- When JS is disabled/blocked, show SSR block and hide main -->
 <noscript>
   <style>
     .ssr{display:block !important;}
@@ -710,30 +455,26 @@ footer a:hover {
 </noscript>
 </head>
 <body class="<%= ssr && ssr.forceNoJS ? 'no-js' : '' %>">
-
-  <!-- NAVBAR -->
   <header>
     <div class="navwrap">
       <div class="wrap top">
         <div class="brand">
-                  <div style="display:none" class="logo" aria-hidden="true"><span>☁️</span></div> 
+          <div style="display:none" class="logo" aria-hidden="true"><span>☁️</span></div> 
           <span class="chip" id="locChip"><%= (ssr && ssr.name) || '—' %></span>
         </div>
         <div class="controls">
           <button id="btnUnits" title="Toggle °C/°F">°C</button>
-          <button id="btnTheme" style="display:none" title="Toggle theme">🌗</button>
+          <button id="btnTheme" title="Toggle theme">🌗</button>
           <button id="btnInstall" class="hidden" title="Install">⬇️ Install</button>
           <a class="btn" href="#" id="btnShare" title="Share">🔗 Share</a>
         </div>
       </div>
-
       <div class="wrap subrow subnav">
         <div class="tabs" role="tablist" aria-label="Sections">
           <a class="tab" href="#now">Now</a>
           <a class="tab" href="#hourly">Hourly</a>
           <a class="tab" href="#daily">7-Day</a>
         </div>
-
         <form class="search" role="search" aria-label="Search location" action="/weather" method="GET" id="searchForm">
           <input id="q" name="q" type="search" placeholder="Search city, place, or paste lat,lon" autocomplete="off" />
           <input type="hidden" name="units" id="unitsHidden" value="<%= (ssr && ssr.units) || 'metric' %>"/>
@@ -744,10 +485,8 @@ footer a:hover {
       </div>
     </div>
   </header>
-
-  <!-- ===== Server-Side Render ===== -->
   <section class="ssr">
-    <div class="wrap" style="padding-top:14px">
+    <div class="wrap" style="padding-top:24px">
       <article class="card" aria-live="polite">
         <h3 class="section-title">Now — <%= (ssr && ssr.name) || 'Unknown' %></h3>
         <% if (ssr && ssr.current) { %>
@@ -766,7 +505,7 @@ footer a:hover {
               <div class="stat"><h4>Pressure</h4><div><%= Math.round(ssr.current.pressure_msl) %> hPa</div></div>
             </div>
           </div>
-          <div class="details" style="margin-top:10px">
+          <div class="details" style="margin-top:16px">
             <div class="stat"><h4>Sunrise</h4><div><%= ssr.sunriseLocal %></div></div>
             <div class="stat"><h4>Sunset</h4><div><%= ssr.sunsetLocal %></div></div>
             <div class="stat"><h4>UV max</h4><div><%= ssr.daily.uv_index_max?.[0] ?? '—' %></div></div>
@@ -776,20 +515,19 @@ footer a:hover {
           <p style="color:var(--muted)">No data to show.</p>
         <% } %>
       </article>
-
-      <article class="card" style="margin-top:14px">
+      <article class="card" style="margin-top:20px">
         <h3 class="section-title">7-day forecast</h3>
         <% if (ssr && ssr.daily) { %>
           <div class="grid" style="grid-template-columns:repeat(1,1fr);gap:10px">
             <% for (let i=0;i<ssr.daily.time.length;i++){ %>
               <div class="day">
                 <div class="row" style="gap:10px">
-                  <div style="font-size:22px"><%= ssr.dailyIcons[i] %></div>
+                  <div style="font-size:24px"><%= ssr.dailyIcons[i] %></div>
                   <div><%= ssr.dailyLabels[i] %></div>
                 </div>
                 <div class="row">
                   <div class="hi"><%= Math.round(ssr.daily.temperature_2m_max[i]) %>°</div>
-                  <div class="lo"><span style="color:var(--muted)"><%= Math.round(ssr.daily.temperature_2m_min[i]) %>°</span></div>
+                  <div class="lo"><span><%= Math.round(ssr.daily.temperature_2m_min[i]) %>°</span></div>
                 </div>
                 <div style="text-align:right;color:var(--muted)"><%= ssr.dailyTexts[i] %></div>
               </div>
@@ -799,10 +537,10 @@ footer a:hover {
       </article>
     </div>
   </section>
-
-   <main>
+  <main>
     <section id="now" class="grid">
       <article class="card current" aria-live="polite">
+        <div id="effects-container"></div>
         <div class="curr-top">
           <div class="row">
             <div class="bigicon" id="currIcon">—</div>
@@ -811,7 +549,7 @@ footer a:hover {
               <div class="desc" id="currDesc">—</div>
             </div>
           </div>
-          <div class="row" style="gap:12px">
+          <div class="row" style="gap:16px">
             <div class="stat"><h4>Feels like</h4><div id="currFeels">—</div></div>
             <div class="stat"><h4>Wind</h4><div id="currWind">—</div></div>
             <div class="stat"><h4>Humidity</h4><div id="currHum">—</div></div>
@@ -825,61 +563,25 @@ footer a:hover {
           <div class="stat"><h4>Precip prob (next hr)</h4><div id="pop">—</div></div>
         </div>
       </article>
-
       <aside id="hourly" class="panel card">
         <h3 class="section-title">Next 24 hours</h3>
         <div id="hours" class="scrollx" aria-label="Hourly forecast"></div>
         <canvas id="chart" height="120" aria-label="Temperature chart" role="img"></canvas>
       </aside>
     </section>
-
     <section id="daily" class="card">
       <h3 class="section-title">7-day forecast</h3>
-      <div id="days" class="grid" style="grid-template-columns:repeat(1,1fr);gap:10px"></div>
+      <div id="days" class="grid" style="grid-template-columns:repeat(1,1fr);gap:12px"></div>
     </section>
   </main>
-
-    <footer>
-      <div><a href="/privacy" style="text-decoration: none;">privacy policy </a> <a href="https://open-meteo.com/">Weather data by Open-Meteo.com</a></div>
-    </footer>
-    
+  <footer>
+    <div><a href="/privacy">privacy policy</a> <a href="https://open-meteo.com/">Weather data by Open-Meteo.com</a></div>
+  </footer>
   <script>
-<!--//--><![CDATA[//><!--
-/**
- * @licstart The following is the entire license notice for the JavaScript
- * code in this page.
- *
- *    Copyright (C) 2021-2025 PokeWeather Of Poke Project, a part of The Poke Project Initiative (initiative.poketube.fun)
- *    ( source code: https://codeberg.org/ashley/poke)
- *
- * The JavaScript code in this page is free software: you can redistribute
- * it and/or modify it under the terms of the GNU General Public License
- * (GNU GPL) as published by the Free Software Foundation, either version 3
- * of the License, or (at your option) any later version.  The code is
- * distributed WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU GPL
- * for more details.
- *
- * As additional permission under GNU GPL version 3 section 7, you may
- * distribute non-source (e.g., minimized or compacted) forms of that code
- * without the copy of the GNU GPL normally required by section 4, provided
- * you include this license notice and a URL through which recipients can
- * access the Corresponding Source.
- *
- * @licend The above is the entire license notice for the JavaScript code
- * in this page.
- */
-
-//--><!]]>
-</script>
-
-<script>
-  /* Expose server data to the client + tell it we’re on the SSR route */
-  window.__SSR__ = <%- JSON.stringify(ssr || {}) %>;
-  window.__SSR_ROUTE__ = "/weather";
-</script>
-
-<script>
+window.__SSR__ = <%- JSON.stringify(ssr || {}) %>;
+window.__SSR_ROUTE__ = "/weather";
+  </script>
+  <script>
   const $=s=>document.querySelector(s);const $$=s=>[...document.querySelectorAll(s)];
   const units=JSON.parse(localStorage.getItem('pokeweather:units')||'{}');
   let state={lat:null,lon:null,name:null,units:units.units||'<%= (ssr && ssr.units) || "metric" %>'};
@@ -901,6 +603,7 @@ footer a:hover {
     if([85,86].includes(c))return"Snow showers";
     if([95].includes(c))return"Thunderstorm";
     if([96,99].includes(c))return"Storm & hail";return"—"}
+  
   const weatherIcon=(c,isDay)=>{
     if(c===0)return isDay?"☀️":"🌙";
     if([1,2].includes(c))return isDay?"🌤️":"☁️";
@@ -912,9 +615,59 @@ footer a:hover {
     if([71,73,75,77,85,86].includes(c))return"❄️";
     if([95,96,99].includes(c))return"⛈️";return"☁️";
   };
+  
   const fmt=(n,u='')=>n==null?'—':`${Math.round(n)}${u}`;
   const fmtTime=(s)=>new Date(s).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
   const fmtDay=(s)=>new Date(s).toLocaleDateString([], {weekday:'short',month:'short',day:'numeric'});
+
+  function setAmbientEffects(code, isDay) {
+    const container = document.getElementById('effects-container');
+    if(!container) return;
+    container.innerHTML = '';
+    const body = document.body;
+    body.className = body.className.replace(/weather-\w+|is-(day|night)/g, '').trim();
+    
+    let type = 'clear';
+    if([1,2,3].includes(code)) type = 'cloudy';
+    if([45,48].includes(code)) type = 'fog';
+    if([51,53,55,56,57,61,63,65,66,67,80,81,82].includes(code)) type = 'rain';
+    if([71,73,75,77,85,86].includes(code)) type = 'snow';
+    if([95,96,99].includes(code)) type = 'storm';
+
+    body.classList.add(`weather-${type}`);
+    body.classList.add(isDay ? 'is-day' : 'is-night');
+
+    if(type === 'rain' || type === 'storm') {
+      for(let i=0; i<30; i++) {
+        let d = document.createElement('div');
+        d.className = 'effect-rain';
+        d.style.left = Math.random() * 100 + '%';
+        d.style.animationDuration = (Math.random() * 0.4 + 0.3) + 's';
+        d.style.animationDelay = Math.random() * 2 + 's';
+        container.appendChild(d);
+      }
+    } else if(type === 'snow') {
+      for(let i=0; i<40; i++) {
+        let d = document.createElement('div');
+        d.className = 'effect-snow';
+        d.style.left = Math.random() * 100 + '%';
+        d.style.animationDuration = (Math.random() * 3 + 2) + 's';
+        d.style.animationDelay = Math.random() * 3 + 's';
+        d.style.opacity = Math.random() * 0.6 + 0.4;
+        d.style.transform = `scale(${Math.random() * 0.8 + 0.2})`;
+        container.appendChild(d);
+      }
+    } else if(type === 'cloudy' || type === 'fog') {
+      for(let i=0; i<4; i++) {
+        let d = document.createElement('div');
+        d.className = 'effect-cloud';
+        d.style.top = Math.random() * 30 + '%';
+        d.style.animationDuration = (Math.random() * 30 + 30) + 's';
+        d.style.animationDelay = (Math.random() * -30) + 's';
+        container.appendChild(d);
+      }
+    }
+  }
 
   async function searchPlaces(q){
     if(!q) return[];
@@ -926,7 +679,6 @@ footer a:hover {
 
   function applyUnits(){
     btnUnits.textContent=state.units==='metric'?"°C":"°F";
-    // Keep SSR search form in sync so non-JS round-trips preserve units
     const uHidden=document.getElementById('unitsHidden');
     if(uHidden) uHidden.value = state.units === 'metric' ? 'metric' : 'imperial';
     if(state.lat&&state.lon) loadWeather(state.lat,state.lon,state.name);
@@ -977,28 +729,27 @@ footer a:hover {
     const popNext=hourly.precipitation_probability?.[nowIndex]??hourly.precipitation_probability?.[0]??null;
     $('#pop').textContent=popNext==null?'—':popNext+"%";
 
-    // hourly tiles
+    setAmbientEffects(c.weather_code, c.is_day);
+
     const H=$('#hours'); H.innerHTML='';
     const start=nowIndex>0?nowIndex-1:0; const end=Math.min(start+24,hourly.time.length);
     for(let i=start;i<end;i++){
       const el=document.createElement('div');
       el.className='hour';
       const t=new Date(hourly.time[i]).toLocaleTimeString([], {hour:'2-digit'});
-      el.innerHTML=`<div>${t}</div><div style="font-size:22px">${weatherIcon(hourly.weather_code[i],1)}</div><div class="t">${fmt(hourly.temperature_2m[i],'°')}</div><div style="color:var(--muted);font-size:12px">${(hourly.precipitation_probability?.[i]??0)}%</div>`;
+      el.innerHTML=`<div>${t}</div><div style="font-size:24px;margin:4px 0">${weatherIcon(hourly.weather_code[i],1)}</div><div class="t">${fmt(hourly.temperature_2m[i],'°')}</div><div style="color:var(--muted);font-size:12px">${(hourly.precipitation_probability?.[i]??0)}%</div>`;
       H.appendChild(el);
     }
 
-    // chart
     drawChart($('#chart'), hourly.time.slice(start,end).map(t=>new Date(t)), hourly.temperature_2m.slice(start,end));
 
-    // 7-day
     const D=$('#days'); D.innerHTML='';
     for(let i=0;i<daily.time.length;i++){
       const row=document.createElement('div'); row.className='day';
       const dt=fmtDay(daily.time[i]);
       const hi=fmt(daily.temperature_2m_max[i],'°');
       const lo=fmt(daily.temperature_2m_min[i],'°');
-      row.innerHTML=`<div class="row" style="gap:10px"><div style="font-size:22px">${weatherIcon(daily.weather_code[i],1)}</div><div>${dt}</div></div><div class="row"><div class="hi">${hi}</div><div class="lo">${lo}</div></div><div style="text-align:right;color:var(--muted)">${weatherText(daily.weather_code[i])}</div>`;
+      row.innerHTML=`<div class="row" style="gap:12px"><div style="font-size:24px">${weatherIcon(daily.weather_code[i],1)}</div><div>${dt}</div></div><div class="row"><div class="hi">${hi}</div><div class="lo">${lo}</div></div><div style="text-align:right;color:var(--muted)">${weatherText(daily.weather_code[i])}</div>`;
       D.appendChild(row);
     }
   }
@@ -1017,16 +768,28 @@ footer a:hover {
     ys.forEach((v,i)=>{ctx.beginPath();ctx.arc(pad+i*xstep, ymap(v), 3.5, 0, Math.PI*2);ctx.fill()});
   }
 
-  // Keep units in sync for SSR form and client
   btnUnits.addEventListener('click',()=>{
     state.units=state.units==='metric'?'imperial':'metric';
     applyUnits();
   });
 
   $('#btnTheme').addEventListener('click',()=>{
-    const dark=document.documentElement.style.getPropertyValue('--bg')==='#0b0f16';
-    if(dark){document.documentElement.style.setProperty('--bg','#fbfbfe');document.documentElement.style.setProperty('--fg','#0b1020');document.documentElement.style.setProperty('--muted','#5b6b87');document.documentElement.style.setProperty('--card','#ffffff');document.documentElement.style.setProperty('--ring','#0b102018');}
-    else{document.documentElement.style.setProperty('--bg','#0b0f16');document.documentElement.style.setProperty('--fg','#eef3ff');document.documentElement.style.setProperty('--muted','#a7b4cc');document.documentElement.style.setProperty('--card','#0f1624');document.documentElement.style.setProperty('--ring','#ffffff22');}
+    const dark=document.documentElement.style.getPropertyValue('--bg')==='#121212';
+    if(dark){
+      document.documentElement.style.setProperty('--bg','#f8f9fa');
+      document.documentElement.style.setProperty('--fg','#202124');
+      document.documentElement.style.setProperty('--muted','#5f6368');
+      document.documentElement.style.setProperty('--card','#ffffff');
+      document.documentElement.style.setProperty('--ring','#e0e0e0');
+      document.documentElement.style.setProperty('--surface-hover','#f1f3f4');
+    } else {
+      document.documentElement.style.setProperty('--bg','#121212');
+      document.documentElement.style.setProperty('--fg','#e3e3e3');
+      document.documentElement.style.setProperty('--muted','#9aa0a6');
+      document.documentElement.style.setProperty('--card','#1e1e1e');
+      document.documentElement.style.setProperty('--ring','#3c4043');
+      document.documentElement.style.setProperty('--surface-hover','#2d2e30');
+    }
   });
 
   $('#btnGeo').addEventListener('click',()=>{
@@ -1060,7 +823,6 @@ footer a:hover {
     loadWeather(item.lat,item.lon,item.display_name.split(',').slice(0,2).join(', '));
   }
 
-  // Intercept form submit in JS mode and route smartly.
   const form = document.getElementById('searchForm');
   form.addEventListener('submit',(e)=>{
     e.preventDefault();
@@ -1073,16 +835,12 @@ footer a:hover {
   function goSearch(){
     const v=$('#q').value.trim();
     if(!v) return;
-
-    // If user typed "lat,lon", stay fully client-side
-    const latlon=v.match(/^\s*(-?\d+(?:\.\d+)?)\s*(-?\d+(?:\.\d+)?)\s*$/);
+    const latlon=v.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
     if(latlon){
       const lat=+latlon[1], lon=+latlon[2];
       reverseName(lat,lon).then(n=>loadWeather(lat,lon,n));
       return;
     }
-
-    // Prefer SSR round-trip when available
     if (window.__SSR_ROUTE__) {
       const units = (state.units==='metric') ? 'metric' : 'imperial';
       const url = new URL(window.__SSR_ROUTE__, location.origin);
@@ -1091,8 +849,6 @@ footer a:hover {
       location.href = url.toString();
       return;
     }
-
-    // Fallback: pure client search (for static build)
     searchPlaces(v).then(list=>{
       if(list[0]) selectPlace(list[0]);
       else alert('No results');
@@ -1115,11 +871,8 @@ footer a:hover {
   function debounce(fn,ms){let t;return (...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms)}}
 
   (function init(){
-    // Sync hidden units field at boot
     const uHidden=document.getElementById('unitsHidden');
     if(uHidden) uHidden.value = state.units;
-
-    // If server already gave us a place, hydrate immediately so UI & search are “awake”
     if (window.__SSR__ && typeof window.__SSR__.lat === "number" && typeof window.__SSR__.lon === "number") {
       try {
         localStorage.setItem('pokeweather:last', JSON.stringify({
@@ -1131,7 +884,6 @@ footer a:hover {
       loadWeather(window.__SSR__.lat, window.__SSR__.lon, window.__SSR__.name);
       return;
     }
-
     const sp=new URLSearchParams(location.search);
     const lat=sp.get('lat'), lon=sp.get('lon'), name=sp.get('name');
     if(lat&&lon){loadWeather(+lat,+lon,name);return}
@@ -1142,6 +894,6 @@ footer a:hover {
       ()=>{}
     )}
   })();
-</script>
+  </script>
 </body>
 </html>
