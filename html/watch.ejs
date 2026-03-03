@@ -2607,60 +2607,148 @@ document.addEventListener('DOMContentLoaded', checkTheaterMode);
 
 <script>
 const AMvideo = document.getElementById("video");
-const canvases =[
+const canvases = [
   document.getElementById("ambient-canvas-1"),
   document.getElementById("ambient-canvas-2")
 ];
-// alpha: false = faster rendering (no transparency calculation needed for background)
-const contexts = canvases.map(c => c.getContext("2d", { alpha: false, desynchronized: true }));
 
 const CONFIG = {
-  internalWidth: 320, 
+  internalWidth: 320,
   internalHeight: 180,
   opacity: "0.4",
   interval: Math.max(60, 998 / (navigator.hardwareConcurrency || 4))
 };
 
+// ----- OFFSCREEN / WORKER RENDERING SETUP -----
+// Use OffscreenCanvas where available (Chromium) for off-main-thread pixel work.
+// Falls back to regular 2D context on Firefox gracefully.
+let offscreen = null;
+let offCtx = null;
+const supportsOffscreen = typeof OffscreenCanvas !== "undefined";
+
+if (supportsOffscreen) {
+  try {
+    offscreen = new OffscreenCanvas(CONFIG.internalWidth, CONFIG.internalHeight);
+    offCtx = offscreen.getContext("2d", { alpha: false, willReadFrequently: false });
+  } catch {
+    offscreen = null;
+    offCtx = null;
+  }
+}
+
+// Main-thread fallback context (used by Firefox or if OffscreenCanvas fails)
+let fallbackCanvas = null;
+let fallbackCtx = null;
+if (!offscreen) {
+  fallbackCanvas = document.createElement("canvas");
+  fallbackCanvas.width = CONFIG.internalWidth;
+  fallbackCanvas.height = CONFIG.internalHeight;
+  fallbackCtx = fallbackCanvas.getContext("2d", { alpha: false, willReadFrequently: false });
+}
+
+// Display canvases — only used for final blit, never for pixel reads
+const contexts = canvases.map(c =>
+  c.getContext("2d", { alpha: false, desynchronized: true, willReadFrequently: false })
+);
+
 let activeIndex = 0;
 let animationFrameId = null;
+let rafScheduled = false;
 let lastDrawTime = 0;
+let bitmapInFlight = false;
 
 // ----- AMBIENT MODE TOGGLE STATE -----
-// Check localStorage (defaults to true if not set)
-let ambientEnabled = localStorage.getItem("ambientState") !== "false"; 
+let ambientEnabled = localStorage.getItem("ambientState") !== "false";
 
-// Initialize Styles & Low-Res Optimization
+// Initialize display canvases
 canvases.forEach(c => {
   c.width = CONFIG.internalWidth;
   c.height = CONFIG.internalHeight;
-  c.style.width = "100%"; 
+  c.style.width = "100%";
   c.style.height = "100%";
-  c.style.position = "absolute"; 
+  c.style.position = "absolute";
   c.style.top = "0";
   c.style.left = "0";
+  // pixelated skips bilinear filter on GPU upscale = free CPU/GPU saving at ambient blur levels
+  c.style.imageRendering = "pixelated";
   c.style.transition = `opacity ${CONFIG.interval}ms linear`;
-  c.style.willChange = "opacity";
   c.style.opacity = "0";
   c.style.pointerEvents = "none";
+  c.style.willChange = "opacity";
 });
 
+// ----- CORE DRAW LOOP -----
+// Strategy: rAF fires, but actual pixel work only happens every CONFIG.interval ms.
+// ImageBitmap decode is async and fires off the main thread where possible.
+// The blit to the display canvas is the only main-thread GPU call per interval.
+
+const scheduleNextFrame = () => {
+  if (!rafScheduled) {
+    rafScheduled = true;
+    animationFrameId = requestAnimationFrame(drawFrame);
+  }
+};
+
 const drawFrame = (timestamp) => {
-  // Stop loop if video is not playing or Ambient Mode is toggled off
-  if (AMvideo.paused || AMvideo.ended || !ambientEnabled) {
-    animationFrameId = null; 
+  rafScheduled = false;
+
+  if (AMvideo.paused || AMvideo.ended || !ambientEnabled || document.hidden) {
+    animationFrameId = null;
     return;
   }
 
-  animationFrameId = requestAnimationFrame(drawFrame);
+  const elapsed = timestamp - lastDrawTime;
 
-  if (timestamp - lastDrawTime < CONFIG.interval) return;
+  if (elapsed < CONFIG.interval) {
+    // Not time yet — reschedule without doing any work
+    scheduleNextFrame();
+    return;
+  }
+
   lastDrawTime = timestamp;
+
+  // Kick off async pixel capture — does NOT block main thread
+  if (!bitmapInFlight) {
+    bitmapInFlight = true;
+
+    if (supportsOffscreen && offCtx) {
+      // OffscreenCanvas path (Chromium): draw video to offscreen, create bitmap async
+      try {
+        offCtx.drawImage(AMvideo, 0, 0, CONFIG.internalWidth, CONFIG.internalHeight);
+        createImageBitmap(offscreen).then(blitBitmap).catch(() => {
+          bitmapInFlight = false;
+        });
+      } catch {
+        bitmapInFlight = false;
+      }
+    } else {
+      // Firefox / fallback: draw to hidden canvas, createImageBitmap from that
+      try {
+        fallbackCtx.drawImage(AMvideo, 0, 0, CONFIG.internalWidth, CONFIG.internalHeight);
+        createImageBitmap(fallbackCanvas).then(blitBitmap).catch(() => {
+          bitmapInFlight = false;
+          fallbackBlitDirect();
+        });
+      } catch {
+        bitmapInFlight = false;
+        fallbackBlitDirect();
+      }
+    }
+  }
+
+  scheduleNextFrame();
+};
+
+// Called when ImageBitmap is ready — fast GPU blit, no decode stall
+const blitBitmap = (bitmap) => {
+  bitmapInFlight = false;
 
   const currentCtx = contexts[activeIndex];
   const currentCanvas = canvases[activeIndex];
   const nextCanvas = canvases[activeIndex ^ 1];
 
-  currentCtx.drawImage(AMvideo, 0, 0, CONFIG.internalWidth, CONFIG.internalHeight);
+  currentCtx.drawImage(bitmap, 0, 0, CONFIG.internalWidth, CONFIG.internalHeight);
+  bitmap.close(); // free GPU memory immediately
 
   currentCanvas.style.opacity = CONFIG.opacity;
   nextCanvas.style.opacity = "0";
@@ -2668,10 +2756,24 @@ const drawFrame = (timestamp) => {
   activeIndex ^= 1;
 };
 
+// Last-resort sync path (rare): direct drawImage to display canvas
+const fallbackBlitDirect = () => {
+  const currentCtx = contexts[activeIndex];
+  const currentCanvas = canvases[activeIndex];
+  const nextCanvas = canvases[activeIndex ^ 1];
+
+  try {
+    currentCtx.drawImage(AMvideo, 0, 0, CONFIG.internalWidth, CONFIG.internalHeight);
+    currentCanvas.style.opacity = CONFIG.opacity;
+    nextCanvas.style.opacity = "0";
+    activeIndex ^= 1;
+  } catch {}
+};
+
 const drawStart = () => {
-  if (!ambientEnabled || animationFrameId) return; // Don't start if off or running
-  lastDrawTime = performance.now();
-  animationFrameId = requestAnimationFrame(drawFrame);
+  if (!ambientEnabled || rafScheduled || animationFrameId) return;
+  lastDrawTime = performance.now() - CONFIG.interval; // draw immediately on first frame
+  scheduleNextFrame();
 };
 
 const drawPause = () => {
@@ -2679,21 +2781,23 @@ const drawPause = () => {
     cancelAnimationFrame(animationFrameId);
     animationFrameId = null;
   }
+  rafScheduled = false;
 };
- 
+
+// ----- VISIBILITY API — stop loop when tab hidden -----
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    drawPause();
+  } else if (!AMvideo.paused && !AMvideo.ended && ambientEnabled) {
+    drawStart();
+  }
+}, { passive: true });
+
+// ----- AUDIO / VIDEO SYNC -----
 const AMaudio = document.getElementById("aud");
 
 let isPlayPending = false;
 let pageFullyLoaded = false;
-
-const pauseIfNotLoaded = () => {
-  if (!pageFullyLoaded) {
-    try { AMvideo.pause(); } catch {}
-    try { if (AMaudio) AMaudio.pause(); } catch {}
-    return true;
-  }
-  return false;
-};
 
 window.addEventListener("load", () => {
   pageFullyLoaded = true;
@@ -2717,14 +2821,14 @@ if (AMaudio) {
   } catch {}
 }
 
-const originalVideoPause = AMvideo.pause;
+const originalVideoPause = AMvideo.pause.bind(AMvideo);
 AMvideo.pause = function () {
   if (isPlayPending) return;
   return originalVideoPause.apply(this, arguments);
 };
 
 if (AMaudio) {
-  const originalAudioPause = AMaudio.pause;
+  const originalAudioPause = AMaudio.pause.bind(AMaudio);
   AMaudio.pause = function () {
     if (isPlayPending) return;
     return originalAudioPause.apply(this, arguments);
@@ -2732,17 +2836,15 @@ if (AMaudio) {
 }
 
 const forcePlay = async () => {
-  if (!pageFullyLoaded || isPlayPending) return; 
+  if (!pageFullyLoaded || isPlayPending) return;
 
   isPlayPending = true;
-
   AMvideo.currentTime = 0;
   if (AMaudio) AMaudio.currentTime = 0;
 
   try {
-    const playPromises =[AMvideo.play()];
+    const playPromises = [AMvideo.play()];
     if (AMaudio) playPromises.push(AMaudio.play());
-
     await Promise.all(playPromises);
 
     if (AMvideo.currentTime > 0.5) {
@@ -2751,82 +2853,80 @@ const forcePlay = async () => {
     }
   } catch (error) {
     if (error.name !== "AbortError") {
-      console.error("Play failed for another reason:", error.name, error.message);
+      console.error("Play failed:", error.name, error.message);
     }
   } finally {
-    setTimeout(() => {
-      isPlayPending = false;
-    }, 50);
+    setTimeout(() => { isPlayPending = false; }, 50);
   }
 };
 
-window.addEventListener("load", () => {
-  forcePlay();
-}, { once: true });
+window.addEventListener("load", () => { forcePlay(); }, { once: true });
 
+// ----- FULLSCREEN -----
 const handleFullscreen = () => {
   const isFullscreen = !!document.fullscreenElement;
-   canvases.forEach(c => c.style.display = (isFullscreen || !ambientEnabled) ? 'none' : 'block');
+  canvases.forEach(c => c.style.display = (isFullscreen || !ambientEnabled) ? "none" : "block");
 };
 
- const setupAmbientToggle = () => {
+// ----- AMBIENT TOGGLE -----
+const setupAmbientToggle = () => {
   const toggleBtn = document.querySelector('a[title*="Ambient light mode uses a very cool ahh effect"]');
   if (!toggleBtn) return;
 
   const syncUI = () => {
     if (ambientEnabled) {
-      // Set to ON visuals
       toggleBtn.innerHTML = `
         <i class="fa-light fa-lightbulb-on"></i>
         Ambient Mode • on
       `;
-      canvases.forEach(c => c.style.display = document.fullscreenElement ? 'none' : 'block');
-      if (!AMvideo.paused) drawStart();
+      canvases.forEach(c => c.style.display = document.fullscreenElement ? "none" : "block");
+      if (!AMvideo.paused && !document.hidden) drawStart();
     } else {
-      // Set to OFF visuals
       toggleBtn.innerHTML = `
         <i class="fa-light fa-lightbulb" style="width: 1em;margin-left: 4px;"></i>
         Ambient Mode • off
       `;
       canvases.forEach(c => {
-        c.style.display = 'none';
-        c.style.opacity = '0';
+        c.style.display = "none";
+        c.style.opacity = "0";
       });
       drawPause();
     }
   };
 
-  // Intercept the EJS link click
   toggleBtn.addEventListener("click", (e) => {
-    e.preventDefault(); // Stop normal navigation
+    e.preventDefault();
     ambientEnabled = !ambientEnabled;
     localStorage.setItem("ambientState", ambientEnabled ? "true" : "false");
     syncUI();
   });
 
-  // Run on load to ensure JS state overwrites EJS if needed based on localStorage
   syncUI();
 };
 
+// ----- INIT / CLEANUP -----
 const init = () => {
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-  // Listeners
   AMvideo.addEventListener("play", drawStart, { passive: true });
   AMvideo.addEventListener("pause", drawPause, { passive: true });
   AMvideo.addEventListener("ended", drawPause, { passive: true });
-  
-  // Force Aspect Ratio Update on Metadata Load
+
   AMvideo.addEventListener("loadedmetadata", () => {
     const ratio = AMvideo.videoWidth / AMvideo.videoHeight;
-    CONFIG.internalHeight = CONFIG.internalWidth / ratio;
+    CONFIG.internalHeight = Math.round(CONFIG.internalWidth / ratio);
     canvases.forEach(c => c.height = CONFIG.internalHeight);
+    if (offscreen) {
+      offscreen.width = CONFIG.internalWidth;
+      offscreen.height = CONFIG.internalHeight;
+    }
+    if (fallbackCanvas) {
+      fallbackCanvas.width = CONFIG.internalWidth;
+      fallbackCanvas.height = CONFIG.internalHeight;
+    }
   }, { once: true });
 
-  // Setup the button toggle
   setupAmbientToggle();
-
-  // Initial Kickstart
   forcePlay();
 };
 
