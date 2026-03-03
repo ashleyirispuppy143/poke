@@ -151,7 +151,7 @@ if (!query) {
 
   const inv = getJson(await invtrend.text());
 
-  renderTemplate(res, req, "search-no-query.ejs", { inv });
+  renderTemplate(res, req, "search-no-query.ejs", { inv, turntomins});
 
 }
 
