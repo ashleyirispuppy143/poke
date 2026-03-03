@@ -609,7 +609,9 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     cancelActiveFade();
     const from = clamp01(audio.volume);
     const target = clamp01(targetVol);
-    if (document.visibilityState === "hidden" || ms <= 0 || Math.abs(target - from) < 0.001) {
+    // FIX (audio pop): if audio is paused, just set the target directly — there's no
+    // audible difference and an rAF-driven ramp can outlive the pause, then fire mid-play.
+    if (document.visibilityState === "hidden" || ms <= 0 || Math.abs(target - from) < 0.001 || audio.paused) {
       try { audio.volume = target; } catch {}
       return;
     }
@@ -617,6 +619,15 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     state.audioFading = true;
     return new Promise(resolve => {
       const step = () => {
+        // FIX (audio pop): abort the ramp if audio got paused mid-fade — set target directly.
+        if (audio.paused) {
+          try { audio.volume = target; } catch {}
+          activeVolumeFade = null;
+          state.audioFading = false;
+          state.audioFadeCompleteUntil = now() + AUDIO_POP_PREVENT_MS;
+          resolve();
+          return;
+        }
         const t = Math.min(1, (now() - start) / ms);
         const easeT = t * t * (3 - 2 * t);
         const val = from + (target - from) * easeT;
@@ -635,8 +646,12 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
   }
   async function softUnmuteAudio(ms = AUDIO_SAFE_FADE_DURATION_MS) {
     if (!audio) return;
+    const target = targetVolFromVideo();
+    // FIX (audio pop): skip the fade entirely if we're already at or very near the target.
+    // Re-fading from e.g. 0.98 → 1.0 causes a subtle dip-then-ramp click.
+    if (Math.abs(clamp01(audio.volume) - target) < 0.02 && !state.audioFading) return;
     state.audioFading = true;
-    await doVolumeFade(targetVolFromVideo(), ms);
+    await doVolumeFade(target, ms);
     state.audioFading = false;
   }
   async function fadeAudioOut(ms = AUDIO_SAFE_FADE_DURATION_MS) {
@@ -907,7 +922,20 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     state.isProgrammaticAudioPause = true;
     try { squelchAudioEvents(ms); } catch {}
     try { resetAudioPlaybackRate(); } catch {}
-    try { audio.pause(); } catch {}
+    // FIX (audio pop): fade to silence before pausing to avoid hard cuts.
+    // If the audio is already silent or a fade is already running toward 0, just pause now.
+    // Otherwise do a short ramp-down first, then pause.
+    const currentVol = !audio.paused ? clamp01(audio.volume) : 0;
+    if (currentVol <= 0.01 || state.audioFading) {
+      try { audio.pause(); } catch {}
+    } else {
+      const fadeMs = Math.min(80, ms * 0.15);
+      doVolumeFade(0, fadeMs).then(() => {
+        try { audio.pause(); } catch {}
+      }).catch(() => {
+        try { audio.pause(); } catch {}
+      });
+    }
     setTimeout(() => { state.isProgrammaticAudioPause = false; }, 400);
   }
   async function execProgrammaticAudioPlay(opts = {}) {
@@ -1344,7 +1372,11 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
       }
       if (videoOk) {
         forceUnmuteForPlaybackIfAllowed();
-        softUnmuteAudio(AUDIO_SAFE_FADE_DURATION_MS).catch(() => {});
+        // FIX (audio pop): only unmute if audio is actually silent/paused — not on every
+        // playTogether call while audio is already playing at the correct volume.
+        if (audio.paused || audio.volume < 0.05) {
+          softUnmuteAudio(AUDIO_SAFE_FADE_DURATION_MS).catch(() => {});
+        }
       }
       if (!state.intendedPlaying || userPauseLockActive()) return;
       if (audio.paused) {
@@ -1412,7 +1444,12 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
           execProgrammaticAudioPause(600);
         }
       }
-      softUnmuteAudio(AUDIO_SAFE_FADE_DURATION_MS).catch(() => {});
+      // FIX (audio pop): only re-unmute at end of playTogether if volume needs correcting.
+      // Calling softUnmuteAudio unconditionally here causes a dip-ramp click on every
+      // mid-playback sync call when audio is already at the correct volume.
+      if (!state.audioFading && audio.volume < 0.05 && !audio.paused) {
+        softUnmuteAudio(AUDIO_SAFE_FADE_DURATION_MS).catch(() => {});
+      }
       if (!state.firstPlayCommitted) {
         state.firstPlayCommitted = true;
         setTimeout(() => { state.startupPhase = false; }, 1200);
@@ -1903,7 +1940,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     }
     if (state.intendedPlaying && !aPaused && !state.userMutedVideo && !state.userMutedAudio) {
       try { if (audio.muted) audio.muted = false; } catch {}
-      if (audio.volume <= 0.001) {
+      // FIX (audio pop): only rescue volume if truly silent and no fade is already running.
+      // Using a slightly higher threshold (0.05) catches cases where the volume got stuck
+      // near-zero without re-fading audio that's already close to target (which causes clicks).
+      if (!state.audioFading && audio.volume < 0.05) {
         softUnmuteAudio(200).catch(() => {});
       }
     }
