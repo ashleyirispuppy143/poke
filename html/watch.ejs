@@ -2613,110 +2613,95 @@ const canvases =[
 ];
 
 const CONFIG = {
-  internalWidth: 320, // TIP: Lowering this to 160 drops CPU by another 50% with almost no visual difference under a blur!
-  internalHeight: 180,
+  internalWidth: 128, // 128px is the magic number. Practically 0 GPU load, looks identical under CSS blur.
+  internalHeight: 72, 
   opacity: "0.4",
-  interval: Math.max(60, 998 / (navigator.hardwareConcurrency || 4))
+  interval: 120 // ~8 FPS. Perfect for a smooth ambient cross-fade.
 };
 
 // Initialize display canvases
 const contexts = canvases.map(c => {
   c.width = CONFIG.internalWidth;
   c.height = CONFIG.internalHeight;
-  c.style.width = "100%";
-  c.style.height = "100%";
-  c.style.position = "absolute";
-  c.style.top = "0";
-  c.style.left = "0";
-  // pixelated skips bilinear filter on GPU upscale = free CPU/GPU saving
-  c.style.imageRendering = "pixelated";
-  c.style.transition = `opacity ${CONFIG.interval}ms linear`;
-  c.style.opacity = "0";
-  c.style.pointerEvents = "none";
-  c.style.willChange = "opacity";
+  
+  // Force strict GPU layer compositing to prevent CPU repaints
+  Object.assign(c.style, {
+    width: "100%",
+    height: "100%",
+    position: "absolute",
+    top: "0",
+    left: "0",
+    imageRendering: "pixelated",
+    transition: `opacity ${CONFIG.interval}ms linear`,
+    opacity: "0",
+    pointerEvents: "none",
+    willChange: "opacity",
+    transform: "translateZ(0)",       // Forces GPU hardware layer
+    backfaceVisibility: "hidden"      // Prevents sub-pixel rendering bugs
+  });
   
   return c.getContext("2d", { alpha: false, desynchronized: true, willReadFrequently: false });
 });
 
 let activeIndex = 0;
-let renderLoopActive = false;
-let lastDrawTime = 0;
-let captureInProgress = false;
+let renderTimer = null;
 let ambientEnabled = localStorage.getItem("ambientState") !== "false";
 
 // ----- CORE DRAW LOOP -----
-const drawFrame = async (now) => {
+const drawFrame = () => {
   // Check exit conditions
-  if (AMvideo.paused || AMvideo.ended || !ambientEnabled || document.hidden) {
-    renderLoopActive = false;
-    return;
-  }
+  if (AMvideo.paused || AMvideo.ended || !ambientEnabled || document.hidden) return;
 
-   const timestamp = now || performance.now();
-  const elapsed = timestamp - lastDrawTime;
+  const currentCtx = contexts[activeIndex];
+  const currentCanvas = canvases[activeIndex];
+  const nextCanvas = canvases[activeIndex ^ 1];
 
-  if (elapsed >= CONFIG.interval) {
-    lastDrawTime = timestamp;
+  // Direct GPU blit. At 128px, this is a single microsecond OpenGL/DirectX command.
+  // No Promises, no GC object creation, zero memory leak risk.
+  try {
+    currentCtx.drawImage(AMvideo, 0, 0, CONFIG.internalWidth, CONFIG.internalHeight);
+  } catch (e) {}
 
-    if (!captureInProgress) {
-      captureInProgress = true;
-      const currentCtx = contexts[activeIndex];
-      const currentCanvas = canvases[activeIndex];
-      const nextCanvas = canvases[activeIndex ^ 1];
-
-      try {
-        // FAST PATH: Hardware off-thread extraction & resize directly from the video decoder
-        const bitmap = await createImageBitmap(AMvideo, {
-          resizeWidth: CONFIG.internalWidth,
-          resizeHeight: CONFIG.internalHeight,
-          resizeQuality: "low" 
-        });
-        
-        currentCtx.drawImage(bitmap, 0, 0);
-        bitmap.close(); // Immediately free GPU memory
-        
-      } catch (err) {
-        // FALLBACK PATH: Direct Blit (Skipping the old OffscreenCanvas middleman entirely)
-        try {
-          currentCtx.drawImage(AMvideo, 0, 0, CONFIG.internalWidth, CONFIG.internalHeight);
-        } catch (e) {}
-      }
-
-      // Cross-fade
-      currentCanvas.style.opacity = CONFIG.opacity;
-      nextCanvas.style.opacity = "0";
-      activeIndex ^= 1;
-      
-      captureInProgress = false;
-    }
-  }
+  // Trigger CSS Cross-fade
+  currentCanvas.style.opacity = CONFIG.opacity;
+  nextCanvas.style.opacity = "0";
+  activeIndex ^= 1;
 
   scheduleNextFrame();
 };
 
 const scheduleNextFrame = () => {
+  clearTimeout(renderTimer);
   if (!ambientEnabled || AMvideo.paused || AMvideo.ended || document.hidden) return;
-  renderLoopActive = true;
 
-  // requestVideoFrameCallback saves massive CPU by only firing on ACTUAL new video frames.
-  if ('requestVideoFrameCallback' in AMvideo) {
-    AMvideo.requestVideoFrameCallback(drawFrame);
-  } else {
-    requestAnimationFrame(drawFrame); // Fallback for older browsers
-  }
+  // 1. Completely put JS thread to sleep for the interval duration (0% CPU usage here)
+  renderTimer = setTimeout(() => {
+    // 2. When awake, align exactly with the browser's next actual video frame
+    if ('requestVideoFrameCallback' in AMvideo) {
+      AMvideo.requestVideoFrameCallback(drawFrame);
+    } else {
+      requestAnimationFrame(drawFrame);
+    }
+  }, CONFIG.interval);
 };
 
 const drawStart = () => {
-  if (!ambientEnabled || renderLoopActive || document.hidden) return;
-  lastDrawTime = performance.now() - CONFIG.interval; // Force immediately draw on first frame
-  scheduleNextFrame();
+  if (!ambientEnabled || document.hidden) return;
+  clearTimeout(renderTimer);
+  
+  // Draw first frame instantly, then start the scheduling loop
+  if ('requestVideoFrameCallback' in AMvideo) {
+    AMvideo.requestVideoFrameCallback(drawFrame);
+  } else {
+    requestAnimationFrame(drawFrame);
+  }
 };
 
 const drawPause = () => {
-  renderLoopActive = false;
+  clearTimeout(renderTimer);
 };
 
-// ----- VISIBILITY API — stop loop when tab hidden -----
+// ----- VISIBILITY API — stop loop entirely when tab hidden -----
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     drawPause();
@@ -2771,7 +2756,7 @@ const forcePlay = async () => {
   if (AMaudio) AMaudio.currentTime = 0;
 
   try {
-    const playPromises =[AMvideo.play()];
+    const playPromises = [AMvideo.play()];
     if (AMaudio) playPromises.push(AMaudio.play());
     await Promise.all(playPromises);
 
@@ -2842,6 +2827,7 @@ const init = () => {
 
   AMvideo.addEventListener("loadedmetadata", () => {
     const ratio = AMvideo.videoWidth / AMvideo.videoHeight;
+    // Calculate aspect ratio dynamically while keeping width fixed at 128
     CONFIG.internalHeight = Math.round(CONFIG.internalWidth / ratio);
     canvases.forEach(c => c.height = CONFIG.internalHeight);
   }, { once: true });
