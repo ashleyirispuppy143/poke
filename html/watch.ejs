@@ -2615,7 +2615,7 @@ if (canvas2) canvas2.style.display = "none";
 const CONFIG = {
   internalWidth: 64,
   internalHeight: 36,
-  interval: 100
+  interval: 50,
 };
 
 canvas1.width = CONFIG.internalWidth;
@@ -2635,7 +2635,7 @@ Object.assign(canvas1.style, {
 });
 
 const ctx = canvas1.getContext("2d", { alpha: false, desynchronized: true, willReadFrequently: false });
-ctx.globalAlpha = 0.15;
+ctx.globalAlpha = 0.4; 
 
 let renderTimer = null;
 let ambientEnabled = localStorage.getItem("ambientState") !== "false";
