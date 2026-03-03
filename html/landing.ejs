@@ -774,7 +774,7 @@
         <div class="ppb-narrative">
            <h2>a softer corner of the internet.</h2>
           <p>
-            no engagement sludge, no weird little traps, no lecture wall when u just wanna watch something.
+            no weird little traps, no lecture wall when u just wanna watch something.
             poke strips it all back so u can actually use the web! without the web using you back :3
           </p>
         </div>
@@ -791,7 +791,7 @@
             <div class="ppb-reason-n">02</div>
             <div class="ppb-reason-body">
               <strong>Pages drowning in noise</strong>
-              <span>ads, clickbait, clutter — all fighting for ur attention around the actual content.</span>
+              <span>ads & clutter... all fighting for ur attention around the actual content.</span>
             </div>
           </div>
           <div class="ppb-reason">
@@ -981,12 +981,12 @@
             Poke is a free software privacy app that lets you watch, explore and do MORE!!! &mdash; all ad-free and without tracking!!!
           </p>
           <p style="margin-top: 10px; color: #aaa; font-size: 12px;">
-            &copy; 2021-<%= new Date().getFullYear() %>
+            &copy; copyleft 2021-<%= new Date().getFullYear() %>
             <a style="text-decoration: none; color: #aaa;" href="https://initiative.poketube.fun/">Poke Project Initiative</a>
             With Love!! &#10084;&#65039; - Licensed under GNU GPL v3+
           </p>
           <p style="margin-top: 10px; color: #aaa; font-size: 12px;">
-            &copy; 2022-2026 <strong>Poke-chan</strong>.
+            &copy; 2022-<%= new Date().getFullYear() %> <strong>Poke-chan</strong>.
             Mascot created with <a href="https://picrew.me/en/image_maker/327" target="_blank" rel="noopener noreferrer" style="color: #aaa;">Tobihane Maker</a> by haruaki.
             <strong>Artistic copyright remains with haruaki;</strong> Poke does not claim ownership of the original artwork or assets.
             Poke-chan is used exclusively as a mascot for Poke via this public avatar maker.
@@ -1227,8 +1227,7 @@
     </script>
 
     <script>
-      // ── Watch section tabs ────────────────────────────────────────────────────
-      (function () {
+       (function () {
         var tabs   = document.querySelectorAll('.poke-watch-tab');
         var panels = document.querySelectorAll('.poke-watch-panel');
 
@@ -1258,8 +1257,7 @@
     </script>
 
     <script>
-      // ── Scroll arrow ─ visible only before #why-poke enters the viewport ──────
-      (function () {
+       (function () {
         var jump    = document.getElementById('problemJump');
         var section = document.getElementById('why-poke');
 
