@@ -14,6 +14,14 @@
 <meta property="og:image" content="/static/poke-embed.webp">
 
 <style>
+@font-face{
+  font-family:"PokeTube Flex";
+  src:url("/static/robotoflex.ttf");
+  font-style:normal;
+  font-stretch:1% 800%;
+  font-display:swap;
+}
+
 :root{
   --bg:#0b0c10;
   --panel:#151821;
@@ -32,11 +40,11 @@ body{
   margin:0;
   min-height:100vh;
   background:
-    radial-gradient(1200px 600px at 50% -10%, rgba(223,3,168,.18), transparent 55%),
-    radial-gradient(900px 500px at 10% 15%, rgba(124,77,255,.12), transparent 60%),
-    radial-gradient(900px 500px at 90% 20%, rgba(0,212,255,.08), transparent 60%),
+    radial-gradient(1200px 600px at 50% -10%, rgba(223,3,168,.20), transparent 55%),
+    radial-gradient(900px 500px at 12% 18%, rgba(124,77,255,.14), transparent 60%),
+    radial-gradient(900px 500px at 90% 22%, rgba(0,212,255,.08), transparent 62%),
     var(--bg);
-  font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  font-family:"PokeTube Flex", Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
   color:var(--text);
 }
 
@@ -60,6 +68,7 @@ body{
 
 .logo{
   width:240px;
+  max-width:70vw;
   filter: drop-shadow(0 10px 24px rgba(0,0,0,.45));
 }
 
@@ -88,13 +97,9 @@ body{
   box-shadow:0 0 0 2px rgba(223,3,168,.25);
 }
 
-/* No-JS toggle (details/summary) */
-.discover{
+.section{
   width:100%;
   margin-top:12px;
-}
-
-.discover details{
   background:var(--panel);
   border:1px solid var(--border);
   border-radius:var(--radius);
@@ -102,103 +107,64 @@ body{
   overflow:hidden;
 }
 
-.discover summary{
-  list-style:none;
-  cursor:pointer;
-  user-select:none;
+.section-header{
   display:flex;
-  align-items:center;
+  align-items:baseline;
   justify-content:space-between;
-  gap:14px;
-  padding:16px 18px;
+  gap:12px;
+  padding:14px 16px;
   border-bottom:1px solid var(--border);
 }
 
-.discover summary::-webkit-details-marker{display:none}
-
-.summary-left{
+.section-left{
   display:flex;
   flex-direction:column;
-  gap:2px;
+  gap:3px;
+  min-width:0;
 }
 
 .section-title{
   font-size:16px;
-  font-weight:700;
+  font-weight:760;
+  letter-spacing:.2px;
 }
 
 .section-sub{
   font-size:13px;
   color:var(--muted);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
 }
 
-.chev{
-  width:34px;
-  height:34px;
-  border-radius:10px;
-  display:grid;
-  place-items:center;
-  border:1px solid var(--border);
-  background:var(--panel2);
-  transition:transform .15s ease, border-color .15s ease;
+.section-actions{
+  display:flex;
+  align-items:center;
+  gap:10px;
 }
 
-details[open] .chev{
-  transform:rotate(180deg);
-  border-color:rgba(223,3,168,.45);
-}
-
-/* JS toggle button (appears only when JS is enabled) */
-.js-toggle{
-  display:none;
-  margin-left:10px;
-  padding:8px 10px;
-  border-radius:10px;
-  border:1px solid var(--border);
-  background:var(--panel2);
-  color:var(--text);
-  font-size:13px;
-  cursor:pointer;
-  transition:border-color .15s ease, transform .15s ease;
-}
-
-.js-toggle:hover{
-  border-color:rgba(223,3,168,.45);
-  transform:translateY(-1px);
-}
-
-.js .js-toggle{
+.toggle{
   display:inline-flex;
   align-items:center;
   gap:8px;
+  cursor:pointer;
+  user-select:none;
+  font-size:13px;
+  color:var(--muted);
 }
 
-/* When JS is enabled, we hide the <summary> UI and use a header bar instead */
-.js .discover summary{
-  display:none;
+.toggle input{
+  width:16px;
+  height:16px;
+  margin:0;
+  accent-color:var(--accent);
 }
 
-.js-header{
-  display:none;
+.toggle-hint{
+  font-size:12px;
+  color:rgba(167,173,191,.8);
 }
 
-.js .js-header{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:14px;
-  padding:16px 18px;
-  border-bottom:1px solid var(--border);
-  background:var(--panel);
-}
-
-.js-header-left{
-  display:flex;
-  flex-direction:column;
-  gap:2px;
-}
-
-/* Content area */
 .video-grid{
   padding:16px;
   display:grid;
@@ -226,12 +192,14 @@ details[open] .chev{
   border-radius:14px;
   background:var(--panel2);
   overflow:hidden;
-  transition:transform .15s ease,border-color .15s ease;
+  transition:transform .15s ease,border-color .15s ease, box-shadow .15s ease;
+  box-shadow:0 10px 24px rgba(0,0,0,.25);
 }
 
 .video:hover{
   transform:translateY(-2px);
   border-color:var(--accent);
+  box-shadow:0 16px 36px rgba(0,0,0,.35);
 }
 
 .thumbnail{
@@ -240,6 +208,7 @@ details[open] .chev{
   aspect-ratio:16/9;
   background-position:center;
   background-size:cover;
+  background-repeat:no-repeat;
 }
 
 .video-length{
@@ -250,6 +219,7 @@ details[open] .chev{
   padding:4px 7px;
   border-radius:6px;
   background:rgba(0,0,0,.75);
+  border:1px solid rgba(255,255,255,.08);
 }
 
 .info{
@@ -261,7 +231,7 @@ details[open] .chev{
 
 .title{
   font-size:14px;
-  font-weight:600;
+  font-weight:680;
   line-height:1.25;
 }
 
@@ -276,94 +246,117 @@ details[open] .chev{
   -webkit-box-orient:vertical;
   overflow:hidden;
 }
+
+/* NO-JS toggle: checkbox controls the section via CSS only */
+#toggle-discover:not(:checked) ~ .discover-body{
+  display:none;
+}
+
+/* If JS is available, we can show a nicer "collapsed" state (optional) */
+html.js #toggle-discover:not(:checked) ~ .discover-body{
+  display:none;
+}
+html.js .toggle-hint{
+  display:inline;
+}
+html.no-js .toggle-hint{
+  display:none;
+}
+
+/* tiny separation between hero and section on small screens */
+@media (max-width:520px){
+  .page{padding:34px 0 44px;}
+  .section-header{flex-direction:column; align-items:flex-start;}
+  .section-actions{width:100%; justify-content:space-between;}
+}
 </style>
+
+<script>
+(function(){
+  document.documentElement.classList.remove("no-js");
+  document.documentElement.classList.add("js");
+
+  function safeGet(key){
+    try{ return localStorage.getItem(key); }catch(e){ return null; }
+  }
+  function safeSet(key,val){
+    try{ localStorage.setItem(key,val); }catch(e){}
+  }
+
+  document.addEventListener("DOMContentLoaded", function(){
+    var cb = document.getElementById("toggle-discover");
+    if(!cb) return;
+
+    var saved = safeGet("poke_discover_open");
+    if(saved === "0") cb.checked = false;
+    if(saved === "1") cb.checked = true;
+
+    cb.addEventListener("change", function(){
+      safeSet("poke_discover_open", cb.checked ? "1" : "0");
+    });
+  });
+})();
+</script>
 </head>
 
 <body>
-
 <div class="page">
 
-<div class="hero">
-<img src="/static/logo-poke.svg" class="logo" alt="Poke Logo">
+  <div class="hero">
+    <img src="/static/logo-poke.svg" class="logo" alt="Poke Logo">
 
-<div class="search-wrap">
-<form action="/search" method="get">
-<input class="search-bar" autocomplete="on" id="fname" name="query" type="text" placeholder="Search...">
-</form>
-</div>
-</div>
+    <div class="search-wrap">
+      <form action="/search" method="get">
+        <input class="search-bar" autocomplete="on" id="fname" name="query" type="text" placeholder="Search...">
+      </form>
+    </div>
+  </div>
 
-<div class="discover">
-  <details id="discoverDetails" open>
-    <summary>
-      <div class="summary-left">
+  <section class="section" aria-label="Discover gaming videos">
+    <div class="section-header">
+      <div class="section-left">
         <div class="section-title">Discover gaming videos</div>
-        <div class="section-sub">Trending gaming videos</div>
-      </div>
-      <div class="chev" aria-hidden="true">▾</div>
-    </summary>
-
-    <div class="js-header" role="heading" aria-level="2">
-      <div class="js-header-left">
-        <div class="section-title">Discover gaming videos</div>
-        <div class="section-sub">Trending gaming videos</div>
+        <div class="section-sub">These are trending gaming videos</div>
       </div>
 
-      <button class="js-toggle" type="button" id="discoverToggle" aria-controls="discoverContent" aria-expanded="true">
-        Hide
-      </button>
+      <div class="section-actions">
+        <label class="toggle" for="toggle-discover" title="Show or hide this section">
+          <input id="toggle-discover" type="checkbox" checked>
+          <span>Show</span>
+        </label>
+        <span class="toggle-hint">(remembers your choice)</span>
+      </div>
     </div>
 
-    <div id="discoverContent">
+    <div class="discover-body">
       <div class="video-grid">
         <% inv.slice(0,16).forEach(x => { %>
 
-        <a href="/watch?v=<%- x.videoId %>" class="video canloadhd" data-author="<%- x.author %>">
-          <div class="thumbnail" style="background-image:url('/vi/<%= x.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw');">
-            <span class="video-length"><%- turntomins(x.lengthSeconds) %></span>
-          </div>
-
-          <div class="info">
-            <span class="title max-lines-2" title="<%- x.title %>"><%- x.title %></span>
-            <span class="byline max-lines-2">By <%- x.author %></span>
-          </div>
-        </a>
+          <a href="/watch?v=<%- x.videoId %>" class="video canloadhd" data-author="<%- x.author %>">
+            <div class="thumbnail" style="background-image:url('/vi/<%= x.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw');">
+              <span class="video-length"><%- turntomins(x.lengthSeconds) %></span>
+            </div>
+            <div class="info">
+              <span class="title max-lines-2" title="<%- x.title %>"><%- x.title %></span>
+              <span class="byline max-lines-2">By <%- x.author %></span>
+            </div>
+          </a>
 
         <% }) %>
       </div>
     </div>
 
-  </details>
-</div>
+    <noscript>
+      <style>
+        html{class: no-js}
+      </style>
+    </noscript>
+  </section>
 
 </div>
 
 <script>
-(function(){
-  document.documentElement.classList.add("js");
-
-  var details = document.getElementById("discoverDetails");
-  var btn = document.getElementById("discoverToggle");
-  var content = document.getElementById("discoverContent");
-
-  if (!details || !btn || !content) return;
-
-  details.open = true;
-
-  function setState(isOpen){
-    content.style.display = isOpen ? "" : "none";
-    btn.textContent = isOpen ? "Hide" : "Show";
-    btn.setAttribute("aria-expanded", isOpen ? "true" : "false");
-  }
-
-  setState(true);
-
-  btn.addEventListener("click", function(){
-    var currentlyOpen = content.style.display !== "none";
-    setState(!currentlyOpen);
-  });
-})();
+document.documentElement.classList.add("no-js");
 </script>
-
 </body>
 </html>
