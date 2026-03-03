@@ -317,7 +317,10 @@ document.addEventListener("DOMContentLoaded", () => {
     // during the very first play attempt, preventing the play→pause→play glitch.
     startupPlaySettleUntil: 0,
     startupPlaySettled: false,
-    startupKickAttempts: 0
+    startupKickAttempts: 0,
+    // FIX (startup pause blocked): true when a real user gesture explicitly requested pause,
+    // which must always be honoured even inside the startup settle window.
+    userGesturePauseIntent: false
   };
   const EPS = 1.0;
   const HAVE_FUTURE_DATA = 3;
@@ -393,14 +396,21 @@ document.addEventListener("DOMContentLoaded", () => {
   function clearMediaSessionForcedPause() { state.mediaForcedPauseUntil = 0; }
   function mediaSessionForcedPauseActive() { return now() < state.mediaForcedPauseUntil; }
   function markUserPauseIntent(ms = 1800) {
-    // FIX (startup double-play): ignore pause intent during startup settle window
-    if (!state.startupPlaySettled && now() < state.startupPlaySettleUntil) return;
+    // FIX (startup pause blocked): a real user gesture always overrides the settle window.
+    // Set the flag first so startupSettleActive() returns false for this call and anything
+    // downstream (pauseTogether, queueHardPauseVerification, etc.).
+    state.userGesturePauseIntent = true;
+    // Clear after a short window — long enough for all downstream checks to see it,
+    // short enough that a subsequent autoplay retry won't be blocked.
+    setTimeout(() => { state.userGesturePauseIntent = false; }, 2000);
     const until = now() + Math.max(0, Number(ms) || 0);
     state.userPauseUntil = Math.max(state.userPauseUntil, until);
     state.userPauseLockUntil = Math.max(state.userPauseLockUntil, until + 300);
     state.userPlayUntil = 0;
     state.intendedPlaying = false;
     state.bufferHoldIntendedPlaying = false;
+    // Also end the settle window immediately so nothing re-starts playback
+    state.startupPlaySettled = true;
     updateMediaSessionPlaybackState();
     if (platform.chromiumOnlyBrowser) {
       state.chromiumPauseGuardUntil = Math.max(state.chromiumPauseGuardUntil, until + 250);
@@ -506,8 +516,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // FIX (startup double-play): returns true during the startup settle window,
   // blocking all spurious auto-pause logic that causes the play→pause→play glitch.
+  // EXCEPTION: a real user gesture (userGesturePauseIntent) always passes through.
   function startupSettleActive() {
     if (state.startupPlaySettled) return false;
+    if (state.userGesturePauseIntent) return false;
     return now() < state.startupPlaySettleUntil;
   }
 
@@ -2624,7 +2636,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }, 100);
   scheduleSync(0);
 });
-
 document.addEventListener('keydown', function(event) {
      const active = document.activeElement;
     if (active && (active.tagName.toLowerCase() === 'input' || active.tagName.toLowerCase() === 'textarea')) {
