@@ -143,10 +143,17 @@ if (typeof query === 'string') {
     if (query && query.startsWith("Hey ChatGPT,") && query.length > 2) {
       res.redirect("https://chatgpt.com/?q=" + query + "- sent using pokeAI features");
     }
+if (!query) {
 
-    if (!query) {
- renderTemplate(res, req, "search-no-query.ejs", { });
- }
+  const invtrend = await fetch(`${config.invapi}/trending?tab=gaming`, {
+    headers: { "User-Agent": config.useragent },
+  });
+
+  const inv = getJson(await invtrend.text());
+
+  renderTemplate(res, req, "search-no-query.ejs", { inv });
+
+}
 
     let continuation = req.query.continuation || "";
     let date = req.query.date || "";
