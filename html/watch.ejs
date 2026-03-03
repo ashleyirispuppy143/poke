@@ -2611,7 +2611,6 @@ const canvas1 = document.getElementById("ambient-canvas-1");
 const canvas2 = document.getElementById("ambient-canvas-2");
 
 // WE NO LONGER NEED CANVAS 2! 
-// Hide it completely to save 50% of the CSS rendering cost.
 if (canvas2) {
   canvas2.style.display = "none";
 }
@@ -2623,12 +2622,10 @@ const CONFIG = {
 };
 const INTERVAL = 1000 / CONFIG.fps;
 
-// Setup the single canvas
-canvas1.width = CONFIG.internalWidth;
+ canvas1.width = CONFIG.internalWidth;
 canvas1.height = CONFIG.internalHeight;
 
-// Removed all CSS transitions and will-change: opacity. 
-// We are letting the canvas handle the fading now.
+
 Object.assign(canvas1.style, {
   width: "100%",
   height: "100%",
@@ -2641,13 +2638,8 @@ Object.assign(canvas1.style, {
   backfaceVisibility: "hidden"
 });
 
-// Create single context
-const ctx = canvas1.getContext("2d", { alpha: false, desynchronized: true, willReadFrequently: false });
-
-// THE MAGIC TRICK: 
-// By setting this, every new frame drawn is highly transparent. 
-// It naturally blends with the previous frames, creating a perfect cross-fade 
-// effect with absolutely zero CSS/GPU compositing overhead!
+ const ctx = canvas1.getContext("2d", { alpha: false, desynchronized: true, willReadFrequently: false });
+ 
 ctx.globalAlpha = 0.15;
 
 let activeIndex = 0;
@@ -2655,8 +2647,7 @@ let lastDrawTime = 0;
 let renderLoopActive = false;
 let ambientEnabled = localStorage.getItem("ambientState") !== "false";
 
-// ----- CORE DRAW LOOP -----
-const drawFrame = (now) => {
+ const drawFrame = (now) => {
   if (AMvideo.paused || AMvideo.ended || !ambientEnabled || document.hidden) {
     renderLoopActive = false;
     return;
@@ -2696,8 +2687,7 @@ const drawPause = () => {
   renderLoopActive = false;
 };
 
-// ----- VISIBILITY API — stop loop entirely when tab hidden -----
-document.addEventListener("visibilitychange", () => {
+ document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     drawPause();
   } else if (!AMvideo.paused && !AMvideo.ended && ambientEnabled) {
