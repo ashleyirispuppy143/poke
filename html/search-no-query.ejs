@@ -26,32 +26,41 @@
   --bg:#0b0c10;
   --panel:#151821;
   --panel2:#1a1d26;
+  --panel3:#121521;
   --text:#f4f6ff;
   --muted:#a7adbf;
+  --muted2:#8c92a6;
   --border:#242836;
+  --border2:#2b3041;
   --accent:#df03a8;
   --shadow:0 14px 32px rgba(0,0,0,.45);
+  --shadow2:0 10px 22px rgba(0,0,0,.35);
   --radius:18px;
+  --radius2:14px;
 }
 
 *{box-sizing:border-box}
+
+html,body{height:100%}
 
 body{
   margin:0;
   min-height:100vh;
   background:
-    radial-gradient(1200px 600px at 50% -10%, rgba(223,3,168,.20), transparent 55%),
-    radial-gradient(900px 500px at 12% 18%, rgba(124,77,255,.14), transparent 60%),
-    radial-gradient(900px 500px at 90% 22%, rgba(0,212,255,.08), transparent 62%),
+    radial-gradient(900px 420px at 50% -10%, rgba(223,3,168,.10), transparent 60%),
+    radial-gradient(800px 420px at 15% 15%, rgba(124,77,255,.08), transparent 65%),
+    radial-gradient(800px 420px at 85% 15%, rgba(0,212,255,.05), transparent 65%),
     var(--bg);
   font-family:"PokeTube Flex", Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
   color:var(--text);
 }
 
+a{color:inherit}
+
 .page{
-  width:min(1200px,92vw);
+  width:min(1240px, 92vw);
   margin:0 auto;
-  padding:42px 0 54px;
+  padding:44px 0 60px;
   display:flex;
   flex-direction:column;
   align-items:center;
@@ -63,20 +72,37 @@ body{
   display:flex;
   flex-direction:column;
   align-items:center;
-  gap:18px;
+  gap:14px;
+  padding-top:4px;
 }
 
 .logo{
-  width:240px;
-  max-width:70vw;
-  filter: drop-shadow(0 10px 24px rgba(0,0,0,.45));
+  width:248px;
+  max-width:72vw;
+  filter: drop-shadow(0 12px 26px rgba(0,0,0,.48));
+}
+
+.tagline{
+  margin-top:-4px;
+  font-size:14px;
+  color:rgba(244,246,255,.72);
+  letter-spacing:.15px;
+  text-align:center;
 }
 
 .search-wrap{
-  width:min(680px,92vw);
+  width:min(720px, 92vw);
+  margin-top:4px;
+}
+
+.search-form{
+  display:flex;
+  gap:10px;
+  align-items:center;
 }
 
 .search-bar{
+  flex:1;
   width:100%;
   padding:14px 18px;
   font-size:16px;
@@ -85,21 +111,27 @@ body{
   background:var(--panel);
   color:var(--text);
   outline:none;
-  transition:border-color .18s ease, box-shadow .18s ease;
+  box-shadow:var(--shadow2);
+  transition:border-color .18s ease, box-shadow .18s ease, transform .18s ease;
 }
 
 .search-bar::placeholder{
-  color:#8c92a6;
+  color:var(--muted2);
 }
 
 .search-bar:focus{
   border-color:var(--accent);
-  box-shadow:0 0 0 2px rgba(223,3,168,.25);
+  box-shadow:0 0 0 2px rgba(223,3,168,.25), var(--shadow2);
+  transform:translateY(-1px);
+}
+
+.quick-pill{
+  display:none;
 }
 
 .section{
   width:100%;
-  margin-top:12px;
+  margin-top:10px;
   background:var(--panel);
   border:1px solid var(--border);
   border-radius:var(--radius);
@@ -109,23 +141,24 @@ body{
 
 .section-header{
   display:flex;
-  align-items:baseline;
   justify-content:space-between;
+  align-items:flex-start;
   gap:12px;
-  padding:14px 16px;
+  padding:16px 18px;
   border-bottom:1px solid var(--border);
+  background:linear-gradient(90deg, rgba(223,3,168,.10), transparent 55%);
 }
 
-.section-left{
+.section-head-left{
   display:flex;
   flex-direction:column;
-  gap:3px;
+  gap:4px;
   min-width:0;
 }
 
 .section-title{
   font-size:16px;
-  font-weight:760;
+  font-weight:720;
   letter-spacing:.2px;
 }
 
@@ -137,51 +170,58 @@ body{
   text-overflow:ellipsis;
 }
 
-.section-actions{
-  display:flex;
-  align-items:center;
-  gap:10px;
-}
-
 .toggle{
   display:inline-flex;
-  align-items:center;
   gap:8px;
-  cursor:pointer;
+  align-items:center;
   user-select:none;
   font-size:13px;
-  color:var(--muted);
+  color:rgba(244,246,255,.78);
+  padding:8px 10px;
+  border-radius:999px;
+  background:var(--panel3);
+  border:1px solid var(--border2);
+  cursor:pointer;
+  transition:border-color .16s ease, transform .16s ease;
 }
 
-.toggle input{
-  width:16px;
-  height:16px;
-  margin:0;
-  accent-color:var(--accent);
+.toggle:hover{
+  border-color:rgba(223,3,168,.55);
+  transform:translateY(-1px);
 }
 
-.toggle-hint{
-  font-size:12px;
-  color:rgba(167,173,191,.8);
+.toggle:active{
+  transform:translateY(0);
+}
+
+.chev{
+  width:10px;
+  height:10px;
+  display:inline-block;
+  border-right:2px solid rgba(244,246,255,.7);
+  border-bottom:2px solid rgba(244,246,255,.7);
+  transform:rotate(45deg);
+  margin-top:-2px;
 }
 
 .video-grid{
   padding:16px;
   display:grid;
-  grid-template-columns:repeat(4,1fr);
+  grid-template-columns:repeat(4, minmax(0, 1fr));
   gap:14px;
 }
 
-@media (max-width:1100px){
-  .video-grid{grid-template-columns:repeat(3,1fr);}
+@media (max-width: 1100px){
+  .video-grid{grid-template-columns:repeat(3, minmax(0, 1fr));}
 }
 
-@media (max-width:820px){
-  .video-grid{grid-template-columns:repeat(2,1fr);}
+@media (max-width: 820px){
+  .video-grid{grid-template-columns:repeat(2, minmax(0, 1fr));}
 }
 
-@media (max-width:520px){
+@media (max-width: 520px){
   .video-grid{grid-template-columns:1fr;}
+  .toggle{padding:7px 9px}
 }
 
 .video{
@@ -189,17 +229,17 @@ body{
   text-decoration:none;
   color:inherit;
   border:1px solid var(--border);
-  border-radius:14px;
+  border-radius:var(--radius2);
   background:var(--panel2);
   overflow:hidden;
-  transition:transform .15s ease,border-color .15s ease, box-shadow .15s ease;
-  box-shadow:0 10px 24px rgba(0,0,0,.25);
+  transition:transform .15s ease, border-color .15s ease, box-shadow .15s ease;
+  box-shadow:0 6px 18px rgba(0,0,0,.25);
 }
 
 .video:hover{
   transform:translateY(-2px);
-  border-color:var(--accent);
-  box-shadow:0 16px 36px rgba(0,0,0,.35);
+  border-color:rgba(223,3,168,.6);
+  box-shadow:0 14px 30px rgba(0,0,0,.35);
 }
 
 .thumbnail{
@@ -211,28 +251,37 @@ body{
   background-repeat:no-repeat;
 }
 
+.thumbnail::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:linear-gradient(180deg, transparent 62%, rgba(0,0,0,.60) 100%);
+}
+
 .video-length{
   position:absolute;
   right:8px;
   bottom:8px;
+  z-index:1;
   font-size:12px;
   padding:4px 7px;
   border-radius:6px;
-  background:rgba(0,0,0,.75);
-  border:1px solid rgba(255,255,255,.08);
+  background:rgba(0,0,0,.78);
+  border:1px solid rgba(255,255,255,.10);
 }
 
 .info{
   padding:10px 12px 12px;
   display:flex;
   flex-direction:column;
-  gap:5px;
+  gap:6px;
 }
 
 .title{
   font-size:14px;
-  font-weight:680;
+  font-weight:660;
   line-height:1.25;
+  letter-spacing:.1px;
 }
 
 .byline{
@@ -247,88 +296,118 @@ body{
   overflow:hidden;
 }
 
-/* NO-JS toggle: checkbox controls the section via CSS only */
-#toggle-discover:not(:checked) ~ .discover-body{
+ #discover-toggle{display:none}
+
+ html.js .discover-controls{display:inline-flex}
+html.js .discover-body{display:block}
+html.js .discover-hidden .discover-body{display:none}
+html.js .discover-hidden .toggle .chev{transform:rotate(-135deg); margin-top:2px}
+
+ .details-fallback{
   display:none;
 }
 
-/* If JS is available, we can show a nicer "collapsed" state (optional) */
-html.js #toggle-discover:not(:checked) ~ .discover-body{
-  display:none;
+noscript .details-fallback{
+  display:block;
+  width:100%;
 }
-html.js .toggle-hint{
-  display:inline;
-}
-html.no-js .toggle-hint{
+
+noscript .section{
   display:none;
 }
 
-/* tiny separation between hero and section on small screens */
-@media (max-width:520px){
-  .page{padding:34px 0 44px;}
-  .section-header{flex-direction:column; align-items:flex-start;}
-  .section-actions{width:100%; justify-content:space-between;}
+details.details-fallback{
+  width:100%;
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  overflow:hidden;
+}
+
+details.details-fallback > summary{
+  list-style:none;
+  cursor:pointer;
+  padding:16px 18px;
+  border-bottom:1px solid var(--border);
+  background:linear-gradient(90deg, rgba(223,3,168,.10), transparent 55%);
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+}
+
+details.details-fallback > summary::-webkit-details-marker{display:none}
+
+.summary-left{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  min-width:0;
+}
+
+.summary-title{
+  font-size:16px;
+  font-weight:720;
+  letter-spacing:.2px;
+}
+
+.summary-sub{
+  font-size:13px;
+  color:var(--muted);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.summary-right{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 10px;
+  border-radius:999px;
+  background:var(--panel3);
+  border:1px solid var(--border2);
+  font-size:13px;
+  color:rgba(244,246,255,.78);
+}
+
+details.details-fallback[open] .summary-right .chev{
+  transform:rotate(-135deg);
+  margin-top:2px;
 }
 </style>
-
-<script>
-(function(){
-  document.documentElement.classList.remove("no-js");
-  document.documentElement.classList.add("js");
-
-  function safeGet(key){
-    try{ return localStorage.getItem(key); }catch(e){ return null; }
-  }
-  function safeSet(key,val){
-    try{ localStorage.setItem(key,val); }catch(e){}
-  }
-
-  document.addEventListener("DOMContentLoaded", function(){
-    var cb = document.getElementById("toggle-discover");
-    if(!cb) return;
-
-    var saved = safeGet("poke_discover_open");
-    if(saved === "0") cb.checked = false;
-    if(saved === "1") cb.checked = true;
-
-    cb.addEventListener("change", function(){
-      safeSet("poke_discover_open", cb.checked ? "1" : "0");
-    });
-  });
-})();
-</script>
 </head>
 
 <body>
+
 <div class="page">
 
   <div class="hero">
     <img src="/static/logo-poke.svg" class="logo" alt="Poke Logo">
-
+ 
     <div class="search-wrap">
-      <form action="/search" method="get">
+      <form class="search-form" action="/search" method="get">
         <input class="search-bar" autocomplete="on" id="fname" name="query" type="text" placeholder="Search...">
       </form>
     </div>
   </div>
 
-  <section class="section" aria-label="Discover gaming videos">
+  <!-- JS / no-JS version (shown when JS is enabled) -->
+  <section class="section" id="discover" aria-label="Discover gaming videos">
     <div class="section-header">
-      <div class="section-left">
+      <div class="section-head-left">
         <div class="section-title">Discover gaming videos</div>
         <div class="section-sub">These are trending gaming videos</div>
       </div>
 
-      <div class="section-actions">
-        <label class="toggle" for="toggle-discover" title="Show or hide this section">
-          <input id="toggle-discover" type="checkbox" checked>
-          <span>Show</span>
-        </label>
-        <span class="toggle-hint">(remembers your choice)</span>
-      </div>
+      <button class="toggle discover-controls" id="discoverToggle" type="button" aria-controls="discoverBody" aria-expanded="true">
+        <span id="discoverToggleText">Hide</span>
+        <span class="chev" aria-hidden="true"></span>
+      </button>
     </div>
 
-    <div class="discover-body">
+    <div class="discover-body" id="discoverBody">
       <div class="video-grid">
         <% inv.slice(0,16).forEach(x => { %>
 
@@ -338,25 +417,91 @@ html.no-js .toggle-hint{
             </div>
             <div class="info">
               <span class="title max-lines-2" title="<%- x.title %>"><%- x.title %></span>
-              <span class="byline max-lines-2">By <%- x.author %></span>
+              <span class="byline max-lines-2" title="Video By <%- x.author %>">By <%- x.author %></span>
             </div>
           </a>
 
         <% }) %>
       </div>
     </div>
-
-    <noscript>
-      <style>
-        html{class: no-js}
-      </style>
-    </noscript>
   </section>
+
+  <!-- NO-JS option: collapsible discover section (only appears when JS is disabled) -->
+  <noscript>
+    <details class="details-fallback" open>
+      <summary>
+        <div class="summary-left">
+          <div class="summary-title">Discover gaming videos</div>
+          <div class="summary-sub">These are trending gaming videos</div>
+        </div>
+        <div class="summary-right">
+          <span>Toggle</span>
+          <span class="chev" aria-hidden="true"></span>
+        </div>
+      </summary>
+
+      <div class="video-grid">
+        <% inv.slice(0,16).forEach(x => { %>
+
+          <a href="/watch?v=<%- x.videoId %>" class="video canloadhd" data-author="<%- x.author %>">
+            <div class="thumbnail" style="background-image:url('/vi/<%= x.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw');">
+              <span class="video-length"><%- turntomins(x.lengthSeconds) %></span>
+            </div>
+            <div class="info">
+              <span class="title max-lines-2" title="<%- x.title %>"><%- x.title %></span>
+              <span class="byline max-lines-2" title="Video By <%- x.author %>">By <%- x.author %></span>
+            </div>
+          </a>
+
+        <% }) %>
+      </div>
+    </details>
+  </noscript>
 
 </div>
 
 <script>
-document.documentElement.classList.add("no-js");
+(function(){
+  document.documentElement.classList.add("js");
+
+  var btn = document.getElementById("discoverToggle");
+  var body = document.getElementById("discoverBody");
+  var txt = document.getElementById("discoverToggleText");
+
+  if (!btn || !body || !txt) return;
+
+  var key = "poke_discover_hidden";
+  var hidden = false;
+
+  try{
+    hidden = localStorage.getItem(key) === "1";
+  }catch(e){
+    hidden = false;
+  }
+
+  function setHidden(v){
+    hidden = !!v;
+    if (hidden){
+      document.documentElement.classList.add("discover-hidden");
+      btn.setAttribute("aria-expanded","false");
+      txt.textContent = "Show";
+    }else{
+      document.documentElement.classList.remove("discover-hidden");
+      btn.setAttribute("aria-expanded","true");
+      txt.textContent = "Hide";
+    }
+    try{
+      localStorage.setItem(key, hidden ? "1" : "0");
+    }catch(e){}
+  }
+
+  btn.addEventListener("click", function(){
+    setHidden(!hidden);
+  });
+
+  setHidden(hidden);
+})();
 </script>
+
 </body>
 </html>
