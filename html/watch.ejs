@@ -776,12 +776,7 @@ background-color: #0000;
        </style>
       <% } %>
                            
-                                <style>
-    #poke-logo {
-         transition: transform 0.05s ease-out;
-         transform-origin: center; 
-    }
-</style>      
+                                      
     </head>
     
  
@@ -871,7 +866,7 @@ background-color: #0000;
  
               <a title="Poke Homepage" class="class" href="/143" style=font-family:Inter,sans-serif;color:var(--text-color)>  
               
-              <img  id="poke-logo"  style="padding-left:0.9em;width: 8.5em;display: block;margin-left: auto;margin-right: auto;" src="/css/logo-poke.svg?v=5"></a>
+              <img  style="padding-left:0.9em;width: 8.5em;display: block;margin-left: auto;margin-right: auto;" src="/css/logo-poke.svg?v=5"></a>
                                      		 	                    
                                              
      <% if (secure) { %> 
@@ -905,7 +900,7 @@ if your domain matches this code you are probably in poketube.fun owo:3
  
 <% if (VideoData.author === "twenty one pilots") { %> 
  
-<a title="Poke Homepage" class="class" href="/143" style="font-family:Inter,sans-serif;color:var(--text-color);display: flex;">  <img style="padding-left:0.9em;width: 8.5em;display: block;margin-left: auto;margin-right: auto;" id="poke-logo" src="/css/logo-poke.svg?v=5">
+<a title="Poke Homepage" class="class" href="/143" style="font-family:Inter,sans-serif;color:var(--text-color);display: flex;">  <img style="padding-left:0.9em;width: 8.5em;display: block;margin-left: auto;margin-right: auto;" src="/css/logo-poke.svg?v=5">
                 <img src="/css/red-tape.webp" style="opacity: 0.9;height: 2em;margin-left: -9em;"></a>
                 
                 
@@ -992,10 +987,6 @@ My Poke
                             <i  class="fa-light fa-compass"></i>
 Discover Poke
         </a>
-        <a href="#" id="vibe-toggle" style="text-decoration: none;" class="dropdown__item">
-    <i class="fa-light fa-compass"></i>
-    <span id="vibe-text">Vibing mode: ON</span>
-</a>
  
           				<a href="/apps" style="text-decoration: none;" class="dropdown__item">
                             <i  class="fa-light fa-grid-2"></i>
@@ -2387,94 +2378,6 @@ VideoData?.recommendedVideos.forEach(video => {
     
 <!-- SCRIPTS -->
 <!-- AUTOPLAY -->
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-    const audio = document.getElementById('aud');
-    const logo = document.getElementById('poke-logo');
-    const toggleBtn = document.getElementById('vibe-toggle');
-    const vibeText = document.getElementById('vibe-text');
-
-    let audioCtx;
-    let analyser;
-    let dataArray;
-    let isVibing = true;
-    let isInitialized = false;
-
-    // Set up the Web Audio API
-    function initAudio() {
-        if (isInitialized) return;
-        
-        // Create Audio Context
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        analyser = audioCtx.createAnalyser();
-
-        // Connect the audio element to the analyzer
-        const source = audioCtx.createMediaElementSource(audio);
-        source.connect(analyser);
-        analyser.connect(audioCtx.destination); // Connect back to speakers
-
-        // Settings for how detailed the audio analysis is
-        analyser.fftSize = 256; 
-        const bufferLength = analyser.frequencyBinCount;
-        dataArray = new Uint8Array(bufferLength);
-
-        isInitialized = true;
-        vibeLoop(); // Start the animation loop
-    }
-
-    // The function that runs constantly to animate the logo
-    function vibeLoop() {
-        requestAnimationFrame(vibeLoop);
-
-        // If vibing is disabled or audio is paused, keep the logo at normal size
-        if (!isVibing || audio.paused) {
-            logo.style.transform = 'scale(1)';
-            return;
-        }
-
-        // Get the current audio frequency data
-        analyser.getByteFrequencyData(dataArray);
-
-        // Calculate the average volume of the current frame
-        let sum = 0;
-        for (let i = 0; i < dataArray.length; i++) {
-            sum += dataArray[i];
-        }
-        const average = sum / dataArray.length;
-
-        // Map the audio volume (0 to 255) to a scale size
-        // Base scale is 1.0. Max addition is 0.15 (so it doesn't get "too big")
-        const scale = 1 + (average / 255) * 0.15; 
-
-        // Apply the scale to the logo
-        logo.style.transform = `scale(${scale})`;
-    }
-
-    // Listen for the toggle button click
-    toggleBtn.addEventListener('click', (e) => {
-        e.preventDefault(); // Prevents the <a> tag from reloading the page
-        isVibing = !isVibing;
-        
-        // Update the button text
-        vibeText.innerText = isVibing ? 'Vibing mode: ON' : 'Vibing mode: OFF';
-        
-        // Instantly reset the logo size if turned off
-        if (!isVibing) {
-            logo.style.transform = 'scale(1)';
-        }
-    });
-
-    // Browsers require user interaction before playing audio context.
-    // So we initialize the audio analysis ONLY when the user clicks Play.
-    audio.addEventListener('play', () => {
-        initAudio();
-        // If context was suspended by the browser, wake it up
-        if (audioCtx && audioCtx.state === 'suspended') {
-            audioCtx.resume();
-        }
-    });
-});
-</script>
  <script>
 document.addEventListener("DOMContentLoaded", () => {
   const desc = document.querySelector(".descriptionHtml");
