@@ -2606,25 +2606,20 @@ document.addEventListener('DOMContentLoaded', checkTheaterMode);
                <% if(!IsOldWindows) { %>
 
 <script>
-const AMvideo = document.getElementById("video");
+ const AMvideo = document.getElementById("video");
 const canvas1 = document.getElementById("ambient-canvas-1");
 const canvas2 = document.getElementById("ambient-canvas-2");
 
-// WE NO LONGER NEED CANVAS 2! 
-if (canvas2) {
-  canvas2.style.display = "none";
-}
+if (canvas2) canvas2.style.display = "none";
 
 const CONFIG = {
-  internalWidth: 128,
-  internalHeight: 72,
-  fps: 15 // 15 FPS is plenty because the alpha-blending naturally smooths it
+  internalWidth: 64,
+  internalHeight: 36,
+  interval: 100
 };
-const INTERVAL = 1000 / CONFIG.fps;
 
- canvas1.width = CONFIG.internalWidth;
+canvas1.width = CONFIG.internalWidth;
 canvas1.height = CONFIG.internalHeight;
-
 
 Object.assign(canvas1.style, {
   width: "100%",
@@ -2635,41 +2630,40 @@ Object.assign(canvas1.style, {
   imageRendering: "pixelated",
   pointerEvents: "none",
   transform: "translateZ(0)",
-  backfaceVisibility: "hidden"
+  backfaceVisibility: "hidden",
+  contain: "strict"
 });
 
- const ctx = canvas1.getContext("2d", { alpha: false, desynchronized: true, willReadFrequently: false });
- 
+const ctx = canvas1.getContext("2d", { alpha: false, desynchronized: true, willReadFrequently: false });
 ctx.globalAlpha = 0.15;
 
-let activeIndex = 0;
-let lastDrawTime = 0;
-let renderLoopActive = false;
+let renderTimer = null;
 let ambientEnabled = localStorage.getItem("ambientState") !== "false";
+let isVisible = true;
 
- const drawFrame = (now) => {
-  if (AMvideo.paused || AMvideo.ended || !ambientEnabled || document.hidden) {
-    renderLoopActive = false;
-    return;
+const observer = new IntersectionObserver((entries) => {
+  isVisible = entries[0].isIntersecting;
+  if (isVisible && ambientEnabled && !AMvideo.paused) {
+    drawStart();
+  } else {
+    drawPause();
   }
+}, { threshold: 0 });
+observer.observe(AMvideo);
 
-  const timestamp = now || performance.now();
-  
-  if (timestamp - lastDrawTime >= INTERVAL) {
-    lastDrawTime = timestamp;
-    try {
-      // Draw directly. The globalAlpha handles the smooth fading instantly.
-      ctx.drawImage(AMvideo, 0, 0, CONFIG.internalWidth, CONFIG.internalHeight);
-    } catch (e) {}
-  }
+const drawFrame = () => {
+  if (AMvideo.paused || AMvideo.ended || !ambientEnabled || document.hidden || !isVisible) return;
 
-  scheduleNextFrame();
+  try {
+    ctx.drawImage(AMvideo, 0, 0, CONFIG.internalWidth, CONFIG.internalHeight);
+  } catch (e) {}
+
+  renderTimer = setTimeout(scheduleNextFrame, CONFIG.interval);
 };
 
 const scheduleNextFrame = () => {
-  if (!ambientEnabled || AMvideo.paused || AMvideo.ended || document.hidden) return;
-  renderLoopActive = true;
-
+  if (!ambientEnabled || AMvideo.paused || AMvideo.ended || document.hidden || !isVisible) return;
+  
   if ('requestVideoFrameCallback' in AMvideo) {
     AMvideo.requestVideoFrameCallback(drawFrame);
   } else {
@@ -2678,114 +2672,82 @@ const scheduleNextFrame = () => {
 };
 
 const drawStart = () => {
-  if (!ambientEnabled || document.hidden || renderLoopActive) return;
-  lastDrawTime = 0; // Force immediate draw
+  if (!ambientEnabled || document.hidden || !isVisible) return;
+  clearTimeout(renderTimer);
   scheduleNextFrame();
 };
 
 const drawPause = () => {
-  renderLoopActive = false;
+  clearTimeout(renderTimer);
 };
 
- document.addEventListener("visibilitychange", () => {
-  if (document.hidden) {
-    drawPause();
-  } else if (!AMvideo.paused && !AMvideo.ended && ambientEnabled) {
-    drawStart();
-  }
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) drawPause();
+  else drawStart();
 }, { passive: true });
 
-// ----- AUDIO / VIDEO SYNC -----
 const AMaudio = document.getElementById("aud");
-
 let isPlayPending = false;
 let pageFullyLoaded = false;
 
-window.addEventListener("load", () => {
-  pageFullyLoaded = true;
-}, { once: true });
+window.addEventListener("load", () => { pageFullyLoaded = true; }, { once: true });
 
-try {
-  AMvideo.addEventListener("play", () => {
-    if (!pageFullyLoaded) try { AMvideo.pause(); } catch {}
-  }, { passive: true });
-} catch {}
-
-if (AMaudio) {
+const pauseHandler = (el) => {
   try {
-    AMaudio.addEventListener("play", () => {
-      if (!pageFullyLoaded) try { AMaudio.pause(); } catch {}
+    el.addEventListener("play", () => {
+      if (!pageFullyLoaded) try { el.pause(); } catch {}
     }, { passive: true });
+    
+    const origPause = el.pause.bind(el);
+    el.pause = function () {
+      if (isPlayPending) return;
+      return origPause.apply(this, arguments);
+    };
   } catch {}
-}
-
-const originalVideoPause = AMvideo.pause.bind(AMvideo);
-AMvideo.pause = function () {
-  if (isPlayPending) return;
-  return originalVideoPause.apply(this, arguments);
 };
 
-if (AMaudio) {
-  const originalAudioPause = AMaudio.pause.bind(AMaudio);
-  AMaudio.pause = function () {
-    if (isPlayPending) return;
-    return originalAudioPause.apply(this, arguments);
-  };
-}
+pauseHandler(AMvideo);
+if (AMaudio) pauseHandler(AMaudio);
 
 const forcePlay = async () => {
   if (!pageFullyLoaded || isPlayPending) return;
-
   isPlayPending = true;
   AMvideo.currentTime = 0;
   if (AMaudio) AMaudio.currentTime = 0;
 
   try {
-    const playPromises =[AMvideo.play()];
-    if (AMaudio) playPromises.push(AMaudio.play());
-    await Promise.all(playPromises);
+    const promises = [AMvideo.play()];
+    if (AMaudio) promises.push(AMaudio.play());
+    await Promise.all(promises);
 
     if (AMvideo.currentTime > 0.5) {
       AMvideo.currentTime = 0;
       if (AMaudio) AMaudio.currentTime = 0;
     }
-  } catch (error) {
-    if (error.name !== "AbortError") {
-      console.error("Play failed:", error.name, error.message);
-    }
+  } catch (e) {
   } finally {
     setTimeout(() => { isPlayPending = false; }, 50);
   }
 };
 
-window.addEventListener("load", () => { forcePlay(); }, { once: true });
+window.addEventListener("load", forcePlay, { once: true });
 
-// ----- FULLSCREEN -----
 const handleFullscreen = () => {
-  const isFullscreen = !!document.fullscreenElement;
-  canvas1.style.display = (isFullscreen || !ambientEnabled) ? "none" : "block";
+  canvas1.style.display = (document.fullscreenElement || !ambientEnabled) ? "none" : "block";
 };
 
-// ----- AMBIENT TOGGLE -----
 const setupAmbientToggle = () => {
   const toggleBtn = document.querySelector('a[title*="Ambient light mode uses a very cool ahh effect"]');
   if (!toggleBtn) return;
 
   const syncUI = () => {
     if (ambientEnabled) {
-      toggleBtn.innerHTML = `
-        <i class="fa-light fa-lightbulb-on"></i>
-        Ambient Mode • on
-      `;
+      toggleBtn.innerHTML = `<i class="fa-light fa-lightbulb-on"></i> Ambient Mode • on`;
       canvas1.style.display = document.fullscreenElement ? "none" : "block";
-      if (!AMvideo.paused && !document.hidden) drawStart();
+      drawStart();
     } else {
-      toggleBtn.innerHTML = `
-        <i class="fa-light fa-lightbulb" style="width: 1em;margin-left: 4px;"></i>
-        Ambient Mode • off
-      `;
+      toggleBtn.innerHTML = `<i class="fa-light fa-lightbulb" style="width: 1em;margin-left: 4px;"></i> Ambient Mode • off`;
       canvas1.style.display = "none";
-      // Clear the canvas instantly when turned off
       ctx.fillRect(0, 0, CONFIG.internalWidth, CONFIG.internalHeight); 
       drawPause();
     }
@@ -2801,7 +2763,6 @@ const setupAmbientToggle = () => {
   syncUI();
 };
 
-// ----- INIT / CLEANUP -----
 const init = () => {
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
@@ -2813,7 +2774,6 @@ const init = () => {
     const ratio = AMvideo.videoWidth / AMvideo.videoHeight;
     CONFIG.internalHeight = Math.round(CONFIG.internalWidth / ratio);
     canvas1.height = CONFIG.internalHeight;
-    // Re-apply alpha after resizing because changing dimensions resets canvas state
     ctx.globalAlpha = 0.15; 
   }, { once: true });
 
@@ -2826,6 +2786,7 @@ const cleanup = () => {
   AMvideo.removeEventListener("pause", drawPause);
   AMvideo.removeEventListener("ended", drawPause);
   document.removeEventListener("fullscreenchange", handleFullscreen);
+  observer.disconnect();
   drawPause();
 };
 
