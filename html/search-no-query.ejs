@@ -1,4 +1,4 @@
- <!--
+<!--
     This Source Code Form is subject to the terms of the GNU General Public License:
    
     Copyright (C) 2021-2026 Poke Project, a part of The Poke Project Initiative (initiative.poketube.fun) 
@@ -99,6 +99,35 @@ img{
 button,
 input{
   font:inherit;
+}
+
+.top-bar{
+  width:100%;
+  border-bottom:1px solid var(--border);
+}
+
+.top-bar-inner{
+  width:var(--container);
+  margin:0 auto;
+  min-height:52px;
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+  gap:18px;
+  padding:0 2px;
+}
+
+.top-link{
+  color:var(--muted);
+  font-size:14px;
+  line-height:1;
+  font-variation-settings:"wdth" 128,"wght" 520;
+  transition:color .18s ease;
+}
+
+.top-link:hover,
+.top-link:focus{
+  color:var(--text);
 }
 
 .page{
@@ -464,6 +493,18 @@ input{
 }
 
 @media (max-width:560px){
+  .top-bar-inner{
+    gap:14px;
+    min-height:48px;
+    overflow-x:auto;
+    white-space:nowrap;
+    padding:0 1px;
+  }
+
+  .top-link{
+    font-size:13px;
+  }
+
   .page{
     width:min(96vw,1240px);
     padding-bottom:36px;
@@ -504,13 +545,21 @@ input{
 
 <body>
 
+<nav class="top-bar" aria-label="Poke sections">
+  <div class="top-bar-inner">
+    <a class="top-link" href="/translate">Translate</a>
+    <a class="top-link" href="/weather">Weather</a>
+    <a class="top-link" href="/map">Maps</a>
+    <a class="top-link" href="/calendar">Calendar</a>
+  </div>
+</nav>
+
 <div class="page">
   <div class="hero">
     <div class="logo-wrap">
       <img src="/static/logo-poke.svg" class="logo" alt="Poke Logo">
     </div>
  
-
     <div class="search-wrap">
       <form class="search-form" action="/search" method="get">
         <div class="search-field">
