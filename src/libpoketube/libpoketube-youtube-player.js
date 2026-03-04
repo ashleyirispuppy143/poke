@@ -1,3 +1,4 @@
+ 
 /**
  * Poke is a Free/Libre YouTube front-end!
  *
@@ -9,6 +10,7 @@
 const getdislikes = require("../libpoketube/libpoketube-dislikes.js");
 const getColors = require("get-image-colors");
 const config = require("../../config.json");
+const fs = require("fs");
 
 class InnerTubePokeVidious {
   constructor(config) {
@@ -26,6 +28,35 @@ class InnerTubePokeVidious {
     this.region = "region=US";
     this.sqp =
       "-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw";
+
+    this.blockedFile = "blocked.txt";
+    this.blockedVideos = new Set();
+    this.loadBlockedVideos();
+  }
+
+  loadBlockedVideos() {
+    try {
+      if (fs.existsSync(this.blockedFile)) {
+        const content = fs.readFileSync(this.blockedFile, "utf8");
+        content.split("\n").forEach((line) => {
+          const trimmed = line.trim();
+          if (trimmed) this.blockedVideos.add(trimmed);
+        });
+      }
+    } catch (e) {
+      console.error("[LIBPT ERROR] Could not load blocked.txt", e);
+    }
+  }
+
+  addBlockedVideo(videoId) {
+    if (!this.blockedVideos.has(videoId)) {
+      this.blockedVideos.add(videoId);
+      try {
+        fs.appendFileSync(this.blockedFile, videoId + "\n");
+      } catch (e) {
+        console.error("[LIBPT ERROR] Could not write to blocked.txt", e);
+      }
+    }
   }
 
   getJson(str) {
@@ -52,6 +83,10 @@ class InnerTubePokeVidious {
     if (!v) {
       this.initError("Missing video ID", null);
       return { error: true, message: "No video ID provided" };
+    }
+
+    if (this.blockedVideos.has(v)) {
+      return { error: true, message: "This video is blocked on copyright grounds." };
     }
 
     if (this.cache[v] && Date.now() - this.cache[v].timestamp < 3600000) {
@@ -83,6 +118,21 @@ class InnerTubePokeVidious {
         return null;
       };
 
+      const checkCopyrightBlock = async (resp) => {
+        if (resp.status === 500) {
+          try {
+            const clone = resp.clone();
+            const text = await clone.text();
+            if (text.includes("who has blocked it on copyright grounds")) {
+              this.addBlockedVideo(v);
+              throw new Error("COPYRIGHT_BLOCKED");
+            }
+          } catch (err) {
+            if (err.message === "COPYRIGHT_BLOCKED") throw err;
+          }
+        }
+      };
+
       let res;
       try {
         res = await fetch(url, {
@@ -98,6 +148,7 @@ class InnerTubePokeVidious {
       }
 
       if (res.ok) return res;
+      await checkCopyrightBlock(res);
       if (!isTrigger(res.status)) return res;
 
       const retryStart = Date.now();
@@ -147,6 +198,8 @@ class InnerTubePokeVidious {
           const r = await attemptWithTimeout(perTryTimeout);
           if (r.ok) return r;
 
+          await checkCopyrightBlock(r);
+
           if (!RETRYABLE.has(r.status)) {
             return r;
           }
@@ -171,6 +224,9 @@ class InnerTubePokeVidious {
           continue;
         } catch (err) {
           if (callerSignal && callerSignal.aborted) throw err;
+          // Re-throw our custom error so it bubbles up to break everything gracefully
+          if (err.message === "COPYRIGHT_BLOCKED") throw err;
+
           lastError = err;
           const remaining2 = maxRetryTime - (Date.now() - retryStart);
           if (remaining2 <= 0) throw lastError;
@@ -208,7 +264,7 @@ class InnerTubePokeVidious {
     const chooseSecond = chooseFirst === primaryUrl ? fallbackUrl : primaryUrl;
 
     // TRY HARD STRATEGY
-    const attemptSequence = [
+    const attemptSequence =[
         chooseFirst,
         chooseSecond,
         chooseFirst,
@@ -249,6 +305,8 @@ class InnerTubePokeVidious {
                  // console.log(`[LIBPT INFO] Parse fail on ${url}. Retrying...`);
               }
             } catch (err) {
+              // Bail out completely if blocked for copyright 
+              if (err.message === "COPYRIGHT_BLOCKED") throw err;
               fetchError = err;
             }
              // If the request fails, we want to hit the fallback immediately, not wait nearly a second.
@@ -318,6 +376,12 @@ class InnerTubePokeVidious {
         this.initError(vid, `ID: ${v}`);
       }
     } catch (error) {
+      if (error.message === "COPYRIGHT_BLOCKED") {
+        return {
+          error: true,
+          message: "This video contains content from a copyright holder who has blocked it.",
+        };
+      }
       this.initError(`Error getting video ${v}`, error);
     }
   }
