@@ -17,12 +17,11 @@ const innertube = require("../libpoketube-youtubei-objects.json");
 const { execSync } = require('child_process'); // DO NOT ABBRV THIS :SOB:
 const fs = require('fs');
 
-const verfull = "v25.2705-luna-MAJOR_UPDATE-stable-dev-nonLTS-git-MTc0NTcwNjc4MA==";
-const versmol = "v25.2705-luna";
+const verfull = "v26.00";
+const versmol = "v26.00";
 const branch = "dev/master";
-const codename = "luna";
-const versionnumber = "294";
-const relaseunixdate = "MTc0NTcwNjc4MA==";
+const codename = "poke-chan";
+const versionnumber = "2600";
 const updatequote = "i created this world.....to feel some control...";
 
 module.exports = function (app, config, renderTemplate) {
@@ -443,7 +442,6 @@ app.get("/feeds/videos.xml", async (req, res) => {
       },
       branch,
       updatequote,
-      relaseunixdate,
       vernum: versionnumber,
       codename,
        system: {
@@ -477,10 +475,8 @@ app.get("/feeds/videos.xml", async (req, res) => {
       },
       invidious,
       innertube,
-      flac: {
-        poketube_flac: "1.2a",
-        apple_musickit: "1.2.3",
-        poketube_normalize_volume: "1.2.23-yt",
+      flac: { 
+        poketube_normalize_volume: "26.034.34",
       },
       process: process.versions,
       dependencies: pkg.dependencies,
@@ -493,6 +489,9 @@ app.get("/feeds/videos.xml", async (req, res) => {
     res.json(response);
   });
 
+    app.get("/api/innertube.json", async (req, res) => {
+      res.json(innertube)
+};
 
   app.get("/api/instances.json", async (req, res) => {
     const { fetch } = await import("undici");
