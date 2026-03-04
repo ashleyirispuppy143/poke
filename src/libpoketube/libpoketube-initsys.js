@@ -2,13 +2,13 @@
 
     PokeTube is a Free/Libre youtube front-end !
     
-    Copyright (C) 2021-2024 POKETUBE
+    Copyright (C) 2021-2025 Poke
  
     This file is Licensed under LGPL-3.0-or-later. Poketube itself is GPL, Only this file is LGPL.
     
     see a copy here: https://www.gnu.org/licenses/lgpl-3.0.txt
     
-    please dont remove this comment while sharing this code 
+    please dont remove this comment while sharing this code.
     
 */
 
@@ -18,12 +18,10 @@ const INNERTUBE = require("../libpoketube/libpoketube-youtube-player.js");
 const musicInfo = require("music-info");
 const wiki = require("wikipedia");
 const config = require("../../config.json")
-
 const fetch = require("node-fetch");
 const toJson = require("xml2json").toJson;
 const express = require("express");
 const useragent = require("express-useragent");
-
 const path = require("path");
 const hash = require("js-sha512").sha384;
 const moment = require("moment");
@@ -48,10 +46,10 @@ function init(app, port) {
   if (!port) port = config.server_port;
   try {
     app.listen(port, () => {
-      initlog("Loading Poketube: success!" + " on port " + port);
+      initlog("Loading poke: success!" + " on port " + port);
     });
   } catch (err) {
-    initlog("Loading Poketube: error", err);
+    initlog("Loading poke: error", err);
   }
 
 }
@@ -96,10 +94,10 @@ module.exports = {
   init,
   
   /**
-   * The version of the LIB-PokeTube module
+   * The version of the LIB-Poke module
    * @type {string}
    */
-  version: "libpoketube-3.1.1-git-aStfl",
+  version: "libpoketube-04.03.2026-21a06bce72-git",
   
   /**
    * The external modules used by PokeTube
