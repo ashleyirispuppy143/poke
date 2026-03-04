@@ -197,17 +197,26 @@ input{
 }
 
 .quick-links{
-  margin-top:18px;
+  margin-top:22px;
   display:flex;
-  align-items:center;
+  align-items:flex-start;
   justify-content:center;
-  gap:14px;
+  gap:28px;
   flex-wrap:wrap;
 }
 
+.quick-tool{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:flex-start;
+  gap:9px;
+  min-width:76px;
+}
+
 .quick-link{
-  width:58px;
-  height:58px;
+  width:60px;
+  height:60px;
   border-radius:999px;
   display:inline-flex;
   align-items:center;
@@ -235,6 +244,20 @@ input{
   outline:none;
 }
 
+.quick-label{
+  color:var(--muted);
+  font-size:12.5px;
+  line-height:1.2;
+  text-align:center;
+  font-variation-settings:"wdth" 126,"wght" 500;
+  transition:color .18s ease;
+}
+
+.quick-tool:hover .quick-label,
+.quick-tool:focus-within .quick-label{
+  color:var(--text);
+}
+
 .quick-link.translate{
   background:linear-gradient(180deg, #a84dff 0%, #7a32db 100%);
 }
@@ -252,7 +275,7 @@ input{
 }
 
 .search-note{
-  margin-top:13px;
+  margin-top:16px;
   text-align:center;
   color:var(--muted2);
   font-size:12.5px;
@@ -540,8 +563,13 @@ input{
   }
 
   .quick-links{
-    gap:12px;
-    margin-top:16px;
+    gap:18px;
+    margin-top:18px;
+  }
+
+  .quick-tool{
+    min-width:68px;
+    gap:8px;
   }
 
   .quick-link{
@@ -551,6 +579,10 @@ input{
 
   .quick-link i{
     font-size:18px;
+  }
+
+  .quick-label{
+    font-size:12px;
   }
 
   .discover-header{
@@ -589,18 +621,33 @@ input{
       </form>
 
       <div class="quick-links" aria-label="Poke tools">
-        <a class="quick-link translate" href="/translate" aria-label="Translate" title="Translate">
-          <i class="fa-solid fa-language" aria-hidden="true"></i>
-        </a>
-        <a class="quick-link weather" href="/weather" aria-label="Weather" title="Weather">
-          <i class="fa-solid fa-cloud-sun" aria-hidden="true"></i>
-        </a>
-        <a class="quick-link maps" href="/map" aria-label="Maps" title="Maps">
-          <i class="fa-solid fa-map-location-dot" aria-hidden="true"></i>
-        </a>
-        <a class="quick-link calendar" href="/calendar" aria-label="Calendar" title="Calendar">
-          <i class="fa-solid fa-calendar-days" aria-hidden="true"></i>
-        </a>
+        <div class="quick-tool">
+          <a class="quick-link translate" href="/translate" aria-label="Translate" title="Translate">
+            <i class="fa-solid fa-language" aria-hidden="true"></i>
+          </a>
+          <span class="quick-label">Translate</span>
+        </div>
+
+        <div class="quick-tool">
+          <a class="quick-link weather" href="/weather" aria-label="Weather" title="Weather">
+            <i class="fa-solid fa-cloud-sun" aria-hidden="true"></i>
+          </a>
+          <span class="quick-label">Weather</span>
+        </div>
+
+        <div class="quick-tool">
+          <a class="quick-link maps" href="/map" aria-label="Maps" title="Maps">
+            <i class="fa-solid fa-map-location-dot" aria-hidden="true"></i>
+          </a>
+          <span class="quick-label">Maps</span>
+        </div>
+
+        <div class="quick-tool">
+          <a class="quick-link calendar" href="/calendar" aria-label="Calendar" title="Calendar">
+            <i class="fa-solid fa-calendar-days" aria-hidden="true"></i>
+          </a>
+          <span class="quick-label">Calendar</span>
+        </div>
       </div>
 
       <div class="search-note">Type anything to search, or browse trending gaming videos below.</div>
