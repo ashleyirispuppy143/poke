@@ -20,14 +20,13 @@ class InnerTubePokeVidious {
     this.param_legacy = "CgIIAdgDAQ%3D%3D";
     this.apikey = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
     this.ANDROID_API_KEY = "AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w";
-    this.ANDROID_APP_VERSION = "20.20.41";
+    this.ANDROID_APP_VERSION = "21.03.36";
     this.ANDROID_VERSION = "16";
     this.useragent = config.useragent
     this.INNERTUBE_CONTEXT_CLIENT_VERSION = "1";
     this.region = "region=US";
     this.sqp =
       "-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw";
-
     this.blockedFile = "blocked.txt";
     this.blockedVideos = new Set();
     this.loadBlockedVideos();
