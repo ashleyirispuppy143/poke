@@ -1,4 +1,3 @@
- 
 /**
  * Poke is a Free/Libre YouTube front-end!
  *
@@ -86,7 +85,7 @@ class InnerTubePokeVidious {
     }
 
     if (this.blockedVideos.has(v)) {
-      return { error: true, message: "This video is blocked on copyright grounds." };
+      return { error: true, message: "This video is blocked, removed, or unavailable." };
     }
 
     if (this.cache[v] && Date.now() - this.cache[v].timestamp < 3600000) {
@@ -118,17 +117,28 @@ class InnerTubePokeVidious {
         return null;
       };
 
-      const checkCopyrightBlock = async (resp) => {
-        if (resp.status === 500) {
+      const checkUnrecoverableErrors = async (resp) => {
+        if (resp.status === 500 || resp.status === 404) {
           try {
             const clone = resp.clone();
             const text = await clone.text();
-            if (text.includes("who has blocked it on copyright grounds")) {
+            
+            if (resp.status === 500 && text.includes("who has blocked it on copyright grounds")) {
               this.addBlockedVideo(v);
               throw new Error("COPYRIGHT_BLOCKED");
             }
+            if (resp.status === 500 && text.includes("This video has been removed by the uploader")) {
+              this.addBlockedVideo(v);
+              throw new Error("UPLOADER_REMOVED");
+            }
+            if (resp.status === 404 && text.includes("Video unavailable")) {
+              this.addBlockedVideo(v);
+              throw new Error("VIDEO_UNAVAILABLE");
+            }
           } catch (err) {
-            if (err.message === "COPYRIGHT_BLOCKED") throw err;
+            if (["COPYRIGHT_BLOCKED", "UPLOADER_REMOVED", "VIDEO_UNAVAILABLE"].includes(err.message)) {
+              throw err;
+            }
           }
         }
       };
@@ -148,7 +158,7 @@ class InnerTubePokeVidious {
       }
 
       if (res.ok) return res;
-      await checkCopyrightBlock(res);
+      await checkUnrecoverableErrors(res);
       if (!isTrigger(res.status)) return res;
 
       const retryStart = Date.now();
@@ -198,7 +208,7 @@ class InnerTubePokeVidious {
           const r = await attemptWithTimeout(perTryTimeout);
           if (r.ok) return r;
 
-          await checkCopyrightBlock(r);
+          await checkUnrecoverableErrors(r);
 
           if (!RETRYABLE.has(r.status)) {
             return r;
@@ -224,8 +234,8 @@ class InnerTubePokeVidious {
           continue;
         } catch (err) {
           if (callerSignal && callerSignal.aborted) throw err;
-          // Re-throw our custom error so it bubbles up to break everything gracefully
-          if (err.message === "COPYRIGHT_BLOCKED") throw err;
+          // Re-throw our custom errors so it bubbles up to break everything gracefully
+          if (["COPYRIGHT_BLOCKED", "UPLOADER_REMOVED", "VIDEO_UNAVAILABLE"].includes(err.message)) throw err;
 
           lastError = err;
           const remaining2 = maxRetryTime - (Date.now() - retryStart);
@@ -305,8 +315,8 @@ class InnerTubePokeVidious {
                  // console.log(`[LIBPT INFO] Parse fail on ${url}. Retrying...`);
               }
             } catch (err) {
-              // Bail out completely if blocked for copyright 
-              if (err.message === "COPYRIGHT_BLOCKED") throw err;
+              // Bail out completely if it hit an unrecoverable state
+              if (["COPYRIGHT_BLOCKED", "UPLOADER_REMOVED", "VIDEO_UNAVAILABLE"].includes(err.message)) throw err;
               fetchError = err;
             }
              // If the request fails, we want to hit the fallback immediately, not wait nearly a second.
@@ -377,10 +387,13 @@ class InnerTubePokeVidious {
       }
     } catch (error) {
       if (error.message === "COPYRIGHT_BLOCKED") {
-        return {
-          error: true,
-          message: "This video contains content from a copyright holder who has blocked it.",
-        };
+        return { error: true, message: "This video contains content from a copyright holder who has blocked it." };
+      }
+      if (error.message === "UPLOADER_REMOVED") {
+        return { error: true, message: "This video has been removed by the uploader." };
+      }
+      if (error.message === "VIDEO_UNAVAILABLE") {
+        return { error: true, message: "Video unavailable." };
       }
       this.initError(`Error getting video ${v}`, error);
     }
