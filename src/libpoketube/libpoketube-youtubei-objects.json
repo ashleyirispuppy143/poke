@@ -1,13 +1,13 @@
 {
   "innertube": {
-    "innertubeApiVersion":"v1",
-    "pokevidious":"20.25",
-    "innertubeContextClientVersion":"2.20250909.02.00",
-    "youtubei":"https://www.youtube.com/youtubei/v1/",
+    "innertubeApiVersion": "v1",
+    "pokevidious": "20.26",
+    "innertubeContextClientVersion": "2.20250909.02.00",
+    "youtubei": "https://www.youtube.com/youtubei/v1/",
     "PAGE_BUILD_LABEL": "youtube.desktop.web_20250909_02_RC00",
     "CLIENT": {
       "clientName": "WEB",
-      "projectClientName":"PokeVidious",
+      "projectClientName": "PokeVidious",
       "clientVersion": "2.20250909.02.00"
     },
     "CONTEXT_CLIENT": {
@@ -16,7 +16,9 @@
       "INNERTUBE_CONTEXT_GL": "US",
       "INNERTUBE_CONTEXT_HL": "en"
     },
-    "LATEST_ECATCHER_SERVICE_PARAMS": { "client.name": "WEB" },
+    "LATEST_ECATCHER_SERVICE_PARAMS": {
+      "client.name": "WEB"
+    },
     "INNERTUBE_API_KEYS": {
       "WEB_KIDS": "AIzaSyBbZV_fZ3an51sF-mvs5w37OqqbsTOzwtU",
       "WEB_MUSIC": "AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30",
@@ -45,5 +47,156 @@
         "useNewTango": true
       }
     }
-  }
+  },
+  "URLS": {
+    "YT_BASE": "https://www.youtube.com",
+    "YT_MUSIC_BASE": "https://music.youtube.com",
+    "YT_SUGGESTIONS": "https://suggestqueries-clients6.youtube.com",
+    "YT_UPLOAD": "https://upload.youtube.com/",
+    "API": {
+      "BASE": "https://youtubei.googleapis.com",
+      "PRODUCTION_1": "https://www.youtube.com/youtubei/",
+      "PRODUCTION_2": "https://youtubei.googleapis.com/youtubei/",
+      "STAGING": "https://green-youtubei.sandbox.googleapis.com/youtubei/",
+      "RELEASE": "https://release-youtubei.sandbox.googleapis.com/youtubei/",
+      "TEST": "https://test-youtubei.sandbox.googleapis.com/youtubei/",
+      "CAMI": "http://cami-youtubei.sandbox.googleapis.com/youtubei/",
+      "UYTFE": "https://uytfe.sandbox.google.com/youtubei/"
+    },
+    "GOOGLE_SEARCH_BASE": "https://www.google.com/",
+    "YOUTUBEI_V1": "https://www.youtube.com/youtubei/v1/"
+  },
+  "OAUTH": {
+    "REGEX": {
+      "TV_SCRIPT": "<script\\s+id=\"base-js\"\\s+src=\"([^\"]+)\"[^>]*><\\/script>",
+      "CLIENT_IDENTITY": "clientId:\"(?<client_id>[^\"]+)\",[^\\\"]*?:\"(?<client_secret>[^\"]+)\""
+    }
+  },
+  "CLIENTS": {
+    "IOS": {
+      "NAME": "iOS",
+      "VERSION": "20.11.6",
+      "USER_AGENT": "com.google.ios.youtube/20.11.6 (iPhone10,4; U; CPU iOS 16_7_7 like Mac OS X)",
+      "DEVICE_MODEL": "iPhone10,4",
+      "OS_NAME": "iOS",
+      "OS_VERSION": "16.7.7.20H330",
+      "API_KEY": "AIzaSyB-63vPrdThhKuerbB2N_l7Kwwcxj6yUAc",
+      "API_VERSION": "v1"
+    },
+    "WEB": {
+      "NAME": "WEB",
+      "VERSION": "2.20250909.02.00",
+      "API_KEY": "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
+      "API_VERSION": "v1",
+      "STATIC_VISITOR_ID": "6zpwvWUNAco",
+      "PAGE_BUILD_LABEL": "youtube.desktop.web_20250909_02_RC00"
+    },
+    "MWEB": {
+      "NAME": "MWEB",
+      "VERSION": "2.20250909.02.00",
+      "API_VERSION": "v1"
+    },
+    "WEB_KIDS": {
+      "NAME": "WEB_KIDS",
+      "VERSION": "2.20250909.02.00",
+      "API_KEY": "AIzaSyBbZV_fZ3an51sF-mvs5w37OqqbsTOzwtU",
+      "API_VERSION": "v1"
+    },
+    "YTMUSIC": {
+      "NAME": "WEB_REMIX",
+      "VERSION": "2.20250909.02.00",
+      "API_KEY": "AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30",
+      "API_VERSION": "v1"
+    },
+    "WEB_CREATOR": {
+      "NAME": "WEB_CREATOR",
+      "VERSION": "2.20250909.02.00",
+      "API_KEY": "AIzaSyBUPetSUmoZL-OhlxA7wSac5XinrygCqMo",
+      "API_VERSION": "v1",
+      "STATIC_VISITOR_ID": "6zpwvWUNAco"
+    },
+    "ANDROID": {
+      "NAME": "ANDROID",
+      "VERSION": "21.03.36",
+      "SDK_VERSION": 36,
+      "USER_AGENT": "com.google.android.youtube/21.03.36(Linux; U; Android 16; en_US; SM-S908E Build/TP1A.220624.014) gzip",
+      "API_KEY": "AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w",
+      "API_VERSION": "v1"
+    },
+    "YTSTUDIO_ANDROID": {
+      "NAME": "ANDROID_CREATOR",
+      "VERSION": "22.43.101",
+      "API_KEY": "AIzaSyD_qjV8zaaUMehtLkrKFgVeSX_Iqbtyws8",
+      "API_VERSION": "v1"
+    },
+    "YTMUSIC_ANDROID": {
+      "NAME": "ANDROID_MUSIC",
+      "VERSION": "5.34.51",
+      "API_KEY": "AIzaSyAOghZGza2MQSZkY_zfZ370N-PUdXEo8AI",
+      "API_VERSION": "v1"
+    },
+    "TV": {
+      "NAME": "TVHTML5",
+      "VERSION": "7.20250219.14.00",
+      "USER_AGENT": "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version",
+      "API_KEY": "AIzaSyDCU8hByM-4DrUqRUYnGn-3llEO78bcxq8",
+      "API_VERSION": "v1"
+    },
+    "TV_SIMPLY": {
+      "NAME": "TVHTML5_SIMPLY",
+      "VERSION": "1.0"
+    },
+    "TV_EMBEDDED": {
+      "NAME": "TVHTML5_SIMPLY_EMBEDDED_PLAYER",
+      "VERSION": "2.0"
+    },
+    "WEB_EMBEDDED": {
+      "NAME": "WEB_EMBEDDED_PLAYER",
+      "VERSION": "2.20250909.02.00",
+      "API_KEY": "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
+      "API_VERSION": "v1",
+      "STATIC_VISITOR_ID": "6zpwvWUNAco"
+    }
+  },
+  "CLIENT_NAME_IDS": {
+    "iOS": "5",
+    "WEB": "1",
+    "MWEB": "2",
+    "WEB_KIDS": "76",
+    "WEB_REMIX": "67",
+    "ANDROID": "3",
+    "ANDROID_CREATOR": "14",
+    "ANDROID_MUSIC": "21",
+    "TVHTML5": "7",
+    "TVHTML5_SIMPLY": "74",
+    "TVHTML5_SIMPLY_EMBEDDED_PLAYER": "85",
+    "WEB_EMBEDDED_PLAYER": "56",
+    "WEB_CREATOR": "62"
+  },
+  "STREAM_HEADERS": {
+    "accept": "*/*",
+    "origin": "https://www.youtube.com",
+    "referer": "https://www.youtube.com",
+    "DNT": "?1"
+  },
+  "INNERTUBE_HEADERS_BASE": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "content-type": "application/json"
+  },
+  "SUPPORTED_CLIENTS": [
+    "IOS",
+    "WEB",
+    "MWEB",
+    "WEB_KIDS",
+    "YTMUSIC",
+    "ANDROID",
+    "YTSTUDIO_ANDROID",
+    "YTMUSIC_ANDROID",
+    "TV",
+    "TV_SIMPLY",
+    "TV_EMBEDDED",
+    "WEB_EMBEDDED",
+    "WEB_CREATOR"
+  ]
 }
