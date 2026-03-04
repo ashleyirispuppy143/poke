@@ -42,6 +42,8 @@ document.documentElement.className = document.documentElement.className.replace(
 </script>
 
 <style>
+@import url("https://p.poketube.fun/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css");
+
 @font-face {
   font-family: "PokeTube Flex";
   src: url("/static/robotoflex.ttf");
@@ -99,35 +101,6 @@ img{
 button,
 input{
   font:inherit;
-}
-
-.top-bar{
-  width:100%;
-  border-bottom:1px solid var(--border);
-}
-
-.top-bar-inner{
-  width:var(--container);
-  margin:0 auto;
-  min-height:52px;
-  display:flex;
-  align-items:center;
-  justify-content:flex-start;
-  gap:18px;
-  padding:0 2px;
-}
-
-.top-link{
-  color:var(--muted);
-  font-size:14px;
-  line-height:1;
-  font-variation-settings:"wdth" 128,"wght" 520;
-  transition:color .18s ease;
-}
-
-.top-link:hover,
-.top-link:focus{
-  color:var(--text);
 }
 
 .page{
@@ -223,8 +196,63 @@ input{
   transform:translateY(-1px);
 }
 
+.quick-links{
+  margin-top:18px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:14px;
+  flex-wrap:wrap;
+}
+
+.quick-link{
+  width:58px;
+  height:58px;
+  border-radius:999px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  color:#ffffff;
+  box-shadow:var(--shadow-soft);
+  border:1px solid rgba(255,255,255,.10);
+  transition:transform .18s ease, box-shadow .18s ease, filter .18s ease, border-color .18s ease;
+}
+
+.quick-link i{
+  font-size:20px;
+  line-height:1;
+}
+
+.quick-link:hover,
+.quick-link:focus{
+  transform:translateY(-2px);
+  box-shadow:0 14px 24px rgba(0,0,0,.26);
+  filter:brightness(1.06);
+  border-color:rgba(255,255,255,.18);
+}
+
+.quick-link:focus{
+  outline:none;
+}
+
+.quick-link.translate{
+  background:linear-gradient(180deg, #a84dff 0%, #7a32db 100%);
+}
+
+.quick-link.weather{
+  background:linear-gradient(180deg, #42b8ff 0%, #1d89df 100%);
+}
+
+.quick-link.maps{
+  background:linear-gradient(180deg, #34d399 0%, #1fa870 100%);
+}
+
+.quick-link.calendar{
+  background:linear-gradient(180deg, #ff9c42 0%, #e5761e 100%);
+}
+
 .search-note{
-  margin-top:11px;
+  margin-top:13px;
   text-align:center;
   color:var(--muted2);
   font-size:12.5px;
@@ -493,18 +521,6 @@ input{
 }
 
 @media (max-width:560px){
-  .top-bar-inner{
-    gap:14px;
-    min-height:48px;
-    overflow-x:auto;
-    white-space:nowrap;
-    padding:0 1px;
-  }
-
-  .top-link{
-    font-size:13px;
-  }
-
   .page{
     width:min(96vw,1240px);
     padding-bottom:36px;
@@ -521,6 +537,20 @@ input{
   .search-bar{
     min-height:54px;
     font-size:15px;
+  }
+
+  .quick-links{
+    gap:12px;
+    margin-top:16px;
+  }
+
+  .quick-link{
+    width:54px;
+    height:54px;
+  }
+
+  .quick-link i{
+    font-size:18px;
   }
 
   .discover-header{
@@ -545,15 +575,6 @@ input{
 
 <body>
 
-<nav class="top-bar" aria-label="Poke sections">
-  <div class="top-bar-inner">
-    <a class="top-link" href="/translate">Translate</a>
-    <a class="top-link" href="/weather">Weather</a>
-    <a class="top-link" href="/map">Maps</a>
-    <a class="top-link" href="/calendar">Calendar</a>
-  </div>
-</nav>
-
 <div class="page">
   <div class="hero">
     <div class="logo-wrap">
@@ -566,6 +587,22 @@ input{
           <input class="search-bar" autocomplete="on" id="fname" name="query" type="text" placeholder="Search...">
         </div>
       </form>
+
+      <div class="quick-links" aria-label="Poke tools">
+        <a class="quick-link translate" href="/translate" aria-label="Translate" title="Translate">
+          <i class="fa-solid fa-language" aria-hidden="true"></i>
+        </a>
+        <a class="quick-link weather" href="/weather" aria-label="Weather" title="Weather">
+          <i class="fa-solid fa-cloud-sun" aria-hidden="true"></i>
+        </a>
+        <a class="quick-link maps" href="/map" aria-label="Maps" title="Maps">
+          <i class="fa-solid fa-map-location-dot" aria-hidden="true"></i>
+        </a>
+        <a class="quick-link calendar" href="/calendar" aria-label="Calendar" title="Calendar">
+          <i class="fa-solid fa-calendar-days" aria-hidden="true"></i>
+        </a>
+      </div>
+
       <div class="search-note">Type anything to search, or browse trending gaming videos below.</div>
     </div>
   </div>
