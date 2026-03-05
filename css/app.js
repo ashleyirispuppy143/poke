@@ -273,8 +273,6 @@ function fetchUrls(urls) {
   }
  
 
-
- 
 var popupMenu = document.getElementById("popupMenu");
 var loopOption = document.getElementById("loopOption");
 var speedOption = document.getElementById("speedOption");
@@ -286,7 +284,9 @@ var loopedIndicator = document.getElementById("loopedIndicator");
 loopedIndicator.style.display = "none";
 
 let audioCtx, source, gainNode, compressorNode, analyzer;
-let audioState = localStorage.getItem("audioMode") || "none"; 
+
+// CHANGED: Default is now "normalize" instead of "none" if no saved preference is found
+let audioState = localStorage.getItem("audioMode") || "normalize"; 
 
 // Normalizer state variables
 let normalizerInterval = null;
@@ -345,6 +345,7 @@ function applyAudioState(isUserInteraction = false) {
         if (whisperOption) whisperOption.innerHTML = "<i class='fa-light fa-check'></i> Whisper On";
         if (audioStatusDisplay) audioStatusDisplay.innerHTML = "&nbsp; &bull; &nbsp;<i class='fa-light fa-ear-listen'></i> Whisper Mode On";
     } else {
+        // "none" state - bypass mode, completely clean audio, no visual indicator
         normalizeOption.innerHTML = "<i class='fa-light fa-wave-square'></i> Audio Normalization";
         boostOption.innerHTML = "<i class='fa-light fa-volume-high'></i> Audio Boost";
         if (whisperOption) whisperOption.innerHTML = "<i class='fa-light fa-volume-low'></i> Whisper Mode";
@@ -415,7 +416,7 @@ function applyAudioState(isUserInteraction = false) {
         compressorNode.threshold.setTargetAtTime(-40, now, smoothTime); 
         compressorNode.ratio.setTargetAtTime(20, now, smoothTime);
     } else {
-        // NORMAL / BYPASS MODE:
+        // NORMAL / BYPASS MODE (Zero effect applied):
         gainNode.gain.setTargetAtTime(1.0, now, smoothTime); 
         compressorNode.threshold.setTargetAtTime(0, now, smoothTime);
         compressorNode.ratio.setTargetAtTime(1, now, smoothTime); 
@@ -537,6 +538,6 @@ function getNextSpeed(currentSpeed) {
         return maxSpeed;
     }
 }
- 
+
 const GoogleTranslateEndpoint = "https://translate.google.com/_/TranslateWebserverUi/data/batchexecute?rpcids=MkEWBc&rt=c"
 // @license-end
