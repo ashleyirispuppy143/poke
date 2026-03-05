@@ -13,7 +13,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  * Available under Apache License Version 2.0
  * <https://github.com/mozilla/vtt.js/blob/main/LICENSE>
  */  
-document.addEventListener("DOMContentLoaded", () => {
+ document.addEventListener("DOMContentLoaded", () => {
   const video = videojs("video", {
     controls: true,
     autoplay: true,
@@ -329,8 +329,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const BIG_DRIFT_BACKGROUND = 6.0;
   const MAX_RATE_NUDGE = 0.001;
   const DRIFT_PERSIST_CYCLES = 8;
-  const AUDIO_FADE_DURATION_MS = 250;
-  const AUDIO_SAFE_FADE_DURATION_MS = 450;
+  const AUDIO_FADE_DURATION_MS = 100;
+  const AUDIO_SAFE_FADE_DURATION_MS = 150;
   const MIN_PLAY_PAUSE_GAP_MS = 1000;
   const SEEK_READY_TIMEOUT_MS = 3000;
   const STATE_CHANGE_COOLDOWN_MS = 800;
@@ -535,9 +535,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (mediaSessionForcedPauseActive()) return false;
     if (userPauseIntentActive() || userPauseLockActive()) return false;
 
-    // CRITICAL LOOP FIX: If the user is fully in the foreground, focused, stable,
-    // and we didn't actively programmatic-pause it, this is a REAL user pause. 
-    // Do NOT ignore it, even if a recent Play transaction just happened.
     if (
       document.visibilityState === "visible" &&
       isWindowFocused() &&
@@ -718,7 +715,6 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {}
   }
   
-  // POP NOISE FIX: Fades the audio out rapidly before seeking it to prevent snapping/popping
   async function quietSeekAudio(t) {
     if (!audio || !coupledMode) return;
     try {
@@ -728,11 +724,11 @@ document.addEventListener("DOMContentLoaded", () => {
       const wasPlaying = !audio.paused && audio.volume > 0.01 && !state.audioFading;
       if (wasPlaying) {
         state.audioFading = true;
-        await doVolumeFade(0, 80).catch(() => {});
+        await doVolumeFade(0, 60).catch(() => {});
       }
       safeSetAudioTime(t);
       if (wasPlaying && state.intendedPlaying) {
-        await softUnmuteAudio(150).catch(() => {});
+        await softUnmuteAudio(120).catch(() => {});
       }
     } catch {}
   }
@@ -925,7 +921,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
   
-  // POP NOISE FIX: Made programmatic pause fully async to properly execute and await the soft fade
   async function execProgrammaticAudioPause(ms = 500) {
     if (!coupledMode || !audio) return;
     const until = now() + Math.max(300, Number(ms) || 0);
@@ -948,16 +943,16 @@ document.addEventListener("DOMContentLoaded", () => {
   async function execProgrammaticAudioPlay(opts = {}) {
     const { squelchMs = 500, minGapMs = 300, force = false } = opts;
     if (!coupledMode || !audio || typeof audio.play !== "function") return false;
-    if (!force && checkRapidPlayPause()) {
-      return !audio.paused;
-    }
-    if (!force && !checkAudioPlayAttempt()) {
-      return !audio.paused;
-    }
+    
+    const isAlreadyPlaying = !audio.paused && audio.volume > 0.05 && !state.audioFading;
+
+    if (!force && checkRapidPlayPause()) return !audio.paused;
+    if (!force && !checkAudioPlayAttempt()) return !audio.paused;
     if (!force && !audio.paused) return true;
+    
     const timeSinceLastPlayPause = now() - state.audioLastPlayPauseTs;
     if (!force && timeSinceLastPlayPause < MIN_PLAY_PAUSE_GAP_MS) {
-      if (!audio.paused) softUnmuteAudio(200).catch(() => {});
+      if (!audio.paused) softUnmuteAudio(150).catch(() => {});
       return !audio.paused;
     }
     if (now() < state.stateChangeCooldownUntil && !force) return !audio.paused;
@@ -977,25 +972,34 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       squelchAudioEvents(squelchMs);
 
-      cancelActiveFade();
-      audio.volume = 0;
+      if (audio.paused || audio.volume < 0.05) {
+          cancelActiveFade();
+          audio.volume = 0;
+      }
 
       const p = audio.play();
       state.audioPlayInFlight = Promise.resolve(p);
       state.audioPlayUntil = Math.max(state.audioPlayUntil, now() + Math.max(400, squelchMs));
       state.audioLastPlayPauseTs = now();
       state.stateChangeCooldownUntil = now() + STATE_CHANGE_COOLDOWN_MS;
+      
       try {
         await state.audioPlayInFlight;
       } catch {
         return false;
       }
+      
       if (shouldBlockNewAudioStart()) {
         try { squelchAudioEvents(350); } catch {}
         try { audio.pause(); } catch {}
         return false;
       }
-      fadeAudioIn(AUDIO_SAFE_FADE_DURATION_MS).catch(() => {});
+      
+      if (!isAlreadyPlaying) {
+          fadeAudioIn(AUDIO_SAFE_FADE_DURATION_MS).catch(() => {});
+      } else {
+          updateAudioGainImmediate();
+      }
       if (!audio.paused) state.audioEverStarted = true;
       return !audio.paused;
     } finally {
@@ -1343,7 +1347,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const v = getVideoNode();
       if (v && v !== videoEl) safeSetCT(v, 0);
     } catch {}
-    try { if (audio) audio.currentTime = 0; } catch {}
+    if (coupledMode && audio) {
+      try { audio.currentTime = 0; } catch {}
+    }
     state.startupZeroed = true;
     state.lastKnownGoodVT = 0;
     state.lastKnownGoodVTts = now();
@@ -1369,6 +1375,13 @@ document.addEventListener("DOMContentLoaded", () => {
     setFastSync(2400);
     try {
       if (!state.intendedPlaying) return;
+      
+      if (state.startupPhase && !state.firstPlayCommitted && !state.firstSeekDone && wantsStartupAutoplay()) {
+        safeSetVideoTime(0);
+        safeSetAudioTime(0);
+        state.startupZeroed = true;
+      }
+
       const vtStart = Number(video.currentTime()) || 0;
       if (state.startupPhase && !state.startupPrimed) {
         safeSetAudioTime(vtStart);
@@ -1399,43 +1412,56 @@ document.addEventListener("DOMContentLoaded", () => {
           quietSeekAudio(vt);
         }
       }
+      
       let videoOk = true;
       let audioOk = true;
+      let vPlayP = null;
+      let aPlayP = null;
+
       if (getVideoPaused()) {
         try {
-          const p = execProgrammaticVideoPlay();
-          if (p && p.then) await p;
-          videoOk = !getVideoPaused();
-        } catch { videoOk = false; }
+          vPlayP = execProgrammaticVideoPlay();
+        } catch {}
       }
-      if (videoOk) {
-        forceUnmuteForPlaybackIfAllowed();
-        if (audio.paused || audio.volume < 0.05) {
-          softUnmuteAudio(AUDIO_SAFE_FADE_DURATION_MS).catch(() => {});
-        }
-      }
-      if (!state.intendedPlaying || userPauseLockActive()) return;
-      if (audio.paused) {
+
+      if (coupledMode && audio && audio.paused) {
         const vNow = Number(video.currentTime()) || 0;
         const canKickFirstAudio = !state.audioEverStarted && canStartAudioAt(vNow);
         const shouldHoldAudio =
           state.strictBufferHold ||
           shouldBlockNewAudioStart() ||
           (document.visibilityState === "visible" && state.videoWaiting && state.startupPhase && !state.audioEverStarted);
+        
         if (shouldHoldAudio) {
-          audioOk = true;
           if (state.videoWaiting) armResumeAfterBuffer(10000);
         } else if (!canKickFirstAudio && startupAudioHoldActive()) {
-          audioOk = true;
+          // hold audio briefly
         } else {
           safeSetAudioTime(vNow);
-          audioOk = await execProgrammaticAudioPlay({
-            squelchMs: canKickFirstAudio ? 400 : 500,
-            minGapMs: canKickFirstAudio ? 0 : 200,
+          aPlayP = execProgrammaticAudioPlay({
+            squelchMs: canKickFirstAudio ? 300 : 400,
+            minGapMs: canKickFirstAudio ? 0 : 100,
             force: true
           });
         }
       }
+
+      if (vPlayP && vPlayP.then) await vPlayP.catch(() => {});
+      videoOk = !getVideoPaused();
+
+      if (aPlayP) {
+        audioOk = await aPlayP.catch(() => false);
+      } else {
+        audioOk = coupledMode ? !audio.paused : true;
+      }
+      
+      if (videoOk) {
+        forceUnmuteForPlaybackIfAllowed();
+        if (coupledMode && audio && (audio.paused || audio.volume < 0.05)) {
+          softUnmuteAudio(AUDIO_SAFE_FADE_DURATION_MS).catch(() => {});
+        }
+      }
+
       if (!state.intendedPlaying || userPauseLockActive()) return;
       
       if (!videoOk && !audioOk) {
@@ -1693,6 +1719,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         forceZeroBeforeFirstPlay();
         safeSetAudioTime(0);
+        safeSetVideoTime(0);
 
         try {
           const vp = execProgrammaticVideoPlay();
@@ -1764,6 +1791,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         forceZeroBeforeFirstPlay();
         safeSetAudioTime(0);
+        safeSetVideoTime(0);
 
         try {
           const vp = execProgrammaticVideoPlay();
