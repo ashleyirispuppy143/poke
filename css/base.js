@@ -13,6 +13,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  * Available under Apache License Version 2.0
  * <https://github.com/mozilla/vtt.js/blob/main/LICENSE>
  */  
+ 
 document.addEventListener("DOMContentLoaded", () => {
   const video = videojs("video", {
     controls: true,
@@ -176,6 +177,7 @@ document.addEventListener("DOMContentLoaded", () => {
     restarting: false,
     syncing: false,
     seeking: false,
+    seekId: 0,
     seekWantedPlaying: false,
     startupPhase: true,
     startupPrimed: !coupledMode,
@@ -317,8 +319,7 @@ document.addEventListener("DOMContentLoaded", () => {
     startupKickAttempts: 0,
     userGesturePauseIntent: false,
     pageFullyLoaded: document.readyState === "complete",
-    bgAudioStartQueued: false,
-    lastUserInteractionTs: 0
+    bgAudioStartQueued: false
   };
   const EPS = 1.0;
   const HAVE_FUTURE_DATA = 3;
@@ -416,8 +417,8 @@ document.addEventListener("DOMContentLoaded", () => {
   
   function markUserPauseIntent(ms = 1800) {
     state.userGesturePauseIntent = true;
-    state.startupPhase = false;       // User interacted, immediately end startup logic
-    state.firstPlayCommitted = true;  // Prevent scripts from trying to auto-resume
+    state.startupPhase = false;
+    state.firstPlayCommitted = true;
     
     setTimeout(() => { state.userGesturePauseIntent = false; }, 2000);
     const until = now() + Math.max(0, Number(ms) || 0);
@@ -991,6 +992,7 @@ document.addEventListener("DOMContentLoaded", () => {
       try {
         await state.audioPlayInFlight;
       } catch {
+        updateAudioGainImmediate(); // Restore volume if promise rejects
         return false;
       }
       
@@ -1440,7 +1442,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (shouldHoldAudio) {
           if (state.videoWaiting) armResumeAfterBuffer(10000);
         } else if (!canKickFirstAudio && startupAudioHoldActive()) {
-          // hold audio briefly
         } else {
           safeSetAudioTime(vNow);
           aPlayP = execProgrammaticAudioPlay({
@@ -1454,13 +1455,18 @@ document.addEventListener("DOMContentLoaded", () => {
       if (vPlayP && vPlayP.then) await vPlayP.catch(() => {});
       videoOk = !getVideoPaused();
 
+      if (!state.intendedPlaying || userPauseLockActive()) {
+        if (!getVideoPaused()) execProgrammaticVideoPause();
+        if (coupledMode && !audio.paused) execProgrammaticAudioPause(100);
+        return;
+      }
+
       if (aPlayP) {
         audioOk = await aPlayP.catch(() => false);
       } else {
         audioOk = coupledMode ? !audio.paused : true;
       }
       
-      // CRITICAL RACE FIX: Did the user pause manually while we awaited those promises?
       if (!state.intendedPlaying || userPauseLockActive()) {
         if (!getVideoPaused()) execProgrammaticVideoPause();
         if (coupledMode && !audio.paused) execProgrammaticAudioPause(100);
@@ -1568,8 +1574,9 @@ document.addEventListener("DOMContentLoaded", () => {
       state.syncing = false;
     }
   }
-  async function finalizeSeekSync() {
+  async function finalizeSeekSync(currentSeekId) {
     if (!coupledMode) {
+      if (state.seekId !== currentSeekId) return;
       state.seeking = false;
       state.firstSeekDone = true;
       state.pendingSeekTarget = null;
@@ -1578,7 +1585,7 @@ document.addEventListener("DOMContentLoaded", () => {
       scheduleSync(0);
       return;
     }
-    if (state.restarting || !state.seeking) return;
+    if (state.restarting || !state.seeking || state.seekId !== currentSeekId) return;
     const v = getVideoNode();
     const vt = Number(video.currentTime());
     if (isFinite(vt)) {
@@ -1591,29 +1598,38 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!state.seekWantedPlaying || !state.intendedPlaying) {
       execProgrammaticVideoPause();
       execProgrammaticAudioPause(600);
-      state.seeking = false;
-      state.firstSeekDone = true;
-      state.seekCompleted = true;
-      state.audioPlayUntil = 0;
-      state.audioPauseUntil = 0;
-      state.pendingSeekTarget = null;
+      if (state.seekId === currentSeekId) {
+          state.seeking = false;
+          state.firstSeekDone = true;
+          state.seekCompleted = true;
+          state.audioPlayUntil = 0;
+          state.audioPauseUntil = 0;
+          state.pendingSeekTarget = null;
+      }
       return;
     }
     const [vReady, aReady] = await Promise.all([
       waitForReadyStateOrCanPlay(v, 3, SEEK_READY_TIMEOUT_MS),
       waitForReadyStateOrCanPlay(audio, 3, SEEK_READY_TIMEOUT_MS)
     ]);
-    if (!state.seeking) return;
-    state.seeking = false;
-    state.firstSeekDone = true;
-    state.seekCompleted = true;
-    state.audioPlayUntil = 0;
-    state.audioPauseUntil = 0;
+    
+    if (!state.seeking || state.seekId !== currentSeekId) return;
+    
     const seekTarget = state.pendingSeekTarget;
-    state.pendingSeekTarget = null;
+    if (state.seekId === currentSeekId) {
+        state.pendingSeekTarget = null;
+    }
+    
     if (!state.seekWantedPlaying || !state.intendedPlaying || mediaSessionForcedPauseActive()) {
       execProgrammaticVideoPause();
       execProgrammaticAudioPause(600);
+      if (state.seekId === currentSeekId) {
+          state.seeking = false;
+          state.firstSeekDone = true;
+          state.seekCompleted = true;
+          state.audioPlayUntil = 0;
+          state.audioPauseUntil = 0;
+      }
       return;
     }
     if (!(vReady && aReady)) {
@@ -1624,6 +1640,11 @@ document.addEventListener("DOMContentLoaded", () => {
         state.strictBufferReason = "seek-buffer";
         state.bufferHoldIntendedPlaying = state.intendedPlaying;
         armResumeAfterBuffer(10000);
+        if (state.seekId === currentSeekId) {
+            state.seeking = false;
+            state.firstSeekDone = true;
+            state.seekCompleted = true;
+        }
         return;
       }
     }
@@ -1632,12 +1653,24 @@ document.addEventListener("DOMContentLoaded", () => {
     state.strictBufferHoldFrames = 0;
     state.strictBufferHoldConfirmed = false;
     await ensureUnmutedIfNotUserMuted().catch(() => {});
+    
+    if (state.seekId !== currentSeekId) return;
+
     const vt2 = Number(video.currentTime());
     if (isFinite(vt2)) {
       const at2 = Number(audio.currentTime);
       if (Math.abs(at2 - vt2) > 0.05) quietSeekAudio(vt2);
     }
     setFastSync(2600);
+    
+    if (state.seekId === currentSeekId) {
+        state.seeking = false;
+        state.firstSeekDone = true;
+        state.seekCompleted = true;
+        state.audioPlayUntil = 0;
+        state.audioPauseUntil = 0;
+    }
+
     if (state.playRequestedDuringSeek || state.seekWantedPlaying) {
       state.playRequestedDuringSeek = false;
       state.seekWantedPlaying = false;
@@ -1645,11 +1678,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     scheduleSync(0);
   }
-  function scheduleSeekFinalize(delay = 0) {
+  function scheduleSeekFinalize(delay = 0, seekId) {
     clearSeekSyncFinalizeTimer();
     state.seekFinalizeTimer = setTimeout(() => {
       state.seekFinalizeTimer = null;
-      finalizeSeekSync().catch(() => {});
+      finalizeSeekSync(seekId).catch(() => {});
     }, delay);
   }
   function wantsStartupAutoplay() {
@@ -1935,6 +1968,20 @@ document.addEventListener("DOMContentLoaded", () => {
     if (state.intendedPlaying && !getVideoPaused() && vt > 0.1) {
       updateLastKnownGoodVT();
     }
+    
+    // Fallback unmuter in case audio got stuck processing a play/pause volume change
+    if (state.intendedPlaying && !audio.paused && !state.userMutedVideo && !state.userMutedAudio) {
+      try { if (audio.muted) audio.muted = false; } catch {}
+      if (!state.audioFading) {
+          const target = clamp01(targetVolFromVideo());
+          if (audio.volume < 0.05 && target > 0.05) {
+              softUnmuteAudio(200).catch(() => {});
+          } else if (Math.abs(audio.volume - target) > 0.05) {
+              updateAudioGainImmediate();
+          }
+      }
+    }
+
     const vPaused = getVideoPaused();
     const aPaused = !!audio.paused;
     const needsHold = evaluateBufferHoldNeed(vt, at);
@@ -2073,38 +2120,98 @@ document.addEventListener("DOMContentLoaded", () => {
       state.lastVT = vt;
       state.lastVTts = now();
     }
-    if (state.intendedPlaying && !aPaused && !state.userMutedVideo && !state.userMutedAudio) {
-      try { if (audio.muted) audio.muted = false; } catch {}
-      if (!state.audioFading && audio.volume < 0.05) {
-        softUnmuteAudio(200).catch(() => {});
-      }
-    }
     scheduleSync();
   }
-  function setupUserInteractionTracking() {
+  function setupUserPauseIntentDetection() {
     const root = video?.el?.() || videoEl || document;
-    const recordInteraction = (e) => {
-      if (e && e.isTrusted !== false) {
-        state.lastUserInteractionTs = now();
+    let pendingTechTogglePausedState = null;
+    const getTargetEl = target => {
+      try { return target && target.nodeType === 1 ? target : null; } catch {}
+      return null;
+    };
+    const isPrimaryActivation = event => {
+      try {
+        if (event?.type === "pointerdown") {
+          if (event.isPrimary === false) return false;
+          if (event.pointerType === "mouse" && typeof event.button === "number" && event.button !== 0) return false;
+        } else if (event?.type === "mousedown") {
+          if (typeof event.button === "number" && event.button !== 0) return false;
+        }
+      } catch {}
+      return true;
+    };
+    const isPlayControlTarget = target => {
+      try {
+        const el = getTargetEl(target);
+        return !!el?.closest?.(".vjs-play-control, .vjs-big-play-button");
+      } catch {}
+      return false;
+    };
+    const isTechSurfaceTarget = target => {
+      try {
+        const el = getTargetEl(target);
+        if (!el) return false;
+        if (el.closest?.(".vjs-control-bar, .vjs-menu, .vjs-menu-content, .vjs-slider, .vjs-control")) return false;
+        return !!el.closest?.(".vjs-tech, video");
+      } catch {}
+      return false;
+    };
+    const onPressStart = event => {
+      if (!isPrimaryActivation(event)) return;
+      if (isPlayControlTarget(event.target)) {
+        pendingTechTogglePausedState = null;
+        if (getVideoPaused()) markUserPlayIntent();
+        else {
+          markUserPauseIntent();
+          clearPendingPlayResumesForPause();
+        }
+        return;
+      }
+      if (isTechSurfaceTarget(event.target)) {
+        pendingTechTogglePausedState = getVideoPaused();
+        return;
+      }
+      pendingTechTogglePausedState = null;
+    };
+    const onClick = event => {
+      if (isPlayControlTarget(event.target)) { pendingTechTogglePausedState = null; return; }
+      if (!isTechSurfaceTarget(event.target)) { pendingTechTogglePausedState = null; return; }
+      const wasPaused = pendingTechTogglePausedState;
+      pendingTechTogglePausedState = null;
+      if (typeof wasPaused !== "boolean") return;
+      requestAnimationFrame(() => {
+        const paused = getVideoPaused();
+        if (wasPaused && !paused) {
+          markUserPlayIntent(1200);
+        } else if (!wasPaused && paused) {
+          markUserPauseIntent(1200);
+          clearPendingPlayResumesForPause();
+        }
+      });
+    };
+    const onKeyDown = event => {
+      const code = event.code || event.key || "";
+      if (code === "Space" || code === "KeyK" || code === "MediaPlayPause") {
+        if (getVideoPaused()) markUserPlayIntent();
+        else {
+          markUserPauseIntent();
+          clearPendingPlayResumesForPause();
+        }
+      } else if (code === "MediaPause" || code === "MediaStop") {
+        markUserPauseIntent();
+        clearPendingPlayResumesForPause();
       }
     };
     try {
       if ("PointerEvent" in window) {
-        root.addEventListener("pointerdown", recordInteraction, { capture: true, passive: true });
+        root.addEventListener("pointerdown", onPressStart, { capture: true, passive: true });
       } else {
-        root.addEventListener("mousedown", recordInteraction, { capture: true, passive: true });
-        root.addEventListener("touchstart", recordInteraction, { capture: true, passive: true });
+        root.addEventListener("mousedown", onPressStart, { capture: true, passive: true });
+        root.addEventListener("touchstart", onPressStart, { capture: true, passive: true });
       }
     } catch {}
-    try { root.addEventListener("click", recordInteraction, { capture: true, passive: true }); } catch {}
-    try {
-      document.addEventListener("keydown", (e) => {
-        const code = e.code || e.key || "";
-        if (["Space", "KeyK", "MediaPlayPause", "MediaPause", "MediaStop"].includes(code)) {
-          state.lastUserInteractionTs = now();
-        }
-      }, { capture: true, passive: true });
-    } catch {}
+    try { root.addEventListener("click", onClick, { capture: true, passive: true }); } catch {}
+    try { document.addEventListener("keydown", onKeyDown, true); } catch {}
   }
   function setupMediaSession() {
     if (!("mediaSession" in navigator)) return;
@@ -2238,11 +2345,6 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      const isUserTriggered = (now() - state.lastUserInteractionTs) < 500;
-      if (isUserTriggered) {
-        markUserPlayIntent();
-      }
-
       if (state.restarting || state.isProgrammaticVideoPlay) return;
       if ((!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) &&
         !userPlayIntentActive() && !state.startupKickInFlight && !wantsStartupAutoplay()) {
@@ -2279,9 +2381,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (state.seeking) return;
       trackPauseEvent();
       
-      const isUserTriggered = (now() - state.lastUserInteractionTs) < 500;
-      if (isUserTriggered || shouldTreatVisiblePauseAsUserPause()) {
-        markUserPauseIntent();
+      if (shouldTreatVisiblePauseAsUserPause()) {
         state.intendedPlaying = false;
         state.bufferHoldIntendedPlaying = false;
         updateMediaSessionPlaybackState();
@@ -2353,9 +2453,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     if (!coupledMode) return;
     const onAudioPlay = () => {
-      const isUserTriggered = (now() - state.lastUserInteractionTs) < 500;
-      if (isUserTriggered) markUserPlayIntent();
-
       if (audioEventsSquelched() || state.restarting || state.isProgrammaticAudioPlay || state.isProgrammaticVideoPlay) return;
       if (now() < state.audioPlayUntil || now() < state.audioPauseUntil) return;
       if ((!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive() || shouldBlockNewAudioStart()) && !userPlayIntentActive()) {
@@ -2384,9 +2481,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     };
     const onAudioPause = () => {
-      const isUserTriggered = (now() - state.lastUserInteractionTs) < 500;
-      if (isUserTriggered || shouldTreatVisiblePauseAsUserPause()) {
-        markUserPauseIntent();
+      if (shouldTreatVisiblePauseAsUserPause()) {
         state.intendedPlaying = false;
         state.bufferHoldIntendedPlaying = false;
         updateMediaSessionPlaybackState();
@@ -2444,7 +2539,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }, { passive: true });
     audio.addEventListener("seeked", () => {
       if (state.restarting || !state.seeking) return;
-      scheduleSeekFinalize(0);
+      scheduleSeekFinalize(0, state.seekId);
     }, { passive: true });
     audio.addEventListener("ended", () => {
       if (state.restarting) return;
@@ -2461,8 +2556,17 @@ document.addEventListener("DOMContentLoaded", () => {
     }, { passive: true });
     videoEl.addEventListener("canplaythrough", onReadyish, { passive: true });
     videoEl.addEventListener("loadeddata", onReadyish, { passive: true });
+    
+    videoEl.addEventListener("loadedmetadata", () => {
+      if (state.startupPhase && !state.firstPlayCommitted && wantsStartupAutoplay()) {
+        forceZeroBeforeFirstPlay();
+      }
+    }, { once: true, passive: true });
+
     video.on("seeking", () => {
       if (state.restarting) return;
+      state.seekId++;
+      const currentSeekId = state.seekId;
       state.strictBufferHold = false;
       state.strictBufferReason = "";
       state.strictBufferHoldFrames = 0;
@@ -2506,7 +2610,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       state.driftStableFrames = 0;
       state.lastDrift = 0;
-      scheduleSeekFinalize(80);
+      scheduleSeekFinalize(80, state.seekId);
     });
     video.on("ended", () => {
       if (state.restarting) return;
@@ -2722,7 +2826,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
   
-  setupUserInteractionTracking();
+  setupUserPauseIntentDetection();
   setupMediaSession();
   bindCommonMediaEvents();
   setupVisibilityLifecycle();
@@ -2780,10 +2884,6 @@ document.addEventListener("DOMContentLoaded", () => {
             state.resumeOnVisible = true;
             return;
         }
-        const isUserTriggered = (now() - state.lastUserInteractionTs) < 500;
-        if (isUserTriggered) {
-            markUserPlayIntent();
-        }
 
         if ((!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) &&
           !userPlayIntentActive() && !wantsStartupAutoplay()) {
@@ -2796,9 +2896,7 @@ document.addEventListener("DOMContentLoaded", () => {
         updateMediaSessionPlaybackState();
       });
       video.on("pause", () => {
-        const isUserTriggered = (now() - state.lastUserInteractionTs) < 500;
-        if (isUserTriggered || shouldTreatVisiblePauseAsUserPause()) {
-            markUserPauseIntent();
+        if (shouldTreatVisiblePauseAsUserPause()) {
             state.intendedPlaying = false;
             state.bufferHoldIntendedPlaying = false;
             updateMediaSessionPlaybackState();
