@@ -979,7 +979,15 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
       state.audioPlayUntil = Math.max(state.audioPlayUntil, now() + Math.max(400, squelchMs));
       state.audioLastPlayPauseTs = now();
       state.stateChangeCooldownUntil = now() + STATE_CHANGE_COOLDOWN_MS;
-      await state.audioPlayInFlight;
+      // FIX (bg autoplay): Catch the rejection from audio.play() here rather than
+      // letting it propagate as an unhandled exception through playTogether().
+      // When the browser blocks audio in a hidden tab the promise rejects with
+      // NotAllowedError; we want to return false gracefully, not throw.
+      try {
+        await state.audioPlayInFlight;
+      } catch {
+        return false;
+      }
       if (shouldBlockNewAudioStart()) {
         try { squelchAudioEvents(350); } catch {}
         try { audio.pause(); } catch {}
@@ -1738,7 +1746,12 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     const primeWait = now() - state.startupPrimeStartedAt;
     if (!bothStartupBufferedAt(t0)) {
       const looseReady = canPlayAt(getVideoNode(), t0) && canStartAudioAt(t0);
-      if (!(looseReady && primeWait > 1800)) {
+      // FIX (background startup delay): In a background tab, audio autoplay is blocked
+      // by the browser regardless, so don't hold up priming waiting for audio to buffer.
+      // Prime as soon as video has any data; audio will catch up once the tab is visible.
+      const bgVideoReady = document.visibilityState === "hidden" &&
+                           Number(getVideoNode().readyState || 0) >= 2;
+      if (!(looseReady && primeWait > 1800) && !bgVideoReady) {
         state.strictBufferHold = true;
         state.strictBufferReason = "startup-buffer";
         return;
@@ -2517,12 +2530,25 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
         }
         state.rapidToggleDetected = false;
         state.rapidToggleUntil = 0;
+        // FIX (bg autoplay): reset retry counter so tab-switch always gets a fresh attempt.
+        // Without this, 10 background retries can exhaust the counter before the user ever
+        // switches to the tab, leaving nothing to trigger audio on visibility restore.
+        if (!state.startupKickDone) state.startupAutoplayRetryCount = 0;
         if (state.intendedPlaying) {
           if (platform.useBgControllerRetry) {
             executeSeamlessWakeup();
           } else {
             state.resumeOnVisible = false;
             state.bgHiddenWasPlaying = false;
+            // FIX (bg autoplay): for non-Chromium/non-iOS browsers the sync loop won't
+            // act for VISIBILITY_TRANSITION_MS (3 s) because isTransientState is true.
+            // Call playTogether() directly after a short settle so audio starts immediately
+            // when the tab is switched to, without waiting 3 full seconds.
+            setTimeout(() => {
+              if (state.intendedPlaying && !userPauseLockActive() && !mediaSessionForcedPauseActive()) {
+                playTogether().catch(() => {});
+              }
+            }, 150);
             setFastSync(800);
             scheduleSync(0);
           }
