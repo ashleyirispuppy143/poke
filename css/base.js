@@ -13,6 +13,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  * Available under Apache License Version 2.0
  * <https://github.com/mozilla/vtt.js/blob/main/LICENSE>
  */  
+ 
 document.addEventListener("DOMContentLoaded", () => {
   const video = videojs("video", {
     controls: true,
@@ -326,7 +327,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const STARTUP_BUFFER_AHEAD_SEC = 1.0;
   const MICRO_DRIFT = 0.15;
   const BIG_DRIFT = 1.5;
-  // FIX: Much higher drift tolerance when in background to prevent background skips
   const BIG_DRIFT_BACKGROUND = 6.0;
   const MAX_RATE_NUDGE = 0.001;
   const DRIFT_PERSIST_CYCLES = 8;
@@ -357,9 +357,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const clamp01 = v => Math.max(0, Math.min(1, Number(v)));
 
-  // FIX: Helper to check if we are truly in background (hidden or unfocused)
-  function isInBackground() {
-    return document.visibilityState === "hidden" || !isWindowFocused();
+  function isHiddenBackground() {
+    return document.visibilityState === "hidden";
   }
 
   if (!state.pageFullyLoaded) {
@@ -1024,7 +1023,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (typeof minDelay === "number") {
       delay = Math.max(0, minDelay);
     } else if (document.visibilityState === "hidden") {
-      // FIX: Longer background sync interval to reduce unnecessary interference
       delay = platform.useBgControllerRetry ? 1200 : 1500;
     } else if (fastSyncActive() || state.syncing || state.seeking || state.videoWaiting || state.strictBufferHold) {
       delay = 200;
@@ -1092,6 +1090,10 @@ document.addEventListener("DOMContentLoaded", () => {
     state.bgResumeRetryTimer = setTimeout(() => {
       if (!state.intendedPlaying || state.restarting || state.seeking || state.syncing) return;
       if (userPauseLockActive()) return;
+      if (isHiddenBackground()) {
+        state.resumeOnVisible = true;
+        return;
+      }
       playTogether().catch(() => {});
     }, delay);
   }
@@ -1132,7 +1134,6 @@ document.addEventListener("DOMContentLoaded", () => {
     try { state.bgHiddenBaseAT = Number(audio.currentTime) || state.bgHiddenBaseVT; } catch { state.bgHiddenBaseAT = state.bgHiddenBaseVT; }
     try { state.bgHiddenBaseRate = Number(video.playbackRate()) || 1; } catch { state.bgHiddenBaseRate = 1; }
   }
-  // FIX: seamlessBgCatchUp rewritten to be gentle — no hard seeks unless drift is very large
   async function seamlessBgCatchUp() {
     if (!coupledMode || !platform.useBgControllerRetry) return;
     if (!state.intendedPlaying) return;
@@ -1146,18 +1147,15 @@ document.addEventListener("DOMContentLoaded", () => {
     const aPausedNow = !!audio.paused;
     const vPausedNow = getVideoPaused();
 
-    // Both streams are already playing — check drift and handle gently
     if (!aPausedNow && !vPausedNow && isFinite(atNow) && isFinite(vtNow)) {
       const drift = Math.abs(vtNow - atNow);
       if (drift < 2.0) {
-        // Acceptable drift — let the regular sync loop handle it via rate nudging
         state.bgHiddenWasPlaying = false;
         state.resumeOnVisible = false;
         setFastSync(1500);
         scheduleSync(0);
         return;
       }
-      // Drift is large (>2s) — sync video to audio without a full restart
       safeSetVideoTime(atNow);
       state.bgHiddenWasPlaying = false;
       state.resumeOnVisible = false;
@@ -1166,7 +1164,6 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // Audio is playing but video is paused — sync video position and resume it
     if (!aPausedNow && isFinite(atNow)) {
       if (isFinite(vtNow) && Math.abs(vtNow - atNow) > 2.0) {
         safeSetVideoTime(atNow);
@@ -1181,7 +1178,6 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // Both paused — need a full resume
     playTogether().catch(() => {});
   }
   function armResumeAfterBuffer(timeoutMs = 9000) {
@@ -1359,8 +1355,9 @@ document.addEventListener("DOMContentLoaded", () => {
       state.strictBufferHoldConfirmed = false;
       const vt = Number(video.currentTime());
       const at = Number(audio.currentTime);
-      // FIX: Only do positional sync adjustment when foreground — skip in background to prevent jumps
-      if (!isInBackground() && isFinite(vt) && isFinite(at) && Math.abs(at - vt) > 0.25) {
+      
+      const inBgDrift = document.visibilityState === "hidden" || !isWindowFocused();
+      if (!inBgDrift && isFinite(vt) && isFinite(at) && Math.abs(at - vt) > 0.25) {
         if (state.audioEverStarted && vt > 0.2) {
           safeSetVideoTime(at);
         } else {
@@ -1400,42 +1397,32 @@ document.addEventListener("DOMContentLoaded", () => {
           audioOk = await execProgrammaticAudioPlay({
             squelchMs: canKickFirstAudio ? 400 : 500,
             minGapMs: canKickFirstAudio ? 0 : 200,
-            force: !!canKickFirstAudio
+            force: true
           });
-        }
-      }
-      if (!audioOk && videoOk && state.intendedPlaying && !getVideoPaused() && !state.strictBufferHold) {
-        const vNow = Number(video.currentTime()) || 0;
-        if (!shouldBlockNewAudioStart() && canStartAudioAt(vNow) && !state.videoWaiting) {
-          safeSetAudioTime(vNow);
-          audioOk = await execProgrammaticAudioPlay({ squelchMs: 500, force: true, minGapMs: 0 });
-        } else if (state.videoWaiting) {
-          armResumeAfterBuffer(10000);
         }
       }
       if (!state.intendedPlaying || userPauseLockActive()) return;
       
       if (!videoOk && !audioOk) {
-        if (platform.useBgControllerRetry) {
-          scheduleBgResumeRetry(500);
+        if (isHiddenBackground()) {
+          state.resumeOnVisible = true;
         } else {
-          if (document.visibilityState !== "hidden" && isWindowFocused()) {
-            state.intendedPlaying = false;
-            pauseHard();
-            updateMediaSessionPlaybackState();
-          } else {
-            scheduleBgResumeRetry(800);
-          }
-          return;
+          state.intendedPlaying = false;
+          pauseHard();
+          updateMediaSessionPlaybackState();
         }
+        return;
       } else if (!videoOk && audioOk) {
         if (document.visibilityState !== "hidden" && isWindowFocused()) {
           execProgrammaticAudioPause(600);
+          state.intendedPlaying = false;
+          updateMediaSessionPlaybackState();
         } else if (coupledMode) {
           execProgrammaticAudioPause(600);
           if (state.startupPhase && !state.firstPlayCommitted) {
             forceZeroBeforeFirstPlay();
           }
+          state.resumeOnVisible = true;
         }
       }
 
@@ -1452,8 +1439,16 @@ document.addEventListener("DOMContentLoaded", () => {
               if (state.startupPhase && !state.firstPlayCommitted) {
                 forceZeroBeforeFirstPlay();
               }
+              if (isHiddenBackground()) {
+                state.resumeOnVisible = true;
+              } else {
+                state.intendedPlaying = false;
+                updateMediaSessionPlaybackState();
+              }
             } else if (document.visibilityState !== "hidden" && isWindowFocused()) {
               execProgrammaticVideoPause();
+              state.intendedPlaying = false;
+              updateMediaSessionPlaybackState();
             }
           }
         } else if (!shouldBlockNewAudioStart()) {
@@ -1462,7 +1457,11 @@ document.addEventListener("DOMContentLoaded", () => {
             if (state.startupPhase && !state.firstPlayCommitted) {
               forceZeroBeforeFirstPlay();
             }
-            armResumeAfterBuffer(10000);
+            if (isHiddenBackground()) {
+              state.resumeOnVisible = true;
+            } else {
+              armResumeAfterBuffer(10000);
+            }
           } else if (document.visibilityState !== "hidden" && isWindowFocused()) {
             execProgrammaticVideoPause();
             armResumeAfterBuffer(10000);
@@ -1626,6 +1625,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!wantsStartupAutoplay() && !state.intendedPlaying) return;
     if (mediaSessionForcedPauseActive()) return;
     if (!pageLoadedForAutoplay()) return;
+    
+    if (isHiddenBackground()) {
+      state.resumeOnVisible = true;
+      return;
+    }
     state.startupKickInFlight = true;
     setTimeout(async () => {
       try {
@@ -1681,13 +1685,16 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!state.intendedPlaying && !wantsStartupAutoplay()) return;
     if (mediaSessionForcedPauseActive() || userPauseLockActive()) return;
     if (!pageLoadedForAutoplay()) return;
+    
+    if (coupledMode && isHiddenBackground()) {
+      state.resumeOnVisible = true;
+      return;
+    }
+
     clearStartupAutoplayRetryTimer();
     const count = state.startupAutoplayRetryCount;
     if (count >= 10) return;
-    const isHidden = document.visibilityState === "hidden";
-    const delays = isHidden
-      ?[100, 200, 350, 500, 800, 1200, 1800, 2500, 3500, 5000]
-      :[400, 700, 1200, 1800, 2500, 3500, 5000, 7000, 9000, 12000];
+    const delays =[400, 700, 1200, 1800, 2500, 3500, 5000, 7000, 9000, 12000];
     const delay = delays[count] || 6000;
     state.startupAutoplayRetryCount++;
     state.startupAutoplayRetryTimer = setTimeout(async () => {
@@ -1696,10 +1703,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!state.intendedPlaying && !wantsStartupAutoplay()) return;
       if (mediaSessionForcedPauseActive() || userPauseLockActive()) return;
 
-      const isNowHidden = document.visibilityState === "hidden";
-      const hasLooseBuffer = isNowHidden
-        ? (Number(getVideoNode().readyState || 0) >= 2 || canPlayAt(getVideoNode(), Number(video.currentTime()) || 0))
-        : startupBufferReadyLoose();
+      const hasLooseBuffer = startupBufferReadyLoose();
 
       if (!hasLooseBuffer) {
         scheduleStartupAutoplayRetry();
@@ -1825,11 +1829,10 @@ document.addEventListener("DOMContentLoaded", () => {
     let vt = vtRaw;
     let at = atRaw;
 
-    // FIX: Only do aggressive position correction when in foreground to prevent background skips
-    const inBg = isInBackground();
+    const inBgDrift = document.visibilityState === "hidden" || !isWindowFocused();
 
     if (state.intendedPlaying && !state.restarting && !state.seeking && !state.syncing) {
-      if (state.audioEverStarted && !audio.paused && !inBg) {
+      if (state.audioEverStarted && !audio.paused && !inBgDrift) {
         if (Math.abs(at - vt) > 0.25) {
           if (vt > 0.2) {
             safeSetVideoTime(at);
@@ -1874,16 +1877,15 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!vPaused) execProgrammaticVideoPause();
         if (!aPaused) execProgrammaticAudioPause(500);
       } else if (isTransientState) {
-        // FIX: In background/transient state, do NOT individually pause streams.
-        // Pausing one stream forces a resync which causes the skip.
-        // Only intervene if BOTH are paused unexpectedly (should be playing).
         if (vPaused && aPaused) {
-          // Both paused in background — schedule a gentle retry
-          scheduleBgResumeRetry(400);
+          if (isHiddenBackground()) {
+            if (!state.resumeOnVisible) {
+              state.resumeOnVisible = true;
+            }
+          } else {
+            scheduleBgResumeRetry(400);
+          }
         }
-        // If only one stream is paused in background, leave it alone.
-        // The stream may just be buffering; the rate nudge will correct minor drift
-        // once both streams are playing again.
       } else {
         if (!vPaused && aPaused) {
           if (!shouldBlockNewAudioStart()) {
@@ -1892,7 +1894,7 @@ document.addEventListener("DOMContentLoaded", () => {
               execProgrammaticAudioPlay({ squelchMs: 450, minGapMs: 0, force: true }).catch(() => false);
             } else if (!startupAudioHoldActive()) {
               safeSetAudioTime(vt);
-              execProgrammaticAudioPlay({ squelchMs: 500, minGapMs: 200 }).catch(() => false);
+              execProgrammaticAudioPlay({ squelchMs: 500, minGapMs: 200, force: true }).catch(() => false);
             }
           }
         } else if (vPaused && !aPaused) {
@@ -1901,13 +1903,16 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         } else if (vPaused && aPaused) {
           if (!inMediaTxnWindow() && !userPauseLockActive() && !chromiumPauseGuardActive()) {
-            playTogether().catch(() => {});
+            if (isHiddenBackground()) {
+              state.resumeOnVisible = true;
+            } else {
+              playTogether().catch(() => {});
+            }
           }
         } else {
           const drift = vt - at;
           const absDrift = Math.abs(drift);
-          // FIX: Use a much higher drift threshold when in background to prevent seeking-induced skips
-          const activeBigDrift = inBg ? BIG_DRIFT_BACKGROUND : BIG_DRIFT;
+          const activeBigDrift = inBgDrift ? BIG_DRIFT_BACKGROUND : BIG_DRIFT;
           if (absDrift > activeBigDrift) {
             resetAudioPlaybackRate();
             safeSetVideoTime(at);
