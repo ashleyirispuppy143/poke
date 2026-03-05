@@ -13,7 +13,6 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  * Available under Apache License Version 2.0
  * <https://github.com/mozilla/vtt.js/blob/main/LICENSE>
  */  
- 
 document.addEventListener("DOMContentLoaded", () => {
   const video = videojs("video", {
     controls: true,
@@ -535,6 +534,23 @@ document.addEventListener("DOMContentLoaded", () => {
   function shouldIgnorePauseAsTransient() {
     if (mediaSessionForcedPauseActive()) return false;
     if (userPauseIntentActive() || userPauseLockActive()) return false;
+
+    // CRITICAL LOOP FIX: If the user is fully in the foreground, focused, stable,
+    // and we didn't actively programmatic-pause it, this is a REAL user pause. 
+    // Do NOT ignore it, even if a recent Play transaction just happened.
+    if (
+      document.visibilityState === "visible" &&
+      isWindowFocused() &&
+      isVisibilityStable() &&
+      isFocusStable() &&
+      !state.isProgrammaticVideoPause &&
+      !state.isProgrammaticAudioPause &&
+      !state.seeking &&
+      !state.syncing
+    ) {
+      return false;
+    }
+
     if (startupSettleActive()) return true;
     if (document.visibilityState === "hidden") return true;
     if (!isWindowFocused()) return true;
@@ -701,6 +717,26 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     } catch {}
   }
+  
+  // POP NOISE FIX: Fades the audio out rapidly before seeking it to prevent snapping/popping
+  async function quietSeekAudio(t) {
+    if (!audio || !coupledMode) return;
+    try {
+      if (!isFinite(t) || t < 0) return;
+      const timeDiff = Math.abs((audio.currentTime || 0) - t);
+      if (timeDiff <= 0.05) return;
+      const wasPlaying = !audio.paused && audio.volume > 0.01 && !state.audioFading;
+      if (wasPlaying) {
+        state.audioFading = true;
+        await doVolumeFade(0, 80).catch(() => {});
+      }
+      safeSetAudioTime(t);
+      if (wasPlaying && state.intendedPlaying) {
+        await softUnmuteAudio(150).catch(() => {});
+      }
+    } catch {}
+  }
+
   function resetAudioPlaybackRate() {
     if (!audio) return;
     try {
@@ -888,7 +924,9 @@ document.addEventListener("DOMContentLoaded", () => {
       throw e;
     }
   }
-  function execProgrammaticAudioPause(ms = 500) {
+  
+  // POP NOISE FIX: Made programmatic pause fully async to properly execute and await the soft fade
+  async function execProgrammaticAudioPause(ms = 500) {
     if (!coupledMode || !audio) return;
     const until = now() + Math.max(300, Number(ms) || 0);
     state.audioPauseUntil = Math.max(state.audioPauseUntil, until);
@@ -896,19 +934,17 @@ document.addEventListener("DOMContentLoaded", () => {
     state.isProgrammaticAudioPause = true;
     try { squelchAudioEvents(ms); } catch {}
     try { resetAudioPlaybackRate(); } catch {}
+
     const currentVol = !audio.paused ? clamp01(audio.volume) : 0;
-    if (currentVol <= 0.01 || state.audioFading) {
+    if (currentVol <= 0.01) {
       try { audio.pause(); } catch {}
     } else {
-      const fadeMs = Math.min(80, ms * 0.15);
-      doVolumeFade(0, fadeMs).then(() => {
-        try { audio.pause(); } catch {}
-      }).catch(() => {
-        try { audio.pause(); } catch {}
-      });
+      await doVolumeFade(0, 150).catch(() => {});
+      try { audio.pause(); } catch {}
     }
     setTimeout(() => { state.isProgrammaticAudioPause = false; }, 400);
   }
+  
   async function execProgrammaticAudioPlay(opts = {}) {
     const { squelchMs = 500, minGapMs = 300, force = false } = opts;
     if (!coupledMode || !audio || typeof audio.play !== "function") return false;
@@ -977,8 +1013,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   async function softAlignAudioTo(t) {
     if (!coupledMode) return;
-    safeSetAudioTime(t);
-    if (state.intendedPlaying) softUnmuteAudio(AUDIO_SAFE_FADE_DURATION_MS).catch(() => {});
+    await quietSeekAudio(t);
   }
   function clearResumeAfterBufferTimer() {
     if (state.resumeAfterBufferTimer) {
@@ -1043,7 +1078,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const vt = Number(video.currentTime());
       const at = Number(audio.currentTime);
       const target = isFinite(vt) ? vt : (isFinite(at) ? at : 0);
-      execProgrammaticAudioPause(600);
+      await execProgrammaticAudioPause(600);
       safeSetAudioTime(target);
       await new Promise(r => setTimeout(r, 100));
       if (state.intendedPlaying && !getVideoPaused() && !userPauseLockActive() && !shouldBlockNewAudioStart()) {
@@ -1345,7 +1380,7 @@ document.addEventListener("DOMContentLoaded", () => {
         state.bufferHoldIntendedPlaying = state.intendedPlaying;
         execProgrammaticVideoPause();
         execProgrammaticAudioPause(600);
-        safeSetAudioTime(vtStart);
+        quietSeekAudio(vtStart);
         armResumeAfterBuffer(10000);
         return;
       }
@@ -1361,7 +1396,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (state.audioEverStarted && vt > 0.2) {
           safeSetVideoTime(at);
         } else {
-          safeSetAudioTime(vt);
+          quietSeekAudio(vt);
         }
       }
       let videoOk = true;
@@ -1505,7 +1540,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const vt = Number(video.currentTime());
     if (isFinite(vt)) {
       const at = Number(audio.currentTime);
-      if (Math.abs(at - vt) > 0.05) safeSetAudioTime(vt);
+      if (Math.abs(at - vt) > 0.05) quietSeekAudio(vt);
       state.seekAudioSyncTime = vt;
       state.seekAudioSyncPending = true;
       state.seekAudioSyncUntil = now() + SEEK_AUDIO_SYNC_DELAY_MS;
@@ -1557,7 +1592,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const vt2 = Number(video.currentTime());
     if (isFinite(vt2)) {
       const at2 = Number(audio.currentTime);
-      if (Math.abs(at2 - vt2) > 0.05) safeSetAudioTime(vt2);
+      if (Math.abs(at2 - vt2) > 0.05) quietSeekAudio(vt2);
     }
     setFastSync(2600);
     if (state.playRequestedDuringSeek || state.seekWantedPlaying) {
@@ -1838,7 +1873,7 @@ document.addEventListener("DOMContentLoaded", () => {
             safeSetVideoTime(at);
             vt = at;
           } else {
-            safeSetAudioTime(vt);
+            quietSeekAudio(vt);
             at = vt;
           }
         }
@@ -2173,7 +2208,7 @@ document.addEventListener("DOMContentLoaded", () => {
         state.pendingSeekTarget = newTime;
         state.seekWantedPlaying = state.intendedPlaying;
         video.currentTime(newTime);
-        if (coupledMode && audio) safeSetAudioTime(newTime);
+        if (coupledMode && audio) quietSeekAudio(newTime);
       });
       navigator.mediaSession.setActionHandler("seekbackward", d => {
         const dec = Number(d?.seekOffset) || 10;
@@ -2181,7 +2216,7 @@ document.addEventListener("DOMContentLoaded", () => {
         state.pendingSeekTarget = newTime;
         state.seekWantedPlaying = state.intendedPlaying;
         video.currentTime(newTime);
-        if (coupledMode && audio) safeSetAudioTime(newTime);
+        if (coupledMode && audio) quietSeekAudio(newTime);
       });
       navigator.mediaSession.setActionHandler("seekto", d => {
         if (!d || typeof d.seekTime !== "number") return;
@@ -2189,7 +2224,7 @@ document.addEventListener("DOMContentLoaded", () => {
         state.pendingSeekTarget = newTime;
         state.seekWantedPlaying = state.intendedPlaying;
         video.currentTime(newTime);
-        if (coupledMode && audio) safeSetAudioTime(newTime);
+        if (coupledMode && audio) quietSeekAudio(newTime);
       });
     } catch {}
   }
@@ -2433,7 +2468,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const at = Number(audio.currentTime);
         if (Math.abs(at - seekTime) > 0.05) {
           squelchAudioEvents(400);
-          safeSetAudioTime(seekTime);
+          quietSeekAudio(seekTime);
         }
       }
       if (!state.intendedPlaying) {
@@ -2454,7 +2489,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const at = Number(audio.currentTime);
         if (Math.abs(at - newTime) > 0.05) {
           squelchAudioEvents(300);
-          safeSetAudioTime(newTime);
+          quietSeekAudio(newTime);
         }
       }
       state.driftStableFrames = 0;
@@ -2570,7 +2605,7 @@ document.addEventListener("DOMContentLoaded", () => {
               if (!state.intendedPlaying || state.audioEverStarted) return;
               if (userPauseLockActive() || mediaSessionForcedPauseActive()) return;
               const vt = Number(video.currentTime()) || 0;
-              safeSetAudioTime(vt);
+              quietSeekAudio(vt);
               execProgrammaticAudioPlay({ squelchMs: 600, force: true, minGapMs: 0 })
                 .then(ok => { if (ok) state.audioEverStarted = true; })
                 .catch(() => {});
