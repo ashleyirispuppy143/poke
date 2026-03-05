@@ -621,6 +621,99 @@
     }
 
     /* ==========================================
+       FAQ
+       ========================================== */
+
+    .poke-faq-section {
+      margin: 4.5em auto 2.5em;
+      max-width: 1200px;
+      padding: 0 20px;
+    }
+
+    .poke-faq-heading {
+      text-align: center;
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.2em;
+      color: #fff;
+    }
+
+    .poke-faq-subheading {
+      text-align: center;
+      max-width: 720px;
+      margin: 0 auto 2em;
+      line-height: 1.72;
+      color: #ccc;
+      font-size: 1.03rem;
+    }
+
+    .poke-faq-list {
+      display: grid;
+      gap: 14px;
+    }
+
+    .poke-faq-item {
+      border-radius: 22px;
+      background: linear-gradient(160deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04));
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      box-shadow:
+        0 16px 42px rgba(0, 0, 0, 0.16),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(16px) saturate(180%);
+      padding: 20px 22px;
+      overflow: hidden;
+    }
+
+    .poke-faq-item summary {
+      list-style: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      color: #fff;
+      font-size: 1.02rem;
+      font-weight: 800;
+      line-height: 1.4;
+    }
+
+    .poke-faq-item summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .poke-faq-item summary::after {
+      content: "+";
+      flex-shrink: 0;
+      width: 34px;
+      height: 34px;
+      border-radius: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 171, 204, 0.14);
+      border: 1px solid rgba(255, 171, 204, 0.26);
+      color: #ffd6e8;
+      font-size: 1.25rem;
+      line-height: 1;
+      transition: transform .18s ease, background .18s ease, border-color .18s ease;
+    }
+
+    .poke-faq-item[open] summary::after {
+      transform: rotate(45deg);
+      background: rgba(255, 171, 204, 0.22);
+      border-color: rgba(255, 171, 204, 0.4);
+    }
+
+    .poke-faq-a {
+      margin-top: 14px;
+      color: #d5d5d5;
+      font-size: 0.98rem;
+      line-height: 1.76;
+      max-width: 930px;
+    }
+
+    /* ==========================================
        RESPONSIVE
        ========================================== */
 
@@ -695,6 +788,19 @@
         height: 52px;
         border-radius: 18px;
         bottom: 20px;
+      }
+
+      .poke-faq-item {
+        border-radius: 18px;
+        padding: 16px 16px;
+      }
+
+      .poke-faq-item summary {
+        font-size: 0.98rem;
+      }
+
+      .poke-faq-a {
+        font-size: 0.95rem;
       }
     }
   </style>
@@ -874,6 +980,53 @@ Take back control of how you explore the internet! Watch videos, translate text,
           </div>
 
         </div>
+      </div>
+    </section>
+
+    <!-- ==============================================
+         FAQ
+         ============================================== -->
+    <section class="poke-faq-section" id="faq">
+      <h1 class="poke-faq-heading">FAQ!!</h1>
+      <p class="poke-faq-subheading">
+        lil things people ask a lot about poke :3
+      </p>
+
+      <div class="poke-faq-list">
+        <details class="poke-faq-item">
+          <summary>is poke legal?</summary>
+          <div class="poke-faq-a">
+            yeah. poke is a privacy-focused layer for publicly available youtube data. in the united states, 17 u.s.c. § 512(a) covers intermediaries that transmit material without modifying it, and in the european union, directive 2001/29/ec covers temporary and incidental copies. poke does not rehost or redistribute copyrighted videos.
+          </div>
+        </details>
+
+        <details class="poke-faq-item">
+          <summary>who owns poke?</summary>
+          <div class="poke-faq-a">
+            poke was founded by ashley íris celeste and is built with love by ashley íris and amazing contributors :3
+          </div>
+        </details>
+
+        <details class="poke-faq-item">
+          <summary>is poke private?</summary>
+          <div class="poke-faq-a">
+            yep!! poke is made to let u watch, search, and explore without ads or tracking following u around.
+          </div>
+        </details>
+
+        <details class="poke-faq-item">
+          <summary>does poke have every youtube video?</summary>
+          <div class="poke-faq-a">
+            yes — if it's publicly available on youtube, poke can show it :3
+          </div>
+        </details>
+
+        <details class="poke-faq-item">
+          <summary>is fish legal in poke?</summary>
+          <div class="poke-faq-a">
+            fish.
+          </div>
+        </details>
       </div>
     </section>
 
