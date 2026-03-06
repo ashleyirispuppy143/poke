@@ -1310,7 +1310,7 @@ Offical Discord Server! :3
 <label class="h" for="box">
   <div class="fnt">
     <% if (Math.floor(Math.random() * 50) === 0) { %>
-      <i title="Stats for nerdys" class="fa-light fa-bug"></i> Stats For Puppies
+      <i title="Stats for nerdys" class="fa-light fa-dog"></i> Stats For Puppies
     <% } else { %>
       <i title="Stats for nerdys" class="fa-light fa-bug"></i> Stats For Nerds
     <% } %>
@@ -1574,11 +1574,10 @@ Offical Discord Server! :3
 
 <div title="<%= likesValue.toLocaleString() %> Likes">
   <div class="pill-button" style="margin-right: 5.5px;">
-    <i class="fa-light fa-thumbs-up"></i>
+    <i class="fa-light <%= VideoData.genre === 'Pets & Animals' ? 'fa-paw' : 'fa-thumbs-up' %>"></i>
     <%= convert(likesValue) %>
   </div>
 </div>
-
       
         <div class = "vertical"></div>
       <%
