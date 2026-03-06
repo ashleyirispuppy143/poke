@@ -199,7 +199,6 @@ document.addEventListener("DOMContentLoaded", () => {
     isProgrammaticAudioPause: false,
     audioEventsSquelchedUntil: 0,
     audioPlayInFlight: null,
-    // FIX: Generation counter to invalidate stale audio play callbacks
     audioPlayGeneration: 0,
     audioPlayUntil: 0,
     audioPauseUntil: 0,
@@ -233,6 +232,9 @@ document.addEventListener("DOMContentLoaded", () => {
     resumeOnVisible: false,
     bgAutoResumeSuppressed: false,
     bgCatchUpCooldownUntil: 0,
+    // FIX: Guard flag to prevent concurrent background resume attempts (seamlessBgCatchUp
+    // and scheduleStartupAutoplayKick firing simultaneously on tab return causing stutter).
+    bgResumeInFlight: false,
     seekFinalizeTimer: null,
     lastAT: 0,
     audioLastProgressTs: 0,
@@ -459,11 +461,7 @@ document.addEventListener("DOMContentLoaded", () => {
     state.firstPlayCommitted = true;
     state.lastUserActionTime = now();
 
-    // FIX: Immediately cancel any in-progress audio fade (e.g. a fade-in from a recent play)
-    // so the audio doesn't briefly audible after the user hits pause.
     cancelActiveFade();
-
-    // FIX: Invalidate any stale in-flight audio play so its callback won't unmute after resolving.
     state.audioPlayGeneration++;
 
     setTimeout(() => { state.userGesturePauseIntent = false; }, 2000);
@@ -497,11 +495,9 @@ document.addEventListener("DOMContentLoaded", () => {
     state.audioPauseUntil = 0;
     state.audioPlayUntil = 0;
     state.startupAudioHoldUntil = 0;
-    // FIX: Do NOT call audio.play() directly here. Doing so bypasses all play guards
-    // (squelch flags, isProgrammaticAudioPlay, generation checks, etc.) and causes
-    // the audio to start twice when playTogether() also fires shortly after via the
-    // video "play" event — producing the audible echo / play-pause-play stutter.
-    // playTogether() will handle starting the audio through the proper guarded path.
+    // Do NOT call audio.play() directly here — it bypasses all play guards and causes
+    // the audio to start twice when playTogether() also fires, producing audible stutter.
+    // playTogether() handles starting the audio through the proper guarded path.
     if (platform.chromiumOnlyBrowser) {
       state.chromiumPauseGuardUntil = 0;
       state.chromiumBgSettlingUntil = 0;
@@ -665,7 +661,6 @@ document.addEventListener("DOMContentLoaded", () => {
       cancelAnimationFrame(activeVolumeFade);
       activeVolumeFade = null;
     }
-    // FIX: Also mark fading as done so downstream checks don't get stuck
     state.audioFading = false;
   }
   async function doVolumeFade(targetVol, ms = AUDIO_SAFE_FADE_DURATION_MS) {
@@ -1001,8 +996,6 @@ document.addEventListener("DOMContentLoaded", () => {
     state.audioPlayUntil = Math.max(state.audioPlayUntil, now() + 250);
     state.isProgrammaticAudioPause = true;
 
-    // FIX: Cancel any active fade synchronously before we go async, so a fade-in
-    // in progress cannot continue raising the volume after we've decided to pause.
     cancelActiveFade();
 
     try { squelchAudioEvents(ms); } catch {}
@@ -1022,8 +1015,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const { squelchMs = 500, minGapMs = 300, force = false } = opts;
     if (!coupledMode || !audio || typeof audio.play !== "function") return false;
 
-    // FIX: Capture generation at call time. If a pause increments the generation
-    // while we are awaiting the play promise, we abort instead of fading in.
     const myGeneration = state.audioPlayGeneration;
     
     const isAlreadyPlaying = !audio.paused && audio.volume > 0.05 && !state.audioFading;
@@ -1072,8 +1063,6 @@ document.addEventListener("DOMContentLoaded", () => {
         return false;
       }
 
-      // FIX: After the async play resolves, check whether a pause intent was issued
-      // while we were awaiting (generation mismatch), or intent is no longer to play.
       if (state.audioPlayGeneration !== myGeneration) {
         try { squelchAudioEvents(400); audio.pause(); } catch {}
         return false;
@@ -1269,45 +1258,58 @@ document.addEventListener("DOMContentLoaded", () => {
     if (state.restarting || state.seeking || state.syncing) return;
     if (mediaSessionForcedPauseActive() || userPauseLockActive()) return;
     if (now() < state.bgCatchUpCooldownUntil) return;
+    // FIX: Prevent concurrent background resume attempts. Without this guard,
+    // seamlessBgCatchUp and scheduleStartupAutoplayKick can both fire on tab
+    // return and issue conflicting play/pause calls that cause audible stutter.
+    if (state.bgResumeInFlight) return;
+    state.bgResumeInFlight = true;
     state.bgCatchUpCooldownUntil = now() + 800;
 
-    const atNow = Number(audio.currentTime);
-    const vtNow = Number(video.currentTime());
-    const aPausedNow = !!audio.paused;
-    const vPausedNow = getVideoPaused();
+    try {
+      const atNow = Number(audio.currentTime);
+      const vtNow = Number(video.currentTime());
+      const aPausedNow = !!audio.paused;
+      const vPausedNow = getVideoPaused();
 
-    if (!aPausedNow && !vPausedNow && isFinite(atNow) && isFinite(vtNow)) {
-      const drift = Math.abs(vtNow - atNow);
-      if (drift < 2.0) {
+      if (!aPausedNow && !vPausedNow && isFinite(atNow) && isFinite(vtNow)) {
+        const drift = Math.abs(vtNow - atNow);
+        if (drift < 2.0) {
+          state.bgHiddenWasPlaying = false;
+          state.resumeOnVisible = false;
+          setFastSync(1500);
+          scheduleSync(0);
+          return;
+        }
+        safeSetVideoTime(atNow);
         state.bgHiddenWasPlaying = false;
         state.resumeOnVisible = false;
         setFastSync(1500);
         scheduleSync(0);
         return;
       }
-      safeSetVideoTime(atNow);
+
+      if (!aPausedNow && isFinite(atNow)) {
+        if (isFinite(vtNow) && Math.abs(vtNow - atNow) > 2.0) {
+          safeSetVideoTime(atNow);
+        }
+        if (vPausedNow && !state.isProgrammaticVideoPlay) {
+          execProgrammaticVideoPlay();
+        }
+        state.bgHiddenWasPlaying = false;
+        state.resumeOnVisible = false;
+        setFastSync(1500);
+        scheduleSync(0);
+        return;
+      }
+
+      // Clear resume flags before calling playTogether so the sync loop
+      // doesn't also try to resume in parallel.
       state.bgHiddenWasPlaying = false;
       state.resumeOnVisible = false;
-      setFastSync(1500);
-      scheduleSync(0);
-      return;
+      await playTogether().catch(() => {});
+    } finally {
+      state.bgResumeInFlight = false;
     }
-
-    if (!aPausedNow && isFinite(atNow)) {
-      if (isFinite(vtNow) && Math.abs(vtNow - atNow) > 2.0) {
-        safeSetVideoTime(atNow);
-      }
-      if (vPausedNow && !state.isProgrammaticVideoPlay) {
-        execProgrammaticVideoPlay();
-      }
-      state.bgHiddenWasPlaying = false;
-      state.resumeOnVisible = false;
-      setFastSync(1500);
-      scheduleSync(0);
-      return;
-    }
-
-    playTogether().catch(() => {});
   }
   function armResumeAfterBuffer(timeoutMs = 9000) {
     if (!coupledMode) return;
@@ -1376,10 +1378,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }, Math.max(2000, Number(timeoutMs) || 0));
   }
   function clearPendingPlayResumesForPause() {
-    // FIX: Cancel any active volume fade immediately so a fade-in doesn't
-    // audibly continue after the user's pause intent is registered.
     cancelActiveFade();
-    // FIX: Bump generation so any in-flight audio play callback aborts on resolve.
     state.audioPlayGeneration++;
 
     clearHiddenMediaSessionPlay();
@@ -1830,6 +1829,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!wantsStartupAutoplay() && !state.intendedPlaying) return;
     if (mediaSessionForcedPauseActive()) return;
     if (!pageLoadedForAutoplay()) return;
+    // FIX: Don't start a startup kick while seamlessBgCatchUp is already handling
+    // a resume — the two concurrent play attempts produce play-pause-play stutter.
+    if (state.bgResumeInFlight) return;
     
     state.startupKickInFlight = true;
     setTimeout(async () => {
@@ -1862,11 +1864,12 @@ document.addEventListener("DOMContentLoaded", () => {
         safeSetVideoTime(0);
 
         try {
+          // FIX: Do NOT call audio.play() directly here before playTogether().
+          // An unguarded audio.play() bypasses isProgrammaticAudioPlay, generation
+          // checks and squelch flags, causing audio to start twice and producing
+          // an audible play-pause-play stutter on background-tab autoplay.
+          // playTogether() handles the audio start through the proper guarded path.
           const vp = execProgrammaticVideoPlay();
-          if (coupledMode && audio && audio.paused) {
-            audio.volume = 0;
-            audio.play().catch(() => {});
-          }
           if (vp && vp.then) await vp;
         } catch {}
         if (getVideoPaused()) return;
@@ -2096,7 +2099,11 @@ document.addEventListener("DOMContentLoaded", () => {
               state.resumeOnVisible = true;
             }
           } else {
-            scheduleBgResumeRetry(400);
+            // FIX: Don't schedule a bg resume retry if seamlessBgCatchUp is already
+            // handling the resume — avoids two concurrent play attempts on tab return.
+            if (!state.bgResumeInFlight) {
+              scheduleBgResumeRetry(400);
+            }
           }
         }
       } else {
@@ -2481,7 +2488,11 @@ document.addEventListener("DOMContentLoaded", () => {
       if (startupSettleActive()) return;
       
       if (shouldIgnorePauseAsTransient()) {
-        if (state.intendedPlaying && platform.useBgControllerRetry) {
+        // FIX: Don't set resumeOnVisible during startup settle — the startup
+        // machinery (scheduleStartupAutoplayKick/Retry) handles the resume and
+        // setting resumeOnVisible here leads to a duplicate play attempt on tab
+        // return causing play-pause-play stutter.
+        if (state.intendedPlaying && platform.useBgControllerRetry && !startupSettleActive()) {
           state.resumeOnVisible = true;
         }
         return;
@@ -2595,7 +2606,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (startupSettleActive()) return;
       
       if (shouldIgnorePauseAsTransient()) {
-        if (state.intendedPlaying && platform.useBgControllerRetry) {
+        // FIX: Same as video pause handler — don't set resumeOnVisible during
+        // startup settle to avoid spurious duplicate resume on tab return.
+        if (state.intendedPlaying && platform.useBgControllerRetry && !startupSettleActive()) {
           state.resumeOnVisible = true;
         }
         return;
@@ -2798,6 +2811,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (state.intendedPlaying) {
           if (platform.useBgControllerRetry) {
+            // FIX: Clear resumeOnVisible/bgHiddenWasPlaying before calling
+            // executeSeamlessWakeup so the sync loop doesn't also schedule a
+            // scheduleBgResumeRetry for the same resume, causing two concurrent
+            // play attempts and the play-pause-play stutter on tab return.
+            state.resumeOnVisible = false;
+            state.bgHiddenWasPlaying = false;
             executeSeamlessWakeup();
           } else {
             state.resumeOnVisible = false;
@@ -2823,8 +2842,15 @@ document.addEventListener("DOMContentLoaded", () => {
             }, 350);
           }
         }
+        // FIX: Only trigger a startup kick on tab-become-visible if we are NOT
+        // already intending to play with useBgControllerRetry — in that case
+        // executeSeamlessWakeup above is already handling the resume, and calling
+        // scheduleStartupAutoplayKick simultaneously creates conflicting play
+        // attempts that produce play-pause-play stutter.
         if (state.startupPhase && !state.startupKickDone && wantsStartupAutoplay() && pageLoadedForAutoplay()) {
-          scheduleStartupAutoplayKick();
+          if (!(platform.useBgControllerRetry && state.intendedPlaying)) {
+            scheduleStartupAutoplayKick();
+          }
         }
         setTimeout(() => { state.visibilityTransitionActive = false; }, VISIBILITY_TRANSITION_MS);
       } else {
