@@ -13,7 +13,9 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  * Available under Apache License Version 2.0
  * <https://github.com/mozilla/vtt.js/blob/main/LICENSE>
  */    
- document.addEventListener("DOMContentLoaded", () => {
+
+ 
+document.addEventListener("DOMContentLoaded", () => {
   const video = videojs("video", {
     controls: true,
     autoplay: true,
@@ -1440,8 +1442,26 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     clearHiddenMediaSessionPlay();
     clearBgResumeRetryTimer();
     clearResumeAfterBufferTimer();
-    execProgrammaticVideoPause();
-    if (coupledMode) execProgrammaticAudioPause(900);
+    
+    state.isProgrammaticVideoPause = true;
+    try { video.pause(); } catch {}
+    try {
+        const v = getVideoNode();
+        if (v && v !== videoEl && !v.paused) v.pause();
+    } catch {}
+    setTimeout(() => { state.isProgrammaticVideoPause = false; }, 500);
+
+    if (coupledMode && audio) {
+        cancelActiveFade();
+        state.isProgrammaticAudioPause = true;
+        try { audio.pause(); } catch {}
+        setTimeout(() => { state.isProgrammaticAudioPause = false; }, 500);
+        
+        const until = now() + 300;
+        state.audioPauseUntil = Math.max(state.audioPauseUntil, until);
+        state.audioPlayUntil = Math.max(state.audioPlayUntil, now() + 250);
+    }
+    
     clearSyncLoop();
     if (!state.intendedPlaying) queueHardPauseVerification();
   }
@@ -1705,7 +1725,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
           state.firstPlayCommitted = true;
           clearStartupAutoplayRetryTimer();
           setTimeout(() => { state.startupPhase = false; }, 1200);
-          state.startupPlaySettleUntil = now() + STARTUP_SETTLE_MS;
+          setTimeout(() => { state.startupPlaySettled = true; }, STARTUP_SETTLE_MS);
         }
       }
       updateMediaSessionPlaybackState();
@@ -1731,7 +1751,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     const vt = Number(video.currentTime());
     if (isFinite(vt)) {
       const at = Number(audio.currentTime);
-      if (Math.abs(at - vt) > 0.05) safeSetAudioTime(vt);
+      if (Math.abs(at - vt) > 0.05) quietSeekAudio(vt);
       state.seekAudioSyncTime = vt;
       state.seekAudioSyncPending = true;
       state.seekAudioSyncUntil = now() + SEEK_AUDIO_SYNC_DELAY_MS;
@@ -1800,7 +1820,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     const vt2 = Number(video.currentTime());
     if (isFinite(vt2)) {
       const at2 = Number(audio.currentTime);
-      if (Math.abs(at2 - vt2) > 0.05) safeSetAudioTime(vt2);
+      if (Math.abs(at2 - vt2) > 0.05) quietSeekAudio(vt2);
     }
     state.seekCooldownUntil = now() + 1000;
     setFastSync(2600);
@@ -2232,7 +2252,12 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
       }
     } else if (!state.intendedPlaying && !state.restarting && !state.seeking && !state.syncing) {
       if (!vPaused) execProgrammaticVideoPause();
-      if (!aPaused) execProgrammaticAudioPause(450);
+      if (!aPaused) {
+        cancelActiveFade();
+        try { audio.pause(); } catch {}
+        state.isProgrammaticAudioPause = true;
+        setTimeout(() => { state.isProgrammaticAudioPause = false; }, 500);
+      }
     }
     maybeUpdateMediaSessionPosition(vt);
     if (!aPaused && state.intendedPlaying) {
@@ -2496,46 +2521,52 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
       if (!coupledMode) return;
 
       if (state.restarting || state.isProgrammaticVideoPlay) return;
-      if ((!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) &&
-        !userPlayIntentActive() && !state.startupKickInFlight && !wantsStartupAutoplay()) {
-        execProgrammaticVideoPause();
-        return;
-      }
-      clearMediaSessionForcedPause();
-      state.intendedPlaying = true;
-      state.bufferHoldIntendedPlaying = true;
-      
-      if (!state.firstPlayCommitted && !state.startupKickInFlight) {
-        state.firstPlayCommitted = true;
-        state.startupKickDone = true;
-        state.startupPlaySettleUntil = now() + STARTUP_SETTLE_MS;
-        clearStartupAutoplayRetryTimer();
-        setTimeout(() => { state.startupPhase = false; }, 1200);
-      }
 
-      markMediaAction("play");
-      setFastSync(2200);
-      forceUnmuteForPlaybackIfAllowed();
-      updateAudioGainImmediate();
-      updateMediaSessionPlaybackState();
-      if (userPlayIntentActive()) state.userPlayUntil = 0;
-      if (!state.startupPrimed && coupledMode) {
-        maybePrimeStartup();
-        scheduleSync(0);
-        return;
-      }
-      if (coupledMode && state.startupKickInFlight && !state.startupKickDone) {
-        scheduleSync(0);
-        return;
-      }
-      if (coupledMode && !audio.paused && state.audioEverStarted) {
-        const vt = Number(video.currentTime());
-        const at = Number(audio.currentTime);
-        if (Math.abs(vt - at) > 0.25) quietSeekAudio(vt);
-        scheduleSync(0);
-        return;
-      }
-      playTogether().catch(() => {});
+      requestAnimationFrame(() => {
+        if (state.seeking || state.restarting || state.isProgrammaticVideoPlay) return;
+        if (getVideoPaused()) return;
+
+        if ((!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) &&
+          !userPlayIntentActive() && !state.startupKickInFlight && !wantsStartupAutoplay()) {
+          execProgrammaticVideoPause();
+          return;
+        }
+        clearMediaSessionForcedPause();
+        state.intendedPlaying = true;
+        state.bufferHoldIntendedPlaying = true;
+        
+        if (!state.firstPlayCommitted && !state.startupKickInFlight) {
+          state.firstPlayCommitted = true;
+          state.startupKickDone = true;
+          state.startupPlaySettleUntil = now() + STARTUP_SETTLE_MS;
+          clearStartupAutoplayRetryTimer();
+          setTimeout(() => { state.startupPhase = false; }, 1200);
+        }
+
+        markMediaAction("play");
+        setFastSync(2200);
+        forceUnmuteForPlaybackIfAllowed();
+        updateAudioGainImmediate();
+        updateMediaSessionPlaybackState();
+        if (userPlayIntentActive()) state.userPlayUntil = 0;
+        if (!state.startupPrimed && coupledMode) {
+          maybePrimeStartup();
+          scheduleSync(0);
+          return;
+        }
+        if (coupledMode && state.startupKickInFlight && !state.startupKickDone) {
+          scheduleSync(0);
+          return;
+        }
+        if (coupledMode && !audio.paused && state.audioEverStarted) {
+          const vt = Number(video.currentTime());
+          const at = Number(audio.currentTime);
+          if (Math.abs(vt - at) > 0.25) quietSeekAudio(vt);
+          scheduleSync(0);
+          return;
+        }
+        playTogether().catch(() => {});
+      });
     });
     video.on("pause", () => {
       incrementRapidPlayPause();
@@ -2548,50 +2579,63 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
       if (!coupledMode) return;
 
       if (state.restarting || state.isProgrammaticVideoPause) return;
-      if (state.seeking) return;
-      trackPauseEvent();
       
-      if (shouldTreatVisiblePauseAsUserPause()) {
-        state.intendedPlaying = false;
-        state.bufferHoldIntendedPlaying = false;
-        updateMediaSessionPlaybackState();
-        pauseHard();
-        return;
-      }
-
-      if (platform.chromiumOnlyBrowser && chromiumBgPauseBlocked()) return;
-      if (isVisibilityTransitionActive()) return;
-      if (isAltTabTransitionActive()) return;
-      if (!isVisibilityStable()) return;
-      if (!isFocusStable()) return;
-      if (startupSettleActive() && document.visibilityState === "visible" && isWindowFocused()) return;
-      
-      if (shouldIgnorePauseAsTransient()) {
-        if (state.intendedPlaying && platform.useBgControllerRetry) {
-          if (!state.startupKickDone && (state.startupKickInFlight || state.startupAutoplayRetryTimer)) {
-          } else if (!state.startupKickDone && !state.startupKickInFlight) {
-            scheduleStartupAutoplayRetry();
-          } else {
-            state.resumeOnVisible = true;
-          }
+      requestAnimationFrame(() => {
+        if (state.seeking || state.restarting || state.isProgrammaticVideoPause) return;
+        if (!getVideoPaused()) return;
+        
+        trackPauseEvent();
+        
+        if (document.visibilityState === "visible" && isWindowFocused()) {
+            state.intendedPlaying = false;
+            state.bufferHoldIntendedPlaying = false;
+            updateMediaSessionPlaybackState();
+            pauseHard();
+            return;
         }
-        return;
-      }
-      if (startupAutoplayPauseGraceActive()) {
-        maybePrimeStartup();
-        scheduleStartupAutoplayKick();
-        return;
-      }
-      if (mediaSessionForcedPauseActive()) return;
-      if (state.intendedPlaying && platform.useBgControllerRetry) {
-        if (state.startupKickInFlight || (!state.startupKickDone && state.startupAutoplayRetryTimer)) {
+
+        if (shouldTreatVisiblePauseAsUserPause()) {
+            state.intendedPlaying = false;
+            state.bufferHoldIntendedPlaying = false;
+            updateMediaSessionPlaybackState();
+            pauseHard();
+            return;
+        }
+
+        if (platform.chromiumOnlyBrowser && chromiumBgPauseBlocked()) return;
+        if (isVisibilityTransitionActive()) return;
+        if (isAltTabTransitionActive()) return;
+        if (!isVisibilityStable()) return;
+        if (!isFocusStable()) return;
+        if (startupSettleActive() && document.visibilityState === "visible" && isWindowFocused()) return;
+        
+        if (shouldIgnorePauseAsTransient()) {
+          if (state.intendedPlaying && platform.useBgControllerRetry) {
+            if (!state.startupKickDone && (state.startupKickInFlight || state.startupAutoplayRetryTimer)) {
+            } else if (!state.startupKickDone && !state.startupKickInFlight) {
+              scheduleStartupAutoplayRetry();
+            } else {
+              state.resumeOnVisible = true;
+            }
+          }
           return;
         }
-        noteBackgroundEntry();
-        state.resumeOnVisible = true;
-        return;
-      }
-      pauseTogether();
+        if (startupAutoplayPauseGraceActive()) {
+          maybePrimeStartup();
+          scheduleStartupAutoplayKick();
+          return;
+        }
+        if (mediaSessionForcedPauseActive()) return;
+        if (state.intendedPlaying && platform.useBgControllerRetry) {
+          if (state.startupKickInFlight || (!state.startupKickDone && state.startupAutoplayRetryTimer)) {
+            return;
+          }
+          noteBackgroundEntry();
+          state.resumeOnVisible = true;
+          return;
+        }
+        pauseTogether();
+      });
     });
     video.on("waiting", () => {
       state.videoWaiting = true;
@@ -2703,51 +2747,65 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
         return;
       }
 
-      if (shouldTreatVisiblePauseAsUserPause()) {
-        state.intendedPlaying = false;
-        state.bufferHoldIntendedPlaying = false;
-        updateMediaSessionPlaybackState();
-        pauseHard();
-        return;
-      }
-
       if (audioEventsSquelched() || state.restarting || state.isProgrammaticAudioPause || state.isProgrammaticVideoPause) return;
       if (now() < state.audioPauseUntil || now() < state.audioPlayUntil) return;
-      if (state.seeking) return;
-      trackPauseEvent();
-      if (platform.chromiumOnlyBrowser && chromiumBgPauseBlocked()) return;
-      if (isVisibilityTransitionActive()) return;
-      if (isAltTabTransitionActive()) return;
-      if (!isVisibilityStable()) return;
-      if (!isFocusStable()) return;
-      if (startupSettleActive() && document.visibilityState === "visible" && isWindowFocused()) return;
       
-      if (shouldIgnorePauseAsTransient()) {
-        if (state.intendedPlaying && platform.useBgControllerRetry) {
-          if (!state.startupKickDone && (state.startupKickInFlight || state.startupAutoplayRetryTimer)) {
-          } else if (!state.startupKickDone && !state.startupKickInFlight) {
-            scheduleStartupAutoplayRetry();
-          } else {
-            state.resumeOnVisible = true;
-          }
+      requestAnimationFrame(() => {
+        if (state.seeking || state.restarting || state.isProgrammaticAudioPause) return;
+        if (audio && !audio.paused) return;
+
+        trackPauseEvent();
+        
+        if (document.visibilityState === "visible" && isWindowFocused()) {
+            state.intendedPlaying = false;
+            state.bufferHoldIntendedPlaying = false;
+            updateMediaSessionPlaybackState();
+            pauseHard();
+            return;
         }
-        return;
-      }
-      if (startupAutoplayPauseGraceActive()) {
-        maybePrimeStartup();
-        scheduleStartupAutoplayKick();
-        return;
-      }
-      if (mediaSessionForcedPauseActive()) return;
-      if (state.intendedPlaying && platform.useBgControllerRetry) {
-        if (state.startupKickInFlight || (!state.startupKickDone && state.startupAutoplayRetryTimer)) {
+
+        if (shouldTreatVisiblePauseAsUserPause()) {
+            state.intendedPlaying = false;
+            state.bufferHoldIntendedPlaying = false;
+            updateMediaSessionPlaybackState();
+            pauseHard();
+            return;
+        }
+
+        if (platform.chromiumOnlyBrowser && chromiumBgPauseBlocked()) return;
+        if (isVisibilityTransitionActive()) return;
+        if (isAltTabTransitionActive()) return;
+        if (!isVisibilityStable()) return;
+        if (!isFocusStable()) return;
+        if (startupSettleActive() && document.visibilityState === "visible" && isWindowFocused()) return;
+        
+        if (shouldIgnorePauseAsTransient()) {
+          if (state.intendedPlaying && platform.useBgControllerRetry) {
+            if (!state.startupKickDone && (state.startupKickInFlight || state.startupAutoplayRetryTimer)) {
+            } else if (!state.startupKickDone && !state.startupKickInFlight) {
+              scheduleStartupAutoplayRetry();
+            } else {
+              state.resumeOnVisible = true;
+            }
+          }
           return;
         }
-        noteBackgroundEntry();
-        state.resumeOnVisible = true;
-        return;
-      }
-      pauseTogether();
+        if (startupAutoplayPauseGraceActive()) {
+          maybePrimeStartup();
+          scheduleStartupAutoplayKick();
+          return;
+        }
+        if (mediaSessionForcedPauseActive()) return;
+        if (state.intendedPlaying && platform.useBgControllerRetry) {
+          if (state.startupKickInFlight || (!state.startupKickDone && state.startupAutoplayRetryTimer)) {
+            return;
+          }
+          noteBackgroundEntry();
+          state.resumeOnVisible = true;
+          return;
+        }
+        pauseTogether();
+      });
     };
     const onReadyish = () => {
       maybePrimeStartup();
@@ -3178,26 +3236,40 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
             pauseHard();
             return;
         }
-        if (shouldTreatVisiblePauseAsUserPause()) {
-            state.intendedPlaying = false;
-            state.bufferHoldIntendedPlaying = false;
-            updateMediaSessionPlaybackState();
-            pauseHard();
-            return;
-        }
-
-        if (startupAutoplayPauseGraceActive()) return;
-        trackPauseEvent();
-        if (platform.chromiumOnlyBrowser && chromiumBgPauseBlocked()) return;
-        if (isVisibilityTransitionActive()) return;
-        if (isAltTabTransitionActive()) return;
-        if (!isVisibilityStable()) return;
-        if (!isFocusStable()) return;
         
-        state.intendedPlaying = false;
-        state.bufferHoldIntendedPlaying = false;
-        updateMediaSessionPlaybackState();
-        queueHardPauseVerification();
+        requestAnimationFrame(() => {
+          if (state.seeking || state.restarting || state.isProgrammaticVideoPause) return;
+          if (!getVideoPaused()) return;
+          
+          if (document.visibilityState === "visible" && isWindowFocused()) {
+              state.intendedPlaying = false;
+              state.bufferHoldIntendedPlaying = false;
+              updateMediaSessionPlaybackState();
+              pauseHard();
+              return;
+          }
+
+          if (shouldTreatVisiblePauseAsUserPause()) {
+              state.intendedPlaying = false;
+              state.bufferHoldIntendedPlaying = false;
+              updateMediaSessionPlaybackState();
+              pauseHard();
+              return;
+          }
+
+          if (startupAutoplayPauseGraceActive()) return;
+          trackPauseEvent();
+          if (platform.chromiumOnlyBrowser && chromiumBgPauseBlocked()) return;
+          if (isVisibilityTransitionActive()) return;
+          if (isAltTabTransitionActive()) return;
+          if (!isVisibilityStable()) return;
+          if (!isFocusStable()) return;
+          
+          state.intendedPlaying = false;
+          state.bufferHoldIntendedPlaying = false;
+          updateMediaSessionPlaybackState();
+          queueHardPauseVerification();
+        });
       });
     } catch {}
   }
