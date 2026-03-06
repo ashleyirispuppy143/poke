@@ -488,9 +488,12 @@ button:hover, a:hover {
   <!-- helps with fetching video information too! -->
 <script>
 window.authorchannelname = "<%- VideoData?.author
-  .replace(' - Topic','')
+  .replace(/\s*-\s*Topic$/,'')
   .replace(/VEVO$/,'')
   .replace(/([a-z])([A-Z])/g,'$1 $2')
+  .replace(/([A-Za-z])([0-9])/g,'$1 $2')
+  .replace(/\s+/g,' ')
+  .trim()
 %>";
 </script>
 
