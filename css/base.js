@@ -12,8 +12,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  * Includes vtt.js <https://github.com/mozilla/vtt.js>
  * Available under Apache License Version 2.0
  * <https://github.com/mozilla/vtt.js/blob/main/LICENSE>
- */  
-
+ */   
 document.addEventListener("DOMContentLoaded", () => {
   const video = videojs("video", {
     controls: true,
@@ -233,12 +232,7 @@ document.addEventListener("DOMContentLoaded", () => {
     resumeOnVisible: false,
     bgAutoResumeSuppressed: false,
     bgCatchUpCooldownUntil: 0,
-    // FIX: Guard flag to prevent concurrent background resume attempts (seamlessBgCatchUp
-    // and scheduleStartupAutoplayKick firing simultaneously on tab return causing stutter).
     bgResumeInFlight: false,
-    // FIX: Guard flag to prevent video "playing" event and runSync from calling
-    // playTogether() while finalizeSeekSync is already handling the post-seek resume,
-    // which caused the content around the seek point to appear to play twice.
     seekResumeInFlight: false,
     seekFinalizeTimer: null,
     lastAT: 0,
@@ -496,20 +490,11 @@ document.addEventListener("DOMContentLoaded", () => {
     state.bufferHoldIntendedPlaying = true;
     markMediaAction("play");
     setFastSync(1800);
-    // FIX: Lock the media txn window so runSync cannot call playTogether() on the
-    // very next tick (triggered by setFastSync → scheduleSync(0) above) before the
-    // browser "play" event has fired and the event handler has had a chance to call
-    // playTogether() itself.  Without this, both runSync AND the "play" event handler
-    // call playTogether() in the same user-click cycle, which causes an audible
-    // double-start (audio fades in, gets interrupted, fades in again).
     setMediaPlayTxn(900);
     updateMediaSessionPlaybackState();
     state.audioPauseUntil = 0;
     state.audioPlayUntil = 0;
     state.startupAudioHoldUntil = 0;
-    // Do NOT call audio.play() directly here — it bypasses all play guards and causes
-    // the audio to start twice when playTogether() also fires, producing audible stutter.
-    // playTogether() handles starting the audio through the proper guarded path.
     if (platform.chromiumOnlyBrowser) {
       state.chromiumPauseGuardUntil = 0;
       state.chromiumBgSettlingUntil = 0;
@@ -1270,15 +1255,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (state.restarting || state.seeking || state.syncing) return;
     if (mediaSessionForcedPauseActive() || userPauseLockActive()) return;
     if (now() < state.bgCatchUpCooldownUntil) return;
-    // FIX: Prevent concurrent background resume attempts. Without this guard,
-    // seamlessBgCatchUp and scheduleStartupAutoplayKick can both fire on tab
-    // return and issue conflicting play/pause calls that cause audible stutter.
     if (state.bgResumeInFlight) return;
-    // FIX: If the startup machinery has not yet committed a first play and a retry
-    // is pending OR currently executing, yield to it.  seamlessBgCatchUp calling
-    // playTogether() here would race with the pending retry timer — both would call
-    // forceZeroBeforeFirstPlay() + execProgrammaticVideoPlay() + playTogether(),
-    // producing the seeks-to-0 + plays-pauses-plays symptom on tab return.
     if (!state.firstPlayCommitted && wantsStartupAutoplay() &&
         (state.startupAutoplayRetryTimer || state.startupKickInFlight)) {
       return;
@@ -1323,17 +1300,8 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      // Clear resume flags before calling playTogether so the sync loop
-      // doesn't also try to resume in parallel.
       state.bgHiddenWasPlaying = false;
       state.resumeOnVisible = false;
-      // FIX: If the first play hasn't committed yet, force both tracks back to
-      // 00:00 before resuming.  The browser can silently advance currentTime
-      // during background buffering (readyState transitions, partial decode),
-      // so without this reset seamlessBgCatchUp would call playTogether() at
-      // e.g. 0.4 s and autoplay would appear to start mid-stream.
-      // startupPhase requirement removed: see playTogether() note — startupPhase
-      // can time-out before firstPlayCommitted is set on slow bg tabs.
       if (!state.firstPlayCommitted && wantsStartupAutoplay()) {
         forceZeroBeforeFirstPlay();
         safeSetAudioTime(0);
@@ -1371,10 +1339,6 @@ document.addEventListener("DOMContentLoaded", () => {
       const vtNow = Number(video.currentTime());
       const atNow = Number(audio.currentTime);
       const checkTime = Math.max(vtNow, atNow || 0);
-      // FIX: In a background tab, browsers throttle readyState updates so
-      // bothPlayableAt() (which requires HAVE_FUTURE_DATA + buffered ahead) can
-      // return false indefinitely even when playback would succeed.  Use a looser
-      // check in background: readyState >= 2 and canPlay is sufficient.
       const inBg = document.visibilityState === "hidden" || !isWindowFocused();
       const ready = inBg
         ? (canPlayAt(getVideoNode(), checkTime) && canPlayAt(audio, checkTime))
@@ -1518,12 +1482,6 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       if (!state.intendedPlaying) return;
       
-      // FIX: Removed !state.firstSeekDone guard (set true by maybePrimeStartup before kick
-      // fires, so old condition silently skipped zeroing on browser-autoplay "play" event).
-      // Also removed state.startupPhase requirement: maybePrimeStartup sets a 3.5 s timeout
-      // that clears startupPhase even if no play ever committed, meaning background tabs that
-      // take >3.5 s to autoplay would skip this zero-reset and start mid-stream.
-      // Now we always reset to 00:00 until the first play actually commits.
       if (!state.firstPlayCommitted && wantsStartupAutoplay()) {
         safeSetVideoTime(0);
         safeSetAudioTime(0);
@@ -1535,14 +1493,6 @@ document.addEventListener("DOMContentLoaded", () => {
         safeSetAudioTime(vtStart);
       }
       forceUnmuteForPlaybackIfAllowed();
-      // FIX: Skip the buffer-ready gate entirely when we are in a background tab.
-      // In background, browsers throttle readyState updates and canplay events, so
-      // bothPlayableAt() can return false even when the media is perfectly ready to
-      // play.  Entering strictBufferHold + armResumeAfterBuffer(10000) here is the
-      // primary cause of the "plays → pauses → huge delay → plays again" symptom:
-      // the buffer poll spins for up to 10 s because bothPlayableAt stays false.
-      // Background playback doesn't need the smooth-ahead buffer guarantee — just let
-      // the browser's own stall/waiting events handle any actual buffer shortage.
       const inBackground = document.visibilityState === "hidden" || !isWindowFocused();
       const blockOnBuffer =
         !inBackground &&
@@ -1718,8 +1668,10 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       if (!state.firstPlayCommitted) {
         if (!getVideoPaused() && (!coupledMode || !audio.paused)) {
+          state.startupKickDone = true;
           state.firstPlayCommitted = true;
           setTimeout(() => { state.startupPhase = false; }, 1200);
+          setTimeout(() => { state.startupPlaySettled = true; }, STARTUP_SETTLE_MS);
         }
       }
       updateMediaSessionPlaybackState();
@@ -1827,10 +1779,6 @@ document.addEventListener("DOMContentLoaded", () => {
         state.audioPauseUntil = 0;
     }
 
-    // FIX: Hold seekResumeInFlight from here until playTogether() resolves.
-    // Between state.seeking=false (above) and playTogether() completing, the video
-    // "playing" event and runSync can both see seeking=false and call playTogether()
-    // concurrently, causing content around the seek point to appear to play twice.
     state.seekResumeInFlight = true;
     try {
       if (state.playRequestedDuringSeek || state.seekWantedPlaying) {
@@ -1872,39 +1820,22 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   function startupBufferReadyLoose() {
     if (!coupledMode) return true;
+    if (document.visibilityState === "hidden" || !isWindowFocused()) return true;
     const t0 = Number(video.currentTime()) || 0;
     const vNode = getVideoNode();
     const vOk = Number(vNode.readyState || 0) >= 2 || canPlayAt(vNode, t0);
-    // FIX: In background tabs, browsers throttle audio readyState and it can
-    // stay at 1 (HAVE_METADATA) for a very long time.  canStartAudioAt requires
-    // RS>=2, so this function would return false on every retry, causing the
-    // retry counter to count up through the 150→300→500→900→1500→2500→3500ms
-    // delay sequence — the "autoplays VERY late" symptom.
-    // In bg, accept RS>=1 (HAVE_METADATA) for audio — play() will either succeed
-    // or reject, and the rejection path schedules the next retry.
-    const inBg = document.visibilityState === "hidden" || !isWindowFocused();
-    const aOk = inBg
-      ? (Number(audio ? audio.readyState : 0) >= 1)
-      : canStartAudioAt(t0);
+    const aOk = canStartAudioAt(t0);
     return vOk && aOk;
   }
 
   function bothReadyForStartupKick() {
     if (!coupledMode) return true;
+    if (document.visibilityState === "hidden" || !isWindowFocused()) return true;
     const t0 = Number(video.currentTime()) || 0;
     const vNode = getVideoNode();
     const vRS = Number(vNode.readyState || 0);
     const aRS = Number(audio ? audio.readyState : 0);
 
-    if (document.visibilityState === "hidden") {
-      // In background, browsers throttle readyState updates for audio heavily.
-      // Accept video RS>=2 alone — audio RS>=1 (HAVE_METADATA) is enough to
-      // attempt play(); if audio truly isn't ready the play() promise rejects
-      // and scheduleStartupAutoplayRetry handles the retry.
-      // Don't require audio RS>=3 here or the retry delays balloon to seconds.
-      const vOk = vRS >= HAVE_FUTURE_DATA || (vRS >= 2 && canPlayAt(vNode, t0));
-      return vOk && aRS >= 1;
-    }
     if (vRS >= HAVE_FUTURE_DATA && aRS >= HAVE_FUTURE_DATA) return true;
     if (vRS >= 2 && aRS >= 2 && canPlayAt(vNode, t0) && canStartAudioAt(t0)) return true;
     return false;
@@ -1917,14 +1848,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!wantsStartupAutoplay() && !state.intendedPlaying) return;
     if (mediaSessionForcedPauseActive()) return;
     if (!pageLoadedForAutoplay()) return;
-    // FIX: Don't start a startup kick while seamlessBgCatchUp is already handling
-    // a resume — the two concurrent play attempts produce play-pause-play stutter.
     if (state.bgResumeInFlight) return;
     
     state.startupKickInFlight = true;
-    // Clear any pending retry timer — we're about to attempt the kick directly,
-    // so a queued retry firing during or after the kick would create a duplicate
-    // forceZeroBeforeFirstPlay()+playTogether() and cause the seek-to-0 loop.
     clearStartupAutoplayRetryTimer();
     setTimeout(async () => {
       try {
@@ -1955,40 +1881,28 @@ document.addEventListener("DOMContentLoaded", () => {
         safeSetAudioTime(0);
         safeSetVideoTime(0);
 
-        try {
-          // FIX: Do NOT call audio.play() directly here before playTogether().
-          // An unguarded audio.play() bypasses isProgrammaticAudioPlay, generation
-          // checks and squelch flags, causing audio to start twice and producing
-          // an audible play-pause-play stutter on background-tab autoplay.
-          // playTogether() handles the audio start through the proper guarded path.
-          const vp = execProgrammaticVideoPlay();
-          if (vp && vp.then) await vp;
-        } catch {}
-        // FIX Bug A: If the browser bg-throttled the video play (video still
-        // paused after execProgrammaticVideoPlay resolved), do NOT silently
-        // return — that leaves no retry path and causes the "nothing plays,
-        // then plays after a long delay" symptom on background tabs.
-        // Schedule a retry instead so we keep trying until the browser allows it.
+        await playTogether().catch(() => {});
+        
         if (getVideoPaused()) {
-          scheduleStartupAutoplayRetry();
+          if (!state.strictBufferHold) {
+            state.resumeOnVisible = false;
+            scheduleStartupAutoplayRetry();
+          }
           return;
         }
-        await playTogether().catch(() => {});
-        if (!getVideoPaused()) {
-          state.startupKickDone = true;
-          if (!state.firstPlayCommitted) {
-            state.firstPlayCommitted = true;
-            setTimeout(() => { state.startupPhase = false; }, 1200);
-          }
-          setTimeout(() => { state.startupPlaySettled = true; }, STARTUP_SETTLE_MS);
-        } else {
-          scheduleStartupAutoplayRetry();
+        
+        state.startupKickDone = true;
+        if (!state.firstPlayCommitted) {
+          state.firstPlayCommitted = true;
+          setTimeout(() => { state.startupPhase = false; }, 1200);
         }
+        setTimeout(() => { state.startupPlaySettled = true; }, STARTUP_SETTLE_MS);
       } finally {
         state.startupKickInFlight = false;
       }
     }, 0);
   }
+
   function scheduleStartupAutoplayRetry() {
     if (state.startupKickDone || state.startupKickInFlight) return;
     if (!state.intendedPlaying && !wantsStartupAutoplay()) return;
@@ -1997,23 +1911,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     clearStartupAutoplayRetryTimer();
     const count = state.startupAutoplayRetryCount;
-    if (count >= 12) return;
-    // FIX: First retries are now much faster (150ms, 300ms, 500ms).  Background
-    // tabs get throttled by the browser but the throttle is usually lifted within
-    // 1-2 animation frames once the media has buffered data.  Slow first retries
-    // (the old 400ms, 700ms sequence) caused the "plays nothing, then plays after
-    // a long delay" symptom because the browser was ready much sooner.
-    const delays = [150, 300, 500, 900, 1500, 2500, 3500, 5000, 7000, 9000, 12000, 15000];
-    const delay = delays[count] || 6000;
+    if (count >= 20) return;
+    const delays =[150, 300, 500, 900, 1500, 2000, 2500, 3000, 4000, 5000];
+    const delay = delays[count] || 5000;
     state.startupAutoplayRetryCount++;
     state.startupAutoplayRetryTimer = setTimeout(async () => {
       state.startupAutoplayRetryTimer = null;
       if (state.startupKickDone || state.startupKickInFlight) return;
       if (!state.intendedPlaying && !wantsStartupAutoplay()) return;
       if (mediaSessionForcedPauseActive() || userPauseLockActive()) return;
-      // FIX: If seamlessBgCatchUp is already driving a resume (e.g. on tab return),
-      // don't let the retry timer also fire execProgrammaticVideoPlay() and
-      // playTogether() — the concurrent attempts produce play-pause-play stutter.
       if (state.bgResumeInFlight) {
         scheduleStartupAutoplayRetry();
         return;
@@ -2047,28 +1953,28 @@ document.addEventListener("DOMContentLoaded", () => {
         safeSetAudioTime(0);
         safeSetVideoTime(0);
 
-        try {
-          const vp = execProgrammaticVideoPlay();
-          if (vp && vp.then) await vp;
-        } catch {}
-        if (!getVideoPaused()) {
-          await playTogether().catch(() => {});
-        }
-        if (!getVideoPaused()) {
-          state.startupKickDone = true;
-          if (!state.firstPlayCommitted) {
-            state.firstPlayCommitted = true;
-            setTimeout(() => { state.startupPhase = false; }, 1200);
+        await playTogether().catch(() => {});
+
+        if (getVideoPaused()) {
+          if (!state.strictBufferHold) {
+            state.resumeOnVisible = false;
+            scheduleStartupAutoplayRetry();
           }
-          setTimeout(() => { state.startupPlaySettled = true; }, STARTUP_SETTLE_MS);
-        } else {
-          scheduleStartupAutoplayRetry();
+          return;
         }
+
+        state.startupKickDone = true;
+        if (!state.firstPlayCommitted) {
+          state.firstPlayCommitted = true;
+          setTimeout(() => { state.startupPhase = false; }, 1200);
+        }
+        setTimeout(() => { state.startupPlaySettled = true; }, STARTUP_SETTLE_MS);
       } finally {
         state.startupKickInFlight = false;
       }
     }, delay);
   }
+
   function maybePrimeStartup() {
     if (!coupledMode) return;
     if (state.restarting || state.startupPrimed) return;
@@ -2077,13 +1983,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const primeWait = now() - state.startupPrimeStartedAt;
     const inBg = document.visibilityState === "hidden" || !isWindowFocused();
     if (!bothStartupBufferedAt(t0)) {
-      // FIX: In background tabs, browsers throttle readyState and buffered ranges
-      // for audio, so bothStartupBufferedAt (needs 1.0s buffered ahead on both
-      // tracks) can stay false indefinitely.  Accept video RS>=2 alone in bg —
-      // the kick will attempt audio play and retry if it rejects.
-      const bgVideoReady = inBg && Number(getVideoNode().readyState || 0) >= 2;
+      const bgReady = inBg;
       const looseReady = canPlayAt(getVideoNode(), t0) && canStartAudioAt(t0);
-      if (!bgVideoReady && !(looseReady && primeWait > 1800)) {
+      if (!bgReady && !(looseReady && primeWait > 1800)) {
         state.strictBufferHold = true;
         state.strictBufferReason = "startup-buffer";
         return;
@@ -2113,10 +2015,6 @@ document.addEventListener("DOMContentLoaded", () => {
   function evaluateBufferHoldNeed(vt, at) {
     if (!state.intendedPlaying || state.seeking || state.syncing) return false;
     if (!state.audioEverStarted && state.startupPhase) return false;
-    // FIX: Skip buffer hold evaluation entirely in background tabs.  Browsers
-    // throttle readyState updates when hidden, so canPlaySmoothAt returns false
-    // even when the media is fully ready, causing runSync to set strictBufferHold
-    // and arm armResumeAfterBuffer(10000) — the source of the huge resume delay.
     if (document.visibilityState === "hidden" || !isWindowFocused()) return false;
     const checkTime = Math.max(vt, at || 0);
     const vNode = getVideoNode();
@@ -2227,16 +2125,10 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!state.resumeOnVisible) {
               state.resumeOnVisible = true;
             }
-            // FIX: If first play already committed and startup kick is done, the
-            // browser bg-suspended us mid-playback.  Attempt to resume immediately
-            // rather than waiting until tab becomes visible — bg audio playback is
-            // allowed (bgPlaybackAllowed=true) so the browser may let us.
             if (state.firstPlayCommitted && state.startupKickDone && !state.bgResumeInFlight) {
               seamlessBgCatchUp().catch(() => {});
             }
           } else {
-            // FIX: Don't schedule a bg resume retry if seamlessBgCatchUp is already
-            // handling the resume — avoids two concurrent play attempts on tab return.
             if (!state.bgResumeInFlight) {
               scheduleBgResumeRetry(400);
             }
@@ -2244,10 +2136,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       } else {
         if (!vPaused && aPaused) {
-          // FIX: Don't try to kick audio while seamlessBgCatchUp is already doing
-          // a full resume — it will start audio via playTogether(); a concurrent
-          // execProgrammaticAudioPlay here races with that and can produce a
-          // double-start (audio starts, gets interrupted by the other attempt).
           if (!shouldBlockNewAudioStart() && !state.bgResumeInFlight) {
             if (!state.audioEverStarted && canStartAudioAt(vt)) {
               safeSetAudioTime(vt);
@@ -2262,9 +2150,6 @@ document.addEventListener("DOMContentLoaded", () => {
             execProgrammaticVideoPlay();
           }
         } else if (vPaused && aPaused) {
-          // FIX: Don't call playTogether() while seamlessBgCatchUp or finalizeSeekSync
-          // is already driving a resume — the concurrent call races and causes
-          // play-pause-play stutter on tab return and after seeking.
           if (!inMediaTxnWindow() && !userPauseLockActive() && !chromiumPauseGuardActive() && !state.bgResumeInFlight && !state.seekResumeInFlight) {
             if (isHiddenBackground()) {
               state.resumeOnVisible = true;
@@ -2274,7 +2159,6 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         } else {
           if (skipDrift) {
-            // Skip drift correction during seek cooldown
           } else {
             const drift = vt - at;
             const absDrift = Math.abs(drift);
@@ -2594,11 +2478,6 @@ document.addEventListener("DOMContentLoaded", () => {
         scheduleSync(0);
         return;
       }
-      // FIX: The startup kick sets positions to 00:00 before calling playTogether().
-      // If a browser-autoplay "play" event fires before the kick's setTimeout(0)
-      // callback runs, calling playTogether() here would commit playback from a
-      // non-zero position (firstSeekDone=true disables zeroing once primed).
-      // Yield back to the kick by only scheduling a sync instead.
       if (coupledMode && state.startupKickInFlight && !state.startupKickDone) {
         scheduleSync(0);
         return;
@@ -2637,29 +2516,14 @@ document.addEventListener("DOMContentLoaded", () => {
       if (isAltTabTransitionActive()) return;
       if (!isVisibilityStable()) return;
       if (!isFocusStable()) return;
-      // FIX: Do NOT silently return during startupSettleActive() when we are in a
-      // background tab.  The browser bg-suspends tracks while the tab is hidden even
-      // during the settle window, but returning here with no action means nothing
-      // re-arms playback — the runSync loop eventually rescues it but only after its
-      // next scheduled tick (up to 1.5 s away), producing the "huge delay" symptom.
-      // Instead, fall through to shouldIgnorePauseAsTransient() which will return
-      // true for hidden/unfocused tabs and arm the proper resume path.
       if (startupSettleActive() && document.visibilityState === "visible" && isWindowFocused()) return;
       
       if (shouldIgnorePauseAsTransient()) {
-        // When the pause is transient (bg tab, visibility transition, etc.) and we
-        // are intending to play, arm a fast resume rather than doing nothing.
-        // NOTE: Fixed JS precedence bug — was: !state.startupKickDone === false
-        // (always equals state.startupKickDone, making the condition dead code).
         if (state.intendedPlaying && platform.useBgControllerRetry) {
           if (!state.startupKickDone && (state.startupKickInFlight || state.startupAutoplayRetryTimer)) {
-            // Startup machinery is already retrying — don't arm resumeOnVisible
-            // or seamlessBgCatchUp would race with it on tab return.
           } else if (!state.startupKickDone && !state.startupKickInFlight) {
-            // Startup not yet committed and no retry running — re-arm the kick.
             scheduleStartupAutoplayRetry();
           } else {
-            // Normal bg pause after first play committed — arm visible resume.
             state.resumeOnVisible = true;
           }
         }
@@ -2673,7 +2537,6 @@ document.addEventListener("DOMContentLoaded", () => {
       if (mediaSessionForcedPauseActive()) return;
       if (state.intendedPlaying && platform.useBgControllerRetry) {
         if (state.startupKickInFlight || (!state.startupKickDone && state.startupAutoplayRetryTimer)) {
-          // Startup machinery is still running — don't set resumeOnVisible.
           return;
         }
         noteBackgroundEntry();
@@ -2713,11 +2576,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       setFastSync(2000);
       if (coupledMode && state.intendedPlaying && audio.paused && !state.seeking && !state.syncing && !state.strictBufferHold && !shouldBlockNewAudioStart()) {
-        // FIX: Same as video.on("play") — don't let a "playing" event trigger
-        // playTogether() before the startup kick has had a chance to zero the time.
-        // Also yield during seekResumeInFlight: finalizeSeekSync is already calling
-        // playTogether() for the post-seek resume; a concurrent call from "playing"
-        // causes the content around the seek point to appear to play twice.
         if ((state.startupKickInFlight && !state.startupKickDone) || state.seekResumeInFlight) {
           scheduleSync(0);
         } else {
@@ -2755,10 +2613,6 @@ document.addEventListener("DOMContentLoaded", () => {
         scheduleSync(0);
         return;
       }
-      // FIX: Same guard as video.on("play") — if the startup kick is already
-      // scheduled (startupKickInFlight=true, set before its setTimeout(0)), yield
-      // to it so it can zero the position before committing playback.
-      // Also yield during seekResumeInFlight for the same reason as video.on("playing").
       if ((state.startupKickInFlight && !state.startupKickDone) || state.seekResumeInFlight) {
         scheduleSync(0);
         return;
@@ -2792,15 +2646,11 @@ document.addEventListener("DOMContentLoaded", () => {
       if (isAltTabTransitionActive()) return;
       if (!isVisibilityStable()) return;
       if (!isFocusStable()) return;
-      // FIX: Same as video.on("pause") — don't silently return during startupSettleActive()
-      // when in a background tab.  Fall through to shouldIgnorePauseAsTransient() instead.
       if (startupSettleActive() && document.visibilityState === "visible" && isWindowFocused()) return;
       
       if (shouldIgnorePauseAsTransient()) {
-        // Fixed JS precedence bug (was: !state.startupKickDone === false → always startupKickDone).
         if (state.intendedPlaying && platform.useBgControllerRetry) {
           if (!state.startupKickDone && (state.startupKickInFlight || state.startupAutoplayRetryTimer)) {
-            // Startup machinery is already retrying — don't arm resumeOnVisible.
           } else if (!state.startupKickDone && !state.startupKickInFlight) {
             scheduleStartupAutoplayRetry();
           } else {
@@ -3005,11 +2855,6 @@ document.addEventListener("DOMContentLoaded", () => {
         state.rapidToggleDetected = false;
         state.rapidToggleUntil = 0;
 
-        // FIX: Only reset startupAutoplayRetryCount on tab-visible if the startup
-        // has already committed.  Resetting it while a retry sequence is in progress
-        // means the retry delays restart from index 0 on every tab-switch, giving the
-        // false impression that playback restarted cleanly when actually the first
-        // attempt was silently abandoned.
         if (state.firstPlayCommitted) {
           state.startupAutoplayRetryCount = 0;
         }
@@ -3017,23 +2862,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (state.intendedPlaying) {
           if (platform.useBgControllerRetry) {
-            // FIX: Clear resumeOnVisible/bgHiddenWasPlaying before calling
-            // executeSeamlessWakeup so the sync loop doesn't also schedule a
-            // scheduleBgResumeRetry for the same resume, causing two concurrent
-            // play attempts and the play-pause-play stutter on tab return.
             state.resumeOnVisible = false;
             state.bgHiddenWasPlaying = false;
-            // FIX: Don't call executeSeamlessWakeup (which calls seamlessBgCatchUp)
-            // if the startup kick hasn't committed a first play yet.  seamlessBgCatchUp
-            // would call playTogether() and race with the pending startup retry timer,
-            // producing the plays-then-pauses-then-long-delay-then-plays symptom.
-            // In that case, let the startup machinery (scheduleStartupAutoplayKick /
-            // scheduleStartupAutoplayRetry) handle the first play, then wakeup resumes
-            // normally for subsequent tab-switches once firstPlayCommitted is true.
             if (!state.firstPlayCommitted && wantsStartupAutoplay() && !state.startupKickDone) {
-              // Don't wake up via seamlessBgCatchUp — let the startup kick handle it.
-              // The startup kick / retry is either already running (startupKickInFlight)
-              // or will be triggered by scheduleStartupAutoplayKick below.
             } else {
               executeSeamlessWakeup();
             }
@@ -3061,20 +2892,8 @@ document.addEventListener("DOMContentLoaded", () => {
             }, 350);
           }
         }
-        // FIX: Only trigger a startup kick on tab-become-visible if we are NOT
-        // already intending to play with useBgControllerRetry — in that case
-        // executeSeamlessWakeup above is already handling the resume, and calling
-        // scheduleStartupAutoplayKick simultaneously creates conflicting play
-        // attempts that produce play-pause-play stutter.
-        // Exception: if firstPlayCommitted is false, try the startup kick — BUT
-        // only if no retry timer is already pending.  If a retry is in flight,
-        // it will call scheduleStartupAutoplayKick itself when it fires.
-        // Starting a new kick alongside a pending retry causes two concurrent
-        // forceZeroBeforeFirstPlay()+playTogether() calls → seeks to 0 mid-play
-        // then stutter loop on tab return.
         if (!state.startupKickDone && wantsStartupAutoplay() && pageLoadedForAutoplay()) {
           if (!state.firstPlayCommitted || !(platform.useBgControllerRetry && state.intendedPlaying)) {
-            // Only kick if no retry is already queued — the retry will kick itself.
             if (!state.startupAutoplayRetryTimer && !state.startupKickInFlight) {
               scheduleStartupAutoplayKick();
             }
@@ -3117,16 +2936,6 @@ document.addEventListener("DOMContentLoaded", () => {
       state.focusStableUntil = now() + 300;
       setTimeout(() => {
         state.altTabTransitionActive = false;
-        // FIX: Only call executeSeamlessWakeup if the tab is already visible.
-        // When switching tabs, both "focus" and "visibilitychange→visible" fire in
-        // the same cycle.  If we call executeSeamlessWakeup from both, the wakeup
-        // timer gets reset twice and — more importantly — if bgResumeInFlight was
-        // not yet set by the first seamlessBgCatchUp call, the second call could
-        // slip through and produce two concurrent play attempts.
-        // The visibilitychange handler already calls executeSeamlessWakeup for the
-        // hidden→visible transition, so we only need to call it from focus for the
-        // case where the window was already visible (e.g. alt-tab to another app
-        // and back without the tab changing).
         if (document.visibilityState === "visible") {
           executeSeamlessWakeup();
         }
@@ -3154,11 +2963,6 @@ document.addEventListener("DOMContentLoaded", () => {
         state.audioEverStarted = true;
         return;
       }
-      // FIX Bug C: If the startup kick is already in flight, defer this forced
-      // audio play attempt — the kick will call playTogether() which starts audio
-      // via the proper guarded path.  A concurrent audio.play() here would race
-      // with the kick's position zeroing, causing the audio to start from a
-      // non-zero position or produce a double-start stutter.
       if (state.startupKickInFlight) {
         state.audioStartupPlayRetries++;
         state.audioForcePlayTimer = setTimeout(tryPlay, AUDIO_STARTUP_PLAY_RETRY_MS);
@@ -3172,13 +2976,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       try {
         audio.volume = 0;
-        // FIX: Set intendedPlaying=true before calling audio.play() so that the
-        // onAudioPlay event handler does not immediately pause the audio (the handler
-        // checks !intendedPlaying and pauses when false).  forceAudioStartupPlay is
-        // only called when wantsStartupAutoplay() is true, so setting intendedPlaying
-        // here is consistent with intent.  Extend the squelch to cover the full
-        // startup-kick window (800ms) so the onAudioPlay handler can't call
-        // playTogether() before the kick has had a chance to zero the position.
         state.intendedPlaying = true;
         state.bufferHoldIntendedPlaying = true;
         squelchAudioEvents(800);
