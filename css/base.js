@@ -199,6 +199,8 @@ document.addEventListener("DOMContentLoaded", () => {
     isProgrammaticAudioPause: false,
     audioEventsSquelchedUntil: 0,
     audioPlayInFlight: null,
+    // FIX: Generation counter to invalidate stale audio play callbacks
+    audioPlayGeneration: 0,
     audioPlayUntil: 0,
     audioPauseUntil: 0,
     startupAudioHoldUntil: 0,
@@ -319,11 +321,9 @@ document.addEventListener("DOMContentLoaded", () => {
     userGesturePauseIntent: false,
     pageFullyLoaded: document.readyState === "complete",
     bgAudioStartQueued: false,
-    // FIX: New state for loop prevention and seek cooldown
     lastUserActionTime: 0,
     loopPreventionCooldownUntil: 0,
     seekCooldownUntil: 0,
-    // FIX: Volume persistence
     volumeSaveScheduled: false
   };
   const EPS = 1.0;
@@ -360,14 +360,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const AUDIO_STARTUP_PLAY_RETRY_MS = 300;
   const MAX_AUDIO_STARTUP_RETRIES = 8;
   const STARTUP_SETTLE_MS = 3500;
-  // FIX: Loop detection constants
   const LOOP_DETECTION_WINDOW_MS = 2000;
   const MAX_LOOP_EVENTS = 5;
   const LOOP_COOLDOWN_MS = 4000;
 
   const clamp01 = v => Math.max(0, Math.min(1, Number(v)));
 
-  // FIX: Volume persistence
   const VOLUME_STORAGE_KEY = 'videoPlayerVolume';
   const MUTED_STORAGE_KEY = 'videoPlayerMuted';
   function loadSavedVolume() {
@@ -459,9 +457,15 @@ document.addEventListener("DOMContentLoaded", () => {
     state.userGesturePauseIntent = true;
     state.startupPhase = false;
     state.firstPlayCommitted = true;
-    // FIX: Record user action time
     state.lastUserActionTime = now();
-    
+
+    // FIX: Immediately cancel any in-progress audio fade (e.g. a fade-in from a recent play)
+    // so the audio doesn't briefly audible after the user hits pause.
+    cancelActiveFade();
+
+    // FIX: Invalidate any stale in-flight audio play so its callback won't unmute after resolving.
+    state.audioPlayGeneration++;
+
     setTimeout(() => { state.userGesturePauseIntent = false; }, 2000);
     const until = now() + Math.max(0, Number(ms) || 0);
     state.userPauseUntil = Math.max(state.userPauseUntil, until);
@@ -477,8 +481,8 @@ document.addEventListener("DOMContentLoaded", () => {
       state.chromiumBgSettlingUntil = Math.max(state.chromiumBgSettlingUntil, until + 200);
     }
   }
+
   function markUserPlayIntent(ms = 1800) {
-    // FIX: Record user action time
     state.lastUserActionTime = now();
     const until = now() + Math.max(0, Number(ms) || 0);
     state.userPlayUntil = Math.max(state.userPlayUntil, until);
@@ -493,10 +497,11 @@ document.addEventListener("DOMContentLoaded", () => {
     state.audioPauseUntil = 0;
     state.audioPlayUntil = 0;
     state.startupAudioHoldUntil = 0;
-    if (coupledMode && audio) {
-      audio.play().catch(() => {});
-      state.audioEverStarted = true;
-    }
+    // FIX: Do NOT call audio.play() directly here. Doing so bypasses all play guards
+    // (squelch flags, isProgrammaticAudioPlay, generation checks, etc.) and causes
+    // the audio to start twice when playTogether() also fires shortly after via the
+    // video "play" event — producing the audible echo / play-pause-play stutter.
+    // playTogether() will handle starting the audio through the proper guarded path.
     if (platform.chromiumOnlyBrowser) {
       state.chromiumPauseGuardUntil = 0;
       state.chromiumBgSettlingUntil = 0;
@@ -581,10 +586,9 @@ document.addEventListener("DOMContentLoaded", () => {
     return now() < state.startupPlaySettleUntil;
   }
 
-  // FIX: Loop detection
   function detectLoop() {
     if (now() < state.loopPreventionCooldownUntil) return true;
-    const recentEvents = state.rapidPlayPauseCount; // reuse rapid count
+    const recentEvents = state.rapidPlayPauseCount;
     if (recentEvents >= MAX_LOOP_EVENTS && (now() - state.lastUserActionTime) > 1000) {
       state.loopPreventionCooldownUntil = now() + LOOP_COOLDOWN_MS;
       return true;
@@ -596,7 +600,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (mediaSessionForcedPauseActive()) return false;
     if (userPauseIntentActive() || userPauseLockActive()) return false;
 
-    // FIX: Loop prevention
     if (detectLoop()) return true;
 
     if (
@@ -632,7 +635,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (mediaActionRecently("play", 2200)) return true;
     if (shouldIgnorePauseEvents()) return true;
     if (platform.chromiumOnlyBrowser && state.bgPauseSuppressionCount < MAX_BG_PAUSE_SUPPRESSIONS) {
-      if (now() < state.bgPauseSuppressionResetAt || (now() - state.bgPauseSuppressionResetAt) > 10000) {
+      if (now() > state.bgPauseSuppressionResetAt || (now() - state.bgPauseSuppressionResetAt) > 10000) {
         state.bgPauseSuppressionCount = 0;
         state.bgPauseSuppressionResetAt = now();
       }
@@ -662,6 +665,8 @@ document.addEventListener("DOMContentLoaded", () => {
       cancelAnimationFrame(activeVolumeFade);
       activeVolumeFade = null;
     }
+    // FIX: Also mark fading as done so downstream checks don't get stuck
+    state.audioFading = false;
   }
   async function doVolumeFade(targetVol, ms = AUDIO_SAFE_FADE_DURATION_MS) {
     if (!audio) return;
@@ -779,7 +784,6 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {}
   }
   
-  // FIX: Skip fade for small seeks
   async function quietSeekAudio(t) {
     if (!audio || !coupledMode) return;
     try {
@@ -787,7 +791,6 @@ document.addEventListener("DOMContentLoaded", () => {
       const timeDiff = Math.abs((audio.currentTime || 0) - t);
       if (timeDiff <= 0.05) return;
       const wasPlaying = !audio.paused && audio.volume > 0.01 && !state.audioFading;
-      // If seek is small (< 0.5 sec), skip fade
       if (wasPlaying && timeDiff < 0.5) {
         safeSetAudioTime(t);
         return;
@@ -967,7 +970,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const v = getVideoNode();
       if (v && v !== videoEl && !v.paused) v.pause();
     } catch {}
-    setTimeout(() => { state.isProgrammaticVideoPause = false; }, 500); // FIX: Extended flag
+    setTimeout(() => { state.isProgrammaticVideoPause = false; }, 500);
   }
   function execProgrammaticVideoPlay() {
     state.isProgrammaticVideoPlay = true;
@@ -982,7 +985,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       if (p && p.catch) p.catch(() => {});
       Promise.resolve(p).finally(() => {
-        setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 500); // FIX: Extended flag
+        setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 500);
       });
       return p;
     } catch (e) {
@@ -997,6 +1000,11 @@ document.addEventListener("DOMContentLoaded", () => {
     state.audioPauseUntil = Math.max(state.audioPauseUntil, until);
     state.audioPlayUntil = Math.max(state.audioPlayUntil, now() + 250);
     state.isProgrammaticAudioPause = true;
+
+    // FIX: Cancel any active fade synchronously before we go async, so a fade-in
+    // in progress cannot continue raising the volume after we've decided to pause.
+    cancelActiveFade();
+
     try { squelchAudioEvents(ms); } catch {}
     try { resetAudioPlaybackRate(); } catch {}
 
@@ -1007,12 +1015,16 @@ document.addEventListener("DOMContentLoaded", () => {
       await doVolumeFade(0, 150).catch(() => {});
       try { audio.pause(); } catch {}
     }
-    setTimeout(() => { state.isProgrammaticAudioPause = false; }, 500); // FIX: Extended flag
+    setTimeout(() => { state.isProgrammaticAudioPause = false; }, 500);
   }
   
   async function execProgrammaticAudioPlay(opts = {}) {
     const { squelchMs = 500, minGapMs = 300, force = false } = opts;
     if (!coupledMode || !audio || typeof audio.play !== "function") return false;
+
+    // FIX: Capture generation at call time. If a pause increments the generation
+    // while we are awaiting the play promise, we abort instead of fading in.
+    const myGeneration = state.audioPlayGeneration;
     
     const isAlreadyPlaying = !audio.paused && audio.volume > 0.05 && !state.audioFading;
 
@@ -1056,7 +1068,14 @@ document.addEventListener("DOMContentLoaded", () => {
       try {
         await state.audioPlayInFlight;
       } catch {
-        updateAudioGainImmediate(); // Restore volume if promise rejects
+        updateAudioGainImmediate();
+        return false;
+      }
+
+      // FIX: After the async play resolves, check whether a pause intent was issued
+      // while we were awaiting (generation mismatch), or intent is no longer to play.
+      if (state.audioPlayGeneration !== myGeneration) {
+        try { squelchAudioEvents(400); audio.pause(); } catch {}
         return false;
       }
       
@@ -1075,7 +1094,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return !audio.paused;
     } finally {
       state.audioPlayInFlight = null;
-      setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 500); // FIX: Extended flag
+      setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 500);
     }
   }
   async function ensureUnmutedIfNotUserMuted() {
@@ -1357,6 +1376,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }, Math.max(2000, Number(timeoutMs) || 0));
   }
   function clearPendingPlayResumesForPause() {
+    // FIX: Cancel any active volume fade immediately so a fade-in doesn't
+    // audibly continue after the user's pause intent is registered.
+    cancelActiveFade();
+    // FIX: Bump generation so any in-flight audio play callback aborts on resolve.
+    state.audioPlayGeneration++;
+
     clearHiddenMediaSessionPlay();
     clearBgResumeRetryTimer();
     clearResumeAfterBufferTimer();
@@ -1398,7 +1423,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!state.intendedPlaying) queueHardPauseVerification();
   }
   function pauseTogether() {
-    // FIX: Loop prevention check
     if (detectLoop()) return;
     if (startupSettleActive() && !userPauseIntentActive() && !mediaSessionForcedPauseActive()) return;
     state.intendedPlaying = false;
@@ -1431,7 +1455,6 @@ document.addEventListener("DOMContentLoaded", () => {
   function ensureStartupZeroed() { forceZeroBeforeFirstPlay(); }
 
   async function playTogether() {
-    // FIX: Loop prevention check
     if (detectLoop()) return;
 
     if (!coupledMode) {
@@ -1650,7 +1673,6 @@ document.addEventListener("DOMContentLoaded", () => {
       state.firstSeekDone = true;
       state.pendingSeekTarget = null;
       state.seekCompleted = true;
-      // FIX: Set seek cooldown to prevent immediate sync
       state.seekCooldownUntil = now() + 1000;
       setFastSync(2200);
       scheduleSync(0);
@@ -1732,7 +1754,6 @@ document.addEventListener("DOMContentLoaded", () => {
       const at2 = Number(audio.currentTime);
       if (Math.abs(at2 - vt2) > 0.05) quietSeekAudio(vt2);
     }
-    // FIX: Set seek cooldown
     state.seekCooldownUntil = now() + 1000;
     setFastSync(2600);
     
@@ -1810,7 +1831,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (mediaSessionForcedPauseActive()) return;
     if (!pageLoadedForAutoplay()) return;
     
-    // FIX: Removed background block to allow startup
     state.startupKickInFlight = true;
     setTimeout(async () => {
       try {
@@ -1867,8 +1887,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!state.intendedPlaying && !wantsStartupAutoplay()) return;
     if (mediaSessionForcedPauseActive() || userPauseLockActive()) return;
     if (!pageLoadedForAutoplay()) return;
-    
-    // FIX: Removed background block to allow startup
 
     clearStartupAutoplayRetryTimer();
     const count = state.startupAutoplayRetryCount;
@@ -2011,7 +2029,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const inBgDrift = document.visibilityState === "hidden" || !isWindowFocused();
 
-    // FIX: Skip drift correction during seek cooldown
     const skipDrift = now() < state.seekCooldownUntil;
 
     if (state.intendedPlaying && !state.restarting && !state.seeking && !state.syncing && !skipDrift) {
@@ -2031,7 +2048,6 @@ document.addEventListener("DOMContentLoaded", () => {
       updateLastKnownGoodVT();
     }
     
-    // Fallback unmuter in case audio got stuck processing a play/pause volume change
     if (state.intendedPlaying && !audio.paused && !state.userMutedVideo && !state.userMutedAudio) {
       try { if (audio.muted) audio.muted = false; } catch {}
       if (!state.audioFading) {
@@ -2107,9 +2123,8 @@ document.addEventListener("DOMContentLoaded", () => {
             }
           }
         } else {
-          // FIX: Skip drift correction during seek cooldown
           if (skipDrift) {
-            // Do nothing
+            // Skip drift correction during seek cooldown
           } else {
             const drift = vt - at;
             const absDrift = Math.abs(drift);
@@ -2402,15 +2417,12 @@ document.addEventListener("DOMContentLoaded", () => {
       } catch {}
     });
     video.on("play", () => {
-      // FIX: Loop prevention
       if (detectLoop()) {
         execProgrammaticVideoPause();
         return;
       }
 
       if (!coupledMode) return;
-
-      // FIX: Removed background block to allow startup
 
       if (state.restarting || state.isProgrammaticVideoPlay) return;
       if ((!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) &&
@@ -2442,7 +2454,6 @@ document.addEventListener("DOMContentLoaded", () => {
       playTogether().catch(() => {});
     });
     video.on("pause", () => {
-      // FIX: Loop prevention
       if (detectLoop()) {
         if (state.intendedPlaying) execProgrammaticVideoPlay();
         return;
@@ -2526,7 +2537,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     if (!coupledMode) return;
     const onAudioPlay = () => {
-      // FIX: Loop prevention
       if (detectLoop()) {
         audio.pause();
         return;
@@ -2560,7 +2570,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     };
     const onAudioPause = () => {
-      // FIX: Loop prevention
       if (detectLoop()) {
         if (state.intendedPlaying) execProgrammaticAudioPlay({ force: true }).catch(() => {});
         return;
@@ -2665,7 +2674,6 @@ document.addEventListener("DOMContentLoaded", () => {
       state.pendingSeekTarget = seekTime;
       state.lastKnownGoodVT = seekTime;
       state.lastKnownGoodVTts = now();
-      // FIX: Set seek cooldown
       state.seekCooldownUntil = now() + 2000;
       if (isFinite(seekTime) && coupledMode && audio) {
         const at = Number(audio.currentTime);
@@ -2918,7 +2926,6 @@ document.addEventListener("DOMContentLoaded", () => {
   bindCommonMediaEvents();
   setupVisibilityLifecycle();
   
-  // FIX: Load saved volume
   loadSavedVolume();
   
   if (coupledMode) {
@@ -2956,14 +2963,12 @@ document.addEventListener("DOMContentLoaded", () => {
       updateAudioGainImmediate();
     }
     state.userMutedVideo = !!video.muted();
-    // FIX: Save volume
     saveVolume();
   });
   if (coupledMode) {
     try {
       audio.addEventListener("volumechange", () => {
         state.userMutedAudio = !!audio.muted;
-        // FIX: Save volume (audio volume follows video, but we can still save)
         saveVolume();
       }, { passive: true });
     } catch {}
@@ -2971,8 +2976,6 @@ document.addEventListener("DOMContentLoaded", () => {
   if (!coupledMode) {
     try {
       video.on("play", () => {
-        // FIX: Removed background block to allow startup
-
         if ((!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) &&
           !userPlayIntentActive() && !wantsStartupAutoplay()) {
           execProgrammaticVideoPause();
