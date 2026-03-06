@@ -360,10 +360,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const MAX_AUDIO_PLAY_ATTEMPTS = 5;
   const AUDIO_PLAY_ATTEMPT_RESET_MS = 5000;
   const AUDIO_STARTUP_PLAY_RETRY_MS = 300;
-  const MAX_AUDIO_STARTUP_RETRIES = 8;
+  const MAX_AUDIO_STARTUP_RETRIES = 20;
   const STARTUP_SETTLE_MS = 3500;
   const LOOP_DETECTION_WINDOW_MS = 2000;
-  const MAX_LOOP_EVENTS = 5;
+  const MAX_LOOP_EVENTS = 6;
   const LOOP_COOLDOWN_MS = 4000;
 
   const clamp01 = v => Math.max(0, Math.min(1, Number(v)));
@@ -593,10 +593,18 @@ document.addEventListener("DOMContentLoaded", () => {
     return now() < state.startupPlaySettleUntil;
   }
 
+  function incrementRapidPlayPause() {
+    const nowTs = now();
+    if (nowTs > state.rapidPlayPauseResetAt || (nowTs - state.rapidPlayPauseResetAt) > RAPID_PLAY_PAUSE_WINDOW_MS) {
+      state.rapidPlayPauseCount = 0;
+      state.rapidPlayPauseResetAt = nowTs;
+    }
+    state.rapidPlayPauseCount++;
+  }
+
   function detectLoop() {
     if (now() < state.loopPreventionCooldownUntil) return true;
-    const recentEvents = state.rapidPlayPauseCount;
-    if (recentEvents >= MAX_LOOP_EVENTS && (now() - state.lastUserActionTime) > 1000) {
+    if (state.rapidPlayPauseCount >= MAX_LOOP_EVENTS && (now() - state.lastUserActionTime) > 1000) {
       state.loopPreventionCooldownUntil = now() + LOOP_COOLDOWN_MS;
       return true;
     }
@@ -1067,29 +1075,32 @@ document.addEventListener("DOMContentLoaded", () => {
       state.audioLastPlayPauseTs = now();
       state.stateChangeCooldownUntil = now() + STATE_CHANGE_COOLDOWN_MS;
       
-      try {
-        await state.audioPlayInFlight;
-      } catch {
-        updateAudioGainImmediate();
-        return false;
-      }
-
-      if (state.audioPlayGeneration !== myGeneration) {
-        try { squelchAudioEvents(400); audio.pause(); } catch {}
-        return false;
-      }
-      
-      if (shouldBlockNewAudioStart() || userPauseLockActive() || !state.intendedPlaying) {
-        try { squelchAudioEvents(350); } catch {}
-        try { audio.pause(); } catch {}
-        return false;
-      }
-      
+      // Do not await the play promise before triggering the fade,
+      // guaranteeing volume immediately rises once it actually plays.
       if (!isAlreadyPlaying) {
           fadeAudioIn(AUDIO_SAFE_FADE_DURATION_MS).catch(() => {});
       } else {
           updateAudioGainImmediate();
       }
+
+      try {
+          await state.audioPlayInFlight;
+      } catch {
+          updateAudioGainImmediate();
+          return false;
+      }
+
+      if (state.audioPlayGeneration !== myGeneration || !state.intendedPlaying) {
+          try { squelchAudioEvents(400); audio.pause(); } catch {}
+          return false;
+      }
+      
+      if (shouldBlockNewAudioStart() || userPauseLockActive()) {
+          try { squelchAudioEvents(350); } catch {}
+          try { audio.pause(); } catch {}
+          return false;
+      }
+      
       if (!audio.paused) state.audioEverStarted = true;
       return !audio.paused;
     } finally {
@@ -1437,7 +1448,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!state.intendedPlaying) queueHardPauseVerification();
   }
   function pauseTogether() {
-    if (detectLoop()) return;
+    if (detectLoop()) {
+        state.intendedPlaying = false;
+        pauseHard();
+        return;
+    }
     if (startupSettleActive() && !userPauseIntentActive() && !mediaSessionForcedPauseActive()) return;
     state.intendedPlaying = false;
     state.bufferHoldIntendedPlaying = false;
@@ -1477,7 +1492,11 @@ document.addEventListener("DOMContentLoaded", () => {
   function ensureStartupZeroed() { forceZeroBeforeFirstPlay(); }
 
   async function playTogether() {
-    if (detectLoop()) return;
+    if (detectLoop()) {
+        state.intendedPlaying = false;
+        pauseHard();
+        return;
+    }
 
     if (!coupledMode) {
       if (getVideoPaused()) {
@@ -1509,6 +1528,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const inBackground = document.visibilityState === "hidden" || !isWindowFocused();
       const blockOnBuffer =
         !inBackground &&
+        !startupSettleActive() &&
         (state.startupPrimed || state.audioEverStarted) &&
         (state.audioEverStarted ? !bothPlayableAt(vtStart) : !canPlaySmoothAt(getVideoNode(), vtStart, STRICT_BUFFER_AHEAD_SEC));
       if (blockOnBuffer) {
@@ -2079,6 +2099,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const inBgDrift = document.visibilityState === "hidden" || !isWindowFocused();
     const skipDrift = now() < state.seekCooldownUntil;
 
+    if (!vPaused && vt > 0) {
+       state.videoWaiting = false;
+    }
+
     if (state.intendedPlaying && !vPaused && vt > 0.5) {
       if (!state.firstPlayCommitted) {
         state.firstPlayCommitted = true;
@@ -2157,13 +2181,8 @@ document.addEventListener("DOMContentLoaded", () => {
       } else {
         if (!vPaused && aPaused) {
           if (!shouldBlockNewAudioStart() && !state.bgResumeInFlight) {
-            if (!state.audioEverStarted && canStartAudioAt(vt)) {
-              safeSetAudioTime(vt);
-              execProgrammaticAudioPlay({ squelchMs: 450, minGapMs: 0, force: true }).catch(() => false);
-            } else if (!startupAudioHoldActive()) {
-              safeSetAudioTime(vt);
-              execProgrammaticAudioPlay({ squelchMs: 500, minGapMs: 200, force: true }).catch(() => false);
-            }
+            safeSetAudioTime(vt);
+            execProgrammaticAudioPlay({ squelchMs: 450, minGapMs: 0, force: true }).catch(() => false);
           }
         } else if (vPaused && !aPaused) {
           if (!state.isProgrammaticVideoPlay && !mediaPlayTxnActive() && !chromiumPauseGuardActive()) {
@@ -2471,8 +2490,10 @@ document.addEventListener("DOMContentLoaded", () => {
       } catch {}
     });
     video.on("play", () => {
+      incrementRapidPlayPause();
       if (detectLoop()) {
-        execProgrammaticVideoPause();
+        state.intendedPlaying = false;
+        pauseHard();
         return;
       }
 
@@ -2520,8 +2541,10 @@ document.addEventListener("DOMContentLoaded", () => {
       playTogether().catch(() => {});
     });
     video.on("pause", () => {
+      incrementRapidPlayPause();
       if (detectLoop()) {
-        if (state.intendedPlaying) execProgrammaticVideoPlay();
+        state.intendedPlaying = false;
+        pauseHard();
         return;
       }
 
@@ -2623,8 +2646,10 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     if (!coupledMode) return;
     const onAudioPlay = () => {
+      incrementRapidPlayPause();
       if (detectLoop()) {
-        audio.pause();
+        state.intendedPlaying = false;
+        pauseHard();
         return;
       }
 
@@ -2672,8 +2697,10 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     };
     const onAudioPause = () => {
+      incrementRapidPlayPause();
       if (detectLoop()) {
-        if (state.intendedPlaying) execProgrammaticAudioPlay({ force: true }).catch(() => {});
+        state.intendedPlaying = false;
+        pauseHard();
         return;
       }
 
@@ -3116,6 +3143,12 @@ document.addEventListener("DOMContentLoaded", () => {
   if (!coupledMode) {
     try {
       video.on("play", () => {
+        incrementRapidPlayPause();
+        if (detectLoop()) {
+            state.intendedPlaying = false;
+            pauseHard();
+            return;
+        }
         if ((!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) &&
           !userPlayIntentActive() && !wantsStartupAutoplay()) {
           execProgrammaticVideoPause();
@@ -3135,6 +3168,12 @@ document.addEventListener("DOMContentLoaded", () => {
         updateMediaSessionPlaybackState();
       });
       video.on("pause", () => {
+        incrementRapidPlayPause();
+        if (detectLoop()) {
+            state.intendedPlaying = false;
+            pauseHard();
+            return;
+        }
         if (shouldTreatVisiblePauseAsUserPause()) {
             state.intendedPlaying = false;
             state.bufferHoldIntendedPlaying = false;
