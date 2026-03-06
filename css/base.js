@@ -13,7 +13,8 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  * Available under Apache License Version 2.0
  * <https://github.com/mozilla/vtt.js/blob/main/LICENSE>
  */   
- document.addEventListener("DOMContentLoaded", () => {
+ 
+document.addEventListener("DOMContentLoaded", () => {
   const video = videojs("video", {
     controls: true,
     autoplay: true,
@@ -1453,8 +1454,6 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     if (state.firstPlayCommitted) return;
     const vt = Number(video.currentTime()) || 0;
     const at = coupledMode && audio ? (Number(audio.currentTime) || 0) : 0;
-    // If the stream has genuinely progressed, do not forcefully zero.
-    // Commit the play and cancel all retries instead.
     if (vt > 0.5 || at > 0.5) {
       state.firstPlayCommitted = true;
       state.startupKickDone = true;
@@ -1531,11 +1530,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
       
       const inBgDrift = document.visibilityState === "hidden" || !isWindowFocused();
       if (!inBgDrift && isFinite(vt) && isFinite(at) && Math.abs(at - vt) > 0.25) {
-        if (state.audioEverStarted && vt > 0.2) {
-          safeSetVideoTime(at);
-        } else {
-          quietSeekAudio(vt);
-        }
+        quietSeekAudio(vt);
       }
       
       let videoOk = true;
@@ -2096,13 +2091,8 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     if (state.intendedPlaying && !state.restarting && !state.seeking && !state.syncing && !skipDrift) {
       if (state.audioEverStarted && !audio.paused && !inBgDrift) {
         if (Math.abs(at - vt) > 0.25) {
-          if (vt > 0.2) {
-            safeSetVideoTime(at);
-            vt = at;
-          } else {
-            quietSeekAudio(vt);
-            at = vt;
-          }
+          quietSeekAudio(vt);
+          at = vt;
         }
       }
     }
@@ -2523,7 +2513,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
       if (coupledMode && !audio.paused && state.audioEverStarted) {
         const vt = Number(video.currentTime());
         const at = Number(audio.currentTime);
-        if (Math.abs(vt - at) > 0.25) safeSetVideoTime(at);
+        if (Math.abs(vt - at) > 0.25) quietSeekAudio(vt);
         scheduleSync(0);
         return;
       }
