@@ -16,7 +16,8 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
 
 // "It takes a lot of hard work to make something simple." ~ Steve Jobs 
  
-document.addEventListener("DOMContentLoaded", () => {
+ 
+ document.addEventListener("DOMContentLoaded", () => {
   const video = videojs("video", {
     controls: true,
     autoplay: true,
@@ -360,7 +361,8 @@ document.addEventListener("DOMContentLoaded", () => {
     bgSilentTimeSyncTimer: null,
     bufferHoldSince: 0,
     videoStallAudioPaused: false,
-    stallAudioResumeHoldUntil: 0
+    stallAudioResumeHoldUntil: 0,
+    videoSyncRetryTs: 0 // Used to strict-pause audio if video fails in foreground
   };
 
   const EPS = 1.0;
@@ -373,8 +375,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const BIG_DRIFT_BACKGROUND = 6.0;
   const MAX_RATE_NUDGE = 0.003;
   const DRIFT_PERSIST_CYCLES = 3;
-  const AUDIO_FADE_DURATION_MS = 120;
-  const AUDIO_SAFE_FADE_DURATION_MS = 150;
+  const AUDIO_FADE_DURATION_MS = 80;
+  const AUDIO_SAFE_FADE_DURATION_MS = 120;
   const MIN_PLAY_PAUSE_GAP_MS = 150;
   const SEEK_READY_TIMEOUT_MS = 3000;
   const SEEK_WATCHDOG_MS = 6000;
@@ -654,9 +656,6 @@ document.addEventListener("DOMContentLoaded", () => {
   function isAltTabTransitionActive() { return state.altTabTransitionActive || now() < state.altTabTransitionUntil; }
   function isVisibilityStable() { return now() >= state.visibilityStableUntil; }
   function isFocusStable() { return now() >= state.focusStableUntil; }
-  function shouldTreatVisiblePauseAsUserPause() {
-    return document.visibilityState === "visible" && (userPauseIntentActive() || userPauseLockActive());
-  }
 
   function startupSettleActive() {
     if (state.startupPlaySettled) return false;
@@ -665,6 +664,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function incrementRapidPlayPause() {
+    if (document.visibilityState === "hidden") return; // Disable loop defense throttling in background
     const nowTs = now();
     if ((nowTs - state.rapidPlayPauseResetAt) > RAPID_PLAY_PAUSE_WINDOW_MS) {
       state.rapidPlayPauseCount = 0;
@@ -674,6 +674,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function detectLoop() {
+    if (document.visibilityState === "hidden") return false; // Disable loop defense throttling in background
+    if (isVisibilityTransitionActive()) return false;
     if (state.seeking || state.syncing || state.restarting) return false;
     if (now() < state.loopPreventionCooldownUntil) return true;
     if ((now() - state.lastUserActionTime) < 1500) return false;
@@ -692,9 +694,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (
       document.visibilityState === "visible" &&
-      isWindowFocused() &&
       isVisibilityStable() &&
-      isFocusStable() &&
       !state.isProgrammaticVideoPause &&
       !state.isProgrammaticAudioPause &&
       !state.seeking &&
@@ -707,11 +707,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (startupSettleActive()) return true;
     if (document.visibilityState === "hidden") return true;
-    if (!isWindowFocused()) return true;
     if (isVisibilityTransitionActive()) return true;
     if (isAltTabTransitionActive()) return true;
     if (!isVisibilityStable()) return true;
-    if (!isFocusStable()) return true;
     if (now() < state.tabVisibilityChangeUntil) return true;
     if (shouldBlockPauseEvent()) return true;
     if (chromiumPauseEventSuppressed()) return true;
@@ -1095,8 +1093,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (state.videoWaiting && document.visibilityState === "visible") return true;
     if (state.videoStallAudioPaused) return true;
     if (now() < state.stallAudioResumeHoldUntil) return true;
-    if (document.visibilityState === "visible" && isWindowFocused() &&
-        state.audioEverStarted && !state.seeking && !state.syncing && !fastSyncActive()) {
+    if (document.visibilityState === "visible" && state.audioEverStarted && !state.seeking && !state.syncing && !fastSyncActive()) {
       const vt = Number(video.currentTime()) || 0;
       const vNode = getVideoNode();
       const bufAhead = bufferedAhead(vNode, vt);
@@ -1597,7 +1594,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const vtNow = Number(video.currentTime());
       const atNow = Number(audio.currentTime);
       const checkTime = Math.max(vtNow, atNow || 0);
-      const inBg = document.visibilityState === "hidden" || !isWindowFocused();
+      const inBg = document.visibilityState === "hidden";
       const vNode = getVideoNode();
       const bufAheadVideo = bufferedAhead(vNode, vtNow);
       const videoBuffered = bufAheadVideo >= MIN_STALL_BUFFER_RESUME_SEC &&
@@ -1636,7 +1633,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const vtNow = Number(video.currentTime());
         const atNow = coupledMode && audio ? Number(audio.currentTime) : vtNow;
         const checkTime = Math.max(vtNow, atNow || 0);
-        const inBg2 = document.visibilityState === "hidden" || !isWindowFocused();
+        const inBg2 = document.visibilityState === "hidden";
         const videoNode = getVideoNode();
         const bufAheadVideo2 = bufferedAhead(videoNode, vtNow);
         const videoReady = Number(videoNode.readyState || 0) >= HAVE_FUTURE_DATA ||
@@ -1716,7 +1713,7 @@ document.addEventListener("DOMContentLoaded", () => {
       state.isProgrammaticAudioPause = true;
 
       if (!audio.paused && audio.volume > 0.015) {
-        fadeAndPauseAudio(AUDIO_FADE_DURATION_MS, () => {
+        fadeAndPauseAudio(80, () => {
           setTimeout(() => { state.isProgrammaticAudioPause = false; }, 200);
         });
       } else {
@@ -1805,7 +1802,7 @@ document.addEventListener("DOMContentLoaded", () => {
         safeSetAudioTime(vtStart);
       }
       forceUnmuteForPlaybackIfAllowed();
-      const inBackground = document.visibilityState === "hidden" || !isWindowFocused();
+      const inBackground = document.visibilityState === "hidden";
       const bypassBufferForBgReturn = inBgReturnGrace();
       const blockOnBuffer =
         !bypassBufferForBgReturn &&
@@ -1831,7 +1828,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const vt = Number(video.currentTime());
       const at = Number(audio.currentTime);
 
-      const inBgDrift = document.visibilityState === "hidden" || !isWindowFocused();
+      const inBgDrift = document.visibilityState === "hidden";
       if (!inBgDrift && isFinite(vt) && isFinite(at) && Math.abs(at - vt) > 0.25) {
         await quietSeekAudio(vt);
       }
@@ -1925,7 +1922,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!getVideoPaused()) return;
             execProgrammaticVideoPlay();
           }, TAB_RETURN_AUDIO_RETRY_DELAY_MS);
-        } else if (document.visibilityState !== "hidden" && isWindowFocused()) {
+        } else if (document.visibilityState === "visible") {
           execProgrammaticAudioPause(600);
           state.intendedPlaying = false;
           state.playSessionId = (state.playSessionId || 0) + 1;
@@ -1980,7 +1977,7 @@ document.addEventListener("DOMContentLoaded", () => {
                   updateMediaSessionPlaybackState();
                 }
               }
-            } else if (document.visibilityState !== "hidden" && isWindowFocused()) {
+            } else if (document.visibilityState === "visible") {
               execProgrammaticVideoPause();
               state.intendedPlaying = false;
               state.playSessionId = (state.playSessionId || 0) + 1;
@@ -1998,14 +1995,14 @@ document.addEventListener("DOMContentLoaded", () => {
             } else {
               armResumeAfterBuffer(10000);
             }
-          } else if (document.visibilityState !== "hidden" && isWindowFocused()) {
+          } else if (document.visibilityState === "visible") {
             execProgrammaticVideoPause();
             armResumeAfterBuffer(10000);
           }
         }
       }
       if (vp && !ap) {
-        if (document.visibilityState === "hidden" || !isWindowFocused() || isVisibilityTransitionActive() || isAltTabTransitionActive()) {
+        if (document.visibilityState === "hidden" || isVisibilityTransitionActive() || isAltTabTransitionActive()) {
           bgSilentSyncVideoTime(Number(audio.currentTime));
         } else {
           execProgrammaticAudioPause(600);
@@ -2175,7 +2172,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function startupBufferReadyLoose() {
     if (!coupledMode) return true;
-    if (document.visibilityState === "hidden" || !isWindowFocused()) return true;
+    if (document.visibilityState === "hidden") return true;
     const t0 = Number(video.currentTime()) || 0;
     const vNode = getVideoNode();
     const vOk = Number(vNode.readyState || 0) >= 2 || canPlayAt(vNode, t0);
@@ -2185,7 +2182,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function bothReadyForStartupKick() {
     if (!coupledMode) return true;
-    if (document.visibilityState === "hidden" || !isWindowFocused()) return true;
+    if (document.visibilityState === "hidden") return true;
     const t0 = Number(video.currentTime()) || 0;
     const vNode = getVideoNode();
     const vRS = Number(vNode.readyState || 0);
@@ -2336,7 +2333,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!pageLoadedForAutoplay()) return;
     const t0 = Number(video.currentTime()) || 0;
     const primeWait = now() - state.startupPrimeStartedAt;
-    const inBg = document.visibilityState === "hidden" || !isWindowFocused();
+    const inBg = document.visibilityState === "hidden";
     if (!bothStartupBufferedAt(t0)) {
       const bgReady = inBg;
       const looseReady = canPlayAt(getVideoNode(), t0) && canStartAudioAt(t0);
@@ -2373,7 +2370,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!state.intendedPlaying || state.seeking || state.syncing) return false;
     if (!state.audioEverStarted && state.startupPhase) return false;
     if (startupSettleActive()) return false;
-    if (document.visibilityState === "hidden" || !isWindowFocused()) return false;
+    if (document.visibilityState === "hidden") return false;
     const checkTime = Math.max(vt, at || 0);
     const vNode = getVideoNode();
     const aNeedsBuffer = !canPlaySmoothAt(audio, checkTime, STRICT_BUFFER_AHEAD_SEC);
@@ -2421,7 +2418,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const vPaused = getVideoPaused();
     const aPaused = !!audio.paused;
 
-    const inBgDrift = document.visibilityState === "hidden" || !isWindowFocused();
+    const inBgDrift = document.visibilityState === "hidden";
     const skipDrift = now() < state.seekCooldownUntil;
 
     if (!vPaused && vt > 0) {
@@ -2482,7 +2479,6 @@ document.addEventListener("DOMContentLoaded", () => {
       setFastSync(1200);
     }
     const isTransientState = document.visibilityState === "hidden" ||
-      !isWindowFocused() ||
       isVisibilityTransitionActive() ||
       isAltTabTransitionActive() ||
       (platform.chromiumOnlyBrowser && chromiumBgPauseBlocked());
@@ -2539,8 +2535,14 @@ document.addEventListener("DOMContentLoaded", () => {
         } else if (vPaused && !aPaused) {
           if (!state.isProgrammaticVideoPlay && !mediaPlayTxnActive() && !chromiumPauseGuardActive()) {
             execProgrammaticVideoPlay();
+            // Strict foreground A/V coupling: if browser refuses to play video, stop the audio.
+            if (!state.videoSyncRetryTs) state.videoSyncRetryTs = now();
+            if (now() - state.videoSyncRetryTs > 800) {
+                execProgrammaticAudioPause(600);
+            }
           }
         } else if (vPaused && aPaused) {
+          state.videoSyncRetryTs = 0;
           if (!inMediaTxnWindow() && !userPauseLockActive() && !chromiumPauseGuardActive() && !state.bgResumeInFlight && !state.seekResumeInFlight) {
             if (isHiddenBackground()) {
               state.resumeOnVisible = true;
@@ -2552,6 +2554,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
           }
         } else {
+          state.videoSyncRetryTs = 0;
           if (skipDrift) {
           } else {
             const drift = vt - at;
@@ -2598,7 +2601,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!aPaused) {
         state.isProgrammaticAudioPause = true;
         if (audio.volume > 0.015) {
-          fadeAndPauseAudio(AUDIO_FADE_DURATION_MS, () => {
+          fadeAndPauseAudio(80, () => {
             setTimeout(() => { state.isProgrammaticAudioPause = false; }, 200);
           });
         } else {
@@ -2696,8 +2699,7 @@ document.addEventListener("DOMContentLoaded", () => {
         !userPauseLockActive() && !mediaSessionForcedPauseActive() &&
         !inMediaTxnWindow() && !inBgReturnGrace() &&
         !isVisibilityTransitionActive() && !isAltTabTransitionActive() &&
-        document.visibilityState === "visible" && isWindowFocused() &&
-        isVisibilityStable() && isFocusStable() &&
+        document.visibilityState === "visible" && isVisibilityStable() && isFocusStable() &&
         now() >= state.tabVisibilityChangeUntil &&
         (nowTs - state.lastConsistencyCheckAt) > CONSISTENCY_CHECK_MIN_INTERVAL_MS
       ) {
@@ -2746,8 +2748,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (coupledMode && state.intendedPlaying && !state.seeking && !state.syncing && !state.restarting &&
           !state.strictBufferHold && !state.videoWaiting && !state.videoStallAudioPaused &&
           now() >= state.stallAudioResumeHoldUntil && !inBgReturnGrace() &&
-          document.visibilityState === "visible" && isWindowFocused() &&
-          isVisibilityStable() && !isVisibilityTransitionActive() && !isAltTabTransitionActive()) {
+          document.visibilityState === "visible" && isVisibilityStable() && !isVisibilityTransitionActive() && !isAltTabTransitionActive()) {
         const vPausedHb = getVideoPaused();
         const aPausedHb = audio ? !!audio.paused : true;
         if (!vPausedHb && aPausedHb && !shouldBlockNewAudioStart()) {
@@ -2889,11 +2890,6 @@ document.addEventListener("DOMContentLoaded", () => {
       state.lastUserActionTime = now();
       if (isPlayControlTarget(event.target)) {
         pendingTechTogglePausedState = null;
-        if (getVideoPaused()) markUserPlayIntent();
-        else {
-          markUserPauseIntent();
-          clearPendingPlayResumesForPause();
-        }
         return;
       }
       if (isTechSurfaceTarget(event.target)) {
@@ -2909,7 +2905,22 @@ document.addEventListener("DOMContentLoaded", () => {
       pendingTechTogglePausedState = null;
     };
     const onClick = event => {
-      if (isPlayControlTarget(event.target)) { pendingTechTogglePausedState = null; return; }
+      state.lastUserActionTime = now();
+      tryUnlockAudioContext();
+      
+      if (isPlayControlTarget(event.target)) { 
+        pendingTechTogglePausedState = null; 
+        Promise.resolve().then(() => {
+          if (getVideoPaused()) {
+            markUserPauseIntent(1200);
+            clearPendingPlayResumesForPause();
+          } else {
+            markUserPlayIntent(1200);
+          }
+        });
+        return; 
+      }
+      
       if (!isTechSurfaceTarget(event.target)) { pendingTechTogglePausedState = null; return; }
       const wasPaused = pendingTechTogglePausedState;
       pendingTechTogglePausedState = null;
@@ -3076,16 +3087,12 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
+      if (!state.isProgrammaticVideoPlay && !state.isProgrammaticAudioPlay) {
+          state.intendedPlaying = true;
+          state.userPlayUntil = 0;
+      }
+
       if (!coupledMode) {
-        const inFg = document.visibilityState === "visible" && isWindowFocused();
-        const recentUserAction = (now() - state.lastUserActionTime) < 800;
-        const allowPlay = inFg || userPlayIntentActive() || wantsStartupAutoplay() ||
-          state.intendedPlaying || recentUserAction;
-        if (!allowPlay || userPauseLockActive() || mediaSessionForcedPauseActive()) {
-          if (!allowPlay) execProgrammaticVideoPause();
-          return;
-        }
-        if (userPlayIntentActive()) state.userPlayUntil = 0;
         state.intendedPlaying = true;
         state.bufferHoldIntendedPlaying = true;
         if (!state.firstPlayCommitted && !state.startupKickInFlight) {
@@ -3163,30 +3170,16 @@ document.addEventListener("DOMContentLoaded", () => {
         Promise.resolve().then(() => {
           if (state.seeking || state.restarting || state.isProgrammaticVideoPause) return;
           if (!getVideoPaused()) return;
-          if (isVisibilityTransitionActive() || !isVisibilityStable() || !isFocusStable()) return;
-          if (now() < state.tabVisibilityChangeUntil) return;
-          if (inBgReturnGrace()) return;
-          if (isAltTabTransitionActive()) return;
-          if (document.visibilityState === "visible" && isWindowFocused()) {
-            const isTransientPause =
-              !userPauseIntentActive() && !userPauseLockActive() && (
-                state.isProgrammaticVideoPlay || state.seekResumeInFlight || state.bgResumeInFlight ||
-                (platform.chromiumOnlyBrowser && chromiumPauseEventSuppressed())
-              );
-            if (isTransientPause) {
-              setTimeout(() => {
-                if (!state.intendedPlaying || !getVideoPaused()) return;
-                if (userPauseLockActive() || mediaSessionForcedPauseActive()) return;
-                execProgrammaticVideoPlay();
-              }, 300);
-              scheduleSync(300);
-              return;
+          
+          if (document.visibilityState === "visible" && !isVisibilityTransitionActive()) {
+            const isTransientPause = state.isProgrammaticVideoPlay || state.seekResumeInFlight || state.bgResumeInFlight || state.videoWaiting || (platform.chromiumOnlyBrowser && chromiumPauseEventSuppressed());
+            if (!isTransientPause) {
+                state.intendedPlaying = false;
+                state.bufferHoldIntendedPlaying = false;
+                updateMediaSessionPlaybackState();
+                pauseHard();
+                return;
             }
-            state.intendedPlaying = false;
-            state.bufferHoldIntendedPlaying = false;
-            updateMediaSessionPlaybackState();
-            pauseHard();
-            return;
           }
           if (shouldTreatVisiblePauseAsUserPause()) {
             state.intendedPlaying = false;
@@ -3211,6 +3204,18 @@ document.addEventListener("DOMContentLoaded", () => {
         if (state.seeking || state.restarting || state.isProgrammaticVideoPause) return;
         if (!getVideoPaused()) return;
 
+        if (document.visibilityState === "visible" && !isVisibilityTransitionActive()) {
+          const isTransientPause = state.isProgrammaticVideoPlay || state.seekResumeInFlight || state.bgResumeInFlight || state.videoWaiting || (platform.chromiumOnlyBrowser && chromiumPauseEventSuppressed());
+          if (!isTransientPause) {
+            state.intendedPlaying = false;
+            state.bufferHoldIntendedPlaying = false;
+            state.playSessionId = (state.playSessionId || 0) + 1;
+            updateMediaSessionPlaybackState();
+            pauseHard();
+            return;
+          }
+        }
+
         if (isVisibilityTransitionActive()) {
           if (state.intendedPlaying && platform.useBgControllerRetry) state.resumeOnVisible = true;
           return;
@@ -3234,22 +3239,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         trackPauseEvent();
 
-        if (document.visibilityState === "visible" && isWindowFocused()) {
-          if (!userPauseIntentActive() && !userPauseLockActive() &&
-              (state.isProgrammaticVideoPlay || state.seekResumeInFlight || state.bgResumeInFlight ||
-               mediaPlayTxnActive() || fastSyncActive() || state.videoWaiting ||
-               (platform.chromiumOnlyBrowser && chromiumPauseEventSuppressed()))) {
-            scheduleSync(200);
-            return;
-          }
-          state.intendedPlaying = false;
-          state.bufferHoldIntendedPlaying = false;
-          state.playSessionId = (state.playSessionId || 0) + 1;
-          updateMediaSessionPlaybackState();
-          pauseHard();
-          return;
-        }
-
         if (shouldTreatVisiblePauseAsUserPause()) {
           state.intendedPlaying = false;
           state.bufferHoldIntendedPlaying = false;
@@ -3260,7 +3249,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         if (platform.chromiumOnlyBrowser && chromiumBgPauseBlocked()) return;
-        if (startupSettleActive() && document.visibilityState === "visible" && isWindowFocused()) return;
+        if (startupSettleActive() && document.visibilityState === "visible") return;
 
         if (shouldIgnorePauseAsTransient()) {
           if (state.intendedPlaying && platform.useBgControllerRetry) {
@@ -3296,7 +3285,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!state.startupPrimed || state.startupKickInFlight || (state.startupPhase && !state.firstPlayCommitted)) return;
 
       if (coupledMode && audio && !audio.paused &&
-          document.visibilityState === "visible" && isWindowFocused() &&
+          document.visibilityState === "visible" &&
           !state.seeking && !state.syncing && !state.bgResumeInFlight) {
         state.videoStallAudioPaused = true;
         state.stallAudioResumeHoldUntil = now() + MIN_STALL_AUDIO_RESUME_MS;
@@ -3444,6 +3433,18 @@ document.addEventListener("DOMContentLoaded", () => {
         if (state.seeking || state.restarting || state.isProgrammaticAudioPause) return;
         if (audio && !audio.paused) return;
 
+        if (document.visibilityState === "visible" && !isVisibilityTransitionActive()) {
+          const isTransientPause = state.isProgrammaticVideoPlay || state.seekResumeInFlight || state.bgResumeInFlight || state.videoWaiting || (platform.chromiumOnlyBrowser && chromiumPauseEventSuppressed());
+          if (!isTransientPause) {
+            state.intendedPlaying = false;
+            state.bufferHoldIntendedPlaying = false;
+            state.playSessionId = (state.playSessionId || 0) + 1;
+            updateMediaSessionPlaybackState();
+            pauseHard();
+            return;
+          }
+        }
+
         if (isVisibilityTransitionActive()) {
           if (state.intendedPlaying && platform.useBgControllerRetry) state.resumeOnVisible = true;
           return;
@@ -3467,22 +3468,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         trackPauseEvent();
 
-        if (document.visibilityState === "visible" && isWindowFocused()) {
-          if (!userPauseIntentActive() && !userPauseLockActive() &&
-              (state.isProgrammaticVideoPlay || state.seekResumeInFlight || state.bgResumeInFlight ||
-               mediaPlayTxnActive() || fastSyncActive() || state.videoWaiting ||
-               (platform.chromiumOnlyBrowser && chromiumPauseEventSuppressed()))) {
-            scheduleSync(200);
-            return;
-          }
-          state.intendedPlaying = false;
-          state.bufferHoldIntendedPlaying = false;
-          state.playSessionId = (state.playSessionId || 0) + 1;
-          updateMediaSessionPlaybackState();
-          pauseHard();
-          return;
-        }
-
         if (shouldTreatVisiblePauseAsUserPause()) {
           state.intendedPlaying = false;
           state.bufferHoldIntendedPlaying = false;
@@ -3493,7 +3478,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         if (platform.chromiumOnlyBrowser && chromiumBgPauseBlocked()) return;
-        if (startupSettleActive() && document.visibilityState === "visible" && isWindowFocused()) return;
+        if (startupSettleActive() && document.visibilityState === "visible") return;
 
         if (shouldIgnorePauseAsTransient()) {
           if (state.intendedPlaying && platform.useBgControllerRetry) {
