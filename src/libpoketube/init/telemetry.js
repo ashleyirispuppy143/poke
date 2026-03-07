@@ -144,32 +144,32 @@ module.exports = function (app, config, renderTemplate) {
     :visited { color: #00c0ff; }
     a { color: #0ab7f0; }
     .app { max-width: 1000px; margin: 0 auto; padding: 24px; }
-    p {
+    p{
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
       line-height: 1.6;
     }
-    ul {
+    ul{
       font-family: "poketube flex";
       font-weight: 500;
       font-stretch: extra-expanded;
       padding-left: 1.2rem;
     }
-    h2 {
+    h2{
       font-family: "poketube flex", sans-serif;
       font-weight: 700;
       font-stretch: extra-expanded;
       margin-top: 1.5rem;
       margin-bottom: .3rem;
     }
-    h1 {
+    h1{
       font-family: "poketube flex", sans-serif;
       font-weight: 1000;
       font-stretch: ultra-expanded;
       margin-top: 0;
       margin-bottom: .3rem;
     }
-    .note { color: #bbb; font-size: .95rem; }
-    .btn {
+    .note{ color: #bbb; font-size: .95rem; }
+    .btn{
       display: inline-block;
       margin-top: 1rem;
       padding: .5rem 1rem;
@@ -181,10 +181,10 @@ module.exports = function (app, config, renderTemplate) {
       text-decoration: none;
       font-size: .95rem;
     }
-    .btn:hover {
+    .btn:hover{
       background: #2f2e3d;
     }
-    .status {
+    .status{
       margin-top: .5rem;
       font-size: .95rem;
     }
@@ -267,10 +267,10 @@ module.exports = function (app, config, renderTemplate) {
       }
 
       const hasLimit = typeof req.query.limit !== "undefined"
-      const rawLimit = parseInt((hasLimit ? req.query.limit : "10").toString(), 10)
+      const rawLimit = parseInt((hasLimit ? req.query.limit : "8").toString(), 10)
       const limit = Number.isFinite(rawLimit)
-        ? Math.max(1, Math.min(rawLimit, 1000))
-        : 10
+        ? Math.max(1, Math.min(rawLimit, 3000))
+        : 8
 
       const sortedVideos = Object.entries(memoryStats.videos)
         .sort((a, b) => b[1] - a[1])
@@ -307,44 +307,44 @@ module.exports = function (app, config, renderTemplate) {
     }
     :root { color-scheme: dark; }
     body { color: #fff; }
-    body {
+    body{
       background: #1c1b22;
       margin: 0;
     }
-    img.logo {
+    img.logo{
       float: right;
       margin: .3em 0 1em 2em;
     }
-    :visited { color: #00c0ff; }
-    a { color: #0ab7f0; }
-    .app { max-width: 1100px; margin: 0 auto; padding: 24px; }
-    p {
+    :visited{ color: #00c0ff; }
+    a{ color: #0ab7f0; }
+    .app{ max-width: 1100px; margin: 0 auto; padding: 24px; }
+    p{
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
       line-height: 1.6;
     }
-    ul {
+    ul{
       font-family: "poketube flex";
       font-weight: 500;
       font-stretch: extra-expanded;
       padding-left: 1.2rem;
     }
-    h2 {
+    h2{
       font-family: "poketube flex", sans-serif;
       font-weight: 700;
       font-stretch: extra-expanded;
       margin-top: 1.5rem;
       margin-bottom: .3rem;
     }
-    h1 {
+    h1{
       font-family: "poketube flex", sans-serif;
       font-weight: 1000;
       font-stretch: ultra-expanded;
       margin-top: 0;
       margin-bottom: .3rem;
     }
-    .toc { margin: 1rem 0 2rem; }
-    .toc li { margin: .25rem 0; }
-    pre.license {
+    .toc{ margin: 1rem 0 2rem; }
+    .toc li{ margin: .25rem 0; }
+    pre.license{
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       background: #111;
       padding: 14px 16px;
@@ -353,12 +353,17 @@ module.exports = function (app, config, renderTemplate) {
       line-height: 1.45;
       border: 1px solid #222;
     }
-    hr { border: 0; border-top: 1px solid #222; margin: 28px 0; }
-    .note { color: #bbb; font-size: .95rem; }
-    .stats-list li { margin: .15rem 0; }
-    .muted { opacity: .8; font-size: .95rem; }
+    hr{ border: 0; border-top: 1px solid #222; margin: 28px 0; }
+    .note{ color: #bbb; font-size: .95rem; }
+    .muted{ opacity: .8; font-size: .95rem; }
 
-    .explain-box {
+    .inline-user-count{
+      display: inline;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .explain-box{
       margin-top: 1rem;
       margin-bottom: 1.25rem;
       background: #252432;
@@ -366,63 +371,63 @@ module.exports = function (app, config, renderTemplate) {
       border-radius: 16px;
       padding: 16px;
     }
-    .explain-box p {
+    .explain-box p{
       margin: 0 0 .9rem 0;
     }
-    .explain-box p:last-child {
+    .explain-box p:last-child{
       margin-bottom: 0;
     }
 
-    .breakdown-grid {
+    .breakdown-grid{
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 16px;
       margin-top: 1rem;
       margin-bottom: 1.25rem;
     }
-    .breakdown-card {
+    .breakdown-card{
       background: #252432;
       border: 1px solid #2a2a35;
       border-radius: 16px;
       padding: 16px;
     }
-    .breakdown-card h3 {
+    .breakdown-card h3{
       margin: 0 0 .85rem 0;
       font-family: "poketube flex", sans-serif;
       font-weight: 700;
       font-stretch: extra-expanded;
       font-size: 1.05rem;
     }
-    .breakdown-empty {
+    .breakdown-empty{
       color: #bbb;
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
     }
-    .breakdown-list {
+    .breakdown-list{
       display: flex;
       flex-direction: column;
       gap: 12px;
     }
-    .breakdown-item {
+    .breakdown-item{
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
     }
-    .breakdown-topline {
+    .breakdown-topline{
       display: flex;
       justify-content: space-between;
       gap: 12px;
       align-items: baseline;
       margin-bottom: .4rem;
     }
-    .breakdown-label {
+    .breakdown-label{
       font-weight: 600;
       min-width: 0;
       word-break: break-word;
     }
-    .breakdown-count {
+    .breakdown-count{
       color: #bbb;
       white-space: nowrap;
       font-size: .92rem;
     }
-    .breakdown-bar-wrap {
+    .breakdown-bar-wrap{
       width: 100%;
       height: 12px;
       background: #17161d;
@@ -430,44 +435,30 @@ module.exports = function (app, config, renderTemplate) {
       border-radius: 999px;
       overflow: hidden;
     }
-    .breakdown-bar {
+    .breakdown-bar{
       height: 100%;
       width: 0%;
       background: linear-gradient(90deg, #0ab7f0 0%, #52d3ff 100%);
       border-radius: 999px;
     }
-    .breakdown-sub {
+    .breakdown-sub{
       margin-top: .35rem;
       color: #bbb;
       font-size: .9rem;
       line-height: 1.45;
     }
 
-    .uuid-value {
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
-      font-size: 1.4rem;
-      font-weight: 700;
-      margin-top: .2rem;
-      margin-bottom: .4rem;
-    }
-    .uuid-sub {
-      color: #bbb;
-      font-size: .95rem;
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
-      line-height: 1.45;
-    }
-
-    .controls {
+    .controls{
       display: flex;
       align-items: center;
       gap: .75rem;
       flex-wrap: wrap;
       margin: .75rem 0 1rem 0;
     }
-    .controls label {
+    .controls label{
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
     }
-    .controls select {
+    .controls select{
       background: #252432;
       color: #fff;
       border: 1px solid #2a2a35;
@@ -475,14 +466,14 @@ module.exports = function (app, config, renderTemplate) {
       padding: .45rem .7rem;
       font: inherit;
     }
-    .limit-warning {
+    .limit-warning{
       width: 100%;
       color: #bbb;
       font-size: .95rem;
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
     }
 
-    .video-grid {
+    .video-grid{
       list-style: none;
       padding-left: 0;
       margin: 0;
@@ -490,7 +481,7 @@ module.exports = function (app, config, renderTemplate) {
       grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 14px;
     }
-    .video-card {
+    .video-card{
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -500,11 +491,11 @@ module.exports = function (app, config, renderTemplate) {
       padding: 12px;
       min-width: 0;
     }
-    .video-thumb-link {
+    .video-thumb-link{
       display: block;
       width: 100%;
     }
-    .video-thumb {
+    .video-thumb{
       display: block;
       width: 100%;
       aspect-ratio: 16 / 9;
@@ -512,58 +503,58 @@ module.exports = function (app, config, renderTemplate) {
       border-radius: 12px;
       background: #111;
     }
-    .video-meta {
+    .video-meta{
       min-width: 0;
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
     }
-    .video-title {
+    .video-title{
       display: inline-block;
       font-weight: 700;
       line-height: 1.35;
       text-decoration: none;
       word-break: break-word;
     }
-    .video-id {
+    .video-id{
       color: #bbb;
       font-size: .9rem;
       margin-top: .4rem;
       word-break: break-all;
     }
-    .video-views {
+    .video-views{
       margin-top: .5rem;
       font-size: .95rem;
       color: #fff;
     }
-    .video-note {
+    .video-note{
       margin-top: .45rem;
       color: #bbb;
       font-size: .9rem;
       line-height: 1.45;
     }
-    .video-rank {
+    .video-rank{
       margin-top: .45rem;
       color: #bbb;
       font-size: .9rem;
     }
 
-    .pagination-wrap {
+    .pagination-wrap{
       margin-top: 1rem;
       display: flex;
       flex-direction: column;
       gap: .75rem;
     }
-    .pagination-info {
+    .pagination-info{
       color: #bbb;
       font-size: .95rem;
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
     }
-    .pagination-controls {
+    .pagination-controls{
       display: flex;
       align-items: center;
       gap: .5rem;
       flex-wrap: wrap;
     }
-    .page-btn {
+    .page-btn{
       background: #252432;
       color: #fff;
       border: 1px solid #2a2a35;
@@ -572,40 +563,40 @@ module.exports = function (app, config, renderTemplate) {
       font: inherit;
       cursor: pointer;
     }
-    .page-btn[disabled] {
+    .page-btn[disabled]{
       opacity: .5;
       cursor: not-allowed;
     }
-    .page-number {
+    .page-number{
       min-width: 2.2rem;
       text-align: center;
       background: #1f1e29;
     }
-    .page-number.active {
+    .page-number.active{
       border-color: #0ab7f0;
       box-shadow: inset 0 0 0 1px #0ab7f0;
     }
 
     @media (max-width: 1000px) {
-      .video-grid {
+      .video-grid{
         grid-template-columns: repeat(3, minmax(0, 1fr));
       }
     }
 
     @media (max-width: 860px) {
-      .breakdown-grid {
+      .breakdown-grid{
         grid-template-columns: 1fr;
       }
-      .video-grid {
+      .video-grid{
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
     }
 
     @media (max-width: 640px) {
-      .video-grid {
+      .video-grid{
         grid-template-columns: 1fr;
       }
-      .breakdown-topline {
+      .breakdown-topline{
         flex-direction: column;
         align-items: flex-start;
         gap: .2rem;
@@ -618,7 +609,8 @@ module.exports = function (app, config, renderTemplate) {
     <h1>Anonymous stats</h1>
     <p class="note">
       These stats are aggregated locally on this Poke instance. For what is collected (and what is not),
-      see <a href="/policies/privacy#stats">privacy policy</a>.
+      see <a href="/policies/privacy#stats">privacy policy</a>.<br>
+      <span class="inline-user-count">user id count: <span id="user-id-count-inline">Loading…</span></span>
     </p>
 
     <div class="explain-box">
@@ -628,12 +620,6 @@ module.exports = function (app, config, renderTemplate) {
     </div>
 
     <div class="breakdown-grid">
-      <div class="breakdown-card">
-        <h3>UUIDS SAVED:</h3>
-        <div id="uuid-count" class="uuid-value">Loading…</div>
-        <div class="uuid-sub">User count:</div>
-      </div>
-
       <div class="breakdown-card">
         <h3>Operating systems</h3>
         <div id="os-breakdown" class="breakdown-list"></div>
@@ -654,13 +640,14 @@ module.exports = function (app, config, renderTemplate) {
     <div class="controls">
       <label for="video-limit">Show top videos:</label>
       <select id="video-limit">
-        <option value="10">10</option>
-        <option value="20">20</option>
-        <option value="50">50</option>
-        <option value="100" selected>100</option>
+        <option value="8" selected>8</option>
+        <option value="16">16</option>
+        <option value="24">24</option>
+        <option value="40">40</option>
+        <option value="100">100</option>
         <option value="200">200</option>
-        <option value="500">500</option>
         <option value="1000">1000</option>
+        <option value="3000">3000</option>
       </select>
       <div id="limit-warning" class="limit-warning" style="display:none;">
         Warning: this mode may have a lot of pages.
@@ -680,8 +667,8 @@ module.exports = function (app, config, renderTemplate) {
     <p class="note">
       • Human view (this page): <code><a href="/api/stats?view=human">/api/stats?view=human</a></code><br>
       • JSON view (for scripts/tools): <code><a href="/api/stats?view=json">/api/stats?view=json</a></code><br>
-      • JSON default limit: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code> (10 videos)<br>
-      • JSON with custom limit: <code><a href="/api/stats?view=json&limit=1000">/api/stats?view=json&limit=1000</a></code><br>
+      • JSON default limit: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code> (8 videos)<br>
+      • JSON with custom limit: <code><a href="/api/stats?view=json&limit=3000">/api/stats?view=json&limit=3000</a></code><br>
       • Opt out for this browser: <code><a href="/api/stats/optout">/api/stats/optout</a></code>
     </p>
   </div>
@@ -698,7 +685,7 @@ module.exports = function (app, config, renderTemplate) {
     const paginationControls = document.getElementById("pagination-controls");
     const osBreakdown = document.getElementById("os-breakdown");
     const browserBreakdown = document.getElementById("browser-breakdown");
-    const uuidCount = document.getElementById("uuid-count");
+    const userIdCountInline = document.getElementById("user-id-count-inline");
     const limitWarning = document.getElementById("limit-warning");
 
     var allVideos = {};
@@ -709,7 +696,7 @@ module.exports = function (app, config, renderTemplate) {
     }
 
     function getSelectedLimit() {
-      return parseInt(videoLimitSelect.value, 10) || 100;
+      return parseInt(videoLimitSelect.value, 10) || 8;
     }
 
     function getLimitedEntries() {
@@ -717,12 +704,12 @@ module.exports = function (app, config, renderTemplate) {
     }
 
     function shouldPaginate() {
-      var selected = getSelectedLimit();
-      return selected === 500 || selected === 1000;
+      return getSelectedLimit() === 1000 || getSelectedLimit() === 3000;
     }
 
     function updateLimitWarning() {
-      limitWarning.style.display = getSelectedLimit() === 1000 ? "block" : "none";
+      const selected = getSelectedLimit();
+      limitWarning.style.display = selected === 1000 || selected === 3000 ? "block" : "none";
     }
 
     function getTotalPages(entries) {
@@ -1003,7 +990,7 @@ module.exports = function (app, config, renderTemplate) {
       topVideos.innerHTML = "<li>No data (telemetry disabled).</li>";
       videoLimitSelect.disabled = true;
       paginationWrap.style.display = "none";
-      uuidCount.textContent = "0";
+      userIdCountInline.textContent = "0";
       osBreakdown.innerHTML = '<div class="breakdown-empty">No data (telemetry disabled).</div>';
       browserBreakdown.innerHTML = '<div class="breakdown-empty">No data (telemetry disabled).</div>';
     } else {
@@ -1016,11 +1003,11 @@ module.exports = function (app, config, renderTemplate) {
         topVideos.innerHTML = "<li>Opt-out active (no stats loaded).</li>";
         videoLimitSelect.disabled = true;
         paginationWrap.style.display = "none";
-        uuidCount.textContent = "Opt-out active";
+        userIdCountInline.textContent = "Opt-out active";
         osBreakdown.innerHTML = '<div class="breakdown-empty">Opt-out active (no stats loaded).</div>';
         browserBreakdown.innerHTML = '<div class="breakdown-empty">Opt-out active (no stats loaded).</div>';
       } else {
-        fetch("/api/stats?view=json&limit=1000")
+        fetch("/api/stats?view=json&limit=3000")
           .then(function (res) { return res.json(); })
           .then(function (data) {
             var videos = data.videos || {};
@@ -1029,7 +1016,7 @@ module.exports = function (app, config, renderTemplate) {
             var totalUsers = data.totalUsers || 0;
 
             allVideos = videos;
-            uuidCount.textContent = String(totalUsers);
+            userIdCountInline.textContent = String(totalUsers);
 
             renderBreakdown(osBreakdown, os, "os");
             renderBreakdown(browserBreakdown, browsers, "browser");
@@ -1048,7 +1035,7 @@ module.exports = function (app, config, renderTemplate) {
             topVideos.innerHTML = "<li>Error loading data.</li>";
             videoLimitSelect.disabled = true;
             paginationWrap.style.display = "none";
-            uuidCount.textContent = "Error";
+            userIdCountInline.textContent = "Error";
             osBreakdown.innerHTML = '<div class="breakdown-empty">Error loading OS data.</div>';
             browserBreakdown.innerHTML = '<div class="breakdown-empty">Error loading browser data.</div>';
           });
@@ -1076,44 +1063,44 @@ module.exports = function (app, config, renderTemplate) {
     }
     :root { color-scheme: dark; }
     body { color: #fff; }
-    body {
+    body{
       background: #1c1b22;
       margin: 0;
     }
-    img {
+    img{
       float: right;
       margin: .3em 0 1em 2em;
     }
-    :visited { color: #00c0ff; }
-    a { color: #0ab7f0; }
-    .app { max-width: 1000px; margin: 0 auto; padding: 24px; }
-    p {
+    :visited{ color: #00c0ff; }
+    a{ color: #0ab7f0; }
+    .app{ max-width: 1000px; margin: 0 auto; padding: 24px; }
+    p{
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
       line-height: 1.6;
     }
-    ul {
+    ul{
       font-family: "poketube flex";
       font-weight: 500;
       font-stretch: extra-expanded;
       padding-left: 1.2rem;
     }
-    h2 {
+    h2{
       font-family: "poketube flex", sans-serif;
       font-weight: 700;
       font-stretch: extra-expanded;
       margin-top: 1.5rem;
       margin-bottom: .3rem;
     }
-    h1 {
+    h1{
       font-family: "poketube flex", sans-serif;
       font-weight: 1000;
       font-stretch: ultra-expanded;
       margin-top: 0;
       margin-bottom: .3rem;
     }
-    .toc { margin: 1rem 0 2rem; }
-    .toc li { margin: .25rem 0; }
-    pre.license {
+    .toc{ margin: 1rem 0 2rem; }
+    .toc li{ margin: .25rem 0; }
+    pre.license{
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       background: #111;
       padding: 14px 16px;
@@ -1122,10 +1109,10 @@ module.exports = function (app, config, renderTemplate) {
       line-height: 1.45;
       border: 1px solid #222;
     }
-    hr { border: 0; border-top: 1px solid #222; margin: 28px 0; }
-    .note { color: #bbb; font-size: .95rem; }
-    .stats-list li { margin: .15rem 0; }
-    .muted { opacity: .8; font-size: .95rem; }
+    hr{ border: 0; border-top: 1px solid #222; margin: 28px 0; }
+    .note{ color: #bbb; font-size: .95rem; }
+    .stats-list li{ margin: .15rem 0; }
+    .muted{ opacity: .8; font-size: .95rem; }
   </style>
 </head>
 <body>
@@ -1152,8 +1139,8 @@ module.exports = function (app, config, renderTemplate) {
     <p class="note">
       • Human view (stats UI): <code><a href="/api/stats?view=human">/api/stats?view=human</a></code><br>
       • JSON view (for scripts/tools): <code><a href="/api/stats?view=json">/api/stats?view=json</a></code><br>
-      • JSON default limit: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code> (10 videos)<br>
-      • JSON with custom limit: <code><a href="/api/stats?view=json&limit=1000">/api/stats?view=json&limit=1000</a></code><br>
+      • JSON default limit: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code> (8 videos)<br>
+      • JSON with custom limit: <code><a href="/api/stats?view=json&limit=3000">/api/stats?view=json&limit=3000</a></code><br>
       • Opt out for this browser: <code><a href="/api/stats/optout">/api/stats/optout</a></code>
     </p>
   </div>
