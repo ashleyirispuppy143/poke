@@ -362,7 +362,10 @@ document.addEventListener("DOMContentLoaded", () => {
     // Timestamp when strictBufferHold last became true — used to force-clear stuck holds
     bufferHoldSince: 0,
     // Was audio paused because video entered a waiting/stall state?
-    videoStallAudioPaused: false
+    videoStallAudioPaused: false,
+    // After a video stall pauses audio, don't allow audio resume until this timestamp.
+    // This prevents the rapid play/pause loop when video fires playing with thin buffer.
+    stallAudioResumeHoldUntil: 0
   };
 
   const EPS = 1.0;
@@ -420,6 +423,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const WAKE_DETECT_THRESHOLD_MS = 8000;
   const CONSISTENCY_CHECK_MIN_INTERVAL_MS = 3000;
   const STALL_RECOVERY_COOLDOWN_MS = 5000;
+  // Minimum buffer ahead (seconds) required before audio is allowed to resume after a video stall.
+  // If video fires "playing" with less buffer than this, audio stays paused and we wait for more.
+  const MIN_STALL_BUFFER_RESUME_SEC = 0.5;
+  // Minimum time to hold audio paused after a stall before allowing any resume attempt.
+  // Prevents the rapid play/pause loop when the video fires "playing" briefly then stalls again.
+  const MIN_STALL_AUDIO_RESUME_MS = 600;
 
   const clamp01 = v => Math.max(0, Math.min(1, Number(v)));
 
@@ -930,7 +939,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (wasPlaying) {
         await doVolumeFade(0, 60);
-        // CRITICAL: Pause the actual audio element before seeking. Without this the browser
+        // Pause the actual audio element before seeking. Without this the browser
         // keeps its decode buffer pointing at the old position and briefly replays it
         // (the "repeat last 0.5s" artifact) when the seek completes.
         state.isProgrammaticAudioPause = true;
@@ -1101,6 +1110,25 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!coupledMode) return false;
     if (!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) return true;
     if (state.startupPhase && !state.firstPlayCommitted) return false;
+
+    // These checks must run BEFORE the bgPlaybackAllowed early-return,
+    // otherwise they are dead code (bgPlaybackAllowed is always true after init).
+    // Block audio if video is actively buffering/stalled — this is the primary fix for
+    // the "audio plays without video buffered" and "stall play/pause loop" bugs.
+    if (state.videoWaiting && document.visibilityState === "visible") return true;
+    if (state.videoStallAudioPaused) return true;
+    if (now() < state.stallAudioResumeHoldUntil) return true;
+    // Block audio if video doesn't have enough buffer ahead to sustain smooth playback
+    if (document.visibilityState === "visible" && isWindowFocused() &&
+        state.audioEverStarted && !state.seeking && !state.syncing && !fastSyncActive()) {
+      const vt = Number(video.currentTime()) || 0;
+      const vNode = getVideoNode();
+      const bufAhead = bufferedAhead(vNode, vt);
+      const vRS = Number(vNode.readyState || 0);
+      // If video readyState < HAVE_FUTURE_DATA AND buffer is thin, block audio
+      if (vRS < HAVE_FUTURE_DATA && bufAhead < MIN_STALL_BUFFER_RESUME_SEC) return true;
+    }
+
     if (state.bgPlaybackAllowed) return false;
     const allowHiddenBootstrap =
       (document.visibilityState === "hidden" && (hiddenMediaSessionPlayActive() || state.mediaSessionInitiatedPlay));
@@ -1613,14 +1641,25 @@ document.addEventListener("DOMContentLoaded", () => {
       const atNow = Number(audio.currentTime);
       const checkTime = Math.max(vtNow, atNow || 0);
       const inBg = document.visibilityState === "hidden" || !isWindowFocused();
+      const vNode = getVideoNode();
+      // Require proper buffer ahead before resuming (not just canplay).
+      // "canplay" fires with nearly no buffer which would restart the stall loop.
+      const bufAheadVideo = bufferedAhead(vNode, vtNow);
+      const videoBuffered = bufAheadVideo >= MIN_STALL_BUFFER_RESUME_SEC &&
+        Number(vNode.readyState || 0) >= HAVE_FUTURE_DATA;
       const ready = inBg
-        ? (canPlayAt(getVideoNode(), checkTime) && canPlayAt(audio, checkTime))
-        : bothPlayableAt(checkTime);
+        ? (canPlayAt(vNode, checkTime) && canPlayAt(audio, checkTime))
+        : (videoBuffered && bothPlayableAt(checkTime));
       if (!ready) return;
+      // Hold time must also have expired before we allow audio to resume
+      if (now() < state.stallAudioResumeHoldUntil) return;
       state.strictBufferHold = false; state.bufferHoldSince = 0;
       state.strictBufferReason = "";
       state.strictBufferHoldFrames = 0;
       state.strictBufferHoldConfirmed = false;
+      // Clear stall-pause state so shouldBlockNewAudioStart() allows audio through
+      state.videoStallAudioPaused = false;
+      state.stallAudioResumeHoldUntil = 0;
       setFastSync(1600);
       cleanup();
       if (!inMediaTxnWindow()) playTogether().catch(() => {});
@@ -1646,20 +1685,21 @@ document.addEventListener("DOMContentLoaded", () => {
         const checkTime = Math.max(vtNow, atNow || 0);
         const inBg2 = document.visibilityState === "hidden" || !isWindowFocused();
         const videoNode = getVideoNode();
+        const bufAheadVideo2 = bufferedAhead(videoNode, vtNow);
         const videoReady = Number(videoNode.readyState || 0) >= HAVE_FUTURE_DATA ||
-          canPlayAt(videoNode, checkTime);
+          (bufAheadVideo2 >= MIN_STALL_BUFFER_RESUME_SEC && canPlayAt(videoNode, checkTime));
         const rdy = inBg2
           ? (canPlayAt(videoNode, checkTime) && (!coupledMode || canPlayAt(audio, checkTime)))
           : bothPlayableAt(checkTime);
-        // Force-clear buffer hold if: both ready, OR video ready + timeout exceeded
+        // Force-clear buffer hold if: both ready, OR video has real buffer + timeout exceeded
         // (audio may just be slow to buffer; don't keep video frozen waiting for it)
         if (rdy || videoReady) {
           state.strictBufferHold = false; state.bufferHoldSince = 0;
           state.strictBufferReason = "";
           state.strictBufferHoldFrames = 0;
           state.strictBufferHoldConfirmed = false;
-          state.bufferHoldSince = 0;
           state.videoStallAudioPaused = false;
+          state.stallAudioResumeHoldUntil = 0;
           playTogether().catch(() => {});
         }
       }
@@ -1678,6 +1718,9 @@ document.addEventListener("DOMContentLoaded", () => {
     state.strictBufferReason = "";
     state.strictBufferHoldFrames = 0;
     state.strictBufferHoldConfirmed = false;
+    // Clear stall-pause state — user explicitly paused, so these locks no longer apply
+    state.videoStallAudioPaused = false;
+    state.stallAudioResumeHoldUntil = 0;
     state.startupAudioHoldUntil = 0;
     state.audioPlayUntil = Math.max(state.audioPlayUntil, now() + 400);
     setPauseEventGuard(1600);
@@ -2540,7 +2583,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
           }
         } else if (vPaused && !aPaused) {
-          // CRITICAL: Audio is playing but video is paused in background/transition.
+          // Audio is playing but video is paused in background/transition.
           // Browser throttled or paused video while audio continued freely.
           // We CANNOT just let audio run ahead — sync video.currentTime so the
           // progress bar stays correct, and try to restart video if possible.
@@ -2564,16 +2607,23 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         } else if (!vPaused && aPaused) {
           // Video is running but audio paused during a transition — kick audio
-          if (!state.bgResumeInFlight && !shouldBlockNewAudioStart() && inBgReturnGrace()) {
+          // (only if not in a stall hold — stall recovery is handled via armResumeAfterBuffer)
+          const inStallHold = state.videoStallAudioPaused || now() < state.stallAudioResumeHoldUntil;
+          if (!inStallHold && !state.bgResumeInFlight && !shouldBlockNewAudioStart() && inBgReturnGrace()) {
             safeSetAudioTime(vt);
             execProgrammaticAudioPlay({ squelchMs: 450, minGapMs: 0, force: true }).catch(() => false);
           }
         }
       } else {
         if (!vPaused && aPaused) {
-          if (!shouldBlockNewAudioStart() && !state.bgResumeInFlight) {
-            safeSetAudioTime(vt);
-            execProgrammaticAudioPlay({ squelchMs: 450, minGapMs: 0, force: true }).catch(() => false);
+          const stallHoldActive = state.videoStallAudioPaused || now() < state.stallAudioResumeHoldUntil;
+          if (!stallHoldActive && !shouldBlockNewAudioStart() && !state.bgResumeInFlight) {
+            // Also verify video has real buffer before restarting audio
+            const bufVt = bufferedAhead(getVideoNode(), vt);
+            if (bufVt >= MIN_STALL_BUFFER_RESUME_SEC || !state.audioEverStarted) {
+              safeSetAudioTime(vt);
+              execProgrammaticAudioPlay({ squelchMs: 450, minGapMs: 0, force: true }).catch(() => false);
+            }
           }
         } else if (vPaused && !aPaused) {
           if (!state.isProgrammaticVideoPlay && !mediaPlayTxnActive() && !chromiumPauseGuardActive()) {
@@ -2663,6 +2713,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const canKickAudio =
           !state.seeking && !state.syncing &&
           !mediaActionLocked() && !state.strictBufferHold &&
+          !state.videoWaiting && !state.videoStallAudioPaused &&
+          now() >= state.stallAudioResumeHoldUntil &&
           now() >= state.audioKickCooldownUntil &&
           !userPauseLockActive() && !shouldBlockNewAudioStart();
         if (canKickAudio && (now() - state.audioLastProgressTs) > 3500) {
@@ -2800,16 +2852,21 @@ document.addEventListener("DOMContentLoaded", () => {
       // Orphaned A/V enforcement: if in foreground and one track is playing without the other,
       // and it's not a deliberate state (seeking, syncing, stall, etc.), resolve it.
       if (coupledMode && state.intendedPlaying && !state.seeking && !state.syncing && !state.restarting &&
-          !state.strictBufferHold && !inBgReturnGrace() &&
+          !state.strictBufferHold && !state.videoWaiting && !state.videoStallAudioPaused &&
+          now() >= state.stallAudioResumeHoldUntil && !inBgReturnGrace() &&
           document.visibilityState === "visible" && isWindowFocused() &&
           isVisibilityStable() && !isVisibilityTransitionActive() && !isAltTabTransitionActive()) {
         const vPausedHb = getVideoPaused();
         const aPausedHb = audio ? !!audio.paused : true;
         if (!vPausedHb && aPausedHb && !shouldBlockNewAudioStart()) {
-          // Video playing without audio — restart audio
+          // Video playing without audio — restart audio (only if video has real buffer)
           const vtHb = Number(video.currentTime()) || 0;
-          safeSetAudioTime(vtHb);
-          execProgrammaticAudioPlay({ squelchMs: 400, force: true, minGapMs: 0 }).catch(() => {});
+          const vNodeHb = getVideoNode();
+          const hasBufHb = bufferedAhead(vNodeHb, vtHb) >= MIN_STALL_BUFFER_RESUME_SEC;
+          if (hasBufHb) {
+            safeSetAudioTime(vtHb);
+            execProgrammaticAudioPlay({ squelchMs: 400, force: true, minGapMs: 0 }).catch(() => {});
+          }
         } else if (vPausedHb && !aPausedHb && !state.isProgrammaticAudioPlay) {
           // Audio playing without video — restart video
           if (!mediaPlayTxnActive() && !chromiumPauseGuardActive()) {
@@ -3375,7 +3432,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!state.intendedPlaying || state.restarting) return;
       if (!state.startupPrimed || state.startupKickInFlight || (state.startupPhase && !state.firstPlayCommitted)) return;
 
-      // CRITICAL — freeze audio immediately when video stalls.
+      // Freeze audio immediately when video stalls.
       // If audio keeps playing past the stall point, we later have to seek it backward
       // to re-sync, which causes the audible "replay last 0.5s" artifact.
       // Pausing audio NOW eliminates that artifact entirely.
@@ -3383,8 +3440,12 @@ document.addEventListener("DOMContentLoaded", () => {
           document.visibilityState === "visible" && isWindowFocused() &&
           !state.seeking && !state.syncing && !state.bgResumeInFlight) {
         state.videoStallAudioPaused = true;
+        // Set a minimum hold time so we don't immediately un-pause audio if the video
+        // fires "playing" briefly with a thin buffer and then stalls again right away.
+        // This is the primary fix for the stall play/pause loop.
+        state.stallAudioResumeHoldUntil = now() + MIN_STALL_AUDIO_RESUME_MS;
         state.bufferHoldIntendedPlaying = true;
-        execProgrammaticAudioPause(3000);
+        execProgrammaticAudioPause(4000);
       }
 
       if (platform.useBgControllerRetry) {
@@ -3424,23 +3485,39 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       setFastSync(2000);
 
-      // If audio was paused because video stalled (videoStallAudioPaused), or if audio
-      // is paused but video just resumed — resync audio to video position and restart it.
-      // This is the counterpart to the "waiting" handler's freeze — we thaw audio here.
-      const audioNeedsResume =
-        coupledMode && audio && audio.paused &&
-        state.intendedPlaying && !state.seeking && !state.syncing && !state.strictBufferHold &&
-        (state.videoStallAudioPaused || state.bufferHoldIntendedPlaying) &&
-        !shouldBlockNewAudioStart();
-      if (audioNeedsResume) {
-        state.videoStallAudioPaused = false;
+      // After a video stall paused audio (videoStallAudioPaused), we need to be
+      // careful about when we resume. The "playing" event fires as soon as the
+      // decoder has a SINGLE decoded frame ready — buffer might still be nearly empty.
+      // Resuming audio immediately would cause another stall+pause loop.
+      if (coupledMode && audio && state.videoStallAudioPaused && state.intendedPlaying &&
+          !state.seeking && !state.syncing) {
         const vtNow = Number(video.currentTime()) || 0;
-        safeSetAudioTime(vtNow); // sync to exact video position
-        execProgrammaticAudioPlay({ squelchMs: 400, force: true, minGapMs: 0 })
-          .then(ok => { if (ok) softUnmuteAudio(AUDIO_SAFE_FADE_DURATION_MS).catch(() => {}); })
-          .catch(() => {});
-      } else if (coupledMode && state.intendedPlaying && audio.paused && !state.seeking && !state.syncing && !state.strictBufferHold && !shouldBlockNewAudioStart()) {
-        state.videoStallAudioPaused = false;
+        const vNode = getVideoNode();
+        const bufAhead = bufferedAhead(vNode, vtNow);
+        const holdExpired = now() >= state.stallAudioResumeHoldUntil;
+        const hasEnoughBuffer = bufAhead >= MIN_STALL_BUFFER_RESUME_SEC &&
+          Number(vNode.readyState || 0) >= HAVE_FUTURE_DATA;
+
+        if (holdExpired && hasEnoughBuffer && !shouldBlockNewAudioStart()) {
+          // Safe to resume audio — video has real buffer and hold has expired
+          state.videoStallAudioPaused = false;
+          state.stallAudioResumeHoldUntil = 0;
+          safeSetAudioTime(vtNow);
+          execProgrammaticAudioPlay({ squelchMs: 400, force: true, minGapMs: 0 })
+            .then(ok => { if (ok) softUnmuteAudio(AUDIO_SAFE_FADE_DURATION_MS).catch(() => {}); })
+            .catch(() => {});
+        } else {
+          // Buffer still thin or hold still active — wait for proper readiness via polling.
+          // armResumeAfterBuffer will fire both tracks together when buffer is sufficient.
+          // Do NOT clear videoStallAudioPaused yet — shouldBlockNewAudioStart() reads it.
+          armResumeAfterBuffer(8000);
+          scheduleSync(0);
+          return;
+        }
+      } else if (coupledMode && audio && audio.paused && state.intendedPlaying &&
+                 !state.seeking && !state.syncing && !state.strictBufferHold &&
+                 !state.videoStallAudioPaused && !shouldBlockNewAudioStart()) {
+        // Audio paused for a non-stall reason (e.g. seek, tab return) — normal resume
         if ((state.startupKickInFlight && !state.startupKickDone) || state.seekResumeInFlight) {
           scheduleSync(0);
         } else {
@@ -4133,7 +4210,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }, 100);
   scheduleSync(0);
 });
-
 document.addEventListener('keydown', function(event) {
      const active = document.activeElement;
     if (active && (active.tagName.toLowerCase() === 'input' || active.tagName.toLowerCase() === 'textarea')) {
