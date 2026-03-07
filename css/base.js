@@ -129,6 +129,15 @@ document.addEventListener("DOMContentLoaded", () => {
   };
   const hasExternalAudio = !!audio && audio.tagName === "AUDIO" && !!pickAudioSrc();
   const coupledMode = hasExternalAudio && qua !== "medium";
+  // When audio element exists but has no source (e.g. quality=medium sets src=""),
+  // silence and disable it immediately so it can never interfere with video playback,
+  // audio focus/session, or event handling.
+  if (!coupledMode && audio) {
+    try { audio.muted = true; audio.volume = 0; } catch {}
+    try { audio.preload = "none"; } catch {}
+    // Ensure it can never accidentally play
+    try { if (!audio.paused) audio.pause(); } catch {}
+  }
   try {
     videoEl.loop = false;
     videoEl.removeAttribute?.("loop");
@@ -346,7 +355,10 @@ document.addEventListener("DOMContentLoaded", () => {
     mediaErrorCount: 0,
     mediaErrorCooldownUntil: 0,
     lastConsistencyCheckAt: 0,
-    consistencyCheckPendingPlayUntil: 0
+    consistencyCheckPendingPlayUntil: 0,
+    // Background silent time sync — prevents seek handler from firing during bg progress-bar sync
+    bgSilentTimeSyncing: false,
+    bgSilentTimeSyncTimer: null
   };
 
   const EPS = 1.0;
@@ -955,6 +967,37 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {}
   }
 
+  // Silently update video.currentTime to match audio position when in the background.
+  // This keeps the progress bar / seekbar correct without triggering our full seek machinery
+  // (seeking watchdog, state.seeking = true, finalizeSeekSync, etc.).
+  // MUST set bgSilentTimeSyncing = true so video.on("seeking") ignores the resulting event.
+  function bgSilentSyncVideoTime(t) {
+    if (!isFinite(t) || t < 0) return;
+    try {
+      const vt = Number(videoEl.currentTime) || 0;
+      if (Math.abs(vt - t) < 0.12) return; // already close enough
+      // Cancel any pending clear so we don't accidentally clear while a new sync is pending
+      if (state.bgSilentTimeSyncTimer) {
+        clearTimeout(state.bgSilentTimeSyncTimer);
+        state.bgSilentTimeSyncTimer = null;
+      }
+      state.bgSilentTimeSyncing = true;
+      videoEl.currentTime = t;
+      try {
+        const v = getVideoNode();
+        if (v && v !== videoEl) v.currentTime = t;
+      } catch {}
+      // Update lastKnownGoodVT so tab-return resume starts from the correct position
+      state.lastKnownGoodVT = t;
+      state.lastKnownGoodVTts = now();
+    } catch {}
+    // Clear flag after generous delay — seek events are asynchronous
+    state.bgSilentTimeSyncTimer = setTimeout(() => {
+      state.bgSilentTimeSyncing = false;
+      state.bgSilentTimeSyncTimer = null;
+    }, 500);
+  }
+
   function timeInBuffered(media, t) {
     try {
       const br = media.buffered;
@@ -1446,10 +1489,21 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       if (!aPausedNow && isFinite(atNow)) {
-        if (isFinite(vtNow) && Math.abs(vtNow - atNow) > 2.0) {
-          safeSetVideoTime(atNow);
+        if (mySession !== state.playSessionId || !state.intendedPlaying) return;
+        const inBg = isHiddenBackground();
+        if (isFinite(vtNow) && Math.abs(vtNow - atNow) > 0.12) {
+          if (inBg) {
+            // Background: silently update video time to keep progress bar in sync.
+            // Full seek machinery MUST NOT fire in background (causes watchdog timeouts,
+            // state.seeking stuck, etc.) — bgSilentSyncVideoTime bypasses all of that.
+            bgSilentSyncVideoTime(atNow);
+          } else {
+            // Foreground / tab-return: do a real seek so video actually renders at
+            // the correct position and audio+video play together from that point.
+            if (Math.abs(vtNow - atNow) > 0.5) safeSetVideoTime(atNow);
+          }
         }
-        if (vPausedNow && !state.isProgrammaticVideoPlay) {
+        if (!inBg && vPausedNow && !state.isProgrammaticVideoPlay) {
           execProgrammaticVideoPlay();
         }
         state.bgHiddenWasPlaying = false;
@@ -1611,6 +1665,10 @@ document.addEventListener("DOMContentLoaded", () => {
         try { audio.pause(); } catch {}
         setTimeout(() => { state.isProgrammaticAudioPause = false; }, 300);
       }
+    } else if (!coupledMode && audio && !audio.paused) {
+      // Non-coupled mode (e.g. quality=medium): audio element exists but has no source.
+      // Keep it permanently silent — it must never play anything.
+      try { audio.muted = true; audio.volume = 0; audio.pause(); } catch {}
     }
 
     clearSyncLoop();
@@ -1900,8 +1958,12 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       if (vp && !ap) {
         if (document.visibilityState === "hidden" || !isWindowFocused() || isVisibilityTransitionActive() || isAltTabTransitionActive()) {
-          safeSetVideoTime(Number(audio.currentTime));
+          // Background / transition: video paused but audio still playing.
+          // Silently update video.currentTime so the progress bar stays correct,
+          // without triggering full seek machinery (which can deadlock in background).
+          bgSilentSyncVideoTime(Number(audio.currentTime));
         } else {
+          // Foreground stable: video paused but audio playing is not allowed — pause audio.
           execProgrammaticAudioPause(600);
         }
       }
@@ -2292,6 +2354,12 @@ document.addEventListener("DOMContentLoaded", () => {
     state.syncScheduledAt = 0;
     enforcePlaybackRateSync();
     if (!coupledMode) {
+      // If audio element exists but has no source (quality=medium), keep it permanently silent.
+      // Browsers can spontaneously resume or fire events on audio elements in the DOM.
+      if (audio && !audio.paused) {
+        try { audio.muted = true; audio.volume = 0; audio.pause(); } catch {}
+      }
+      // Non-coupled: if intendedPlaying but video somehow stopped, restart it
       if (state.intendedPlaying && getVideoPaused() && !userPauseLockActive() && !mediaSessionForcedPauseActive()) {
         try { await Promise.resolve(execProgrammaticVideoPlay()); } catch {}
       }
@@ -2398,6 +2466,35 @@ document.addEventListener("DOMContentLoaded", () => {
               scheduleBgResumeRetry(inBgReturnGrace() ? 80 : 400);
             }
           }
+        } else if (vPaused && !aPaused) {
+          // CRITICAL: Audio is playing but video is paused in background/transition.
+          // Browser throttled or paused video while audio continued freely.
+          // We CANNOT just let audio run ahead — sync video.currentTime so the
+          // progress bar stays correct, and try to restart video if possible.
+          if (isHiddenBackground()) {
+            // Silent sync: update video.currentTime without triggering seek machinery
+            bgSilentSyncVideoTime(at);
+            // Also try to restart the video in background (may fail, that's OK)
+            if (!state.bgResumeInFlight && !state.isProgrammaticVideoPlay && !state.seeking) {
+              // Don't spam — only try if video is significantly behind audio
+              if (Math.abs(at - vt) > 1.0) {
+                execProgrammaticVideoPlay();
+              }
+            }
+          } else {
+            // Tab is being restored (altTab/focus transition): let the return-grace
+            // recovery handle the full sync. Just silently update progress bar.
+            bgSilentSyncVideoTime(at);
+            if (!state.bgResumeInFlight) {
+              scheduleBgResumeRetry(inBgReturnGrace() ? 80 : 200);
+            }
+          }
+        } else if (!vPaused && aPaused) {
+          // Video is running but audio paused during a transition — kick audio
+          if (!state.bgResumeInFlight && !shouldBlockNewAudioStart() && inBgReturnGrace()) {
+            safeSetAudioTime(vt);
+            execProgrammaticAudioPlay({ squelchMs: 450, minGapMs: 0, force: true }).catch(() => false);
+          }
         }
       } else {
         if (!vPaused && aPaused) {
@@ -2414,6 +2511,10 @@ document.addEventListener("DOMContentLoaded", () => {
             if (isHiddenBackground()) {
               state.resumeOnVisible = true;
             } else {
+              // Sync audio position to video before resuming both to avoid A/V drift pop
+              if (isFinite(vt) && isFinite(at) && Math.abs(at - vt) > 0.25) {
+                safeSetAudioTime(vt);
+              }
               playTogether().catch(() => {});
             }
           }
@@ -2426,7 +2527,10 @@ document.addEventListener("DOMContentLoaded", () => {
             const activeBigDrift = inBgDrift ? BIG_DRIFT_BACKGROUND : BIG_DRIFT;
             if (absDrift > activeBigDrift) {
               resetAudioPlaybackRate();
-              safeSetVideoTime(at);
+              // Big drift: video is authoritative in foreground; seek audio to video
+              await quietSeekAudio(vt);
+              resetAudioPlaybackRate();
+              state.driftStableFrames = 0;
               setFastSync(1600);
             } else if (absDrift > 0.5 && !inBgDrift) {
               await quietSeekAudio(vt);
@@ -2579,6 +2683,20 @@ document.addEventListener("DOMContentLoaded", () => {
         if (bothPaused && (nowTs - state.lastUserActionTime) > 3000) {
           state.consistencyCheckPendingPlayUntil = nowTs + 2000;
           playTogether().catch(() => {});
+        }
+      }
+
+      // Background sync: when audio is playing but video is paused, continuously
+      // update video.currentTime so the progress bar reflects the true playback position.
+      // This runs every heartbeat (~1.5s) to keep the seekbar from freezing at 00:00.
+      if (
+        coupledMode && state.intendedPlaying &&
+        isHiddenBackground() && audio && !audio.paused && getVideoPaused() &&
+        !state.seeking && !state.bgSilentTimeSyncing
+      ) {
+        const atBg = Number(audio.currentTime);
+        if (isFinite(atBg) && atBg > 0.1) {
+          bgSilentSyncVideoTime(atBg);
         }
       }
 
@@ -3347,6 +3465,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     video.on("seeking", () => {
       if (state.restarting) return;
+      // Background silent time sync — we set videoEl.currentTime directly to keep
+      // the progress bar in sync with audio. Ignore the resulting seeking event entirely.
+      if (state.bgSilentTimeSyncing) return;
       state.seekId++;
       const currentSeekId = state.seekId;
       state.strictBufferHold = false;
@@ -3655,6 +3776,7 @@ document.addEventListener("DOMContentLoaded", () => {
       clearAudioForcePlayTimer();
       clearTimeout(state.wakeupTimer);
       clearTimeout(state.heartbeatTimer);
+      clearTimeout(state.bgSilentTimeSyncTimer);
       clearSyncLoop();
     });
   }
@@ -3809,7 +3931,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }, 100);
   scheduleSync(0);
 });
-
 document.addEventListener('keydown', function(event) {
      const active = document.activeElement;
     if (active && (active.tagName.toLowerCase() === 'input' || active.tagName.toLowerCase() === 'textarea')) {
