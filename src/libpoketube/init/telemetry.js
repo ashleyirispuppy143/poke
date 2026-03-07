@@ -269,7 +269,7 @@ module.exports = function (app, config, renderTemplate) {
       const hasLimit = typeof req.query.limit !== "undefined"
       const rawLimit = parseInt((hasLimit ? req.query.limit : "10").toString(), 10)
       const limit = Number.isFinite(rawLimit)
-        ? Math.max(1, Math.min(rawLimit, 200))
+        ? Math.max(1, Math.min(rawLimit, 500))
         : 10
 
       const sortedVideos = Object.entries(memoryStats.videos)
@@ -317,7 +317,7 @@ module.exports = function (app, config, renderTemplate) {
     }
     :visited { color: #00c0ff; }
     a { color: #0ab7f0; }
-    .app { max-width: 1000px; margin: 0 auto; padding: 24px; }
+    .app { max-width: 1100px; margin: 0 auto; padding: 24px; }
     p {
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
       line-height: 1.6;
@@ -357,6 +357,22 @@ module.exports = function (app, config, renderTemplate) {
     .note { color: #bbb; font-size: .95rem; }
     .stats-list li { margin: .15rem 0; }
     .muted { opacity: .8; font-size: .95rem; }
+
+    .explain-box {
+      margin-top: 1rem;
+      margin-bottom: 1.25rem;
+      background: #252432;
+      border: 1px solid #2a2a35;
+      border-radius: 16px;
+      padding: 16px;
+    }
+    .explain-box p {
+      margin: 0 0 .9rem 0;
+    }
+    .explain-box p:last-child {
+      margin-bottom: 0;
+    }
+
     .controls {
       display: flex;
       align-items: center;
@@ -375,6 +391,7 @@ module.exports = function (app, config, renderTemplate) {
       padding: .45rem .7rem;
       font: inherit;
     }
+
     .video-grid {
       list-style: none;
       padding-left: 0;
@@ -423,11 +440,58 @@ module.exports = function (app, config, renderTemplate) {
       font-size: .95rem;
       color: #fff;
     }
+    .video-note {
+      margin-top: .45rem;
+      color: #bbb;
+      font-size: .9rem;
+      line-height: 1.45;
+    }
     .video-rank {
       margin-top: .45rem;
       color: #bbb;
       font-size: .9rem;
     }
+
+    .pagination-wrap {
+      margin-top: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: .75rem;
+    }
+    .pagination-info {
+      color: #bbb;
+      font-size: .95rem;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+    }
+    .pagination-controls {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      flex-wrap: wrap;
+    }
+    .page-btn {
+      background: #252432;
+      color: #fff;
+      border: 1px solid #2a2a35;
+      border-radius: 10px;
+      padding: .5rem .8rem;
+      font: inherit;
+      cursor: pointer;
+    }
+    .page-btn[disabled] {
+      opacity: .5;
+      cursor: not-allowed;
+    }
+    .page-number {
+      min-width: 2.2rem;
+      text-align: center;
+      background: #1f1e29;
+    }
+    .page-number.active {
+      border-color: #0ab7f0;
+      box-shadow: inset 0 0 0 1px #0ab7f0;
+    }
+
     @media (max-width: 640px) {
       .video-card {
         grid-template-columns: 1fr;
@@ -443,25 +507,42 @@ module.exports = function (app, config, renderTemplate) {
       see <a href="/policies/privacy#stats">privacy policy</a>.
     </p>
 
+    <div class="explain-box">
+      <p><strong>Important:</strong> the numbers shown on this page are <strong>not</strong> the public video view counts from YouTube or any other upstream site.</p>
+      <p>They only represent how many times a video was viewed <strong>through this specific Poke instance</strong>, based on the local anonymous stats system used here.</p>
+      <p>So if a video card says <strong>27 local Poke instance views</strong>, that means this Poke server recorded 27 anonymous view events for that video on this instance only. It does <strong>not</strong> mean the video has 27 total platform views, and it does <strong>not</strong> reflect the public view counter shown on the original video platform.</p>
+      <p>These numbers are useful for understanding which videos are popular <strong>inside this instance</strong>. They are basically an instance-local popularity signal, not a global audience metric.</p>
+      <p>In other words: this page measures <strong>traffic on Poke</strong>, not <strong>traffic on YouTube</strong>. Please do not read these counts as the real public video view totals.</p>
+    </div>
+
     <h2>Current anonymous stats</h2>
     <p id="stats-note" class="note">Loading…</p>
     <ul id="stats-list" class="stats-list"></ul>
 
     <h2>Top videos (local-only)</h2>
-    <p class="note">You can choose how many of the top videos to display below.</p>
+    <p class="note">
+      This section ranks videos by <strong>local Poke instance views</strong> only.
+      It does <strong>not</strong> show YouTube public view totals.
+    </p>
 
     <div class="controls">
       <label for="video-limit">Show top videos:</label>
       <select id="video-limit">
-        <option value="10" selected>10</option>
+        <option value="10">10</option>
         <option value="20">20</option>
         <option value="50">50</option>
-        <option value="100">100</option>
+        <option value="100" selected>100</option>
         <option value="200">200</option>
+        <option value="500">500</option>
       </select>
     </div>
 
     <ul id="top-videos" class="video-grid"></ul>
+
+    <div id="pagination-wrap" class="pagination-wrap" style="display:none;">
+      <div id="pagination-info" class="pagination-info"></div>
+      <div id="pagination-controls" class="pagination-controls"></div>
+    </div>
 
     <hr>
 
@@ -469,7 +550,8 @@ module.exports = function (app, config, renderTemplate) {
     <p class="note">
       • Human view (this page): <code><a href="/api/stats?view=human">/api/stats?view=human</a></code><br>
       • JSON view (for scripts/tools): <code><a href="/api/stats?view=json">/api/stats?view=json</a></code><br>
-      • JSON with custom limit: <code><a href="/api/stats?view=json&limit=200">/api/stats?view=json&limit=200</a></code><br>
+      • JSON default limit: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code> (10 videos)<br>
+      • JSON with custom limit: <code><a href="/api/stats?view=json&limit=500">/api/stats?view=json&limit=500</a></code><br>
       • Opt out for this browser: <code><a href="/api/stats/optout">/api/stats/optout</a></code>
     </p>
   </div>
@@ -477,29 +559,136 @@ module.exports = function (app, config, renderTemplate) {
   <script>
     const TELEMETRY_ON = ${telemetryOn ? "true" : "false"};
     const OPT_KEY = "poke_stats_optout";
+    const CARDS_PER_PAGE = 50;
 
     const statsNote = document.getElementById("stats-note");
     const statsList = document.getElementById("stats-list");
     const topVideos = document.getElementById("top-videos");
     const videoLimitSelect = document.getElementById("video-limit");
+    const paginationWrap = document.getElementById("pagination-wrap");
+    const paginationInfo = document.getElementById("pagination-info");
+    const paginationControls = document.getElementById("pagination-controls");
 
     var allVideos = {};
+    var currentPage = 1;
 
     function getThumbnailUrl(videoId) {
       return "https://i.ytimg.com/vi/" + encodeURIComponent(videoId) + "/hqdefault.jpg";
     }
 
-    function renderTopVideos(limit) {
-      var entries = Object.entries(allVideos).slice(0, limit);
+    function getSelectedLimit() {
+      return parseInt(videoLimitSelect.value, 10) || 100;
+    }
 
-      if (entries.length === 0) {
-        topVideos.innerHTML = "<li>No stats recorded yet.</li>";
+    function getLimitedEntries() {
+      return Object.entries(allVideos).slice(0, getSelectedLimit());
+    }
+
+    function getTotalPages(entries) {
+      return Math.max(1, Math.ceil(entries.length / CARDS_PER_PAGE));
+    }
+
+    function createPageButton(label, page, disabled, active) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "page-btn" + (active ? " page-number active" : page ? " page-number" : "");
+      btn.textContent = label;
+
+      if (disabled) {
+        btn.disabled = true;
+        return btn;
+      }
+
+      btn.addEventListener("click", function () {
+        if (page === currentPage) return;
+        currentPage = page;
+        renderTopVideos();
+      });
+
+      return btn;
+    }
+
+    function renderPagination(entries) {
+      var totalPages = getTotalPages(entries);
+
+      if (entries.length <= CARDS_PER_PAGE) {
+        paginationWrap.style.display = "none";
+        paginationInfo.textContent = "";
+        paginationControls.innerHTML = "";
         return;
       }
 
+      paginationWrap.style.display = "flex";
+      paginationControls.innerHTML = "";
+
+      var startIndex = (currentPage - 1) * CARDS_PER_PAGE + 1;
+      var endIndex = Math.min(currentPage * CARDS_PER_PAGE, entries.length);
+
+      paginationInfo.textContent =
+        "Showing " + startIndex + "–" + endIndex + " of " + entries.length +
+        " videos. These are local Poke instance view rankings, not YouTube public views.";
+
+      paginationControls.appendChild(
+        createPageButton("Prev", currentPage - 1, currentPage === 1, false)
+      );
+
+      var startPage = Math.max(1, currentPage - 2);
+      var endPage = Math.min(totalPages, currentPage + 2);
+
+      if (startPage > 1) {
+        paginationControls.appendChild(createPageButton("1", 1, false, currentPage === 1));
+        if (startPage > 2) {
+          var gapLeft = document.createElement("span");
+          gapLeft.className = "note";
+          gapLeft.textContent = "…";
+          paginationControls.appendChild(gapLeft);
+        }
+      }
+
+      for (var page = startPage; page <= endPage; page++) {
+        paginationControls.appendChild(
+          createPageButton(String(page), page, false, page === currentPage)
+        );
+      }
+
+      if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+          var gapRight = document.createElement("span");
+          gapRight.className = "note";
+          gapRight.textContent = "…";
+          paginationControls.appendChild(gapRight);
+        }
+        paginationControls.appendChild(
+          createPageButton(String(totalPages), totalPages, false, currentPage === totalPages)
+        );
+      }
+
+      paginationControls.appendChild(
+        createPageButton("Next", currentPage + 1, currentPage === totalPages, false)
+      );
+    }
+
+    function renderTopVideos() {
+      var entries = getLimitedEntries();
+      var totalPages = getTotalPages(entries);
+
+      if (currentPage > totalPages) currentPage = totalPages;
+      if (currentPage < 1) currentPage = 1;
+
+      if (entries.length === 0) {
+        topVideos.innerHTML = "<li>No stats recorded yet.</li>";
+        paginationWrap.style.display = "none";
+        return;
+      }
+
+      var start = (currentPage - 1) * CARDS_PER_PAGE;
+      var end = start + CARDS_PER_PAGE;
+      var pageEntries = entries.slice(start, end);
+
       topVideos.innerHTML = "";
 
-      entries.forEach(function (entry, index) {
+      pageEntries.forEach(function (entry, pageIndex) {
+        var absoluteIndex = start + pageIndex;
         var id = entry[0];
         var views = entry[1];
 
@@ -532,7 +721,7 @@ module.exports = function (app, config, renderTemplate) {
 
         var rank = document.createElement("div");
         rank.className = "video-rank";
-        rank.textContent = "Rank #" + (index + 1);
+        rank.textContent = "Rank #" + (absoluteIndex + 1);
 
         var idEl = document.createElement("div");
         idEl.className = "video-id";
@@ -540,18 +729,26 @@ module.exports = function (app, config, renderTemplate) {
 
         var viewsEl = document.createElement("div");
         viewsEl.className = "video-views";
-        viewsEl.textContent = views + " views";
+        viewsEl.textContent = views + " local Poke instance views";
+
+        var noteEl = document.createElement("div");
+        noteEl.className = "video-note";
+        noteEl.textContent =
+          "This number is counted only from anonymous requests on this Poke instance. It is not the video's public YouTube view count.";
 
         meta.appendChild(titleLink);
         meta.appendChild(rank);
         meta.appendChild(idEl);
         meta.appendChild(viewsEl);
+        meta.appendChild(noteEl);
 
         li.appendChild(thumbLink);
         li.appendChild(meta);
 
         topVideos.appendChild(li);
       });
+
+      renderPagination(entries);
     }
 
     if (!TELEMETRY_ON) {
@@ -560,6 +757,7 @@ module.exports = function (app, config, renderTemplate) {
       statsList.innerHTML = "";
       topVideos.innerHTML = "<li>No data (telemetry disabled).</li>";
       videoLimitSelect.disabled = true;
+      paginationWrap.style.display = "none";
     } else {
       var optedOut = false;
       try {
@@ -572,14 +770,17 @@ module.exports = function (app, config, renderTemplate) {
         statsList.innerHTML = "";
         topVideos.innerHTML = "<li>Opt-out active (no stats loaded).</li>";
         videoLimitSelect.disabled = true;
+        paginationWrap.style.display = "none";
       } else {
-        fetch("/api/stats?view=json&limit=200")
+        fetch("/api/stats?view=json&limit=500")
           .then(function (res) { return res.json(); })
           .then(function (data) {
             var videos = data.videos || {};
             var browsers = data.browsers || {};
             var os = data.os || {};
             var totalUsers = data.totalUsers || 0;
+            var totalLocalVideoEntries = Object.keys(videos).length;
+            var selectedLimit = getSelectedLimit();
 
             allVideos = videos;
 
@@ -588,9 +789,11 @@ module.exports = function (app, config, renderTemplate) {
 
             var summaryItems = [
               "Anonymous users (unique local IDs): " + totalUsers,
-              "Videos with recorded views in current response: " + Object.keys(videos).length,
+              "Videos available in this local response: " + totalLocalVideoEntries,
+              "Current selected ranking size: top " + selectedLimit,
               "Browser types seen: " + Object.keys(browsers).length,
-              "OS families seen: " + Object.keys(os).length
+              "OS families seen: " + Object.keys(os).length,
+              "Important: all video counts on this page are local Poke instance view totals, not YouTube public view totals"
             ];
 
             summaryItems.forEach(function (text) {
@@ -599,10 +802,12 @@ module.exports = function (app, config, renderTemplate) {
               statsList.appendChild(li);
             });
 
-            renderTopVideos(parseInt(videoLimitSelect.value, 10) || 10);
+            currentPage = 1;
+            renderTopVideos();
 
             videoLimitSelect.addEventListener("change", function () {
-              renderTopVideos(parseInt(videoLimitSelect.value, 10) || 10);
+              currentPage = 1;
+              renderTopVideos();
             });
           })
           .catch(function () {
@@ -611,6 +816,7 @@ module.exports = function (app, config, renderTemplate) {
             statsList.innerHTML = "";
             topVideos.innerHTML = "<li>Error loading data.</li>";
             videoLimitSelect.disabled = true;
+            paginationWrap.style.display = "none";
           });
       }
     }
@@ -713,7 +919,7 @@ module.exports = function (app, config, renderTemplate) {
       • Human view (stats UI): <code><a href="/api/stats?view=human">/api/stats?view=human</a></code><br>
       • JSON view (for scripts/tools): <code><a href="/api/stats?view=json">/api/stats?view=json</a></code><br>
       • JSON default limit: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code> (10 videos)<br>
-      • JSON with custom limit: <code><a href="/api/stats?view=json&limit=200">/api/stats?view=json&limit=200</a></code><br>
+      • JSON with custom limit: <code><a href="/api/stats?view=json&limit=500">/api/stats?view=json&limit=500</a></code><br>
       • Opt out for this browser: <code><a href="/api/stats/optout">/api/stats/optout</a></code>
     </p>
   </div>
