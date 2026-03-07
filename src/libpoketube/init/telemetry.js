@@ -8,7 +8,13 @@ const statsFile = path.join(__dirname, "stats.json")
 const statsFileV2 = path.join(__dirname, "stats-v2.json")
 
 // Helper for empty structure
-const getEmptyStats = () => ({ videos: {}, browsers: {}, os: {}, users: {} })
+const getEmptyStats = () => ({
+  videos: {},
+  browsers: {},
+  os: {},
+  users: {},
+  recentVideos: []
+})
 
 function parseUA(ua) {
   let browser = "unknown"
@@ -42,6 +48,15 @@ module.exports = function (app, config, renderTemplate) {
   let memoryStats = getEmptyStats()
   let needsSave = false
 
+  function touchRecentVideo(videoId) {
+    if (!videoId) return
+    memoryStats.recentVideos = (memoryStats.recentVideos || []).filter((id) => id !== videoId)
+    memoryStats.recentVideos.unshift(videoId)
+    if (memoryStats.recentVideos.length > 300) {
+      memoryStats.recentVideos.length = 300
+    }
+  }
+
   const v1 = safeRead(statsFile)
   const v2 = safeRead(statsFileV2)
 
@@ -68,6 +83,12 @@ module.exports = function (app, config, renderTemplate) {
 
     if (source.users) {
       Object.assign(memoryStats.users, source.users)
+    }
+
+    if (Array.isArray(source.recentVideos)) {
+      for (let i = source.recentVideos.length - 1; i >= 0; i--) {
+        touchRecentVideo(source.recentVideos[i])
+      }
     }
   }
 
@@ -112,6 +133,7 @@ module.exports = function (app, config, renderTemplate) {
     memoryStats.browsers[browser] = (memoryStats.browsers[browser] || 0) + 1
     memoryStats.os[os] = (memoryStats.os[os] || 0) + 1
     memoryStats.users[userId] = true
+    touchRecentVideo(videoId)
 
     needsSave = true
 
@@ -144,32 +166,32 @@ module.exports = function (app, config, renderTemplate) {
     :visited { color: #00c0ff; }
     a { color: #0ab7f0; }
     .app { max-width: 1000px; margin: 0 auto; padding: 24px; }
-    p{
+    p {
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
       line-height: 1.6;
     }
-    ul{
+    ul {
       font-family: "poketube flex";
       font-weight: 500;
       font-stretch: extra-expanded;
       padding-left: 1.2rem;
     }
-    h2{
+    h2 {
       font-family: "poketube flex", sans-serif;
       font-weight: 700;
       font-stretch: extra-expanded;
       margin-top: 1.5rem;
       margin-bottom: .3rem;
     }
-    h1{
+    h1 {
       font-family: "poketube flex", sans-serif;
       font-weight: 1000;
       font-stretch: ultra-expanded;
       margin-top: 0;
       margin-bottom: .3rem;
     }
-    .note{ color: #bbb; font-size: .95rem; }
-    .btn{
+    .note { color: #bbb; font-size: .95rem; }
+    .btn {
       display: inline-block;
       margin-top: 1rem;
       padding: .5rem 1rem;
@@ -181,10 +203,10 @@ module.exports = function (app, config, renderTemplate) {
       text-decoration: none;
       font-size: .95rem;
     }
-    .btn:hover{
+    .btn:hover {
       background: #2f2e3d;
     }
-    .status{
+    .status {
       margin-top: .5rem;
       font-size: .95rem;
     }
@@ -263,7 +285,7 @@ module.exports = function (app, config, renderTemplate) {
 
     if (view === "json") {
       if (!telemetryConfig.telemetry) {
-        return res.json({ videos: {}, browsers: {}, os: {}, totalUsers: 0, limit: 0 })
+        return res.json({ videos: {}, recentVideos: [], browsers: {}, os: {}, totalUsers: 0, limit: 0 })
       }
 
       const hasLimit = typeof req.query.limit !== "undefined"
@@ -280,6 +302,7 @@ module.exports = function (app, config, renderTemplate) {
 
       return res.json({
         videos: topVideos,
+        recentVideos: (memoryStats.recentVideos || []).slice(0, 32),
         browsers: memoryStats.browsers,
         os: memoryStats.os,
         totalUsers: Object.keys(memoryStats.users).length,
@@ -307,44 +330,44 @@ module.exports = function (app, config, renderTemplate) {
     }
     :root { color-scheme: dark; }
     body { color: #fff; }
-    body{
+    body {
       background: #1c1b22;
       margin: 0;
     }
-    img.logo{
+    img.logo {
       float: right;
       margin: .3em 0 1em 2em;
     }
-    :visited{ color: #00c0ff; }
-    a{ color: #0ab7f0; }
-    .app{ max-width: 1100px; margin: 0 auto; padding: 24px; }
-    p{
+    :visited { color: #00c0ff; }
+    a { color: #0ab7f0; }
+    .app { max-width: 1100px; margin: 0 auto; padding: 24px; }
+    p {
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
       line-height: 1.6;
     }
-    ul{
+    ul {
       font-family: "poketube flex";
       font-weight: 500;
       font-stretch: extra-expanded;
       padding-left: 1.2rem;
     }
-    h2{
+    h2 {
       font-family: "poketube flex", sans-serif;
       font-weight: 700;
       font-stretch: extra-expanded;
       margin-top: 1.5rem;
       margin-bottom: .3rem;
     }
-    h1{
+    h1 {
       font-family: "poketube flex", sans-serif;
       font-weight: 1000;
       font-stretch: ultra-expanded;
       margin-top: 0;
       margin-bottom: .3rem;
     }
-    .toc{ margin: 1rem 0 2rem; }
-    .toc li{ margin: .25rem 0; }
-    pre.license{
+    .toc { margin: 1rem 0 2rem; }
+    .toc li { margin: .25rem 0; }
+    pre.license {
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       background: #111;
       padding: 14px 16px;
@@ -353,17 +376,18 @@ module.exports = function (app, config, renderTemplate) {
       line-height: 1.45;
       border: 1px solid #222;
     }
-    hr{ border: 0; border-top: 1px solid #222; margin: 28px 0; }
-    .note{ color: #bbb; font-size: .95rem; }
-    .muted{ opacity: .8; font-size: .95rem; }
+    hr { border: 0; border-top: 1px solid #222; margin: 28px 0; }
+    .note { color: #bbb; font-size: .95rem; }
+    .muted { opacity: .8; font-size: .95rem; }
 
-    .inline-user-count{
-      display: inline;
-      font-weight: 600;
-      color: #fff;
+    .user-count-line {
+      margin-top: .55rem;
+      color: #bbb;
+      font-size: .95rem;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
     }
 
-    .explain-box{
+    .explain-box {
       margin-top: 1rem;
       margin-bottom: 1.25rem;
       background: #252432;
@@ -371,63 +395,63 @@ module.exports = function (app, config, renderTemplate) {
       border-radius: 16px;
       padding: 16px;
     }
-    .explain-box p{
+    .explain-box p {
       margin: 0 0 .9rem 0;
     }
-    .explain-box p:last-child{
+    .explain-box p:last-child {
       margin-bottom: 0;
     }
 
-    .breakdown-grid{
+    .breakdown-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 16px;
       margin-top: 1rem;
       margin-bottom: 1.25rem;
     }
-    .breakdown-card{
+    .breakdown-card {
       background: #252432;
       border: 1px solid #2a2a35;
       border-radius: 16px;
       padding: 16px;
     }
-    .breakdown-card h3{
+    .breakdown-card h3 {
       margin: 0 0 .85rem 0;
       font-family: "poketube flex", sans-serif;
       font-weight: 700;
       font-stretch: extra-expanded;
       font-size: 1.05rem;
     }
-    .breakdown-empty{
+    .breakdown-empty {
       color: #bbb;
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
     }
-    .breakdown-list{
+    .breakdown-list {
       display: flex;
       flex-direction: column;
       gap: 12px;
     }
-    .breakdown-item{
+    .breakdown-item {
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
     }
-    .breakdown-topline{
+    .breakdown-topline {
       display: flex;
       justify-content: space-between;
       gap: 12px;
       align-items: baseline;
       margin-bottom: .4rem;
     }
-    .breakdown-label{
+    .breakdown-label {
       font-weight: 600;
       min-width: 0;
       word-break: break-word;
     }
-    .breakdown-count{
+    .breakdown-count {
       color: #bbb;
       white-space: nowrap;
       font-size: .92rem;
     }
-    .breakdown-bar-wrap{
+    .breakdown-bar-wrap {
       width: 100%;
       height: 12px;
       background: #17161d;
@@ -435,30 +459,30 @@ module.exports = function (app, config, renderTemplate) {
       border-radius: 999px;
       overflow: hidden;
     }
-    .breakdown-bar{
+    .breakdown-bar {
       height: 100%;
       width: 0%;
       background: linear-gradient(90deg, #0ab7f0 0%, #52d3ff 100%);
       border-radius: 999px;
     }
-    .breakdown-sub{
+    .breakdown-sub {
       margin-top: .35rem;
       color: #bbb;
       font-size: .9rem;
       line-height: 1.45;
     }
 
-    .controls{
+    .controls {
       display: flex;
       align-items: center;
       gap: .75rem;
       flex-wrap: wrap;
       margin: .75rem 0 1rem 0;
     }
-    .controls label{
+    .controls label {
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
     }
-    .controls select{
+    .controls select {
       background: #252432;
       color: #fff;
       border: 1px solid #2a2a35;
@@ -466,22 +490,22 @@ module.exports = function (app, config, renderTemplate) {
       padding: .45rem .7rem;
       font: inherit;
     }
-    .limit-warning{
+    .limit-warning {
       width: 100%;
       color: #bbb;
       font-size: .95rem;
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
     }
 
-    .video-grid{
+    .recent-grid {
       list-style: none;
       padding-left: 0;
-      margin: 0;
+      margin: 0 0 1.25rem 0;
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 14px;
     }
-    .video-card{
+    .recent-card {
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -491,11 +515,30 @@ module.exports = function (app, config, renderTemplate) {
       padding: 12px;
       min-width: 0;
     }
-    .video-thumb-link{
+
+    .video-grid {
+      list-style: none;
+      padding-left: 0;
+      margin: 0;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .video-card {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: #252432;
+      border: 1px solid #2a2a35;
+      border-radius: 16px;
+      padding: 12px;
+      min-width: 0;
+    }
+    .video-thumb-link {
       display: block;
       width: 100%;
     }
-    .video-thumb{
+    .video-thumb {
       display: block;
       width: 100%;
       aspect-ratio: 16 / 9;
@@ -503,58 +546,58 @@ module.exports = function (app, config, renderTemplate) {
       border-radius: 12px;
       background: #111;
     }
-    .video-meta{
+    .video-meta {
       min-width: 0;
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
     }
-    .video-title{
+    .video-title {
       display: inline-block;
       font-weight: 700;
       line-height: 1.35;
       text-decoration: none;
       word-break: break-word;
     }
-    .video-id{
+    .video-id {
       color: #bbb;
       font-size: .9rem;
       margin-top: .4rem;
       word-break: break-all;
     }
-    .video-views{
+    .video-views {
       margin-top: .5rem;
       font-size: .95rem;
       color: #fff;
     }
-    .video-note{
+    .video-note {
       margin-top: .45rem;
       color: #bbb;
       font-size: .9rem;
       line-height: 1.45;
     }
-    .video-rank{
+    .video-rank {
       margin-top: .45rem;
       color: #bbb;
       font-size: .9rem;
     }
 
-    .pagination-wrap{
+    .pagination-wrap {
       margin-top: 1rem;
       display: flex;
       flex-direction: column;
       gap: .75rem;
     }
-    .pagination-info{
+    .pagination-info {
       color: #bbb;
       font-size: .95rem;
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
     }
-    .pagination-controls{
+    .pagination-controls {
       display: flex;
       align-items: center;
       gap: .5rem;
       flex-wrap: wrap;
     }
-    .page-btn{
+    .page-btn {
       background: #252432;
       color: #fff;
       border: 1px solid #2a2a35;
@@ -563,40 +606,43 @@ module.exports = function (app, config, renderTemplate) {
       font: inherit;
       cursor: pointer;
     }
-    .page-btn[disabled]{
+    .page-btn[disabled] {
       opacity: .5;
       cursor: not-allowed;
     }
-    .page-number{
+    .page-number {
       min-width: 2.2rem;
       text-align: center;
       background: #1f1e29;
     }
-    .page-number.active{
+    .page-number.active {
       border-color: #0ab7f0;
       box-shadow: inset 0 0 0 1px #0ab7f0;
     }
 
     @media (max-width: 1000px) {
-      .video-grid{
+      .video-grid,
+      .recent-grid {
         grid-template-columns: repeat(3, minmax(0, 1fr));
       }
     }
 
     @media (max-width: 860px) {
-      .breakdown-grid{
+      .breakdown-grid {
         grid-template-columns: 1fr;
       }
-      .video-grid{
+      .video-grid,
+      .recent-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
     }
 
     @media (max-width: 640px) {
-      .video-grid{
+      .video-grid,
+      .recent-grid {
         grid-template-columns: 1fr;
       }
-      .breakdown-topline{
+      .breakdown-topline {
         flex-direction: column;
         align-items: flex-start;
         gap: .2rem;
@@ -609,8 +655,9 @@ module.exports = function (app, config, renderTemplate) {
     <h1>Anonymous stats</h1>
     <p class="note">
       These stats are aggregated locally on this Poke instance. For what is collected (and what is not),
-      see <a href="/policies/privacy#stats">privacy policy</a>.<br>
-      <span class="inline-user-count">user id count: <span id="user-id-count-inline">Loading…</span></span>
+      see <a href="/policies/privacy#stats">privacy policy</a>.
+      <br>
+      user id count: <span id="user-id-count">Loading…</span>
     </p>
 
     <div class="explain-box">
@@ -631,6 +678,13 @@ module.exports = function (app, config, renderTemplate) {
       </div>
     </div>
 
+    <h2>Recently viewed video IDs</h2>
+    <p class="note">
+      These are the most recently viewed video IDs recorded by this Poke instance.
+    </p>
+
+    <ul id="recent-videos" class="recent-grid"></ul>
+
     <h2>Top videos (local-only)</h2>
     <p class="note">
       This section ranks videos by <strong>local Poke instance views</strong> only.
@@ -640,12 +694,11 @@ module.exports = function (app, config, renderTemplate) {
     <div class="controls">
       <label for="video-limit">Show top videos:</label>
       <select id="video-limit">
-        <option value="8" selected>8</option>
-        <option value="16">16</option>
-        <option value="24">24</option>
-        <option value="40">40</option>
-        <option value="100">100</option>
+        <option value="8">8</option>
+        <option value="20">20</option>
+        <option value="100" selected>100</option>
         <option value="200">200</option>
+        <option value="500">500</option>
         <option value="1000">1000</option>
         <option value="3000">3000</option>
       </select>
@@ -679,16 +732,18 @@ module.exports = function (app, config, renderTemplate) {
     const CARDS_PER_PAGE = 40;
 
     const topVideos = document.getElementById("top-videos");
+    const recentVideos = document.getElementById("recent-videos");
     const videoLimitSelect = document.getElementById("video-limit");
     const paginationWrap = document.getElementById("pagination-wrap");
     const paginationInfo = document.getElementById("pagination-info");
     const paginationControls = document.getElementById("pagination-controls");
     const osBreakdown = document.getElementById("os-breakdown");
     const browserBreakdown = document.getElementById("browser-breakdown");
-    const userIdCountInline = document.getElementById("user-id-count-inline");
+    const userIdCount = document.getElementById("user-id-count");
     const limitWarning = document.getElementById("limit-warning");
 
     var allVideos = {};
+    var recentVideoIds = [];
     var currentPage = 1;
 
     function getThumbnailUrl(videoId) {
@@ -696,7 +751,7 @@ module.exports = function (app, config, renderTemplate) {
     }
 
     function getSelectedLimit() {
-      return parseInt(videoLimitSelect.value, 10) || 8;
+      return parseInt(videoLimitSelect.value, 10) || 100;
     }
 
     function getLimitedEntries() {
@@ -704,11 +759,12 @@ module.exports = function (app, config, renderTemplate) {
     }
 
     function shouldPaginate() {
-      return getSelectedLimit() === 1000 || getSelectedLimit() === 3000;
+      var selected = getSelectedLimit();
+      return selected === 1000 || selected === 3000;
     }
 
     function updateLimitWarning() {
-      const selected = getSelectedLimit();
+      var selected = getSelectedLimit();
       limitWarning.style.display = selected === 1000 || selected === 3000 ? "block" : "none";
     }
 
@@ -895,6 +951,74 @@ module.exports = function (app, config, renderTemplate) {
       });
     }
 
+    function createVideoCard(videoId, extraText, thumbAlt, href) {
+      var li = document.createElement("li");
+      li.className = "video-card";
+
+      var thumbLink = document.createElement("a");
+      thumbLink.className = "video-thumb-link";
+      thumbLink.href = href;
+      thumbLink.setAttribute("aria-label", "Open video " + videoId);
+
+      var img = document.createElement("img");
+      img.className = "video-thumb";
+      img.src = getThumbnailUrl(videoId);
+      img.alt = thumbAlt;
+      img.loading = "lazy";
+      img.referrerPolicy = "no-referrer";
+      img.onerror = function () {
+        this.style.display = "none";
+      };
+
+      thumbLink.appendChild(img);
+
+      var meta = document.createElement("div");
+      meta.className = "video-meta";
+
+      var titleLink = document.createElement("a");
+      titleLink.className = "video-title";
+      titleLink.href = href;
+      titleLink.textContent = videoId;
+
+      var idEl = document.createElement("div");
+      idEl.className = "video-id";
+      idEl.textContent = "Video ID: " + videoId;
+
+      var infoEl = document.createElement("div");
+      infoEl.className = "video-note";
+      infoEl.textContent = extraText;
+
+      meta.appendChild(titleLink);
+      meta.appendChild(idEl);
+      meta.appendChild(infoEl);
+
+      li.appendChild(thumbLink);
+      li.appendChild(meta);
+
+      return li;
+    }
+
+    function renderRecentVideos() {
+      recentVideos.innerHTML = "";
+
+      if (!Array.isArray(recentVideoIds) || recentVideoIds.length === 0) {
+        recentVideos.innerHTML = "<li>No recent video IDs recorded yet.</li>";
+        return;
+      }
+
+      recentVideoIds.slice(0, 8).forEach(function (videoId, index) {
+        var card = createVideoCard(
+          videoId,
+          "Recently viewed on this Poke instance. Position #" + (index + 1) + " in the recent list.",
+          "Thumbnail for recent video " + videoId,
+          "/watch?v=" + encodeURIComponent(videoId)
+        )
+
+        card.className = "recent-card"
+        recentVideos.appendChild(card)
+      })
+    }
+
     function renderTopVideos() {
       var entries = getLimitedEntries();
 
@@ -988,9 +1112,10 @@ module.exports = function (app, config, renderTemplate) {
 
     if (!TELEMETRY_ON) {
       topVideos.innerHTML = "<li>No data (telemetry disabled).</li>";
+      recentVideos.innerHTML = "<li>No data (telemetry disabled).</li>";
       videoLimitSelect.disabled = true;
       paginationWrap.style.display = "none";
-      userIdCountInline.textContent = "0";
+      userIdCount.textContent = "0";
       osBreakdown.innerHTML = '<div class="breakdown-empty">No data (telemetry disabled).</div>';
       browserBreakdown.innerHTML = '<div class="breakdown-empty">No data (telemetry disabled).</div>';
     } else {
@@ -1001,9 +1126,10 @@ module.exports = function (app, config, renderTemplate) {
 
       if (optedOut) {
         topVideos.innerHTML = "<li>Opt-out active (no stats loaded).</li>";
+        recentVideos.innerHTML = "<li>Opt-out active (no stats loaded).</li>";
         videoLimitSelect.disabled = true;
         paginationWrap.style.display = "none";
-        userIdCountInline.textContent = "Opt-out active";
+        userIdCount.textContent = "Opt-out active";
         osBreakdown.innerHTML = '<div class="breakdown-empty">Opt-out active (no stats loaded).</div>';
         browserBreakdown.innerHTML = '<div class="breakdown-empty">Opt-out active (no stats loaded).</div>';
       } else {
@@ -1011,15 +1137,18 @@ module.exports = function (app, config, renderTemplate) {
           .then(function (res) { return res.json(); })
           .then(function (data) {
             var videos = data.videos || {};
+            var recent = data.recentVideos || [];
             var browsers = data.browsers || {};
             var os = data.os || {};
             var totalUsers = data.totalUsers || 0;
 
             allVideos = videos;
-            userIdCountInline.textContent = String(totalUsers);
+            recentVideoIds = recent;
+            userIdCount.textContent = String(totalUsers);
 
             renderBreakdown(osBreakdown, os, "os");
             renderBreakdown(browserBreakdown, browsers, "browser");
+            renderRecentVideos();
 
             updateLimitWarning();
             currentPage = 1;
@@ -1033,9 +1162,10 @@ module.exports = function (app, config, renderTemplate) {
           })
           .catch(function () {
             topVideos.innerHTML = "<li>Error loading data.</li>";
+            recentVideos.innerHTML = "<li>Error loading recent video IDs.</li>";
             videoLimitSelect.disabled = true;
             paginationWrap.style.display = "none";
-            userIdCountInline.textContent = "Error";
+            userIdCount.textContent = "Error";
             osBreakdown.innerHTML = '<div class="breakdown-empty">Error loading OS data.</div>';
             browserBreakdown.innerHTML = '<div class="breakdown-empty">Error loading browser data.</div>';
           });
@@ -1063,44 +1193,44 @@ module.exports = function (app, config, renderTemplate) {
     }
     :root { color-scheme: dark; }
     body { color: #fff; }
-    body{
+    body {
       background: #1c1b22;
       margin: 0;
     }
-    img{
+    img {
       float: right;
       margin: .3em 0 1em 2em;
     }
-    :visited{ color: #00c0ff; }
-    a{ color: #0ab7f0; }
-    .app{ max-width: 1000px; margin: 0 auto; padding: 24px; }
-    p{
+    :visited { color: #00c0ff; }
+    a { color: #0ab7f0; }
+    .app { max-width: 1000px; margin: 0 auto; padding: 24px; }
+    p {
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
       line-height: 1.6;
     }
-    ul{
+    ul {
       font-family: "poketube flex";
       font-weight: 500;
       font-stretch: extra-expanded;
       padding-left: 1.2rem;
     }
-    h2{
+    h2 {
       font-family: "poketube flex", sans-serif;
       font-weight: 700;
       font-stretch: extra-expanded;
       margin-top: 1.5rem;
       margin-bottom: .3rem;
     }
-    h1{
+    h1 {
       font-family: "poketube flex", sans-serif;
       font-weight: 1000;
       font-stretch: ultra-expanded;
       margin-top: 0;
       margin-bottom: .3rem;
     }
-    .toc{ margin: 1rem 0 2rem; }
-    .toc li{ margin: .25rem 0; }
-    pre.license{
+    .toc { margin: 1rem 0 2rem; }
+    .toc li { margin: .25rem 0; }
+    pre.license {
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       background: #111;
       padding: 14px 16px;
@@ -1109,10 +1239,9 @@ module.exports = function (app, config, renderTemplate) {
       line-height: 1.45;
       border: 1px solid #222;
     }
-    hr{ border: 0; border-top: 1px solid #222; margin: 28px 0; }
-    .note{ color: #bbb; font-size: .95rem; }
-    .stats-list li{ margin: .15rem 0; }
-    .muted{ opacity: .8; font-size: .95rem; }
+    hr { border: 0; border-top: 1px solid #222; margin: 28px 0; }
+    .note { color: #bbb; font-size: .95rem; }
+    .muted { opacity: .8; font-size: .95rem; }
   </style>
 </head>
 <body>
