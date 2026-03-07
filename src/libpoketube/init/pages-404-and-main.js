@@ -158,10 +158,10 @@ const invtrend = await fetch(`${config.invapi}/trending${tab}`, {
       req.hostname
     );
 
+const officialHost = "poketube.fun";
+const officialApi = config.invapi;
 
-    const officialHost = "poketube.fun";
-    const officialApi = config.invapi
- if (req.hostname !== officialHost && config.invapi === officialApi) {
+if (req.hostname !== officialHost && config.invapi.includes("invid-api.poketube.fun")) {
     const message = `
       <!DOCTYPE html>
       <html lang="en">
