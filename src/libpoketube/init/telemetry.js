@@ -590,10 +590,9 @@ module.exports = function (app, config, renderTemplate) {
 
     <div class="explain-box">
       <p><strong>Important:</strong> the numbers shown on this page are <strong>not</strong> the public video view counts from YouTube or any other upstream site.</p>
-      <p>They only represent how many times a video was viewed <strong>through this specific Poke instance</strong>, based on the local anonymous stats system used here.</p>
-      <p>So if a video card says <strong>27 local Poke instance views</strong>, that means this Poke server recorded 27 anonymous view events for that video on this instance only. It does <strong>not</strong> mean the video has 27 total platform views, and it does <strong>not</strong> reflect the public view counter shown on the original video platform.</p>
-      <p>These numbers are useful for understanding which videos are popular <strong>inside this instance</strong>.  
-     </div>
+      <p>They only show views recorded on this specific Poke instance.</p>
+      <p>If a video says <strong>27 local Poke instance views</strong>, that means this instance recorded 27 anonymous views for it here.</p>
+    </div>
 
     <h2>Current anonymous stats</h2>
     <p id="stats-note" class="note">Loading…</p>
@@ -969,10 +968,6 @@ module.exports = function (app, config, renderTemplate) {
             var browsers = data.browsers || {};
             var os = data.os || {};
             var totalUsers = data.totalUsers || 0;
-            var totalLocalVideoEntries = Object.keys(videos).length;
-            var selectedLimit = getSelectedLimit();
-            var totalBrowserDetections = sumValues(browsers);
-            var totalOsDetections = sumValues(os);
 
             allVideos = videos;
 
@@ -980,12 +975,7 @@ module.exports = function (app, config, renderTemplate) {
             statsList.innerHTML = "";
 
             var summaryItems = [
-              "Anonymous users (unique local IDs): " + totalUsers,
-              "Videos available in this local response: " + totalLocalVideoEntries,
-              "Current selected ranking size: top " + selectedLimit,
-              "Total browser detections recorded: " + totalBrowserDetections,
-              "Total OS detections recorded: " + totalOsDetections,
-              "Important: all video counts on this page are local Poke instance view totals, not YouTube public view totals"
+              "Anonymous users (unique local IDs): " + totalUsers
             ];
 
             summaryItems.forEach(function (text) {
