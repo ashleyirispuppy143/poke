@@ -1,4 +1,4 @@
-//  At Poke, we do not collect or share any personal information. That's our privacy promise in a nutshell. To improve Poke we use a completely anonymous, local-only way to figure out how the site is being used. 
+//  At Poke, we do not collect or share any personal information. That's our privacy promise in a nutshell. To improve Poke we use a completely anonymous, local-only way to figure out how the site is being used.
 //Any anonymous stats recorded by this instance come from the /api/stats system. You can read exactly what is measured (and what is not) in our privacy policy.
 
 const fs = require("fs")
@@ -281,7 +281,15 @@ module.exports = function (app, config, renderTemplate) {
 
     if (view === "json") {
       if (!telemetryConfig.telemetry) {
-        return res.json({ videos: {}, recentVideos: [], browsers: {}, os: {}, totalUsers: 0, limit: 0 })
+        return res.json({
+          videos: {},
+          recentVideos: [],
+          browsers: {},
+          os: {},
+          totalUsers: 0,
+          totalVideoIds: 0,
+          limit: 0
+        })
       }
 
       const hasLimit = typeof req.query.limit !== "undefined"
@@ -302,6 +310,7 @@ module.exports = function (app, config, renderTemplate) {
         browsers: memoryStats.browsers,
         os: memoryStats.os,
         totalUsers: Object.keys(memoryStats.users).length,
+        totalVideoIds: Object.keys(memoryStats.videos).length,
         limit
       })
     }
@@ -1244,7 +1253,7 @@ module.exports = function (app, config, renderTemplate) {
             var browsers = data.browsers || {};
             var os = data.os || {};
             var totalUsers = data.totalUsers || 0;
-            var totalVideoIds = Object.keys(videos).length;
+            var totalVideoIds = data.totalVideoIds || 0;
 
             allVideos = videos;
             recentVideoIds = recent;
