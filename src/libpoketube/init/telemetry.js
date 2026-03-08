@@ -1046,12 +1046,7 @@ module.exports = function (app, config, renderTemplate) {
             <div id="recent-latest" class="summary-value">Loading…</div>
             <div class="summary-sub">The first item in the recency queue, if any recent ID exists.</div>
           </div>
-
-          <div class="summary-card">
-            <div class="summary-label">download format</div>
-            <div class="summary-value">JSON</div>
-            <div class="summary-sub">You can export the current recent-ID list and keep it to revisit later.</div>
-          </div>
+ 
         </div>
 
         <ul id="recent-videos" class="recent-grid"></ul>
