@@ -1004,9 +1004,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (wasPlaying) {
         await doVolumeFade(0, 60);
-        // CRITICAL: Pause the actual audio element before seeking. Without this the browser
+        //  Pause the actual audio element before seeking. Without this the browser
         // keeps its decode buffer pointing at the old position and briefly replays it
-        // (the "repeat last 0.5s" artifact) when the seek completes.
         state.isProgrammaticAudioPause = true;
         try { audio.pause(); } catch {}
         setTimeout(() => { state.isProgrammaticAudioPause = false; }, 300);
@@ -1301,7 +1300,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const { squelchMs = 500, minGapMs = 300, force = false } = opts;
     if (!coupledMode || !audio || typeof audio.play !== "function") return false;
 
-    // CRITICAL FIX: Cancel any active volume fade before attempting to play.
+    // Cancel any active volume fade before attempting to play.
     // pauseHard() starts a fadeAndPauseAudio(120ms) that calls audio.pause() via
     // a callback. If play fires within those 120ms, audio.play() succeeds but the
     // fade callback fires after and re-pauses audio. cancelActiveFade() stops this.
@@ -2290,10 +2289,16 @@ document.addEventListener("DOMContentLoaded", () => {
       if (state.playRequestedDuringSeek || state.seekWantedPlaying) {
         state.playRequestedDuringSeek = false;
         state.seekWantedPlaying = false;
-        // Clear stall state before resuming after seek
+        // Clear stall state before resuming after seek.
+        // also clear videoWaiting — when seeking to an already-buffered position,
+        // readyState is already >= 3 so waitForReadyStateOrCanPlay returns immediately with
+        // no canplay event firing. videoWaiting stays true → shouldBlockNewAudioStart()
+        // blocks audio → silence after seek. Clear it here since we've confirmed data is ready.
+        state.videoWaiting = false;
         state.videoStallAudioPaused = false;
         state.stallAudioPausedSince = 0;
         state.stallAudioResumeHoldUntil = 0;
+        state.audioPauseUntil = 0;
         await ensureUnmutedIfNotUserMuted().catch(() => {});
         if (state.seekId === currentSeekId || !state.seeking) {
           await playTogether().catch(() => {});
@@ -4308,6 +4313,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }, 100);
   scheduleSync(0);
 });
+
 document.addEventListener('keydown', function(event) {
      const active = document.activeElement;
     if (active && (active.tagName.toLowerCase() === 'input' || active.tagName.toLowerCase() === 'textarea')) {
