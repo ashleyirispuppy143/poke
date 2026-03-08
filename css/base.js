@@ -440,21 +440,7 @@ document.addEventListener("DOMContentLoaded", () => {
     userPlayIntentPresetAt: 0
   };
 
-
-  // ─── BackgroundPlaybackManager v2 ─────────────────────────────────────────
-  // Single authoritative state machine for all background/foreground transitions.
-  // PHASES: STABLE_FG → GOING_BG → STABLE_BG → RETURNING → STABLE_FG
-  //
-  // v2 improvements over v1:
-  //  - Exponential backoff for bg resume attempts (1s, 2s, 4s, 8s, 16s, 30s…)
-  //    instead of a hard 3-attempt limit — allows genuine recovery while
-  //    preventing the rapid play→pause→play oscillation loop.
-  //  - "Stable playing" tracking: if audio played cleanly for >2s before a pause
-  //    it's almost certainly browser-forced, not user-initiated.
-  //  - isUserPauseImmediate/isUserPlayImmediate window extended to 2000ms.
-  //  - Longer return suppression: Chromium 10s, others 5s.
-  //  - RETURN_SUPPRESS_MS applies to ALL non-user pause events (not just audio).
-  // ────────────────────────────────────────────────────────────────────────────
+ 
   const BackgroundPlaybackManager = (() => {
     const PHASE = { STABLE_FG: 0, GOING_BG: 1, STABLE_BG: 2, RETURNING: 3 };
     let _phase = PHASE.STABLE_FG;
@@ -872,22 +858,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   })();
 
-
-  // ─── BringBackToTabManager (BBTM) ────────────────────────────────────────
-  // The single source of truth for "we are in the process of returning to this
-  // tab." Its ONE job: prevent ANY browser-imposed pause event from being
-  // treated as authoritative state during the return window. Combined with a
-  // tight rAF-speed play-retry loop (startBringBackRetry, defined later once
-  // playTogether is available), this makes tab-return play→pause→play flicker
-  // completely invisible.
-  //
-  // Architecture:
-  //   BBTM = flag keeper + timing only (no play/pause calls — circular deps)
-  //   startBringBackRetry() = the actual retry engine, defined after playTogether
-  //
-  // Pause handlers check isLocked() AFTER user-intent checks. User pauses
-  // always win; browser-imposed pauses are dropped on the floor.
-  // ─────────────────────────────────────────────────────────────────────────
+ 
   const BringBackToTabManager = (() => {
     // How long to hold the lock after a tab-return event. Must be ≥ the
     // longest browser spurious-pause burst we've observed (Chromium ~800ms).
@@ -943,6 +914,1065 @@ document.addEventListener("DOMContentLoaded", () => {
 
     return { isLocked, onTabReturn, onVideoConfirmedPlaying, onUserPause, cancelLock, timeSinceReturn };
   })();
+
+ 
+  const UltraStabilizer = (() => {
+    // ── shared nano-clock ────────────────────────────────────────────────────
+    const _now = () => performance.now();
+
+    // ── 1. AudioVideoLockstepGuard (AVLG) ────────────────────────────────────
+    // ROOT CAUSE FIX: audio must NEVER play before video fires its first
+    // "playing" event during the startup sequence. This guard is the single
+    // authoritative blocker for that constraint.
+    const AVLG = (() => {
+      let _videoHasPlayed    = false; // video fired "playing" at least once
+      let _audioHasPlayed    = false; // audio fired "playing" at least once
+      let _lockReleasedAt    = 0;     // when the startup lock was lifted
+      let _startupLockActive = true;  // stays true until video plays or timeout
+      let _videoStallCount   = 0;
+      let _audioStallCount   = 0;
+      let _audioBlockLog     = 0;     // how many times we blocked audio (debug)
+
+      // The lock is released when video plays OR after 12s (failsafe)
+      const STARTUP_LOCK_TIMEOUT_MS = 12000;
+      const _startTs = _now();
+
+      function _maybeReleaseLock() {
+        if (!_startupLockActive) return;
+        if (_videoHasPlayed) {
+          _startupLockActive = false;
+          _lockReleasedAt = _now();
+        } else if ((_now() - _startTs) > STARTUP_LOCK_TIMEOUT_MS) {
+          // Failsafe: release after timeout to not block forever
+          _startupLockActive = false;
+          _lockReleasedAt = _now();
+        }
+      }
+
+      function onVideoPlaying() {
+        _videoHasPlayed = true;
+        _videoStallCount = 0;
+        _maybeReleaseLock();
+      }
+
+      function onAudioPlaying() {
+        _audioHasPlayed = true;
+        _audioStallCount = 0;
+      }
+
+      function onVideoStall() { _videoStallCount++; }
+      function onAudioStall() { _audioStallCount++; }
+
+      // Primary gate: return true → caller must NOT play audio right now
+      function shouldBlockAudio() {
+        _maybeReleaseLock();
+        if (!_startupLockActive) return false;
+        if (!coupledMode) return false; // only matters in coupled A/V mode
+        if (_videoHasPlayed) return false;
+        // Video not yet playing → block audio
+        _audioBlockLog++;
+        return true;
+      }
+
+      function isVideoConfirmedPlaying() { return _videoHasPlayed; }
+      function isAudioConfirmedPlaying() { return _audioHasPlayed; }
+      function getAudioBlockCount()      { return _audioBlockLog;   }
+      function isStartupLockActive()     { return _startupLockActive; }
+
+      // Force-release for edge cases (e.g. muxed mode toggle)
+      function forceRelease() { _startupLockActive = false; _lockReleasedAt = _now(); }
+
+      return {
+        onVideoPlaying, onAudioPlaying, onVideoStall, onAudioStall,
+        shouldBlockAudio, isVideoConfirmedPlaying, isAudioConfirmedPlaying,
+        getAudioBlockCount, isStartupLockActive, forceRelease,
+      };
+    })();
+
+    // ── 2. StartupSequencer ───────────────────────────────────────────────────
+    // State machine that tracks the startup phase with strict ordering.
+    // Phases: COLD → VIDEO_LOADING → VIDEO_READY → VIDEO_PLAYING → BOTH_COMMITTED → STABLE
+    const StartupSequencer = (() => {
+      const PHASE = {
+        COLD: 0, VIDEO_LOADING: 1, VIDEO_READY: 2,
+        VIDEO_PLAYING: 3, BOTH_COMMITTED: 4, STABLE: 5,
+      };
+      let _phase = PHASE.COLD;
+      let _phaseAt = _now();
+      let _videoReadyStateAtStart = 0;
+      let _audioReadyStateAtStart = 0;
+      let _videoPlayedAt  = 0;
+      let _audioPlayedAt  = 0;
+      let _bothCommittedAt = 0;
+      let _stableAt        = 0;
+      const STABILITY_WINDOW_MS = 2000; // both must play for 2s to reach STABLE
+
+      function _advance(newPhase) {
+        if (newPhase > _phase) { _phase = newPhase; _phaseAt = _now(); }
+      }
+
+      function onVideoLoading()  { _advance(PHASE.VIDEO_LOADING); }
+      function onVideoReady()    {
+        _videoReadyStateAtStart = (() => { try { return Number(getVideoNode().readyState || 0); } catch { return 0; } })();
+        _advance(PHASE.VIDEO_READY);
+      }
+      function onVideoPlaying()  {
+        _videoPlayedAt = _now();
+        _advance(PHASE.VIDEO_PLAYING);
+        // Once video plays, audio is permitted — immediately try to advance
+        if (_audioPlayedAt > 0) _checkBothCommitted();
+      }
+      function onAudioPlaying()  {
+        _audioPlayedAt = _now();
+        _checkBothCommitted();
+      }
+      function _checkBothCommitted() {
+        if (!coupledMode) { _advance(PHASE.BOTH_COMMITTED); return; }
+        if (_videoPlayedAt > 0 && _audioPlayedAt > 0) {
+          _bothCommittedAt = _now();
+          _advance(PHASE.BOTH_COMMITTED);
+        }
+      }
+
+      // Called from periodic tick
+      function tick() {
+        if (_phase === PHASE.BOTH_COMMITTED && (_now() - _bothCommittedAt) > STABILITY_WINDOW_MS) {
+          _stableAt = _now();
+          _advance(PHASE.STABLE);
+        }
+        // Failsafe: after 15s always mark stable
+        if (_phase < PHASE.STABLE && (_now() - _phaseAt) > 15000) {
+          _advance(PHASE.STABLE);
+        }
+      }
+
+      function shouldBlockAudioAtStartup() {
+        if (!coupledMode) return false;
+        // Block audio if video has not yet fired "playing"
+        return _phase < PHASE.VIDEO_PLAYING;
+      }
+
+      function isStable()          { return _phase >= PHASE.STABLE; }
+      function isBothCommitted()   { return _phase >= PHASE.BOTH_COMMITTED; }
+      function getPhaseLabel()     {
+        return ['COLD','VIDEO_LOADING','VIDEO_READY','VIDEO_PLAYING','BOTH_COMMITTED','STABLE'][_phase] || '?';
+      }
+      function getPhaseAge()       { return _now() - _phaseAt; }
+
+      return {
+        onVideoLoading, onVideoReady, onVideoPlaying, onAudioPlaying,
+        tick, shouldBlockAudioAtStartup, isStable, isBothCommitted,
+        getPhaseLabel, getPhaseAge,
+      };
+    })();
+
+    // ── 3. BufferHealthMonitor ────────────────────────────────────────────────
+    // Every tick, measures buffered-seconds-ahead for video and audio.
+    // Maintains a rolling 8-sample window; calculates health score 0-100.
+    const BufferHealthMonitor = (() => {
+      const WINDOW = 8;
+      const _vBuf = new Array(WINDOW).fill(0);
+      const _aBuf = new Array(WINDOW).fill(0);
+      let _idx = 0;
+      let _videoScore = 100;
+      let _audioScore = 100;
+      let _lastCheckAt = 0;
+      const CHECK_INTERVAL_MS = 600;
+
+      function _bufferedAheadVideo() {
+        try {
+          const vNode = getVideoNode();
+          const ct = Number(vNode.currentTime || 0);
+          const tb = vNode.buffered;
+          let best = 0;
+          for (let i = 0; i < tb.length; i++) {
+            if (tb.start(i) <= ct + 0.1) best = Math.max(best, tb.end(i) - ct);
+          }
+          return best;
+        } catch { return 0; }
+      }
+
+      function _bufferedAheadAudio() {
+        if (!coupledMode || !audio) return 999;
+        try {
+          const ct = Number(audio.currentTime || 0);
+          const tb = audio.buffered;
+          let best = 0;
+          for (let i = 0; i < tb.length; i++) {
+            if (tb.start(i) <= ct + 0.1) best = Math.max(best, tb.end(i) - ct);
+          }
+          return best;
+        } catch { return 0; }
+      }
+
+      function _scoreFromSamples(samples) {
+        const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
+        const recent = samples.slice(-3).reduce((a, b) => a + b, 0) / 3;
+        // 0→0, 0.5→40, 2→80, 5→100
+        const avgScore = Math.min(100, avg * 20);
+        const recentScore = Math.min(100, recent * 20);
+        return Math.round(avgScore * 0.4 + recentScore * 0.6);
+      }
+
+      function tick() {
+        if ((_now() - _lastCheckAt) < CHECK_INTERVAL_MS) return;
+        _lastCheckAt = _now();
+        _vBuf[_idx % WINDOW] = _bufferedAheadVideo();
+        _aBuf[_idx % WINDOW] = _bufferedAheadAudio();
+        _idx++;
+        _videoScore = _scoreFromSamples(_vBuf);
+        _audioScore = _scoreFromSamples(_aBuf);
+      }
+
+      function getVideoScore()    { return _videoScore; }
+      function getAudioScore()    { return _audioScore; }
+      function getCombinedScore() { return Math.min(_videoScore, coupledMode ? _audioScore : 100); }
+      function isHealthy()        { return getCombinedScore() >= 40; }
+      function getVideoAheadSec() { return _vBuf[(_idx - 1 + WINDOW) % WINDOW]; }
+      function getAudioAheadSec() { return _aBuf[(_idx - 1 + WINDOW) % WINDOW]; }
+
+      return { tick, getVideoScore, getAudioScore, getCombinedScore, isHealthy, getVideoAheadSec, getAudioAheadSec };
+    })();
+
+    // ── 4. DriftSupervisor ────────────────────────────────────────────────────
+    // Second-layer drift detection on top of runSync. Runs at high frequency
+    // and catches edge cases the main sync loop misses.
+    const DriftSupervisor = (() => {
+      const HISTORY_LEN = 12;
+      const _driftHistory = new Array(HISTORY_LEN).fill(0);
+      let _dIdx           = 0;
+      let _lastCheckAt    = 0;
+      let _currentDriftMs = 0;
+      let _runawayCount   = 0;   // consecutive checks where drift is growing
+      let _criticalCount  = 0;   // consecutive checks where drift > critical threshold
+      let _correctionCount = 0;
+      let _lastCorrectionAt = 0;
+      const CHECK_INTERVAL_MS    = 300;
+      const CRITICAL_DRIFT_MS    = 400;  // 400ms A/V drift = critical
+      const RUNAWAY_THRESHOLD    = 5;    // 5 consecutive growing-drift checks = runaway
+      const CRITICAL_THRESHOLD   = 3;    // 3 consecutive critical checks = correct
+      const CORRECTION_COOLDOWN  = 2000; // min ms between UltraStabilizer drift corrections
+
+      function tick() {
+        if (!coupledMode || !audio) return;
+        if ((_now() - _lastCheckAt) < CHECK_INTERVAL_MS) return;
+        _lastCheckAt = _now();
+
+        let driftMs = 0;
+        try {
+          const vt = Number(video.currentTime()) || 0;
+          const at = Number(audio.currentTime) || 0;
+          driftMs = Math.abs(at - vt) * 1000;
+        } catch { return; }
+
+        const prev = _driftHistory[(_dIdx - 1 + HISTORY_LEN) % HISTORY_LEN];
+        _driftHistory[_dIdx % HISTORY_LEN] = driftMs;
+        _dIdx++;
+        _currentDriftMs = driftMs;
+
+        // Runaway detection: drift increasing monotonically
+        if (driftMs > prev && prev > 100) _runawayCount++;
+        else _runawayCount = 0;
+
+        // Critical accumulation
+        if (driftMs > CRITICAL_DRIFT_MS) _criticalCount++;
+        else _criticalCount = Math.max(0, _criticalCount - 1);
+
+        // Auto-correct: if drift is critical AND stable (not already correcting)
+        if (_criticalCount >= CRITICAL_THRESHOLD && (_now() - _lastCorrectionAt) > CORRECTION_COOLDOWN) {
+          _attemptCorrection();
+        }
+      }
+
+      function _attemptCorrection() {
+        try {
+          // Only correct during stable foreground playback
+          if (document.visibilityState !== "visible") return;
+          if (!state.intendedPlaying) return;
+          if (state.seeking || state.syncing || state.restarting) return;
+          if (BringBackToTabManager.isLocked()) return;
+          const vt = Number(video.currentTime()) || 0;
+          const at = Number(audio.currentTime) || 0;
+          if (Math.abs(at - vt) > 0.3) {
+            // safeSetAudioTime is a function declaration and is hoisted
+            safeSetAudioTime(vt);
+            _correctionCount++;
+            _lastCorrectionAt = _now();
+            _criticalCount = 0;
+          }
+        } catch {}
+      }
+
+      function getDriftMs()      { return _currentDriftMs; }
+      function isDriftCritical() { return _criticalCount >= CRITICAL_THRESHOLD; }
+      function isDriftRunaway()  { return _runawayCount >= RUNAWAY_THRESHOLD; }
+      function getAvgDriftMs() {
+        return _driftHistory.reduce((a, b) => a + b, 0) / HISTORY_LEN;
+      }
+
+      return { tick, getDriftMs, isDriftCritical, isDriftRunaway, getAvgDriftMs };
+    })();
+
+    // ── 5. StallRecoveryEngine ────────────────────────────────────────────────
+    // Multi-stage stall detection and recovery. Works alongside the existing
+    // heartbeat stall detection as a second layer with different thresholds
+    // and recovery strategies.
+    const StallRecoveryEngine = (() => {
+      let _videoPosSamples   = [];
+      let _audioTimeSamples  = [];
+      let _videoStallSince   = 0;
+      let _audioStallSince   = 0;
+      let _lastRecoveryAt    = 0;
+      let _recoveryAttempts  = 0;
+      let _inRecovery        = false;
+      let _lastSampleAt      = 0;
+
+      const SAMPLE_INTERVAL_MS  = 800;
+      const VIDEO_STALL_MS      = 3500;
+      const AUDIO_STALL_MS      = 3000;
+      const RECOVERY_COOLDOWN   = 6000;
+      const MAX_ATTEMPTS        = 4;
+      const SAMPLE_WINDOW       = 5;
+
+      function _samplePositions() {
+        if ((_now() - _lastSampleAt) < SAMPLE_INTERVAL_MS) return;
+        _lastSampleAt = _now();
+        try {
+          const vt = Number(video.currentTime()) || 0;
+          _videoPosSamples.push({ t: _now(), pos: vt });
+          if (_videoPosSamples.length > SAMPLE_WINDOW) _videoPosSamples.shift();
+        } catch {}
+        if (coupledMode && audio) {
+          try {
+            const at = Number(audio.currentTime) || 0;
+            _audioTimeSamples.push({ t: _now(), pos: at });
+            if (_audioTimeSamples.length > SAMPLE_WINDOW) _audioTimeSamples.shift();
+          } catch {}
+        }
+      }
+
+      function _isVideoPositionFrozen() {
+        if (_videoPosSamples.length < 3) return false;
+        const oldest = _videoPosSamples[0];
+        const newest = _videoPosSamples[_videoPosSamples.length - 1];
+        const elapsed = newest.t - oldest.t;
+        const moved   = Math.abs(newest.pos - oldest.pos);
+        return elapsed > VIDEO_STALL_MS && moved < 0.08;
+      }
+
+      function _isAudioTimeFrozen() {
+        if (!coupledMode || _audioTimeSamples.length < 3) return false;
+        const oldest = _audioTimeSamples[0];
+        const newest = _audioTimeSamples[_audioTimeSamples.length - 1];
+        const elapsed = newest.t - oldest.t;
+        const moved   = Math.abs(newest.pos - oldest.pos);
+        return elapsed > AUDIO_STALL_MS && moved < 0.08;
+      }
+
+      function tick() {
+        _samplePositions();
+        if (!state.intendedPlaying || _inRecovery) return;
+        if ((_now() - _lastRecoveryAt) < RECOVERY_COOLDOWN) return;
+        if (state.seeking || state.syncing || state.strictBufferHold) return;
+        if (document.visibilityState === "hidden") return;
+
+        const videoPaused = getVideoPaused();
+
+        // Video freeze: video supposedly playing but position frozen
+        if (!videoPaused && _isVideoPositionFrozen()) {
+          if (!_videoStallSince) _videoStallSince = _now();
+          if ((_now() - _videoStallSince) > VIDEO_STALL_MS) {
+            _triggerVideoRecovery("freeze");
+            return;
+          }
+        } else {
+          _videoStallSince = 0;
+        }
+
+        // Audio silence stall: audio playing but currentTime not advancing
+        if (coupledMode && audio && !audio.paused && _isAudioTimeFrozen()) {
+          if (!_audioStallSince) _audioStallSince = _now();
+          if ((_now() - _audioStallSince) > AUDIO_STALL_MS) {
+            _triggerAudioRecovery("time-freeze");
+            return;
+          }
+        } else {
+          _audioStallSince = 0;
+        }
+      }
+
+      function _triggerVideoRecovery(reason) {
+        if (_recoveryAttempts >= MAX_ATTEMPTS) return;
+        _inRecovery = true;
+        _recoveryAttempts++;
+        _lastRecoveryAt = _now();
+        _videoPosSamples = [];
+        _audioTimeSamples = [];
+        try {
+          const vt = Number(video.currentTime()) || 0;
+          // Stage 1: just re-issue play
+          execProgrammaticVideoPlay();
+          setTimeout(() => {
+            _inRecovery = false;
+            // Stage 2: if still frozen, do a tiny seek
+            if (getVideoPaused() && state.intendedPlaying) {
+              try { video.currentTime(Math.max(0, vt + 0.1)); } catch {}
+              setTimeout(() => {
+                try { execProgrammaticVideoPlay(); } catch {}
+              }, 200);
+            }
+          }, 1200);
+        } catch { _inRecovery = false; }
+      }
+
+      function _triggerAudioRecovery(reason) {
+        if (!coupledMode || !audio) return;
+        _inRecovery = true;
+        _recoveryAttempts++;
+        _lastRecoveryAt = _now();
+        _audioTimeSamples = [];
+        try {
+          const vt = Number(video.currentTime()) || 0;
+          safeSetAudioTime(vt);
+          execProgrammaticAudioPlay({ force: true, squelchMs: 400, minGapMs: 0 }).catch(() => {});
+          setTimeout(() => { _inRecovery = false; }, 1500);
+        } catch { _inRecovery = false; }
+      }
+
+      function onSeekStart() { _videoPosSamples = []; _audioTimeSamples = []; _videoStallSince = 0; _audioStallSince = 0; }
+      function onRecovery()  { _inRecovery = false; _videoPosSamples = []; _audioTimeSamples = []; }
+      function resetAttempts() { _recoveryAttempts = 0; }
+
+      return { tick, onSeekStart, onRecovery, resetAttempts };
+    })();
+
+    // ── 6. AudioContextReviver ────────────────────────────────────────────────
+    // Keeps the Web Audio API context in 'running' state. A suspended context
+    // causes audio to silently stop on some browsers/OS combos.
+    const AudioContextReviver = (() => {
+      let _ctx = null;
+      let _lastReviveAt = 0;
+      let _reviveCount = 0;
+      const REVIVE_COOLDOWN_MS = 3000;
+
+      function _findContext() {
+        if (_ctx) return _ctx;
+        try {
+          // Try to find or create an AudioContext
+          if (typeof AudioContext !== "undefined") {
+            _ctx = new AudioContext();
+          } else if (typeof webkitAudioContext !== "undefined") {
+            _ctx = new webkitAudioContext(); // eslint-disable-line new-cap
+          }
+        } catch {}
+        return _ctx;
+      }
+
+      function revive() {
+        if ((_now() - _lastReviveAt) < REVIVE_COOLDOWN_MS) return;
+        const ctx = _findContext();
+        if (!ctx) return;
+        if (ctx.state === "suspended") {
+          ctx.resume().then(() => {
+            _lastReviveAt = _now();
+            _reviveCount++;
+          }).catch(() => {});
+        }
+      }
+
+      function onUserGesture() {
+        // User gestures are the only reliable way to unlock AudioContext
+        const ctx = _findContext();
+        if (!ctx) return;
+        if (ctx.state !== "running") {
+          ctx.resume().catch(() => {});
+          _lastReviveAt = _now();
+        }
+      }
+
+      function tick() {
+        if (!coupledMode || !audio) return;
+        if (!state.intendedPlaying) return;
+        revive();
+      }
+
+      function getState() {
+        const ctx = _ctx;
+        return ctx ? ctx.state : "no-context";
+      }
+
+      return { revive, onUserGesture, tick, getState };
+    })();
+
+    // ── 7. PositionFreezeDetector ─────────────────────────────────────────────
+    // Maintains a sample history of video playback position. Detects when the
+    // position is stuck at the same value for too long while supposedly playing.
+    const PositionFreezeDetector = (() => {
+      const SAMPLES = 6;
+      let _positions    = new Array(SAMPLES).fill(-1);
+      let _timestamps   = new Array(SAMPLES).fill(0);
+      let _idx          = 0;
+      let _frozenSince  = 0;
+      let _lastSampleAt = 0;
+
+      const SAMPLE_MS       = 1000;   // sample every 1s
+      const FREEZE_POS_DELTA = 0.05; // < 0.05s movement = frozen
+      const FREEZE_CONFIRM_MS = 5000; // 5s of no movement = confirmed freeze
+
+      function sample() {
+        if ((_now() - _lastSampleAt) < SAMPLE_MS) return;
+        _lastSampleAt = _now();
+        try {
+          const pos = Number(video.currentTime()) || 0;
+          _positions[_idx % SAMPLES]  = pos;
+          _timestamps[_idx % SAMPLES] = _now();
+          _idx++;
+        } catch {}
+      }
+
+      function isFrozen() {
+        if (!state.intendedPlaying || getVideoPaused()) return false;
+        if (state.seeking || state.syncing || state.strictBufferHold) return false;
+        if (document.visibilityState === "hidden") return false;
+        if (_idx < SAMPLES) return false; // not enough samples
+        const oldest = _positions[_idx % SAMPLES];
+        const newest = _positions[(_idx - 1 + SAMPLES) % SAMPLES];
+        if (oldest < 0 || newest < 0) return false;
+        const timeDelta = _timestamps[(_idx - 1 + SAMPLES) % SAMPLES] - _timestamps[_idx % SAMPLES];
+        const posDelta  = Math.abs(newest - oldest);
+        if (posDelta < FREEZE_POS_DELTA && timeDelta > FREEZE_CONFIRM_MS) {
+          if (!_frozenSince) _frozenSince = _now();
+          return (_now() - _frozenSince) > FREEZE_CONFIRM_MS;
+        }
+        _frozenSince = 0;
+        return false;
+      }
+
+      function getFrozenDurationMs() {
+        return _frozenSince > 0 ? (_now() - _frozenSince) : 0;
+      }
+
+      function onSeekStart() {
+        _positions.fill(-1);
+        _timestamps.fill(0);
+        _idx = 0;
+        _frozenSince = 0;
+      }
+
+      function tick() { sample(); }
+
+      return { tick, isFrozen, getFrozenDurationMs, onSeekStart };
+    })();
+
+    // ── 8. AudioSilenceGuard ──────────────────────────────────────────────────
+    // Detects the "ghost audio" case: audio.paused=false, audio.currentTime
+    // advancing, but no actual sound (e.g. browser silenced it, zero volume,
+    // or the audio context is suspended).
+    const AudioSilenceGuard = (() => {
+      let _lastAT         = -1;
+      let _lastATAt       = 0;
+      let _silentSince    = 0;
+      let _silenceFixed   = 0;
+      let _checkCount     = 0;
+      let _lastCheckAt    = 0;
+      const CHECK_MS      = 2500;
+      const SILENT_CONF_MS = 5000; // must be silent for 5s to trigger action
+
+      function tick() {
+        if (!coupledMode || !audio) return;
+        if ((_now() - _lastCheckAt) < CHECK_MS) return;
+        _lastCheckAt = _now();
+        _checkCount++;
+
+        if (!state.intendedPlaying || audio.paused) {
+          _silentSince = 0;
+          _lastAT = -1;
+          return;
+        }
+
+        const at = Number(audio.currentTime) || 0;
+
+        // Case 1: volume is zero or muted despite intending to play
+        if (coupledMode && !audio.muted && audio.volume < 0.02) {
+          softUnmuteAudio(100).catch(() => {});
+          _silenceFixed++;
+          return;
+        }
+
+        // Case 2: currentTime not advancing despite audio.paused=false
+        if (_lastAT >= 0 && at > 0) {
+          const timeDelta = _now() - _lastATAt;
+          const posDelta  = Math.abs(at - _lastAT);
+          const expectedDelta = timeDelta / 1000;
+          if (posDelta < expectedDelta * 0.1 && timeDelta > CHECK_MS * 0.8) {
+            // Audio "playing" but time not advancing → ghost audio
+            if (!_silentSince) _silentSince = _now();
+            if ((_now() - _silentSince) > SILENT_CONF_MS) {
+              _fixSilence();
+            }
+          } else {
+            _silentSince = 0;
+          }
+        }
+        _lastAT   = at;
+        _lastATAt = _now();
+      }
+
+      function _fixSilence() {
+        _silentSince = 0;
+        _silenceFixed++;
+        if (!coupledMode || !audio || !state.intendedPlaying) return;
+        try {
+          const vt = Number(video.currentTime()) || 0;
+          squelchAudioEvents(600);
+          safeSetAudioTime(vt);
+          audio.pause();
+          setTimeout(() => {
+            if (!state.intendedPlaying) return;
+            execProgrammaticAudioPlay({ force: true, squelchMs: 600, minGapMs: 0 }).catch(() => {});
+          }, 200);
+        } catch {}
+      }
+
+      function isDetectedSilent() {
+        return _silentSince > 0 && (_now() - _silentSince) > SILENT_CONF_MS;
+      }
+
+      function getFixCount() { return _silenceFixed; }
+
+      return { tick, isDetectedSilent, getFixCount };
+    })();
+
+    // ── 9. ReadyStateWatcher ──────────────────────────────────────────────────
+    // Tracks readyState for both streams and detects unexpected drops
+    // (e.g. from HAVE_ENOUGH_DATA down to HAVE_METADATA or lower during playback).
+    const ReadyStateWatcher = (() => {
+      let _lastVRS         = 0;
+      let _lastARS         = 0;
+      let _vrsDrop         = false;
+      let _arsDrop         = false;
+      let _vrsDropAt       = 0;
+      let _arsDropAt       = 0;
+      let _vrsDropCount    = 0;
+      let _arsDropCount    = 0;
+      let _lastCheckAt     = 0;
+      const CHECK_MS       = 400;
+      const DROP_RECOVER_MS = 3000;
+
+      function tick() {
+        if ((_now() - _lastCheckAt) < CHECK_MS) return;
+        _lastCheckAt = _now();
+
+        try {
+          const vrs = Number(getVideoNode().readyState || 0);
+          if (_lastVRS >= 3 && vrs < 2 && !state.seeking) {
+            _vrsDrop = true;
+            _vrsDropAt = _now();
+            _vrsDropCount++;
+          } else if (vrs >= 3 && _vrsDrop) {
+            _vrsDrop = false;
+          }
+          _lastVRS = vrs;
+        } catch {}
+
+        if (coupledMode && audio) {
+          try {
+            const ars = Number(audio.readyState || 0);
+            if (_lastARS >= 3 && ars < 2 && !audio.paused) {
+              _arsDrop = true;
+              _arsDropAt = _now();
+              _arsDropCount++;
+              // Immediately pause audio if video is fine — don't play with partial buffer
+              if (!getVideoPaused() && state.intendedPlaying && !state.strictBufferHold) {
+                execProgrammaticAudioPause(800);
+                armResumeAfterBuffer(8000);
+              }
+            } else if (ars >= 3 && _arsDrop) {
+              _arsDrop = false;
+            }
+            _lastARS = ars;
+          } catch {}
+        }
+
+        // Auto-clear stale drop flags
+        if (_vrsDrop && (_now() - _vrsDropAt) > DROP_RECOVER_MS) _vrsDrop = false;
+        if (_arsDrop && (_now() - _arsDropAt) > DROP_RECOVER_MS) _arsDrop = false;
+      }
+
+      function hasVideoRsDrop()  { return _vrsDrop; }
+      function hasAudioRsDrop()  { return _arsDrop; }
+      function getVideoRS()      { return _lastVRS; }
+      function getAudioRS()      { return _lastARS; }
+      function getVrsDropCount() { return _vrsDropCount; }
+      function getArsDropCount() { return _arsDropCount; }
+
+      return { tick, hasVideoRsDrop, hasAudioRsDrop, getVideoRS, getAudioRS, getVrsDropCount, getArsDropCount };
+    })();
+
+    // ── 10. PlaybackRateGuard ─────────────────────────────────────────────────
+    // Enforces that video.playbackRate === 1.0 unless the player explicitly
+    // changed it (e.g. audio rate nudge). Silent rate drift causes A/V desync.
+    const PlaybackRateGuard = (() => {
+      let _lastCheckAt   = 0;
+      let _correctionCount = 0;
+      let _lastCorrectionAt = 0;
+      const CHECK_MS         = 2000;
+      const RATE_TOLERANCE   = 0.005;
+      const CORRECTION_COOLDOWN = 3000;
+
+      function tick() {
+        if ((_now() - _lastCheckAt) < CHECK_MS) return;
+        _lastCheckAt = _now();
+        if (state.audioRateNudgeActive) return; // player intentionally adjusting rate
+        if (state.seeking || state.syncing) return;
+        if ((_now() - _lastCorrectionAt) < CORRECTION_COOLDOWN) return;
+        try {
+          const vNode = getVideoNode();
+          const rate = Number(vNode.playbackRate);
+          if (isFinite(rate) && Math.abs(rate - 1.0) > RATE_TOLERANCE) {
+            vNode.playbackRate = 1.0;
+            try { video.playbackRate(1.0); } catch {}
+            _correctionCount++;
+            _lastCorrectionAt = _now();
+          }
+        } catch {}
+        // Also enforce audio rate if it drifted
+        if (coupledMode && audio && !state.audioRateNudgeActive) {
+          try {
+            const aRate = Number(audio.playbackRate);
+            if (isFinite(aRate) && Math.abs(aRate - 1.0) > RATE_TOLERANCE) {
+              audio.playbackRate = 1.0;
+              _correctionCount++;
+            }
+          } catch {}
+        }
+      }
+
+      function getCorrectionCount() { return _correctionCount; }
+
+      return { tick, getCorrectionCount };
+    })();
+
+    // ── 11. NetworkRecoveryHandler ────────────────────────────────────────────
+    // Handles online/offline transitions and triggers smart recovery.
+    const NetworkRecoveryHandler = (() => {
+      let _offlineSince   = 0;
+      let _backOnlineAt   = 0;
+      let _offlineCount   = 0;
+      let _recoveryTimer  = null;
+
+      function onOffline() {
+        _offlineSince = _now();
+        _offlineCount++;
+        // Clear any pending retry timers — no point retrying while offline
+        if (_recoveryTimer) { clearTimeout(_recoveryTimer); _recoveryTimer = null; }
+      }
+
+      function onOnline() {
+        _backOnlineAt = _now();
+        const offlineDuration = _offlineSince > 0 ? (_now() - _offlineSince) : 0;
+        _offlineSince = 0;
+
+        // Don't immediately retry — give network 500ms to stabilize
+        const retryDelay = offlineDuration > 5000 ? 1200 : 500;
+        if (_recoveryTimer) clearTimeout(_recoveryTimer);
+        _recoveryTimer = setTimeout(() => {
+          _recoveryTimer = null;
+          if (!state.intendedPlaying) return;
+          // Trigger a full sync after network recovery
+          try { scheduleSync(0); } catch {}
+          // If video is stalled, arm buffer recovery
+          if (getVideoPaused() && !state.strictBufferHold) {
+            try { armResumeAfterBuffer(10000); } catch {}
+          }
+        }, retryDelay);
+      }
+
+      function isOffline()     { return _offlineSince > 0; }
+      function getOfflineCount() { return _offlineCount; }
+      function getOfflineDurationMs() { return _offlineSince > 0 ? (_now() - _offlineSince) : 0; }
+
+      return { onOffline, onOnline, isOffline, getOfflineCount, getOfflineDurationMs };
+    })();
+
+    // ── 12. GhostAudioKiller ──────────────────────────────────────────────────
+    // In coupledMode: detects and kills rogue "audio playing without video"
+    // state in foreground stable conditions. More aggressive than playTogether
+    // for edge cases that slip through.
+    const GhostAudioKiller = (() => {
+      let _ghostDetectedAt = 0;
+      let _killCount       = 0;
+      let _lastCheckAt     = 0;
+      const CHECK_MS           = 1500;
+      const CONFIRM_MS         = 600;  // must see ghost for 600ms before acting
+
+      function tick() {
+        if (!coupledMode || !audio) return;
+        if ((_now() - _lastCheckAt) < CHECK_MS) return;
+        _lastCheckAt = _now();
+
+        if (!state.intendedPlaying) return;
+        if (state.seeking || state.syncing || state.restarting) return;
+        if (BringBackToTabManager.isLocked()) return;
+        if (document.visibilityState === "hidden" || !isWindowFocused()) return;
+        if (isVisibilityTransitionActive()) return;
+        if (inBgReturnGrace()) return;
+
+        const vPaused = getVideoPaused();
+        const aPaused = !!audio.paused;
+
+        // Ghost: audio playing but video paused in stable foreground
+        if (!aPaused && vPaused) {
+          if (!_ghostDetectedAt) { _ghostDetectedAt = _now(); return; }
+          if ((_now() - _ghostDetectedAt) > CONFIRM_MS) {
+            _killGhostAudio();
+          }
+        } else {
+          _ghostDetectedAt = 0;
+        }
+      }
+
+      function _killGhostAudio() {
+        _ghostDetectedAt = 0;
+        _killCount++;
+        try { execProgrammaticAudioPause(500); } catch {}
+        // Also try to re-start both together
+        setTimeout(() => {
+          if (!state.intendedPlaying) return;
+          try { scheduleSync(0); } catch {}
+        }, 300);
+      }
+
+      function getKillCount() { return _killCount; }
+
+      return { tick, getKillCount };
+    })();
+
+    // ── 13. HealthScoreTracker ────────────────────────────────────────────────
+    // Aggregates all subsystem signals into a 0-100 health score.
+    // Triggers escalating interventions when score drops.
+    const HealthScoreTracker = (() => {
+      let _score           = 100;
+      let _lastScore       = 100;
+      let _scoreAt         = 0;
+      let _interventions   = 0;
+      let _lastInterventionAt = 0;
+      const INTERVENTION_COOLDOWN = 8000;
+
+      function compute() {
+        let score = 100;
+
+        // Buffer health (30% weight)
+        const bufScore = BufferHealthMonitor.getCombinedScore();
+        score -= (100 - bufScore) * 0.30;
+
+        // Drift (20% weight)
+        const driftMs = DriftSupervisor.getDriftMs();
+        if (driftMs > 200)  score -= 10;
+        if (driftMs > 500)  score -= 15;
+        if (driftMs > 1000) score -= 20;
+        if (DriftSupervisor.isDriftRunaway()) score -= 15;
+
+        // Position freeze (20% weight)
+        if (PositionFreezeDetector.isFrozen()) score -= 25;
+
+        // ReadyState drops (15% weight)
+        if (ReadyStateWatcher.hasVideoRsDrop()) score -= 10;
+        if (ReadyStateWatcher.hasAudioRsDrop()) score -= 10;
+
+        // Network (15% weight)
+        if (NetworkRecoveryHandler.isOffline()) score -= 20;
+
+        // Silence guard
+        if (AudioSilenceGuard.isDetectedSilent()) score -= 20;
+
+        _lastScore = _score;
+        _score = Math.max(0, Math.min(100, Math.round(score)));
+        _scoreAt = _now();
+        return _score;
+      }
+
+      function tick() {
+        compute();
+        _maybeIntervene();
+      }
+
+      function _maybeIntervene() {
+        if ((_now() - _lastInterventionAt) < INTERVENTION_COOLDOWN) return;
+        if (!state.intendedPlaying || state.seeking || state.syncing) return;
+        if (document.visibilityState === "hidden") return;
+
+        if (_score < 20) {
+          // Critical: trigger full sync
+          _interventions++;
+          _lastInterventionAt = _now();
+          try { scheduleSync(0); } catch {}
+          try { setFastSync(2000); } catch {}
+        } else if (_score < 40) {
+          // Poor: trigger sync
+          _interventions++;
+          _lastInterventionAt = _now();
+          try { scheduleSync(100); } catch {}
+        }
+      }
+
+      function getScore()          { return _score; }
+      function getLastScore()      { return _lastScore; }
+      function getInterventions()  { return _interventions; }
+      function isHealthy()         { return _score >= 60; }
+      function isCritical()        { return _score < 20; }
+
+      return { tick, getScore, getLastScore, getInterventions, isHealthy, isCritical };
+    })();
+
+    // ── 14. MicroSyncScheduler ────────────────────────────────────────────────
+    // Fires scheduleSync() at adaptive intervals based on current health and
+    // playback state. Prevents both over-scheduling (causes churn) and
+    // under-scheduling (misses drift correction windows).
+    const MicroSyncScheduler = (() => {
+      let _lastFireAt  = 0;
+      let _pendingRaf  = null;
+      let _fastUntil   = 0;
+
+      const HEALTHY_INTERVAL_MS  = 3000;
+      const DRIFT_INTERVAL_MS    = 400;
+      const CRITICAL_INTERVAL_MS = 150;
+      const POST_TAB_FAST_MS     = 2500;
+
+      function tick() {
+        if (!coupledMode) return; // non-coupled mode managed by existing heartbeat
+        if (!state.intendedPlaying) return;
+
+        const score = HealthScoreTracker.getScore();
+        const drift = DriftSupervisor.getDriftMs();
+
+        let interval = HEALTHY_INTERVAL_MS;
+        if (drift > 300 || score < 40) interval = DRIFT_INTERVAL_MS;
+        if (score < 20)                interval = CRITICAL_INTERVAL_MS;
+        if (_now() < _fastUntil)       interval = Math.min(interval, DRIFT_INTERVAL_MS);
+
+        if ((_now() - _lastFireAt) >= interval) {
+          _lastFireAt = _now();
+          try { scheduleSync(0); } catch {}
+        }
+      }
+
+      function onTabReturn() {
+        _fastUntil = _now() + POST_TAB_FAST_MS;
+      }
+
+      return { tick, onTabReturn };
+    })();
+
+    // ════════════════════════════════════════════════════════════════════════
+    // Public API — façade over all 14 subsystems
+    // ════════════════════════════════════════════════════════════════════════
+
+    // ── Event hooks (called by player event handlers) ──────────────────────
+    function onVideoPlaying() {
+      AVLG.onVideoPlaying();
+      StartupSequencer.onVideoPlaying();
+    }
+    function onAudioPlaying() {
+      AVLG.onAudioPlaying();
+      StartupSequencer.onAudioPlaying();
+    }
+    function onVideoStall() {
+      AVLG.onVideoStall();
+      StallRecoveryEngine.onRecovery(); // reset samples on stall event
+    }
+    function onAudioStall() {
+      AVLG.onAudioStall();
+    }
+    function onSeekStart() {
+      StallRecoveryEngine.onSeekStart();
+      PositionFreezeDetector.onSeekStart();
+    }
+    function onSeekEnd() {
+      StallRecoveryEngine.onSeekStart(); // fresh samples after seek
+      PositionFreezeDetector.onSeekStart();
+    }
+    function onVisibilityChange(isVisible) {
+      if (isVisible) {
+        AudioContextReviver.revive();
+        MicroSyncScheduler.onTabReturn();
+        StartupSequencer.tick();
+      }
+    }
+    function onUserAction() {
+      AudioContextReviver.onUserGesture();
+      StallRecoveryEngine.resetAttempts();
+    }
+    function onNetworkOnline()  { NetworkRecoveryHandler.onOnline();  }
+    function onNetworkOffline() { NetworkRecoveryHandler.onOffline(); }
+
+    // ── Heartbeat tick (called every ~1.5s from setupHeartbeat) ───────────
+    function tick() {
+      try { BufferHealthMonitor.tick(); }   catch {}
+      try { DriftSupervisor.tick(); }       catch {}
+      try { StallRecoveryEngine.tick(); }   catch {}
+      try { AudioContextReviver.tick(); }   catch {}
+      try { PositionFreezeDetector.tick(); } catch {}
+      try { AudioSilenceGuard.tick(); }     catch {}
+      try { ReadyStateWatcher.tick(); }     catch {}
+      try { PlaybackRateGuard.tick(); }     catch {}
+      try { GhostAudioKiller.tick(); }      catch {}
+      try { HealthScoreTracker.tick(); }    catch {}
+      try { MicroSyncScheduler.tick(); }    catch {}
+      try { StartupSequencer.tick(); }      catch {}
+    }
+
+    // ── Fast tick (called every ~200ms during active sync / fast mode) ─────
+    function fastTick() {
+      try { DriftSupervisor.tick(); }       catch {}
+      try { ReadyStateWatcher.tick(); }     catch {}
+      try { BufferHealthMonitor.tick(); }   catch {}
+    }
+
+    // ── Primary gates (safe to call from any event handler) ───────────────
+    function shouldBlockAudioAtStartup() {
+      // Gate 1: AVLG — video must have played at least once
+      if (AVLG.shouldBlockAudio()) return true;
+      // Gate 2: StartupSequencer — video must be in VIDEO_PLAYING phase
+      if (StartupSequencer.shouldBlockAudioAtStartup()) return true;
+      return false;
+    }
+
+    function isAudioSilent()    { return AudioSilenceGuard.isDetectedSilent(); }
+    function isVideoFrozen()    { return PositionFreezeDetector.isFrozen(); }
+    function getHealthScore()   { return HealthScoreTracker.getScore(); }
+    function isHealthy()        { return HealthScoreTracker.isHealthy(); }
+    function getDriftMs()       { return DriftSupervisor.getDriftMs(); }
+    function getBufferScore()   { return BufferHealthMonitor.getCombinedScore(); }
+    function getStartupPhase()  { return StartupSequencer.getPhaseLabel(); }
+    function isStartupStable()  { return StartupSequencer.isStable(); }
+    function isOffline()        { return NetworkRecoveryHandler.isOffline(); }
+
+    // ── Startup: mark video/audio as fully loaded and ready ───────────────
+    function notifyVideoLoadeddata()   { StartupSequencer.onVideoReady(); }
+    function notifyVideoLoading()      { StartupSequencer.onVideoLoading(); }
+    function forceStartupRelease()     { AVLG.forceRelease(); }
+
+    return {
+      // Event hooks
+      onVideoPlaying, onAudioPlaying,
+      onVideoStall, onAudioStall,
+      onSeekStart, onSeekEnd,
+      onVisibilityChange, onUserAction,
+      onNetworkOnline, onNetworkOffline,
+      // Ticks
+      tick, fastTick,
+      // Gates
+      shouldBlockAudioAtStartup,
+      isAudioSilent, isVideoFrozen,
+      // Metrics
+      getHealthScore, isHealthy, getDriftMs, getBufferScore,
+      getStartupPhase, isStartupStable, isOffline,
+      // Startup helpers
+      notifyVideoLoadeddata, notifyVideoLoading, forceStartupRelease,
+    };
+  })();
+
 
   const EPS = 1.0;
   const HAVE_FUTURE_DATA = 3;
@@ -1133,6 +2163,7 @@ document.addEventListener("DOMContentLoaded", () => {
     state.playSessionId = (state.playSessionId || 0) + 1;
     MediumQualityManager.markUserPaused(); // MQM: record authoritative user pause intent
     PlaybackStabilityManager.onUserAction();
+    try { UltraStabilizer.onUserAction(); } catch {}
     BringBackToTabManager.onUserPause(); // cancel any tab-return lock — user is in control
     clearStartupAutoplayRetryTimer();
     state.lastUserActionTime = now();
@@ -1174,6 +2205,7 @@ document.addEventListener("DOMContentLoaded", () => {
     state.loopPreventionCooldownUntil = 0;
     MediumQualityManager.markUserPlayed(); // MQM: clear any pending pause intent
     PlaybackStabilityManager.onUserAction();
+    try { UltraStabilizer.onUserAction(); } catch {}
     const until = now() + Math.max(0, Number(ms) || 0);
     state.userPlayUntil = Math.max(state.userPlayUntil, until);
     state.userPauseUntil = 0;
@@ -1926,7 +2958,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // force=true bypasses other guards but video has since paused between the call and execution.
     if (getVideoPaused() && !isHiddenBackground()) return false;
 
-    // Cancel any active volume fade before attempting to play.
+    // CRITICAL FIX: Cancel any active volume fade before attempting to play.
     // pauseHard() starts a fadeAndPauseAudio(120ms) that calls audio.pause() via
     // a callback. If play fires within those 120ms, audio.play() succeeds but the
     // fade callback fires after and re-pauses audio. cancelActiveFade() stops this.
@@ -2662,6 +3694,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const shouldHoldAudio =
           state.strictBufferHold ||
           shouldBlockNewAudioStart() ||
+          // UltraStabilizer gate: block audio until video has fired its first "playing" event.
+          // This prevents the audio-without-video race at startup.
+          UltraStabilizer.shouldBlockAudioAtStartup() ||
           (document.visibilityState === "visible" && state.videoWaiting && state.startupPhase && !state.audioEverStarted);
 
         if (shouldHoldAudio) {
@@ -3770,6 +4805,11 @@ document.addEventListener("DOMContentLoaded", () => {
         );
       }
 
+      // ── UltraStabilizer heartbeat tick ───────────────────────────────────
+      // Runs all 14 stabilization subsystems (buffer health, drift supervisor,
+      // stall recovery, silence guard, readyState watcher, rate guard, etc.)
+      try { UltraStabilizer.tick(); } catch {}
+
       state.heartbeatTimer = setTimeout(beat, HEARTBEAT_INTERVAL_MS);
     };
     state.heartbeatTimer = setTimeout(beat, HEARTBEAT_INTERVAL_MS);
@@ -3836,6 +4876,7 @@ document.addEventListener("DOMContentLoaded", () => {
       scheduleSync(200);
     };
     const onAudioStalled = () => {
+      try { UltraStabilizer.onAudioStall(); } catch {}
       if (!coupledMode || !state.intendedPlaying) return;
       scheduleSync(200);
     };
@@ -3848,6 +4889,7 @@ document.addEventListener("DOMContentLoaded", () => {
       state.networkOnline = true;
       state.mediaErrorCount = 0;
       state.mediaErrorCooldownUntil = 0;
+      try { UltraStabilizer.onNetworkOnline(); } catch {}
       if (state.intendedPlaying && document.visibilityState === "visible") {
         setTimeout(() => {
           if (state.intendedPlaying && !state.restarting) playTogether().catch(() => {});
@@ -3856,6 +4898,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }, { passive: true });
     window.addEventListener("offline", () => {
       state.networkOnline = false;
+      try { UltraStabilizer.onNetworkOffline(); } catch {}
     }, { passive: true });
   }
 
@@ -4238,7 +5281,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      // Gate isUserAction on visibility stability.
+      // CRITICAL FIX: Gate isUserAction on visibility stability.
       // Without this, clicking anything ≤1500ms before switching tabs causes the
       // spurious Chromium pause event (fired on tab hide) to be classified as a
       // user pause → intendedPlaying=false → wakeup timer fires but does nothing.
@@ -4285,7 +5328,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      // Tab-return grace window (8s). Both Chromium AND Firefox fire
+      // CRITICAL FIX: Tab-return grace window (8s). Both Chromium AND Firefox fire
       // spurious pause events after a tab returns to foreground. The visibility-transition
       // guard above only lasts 4.5s; anything after that but within 8s falls through to
       // pauseHard() without this check, causing the visible play→pause→play stutter.
@@ -4326,6 +5369,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     video.on("waiting", () => {
+      try { UltraStabilizer.onVideoStall(); } catch {}
       state.videoWaiting = true;
       if (!state.intendedPlaying || state.restarting) return;
       if (!state.startupPrimed || state.startupKickInFlight || (state.startupPhase && !state.firstPlayCommitted)) return;
@@ -4363,6 +5407,8 @@ document.addEventListener("DOMContentLoaded", () => {
       scheduleSync(0);
     });
     video.on("playing", () => {
+      // ── UltraStabilizer: notify video playing ────────────────────────────
+      try { UltraStabilizer.onVideoPlaying(); } catch {}
       // Only clear videoWaiting when the browser truly has enough data (readyState >= 3).
       // playing can fire with readyState=2 during thin-buffer situations; clearing here
       // would allow audio to restart before the next "waiting" arrives.
@@ -4381,8 +5427,9 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       if ((!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) && !userPlayIntentActive()) {
-        // ── never let autoplay override an explicit user pause ────────
-         //   1. User clicks pause → intendedPlaying=false
+        // ── CRITICAL FIX: never let autoplay override an explicit user pause ────────
+        // Root cause of quality=medium "can't pause" bug:
+        //   1. User clicks pause → intendedPlaying=false
         //   2. "playing" fires AFTER "pause" (browser can emit these out of order during
         //      buffering/preload state changes)
         //   3. wantsStartupAutoplay()=true → intendedPlaying=true again
@@ -4688,6 +5735,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     };
     audio.addEventListener("play", onAudioPlay, { passive: true });
+    audio.addEventListener("playing", () => { try { UltraStabilizer.onAudioPlaying(); } catch {} }, { passive: true });
     audio.addEventListener("pause", onAudioPause, { passive: true });
     audio.addEventListener("seeking", () => {
       if (state.restarting || !state.seeking) return;
@@ -4714,7 +5762,7 @@ document.addEventListener("DOMContentLoaded", () => {
       onReadyish();
     }, { passive: true });
     videoEl.addEventListener("canplaythrough", onReadyish, { passive: true });
-    videoEl.addEventListener("loadeddata", onReadyish, { passive: true });
+    videoEl.addEventListener("loadeddata", () => { try { UltraStabilizer.notifyVideoLoadeddata(); } catch {} onReadyish(); }, { passive: true });
 
     videoEl.addEventListener("loadedmetadata", () => {
       if (state.startupPhase && !state.firstPlayCommitted && wantsStartupAutoplay()) {
@@ -4723,6 +5771,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }, { once: true, passive: true });
 
     video.on("seeking", () => {
+      try { UltraStabilizer.onSeekStart(); } catch {}
       if (state.restarting) return;
       // Background silent time sync — we set videoEl.currentTime directly to keep
       // the progress bar in sync with audio. Ignore the resulting seeking event entirely.
@@ -5048,6 +6097,7 @@ document.addEventListener("DOMContentLoaded", () => {
         BackgroundPlaybackManagerManager.onForegroundReturn();
         // ── BringBackToTab: arm the lock immediately before any pause events fire ──
         if (state.intendedPlaying) BringBackToTabManager.onTabReturn();
+        try { UltraStabilizer.onVisibilityChange(true); } catch {}
 
         clearHiddenMediaSessionPlay();
         state.bgAutoResumeSuppressed = false;
@@ -5225,6 +6275,17 @@ document.addEventListener("DOMContentLoaded", () => {
         state.audioForcePlayTimer = setTimeout(tryPlay, AUDIO_STARTUP_PLAY_RETRY_MS);
         return;
       }
+      // ── UltraStabilizer startup gate ─────────────────────────────────────
+      // CORE FIX: audio must never play before video has confirmed playing.
+      // forceAudioStartupPlay() can fire while video is still buffering (RS<3),
+      // producing audible audio with a frozen/black video frame. Block & retry.
+      const vrs = getVideoReadyState();
+      if (UltraStabilizer.shouldBlockAudioAtStartup() || vrs < 3) {
+        state.audioStartupPlayRetries++;
+        state.audioForcePlayTimer = setTimeout(tryPlay, AUDIO_STARTUP_PLAY_RETRY_MS);
+        return;
+      }
+      // ─────────────────────────────────────────────────────────────────────
       try {
         audio.volume = 0;
         state.intendedPlaying = true;
@@ -5351,7 +6412,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }, 100);
   scheduleSync(0);
 });
-
 document.addEventListener('keydown', function(event) {
      const active = document.activeElement;
     if (active && (active.tagName.toLowerCase() === 'input' || active.tagName.toLowerCase() === 'textarea')) {
