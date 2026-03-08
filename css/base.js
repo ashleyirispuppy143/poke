@@ -395,6 +395,9 @@ document.addEventListener("DOMContentLoaded", () => {
     userGesturePauseIntent: false,
     pageFullyLoaded: document.readyState === "complete",
     bgAudioStartQueued: false,
+    bbtabRetryTimer: null,
+    bbtabRetryCount: 0,
+    bbtabAudioSyncTimer: null,
     lastUserActionTime: 0,
     loopPreventionCooldownUntil: 0,
     seekCooldownUntil: 0,
@@ -870,6 +873,77 @@ document.addEventListener("DOMContentLoaded", () => {
   })();
 
 
+  // ─── BringBackToTabManager (BBTM) ────────────────────────────────────────
+  // The single source of truth for "we are in the process of returning to this
+  // tab." Its ONE job: prevent ANY browser-imposed pause event from being
+  // treated as authoritative state during the return window. Combined with a
+  // tight rAF-speed play-retry loop (startBringBackRetry, defined later once
+  // playTogether is available), this makes tab-return play→pause→play flicker
+  // completely invisible.
+  //
+  // Architecture:
+  //   BBTM = flag keeper + timing only (no play/pause calls — circular deps)
+  //   startBringBackRetry() = the actual retry engine, defined after playTogether
+  //
+  // Pause handlers check isLocked() AFTER user-intent checks. User pauses
+  // always win; browser-imposed pauses are dropped on the floor.
+  // ─────────────────────────────────────────────────────────────────────────
+  const BringBackToTabManager = (() => {
+    // How long to hold the lock after a tab-return event. Must be ≥ the
+    // longest browser spurious-pause burst we've observed (Chromium ~800ms).
+    // We use 2200ms to cover all platforms plus margin.
+    const LOCK_DURATION_MS = 2200;
+
+    // After the video is confirmed playing, how long to continue monitoring
+    // for late-arriving spurious pauses before fully releasing control.
+    const POST_PLAY_SETTLE_MS = 600;
+
+    let _lockUntil = 0;
+    let _postPlaySettleUntil = 0;
+    let _returnTs = 0; // timestamp of the most recent tab-return event
+
+    function isLocked() {
+      return now() < _lockUntil || now() < _postPlaySettleUntil;
+    }
+
+    // Called the instant the tab becomes visible.
+    function onTabReturn() {
+      _returnTs = now();
+      _lockUntil = now() + LOCK_DURATION_MS;
+      _postPlaySettleUntil = 0;
+    }
+
+    // Called once the video is confirmed playing after a return. Switches
+    // from the full lock to a shorter post-play settle window.
+    function onVideoConfirmedPlaying() {
+      if (_returnTs === 0) return; // not in a return sequence
+      _lockUntil = Math.min(_lockUntil, now() + 80); // drain main lock quickly
+      _postPlaySettleUntil = Math.max(_postPlaySettleUntil, now() + POST_PLAY_SETTLE_MS);
+    }
+
+    // Called when the user explicitly pauses — cancel immediately so their
+    // pause isn't swallowed.
+    function onUserPause() {
+      _lockUntil = 0;
+      _postPlaySettleUntil = 0;
+      _returnTs = 0;
+    }
+
+    // Hard cancel (e.g. page unload, error recovery).
+    function cancelLock() {
+      _lockUntil = 0;
+      _postPlaySettleUntil = 0;
+      _returnTs = 0;
+    }
+
+    // How long ago (ms) was the last tab return? Used by retry loop.
+    function timeSinceReturn() {
+      return _returnTs > 0 ? (now() - _returnTs) : Infinity;
+    }
+
+    return { isLocked, onTabReturn, onVideoConfirmedPlaying, onUserPause, cancelLock, timeSinceReturn };
+  })();
+
   const EPS = 1.0;
   const HAVE_FUTURE_DATA = 3;
   const HAVE_ENOUGH_DATA = 4;
@@ -1059,6 +1133,7 @@ document.addEventListener("DOMContentLoaded", () => {
     state.playSessionId = (state.playSessionId || 0) + 1;
     MediumQualityManager.markUserPaused(); // MQM: record authoritative user pause intent
     PlaybackStabilityManager.onUserAction();
+    BringBackToTabManager.onUserPause(); // cancel any tab-return lock — user is in control
     clearStartupAutoplayRetryTimer();
     state.lastUserActionTime = now();
     state.bgSuppressionSessionCount = 0;
@@ -1851,7 +1926,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // force=true bypasses other guards but video has since paused between the call and execution.
     if (getVideoPaused() && !isHiddenBackground()) return false;
 
-    // CRITICAL FIX: Cancel any active volume fade before attempting to play.
+    // Cancel any active volume fade before attempting to play.
     // pauseHard() starts a fadeAndPauseAudio(120ms) that calls audio.pause() via
     // a callback. If play fires within those 120ms, audio.play() succeeds but the
     // fade callback fires after and re-pauses audio. cancelActiveFade() stops this.
@@ -3204,16 +3279,19 @@ document.addEventListener("DOMContentLoaded", () => {
     // This catches any async race where audio started via playTogether/stall-recovery but video
     // then paused before audio could be stopped. The heartbeat (1.5s) enforces the invariant
     // continuously. Only bypassed during background playback (bgPlaybackAllowed) where
-    // audio-only is intentional.
-    if (!aPaused && vPaused && !isHiddenBackground() && !state.intendedPlaying) {
-      execProgrammaticAudioPause(100);
-    } else if (!aPaused && vPaused && !isHiddenBackground() &&
-               !state.strictBufferHold && !state.videoWaiting &&
-               !state.seeking && !state.syncing &&
-               !state.bgPlaybackAllowed) {
-      // Also catch the case where intendedPlaying=true but video is still paused — audio should
-      // wait for video to resume, not play ahead solo.
-      execProgrammaticAudioPause(100);
+    // audio-only is intentional, and during BBTM lock (video IS intending to play, BBTM
+    // is actively retrying — killing audio here would cause an unnecessary audio restart).
+    if (!BringBackToTabManager.isLocked()) {
+      if (!aPaused && vPaused && !isHiddenBackground() && !state.intendedPlaying) {
+        execProgrammaticAudioPause(100);
+      } else if (!aPaused && vPaused && !isHiddenBackground() &&
+                 !state.strictBufferHold && !state.videoWaiting &&
+                 !state.seeking && !state.syncing &&
+                 !state.bgPlaybackAllowed) {
+        // Also catch the case where intendedPlaying=true but video is still paused — audio should
+        // wait for video to resume, not play ahead solo.
+        execProgrammaticAudioPause(100);
+      }
     }
 
     const inBgDrift = document.visibilityState === "hidden" || !isWindowFocused() || inBgReturnGrace();
@@ -4160,7 +4238,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      // CRITICAL FIX: Gate isUserAction on visibility stability.
+      // Gate isUserAction on visibility stability.
       // Without this, clicking anything ≤1500ms before switching tabs causes the
       // spurious Chromium pause event (fired on tab hide) to be classified as a
       // user pause → intendedPlaying=false → wakeup timer fires but does nothing.
@@ -4192,14 +4270,22 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      if (state.isProgrammaticVideoPause || state.restarting || state.seeking) return;
+      // ── BringBackToTab hard lock ─────────────────────────────────────────
+      // We've already confirmed above that this is NOT a user pause. If BBTM
+      // is active we are inside the tab-return spurious-pause burst window.
+      // Drop this event on the floor — the retry loop will keep calling play()
+      // until it sticks, completely invisibly.
+      if (BringBackToTabManager.isLocked()) {
+        scheduleSync(50);
+        return;
+      }
 
       if (document.visibilityState === "hidden" || isVisibilityTransitionActive() || isAltTabTransitionActive()) {
         if (state.intendedPlaying && platform.useBgControllerRetry) state.resumeOnVisible = true;
         return;
       }
 
-      // CRITICAL FIX: Tab-return grace window (8s). Both Chromium AND Firefox fire
+      // Tab-return grace window (8s). Both Chromium AND Firefox fire
       // spurious pause events after a tab returns to foreground. The visibility-transition
       // guard above only lasts 4.5s; anything after that but within 8s falls through to
       // pauseHard() without this check, causing the visible play→pause→play stutter.
@@ -4295,9 +4381,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       if ((!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) && !userPlayIntentActive()) {
-        // ── CRITICAL FIX: never let autoplay override an explicit user pause ────────
-        // Root cause of quality=medium "can't pause" bug:
-        //   1. User clicks pause → intendedPlaying=false
+        // ── never let autoplay override an explicit user pause ────────
+         //   1. User clicks pause → intendedPlaying=false
         //   2. "playing" fires AFTER "pause" (browser can emit these out of order during
         //      buffering/preload state changes)
         //   3. wantsStartupAutoplay()=true → intendedPlaying=true again
@@ -4496,6 +4581,11 @@ document.addEventListener("DOMContentLoaded", () => {
       requestAnimationFrame(() => {
         if (state.seeking || state.restarting || state.isProgrammaticAudioPause) return;
         if (audio && !audio.paused) return;
+
+        // ── BringBackToTab hard lock ─────────────────────────────────────
+        // Inside the tab-return window, audio pause events are spurious.
+        // The BBTM audio sync step will re-sync audio once video is playing.
+        if (BringBackToTabManager.isLocked()) return;
 
         if (isVisibilityTransitionActive()) {
           if (state.intendedPlaying && platform.useBgControllerRetry) state.resumeOnVisible = true;
@@ -4760,6 +4850,99 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // ─── BringBackToTab retry engine ──────────────────────────────────────────
+  // Called from the visibilitychange→visible handler. Spins a tight rAF-speed
+  // loop (≈16ms per tick) that:
+  //   1. Immediately tries to play() the video — no 950ms wait.
+  //   2. If the browser's spurious-pause burst fires, the pause handler returns
+  //      early (BringBackToTabManager.isLocked()), so state never changes.
+  //   3. Once video is playing, does a gentle audio-sync without pausing.
+  //   4. Gives up gracefully after ~2s if user paused or an error occurred.
+  //
+  // This replaces the single delayed play() in executeSeamlessWakeup for the
+  // VIDEO track. executeSeamlessWakeup is kept as a fallback / audio-sync path.
+  // ─────────────────────────────────────────────────────────────────────────
+  function startBringBackRetry() {
+    // Clear any previous retry loop
+    if (state.bbtabRetryTimer) { clearTimeout(state.bbtabRetryTimer); state.bbtabRetryTimer = null; }
+    if (state.bbtabAudioSyncTimer) { clearTimeout(state.bbtabAudioSyncTimer); state.bbtabAudioSyncTimer = null; }
+    state.bbtabRetryCount = 0;
+
+    if (!state.intendedPlaying) return;
+
+    _doBringBackRetry();
+  }
+
+  function _doBringBackRetry() {
+    // If lock has fully expired, we're done
+    if (!BringBackToTabManager.isLocked()) return;
+
+    // If user paused or media session forced pause — stop immediately
+    if (!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) {
+      BringBackToTabManager.cancelLock();
+      return;
+    }
+
+    state.bbtabRetryCount++;
+
+    // Hard cap at 150 iterations (~2.4s at 16ms) — safety valve
+    if (state.bbtabRetryCount > 150) {
+      BringBackToTabManager.cancelLock();
+      return;
+    }
+
+    const vPaused = getVideoPaused();
+
+    if (!vPaused) {
+      // ✅ Video is playing — success path
+      BringBackToTabManager.onVideoConfirmedPlaying();
+
+      // Schedule a gentle audio sync 150ms from now so we don't interrupt
+      // the first clean frame
+      if (coupledMode && audio) {
+        if (state.bbtabAudioSyncTimer) clearTimeout(state.bbtabAudioSyncTimer);
+        state.bbtabAudioSyncTimer = setTimeout(() => {
+          state.bbtabAudioSyncTimer = null;
+          if (!state.intendedPlaying || userPauseLockActive()) return;
+          try {
+            const vt = Number(video.currentTime());
+            const at = Number(audio ? audio.currentTime : NaN);
+            // If drift is meaningful, resync audio quietly
+            if (isFinite(vt) && isFinite(at) && Math.abs(vt - at) > 0.08) {
+              safeSetAudioTime(vt);
+            }
+            if (audio && audio.paused && !state.isProgrammaticAudioPause) {
+              execProgrammaticAudioPlay({ squelchMs: 200, force: true, minGapMs: 0 })
+                .catch(() => {});
+            }
+          } catch {}
+          setFastSync(1200);
+          scheduleSync(0);
+        }, 150);
+      } else {
+        setFastSync(800);
+        scheduleSync(0);
+      }
+      return;
+    }
+
+    // Video still paused — kick it immediately and schedule next retry
+    try {
+      const vn = getVideoNode();
+      if (vn && typeof vn.play === "function") {
+        vn.play().catch(() => {}); // Promise rejection is expected during burst — ignore
+      }
+    } catch {}
+
+    // Also try via video.js API on some iterations to cover different code paths
+    if (state.bbtabRetryCount % 6 === 0) {
+      try { video.play(); } catch {}
+    }
+
+    // Schedule next attempt at rAF speed
+    state.bbtabRetryTimer = setTimeout(_doBringBackRetry, 16);
+  }
+
   function executeSeamlessWakeup() {
     if (!state.intendedPlaying) return;
     // If a wakeup timer is already counting down, don't reset it — that would
@@ -4769,12 +4952,12 @@ document.addEventListener("DOMContentLoaded", () => {
     clearTimeout(state.wakeupTimer);
     state.wakeupTimer = null;
 
-    // Chromium fires a burst of spurious pause events for ~800ms after a tab returns to
-    // foreground. Attempting resume before this burst clears causes a visible play→pause→play
-    // stutter. Use a longer delay on Chromium so we only attempt resume when it's safe.
+    // BringBackToTabManager handles the video play-retry loop immediately.
+    // executeSeamlessWakeup is now purely an audio-sync + final-state-check
+    // fallback. Use a short delay just to let the BBTM retry loop settle first.
     const wakeDelay = platform.chromiumOnlyBrowser
-      ? BG_RETURN_WAKEUP_DELAY_CHROMIUM_MS   // 950ms
-      : BG_RETURN_WAKEUP_DELAY_OTHER_MS;     // 300ms
+      ? 180    // Chromium: give BBTM loop ~6 iterations to confirm video playing
+      : 100;   // Other: faster settling
 
     state.wakeupTimer = setTimeout(() => {
       state.wakeupTimer = null;
@@ -4863,6 +5046,8 @@ document.addEventListener("DOMContentLoaded", () => {
         state.lastBgReturnAt = now();
         BackgroundPlaybackManager.onBecomeForeground();
         BackgroundPlaybackManagerManager.onForegroundReturn();
+        // ── BringBackToTab: arm the lock immediately before any pause events fire ──
+        if (state.intendedPlaying) BringBackToTabManager.onTabReturn();
 
         clearHiddenMediaSessionPlay();
         state.bgAutoResumeSuppressed = false;
@@ -4902,11 +5087,16 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!state.firstPlayCommitted && wantsStartupAutoplay() && !state.startupKickDone) {
               // startup will handle it
             } else {
+              // Start the tight retry loop FIRST (no delay), then also run
+              // executeSeamlessWakeup as an audio-sync + state-consistency pass.
+              startBringBackRetry();
               executeSeamlessWakeup();
             }
           } else {
             state.resumeOnVisible = false;
             state.bgHiddenWasPlaying = false;
+            // Non-Chromium path: also run BBTM retry loop
+            startBringBackRetry();
             setTimeout(() => {
               if (state.intendedPlaying && !userPauseLockActive() && !mediaSessionForcedPauseActive()) {
                 playTogether().catch(() => {});
@@ -4988,9 +5178,11 @@ document.addEventListener("DOMContentLoaded", () => {
       state.loopPreventionCooldownUntil = 0;
       setChromiumPauseEventSuppress(BG_RETURN_GRACE_MS);
       setChromiumAutoPauseBlock(BG_RETURN_GRACE_MS);
+      if (state.intendedPlaying) BringBackToTabManager.onTabReturn();
       setTimeout(() => {
         state.altTabTransitionActive = false;
         if (document.visibilityState === "visible") {
+          startBringBackRetry();
           executeSeamlessWakeup();
         }
       }, 150);
@@ -5159,6 +5351,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }, 100);
   scheduleSync(0);
 });
+
 document.addEventListener('keydown', function(event) {
      const active = document.activeElement;
     if (active && (active.tagName.toLowerCase() === 'input' || active.tagName.toLowerCase() === 'textarea')) {
