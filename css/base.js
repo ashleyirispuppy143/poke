@@ -1004,8 +1004,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (wasPlaying) {
         await doVolumeFade(0, 60);
-        //  Pause the actual audio element before seeking. Without this the browser
+        // CRITICAL: Pause the actual audio element before seeking. Without this the browser
         // keeps its decode buffer pointing at the old position and briefly replays it
+        // (the "repeat last 0.5s" artifact) when the seek completes.
         state.isProgrammaticAudioPause = true;
         try { audio.pause(); } catch {}
         setTimeout(() => { state.isProgrammaticAudioPause = false; }, 300);
@@ -1300,7 +1301,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const { squelchMs = 500, minGapMs = 300, force = false } = opts;
     if (!coupledMode || !audio || typeof audio.play !== "function") return false;
 
-    // Cancel any active volume fade before attempting to play.
+    // CRITICAL FIX: Cancel any active volume fade before attempting to play.
     // pauseHard() starts a fadeAndPauseAudio(120ms) that calls audio.pause() via
     // a callback. If play fires within those 120ms, audio.play() succeeds but the
     // fade callback fires after and re-pauses audio. cancelActiveFade() stops this.
@@ -2290,7 +2291,7 @@ document.addEventListener("DOMContentLoaded", () => {
         state.playRequestedDuringSeek = false;
         state.seekWantedPlaying = false;
         // Clear stall state before resuming after seek.
-        // also clear videoWaiting — when seeking to an already-buffered position,
+        // CRITICAL: also clear videoWaiting — when seeking to an already-buffered position,
         // readyState is already >= 3 so waitForReadyStateOrCanPlay returns immediately with
         // no canplay event firing. videoWaiting stays true → shouldBlockNewAudioStart()
         // blocks audio → silence after seek. Clear it here since we've confirmed data is ready.
@@ -3506,12 +3507,15 @@ document.addEventListener("DOMContentLoaded", () => {
       // Freeze audio immediately when video stalls.
       // Audio must not play ahead of the stall point — when video resumes it will need
       // to seek audio back, causing the audible "replay last 0.5s" artifact.
-      if (coupledMode && audio && !audio.paused && !state.seeking) {
+      if (coupledMode && audio && !audio.paused && !state.seeking && !state.seekResumeInFlight) {
         // INSTANT STOP — no fade. The 120ms fade in execProgrammaticAudioPause was the
         // "audio audible while video buffers" artifact: audio played at full volume for
         // the duration of the fade, which is exactly what the user sees/hears.
         // Also removed isWindowFocused() and !bgResumeInFlight guards — audio must stop
         // when video buffers regardless of window focus or in-flight resume state.
+        // seekResumeInFlight guard: after finalizeSeekSync clears state.seeking and begins
+        // playTogether, the browser may fire waiting (thin buffer) — without this guard it
+        // would immediately re-pause audio, racing the seek resume and causing silence.
         state.videoStallAudioPaused = true;
         state.stallAudioPausedSince = now();
         state.audioPausedSince = 0; // legit stall, not a watchdog case
@@ -3837,6 +3841,16 @@ document.addEventListener("DOMContentLoaded", () => {
       state.lastKnownGoodVT = seekTime;
       state.lastKnownGoodVTts = now();
       state.seekCooldownUntil = now() + 2000;
+
+      // A seek supersedes any prior stall state. Clear all stall flags now so they cannot
+      // block audio from resuming when the seek completes. Without this, seeking during a
+      // video stall leaves videoStallAudioPaused=true and audioPauseUntil=now()+5000, which
+      // causes shouldBlockNewAudioStart() to silently block audio after seek finalization.
+      state.videoWaiting = false;
+      state.videoStallAudioPaused = false;
+      state.stallAudioPausedSince = 0;
+      state.stallAudioResumeHoldUntil = 0;
+      state.audioPauseUntil = 0;
 
       // Safety watchdog: if seeked event never fires (slow network, rapid seeks),
       // force-finalize after SEEK_WATCHDOG_MS to prevent state.seeking staying true forever.
