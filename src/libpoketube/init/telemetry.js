@@ -14,6 +14,7 @@ const getEmptyStats = () => ({
   browsers: {},
   os: {},
   users: {},
+  humanViewUsers: {},
   recentVideos: []
 })
 
@@ -85,6 +86,10 @@ module.exports = function (app, config, renderTemplate) {
       Object.assign(memoryStats.users, source.users)
     }
 
+    if (source.humanViewUsers) {
+      Object.assign(memoryStats.humanViewUsers, source.humanViewUsers)
+    }
+
     if (Array.isArray(source.recentVideos)) {
       for (let i = source.recentVideos.length - 1; i >= 0; i--) {
         touchRecentVideo(source.recentVideos[i])
@@ -136,6 +141,27 @@ module.exports = function (app, config, renderTemplate) {
     needsSave = true
 
     res.json({ ok: true })
+  })
+
+  app.post("/api/stats/human-view", (req, res) => {
+    if (!telemetryConfig.telemetry) return res.status(200).json({ ok: true })
+
+    const humanViewId = req.body && typeof req.body.humanViewId === "string"
+      ? req.body.humanViewId.trim()
+      : ""
+
+    if (!humanViewId) {
+      return res.status(400).json({ error: "missing humanViewId" })
+    }
+
+    if (humanViewId.length > 200) {
+      return res.status(400).json({ error: "invalid humanViewId" })
+    }
+
+    memoryStats.humanViewUsers[humanViewId] = true
+    needsSave = true
+
+    return res.json({ ok: true })
   })
 
   app.get("/api/stats/optout", (req, res) => {
@@ -288,6 +314,7 @@ module.exports = function (app, config, renderTemplate) {
           os: {},
           totalUsers: 0,
           totalVideoIds: 0,
+          totalHumanViewUsers: 0,
           limit: 0
         })
       }
@@ -311,6 +338,7 @@ module.exports = function (app, config, renderTemplate) {
         os: memoryStats.os,
         totalUsers: Object.keys(memoryStats.users).length,
         totalVideoIds: Object.keys(memoryStats.videos).length,
+        totalHumanViewUsers: Object.keys(memoryStats.humanViewUsers).length,
         limit
       })
     }
@@ -742,6 +770,11 @@ module.exports = function (app, config, renderTemplate) {
           <div class="mini-stat-label">total video ids seen in total</div>
           <div id="total-video-id-count" class="mini-stat-value">Loading…</div>
         </div>
+
+        <div class="mini-stat">
+          <div class="mini-stat-label">unique stats page viewers</div>
+          <div id="human-view-user-count" class="mini-stat-value">Loading…</div>
+        </div>
       </div>
     </div>
 
@@ -758,6 +791,13 @@ module.exports = function (app, config, renderTemplate) {
         <p class="note" style="margin:0;">
           If a video shows <strong>27 local Poke instance views</strong>, it means this Poke instance recorded 27 anonymous views for that video here.
           It does not reflect the public upstream platform counter.
+        </p>
+      </div>
+
+      <div class="section-card">
+        <h2>About unique stats page viewers</h2>
+        <p class="note" style="margin:0;">
+          This number counts unique browsers/profiles that opened this stats page using a random local-only identifier stored in browser storage. It is anonymous and local to this Poke instance. If someone clears storage or uses another browser/profile/device, they may count again.
         </p>
       </div>
 
@@ -839,6 +879,7 @@ module.exports = function (app, config, renderTemplate) {
   <script>
     const TELEMETRY_ON = ${telemetryOn ? "true" : "false"};
     const OPT_KEY = "poke_stats_optout";
+    const HUMAN_VIEW_KEY = "poke_stats_human_view_id";
     const CARDS_PER_PAGE = 40;
 
     const topVideos = document.getElementById("top-videos");
@@ -851,6 +892,7 @@ module.exports = function (app, config, renderTemplate) {
     const browserBreakdown = document.getElementById("browser-breakdown");
     const userIdCount = document.getElementById("user-id-count");
     const totalVideoIdCount = document.getElementById("total-video-id-count");
+    const humanViewUserCount = document.getElementById("human-view-user-count");
     const limitWarning = document.getElementById("limit-warning");
     const segButtons = document.querySelectorAll(".seg-btn");
     const panels = document.querySelectorAll(".panel");
@@ -1016,6 +1058,49 @@ module.exports = function (app, config, renderTemplate) {
       if (name === "edge") return "Edge";
       if (name === "unknown") return "Unknown";
       return name;
+    }
+
+    function ensureHumanViewId() {
+      try {
+        var existing = localStorage.getItem(HUMAN_VIEW_KEY);
+        if (existing) return existing;
+
+        var generated = "";
+        if (window.crypto && typeof window.crypto.randomUUID === "function") {
+          generated = window.crypto.randomUUID();
+        } else {
+          generated =
+            "hv_" +
+            Math.random().toString(36).slice(2) +
+            "_" +
+            Date.now().toString(36) +
+            "_" +
+            Math.random().toString(36).slice(2);
+        }
+
+        localStorage.setItem(HUMAN_VIEW_KEY, generated);
+        return generated;
+      } catch (e) {
+        return "";
+      }
+    }
+
+    function registerHumanView() {
+      if (!TELEMETRY_ON) return Promise.resolve();
+      try {
+        if (localStorage.getItem(OPT_KEY) === "1") return Promise.resolve();
+      } catch (e) {}
+
+      var humanViewId = ensureHumanViewId();
+      if (!humanViewId) return Promise.resolve();
+
+      return fetch("/api/stats/human-view", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ humanViewId: humanViewId })
+      }).catch(function () {});
     }
 
     function renderBreakdown(targetEl, data, kind) {
@@ -1246,6 +1331,7 @@ module.exports = function (app, config, renderTemplate) {
       paginationWrap.style.display = "none";
       userIdCount.textContent = "0";
       totalVideoIdCount.textContent = "0";
+      humanViewUserCount.textContent = "0";
       osBreakdown.innerHTML = '<div class="breakdown-empty">No data (telemetry disabled).</div>';
       browserBreakdown.innerHTML = '<div class="breakdown-empty">No data (telemetry disabled).</div>';
     } else {
@@ -1261,10 +1347,13 @@ module.exports = function (app, config, renderTemplate) {
         paginationWrap.style.display = "none";
         userIdCount.textContent = "Opt-out active";
         totalVideoIdCount.textContent = "Opt-out active";
+        humanViewUserCount.textContent = "Opt-out active";
         osBreakdown.innerHTML = '<div class="breakdown-empty">Opt-out active (no stats loaded).</div>';
         browserBreakdown.innerHTML = '<div class="breakdown-empty">Opt-out active (no stats loaded).</div>';
       } else {
-        fetch("/api/stats?view=json&limit=3000")
+        registerHumanView().then(function () {
+          return fetch("/api/stats?view=json&limit=3000");
+        })
           .then(function (res) { return res.json(); })
           .then(function (data) {
             var videos = data.videos || {};
@@ -1273,11 +1362,13 @@ module.exports = function (app, config, renderTemplate) {
             var os = data.os || {};
             var totalUsers = data.totalUsers || 0;
             var totalVideoIds = data.totalVideoIds || 0;
+            var totalHumanViewUsers = data.totalHumanViewUsers || 0;
 
             allVideos = videos;
             recentVideoIds = recent;
             userIdCount.textContent = String(totalUsers);
             totalVideoIdCount.textContent = String(totalVideoIds);
+            humanViewUserCount.textContent = String(totalHumanViewUsers);
 
             renderBreakdown(osBreakdown, os, "os");
             renderBreakdown(browserBreakdown, browsers, "browser");
@@ -1300,6 +1391,7 @@ module.exports = function (app, config, renderTemplate) {
             paginationWrap.style.display = "none";
             userIdCount.textContent = "Error";
             totalVideoIdCount.textContent = "Error";
+            humanViewUserCount.textContent = "Error";
             osBreakdown.innerHTML = '<div class="breakdown-empty">Error loading OS data.</div>';
             browserBreakdown.innerHTML = '<div class="breakdown-empty">Error loading browser data.</div>';
           });
