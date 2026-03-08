@@ -396,8 +396,10 @@ document.addEventListener("DOMContentLoaded", () => {
     pageFullyLoaded: document.readyState === "complete",
     bgAudioStartQueued: false,
     bbtabRetryTimer: null,
+    bbtabRetryRafId: null,
     bbtabRetryCount: 0,
     bbtabAudioSyncTimer: null,
+    bbtabVideoConfirmedAt: 0,
     lastUserActionTime: 0,
     loopPreventionCooldownUntil: 0,
     seekCooldownUntil: 0,
@@ -440,7 +442,21 @@ document.addEventListener("DOMContentLoaded", () => {
     userPlayIntentPresetAt: 0
   };
 
- 
+
+  // ─── BackgroundPlaybackManager v2 ─────────────────────────────────────────
+  // Single authoritative state machine for all background/foreground transitions.
+  // PHASES: STABLE_FG → GOING_BG → STABLE_BG → RETURNING → STABLE_FG
+  //
+  // v2 improvements over v1:
+  //  - Exponential backoff for bg resume attempts (1s, 2s, 4s, 8s, 16s, 30s…)
+  //    instead of a hard 3-attempt limit — allows genuine recovery while
+  //    preventing the rapid play→pause→play oscillation loop.
+  //  - "Stable playing" tracking: if audio played cleanly for >2s before a pause
+  //    it's almost certainly browser-forced, not user-initiated.
+  //  - isUserPauseImmediate/isUserPlayImmediate window extended to 2000ms.
+  //  - Longer return suppression: Chromium 10s, others 5s.
+  //  - RETURN_SUPPRESS_MS applies to ALL non-user pause events (not just audio).
+  // ────────────────────────────────────────────────────────────────────────────
   const BackgroundPlaybackManager = (() => {
     const PHASE = { STABLE_FG: 0, GOING_BG: 1, STABLE_BG: 2, RETURNING: 3 };
     let _phase = PHASE.STABLE_FG;
@@ -858,20 +874,47 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   })();
 
- 
+
+  // ─── BringBackToTabManager (BBTM) ────────────────────────────────────────
+  // The single source of truth for "we are in the process of returning to this
+  // tab." Its ONE job: prevent ANY browser-imposed pause event from being
+  // treated as authoritative state during the return window. Combined with a
+  // rAF-speed play-retry loop (startBringBackRetry, defined later once
+  // playTogether is available), this makes tab-return play→pause→play flicker
+  // completely invisible.
+  //
+  // Architecture:
+  //   BBTM = flag keeper + timing only (no play/pause calls — circular deps)
+  //   startBringBackRetry() = the actual retry engine, defined after playTogether
+  //
+  // Pause handlers check isLocked() AFTER user-intent checks. User pauses
+  // always win; browser-imposed pauses are dropped on the floor.
+  //
+  // v2 upgrades:
+  //   - LOCK_DURATION_MS: 2200 → 3500  (covers Chromium + Firefox + edge cases)
+  //   - POST_PLAY_SETTLE_MS: 600 → 2000 (late-arriving pauses on slow machines)
+  //   - onVideoConfirmedPlaying: NO LONGER drains _lockUntil aggressively;
+  //     main lock runs to natural expiry, post-play settle is ADDITIVE on top.
+  //     This prevents the "video playing → lock drained → late pause slips through"
+  //     race that caused intermittent stutter on some tab-return patterns.
+  //   - onLateArrivedPause: adaptively extends the lock when late pauses arrive
+  //   - extendLock(ms): explicit extension hook for audio catch-up scenarios
+  // ─────────────────────────────────────────────────────────────────────────
   const BringBackToTabManager = (() => {
-    // How long to hold the lock after a tab-return event. Must be ≥ the
-    // longest browser spurious-pause burst we've observed (Chromium ~800ms).
-    // We use 2200ms to cover all platforms plus margin.
-    const LOCK_DURATION_MS = 2200;
+    // How long to hold the lock after a tab-return event.
+    // 3500ms covers Chromium's longest observed spurious-pause burst (~800ms)
+    // with a generous safety margin for slow machines and Firefox.
+    const LOCK_DURATION_MS = 3500;
 
-    // After the video is confirmed playing, how long to continue monitoring
-    // for late-arriving spurious pauses before fully releasing control.
-    const POST_PLAY_SETTLE_MS = 600;
+    // After video is confirmed playing, how long to continue absorbing late
+    // spurious pauses. Runs CONCURRENTLY with the main lock — does not replace it.
+    const POST_PLAY_SETTLE_MS = 2000;
 
-    let _lockUntil = 0;
+    let _lockUntil           = 0;
     let _postPlaySettleUntil = 0;
-    let _returnTs = 0; // timestamp of the most recent tab-return event
+    let _returnTs            = 0;  // timestamp of the most recent tab-return event
+    let _videoConfirmedAt    = 0;  // when video was first confirmed playing this return
+    let _lateArrivalCount    = 0;  // how many pause events arrived after video confirmed
 
     function isLocked() {
       return now() < _lockUntil || now() < _postPlaySettleUntil;
@@ -879,32 +922,58 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Called the instant the tab becomes visible.
     function onTabReturn() {
-      _returnTs = now();
-      _lockUntil = now() + LOCK_DURATION_MS;
+      _returnTs            = now();
+      _lockUntil           = now() + LOCK_DURATION_MS;
       _postPlaySettleUntil = 0;
+      _videoConfirmedAt    = 0;
+      _lateArrivalCount    = 0;
     }
 
-    // Called once the video is confirmed playing after a return. Switches
-    // from the full lock to a shorter post-play settle window.
+    // Called once the video is confirmed playing after a return.
+    // v2: does NOT drain _lockUntil — main lock runs to natural expiry.
+    // Only sets _postPlaySettleUntil as an ADDITIONAL protection layer.
     function onVideoConfirmedPlaying() {
       if (_returnTs === 0) return; // not in a return sequence
-      _lockUntil = Math.min(_lockUntil, now() + 80); // drain main lock quickly
+      if (!_videoConfirmedAt) _videoConfirmedAt = now();
+      // Post-play settle window starts from confirmation time, runs 2s
       _postPlaySettleUntil = Math.max(_postPlaySettleUntil, now() + POST_PLAY_SETTLE_MS);
+      // Main lock stays: _lockUntil is NOT drained here (v2 change)
+    }
+
+    // Called each time a pause event is suppressed after video was already confirmed.
+    // Adaptively extends both windows so late-arriving pauses keep getting absorbed.
+    function onLateArrivedPause() {
+      _lateArrivalCount++;
+      if (_lateArrivalCount <= 8) {
+        _lockUntil           = Math.max(_lockUntil,           now() + 400);
+        _postPlaySettleUntil = Math.max(_postPlaySettleUntil, now() + 600);
+      }
     }
 
     // Called when the user explicitly pauses — cancel immediately so their
     // pause isn't swallowed.
     function onUserPause() {
-      _lockUntil = 0;
+      _lockUntil           = 0;
       _postPlaySettleUntil = 0;
-      _returnTs = 0;
+      _returnTs            = 0;
+      _videoConfirmedAt    = 0;
+      _lateArrivalCount    = 0;
+    }
+
+    // Extend both windows by ms (e.g. when audio is still catching up).
+    function extendLock(ms) {
+      if (_returnTs === 0) return;
+      _lockUntil           = Math.max(_lockUntil,           now() + ms);
+      _postPlaySettleUntil = Math.max(_postPlaySettleUntil, now() + ms);
     }
 
     // Hard cancel (e.g. page unload, error recovery).
     function cancelLock() {
-      _lockUntil = 0;
+      _lockUntil           = 0;
       _postPlaySettleUntil = 0;
-      _returnTs = 0;
+      _returnTs            = 0;
+      _videoConfirmedAt    = 0;
+      _lateArrivalCount    = 0;
     }
 
     // How long ago (ms) was the last tab return? Used by retry loop.
@@ -912,10 +981,183 @@ document.addEventListener("DOMContentLoaded", () => {
       return _returnTs > 0 ? (now() - _returnTs) : Infinity;
     }
 
-    return { isLocked, onTabReturn, onVideoConfirmedPlaying, onUserPause, cancelLock, timeSinceReturn };
+    function isVideoConfirmed()    { return _videoConfirmedAt > 0; }
+    function getLateArrivalCount() { return _lateArrivalCount; }
+
+    return {
+      isLocked, onTabReturn, onVideoConfirmedPlaying, onLateArrivedPause,
+      onUserPause, cancelLock, extendLock, timeSinceReturn,
+      isVideoConfirmed, getLateArrivalCount,
+    };
   })();
 
- 
+
+  // ─── QuantumReturnOrchestrator (QRO) ─────────────────────────────────────
+  // The deepest-level fix for "browser pauses video in background" visible
+  // stutter. Eliminates the audible/visual gap on tab-return by:
+  //
+  //  1. BACKGROUND SNAPSHOT — captures {position, timestamp, audioPosition}
+  //     the instant the page hides so we know exactly where both streams are
+  //     and can pre-align without seeking on return.
+  //
+  //  2. PRE-EMPTIVE PLAY — fires play() on BOTH streams as the VERY FIRST
+  //     action inside the visibilitychange handler (before any state mutations),
+  //     racing the browser's spurious pause event with a head start. This
+  //     reduces the gap between "tab becomes visible" and "play() called"
+  //     from ~5-50ms (after state setup) to ~0ms.
+  //
+  //  3. AUDIO PRE-ALIGNMENT — before the preemptive play(), seeks audio to
+  //     the current video position so both streams start from the SAME frame
+  //     with zero inter-stream gap. This eliminates the audible cut that
+  //     happened when audio was synced 150ms after video confirmation.
+  //
+  //  4. CONTINUITY ASSESSMENT — after returning, checks whether background
+  //     playback succeeded (streams still running) or was killed, so the
+  //     retry loop can take the optimal path for each case.
+  //
+  // QRO works alongside BBTM: BBTM is the gatekeeper (lock + suppress pauses),
+  // QRO is the active resumer (preemptive play + pre-alignment + assessment).
+  // ─────────────────────────────────────────────────────────────────────────
+  const QuantumReturnOrchestrator = (() => {
+    let _snapshot          = null;  // {ts, vPos, aPos, wasPlaying}
+    let _returnTs          = 0;     // when we last returned to foreground
+    let _preemptiveFired   = false; // did preemptive play() fire this return?
+    let _bgPlayConfirmed   = false; // bg playback confirmed still running on return
+    let _audioPreAligned   = false; // did we pre-align audio before play()?
+
+    // ── Background entry ──────────────────────────────────────────────────
+    // Snapshot state the instant the page hides. Called from visibilitychange
+    // hidden branch AND from the blur handler for maximum coverage.
+    function snapshotState() {
+      try {
+        const vPos = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
+        const aPos = (coupledMode && audio) ? (Number(audio.currentTime) || vPos) : null;
+        _snapshot = {
+          ts:         performance.now(),
+          vPos,
+          aPos,
+          wasPlaying: state.intendedPlaying,
+        };
+      } catch {}
+    }
+
+    // ── Foreground return: pre-emptive play ───────────────────────────────
+    // Called as the VERY FIRST action in the visibilitychange visible handler,
+    // before any state mutations. This is the most impactful single change
+    // for reducing visible/audible stutter on tab return.
+    function preemptivePlay() {
+      if (!state.intendedPlaying) return;
+      _returnTs        = performance.now();
+      _preemptiveFired = false;
+      _audioPreAligned = false;
+      _bgPlayConfirmed = false;
+
+      try {
+        // Step 1: Pre-align audio to the current video position BEFORE playing.
+        // When both were paused in background, seek audio to video.currentTime
+        // so they start from exactly the same frame — no inter-stream gap.
+        if (coupledMode && audio) {
+          const vNow     = (() => { try { return Number(video.currentTime()); } catch { return NaN; } })();
+          const aNow     = Number(audio.currentTime) || 0;
+          const snapPos  = _snapshot ? _snapshot.vPos : 0;
+          const targetPos = (isFinite(vNow) && vNow > 0.1) ? vNow : snapPos;
+          if (isFinite(targetPos) && targetPos > 0.05 &&
+              isFinite(aNow)      && Math.abs(aNow - targetPos) > 0.1) {
+            try { audio.currentTime = targetPos; } catch {}
+            _audioPreAligned = true;
+          }
+        }
+
+        // Step 2: Fire play() on the raw HTMLVideoElement IMMEDIATELY,
+        // bypassing any video.js wrapper queuing to minimize latency.
+        const vn = getVideoNode();
+        if (vn && typeof vn.play === 'function') {
+          vn.play().catch(() => {});
+          _preemptiveFired = true;
+        }
+
+        // Step 3: Fire audio.play() SIMULTANEOUSLY with video.
+        // Audio must not wait for the video confirmation callback (150ms later).
+        // If audio starts fractionally before/after video, the sync loop
+        // corrects the tiny drift within its next heartbeat tick.
+        if (coupledMode && audio && audio.paused) {
+          audio.play().catch(() => {});
+        }
+      } catch {}
+    }
+
+    // ── Continuity assessment ─────────────────────────────────────────────
+    // Called by the retry loop on first success tick. Determines whether
+    // background playback was alive (position advanced) or killed.
+    function assessContinuity() {
+      if (!_snapshot) return;
+      try {
+        const vNow    = (() => { try { return Number(video.currentTime()); } catch { return NaN; } })();
+        const elapsed = (performance.now() - _snapshot.ts) / 1000;
+        // If video is significantly ahead of where it was when we went BG,
+        // background playback was running (rare but possible on some platforms).
+        if (isFinite(vNow) && (vNow - _snapshot.vPos) > (elapsed * 0.5)) {
+          _bgPlayConfirmed = true;
+        }
+      } catch {}
+    }
+
+    function getSnapshot()        { return _snapshot; }
+    function getReturnAge()       { return _returnTs ? (performance.now() - _returnTs) : Infinity; }
+    function wasBgPlayConfirmed() { return _bgPlayConfirmed; }
+    function wasPreemptiveFired() { return _preemptiveFired; }
+
+    return {
+      snapshotState, preemptivePlay, assessContinuity,
+      getSnapshot, getReturnAge, wasBgPlayConfirmed, wasPreemptiveFired,
+    };
+  })();
+
+
+
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ─── UltraStabilizer ─────────────────────────────────────────────────────
+  //
+  // Comprehensive playback stability system with 14 coordinated subsystems:
+  //
+  //  1. AudioVideoLockstepGuard  — blocks audio from EVER playing before video
+  //                                fires its first "playing" event at startup
+  //  2. StartupSequencer         — strict state machine for the startup sequence;
+  //                                enforces video-first ordering before audio
+  //  3. BufferHealthMonitor      — rolling buffer health score for both streams
+  //  4. DriftSupervisor          — second-layer A/V drift detection + correction
+  //  5. StallRecoveryEngine      — multi-stage stall detection & recovery
+  //  6. AudioContextReviver      — keeps Web Audio context in 'running' state
+  //  7. PositionFreezeDetector   — detects position stuck despite playing state
+  //  8. AudioSilenceGuard        — detects audio playing but producing silence
+  //  9. ReadyStateWatcher        — monitors RS transitions; flags drops mid-play
+  // 10. PlaybackRateGuard        — enforces rate=1.0; corrects silent rate drift
+  // 11. NetworkRecoveryHandler   — online/offline aware recovery sequencing
+  // 12. GhostAudioKiller         — kills rogue audio-playing-without-video state
+  // 13. HealthScoreTracker       — 0-100 aggregate score + escalating actions
+  // 14. MicroSyncScheduler       — adaptive runSync interval based on health
+  //
+  // Usage hooks (called from event handlers + heartbeat):
+  //   UltraStabilizer.onVideoPlaying()   — call from video "playing" event
+  //   UltraStabilizer.onAudioPlaying()   — call from audio "playing" event
+  //   UltraStabilizer.onVideoStall()     — call from video "waiting"/"stalled"
+  //   UltraStabilizer.onAudioStall()     — call from audio "waiting"/"stalled"
+  //   UltraStabilizer.onSeekStart()      — call when seek begins
+  //   UltraStabilizer.onSeekEnd()        — call when seek ends
+  //   UltraStabilizer.onVisibilityChange(isVisible) — visibility events
+  //   UltraStabilizer.onUserAction()     — any user gesture
+  //   UltraStabilizer.onNetworkOnline()  — window online event
+  //   UltraStabilizer.onNetworkOffline() — window offline event
+  //   UltraStabilizer.tick()             — heartbeat tick (call every ~1.5s)
+  //   UltraStabilizer.fastTick()         — fast tick (call every ~200ms during sync)
+  //
+  // Read-only gates (safe to call from any context):
+  //   UltraStabilizer.shouldBlockAudioAtStartup()
+  //   UltraStabilizer.isAudioSilent()
+  //   UltraStabilizer.isVideoFrozen()
+  //   UltraStabilizer.getHealthScore()
+  // ═══════════════════════════════════════════════════════════════════════════
   const UltraStabilizer = (() => {
     // ── shared nano-clock ────────────────────────────────────────────────────
     const _now = () => performance.now();
@@ -5319,6 +5561,11 @@ document.addEventListener("DOMContentLoaded", () => {
       // Drop this event on the floor — the retry loop will keep calling play()
       // until it sticks, completely invisibly.
       if (BringBackToTabManager.isLocked()) {
+        // If video was already confirmed playing and a late pause arrived,
+        // tell BBTM so it can extend the lock adaptively.
+        if (BringBackToTabManager.isVideoConfirmed()) {
+          BringBackToTabManager.onLateArrivedPause();
+        }
         scheduleSync(50);
         return;
       }
@@ -5631,8 +5878,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // ── BringBackToTab hard lock ─────────────────────────────────────
         // Inside the tab-return window, audio pause events are spurious.
-        // The BBTM audio sync step will re-sync audio once video is playing.
-        if (BringBackToTabManager.isLocked()) return;
+        // The retry loop handles audio simultaneously now (no 150ms delay).
+        if (BringBackToTabManager.isLocked()) {
+          // Track late arrivals for adaptive lock extension
+          if (BringBackToTabManager.isVideoConfirmed()) {
+            BringBackToTabManager.onLateArrivedPause();
+          }
+          return;
+        }
 
         if (isVisibilityTransitionActive()) {
           if (state.intendedPlaying && platform.useBgControllerRetry) state.resumeOnVisible = true;
@@ -5911,22 +6164,45 @@ document.addEventListener("DOMContentLoaded", () => {
   // This replaces the single delayed play() in executeSeamlessWakeup for the
   // VIDEO track. executeSeamlessWakeup is kept as a fallback / audio-sync path.
   // ─────────────────────────────────────────────────────────────────────────
+  // ── QuantumRetry: rAF-based bring-back loop ─────────────────────────────
+  // Replaces the old setTimeout(16) loop with requestAnimationFrame for:
+  //   - Frame-perfect synchronization with the browser paint cycle
+  //   - Accurate "is video actually rendering?" detection
+  //   - No timer throttling in background (rAF is also throttled but cleanly)
+  //   - Immediate audio resume in the same frame as video confirmation (no
+  //     150ms delay that caused the audible cut in the previous version)
+  //
+  // The loop keeps running until the BBTM lock FULLY expires (3500ms), not
+  // just until video is confirmed. This catches late-arriving spurious pauses
+  // that the old version missed after draining _lockUntil to now()+80ms.
+  // ────────────────────────────────────────────────────────────────────────
   function startBringBackRetry() {
-    // Clear any previous retry loop
-    if (state.bbtabRetryTimer) { clearTimeout(state.bbtabRetryTimer); state.bbtabRetryTimer = null; }
-    if (state.bbtabAudioSyncTimer) { clearTimeout(state.bbtabAudioSyncTimer); state.bbtabAudioSyncTimer = null; }
-    state.bbtabRetryCount = 0;
+    // Cancel any previous loop (both rAF and setTimeout handles)
+    if (state.bbtabRetryRafId)    { cancelAnimationFrame(state.bbtabRetryRafId); state.bbtabRetryRafId = null; }
+    if (state.bbtabRetryTimer)    { clearTimeout(state.bbtabRetryTimer); state.bbtabRetryTimer = null; }
+    if (state.bbtabAudioSyncTimer){ clearTimeout(state.bbtabAudioSyncTimer); state.bbtabAudioSyncTimer = null; }
+    state.bbtabRetryCount        = 0;
+    state.bbtabVideoConfirmedAt  = 0;
 
     if (!state.intendedPlaying) return;
 
+    // Kick the first iteration synchronously (no rAF delay on first tick)
     _doBringBackRetry();
   }
 
   function _doBringBackRetry() {
-    // If lock has fully expired, we're done
-    if (!BringBackToTabManager.isLocked()) return;
+    state.bbtabRetryRafId = null;
 
-    // If user paused or media session forced pause — stop immediately
+    // Lock expired — clean exit
+    if (!BringBackToTabManager.isLocked()) {
+      if (state.intendedPlaying) {
+        setFastSync(800);
+        scheduleSync(0);
+      }
+      return;
+    }
+
+    // User paused / media session forced pause — abort
     if (!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) {
       BringBackToTabManager.cancelLock();
       return;
@@ -5934,8 +6210,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     state.bbtabRetryCount++;
 
-    // Hard cap at 150 iterations (~2.4s at 16ms) — safety valve
-    if (state.bbtabRetryCount > 150) {
+    // Hard cap: 250 rAF iterations ≈ 4.2s at 60fps (covers 3500ms lock + margin)
+    if (state.bbtabRetryCount > 250) {
       BringBackToTabManager.cancelLock();
       return;
     }
@@ -5943,53 +6219,66 @@ document.addEventListener("DOMContentLoaded", () => {
     const vPaused = getVideoPaused();
 
     if (!vPaused) {
-      // ✅ Video is playing — success path
-      BringBackToTabManager.onVideoConfirmedPlaying();
+      // ── Video is (or just became) playing ────────────────────────────────
 
-      // Schedule a gentle audio sync 150ms from now so we don't interrupt
-      // the first clean frame
-      if (coupledMode && audio) {
-        if (state.bbtabAudioSyncTimer) clearTimeout(state.bbtabAudioSyncTimer);
-        state.bbtabAudioSyncTimer = setTimeout(() => {
-          state.bbtabAudioSyncTimer = null;
-          if (!state.intendedPlaying || userPauseLockActive()) return;
-          try {
-            const vt = Number(video.currentTime());
-            const at = Number(audio ? audio.currentTime : NaN);
-            // If drift is meaningful, resync audio quietly
-            if (isFinite(vt) && isFinite(at) && Math.abs(vt - at) > 0.08) {
-              safeSetAudioTime(vt);
-            }
-            if (audio && audio.paused && !state.isProgrammaticAudioPause) {
-              execProgrammaticAudioPlay({ squelchMs: 200, force: true, minGapMs: 0 })
-                .catch(() => {});
-            }
-          } catch {}
-          setFastSync(1200);
-          scheduleSync(0);
-        }, 150);
-      } else {
-        setFastSync(800);
-        scheduleSync(0);
+      // First confirmation: notify BBTM (v2: does NOT drain the main lock)
+      if (!state.bbtabVideoConfirmedAt) {
+        state.bbtabVideoConfirmedAt = now();
+        BringBackToTabManager.onVideoConfirmedPlaying();
+        try { QuantumReturnOrchestrator.assessContinuity(); } catch {}
       }
+
+      // ── Immediate audio sync (no 150ms delay — this is the key fix) ──────
+      // Previous version waited 150ms after video confirmation before touching
+      // audio. This caused a clearly audible 150ms+ gap. Now we sync audio in
+      // the SAME rAF frame as video confirmation — the user hears no cut.
+      if (coupledMode && audio && !state.isProgrammaticAudioPause) {
+        const vt = (() => { try { return Number(video.currentTime()); } catch { return NaN; } })();
+        const at = Number(audio.currentTime) || 0;
+
+        if (audio.paused) {
+          // Audio is paused: align position then play
+          if (isFinite(vt) && isFinite(at) && Math.abs(at - vt) > 0.05) {
+            try { audio.currentTime = vt; } catch {}
+          }
+          execProgrammaticAudioPlay({ squelchMs: 200, force: true, minGapMs: 0 }).catch(() => {});
+          // Extend lock while audio is still catching up
+          BringBackToTabManager.extendLock(500);
+        } else if (isFinite(vt) && isFinite(at) && Math.abs(at - vt) > 0.15) {
+          // Audio playing but drifted — quiet resync without pausing
+          safeSetAudioTime(vt);
+        }
+      }
+
+      // Keep the rAF loop running until the lock fully expires.
+      // This ensures ANY late-arriving spurious pause is caught and suppressed
+      // by the BBTM lock (which now stays alive for the full 3500ms).
+      state.bbtabRetryRafId = requestAnimationFrame(_doBringBackRetry);
       return;
     }
 
-    // Video still paused — kick it immediately and schedule next retry
+    // ── Video still paused — kick it ─────────────────────────────────────
+    // Also kick audio simultaneously: if audio can start before video, that's
+    // fine — a tiny audio-before-video gap is far less noticeable than silence.
     try {
       const vn = getVideoNode();
-      if (vn && typeof vn.play === "function") {
-        vn.play().catch(() => {}); // Promise rejection is expected during burst — ignore
+      if (vn && typeof vn.play === 'function') {
+        vn.play().catch(() => {}); // rejection expected during spurious-pause burst
       }
     } catch {}
 
-    // Also try via video.js API on some iterations to cover different code paths
-    if (state.bbtabRetryCount % 6 === 0) {
+    // Every 5th iteration also try via video.js API (different internal path)
+    if (state.bbtabRetryCount % 5 === 0) {
       try { video.play(); } catch {}
     }
 
-    // Schedule next attempt at rAF speed
-    state.bbtabRetryTimer = setTimeout(_doBringBackRetry, 16);
+    // If audio is paused too, kick it simultaneously with video
+    if (coupledMode && audio && audio.paused && !state.isProgrammaticAudioPause) {
+      try { audio.play().catch(() => {}); } catch {}
+    }
+
+    // Next attempt at rAF speed (≈16ms at 60fps — frame-perfect timing)
+    state.bbtabRetryRafId = requestAnimationFrame(_doBringBackRetry);
   }
 
   function executeSeamlessWakeup() {
@@ -6092,6 +6381,13 @@ document.addEventListener("DOMContentLoaded", () => {
       state.visibilityStableUntil = now() + VISIBILITY_TRANSITION_MS;
       state.tabVisibilityChangeUntil = now() + TAB_VISIBILITY_STABLE_MS;
       if (newState === "visible") {
+        // ── QUANTUM FIRST-ACTION: fire play() BEFORE any state mutations ─────
+        // The pre-emptive play() races the browser's spurious pause event.
+        // By calling it here — as the absolute first thing — we minimize the
+        // gap between "tab becomes visible" and "play() called" to ~0ms.
+        // Audio pre-alignment also happens here, eliminating the audible cut.
+        try { QuantumReturnOrchestrator.preemptivePlay(); } catch {}
+
         state.lastBgReturnAt = now();
         BackgroundPlaybackManager.onBecomeForeground();
         BackgroundPlaybackManagerManager.onForegroundReturn();
@@ -6178,6 +6474,9 @@ document.addEventListener("DOMContentLoaded", () => {
         setTimeout(() => { state.visibilityTransitionActive = false; }, VISIBILITY_TRANSITION_MS);
       } else {
         updateLastKnownGoodVT();
+        // QRO: snapshot position/audio before going to background.
+        // On return, preemptivePlay() uses this to pre-align audio instantly.
+        try { QuantumReturnOrchestrator.snapshotState(); } catch {}
         BackgroundPlaybackManager.onBecomeBackground();
         state.bgTransitionInProgress = true;
         if (platform.useBgControllerRetry) {
@@ -6198,6 +6497,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }, { passive: true, capture: true });
     window.addEventListener("blur", () => {
+      // QRO: snapshot on blur too (alt-tab before visibilitychange fires)
+      try { QuantumReturnOrchestrator.snapshotState(); } catch {}
       BackgroundPlaybackManager.onBecomeBackground();
       if (!platform.chromiumOnlyBrowser) return;
       state.lastFocusLoss = now();
@@ -6216,6 +6517,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }, { passive: true, capture: true });
     window.addEventListener("focus", () => {
+      // QRO: pre-emptive play on focus (alt-tab return) — fire immediately
+      try { QuantumReturnOrchestrator.preemptivePlay(); } catch {}
       BackgroundPlaybackManager.onBecomeForeground();
       if (!platform.chromiumOnlyBrowser) return;
       state.lastBgReturnAt = Math.max(state.lastBgReturnAt, now());
@@ -6235,7 +6538,7 @@ document.addEventListener("DOMContentLoaded", () => {
           startBringBackRetry();
           executeSeamlessWakeup();
         }
-      }, 150);
+      }, 50); // reduced from 150ms — QRO already fired preemptive play above
     }, { passive: true, capture: true });
     window.addEventListener("beforeunload", () => {
       clearBgResumeRetryTimer();
@@ -6247,6 +6550,9 @@ document.addEventListener("DOMContentLoaded", () => {
       clearTimeout(state.wakeupTimer);
       clearTimeout(state.heartbeatTimer);
       clearTimeout(state.bgSilentTimeSyncTimer);
+      if (state.bbtabRetryRafId) { cancelAnimationFrame(state.bbtabRetryRafId); state.bbtabRetryRafId = null; }
+      if (state.bbtabRetryTimer) { clearTimeout(state.bbtabRetryTimer); state.bbtabRetryTimer = null; }
+      if (state.bbtabAudioSyncTimer) { clearTimeout(state.bbtabAudioSyncTimer); state.bbtabAudioSyncTimer = null; }
       clearSyncLoop();
     });
   }
@@ -6412,6 +6718,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }, 100);
   scheduleSync(0);
 });
+
 document.addEventListener('keydown', function(event) {
      const active = document.activeElement;
     if (active && (active.tagName.toLowerCase() === 'input' || active.tagName.toLowerCase() === 'textarea')) {
