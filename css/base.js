@@ -1609,7 +1609,11 @@ document.addEventListener("DOMContentLoaded", () => {
           scheduleSync(0);
           return;
         }
-        await quietSeekAudio(vtNow);
+        // Both playing but drift > 2s (audio ahead of video from background playback).
+        // Instead of cutting audio (quietSeekAudio), seek VIDEO forward to audio position:
+        // audio continues uninterrupted and video jumps to the correct frame.
+        // This is invisible if video is buffered at the target position (usual case).
+        bgSilentSyncVideoTime(atNow);
         if (mySession !== state.playSessionId || !state.intendedPlaying) return;
         state.bgHiddenWasPlaying = false;
         state.resumeOnVisible = false;
@@ -1628,13 +1632,13 @@ document.addEventListener("DOMContentLoaded", () => {
             // state.seeking stuck, etc.) — bgSilentSyncVideoTime bypasses all of that.
             bgSilentSyncVideoTime(atNow);
           } else {
-            // STUTTER FIX: Use bgSilentSyncVideoTime instead of safeSetVideoTime.
-            // safeSetVideoTime triggers seeking/seeked events which pause audio and
-            // cause the visible play→pause→play stutter on every tab return.
-            // bgSilentSyncVideoTime sets videoEl.currentTime with bgSilentTimeSyncing=true
-            // so our seeking handler ignores it; finalizeSeekSync returns immediately
-            // because state.seeking is never set to true. No audio pause. No stutter.
-            if (isFinite(vtNow) && isFinite(atNow) && Math.abs(vtNow - atNow) > 0.12) {
+            // For small drift (≤ BIG_DRIFT = 1.5s): just restart video from its
+            // current paused position. bgSilentSyncVideoTime causes a visible
+            // frame-jump even for sub-second offsets — worse UX than letting
+            // rate-nudge close the gap after video restarts.
+            // For large drift (> BIG_DRIFT): sync video to audio position first
+            // so the user doesn't see the content jump back in time.
+            if (isFinite(vtNow) && isFinite(atNow) && Math.abs(vtNow - atNow) > BIG_DRIFT) {
               bgSilentSyncVideoTime(atNow);
               // Brief settle before restarting video
               await new Promise(r => setTimeout(r, 25));
@@ -1969,7 +1973,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const vt = Number(video.currentTime());
       const at = Number(audio.currentTime);
 
-      const inBgDrift = document.visibilityState === "hidden" || !isWindowFocused();
+      const inBgDrift = document.visibilityState === "hidden" || !isWindowFocused() || inBgReturnGrace();
+      // inBgReturnGrace: don't seek audio during the tab-return grace window.
+      // seamlessBgCatchUp (fired by executeSeamlessWakeup) handles drift correction
+      // after the spurious-pause burst has subsided (950ms on Chromium, 300ms others).
       if (!inBgDrift && isFinite(vt) && isFinite(at) && Math.abs(at - vt) > 0.25) {
         await quietSeekAudio(vt);
       }
@@ -2600,7 +2607,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const vPaused = getVideoPaused();
     const aPaused = !!audio.paused;
 
-    const inBgDrift = document.visibilityState === "hidden" || !isWindowFocused();
+    const inBgDrift = document.visibilityState === "hidden" || !isWindowFocused() || inBgReturnGrace();
+    // inBgReturnGrace: suppress all drift-correction seeks for 8s after tab return so the
+    // wakeup timer (seamlessBgCatchUp) can handle position sync without racing runSync.
     const skipDrift = now() < state.seekCooldownUntil;
 
     if (!vPaused && vt > 0 && getVideoReadyState() >= HAVE_FUTURE_DATA) {
@@ -2711,8 +2720,12 @@ document.addEventListener("DOMContentLoaded", () => {
             }
           } else {
             // Tab is being restored (altTab/focus transition): let the return-grace
-            // recovery handle the full sync. Just silently update progress bar.
-            bgSilentSyncVideoTime(at);
+            // recovery handle the full sync.
+            // Only sync video position if drift is large (> BIG_DRIFT = 1.5s).
+            // For small drift, avoid bgSilentSyncVideoTime: it triggers a visible
+            // video frame-jump even with bgSilentTimeSyncing=true. Just restart
+            // video from its current position — rate nudge closes the small gap.
+            if (Math.abs(at - vt) > BIG_DRIFT) bgSilentSyncVideoTime(at);
             if (!state.bgResumeInFlight) {
               scheduleBgResumeRetry(inBgReturnGrace() ? 80 : 200);
             }
@@ -3679,6 +3692,11 @@ document.addEventListener("DOMContentLoaded", () => {
       if (audioEventsSquelched() || state.restarting || state.isProgrammaticAudioPause || state.isProgrammaticVideoPause) return;
       if (now() < state.audioPauseUntil || now() < state.audioPlayUntil) return;
 
+      // Snapshot grace state at event-fire time. RAF can run up to 300ms later;
+      // a pause event that fired at T=7.9s would miss inBgReturnGrace() inside
+      // the RAF (which runs at T=8.1s) and be misclassified as a user pause.
+      const _inGraceAtPauseFire = inBgReturnGrace();
+
       requestAnimationFrame(() => {
         if (state.seeking || state.restarting || state.isProgrammaticAudioPause) return;
         if (audio && !audio.paused) return;
@@ -3695,7 +3713,7 @@ document.addEventListener("DOMContentLoaded", () => {
           if (state.intendedPlaying && platform.useBgControllerRetry) state.resumeOnVisible = true;
           return;
         }
-        if (inBgReturnGrace()) {
+        if (_inGraceAtPauseFire || inBgReturnGrace()) {
           if (state.intendedPlaying && platform.useBgControllerRetry) state.resumeOnVisible = true;
           return;
         }
@@ -3939,6 +3957,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function executeSeamlessWakeup() {
     if (!state.intendedPlaying) return;
+    // If a wakeup timer is already counting down, don't reset it — that would
+    // push the wakeup further into the future and extend the stutter window.
+    // Only reset if the previous timer has already fired (wakeupTimer === null).
+    if (state.wakeupTimer) return;
     clearTimeout(state.wakeupTimer);
     state.wakeupTimer = null;
 
@@ -4327,7 +4349,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }, 100);
   scheduleSync(0);
 });
-
 document.addEventListener('keydown', function(event) {
      const active = document.activeElement;
     if (active && (active.tagName.toLowerCase() === 'input' || active.tagName.toLowerCase() === 'textarea')) {
