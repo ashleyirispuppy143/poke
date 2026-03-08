@@ -15,8 +15,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 // "It takes a lot of hard work to make something simple." ~ Steve Jobs 
- 
-document.addEventListener("DOMContentLoaded", () => {
+ document.addEventListener("DOMContentLoaded", () => {
   const video = videojs("video", {
     controls: true,
     autoplay: true,
@@ -613,6 +612,10 @@ document.addEventListener("DOMContentLoaded", () => {
     state.audioPlayUntil = 0;
     state.startupAudioHoldUntil = 0;
     state.audioPausedSince = 0;
+    // Cancel any ongoing pause fade immediately — if pauseHard() was fading audio out,
+    // this stops the fade callback from re-pausing audio after play() succeeds.
+    cancelActiveFade();
+    state.isProgrammaticAudioPause = false;
     if (platform.chromiumOnlyBrowser) {
       state.chromiumPauseGuardUntil = 0;
       state.chromiumBgSettlingUntil = 0;
@@ -1298,6 +1301,15 @@ document.addEventListener("DOMContentLoaded", () => {
     const { squelchMs = 500, minGapMs = 300, force = false } = opts;
     if (!coupledMode || !audio || typeof audio.play !== "function") return false;
 
+    // CRITICAL FIX: Cancel any active volume fade before attempting to play.
+    // pauseHard() starts a fadeAndPauseAudio(120ms) that calls audio.pause() via
+    // a callback. If play fires within those 120ms, audio.play() succeeds but the
+    // fade callback fires after and re-pauses audio. cancelActiveFade() stops this.
+    if (force) {
+      cancelActiveFade();
+      state.isProgrammaticAudioPause = false;
+    }
+
     const myGeneration = state.audioPlayGeneration;
     const mySession = state.playSessionId;
 
@@ -1616,9 +1628,18 @@ document.addEventListener("DOMContentLoaded", () => {
             // state.seeking stuck, etc.) — bgSilentSyncVideoTime bypasses all of that.
             bgSilentSyncVideoTime(atNow);
           } else {
-            // Foreground / tab-return: do a real seek so video actually renders at
-            // the correct position and audio+video play together from that point.
-            if (Math.abs(vtNow - atNow) > 0.5) safeSetVideoTime(atNow);
+            // STUTTER FIX: Use bgSilentSyncVideoTime instead of safeSetVideoTime.
+            // safeSetVideoTime triggers seeking/seeked events which pause audio and
+            // cause the visible play→pause→play stutter on every tab return.
+            // bgSilentSyncVideoTime sets videoEl.currentTime with bgSilentTimeSyncing=true
+            // so our seeking handler ignores it; finalizeSeekSync returns immediately
+            // because state.seeking is never set to true. No audio pause. No stutter.
+            if (isFinite(vtNow) && isFinite(atNow) && Math.abs(vtNow - atNow) > 0.12) {
+              bgSilentSyncVideoTime(atNow);
+              // Brief settle before restarting video
+              await new Promise(r => setTimeout(r, 25));
+              if (mySession !== state.playSessionId || !state.intendedPlaying) return;
+            }
           }
         }
         if (!inBg && vPausedNow && !state.isProgrammaticVideoPlay) {
@@ -1818,7 +1839,15 @@ document.addEventListener("DOMContentLoaded", () => {
       state.isProgrammaticAudioPause = true;
 
       if (!audio.paused && audio.volume > 0.015) {
+        // Guard the fade callback: if intendedPlaying became true before the fade
+        // completes (user pressed play immediately), abort the pause.
+        const pauseSession = state.playSessionId;
         fadeAndPauseAudio(AUDIO_FADE_DURATION_MS, () => {
+          // Only pause if nothing changed since we started the fade
+          if (state.playSessionId !== pauseSession || state.intendedPlaying) {
+            setTimeout(() => { state.isProgrammaticAudioPause = false; }, 100);
+            return;
+          }
           setTimeout(() => { state.isProgrammaticAudioPause = false; }, 200);
         });
       } else {
@@ -3230,9 +3259,13 @@ document.addEventListener("DOMContentLoaded", () => {
         clearMediaSessionForcedPause();
         state.mediaSessionInitiatedPlay = true;
         markMediaAction("play");
-        markUserPlayIntent(1800);
+        markUserPlayIntent(1800); // also calls cancelActiveFade + clears isProgrammaticAudioPause
         state.intendedPlaying = true;
         state.bufferHoldIntendedPlaying = true;
+        // Belt-and-suspenders: cancel fade again in case pauseHard's fade timer is still running
+        cancelActiveFade();
+        state.isProgrammaticAudioPause = false;
+        state.audioEventsSquelchedUntil = 0; // clear squelch so audio can start
         updateMediaSessionPlaybackState();
         setPauseEventGuard(2800);
         setMediaPlayTxn(2800);
@@ -3380,8 +3413,19 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      // Explicit user pause intent — always honour immediately
-      if (userPauseIntentActive() || userPauseLockActive()) {
+      // CRITICAL FIX: Gate isUserAction on visibility stability.
+      // Without this, clicking anything ≤1500ms before switching tabs causes the
+      // spurious Chromium pause event (fired on tab hide) to be classified as a
+      // user pause → intendedPlaying=false → wakeup timer fires but does nothing.
+      // This is the root cause of the tab-return play→pause stutter.
+      const isUserAction = (now() - state.lastUserActionTime) < 1500 &&
+        document.visibilityState === "visible" &&
+        !isVisibilityTransitionActive() &&
+        !isAltTabTransitionActive() &&
+        now() >= state.tabVisibilityChangeUntil &&
+        !inBgReturnGrace();
+
+      if (isUserAction || userPauseIntentActive() || userPauseLockActive()) {
         state.intendedPlaying = false;
         state.bufferHoldIntendedPlaying = false;
         state.playSessionId++;
@@ -3391,15 +3435,38 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      // Internal / transient operations — never treat as a real pause
       if (state.isProgrammaticVideoPause || state.restarting || state.seeking) return;
 
-      if (shouldIgnorePauseAsTransient()) {
+      if (document.visibilityState === "hidden" || isVisibilityTransitionActive() || isAltTabTransitionActive()) {
+        if (state.intendedPlaying && platform.useBgControllerRetry) state.resumeOnVisible = true;
+        return;
+      }
+
+      // CRITICAL FIX: Tab-return grace window (8s). Both Chromium AND Firefox fire
+      // spurious pause events after a tab returns to foreground. The visibility-transition
+      // guard above only lasts 4.5s; anything after that but within 8s falls through to
+      // pauseHard() without this check, causing the visible play→pause→play stutter.
+      // The audio pause handler already has this guard — now the video one does too.
+      if (inBgReturnGrace() && !mediaSessionForcedPauseActive()) {
+        if (state.intendedPlaying) state.resumeOnVisible = true;
+        scheduleSync(300);
+        return;
+      }
+
+      // If the wakeup timer is still counting down, a resume is imminent — ignore pauses.
+      if (state.wakeupTimer && state.intendedPlaying && !mediaSessionForcedPauseActive()) {
+        scheduleSync(300);
+        return;
+      }
+
+      if (platform.chromiumOnlyBrowser && chromiumBgPauseBlocked()) return;
+
+      if (state.isProgrammaticVideoPlay || state.seekResumeInFlight || state.bgResumeInFlight ||
+          state.videoWaiting || (platform.chromiumOnlyBrowser && chromiumPauseEventSuppressed())) {
         scheduleSync(200);
         return;
       }
 
-      // All guards passed — this is a genuine, stable pause
       state.intendedPlaying = false;
       state.bufferHoldIntendedPlaying = false;
       state.playSessionId++;
@@ -4207,8 +4274,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }, 100);
   scheduleSync(0);
 });
-
-document.addEventListener('keydown', function(event) {
+ document.addEventListener('keydown', function(event) {
      const active = document.activeElement;
     if (active && (active.tagName.toLowerCase() === 'input' || active.tagName.toLowerCase() === 'textarea')) {
         return;
