@@ -368,7 +368,7 @@
 
   <p>
     We improve Poke using a small <strong>anonymous statistics system</strong> built directly into the server.
-    We do this so we can understand how Poke is being used in general without relying on invasive analytics,
+    We use it so we can understand how Poke is being used in general without relying on invasive analytics,
     personal profiles, ad-tech, or third-party tracking platforms.
   </p>
 
@@ -434,10 +434,15 @@
     </p>
 
     <p>
-      We think this is an example of telemetry done carefully and respectfully.
+      We think this is telemetry done carefully and respectfully.
       It helps us improve free software using broad technical patterns without turning users into products or building invasive analytics systems.
     </p>
   </details>
+
+  <p>
+    Here is the short version of what this system does.
+    These are the basic facts, without the longer explanation.
+  </p>
 
   <ul>
     <li><strong>Enabled by default.</strong> Instance operators may disable the stats system entirely in server configuration.</li>
@@ -491,6 +496,10 @@
     </li>
   </ul>
 
+  <p>
+    If you want the reasoning behind each recorded field, the sections below explain that in more detail.
+  </p>
+
   <details class="block">
     <summary><strong>Why we record the video ID</strong></summary>
 
@@ -518,6 +527,11 @@
     </p>
   </details>
 
+  <p>
+    The next part explains the anonymous browser-side identifier.
+    This is usually the part people worry about most, so we want to explain it clearly.
+  </p>
+
   <details class="block">
     <summary><strong>Why we store an anonymous random viewer ID in localStorage</strong></summary>
 
@@ -544,6 +558,11 @@
       without requiring accounts, invasive identifiers, or cross-site surveillance.
     </p>
   </details>
+
+  <p>
+    We also record broad technical platform information.
+    We keep it intentionally coarse so it stays useful for maintenance without becoming invasive.
+  </p>
 
   <details class="block">
     <summary><strong>Why we record the browser family</strong></summary>
@@ -591,6 +610,10 @@
       That is useful technical information, not personal information.
     </p>
   </details>
+
+  <p>
+    Finally, this is why we believe this approach is worth doing at all.
+  </p>
 
   <details class="block">
     <summary><strong>Why we believe this is a good thing</strong></summary>
@@ -645,6 +668,7 @@
     or disable the stats system when running their own Poke instance.
   </p>
 </section>
+
 
 <section id="cookies" aria-labelledby="cookies-heading">
   <h2 id="cookies-heading" class="section">Cookies &amp; Local Storage</h2>
