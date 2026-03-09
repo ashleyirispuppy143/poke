@@ -15,7 +15,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 // "It takes a lot of hard work to make something simple." ~ Steve Jobs 
-document.addEventListener("DOMContentLoaded", () => {
+ document.addEventListener("DOMContentLoaded", () => {
   const video = videojs("video", {
     controls: true,
     autoplay: true,
@@ -2556,6 +2556,10 @@ document.addEventListener("DOMContentLoaded", () => {
     // Don't count events during tab-return grace (spurious browser events expected)
     // or while hidden (browser-throttled play/pause events are not user-initiated loops)
     if (inBgReturnGrace() || document.visibilityState === "hidden") return;
+    // Don't count events before the first committed play. During startup, multiple competing
+    // mechanisms (kick, forceAudioStartupPlay, retries) fire rapid play/pause events that are
+    // completely normal. Counting them triggers false loop-detection which kills autoplay.
+    if (!state.firstPlayCommitted) return;
     const nowTs = now();
     if ((nowTs - state.rapidPlayPauseResetAt) > RAPID_PLAY_PAUSE_WINDOW_MS) {
       state.rapidPlayPauseCount = 0;
@@ -2567,6 +2571,11 @@ document.addEventListener("DOMContentLoaded", () => {
   // FIX: detectLoop no longer fires during seek/sync operations to prevent false positives
   function detectLoop() {
     if (state.seeking || state.syncing || state.restarting) return false;
+    // Never fire loop detection before first committed play. The startup sequence generates
+    // legitimate rapid play/pause events (retries, seeks, buffer waits) that must not be
+    // mistaken for an infinite loop. Without this guard, autoplay oscillation at startup
+    // eventually triggers a 4s loop-lockout that prevents the video from ever starting.
+    if (!state.firstPlayCommitted) return false;
     // Never fire loop detection during tab-return grace — spurious events are expected
     if (inBgReturnGrace()) return false;
     // Never fire when tab is not visible — background events are expected
@@ -3986,6 +3995,16 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!videoOk && !audioOk) {
         if (isHiddenBackground()) {
           state.resumeOnVisible = true;
+        } else if (!state.firstPlayCommitted || (state.startupPhase && !state.audioEverStarted)) {
+          // ── Fix 7: Startup guard for dual-fail ────────────────────────────────
+          // Both video.play() and audio.play() were rejected (autoplay policy,
+          // thin buffer, or AVLG still active). During startup, killing
+          // intendedPlaying here starts the play→pause→play oscillation cycle:
+          //   intendedPlaying=false → scheduleStartupAutoplayRetry fires →
+          //   intendedPlaying=true → playTogether → both fail again → repeat.
+          // Fix: arm buffer wait and let the retry machinery own the restart.
+          // intendedPlaying stays true throughout the startup phase.
+          armResumeAfterBuffer(8000);
         } else {
           state.intendedPlaying = false;
           state.playSessionId = (state.playSessionId || 0) + 1;
@@ -4004,6 +4023,12 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!getVideoPaused()) return;
             execProgrammaticVideoPlay();
           }, TAB_RETURN_AUDIO_RETRY_DELAY_MS);
+        } else if (state.startupPhase || !state.audioEverStarted) {
+          // During startup: keep intendedPlaying=true. Audio started but video failed —
+          // pause audio and arm buffer retry. The startup mechanism handles the restart.
+          // Setting intendedPlaying=false here creates the visible first-30s oscillation.
+          execProgrammaticAudioPause(600);
+          armResumeAfterBuffer(8000);
         } else if (document.visibilityState !== "hidden" && isWindowFocused()) {
           execProgrammaticAudioPause(600);
           state.intendedPlaying = false;
@@ -4048,11 +4073,14 @@ document.addEventListener("DOMContentLoaded", () => {
                   execProgrammaticAudioPlay({ force: true, squelchMs: 500, minGapMs: 0 }).catch(() => {});
                   softUnmuteAudio(AUDIO_SAFE_FADE_DURATION_MS).catch(() => {});
                 }, TAB_RETURN_AUDIO_RETRY_DELAY_MS);
+              } else if (state.startupPhase || !state.audioEverStarted) {
+                if (isHiddenBackground()) {
+                  state.resumeOnVisible = true;
+                } else {
+                  armResumeAfterBuffer(8000);
+                }
               } else {
                 execProgrammaticVideoPause();
-                if (state.startupPhase && !state.firstPlayCommitted) {
-                  forceZeroBeforeFirstPlay();
-                }
                 if (isHiddenBackground()) {
                   state.resumeOnVisible = true;
                 } else {
@@ -5601,6 +5629,28 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
+      // ── Fix 6A: Startup guard ────────────────────────────────────────────────
+      // Before firstPlayCommitted, ANY non-user video pause is a temporary startup
+      // artefact (buffer-wait, audio-sync, AVLG hold, kill-switch retry…).
+      // Setting intendedPlaying=false here creates the play→pause→play oscillation
+      // that is visible in the first ~30s. The startup retry machinery owns
+      // intendedPlaying during this window — don't touch it here.
+      if (!state.firstPlayCommitted && state.intendedPlaying && !mediaSessionForcedPauseActive()) {
+        scheduleSync(300);
+        return;
+      }
+
+      // ── Fix 6B: Programmatic pause guard ────────────────────────────────────
+      // execProgrammaticVideoPause() sets isProgrammaticVideoPause=true for 500ms.
+      // When intendedPlaying=true at the time of the pause, it means the pause is
+      // intentionally temporary (buffer hold, audio alignment, stall recovery).
+      // Never kill intendedPlaying for these — the caller is responsible for
+      // re-starting playback once the blocking condition clears.
+      if (state.isProgrammaticVideoPause && state.intendedPlaying) {
+        scheduleSync(200);
+        return;
+      }
+
       state.intendedPlaying = false;
       state.bufferHoldIntendedPlaying = false;
       state.playSessionId++;
@@ -5777,6 +5827,19 @@ document.addEventListener("DOMContentLoaded", () => {
                 softUnmuteAudio(AUDIO_SAFE_FADE_DURATION_MS).catch(() => {});
                 return;
               }
+              // ── Fix 8: Don't pause video during startup ──────────────────────
+              // During startup, AVLG blocks audio until video fires its first
+              // "playing" event. The kill-switch fires at t+1s — before audio has
+              // ever played. Pausing video here starts the oscillation cycle:
+              //   kill-switch pauses video → armResumeAfterBuffer restarts video →
+              //   "playing" fires → new kill-switch arms → repeat every ~1s.
+              // Fix: if audio has never started, skip the video-pause step and just
+              // arm a longer buffer retry. The startup path will start audio once
+              // AVLG releases and buffer is ready.
+              if (!state.audioEverStarted) {
+                armResumeAfterBuffer(6000);
+                return;
+              }
               // Audio truly can't start right now — pause video to keep A/V contract.
               // armResumeAfterBuffer will restart both once audio is ready.
               if (!getVideoPaused() && state.intendedPlaying &&
@@ -5786,6 +5849,9 @@ document.addEventListener("DOMContentLoaded", () => {
               }
             })
             .catch(() => {
+              if (state.playSessionId !== _ksSession) return;
+              // Same guard as .then: don't pause video during startup.
+              if (!state.audioEverStarted) { armResumeAfterBuffer(6000); return; }
               if (!getVideoPaused() && state.intendedPlaying &&
                   state.playSessionId === _ksSession && !state.seeking) {
                 execProgrammaticVideoPause();
@@ -6590,13 +6656,21 @@ document.addEventListener("DOMContentLoaded", () => {
     const tryPlay = () => {
       if (state.audioStartupPlayRetries >= MAX_AUDIO_STARTUP_RETRIES) return;
       if (!audio || (!state.intendedPlaying && !wantsStartupAutoplay())) return;
+      // Once the startup kick has committed play (firstPlayCommitted=true), the normal
+      // video.on("playing") → playTogether path handles audio. forceAudioStartupPlay's
+      // direct audio.play() calls would compete with that, generating extra rapid-fire
+      // play/pause events. Exit cleanly — we're not needed anymore.
+      if (state.firstPlayCommitted) return;
       if (!audio.paused) {
         state.audioEverStarted = true;
         return;
       }
       if (state.startupKickInFlight) {
+        // The startup kick is running playTogether which already handles audio startup
+        // via execProgrammaticAudioPlay. Competing with it causes extra play/pause events
+        // and increment the rapid-play-pause counter. Back off significantly.
         state.audioStartupPlayRetries++;
-        state.audioForcePlayTimer = setTimeout(tryPlay, AUDIO_STARTUP_PLAY_RETRY_MS);
+        state.audioForcePlayTimer = setTimeout(tryPlay, AUDIO_STARTUP_PLAY_RETRY_MS * 4);
         return;
       }
       const rs = Number(audio.readyState || 0);
@@ -6742,6 +6816,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }, 100);
   scheduleSync(0);
 });
+
+
 document.addEventListener('keydown', function(event) {
      const active = document.activeElement;
     if (active && (active.tagName.toLowerCase() === 'input' || active.tagName.toLowerCase() === 'textarea')) {
