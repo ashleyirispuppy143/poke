@@ -15,7 +15,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 // "It takes a lot of hard work to make something simple." ~ Steve Jobs 
- document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", () => {
   const video = videojs("video", {
     controls: true,
     autoplay: true,
@@ -4504,6 +4504,15 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
         scheduleStartupAutoplayRetry();
         return;
       }
+      // If we just returned to the tab (tab is visible, retry count was reset),
+      // always reset the startupPrimed state to allow kick to fire immediately.
+      if (document.visibilityState === "visible" && !state.startupPrimed) {
+        maybePrimeStartup();
+        if (!state.startupPrimed) {
+          scheduleStartupAutoplayRetry();
+          return;
+        }
+      }
       state.startupKickInFlight = true;
       try {
         clearMediaSessionForcedPause();
@@ -4616,6 +4625,18 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     state.syncTimer = null;
     state.syncScheduledAt = 0;
     enforcePlaybackRateSync();
+
+    // PAGE-LOAD GATE: never attempt autoplay-driven startup before window.load.
+    // The browser fires play/canplay/playing events while DOM resources (images,
+    // fonts, scripts) are still loading. Starting media on a half-rendered page
+    // produces a jarring flash of unloaded content + playing video.
+    // User-initiated play (firstPlayCommitted=true set by markUserPlayIntent) is
+    // never blocked — only pure autoplay attempts before the page is ready.
+    if (!pageLoadedForAutoplay() && !state.firstPlayCommitted && wantsStartupAutoplay()) {
+      scheduleSync();
+      return;
+    }
+
     if (!coupledMode) {
       // If audio element exists but has no source (quality=medium), keep it permanently silent.
       // Browsers can spontaneously resume or fire events on audio elements in the DOM.
@@ -5537,6 +5558,15 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
       const isUserAction = (now() - state.lastUserActionTime) < 1500;
 
       if (isUserAction || userPlayIntentActive() || wantsStartupAutoplay()) {
+        // PAGE-LOAD GATE: if this is pure autoplay (no user gesture, no user intent)
+        // and the page hasn't finished loading yet, pause immediately and defer.
+        // window.load will call maybePrimeStartup/scheduleStartupAutoplayKick.
+        // User play actions (isUserAction / userPlayIntentActive) are never blocked.
+        if (!isUserAction && !userPlayIntentActive() && !pageLoadedForAutoplay()) {
+          execProgrammaticVideoPause();
+          return;
+        }
+
         state.intendedPlaying = true;
         state.bufferHoldIntendedPlaying = true;
         state.playSessionId++;
@@ -5846,11 +5876,21 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
       state.videoStallSince = 0;
 
       if (!state.firstPlayCommitted && !state.startupKickInFlight) {
-        state.firstPlayCommitted = true;
-        state.startupKickDone = true;
-        state.startupPlaySettleUntil = now() + STARTUP_SETTLE_MS;
-        clearStartupAutoplayRetryTimer();
-        setTimeout(() => { state.startupPhase = false; }, 1200);
+        // PAGE-LOAD GATE: don't commit the first play before window.load unless
+        // it was triggered by a user gesture. An autoplay "playing" event before
+        // load would lock in firstPlayCommitted=true and prevent the window.load
+        // handler from running the proper startup sequence.
+        if (pageLoadedForAutoplay() || state.lastUserActionTime > 0 && (now() - state.lastUserActionTime) < 2000) {
+          state.firstPlayCommitted = true;
+          state.startupKickDone = true;
+          state.startupPlaySettleUntil = now() + STARTUP_SETTLE_MS;
+          clearStartupAutoplayRetryTimer();
+          setTimeout(() => { state.startupPhase = false; }, 1200);
+        } else {
+          // Page not loaded + no user gesture → autoplay fired too early. Pause.
+          execProgrammaticVideoPause();
+          return;
+        }
       }
 
       if ((!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) && !userPlayIntentActive()) {
@@ -5880,6 +5920,11 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
           return;
         }
         if (wantsStartupAutoplay() || (now() - state.startupPrimeStartedAt) < 2600) {
+          // PAGE-LOAD GATE: autoplay recovery must also wait for window.load.
+          if (!pageLoadedForAutoplay()) {
+            execProgrammaticVideoPause();
+            return;
+          }
           clearMediaSessionForcedPause();
           state.intendedPlaying = true;
           state.bufferHoldIntendedPlaying = true;
@@ -6186,6 +6231,11 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
       });
     };
     const onReadyish = () => {
+      // Never attempt to start playback from a media-ready event before page load.
+      // canplay/loadeddata fire during resource loading; acting on them produces
+      // media on a half-rendered page. maybePrimeStartup already guards itself,
+      // but scheduleSync below would still reach runSync → playTogether.
+      if (!pageLoadedForAutoplay() && !state.firstPlayCommitted) return;
       maybePrimeStartup();
       if (!state.intendedPlaying || state.restarting || state.seeking) return;
       if (mediaSessionForcedPauseActive()) return;
@@ -6636,27 +6686,37 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
         state.rapidPlayPauseResetAt = now();
         state.loopPreventionCooldownUntil = 0;
 
-        if (state.firstPlayCommitted) {
-          state.startupAutoplayRetryCount = 0;
-        }
+        // Always reset startup retry count on tab return — if the user switched
+        // tabs during startup, we want fresh timing for the resumed attempts.
+        state.startupAutoplayRetryCount = 0;
         state.bgAudioStartQueued = false;
 
         if (state.intendedPlaying) {
           if (platform.useBgControllerRetry) {
             state.resumeOnVisible = false;
             state.bgHiddenWasPlaying = false;
-            if (!state.firstPlayCommitted && wantsStartupAutoplay() && !state.startupKickDone) {
-              // startup will handle it
-            } else {
-              // Start the tight retry loop FIRST (no delay), then also run
-              // executeSeamlessWakeup as an audio-sync + state-consistency pass.
-              startBringBackRetry();
-              executeSeamlessWakeup();
+
+            // ALWAYS start the bring-back retry loop when intendedPlaying=true on
+            // tab return. The old guard:
+            //   if (!firstPlayCommitted && wantsStartupAutoplay() && !startupKickDone)
+            //     // startup will handle it   ← comment with NO actual code
+            // meant the video stayed paused forever when the user switched tabs
+            // during autoplay startup. startBringBackRetry() calls play() directly,
+            // bypassing BPM's shouldSuppressAutoPause() which blocks runSync for 10s.
+            startBringBackRetry();
+            executeSeamlessWakeup();
+
+            // If startup hasn't committed yet, also wake the startup machinery so it
+            // can run its sequencing (AVLG check, audio startup, etc.) alongside the
+            // direct play() above. One will succeed first; the other is a no-op.
+            if (!state.firstPlayCommitted && wantsStartupAutoplay() && !state.startupKickInFlight) {
+              if (!state.startupAutoplayRetryTimer) {
+                scheduleStartupAutoplayRetry();
+              }
             }
           } else {
             state.resumeOnVisible = false;
             state.bgHiddenWasPlaying = false;
-            // Non-Chromium path: also run BBTM retry loop
             startBringBackRetry();
             setTimeout(() => {
               if (state.intendedPlaying && !userPauseLockActive() && !mediaSessionForcedPauseActive()) {
@@ -6679,8 +6739,13 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
             }, 350);
           }
         }
-        if (!state.startupKickDone && wantsStartupAutoplay() && pageLoadedForAutoplay()) {
-          if (!state.firstPlayCommitted || !(platform.useBgControllerRetry && state.intendedPlaying)) {
+        // Startup retry on tab-return: kick the startup kick regardless.
+        // Also resets retry count unconditionally — if the user switched tabs during
+        // startup and came back, we want fresh retry timing, not the accumulated
+        // count from the pre-hide attempts (which causes 4–5s delay on first retry).
+        if (wantsStartupAutoplay() && pageLoadedForAutoplay()) {
+          state.startupAutoplayRetryCount = 0;
+          if (!state.startupKickDone && !state.firstPlayCommitted) {
             if (!state.startupAutoplayRetryTimer && !state.startupKickInFlight) {
               scheduleStartupAutoplayKick();
             }
@@ -6709,6 +6774,15 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
             state.resumeOnVisible = false;
             state.bgHiddenWasPlaying = false;
           }
+        }
+        // If the startup kick was in-flight when we hid, release the lock so a
+        // fresh kick can run immediately on tab return. The in-flight async function
+        // may have stalled (e.g. awaiting playTogether in background) and won't
+        // clear startupKickInFlight until it eventually resolves — which could take
+        // many seconds. Releasing here ensures scheduleStartupAutoplayKick/Retry
+        // can fire immediately from the visible return handler.
+        if (!state.firstPlayCommitted && state.startupKickInFlight) {
+          state.startupKickInFlight = false;
         }
       }
     }, { passive: true, capture: true });
@@ -6942,8 +7016,19 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
       forceAudioStartupPlay();
     }
   }, 100);
-  scheduleSync(0);
-});
+  // Only schedule the initial sync tick if the page is already fully loaded.
+  // If not, the window.load listener (registered above) will call scheduleSync
+  // after load completes. Scheduling now when the page is still loading causes
+  // runSync to fire → intendedPlaying checks → potential autoplay before load.
+  if (pageLoadedForAutoplay()) {
+    scheduleSync(0);
+  }
+  // else: window.load handler triggers maybePrimeStartup + scheduleSync via
+  // the coupledMode branch, or scheduleSync(0) directly for non-coupled.
+}); 
+
+
+
 document.addEventListener('keydown', function(event) {
      const active = document.activeElement;
     if (active && (active.tagName.toLowerCase() === 'input' || active.tagName.toLowerCase() === 'textarea')) {
