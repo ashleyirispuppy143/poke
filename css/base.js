@@ -7138,9 +7138,19 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 
-document.addEventListener('keydown', function(event) {
-     const active = document.activeElement;
-    if (active && (active.tagName.toLowerCase() === 'input' || active.tagName.toLowerCase() === 'textarea')) {
+ document.addEventListener('keydown', function (event) {
+
+    const active = document.activeElement;
+
+    if (
+        active &&
+        (
+            active.tagName === 'INPUT' ||
+            active.tagName === 'TEXTAREA' ||
+            active.tagName === 'SELECT' ||
+            active.isContentEditable
+        )
+    ) {
         return;
     }
 
@@ -7150,16 +7160,22 @@ document.addEventListener('keydown', function(event) {
 
     const videoElement = document.querySelector('.video-js');
     if (!videoElement) return;
+
     const player = videojs(videoElement);
 
-    switch (event.key.toLowerCase()) {
+    const key = event.key.toLowerCase();
+
+    switch (key) {
+
         case 'f':
+            event.preventDefault();
             if (!player.isFullscreen()) {
                 player.requestFullscreen();
             } else {
                 player.exitFullscreen();
             }
             break;
+
         case ' ':
         case 'k':
             event.preventDefault();
@@ -7169,28 +7185,36 @@ document.addEventListener('keydown', function(event) {
                 player.pause();
             }
             break;
+
         case 'm':
+            event.preventDefault();
             player.muted(!player.muted());
             break;
+
         case 'arrowright':
         case 'l':
+            event.preventDefault();
             player.currentTime(player.currentTime() + 10);
             break;
+
         case 'arrowleft':
         case 'j':
+            event.preventDefault();
             player.currentTime(player.currentTime() - 10);
             break;
+
         case 'arrowup':
             event.preventDefault();
             player.volume(Math.min(1, player.volume() + 0.1));
             break;
+
         case 'arrowdown':
             event.preventDefault();
             player.volume(Math.max(0, player.volume() - 0.1));
             break;
     }
-});
 
+});
  // https://codeberg.org/ashleyirispuppy/poke/src/branch/main/src/libpoketube/libpoketube-youtubei-objects.json
 
 
