@@ -169,7 +169,12 @@ const CORD_REGEX = /https:\/\/(?:www\.)?discord\.gg\/(?<name>[\w\d_-]+)/;
 const TWITCH_REGEX = /https:\/\/(?:www\.)?twitch\.tv\/(?<name>[\w\d_-]+)/;
 const REDDIT_REGEX = /https:\/\/(?:www\.)?reddit\.com\/r\/(?<name>[\w\d_-]+)/;
 const TIKTOK_REGEX = /https:\/\/(?:www\.)?tiktok\.com\/@(?<name>[\w\d_.-]+)/;
+const BLUESKY_REGEX = /https:\/\/(?:www\.)?bsky\.app\/profile\/(?<name>[\w\d\.-]+)/;
+
+/* developer */
 const GITHUB_REGEX = /https:\/\/(?:www\.)?github\.com\/(?<name>[\w\d_-]+)/;
+
+/* games */
 const STEAM_REGEX = /https:\/\/(?:www\.)?steamcommunity\.com\/(?:(?:id)|(?:profiles))\/(?<name>[\w\d_-]+)/;
 
 /* meta software */
@@ -177,8 +182,12 @@ const INSTAGRAM_REGEX = /https:\/\/(?:www\.)?instagram\.com\/(?<name>[\w\d_.-]+)
 const THREADS_BY_INSTAGRAM_REGEX = /https:\/\/(?:www\.)?threads\.net\/@(?<name>[\w\d_.-]+)/;
 const FACEBOOK_REGEX = /https:\/\/(?:www\.)?facebook\.com\/(?<name>[\w\d_.-]+)/;
 
+/* creator / media */
+const FLOATPLANE_REGEX = /https:\/\/(?:www\.)?floatplane\.com\/channel\/(?<name>[\w\d_-]+)/;
+
 /* music */
 const LNKTO_REGEX = /https:\/\/(?<subdomain>\w+)\.lnk\.to\/(?<path>\S*)/;
+const SOUNDCLOUD_REGEX = /https:\/\/(?:www\.)?soundcloud\.com\/(?<name>[\w\d_-]+)/;
 
 module.exports = function (app, config, renderTemplate) {
   app.get("/encryption", async function (req, res) {
@@ -309,6 +318,9 @@ module.exports = function (app, config, renderTemplate) {
           const tiktok = extractInfo(TIKTOK_REGEX);
           const github = extractInfo(GITHUB_REGEX);
           const steam = extractInfo(STEAM_REGEX);
+          const soundcloud = extractInfo(SOUNDCLOUD_REGEX);
+          const floatplane = extractInfo(FLOATPLANE_REGEX);
+          const bluesky = extractInfo(BLUESKY_REGEX);
           
           /* meta software */
           const instagram = extractInfo(INSTAGRAM_REGEX);
@@ -406,6 +418,9 @@ module.exports = function (app, config, renderTemplate) {
               github,
               steam,
               tiktok,
+              bluesky,
+              floatplane,
+              soundcloud,
               dnt_val,
               reddit,
               channel_uploads,
