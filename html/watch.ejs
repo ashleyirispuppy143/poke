@@ -1744,7 +1744,7 @@ WIP!                                                 </a>
                                          <% } %>           
 
             
-              <%-String(channelurlfixer(VideoData.descriptionHtml)).replace(/\n/g, " <br> ").replace("(?i)(?<!\w)x\.com(?!\w)", "twitter.com").replace(/reddit\.com/g, "redlib.matthew.science") %>
+              <%-String(channelurlfixer(VideoData.descriptionHtml)).replace(/\n/g, " <br> ").replace("(?i)(?<!\w)x\.com(?!\w)", "twitter.com")%>
                    </div> 
                           <% } %>                          <% } %>                                  <% } %>          
                              
@@ -1755,7 +1755,7 @@ WIP!                                                 </a>
            <div class="descriptionNORMAL" style="margin-top:1em;">
              
         
-              <%-String(linkify(VideoData.description)).replace(/\n/g, " <br> ").replace(/twitter\.com/g, "twitter.com").replace(/reddit\.com/g, "redlib.matthew.science") %>
+              <%-String(linkify(VideoData.description)).replace(/\n/g, " <br> ").replace(/twitter\.com/g, "twitter.com") %>
                    </div> 
                           <% } %>                          <% } %>                                  <% } %>          
                              
