@@ -261,7 +261,7 @@ module.exports = function (app, config, renderTemplate) {
 
     <p class="note" style="margin-top:1.5rem;">
       • To see the stats UI (if enabled on this instance), visit
-      <code><a href="/api/stats?view=human">/api/stats?view=human</a></code>.<br>
+      <code><a href="/api/stats?view=gui">/api/stats?view=gui</a></code>.<br>
       • For raw JSON, use <code><a href="/api/stats?view=json">/api/stats?view=json</a></code>.
     </p>
   </div>
@@ -312,6 +312,25 @@ module.exports = function (app, config, renderTemplate) {
   app.get("/api/stats", (req, res) => {
     const view = (req.query.view || "").toString()
 
+    if (view === "human") {
+      const params = new URLSearchParams()
+
+      for (const [key, value] of Object.entries(req.query || {})) {
+        if (key === "view") continue
+        if (Array.isArray(value)) {
+          for (const item of value) {
+            params.append(key, String(item))
+          }
+        } else if (typeof value !== "undefined") {
+          params.append(key, String(value))
+        }
+      }
+
+      params.set("view", "gui")
+
+      return res.redirect(`/api/stats?${params.toString()}`)
+    }
+
     if (view === "json") {
       if (!telemetryConfig.telemetry) {
         return res.json({
@@ -355,7 +374,7 @@ module.exports = function (app, config, renderTemplate) {
       })
     }
 
-    if (view === "human") {
+    if (view === "gui") {
       const telemetryOn = telemetryConfig.telemetry
 
       return res.send(`<!DOCTYPE html>
@@ -1100,7 +1119,7 @@ module.exports = function (app, config, renderTemplate) {
       <div class="section-card api-lines">
         <h2>API usage</h2>
         <p class="note">
-          • Human view (this page): <code><a href="/api/stats?view=human">/api/stats?view=human</a></code><br>
+          • GUI view (this page): <code><a href="/api/stats?view=gui">/api/stats?view=gui</a></code><br>
           • JSON view (for scripts/tools): <code><a href="/api/stats?view=json">/api/stats?view=json</a></code><br>
           • JSON default limit: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code> (8 videos)<br>
           • JSON with custom limit: <code><a href="/api/stats?view=json&limit=3000">/api/stats?view=json&limit=3000</a></code><br>
@@ -1467,7 +1486,7 @@ module.exports = function (app, config, renderTemplate) {
 
       var payload = {
         exportedAt: new Date().toISOString(),
-        source: "/api/stats?view=human",
+        source: "/api/stats?view=gui",
         totalRecentVideoIds: recentVideoIds.length,
         recentVideoIds: recentVideoIds.slice()
       }
@@ -1768,7 +1787,7 @@ module.exports = function (app, config, renderTemplate) {
 
     <h2>API usage</h2>
     <p class="note">
-      • Human view (stats UI): <code><a href="/api/stats?view=human">/api/stats?view=human</a></code><br>
+      • GUI view (stats UI): <code><a href="/api/stats?view=gui">/api/stats?view=gui</a></code><br>
       • JSON view (for scripts/tools): <code><a href="/api/stats?view=json">/api/stats?view=json</a></code><br>
       • JSON default limit: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code> (8 videos)<br>
       • JSON with custom limit: <code><a href="/api/stats?view=json&limit=3000">/api/stats?view=json&limit=3000</a></code><br>
