@@ -958,7 +958,7 @@ module.exports = function (app, config, renderTemplate) {
       <div class="nojs-warning">
         <h2>JavaScript is disabled</h2>
         <p>
-          This human-readable stats page is designed as an interactive view, so without JavaScript it cannot load live instance numbers, switch between sections, paginate top videos, or generate the downloadable recent-video JSON file.
+          This GUI stats page is designed as an interactive view, so without JavaScript it cannot load live instance numbers, switch between sections, paginate top videos, or generate the downloadable recent-video JSON file.
         </p>
         <ul>
           <li>You can still read the raw local stats at <code>/api/stats?view=json</code>.</li>
@@ -1339,7 +1339,7 @@ module.exports = function (app, config, renderTemplate) {
       }, 0)
     }
 
-    function humanizeOsName(name) {
+    function getFriendlyOsName(name) {
       if (name === "windows") return "Windows"
       if (name === "android") return "Android"
       if (name === "unknown") return "Unknown"
@@ -1349,7 +1349,7 @@ module.exports = function (app, config, renderTemplate) {
       return name
     }
 
-    function humanizeBrowserName(name) {
+    function getFriendlyBrowserName(name) {
       if (name === "firefox") return "Firefox"
       if (name === "chrome") return "Chromium browser"
       if (name === "safari") return "Safari"
@@ -1379,7 +1379,7 @@ module.exports = function (app, config, renderTemplate) {
         var key = entry[0]
         var count = entry[1]
         var percent = formatPercent(count, total)
-        var label = kind === "os" ? humanizeOsName(key) : humanizeBrowserName(key)
+        var label = kind === "os" ? getFriendlyOsName(key) : getFriendlyBrowserName(key)
 
         var item = document.createElement("div")
         item.className = "breakdown-item"
