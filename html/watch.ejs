@@ -2396,6 +2396,8 @@ VideoData?.recommendedVideos.forEach(video => {
  
     
 <!-- SCRIPTS -->
+<script id="video" type="application/json"><%- JSON.stringify(VideoData).replace(/(\bip=)[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/g, "$1[REDACTED]").replace(/https:\/\/iv\.duti\.dev/g, "https://invid-api.poketube.fun") %></script><script id="comments" type="application/json"><%- JSON.stringify(inv.comments) %></script>
+
 <!-- AUTOPLAY -->
  <script>
 document.addEventListener("DOMContentLoaded", () => {
@@ -2597,7 +2599,7 @@ document.addEventListener('DOMContentLoaded', checkTheaterMode);
 	    isMiddleButtonPressed = false;
 	    changeVideoSpeed();
 	  }
-	});
+	});""
 	
 	var anchor = document.getElementById("sub");
 	
@@ -2612,7 +2614,6 @@ document.addEventListener('DOMContentLoaded', checkTheaterMode);
 	 } 
 	 </script>
 
-<script id="video" type="application/json"><%- JSON.stringify(VideoData).replace(/(\bip=)[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/g, "$1[REDACTED]").replace(/https:\/\/iv\.duti\.dev/g, "https://invid-api.poketube.fun") %></script><script id="comments" type="application/json"><%- JSON.stringify(inv.comments) %></script>
    
 <!-- Ambient Mode, for Poke -->
 <% if(IsOldWindows) { %>
