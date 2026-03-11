@@ -1937,7 +1937,7 @@ WIP!                                                 </a>
           <% if (VideoData?.keywords && VideoData.keywords.length > 0) { %>
  <% VideoData?.keywords.forEach(x => { %>
  <div class="tag">
-   <a href="/hashtag/<%=x %>" style="color:var(--text-color)">
+   <a href="/search?query=<%=x %>" style="color:var(--text-color)">
    <%=x %>
      </a>
    </div>
