@@ -7137,105 +7137,134 @@ document.addEventListener("DOMContentLoaded", () => {
   // the coupledMode branch, or scheduleSync(0) directly for non-coupled.
 });
 
+
 (function () {
+    function isTypingTarget(el) {
+        if (!el || !(el instanceof Element)) return false;
 
-function isTyping(el) {
-    if (!el) return false;
+        if (el.matches('.search-bar, #fname, input[name="query"]')) return true;
+        if (el.closest('form[action="/search"]')) return true;
+        if (el.isContentEditable) return true;
 
-    if (el.isContentEditable) return true;
+        const tag = (el.tagName || '').toLowerCase();
+        if (tag === 'textarea' || tag === 'select') return true;
 
-    const tag = (el.tagName || '').toLowerCase();
+        if (tag === 'input') {
+            const type = (el.getAttribute('type') || 'text').toLowerCase();
 
-    if (tag === 'textarea' || tag === 'select') return true;
+            const allowedNonTypingInputs = new Set([
+                'button',
+                'checkbox',
+                'color',
+                'file',
+                'hidden',
+                'image',
+                'radio',
+                'range',
+                'reset',
+                'submit'
+            ]);
 
-    if (tag === 'input') {
-        const type = (el.getAttribute('type') || 'text').toLowerCase();
+            return !allowedNonTypingInputs.has(type);
+        }
 
-        const nonTyping = new Set([
-            'button','checkbox','radio','range','color',
-            'file','image','reset','submit','hidden'
-        ]);
+        if (
+            el.matches(
+                '[contenteditable], [role="textbox"], [role="searchbox"], [role="combobox"], [role="spinbutton"]'
+            )
+        ) {
+            return true;
+        }
 
-        return !nonTyping.has(type);
+        const parentTypingEl = el.closest(
+            '.search-bar, #fname, input[name="query"], form[action="/search"], textarea, select, input, [contenteditable], [role="textbox"], [role="searchbox"], [role="combobox"], [role="spinbutton"]'
+        );
+
+        return !!parentTypingEl;
     }
 
-    if (el.closest('.search-bar, #fname, input[name="query"], form[action="/search"]'))
-        return true;
-
-    return false;
-}
-
-function getPlayer() {
-    const video = document.querySelector('.video-js');
-    if (!video || typeof videojs === 'undefined') return null;
-    return videojs.getPlayer(video) || videojs(video);
-}
-
-document.addEventListener('keydown', function (event) {
-
-    if (event.ctrlKey || event.altKey || event.metaKey) return;
-
-    const target = event.target;
-    const active = document.activeElement;
-
-    if (isTyping(target) || isTyping(active)) return;
-
-    const player = getPlayer();
-    if (!player) return;
-
-    /* kill all other handlers */
-    event.stopImmediatePropagation();
-    event.stopPropagation();
-
-    const key = (event.key || '').toLowerCase();
-
-    switch (key) {
-
-        case 'f':
-            event.preventDefault();
-            player.isFullscreen() ? player.exitFullscreen() : player.requestFullscreen();
-            break;
-
-        case 'k':
-        case ' ':
-        case 'spacebar':
-            event.preventDefault();
-            player.paused() ? player.play() : player.pause();
-            break;
-
-        case 'm':
-            event.preventDefault();
-            player.muted(!player.muted());
-            break;
-
-        case 'arrowright':
-        case 'l':
-            event.preventDefault();
-            player.currentTime(Math.min(player.duration() || Infinity, player.currentTime() + 10));
-            break;
-
-        case 'arrowleft':
-        case 'j':
-            event.preventDefault();
-            player.currentTime(Math.max(0, player.currentTime() - 10));
-            break;
-
-        case 'arrowup':
-            event.preventDefault();
-            player.volume(Math.min(1, player.volume() + 0.1));
-            break;
-
-        case 'arrowdown':
-            event.preventDefault();
-            player.volume(Math.max(0, player.volume() - 0.1));
-            break;
+    function getPlayer() {
+        const videoElement = document.querySelector('.video-js');
+        if (!videoElement || typeof videojs === 'undefined') return null;
+        return videojs.getPlayer(videoElement) || videojs(videoElement);
     }
 
-}, true); // capture phase
+    document.addEventListener('keydown', function (event) {
+        if (event.defaultPrevented) return;
+        if (event.ctrlKey || event.altKey || event.metaKey) return;
+        if (event.isComposing || event.keyCode === 229) return;
 
-})();
+        const target = event.target;
+        const active = document.activeElement;
+        const searchInput = document.querySelector('.search-bar, #fname, input[name="query"]');
 
- // https://codeberg.org/ashleyirispuppy/poke/src/branch/main/src/libpoketube/libpoketube-youtubei-objects.json
+        if (isTypingTarget(target) || isTypingTarget(active)) return;
+        if (searchInput && active === searchInput) return;
+        if (searchInput && searchInput.matches(':focus, :focus-within')) return;
+
+        const player = getPlayer();
+        if (!player) return;
+
+        const key = typeof event.key === 'string' ? event.key.toLowerCase() : '';
+
+        switch (key) {
+            case 'f':
+                event.preventDefault();
+                if (player.isFullscreen()) {
+                    player.exitFullscreen();
+                } else {
+                    player.requestFullscreen();
+                }
+                break;
+
+            case 'k':
+            case ' ':
+            case 'spacebar':
+                event.preventDefault();
+                if (player.paused()) {
+                    player.play();
+                } else {
+                    player.pause();
+                }
+                break;
+
+            case 'm':
+                event.preventDefault();
+                player.muted(!player.muted());
+                break;
+
+            case 'arrowright':
+            case 'l':
+                event.preventDefault();
+                player.currentTime(Math.min(player.duration() || Infinity, player.currentTime() + 10));
+                break;
+
+            case 'arrowleft':
+            case 'j':
+                event.preventDefault();
+                player.currentTime(Math.max(0, player.currentTime() - 10));
+                break;
+
+            case 'arrowup':
+                event.preventDefault();
+                if (player.muted() && player.volume() === 0) {
+                    player.muted(false);
+                }
+                player.volume(Math.min(1, Math.round((player.volume() + 0.1) * 10) / 10));
+                break;
+
+            case 'arrowdown':
+                event.preventDefault();
+                player.volume(Math.max(0, Math.round((player.volume() - 0.1) * 10) / 10));
+                if (player.volume() === 0) {
+                    player.muted(true);
+                }
+                break;
+        }
+    });
+})(); 
+
+// https://codeberg.org/ashleyirispuppy/poke/src/branch/main/src/libpoketube/libpoketube-youtubei-objects.json
 
 
  const FORMATS = {
@@ -7633,372 +7662,9 @@ try {
 
 // custom video.js ui for POKE PLAYER 
  const customVideoJsUI = document.createElement("style");
-customVideoJsUI.innerHTML = `
- 
+customVideoJsUI.innerHTML = `:root{--poke-accent-1:#ff0045;--poke-accent-2:#ff0e55;--poke-accent-3:#ff1d79;--glass-bg:rgba(20, 20, 20, 0.38);--glass-bg-hover:rgba(20, 20, 20, 0.46);--glass-border:rgba(255, 255, 255, 0.22);--glass-border-strong:rgba(255, 255, 255, 0.30);--glass-shadow:0 10px 30px rgba(0,0,0,0.32), inset 0 0 0 1px rgba(255,255,255,0.10);--scene-contrast-wash:rgba(0,0,0,0.10);--ui-text:rgba(255,255,255,0.96);--ui-text-soft:rgba(255,255,255,0.86);--ui-text-shadow:0 1px 2px rgba(0,0,0,0.65);--ui-text-outline:0 0 1px rgba(0,0,0,0.70);--r-outer:16px;--r-pill:999px;--r-bubble:1em;--btn:38px;--btn-mobile:34px;--bar-bottom:12px;--bar-bottom-mobile:10px}.video-js,.video-js .vjs-poster,.video-js .vjs-poster img,.video-js .vjs-tech{border-radius:var(--r-outer) !important}.vjs-title-bar{background:none !important;border-radius:var(--r-outer);overflow:hidden}.vjs-title-bar-title{font-family:"PokeTube Flex", sans-serif !important;font-stretch:ultra-expanded;font-weight:1000;font-size:1.5em;color:var(--ui-text) !important;text-shadow:var(--ui-text-shadow);-webkit-text-stroke:0.35px rgba(0,0,0,0.35)}.vjs-title-bar-description{width:fit-content;border-radius:var(--r-bubble);padding:1em;font-family:"PokeTube Flex", "poketube flex", sans-serif;font-weight:600;font-stretch:semi-expanded;color:var(--ui-text);text-shadow:var(--ui-text-shadow);filter: drop-shadow(0 8px 22px rgba(0,0,0,0.25));background:linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.06)), linear-gradient(180deg, var(--scene-contrast-wash), var(--scene-contrast-wash)), var(--glass-bg);border:1px solid var(--glass-border);-webkit-backdrop-filter: blur(14px) saturate(170%);backdrop-filter: blur(14px) saturate(170%)}.video-js .vjs-control-bar{bottom:var(--bar-bottom) !important}.vjs-control-bar{background:transparent !important;border:none !important;box-shadow:none !important;display:flex !important;align-items:center !important;gap:2px;padding:6px 10px;border-radius:var(--r-outer);background:linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.05)), linear-gradient(180deg, var(--scene-contrast-wash), var(--scene-contrast-wash)) !important;-webkit-backdrop-filter: blur(12px) saturate(160%);backdrop-filter: blur(12px) saturate(160%);border:1px solid rgba(255,255,255,0.12) !important;box-shadow:0 12px 34px rgba(0,0,0,0.26) !important}.vjs-control-bar .vjs-button{width:var(--btn);height:var(--btn);min-width:var(--btn);border-radius:50%;background:linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.08)), linear-gradient(180deg, var(--scene-contrast-wash), var(--scene-contrast-wash)), var(--glass-bg);-webkit-backdrop-filter: blur(12px) saturate(160%);backdrop-filter: blur(12px) saturate(160%);border:1px solid var(--glass-border);box-shadow:var(--glass-shadow);display:inline-flex;align-items:center;justify-content:center;margin:0 6px;transition:transform 0.12s ease, box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;vertical-align:middle}.vjs-control-bar .vjs-button:hover{background:linear-gradient(180deg, rgba(255,255,255,0.24), rgba(255,255,255,0.12)), linear-gradient(180deg, rgba(0,0,0,0.12), rgba(0,0,0,0.12)), var(--glass-bg-hover);border-color:var(--glass-border-strong);box-shadow:0 12px 32px rgba(0,0,0,0.36), inset 0 0 0 1px rgba(255,255,255,0.16);transform:translateY(-1px)}.vjs-control-bar .vjs-button:active{transform:translateY(0)}.vjs-control-bar .vjs-button:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(255,0,90,0.35), inset 0 0 0 1px rgba(255,255,255,0.20), 0 12px 34px rgba(0,0,0,0.32);border-color:rgba(255,255,255,0.30)}.vjs-control-bar .vjs-icon-placeholder:before{font-size:18px;line-height:var(--btn);color:var(--ui-text);text-shadow:var(--ui-text-shadow);filter: drop-shadow(var(--ui-text-outline))}.vjs-current-time,.vjs-duration,.vjs-remaining-time,.vjs-time-divider{background:transparent;padding:0 8px;border-radius:var(--r-pill);box-shadow:none;margin:0;height:var(--btn);line-height:1;display:inline-flex;align-items:center;color:var(--ui-text-soft) !important;text-shadow:var(--ui-text-shadow)}.vjs-fullscreen-control,.vjs-remaining-time{background-color:transparent !important}.vjs-progress-control{flex:1 1 auto;display:flex !important;align-items:center !important;margin:0 6px;padding:0;height:var(--btn)}.vjs-progress-control .vjs-progress-holder{height:8px !important;border-radius:var(--r-pill) !important;background:transparent !important;border:none;box-shadow:none;position:relative;margin:0;width:100%;overflow:hidden}.vjs-progress-control .vjs-progress-holder::before{content:"";position:absolute;inset:0;border-radius:inherit;background:linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.08)), linear-gradient(180deg, rgba(0,0,0,0.14), rgba(0,0,0,0.14)), rgba(20,20,20,0.34);-webkit-backdrop-filter: blur(12px) saturate(160%);backdrop-filter: blur(12px) saturate(160%);border:1px solid rgba(255,255,255,0.18);box-shadow:0 8px 24px rgba(0,0,0,0.25), inset 0 0 0 1px rgba(255,255,255,0.10);pointer-events:none}.vjs-progress-control .vjs-load-progress,.vjs-progress-control .vjs-play-progress{position:relative;z-index:1;border-radius:inherit !important}.vjs-play-progress,.vjs-progress-control .vjs-play-progress{background-image:linear-gradient(to right, var(--poke-accent-1), var(--poke-accent-2), var(--poke-accent-3)) !important}.vjs-progress-control .vjs-slider-handle{width:14px !important;height:14px !important;border-radius:50% !important;background:rgba(255,255,255,0.95) !important;border:1px solid rgba(255,255,255,0.95);box-shadow:0 8px 20px rgba(0,0,0,0.35), 0 0 0 3px rgba(255,0,90,0.22);top:-4px !important;z-index:2}.vjs-volume-panel{gap:8px;align-items:center !important;padding:0;height:var(--btn)}.vjs-volume-bar{height:6px !important;border-radius:var(--r-pill) !important;background:linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06)), linear-gradient(180deg, rgba(0,0,0,0.18), rgba(0,0,0,0.18)), rgba(18,18,18,0.40) !important;border:1px solid rgba(255,255,255,0.16);box-shadow:0 8px 20px rgba(0,0,0,0.20);position:relative;overflow:hidden}.vjs-volume-level{border-radius:inherit !important;background-image:linear-gradient(to right, var(--poke-accent-1), var(--poke-accent-3)) !important}.vjs-volume-bar .vjs-slider-handle{width:12px !important;height:12px !important;border-radius:50% !important;background:rgba(255,255,255,0.95) !important;border:1px solid rgba(255,255,255,0.95);top:-3px !important;box-shadow:0 6px 16px rgba(0,0,0,0.28), 0 0 0 3px rgba(255,0,90,0.20)}@media (max-width: 640px){.video-js .vjs-control-bar{bottom:var(--bar-bottom-mobile) !important}.vjs-control-bar{gap:8px;padding:6px 8px}.vjs-control-bar .vjs-button{width:var(--btn-mobile);height:var(--btn-mobile);min-width:var(--btn-mobile)}.vjs-control-bar .vjs-icon-placeholder:before{font-size:16px;line-height:var(--btn-mobile)}.vjs-current-time,.vjs-duration,.vjs-remaining-time,.vjs-time-divider{height:var(--btn-mobile)}.vjs-progress-control{height:var(--btn-mobile)}.vjs-progress-control .vjs-slider-handle{width:12px !important;height:12px !important;top:-3px !important}}@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))){.vjs-control-bar,.vjs-control-bar .vjs-button,.vjs-progress-control .vjs-progress-holder::before,.vjs-title-bar-description,.vjs-volume-bar{-webkit-backdrop-filter: none !important;backdrop-filter: none !important;background:rgba(18,18,18,0.72) !important;border-color:rgba(255,255,255,0.18) !important}}`;
 
-:root{
-  /* Brand */
-  --poke-accent-1: #ff0045;
-  --poke-accent-2: #ff0e55;
-  --poke-accent-3: #ff1d79;
 
-   --glass-bg: rgba(20, 20, 20, 0.38);
-  --glass-bg-hover: rgba(20, 20, 20, 0.46);
-  --glass-border: rgba(255, 255, 255, 0.22);
-  --glass-border-strong: rgba(255, 255, 255, 0.30);
-  --glass-shadow: 0 10px 30px rgba(0,0,0,0.32), inset 0 0 0 1px rgba(255,255,255,0.10);
-
-   --scene-contrast-wash: rgba(0,0,0,0.10);
-
-  /* Text */
-  --ui-text: rgba(255,255,255,0.96);
-  --ui-text-soft: rgba(255,255,255,0.86);
-  --ui-text-shadow: 0 1px 2px rgba(0,0,0,0.65);
-  --ui-text-outline: 0 0 1px rgba(0,0,0,0.70);
-
-  /* Radii */
-  --r-outer: 16px;
-  --r-pill: 999px;
-  --r-bubble: 1em;
-
-  /* Sizes */
-  --btn: 38px;
-  --btn-mobile: 34px;
-  --bar-bottom: 12px;
-  --bar-bottom-mobile: 10px;
-}
-
-/* Keep the whole player rounded */
-.video-js,
-.video-js .vjs-tech,
-.video-js .vjs-poster,
-.video-js .vjs-poster img{
-  border-radius: var(--r-outer) !important;
-}
-
-/* Title bar container */
-.vjs-title-bar{
-  background: none !important;
-  border-radius: var(--r-outer);
-  overflow: hidden;
-}
-
-/* Title text readability on bright frames */
-.vjs-title-bar-title{
-  font-family: "PokeTube Flex", sans-serif !important;
-  font-stretch: ultra-expanded;
-  font-weight: 1000;
-  font-size: 1.5em;
-  color: var(--ui-text) !important;
-  text-shadow: var(--ui-text-shadow);
-  -webkit-text-stroke: 0.35px rgba(0,0,0,0.35);
-}
-
-/* Description bubble: more readable on white frames */
-.vjs-title-bar-description{
-  width: fit-content;
-  border-radius: var(--r-bubble);
-  padding: 1em;
-
-  font-family: "PokeTube Flex", "poketube flex", sans-serif;
-  font-weight: 600;
-  font-stretch: semi-expanded;
-
-  color: var(--ui-text);
-  text-shadow: var(--ui-text-shadow);
-  filter: drop-shadow(0 8px 22px rgba(0,0,0,0.25));
-
-  /* layered glass + wash for bright scenes */
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.06)),
-    linear-gradient(180deg, var(--scene-contrast-wash), var(--scene-contrast-wash)),
-    var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  -webkit-backdrop-filter: blur(14px) saturate(170%);
-  backdrop-filter: blur(14px) saturate(170%);
-}
-
-/* Control bar placement */
-.video-js .vjs-control-bar{
-  bottom: var(--bar-bottom) !important;
-}
-
-/* Control bar glass container */
-.vjs-control-bar{
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  display: flex !important;
-  align-items: center !important;
-
-  gap: 2px;
-  padding: 6px 10px;
-  border-radius: var(--r-outer);
-
-  /* A faint wash behind the whole bar to survive white frames */
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.05)),
-    linear-gradient(180deg, var(--scene-contrast-wash), var(--scene-contrast-wash)) !important;
-
-  -webkit-backdrop-filter: blur(12px) saturate(160%);
-  backdrop-filter: blur(12px) saturate(160%);
-  border: 1px solid rgba(255,255,255,0.12) !important;
-  box-shadow: 0 12px 34px rgba(0,0,0,0.26) !important;
-}
-
-/* Buttons */
-.vjs-control-bar .vjs-button{
-  width: var(--btn);
-  height: var(--btn);
-  min-width: var(--btn);
-  border-radius: 50%;
-
-   background:
-    linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.08)),
-    linear-gradient(180deg, var(--scene-contrast-wash), var(--scene-contrast-wash)),
-    var(--glass-bg);
-
-  -webkit-backdrop-filter: blur(12px) saturate(160%);
-  backdrop-filter: blur(12px) saturate(160%);
-
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow);
-
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-
-  margin: 0 6px;
-  transition: transform 0.12s ease, box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;
-  vertical-align: middle;
-}
-
-.vjs-control-bar .vjs-button:hover{
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.24), rgba(255,255,255,0.12)),
-    linear-gradient(180deg, rgba(0,0,0,0.12), rgba(0,0,0,0.12)),
-    var(--glass-bg-hover);
-
-  border-color: var(--glass-border-strong);
-  box-shadow: 0 12px 32px rgba(0,0,0,0.36), inset 0 0 0 1px rgba(255,255,255,0.16);
-  transform: translateY(-1px);
-}
-
-.vjs-control-bar .vjs-button:active{
-  transform: translateY(0);
-}
-
-.vjs-control-bar .vjs-button:focus-visible{
-  outline: none;
-  box-shadow:
-    0 0 0 3px rgba(255,0,90,0.35),
-    inset 0 0 0 1px rgba(255,255,255,0.20),
-    0 12px 34px rgba(0,0,0,0.32);
-  border-color: rgba(255,255,255,0.30);
-}
-
-/* Icons: keep them readable on white frames */
-.vjs-control-bar .vjs-icon-placeholder:before{
-  font-size: 18px;
-  line-height: var(--btn);
-  color: var(--ui-text);
-  text-shadow: var(--ui-text-shadow);
-  filter: drop-shadow(var(--ui-text-outline));
-}
-
- .vjs-current-time,
-.vjs-duration,
-.vjs-remaining-time,
-.vjs-time-divider{
-  background: transparent;
-  padding: 0 8px;
-  border-radius: var(--r-pill);
-  box-shadow: none;
-  margin: 0;
-
-  height: var(--btn);
-  line-height: 1;
-
-  display: inline-flex;
-  align-items: center;
-
-  color: var(--ui-text-soft) !important;
-  text-shadow: var(--ui-text-shadow);
-}
-
- .vjs-fullscreen-control,
-.vjs-remaining-time{
-  background-color: transparent !important;
-}
-
- .vjs-progress-control{
-  flex: 1 1 auto;
-  display: flex !important;
-  align-items: center !important;
-  margin: 0 6px;
-  padding: 0;
-  height: var(--btn);
-}
-
-/* Progress bar glass track */
-.vjs-progress-control .vjs-progress-holder{
-  height: 8px !important;
-  border-radius: var(--r-pill) !important;
-  background: transparent !important;
-  border: none;
-  box-shadow: none;
-  position: relative;
-  margin: 0;
-  width: 100%;
-  overflow: hidden;
-}
-
- .vjs-progress-control .vjs-progress-holder::before{
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.08)),
-    linear-gradient(180deg, rgba(0,0,0,0.14), rgba(0,0,0,0.14)),
-    rgba(20,20,20,0.34);
-
-  -webkit-backdrop-filter: blur(12px) saturate(160%);
-  backdrop-filter: blur(12px) saturate(160%);
-
-  border: 1px solid rgba(255,255,255,0.18);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.25), inset 0 0 0 1px rgba(255,255,255,0.10);
-  pointer-events: none;
-}
-
-/* Load + play layers */
-.vjs-progress-control .vjs-load-progress,
-.vjs-progress-control .vjs-play-progress{
-  position: relative;
-  z-index: 1;
-  border-radius: inherit !important;
-}
-
-.vjs-progress-control .vjs-play-progress,
-.vjs-play-progress{
-  background-image: linear-gradient(to right, var(--poke-accent-1), var(--poke-accent-2), var(--poke-accent-3)) !important;
-}
-
-/* Scrubber handle */
-.vjs-progress-control .vjs-slider-handle{
-  width: 14px !important;
-  height: 14px !important;
-  border-radius: 50% !important;
-
-  background: rgba(255,255,255,0.95) !important;
-  border: 1px solid rgba(255,255,255,0.95);
-
-  box-shadow:
-    0 8px 20px rgba(0,0,0,0.35),
-    0 0 0 3px rgba(255,0,90,0.22);
-
-  top: -4px !important;
-  z-index: 2;
-}
-
-/* Volume panel */
-.vjs-volume-panel{
-  gap: 8px;
-  align-items: center !important;
-  padding: 0;
-  height: var(--btn);
-}
-
-/* Volume track: make it readable on white frames too */
-.vjs-volume-bar{
-  height: 6px !important;
-  border-radius: var(--r-pill) !important;
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06)),
-    linear-gradient(180deg, rgba(0,0,0,0.18), rgba(0,0,0,0.18)),
-    rgba(18,18,18,0.40) !important;
-
-  border: 1px solid rgba(255,255,255,0.16);
-  box-shadow: 0 8px 20px rgba(0,0,0,0.20);
-  position: relative;
-  overflow: hidden;
-}
-
-.vjs-volume-level{
-  border-radius: inherit !important;
-  background-image: linear-gradient(to right, var(--poke-accent-1), var(--poke-accent-3)) !important;
-}
-
-.vjs-volume-bar .vjs-slider-handle{
-  width: 12px !important;
-  height: 12px !important;
-  border-radius: 50% !important;
-
-  background: rgba(255,255,255,0.95) !important;
-  border: 1px solid rgba(255,255,255,0.95);
-
-  top: -3px !important;
-
-  box-shadow:
-    0 6px 16px rgba(0,0,0,0.28),
-    0 0 0 3px rgba(255,0,90,0.20);
-}
-
-/* Mobile tweaks */
-@media (max-width: 640px){
-  .video-js .vjs-control-bar{
-    bottom: var(--bar-bottom-mobile) !important;
-  }
-
-  .vjs-control-bar{
-    gap: 8px;
-    padding: 6px 8px;
-  }
-
-  .vjs-control-bar .vjs-button{
-    width: var(--btn-mobile);
-    height: var(--btn-mobile);
-    min-width: var(--btn-mobile);
-  }
-
-  .vjs-control-bar .vjs-icon-placeholder:before{
-    font-size: 16px;
-    line-height: var(--btn-mobile);
-  }
-
-  .vjs-current-time,
-  .vjs-duration,
-  .vjs-remaining-time,
-  .vjs-time-divider{
-    height: var(--btn-mobile);
-  }
-
-  .vjs-progress-control{
-    height: var(--btn-mobile);
-  }
-
-  .vjs-progress-control .vjs-slider-handle{
-    width: 12px !important;
-    height: 12px !important;
-    top: -3px !important;
-  }
-}
-
-/* If backdrop-filter isn't supported, fall back to solid-ish surfaces */
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))){
-  .vjs-control-bar,
-  .vjs-control-bar .vjs-button,
-  .vjs-title-bar-description,
-  .vjs-progress-control .vjs-progress-holder::before,
-  .vjs-volume-bar{
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
-    background: rgba(18,18,18,0.72) !important;
-    border-color: rgba(255,255,255,0.18) !important;
-  }
-}
-`;
 document.head.appendChild(customVideoJsUI);
 
 
