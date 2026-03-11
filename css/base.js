@@ -7139,131 +7139,102 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 (function () {
-    function isTypingTarget(el) {
-        if (!el || !(el instanceof Element)) return false;
 
-        if (el.matches('.search-bar, #fname, input[name="query"]')) return true;
-        if (el.closest('form[action="/search"]')) return true;
-        if (el.isContentEditable) return true;
+function isTyping(el) {
+    if (!el) return false;
 
-        const tag = (el.tagName || '').toLowerCase();
-        if (tag === 'textarea' || tag === 'select') return true;
+    if (el.isContentEditable) return true;
 
-        if (tag === 'input') {
-            const type = (el.getAttribute('type') || 'text').toLowerCase();
+    const tag = (el.tagName || '').toLowerCase();
 
-            const allowedNonTypingInputs = new Set([
-                'button',
-                'checkbox',
-                'color',
-                'file',
-                'hidden',
-                'image',
-                'radio',
-                'range',
-                'reset',
-                'submit'
-            ]);
+    if (tag === 'textarea' || tag === 'select') return true;
 
-            return !allowedNonTypingInputs.has(type);
-        }
+    if (tag === 'input') {
+        const type = (el.getAttribute('type') || 'text').toLowerCase();
 
-        if (
-            el.matches(
-                '[contenteditable], [role="textbox"], [role="searchbox"], [role="combobox"], [role="spinbutton"]'
-            )
-        ) {
-            return true;
-        }
+        const nonTyping = new Set([
+            'button','checkbox','radio','range','color',
+            'file','image','reset','submit','hidden'
+        ]);
 
-        const parentTypingEl = el.closest(
-            '.search-bar, #fname, input[name="query"], form[action="/search"], textarea, select, input, [contenteditable], [role="textbox"], [role="searchbox"], [role="combobox"], [role="spinbutton"]'
-        );
-
-        return !!parentTypingEl;
+        return !nonTyping.has(type);
     }
 
-    function getPlayer() {
-        const videoElement = document.querySelector('.video-js');
-        if (!videoElement || typeof videojs === 'undefined') return null;
-        return videojs.getPlayer(videoElement) || videojs(videoElement);
+    if (el.closest('.search-bar, #fname, input[name="query"], form[action="/search"]'))
+        return true;
+
+    return false;
+}
+
+function getPlayer() {
+    const video = document.querySelector('.video-js');
+    if (!video || typeof videojs === 'undefined') return null;
+    return videojs.getPlayer(video) || videojs(video);
+}
+
+document.addEventListener('keydown', function (event) {
+
+    if (event.ctrlKey || event.altKey || event.metaKey) return;
+
+    const target = event.target;
+    const active = document.activeElement;
+
+    if (isTyping(target) || isTyping(active)) return;
+
+    const player = getPlayer();
+    if (!player) return;
+
+    /* kill all other handlers */
+    event.stopImmediatePropagation();
+    event.stopPropagation();
+
+    const key = (event.key || '').toLowerCase();
+
+    switch (key) {
+
+        case 'f':
+            event.preventDefault();
+            player.isFullscreen() ? player.exitFullscreen() : player.requestFullscreen();
+            break;
+
+        case 'k':
+        case ' ':
+        case 'spacebar':
+            event.preventDefault();
+            player.paused() ? player.play() : player.pause();
+            break;
+
+        case 'm':
+            event.preventDefault();
+            player.muted(!player.muted());
+            break;
+
+        case 'arrowright':
+        case 'l':
+            event.preventDefault();
+            player.currentTime(Math.min(player.duration() || Infinity, player.currentTime() + 10));
+            break;
+
+        case 'arrowleft':
+        case 'j':
+            event.preventDefault();
+            player.currentTime(Math.max(0, player.currentTime() - 10));
+            break;
+
+        case 'arrowup':
+            event.preventDefault();
+            player.volume(Math.min(1, player.volume() + 0.1));
+            break;
+
+        case 'arrowdown':
+            event.preventDefault();
+            player.volume(Math.max(0, player.volume() - 0.1));
+            break;
     }
 
-    document.addEventListener('keydown', function (event) {
-        if (event.defaultPrevented) return;
-        if (event.ctrlKey || event.altKey || event.metaKey) return;
-        if (event.isComposing || event.keyCode === 229) return;
+}, true); // capture phase
 
-        const target = event.target;
-        const active = document.activeElement;
-        const searchInput = document.querySelector('.search-bar, #fname, input[name="query"]');
-
-        if (isTypingTarget(target) || isTypingTarget(active)) return;
-        if (searchInput && active === searchInput) return;
-        if (searchInput && searchInput.matches(':focus, :focus-within')) return;
-
-        const player = getPlayer();
-        if (!player) return;
-
-        const key = typeof event.key === 'string' ? event.key.toLowerCase() : '';
-
-        switch (key) {
-            case 'f':
-                event.preventDefault();
-                if (player.isFullscreen()) {
-                    player.exitFullscreen();
-                } else {
-                    player.requestFullscreen();
-                }
-                break;
-
-            case 'k':
-            case ' ':
-            case 'spacebar':
-                event.preventDefault();
-                if (player.paused()) {
-                    player.play();
-                } else {
-                    player.pause();
-                }
-                break;
-
-            case 'm':
-                event.preventDefault();
-                player.muted(!player.muted());
-                break;
-
-            case 'arrowright':
-            case 'l':
-                event.preventDefault();
-                player.currentTime(Math.min(player.duration() || Infinity, player.currentTime() + 10));
-                break;
-
-            case 'arrowleft':
-            case 'j':
-                event.preventDefault();
-                player.currentTime(Math.max(0, player.currentTime() - 10));
-                break;
-
-            case 'arrowup':
-                event.preventDefault();
-                if (player.muted() && player.volume() === 0) {
-                    player.muted(false);
-                }
-                player.volume(Math.min(1, Math.round((player.volume() + 0.1) * 10) / 10));
-                break;
-
-            case 'arrowdown':
-                event.preventDefault();
-                player.volume(Math.max(0, Math.round((player.volume() - 0.1) * 10) / 10));
-                if (player.volume() === 0) {
-                    player.muted(true);
-                }
-                break;
-        }
-    });
-})(); 
-
+})();
 // https://codeberg.org/ashleyirispuppy/poke/src/branch/main/src/libpoketube/libpoketube-youtubei-objects.json
 
 
