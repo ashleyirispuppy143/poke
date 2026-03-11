@@ -2027,6 +2027,11 @@ const platforms = [
     url: "https://bsky.app/profile/" + bluesky.name,
     label: bluesky.name,
     icon: media_proxy_url + "/proxy?url=https://bsky.app/static/favicon.png"
+  },
+  facebook && {
+    url: "https://facebook.com/" + facebook.name,
+    label: facebook.name,
+    icon: media_proxy_url + "/proxy?url=https://www.facebook.com/favicon.ico"
   }
 ].filter(Boolean);
 %>
@@ -2047,7 +2052,6 @@ const platforms = [
   </div>
 <% }) %>
 </div>
-
    </div>    
 
                        </p>
