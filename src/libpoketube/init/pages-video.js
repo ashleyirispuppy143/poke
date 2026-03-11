@@ -325,6 +325,7 @@ module.exports = function (app, config, renderTemplate) {
           /* meta software */
           const instagram = extractInfo(INSTAGRAM_REGEX);
           const threads_by_instagram = extractInfo(THREADS_BY_INSTAGRAM_REGEX);
+         const facebook = extractInfo(FACEBOOK_REGEX);
 
           const videoObject = inv_vid?.adaptiveFormats;
           function findItag(adaptiveFormats) {
@@ -394,6 +395,7 @@ module.exports = function (app, config, renderTemplate) {
               IsOldWindows,
               channelurlfixer,
               itag_hd,
+              facebook,
               support,
               dyx,
               shortsui,
