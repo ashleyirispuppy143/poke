@@ -1,7 +1,7 @@
 const { modules } = require("../libpoketube-initsys.js");
 const crypto = require("crypto");
 const sha384 = modules.hash;
-const config = require("../../../config.json");
+const configJson = require("../../../config.json");
 
  const SERVER_SECRET = configJson.subSecret;
 if (!SERVER_SECRET) {
