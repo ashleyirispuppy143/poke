@@ -17,6 +17,30 @@
     You should have received a copy of the GNU General Public License
     along with this program. If not, see https://www.gnu.org/licenses/.
 -->
+
+<%
+ 
+  function FilterChannels(videos, blockedAuthors, limit) {
+    // First pass: collect all videos that are NOT from blocked authors
+    var allowed = videos.filter(function(item) {
+      return blockedAuthors.indexOf(item.author) === -1;
+    });
+
+    // Return up to `limit` allowed videos
+    return allowed.slice(0, limit);
+  }
+
+   // yes, these channels are usually gaming channels but they also do a lot of politics,
+  // so we dont use them on "gaming" discovery.
+   var blockedAuthors = [
+    "TheBurntPeanut",
+    "Asmongold TV "
+  ];
+
+  // Get up to 16 filtered videos, replacing any blocked-author slots with
+  // other videos from the inv object that are not from blocked authors.
+  var filteredVideos = FilterChannels(inv, blockedAuthors, 16);
+%>
       
 <!DOCTYPE html>
 <html lang="en" class="no-js">
@@ -679,7 +703,7 @@ input{
 
         <div class="discover-body">
           <div class="video-grid">
-            <% inv.slice(0,16).forEach(item => { %>
+            <% filteredVideos.forEach(function(item) { %>
               <a href="/watch?v=<%- item.videoId %>" class="video canloadhd" data-author="<%- item.author %>">
                 <div class="thumbnail" style="background-image:url('/vi/<%= item.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw');">
                   <span class="video-length"><%- turntomins(item.lengthSeconds) %></span>
@@ -690,7 +714,7 @@ input{
                   <span class="byline max-lines-2" title="Video By <%- item.author %>"><%- item.author %></span>
                 </div>
               </a>
-            <% }) %>
+            <% }); %>
           </div>
         </div>
       </details>
