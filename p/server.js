@@ -227,6 +227,13 @@ app.use(function (_req, res, next) {
 // modifier) to if_ so the Wayback Machine returns the raw binary file.
 app.get(/^\/web\/\d{14}[a-z_]*\/https:\/\/site-assets\.fontawesome\.com\/(.*)$/, async (req, res) => {
   try {
+    // Override global cache headers so browsers never store old 404s for fonts.
+    // The browser caches 404s aggressively; no-store forces a fresh fetch every time.
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.setHeader("Surrogate-Control", "no-store");
+
     // Extract the FA asset path from the URL
     const faPath = req.path.replace(/^\/web\/\d{14}[a-z_]*\/https:\/\/site-assets\.fontawesome\.com/, "");
 
