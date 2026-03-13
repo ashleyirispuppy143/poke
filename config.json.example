@@ -9,6 +9,7 @@
     "videourl":"https://eu-proxy.poketube.fun",
     "email_main_url":"https://email-server.poketube.fun",
     "mastodon_client_url":"https://social.poketube.fun",
+    "subSecret":"some-secret-thning",
     "mastodon_client_server_name":"PokeSocial",
     "libreoffice_online_url":"https://office.poketube.fun",
     "cacher_max_age": "86400",
