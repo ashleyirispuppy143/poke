@@ -1,16 +1,19 @@
 const { modules } = require("../libpoketube-initsys.js");
 const crypto = require("crypto");
 const sha384 = modules.hash;
-const configJson = require("../../../config.json");
+const configJson = require("../config.json");
 
- const SERVER_SECRET = configJson.subSecret;
+// ─── Config ───────────────────────────────────────────────────────────────────
+
+const SERVER_SECRET = configJson.subSecret;
 if (!SERVER_SECRET) {
   throw new Error(
     "[poketube-subs] Missing 'subSecret' in config.json — add it before starting the server."
   );
 }
 
- 
+// ─── E2EE helpers ────────────────────────────────────────────────────────────
+
 function deriveKey(userId) {
   return Buffer.from(sha384(userId + SERVER_SECRET), "hex").slice(0, 32);
 }
@@ -30,7 +33,7 @@ function encrypt(userId, obj) {
 function decrypt(userId, stored) {
   try {
     const [ivHex, tagHex, encHex] = stored.split(":");
-    if (!ivHex || !tagHex || !encHex) return null; // plaintext/legacy entry
+    if (!ivHex || !tagHex || !encHex) return null;
     const key = deriveKey(userId);
     const decipher = crypto.createDecipheriv(
       "aes-256-gcm",
@@ -47,62 +50,90 @@ function decrypt(userId, stored) {
     return null;
   }
 }
- 
+
+// ─── Migration ────────────────────────────────────────────────────────────────
+
+const MIGRATION_FLAG = "meta.subsE2eeMigrated";
+
 function isEncrypted(value) {
   return typeof value === "string" && value.split(":").length === 3;
 }
 
 /**
- * migrateUser — re-encrypts any plaintext subscription entries for one user.
- * Safe to call repeatedly; already-encrypted entries are skipped.
- * Returns the number of entries migrated.
+ * Migrates one user's plaintext subs in place.
+ * Yields control back to the event loop between users via setImmediate
+ * so startup / request handling is never blocked.
  */
-function migrateUser(db, userId) {
-  const raw = db.get(`user.${userId}.subs`);
-  if (!raw || typeof raw !== "object") return 0;
+function migrateUserAsync(db, userId) {
+  return new Promise((resolve) => {
+    setImmediate(() => {
+      try {
+        const raw = db.get(`user.${userId}.subs`);
+        if (!raw || typeof raw !== "object") return resolve(0);
 
-  let migrated = 0;
-  for (const [channelId, value] of Object.entries(raw)) {
-    if (isEncrypted(value)) continue; // already done
-
-    // value is a plaintext object like { channelName, avatar }
-    if (value && typeof value === "object") {
-      db.set(`user.${userId}.subs.${channelId}`, encrypt(userId, value));
-      migrated++;
-    }
-  }
-  return migrated;
+        let migrated = 0;
+        for (const [channelId, value] of Object.entries(raw)) {
+          if (isEncrypted(value)) continue;
+          if (value && typeof value === "object") {
+            db.set(`user.${userId}.subs.${channelId}`, encrypt(userId, value));
+            migrated++;
+          }
+        }
+        resolve(migrated);
+      } catch {
+        resolve(0);
+      }
+    });
+  });
 }
 
 /**
- * migrateAllUsers — iterates every user in the DB and migrates their subs.
- * Called once at startup.
+ * Runs the full migration once, in the background, after the server is up.
+ * Skips entirely if the flag is already set in the DB.
  */
-function migrateAllUsers(db) {
+async function runMigrationIfNeeded(db) {
+  if (db.get(MIGRATION_FLAG)) {
+    console.log("[poketube-subs] E2EE migration already done, skipping.");
+    return;
+  }
+
   const all = db.get("user");
-  if (!all || typeof all !== "object") return;
+  if (!all || typeof all !== "object") {
+    db.set(MIGRATION_FLAG, true);
+    return;
+  }
 
-  let totalUsers = 0;
+  const userIds = Object.keys(all);
+  if (userIds.length === 0) {
+    db.set(MIGRATION_FLAG, true);
+    return;
+  }
+
+  console.log(`[poketube-subs] Checking DB — migrating ${userIds.length} user(s) to E2EE in background...`);
+
   let totalEntries = 0;
+  let totalUsers   = 0;
 
-  for (const userId of Object.keys(all)) {
-    const count = migrateUser(db, userId);
+  for (const userId of userIds) {
+    const count = await migrateUserAsync(db, userId);
     if (count > 0) {
       totalUsers++;
       totalEntries += count;
     }
   }
 
+  // Mark migration as done so it never runs again
+  db.set(MIGRATION_FLAG, true);
+
   if (totalEntries > 0) {
-    console.log(
-      `[poketube-subs] Migration complete — encrypted ${totalEntries} sub(s) across ${totalUsers} user(s).`
-    );
+    console.log(`[poketube-subs] Migration done — encrypted ${totalEntries} sub(s) across ${totalUsers} user(s).`);
   } else {
-    console.log("[poketube-subs] Migration check done — nothing to migrate.");
+    console.log("[poketube-subs] Migration done — everything was already encrypted.");
   }
 }
 
- 
+// ─── DB helpers ──────────────────────────────────────────────────────────────
+
 function getSubsDecrypted(db, userId) {
   const raw = db.get(`user.${userId}.subs`);
   if (!raw) return null;
@@ -119,7 +150,8 @@ function setSubEncrypted(db, userId, channelId, channelData) {
   db.set(`user.${userId}.subs.${channelId}`, encrypt(userId, channelData));
 }
 
- 
+// ─── Route validation ─────────────────────────────────────────────────────────
+
 function validateId(id, res) {
   if (!id || typeof id !== "string" || id.length > 7) {
     res.status(400).json({ error: "IDs can be 7 characters max silly :3" });
@@ -128,12 +160,13 @@ function validateId(id, res) {
   return true;
 }
 
- 
+// ─── Module export ────────────────────────────────────────────────────────────
+
 module.exports = function (app, config, renderTemplate) {
   const db = require("quick.db");
 
-  // Migrate all legacy plaintext subs on startup
-  migrateAllUsers(db);
+  // Fire migration in background — doesn't block server startup at all
+  setImmediate(() => runMigrationIfNeeded(db).catch(console.error));
 
   app.get("/api/get-channel-subs", async function (req, res) {
     const userId = req.query.ID;
