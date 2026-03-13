@@ -41,43 +41,83 @@ const URL_WHITELIST = [
   "web.archive.org",
 ];
 
-// Exact Wayback Machine snapshots for Font Awesome assets.
-// Each key is the original asset path, value is the full archived URL.
-// Using `if_` flag so the Wayback Machine returns the raw file without
-// injecting its toolbar HTML/JS.
+// Timestamp to use for all Font Awesome Wayback Machine snapshots.
+// The `if_` modifier tells the Wayback Machine to return the raw archived file
+// without injecting its toolbar HTML/JS — critical for binary font files.
+const FA_TS = "20260129053127";
+
+// All known Font Awesome v6.1.1 webfont filenames
+const FA_WEBFONTS = [
+  "fa-brands-400.woff2",
+  "fa-brands-400.ttf",
+  "fa-duotone-900.woff2",
+  "fa-duotone-900.ttf",
+  "fa-light-300.woff2",
+  "fa-light-300.ttf",
+  "fa-regular-400.woff2",
+  "fa-regular-400.ttf",
+  "fa-solid-900.woff2",
+  "fa-solid-900.ttf",
+  "fa-thin-100.woff2",
+  "fa-thin-100.ttf",
+  "fa-v4compatibility.woff2",
+  "fa-v4compatibility.ttf",
+];
+
+// Lookup map: FA asset path -> canonical Wayback Machine if_ URL
 const FONTAWESOME_ARCHIVE_MAP = {
-  "/releases/v6.1.1/css/all.css":
-    "https://web.archive.org/web/20260129053127if_/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css",
+  "/releases/v6.1.1/css/all.css": `https://web.archive.org/web/${FA_TS}if_/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css`,
 };
+for (const font of FA_WEBFONTS) {
+  const path = `/releases/v6.1.1/webfonts/${font}`;
+  FONTAWESOME_ARCHIVE_MAP[path] = `https://web.archive.org/web/${FA_TS}if_/https://site-assets.fontawesome.com${path}`;
+}
 
 /**
- * If the requested URL targets site-assets.fontawesome.com, rewrite it to
- * the exact Wayback Machine snapshot URL for that asset.
- * Unknown paths fall back to a generic archive base so they still work.
+ * Rewrite Font Awesome URLs to their correct Wayback Machine if_ equivalents.
+ *
+ * Three cases:
+ *
+ * 1. Direct request to site-assets.fontawesome.com
+ *    → rewrite to web.archive.org/web/<TS>if_/...
+ *
+ * 2. The archived CSS rewrites its own font src() URLs to Wayback Machine
+ *    paths with the `im_` modifier (image mode), e.g.:
+ *      /web/20260129053127im_/https://site-assets.fontawesome.com/.../fa-solid-900.woff2
+ *    These arrive at our proxy as GET /web/... and 404 because we don't handle
+ *    that path prefix. We intercept and rewrite im_ → if_ so the binary is
+ *    fetched correctly.
+ *
+ * 3. Any other web.archive.org URL that contains site-assets.fontawesome.com
+ *    but is not already using if_ — normalise it to if_.
  *
  * @param {string} rawUrl
  * @returns {string} possibly-rewritten URL
  */
 const rewriteFontAwesomeUrl = (rawUrl) => {
-  if (rawUrl.includes("site-assets.fontawesome.com")) {
+  // Case 1: direct hit on site-assets.fontawesome.com
+  if (rawUrl.includes("site-assets.fontawesome.com") && !rawUrl.includes("web.archive.org")) {
     const clean = rawUrl.split("?")[0];
-    // Extract just the path after the hostname
-    let path;
+    let pathname = "";
     try {
-      path = new URL(clean).pathname;
-    } catch (_) {
-      path = null;
+      pathname = new URL(clean).pathname;
+    } catch (_) {}
+    if (FONTAWESOME_ARCHIVE_MAP[pathname]) {
+      return FONTAWESOME_ARCHIVE_MAP[pathname];
     }
+    // Unknown path — still serve from archive with if_
+    return `https://web.archive.org/web/${FA_TS}if_/https://site-assets.fontawesome.com${pathname}`;
+  }
 
-    if (path && FONTAWESOME_ARCHIVE_MAP[path]) {
-      return FONTAWESOME_ARCHIVE_MAP[path];
-    }
-
-    // Fallback: use the same timestamp for any other FA asset path
-    return (
-      "https://web.archive.org/web/20260129053127if_/" + clean
+  // Case 2 & 3: already a web.archive.org URL referencing FA — ensure if_ not im_/cs_/js_/etc.
+  if (rawUrl.includes("web.archive.org") && rawUrl.includes("site-assets.fontawesome.com")) {
+    // Replace any WBM modifier (im_, cs_, js_, fw_, mp_, oe_, or none) with if_
+    return rawUrl.replace(
+      /(\/web\/\d{14})((?:im_|cs_|js_|fw_|mp_|oe_)?)\//,
+      `$1if_/`
     );
   }
+
   return rawUrl;
 };
 
@@ -91,10 +131,10 @@ const getSpoofedHeaders = (host) => {
     return {
       "User-Agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-      "Accept": "text/css,*/*;q=0.1",
+      "Accept": "*/*",
       "Accept-Language": "en-US,en;q=0.9",
-      // Ask for plain (identity) encoding so we never receive an encoding
-      // format that Node cannot handle (e.g. zstd).
+      // Request plain encoding — prevents receiving zstd or other encodings
+      // that Node's http stack cannot handle natively.
       "Accept-Encoding": "identity",
       "Referer": "https://web.archive.org/",
     };
@@ -196,7 +236,7 @@ const proxy = async (req, res) => {
       rawUrl = rawUrl.replace("cdn.glitch.global", "cdn.glitch.me");
     }
 
-    // Rewrite Font Awesome URLs to the Wayback Machine snapshot
+    // Rewrite Font Awesome URLs (and broken im_ archive URLs) to if_ snapshots
     rawUrl = rewriteFontAwesomeUrl(rawUrl);
 
     let url;
@@ -218,8 +258,8 @@ const proxy = async (req, res) => {
 
     const spoofedHeaders = getSpoofedHeaders(url.host);
 
-    // Do not append cachefixer to Wayback Machine URLs — it would break their
-    // URL structure and result in a 404.
+    // Do not append cachefixer to Wayback Machine URLs — it would corrupt
+    // their URL structure and result in a 404.
     const fetchUrl =
       url.host === "web.archive.org"
         ? rawUrl
@@ -240,7 +280,7 @@ const proxy = async (req, res) => {
         .send(`Upstream error: ${f.status} ${f.statusText}`);
     }
 
-    // Buffer the full response so we can decompress it before forwarding.
+    // Buffer the full response body so we can decompress it before forwarding.
     // This prevents the browser from receiving a Content-Encoding it cannot
     // handle (e.g. when upstream sends gzip but our proxy strips the header).
     const rawBody = Buffer.from(await f.arrayBuffer());
@@ -251,7 +291,6 @@ const proxy = async (req, res) => {
       body = await decompress(rawBody, encoding);
     } catch (decompErr) {
       console.log(`==> Decompression failed (${encoding}): ${decompErr}`);
-      // Fall back to sending raw bytes; client may or may not cope
       body = rawBody;
     }
 
@@ -265,7 +304,7 @@ const proxy = async (req, res) => {
       }
     }
 
-    // Remove Content-Encoding so the browser does not try to decompress again
+    // Strip Content-Encoding — body is already decoded
     res.removeHeader("content-encoding");
     // Set accurate Content-Length for the decoded body
     res.setHeader("content-length", body.length);
