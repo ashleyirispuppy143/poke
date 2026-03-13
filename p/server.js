@@ -41,15 +41,19 @@ const URL_WHITELIST = [
   "web.archive.org",
 ];
 
-// When a request comes in for a Font Awesome asset, rewrite it to the
-// Wayback Machine snapshot URL.  The `if_` flag tells the Wayback Machine
-// to serve the raw original response without injecting its toolbar JS/HTML.
-const FONTAWESOME_ARCHIVE_BASE =
-  "https://web.archive.org/web/20220323022033if_/";
+// Exact Wayback Machine snapshots for Font Awesome assets.
+// Each key is the original asset path, value is the full archived URL.
+// Using `if_` flag so the Wayback Machine returns the raw file without
+// injecting its toolbar HTML/JS.
+const FONTAWESOME_ARCHIVE_MAP = {
+  "/releases/v6.1.1/css/all.css":
+    "https://web.archive.org/web/20260129053127if_/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css",
+};
 
 /**
  * If the requested URL targets site-assets.fontawesome.com, rewrite it to
- * the Wayback Machine snapshot URL.
+ * the exact Wayback Machine snapshot URL for that asset.
+ * Unknown paths fall back to a generic archive base so they still work.
  *
  * @param {string} rawUrl
  * @returns {string} possibly-rewritten URL
@@ -57,7 +61,22 @@ const FONTAWESOME_ARCHIVE_BASE =
 const rewriteFontAwesomeUrl = (rawUrl) => {
   if (rawUrl.includes("site-assets.fontawesome.com")) {
     const clean = rawUrl.split("?")[0];
-    return FONTAWESOME_ARCHIVE_BASE + clean;
+    // Extract just the path after the hostname
+    let path;
+    try {
+      path = new URL(clean).pathname;
+    } catch (_) {
+      path = null;
+    }
+
+    if (path && FONTAWESOME_ARCHIVE_MAP[path]) {
+      return FONTAWESOME_ARCHIVE_MAP[path];
+    }
+
+    // Fallback: use the same timestamp for any other FA asset path
+    return (
+      "https://web.archive.org/web/20260129053127if_/" + clean
+    );
   }
   return rawUrl;
 };
