@@ -274,29 +274,31 @@
 <title>PokeTranslate</title>
     <link rel="icon" href="/static/yt-ukraine.svg">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta content="PokeTranslate" property=og:title>
-    <meta content="Translate text - Anonymously!" property=twitter:description>
+    <meta content="PokeTranslate" property="og:title">
+    <meta content="Translate text - Anonymously!" property="twitter:description">
     <meta charset="UTF-8">
     <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline'">
     <meta name="referrer" content="no-referrer">
     <link rel="manifest" href="/manifest.json">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.bunny.net/css?family=roboto:400,500,700&display=swap" rel="stylesheet">
     <link href="https://fonts.bunny.net/icon?family=Material+Icons" rel="stylesheet">
     
   <style>
    :root {
-  /* Enforced Dark Mode Variables */
-  --primary: #8ab4f8;
-  --primary-hover: #aecbfa;
-  --bg-body: #202124;
-  --surface: #303134;
-  --border: #5f6368;
+   --bg-body: #202124;
+  --bg-surface: #292a2d;
+  --bg-output: #303134;
+  --border-color: #5f6368;
+  --divider-subtle: #3c4043;
   --text-main: #e8eaed;
   --text-muted: #9aa0a6;
-  --divider: #3c4043;
-  --shadow: 0 1px 3px 0 rgba(0,0,0,0.4);
+  --accent-blue: #8ab4f8;
+  --accent-hover: #aecbfa;
+  --btn-hover-bg: rgba(255, 255, 255, 0.04);
+  --btn-active-bg: rgba(255, 255, 255, 0.08);
+  --shadow-elevation: 0 1px 3px 0 rgba(0,0,0,0.3), 0 4px 8px 3px rgba(0,0,0,0.15);
   
-  --radius: 8px;
+  --radius-card: 12px;
   --nav-height: 64px;
 }
 
@@ -313,12 +315,12 @@ body {
 
 /* Navbar */
 header {
-  background: var(--surface);
+  background: var(--bg-body);
   height: var(--nav-height);
   display: flex;
   align-items: center;
   padding: 0 24px;
-  border-bottom: 1px solid var(--divider);
+  border-bottom: 1px solid var(--divider-subtle);
   position: sticky;
   top: 0;
   z-index: 10;
@@ -330,7 +332,13 @@ header h1 {
   color: var(--text-muted);
   display: flex;
   align-items: center;
-  gap: 10px;
+}
+
+.site-logo {
+  height: 32px;
+  width: auto;
+  margin-right: 12px;
+  display: block;
 }
 
 header h1 span {
@@ -341,18 +349,18 @@ header h1 span {
 main {
   flex: 1;
   width: 100%;
-  max-width: 1280px;
+  max-width: 1360px;
   margin: 0 auto;
-  padding: 24px;
+  padding: 32px 24px;
 }
 
+/* Card Styling */
 .translate-card {
-  background: var(--surface);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  border: 1px solid var(--divider);
+  background: var(--bg-surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-elevation);
+  border: 1px solid var(--divider-subtle);
   overflow: hidden;
-  min-height: 300px;
   display: flex;
   flex-direction: column;
 }
@@ -361,25 +369,22 @@ main {
 .language-toolbar {
   display: flex;
   align-items: center;
-  border-bottom: 1px solid var(--divider);
-  height: 56px;
-  padding: 0 8px;
-  background: var(--surface);
+  border-bottom: 1px solid var(--divider-subtle);
+  min-height: 56px;
+  padding: 8px 16px;
 }
 
 .lang-group {
   flex: 1;
   display: flex;
   align-items: center;
-  position: relative;
 }
 
-/* Custom Select Styling */
+/* Clean Dropdown Tabs */
 .select-wrapper {
   position: relative;
-  display: inline-block;
-  width: 100%;
-  max-width: 200px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .select-wrapper select {
@@ -387,74 +392,81 @@ main {
   background: transparent;
   border: none;
   font-family: inherit;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 500;
-  color: var(--primary);
-  padding: 12px 32px 12px 16px;
-  width: 100%;
+  color: var(--accent-blue);
+  padding: 10px 32px 10px 16px;
   cursor: pointer;
-  border-radius: 4px;
-  transition: background 0.2s;
+  border-radius: 6px;
+  transition: background 0.2s ease;
+  outline: none;
 }
 
-/* Force dark mode on the actual dropdown menu options */
 .select-wrapper select option {
-  background-color: var(--surface);
+  background-color: var(--bg-surface);
   color: var(--text-main);
+  font-weight: 400;
 }
 
-.select-wrapper select:hover {
-  background: rgba(138, 180, 248, 0.08);
+.select-wrapper select:hover,
+.select-wrapper select:focus {
+  background: var(--btn-hover-bg);
 }
 
-/* Arrow icon for select */
 .select-wrapper::after {
   content: '▼';
   font-size: 10px;
-  color: var(--text-muted);
+  color: var(--accent-blue);
   position: absolute;
   right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
   pointer-events: none;
 }
 
+/* Swap Button */
 .swap-btn {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
   color: var(--text-muted);
   text-decoration: none;
-  transition: background 0.2s, transform 0.2s;
-  margin: 0 8px;
+  transition: all 0.2s ease;
+  margin: 0 16px;
+  cursor: pointer;
+  user-select: none;
 }
 
 .swap-btn:hover {
-  background: rgba(255, 255, 255, 0.08); /* Adjusted for dark mode contrast */
+  background: var(--btn-hover-bg);
   color: var(--text-main);
+}
+
+.swap-btn:active {
+  background: var(--btn-active-bg);
 }
 
 /* Input/Output Grid */
 .editor-grid {
   display: grid;
-  grid-template-columns: 1fr 1px 1fr;
-  flex: 1;
-  position: relative;
-}
-
-.vertical-divider {
-  background: var(--divider);
-  width: 1px;
-  height: 100%;
+  grid-template-columns: 1fr 1fr;
+  min-height: 250px;
 }
 
 .editor-panel {
-  padding: 20px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
+}
+
+.input-panel {
+  background: var(--bg-surface);
+  border-right: 1px solid var(--divider-subtle);
+}
+
+.output-panel {
+  background: var(--bg-output);
 }
 
 .editor-panel textarea {
@@ -467,43 +479,37 @@ main {
   line-height: 1.4;
   color: var(--text-main);
   outline: none;
-  min-height: 150px;
-  overflow: hidden;
+  min-height: 180px;
+  overflow-y: auto;
 }
 
 .editor-panel textarea::placeholder {
   color: var(--text-muted);
 }
 
-.output-panel {
-  background: rgba(0,0,0,0.1); /* Dark mode output tint */
-}
-
-/* Actions Footer inside card */
-.card-footer {
-  padding: 12px 24px;
+ .card-footer {
+  padding: 16px 24px;
   display: flex;
   justify-content: flex-end;
-  align-items: center;
-  background: var(--surface);
+  background: var(--bg-surface);
+  border-top: 1px solid var(--divider-subtle);
+  display: none; /* Hidden by default, JS auto-translates */
 }
 
 .translate-submit {
-  background: var(--primary);
-  color: #202124; /* Dark text on light blue button for contrast */
+  background: var(--accent-blue);
+  color: #171717;
   border: none;
   padding: 10px 24px;
   border-radius: 4px;
   font-weight: 500;
   font-size: 14px;
   cursor: pointer;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.2);
-  transition: background 0.2s, box-shadow 0.2s;
+  transition: background 0.2s;
 }
 
 .translate-submit:hover {
-  background: var(--primary-hover);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  background: var(--accent-hover);
 }
 
 /* Footer/Credits */
@@ -512,39 +518,34 @@ main {
   padding: 24px;
   color: var(--text-muted);
   font-size: 0.85rem;
+  margin-top: auto;
 }
 
 /* Responsive */
-@media (max-width: 768px) {
-  main { padding: 12px; }
+@media (max-width: 800px) {
+  main { padding: 16px; }
   
-  .translate-card {
-    height: auto;
-  }
-
   .editor-grid {
     grid-template-columns: 1fr;
-    grid-template-rows: auto 1px auto;
+    grid-template-rows: auto auto;
   }
 
-  .vertical-divider {
-    width: 100%;
-    height: 1px;
+  .input-panel {
+    border-right: none;
+    border-bottom: 1px solid var(--divider-subtle);
   }
   
   .language-toolbar {
-    height: auto;
     flex-wrap: wrap;
+    justify-content: center;
     padding: 12px;
-    gap: 12px;
   }
   
   .lang-group {
-    min-width: 40%;
+    flex: initial;
+    width: calc(50% - 40px);
     justify-content: center;
   }
-  
-  .select-wrapper { max-width: 100%; }
   
   .editor-panel textarea { font-size: 20px; }
 }
@@ -560,7 +561,7 @@ main {
 
   <header>
     <h1>
-       <span class="material-icons" style="font-size: 32px; color: var(--primary); margin-right: 8px;">translate</span>
+       <img src="logo.svg" alt="PokeTranslate Logo" class="site-logo">
        <span>Poke</span>Translate
     </h1>
   </header>
@@ -569,7 +570,7 @@ main {
     <form action="/translate" method="GET" class="translate-card">
       
       <div class="language-toolbar">
-        <div class="lang-group">
+        <div class="lang-group" style="justify-content: flex-start;">
           <div class="select-wrapper">
             <select name="from_language" id="from_language">
               <% languageOptions.forEach(lang => { %>
@@ -606,8 +607,6 @@ main {
           <textarea id="input" name="input" placeholder="Enter text" spellcheck="false"><%= text %></textarea>
         </div>
         
-        <div class="vertical-divider"></div>
-
         <div class="editor-panel output-panel">
           <textarea id="output" readonly placeholder="Translation"><%= translation %></textarea>
         </div>
@@ -625,148 +624,112 @@ main {
   </div>
 
   <script>
-(function() {
-    'use strict';
+  (function() {
+      'use strict';
 
-    // 1. Cache DOM Elements
-    const DOM = {
-        swapBtn: document.getElementById('swapBtn'),
-        from: document.getElementById('from_language'),
-        to: document.getElementById('to_language'),
-        input: document.getElementById('input'),
-        output: document.getElementById('output'),
-        textareas: document.querySelectorAll('textarea')
-    };
+      const DOM = {
+          swapBtn: document.getElementById('swapBtn'),
+          from: document.getElementById('from_language'),
+          to: document.getElementById('to_language'),
+          input: document.getElementById('input'),
+          output: document.getElementById('output'),
+          textareas: document.querySelectorAll('textarea')
+      };
 
-     if (!DOM.from || !DOM.to || !DOM.input || !DOM.output) {
-        console.warn("Translation script paused: Required DOM elements are missing.");
-        return;
-    }
+      if (!DOM.from || !DOM.to || !DOM.input || !DOM.output) return;
 
-     const debounce = (func, delay) => {
-        let timeoutId;
-        return (...args) => {
-            clearTimeout(timeoutId);
-            timeoutId = setTimeout(() => func(...args), delay);
-        };
-    };
+      // Local Storage Setup
+      const STORAGE_KEYS = { FROM: 'poke_trans_from', TO: 'poke_trans_to' };
 
-    // 3. Auto-resize Textareas
-    const resize = (el) => {
-        if (!el) return;
-        el.style.height = 'auto'; // Reset height to recalculate scrollHeight
-        el.style.height = `${el.scrollHeight}px`;
-    };
+      const loadPreferences = () => {
+          const savedFrom = localStorage.getItem(STORAGE_KEYS.FROM);
+          const savedTo = localStorage.getItem(STORAGE_KEYS.TO);
+          if (savedFrom) DOM.from.value = savedFrom;
+          if (savedTo) DOM.to.value = savedTo;
+      };
 
-    const initTextareas = () => {
-        DOM.textareas.forEach(el => {
-            el.addEventListener('input', () => resize(el));
-            resize(el); // Initial resize on load
-        });
-    };
+      const savePreferences = () => {
+          localStorage.setItem(STORAGE_KEYS.FROM, DOM.from.value);
+          localStorage.setItem(STORAGE_KEYS.TO, DOM.to.value);
+      };
 
-    // 4. Local Storage Logic
-    const STORAGE_KEYS = {
-        FROM: 'translate_pref_from',
-        TO: 'translate_pref_to'
-    };
+      // Debounce utility to prevent spamming translation requests
+      const debounce = (func, delay) => {
+          let timeoutId;
+          return (...args) => {
+              clearTimeout(timeoutId);
+              timeoutId = setTimeout(() => func(...args), delay);
+          };
+      };
 
-    const loadPreferences = () => {
-        const savedFrom = localStorage.getItem(STORAGE_KEYS.FROM);
-        const savedTo = localStorage.getItem(STORAGE_KEYS.TO);
-        
-        if (savedFrom) DOM.from.value = savedFrom;
-        if (savedTo) DOM.to.value = savedTo;
-    };
+      // Auto-resize logic
+      const resize = (el) => {
+          if (!el) return;
+          el.style.height = 'auto';
+          el.style.height = `${el.scrollHeight}px`;
+      };
 
-    const savePreferences = () => {
-        localStorage.setItem(STORAGE_KEYS.FROM, DOM.from.value);
-        localStorage.setItem(STORAGE_KEYS.TO, DOM.to.value);
-    };
+      DOM.textareas.forEach(el => {
+          el.addEventListener('input', () => resize(el));
+          resize(el);
+      });
 
-    // 5. Translation Logic (using async/await)
-    const fetchTranslation = async () => {
-        const text = DOM.input.value.trim();
-        
-        // Don't translate empty text
-        if (!text) {
-            DOM.output.value = "";
-            resize(DOM.output);
-            return;
-        }
+      // Async Translation Fetch
+      const fetchTranslation = async () => {
+          const text = DOM.input.value.trim();
+          
+          if (!text) {
+              DOM.output.value = "";
+              resize(DOM.output);
+              return;
+          }
 
-        const queryParams = new URLSearchParams({
-            from_language: DOM.from.value,
-            to_language: DOM.to.value,
-            input: text
-        });
+          const queryParams = new URLSearchParams({
+              from_language: DOM.from.value,
+              to_language: DOM.to.value,
+              input: text
+          });
 
-        try {
-            const response = await fetch(`/translate?${queryParams}`);
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            
-            const html = await response.text();
-            
-            // Parse the returned HTML to extract the output value
-            const doc = new DOMParser().parseFromString(html, 'text/html');
-            const newOut = doc.getElementById('output');
-            
-            if (newOut) {
-                DOM.output.value = newOut.value;
-                resize(DOM.output);
-            }
-        } catch (error) {
-            console.error("Translation request failed:", error);
-        }
-    };
+          try {
+              const response = await fetch(`/translate?${queryParams}`);
+              if (!response.ok) throw new Error('Network response failed');
+              
+              const html = await response.text();
+              const doc = new DOMParser().parseFromString(html, 'text/html');
+              const newOut = doc.getElementById('output');
+              
+              if (newOut) {
+                  DOM.output.value = newOut.value;
+                  resize(DOM.output);
+              }
+          } catch (error) {
+              console.error("Translation Error:", error);
+          }
+      };
 
-    // Create a debounced version of the fetch function (waits 300ms after user stops typing)
-    const debouncedTranslate = debounce(fetchTranslation, 300);
+      const debouncedTranslate = debounce(fetchTranslation, 300);
 
-    // 6. Handle Language Dropdown Changes
-    const handleLanguageChange = () => {
-        savePreferences();
-        fetchTranslation(); // Trigger translation immediately when dropdown changes
-    };
+      // Event Listeners
+      DOM.from.addEventListener('change', () => { savePreferences(); fetchTranslation(); });
+      DOM.to.addEventListener('change', () => { savePreferences(); fetchTranslation(); });
+      DOM.input.addEventListener('input', debouncedTranslate);
 
-    // 7. Handle Swap Button Click
-    const handleSwap = (e) => {
-        e.preventDefault();
-        
-        // Swap values
-        [DOM.from.value, DOM.to.value] = [DOM.to.value, DOM.from.value];
-        [DOM.input.value, DOM.output.value] = [DOM.output.value, DOM.input.value];
-        
-        // Save new selections to local storage
-        savePreferences();
-        
-        // Resize textareas to fit the swapped text
-        resize(DOM.input);
-        resize(DOM.output);
-        
-        // Fetch new translation for the newly swapped text
-        fetchTranslation();
-    };
+      if (DOM.swapBtn) {
+          DOM.swapBtn.addEventListener('click', (e) => {
+              e.preventDefault();
+              [DOM.from.value, DOM.to.value] = [DOM.to.value, DOM.from.value];
+              [DOM.input.value, DOM.output.value] = [DOM.output.value, DOM.input.value];
+              
+              savePreferences();
+              resize(DOM.input);
+              resize(DOM.output);
+              fetchTranslation();
+          });
+      }
 
-    // 8. Initialization Master Function
-    const init = () => {
-        loadPreferences(); // Load saved languages BEFORE adding listeners
-        initTextareas();
-
-        // Attach Event Listeners
-        if (DOM.swapBtn) {
-            DOM.swapBtn.addEventListener('click', handleSwap);
-        }
-
-        DOM.input.addEventListener('input', debouncedTranslate);
-        DOM.from.addEventListener('change', handleLanguageChange);
-        DOM.to.addEventListener('change', handleLanguageChange);
-    };
-
-    // Run the app setup
-    init();
-
-})();
+      // Init
+      loadPreferences();
+  })();
   </script>
 </body>
 </html>
