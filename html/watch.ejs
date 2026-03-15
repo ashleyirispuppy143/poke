@@ -4335,66 +4335,81 @@ const vid = document.getElementById("video");
 
   <% } %>
 <% } catch (error) { %>
-  <!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video Loading Failed</title>
+    <title>Video unavailable</title>
     <style>
-         @import url('https://p.poketube.fun/https://fonts.bunny.net/css?family=roboto:400,500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap');
 
         body {
             margin: 0;
             padding: 0;
             font-family: 'Roboto', Arial, sans-serif;
-            background-color: #000000;  
+            background-color: #0f0f0f; /* YouTube's exact dark mode background */
             color: #f1f1f1;
             display: flex;
             align-items: center;
             justify-content: center;
             min-height: 100vh;
-        }
-
-        #error-container {
-            display: block; 
-            max-width: 500px;
-            width: 90%;
             text-align: center;
         }
 
-        .error-icon {
-            width: 64px;
-            height: 64px;
-            fill: #ffffff;
+        #error-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            max-width: 500px;
+            width: 90%;
+            padding: 24px;
+        }
+
+        .error-image {
+            width: 250px;
             margin-bottom: 24px;
+            user-select: none; /* Prevents highlighting the image */
         }
 
         h1 {
             font-size: 24px;
             font-weight: 400; 
-            margin: 0 0 12px 0;
-            color: #ffffff;
+            line-height: 32px;
+            margin: 0 0 16px 0;
+            color: #f1f1f1;
         }
 
         .subtitle {
-            font-size: 15px;
+            font-size: 16px;
             color: #aaaaaa;
-            margin-bottom: 20px;
+            margin: 0 0 8px 0;
             line-height: 1.5;
         }
 
+        .system-note {
+            font-size: 14px;
+            background-color: rgba(255, 255, 255, 0.05);
+            padding: 10px 16px;
+            border-radius: 8px;
+            color: #aaaaaa;
+            margin: 16px 0 24px 0;
+            line-height: 1.4;
+            max-width: 400px;
+        }
+
         .might-be {
-            font-size: 15px;
+            font-size: 16px;
             color: #f1f1f1;
             margin-bottom: 16px;
+            font-weight: 500;
         }
 
         .reasons-list {
             text-align: left;
             display: inline-block; 
             padding: 0;
-            margin: 0 auto 36px auto;
+            margin: 0 auto 32px auto;
             font-size: 14px;
             color: #aaaaaa;
             line-height: 1.6;
@@ -4402,24 +4417,25 @@ const vid = document.getElementById("video");
         }
 
         .reasons-list li {
-            margin-bottom: 10px;
+            margin-bottom: 12px;
             position: relative;
-            padding-left: 18px;
+            padding-left: 20px;
         }
 
         .reasons-list li:last-child {
             margin-bottom: 0;
         }
 
-         .reasons-list li::before {
+        .reasons-list li::before {
             content: "•";
             position: absolute;
             left: 0;
             color: #717171; 
+            font-size: 16px;
         }
 
         a {
-            color: #3ea6ff; 
+            color: #3ea6ff; /* YouTube's blue link color */
             text-decoration: none;
         }
 
@@ -4427,18 +4443,29 @@ const vid = document.getElementById("video");
             text-decoration: underline;
         }
 
+        /* Modern YouTube Button Container */
+        .action-buttons {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
         /* Shared button styles */
         .btn {
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             border: none;
-            padding: 9px 16px;
+            padding: 0 16px;
+            height: 36px;
             font-size: 14px;
             font-weight: 500;
-            border-radius: 18px; 
+            border-radius: 18px; /* Modern YouTube pill shape */
             cursor: pointer;
-            transition: background-color 0.2s, opacity 0.2s;
+            transition: background-color 0.2s ease, opacity 0.2s;
             font-family: 'Roboto', Arial, sans-serif;
-            margin: 0 6px 32px 6px;
             text-decoration: none;
             box-sizing: border-box;
         }
@@ -4457,7 +4484,7 @@ const vid = document.getElementById("video");
             background-color: #d9d9d9;
         }
 
-        /* Secondary Button (Translucent dark mode style) */
+        /* Secondary Button (Translucent) */
         .btn-secondary {
             background-color: rgba(255, 255, 255, 0.1);
             color: #f1f1f1;
@@ -4467,10 +4494,21 @@ const vid = document.getElementById("video");
             background-color: rgba(255, 255, 255, 0.2);
         }
 
+        /* Error output from backend */
+        .backend-error {
+            font-size: 14px;
+            color: #ff4e45; /* YouTube red error color */
+            margin-bottom: 24px;
+            background: rgba(255, 78, 69, 0.1);
+            padding: 8px 16px;
+            border-radius: 8px;
+        }
+
         .report-issue {
-            font-size: 13px;
+            font-size: 12px;
             color: #717171;
             line-height: 1.6;
+            margin-top: 16px;
         }
 
         .report-issue a {
@@ -4487,20 +4525,23 @@ const vid = document.getElementById("video");
 
     <noscript>
         <style>
-            #error-container { display: block !important; }
+            #error-container { display: flex !important; }
         </style>
     </noscript>
 
     <div id="error-container">
-        <img src="<%- media_proxy_url %>/proxy?url=https://www.youtube.com/img/desktop/unavailable/unavailable_video_dark_theme.png">
-        <svg class="error-icon" viewBox="0 0 24 24">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
-        </svg> 
+        <img class="error-image" src="https://image-proxy.poketube.fun/proxy?url=https://www.youtube.com/img/desktop/unavailable/unavailable_video_dark_theme.png" alt="Video Unavailable">
+        
         <h1>Video unavailable</h1>
+        
         <p class="subtitle">
             We cannot load this video (╥﹏╥)
         </p>
-        <p class="subtitle"> NOTE: VIDEOS MARKED AS MADE FOR KIDS VIDEOS DONT WORK FOR NOW! THEY WILL WORK SOON!</p>
+
+        <div class="system-note">
+            <strong>Note:</strong> Videos marked as "Made for Kids" do not work currently, but will be supported soon.
+        </div>
+
         <div class="might-be">It might be because...</div>
 
         <ul class="reasons-list">
@@ -4510,10 +4551,10 @@ const vid = document.getElementById("video");
             <li>Companion may be restarting.</li>
             <li>The video ID provided is invalid.</li>
             <li>YouTube may have blocked Poke.</li>
-            <li>Upstream bug (check <a href="https://github.com/iv-org/invidious/issues" target="_blank">Invidious</a> or <a href="https://github.com/LuanRT/YouTube.js/issues" target="_blank">YouTube.js</a> issues).</li>
+            <li>Upstream bug (check <a href="https://github.com/iv-org/invidious/issues" target="_blank">Invidious</a> or <a href="https://github.com/LuanRT/YouTube.js/issues" target="_blank">YouTube.js</a>).</li>
         </ul>
 
-        <div>
+        <div class="action-buttons">
             <button class="btn btn-primary" onclick="window.location.reload();">
                 Try Again
             </button>
@@ -4523,10 +4564,11 @@ const vid = document.getElementById("video");
             </a>
         </div>
 
-<% if (VideoData && VideoData.error) { %>
-  <%= VideoData.error %>
-<% } %> 
-        
+        <% if (VideoData && VideoData.error) { %>
+            <div class="backend-error">
+                <%= VideoData.error %>
+            </div>
+        <% } %> 
 
         <div class="report-issue">
             This incident has been auto-reported.<br>
