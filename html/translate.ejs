@@ -295,8 +295,10 @@
         
         --text-main: #e8eaed;
         --text-muted: #9aa0a6;
-        --accent-blue: #8ab4f8;
-        --accent-blue-bg: rgba(138, 180, 248, 0.24);
+        
+         --accent-pink: #ffabcc;
+        --accent-hover: #f88ab4;
+        --accent-bg: rgba(255, 171, 204, 0.15); 
         
         --radius-card: 12px;
         --nav-height: 64px;
@@ -378,7 +380,7 @@
     }
     .tab-btn:hover { background: var(--bg-hover); color: var(--text-main); }
     
-    .tab-btn.active { color: var(--accent-blue); }
+    .tab-btn.active { color: var(--accent-pink); }
     .tab-btn.active::after {
         content: '';
         position: absolute;
@@ -386,7 +388,7 @@
         left: 0;
         right: 0;
         height: 3px;
-        background: var(--accent-blue);
+        background: var(--accent-pink);
         border-radius: 3px 3px 0 0;
     }
 
@@ -399,7 +401,7 @@
 
     .swap-btn {
         background: transparent; border: none; color: var(--text-muted);
-        height: 40px; width: 40px; display: flex; align-items: center;
+        height: 40px; width: 40px; display: flex; align-items: center; text-decoration: none;
         justify-content: center; border-radius: 50%; cursor: pointer;
         margin: 0 12px; transition: transform 0.2s;
     }
@@ -472,19 +474,26 @@
         border-radius: 6px; cursor: pointer; display: flex; align-items: center;
     }
     .lang-item:hover { background: var(--bg-hover); }
-    .lang-item.selected { background: var(--accent-blue-bg); color: var(--accent-blue); font-weight: 500; }
+    .lang-item.selected { background: var(--accent-bg); color: var(--accent-pink); font-weight: 500; }
     .lang-item .check-icon { margin-right: 12px; font-size: 18px; opacity: 0; }
     .lang-item.selected .check-icon { opacity: 1; }
- 
-    .no-js-select { display: none; } /* Hidden by default when JS is active */
+    
+    /* Sparkle Icon for Detect Language */
+    .sparkle-icon { font-size: 16px; margin-left: 6px; color: var(--text-muted); }
+    .lang-item.selected .sparkle-icon { color: var(--accent-pink); }
+
+    /* ---------------------------------
+       No-JS Fallback Base Styling
+       --------------------------------- */
+    .no-js-fallback { display: none; } /* Hidden by default when JS is active */
     .fallback-controls { display: none; }
     
     .translate-submit-btn {
-        background: var(--accent-blue); color: #171717;
+        background: var(--accent-pink); color: #171717;
         border: none; padding: 10px 24px; border-radius: 4px;
         font-weight: 500; font-size: 14px; cursor: pointer; transition: background 0.2s;
     }
-    .translate-submit-btn:hover { background: #aecbfa; }
+    .translate-submit-btn:hover { background: var(--accent-hover); }
 
     @media (max-width: 800px) {
         .editor-grid { grid-template-columns: 1fr; }
@@ -500,23 +509,42 @@
             .no-js-fallback {
                 display: flex;
                 align-items: center;
-                gap: 16px;
-                padding: 12px 24px;
+                min-height: 48px;
+                padding: 0 16px;
                 border-bottom: 1px solid var(--divider-subtle);
                 background: var(--bg-surface);
-                overflow-x: auto;
+            }
+
+            .select-wrapper {
+                position: relative;
+                display: flex;
+                align-items: center;
+                flex: 1;
             }
 
             .no-js-select {
-                display: block;
-                padding: 10px;
-                background: var(--bg-body);
-                color: var(--text-main);
-                border: 1px solid var(--border-color);
-                border-radius: 6px;
+                appearance: none;
+                background: transparent;
+                color: var(--accent-pink);
+                border: none;
                 font-size: 14px;
-                outline: none;
+                font-weight: 500;
+                padding: 10px 32px 10px 12px;
+                border-radius: 4px;
                 cursor: pointer;
+                outline: none;
+                width: 100%;
+                transition: background 0.2s;
+            }
+            .no-js-select option { background: var(--bg-surface); color: var(--text-main); font-weight: normal; }
+            .no-js-select:hover { background: var(--bg-hover); }
+            
+            .select-arrow {
+                position: absolute;
+                right: 8px;
+                pointer-events: none;
+                font-size: 18px;
+                color: var(--text-muted);
             }
 
             .fallback-controls {
@@ -534,7 +562,8 @@
     <header>
         <h1>
             <img src="/static/logo-poke.svg" alt="Poke LOGO" class="site-logo">
-         </h1>
+            PokeTranslate
+        </h1>
     </header>
 
     <main>
@@ -551,25 +580,35 @@
             </div>
 
             <div class="no-js-fallback">
-                <select name="from_language" id="native_from" class="no-js-select">
-                    <% languageOptions.forEach(lang => { %>
-                        <option value="<%= lang.code %>" <%= (typeof from_language !== 'undefined' ? from_language : 'auto') === lang.code ? 'selected' : '' %>>
-                            <%= lang.name %>
-                        </option>
-                    <% }); %>
-                </select>
-
-                <span class="no-js-select material-icons" style="color: var(--text-muted);">arrow_forward</span>
-
-                <select name="to_language" id="native_to" class="no-js-select">
-                    <% languageOptions.forEach(lang => { %>
-                        <% if(lang.code !== 'auto') { %>
-                            <option value="<%= lang.code %>" <%= (typeof to_language !== 'undefined' ? to_language : 'en') === lang.code ? 'selected' : '' %>>
+                <div class="select-wrapper">
+                    <select name="from_language" id="native_from" class="no-js-select">
+                        <% languageOptions.forEach(lang => { %>
+                            <option value="<%= lang.code %>" <%= (typeof from_language !== 'undefined' ? from_language : 'auto') === lang.code ? 'selected' : '' %>>
                                 <%= lang.name %>
                             </option>
-                        <% } %>
-                    <% }); %>
-                </select>
+                        <% }); %>
+                    </select>
+                    <span class="material-icons select-arrow">expand_more</span>
+                </div>
+
+                <a href="?from_language=<%= typeof to_language !== 'undefined' ? to_language : 'en' %>&to_language=<%= typeof from_language !== 'undefined' ? from_language : 'auto' %>&input=<%= encodeURIComponent(typeof text !== 'undefined' ? text : '') %>" 
+                   class="swap-btn material-icons" 
+                   title="Swap languages">
+                   swap_horiz
+                </a>
+
+                <div class="select-wrapper">
+                    <select name="to_language" id="native_to" class="no-js-select">
+                        <% languageOptions.forEach(lang => { %>
+                            <% if(lang.code !== 'auto') { %>
+                                <option value="<%= lang.code %>" <%= (typeof to_language !== 'undefined' ? to_language : 'en') === lang.code ? 'selected' : '' %>>
+                                    <%= lang.name %>
+                                </option>
+                            <% } %>
+                        <% }); %>
+                    </select>
+                    <span class="material-icons select-arrow">expand_more</span>
+                </div>
             </div>
 
             <div class="editor-grid">
@@ -745,11 +784,18 @@
                     const icon = document.createElement('span');
                     icon.className = 'material-icons check-icon';
                     icon.textContent = 'check';
+                    btn.appendChild(icon);
                     
                     const textNode = document.createTextNode(lang.name);
-                    
-                    btn.appendChild(icon);
                     btn.appendChild(textNode);
+                    
+                    // Add Sparkle Icon if it's "Detect Language"
+                    if(lang.code === 'auto') {
+                        const sparkle = document.createElement('span');
+                        sparkle.className = 'material-icons sparkle-icon';
+                        sparkle.textContent = 'auto_awesome';
+                        btn.appendChild(sparkle);
+                    }
                     
                     btn.onclick = () => selectLanguage(state.modalMode, lang.code);
                     DOM.modalGrid.appendChild(btn);
@@ -759,7 +805,8 @@
 
         DOM.searchInput.addEventListener('input', (e) => renderModalGrid(e.target.value));
 
-        DOM.swapBtn.addEventListener('click', () => {
+        DOM.swapBtn.addEventListener('click', (e) => {
+            e.preventDefault(); // Prevent the fallback anchor link from firing in JS mode
             let safeFrom = state.currentFrom === 'auto' ? 'en' : state.currentFrom;
             
             const temp = safeFrom;
