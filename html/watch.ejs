@@ -1155,7 +1155,7 @@ Offical Discord Server! :3
   let hasHD = false, hasUHD = false, has4K = false;
 
   VideoData.adaptiveFormats.forEach(format => {
-    if (format.itag == '136' || format.itag == '298') {
+    if (format.itag == '247' || format.itag == '298') {
       itag = '140';
       hasHD = true;
     }
@@ -1186,7 +1186,7 @@ Offical Discord Server! :3
   <% if (isvidious) { %>
     <% if (!qua) { %>
       <% if (hasHD) { 
-        let hdItag = '136';
+        let hdItag = '247';
         VideoData.adaptiveFormats.forEach(format => {
           if (format.itag == '298') hdItag = '298';
         });
@@ -1339,7 +1339,7 @@ Offical Discord Server! :3
    let statsForNerdsQuality = null;
 
   if (!qua) {
-     let hdItag = '136';
+     let hdItag = '247';
     VideoData.adaptiveFormats.forEach(format => {
       if (format.itag == '298') {
         hdItag = '298';
@@ -1495,7 +1495,7 @@ Offical Discord Server! :3
     <% } %> 
     
     <% 
-    let nonhditag = '136'; // Default itag
+    let nonhditag = '247'; // Default itag
     VideoData.adaptiveFormats.forEach(format => {
         if (format.itag == '298') {
             nonhditag = '298';
