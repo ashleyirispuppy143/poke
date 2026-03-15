@@ -625,85 +625,148 @@ main {
   </div>
 
   <script>
-  (function(){
-    // swap button logic
-    const swapBtn = document.getElementById('swapBtn');
-    if(swapBtn){
-      swapBtn.addEventListener('click', function(e){
-        e.preventDefault();
-        const from = document.getElementById('from_language');
-        const to   = document.getElementById('to_language');
-        const inp  = document.getElementById('input');
-        const out  = document.getElementById('output');
-        
-        // Value swap
-        [from.value, to.value] = [to.value, from.value];
-        [inp.value, out.value] = [out.value, inp.value];
-        
-        // Trigger change events for logic hooks
-        from.dispatchEvent(new Event('change'));
-        to.dispatchEvent(new Event('change'));
-        inp.dispatchEvent(new Event('input'));
-      });
+(function() {
+    'use strict';
+
+    // 1. Cache DOM Elements
+    const DOM = {
+        swapBtn: document.getElementById('swapBtn'),
+        from: document.getElementById('from_language'),
+        to: document.getElementById('to_language'),
+        input: document.getElementById('input'),
+        output: document.getElementById('output'),
+        textareas: document.querySelectorAll('textarea')
+    };
+
+     if (!DOM.from || !DOM.to || !DOM.input || !DOM.output) {
+        console.warn("Translation script paused: Required DOM elements are missing.");
+        return;
     }
 
-    // auto-resize textareas
-    const textareas = document.querySelectorAll('textarea');
-    const resize = (el) => {
-        el.style.height = 'auto';
-        el.style.height = el.scrollHeight + 'px';
+     const debounce = (func, delay) => {
+        let timeoutId;
+        return (...args) => {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => func(...args), delay);
+        };
     };
-    
-    textareas.forEach(el => {
-      el.addEventListener('input', () => resize(el));
-      // initial resize
-      resize(el);
-    });
 
-    // live-translate logic
-    if(window.fetch){
-      const from  = document.getElementById('from_language');
-      const to    = document.getElementById('to_language');
-      const input = document.getElementById('input');
-      const output= document.getElementById('output');
-      let timer;
+    // 3. Auto-resize Textareas
+    const resize = (el) => {
+        if (!el) return;
+        el.style.height = 'auto'; // Reset height to recalculate scrollHeight
+        el.style.height = `${el.scrollHeight}px`;
+    };
 
-      function translateNow(){
+    const initTextareas = () => {
+        DOM.textareas.forEach(el => {
+            el.addEventListener('input', () => resize(el));
+            resize(el); // Initial resize on load
+        });
+    };
+
+    // 4. Local Storage Logic
+    const STORAGE_KEYS = {
+        FROM: 'translate_pref_from',
+        TO: 'translate_pref_to'
+    };
+
+    const loadPreferences = () => {
+        const savedFrom = localStorage.getItem(STORAGE_KEYS.FROM);
+        const savedTo = localStorage.getItem(STORAGE_KEYS.TO);
+        
+        if (savedFrom) DOM.from.value = savedFrom;
+        if (savedTo) DOM.to.value = savedTo;
+    };
+
+    const savePreferences = () => {
+        localStorage.setItem(STORAGE_KEYS.FROM, DOM.from.value);
+        localStorage.setItem(STORAGE_KEYS.TO, DOM.to.value);
+    };
+
+    // 5. Translation Logic (using async/await)
+    const fetchTranslation = async () => {
+        const text = DOM.input.value.trim();
+        
         // Don't translate empty text
-        if(!input.value.trim()) {
-            output.value = "";
+        if (!text) {
+            DOM.output.value = "";
+            resize(DOM.output);
             return;
         }
 
-        const q = new URLSearchParams({
-          from_language: from.value,
-          to_language: to.value,
-          input: input.value
+        const queryParams = new URLSearchParams({
+            from_language: DOM.from.value,
+            to_language: DOM.to.value,
+            input: text
         });
-        
-        fetch(`/translate?${q}`)
-          .then(r => r.text())
-          .then(html => {
+
+        try {
+            const response = await fetch(`/translate?${queryParams}`);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            
+            const html = await response.text();
+            
+            // Parse the returned HTML to extract the output value
             const doc = new DOMParser().parseFromString(html, 'text/html');
             const newOut = doc.getElementById('output');
-            if(newOut){
-              output.value = newOut.value;
-              resize(output);
+            
+            if (newOut) {
+                DOM.output.value = newOut.value;
+                resize(DOM.output);
             }
-          })
-          .catch(() => {/* ignore */});
-      }
+        } catch (error) {
+            console.error("Translation request failed:", error);
+        }
+    };
 
-      // Debounce typing (Wait 200ms after typing stops)
-      input.addEventListener('input', ()=>{
-        clearTimeout(timer);
-        timer = setTimeout(translateNow, 200);
-      });
-      
-      from.addEventListener('change', translateNow);
-      to.addEventListener('change', translateNow);
-    }
-  })();
+    // Create a debounced version of the fetch function (waits 300ms after user stops typing)
+    const debouncedTranslate = debounce(fetchTranslation, 300);
+
+    // 6. Handle Language Dropdown Changes
+    const handleLanguageChange = () => {
+        savePreferences();
+        fetchTranslation(); // Trigger translation immediately when dropdown changes
+    };
+
+    // 7. Handle Swap Button Click
+    const handleSwap = (e) => {
+        e.preventDefault();
+        
+        // Swap values
+        [DOM.from.value, DOM.to.value] = [DOM.to.value, DOM.from.value];
+        [DOM.input.value, DOM.output.value] = [DOM.output.value, DOM.input.value];
+        
+        // Save new selections to local storage
+        savePreferences();
+        
+        // Resize textareas to fit the swapped text
+        resize(DOM.input);
+        resize(DOM.output);
+        
+        // Fetch new translation for the newly swapped text
+        fetchTranslation();
+    };
+
+    // 8. Initialization Master Function
+    const init = () => {
+        loadPreferences(); // Load saved languages BEFORE adding listeners
+        initTextareas();
+
+        // Attach Event Listeners
+        if (DOM.swapBtn) {
+            DOM.swapBtn.addEventListener('click', handleSwap);
+        }
+
+        DOM.input.addEventListener('input', debouncedTranslate);
+        DOM.from.addEventListener('change', handleLanguageChange);
+        DOM.to.addEventListener('change', handleLanguageChange);
+    };
+
+    // Run the app setup
+    init();
+
+})();
   </script>
 </body>
 </html>
