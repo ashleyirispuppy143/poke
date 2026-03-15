@@ -4524,6 +4524,11 @@ const vid = document.getElementById("video");
             </a>
         </div>
 
+<% if (VideoData && VideoData.error) { %>
+  <%= VideoData.error %>
+<% } %> 
+        
+
         <div class="report-issue">
             This incident has been auto-reported.<br>
             Still none of these somehow? <a href="https://codeberg.org/ashleyirispuppy/poke/issues/new/choose" target="_blank">Report an issue here</a>.
