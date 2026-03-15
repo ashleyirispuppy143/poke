@@ -1156,7 +1156,7 @@ Offical Discord Server! :3
 
   VideoData.adaptiveFormats.forEach(format => {
     if (format.itag == '247' || format.itag == '302') {
-      itag = '140';
+      itag = '271';
       hasHD = true;
     }
     if (format.itag == '400' || format.itag == '271') {
@@ -1170,7 +1170,7 @@ Offical Discord Server! :3
 
 <% if (itag && qua !== "medium" && itag !== '18') { %>
   <audio  id="aud" preload>
-    <source src="<%=u%>/companion/latest_version?id=<%=VideoData.videoId%>&itag=<%=itag%>&local=true" type="video/mp4" />
+    <source src="<%=u%>/companion/latest_version?id=<%=VideoData.videoId%>&itag=271&local=true" type="video/mp4" />
   </audio>
 <% } else { %>
   <audio id="aud"></audio>
@@ -1427,7 +1427,7 @@ Offical Discord Server! :3
   <% } %>
      <br> 
          <% if (qua !== "medium") { %>
-         Audio Format: 140 (AUDIO_QUALITY_MEDIUM) m4a | aac | 44100hz | STEREO(2channels)<br>
+         Audio Format: 140 (AUDIO_QUALITY_MEDIUM) webm | aac | 44100hz | STEREO(2channels)<br>
                                     <% } %>   
      
         PokeEncryptID: <%=sha384(VideoData.videoId)%> <br>
