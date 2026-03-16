@@ -6,7 +6,8 @@
 
   <link rel="manifest" href="/manifest.json" />
   <link rel="icon" href="css/yt-ukraine.svg" type="image/svg+xml" />
-  <meta name="theme-color" content="#0c0c0c" />
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#202124" media="(prefers-color-scheme: dark)" />
   <meta name="description" content="Poke! Calendar — zero-JS calendar" />
   <meta property="og:title" content="Poke! Calendar" />
   <meta property="og:description" content="Navigate months without JavaScript needed" />
@@ -19,53 +20,47 @@
 
   <style>
     :root {
-      /* Dark Theme Palette (Default) */
-      --bg: #09090b;
-      --surface-1: #18181b;
-      --surface-2: #27272a;
-      --surface-hover: #3f3f46;
-      --surface-glass: rgba(9, 9, 11, 0.75);
-      --border: #3f3f46;
-      --border-light: #27272a;
+      /* Google Calendar Light Theme Vibe */
+      --bg: #ffffff;
+      --surface-1: #ffffff;
+      --surface-2: #f1f3f4;
+      --border: #dadce0;
       
-      --text-main: #f4f4f5;
-      --text-muted: #a1a1aa;
+      --text-main: #3c4043;
+      --text-muted: #70757a;
       
-      --accent: #8b5cf6;
-      --accent-hover: #7c3aed;
-      --accent-glow: rgba(139, 92, 246, 0.25);
+      --accent: #1a73e8; /* Google Blue */
+      --accent-hover: #1b66c9;
+      --accent-faint: #e8f0fe;
       
-      --today-bg: rgba(139, 92, 246, 0.15);
-      --today-border: #8b5cf6;
+      --today-bg: #1a73e8;
+      --today-text: #ffffff;
 
-      /* Spacing & Layout */
-      --radius-lg: 16px;
-      --radius-md: 10px;
-      --radius-sm: 6px;
-      --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.1);
-      --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.4);
-      --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+      --cell-hover: #f1f3f4;
+      --shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+      --font-body: "Google Sans", Roboto, Arial, sans-serif;
     }
 
-    @media (prefers-color-scheme: light) {
+    @media (prefers-color-scheme: dark) {
       :root {
-        --bg: #f4f4f5;
-        --surface-1: #ffffff;
-        --surface-2: #f4f4f5;
-        --surface-hover: #e4e4e7;
-        --surface-glass: rgba(255, 255, 255, 0.85);
-        --border: #e4e4e7;
-        --border-light: #f4f4f5;
+        /* Google Calendar Dark Theme Vibe */
+        --bg: #202124;
+        --surface-1: #202124;
+        --surface-2: #303134;
+        --border: #5f6368;
         
-        --text-main: #18181b;
-        --text-muted: #71717a;
+        --text-main: #e8eaed;
+        --text-muted: #9aa0a6;
         
-        --accent: #6d28d9;
-        --accent-hover: #5b21b6;
-        --accent-glow: rgba(109, 40, 217, 0.15);
+        --accent: #8ab4f8;
+        --accent-hover: #aecbfa;
+        --accent-faint: rgba(138, 180, 248, 0.12);
         
-        --today-bg: #f5f3ff;
-        --today-border: #8b5cf6;
+        --today-bg: #8ab4f8;
+        --today-text: #202124;
+
+        --cell-hover: #3c4043;
+        --shadow: 0 1px 2px 0 rgba(0,0,0,0.3), 0 1px 3px 1px rgba(0,0,0,0.15);
       }
     }
 
@@ -79,61 +74,42 @@
       min-height: 100vh;
       display: flex;
       flex-direction: column;
-      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
     }
 
-    /* Navbar */
+    /* Top Navbar */
     .navbar {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      padding: 1rem 5%;
-      background: var(--surface-glass);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
+      padding: 12px 24px;
+      background: var(--surface-1);
       border-bottom: 1px solid var(--border);
       position: sticky;
       top: 0;
       z-index: 100;
     }
 
-    .brand img { 
-      height: 24px; 
-      width: auto; 
-      display: block; 
-    }
+    .brand img { height: 28px; width: auto; display: block; }
     
     .year-info {
       display: flex;
-      gap: 1.25rem;
-      font-size: 0.85rem;
+      gap: 1.5rem;
+      font-size: 0.875rem;
       color: var(--text-muted);
-      background: var(--surface-2);
-      padding: 0.5rem 1rem;
-      border-radius: 100px;
-      border: 1px solid var(--border);
     }
-    .year-info span strong { 
-      color: var(--text-main); 
-      font-weight: 600; 
-    }
+    .year-info span strong { color: var(--text-main); font-weight: 500; }
 
     /* Main Container */
     .main-wrapper {
       width: 100%;
-      max-width: 1100px;
-      margin: 2rem auto;
-      padding: 0 1.5rem;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 1rem 2rem;
       flex: 1;
-    }
-
-    .calendar-card {
-      background: var(--surface-1);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      box-shadow: var(--shadow-sm);
-      padding: 2rem;
+      display: flex;
+      flex-direction: column;
     }
 
     /* Controls Header */
@@ -142,13 +118,13 @@
       flex-wrap: wrap;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 2rem;
+      margin-bottom: 1rem;
       gap: 1rem;
     }
 
     .month-title {
-      font-size: 1.75rem;
-      font-weight: 700;
+      font-size: 1.5rem;
+      font-weight: 400;
       margin: 0;
       color: var(--text-main);
     }
@@ -156,116 +132,115 @@
     .date-form {
       display: flex;
       gap: 0.5rem;
+      align-items: center;
     }
 
     .picker-input {
-      background: var(--bg);
+      background: transparent;
       border: 1px solid var(--border);
       color: var(--text-main);
-      padding: 0.5rem 1rem;
-      border-radius: var(--radius-md);
+      padding: 8px 12px;
+      border-radius: 4px;
       font-family: inherit;
-      font-size: 0.9rem;
+      font-size: 0.875rem;
       outline: none;
       transition: border-color 0.2s;
     }
     .picker-input:focus { border-color: var(--accent); }
 
-    /* Buttons */
     .btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      padding: 0.5rem 1.25rem;
-      border-radius: var(--radius-md);
+      padding: 8px 16px;
+      border-radius: 4px;
       font-weight: 500;
       text-decoration: none;
-      transition: all 0.2s ease;
+      transition: background 0.2s;
       cursor: pointer;
-      border: none;
-      font-size: 0.9rem;
+      border: 1px solid transparent;
+      font-size: 0.875rem;
+      font-family: inherit;
     }
 
     .btn-primary {
       background: var(--accent);
-      color: white;
-      box-shadow: 0 4px 12px var(--accent-glow);
+      color: white !important; /* Force white for light/dark mode consistency */
     }
-    .btn-primary:hover { 
-      background: var(--accent-hover); 
-    }
+    .btn-primary:hover { background: var(--accent-hover); }
 
     .btn-secondary {
-      background: var(--surface-2);
-      color: var(--text-main);
-      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--accent);
+      border-color: var(--border);
     }
     .btn-secondary:hover { 
-      background: var(--surface-hover); 
+      background: var(--surface-2); 
     }
 
     /* Calendar Grid */
     .calendar-table {
       width: 100%;
-      border-collapse: separate;
-      border-spacing: 8px; /* Clean gap between squares */
+      border-collapse: collapse; /* Removes gaps between cells */
       table-layout: fixed;
+      flex: 1; /* Pushes footer down */
     }
 
     .calendar-table th {
-      padding-bottom: 1rem;
+      padding: 12px 0;
       color: var(--text-muted);
       font-size: 0.75rem;
-      font-weight: 600;
+      font-weight: 500;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.3px;
+      border-bottom: 1px solid var(--border);
     }
 
     .calendar-table td {
-      height: clamp(90px, 12vw, 130px);
-      background: var(--surface-2);
-      border-radius: var(--radius-md);
-      padding: 10px;
-      transition: all 0.2s ease;
+      height: clamp(100px, 14vh, 180px);
+      vertical-align: top;
+      background: var(--surface-1);
+      border: 1px solid var(--border);
+      padding: 4px;
+      transition: background 0.1s ease;
       position: relative;
-      border: 1px solid var(--border-light);
-    }
-
-    /* Day Number */
-    .day-num {
-      position: absolute;
-      top: 10px;
-      right: 12px;
-      font-weight: 500;
-      font-size: 0.95rem;
-      color: var(--text-main);
     }
 
     /* Empty Cells */
     .calendar-table td:empty {
-      background: transparent;
-      border-color: transparent;
+      background: var(--surface-2); /* Slight grey to differentiate empty days */
       pointer-events: none;
     }
 
     /* Interactive States */
-    .calendar-table td:not(:empty) { 
-      cursor: pointer; 
-    }
-    
+    .calendar-table td:not(:empty) { cursor: pointer; }
     .calendar-table td:not(:empty):hover {
-      background: var(--surface-hover);
-      border-color: var(--border);
+      background: var(--cell-hover);
+    }
+    .calendar-table td:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: -2px;
+    }
+
+    /* Day Number Positioning */
+    .day-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      font-weight: 400;
+      font-size: 0.875rem;
+      margin: 4px;
+      color: var(--text-main);
     }
 
     /* Today Modifier */
-    .calendar-table td.today {
+    .calendar-table td.today .day-num {
       background: var(--today-bg);
-      border: 1px solid var(--today-border);
-    }
-    .calendar-table td.today .day-num { 
-      color: var(--accent); 
-      font-weight: 700;
+      color: var(--today-text);
+      font-weight: 500;
     }
 
     /* Note Indicator */
@@ -276,9 +251,8 @@
       background-color: var(--accent);
       border-radius: 50%;
       position: absolute;
-      bottom: 12px;
-      left: 12px;
-      box-shadow: 0 0 10px var(--accent-glow);
+      top: 14px;
+      right: 14px;
     }
     
     .calendar-table td.has-note .note-indicator { display: block; }
@@ -287,91 +261,64 @@
     .nav-footer {
       display: flex;
       justify-content: space-between;
-      margin-top: 2rem;
-      padding-top: 1.5rem;
-      border-top: 1px solid var(--border);
+      margin-top: 1rem;
     }
 
     /* Modal Styling */
     #note-modal {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.6);
-      backdrop-filter: blur(8px);
+      background: rgba(0,0,0,0.4); /* Lighter backdrop */
       display: flex;
       align-items: center;
       justify-content: center;
       z-index: 1000;
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.25s ease;
+      transition: opacity 0.2s;
     }
-    
-    #note-modal.open { 
-      opacity: 1; 
-      pointer-events: auto; 
-    }
+    #note-modal.open { opacity: 1; pointer-events: auto; }
 
     .modal-content {
       background: var(--surface-1);
-      border: 1px solid var(--border);
-      padding: 2rem;
-      border-radius: var(--radius-lg);
-      width: min(90%, 450px);
-      box-shadow: var(--shadow-lg);
-      transform: translateY(10px) scale(0.98);
-      transition: transform 0.25s ease;
+      padding: 24px;
+      border-radius: 8px;
+      width: min(90%, 420px);
+      box-shadow: var(--shadow);
     }
-
-    #note-modal.open .modal-content {
-      transform: translateY(0) scale(1);
-    }
-
     .modal-header { 
-      font-size: 1.25rem; 
-      font-weight: 600; 
-      margin-bottom: 1.25rem; 
+      font-size: 1.125rem; 
+      font-weight: 400; 
+      margin-bottom: 16px; 
       color: var(--text-main); 
     }
-    
     .modal-textarea {
       width: 100%;
-      height: 140px;
-      background: var(--bg);
+      height: 120px;
+      background: transparent;
       border: 1px solid var(--border);
       color: var(--text-main);
-      padding: 1rem;
-      border-radius: var(--radius-md);
-      margin-bottom: 1.5rem;
-      resize: none;
+      padding: 12px;
+      border-radius: 4px;
+      margin-bottom: 24px;
+      resize: vertical;
       font-family: inherit;
-      font-size: 0.95rem;
       outline: none;
-      transition: border-color 0.2s;
     }
-    
     .modal-textarea:focus {
       border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent);
     }
-
-    .modal-actions { 
-      display: flex; 
-      justify-content: flex-end; 
-      gap: 0.75rem; 
-    }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
     /* Mobile Adjustments */
-    @media (max-width: 768px) {
-      .navbar { flex-direction: column; gap: 1rem; }
-      .year-info { width: 100%; justify-content: center; }
-      .calendar-card { padding: 1rem; border-radius: 0; border-left: none; border-right: none; }
-      .main-wrapper { padding: 0; margin: 0; }
-      .calendar-table td { height: 75px; padding: 6px; }
-      .day-num { top: 6px; right: 8px; font-size: 0.85rem; }
-      .note-indicator { bottom: 6px; left: 6px; width: 6px; height: 6px; }
-      .controls { flex-direction: column; align-items: flex-start; }
-      .date-form { width: 100%; }
-      .picker-input { flex: 1; }
+    @media (max-width: 600px) {
+      .main-wrapper { padding: 1rem; }
+      .year-info { width: 100%; justify-content: flex-start; margin-top: 0.5rem; gap: 1rem; flex-wrap: wrap;}
+      .calendar-table td { height: 80px; }
+      .day-num { width: 24px; height: 24px; font-size: 0.8rem; }
+      .month-title { font-size: 1.25rem; }
+      .note-indicator { top: 8px; right: 8px; width: 6px; height: 6px;}
     }
   </style>
 </head>
@@ -391,81 +338,76 @@
   </nav>
 
   <div class="main-wrapper">
-    <div class="calendar-card">
+    <div class="controls">
+      <h2 class="month-title">
+        <%= queryDate.toLocaleString('default', { month: 'long' }) %> <%= year %>
+      </h2>
       
-      <div class="controls">
-        <h2 class="month-title">
-          <%= queryDate.toLocaleString('default', { month: 'long' }) %> <%= year %>
-        </h2>
-        
-        <form action="/calendar" method="get" class="date-form">
-          <input 
-            type="month" 
-            name="date" 
-            value="<%= currentDate.toISOString().slice(0,7) %>" 
-            class="picker-input" 
-            aria-label="Select Month"
-          />
-          <button type="submit" class="btn btn-primary">Go</button>
-        </form>
-      </div>
+      <form action="/calendar" method="get" class="date-form">
+        <input 
+          type="month" 
+          name="date" 
+          value="<%= currentDate.toISOString().slice(0,7) %>" 
+          class="picker-input" 
+          aria-label="Select Month"
+        />
+        <button type="submit" class="btn btn-secondary">Go</button>
+      </form>
+    </div>
 
-      <table class="calendar-table" role="grid" aria-label="Monthly calendar">
-        <thead>
-          <tr>
-            <th scope="col" abbr="Sunday">Sun</th>
-            <th scope="col" abbr="Monday">Mon</th>
-            <th scope="col" abbr="Tuesday">Tue</th>
-            <th scope="col" abbr="Wednesday">Wed</th>
-            <th scope="col" abbr="Thursday">Thu</th>
-            <th scope="col" abbr="Friday">Fri</th>
-            <th scope="col" abbr="Saturday">Sat</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% days.forEach((day, idx) => { %>
-            <% if (idx % 7 === 0) { %><tr><% } %>
+    <table class="calendar-table" role="grid" aria-label="Monthly calendar">
+      <thead>
+        <tr>
+          <th scope="col" abbr="Sunday">Sun</th>
+          <th scope="col" abbr="Monday">Mon</th>
+          <th scope="col" abbr="Tuesday">Tue</th>
+          <th scope="col" abbr="Wednesday">Wed</th>
+          <th scope="col" abbr="Thursday">Thu</th>
+          <th scope="col" abbr="Friday">Fri</th>
+          <th scope="col" abbr="Saturday">Sat</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% days.forEach((day, idx) => { %>
+          <% if (idx % 7 === 0) { %><tr><% } %>
+            
+            <% 
+              const today = new Date();
+              const isToday = day &&
+                day.getDate() === today.getDate() &&
+                day.getMonth() === today.getMonth() &&
+                day.getFullYear() === today.getFullYear();
               
-              <% 
-                const today = new Date();
-                const isToday = day &&
-                  day.getDate() === today.getDate() &&
-                  day.getMonth() === today.getMonth() &&
-                  day.getFullYear() === today.getFullYear();
-                
-                // Format date for JS Data Attribute (YYYY-MM-DD)
-                const dateStr = day ? 
-                   day.getFullYear() + '-' + 
-                   String(day.getMonth() + 1).padStart(2, '0') + '-' + 
-                   String(day.getDate()).padStart(2, '0') 
-                   : '';
-              %>
+              const dateStr = day ? 
+                 day.getFullYear() + '-' + 
+                 String(day.getMonth() + 1).padStart(2, '0') + '-' + 
+                 String(day.getDate()).padStart(2, '0') 
+                 : '';
+            %>
 
-              <td 
-                class="<%= isToday ? 'today' : '' %>" 
-                data-date="<%= dateStr %>"
-                <% if (day) { %> tabindex="0" role="gridcell" <% } %>
-              >
-                <% if (day) { %>
-                  <span class="day-num"><%= day.getDate() %></span>
-                  <div class="note-indicator" title="Has note"></div>
-                <% } %>
-              </td>
+            <td 
+              class="<%= isToday ? 'today' : '' %>" 
+              data-date="<%= dateStr %>"
+              <% if (day) { %> tabindex="0" role="gridcell" <% } %>
+            >
+              <% if (day) { %>
+                <span class="day-num"><%= day.getDate() %></span>
+                <div class="note-indicator" title="Has note"></div>
+              <% } %>
+            </td>
 
-            <% if (idx % 7 === 6) { %></tr><% } %>
-          <% }); %>
-        </tbody>
-      </table>
+          <% if (idx % 7 === 6) { %></tr><% } %>
+        <% }); %>
+      </tbody>
+    </table>
 
-      <div class="nav-footer">
-        <a href="/calendar?date=<%= new Date(year, month - 1, 1).toISOString() %>" class="btn btn-secondary">
-          &larr; Previous
-        </a>
-        <a href="/calendar?date=<%= new Date(year, month + 1, 1).toISOString() %>" class="btn btn-secondary">
-          Next &rarr;
-        </a>
-      </div>
-
+    <div class="nav-footer">
+      <a href="/calendar?date=<%= new Date(year, month - 1, 1).toISOString() %>" class="btn btn-secondary">
+        &larr; Previous
+      </a>
+      <a href="/calendar?date=<%= new Date(year, month + 1, 1).toISOString() %>" class="btn btn-secondary">
+        Next &rarr;
+      </a>
     </div>
   </div>
 
@@ -475,7 +417,7 @@
       <textarea id="note-text" class="modal-textarea" placeholder="Add a reminder or note for this day..."></textarea>
       <div class="modal-actions">
         <button id="close-modal" class="btn btn-secondary">Cancel</button>
-        <button id="save-note" class="btn btn-primary">Save Note</button>
+        <button id="save-note" class="btn btn-primary">Save</button>
       </div>
     </div>
   </div>
@@ -519,7 +461,10 @@
         
         // Format Date for Header
         const dateObj = new Date(activeDateKey);
-        dateDisplay.textContent = dateObj.toLocaleDateString(undefined, { 
+        // Correcting timezone offset so the date displays accurately
+        const localDateObj = new Date(dateObj.getTime() + dateObj.getTimezoneOffset() * 60000);
+        
+        dateDisplay.textContent = localDateObj.toLocaleDateString(undefined, { 
             weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
         });
 
