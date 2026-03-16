@@ -277,8 +277,7 @@
 
     <div class="desktop-only absolute-top-right">
       <div class="gm-search-box">
-         <div class="search-divider"></div>
-        <input type="text" id="d-search" class="search-input" placeholder="Search Poke Maps..." autocomplete="off">
+         <input type="text" id="d-search" class="search-input" placeholder="Search Poke Maps..." autocomplete="off">
         <button class="search-icon-btn"><svg class="icon"><use href="#icon-search"/></svg></button>
       </div>
       <ul id="d-suggestions" class="suggestions"></ul>
@@ -406,72 +405,117 @@
 
   </div>
 </div>
-
+    <script type="text/javascript">
+	<!--//--><![CDATA[//><!-- 
+	/**
+	 * @licstart The following is the entire license notice for the JavaScript
+	 * code in this page.
+	 *
+	 *  Copyright (C) 2021-2023 POKETUBE (https://github.com/iamashley0/poketube)
+	 *
+	 * The JavaScript code in this page is free software: you can redistribute
+	 * it and/or modify it under the terms of the GNU General Public License
+	 * (GNU GPL) as published by the Free Software Foundation, either version 3
+	 * of the License, or (at your option) any later version.  The code is
+	 * distributed WITHOUT ANY WARRANTY; without even the implied warranty of
+	 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU GPL
+	 * for more details.
+	 *
+	 * As additional permission under GNU GPL version 3 section 7, you may
+	 * distribute non-source (e.g., minimized or compacted) forms of that code
+	 * without the copy of the GNU GPL normally required by section 4, provided
+	 * you include this license notice and a URL through which recipients can
+	 * access the Corresponding Source.
+	 *
+	 * @licend The above is the entire license notice for the JavaScript code
+	 * in this page.
+	 */
+	
+	//--><!]]>
+	</script>
 <script>
 ;(() => {
-  // State (Dark mode is strictly default via CSS, JS manages toggling)
-  const STATE = { lat: 30.41, lon: 72.44, delta: 0.25, layer: 'mapnik', following: false };
-  let PINS = [];
-  try { PINS = JSON.parse(localStorage.getItem('pm_pins') || '[]'); } catch(e){}
-  
-  const EL = (sel) => document.querySelector(sel);
-  
-  // UI References
+  const mapState = { lat: 30.41, lon: 72.44, delta: 0.25, layer: 'mapnik', following: false };
+  let savedPins = [];
+  try { savedPins = JSON.parse(localStorage.getItem('pm_pins') || '[]'); } catch(e){}
+
+  const select = (s) => document.querySelector(s);
+
   const ui = {
-    map: EL('#map'),
-    marker: EL('#center-marker'),
-    // Desktop Nav
-    d_search: EL('#d-search'), d_sug: EL('#d-suggestions'),
-    d_locate: EL('#d-locate'), d_save: EL('#d-save-pin'), d_pinList: EL('#d-pin-list'),
-    d_layer: EL('#d-layer'), d_follow: EL('#d-follow'), d_theme: EL('#d-theme'), d_share: EL('#d-share'),
-    d_mSize: EL('#d-m-size'), d_mColor: EL('#d-m-color'),
-    d_btnPins: EL('#d-btn-pins'), d_btnSet: EL('#d-btn-settings'),
-    popPins: EL('#pop-pins'), popSet: EL('#pop-settings'),
-    // Mobile
-    m_btnSearch: EL('#m-btn-search'),
-    m_search: EL('#m-search'), m_sug: EL('#m-suggestions'),
-    m_locate: EL('#m-btn-locate'), m_pinsBtn: EL('#m-btn-pins'), m_menuBtn: EL('#m-btn-menu'),
-    m_save: EL('#m-save-curr'), m_pinList: EL('#m-pin-list'),
-    m_layer: EL('#m-layer'), m_follow: EL('#m-follow'), m_theme: EL('#m-theme'),
-    sheetSearch: EL('#sheet-search'), sheetPins: EL('#sheet-pins'), sheetMenu: EL('#sheet-menu')
+    mapFrame: select('#map'),
+    centerMarker: select('#center-marker'),
+    desktopSearch: select('#d-search'),
+    desktopSuggestions: select('#d-suggestions'),
+    desktopLocate: select('#d-locate'),
+    desktopSavePin: select('#d-save-pin'),
+    desktopPinList: select('#d-pin-list'),
+    desktopLayer: select('#d-layer'),
+    desktopFollow: select('#d-follow'),
+    desktopTheme: select('#d-theme'),
+    desktopShare: select('#d-share'),
+    desktopMarkerSize: select('#d-m-size'),
+    desktopMarkerColor: select('#d-m-color'),
+    desktopPinsButton: select('#d-btn-pins'),
+    desktopSettingsButton: select('#d-btn-settings'),
+    pinsPopover: select('#pop-pins'),
+    settingsPopover: select('#pop-settings'),
+    mobileSearchButton: select('#m-btn-search'),
+    mobileSearch: select('#m-search'),
+    mobileSuggestions: select('#m-suggestions'),
+    mobileLocate: select('#m-btn-locate'),
+    mobilePinsButton: select('#m-btn-pins'),
+    mobileMenuButton: select('#m-btn-menu'),
+    mobileSave: select('#m-save-curr'),
+    mobilePinList: select('#m-pin-list'),
+    mobileLayer: select('#m-layer'),
+    mobileFollow: select('#m-follow'),
+    mobileTheme: select('#m-theme'),
+    searchSheet: select('#sheet-search'),
+    pinsSheet: select('#sheet-pins'),
+    menuSheet: select('#sheet-menu')
   };
 
-  // --- MAP CORE ---
-  const updateMap = (push = false) => {
-    STATE.delta = Math.max(0.0005, Math.min(45, STATE.delta));
+  const refreshMap = (pushHistory = false) => {
+    mapState.delta = Math.max(0.0005, Math.min(45, mapState.delta));
     const bbox = {
-      l: (STATE.lon - STATE.delta).toFixed(6),
-      b: (STATE.lat - STATE.delta).toFixed(6),
-      r: (STATE.lon + STATE.delta).toFixed(6),
-      t: (STATE.lat + STATE.delta).toFixed(6)
+      l: (mapState.lon - mapState.delta).toFixed(6),
+      b: (mapState.lat - mapState.delta).toFixed(6),
+      r: (mapState.lon + mapState.delta).toFixed(6),
+      t: (mapState.lat + mapState.delta).toFixed(6)
     };
-    const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox.l}%2C${bbox.b}%2C${bbox.r}%2C${bbox.t}&layer=${STATE.layer}`;
-    if (ui.map.src !== src) ui.map.src = src;
 
-    if (push) {
-      const u = new URL(location);
-      u.searchParams.set('lat', STATE.lat.toFixed(5));
-      u.searchParams.set('lon', STATE.lon.toFixed(5));
-      u.searchParams.set('d', STATE.delta.toFixed(4));
-      u.searchParams.set('l', STATE.layer);
-      history.pushState(STATE, '', u);
+    const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox.l}%2C${bbox.b}%2C${bbox.r}%2C${bbox.t}&layer=${mapState.layer}`;
+    if (ui.mapFrame.src !== src) ui.mapFrame.src = src;
+
+    if (pushHistory) {
+      const url = new URL(location);
+      url.searchParams.set('lat', mapState.lat.toFixed(5));
+      url.searchParams.set('lon', mapState.lon.toFixed(5));
+      url.searchParams.set('d', mapState.delta.toFixed(4));
+      url.searchParams.set('l', mapState.layer);
+      history.pushState(mapState, '', url);
     }
-    
-    // Sync Inputs
-    if(ui.d_layer.value !== STATE.layer) ui.d_layer.value = STATE.layer;
-    if(ui.m_layer.value !== STATE.layer) ui.m_layer.value = STATE.layer;
-    ui.d_follow.checked = STATE.following; ui.m_follow.checked = STATE.following;
+
+    if(ui.desktopLayer.value !== mapState.layer) ui.desktopLayer.value = mapState.layer;
+    if(ui.mobileLayer.value !== mapState.layer) ui.mobileLayer.value = mapState.layer;
+
+    ui.desktopFollow.checked = mapState.following;
+    ui.mobileFollow.checked = mapState.following;
   };
 
-  // --- SEARCH ---
-  let timer;
-  const doSearch = (val, list) => {
-    if (!val || val.length < 3) { list.style.display = 'none'; return; }
-    
-    // Check Coords
-    const m = val.match(/([+-]?\d+\.?\d*)\s*,\s*([+-]?\d+\.?\d*)/);
-    if(m) {
-      const lat = parseFloat(m[1]), lon = parseFloat(m[2]);
+  let searchTimer;
+
+  const performSearch = (value, list) => {
+    if (!value || value.length < 3) {
+      list.style.display = 'none';
+      return;
+    }
+
+    const coords = value.match(/([+-]?\d+\.?\d*)\s*,\s*([+-]?\d+\.?\d*)/);
+    if(coords) {
+      const lat = parseFloat(coords[1]);
+      const lon = parseFloat(coords[2]);
+
       list.innerHTML = `
         <li onclick="goTo(${lat},${lon})">
           <div class="sug-icon"><svg class="icon"><use href="#icon-loc"/></svg></div>
@@ -484,160 +528,264 @@
       return;
     }
 
-    clearTimeout(timer);
-    timer = setTimeout(async () => {
+    clearTimeout(searchTimer);
+
+    searchTimer = setTimeout(async () => {
       try {
-        const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(val)}`);
-        const d = await r.json();
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(value)}`);
+        const data = await res.json();
+
         list.innerHTML = '';
-        if(!d.length) { list.style.display = 'none'; return; }
-        
-        d.slice(0,5).forEach(i => {
-          let parts = i.display_name.split(',');
-          let main = parts[0];
-          let sub = parts.slice(1).join(',').trim();
+        if(!data.length) {
+          list.style.display = 'none';
+          return;
+        }
+
+        data.slice(0,5).forEach(item => {
+          const parts = item.display_name.split(',');
+          const title = parts[0];
+          const subtitle = parts.slice(1).join(',').trim();
 
           const li = document.createElement('li');
           li.innerHTML = `
             <div class="sug-icon"><svg class="icon"><use href="#icon-loc"/></svg></div>
             <div class="sug-text">
-              <span class="sug-title">${main}</span>
-              <span class="sug-sub">${sub}</span>
+              <span class="sug-title">${title}</span>
+              <span class="sug-sub">${subtitle}</span>
             </div>
           `;
-          li.onclick = () => { 
-            goTo(parseFloat(i.lat), parseFloat(i.lon)); 
-            list.style.display = 'none'; 
-            ui.d_search.value = main; ui.m_search.value = main;
-            closeSheets();
+
+          li.onclick = () => {
+            goTo(parseFloat(item.lat), parseFloat(item.lon));
+            list.style.display = 'none';
+            ui.desktopSearch.value = title;
+            ui.mobileSearch.value = title;
+            closeAllPanels();
           };
+
           list.appendChild(li);
         });
+
         list.style.display = 'block';
       } catch(e){}
     }, 400);
   };
-  
-  window.goTo = (lat, lon) => { 
-    STATE.lat = lat; STATE.lon = lon; STATE.following = false; updateMap(true); 
+
+  window.goTo = (lat, lon) => {
+    mapState.lat = lat;
+    mapState.lon = lon;
+    mapState.following = false;
+    refreshMap(true);
   };
 
-  // --- LOCATION & PINS ---
-  let watchId = null;
-  const toggleFollow = () => {
-    if (STATE.following) {
-      STATE.following = false;
-      if (watchId) navigator.geolocation.clearWatch(watchId);
-      updateMap();
+  let geoWatchId = null;
+
+  const toggleFollowLocation = () => {
+    if (mapState.following) {
+      mapState.following = false;
+      if (geoWatchId) navigator.geolocation.clearWatch(geoWatchId);
+      refreshMap();
     } else {
       if (!navigator.geolocation) return alert("Geolocation not supported");
-      STATE.following = true;
-      watchId = navigator.geolocation.watchPosition(
-        p => { STATE.lat = p.coords.latitude; STATE.lon = p.coords.longitude; updateMap(); },
-        e => { STATE.following = false; updateMap(); alert("Location access denied"); },
+
+      mapState.following = true;
+
+      geoWatchId = navigator.geolocation.watchPosition(
+        p => {
+          mapState.lat = p.coords.latitude;
+          mapState.lon = p.coords.longitude;
+          refreshMap();
+        },
+        () => {
+          mapState.following = false;
+          refreshMap();
+          alert("Location access denied");
+        },
         { enableHighAccuracy: true }
       );
-      updateMap();
+
+      refreshMap();
     }
   };
+
   const locateOnce = () => {
-    navigator.geolocation.getCurrentPosition(p => {
-      STATE.lat = p.coords.latitude; STATE.lon = p.coords.longitude; STATE.delta = 0.01;
-      updateMap(true);
-    }, e => alert("Could not locate"));
+    navigator.geolocation.getCurrentPosition(
+      p => {
+        mapState.lat = p.coords.latitude;
+        mapState.lon = p.coords.longitude;
+        mapState.delta = 0.01;
+        refreshMap(true);
+      },
+      () => alert("Could not locate")
+    );
   };
 
-  const renderPins = () => {
-    const html = PINS.length ? PINS.map((p, i) => `
-      <div class="pin-item">
-        <div class="pin-info"><strong>${p.name}</strong><span>${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</span></div>
-        <div class="pin-actions">
-          <button class="pin-btn" onclick="loadPin(${i})">Go</button>
-          <button class="pin-btn del" onclick="delPin(${i})">✕</button>
+  const renderPinList = () => {
+    const html = savedPins.length
+      ? savedPins.map((p, i) => `
+        <div class="pin-item">
+          <div class="pin-info">
+            <strong>${p.name}</strong>
+            <span>${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</span>
+          </div>
+          <div class="pin-actions">
+            <button class="pin-btn" onclick="loadPin(${i})">Go</button>
+            <button class="pin-btn del" onclick="delPin(${i})">✕</button>
+          </div>
         </div>
-      </div>
-    `).join('') : '<div style="text-align:center; opacity:0.6; padding:20px; font-size:14px">No saved pins</div>';
-    
-    ui.d_pinList.innerHTML = html;
-    ui.m_pinList.innerHTML = html;
+      `).join('')
+      : '<div style="text-align:center; opacity:0.6; padding:20px; font-size:14px">No saved pins</div>';
+
+    ui.desktopPinList.innerHTML = html;
+    ui.mobilePinList.innerHTML = html;
   };
 
-  window.loadPin = (i) => { STATE.lat = PINS[i].lat; STATE.lon = PINS[i].lon; STATE.layer = PINS[i].layer || 'mapnik'; updateMap(true); closeSheets(); };
-  window.delPin = (i) => { if(confirm("Remove pin?")){ PINS.splice(i,1); localStorage.setItem('pm_pins', JSON.stringify(PINS)); renderPins(); } };
-  
-  const savePin = () => {
+  window.loadPin = (i) => {
+    mapState.lat = savedPins[i].lat;
+    mapState.lon = savedPins[i].lon;
+    mapState.layer = savedPins[i].layer || 'mapnik';
+    refreshMap(true);
+    closeAllPanels();
+  };
+
+  window.delPin = (i) => {
+    if(confirm("Remove pin?")){
+      savedPins.splice(i,1);
+      localStorage.setItem('pm_pins', JSON.stringify(savedPins));
+      renderPinList();
+    }
+  };
+
+  const saveCurrentPin = () => {
     const name = prompt("Name this location:", "New Place");
     if(name) {
-      PINS.unshift({ name, lat: STATE.lat, lon: STATE.lon, layer: STATE.layer });
-      localStorage.setItem('pm_pins', JSON.stringify(PINS));
-      renderPins();
+      savedPins.unshift({
+        name,
+        lat: mapState.lat,
+        lon: mapState.lon,
+        layer: mapState.layer
+      });
+
+      localStorage.setItem('pm_pins', JSON.stringify(savedPins));
+      renderPinList();
     }
   };
 
-  // --- SETTINGS ---
-  const updateMarker = () => {
-    document.documentElement.style.setProperty('--marker-size', ui.d_mSize.value + 'px');
-    document.documentElement.style.setProperty('--marker-color', ui.d_mColor.value);
-  };
-  ui.d_mSize.oninput = updateMarker; ui.d_mColor.oninput = updateMarker;
-
-  const applyTheme = (t) => {
-    document.body.classList.toggle('light-mode', t === 'light');
-    ui.d_theme.value = t; ui.m_theme.value = t;
+  const updateMarkerStyle = () => {
+    document.documentElement.style.setProperty('--marker-size', ui.desktopMarkerSize.value + 'px');
+    document.documentElement.style.setProperty('--marker-color', ui.desktopMarkerColor.value);
   };
 
-  // --- UI TOGGLES ---
-  const closeSheets = () => {
+  ui.desktopMarkerSize.oninput = updateMarkerStyle;
+  ui.desktopMarkerColor.oninput = updateMarkerStyle;
+
+  const setTheme = (theme) => {
+    document.body.classList.toggle('light-mode', theme === 'light');
+    ui.desktopTheme.value = theme;
+    ui.mobileTheme.value = theme;
+  };
+
+  const closeAllPanels = () => {
     document.querySelectorAll('.bottom-sheet').forEach(s => s.classList.remove('open'));
     document.querySelectorAll('.popover').forEach(p => p.classList.remove('open'));
-    ui.d_btnPins.classList.remove('active'); ui.d_btnSet.classList.remove('active');
-  };
-  const toggleSheet = (s) => { const o = s.classList.contains('open'); closeSheets(); if(!o) s.classList.add('open'); };
-  const togglePop = (p, btn) => { 
-    const o = p.classList.contains('open'); 
-    closeSheets(); 
-    if(!o) { p.classList.add('open'); btn.classList.add('active'); }
+
+    ui.desktopPinsButton.classList.remove('active');
+    ui.desktopSettingsButton.classList.remove('active');
   };
 
-  // --- LISTENERS ---
-  ui.d_search.oninput = (e) => doSearch(e.target.value, ui.d_sug);
-  ui.m_search.oninput = (e) => doSearch(e.target.value, ui.m_sug);
-  
-  ui.d_locate.onclick = locateOnce; ui.m_locate.onclick = locateOnce;
-  ui.d_save.onclick = savePin; ui.m_save.onclick = savePin;
-  ui.d_share.onclick = () => { navigator.clipboard.writeText(location.href); alert("Link copied!"); };
-  
-  ui.d_layer.onchange = (e) => { STATE.layer = e.target.value; updateMap(true); };
-  ui.m_layer.onchange = (e) => { STATE.layer = e.target.value; updateMap(true); };
-  
-  ui.d_follow.onchange = toggleFollow; ui.m_follow.onchange = toggleFollow;
-  ui.d_theme.onchange = (e) => applyTheme(e.target.value); ui.m_theme.onchange = (e) => applyTheme(e.target.value);
-  
-  // Desktop Nav Toggles
-  ui.d_btnPins.onclick = (e) => { e.stopPropagation(); togglePop(ui.popPins, ui.d_btnPins); };
-  ui.d_btnSet.onclick = (e) => { e.stopPropagation(); togglePop(ui.popSet, ui.d_btnSet); };
-  ui.popPins.onclick = (e) => e.stopPropagation();
-  ui.popSet.onclick = (e) => e.stopPropagation();
+  const toggleSheet = (sheet) => {
+    const open = sheet.classList.contains('open');
+    closeAllPanels();
+    if(!open) sheet.classList.add('open');
+  };
 
-  // Mobile Toggles
-  ui.m_btnSearch.onclick = () => { toggleSheet(ui.sheetSearch); setTimeout(() => ui.m_search.focus(), 100); };
-  ui.m_pinsBtn.onclick = () => toggleSheet(ui.sheetPins);
-  ui.m_menuBtn.onclick = () => toggleSheet(ui.sheetMenu);
-  
+  const togglePopover = (popover, button) => {
+    const open = popover.classList.contains('open');
+    closeAllPanels();
+
+    if(!open) {
+      popover.classList.add('open');
+      button.classList.add('active');
+    }
+  };
+
+  ui.desktopSearch.oninput = e => performSearch(e.target.value, ui.desktopSuggestions);
+  ui.mobileSearch.oninput = e => performSearch(e.target.value, ui.mobileSuggestions);
+
+  ui.desktopLocate.onclick = locateOnce;
+  ui.mobileLocate.onclick = locateOnce;
+
+  ui.desktopSavePin.onclick = saveCurrentPin;
+  ui.mobileSave.onclick = saveCurrentPin;
+
+  ui.desktopShare.onclick = () => {
+    navigator.clipboard.writeText(location.href);
+    alert("Link copied!");
+  };
+
+  ui.desktopLayer.onchange = e => {
+    mapState.layer = e.target.value;
+    refreshMap(true);
+  };
+
+  ui.mobileLayer.onchange = e => {
+    mapState.layer = e.target.value;
+    refreshMap(true);
+  };
+
+  ui.desktopFollow.onchange = toggleFollowLocation;
+  ui.mobileFollow.onchange = toggleFollowLocation;
+
+  ui.desktopTheme.onchange = e => setTheme(e.target.value);
+  ui.mobileTheme.onchange = e => setTheme(e.target.value);
+
+  ui.desktopPinsButton.onclick = e => {
+    e.stopPropagation();
+    togglePopover(ui.pinsPopover, ui.desktopPinsButton);
+  };
+
+  ui.desktopSettingsButton.onclick = e => {
+    e.stopPropagation();
+    togglePopover(ui.settingsPopover, ui.desktopSettingsButton);
+  };
+
+  ui.pinsPopover.onclick = e => e.stopPropagation();
+  ui.settingsPopover.onclick = e => e.stopPropagation();
+
+  ui.mobileSearchButton.onclick = () => {
+    toggleSheet(ui.searchSheet);
+    setTimeout(() => ui.mobileSearch.focus(), 100);
+  };
+
+  ui.mobilePinsButton.onclick = () => toggleSheet(ui.pinsSheet);
+  ui.mobileMenuButton.onclick = () => toggleSheet(ui.menuSheet);
+
   document.body.onclick = (e) => {
-    if(!e.target.closest('.bottom-sheet') && !e.target.closest('.mobile-dock') && !e.target.closest('.mobile-search-fab') && !e.target.closest('.gm-search-box') && !e.target.closest('.gm-tool-stack')) closeSheets();
-    if(!e.target.closest('.gm-search-box') && !e.target.closest('.m-input-container')) { ui.d_sug.style.display='none'; }
+    if(!e.target.closest('.bottom-sheet') &&
+       !e.target.closest('.mobile-dock') &&
+       !e.target.closest('.mobile-search-fab') &&
+       !e.target.closest('.gm-search-box') &&
+       !e.target.closest('.gm-tool-stack')) closeAllPanels();
+
+    if(!e.target.closest('.gm-search-box') &&
+       !e.target.closest('.m-input-container')) {
+      ui.desktopSuggestions.style.display = 'none';
+    }
   };
 
-  // Init
-  const p = new URLSearchParams(location.search);
-  if(p.has('lat')) { STATE.lat = parseFloat(p.get('lat')); STATE.lon = parseFloat(p.get('lon')); }
-  if(p.has('l')) STATE.layer = p.get('l');
-  
-  applyTheme('dark'); // Force dark mode as default startup state
-  renderPins();
-  updateMap();
-  updateMarker();
+  const params = new URLSearchParams(location.search);
+
+  if(params.has('lat')) {
+    mapState.lat = parseFloat(params.get('lat'));
+    mapState.lon = parseFloat(params.get('lon'));
+  }
+
+  if(params.has('l')) mapState.layer = params.get('l');
+
+  setTheme('dark');
+  renderPinList();
+  refreshMap();
+  updateMarkerStyle();
 })();
 </script>
 </body>
