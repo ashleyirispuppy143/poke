@@ -636,19 +636,19 @@ _seekPostTimers: []
       // allow audio.play() through so it can start alongside video. The RAF manager
       // will catch any issues post-startup.
       if (document.visibilityState !== "hidden" && state.audioEverStarted && state.firstPlayCommitted) {
-        // ALWAYS check Video.js spinner — the most reliable indicator of actual buffering.
+        // CHECK 1: Video.js spinner — the most reliable indicator of actual buffering.
         try {
           const vjsEl = video?.el?.();
           if (vjsEl && vjsEl.classList && vjsEl.classList.contains("vjs-waiting")) return Promise.resolve();
         } catch {}
-        // ALWAYS check readyState — even during seek cooldown.
-        // readyState < HAVE_CURRENT_DATA (2) means truly no data at current position.
-        // readyState < HAVE_FUTURE_DATA (3) means not enough to play smoothly.
+        // CHECK 2: readyState — ALWAYS require HAVE_FUTURE_DATA (3).
+        // No exceptions for seek cooldown. readyState 2 means "current frame only,
+        // not enough data for smooth playback" — that IS buffering.
+        // Post-seek retries (playing event kick, guarantee timers, runSync) will
+        // re-attempt audio.play() once readyState recovers.
         const vn = getVideoNode();
         const vrs = vn ? Number(vn.readyState || 0) : 0;
-        if (vrs < HAVE_CURRENT_DATA) return Promise.resolve(); // Hard block: no data at all
-        const inSeekCooldown = now() < state.seekCooldownUntil;
-        if (!inSeekCooldown && vrs < HAVE_FUTURE_DATA) return Promise.resolve(); // Soft block: not enough for smooth play
+        if (vrs < HAVE_FUTURE_DATA) return Promise.resolve();
       }
       return _origAudioPlay();
     };
@@ -703,12 +703,14 @@ _seekPostTimers: []
       if (document.visibilityState === "hidden") { requestAnimationFrame(_tick); return; }
       // Skip during seeking (seek machinery handles sync)
       if (state.seeking || state.seekBuffering || state.restarting) { requestAnimationFrame(_tick); return; }
-      // During seek cooldown, readyState drops briefly — but still check Video.js spinner.
-      // If spinner is visible, audio MUST be stopped regardless of cooldown.
+      // During seek cooldown, check BOTH spinner AND readyState.
+      // If video is not ready to play smoothly, audio must be stopped.
       if (now() < state.seekCooldownUntil) {
         if (!audio.paused && state.audioEverStarted && state.firstPlayCommitted) {
           const _vjsCooldownSpinner = (() => { try { const e = video?.el?.(); return e && e.classList && e.classList.contains("vjs-waiting"); } catch { return false; } })();
-          if (_vjsCooldownSpinner) { _forceStopAudio(); }
+          const _cooldownVn = getVideoNode();
+          const _cooldownRS = _cooldownVn ? Number(_cooldownVn.readyState || 0) : 0;
+          if (_vjsCooldownSpinner || _cooldownRS < HAVE_FUTURE_DATA) { _forceStopAudio(); }
         }
         requestAnimationFrame(_tick); return;
       }
@@ -4972,7 +4974,8 @@ _seekPostTimers: []
     if (state.seeking || state.seekBuffering) return true;
     if (!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) return true;
     // During seek cooldown, don't block audio — stale stall flags from pre-seek may linger
-    if (now() < state.seekCooldownUntil) return false;
+    // During seek cooldown, DON'T skip — still check readyState below.
+    // The old "return false" here was the main loophole letting audio through during buffering.
     // During tab-return grace/immunity/NMPBFN recovery, don't block audio
     if (inBgReturnGrace() || BringBackToTabManager.isLocked() || isTabReturnImmune() || NotMakePlayBackFixingNoticable.isActive()) return false;
 
@@ -4981,7 +4984,7 @@ _seekPostTimers: []
     if (state.startupPhase && !state.firstPlayCommitted) return false;
     if (state.startupKickInFlight) return false;
 
-    if (getVideoPaused() && !isHiddenBackground()) return true;
+    if (getVideoPaused() && !isHiddenBackground() && !(now() < state.seekCooldownUntil)) return true;
 
     // REAL readyState + spinner check — the definitive source of truth.
     // State flags (videoWaiting etc.) can be stale; readyState is always current.
@@ -5225,11 +5228,10 @@ _seekPostTimers: []
 
       // HARD BUFFER GATE — even with force:true, NEVER start audio when video is actively buffering.
       // The Video.js spinner is the single most reliable signal. Also check readyState.
-      // Exceptions: background, startup kick, recent user action (user pressed play),
-      // tab-return immunity (NMPBFN handles sync), seek resume.
+      // Exceptions: background, startup kick, tab-return immunity (NMPBFN handles sync).
+      // NO exception for user actions or seek resume — the wrapper gate handles retries.
       if (document.visibilityState !== "hidden" && state.audioEverStarted && state.firstPlayCommitted &&
-          (now() - state.lastUserActionTime) > 1500 && !isTabReturnImmune() &&
-          !state.seekResumeInFlight && !state.startupKickInFlight) {
+          !isTabReturnImmune() && !state.startupKickInFlight) {
         const _epVn = getVideoNode();
         const _epRS = _epVn ? Number(_epVn.readyState || 0) : 0;
         const _epSpinner = (() => { try { const e = video?.el?.(); return e && e.classList && e.classList.contains("vjs-waiting"); } catch { return false; } })();
