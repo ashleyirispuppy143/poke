@@ -6649,14 +6649,12 @@ try {
   }
 
   // --- rAF buffer monitor: detects video stalls by watching currentTime.
-  // readyState and the "waiting" event both lag behind the actual stall.
-  // The real signal is: video is not paused but currentTime stopped moving.
-  // We detect this within 2 frames (~33ms) and kill audio instantly.
+  // The "waiting" event can lag hundreds of ms. This catches stalls in ~80ms
+  // by detecting that video.currentTime has stopped advancing for 5 frames.
   let _bufMonRafId = null;
   let _bufMonLastVT = -1;
-  let _bufMonLastVTAt = 0;
   let _bufMonStalledFrames = 0;
-  const _BUF_MON_STALL_FRAMES = 2; // 2 consecutive frames with no movement = stalled
+  const _BUF_MON_STALL_FRAMES = 5; // ~83ms at 60fps — avoids false positives on 30fps video
   function bufferMonitorTick() {
     _bufMonRafId = null;
     if (!coupledMode || !audio) { _bufMonRafId = requestAnimationFrame(bufferMonitorTick); return; }
@@ -6668,7 +6666,6 @@ try {
       return;
     }
 
-    // Check if video currentTime is advancing
     let vt = 0;
     try { vt = Number(getVideoNode().currentTime || 0); } catch {}
     const vPaused = getVideoPaused();
@@ -6680,16 +6677,12 @@ try {
     }
     _bufMonLastVT = vt;
 
-    const rs = getVideoReadyState();
-    const isStalled = _bufMonStalledFrames >= _BUF_MON_STALL_FRAMES || rs < 3 || state.videoWaiting;
-
-    if (isStalled && !audio.paused) {
-      // Video is stuck — kill audio NOW
+    if (_bufMonStalledFrames >= _BUF_MON_STALL_FRAMES && !audio.paused) {
+      // Video currentTime frozen for ~80ms — it's buffering. Kill audio.
       try { audio.volume = 0; } catch {}
       try { audio.pause(); } catch {}
       if (!state.videoStallAudioPaused) {
         state.videoStallAudioPaused = true;
-        state.videoWaiting = true;
         state.stallAudioPausedSince = now();
         state.bufferHoldIntendedPlaying = state.intendedPlaying;
         state.stallAudioResumeHoldUntil = now() + MIN_STALL_AUDIO_RESUME_MS;
@@ -6712,13 +6705,11 @@ try {
       state.lastHeartbeatAt = nowTs;
 
       // --- audio/video sync enforcement: if audio is playing but video is
-      // buffering (readyState < 3 or videoWaiting), kill audio immediately.
-      // This is the heartbeat safety net — catches anything the event handlers missed.
-      if (coupledMode && audio && !audio.paused && document.visibilityState !== "hidden") {
-        const _hbRS = getVideoReadyState();
-        if (state.videoWaiting || _hbRS < 3) {
-          try { audio.volume = 0; } catch {}
-          try { audio.pause(); } catch {}
+      // stalled (videoWaiting flag set by events or rAF monitor), kill audio.
+      if (coupledMode && audio && !audio.paused && document.visibilityState !== "hidden" && state.videoWaiting) {
+        try { audio.volume = 0; } catch {}
+        try { audio.pause(); } catch {}
+        if (!state.videoStallAudioPaused) {
           state.videoStallAudioPaused = true;
           state.bufferHoldIntendedPlaying = state.intendedPlaying;
         }
