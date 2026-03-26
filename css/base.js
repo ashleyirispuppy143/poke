@@ -486,15 +486,22 @@ _allowAudioTimeWrite: false,
 _seekPostTimers: []
   };
 
-  // Gate audio.play() — block during seeking/seekBuffering and while video is buffering.
-  // This is the single chokepoint: no code path can play audio while video is stalled.
+  // Gate audio.play() — the single chokepoint for ALL audio playback.
+  // No code path can play audio while video is stalled/buffering.
   if (audio && typeof audio.play === "function") {
     const _origAudioPlay = audio.play.bind(audio);
     audio.play = function() {
       if (state.seeking || state.seekBuffering) return Promise.resolve();
-      // Block audio while video is buffering (visible tab only —
-      // in background, video can't render so audio should keep going)
-      if (state.videoWaiting && document.visibilityState !== "hidden") return Promise.resolve();
+      // Block audio while video is buffering — check both our state flag AND
+      // the actual video readyState (belt-and-suspenders: the flag can briefly
+      // go stale between "playing" and the next "waiting" event).
+      if (document.visibilityState !== "hidden") {
+        if (state.videoWaiting) return Promise.resolve();
+        try {
+          const rs = Number(getVideoNode().readyState || 0);
+          if (rs < 3) return Promise.resolve(); // < HAVE_FUTURE_DATA = still buffering
+        } catch {}
+      }
       return _origAudioPlay();
     };
   }
@@ -3926,6 +3933,8 @@ _seekPostTimers: []
     if (!state.intendedPlaying) return;
     if (userPauseLockActive() || mediaSessionForcedPauseActive()) return;
     if (state.seeking || state.restarting || state.syncing) return;
+    // Never force audio while video is buffering
+    if (state.videoWaiting || state.videoStallAudioPaused) return;
     const vPaused = getVideoPaused();
     const aPaused = !!audio.paused;
     if (!vPaused && !aPaused) { state.audioPausedSince = 0; return; }
@@ -5858,11 +5867,11 @@ try {
 
     let vReady = fastBuffered, aReady = fastBuffered;
     if (!fastBuffered) {
-      // Slow path: wait for readyState ≥ 3 (parallel, not serial)
-      [vReady, aReady] = await Promise.all([
-        waitForReadyStateOrCanPlay(v, 3, SEEK_READY_TIMEOUT_MS),
-                                           waitForReadyStateOrCanPlay(audio, 3, SEEK_READY_TIMEOUT_MS)
-      ]);
+      // Wait for video readyState first — don't block video on audio buffering.
+      // Audio will start independently as soon as it's ready.
+      vReady = await waitForReadyStateOrCanPlay(v, 3, SEEK_READY_TIMEOUT_MS);
+      // Quick check audio — if already ready, great; if not, don't block video
+      try { aReady = Number(audio.readyState || 0) >= 3; } catch { aReady = false; }
     }
 
     if (!state.seeking || state.seekId !== currentSeekId) return;
@@ -5949,20 +5958,26 @@ try {
         cancelActiveFade();
         await ensureUnmutedIfNotUserMuted().catch(() => {});
 
-        // Fast path: if audio is already playing and near the right position,
-        // just ensure video is playing — skip full playTogether to avoid glitches.
-        const _audioAlreadySynced = coupledMode && audio && !audio.paused &&
-        Math.abs((Number(audio.currentTime) || 0) - (Number(video.currentTime()) || 0)) < 0.3;
-        if (_audioAlreadySynced) {
-          // Audio kept playing through seek (buffered fast path). Just kick video.
-          if (getVideoPaused()) execProgrammaticVideoPlay();
-          // Restore audio volume smoothly if needed
-          const _tv = targetVolFromVideo();
-          if (audio.volume < _tv - 0.05 && _tv > 0) {
-            softUnmuteAudio(100).catch(() => {});
+        // Start video immediately — don't wait for audio to be ready
+        if (getVideoPaused()) execProgrammaticVideoPlay();
+
+        // Start audio: sync position, zero volume, play, then fade up
+        if (coupledMode && audio) {
+          const _seekVt = Number(video.currentTime()) || 0;
+          if (isFinite(_seekVt)) {
+            state._allowAudioTimeWrite = true;
+            try { audio.currentTime = _seekVt; } catch {}
+            state._allowAudioTimeWrite = false;
           }
-        } else if (state.seekId === currentSeekId || !state.seeking) {
-          await playTogether().catch(() => {});
+          try { audio.volume = 0; } catch {}
+          clearAudioPauseLocks();
+          if (audio.paused) {
+            execProgrammaticAudioPlay({ squelchMs: 300, force: true, minGapMs: 0 })
+              .then(ok => { if (ok) softUnmuteAudio(120).catch(() => {}); })
+              .catch(() => {});
+          } else {
+            softUnmuteAudio(120).catch(() => {});
+          }
         }
       }
       // Post-seek audio guarantee with aggressive retry windows
@@ -5972,7 +5987,7 @@ try {
         state._seekPostTimers = [];
       }
       const _seekGuaranteeSession = state.playSessionId;
-      [200, 500, 1000, 2000].forEach(delay => {
+      [100, 300, 700, 1500].forEach(delay => {
         const tid = setTimeout(() => {
           if (state.playSessionId !== _seekGuaranteeSession) return;
           if (!state.intendedPlaying || state.seeking || state.restarting) return;
@@ -6648,7 +6663,18 @@ try {
       const elapsed = nowTs - state.lastHeartbeatAt;
       state.lastHeartbeatAt = nowTs;
 
-      // (loop attribute is now native — no enforcement needed)
+      // --- audio/video sync enforcement: if audio is playing but video is
+      // buffering (readyState < 3 or videoWaiting), kill audio immediately.
+      // This is the heartbeat safety net — catches anything the event handlers missed.
+      if (coupledMode && audio && !audio.paused && document.visibilityState !== "hidden") {
+        const _hbRS = getVideoReadyState();
+        if (state.videoWaiting || _hbRS < 3) {
+          try { audio.volume = 0; } catch {}
+          try { audio.pause(); } catch {}
+          state.videoStallAudioPaused = true;
+          state.bufferHoldIntendedPlaying = state.intendedPlaying;
+        }
+      }
 
       // --- non-coupled MQM enforcement
       // If user paused in non-coupled mode, ensure video stays paused every heartbeat.
@@ -7714,18 +7740,10 @@ try {
       if (!state.intendedPlaying || state.restarting) return;
       if (!state.startupPrimed || state.startupKickInFlight || (state.startupPhase && !state.firstPlayCommitted)) return;
 
-      // Don't stall-pause audio during tab-return immunity or near end of video
-      // (near-end stalls resolve into "ended" almost immediately, so pausing audio
-      // just creates an audible gap right before the natural stop).
-      let _nearEnd = false;
-      try {
-        const _dur = Number(video.duration()) || 0;
-        const _ct = Number(video.currentTime()) || 0;
-        if (_dur > 1 && _ct > _dur - 2.5) _nearEnd = true;
-      } catch {}
-      // During NMPBFN recovery/settling, don't stall-pause audio — NMPBFN owns playback
-      if (coupledMode && audio && !audio.paused && !state.seeking && !state.seekResumeInFlight && !state.seekBuffering && !(now() < state.seekCooldownUntil) && !(state.tabReturnImmuneUntil > now()) && !_nearEnd && !NotMakePlayBackFixingNoticable.isActive() && !(now() < state.audioStartGraceUntil)) {
-        // Immediately pause audio on video stall — no delay
+      // Immediately kill audio whenever video is buffering. No exceptions —
+      // tab-return immunity, audioStartGrace, NMPBFN, near-end, none of it matters.
+      // The audio.play() wrapper also blocks replay, so this is belt-and-suspenders.
+      if (coupledMode && audio && !audio.paused && !state.seeking && !state.seekResumeInFlight && !state.seekBuffering) {
         if (state._stallAudioPauseTimer) { clearTimeout(state._stallAudioPauseTimer); state._stallAudioPauseTimer = null; }
         state.videoStallAudioPaused = true;
         state.stallAudioPausedSince = now();
@@ -8070,7 +8088,7 @@ try {
     };
     const onAudioPause = () => {
       try { MakeSureAudioIsNotCuttingOrWeird.onPause(); } catch {}
-      if (isTabReturnImmune() && state.intendedPlaying &&
+      if (isTabReturnImmune() && state.intendedPlaying && !state.videoWaiting &&
         !(state.userPauseIntentPresetAt > 0 && (now() - state.userPauseIntentPresetAt) < 2000)) {
         try { if (audio && audio.paused) audio.play().catch(() => {}); } catch {}
         return;
