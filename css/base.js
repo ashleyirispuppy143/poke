@@ -6655,26 +6655,48 @@ try {
         scheduleSync();
   }
 
-  // --- rAF buffer monitor: checks video readyState every frame while audio is playing.
-  // The "waiting" event fires LATE — the browser can visibly buffer for hundreds of ms
-  // before dispatching it. This catches the stall within one frame (~16ms).
+  // --- rAF buffer monitor: detects video stalls by watching currentTime.
+  // readyState and the "waiting" event both lag behind the actual stall.
+  // The real signal is: video is not paused but currentTime stopped moving.
+  // We detect this within 2 frames (~33ms) and kill audio instantly.
   let _bufMonRafId = null;
+  let _bufMonLastVT = -1;
+  let _bufMonLastVTAt = 0;
+  let _bufMonStalledFrames = 0;
+  const _BUF_MON_STALL_FRAMES = 2; // 2 consecutive frames with no movement = stalled
   function bufferMonitorTick() {
     _bufMonRafId = null;
-    if (!coupledMode || !audio) return;
-    // Only monitor when audio is audible in foreground
+    if (!coupledMode || !audio) { _bufMonRafId = requestAnimationFrame(bufferMonitorTick); return; }
+
     if (audio.paused || document.visibilityState === "hidden") {
-      // Re-arm: check again next frame in case audio resumes
+      _bufMonStalledFrames = 0;
+      _bufMonLastVT = -1;
       _bufMonRafId = requestAnimationFrame(bufferMonitorTick);
       return;
     }
+
+    // Check if video currentTime is advancing
+    let vt = 0;
+    try { vt = Number(getVideoNode().currentTime || 0); } catch {}
+    const vPaused = getVideoPaused();
+
+    if (!vPaused && _bufMonLastVT >= 0 && vt === _bufMonLastVT) {
+      _bufMonStalledFrames++;
+    } else {
+      _bufMonStalledFrames = 0;
+    }
+    _bufMonLastVT = vt;
+
     const rs = getVideoReadyState();
-    if (rs < 3 || state.videoWaiting) {
-      // Video can't play — kill audio immediately
+    const isStalled = _bufMonStalledFrames >= _BUF_MON_STALL_FRAMES || rs < 3 || state.videoWaiting;
+
+    if (isStalled && !audio.paused) {
+      // Video is stuck — kill audio NOW
       try { audio.volume = 0; } catch {}
       try { audio.pause(); } catch {}
       if (!state.videoStallAudioPaused) {
         state.videoStallAudioPaused = true;
+        state.videoWaiting = true;
         state.stallAudioPausedSince = now();
         state.bufferHoldIntendedPlaying = state.intendedPlaying;
         state.stallAudioResumeHoldUntil = now() + MIN_STALL_AUDIO_RESUME_MS;
