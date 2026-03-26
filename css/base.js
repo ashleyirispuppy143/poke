@@ -6648,37 +6648,17 @@ try {
         scheduleSync();
   }
 
-  // --- rAF buffer monitor: detects video stalls by watching currentTime.
-  // The "waiting" event can lag hundreds of ms. This catches stalls in ~80ms
-  // by detecting that video.currentTime has stopped advancing for 5 frames.
+  // --- rAF buffer monitor: enforces audio silence while state.videoWaiting is true.
+  // The "waiting" event handler pauses audio immediately, but other code paths can
+  // re-start it before "playing" fires. This monitor runs every frame and re-kills
+  // audio if anything managed to start it while video is still stalled.
   let _bufMonRafId = null;
-  let _bufMonLastVT = -1;
-  let _bufMonStalledFrames = 0;
-  const _BUF_MON_STALL_FRAMES = 5; // ~83ms at 60fps — avoids false positives on 30fps video
   function bufferMonitorTick() {
     _bufMonRafId = null;
     if (!coupledMode || !audio) { _bufMonRafId = requestAnimationFrame(bufferMonitorTick); return; }
 
-    if (audio.paused || document.visibilityState === "hidden") {
-      _bufMonStalledFrames = 0;
-      _bufMonLastVT = -1;
-      _bufMonRafId = requestAnimationFrame(bufferMonitorTick);
-      return;
-    }
-
-    let vt = 0;
-    try { vt = Number(getVideoNode().currentTime || 0); } catch {}
-    const vPaused = getVideoPaused();
-
-    if (!vPaused && _bufMonLastVT >= 0 && vt === _bufMonLastVT) {
-      _bufMonStalledFrames++;
-    } else {
-      _bufMonStalledFrames = 0;
-    }
-    _bufMonLastVT = vt;
-
-    if (_bufMonStalledFrames >= _BUF_MON_STALL_FRAMES && !audio.paused) {
-      // Video currentTime frozen for ~80ms — it's buffering. Kill audio.
+    // Only act when video is confirmed stalled (flag set by "waiting" event)
+    if (state.videoWaiting && !audio.paused && document.visibilityState !== "hidden") {
       try { audio.volume = 0; } catch {}
       try { audio.pause(); } catch {}
       if (!state.videoStallAudioPaused) {
