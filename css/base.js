@@ -488,20 +488,12 @@ _seekPostTimers: []
 
   // Gate audio.play() — the single chokepoint for ALL audio playback.
   // No code path can play audio while video is stalled/buffering.
+  // The rAF buffer monitor sets state.videoWaiting within ~80ms of a stall.
   if (audio && typeof audio.play === "function") {
     const _origAudioPlay = audio.play.bind(audio);
     audio.play = function() {
       if (state.seeking || state.seekBuffering) return Promise.resolve();
-      // Block audio while video is buffering — check both our state flag AND
-      // the actual video readyState (belt-and-suspenders: the flag can briefly
-      // go stale between "playing" and the next "waiting" event).
-      if (document.visibilityState !== "hidden") {
-        if (state.videoWaiting) return Promise.resolve();
-        try {
-          const rs = Number(getVideoNode().readyState || 0);
-          if (rs < 3) return Promise.resolve(); // < HAVE_FUTURE_DATA = still buffering
-        } catch {}
-      }
+      if (state.videoWaiting && document.visibilityState !== "hidden") return Promise.resolve();
       return _origAudioPlay();
     };
   }
