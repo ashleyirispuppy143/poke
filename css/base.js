@@ -6655,6 +6655,39 @@ try {
         scheduleSync();
   }
 
+  // --- rAF buffer monitor: checks video readyState every frame while audio is playing.
+  // The "waiting" event fires LATE — the browser can visibly buffer for hundreds of ms
+  // before dispatching it. This catches the stall within one frame (~16ms).
+  let _bufMonRafId = null;
+  function bufferMonitorTick() {
+    _bufMonRafId = null;
+    if (!coupledMode || !audio) return;
+    // Only monitor when audio is audible in foreground
+    if (audio.paused || document.visibilityState === "hidden") {
+      // Re-arm: check again next frame in case audio resumes
+      _bufMonRafId = requestAnimationFrame(bufferMonitorTick);
+      return;
+    }
+    const rs = getVideoReadyState();
+    if (rs < 3 || state.videoWaiting) {
+      // Video can't play — kill audio immediately
+      try { audio.volume = 0; } catch {}
+      try { audio.pause(); } catch {}
+      if (!state.videoStallAudioPaused) {
+        state.videoStallAudioPaused = true;
+        state.stallAudioPausedSince = now();
+        state.bufferHoldIntendedPlaying = state.intendedPlaying;
+        state.stallAudioResumeHoldUntil = now() + MIN_STALL_AUDIO_RESUME_MS;
+      }
+    }
+    _bufMonRafId = requestAnimationFrame(bufferMonitorTick);
+  }
+  function startBufferMonitor() {
+    if (!_bufMonRafId && coupledMode) {
+      _bufMonRafId = requestAnimationFrame(bufferMonitorTick);
+    }
+  }
+
   // --- heartbeat: detects device sleep/wake, persistent stalls, and state inconsistency
   function setupHeartbeat() {
     state.lastHeartbeatAt = now();
@@ -9166,6 +9199,7 @@ try {
   setupVisibilityLifecycle();
   setupMediaErrorHandlers();
   setupHeartbeat();
+  startBufferMonitor();
 
   if (coupledMode) {
     try {
