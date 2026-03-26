@@ -3117,6 +3117,7 @@ _seekPostTimers: []
 
 
   const EPS = 1.0;
+  const HAVE_CURRENT_DATA = 2;
   const HAVE_FUTURE_DATA = 3;
   const HAVE_ENOUGH_DATA = 4;
   const STRICT_BUFFER_AHEAD_SEC = 0.25;
