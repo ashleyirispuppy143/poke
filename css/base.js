@@ -374,6 +374,7 @@ document.addEventListener("DOMContentLoaded", () => {
                           visibilityTransitionActive: false,
                           visibilityTransitionUntil: 0,
                           lastVisibilityState: "visible",
+                          previousVisibilityState: "visible",
                           bgPauseSuppressionCount: 0,
                           bgPauseSuppressionResetAt: 0,
                           mediaSessionPauseBlockedUntil: 0,
@@ -3355,11 +3356,15 @@ _seekPostTimers: []
   if (!state.pageFullyLoaded) {
     window.addEventListener("load", () => {
       state.pageFullyLoaded = true;
-      // If the playing event already committed startup (firstPlayCommitted=true),
-      // skip all startup kick machinery. Re-running it after the video is already
-      // playing fine causes a redundant audio seek (audible skip) and state churn.
-      if (state.firstPlayCommitted) {
-        // just make sure startup phase winds down
+      // If startup already succeeded (firstPlayCommitted) OR both media elements
+      // are already playing, skip all startup machinery. Re-running it causes
+      // a redundant audio seek (audible skip) and state churn.
+      const _loadVNode = getVideoNode();
+      const _loadVideoPlaying = _loadVNode && !_loadVNode.paused;
+      const _loadAudioPlaying = coupledMode && audio && !audio.paused;
+      if (state.firstPlayCommitted || (_loadVideoPlaying && _loadAudioPlaying) ||
+          state.startupKickInFlight || state.startupKickDone ||
+          (state.audioEverStarted && _loadAudioPlaying)) {
         if (state.startupPhase) setTimeout(() => { state.startupPhase = false; }, 500);
         return;
       }
@@ -3652,7 +3657,12 @@ _seekPostTimers: []
         // Full tab switch: visibilitychange→hidden then visibilitychange→visible.
         // For alt-tab, media is usually still playing or was only briefly paused.
         // No warm-start / volume zeroing needed — just a quick nudge.
-        const _wasRealTabSwitch = (state.lastVisibilityState === "hidden") ||
+        // use previousVisibilityState — lastVisibilityState is already overwritten
+        // to "visible" by the visibilitychange handler before we get here.
+        // for focus-fires-first browsers: lastVisibilityState is still "hidden"
+        // from the earlier visibilitychange→hidden. both paths covered.
+        const _wasRealTabSwitch = (state.previousVisibilityState === "hidden") ||
+          (state.lastVisibilityState === "hidden") ||
           (now() - (state.visibilityTransitionUntil - VISIBILITY_TRANSITION_MS)) < 500;
 
         if (_wasRealTabSwitch) {
@@ -4409,24 +4419,40 @@ _seekPostTimers: []
     } catch {}
   }
 
+  let _lastSafeSeekAt = 0;
+  let _audioFirstPlayedAt = 0;
   function safeSetAudioTime(t) {
     if (!audio) return;
-    // During immunity (tab return/hide/autoplay), never seek audio.
-    // Seeking flushes the decode buffer and causes replay artifacts.
-    // Let audio continue from its current position — the sync loop
-    // will correct drift after the immunity window expires.
+    // during immunity (tab return/hide/autoplay), never seek audio.
     if ((isTabReturnImmune() || NotMakePlayBackFixingNoticable.shouldBlockSeek()) && state.firstPlayCommitted) return;
     try {
       if (isFinite(t) && t >= 0) {
-        // Never seek audio backward to near 0 when it's already playing
+        // never seek audio backward to near 0 when it's already playing ahead
         if (t < 0.5 && state.firstPlayCommitted && !state.restarting && !isLoopDesired()) {
           const currentAt = Number(audio.currentTime) || 0;
           if (currentAt > 0.5) return;
         }
-        const timeDiff = Math.abs((audio.currentTime || 0) - t);
-        if (timeDiff > 0.05) {
-          audio.currentTime = t;
-        }
+        const currentPos = Number(audio.currentTime) || 0;
+        const timeDiff = Math.abs(currentPos - t);
+
+        // if audio is currently playing and we're in the first 3s of playback,
+        // only seek for really large drift (>1.5s). small drift at startup is
+        // normal — decoders initialize at different speeds. the sync loop
+        // corrects it via rate nudging without any audible skip.
+        const inEarlyPlayback = !audio.paused && _audioFirstPlayedAt > 0 &&
+          (performance.now() - _audioFirstPlayedAt) < 3000;
+        if (inEarlyPlayback && timeDiff < 1.5) return;
+
+        // during startup (audio not yet confirmed playing), use 0.5s threshold
+        const isStartup = state.startupPhase || !state.firstPlayCommitted;
+        const threshold = isStartup ? 0.5 : 0.05;
+        if (timeDiff <= threshold) return;
+
+        // debounce during startup: max one seek per 500ms
+        const _now = performance.now();
+        if (isStartup && (_now - _lastSafeSeekAt) < 500) return;
+        _lastSafeSeekAt = _now;
+        audio.currentTime = t;
       }
     } catch {}
   }
@@ -6294,6 +6320,17 @@ try {
     if (!wantsStartupAutoplay() && !state.intendedPlaying) return;
     if (mediaSessionForcedPauseActive()) return;
     if (state.bgResumeInFlight) return;
+    // both already playing? commit startup right here, skip the kick entirely.
+    // re-calling playTogether when media is already running causes redundant seeks.
+    const _skVN = getVideoNode();
+    if (_skVN && !_skVN.paused && audio && !audio.paused) {
+      state.startupKickDone = true;
+      state.firstPlayCommitted = true;
+      state.intendedPlaying = true;
+      state.audioEverStarted = true;
+      setTimeout(() => { state.startupPhase = false; }, 500);
+      return;
+    }
 
     state.startupKickInFlight = true;
     clearStartupAutoplayRetryTimer();
@@ -6440,6 +6477,20 @@ try {
   function maybePrimeStartup() {
     if (!coupledMode) return;
     if (state.restarting || state.startupPrimed) return;
+    // if both elements are already playing, just commit startup — no priming needed.
+    // calling playTogether/seeking audio when it's already running causes skips.
+    if (state.audioEverStarted && audio && !audio.paused && !getVideoPaused()) {
+      state.startupPrimed = true;
+      clearBufferHold();
+      state.firstSeekDone = true;
+      if (!state.startupKickDone) state.startupKickDone = true;
+      if (!state.firstPlayCommitted) {
+        state.firstPlayCommitted = true;
+        state.intendedPlaying = true;
+      }
+      setTimeout(() => { state.startupPhase = false; }, 500);
+      return;
+    }
     const t0 = Number(video.currentTime()) || 0;
     const primeWait = now() - state.startupPrimeStartedAt;
     const inBg = document.visibilityState === "hidden" || !isWindowFocused();
@@ -8597,6 +8648,8 @@ try {
       });
     };
     const onReadyish = () => {
+      // if startup already committed and audio is playing, nothing to do
+      if (state.firstPlayCommitted && state.audioEverStarted && audio && !audio.paused) return;
       if (!state.firstPlayCommitted && !state.intendedPlaying && !wantsStartupAutoplay()) return;
       maybePrimeStartup();
       if (!state.intendedPlaying || state.restarting || state.seeking) return;
@@ -8611,6 +8664,9 @@ try {
     audio.addEventListener("play", onAudioPlay, { passive: true });
     audio.addEventListener("playing", () => {
       try { UltraStabilizer.onAudioPlaying(); } catch {}
+      // track when audio first started playing — safeSetAudioTime uses this
+      // to avoid seeking during the first 3s of playback
+      if (!_audioFirstPlayedAt) _audioFirstPlayedAt = performance.now();
       // Clear audio stall state — audio has data again
       if (state._stallVideoPauseTimer) { clearTimeout(state._stallVideoPauseTimer); state._stallVideoPauseTimer = null; }
       state.audioWaiting = false;
@@ -9234,6 +9290,7 @@ try {
     } catch {}
     window.addEventListener("visibilitychange", () => {
       const newState = document.visibilityState;
+      state.previousVisibilityState = state.lastVisibilityState;
       state.lastVisibilityState = newState;
       state.visibilityTransitionActive = true;
       state.visibilityTransitionUntil = now() + VISIBILITY_TRANSITION_MS;
@@ -9262,11 +9319,16 @@ try {
             DONTMAKEITDOUBLEPLAY.resetAll();
             const _immVN = getVideoNode();
             if (_immVN && _immVN.paused) { try { _immVN.play().catch(() => {}); } catch {} }
-            if (coupledMode && audio && audio.paused) {
-              const _immVT = (() => { try { return Number(video.currentTime()); } catch { return 0; } })();
-              if (isFinite(_immVT)) safeSetAudioTime(_immVT);
-              try { audio.volume = targetVolFromVideo(); } catch {}
-              try { audio.play().catch(() => {}); } catch {}
+            if (coupledMode && audio) {
+              if (audio.paused) {
+                const _immVT = (() => { try { return Number(video.currentTime()); } catch { return 0; } })();
+                if (isFinite(_immVT)) safeSetAudioTime(_immVT);
+                try { audio.volume = targetVolFromVideo(); } catch {}
+                try { audio.play().catch(() => {}); } catch {}
+              } else {
+                // audio still playing — just verify volume is right, don't seek
+                try { audio.volume = targetVolFromVideo(); } catch {}
+              }
             }
           }
 
@@ -9280,6 +9342,9 @@ try {
           VisibilityGuard.onTabShow();
 
           state.lastBgReturnAt = now();
+          // reset previous visibility so subsequent focus events (within the
+          // same visible session) don't mistake themselves for tab switches
+          setTimeout(() => { state.previousVisibilityState = "visible"; }, 200);
           BackgroundPlaybackManager.onBecomeForeground();
           BackgroundPlaybackManagerManager.onForegroundReturn(); // reset oscillation counters
           try { UltraStabilizer.onVisibilityChange(true); } catch {}
@@ -9491,6 +9556,8 @@ try {
 
   function forceAudioStartupPlay() {
     if (!coupledMode || !audio) return;
+    // bail if audio is already playing — no need to force-start it again
+    if (!audio.paused) { state.audioEverStarted = true; return; }
     if (state.audioStartupPlayAttempted && state.audioEverStarted) return;
     if (!state.intendedPlaying && !wantsStartupAutoplay()) return;
     if (state.startupPrimed && state.firstPlayCommitted && state.audioEverStarted) return;
