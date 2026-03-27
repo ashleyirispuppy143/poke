@@ -491,20 +491,30 @@ _seekPostTimers: []
   if (audio && typeof audio.play === "function") {
     const _origAudioPlay = audio.play.bind(audio);
     audio.play = function() {
+      // during active seeking, swallow silently — seek finalize handles audio
       if (state.seeking || state.seekBuffering) return Promise.resolve();
+      // background tab: always let through (keepalive needs this)
       if (document.visibilityState === "hidden") return _origAudioPlay();
+      // tab return / NMPBFN recovery / grace period: readyState is stale in
+      // Chrome after bg throttling, so skip the readyState check entirely.
+      // these systems cleared stall flags already and own the play sequence.
+      if (isTabReturnImmune() || NotMakePlayBackFixingNoticable.isActive() ||
+          now() < state.audioStartGraceUntil) {
+        return _origAudioPlay();
+      }
       const _gateVNode = getVideoNode();
       const _gateRS = _gateVNode ? Number(_gateVNode.readyState || 0) : 4;
       const _gateStallAge = state.stallAudioPausedSince ? (now() - state.stallAudioPausedSince) : 0;
-      // stuck for 4s+? something missed the cleanup, force it
+      // stall flag stuck for 4s+? something missed the cleanup — force through
       if (_gateStallAge > 4000) {
         state.videoStallAudioPaused = false;
         state.stallAudioResumeHoldUntil = 0;
         state.stallAudioPausedSince = 0;
         return _origAudioPlay();
       }
-      // video has data, stall is over
+      // video has enough data buffered, stall is over
       if (_gateRS >= HAVE_FUTURE_DATA) return _origAudioPlay();
+      // confirmed stall states — block audio until video recovers
       if (state.videoWaiting) return Promise.resolve();
       if (state.videoStallAudioPaused) return Promise.resolve();
       if (now() < state.stallAudioResumeHoldUntil) return Promise.resolve();
@@ -761,7 +771,13 @@ _seekPostTimers: []
   function _bgKeepaliveTick() {
     if (!state.intendedPlaying) return;
     if (userPauseLockActive() || mediaSessionForcedPauseActive()) return;
-    if (state.restarting || state.seeking || state.seekBuffering || state.strictBufferHold) return;
+    if (state.restarting || state.strictBufferHold) return;
+    // In background, seeking/seekBuffering flags can get stuck because seeked events
+    // don't fire. If the flag has been set for 5s+, it's stale — clear it.
+    if (state.seeking && state._seekStartedAt > 0 && (performance.now() - state._seekStartedAt) > 5000) {
+      state.seeking = false; state.seekBuffering = false; state._seekStartedAt = 0;
+    }
+    if (state.seeking || state.seekBuffering) return;
     if (NotMakePlayBackFixingNoticable.isRecovering()) return;
     const isVisible = document.visibilityState !== "hidden";
     const isFocused = isWindowFocused();
@@ -776,6 +792,15 @@ _seekPostTimers: []
       _bgKeepaliveFailCount < 15 ? 1200 : 2000;
     if (t - _lastKeepalivePlayAt < backoffMs) return;
     _lastKeepalivePlayAt = t;
+    // in background, stall flags are stale (no playing/canplay events fire).
+    // clear them so the audio.play() gate doesn't swallow our call.
+    if (!isVisible) {
+      state.videoWaiting = false;
+      state.videoStallAudioPaused = false;
+      state.stallAudioResumeHoldUntil = 0;
+      state.stallAudioPausedSince = 0;
+      state.videoStallSince = 0;
+    }
     if (coupledMode && audio && audio.paused) {
       try { audio.play().catch(() => {}); } catch {}
     }
@@ -6094,7 +6119,11 @@ try {
       });
       scheduleSync(0);
     } finally {
-      state.seekResumeInFlight = false;
+      // Don't clear seekResumeInFlight synchronously — the video "waiting" event
+      // often fires 50-200ms after seek finalize because the decoder needs to refill.
+      // If we clear the flag now, the waiting handler kills audio immediately (play-pause).
+      // Keep the flag alive for 800ms so post-seek rebuffering doesn't murder audio.
+      setTimeout(() => { state.seekResumeInFlight = false; }, 800);
       try { MakeSureAudioIsNotCuttingOrWeird.onSeekEnd(); } catch {}
     }
   }
@@ -6573,8 +6602,10 @@ try {
               const _syncVNode = getVideoNode();
               const _syncRS = _syncVNode ? Number(_syncVNode.readyState || 0) : 4;
               const _syncInGrace = now() < state.audioStartGraceUntil;
+              // only kill audio for buffering in foreground — in background, readyState
+              // is stale and videoWaiting never clears. killing audio here fights keepalive.
               if (state.videoWaiting && coupledMode && !aPaused && !NotMakePlayBackFixingNoticable.isActive() &&
-                  _syncRS < HAVE_FUTURE_DATA && !_syncInGrace) {
+                  _syncRS < HAVE_FUTURE_DATA && !_syncInGrace && document.visibilityState !== "hidden") {
                 state.videoStallAudioPaused = true;
                 state.stallAudioPausedSince = now();
                 state.audioPausedSince = 0;
@@ -7883,8 +7914,11 @@ try {
       if (!state.intendedPlaying || state.restarting) return;
       if (!state.startupPrimed || state.startupKickInFlight || (state.startupPhase && !state.firstPlayCommitted)) return;
 
-      // kill audio during a real stall (readyState confirms low buffer)
-      if (coupledMode && audio && !audio.paused && !state.seeking && !state.seekResumeInFlight && !state.seekBuffering) {
+      // kill audio during a real stall (readyState confirms low buffer).
+      // skip during seek-related grace periods — post-seek rebuffering is expected
+      // and audio should keep playing through it.
+      if (coupledMode && audio && !audio.paused && !state.seeking && !state.seekResumeInFlight &&
+          !state.seekBuffering && !(now() < state.audioStartGraceUntil)) {
         const _waitVNode = getVideoNode();
         const _waitRS = _waitVNode ? Number(_waitVNode.readyState || 0) : 0;
         // readyState >= 3 means there's data, "waiting" is just a hiccup
@@ -9072,6 +9106,13 @@ try {
         setTimeout(() => {
           if (!isTabReturnImmune()) stopBgAudioKeepalive();
         }, 3500);
+          // wipe stall flags from background FIRST — they're stale and block
+          // every audio play attempt if left alive.
+          state.videoWaiting = false;
+          state.videoStallAudioPaused = false;
+          state.stallAudioPausedSince = 0;
+          state.stallAudioResumeHoldUntil = 0;
+          state.videoStallSince = 0;
           // Let the tab-return manager handle immunity, intercept, rapid counter
           // resets, alt-tab flag clearing, instant play, and bbtab/wakeup retry.
           SmoothTabWelcomeBackManagement.onTabReturn();
