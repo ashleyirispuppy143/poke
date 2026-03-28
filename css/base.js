@@ -10069,6 +10069,17 @@ try {
   }, 100);
   // Always schedule initial sync — don't gate on page load.
   scheduleSync(0);
+
+  // test helper — survives minification
+  window.__test_player_error = (source, code) => {
+    handleFatalMediaError(source || "video", { code: code || 4 });
+  };
+  window.__test_player_reset_error = () => {
+    _errorOverlayShown = false;
+    _videoErrorObj = null;
+    _audioErrorObj = null;
+    PlayerErrorOverlay.hide();
+  };
 });
 
 
