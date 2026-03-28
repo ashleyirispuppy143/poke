@@ -356,156 +356,158 @@ document.addEventListener("DOMContentLoaded", () => {
     videoRepairCooldownUntil: 0,
     hardPauseVerifySerial: 0,
     startupPrimeStartedAt: performance.now(),
-                          lastKnownGoodVT: 0,
-                          lastKnownGoodVTts: 0,
-                          startupAutoplayRetryTimer: null,
-                          startupAutoplayRetryCount: 0,
-                          driftStableFrames: 0,
-                          lastDrift: 0,
-                          bgTransitionInProgress: false,
-                          audioRateNudgeActive: false,
-                          audioRateNudgeUntil: 0,
-                          syncConvergenceCount: 0,
-                          lastSyncDrift: 0,
-                          backgroundPauseBlocked: false,
-                          mediaControlPending: false,
-                          initialSyncComplete: false,
-                          audioPopPreventUntil: 0,
-                          audioFading: false,
-                          audioFadeTarget: 1,
-                          audioLastPlayPauseTs: 0,
-                          initialSyncDone: false,
-                          bufferHoldIntendedPlaying: false,
-                          mediaSessionInitiatedPlay: false,
-                          pendingSeekTarget: null,
-                          playRequestedDuringSeek: false,
-                          seekCompleted: false,
-                          audioVolumeBeforePause: 1,
-                          stateChangeCooldownUntil: 0,
-                          audioFadeCompleteUntil: 0,
-                          chromiumBgPauseBlockedUntil: 0,
-                          tabVisibilityChangeUntil: 0,
-                          audioGainSmoothUntil: 0,
-                          chromiumBgPauseBlockedUntilExtended: 0,
-                          visibilityTransitionActive: false,
-                          visibilityTransitionUntil: 0,
-                          lastVisibilityState: "visible",
-                          previousVisibilityState: "visible",
-                          bgPauseSuppressionCount: 0,
-                          bgPauseSuppressionResetAt: 0,
-                          mediaSessionPauseBlockedUntil: 0,
-                          rapidToggleDetected: false,
-                          rapidToggleUntil: 0,
-                          altTabTransitionActive: false,
-                          altTabTransitionUntil: 0,
-                          lastFocusLoss: 0,
-                          focusLossCount: 0,
-                          focusLossResetAt: 0,
-                          chromiumAutoPauseBlockedUntil: 0,
-                          chromiumPauseEventSuppressedUntil: 0,
-                          lastPauseEventTs: 0,
-                          pauseEventCount: 0,
-                          pauseEventResetAt: 0,
-                          visibilityStableUntil: 0,
-                          focusStableUntil: 0,
-                          mediaSessionOverrideActive: false,
-                          audioVolumeLocked: false,
-                          audioSafeMuteUntil: 0,
-                          seekAudioSyncPending: false,
-                          seekAudioSyncTime: 0,
-                          seekAudioSyncUntil: 0,
-                          bgPlaybackAllowed: true,
-                          startupBgRetryCount: 0,
-                          bgPlayAttempted: false,
-                          audioVolumeBeforeTimeChange: 1,
-                          audioZeroVolumeConfirmed: false,
-                          rapidPlayPauseCount: 0,
-                          rapidPlayPauseResetAt: 0,
-                          // Separate user-click spam tracker — only counts deliberate pointer/key events,
-                          // NOT background/auto play-pause events. Used for audio protection.
-                          userClickSpamCount: 0,
-                          userClickSpamWindowStart: 0,
-                          userClickSpamActive: false,
-                          userClickSpamUntil: 0,
-                          audioPlayAttemptCount: 0,
-                          audioPlayAttemptResetAt: 0,
-                          backgroundAutoplayTriggered: false,
-                          audioStartupPlayAttempted: false,
-                          audioStartupPlayRetries: 0,
-                          audioForcePlayTimer: null,
-                          wakeupTimer: null,
-                          startupZeroed: false,
-                          startupPlaySettleUntil: 0,
-                          startupPlaySettled: false,
-                          startupKickAttempts: 0,
-                          userGesturePauseIntent: false,
-                          pageFullyLoaded: document.readyState === "complete",
-                          bgAudioStartQueued: false,
-                          bbtabRetryTimer: null,
-                          bbtabRetryRafId: null,
-                          bbtabRetryCount: 0,
-                          bbtabAudioSyncTimer: null,
-                          bbtabVideoConfirmedAt: 0,
-                          bbtabAudioSyncDone: false,       // true after first audio sync attempt in retry loop
-                          bbtabAudioFallbackDone: false,   // true after fallback audio retry (600ms after video confirmed)
-lastUserActionTime: 0,
-loopPreventionCooldownUntil: 0,
-seekCooldownUntil: 0,
-volumeSaveScheduled: false,
-lastBgReturnAt: 0,
-tabReturnGen: 0,
-tabReturnImmuneUntil: 0,
-tabReturnAudioMuted: false,
-tabReturnSettleTimer: null,
-bgSuppressionSessionCount: 0,
-// NEW: Heartbeat & stall recovery
-heartbeatTimer: null,
-lastHeartbeatAt: 0,
-videoStallSince: 0,
-audioStallSince: 0,
-stallRecoveryUntil: 0,
-networkOnline: typeof navigator.onLine === "boolean" ? navigator.onLine : true,
-networkRecoverUntil: 0,
-audioContextUnlocked: false,
-mediaErrorCount: 0,
-mediaErrorCooldownUntil: 0,
-lastConsistencyCheckAt: 0,
-consistencyCheckPendingPlayUntil: 0,
-// Background silent time sync — prevents seek handler from firing during bg progress-bar sync
-bgSilentTimeSyncing: false,
-bgSilentTimeSyncTimer: null,
-// Timestamp when strictBufferHold last became true — used to force-clear stuck holds
-bufferHoldSince: 0,
-// Was audio paused because video entered a waiting/stall state?
-videoStallAudioPaused: false,
-// Timestamp when videoStallAudioPaused became true (for the stall watchdog)
-stallAudioPausedSince: 0,
-// Last time the stall watchdog ran
-lastStallWatchdogAt: 0,
-// After a video stall pauses audio, don't allow audio resume until this timestamp.
-// This prevents the rapid play/pause loop when video fires playing with thin buffer.
-stallAudioResumeHoldUntil: 0,
-audioWaiting: false,
-audioStallVideoPaused: false,
-_stallVideoPauseTimer: null,
-audioPausedSince: 0,
-audioStartGraceUntil: 0,
-seekTargetTime: 0,
-videoSyncRetryTs: 0,
-// User intent presets — set immediately on pointer events,
-// consumed by play/pause handlers for bulletproof non-coupled/quality=medium support
-userPauseIntentPresetAt: 0,
-userPlayIntentPresetAt: 0,
-_stallAudioPauseTimer: null,
-seekBuffering: false,
-seekBufferResumeTimer: null,
-_allowAudioTimeWrite: false,
-_seekPreVolume: null,
-_seekPostTimers: [],
-// MakeSureUnintentionalLoopDoesntEverHappenAtALLManager state
-endedNaturally: false,
-endedAt: 0,
-endedLockUntil: 0
+    lastKnownGoodVT: 0,
+    lastKnownGoodVTts: 0,
+    startupAutoplayRetryTimer: null,
+    startupAutoplayRetryCount: 0,
+    driftStableFrames: 0,
+    lastDrift: 0,
+    bgTransitionInProgress: false,
+    audioRateNudgeActive: false,
+    audioRateNudgeUntil: 0,
+    syncConvergenceCount: 0,
+    lastSyncDrift: 0,
+    backgroundPauseBlocked: false,
+    mediaControlPending: false,
+    initialSyncComplete: false,
+    audioPopPreventUntil: 0,
+    audioFading: false,
+    audioFadeTarget: 1,
+    audioLastPlayPauseTs: 0,
+    initialSyncDone: false,
+    bufferHoldIntendedPlaying: false,
+    mediaSessionInitiatedPlay: false,
+    pendingSeekTarget: null,
+    playRequestedDuringSeek: false,
+    seekCompleted: false,
+    audioVolumeBeforePause: 1,
+    stateChangeCooldownUntil: 0,
+    audioFadeCompleteUntil: 0,
+    chromiumBgPauseBlockedUntil: 0,
+    tabVisibilityChangeUntil: 0,
+    audioGainSmoothUntil: 0,
+    chromiumBgPauseBlockedUntilExtended: 0,
+    visibilityTransitionActive: false,
+    visibilityTransitionUntil: 0,
+    lastVisibilityState: "visible",
+    previousVisibilityState: "visible",
+    bgPauseSuppressionCount: 0,
+    bgPauseSuppressionResetAt: 0,
+    mediaSessionPauseBlockedUntil: 0,
+    rapidToggleDetected: false,
+    rapidToggleUntil: 0,
+    altTabTransitionActive: false,
+    altTabTransitionUntil: 0,
+    lastFocusLoss: 0,
+    focusLossCount: 0,
+    focusLossResetAt: 0,
+    chromiumAutoPauseBlockedUntil: 0,
+    chromiumPauseEventSuppressedUntil: 0,
+    lastPauseEventTs: 0,
+    pauseEventCount: 0,
+    pauseEventResetAt: 0,
+    visibilityStableUntil: 0,
+    focusStableUntil: 0,
+    mediaSessionOverrideActive: false,
+    audioVolumeLocked: false,
+    audioSafeMuteUntil: 0,
+    seekAudioSyncPending: false,
+    seekAudioSyncTime: 0,
+    seekAudioSyncUntil: 0,
+    bgPlaybackAllowed: true,
+    startupBgRetryCount: 0,
+    bgPlayAttempted: false,
+    audioVolumeBeforeTimeChange: 1,
+    audioZeroVolumeConfirmed: false,
+    rapidPlayPauseCount: 0,
+    rapidPlayPauseResetAt: 0,
+    // Separate user-click spam tracker — only counts deliberate pointer/key events,
+    // NOT background/auto play-pause events. Used for audio protection.
+    userClickSpamCount: 0,
+    userClickSpamWindowStart: 0,
+    userClickSpamActive: false,
+    userClickSpamUntil: 0,
+    audioPlayAttemptCount: 0,
+    audioPlayAttemptResetAt: 0,
+    backgroundAutoplayTriggered: false,
+    audioStartupPlayAttempted: false,
+    audioStartupPlayRetries: 0,
+    audioForcePlayTimer: null,
+    wakeupTimer: null,
+    startupZeroed: false,
+    startupPlaySettleUntil: 0,
+    startupPlaySettled: false,
+    startupKickAttempts: 0,
+    userGesturePauseIntent: false,
+    pageFullyLoaded: document.readyState === "complete",
+    bgAudioStartQueued: false,
+    bbtabRetryTimer: null,
+    bbtabRetryRafId: null,
+    bbtabRetryCount: 0,
+    bbtabAudioSyncTimer: null,
+    bbtabVideoConfirmedAt: 0,
+    bbtabAudioSyncDone: false,
+    bbtabAudioFallbackDone: false,
+    lastUserActionTime: 0,
+    loopPreventionCooldownUntil: 0,
+    seekCooldownUntil: 0,
+    volumeSaveScheduled: false,
+    lastBgReturnAt: 0,
+    tabReturnGen: 0,
+    tabReturnImmuneUntil: 0,
+    tabReturnAudioMuted: false,
+    tabReturnSettleTimer: null,
+    bgSuppressionSessionCount: 0,
+    // Heartbeat & stall recovery
+    heartbeatTimer: null,
+    lastHeartbeatAt: 0,
+    videoStallSince: 0,
+    audioStallSince: 0,
+    stallRecoveryUntil: 0,
+    networkOnline: typeof navigator.onLine === "boolean" ? navigator.onLine : true,
+    networkRecoverUntil: 0,
+    audioContextUnlocked: false,
+    mediaErrorCount: 0,
+    mediaErrorCooldownUntil: 0,
+    lastConsistencyCheckAt: 0,
+    consistencyCheckPendingPlayUntil: 0,
+    // Background silent time sync — prevents seek handler from firing during bg progress-bar sync
+    bgSilentTimeSyncing: false,
+    bgSilentTimeSyncTimer: null,
+    // Timestamp when strictBufferHold last became true — used to force-clear stuck holds
+    bufferHoldSince: 0,
+    // Was audio paused because video entered a waiting/stall state?
+    videoStallAudioPaused: false,
+    // Timestamp when videoStallAudioPaused became true (for the stall watchdog)
+    stallAudioPausedSince: 0,
+    // Last time the stall watchdog ran
+    lastStallWatchdogAt: 0,
+    // After a video stall pauses audio, don't allow audio resume until this timestamp.
+    // This prevents the rapid play/pause loop when video fires playing with thin buffer.
+    stallAudioResumeHoldUntil: 0,
+    audioWaiting: false,
+    audioStallVideoPaused: false,
+    _stallVideoPauseTimer: null,
+    audioPausedSince: 0,
+    audioStartGraceUntil: 0,
+    seekTargetTime: 0,
+    videoSyncRetryTs: 0,
+    // User intent presets — set immediately on pointer events,
+    // consumed by play/pause handlers for bulletproof non-coupled/quality=medium support
+    userPauseIntentPresetAt: 0,
+    userPlayIntentPresetAt: 0,
+    _stallAudioPauseTimer: null,
+    seekBuffering: false,
+    seekBufferResumeTimer: null,
+    _allowAudioTimeWrite: false,
+    _seekPreVolume: null,
+    _seekPostTimers: [],
+    // MakeSureUnintentionalLoopDoesntEverHappenAtALLManager state
+    endedNaturally: false,
+    endedAt: 0,
+    endedLockUntil: 0,
+    // Wakeup retry timer IDs — tracked for explicit cancellation to prevent timer leaks
+    _wakeupRetryTimers: []
   };
 
   // wraps audio.play() so nothing can start audio while video is actually buffering.
@@ -3719,7 +3721,8 @@ endedLockUntil: 0
           if (_atVN && _atVN.paused) { try { _nativePlayAT.call(_atVN).catch(() => {}); } catch {} }
           if (coupledMode && audio) {
             try { audio.volume = targetVolFromVideo(); } catch {}
-            if (audio.paused) {
+            const _atVRS = _atVN ? Number(_atVN.readyState || 0) : 4;
+            if (audio.paused && _atVRS >= 3) {
               state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 800);
               try { _nativePlayAT.call(audio).catch(() => {}); } catch {}
             }
@@ -7394,6 +7397,34 @@ try {
                   // stall recovery, silence guard, readyState watcher, rate guard, etc.)
                   try { UltraStabilizer.tick(); } catch {}
 
+                  // --- Stuck seek/buffer safety valve ---
+                  // If seeking or seekBuffering has been stuck for >12s, force-clear it.
+                  // This prevents the player from permanently locking up after a botched seek.
+                  if ((state.seeking || state.seekBuffering) && state._seekStartedAt > 0) {
+                    const seekAge = performance.now() - state._seekStartedAt;
+                    if (seekAge > 12000) {
+                      state.seeking = false;
+                      state.seekBuffering = false;
+                      state.seekResumeInFlight = false;
+                      state.seekCompleted = true;
+                      state._seekStartedAt = 0;
+                      state.pendingSeekTarget = null;
+                      clearSeekSyncFinalizeTimer();
+                      clearSeekWatchdog();
+                      if (state.intendedPlaying && !userPauseLockActive() &&
+                          document.visibilityState === "visible") {
+                        playTogether().catch(() => {});
+                      }
+                    }
+                  }
+
+                  // --- Stuck bgResumeInFlight safety valve ---
+                  // bgResumeInFlight blocks seamlessBgCatchUp. Clear if stuck >8s.
+                  if (state.bgResumeInFlight && state.lastBgReturnAt > 0 &&
+                      (nowTs - state.lastBgReturnAt) > 8000) {
+                    state.bgResumeInFlight = false;
+                  }
+
                   state.heartbeatTimer = setTimeout(beat, HEARTBEAT_INTERVAL_MS);
     };
     state.heartbeatTimer = setTimeout(beat, HEARTBEAT_INTERVAL_MS);
@@ -7444,7 +7475,7 @@ try {
           position: absolute; inset: 0; z-index: 9999;
           display: flex; align-items: center; justify-content: center;
           background: #0f0f0f; color: #fff;
-          border-radius: 16px;
+          border-radius: 12px;
           font-family: Roboto, Arial, Helvetica, sans-serif;
           opacity: 0; pointer-events: none;
           transition: opacity .2s ease;
@@ -7456,14 +7487,14 @@ try {
         }
         .pe-overlay-icon {
           width: 120px; height: 120px; flex-shrink: 0;
-          fill: #909090;
+          fill: #606060;
         }
         .pe-overlay-text {
           display: flex; flex-direction: column; gap: 4px;
           min-width: 0;
         }
         .pe-overlay-title {
-          font-size: 15px; font-weight: 400; color: #fff;
+          font-size: 17px; font-weight: 500; color: #fff;
           line-height: 1.4;
         }
         .pe-overlay-title a {
@@ -7526,28 +7557,41 @@ try {
           opacity: 1; pointer-events: auto;
         }
         .pe-stack-popup {
-          background: #1a1a1a; border-radius: 12px;
-          padding: 20px 24px; width: 90vw; max-width: 640px;
-          max-height: 70vh; overflow-y: auto;
-          box-shadow: 0 8px 32px rgba(0,0,0,.6);
+          background: #212121; border-radius: 12px;
+          padding: 0; width: 90vw; max-width: 640px;
+          max-height: 70vh; overflow: hidden;
+          box-shadow: 0 12px 48px rgba(0,0,0,.8);
           position: relative;
+          display: flex; flex-direction: column;
         }
         .pe-stack-popup-title {
-          font-size: 14px; font-weight: 600; color: #fff;
-          margin-bottom: 12px; display: flex; align-items: center;
+          font-size: 14px; font-weight: 500; color: #fff;
+          padding: 16px 20px; display: flex; align-items: center;
           justify-content: space-between;
+          border-bottom: 1px solid #333;
+          flex-shrink: 0;
         }
         .pe-stack-popup-close {
           background: none; border: none; color: #888;
-          font-size: 22px; cursor: pointer; padding: 0 4px;
+          font-size: 22px; cursor: pointer; padding: 4px 8px;
           line-height: 1; font-family: inherit;
+          border-radius: 50%; transition: background-color .15s;
         }
-        .pe-stack-popup-close:hover { color: #fff; }
+        .pe-stack-popup-close:hover { color: #fff; background: rgba(255,255,255,.1); }
+        .pe-stack-popup-copy {
+          background: none; border: 1px solid #555; color: #aaa;
+          font-size: 12px; cursor: pointer; padding: 4px 12px;
+          border-radius: 14px; font-family: inherit;
+          margin-right: 8px; transition: all .15s;
+        }
+        .pe-stack-popup-copy:hover { color: #fff; border-color: #888; }
         .pe-overlay-stack {
           font-size: 12px; color: #ccc; white-space: pre-wrap;
           word-break: break-all; font-family: "Roboto Mono", "Consolas", "Courier New", monospace;
-          margin: 0; line-height: 1.6;
+          margin: 0; padding: 16px 20px; line-height: 1.7;
           user-select: text; -webkit-user-select: text;
+          overflow-y: auto; flex: 1;
+          background: #181818;
         }
       `;
       document.head.appendChild(s);
@@ -7582,7 +7626,8 @@ try {
         container.appendChild(_el);
       }
       _el.querySelector(".pe-overlay-btn").addEventListener("click", () => {
-        hide();
+        // Don't hide the overlay — keep it visible during reload so the user
+        // doesn't see a flash of broken player before the page refreshes.
         window.location.reload();
       });
       // Stack trace popup — lives on document.body, centered on screen
@@ -7592,7 +7637,10 @@ try {
         <div class="pe-stack-popup">
           <div class="pe-stack-popup-title">
             <span>Stack Trace</span>
-            <button class="pe-stack-popup-close">&times;</button>
+            <span style="display:flex;align-items:center;gap:4px">
+              <button class="pe-stack-popup-copy">Copy</button>
+              <button class="pe-stack-popup-close">&times;</button>
+            </span>
           </div>
           <pre class="pe-overlay-stack"></pre>
         </div>
@@ -7605,6 +7653,17 @@ try {
       // click backdrop to close
       _stackPopup.addEventListener("click", (e) => {
         if (e.target === _stackPopup) _stackPopup.classList.remove("pe-stack-popup-open");
+      });
+      // copy button
+      _stackPopup.querySelector(".pe-stack-popup-copy").addEventListener("click", (e) => {
+        const text = _stackPopup.querySelector(".pe-overlay-stack").textContent || "";
+        const btn = e.currentTarget;
+        try {
+          navigator.clipboard.writeText(text).then(() => {
+            btn.textContent = "Copied";
+            setTimeout(() => { btn.textContent = "Copy"; }, 1500);
+          }).catch(() => {});
+        } catch {}
       });
       // "Show stack trace" link opens the popup
       const stackLink = _el.querySelector(".pe-overlay-stack-link");
@@ -9333,6 +9392,22 @@ try {
       // track when audio first started playing — safeSetAudioTime uses this
       // to avoid seeking during the first 3s of playback
       if (!_audioFirstPlayedAt) _audioFirstPlayedAt = performance.now();
+      // GUARD: if video is actually buffering/waiting, don't let audio play.
+      // This catches any path that bypassed the audio.play() gate.
+      if (state.videoWaiting && document.visibilityState === "visible" &&
+          !(now() < state.audioStartGraceUntil)) {
+        const _apVN = getVideoNode();
+        const _apRS = _apVN ? Number(_apVN.readyState || 0) : 4;
+        if (_apRS < HAVE_FUTURE_DATA) {
+          try { audio.pause(); } catch {}
+          if (!state.videoStallAudioPaused) {
+            state.videoStallAudioPaused = true;
+            state.stallAudioPausedSince = now();
+            state.bufferHoldIntendedPlaying = state.intendedPlaying;
+          }
+          return; // don't clear stall state since we just re-paused
+        }
+      }
       // Clear audio stall state — audio has data again
       if (state._stallVideoPauseTimer) { clearTimeout(state._stallVideoPauseTimer); state._stallVideoPauseTimer = null; }
       state.audioWaiting = false;
@@ -9868,7 +9943,7 @@ try {
     // Cancel and replace any existing wakeup timer (don't silently drop)
     if (state.wakeupTimer) { clearTimeout(state.wakeupTimer); state.wakeupTimer = null; }
 
-    const wakeDelay = platform.chromiumOnlyBrowser ? 50 : 30;
+    const wakeDelay = platform.chromiumOnlyBrowser ? 20 : 10;
     const myGen = state.tabReturnGen;
 
     state.wakeupTimer = setTimeout(() => {
@@ -9908,19 +9983,27 @@ try {
           }
       }
 
-      [300, 600, 1200, 2000].forEach(retryDelay => {
-        setTimeout(() => {
+      // Cancel any leftover retry timers from a previous wakeup cycle
+      if (state._wakeupRetryTimers.length) {
+        state._wakeupRetryTimers.forEach(t => clearTimeout(t));
+        state._wakeupRetryTimers = [];
+      }
+      [150, 400, 800, 1400].forEach(retryDelay => {
+        const tid = setTimeout(() => {
+          // Remove self from tracked list
+          const idx = state._wakeupRetryTimers.indexOf(tid);
+          if (idx !== -1) state._wakeupRetryTimers.splice(idx, 1);
           if (state.tabReturnGen !== myGen) return;
           if (!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) return;
           if (!getVideoPaused()) {
             if (coupledMode && audio && !state.tabReturnAudioMuted && audio.paused && !state.isProgrammaticAudioPause &&
               !shouldBlockNewAudioStart()) {
               const vtRetry = Number(video.currentTime()) || 0;
-            safeSetAudioTime(vtRetry);
-            execProgrammaticAudioPlay({ squelchMs: 200, force: true, minGapMs: 0 }).catch(() => {});
-            softUnmuteAudio(200).catch(() => {});
-              }
-              return;
+              safeSetAudioTime(vtRetry);
+              execProgrammaticAudioPlay({ squelchMs: 200, force: true, minGapMs: 0 }).catch(() => {});
+              softUnmuteAudio(200).catch(() => {});
+            }
+            return;
           }
           if (state.bgResumeInFlight || state.seekResumeInFlight) return;
           state.bgCatchUpCooldownUntil = 0;
@@ -9933,14 +10016,16 @@ try {
           }
           // If video is still paused after trying to play (buffer empty from
           // network change), arm buffer recovery so it auto-plays once data arrives
-          setTimeout(() => {
+          const tid2 = setTimeout(() => {
             if (state.tabReturnGen !== myGen) return;
             if (!state.intendedPlaying) return;
             if (getVideoPaused() && !state.strictBufferHold && !state.bgResumeInFlight) {
               armResumeAfterBuffer(12000);
             }
-          }, 250);
+          }, 150);
+          state._wakeupRetryTimers.push(tid2);
         }, retryDelay);
+        state._wakeupRetryTimers.push(tid);
       });
     }, wakeDelay);
   }
@@ -10029,7 +10114,10 @@ try {
             if (coupledMode && audio) {
               const _immVol = targetVolFromVideo();
               try { audio.volume = _immVol; } catch {}
-              if (audio.paused) {
+              // Only start audio if the video element has enough data buffered.
+              // Without this check, audio plays while video is still buffering.
+              const _immVRS = _immVN ? Number(_immVN.readyState || 0) : 4;
+              if (audio.paused && _immVRS >= 3) {
                 try { _nativePlay.call(audio).catch(() => {}); } catch {}
               }
             }
@@ -10112,6 +10200,11 @@ try {
           }
           setTimeout(() => { state.visibilityTransitionActive = false; }, VISIBILITY_TRANSITION_MS);
       } else {
+        // Cancel any in-flight wakeup retry timers from previous tab return
+        if (state._wakeupRetryTimers.length) {
+          state._wakeupRetryTimers.forEach(t => clearTimeout(t));
+          state._wakeupRetryTimers = [];
+        }
         // Let tab-return manager clean up: bumps gen, clears immunity,
         // disengages intercept, cancels audio mute, clears timers, snapshots QRO.
         SmoothTabWelcomeBackManagement.onTabLeave();
@@ -10261,6 +10354,7 @@ try {
       if (_playLockTimer) { clearTimeout(_playLockTimer); _playLockTimer = null; }
       if (_ncBufferWaitCleanup) { try { _ncBufferWaitCleanup(); } catch {} _ncBufferWaitCleanup = null; }
       if (state._seekPostTimers.length) { state._seekPostTimers.forEach(t => clearTimeout(t)); state._seekPostTimers = []; }
+      if (state._wakeupRetryTimers.length) { state._wakeupRetryTimers.forEach(t => clearTimeout(t)); state._wakeupRetryTimers = []; }
       if (state.bbtabRetryRafId) { cancelAnimationFrame(state.bbtabRetryRafId); state.bbtabRetryRafId = null; }
       if (state.bbtabRetryTimer) { clearTimeout(state.bbtabRetryTimer); state.bbtabRetryTimer = null; }
       if (state.bbtabAudioSyncTimer) { clearTimeout(state.bbtabAudioSyncTimer); state.bbtabAudioSyncTimer = null; }
