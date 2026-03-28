@@ -1342,7 +1342,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }, SETTLING_DURATION_MS);
     }
 
-    // One-time drift correction. Forward-only: prefer moving video to audio (no audio glitch).
+    // One-time drift correction. Prefer seeking audio to video (no visible jump).
+    // Only seek video if audio is significantly ahead AND video is paused/hidden.
     function _doSettleDriftCorrection(gen) {
       if (!coupledMode || !audio) return;
       try {
@@ -1350,15 +1351,15 @@ document.addEventListener("DOMContentLoaded", () => {
         const at = Number(audio.currentTime) || 0;
         if (!isFinite(vt) || !isFinite(at)) return;
         const drift = Math.abs(at - vt);
-        if (drift < 0.3) return; // Close enough — no correction needed
-        if (at > vt) {
-          // Audio ahead — move video forward to audio (silent, no audio glitch)
+        if (drift < 0.4) return; // Close enough — no correction needed
+        if (at > vt && drift > 1.5 && document.visibilityState === "hidden") {
+          // Audio far ahead + tab hidden — safe to move video (user can't see it)
           try { const _vn = getVideoNode(); if (_vn) _vn.currentTime = at; } catch {}
-        } else {
-          // Audio behind — seek audio to video position
+        } else if (at !== vt) {
+          // Always prefer seeking audio to video position — no visible jump
           // Guard: never seek audio to near-0 if it's playing well into the track
           if (vt < 0.5 && state.firstPlayCommitted && !state.restarting && !isLoopDesired() && at > 2) return;
-          try { audio.currentTime = vt; } catch {}
+          safeSetAudioTime(vt);
         }
       } catch {}
     }
@@ -4750,7 +4751,15 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function safeSetVideoTime(t) {
-    try { if (isFinite(t) && t >= 0) video.currentTime(t); } catch {}
+    if (!isFinite(t) || t < 0) return;
+    // Block large backward seeks on video unless user-initiated or restarting.
+    // This prevents programmatic code from jumping video backward visibly.
+    const curVT = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
+    if (t < curVT - 2.0 && state.firstPlayCommitted && !state.restarting && !state.seeking && !isLoopDesired()) {
+      const userRecent = (now() - state.lastUserActionTime) < 2000;
+      if (!userRecent) return;
+    }
+    try { video.currentTime(t); } catch {}
     try { safeSetCT(videoEl, t); } catch {}
     try {
       const v = getVideoNode();
@@ -4761,6 +4770,14 @@ document.addEventListener("DOMContentLoaded", () => {
   // Silently update video.currentTime to match audio position when in the backgro
   function bgSilentSyncVideoTime(t) {
     if (!isFinite(t) || t < 0) return;
+    // CRITICAL: Never seek video when the user is watching. This function is
+    // ONLY for background sync (updating progress bar). If the tab is visible
+    // and focused, the user would see a random jump — that's the #1 cause of
+    // "random seeks". Only allow when actually hidden or during return grace.
+    if (document.visibilityState === "visible" && isWindowFocused() &&
+        !inBgReturnGrace() && !isAltTabTransitionActive()) {
+      return;
+    }
     // Never silently sync video to 0 after first play (unless looping)
     if (t < 0.5 && state.firstPlayCommitted && !state.restarting && !isLoopDesired()) {
       const vt = Number(videoEl.currentTime) || 0;
@@ -5262,6 +5279,10 @@ try {
     if (state.videoRepairing) return;
     if (now() < state.videoRepairCooldownUntil) return;
     if (!state.intendedPlaying) return;
+    // Don't kick video while user is actively watching and video is playing fine.
+    // The +0.001 nudge fires a visible seek event that looks like a "random seek".
+    const _kvNode = getVideoNode();
+    if (_kvNode && !_kvNode.paused && Number(_kvNode.readyState || 0) >= 3) return;
     state.videoRepairing = true;
     state.videoRepairCooldownUntil = now() + 4000;
     try {
@@ -6896,10 +6917,10 @@ try {
         if (state.intendedPlaying && !state.restarting && !state.seeking && !state.syncing && !skipDrift && !state.seekResumeInFlight && !state.seekBuffering) {
           if (state.audioEverStarted && !audio.paused && !inBgDrift && !state.startupPhase) {
             const _syncDrift = Math.abs(at - vt);
-            // only correct noticeable drift (>0.25s). very small drift is imperceptible
+            // only correct noticeable drift (>0.35s). small drift is imperceptible
             // and seeking to fix it causes more disruption than the drift itself.
-            // the 0.05s threshold before caused constant micro-seeks (random seek stutter).
-            if (_syncDrift > 0.25) {
+            // lower thresholds caused constant micro-seeks (random seek stutter).
+            if (_syncDrift > 0.35) {
               await quietSeekAudio(vt);
               at = vt;
             }
@@ -6983,8 +7004,9 @@ try {
                   }
                 }
               } else {
-                // Tab is being restored (altTab/focus transition): let the return-grace
-                if (Math.abs(at - vt) > BIG_DRIFT) bgSilentSyncVideoTime(at);
+                // Tab is being restored (altTab/focus transition) — DON'T seek video
+                // here. bgSilentSyncVideoTime causes visible random jumps. Let the
+                // normal sync loop handle drift after the transition settles.
                 if (!state.bgResumeInFlight) {
                   scheduleBgResumeRetry(inBgReturnGrace() ? 80 : 200);
                 }
