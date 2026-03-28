@@ -972,15 +972,16 @@ _seekPostTimers: []
     const PHASE_SETTLING   = 3;
 
     // --- Timing constants
-    const RECOVERY_DURATION_MS   = 3000;  // How long RECOVERING phase lasts
-    const SETTLING_DURATION_MS   = 8000;  // How long SETTLING phase lasts
+    const RECOVERY_DURATION_MS   = 1500;  // How long RECOVERING phase lasts (fast: 1.5s)
+    const SETTLING_DURATION_MS   = 3000;  // How long SETTLING phase lasts (was 8s, 3s is enough)
     const DRIFT_CORRECTION_MIN   = 0.3;   // Only correct drift > 300ms
-    const RETRY_INTERVALS        = [200, 500, 1000, 2000]; // Progressive retry delays
+    const RETRY_INTERVALS        = [100, 300, 700, 1400]; // Progressive retry delays (faster first check)
     const PLAY_CHECK_MS          = 100;   // How soon to verify play() worked
 
     // --- State
     let _phase       = PHASE_IDLE;
     let _phaseAt     = 0;
+    let _bgEnteredAt = 0;     // Timestamp when we entered background (for bgDuration calc)
     let _snapshotVt  = 0;     // Video position when we went to background
     let _snapshotAt  = 0;     // Audio position when we went to background
     let _snapshotVol = 1;     // Audio volume when we went to background
@@ -1001,6 +1002,7 @@ _seekPostTimers: []
 
       _phase = PHASE_GUARDING;
       _phaseAt = now();
+      _bgEnteredAt = now(); // record when we went to background for warm-start calc
 
       // Snapshot current playback state so we can restore it perfectly
       _takeSnapshot();
@@ -1043,8 +1045,8 @@ _seekPostTimers: []
       // Clear any old timers
       _clearAllTimers();
 
-      // Set immunity for the full recovery window
-      state.tabReturnImmuneUntil = Math.max(state.tabReturnImmuneUntil, now() + RECOVERY_DURATION_MS);
+      // Set immunity for the full recovery window + settling buffer
+      state.tabReturnImmuneUntil = Math.max(state.tabReturnImmuneUntil, now() + RECOVERY_DURATION_MS + 500);
 
       // Reset play dedup so our play() calls go through
       DONTMAKEITDOUBLEPLAY.resetAll();
@@ -1121,7 +1123,8 @@ _seekPostTimers: []
         // (decoder needs to refill buffer). For quick tab switches (<2s), play at full
         // volume immediately — the decoder still has data cached.
         const wasInBackground = _snapshotAt > 0 || _snapshotVt > 0;
-        const bgDuration = wasInBackground ? (now() - _phaseAt) : 0;
+        // Use _bgEnteredAt (set when we went to bg), not _phaseAt (set to now() in onReturn)
+        const bgDuration = (wasInBackground && _bgEnteredAt > 0) ? (now() - _bgEnteredAt) : 0;
         const needsWarmStart = wasInBackground && !audioAlreadyPlaying &&
         document.visibilityState !== "hidden" && bgDuration > 2000;
 
@@ -1482,7 +1485,9 @@ _seekPostTimers: []
     function shouldBlockSeek()    { return _phase === PHASE_RECOVERING; }
     function shouldBlockPause()   { return _phase === PHASE_RECOVERING; }
     function shouldBlockVolume()  { return _phase === PHASE_RECOVERING; }
-    function shouldBlockSync()    { return _phase === PHASE_RECOVERING || _phase === PHASE_SETTLING; }
+    // Only block sync during RECOVERING — let sync run during SETTLING so drift
+    // correction happens sooner. Settling just means "recovery is done, be gentle".
+    function shouldBlockSync()    { return _phase === PHASE_RECOVERING; }
 
     // How long since we started recovering?
     function recoveryAge() { return _phase >= PHASE_RECOVERING ? now() - _lastRecoveryAt : Infinity; }
@@ -3634,7 +3639,7 @@ _seekPostTimers: []
       }
 
       if (this.shouldResume()) {
-        state.tabReturnImmuneUntil = now() + 3000;
+        state.tabReturnImmuneUntil = Math.max(state.tabReturnImmuneUntil, now() + 2000);
       }
 
       state.rapidPlayPauseCount = 0;
@@ -3674,19 +3679,26 @@ _seekPostTimers: []
         } else {
           // Alt-tab or window blur/focus — lightweight recovery. Just make sure
           // both elements are playing at the right volume. No vol=0, no fade, no fuss.
+          // Use native play() to bypass all wrappers for max speed.
+          const _nativePlayAT = HTMLMediaElement.prototype.play;
           const _atVN = getVideoNode();
-          if (_atVN && _atVN.paused) { try { _atVN.play().catch(() => {}); } catch {} }
+          if (_atVN && _atVN.paused) { try { _nativePlayAT.call(_atVN).catch(() => {}); } catch {} }
           if (coupledMode && audio) {
+            try { audio.volume = targetVolFromVideo(); } catch {}
             if (audio.paused) {
-              const _atVT = (() => { try { return Number(video.currentTime()); } catch { return 0; } })();
-              if (isFinite(_atVT)) safeSetAudioTime(_atVT);
-              try { audio.volume = targetVolFromVideo(); } catch {}
               state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 800);
-              execProgrammaticAudioPlay({ squelchMs: 200, force: true, minGapMs: 0 }).catch(() => {});
-            } else {
-              // audio playing — just make sure volume is correct
-              try { audio.volume = targetVolFromVideo(); } catch {}
+              try { _nativePlayAT.call(audio).catch(() => {}); } catch {}
             }
+            // Defer position correction 80ms — don't seek while play() is resuming,
+            // that creates an audible skip. Let the decoder resume first.
+            setTimeout(() => {
+              if (!coupledMode || !audio || audio.paused) return;
+              const _atVT = (() => { try { return Number(video.currentTime()); } catch { return 0; } })();
+              const _atAT = Number(audio.currentTime) || 0;
+              if (isFinite(_atVT) && Math.abs(_atAT - _atVT) > 0.4) {
+                safeSetAudioTime(_atVT);
+              }
+            }, 80);
           }
         }
       }
@@ -3730,16 +3742,18 @@ _seekPostTimers: []
       (state.startupPhase && wantsStartupAutoplay());
     },
 
-    // Fires play() on both video and audio immediately.
+    // Fires play() on both video and audio immediately using native play().
     // Pure play — no seeking, no currentTime writes, no volume changes.
+    // Uses HTMLMediaElement.prototype.play to bypass all wrappers/gates.
     // Any seek (even zero-delta buffer flush) creates a tiny silence gap
     // that sounds like "play pause play". Just resume from wherever the
     // decoder left off. The sync loop handles drift after immunity expires.
     instantPlay() {
       try {
+        const _nIP = HTMLMediaElement.prototype.play;
         const _vn = getVideoNode();
-        if (_vn && _vn.paused) _vn.play().catch(() => {});
-        if (coupledMode && audio && audio.paused) audio.play().catch(() => {});
+        if (_vn && _vn.paused) { try { _nIP.call(_vn).catch(() => {}); } catch {} }
+        if (coupledMode && audio && audio.paused) { try { _nIP.call(audio).catch(() => {}); } catch {} }
       } catch {}
     },
 
@@ -4318,7 +4332,6 @@ _seekPostTimers: []
     return false;
   }
 
-  // --- play/pause toggle debounce (YouTube-style spam protection)
   // When user spams the play/pause button, we don't immediately execute
   // every toggle. Instead: each click cancels the pending action and starts
   // a short timer. Only the LAST click in a rapid burst actually executes.
@@ -7255,19 +7268,183 @@ try {
   }
 
   // --- media error recovery
+  // =========================================================================
+  // error overlay —  black screen with icon + message
+  // =========================================================================
+  const PlayerErrorOverlay = (() => {
+    let _el = null;
+    let _visible = false;
+    let _reloadTimer = null;
+
+    // inject all styles inline so no external CSS is needed
+    function _injectStyles() {
+      if (document.getElementById("pe-overlay-css")) return;
+      const s = document.createElement("style");
+      s.id = "pe-overlay-css";
+      s.textContent = `
+        .pe-overlay {
+          position: absolute; inset: 0; z-index: 9999;
+          display: flex; flex-direction: column; align-items: center; justify-content: center;
+          background: rgba(0,0,0,.92); color: #fff;
+          font-family: "YouTube Noto", Roboto, Arial, sans-serif;
+          opacity: 0; pointer-events: none;
+          transition: opacity .25s ease;
+        }
+        .pe-overlay.pe-visible { opacity: 1; pointer-events: auto; }
+        .pe-overlay-icon {
+          width: 72px; height: 72px; margin-bottom: 18px;
+          fill: #aaa; flex-shrink: 0;
+        }
+        .pe-overlay-title {
+          font-size: 18px; font-weight: 500; color: #fff;
+          margin-bottom: 8px; text-align: center; padding: 0 24px;
+        }
+        .pe-overlay-msg {
+          font-size: 13px; color: #aaa; text-align: center;
+          max-width: 420px; line-height: 1.5; padding: 0 24px;
+        }
+        .pe-overlay-code {
+          font-size: 11px; color: #666; margin-top: 14px;
+          font-family: "Roboto Mono", monospace;
+        }
+        .pe-overlay-btn {
+          margin-top: 20px; padding: 10px 28px;
+          background: #fff; color: #0f0f0f; border: none; border-radius: 20px;
+          font-size: 14px; font-weight: 500; cursor: pointer;
+          font-family: inherit; transition: background .15s;
+        }
+        .pe-overlay-btn:hover { background: #d9d9d9; }
+      `;
+      document.head.appendChild(s);
+    }
+
+    function _create() {
+      if (_el) return _el;
+      _injectStyles();
+      _el = document.createElement("div");
+      _el.className = "pe-overlay";
+      _el.innerHTML = `
+        <svg class="pe-overlay-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+        </svg>
+        <div class="pe-overlay-title"></div>
+        <div class="pe-overlay-msg"></div>
+        <div class="pe-overlay-code"></div>
+        <button class="pe-overlay-btn" style="display:none">Retry</button>
+      `;
+      // insert into the video.js container so it sits on top of the video
+      const container = video.el ? video.el() : videoEl.parentElement;
+      if (container) {
+        container.style.position = container.style.position || "relative";
+        container.appendChild(_el);
+      }
+      _el.querySelector(".pe-overlay-btn").addEventListener("click", () => {
+        hide();
+        window.location.reload();
+      });
+      return _el;
+    }
+
+    function show({ title, message, code, canRetry }) {
+      const el = _create();
+      el.querySelector(".pe-overlay-title").textContent = title || "An error occurred";
+      el.querySelector(".pe-overlay-msg").textContent = message || "";
+      el.querySelector(".pe-overlay-code").textContent = code ? `Error code: ${code}` : "";
+      const btn = el.querySelector(".pe-overlay-btn");
+      btn.style.display = canRetry ? "" : "none";
+      btn.textContent = canRetry === "reload" ? "Reload" : "Retry";
+      el.classList.add("pe-visible");
+      _visible = true;
+    }
+
+    function hide() {
+      if (_el) _el.classList.remove("pe-visible");
+      _visible = false;
+      if (_reloadTimer) { clearTimeout(_reloadTimer); _reloadTimer = null; }
+    }
+
+    function isVisible() { return _visible; }
+
+    return { show, hide, isVisible, _setReloadTimer(t) { _reloadTimer = t; } };
+  })();
+
+  // =========================================================================
+  // error code 4 auto-reload (once per session, prevents infinite loop)
+  // =========================================================================
+  const ERROR4_STORAGE_KEY = "pe_error4_reload_ts";
+  function handleFatalMediaError(source, errorObj) {
+    const code = errorObj ? (errorObj.code || 0) : 0;
+    const msg = errorObj ? (errorObj.message || "") : "";
+
+    // map error codes to readable messages
+    const titles = {
+      1: "Playback aborted",
+      2: "Network error",
+      3: "Decode error",
+      4: "Source not supported"
+    };
+    const messages = {
+      1: "The video playback was aborted.",
+      2: "A network error caused the video to fail. Check your connection and try again.",
+      3: "The video could not be decoded. The file may be corrupt or unsupported.",
+      4: "The video format or source is not supported by your browser."
+    };
+
+    // show the overlay for any error code >= 1
+    if (code >= 1) {
+      // pause everything so we're not fighting in the background
+      state.intendedPlaying = false;
+      state.bufferHoldIntendedPlaying = false;
+      try { pauseHard(); } catch {}
+      PlayerErrorOverlay.show({
+        title: titles[code] || "Playback error",
+        message: messages[code] || (msg || "An unexpected error occurred."),
+        code: code,
+        canRetry: code === 4 ? "reload" : "reload"
+      });
+    }
+
+    // error code 4: auto-reload once. use sessionStorage to prevent infinite loop.
+    if (code === 4) {
+      try {
+        const lastReload = Number(sessionStorage.getItem(ERROR4_STORAGE_KEY)) || 0;
+        const elapsed = Date.now() - lastReload;
+        // only auto-reload if we haven't reloaded in the last 30s
+        if (elapsed > 30000) {
+          sessionStorage.setItem(ERROR4_STORAGE_KEY, String(Date.now()));
+          // wait 2s so the user can see the error message, then reload
+          const t = setTimeout(() => window.location.reload(), 2000);
+          PlayerErrorOverlay._setReloadTimer(t);
+        }
+        // if we already reloaded recently, just show the overlay (don't loop)
+      } catch {}
+    }
+  }
+
   function setupMediaErrorHandlers() {
     const onVideoError = (e) => {
+      // check for fatal media errors (code 1-4)
+      const errObj = videoEl.error || (e && e.target && e.target.error);
+      if (errObj && errObj.code >= 1) {
+        handleFatalMediaError("video", errObj);
+        return;
+      }
       if (!state.intendedPlaying || state.restarting) return;
       if (now() < state.mediaErrorCooldownUntil) return;
       state.mediaErrorCount++;
       state.mediaErrorCooldownUntil = now() + 4000;
-      // Soft recovery: re-arm buffer wait
       if (state.mediaErrorCount <= 3) {
         armResumeAfterBuffer(8000);
       }
     };
     const onAudioError = (e) => {
       if (!coupledMode || !audio) return;
+      // check for fatal audio errors
+      const errObj = audio.error || (e && e.target && e.target.error);
+      if (errObj && errObj.code >= 1) {
+        handleFatalMediaError("audio", errObj);
+        return;
+      }
       if (!state.intendedPlaying || state.restarting) return;
       if (now() < state.mediaErrorCooldownUntil) return;
       state.mediaErrorCount++;
@@ -8764,24 +8941,35 @@ try {
           try { UltraStabilizer.onSeekStart(); } catch {}
           if (state.restarting) return;
           if (state.bgSilentTimeSyncing) return;
+
+          // phantom loop detection: if video suddenly jumps to near-0 from well
+          // into the track, and nobody asked for it, revert immediately. browsers
+          // sometimes fire bogus seeking-to-0 on buffer refill or codec flush.
+          // also catches video.loop=true auto-restart when our isLoopDesired()
+          // says loop is NOT wanted (e.g. loop attribute set by page but overridden).
+          const _phVt = Number(videoEl.currentTime) || 0;
+          const _phPrev = state.lastKnownGoodVT || 0;
+          const _phUserRecent = (now() - state.lastUserActionTime) < 2000;
+          const _phProgrammatic = state.pendingSeekTarget != null || state.seeking || state.restarting;
+          if (_phVt < 0.5 && _phPrev > 2.0 && state.firstPlayCommitted &&
+              !_phUserRecent && !_phProgrammatic && !isLoopDesired()) {
+            // this is a phantom restart — revert video to its last good position.
+            // don't touch audio — the _seekWouldRestart guard handles that.
+            try { videoEl.currentTime = _phPrev; } catch {}
+            return;
+          }
+
           // During tab-return immunity, ignore spurious browser-fired seeks.
-          // These cascade into audio position correction (seeked handler syncs
-          // audio to video), causing audible backward seeks + replays.
-          // Only allow seeks from explicit user actions during immunity.
           if (isTabReturnImmune() && !state.seeking &&
             (now() - state.lastUserActionTime) > 2000) return;
 
           // Android Chromium random seek protection:
-          // Android Chrome fires spurious seeking events (buffer adjustments, tiny position
-          // corrections) that disrupt playback. Ignore micro-seeks (<0.5s change) that
-          // weren't triggered by a user action or programmatic seek target.
           if (platform.androidChromium && state.pendingSeekTarget == null) {
             const _curTime = Number(videoEl.currentTime) || 0;
             const _prevTime = state.lastKnownGoodVT || 0;
             const _delta = Math.abs(_curTime - _prevTime);
             const _recentUserAction = (now() - state.lastUserActionTime) < 2000;
             if (_delta < 0.5 && !_recentUserAction && !state.seeking && state.intendedPlaying) {
-              // Spurious micro-seek — ignore it entirely
               return;
             }
           }
@@ -8908,7 +9096,6 @@ try {
           if (state.restarting) return;
           // During immunity, if this seeked event is from a spurious browser seek
           // (not from our programmatic seek machinery), skip the audio sync.
-          // The seeking handler already bailed out, so state.seeking is false.
           if (isTabReturnImmune() && !state.seeking) return;
           clearSeekWatchdog();
           clearAudioPauseLocks();
@@ -8916,6 +9103,13 @@ try {
           state.audioStallVideoPaused = false;
           // Get the definitive seek target — video.currentTime() is reliable after seeked
           const newTime = Number(video.currentTime());
+          // phantom loop guard (backup): if seeked lands at near-0 but nobody asked,
+          // the seeking handler should have caught it. if it didn't (e.g. seeking
+          // handler's lastKnownGoodVT was already 0), skip audio sync.
+          if (newTime < 0.5 && !state.seeking && state.firstPlayCommitted && !isLoopDesired() &&
+              (now() - state.lastUserActionTime) > 2000 && state.pendingSeekTarget == null) {
+            return;
+          }
           state.lastKnownGoodVT = newTime;
           state.lastKnownGoodVTts = now();
           state.pendingSeekTarget = newTime;
@@ -9397,10 +9591,10 @@ try {
               }
             }
 
-            // Schedule a sync after things settle — this handles position correction
-            // without the aggressive seeking that causes glitches
+            // Schedule a sync soon — position correction without aggressive seeking.
+            // 100ms is enough for the decoder to warm up from the instant shot play().
             setFastSync(800);
-            scheduleSync(300);
+            scheduleSync(100);
           }
           // Startup retry on tab-return: kick the startup kick regardless.
           if (wantsStartupAutoplay()) {
@@ -9511,6 +9705,17 @@ try {
       state.videoStallAudioPaused = false;
       state.stallAudioPausedSince = 0;
       state.stallAudioResumeHoldUntil = 0;
+
+      // Instant shot on focus too (covers alt-tab where visibilitychange may not fire)
+      if (state.intendedPlaying && document.visibilityState === "visible") {
+        const _nFocus = HTMLMediaElement.prototype.play;
+        const _fVN = getVideoNode();
+        if (_fVN && _fVN.paused) { try { _nFocus.call(_fVN).catch(() => {}); } catch {} }
+        if (coupledMode && audio && audio.paused) {
+          state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 800);
+          try { _nFocus.call(audio).catch(() => {}); } catch {}
+        }
+      }
 
       // Let tab-return manager handle immunity, intercept, rapid counter resets,
       // alt-tab flag clearing, instant play, and bbtab/wakeup retry.
@@ -9638,8 +9843,12 @@ try {
 
     // Continuously enforce t=0 while loading in background — browsers can buffer/seek
     // to non-zero keyframes before we start playing. Remove once first play committed.
+    let _enforceZeroDisabled = false;
     const enforceStartAtZero = () => {
-      if (state.firstPlayCommitted || state.audioEverStarted || state.intendedPlaying) {
+      if (_enforceZeroDisabled) return;
+      if (state.firstPlayCommitted || state.audioEverStarted || state.intendedPlaying ||
+          state.startupKickDone || state.startupKickInFlight) {
+        _enforceZeroDisabled = true;
         try { videoEl.removeEventListener("timeupdate", enforceStartAtZero); } catch {}
         return;
       }
@@ -9711,9 +9920,11 @@ try {
     // during programmatic operations (seeking, stall recovery, startup), don't
     // snap audio volume — it causes pops. the operation will set volume itself.
     if (state.seeking || state.seekBuffering || state.restarting ||
-        state.videoStallAudioPaused || NotMakePlayBackFixingNoticable.isRecovering()) {
+        state.videoStallAudioPaused || NotMakePlayBackFixingNoticable.isActive()) {
       return;
     }
+    // During tab return grace, don't snap volume — let NMPBFN handle it
+    if (isTabReturnImmune() && state.firstPlayCommitted) return;
     if (state.audioFading) cancelActiveFade();
     updateAudioGainImmediate(true);
     // Only track user-initiated mute: recent user action + no programmatic flags
