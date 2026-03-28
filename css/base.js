@@ -1139,15 +1139,18 @@ _seekPostTimers: []
           try { audio.volume = targetVol; } catch {}
         }
 
-        // Play video
+        // Play video — use native play() to bypass all wrappers for speed.
+        // The gate/dedup exist to prevent double-play during normal operation,
+        // but during recovery we WANT the play to go through unconditionally.
+        const _nPlay = HTMLMediaElement.prototype.play;
         const vn = getVideoNode();
         if (vn && vn.paused) {
-          try { vn.play().catch(() => {}); } catch {}
+          try { _nPlay.call(vn).catch(() => {}); } catch {}
         }
 
-        // Play audio
+        // Play audio — same, native play bypasses the stall-check gate
         if (coupledMode && audio && audio.paused) {
-          try { audio.play().catch(() => {}); } catch {}
+          try { _nPlay.call(audio).catch(() => {}); } catch {}
         }
 
         // Ensure video isn't muted
@@ -9317,17 +9320,18 @@ try {
               (!state.firstPlayCommitted && wantsStartupAutoplay())) {
             state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 1500);
             DONTMAKEITDOUBLEPLAY.resetAll();
+            // bypass ALL wrappers (gate, dedup, execProgrammatic) — call the
+            // browser's native play() directly. this is the fastest possible
+            // resume. wrappers add guards/checks that cost 1-5ms and can reject
+            // the call; we want zero delay here.
+            const _nativePlay = HTMLMediaElement.prototype.play;
             const _immVN = getVideoNode();
-            if (_immVN && _immVN.paused) { try { _immVN.play().catch(() => {}); } catch {} }
+            if (_immVN && _immVN.paused) { try { _nativePlay.call(_immVN).catch(() => {}); } catch {} }
             if (coupledMode && audio) {
+              const _immVol = targetVolFromVideo();
+              try { audio.volume = _immVol; } catch {}
               if (audio.paused) {
-                const _immVT = (() => { try { return Number(video.currentTime()); } catch { return 0; } })();
-                if (isFinite(_immVT)) safeSetAudioTime(_immVT);
-                try { audio.volume = targetVolFromVideo(); } catch {}
-                try { audio.play().catch(() => {}); } catch {}
-              } else {
-                // audio still playing — just verify volume is right, don't seek
-                try { audio.volume = targetVolFromVideo(); } catch {}
+                try { _nativePlay.call(audio).catch(() => {}); } catch {}
               }
             }
           }
