@@ -232,7 +232,23 @@ document.addEventListener("DOMContentLoaded", () => {
     // Ensure it can never accidentally play
     try { if (!audio.paused) audio.pause(); } catch {}
   }
-  // --- loop: just use native videoEl.loop as the source of truth
+  // --- loop: use native videoEl.loop as the source of truth.
+  // Fix: some pages / Video.js configs set the "loop" attribute on the <video> tag
+  // unintentionally. Strip it on startup so videos don't auto-restart unless
+  // loop is explicitly set AFTER init by application code.
+  // This preserves loop functionality for when it's actually wanted.
+  try { videoEl.loop = false; } catch {}
+  try { videoEl.removeAttribute("loop"); } catch {}
+  // Also strip from Video.js inner element (it creates a new <video> inside its container)
+  video.ready(() => {
+    try {
+      const inner = video.el()?.querySelector?.("video");
+      if (inner && inner !== videoEl) {
+        inner.loop = false;
+        try { inner.removeAttribute("loop"); } catch {}
+      }
+    } catch {}
+  });
   function isLoopDesired() {
     try { return videoEl.loop; } catch { return false; }
   }
@@ -484,7 +500,12 @@ _stallAudioPauseTimer: null,
 seekBuffering: false,
 seekBufferResumeTimer: null,
 _allowAudioTimeWrite: false,
-_seekPostTimers: []
+_seekPreVolume: null,
+_seekPostTimers: [],
+// MakeSureUnintentionalLoopDoesntEverHappenAtALLManager state
+endedNaturally: false,
+endedAt: 0,
+endedLockUntil: 0
   };
 
   // wraps audio.play() so nothing can start audio while video is actually buffering.
@@ -1513,12 +1534,13 @@ _seekPostTimers: []
     let _lastAudioPos = 0;
     let _lastCheckAt = 0;
     let _frozenCount = 0;
-    const TICK_MS = 750; // 750ms — reduces CPU on slow devices while still catching issues
+    const TICK_MS = 500; // 500ms — catches audio issues faster
     const MAX_DRIFT = 0.5;
     const FROZEN_THRESHOLD = 4; // ticks of no progress = frozen (3s)
 
   function _shouldRun() {
     if (!coupledMode || !audio || !state.intendedPlaying) return false;
+    if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) return false;
     if (state.seeking || state.seekBuffering || state.restarting) return false;
     if (state.strictBufferHold || state.videoWaiting || state.audioWaiting) return false;
     if (state.startupPhase) return false;
@@ -3277,7 +3299,7 @@ _seekPostTimers: []
   const AUDIO_PLAY_ATTEMPT_RESET_MS = 5000;
   const AUDIO_STARTUP_PLAY_RETRY_MS = 300;
   const MAX_AUDIO_STARTUP_RETRIES = 20;
-  const STARTUP_SETTLE_MS = 3000; // extended to cover slow page loads
+  const STARTUP_SETTLE_MS = 2000; // balanced: covers slow loads without blocking too long
   const LOOP_DETECTION_WINDOW_MS = 2000;
   // Increased from 6→14: 6 events fires too easily during tab switches / buffering states.
   // 14 is still well below any real infinite loop scenario.
@@ -3381,7 +3403,7 @@ _seekPostTimers: []
         // without re-triggering the full startup machinery
         if (coupledMode && _loadVideoPlaying && !_loadAudioPlaying && audio &&
             state.intendedPlaying && !state.seeking) {
-          state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 1200);
+          state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 600);
           const _loadVol = targetVolFromVideo();
           try { audio.volume = _loadVol; } catch {}
           execProgrammaticAudioPlay({ squelchMs: 400, force: true, minGapMs: 0 }).catch(() => {});
@@ -3583,7 +3605,7 @@ _seekPostTimers: []
 
     // Auto-disengage after immunity expires
     if (_pauseInterceptTimer) clearTimeout(_pauseInterceptTimer);
-    _pauseInterceptTimer = setTimeout(disengagePauseIntercept, 3200);
+    _pauseInterceptTimer = setTimeout(disengagePauseIntercept, 2000);
   }
 
   function disengagePauseIntercept() {
@@ -3863,7 +3885,7 @@ _seekPostTimers: []
     state.rapidToggleUntil = 0;
     state.loopPreventionCooldownUntil = 0;
 
-    setTimeout(() => { state.userGesturePauseIntent = false; }, 2000);
+    setTimeout(() => { state.userGesturePauseIntent = false; }, 1200);
     const until = now() + Math.max(0, Number(ms) || 0);
     state.userPauseUntil = Math.max(state.userPauseUntil, until);
     state.userPauseLockUntil = Math.max(state.userPauseLockUntil, until + 300);
@@ -4060,6 +4082,83 @@ _seekPostTimers: []
     return false;
   }
 
+  // =========================================================================
+  // MakeSureUnintentionalLoopDoesntEverHappenAtALLManager
+  // =========================================================================
+  // Catches ALL scenarios where the video restarts from the beginning when it
+  // shouldn't — browser-native loop, phantom seeks to 0, ended→play races,
+  // sync machinery accidentally restarting, etc. This is the final safety net.
+  const MakeSureUnintentionalLoopDoesntEverHappenAtALLManager = (() => {
+    const LOCK_DURATION_MS = 8000; // block auto-restart for 8s after ended
+
+    function onEnded() {
+      state.endedNaturally = true;
+      state.endedAt = now();
+      state.endedLockUntil = now() + LOCK_DURATION_MS;
+      state.intendedPlaying = false;
+      state.bufferHoldIntendedPlaying = false;
+      state.resumeOnVisible = false;
+      state.bgHiddenWasPlaying = false;
+    }
+
+    // Call this before any auto-play/resume to check if we should block it
+    function shouldBlockAutoRestart() {
+      if (!state.endedNaturally) return false;
+      if (now() < state.endedLockUntil) return true;
+      // lock expired, clear
+      state.endedNaturally = false;
+      return false;
+    }
+
+    // User explicitly clicks play → clear the ended lock
+    function onUserPlay() {
+      state.endedNaturally = false;
+      state.endedAt = 0;
+      state.endedLockUntil = 0;
+    }
+
+    // Checks if video is at/near 0 and nobody asked for it (phantom restart)
+    function isPhantomRestart(videoTime) {
+      if (!state.firstPlayCommitted) return false;
+      if (state.restarting || state.seeking) return false;
+      if (isLoopDesired()) return false;
+      if (videoTime > 1.0) return false;
+      // video is near 0 after we were well into playback
+      if (state.endedNaturally) return true;
+      const lastGood = state.lastKnownGoodVT || 0;
+      if (lastGood > 3.0 && videoTime < 0.5) {
+        // big backward jump nobody asked for
+        const userRecent = (now() - state.lastUserActionTime) < 2000;
+        const programmatic = state.pendingSeekTarget != null;
+        if (!userRecent && !programmatic) return true;
+      }
+      return false;
+    }
+
+    // Periodic tick — if video somehow restarted, kill it
+    function tick() {
+      if (!state.endedNaturally) return;
+      if (now() > state.endedLockUntil) {
+        state.endedNaturally = false;
+        return;
+      }
+      const vn = getVideoNode();
+      if (!vn) return;
+      const vt = Number(vn.currentTime) || 0;
+      // video is playing from near 0 after it ended — kill it
+      if (vt < 2.0 && !vn.paused && !state.restarting && !isLoopDesired()) {
+        try { vn.pause(); } catch {}
+        if (coupledMode && audio && !audio.paused) {
+          try { audio.pause(); } catch {}
+        }
+        state.intendedPlaying = false;
+        state.bufferHoldIntendedPlaying = false;
+      }
+    }
+
+    return { onEnded, shouldBlockAutoRestart, onUserPlay, isPhantomRestart, tick };
+  })();
+
   function shouldIgnorePauseAsTransient() {
     if (mediaSessionForcedPauseActive()) return false;
     if (userPauseIntentActive() || userPauseLockActive()) return false;
@@ -4115,6 +4214,7 @@ _seekPostTimers: []
   function enforceAudioPlayback(force = false) {
     if (!coupledMode || !audio) return;
     if (!state.intendedPlaying) return;
+    if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) return;
     if (userPauseLockActive() || mediaSessionForcedPauseActive()) return;
     if (state.seeking || state.restarting || state.syncing) return;
     // only block if video is actually starved (check readyState, not just flags)
@@ -4466,13 +4566,14 @@ _seekPostTimers: []
         const currentPos = Number(audio.currentTime) || 0;
         const timeDiff = Math.abs(currentPos - t);
 
-        // if audio is currently playing and we're in the first 3s of playback,
-        // only seek for really large drift (>1.5s). small drift at startup is
+        // if audio is currently playing and we're in the first 1.5s of playback,
+        // only seek for large drift (>0.5s). small drift at startup is
         // normal — decoders initialize at different speeds. the sync loop
         // corrects it via rate nudging without any audible skip.
+        // Was 3s/1.5s — too aggressive, blocked initial sync causing audio to lag.
         const inEarlyPlayback = !audio.paused && _audioFirstPlayedAt > 0 &&
-          (performance.now() - _audioFirstPlayedAt) < 3000;
-        if (inEarlyPlayback && timeDiff < 1.5) return;
+          (performance.now() - _audioFirstPlayedAt) < 1500;
+        if (inEarlyPlayback && timeDiff < 0.5) return;
 
         // during startup (audio not yet confirmed playing), use 0.5s threshold
         // during normal playback, use 0.15s — drift under 150ms is imperceptible
@@ -4480,10 +4581,10 @@ _seekPostTimers: []
         const threshold = isStartup ? 0.5 : 0.15;
         if (timeDiff <= threshold) return;
 
-        // debounce: max one seek per 500ms during startup, per 250ms during normal play.
+        // debounce: max one seek per 400ms during startup, per 150ms during normal play.
         // rapid-fire seeks from competing code paths cause the random seek stutter.
         const _now = performance.now();
-        const debounce = isStartup ? 500 : 250;
+        const debounce = isStartup ? 400 : 150;
         if ((_now - _lastSafeSeekAt) < debounce) return;
         _lastSafeSeekAt = _now;
         audio.currentTime = t;
@@ -4520,7 +4621,7 @@ _seekPostTimers: []
         // Pause to flush decode buffer (prevents "repeat last 0.5s" artifact)
         state.isProgrammaticAudioPause = true;
         try { audio.pause(); } catch {}
-        setTimeout(() => { state.isProgrammaticAudioPause = false; }, 300);
+        setTimeout(() => { state.isProgrammaticAudioPause = false; }, 150);
       } else {
         cancelActiveFade();
       }
@@ -4536,7 +4637,7 @@ _seekPostTimers: []
         try {
           const p = audio.play();
           if (p && p.catch) p.catch(() => {});
-          setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 400);
+          setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 200);
         } catch {
           state.isProgrammaticAudioPlay = false;
         }
@@ -4818,7 +4919,7 @@ _seekPostTimers: []
       const inner = video?.el?.()?.querySelector?.("video");
       if (inner && !inner.paused) inner.pause();
     } catch {}
-    setTimeout(() => { state.isProgrammaticVideoPause = false; }, 500);
+    setTimeout(() => { state.isProgrammaticVideoPause = false; }, 250);
   }
 
   function execProgrammaticVideoPlay() {
@@ -4835,7 +4936,7 @@ try {
   }
   if (p && p.then) {
     p.then(() => {
-      setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 500);
+      setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 250);
     }).catch((err) => {
       // Chromium autoplay policy: if play() fails because video is unmuted,
       // mute it and retry (in coupled mode, audio comes from separate element)
@@ -4847,10 +4948,10 @@ try {
           if (p2 && p2.catch) p2.catch(() => {});
         } catch {}
       }
-      setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 500);
+      setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 250);
     });
   } else {
-    setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 500);
+    setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 250);
   }
   return p;
 } catch (e) {
@@ -4879,7 +4980,7 @@ try {
     cancelActiveFade();
     try { audio.pause(); } catch {}
 
-    setTimeout(() => { state.isProgrammaticAudioPause = false; }, 500);
+    setTimeout(() => { state.isProgrammaticAudioPause = false; }, 200);
   }
 
   async function execProgrammaticAudioPlay(opts = {}) {
@@ -4996,7 +5097,7 @@ try {
       return !audio.paused;
     } finally {
       state.audioPlayInFlight = null;
-      setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 500);
+      setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 250);
     }
   }
 
@@ -5086,7 +5187,7 @@ try {
       const target = isFinite(vt) ? vt : (isFinite(at) ? at : 0);
       await execProgrammaticAudioPause(600);
       safeSetAudioTime(target);
-      await new Promise(r => setTimeout(r, 100));
+      await new Promise(r => setTimeout(r, 30));
       if (state.intendedPlaying && !getVideoPaused() && !userPauseLockActive() && !shouldBlockNewAudioStart()) {
         resetAudioPlaybackRate();
         await execProgrammaticAudioPlay({ squelchMs: 600, force: true, minGapMs: 0 }).catch(() => false);
@@ -5111,7 +5212,7 @@ try {
         safeSetCT(videoEl, nudge);
         if (v && v !== videoEl) safeSetCT(v, nudge);
       } catch {}
-      await new Promise(r => setTimeout(r, 120));
+      await new Promise(r => setTimeout(r, 50));
       try { await Promise.resolve(execProgrammaticVideoPlay()); } catch {}
       if (!getVideoPaused()) {
         const vt = Number(video.currentTime()) || t;
@@ -5531,7 +5632,7 @@ try {
       const inner = video?.el?.()?.querySelector?.("video");
       if (inner && !inner.paused) inner.pause();
     } catch {}
-    setTimeout(() => { state.isProgrammaticVideoPause = false; }, 500);
+    setTimeout(() => { state.isProgrammaticVideoPause = false; }, 250);
 
     if (coupledMode && audio) {
       state.audioPauseUntil = Math.max(state.audioPauseUntil, now() + 300);
@@ -5554,7 +5655,7 @@ try {
       } else {
         cancelActiveFade();
         try { audio.pause(); } catch {}
-        setTimeout(() => { state.isProgrammaticAudioPause = false; }, 300);
+        setTimeout(() => { state.isProgrammaticAudioPause = false; }, 150);
       }
     } else if (!coupledMode && audio && !audio.paused) {
       // Non-coupled mode (e.g. quality=medium): audio element exists but has no source.
@@ -6000,7 +6101,7 @@ try {
           const inner = video?.el?.()?.querySelector?.("video");
           if (inner) inner.play().catch(() => {});
         } catch {}
-        setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 500);
+        setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 250);
         updateMediaSessionPlaybackState();
       }
     };
@@ -6045,7 +6146,7 @@ try {
       state.firstSeekDone = true;
       state.pendingSeekTarget = null;
       state.seekCompleted = true; state._seekStartedAt = 0;
-      state.seekCooldownUntil = now() + 600;
+      state.seekCooldownUntil = now() + 300;
       setFastSync(2200);
 
       if (wantedPlaying) {
@@ -6060,7 +6161,7 @@ try {
           const inner = video?.el?.()?.querySelector?.("video");
           if (inner && inner !== videoEl) inner.play().catch(() => {});
         } catch {}
-        setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 500);
+        setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 250);
       }
       scheduleSync(0);
       return;
@@ -6103,7 +6204,7 @@ try {
         state.audioPlayUntil = 0;
         state.audioPauseUntil = 0;
         state.pendingSeekTarget = null;
-        state.seekCooldownUntil = now() + 600;
+        state.seekCooldownUntil = now() + 300;
       }
       return;
     }
@@ -6136,7 +6237,7 @@ try {
         state.seekCompleted = true; state._seekStartedAt = 0;
         state.audioPlayUntil = 0;
         state.audioPauseUntil = 0;
-        state.seekCooldownUntil = now() + 600;
+        state.seekCooldownUntil = now() + 300;
       }
       return;
     }
@@ -6155,7 +6256,7 @@ try {
           state.seeking = false;
           state.firstSeekDone = true;
           state.seekCompleted = true; state._seekStartedAt = 0;
-          state.seekCooldownUntil = now() + 600;
+          state.seekCooldownUntil = now() + 300;
         }
         if (startSeekBufferWait(true)) return;
         // startSeekBufferWait returned false = video already buffered. Clear and resume.
@@ -6168,11 +6269,13 @@ try {
     clearBufferHold();
 
     // Final position sync before resuming — bypass gate but guard near-0 restart
+    // Only sync if drift is significant (>0.15s). The 0.05s threshold before caused
+    // audio decode buffer flushes on tiny drift, producing audible glitches on seek.
     const vt2 = Number(video.currentTime());
     if (isFinite(vt2) && coupledMode && audio) {
       const at2 = Number(audio.currentTime) || 0;
       const _fsWouldRestart = vt2 < 0.5 && at2 > 1.0 && state.firstPlayCommitted && !state.restarting && !isLoopDesired();
-      if (!_fsWouldRestart && Math.abs(at2 - vt2) > 0.05) {
+      if (!_fsWouldRestart && Math.abs(at2 - vt2) > 0.15) {
         state._allowAudioTimeWrite = true;
         try { audio.currentTime = vt2; } catch {}
         state._allowAudioTimeWrite = false;
@@ -6181,7 +6284,7 @@ try {
 
     if (state.seekId !== currentSeekId) return;
 
-    state.seekCooldownUntil = now() + 600;
+    state.seekCooldownUntil = now() + 300;
     setFastSync(2600);
 
     if (state.seekId === currentSeekId) {
@@ -6229,7 +6332,7 @@ try {
           const _seekTargetVol = targetVolFromVideo();
           try { audio.volume = _seekTargetVol; } catch {}
           // grace period so buffer monitor doesn't immediately kill this
-          state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 1200);
+          state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 600);
           if (audio.paused) {
             execProgrammaticAudioPlay({ squelchMs: 400, force: true, minGapMs: 0 })
               .then(ok => { if (ok) { try { audio.volume = _seekTargetVol; } catch {} } })
@@ -6258,15 +6361,16 @@ try {
           // both playing? just fix drift if needed
           if (!audio.paused && !getVideoPaused() && isFinite(vt)) {
             const drift = Math.abs((Number(audio.currentTime) || 0) - vt);
-            if (drift > 0.4) {
+            // Only correct noticeable drift (>0.25s). Smaller drift is
+            // imperceptible and seeking for it flushes the audio decode buffer,
+            // causing the audible glitch/pop on seek.
+            if (drift > 0.25) {
               const _sgAt = Number(audio.currentTime) || 0;
               const _sgWouldRestart = vt < 0.5 && _sgAt > 1.0 && state.firstPlayCommitted && !state.restarting && !isLoopDesired();
               if (!_sgWouldRestart) {
                 const _bufAhead = bufferedAhead(audio, vt);
                 if (_bufAhead > 0.1) {
-                  state._allowAudioTimeWrite = true;
-                  try { audio.currentTime = vt; } catch {}
-                  state._allowAudioTimeWrite = false;
+                  safeSetAudioTime(vt);
                 }
               }
             }
@@ -6280,7 +6384,7 @@ try {
           state._allowAudioTimeWrite = false;
           const _sgVol = targetVolFromVideo();
           try { audio.volume = _sgVol; } catch {}
-          state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 1200);
+          state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 600);
           execProgrammaticAudioPlay({ squelchMs: 400, force: true, minGapMs: 0 })
           .catch(() => {});
         }, delay);
@@ -6292,7 +6396,7 @@ try {
       // often fires 50-200ms after seek finalize because the decoder needs to refill.
       // If we clear the flag now, the waiting handler kills audio immediately (play-pause).
       // Keep the flag alive for 800ms so post-seek rebuffering doesn't murder audio.
-      setTimeout(() => { state.seekResumeInFlight = false; }, 800);
+      setTimeout(() => { state.seekResumeInFlight = false; }, 400);
       try { MakeSureAudioIsNotCuttingOrWeird.onSeekEnd(); } catch {}
     }
   }
@@ -6604,6 +6708,8 @@ try {
     state.syncTimer = null;
     state.syncScheduledAt = 0;
     enforcePlaybackRateSync();
+    // Anti-loop tick — catch phantom restarts every sync cycle
+    try { MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.tick(); } catch {}
 
     // Safety: unstick seeking if stuck >8s
     if ((state.seeking || state.seekBuffering) && state._seekStartedAt > 0 &&
@@ -6709,10 +6815,10 @@ try {
         if (state.intendedPlaying && !state.restarting && !state.seeking && !state.syncing && !skipDrift && !state.seekResumeInFlight && !state.seekBuffering) {
           if (state.audioEverStarted && !audio.paused && !inBgDrift && !state.startupPhase) {
             const _syncDrift = Math.abs(at - vt);
-            // only correct large drift (>0.4s). small drift is imperceptible and
-            // seeking to fix it causes more disruption than the drift itself.
+            // only correct noticeable drift (>0.25s). very small drift is imperceptible
+            // and seeking to fix it causes more disruption than the drift itself.
             // the 0.05s threshold before caused constant micro-seeks (random seek stutter).
-            if (_syncDrift > 0.4) {
+            if (_syncDrift > 0.25) {
               await quietSeekAudio(vt);
               at = vt;
             }
@@ -6756,7 +6862,8 @@ try {
         isAltTabTransitionActive() ||
         (platform.chromiumOnlyBrowser && chromiumBgPauseBlocked());
 
-        if (state.intendedPlaying && !state.restarting && !state.seeking && !state.seekBuffering && !state.syncing) {
+        if (state.intendedPlaying && !state.restarting && !state.seeking && !state.seekBuffering && !state.syncing &&
+          !MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) {
           if (state.strictBufferHold) {
             if (!vPaused) execProgrammaticVideoPause();
             if (!aPaused) execProgrammaticAudioPause(500);
@@ -6838,7 +6945,7 @@ try {
                 squelchAudioEvents(600);
                 state.audioPauseUntil = Math.max(state.audioPauseUntil, now() + 600);
                 try { audio.volume = 0; audio.pause(); } catch {}
-                setTimeout(() => { state.isProgrammaticAudioPause = false; }, 300);
+                setTimeout(() => { state.isProgrammaticAudioPause = false; }, 150);
               } else if (state.videoWaiting && _syncRS >= HAVE_FUTURE_DATA) {
                 // stale flag, clear it
                 state.videoWaiting = false;
@@ -6917,7 +7024,7 @@ try {
             } else {
               cancelActiveFade();
               try { audio.pause(); } catch {}
-              setTimeout(() => { state.isProgrammaticAudioPause = false; }, 300);
+              setTimeout(() => { state.isProgrammaticAudioPause = false; }, 150);
             }
           }
         }
@@ -7211,7 +7318,7 @@ try {
                 const vtWd = Number(video.currentTime()) || 0;
               safeSetAudioTime(vtWd);
               try { audio.volume = targetVolFromVideo(); } catch {}
-              state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 1200);
+              state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 600);
               execProgrammaticAudioPlay({ squelchMs: 400, force: true, minGapMs: 0 })
               .catch(() => {});
                 }
@@ -7302,6 +7409,7 @@ try {
   // =========================================================================
   const PlayerErrorOverlay = (() => {
     let _el = null;
+    let _stackPopup = null;
     let _visible = false;
 
     // inject all styles inline — no external CSS needed
@@ -7377,6 +7485,48 @@ try {
         }
         .pe-overlay-btn-outline:hover { background-color: rgba(255,255,255,.08) !important; border-color: #888 !important; color: #fff !important; }
         .pe-overlay-btn-outline:active { background-color: rgba(255,255,255,.14) !important; }
+        .pe-overlay-stack-link {
+          font-size: 13px; color: #3ea6ff; cursor: pointer;
+          margin-top: 8px; display: none;
+          background: none; border: none; padding: 0;
+          font-family: inherit; text-decoration: underline;
+          text-align: left;
+        }
+        .pe-overlay-stack-link:hover { color: #7fc4ff; }
+        .pe-stack-popup-backdrop {
+          position: fixed; inset: 0; z-index: 99999;
+          background: rgba(0,0,0,.7);
+          display: flex; align-items: center; justify-content: center;
+          opacity: 0; pointer-events: none;
+          transition: opacity .15s ease;
+        }
+        .pe-stack-popup-backdrop.pe-stack-popup-open {
+          opacity: 1; pointer-events: auto;
+        }
+        .pe-stack-popup {
+          background: #1a1a1a; border-radius: 12px;
+          padding: 20px 24px; width: 90vw; max-width: 640px;
+          max-height: 70vh; overflow-y: auto;
+          box-shadow: 0 8px 32px rgba(0,0,0,.6);
+          position: relative;
+        }
+        .pe-stack-popup-title {
+          font-size: 14px; font-weight: 600; color: #fff;
+          margin-bottom: 12px; display: flex; align-items: center;
+          justify-content: space-between;
+        }
+        .pe-stack-popup-close {
+          background: none; border: none; color: #888;
+          font-size: 22px; cursor: pointer; padding: 0 4px;
+          line-height: 1; font-family: inherit;
+        }
+        .pe-stack-popup-close:hover { color: #fff; }
+        .pe-overlay-stack {
+          font-size: 12px; color: #ccc; white-space: pre-wrap;
+          word-break: break-all; font-family: "Roboto Mono", "Consolas", "Courier New", monospace;
+          margin: 0; line-height: 1.6;
+          user-select: text; -webkit-user-select: text;
+        }
       `;
       document.head.appendChild(s);
     }
@@ -7395,6 +7545,7 @@ try {
             <div class="pe-overlay-title"></div>
             <div class="pe-overlay-msg"></div>
             <div class="pe-overlay-code"></div>
+            <button class="pe-overlay-stack-link">Show stack trace</button>
             <div class="pe-overlay-actions">
               <button class="pe-overlay-btn" style="display:none">Reload</button>
               <a class="pe-overlay-btn-outline" style="display:none" target="_blank" rel="noopener">Report Issue</a>
@@ -7412,10 +7563,36 @@ try {
         hide();
         window.location.reload();
       });
+      // Stack trace popup — lives on document.body, centered on screen
+      _stackPopup = document.createElement("div");
+      _stackPopup.className = "pe-stack-popup-backdrop";
+      _stackPopup.innerHTML = `
+        <div class="pe-stack-popup">
+          <div class="pe-stack-popup-title">
+            <span>Stack Trace</span>
+            <button class="pe-stack-popup-close">&times;</button>
+          </div>
+          <pre class="pe-overlay-stack"></pre>
+        </div>
+      `;
+      document.body.appendChild(_stackPopup);
+      // close button
+      _stackPopup.querySelector(".pe-stack-popup-close").addEventListener("click", () => {
+        _stackPopup.classList.remove("pe-stack-popup-open");
+      });
+      // click backdrop to close
+      _stackPopup.addEventListener("click", (e) => {
+        if (e.target === _stackPopup) _stackPopup.classList.remove("pe-stack-popup-open");
+      });
+      // "Show stack trace" link opens the popup
+      const stackLink = _el.querySelector(".pe-overlay-stack-link");
+      stackLink.addEventListener("click", () => {
+        _stackPopup.classList.add("pe-stack-popup-open");
+      });
       return _el;
     }
 
-    function show({ title, message, code, canRetry, reportUrl }) {
+    function show({ title, message, code, canRetry, reportUrl, stackTrace }) {
       const el = _create();
       const titleEl = el.querySelector(".pe-overlay-title");
       if (title && title.includes("<")) {
@@ -7434,12 +7611,27 @@ try {
       } else {
         reportBtn.style.display = "none";
       }
+      // stack trace — show the link if we have trace data; popup is separate
+      const stackLink = el.querySelector(".pe-overlay-stack-link");
+      if (stackTrace && _stackPopup) {
+        _stackPopup.querySelector(".pe-overlay-stack").textContent = stackTrace;
+        stackLink.style.display = "";
+        stackLink.textContent = "Show stack trace";
+        _stackPopup.classList.remove("pe-stack-popup-open");
+      } else {
+        stackLink.style.display = "none";
+        if (_stackPopup) {
+          _stackPopup.classList.remove("pe-stack-popup-open");
+          _stackPopup.querySelector(".pe-overlay-stack").textContent = "";
+        }
+      }
       el.classList.add("pe-visible");
       _visible = true;
     }
 
     function hide() {
       if (_el) _el.classList.remove("pe-visible");
+      if (_stackPopup) _stackPopup.classList.remove("pe-stack-popup-open");
       _visible = false;
     }
 
@@ -7599,9 +7791,39 @@ try {
     try { pauseHard(); } catch {}
     _errorOverlayShown = true;
 
-    // build report URL with error context pre-filled
     const _reportBase = "https://codeberg.org/ashleyirispuppy/poke/issues/new?template=issue_template%2fplayer-bug.yml";
-    const _errLabel = isBug ? "BUG" : errorId;
+
+    // build stack trace from the error objects
+    let _stack = "";
+    try {
+      const parts = [];
+      parts.push("Error scope: " + scope);
+      parts.push("Error code: " + worstCode + " (" + errorId + ")");
+      parts.push("User agent: " + navigator.userAgent);
+      parts.push("Time: " + new Date().toISOString());
+      if (_videoErrorObj) {
+        parts.push("\n--- Video Error ---");
+        parts.push("code: " + (_videoErrorObj.code || "?"));
+        parts.push("message: " + (_videoErrorObj.message || "(none)"));
+        try { parts.push("video.src: " + (videoEl.currentSrc || videoEl.src || "?")); } catch {}
+        try { parts.push("video.readyState: " + videoEl.readyState); } catch {}
+        try { parts.push("video.networkState: " + videoEl.networkState); } catch {}
+      }
+      if (_audioErrorObj) {
+        parts.push("\n--- Audio Error ---");
+        parts.push("code: " + (_audioErrorObj.code || "?"));
+        parts.push("message: " + (_audioErrorObj.message || "(none)"));
+        try { parts.push("audio.src: " + (audio.currentSrc || audio.src || "?")); } catch {}
+        try { parts.push("audio.readyState: " + audio.readyState); } catch {}
+        try { parts.push("audio.networkState: " + audio.networkState); } catch {}
+      }
+      parts.push("\n--- Player State ---");
+      parts.push("firstPlayCommitted: " + state.firstPlayCommitted);
+      parts.push("intendedPlaying: " + state.intendedPlaying);
+      parts.push("startupPhase: " + state.startupPhase);
+      parts.push("coupledMode: " + coupledMode);
+      _stack = parts.join("\n");
+    } catch { _stack = "Failed to collect error details"; }
 
     PlayerErrorOverlay.show({
       title: isBug ? "You found a bug!" : (titles[worstCode] || "Playback error"),
@@ -7610,7 +7832,8 @@ try {
         : (messages[worstCode] || (msg || "An unexpected error occurred.")),
       code: errorId,
       canRetry: true,
-      reportUrl: _reportBase
+      reportUrl: _reportBase,
+      stackTrace: _stack
     });
   }
 
@@ -7771,6 +7994,8 @@ try {
         state.userPauseIntentPresetAt = now();
       } else {
         state.userPlayIntentPresetAt = now();
+        // User wants to play — clear ended lock so restart is allowed
+        MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.onUserPlay();
         // Reset play dedup so user's play() goes through immediately
         DONTMAKEITDOUBLEPLAY.resetAll();
       }
@@ -7817,7 +8042,7 @@ try {
             state.bufferHoldIntendedPlaying = false;
             MediumQualityManager.markUserPaused();
             state.userGesturePauseIntent = true;
-            setTimeout(() => { state.userGesturePauseIntent = false; }, 2000);
+            setTimeout(() => { state.userGesturePauseIntent = false; }, 1200);
           }
         }
         return;
@@ -7988,6 +8213,20 @@ try {
     });
     video.on("play", () => {
       if (state.seeking || state.seekBuffering) return;
+      // Anti-loop: if video ended naturally and something is trying to auto-restart,
+      // block it unless the user explicitly clicked play.
+      const _isUserPlayAction = (now() - state.lastUserActionTime) < 1500 &&
+        document.visibilityState === "visible";
+      if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart() && !_isUserPlayAction) {
+        execProgrammaticVideoPause();
+        if (coupledMode && audio && !audio.paused) {
+          try { audio.pause(); } catch {}
+        }
+        return;
+      }
+      if (_isUserPlayAction) {
+        MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.onUserPlay();
+      }
       // TAB RETURN + STARTUP IMMUNITY: accept play if we were playing or during startup.
       // Never override an explicit user pause.
       if (state.tabReturnImmuneUntil > now() && (state.intendedPlaying || !state.firstPlayCommitted)) {
@@ -8213,7 +8452,7 @@ try {
             state.playSessionId++;
             state.videoWaiting = false;
             state.userGesturePauseIntent = true;
-            setTimeout(() => { state.userGesturePauseIntent = false; }, 2000);
+            setTimeout(() => { state.userGesturePauseIntent = false; }, 1200);
             updateMediaSessionPlaybackState();
             pauseHard();
             // Verify pause took effect after a tick
@@ -8486,7 +8725,7 @@ try {
           state.audioPauseUntil = Math.max(state.audioPauseUntil, now() + 600);
           try { audio.volume = 0; } catch {}
           try { audio.pause(); } catch {}
-          setTimeout(() => { state.isProgrammaticAudioPause = false; }, 300);
+          setTimeout(() => { state.isProgrammaticAudioPause = false; }, 150);
         }
       }
 
@@ -8496,6 +8735,16 @@ try {
       scheduleSync(0);
     });
     video.on("playing", () => {
+      // Anti-loop: if video is playing after it ended naturally, kill it
+      if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) {
+        const _playingVt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
+        if (_playingVt < 2.0) {
+          execProgrammaticVideoPause();
+          if (coupledMode && audio && !audio.paused) { try { audio.pause(); } catch {} }
+          state.intendedPlaying = false;
+          return;
+        }
+      }
       // Reset proactive stall detection counters
       _bufMonStallFrames = 0;
       _bufMonLastVT = -1;
@@ -8518,7 +8767,7 @@ try {
         const _resumeVol = targetVolFromVideo();
         try { audio.volume = _resumeVol; } catch {}
         // grace period so the buffer monitor doesn't re-kill this within one frame
-        state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 1200);
+        state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 600);
         execProgrammaticAudioPlay({ squelchMs: 400, force: true, minGapMs: 0 }).catch(() => {});
         state.audioEverStarted = true;
       }
@@ -9078,11 +9327,8 @@ try {
             if (dur > 5 && ct < 1) return;
           } catch {}
           if (isLoopDesired()) { restartLoop().catch(() => {}); return; }
-          // Hard stop — bypass pauseTogether's startupSettle guard
-          state.intendedPlaying = false;
-          state.bufferHoldIntendedPlaying = false;
-          state.resumeOnVisible = false;
-          state.bgHiddenWasPlaying = false;
+          // Tell the anti-loop manager playback ended naturally
+          MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.onEnded();
           state.tabReturnImmuneUntil = 0;
           disengagePauseIntercept();
           state.playSessionId++;
@@ -9114,7 +9360,7 @@ try {
               safeSetAudioTime(_canplayVt);
               try { audio.volume = targetVolFromVideo(); } catch {}
               // grace period for this audio restart
-              state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 1200);
+              state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 600);
               execProgrammaticAudioPlay({ squelchMs: 400, force: true, minGapMs: 0 }).catch(() => {});
             }
           }
@@ -9139,10 +9385,17 @@ try {
           // sometimes fire bogus seeking-to-0 on buffer refill or codec flush.
           // also catches video.loop=true auto-restart when our isLoopDesired()
           // says loop is NOT wanted (e.g. loop attribute set by page but overridden).
+          // Also catches post-ended phantom restarts via the manager.
           const _phVt = Number(videoEl.currentTime) || 0;
           const _phPrev = state.lastKnownGoodVT || 0;
           const _phUserRecent = (now() - state.lastUserActionTime) < 2000;
           const _phProgrammatic = state.pendingSeekTarget != null || state.seeking || state.restarting;
+          // Enhanced: also block if MakeSureUnintentionalLoopDoesntEverHappenAtALLManager says so
+          if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.isPhantomRestart(_phVt)) {
+            try { videoEl.currentTime = _phPrev > 0.5 ? _phPrev : videoEl.duration || _phPrev; } catch {}
+            try { if (!videoEl.paused) videoEl.pause(); } catch {}
+            return;
+          }
           if (_phVt < 0.5 && _phPrev > 2.0 && state.firstPlayCommitted &&
               !_phUserRecent && !_phProgrammatic && !isLoopDesired()) {
             // this is a phantom restart — revert video to its last good position.
@@ -9177,6 +9430,11 @@ try {
           clearBufferHold();
           state.seeking = true;
           state._seekStartedAt = performance.now();
+          // Brief audio volume dip to mask decode buffer flush pop
+          if (coupledMode && audio && !audio.paused) {
+            state._seekPreVolume = audio.volume;
+            try { audio.volume = 0; } catch {}
+          }
           try { MakeSureAudioIsNotCuttingOrWeird.onSeekStart(); } catch {}
           state.seekWantedPlaying = state.intendedPlaying;
           state.playRequestedDuringSeek = state.intendedPlaying;
@@ -9293,6 +9551,11 @@ try {
           clearAudioPauseLocks();
           state.audioWaiting = false;
           state.audioStallVideoPaused = false;
+          // Restore audio volume that was dipped at seek start — instant, no delay
+          if (coupledMode && audio && state._seekPreVolume != null) {
+            try { audio.volume = state._seekPreVolume; } catch {}
+            state._seekPreVolume = null;
+          }
           // Get the definitive seek target — video.currentTime() is reliable after seeked
           const newTime = Number(video.currentTime());
           // phantom loop guard (backup): if seeked lands at near-0 but nobody asked,
@@ -9309,10 +9572,18 @@ try {
             const _curAudioTime = Number(audio.currentTime) || 0;
             // Guard: never seek audio to near-0 when it's well into playback
             const _wouldRestart = newTime < 0.5 && _curAudioTime > 1.0 && state.firstPlayCommitted && !state.restarting && !isLoopDesired();
+            // Only sync audio if drift is meaningful (>0.2s). Smaller drift
+            // flushes the audio decode buffer and causes audible pops/glitches.
             if (!_wouldRestart && Math.abs(_curAudioTime - newTime) > 0.2) {
-              state._allowAudioTimeWrite = true;
-              try { audio.currentTime = newTime; } catch {}
-              state._allowAudioTimeWrite = false;
+              // Debounce: if we just wrote audio.currentTime very recently
+              // (rapid scrubbing), skip this write — finalizeSeekSync handles it.
+              const _seekedWriteNow = performance.now();
+              if ((_seekedWriteNow - _lastSafeSeekAt) > 100) {
+                _lastSafeSeekAt = _seekedWriteNow;
+                state._allowAudioTimeWrite = true;
+                try { audio.currentTime = newTime; } catch {}
+                state._allowAudioTimeWrite = false;
+              }
             }
             const _seekedId = state.seekId;
             setTimeout(() => {
@@ -9320,13 +9591,13 @@ try {
               const _at2 = Number(audio.currentTime) || 0;
               const _wr2 = newTime < 0.5 && _at2 > 1.0 && state.firstPlayCommitted && !state.restarting && !isLoopDesired();
               if (_wr2) return;
-              state._allowAudioTimeWrite = true;
-              try {
-                if (Math.abs(_at2 - newTime) > 0.15) audio.currentTime = newTime;
-              } catch {}
-              state._allowAudioTimeWrite = false;
-            }, 80);
-            state._allowAudioTimeWrite = false;
+              // Only correct if still significantly off (>0.2s)
+              if (Math.abs(_at2 - newTime) > 0.2) {
+                state._allowAudioTimeWrite = true;
+                try { audio.currentTime = newTime; } catch {}
+                state._allowAudioTimeWrite = false;
+              }
+            }, 100);
           }
           state.driftStableFrames = 0;
           state.lastDrift = 0;
@@ -9343,11 +9614,8 @@ try {
             if (dur > 5 && ct < 1) return;
           } catch {}
           if (isLoopDesired()) { restartLoop().catch(() => {}); return; }
-          // Hard stop — bypass pauseTogether's startupSettle guard
-          state.intendedPlaying = false;
-          state.bufferHoldIntendedPlaying = false;
-          state.resumeOnVisible = false;
-          state.bgHiddenWasPlaying = false;
+          // Tell the anti-loop manager playback ended naturally
+          MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.onEnded();
           state.tabReturnImmuneUntil = 0;
           disengagePauseIntercept();
           state.playSessionId++;
@@ -9513,7 +9781,7 @@ try {
             }
             if (audio.paused && !state.isProgrammaticAudioPause) {
               try { audio.volume = targetVolFromVideo(); } catch {}
-              state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 1200);
+              state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 600);
               execProgrammaticAudioPlay({ squelchMs: 0, force: true, minGapMs: 0 }).catch(() => {});
             }
             // 700ms into tab return, snap volume (no fade needed, decoder is warm)
@@ -9983,7 +10251,7 @@ try {
       }
       if (state.startupKickInFlight) {
         state.audioStartupPlayRetries++;
-        state.audioForcePlayTimer = setTimeout(tryPlay, AUDIO_STARTUP_PLAY_RETRY_MS * 4);
+        state.audioForcePlayTimer = setTimeout(tryPlay, AUDIO_STARTUP_PLAY_RETRY_MS * 2);
         return;
       }
       const vrs = getVideoReadyState();
@@ -9999,7 +10267,7 @@ try {
         // play at target volume immediately — no vol=0 fade dance
         const _startVol = targetVolFromVideo();
         try { audio.volume = _startVol; } catch {}
-        state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 1200);
+        state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 600);
         const p = audio.play();
         if (p && p.then) {
           p.then(() => {
@@ -10248,6 +10516,13 @@ try {
     _audioErrorObj = null;
     PlayerErrorOverlay.hide();
   };
+  window.__test_ended_lock = () => {
+    // Simulate the anti-loop manager state for testing
+    return { endedNaturally: state.endedNaturally, endedAt: state.endedAt, endedLockUntil: state.endedLockUntil };
+  };
+  window.__test_clear_ended = () => {
+    MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.onUserPlay();
+  };
 
   // =========================================================================
   // global error catcher — catches uncaught JS errors from the player code
@@ -10257,7 +10532,7 @@ try {
   let _globalErrorCaught = false;
   const _reportBase = "https://codeberg.org/ashleyirispuppy/poke/issues/new?template=issue_template%2fplayer-bug.yml";
 
-  function _handlePlayerCrash(errorMsg, source) {
+  function _handlePlayerCrash(errorMsg, source, stack) {
     if (_globalErrorCaught || _errorOverlayShown) return;
     _globalErrorCaught = true;
     _errorOverlayShown = true;
@@ -10272,13 +10547,39 @@ try {
       try { pauseHard(); } catch {}
     }
 
-    const errDetail = String(errorMsg || "Unknown error").slice(0, 200);
+    // build full stack trace
+    let _trace = "";
+    try {
+      const parts = [];
+      parts.push("Error: " + String(errorMsg || "Unknown error"));
+      parts.push("Source: " + String(source || "unknown"));
+      parts.push("Time: " + new Date().toISOString());
+      parts.push("User agent: " + navigator.userAgent);
+      if (stack) {
+        parts.push("\n--- Stack Trace ---");
+        parts.push(String(stack));
+      }
+      parts.push("\n--- Player State ---");
+      parts.push("firstPlayCommitted: " + state.firstPlayCommitted);
+      parts.push("intendedPlaying: " + state.intendedPlaying);
+      parts.push("startupPhase: " + state.startupPhase);
+      parts.push("coupledMode: " + coupledMode);
+      parts.push("seeking: " + state.seeking);
+      parts.push("videoWaiting: " + state.videoWaiting);
+      try { parts.push("video.readyState: " + getVideoNode().readyState); } catch {}
+      try { parts.push("audio.readyState: " + (audio ? audio.readyState : "N/A")); } catch {}
+      try { parts.push("video.currentTime: " + video.currentTime()); } catch {}
+      try { parts.push("audio.currentTime: " + (audio ? audio.currentTime : "N/A")); } catch {}
+      _trace = parts.join("\n");
+    } catch { _trace = String(errorMsg || "Unknown error") + "\n" + String(stack || ""); }
+
     PlayerErrorOverlay.show({
       title: "You found a bug!",
       message: "The player encountered an unexpected error. You can try reloading, or report this issue so we can fix it.",
       code: "PLAYER_ERR_UNCAUGHT",
       canRetry: true,
-      reportUrl: _reportBase
+      reportUrl: _reportBase,
+      stackTrace: _trace
     });
   }
 
@@ -10294,7 +10595,7 @@ try {
     if (!isPlayerScript) return;
     // ignore benign errors that don't affect playback
     if (msg.includes("ResizeObserver") || msg.includes("Script error")) return;
-    _handlePlayerCrash(msg, src);
+    _handlePlayerCrash(msg, src, e.error ? (e.error.stack || "") : "");
   }, { passive: true });
 
   window.addEventListener("unhandledrejection", (e) => {
@@ -10304,7 +10605,7 @@ try {
     // ignore AbortError (from aborted play() calls) and NotAllowedError (autoplay policy)
     if (typeof msg === "string" && (msg.includes("AbortError") || msg.includes("NotAllowedError") ||
         msg.includes("play() request was interrupted"))) return;
-    _handlePlayerCrash(msg, "promise");
+    _handlePlayerCrash(msg, "promise", reason ? (reason.stack || "") : "");
   }, { passive: true });
 });
 
