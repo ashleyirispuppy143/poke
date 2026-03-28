@@ -7293,8 +7293,7 @@ try {
     let _el = null;
     let _visible = false;
 
-    // inject all styles inline — no external CSS needed
-    function _injectStyles() {
+     function _injectStyles() {
       if (document.getElementById("pe-overlay-css")) return;
       const s = document.createElement("style");
       s.id = "pe-overlay-css";
@@ -7306,6 +7305,7 @@ try {
           font-family: Roboto, Arial, Helvetica, sans-serif;
           opacity: 0; pointer-events: none;
           transition: opacity .2s ease;
+          border-radius: 16px;
         }
         .pe-overlay.pe-visible { opacity: 1; pointer-events: auto; }
         .pe-overlay-inner {
