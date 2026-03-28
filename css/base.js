@@ -3277,7 +3277,7 @@ _seekPostTimers: []
   const AUDIO_PLAY_ATTEMPT_RESET_MS = 5000;
   const AUDIO_STARTUP_PLAY_RETRY_MS = 300;
   const MAX_AUDIO_STARTUP_RETRIES = 20;
-  const STARTUP_SETTLE_MS = 1500;
+  const STARTUP_SETTLE_MS = 3000; // extended to cover slow page loads
   const LOOP_DETECTION_WINDOW_MS = 2000;
   // Increased from 6→14: 6 events fires too easily during tab switches / buffering states.
   // 14 is still well below any real infinite loop scenario.
@@ -3364,16 +3364,28 @@ _seekPostTimers: []
   if (!state.pageFullyLoaded) {
     window.addEventListener("load", () => {
       state.pageFullyLoaded = true;
-      // If startup already succeeded (firstPlayCommitted) OR both media elements
-      // are already playing, skip all startup machinery. Re-running it causes
-      // a redundant audio seek (audible skip) and state churn.
+      // If startup already succeeded OR media is already playing, skip all
+      // startup machinery. Re-running it causes a redundant audio seek
+      // (audible skip) and play-pause-play stutter.
       const _loadVNode = getVideoNode();
       const _loadVideoPlaying = _loadVNode && !_loadVNode.paused;
       const _loadAudioPlaying = coupledMode && audio && !audio.paused;
+      const _loadVideoHasData = _loadVNode && Number(_loadVNode.readyState || 0) >= 2;
       if (state.firstPlayCommitted || (_loadVideoPlaying && _loadAudioPlaying) ||
           state.startupKickInFlight || state.startupKickDone ||
-          (state.audioEverStarted && _loadAudioPlaying)) {
+          (state.audioEverStarted && _loadAudioPlaying) ||
+          (_loadVideoPlaying && !coupledMode) ||
+          state.intendedPlaying) {
         if (state.startupPhase) setTimeout(() => { state.startupPhase = false; }, 500);
+        // If video is playing but audio isn't in coupled mode, just start audio
+        // without re-triggering the full startup machinery
+        if (coupledMode && _loadVideoPlaying && !_loadAudioPlaying && audio &&
+            state.intendedPlaying && !state.seeking) {
+          state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 1200);
+          const _loadVol = targetVolFromVideo();
+          try { audio.volume = _loadVol; } catch {}
+          execProgrammaticAudioPlay({ squelchMs: 400, force: true, minGapMs: 0 }).catch(() => {});
+        }
         return;
       }
       if (coupledMode && state.startupPhase && !state.startupPrimed) {
@@ -6553,6 +6565,11 @@ try {
     if (!state.intendedPlaying || state.seeking || state.seekBuffering || state.syncing) return false;
     if (!state.audioEverStarted && state.startupPhase) return false;
     if (startupSettleActive()) return false;
+    // never enter buffer hold within 5s of first play commit — page-load
+    // resource contention causes transient low readyState that resolves itself.
+    // pausing during this window creates the visible play-pause-play stutter.
+    if (state.firstPlayCommitted && state.startupPlaySettleUntil > 0 &&
+        (now() - state.startupPlaySettleUntil + STARTUP_SETTLE_MS) < 5000) return false;
     // Don't trigger buffer hold right after a seek — let the browser buffer naturally
     if (now() < state.seekCooldownUntil) return false;
     if (document.visibilityState === "hidden" || !isWindowFocused()) return false;
@@ -7319,12 +7336,15 @@ try {
         }
         .pe-overlay-btn {
           margin-top: 12px; padding: 8px 20px; width: fit-content;
-          background: #fff; color: #0f0f0f; border: none; border-radius: 18px;
+          background-color: #ffffff !important; color: #0f0f0f !important;
+          border: none !important; border-radius: 18px;
           font-size: 14px; font-weight: 500; cursor: pointer;
-          font-family: inherit; transition: background .15s;
-          line-height: 1;
+          font-family: inherit; transition: background-color .15s;
+          line-height: 1; outline: none;
+          -webkit-appearance: none; appearance: none;
         }
-        .pe-overlay-btn:hover { background: #d9d9d9; }
+        .pe-overlay-btn:hover { background-color: #d9d9d9 !important; }
+        .pe-overlay-btn:active { background-color: #bbb !important; }
       `;
       document.head.appendChild(s);
     }
@@ -7388,64 +7408,101 @@ try {
   })();
 
   // =========================================================================
-  // handleFatalMediaError — shows overlay, no auto-reload (user clicks button)
+  // handleFatalMediaError — shows overlay for video, audio, or both errors
   // =========================================================================
-  // tracks which sources have errored so we can detect both failing
   let _videoErrorObj = null;
   let _audioErrorObj = null;
   let _errorOverlayShown = false;
+
+  // unique error IDs for each error code + source combination
+  const ERROR_IDS = {
+    "video-1": "MEDIA_ERR_ABORTED",
+    "video-2": "MEDIA_ERR_NETWORK",
+    "video-3": "MEDIA_ERR_DECODE",
+    "video-4": "MEDIA_ERR_SRC_NOT_SUPPORTED",
+    "audio-1": "AUDIO_ERR_ABORTED",
+    "audio-2": "AUDIO_ERR_NETWORK",
+    "audio-3": "AUDIO_ERR_DECODE",
+    "audio-4": "AUDIO_ERR_SRC_NOT_SUPPORTED",
+    "player-1": "PLAYER_ERR_ABORTED",
+    "player-2": "PLAYER_ERR_NETWORK",
+    "player-3": "PLAYER_ERR_DECODE",
+    "player-4": "PLAYER_ERR_SRC_NOT_SUPPORTED"
+  };
 
   function handleFatalMediaError(source, errorObj) {
     const code = errorObj ? (errorObj.code || 0) : 0;
     const msg = errorObj ? (errorObj.message || "") : "";
 
-    // track per-source errors
     if (source === "video") _videoErrorObj = errorObj;
     if (source === "audio") _audioErrorObj = errorObj;
 
-    // in coupled mode, wait for BOTH sources to error before showing overlay.
-    // a single source error might be recoverable (e.g. audio 404 → switch to non-coupled).
-    // non-coupled: show immediately on video error.
-    if (coupledMode && audio) {
-      const bothErrored = _videoErrorObj && _audioErrorObj;
-      const singleVideoFatal = _videoErrorObj && !audio; // no audio element at all
-      if (!bothErrored && !singleVideoFatal) {
-        // only one source errored so far — wait for the other or let soft recovery try
-        return;
-      }
-    }
+    // determine error scope: "video", "audio", or "player" (both)
+    const bothErrored = _videoErrorObj && _audioErrorObj;
+    const scope = bothErrored ? "player" : source;
 
-    // don't show twice
-    if (_errorOverlayShown) return;
-    _errorOverlayShown = true;
-
-    // use the worst error code between video and audio
+    // show overlay immediately for any source error
+    // if already shown, update it to reflect the new scope (e.g. video→player)
     const vCode = _videoErrorObj ? (_videoErrorObj.code || 0) : 0;
     const aCode = _audioErrorObj ? (_audioErrorObj.code || 0) : 0;
     const worstCode = Math.max(vCode, aCode, code);
 
-    const titles = {
-      1: "Playback aborted",
-      2: "Network error",
-      3: "Decode error",
-      4: "Video player configuration error"
+    const scopeTitles = {
+      video: {
+        1: "Video playback aborted",
+        2: "Video network error",
+        3: "Video decode error",
+        4: "Video player configuration error"
+      },
+      audio: {
+        1: "Audio playback aborted",
+        2: "Audio network error",
+        3: "Audio decode error",
+        4: "Audio source not supported"
+      },
+      player: {
+        1: "Playback aborted",
+        2: "Network error",
+        3: "Decode error",
+        4: "Player configuration error"
+      }
     };
-    const messages = {
-      1: "The playback was aborted.",
-      2: "A network error occurred. Check your connection and try again.",
-      3: "The media could not be decoded.",
-      4: "The media format or source is not supported."
+
+    const scopeMessages = {
+      video: {
+        1: "The video playback was aborted.",
+        2: "A network error caused the video to fail. Check your connection and try again.",
+        3: "The video could not be decoded. The file may be corrupt or unsupported.",
+        4: "The video format or source is not supported by your browser."
+      },
+      audio: {
+        1: "The audio playback was aborted.",
+        2: "A network error caused the audio to fail. Check your connection and try again.",
+        3: "The audio could not be decoded. The file may be corrupt or unsupported.",
+        4: "The audio format or source is not supported by your browser."
+      },
+      player: {
+        1: "Both video and audio playback were aborted.",
+        2: "A network error caused playback to fail. Check your connection and try again.",
+        3: "The media could not be decoded. The files may be corrupt or unsupported.",
+        4: "The media format or source is not supported by your browser."
+      }
     };
+
+    const titles = scopeTitles[scope] || scopeTitles.player;
+    const messages = scopeMessages[scope] || scopeMessages.player;
+    const errorId = ERROR_IDS[scope + "-" + worstCode] || ("ERR_UNKNOWN_" + worstCode);
 
     // pause everything
     state.intendedPlaying = false;
     state.bufferHoldIntendedPlaying = false;
     try { pauseHard(); } catch {}
+    _errorOverlayShown = true;
 
     PlayerErrorOverlay.show({
       title: titles[worstCode] || "Playback error",
       message: messages[worstCode] || (msg || "An unexpected error occurred."),
-      code: worstCode,
+      code: errorId,
       canRetry: true
     });
   }
@@ -10070,9 +10127,13 @@ try {
   // Always schedule initial sync — don't gate on page load.
   scheduleSync(0);
 
-  // test helper — survives minification
+  // test helpers — survive minification
   window.__test_player_error = (source, code) => {
     handleFatalMediaError(source || "video", { code: code || 4 });
+  };
+  window.__test_player_error_both = (code) => {
+    handleFatalMediaError("video", { code: code || 4 });
+    handleFatalMediaError("audio", { code: code || 4 });
   };
   window.__test_player_reset_error = () => {
     _errorOverlayShown = false;
