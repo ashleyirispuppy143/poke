@@ -4332,6 +4332,7 @@ _seekPostTimers: []
     return false;
   }
 
+  // --- play/pause toggle debounce (YouTube-style spam protection)
   // When user spams the play/pause button, we don't immediately execute
   // every toggle. Instead: each click cancels the pending action and starts
   // a short timer. Only the LAST click in a rapid burst actually executes.
@@ -7269,14 +7270,13 @@ try {
 
   // --- media error recovery
   // =========================================================================
-  // error overlay —  black screen with icon + message
+  // error overlay — icon on left, text on right, horizontal layout
   // =========================================================================
   const PlayerErrorOverlay = (() => {
     let _el = null;
     let _visible = false;
-    let _reloadTimer = null;
 
-    // inject all styles inline so no external CSS is needed
+    // inject all styles inline — no external CSS needed
     function _injectStyles() {
       if (document.getElementById("pe-overlay-css")) return;
       const s = document.createElement("style");
@@ -7284,34 +7284,45 @@ try {
       s.textContent = `
         .pe-overlay {
           position: absolute; inset: 0; z-index: 9999;
-          display: flex; flex-direction: column; align-items: center; justify-content: center;
-          background: rgba(0,0,0,.92); color: #fff;
-          font-family: "YouTube Noto", Roboto, Arial, sans-serif;
+          display: flex; align-items: center; justify-content: center;
+          background: #0f0f0f; color: #fff;
+          font-family: Roboto, Arial, Helvetica, sans-serif;
           opacity: 0; pointer-events: none;
-          transition: opacity .25s ease;
+          transition: opacity .2s ease;
         }
         .pe-overlay.pe-visible { opacity: 1; pointer-events: auto; }
+        .pe-overlay-inner {
+          display: flex; align-items: center; gap: 20px;
+          max-width: 520px; padding: 0 32px;
+        }
         .pe-overlay-icon {
-          width: 72px; height: 72px; margin-bottom: 18px;
-          fill: #aaa; flex-shrink: 0;
+          width: 120px; height: 120px; flex-shrink: 0;
+          fill: #909090;
+        }
+        .pe-overlay-text {
+          display: flex; flex-direction: column; gap: 4px;
+          min-width: 0;
         }
         .pe-overlay-title {
-          font-size: 18px; font-weight: 500; color: #fff;
-          margin-bottom: 8px; text-align: center; padding: 0 24px;
+          font-size: 15px; font-weight: 400; color: #fff;
+          line-height: 1.4;
         }
+        .pe-overlay-title a {
+          color: #3ea6ff; text-decoration: none; cursor: pointer;
+        }
+        .pe-overlay-title a:hover { text-decoration: underline; }
         .pe-overlay-msg {
-          font-size: 13px; color: #aaa; text-align: center;
-          max-width: 420px; line-height: 1.5; padding: 0 24px;
+          font-size: 13px; color: #aaa; line-height: 1.4;
         }
         .pe-overlay-code {
-          font-size: 11px; color: #666; margin-top: 14px;
-          font-family: "Roboto Mono", monospace;
+          font-size: 12px; color: #717171; margin-top: 2px;
         }
         .pe-overlay-btn {
-          margin-top: 20px; padding: 10px 28px;
-          background: #fff; color: #0f0f0f; border: none; border-radius: 20px;
+          margin-top: 12px; padding: 8px 20px; width: fit-content;
+          background: #fff; color: #0f0f0f; border: none; border-radius: 18px;
           font-size: 14px; font-weight: 500; cursor: pointer;
           font-family: inherit; transition: background .15s;
+          line-height: 1;
         }
         .pe-overlay-btn:hover { background: #d9d9d9; }
       `;
@@ -7324,13 +7335,17 @@ try {
       _el = document.createElement("div");
       _el.className = "pe-overlay";
       _el.innerHTML = `
-        <svg class="pe-overlay-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
-        </svg>
-        <div class="pe-overlay-title"></div>
-        <div class="pe-overlay-msg"></div>
-        <div class="pe-overlay-code"></div>
-        <button class="pe-overlay-btn" style="display:none">Retry</button>
+        <div class="pe-overlay-inner">
+          <svg class="pe-overlay-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+          </svg>
+          <div class="pe-overlay-text">
+            <div class="pe-overlay-title"></div>
+            <div class="pe-overlay-msg"></div>
+            <div class="pe-overlay-code"></div>
+            <button class="pe-overlay-btn" style="display:none">Reload</button>
+          </div>
+        </div>
       `;
       // insert into the video.js container so it sits on top of the video
       const container = video.el ? video.el() : videoEl.parentElement;
@@ -7347,12 +7362,17 @@ try {
 
     function show({ title, message, code, canRetry }) {
       const el = _create();
-      el.querySelector(".pe-overlay-title").textContent = title || "An error occurred";
+      const titleEl = el.querySelector(".pe-overlay-title");
+      // allow HTML in title (for links)
+      if (title && title.includes("<")) {
+        titleEl.innerHTML = title;
+      } else {
+        titleEl.textContent = title || "An error occurred";
+      }
       el.querySelector(".pe-overlay-msg").textContent = message || "";
       el.querySelector(".pe-overlay-code").textContent = code ? `Error code: ${code}` : "";
       const btn = el.querySelector(".pe-overlay-btn");
       btn.style.display = canRetry ? "" : "none";
-      btn.textContent = canRetry === "reload" ? "Reload" : "Retry";
       el.classList.add("pe-visible");
       _visible = true;
     }
@@ -7360,74 +7380,83 @@ try {
     function hide() {
       if (_el) _el.classList.remove("pe-visible");
       _visible = false;
-      if (_reloadTimer) { clearTimeout(_reloadTimer); _reloadTimer = null; }
     }
 
     function isVisible() { return _visible; }
 
-    return { show, hide, isVisible, _setReloadTimer(t) { _reloadTimer = t; } };
+    return { show, hide, isVisible };
   })();
 
   // =========================================================================
-  // error code 4 auto-reload (once per session, prevents infinite loop)
+  // handleFatalMediaError — shows overlay, no auto-reload (user clicks button)
   // =========================================================================
-  const ERROR4_STORAGE_KEY = "pe_error4_reload_ts";
+  // tracks which sources have errored so we can detect both failing
+  let _videoErrorObj = null;
+  let _audioErrorObj = null;
+  let _errorOverlayShown = false;
+
   function handleFatalMediaError(source, errorObj) {
     const code = errorObj ? (errorObj.code || 0) : 0;
     const msg = errorObj ? (errorObj.message || "") : "";
 
-    // map error codes to readable messages
+    // track per-source errors
+    if (source === "video") _videoErrorObj = errorObj;
+    if (source === "audio") _audioErrorObj = errorObj;
+
+    // in coupled mode, wait for BOTH sources to error before showing overlay.
+    // a single source error might be recoverable (e.g. audio 404 → switch to non-coupled).
+    // non-coupled: show immediately on video error.
+    if (coupledMode && audio) {
+      const bothErrored = _videoErrorObj && _audioErrorObj;
+      const singleVideoFatal = _videoErrorObj && !audio; // no audio element at all
+      if (!bothErrored && !singleVideoFatal) {
+        // only one source errored so far — wait for the other or let soft recovery try
+        return;
+      }
+    }
+
+    // don't show twice
+    if (_errorOverlayShown) return;
+    _errorOverlayShown = true;
+
+    // use the worst error code between video and audio
+    const vCode = _videoErrorObj ? (_videoErrorObj.code || 0) : 0;
+    const aCode = _audioErrorObj ? (_audioErrorObj.code || 0) : 0;
+    const worstCode = Math.max(vCode, aCode, code);
+
     const titles = {
       1: "Playback aborted",
       2: "Network error",
       3: "Decode error",
-      4: "Source not supported"
+      4: "Video player configuration error"
     };
     const messages = {
-      1: "The video playback was aborted.",
-      2: "A network error caused the video to fail. Check your connection and try again.",
-      3: "The video could not be decoded. The file may be corrupt or unsupported.",
-      4: "The video format or source is not supported by your browser."
+      1: "The playback was aborted.",
+      2: "A network error occurred. Check your connection and try again.",
+      3: "The media could not be decoded.",
+      4: "The media format or source is not supported."
     };
 
-    // show the overlay for any error code >= 1
-    if (code >= 1) {
-      // pause everything so we're not fighting in the background
-      state.intendedPlaying = false;
-      state.bufferHoldIntendedPlaying = false;
-      try { pauseHard(); } catch {}
-      PlayerErrorOverlay.show({
-        title: titles[code] || "Playback error",
-        message: messages[code] || (msg || "An unexpected error occurred."),
-        code: code,
-        canRetry: code === 4 ? "reload" : "reload"
-      });
-    }
+    // pause everything
+    state.intendedPlaying = false;
+    state.bufferHoldIntendedPlaying = false;
+    try { pauseHard(); } catch {}
 
-    // error code 4: auto-reload once. use sessionStorage to prevent infinite loop.
-    if (code === 4) {
-      try {
-        const lastReload = Number(sessionStorage.getItem(ERROR4_STORAGE_KEY)) || 0;
-        const elapsed = Date.now() - lastReload;
-        // only auto-reload if we haven't reloaded in the last 30s
-        if (elapsed > 30000) {
-          sessionStorage.setItem(ERROR4_STORAGE_KEY, String(Date.now()));
-          // wait 2s so the user can see the error message, then reload
-          const t = setTimeout(() => window.location.reload(), 2000);
-          PlayerErrorOverlay._setReloadTimer(t);
-        }
-        // if we already reloaded recently, just show the overlay (don't loop)
-      } catch {}
-    }
+    PlayerErrorOverlay.show({
+      title: titles[worstCode] || "Playback error",
+      message: messages[worstCode] || (msg || "An unexpected error occurred."),
+      code: worstCode,
+      canRetry: true
+    });
   }
 
   function setupMediaErrorHandlers() {
     const onVideoError = (e) => {
-      // check for fatal media errors (code 1-4)
       const errObj = videoEl.error || (e && e.target && e.target.error);
       if (errObj && errObj.code >= 1) {
         handleFatalMediaError("video", errObj);
-        return;
+        // if the overlay is now shown, stop trying to recover
+        if (_errorOverlayShown) return;
       }
       if (!state.intendedPlaying || state.restarting) return;
       if (now() < state.mediaErrorCooldownUntil) return;
@@ -7439,11 +7468,10 @@ try {
     };
     const onAudioError = (e) => {
       if (!coupledMode || !audio) return;
-      // check for fatal audio errors
       const errObj = audio.error || (e && e.target && e.target.error);
       if (errObj && errObj.code >= 1) {
         handleFatalMediaError("audio", errObj);
-        return;
+        if (_errorOverlayShown) return;
       }
       if (!state.intendedPlaying || state.restarting) return;
       if (now() < state.mediaErrorCooldownUntil) return;
