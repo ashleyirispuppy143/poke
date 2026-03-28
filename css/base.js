@@ -15,7 +15,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 // "It takes a lot of hard work to make something simple." ~ Steve Jobs 
-document.addEventListener("DOMContentLoaded", () => {
+ document.addEventListener("DOMContentLoaded", () => {
   const video = videojs("video", {
     controls: true,
     autoplay: true,
@@ -271,16 +271,41 @@ document.addEventListener("DOMContentLoaded", () => {
         inner.autoplay = false;
       }
     } catch {}
+    // Kill Video.js INTERNAL autoplay config — this is the #1 cause of phantom loops.
+    // Video.js stores autoplay in options_ and checks it from handleTechReady_, techReady_,
+    // and other internal methods. Just overriding the .autoplay() method is NOT enough —
+    // Video.js bypasses it and reads options_ directly.
+    try { if (video.options_) video.options_.autoplay = false; } catch {}
+    try { if (video.autoplay_) video.autoplay_ = false; } catch {}
+    try { if (video.options) video.options.autoplay = false; } catch {}
+    // Kill on tech layer too
+    try {
+      const tech = video.tech_;
+      if (tech) {
+        try { if (tech.options_) tech.options_.autoplay = false; } catch {}
+        try { if (tech.autoplay_) tech.autoplay_ = false; } catch {}
+        try { const tel = tech.el_; if (tel) { tel.removeAttribute("autoplay"); tel.autoplay = false; } } catch {}
+      }
+    } catch {}
     // Override Video.js autoplay to return false after first play
     try {
       if (typeof video.autoplay === "function") {
-        const _origAutoplay = video.autoplay.bind(video);
         video.autoplay = function(val) {
-          if (arguments.length === 0) return false; // always report no autoplay
-          // silently eat any attempt to set autoplay after first play
+          if (arguments.length === 0) return false;
           return false;
         };
       }
+    } catch {}
+    // Patch video.play() itself to block phantom restarts for 10s after ended
+    try {
+      const _origVjsPlay = video.play.bind(video);
+      video.play = function() {
+        if (state.endedNaturally && !state.restarting && !isLoopDesired()) {
+          const userRecent = (now() - state.lastUserActionTime) < 1000;
+          if (!userRecent) return Promise.resolve();
+        }
+        return _origVjsPlay();
+      };
     } catch {}
   }
   video.ready(() => {
@@ -837,6 +862,9 @@ document.addEventListener("DOMContentLoaded", () => {
   let _bgKeepaliveFailResetAt = 0;
   function _bgKeepaliveTick() {
     if (!state.intendedPlaying) return;
+    // Never restart after ended — this was causing phantom loops
+    if (state.endedNaturally) return;
+    if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) return;
     if (userPauseLockActive() || mediaSessionForcedPauseActive()) return;
     if (state.restarting || state.strictBufferHold) return;
     // In background, seeking/seekBuffering flags can get stuck because seeked events
@@ -1586,6 +1614,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function _shouldRun() {
     if (!coupledMode || !audio || !state.intendedPlaying) return false;
+    if (state.endedNaturally) return false;
     if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) return false;
     if (state.seeking || state.seekBuffering || state.restarting) return false;
     if (state.strictBufferHold || state.videoWaiting || state.audioWaiting) return false;
@@ -1741,6 +1770,8 @@ document.addEventListener("DOMContentLoaded", () => {
     function _tick() {
       _timer = null;
       if (!state.intendedPlaying) { _schedule(); return; }
+      // CRITICAL: never restart after ended — this was a major loop cause
+      if (state.endedNaturally || MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) { _schedule(); return; }
       if (state.seeking || state.seekBuffering || state.restarting) { _schedule(); return; }
       if (state.strictBufferHold || state.videoWaiting || state.videoStallAudioPaused) { _schedule(); return; }
       if (NotMakePlayBackFixingNoticable.isRecovering()) { _schedule(); return; }
@@ -4173,15 +4204,16 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!state.firstPlayCommitted) return false;
       if (state.restarting || state.seeking) return false;
       if (isLoopDesired()) return false;
-      if (videoTime > 1.0) return false;
+      if (videoTime > 2.0) return false;
       // video is near 0 after we were well into playback
       if (state.endedNaturally) return true;
       const lastGood = state.lastKnownGoodVT || 0;
-      if (lastGood > 3.0 && videoTime < 0.5) {
+      if (lastGood > 3.0 && videoTime < 1.0) {
         // big backward jump nobody asked for
-        const userRecent = (now() - state.lastUserActionTime) < 2000;
+        const userRecent = (now() - state.lastUserActionTime) < 1500;
+        const userPlay = state.userPlayIntentPresetAt > 0 && (now() - state.userPlayIntentPresetAt) < 2000;
         const programmatic = state.pendingSeekTarget != null;
-        if (!userRecent && !programmatic) return true;
+        if (!userRecent && !userPlay && !programmatic) return true;
       }
       return false;
     }
@@ -4197,13 +4229,14 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!vn) return;
       const vt = Number(vn.currentTime) || 0;
       // video is playing from near 0 after it ended — kill it
-      if (vt < 2.0 && !vn.paused && !state.restarting && !isLoopDesired()) {
+      if (vt < 5.0 && !vn.paused && !state.restarting && !isLoopDesired()) {
         try { vn.pause(); } catch {}
         if (coupledMode && audio && !audio.paused) {
           try { audio.pause(); } catch {}
         }
         state.intendedPlaying = false;
         state.bufferHoldIntendedPlaying = false;
+        state.resumeOnVisible = false;
       }
     }
 
@@ -5000,6 +5033,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function execProgrammaticVideoPlay() {
     if (_errorOverlayShown) return;
+    // Never restart after ended unless user explicitly clicked play
+    if (state.endedNaturally && !state.restarting && !isLoopDesired()) {
+      const _upCheck = state.userPlayIntentPresetAt > 0 && (now() - state.userPlayIntentPresetAt) < 2000;
+      if (!_upCheck) return;
+    }
     VisibilityGuard.onPlayCalled(); // VG: suppress spurious pause after our play()
 state.isProgrammaticVideoPlay = true;
 try {
@@ -5312,6 +5350,7 @@ try {
 
   function scheduleBgResumeRetry(delay = 400) {
     if (!platform.useBgControllerRetry) return;
+    if (state.endedNaturally) return;
     if (mediaSessionForcedPauseActive()) return;
     if (userPauseLockActive()) return;
     // During immunity or NMPBFN recovery, the recovery system handles everything.
@@ -5387,6 +5426,8 @@ try {
   async function seamlessBgCatchUp() {
     if (!coupledMode || !platform.useBgControllerRetry) return;
     if (!state.intendedPlaying) return;
+    if (state.endedNaturally) return;
+    if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) return;
     if (isTabReturnImmune() || NotMakePlayBackFixingNoticable.isActive()) return;
     if (state.restarting || state.seeking || state.syncing) return;
     if (mediaSessionForcedPauseActive() || userPauseLockActive()) return;
@@ -5797,6 +5838,12 @@ try {
   async function playTogether() {
     // Error overlay active — all playback is dead
     if (_errorOverlayShown) return;
+    // Never restart after ended unless user explicitly clicked play
+    if (state.endedNaturally && !state.restarting && !isLoopDesired()) {
+      const _ptUserPlay = state.userPlayIntentPresetAt > 0 && (now() - state.userPlayIntentPresetAt) < 2000;
+      const _ptUserAction = (now() - state.lastUserActionTime) < 800;
+      if (!_ptUserPlay && !_ptUserAction) return;
+    }
     state.userPlayIntentPresetAt = 0;
     // Never trigger loop detection during tab-return immunity
     if (!(state.tabReturnImmuneUntil > now()) && detectLoop()) {
@@ -6509,19 +6556,27 @@ try {
     }, delay);
   }
 
+  // Cache the initial autoplay desire BEFORE we strip it
+  let _cachedWantsAutoplay = null;
   function wantsStartupAutoplay() {
+    // Once computed, cache permanently — stripping autoplay later must NOT
+    // change this result or the tab-return handler will fail to restart.
+    if (_cachedWantsAutoplay !== null) return _cachedWantsAutoplay;
     try {
       const q = (qs.get("autoplay") || "").toLowerCase();
-      if (q === "1" || q === "true" || q === "yes") return true;
+      if (q === "1" || q === "true" || q === "yes") { _cachedWantsAutoplay = true; return true; }
     } catch {}
-    try { if (window.forceAutoplay === true) return true; } catch {}
-    try { if (videoEl?.autoplay || videoEl?.hasAttribute?.("autoplay")) return true; } catch {}
+    try { if (window.forceAutoplay === true) { _cachedWantsAutoplay = true; return true; } } catch {}
+    try { if (videoEl?.autoplay || videoEl?.hasAttribute?.("autoplay")) { _cachedWantsAutoplay = true; return true; } } catch {}
     try {
       if (typeof video.autoplay === "function") {
         const a = video.autoplay();
-        if (a === true || a === "play" || a === "muted" || a === "any") return true;
+        if (a === true || a === "play" || a === "muted" || a === "any") { _cachedWantsAutoplay = true; return true; }
       }
     } catch {}
+    // Also check options_ directly (in case autoplay() was already overridden)
+    try { if (video.options_ && video.options_.autoplay) { _cachedWantsAutoplay = true; return true; } } catch {}
+    _cachedWantsAutoplay = false;
     return false;
   }
 
@@ -6556,7 +6611,14 @@ try {
   function scheduleStartupAutoplayKick() {
     if (!coupledMode) return;
     if (state.startupKickDone || state.startupKickInFlight || state.firstPlayCommitted) return;
-    if (!state.startupPrimed) return;
+    // On tab return, auto-prime if not already primed
+    if (!state.startupPrimed) {
+      if (document.visibilityState === "visible" && wantsStartupAutoplay()) {
+        state.startupPrimed = true;
+      } else {
+        return;
+      }
+    }
     if (!wantsStartupAutoplay() && !state.intendedPlaying) return;
     if (mediaSessionForcedPauseActive()) return;
     if (state.bgResumeInFlight) return;
@@ -7548,7 +7610,7 @@ try {
       if (document.getElementById("pe-overlay-css")) return;
       const s = document.createElement("style");
       s.id = "pe-overlay-css";
-      s.textContent = `.pe-overlay{position:absolute;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:#0f0f0f;color:#fff;border-radius:16px;font-family:Roboto,Arial,Helvetica,sans-serif;opacity:0;pointer-events:none;transition:opacity .2s ease}.pe-overlay.pe-visible{opacity:1;pointer-events:auto}.pe-overlay-inner{display:flex;align-items:center;gap:20px;max-width:520px;padding:0 32px}.pe-overlay-icon{width:120px;height:120px;flex-shrink:0;fill:#606060}.pe-overlay-text{display:flex;flex-direction:column;gap:4px;min-width:0}.pe-overlay-title{font-size:17px;font-weight:500;color:#fff;line-height:1.4}.pe-overlay-title a{color:#3ea6ff;text-decoration:none;cursor:pointer}.pe-overlay-title a:hover{text-decoration:underline}.pe-overlay-msg{font-size:13px;color:#aaa;line-height:1.4}.pe-overlay-code{font-size:12px;color:#717171;margin-top:2px}.pe-overlay-actions{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}.pe-overlay-btn,.pe-overlay-btn-outline,.pe-overlay-stack-link,.pe-stack-popup-close,.pe-stack-popup-copy{transform:none !important;filter:none !important}.pe-overlay-btn:hover,.pe-overlay-btn:focus,.pe-overlay-btn:active,.pe-overlay-btn-outline:hover,.pe-overlay-btn-outline:focus,.pe-overlay-btn-outline:active,.pe-overlay-stack-link:hover,.pe-overlay-stack-link:focus,.pe-overlay-stack-link:active,.pe-stack-popup-close:hover,.pe-stack-popup-close:focus,.pe-stack-popup-close:active,.pe-stack-popup-copy:hover,.pe-stack-popup-copy:focus,.pe-stack-popup-copy:active{transform:none !important;filter:none !important}.pe-overlay-btn{padding:8px 20px;width:fit-content;background-color:#fff !important;color:#0f0f0f !important;border:none !important;border-radius:18px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;transition:background-color .15s;line-height:1;outline:none;-webkit-appearance:none;appearance:none;text-decoration:none !important;display:inline-flex;align-items:center}.pe-overlay-btn:hover{background-color:#d9d9d9 !important}.pe-overlay-btn:active{background-color:#bbb !important}.pe-overlay-btn-outline{padding:8px 20px;width:fit-content;background-color:transparent !important;color:#aaa !important;border:1px solid #555 !important;border-radius:18px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;transition:background-color .15s,border-color .15s;line-height:1;outline:none;-webkit-appearance:none;appearance:none;text-decoration:none !important;display:inline-flex;align-items:center}.pe-overlay-btn-outline:hover{background-color:rgba(255,255,255,.08) !important;border-color:#888 !important;color:#fff !important}.pe-overlay-btn-outline:active{background-color:rgba(255,255,255,.14) !important}.pe-overlay-stack-link{font-size:13px;color:#3ea6ff;cursor:pointer;margin-top:8px;display:none;background:none;border:none;padding:0;font-family:inherit;text-decoration:underline;text-align:left}.pe-overlay-stack-link:hover{color:#7fc4ff}.pe-stack-popup-backdrop{position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .15s ease}.pe-stack-popup-backdrop.pe-stack-popup-open{opacity:1;pointer-events:auto}.pe-stack-popup{background:#212121;border-radius:12px;padding:0;width:90vw;max-width:640px;max-height:70vh;overflow:hidden;box-shadow:0 12px 48px rgba(0,0,0,.8);position:relative;display:flex;flex-direction:column}.pe-stack-popup-title{font-size:14px;font-weight:500;color:#fff;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #333;flex-shrink:0}.pe-stack-popup-close{background:none;border:none;color:#888;font-size:22px;cursor:pointer;padding:4px 8px;line-height:1;font-family:inherit;border-radius:50%;transition:background-color .15s}.pe-stack-popup-close:hover{color:#fff;background:rgba(255,255,255,.1)}.pe-stack-popup-copy{background:none;border:1px solid #555;color:#aaa;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:14px;font-family:inherit;margin-right:8px;transition:all .15s}.pe-stack-popup-copy:hover{color:#fff;border-color:#888}.pe-overlay-stack{font-size:12px;color:#ccc;white-space:pre-wrap;word-break:break-all;font-family:"Roboto Mono","Consolas","Courier New",monospace;margin:0;padding:16px 20px;line-height:1.7;user-select:text;-webkit-user-select:text;overflow-y:auto;flex:1;background:#181818}`;
+      s.textContent = `@keyframes pe-fadein{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}.pe-overlay{position:absolute;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0f0f0f 0%,#1a1a1a 100%);color:#fff;border-radius:16px;font-family:Roboto,Arial,Helvetica,sans-serif;opacity:0;pointer-events:none;transition:opacity .25s ease}.pe-overlay.pe-visible{opacity:1;pointer-events:auto}.pe-overlay.pe-visible .pe-overlay-inner{animation:pe-fadein .3s ease-out}.pe-overlay-inner{display:flex;align-items:center;gap:24px;max-width:540px;padding:0 36px}.pe-overlay-icon{width:110px;height:110px;flex-shrink:0;fill:#505050;opacity:.85}.pe-overlay-text{display:flex;flex-direction:column;gap:6px;min-width:0}.pe-overlay-title{font-size:17px;font-weight:600;color:#fff;line-height:1.45;letter-spacing:-.01em}.pe-overlay-title a{color:#3ea6ff;text-decoration:none;cursor:pointer}.pe-overlay-title a:hover{text-decoration:underline}.pe-overlay-msg{font-size:13px;color:#999;line-height:1.5}.pe-overlay-code{font-size:11px;color:#606060;margin-top:3px;font-family:"Roboto Mono","Consolas","Courier New",monospace;letter-spacing:.02em}.pe-overlay-actions{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}.pe-overlay-btn,.pe-overlay-btn-outline,.pe-overlay-stack-link,.pe-stack-popup-close,.pe-stack-popup-copy{transform:none !important;filter:none !important}.pe-overlay-btn:hover,.pe-overlay-btn:focus,.pe-overlay-btn:active,.pe-overlay-btn-outline:hover,.pe-overlay-btn-outline:focus,.pe-overlay-btn-outline:active,.pe-overlay-stack-link:hover,.pe-overlay-stack-link:focus,.pe-overlay-stack-link:active,.pe-stack-popup-close:hover,.pe-stack-popup-close:focus,.pe-stack-popup-close:active,.pe-stack-popup-copy:hover,.pe-stack-popup-copy:focus,.pe-stack-popup-copy:active{transform:none !important;filter:none !important}.pe-overlay-btn{padding:9px 22px;width:fit-content;background-color:#fff !important;color:#0f0f0f !important;border:none !important;border-radius:20px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;transition:background-color .15s,box-shadow .15s;line-height:1;outline:none;-webkit-appearance:none;appearance:none;text-decoration:none !important;display:inline-flex;align-items:center;box-shadow:0 2px 8px rgba(0,0,0,.3)}.pe-overlay-btn:hover{background-color:#e0e0e0 !important;box-shadow:0 4px 12px rgba(0,0,0,.4) !important}.pe-overlay-btn:active{background-color:#ccc !important}.pe-overlay-btn-outline{padding:9px 22px;width:fit-content;background-color:transparent !important;color:#aaa !important;border:1px solid #444 !important;border-radius:20px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;transition:background-color .15s,border-color .15s,color .15s;line-height:1;outline:none;-webkit-appearance:none;appearance:none;text-decoration:none !important;display:inline-flex;align-items:center}.pe-overlay-btn-outline:hover{background-color:rgba(255,255,255,.06) !important;border-color:#777 !important;color:#fff !important}.pe-overlay-btn-outline:active{background-color:rgba(255,255,255,.12) !important}.pe-overlay-stack-link{font-size:12px;color:#3ea6ff;cursor:pointer;margin-top:10px;display:none;background:none;border:none;padding:0;font-family:inherit;text-decoration:none;text-align:left;opacity:.8;transition:opacity .15s}.pe-overlay-stack-link:hover{opacity:1;color:#7fc4ff}.pe-stack-popup-backdrop{position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s ease;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}.pe-stack-popup-backdrop.pe-stack-popup-open{opacity:1;pointer-events:auto}.pe-stack-popup{background:#1e1e1e;border-radius:14px;padding:0;width:90vw;max-width:640px;max-height:70vh;overflow:hidden;box-shadow:0 16px 56px rgba(0,0,0,.85),0 0 0 1px rgba(255,255,255,.06);position:relative;display:flex;flex-direction:column}.pe-stack-popup-title{font-size:13px;font-weight:600;color:#ddd;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.08);flex-shrink:0;letter-spacing:.02em;text-transform:uppercase}.pe-stack-popup-close{background:none;border:none;color:#777;font-size:20px;cursor:pointer;padding:4px 8px;line-height:1;font-family:inherit;border-radius:50%;transition:background-color .15s,color .15s}.pe-stack-popup-close:hover{color:#fff;background:rgba(255,255,255,.1)}.pe-stack-popup-copy{background:none;border:1px solid #444;color:#999;font-size:11px;cursor:pointer;padding:5px 14px;border-radius:14px;font-family:inherit;margin-right:8px;transition:all .15s;letter-spacing:.02em}.pe-stack-popup-copy:hover{color:#fff;border-color:#777;background:rgba(255,255,255,.06)}.pe-overlay-stack{font-size:12px;color:#bbb;white-space:pre-wrap;word-break:break-all;font-family:"Roboto Mono","Consolas","Courier New",monospace;margin:0;padding:18px 22px;line-height:1.75;user-select:text;-webkit-user-select:text;overflow-y:auto;flex:1;background:#161616}`;
       document.head.appendChild(s);
     }
 
@@ -7862,7 +7924,7 @@ try {
     } catch { _stack = "Failed to collect error details"; }
 
     PlayerErrorOverlay.show({
-      title: isBug ? "You found a bug!" : (titles[worstCode] || "Playback error"),
+      title: isBug ? "You found a bug! \u0CA5\u203F\u0CA5" : (titles[worstCode] || "Playback error"),
       message: isBug
         ? "Well this is embarrassing. The player just did something illegal. Try reloading, or snitch on it below."
         : (messages[worstCode] || (msg || "An unexpected error occurred.")),
@@ -8309,11 +8371,20 @@ try {
         if (coupledMode && audio && !audio.paused) { try { audio.pause(); } catch {} }
         return;
       }
-      if (state.seeking || state.seekBuffering) return;
+      // If seeking, don't silently eat the play — mark intent so seek finalize resumes
+      if (state.seeking || state.seekBuffering) {
+        state.playRequestedDuringSeek = true;
+        state.intendedPlaying = true;
+        state.bufferHoldIntendedPlaying = true;
+        return;
+      }
       // Anti-loop: if video ended naturally and something is trying to auto-restart,
-      // block it unless the user explicitly clicked play.
-      const _isUserPlayAction = (now() - state.lastUserActionTime) < 1500 &&
-        document.visibilityState === "visible";
+      // block it unless the user EXPLICITLY clicked play (userPlayIntentPresetAt).
+      // lastUserActionTime alone is too loose — mouse moves, scrolls etc. can set it.
+      const _isUserPlayAction = (
+        (state.userPlayIntentPresetAt > 0 && (now() - state.userPlayIntentPresetAt) < 2000) ||
+        (now() - state.lastUserActionTime) < 800
+      ) && document.visibilityState === "visible";
       if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart() && !_isUserPlayAction) {
         execProgrammaticVideoPause();
         if (coupledMode && audio && !audio.paused) {
@@ -8854,10 +8925,11 @@ try {
       // Anti-loop: if video is playing after it ended naturally, kill it
       if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) {
         const _playingVt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
-        if (_playingVt < 2.0) {
+        if (_playingVt < 5.0) {
           execProgrammaticVideoPause();
           if (coupledMode && audio && !audio.paused) { try { audio.pause(); } catch {} }
           state.intendedPlaying = false;
+          state.bufferHoldIntendedPlaying = false;
           return;
         }
       }
@@ -9463,8 +9535,11 @@ try {
           MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.onEnded();
           stripAutoplayAfterFirstPlay();
           state.tabReturnImmuneUntil = 0;
+          state.resumeOnVisible = false;
+          state.bgHiddenWasPlaying = false;
           disengagePauseIntercept();
           state.playSessionId++;
+          clearSyncLoop();
           updateMediaSessionPlaybackState();
           pauseHard();
         }, { passive: true });
@@ -9752,13 +9827,35 @@ try {
           // Kill autoplay so Video.js/browser doesn't auto-restart
           stripAutoplayAfterFirstPlay();
           state.tabReturnImmuneUntil = 0;
+          state.resumeOnVisible = false;
+          state.bgHiddenWasPlaying = false;
           disengagePauseIntercept();
           state.playSessionId++;
+          // Kill sync loop — nothing should be syncing after ended
+          clearSyncLoop();
           updateMediaSessionPlaybackState();
           pauseHard();
+          // Patch native element play() to block phantom restarts at the lowest level
+          const _endedGen = state.playSessionId;
+          try {
+            const _nativeVN = getVideoNode();
+            if (_nativeVN && !_nativeVN._endedPlayPatched) {
+              const _origNativePlay = _nativeVN.play.bind(_nativeVN);
+              _nativeVN.play = function() {
+                if (state.endedNaturally && !state.restarting && !isLoopDesired()) {
+                  const _ur = (now() - state.lastUserActionTime) < 800;
+                  const _up = state.userPlayIntentPresetAt > 0 && (now() - state.userPlayIntentPresetAt) < 2000;
+                  if (!_ur && !_up) {
+                    return Promise.resolve();
+                  }
+                }
+                return _origNativePlay();
+              };
+              _nativeVN._endedPlayPatched = true;
+            }
+          } catch {}
           // Nuclear: after ending, actively prevent any play() for the lock duration
           // by continuously monitoring and killing phantom restarts
-          const _endedGen = state.playSessionId;
           const _endedKill = setInterval(() => {
             if (state.playSessionId !== _endedGen || !state.endedNaturally) {
               clearInterval(_endedKill);
@@ -9767,14 +9864,21 @@ try {
             const vn = getVideoNode();
             if (vn && !vn.paused && !state.restarting && !isLoopDesired()) {
               const vt = Number(vn.currentTime) || 0;
-              if (vt < 2.0) {
+              if (vt < 3.0) {
                 try { vn.pause(); } catch {}
                 if (coupledMode && audio && !audio.paused) { try { audio.pause(); } catch {} }
               }
             }
-          }, 200);
-          // Clear the interval when lock expires (8s lock + 500ms buffer)
-          setTimeout(() => clearInterval(_endedKill), 8500);
+            // Also kill audio if it somehow started
+            if (coupledMode && audio && !audio.paused && !state.restarting && !isLoopDesired()) {
+              const at2 = Number(audio.currentTime) || 0;
+              if (at2 < 3.0) {
+                try { audio.pause(); } catch {}
+              }
+            }
+          }, 150);
+          // Clear the interval when lock expires (10s lock)
+          setTimeout(() => clearInterval(_endedKill), 10000);
         });
   }
 
@@ -10211,11 +10315,11 @@ try {
             state.resumeOnVisible = false;
             state.bgHiddenWasPlaying = false;
 
-            // If startup hasn't committed, wake the startup machinery
+            // If startup hasn't committed, wake the startup machinery immediately
             if (!state.firstPlayCommitted && wantsStartupAutoplay() && !state.startupKickInFlight) {
-              if (!state.startupAutoplayRetryTimer) {
-                scheduleStartupAutoplayRetry();
-              }
+              state.startupAutoplayRetryCount = 0;
+              state.startupKickInFlight = false; // clear stale flag
+              scheduleStartupAutoplayKick();
             }
 
             // Schedule a sync soon — position correction without aggressive seeking.
@@ -10227,9 +10331,8 @@ try {
           if (wantsStartupAutoplay()) {
             state.startupAutoplayRetryCount = 0;
             if (!state.startupKickDone && !state.firstPlayCommitted) {
-              if (!state.startupAutoplayRetryTimer && !state.startupKickInFlight) {
-                scheduleStartupAutoplayKick();
-              }
+              state.startupKickInFlight = false; // clear stale flag from bg attempt
+              scheduleStartupAutoplayKick();
             }
           }
           setTimeout(() => { state.visibilityTransitionActive = false; }, VISIBILITY_TRANSITION_MS);
@@ -10743,7 +10846,7 @@ try {
     } catch { _trace = String(errorMsg || "Unknown error") + "\n" + String(stack || ""); }
 
     PlayerErrorOverlay.show({
-      title: "You found a bug!",
+      title: "You found a bug! \u0CA5\u203F\u0CA5",
       message: "The player just crashed into a wall it didn't see coming. Reload to get back on track, or report it so we can move the wall.",
       code: "PLAYER_ERR_UNCAUGHT",
       canRetry: true,
