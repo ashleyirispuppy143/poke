@@ -4454,6 +4454,8 @@ _seekPostTimers: []
     if (!audio) return;
     // during immunity (tab return/hide/autoplay), never seek audio.
     if ((isTabReturnImmune() || NotMakePlayBackFixingNoticable.shouldBlockSeek()) && state.firstPlayCommitted) return;
+    // never seek while the error overlay is showing
+    if (_errorOverlayShown) return;
     try {
       if (isFinite(t) && t >= 0) {
         // never seek audio backward to near 0 when it's already playing ahead
@@ -4473,13 +4475,16 @@ _seekPostTimers: []
         if (inEarlyPlayback && timeDiff < 1.5) return;
 
         // during startup (audio not yet confirmed playing), use 0.5s threshold
+        // during normal playback, use 0.15s — drift under 150ms is imperceptible
         const isStartup = state.startupPhase || !state.firstPlayCommitted;
-        const threshold = isStartup ? 0.5 : 0.05;
+        const threshold = isStartup ? 0.5 : 0.15;
         if (timeDiff <= threshold) return;
 
-        // debounce during startup: max one seek per 500ms
+        // debounce: max one seek per 500ms during startup, per 250ms during normal play.
+        // rapid-fire seeks from competing code paths cause the random seek stutter.
         const _now = performance.now();
-        if (isStartup && (_now - _lastSafeSeekAt) < 500) return;
+        const debounce = isStartup ? 500 : 250;
+        if ((_now - _lastSafeSeekAt) < debounce) return;
         _lastSafeSeekAt = _now;
         audio.currentTime = t;
       }
@@ -4491,10 +4496,12 @@ _seekPostTimers: []
     // During immunity or NMPBFN recovery, never seek audio — seeking flushes
     // the decode buffer and causes audible replay artifacts.
     if ((isTabReturnImmune() || NotMakePlayBackFixingNoticable.shouldBlockSeek()) && state.firstPlayCommitted) return;
+    if (_errorOverlayShown) return;
     try {
       if (!isFinite(t) || t < 0) return;
       const timeDiff = Math.abs((audio.currentTime || 0) - t);
-      if (timeDiff <= 0.05) return;
+      // 0.15s threshold — drift under 150ms is imperceptible
+      if (timeDiff <= 0.15) return;
 
       const wasPlaying = !audio.paused;
 
@@ -6701,7 +6708,11 @@ try {
 
         if (state.intendedPlaying && !state.restarting && !state.seeking && !state.syncing && !skipDrift && !state.seekResumeInFlight && !state.seekBuffering) {
           if (state.audioEverStarted && !audio.paused && !inBgDrift && !state.startupPhase) {
-            if (Math.abs(at - vt) > 0.5) {
+            const _syncDrift = Math.abs(at - vt);
+            // only correct large drift (>0.4s). small drift is imperceptible and
+            // seeking to fix it causes more disruption than the drift itself.
+            // the 0.05s threshold before caused constant micro-seeks (random seek stutter).
+            if (_syncDrift > 0.4) {
               await quietSeekAudio(vt);
               at = vt;
             }
@@ -7293,7 +7304,8 @@ try {
     let _el = null;
     let _visible = false;
 
-     function _injectStyles() {
+    // inject all styles inline — no external CSS needed
+    function _injectStyles() {
       if (document.getElementById("pe-overlay-css")) return;
       const s = document.createElement("style");
       s.id = "pe-overlay-css";
@@ -7302,10 +7314,10 @@ try {
           position: absolute; inset: 0; z-index: 9999;
           display: flex; align-items: center; justify-content: center;
           background: #0f0f0f; color: #fff;
+          border-radius: 16px;
           font-family: Roboto, Arial, Helvetica, sans-serif;
           opacity: 0; pointer-events: none;
           transition: opacity .2s ease;
-          border-radius: 16px;
         }
         .pe-overlay.pe-visible { opacity: 1; pointer-events: auto; }
         .pe-overlay-inner {
@@ -7334,17 +7346,37 @@ try {
         .pe-overlay-code {
           font-size: 12px; color: #717171; margin-top: 2px;
         }
+        .pe-overlay-actions {
+          display: flex; gap: 10px; margin-top: 12px;
+          flex-wrap: wrap;
+        }
         .pe-overlay-btn {
-          margin-top: 12px; padding: 8px 20px; width: fit-content;
+          padding: 8px 20px; width: fit-content;
           background-color: #ffffff !important; color: #0f0f0f !important;
           border: none !important; border-radius: 18px;
           font-size: 14px; font-weight: 500; cursor: pointer;
           font-family: inherit; transition: background-color .15s;
           line-height: 1; outline: none;
           -webkit-appearance: none; appearance: none;
+          text-decoration: none !important;
+          display: inline-flex; align-items: center;
         }
         .pe-overlay-btn:hover { background-color: #d9d9d9 !important; }
         .pe-overlay-btn:active { background-color: #bbb !important; }
+        .pe-overlay-btn-outline {
+          padding: 8px 20px; width: fit-content;
+          background-color: transparent !important;
+          color: #aaa !important;
+          border: 1px solid #555 !important; border-radius: 18px;
+          font-size: 14px; font-weight: 500; cursor: pointer;
+          font-family: inherit; transition: background-color .15s, border-color .15s;
+          line-height: 1; outline: none;
+          -webkit-appearance: none; appearance: none;
+          text-decoration: none !important;
+          display: inline-flex; align-items: center;
+        }
+        .pe-overlay-btn-outline:hover { background-color: rgba(255,255,255,.08) !important; border-color: #888 !important; color: #fff !important; }
+        .pe-overlay-btn-outline:active { background-color: rgba(255,255,255,.14) !important; }
       `;
       document.head.appendChild(s);
     }
@@ -7363,7 +7395,10 @@ try {
             <div class="pe-overlay-title"></div>
             <div class="pe-overlay-msg"></div>
             <div class="pe-overlay-code"></div>
-            <button class="pe-overlay-btn" style="display:none">Reload</button>
+            <div class="pe-overlay-actions">
+              <button class="pe-overlay-btn" style="display:none">Reload</button>
+              <a class="pe-overlay-btn-outline" style="display:none" target="_blank" rel="noopener">Report Issue</a>
+            </div>
           </div>
         </div>
       `;
@@ -7380,10 +7415,9 @@ try {
       return _el;
     }
 
-    function show({ title, message, code, canRetry }) {
+    function show({ title, message, code, canRetry, reportUrl }) {
       const el = _create();
       const titleEl = el.querySelector(".pe-overlay-title");
-      // allow HTML in title (for links)
       if (title && title.includes("<")) {
         titleEl.innerHTML = title;
       } else {
@@ -7393,6 +7427,13 @@ try {
       el.querySelector(".pe-overlay-code").textContent = code ? `Error code: ${code}` : "";
       const btn = el.querySelector(".pe-overlay-btn");
       btn.style.display = canRetry ? "" : "none";
+      const reportBtn = el.querySelector(".pe-overlay-btn-outline");
+      if (reportUrl) {
+        reportBtn.style.display = "";
+        reportBtn.href = reportUrl;
+      } else {
+        reportBtn.style.display = "none";
+      }
       el.classList.add("pe-visible");
       _visible = true;
     }
@@ -7414,20 +7455,41 @@ try {
   let _audioErrorObj = null;
   let _errorOverlayShown = false;
 
-  // unique error IDs for each error code + source combination
+  // unique error IDs — 10 per source (video, audio, player)
   const ERROR_IDS = {
-    "video-1": "MEDIA_ERR_ABORTED",
-    "video-2": "MEDIA_ERR_NETWORK",
-    "video-3": "MEDIA_ERR_DECODE",
-    "video-4": "MEDIA_ERR_SRC_NOT_SUPPORTED",
-    "audio-1": "AUDIO_ERR_ABORTED",
-    "audio-2": "AUDIO_ERR_NETWORK",
-    "audio-3": "AUDIO_ERR_DECODE",
-    "audio-4": "AUDIO_ERR_SRC_NOT_SUPPORTED",
-    "player-1": "PLAYER_ERR_ABORTED",
-    "player-2": "PLAYER_ERR_NETWORK",
-    "player-3": "PLAYER_ERR_DECODE",
-    "player-4": "PLAYER_ERR_SRC_NOT_SUPPORTED"
+    // video errors (1-10)
+    "video-1":  "MEDIA_ERR_ABORTED",
+    "video-2":  "MEDIA_ERR_NETWORK",
+    "video-3":  "MEDIA_ERR_DECODE",
+    "video-4":  "MEDIA_ERR_SRC_NOT_SUPPORTED",
+    "video-5":  "MEDIA_ERR_ENCRYPTED",
+    "video-6":  "MEDIA_ERR_STALL_TIMEOUT",
+    "video-7":  "MEDIA_ERR_BUFFER_FULL",
+    "video-8":  "MEDIA_ERR_RENDERER_FAILED",
+    "video-9":  "MEDIA_ERR_CODEC_UNSUPPORTED",
+    "video-10": "MEDIA_ERR_UNKNOWN",
+    // audio errors (1-10)
+    "audio-1":  "AUDIO_ERR_ABORTED",
+    "audio-2":  "AUDIO_ERR_NETWORK",
+    "audio-3":  "AUDIO_ERR_DECODE",
+    "audio-4":  "AUDIO_ERR_SRC_NOT_SUPPORTED",
+    "audio-5":  "AUDIO_ERR_ENCRYPTED",
+    "audio-6":  "AUDIO_ERR_STALL_TIMEOUT",
+    "audio-7":  "AUDIO_ERR_BUFFER_FULL",
+    "audio-8":  "AUDIO_ERR_SYNC_LOST",
+    "audio-9":  "AUDIO_ERR_CODEC_UNSUPPORTED",
+    "audio-10": "AUDIO_ERR_UNKNOWN",
+    // player errors (both, 1-10)
+    "player-1":  "PLAYER_ERR_ABORTED",
+    "player-2":  "PLAYER_ERR_NETWORK",
+    "player-3":  "PLAYER_ERR_DECODE",
+    "player-4":  "PLAYER_ERR_SRC_NOT_SUPPORTED",
+    "player-5":  "PLAYER_ERR_ENCRYPTED",
+    "player-6":  "PLAYER_ERR_STALL_TIMEOUT",
+    "player-7":  "PLAYER_ERR_BUFFER_FULL",
+    "player-8":  "PLAYER_ERR_STATE_CORRUPT",
+    "player-9":  "PLAYER_ERR_CODEC_UNSUPPORTED",
+    "player-10": "PLAYER_ERR_UNKNOWN"
   };
 
   function handleFatalMediaError(source, errorObj) {
@@ -7449,49 +7511,87 @@ try {
 
     const scopeTitles = {
       video: {
-        1: "Video playback aborted",
-        2: "Video network error",
-        3: "Video decode error",
-        4: "Video player configuration error"
+        1:  "Video playback aborted",
+        2:  "Video network error",
+        3:  "Video decode error",
+        4:  "Video player configuration error",
+        5:  "Video encryption error",
+        6:  "Video stall timeout",
+        7:  "Video buffer overflow",
+        8:  "Video renderer failed",
+        9:  "Video codec unsupported",
+        10: "Video error"
       },
       audio: {
-        1: "Audio playback aborted",
-        2: "Audio network error",
-        3: "Audio decode error",
-        4: "Audio source not supported"
+        1:  "Audio playback aborted",
+        2:  "Audio network error",
+        3:  "Audio decode error",
+        4:  "Audio source not supported",
+        5:  "Audio encryption error",
+        6:  "Audio stall timeout",
+        7:  "Audio buffer overflow",
+        8:  "Audio sync lost",
+        9:  "Audio codec unsupported",
+        10: "Audio error"
       },
       player: {
-        1: "Playback aborted",
-        2: "Network error",
-        3: "Decode error",
-        4: "Player configuration error"
+        1:  "Playback aborted",
+        2:  "Network error",
+        3:  "Decode error",
+        4:  "Player configuration error",
+        5:  "Encryption error",
+        6:  "Stall timeout",
+        7:  "Buffer overflow",
+        8:  "Player state error",
+        9:  "Codec unsupported",
+        10: "Player error"
       }
     };
 
     const scopeMessages = {
       video: {
-        1: "The video playback was aborted.",
-        2: "A network error caused the video to fail. Check your connection and try again.",
-        3: "The video could not be decoded. The file may be corrupt or unsupported.",
-        4: "The video format or source is not supported by your browser."
+        1:  "The video playback was aborted.",
+        2:  "A network error caused the video to fail. Check your connection and try again.",
+        3:  "The video could not be decoded. The file may be corrupt or unsupported.",
+        4:  "The video format or source is not supported by your browser.",
+        5:  "The video is encrypted and the key could not be retrieved.",
+        6:  "The video stalled and could not recover. Try reloading.",
+        7:  "The video buffer is full and playback cannot continue.",
+        8:  "The video renderer encountered a fatal error.",
+        9:  "The video codec is not supported by your browser.",
+        10: "An unexpected video error occurred."
       },
       audio: {
-        1: "The audio playback was aborted.",
-        2: "A network error caused the audio to fail. Check your connection and try again.",
-        3: "The audio could not be decoded. The file may be corrupt or unsupported.",
-        4: "The audio format or source is not supported by your browser."
+        1:  "The audio playback was aborted.",
+        2:  "A network error caused the audio to fail. Check your connection and try again.",
+        3:  "The audio could not be decoded. The file may be corrupt or unsupported.",
+        4:  "The audio format or source is not supported by your browser.",
+        5:  "The audio is encrypted and the key could not be retrieved.",
+        6:  "The audio stalled and could not recover. Try reloading.",
+        7:  "The audio buffer is full and playback cannot continue.",
+        8:  "Audio and video sync was lost and could not be restored.",
+        9:  "The audio codec is not supported by your browser.",
+        10: "An unexpected audio error occurred."
       },
       player: {
-        1: "Both video and audio playback were aborted.",
-        2: "A network error caused playback to fail. Check your connection and try again.",
-        3: "The media could not be decoded. The files may be corrupt or unsupported.",
-        4: "The media format or source is not supported by your browser."
+        1:  "Both video and audio playback were aborted.",
+        2:  "A network error caused playback to fail. Check your connection and try again.",
+        3:  "The media could not be decoded. The files may be corrupt or unsupported.",
+        4:  "The media format or source is not supported by your browser.",
+        5:  "The media is encrypted and the key could not be retrieved.",
+        6:  "Playback stalled and could not recover. Try reloading.",
+        7:  "The media buffer is full and playback cannot continue.",
+        8:  "The player encountered an internal state error.",
+        9:  "The media codec is not supported by your browser.",
+        10: "An unexpected playback error occurred."
       }
     };
 
     const titles = scopeTitles[scope] || scopeTitles.player;
     const messages = scopeMessages[scope] || scopeMessages.player;
     const errorId = ERROR_IDS[scope + "-" + worstCode] || ("ERR_UNKNOWN_" + worstCode);
+    // for unknown/unrecognized codes, use "you found a bug!"
+    const isBug = !titles[worstCode];
 
     // pause everything
     state.intendedPlaying = false;
@@ -7499,11 +7599,18 @@ try {
     try { pauseHard(); } catch {}
     _errorOverlayShown = true;
 
+    // build report URL with error context pre-filled
+    const _reportBase = "https://codeberg.org/ashleyirispuppy/poke/issues/new?template=issue_template%2fplayer-bug.yml";
+    const _errLabel = isBug ? "BUG" : errorId;
+
     PlayerErrorOverlay.show({
-      title: titles[worstCode] || "Playback error",
-      message: messages[worstCode] || (msg || "An unexpected error occurred."),
+      title: isBug ? "You found a bug!" : (titles[worstCode] || "Playback error"),
+      message: isBug
+        ? "Something went wrong that shouldn't have. Try reloading the page."
+        : (messages[worstCode] || (msg || "An unexpected error occurred.")),
       code: errorId,
-      canRetry: true
+      canRetry: true,
+      reportUrl: _reportBase
     });
   }
 
@@ -10141,6 +10248,64 @@ try {
     _audioErrorObj = null;
     PlayerErrorOverlay.hide();
   };
+
+  // =========================================================================
+  // global error catcher — catches uncaught JS errors from the player code
+  // and shows the "you found a bug!" overlay with a report link.
+  // only triggers once to avoid spam. ignores errors from other scripts.
+  // =========================================================================
+  let _globalErrorCaught = false;
+  const _reportBase = "https://codeberg.org/ashleyirispuppy/poke/issues/new?template=issue_template%2fplayer-bug.yml";
+
+  function _handlePlayerCrash(errorMsg, source) {
+    if (_globalErrorCaught || _errorOverlayShown) return;
+    _globalErrorCaught = true;
+    _errorOverlayShown = true;
+
+    // try to keep playback going if possible — only show overlay, don't pause
+    // unless video is already broken
+    const vn = getVideoNode();
+    const videoBroken = !vn || vn.paused || (vn.readyState < 2);
+    if (videoBroken) {
+      state.intendedPlaying = false;
+      state.bufferHoldIntendedPlaying = false;
+      try { pauseHard(); } catch {}
+    }
+
+    const errDetail = String(errorMsg || "Unknown error").slice(0, 200);
+    PlayerErrorOverlay.show({
+      title: "You found a bug!",
+      message: "The player encountered an unexpected error. You can try reloading, or report this issue so we can fix it.",
+      code: "PLAYER_ERR_UNCAUGHT",
+      canRetry: true,
+      reportUrl: _reportBase
+    });
+  }
+
+  window.addEventListener("error", (e) => {
+    if (_globalErrorCaught) return;
+    // only catch errors from the player script (this file) or inline scripts.
+    // ignore errors from unrelated third-party scripts.
+    const src = e && e.filename ? String(e.filename) : "";
+    const msg = e && e.message ? String(e.message) : "";
+    // match player script by filename pattern or if it's an inline script (empty filename)
+    const isPlayerScript = !src || src.includes("player") || src.includes("bundle") ||
+      src.includes("app.") || src.includes("index.");
+    if (!isPlayerScript) return;
+    // ignore benign errors that don't affect playback
+    if (msg.includes("ResizeObserver") || msg.includes("Script error")) return;
+    _handlePlayerCrash(msg, src);
+  }, { passive: true });
+
+  window.addEventListener("unhandledrejection", (e) => {
+    if (_globalErrorCaught) return;
+    const reason = e && e.reason;
+    const msg = reason ? (reason.message || reason.stack || String(reason)) : "";
+    // ignore AbortError (from aborted play() calls) and NotAllowedError (autoplay policy)
+    if (typeof msg === "string" && (msg.includes("AbortError") || msg.includes("NotAllowedError") ||
+        msg.includes("play() request was interrupted"))) return;
+    _handlePlayerCrash(msg, "promise");
+  }, { passive: true });
 });
 
 
