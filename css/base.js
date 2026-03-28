@@ -15,7 +15,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 // "It takes a lot of hard work to make something simple." ~ Steve Jobs 
- document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", () => {
   const video = videojs("video", {
     controls: true,
     autoplay: true,
@@ -952,6 +952,8 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     if (!(state.tabReturnImmuneUntil > now())) return; // not immune — let normal handlers run
     if (state.userPauseIntentPresetAt > 0 && (now() - state.userPauseIntentPresetAt) < 2000) return; // user pause
     if (!state.intendedPlaying) return;
+    // CRITICAL: never fight pause after video ended — this was causing phantom loops
+    if (state.endedNaturally) return;
     // In background, don't fight Chrome's auto-pause. Replaying here just causes
     // the play-pause-play-pause stutter loop. Let keepalive handle bg playback
     // at its own pace with proper backoff.
@@ -1122,6 +1124,9 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     // PHASE 2: RECOVERING — tab just returned, resume playback
     // -----------------------------------------------------------------------
     function onReturn() {
+      // CRITICAL: never restart after video ended naturally — this was a major loop cause
+      if (state.endedNaturally) return;
+      if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) return;
       if (!state.intendedPlaying && !state.resumeOnVisible &&
         !(wantsStartupAutoplay() && !state.firstPlayCommitted) &&
         !state.startupPhase) return;
@@ -1198,6 +1203,9 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
 
     function _doSingleCleanPlay(gen) {
       if (_recoveryGen !== gen) return;
+      // CRITICAL: never restart after ended
+      if (state.endedNaturally) return;
+      if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) return;
       _playAttempts++;
       // During startup recovery, commit play intent so full machinery activates
       if (state.startupPhase || wantsStartupAutoplay()) {
@@ -2196,6 +2204,8 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     // --- foreground return: pre-emptive play
     function preemptivePlay() {
       if (!state.intendedPlaying) return;
+      if (state.endedNaturally) return;
+      if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) return;
       _returnTs        = performance.now();
       _preemptiveFired = false;
       _audioPreAligned = false;
@@ -3749,7 +3759,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
         return;
       }
 
-      if (this.shouldResume()) {
+      if (this.shouldResume() && !state.endedNaturally) {
         state.tabReturnImmuneUntil = Math.max(state.tabReturnImmuneUntil, now() + 2000);
       }
 
@@ -3770,7 +3780,12 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
       const pageActuallyVisible = document.visibilityState === "visible";
       const isDuplicate = timeSinceLast < 80;
 
-      if (this.shouldResume() && pageActuallyVisible && !isDuplicate) {
+      // CRITICAL: never restart after video ended naturally — all tab-return paths
+      // must respect ended state or the video will phantom-loop on tab switch.
+      const _endedBlock = state.endedNaturally ||
+        MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart();
+
+      if (this.shouldResume() && pageActuallyVisible && !isDuplicate && !_endedBlock) {
         // Check if this is a lightweight alt-tab (visibilityState never went hidden).
         // Alt-tab: blur→focus with page staying "visible" the whole time.
         // Full tab switch: visibilitychange→hidden then visibilitychange→visible.
@@ -8282,6 +8297,8 @@ try {
     try {
       navigator.mediaSession.setActionHandler("play", () => {
         const serial = ++state.mediaSessionActionSerial;
+        // User explicitly pressed play from OS media controls — clear ended lock
+        MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.onUserPlay();
         clearMediaSessionForcedPause();
         state.mediaSessionInitiatedPlay = true;
         markMediaAction("play");
@@ -8624,6 +8641,8 @@ try {
       // Never fight the user's explicit pause.
       if (state.tabReturnImmuneUntil > now() &&
         (state.intendedPlaying || !state.firstPlayCommitted) &&
+        !state.endedNaturally &&
+        !MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart() &&
         !(state.userPauseIntentPresetAt > 0 && (now() - state.userPauseIntentPresetAt) < 2000)) {
         const _vn = getVideoNode();
       if (_vn && typeof _vn.play === 'function') _vn.play().catch(() => {});
@@ -8661,9 +8680,9 @@ try {
           // 4. User already in paused-intent state → accept (expected)
           if (MediumQualityManager.intentPaused || !state.intendedPlaying) return;
           // 5. intendedPlaying=true but browser paused us → counter-play if suppressed
-          if (inBgReturnGrace() || BringBackToTabManager.isLocked() ||
+          if ((inBgReturnGrace() || BringBackToTabManager.isLocked() ||
             VisibilityGuard.shouldSuppress() || isVisibilityTransitionActive() ||
-            isAltTabTransitionActive()) {
+            isAltTabTransitionActive()) && !state.endedNaturally) {
             VisibilityGuard.onPlayCalled();
           const _vn = getVideoNode();
           if (_vn && typeof _vn.play === "function") _vn.play().catch(() => {});
@@ -8675,7 +8694,7 @@ try {
               return;
             }
             // 6.5. Recently seeked — browser may fire pause during seek settle
-            if (state.seekCooldownUntil > now()) {
+            if (state.seekCooldownUntil > now() && !state.endedNaturally) {
               VisibilityGuard.onPlayCalled();
               const _vn = getVideoNode();
               if (_vn && typeof _vn.play === "function") _vn.play().catch(() => {});
@@ -8709,6 +8728,7 @@ try {
           // --- immediate counter-play helper
           const _shouldCounterPlay = () =>
           state.intendedPlaying &&
+          !state.endedNaturally &&
           !state.videoWaiting &&
           !state.seeking &&
           !state.seekResumeInFlight &&
@@ -9917,6 +9937,10 @@ try {
     if (state.bbtabRetryTimer)    { clearTimeout(state.bbtabRetryTimer);         state.bbtabRetryTimer    = null; }
     if (state.bbtabAudioSyncTimer){ clearTimeout(state.bbtabAudioSyncTimer);     state.bbtabAudioSyncTimer = null; }
 
+    // CRITICAL: never restart after video ended naturally
+    if (state.endedNaturally) return;
+    if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) return;
+
     // Only allow if: was playing, OR resume flagged, OR startup hasn't committed yet
     if (!state.intendedPlaying && !state.resumeOnVisible &&
       !(wantsStartupAutoplay() && !state.firstPlayCommitted)) return;
@@ -9932,6 +9956,8 @@ try {
     state.bbtabRetryRafId = requestAnimationFrame(() => {
       state.bbtabRetryRafId = null;
       if (state.tabReturnGen !== bbtGen) return;
+      if (state.endedNaturally) return;
+      if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) return;
       if (userPauseLockActive() || mediaSessionForcedPauseActive()) return;
       if (!state.intendedPlaying && !state.firstPlayCommitted && wantsStartupAutoplay()) {
         state.intendedPlaying = true;
@@ -9964,6 +9990,7 @@ try {
     // --- shot 1.25: 80ms quick-check
     setTimeout(() => {
       if (state.tabReturnGen !== bbtGen) return;
+      if (state.endedNaturally || MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) return;
       if (!state.intendedPlaying && !state.firstPlayCommitted && wantsStartupAutoplay()) { state.intendedPlaying = true; state.bufferHoldIntendedPlaying = true; }
       if (!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) return;
       // clear stale stall flags
@@ -9988,6 +10015,7 @@ try {
     // --- shot 1.5: 200ms intermediate
     setTimeout(() => {
       if (state.tabReturnGen !== bbtGen) return;
+      if (state.endedNaturally || MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) return;
       if (!state.intendedPlaying && !state.firstPlayCommitted && wantsStartupAutoplay()) { state.intendedPlaying = true; state.bufferHoldIntendedPlaying = true; }
       if (!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) return;
       // clear stale stall flags
@@ -10016,6 +10044,7 @@ try {
     state.bbtabRetryTimer = setTimeout(() => {
       state.bbtabRetryTimer = null;
       if (state.tabReturnGen !== bbtGen) return;
+      if (state.endedNaturally || MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) return;
       if (!state.intendedPlaying && !state.firstPlayCommitted && wantsStartupAutoplay()) { state.intendedPlaying = true; state.bufferHoldIntendedPlaying = true; }
       if (!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) return;
       // nuke stall flags — 700ms into tab return they're definitely stale
@@ -10073,6 +10102,8 @@ try {
   function _doBringBackRetry() {}
 
   function executeSeamlessWakeup() {
+    if (state.endedNaturally) return;
+    if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) return;
     if (!state.intendedPlaying && !state.resumeOnVisible &&
       !(wantsStartupAutoplay() && !state.firstPlayCommitted)) return;
     // During immunity or NMPBFN recovery, the recovery system handles everything.
@@ -10238,8 +10269,11 @@ try {
           // instant shot: fire play() on BOTH elements right now, before any
           // manager overhead runs. if media was just bg-paused by Chrome, this
           // resumes it in <1ms. managers below handle retries if this one fails.
-          if (state.intendedPlaying || state.resumeOnVisible ||
-              (!state.firstPlayCommitted && wantsStartupAutoplay())) {
+          // CRITICAL: NEVER restart after ended — this was THE root cause of phantom looping.
+          if ((state.intendedPlaying || state.resumeOnVisible ||
+              (!state.firstPlayCommitted && wantsStartupAutoplay())) &&
+              !state.endedNaturally &&
+              !MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) {
             state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 1500);
             DONTMAKEITDOUBLEPLAY.resetAll();
             // bypass ALL wrappers (gate, dedup, execProgrammatic) — call the
