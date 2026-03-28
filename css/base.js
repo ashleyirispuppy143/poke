@@ -4923,6 +4923,7 @@ endedLockUntil: 0
   }
 
   function execProgrammaticVideoPlay() {
+    if (_errorOverlayShown) return;
     VisibilityGuard.onPlayCalled(); // VG: suppress spurious pause after our play()
 state.isProgrammaticVideoPlay = true;
 try {
@@ -4986,6 +4987,8 @@ try {
   async function execProgrammaticAudioPlay(opts = {}) {
     const { squelchMs = 500, minGapMs = 300, force = false } = opts;
     if (!coupledMode || !audio || typeof audio.play !== "function") return false;
+    // Error overlay active — playback is dead, don't start anything
+    if (_errorOverlayShown) return false;
 
     // Never start audio during seeking or seek-buffering.
     // Only finalizeSeekSync/playTogether may restart audio after seek completes.
@@ -5712,6 +5715,8 @@ try {
   function ensureStartupZeroed() { forceZeroBeforeFirstPlay(); }
 
   async function playTogether() {
+    // Error overlay active — all playback is dead
+    if (_errorOverlayShown) return;
     state.userPlayIntentPresetAt = 0;
     // Never trigger loop detection during tab-return immunity
     if (!(state.tabReturnImmuneUntil > now()) && detectLoop()) {
@@ -5841,7 +5846,15 @@ try {
         } else if (!isRecentUserAction && !canKickFirstAudio && startupAudioHoldActive()) {
           // hold
         } else {
-          safeSetAudioTime(vNow);
+          // For user-initiated plays, bypass debounce and set audio position DIRECTLY
+          // so audio doesn't briefly play from its old position before syncing.
+          if (isRecentUserAction && isFinite(vNow) && vNow >= 0) {
+            state._allowAudioTimeWrite = true;
+            try { audio.currentTime = vNow; } catch {}
+            state._allowAudioTimeWrite = false;
+          } else {
+            safeSetAudioTime(vNow);
+          }
           aPlayP = execProgrammaticAudioPlay({
             squelchMs: canKickFirstAudio ? 300 : 400,
             minGapMs: canKickFirstAudio ? 0 : 100,
@@ -6067,6 +6080,7 @@ try {
       try { vNode.removeEventListener("canplay", onReady); } catch {}
       try { vNode.removeEventListener("canplaythrough", onReady); } catch {}
       try { vNode.removeEventListener("playing", onReady); } catch {}
+      try { vNode.removeEventListener("progress", onReady); } catch {}
       try { clearTimeout(fallbackTimer); } catch {}
       try { clearInterval(pollTimer); } catch {}
       state.seekBuffering = false;
@@ -6112,6 +6126,8 @@ try {
       try { vNode.addEventListener("canplay", onReady, { passive: true }); } catch {}
       try { vNode.addEventListener("canplaythrough", onReady, { passive: true }); } catch {}
       try { vNode.addEventListener("playing", onReady, { passive: true }); } catch {}
+      // Also listen for progress/timeupdate events as buffer-ready signals
+      try { vNode.addEventListener("progress", onReady, { passive: true }); } catch {}
       const pollTimer = setInterval(() => {
         if (done) { clearInterval(pollTimer); return; }
         const rs = Number(vNode?.readyState || 0);
@@ -6124,8 +6140,8 @@ try {
           }
         } catch {}
         if (rs >= HAVE_FUTURE_DATA || vBuf) resume();
-      }, 300);
-        const fallbackTimer = setTimeout(resume, 10000);
+      }, 150);
+        const fallbackTimer = setTimeout(resume, 6000);
         state.seekBufferResumeTimer = fallbackTimer;
         return true;
   }
@@ -6317,6 +6333,13 @@ try {
         // sync audio position and play at full volume right away
         if (coupledMode && audio) {
           const _seekVt = Number(video.currentTime()) || 0;
+          // If audio is still playing, pause it FIRST to prevent playing old position
+          const _wasAudioPlaying = !audio.paused;
+          if (_wasAudioPlaying) {
+            state.isProgrammaticAudioPause = true;
+            try { audio.pause(); } catch {}
+            setTimeout(() => { state.isProgrammaticAudioPause = false; }, 100);
+          }
           if (isFinite(_seekVt)) {
             state._allowAudioTimeWrite = true;
             try { audio.currentTime = _seekVt; } catch {}
@@ -6333,13 +6356,10 @@ try {
           try { audio.volume = _seekTargetVol; } catch {}
           // grace period so buffer monitor doesn't immediately kill this
           state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 600);
-          if (audio.paused) {
-            execProgrammaticAudioPlay({ squelchMs: 400, force: true, minGapMs: 0 })
-              .then(ok => { if (ok) { try { audio.volume = _seekTargetVol; } catch {} } })
-              .catch(() => {});
-          } else {
-            try { audio.volume = _seekTargetVol; } catch {}
-          }
+          // Always restart audio after seek (we paused it above to prevent old-position playback)
+          execProgrammaticAudioPlay({ squelchMs: 400, force: true, minGapMs: 0 })
+            .then(ok => { if (ok) { try { audio.volume = _seekTargetVol; } catch {} } })
+            .catch(() => {});
         }
       }
       // post-seek: retry audio at a few intervals in case the first attempt got eaten
@@ -6707,6 +6727,8 @@ try {
   async function runSync() {
     state.syncTimer = null;
     state.syncScheduledAt = 0;
+    // Error overlay active — don't sync anything, media is dead
+    if (_errorOverlayShown) return;
     enforcePlaybackRateSync();
     // Anti-loop tick — catch phantom restarts every sync cycle
     try { MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.tick(); } catch {}
@@ -7828,7 +7850,7 @@ try {
     PlayerErrorOverlay.show({
       title: isBug ? "You found a bug!" : (titles[worstCode] || "Playback error"),
       message: isBug
-        ? "Something went wrong that shouldn't have. Try reloading the page."
+        ? "Well this is embarrassing. The player just did something illegal. Try reloading, or snitch on it below."
         : (messages[worstCode] || (msg || "An unexpected error occurred.")),
       code: errorId,
       canRetry: true,
@@ -8212,6 +8234,12 @@ try {
       } catch {}
     });
     video.on("play", () => {
+      // Error overlay active — kill any play attempts
+      if (_errorOverlayShown) {
+        execProgrammaticVideoPause();
+        if (coupledMode && audio && !audio.paused) { try { audio.pause(); } catch {} }
+        return;
+      }
       if (state.seeking || state.seekBuffering) return;
       // Anti-loop: if video ended naturally and something is trying to auto-restart,
       // block it unless the user explicitly clicked play.
@@ -8406,6 +8434,23 @@ try {
                   }
                   scheduleSync(0);
                   return;
+                }
+                // Fast path: kick audio immediately so user hears it ASAP.
+                // playTogether() has awaits that add 50-150ms of latency.
+                // Set audio position and fire play() directly, then let
+                // playTogether handle the full sync in the background.
+                if (audio && audio.paused) {
+                  const _fastVt = Number(video.currentTime()) || 0;
+                  if (isFinite(_fastVt) && _fastVt >= 0) {
+                    state._allowAudioTimeWrite = true;
+                    try { audio.currentTime = _fastVt; } catch {}
+                    state._allowAudioTimeWrite = false;
+                  }
+                  try { audio.volume = targetVolFromVideo(); } catch {}
+                  squelchAudioEvents(300);
+                  state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 600);
+                  try { audio.play().catch(() => {}); } catch {}
+                  state.audioEverStarted = true;
                 }
                 playTogether().catch(() => {});
               } else {
@@ -10537,15 +10582,11 @@ try {
     _globalErrorCaught = true;
     _errorOverlayShown = true;
 
-    // try to keep playback going if possible — only show overlay, don't pause
-    // unless video is already broken
-    const vn = getVideoNode();
-    const videoBroken = !vn || vn.paused || (vn.readyState < 2);
-    if (videoBroken) {
-      state.intendedPlaying = false;
-      state.bufferHoldIntendedPlaying = false;
-      try { pauseHard(); } catch {}
-    }
+    // Kill all playback — error overlay blocks all play paths anyway
+    state.intendedPlaying = false;
+    state.bufferHoldIntendedPlaying = false;
+    state.resumeOnVisible = false;
+    try { pauseHard(); } catch {}
 
     // build full stack trace
     let _trace = "";
@@ -10575,7 +10616,7 @@ try {
 
     PlayerErrorOverlay.show({
       title: "You found a bug!",
-      message: "The player encountered an unexpected error. You can try reloading, or report this issue so we can fix it.",
+      message: "The player just crashed into a wall it didn't see coming. Reload to get back on track, or report it so we can move the wall.",
       code: "PLAYER_ERR_UNCAUGHT",
       canRetry: true,
       reportUrl: _reportBase,
