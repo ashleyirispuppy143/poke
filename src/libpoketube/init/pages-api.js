@@ -165,6 +165,117 @@ module.exports = function (app, config, renderTemplate) {
     res.redirect(url);
   });
 
+app.get("/api/yturl", async function (req, res) {
+  var v = req.query.v;
+
+  // Make sure a video ID was provided
+  if (!v) {
+    return res.status(400).send("No video ID provided.");
+  }
+
+  const url = `https://youtube.com/watch?v=${v}`;
+ 
+  const warningPage = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Leaving Our Site</title>
+        <style>
+            body {
+                font-family: "Roboto", Arial, sans-serif;
+                background-color: #0f0f0f;
+                color: #f1f1f1;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+                margin: 0;
+            }
+            .warning-card {
+                background-color: #212121;
+                padding: 40px;
+                border-radius: 12px;
+                text-align: center;
+                max-width: 400px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            }
+            .icon-container {
+                margin-bottom: 20px;
+            }
+            .yt-icon {
+                fill: #ff0000;
+                width: 48px;
+                height: 48px;
+            }
+            h1 {
+                font-size: 22px;
+                margin: 0 0 15px 0;
+                font-weight: 500;
+            }
+            p {
+                font-size: 14px;
+                color: #aaaaaa;
+                line-height: 1.6;
+                margin-bottom: 30px;
+            }
+            .buttons {
+                display: flex;
+                gap: 15px;
+                justify-content: center;
+            }
+            .btn {
+                padding: 10px 20px;
+                border-radius: 18px;
+                font-size: 14px;
+                font-weight: 500;
+                cursor: pointer;
+                text-decoration: none;
+                border: none;
+                transition: background-color 0.2s;
+            }
+            .btn-cancel {
+                background-color: transparent;
+                color: #3ea6ff;
+            }
+            .btn-cancel:hover {
+                background-color: rgba(62, 166, 255, 0.1);
+            }
+            .btn-proceed {
+                background-color: #3ea6ff;
+                color: #0f0f0f;
+            }
+            .btn-proceed:hover {
+                background-color: #65b8ff;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="warning-card">
+            <div class="icon-container">
+                <svg class="yt-icon" viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet" focusable="false">
+                    <g><path d="M21.58,7.19C21.35,6.33 20.67,5.65 19.81,5.42C18.25,5 12,5 12,5C12,5 5.75,5 4.19,5.42C3.33,5.65 2.65,6.33 2.42,7.19C2,8.75 2,12 2,12C2,12 2,15.25 2.42,16.81C2.65,17.67 3.33,18.35 4.19,18.58C5.75,19 12,19 12,19C12,19 18.25,19 19.81,18.58C20.67,18.35 21.35,17.67 21.58,16.81C22,15.25 22,12 22,12C22,12 22,8.75 21.58,7.19ZM10,15V9L15.2,12L10,15Z"></path></g>
+                </svg>
+            </div>
+            <h1>Hold on a second!</h1>
+            <p>
+                Are you sure you want to continue to <strong>youtube.com</strong>?<br><br>
+                External sites like YouTube may track your activity, use cookies, and collect your data in accordance with their own privacy policies.
+            </p>
+            <div class="buttons">
+                <button class="btn btn-cancel" onclick="window.history.back()">Go Back</button>
+                
+                <a href="${url}" class="btn btn-proceed">Proceed to YouTube</a>
+            </div>
+        </div>
+    </body>
+    </html>
+  `;
+
+   res.send(warningPage);
+});
+  
   app.get("/api/subtitles", async (req, res) => {
     const { fetch } = await import("undici");
 
