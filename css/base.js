@@ -17,6 +17,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  * 100% puppy made code! 0 slop guarenteed!
  * "It takes a lot of hard work to make something simple." ~ Steve Jobs 
  */
+ 
 // before DOMContentLoaded. Ensures both video and audio start at 00:00
 // even if the browser pre-buffers to a non-zero keyframe position.
 // This runs in a try-catch because elements might not exist yet.
@@ -603,6 +604,7 @@ document.addEventListener("DOMContentLoaded", () => {
     endedNaturally: false,
     endedAt: 0,
     endedLockUntil: 0,
+    restartFromEndedUntil: 0,
     // Wakeup retry timer IDs — tracked for explicit cancellation to prevent timer leaks
     _wakeupRetryTimers: []
   };
@@ -4146,6 +4148,7 @@ document.addEventListener("DOMContentLoaded", () => {
     state.lastUserActionTime = now();
   }
   function userSeekIntentActive() { return now() < state.userSeekIntentUntil; }
+  function restartFromEndedGuardActive() { return now() < state.restartFromEndedUntil; }
   function armSeekResumeIntent(ms = 7000) {
     const until = now() + Math.max(0, Number(ms) || 0);
     state.seekResumeWantedUntil = Math.max(state.seekResumeWantedUntil, until);
@@ -4575,9 +4578,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // User explicitly clicks play → clear the ended lock
     function onUserPlay() {
+      const recentlyEnded = state.endedNaturally || (state.endedAt > 0 && (now() - state.endedAt) < 15000);
       state.endedNaturally = false;
       state.endedAt = 0;
       state.endedLockUntil = 0;
+      if (recentlyEnded) {
+        state.restartFromEndedUntil = Math.max(state.restartFromEndedUntil, now() + 2600);
+        state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 900);
+        state.userPauseIntentPresetAt = 0;
+        clearMediaSessionForcedPause();
+      }
     }
 
     // Checks if video is at/near 0 and nobody asked for it (phantom restart)
@@ -6094,6 +6104,7 @@ try {
 
   function clearPendingPlayResumesForPause() {
     state.userPlayIntentPresetAt = 0;  // cancel any pending play preset
+    state.restartFromEndedUntil = 0;
     state.seekAudioMustStartUntil = 0;
     clearSeekResumeIntent();
     cancelActiveFade();
@@ -6135,6 +6146,7 @@ try {
 
   function pauseHard() {
     state.userPauseIntentPresetAt = 0;
+    state.restartFromEndedUntil = 0;
     state.seekAudioMustStartUntil = 0;
     clearSeekResumeIntent();
     disengagePauseIntercept();
@@ -8796,7 +8808,42 @@ try {
       pendingTechTogglePausedState = null;
     };
     const onClick = event => {
-      if (isPlayControlTarget(event.target)) { pendingTechTogglePausedState = null; return; }
+      if (isPlayControlTarget(event.target)) {
+        const clickTs = now();
+        const wasPaused = getVideoPaused();
+        pendingTechTogglePausedState = null;
+        // Fallback for browsers/UI paths where pointerdown doesn't surface to us.
+        // Without this, restart-from-ended can be misread as auto-play and get paused.
+        if (wasPaused) {
+          const haveRecentPlayIntent =
+            ((state.userPlayIntentPresetAt > 0) && ((clickTs - state.userPlayIntentPresetAt) < 650)) ||
+            userToggleRecently("play", 650) ||
+            userToggleExpectingPlay();
+          if (!haveRecentPlayIntent) {
+            markUserPlayIntent(1800, { skipImmediateAudioKick: true });
+          }
+          requestAnimationFrame(() => {
+            if (!getVideoPaused()) return;
+            if (!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) return;
+            const _pcVn = getVideoNode();
+            if (_pcVn && typeof _pcVn.play === "function" && _pcVn.paused) _pcVn.play().catch(() => {});
+            if (coupledMode && audio && audio.paused) {
+              execProgrammaticAudioPlay({ squelchMs: 120, force: true, minGapMs: 0 }).catch(() => {});
+            }
+            scheduleSync(0);
+          });
+        } else {
+          const haveRecentPauseIntent =
+            ((state.userPauseIntentPresetAt > 0) && ((clickTs - state.userPauseIntentPresetAt) < 650)) ||
+            userToggleRecently("pause", 650) ||
+            userToggleExpectingPause();
+          if (!haveRecentPauseIntent) {
+            markUserPauseIntent(1200);
+            clearPendingPlayResumesForPause();
+          }
+        }
+        return;
+      }
       if (!isTechSurfaceTarget(event.target)) { pendingTechTogglePausedState = null; return; }
       const wasPaused = pendingTechTogglePausedState;
       pendingTechTogglePausedState = null;
@@ -9251,6 +9298,22 @@ try {
       // Also check the native element's seeking flag — the "seeking" event handler
       // may not have fired yet, but the element is already seeking
       try { if (getVideoNode()?.seeking) return; } catch {}
+      if (restartFromEndedGuardActive() &&
+          !state.isProgrammaticVideoPause &&
+          !userWantsPauseNow(2400) &&
+          !mediaSessionForcedPauseActive()) {
+        state.intendedPlaying = true;
+        state.bufferHoldIntendedPlaying = true;
+        const _reVn = getVideoNode();
+        if (_reVn && typeof _reVn.play === "function" && _reVn.paused) _reVn.play().catch(() => {});
+        if (coupledMode && audio && audio.paused && !state.isProgrammaticAudioPause) {
+          state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 900);
+          execProgrammaticAudioPlay({ squelchMs: 80, force: true, minGapMs: 0 }).catch(() => {});
+        }
+        setFastSync(1400);
+        scheduleSync(0);
+        return;
+      }
       if (userToggleExpectingPlay() &&
           !state.isProgrammaticVideoPause &&
           !userWantsPauseNow(2400) &&
@@ -10028,6 +10091,18 @@ try {
     const onAudioPause = () => {
       try { MakeSureAudioIsNotCuttingOrWeird.onPause(); } catch {}
       if (userToggleExpectingPause()) clearUserToggleTxn();
+      if (restartFromEndedGuardActive() &&
+          state.intendedPlaying &&
+          !state.isProgrammaticAudioPause &&
+          !userWantsPauseNow(2400) &&
+          !mediaSessionForcedPauseActive()) {
+        const _endedRestartVt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
+        safeSetAudioTime(_endedRestartVt);
+        state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 900);
+        execProgrammaticAudioPlay({ squelchMs: 80, force: true, minGapMs: 0 }).catch(() => {});
+        scheduleSync(0);
+        return;
+      }
       if (isTabReturnImmune() && state.intendedPlaying && !state.videoWaiting &&
         !(state.userPauseIntentPresetAt > 0 && (now() - state.userPauseIntentPresetAt) < 2000)) {
         try { if (audio && audio.paused) audio.play().catch(() => {}); } catch {}
