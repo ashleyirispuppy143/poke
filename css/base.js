@@ -19,7 +19,6 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  *
  * "It takes a lot of hard work to make something simple." ~ Steve Jobs 
  */
- 
   // before DOMContentLoaded. Ensures both video and audio start at 00:00
   // even if the browser pre-buffers to a non-zero keyframe position.
   // This runs in a try-catch because elements might not exist yet.
@@ -43,7 +42,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
     _earlyZero(_earlyAudio);
   } catch {}
 
-  document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", () => {
     const video = videojs("video", {
       controls: true,
       autoplay: true,
