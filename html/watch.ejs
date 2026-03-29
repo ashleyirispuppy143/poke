@@ -1105,18 +1105,18 @@ Offical Discord Server! :3
 
  	<div class="primary">
       <div id="popupMenu" class="popup">
-      <!--
-   <div>
-          <a href="<%=u%>/companion/latest_version?id=<%=VideoData.videoId%>&itag=18&local=true" style="color: #fff;">
+   <div >
+          <a href="<%=u%>/companion/latest_version?id=<%=VideoData.videoId%>&itag=18&local=true" style="color: #fff;display:none;">
        <i class="fa-light fa-download"></i> Download Video (360p)</a>
-              </div>   
-              <div>
-          <a href="/download?v=<%=VideoData.videoId%>" style="color: #fff;">
+              </div>
+              
+              <div >
+
+          <a href="/download?v=<%=VideoData.videoId%>" style="color: #fff;display:none;">
        <i class="fa-light fa-download"></i> Download - Moar Options :O</a>
               </div>
-              -->
                     <div id="snapshotOption">
-    <i class="fa-light fa-camera"></i> Take a screenshot!
+    <i class="fa-light fa-camera"></i> Take Snapshot
 </div>
                 <div id="loopOption"> 
         <i class="fa-light fa-repeat"> </i> Loop Video
@@ -1142,15 +1142,14 @@ Offical Discord Server! :3
       <i class="fa-light fa-flag"></i>     Have Problems? Report em here</a>
               </div>
   <div >
-  <!--
-          <a href="https://codeberg.org/ashleyirispuppy/poke/src/branch/main/fix-videoplayback-issues.md" style="color: #fff;">
+          <a href="https://codeberg.org/ashleyirispuppy/poke/src/branch/main/fix-videoplayback-issues.md" style="color: #fff;display:none;">
       <i class="fa-light fa-info-circle"></i>    Having issues ;_;</a>
               </div>
                <div >
-          <a href="https://discord.poketube.fun" style="color: #fff;">
+          <a href="https://discord.poketube.fun" style="color: #fff;display:none;">
       <i class="fa-brands fa-discord"></i>  Discord Server</a>
               </div>
-                         -->                                                                                               
+                                                                                                                        
     </div>
 <div id="<%=sha384(VideoData.videoId)%>" class="video-player-container">
 <% 
