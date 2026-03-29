@@ -1754,7 +1754,7 @@ WIP!                                                 </a>
     <details class="description-new">
 <% } %>         
          	<summary style="color:#fff;">
-                                <%=engagement?.viewCount?.toLocaleString()%> Views  •  <%=date%> • Click to toggle off description</summary>
+                                <%=convert(engagement?.viewCount?.toLocaleString())%> Views  •  <%=date%> • Click to toggle off description</summary>
    
           <% if (String(VideoData.descriptionHtml) != "undefined")  { %>
          <% if (String(VideoData.descriptionHtml) != " ")  { %>
