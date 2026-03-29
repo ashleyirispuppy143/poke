@@ -169,7 +169,7 @@ app.get("/api/yturl", async function (req, res) {
   var v = req.query.v;
 
   if (!v) {
-    return res.status(400).send("No video ID provided.");
+    return res.status(400).send("No video ID??? how...");
   }
 
   const url = `https://youtube.com/watch?v=${v}`;
@@ -255,12 +255,12 @@ app.get("/api/yturl", async function (req, res) {
                 <path d="M21,3H3C1.89,3,1,3.89,1,5v12c0,1.1,0.89,2,2,2h5v2h8v-2h5c1.1,0,2-0.9,2-2V5C23,3.89,22.1,3,21,3z M21,17H3V5h18V17z M11,7h2v4h-2V7z M11,13h2v2h-2V13z"/>
             </svg>
             
-            <h1>You're leaving this site</h1>
-            <p>You are about to be redirected to youtube.com. External sites may track your activity, use cookies, and collect data.</p>
+            <h1>You're leaving poke :c</h1>
+            <p>You are about to be redirected to youtube, which collects your data, tracks u and does all sorts of evil thingies... do u really wanna go to youtube?? </p>
             
             <div class="buttons">
-                <button class="btn btn-secondary" onclick="window.history.back()">Go back</button>
-                <a href="${url}" class="btn btn-primary">Continue to YouTube</a>
+                <button class="btn btn-secondary" onclick="window.history.back()">Stay Private</button>
+                <a href="${url}" class="btn btn-primary">yeah...i really do..</a>
             </div>
         </div>
     </body>
