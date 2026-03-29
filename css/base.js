@@ -537,6 +537,8 @@ document.addEventListener("DOMContentLoaded", () => {
     bbtabAudioSyncDone: false,
     bbtabAudioFallbackDone: false,
     lastUserActionTime: 0,
+    lastUserToggleType: "",
+    lastUserToggleAt: 0,
     loopPreventionCooldownUntil: 0,
     seekCooldownUntil: 0,
     volumeSaveScheduled: false,
@@ -788,12 +790,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // Is a very recent pointer/keyboard event active on the visible page?
-    // Extended to 2000ms so it covers slow transitions and delayed RAF callbacks.
+    // Use explicit toggle intent, not generic user activity.
     function isUserPauseImmediate() {
-      return (now() - state.lastUserActionTime) < 2000 && document.visibilityState === 'visible';
+      return document.visibilityState === 'visible' && userWantsPauseNow(2400);
     }
     function isUserPlayImmediate() {
-      return (now() - state.lastUserActionTime) < 2000 && document.visibilityState === 'visible';
+      return document.visibilityState === 'visible' && userWantsPlayNow(2400);
     }
 
     // --- exponential backoff for background resume
@@ -995,7 +997,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const _guardPlayTimes = new WeakMap();
   function _immunityPauseGuard(e) {
     if (!(state.tabReturnImmuneUntil > now())) return; // not immune — let normal handlers run
-    if (state.userPauseIntentPresetAt > 0 && (now() - state.userPauseIntentPresetAt) < 2000) return; // user pause
+    if (userWantsPauseNow(2400)) return; // user pause must always win
     if (!state.intendedPlaying) return;
     // CRITICAL: never fight pause after video ended — this was causing phantom loops
     if (state.endedNaturally) return;
@@ -4046,6 +4048,29 @@ document.addEventListener("DOMContentLoaded", () => {
     state.lastMediaAction = type;
     state.lastMediaActionTs = now();
   }
+  function noteUserToggle(type) {
+    if (type !== "play" && type !== "pause") return;
+    state.lastUserToggleType = type;
+    state.lastUserToggleAt = now();
+  }
+  function userToggleRecently(type, ms = 1800) {
+    if (state.lastUserToggleType !== type) return false;
+    return (now() - state.lastUserToggleAt) < Math.max(0, Number(ms) || 0);
+  }
+  function userWantsPlayNow(ms = 2200) {
+    const windowMs = Math.max(0, Number(ms) || 0);
+    return userPlayIntentActive() ||
+      ((state.userPlayIntentPresetAt > 0) && ((now() - state.userPlayIntentPresetAt) < windowMs)) ||
+      userToggleRecently("play", windowMs);
+  }
+  function userWantsPauseNow(ms = 2200) {
+    const windowMs = Math.max(0, Number(ms) || 0);
+    return userPauseIntentActive() ||
+      userPauseLockActive() ||
+      ((state.userPauseIntentPresetAt > 0) && ((now() - state.userPauseIntentPresetAt) < windowMs)) ||
+      userToggleRecently("pause", windowMs) ||
+      !!state.userGesturePauseIntent;
+  }
   function mediaActionRecently(type, ms = 1200) {
     return state.lastMediaAction === type && (now() - state.lastMediaActionTs) < ms;
   }
@@ -4101,6 +4126,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function markUserPauseIntent(ms = 1800) {
     VisibilityGuard.onUserPause();
     SmoothTabWelcomeBackManagement.onUserPause();
+    noteUserToggle("pause");
     state.userPauseIntentPresetAt = now();
     state.userPlayIntentPresetAt = 0;
     state.audioStartGraceUntil = 0;
@@ -4143,6 +4169,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function markUserPlayIntent(ms = 1800, opts = {}) {
     const skipImmediateAudioKick = !!(opts && opts.skipImmediateAudioKick);
+    noteUserToggle("play");
     state.userPlayIntentPresetAt = now(); // reinforce preset
     state.userPauseIntentPresetAt = 0;    // clear opposite
     state.lastUserActionTime = now();
@@ -4286,7 +4313,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function isVisibilityStable() { return now() >= state.visibilityStableUntil; }
   function isFocusStable() { return now() >= state.focusStableUntil; }
   function shouldTreatVisiblePauseAsUserPause() {
-    return document.visibilityState === "visible" && (userPauseIntentActive() || userPauseLockActive());
+    return document.visibilityState === "visible" && userWantsPauseNow(2400);
   }
 
   function startupSettleActive() {
@@ -4406,7 +4433,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function shouldIgnorePauseAsTransient() {
     if (mediaSessionForcedPauseActive()) return false;
-    if (userPauseIntentActive() || userPauseLockActive()) return false;
+    if (userWantsPauseNow(2400)) return false;
     if (detectLoop()) return true;
     if (inBgReturnGrace()) return true;
 
@@ -6088,7 +6115,7 @@ try {
       // Let the browser buffer naturally while playing; the video will stall
       // briefly if needed, which is less jarring than an explicit pause+resume.
       const isStartupKick = state.startupPhase || !state.firstPlayCommitted;
-      const isRecentUserPlay = (now() - state.lastUserActionTime) < 2000;
+      const isRecentUserPlay = userWantsPlayNow(2400);
       const blockOnBuffer =
       !isStartupKick &&
       !isRecentUserPlay &&
@@ -6146,7 +6173,7 @@ try {
         const vNow = Number(video.currentTime()) || 0;
         const canKickFirstAudio = !state.audioEverStarted && canStartAudioAt(vNow);
         const inStartupKickFlow = state.startupKickInFlight || isTabReturnImmune();
-        const isRecentUserAction = (now() - state.lastUserActionTime) < 2000;
+        const isRecentUserAction = userWantsPlayNow(2400);
         // Skip all audio hold gates for user-initiated plays AND startup autoplay —
         // audio must start immediately. The gates exist for mid-playback scenarios
         // (stall recovery, tab return) not initial startup. Holding audio during
@@ -8454,17 +8481,17 @@ try {
       if (isPlayCtrl || isTechSurface) {
         trackUserClickForSpam();
         trackToggleClick();
-      }
-
-      // Pre-set user intent immediately on every pointer event
-      if (!getVideoPaused()) {
-        state.userPauseIntentPresetAt = now();
-      } else {
-        state.userPlayIntentPresetAt = now();
-        // User wants to play — clear ended lock so restart is allowed
-        MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.onUserPlay();
-        // Reset play dedup so user's play() goes through immediately
-        DONTMAKEITDOUBLEPLAY.resetAll();
+        // Pre-set user intent only for actual toggle surfaces. Setting this on
+        // all pointer events (seek/menus/sliders) creates false play/pause intents.
+        if (!getVideoPaused()) {
+          state.userPauseIntentPresetAt = now();
+        } else {
+          state.userPlayIntentPresetAt = now();
+          // User wants to play — clear ended lock so restart is allowed
+          MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.onUserPlay();
+          // Reset play dedup so user's play() goes through immediately
+          DONTMAKEITDOUBLEPLAY.resetAll();
+        }
       }
 
       // Spam debounce: if user is clicking too fast, debounce the toggle.
@@ -8707,11 +8734,8 @@ try {
       }
       // Anti-loop: if video ended naturally and something is trying to auto-restart,
       // block it unless the user EXPLICITLY clicked play (userPlayIntentPresetAt).
-      // lastUserActionTime alone is too loose — mouse moves, scrolls etc. can set it.
-      const _isUserPlayAction = (
-        (state.userPlayIntentPresetAt > 0 && (now() - state.userPlayIntentPresetAt) < 2000) ||
-        (now() - state.lastUserActionTime) < 800
-      ) && document.visibilityState === "visible";
+      // Use explicit play-toggle intent; generic user activity is too loose.
+      const _isUserPlayAction = document.visibilityState === "visible" && userWantsPlayNow(2400);
       if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart() && !_isUserPlayAction) {
         execProgrammaticVideoPause();
         if (coupledMode && audio && !audio.paused) {
@@ -8799,9 +8823,9 @@ try {
           return;
       }
       // --- coupled mode: user play intent (checked first)
-      if (!state.isProgrammaticVideoPlay && state.userPlayIntentPresetAt > 0 &&
-        (now() - state.userPlayIntentPresetAt) < 2000 &&
-        document.visibilityState === "visible") {
+      if (!state.isProgrammaticVideoPlay &&
+        document.visibilityState === "visible" &&
+        userWantsPlayNow(2400)) {
         state.userPlayIntentPresetAt = 0; // consume
         MediumQualityManager.markUserPlayed(); // MQM: clear any pending pause block
         state.intendedPlaying = true;
@@ -8830,11 +8854,11 @@ try {
           return;
         }
 
-        const isUserAction = (now() - state.lastUserActionTime) < 1500;
+        const hasExplicitUserPlay = userWantsPlayNow(2400);
 
-        if (isUserAction || userPlayIntentActive() || wantsStartupAutoplay()) {
+        if (hasExplicitUserPlay || wantsStartupAutoplay()) {
           // PAGE-LOAD GATE — skip if startup autoplay is desired
-          if (!isUserAction && !userPlayIntentActive() && !pageLoadedForAutoplay() && !wantsStartupAutoplay()) {
+          if (!hasExplicitUserPlay && !pageLoadedForAutoplay() && !wantsStartupAutoplay()) {
             execProgrammaticVideoPause();
             return;
           }
@@ -8853,7 +8877,7 @@ try {
             // After first play committed, wantsStartupAutoplay() alone must not
             // override a user pause. Only allow if there's actual user play intent.
             if (state.firstPlayCommitted && !state.intendedPlaying &&
-              !isUserAction && !userPlayIntentActive()) {
+              !hasExplicitUserPlay) {
               execProgrammaticVideoPause();
             return;
               }
@@ -8958,7 +8982,7 @@ try {
         (state.intendedPlaying || !state.firstPlayCommitted) &&
         !state.endedNaturally &&
         !MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart() &&
-        !(state.userPauseIntentPresetAt > 0 && (now() - state.userPauseIntentPresetAt) < 2000)) {
+        !userWantsPauseNow(2400)) {
         // Check if this pause is the natural end-of-video pause
         try {
           const _pauseVN = getVideoNode();
@@ -8978,7 +9002,7 @@ try {
         }
 
         if (!coupledMode) {
-          if (state.userPauseIntentPresetAt > 0 && (now() - state.userPauseIntentPresetAt) < 2000) {
+          if (userWantsPauseNow(2400)) {
             state.userPauseIntentPresetAt = 0;
             MediumQualityManager.markUserPaused();
             state.intendedPlaying = false;
@@ -9039,9 +9063,9 @@ try {
         // --- coupled mode: user pause intent (checked first)
         // If user clicked within 2000ms and video was playing at click time, this
         // is definitively user-initiated pause. Bypass EVERY other guard.
-        if (!state.isProgrammaticVideoPause && state.userPauseIntentPresetAt > 0 &&
-          (now() - state.userPauseIntentPresetAt) < 2000 &&
-          document.visibilityState === "visible") {
+        if (!state.isProgrammaticVideoPause &&
+          document.visibilityState === "visible" &&
+          userWantsPauseNow(2400)) {
           state.userPauseIntentPresetAt = 0;
         MediumQualityManager.markUserPaused();
         state.intendedPlaying = false;
@@ -9099,18 +9123,13 @@ try {
             return;
           }
 
-          // --- user action detection
-          const isUserAction = (now() - state.lastUserActionTime) < 1500 &&
-          document.visibilityState === "visible" &&
-          !isVisibilityTransitionActive() &&
-          !isAltTabTransitionActive() &&
-          now() >= state.tabVisibilityChangeUntil &&
-          !inBgReturnGrace();
+          // --- explicit user pause intent detection
+          // Only treat pause as user-authored when we have pause intent,
+          // not just any recent user interaction (play clicks are also interactions).
+          const hasExplicitUserPause = userWantsPauseNow(2400) ||
+            BackgroundPlaybackManager.isUserPauseImmediate();
 
-          // isUserPauseImmediate: pointer event < 600ms ago on visible page.
-          const isImmediateUserAction = BackgroundPlaybackManager.isUserPauseImmediate();
-
-          if (isImmediateUserAction || isUserAction || userPauseIntentActive() || userPauseLockActive()) {
+          if (hasExplicitUserPause) {
             state.intendedPlaying = false;
             state.bufferHoldIntendedPlaying = false;
             state.playSessionId++;
