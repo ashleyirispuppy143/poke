@@ -174,216 +174,101 @@ app.get("/api/yturl", async function (req, res) {
 
   const url = `https://youtube.com/watch?v=${v}`;
 
-  const modernPage = `
+  const page = `
     <!DOCTYPE html>
     <html lang="en">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>External Link Warning</title>
+        <title>Leaving to YouTube</title>
         <style>
-            :root {
-                --bg-dark: #0a0a0c;
-                --text-main: #ffffff;
-                --text-muted: #a1a1aa;
-                --yt-red: #ff0000;
-                --yt-red-hover: #cc0000;
-                --border-color: #27272a;
-            }
-            
-            * {
-                box-sizing: border-box;
-                margin: 0;
-                padding: 0;
-            }
-
             body {
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-                background-color: var(--bg-dark);
-                color: var(--text-main);
-                display: flex;
-                min-height: 100vh;
-                overflow-x: hidden;
-            }
-
-            /* Split Layout */
-            .content-side {
-                flex: 1;
+                font-family: "Roboto", Arial, sans-serif;
+                background-color: #0f0f0f; 
+                color: #f1f1f1; 
+                margin: 0;
                 display: flex;
                 flex-direction: column;
-                justify-content: center;
-                padding: 8% 12%;
-                z-index: 10;
-                background: linear-gradient(90deg, #0a0a0c 80%, transparent 100%);
-            }
-
-            .visual-side {
-                flex: 1;
-                display: flex;
-                justify-content: center;
                 align-items: center;
-                position: relative;
-                background-color: #050505;
-                overflow: hidden;
+                justify-content: center;
+                height: 100vh;
             }
-
-            /* Ambient Glow Effect */
-            .glow {
-                position: absolute;
-                width: 600px;
-                height: 600px;
-                background: radial-gradient(circle, rgba(255,0,0,0.15) 0%, rgba(0,0,0,0) 70%);
-                border-radius: 50%;
-                animation: pulse 4s infinite alternate;
-            }
-
-            /* Typography */
-            .badge {
-                display: inline-block;
-                padding: 6px 12px;
-                background-color: rgba(255, 255, 255, 0.1);
-                border-radius: 20px;
-                font-size: 0.85rem;
-                font-weight: 600;
-                letter-spacing: 1px;
-                text-transform: uppercase;
-                margin-bottom: 2rem;
-                color: var(--text-muted);
-                width: fit-content;
-                border: 1px solid var(--border-color);
-            }
-
-            h1 {
-                font-size: 3.5rem;
-                line-height: 1.1;
-                margin-bottom: 1.5rem;
-                font-weight: 700;
-                letter-spacing: -1px;
-            }
-
-            p {
-                font-size: 1.15rem;
-                color: var(--text-muted);
-                line-height: 1.6;
-                margin-bottom: 3rem;
+            .container {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                text-align: center;
+                padding: 0 24px;
                 max-width: 500px;
             }
-
-            /* Buttons */
-            .action-group {
+            .tv-icon {
+                width: 100px;
+                height: 100px;
+                fill: #aaaaaa;
+                margin-bottom: 24px;
+            }
+            h1 {
+                font-size: 24px;
+                font-weight: 400;
+                margin: 0 0 12px 0;
+            }
+            p {
+                font-size: 16px;
+                color: #aaaaaa; 
+                margin: 0 0 32px 0;
+                line-height: 1.4;
+            }
+            .buttons {
                 display: flex;
-                gap: 1rem;
-                flex-wrap: wrap;
-            }
-
-            .btn {
-                padding: 14px 28px;
-                border-radius: 8px;
-                font-size: 1rem;
-                font-weight: 600;
-                cursor: pointer;
-                text-decoration: none;
-                transition: all 0.2s ease;
-                display: inline-flex;
+                gap: 12px;
                 align-items: center;
-                justify-content: center;
             }
-
-            .btn-proceed {
-                background-color: var(--yt-red);
-                color: white;
+            .btn {
+                padding: 10px 16px;
+                border-radius: 18px; 
+                font-size: 14px;
+                font-weight: 500;
+                text-decoration: none;
+                cursor: pointer;
                 border: none;
-                box-shadow: 0 4px 14px rgba(255, 0, 0, 0.3);
+                transition: background-color 0.2s;
             }
-
-            .btn-proceed:hover {
-                background-color: var(--yt-red-hover);
-                transform: translateY(-2px);
-                box-shadow: 0 6px 20px rgba(255, 0, 0, 0.4);
+            .btn-primary {
+                background-color: #f1f1f1;
+                color: #0f0f0f;
             }
-
-            .btn-back {
+            .btn-primary:hover {
+                background-color: #d9d9d9;
+            }
+            .btn-secondary {
                 background-color: transparent;
-                color: var(--text-main);
-                border: 1px solid var(--border-color);
+                color: #3ea6ff;  
             }
-
-            .btn-back:hover {
-                background-color: rgba(255, 255, 255, 0.05);
-                border-color: var(--text-muted);
-            }
-
-            /* Giant decorative icon */
-            .giant-icon {
-                width: 250px;
-                height: 250px;
-                fill: #ffffff;
-                opacity: 0.05;
-                z-index: 2;
-                transform: scale(1);
-                transition: transform 0.3s ease;
-            }
-
-            /* Animations */
-            @keyframes pulse {
-                0% { transform: scale(0.95); opacity: 0.7; }
-                100% { transform: scale(1.05); opacity: 1; }
-            }
-
-            /* Responsive Design for Mobile */
-            @media (max-width: 900px) {
-                body {
-                    flex-direction: column;
-                }
-                .content-side {
-                    padding: 2rem;
-                    align-items: center;
-                    text-align: center;
-                    background: none;
-                }
-                .visual-side {
-                    display: none; /* Hide visual side on small screens to save space */
-                }
-                h1 {
-                    font-size: 2.5rem;
-                }
-                .action-group {
-                    justify-content: center;
-                    width: 100%;
-                }
-                .btn {
-                    width: 100%;
-                }
+            .btn-secondary:hover {
+                background-color: rgba(62, 166, 255, 0.1);
             }
         </style>
     </head>
     <body>
-        <div class="content-side">
-            <div class="badge">Security Notice</div>
-            <h1>Leaving<br>Our Platform</h1>
-            <p>
-                You are about to be redirected to <strong>YouTube</strong>. External websites have their own privacy policies, tracking methods, and terms of service that differ from ours.
-            </p>
-            <div class="action-group">
-                <button class="btn btn-back" onclick="window.history.back()">Stay Here</button>
-                
-                <a href="${url}" class="btn btn-proceed">Continue to YouTube</a>
-            </div>
-        </div>
-        
-        <div class="visual-side">
-            <div class="glow"></div>
-            <svg class="giant-icon" viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet" focusable="false">
-                <g><path d="M21.58,7.19C21.35,6.33 20.67,5.65 19.81,5.42C18.25,5 12,5 12,5C12,5 5.75,5 4.19,5.42C3.33,5.65 2.65,6.33 2.42,7.19C2,8.75 2,12 2,12C2,12 2,15.25 2.42,16.81C2.65,17.67 3.33,18.35 4.19,18.58C5.75,19 12,19 12,19C12,19 18.25,19 19.81,18.58C20.67,18.35 21.35,17.67 21.58,16.81C22,15.25 22,12 22,12C22,12 22,8.75 21.58,7.19ZM10,15V9L15.2,12L10,15Z"></path></g>
+        <div class="container">
+            <svg class="tv-icon" viewBox="0 0 24 24">
+                <path d="M21,3H3C1.89,3,1,3.89,1,5v12c0,1.1,0.89,2,2,2h5v2h8v-2h5c1.1,0,2-0.9,2-2V5C23,3.89,22.1,3,21,3z M21,17H3V5h18V17z M11,7h2v4h-2V7z M11,13h2v2h-2V13z"/>
             </svg>
+            
+            <h1>You're leaving this site</h1>
+            <p>You are about to be redirected to youtube.com. External sites may track your activity, use cookies, and collect data.</p>
+            
+            <div class="buttons">
+                <button class="btn btn-secondary" onclick="window.history.back()">Go back</button>
+                <a href="${url}" class="btn btn-primary">Continue to YouTube</a>
+            </div>
         </div>
     </body>
     </html>
   `;
 
-  res.send(modernPage);
-});
-  
+  res.send(page);
+});  
   app.get("/api/subtitles", async (req, res) => {
     const { fetch } = await import("undici");
 
