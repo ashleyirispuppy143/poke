@@ -15,6 +15,26 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 // "It takes a lot of hard work to make something simple." ~ Steve Jobs 
+try {
+  const _earlyVideo = document.getElementById("video");
+  const _earlyAudio = document.getElementById("aud");
+  if (_earlyVideo) { _earlyVideo.currentTime = 0; }
+  if (_earlyAudio) { _earlyAudio.currentTime = 0; }
+  // Also strip loop attribute early to prevent browser-native looping
+  if (_earlyVideo) { _earlyVideo.removeAttribute("loop"); _earlyVideo.loop = false; }
+  // Re-check on loadedmetadata (browser can move currentTime after our zero-set)
+  const _earlyZero = (el) => {
+    if (!el) return;
+    const _handler = () => {
+      try { if (el.currentTime > 0.5) el.currentTime = 0; } catch {}
+      el.removeEventListener("loadedmetadata", _handler);
+    };
+    el.addEventListener("loadedmetadata", _handler, { passive: true, once: true });
+  };
+  _earlyZero(_earlyVideo);
+  _earlyZero(_earlyAudio);
+} catch {}
+
 document.addEventListener("DOMContentLoaded", () => {
   const video = videojs("video", {
     controls: true,
@@ -1083,10 +1103,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const PHASE_SETTLING   = 3;
 
     // --- Timing constants
-    const RECOVERY_DURATION_MS   = 1000;  // How long RECOVERING phase lasts (fast: 1s)
-    const SETTLING_DURATION_MS   = 2000;  // How long SETTLING phase lasts (was 3s, 2s is enough)
+    const RECOVERY_DURATION_MS   = 500;   // How long RECOVERING phase lasts (was 1s — too slow for tab return)
+    const SETTLING_DURATION_MS   = 1000;  // How long SETTLING phase lasts (was 2s — 1s is enough)
     const DRIFT_CORRECTION_MIN   = 0.3;   // Only correct drift > 300ms
-    const RETRY_INTERVALS        = [80, 200, 500, 1000]; // Progressive retry delays (faster first check)
+    const RETRY_INTERVALS        = [50, 120, 300]; // Progressive retry delays (faster for snappy tab return)
     const PLAY_CHECK_MS          = 100;   // How soon to verify play() worked
 
     // --- State
@@ -1159,8 +1179,8 @@ document.addEventListener("DOMContentLoaded", () => {
       // Clear any old timers
       _clearAllTimers();
 
-      // Set immunity for the full recovery window + settling buffer
-      state.tabReturnImmuneUntil = Math.max(state.tabReturnImmuneUntil, now() + RECOVERY_DURATION_MS + 500);
+      // Set immunity for the recovery window
+      state.tabReturnImmuneUntil = Math.max(state.tabReturnImmuneUntil, now() + RECOVERY_DURATION_MS + 300);
 
       // Reset play dedup so our play() calls go through
       DONTMAKEITDOUBLEPLAY.resetAll();
@@ -3370,7 +3390,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const HAVE_ENOUGH_DATA = 4;
   const STRICT_BUFFER_AHEAD_SEC = 0.25;
   const STARTUP_BUFFER_AHEAD_SEC = 1.0;
-  const MICRO_DRIFT = 0.08;
+  const MICRO_DRIFT = 0.15;  // was 0.08 — too sensitive, caused constant rate changes
   const BIG_DRIFT = 1.5;
   const BIG_DRIFT_BACKGROUND = 6.0;
   const MAX_RATE_NUDGE = 0.003;
@@ -4737,16 +4757,20 @@ document.addEventListener("DOMContentLoaded", () => {
           (performance.now() - _audioFirstPlayedAt) < 3000;
         if (inEarlyPlayback && timeDiff < 0.8) return;
 
-        // during startup (audio not yet confirmed playing), use 0.5s threshold
-        // during normal playback, use 0.15s — drift under 150ms is imperceptible
+        // during startup, use 0.5s threshold.
+        // during normal playback, use 0.35s — drift under 350ms is imperceptible
+        // and the sync loop's rate nudging handles it smoothly. the old 0.15s
+        // threshold caused constant audio decode buffer flushes (audible pops).
         const isStartup = state.startupPhase || !state.firstPlayCommitted;
-        const threshold = isStartup ? 0.5 : 0.15;
+        const threshold = isStartup ? 0.5 : 0.35;
         if (timeDiff <= threshold) return;
 
-        // debounce: max one seek per 400ms during startup, per 150ms during normal play.
+        // debounce: max one seek per 400ms during startup, per 500ms during normal play.
         // rapid-fire seeks from competing code paths cause the random seek stutter.
+        // the old 150ms debounce was too aggressive — audio needs time to settle
+        // after a seek before another seek is useful.
         const _now = performance.now();
-        const debounce = isStartup ? 400 : 150;
+        const debounce = isStartup ? 400 : 500;
         if ((_now - _lastSafeSeekAt) < debounce) return;
         _lastSafeSeekAt = _now;
         audio.currentTime = t;
@@ -4763,8 +4787,9 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       if (!isFinite(t) || t < 0) return;
       const timeDiff = Math.abs((audio.currentTime || 0) - t);
-      // 0.15s threshold — drift under 150ms is imperceptible
-      if (timeDiff <= 0.15) return;
+      // 0.35s threshold — drift under 350ms is imperceptible and handled by rate nudge.
+      // the old 0.15s threshold caused constant decode buffer flushes.
+      if (timeDiff <= 0.35) return;
 
       const wasPlaying = !audio.paused;
 
@@ -4991,15 +5016,19 @@ document.addEventListener("DOMContentLoaded", () => {
     if (state.startupPhase && !state.firstPlayCommitted) return false;
     if (state.startupKickInFlight) return false;
 
-    if (getVideoPaused() && !isHiddenBackground()) return true;
+    // Only block if video is TRULY paused (not just momentarily during a programmatic
+    // operation). Check isProgrammaticVideoPlay/Pause flags to avoid false blocks.
+    if (getVideoPaused() && !isHiddenBackground() &&
+        !state.isProgrammaticVideoPlay && !state.isProgrammaticVideoPause &&
+        !state.seekResumeInFlight) return true;
 
     // These checks must run BEFORE the bgPlaybackAllowed early-return (bgPlaybackAllowed is always true).
     // Block audio when video is actively buffering/stalled — but with a safety timeout.
     // If these flags have been stuck for >8s, something went wrong; force-clear them
     // to prevent permanent audio disconnection.
     const stallAge = state.videoStallSince ? (now() - state.videoStallSince) : 0;
-    if (stallAge > 5000) {
-      // 5s+ stall is stuck, force-clear
+    if (stallAge > 3000) {
+      // 3s+ stall is stuck, force-clear (was 5s — too long, audio disconnects)
       state.videoWaiting = false;
       state.videoStallAudioPaused = false;
       state.stallAudioResumeHoldUntil = 0;
@@ -7182,16 +7211,21 @@ try {
               // is stale and videoWaiting never clears. killing audio here fights keepalive.
               if (state.videoWaiting && coupledMode && !aPaused && !NotMakePlayBackFixingNoticable.isActive() &&
                   _syncRS < HAVE_FUTURE_DATA && !_syncInGrace && document.visibilityState !== "hidden") {
-                state.videoStallAudioPaused = true;
-                state.stallAudioPausedSince = now();
-                state.audioPausedSince = 0;
-                state.stallAudioResumeHoldUntil = now() + MIN_STALL_AUDIO_RESUME_MS;
-                cancelActiveFade();
-                state.isProgrammaticAudioPause = true;
-                squelchAudioEvents(600);
-                state.audioPauseUntil = Math.max(state.audioPauseUntil, now() + 600);
-                try { audio.volume = 0; audio.pause(); } catch {}
-                setTimeout(() => { state.isProgrammaticAudioPause = false; }, 150);
+                // Only pause audio if stall has persisted for > 500ms — brief rebuffers
+                // are normal and killing audio on every one causes choppy playback.
+                const stallAge = state.videoStallSince ? (now() - state.videoStallSince) : 0;
+                if (stallAge > 500 && !state.videoStallAudioPaused) {
+                  state.videoStallAudioPaused = true;
+                  state.stallAudioPausedSince = now();
+                  state.audioPausedSince = 0;
+                  state.stallAudioResumeHoldUntil = now() + MIN_STALL_AUDIO_RESUME_MS;
+                  cancelActiveFade();
+                  state.isProgrammaticAudioPause = true;
+                  squelchAudioEvents(400);
+                  state.audioPauseUntil = Math.max(state.audioPauseUntil, now() + 400);
+                  try { audio.volume = 0; audio.pause(); } catch {}
+                  setTimeout(() => { state.isProgrammaticAudioPause = false; }, 150);
+                }
               } else if (state.videoWaiting && _syncRS >= HAVE_FUTURE_DATA) {
                 // stale flag, clear it
                 state.videoWaiting = false;
@@ -7234,7 +7268,11 @@ try {
                   resetAudioPlaybackRate();
                   state.driftStableFrames = 0;
                   setFastSync(1600);
-                } else if (absDrift > 0.5 && !inBgDrift) {
+                } else if (absDrift > 0.8 && !inBgDrift) {
+                  // Medium drift (0.8-1.5s): seek audio to video.
+                  // Was 0.5s — but seeking at 0.5s drift flushes the decode buffer
+                  // too aggressively, causing constant audible pops. Rate nudging
+                  // handles 0.15-0.8s drift without any audible artifact.
                   await quietSeekAudio(vt);
                   resetAudioPlaybackRate();
                   state.driftStableFrames = 0;
@@ -8103,6 +8141,19 @@ try {
     if (audio) {
       try { audio.addEventListener("error", onAudioError, { passive: true }); } catch {}
     }
+    // Video.js-level error handler — catches "All candidate resources failed to load"
+    // and other Video.js errors that don't fire on the native <video> element.
+    // Without this, source failures silently break playback with no error overlay.
+    try {
+      video.on("error", () => {
+        const vjsErr = video.error();
+        if (vjsErr && !_errorOverlayShown) {
+          const code = vjsErr.code || 4;
+          const msg = vjsErr.message || "All candidate resources failed to load.";
+          handleFatalMediaError("video", { code, message: msg });
+        }
+      });
+    } catch {}
     // Stalled event: browser ran out of data and stalled the decode
     const onVideoStalled = () => {
       if (!state.intendedPlaying) return;
@@ -8153,12 +8204,12 @@ try {
       // networkState 3 = NETWORK_NO_SOURCE (failed to load)
       const vNS = videoEl ? Number(videoEl.networkState || 0) : 0;
       const aNS = audio ? Number(audio.networkState || 0) : 0;
-      if (vNS === 3 && state.firstPlayCommitted) {
+      if (vNS === 3) {
         clearInterval(_corsCheckInterval);
-        handleFatalMediaError("video", { code: 2, message: "Network error (CORS/HTTP failure)" });
+        handleFatalMediaError("video", { code: 2, message: "Network error — video source failed to load" });
         return;
       }
-      if (aNS === 3 && state.firstPlayCommitted && coupledMode) {
+      if (aNS === 3 && coupledMode) {
         clearInterval(_corsCheckInterval);
         handleFatalMediaError("audio", { code: 2, message: "Network error (CORS/HTTP failure)" });
         return;
@@ -9055,29 +9106,39 @@ try {
       if (!state.intendedPlaying || state.restarting) return;
       if (!state.startupPrimed || state.startupKickInFlight || (state.startupPhase && !state.firstPlayCommitted)) return;
 
-      // kill audio during a real stall (readyState confirms low buffer).
+      // kill audio during a REAL stall (readyState confirms low buffer).
       // skip during seek-related grace periods — post-seek rebuffering is expected
       // and audio should keep playing through it.
+      // IMPORTANT: delay audio pause by 400ms — brief rebuffers (<400ms) are normal
+      // and killing audio on every hiccup causes choppy playback. Only pause
+      // audio if the stall persists for > 400ms.
       if (coupledMode && audio && !audio.paused && !state.seeking && !state.seekResumeInFlight &&
           !state.seekBuffering && !(now() < state.audioStartGraceUntil)) {
         const _waitVNode = getVideoNode();
         const _waitRS = _waitVNode ? Number(_waitVNode.readyState || 0) : 0;
-        // readyState >= 3 means there's data, "waiting" is just a hiccup
         if (_waitRS < HAVE_FUTURE_DATA) {
           if (state._stallAudioPauseTimer) { clearTimeout(state._stallAudioPauseTimer); state._stallAudioPauseTimer = null; }
-          state.videoStallAudioPaused = true;
-          state.stallAudioPausedSince = now();
-          state.audioPausedSince = 0;
-          state.stallAudioResumeHoldUntil = now() + MIN_STALL_AUDIO_RESUME_MS;
-          state.bufferHoldIntendedPlaying = true;
-          cancelActiveFade();
-          state.isProgrammaticAudioPause = true;
-          // 600ms squelch covers the gap until "playing" fires and clears the stall
-          squelchAudioEvents(600);
-          state.audioPauseUntil = Math.max(state.audioPauseUntil, now() + 600);
-          try { audio.volume = 0; } catch {}
-          try { audio.pause(); } catch {}
-          setTimeout(() => { state.isProgrammaticAudioPause = false; }, 150);
+          state._stallAudioPauseTimer = setTimeout(() => {
+            state._stallAudioPauseTimer = null;
+            // Re-check: stall may have resolved during the 400ms wait
+            if (!state.videoWaiting || !state.intendedPlaying || state.seeking) return;
+            if (audio.paused) return;
+            const _reVN = getVideoNode();
+            const _reRS = _reVN ? Number(_reVN.readyState || 0) : 0;
+            if (_reRS >= HAVE_FUTURE_DATA) { state.videoWaiting = false; return; }
+            state.videoStallAudioPaused = true;
+            state.stallAudioPausedSince = now();
+            state.audioPausedSince = 0;
+            state.stallAudioResumeHoldUntil = now() + MIN_STALL_AUDIO_RESUME_MS;
+            state.bufferHoldIntendedPlaying = true;
+            cancelActiveFade();
+            state.isProgrammaticAudioPause = true;
+            squelchAudioEvents(400);
+            state.audioPauseUntil = Math.max(state.audioPauseUntil, now() + 400);
+            try { audio.volume = 0; } catch {}
+            try { audio.pause(); } catch {}
+            setTimeout(() => { state.isProgrammaticAudioPause = false; }, 150);
+          }, 400);
         }
       }
 
@@ -9982,6 +10043,22 @@ try {
                 if (state._seekPreVolume != null) return; // new seek started
                 try { audio.volume = _seekedPreVol; } catch {}
               }, 40);
+            }
+            // IMMEDIATE audio kick: if audio is paused and we intend to play,
+            // start audio NOW instead of waiting for finalizeSeekSync. This fixes
+            // "audio plays really late after seek" — finalizeSeekSync goes through
+            // waitForReadyState which can take hundreds of ms.
+            if (audio.paused && state.intendedPlaying && !state.endedNaturally) {
+              state.isProgrammaticAudioPause = false;
+              state.audioEventsSquelchedUntil = 0;
+              state.audioPauseUntil = 0;
+              state.videoStallAudioPaused = false;
+              state.stallAudioResumeHoldUntil = 0;
+              state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 800);
+              setTimeout(() => {
+                if (!state.intendedPlaying || !audio.paused || state.endedNaturally) return;
+                execProgrammaticAudioPlay({ squelchMs: 200, force: true, minGapMs: 0 }).catch(() => {});
+              }, 30);
             }
             const _seekedId = state.seekId;
             setTimeout(() => {
