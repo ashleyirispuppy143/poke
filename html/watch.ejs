@@ -1814,6 +1814,273 @@ WIP!                                                 </a>
 
 <a id="metadata"></a>
 
+<style>
+  .engagement-root {
+    margin-top: 10px;
+  }
+
+  .engagement-title {
+    color: var(--text-color);
+    font-family: var(--text-font-primary);
+    font-weight: var(--text-header-weight);
+    font-stretch: extra-expanded;
+    margin: 10px 0 14px 0;
+  }
+
+  .engagement-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .engagement-panel {
+    background: var(--background-color-secondary, #111);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+    border-radius: 16px;
+    padding: 16px;
+  }
+
+  .engagement-panel-title {
+    color: var(--text-color);
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+
+  .engagement-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 12px;
+  }
+
+  .engagement-card {
+    background: var(--background-color-primary, #0c0c0c);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    border-radius: 14px;
+    padding: 14px;
+  }
+
+  .engagement-label {
+    color: var(--text-color);
+    opacity: 0.72;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+
+  .engagement-value {
+    color: var(--text-color);
+    font-size: 1.3rem;
+    font-weight: 800;
+    line-height: 1.25;
+    word-break: break-word;
+  }
+
+  .engagement-subvalue {
+    color: var(--text-color);
+    opacity: 0.88;
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+
+  .engagement-score-line {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: baseline;
+    line-height: 1.35;
+  }
+
+  .engagement-score-number {
+    font-size: 1.45rem;
+    font-weight: 800;
+  }
+
+  .engagement-score-text {
+    font-size: 1.1rem;
+    font-weight: 800;
+  }
+
+  .engagement-details {
+    background: var(--background-color-secondary, #111);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  .engagement-details summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 14px 16px;
+    color: var(--text-color);
+    font-weight: 700;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .engagement-details summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .engagement-summary-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .engagement-summary-right {
+    opacity: 0.75;
+    font-size: 1.1rem;
+    line-height: 1;
+  }
+
+  .engagement-details[open] .engagement-summary-right {
+    opacity: 1;
+  }
+
+  .engagement-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 9px;
+    border-radius: 999px;
+    background: var(--background-color-primary, #0c0c0c);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    color: var(--text-color);
+    font-size: 0.8rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .engagement-details-content {
+    padding: 0 16px 16px 16px;
+    border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  }
+
+  .engagement-note {
+    color: var(--text-color);
+    opacity: 0.82;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    margin: 14px 0 12px 0;
+  }
+
+  .engagement-rating-line {
+    color: var(--text-color);
+    font-weight: 700;
+    font-size: 1rem;
+    line-height: 1.5;
+    margin-bottom: 12px;
+  }
+
+  .engagement-rating-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .engagement-mini-card {
+    background: var(--background-color-primary, #0c0c0c);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    border-radius: 14px;
+    padding: 12px 14px;
+  }
+
+  .engagement-mini-title {
+    color: var(--text-color);
+    opacity: 0.72;
+    font-size: 0.82rem;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+
+  .engagement-mini-value {
+    color: var(--text-color);
+    font-size: 1.05rem;
+    font-weight: 800;
+    line-height: 1.35;
+    word-break: break-word;
+  }
+
+  .engagement-bar-wrap {
+    margin-top: 8px;
+  }
+
+  .engagement-bar-labels {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+    font-weight: 700;
+  }
+
+  .engagement-bar {
+    width: 100%;
+    height: 10px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: var(--background-color-primary, #0c0c0c);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    display: flex;
+  }
+
+  .engagement-bar-like {
+    height: 100%;
+    background: green;
+  }
+
+  .engagement-bar-dislike {
+    height: 100%;
+    background: #ff0033;
+  }
+
+  .engagement-other-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    padding-top: 14px;
+  }
+
+  .engagement-link {
+    color: var(--link-color, #8ab4ff);
+    text-decoration: none;
+    font-weight: 700;
+  }
+
+  .engagement-link:hover {
+    text-decoration: underline;
+  }
+
+  .rainbow-gradient {
+    background: linear-gradient(90deg, red, orange, yellow, green, cyan, blue, violet);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    color: transparent;
+  }
+
+  @media (max-width: 700px) {
+    .engagement-value {
+      font-size: 1.15rem;
+    }
+
+    .engagement-score-number {
+      font-size: 1.25rem;
+    }
+
+    .engagement-score-text {
+      font-size: 1rem;
+    }
+  }
+</style>
+
 <%
   const likes = parseInt(engagement?.likes) || 0;
   const dislikes = parseInt(engagement?.dislikes) || 0;
@@ -1859,409 +2126,142 @@ WIP!                                                 </a>
       ? "orange"
       : "#ff0033";
 
-  const userScoreClass = parseFloat(userScore) >= 98 ? "meta-rainbow" : "";
+  const userScoreClass = parseFloat(userScore) >= 98 ? "rainbow-gradient" : "";
 
   const publishLabel = date.includes("Premiered") ? "Premiered" : "Uploaded At";
   const publishValue = date.includes("Premiered")
     ? `${date.replace("Premiered", "at")} ^^`
     : `${date} ^^`;
-
-  const genreValue = VideoData?.genre || "none listed";
-
-  const licenseValue = VideoData?.license || "Standard YouTube License";
 %>
 
-<style>
-  .meta-clean {
-    margin-top: 10px;
-    background: var(--background-color-secondary, #111);
-    border: 1px solid var(--border-color, rgba(255,255,255,0.1));
-    border-radius: 16px;
-    overflow: hidden;
-  }
+<div class="engagement-root">
+ 
+  <div class="engagement-stack">
 
-  .meta-clean-header {
-    padding: 16px 18px 12px 18px;
-    border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.08));
-  }
+    <div class="engagement-panel">
+      <div class="engagement-panel-title">Metadata And Engagement</div>
 
-  .meta-clean-title {
-    color: var(--text-color);
-    font-family: var(--text-font-primary);
-    font-weight: var(--text-header-weight);
-    font-stretch: extra-expanded;
-    font-size: 1.15rem;
-    line-height: 1.3;
-  }
-
-  .meta-clean-body {
-    padding: 16px 18px;
-  }
-
-  .meta-clean-top {
-    display: grid;
-    grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr);
-    gap: 18px;
-    align-items: start;
-  }
-
-  .meta-clean-score {
-    min-width: 0;
-  }
-
-  .meta-clean-kicker {
-    color: var(--text-color);
-    opacity: 0.68;
-    font-size: 0.8rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    margin-bottom: 6px;
-  }
-
-  .meta-clean-score-line {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    align-items: baseline;
-    line-height: 1.25;
-  }
-
-  .meta-clean-score-number {
-    font-size: 2rem;
-    font-weight: 900;
-  }
-
-  .meta-clean-score-label {
-    font-size: 1.25rem;
-    font-weight: 900;
-    color: var(--text-color);
-    word-break: break-word;
-  }
-
-  .meta-clean-sub {
-    color: var(--text-color);
-    opacity: 0.72;
-    font-size: 0.92rem;
-    line-height: 1.45;
-    margin-top: 8px;
-  }
-
-  .meta-clean-summary {
-    display: grid;
-    gap: 10px;
-  }
-
-  .meta-clean-row {
-    display: grid;
-    grid-template-columns: 120px 1fr;
-    gap: 12px;
-    align-items: start;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.08));
-  }
-
-  .meta-clean-row:last-child {
-    border-bottom: 0;
-    padding-bottom: 0;
-  }
-
-  .meta-clean-label {
-    color: var(--text-color);
-    opacity: 0.68;
-    font-size: 0.9rem;
-    font-weight: 700;
-  }
-
-  .meta-clean-value {
-    color: var(--text-color);
-    font-size: 0.98rem;
-    font-weight: 700;
-    line-height: 1.45;
-    word-break: break-word;
-  }
-
-  .meta-clean-sections {
-    margin-top: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .meta-clean-details {
-    border: 1px solid var(--border-color, rgba(255,255,255,0.08));
-    border-radius: 12px;
-    background: var(--background-color-primary, #0c0c0c);
-    overflow: hidden;
-  }
-
-  .meta-clean-details summary {
-    list-style: none;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 13px 14px;
-    color: var(--text-color);
-    font-weight: 800;
-    user-select: none;
-  }
-
-  .meta-clean-details summary::-webkit-details-marker {
-    display: none;
-  }
-
-  .meta-clean-details summary::after {
-    content: "+";
-    opacity: 0.7;
-    font-size: 1rem;
-    line-height: 1;
-  }
-
-  .meta-clean-details[open] summary::after {
-    content: "−";
-    opacity: 1;
-  }
-
-  .meta-clean-details-content {
-    padding: 0 14px 14px 14px;
-    border-top: 1px solid var(--border-color, rgba(255,255,255,0.08));
-  }
-
-  .meta-clean-note {
-    color: var(--text-color);
-    opacity: 0.8;
-    font-size: 0.93rem;
-    line-height: 1.5;
-    padding-top: 12px;
-    margin-bottom: 12px;
-  }
-
-  .meta-clean-plain {
-    color: var(--text-color);
-    font-weight: 700;
-    line-height: 1.5;
-    margin-bottom: 12px;
-  }
-
-  .meta-clean-split {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-    margin-bottom: 12px;
-  }
-
-  .meta-clean-stat {
-    padding: 12px;
-    border: 1px solid var(--border-color, rgba(255,255,255,0.08));
-    border-radius: 10px;
-    background: var(--background-color-secondary, #111);
-  }
-
-  .meta-clean-stat-title {
-    color: var(--text-color);
-    opacity: 0.68;
-    font-size: 0.8rem;
-    font-weight: 700;
-    margin-bottom: 6px;
-  }
-
-  .meta-clean-stat-value {
-    font-size: 1rem;
-    font-weight: 800;
-    line-height: 1.4;
-    word-break: break-word;
-  }
-
-  .meta-clean-bar-head {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 8px;
-    font-size: 0.88rem;
-    font-weight: 800;
-  }
-
-  .meta-clean-bar {
-    width: 100%;
-    height: 8px;
-    display: flex;
-    overflow: hidden;
-    border-radius: 999px;
-    background: var(--background-color-secondary, #111);
-    border: 1px solid var(--border-color, rgba(255,255,255,0.08));
-  }
-
-  .meta-clean-bar-like {
-    height: 100%;
-    background: green;
-  }
-
-  .meta-clean-bar-dislike {
-    height: 100%;
-    background: #ff0033;
-  }
-
-  .meta-clean-list {
-    padding-top: 6px;
-  }
-
-  .meta-clean-link {
-    color: var(--link-color, #8ab4ff);
-    text-decoration: none;
-    font-weight: 800;
-  }
-
-  .meta-clean-link:hover {
-    text-decoration: underline;
-  }
-
-  .meta-rainbow {
-    background: linear-gradient(90deg, red, orange, yellow, green, cyan, blue, violet);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    color: transparent;
-  }
-
-  @media (max-width: 760px) {
-    .meta-clean-top {
-      grid-template-columns: 1fr;
-    }
-
-    .meta-clean-row {
-      grid-template-columns: 1fr;
-      gap: 4px;
-    }
-
-    .meta-clean-split {
-      grid-template-columns: 1fr;
-    }
-
-    .meta-clean-score-number {
-      font-size: 1.65rem;
-    }
-
-    .meta-clean-score-label {
-      font-size: 1.1rem;
-    }
-  }
-</style>
-
-<div class="meta-clean">
-  <div class="meta-clean-header">
-    <div class="meta-clean-title">Metadata And Engagement</div>
-  </div>
-
-  <div class="meta-clean-body">
-    <div class="meta-clean-top">
-      <div class="meta-clean-score">
-        <div class="meta-clean-kicker">User score</div>
-
-        <div class="meta-clean-score-line">
-          <span class="meta-clean-score-number" style="color:<%= userScoreColor %>;">
-            <%= userScore %>
-          </span>
-          <span class="meta-clean-score-label <%= userScoreClass %>">
-            <%= userScoreLabel %>
-          </span>
+      <div class="engagement-summary-grid">
+        <div class="engagement-card">
+          <div class="engagement-label">Views</div>
+          <div class="engagement-value"><%= engagement?.viewCount?.toLocaleString() %></div>
         </div>
 
-        <div class="meta-clean-sub">
-          based on likes and dislikes :3
-        </div>
-      </div>
-
-      <div class="meta-clean-summary">
-        <div class="meta-clean-row">
-          <div class="meta-clean-label">Genre</div>
-          <div class="meta-clean-value"><%= genreValue %></div>
+        <div class="engagement-card">
+          <div class="engagement-label"><%= publishLabel %></div>
+          <div class="engagement-value"><%= publishValue %></div>
         </div>
 
-        <div class="meta-clean-row">
-          <div class="meta-clean-label"><%= publishLabel %></div>
-          <div class="meta-clean-value"><%= publishValue %></div>
+        <div class="engagement-card">
+          <div class="engagement-label">User score</div>
+
+          <div class="engagement-score-line">
+            <span class="engagement-score-number" style="color:<%= userScoreColor %>;"><%= userScore %></span>
+            <span class="engagement-score-text <%= userScoreClass %>"><%= userScoreLabel %></span>
+          </div>
+
+          <div class="engagement-subvalue">
+            based on likes and dislikes :3
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="meta-clean-sections">
-      <details class="meta-clean-details">
-        <summary>Rating details</summary>
+    <details class="engagement-details">
+      <summary>
+        <span class="engagement-summary-left">
+          <span>Rating details</span>
+          <span class="engagement-badge"><%= engagement?.rating?.toLocaleString() %> rating</span>
+        </span>
+        <span class="engagement-summary-right">+</span>
+      </summary>
 
-        <div class="meta-clean-details-content">
-          <div class="meta-clean-note">
-            warning: returnyoutubedislikes may not be accurate, this is just an estiment ehe :3
-          </div>
+      <div class="engagement-details-content">
+        <div class="engagement-note">
+          warning: returnyoutubedislikes may not be accurate, this is just an estiment ehe :3
+        </div>
 
-          <div class="meta-clean-plain">
-            Rating : <%= engagement?.rating?.toLocaleString() %>
-            (<%= engagement?.dislikes?.toLocaleString() %>/<%= engagement?.likes?.toLocaleString() %>
-            <abbr title="Like To dislike ratio - the number to the left is dislike count and the one to the right is like count :3">LTDR</abbr>)
-          </div>
+        <div class="engagement-rating-line">
+          Rating : <%= engagement?.rating?.toLocaleString() %>
+          (<%= engagement?.dislikes?.toLocaleString() %>/<%= engagement?.likes?.toLocaleString() %>
+          <abbr title="Like To dislike ratio - the number to the left is dislike count and the one to the right is like count :3">LTDR</abbr>)
+        </div>
 
-          <div class="meta-clean-split">
-            <div class="meta-clean-stat">
-              <div class="meta-clean-stat-title">Liked</div>
-              <div class="meta-clean-stat-value" style="color:<%= likeColor %>;">
-                <%= likePercentage %>% of the users lieked the video!!
-              </div>
-            </div>
-
-            <div class="meta-clean-stat">
-              <div class="meta-clean-stat-title">Disliked</div>
-              <div class="meta-clean-stat-value" style="color:<%= dislikeColor %>;">
-                <%= dislikePercentage %>% of the users dislieked the video!!
-              </div>
+        <div class="engagement-rating-grid">
+          <div class="engagement-mini-card">
+            <div class="engagement-mini-title">Liked</div>
+            <div class="engagement-mini-value" style="color:<%= likeColor %>;">
+              <%= likePercentage %>% of the users lieked the video!!
             </div>
           </div>
 
-          <div class="meta-clean-bar-head">
+          <div class="engagement-mini-card">
+            <div class="engagement-mini-title">Disliked</div>
+            <div class="engagement-mini-value" style="color:<%= dislikeColor %>;">
+              <%= dislikePercentage %>% of the users dislieked the video!!
+            </div>
+          </div>
+        </div>
+
+        <div class="engagement-bar-wrap">
+          <div class="engagement-bar-labels">
             <span style="color:<%= likeColor %>;">Likes <%= likePercentage %>%</span>
             <span style="color:<%= dislikeColor %>;">Dislikes <%= dislikePercentage %>%</span>
           </div>
 
-          <div class="meta-clean-bar" aria-hidden="true">
-            <div class="meta-clean-bar-like" style="width:<%= likePercentage %>%;"></div>
-            <div class="meta-clean-bar-dislike" style="width:<%= dislikePercentage %>%;"></div>
+          <div class="engagement-bar" aria-hidden="true">
+            <div class="engagement-bar-like" style="width:<%= likePercentage %>%"></div>
+            <div class="engagement-bar-dislike" style="width:<%= dislikePercentage %>%"></div>
           </div>
         </div>
-      </details>
+      </div>
+    </details>
 
-      <details class="meta-clean-details">
-        <summary>other data</summary>
+    <details class="engagement-details">
+      <summary>
+        <span class="engagement-summary-left">
+          <span>other data</span>
+        </span>
+        <span class="engagement-summary-right">+</span>
+      </summary>
 
-        <div class="meta-clean-details-content">
-          <div class="meta-clean-list">
-            <div class="meta-clean-row">
-              <div class="meta-clean-label">Views</div>
-              <div class="meta-clean-value"><%= engagement?.viewCount?.toLocaleString() %></div>
+      <div class="engagement-details-content">
+        <div class="engagement-other-grid">
+          <% if (VideoData?.genre) { %>
+            <div class="engagement-mini-card">
+              <div class="engagement-mini-title">Genre</div>
+              <div class="engagement-mini-value"><%- VideoData.genre %></div>
             </div>
+          <% } %>
 
-            <div class="meta-clean-row">
-              <div class="meta-clean-label">License</div>
-              <div class="meta-clean-value"><%= licenseValue %></div>
+          <div class="engagement-mini-card">
+            <div class="engagement-mini-title">License</div>
+            <div class="engagement-mini-value">
+              <% if (VideoData?.license) { %>
+                <%- VideoData.license %>
+              <% } else { %>
+                Standard YouTube License
+              <% } %>
             </div>
+          </div>
 
-            <div class="meta-clean-row">
-              <div class="meta-clean-label">RYD date created</div>
-              <div class="meta-clean-value"><%= engagement?.dateCreated?.toLocaleString() %></div>
-            </div>
+          <div class="engagement-mini-card">
+            <div class="engagement-mini-title">RYD date created</div>
+            <div class="engagement-mini-value"><%= engagement?.dateCreated?.toLocaleString() %></div>
+          </div>
 
-            <div class="meta-clean-row">
-              <div class="meta-clean-label">Raw data</div>
-              <div class="meta-clean-value">
-                <a class="meta-clean-link" href="/api/getEngagementData?v=<%= VideoData.videoId %>">See in json</a>
-              </div>
+          <div class="engagement-mini-card">
+            <div class="engagement-mini-title">Raw data</div>
+            <div class="engagement-mini-value">
+              <a class="engagement-link" href="/api/getEngagementData?v=<%= VideoData.videoId %>">See in json</a>
             </div>
           </div>
         </div>
-      </details>
-    </div>
+      </div>
+    </details>
+
   </div>
-</div>
- 
+
 
 
 </div>
