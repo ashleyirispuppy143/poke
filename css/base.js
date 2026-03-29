@@ -15,6 +15,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 // "It takes a lot of hard work to make something simple." ~ Steve Jobs 
+ // IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
+// before DOMContentLoaded. Ensures both video and audio start at 00:00
+// even if the browser pre-buffers to a non-zero keyframe position.
+// This runs in a try-catch because elements might not exist yet.
 try {
   const _earlyVideo = document.getElementById("video");
   const _earlyAudio = document.getElementById("aud");
@@ -598,6 +602,11 @@ document.addEventListener("DOMContentLoaded", () => {
       if (state.seeking || state.seekBuffering) return Promise.resolve();
       // background tab: always let through (keepalive needs this)
       if (document.visibilityState === "hidden") return _origAudioPlay();
+      // STARTUP: during page load / initial buffering, don't block audio.
+      // Stall flags fire constantly while the page is loading and the video
+      // is still buffering its first few seconds.  Blocking audio here causes
+      // the audio to go silent until the page finishes loading.
+      if (!state.firstPlayCommitted && state.intendedPlaying) return _origAudioPlay();
       // tab return / NMPBFN recovery / grace period: readyState is stale in
       // Chrome after bg throttling, so skip the readyState check entirely.
       // these systems cleared stall flags already and own the play sequence.
@@ -1824,8 +1833,10 @@ document.addEventListener("DOMContentLoaded", () => {
       if (NotMakePlayBackFixingNoticable.isRecovering()) { _schedule(); return; }
       if (mediaSessionForcedPauseActive()) { _schedule(); return; }
       if (_isUserPauseEvident()) { _schedule(); return; }
-      // don't fight during startup or tab transitions
-      if (!state.firstPlayCommitted) { _schedule(); return; }
+      // don't fight during tab transitions
+      // NOTE: we intentionally DO run during startup (!firstPlayCommitted).
+      // During page load, the video can get paused by buffering and nothing
+      // else restarts it, causing the "plays then stops mid-load" bug.
       if (isTabReturnImmune() || inBgReturnGrace()) { _schedule(); return; }
 
       const vPaused = getVideoPaused();
@@ -7210,7 +7221,8 @@ try {
               // only kill audio for buffering in foreground — in background, readyState
               // is stale and videoWaiting never clears. killing audio here fights keepalive.
               if (state.videoWaiting && coupledMode && !aPaused && !NotMakePlayBackFixingNoticable.isActive() &&
-                  _syncRS < HAVE_FUTURE_DATA && !_syncInGrace && document.visibilityState !== "hidden") {
+                  _syncRS < HAVE_FUTURE_DATA && !_syncInGrace && document.visibilityState !== "hidden" &&
+                  state.firstPlayCommitted /* don't kill audio during page-load buffering */) {
                 // Only pause audio if stall has persisted for > 500ms — brief rebuffers
                 // are normal and killing audio on every one causes choppy playback.
                 const stallAge = state.videoStallSince ? (now() - state.videoStallSince) : 0;
@@ -7394,8 +7406,10 @@ try {
         const vNode = getVideoNode();
         const rs = vNode ? Number(vNode.readyState || 0) : 0;
         // only mark stall if time frozen for 20+ frames AND browser confirms low buffer
+        // don't mark stall during startup — buffering is expected while page loads
         if (_bufMonStallFrames >= 20 && rs < HAVE_FUTURE_DATA &&
-            !state.seeking && !state.seekBuffering && !state.restarting) {
+            !state.seeking && !state.seekBuffering && !state.restarting &&
+            state.firstPlayCommitted) {
           if (!state.videoWaiting) {
             state.videoWaiting = true;
             state.videoStallSince = state.videoStallSince || now();
@@ -7412,11 +7426,13 @@ try {
 
     // only kill audio if video is truly starved (readyState < 3 AND videoWaiting).
     // skip if audio just started (grace period) or if video already has data again.
+    // NEVER kill audio during startup/page-load — stalls are normal while buffering.
     const vNodeBuf = getVideoNode();
     const vRSBuf = vNodeBuf ? Number(vNodeBuf.readyState || 0) : 0;
     const reallyStalled = state.videoWaiting && vRSBuf < HAVE_FUTURE_DATA;
     const inGrace = now() < state.audioStartGraceUntil;
-    if (reallyStalled && !audio.paused && document.visibilityState !== "hidden" && !inGrace) {
+    const inStartup = !state.firstPlayCommitted;
+    if (reallyStalled && !audio.paused && document.visibilityState !== "hidden" && !inGrace && !inStartup) {
       try { audio.volume = 0; } catch {}
       try { audio.pause(); } catch {}
       // stamp the hold once, not every frame (refreshing = it never expires)
@@ -8155,9 +8171,11 @@ try {
       });
     } catch {}
     // Stalled event: browser ran out of data and stalled the decode
+    // During startup/page load, stalls are expected — don't set videoWaiting
+    // which would kill audio through the stall gates.
     const onVideoStalled = () => {
       if (!state.intendedPlaying) return;
-      state.videoWaiting = true;
+      if (state.firstPlayCommitted) state.videoWaiting = true;
       scheduleSync(200);
     };
     const onAudioStalled = () => {
@@ -9050,9 +9068,14 @@ try {
               return;
             }
 
-            // --- startup guard
+            // --- startup guard: during page load, video can get paused by buffering.
+            // Aggressively restart — don't just schedule a sync in 300ms.
             if (!state.firstPlayCommitted && state.intendedPlaying && !mediaSessionForcedPauseActive()) {
-              scheduleSync(300);
+              DONTMAKEITDOUBLEPLAY.resetAll();
+              execProgrammaticVideoPlay();
+              if (coupledMode && audio && audio.paused && !state.endedNaturally) {
+                execProgrammaticAudioPlay({ squelchMs: 200, force: true, minGapMs: 0 }).catch(() => {});
+              }
               return;
             }
 
@@ -9101,9 +9124,14 @@ try {
 
     video.on("waiting", () => {
       try { UltraStabilizer.onVideoStall(); } catch {}
-      state.videoWaiting = true;
-      state.videoStallSince = state.videoStallSince || now();
+      // During startup / page load, stalls are expected as data arrives.
+      // Don't set videoWaiting — it blocks audio through every gate.
+      if (state.firstPlayCommitted) {
+        state.videoWaiting = true;
+        state.videoStallSince = state.videoStallSince || now();
+      }
       if (!state.intendedPlaying || state.restarting) return;
+      if (!state.firstPlayCommitted) return;
       if (!state.startupPrimed || state.startupKickInFlight || (state.startupPhase && !state.firstPlayCommitted)) return;
 
       // kill audio during a REAL stall (readyState confirms low buffer).
