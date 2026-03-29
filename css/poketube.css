@@ -808,38 +808,35 @@ a.new-button:hover {
 }
  .fnt,
 .pwp a {
-  background-color: rgba(255, 255, 255, 0.1);
-  border: none;
-  border-radius: 18px;  
-  display: inline-flex;
+   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
   padding: 0 16px;
-  height: 36px;
-  color: #f1f1f1;
-  font-family: "poketube flex", sans-serif;  
+  height: 29px;
+  border-radius: 18px; /* Perfect pill shape */
+  background: linear-gradient(to bottom, #3f3f3f, #212121);  
+  border: 1px solid rgba(255, 255, 255, 0.1); 
+  color: #ffffff;
+  font-family: "Poketube Flex", "Arial", sans-serif;  
   font-weight: 500;
   font-size: 14px;
   text-decoration: none;
-  line-height: normal;
-  transition: background-color 0.2s cubic-bezier(0.05, 0, 0, 1);
   cursor: pointer;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); 
 }
 
 .fnt:hover,
 .pwp a:hover {
-  background-color: rgba(255, 255, 255, 0.2);
-    transform: translateY(-2px);
-
+  background: linear-gradient(to bottom, #4f4f4f, #2a2a2a); 
 }
 
 .fnt:active,
 .pwp a:active {
-  transform: translateY(0);
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.25);
+  background: #1a1a1a;
+  transform: scale(0.98);  
 }
-
 
 .hj:checked ~ .flying_cmnt {
   display: grid;
