@@ -296,13 +296,16 @@ document.addEventListener("DOMContentLoaded", () => {
         };
       }
     } catch {}
-    // Patch video.play() itself to block phantom restarts for 10s after ended
+    // Patch video.play() itself to block phantom restarts after ended
     try {
       const _origVjsPlay = video.play.bind(video);
       video.play = function() {
         if (state.endedNaturally && !state.restarting && !isLoopDesired()) {
-          const userRecent = (now() - state.lastUserActionTime) < 1000;
-          if (!userRecent) return Promise.resolve();
+          // endedNaturally should already be cleared by onUserPlay() from
+          // onPressStart/markUserPlayIntent BEFORE this runs (capture phase).
+          // If we're here with endedNaturally still true, it's a programmatic
+          // call — block it unconditionally.
+          return Promise.resolve();
         }
         return _origVjsPlay();
       };
@@ -1259,15 +1262,18 @@ document.addEventListener("DOMContentLoaded", () => {
         // Play video — use native play() to bypass all wrappers for speed.
         // The gate/dedup exist to prevent double-play during normal operation,
         // but during recovery we WANT the play to go through unconditionally.
-        const _nPlay = HTMLMediaElement.prototype.play;
-        const vn = getVideoNode();
-        if (vn && vn.paused) {
-          try { _nPlay.call(vn).catch(() => {}); } catch {}
-        }
+        // EXCEPT after ended — never restart a finished video from recovery code.
+        if (!state.endedNaturally) {
+          const _nPlay = HTMLMediaElement.prototype.play;
+          const vn = getVideoNode();
+          if (vn && vn.paused) {
+            try { _nPlay.call(vn).catch(() => {}); } catch {}
+          }
 
-        // Play audio — same, native play bypasses the stall-check gate
-        if (coupledMode && audio && audio.paused) {
-          try { _nPlay.call(audio).catch(() => {}); } catch {}
+          // Play audio — same, native play bypasses the stall-check gate
+          if (coupledMode && audio && audio.paused) {
+            try { _nPlay.call(audio).catch(() => {}); } catch {}
+          }
         }
 
         // Ensure video isn't muted
@@ -1503,7 +1509,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       // --- Check 3: Video paused but audio playing — video stalled ---
-      if (videoPaused && !audioPaused && vn) {
+      if (videoPaused && !audioPaused && vn && !state.endedNaturally) {
         try { vn.play().catch(() => {}); } catch {}
         return;
       }
@@ -1570,7 +1576,8 @@ document.addEventListener("DOMContentLoaded", () => {
       cancelActiveFade();
       DONTMAKEITDOUBLEPLAY.resetAll();
 
-      // Force play both
+      // Force play both — never after ended
+      if (state.endedNaturally) return;
       const vn = getVideoNode();
       if (vn && vn.paused) {
         try { vn.play().catch(() => {}); } catch {}
@@ -3850,6 +3857,8 @@ document.addEventListener("DOMContentLoaded", () => {
           // Alt-tab or window blur/focus — lightweight recovery. Just make sure
           // both elements are playing at the right volume. No vol=0, no fade, no fuss.
           // Use native play() to bypass all wrappers for max speed.
+          // NEVER restart after ended — this was an unguarded native play() path.
+          if (state.endedNaturally) return;
           const _nativePlayAT = HTMLMediaElement.prototype.play;
           const _atVN = getVideoNode();
           if (_atVN && _atVN.paused) { try { _nativePlayAT.call(_atVN).catch(() => {}); } catch {} }
@@ -3920,6 +3929,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // that sounds like "play pause play". Just resume from wherever the
     // decoder left off. The sync loop handles drift after immunity expires.
     instantPlay() {
+      // NEVER restart after ended
+      if (state.endedNaturally) return;
       try {
         const _nIP = HTMLMediaElement.prototype.play;
         const _vn = getVideoNode();
@@ -4048,6 +4059,10 @@ document.addEventListener("DOMContentLoaded", () => {
     state.rapidToggleDetected = false;
     state.rapidToggleUntil = 0;
     state.loopPreventionCooldownUntil = 0;
+    // CRITICAL: Clear ended lock so user can restart playback.
+    // Without this, keyboard play (Space/K) after video ended was blocked
+    // because onUserPlay() was never called from the keyboard path.
+    MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.onUserPlay();
     DONTMAKEITDOUBLEPLAY.resetAll();
     clearAudioPauseLocks();
     // User clicked play — clear any stale mute flags from programmatic pause
@@ -4226,12 +4241,9 @@ document.addEventListener("DOMContentLoaded", () => {
   // shouldn't — browser-native loop, phantom seeks to 0, ended→play races,
   // sync machinery accidentally restarting, etc. This is the final safety net.
   const MakeSureUnintentionalLoopDoesntEverHappenAtALLManager = (() => {
-    const LOCK_DURATION_MS = 8000; // block auto-restart for 8s after ended
-
     function onEnded() {
       state.endedNaturally = true;
       state.endedAt = now();
-      state.endedLockUntil = now() + LOCK_DURATION_MS;
       state.intendedPlaying = false;
       state.bufferHoldIntendedPlaying = false;
       state.resumeOnVisible = false;
@@ -4242,13 +4254,13 @@ document.addEventListener("DOMContentLoaded", () => {
       stripAutoplayAfterFirstPlay();
     }
 
-    // Call this before any auto-play/resume to check if we should block it
+    // Call this before any auto-play/resume to check if we should block it.
+    // NEVER auto-expires. Only onUserPlay() can clear this.
+    // The old version auto-cleared endedNaturally after 8 seconds, which let
+    // stale play() calls from 25+ unguarded code paths restart the video.
+    // That was THE fundamental reason the loop kept happening.
     function shouldBlockAutoRestart() {
-      if (!state.endedNaturally) return false;
-      if (now() < state.endedLockUntil) return true;
-      // lock expired, clear
-      state.endedNaturally = false;
-      return false;
+      return !!state.endedNaturally;
     }
 
     // User explicitly clicks play → clear the ended lock
@@ -4277,13 +4289,10 @@ document.addEventListener("DOMContentLoaded", () => {
       return false;
     }
 
-    // Periodic tick — if video somehow restarted, kill it
+    // Periodic tick — if video somehow restarted, kill it.
+    // endedNaturally persists until user explicitly clears it via onUserPlay().
     function tick() {
       if (!state.endedNaturally) return;
-      if (now() > state.endedLockUntil) {
-        state.endedNaturally = false;
-        return;
-      }
       const vn = getVideoNode();
       if (!vn) return;
       const vt = Number(vn.currentTime) || 0;
@@ -5093,11 +5102,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function execProgrammaticVideoPlay() {
     if (_errorOverlayShown) return;
-    // Never restart after ended unless user explicitly clicked play
-    if (state.endedNaturally && !state.restarting && !isLoopDesired()) {
-      const _upCheck = state.userPlayIntentPresetAt > 0 && (now() - state.userPlayIntentPresetAt) < 2000;
-      if (!_upCheck) return;
-    }
+    // Never restart after ended. User play clears endedNaturally first.
+    if (state.endedNaturally && !state.restarting && !isLoopDesired()) return;
     VisibilityGuard.onPlayCalled(); // VG: suppress spurious pause after our play()
 state.isProgrammaticVideoPlay = true;
 try {
@@ -5900,12 +5906,10 @@ try {
   async function playTogether() {
     // Error overlay active — all playback is dead
     if (_errorOverlayShown) return;
-    // Never restart after ended unless user explicitly clicked play
-    if (state.endedNaturally && !state.restarting && !isLoopDesired()) {
-      const _ptUserPlay = state.userPlayIntentPresetAt > 0 && (now() - state.userPlayIntentPresetAt) < 2000;
-      const _ptUserAction = (now() - state.lastUserActionTime) < 800;
-      if (!_ptUserPlay && !_ptUserAction) return;
-    }
+    // Never restart after ended. onUserPlay() (called from capture-phase
+    // click/keyboard handlers) clears endedNaturally BEFORE this runs.
+    // If endedNaturally is still true here, it's a programmatic call — block it.
+    if (state.endedNaturally && !state.restarting && !isLoopDesired()) return;
     state.userPlayIntentPresetAt = 0;
     // Never trigger loop detection during tab-return immunity
     if (!(state.tabReturnImmuneUntil > now()) && detectLoop()) {
@@ -7968,7 +7972,8 @@ try {
 
     const _reportBase = "https://codeberg.org/ashleyirispuppy/poke/issues/new?template=issue_template%2fplayer-bug.yml";
 
-     const _splashMessages = [
+    // Easter egg splash messages — like Minecraft crash logs
+    const _splashMessages = [
       "Have you tried mass producing mass produced goods?",
       "This is fine. Everything is fine.",
       "I blame the mass production of mass produced goods.",
@@ -7978,6 +7983,7 @@ try {
       "The bits are revolting!",
       "Something went wrong. Probably.",
       "Works on my machine ¯\\_(ツ)_/¯",
+      "This wouldn't happen in Minecraft.",
       "Have you tried turning it off and on again?",
       "The video element chose violence today.",
       "Skill issue (from the browser).",
@@ -8053,7 +8059,10 @@ try {
       code: errorId,
       canRetry: true,
       reportUrl: _reportBase,
-      stackTrace: _stack
+      // Stack trace only for uncaught/unknown errors — regular media errors
+      // (codec, network, decode) don't need a stack trace since the error
+      // code itself tells the user everything they need.
+      stackTrace: isBug ? _stack : undefined
     });
   }
 
@@ -10030,21 +10039,22 @@ try {
               const _origNativePlay = _nativeVN.play.bind(_nativeVN);
               _nativeVN.play = function() {
                 if (state.endedNaturally && !state.restarting && !isLoopDesired()) {
-                  const _ur = (now() - state.lastUserActionTime) < 800;
-                  const _up = state.userPlayIntentPresetAt > 0 && (now() - state.userPlayIntentPresetAt) < 2000;
-                  if (!_ur && !_up) {
-                    return Promise.resolve();
-                  }
+                  // endedNaturally should already be cleared by onUserPlay()
+                  // from onPressStart/markUserPlayIntent (capture phase, runs first).
+                  // If still true here, this is a programmatic call — block it.
+                  return Promise.resolve();
                 }
                 return _origNativePlay();
               };
               _nativeVN._endedPlayPatched = true;
             }
           } catch {}
-          // Nuclear: after ending, actively prevent any play() for the lock duration
-          // by continuously monitoring and killing phantom restarts
+          // Watchdog: after ending, monitor for phantom restarts and kill them.
+          // Self-clears when endedNaturally is cleared by user play intent.
+          // No fixed timeout — stays active until user explicitly plays again.
           const _endedKill = setInterval(() => {
-            if (state.playSessionId !== _endedGen || !state.endedNaturally) {
+            // If user cleared the ended state (via onUserPlay), stop watching
+            if (!state.endedNaturally) {
               clearInterval(_endedKill);
               return;
             }
@@ -10056,7 +10066,6 @@ try {
                 if (coupledMode && audio && !audio.paused) { try { audio.pause(); } catch {} }
               }
             }
-            // Also kill audio if it somehow started
             if (coupledMode && audio && !audio.paused && !state.restarting && !isLoopDesired()) {
               const at2 = Number(audio.currentTime) || 0;
               if (at2 < 3.0) {
@@ -10064,8 +10073,6 @@ try {
               }
             }
           }, 150);
-          // Clear the interval when lock expires (10s lock)
-          setTimeout(() => clearInterval(_endedKill), 10000);
         });
   }
 
@@ -10643,7 +10650,10 @@ try {
       state.stallAudioResumeHoldUntil = 0;
 
       // Instant shot on focus too (covers alt-tab where visibilitychange may not fire)
-      if (state.intendedPlaying && document.visibilityState === "visible") {
+      // CRITICAL: never restart after ended — this focus handler was an unguarded
+      // path that could restart the video via native play() bypass.
+      if (state.intendedPlaying && document.visibilityState === "visible" &&
+          !state.endedNaturally) {
         const _nFocus = HTMLMediaElement.prototype.play;
         const _fVN = getVideoNode();
         if (_fVN && _fVN.paused) { try { _nFocus.call(_fVN).catch(() => {}); } catch {} }
