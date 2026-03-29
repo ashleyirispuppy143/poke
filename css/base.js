@@ -17,7 +17,12 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  * 100% puppy made code! 0 slop guarenteed!
  * "It takes a lot of hard work to make something simple." ~ Steve Jobs 
  */
+ 
 
+
+// before DOMContentLoaded. Ensures both video and audio start at 00:00
+// even if the browser pre-buffers to a non-zero keyframe position.
+// This runs in a try-catch because elements might not exist yet.
 try {
   const _earlyVideo = document.getElementById("video");
   const _earlyAudio = document.getElementById("aud");
@@ -581,6 +586,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // consumed by play/pause handlers for bulletproof non-coupled/quality=medium support
     userPauseIntentPresetAt: 0,
     userPlayIntentPresetAt: 0,
+    userSeekIntentUntil: 0,
     _stallAudioPauseTimer: null,
     seekBuffering: false,
     seekBufferResumeTimer: null,
@@ -4047,6 +4053,12 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   function clearMediaSessionForcedPause() { state.mediaForcedPauseUntil = 0; }
   function mediaSessionForcedPauseActive() { return now() < state.mediaForcedPauseUntil; }
+  function markUserSeekIntent(ms = 2600) {
+    const until = now() + Math.max(0, Number(ms) || 0);
+    state.userSeekIntentUntil = Math.max(state.userSeekIntentUntil, until);
+    state.lastUserActionTime = now();
+  }
+  function userSeekIntentActive() { return now() < state.userSeekIntentUntil; }
 
   function markUserPauseIntent(ms = 1800) {
     VisibilityGuard.onUserPause();
@@ -8374,6 +8386,14 @@ try {
       } catch {}
       return false;
     };
+    const isSeekControlTarget = target => {
+      try {
+        const el = getTargetEl(target);
+        if (!el) return false;
+        return !!el.closest?.(".vjs-progress-control, .vjs-progress-holder, .vjs-play-progress, .vjs-mouse-display");
+      } catch {}
+      return false;
+    };
     const onPressStart = event => {
       if (!isPrimaryActivation(event)) return;
       tryUnlockAudioContext();
@@ -8389,6 +8409,8 @@ try {
 
         const isPlayCtrl = isPlayControlTarget(event.target);
       const isTechSurface = isTechSurfaceTarget(event.target);
+      const isSeekControl = isSeekControlTarget(event.target);
+      if (isSeekControl) markUserSeekIntent(3200);
 
       if (isPlayCtrl || isTechSurface) {
         trackUserClickForSpam();
@@ -8475,6 +8497,14 @@ try {
       // Unlock AudioContext on keyboard interaction too
       tryUnlockAudioContext();
       const code = event.code || event.key || "";
+      if (
+        code === "ArrowLeft" || code === "ArrowRight" ||
+        code === "Home" || code === "End" ||
+        code === "KeyJ" || code === "KeyL" ||
+        code === "MediaSeekBackward" || code === "MediaSeekForward"
+      ) {
+        markUserSeekIntent(2800);
+      }
       if (code === "Space" || code === "KeyK" || code === "MediaPlayPause") {
         if (getVideoPaused()) markUserPlayIntent();
         else {
@@ -8586,6 +8616,7 @@ try {
       navigator.mediaSession.setActionHandler("seekforward", d => {
         const inc = Number(d?.seekOffset) || 10;
         const newTime = Math.min((video.currentTime() || 0) + inc, Number(video.duration()) || 0);
+        markUserSeekIntent(3000);
         state.pendingSeekTarget = newTime;
         state.seekWantedPlaying = state.intendedPlaying;
         video.currentTime(newTime);
@@ -8593,6 +8624,7 @@ try {
       navigator.mediaSession.setActionHandler("seekbackward", d => {
         const dec = Number(d?.seekOffset) || 10;
         const newTime = Math.max((video.currentTime() || 0) - dec, 0);
+        markUserSeekIntent(3000);
         state.pendingSeekTarget = newTime;
         state.seekWantedPlaying = state.intendedPlaying;
         video.currentTime(newTime);
@@ -8600,6 +8632,7 @@ try {
       navigator.mediaSession.setActionHandler("seekto", d => {
         if (!d || typeof d.seekTime !== "number") return;
         const newTime = Math.max(0, Math.min(Number(video.duration()) || 0, d.seekTime));
+        markUserSeekIntent(3000);
         state.pendingSeekTarget = newTime;
         state.seekWantedPlaying = state.intendedPlaying;
         video.currentTime(newTime);
@@ -9916,8 +9949,9 @@ try {
           // Also catches post-ended phantom restarts via the manager.
           const _phVt = Number(videoEl.currentTime) || 0;
           const _phPrev = state.lastKnownGoodVT || 0;
-          const _phUserRecent = (now() - state.lastUserActionTime) < 2000;
           const _phProgrammatic = state.pendingSeekTarget != null || state.seeking || state.restarting;
+          const _phUserSeek = userSeekIntentActive();
+          const _phRequestedNearZero = state.pendingSeekTarget != null && Number(state.pendingSeekTarget) < 0.8;
           // Enhanced: also block if MakeSureUnintentionalLoopDoesntEverHappenAtALLManager says so
           if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.isPhantomRestart(_phVt)) {
             try { videoEl.currentTime = _phPrev > 0.5 ? _phPrev : videoEl.duration || _phPrev; } catch {}
@@ -9925,7 +9959,7 @@ try {
             return;
           }
           if (_phVt < 0.5 && _phPrev > 2.0 && state.firstPlayCommitted &&
-              !_phUserRecent && !_phProgrammatic && !isLoopDesired()) {
+              !_phUserSeek && !_phRequestedNearZero && !_phProgrammatic && !isLoopDesired()) {
             // this is a phantom restart — revert video to its last good position.
             // don't touch audio — the _seekWouldRestart guard handles that.
             try { videoEl.currentTime = _phPrev; } catch {}
@@ -9936,6 +9970,7 @@ try {
           // Legit user seeks must always go through (fixes "first seek ignored").
           const _seekLikelyUser =
             state.pendingSeekTarget != null ||
+            userSeekIntentActive() ||
             ((now() - state.lastUserActionTime) < 3500) ||
             (document.visibilityState === "visible" && isWindowFocused() && !isVisibilityTransitionActive());
           if (isTabReturnImmune() && !state.seeking &&
@@ -10101,24 +10136,6 @@ try {
           // to play at full volume for ~10-50ms (the audible "blip").
           // Get the definitive seek target — video.currentTime() is reliable after seeked
           const newTime = Number(video.currentTime());
-          const requestedSeek = Number(state.pendingSeekTarget);
-          const hasRequestedSeek = isFinite(requestedSeek);
-          // If seek unexpectedly snaps to ~0 while we had a real non-zero target,
-          // treat it as phantom rollback and force back to the requested position.
-          if (newTime < 0.5 && hasRequestedSeek && requestedSeek > 1.0 &&
-              state.firstPlayCommitted && !state.restarting && !isLoopDesired()) {
-            try { video.currentTime(requestedSeek); } catch {}
-            try { videoEl.currentTime = requestedSeek; } catch {}
-            try {
-              const _vnSeeked = getVideoNode();
-              if (_vnSeeked && _vnSeeked !== videoEl) _vnSeeked.currentTime = requestedSeek;
-            } catch {}
-            state.lastKnownGoodVT = requestedSeek;
-            state.lastKnownGoodVTts = now();
-            state.pendingSeekTarget = requestedSeek;
-            scheduleSeekFinalize(0, state.seekId);
-            return;
-          }
           // phantom loop guard (backup): if seeked lands at near-0 but nobody asked,
           // the seeking handler should have caught it. if it didn't (e.g. seeking
           // handler's lastKnownGoodVT was already 0), skip audio sync.
