@@ -954,6 +954,18 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!state.intendedPlaying) return;
     // CRITICAL: never fight pause after video ended — this was causing phantom loops
     if (state.endedNaturally) return;
+    // CRITICAL FIX: The browser fires 'pause' BEFORE 'ended'. endedNaturally isn't
+    // set yet at this point, so we MUST check currentTime vs duration to detect the
+    // natural end-of-video pause. Calling play() here on an ended video auto-seeks
+    // to 0 and restarts — this was THE root cause of phantom looping.
+    try {
+      const _guardEl = e.target;
+      if (_guardEl) {
+        const _gCT = Number(_guardEl.currentTime) || 0;
+        const _gDur = Number(_guardEl.duration) || 0;
+        if (_gDur > 0.5 && _gCT >= _gDur - 0.5) return; // at the end — don't fight
+      }
+    } catch {}
     // In background, don't fight Chrome's auto-pause. Replaying here just causes
     // the play-pause-play-pause stutter loop. Let keepalive handle bg playback
     // at its own pace with proper backoff.
@@ -3586,6 +3598,20 @@ document.addEventListener("DOMContentLoaded", () => {
   function _videoPauseEventSuppressor(e) {
     if (!(state.tabReturnImmuneUntil > now())) return; // not immune, let it through
     if (state.userPauseIntentPresetAt > 0 && (now() - state.userPauseIntentPresetAt) < 2000) return; // user pause
+    // CRITICAL FIX: Never fight the natural end-of-video pause!
+    // The browser fires 'pause' BEFORE 'ended', so endedNaturally isn't set yet.
+    // We must check currentTime vs duration to detect the natural end-pause.
+    // Without this check, calling play() on an ended video makes the browser
+    // auto-seek to 0 and restart — THIS WAS THE ROOT CAUSE OF PHANTOM LOOPING.
+    if (state.endedNaturally) return;
+    try {
+      const _suppVN = e.target || getVideoNode();
+      if (_suppVN) {
+        const _suppCT = Number(_suppVN.currentTime) || 0;
+        const _suppDur = Number(_suppVN.duration) || 0;
+        if (_suppDur > 0.5 && _suppCT >= _suppDur - 0.5) return; // at the end — let it pause naturally
+      }
+    } catch {}
     // Swallow the event — no other listener sees it (including video.js)
     e.stopImmediatePropagation();
     e.stopPropagation();
@@ -3603,6 +3629,17 @@ document.addEventListener("DOMContentLoaded", () => {
   function _audioEventPauseSuppressor(e) {
     if (!(state.tabReturnImmuneUntil > now())) return;
     if (state.userPauseIntentPresetAt > 0 && (now() - state.userPauseIntentPresetAt) < 2000) return;
+    // Never suppress the natural end-of-video pause
+    if (state.endedNaturally) return;
+    try {
+      // Check video duration — audio pausing at end of video is normal
+      const _aVN = getVideoNode();
+      if (_aVN) {
+        const _aCT = Number(_aVN.currentTime) || 0;
+        const _aDur = Number(_aVN.duration) || 0;
+        if (_aDur > 0.5 && _aCT >= _aDur - 0.5) return;
+      }
+    } catch {}
     // Swallow the event so no other listener sees it.
     // Do NOT call audio.play() here — the play-lock handles resume.
     // Calling play() from the pause suppressor causes decode buffer replay
@@ -3623,9 +3660,16 @@ document.addEventListener("DOMContentLoaded", () => {
       _playLockRafId = null;
       if (state.userPauseIntentPresetAt > 0 && (now() - state.userPauseIntentPresetAt) < 2000) return;
       if (now() - startTime > lockDuration || !(state.tabReturnImmuneUntil > now())) return;
+      // Never fight pause after video ended or at end of video
+      if (state.endedNaturally) return;
       if (state.intendedPlaying) {
         try {
           const vn = getVideoNode();
+          // CRITICAL: check if video is at its end before calling play().
+          // play() on an ended video auto-seeks to 0 = phantom loop.
+          const _plCT = vn ? (Number(vn.currentTime) || 0) : 0;
+          const _plDur = vn ? (Number(vn.duration) || 0) : 0;
+          if (_plDur > 0.5 && _plCT >= _plDur - 0.5) return; // at the end — stop pumping
           if (vn && vn.paused) vn.play().catch(() => {});
           if (videoEl && videoEl !== vn && videoEl.paused) videoEl.play().catch(() => {});
           if (coupledMode && audio && audio.paused) audio.play().catch(() => {});
@@ -4674,14 +4718,15 @@ document.addEventListener("DOMContentLoaded", () => {
           if (!userRecent) return;
         }
 
-        // if audio is currently playing and we're in the first 1.5s of playback,
-        // only seek for large drift (>0.5s). small drift at startup is
+        // if audio is currently playing and we're in the first 3s of playback,
+        // only seek for large drift (>0.8s). small drift at startup is
         // normal — decoders initialize at different speeds. the sync loop
         // corrects it via rate nudging without any audible skip.
-        // Was 3s/1.5s — too aggressive, blocked initial sync causing audio to lag.
+        // Seeking during the first few seconds causes the "audio glitch at
+        // start" where audio randomly jumps to places.
         const inEarlyPlayback = !audio.paused && _audioFirstPlayedAt > 0 &&
-          (performance.now() - _audioFirstPlayedAt) < 1500;
-        if (inEarlyPlayback && timeDiff < 0.5) return;
+          (performance.now() - _audioFirstPlayedAt) < 3000;
+        if (inEarlyPlayback && timeDiff < 0.8) return;
 
         // during startup (audio not yet confirmed playing), use 0.5s threshold
         // during normal playback, use 0.15s — drift under 150ms is imperceptible
@@ -5832,8 +5877,10 @@ try {
   // The browser can pre-buffer a background tab's video at a non-zero position;
   // the old "give up if vt > 0.5" logic caused autoplay to start mid-video.
   function forceZeroBeforeFirstPlay() {
-    // Only run ONCE, and never after play has started
-    if (state.startupZeroed || state.firstPlayCommitted) return;
+    // Never after play has started
+    if (state.firstPlayCommitted) return;
+    // Allow re-runs — browser can move currentTime forward via keyframe buffering
+    // after our first zero-set. Re-zeroing is harmless and prevents mid-video starts.
     state.startupZeroed = true;
     try { video.currentTime(0); } catch {}
     try {
@@ -5896,6 +5943,19 @@ try {
 
       if (!state.firstPlayCommitted && wantsStartupAutoplay()) {
         forceZeroBeforeFirstPlay();
+      }
+
+      // Double-check: if browser moved currentTime forward (keyframe buffering),
+      // force it back to 0. This catches the race where forceZeroBeforeFirstPlay
+      // set ct=0 but the browser's async buffering moved it to a keyframe at 1-2s.
+      if (!state.firstPlayCommitted || state.startupPhase) {
+        const _preVt = Number(video.currentTime()) || 0;
+        if (_preVt > 0.5) {
+          try { video.currentTime(0); } catch {}
+          try { videoEl.currentTime = 0; } catch {}
+          try { const _vn = getVideoNode(); if (_vn && _vn !== videoEl) _vn.currentTime = 0; } catch {}
+          if (coupledMode && audio) { try { audio.currentTime = 0; } catch {} }
+        }
       }
 
       const vtStart = Number(video.currentTime()) || 0;
@@ -5974,10 +6034,12 @@ try {
         const canKickFirstAudio = !state.audioEverStarted && canStartAudioAt(vNow);
         const inStartupKickFlow = state.startupKickInFlight || isTabReturnImmune();
         const isRecentUserAction = (now() - state.lastUserActionTime) < 2000;
-        // Skip all audio hold gates for user-initiated plays — audio must
-        // start immediately when the user clicks play. The browser can
-        // handle any buffering naturally.
-        const shouldHoldAudio = !isRecentUserAction && (
+        // Skip all audio hold gates for user-initiated plays AND startup autoplay —
+        // audio must start immediately. The gates exist for mid-playback scenarios
+        // (stall recovery, tab return) not initial startup. Holding audio during
+        // startup is the root cause of "audio plays really late."
+        const isStartupAutoplay = state.startupPhase || !state.firstPlayCommitted || state.startupKickInFlight;
+        const shouldHoldAudio = !isRecentUserAction && !isStartupAutoplay && (
           state.strictBufferHold ||
           shouldBlockNewAudioStart() ||
           (!inStartupKickFlow && UltraStabilizer.shouldBlockAudioAtStartup()) ||
@@ -7625,7 +7687,7 @@ try {
       if (document.getElementById("pe-overlay-css")) return;
       const s = document.createElement("style");
       s.id = "pe-overlay-css";
-      s.textContent = `@keyframes pe-fadein{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}.pe-overlay{position:absolute;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0f0f0f 0%,#1a1a1a 100%);color:#fff;border-radius:16px;font-family:Roboto,Arial,Helvetica,sans-serif;opacity:0;pointer-events:none;transition:opacity .25s ease}.pe-overlay.pe-visible{opacity:1;pointer-events:auto}.pe-overlay.pe-visible .pe-overlay-inner{animation:pe-fadein .3s ease-out}.pe-overlay-inner{display:flex;align-items:center;gap:24px;max-width:540px;padding:0 36px}.pe-overlay-icon{width:110px;height:110px;flex-shrink:0;fill:#505050;opacity:.85}.pe-overlay-text{display:flex;flex-direction:column;gap:6px;min-width:0}.pe-overlay-title{font-size:17px;font-weight:600;color:#fff;line-height:1.45;letter-spacing:-.01em}.pe-overlay-title a{color:#3ea6ff;text-decoration:none;cursor:pointer}.pe-overlay-title a:hover{text-decoration:underline}.pe-overlay-msg{font-size:13px;color:#999;line-height:1.5}.pe-overlay-code{font-size:11px;color:#606060;margin-top:3px;font-family:"Roboto Mono","Consolas","Courier New",monospace;letter-spacing:.02em}.pe-overlay-actions{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}.pe-overlay-btn,.pe-overlay-btn-outline,.pe-overlay-stack-link,.pe-stack-popup-close,.pe-stack-popup-copy{transform:none !important;filter:none !important}.pe-overlay-btn:hover,.pe-overlay-btn:focus,.pe-overlay-btn:active,.pe-overlay-btn-outline:hover,.pe-overlay-btn-outline:focus,.pe-overlay-btn-outline:active,.pe-overlay-stack-link:hover,.pe-overlay-stack-link:focus,.pe-overlay-stack-link:active,.pe-stack-popup-close:hover,.pe-stack-popup-close:focus,.pe-stack-popup-close:active,.pe-stack-popup-copy:hover,.pe-stack-popup-copy:focus,.pe-stack-popup-copy:active{transform:none !important;filter:none !important}.pe-overlay-btn{padding:9px 22px;width:fit-content;background-color:#fff !important;color:#0f0f0f !important;border:none !important;border-radius:20px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;transition:background-color .15s,box-shadow .15s;line-height:1;outline:none;-webkit-appearance:none;appearance:none;text-decoration:none !important;display:inline-flex;align-items:center;box-shadow:0 2px 8px rgba(0,0,0,.3)}.pe-overlay-btn:hover{background-color:#e0e0e0 !important;box-shadow:0 4px 12px rgba(0,0,0,.4) !important}.pe-overlay-btn:active{background-color:#ccc !important}.pe-overlay-btn-outline{padding:9px 22px;width:fit-content;background-color:transparent !important;color:#aaa !important;border:1px solid #444 !important;border-radius:20px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;transition:background-color .15s,border-color .15s,color .15s;line-height:1;outline:none;-webkit-appearance:none;appearance:none;text-decoration:none !important;display:inline-flex;align-items:center}.pe-overlay-btn-outline:hover{background-color:rgba(255,255,255,.06) !important;border-color:#777 !important;color:#fff !important}.pe-overlay-btn-outline:active{background-color:rgba(255,255,255,.12) !important}.pe-overlay-stack-link{font-size:12px;color:#3ea6ff;cursor:pointer;margin-top:10px;display:none;background:none;border:none;padding:0;font-family:inherit;text-decoration:none;text-align:left;opacity:.8;transition:opacity .15s}.pe-overlay-stack-link:hover{opacity:1;color:#7fc4ff}.pe-stack-popup-backdrop{position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s ease;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}.pe-stack-popup-backdrop.pe-stack-popup-open{opacity:1;pointer-events:auto}.pe-stack-popup{background:#1e1e1e;border-radius:14px;padding:0;width:90vw;max-width:640px;max-height:70vh;overflow:hidden;box-shadow:0 16px 56px rgba(0,0,0,.85),0 0 0 1px rgba(255,255,255,.06);position:relative;display:flex;flex-direction:column}.pe-stack-popup-title{font-size:13px;font-weight:600;color:#ddd;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.08);flex-shrink:0;letter-spacing:.02em;text-transform:uppercase}.pe-stack-popup-close{background:none;border:none;color:#777;font-size:20px;cursor:pointer;padding:4px 8px;line-height:1;font-family:inherit;border-radius:50%;transition:background-color .15s,color .15s}.pe-stack-popup-close:hover{color:#fff;background:rgba(255,255,255,.1)}.pe-stack-popup-copy{background:none;border:1px solid #444;color:#999;font-size:11px;cursor:pointer;padding:5px 14px;border-radius:14px;font-family:inherit;margin-right:8px;transition:all .15s;letter-spacing:.02em}.pe-stack-popup-copy:hover{color:#fff;border-color:#777;background:rgba(255,255,255,.06)}.pe-overlay-stack{font-size:12px;color:#bbb;white-space:pre-wrap;word-break:break-all;font-family:"Roboto Mono","Consolas","Courier New",monospace;margin:0;padding:18px 22px;line-height:1.75;user-select:text;-webkit-user-select:text;overflow-y:auto;flex:1;background:#161616}`;
+      s.textContent = `@keyframes pe-fadein{from{opacity:0;transform:scale(.96) translateY(4px)}to{opacity:1;transform:scale(1) translateY(0)}}.pe-overlay{position:absolute;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:linear-gradient(145deg,#0d0d0d 0%,#171717 50%,#1c1c1c 100%);color:#fff;border-radius:16px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,Helvetica,sans-serif;opacity:0;pointer-events:none;transition:opacity .3s ease}.pe-overlay.pe-visible{opacity:1;pointer-events:auto}.pe-overlay.pe-visible .pe-overlay-inner{animation:pe-fadein .35s cubic-bezier(.16,1,.3,1)}.pe-overlay-inner{display:flex;align-items:center;gap:28px;max-width:560px;padding:0 40px}.pe-overlay-icon{width:100px;height:100px;flex-shrink:0;fill:#3a3a3a;opacity:.9}.pe-overlay-text{display:flex;flex-direction:column;gap:8px;min-width:0}.pe-overlay-title{font-size:17px;font-weight:600;color:#f0f0f0;line-height:1.5;letter-spacing:-.015em}.pe-overlay-title a{color:#3ea6ff;text-decoration:none;cursor:pointer;transition:color .15s}.pe-overlay-title a:hover{text-decoration:underline;color:#7fc4ff}.pe-overlay-msg{font-size:13px;color:#8a8a8a;line-height:1.6}.pe-overlay-code{font-size:11px;color:#555;margin-top:2px;font-family:"SF Mono","Roboto Mono","Consolas","Courier New",monospace;letter-spacing:.03em;opacity:.9}.pe-overlay-actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}.pe-overlay-btn,.pe-overlay-btn-outline,.pe-overlay-stack-link,.pe-stack-popup-close,.pe-stack-popup-copy{transform:none !important;filter:none !important}.pe-overlay-btn:hover,.pe-overlay-btn:focus,.pe-overlay-btn:active,.pe-overlay-btn-outline:hover,.pe-overlay-btn-outline:focus,.pe-overlay-btn-outline:active,.pe-overlay-stack-link:hover,.pe-overlay-stack-link:focus,.pe-overlay-stack-link:active,.pe-stack-popup-close:hover,.pe-stack-popup-close:focus,.pe-stack-popup-close:active,.pe-stack-popup-copy:hover,.pe-stack-popup-copy:focus,.pe-stack-popup-copy:active{transform:none !important;filter:none !important}.pe-overlay-btn{padding:10px 24px;width:fit-content;background-color:#fff !important;color:#0f0f0f !important;border:none !important;border-radius:22px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;transition:background-color .15s,box-shadow .2s;line-height:1;outline:none;-webkit-appearance:none;appearance:none;text-decoration:none !important;display:inline-flex;align-items:center;box-shadow:0 2px 12px rgba(0,0,0,.35)}.pe-overlay-btn:hover{background-color:#e8e8e8 !important;box-shadow:0 4px 16px rgba(0,0,0,.45) !important}.pe-overlay-btn:active{background-color:#d4d4d4 !important;box-shadow:0 1px 4px rgba(0,0,0,.3) !important}.pe-overlay-btn-outline{padding:10px 24px;width:fit-content;background-color:transparent !important;color:#aaa !important;border:1px solid rgba(255,255,255,.12) !important;border-radius:22px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .15s;line-height:1;outline:none;-webkit-appearance:none;appearance:none;text-decoration:none !important;display:inline-flex;align-items:center}.pe-overlay-btn-outline:hover{background-color:rgba(255,255,255,.06) !important;border-color:rgba(255,255,255,.22) !important;color:#fff !important}.pe-overlay-btn-outline:active{background-color:rgba(255,255,255,.1) !important}.pe-overlay-stack-link{font-size:12px;color:#3ea6ff;cursor:pointer;margin-top:12px;display:none;background:none;border:none;padding:0;font-family:inherit;text-decoration:none;text-align:left;opacity:.75;transition:opacity .15s,color .15s}.pe-overlay-stack-link:hover{opacity:1;color:#7fc4ff}.pe-stack-popup-backdrop{position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s ease;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}.pe-stack-popup-backdrop.pe-stack-popup-open{opacity:1;pointer-events:auto}.pe-stack-popup{background:#1a1a1a;border-radius:16px;padding:0;width:90vw;max-width:640px;max-height:70vh;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.9),0 0 0 1px rgba(255,255,255,.05);position:relative;display:flex;flex-direction:column}.pe-stack-popup-title{font-size:12px;font-weight:600;color:#ccc;padding:16px 22px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0;letter-spacing:.06em;text-transform:uppercase}.pe-stack-popup-close{background:none;border:none;color:#666;font-size:20px;cursor:pointer;padding:4px 8px;line-height:1;font-family:inherit;border-radius:8px;transition:all .15s}.pe-stack-popup-close:hover{color:#fff;background:rgba(255,255,255,.08)}.pe-stack-popup-copy{background:none;border:1px solid rgba(255,255,255,.1);color:#888;font-size:11px;cursor:pointer;padding:5px 14px;border-radius:12px;font-family:inherit;margin-right:8px;transition:all .15s;letter-spacing:.02em}.pe-stack-popup-copy:hover{color:#fff;border-color:rgba(255,255,255,.22);background:rgba(255,255,255,.05)}.pe-overlay-stack{font-size:12px;color:#b0b0b0;white-space:pre-wrap;word-break:break-all;font-family:"SF Mono","Roboto Mono","Consolas","Courier New",monospace;margin:0;padding:20px 24px;line-height:1.8;user-select:text;-webkit-user-select:text;overflow-y:auto;flex:1;background:#141414}`;
       document.head.appendChild(s);
     }
 
@@ -7906,10 +7968,55 @@ try {
 
     const _reportBase = "https://codeberg.org/ashleyirispuppy/poke/issues/new?template=issue_template%2fplayer-bug.yml";
 
+     const _splashMessages = [
+      "Have you tried mass producing mass produced goods?",
+      "This is fine. Everything is fine.",
+      "I blame the mass production of mass produced goods.",
+      "The audio was simply too powerful.",
+      "Error 404: Good vibes not found.",
+      "It's not a bug, it's a surprise feature.",
+      "The bits are revolting!",
+      "Something went wrong. Probably.",
+      "Works on my machine ¯\\_(ツ)_/¯",
+      "Have you tried turning it off and on again?",
+      "The video element chose violence today.",
+      "Skill issue (from the browser).",
+      "The codec said 'no thank you' and left.",
+      "I'm in your walls (and your error logs).",
+      "Bazinga! Just kidding, this is real.",
+      "Achievement unlocked: Break the player!",
+      "POV: you found a rare error.",
+      "The video was not the imposter. It was ejected anyway.",
+      "Don't worry, the error is more scared of you than you are of it.",
+      "This error was mass produced.",
+      "The media pipeline left the chat.",
+      "L + ratio + no playback.",
+      "Bro really said 'MEDIA_ERR' unironically.",
+      "Certified bruh moment.",
+      "The sync loop did a little too much looping.",
+      "Told the audio to play. It chose emotional damage instead.",
+      "This is why we can't have nice things.",
+      "Someone call an ambulance... but not for me!",
+      "It's giving... error.",
+      "The browser ran out of vibes.",
+      "Plot twist: the real error was the friends we made along the way.",
+      "No thoughts, just errors.",
+      "We do a little crashing.",
+      "The media pipeline went on a coffee break.",
+      "The video said: 'I'm tired, boss.'",
+      "Looks like the decoder had a bad day at work.",
+      "Unexpected token: disappointment.",
+      "The electrons got confused.",
+      "Error: success was not an option."
+    ];
+    const _splashMsg = _splashMessages[Math.floor(Math.random() * _splashMessages.length)];
+
     // build stack trace from the error objects
     let _stack = "";
     try {
       const parts = [];
+      parts.push("// " + _splashMsg);
+      parts.push("");
       parts.push("Error scope: " + scope);
       parts.push("Error code: " + worstCode + " (" + errorId + ")");
       parts.push("User agent: " + navigator.userAgent);
@@ -7939,7 +8046,7 @@ try {
     } catch { _stack = "Failed to collect error details"; }
 
     PlayerErrorOverlay.show({
-      title: isBug ? "You found a bug! \u0CA5\u203F\u0CA5" : (titles[worstCode] || "Playback error"),
+      title: isBug ? "You found a bug! (ಥ﹏ಥ)" : (titles[worstCode] || "Playback error"),
       message: isBug
         ? "Well this is embarrassing. The player just did something illegal. Try reloading, or snitch on it below."
         : (messages[worstCode] || (msg || "An unexpected error occurred.")),
@@ -8572,13 +8679,16 @@ try {
 
               if (coupledMode) {
                 if (!state.startupPrimed) {
+                  // Force prime — user explicitly clicked play, don't bail out
+                  state.startupPrimed = true;
                   maybePrimeStartup();
-                  scheduleSync(0);
-                  return;
+                  // Don't return — fall through to start audio immediately.
+                  // Previously we returned here, requiring the user to click play twice.
                 }
                 if (state.startupKickInFlight && !state.startupKickDone) {
-                  scheduleSync(0);
-                  return;
+                  // Don't bail — user clicked play, override the startup kick
+                  state.startupKickDone = true;
+                  state.startupKickInFlight = false;
                 }
                 if (!audio.paused && state.audioEverStarted) {
                   const vt = Number(video.currentTime());
@@ -8639,11 +8749,26 @@ try {
       try { if (getVideoNode()?.seeking) return; } catch {}
       // Immunity check: after tab return, reject pause events if we were playing or in startup.
       // Never fight the user's explicit pause.
+      // CRITICAL: Also check currentTime vs duration — browser fires pause BEFORE ended,
+      // so endedNaturally isn't set yet. Without this, calling play() restarts the video.
       if (state.tabReturnImmuneUntil > now() &&
         (state.intendedPlaying || !state.firstPlayCommitted) &&
         !state.endedNaturally &&
         !MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart() &&
         !(state.userPauseIntentPresetAt > 0 && (now() - state.userPauseIntentPresetAt) < 2000)) {
+        // Check if this pause is the natural end-of-video pause
+        try {
+          const _pauseVN = getVideoNode();
+          if (_pauseVN) {
+            const _pCT = Number(_pauseVN.currentTime) || 0;
+            const _pDur = Number(_pauseVN.duration) || 0;
+            if (_pDur > 0.5 && _pCT >= _pDur - 0.5) {
+              // Video is at its end — this is the natural end pause, don't fight it
+              // The ended event will fire next and handle cleanup
+              return;
+            }
+          }
+        } catch {}
         const _vn = getVideoNode();
       if (_vn && typeof _vn.play === 'function') _vn.play().catch(() => {});
       return;
@@ -8736,6 +8861,17 @@ try {
           !mediaSessionForcedPauseActive();
 
           const _counterPlay = () => {
+            // CRITICAL: check if video is at its end before calling play().
+            // Browser fires pause BEFORE ended, so endedNaturally isn't set yet.
+            // play() on an ended video auto-seeks to 0 = phantom loop.
+            try {
+              const _cpVN = getVideoNode();
+              if (_cpVN) {
+                const _cpCT = Number(_cpVN.currentTime) || 0;
+                const _cpDur = Number(_cpVN.duration) || 0;
+                if (_cpDur > 0.5 && _cpCT >= _cpDur - 0.5) return; // at the end — don't fight
+              }
+            } catch {}
             VisibilityGuard.onPlayCalled();
             const vn = getVideoNode();
             if (vn && typeof vn.play === 'function') vn.play().catch(() => {});
@@ -8942,6 +9078,18 @@ try {
       scheduleSync(0);
     });
     video.on("playing", () => {
+      // STARTUP ZERO ENFORCEMENT: if this is the first play and video started
+      // at a non-zero position (browser buffered to a keyframe), seek to 0.
+      // This is the last-resort catch — forceZeroBeforeFirstPlay and enforceStartAtZero
+      // should have handled it, but the browser can race us.
+      if (state.startupPhase || !state.firstPlayCommitted) {
+        const _playingZeroVt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
+        if (_playingZeroVt > 1.0) {
+          try { video.currentTime(0); } catch {}
+          try { videoEl.currentTime = 0; } catch {}
+          if (coupledMode && audio) { try { audio.currentTime = 0; } catch {} }
+        }
+      }
       // Anti-loop: if video is playing after it ended naturally, kill it
       if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) {
         const _playingVt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
@@ -9779,11 +9927,9 @@ try {
           clearAudioPauseLocks();
           state.audioWaiting = false;
           state.audioStallVideoPaused = false;
-          // Restore audio volume that was dipped at seek start — instant, no delay
-          if (coupledMode && audio && state._seekPreVolume != null) {
-            try { audio.volume = state._seekPreVolume; } catch {}
-            state._seekPreVolume = null;
-          }
+          // DON'T restore audio volume yet — we need to seek audio first.
+          // Restoring volume before the audio seek causes the old audio buffer
+          // to play at full volume for ~10-50ms (the audible "blip").
           // Get the definitive seek target — video.currentTime() is reliable after seeked
           const newTime = Number(video.currentTime());
           // phantom loop guard (backup): if seeked lands at near-0 but nobody asked,
@@ -9791,6 +9937,11 @@ try {
           // handler's lastKnownGoodVT was already 0), skip audio sync.
           if (newTime < 0.5 && !state.seeking && state.firstPlayCommitted && !isLoopDesired() &&
               (now() - state.lastUserActionTime) > 2000 && state.pendingSeekTarget == null) {
+            // Still restore volume even on bail-out
+            if (coupledMode && audio && state._seekPreVolume != null) {
+              try { audio.volume = state._seekPreVolume; } catch {}
+              state._seekPreVolume = null;
+            }
             return;
           }
           state.lastKnownGoodVT = newTime;
@@ -9813,6 +9964,16 @@ try {
                 state._allowAudioTimeWrite = false;
               }
             }
+            // Restore volume AFTER audio seek — wait for the audio decoder to flush
+            // its old buffer so the old content doesn't play at full volume.
+            const _seekedPreVol = state._seekPreVolume;
+            state._seekPreVolume = null;
+            if (_seekedPreVol != null) {
+              setTimeout(() => {
+                if (state._seekPreVolume != null) return; // new seek started
+                try { audio.volume = _seekedPreVol; } catch {}
+              }, 40);
+            }
             const _seekedId = state.seekId;
             setTimeout(() => {
               if (state.seekId !== _seekedId) return;
@@ -9826,6 +9987,12 @@ try {
                 state._allowAudioTimeWrite = false;
               }
             }, 100);
+          } else {
+            // No audio seek needed — restore volume immediately
+            if (coupledMode && audio && state._seekPreVolume != null) {
+              try { audio.volume = state._seekPreVolume; } catch {}
+              state._seekPreVolume = null;
+            }
           }
           state.driftStableFrames = 0;
           state.lastDrift = 0;
@@ -10616,24 +10783,34 @@ try {
     let _enforceZeroDisabled = false;
     const enforceStartAtZero = () => {
       if (_enforceZeroDisabled) return;
-      if (state.firstPlayCommitted || state.audioEverStarted || state.intendedPlaying ||
-          state.startupKickDone || state.startupKickInFlight) {
+      // Only disable AFTER firstPlayCommitted AND video is near 0 (success).
+      // Don't disable just because intendedPlaying is true — the play hasn't
+      // happened yet, the browser can still move currentTime to a keyframe.
+      if (state.firstPlayCommitted && state.audioEverStarted) {
         _enforceZeroDisabled = true;
         try { videoEl.removeEventListener("timeupdate", enforceStartAtZero); } catch {}
         return;
       }
       const vt = Number(videoEl.currentTime) || 0;
-      if (vt > 0.5) {
+      if (vt > 0.5 && !state.firstPlayCommitted) {
         try { video.currentTime(0); } catch {}
         try { videoEl.currentTime = 0; } catch {}
         if (audio) try { audio.currentTime = 0; } catch {}
       }
     };
     try { videoEl.addEventListener("timeupdate", enforceStartAtZero, { passive: true }); } catch {}
+    // Disable after 12s regardless — don't run forever
+    setTimeout(() => {
+      _enforceZeroDisabled = true;
+      try { videoEl.removeEventListener("timeupdate", enforceStartAtZero); } catch {}
+    }, 12000);
     // Also clean up if user manually seeks before playing
     try {
       videoEl.addEventListener("seeking", () => {
-        try { videoEl.removeEventListener("timeupdate", enforceStartAtZero); } catch {}
+        if (state.firstPlayCommitted) {
+          _enforceZeroDisabled = true;
+          try { videoEl.removeEventListener("timeupdate", enforceStartAtZero); } catch {}
+        }
       }, { once: true, passive: true });
     } catch {}
   }
@@ -10854,9 +11031,28 @@ try {
     try { pauseHard(); } catch {}
 
     // build full stack trace
+    const _crashSplashMessages = [
+      "Have you tried mass producing mass produced goods?",
+      "This is fine. Everything is fine.",
+      "The audio was simply too powerful.",
+      "Works on my machine ¯\\_(ツ)_/¯",
+      "Achievement unlocked: Break the player!",
+      "The video element chose violence today.",
+      "Skill issue (from the browser).",
+      "Certified bruh moment.",
+      "The sync loop did a little too much looping.",
+      "This is why we can't have nice things.",
+      "No thoughts, just errors.",
+      "We do a little crashing.",
+      "The electrons got confused.",
+      "Error: success was not an option."
+    ];
+    const _crashSplash = _crashSplashMessages[Math.floor(Math.random() * _crashSplashMessages.length)];
     let _trace = "";
     try {
       const parts = [];
+      parts.push("// " + _crashSplash);
+      parts.push("");
       parts.push("Error: " + String(errorMsg || "Unknown error"));
       parts.push("Source: " + String(source || "unknown"));
       parts.push("Time: " + new Date().toISOString());
@@ -10880,7 +11076,7 @@ try {
     } catch { _trace = String(errorMsg || "Unknown error") + "\n" + String(stack || ""); }
 
     PlayerErrorOverlay.show({
-      title: "You found a bug! \u0CA5\u203F\u0CA5",
+      title: "You found a bug! (ಥ﹏ಥ)",
       message: "The player just crashed into a wall it didn't see coming. Reload to get back on track, or report it so we can move the wall.",
       code: "PLAYER_ERR_UNCAUGHT",
       canRetry: true,
