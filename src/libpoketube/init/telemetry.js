@@ -251,7 +251,7 @@ module.exports = function (app, config, renderTemplate) {
     </p>
 
     <p class="note">
-      Anonymous stats help us understand which videos are popular and which platforms people use —
+      Anonymous stats help us understand which videos are popular and which platforms people use,
       without collecting personal data. You can read the full details here:
       <a href="/policies/privacy#stats">Privacy Policy</a>.
     </p>
@@ -1389,7 +1389,7 @@ module.exports = function (app, config, renderTemplate) {
 
         var labelEl = document.createElement("div")
         labelEl.className = "breakdown-label"
-        labelEl.textContent = label + " — " + percent + "% of total " + (kind === "os" ? "OS detections" : "browser detections")
+        labelEl.textContent = label + " -" + percent + "% of total " + (kind === "os" ? "OS detections" : "browser detections")
 
         var countEl = document.createElement("div")
         countEl.className = "breakdown-count"
