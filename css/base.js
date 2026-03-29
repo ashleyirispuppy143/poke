@@ -464,6 +464,7 @@ document.addEventListener("DOMContentLoaded", () => {
     playRequestedDuringSeek: false,
     seekCompleted: false,
     seekKickAudioAllowedUntil: 0,
+    seekAudioKickAt: 0,
     audioVolumeBeforePause: 1,
     stateChangeCooldownUntil: 0,
     audioFadeCompleteUntil: 0,
@@ -604,8 +605,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // immediately after seeked instead of waiting for full finalize/buffer flow.
       const inSeekKickWindow =
         state.isProgrammaticAudioPlay &&
-        state.seeking &&
-        !state.seekBuffering &&
+        (state.seeking || state.seekBuffering) &&
         now() < state.seekKickAudioAllowedUntil;
       if ((state.seeking || state.seekBuffering) && !inSeekKickWindow) return Promise.resolve();
       // background tab: always let through (keepalive needs this)
@@ -3417,7 +3417,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const AUDIO_FADE_DURATION_MS = 60;
   const AUDIO_SAFE_FADE_DURATION_MS = 80;
   const MIN_PLAY_PAUSE_GAP_MS = 150;
-  const SEEK_READY_TIMEOUT_MS = 3000;
+  const SEEK_READY_TIMEOUT_MS = 700;
   const SEEK_WATCHDOG_MS = 6000; // max time to wait for seeked event before force-finalizing
   const STATE_CHANGE_COOLDOWN_MS = 100;
   const CHROMIUM_BG_PAUSE_BLOCK_MS = 6000;
@@ -5223,8 +5223,7 @@ try {
     // so audio can resume immediately when seek landed cleanly.
     const inSeekKickWindow =
       force &&
-      state.seeking &&
-      !state.seekBuffering &&
+      (state.seeking || state.seekBuffering) &&
       now() < state.seekKickAudioAllowedUntil;
     if ((state.seeking || state.seekBuffering) && !inSeekKickWindow) return false;
 
@@ -6325,7 +6324,7 @@ try {
 
     // Video buffered → no need to wait (audio syncs via playTogether)
     if (videoBuffered) return false;
-    if (vRS >= HAVE_FUTURE_DATA) return false;
+    if (vRS >= HAVE_CURRENT_DATA) return false;
 
     // Enter seek-buffering state
     state.seekBuffering = true;
@@ -6383,7 +6382,7 @@ try {
     };
     const onReady = () => {
       const rs = Number(vNode?.readyState || 0);
-      if (rs >= HAVE_FUTURE_DATA) resume();
+      if (rs >= HAVE_CURRENT_DATA) resume();
     };
       try { vNode.addEventListener("canplay", onReady, { passive: true }); } catch {}
       try { vNode.addEventListener("canplaythrough", onReady, { passive: true }); } catch {}
@@ -6401,9 +6400,9 @@ try {
             if (buf.start(i) <= pos + 0.1 && buf.end(i) >= pos + 0.2) { vBuf = true; break; }
           }
         } catch {}
-        if (rs >= HAVE_FUTURE_DATA || vBuf) resume();
+        if (rs >= HAVE_CURRENT_DATA || vBuf) resume();
       }, 150);
-        const fallbackTimer = setTimeout(resume, 6000);
+        const fallbackTimer = setTimeout(resume, 1800);
         state.seekBufferResumeTimer = fallbackTimer;
         return true;
   }
@@ -6498,9 +6497,9 @@ try {
     if (!fastBuffered) {
       // Wait for video readyState first — don't block video on audio buffering.
       // Audio will start independently as soon as it's ready.
-      vReady = await waitForReadyStateOrCanPlay(v, 3, SEEK_READY_TIMEOUT_MS);
+      vReady = await waitForReadyStateOrCanPlay(v, HAVE_CURRENT_DATA, SEEK_READY_TIMEOUT_MS);
       // Quick check audio — if already ready, great; if not, don't block video
-      try { aReady = Number(audio.readyState || 0) >= 3; } catch { aReady = false; }
+      try { aReady = Number(audio.readyState || 0) >= HAVE_CURRENT_DATA; } catch { aReady = false; }
     }
 
     if (!state.seeking || state.seekId !== currentSeekId) return;
@@ -6520,12 +6519,12 @@ try {
       return;
     }
 
-    if (!(vReady && aReady)) {
+    if (!vReady) {
       const vtCheck = Number(video.currentTime());
-      // Check buffer ranges directly — readyState can briefly drop after seek even when buffered
-      const alreadyReady = isFinite(vtCheck) && (bothPlayableAt(vtCheck) ||
-      (timeInBuffered(getVideoNode(), vtCheck) && (!audio || timeInBuffered(audio, vtCheck))));
-      if (!alreadyReady) {
+      // If video is playable at the seek target, don't enter seekBuffering.
+      // Audio can recover independently via immediate kick + retries.
+      const videoReadyNow = isFinite(vtCheck) && canPlayAt(getVideoNode(), vtCheck);
+      if (!videoReadyNow) {
         // Set seekBuffering BEFORE clearing seeking — no gap for events to sneak through
         state.seekBuffering = true;
         state.strictBufferHold = true;
@@ -6595,17 +6594,24 @@ try {
         // sync audio position and play at full volume right away
         if (coupledMode && audio) {
           const _seekVt = Number(video.currentTime()) || 0;
-          // If audio is still playing, pause it FIRST to prevent playing old position
-          const _wasAudioPlaying = !audio.paused;
-          if (_wasAudioPlaying) {
+          const _atNow = Number(audio.currentTime) || 0;
+          const _recentSeekKick = state.seekAudioKickAt > 0 && (now() - state.seekAudioKickAt) < 1400;
+          const _alreadyAligned = isFinite(_seekVt) && !audio.paused && Math.abs(_atNow - _seekVt) <= 0.22;
+          const _keepRunning = _recentSeekKick && _alreadyAligned;
+
+          // If seeked already restarted audio at the right spot, don't pause it again.
+          if (!_keepRunning && !audio.paused) {
             state.isProgrammaticAudioPause = true;
             try { audio.pause(); } catch {}
             setTimeout(() => { state.isProgrammaticAudioPause = false; }, 50);
           }
           if (isFinite(_seekVt)) {
-            state._allowAudioTimeWrite = true;
-            try { audio.currentTime = _seekVt; } catch {}
-            state._allowAudioTimeWrite = false;
+            const _atAfterPauseCheck = Number(audio.currentTime) || 0;
+            if (!_keepRunning || Math.abs(_atAfterPauseCheck - _seekVt) > 0.18) {
+              state._allowAudioTimeWrite = true;
+              try { audio.currentTime = _seekVt; } catch {}
+              state._allowAudioTimeWrite = false;
+            }
           }
           // seek = clean slate, wipe all stall flags
           state.videoWaiting = false;
@@ -6618,10 +6624,14 @@ try {
           try { audio.volume = _seekTargetVol; } catch {}
           // grace period so buffer monitor doesn't immediately kill this
           state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 1200);
-          // Always restart audio after seek (we paused it above to prevent old-position playback)
-          execProgrammaticAudioPlay({ squelchMs: 250, force: true, minGapMs: 0 })
-            .then(ok => { if (ok) { try { audio.volume = _seekTargetVol; } catch {} } })
-            .catch(() => {});
+          if (_keepRunning) {
+            state.audioEverStarted = true;
+          } else {
+            // Restart audio when needed; keep the kick path forceful and immediate.
+            execProgrammaticAudioPlay({ squelchMs: 180, force: true, minGapMs: 0 })
+              .then(ok => { if (ok) { try { audio.volume = _seekTargetVol; } catch {} } })
+              .catch(() => {});
+          }
         }
       }
       // post-seek: retry audio at a few intervals in case the first attempt got eaten
@@ -9928,6 +9938,7 @@ try {
           state.playRequestedDuringSeek = state.intendedPlaying;
           state.seekCompleted = false;
           state.seekKickAudioAllowedUntil = 0;
+          state.seekAudioKickAt = 0;
           state.firstSeekDone = true;
           // Reset rapid-play-pause counter — seek events should never feed loop detection
           state.rapidPlayPauseCount = 0;
@@ -10094,17 +10105,24 @@ try {
             // "audio plays really late after seek" — finalizeSeekSync goes through
             // waitForReadyState which can take hundreds of ms.
             if (audio.paused && state.intendedPlaying && !state.endedNaturally) {
-              state.seekKickAudioAllowedUntil = now() + 300;
+              const _kickSeekId = state.seekId;
+              const _kickArmedAt = now();
+              state.seekAudioKickAt = _kickArmedAt;
+              state.seekKickAudioAllowedUntil = _kickArmedAt + 1200;
               state.isProgrammaticAudioPause = false;
               state.audioEventsSquelchedUntil = 0;
               state.audioPauseUntil = 0;
               state.videoStallAudioPaused = false;
               state.stallAudioResumeHoldUntil = 0;
-              state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 800);
-              setTimeout(() => {
-                if (!state.intendedPlaying || !audio.paused || state.endedNaturally) return;
-                execProgrammaticAudioPlay({ squelchMs: 200, force: true, minGapMs: 0 }).catch(() => {});
-              }, 30);
+              state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, _kickArmedAt + 1200);
+              const _kickAudioNow = () => {
+                if (state.seekId !== _kickSeekId) return;
+                if (!state.intendedPlaying || state.endedNaturally || !audio.paused) return;
+                execProgrammaticAudioPlay({ squelchMs: 160, force: true, minGapMs: 0 }).catch(() => {});
+              };
+              _kickAudioNow();
+              setTimeout(_kickAudioNow, 80);
+              setTimeout(_kickAudioNow, 220);
             }
             const _seekedId = state.seekId;
             setTimeout(() => {
