@@ -19,11 +19,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
 // "It takes a lot of hard work to make something simple." ~ Steve Jobs 
 
 
-
-//  runs as soon as the script is parsed,
+ // IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
 // before DOMContentLoaded. Ensures both video and audio start at 00:00
 // even if the browser pre-buffers to a non-zero keyframe position.
-// This runs in a try-catch because elements might not exist yet. 
+// This runs in a try-catch because elements might not exist yet.
 try {
   const _earlyVideo = document.getElementById("video");
   const _earlyAudio = document.getElementById("aud");
@@ -10016,6 +10015,15 @@ try {
           isFinite(vjsTime) ? vjsTime :
           isFinite(innerTime) ? innerTime : 0;
           state.pendingSeekTarget = seekTime;
+          // User seeking away from start should immediately disable startup-zero logic.
+          // Without this, first manual seek can be forced back to 0 by startup guards.
+          if (!state.firstPlayCommitted && seekTime > 0.5) {
+            state.firstPlayCommitted = true;
+            state.startupKickDone = true;
+            state.startupPlaySettleUntil = now() + STARTUP_SETTLE_MS;
+            clearStartupAutoplayRetryTimer();
+            setTimeout(() => { state.startupPhase = false; }, 800);
+          }
           state.lastKnownGoodVT = seekTime;
           state.lastKnownGoodVTts = now();
           state.seekCooldownUntil = now() + 1500;
@@ -10098,6 +10106,24 @@ try {
           // to play at full volume for ~10-50ms (the audible "blip").
           // Get the definitive seek target — video.currentTime() is reliable after seeked
           const newTime = Number(video.currentTime());
+          const requestedSeek = Number(state.pendingSeekTarget);
+          const hasRequestedSeek = isFinite(requestedSeek);
+          // If seek unexpectedly snaps to ~0 while we had a real non-zero target,
+          // treat it as phantom rollback and force back to the requested position.
+          if (newTime < 0.5 && hasRequestedSeek && requestedSeek > 1.0 &&
+              state.firstPlayCommitted && !state.restarting && !isLoopDesired()) {
+            try { video.currentTime(requestedSeek); } catch {}
+            try { videoEl.currentTime = requestedSeek; } catch {}
+            try {
+              const _vnSeeked = getVideoNode();
+              if (_vnSeeked && _vnSeeked !== videoEl) _vnSeeked.currentTime = requestedSeek;
+            } catch {}
+            state.lastKnownGoodVT = requestedSeek;
+            state.lastKnownGoodVTts = now();
+            state.pendingSeekTarget = requestedSeek;
+            scheduleSeekFinalize(0, state.seekId);
+            return;
+          }
           // phantom loop guard (backup): if seeked lands at near-0 but nobody asked,
           // the seeking handler should have caught it. if it didn't (e.g. seeking
           // handler's lastKnownGoodVT was already 0), skip audio sync.
@@ -10967,7 +10993,12 @@ try {
     // Also clean up if user manually seeks before playing
     try {
       videoEl.addEventListener("seeking", () => {
-        if (state.firstPlayCommitted) {
+        const vtNow = Number(videoEl.currentTime) || 0;
+        const likelyUserSeek =
+          state.pendingSeekTarget != null ||
+          (now() - state.lastUserActionTime) < 3000 ||
+          vtNow > 0.5;
+        if (state.firstPlayCommitted || likelyUserSeek) {
           _enforceZeroDisabled = true;
           try { videoEl.removeEventListener("timeupdate", enforceStartAtZero); } catch {}
         }
