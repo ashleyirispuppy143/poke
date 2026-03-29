@@ -15,7 +15,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 // "It takes a lot of hard work to make something simple." ~ Steve Jobs 
- // IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
+// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
 // before DOMContentLoaded. Ensures both video and audio start at 00:00
 // even if the browser pre-buffers to a non-zero keyframe position.
 // This runs in a try-catch because elements might not exist yet.
@@ -463,6 +463,7 @@ document.addEventListener("DOMContentLoaded", () => {
     pendingSeekTarget: null,
     playRequestedDuringSeek: false,
     seekCompleted: false,
+    seekKickAudioAllowedUntil: 0,
     audioVolumeBeforePause: 1,
     stateChangeCooldownUntil: 0,
     audioFadeCompleteUntil: 0,
@@ -598,8 +599,15 @@ document.addEventListener("DOMContentLoaded", () => {
   if (audio && typeof audio.play === "function") {
     const _origAudioPlay = audio.play.bind(audio);
     audio.play = function() {
-      // during active seeking, swallow silently — seek finalize handles audio
-      if (state.seeking || state.seekBuffering) return Promise.resolve();
+      // During active seeking, swallow silently by default.
+      // Exception: allow the short post-seek kick window so audio can restart
+      // immediately after seeked instead of waiting for full finalize/buffer flow.
+      const inSeekKickWindow =
+        state.isProgrammaticAudioPlay &&
+        state.seeking &&
+        !state.seekBuffering &&
+        now() < state.seekKickAudioAllowedUntil;
+      if ((state.seeking || state.seekBuffering) && !inSeekKickWindow) return Promise.resolve();
       // background tab: always let through (keepalive needs this)
       if (document.visibilityState === "hidden") return _origAudioPlay();
       // STARTUP: during page load / initial buffering, don't block audio.
@@ -5210,9 +5218,15 @@ try {
     // Error overlay active — playback is dead, don't start anything
     if (_errorOverlayShown) return false;
 
-    // Never start audio during seeking or seek-buffering.
-    // Only finalizeSeekSync/playTogether may restart audio after seek completes.
-    if (state.seeking || state.seekBuffering) return false;
+    // Never start audio during seeking or seek-buffering by default.
+    // Exception: forced short post-seek kick window (armed by video "seeked")
+    // so audio can resume immediately when seek landed cleanly.
+    const inSeekKickWindow =
+      force &&
+      state.seeking &&
+      !state.seekBuffering &&
+      now() < state.seekKickAudioAllowedUntil;
+    if ((state.seeking || state.seekBuffering) && !inSeekKickWindow) return false;
 
     // skip if video is genuinely buffering (readyState < 3)
     if (state.videoWaiting && !force) {
@@ -9913,6 +9927,7 @@ try {
           state.seekWantedPlaying = state.intendedPlaying;
           state.playRequestedDuringSeek = state.intendedPlaying;
           state.seekCompleted = false;
+          state.seekKickAudioAllowedUntil = 0;
           state.firstSeekDone = true;
           // Reset rapid-play-pause counter — seek events should never feed loop detection
           state.rapidPlayPauseCount = 0;
@@ -10072,11 +10087,14 @@ try {
                 try { audio.volume = _seekedPreVol; } catch {}
               }, 40);
             }
+            // Mark seeked as complete for post-seek kick gating.
+            state.seekCompleted = true;
             // IMMEDIATE audio kick: if audio is paused and we intend to play,
             // start audio NOW instead of waiting for finalizeSeekSync. This fixes
             // "audio plays really late after seek" — finalizeSeekSync goes through
             // waitForReadyState which can take hundreds of ms.
             if (audio.paused && state.intendedPlaying && !state.endedNaturally) {
+              state.seekKickAudioAllowedUntil = now() + 300;
               state.isProgrammaticAudioPause = false;
               state.audioEventsSquelchedUntil = 0;
               state.audioPauseUntil = 0;
@@ -11225,7 +11243,6 @@ try {
     _handlePlayerCrash(msg, "promise", reason ? (reason.stack || "") : "");
   }, { passive: true });
 });
-
 
 (function () {
   'use strict';
