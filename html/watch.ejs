@@ -1812,124 +1812,312 @@ WIP!                                                 </a>
 
                        
 
-          <a id="metadata"></a>
+           <a id="metadata"></a>
+<a id="metadata"></a>
 
-<div class="video-title" style="
-  color:var(--text-color);
-  font-family:var(--text-font-primary);
-  font-weight:var(--text-header-weight);
-  font-stretch: extra-expanded;
-  margin: 10px 0;
-">
-  Metadata And Engagement
-</div>
+<style>
+  .engagement-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 10px;
+  }
 
-<div style="font-weight: bold; line-height: 1.6;">
+  .engagement-title {
+    color: var(--text-color);
+    font-family: var(--text-font-primary);
+    font-weight: var(--text-header-weight);
+    font-stretch: extra-expanded;
+    margin: 10px 0;
+  }
 
-  <!-- basic info -->
-  <div>
-    Views : <%= engagement?.viewCount?.toLocaleString() %><br>
+  .engagement-box {
+    background: var(--background-color-secondary, #111);
+    border: 1px solid var(--border-color, rgba(255,255,255,0.12));
+    border-radius: 14px;
+    padding: 14px 16px;
+  }
 
-    <% if (VideoData?.genre) { %>
-      Genre: <%- VideoData.genre %><br>
-    <% } %>
+  .engagement-box-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-color);
+    margin-bottom: 10px;
+    opacity: 0.9;
+  }
 
-    <% if (VideoData?.license) { %>
-      License: <%- VideoData.license %><br>
-    <% } else { %>
-      License: Standard YouTube License<br>
-    <% } %>
+  .engagement-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+  }
 
-    <% if (date.includes("Premiered")) { %>
-      Premiered <%= date.replace("Premiered", "at") %> ^^<br>
-    <% } else { %>
-      Uploaded At <%= date %> ^^<br>
-    <% } %>
+  .engagement-stat {
+    background: var(--background-color-primary, #0c0c0c);
+    border: 1px solid var(--border-color, rgba(255,255,255,0.08));
+    border-radius: 12px;
+    padding: 12px;
+  }
+
+  .engagement-label {
+    font-size: 0.85rem;
+    opacity: 0.75;
+    margin-bottom: 6px;
+    color: var(--text-color);
+  }
+
+  .engagement-value {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-color);
+    word-break: break-word;
+  }
+
+  .engagement-note {
+    font-size: 0.9rem;
+    color: var(--text-color);
+    opacity: 0.8;
+  }
+
+  .engagement-rating-line {
+    font-weight: 700;
+    color: var(--text-color);
+    line-height: 1.6;
+  }
+
+  .engagement-score {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    font-weight: 700;
+    color: var(--text-color);
+  }
+
+  .engagement-meter {
+    width: 100%;
+    height: 10px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: var(--background-color-primary, #0c0c0c);
+    border: 1px solid var(--border-color, rgba(255,255,255,0.08));
+    margin-top: 10px;
+    display: flex;
+  }
+
+  .engagement-meter-like {
+    height: 100%;
+    background: green;
+  }
+
+  .engagement-meter-dislike {
+    height: 100%;
+    background: #ff0033;
+  }
+
+  .engagement-details {
+    background: var(--background-color-secondary, #111);
+    border: 1px solid var(--border-color, rgba(255,255,255,0.12));
+    border-radius: 14px;
+    overflow: hidden;
+  }
+
+  .engagement-details summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 14px 16px;
+    font-weight: 700;
+    color: var(--text-color);
+    user-select: none;
+  }
+
+  .engagement-details summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .engagement-details summary::after {
+    content: "＋";
+    float: right;
+    opacity: 0.7;
+  }
+
+  .engagement-details[open] summary::after {
+    content: "－";
+  }
+
+  .engagement-details-content {
+    padding: 0 16px 16px 16px;
+    border-top: 1px solid var(--border-color, rgba(255,255,255,0.08));
+  }
+
+  .engagement-link {
+    color: var(--link-color, #8ab4ff);
+    text-decoration: none;
+    font-weight: 700;
+  }
+
+  .engagement-link:hover {
+    text-decoration: underline;
+  }
+
+  .rainbow-gradient {
+    background: linear-gradient(90deg, red, orange, yellow, green, cyan, blue, violet);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+</style>
+
+<div class="engagement-title">Metadata And Engagement</div>
+
+<%
+  const likes = parseInt(engagement?.likes) || 0;
+  const dislikes = parseInt(engagement?.dislikes) || 0;
+  const total = likes + dislikes;
+
+  const likePercentage = total > 0 ? ((likes / total) * 100).toFixed(2) : "0.00";
+  const dislikePercentage = total > 0 ? ((dislikes / total) * 100).toFixed(2) : "0.00";
+
+  const getLikePercentageColor = (p) => {
+    const percentage = parseFloat(p);
+    if (percentage >= 80) return "green";
+    if (percentage >= 50) return "orange";
+    return "#ff0033";
+  };
+
+  const getDislikePercentageColor = (p) => {
+    const percentage = parseFloat(p);
+    if (percentage >= 50) return "#ff0033";
+    if (percentage >= 20) return "orange";
+    return "green";
+  };
+
+  const likeColor = getLikePercentageColor(likePercentage);
+  const dislikeColor = getDislikePercentageColor(dislikePercentage);
+
+  const userScore = (parseFloat(likePercentage) - parseFloat(dislikePercentage) / 2).toFixed(2);
+
+  const getUserScoreLabel = (score) => {
+    const s = parseFloat(score);
+    if (s >= 98) return "Masterpiece Video";
+    if (s >= 80) return "Overwhelmingly Positive";
+    if (s >= 60) return "Positive";
+    if (s >= 40) return "Mixed";
+    if (s >= 20) return "Negative";
+    return "Overwhelmingly Negative";
+  };
+
+  const userScoreLabel = getUserScoreLabel(userScore);
+  const userScoreColor =
+    parseFloat(userScore) >= 80 ? "green" :
+    parseFloat(userScore) >= 50 ? "orange" :
+    "#ff0033";
+
+  const userScoreClass = parseFloat(userScore) >= 98 ? "rainbow-gradient" : "";
+
+  const publishLabel = date.includes("Premiered") ? "Premiered" : "Uploaded At";
+  const publishValue = date.includes("Premiered")
+    ? `${date.replace("Premiered", "at")} ^^`
+    : `${date} ^^`;
+%>
+
+<div class="engagement-wrap">
+
+  <div class="engagement-box">
+    <div class="engagement-box-title">Main Info</div>
+    <div class="engagement-grid">
+      <div class="engagement-stat">
+        <div class="engagement-label">Views</div>
+        <div class="engagement-value"><%= engagement?.viewCount?.toLocaleString() %></div>
+      </div>
+
+      <div class="engagement-stat">
+        <div class="engagement-label"><%= publishLabel %></div>
+        <div class="engagement-value"><%= publishValue %></div>
+      </div>
+
+      <div class="engagement-stat">
+        <div class="engagement-label">User score</div>
+        <div class="engagement-value">
+          <span style="color:<%= userScoreColor %>;"><%= userScore %></span>
+          -
+          <span class="<%= userScoreClass %>"><%= userScoreLabel %></span>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <br>
+  <div class="engagement-box">
+    <div class="engagement-box-title">Rating</div>
 
-  <!-- rating -->
-  <div>
-    warning: returnyoutubedislikes may not be accurate, this is just an estiment ehe :3<br><br>
+    <div class="engagement-rating-line">
+      warning: returnyoutubedislikes may not be accurate, this is just an estiment ehe :3
+    </div>
 
-    Rating :
-    <%= engagement?.rating?.toLocaleString() %>
-    (<%= engagement?.dislikes?.toLocaleString() %> /
-     <%= engagement?.likes?.toLocaleString() %>
-     <abbr title="Like To dislike ratio - the number to the left is dislike count and the one to the right is like count :3">
-       LTDR
-     </abbr>)
+    <div class="engagement-rating-line" style="margin-top: 10px;">
+      Rating : <%= engagement?.rating?.toLocaleString() %>
+      (<%= engagement?.dislikes?.toLocaleString() %>/<%= engagement?.likes?.toLocaleString() %>
+      <abbr title="Like To dislike ratio - the number to the left is dislike count and the one to the right is like count :3">LTDR</abbr>)
+    </div>
+
+    <div class="engagement-grid" style="margin-top: 12px;">
+      <div class="engagement-stat">
+        <div class="engagement-label">Liked</div>
+        <div class="engagement-value" style="color:<%= likeColor %>;">
+          <%= likePercentage %>% of the users lieked the video!!
+        </div>
+      </div>
+
+      <div class="engagement-stat">
+        <div class="engagement-label">Disliked</div>
+        <div class="engagement-value" style="color:<%= dislikeColor %>;">
+          <%= dislikePercentage %>% of the users dislieked the video!!
+        </div>
+      </div>
+    </div>
+
+    <div class="engagement-meter" aria-hidden="true">
+      <div class="engagement-meter-like" style="width: <%= likePercentage %>%;"></div>
+      <div class="engagement-meter-dislike" style="width: <%= dislikePercentage %>%;"></div>
+    </div>
   </div>
 
-  <%
-    const likes = parseInt(engagement?.likes) || 0;
-    const dislikes = parseInt(engagement?.dislikes) || 0;
-    const total = likes + dislikes;
+  <details class="engagement-details">
+    <summary>Extra stuff not needed</summary>
+    <div class="engagement-details-content">
+      <div class="engagement-grid">
+        <% if (VideoData?.genre) { %>
+          <div class="engagement-stat">
+            <div class="engagement-label">Genre</div>
+            <div class="engagement-value"><%- VideoData.genre %></div>
+          </div>
+        <% } %>
 
-    const likePercentage = total > 0 ? ((likes / total) * 100).toFixed(2) : 0;
-    const dislikePercentage = total > 0 ? ((dislikes / total) * 100).toFixed(2) : 0;
+        <div class="engagement-stat">
+          <div class="engagement-label">License</div>
+          <div class="engagement-value">
+            <% if (VideoData?.license) { %>
+              <%- VideoData.license %>
+            <% } else { %>
+              Standard YouTube License
+            <% } %>
+          </div>
+        </div>
 
-    const getLikePercentageColor = (p) => p >= 80 ? 'green' : p >= 50 ? 'orange' : '#ff0033';
-    const getDislikePercentageColor = (p) => p >= 50 ? '#ff0033' : p >= 20 ? 'orange' : 'green';
+        <div class="engagement-stat">
+          <div class="engagement-label">RYD date created</div>
+          <div class="engagement-value"><%= engagement?.dateCreated?.toLocaleString() %></div>
+        </div>
 
-    const likeColor = getLikePercentageColor(likePercentage);
-    const dislikeColor = getDislikePercentageColor(dislikePercentage);
-
-    const userScore = (parseFloat(likePercentage) - parseFloat(dislikePercentage) / 2).toFixed(2);
-
-    const getUserScoreLabel = (s) => {
-      if (s >= 98) return 'Masterpiece Video';
-      if (s >= 80) return 'Overwhelmingly Positive';
-      if (s >= 60) return 'Positive';
-      if (s >= 40) return 'Mixed';
-      if (s >= 20) return 'Negative';
-      return 'Overwhelmingly Negative';
-    };
-
-    const userScoreLabel = getUserScoreLabel(userScore);
-    const userScoreColor = userScore >= 80 ? 'green' : userScore >= 50 ? 'orange' : '#ff0033';
-    const userScoreClass = userScore >= 98 ? 'rainbow-gradient' : '';
-  %>
-
-  <br>
-
-  <!-- percentages -->
-  <div>
-    <span style="color:<%= likeColor %>;">
-      <%= likePercentage %>%
-    </span> of the users lieked the video!!<br>
-
-    <span style="color:<%= dislikeColor %>;">
-      <%= dislikePercentage %>%
-    </span> of the users dislieked the video!!
-  </div>
-
-  <br>
-
-  <!-- score -->
-  <div>
-    User score:
-    <span style="color:<%= userScoreColor %>;">
-      <%= userScore %>
-    </span>
-    -
-    <span class="<%= userScoreClass %>">
-      <%= userScoreLabel %>
-    </span>
-  </div>
-
-  <br>
-
-  <!-- extra -->
-  <div>
-    RYD date created :
-    <%= engagement?.dateCreated?.toLocaleString() %><br>
-
-    <a href="/api/getEngagementData?v=<%= VideoData.videoId %>">
-      See in json
-    </a>
-  </div>
+        <div class="engagement-stat">
+          <div class="engagement-label">Raw data</div>
+          <div class="engagement-value">
+            <a class="engagement-link" href="/api/getEngagementData?v=<%= VideoData.videoId %>">See in json</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </details>
 
 </div>
                                                 <a id="nerdy"></a>
