@@ -2700,8 +2700,7 @@ observer.observe(AMvideo);
 const canRun = () =>
   ambientEnabled && isVisible && !document.hidden && !AMvideo.paused && !AMvideo.ended;
 
-// Unified render loop: one callback chain with timestamp throttle
-// instead of the old setTimeout → rVFC/rAF double-hop
+// Unified render loop
 const loop = (now) => {
   if (!running || !canRun()) {
     running = false;
@@ -2725,7 +2724,15 @@ const loop = (now) => {
 const drawStart = () => {
   if (running || !canRun()) return;
   running = true;
-  lastDrawTime = 0; // draw immediately on first frame
+  
+  // FIX: Force an immediate, synchronous draw right now.
+  // This bypasses the browser's rAF/rVFC scheduling delay when returning from a background tab.
+  try {
+    ctx.drawImage(AMvideo, 0, 0, CONFIG.internalWidth, CONFIG.internalHeight);
+  } catch (e) {}
+  
+  lastDrawTime = performance.now(); // Sync the throttle timer with our forced draw
+
   if (hasRVFC) {
     AMvideo.requestVideoFrameCallback(loop);
   } else {
@@ -2859,7 +2866,7 @@ const cleanup = () => {
 
 window.addEventListener("load", init);
 window.addEventListener("unload", cleanup);
-document.addEventListener("fullscreenchange", handleFullscreen); 
+document.addEventListener("fullscreenchange", handleFullscreen);
 </script>
 <style>
 .video-player-container, #video {
@@ -2909,7 +2916,7 @@ document.addEventListener("fullscreenchange", handleFullscreen);
                  <% } %>
   <!-- BUNDLE --><script src="/static/app.bundle.js?version=2026&bundledate=354556" > </script><!-- BUNDLE -->
   <script src="/static/stats.js?e=341082025_0143ab5845544493_videojs815563605"></script>
-  <script id="baseScript" src="/static/base.js?ver=2026042h25&videoID=<%=VideoData.videoId%>&version=20262803-build13343440bAAb2aAb&audio=aud_element&source=a2a0gfwracvbffmbgg"> </script>
+  <script id="baseScript" src="/static/base.js?ver=2026042h25&videoID=<%=VideoData.videoId%>&version=20262803-build13343440bAAb2aAb&audio=aud_element&source=fqwfrrfge"> </script>
   <script>
 (function(){
   var script = document.getElementById("baseScript");
