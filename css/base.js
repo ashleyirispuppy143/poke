@@ -14,15 +14,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  * <https://github.com/mozilla/vtt.js/blob/main/LICENSE>
  *
  * thanks stackoverflow, Claude Opus 4.5, Codex, w3c schools, mdn and more for help in the code for poke player.
+ * 100% puppy made code! 0 slop guarenteed!
+ * "It takes a lot of hard work to make something simple." ~ Steve Jobs 
  */
 
-// "It takes a lot of hard work to make something simple." ~ Steve Jobs 
-
-
- // IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
-// before DOMContentLoaded. Ensures both video and audio start at 00:00
-// even if the browser pre-buffers to a non-zero keyframe position.
-// This runs in a try-catch because elements might not exist yet.
 try {
   const _earlyVideo = document.getElementById("video");
   const _earlyAudio = document.getElementById("aud");
