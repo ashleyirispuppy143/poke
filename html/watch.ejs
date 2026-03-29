@@ -1053,7 +1053,7 @@ My Poke Account
                                       
                                                                                      <% } %>    
          
-         	<a href="https://youtube.com/watch?v=<%=VideoData.videoId%>" style="text-decoration: none;" class="dropdown__item">
+         	<a href="/api/yturl?v=<%=VideoData.videoId%>" style="text-decoration: none;" class="dropdown__item">
                             <i  class="fa-brands fa-youtube"></i>
 Open on YouTube :3
         </a>
@@ -1662,7 +1662,7 @@ for (const format of (VideoData.adaptiveFormats || [])) {
     <% if (!VideoData.title.endsWith('IGNORE_THIS_PLEASE_THIS_IS_DEPRACTED_LOL_SORRY_THIS_WAS_USED_IN_2023_AND_IM_LAZY_TO_REMOVE_THIS)')) { %> 
 
       <div class="new-button button-encryption">
-					<a   title="open the video on youtube.com!" style="color:var(--text-color);text-decoration: none;" href="https://youtube.com/watch?v=<%=VideoData.videoId%>">
+					<a   title="open the video on youtube.com!" style="color:var(--text-color);text-decoration: none;" href="/api/yturl?v=<%=VideoData.videoId%>">
                                         <div class="pill-button">
 
                <i class="fa-brands fa-youtube"></i>
