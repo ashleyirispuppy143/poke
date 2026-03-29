@@ -1873,25 +1873,40 @@ WIP!                                                 </a>
     word-break: break-word;
   }
 
-  .engagement-note {
-    font-size: 0.9rem;
-    color: var(--text-color);
-    opacity: 0.8;
+  .engagement-details {
+    background: var(--background-color-secondary, #111);
+    border: 1px solid var(--border-color, rgba(255,255,255,0.12));
+    border-radius: 12px;
+    margin-top: 10px;
+    overflow: hidden;
   }
 
-  .engagement-rating-line {
+  .engagement-details summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 10px 12px;
     font-weight: 700;
     color: var(--text-color);
-    line-height: 1.6;
+    user-select: none;
   }
 
-  .engagement-score {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-    font-weight: 700;
-    color: var(--text-color);
+  .engagement-details summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .engagement-details summary::after {
+    content: "＋";
+    float: right;
+    opacity: 0.7;
+  }
+
+  .engagement-details[open] summary::after {
+    content: "－";
+  }
+
+  .engagement-details-content {
+    padding: 10px 12px 14px 12px;
+    border-top: 1px solid var(--border-color, rgba(255,255,255,0.08));
   }
 
   .engagement-meter {
@@ -1913,41 +1928,6 @@ WIP!                                                 </a>
   .engagement-meter-dislike {
     height: 100%;
     background: #ff0033;
-  }
-
-  .engagement-details {
-    background: var(--background-color-secondary, #111);
-    border: 1px solid var(--border-color, rgba(255,255,255,0.12));
-    border-radius: 14px;
-    overflow: hidden;
-  }
-
-  .engagement-details summary {
-    list-style: none;
-    cursor: pointer;
-    padding: 14px 16px;
-    font-weight: 700;
-    color: var(--text-color);
-    user-select: none;
-  }
-
-  .engagement-details summary::-webkit-details-marker {
-    display: none;
-  }
-
-  .engagement-details summary::after {
-    content: "＋";
-    float: right;
-    opacity: 0.7;
-  }
-
-  .engagement-details[open] summary::after {
-    content: "－";
-  }
-
-  .engagement-details-content {
-    padding: 0 16px 16px 16px;
-    border-top: 1px solid var(--border-color, rgba(255,255,255,0.08));
   }
 
   .engagement-link {
@@ -2023,8 +2003,10 @@ WIP!                                                 </a>
 
 <div class="engagement-wrap">
 
+  <!-- main -->
   <div class="engagement-box">
     <div class="engagement-box-title">Main Info</div>
+
     <div class="engagement-grid">
       <div class="engagement-stat">
         <div class="engagement-label">Views</div>
@@ -2043,48 +2025,47 @@ WIP!                                                 </a>
           -
           <span class="<%= userScoreClass %>"><%= userScoreLabel %></span>
         </div>
+
+        <!-- collapsible rating -->
+        <details class="engagement-details">
+          <summary>Show rating details</summary>
+          <div class="engagement-details-content">
+
+            <div style="margin-bottom:10px;">
+              warning: returnyoutubedislikes may not be accurate, this is just an estiment ehe :3
+            </div>
+
+            <div style="margin-bottom:10px;">
+              Rating : <%= engagement?.rating?.toLocaleString() %>
+              (<%= engagement?.dislikes?.toLocaleString() %>/<%= engagement?.likes?.toLocaleString() %>
+              <abbr title="Like To dislike ratio - the number to the left is dislike count and the one to the right is like count :3">LTDR</abbr>)
+            </div>
+
+            <div style="color:<%= likeColor %>;">
+              <%= likePercentage %>% of the users lieked the video!!
+            </div>
+
+            <div style="color:<%= dislikeColor %>;">
+              <%= dislikePercentage %>% of the users dislieked the video!!
+            </div>
+
+            <div class="engagement-meter">
+              <div class="engagement-meter-like" style="width:<%= likePercentage %>%"></div>
+              <div class="engagement-meter-dislike" style="width:<%= dislikePercentage %>%"></div>
+            </div>
+
+          </div>
+        </details>
+
       </div>
     </div>
   </div>
 
-  <div class="engagement-box">
-    <div class="engagement-box-title">Rating</div>
-
-    <div class="engagement-rating-line">
-      warning: returnyoutubedislikes may not be accurate, this is just an estiment ehe :3
-    </div>
-
-    <div class="engagement-rating-line" style="margin-top: 10px;">
-      Rating : <%= engagement?.rating?.toLocaleString() %>
-      (<%= engagement?.dislikes?.toLocaleString() %>/<%= engagement?.likes?.toLocaleString() %>
-      <abbr title="Like To dislike ratio - the number to the left is dislike count and the one to the right is like count :3">LTDR</abbr>)
-    </div>
-
-    <div class="engagement-grid" style="margin-top: 12px;">
-      <div class="engagement-stat">
-        <div class="engagement-label">Liked</div>
-        <div class="engagement-value" style="color:<%= likeColor %>;">
-          <%= likePercentage %>% of the users lieked the video!!
-        </div>
-      </div>
-
-      <div class="engagement-stat">
-        <div class="engagement-label">Disliked</div>
-        <div class="engagement-value" style="color:<%= dislikeColor %>;">
-          <%= dislikePercentage %>% of the users dislieked the video!!
-        </div>
-      </div>
-    </div>
-
-    <div class="engagement-meter" aria-hidden="true">
-      <div class="engagement-meter-like" style="width: <%= likePercentage %>%;"></div>
-      <div class="engagement-meter-dislike" style="width: <%= dislikePercentage %>%;"></div>
-    </div>
-  </div>
-
+  <!-- other data -->
   <details class="engagement-details">
-    <summary>Extra stuff</summary>
+    <summary>other data</summary>
     <div class="engagement-details-content">
+
       <div class="engagement-grid">
         <% if (VideoData?.genre) { %>
           <div class="engagement-stat">
@@ -2112,12 +2093,16 @@ WIP!                                                 </a>
         <div class="engagement-stat">
           <div class="engagement-label">Raw data</div>
           <div class="engagement-value">
-            <a class="engagement-link" href="/api/getEngagementData?v=<%= VideoData.videoId %>">See in json</a>
+            <a class="engagement-link" href="/api/getEngagementData?v=<%= VideoData.videoId %>">
+              See in json
+            </a>
           </div>
         </div>
       </div>
+
     </div>
   </details>
+
 
 </div>
                                                 <a id="nerdy"></a>
