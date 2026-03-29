@@ -1812,100 +1812,126 @@ WIP!                                                 </a>
 
                        
 
-              
-                       <a id="metadata"></a>
-                           <div class="video-title" style="color:var(--text-color);font-family:var(--text-font-primary);;font-weight:var(--text-header-weight);font-stretch: extra-expanded;margin-top: 10px;margin-bottom: 10px;">Metadata And Engagement</div>
- 
-     <p  style="font-weight: bold;">
- 
-                    <span>Views : <%=engagement?.viewCount?.toLocaleString()%> <br>
-                        
-                        
-                         <% if (VideoData?.genre) { %> 
-                        Genre: <%-VideoData.genre %>                  
+          <a id="metadata"></a>
 
-                         <% } %> 
-                        <br>
-                         <% if (VideoData?.license) { %> 
-                         License: <%-VideoData?.license %> <br>
-                         <% } else { %>
-                         License: Standard YouTube License <br>
-                         <% } %> <br>
+<div class="video-title" style="
+  color:var(--text-color);
+  font-family:var(--text-font-primary);
+  font-weight:var(--text-header-weight);
+  font-stretch: extra-expanded;
+  margin: 10px 0;
+">
+  Metadata And Engagement
+</div>
 
-                         <% if (date.includes("Premiered")) { %>
-                         Premiered <%= date.replace("Premiered", "at") %> ^^ <br>
-                         <% } else { %>
-                         Uploaded At <%= date %> ^^ <br>
-                        <% } %>
-                        
-                     warning: returnyoutubedislikes may not be accurate, this is just an estiment ehe :3  <br>
+<div style="font-weight: bold; line-height: 1.6;">
 
-                   Rating  :  <%=engagement?.rating?.toLocaleString()%> (<%=engagement?.dislikes?.toLocaleString()%>/<%=engagement?.likes?.toLocaleString()%> <abbr title="Like To dislike ratio - the number to the left is dislike count and the one to the right is like count :3">LTDR</abbr>) <br>
+  <!-- basic info -->
+  <div>
+    Views : <%= engagement?.viewCount?.toLocaleString() %><br>
 
-         <%
-      const likes = parseInt(engagement?.likes) || 0;
+    <% if (VideoData?.genre) { %>
+      Genre: <%- VideoData.genre %><br>
+    <% } %>
+
+    <% if (VideoData?.license) { %>
+      License: <%- VideoData.license %><br>
+    <% } else { %>
+      License: Standard YouTube License<br>
+    <% } %>
+
+    <% if (date.includes("Premiered")) { %>
+      Premiered <%= date.replace("Premiered", "at") %> ^^<br>
+    <% } else { %>
+      Uploaded At <%= date %> ^^<br>
+    <% } %>
+  </div>
+
+  <br>
+
+  <!-- rating -->
+  <div>
+    warning: returnyoutubedislikes may not be accurate, this is just an estiment ehe :3<br><br>
+
+    Rating :
+    <%= engagement?.rating?.toLocaleString() %>
+    (<%= engagement?.dislikes?.toLocaleString() %> /
+     <%= engagement?.likes?.toLocaleString() %>
+     <abbr title="Like To dislike ratio - the number to the left is dislike count and the one to the right is like count :3">
+       LTDR
+     </abbr>)
+  </div>
+
+  <%
+    const likes = parseInt(engagement?.likes) || 0;
     const dislikes = parseInt(engagement?.dislikes) || 0;
     const total = likes + dislikes;
 
     const likePercentage = total > 0 ? ((likes / total) * 100).toFixed(2) : 0;
     const dislikePercentage = total > 0 ? ((dislikes / total) * 100).toFixed(2) : 0;
 
-    const getLikePercentageColor = (percentage) => {
-        if (percentage >= 80) {
-            return 'green';
-        } else if (percentage >= 50) {
-            return 'orange';
-        } else {
-            return '#ff0033';
-        }
-    };
-
-    const getDislikePercentageColor = (percentage) => {
-        if (percentage >= 50) {
-            return '#ff0033';
-        } else if (percentage >= 20) {
-            return 'orange';
-        } else {
-            return 'green';
-        }
-    };
+    const getLikePercentageColor = (p) => p >= 80 ? 'green' : p >= 50 ? 'orange' : '#ff0033';
+    const getDislikePercentageColor = (p) => p >= 50 ? '#ff0033' : p >= 20 ? 'orange' : 'green';
 
     const likeColor = getLikePercentageColor(likePercentage);
     const dislikeColor = getDislikePercentageColor(dislikePercentage);
 
     const userScore = (parseFloat(likePercentage) - parseFloat(dislikePercentage) / 2).toFixed(2);
 
-    const getUserScoreLabel = (score) => {
-        if (score >= 98) {
-            return 'Masterpiece Video';
-        } else if (score >= 80) {
-            return 'Overwhelmingly Positive';
-        } else if (score >= 60) {
-            return 'Positive';
-        } else if (score >= 40) {
-            return 'Mixed';
-        } else if (score >= 20) {
-            return 'Negative';
-        } else {
-            return 'Overwhelmingly Negative';
-        }
+    const getUserScoreLabel = (s) => {
+      if (s >= 98) return 'Masterpiece Video';
+      if (s >= 80) return 'Overwhelmingly Positive';
+      if (s >= 60) return 'Positive';
+      if (s >= 40) return 'Mixed';
+      if (s >= 20) return 'Negative';
+      return 'Overwhelmingly Negative';
     };
 
     const userScoreLabel = getUserScoreLabel(userScore);
     const userScoreColor = userScore >= 80 ? 'green' : userScore >= 50 ? 'orange' : '#ff0033';
+    const userScoreClass = userScore >= 98 ? 'rainbow-gradient' : '';
+  %>
 
-    const userScoreClass = userScore >= 98.00 ? 'rainbow-gradient' : '';
-    %>
+  <br>
 
+  <!-- percentages -->
+  <div>
+    <span style="color:<%= likeColor %>;">
+      <%= likePercentage %>%
+    </span> of the users lieked the video!!<br>
 
-                          
-                      <br><span style="color: <%= likeColor %>;"><%= likePercentage %>%</span> of the users lieked the video!! <br>
-                      <span style="color: <%= dislikeColor %>;"><%= dislikePercentage %>%</span> of the users dislieked the video!! <br>
-                      User score: <span style="color: <%= userScoreColor %>;"><%= userScore %></span>- <span class="<%= userScoreClass %>"> <%= userScoreLabel %> </span><br><br>
-                      RYD date created : <%=engagement?.dateCreated?.toLocaleString()%>  <br>
-                      <a href="/api/getEngagementData?v=<%=VideoData.videoId%>">See in json</a>
-                      
-                  
+    <span style="color:<%= dislikeColor %>;">
+      <%= dislikePercentage %>%
+    </span> of the users dislieked the video!!
+  </div>
+
+  <br>
+
+  <!-- score -->
+  <div>
+    User score:
+    <span style="color:<%= userScoreColor %>;">
+      <%= userScore %>
+    </span>
+    -
+    <span class="<%= userScoreClass %>">
+      <%= userScoreLabel %>
+    </span>
+  </div>
+
+  <br>
+
+  <!-- extra -->
+  <div>
+    RYD date created :
+    <%= engagement?.dateCreated?.toLocaleString() %><br>
+
+    <a href="/api/getEngagementData?v=<%= VideoData.videoId %>">
+      See in json
+    </a>
+  </div>
+
+</div>
                                                 <a id="nerdy"></a>
 
                        
