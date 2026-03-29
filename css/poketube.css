@@ -769,7 +769,7 @@ a.new-button:hover {
   height:-moz-fit-content;
   height:-webkit-fit-content;
   max-width:708px;
-  max-height:185.6px;
+  max-height:224.6px;
   margin-right: 13em;
 }
 
@@ -777,7 +777,7 @@ a.new-button:hover {
   .v:checked ~ .div_box {
     display: flex;
     margin-top: -54em;
-    margin-left: -14em;
+    margin-left: 0em;
   }
 }
 
@@ -802,7 +802,7 @@ a.new-button:hover {
 .pwp {
   display: flex;
   align-items: center;
-  justify-content: end;
+  justify-content: center;
   gap: 6px;
   padding: 16px 0px;
 }
