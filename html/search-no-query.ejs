@@ -18,30 +18,45 @@
     along with this program. If not, see https://www.gnu.org/licenses/.
 -->
 <%
- 
-  function FilterChannels(videos, blockedAuthors, limit) {
+  function FilterVideos(videos, blockedAuthors, blockedTerms, limit) {
     var allowed = videos.filter(function(item) {
        var authorSafe = blockedAuthors.indexOf(item.author) === -1;
       
        var titleLengthSafe = item.title && item.title.trim().length >= 3;
       
-       var noBrainrot = item.title && item.title.toLowerCase().indexOf("brainrot") === -1;
+       var titleSafe = true;
+      if (item.title) {
+        var lowerTitle = item.title.toLowerCase();
+        for (var i = 0; i < blockedTerms.length; i++) {
+          if (lowerTitle.indexOf(blockedTerms[i]) !== -1) {
+            titleSafe = false;
+            break; // Stop checking this title as soon as we find a bad word
+          }
+        }
+      }
       
-      return authorSafe && titleLengthSafe && noBrainrot;
+      return authorSafe && titleLengthSafe && titleSafe;
     });
 
-     return allowed.slice(0, limit);
+    // Return up to `limit` allowed videos
+    return allowed.slice(0, limit);
   }
 
-   // yes, these channels are usually gaming channels but they also do a lot of politics,
-  // so we dont use them on "gaming" discovery.
-   var blockedAuthors = [
+  // Blocked Channels
+  var blockedAuthors = [
     "TheBurntPeanut",
     "Asmongold TV  "
   ];
 
-  // Get up to 30! filtered videos
-  var filteredVideos = FilterChannels(inv, blockedAuthors, 30);
+  // Blocked Brainrot / Gen Alpha Terms
+  var blockedTerms = [
+    "skibidi", "rizz", "sigma", "gyatt", "fanum tax",
+    "mewing", "looksmaxxing", "grimace shake", "garten of banban", "brainrot", "smurf cat", "pibby",
+    "ohio", "baby gronk", "livvy dunne", "huggy wuggy", "amanda the adventurer"
+  ];
+
+  // Get up to 32 filtered videos
+  var filteredVideos = FilterVideos(inv, blockedAuthors, blockedTerms, 32);
 %>
       
 <!DOCTYPE html>
@@ -265,15 +280,6 @@ input{
   opacity: 1;
   visibility: visible;
   transform: translateY(0);
-}
-
-.home-extras-wrapper.hidden {
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(10px);
-  position: absolute;
-  pointer-events: none;
-  width: 100%;
 }
 
 .quick-links{
@@ -732,7 +738,7 @@ input{
     <div class="search-wrap">
       <form class="search-form" action="/search" method="get">
         <div class="search-field">
-          <input class="search-bar" autocomplete="off" id="fname" name="query" type="text" placeholder="Search Videos, use bangs, do math, and more...">
+          <input class="search-bar" autocomplete="on" id="fname" name="query" type="text" placeholder="Search Videos, use bangs, do math, and more...">
           
           <div id="bang-indicator" class="bang-indicator hidden">
             <i class="fa-solid fa-bolt" style="color: var(--accent); margin-right: 4px;"></i>
@@ -829,7 +835,7 @@ input{
 </div>
 
 <script>
-// Toggle Discover Videos
+// Toggle Discover Videos logic
 (function () {
   var section = document.getElementById("discover-section");
   var button = document.getElementById("discover-toggle");
@@ -883,25 +889,27 @@ input{
     saveState();
   });
 })();
-(function () {
+
+ (function () {
   var searchInput = document.getElementById("fname");
   var bangIndicator = document.getElementById("bang-indicator");
-  var homeExtras = document.getElementById("home-extras");
 
   if (searchInput && bangIndicator) {
     searchInput.addEventListener("input", function (e) {
       if (e.target.value.includes("!")) {
         bangIndicator.classList.remove("hidden");
-        if (homeExtras) homeExtras.classList.add("hidden");
+        // Turn off autocomplete when using bangs
+        searchInput.setAttribute("autocomplete", "off"); 
       } else {
         bangIndicator.classList.add("hidden");
-        if (homeExtras) homeExtras.classList.remove("hidden");
+        // Re-enable autocomplete when the bang is removed
+        searchInput.setAttribute("autocomplete", "on"); 
       }
     });
   }
 
-  var randomBangNote = document.getElementById("random-bang-note");
-  if (randomBangNote && Math.random() > 0.5) {
+   var randomBangNote = document.getElementById("random-bang-note");
+  if (randomBangNote && Math.random() > 0.3) {
     randomBangNote.style.display = "block";
   }
 })();
