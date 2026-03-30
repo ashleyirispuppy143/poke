@@ -12,15 +12,19 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  * Includes vtt.js <https://github.com/mozilla/vtt.js>
  * Available under Apache License Version 2.0
  * <https://github.com/mozilla/vtt.js/blob/main/LICENSE>
- *
+ * /////////////////////////////////////////////////////////////////////////////////////
+ * credits:
  * thanks stackoverflow, Claude Opus 4.5, Codex, w3c schools, mdn and more for help in the code for poke player.
  * 100% puppy made code! 0 slop guarenteed!
  * also, legit fuck claude's weekly limit #antrophicdobetter #wokeai or something i have no idea,,,they are making claude have pronouns(???)
- *
+ * this works, 100%! no issues..at all!!
+ * UNDER GPL 3-OR-LATER license, but i think video.js istelf is Apache 2.0, so basically this code, the players code is gpl3, u get wha we mean :3
+ * gay!
+ * ///////////////////////////////////////////////////////////////////////////
  * "It takes a lot of hard work to make something simple." ~ Steve Jobs 
  */
 
-// This runs in a try-catch because elements might not exist yet.
+ // This runs in a try-catch because elements might not exist yet...which is sillah am sillah tooo waowawawa............
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -61,6 +65,8 @@ try {
   _earlyZero(_earlyAudio);
 } catch {}
 
+
+//////////////THE, PLAYER ///////////////////////////////
 document.addEventListener("DOMContentLoaded", () => {
   const video = videojs("video", {
     controls: true,
@@ -487,6 +493,7 @@ document.addEventListener("DOMContentLoaded", () => {
     hiddenPlayRequestUntil: 0,
     foregroundResumeBoostUntil: 0,
     pendingSeekTarget: null,
+    nearZeroSeekAuthorizedUntil: 0,
     playRequestedDuringSeek: false,
     seekCompleted: false,
     seekKickAudioAllowedUntil: 0,
@@ -4256,6 +4263,22 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {}
   }
   function restartFromEndedGuardActive() { return now() < state.restartFromEndedUntil; }
+  function authorizeNearZeroSeek(ms = 2400) {
+    state.nearZeroSeekAuthorizedUntil = Math.max(
+      state.nearZeroSeekAuthorizedUntil,
+      now() + Math.max(0, Number(ms) || 0)
+    );
+  }
+  function nearZeroSeekAuthorized(target = NaN) {
+    const t = Number(target);
+    if (!isFinite(t) || t >= 0.8) return true;
+    if (!state.firstPlayCommitted) return true;
+    if (state.restarting || isLoopDesired() || restartFromEndedGuardActive()) return true;
+    if (now() < state.nearZeroSeekAuthorizedUntil) return true;
+    const pending = Number(state.pendingSeekTarget);
+    if (state.pendingSeekTarget != null && isFinite(pending) && pending < 0.8) return true;
+    return false;
+  }
   function armSeekResumeIntent(ms = 7000) {
     const until = now() + Math.max(0, Number(ms) || 0);
     state.seekResumeWantedUntil = Math.max(state.seekResumeWantedUntil, until);
@@ -4708,7 +4731,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // video is near 0 after we were well into playback
       if (state.endedNaturally) return true;
       const lastGood = state.lastKnownGoodVT || 0;
-      if (lastGood > 3.0 && videoTime < 1.0) {
+      if (!nearZeroSeekAuthorized(videoTime) && lastGood > 0.9 && videoTime < 0.8) {
         // big backward jump nobody asked for
         const userRecent = (now() - state.lastUserActionTime) < 1500;
         const userPlay = state.userPlayIntentPresetAt > 0 && (now() - state.userPlayIntentPresetAt) < 2000;
@@ -5291,6 +5314,10 @@ document.addEventListener("DOMContentLoaded", () => {
     // Block large backward seeks on video unless user-initiated or restarting.
     // This prevents programmatic code from jumping video backward visibly.
     const curVT = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
+    if (t < 0.5 && state.firstPlayCommitted && !nearZeroSeekAuthorized(t) &&
+        !state.restarting && !state.seeking && !isLoopDesired() && curVT > 0.9) {
+      return;
+    }
     if (t < curVT - 2.0 && state.firstPlayCommitted && !state.restarting && !state.seeking && !isLoopDesired()) {
       const userRecent = (now() - state.lastUserActionTime) < 2000;
       if (!userRecent) return;
@@ -5315,9 +5342,9 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     // Never silently sync video to 0 after first play (unless looping)
-    if (t < 0.5 && state.firstPlayCommitted && !state.restarting && !isLoopDesired()) {
+    if (t < 0.5 && state.firstPlayCommitted && !nearZeroSeekAuthorized(t) && !state.restarting && !isLoopDesired()) {
       const vt = Number(videoEl.currentTime) || 0;
-      if (vt > 2) return;
+      if (vt > 0.9) return;
     }
     try {
       const vt = Number(videoEl.currentTime) || 0;
@@ -9082,6 +9109,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const inc = Number(d?.seekOffset) || 10;
         const newTime = Math.min((video.currentTime() || 0) + inc, Number(video.duration()) || 0);
         markUserSeekIntent(3000);
+        if (newTime < 0.8) authorizeNearZeroSeek(2500);
         state.pendingSeekTarget = newTime;
         state.seekWantedPlaying = state.intendedPlaying;
         if (state.seekWantedPlaying) armSeekResumeIntent(9000);
@@ -9092,6 +9120,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const dec = Number(d?.seekOffset) || 10;
         const newTime = Math.max((video.currentTime() || 0) - dec, 0);
         markUserSeekIntent(3000);
+        if (newTime < 0.8) authorizeNearZeroSeek(2500);
         state.pendingSeekTarget = newTime;
         state.seekWantedPlaying = state.intendedPlaying;
         if (state.seekWantedPlaying) armSeekResumeIntent(9000);
@@ -9102,6 +9131,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!d || typeof d.seekTime !== "number") return;
         const newTime = Math.max(0, Math.min(Number(video.duration()) || 0, d.seekTime));
         markUserSeekIntent(3000);
+        if (newTime < 0.8) authorizeNearZeroSeek(2500);
         state.pendingSeekTarget = newTime;
         state.seekWantedPlaying = state.intendedPlaying;
         if (state.seekWantedPlaying) armSeekResumeIntent(9000);
@@ -10511,14 +10541,18 @@ document.addEventListener("DOMContentLoaded", () => {
           const _phProgrammatic = state.pendingSeekTarget != null || state.seeking || state.restarting;
           const _phUserSeek = userSeekIntentActive();
           const _phRequestedNearZero = state.pendingSeekTarget != null && Number(state.pendingSeekTarget) < 0.8;
+          const _phNearZeroAuthorized =
+            nearZeroSeekAuthorized(_phVt) ||
+            _phUserSeek ||
+            _phRequestedNearZero;
           // Enhanced: also block if MakeSureUnintentionalLoopDoesntEverHappenAtALLManager says so
           if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.isPhantomRestart(_phVt)) {
             try { videoEl.currentTime = _phPrev > 0.5 ? _phPrev : videoEl.duration || _phPrev; } catch {}
             try { if (!videoEl.paused) videoEl.pause(); } catch {}
             return;
           }
-          if (_phVt < 0.5 && _phPrev > 2.0 && state.firstPlayCommitted &&
-              !_phUserSeek && !_phRequestedNearZero && !_phProgrammatic && !isLoopDesired()) {
+          if (_phVt < 0.5 && _phPrev > 0.9 && state.firstPlayCommitted &&
+              !_phNearZeroAuthorized && !_phProgrammatic && !isLoopDesired()) {
             // this is a phantom restart — revert video to its last good position.
             // don't touch audio — the _seekWouldRestart guard handles that.
             try { videoEl.currentTime = _phPrev; } catch {}
@@ -10613,6 +10647,9 @@ document.addEventListener("DOMContentLoaded", () => {
           isFinite(nativeTime) ? nativeTime :
           isFinite(vjsTime) ? vjsTime :
           isFinite(innerTime) ? innerTime : 0;
+          if (seekTime < 0.8 && (_isUserOrProgrammaticSeek || _seekLikelyUser)) {
+            authorizeNearZeroSeek(2500);
+          }
           state.pendingSeekTarget = seekTime;
           // User seeking away from start should immediately disable startup-zero logic.
           // Without this, first manual seek can be forced back to 0 by startup guards.
@@ -10712,8 +10749,11 @@ document.addEventListener("DOMContentLoaded", () => {
           // phantom loop guard (backup): if seeked lands at near-0 but nobody asked,
           // the seeking handler should have caught it. if it didn't (e.g. seeking
           // handler's lastKnownGoodVT was already 0), skip audio sync.
+          const prevBeforeSeeked = state.lastKnownGoodVT || 0;
           if (newTime < 0.5 && !state.seeking && state.firstPlayCommitted && !isLoopDesired() &&
+              !nearZeroSeekAuthorized(newTime) && prevBeforeSeeked > 0.9 &&
               (now() - state.lastUserActionTime) > 2000 && state.pendingSeekTarget == null) {
+            try { videoEl.currentTime = prevBeforeSeeked; } catch {}
             // Still restore volume even on bail-out
             if (coupledMode && audio && state._seekPreVolume != null) {
               try { audio.volume = state._seekPreVolume; } catch {}
@@ -12052,7 +12092,7 @@ document.addEventListener("DOMContentLoaded", () => {
     _handlePlayerCrash(msg, "promise", reason ? (reason.stack || "") : "");
   }, { passive: true });
 });
-
+//////////////// THE PLAYER, END ////////////////////////
  
   
   (function () {
