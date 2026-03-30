@@ -294,174 +294,169 @@ let eqValues = JSON.parse(localStorage.getItem("eqValues")) || [0, 0, 0, 0, 0, 0
 let isEqOn = localStorage.getItem("isEqOn") === "true";
 const freqs = [60, 230, 640, 1500, 3600, 7000, 14000];
 
-const eqStyle = document.createElement('style');
-eqStyle.innerHTML = `
-    .ptd-eq-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(28,28,28,0.95); color: #fff; padding: 24px; border-radius: 12px; font-family: 'Roboto', Arial, sans-serif; display: none; z-index: 999999; box-shadow: 0 8px 32px rgba(0,0,0,0.8); width: 480px; backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); user-select: none; }
+const ptdEqStyle = document.createElement('style');
+ptdEqStyle.innerHTML = `
+    .ptd-eq-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(24,24,24,0.98); color: #fff; padding: 24px; border-radius: 12px; font-family: 'Roboto', Arial, sans-serif; display: none; z-index: 999999; box-shadow: 0 8px 32px rgba(0,0,0,0.8); width: 480px; backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); }
     .ptd-eq-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px; margin-bottom: 20px; }
     .ptd-eq-title { font-size: 16px; font-weight: 500; margin:0; letter-spacing: 0.5px; }
     .ptd-eq-close { cursor: pointer; font-size: 24px; color: #aaa; background: none; border: none; line-height: 1; padding: 0; transition: color 0.2s; }
     .ptd-eq-close:hover { color: #fff; }
-    .ptd-eq-toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; font-size: 14px; font-weight: 500; }
+    .ptd-eq-toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; font-size: 14px; font-weight: 500; }
     .ptd-toggle { position: relative; width: 40px; height: 22px; background: rgba(255,255,255,0.2); border-radius: 11px; cursor: pointer; transition: 0.3s; }
     .ptd-toggle.active { background: #3ea6ff; }
     .ptd-toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; background: white; border-radius: 50%; transition: 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
     .ptd-toggle.active::after { left: 20px; }
-    #eqCanvas { width: 100%; height: 240px; background: #181818; border-radius: 8px; cursor: pointer; display: block; border: 1px solid rgba(255,255,255,0.05); }
-    .disabled-menu-item { opacity: 0.4; pointer-events: none; }
+    #ptdEqCanvas { width: 100%; height: 260px; background: #0f0f0f; border-radius: 8px; cursor: pointer; display: block; border: 1px solid rgba(255,255,255,0.05); }
+    .ptd-disabled-menu-item { opacity: 0.4; pointer-events: none; }
 `;
-document.head.appendChild(eqStyle);
+document.head.appendChild(ptdEqStyle);
 
-var eqOption = document.createElement("div");
-eqOption.id = "eqOption";
-eqOption.innerHTML = "<i class='fa-light fa-sliders'></i> Audio Equalizer";
-eqOption.style.cursor = "pointer";
-eqOption.style.padding = "10px";
+var ptdEqOption = document.createElement("div");
+ptdEqOption.id = "ptdEqOption";
+ptdEqOption.innerHTML = "<i class='fa-light fa-sliders'></i> Audio Equalizer";
+ptdEqOption.style.cursor = "pointer";
+ptdEqOption.style.padding = "10px";
 
 if (snapshotOption) {
-    popupMenu.insertBefore(eqOption, snapshotOption);
+    popupMenu.insertBefore(ptdEqOption, snapshotOption);
 } else {
-    popupMenu.appendChild(eqOption);
+    popupMenu.appendChild(ptdEqOption);
 }
 
-const eqModal = document.createElement("div");
-eqModal.className = "ptd-eq-modal";
-eqModal.innerHTML = `
+const ptdEqModal = document.createElement("div");
+ptdEqModal.className = "ptd-eq-modal";
+ptdEqModal.innerHTML = `
     <div class="ptd-eq-header">
         <h3 class="ptd-eq-title">Graphic Equalizer</h3>
         <button class="ptd-eq-close">&times;</button>
     </div>
     <div class="ptd-eq-toggle-row">
         <span>Enable EQ</span>
-        <div class="ptd-toggle ${isEqOn ? 'active' : ''}" id="eqToggleBtn"></div>
+        <div class="ptd-toggle ${isEqOn ? 'active' : ''}" id="ptdEqToggleBtn"></div>
     </div>
-    <canvas id="eqCanvas" width="432" height="240"></canvas>
+    <canvas id="ptdEqCanvas" width="430" height="260"></canvas>
 `;
-document.body.appendChild(eqModal);
+document.body.appendChild(ptdEqModal);
 
-const eqCanvasEl = document.getElementById("eqCanvas");
-const eqCtx = eqCanvasEl.getContext("2d");
+const ptdEqCanvasEl = document.getElementById("ptdEqCanvas");
+const ptdEqCtx = ptdEqCanvasEl.getContext("2d");
 let isDragging = false;
 let activeNode = -1;
 let animFrame;
 
-function getTrackBounds(index) {
-    const paddingX = 40;
-    const spacing = (eqCanvasEl.width - paddingX * 2) / 7;
-    const cx = paddingX + (index + 0.5) * spacing;
-    return cx;
+const ptdPadding = { top: 30, bottom: 40, left: 40, right: 20 };
+const ptdUsableHeight = ptdEqCanvasEl.height - ptdPadding.top - ptdPadding.bottom;
+const ptdUsableWidth = ptdEqCanvasEl.width - ptdPadding.left - ptdPadding.right;
+const ptdSpacing = ptdUsableWidth / 6;
+
+function getX(i) {
+    return ptdPadding.left + i * ptdSpacing;
 }
 
-function getYFromVal(val) {
-    const centerY = 120;
-    const rangeY = 70; 
-    return centerY - (val / 12) * rangeY;
+function getY(val) {
+    return ptdPadding.top + ptdUsableHeight / 2 - (val / 12) * (ptdUsableHeight / 2);
 }
 
 function getValFromY(y) {
-    const centerY = 120;
-    const rangeY = 70;
-    let val = ((centerY - y) / rangeY) * 12;
+    let val = (ptdPadding.top + ptdUsableHeight / 2 - y) / (ptdUsableHeight / 2) * 12;
     return Math.max(-12, Math.min(12, val));
 }
 
+function drawRoundRect(ctx, x, y, width, height, radius) {
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+    ctx.fill();
+}
+
 function drawEQ() {
-    if (eqModal.style.display === "none") return;
+    if (ptdEqModal.style.display === "none") return;
     
-    eqCtx.clearRect(0, 0, eqCanvasEl.width, eqCanvasEl.height);
+    ptdEqCtx.clearRect(0, 0, ptdEqCanvasEl.width, ptdEqCanvasEl.height);
+    ptdEqCtx.fillStyle = "#0f0f0f";
+    ptdEqCtx.fillRect(0, 0, ptdEqCanvasEl.width, ptdEqCanvasEl.height);
+
+    ptdEqCtx.globalAlpha = isEqOn ? 1.0 : 0.4;
+
+    ptdEqCtx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+    ptdEqCtx.lineWidth = 1;
     
-    eqCtx.strokeStyle = "rgba(255, 255, 255, 0.08)";
-    eqCtx.lineWidth = 1;
-    eqCtx.beginPath();
-    eqCtx.moveTo(40, 50); eqCtx.lineTo(eqCanvasEl.width - 40, 50);
-    eqCtx.moveTo(40, 85); eqCtx.lineTo(eqCanvasEl.width - 40, 85);
-    eqCtx.moveTo(40, 120); eqCtx.lineTo(eqCanvasEl.width - 40, 120);
-    eqCtx.moveTo(40, 155); eqCtx.lineTo(eqCanvasEl.width - 40, 155);
-    eqCtx.moveTo(40, 190); eqCtx.lineTo(eqCanvasEl.width - 40, 190);
-    eqCtx.stroke();
+    [12, 0, -12].forEach(val => {
+        let y = getY(val);
+        ptdEqCtx.beginPath();
+        ptdEqCtx.moveTo(ptdPadding.left - 10, y);
+        ptdEqCtx.lineTo(ptdEqCanvasEl.width - ptdPadding.right + 10, y);
+        ptdEqCtx.stroke();
+        
+        ptdEqCtx.fillStyle = "#888";
+        ptdEqCtx.font = "11px Arial";
+        ptdEqCtx.textAlign = "right";
+        ptdEqCtx.textBaseline = "middle";
+        ptdEqCtx.fillText(val > 0 ? "+" + val : val, ptdPadding.left - 15, y);
+    });
 
-    eqCtx.fillStyle = "rgba(255, 255, 255, 0.4)";
-    eqCtx.font = "10px Arial";
-    eqCtx.textAlign = "right";
-    eqCtx.textBaseline = "middle";
-    eqCtx.fillText("+12", 30, 50);
-    eqCtx.fillText("0", 30, 120);
-    eqCtx.fillText("-12", 30, 190);
-
-    if (analyzer && freqDataArray && isEqOn) {
-        analyzer.getByteFrequencyData(freqDataArray);
-        eqCtx.fillStyle = "rgba(62, 166, 255, 0.08)";
-        let barW = (eqCanvasEl.width - 80) / freqDataArray.length;
-        for (let i = 0; i < freqDataArray.length; i++) {
-            let percent = freqDataArray[i] / 255;
-            let h = percent * 140;
-            eqCtx.fillRect(40 + (i * barW), 190 - h, barW, h);
-        }
-    }
-
-    eqCtx.textAlign = "center";
     for (let i = 0; i < 7; i++) {
-        let cx = getTrackBounds(i);
-        let val = eqValues[i];
-        let cy = getYFromVal(val);
+        let x = getX(i);
         
-        eqCtx.fillStyle = "rgba(255, 255, 255, 0.6)";
-        let label = freqs[i] >= 1000 ? (freqs[i]/1000) + 'k' : freqs[i];
-        eqCtx.fillText(label, cx, 215);
+        ptdEqCtx.strokeStyle = "#000";
+        ptdEqCtx.lineWidth = 8;
+        ptdEqCtx.lineCap = "round";
+        ptdEqCtx.beginPath();
+        ptdEqCtx.moveTo(x, getY(12));
+        ptdEqCtx.lineTo(x, getY(-12));
+        ptdEqCtx.stroke();
 
-        eqCtx.fillStyle = "rgba(0, 0, 0, 0.6)";
-        eqCtx.fillRect(cx - 3, 50, 6, 140);
+        ptdEqCtx.strokeStyle = "#3ea6ff";
+        ptdEqCtx.lineWidth = 2;
+        ptdEqCtx.beginPath();
+        ptdEqCtx.moveTo(x, getY(0));
+        ptdEqCtx.lineTo(x, getY(eqValues[i]));
+        ptdEqCtx.stroke();
 
-        if (isEqOn) {
-            eqCtx.fillStyle = "rgba(62, 166, 255, 0.6)";
-            if (val > 0) {
-                eqCtx.fillRect(cx - 3, cy, 6, 120 - cy);
-            } else {
-                eqCtx.fillRect(cx - 3, 120, 6, cy - 120);
-            }
-        }
+        let ty = getY(eqValues[i]);
+        ptdEqCtx.fillStyle = activeNode === i ? "#fff" : "#ddd";
+        drawRoundRect(ptdEqCtx, x - 8, ty - 12, 16, 24, 4);
 
-        eqCtx.beginPath();
-        let tw = 14, th = 20;
-        if (eqCtx.roundRect) {
-            eqCtx.roundRect(cx - tw/2, cy - th/2, tw, th, 4);
-        } else {
-            eqCtx.rect(cx - tw/2, cy - th/2, tw, th);
-        }
-        
-        eqCtx.fillStyle = isEqOn ? (activeNode === i ? "#fff" : "#ccc") : "#444";
-        eqCtx.fill();
-        
-        if (isEqOn && activeNode === i) {
-            eqCtx.fillStyle = "#fff";
-            eqCtx.font = "bold 10px Arial";
-            eqCtx.fillText(val > 0 ? "+" + val.toFixed(1) : val.toFixed(1), cx, cy - 18);
-        }
+        ptdEqCtx.fillStyle = "#aaa";
+        ptdEqCtx.font = "11px Arial";
+        ptdEqCtx.textAlign = "center";
+        let label = freqs[i] >= 1000 ? (freqs[i] / 1000) + "K" : freqs[i];
+        ptdEqCtx.fillText(label, x, ptdEqCanvasEl.height - 15);
     }
 
+    ptdEqCtx.globalAlpha = 1.0;
     animFrame = requestAnimationFrame(drawEQ);
 }
 
-eqCanvasEl.addEventListener("mousedown", (e) => {
+ptdEqCanvasEl.addEventListener("mousedown", (e) => {
     if (!isEqOn) return;
-    const rect = eqCanvasEl.getBoundingClientRect();
+    const rect = ptdEqCanvasEl.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     
     for (let i = 0; i < 7; i++) {
-        let cx = getTrackBounds(i);
-        if (Math.abs(x - cx) < 20 && y >= 30 && y <= 210) {
+        let cx = getX(i);
+        if (Math.abs(x - cx) < 20) {
             isDragging = true;
             activeNode = i;
-            eqValues[activeNode] = getValFromY(y);
+            eqValues[i] = getValFromY(y);
             applyEQSettings();
             break;
         }
     }
 });
 
-eqCanvasEl.addEventListener("mousemove", (e) => {
+ptdEqCanvasEl.addEventListener("mousemove", (e) => {
     if (!isDragging || activeNode === -1 || !isEqOn) return;
-    const rect = eqCanvasEl.getBoundingClientRect();
+    const rect = ptdEqCanvasEl.getBoundingClientRect();
     const y = e.clientY - rect.top;
     eqValues[activeNode] = getValFromY(y);
     applyEQSettings();
@@ -475,12 +470,12 @@ window.addEventListener("mouseup", () => {
     activeNode = -1;
 });
 
-eqModal.querySelector('.ptd-eq-close').addEventListener('click', () => {
-    eqModal.style.display = "none";
+ptdEqModal.querySelector('.ptd-eq-close').addEventListener('click', () => {
+    ptdEqModal.style.display = "none";
     cancelAnimationFrame(animFrame);
 });
 
-eqModal.querySelector('#eqToggleBtn').addEventListener('click', function() {
+ptdEqModal.querySelector('#ptdEqToggleBtn').addEventListener('click', function() {
     isEqOn = !isEqOn;
     this.classList.toggle('active', isEqOn);
     localStorage.setItem("isEqOn", isEqOn);
@@ -494,9 +489,9 @@ eqModal.querySelector('#eqToggleBtn').addEventListener('click', function() {
     applyEQSettings();
 });
 
-eqOption.addEventListener("click", function() {
+ptdEqOption.addEventListener("click", function() {
     popupMenu.style.display = "none";
-    eqModal.style.display = "block";
+    ptdEqModal.style.display = "block";
     drawEQ();
 });
 
@@ -513,29 +508,25 @@ function updateUIAccessibility() {
     [boostOption, normalizeOption, whisperOption].forEach(opt => {
         if (!opt) return;
         if (isEqOn) {
-            opt.classList.add("disabled-menu-item");
+            opt.classList.add("ptd-disabled-menu-item");
             opt.title = "Disable EQ to use this feature";
         } else {
-            opt.classList.remove("disabled-menu-item");
+            opt.classList.remove("ptd-disabled-menu-item");
             opt.title = "";
         }
     });
 }
 
-function getActiveMediaElement() {
-    return document.getElementById("aud") || document.querySelector("video") || window.video;
-}
-
 function initAudio() {
-    var mediaEl = getActiveMediaElement();
-    if (audioCtx || !mediaEl) return; 
+    var currentMedia = document.getElementById("aud") || window.video || document.querySelector("video"); 
+    if (audioCtx || !currentMedia) return; 
 
     try {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        source = audioCtx.createMediaElementSource(mediaEl);
+        source = audioCtx.createMediaElementSource(currentMedia);
         
         analyzer = audioCtx.createAnalyser();
-        analyzer.fftSize = 256; 
+        analyzer.fftSize = 512; 
         dataArray = new Float32Array(analyzer.frequencyBinCount);
         freqDataArray = new Uint8Array(analyzer.frequencyBinCount);
 
@@ -618,8 +609,8 @@ function applyAudioState(isUserInteraction = false) {
         compressorNode.ratio.setTargetAtTime(20, now, smoothTime);
 
         normalizerInterval = setInterval(() => {
-            var mediaEl = getActiveMediaElement();
-            if (!mediaEl || mediaEl.paused || audioCtx.state !== 'running') return;
+            var currentAud = document.getElementById("aud") || window.video || document.querySelector("video");
+            if (!currentAud || currentAud.paused || audioCtx.state !== 'running') return;
 
             analyzer.getFloatTimeDomainData(dataArray);
             
@@ -697,19 +688,18 @@ if (whisperOption) {
 
  if (snapshotOption) {
     snapshotOption.addEventListener("click", function() {
-        let vTarget = getActiveMediaElement();
-        if (vTarget && vTarget.videoWidth > 0 && vTarget.videoHeight > 0) {
+        if (video.videoWidth > 0 && video.videoHeight > 0) {
             var snapCanvas = document.createElement("canvas");
-            snapCanvas.width = vTarget.videoWidth;
-            snapCanvas.height = vTarget.videoHeight;
+            snapCanvas.width = video.videoWidth;
+            snapCanvas.height = video.videoHeight;
             
             var snapCtx = snapCanvas.getContext("2d");
-            snapCtx.drawImage(vTarget, 0, 0, snapCanvas.width, snapCanvas.height);
+            snapCtx.drawImage(video, 0, 0, snapCanvas.width, snapCanvas.height);
             
             var dataURL = snapCanvas.toDataURL("image/png");
             
             var videoName = "snapshot";
-            var src = vTarget.currentSrc || vTarget.src || "";
+            var src = video.currentSrc || video.src || "";
             
             if (src && !src.startsWith("blob:")) {
                 var fileNameWithExt = src.split('/').pop().split('?')[0].split('#')[0];
@@ -725,7 +715,7 @@ if (whisperOption) {
                  videoName = document.title ? document.title.replace(/[^a-zA-Z0-9 -]/g, "").trim() : "snapshot";
             }
 
-            var time = vTarget.currentTime;
+            var time = video.currentTime;
             var hrs = Math.floor(time / 3600);
             var mins = Math.floor((time % 3600) / 60);
             var secs = Math.floor(time % 60);
@@ -743,9 +733,8 @@ if (whisperOption) {
     });
 }
  
-window.addEventListener("contextmenu", function(event) {
-    let vTarget = getActiveMediaElement();
-    if (event.target === vTarget && !document.fullscreenElement && !document.webkitFullscreenElement && !document.mozFullScreenElement && !document.msFullscreenElement) {
+video.addEventListener("contextmenu", function(event) {
+    if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.mozFullScreenElement && !document.msFullscreenElement) {
         event.preventDefault();
         popupMenu.style.display = "block";
         popupMenu.style.left = event.pageX + "px";
@@ -754,17 +743,22 @@ window.addEventListener("contextmenu", function(event) {
 });
 
 window.addEventListener("click", function(event) {
-    let vTarget = getActiveMediaElement();
-    if (event.target !== vTarget && !eqModal.contains(event.target)) {
+    if (event.target !== video && !ptdEqModal.contains(event.target)) {
         popupMenu.style.display = "none";
     }
 });
 
 loopOption.addEventListener("click", function() {
-    let vTarget = getActiveMediaElement();
     const quaindt = new URLSearchParams(window.location.search).get("quality") || "";
-    var looped = vTarget.loop;
-    vTarget.loop = !looped;
+    var looped = video.loop;
+    video.loop = !looped;
+    var currentAud = document.getElementById("aud");
+
+    if (quaindt !== "medium") {
+        if (currentAud) {
+            currentAud.loop = !looped;
+        }
+    }
 
     var displaySpecialText = Math.random() < 0.5;
 
@@ -785,11 +779,12 @@ loopOption.addEventListener("click", function() {
 });
 
 speedOption.addEventListener("click", function() {
-    let vTarget = getActiveMediaElement();
-    var currentSpeed = vTarget.playbackRate;
+    var currentSpeed = video.playbackRate;
     var newSpeed = getNextSpeed(currentSpeed);
+    var currentAud = document.getElementById("aud");
 
-    vTarget.playbackRate = newSpeed;
+    video.playbackRate = newSpeed;
+    if (currentAud) currentAud.playbackRate = newSpeed;
     
     speedOption.innerHTML = "<i class='fa-light fa-gauge'></i> Speed: " + newSpeed.toFixed(2) + "x";
     popupMenu.style.display = "none"; 
