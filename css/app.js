@@ -271,7 +271,6 @@ function fetchUrls(urls) {
   
   }
   }
-
 var popupMenu = document.getElementById("popupMenu");
 var loopOption = document.getElementById("loopOption");
 var speedOption = document.getElementById("speedOption");
@@ -284,34 +283,30 @@ var loopedIndicator = document.getElementById("loopedIndicator");
 loopedIndicator.style.display = "none";
 
 let audioCtx, source, gainNode, compressorNode, analyzer;
-
 let audioState = localStorage.getItem("audioMode") || "normalize"; 
 let normalizerInterval = null;
 let dataArray = null;
+let freqDataArray = null;
 let currentAutoGain = 1.0;
 
 let eqFilters = [];
 let eqValues = JSON.parse(localStorage.getItem("eqValues")) || [0, 0, 0, 0, 0, 0, 0];
 let isEqOn = localStorage.getItem("isEqOn") === "true";
+const freqs = [60, 230, 640, 1500, 3600, 7000, 14000];
 
 const eqStyle = document.createElement('style');
 eqStyle.innerHTML = `
-    .yt-eq-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(28,28,28,0.95); color: #fff; padding: 24px; border-radius: 12px; font-family: 'Roboto', Arial, sans-serif; display: none; z-index: 999999; box-shadow: 0 8px 32px rgba(0,0,0,0.8); width: 400px; backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); }
+    .yt-eq-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(28,28,28,0.95); color: #fff; padding: 24px; border-radius: 12px; font-family: 'Roboto', Arial, sans-serif; display: none; z-index: 999999; box-shadow: 0 8px 32px rgba(0,0,0,0.8); width: 450px; backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); }
     .yt-eq-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px; margin-bottom: 20px; }
     .yt-eq-title { font-size: 16px; font-weight: 500; margin:0; letter-spacing: 0.5px; }
     .yt-eq-close { cursor: pointer; font-size: 24px; color: #aaa; background: none; border: none; line-height: 1; padding: 0; transition: color 0.2s; }
     .yt-eq-close:hover { color: #fff; }
-    .yt-eq-toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; font-size: 14px; font-weight: 500; }
+    .yt-eq-toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; font-size: 14px; font-weight: 500; }
     .yt-toggle { position: relative; width: 40px; height: 22px; background: rgba(255,255,255,0.2); border-radius: 11px; cursor: pointer; transition: 0.3s; }
     .yt-toggle.active { background: #3ea6ff; }
     .yt-toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; background: white; border-radius: 50%; transition: 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
     .yt-toggle.active::after { left: 20px; }
-    .yt-eq-sliders { display: flex; justify-content: space-between; height: 170px; }
-    .yt-eq-slider-col { display: flex; flex-direction: column; align-items: center; justify-content: space-between; width: 45px; }
-    .yt-eq-slider-col span { font-size: 11px; color: #bbb; margin-top: 14px; font-weight: 500; }
-    .yt-eq-slider { -webkit-appearance: slider-vertical; appearance: slider-vertical; width: 6px; height: 140px; background: rgba(255,255,255,0.15); outline: none; border-radius: 3px; transition: background 0.2s; }
-    .yt-eq-slider:hover { background: rgba(255,255,255,0.25); }
-    .yt-eq-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; background: #3ea6ff; border-radius: 50%; cursor: pointer; box-shadow: 0 0 6px rgba(0,0,0,0.6); }
+    #eqCanvas { width: 100%; height: 220px; background: #181818; border-radius: 8px; cursor: crosshair; display: block; border: 1px solid rgba(255,255,255,0.05); }
     .disabled-menu-item { opacity: 0.4; pointer-events: none; }
 `;
 document.head.appendChild(eqStyle);
@@ -332,26 +327,164 @@ const eqModal = document.createElement("div");
 eqModal.className = "yt-eq-modal";
 eqModal.innerHTML = `
     <div class="yt-eq-header">
-        <h3 class="yt-eq-title">Audio Equalizer</h3>
+        <h3 class="yt-eq-title">Graphic Equalizer</h3>
         <button class="yt-eq-close">&times;</button>
     </div>
     <div class="yt-eq-toggle-row">
         <span>Enable EQ</span>
         <div class="yt-toggle ${isEqOn ? 'active' : ''}" id="eqToggleBtn"></div>
     </div>
-    <div class="yt-eq-sliders">
-        ${[60, 230, 640, '1.5k', '3.6k', '7k', '14k'].map((freq, i) => `
-            <div class="yt-eq-slider-col">
-                <input type="range" class="yt-eq-slider" data-index="${i}" min="-12" max="12" step="0.5" value="${eqValues[i]}">
-                <span>${freq}</span>
-            </div>
-        `).join('')}
-    </div>
+    <canvas id="eqCanvas" width="402" height="220"></canvas>
 `;
 document.body.appendChild(eqModal);
 
+const canvas = document.getElementById("eqCanvas");
+const ctx = canvas.getContext("2d");
+let isDragging = false;
+let activeNode = -1;
+let animFrame;
+
+function getX(index) {
+    const padding = 30;
+    const spacing = (canvas.width - padding * 2) / 6;
+    return padding + index * spacing;
+}
+
+function getY(val) {
+    const paddingY = 30;
+    const usableHeight = canvas.height - paddingY * 2;
+    return canvas.height / 2 - (val / 12) * (usableHeight / 2);
+}
+
+function getValFromY(y) {
+    const paddingY = 30;
+    const usableHeight = canvas.height - paddingY * 2;
+    let val = (canvas.height / 2 - y) / (usableHeight / 2) * 12;
+    return Math.max(-12, Math.min(12, val));
+}
+
+function drawEQ() {
+    if (eqModal.style.display === "none") return;
+    
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, canvas.height / 2);
+    ctx.lineTo(canvas.width, canvas.height / 2);
+    ctx.stroke();
+
+    for (let i = 0; i <= 6; i++) {
+        let x = getX(i);
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+        
+        ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
+        ctx.font = "10px Arial";
+        ctx.textAlign = "center";
+        let label = freqs[i] >= 1000 ? (freqs[i]/1000) + 'k' : freqs[i];
+        ctx.fillText(label, x, canvas.height - 8);
+    }
+
+    if (analyzer && freqDataArray && isEqOn) {
+        analyzer.getByteFrequencyData(freqDataArray);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.15)";
+        ctx.beginPath();
+        ctx.moveTo(0, canvas.height);
+        let barWidth = canvas.width / freqDataArray.length;
+        for (let i = 0; i < freqDataArray.length; i++) {
+            let percent = freqDataArray[i] / 255;
+            let y = canvas.height - (percent * canvas.height * 0.8);
+            ctx.lineTo(i * barWidth, y);
+        }
+        ctx.lineTo(canvas.width, canvas.height);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    ctx.strokeStyle = isEqOn ? "#3ea6ff" : "rgba(255, 255, 255, 0.3)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    
+    let points = [];
+    points.push({x: 0, y: getY(eqValues[0])});
+    for (let i = 0; i < 7; i++) {
+        points.push({x: getX(i), y: getY(eqValues[i])});
+    }
+    points.push({x: canvas.width, y: getY(eqValues[6])});
+
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length - 2; i++) {
+        let xc = (points[i].x + points[i + 1].x) / 2;
+        let yc = (points[i].y + points[i + 1].y) / 2;
+        ctx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
+    }
+    ctx.quadraticCurveTo(points[points.length - 2].x, points[points.length - 2].y, points[points.length - 1].x, points[points.length - 1].y);
+    ctx.stroke();
+
+    if (isEqOn) {
+        for (let i = 0; i < 7; i++) {
+            let cx = getX(i);
+            let cy = getY(eqValues[i]);
+            
+            ctx.beginPath();
+            ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+            ctx.fillStyle = activeNode === i ? "#fff" : "#181818";
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = activeNode === i ? "#fff" : "#f39c12";
+            ctx.stroke();
+
+            ctx.fillStyle = activeNode === i ? "#000" : "#f39c12";
+            ctx.font = "bold 9px Arial";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(i + 1, cx, cy);
+        }
+    }
+
+    animFrame = requestAnimationFrame(drawEQ);
+}
+
+canvas.addEventListener("mousedown", (e) => {
+    if (!isEqOn) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    for (let i = 0; i < 7; i++) {
+        let cx = getX(i);
+        let cy = getY(eqValues[i]);
+        if (Math.hypot(x - cx, y - cy) < 15) {
+            isDragging = true;
+            activeNode = i;
+            break;
+        }
+    }
+});
+
+canvas.addEventListener("mousemove", (e) => {
+    if (!isDragging || activeNode === -1 || !isEqOn) return;
+    const rect = canvas.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    eqValues[activeNode] = getValFromY(y);
+    applyEQSettings();
+});
+
+window.addEventListener("mouseup", () => {
+    if (isDragging) {
+        localStorage.setItem("eqValues", JSON.stringify(eqValues));
+    }
+    isDragging = false;
+    activeNode = -1;
+});
+
 eqModal.querySelector('.yt-eq-close').addEventListener('click', () => {
     eqModal.style.display = "none";
+    cancelAnimationFrame(animFrame);
 });
 
 eqModal.querySelector('#eqToggleBtn').addEventListener('click', function() {
@@ -368,23 +501,15 @@ eqModal.querySelector('#eqToggleBtn').addEventListener('click', function() {
     applyEQSettings();
 });
 
-eqModal.querySelectorAll('.yt-eq-slider').forEach(slider => {
-    slider.addEventListener('input', function() {
-        const index = parseInt(this.getAttribute('data-index'));
-        eqValues[index] = parseFloat(this.value);
-        localStorage.setItem("eqValues", JSON.stringify(eqValues));
-        if (isEqOn) applyEQSettings();
-    });
-});
-
 eqOption.addEventListener("click", function() {
     popupMenu.style.display = "none";
     eqModal.style.display = "block";
+    drawEQ();
 });
 
 function applyEQSettings() {
     if (!audioCtx || eqFilters.length === 0) return;
-    const smoothTime = 0.1;
+    const smoothTime = 0.05;
     eqFilters.forEach((filter, i) => {
         const targetGain = isEqOn ? eqValues[i] : 0;
         filter.gain.setTargetAtTime(targetGain, audioCtx.currentTime, smoothTime);
@@ -413,13 +538,13 @@ function initAudio() {
         source = audioCtx.createMediaElementSource(currentAud);
         
         analyzer = audioCtx.createAnalyser();
-        analyzer.fftSize = 2048; 
+        analyzer.fftSize = 512; 
         dataArray = new Float32Array(analyzer.frequencyBinCount);
+        freqDataArray = new Uint8Array(analyzer.frequencyBinCount);
 
         gainNode = audioCtx.createGain();
         compressorNode = audioCtx.createDynamicsCompressor();
 
-        const freqs = [60, 230, 640, 1500, 3600, 7000, 14000];
         const types = ['lowshelf', 'peaking', 'peaking', 'peaking', 'peaking', 'peaking', 'highshelf'];
         
         eqFilters = freqs.map((freq, i) => {
@@ -576,14 +701,14 @@ if (whisperOption) {
  if (snapshotOption) {
     snapshotOption.addEventListener("click", function() {
         if (video.videoWidth > 0 && video.videoHeight > 0) {
-            var canvas = document.createElement("canvas");
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
+            var sc = document.createElement("canvas");
+            sc.width = video.videoWidth;
+            sc.height = video.videoHeight;
             
-            var ctx = canvas.getContext("2d");
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            var sctx = sc.getContext("2d");
+            sctx.drawImage(video, 0, 0, sc.width, sc.height);
             
-            var dataURL = canvas.toDataURL("image/png");
+            var dataURL = sc.toDataURL("image/png");
             
             var videoName = "snapshot";
             var src = video.currentSrc || video.src || "";
@@ -692,6 +817,5 @@ function getNextSpeed(currentSpeed) {
         return maxSpeed;
     }
 }
-
 const GoogleTranslateEndpoint = "https://translate.google.com/_/TranslateWebserverUi/data/batchexecute?rpcids=MkEWBc&rt=c"
 // @license-end
