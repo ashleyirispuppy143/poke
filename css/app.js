@@ -385,7 +385,6 @@ function drawEQ() {
     ptdEqCtx.fillRect(0, 0, ptdEqCanvasEl.width, ptdEqCanvasEl.height);
 
     ptdEqCtx.globalAlpha = isEqOn ? 1.0 : 0.4;
-
     ptdEqCtx.strokeStyle = "rgba(255, 255, 255, 0.08)";
     ptdEqCtx.lineWidth = 1;
     
@@ -407,7 +406,7 @@ function drawEQ() {
         let x = getX(i);
         
         ptdEqCtx.strokeStyle = "#000";
-        ptdEqCtx.lineWidth = 8;
+        ptdEqCtx.lineWidth = 6;
         ptdEqCtx.lineCap = "round";
         ptdEqCtx.beginPath();
         ptdEqCtx.moveTo(x, getY(12));
@@ -436,15 +435,19 @@ function drawEQ() {
     animFrame = requestAnimationFrame(drawEQ);
 }
 
+// Fixed coordinate scaling for perfectly aligned mouse hitboxes
 ptdEqCanvasEl.addEventListener("mousedown", (e) => {
     if (!isEqOn) return;
     const rect = ptdEqCanvasEl.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const scaleX = ptdEqCanvasEl.width / rect.width;
+    const scaleY = ptdEqCanvasEl.height / rect.height;
+    
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
     
     for (let i = 0; i < 7; i++) {
         let cx = getX(i);
-        if (Math.abs(x - cx) < 20) {
+        if (Math.abs(x - cx) < 25) { // Generous hitbox width
             isDragging = true;
             activeNode = i;
             eqValues[i] = getValFromY(y);
@@ -457,7 +460,9 @@ ptdEqCanvasEl.addEventListener("mousedown", (e) => {
 ptdEqCanvasEl.addEventListener("mousemove", (e) => {
     if (!isDragging || activeNode === -1 || !isEqOn) return;
     const rect = ptdEqCanvasEl.getBoundingClientRect();
-    const y = e.clientY - rect.top;
+    const scaleY = ptdEqCanvasEl.height / rect.height;
+    
+    const y = (e.clientY - rect.top) * scaleY;
     eqValues[activeNode] = getValFromY(y);
     applyEQSettings();
 });
@@ -482,7 +487,7 @@ ptdEqModal.querySelector('#ptdEqToggleBtn').addEventListener('click', function()
     
     if (isEqOn) {
         audioState = "none";
-        applyAudioState(true);
+        applyAudioState(true); 
     }
     
     updateUIAccessibility();
@@ -493,14 +498,24 @@ ptdEqOption.addEventListener("click", function() {
     popupMenu.style.display = "none";
     ptdEqModal.style.display = "block";
     drawEQ();
+    
+    if (isEqOn && !audioCtx) {
+        applyAudioState(true);
+    }
 });
 
+// Fixed applying EQ settings instantly
 function applyEQSettings() {
     if (!audioCtx || eqFilters.length === 0) return;
-    const smoothTime = 0.05;
+    
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+    
     eqFilters.forEach((filter, i) => {
         const targetGain = isEqOn ? eqValues[i] : 0;
-        filter.gain.setTargetAtTime(targetGain, audioCtx.currentTime, smoothTime);
+        // Direct assignment to fix the "late / laggy" bug
+        filter.gain.value = targetGain; 
     });
 }
 
@@ -557,7 +572,7 @@ function initAudio() {
         compressorNode.attack.value = 0.003;
         compressorNode.release.value = 0.25;
     } catch (e) {
-        console.error(e);
+        console.error("Audio Routing bypassed:", e);
     }
 }
 
