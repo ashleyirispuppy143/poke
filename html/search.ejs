@@ -1867,7 +1867,7 @@ font-weight: 1000;">dont.</h1></a>
   }
 </style>
 
-   <%  if (invresults?.length < 1) { %>
+   <%  if (invresults.results?.length < 1) { %>
               <style>
               #filters {
                 display:none
@@ -1951,7 +1951,7 @@ no results found :c	u can try <a href="https://youtube.com/results?search_query=
     <span class="label">Download</span>
   </a>
 
-  <a href="https://youtube.com/watch?v=<%= x.videoId %>" class="new-button">
+  <a href="/api/yturl?v=<%= x.videoId %>" class="new-button">
     <span class="icon"><i class="fa-brands fa-youtube"></i></span>
     <span class="label">Open on YouTube :/</span>
   </a>
