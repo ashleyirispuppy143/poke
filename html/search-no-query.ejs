@@ -17,6 +17,7 @@
     You should have received a copy of the GNU General Public License
     along with this program. If not, see https://www.gnu.org/licenses/.
 -->
+
 <%
  
   function FilterChannels(videos, blockedAuthors, limit) {
@@ -219,6 +220,43 @@ input{
   transform:translateY(-1px);
 }
 
+/* Bang Indicator Styles */
+.bang-indicator {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 20px;
+  background: var(--panel2);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  box-shadow: var(--shadow);
+  z-index: 20;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+  font-variation-settings: "wdth" 126, "wght" 500;
+}
+
+.bang-indicator.hidden {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-8px);
+  pointer-events: none;
+}
+
+.bang-indicator a {
+  color: var(--accent);
+  text-decoration: underline;
+  margin-left: 4px;
+  transition: filter 0.2s ease;
+}
+
+.bang-indicator a:hover {
+  filter: brightness(1.2);
+}
+
 .quick-links{
   margin-top:22px;
   display:flex;
@@ -298,11 +336,21 @@ input{
 }
 
 .search-note{
-  margin-top:16px;
+  margin-top:24px;
   text-align:center;
   color:var(--muted2);
-  font-size:12.5px;
-  font-variation-settings:"wdth" 126,"wght" 420;
+  font-size:13px;
+  font-variation-settings:"wdth" 126,"wght" 460;
+}
+
+.search-note a {
+  color: var(--muted);
+  text-decoration: underline;
+  transition: color 0.2s ease;
+}
+
+.search-note a:hover {
+  color: var(--text);
 }
 
 .content{
@@ -600,6 +648,12 @@ input{
     font-size:15px;
   }
 
+  .bang-indicator {
+    left: 10px;
+    right: 10px;
+    text-align: center;
+  }
+
   .quick-links{
     gap:18px;
     margin-top:18px;
@@ -655,6 +709,12 @@ input{
       <form class="search-form" action="/search" method="get">
         <div class="search-field">
           <input class="search-bar" autocomplete="on" id="fname" name="query" type="text" placeholder="Search Videos, use bangs, do math, and more...">
+          
+          <div id="bang-indicator" class="bang-indicator hidden">
+            <i class="fa-solid fa-bolt" style="color: var(--accent); margin-right: 4px;"></i>
+            You are using bangs! <a href="https://duckduckgo.com/bangs" target="_blank" rel="noopener noreferrer">Learn more here.</a>
+          </div>
+
         </div>
       </form>
 
@@ -686,6 +746,10 @@ input{
           </a>
           <span class="quick-label">Calendar</span>
         </div>
+      </div>
+
+      <div class="search-note">
+        Want to unlock powerful search shortcuts? <a href="https://duckduckgo.com/bangs" target="_blank" rel="noopener noreferrer">Learn about Bangs</a>
       </div>
 
      </div>
@@ -739,6 +803,7 @@ input{
 </div>
 
 <script>
+// Toggle Discover Videos logic
 (function () {
   var section = document.getElementById("discover-section");
   var button = document.getElementById("discover-toggle");
@@ -791,6 +856,22 @@ input{
     updateButton();
     saveState();
   });
+})();
+
+// Bang Indicator Logic
+(function () {
+  var searchInput = document.getElementById("fname");
+  var bangIndicator = document.getElementById("bang-indicator");
+
+  if (searchInput && bangIndicator) {
+    searchInput.addEventListener("input", function (e) {
+      if (e.target.value.includes("!")) {
+        bangIndicator.classList.remove("hidden");
+      } else {
+        bangIndicator.classList.add("hidden");
+      }
+    });
+  }
 })();
 </script>
 
