@@ -271,9 +271,7 @@ function fetchUrls(urls) {
   
   }
   }
- 
-  
-var popupMenu = document.getElementById("popupMenu");
+ var popupMenu = document.getElementById("popupMenu");
 var loopOption = document.getElementById("loopOption");
 var speedOption = document.getElementById("speedOption");
 var boostOption = document.getElementById("boostOption");
@@ -281,16 +279,137 @@ var normalizeOption = document.getElementById("normalizeOption");
 var whisperOption = document.getElementById("whisperOption"); 
 var snapshotOption = document.getElementById("snapshotOption");
 var loopedIndicator = document.getElementById("loopedIndicator");
- 
+
 loopedIndicator.style.display = "none";
 
 let audioCtx, source, gainNode, compressorNode, analyzer;
 
- let audioState = localStorage.getItem("audioMode") || "normalize"; 
-
- let normalizerInterval = null;
+let audioState = localStorage.getItem("audioMode") || "normalize"; 
+let normalizerInterval = null;
 let dataArray = null;
 let currentAutoGain = 1.0;
+
+// --- EQ Variables & Logic ---
+let eqFilters = [];
+let eqValues = JSON.parse(localStorage.getItem("eqValues")) || [0, 0, 0, 0, 0];
+let isEqOn = localStorage.getItem("isEqOn") === "true";
+
+// Inject CSS for the EQ Modal dynamically
+const eqStyle = document.createElement('style');
+eqStyle.innerHTML = `
+    .yt-eq-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(28,28,28,0.95); color: #fff; padding: 24px; border-radius: 12px; font-family: 'Roboto', Arial, sans-serif; display: none; z-index: 999999; box-shadow: 0 4px 24px rgba(0,0,0,0.6); width: 320px; backdrop-filter: blur(8px); }
+    .yt-eq-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px; margin-bottom: 20px; }
+    .yt-eq-title { font-size: 16px; font-weight: 500; margin:0; }
+    .yt-eq-close { cursor: pointer; font-size: 24px; color: #aaa; background: none; border: none; line-height: 1; padding: 0; }
+    .yt-eq-close:hover { color: #fff; }
+    .yt-eq-toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; font-size: 14px; }
+    .yt-toggle { position: relative; width: 36px; height: 20px; background: rgba(255,255,255,0.2); border-radius: 10px; cursor: pointer; transition: 0.2s; }
+    .yt-toggle.active { background: #3ea6ff; }
+    .yt-toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background: white; border-radius: 50%; transition: 0.2s; }
+    .yt-toggle.active::after { left: 18px; }
+    .yt-eq-sliders { display: flex; justify-content: space-between; height: 160px; }
+    .yt-eq-slider-col { display: flex; flex-direction: column; align-items: center; justify-content: space-between; width: 40px;}
+    .yt-eq-slider-col span { font-size: 11px; color: #aaa; margin-top: 12px; font-weight: 500;}
+    .yt-eq-slider { -webkit-appearance: slider-vertical; appearance: slider-vertical; width: 4px; height: 130px; background: rgba(255,255,255,0.2); outline: none; border-radius: 2px; }
+    .yt-eq-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; background: #3ea6ff; border-radius: 50%; cursor: pointer; }
+    .disabled-menu-item { opacity: 0.4; pointer-events: none; }
+`;
+document.head.appendChild(eqStyle);
+
+// Build EQ Menu Option dynamically in Context Menu
+var eqOption = document.createElement("div");
+eqOption.id = "eqOption";
+eqOption.innerHTML = "<i class='fa-light fa-sliders'></i> Audio Equalizer";
+eqOption.style.cursor = "pointer";
+eqOption.style.padding = "10px"; // Default padding mimicking standard context menus
+// Insert EQ Option into the popupMenu before the snapshot option or at the end
+if (snapshotOption) {
+    popupMenu.insertBefore(eqOption, snapshotOption);
+} else {
+    popupMenu.appendChild(eqOption);
+}
+
+// Build the EQ Modal UI dynamically
+const eqModal = document.createElement("div");
+eqModal.className = "yt-eq-modal";
+eqModal.innerHTML = `
+    <div class="yt-eq-header">
+        <h3 class="yt-eq-title">Audio Equalizer</h3>
+        <button class="yt-eq-close">&times;</button>
+    </div>
+    <div class="yt-eq-toggle-row">
+        <span>Enable EQ</span>
+        <div class="yt-toggle ${isEqOn ? 'active' : ''}" id="eqToggleBtn"></div>
+    </div>
+    <div class="yt-eq-sliders">
+        ${[60, 230, 910, '3.6k', '14k'].map((freq, i) => `
+            <div class="yt-eq-slider-col">
+                <input type="range" class="yt-eq-slider" data-index="${i}" min="-12" max="12" step="0.5" value="${eqValues[i]}">
+                <span>${freq}</span>
+            </div>
+        `).join('')}
+    </div>
+`;
+document.body.appendChild(eqModal);
+
+// Modal Event Listeners
+eqModal.querySelector('.yt-eq-close').addEventListener('click', () => {
+    eqModal.style.display = "none";
+});
+
+eqModal.querySelector('#eqToggleBtn').addEventListener('click', function() {
+    isEqOn = !isEqOn;
+    this.classList.toggle('active', isEqOn);
+    localStorage.setItem("isEqOn", isEqOn);
+    
+    if (isEqOn) {
+        // If EQ turned on, force other audio enhancements off
+        audioState = "none";
+        applyAudioState(true);
+    }
+    
+    updateUIAccessibility();
+    applyEQSettings();
+});
+
+eqModal.querySelectorAll('.yt-eq-slider').forEach(slider => {
+    slider.addEventListener('input', function() {
+        const index = parseInt(this.getAttribute('data-index'));
+        eqValues[index] = parseFloat(this.value);
+        localStorage.setItem("eqValues", JSON.stringify(eqValues));
+        if (isEqOn) applyEQSettings();
+    });
+});
+
+eqOption.addEventListener("click", function() {
+    popupMenu.style.display = "none";
+    eqModal.style.display = "block";
+});
+
+function applyEQSettings() {
+    if (!audioCtx || eqFilters.length === 0) return;
+    const smoothTime = 0.1;
+    eqFilters.forEach((filter, i) => {
+        const targetGain = isEqOn ? eqValues[i] : 0;
+        filter.gain.setTargetAtTime(targetGain, audioCtx.currentTime, smoothTime);
+    });
+}
+
+function updateUIAccessibility() {
+    // Disable/Enable Boost, Normalize, Whisper based on EQ State
+    [boostOption, normalizeOption, whisperOption].forEach(opt => {
+        if (!opt) return;
+        if (isEqOn) {
+            opt.classList.add("disabled-menu-item");
+            opt.title = "Disable EQ to use this feature";
+        } else {
+            opt.classList.remove("disabled-menu-item");
+            opt.title = "";
+        }
+    });
+}
+// ----------------------------
+
 
 function initAudio() {
     var currentAud = document.getElementById("aud"); 
@@ -307,8 +426,27 @@ function initAudio() {
         gainNode = audioCtx.createGain();
         compressorNode = audioCtx.createDynamicsCompressor();
 
+        // Setup 5-Band EQ Filters
+        const freqs = [60, 230, 910, 3600, 14000];
+        const types = ['lowshelf', 'peaking', 'peaking', 'peaking', 'highshelf'];
+        
+        eqFilters = freqs.map((freq, i) => {
+            let f = audioCtx.createBiquadFilter();
+            f.type = types[i];
+            f.frequency.value = freq;
+            f.gain.value = isEqOn ? eqValues[i] : 0;
+            return f;
+        });
+
+        // Connect Filters in Series
+        for (let i = 0; i < eqFilters.length - 1; i++) {
+            eqFilters[i].connect(eqFilters[i+1]);
+        }
+
+        // Routing: source -> analyzer -> EQ filters -> gain -> compressor -> destination
         source.connect(analyzer);
-        analyzer.connect(gainNode);
+        analyzer.connect(eqFilters[0]);
+        eqFilters[eqFilters.length - 1].connect(gainNode);
         gainNode.connect(compressorNode);
         compressorNode.connect(audioCtx.destination);
 
@@ -342,7 +480,9 @@ function applyAudioState(isUserInteraction = false) {
         normalizeOption.innerHTML = "<i class='fa-light fa-wave-square'></i> Audio Normalization";
         boostOption.innerHTML = "<i class='fa-light fa-volume-high'></i> Audio Boost";
         if (whisperOption) whisperOption.innerHTML = "<i class='fa-light fa-volume-low'></i> Whisper Mode";
-        if (audioStatusDisplay) audioStatusDisplay.innerHTML = "";
+        if (audioStatusDisplay) {
+            audioStatusDisplay.innerHTML = isEqOn ? "&nbsp; &bull; &nbsp;<i class='fa-light fa-sliders'></i> EQ Active" : "";
+        }
     }
 
     localStorage.setItem("audioMode", audioState);
@@ -406,6 +546,8 @@ function applyAudioState(isUserInteraction = false) {
     if (audioCtx.state === 'suspended') audioCtx.resume();
 }
 
+// Initial Calls
+updateUIAccessibility();
 applyAudioState(false);
  
 document.addEventListener('play', function(event) {
@@ -413,7 +555,7 @@ document.addEventListener('play', function(event) {
         if (audioCtx && audioCtx.state === 'suspended') {
             audioCtx.resume();
         }
-        if (audioState !== "none" && !audioCtx) {
+        if ((audioState !== "none" || isEqOn) && !audioCtx) {
             applyAudioState(true); 
         }
     }
@@ -421,12 +563,14 @@ document.addEventListener('play', function(event) {
 
 
 boostOption.addEventListener("click", function() {
+    if (isEqOn) return; // Prevent if EQ is on
     audioState = (audioState === "boost") ? "none" : "boost";
     applyAudioState(true); 
     popupMenu.style.display = "none"; 
 });
 
 normalizeOption.addEventListener("click", function() {
+    if (isEqOn) return; // Prevent if EQ is on
     audioState = (audioState === "normalize") ? "none" : "normalize";
     applyAudioState(true); 
     popupMenu.style.display = "none";
@@ -434,6 +578,7 @@ normalizeOption.addEventListener("click", function() {
 
 if (whisperOption) {
     whisperOption.addEventListener("click", function() {
+        if (isEqOn) return; // Prevent if EQ is on
         audioState = (audioState === "whisper") ? "none" : "whisper";
         applyAudioState(true); 
         popupMenu.style.display = "none";
@@ -457,14 +602,12 @@ if (whisperOption) {
             var src = video.currentSrc || video.src || "";
             
             if (src && !src.startsWith("blob:")) {
-                // Remove path, search queries and hashes
                 var fileNameWithExt = src.split('/').pop().split('?')[0].split('#')[0];
-                // Strip out the file extension (e.g. .mp4)
                 var lastDot = fileNameWithExt.lastIndexOf('.');
                 var baseName = lastDot !== -1 ? fileNameWithExt.substring(0, lastDot) : fileNameWithExt;
                 
                 try {
-                    videoName = decodeURIComponent(baseName) || "snapshot"; // Fix %20 spaces
+                    videoName = decodeURIComponent(baseName) || "snapshot"; 
                 } catch(e) {
                     videoName = baseName || "snapshot";
                 }
@@ -472,7 +615,7 @@ if (whisperOption) {
                  videoName = document.title ? document.title.replace(/[^a-zA-Z0-9 -]/g, "").trim() : "snapshot";
             }
 
-            // 2. Format Current Timestamp (e.g., "1h2m34s" or "4m12s")
+            // 2. Format Current Timestamp
             var time = video.currentTime;
             var hrs = Math.floor(time / 3600);
             var mins = Math.floor((time % 3600) / 60);
@@ -504,7 +647,7 @@ video.addEventListener("contextmenu", function(event) {
 });
 
 window.addEventListener("click", function(event) {
-    if (event.target !== video) {
+    if (event.target !== video && !eqModal.contains(event.target)) {
         popupMenu.style.display = "none";
     }
 });
