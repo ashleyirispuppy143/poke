@@ -1843,7 +1843,7 @@ WIP!                                                 </a>
 
   const getUserScoreLabel = (score) => {
     const s = parseFloat(score);
-    if (s >= 98) return "Masterpiece Video";
+    if (s >= 98) return "Masterpiece!";
     if (s >= 80) return "Overwhelmingly Positive";
     if (s >= 60) return "Positive";
     if (s >= 40) return "Mixed";
@@ -2180,8 +2180,8 @@ WIP!                                                 </a>
         </div>
 
         <div class="meta-clean-row">
-          <div class="meta-clean-label"><%= publishLabel %></div>
-          <div class="meta-clean-value"><%= publishValue %></div>
+          <div class="meta-clean-label">Full View Count</div>
+          <div class="meta-clean-value"><%= engagement?.viewCount?.toLocaleString() %></div>
         </div>
       </div>
     </div>
@@ -2235,9 +2235,10 @@ WIP!                                                 </a>
         <div class="meta-clean-details-content">
           <div class="meta-clean-list">
             <div class="meta-clean-row">
-              <div class="meta-clean-label">Views</div>
-              <div class="meta-clean-value"><%= engagement?.viewCount?.toLocaleString() %></div>
+              <div class="meta-clean-label"><%= publishLabel %></div>
+              <div class="meta-clean-value"><%= publishValue %></div>
             </div>
+
 
             <div class="meta-clean-row">
               <div class="meta-clean-label">License</div>
@@ -2245,14 +2246,14 @@ WIP!                                                 </a>
             </div>
 
             <div class="meta-clean-row">
-              <div class="meta-clean-label">RYD date created</div>
+              <div class="meta-clean-label">RYD dateCreated</div>
               <div class="meta-clean-value"><%= engagement?.dateCreated?.toLocaleString() %></div>
             </div>
 
             <div class="meta-clean-row">
               <div class="meta-clean-label">Raw data</div>
               <div class="meta-clean-value">
-                <a class="meta-clean-link" href="/api/getEngagementData?v=<%= VideoData.videoId %>">See in json</a>
+                <a class="meta-clean-link" href="/api/getEngagementData?v=<%= VideoData.videoId %>">See in json here!</a>
               </div>
             </div>
           </div>
