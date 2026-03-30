@@ -19,8 +19,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  *
  * "It takes a lot of hard work to make something simple." ~ Steve Jobs 
  */
-// before DOMContentLoaded. Ensures both video and audio start at 00:00
-// even if the browser pre-buffers to a non-zero keyframe position.
+
 // This runs in a try-catch because elements might not exist yet.
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
@@ -33,6 +32,16 @@ try {
   const _earlyAudio = document.getElementById("aud");
   if (_earlyVideo && !_startupZeroSuppressed()) { _earlyVideo.currentTime = 0; }
   if (_earlyAudio && !_startupZeroSuppressed()) { _earlyAudio.currentTime = 0; }
+  if (_earlyAudio) {
+    try { _earlyAudio.preload = "auto"; } catch {}
+    try {
+      const _earlyAudioSrc =
+        (_earlyAudio.getAttribute?.("src") ||
+        _earlyAudio.querySelector?.("source")?.getAttribute?.("src") ||
+        "").trim();
+      if (_earlyAudioSrc) _earlyAudio.load();
+    } catch {}
+  }
   // Also strip loop attribute early to prevent browser-native looping
   if (_earlyVideo) { _earlyVideo.removeAttribute("loop"); _earlyVideo.loop = false; }
   // Re-check on loadedmetadata (browser can move currentTime after our zero-set)
@@ -4171,6 +4180,36 @@ document.addEventListener("DOMContentLoaded", () => {
     state.audioEventsSquelchedUntil = 0;
     state.audioPausedSince = 0;
   }
+  function isConfirmedForegroundVideoStall(minAgeMs = 450) {
+    if (!coupledMode || !audio) return false;
+    if (!state.intendedPlaying || state.restarting) return false;
+    if (!state.videoWaiting || state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
+    if (!state.firstPlayCommitted) return false;
+    if (document.visibilityState === "hidden") return false;
+    if (now() < state.audioStartGraceUntil) return false;
+    const vNode = getVideoNode();
+    const vRS = vNode ? Number(vNode.readyState || 0) : 4;
+    if (vRS >= HAVE_FUTURE_DATA) return false;
+    const stallAge = state.videoStallSince ? (now() - state.videoStallSince) : 0;
+    return stallAge >= Math.max(0, Number(minAgeMs) || 0);
+  }
+  function pauseAudioForConfirmedVideoStall(holdMs = MIN_STALL_AUDIO_RESUME_MS) {
+    if (!coupledMode || !audio || audio.paused) return false;
+    const holdUntil = now() + Math.max(0, Number(holdMs) || 0);
+    state.videoStallAudioPaused = true;
+    state.stallAudioPausedSince = state.stallAudioPausedSince || now();
+    state.audioPausedSince = 0;
+    state.stallAudioResumeHoldUntil = Math.max(state.stallAudioResumeHoldUntil, holdUntil);
+    state.bufferHoldIntendedPlaying = state.intendedPlaying;
+    cancelActiveFade();
+    state.isProgrammaticAudioPause = true;
+    squelchAudioEvents(400);
+    state.audioPauseUntil = Math.max(state.audioPauseUntil, now() + 400);
+    try { audio.volume = 0; } catch {}
+    try { audio.pause(); } catch {}
+    setTimeout(() => { state.isProgrammaticAudioPause = false; }, 150);
+    return true;
+  }
   function setPauseEventGuard(ms = 1000) {
     state.pauseEventGuardUntil = Math.max(state.pauseEventGuardUntil, now() + Math.max(0, Number(ms) || 0));
   }
@@ -7668,20 +7707,8 @@ document.addEventListener("DOMContentLoaded", () => {
               if (state.videoWaiting && coupledMode && !aPaused && !NotMakePlayBackFixingNoticable.isActive() &&
                   _syncRS < HAVE_FUTURE_DATA && !_syncInGrace && document.visibilityState !== "hidden" &&
                   state.firstPlayCommitted /* don't kill audio during page-load buffering */) {
-                // Only pause audio if stall has persisted for > 500ms — brief rebuffers
-                // are normal and killing audio on every one causes choppy playback.
-                const stallAge = state.videoStallSince ? (now() - state.videoStallSince) : 0;
-                if (stallAge > 500 && !state.videoStallAudioPaused) {
-                  state.videoStallAudioPaused = true;
-                  state.stallAudioPausedSince = now();
-                  state.audioPausedSince = 0;
-                  state.stallAudioResumeHoldUntil = now() + MIN_STALL_AUDIO_RESUME_MS;
-                  cancelActiveFade();
-                  state.isProgrammaticAudioPause = true;
-                  squelchAudioEvents(400);
-                  state.audioPauseUntil = Math.max(state.audioPauseUntil, now() + 400);
-                  try { audio.volume = 0; audio.pause(); } catch {}
-                  setTimeout(() => { state.isProgrammaticAudioPause = false; }, 150);
+                if (isConfirmedForegroundVideoStall(500) && !state.videoStallAudioPaused) {
+                  pauseAudioForConfirmedVideoStall();
                 }
               } else if (state.videoWaiting && _syncRS >= HAVE_FUTURE_DATA) {
                 // stale flag, clear it
@@ -7876,19 +7903,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // NEVER kill audio during startup/page-load — stalls are normal while buffering.
     const vNodeBuf = getVideoNode();
     const vRSBuf = vNodeBuf ? Number(vNodeBuf.readyState || 0) : 0;
-    const reallyStalled = state.videoWaiting && vRSBuf < HAVE_FUTURE_DATA;
-    const inGrace = now() < state.audioStartGraceUntil;
-    const inStartup = !state.firstPlayCommitted;
-    if (reallyStalled && !audio.paused && document.visibilityState !== "hidden" && !inGrace && !inStartup) {
-      try { audio.volume = 0; } catch {}
-      try { audio.pause(); } catch {}
-      // stamp the hold once, not every frame (refreshing = it never expires)
-      if (!state.videoStallAudioPaused) {
-        state.videoStallAudioPaused = true;
-        state.stallAudioPausedSince = now();
-        state.bufferHoldIntendedPlaying = state.intendedPlaying;
-        state.stallAudioResumeHoldUntil = now() + MIN_STALL_AUDIO_RESUME_MS;
-      }
+    const reallyStalled = isConfirmedForegroundVideoStall(450);
+    if (reallyStalled && !state.videoStallAudioPaused) {
+      pauseAudioForConfirmedVideoStall();
     }
     _bufMonRafId = requestAnimationFrame(bufferMonitorTick);
   }
@@ -7910,13 +7927,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (coupledMode && audio && !audio.paused && document.visibilityState !== "hidden" && state.videoWaiting) {
         const _hbVNode = getVideoNode();
         const _hbRS = _hbVNode ? Number(_hbVNode.readyState || 0) : 4;
-        if (_hbRS < HAVE_FUTURE_DATA && !(nowTs < state.audioStartGraceUntil)) {
-          try { audio.volume = 0; } catch {}
-          try { audio.pause(); } catch {}
-          if (!state.videoStallAudioPaused) {
-            state.videoStallAudioPaused = true;
-            state.bufferHoldIntendedPlaying = state.intendedPlaying;
-          }
+        if (_hbRS < HAVE_FUTURE_DATA && isConfirmedForegroundVideoStall(450)) {
+          if (!state.videoStallAudioPaused) pauseAudioForConfirmedVideoStall();
         } else if (_hbRS >= HAVE_FUTURE_DATA) {
           // stale flag, video has data
           state.videoWaiting = false;
@@ -9738,18 +9750,8 @@ document.addEventListener("DOMContentLoaded", () => {
             const _reVN = getVideoNode();
             const _reRS = _reVN ? Number(_reVN.readyState || 0) : 0;
             if (_reRS >= HAVE_FUTURE_DATA) { state.videoWaiting = false; return; }
-            state.videoStallAudioPaused = true;
-            state.stallAudioPausedSince = now();
-            state.audioPausedSince = 0;
-            state.stallAudioResumeHoldUntil = now() + MIN_STALL_AUDIO_RESUME_MS;
-            state.bufferHoldIntendedPlaying = true;
-            cancelActiveFade();
-            state.isProgrammaticAudioPause = true;
-            squelchAudioEvents(400);
-            state.audioPauseUntil = Math.max(state.audioPauseUntil, now() + 400);
-            try { audio.volume = 0; } catch {}
-            try { audio.pause(); } catch {}
-            setTimeout(() => { state.isProgrammaticAudioPause = false; }, 150);
+            if (!isConfirmedForegroundVideoStall(400)) return;
+            pauseAudioForConfirmedVideoStall();
           }, 400);
         }
       }
@@ -11627,6 +11629,50 @@ document.addEventListener("DOMContentLoaded", () => {
     state.audioForcePlayTimer = setTimeout(tryPlay, 150);
   }
 
+  function bootstrapStartupAudioNow() {
+    if (!coupledMode || !audio) return;
+    if (state.restarting || state.seeking || state.seekBuffering) return;
+    if (mediaSessionForcedPauseActive() || userPauseLockActive()) return;
+
+    const vNode = getVideoNode();
+    const videoPlaying = !!(vNode && !vNode.paused);
+    const audioPlaying = !audio.paused;
+    const wantsStartupNow =
+      wantsStartupAutoplay() ||
+      state.intendedPlaying ||
+      videoPlaying ||
+      audioPlaying;
+    if (!wantsStartupNow) return;
+
+    const vrs = vNode ? Number(vNode.readyState || 0) : 0;
+    const ars = Number(audio.readyState || 0);
+    const vt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
+
+    if (!state.intendedPlaying && (wantsStartupAutoplay() || videoPlaying || audioPlaying)) {
+      state.intendedPlaying = true;
+      state.bufferHoldIntendedPlaying = true;
+    }
+
+    if (!state.startupPrimed && (videoPlaying || vrs >= HAVE_CURRENT_DATA || ars >= HAVE_METADATA || vt > 0)) {
+      maybePrimeStartup();
+    }
+
+    if (videoPlaying && audio.paused && !state.videoWaiting && !state.videoStallAudioPaused) {
+      clearAudioPauseLocks();
+      if (isFinite(vt)) safeSetAudioTime(vt);
+      try { audio.volume = targetVolFromVideo(); } catch {}
+      state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 900);
+      execProgrammaticAudioPlay({ squelchMs: 250, force: true, minGapMs: 0 }).catch(() => {});
+      forceAudioStartupPlay();
+    } else if (!audioPlaying && (state.startupPrimed || videoPlaying || vrs >= HAVE_CURRENT_DATA || ars >= HAVE_METADATA)) {
+      forceAudioStartupPlay();
+    }
+
+    if (state.startupPrimed && !state.firstPlayCommitted && !state.startupKickDone && !state.startupKickInFlight) {
+      scheduleStartupAutoplayKick();
+    }
+  }
+
   function clearAudioForcePlayTimer() {
     if (state.audioForcePlayTimer) {
       clearTimeout(state.audioForcePlayTimer);
@@ -11709,7 +11755,11 @@ document.addEventListener("DOMContentLoaded", () => {
   if (coupledMode) {
     try {
       audio.preload = "auto";
-      audio.load();
+      const audioLoadAlreadyStarted =
+        (Number(audio.readyState || 0) > 0) ||
+        (Number(audio.networkState || 0) !== 0) ||
+        !!audio.currentSrc;
+      if (!audioLoadAlreadyStarted) audio.load();
     } catch {}
     const maybeStart = () => maybePrimeStartup();
     const bindStartupOnce = (el, type, extraCb = null) => {
@@ -11743,6 +11793,13 @@ document.addEventListener("DOMContentLoaded", () => {
     bindStartupOnce(videoEl, "loadeddata");
     bindStartupOnce(videoEl, "loadedmetadata");
     bindStartupOnce(videoEl, "canplay");
+    [0, 120, 320].forEach(delay => {
+      setTimeout(() => {
+        if (!coupledMode || !audio) return;
+        if (state.firstPlayCommitted && state.audioEverStarted && !audio.paused) return;
+        bootstrapStartupAudioNow();
+      }, delay);
+    });
   }
   video.on("volumechange", () => {
     // during programmatic operations (seeking, stall recovery, startup), don't
@@ -11995,7 +12052,6 @@ document.addEventListener("DOMContentLoaded", () => {
     _handlePlayerCrash(msg, "promise", reason ? (reason.stack || "") : "");
   }, { passive: true });
 });
-
 
  
   
