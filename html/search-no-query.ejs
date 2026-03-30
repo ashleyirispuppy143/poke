@@ -17,17 +17,20 @@
     You should have received a copy of the GNU General Public License
     along with this program. If not, see https://www.gnu.org/licenses/.
 -->
-
 <%
  
   function FilterChannels(videos, blockedAuthors, limit) {
-    // First pass: collect all videos that are NOT from blocked authors
     var allowed = videos.filter(function(item) {
-      return blockedAuthors.indexOf(item.author) === -1;
+       var authorSafe = blockedAuthors.indexOf(item.author) === -1;
+      
+       var titleLengthSafe = item.title && item.title.trim().length >= 3;
+      
+       var noBrainrot = item.title && item.title.toLowerCase().indexOf("brainrot") === -1;
+      
+      return authorSafe && titleLengthSafe && noBrainrot;
     });
 
-    // Return up to `limit` allowed videos
-    return allowed.slice(0, limit);
+     return allowed.slice(0, limit);
   }
 
    // yes, these channels are usually gaming channels but they also do a lot of politics,
@@ -37,9 +40,8 @@
     "Asmongold TV  "
   ];
 
-  // Get up to 20 filtered videos, replacing any blocked-author slots with
-  // other videos from the inv object that are not from blocked authors.
-  var filteredVideos = FilterChannels(inv, blockedAuthors, 20);
+  // Get up to 30! filtered videos
+  var filteredVideos = FilterChannels(inv, blockedAuthors, 30);
 %>
       
 <!DOCTYPE html>
@@ -257,6 +259,23 @@ input{
   filter: brightness(1.2);
 }
 
+/* Home Extras Wrapper */
+.home-extras-wrapper {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.home-extras-wrapper.hidden {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(10px);
+  position: absolute;
+  pointer-events: none;
+  width: 100%;
+}
+
 .quick-links{
   margin-top:22px;
   display:flex;
@@ -341,6 +360,8 @@ input{
   color:var(--muted2);
   font-size:13px;
   font-variation-settings:"wdth" 126,"wght" 460;
+  /* Hidden by default, triggered randomly by JS */
+  display: none; 
 }
 
 .search-note a {
@@ -386,6 +407,9 @@ input{
   font-size:17px;
   line-height:1.2;
   font-variation-settings:"wdth" 138,"wght" 650;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .section-sub{
@@ -708,7 +732,7 @@ input{
     <div class="search-wrap">
       <form class="search-form" action="/search" method="get">
         <div class="search-field">
-          <input class="search-bar" autocomplete="on" id="fname" name="query" type="text" placeholder="Search Videos, use bangs, do math, and more...">
+          <input class="search-bar" autocomplete="off" id="fname" name="query" type="text" placeholder="Search Videos, use bangs, do math, and more...">
           
           <div id="bang-indicator" class="bang-indicator hidden">
             <i class="fa-solid fa-bolt" style="color: var(--accent); margin-right: 4px;"></i>
@@ -718,38 +742,40 @@ input{
         </div>
       </form>
 
-      <div class="quick-links" aria-label="Poke tools">
-        <div class="quick-tool">
-          <a class="quick-link translate" href="/translate" aria-label="Translate" title="Translate">
-            <i class="fa-solid fa-language" aria-hidden="true"></i>
-          </a>
-          <span class="quick-label">Translate</span>
+      <div id="home-extras" class="home-extras-wrapper">
+        <div class="quick-links" aria-label="Poke tools">
+          <div class="quick-tool">
+            <a class="quick-link translate" href="/translate" aria-label="Translate" title="Translate">
+              <i class="fa-solid fa-language" aria-hidden="true"></i>
+            </a>
+            <span class="quick-label">Translate</span>
+          </div>
+
+          <div class="quick-tool">
+            <a class="quick-link weather" href="/weather" aria-label="Weather" title="Weather">
+              <i class="fa-solid fa-cloud-sun" aria-hidden="true"></i>
+            </a>
+            <span class="quick-label">Weather</span>
+          </div>
+
+          <div class="quick-tool">
+            <a class="quick-link maps" href="/map" aria-label="Maps" title="Maps">
+              <i class="fa-solid fa-map-location-dot" aria-hidden="true"></i>
+            </a>
+            <span class="quick-label">Maps</span>
+          </div>
+
+          <div class="quick-tool">
+            <a class="quick-link calendar" href="/calendar" aria-label="Calendar" title="Calendar">
+              <i class="fa-solid fa-calendar-days" aria-hidden="true"></i>
+            </a>
+            <span class="quick-label">Calendar</span>
+          </div>
         </div>
 
-        <div class="quick-tool">
-          <a class="quick-link weather" href="/weather" aria-label="Weather" title="Weather">
-            <i class="fa-solid fa-cloud-sun" aria-hidden="true"></i>
-          </a>
-          <span class="quick-label">Weather</span>
+        <div id="random-bang-note" class="search-note">
+          Want to unlock powerful search shortcuts? <a href="https://duckduckgo.com/bangs" target="_blank" rel="noopener noreferrer">Learn about Bangs</a>
         </div>
-
-        <div class="quick-tool">
-          <a class="quick-link maps" href="/map" aria-label="Maps" title="Maps">
-            <i class="fa-solid fa-map-location-dot" aria-hidden="true"></i>
-          </a>
-          <span class="quick-label">Maps</span>
-        </div>
-
-        <div class="quick-tool">
-          <a class="quick-link calendar" href="/calendar" aria-label="Calendar" title="Calendar">
-            <i class="fa-solid fa-calendar-days" aria-hidden="true"></i>
-          </a>
-          <span class="quick-label">Calendar</span>
-        </div>
-      </div>
-
-      <div class="search-note">
-        Want to unlock powerful search shortcuts? <a href="https://duckduckgo.com/bangs" target="_blank" rel="noopener noreferrer">Learn about Bangs</a>
       </div>
 
      </div>
@@ -759,7 +785,7 @@ input{
     <section class="discover-wrap">
       <div class="discover-header">
         <div class="discover-heading">
-          <h2 class="section-title">Poke Gaming</h2>
+          <h2 class="section-title"><i class="fa-solid fa-gamepad"></i> Poke Gaming</h2>
           <p class="section-sub">Discover Popular Gaming Videos!</p>
         </div>
 
@@ -803,7 +829,7 @@ input{
 </div>
 
 <script>
-// Toggle Discover Videos logic
+// Toggle Discover Videos
 (function () {
   var section = document.getElementById("discover-section");
   var button = document.getElementById("discover-toggle");
@@ -857,20 +883,26 @@ input{
     saveState();
   });
 })();
-
-// Bang Indicator Logic
 (function () {
   var searchInput = document.getElementById("fname");
   var bangIndicator = document.getElementById("bang-indicator");
+  var homeExtras = document.getElementById("home-extras");
 
   if (searchInput && bangIndicator) {
     searchInput.addEventListener("input", function (e) {
       if (e.target.value.includes("!")) {
         bangIndicator.classList.remove("hidden");
+        if (homeExtras) homeExtras.classList.add("hidden");
       } else {
         bangIndicator.classList.add("hidden");
+        if (homeExtras) homeExtras.classList.remove("hidden");
       }
     });
+  }
+
+  var randomBangNote = document.getElementById("random-bang-note");
+  if (randomBangNote && Math.random() > 0.5) {
+    randomBangNote.style.display = "block";
   }
 })();
 </script>
