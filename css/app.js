@@ -338,120 +338,120 @@ eqModal.innerHTML = `
 `;
 document.body.appendChild(eqModal);
 
-const canvas = document.getElementById("eqCanvas");
-const ctx = canvas.getContext("2d");
+const eqCanvasEl = document.getElementById("eqCanvas");
+const eqCtx = eqCanvasEl.getContext("2d");
 let isDragging = false;
 let activeNode = -1;
 let animFrame;
 
 function getX(index) {
     const padding = 30;
-    const spacing = (canvas.width - padding * 2) / 6;
+    const spacing = (eqCanvasEl.width - padding * 2) / 6;
     return padding + index * spacing;
 }
 
 function getY(val) {
     const paddingY = 30;
-    const usableHeight = canvas.height - paddingY * 2;
-    return canvas.height / 2 - (val / 12) * (usableHeight / 2);
+    const usableHeight = eqCanvasEl.height - paddingY * 2;
+    return eqCanvasEl.height / 2 - (val / 12) * (usableHeight / 2);
 }
 
 function getValFromY(y) {
     const paddingY = 30;
-    const usableHeight = canvas.height - paddingY * 2;
-    let val = (canvas.height / 2 - y) / (usableHeight / 2) * 12;
+    const usableHeight = eqCanvasEl.height - paddingY * 2;
+    let val = (eqCanvasEl.height / 2 - y) / (usableHeight / 2) * 12;
     return Math.max(-12, Math.min(12, val));
 }
 
 function drawEQ() {
     if (eqModal.style.display === "none") return;
     
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    eqCtx.clearRect(0, 0, eqCanvasEl.width, eqCanvasEl.height);
     
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(0, canvas.height / 2);
-    ctx.lineTo(canvas.width, canvas.height / 2);
-    ctx.stroke();
+    eqCtx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+    eqCtx.lineWidth = 1;
+    eqCtx.beginPath();
+    eqCtx.moveTo(0, eqCanvasEl.height / 2);
+    eqCtx.lineTo(eqCanvasEl.width, eqCanvasEl.height / 2);
+    eqCtx.stroke();
 
     for (let i = 0; i <= 6; i++) {
         let x = getX(i);
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, canvas.height);
-        ctx.stroke();
+        eqCtx.beginPath();
+        eqCtx.moveTo(x, 0);
+        eqCtx.lineTo(x, eqCanvasEl.height);
+        eqCtx.stroke();
         
-        ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
-        ctx.font = "10px Arial";
-        ctx.textAlign = "center";
+        eqCtx.fillStyle = "rgba(255, 255, 255, 0.3)";
+        eqCtx.font = "10px Arial";
+        eqCtx.textAlign = "center";
         let label = freqs[i] >= 1000 ? (freqs[i]/1000) + 'k' : freqs[i];
-        ctx.fillText(label, x, canvas.height - 8);
+        eqCtx.fillText(label, x, eqCanvasEl.height - 8);
     }
 
     if (analyzer && freqDataArray && isEqOn) {
         analyzer.getByteFrequencyData(freqDataArray);
-        ctx.fillStyle = "rgba(255, 255, 255, 0.15)";
-        ctx.beginPath();
-        ctx.moveTo(0, canvas.height);
-        let barWidth = canvas.width / freqDataArray.length;
+        eqCtx.fillStyle = "rgba(255, 255, 255, 0.15)";
+        eqCtx.beginPath();
+        eqCtx.moveTo(0, eqCanvasEl.height);
+        let barWidth = eqCanvasEl.width / freqDataArray.length;
         for (let i = 0; i < freqDataArray.length; i++) {
             let percent = freqDataArray[i] / 255;
-            let y = canvas.height - (percent * canvas.height * 0.8);
-            ctx.lineTo(i * barWidth, y);
+            let y = eqCanvasEl.height - (percent * eqCanvasEl.height * 0.8);
+            eqCtx.lineTo(i * barWidth, y);
         }
-        ctx.lineTo(canvas.width, canvas.height);
-        ctx.closePath();
-        ctx.fill();
+        eqCtx.lineTo(eqCanvasEl.width, eqCanvasEl.height);
+        eqCtx.closePath();
+        eqCtx.fill();
     }
 
-    ctx.strokeStyle = isEqOn ? "#3ea6ff" : "rgba(255, 255, 255, 0.3)";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
+    eqCtx.strokeStyle = isEqOn ? "#3ea6ff" : "rgba(255, 255, 255, 0.3)";
+    eqCtx.lineWidth = 3;
+    eqCtx.beginPath();
     
     let points = [];
     points.push({x: 0, y: getY(eqValues[0])});
     for (let i = 0; i < 7; i++) {
         points.push({x: getX(i), y: getY(eqValues[i])});
     }
-    points.push({x: canvas.width, y: getY(eqValues[6])});
+    points.push({x: eqCanvasEl.width, y: getY(eqValues[6])});
 
-    ctx.moveTo(points[0].x, points[0].y);
+    eqCtx.moveTo(points[0].x, points[0].y);
     for (let i = 1; i < points.length - 2; i++) {
         let xc = (points[i].x + points[i + 1].x) / 2;
         let yc = (points[i].y + points[i + 1].y) / 2;
-        ctx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
+        eqCtx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
     }
-    ctx.quadraticCurveTo(points[points.length - 2].x, points[points.length - 2].y, points[points.length - 1].x, points[points.length - 1].y);
-    ctx.stroke();
+    eqCtx.quadraticCurveTo(points[points.length - 2].x, points[points.length - 2].y, points[points.length - 1].x, points[points.length - 1].y);
+    eqCtx.stroke();
 
     if (isEqOn) {
         for (let i = 0; i < 7; i++) {
             let cx = getX(i);
             let cy = getY(eqValues[i]);
             
-            ctx.beginPath();
-            ctx.arc(cx, cy, 8, 0, Math.PI * 2);
-            ctx.fillStyle = activeNode === i ? "#fff" : "#181818";
-            ctx.fill();
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = activeNode === i ? "#fff" : "#f39c12";
-            ctx.stroke();
+            eqCtx.beginPath();
+            eqCtx.arc(cx, cy, 8, 0, Math.PI * 2);
+            eqCtx.fillStyle = activeNode === i ? "#fff" : "#181818";
+            eqCtx.fill();
+            eqCtx.lineWidth = 2;
+            eqCtx.strokeStyle = activeNode === i ? "#fff" : "#f39c12";
+            eqCtx.stroke();
 
-            ctx.fillStyle = activeNode === i ? "#000" : "#f39c12";
-            ctx.font = "bold 9px Arial";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            ctx.fillText(i + 1, cx, cy);
+            eqCtx.fillStyle = activeNode === i ? "#000" : "#f39c12";
+            eqCtx.font = "bold 9px Arial";
+            eqCtx.textAlign = "center";
+            eqCtx.textBaseline = "middle";
+            eqCtx.fillText(i + 1, cx, cy);
         }
     }
 
     animFrame = requestAnimationFrame(drawEQ);
 }
 
-canvas.addEventListener("mousedown", (e) => {
+eqCanvasEl.addEventListener("mousedown", (e) => {
     if (!isEqOn) return;
-    const rect = canvas.getBoundingClientRect();
+    const rect = eqCanvasEl.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     
@@ -466,9 +466,9 @@ canvas.addEventListener("mousedown", (e) => {
     }
 });
 
-canvas.addEventListener("mousemove", (e) => {
+eqCanvasEl.addEventListener("mousemove", (e) => {
     if (!isDragging || activeNode === -1 || !isEqOn) return;
-    const rect = canvas.getBoundingClientRect();
+    const rect = eqCanvasEl.getBoundingClientRect();
     const y = e.clientY - rect.top;
     eqValues[activeNode] = getValFromY(y);
     applyEQSettings();
@@ -701,14 +701,14 @@ if (whisperOption) {
  if (snapshotOption) {
     snapshotOption.addEventListener("click", function() {
         if (video.videoWidth > 0 && video.videoHeight > 0) {
-            var sc = document.createElement("canvas");
-            sc.width = video.videoWidth;
-            sc.height = video.videoHeight;
+            var snapCanvas = document.createElement("canvas");
+            snapCanvas.width = video.videoWidth;
+            snapCanvas.height = video.videoHeight;
             
-            var sctx = sc.getContext("2d");
-            sctx.drawImage(video, 0, 0, sc.width, sc.height);
+            var snapCtx = snapCanvas.getContext("2d");
+            snapCtx.drawImage(video, 0, 0, snapCanvas.width, snapCanvas.height);
             
-            var dataURL = sc.toDataURL("image/png");
+            var dataURL = snapCanvas.toDataURL("image/png");
             
             var videoName = "snapshot";
             var src = video.currentSrc || video.src || "";
