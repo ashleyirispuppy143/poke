@@ -17,7 +17,6 @@
     You should have received a copy of the GNU General Public License
     along with this program. If not, see https://www.gnu.org/licenses/.
 -->
-
 <%
  
   function FilterChannels(videos, blockedAuthors, limit) {
@@ -37,9 +36,9 @@
     "Asmongold TV  "
   ];
 
-  // Get up to 16 filtered videos, replacing any blocked-author slots with
+  // Get up to 20 filtered videos, replacing any blocked-author slots with
   // other videos from the inv object that are not from blocked authors.
-  var filteredVideos = FilterChannels(inv, blockedAuthors, 16);
+  var filteredVideos = FilterChannels(inv, blockedAuthors, 20);
 %>
       
 <!DOCTYPE html>
@@ -458,6 +457,7 @@ input{
 
 .video{
   display:block;
+  position:relative;
   border:1px solid var(--border);
   border-radius:16px;
   background:var(--panel2);
@@ -471,6 +471,12 @@ input{
   border-color:rgba(223,3,168,.58);
   background:#1d2230;
   box-shadow:0 14px 28px rgba(0,0,0,.24);
+}
+
+.video-cover-link{
+  position:absolute;
+  inset:0;
+  z-index:1;
 }
 
 .thumbnail{
@@ -521,10 +527,18 @@ input{
 }
 
 .byline{
+  position:relative;
+  z-index:2;
   color:var(--muted);
   font-size:12.5px;
   line-height:1.35;
   font-variation-settings:"wdth" 122,"wght" 430;
+  transition:color .18s ease;
+}
+
+.byline:hover{
+  text-decoration:underline;
+  color:var(--text);
 }
 
 .max-lines-2{
@@ -704,16 +718,18 @@ input{
         <div class="discover-body">
           <div class="video-grid">
             <% filteredVideos.forEach(function(item) { %>
-              <a href="/watch?v=<%- item.videoId %>" class="video canloadhd" data-author="<%- item.author %>">
+              <div class="video canloadhd" data-author="<%- item.author %>">
+                <a href="/watch?v=<%- item.videoId %>" class="video-cover-link" aria-label="Watch <%- item.title %>"></a>
+                
                 <div class="thumbnail" style="background-image:url('/vi/<%= item.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw');">
                   <span class="video-length"><%- turntomins(item.lengthSeconds) %></span>
                 </div>
 
                 <div class="info">
                   <span class="title max-lines-2" title="<%- item.title %>"><%- item.title %></span>
-                  <span class="byline max-lines-2" title="Video By <%- item.author %>"><%- item.author %></span>
+                  <a href="/channel?id=<%- item.authorId %>" class="byline max-lines-2" title="Visit channel: <%- item.author %>"><%- item.author %></a>
                 </div>
-              </a>
+              </div>
             <% }); %>
           </div>
         </div>
