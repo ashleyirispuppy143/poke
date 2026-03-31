@@ -28,7 +28,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  
 //////////////// THE PLAYER, START ////////////////////////
   // This runs in a try-catch because elements might not exist yet...which is sillah am sillah tooo waowawawa............
-  
+ 
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -4222,6 +4222,30 @@ const HAVE_ENOUGH_DATA = 4;
     const win = Math.max(0, Number(windowMs) || 0);
     return userWantsPlayNow(win) || userWantsPauseNow(win) || userToggleExpectingPlay() || userToggleExpectingPause();
   }
+  function shouldTreatUpcomingPlayAsFreshForegroundStart() {
+    if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
+    if (state.resumeOnVisible || state.bgHiddenWasPlaying) return false;
+    if (hiddenPlayPendingActive() || foregroundResumeBoostActive() || state.mediaSessionInitiatedPlay) return false;
+    return (
+      inBgReturnGrace() ||
+      isVisibilityTransitionActive() ||
+      !isVisibilityStable() ||
+      !isFocusStable() ||
+      now() < state.tabVisibilityChangeUntil
+    );
+  }
+  function clearFreshForegroundReturnGatesForUserPlay() {
+    if (!shouldTreatUpcomingPlayAsFreshForegroundStart()) return false;
+    state.lastBgReturnAt = 0;
+    state.visibilityTransitionActive = false;
+    state.visibilityTransitionUntil = 0;
+    state.visibilityStableUntil = 0;
+    state.focusStableUntil = 0;
+    state.tabVisibilityChangeUntil = 0;
+    state.altTabTransitionActive = false;
+    state.altTabTransitionUntil = 0;
+    return true;
+  }
   function mediaActionRecently(type, ms = 1200) {
     return state.lastMediaAction === type && (now() - state.lastMediaActionTs) < ms;
   }
@@ -4369,15 +4393,16 @@ const HAVE_ENOUGH_DATA = 4;
       }, delay));
     });
   }
-  function directUserVideoPlaybackHealthy(baseVt = NaN, armedAt = 0) {
+  function directUserVideoPlaybackHealthy(baseVt = NaN, armedAt = 0, requireProgress = false) {
     if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
     if (getVideoPaused()) return false;
     const vNode = getVideoNode();
     const vrs = vNode ? Number(vNode.readyState || 0) : 0;
     if (state.videoWaiting && vrs < HAVE_FUTURE_DATA) return false;
-    if (armedAt > 0 && state.lastVideoPlayingAt >= (armedAt - 25)) return true;
     const vtNow = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
+    if (armedAt > 0 && state.lastVideoPlayingAt >= (armedAt - 25) && vrs >= HAVE_CURRENT_DATA) return true;
     if (isFinite(baseVt) && Math.abs(vtNow - baseVt) > 0.04 && vrs >= HAVE_CURRENT_DATA) return true;
+    if (requireProgress) return false;
     return vrs >= HAVE_FUTURE_DATA && !state.videoWaiting && armedAt > 0 && (now() - armedAt) > 260;
   }
   function startForegroundUserPlayRetry() {
@@ -4388,6 +4413,8 @@ const HAVE_ENOUGH_DATA = 4;
 
     const playSession = state.playSessionId;
     const armedAt = now();
+    const recentReturnAtStart = shouldTreatUpcomingPlayAsFreshForegroundStart();
+    if (recentReturnAtStart) clearFreshForegroundReturnGatesForUserPlay();
     const baseVt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
     const kick = () => {
       if (state.playSessionId !== playSession) { clearForegroundUserPlayRetryTimers(); return; }
@@ -4403,7 +4430,7 @@ const HAVE_ENOUGH_DATA = 4;
         clearForegroundUserPlayRetryTimers();
         return;
       }
-      if (directUserVideoPlaybackHealthy(baseVt, armedAt)) {
+      if (directUserVideoPlaybackHealthy(baseVt, armedAt, recentReturnAtStart)) {
         clearForegroundUserPlayRetryTimers();
         return;
       }
@@ -4422,7 +4449,10 @@ const HAVE_ENOUGH_DATA = 4;
       scheduleSync(0);
     };
 
-    [0, 70, 180, 320, 520, 850, 1250].forEach(delay => {
+    const retryDelays = recentReturnAtStart
+      ? [0, 70, 180, 320, 520, 850, 1250, 1700, 2350, 3200]
+      : [0, 70, 180, 320, 520, 850, 1250];
+    retryDelays.forEach(delay => {
       const tid = trackForegroundUserPlayRetryTimer(setTimeout(() => {
         untrackForegroundUserPlayRetryTimer(tid);
         kick();
