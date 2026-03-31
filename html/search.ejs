@@ -75,53 +75,7 @@ summary:hover{
       nav {
         background:#111111
     }
-
-  /* Toast Popups (Achievements & Warnings) */
-.poke-toast {
-  position: fixed;
-  top: 20px;
-  right: -350px; /* Hidden off-screen */
-  width: 280px;
-  background: #212121;
-  border: 3px solid #555;
-  border-right-color: #111;
-  border-bottom-color: #111;
-  color: #fff;
-  padding: 12px;
-  font-family: monospace, sans-serif;
-  box-shadow: 4px 4px 0px rgba(0,0,0,0.5);
-  transition: right 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  z-index: 9999;
-  display: flex;
-  flex-direction: column;
-}
-
-.poke-toast.show {
-  right: 20px;
-}
-
-.poke-toast.warning {
-  border-color: #ff5555;
-  border-right-color: #aa0000;
-  border-bottom-color: #aa0000;
-}
-
-.poke-toast-title {
-  color: #ffff55;  
-  font-size: 14px;
-  margin: 0 0 6px 0;
-  font-weight: bold;
-}
-
-.poke-toast.warning .poke-toast-title {
-  color: #ff5555;
-}
-
-.poke-toast-desc {
-  font-size: 13px;
-  margin: 0;
-  color: #ddd;
-}
+ 
   
  
 </style>    
@@ -2117,149 +2071,265 @@ no results found :c	u can try <a href="https://youtube.com/results?search_query=
         </div>
 
 <script>
-   document.addEventListener("DOMContentLoaded", function() {
+  document.addEventListener("DOMContentLoaded", function() {
+    
+    // ==========================================
+    // 1. DYNAMICALLY INJECT CSS
+    // ==========================================
+    const style = document.createElement('style');
+    style.innerHTML = `
+      /* Toast Popups */
+      .poke-toast { position: fixed; top: 20px; right: -350px; width: 280px; background: #212121; border: 3px solid #555; border-right-color: #111; border-bottom-color: #111; color: #fff; padding: 12px; font-family: monospace, sans-serif; box-shadow: 4px 4px 0px rgba(0,0,0,0.5); transition: right 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 9999; display: flex; flex-direction: column; }
+      .poke-toast.show { right: 20px; }
+      .poke-toast.warning { border-color: #ff5555; border-right-color: #aa0000; border-bottom-color: #aa0000; }
+      .poke-toast-title { color: #ffff55; font-size: 14px; margin: 0 0 6px 0; font-weight: bold; }
+      .poke-toast.warning .poke-toast-title { color: #ff5555; }
+      .poke-toast-desc { font-size: 13px; margin: 0; color: #ddd; }
+      
+      /* Floating Action Button (FAB) */
+      .achievement-fab { position: fixed; bottom: 30px; right: 30px; width: 60px; height: 60px; background: linear-gradient(135deg, #ffd700, #ff8c00); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 24px; color: #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.5); cursor: pointer; z-index: 1000; border: 2px solid #fff; transition: transform 0.2s, box-shadow 0.2s; }
+      .achievement-fab:hover { transform: scale(1.1) rotate(10deg); box-shadow: 0 6px 20px rgba(255, 215, 0, 0.6); }
+      
+      /* Achievement Modal */
+      .ach-modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(5px); z-index: 2000; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.3s ease; }
+      .ach-modal-overlay.active { display: flex; opacity: 1; }
+      .ach-modal { background: #1a1a1a; border: 2px solid #444; border-radius: 12px; width: 90%; max-width: 500px; max-height: 80vh; overflow-y: auto; padding: 20px; color: #fff; box-shadow: 0 10px 30px rgba(0,0,0,0.8); }
+      .ach-modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 15px; margin-bottom: 15px; }
+      .ach-modal-header h2 { margin: 0; font-family: 'PokeTube Flex', sans-serif; color: #ffd700; }
+      .ach-close { background: none; border: none; color: #fff; font-size: 24px; cursor: pointer; }
+      
+      /* Achievement Items */
+      .ach-list { display: flex; flex-direction: column; gap: 10px; }
+      .ach-item { display: flex; gap: 15px; padding: 15px; border-radius: 8px; background: #2a2a2a; border: 1px solid #444; transition: all 0.3s; }
+      .ach-item.locked { opacity: 0.5; filter: grayscale(100%); }
+      .ach-item.unlocked { border-color: #ffd700; background: linear-gradient(90deg, #2a2a2a 0%, #3a3210 100%); }
+      .ach-icon { font-size: 2em; }
+      .ach-details h4 { margin: 0 0 5px 0; color: #fff; }
+      .ach-details p { margin: 0; font-size: 0.85em; color: #aaa; }
+      .ach-item.locked .ach-details p { filter: blur(3px); user-select: none; }
+      
+      /* Easter Egg Classes */
+      .easter-egg-comic-sans * { font-family: "Comic Sans MS", "Comic Sans", cursive !important; }
+      .easter-egg-flip { transform: rotate(180deg); transition: transform 1s ease-in-out; }
+    `;
+    document.head.appendChild(style);
+
+    // ==========================================
+    // 2. DYNAMICALLY INJECT HTML UI
+    // ==========================================
+    const uiContainer = document.createElement('div');
+    uiContainer.innerHTML = `
+      <div class="achievement-fab" id="open-achievements" title="View Achievements">
+        <i class="fa-solid fa-trophy"></i>
+      </div>
+      <div class="ach-modal-overlay" id="ach-modal">
+        <div class="ach-modal">
+          <div class="ach-modal-header">
+            <h2>Secret Queries Discovered</h2>
+            <button class="ach-close" id="close-achievements">&times;</button>
+          </div>
+          <div class="ach-list" id="ach-list-container"></div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(uiContainer);
+
+    // ==========================================
+    // 3. CORE LOGIC
+    // ==========================================
     const aprilFoolsBtn = document.getElementById("april-fools-btn");
     const searchInput = document.getElementById("fname");
+    const searchForm = document.getElementById("search-form") || document.querySelector("form[action='/search']");
+    
+    // Secret Queries Data
+    const secretQueries = [
+      { id: "ram", icon: "💻", title: "Tech Expert", desc: "Attempt to download hardware.", query: "how to download more ram" },
+      { id: "harlem", icon: "🕺", title: "2013 Nostalgia", desc: "Do the Harlem Shake.", query: "do the harlem shake" },
+      { id: "barrel", icon: "🛩️", title: "Peppy Hare", desc: "Follow Star Fox's instructions.", query: "do a barrel roll" },
+      { id: "comic", icon: "🤡", title: "Graphic Design is my Passion", desc: "Change the universe to Comic Sans.", query: "comic sans" },
+      { id: "flip", icon: "🙃", title: "Australian Mode", desc: "Turn the internet upside down.", query: "do a flip" }
+    ];
+
+    let unlockedAch = JSON.parse(localStorage.getItem('poke_achievements') || '[]');
+
+    function unlockAchievement(queryStr) {
+      const ach = secretQueries.find(a => a.query.toLowerCase() === queryStr.toLowerCase());
+      if (ach && !unlockedAch.includes(ach.id)) {
+        unlockedAch.push(ach.id);
+        localStorage.setItem('poke_achievements', JSON.stringify(unlockedAch));
+        showToast("Achievement Unlocked!", `${ach.icon} ${ach.title}`);
+        renderAchievements();
+      }
+    }
+
+    // Modal Events
+    const modalOverlay = document.getElementById("ach-modal");
+    const listContainer = document.getElementById("ach-list-container");
+
+    function renderAchievements() {
+      listContainer.innerHTML = "";
+      secretQueries.forEach(ach => {
+        const isUnlocked = unlockedAch.includes(ach.id);
+        listContainer.innerHTML += `
+          <div class="ach-item ${isUnlocked ? 'unlocked' : 'locked'}">
+            <div class="ach-icon">${isUnlocked ? ach.icon : '❓'}</div>
+            <div class="ach-details">
+              <h4>${isUnlocked ? ach.title : 'Secret Query'}</h4>
+              <p>${isUnlocked ? ach.desc : 'Keep generating random searches to find this.'}</p>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    document.getElementById("open-achievements").addEventListener("click", () => {
+      renderAchievements();
+      modalOverlay.classList.add("active");
+    });
+
+    document.getElementById("close-achievements").addEventListener("click", () => {
+      modalOverlay.classList.remove("active");
+    });
+
+    // Toast UI Generator
+    function showToast(title, description, isWarning = false) {
+      const toast = document.createElement("div");
+      toast.className = `poke-toast ${isWarning ? 'warning' : ''}`;
+      toast.innerHTML = `<p class="poke-toast-title">${title}</p><p class="poke-toast-desc">${description}</p>`;
+      document.body.appendChild(toast);
+      void toast.offsetWidth; 
+      toast.classList.add("show");
+      setTimeout(() => {
+        toast.classList.remove("show");
+        setTimeout(() => toast.remove(), 500);
+      }, 4000);
+    }
+
+    // Generator Dictionaries (Tuned for ~6 words)
+    const templates = [
+      "how to {action} {object} safely",
+      "why is {subject} {action} {object}",
+      "{subject} is {action} {object} today",
+      "did {subject} actually {action} {object}",
+      "where to find {object} for {subject}"
+    ];
+
+    const dict = {
+      subject: ["gordon ramsay", "batman", "shrek", "my cat", "a roomba", "the fbi", "mr. bean", "peppa pig"],
+      action: ["cook", "destroy", "speedrun", "fix", "survive", "investigate", "befriend", "fight"],
+      object: ["a grilled cheese", "a 5g tower", "a wet sock", "windows 95", "the backrooms", "an nft", "a toaster"]
+    };
+
+    function generateFunnyQuery() {
+      // 15% chance to force an achievement
+      if (Math.random() < 0.15) {
+        const lockedSecrets = secretQueries.filter(a => !unlockedAch.includes(a.id));
+        if (lockedSecrets.length > 0) {
+          return lockedSecrets[Math.floor(Math.random() * lockedSecrets.length)].query;
+        }
+      }
+      
+      // Strict 6-7 Word Algorithm
+      let attempt = "";
+      let wordCount = 0;
+      let failsafe = 0;
+      
+      while ((wordCount < 6 || wordCount > 7) && failsafe < 10) {
+        let temp = templates[Math.floor(Math.random() * templates.length)];
+        attempt = temp.replace(/\{(\w+)\}/g, (match, type) => {
+          const list = dict[type];
+          return list[Math.floor(Math.random() * list.length)];
+        });
+        wordCount = attempt.trim().split(/\s+/).length;
+        failsafe++;
+      }
+      
+      return failsafe >= 10 ? "how to fix a haunted toaster safely" : attempt;
+    }
+
+    // Button Logic & Rate Limit
+    let clickHistory = [];
+    let isTyping = false;
 
     if (aprilFoolsBtn) {
-      // Data Arrays
-      const subjects = [
-        "shrek", "gordon ramsay", "danny devito", "peppa pig", "waluigi",
-        "a single slice of cheese", "my fbi agent", "a roomba", "john cena", "garfield",
-        "spongebob", "batman", "mr. bean", "a very polite cat", "the duolingo owl"
-      ];
-      
-      const actions = [
-        "aggressively reviewing", "crying over", "speedrunning", "explaining fnaf lore to",
-        "doing the macarena with", "eating", "fighting", "apologizing to",
-        "trying to cook", "getting stuck in", "teleporting bread with", "judging",
-        "yelling at", "escaping from", "writing a diss track about"
-      ];
-      
-      const objects = [
-        "a haunted toaster", "windows 95", "a singular baked bean", "the entire bee movie script",
-        "a geometry dash level", "the backrooms", "a bowl of cold soup", "a wet sock",
-        "an nft", "a 2006 honda civic", "the krabby patty secret formula",
-        "a pile of dirt", "an existential crisis", "the mcdonalds ice cream machine", "a 5g tower"
-      ];
-
-      const classicMemes = [
-        "how to download more ram",
-        "why is my cat staring at the wall",
-        "do the harlem shake",
-        "do a barrel roll",
-        "never gonna give you up 10 hours",
-        "10 hour loop of absolute silence",
-        "how to tame a t-rex in minecraft",
-        "is mayonnaise an instrument"
-      ];
-
-      // State Trackers
-      let clickHistory = [];
-      let isTyping = false;
-
-      // Popup Generator
-      function showToast(title, description, isWarning = false) {
-        const toast = document.createElement("div");
-        toast.className = `poke-toast ${isWarning ? 'warning' : ''}`;
-        
-        const titleEl = document.createElement("p");
-        titleEl.className = "poke-toast-title";
-        titleEl.innerText = title;
-        
-        const descEl = document.createElement("p");
-        descEl.className = "poke-toast-desc";
-        descEl.innerText = description;
-
-        toast.appendChild(titleEl);
-        toast.appendChild(descEl);
-        document.body.appendChild(toast);
-
-        // Trigger reflow for animation, then slide in
-        void toast.offsetWidth; 
-        toast.classList.add("show");
-
-        // Remove after 4 seconds
-        setTimeout(() => {
-          toast.classList.remove("show");
-          setTimeout(() => toast.remove(), 500);
-        }, 4000);
-      }
-
-      function generateFunnyQuery() {
-        // 10% chance for a classic meme (Triggers Achievement)
-        if (Math.random() < 0.1) {
-          return {
-            text: classicMemes[Math.floor(Math.random() * classicMemes.length)],
-            isSecret: true
-          };
-        }
-        
-        const sub = subjects[Math.floor(Math.random() * subjects.length)];
-        const act = actions[Math.floor(Math.random() * actions.length)];
-        const obj = objects[Math.floor(Math.random() * objects.length)];
-        
-        return {
-          text: `${sub} ${act} ${obj}`,
-          isSecret: false
-        };
-      }
-
       aprilFoolsBtn.addEventListener("click", function() {
-        // 1. Check if an animation is already running
         if (isTyping) return;
 
-        // 2. Check Rate Limit (5 per 60 seconds)
         const now = Date.now();
-        clickHistory = clickHistory.filter(time => now - time < 60000); // Remove timestamps older than 1 min
+        clickHistory = clickHistory.filter(time => now - time < 60000); 
         
         if (clickHistory.length >= 5) {
-          showToast("Overheating!", "Whoa there speed demon. The meme machine needs a minute to cool down.", true);
-          aprilFoolsBtn.style.transform = "rotate(-15deg)"; // Shake it a bit
+          showToast("Overheating!", "The meme machine needs a minute to cool down.", true);
+          aprilFoolsBtn.style.transform = "rotate(-15deg)";
           setTimeout(() => aprilFoolsBtn.style.transform = "rotate(0deg)", 200);
           return;
         }
 
-        // Log the click
         clickHistory.push(now);
         isTyping = true;
         
-        // 3. Generate Query & Check for Achievement
-        const queryData = generateFunnyQuery();
-        
-        if (queryData.isSecret) {
-          showToast("Achievement Get!", "Secret Query Found: " + queryData.text);
-        }
+        const finalQuery = generateFunnyQuery();
+        unlockAchievement(finalQuery);
 
-        // 4. Typing Effect over 3 seconds
         aprilFoolsBtn.style.transform = `rotate(${360 * clickHistory.length}deg)`;
         
         if (searchInput) {
-          const words = queryData.text.split(" ");
-          const intervalTime = 3000 / words.length; // Spread words evenly over 3000ms
-          let currentWordIndex = 0;
-          
-          searchInput.value = ""; // Clear current input
+          const words = finalQuery.split(" ");
+          const intervalTime = 2500 / words.length; 
+          let idx = 0;
+          searchInput.value = ""; 
           
           const typingInterval = setInterval(() => {
-            searchInput.value += (currentWordIndex > 0 ? " " : "") + words[currentWordIndex];
-            currentWordIndex++;
-            
-            if (currentWordIndex >= words.length) {
+            searchInput.value += (idx > 0 ? " " : "") + words[idx];
+            idx++;
+            if (idx >= words.length) {
               clearInterval(typingInterval);
-              
-              // Wait half a second after finishing, then redirect
               setTimeout(() => {
                 isTyping = false;
-                window.location.href = "/search?query=" + encodeURIComponent(queryData.text);
+                handleEasterEggs(searchInput.value, true);
               }, 500);
             }
           }, intervalTime);
         }
       });
     }
+
+    // Easter Egg Interceptor
+    function handleEasterEggs(query, forceSubmit = false) {
+      const q = query.toLowerCase().trim();
+      unlockAchievement(q); 
+
+      if (q === "comic sans") {
+        document.body.classList.add("easter-egg-comic-sans");
+        showToast("Easter Egg!", "Graphic design is my passion.");
+        if(forceSubmit) isTyping = false;
+        return false; 
+      }
+      if (q === "do a flip") {
+        document.body.classList.add("easter-egg-flip");
+        showToast("Easter Egg!", "Whoa, steady there.");
+        if(forceSubmit) isTyping = false;
+        return false;
+      }
+      
+      if (forceSubmit) {
+         window.location.href = "/search?query=" + encodeURIComponent(q);
+      }
+      return true;
+    }
+
+    if (searchForm) {
+      searchForm.addEventListener("submit", function(e) {
+        if (!handleEasterEggs(searchInput.value)) {
+          e.preventDefault(); 
+        }
+      });
+    }
+
+    // Initial render
+    renderAchievements();
   });
- </script>
+</script>
                  <script src="/static/custom-css.js?v=45485"> </script>
                               <script>    
                     // @license magnet:?xt=urn:btih:1f739d935676111cfff4b4693e3816e664797050&dn=gpl-3.0.txt GPL-3.0-or-later            
