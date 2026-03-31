@@ -28,8 +28,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  
 //////////////// THE PLAYER, START ////////////////////////
   // This runs in a try-catch because elements might not exist yet...which is sillah am sillah tooo waowawawa............
-
-try {
+ try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -663,12 +662,15 @@ document.addEventListener("DOMContentLoaded", () => {
       // is still buffering its first few seconds.  Blocking audio here causes
       // the audio to go silent until the page finishes loading.
       if (!state.firstPlayCommitted && state.intendedPlaying) return _origAudioPlay();
+      const _gateVNode = getVideoNode();
+      const _gateRS = _gateVNode ? Number(_gateVNode.readyState || 0) : 4;
       if (shouldHoldAudioForForegroundStall({ allowRecovery: true })) return Promise.resolve();
       // tab return / NMPBFN recovery / grace period: readyState is stale in
       // Chrome after bg throttling, so skip the readyState check entirely.
       // these systems cleared stall flags already and own the play sequence.
       const _audioGraceBypass =
         now() < state.audioStartGraceUntil &&
+        _gateRS >= HAVE_CURRENT_DATA &&
         !state.videoWaiting &&
         !state.videoStallAudioPaused &&
         !(state.strictBufferHold && state.firstPlayCommitted);
@@ -676,8 +678,6 @@ document.addEventListener("DOMContentLoaded", () => {
           _audioGraceBypass) {
         return _origAudioPlay();
       }
-      const _gateVNode = getVideoNode();
-      const _gateRS = _gateVNode ? Number(_gateVNode.readyState || 0) : 4;
       const _gateStallAge = state.stallAudioPausedSince ? (now() - state.stallAudioPausedSince) : 0;
       // stall flag stuck for 4s+? something missed the cleanup — force through
       if (_gateStallAge > 4000) {
@@ -3517,12 +3517,12 @@ const HAVE_ENOUGH_DATA = 4;
   const USER_EXPLICIT_PAUSE_FADE_MS = 16;
   const USER_GESTURE_PAUSE_HOLD_MS = 650;
   const CHROMIUM_BG_PAUSE_BLOCK_MS = 6000;
-  const TAB_VISIBILITY_STABLE_MS = 3500;
-  const VISIBILITY_TRANSITION_MS = 1200; // reduced from 4500 — inBgReturnGrace(8s) handles the rest
+  const TAB_VISIBILITY_STABLE_MS = 900;
+  const VISIBILITY_TRANSITION_MS = 450;
   const MAX_BG_PAUSE_SUPPRESSIONS = 200;
-  const ALT_TAB_TRANSITION_MS = 3500;
+  const ALT_TAB_TRANSITION_MS = 1100;
   const FOCUS_LOSS_RESET_MS = 12000;
-  const CHROMIUM_PAUSE_EVENT_SUPPRESS_MS = 10000;
+  const CHROMIUM_PAUSE_EVENT_SUPPRESS_MS = 2600;
   const PAUSE_EVENT_RESET_MS = 15000;
   const MAX_PAUSE_EVENTS_BEFORE_BLOCK = 3;
   const AUDIO_POP_PREVENT_MS = 200;
@@ -3546,14 +3546,11 @@ const HAVE_ENOUGH_DATA = 4;
   // 14 is still well below any real infinite loop scenario.
   const MAX_LOOP_EVENTS = 14;
   const LOOP_COOLDOWN_MS = 4000;
-  const BG_RETURN_GRACE_MS = 8000;
+  const BG_RETURN_GRACE_MS = 3000;
   const TAB_RETURN_AUDIO_RETRY_DELAY_MS = 300;
-  // Tab-return wakeup delay: Chromium fires a burst of spurious pause events for ~800ms after
-  // tab becomes visible. We must not attempt resume until this burst has fully settled.
-  const BG_RETURN_WAKEUP_DELAY_CHROMIUM_MS = 950;
+  const BG_RETURN_WAKEUP_DELAY_CHROMIUM_MS = 180;
   const BG_RETURN_WAKEUP_DELAY_OTHER_MS = 300;
-  // Minimum bgResumeRetry delay on Chromium during tab-return grace window
-  const BG_RESUME_MIN_DELAY_CHROMIUM_MS = 950;
+  const BG_RESUME_MIN_DELAY_CHROMIUM_MS = 160;
   // If strictBufferHold stays active this long but media is actually ready, force-clear it
   const BUFFER_HOLD_MAX_MS = 20000;
   const HEARTBEAT_INTERVAL_MS = 1500;
@@ -4238,6 +4235,19 @@ const HAVE_ENOUGH_DATA = 4;
     state.audioEventsSquelchedUntil = 0;
     state.audioPausedSince = 0;
   }
+  function clearTrackedWakeupRetryTimers() {
+    if (!state._wakeupRetryTimers.length) return;
+    state._wakeupRetryTimers.forEach(t => clearTimeout(t));
+    state._wakeupRetryTimers = [];
+  }
+  function trackWakeupRetryTimer(tid) {
+    if (tid != null) state._wakeupRetryTimers.push(tid);
+    return tid;
+  }
+  function untrackWakeupRetryTimer(tid) {
+    const idx = state._wakeupRetryTimers.indexOf(tid);
+    if (idx !== -1) state._wakeupRetryTimers.splice(idx, 1);
+  }
   function isConfirmedForegroundVideoStall(minAgeMs = 450) {
     if (!coupledMode || !audio) return false;
     if (!state.intendedPlaying || state.restarting) return false;
@@ -4275,7 +4285,7 @@ const HAVE_ENOUGH_DATA = 4;
     if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
 
     const allowRecovery = !!opts.allowRecovery;
-    if (!allowRecovery && foregroundRecoveryActive(250)) return false;
+    const recovering = foregroundRecoveryActive(250);
 
     const vNode = getVideoNode();
     const vRS = vNode ? Number(vNode.readyState || 0) : 4;
@@ -4285,11 +4295,17 @@ const HAVE_ENOUGH_DATA = 4;
       state.videoStallAudioPaused ||
       state.strictBufferHold ||
       now() < state.stallAudioResumeHoldUntil;
+    const hardForegroundStarve =
+      (state.videoWaiting && vRS < HAVE_CURRENT_DATA) ||
+      (state.videoStallAudioPaused && (vPaused || vRS < HAVE_FUTURE_DATA)) ||
+      ((state.strictBufferHold || now() < state.stallAudioResumeHoldUntil) && vRS < HAVE_FUTURE_DATA) ||
+      (state.videoStallSince > 0 && (now() - state.videoStallSince) > 120 && vRS < HAVE_CURRENT_DATA);
+    if (hardForegroundStarve) return true;
     if (!stallFlagsActive) return false;
+    if (!allowRecovery && recovering) return false;
     if (vPaused) return true;
-    if ((state.videoWaiting || state.videoStallAudioPaused) && vRS < HAVE_CURRENT_DATA) return true;
+    if ((state.videoWaiting || state.videoStallAudioPaused) && vRS < HAVE_FUTURE_DATA) return true;
     if ((state.strictBufferHold || now() < state.stallAudioResumeHoldUntil) && vRS < HAVE_FUTURE_DATA) return true;
-    if (state.videoStallSince > 0 && (now() - state.videoStallSince) > 180 && vRS < HAVE_FUTURE_DATA) return true;
     return false;
   }
   function setPauseEventGuard(ms = 1000) {
@@ -4681,6 +4697,7 @@ const HAVE_ENOUGH_DATA = 4;
     clearBufferHold();
     clearAudioPauseLocks();
     clearHiddenPlayPending();
+    clearTrackedWakeupRetryTimers();
     try { SmoothTabWelcomeBackManagement.clearTimers(); } catch {}
     try { BringBackToTabManager.onVideoConfirmedPlaying(); } catch {}
     return true;
@@ -6772,6 +6789,8 @@ const HAVE_ENOUGH_DATA = 4;
 
       if (coupledMode && audio && audio.paused) {
         const vNow = Number(video.currentTime()) || 0;
+        const aNow = Number(audio.currentTime) || 0;
+        const avDrift = Math.abs(aNow - vNow);
         const canKickFirstAudio = !state.audioEverStarted && canStartAudioAt(vNow);
         const inStartupKickFlow = state.startupKickInFlight || isTabReturnImmune();
         const isRecentUserAction = userWantsPlayNow(2400) || userSeekIntentActive();
@@ -6791,9 +6810,9 @@ const HAVE_ENOUGH_DATA = 4;
         } else if (!isRecentUserAction && !canKickFirstAudio && startupAudioHoldActive()) {
           // hold
         } else {
-          // For user-initiated plays, bypass debounce and set audio position DIRECTLY
-          // so audio doesn't briefly play from its old position before syncing.
-          if (isRecentUserAction && isFinite(vNow) && vNow >= 0) {
+          // Only hard-resync on user toggles when drift is real.
+          // Rewriting currentTime on every quick play/pause causes tiny audible skips.
+          if (isRecentUserAction && isFinite(vNow) && vNow >= 0 && (avDrift > 0.28 || userSeekIntentActive())) {
             state._allowAudioTimeWrite = true;
             try { audio.currentTime = vNow; } catch {}
             state._allowAudioTimeWrite = false;
@@ -10686,7 +10705,10 @@ const HAVE_ENOUGH_DATA = 4;
       if (!_audioFirstPlayedAt) _audioFirstPlayedAt = performance.now();
       // GUARD: if video is actually buffering/waiting, don't let audio play.
       // This catches any path that bypassed the audio.play() gate.
-      if (shouldHoldAudioForForegroundStall({ allowRecovery: true })) {
+      const _mustHoldAudioForVideo =
+        shouldHoldAudioForForegroundStall({ allowRecovery: false }) ||
+        isConfirmedForegroundVideoStall(120);
+      if (_mustHoldAudioForVideo) {
         const _apVN = getVideoNode();
         const _apRS = _apVN ? Number(_apVN.readyState || 0) : 4;
         if (_apRS < HAVE_FUTURE_DATA) {
@@ -11253,6 +11275,7 @@ const HAVE_ENOUGH_DATA = 4;
     if (state.bbtabRetryRafId)    { cancelAnimationFrame(state.bbtabRetryRafId); state.bbtabRetryRafId = null; }
     if (state.bbtabRetryTimer)    { clearTimeout(state.bbtabRetryTimer);         state.bbtabRetryTimer    = null; }
     if (state.bbtabAudioSyncTimer){ clearTimeout(state.bbtabAudioSyncTimer);     state.bbtabAudioSyncTimer = null; }
+    clearTrackedWakeupRetryTimers();
 
     // CRITICAL: never restart after video ended naturally
     if (state.endedNaturally) return;
@@ -11347,7 +11370,8 @@ const HAVE_ENOUGH_DATA = 4;
     });
 
     // --- shot 1.25: 80ms quick-check
-    setTimeout(() => {
+    const _shot80 = trackWakeupRetryTimer(setTimeout(() => {
+      untrackWakeupRetryTimer(_shot80);
       if (state.tabReturnGen !== bbtGen) return;
       if (state.endedNaturally || MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) return;
       if (!state.intendedPlaying && !state.firstPlayCommitted && wantsStartupAutoplay()) { state.intendedPlaying = true; state.bufferHoldIntendedPlaying = true; }
@@ -11369,10 +11393,11 @@ const HAVE_ENOUGH_DATA = 4;
       VisibilityGuard.onPlayCalled();
       const vnE = getVideoNode();
       if (vnE && typeof vnE.play === 'function') vnE.play().catch(() => {});
-    }, 80);
+    }, 80));
 
     // --- shot 1.5: 200ms intermediate
-    setTimeout(() => {
+    const _shot200 = trackWakeupRetryTimer(setTimeout(() => {
+      untrackWakeupRetryTimer(_shot200);
       if (state.tabReturnGen !== bbtGen) return;
       if (state.endedNaturally || MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) return;
       if (!state.intendedPlaying && !state.firstPlayCommitted && wantsStartupAutoplay()) { state.intendedPlaying = true; state.bufferHoldIntendedPlaying = true; }
@@ -11397,11 +11422,12 @@ const HAVE_ENOUGH_DATA = 4;
       if (coupledMode && audio && !state.tabReturnAudioMuted && audio.paused) {
         audio.play().catch(() => {});
       }
-    }, 200);
+    }, 200));
 
-    // --- shot 2: 700ms fallback
-    state.bbtabRetryTimer = setTimeout(() => {
-      state.bbtabRetryTimer = null;
+    // --- shot 2: early fallback
+    const _shot420 = trackWakeupRetryTimer(setTimeout(() => {
+      untrackWakeupRetryTimer(_shot420);
+      if (state.bbtabRetryTimer === _shot420) state.bbtabRetryTimer = null;
       if (state.tabReturnGen !== bbtGen) return;
       if (state.endedNaturally || MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) return;
       if (!state.intendedPlaying && !state.firstPlayCommitted && wantsStartupAutoplay()) { state.intendedPlaying = true; state.bufferHoldIntendedPlaying = true; }
@@ -11446,19 +11472,22 @@ const HAVE_ENOUGH_DATA = 4;
       setFastSync(1200);
       scheduleSync(0);
       // If video is still paused after 400ms (buffer empty), arm buffer recovery
-      setTimeout(() => {
+      const _bufferShot = trackWakeupRetryTimer(setTimeout(() => {
+        untrackWakeupRetryTimer(_bufferShot);
         if (state.tabReturnGen !== bbtGen) return;
         if (!state.intendedPlaying) return;
         if (getVideoPaused() && !state.strictBufferHold && !state.bgResumeInFlight) {
           armResumeAfterBuffer(12000);
         }
-      }, 400);
-    }, 700);
+      }, 240));
+    }, 420));
+    state.bbtabRetryTimer = _shot420;
 
     // Late safety shots: catches cases where browsers report "playing" early
     // but decoder/pipeline actually resumes much later after tab return.
-    [1200, 1900, 2700].forEach((delay, idx) => {
-      setTimeout(() => {
+    [800, 1300, 1900].forEach((delay, idx) => {
+      const _lateShot = trackWakeupRetryTimer(setTimeout(() => {
+        untrackWakeupRetryTimer(_lateShot);
         if (state.tabReturnGen !== bbtGen) return;
         if (state.endedNaturally || MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) return;
         if (!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) return;
@@ -11470,7 +11499,7 @@ const HAVE_ENOUGH_DATA = 4;
         if (idx >= 1 && getVideoPaused() && !state.strictBufferHold && !state.bgResumeInFlight) {
           armResumeAfterBuffer(12000);
         }
-      }, delay);
+      }, delay));
     });
   }
 
@@ -12370,7 +12399,7 @@ const HAVE_ENOUGH_DATA = 4;
     _handlePlayerCrash(msg, "promise", reason ? (reason.stack || "") : "");
   }, { passive: true });
 });
-
+ 
 //////////////// THE PLAYER, END ////////////////////////
  
   
