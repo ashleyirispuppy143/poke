@@ -354,12 +354,12 @@ function getX(i) {
 }
 
 function getY(val) {
-    return ptdPadding.top + ptdUsableHeight / 2 - (val / 12) * (ptdUsableHeight / 2);
+    return ptdPadding.top + ptdUsableHeight / 2 - (val / 15) * (ptdUsableHeight / 2);
 }
 
 function getValFromY(y) {
-    let val = (ptdPadding.top + ptdUsableHeight / 2 - y) / (ptdUsableHeight / 2) * 12;
-    return Math.max(-12, Math.min(12, val));
+    let val = (ptdPadding.top + ptdUsableHeight / 2 - y) / (ptdUsableHeight / 2) * 15;
+    return Math.max(-15, Math.min(15, val));
 }
 
 function drawRoundRect(ctx, x, y, width, height, radius) {
@@ -388,7 +388,7 @@ function drawEQ() {
     ptdEqCtx.strokeStyle = "rgba(255, 255, 255, 0.08)";
     ptdEqCtx.lineWidth = 1;
     
-    [12, 0, -12].forEach(val => {
+    [15, 0, -15].forEach(val => {
         let y = getY(val);
         ptdEqCtx.beginPath();
         ptdEqCtx.moveTo(ptdPadding.left - 10, y);
@@ -402,6 +402,22 @@ function drawEQ() {
         ptdEqCtx.fillText(val > 0 ? "+" + val : val, ptdPadding.left - 15, y);
     });
 
+    if (analyzer && freqDataArray && isEqOn) {
+        analyzer.getByteFrequencyData(freqDataArray);
+        ptdEqCtx.fillStyle = "rgba(255, 255, 255, 0.1)";
+        ptdEqCtx.beginPath();
+        ptdEqCtx.moveTo(0, ptdEqCanvasEl.height);
+        let barWidth = ptdEqCanvasEl.width / freqDataArray.length;
+        for (let i = 0; i < freqDataArray.length; i++) {
+            let percent = freqDataArray[i] / 255;
+            let y = ptdEqCanvasEl.height - (percent * ptdEqCanvasEl.height * 0.9);
+            ptdEqCtx.lineTo(i * barWidth, y);
+        }
+        ptdEqCtx.lineTo(ptdEqCanvasEl.width, ptdEqCanvasEl.height);
+        ptdEqCtx.closePath();
+        ptdEqCtx.fill();
+    }
+
     for (let i = 0; i < 7; i++) {
         let x = getX(i);
         
@@ -409,8 +425,8 @@ function drawEQ() {
         ptdEqCtx.lineWidth = 6;
         ptdEqCtx.lineCap = "round";
         ptdEqCtx.beginPath();
-        ptdEqCtx.moveTo(x, getY(12));
-        ptdEqCtx.lineTo(x, getY(-12));
+        ptdEqCtx.moveTo(x, getY(15));
+        ptdEqCtx.lineTo(x, getY(-15));
         ptdEqCtx.stroke();
 
         ptdEqCtx.strokeStyle = "#3ea6ff";
@@ -435,7 +451,6 @@ function drawEQ() {
     animFrame = requestAnimationFrame(drawEQ);
 }
 
-// Fixed coordinate scaling for perfectly aligned mouse hitboxes
 ptdEqCanvasEl.addEventListener("mousedown", (e) => {
     if (!isEqOn) return;
     const rect = ptdEqCanvasEl.getBoundingClientRect();
@@ -447,7 +462,7 @@ ptdEqCanvasEl.addEventListener("mousedown", (e) => {
     
     for (let i = 0; i < 7; i++) {
         let cx = getX(i);
-        if (Math.abs(x - cx) < 25) { // Generous hitbox width
+        if (Math.abs(x - cx) < 25) { 
             isDragging = true;
             activeNode = i;
             eqValues[i] = getValFromY(y);
@@ -488,10 +503,11 @@ ptdEqModal.querySelector('#ptdEqToggleBtn').addEventListener('click', function()
     if (isEqOn) {
         audioState = "none";
         applyAudioState(true); 
+    } else {
+        applyEQSettings(); 
     }
     
     updateUIAccessibility();
-    applyEQSettings();
 });
 
 ptdEqOption.addEventListener("click", function() {
@@ -504,7 +520,6 @@ ptdEqOption.addEventListener("click", function() {
     }
 });
 
-// Fixed applying EQ settings instantly
 function applyEQSettings() {
     if (!audioCtx || eqFilters.length === 0) return;
     
@@ -514,7 +529,6 @@ function applyEQSettings() {
     
     eqFilters.forEach((filter, i) => {
         const targetGain = isEqOn ? eqValues[i] : 0;
-        // Direct assignment to fix the "late / laggy" bug
         filter.gain.value = targetGain; 
     });
 }
@@ -533,7 +547,10 @@ function updateUIAccessibility() {
 }
 
 function initAudio() {
-    var currentMedia = document.getElementById("aud") || window.video || document.querySelector("video"); 
+    // Specifically target the audio element first
+    var currentMedia = document.getElementById("aud") || document.querySelector("audio");
+    if (!currentMedia && typeof video !== "undefined") currentMedia = video; 
+    
     if (audioCtx || !currentMedia) return; 
 
     try {
@@ -554,6 +571,9 @@ function initAudio() {
             let f = audioCtx.createBiquadFilter();
             f.type = types[i];
             f.frequency.value = freq;
+            if (types[i] === 'peaking') {
+                f.Q.value = 1.414; 
+            }
             f.gain.value = isEqOn ? eqValues[i] : 0;
             return f;
         });
@@ -562,9 +582,9 @@ function initAudio() {
             eqFilters[i].connect(eqFilters[i+1]);
         }
 
-        source.connect(analyzer);
-        analyzer.connect(eqFilters[0]);
-        eqFilters[eqFilters.length - 1].connect(gainNode);
+        source.connect(eqFilters[0]);
+        eqFilters[eqFilters.length - 1].connect(analyzer);
+        analyzer.connect(gainNode);
         gainNode.connect(compressorNode);
         compressorNode.connect(audioCtx.destination);
 
@@ -624,7 +644,10 @@ function applyAudioState(isUserInteraction = false) {
         compressorNode.ratio.setTargetAtTime(20, now, smoothTime);
 
         normalizerInterval = setInterval(() => {
-            var currentAud = document.getElementById("aud") || window.video || document.querySelector("video");
+            // Specifically target the audio element first
+            var currentAud = document.getElementById("aud") || document.querySelector("audio");
+            if (!currentAud && typeof video !== "undefined") currentAud = video;
+
             if (!currentAud || currentAud.paused || audioCtx.state !== 'running') return;
 
             analyzer.getFloatTimeDomainData(dataArray);
@@ -668,7 +691,7 @@ updateUIAccessibility();
 applyAudioState(false);
  
 document.addEventListener('play', function(event) {
-    if (event.target.id === 'aud' || event.target.tagName === 'VIDEO') {
+    if (event.target.id === 'aud' || event.target.tagName === 'VIDEO' || event.target.tagName === 'AUDIO') {
         if (audioCtx && audioCtx.state === 'suspended') {
             audioCtx.resume();
         }
@@ -767,7 +790,7 @@ loopOption.addEventListener("click", function() {
     const quaindt = new URLSearchParams(window.location.search).get("quality") || "";
     var looped = video.loop;
     video.loop = !looped;
-    var currentAud = document.getElementById("aud");
+    var currentAud = document.getElementById("aud") || document.querySelector("audio");
 
     if (quaindt !== "medium") {
         if (currentAud) {
@@ -796,7 +819,7 @@ loopOption.addEventListener("click", function() {
 speedOption.addEventListener("click", function() {
     var currentSpeed = video.playbackRate;
     var newSpeed = getNextSpeed(currentSpeed);
-    var currentAud = document.getElementById("aud");
+    var currentAud = document.getElementById("aud") || document.querySelector("audio");
 
     video.playbackRate = newSpeed;
     if (currentAud) currentAud.playbackRate = newSpeed;
