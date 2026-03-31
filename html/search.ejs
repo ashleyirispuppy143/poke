@@ -75,7 +75,53 @@ summary:hover{
       nav {
         background:#111111
     }
-  
+
+  /* Toast Popups (Achievements & Warnings) */
+.poke-toast {
+  position: fixed;
+  top: 20px;
+  right: -350px; /* Hidden off-screen */
+  width: 280px;
+  background: #212121;
+  border: 3px solid #555;
+  border-right-color: #111;
+  border-bottom-color: #111;
+  color: #fff;
+  padding: 12px;
+  font-family: monospace, sans-serif;
+  box-shadow: 4px 4px 0px rgba(0,0,0,0.5);
+  transition: right 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+}
+
+.poke-toast.show {
+  right: 20px;
+}
+
+.poke-toast.warning {
+  border-color: #ff5555;
+  border-right-color: #aa0000;
+  border-bottom-color: #aa0000;
+}
+
+.poke-toast-title {
+  color: #ffff55;  
+  font-size: 14px;
+  margin: 0 0 6px 0;
+  font-weight: bold;
+}
+
+.poke-toast.warning .poke-toast-title {
+  color: #ff5555;
+}
+
+.poke-toast-desc {
+  font-size: 13px;
+  margin: 0;
+  color: #ddd;
+}
   
  
 </style>    
@@ -2071,12 +2117,13 @@ no results found :c	u can try <a href="https://youtube.com/results?search_query=
         </div>
 
 <script>
+ <script>
   document.addEventListener("DOMContentLoaded", function() {
     const aprilFoolsBtn = document.getElementById("april-fools-btn");
     const searchInput = document.getElementById("fname");
 
     if (aprilFoolsBtn) {
-      // 15 Subjects * 15 Actions * 15 Objects = 3,375 Unique Combinations
+      // Data Arrays
       const subjects = [
         "shrek", "gordon ramsay", "danny devito", "peppa pig", "waluigi",
         "a single slice of cheese", "my fbi agent", "a roomba", "john cena", "garfield",
@@ -2108,33 +2155,112 @@ no results found :c	u can try <a href="https://youtube.com/results?search_query=
         "is mayonnaise an instrument"
       ];
 
+      // State Trackers
+      let clickHistory = [];
+      let isTyping = false;
+
+      // Popup Generator
+      function showToast(title, description, isWarning = false) {
+        const toast = document.createElement("div");
+        toast.className = `poke-toast ${isWarning ? 'warning' : ''}`;
+        
+        const titleEl = document.createElement("p");
+        titleEl.className = "poke-toast-title";
+        titleEl.innerText = title;
+        
+        const descEl = document.createElement("p");
+        descEl.className = "poke-toast-desc";
+        descEl.innerText = description;
+
+        toast.appendChild(titleEl);
+        toast.appendChild(descEl);
+        document.body.appendChild(toast);
+
+        // Trigger reflow for animation, then slide in
+        void toast.offsetWidth; 
+        toast.classList.add("show");
+
+        // Remove after 4 seconds
+        setTimeout(() => {
+          toast.classList.remove("show");
+          setTimeout(() => toast.remove(), 500);
+        }, 4000);
+      }
+
       function generateFunnyQuery() {
+        // 10% chance for a classic meme (Triggers Achievement)
         if (Math.random() < 0.1) {
-          return classicMemes[Math.floor(Math.random() * classicMemes.length)];
+          return {
+            text: classicMemes[Math.floor(Math.random() * classicMemes.length)],
+            isSecret: true
+          };
         }
         
         const sub = subjects[Math.floor(Math.random() * subjects.length)];
         const act = actions[Math.floor(Math.random() * actions.length)];
         const obj = objects[Math.floor(Math.random() * objects.length)];
         
-        return `${sub} ${act} ${obj}`;
+        return {
+          text: `${sub} ${act} ${obj}`,
+          isSecret: false
+        };
       }
 
       aprilFoolsBtn.addEventListener("click", function() {
-         aprilFoolsBtn.style.transform = "rotate(360deg)";
+        // 1. Check if an animation is already running
+        if (isTyping) return;
+
+        // 2. Check Rate Limit (5 per 60 seconds)
+        const now = Date.now();
+        clickHistory = clickHistory.filter(time => now - time < 60000); // Remove timestamps older than 1 min
         
-        const randomQuery = generateFunnyQuery();
-        
-         if (searchInput) {
-          searchInput.value = randomQuery;
+        if (clickHistory.length >= 5) {
+          showToast("Overheating!", "Whoa there speed demon. The meme machine needs a minute to cool down.", true);
+          aprilFoolsBtn.style.transform = "rotate(-15deg)"; // Shake it a bit
+          setTimeout(() => aprilFoolsBtn.style.transform = "rotate(0deg)", 200);
+          return;
         }
+
+        // Log the click
+        clickHistory.push(now);
+        isTyping = true;
         
-         setTimeout(() => {
-           window.location.href = "/search?query=" + encodeURIComponent(randomQuery);
-        }, 600);
+        // 3. Generate Query & Check for Achievement
+        const queryData = generateFunnyQuery();
+        
+        if (queryData.isSecret) {
+          showToast("Achievement Get!", "Secret Query Found: " + queryData.text);
+        }
+
+        // 4. Typing Effect over 3 seconds
+        aprilFoolsBtn.style.transform = `rotate(${360 * clickHistory.length}deg)`;
+        
+        if (searchInput) {
+          const words = queryData.text.split(" ");
+          const intervalTime = 3000 / words.length; // Spread words evenly over 3000ms
+          let currentWordIndex = 0;
+          
+          searchInput.value = ""; // Clear current input
+          
+          const typingInterval = setInterval(() => {
+            searchInput.value += (currentWordIndex > 0 ? " " : "") + words[currentWordIndex];
+            currentWordIndex++;
+            
+            if (currentWordIndex >= words.length) {
+              clearInterval(typingInterval);
+              
+              // Wait half a second after finishing, then redirect
+              setTimeout(() => {
+                isTyping = false;
+                window.location.href = "/search?query=" + encodeURIComponent(queryData.text);
+              }, 500);
+            }
+          }, intervalTime);
+        }
       });
     }
   });
+</script>
 </script>
                  <script src="/static/custom-css.js?v=45485"> </script>
                               <script>    
