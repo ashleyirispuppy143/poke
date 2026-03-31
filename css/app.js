@@ -547,10 +547,7 @@ function updateUIAccessibility() {
 }
 
 function initAudio() {
-    // Specifically target the audio element first
-    var currentMedia = document.getElementById("aud") || document.querySelector("audio");
-    if (!currentMedia && typeof video !== "undefined") currentMedia = video; 
-    
+    var currentMedia = typeof video !== "undefined" ? video : (document.getElementById("aud") || document.querySelector("audio")); 
     if (audioCtx || !currentMedia) return; 
 
     try {
@@ -644,10 +641,7 @@ function applyAudioState(isUserInteraction = false) {
         compressorNode.ratio.setTargetAtTime(20, now, smoothTime);
 
         normalizerInterval = setInterval(() => {
-            // Specifically target the audio element first
-            var currentAud = document.getElementById("aud") || document.querySelector("audio");
-            if (!currentAud && typeof video !== "undefined") currentAud = video;
-
+            var currentAud = typeof video !== "undefined" ? video : (document.getElementById("aud") || document.querySelector("video"));
             if (!currentAud || currentAud.paused || audioCtx.state !== 'running') return;
 
             analyzer.getFloatTimeDomainData(dataArray);
@@ -686,18 +680,38 @@ function applyAudioState(isUserInteraction = false) {
 
     if (audioCtx.state === 'suspended') audioCtx.resume();
 }
+ 
+ function unlockAudioContext() {
+    if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+    // If the user has an audio effect active but it hasn't started, start it now.
+    if ((audioState !== "none" || isEqOn) && !audioCtx) {
+        applyAudioState(true);
+    }
+    
+    // Remove listeners once unlocked
+    document.removeEventListener('click', unlockAudioContext);
+    document.removeEventListener('touchstart', unlockAudioContext);
+    document.removeEventListener('keydown', unlockAudioContext);
+}
 
+// Listen for first genuine user interaction to bypass autoplay restrictions safely
+document.addEventListener('click', unlockAudioContext);
+document.addEventListener('touchstart', unlockAudioContext);
+document.addEventListener('keydown', unlockAudioContext);
+ 
 updateUIAccessibility();
 applyAudioState(false);
  
 document.addEventListener('play', function(event) {
     if (event.target.id === 'aud' || event.target.tagName === 'VIDEO' || event.target.tagName === 'AUDIO') {
+        // Just attempt to resume gracefully if the context is already running
         if (audioCtx && audioCtx.state === 'suspended') {
-            audioCtx.resume();
+            audioCtx.resume().catch(e => console.warn("Audio resume blocked by autoplay policy.", e));
         }
-        if ((audioState !== "none" || isEqOn) && !audioCtx) {
-            applyAudioState(true); 
-        }
+        // Notice: We NO LONGER force applyAudioState(true) here!
+        // The unlockAudioContext listener handles initialization safely instead.
     }
 }, true);
 
