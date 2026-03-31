@@ -531,10 +531,9 @@ video[counter].classList.add("shake");
         <form action=/search><input class=search-bar autocomplete="on"  value="<%=q%>" id=fname name=query  style="color:#fff;font-family:Inter,sans-serif;border-radius: 8px;background: linear-gradient(90deg, hsla(235, 21%, 21%, 1) 0%, hsla(194, 41%, 22%, 1) 50%, hsla(174, 48%, 20%, 1) 100%);" >
           <button class="btn btn-success" type=submit><i class="fa-light fa-search"></i></button>
              
-         </form><button class="btn btn-warning" type="button" id="april-fools-btn" title="I'm Feeling Funny (April Fools!)" style="background: #ff7b00; border: none; border-radius: 8px; color: #fff; cursor: pointer; padding: 0 12px; transition: transform 0.2s;">
+         </form> <a class="btn btn-warning" type="button" id="april-fools-btn" title="I'm Feeling Funny (April Fools!)" style=" border: none; border-radius: 8px; color: #fff; cursor: pointer; padding: 0 12px; transition: transform 0.2s;background: orange;padding: 8px;margin-left: 13px;margin-top: -3px;">
       <i class="fa-light fa-dice"></i>
-    </button>
-
+    </a>
       </div>          </div>
 
 
@@ -2070,7 +2069,73 @@ no results found :c	u can try <a href="https://youtube.com/results?search_query=
 
         </a>
         </div>
-                                    
+                                    <script>
+  document.addEventListener("DOMContentLoaded", function() {
+    const aprilFoolsBtn = document.getElementById("april-fools-btn");
+    const searchInput = document.getElementById("fname");
+    const searchForm = document.getElementById("search-form");
+
+    if (aprilFoolsBtn) {
+       const subjects = [
+        "shrek", "gordon ramsay", "danny devito", "peppa pig", "waluigi",
+        "a single slice of cheese", "my fbi agent", "a roomba", "john cena", "garfield",
+        "spongebob", "batman", "mr. bean", "a very polite cat", "the duolingo owl"
+      ];
+      
+      const actions = [
+        "aggressively reviewing", "crying over", "speedrunning", "explaining fnaf lore to",
+        "doing the macarena with", "eating", "fighting", "apologizing to",
+        "trying to cook", "getting stuck in", "teleporting bread with", "judging",
+        "yelling at", "escaping from", "writing a diss track about"
+      ];
+      
+      const objects = [
+        "a haunted toaster", "windows 95", "a singular baked bean", "the entire bee movie script",
+        "a geometry dash level", "the backrooms", "a bowl of cold soup", "a wet sock",
+        "an nft", "a 2006 honda civic", "the krabby patty secret formula",
+        "a pile of dirt", "an existential crisis", "the mcdonalds ice cream machine", "a 5g tower"
+      ];
+
+       const classicMemes = [
+        "how to download more ram",
+        "why is my cat staring at the wall",
+        "do the harlem shake",
+        "do a barrel roll",
+        "never gonna give you up 10 hours",
+        "10 hour loop of absolute silence",
+        "how to tame a t-rex in minecraft",
+        "is mayonnaise an instrument"
+      ];
+
+      function generateFunnyQuery() {
+         if (Math.random() < 0.1) {
+          return classicMemes[Math.floor(Math.random() * classicMemes.length)];
+        }
+        
+         const sub = subjects[Math.floor(Math.random() * subjects.length)];
+        const act = actions[Math.floor(Math.random() * actions.length)];
+        const obj = objects[Math.floor(Math.random() * objects.length)];
+        
+        return `${sub} ${act} ${obj}`;
+      }
+
+      aprilFoolsBtn.addEventListener("click", function() {
+        // Make the button do a little spin for extra flavor
+        aprilFoolsBtn.style.transform = "rotate(360deg)";
+        
+        const randomQuery = generateFunnyQuery();
+        
+        // Type it out into the search bar
+        searchInput.value = randomQuery;
+        
+        // Slight delay so the user can read the absurdity before it searches
+        setTimeout(() => {
+          searchForm.submit();
+        }, 600);
+      });
+    }
+  });
+</script>
                  <script src="/static/custom-css.js?v=45485"> </script>
                               <script>    
                     // @license magnet:?xt=urn:btih:1f739d935676111cfff4b4693e3816e664797050&dn=gpl-3.0.txt GPL-3.0-or-later            
@@ -2089,6 +2154,7 @@ no results found :c	u can try <a href="https://youtube.com/results?search_query=
                      }
 
                  }
+
 
                  document.addEventListener("DOMContentLoaded", function() {
                      if (localStorage.getItem('liar.')) {
