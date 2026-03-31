@@ -24,8 +24,11 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  * "It takes a lot of hard work to make something simple." ~ Steve Jobs 
  */
 
- // This runs in a try-catch because elements might not exist yet...which is sillah am sillah tooo waowawawa............
  
+ 
+//////////////// THE PLAYER, START ////////////////////////
+  // This runs in a try-catch because elements might not exist yet...which is sillah am sillah tooo waowawawa............
+
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -65,8 +68,6 @@ try {
   _earlyZero(_earlyVideo);
   _earlyZero(_earlyAudio);
 } catch {}
-
-//////////////// THE PLAYER, START ////////////////////////
 
 document.addEventListener("DOMContentLoaded", () => {
   const video = videojs("video", {
@@ -5707,8 +5708,8 @@ const HAVE_ENOUGH_DATA = 4;
     if (_errorOverlayShown) return;
     // Never restart after ended. User play clears endedNaturally first.
     if (state.endedNaturally && !state.restarting && !isLoopDesired()) return;
-    const userImmediate = directUserToggleActive();
-    const resolvedMinGapMs = Math.max(0, Number(minGapMs != null ? minGapMs : (userImmediate ? 80 : 180)) || 0);
+    var userImmediate = !!directUserToggleActive();
+    var resolvedMinGapMs = Math.max(0, Number(minGapMs != null ? minGapMs : (userImmediate ? 80 : 180)) || 0);
     const nowTs = now();
     if (!force && state.videoPlayInFlight) return state.videoPlayInFlight;
     if (!force && nowTs < state.videoPlayUntil) return Promise.resolve();
@@ -5788,6 +5789,8 @@ const HAVE_ENOUGH_DATA = 4;
     if (!coupledMode || !audio || typeof audio.play !== "function") return false;
     // Error overlay active — playback is dead, don't start anything
     if (_errorOverlayShown) return false;
+    var userImmediate = !!directUserToggleActive();
+    var resolvedMinGapMs = Math.max(0, Number(minGapMs != null ? minGapMs : (userImmediate ? 120 : 300)) || 0);
 
     // Never start audio during seeking or seek-buffering by default.
     // Exception: forced short post-seek kick window (armed by video "seeked")
@@ -12367,9 +12370,7 @@ const HAVE_ENOUGH_DATA = 4;
     _handlePlayerCrash(msg, "promise", reason ? (reason.stack || "") : "");
   }, { passive: true });
 });
-    const userImmediate = directUserToggleActive();
-    const resolvedMinGapMs = Math.max(0, Number(minGapMs != null ? minGapMs : (userImmediate ? 120 : 300)) || 0);
- 
+
 //////////////// THE PLAYER, END ////////////////////////
  
   
