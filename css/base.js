@@ -27,7 +27,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  
  
 //////////////// THE PLAYER, START ////////////////////////
-  // This runs in a try-catch because elements might not exist yet...which is sillah am sillah tooo waowawawa............
+// This runs in a try-catch because elements might not exist yet...which is sillah am sillah tooo waowawawa............
  
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
@@ -4229,7 +4229,11 @@ const HAVE_ENOUGH_DATA = 4;
     if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
     if (state.resumeOnVisible || state.bgHiddenWasPlaying) return false;
     if (hiddenPlayPendingActive() || foregroundResumeBoostActive() || state.mediaSessionInitiatedPlay) return false;
+    const recentlyReturnedToForeground =
+      state.lastBgReturnAt > 0 &&
+      (now() - state.lastBgReturnAt) < 8000;
     return (
+      recentlyReturnedToForeground ||
       inBgReturnGrace() ||
       isVisibilityTransitionActive() ||
       !isVisibilityStable() ||
@@ -4254,13 +4258,13 @@ const HAVE_ENOUGH_DATA = 4;
     state.freshForegroundVideoFirstArmedAt = 0;
     state.freshForegroundVideoFirstBaseVT = 0;
   }
-  function armFreshForegroundVideoFirst(baseVt = NaN, ms = 4200) {
+  function armFreshForegroundVideoFirst(baseVt = NaN, ms = 6500) {
     const vt = isFinite(baseVt) ? Number(baseVt) : (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
     state.freshForegroundVideoFirstBaseVT = isFinite(vt) ? vt : 0;
     state.freshForegroundVideoFirstArmedAt = now();
     state.freshForegroundVideoFirstUntil = Math.max(
       state.freshForegroundVideoFirstUntil,
-      state.freshForegroundVideoFirstArmedAt + Math.max(1200, Number(ms) || 0)
+      state.freshForegroundVideoFirstArmedAt + Math.max(1800, Number(ms) || 0)
     );
   }
   function freshForegroundVideoFirstPending() {
@@ -4427,8 +4431,12 @@ const HAVE_ENOUGH_DATA = 4;
     const vrs = vNode ? Number(vNode.readyState || 0) : 0;
     if (state.videoWaiting && vrs < HAVE_FUTURE_DATA) return false;
     const vtNow = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
+    const forwardProgress =
+      isFinite(baseVt) &&
+      isFinite(vtNow) &&
+      vtNow > (baseVt + 0.02);
     if (armedAt > 0 && state.lastVideoPlayingAt >= (armedAt - 25) && vrs >= HAVE_CURRENT_DATA) return true;
-    if (isFinite(baseVt) && Math.abs(vtNow - baseVt) > 0.04 && vrs >= HAVE_CURRENT_DATA) return true;
+    if (forwardProgress && vrs >= HAVE_CURRENT_DATA) return true;
     if (requireProgress) return false;
     return vrs >= HAVE_FUTURE_DATA && !state.videoWaiting && armedAt > 0 && (now() - armedAt) > 260;
   }
@@ -4479,7 +4487,7 @@ const HAVE_ENOUGH_DATA = 4;
     };
 
     const retryDelays = recentReturnAtStart
-      ? [0, 70, 180, 320, 520, 850, 1250, 1700, 2350, 3200]
+      ? [0, 70, 180, 320, 520, 850, 1250, 1700, 2350, 3200, 4300, 5600]
       : [0, 70, 180, 320, 520, 850, 1250];
     retryDelays.forEach(delay => {
       const tid = trackForegroundUserPlayRetryTimer(setTimeout(() => {
@@ -4560,6 +4568,7 @@ const HAVE_ENOUGH_DATA = 4;
     return 0;
   }
   function shouldAllowVisibleReturnSyncSeek() {
+    if (freshForegroundVideoFirstPending()) return false;
     return (
       isHiddenBackground() ||
       inBgReturnGrace() ||
@@ -7143,6 +7152,7 @@ const HAVE_ENOUGH_DATA = 4;
         try { earlyUserVideoKick = execProgrammaticVideoPlay({ force: true, minGapMs: 0 }); } catch {}
       }
       const allowVisibleVideoCatchUp =
+        !freshVideoFirst &&
         !recentDirectToggle &&
         (state.resumeOnVisible ||
          state.bgHiddenWasPlaying ||
@@ -7150,7 +7160,10 @@ const HAVE_ENOUGH_DATA = 4;
          foregroundRecoveryActive(450));
       // inBgReturnGrace: don't seek audio during the tab-return grace window.
       if (!inBgDrift && isFinite(vt) && isFinite(at) && Math.abs(at - vt) > 0.25) {
-        if (at > vt + 0.3 && allowVisibleVideoCatchUp) {
+        if (freshVideoFirst && at > vt + 0.08 && !audio.paused) {
+          execProgrammaticAudioPause(120);
+          safeSetAudioTime(vt);
+        } else if (at > vt + 0.3 && allowVisibleVideoCatchUp) {
           // Audio is ahead of video — it kept playing in the background while
           // video was paused. Seek VIDEO forward to audio's position instead
           // of seeking audio backward (which would cause an audible replay).
@@ -10057,13 +10070,20 @@ const HAVE_ENOUGH_DATA = 4;
                   state.startupKickDone = true;
                   state.startupKickInFlight = false;
                 }
+                const freshVideoFirst = freshForegroundVideoFirstPending();
                 if (!audio.paused && state.audioEverStarted) {
                   const vt = Number(video.currentTime());
                   const at = Number(audio.currentTime);
                   if (isFinite(vt) && isFinite(at) && Math.abs(vt - at) > 0.25) {
                     if (at > vt + 0.3) {
-                      // Audio ahead — seek video forward, don't replay audio
-                      try { const _vn = getVideoNode(); if (_vn) _vn.currentTime = at; } catch {}
+                      if (freshVideoFirst) {
+                        execProgrammaticAudioPause(120);
+                        safeSetAudioTime(vt);
+                      } else {
+                        // Audio ahead during a real resume/catch-up — move video
+                        // using the guarded helper instead of a raw visible seek.
+                        safeSetVideoTime(at, { force: true });
+                      }
                     } else {
                       quietSeekAudio(vt).catch(() => {});
                     }
@@ -10075,7 +10095,7 @@ const HAVE_ENOUGH_DATA = 4;
                 // playTogether() has awaits that add 50-150ms of latency.
                 // Set audio position and fire play() directly, then let
                 // playTogether handle the full sync in the background.
-                if (audio && audio.paused) {
+                if (audio && audio.paused && !freshVideoFirst) {
                   const _fastVt = Number(video.currentTime()) || 0;
                   if (isFinite(_fastVt) && _fastVt >= 0) {
                     state._allowAudioTimeWrite = true;
@@ -12808,7 +12828,6 @@ const HAVE_ENOUGH_DATA = 4;
   }, { passive: true });
 });
 
- 
  
 //////////////// THE PLAYER, END ////////////////////////
  
