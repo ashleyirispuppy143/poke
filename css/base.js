@@ -28,7 +28,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  
 //////////////// THE PLAYER, START ////////////////////////
 // This runs in a try-catch because elements might not exist yet...which is sillah am sillah tooo waowawawa............
- 
+// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
+// before DOMContentLoaded. Ensures both video and audio start at 00:00
+// even if the browser pre-buffers to a non-zero keyframe position.
+// This runs in a try-catch because elements might not exist yet.
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -676,6 +679,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!state.firstPlayCommitted && state.intendedPlaying) return _origAudioPlay();
       const _gateVNode = getVideoNode();
       const _gateRS = _gateVNode ? Number(_gateVNode.readyState || 0) : 4;
+      if (shouldKeepForegroundReturnVideoFirst() && (getVideoPaused() || _gateRS < HAVE_CURRENT_DATA)) {
+        return Promise.resolve();
+      }
       if (shouldHoldAudioForForegroundStall({ allowRecovery: true })) return Promise.resolve();
       // tab return / NMPBFN recovery / grace period: readyState is stale in
       // Chrome after bg throttling, so skip the readyState check entirely.
@@ -4277,6 +4283,20 @@ const HAVE_ENOUGH_DATA = 4;
       true
     );
   }
+  function shouldKeepForegroundReturnVideoFirst() {
+    if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
+    if (!state.intendedPlaying || state.restarting || state.seeking || state.seekBuffering) return false;
+    if (freshForegroundVideoFirstPending()) return true;
+    const recentlyReturnedToForeground =
+      state.lastBgReturnAt > 0 &&
+      (now() - state.lastBgReturnAt) < 10000;
+    if (!recentlyReturnedToForeground) return false;
+    return (
+      directUserToggleActive(2200) ||
+      userWantsPlayNow(2800) ||
+      userToggleExpectingPlay()
+    );
+  }
   function mediaActionRecently(type, ms = 1200) {
     return state.lastMediaAction === type && (now() - state.lastMediaActionTs) < ms;
   }
@@ -4568,7 +4588,7 @@ const HAVE_ENOUGH_DATA = 4;
     return 0;
   }
   function shouldAllowVisibleReturnSyncSeek() {
-    if (freshForegroundVideoFirstPending()) return false;
+    if (shouldKeepForegroundReturnVideoFirst()) return false;
     return (
       isHiddenBackground() ||
       inBgReturnGrace() ||
@@ -4862,7 +4882,7 @@ const HAVE_ENOUGH_DATA = 4;
     // click, adding 50-200ms of perceived delay. By starting audio here, it begins
     // at the same time as video. playTogether() will see audio already playing and
     // skip the audio section (no double-play).
-    if (!skipImmediateAudioKick && coupledMode && audio && audio.paused && !freshForegroundVideoFirstPending()) {
+    if (!skipImmediateAudioKick && coupledMode && audio && audio.paused && !shouldKeepForegroundReturnVideoFirst()) {
       const targetTime = getPreferredPlaybackSyncTarget({
         preferAudio: false,
         allowNearZero: !state.firstPlayCommitted
@@ -6190,6 +6210,12 @@ const HAVE_ENOUGH_DATA = 4;
 
     const _epVNode = getVideoNode();
     const _epRS = _epVNode ? Number(_epVNode.readyState || 0) : 4;
+    if (shouldKeepForegroundReturnVideoFirst() &&
+        document.visibilityState === "visible" &&
+        isWindowFocused() &&
+        (getVideoPaused() || _epRS < HAVE_CURRENT_DATA)) {
+      return false;
+    }
     const _forceBufferBypass =
       force &&
       (
@@ -7139,7 +7165,7 @@ const HAVE_ENOUGH_DATA = 4;
       clearBufferHold();
       const vt = Number(video.currentTime());
       const at = Number(audio.currentTime);
-      const freshVideoFirst = freshForegroundVideoFirstPending();
+      const freshVideoFirst = shouldKeepForegroundReturnVideoFirst();
 
       const inBgDrift = document.visibilityState === "hidden" || !isWindowFocused() || inBgReturnGrace();
       const recentDirectToggle =
@@ -7274,7 +7300,7 @@ const HAVE_ENOUGH_DATA = 4;
       }
 
       if (!videoOk && !audioOk) {
-        if (freshForegroundVideoFirstPending()) {
+        if (shouldKeepForegroundReturnVideoFirst()) {
           startForegroundUserPlayRetry();
           if (!state.strictBufferHold) armResumeAfterBuffer(5000);
         } else if (isHiddenBackground() && state.intendedPlaying) {
@@ -7294,6 +7320,12 @@ const HAVE_ENOUGH_DATA = 4;
         }
         return;
       } else if (!videoOk && audioOk) {
+        if (shouldKeepForegroundReturnVideoFirst()) {
+          execProgrammaticAudioPause(120);
+          startForegroundUserPlayRetry();
+          if (!state.strictBufferHold) armResumeAfterBuffer(5000);
+          return;
+        }
         if (isHiddenBackground() && state.bgPlaybackAllowed) {
           // ok — audio-only background playback is allowed
         } else if (inBgReturnGrace() && !isHiddenBackground()) {
@@ -7388,7 +7420,10 @@ const HAVE_ENOUGH_DATA = 4;
         }
       }
       if (vp && !ap) {
-        if (document.visibilityState === "hidden" || !isWindowFocused() || isVisibilityTransitionActive() || isAltTabTransitionActive()) {
+        if (shouldKeepForegroundReturnVideoFirst()) {
+          execProgrammaticAudioPause(120);
+          if (state.intendedPlaying) startForegroundUserPlayRetry();
+        } else if (document.visibilityState === "hidden" || !isWindowFocused() || isVisibilityTransitionActive() || isAltTabTransitionActive()) {
           // Background / transition: video paused but audio still playing.
           // Silently update video.currentTime so the progress bar stays correct,
           // without triggering full seek machinery (which can deadlock in background).
@@ -10070,7 +10105,7 @@ const HAVE_ENOUGH_DATA = 4;
                   state.startupKickDone = true;
                   state.startupKickInFlight = false;
                 }
-                const freshVideoFirst = freshForegroundVideoFirstPending();
+                const freshVideoFirst = shouldKeepForegroundReturnVideoFirst();
                 if (!audio.paused && state.audioEverStarted) {
                   const vt = Number(video.currentTime());
                   const at = Number(audio.currentTime);
@@ -12828,7 +12863,6 @@ const HAVE_ENOUGH_DATA = 4;
   }, { passive: true });
 });
 
- 
 //////////////// THE PLAYER, END ////////////////////////
  
   
