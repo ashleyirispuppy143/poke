@@ -2069,14 +2069,15 @@ no results found :c	u can try <a href="https://youtube.com/results?search_query=
 
         </a>
         </div>
-                                    <script>
+
+<script>
   document.addEventListener("DOMContentLoaded", function() {
     const aprilFoolsBtn = document.getElementById("april-fools-btn");
     const searchInput = document.getElementById("fname");
-    const searchForm = document.getElementById("search-form");
 
     if (aprilFoolsBtn) {
-       const subjects = [
+      // 15 Subjects * 15 Actions * 15 Objects = 3,375 Unique Combinations
+      const subjects = [
         "shrek", "gordon ramsay", "danny devito", "peppa pig", "waluigi",
         "a single slice of cheese", "my fbi agent", "a roomba", "john cena", "garfield",
         "spongebob", "batman", "mr. bean", "a very polite cat", "the duolingo owl"
@@ -2096,7 +2097,7 @@ no results found :c	u can try <a href="https://youtube.com/results?search_query=
         "a pile of dirt", "an existential crisis", "the mcdonalds ice cream machine", "a 5g tower"
       ];
 
-       const classicMemes = [
+      const classicMemes = [
         "how to download more ram",
         "why is my cat staring at the wall",
         "do the harlem shake",
@@ -2108,11 +2109,11 @@ no results found :c	u can try <a href="https://youtube.com/results?search_query=
       ];
 
       function generateFunnyQuery() {
-         if (Math.random() < 0.1) {
+        if (Math.random() < 0.1) {
           return classicMemes[Math.floor(Math.random() * classicMemes.length)];
         }
         
-         const sub = subjects[Math.floor(Math.random() * subjects.length)];
+        const sub = subjects[Math.floor(Math.random() * subjects.length)];
         const act = actions[Math.floor(Math.random() * actions.length)];
         const obj = objects[Math.floor(Math.random() * objects.length)];
         
@@ -2120,17 +2121,16 @@ no results found :c	u can try <a href="https://youtube.com/results?search_query=
       }
 
       aprilFoolsBtn.addEventListener("click", function() {
-        // Make the button do a little spin for extra flavor
-        aprilFoolsBtn.style.transform = "rotate(360deg)";
+         aprilFoolsBtn.style.transform = "rotate(360deg)";
         
         const randomQuery = generateFunnyQuery();
         
-        // Type it out into the search bar
-        searchInput.value = randomQuery;
+         if (searchInput) {
+          searchInput.value = randomQuery;
+        }
         
-        // Slight delay so the user can read the absurdity before it searches
-        setTimeout(() => {
-          searchForm.submit();
+         setTimeout(() => {
+           window.location.href = "/search?query=" + encodeURIComponent(randomQuery);
         }, 600);
       });
     }
