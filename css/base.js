@@ -25,7 +25,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
  // This runs in a try-catch because elements might not exist yet...which is sillah am sillah tooo waowawawa............
-try {
+ try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -46,10 +46,8 @@ try {
       if (_earlyAudioSrc) _earlyAudio.load();
     } catch {}
   }
-  // Also strip loop attribute early to prevent browser-native looping
-  if (_earlyVideo) { _earlyVideo.removeAttribute("loop"); _earlyVideo.loop = false; }
-  // Re-check on loadedmetadata (browser can move currentTime after our zero-set)
-  const _earlyZero = (el) => {
+   if (_earlyVideo) { _earlyVideo.removeAttribute("loop"); _earlyVideo.loop = false; }
+   const _earlyZero = (el) => {
     if (!el) return;
     const _handler = () => {
       if (_startupZeroSuppressed()) {
@@ -64,7 +62,6 @@ try {
   _earlyZero(_earlyVideo);
   _earlyZero(_earlyAudio);
 } catch {}
-
 
 //////////////THE, PLAYER ///////////////////////////////
 document.addEventListener("DOMContentLoaded", () => {
@@ -664,8 +661,13 @@ document.addEventListener("DOMContentLoaded", () => {
       // tab return / NMPBFN recovery / grace period: readyState is stale in
       // Chrome after bg throttling, so skip the readyState check entirely.
       // these systems cleared stall flags already and own the play sequence.
+      const _audioGraceBypass =
+        now() < state.audioStartGraceUntil &&
+        !state.videoWaiting &&
+        !state.videoStallAudioPaused &&
+        !(state.strictBufferHold && state.firstPlayCommitted);
       if (isTabReturnImmune() || NotMakePlayBackFixingNoticable.isActive() ||
-          now() < state.audioStartGraceUntil) {
+          _audioGraceBypass) {
         return _origAudioPlay();
       }
       const _gateVNode = getVideoNode();
@@ -3482,9 +3484,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
   const EPS = 1.0;
-  const HAVE_CURRENT_DATA = 2;
-  const HAVE_FUTURE_DATA = 3;
-  const HAVE_ENOUGH_DATA = 4;
+const HAVE_METADATA = 1;
+const HAVE_CURRENT_DATA = 2;
+const HAVE_FUTURE_DATA = 3;
+const HAVE_ENOUGH_DATA = 4;
   const STRICT_BUFFER_AHEAD_SEC = 0.25;
   const STARTUP_BUFFER_AHEAD_SEC = 1.0;
   const MICRO_DRIFT = 0.15;  // was 0.08 — too sensitive, caused constant rate changes
@@ -5658,11 +5661,27 @@ document.addEventListener("DOMContentLoaded", () => {
       now() < state.seekKickAudioAllowedUntil;
     if ((state.seeking || state.seekBuffering) && !inSeekKickWindow) return false;
 
+    const _epVNode = getVideoNode();
+    const _epRS = _epVNode ? Number(_epVNode.readyState || 0) : 4;
+    const _forceBufferBypass =
+      force &&
+      (
+        document.visibilityState === "hidden" ||
+        inSeekKickWindow ||
+        (state.startupPhase && !state.firstPlayCommitted) ||
+        isTabReturnImmune() ||
+        inBgReturnGrace() ||
+        NotMakePlayBackFixingNoticable.isActive()
+      );
+
     // skip if video is genuinely buffering (readyState < 3)
-    if (state.videoWaiting && !force) {
-      const _epVNode = getVideoNode();
-      const _epRS = _epVNode ? Number(_epVNode.readyState || 0) : 4;
-      if (_epRS < HAVE_FUTURE_DATA) return false;
+    if ((state.videoWaiting || state.videoStallAudioPaused ||
+         (state.strictBufferHold && state.firstPlayCommitted) ||
+         now() < state.stallAudioResumeHoldUntil) &&
+        _epRS < HAVE_FUTURE_DATA && !_forceBufferBypass) {
+      return false;
+    }
+    if (state.videoWaiting && _epRS >= HAVE_FUTURE_DATA) {
       state.videoWaiting = false; // stale
       state.videoStallSince = 0;
     }
@@ -6902,6 +6921,7 @@ document.addEventListener("DOMContentLoaded", () => {
       state.seeking = false;
       state.firstSeekDone = true;
       state.pendingSeekTarget = null;
+      state.seekTargetTime = 0;
       state.seekCompleted = true; state._seekStartedAt = 0;
       state.seekCooldownUntil = now() + 200;
       setFastSync(1500);
@@ -6962,6 +6982,7 @@ document.addEventListener("DOMContentLoaded", () => {
         state.audioPlayUntil = 0;
         state.audioPauseUntil = 0;
         state.pendingSeekTarget = null;
+        state.seekTargetTime = 0;
         state.seekCooldownUntil = now() + 200;
       }
       return;
@@ -6985,6 +7006,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!state.seeking || state.seekId !== currentSeekId) return;
     if (state.pendingSeekTarget != null) state.pendingSeekTarget = null;
+    state.seekTargetTime = 0;
 
     if (!shouldResumeAfterSeek() || mediaSessionForcedPauseActive()) {
       clearSeekResumeIntent();
@@ -8196,6 +8218,7 @@ document.addEventListener("DOMContentLoaded", () => {
                       state.seekCompleted = true;
                       state._seekStartedAt = 0;
                       state.pendingSeekTarget = null;
+                      state.seekTargetTime = 0;
                       clearSeekSyncFinalizeTimer();
                       clearSeekWatchdog();
                       if (state.intendedPlaying && !userPauseLockActive() &&
@@ -10420,17 +10443,18 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!_audioFirstPlayedAt) _audioFirstPlayedAt = performance.now();
       // GUARD: if video is actually buffering/waiting, don't let audio play.
       // This catches any path that bypassed the audio.play() gate.
-      if (state.videoWaiting && document.visibilityState === "visible" &&
-          !(now() < state.audioStartGraceUntil)) {
+      if (document.visibilityState === "visible" &&
+          state.firstPlayCommitted &&
+          !(now() < state.audioStartGraceUntil) &&
+          (state.videoWaiting || state.videoStallAudioPaused || state.strictBufferHold || now() < state.stallAudioResumeHoldUntil)) {
         const _apVN = getVideoNode();
         const _apRS = _apVN ? Number(_apVN.readyState || 0) : 4;
         if (_apRS < HAVE_FUTURE_DATA) {
-          try { audio.pause(); } catch {}
-          if (!state.videoStallAudioPaused) {
-            state.videoStallAudioPaused = true;
-            state.stallAudioPausedSince = now();
-            state.bufferHoldIntendedPlaying = state.intendedPlaying;
+          if (!state.videoWaiting) {
+            state.videoWaiting = true;
+            state.videoStallSince = state.videoStallSince || now();
           }
+          pauseAudioForConfirmedVideoStall();
           return; // don't clear stall state since we just re-paused
         }
       }
@@ -10647,6 +10671,8 @@ document.addEventListener("DOMContentLoaded", () => {
           isFinite(nativeTime) ? nativeTime :
           isFinite(vjsTime) ? vjsTime :
           isFinite(innerTime) ? innerTime : 0;
+          const previousGoodVT = state.lastKnownGoodVT || 0;
+          state.seekTargetTime = seekTime;
           if (seekTime < 0.8 && (_isUserOrProgrammaticSeek || _seekLikelyUser)) {
             authorizeNearZeroSeek(2500);
           }
@@ -10660,8 +10686,15 @@ document.addEventListener("DOMContentLoaded", () => {
             clearStartupAutoplayRetryTimer();
             setTimeout(() => { state.startupPhase = false; }, 800);
           }
-          state.lastKnownGoodVT = seekTime;
-          state.lastKnownGoodVTts = now();
+          const shouldKeepPreviousGoodVT =
+            seekTime < 0.8 &&
+            state.firstPlayCommitted &&
+            previousGoodVT > 0.9 &&
+            !nearZeroSeekAuthorized(seekTime);
+          if (!shouldKeepPreviousGoodVT) {
+            state.lastKnownGoodVT = seekTime;
+            state.lastKnownGoodVTts = now();
+          }
           state.seekCooldownUntil = now() + 2200;
 
           state.videoWaiting = false;
@@ -10746,10 +10779,23 @@ document.addEventListener("DOMContentLoaded", () => {
           // to play at full volume for ~10-50ms (the audible "blip").
           // Get the definitive seek target — video.currentTime() is reliable after seeked
           const newTime = Number(video.currentTime());
+          const expectedSeekTime = Number(state.seekTargetTime);
           // phantom loop guard (backup): if seeked lands at near-0 but nobody asked,
           // the seeking handler should have caught it. if it didn't (e.g. seeking
           // handler's lastKnownGoodVT was already 0), skip audio sync.
           const prevBeforeSeeked = state.lastKnownGoodVT || 0;
+          if (newTime < 0.5 && state.firstPlayCommitted && !isLoopDesired() &&
+              isFinite(expectedSeekTime) && expectedSeekTime > 0.8 &&
+              !nearZeroSeekAuthorized(newTime)) {
+            state.pendingSeekTarget = expectedSeekTime;
+            try { video.currentTime(expectedSeekTime); } catch {}
+            try { videoEl.currentTime = expectedSeekTime; } catch {}
+            try {
+              const _sv = getVideoNode();
+              if (_sv && _sv !== videoEl) _sv.currentTime = expectedSeekTime;
+            } catch {}
+            return;
+          }
           if (newTime < 0.5 && !state.seeking && state.firstPlayCommitted && !isLoopDesired() &&
               !nearZeroSeekAuthorized(newTime) && prevBeforeSeeked > 0.9 &&
               (now() - state.lastUserActionTime) > 2000 && state.pendingSeekTarget == null) {
@@ -12092,7 +12138,7 @@ document.addEventListener("DOMContentLoaded", () => {
     _handlePlayerCrash(msg, "promise", reason ? (reason.stack || "") : "");
   }, { passive: true });
 });
-//////////////// THE PLAYER, END ////////////////////////
+ //////////////// THE PLAYER, END ////////////////////////
  
   
   (function () {
