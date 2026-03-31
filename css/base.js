@@ -588,6 +588,9 @@ document.addEventListener("DOMContentLoaded", () => {
     tabReturnImmuneUntil: 0,
     tabReturnAudioMuted: false,
     tabReturnSettleTimer: null,
+    freshForegroundVideoFirstUntil: 0,
+    freshForegroundVideoFirstArmedAt: 0,
+    freshForegroundVideoFirstBaseVT: 0,
     bgSuppressionSessionCount: 0,
     // Heartbeat & stall recovery
     heartbeatTimer: null,
@@ -4246,6 +4249,30 @@ const HAVE_ENOUGH_DATA = 4;
     state.altTabTransitionUntil = 0;
     return true;
   }
+  function clearFreshForegroundVideoFirst() {
+    state.freshForegroundVideoFirstUntil = 0;
+    state.freshForegroundVideoFirstArmedAt = 0;
+    state.freshForegroundVideoFirstBaseVT = 0;
+  }
+  function armFreshForegroundVideoFirst(baseVt = NaN, ms = 4200) {
+    const vt = isFinite(baseVt) ? Number(baseVt) : (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
+    state.freshForegroundVideoFirstBaseVT = isFinite(vt) ? vt : 0;
+    state.freshForegroundVideoFirstArmedAt = now();
+    state.freshForegroundVideoFirstUntil = Math.max(
+      state.freshForegroundVideoFirstUntil,
+      state.freshForegroundVideoFirstArmedAt + Math.max(1200, Number(ms) || 0)
+    );
+  }
+  function freshForegroundVideoFirstPending() {
+    if (now() >= state.freshForegroundVideoFirstUntil) return false;
+    if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
+    if (!state.intendedPlaying || state.restarting || state.seeking || state.seekBuffering) return false;
+    return !directUserVideoPlaybackHealthy(
+      Number(state.freshForegroundVideoFirstBaseVT) || 0,
+      Number(state.freshForegroundVideoFirstArmedAt) || 0,
+      true
+    );
+  }
   function mediaActionRecently(type, ms = 1200) {
     return state.lastMediaAction === type && (now() - state.lastMediaActionTs) < ms;
   }
@@ -4416,6 +4443,8 @@ const HAVE_ENOUGH_DATA = 4;
     const recentReturnAtStart = shouldTreatUpcomingPlayAsFreshForegroundStart();
     if (recentReturnAtStart) clearFreshForegroundReturnGatesForUserPlay();
     const baseVt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
+    if (recentReturnAtStart) armFreshForegroundVideoFirst(baseVt);
+    else clearFreshForegroundVideoFirst();
     const kick = () => {
       if (state.playSessionId !== playSession) { clearForegroundUserPlayRetryTimers(); return; }
       if (!state.intendedPlaying || state.restarting || state.seeking || state.seekBuffering) {
@@ -4715,6 +4744,7 @@ const HAVE_ENOUGH_DATA = 4;
     clearSeekResumeIntent();
     clearForegroundUserPlayRetryTimers();
     clearTransitionDriftTimers();
+    clearFreshForegroundVideoFirst();
     state.userPauseIntentPresetAt = now();
     state.userPlayIntentPresetAt = 0;
     state.audioStartGraceUntil = 0;
@@ -4823,7 +4853,7 @@ const HAVE_ENOUGH_DATA = 4;
     // click, adding 50-200ms of perceived delay. By starting audio here, it begins
     // at the same time as video. playTogether() will see audio already playing and
     // skip the audio section (no double-play).
-    if (!skipImmediateAudioKick && coupledMode && audio && audio.paused) {
+    if (!skipImmediateAudioKick && coupledMode && audio && audio.paused && !freshForegroundVideoFirstPending()) {
       const targetTime = getPreferredPlaybackSyncTarget({
         preferAudio: false,
         allowNearZero: !state.firstPlayCommitted
@@ -6849,6 +6879,7 @@ const HAVE_ENOUGH_DATA = 4;
     state.userPlayIntentPresetAt = 0;  // cancel any pending play preset
     state.restartFromEndedUntil = 0;
     state.seekAudioMustStartUntil = 0;
+    clearFreshForegroundVideoFirst();
     clearForegroundUserPlayRetryTimers();
     clearTransitionDriftTimers();
     clearSeekAudioReadyKick();
@@ -6900,6 +6931,7 @@ const HAVE_ENOUGH_DATA = 4;
     clearSeekResumeIntent();
     clearForegroundUserPlayRetryTimers();
     clearTransitionDriftTimers();
+    clearFreshForegroundVideoFirst();
     disengagePauseIntercept();
     clearSeekBuffering();
     clearHiddenPlayPending();
@@ -7098,6 +7130,7 @@ const HAVE_ENOUGH_DATA = 4;
       clearBufferHold();
       const vt = Number(video.currentTime());
       const at = Number(audio.currentTime);
+      const freshVideoFirst = freshForegroundVideoFirstPending();
 
       const inBgDrift = document.visibilityState === "hidden" || !isWindowFocused() || inBgReturnGrace();
       const recentDirectToggle =
@@ -7163,7 +7196,11 @@ const HAVE_ENOUGH_DATA = 4;
           (!inStartupKickFlow && UltraStabilizer.shouldBlockAudioAtStartup()) ||
           (document.visibilityState === "visible" && state.videoWaiting));
 
-        if (shouldHoldAudio) {
+        if (freshVideoFirst) {
+          // Fresh user play right after tab return: keep audio from getting ahead
+          // of a decoder/pipeline that is still waking the video path back up.
+          // video.on("playing") will start audio once video is genuinely live.
+        } else if (shouldHoldAudio) {
           if (state.videoWaiting) armResumeAfterBuffer(10000);
         } else if (!isRecentUserAction && !canKickFirstAudio && startupAudioHoldActive()) {
           // hold
@@ -7224,7 +7261,10 @@ const HAVE_ENOUGH_DATA = 4;
       }
 
       if (!videoOk && !audioOk) {
-        if (isHiddenBackground() && state.intendedPlaying) {
+        if (freshForegroundVideoFirstPending()) {
+          startForegroundUserPlayRetry();
+          if (!state.strictBufferHold) armResumeAfterBuffer(5000);
+        } else if (isHiddenBackground() && state.intendedPlaying) {
           state.resumeOnVisible = true;
         } else if (!state.firstPlayCommitted || (state.startupPhase && !state.audioEverStarted)) {
           // --- startup guard for dual-fail
@@ -7267,6 +7307,9 @@ const HAVE_ENOUGH_DATA = 4;
           if (state.intendedPlaying) state.resumeOnVisible = true;
         }
       } else if (videoOk && !audioOk) {
+        if (freshForegroundVideoFirstPending()) {
+          return;
+        }
         if (coupledMode && isHiddenBackground() && state.intendedPlaying) {
           state.resumeOnVisible = true;
         }
@@ -7274,7 +7317,7 @@ const HAVE_ENOUGH_DATA = 4;
 
       const vp = getVideoPaused();
       const ap = !!audio.paused;
-      if (!vp && ap && !state.strictBufferHold && !state.videoWaiting) {
+      if (!vp && ap && !state.strictBufferHold && !state.videoWaiting && !freshForegroundVideoFirstPending()) {
         const cur = Number(video.currentTime()) || 0;
         if (!shouldBlockNewAudioStart() && canStartAudioAt(cur)) {
           safeSetAudioTime(cur);
@@ -10455,6 +10498,7 @@ const HAVE_ENOUGH_DATA = 4;
     });
     video.on("playing", () => {
       state.lastVideoPlayingAt = now();
+      clearFreshForegroundVideoFirst();
       clearForegroundUserPlayRetryTimers();
       const _playingNow = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
       commitStartupFromResolvedPlaybackPosition(_playingNow, {
