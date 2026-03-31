@@ -25,7 +25,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
  // This runs in a try-catch because elements might not exist yet...which is sillah am sillah tooo waowawawa............
- try {
+try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -46,8 +46,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
       if (_earlyAudioSrc) _earlyAudio.load();
     } catch {}
   }
-   if (_earlyVideo) { _earlyVideo.removeAttribute("loop"); _earlyVideo.loop = false; }
-   const _earlyZero = (el) => {
+  // Also strip loop attribute early to prevent browser-native looping
+  if (_earlyVideo) { _earlyVideo.removeAttribute("loop"); _earlyVideo.loop = false; }
+  // Re-check on loadedmetadata (browser can move currentTime after our zero-set)
+  const _earlyZero = (el) => {
     if (!el) return;
     const _handler = () => {
       if (_startupZeroSuppressed()) {
@@ -63,7 +65,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
   _earlyZero(_earlyAudio);
 } catch {}
 
-//////////////THE, PLAYER ///////////////////////////////
+//////////////// THE PLAYER, START ////////////////////////
 document.addEventListener("DOMContentLoaded", () => {
   const video = videojs("video", {
     controls: true,
@@ -3586,6 +3588,35 @@ const HAVE_ENOUGH_DATA = 4;
     state.startupPlaySettleUntil = Math.max(state.startupPlaySettleUntil, now() + STARTUP_SETTLE_MS);
     state.startupPhase = false;
     if (coupledMode) state.audioEverStarted = true;
+    clearStartupAutoplayRetryTimer();
+    clearAudioForcePlayTimer();
+    return true;
+  }
+
+  function commitStartupFromResolvedPlaybackPosition(position, opts = {}) {
+    const resolvedPosition = Number(position);
+    if (!isFinite(resolvedPosition) || resolvedPosition < 0.35) return false;
+
+    const recentSeek =
+      !!opts.fromSeek ||
+      state.seeking ||
+      seekRecoveryActive(1200) ||
+      userSeekIntentActive() ||
+      (isFinite(Number(state.seekTargetTime)) && Number(state.seekTargetTime) > 0.35) ||
+      (state.pendingSeekTarget != null && Number(state.pendingSeekTarget) > 0.35);
+    if (!recentSeek) return false;
+
+    state.intendedPlaying = true;
+    state.bufferHoldIntendedPlaying = true;
+    state.firstPlayCommitted = true;
+    state.startupKickDone = true;
+    state.startupKickInFlight = false;
+    state.startupPrimed = true;
+    state.startupPlaySettleUntil = Math.max(state.startupPlaySettleUntil, now() + STARTUP_SETTLE_MS);
+    state.startupPhase = false;
+    state.startupPlaySettled = true;
+    if (!coupledMode || (audio && !audio.paused)) state.audioEverStarted = true;
+    suppressStartupZero(Math.max(15000, (opts && opts.suppressMs) || 0));
     clearStartupAutoplayRetryTimer();
     clearAudioForcePlayTimer();
     return true;
@@ -9815,6 +9846,14 @@ const HAVE_ENOUGH_DATA = 4;
       scheduleSync(0);
     });
     video.on("playing", () => {
+      const _playingNow = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
+      commitStartupFromResolvedPlaybackPosition(_playingNow, {
+        fromSeek:
+          state.seeking ||
+          seekRecoveryActive(1400) ||
+          (isFinite(Number(state.seekTargetTime)) && Number(state.seekTargetTime) > 0.35) ||
+          (state.pendingSeekTarget != null && Number(state.pendingSeekTarget) > 0.35)
+      });
       // STARTUP ZERO ENFORCEMENT (early window only): if this is the first play and
       // video started at a non-zero position (browser buffered to a keyframe), seek to 0.
       // Do NOT run this after startup has effectively settled, or we create a visible
@@ -9826,8 +9865,7 @@ const HAVE_ENOUGH_DATA = 4;
         !startupZeroSuppressed() &&
         (now() - state.startupPrimeStartedAt) < 2600;
       if (_allowStartupZeroCorrection) {
-        const _playingZeroVt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
-        if (_playingZeroVt > 1.0) {
+        if (_playingNow > 1.0) {
           try { video.currentTime(0); } catch {}
           try { videoEl.currentTime = 0; } catch {}
           if (coupledMode && audio) { try { audio.currentTime = 0; } catch {} }
@@ -10649,13 +10687,6 @@ const HAVE_ENOUGH_DATA = 4;
           if (!state.firstPlayCommitted && _isUserOrProgrammaticSeek) {
             suppressStartupZero(15000);
           }
-          if (!state.firstPlayCommitted && _isUserOrProgrammaticSeek) {
-            state.firstPlayCommitted = true;
-            state.startupKickDone = true;
-            state.startupPlaySettleUntil = now() + STARTUP_SETTLE_MS;
-            clearStartupAutoplayRetryTimer();
-            setTimeout(() => { state.startupPhase = false; }, 800);
-          }
 
           clearSeekSyncFinalizeTimer();
           clearSeekWatchdog();
@@ -10673,19 +10704,16 @@ const HAVE_ENOUGH_DATA = 4;
           isFinite(innerTime) ? innerTime : 0;
           const previousGoodVT = state.lastKnownGoodVT || 0;
           state.seekTargetTime = seekTime;
+          if (seekTime > 0.35) {
+            commitStartupFromResolvedPlaybackPosition(seekTime, {
+              fromSeek: !!(_isUserOrProgrammaticSeek || _seekLikelyUser),
+              suppressMs: 20000
+            });
+          }
           if (seekTime < 0.8 && (_isUserOrProgrammaticSeek || _seekLikelyUser)) {
             authorizeNearZeroSeek(2500);
           }
           state.pendingSeekTarget = seekTime;
-          // User seeking away from start should immediately disable startup-zero logic.
-          // Without this, first manual seek can be forced back to 0 by startup guards.
-          if (!state.firstPlayCommitted && seekTime > 0.5) {
-            state.firstPlayCommitted = true;
-            state.startupKickDone = true;
-            state.startupPlaySettleUntil = now() + STARTUP_SETTLE_MS;
-            clearStartupAutoplayRetryTimer();
-            setTimeout(() => { state.startupPhase = false; }, 800);
-          }
           const shouldKeepPreviousGoodVT =
             seekTime < 0.8 &&
             state.firstPlayCommitted &&
@@ -10780,6 +10808,9 @@ const HAVE_ENOUGH_DATA = 4;
           // Get the definitive seek target — video.currentTime() is reliable after seeked
           const newTime = Number(video.currentTime());
           const expectedSeekTime = Number(state.seekTargetTime);
+          if (newTime > 0.35) {
+            commitStartupFromResolvedPlaybackPosition(newTime, { fromSeek: true, suppressMs: 20000 });
+          }
           // phantom loop guard (backup): if seeked lands at near-0 but nobody asked,
           // the seeking handler should have caught it. if it didn't (e.g. seeking
           // handler's lastKnownGoodVT was already 0), skip audio sync.
