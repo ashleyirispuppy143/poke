@@ -28,8 +28,11 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  
 //////////////// THE PLAYER, START ////////////////////////
 // This runs in a try-catch because elements might not exist yet...which is sillah am sillah tooo waowawawa............
- 
- try {
+ // IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
+// before DOMContentLoaded. Ensures both video and audio start at 00:00
+// even if the browser pre-buffers to a non-zero keyframe position.
+// This runs in a try-catch because elements might not exist yet.
+try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -1412,8 +1415,11 @@ document.addEventListener("DOMContentLoaded", () => {
         state.intendedPlaying = true;
         state.bufferHoldIntendedPlaying = true;
       }
-      // Protect newly-started audio from stall-pause for 1.5s
-      state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 1500);
+      // Protect newly-started audio from stall-pause for 600ms.
+      // Was 1500ms — that's way too long. It prevented stall detection for 1.5s
+      // after any programmatic audio play, letting audio play while video buffered.
+      // 600ms is enough for the decoder to initialize without silencing stall detection.
+      state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 600);
       // Reset dedup EVERY time we try to play during recovery.
       // Without this, DONTMAKEITDOUBLEPLAY suppresses retries.
       DONTMAKEITDOUBLEPLAY.resetAll();
@@ -1446,6 +1452,10 @@ document.addEventListener("DOMContentLoaded", () => {
           // Audio already playing — snap volume to target immediately (no fade)
           try { audio.volume = targetVol; } catch {}
         }
+
+        // Decoder warmup grace — suppress stall detection after play().
+        state.playRecoveryGraceUntil = now() + 1500;
+        _bufMonStallFrames = 0;
 
         // Play video — use native play() to bypass all wrappers for speed.
         // The gate/dedup exist to prevent double-play during normal operation,
@@ -2438,7 +2448,7 @@ document.addEventListener("DOMContentLoaded", () => {
           try {
             const vt = Number(video.currentTime()) || 0;
             // Never seek audio near 0 when it's playing well into the track
-            if (isFinite(vt) && Math.abs((audio.currentTime || 0) - vt) > 0.15 &&
+            if (isFinite(vt) && Math.abs((audio.currentTime || 0) - vt) > 1.0 &&
               !(vt < 0.5 && state.firstPlayCommitted && !state.restarting && !isLoopDesired() && (Number(audio.currentTime) || 0) > 2)) {
               audio.currentTime = vt;
             _audioPreAligned = true;
@@ -4522,7 +4532,7 @@ const HAVE_ENOUGH_DATA = 4;
 
     const drift = Math.abs(at - vt);
     const needsResume = resumeIfPaused && audio.paused;
-    if (!needsResume && drift <= Math.max(0.5, Number(threshold) || 0)) return false;
+    if (!needsResume && drift <= Math.max(0.8, Number(threshold) || 0)) return false;
 
     const wouldRestart =
       vt < 0.5 &&
@@ -4571,7 +4581,7 @@ const HAVE_ENOUGH_DATA = 4;
         untrackTransitionDriftTimer(tid);
         if (state.playSessionId !== playSession) return;
         if (!state.intendedPlaying || state.restarting || state.seeking || state.seekBuffering) return;
-        attemptTransitionDriftRepair({ threshold: 0.6, resumeIfPaused: true, allowSeekRecovery: false });
+        attemptTransitionDriftRepair({ threshold: 0.8, resumeIfPaused: true, allowSeekRecovery: false });
       }, delay));
     });
   }
@@ -4584,7 +4594,7 @@ const HAVE_ENOUGH_DATA = 4;
         if (state.seekId !== seekId || state.playSessionId !== playSession) return;
         if (!state.intendedPlaying || state.restarting || state.seekBuffering) return;
         if (!shouldResumeAfterSeek() && !state.playRequestedDuringSeek) return;
-        attemptTransitionDriftRepair({ threshold: 0.5, resumeIfPaused: true, allowSeekRecovery: true });
+        attemptTransitionDriftRepair({ threshold: 0.8, resumeIfPaused: true, allowSeekRecovery: true });
       }, delay));
     });
   }
@@ -4685,7 +4695,11 @@ const HAVE_ENOUGH_DATA = 4;
     if (!state.videoWaiting || state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
     if (!state.firstPlayCommitted) return false;
     if (document.visibilityState === "hidden") return false;
-    if (now() < state.audioStartGraceUntil) return false;
+    // Grace period: only skip stall detection if videoWaiting is NOT set.
+    // If the browser fired "waiting" (hardware signal), trust it over grace.
+    // The old logic silenced ALL stall detection during grace (600-1500ms),
+    // letting audio play while video was genuinely stalling.
+    if (now() < state.audioStartGraceUntil && !state.videoWaiting) return false;
     const vNode = getVideoNode();
     const vRS = vNode ? Number(vNode.readyState || 0) : 4;
     if (vRS >= HAVE_FUTURE_DATA) return false;
@@ -4728,6 +4742,9 @@ const HAVE_ENOUGH_DATA = 4;
     if (!state.firstPlayCommitted) return false;
     if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
     if (isTabReturnImmune() || NotMakePlayBackFixingNoticable.isActive()) return false;
+    // During play recovery grace, don't immediately kill audio — the decoder
+    // is warming up. A brief currentTime freeze right after play() is normal.
+    if (now() < (state.playRecoveryGraceUntil || 0)) return false;
     return isForegroundVideoActuallyBuffering();
   }
   function getPreferredPlaybackSyncTarget(opts = {}) {
@@ -4770,6 +4787,10 @@ const HAVE_ENOUGH_DATA = 4;
     if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
     if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
     if (isTabReturnImmune() || NotMakePlayBackFixingNoticable.isActive()) return false;
+    // During play recovery grace, don't force-pause audio on "waiting" event.
+    // The browser fires "waiting" during normal decoder warmup after play().
+    // Let the 600ms backstop timer handle genuine stalls instead.
+    if (now() < (state.playRecoveryGraceUntil || 0)) return false;
     return true;
   }
   function armForegroundBufferAudioHold(ms = MIN_STALL_AUDIO_RESUME_MS) {
@@ -5229,7 +5250,7 @@ const HAVE_ENOUGH_DATA = 4;
       }
       try { audio.volume = targetVolFromVideo(); } catch {}
       if (audio.paused && !state.isProgrammaticAudioPause) {
-        state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 1000);
+        state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 500);
         execProgrammaticAudioPlay({ squelchMs: 0, force: true, minGapMs: 0 }).catch(() => {});
       }
     }
@@ -5402,7 +5423,7 @@ const HAVE_ENOUGH_DATA = 4;
       state.endedLockUntil = 0;
       if (recentlyEnded) {
         state.restartFromEndedUntil = Math.max(state.restartFromEndedUntil, now() + 2600);
-        state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 900);
+        state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 500);
         state.userPauseIntentPresetAt = 0;
         clearMediaSessionForcedPause();
       }
@@ -5902,15 +5923,16 @@ const HAVE_ENOUGH_DATA = 4;
         // Seeking during the first few seconds causes the "audio glitch at
         // start" where audio randomly jumps to places.
         const inEarlyPlayback = !audio.paused && _audioFirstPlayedAt > 0 &&
-          (performance.now() - _audioFirstPlayedAt) < 3000;
-        if (inEarlyPlayback && timeDiff < 0.8) return;
+          (performance.now() - _audioFirstPlayedAt) < 5000;
+        if (inEarlyPlayback && timeDiff < 1.0) return;
 
-        // during startup, use 0.6s threshold.
-        // during normal playback, use 0.5s — drift under 500ms is imperceptible
-        // and the sync loop's rate enforcement handles it smoothly. the old 0.35s
-        // threshold was still causing random small audio seeks during playback.
+        // during startup, use 0.8s threshold.
+        // during normal playback, use 0.8s — drift under 800ms is imperceptible
+        // and the sync loop's rate enforcement handles it smoothly. Previous
+        // thresholds (0.5s, 0.35s) caused random small audio seeks during playback.
+        // 0.8s aligns with the sync loop's 0.8s drift check threshold.
         const isStartup = state.startupPhase || !state.firstPlayCommitted;
-        const threshold = isStartup ? 0.6 : 0.5;
+        const threshold = isStartup ? 1.0 : 0.8;
         if (timeDiff <= threshold) return;
 
         // debounce: max one seek per 500ms during startup, per 700ms during normal play.
@@ -5933,9 +5955,9 @@ const HAVE_ENOUGH_DATA = 4;
       if (!isFinite(t) || t < 0) return;
       if (shouldBlockStableForegroundAudioSeek(t, 1.1)) return;
       const timeDiff = Math.abs((audio.currentTime || 0) - t);
-      // 0.5s threshold — drift under 500ms is imperceptible and handled by rate sync.
-      // the old 0.35s threshold was still causing random small audio seeks.
-      if (timeDiff <= 0.5) return;
+      // 0.8s threshold — drift under 800ms is imperceptible and handled by rate sync.
+      // Previous thresholds (0.5s, 0.35s) caused random small audio seeks during playback.
+      if (timeDiff <= 0.8) return;
 
       const wasPlaying = !audio.paused;
 
@@ -6354,6 +6376,11 @@ const HAVE_ENOUGH_DATA = 4;
     state.videoPlayUntil = nowTs + resolvedMinGapMs;
     VisibilityGuard.onPlayCalled(); // VG: suppress spurious pause after our play()
     state.isProgrammaticVideoPlay = true;
+    // Give the decoder 1.2s to warm up before stall detection kicks in.
+    // Without this, the buffer monitor/waiting handler detect a "stall"
+    // within 333ms of play() (before first frame decodes) and freeze everything.
+    state.playRecoveryGraceUntil = now() + 1200;
+    _bufMonStallFrames = 0;  // reset so stale count doesn't trigger immediately
     try {
       let p = null;
       const vNode = getVideoNode();
@@ -6679,7 +6706,7 @@ const HAVE_ENOUGH_DATA = 4;
       state.stallAudioResumeHoldUntil = 0;
       state.audioPauseUntil = 0;
       state.audioEventsSquelchedUntil = 0;
-      state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 1200);
+      state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 600);
       safeSetAudioTime(vt);
       execProgrammaticAudioPlay({ squelchMs: 100, force: true, minGapMs: 0 })
         .then(ok => {
@@ -7501,7 +7528,7 @@ const HAVE_ENOUGH_DATA = 4;
         } else {
           // Only hard-resync on user toggles when drift is real.
           // Rewriting currentTime on every quick play/pause causes tiny audible skips.
-          if (isRecentUserAction && isFinite(vNow) && vNow >= 0 && (avDrift > 0.6 || userSeekIntentActive())) {
+          if (isRecentUserAction && isFinite(vNow) && vNow >= 0 && (avDrift > 0.8 || userSeekIntentActive())) {
             state._allowAudioTimeWrite = true;
             try { audio.currentTime = vNow; } catch {}
             state._allowAudioTimeWrite = false;
@@ -7832,7 +7859,7 @@ const HAVE_ENOUGH_DATA = 4;
           const _sVt = Number(video.currentTime()) || 0;
           if (isFinite(_sVt)) safeSetAudioTime(_sVt);
           try { audio.volume = targetVolFromVideo(); } catch {}
-          state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 1000);
+          state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 500);
           execProgrammaticAudioPlay({ squelchMs: 140, force: true, minGapMs: 0 }).catch(() => {});
           armSeekAudioReadyKick(state.seekId, 2800);
         }
@@ -8123,7 +8150,7 @@ const HAVE_ENOUGH_DATA = 4;
           state.seekKickAudioAllowedUntil = Math.max(state.seekKickAudioAllowedUntil, now() + 5500);
           state.seekAudioMustStartUntil = Math.max(state.seekAudioMustStartUntil, now() + 6000);
           // grace period so buffer monitor doesn't immediately kill this
-          state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 1200);
+          state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 600);
           armSeekAudioReadyKick(currentSeekId, _audioReadyish ? 4200 : 6000);
           if (_keepRunning) {
             state.audioEverStarted = true;
@@ -8629,10 +8656,12 @@ const HAVE_ENOUGH_DATA = 4;
         if (state.intendedPlaying && !state.restarting && !state.seeking && !state.syncing && !skipDrift && !state.seekResumeInFlight && !state.seekBuffering) {
           if (state.audioEverStarted && !audio.paused && !inBgDrift && !state.startupPhase) {
             const _syncDrift = Math.abs(at - vt);
-            // only correct noticeable drift (>0.35s). small drift is imperceptible
-            // and seeking to fix it causes more disruption than the drift itself.
-            // lower thresholds caused constant micro-seeks (random seek stutter).
-            if (_syncDrift > 0.35) {
+            // only correct large drift (>0.8s). Drift under 0.8s is imperceptible
+            // and the rate sync system handles it smoothly without any audible
+            // disruption. Seeking to fix small drift causes random audio pops/jumps
+            // that the user hears as "random seeks". Previous thresholds (0.35s)
+            // triggered constant micro-seeks during normal playback.
+            if (_syncDrift > 0.8) {
               await quietSeekAudio(vt);
               at = vt;
             }
@@ -8784,7 +8813,7 @@ const HAVE_ENOUGH_DATA = 4;
                   state.resumeOnVisible = true;
                 } else {
                   // Sync audio position to video before resuming both to avoid A/V drift pop
-                  if (isFinite(vt) && isFinite(at) && Math.abs(at - vt) > 0.25) {
+                  if (isFinite(vt) && isFinite(at) && Math.abs(at - vt) > 0.8) {
                     safeSetAudioTime(vt);
                   }
                   playTogether().catch(() => {});
@@ -8931,9 +8960,14 @@ const HAVE_ENOUGH_DATA = 4;
         _bufMonStallFrames++;
         const vNode = getVideoNode();
         const rs = vNode ? Number(vNode.readyState || 0) : 0;
-        // only mark stall if time frozen for 20+ frames AND browser confirms low buffer
-        // don't mark stall during startup — buffering is expected while page loads
-        if (_bufMonStallFrames >= 20 && rs < HAVE_FUTURE_DATA &&
+        // only mark stall if time frozen for enough frames AND browser confirms low buffer.
+        // During play recovery grace (first 1.2-1.5s after play()), use 50 frames (~833ms)
+        // instead of 20 — the decoder needs time to warm up after pause or tab return.
+        // Without this, a false "stall" is detected within 333ms of play() before the
+        // first frame even decodes, causing video to freeze.
+        const _inPlayGrace = now() < (state.playRecoveryGraceUntil || 0);
+        const _stallFrameThreshold = _inPlayGrace ? 50 : 20;
+        if (_bufMonStallFrames >= _stallFrameThreshold && rs < HAVE_FUTURE_DATA &&
             !state.seeking && !state.seekBuffering && !state.restarting &&
             state.firstPlayCommitted) {
           if (!state.videoWaiting) {
@@ -9124,7 +9158,7 @@ const HAVE_ENOUGH_DATA = 4;
               state.stallAudioResumeHoldUntil = 0;
               state.audioPauseUntil = 0;
               state.audioEventsSquelchedUntil = 0;
-              state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 900);
+              state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 500);
               safeSetAudioTime(vtForce);
               execProgrammaticAudioPlay({ squelchMs: 140, force: true, minGapMs: 0 }).catch(() => {});
             } else if (state.seekAudioMustStartUntil > 0 && nowTs >= state.seekAudioMustStartUntil) {
@@ -10484,7 +10518,7 @@ const HAVE_ENOUGH_DATA = 4;
         const _reVn = getVideoNode();
         if (_reVn && typeof _reVn.play === "function" && _reVn.paused) _reVn.play().catch(() => {});
         if (coupledMode && audio && audio.paused && !state.isProgrammaticAudioPause) {
-          state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 900);
+          state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 500);
           execProgrammaticAudioPlay({ squelchMs: 80, force: true, minGapMs: 0 }).catch(() => {});
         }
         setFastSync(1400);
@@ -10807,7 +10841,11 @@ const HAVE_ENOUGH_DATA = 4;
       try { UltraStabilizer.onVideoStall(); } catch {}
       // During startup / page load, stalls are expected as data arrives.
       // Don't set videoWaiting — it blocks audio through every gate.
-      if (state.firstPlayCommitted) {
+      // During play recovery grace, also skip — the browser fires "waiting" during
+      // normal decoder warmup after play(). Setting videoWaiting here causes the
+      // freeze-after-play bug.
+      const _inPlayRecoveryGrace = now() < (state.playRecoveryGraceUntil || 0);
+      if (state.firstPlayCommitted && !_inPlayRecoveryGrace) {
         state.videoWaiting = true;
         state.videoStallSince = state.videoStallSince || now();
       }
@@ -10879,7 +10917,11 @@ const HAVE_ENOUGH_DATA = 4;
         state.videoWaiting ||
         state.videoStallAudioPaused ||
         foregroundBufferAudioHoldActive();
-      const _stallRecoveryStable = !_stallRecoveryPending || videoReadyForAudioResume(_playingNow);
+      // During play recovery grace, don't re-arm stalls — the decoder is warming up.
+      // The "playing" event fires immediately after play() resolves, but frames
+      // may not have rendered yet. Re-arming here causes the freeze.
+      const _inPlayRecoveryGrace = now() < (state.playRecoveryGraceUntil || 0);
+      const _stallRecoveryStable = !_stallRecoveryPending || _inPlayRecoveryGrace || videoReadyForAudioResume(_playingNow);
       if (!_stallRecoveryStable) {
         armForegroundBufferAudioHold(Math.max(MIN_STALL_AUDIO_RESUME_MS, 450));
         state.videoWaiting = true;
@@ -11291,7 +11333,7 @@ const HAVE_ENOUGH_DATA = 4;
         clearAudioPauseLocks();
         state.videoWaiting = false;
         state.videoStallSince = 0;
-        state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 1000);
+        state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 500);
       }
 
       state.audioEverStarted = true;
@@ -11345,7 +11387,7 @@ const HAVE_ENOUGH_DATA = 4;
           !mediaSessionForcedPauseActive()) {
         const _endedRestartVt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
         safeSetAudioTime(_endedRestartVt);
-        state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 900);
+        state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 500);
         execProgrammaticAudioPlay({ squelchMs: 80, force: true, minGapMs: 0 }).catch(() => {});
         scheduleSync(0);
         return;
@@ -11382,7 +11424,7 @@ const HAVE_ENOUGH_DATA = 4;
           clearAudioPauseLocks();
           state.videoWaiting = false;
           state.videoStallSince = 0;
-          state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 1000);
+          state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 500);
           safeSetAudioTime(_seekPauseVt);
           execProgrammaticAudioPlay({ squelchMs: 120, force: true, minGapMs: 0 }).catch(() => {});
           return;
@@ -11701,7 +11743,7 @@ const HAVE_ENOUGH_DATA = 4;
             clearAudioPauseLocks();
             safeSetAudioTime(_seekCanplayVt);
             try { audio.volume = targetVolFromVideo(); } catch {}
-            state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 900);
+            state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 500);
             armSeekAudioReadyKick(state.seekId, 3600);
             execProgrammaticAudioPlay({ squelchMs: 180, force: true, minGapMs: 0 }).catch(() => {});
           }
@@ -12023,7 +12065,7 @@ const HAVE_ENOUGH_DATA = 4;
               state.audioPauseUntil = 0;
               state.videoStallAudioPaused = false;
               state.stallAudioResumeHoldUntil = 0;
-              state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, _kickArmedAt + 1800);
+              state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, _kickArmedAt + 600);
               const _kickVideoNow = () => {
                 if (state.seekId !== _kickSeekId) return;
                 if (!state.intendedPlaying || state.endedNaturally) return;
@@ -12240,7 +12282,7 @@ const HAVE_ENOUGH_DATA = 4;
       try { audio.volume = targetVolFromVideo(); } catch {}
       if (audio.paused || hard) {
         cancelActiveFade();
-        state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + (hard ? 1500 : 900));
+        state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + (hard ? 600 : 400));
         execProgrammaticAudioPlay({ squelchMs: hard ? 120 : 0, force: true, minGapMs: 0 }).catch(() => {});
       }
     };
@@ -12251,6 +12293,12 @@ const HAVE_ENOUGH_DATA = 4;
       state.stallAudioResumeHoldUntil = 0;
       state.videoStallSince = 0;
       state.isProgrammaticVideoPause = false;
+      // Decoder warmup grace — suppress stall detection for 1.5s on tab return.
+      // The video decoder was suspended while tab was hidden; it needs time to
+      // reinitialize. Without this, buffer monitor detects "stall" within 333ms
+      // and freezes everything.
+      state.playRecoveryGraceUntil = now() + 1500;
+      _bufMonStallFrames = 0;
       clearAudioPauseLocks();
       clearBufferHold();
       VisibilityGuard.onPlayCalled();
@@ -12908,7 +12956,7 @@ const HAVE_ENOUGH_DATA = 4;
       clearAudioPauseLocks();
       if (isFinite(vt)) safeSetAudioTime(vt);
       try { audio.volume = targetVolFromVideo(); } catch {}
-      state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 900);
+      state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 500);
       execProgrammaticAudioPlay({ squelchMs: 250, force: true, minGapMs: 0 }).catch(() => {});
       forceAudioStartupPlay();
     } else if (!audioPlaying && (state.startupPrimed || videoPlaying || vrs >= HAVE_CURRENT_DATA || ars >= HAVE_METADATA)) {
