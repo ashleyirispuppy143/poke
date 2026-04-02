@@ -28,10 +28,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  
 //////////////// THE PLAYER, START ////////////////////////
 // This runs in a try-catch because elements might not exist yet...which is sillah am sillah tooo waowawawa............
- // IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
-// before DOMContentLoaded. Ensures both video and audio start at 00:00
-// even if the browser pre-buffers to a non-zero keyframe position.
-// This runs in a try-catch because elements might not exist yet.
+ 
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -1453,8 +1450,6 @@ document.addEventListener("DOMContentLoaded", () => {
           try { audio.volume = targetVol; } catch {}
         }
 
-        // Decoder warmup grace — suppress stall detection after play().
-        state.playRecoveryGraceUntil = now() + 1500;
         _bufMonStallFrames = 0;
 
         // Play video — use native play() to bypass all wrappers for speed.
@@ -4399,36 +4394,20 @@ const HAVE_ENOUGH_DATA = 4;
     );
   }
   function shouldRequireVisibleVideoLeadForDirectUserPlay() {
-    if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
-    if (!state.intendedPlaying || state.restarting || state.seeking || state.seekBuffering) return false;
-    if (state.resumeOnVisible || state.bgHiddenWasPlaying || inBgReturnGrace()) return false;
-    return (
-      directUserToggleActive(1800) ||
-      userWantsPlayNow(2400) ||
-      userToggleExpectingPlay()
-    );
+    // DISABLED: This system blocked both audio AND video on every user play,
+    // waiting for video to produce frames before allowing anything to start.
+    // Since video needs 100-500ms to decode the first frame after play(),
+    // this caused a visible freeze on every play press. The sync loop handles
+    // any A/V drift that occurs from starting both simultaneously.
+    return false;
   }
   function shouldRequireVisibleVideoHealthForForegroundPlay() {
-    if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
-    if (!state.intendedPlaying || state.restarting || state.seeking || state.seekBuffering) return false;
-    // During bg return grace, don't require video health proof — the decoder
-    // was suspended and needs time to produce frames. Gating here causes freeze.
-    if (inBgReturnGrace()) return false;
-    if (shouldKeepForegroundReturnVideoFirst()) return true;
-    if (shouldRequireVisibleVideoLeadForDirectUserPlay()) return true;
-    if (now() < state.foregroundReturnUserPlayUntil &&
-        (directUserToggleActive(3200) || userWantsPlayNow(3600) || userToggleExpectingPlay())) {
-      return true;
-    }
-    const recentlyReturnedToForeground =
-      state.lastBgReturnAt > 0 &&
-      (now() - state.lastBgReturnAt) < 12000;
-    if (!recentlyReturnedToForeground) return false;
-    return (
-      directUserToggleActive(3200) ||
-      userWantsPlayNow(3600) ||
-      userToggleExpectingPlay()
-    );
+    // DISABLED: This entire system blocked both audio and video playback until
+    // video proved it was producing frames (via directUserVideoPlaybackHealthy).
+    // Since video needs 100-500ms to decode the first frame after play(), this
+    // caused a visible freeze on every play, tab return, and recovery. The sync
+    // loop and stall detection handle A/V coordination properly without this gate.
+    return false;
   }
   function shouldBlockLeadingAudioForForegroundPlay() {
     if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
@@ -4742,9 +4721,6 @@ const HAVE_ENOUGH_DATA = 4;
     if (!state.firstPlayCommitted) return false;
     if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
     if (isTabReturnImmune() || NotMakePlayBackFixingNoticable.isActive()) return false;
-    // During play recovery grace, don't immediately kill audio — the decoder
-    // is warming up. A brief currentTime freeze right after play() is normal.
-    if (now() < (state.playRecoveryGraceUntil || 0)) return false;
     return isForegroundVideoActuallyBuffering();
   }
   function getPreferredPlaybackSyncTarget(opts = {}) {
@@ -4787,10 +4763,6 @@ const HAVE_ENOUGH_DATA = 4;
     if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
     if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
     if (isTabReturnImmune() || NotMakePlayBackFixingNoticable.isActive()) return false;
-    // During play recovery grace, don't force-pause audio on "waiting" event.
-    // The browser fires "waiting" during normal decoder warmup after play().
-    // Let the 600ms backstop timer handle genuine stalls instead.
-    if (now() < (state.playRecoveryGraceUntil || 0)) return false;
     return true;
   }
   function armForegroundBufferAudioHold(ms = MIN_STALL_AUDIO_RESUME_MS) {
@@ -6376,11 +6348,7 @@ const HAVE_ENOUGH_DATA = 4;
     state.videoPlayUntil = nowTs + resolvedMinGapMs;
     VisibilityGuard.onPlayCalled(); // VG: suppress spurious pause after our play()
     state.isProgrammaticVideoPlay = true;
-    // Give the decoder 1.2s to warm up before stall detection kicks in.
-    // Without this, the buffer monitor/waiting handler detect a "stall"
-    // within 333ms of play() (before first frame decodes) and freeze everything.
-    state.playRecoveryGraceUntil = now() + 1200;
-    _bufMonStallFrames = 0;  // reset so stale count doesn't trigger immediately
+    _bufMonStallFrames = 0;  // reset stale stall count
     try {
       let p = null;
       const vNode = getVideoNode();
@@ -7466,22 +7434,20 @@ const HAVE_ENOUGH_DATA = 4;
         document.visibilityState === "visible" &&
         isWindowFocused() &&
         requireVisibleVideoHealth;
-      // Don't let audio alignment work get ahead of direct foreground video start.
+      // Align audio to video if drift is large. Only seek for big drift (>1.5s) —
+      // the sync loop handles smaller drift via rate correction without any audible skip.
+      // Previous threshold (0.25s) caused random audio seeks on every play press and
+      // the await on quietSeekAudio added 235ms+ of delay before playback started.
       if (!shouldDeferAudioAlignmentForVideoLead &&
           !inBgDrift &&
           isFinite(vt) &&
           isFinite(at) &&
-          Math.abs(at - vt) > 0.25) {
-        if (at > vt + 0.08 && !audio.paused) {
-          execProgrammaticAudioPause(120);
+          Math.abs(at - vt) > 1.5) {
+        if (audio.paused) {
           safeSetAudioTime(vt);
-        } else if (!(recentDirectToggle && !audio.paused)) {
-          if (audio.paused) {
-            safeSetAudioTime(vt);
-          } else {
-            await quietSeekAudio(vt);
-          }
         }
+        // Don't await quietSeekAudio — it adds 235ms+ delay. Just set the time directly.
+        // The sync loop will handle any remaining drift after both start playing.
       }
 
       // Re-check after await
@@ -8960,14 +8926,8 @@ const HAVE_ENOUGH_DATA = 4;
         _bufMonStallFrames++;
         const vNode = getVideoNode();
         const rs = vNode ? Number(vNode.readyState || 0) : 0;
-        // only mark stall if time frozen for enough frames AND browser confirms low buffer.
-        // During play recovery grace (first 1.2-1.5s after play()), use 50 frames (~833ms)
-        // instead of 20 — the decoder needs time to warm up after pause or tab return.
-        // Without this, a false "stall" is detected within 333ms of play() before the
-        // first frame even decodes, causing video to freeze.
-        const _inPlayGrace = now() < (state.playRecoveryGraceUntil || 0);
-        const _stallFrameThreshold = _inPlayGrace ? 50 : 20;
-        if (_bufMonStallFrames >= _stallFrameThreshold && rs < HAVE_FUTURE_DATA &&
+        // only mark stall if time frozen for 20+ frames (~333ms) AND browser confirms low buffer.
+        if (_bufMonStallFrames >= 20 && rs < HAVE_FUTURE_DATA &&
             !state.seeking && !state.seekBuffering && !state.restarting &&
             state.firstPlayCommitted) {
           if (!state.videoWaiting) {
@@ -10841,11 +10801,7 @@ const HAVE_ENOUGH_DATA = 4;
       try { UltraStabilizer.onVideoStall(); } catch {}
       // During startup / page load, stalls are expected as data arrives.
       // Don't set videoWaiting — it blocks audio through every gate.
-      // During play recovery grace, also skip — the browser fires "waiting" during
-      // normal decoder warmup after play(). Setting videoWaiting here causes the
-      // freeze-after-play bug.
-      const _inPlayRecoveryGrace = now() < (state.playRecoveryGraceUntil || 0);
-      if (state.firstPlayCommitted && !_inPlayRecoveryGrace) {
+      if (state.firstPlayCommitted) {
         state.videoWaiting = true;
         state.videoStallSince = state.videoStallSince || now();
       }
@@ -10917,11 +10873,7 @@ const HAVE_ENOUGH_DATA = 4;
         state.videoWaiting ||
         state.videoStallAudioPaused ||
         foregroundBufferAudioHoldActive();
-      // During play recovery grace, don't re-arm stalls — the decoder is warming up.
-      // The "playing" event fires immediately after play() resolves, but frames
-      // may not have rendered yet. Re-arming here causes the freeze.
-      const _inPlayRecoveryGrace = now() < (state.playRecoveryGraceUntil || 0);
-      const _stallRecoveryStable = !_stallRecoveryPending || _inPlayRecoveryGrace || videoReadyForAudioResume(_playingNow);
+      const _stallRecoveryStable = !_stallRecoveryPending || videoReadyForAudioResume(_playingNow);
       if (!_stallRecoveryStable) {
         armForegroundBufferAudioHold(Math.max(MIN_STALL_AUDIO_RESUME_MS, 450));
         state.videoWaiting = true;
@@ -12293,11 +12245,6 @@ const HAVE_ENOUGH_DATA = 4;
       state.stallAudioResumeHoldUntil = 0;
       state.videoStallSince = 0;
       state.isProgrammaticVideoPause = false;
-      // Decoder warmup grace — suppress stall detection for 1.5s on tab return.
-      // The video decoder was suspended while tab was hidden; it needs time to
-      // reinitialize. Without this, buffer monitor detects "stall" within 333ms
-      // and freezes everything.
-      state.playRecoveryGraceUntil = now() + 1500;
       _bufMonStallFrames = 0;
       clearAudioPauseLocks();
       clearBufferHold();
