@@ -28,7 +28,6 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  
 //////////////// THE PLAYER, START ////////////////////////
 // This runs in a try-catch because elements might not exist yet...which is sillah am sillah tooo waowawawa............
- 
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -713,7 +712,7 @@ document.addEventListener("DOMContentLoaded", () => {
           state.videoStallAudioPaused ||
           state.strictBufferHold ||
           foregroundBufferAudioHoldActive() ||
-          state.videoStallSince > 0
+          (state.videoStallSince > 0 && (now() - state.videoStallSince) > 400)
         );
       if (shouldBlockLeadingAudioForForegroundPlay()) {
         return Promise.resolve();
@@ -1266,8 +1265,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const PHASE_SETTLING   = 3;
 
     // --- Timing constants
-    const RECOVERY_DURATION_MS   = 500;   // How long RECOVERING phase lasts (was 1s — too slow for tab return)
-    const SETTLING_DURATION_MS   = 1000;  // How long SETTLING phase lasts (was 2s — 1s is enough)
+    const RECOVERY_DURATION_MS   = 250;   // How long RECOVERING phase lasts (was 500ms — still too slow)
+    const SETTLING_DURATION_MS   = 400;   // How long SETTLING phase lasts (was 1000ms — 400ms is plenty)
     const DRIFT_CORRECTION_MIN   = 0.3;   // Only correct drift > 300ms
     const RETRY_INTERVALS        = [50, 120, 300]; // Progressive retry delays (faster for snappy tab return)
     const PLAY_CHECK_MS          = 100;   // How soon to verify play() worked
@@ -1426,7 +1425,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // Use _bgEnteredAt (set when we went to bg), not _phaseAt (set to now() in onReturn)
         const bgDuration = (wasInBackground && _bgEnteredAt > 0) ? (now() - _bgEnteredAt) : 0;
         const needsWarmStart = wasInBackground && !audioAlreadyPlaying &&
-        document.visibilityState !== "hidden" && bgDuration > 4000;
+        document.visibilityState !== "hidden" && bgDuration > 2000;
 
         if (coupledMode && audio && !audioAlreadyPlaying) {
           if (needsWarmStart) {
@@ -1470,8 +1469,15 @@ document.addEventListener("DOMContentLoaded", () => {
             if (_recoveryGen !== gen) return;
             if (!state.intendedPlaying) return;
             _microFadeAudioUp(targetVol, gen);
-          }, 50); // Reduced from 150ms — start fade sooner
+          }, 30); // Start fade ASAP
         }
+
+        // Kick a fast sync immediately — don't wait for SETTLING to start
+        // drift correction. This is the #1 fix for "video plays late after
+        // tab return" — without this, nothing corrects the A/V drift until
+        // settling phase starts 250ms later.
+        setFastSync(1200);
+        scheduleSync(0);
       } catch {}
     }
 
@@ -1790,9 +1796,10 @@ document.addEventListener("DOMContentLoaded", () => {
     function shouldBlockSeek()    { return _phase === PHASE_RECOVERING; }
     function shouldBlockPause()   { return _phase === PHASE_RECOVERING; }
     function shouldBlockVolume()  { return _phase === PHASE_RECOVERING; }
-    // Only block sync during RECOVERING — let sync run during SETTLING so drift
-    // correction happens sooner. Settling just means "recovery is done, be gentle".
-    function shouldBlockSync()    { return _phase === PHASE_RECOVERING; }
+    // Let sync run during both RECOVERING and SETTLING — sync is needed for
+    // drift correction which is the #1 fix for "video plays late on tab return".
+    // The sync loop already respects immunity and won't do harmful seeks.
+    function shouldBlockSync()    { return false; }
 
     // How long since we started recovering?
     function recoveryAge() { return _phase >= PHASE_RECOVERING ? now() - _lastRecoveryAt : Infinity; }
@@ -1984,14 +1991,14 @@ document.addEventListener("DOMContentLoaded", () => {
       if (state.endedNaturally || MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) { _schedule(); return; }
       if (state.seeking || state.seekBuffering || state.restarting) { _schedule(); return; }
       if (state.strictBufferHold || state.videoWaiting || state.videoStallAudioPaused) { _schedule(); return; }
-      if (NotMakePlayBackFixingNoticable.isRecovering()) { _schedule(); return; }
+      // Only back off during very early NMPBFN recovery (<120ms) when play() is in flight.
+      // After that, MSAOVDPUURWT should actively restart paused media — that's its job.
+      if (NotMakePlayBackFixingNoticable.isRecovering() && NotMakePlayBackFixingNoticable.recoveryAge() < 120) { _schedule(); return; }
       if (mediaSessionForcedPauseActive()) { _schedule(); return; }
       if (_isUserPauseEvident()) { _schedule(); return; }
-      // don't fight during tab transitions
-      // NOTE: we intentionally DO run during startup (!firstPlayCommitted).
-      // During page load, the video can get paused by buffering and nothing
-      // else restarts it, causing the "plays then stops mid-load" bug.
-      if (isTabReturnImmune() || inBgReturnGrace()) { _schedule(); return; }
+      // NOTE: we intentionally DO run during startup (!firstPlayCommitted) and
+      // during tab return immunity — paused media needs restarting in both cases.
+      if (inBgReturnGrace()) { _schedule(); return; }
 
       const vPaused = getVideoPaused();
       const aPaused = coupledMode && audio ? !!audio.paused : false;
@@ -4691,7 +4698,7 @@ const HAVE_ENOUGH_DATA = 4;
       state.strictBufferHold ||
       now() < state.stallAudioResumeHoldUntil;
     if (stallFlagsActive && (vPaused || vRS < HAVE_FUTURE_DATA)) return true;
-    if (state.videoStallSince > 0 && (now() - state.videoStallSince) > 120 && vRS < HAVE_CURRENT_DATA) return true;
+    if (state.videoStallSince > 0 && (now() - state.videoStallSince) > 600 && vRS < HAVE_CURRENT_DATA) return true;
     if (frozenVisiblePlayback) return true;
     return false;
   }
@@ -5841,8 +5848,12 @@ const HAVE_ENOUGH_DATA = 4;
   }
   function safeSetAudioTime(t) {
     if (!audio) return;
-    // during immunity (tab return/hide/autoplay), never seek audio.
-    if ((isTabReturnImmune() || NotMakePlayBackFixingNoticable.shouldBlockSeek()) && state.firstPlayCommitted) return;
+    // During very early NMPBFN recovery (<120ms), block seeks — play() calls
+    // are still in flight and seeking would flush the decode buffer.
+    // After that, ALLOW seeks — they're needed for drift correction on tab return.
+    // The old code blocked all seeks during immunity (2s+) which caused
+    // "video plays late" because audio/video drift was never corrected.
+    if (NotMakePlayBackFixingNoticable.isRecovering() && NotMakePlayBackFixingNoticable.recoveryAge() < 120 && state.firstPlayCommitted) return;
     // never seek while the error overlay is showing
     if (_errorOverlayShown) return;
     try {
@@ -5875,20 +5886,18 @@ const HAVE_ENOUGH_DATA = 4;
           (performance.now() - _audioFirstPlayedAt) < 3000;
         if (inEarlyPlayback && timeDiff < 0.8) return;
 
-        // during startup, use 0.5s threshold.
-        // during normal playback, use 0.35s — drift under 350ms is imperceptible
-        // and the sync loop's rate nudging handles it smoothly. the old 0.15s
-        // threshold caused constant audio decode buffer flushes (audible pops).
+        // during startup, use 0.6s threshold.
+        // during normal playback, use 0.5s — drift under 500ms is imperceptible
+        // and the sync loop's rate enforcement handles it smoothly. the old 0.35s
+        // threshold was still causing random small audio seeks during playback.
         const isStartup = state.startupPhase || !state.firstPlayCommitted;
-        const threshold = isStartup ? 0.5 : 0.35;
+        const threshold = isStartup ? 0.6 : 0.5;
         if (timeDiff <= threshold) return;
 
-        // debounce: max one seek per 400ms during startup, per 500ms during normal play.
+        // debounce: max one seek per 500ms during startup, per 700ms during normal play.
         // rapid-fire seeks from competing code paths cause the random seek stutter.
-        // the old 150ms debounce was too aggressive — audio needs time to settle
-        // after a seek before another seek is useful.
         const _now = performance.now();
-        const debounce = isStartup ? 400 : 500;
+        const debounce = isStartup ? 500 : 700;
         if ((_now - _lastSafeSeekAt) < debounce) return;
         _lastSafeSeekAt = _now;
         audio.currentTime = t;
@@ -5898,17 +5907,16 @@ const HAVE_ENOUGH_DATA = 4;
 
   async function quietSeekAudio(t) {
     if (!audio || !coupledMode) return;
-    // During immunity or NMPBFN recovery, never seek audio — seeking flushes
-    // the decode buffer and causes audible replay artifacts.
-    if ((isTabReturnImmune() || NotMakePlayBackFixingNoticable.shouldBlockSeek()) && state.firstPlayCommitted) return;
+    // During very early NMPBFN recovery (<120ms), block seeks — play() is in flight.
+    if (NotMakePlayBackFixingNoticable.isRecovering() && NotMakePlayBackFixingNoticable.recoveryAge() < 120 && state.firstPlayCommitted) return;
     if (_errorOverlayShown) return;
     try {
       if (!isFinite(t) || t < 0) return;
       if (shouldBlockStableForegroundAudioSeek(t, 1.1)) return;
       const timeDiff = Math.abs((audio.currentTime || 0) - t);
-      // 0.35s threshold — drift under 350ms is imperceptible and handled by rate nudge.
-      // the old 0.15s threshold caused constant decode buffer flushes.
-      if (timeDiff <= 0.35) return;
+      // 0.5s threshold — drift under 500ms is imperceptible and handled by rate sync.
+      // the old 0.35s threshold was still causing random small audio seeks.
+      if (timeDiff <= 0.5) return;
 
       const wasPlaying = !audio.paused;
 
@@ -6425,12 +6433,12 @@ const HAVE_ENOUGH_DATA = 4;
         state.videoStallAudioPaused ||
         state.strictBufferHold ||
         foregroundBufferAudioHoldActive() ||
-        state.videoStallSince > 0
+        (state.videoStallSince > 0 && (now() - state.videoStallSince) > 400)
       );
     if (shouldBlockLeadingAudioForForegroundPlay()) {
       return false;
     }
-    if (_epNeedsStableVideo && !videoReadyForAudioResume(_epTime)) return false;
+    if (!force && _epNeedsStableVideo && !videoReadyForAudioResume(_epTime)) return false;
     const _forceBufferBypass =
       force &&
       (
@@ -8700,7 +8708,7 @@ const HAVE_ENOUGH_DATA = 4;
               if (state.videoWaiting && coupledMode && !aPaused && !NotMakePlayBackFixingNoticable.isActive() &&
                   _syncRS < HAVE_FUTURE_DATA && !_syncInGrace && document.visibilityState !== "hidden" &&
                   state.firstPlayCommitted /* don't kill audio during page-load buffering */) {
-                if (isConfirmedForegroundVideoStall(500) && !state.videoStallAudioPaused) {
+                if (isConfirmedForegroundVideoStall(800) && !state.videoStallAudioPaused) {
                   pauseAudioForConfirmedVideoStall();
                 }
               } else if (state.videoWaiting && _syncRS >= HAVE_FUTURE_DATA) {
@@ -8745,11 +8753,11 @@ const HAVE_ENOUGH_DATA = 4;
                   resetAudioPlaybackRate();
                   state.driftStableFrames = 0;
                   setFastSync(1600);
-                } else if (absDrift > 0.8 && !inBgDrift) {
-                  // Medium drift (0.8-1.5s): seek audio to video.
-                  // Was 0.5s — but seeking at 0.5s drift flushes the decode buffer
-                  // too aggressively, causing constant audible pops. Rate nudging
-                  // handles 0.15-0.8s drift without any audible artifact.
+                } else if (absDrift > 1.2 && !inBgDrift) {
+                  // Medium drift (1.2-1.5s): seek audio to video.
+                  // Was 0.8s — but seeking at 0.8s drift still causes noticeable
+                  // audio pops/jumps during normal playback. Rate enforcement
+                  // handles drift up to ~1.2s smoothly without any audible artifact.
                   await quietSeekAudio(vt);
                   resetAudioPlaybackRate();
                   state.driftStableFrames = 0;
@@ -8896,7 +8904,7 @@ const HAVE_ENOUGH_DATA = 4;
     // NEVER kill audio during startup/page-load — stalls are normal while buffering.
     const vNodeBuf = getVideoNode();
     const vRSBuf = vNodeBuf ? Number(vNodeBuf.readyState || 0) : 0;
-    const reallyStalled = isConfirmedForegroundVideoStall(450);
+    const reallyStalled = isConfirmedForegroundVideoStall(700);
     if ((shouldPauseAudioImmediatelyForForegroundVideoBuffer() || reallyStalled) && !state.videoStallAudioPaused) {
       pauseAudioForConfirmedVideoStall();
     }
@@ -10783,15 +10791,16 @@ const HAVE_ENOUGH_DATA = 4;
           if (state._stallAudioPauseTimer) { clearTimeout(state._stallAudioPauseTimer); state._stallAudioPauseTimer = null; }
           state._stallAudioPauseTimer = setTimeout(() => {
             state._stallAudioPauseTimer = null;
-            // Re-check: stall may have resolved during the short wait
+            // Re-check: stall may have resolved during the wait.
+            // 600ms delay means only genuine stalls (not brief hiccups) kill audio.
             if (!state.videoWaiting || !state.intendedPlaying || state.seeking) return;
             if (audio.paused) return;
             const _reVN = getVideoNode();
             const _reRS = _reVN ? Number(_reVN.readyState || 0) : 0;
             if (_reRS >= HAVE_FUTURE_DATA) { state.videoWaiting = false; clearForegroundBufferAudioHold(); return; }
-            if (!isConfirmedForegroundVideoStall(180)) return;
+            if (!isConfirmedForegroundVideoStall(500)) return;
             pauseAudioForConfirmedVideoStall();
-          }, 180);
+          }, 600);
         }
       }
 
@@ -11683,9 +11692,12 @@ const HAVE_ENOUGH_DATA = 4;
             return;
           }
           if (_phVt < 0.5 && _phPrev > 0.9 && state.firstPlayCommitted &&
-              !_phNearZeroAuthorized && !_phProgrammatic && !isLoopDesired()) {
+              !_phNearZeroAuthorized && !_phProgrammatic && !isLoopDesired() &&
+              (now() - state.lastUserActionTime) > 3000) {
             // this is a phantom restart — revert video to its last good position.
             // don't touch audio — the _seekWouldRestart guard handles that.
+            // Only revert if user hasn't interacted recently — recent interaction
+            // means this could be a real seek that the browser is resolving.
             try { videoEl.currentTime = _phPrev; } catch {}
             return;
           }
@@ -11901,7 +11913,8 @@ const HAVE_ENOUGH_DATA = 4;
           }
           if (newTime < 0.5 && !state.seeking && state.firstPlayCommitted && !isLoopDesired() &&
               !nearZeroSeekAuthorized(newTime) && prevBeforeSeeked > 0.9 &&
-              (now() - state.lastUserActionTime) > 2000 && state.pendingSeekTarget == null) {
+              (now() - state.lastUserActionTime) > 3500 && state.pendingSeekTarget == null &&
+              !userSeekIntentActive()) {
             try { videoEl.currentTime = prevBeforeSeeked; } catch {}
             // Still restore volume even on bail-out
             if (coupledMode && audio && state._seekPreVolume != null) {
@@ -12319,13 +12332,18 @@ const HAVE_ENOUGH_DATA = 4;
     if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) return;
     if (!state.intendedPlaying && !state.resumeOnVisible &&
       !(wantsStartupAutoplay() && !state.firstPlayCommitted)) return;
-    // During immunity or NMPBFN recovery, the recovery system handles everything.
-    // Don't fire competing wakeup/retry machinery.
-    if ((isTabReturnImmune() || NotMakePlayBackFixingNoticable.isRecovering()) && state.firstPlayCommitted) return;
+    // During early NMPBFN recovery (<150ms), let it do its thing alone.
+    // After that, fire wakeup too — NMPBFN only does play() calls but
+    // wakeup does drift correction and seamlessBgCatchUp which are needed
+    // for fast video resume. Without this, video sits frozen waiting for
+    // SETTLING phase drift correction.
+    if (NotMakePlayBackFixingNoticable.isRecovering() && state.firstPlayCommitted) {
+      if (NotMakePlayBackFixingNoticable.recoveryAge() < 150) return;
+    }
     // Cancel and replace any existing wakeup timer (don't silently drop)
     if (state.wakeupTimer) { clearTimeout(state.wakeupTimer); state.wakeupTimer = null; }
 
-    const wakeDelay = platform.chromiumOnlyBrowser ? 20 : 10;
+    const wakeDelay = 5; // near-instant — don't wait for browser paint cycle
     const myGen = state.tabReturnGen;
 
     state.wakeupTimer = setTimeout(() => {
@@ -12370,7 +12388,7 @@ const HAVE_ENOUGH_DATA = 4;
         state._wakeupRetryTimers.forEach(t => clearTimeout(t));
         state._wakeupRetryTimers = [];
       }
-      [150, 400, 800, 1400].forEach(retryDelay => {
+      [80, 200, 500, 900].forEach(retryDelay => {
         const tid = setTimeout(() => {
           // Remove self from tracked list
           const idx = state._wakeupRetryTimers.indexOf(tid);
