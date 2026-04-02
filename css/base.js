@@ -1366,6 +1366,8 @@ document.addEventListener("DOMContentLoaded", () => {
       state.isProgrammaticVideoPause = false;
       state.audioPlayUntil = 0;
       state.audioPlayInFlight = null;
+      // Clear buffer hold — it blocks play() and can be stale from bg
+      clearBufferHold();
 
       // --- THE play. Exactly one per element. ---
       _doSingleCleanPlay(myGen);
@@ -1411,6 +1413,9 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       // Protect newly-started audio from stall-pause for 1.5s
       state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 1500);
+      // Reset dedup EVERY time we try to play during recovery.
+      // Without this, DONTMAKEITDOUBLEPLAY suppresses retries.
+      DONTMAKEITDOUBLEPLAY.resetAll();
       try {
         // Always use live video volume as source of truth (reflects localStorage)
         const targetVol = (coupledMode && audio) ? targetVolFromVideo() : 1;
@@ -1594,7 +1599,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const at = Number(audio.currentTime) || 0;
         if (!isFinite(vt) || !isFinite(at)) return;
         const drift = Math.abs(at - vt);
-        if (drift < 0.4) return; // Close enough — no correction needed
+        if (drift < 1.0) return; // Under 1s drift is fine — rate sync handles it
         if (at > vt && drift > 1.5 && document.visibilityState === "hidden") {
           // Audio far ahead + tab hidden — safe to move video (user can't see it)
           try { const _vn = getVideoNode(); if (_vn) _vn.currentTime = at; } catch {}
@@ -4156,7 +4161,7 @@ const HAVE_ENOUGH_DATA = 4;
               if (!coupledMode || !audio || audio.paused) return;
               const _atVT = (() => { try { return Number(video.currentTime()); } catch { return 0; } })();
               const _atAT = Number(audio.currentTime) || 0;
-              if (isFinite(_atVT) && Math.abs(_atAT - _atVT) > 0.4) {
+              if (isFinite(_atVT) && Math.abs(_atAT - _atVT) > 1.0) {
                 safeSetAudioTime(_atVT);
               }
             }, 80);
@@ -4493,7 +4498,7 @@ const HAVE_ENOUGH_DATA = 4;
     if (idx !== -1) state._transitionDriftTimers.splice(idx, 1);
   }
   function attemptTransitionDriftRepair(opts = {}) {
-    const { threshold = 0.24, resumeIfPaused = false, allowSeekRecovery = false } = opts || {};
+    const { threshold = 0.6, resumeIfPaused = false, allowSeekRecovery = false } = opts || {};
     if (!coupledMode || !audio || _errorOverlayShown) return false;
     if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
     if (!state.intendedPlaying || state.restarting) return false;
@@ -4510,7 +4515,7 @@ const HAVE_ENOUGH_DATA = 4;
 
     const drift = Math.abs(at - vt);
     const needsResume = resumeIfPaused && audio.paused;
-    if (!needsResume && drift <= Math.max(0.12, Number(threshold) || 0)) return false;
+    if (!needsResume && drift <= Math.max(0.5, Number(threshold) || 0)) return false;
 
     const wouldRestart =
       vt < 0.5 &&
@@ -4559,7 +4564,7 @@ const HAVE_ENOUGH_DATA = 4;
         untrackTransitionDriftTimer(tid);
         if (state.playSessionId !== playSession) return;
         if (!state.intendedPlaying || state.restarting || state.seeking || state.seekBuffering) return;
-        attemptTransitionDriftRepair({ threshold: 0.22, resumeIfPaused: true, allowSeekRecovery: false });
+        attemptTransitionDriftRepair({ threshold: 0.6, resumeIfPaused: true, allowSeekRecovery: false });
       }, delay));
     });
   }
@@ -4572,7 +4577,7 @@ const HAVE_ENOUGH_DATA = 4;
         if (state.seekId !== seekId || state.playSessionId !== playSession) return;
         if (!state.intendedPlaying || state.restarting || state.seekBuffering) return;
         if (!shouldResumeAfterSeek() && !state.playRequestedDuringSeek) return;
-        attemptTransitionDriftRepair({ threshold: 0.16, resumeIfPaused: true, allowSeekRecovery: true });
+        attemptTransitionDriftRepair({ threshold: 0.5, resumeIfPaused: true, allowSeekRecovery: true });
       }, delay));
     });
   }
@@ -5064,7 +5069,7 @@ const HAVE_ENOUGH_DATA = 4;
         !state.restarting &&
         !isLoopDesired();
       // Sync audio to the best known playback position before playing.
-      if (isFinite(targetTime) && !wouldRestartNearZero && Math.abs(currentAt - targetTime) > 0.2) {
+      if (isFinite(targetTime) && !wouldRestartNearZero && Math.abs(currentAt - targetTime) > 0.8) {
         try { audio.currentTime = targetTime; } catch {}
       }
       try { if (audio.muted && !state.userMutedAudio) audio.muted = false; } catch {}
@@ -6943,12 +6948,12 @@ const HAVE_ENOUGH_DATA = 4;
       // Sync both tracks to best position before resuming
       const allowVisibleReturnSeek = shouldAllowVisibleReturnSyncSeek();
       if (bestPos > 0.1) {
-        if (isFinite(vtNow) && Math.abs(vtNow - bestPos) > 0.3) {
+        if (isFinite(vtNow) && Math.abs(vtNow - bestPos) > 1.5) {
           if (allowVisibleReturnSeek || document.visibilityState !== "visible" || !isWindowFocused()) {
             safeSetVideoTime(bestPos, { force: true });
           }
         }
-        if (coupledMode && isFinite(atNow) && Math.abs(atNow - bestPos) > 0.1) {
+        if (coupledMode && isFinite(atNow) && Math.abs(atNow - bestPos) > 0.8) {
           if (audio.paused || allowVisibleReturnSeek || document.visibilityState !== "visible" || !isWindowFocused()) {
             safeSetAudioTime(bestPos);
           }
@@ -6982,18 +6987,25 @@ const HAVE_ENOUGH_DATA = 4;
         } else if (!getVideoPaused() || (audio && !audio.paused)) {
           // Partial success — at least one track playing, don't backoff hard
         } else {
-          // Complete failure — maybe buffer is empty (network changed).
-          // Arm buffer recovery so playback resumes once data arrives.
+          // Complete failure — try play again instead of a huge buffer hold.
+          // Buffer holds of 15s freeze the video for the user. Just retry.
           BackgroundPlaybackManagerManager.onBrowserForcedPause();
-          if (!state.strictBufferHold && state.intendedPlaying) {
-            armResumeAfterBuffer(15000);
+          if (state.intendedPlaying) {
+            DONTMAKEITDOUBLEPLAY.resetAll();
+            const _nativePlay = HTMLMediaElement.prototype.play;
+            const _vn = getVideoNode();
+            if (_vn && _vn.paused) try { _nativePlay.call(_vn).catch(() => {}); } catch {}
+            if (coupledMode && audio && audio.paused) try { _nativePlay.call(audio).catch(() => {}); } catch {}
           }
         }
       } else if (!getVideoPaused() && state.intendedPlaying) {
         BackgroundPlaybackManagerManager.onBgPlaySuccess();
-      } else if (state.intendedPlaying && !state.strictBufferHold) {
-        // Non-coupled complete failure — arm buffer recovery
-        armResumeAfterBuffer(15000);
+      } else if (state.intendedPlaying) {
+        // Non-coupled failure — retry play instead of 15s buffer hold
+        DONTMAKEITDOUBLEPLAY.resetAll();
+        const _nativePlay = HTMLMediaElement.prototype.play;
+        const _vn = getVideoNode();
+        if (_vn && _vn.paused) try { _nativePlay.call(_vn).catch(() => {}); } catch {}
       }
     } finally {
       state.bgResumeInFlight = false;
@@ -7003,6 +7015,11 @@ const HAVE_ENOUGH_DATA = 4;
   // Cancel any active non-coupled buffer wait from a previous armResumeAfterBuffer call
   let _ncBufferWaitCleanup = null;
   function armResumeAfterBuffer(timeoutMs = 9000) {
+    // During tab return, cap timeout at 2s — 10-15s buffer holds freeze the UI.
+    // The video decoder just needs a moment to wake up, not a 15-second nap.
+    if (inBgReturnGrace() || isTabReturnImmune()) {
+      timeoutMs = Math.min(timeoutMs, 2000);
+    }
     if (!coupledMode) {
       // Cancel previous non-coupled buffer wait to prevent listener leaks
       if (_ncBufferWaitCleanup) { try { _ncBufferWaitCleanup(); } catch {} _ncBufferWaitCleanup = null; }
@@ -7351,9 +7368,9 @@ const HAVE_ENOUGH_DATA = 4;
       const vtStart = Number(video.currentTime()) || 0;
       // only seek audio if it's not primed yet AND audio position is actually wrong.
       // if audio is already playing in sync, seeking causes an audible skip.
-      if (state.startupPhase && !state.startupPrimed && vtStart > 0.3) {
+      if (state.startupPhase && !state.startupPrimed && vtStart > 0.8) {
         const _ptAt = Number(audio.currentTime) || 0;
-        if (Math.abs(_ptAt - vtStart) > 0.4 || audio.paused) {
+        if (Math.abs(_ptAt - vtStart) > 1.0 || (audio.paused && Math.abs(_ptAt - vtStart) > 0.5)) {
           safeSetAudioTime(vtStart);
         }
       }
@@ -7470,7 +7487,7 @@ const HAVE_ENOUGH_DATA = 4;
         } else {
           // Only hard-resync on user toggles when drift is real.
           // Rewriting currentTime on every quick play/pause causes tiny audible skips.
-          if (isRecentUserAction && isFinite(vNow) && vNow >= 0 && (avDrift > 0.28 || userSeekIntentActive())) {
+          if (isRecentUserAction && isFinite(vNow) && vNow >= 0 && (avDrift > 0.6 || userSeekIntentActive())) {
             state._allowAudioTimeWrite = true;
             try { audio.currentTime = vNow; } catch {}
             state._allowAudioTimeWrite = false;
@@ -12181,8 +12198,8 @@ const HAVE_ENOUGH_DATA = 4;
         const shouldRealignAudio =
           audio.paused ||
           hard ||
-          drift > 0.85 ||
-          (_returnNeedsForegroundResume() && drift > 0.35);
+          drift > 1.5 ||
+          (_returnNeedsForegroundResume() && drift > 1.0);
         if (shouldRealignAudio) safeSetAudioTime(targetTime);
       }
 
@@ -12199,9 +12216,21 @@ const HAVE_ENOUGH_DATA = 4;
       state.stallAudioPausedSince = 0;
       state.stallAudioResumeHoldUntil = 0;
       state.videoStallSince = 0;
+      state.isProgrammaticVideoPause = false;
       clearAudioPauseLocks();
+      clearBufferHold();
       VisibilityGuard.onPlayCalled();
-      try { execProgrammaticVideoPlay({ force: true, minGapMs: 0 }); } catch {}
+      // Reset dedup so our play() calls actually go through.
+      // Without this, DONTMAKEITDOUBLEPLAY's storm protection suppresses
+      // retry plays and the video stays frozen for seconds.
+      DONTMAKEITDOUBLEPLAY.resetAll();
+      // Use NATIVE play() to bypass ALL wrappers (dedup, gates, etc).
+      // This is tab return — we NEED the play to go through no matter what.
+      const _nPlay = HTMLMediaElement.prototype.play;
+      const vn = getVideoNode();
+      if (vn && vn.paused) {
+        try { _nPlay.call(vn).catch(() => {}); } catch {}
+      }
       if (coupledMode) {
         _kickReturnAudio(hard);
         if (hard) {
@@ -12291,13 +12320,14 @@ const HAVE_ENOUGH_DATA = 4;
         return;
       }
       _kickReturnPlayback(true);
-      // If video is still paused after 400ms (buffer empty), arm buffer recovery
+      // If video is still paused after 400ms, just try play() again instead
+      // of arming a 12-second buffer hold which freezes everything.
       const _bufferShot = trackWakeupRetryTimer(setTimeout(() => {
         untrackWakeupRetryTimer(_bufferShot);
         if (state.tabReturnGen !== bbtGen) return;
         if (!state.intendedPlaying) return;
-        if (getVideoPaused() && !state.strictBufferHold && !state.bgResumeInFlight) {
-          armResumeAfterBuffer(12000);
+        if (getVideoPaused()) {
+          _kickReturnPlayback(true);
         }
       }, 240));
     }, 420));
@@ -12316,10 +12346,9 @@ const HAVE_ENOUGH_DATA = 4;
           _kickReturnAudio(false);
           return;
         }
-        _kickReturnPlayback(idx >= 1);
-        if (idx >= 1 && getVideoPaused() && !state.strictBufferHold && !state.bgResumeInFlight) {
-          armResumeAfterBuffer(12000);
-        }
+        _kickReturnPlayback(true);
+        // Don't arm buffer hold on tab return — just keep calling play().
+        // 12-second buffer holds cause the "frozen video for 2-3 seconds" bug.
       }, delay));
     });
   }
