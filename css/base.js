@@ -28,7 +28,8 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  
 //////////////// THE PLAYER, START ////////////////////////
 // This runs in a try-catch because elements might not exist yet...which is sillah am sillah tooo waowawawa............
-try {
+ 
+ try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -4369,6 +4370,9 @@ const HAVE_ENOUGH_DATA = 4;
   function shouldKeepForegroundReturnVideoFirst() {
     if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
     if (!state.intendedPlaying || state.restarting || state.seeking || state.seekBuffering) return false;
+    // During bg return grace, skip video-first gating — decoder needs warmup time
+    // and blocking audio/arming buffer holds just makes the freeze worse.
+    if (inBgReturnGrace()) return false;
     if (freshForegroundVideoFirstPending()) return true;
     if (now() < state.foregroundReturnUserPlayUntil &&
         (directUserToggleActive(2600) || userWantsPlayNow(3200) || userToggleExpectingPlay())) {
@@ -4397,6 +4401,9 @@ const HAVE_ENOUGH_DATA = 4;
   function shouldRequireVisibleVideoHealthForForegroundPlay() {
     if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
     if (!state.intendedPlaying || state.restarting || state.seeking || state.seekBuffering) return false;
+    // During bg return grace, don't require video health proof — the decoder
+    // was suspended and needs time to produce frames. Gating here causes freeze.
+    if (inBgReturnGrace()) return false;
     if (shouldKeepForegroundReturnVideoFirst()) return true;
     if (shouldRequireVisibleVideoLeadForDirectUserPlay()) return true;
     if (now() < state.foregroundReturnUserPlayUntil &&
@@ -4598,6 +4605,13 @@ const HAVE_ENOUGH_DATA = 4;
     if (document.visibilityState !== "visible" || !isWindowFocused()) return;
     if (!state.intendedPlaying || state.restarting || state.seeking || state.seekBuffering) return;
     if (mediaSessionForcedPauseActive() || userPauseLockActive() || userWantsPauseNow(1000)) return;
+    // During bg return grace, don't arm long retry chains — just kick play directly
+    if (inBgReturnGrace()) {
+      const _nPlay = HTMLMediaElement.prototype.play;
+      const _vn = getVideoNode();
+      if (_vn && _vn.paused) try { _nPlay.call(_vn).catch(() => {}); } catch {}
+      return;
+    }
 
     const playSession = state.playSessionId;
     const armedAt = now();
@@ -7553,9 +7567,18 @@ const HAVE_ENOUGH_DATA = 4;
       }
 
       if (!videoOk && !audioOk) {
-        if (requireVisibleVideoHealth || shouldKeepForegroundReturnVideoFirst()) {
+        if ((requireVisibleVideoHealth || shouldKeepForegroundReturnVideoFirst()) && !inBgReturnGrace()) {
           startForegroundUserPlayRetry();
           if (!state.strictBufferHold) armResumeAfterBuffer(5000);
+        } else if (inBgReturnGrace() && state.intendedPlaying) {
+          // Tab return: both failed, just retry play directly instead of long buffer holds
+          const _nPlay = HTMLMediaElement.prototype.play;
+          const _vn = getVideoNode();
+          setTimeout(() => {
+            if (!state.intendedPlaying) return;
+            if (_vn && _vn.paused) try { _nPlay.call(_vn).catch(() => {}); } catch {}
+            if (coupledMode && audio && audio.paused) try { _nPlay.call(audio).catch(() => {}); } catch {}
+          }, 200);
         } else if (isHiddenBackground() && state.intendedPlaying) {
           state.resumeOnVisible = true;
         } else if (!state.firstPlayCommitted || (state.startupPhase && !state.audioEverStarted)) {
@@ -7574,6 +7597,17 @@ const HAVE_ENOUGH_DATA = 4;
         return;
       } else if (!videoOk && audioOk) {
         if (requireVisibleVideoHealth || shouldKeepForegroundReturnVideoFirst()) {
+          // During tab return, do NOT pause audio or arm long buffer holds —
+          // just retry video. The decoder needs warmup time, not a full restart.
+          if (inBgReturnGrace()) {
+            const _retSess = mySession;
+            setTimeout(() => {
+              if (!state.intendedPlaying || _retSess !== state.playSessionId) return;
+              if (!getVideoPaused()) return;
+              execProgrammaticVideoPlay();
+            }, 150);
+            return;
+          }
           execProgrammaticAudioPause(120);
           startForegroundUserPlayRetry();
           if (!state.strictBufferHold) armResumeAfterBuffer(5000);
