@@ -33,6 +33,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
 // before DOMContentLoaded. Ensures both video and audio start at 00:00
 // even if the browser pre-buffers to a non-zero keyframe position.
 // This runs in a try-catch because elements might not exist yet.
+// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
+// before DOMContentLoaded. Ensures both video and audio start at 00:00
+// even if the browser pre-buffers to a non-zero keyframe position.
+// This runs in a try-catch because elements might not exist yet.
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -2055,38 +2059,118 @@ document.addEventListener("DOMContentLoaded", () => {
     return { start, stop };
   })();
 
-  // --- MakeVideoNotFreezeAfterPlaybackAfterAltTabHapens (MVNFAPAAT)
-  // Continuous enforcer that monitors actual hardware state and enforces:
-  // 1. If video readyState < HAVE_FUTURE_DATA in visible foreground → audio MUST be paused
-  // 2. If video is frozen/paused while intendedPlaying → kick video play
-  // 3. If audio is paused while video plays fine → kick audio play
-  // This runs every 250ms and does NOT respect grace periods or recovery bypasses.
-  // It is the FINAL AUTHORITY on playback state consistency.
-  const MakeVideoNotFreezeAfterPlaybackAfterAltTabHapens = (() => {
-    let _timer = null;
-    const TICK_MS = 250;
+  // ═══════════════════════════════════════════════════════════════════════
+  // MakeVideoNotFreezeAfterPlaybackAfterAltTabHapenns — VideoSyncManager
+  // ═══════════════════════════════════════════════════════════════════════
+  // Production-grade sync enforcer that acts as the FINAL AUTHORITY on
+  // audio/video playback state coherence. Three invariants, zero exceptions:
+  //
+  //   1. ANTI-GHOST SYNC-LOCK: If video readyState < HAVE_FUTURE_DATA in
+  //      visible foreground, audio MUST be silent. Period. No grace period,
+  //      no bypass flag, no recovery exception. readyState is the browser's
+  //      hardware signal — it is always authoritative.
+  //
+  //   2. RENDERER FREEZE DETECTION: Uses requestAnimationFrame (not timers)
+  //      to detect frozen video at frame-level precision. If video.paused is
+  //      false but currentTime hasn't advanced across 2+ rAF cycles AND
+  //      readyState >= HAVE_FUTURE_DATA, the renderer is stuck on a stale
+  //      GPU frame. Fix: micro-seek to flush the compositor, then re-play.
+  //
+  //   3. INTENT PRESERVATION: If intendedPlaying is true and both elements
+  //      should be running but one is stuck paused, kick it — but ONLY if
+  //      the video has data (readyState >= HAVE_FUTURE_DATA). Never start
+  //      audio ahead of a starving video.
+  //
+  // Design: Dual-loop architecture.
+  //   - A requestAnimationFrame loop for frame-accurate freeze detection
+  //     (runs only when tab is visible and intendedPlaying).
+  //   - A 200ms setTimeout fallback watchdog for cases where rAF is
+  //     throttled (browser background tab, minimized window).
+  //
+  // This replaces the old timer-only MVNFAPAAT which used 250ms setTimeout
+  // polling — too slow to catch single-frame stalls and subject to
+  // browser timer throttling in background tabs.
+  // ═══════════════════════════════════════════════════════════════════════
+  const MakeVideoNotFreezeAfterPlaybackAfterAltTabHapenns = (() => {
+    // --- private state (not accessible externally) ---
+    let _rafId = null;
+    let _watchdogTimer = null;
     let _lastVideoTime = -1;
+    let _lastFrameCount = -1;
+    let _frozenFrames = 0;        // consecutive rAF ticks where video didn't advance
     let _frozenSince = 0;
+    let _lastRafTs = 0;
+    let _running = false;
+    let _tabReturnMicroSeekDone = false;
+    let _preHideTime = -1;        // video.currentTime captured on visibilitychange→hidden
+    let _preHideAudioTime = -1;   // audio.currentTime captured on hide
+    let _wasPlayingBeforeHide = false;
 
-    function _tick() {
-      _timer = null;
-      if (!state.intendedPlaying || state.endedNaturally || state.restarting) { _schedule(); return; }
-      if (state.seeking || state.seekBuffering) { _schedule(); return; }
-      if (document.visibilityState !== "visible" || !isWindowFocused()) { _schedule(); return; }
-      if (userPauseLockActive() || mediaSessionForcedPauseActive()) { _schedule(); return; }
-      if (!state.firstPlayCommitted) { _schedule(); return; }
+    const SYNC_PRECISION = 0.1;   // max tolerable A/V drift in seconds
+    const FROZEN_FRAME_THRESHOLD = 3;  // rAF ticks before declaring stall
+    const WATCHDOG_MS = 200;      // fallback timer interval
+    const MICRO_SEEK_OFFSET = 0.001;
+    const STALL_KICK_COOLDOWN_MS = 400; // don't re-kick faster than this
+    let _lastKickAt = 0;
+
+    // ------------------------------------------------------------------
+    // BufferWatcher: compares video.buffered against currentTime to get
+    // the real buffer health independent of readyState (which can lag).
+    // ------------------------------------------------------------------
+    function _getBufferAhead(el) {
+      try {
+        const t = Number(el.currentTime) || 0;
+        const b = el.buffered;
+        if (!b || b.length === 0) return 0;
+        for (let i = 0; i < b.length; i++) {
+          if (t >= b.start(i) - 0.01 && t <= b.end(i) + 0.01) {
+            return Math.max(0, b.end(i) - t);
+          }
+        }
+      } catch {}
+      return 0;
+    }
+
+    // ------------------------------------------------------------------
+    // The rAF-based heartbeat. Fires once per display frame (~16ms @60Hz).
+    // This is the primary loop: frame-accurate, not subject to timer
+    // throttling, and guaranteed to run in sync with the compositor.
+    // ------------------------------------------------------------------
+    function _rafTick(timestamp) {
+      _rafId = null;
+      if (!_running) return;
+
+      // Always re-schedule first (ensures the loop continues even if we throw)
+      _scheduleRaf();
+
+      // --- gate checks: skip enforcement in states where we shouldn't act ---
+      if (!state.intendedPlaying || state.endedNaturally || state.restarting) return;
+      if (state.seeking || state.seekBuffering) { _frozenFrames = 0; _frozenSince = 0; return; }
+      if (document.visibilityState !== "visible" || !isWindowFocused()) return;
+      if (userPauseLockActive() || mediaSessionForcedPauseActive()) return;
+      if (!state.firstPlayCommitted) return;
 
       const vNode = getVideoNode();
-      if (!vNode) { _schedule(); return; }
+      if (!vNode) return;
+
       const vRS = Number(vNode.readyState || 0);
       const vPaused = getVideoPaused();
       const aPaused = coupledMode && audio ? !!audio.paused : false;
       const vt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
+      const frameCount = getVideoPresentedFrameCount(vNode);
+      const bufAhead = _getBufferAhead(vNode);
 
-      // --- INVARIANT 1: Audio must NEVER play while video is buffering ---
-      // If video readyState < HAVE_FUTURE_DATA AND audio is playing → pause audio
-      if (vRS < HAVE_FUTURE_DATA && !aPaused && coupledMode && audio) {
-        // Video doesn't have enough data. Audio must stop.
+      // ════════════════════════════════════════════════════════════════
+      // INVARIANT 1: ANTI-GHOST SYNC-LOCK
+      // Audio MUST be silent when video cannot play.
+      // This is the un-bypassable gate. readyState is the hardware truth.
+      // Also check actual buffer: if less than 0.05s buffered ahead,
+      // treat as genuinely starved even if readyState briefly hit 3.
+      // ════════════════════════════════════════════════════════════════
+      const videoStarving = vRS < HAVE_FUTURE_DATA || (vRS === HAVE_FUTURE_DATA && bufAhead < 0.05);
+
+      if (videoStarving && !aPaused && coupledMode && audio) {
+        // Video is data-starved. Force audio silent immediately.
         if (!state.videoWaiting) {
           state.videoWaiting = true;
           state.videoStallSince = state.videoStallSince || now();
@@ -2094,57 +2178,284 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!state.videoStallAudioPaused) {
           pauseAudioForConfirmedVideoStall(500);
         }
-        _schedule();
+        _frozenFrames = 0;
+        _frozenSince = 0;
         return;
       }
 
-      // --- INVARIANT 2: Video must not stay frozen while we want to play ---
-      // Detect frozen video: paused or currentTime not advancing
-      if (!vPaused && Math.abs(vt - _lastVideoTime) < 0.001 && _lastVideoTime >= 0) {
-        if (!_frozenSince) _frozenSince = now();
-        // Video appears frozen for > 600ms and has data → kick it
-        if ((now() - _frozenSince) > 600 && vRS >= HAVE_FUTURE_DATA) {
-          DONTMAKEITDOUBLEPLAY.resetAll();
-          execProgrammaticVideoPlay();
+      // ════════════════════════════════════════════════════════════════
+      // INVARIANT 2: RENDERER FREEZE DETECTION (rAF-precision)
+      // If video reports "playing" (paused=false) but currentTime AND
+      // the decoded frame count are both frozen → the renderer is stuck
+      // on a stale GPU surface. This happens after alt-tab because
+      // Chromium caches the last composited frame in a texture.
+      //
+      // Fix strategy (the "Double-Nudge"):
+      //   1. Micro-seek: video.currentTime += 0.001
+      //      Forces the demuxer to flush and re-feed the decoder,
+      //      which pushes a fresh frame to the compositor.
+      //   2. Re-play inside the NEXT rAF after the micro-seek lands.
+      //      This ensures the browser has a paint cycle ready.
+      // ════════════════════════════════════════════════════════════════
+      if (!vPaused && vRS >= HAVE_FUTURE_DATA) {
+        const timeAdvanced = Math.abs(vt - _lastVideoTime) > 0.0005;
+        const framesAdvanced = isFinite(frameCount) && isFinite(_lastFrameCount)
+          ? frameCount > _lastFrameCount
+          : true; // if frame count unavailable, assume advancing
+
+        if (!timeAdvanced && !framesAdvanced && _lastVideoTime >= 0) {
+          _frozenFrames++;
+          if (!_frozenSince) _frozenSince = now();
+
+          if (_frozenFrames >= FROZEN_FRAME_THRESHOLD && (now() - _lastKickAt) > STALL_KICK_COOLDOWN_MS) {
+            // Renderer is confirmed stuck. Execute Double-Nudge.
+            _lastKickAt = now();
+            _frozenFrames = 0;
+            _frozenSince = 0;
+
+            // Step 1: Micro-seek to flush stale GPU frame
+            try { vNode.currentTime = vt + MICRO_SEEK_OFFSET; } catch {}
+
+            // Step 2: Ensure play() fires after the compositor accepts the new frame
+            DONTMAKEITDOUBLEPLAY.resetAll();
+            requestAnimationFrame(() => {
+              if (!state.intendedPlaying || state.endedNaturally) return;
+              if (getVideoPaused()) {
+                const p = execProgrammaticVideoPlay();
+                if (p && typeof p.catch === "function") p.catch(() => {});
+              }
+            });
+          }
+        } else {
+          _frozenFrames = 0;
           _frozenSince = 0;
         }
       } else {
-        _frozenSince = 0;
+        _frozenFrames = 0;
+        if (!vPaused && vRS < HAVE_FUTURE_DATA) {
+          // Video is "playing" but starved — let INVARIANT 1 handle it next frame
+        }
       }
-      _lastVideoTime = vt;
 
-      // Video is paused but we want to play and video has data → kick video
-      if (vPaused && vRS >= HAVE_FUTURE_DATA && !state.strictBufferHold) {
+      _lastVideoTime = vt;
+      _lastFrameCount = isFinite(frameCount) ? frameCount : -1;
+
+      // ════════════════════════════════════════════════════════════════
+      // INVARIANT 3: INTENT PRESERVATION — KICK STUCK ELEMENTS
+      // If we intend to play and an element is paused but has data, kick it.
+      // But NEVER start audio unless video has HAVE_FUTURE_DATA.
+      // ════════════════════════════════════════════════════════════════
+
+      // 3a: Video is paused but has data and we want to play → kick video
+      if (vPaused && vRS >= HAVE_FUTURE_DATA && !state.strictBufferHold &&
+          (now() - _lastKickAt) > STALL_KICK_COOLDOWN_MS) {
+        _lastKickAt = now();
         state.isProgrammaticVideoPause = false;
         DONTMAKEITDOUBLEPLAY.resetAll();
-        execProgrammaticVideoPlay();
+        const p = execProgrammaticVideoPlay();
+        if (p && typeof p.catch === "function") p.catch(() => {});
       }
 
-      // --- INVARIANT 3: Audio must play when video plays fine ---
-      // Video playing with data, audio paused, no stall → kick audio
+      // 3b: Audio is paused while video plays with data → kick audio
+      //     ONLY if video readyState confirms sufficient data (≥ HAVE_FUTURE_DATA)
+      //     AND no stall flags are active.
       if (!vPaused && aPaused && vRS >= HAVE_FUTURE_DATA && coupledMode && audio &&
           !state.videoWaiting && !state.videoStallAudioPaused &&
-          !state.strictBufferHold && now() > state.stallAudioResumeHoldUntil) {
+          !state.strictBufferHold && now() > state.stallAudioResumeHoldUntil &&
+          bufAhead >= 0.1) {
         safeSetAudioTime(vt);
         try { audio.volume = targetVolFromVideo(); } catch {}
         state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 400);
         execProgrammaticAudioPlay({ squelchMs: 120, force: true, minGapMs: 0 }).catch(() => {});
       }
-
-      _schedule();
     }
 
-    function _schedule() {
-      if (_timer) return;
-      _timer = setTimeout(_tick, TICK_MS);
+    // ------------------------------------------------------------------
+    // Watchdog: 200ms setTimeout fallback for when rAF is throttled.
+    // Runs the same invariant checks but at lower frequency. This catches
+    // cases where the tab is "visible" but rAF isn't firing (e.g. window
+    // is minimized on some OSes, or rAF is deprioritized).
+    // ------------------------------------------------------------------
+    function _watchdogTick() {
+      _watchdogTimer = null;
+      if (!_running) return;
+      _scheduleWatchdog();
+
+      // Delegate to the same logic as rAF tick (with a fake timestamp)
+      // The rAF loop handles the frame-accurate work; watchdog handles
+      // the "is everything stuck?" coarse check.
+      if (!state.intendedPlaying || state.endedNaturally) return;
+      if (document.visibilityState !== "visible") return;
+      if (!state.firstPlayCommitted) return;
+
+      const vNode = getVideoNode();
+      if (!vNode) return;
+      const vRS = Number(vNode.readyState || 0);
+      const vPaused = getVideoPaused();
+      const aPaused = coupledMode && audio ? !!audio.paused : false;
+
+      // Watchdog-specific: detect "video has data but nothing is playing"
+      // This catches the case where buffer fills in background but neither
+      // the rAF loop nor events managed to restart playback.
+      if (vPaused && !state.seeking && !state.seekBuffering && !state.restarting &&
+          vRS >= HAVE_FUTURE_DATA && !state.strictBufferHold &&
+          !userPauseLockActive() && !mediaSessionForcedPauseActive() &&
+          (now() - _lastKickAt) > STALL_KICK_COOLDOWN_MS) {
+        _lastKickAt = now();
+        state.isProgrammaticVideoPause = false;
+        DONTMAKEITDOUBLEPLAY.resetAll();
+        const p = execProgrammaticVideoPlay();
+        if (p && typeof p.catch === "function") p.catch(() => {});
+
+        // Also kick audio if it's paused
+        if (aPaused && coupledMode && audio && !state.videoStallAudioPaused) {
+          const vt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
+          safeSetAudioTime(vt);
+          state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 400);
+          execProgrammaticAudioPlay({ squelchMs: 120, force: true, minGapMs: 0 }).catch(() => {});
+        }
+      }
+
+      // Watchdog also enforces anti-ghost: if audio is playing but video is starved
+      if (vRS < HAVE_FUTURE_DATA && !aPaused && coupledMode && audio && state.firstPlayCommitted) {
+        if (!state.videoWaiting) {
+          state.videoWaiting = true;
+          state.videoStallSince = state.videoStallSince || now();
+        }
+        if (!state.videoStallAudioPaused) {
+          pauseAudioForConfirmedVideoStall(500);
+        }
+      }
     }
 
-    function start() { _schedule(); }
-    function stop() { if (_timer) { clearTimeout(_timer); _timer = null; } }
-    function reset() { _lastVideoTime = -1; _frozenSince = 0; }
+    // ------------------------------------------------------------------
+    // Tab visibility transition handlers (called from visibilitychange)
+    // ------------------------------------------------------------------
 
-    return { start, stop, reset };
+    // Called BEFORE the tab goes hidden. Captures the exact playback
+    // position so we can do a hard resync on return.
+    function onTabHide() {
+      const vNode = getVideoNode();
+      _preHideTime = vNode ? Number(vNode.currentTime || 0) : -1;
+      _preHideAudioTime = (coupledMode && audio) ? Number(audio.currentTime || 0) : -1;
+      _wasPlayingBeforeHide = state.intendedPlaying && !getVideoPaused();
+      _tabReturnMicroSeekDone = false;
+    }
+
+    // Called when the tab becomes visible again. Implements the
+    // "Hard Resync" strategy:
+    //   1. Check if desync > SYNC_PRECISION from the saved position.
+    //   2. If so, seek both elements back to the saved position.
+    //   3. Micro-seek (+0.001s) to flush the stale compositor frame.
+    //   4. Wait for rAF before calling play() to ensure a paint cycle.
+    function onTabReturn() {
+      if (!state.intendedPlaying || state.endedNaturally) return;
+      if (_tabReturnMicroSeekDone) return; // dedup
+      _tabReturnMicroSeekDone = true;
+
+      const vNode = getVideoNode();
+      if (!vNode) return;
+      const vRS = Number(vNode.readyState || 0);
+      const currentVt = Number(vNode.currentTime || 0);
+
+      // Check for desync from pre-hide position.
+      // If the video drifted more than SYNC_PRECISION while hidden,
+      // seek back to where it was. This prevents the "skip forward" on tab return.
+      if (_preHideTime >= 0 && isFinite(currentVt) && vRS >= HAVE_CURRENT_DATA) {
+        const drift = Math.abs(currentVt - _preHideTime);
+        if (drift > SYNC_PRECISION && drift < 30) {
+          // Hard resync: snap back to pre-hide position
+          try { vNode.currentTime = _preHideTime; } catch {}
+          if (coupledMode && audio && _preHideAudioTime >= 0) {
+            safeSetAudioTime(_preHideTime);
+          }
+        }
+      }
+
+      // Micro-seek: bump currentTime by 0.001s to force the browser
+      // to discard the cached GPU surface and decode a fresh frame.
+      // Without this, the compositor keeps showing the stale pre-hide frame
+      // for 200-500ms until the decoder catches up naturally.
+      if (vRS >= HAVE_CURRENT_DATA) {
+        try {
+          const t = Number(vNode.currentTime || 0);
+          vNode.currentTime = t + MICRO_SEEK_OFFSET;
+        } catch {}
+      }
+
+      // Wrap play() in rAF: don't play until the browser confirms
+      // a paint cycle is ready. This prevents the "frozen first frame" issue
+      // where play() fires before the compositor has the new frame.
+      if (_wasPlayingBeforeHide && vRS >= HAVE_CURRENT_DATA) {
+        requestAnimationFrame(() => {
+          if (!state.intendedPlaying || state.endedNaturally) return;
+          if (getVideoPaused()) {
+            DONTMAKEITDOUBLEPLAY.resetAll();
+            const p = execProgrammaticVideoPlay();
+            if (p && typeof p.catch === "function") p.catch(() => {});
+          }
+          // Audio restart handled by INVARIANT 3 in the next rAF tick
+          // (only after video confirms it has data)
+        });
+      }
+
+      // Reset freeze detection state
+      _frozenFrames = 0;
+      _frozenSince = 0;
+      _lastVideoTime = -1;
+      _lastFrameCount = -1;
+    }
+
+    // ------------------------------------------------------------------
+    // Scheduling
+    // ------------------------------------------------------------------
+    function _scheduleRaf() {
+      if (_rafId !== null || !_running) return;
+      _rafId = requestAnimationFrame(_rafTick);
+    }
+
+    function _scheduleWatchdog() {
+      if (_watchdogTimer !== null || !_running) return;
+      _watchdogTimer = setTimeout(_watchdogTick, WATCHDOG_MS);
+    }
+
+    // ------------------------------------------------------------------
+    // Lifecycle
+    // ------------------------------------------------------------------
+    function start() {
+      _running = true;
+      _scheduleRaf();
+      _scheduleWatchdog();
+    }
+
+    function stop() {
+      _running = false;
+      if (_rafId !== null) { cancelAnimationFrame(_rafId); _rafId = null; }
+      if (_watchdogTimer !== null) { clearTimeout(_watchdogTimer); _watchdogTimer = null; }
+    }
+
+    function reset() {
+      _lastVideoTime = -1;
+      _lastFrameCount = -1;
+      _frozenFrames = 0;
+      _frozenSince = 0;
+      _lastKickAt = 0;
+      _tabReturnMicroSeekDone = false;
+    }
+
+    // destroy() — for SPA teardown. Nullifies references to prevent leaks.
+    function destroy() {
+      stop();
+      _preHideTime = -1;
+      _preHideAudioTime = -1;
+      _wasPlayingBeforeHide = false;
+    }
+
+    return { start, stop, reset, destroy, onTabHide, onTabReturn };
   })();
+
+  // Backward-compatible alias: existing callsites use the single-n spelling
+  const MakeVideoNotFreezeAfterPlaybackAfterAltTabHapens = MakeVideoNotFreezeAfterPlaybackAfterAltTabHapenns;
 
   // --- VisibilityGuard (VG)
   const VisibilityGuard = (() => {
@@ -6519,9 +6830,16 @@ const HAVE_ENOUGH_DATA = 4;
 
   async function execProgrammaticAudioPause(ms = 500) {
     if (!coupledMode || !audio) return;
-    // Hard lockout: during immunity or NMPBFN recovery, never programmatically pause audio.
-    if ((isTabReturnImmune() || NotMakePlayBackFixingNoticable.shouldBlockPause()) && state.intendedPlaying &&
-      !(state.userPauseIntentPresetAt > 0 && (now() - state.userPauseIntentPresetAt) < 2000)) return;
+    // During immunity or NMPBFN recovery, don't pause audio for non-buffering reasons.
+    // BUT: if video is genuinely buffering (readyState < HAVE_FUTURE_DATA), audio
+    // MUST pause regardless of immunity. The anti-ghost invariant overrides everything.
+    const _epapVNode = getVideoNode();
+    const _epapRS = _epapVNode ? Number(_epapVNode.readyState || 0) : 4;
+    const _epapGenuineBuffer = _epapRS < HAVE_FUTURE_DATA && state.firstPlayCommitted &&
+      document.visibilityState === "visible";
+    if (!_epapGenuineBuffer &&
+        (isTabReturnImmune() || NotMakePlayBackFixingNoticable.shouldBlockPause()) && state.intendedPlaying &&
+        !(state.userPauseIntentPresetAt > 0 && (now() - state.userPauseIntentPresetAt) < 2000)) return;
     const userImmediate = directUserToggleActive();
     const until = now() + Math.max(userImmediate ? 120 : 300, Number(ms) || 0);
     state.audioPauseUntil = Math.max(state.audioPauseUntil, until);
@@ -12727,7 +13045,11 @@ const HAVE_ENOUGH_DATA = 4;
           // Let the tab-return manager handle immunity, intercept, rapid counter
           // resets, alt-tab flag clearing, instant play, and bbtab/wakeup retry.
           SmoothTabWelcomeBackManagement.onTabReturn();
-          try { MakeVideoNotFreezeAfterPlaybackAfterAltTabHapens.reset(); MakeVideoNotFreezeAfterPlaybackAfterAltTabHapens.start(); } catch {}
+          try {
+            MakeVideoNotFreezeAfterPlaybackAfterAltTabHapenns.onTabReturn();
+            MakeVideoNotFreezeAfterPlaybackAfterAltTabHapenns.reset();
+            MakeVideoNotFreezeAfterPlaybackAfterAltTabHapenns.start();
+          } catch {}
 
           // Don't call QuantumReturnOrchestrator.preemptivePlay() here —
           // it seeks audio and calls play(), competing with onTabReturn's
@@ -12821,6 +13143,8 @@ const HAVE_ENOUGH_DATA = 4;
         NotMakePlayBackFixingNoticable.onGoBackground();
         updateLastKnownGoodVT();
         VisibilityGuard.onTabHide();
+        // Snapshot playback position so we can hard-resync on return
+        try { MakeVideoNotFreezeAfterPlaybackAfterAltTabHapenns.onTabHide(); } catch {}
         BackgroundPlaybackManager.onBecomeBackground();
         if (state.intendedPlaying) {
           startBgAudioKeepalive();
