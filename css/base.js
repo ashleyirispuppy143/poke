@@ -29,18 +29,6 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
 //////////////// THE PLAYER, START ////////////////////////
 // This runs in a try-catch because elements might not exist yet...which is sillah am sillah tooo waowawawa............
  
-// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
-// before DOMContentLoaded. Ensures both video and audio start at 00:00
-// even if the browser pre-buffers to a non-zero keyframe position.
-// This runs in a try-catch because elements might not exist yet.
-// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
-// before DOMContentLoaded. Ensures both video and audio start at 00:00
-// even if the browser pre-buffers to a non-zero keyframe position.
-// This runs in a try-catch because elements might not exist yet.
-// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
-// before DOMContentLoaded. Ensures both video and audio start at 00:00
-// even if the browser pre-buffers to a non-zero keyframe position.
-// This runs in a try-catch because elements might not exist yet.
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -673,6 +661,7 @@ document.addEventListener("DOMContentLoaded", () => {
     seekBufferResumeTimer: null,
     _allowAudioTimeWrite: false,
     _isMicroSeek: false,
+    _lastSyncBackstopAt: 0,
     _seekPreVolume: null,
     _seekPostTimers: [],
     // MakeSureUnintentionalLoopDoesntEverHappenAtALLManager state
@@ -2200,26 +2189,19 @@ document.addEventListener("DOMContentLoaded", () => {
           if (!_frozenSince) _frozenSince = now();
 
           if (_frozenFrames >= FROZEN_FRAME_THRESHOLD && (now() - _lastKickAt) > STALL_KICK_COOLDOWN_MS) {
-            // Renderer is confirmed stuck. Execute Double-Nudge.
             _lastKickAt = now();
             _frozenFrames = 0;
             _frozenSince = 0;
 
-            // Step 1: Micro-seek to flush stale GPU frame.
-            // Flag it so seeking/seeked handlers skip their heavy machinery.
-            state._isMicroSeek = true;
-            try { vNode.currentTime = vt + MICRO_SEEK_OFFSET; } catch {}
-            setTimeout(() => { state._isMicroSeek = false; }, 150);
-
-            // Step 2: Ensure play() fires after the compositor accepts the new frame
-            DONTMAKEITDOUBLEPLAY.resetAll();
-            requestAnimationFrame(() => {
-              if (!state.intendedPlaying || state.endedNaturally) return;
-              if (getVideoPaused()) {
-                const p = execProgrammaticVideoPlay();
-                if (p && typeof p.catch === "function") p.catch(() => {});
-              }
-            });
+            // Just re-call play() — no micro-seek during normal playback.
+            // Micro-seeks trigger seeking/seeked cascades and cause visible
+            // glitches. The micro-seek is only used on tab return (in onTabReturn)
+            // where a stale GPU surface genuinely needs flushing.
+            if (getVideoPaused()) {
+              DONTMAKEITDOUBLEPLAY.resetAll();
+              const p = execProgrammaticVideoPlay();
+              if (p && typeof p.catch === "function") p.catch(() => {});
+            }
           }
         } else {
           _frozenFrames = 0;
@@ -6880,14 +6862,14 @@ const HAVE_ENOUGH_DATA = 4;
       );
     if (shouldHoldAudioForForegroundStall({ allowRecovery: _forceBufferBypass })) return false;
 
-    // Hard block: NEVER start audio in visible foreground when video doesn't have
-    // enough data to play (readyState < HAVE_FUTURE_DATA). This check is NOT
-    // bypassable by _forceBufferBypass, force:true, grace periods, or ANY flag.
-    // readyState is the browser's hardware signal — if it says data is insufficient,
-    // audio must wait. This prevents audio-during-buffering regardless of which
-    // recovery system cleared the stall flags.
+    // Hard block: Don't start audio in visible foreground when video doesn't have
+    // enough data to play (readyState < HAVE_FUTURE_DATA). Exception: during
+    // seek resume — readyState temporarily drops after seek and recovers quickly.
+    // Without this exception, audio restarts very late after seeking.
+    const _epInSeekResume = state.seekResumeInFlight ||
+      (state.seekKickAudioAllowedUntil > 0 && now() < state.seekKickAudioAllowedUntil);
     if (_epVisibleForeground && state.firstPlayCommitted &&
-        _epRS < HAVE_FUTURE_DATA) {
+        _epRS < HAVE_FUTURE_DATA && !_epInSeekResume) {
       return false;
     }
     // skip if video is genuinely buffering (readyState < 3)
@@ -9170,10 +9152,20 @@ const HAVE_ENOUGH_DATA = 4;
                 if (isConfirmedForegroundVideoStall(400) && !state.videoStallAudioPaused) {
                   pauseAudioForConfirmedVideoStall();
                 }
-              // NOTE: Removed flag-independent backstop that re-armed videoWaiting
-              // when readyState < HAVE_FUTURE_DATA. That caused rapid oscillation
-              // by fighting with systems that clear the flag. The "waiting" event
-              // handler is the authoritative source for videoWaiting.
+              // Throttled backstop: if "waiting" event didn't fire but video is
+              // clearly starved, set videoWaiting and pause audio. Only acts once
+              // per 3s to prevent the oscillation the old per-tick backstop caused.
+              } else if (!state.videoWaiting && _syncRS < HAVE_FUTURE_DATA &&
+                         coupledMode && !aPaused && !_syncInGrace &&
+                         document.visibilityState !== "hidden" && state.firstPlayCommitted &&
+                         !state.seekResumeInFlight && !state.seeking && !state.seekBuffering &&
+                         (!state._lastSyncBackstopAt || (now() - state._lastSyncBackstopAt) > 3000)) {
+                state._lastSyncBackstopAt = now();
+                state.videoWaiting = true;
+                state.videoStallSince = state.videoStallSince || now();
+                if (!state.videoStallAudioPaused) {
+                  pauseAudioForConfirmedVideoStall(1500);
+                }
               } else if (state.videoWaiting && _syncRS >= HAVE_FUTURE_DATA) {
                 // stale flag, clear it
                 state.videoWaiting = false;
