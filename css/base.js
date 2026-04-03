@@ -29,6 +29,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
 //////////////// THE PLAYER, START ////////////////////////
 // This runs in a try-catch because elements might not exist yet...which is sillah am sillah tooo waowawawa............
  
+// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
+// before DOMContentLoaded. Ensures both video and audio start at 00:00
+// even if the browser pre-buffers to a non-zero keyframe position.
+// This runs in a try-catch because elements might not exist yet.
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -2014,7 +2018,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (_isUserPauseEvident()) { _schedule(); return; }
       // NOTE: we intentionally DO run during startup (!firstPlayCommitted) and
       // during tab return immunity — paused media needs restarting in both cases.
-      if (inBgReturnGrace()) { _schedule(); return; }
+      // DO NOT back off during bgReturnGrace — video can be stuck paused after
+      // tab return and needs restarting. MVNFAPAAT handles the buffering checks.
 
       const vPaused = getVideoPaused();
       const aPaused = coupledMode && audio ? !!audio.paused : false;
@@ -2048,6 +2053,97 @@ document.addEventListener("DOMContentLoaded", () => {
     function stop() { if (_timer) { clearTimeout(_timer); _timer = null; } }
 
     return { start, stop };
+  })();
+
+  // --- MakeVideoNotFreezeAfterPlaybackAfterAltTabHapens (MVNFAPAAT)
+  // Continuous enforcer that monitors actual hardware state and enforces:
+  // 1. If video readyState < HAVE_FUTURE_DATA in visible foreground → audio MUST be paused
+  // 2. If video is frozen/paused while intendedPlaying → kick video play
+  // 3. If audio is paused while video plays fine → kick audio play
+  // This runs every 250ms and does NOT respect grace periods or recovery bypasses.
+  // It is the FINAL AUTHORITY on playback state consistency.
+  const MakeVideoNotFreezeAfterPlaybackAfterAltTabHapens = (() => {
+    let _timer = null;
+    const TICK_MS = 250;
+    let _lastVideoTime = -1;
+    let _frozenSince = 0;
+
+    function _tick() {
+      _timer = null;
+      if (!state.intendedPlaying || state.endedNaturally || state.restarting) { _schedule(); return; }
+      if (state.seeking || state.seekBuffering) { _schedule(); return; }
+      if (document.visibilityState !== "visible" || !isWindowFocused()) { _schedule(); return; }
+      if (userPauseLockActive() || mediaSessionForcedPauseActive()) { _schedule(); return; }
+      if (!state.firstPlayCommitted) { _schedule(); return; }
+
+      const vNode = getVideoNode();
+      if (!vNode) { _schedule(); return; }
+      const vRS = Number(vNode.readyState || 0);
+      const vPaused = getVideoPaused();
+      const aPaused = coupledMode && audio ? !!audio.paused : false;
+      const vt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
+
+      // --- INVARIANT 1: Audio must NEVER play while video is buffering ---
+      // If video readyState < HAVE_FUTURE_DATA AND audio is playing → pause audio
+      if (vRS < HAVE_FUTURE_DATA && !aPaused && coupledMode && audio) {
+        // Video doesn't have enough data. Audio must stop.
+        if (!state.videoWaiting) {
+          state.videoWaiting = true;
+          state.videoStallSince = state.videoStallSince || now();
+        }
+        if (!state.videoStallAudioPaused) {
+          pauseAudioForConfirmedVideoStall(500);
+        }
+        _schedule();
+        return;
+      }
+
+      // --- INVARIANT 2: Video must not stay frozen while we want to play ---
+      // Detect frozen video: paused or currentTime not advancing
+      if (!vPaused && Math.abs(vt - _lastVideoTime) < 0.001 && _lastVideoTime >= 0) {
+        if (!_frozenSince) _frozenSince = now();
+        // Video appears frozen for > 600ms and has data → kick it
+        if ((now() - _frozenSince) > 600 && vRS >= HAVE_FUTURE_DATA) {
+          DONTMAKEITDOUBLEPLAY.resetAll();
+          execProgrammaticVideoPlay();
+          _frozenSince = 0;
+        }
+      } else {
+        _frozenSince = 0;
+      }
+      _lastVideoTime = vt;
+
+      // Video is paused but we want to play and video has data → kick video
+      if (vPaused && vRS >= HAVE_FUTURE_DATA && !state.strictBufferHold) {
+        state.isProgrammaticVideoPause = false;
+        DONTMAKEITDOUBLEPLAY.resetAll();
+        execProgrammaticVideoPlay();
+      }
+
+      // --- INVARIANT 3: Audio must play when video plays fine ---
+      // Video playing with data, audio paused, no stall → kick audio
+      if (!vPaused && aPaused && vRS >= HAVE_FUTURE_DATA && coupledMode && audio &&
+          !state.videoWaiting && !state.videoStallAudioPaused &&
+          !state.strictBufferHold && now() > state.stallAudioResumeHoldUntil) {
+        safeSetAudioTime(vt);
+        try { audio.volume = targetVolFromVideo(); } catch {}
+        state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 400);
+        execProgrammaticAudioPlay({ squelchMs: 120, force: true, minGapMs: 0 }).catch(() => {});
+      }
+
+      _schedule();
+    }
+
+    function _schedule() {
+      if (_timer) return;
+      _timer = setTimeout(_tick, TICK_MS);
+    }
+
+    function start() { _schedule(); }
+    function stop() { if (_timer) { clearTimeout(_timer); _timer = null; } }
+    function reset() { _lastVideoTime = -1; _frozenSince = 0; }
+
+    return { start, stop, reset };
   })();
 
   // --- VisibilityGuard (VG)
@@ -4779,7 +4875,9 @@ const HAVE_ENOUGH_DATA = 4;
     if (!state.firstPlayCommitted) return false;
     if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
     if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
-    if (isTabReturnImmune() || NotMakePlayBackFixingNoticable.isActive()) return false;
+    // DO NOT bypass for tab-return immunity or NMPBFN recovery.
+    // If the browser fires "waiting" in visible foreground, video is genuinely
+    // out of data regardless of what recovery system is active. Audio must pause.
     return true;
   }
   function armForegroundBufferAudioHold(ms = MIN_STALL_AUDIO_RESUME_MS) {
@@ -7125,7 +7223,10 @@ const HAVE_ENOUGH_DATA = 4;
       state.stallAudioResumeHoldUntil = 0;
       setFastSync(1600);
       cleanup();
-      if (!inMediaTxnWindow()) playTogether().catch(() => {});
+      // Skip the blockOnBuffer gate — we JUST confirmed media is ready.
+      // Without this, playTogether re-checks bothPlayableAt() which can
+      // re-arm strictBufferHold, creating an infinite buffer-hold loop.
+      if (!inMediaTxnWindow()) playTogether({ skipBufferGate: true }).catch(() => {});
       else scheduleSync(200);
     };
       const onReady = () => { requestAnimationFrame(tryKick); };
@@ -7165,7 +7266,7 @@ const HAVE_ENOUGH_DATA = 4;
               state.videoStallAudioPaused = false;
               state.stallAudioPausedSince = 0;
               state.stallAudioResumeHoldUntil = 0;
-              playTogether().catch(() => {});
+              playTogether({ skipBufferGate: true }).catch(() => {});
             }
           }
         }, Math.max(2000, Number(timeoutMs) || 0));
@@ -7328,7 +7429,8 @@ const HAVE_ENOUGH_DATA = 4;
 
   function ensureStartupZeroed() { forceZeroBeforeFirstPlay(); }
 
-  async function playTogether() {
+  async function playTogether(opts = {}) {
+    const _skipBufferGate = !!opts.skipBufferGate;
     // Error overlay active — all playback is dead
     if (_errorOverlayShown) return;
     // Never restart after ended. onUserPlay() (called from capture-phase
@@ -7406,6 +7508,7 @@ const HAVE_ENOUGH_DATA = 4;
       const isStartupKick = state.startupPhase || !state.firstPlayCommitted;
       const isRecentUserPlay = userWantsPlayNow(2400) || userSeekIntentActive();
       const blockOnBuffer =
+      !_skipBufferGate &&
       !isStartupKick &&
       !isRecentUserPlay &&
       !bypassBufferForBgReturn &&
@@ -8494,6 +8597,10 @@ const HAVE_ENOUGH_DATA = 4;
     if (!state.intendedPlaying || state.seeking || state.seekBuffering || state.syncing) return false;
     if (!state.audioEverStarted && state.startupPhase) return false;
     if (startupSettleActive()) return false;
+    // Don't arm buffer hold during tab return — video just needs a moment
+    // to wake up. Pausing here causes the visible freeze on tab return.
+    // MVNFAPAAT handles the case where video genuinely can't play.
+    if (inBgReturnGrace() || isTabReturnImmune()) return false;
     // never enter buffer hold within 5s of first play commit — page-load
     // resource contention causes transient low readyState that resolves itself.
     // pausing during this window creates the visible play-pause-play stutter.
@@ -10950,6 +11057,7 @@ const HAVE_ENOUGH_DATA = 4;
       _bufMonStallFrames = 0;
       _bufMonLastVT = -1;
       try { MakeSureAudioOrVideoDoesntPauseUnlessUserReallyWantsTo.start(); } catch {}
+      try { MakeVideoNotFreezeAfterPlaybackAfterAltTabHapens.start(); } catch {}
 
       if (state._stallAudioPauseTimer) {
         clearTimeout(state._stallAudioPauseTimer);
@@ -10990,6 +11098,15 @@ const HAVE_ENOUGH_DATA = 4;
           state.startupKickDone = true;
           state.startupPhase = false;
           clearStartupAutoplayRetryTimer();
+        }
+        // Video is playing during tab return — also restart audio if coupled.
+        // Without this, the early return below skips coupled-mode audio restart,
+        // leaving audio paused while video plays (or video frozen waiting for audio).
+        if (coupledMode && audio && audio.paused && state.intendedPlaying) {
+          const _trVt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
+          safeSetAudioTime(_trVt);
+          state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 500);
+          execProgrammaticAudioPlay({ squelchMs: 200, force: true, minGapMs: 0 }).catch(() => {});
         }
         return;
       }
@@ -11320,6 +11437,7 @@ const HAVE_ENOUGH_DATA = 4;
       state.audioStallSince = 0;
       try { MakeSureAudioIsNotCuttingOrWeird.onPlay(); } catch {}
       try { MakeSureAudioOrVideoDoesntPauseUnlessUserReallyWantsTo.start(); } catch {}
+      try { MakeVideoNotFreezeAfterPlaybackAfterAltTabHapens.start(); } catch {}
       if (!state.firstPlayCommitted && !state.startupKickInFlight) {
         state.firstPlayCommitted = true;
         state.startupKickDone = true;
@@ -12609,6 +12727,7 @@ const HAVE_ENOUGH_DATA = 4;
           // Let the tab-return manager handle immunity, intercept, rapid counter
           // resets, alt-tab flag clearing, instant play, and bbtab/wakeup retry.
           SmoothTabWelcomeBackManagement.onTabReturn();
+          try { MakeVideoNotFreezeAfterPlaybackAfterAltTabHapens.reset(); MakeVideoNotFreezeAfterPlaybackAfterAltTabHapens.start(); } catch {}
 
           // Don't call QuantumReturnOrchestrator.preemptivePlay() here —
           // it seeks audio and calls play(), competing with onTabReturn's
