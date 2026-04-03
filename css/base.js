@@ -1361,14 +1361,19 @@ document.addEventListener("DOMContentLoaded", () => {
       state.altTabTransitionUntil = 0;
 
       clearAudioPauseLocks();
-      // clean slate for recovery — stall flags from bg are stale
-      state.videoWaiting = false;
-      state.videoStallSince = 0;
+      // Only clear stall flags if video has data — otherwise video is genuinely
+      // buffering and clearing these would let audio start during the stall.
+      const _nmpbfnVNode = getVideoNode();
+      const _nmpbfnRS = _nmpbfnVNode ? Number(_nmpbfnVNode.readyState || 0) : 0;
+      if (_nmpbfnRS >= HAVE_FUTURE_DATA) {
+        state.videoWaiting = false;
+        state.videoStallSince = 0;
+      }
       state.isProgrammaticVideoPause = false;
       state.audioPlayUntil = 0;
       state.audioPlayInFlight = null;
-      // Clear buffer hold — it blocks play() and can be stale from bg
-      clearBufferHold();
+      // Clear buffer hold only if video has data
+      if (_nmpbfnRS >= HAVE_FUTURE_DATA) clearBufferHold();
 
       // --- THE play. Exactly one per element. ---
       _doSingleCleanPlay(myGen);
@@ -2027,7 +2032,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const vt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
         safeSetAudioTime(vt);
         try { audio.volume = targetVolFromVideo(); } catch {}
-        state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 800);
+        state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 400);
         execProgrammaticAudioPlay({ squelchMs: 200, force: true, minGapMs: 0 }).catch(() => {});
       }
 
@@ -4644,12 +4649,18 @@ const HAVE_ENOUGH_DATA = 4;
 
       // Clear stale foreground hold state before retrying. A real visible user
       // play should not wait behind old buffer/return bookkeeping.
-      clearBufferHold();
-      state.videoWaiting = false;
-      state.videoStallSince = 0;
-      state.videoStallAudioPaused = false;
-      state.stallAudioPausedSince = 0;
-      state.stallAudioResumeHoldUntil = 0;
+      // But only clear stall flags if video has data — if readyState is low,
+      // video is genuinely buffering and audio must not start.
+      const _sfuprVNode = getVideoNode();
+      const _sfuprRS = _sfuprVNode ? Number(_sfuprVNode.readyState || 0) : 0;
+      if (_sfuprRS >= HAVE_FUTURE_DATA) {
+        clearBufferHold();
+        state.videoWaiting = false;
+        state.videoStallSince = 0;
+        state.videoStallAudioPaused = false;
+        state.stallAudioPausedSince = 0;
+        state.stallAudioResumeHoldUntil = 0;
+      }
       VisibilityGuard.onPlayCalled();
       try { execProgrammaticVideoPlay({ force: true, minGapMs: 0 }); } catch {}
       setFastSync(1400);
@@ -4690,10 +4701,16 @@ const HAVE_ENOUGH_DATA = 4;
     if (!state.firstPlayCommitted || !state.intendedPlaying || state.restarting) return false;
     if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
     if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
-    if (isTabReturnImmune() || NotMakePlayBackFixingNoticable.isActive()) return false;
 
     const vNode = getVideoNode();
     const vRS = vNode ? Number(vNode.readyState || 0) : 4;
+    // If readyState confirms video genuinely lacks data, report buffering even
+    // during tab return or NMPBFN recovery. readyState is a hardware signal.
+    // Only bypass for transient states where readyState is already sufficient.
+    if (isTabReturnImmune() || NotMakePlayBackFixingNoticable.isActive()) {
+      if (vRS < HAVE_FUTURE_DATA && state.videoWaiting) return true;
+      return false;
+    }
     const vPaused = getVideoPaused();
     const vtNow = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
     const lastVt = Number(state.lastVT) || 0;
@@ -5192,11 +5209,16 @@ const HAVE_ENOUGH_DATA = 4;
     state.resumeOnVisible = false;
     state.bgHiddenWasPlaying = false;
     state.tabReturnImmuneUntil = Math.max(state.tabReturnImmuneUntil, now() + 2200);
-    state.videoWaiting = false;
-    state.videoStallAudioPaused = false;
-    state.stallAudioPausedSince = 0;
-    state.stallAudioResumeHoldUntil = 0;
-    state.videoStallSince = 0;
+    // Only clear stall flags if video has data — protect against audio-during-buffering
+    const _ffrVNode = getVideoNode();
+    const _ffrRS = _ffrVNode ? Number(_ffrVNode.readyState || 0) : 0;
+    if (_ffrRS >= HAVE_FUTURE_DATA) {
+      state.videoWaiting = false;
+      state.videoStallAudioPaused = false;
+      state.stallAudioPausedSince = 0;
+      state.stallAudioResumeHoldUntil = 0;
+      state.videoStallSince = 0;
+    }
     state.audioPlayInFlight = null;
     state.audioPlayUntil = 0;
     state.audioPauseUntil = 0;
@@ -5236,12 +5258,17 @@ const HAVE_ENOUGH_DATA = 4;
     if (!playbackHealthyForReturn()) return false;
     state.resumeOnVisible = false;
     state.bgHiddenWasPlaying = false;
-    state.videoWaiting = false;
-    state.videoStallAudioPaused = false;
-    state.stallAudioPausedSince = 0;
-    state.stallAudioResumeHoldUntil = 0;
-    state.videoStallSince = 0;
-    clearBufferHold();
+    // Only clear stall flags if video has enough data for smooth playback
+    const _ffrrVNode = getVideoNode();
+    const _ffrrRS = _ffrrVNode ? Number(_ffrrVNode.readyState || 0) : 0;
+    if (_ffrrRS >= HAVE_FUTURE_DATA) {
+      state.videoWaiting = false;
+      state.videoStallAudioPaused = false;
+      state.stallAudioPausedSince = 0;
+      state.stallAudioResumeHoldUntil = 0;
+      state.videoStallSince = 0;
+      clearBufferHold();
+    }
     clearAudioPauseLocks();
     clearHiddenPlayPending();
     clearTrackedWakeupRetryTimers();
@@ -6465,6 +6492,16 @@ const HAVE_ENOUGH_DATA = 4;
       );
     if (shouldHoldAudioForForegroundStall({ allowRecovery: _forceBufferBypass })) return false;
 
+    // Hard block: NEVER start audio in visible foreground when video doesn't have
+    // enough data to play (readyState < HAVE_FUTURE_DATA). This check is NOT
+    // bypassable by _forceBufferBypass, force:true, grace periods, or ANY flag.
+    // readyState is the browser's hardware signal — if it says data is insufficient,
+    // audio must wait. This prevents audio-during-buffering regardless of which
+    // recovery system cleared the stall flags.
+    if (_epVisibleForeground && state.firstPlayCommitted &&
+        _epRS < HAVE_FUTURE_DATA) {
+      return false;
+    }
     // skip if video is genuinely buffering (readyState < 3)
     if ((state.videoWaiting || state.videoStallAudioPaused ||
          (state.strictBufferHold && state.firstPlayCommitted) ||
@@ -6892,17 +6929,8 @@ const HAVE_ENOUGH_DATA = 4;
       if (mySession !== state.playSessionId || !state.intendedPlaying) return;
 
       if (!aPausedNow && !vPausedNow && isFinite(atNow) && isFinite(vtNow)) {
-        const drift = Math.abs(vtNow - atNow);
-        if (drift < 2.0) {
-          state.bgHiddenWasPlaying = false;
-          state.resumeOnVisible = false;
-          setFastSync(1000);
-          scheduleSync(0);
-          return;
-        }
-        // Both playing but drift > 2s (audio ahead of video from background playback).
-        bgSilentSyncVideoTime(atNow);
-        if (mySession !== state.playSessionId || !state.intendedPlaying) return;
+        // Both playing — just let the sync loop handle drift. No seeks needed.
+        // Seeking here causes the visible "skip forward" on tab return.
         state.bgHiddenWasPlaying = false;
         state.resumeOnVisible = false;
         setFastSync(1000);
@@ -6913,22 +6941,12 @@ const HAVE_ENOUGH_DATA = 4;
       if (!aPausedNow && isFinite(atNow)) {
         if (mySession !== state.playSessionId || !state.intendedPlaying) return;
         const inBg = isHiddenBackground();
-        if (isFinite(vtNow) && Math.abs(vtNow - atNow) > 0.12) {
-          if (inBg) {
-            // Background: silently update video time to keep progress bar in sync.
-            // Full seek machinery MUST NOT fire in background (causes watchdog timeouts,
-            // state.seeking stuck, etc.) — bgSilentSyncVideoTime bypasses all of that.
-            bgSilentSyncVideoTime(atNow);
-          } else {
-            // For small drift (≤ BIG_DRIFT = 1.5s): just restart video from its
-            if (isFinite(vtNow) && isFinite(atNow) && Math.abs(vtNow - atNow) > BIG_DRIFT) {
-              bgSilentSyncVideoTime(atNow);
-              // Brief settle before restarting video
-              await new Promise(r => setTimeout(r, 25));
-              if (mySession !== state.playSessionId || !state.intendedPlaying) return;
-            }
-          }
+        if (inBg && isFinite(vtNow) && Math.abs(vtNow - atNow) > 0.12) {
+          // Background only: silently update video time to keep progress bar in sync.
+          bgSilentSyncVideoTime(atNow);
         }
+        // Foreground: do NOT seek video to audio position — it causes visible skip.
+        // Just restart video from its current position, sync loop handles drift.
         if (!inBg && vPausedNow && !state.isProgrammaticVideoPlay) {
           execProgrammaticVideoPlay();
         }
@@ -6954,22 +6972,14 @@ const HAVE_ENOUGH_DATA = 4;
       state.bgHiddenWasPlaying = false;
       state.resumeOnVisible = false;
 
-      // Sync both tracks to best position before resuming
-      const allowVisibleReturnSeek = shouldAllowVisibleReturnSyncSeek();
-      if (bestPos > 0.1) {
-        if (isFinite(vtNow) && Math.abs(vtNow - bestPos) > 1.5) {
-          if (allowVisibleReturnSeek || document.visibilityState !== "visible" || !isWindowFocused()) {
-            safeSetVideoTime(bestPos, { force: true });
-          }
+      // Resume from current positions — do NOT seek to "best position".
+      // Seeking video forward causes the visible "skip" on tab return, and
+      // the await delays cause the freeze. Let sync loop handle drift instead.
+      // Only seek audio if it's very far off (>3s), and never seek video here.
+      if (bestPos > 0.1 && coupledMode && isFinite(atNow) && Math.abs(atNow - bestPos) > 3.0) {
+        if (audio.paused) {
+          safeSetAudioTime(bestPos);
         }
-        if (coupledMode && isFinite(atNow) && Math.abs(atNow - bestPos) > 0.8) {
-          if (audio.paused || allowVisibleReturnSeek || document.visibilityState !== "visible" || !isWindowFocused()) {
-            safeSetAudioTime(bestPos);
-          }
-        }
-        // Brief settle after seek
-        await new Promise(r => setTimeout(r, 40));
-        if (mySession !== state.playSessionId || !state.intendedPlaying) return;
       }
 
       if (!state.firstPlayCommitted && wantsStartupAutoplay()) {
@@ -6983,10 +6993,9 @@ const HAVE_ENOUGH_DATA = 4;
         return;
       }
       BackgroundPlaybackManager.trackBgResumeAttempt();
-      await playTogether().catch(() => {});
-
-      // Brief settle — let the browser's play promise resolve
-      await new Promise(r => setTimeout(r, 80));
+      // Fire-and-forget — do NOT await. Awaiting playTogether() here blocks
+      // seamlessBgCatchUp, causing the visible freeze on tab return.
+      playTogether().catch(() => {});
       if (mySession !== state.playSessionId || !state.intendedPlaying) return;
 
       // Track success: if both tracks are now playing, reset backoff
@@ -7081,11 +7090,14 @@ const HAVE_ENOUGH_DATA = 4;
       if (mediaSessionForcedPauseActive() || userPauseLockActive()) {
         cleanup(); return;
       }
-      // stall hold active but video has data? clear it, it's stale
+      // stall hold active but video has data? clear it, it's stale.
+      // STRICT check: require readyState >= HAVE_FUTURE_DATA AND videoWaiting cleared.
+      // The old check (videoReadyForAudioResume) was too lenient and cleared flags
+      // while video was still genuinely buffering, letting audio play during stalls.
       if (now() < state.stallAudioResumeHoldUntil) {
         const _arbVNode = getVideoNode();
-        const _arbTime = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
-        if (videoReadyForAudioResume(_arbTime)) {
+        const _arbRS = _arbVNode ? Number(_arbVNode.readyState || 0) : 0;
+        if (!state.videoWaiting && _arbRS >= HAVE_FUTURE_DATA && !getVideoPaused()) {
           state.stallAudioResumeHoldUntil = 0;
           state.videoStallAudioPaused = false;
           state.stallAudioPausedSince = 0;
@@ -7100,9 +7112,10 @@ const HAVE_ENOUGH_DATA = 4;
       const checkTime = Math.max(vtNow, atNow || 0);
       const inBg = document.visibilityState === "hidden" || !isWindowFocused();
       const vNode = getVideoNode();
+      const _arbRS2 = vNode ? Number(vNode.readyState || 0) : 0;
       const ready = inBg
       ? (canPlayAt(vNode, checkTime) && canPlayAt(audio, checkTime))
-      : (videoReadyForAudioResume(checkTime) && bothPlayableAt(checkTime));
+      : (!state.videoWaiting && _arbRS2 >= HAVE_FUTURE_DATA && bothPlayableAt(checkTime));
       if (!ready) return;
       clearBufferHold();
       clearForegroundBufferAudioHold();
@@ -8751,10 +8764,24 @@ const HAVE_ENOUGH_DATA = 4;
               const _syncInGrace = now() < state.audioStartGraceUntil;
               // only kill audio for buffering in foreground — in background, readyState
               // is stale and videoWaiting never clears. killing audio here fights keepalive.
-              if (state.videoWaiting && coupledMode && !aPaused && !NotMakePlayBackFixingNoticable.isActive() &&
+              // NOTE: Do NOT skip this check during NMPBFN recovery — if video is genuinely
+              // buffering (readyState < HAVE_FUTURE_DATA), audio MUST be paused regardless
+              // of what recovery system is active. Audio-during-buffering is never acceptable.
+              if (state.videoWaiting && coupledMode && !aPaused &&
                   _syncRS < HAVE_FUTURE_DATA && !_syncInGrace && document.visibilityState !== "hidden" &&
                   state.firstPlayCommitted /* don't kill audio during page-load buffering */) {
-                if (isConfirmedForegroundVideoStall(800) && !state.videoStallAudioPaused) {
+                if (isConfirmedForegroundVideoStall(400) && !state.videoStallAudioPaused) {
+                  pauseAudioForConfirmedVideoStall();
+                }
+              } else if (!state.videoWaiting && _syncRS < HAVE_FUTURE_DATA &&
+                         coupledMode && !aPaused && !_syncInGrace &&
+                         document.visibilityState !== "hidden" && state.firstPlayCommitted) {
+                // videoWaiting flag was cleared (by tab return, NMPBFN, etc.) but
+                // readyState still confirms video lacks data. Re-arm the flag and
+                // pause audio — this catches flag-clear bypasses.
+                state.videoWaiting = true;
+                state.videoStallSince = state.videoStallSince || now();
+                if (!state.videoStallAudioPaused) {
                   pauseAudioForConfirmedVideoStall();
                 }
               } else if (state.videoWaiting && _syncRS >= HAVE_FUTURE_DATA) {
@@ -12239,15 +12266,22 @@ const HAVE_ENOUGH_DATA = 4;
       }
     };
     const _kickReturnPlayback = (hard = false) => {
-      state.videoWaiting = false;
-      state.videoStallAudioPaused = false;
-      state.stallAudioPausedSince = 0;
-      state.stallAudioResumeHoldUntil = 0;
-      state.videoStallSince = 0;
+      // Only clear stall flags if video actually has data. If readyState is low,
+      // video is genuinely buffering and clearing these flags would let audio
+      // start while video has no data — causing audio-during-buffering.
+      const _krVNode = getVideoNode();
+      const _krRS = _krVNode ? Number(_krVNode.readyState || 0) : 0;
+      if (_krRS >= HAVE_FUTURE_DATA) {
+        state.videoWaiting = false;
+        state.videoStallAudioPaused = false;
+        state.stallAudioPausedSince = 0;
+        state.stallAudioResumeHoldUntil = 0;
+        state.videoStallSince = 0;
+      }
       state.isProgrammaticVideoPause = false;
       _bufMonStallFrames = 0;
       clearAudioPauseLocks();
-      clearBufferHold();
+      if (_krRS >= HAVE_FUTURE_DATA) clearBufferHold();
       VisibilityGuard.onPlayCalled();
       // Reset dedup so our play() calls actually go through.
       // Without this, DONTMAKEITDOUBLEPLAY's storm protection suppresses
@@ -12332,12 +12366,17 @@ const HAVE_ENOUGH_DATA = 4;
       if (state.endedNaturally || MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) return;
       if (!state.intendedPlaying && !state.firstPlayCommitted && wantsStartupAutoplay()) { state.intendedPlaying = true; state.bufferHoldIntendedPlaying = true; }
       if (!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) return;
-      // nuke stall flags — 700ms into tab return they're definitely stale
-      state.videoWaiting = false;
-      state.videoStallAudioPaused = false;
-      state.stallAudioPausedSince = 0;
-      state.stallAudioResumeHoldUntil = 0;
-      state.videoStallSince = 0;
+      // Only clear stall flags if video has data — otherwise they're not stale,
+      // video is genuinely buffering and clearing these would let audio leak through.
+      const _shot420VNode = getVideoNode();
+      const _shot420RS = _shot420VNode ? Number(_shot420VNode.readyState || 0) : 0;
+      if (_shot420RS >= HAVE_FUTURE_DATA) {
+        state.videoWaiting = false;
+        state.videoStallAudioPaused = false;
+        state.stallAudioPausedSince = 0;
+        state.stallAudioResumeHoldUntil = 0;
+        state.videoStallSince = 0;
+      }
       clearAudioPauseLocks();
       if (_isHealthyReturnVideoPlayback()) {
         BringBackToTabManager.onVideoConfirmedPlaying();
@@ -12548,13 +12587,19 @@ const HAVE_ENOUGH_DATA = 4;
         setTimeout(() => {
           if (!isTabReturnImmune()) stopBgAudioKeepalive();
         }, 3500);
-          // wipe stall flags from background FIRST — they're stale and block
-          // every audio play attempt if left alive.
-          state.videoWaiting = false;
-          state.videoStallAudioPaused = false;
-          state.stallAudioPausedSince = 0;
-          state.stallAudioResumeHoldUntil = 0;
-          state.videoStallSince = 0;
+          // Only clear stall flags if video has data. In background, readyState
+          // is stale, but on tab return the browser updates it quickly. If video
+          // genuinely doesn't have data, these flags are NOT stale — keeping them
+          // prevents audio from starting while video buffers.
+          const _vcVNode = getVideoNode();
+          const _vcRS = _vcVNode ? Number(_vcVNode.readyState || 0) : 0;
+          if (_vcRS >= HAVE_FUTURE_DATA) {
+            state.videoWaiting = false;
+            state.videoStallAudioPaused = false;
+            state.stallAudioPausedSince = 0;
+            state.stallAudioResumeHoldUntil = 0;
+            state.videoStallSince = 0;
+          }
 
           // Let the consolidated tab-return manager perform the resume kick.
           // Duplicating native play() calls here and in focus/onTabReturn caused
@@ -12972,7 +13017,7 @@ const HAVE_ENOUGH_DATA = 4;
           _enforceZeroDisabled = true;
           try { videoEl.removeEventListener("timeupdate", enforceStartAtZero); } catch {}
         }
-      }, { once: true, passive: true });
+      }, { passive: true });
     } catch {}
   }
 
