@@ -29,10 +29,6 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
 //////////////// THE PLAYER, START ////////////////////////
 // This runs in a try-catch because elements might not exist yet...which is sillah am sillah tooo waowawawa............
  
-// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
-// before DOMContentLoaded. Ensures both video and audio start at 00:00
-// even if the browser pre-buffers to a non-zero keyframe position.
-// This runs in a try-catch because elements might not exist yet.
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -738,8 +734,12 @@ document.addEventListener("DOMContentLoaded", () => {
       // During tab return / NMPBFN recovery, still block audio if video is
       // genuinely starved (readyState < HAVE_FUTURE_DATA with videoWaiting).
       // Without this, audio leaks through immunity while video buffers.
+      // Exception: during seek kick window, video temporarily loses readyState
+      // but audio should start anyway (video is recovering from the seek).
+      const _gateInSeekKick = state.isProgrammaticAudioPlay && now() < state.seekKickAudioAllowedUntil;
       const _gateGenuineStarve = _gateVisibleForeground && state.firstPlayCommitted &&
-        _gateRS < HAVE_FUTURE_DATA && (state.videoWaiting || state.videoStallAudioPaused);
+        _gateRS < HAVE_FUTURE_DATA && (state.videoWaiting || state.videoStallAudioPaused) &&
+        !_gateInSeekKick;
       if ((isTabReturnImmune() || NotMakePlayBackFixingNoticable.isActive() ||
           _audioGraceBypass) && !_gateGenuineStarve) {
         return _origAudioPlay();
@@ -1466,6 +1466,19 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         _bufMonStallFrames = 0;
+
+        // Clear stale stall flags from pre-background period. These flags
+        // don't represent current state — the video just woke up and hasn't
+        // had a chance to buffer yet. Keeping them causes the "playing"
+        // handler to immediately re-pause audio → buffer hold → 1-3s freeze.
+        state.videoWaiting = false;
+        state.videoStallSince = 0;
+        state.videoStallAudioPaused = false;
+        state.stallAudioPausedSince = 0;
+        state.stallAudioResumeHoldUntil = 0;
+        state.strictBufferHold = false;
+        state.strictBufferReason = "";
+        state.bufferHoldSince = 0;
 
         // Play video — use native play() to bypass all wrappers for speed.
         // The gate/dedup exist to prevent double-play during normal operation,
@@ -4943,7 +4956,19 @@ const HAVE_ENOUGH_DATA = 4;
 
     const drift = Math.abs(at - vt);
     const needsResume = resumeIfPaused && audio.paused;
-    if (!needsResume && drift <= Math.max(0.8, Number(threshold) || 0)) return false;
+    // Always check drift — even when audio needs resume. The old code skipped
+    // this when needsResume was true, hard-seeking audio on every play/pause
+    // toggle even for 0.01s drift (the audible "skip" on play press).
+    // If drift is tiny, just resume audio without seeking.
+    if (drift <= (needsResume ? 0.3 : Math.max(0.8, Number(threshold) || 0))) {
+      if (needsResume && state.intendedPlaying && !shouldBlockNewAudioStart()) {
+        execProgrammaticAudioPlay({ squelchMs: 120, force: true, minGapMs: 0 }).catch(() => {});
+        setFastSync(1000);
+        scheduleSync(0);
+        return true;
+      }
+      return false;
+    }
 
     const wouldRestart =
       vt < 0.5 &&
@@ -4987,12 +5012,18 @@ const HAVE_ENOUGH_DATA = 4;
   function armTransitionDriftSettleForPlay(playSession = state.playSessionId) {
     if (!coupledMode || !audio) return;
     clearTransitionDriftTimers();
+    // Use a high threshold (1.5s) for play/pause transitions. After a quick
+    // pause→play cycle, video and audio positions are nearly identical — the
+    // old 0.8s threshold triggered hard audio seeks on tiny drift from decoder
+    // jitter, causing an audible "skip" on every play press. 1.5s ensures only
+    // genuinely desynchronized playback gets corrected. The rate-sync system
+    // handles sub-1.5s drift smoothly without any audible disruption.
     [140, 320, 620, 980].forEach(delay => {
       const tid = trackTransitionDriftTimer(setTimeout(() => {
         untrackTransitionDriftTimer(tid);
         if (state.playSessionId !== playSession) return;
         if (!state.intendedPlaying || state.restarting || state.seeking || state.seekBuffering) return;
-        attemptTransitionDriftRepair({ threshold: 0.8, resumeIfPaused: true, allowSeekRecovery: false });
+        attemptTransitionDriftRepair({ threshold: 1.5, resumeIfPaused: true, allowSeekRecovery: false });
       }, delay));
     });
   }
@@ -6351,29 +6382,26 @@ const HAVE_ENOUGH_DATA = 4;
           if (!userRecent) return;
         }
 
+        // During seek kick window, use relaxed guards so audio syncs to the
+        // new video position quickly. Normal thresholds (0.8s, 700ms debounce)
+        // prevent correction after seek, causing "audio plays late after seek."
+        const _inSeekKick = state.seekKickAudioAllowedUntil > 0 && now() < state.seekKickAudioAllowedUntil;
+
         // if audio is currently playing and we're in the first 3s of playback,
         // only seek for large drift (>0.8s). small drift at startup is
         // normal — decoders initialize at different speeds. the sync loop
         // corrects it via rate nudging without any audible skip.
-        // Seeking during the first few seconds causes the "audio glitch at
-        // start" where audio randomly jumps to places.
+        // Exception: after a seek, always correct position regardless of playback age.
         const inEarlyPlayback = !audio.paused && _audioFirstPlayedAt > 0 &&
           (performance.now() - _audioFirstPlayedAt) < 5000;
-        if (inEarlyPlayback && timeDiff < 1.0) return;
+        if (inEarlyPlayback && timeDiff < 1.0 && !_inSeekKick) return;
 
-        // during startup, use 0.8s threshold.
-        // during normal playback, use 0.8s — drift under 800ms is imperceptible
-        // and the sync loop's rate enforcement handles it smoothly. Previous
-        // thresholds (0.5s, 0.35s) caused random small audio seeks during playback.
-        // 0.8s aligns with the sync loop's 0.8s drift check threshold.
         const isStartup = state.startupPhase || !state.firstPlayCommitted;
-        const threshold = isStartup ? 1.0 : 0.8;
+        const threshold = _inSeekKick ? 0.15 : (isStartup ? 1.0 : 0.8);
         if (timeDiff <= threshold) return;
 
-        // debounce: max one seek per 500ms during startup, per 700ms during normal play.
-        // rapid-fire seeks from competing code paths cause the random seek stutter.
         const _now = performance.now();
-        const debounce = isStartup ? 500 : 700;
+        const debounce = _inSeekKick ? 100 : (isStartup ? 500 : 700);
         if ((_now - _lastSafeSeekAt) < debounce) return;
         _lastSafeSeekAt = _now;
         audio.currentTime = t;
@@ -6925,8 +6953,12 @@ const HAVE_ENOUGH_DATA = 4;
     // Allow forced audio start to bypass buffer hold — EXCEPT when video is
     // genuinely starved in visible foreground. Without this exception, audio
     // plays over a frozen/buffering video during tab return and NMPBFN recovery.
+    // IMPORTANT: Don't block during seek kick window — after a seek, video
+    // temporarily loses readyState and may have videoWaiting set, but audio
+    // should start immediately because video is about to recover.
     const _epGenuinelyStarved = _epVisibleForeground && state.firstPlayCommitted &&
-      _epRS < HAVE_FUTURE_DATA && (state.videoWaiting || state.videoStallAudioPaused);
+      _epRS < HAVE_FUTURE_DATA && (state.videoWaiting || state.videoStallAudioPaused) &&
+      !inSeekKickWindow;
     const _forceBufferBypass =
       force && !_epGenuinelyStarved &&
       (
@@ -7442,7 +7474,9 @@ const HAVE_ENOUGH_DATA = 4;
       BackgroundPlaybackManager.trackBgResumeAttempt();
       // Fire-and-forget — do NOT await. Awaiting playTogether() here blocks
       // seamlessBgCatchUp, causing the visible freeze on tab return.
-      playTogether().catch(() => {});
+      // skipBufferGate: after a long background, video readyState is low and
+      // blockOnBuffer would pause both tracks → buffer hold → 1-3s freeze.
+      playTogether({ skipBufferGate: true }).catch(() => {});
       if (mySession !== state.playSessionId || !state.intendedPlaying) return;
 
       // Track success: if both tracks are now playing, reset backoff
@@ -7957,9 +7991,12 @@ const HAVE_ENOUGH_DATA = 4;
         } else if (!isRecentUserAction && !canKickFirstAudio && startupAudioHoldActive()) {
           // hold
         } else {
-          // Only hard-resync on user toggles when drift is real.
-          // Rewriting currentTime on every quick play/pause causes tiny audible skips.
-          if (isRecentUserAction && isFinite(vNow) && vNow >= 0 && (avDrift > 0.8 || userSeekIntentActive())) {
+          // Only hard-resync on user toggles when drift is genuinely large (>1.5s)
+          // or when a seek just happened. For play/pause toggles, decoders pause at
+          // nearly identical positions — the old 0.8s threshold triggered hard audio
+          // seeks from decoder jitter, causing an audible "skip" every time.
+          // Sub-1.5s drift is handled smoothly by the rate sync system.
+          if (isRecentUserAction && isFinite(vNow) && vNow >= 0 && (avDrift > 1.5 || userSeekIntentActive())) {
             state._allowAudioTimeWrite = true;
             try { audio.currentTime = vNow; } catch {}
             state._allowAudioTimeWrite = false;
@@ -8996,11 +9033,14 @@ const HAVE_ENOUGH_DATA = 4;
     state.seekCompleted = true; state._seekStartedAt = 0;
       }
 
-      if ((isTabReturnImmune() || NotMakePlayBackFixingNoticable.shouldBlockSync()) &&
-        state.intendedPlaying && state.firstPlayCommitted) {
-        scheduleSync(500);
-      return;
-        }
+      // Tab-return: DON'T skip sync entirely. The sync loop is the only system
+      // that can detect "video playing but frozen" and restart it. Blocking sync
+      // for the full 2s immunity window causes 1-3s freezes after returning from
+      // a long background. Instead, run sync in LIMITED MODE: skip drift-correction
+      // seeks (those would fight NMPBFN recovery) but still do health monitoring
+      // and play kicks. The skipDrift flag below handles this.
+      const _syncInTabReturnImmunity = (isTabReturnImmune() || NotMakePlayBackFixingNoticable.shouldBlockSync()) &&
+        state.intendedPlaying && state.firstPlayCommitted;
 
         // PAGE-LOAD GATE: defer sync during early loading, but only if we haven't
         // committed a play yet. Once firstPlayCommitted, always run sync so audio
@@ -9070,11 +9110,31 @@ const HAVE_ENOUGH_DATA = 4;
         const inBgDrift = document.visibilityState === "hidden" || !isWindowFocused() || inBgReturnGrace();
         // inBgReturnGrace: suppress all drift-correction seeks for 8s after tab return so the
         // wakeup timer (seamlessBgCatchUp) can handle position sync without racing runSync.
-        const skipDrift = now() < state.seekCooldownUntil;
+        const skipDrift = now() < state.seekCooldownUntil || _syncInTabReturnImmunity;
 
         if (!vPaused && vt > 0 && getVideoReadyState() >= HAVE_CURRENT_DATA) {
           // Video is playing with data — clear stale waiting flag
           state.videoWaiting = false;
+        }
+
+        // TAB RETURN RECOVERY: If video is "playing" (paused=false) but readyState
+        // is low during tab return, the decoder is stale and showing a frozen GPU
+        // frame. Kick it with a seek to its current position to force the decoder
+        // pipeline to restart. This is the primary fix for the 1-3s freeze.
+        if (_syncInTabReturnImmunity && !vPaused && state.intendedPlaying) {
+          const _trVNode = getVideoNode();
+          const _trRS = _trVNode ? Number(_trVNode.readyState || 0) : 4;
+          if (_trRS < HAVE_CURRENT_DATA && vt > 0) {
+            // Force-seek to current position to kick decoder
+            state._isMicroSeek = true;
+            try { _trVNode.currentTime = vt; } catch {}
+            setTimeout(() => { state._isMicroSeek = false; }, 150);
+          } else if (_trRS >= HAVE_CURRENT_DATA && vPaused === false) {
+            // Decoder has data but might be on stale frame — micro-seek flush
+            state._isMicroSeek = true;
+            try { _trVNode.currentTime = vt + 0.001; } catch {}
+            setTimeout(() => { state._isMicroSeek = false; }, 150);
+          }
         }
 
         // Guard with !state.startupKickInFlight so this path never races with
@@ -9223,10 +9283,19 @@ const HAVE_ENOUGH_DATA = 4;
               // NOTE: Do NOT skip this check during NMPBFN recovery — if video is genuinely
               // buffering (readyState < HAVE_FUTURE_DATA), audio MUST be paused regardless
               // of what recovery system is active. Audio-during-buffering is never acceptable.
+              // When videoWaiting is set (browser fired "waiting"), always kill audio
+              // regardless of grace period. Grace should only suppress false positives
+              // from readyState flicker — NOT from confirmed browser stall events.
+              // The old code let audio play for 600ms during a genuine stall because
+              // the "playing" handler set audioStartGraceUntil right before the re-stall.
               if (state.videoWaiting && coupledMode && !aPaused &&
-                  _syncRS < HAVE_FUTURE_DATA && !_syncInGrace && document.visibilityState !== "hidden" &&
-                  state.firstPlayCommitted /* don't kill audio during page-load buffering */) {
-                if (isConfirmedForegroundVideoStall(400) && !state.videoStallAudioPaused) {
+                  _syncRS < HAVE_FUTURE_DATA && document.visibilityState !== "hidden" &&
+                  state.firstPlayCommitted /* don't kill audio during page-load buffering */ &&
+                  !(now() < state.seekKickAudioAllowedUntil) /* don't kill during seek recovery */) {
+                // videoWaiting = browser fired "waiting" = confirmed stall.
+                // Kill audio immediately — don't check grace period. Grace is
+                // for readyState false positives, not confirmed stall events.
+                if (!state.videoStallAudioPaused) {
                   pauseAudioForConfirmedVideoStall();
                 }
               // Throttled backstop: if "waiting" event didn't fire but video is
@@ -11370,7 +11439,11 @@ const HAVE_ENOUGH_DATA = 4;
         state.videoWaiting ||
         state.videoStallAudioPaused ||
         foregroundBufferAudioHoldActive();
-      const _stallRecoveryStable = !_stallRecoveryPending || videoReadyForAudioResume(_playingNow);
+      // During tab return recovery, trust the "playing" event — video IS
+      // resuming. Don't re-enter stall machinery with stale pre-bg flags.
+      // NMPBFN owns recovery; re-pausing audio here causes the 1-3s freeze.
+      const _inTabReturnRecovery = isTabReturnImmune() || NotMakePlayBackFixingNoticable.isActive();
+      const _stallRecoveryStable = _inTabReturnRecovery || !_stallRecoveryPending || videoReadyForAudioResume(_playingNow);
       if (!_stallRecoveryStable) {
         armForegroundBufferAudioHold(Math.max(MIN_STALL_AUDIO_RESUME_MS, 450));
         state.videoWaiting = true;
@@ -11438,8 +11511,11 @@ const HAVE_ENOUGH_DATA = 4;
         safeSetAudioTime(_resumeVt);
         const _resumeVol = targetVolFromVideo();
         try { audio.volume = _resumeVol; } catch {}
-        // grace period so the buffer monitor doesn't re-kill this within one frame
-        state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 600);
+        // Short grace so buffer monitor doesn't re-kill within one frame.
+        // Was 600ms — too long. If video re-stalls immediately, audio played
+        // over frozen video for up to 600ms before stall detection kicked in.
+        // 150ms is enough for the decoder to produce the first frame.
+        state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 150);
         execProgrammaticAudioPlay({ squelchMs: 250, force: true, minGapMs: 0 }).catch(() => {});
         state.audioEverStarted = true;
       }
@@ -12191,8 +12267,10 @@ const HAVE_ENOUGH_DATA = 4;
               clearAudioPauseLocks();
               safeSetAudioTime(_canplayVt);
               try { audio.volume = targetVolFromVideo(); } catch {}
-              // grace period for this audio restart
-              state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 600);
+              // Short grace — just enough so buffer monitor doesn't re-kill
+              // within one frame. Was 600ms which let audio play over frozen
+              // video when canplay fired but video immediately re-stalled.
+              state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 150);
               execProgrammaticAudioPlay({ squelchMs: 250, force: true, minGapMs: 0 }).catch(() => {});
             }
           }
