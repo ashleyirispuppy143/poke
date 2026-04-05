@@ -28,7 +28,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  
 //////////////// THE PLAYER, START ////////////////////////
 // This runs in a try-catch because elements might not exist yet...which is sillah am sillah tooo waowawawa............
- 
+// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
+// before DOMContentLoaded. Ensures both video and audio start at 00:00
+// even if the browser pre-buffers to a non-zero keyframe position.
+// This runs in a try-catch because elements might not exist yet.
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -695,6 +698,21 @@ document.addEventListener("DOMContentLoaded", () => {
       if ((state.seeking || state.seekBuffering) && !inSeekKickWindow) return Promise.resolve();
       // background tab: always let through (keepalive needs this)
       if (document.visibilityState === "hidden") return _origAudioPlay();
+      // HARD INVARIANT: in visible foreground after startup, NEVER play audio
+      // when video lacks decoded data. This single check catches every leak
+      // path: immunity guards, NMPBFN, rAF play-lock, grace periods, etc.
+      // Exceptions: startup (readyState low while first chunk loads), seek
+      // recovery (readyState temporarily drops during seek).
+      if (state.firstPlayCommitted &&
+          document.visibilityState === "visible" &&
+          !inSeekKickWindow &&
+          !state.seeking && !state.seekBuffering) {
+        const _hardVNode = getVideoNode();
+        const _hardRS = _hardVNode ? Number(_hardVNode.readyState || 0) : 4;
+        if (_hardRS < HAVE_FUTURE_DATA) {
+          return Promise.resolve();
+        }
+      }
       // STARTUP: during page load / initial buffering, don't block audio.
       // Stall flags fire constantly while the page is loading and the video
       // is still buffering its first few seconds.  Blocking audio here causes
@@ -1132,11 +1150,22 @@ document.addEventListener("DOMContentLoaded", () => {
     // the play-pause-play-pause stutter loop. Let keepalive handle bg playback
     // at its own pace with proper backoff.
     if (document.visibilityState === "hidden") return;
+    // For audio elements: don't counter-play if video lacks decoded data.
+    // This prevents audio from restarting over a frozen/buffering video.
+    // Video counter-play is fine — it triggers the decoder to start.
+    if (coupledMode && audio && e.target === audio) {
+      const _guardVN = getVideoNode();
+      const _guardRS = _guardVN ? Number(_guardVN.readyState || 0) : 0;
+      if (_guardRS < HAVE_FUTURE_DATA && state.firstPlayCommitted) return;
+    }
     e.stopImmediatePropagation();
     const el = e.target;
     const t = now();
     const lastPlay = _guardPlayTimes.get(el) || 0;
-    if (t - lastPlay < 150) return;
+    // During NMPBFN recovery, rate-limit video counter-plays to 500ms.
+    // Each play() resets the decode pipeline. 150ms means ~13 resets in 2s.
+    const minGap = NotMakePlayBackFixingNoticable.isRecovering() ? 500 : 150;
+    if (t - lastPlay < minGap) return;
     _guardPlayTimes.set(el, t);
     try { el.play().catch(() => {}); } catch {}
   }
@@ -1385,28 +1414,24 @@ document.addEventListener("DOMContentLoaded", () => {
       // Clear buffer hold only if video has data
       if (_nmpbfnRS >= HAVE_FUTURE_DATA) clearBufferHold();
 
-      // --- THE play. Exactly one per element. ---
+      // --- THE play. Exactly one video play + canplay wait for audio. ---
       _doSingleCleanPlay(myGen);
 
       // --- Start watchdog to monitor recovery health ---
       _startWatchdog(myGen);
 
-      // --- Progressive retry: if play() didn't stick, try again ---
-      RETRY_INTERVALS.forEach((delay, i) => {
-        const tid = setTimeout(() => {
-          if (_recoveryGen !== myGen) return;
-          if (_phase !== PHASE_RECOVERING) return;
-          if (!state.intendedPlaying) return;
-          _verifyAndRetryPlay(myGen, i);
-        }, delay);
-        _retryTimers.push(tid);
-      });
+      // NO retry timers. Repeated play() calls reset the video decode
+      // pipeline, extending the freeze from ~500ms to 1-3s. The canplay
+      // listener in _doSingleCleanPlay handles audio start. If video
+      // never fires canplay, the 2.5s timeout in _doSingleCleanPlay
+      // force-starts both tracks.
 
-      // --- Transition to SETTLING after recovery window ---
+      // Settling is now triggered by _doSingleCleanPlay's canplay callback
+      // (or its 2.5s timeout). Only use a fixed timer as a final safety net.
       _settleTimer = setTimeout(() => {
         if (_recoveryGen !== myGen) return;
-        _enterSettling(myGen);
-      }, RECOVERY_DURATION_MS);
+        if (_phase === PHASE_RECOVERING) _enterSettling(myGen);
+      }, 3000);
     }
 
     // Warm-start: on background recovery, play audio at vol 0, wait for decoder,
@@ -1416,108 +1441,128 @@ document.addEventListener("DOMContentLoaded", () => {
     const WARM_FADE_STEPS      = 5;
     let _warmFadeTimer = null;
 
+    // Cleanup handle for canplay listener from _doSingleCleanPlay
+    let _cleanPlayCleanup = null;
+
     function _doSingleCleanPlay(gen) {
       if (_recoveryGen !== gen) return;
-      // CRITICAL: never restart after ended
       if (state.endedNaturally) return;
       if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) return;
       _playAttempts++;
-      // During startup recovery, commit play intent so full machinery activates
       if (state.startupPhase || wantsStartupAutoplay()) {
         state.intendedPlaying = true;
         state.bufferHoldIntendedPlaying = true;
       }
-      // Protect newly-started audio from stall-pause for 600ms.
-      // Was 1500ms — that's way too long. It prevented stall detection for 1.5s
-      // after any programmatic audio play, letting audio play while video buffered.
-      // 600ms is enough for the decoder to initialize without silencing stall detection.
-      state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 600);
-      // Reset dedup EVERY time we try to play during recovery.
-      // Without this, DONTMAKEITDOUBLEPLAY suppresses retries.
       DONTMAKEITDOUBLEPLAY.resetAll();
+
+      // Clean up any previous canplay wait
+      if (_cleanPlayCleanup) { try { _cleanPlayCleanup(); } catch {} _cleanPlayCleanup = null; }
+
+      _bufMonStallFrames = 0;
+      const _nPlay = HTMLMediaElement.prototype.play;
+      const vn = getVideoNode();
+      if (!vn) return;
+
       try {
-        // Always use live video volume as source of truth (reflects localStorage)
-        const targetVol = (coupledMode && audio) ? targetVolFromVideo() : 1;
-
-        // Check if audio is already playing (retry call after successful first play).
-        const audioAlreadyPlaying = coupledMode && audio && !audio.paused;
-
-        // Warm start: only needed when audio was paused in background for a long time
-        // (decoder needs to refill buffer). For quick tab switches (<2s), play at full
-        // volume immediately — the decoder still has data cached.
-        const wasInBackground = _snapshotAt > 0 || _snapshotVt > 0;
-        // Use _bgEnteredAt (set when we went to bg), not _phaseAt (set to now() in onReturn)
-        const bgDuration = (wasInBackground && _bgEnteredAt > 0) ? (now() - _bgEnteredAt) : 0;
-        const needsWarmStart = wasInBackground && !audioAlreadyPlaying &&
-        document.visibilityState !== "hidden" && bgDuration > 2000;
-
-        if (coupledMode && audio && !audioAlreadyPlaying) {
-          if (needsWarmStart) {
-            // Long background recovery: brief vol=0 to mask decoder restart, then fast fade
-            try { audio.volume = 0; } catch {}
-          } else {
-            // Short bg return or fresh start: play at target volume immediately — no silence gap
-            try { audio.volume = targetVol; } catch {}
-          }
-          try { if (audio.muted && !state.userMutedAudio) audio.muted = false; } catch {}
-        } else if (coupledMode && audio && audioAlreadyPlaying) {
-          // Audio already playing — snap volume to target immediately (no fade)
-          try { audio.volume = targetVol; } catch {}
+        // Micro-seek to force fresh decode pipeline. Without this, play()
+        // tries to resume from stale buffer, which takes much longer.
+        const vt = Number(vn.currentTime) || 0;
+        if (vt > 0) {
+          state._isMicroSeek = true;
+          try { vn.currentTime = vt + 0.001; } catch {}
+          setTimeout(() => { state._isMicroSeek = false; }, 150);
         }
 
-        _bufMonStallFrames = 0;
+        // Play VIDEO only. Do NOT play audio yet — video decoder needs to
+        // recover first. Playing audio before video has data causes audio
+        // over frozen frame. The canplay callback below starts audio.
+        if (vn.paused && !state.endedNaturally) {
+          try { _nPlay.call(vn).catch(() => {}); } catch {}
+        }
+        try { if (!state.userMutedVideo && getVideoMutedState()) setVideoMutedState(false); } catch {}
 
-        // Clear stale stall flags from pre-background period. These flags
-        // don't represent current state — the video just woke up and hasn't
-        // had a chance to buffer yet. Keeping them causes the "playing"
-        // handler to immediately re-pause audio → buffer hold → 1-3s freeze.
+        // Mute audio during video recovery — will be started by canplay
+        if (coupledMode && audio) {
+          try { audio.volume = 0; } catch {}
+          try { if (audio.muted && !state.userMutedAudio) audio.muted = false; } catch {}
+        }
+      } catch {}
+
+      // --- Wait for video decoder to have data, then start audio ---
+      let _cpCleaned = false;
+      let _cpPollTimer = null;
+      const _cpCleanup = () => {
+        if (_cpCleaned) return;
+        _cpCleaned = true;
+        _cleanPlayCleanup = null;
+        try { vn.removeEventListener("canplay", _cpCheck); } catch {}
+        try { vn.removeEventListener("canplaythrough", _cpCheck); } catch {}
+        if (_cpPollTimer) { clearTimeout(_cpPollTimer); _cpPollTimer = null; }
+      };
+      _cleanPlayCleanup = _cpCleanup;
+
+      const _cpStartAudio = () => {
+        if (_recoveryGen !== gen || !state.intendedPlaying) return;
+        _cpCleanup();
+        if (!coupledMode || !audio) return;
+        const targetVol = targetVolFromVideo();
+        const currentVt = Number(vn.currentTime) || 0;
+        // Sync audio position to video
+        state._allowAudioTimeWrite = true;
+        try { audio.currentTime = currentVt; } catch {}
+        state._allowAudioTimeWrite = false;
+        // Set volume and play
+        try { audio.volume = targetVol; } catch {}
+        state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 300);
+        if (audio.paused && !state.endedNaturally) {
+          try { _nPlay.call(audio).catch(() => {}); } catch {}
+        }
+        state.audioEverStarted = true;
+        // Clear stall flags — video confirmed ready
         state.videoWaiting = false;
         state.videoStallSince = 0;
         state.videoStallAudioPaused = false;
         state.stallAudioPausedSince = 0;
         state.stallAudioResumeHoldUntil = 0;
-        state.strictBufferHold = false;
-        state.strictBufferReason = "";
-        state.bufferHoldSince = 0;
+      };
 
-        // Play video — use native play() to bypass all wrappers for speed.
-        // The gate/dedup exist to prevent double-play during normal operation,
-        // but during recovery we WANT the play to go through unconditionally.
-        // EXCEPT after ended — never restart a finished video from recovery code.
-        if (!state.endedNaturally) {
-          const _nPlay = HTMLMediaElement.prototype.play;
-          const vn = getVideoNode();
-          if (vn && vn.paused) {
-            try { _nPlay.call(vn).catch(() => {}); } catch {}
-          }
-
-          // Play audio — same, native play bypasses the stall-check gate
-          if (coupledMode && audio && audio.paused) {
-            try { _nPlay.call(audio).catch(() => {}); } catch {}
-          }
+      const _cpCheck = () => {
+        if (_cpCleaned || _recoveryGen !== gen) return;
+        if (Number(vn.readyState || 0) >= HAVE_FUTURE_DATA) {
+          _cpStartAudio();
+          // Now transition to SETTLING
+          _enterSettling(gen);
         }
+      };
 
-        // Ensure video isn't muted
-        try { if (!state.userMutedVideo && getVideoMutedState()) setVideoMutedState(false); } catch {}
-
-        // Warm fade only for long background recovery (>2s)
-        if (coupledMode && audio && needsWarmStart) {
-          if (_warmFadeTimer) { clearTimeout(_warmFadeTimer); _warmFadeTimer = null; }
-          _warmFadeTimer = setTimeout(() => {
-            _warmFadeTimer = null;
-            if (_recoveryGen !== gen) return;
-            if (!state.intendedPlaying) return;
-            _microFadeAudioUp(targetVol, gen);
-          }, 30); // Start fade ASAP
-        }
-
-        // Kick a fast sync immediately — don't wait for SETTLING to start
-        // drift correction. This is the #1 fix for "video plays late after
-        // tab return" — without this, nothing corrects the A/V drift until
-        // settling phase starts 250ms later.
+      // Already ready? Start audio immediately
+      if (Number(vn.readyState || 0) >= HAVE_FUTURE_DATA) {
+        _cpStartAudio();
         setFastSync(1200);
         scheduleSync(0);
-      } catch {}
+        return;
+      }
+
+      // Wait for canplay + poll every 50ms for fast detection
+      try { vn.addEventListener("canplay", _cpCheck, { passive: true }); } catch {}
+      try { vn.addEventListener("canplaythrough", _cpCheck, { passive: true }); } catch {}
+      const _cpPoll = () => {
+        if (_cpCleaned || _recoveryGen !== gen) return;
+        _cpCheck();
+        if (!_cpCleaned) _cpPollTimer = setTimeout(_cpPoll, 50);
+      };
+      _cpPollTimer = setTimeout(_cpPoll, 50);
+
+      // Timeout: if video doesn't recover in 2.5s, force-start audio anyway
+      setTimeout(() => {
+        if (_cpCleaned || _recoveryGen !== gen) return;
+        _cpCleanup();
+        _cpStartAudio();
+        _enterSettling(gen);
+      }, 2500);
+
+      setFastSync(1200);
+      scheduleSync(0);
     }
 
     // Ultra-fast fade from 0 → targetVol. Uses requestAnimationFrame for
@@ -2415,8 +2460,10 @@ document.addEventListener("DOMContentLoaded", () => {
           return;
         }
         // At 500ms: aggressive recovery — pause, re-seek, play to force
-        // the decoder to fully re-initialize its pipeline
-        if (attempts === AGGRESSIVE_AT) {
+        // the decoder to fully re-initialize its pipeline.
+        // Skip during NMPBFN recovery — it already did one play() and is
+        // waiting for canplay. Re-initializing the pipeline here extends the freeze.
+        if (attempts === AGGRESSIVE_AT && !NotMakePlayBackFixingNoticable.isRecovering()) {
           try { vNode.pause(); } catch {}
           try { vNode.currentTime = targetTime; } catch {}
           requestAnimationFrame(() => {
@@ -4343,21 +4390,20 @@ const HAVE_ENOUGH_DATA = 4;
   function _audioEventPauseSuppressor(e) {
     if (!(state.tabReturnImmuneUntil > now())) return;
     if (state.userPauseIntentPresetAt > 0 && (now() - state.userPauseIntentPresetAt) < 2000) return;
-    // Never suppress the natural end-of-video pause
     if (state.endedNaturally) return;
     try {
-      // Check video duration — audio pausing at end of video is normal
       const _aVN = getVideoNode();
       if (_aVN) {
         const _aCT = Number(_aVN.currentTime) || 0;
         const _aDur = Number(_aVN.duration) || 0;
         if (_aDur > 0.5 && _aCT >= _aDur - 0.5) return;
+        // Don't swallow audio pause when video lacks data. The pause was
+        // likely intentional (stall detection paused audio because video
+        // is buffering). Swallowing it lets the rAF play-lock restart audio.
+        const _aRS = Number(_aVN.readyState || 0);
+        if (_aRS < HAVE_FUTURE_DATA && state.firstPlayCommitted) return;
       }
     } catch {}
-    // Swallow the event so no other listener sees it.
-    // Do NOT call audio.play() here — the play-lock handles resume.
-    // Calling play() from the pause suppressor causes decode buffer replay
-    // (the "hel-hello" artifact) because the browser resumes from stale buffer.
     e.stopImmediatePropagation();
   }
 
@@ -4386,7 +4432,10 @@ const HAVE_ENOUGH_DATA = 4;
           if (_plDur > 0.5 && _plCT >= _plDur - 0.5) return; // at the end — stop pumping
           if (vn && vn.paused) vn.play().catch(() => {});
           if (videoEl && videoEl !== vn && videoEl.paused) videoEl.play().catch(() => {});
-          if (coupledMode && audio && audio.paused) audio.play().catch(() => {});
+          // Only restart audio if video has decoded data. Otherwise we get
+          // audio playing over a frozen video frame during tab return.
+          const _plRS = vn ? Number(vn.readyState || 0) : 0;
+          if (coupledMode && audio && audio.paused && _plRS >= HAVE_FUTURE_DATA) audio.play().catch(() => {});
         } catch {}
       }
       _playLockRafId = requestAnimationFrame(rafPump);
@@ -9121,11 +9170,13 @@ const HAVE_ENOUGH_DATA = 4;
         // is low during tab return, the decoder is stale and showing a frozen GPU
         // frame. Kick it with a seek to its current position to force the decoder
         // pipeline to restart. This is the primary fix for the 1-3s freeze.
-        if (_syncInTabReturnImmunity && !vPaused && state.intendedPlaying) {
+        if (_syncInTabReturnImmunity && !vPaused && state.intendedPlaying &&
+            !NotMakePlayBackFixingNoticable.isRecovering()) {
+          // Skip decoder kicks during NMPBFN recovery — it already micro-seeked
+          // once. Additional seeks reset the decode pipeline and extend the freeze.
           const _trVNode = getVideoNode();
           const _trRS = _trVNode ? Number(_trVNode.readyState || 0) : 4;
           if (_trRS < HAVE_CURRENT_DATA && vt > 0) {
-            // Force-seek to current position to kick decoder
             state._isMicroSeek = true;
             try { _trVNode.currentTime = vt; } catch {}
             setTimeout(() => { state._isMicroSeek = false; }, 150);
@@ -11439,11 +11490,7 @@ const HAVE_ENOUGH_DATA = 4;
         state.videoWaiting ||
         state.videoStallAudioPaused ||
         foregroundBufferAudioHoldActive();
-      // During tab return recovery, trust the "playing" event — video IS
-      // resuming. Don't re-enter stall machinery with stale pre-bg flags.
-      // NMPBFN owns recovery; re-pausing audio here causes the 1-3s freeze.
-      const _inTabReturnRecovery = isTabReturnImmune() || NotMakePlayBackFixingNoticable.isActive();
-      const _stallRecoveryStable = _inTabReturnRecovery || !_stallRecoveryPending || videoReadyForAudioResume(_playingNow);
+      const _stallRecoveryStable = !_stallRecoveryPending || videoReadyForAudioResume(_playingNow);
       if (!_stallRecoveryStable) {
         armForegroundBufferAudioHold(Math.max(MIN_STALL_AUDIO_RESUME_MS, 450));
         state.videoWaiting = true;
@@ -12831,9 +12878,10 @@ const HAVE_ENOUGH_DATA = 4;
       }
     };
     const _kickReturnPlayback = (hard = false) => {
-      // Only clear stall flags if video actually has data. If readyState is low,
-      // video is genuinely buffering and clearing these flags would let audio
-      // start while video has no data — causing audio-during-buffering.
+      // If NMPBFN is handling recovery, don't interfere. NMPBFN already called
+      // play() once and is waiting for canplay. Additional play() calls from
+      // here reset the video decode pipeline, extending the freeze.
+      if (NotMakePlayBackFixingNoticable.isRecovering()) return;
       const _krVNode = getVideoNode();
       const _krRS = _krVNode ? Number(_krVNode.readyState || 0) : 0;
       if (_krRS >= HAVE_FUTURE_DATA) {
@@ -12848,12 +12896,7 @@ const HAVE_ENOUGH_DATA = 4;
       clearAudioPauseLocks();
       if (_krRS >= HAVE_FUTURE_DATA) clearBufferHold();
       VisibilityGuard.onPlayCalled();
-      // Reset dedup so our play() calls actually go through.
-      // Without this, DONTMAKEITDOUBLEPLAY's storm protection suppresses
-      // retry plays and the video stays frozen for seconds.
       DONTMAKEITDOUBLEPLAY.resetAll();
-      // Use NATIVE play() to bypass ALL wrappers (dedup, gates, etc).
-      // This is tab return — we NEED the play to go through no matter what.
       const _nPlay = HTMLMediaElement.prototype.play;
       const vn = getVideoNode();
       if (vn && vn.paused) {
@@ -12999,9 +13042,10 @@ const HAVE_ENOUGH_DATA = 4;
     // wakeup does drift correction and seamlessBgCatchUp which are needed
     // for fast video resume. Without this, video sits frozen waiting for
     // SETTLING phase drift correction.
-    if (NotMakePlayBackFixingNoticable.isRecovering() && state.firstPlayCommitted) {
-      if (NotMakePlayBackFixingNoticable.recoveryAge() < 150) return;
-    }
+    // During NMPBFN recovery, let it handle everything. NMPBFN now waits for
+    // video canplay before starting audio. Additional play/seek calls from
+    // wakeup retry shots reset the decode pipeline and extend the freeze.
+    if (NotMakePlayBackFixingNoticable.isRecovering() && state.firstPlayCommitted) return;
     // Cancel and replace any existing wakeup timer (don't silently drop)
     if (state.wakeupTimer) { clearTimeout(state.wakeupTimer); state.wakeupTimer = null; }
 
