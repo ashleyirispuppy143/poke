@@ -27,16 +27,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  
  
 //////////////// THE PLAYER, START ////////////////////////
-// This runs in a try-catch because elements might not exist yet...which is sillah am sillah tooo waowawawa............
-// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
-// before DOMContentLoaded. Ensures both video and audio start at 00:00
-// even if the browser pre-buffers to a non-zero keyframe position.
-// This runs in a try-catch because elements might not exist yet.
-// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
-// before DOMContentLoaded. Ensures both video and audio start at 00:00
-// even if the browser pre-buffers to a non-zero keyframe position.
-// This runs in a try-catch because elements might not exist yet.
-// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
+ // IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
 // before DOMContentLoaded. Ensures both video and audio start at 00:00
 // even if the browser pre-buffers to a non-zero keyframe position.
 // This runs in a try-catch because elements might not exist yet.
@@ -2067,8 +2058,10 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!state.intendedPlaying) { _schedule(); return; }
       // CRITICAL: never restart after ended — this was a major loop cause
       if (state.endedNaturally || MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) { _schedule(); return; }
-      if (state.seeking || state.seekBuffering || state.restarting) { _schedule(); return; }
+      if (state.seeking || state.seekBuffering || state.restarting || state.seekResumeInFlight) { _schedule(); return; }
       if (state.strictBufferHold || state.videoWaiting || state.videoStallAudioPaused) { _schedule(); return; }
+      // Don't kick during seek stabilization — let the seek machinery finish
+      if (state.seekStabilizeUntil && now() < state.seekStabilizeUntil) { _schedule(); return; }
       // Only back off during very early NMPBFN recovery (<120ms) when play() is in flight.
       // After that, MSAOVDPUURWT should actively restart paused media — that's its job.
       if (NotMakePlayBackFixingNoticable.isRecovering() && NotMakePlayBackFixingNoticable.recoveryAge() < 120) { _schedule(); return; }
@@ -2084,7 +2077,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const _msVRS = _msVNode ? Number(_msVNode.readyState || 0) : 4;
 
       // video paused but nobody asked for it — restart
-      if (vPaused && document.visibilityState === "visible" && _msVRS >= HAVE_FUTURE_DATA) {
+      // Don't kick if a play is already in flight — prevents fighting
+      if (vPaused && document.visibilityState === "visible" && _msVRS >= HAVE_FUTURE_DATA &&
+          !state.isProgrammaticVideoPlay && !state.videoPlayInFlight) {
         DONTMAKEITDOUBLEPLAY.resetAll();
         execProgrammaticVideoPlay();
       }
@@ -2286,7 +2281,13 @@ document.addEventListener("DOMContentLoaded", () => {
       // ════════════════════════════════════════════════════════════════
 
       // 3a: Video is paused but has data and we want to play → kick video
+      // Guard: Don't kick if a programmatic play is already in flight or if
+      // the seeking/seekBuffering state is active. Re-kicking while a play()
+      // promise is pending resets the video decode pipeline, extending the
+      // freeze and causing visible play-pause oscillation.
       if (vPaused && vRS >= HAVE_FUTURE_DATA && !state.strictBufferHold &&
+          !state.isProgrammaticVideoPlay && !state.videoPlayInFlight &&
+          !state.seeking && !state.seekBuffering && !state.seekResumeInFlight &&
           (now() - _lastKickAt) > STALL_KICK_COOLDOWN_MS) {
         _lastKickAt = now();
         state.isProgrammaticVideoPause = false;
@@ -2327,8 +2328,11 @@ document.addEventListener("DOMContentLoaded", () => {
       // Watchdog-specific: detect "video has data but nothing is playing"
       // This catches the case where buffer fills in background but neither
       // the rAF loop nor events managed to restart playback.
+      // Same guards as INVARIANT 3: don't kick if a play is already in flight.
       if (vPaused && !state.seeking && !state.seekBuffering && !state.restarting &&
           vRS >= HAVE_FUTURE_DATA && !state.strictBufferHold &&
+          !state.isProgrammaticVideoPlay && !state.videoPlayInFlight &&
+          !state.seekResumeInFlight &&
           !userPauseLockActive() && !mediaSessionForcedPauseActive() &&
           (now() - _lastKickAt) > STALL_KICK_COOLDOWN_MS) {
         _lastKickAt = now();
@@ -5324,9 +5328,10 @@ const HAVE_ENOUGH_DATA = 4;
     // flags weren't cleared due to a race). Video's "playing" event clears flags,
     // but if it hasn't fired yet, readyState tells us the truth.
     if (vRS >= HAVE_FUTURE_DATA) {
-      // Video has data — stall flags are stale, clear them
+      // Video has data — stall flags are stale, clear them all
       if (state.videoWaiting) { state.videoWaiting = false; state.videoStallSince = 0; }
       if (state.videoStallAudioPaused) { state.videoStallAudioPaused = false; state.stallAudioPausedSince = 0; state.stallAudioResumeHoldUntil = 0; }
+      clearForegroundBufferAudioHold();
       return false;
     }
     // Video lacks data — block audio if any stall flag is set
@@ -5842,6 +5847,10 @@ const HAVE_ENOUGH_DATA = 4;
 
   function incrementRapidPlayPause() {
     if (state.seeking || state.seekBuffering) return;
+    if (state.seekResumeInFlight || state.bgResumeInFlight) return;
+    // Don't count during seek stabilization — post-seek play/pause events are expected
+    if (state.seekStabilizeUntil && now() < state.seekStabilizeUntil) return;
+    if (state.seekCooldownUntil && now() < state.seekCooldownUntil) return;
     if (state.tabReturnImmuneUntil > now()) return;
     if (inBgReturnGrace() || document.visibilityState === "hidden" || !isWindowFocused()) return;
     if (!state.firstPlayCommitted) return;
@@ -5858,6 +5867,10 @@ const HAVE_ENOUGH_DATA = 4;
   // detectLoop no longer fires during seek/sync operations to prevent false positives
   function detectLoop() {
     if (state.seeking || state.syncing || state.restarting || state.seekBuffering) return false;
+    if (state.seekResumeInFlight || state.bgResumeInFlight) return false;
+    // Don't fire during seek stabilization — post-seek play/pause events are expected
+    if (state.seekStabilizeUntil && now() < state.seekStabilizeUntil) return false;
+    if (state.seekCooldownUntil && now() < state.seekCooldownUntil) return false;
     if (!state.firstPlayCommitted) return false;
     if (inBgReturnGrace()) return false;
     if (document.visibilityState === "hidden" || !isWindowFocused()) return false;
@@ -5916,20 +5929,42 @@ const HAVE_ENOUGH_DATA = 4;
     }
 
     // Checks if video is at/near 0 and nobody asked for it (phantom restart)
+    // Rate-limited: max 2 reverts per 10 seconds. If detection keeps triggering,
+    // it's a false positive — let the seek through instead of looping.
+    let _phantomRevertCount = 0;
+    let _phantomRevertWindowStart = 0;
     function isPhantomRestart(videoTime) {
       if (!state.firstPlayCommitted) return false;
       if (state.restarting || state.seeking) return false;
       if (isLoopDesired()) return false;
       if (videoTime > 2.0) return false;
+
+      // Rate limiter: if we've already reverted 2+ times in the last 10s,
+      // stop reverting. The detection is wrong — let the seek through.
+      const _prNow = now();
+      if (_phantomRevertWindowStart && (_prNow - _phantomRevertWindowStart) > 10000) {
+        _phantomRevertCount = 0;
+        _phantomRevertWindowStart = 0;
+      }
+      if (_phantomRevertCount >= 2) return false;
+
       // video is near 0 after we were well into playback
-      if (state.endedNaturally) return true;
+      if (state.endedNaturally) {
+        if (!_phantomRevertWindowStart) _phantomRevertWindowStart = _prNow;
+        _phantomRevertCount++;
+        return true;
+      }
       const lastGood = state.lastKnownGoodVT || 0;
       if (!nearZeroSeekAuthorized(videoTime) && lastGood > 0.9 && videoTime < 0.8) {
         // big backward jump nobody asked for
-        const userRecent = (now() - state.lastUserActionTime) < 1500;
-        const userPlay = state.userPlayIntentPresetAt > 0 && (now() - state.userPlayIntentPresetAt) < 2000;
+        const userRecent = (_prNow - state.lastUserActionTime) < 1500;
+        const userPlay = state.userPlayIntentPresetAt > 0 && (_prNow - state.userPlayIntentPresetAt) < 2000;
         const programmatic = state.pendingSeekTarget != null;
-        if (!userRecent && !userPlay && !programmatic) return true;
+        if (!userRecent && !userPlay && !programmatic) {
+          if (!_phantomRevertWindowStart) _phantomRevertWindowStart = _prNow;
+          _phantomRevertCount++;
+          return true;
+        }
       }
       return false;
     }
@@ -9335,7 +9370,10 @@ const HAVE_ENOUGH_DATA = 4;
                   pauseAudioForConfirmedVideoStall(1500);
                 }
               } else if ((state.videoWaiting || state.videoStallAudioPaused) && _syncRS >= HAVE_FUTURE_DATA) {
-                // stale flags — video has data, clear everything
+                // stale flags — video has data, clear everything and resume audio.
+                // This is the auto-resume path: buffering ended, video has data,
+                // stall flags are stale → clear them and kick audio immediately.
+                const _wasStallPaused = state.videoStallAudioPaused;
                 state.videoWaiting = false;
                 state.videoStallSince = 0;
                 if (state.videoStallAudioPaused) {
@@ -9343,14 +9381,42 @@ const HAVE_ENOUGH_DATA = 4;
                   state.stallAudioPausedSince = 0;
                   state.stallAudioResumeHoldUntil = 0;
                 }
+                clearForegroundBufferAudioHold();
+                // Resume audio immediately if it was paused due to the stall.
+                // Previously this only cleared flags — audio had to wait for
+                // MSAOVDPUURWT's 500ms timer to restart it. Now resume inline.
+                if (_wasStallPaused && coupledMode && audio && aPaused &&
+                    state.intendedPlaying && !state.seeking && !state.seekBuffering &&
+                    !state.endedNaturally && !userPauseLockActive()) {
+                  safeSetAudioTime(vt);
+                  try { audio.volume = targetVolFromVideo(); } catch {}
+                  state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 300);
+                  execProgrammaticAudioPlay({ squelchMs: 200, force: true, minGapMs: 0 }).catch(() => {});
+                }
+                // Also kick video if it's paused — complete auto-resume
+                if (getVideoPaused() && state.intendedPlaying && !state.endedNaturally &&
+                    !userPauseLockActive() && !state.isProgrammaticVideoPlay) {
+                  DONTMAKEITDOUBLEPLAY.resetAll();
+                  execProgrammaticVideoPlay();
+                }
               }
               state.audioPausedSince = 0;
               state.videoSyncRetryTs = 0;
             } else if (vPaused && !aPaused) {
               if (!state.videoSyncRetryTs) state.videoSyncRetryTs = now();
-              if (!state.isProgrammaticVideoPlay && !mediaPlayTxnActive() && !chromiumPauseGuardActive()) {
+              if (!state.isProgrammaticVideoPlay && !state.videoPlayInFlight &&
+                  !state.seekResumeInFlight && !state.bgResumeInFlight &&
+                  !mediaPlayTxnActive() && !chromiumPauseGuardActive()) {
                 execProgrammaticVideoPlay();
-                if ((now() - state.videoSyncRetryTs) > 800) {
+                // Old timeout: 800ms. That was way too short — during seeking or
+                // buffer recovery, video can easily be paused for 800ms+ while the
+                // decoder catches up. Killing audio at 800ms then triggers the
+                // play-pause loop: audio pause → both paused → playTogether() →
+                // video pauses again → audio killed again → repeat.
+                // New timeout: 3000ms. If video genuinely can't resume in 3s,
+                // syncing audio to match is correct. Also skip the kill if a
+                // play() call is still in flight.
+                if ((now() - state.videoSyncRetryTs) > 3000) {
                   execProgrammaticAudioPause(350);
                   state.videoSyncRetryTs = 0;
                 }
@@ -9530,10 +9596,13 @@ const HAVE_ENOUGH_DATA = 4;
     // Kill audio if video is stalled in visible foreground — no exceptions.
     // This is the backstop that catches every leak path: keepalive replays,
     // grace period bypasses, immunity plays, sync loop restarts, everything.
+    // Guard: don't kill during seekResumeInFlight — the seek recovery is
+    // actively restarting playback and readyState may briefly be low.
     const vNodeBuf = getVideoNode();
     const vRSBuf = vNodeBuf ? Number(vNodeBuf.readyState || 0) : 0;
     if (!audio.paused && state.firstPlayCommitted && document.visibilityState === "visible" &&
-        !state.seeking && !state.seekBuffering && !(now() < state.seekKickAudioAllowedUntil)) {
+        !state.seeking && !state.seekBuffering && !state.seekResumeInFlight &&
+        !(now() < state.seekKickAudioAllowedUntil)) {
       // condition 1: video readyState says no data
       // condition 2: our stall flags say video is frozen
       const _bufVideoStarved = vRSBuf < HAVE_FUTURE_DATA;
@@ -12314,8 +12383,10 @@ const HAVE_ENOUGH_DATA = 4;
           // Also catches post-ended phantom restarts via the manager.
           const _phVt = Number(videoEl.currentTime) || 0;
           const _phPrev = state.lastKnownGoodVT || 0;
-          const _phProgrammatic = state.pendingSeekTarget != null || state.seeking || state.restarting;
-          const _phUserSeek = userSeekIntentActive();
+          const _phProgrammatic = state.pendingSeekTarget != null || state.seeking || state.restarting ||
+            (state.seekStabilizeUntil && now() < state.seekStabilizeUntil) ||
+            (state.seekCooldownUntil && now() < state.seekCooldownUntil);
+          const _phUserSeek = userSeekIntentActive() || (now() - state.lastUserActionTime) < 1500;
           const _phRequestedNearZero = state.pendingSeekTarget != null && Number(state.pendingSeekTarget) < 0.8;
           const _phNearZeroAuthorized =
             nearZeroSeekAuthorized(_phVt) ||
@@ -12330,15 +12401,19 @@ const HAVE_ENOUGH_DATA = 4;
             try { if (!videoEl.paused) videoEl.pause(); } catch {}
             return;
           }
+          // Standalone near-zero revert: only fires if isPhantomRestart didn't
+          // already catch it. Also subject to the rate limiter — if we've reverted
+          // 2+ times in the phantom revert window, let the seek through.
           if (_phVt < 0.5 && _phPrev > 0.9 && state.firstPlayCommitted &&
               !_phNearZeroAuthorized && !_phProgrammatic && !isLoopDesired() &&
               (now() - state.lastUserActionTime) > 3000) {
-            // this is a phantom restart — revert video to its last good position.
-            // don't touch audio — the _seekWouldRestart guard handles that.
-            // Only revert if user hasn't interacted recently — recent interaction
-            // means this could be a real seek that the browser is resolving.
-            try { videoEl.currentTime = _phPrev; } catch {}
-            return;
+            // Check rate limiter from isPhantomRestart — reuse the same counter
+            if (!MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.isPhantomRestart(_phVt)) {
+              // Rate limiter said "enough reverts" — let this seek through
+            } else {
+              try { videoEl.currentTime = _phPrev; } catch {}
+              return;
+            }
           }
 
           // During tab-return immunity, ignore only clearly spurious seeks.
@@ -12466,14 +12541,24 @@ const HAVE_ENOUGH_DATA = 4;
             }
           }, SEEK_WATCHDOG_MS);
 
-          // ALWAYS mute audio during seeking — prevents old buffer content from
-          // playing at full volume between the seek start and audio.currentTime update.
-          // The seeked handler restores volume after the audio position is synced.
+          // ALWAYS pause audio during seeking — prevents old buffer content from
+          // being heard between seek start and audio.currentTime write.
+          // Previous approach: only zero volume for buffered seeks, pause for unbuffered.
+          // Problem: volume-zeroed audio kept playing old content, and if ANY code
+          // restored volume before the currentTime write took effect, old audio leaked.
+          // New approach: PAUSE audio for ALL seeks. Seeked handler resumes + restores
+          // volume after audio position is synced. This is the only safe approach.
           if (coupledMode && audio) {
-            // Zero audio immediately — old content must never be audible during seek
+            // Zero volume AND pause — belt and suspenders
+            try { audio.volume = 0; } catch {}
             if (!audio.paused) {
-              try { audio.volume = 0; } catch {}
+              squelchAudioEvents(600);
+              try {
+                cancelActiveFade();
+                audio.pause();
+              } catch {}
             }
+            // Move audio position to seek target if buffered (best-effort)
             let _seekTargetBuffered = false;
             try {
               const buf = audio.buffered;
@@ -12482,7 +12567,6 @@ const HAVE_ENOUGH_DATA = 4;
               }
             } catch {}
             if (_seekTargetBuffered) {
-              // Fast path: target buffered → move audio position immediately
               const _seekAudioAt = Number(audio.currentTime) || 0;
               const _seekWouldRestart = seekTime < 0.5 && _seekAudioAt > 1.0 && state.firstPlayCommitted && !state.restarting && !isLoopDesired();
               if (!_seekWouldRestart) {
@@ -12490,20 +12574,8 @@ const HAVE_ENOUGH_DATA = 4;
                 try { audio.currentTime = seekTime; } catch {}
                 state._allowAudioTimeWrite = false;
               }
-              if (audio.paused && shouldResumeAfterSeek()) {
-                execProgrammaticAudioPlay({ squelchMs: 200, force: true, minGapMs: 0 }).catch(() => {});
-                armSeekAudioReadyKick(currentSeekId, 2400);
-              }
-            } else {
-              // Slow path: target unbuffered → pause audio entirely
-              if (!audio.paused) {
-                squelchAudioEvents(600);
-                try {
-                  cancelActiveFade();
-                  audio.pause();
-                } catch {}
-              }
             }
+            // Do NOT play audio here — seeked handler owns the resume
           }
 
           if (!shouldResumeAfterSeek()) {
@@ -12614,22 +12686,21 @@ const HAVE_ENOUGH_DATA = 4;
               armSeekAudioReadyKick(_kickSeekId, 2500);
               // single video kick
               if (getVideoPaused()) execProgrammaticVideoPlay();
-              // single audio kick
-              if (audio.paused) {
-                execProgrammaticAudioPlay({ squelchMs: 160, force: true, minGapMs: 0 }).catch(() => {});
-              }
-              // one safety-net retry at 400ms — if something paused either element
-              // (e.g., buffer monitor killed audio because video was briefly starved),
-              // try ONE more time. finalizeSeekSync is the real backstop after this.
-              const _safetyTimer = setTimeout(() => {
+              // single audio kick — use a short delay (60ms) to let the audio
+              // decoder flush its old buffer after the currentTime write above.
+              // Playing immediately can briefly output old buffer content.
+              const _audioKickTimer = setTimeout(() => {
                 if (state.seekId !== _kickSeekId) return;
                 if (!state.intendedPlaying || state.endedNaturally) return;
-                if (getVideoPaused()) execProgrammaticVideoPlay();
                 if (audio.paused) {
                   execProgrammaticAudioPlay({ squelchMs: 160, force: true, minGapMs: 0 }).catch(() => {});
                 }
-              }, 400);
-              state._seekPostTimers.push(_safetyTimer);
+              }, 60);
+              state._seekPostTimers.push(_audioKickTimer);
+              // NO 400ms safety retry. The old retry raced with the buffer monitor:
+              // buffer monitor killed audio (video briefly starved) → retry restarted
+              // it → buffer monitor killed it again → play-pause loop. Instead,
+              // finalizeSeekSync is the single backstop for seek recovery.
             }
             // deferred audio position correction — only if still drifted
             const _seekedId = state.seekId;
@@ -13353,7 +13424,7 @@ const HAVE_ENOUGH_DATA = 4;
     window.addEventListener("focus", () => {
       const _focusTs = now();
       const _isVisible = document.visibilityState === "visible";
-      // Clear stale stall flags    but only if video actually has data.
+      // Clear stale stall flags �� but only if video actually has data.
       // If video is genuinely starved, keep the flags so audio stays paused.
       const _focusVNode = getVideoNode();
       const _focusVRS = _focusVNode ? Number(_focusVNode.readyState || 0) : 4;
