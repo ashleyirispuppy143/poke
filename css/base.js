@@ -14,7 +14,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  * <https://github.com/mozilla/vtt.js/blob/main/LICENSE>
  * /////////////////////////////////////////////////////////////////////////////////////
  * credits:
- * thanks stackoverflow, Claude Opus 4.5, Codex, w3c schools, mdn and more for help in the code for poke player.
+ * thanks stackoverflow, Claude Opus 4.6, Codex, w3c schools, mdn and more for help in the code for poke player.
  * 100% puppy made code! 0 slop guarenteed!
  * also, legit fuck claude's weekly limit #antrophicdobetter #wokeai or something i have no idea,,,they are making claude have pronouns(???)
  * this works, 100%! no issues..at all!!
@@ -28,6 +28,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  
 //////////////// THE PLAYER, START ////////////////////////
  // IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
+// before DOMContentLoaded. Ensures both video and audio start at 00:00
+// even if the browser pre-buffers to a non-zero keyframe position.
+// This runs in a try-catch because elements might not exist yet.
+// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
 // before DOMContentLoaded. Ensures both video and audio start at 00:00
 // even if the browser pre-buffers to a non-zero keyframe position.
 // This runs in a try-catch because elements might not exist yet.
@@ -2501,45 +2505,65 @@ document.addEventListener("DOMContentLoaded", () => {
       const vRS = Number(vNode.readyState || 0);
       const currentVt = Number(vNode.currentTime || 0);
 
-      // CRITICAL FIX: video seeking to 0 on tab return.
-      // The old code used `_preHideTime >= 0 ? _preHideTime : currentVt` as
-      // the target, but if _preHideTime was never captured (first tab return,
-      // race condition, etc.) it was -1 and we fell back to currentVt — which
-      // could itself be 0 if the browser reset during background. Result:
-      // video seeks to 0 and restarts.
+      // CRITICAL FIX: video seeking to 0 / random position on tab return.
       //
-      // Fix: pick a target that's DEFINITELY not zero unless both positions
-      // are genuinely at 0. Prefer the MAX of all known good positions:
-      //   - _preHideTime (captured on hide)
-      //   - currentVt (current position, may have advanced in background)
-      //   - audio.currentTime (often more reliable than video during bg)
-      //   - state.lastKnownGoodVT (last confirmed good position)
-      let _bestReturnTime = 0;
-      const _candidates = [];
-      if (_preHideTime >= 0 && isFinite(_preHideTime)) _candidates.push(_preHideTime);
-      if (isFinite(currentVt) && currentVt > 0) _candidates.push(currentVt);
-      if (coupledMode && audio) {
+      // Strategy: the user's LAST SEEN position is _preHideTime. That's the
+      // ground truth of "where the user was watching". Everything else is
+      // either (a) background playback that advanced naturally (currentVt),
+      // (b) audio that kept running in the background (audio.currentTime), or
+      // (c) the last confirmed good position (state.lastKnownGoodVT).
+      //
+      // Old code used Math.max() over all candidates. That caused the bug the
+      // user reports: if audio ran ahead in the background (coupled bg
+      // playback), audio.currentTime could be 30s while _preHideTime was 25s,
+      // and we'd seek video to 30s — a visible forward jump to a place the
+      // user never actually saw.
+      //
+      // New code: primary target = _preHideTime (if known). Secondary = the
+      // current foreground position (currentVt). We only overshoot forward
+      // to audio.currentTime if the audio-ahead delta is SMALL (<5s) — that
+      // matches natural bg advancement, not a runaway audio clock.
+      const _lastGood = Number(state.lastKnownGoodVT) || 0;
+      let _primaryTarget = -1;
+      if (_preHideTime >= 0 && isFinite(_preHideTime) && _preHideTime > 0.2) {
+        _primaryTarget = _preHideTime;
+      } else if (_lastGood > 0.2) {
+        _primaryTarget = _lastGood;
+      } else if (isFinite(currentVt) && currentVt > 0.2) {
+        _primaryTarget = currentVt;
+      }
+
+      // If currentVt has advanced past _primaryTarget (background did actually
+      // play through normally), trust that — never rewind the user.
+      if (isFinite(currentVt) && currentVt > _primaryTarget) {
+        _primaryTarget = currentVt;
+      }
+
+      // Audio-ahead check: in coupled mode the audio element often keeps
+      // running during background. If audio is AT MOST 5s ahead of our
+      // primary target, that's natural bg advancement — take it. Larger
+      // deltas look like runaway/clock drift and should be ignored.
+      if (coupledMode && audio && _primaryTarget > 0) {
         try {
           const _at = Number(audio.currentTime) || 0;
-          if (isFinite(_at) && _at > 0) _candidates.push(_at);
+          if (isFinite(_at) && _at > _primaryTarget && (_at - _primaryTarget) < 5) {
+            _primaryTarget = _at;
+          }
         } catch {}
       }
-      const _lastGood = Number(state.lastKnownGoodVT) || 0;
-      if (_lastGood > 0) _candidates.push(_lastGood);
-      // Use the maximum — the furthest progress, never an accidental zero.
-      if (_candidates.length > 0) {
-        _bestReturnTime = Math.max.apply(null, _candidates);
-      }
-      const targetTime = _bestReturnTime > 0 ? _bestReturnTime : currentVt;
 
-      // Resync if video drifted from the target (background playback can
-      // advance position, or browser may reset it to 0 on some platforms).
-      // Guard: never seek to near-0 if we KNOW we were playing past 0.
-      // Also: never seek video BACKWARD on tab return — if currentVt is
-      // already >= targetTime, the video has already advanced naturally
-      // and moving it back would cause the "seek to 0 / seek-back" bug.
+      const targetTime = _primaryTarget > 0 ? _primaryTarget : currentVt;
+
+      // Resync ONLY if drift is large enough to matter. Previously we seeked
+      // for 0.1s drift, which caused audible/visible "random seeks" on every
+      // tab return. Real drift from bg playback is either very small (<1s)
+      // or very large (>5s, bg was suspended). Middle cases don't exist.
+      //
+      // Never seek video BACKWARD on tab return — if currentVt is already
+      // >= targetTime, the video has already advanced naturally and moving
+      // it back would cause the "seek to 0 / seek-back" bug.
       if (targetTime > 0.5 && isFinite(currentVt) &&
-          currentVt < targetTime - SYNC_PRECISION &&
+          currentVt < targetTime - 1.5 &&
           Math.abs(currentVt - targetTime) < 300) { // cap drift at 5 minutes
         state._isMicroSeek = true;
         try { vNode.currentTime = targetTime; } catch {}
@@ -2567,13 +2591,21 @@ document.addEventListener("DOMContentLoaded", () => {
       // HARD GUARD: never perform the compositor-flush write if:
       //   (a) _finalSeekTarget would land near zero (that IS the seek-to-0 bug), or
       //   (b) the write would move video BACKWARD from where it currently is, or
-      //   (c) the write would overshoot duration and trigger an ended event.
-      // In those cases, skip the flush entirely — the browser's own playing
-      // event will flush the stale frame when playback resumes.
+      //   (c) the write would overshoot duration and trigger an ended event, or
+      //   (d) the decoder is still live (readyState >= HAVE_CURRENT_DATA).
+      //
+      // CRITICAL: the compositor flush (+0.01 write) is ONLY needed when the
+      // decoder was fully suspended (vRS < HAVE_CURRENT_DATA). When the decoder
+      // is still live, writing currentTime triggers a real demuxer seek and
+      // causes a visible seek/jank/shake on tab return — that's the bug the
+      // user reports. Modern browsers flush the compositor on the next frame
+      // when "playing" fires, so skipping this write is strictly better.
       const _flushTarget = _finalSeekTarget + 0.01;
       let _flushVideoDuration = 0;
       try { _flushVideoDuration = Number(vNode.duration) || 0; } catch {}
+      const _decoderSuspended = vRS < HAVE_CURRENT_DATA;
       const _flushSafe =
+        _decoderSuspended &&
         _finalSeekTarget >= 0.5 &&
         _flushTarget >= (isFinite(currentVt) ? currentVt : 0) - 0.001 &&
         (_flushVideoDuration <= 0 || _flushTarget < _flushVideoDuration - 0.5);
@@ -8139,7 +8171,16 @@ const HAVE_ENOUGH_DATA = 4;
       // Double-check: if browser moved currentTime forward (keyframe buffering),
       // force it back to 0. This catches the race where forceZeroBeforeFirstPlay
       // set ct=0 but the browser's async buffering moved it to a keyframe at 1-2s.
-      if ((!state.firstPlayCommitted || state.startupPhase) && !startupZeroSuppressed()) {
+      //
+      // CRITICAL: only do this BEFORE firstPlayCommitted. The old code also ran
+      // during state.startupPhase (which stays true for 500-800ms AFTER firstPlay
+      // commits). That meant we could yank a currently-playing video back to 0,
+      // producing a visible "start → seek-back → play" glitch that looked like
+      // play-pause-play on video start.
+      //
+      // Also require the video to actually be PAUSED — if it's already playing,
+      // we must never forcibly rewind it.
+      if (!state.firstPlayCommitted && !startupZeroSuppressed() && getVideoPaused()) {
         const _preVt = Number(video.currentTime()) || 0;
         if (_preVt > 0.5) {
           try { video.currentTime(0); } catch {}
@@ -9881,6 +9922,27 @@ const HAVE_ENOUGH_DATA = 4;
     }
   }
 
+  // --- heartbeat-level frozen video backup detector ---
+  // The rAF-based freeze detector in MakeVideoNotFreezeAfterPlaybackAfterAltTabHapenns
+  // is the primary mechanism. But rAF itself can be throttled by the browser
+  // (tab marginally in focus, window minimized, GPU backpressure), and if the
+  // rAF loop stops firing, the freeze detector goes silent — which is exactly
+  // when we'd want it most. This heartbeat-based backup runs on setTimeout
+  // (never throttled to the point of invisibility on visible tabs) and kicks
+  // in as a last-resort safety net.
+  //
+  // Detection: currentTime not advancing for 4+ seconds while visible, focused,
+  // intendedPlaying, not paused, not seeking, and readyState says we have data.
+  // Recovery: a SAFE micro-seek (+0.01) followed by a play() nudge.
+  //
+  // Cooldown: 5s between kicks so we don't thrash if the kick itself doesn't
+  // immediately unstick the decoder.
+  let _hbFreezeLastVt = -1;
+  let _hbFreezeStuckSince = 0;
+  let _hbFreezeLastKickAt = 0;
+  const HB_FREEZE_THRESHOLD_MS = 4000;
+  const HB_FREEZE_KICK_COOLDOWN_MS = 5000;
+
   // --- heartbeat: detects device sleep/wake, persistent stalls, and state inconsistency
   function setupHeartbeat() {
     state.lastHeartbeatAt = now();
@@ -10217,6 +10279,100 @@ const HAVE_ENOUGH_DATA = 4;
                   if (state.bgResumeInFlight && state.lastBgReturnAt > 0 &&
                       (nowTs - state.lastBgReturnAt) > 8000) {
                     state.bgResumeInFlight = false;
+                  }
+
+                  // --- heartbeat-level frozen video backup detector ---
+                  // Last-resort backup for the rAF-based freeze detector. The rAF
+                  // loop is the primary mechanism, but if the browser stops firing
+                  // rAF (minimized, throttled, GPU backpressure), we need a timer-
+                  // based safety net. Runs every HEARTBEAT_INTERVAL_MS (1500ms).
+                  //
+                  // Conditions for "video is frozen":
+                  //   - intendedPlaying
+                  //   - visible + focused + stable
+                  //   - not paused, not seeking, not buffering, not restarting
+                  //   - readyState >= HAVE_FUTURE_DATA (we have data to advance)
+                  //   - currentTime has not changed by > 0.01s since last check
+                  //   - no recent seek activity
+                  //   - not in bg-return grace / visibility transition
+                  //
+                  // Recovery: safe +0.01 micro-seek + play() kick, marked with
+                  // _isMicroSeek so seeking/seeked handlers don't cascade it into
+                  // the seek machinery.
+                  if (
+                    state.intendedPlaying && !state.endedNaturally && !state.restarting &&
+                    !state.seeking && !state.seekBuffering && !state.seekResumeInFlight &&
+                    !state.strictBufferHold && !state.videoWaiting &&
+                    !state.videoStallAudioPaused &&
+                    !seekRecoveryActive(1500) &&
+                    !userPauseLockActive() && !mediaSessionForcedPauseActive() &&
+                    !inMediaTxnWindow() && !inBgReturnGrace() &&
+                    !isVisibilityTransitionActive() && !isAltTabTransitionActive() &&
+                    document.visibilityState === "visible" && isWindowFocused() &&
+                    isVisibilityStable() && isFocusStable()
+                  ) {
+                    const _frzVNode = getVideoNode();
+                    if (_frzVNode && !_frzVNode.paused) {
+                      const _frzVt = Number(_frzVNode.currentTime) || 0;
+                      const _frzRS = Number(_frzVNode.readyState || 0);
+                      const _frzDur = Number(_frzVNode.duration) || 0;
+                      // Only consider the video "frozen" if it has data and isn't at EOF.
+                      const _frzHasData = _frzRS >= HAVE_FUTURE_DATA;
+                      const _frzNotAtEnd = _frzDur <= 0 || _frzVt < _frzDur - 0.5;
+                      if (_frzHasData && _frzNotAtEnd) {
+                        if (_hbFreezeLastVt >= 0 && Math.abs(_frzVt - _hbFreezeLastVt) < 0.01) {
+                          if (!_hbFreezeStuckSince) _hbFreezeStuckSince = nowTs;
+                          const _stuckFor = nowTs - _hbFreezeStuckSince;
+                          if (_stuckFor >= HB_FREEZE_THRESHOLD_MS &&
+                              (nowTs - _hbFreezeLastKickAt) >= HB_FREEZE_KICK_COOLDOWN_MS) {
+                            _hbFreezeLastKickAt = nowTs;
+                            _hbFreezeStuckSince = 0;
+                            // Safe micro-seek: +0.01s forward, never backward,
+                            // never past EOF. Marked as _isMicroSeek so it
+                            // doesn't cascade into the seek retry chain.
+                            const _kickTarget = _frzVt + 0.01;
+                            if (_kickTarget > _frzVt && (_frzDur <= 0 || _kickTarget < _frzDur - 0.5)) {
+                              state._isMicroSeek = true;
+                              try { _frzVNode.currentTime = _kickTarget; } catch {}
+                              setTimeout(() => { state._isMicroSeek = false; }, 200);
+                              // Nudge play() — through the unified lock so we
+                              // don't race other kick paths.
+                              if (_frzVNode.paused && tryAcquireVideoPlayLock()) {
+                                DONTMAKEITDOUBLEPLAY.resetAll();
+                                const _p = execProgrammaticVideoPlay();
+                                if (_p && typeof _p.catch === "function") _p.catch(() => {});
+                              }
+                              // Also nudge audio if we're in coupled mode and
+                              // audio is paused — but only if we're not in a
+                              // delicate post-seek window.
+                              if (coupledMode && audio && audio.paused &&
+                                  !state.seeking && !state.seekBuffering &&
+                                  canResumeAudio && canResumeAudio()) {
+                                try {
+                                  state._allowAudioTimeWrite = true;
+                                  safeSetAudioTime(_kickTarget);
+                                  state._allowAudioTimeWrite = false;
+                                } catch {}
+                                execProgrammaticAudioPlay({ squelchMs: 160, force: true, minGapMs: 0 })
+                                  .catch(() => {});
+                              }
+                            }
+                          }
+                        } else {
+                          _hbFreezeStuckSince = 0;
+                        }
+                        _hbFreezeLastVt = _frzVt;
+                      } else {
+                        _hbFreezeLastVt = -1;
+                        _hbFreezeStuckSince = 0;
+                      }
+                    } else {
+                      _hbFreezeLastVt = -1;
+                      _hbFreezeStuckSince = 0;
+                    }
+                  } else {
+                    _hbFreezeLastVt = -1;
+                    _hbFreezeStuckSince = 0;
                   }
 
                   state.heartbeatTimer = setTimeout(beat, HEARTBEAT_INTERVAL_MS);
@@ -11740,11 +11896,21 @@ const HAVE_ENOUGH_DATA = 4;
 
             // --- startup guard: during page load, video can get paused by buffering.
             // Aggressively restart — don't just schedule a sync in 300ms.
+            //
+            // Debounced at 180ms: without this, a browser that pauses and emits
+            // rapid pause events during initial buffering would produce the
+            // visible play-pause-play-pause spam the user sees on video start.
+            // 180ms is tight enough for real startup recovery, loose enough to
+            // collapse tight pause bursts into a single counter-play.
             if (!state.firstPlayCommitted && state.intendedPlaying && !mediaSessionForcedPauseActive()) {
-              DONTMAKEITDOUBLEPLAY.resetAll();
-              execProgrammaticVideoPlay();
-              if (coupledMode && audio && audio.paused && !state.endedNaturally) {
-                execProgrammaticAudioPlay({ squelchMs: 200, force: true, minGapMs: 0 }).catch(() => {});
+              const _nowStartup = now();
+              if ((_nowStartup - (state._startupCounterPlayAt || 0)) >= 180) {
+                state._startupCounterPlayAt = _nowStartup;
+                DONTMAKEITDOUBLEPLAY.resetAll();
+                execProgrammaticVideoPlay();
+                if (coupledMode && audio && audio.paused && !state.endedNaturally) {
+                  execProgrammaticAudioPlay({ squelchMs: 200, force: true, minGapMs: 0 }).catch(() => {});
+                }
               }
               return;
             }
