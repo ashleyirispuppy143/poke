@@ -31,14 +31,6 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
 // before DOMContentLoaded. Ensures both video and audio start at 00:00
 // even if the browser pre-buffers to a non-zero keyframe position.
 // This runs in a try-catch because elements might not exist yet.
-// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
-// before DOMContentLoaded. Ensures both video and audio start at 00:00
-// even if the browser pre-buffers to a non-zero keyframe position.
-// This runs in a try-catch because elements might not exist yet.
-// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
-// before DOMContentLoaded. Ensures both video and audio start at 00:00
-// even if the browser pre-buffers to a non-zero keyframe position.
-// This runs in a try-catch because elements might not exist yet.
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -2460,12 +2452,18 @@ document.addEventListener("DOMContentLoaded", () => {
       const vNode = getVideoNode();
       const _vt = vNode ? (Number(vNode.currentTime) || 0) : -1;
       const _at = (coupledMode && audio) ? (Number(audio.currentTime) || 0) : -1;
-      // Take the max of the two, but only if both are valid numbers
-      if (_vt >= 0 && _at >= 0) {
-        _preHideTime = Math.max(_vt, _at);
-      } else if (_vt >= 0) {
+
+      // CRITICAL: use VIDEO position as the ground truth for "where the user
+      // was watching". Audio can run ahead in coupled bg playback (it keeps
+      // playing while the browser throttles video). Taking Math.max(vt, at)
+      // caused the "continues from a random place" bug: if audio was 5s ahead,
+      // _preHideTime would be the audio position and we'd seek video there on
+      // return — jumping forward past content the user never watched.
+      //
+      // Correct priority: video > audio (fallback if video unavailable).
+      if (_vt > 0.1) {
         _preHideTime = _vt;
-      } else if (_at >= 0) {
+      } else if (_at > 0.1) {
         _preHideTime = _at;
       } else {
         _preHideTime = -1;
@@ -2473,8 +2471,7 @@ document.addEventListener("DOMContentLoaded", () => {
       _preHideAudioTime = _at;
       _wasPlayingBeforeHide = state.intendedPlaying && !getVideoPaused();
       _tabReturnMicroSeekDone = false;
-      // Also refresh lastKnownGoodVT so on return, the candidates list has a
-      // correct entry even if captured state gets wiped.
+      // Refresh lastKnownGoodVT using video position (same logic).
       if (_preHideTime > 0) {
         state.lastKnownGoodVT = Math.max(Number(state.lastKnownGoodVT) || 0, _preHideTime);
         state.lastKnownGoodVTts = now();
@@ -2568,8 +2565,26 @@ document.addEventListener("DOMContentLoaded", () => {
         state._isMicroSeek = true;
         try { vNode.currentTime = targetTime; } catch {}
         if (coupledMode && audio) {
-          safeSetAudioTime(targetTime);
+          // Bypass safeSetAudioTime's backward-seek guard: on tab return, audio
+          // can be far ahead of targetTime and the guard would block correction.
+          state._allowAudioTimeWrite = true;
+          try { audio.currentTime = targetTime; } catch {}
+          state._allowAudioTimeWrite = false;
         }
+      } else if (coupledMode && audio && targetTime > 0.1) {
+        // Even when video doesn't need a corrective seek, always snap audio
+        // back to targetTime (where user was actually watching) if it drifted
+        // more than 1s ahead/behind. Audio can be seconds ahead after bg play.
+        try {
+          const _tabAt = Number(audio.currentTime) || 0;
+          const _tabDrift = Math.abs(_tabAt - targetTime);
+          if (_tabDrift > 1.0 && (_tabAt - targetTime) > 0) {
+            // Audio is ahead — bring it back to where user left off.
+            state._allowAudioTimeWrite = true;
+            try { audio.currentTime = targetTime; } catch {}
+            state._allowAudioTimeWrite = false;
+          }
+        } catch {}
       }
 
       // Mark as micro-seek so seeking/seeked handlers ignore this
@@ -2654,11 +2669,11 @@ document.addEventListener("DOMContentLoaded", () => {
             clearInterval(_tabReturnPollTimer); _tabReturnPollTimer = null;
             return;
           }
-          // At 300ms: harder kick — pause, re-seek, play (with safe seek target).
-          // Only re-seek if the target is non-trivial AND we wouldn't move the
-          // video backward. Otherwise, just kick play() without touching time.
+          // At 300ms: harder kick — re-seek + play. Do NOT pause first.
+          // Pausing before the seek causes: freeze-frame → seek flash → play,
+          // which is the visible "flash of a scene / video shake" the user reports.
+          // Just re-seek and play() — the seek itself replaces the current frame.
           if (_retryCount === 3 && !NotMakePlayBackFixingNoticable.isRecovering()) {
-            try { vNode.pause(); } catch {}
             const _curAtRetry = Number(vNode.currentTime) || 0;
             let _retryDur = 0;
             try { _retryDur = Number(vNode.duration) || 0; } catch {}
@@ -4858,20 +4873,31 @@ const HAVE_ENOUGH_DATA = 4;
           if (coupledMode && audio) {
             try { audio.volume = targetVolFromVideo(); } catch {}
             const _atVRS = _atVN ? Number(_atVN.readyState || 0) : 4;
-            if (audio.paused && _atVRS >= 3) {
+            // HAVE_CURRENT_DATA (2) is enough to resume — waiting for HAVE_FUTURE_DATA
+            // (3) delayed audio by 100-400ms after alt-tab when the decoder briefly
+            // dropped to readyState 2 during the focus transition.
+            if (audio.paused && _atVRS >= HAVE_CURRENT_DATA) {
               state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 800);
               try { _nativePlayAT.call(audio).catch(() => {}); } catch {}
             }
-            // Defer position correction 80ms — don't seek while play() is resuming,
+            // Defer position correction 60ms — don't seek while play() is resuming,
             // that creates an audible skip. Let the decoder resume first.
             setTimeout(() => {
-              if (!coupledMode || !audio || audio.paused) return;
+              if (!coupledMode || !audio) return;
               const _atVT = (() => { try { return Number(video.currentTime()); } catch { return 0; } })();
               const _atAT = Number(audio.currentTime) || 0;
-              if (isFinite(_atVT) && Math.abs(_atAT - _atVT) > 1.0) {
-                safeSetAudioTime(_atVT);
+              if (isFinite(_atVT) && _atVT > 0.1 && Math.abs(_atAT - _atVT) > 0.5) {
+                // Use direct write here — we want audio to snap back to video
+                // position regardless of forward/backward direction.
+                state._allowAudioTimeWrite = true;
+                try { audio.currentTime = _atVT; } catch {}
+                state._allowAudioTimeWrite = false;
+                if (audio.paused) {
+                  state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 600);
+                  try { _nativePlayAT.call(audio).catch(() => {}); } catch {}
+                }
               }
-            }, 80);
+            }, 60);
           }
         }
       }
@@ -13065,22 +13091,20 @@ const HAVE_ENOUGH_DATA = 4;
                 audio.pause();
               } catch {}
             }
-            // Move audio position to seek target if buffered (best-effort)
-            let _seekTargetBuffered = false;
-            try {
-              const buf = audio.buffered;
-              for (let i = 0; i < buf.length; i++) {
-                if (buf.start(i) <= seekTime + 0.3 && buf.end(i) > seekTime) { _seekTargetBuffered = true; break; }
-              }
-            } catch {}
-            if (_seekTargetBuffered) {
-              const _seekAudioAt = Number(audio.currentTime) || 0;
-              const _seekWouldRestart = seekTime < 0.5 && _seekAudioAt > 1.0 && state.firstPlayCommitted && !state.restarting && !isLoopDesired();
-              if (!_seekWouldRestart) {
-                state._allowAudioTimeWrite = true;
-                try { audio.currentTime = seekTime; } catch {}
-                state._allowAudioTimeWrite = false;
-              }
+            // Move audio position to seek target — EAGERLY, regardless of buffering.
+            // Previously we only did this when the target was in the audio buffer.
+            // But for unbuffered seeks (common when scrubbing to new positions),
+            // seeking audio here gives the decoder a head-start: it starts
+            // requesting the new data immediately rather than waiting for seeked
+            // + 60ms kick. On typical connections, this cuts audio latency by
+            // 150-400ms — the difference between "audio starts right away" and
+            // "audio comes really late after seek".
+            const _seekAudioAt = Number(audio.currentTime) || 0;
+            const _seekWouldRestart = seekTime < 0.5 && _seekAudioAt > 1.0 && state.firstPlayCommitted && !state.restarting && !isLoopDesired();
+            if (!_seekWouldRestart && isFinite(seekTime) && seekTime >= 0) {
+              state._allowAudioTimeWrite = true;
+              try { audio.currentTime = seekTime; } catch {}
+              state._allowAudioTimeWrite = false;
             }
             // Do NOT play audio here — seeked handler owns the resume
           }
@@ -13213,20 +13237,27 @@ const HAVE_ENOUGH_DATA = 4;
               const _kickAudio = (attemptId) => {
                 if (state.seekId !== _kickSeekId) return;
                 if (!state.intendedPlaying || state.endedNaturally) return;
-                if (!audio.paused) return; // already playing
                 // Re-sync position to current video just before replay —
                 // catches cases where audio decoder seeked to wrong frame.
+                // Do this BEFORE the paused check so even playing-but-desynced
+                // audio gets corrected.
                 try {
                   const _kickVt = Number(video.currentTime()) || 0;
                   const _kickAt = Number(audio.currentTime) || 0;
-                  if (isFinite(_kickVt) && _kickVt > 0.2 &&
-                      Math.abs(_kickAt - _kickVt) > 0.35) {
+                  const _kickDrift = Math.abs(_kickAt - _kickVt);
+                  if (isFinite(_kickVt) && _kickVt > 0.2 && _kickDrift > 0.35) {
                     state._allowAudioTimeWrite = true;
                     try { audio.currentTime = _kickVt; } catch {}
                     state._allowAudioTimeWrite = false;
+                    // If audio was playing at the wrong position, pause it so
+                    // the play() below actually restarts at the correct position.
+                    if (!audio.paused && _kickDrift > 1.0) {
+                      try { audio.pause(); } catch {}
+                    }
                   }
                 } catch {}
-                execProgrammaticAudioPlay({ squelchMs: 160, force: true, minGapMs: 0 }).catch(() => {});
+                if (!audio.paused) return; // already playing at correct position
+                execProgrammaticAudioPlay({ squelchMs: 80, force: true, minGapMs: 0 }).catch(() => {});
               };
               const _t1 = setTimeout(() => _kickAudio(1), 60);
               const _t2 = setTimeout(() => _kickAudio(2), 250);
