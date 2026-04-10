@@ -31,6 +31,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
 // before DOMContentLoaded. Ensures both video and audio start at 00:00
 // even if the browser pre-buffers to a non-zero keyframe position.
 // This runs in a try-catch because elements might not exist yet.
+// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
+// before DOMContentLoaded. Ensures both video and audio start at 00:00
+// even if the browser pre-buffers to a non-zero keyframe position.
+// This runs in a try-catch because elements might not exist yet.
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -1530,10 +1534,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
       try {
         // Seek to current position + small offset to flush stale decoder pipeline.
-        // 0.01s is large enough for the demuxer to treat as a real seek,
-        // small enough to be invisible. 0.001 was sometimes ignored.
+        // ONLY when the decoder is suspended (readyState < HAVE_CURRENT_DATA).
+        // When the decoder is still live, writing currentTime triggers a real
+        // demuxer seek → visible jank/shake on tab return. The play() call
+        // below is sufficient for live decoders — modern browsers flush the
+        // compositor on the next frame when "playing" fires.
         const vt = Number(vn.currentTime) || 0;
-        if (vt > 0) {
+        const _nmpRS = Number(vn.readyState || 0);
+        if (vt > 0 && _nmpRS < HAVE_CURRENT_DATA) {
           state._isMicroSeek = true;
           try { vn.currentTime = vt + 0.01; } catch {}
           setTimeout(() => { state._isMicroSeek = false; }, 200);
@@ -1579,7 +1587,7 @@ document.addEventListener("DOMContentLoaded", () => {
         state._allowAudioTimeWrite = false;
         // Set volume and play
         try { audio.volume = targetVol; } catch {}
-        state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 80);
+        state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 800);
         if (audio.paused && !state.endedNaturally) {
           try { _nPlay.call(audio).catch(() => {}); } catch {}
         }
@@ -2471,9 +2479,12 @@ document.addEventListener("DOMContentLoaded", () => {
       _preHideAudioTime = _at;
       _wasPlayingBeforeHide = state.intendedPlaying && !getVideoPaused();
       _tabReturnMicroSeekDone = false;
-      // Refresh lastKnownGoodVT using video position (same logic).
+      // Refresh lastKnownGoodVT using video position. Use assignment (not max)
+      // because lastKnownGoodVT may have been advanced by background playback
+      // to a position past where the user was actually watching. _preHideTime
+      // is the user's real position — it must be authoritative.
       if (_preHideTime > 0) {
-        state.lastKnownGoodVT = Math.max(Number(state.lastKnownGoodVT) || 0, _preHideTime);
+        state.lastKnownGoodVT = _preHideTime;
         state.lastKnownGoodVTts = now();
       }
     }
@@ -2530,24 +2541,14 @@ document.addEventListener("DOMContentLoaded", () => {
         _primaryTarget = currentVt;
       }
 
-      // If currentVt has advanced past _primaryTarget (background did actually
-      // play through normally), trust that — never rewind the user.
-      if (isFinite(currentVt) && currentVt > _primaryTarget) {
-        _primaryTarget = currentVt;
-      }
-
-      // Audio-ahead check: in coupled mode the audio element often keeps
-      // running during background. If audio is AT MOST 5s ahead of our
-      // primary target, that's natural bg advancement — take it. Larger
-      // deltas look like runaway/clock drift and should be ignored.
-      if (coupledMode && audio && _primaryTarget > 0) {
-        try {
-          const _at = Number(audio.currentTime) || 0;
-          if (isFinite(_at) && _at > _primaryTarget && (_at - _primaryTarget) < 5) {
-            _primaryTarget = _at;
-          }
-        } catch {}
-      }
+      // DO NOT override _primaryTarget with currentVt or audio.currentTime.
+      // The old code took Math.max / allowed forward-override, which meant
+      // if video or audio continued playing in background (browsers do this),
+      // we'd seek to whatever advanced position they reached — NOT where the
+      // user was actually watching. _preHideTime is the ground truth.
+      //
+      // The only valid "forward override" is if _primaryTarget is invalid/zero
+      // and currentVt has some data — but that's already handled above.
 
       const targetTime = _primaryTarget > 0 ? _primaryTarget : currentVt;
 
@@ -2573,13 +2574,12 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       } else if (coupledMode && audio && targetTime > 0.1) {
         // Even when video doesn't need a corrective seek, always snap audio
-        // back to targetTime (where user was actually watching) if it drifted
-        // more than 1s ahead/behind. Audio can be seconds ahead after bg play.
+        // back to targetTime (where user was actually watching) if it drifted.
+        // Audio can be seconds ahead OR behind after bg play / alt-tab.
         try {
           const _tabAt = Number(audio.currentTime) || 0;
           const _tabDrift = Math.abs(_tabAt - targetTime);
-          if (_tabDrift > 1.0 && (_tabAt - targetTime) > 0) {
-            // Audio is ahead — bring it back to where user left off.
+          if (_tabDrift > 0.5) {
             state._allowAudioTimeWrite = true;
             try { audio.currentTime = targetTime; } catch {}
             state._allowAudioTimeWrite = false;
@@ -4310,7 +4310,7 @@ const HAVE_ENOUGH_DATA = 4;
   const TAB_VISIBILITY_STABLE_MS = 900;
   const VISIBILITY_TRANSITION_MS = 450;
   const MAX_BG_PAUSE_SUPPRESSIONS = 200;
-  const ALT_TAB_TRANSITION_MS = 1100;
+  const ALT_TAB_TRANSITION_MS = 500;
   const FOCUS_LOSS_RESET_MS = 12000;
   const CHROMIUM_PAUSE_EVENT_SUPPRESS_MS = 2600;
   const PAUSE_EVENT_RESET_MS = 15000;
@@ -4867,9 +4867,20 @@ const HAVE_ENOUGH_DATA = 4;
           // Use native play() to bypass all wrappers for max speed.
           // NEVER restart after ended — this was an unguarded native play() path.
           if (state.endedNaturally) return;
+          // Engage pause intercept so browser's auto-pause on alt-tab return
+          // is blocked. Without this, the browser fires pause → user sees video
+          // stop → then our counter-play kicks in 100-200ms later = visible
+          // "pauses and then starts playing a bit later" glitch.
+          engagePauseIntercept();
           const _nativePlayAT = HTMLMediaElement.prototype.play;
           const _atVN = getVideoNode();
-          if (_atVN && _atVN.paused) { try { _nativePlayAT.call(_atVN).catch(() => {}); } catch {} }
+          // Always call play() — even if !paused, calling play() on a playing
+          // element is a no-op but ensures the browser's internal pause doesn't
+          // race ahead of us.
+          if (_atVN) {
+            DONTMAKEITDOUBLEPLAY.resetAll();
+            try { _nativePlayAT.call(_atVN).catch(() => {}); } catch {}
+          }
           if (coupledMode && audio) {
             try { audio.volume = targetVolFromVideo(); } catch {}
             const _atVRS = _atVN ? Number(_atVN.readyState || 0) : 4;
@@ -9519,7 +9530,8 @@ const HAVE_ENOUGH_DATA = 4;
             }
           }
         }
-        if (state.intendedPlaying && !getVideoPaused() && vt > 0.1) {
+        if (state.intendedPlaying && !getVideoPaused() && vt > 0.1 &&
+            document.visibilityState === "visible") {
           updateLastKnownGoodVT();
         }
 
@@ -11803,6 +11815,15 @@ const HAVE_ENOUGH_DATA = 4;
                 if (_cpDur > 0.5 && _cpCT >= _cpDur - 0.5) return; // at the end — don't fight
               }
             } catch {}
+            // DEBOUNCE: collapse rapid pause events into at most one counter-play
+            // per 180ms. Without this, browser-fired rapid pause events (during
+            // buffering stalls, post-seek settle, alt-tab transitions) each
+            // trigger a separate vn.play() call, creating visible play-pause-play
+            // spam. 180ms is tight enough for real recovery but loose enough to
+            // collapse pause bursts into a single counter-play.
+            const _cpNow = now();
+            if ((_cpNow - (state._counterPlayLastAt || 0)) < 180) return;
+            state._counterPlayLastAt = _cpNow;
             VisibilityGuard.onPlayCalled();
             // Set audio grace so the "playing" handler's audio resume isn't
             // immediately killed by the buffer monitor or waiting handler
@@ -13053,7 +13074,7 @@ const HAVE_ENOUGH_DATA = 4;
             state.lastKnownGoodVT = seekTime;
             state.lastKnownGoodVTts = now();
           }
-          state.seekCooldownUntil = now() + 2200;
+          state.seekCooldownUntil = now() + 1200;
 
           state.videoWaiting = false;
           state.audioWaiting = false;
@@ -13257,6 +13278,11 @@ const HAVE_ENOUGH_DATA = 4;
                   }
                 } catch {}
                 if (!audio.paused) return; // already playing at correct position
+                // Reset play dedup so our kick isn't blocked by a recent
+                // play() from the "playing" handler or other code path.
+                // Without this, the 200ms dedup window eats kick attempts
+                // and audio stays silent until the next retry.
+                DONTMAKEITDOUBLEPLAY.reset(audio);
                 execProgrammaticAudioPlay({ squelchMs: 80, force: true, minGapMs: 0 }).catch(() => {});
               };
               const _t1 = setTimeout(() => _kickAudio(1), 60);
@@ -13987,7 +14013,6 @@ const HAVE_ENOUGH_DATA = 4;
         state.focusStableUntil = now() + ALT_TAB_TRANSITION_MS;
         setChromiumAutoPauseBlock(ALT_TAB_TRANSITION_MS + 2000);
         setChromiumBgPauseBlock(CHROMIUM_BG_PAUSE_BLOCK_MS);
-        // Use ALT_TAB_TRANSITION_MS (3500ms) instead of CHROMIUM_PAUSE_EVENT_SUPPRESS_M
         setChromiumPauseEventSuppress(ALT_TAB_TRANSITION_MS);
       }
     }, { passive: true, capture: true });
