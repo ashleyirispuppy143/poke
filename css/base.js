@@ -1557,13 +1557,16 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         try { if (!state.userMutedVideo && getVideoMutedState()) setVideoMutedState(false); } catch {}
 
-        // Mute audio during video recovery — will be started by canplay.
-        // EXCEPTION: if both tracks are already playing (e.g. Chromium woke
-        // both on tab return), zeroing volume causes an audible blip. Skip
-        // the volume=0 in that case — _cpStartAudio will just restore volume.
+        // Mute audio during video recovery — will be faded back up by canplay.
+        // CRITICAL: only zero audio if audio is actually PAUSED (needs to restart).
+        // If audio is already playing (keepalive kept it alive while video was
+        // suspended by Chromium), zeroing volume creates an audible dip even
+        // if we immediately restore it. The old check was !vn.paused — but
+        // Chromium pauses video on tab hide, so vn.paused=true on return even
+        // when audio was running fine. Check audio state directly.
         if (coupledMode && audio) {
-          const _alreadyBothPlaying = !vn.paused && !audio.paused;
-          if (!_alreadyBothPlaying) {
+          const _audioCurrentlyPlaying = !audio.paused;
+          if (!_audioCurrentlyPlaying) {
             try { audio.volume = 0; } catch {}
           }
           try { if (audio.muted && !state.userMutedAudio) audio.muted = false; } catch {}
@@ -2568,38 +2571,38 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const targetTime = _primaryTarget > 0 ? _primaryTarget : currentVt;
 
-      // Resync if drift is large enough to matter. Corrects BOTH directions:
-      //   - Video behind target (browser suspended video in bg): seek forward
-      //   - Video ahead of target (bg playback continued): seek backward to
-      //     where user was actually watching. The old code never seeked backward,
-      //     which caused "video plays from wrong place on tab return" when bg
-      //     playback advanced video past the user's last-seen position.
-      // The "seek to 0" bug was caused by bad target calculation, not by
-      // backward seeking itself. targetTime comes from _preHideTime which is
-      // the user's real position — seeking to it is always correct.
+      // Resync video only when it's BEHIND the target position (browser suspended
+      // video while the tab was hidden). Do NOT seek backward if video ran
+      // AHEAD — that means background playback continued normally, and seeking
+      // back would jump the user to a position they already watched.
+      // The "few seconds before" bug: video advanced 3s in bg → old code seeked
+      // back 3s → user sees a rewind. Fix: only seek forward, never backward.
       if (targetTime > 0.5 && isFinite(currentVt) &&
-          (currentVt < targetTime - 1.5 || currentVt > targetTime + 2.0) &&
-          Math.abs(currentVt - targetTime) < 300) { // cap drift at 5 minutes
+          currentVt < targetTime - 1.5 &&   // only seek if video is BEHIND target
+          Math.abs(currentVt - targetTime) < 300) { // cap at 5 min
         state._isMicroSeek = true;
         try { vNode.currentTime = targetTime; } catch {}
         if (coupledMode && audio) {
-          // Bypass safeSetAudioTime's backward-seek guard: on tab return, audio
-          // can be far ahead of targetTime and the guard would block correction.
           state._allowAudioTimeWrite = true;
           try { audio.currentTime = targetTime; } catch {}
           state._allowAudioTimeWrite = false;
         }
-      } else if (coupledMode && audio && targetTime > 0.1) {
-        // Even when video doesn't need a corrective seek, always snap audio
-        // back to targetTime (where user was actually watching) if it drifted.
-        // Audio can be seconds ahead OR behind after bg play / alt-tab.
+      } else if (coupledMode && audio) {
+        // Video doesn't need a seek. Sync audio to wherever video actually IS
+        // (currentVt), not to _preHideTime. If video played forward in bg,
+        // audio should play from video's current position, not jump back.
+        // Only sync when drift is meaningful.
         try {
-          const _tabAt = Number(audio.currentTime) || 0;
-          const _tabDrift = Math.abs(_tabAt - targetTime);
-          if (_tabDrift > 0.5) {
-            state._allowAudioTimeWrite = true;
-            try { audio.currentTime = targetTime; } catch {}
-            state._allowAudioTimeWrite = false;
+          const _syncAudioTo = (isFinite(currentVt) && currentVt > 0.2) ? currentVt
+            : (targetTime > 0.1 ? targetTime : 0);
+          if (_syncAudioTo > 0.1) {
+            const _tabAt = Number(audio.currentTime) || 0;
+            const _tabDrift = Math.abs(_tabAt - _syncAudioTo);
+            if (_tabDrift > 0.5) {
+              state._allowAudioTimeWrite = true;
+              try { audio.currentTime = _syncAudioTo; } catch {}
+              state._allowAudioTimeWrite = false;
+            }
           }
         } catch {}
       }
@@ -7843,18 +7846,22 @@ const HAVE_ENOUGH_DATA = 4;
       state.bgHiddenWasPlaying = false;
       state.resumeOnVisible = false;
 
-      // Resume from the user's last-seen position (bestPos = lastKnownGoodVT).
-      // Seek both tracks to this position so the user continues from where they
-      // left off, not wherever audio/video drifted during background playback.
-      if (bestPos > 0.1) {
-        if (isFinite(vtNow) && Math.abs(vtNow - bestPos) > 1.5) {
+      // Seek video forward to bestPos only when it's BEHIND (browser suspended
+      // video in background). If video is AHEAD of bestPos — background playback
+      // continued naturally — don't seek it back. Update bestPos to vtNow so
+      // audio is aligned to video's actual current position.
+      const resumePos = (isFinite(vtNow) && vtNow > bestPos) ? vtNow : bestPos;
+      if (resumePos > 0.1) {
+        // Only seek video forward if it fell behind
+        if (isFinite(vtNow) && vtNow < resumePos - 1.5) {
           state._isMicroSeek = true;
-          try { getVideoNode().currentTime = bestPos; } catch {}
+          try { getVideoNode().currentTime = resumePos; } catch {}
           setTimeout(() => { state._isMicroSeek = false; }, 200);
         }
-        if (coupledMode && audio && isFinite(atNow) && Math.abs(atNow - bestPos) > 0.5) {
+        // Sync audio to resumePos (wherever video actually is)
+        if (coupledMode && audio && isFinite(atNow) && Math.abs(atNow - resumePos) > 0.5) {
           state._allowAudioTimeWrite = true;
-          try { audio.currentTime = bestPos; } catch {}
+          try { audio.currentTime = resumePos; } catch {}
           state._allowAudioTimeWrite = false;
         }
       }
@@ -9435,7 +9442,11 @@ const HAVE_ENOUGH_DATA = 4;
     const vNeedsBuffer = vLacksData || (!isSuspended && state.videoWaiting);
     if (vNeedsBuffer || aNeedsBuffer) {
       state.strictBufferHoldFrames = (state.strictBufferHoldFrames || 0) + 1;
-      if (state.strictBufferHoldFrames >= 2) {
+      // Raised from 2 → 4 consecutive low-buffer sync frames before triggering.
+      // At ~200ms sync interval, 4 frames = ~800ms of sustained low buffer.
+      // Segment-boundary dips last 50-300ms and don't need a buffer hold —
+      // the old threshold of 2 (≈400ms) was cutting audio at segment crossings.
+      if (state.strictBufferHoldFrames >= 4) {
         state.strictBufferHoldConfirmed = true;
         return true;
       }
@@ -12083,6 +12094,10 @@ const HAVE_ENOUGH_DATA = 4;
       // 180ms via a timer — if "playing" fires before that, we never kill at all.
       const _waitVNode = getVideoNode();
       const _waitRS = _waitVNode ? Number(_waitVNode.readyState || 0) : 0;
+      // Snapshot video position at the moment waiting fires so the deferred
+      // timer can detect transient stalls (segment-boundary readyState dips
+      // that resolve in <100ms without video actually freezing).
+      const _waitVTSnapshot = _waitVNode ? (Number(_waitVNode.currentTime) || 0) : 0;
       if (state._stallAudioPauseTimer) {
         clearTimeout(state._stallAudioPauseTimer);
         state._stallAudioPauseTimer = null;
@@ -12099,12 +12114,19 @@ const HAVE_ENOUGH_DATA = 4;
           const _wrs = _wvn ? Number(_wvn.readyState || 0) : 4;
           if (_wrs >= HAVE_FUTURE_DATA) return;
           if (!state.videoWaiting) return;
+          // Progress check: if video has advanced since "waiting" fired, the
+          // stall was transient (e.g. segment-boundary readyState dip that
+          // lasted < 600ms). Don't kill audio for transient stalls — the old
+          // 400ms timer triggered on every keyframe boundary, causing random
+          // audio cuts during otherwise-smooth playback.
+          const _currentVTCheck = _wvn ? (Number(_wvn.currentTime) || 0) : 0;
+          if (Math.abs(_currentVTCheck - _waitVTSnapshot) > 0.04) return;
           // bypassGrace: the deferred kill has confirmed the stall survived
           // the grace window, so we can now legitimately pause audio.
           if (canKillAudio({ bypassGrace: true })) {
             pauseAudioForConfirmedVideoStall(Math.max(MIN_STALL_AUDIO_RESUME_MS, 400));
           }
-        }, 400); // 400ms: long enough to skip normal decode jitter, short enough for real stalls
+        }, 600); // 600ms: was 400ms — extra 200ms lets segment-boundary stalls clear naturally
       }
 
       if (platform.useBgControllerRetry && state.intendedPlaying) {
