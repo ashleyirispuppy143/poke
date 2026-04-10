@@ -467,13 +467,13 @@
     "skill issue",
     "maybe try a different hobby? this one isnt working out",
     "server is still up btw. just so you know",
-    "your botnet has mass mass mass mass mass mass mass mass mass been mass mass mass mass mass mass mass mass mass blocked mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass :3",
+    "your botnet has been blocked :3",
     "trans rights are human rights. anyway youre banned",
     "L + ratio + blocked + server still up",
-    "every request you send makes poke mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass stronger (it doesnt but you dont know that)",
-    "have you considered mass mass mass that mass mass mass mass this mass mass mass mass mass mass is mass mass mass mass a mass mass mass waste mass mass mass of mass mass mass mass mass mass your mass mass time mass mass mass mass mass mass mass mass mass mass",
-    "you are mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass banned :3",
-    "did your mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass botnet come with a mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass receipt? mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass you should mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass get a mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass refund mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass mass",
+    "every request you send makes poke stronger (it doesnt but you dont know that)",
+    "have you considered that this is a waste of your time",
+    "you are banned :3",
+    "did your botnet come with a receipt? you should get a refund",
   ];
 
   function getSkidMessage() {
