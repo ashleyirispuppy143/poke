@@ -799,17 +799,17 @@ li > a {cursor: var(--pointer-cursor)}
   margin: -10px 10px -10px -24px;
 }
 
-img[src="/static/poke-chan-2.webp"] {
-  height: 400px;
-  width: 369px;
-  mask-image: none;
-  z-index: 5;
-  transform: scaleX(1);
-  float: right;
-  display: flex;
-  position: absolute;
-  right: 10px;
-  margin: -237px -60px 0px 0px;
+img[src="/static/poke-mascot-new.webp"] {
+  height:400px;
+  width:369px;
+  mask-image:none;
+  z-index:5;
+  transform:scaleX(-1);
+  float:right;
+  display:flex;
+  position:absolute;
+  right:10px;
+  margin:-237px -141px 0 0;
 }
 
 .new-feature-set {
