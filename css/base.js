@@ -35,6 +35,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
 // before DOMContentLoaded. Ensures both video and audio start at 00:00
 // even if the browser pre-buffers to a non-zero keyframe position.
 // This runs in a try-catch because elements might not exist yet.
+ // IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
+// before DOMContentLoaded. Ensures both video and audio start at 00:00
+// even if the browser pre-buffers to a non-zero keyframe position.
+// This runs in a try-catch because elements might not exist yet.
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -668,6 +672,8 @@ document.addEventListener("DOMContentLoaded", () => {
     seekBufferResumeTimer: null,
     _allowAudioTimeWrite: false,
     _isMicroSeek: false,
+    _lastMicroSeekAt: 0,
+    _microSeekCount: 0,
     _lastSyncBackstopAt: 0,
     _seekPreVolume: null,
     _seekPostTimers: [],
@@ -2298,7 +2304,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // CPU OPTIMIZATION: skip every other rAF tick. Freeze detection at 30fps
     // is fast enough to catch single-frame stalls (166ms window) while cutting
     // detection work in half. Still rAF-based so it scales with monitor refresh.
-    const RAF_SKIP_INTERVAL_MS = 30; // min gap between "big" ticks that do full work
+    const RAF_SKIP_INTERVAL_MS = 50; // min gap between "big" ticks (~20Hz effective rate, still catches freezes in ~150ms)
     let _lastKickAt = 0;
     let _lastBigTickAt = 0;
 
@@ -2556,6 +2562,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const vNode = getVideoNode();
       if (!vNode) return;
+
+      // If both video and audio are already playing, skip ALL recovery.
+      // The VCFM will verify the compositor is healthy. Doing seeks and
+      // play() calls here when media is already running causes the visible
+      // "play-pause-play" stutter on tab return.
+      const _trBothPlaying = !vNode.paused && (!coupledMode || (audio && !audio.paused));
+      if (_trBothPlaying && state.intendedPlaying) return;
+
       const vRS = Number(vNode.readyState || 0);
       const currentVt = Number(vNode.currentTime || 0);
 
@@ -2671,7 +2685,8 @@ document.addEventListener("DOMContentLoaded", () => {
         _finalSeekTarget >= 0.5 &&
         _flushTarget >= (isFinite(currentVt) ? currentVt : 0) - 0.001 &&
         (_flushVideoDuration <= 0 || _flushTarget < _flushVideoDuration - 0.5);
-      if (_flushSafe) {
+      if (_flushSafe && canDoMicroSeek()) {
+        recordMicroSeek();
         try { vNode.currentTime = _flushTarget; } catch {}
       }
 
@@ -2962,11 +2977,14 @@ document.addEventListener("DOMContentLoaded", () => {
       if (vt <= 0) { _armed = false; return; }
 
       // Micro-seek: forces the decoder to flush the stale GPU texture.
-      // The seek distance (+0.001) is invisible but enough for the demuxer
-      // to treat it as a real seek and push a fresh frame to the compositor.
+      if (!canDoMicroSeek()) {
+        // Too many micro-seeks recently — retry after cooldown
+        setTimeout(() => _doFlush(gen), MICRO_SEEK_MIN_GAP_MS);
+        return;
+      }
+      recordMicroSeek();
       state._isMicroSeek = true;
       try {
-        // Check duration to avoid seeking past end
         const dur = Number(vn.duration) || 0;
         const seekTo = (dur > 0 && vt + 0.001 >= dur - 0.5) ? vt - 0.001 : vt + 0.001;
         vn.currentTime = seekTo;
@@ -5056,26 +5074,13 @@ const HAVE_ENOUGH_DATA = 4;
         return;
       }
 
-      // if media is already playing fine, this is a spurious blur/focus cycle
+      // If both tracks are already playing, don't do anything — no play() calls,
+      // no NMPBFN recovery, no wakeup retries, no aggressive kicks. This is the
+      // key fix for "tab switch causes play-pause-play when video is already
+      // playing." MUST come BEFORE shouldAggressiveKick to prevent unnecessary
+      // startBringBackRetry/executeSeamlessWakeup when media is healthy.
       const videoPlaying = !getVideoPaused();
       const audioPlaying = !coupledMode || (audio && !audio.paused);
-      const shouldResumeNow = this.shouldResume() && !state.endedNaturally;
-      const playbackHealthy = playbackHealthyForReturn();
-      const shouldAggressiveKick = shouldResumeNow &&
-        (!playbackHealthy ||
-         state.resumeOnVisible ||
-         state.bgHiddenWasPlaying ||
-         hiddenPlayPendingActive() ||
-         foregroundResumeBoostActive());
-      if (shouldAggressiveKick) {
-        try { startBringBackRetry(); } catch {}
-        try { executeSeamlessWakeup(); } catch {}
-      }
-      // If both tracks are already playing, don't do anything — no play() calls,
-      // no NMPBFN recovery, no wakeup retries. This is the key fix for "tab switch
-      // causes play-pause-play when video is already playing." The old code only
-      // bailed here when playbackHealthy was true AND shouldAggressiveKick was false,
-      // which meant it still fired play()/recovery when e.g. resumeOnVisible was set.
       if (videoPlaying && audioPlaying && document.visibilityState === "visible") {
         state.rapidPlayPauseCount = 0;
         state.rapidPlayPauseResetAt = now();
@@ -5088,6 +5093,19 @@ const HAVE_ENOUGH_DATA = 4;
         // frame rendered — if not, it will force-flush the compositor.
         try { VideoCompositorFlushManager.arm(); } catch {}
         return;
+      }
+
+      const shouldResumeNow = this.shouldResume() && !state.endedNaturally;
+      const playbackHealthy = playbackHealthyForReturn();
+      const shouldAggressiveKick = shouldResumeNow &&
+        (!playbackHealthy ||
+         state.resumeOnVisible ||
+         state.bgHiddenWasPlaying ||
+         hiddenPlayPendingActive() ||
+         foregroundResumeBoostActive());
+      if (shouldAggressiveKick) {
+        try { startBringBackRetry(); } catch {}
+        try { executeSeamlessWakeup(); } catch {}
       }
 
       if (shouldResumeNow) {
@@ -5436,6 +5454,9 @@ const HAVE_ENOUGH_DATA = 4;
     if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
     if (!state.intendedPlaying || state.restarting || state.seeking || state.seekBuffering) return false;
     if (!coupledMode || !audio) return false;
+    // Never block audio during the post-seek kick window — readyState temporarily
+    // drops after seek and this gate would delay audio start by seconds.
+    if (state.seekKickAudioAllowedUntil > 0 && now() < state.seekKickAudioAllowedUntil) return false;
     const requireVisibleVideoHealth =
       shouldKeepForegroundReturnVideoFirst() ||
       shouldRequireVisibleVideoHealthForForegroundPlay();
@@ -6131,6 +6152,12 @@ const HAVE_ENOUGH_DATA = 4;
     state.videoPlayInFlight = null;
     clearTransitionDriftTimers();
     updateMediaSessionPlaybackState();
+    // Arm VCFM when user resumes from a pause longer than 2s.
+    // The GPU compositor may have stopped refreshing during the pause,
+    // causing a stale frame on resume (same bug as tab return, just rarer).
+    if (state.userPauseIntentPresetAt > 0 && (now() - state.userPauseIntentPresetAt) > 2000) {
+      try { VideoCompositorFlushManager.arm(); } catch {}
+    }
     state.audioPlayUntil = 0;
     state.startupAudioHoldUntil = 0;
     cancelActiveFade();
@@ -6172,7 +6199,8 @@ const HAVE_ENOUGH_DATA = 4;
       try { if (audio.muted && !state.userMutedAudio) audio.muted = false; } catch {}
       try {
         const vol = targetVolFromVideo();
-        if (audio.volume < vol * 0.5) audio.volume = vol;
+        // Always restore volume — instant pause zeroes it
+        if (vol > 0 && audio.volume < vol * 0.95) audio.volume = vol;
       } catch {}
       try { audio.play().catch(() => {}); } catch {}
       state.audioEverStarted = true;
@@ -6966,6 +6994,31 @@ const HAVE_ENOUGH_DATA = 4;
     } catch {}
   }
 
+  // Global micro-seek rate limiter. Prevents multiple systems from piling up
+  // micro-seeks (VCFM, heartbeat freeze detector, sync loop tab-return kick,
+  // tab-return compositor flush) which the user perceives as "random seeks."
+  // Returns true if a micro-seek is allowed right now. Minimum 500ms between
+  // micro-seeks, max 3 per 5 seconds in foreground playback.
+  const MICRO_SEEK_MIN_GAP_MS = 500;
+  const MICRO_SEEK_WINDOW_MS = 5000;
+  const MICRO_SEEK_MAX_IN_WINDOW = 3;
+  function canDoMicroSeek() {
+    const t = now();
+    if (t - state._lastMicroSeekAt < MICRO_SEEK_MIN_GAP_MS) return false;
+    // In foreground with healthy playback, limit rate
+    if (document.visibilityState === "visible" && !getVideoPaused() && state.intendedPlaying) {
+      if (state._microSeekCount >= MICRO_SEEK_MAX_IN_WINDOW &&
+          t - state._lastMicroSeekAt < MICRO_SEEK_WINDOW_MS) return false;
+    }
+    return true;
+  }
+  function recordMicroSeek() {
+    const t = now();
+    if (t - state._lastMicroSeekAt > MICRO_SEEK_WINDOW_MS) state._microSeekCount = 0;
+    state._lastMicroSeekAt = t;
+    state._microSeekCount++;
+  }
+
   let _lastSafeSeekAt = 0;
   let _audioFirstPlayedAt = 0;
   function shouldBlockStableForegroundAudioSeek(target, minDiff = 1.0) {
@@ -7568,11 +7621,19 @@ const HAVE_ENOUGH_DATA = 4;
     try { squelchAudioEvents(ms); } catch {}
     try { resetAudioPlaybackRate(); } catch {}
 
-    if (!audio.paused && audio.volume > 0.015) {
+    if (userImmediate) {
+      // Instant pause for direct user action — zero latency
+      cancelActiveFade();
+      try { audio.volume = 0; } catch {}
+      try { audio.pause(); } catch {}
+    } else if (!audio.paused && audio.volume > 0.015) {
       await doVolumeFade(0, AUDIO_FADE_DURATION_MS);
+      cancelActiveFade();
+      try { audio.pause(); } catch {}
+    } else {
+      cancelActiveFade();
+      try { audio.pause(); } catch {}
     }
-    cancelActiveFade();
-    try { audio.pause(); } catch {}
 
     setTimeout(() => { state.isProgrammaticAudioPause = false; }, userImmediate ? USER_PROGRAMMATIC_FLAG_CLEAR_MS : 200);
   }
@@ -8418,22 +8479,31 @@ const HAVE_ENOUGH_DATA = 4;
       state.audioPlayGeneration++;
       state.isProgrammaticAudioPause = true;
 
-      if (!audio.paused && audio.volume > 0.015) {
-        // Guard the fade callback: if intendedPlaying became true before the fade
-        // completes (user pressed play immediately), abort the pause.
+      if (immediateUserPause) {
+        // INSTANT pause for user actions — no fade, no async delay.
+        // The old 16ms fade + async callback added perceptible latency that
+        // the user heard as a 0.1s audio tail after pressing pause.
+        cancelActiveFade();
+        try { audio.volume = 0; } catch {}
+        try { audio.pause(); } catch {}
+        setTimeout(() => {
+          state.isProgrammaticAudioPause = false;
+          // Restore volume for next play (volume is set by play path)
+        }, USER_PROGRAMMATIC_FLAG_CLEAR_MS);
+      } else if (!audio.paused && audio.volume > 0.015) {
+        // Programmatic pause: short fade to avoid pop
         const pauseSession = state.playSessionId;
         fadeAndPauseAudio(pauseFadeMs, () => {
-          // Only pause if nothing changed since we started the fade
           if (state.playSessionId !== pauseSession || state.intendedPlaying) {
             setTimeout(() => { state.isProgrammaticAudioPause = false; }, Math.min(100, flagReleaseMs));
             return;
           }
-          setTimeout(() => { state.isProgrammaticAudioPause = false; }, immediateUserPause ? USER_PROGRAMMATIC_FLAG_CLEAR_MS : 200);
+          setTimeout(() => { state.isProgrammaticAudioPause = false; }, 200);
         });
       } else {
         cancelActiveFade();
         try { audio.pause(); } catch {}
-        setTimeout(() => { state.isProgrammaticAudioPause = false; }, immediateUserPause ? USER_PROGRAMMATIC_FLAG_CLEAR_MS : 150);
+        setTimeout(() => { state.isProgrammaticAudioPause = false; }, 150);
       }
     } else if (!coupledMode && audio && !audio.paused) {
       // Non-coupled mode (e.g. quality=medium): audio element exists but has no source.
@@ -8550,7 +8620,9 @@ const HAVE_ENOUGH_DATA = 4;
       //
       // Also require the video to actually be PAUSED — if it's already playing,
       // we must never forcibly rewind it.
-      if (!state.firstPlayCommitted && !startupZeroSuppressed() && getVideoPaused()) {
+      if (!state.firstPlayCommitted && !startupZeroSuppressed() && getVideoPaused() && !state.startupZeroed) {
+        // Only re-zero if forceZeroBeforeFirstPlay hasn't run yet.
+        // Re-zeroing after it already ran causes a visible seek-back glitch.
         const _preVt = Number(video.currentTime()) || 0;
         if (_preVt > 0.5) {
           try { video.currentTime(0); } catch {}
@@ -8631,9 +8703,10 @@ const HAVE_ENOUGH_DATA = 4;
           // never ran (it only runs for "was playing" scenarios). We need to
           // flush the compositor here in the playTogether path.
           const _ptVN = getVideoNode();
-          if (_ptVN) {
+          if (_ptVN && canDoMicroSeek()) {
             const _ptVT = Number(_ptVN.currentTime) || 0;
             if (_ptVT > 0.5) {
+              recordMicroSeek();
               state._isMicroSeek = true;
               try { _ptVN.currentTime = _ptVT + 0.01; } catch {}
               setTimeout(() => { state._isMicroSeek = false; }, 200);
@@ -9892,8 +9965,9 @@ const HAVE_ENOUGH_DATA = 4;
           // visible jitter/shaking that the user perceives as "random seeks".
           const _trVNode = getVideoNode();
           const _trRS = _trVNode ? Number(_trVNode.readyState || 0) : 4;
-          if (_trRS < HAVE_CURRENT_DATA && vt > 0 && !state._syncTabReturnKickDone) {
+          if (_trRS < HAVE_CURRENT_DATA && vt > 0 && !state._syncTabReturnKickDone && canDoMicroSeek()) {
             state._syncTabReturnKickDone = true;
+            recordMicroSeek();
             state._isMicroSeek = true;
             try { _trVNode.currentTime = vt; } catch {}
             setTimeout(() => { state._isMicroSeek = false; }, 150);
@@ -10382,6 +10456,13 @@ const HAVE_ENOUGH_DATA = 4;
       const elapsed = nowTs - state.lastHeartbeatAt;
       state.lastHeartbeatAt = nowTs;
 
+      // CPU OPTIMIZATION: skip all heartbeat work when fully idle
+      if (!state.intendedPlaying && getVideoPaused() &&
+          (!coupledMode || !audio || audio.paused) &&
+          !state.seeking && !state.seekBuffering) {
+        return;
+      }
+
       // audio playing but video stalled? kill audio (unless readyState says otherwise)
       // All guard logic unified through canKillAudio — bypassGrace because the
       // heartbeat only fires every ~500ms and videoWaiting has been set by the
@@ -10762,7 +10843,8 @@ const HAVE_ENOUGH_DATA = 4;
                             // never past EOF. Marked as _isMicroSeek so it
                             // doesn't cascade into the seek retry chain.
                             const _kickTarget = _frzVt + 0.01;
-                            if (_kickTarget > _frzVt && (_frzDur <= 0 || _kickTarget < _frzDur - 0.5)) {
+                            if (_kickTarget > _frzVt && (_frzDur <= 0 || _kickTarget < _frzDur - 0.5) && canDoMicroSeek()) {
+                              recordMicroSeek();
                               state._isMicroSeek = true;
                               try { _frzVNode.currentTime = _kickTarget; } catch {}
                               setTimeout(() => { state._isMicroSeek = false; }, 200);
@@ -12487,23 +12569,15 @@ const HAVE_ENOUGH_DATA = 4;
         state.videoStallSince = 0;
         clearForegroundBufferAudioHold();
       }
-      // STARTUP ZERO ENFORCEMENT (early window only): if this is the first play and
-      // video started at a non-zero position (browser buffered to a keyframe), seek to 0.
-      // Do NOT run this after startup has effectively settled, or we create a visible
-      // replay/jump-to-start during normal playback.
-      const _allowStartupZeroCorrection =
-        !state.firstPlayCommitted &&
-        !state.startupKickDone &&
-        !state.pageFullyLoaded &&
-        !startupZeroSuppressed() &&
-        (now() - state.startupPrimeStartedAt) < 2600;
-      if (_allowStartupZeroCorrection) {
-        if (_playingNow > 1.0) {
-          try { video.currentTime(0); } catch {}
-          try { videoEl.currentTime = 0; } catch {}
-          if (coupledMode && audio) { try { audio.currentTime = 0; } catch {} }
-        }
-      }
+      // STARTUP ZERO ENFORCEMENT — DISABLED.
+      // forceZeroBeforeFirstPlay() already handles this BEFORE play() is called.
+      // Re-zeroing here in the "playing" handler caused a visible play→seek→play
+      // double-play glitch because:
+      //   1. playTogether calls forceZeroBeforeFirstPlay (sets ct=0)
+      //   2. play() fires, browser starts playing from 0
+      //   3. "playing" event fires with _playingNow slightly > 0 due to decode latency
+      //   4. Old code would seek back to 0 → visible restart/double-play
+      // The pre-play zeroing in forceZeroBeforeFirstPlay + playTogether is sufficient.
       // Anti-loop: if video is playing after it ended naturally, kill it
       if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) {
         const _playingVt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
@@ -13646,7 +13720,10 @@ const HAVE_ENOUGH_DATA = 4;
               state.isProgrammaticAudioPause = false;
               state.audioEventsSquelchedUntil = 0;
               state.audioPauseUntil = 0;
+              state.audioPlayUntil = 0;
+              state.stateChangeCooldownUntil = 0;
               state.videoStallAudioPaused = false;
+              state.videoWaiting = false;
               state.stallAudioResumeHoldUntil = 0;
               // Long grace so buffer monitor doesn't kill audio during the
               // post-seek settle window.
@@ -13688,10 +13765,17 @@ const HAVE_ENOUGH_DATA = 4;
                 DONTMAKEITDOUBLEPLAY.reset(audio);
                 execProgrammaticAudioPlay({ squelchMs: 80, force: true, minGapMs: 0 }).catch(() => {});
               };
-              const _t1 = setTimeout(() => _kickAudio(1), 20);
-              const _t2 = setTimeout(() => _kickAudio(2), 80);
-              const _t3 = setTimeout(() => _kickAudio(3), 250);
-              const _t4 = setTimeout(() => _kickAudio(4), 500);
+              // Kick chain: 5ms → 40ms → 150ms → 400ms → 800ms
+              // First kick at 5ms (near-synchronous) eliminates perceived delay.
+              // Restore volume IMMEDIATELY so audio starts at full level.
+              if (_seekedPreVol != null) {
+                try { audio.volume = _seekedPreVol; } catch {}
+                state._seekPreVolume = null;
+              }
+              const _t1 = setTimeout(() => _kickAudio(1), 5);
+              const _t2 = setTimeout(() => _kickAudio(2), 40);
+              const _t3 = setTimeout(() => _kickAudio(3), 150);
+              const _t4 = setTimeout(() => _kickAudio(4), 400);
               const _t5 = setTimeout(() => _kickAudio(5), 800);
               state._seekPostTimers.push(_t1, _t2, _t3, _t4, _t5);
               // Legacy name retained for the line below that references it
