@@ -31,6 +31,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
 // before DOMContentLoaded. Ensures both video and audio start at 00:00
 // even if the browser pre-buffers to a non-zero keyframe position.
 // This runs in a try-catch because elements might not exist yet.
+// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
+// before DOMContentLoaded. Ensures both video and audio start at 00:00
+// even if the browser pre-buffers to a non-zero keyframe position.
+// This runs in a try-catch because elements might not exist yet.
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -2067,10 +2071,15 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!vPaused && aPaused && state.intendedPlaying && !state.videoStallAudioPaused &&
       !state.videoWaiting &&
       t > state.stallAudioResumeHoldUntil && t > state.audioPauseUntil) {
-      safeSetAudioTime(vt);
-    execProgrammaticAudioPlay({ squelchMs: 200, force: true, minGapMs: 0 }).catch(() => {});
-    _schedule(); return;
+      // Only reset decoder position for significant drift (>0.3s). Small drift
+      // from micro-seeks or play/pause transitions is handled by rate sync
+      // without the audible pipeline-reset latency that safeSetAudioTime causes.
+      if (Math.abs(at - vt) > 0.3) {
+        safeSetAudioTime(vt);
       }
+      execProgrammaticAudioPlay({ squelchMs: 200, force: true, minGapMs: 0 }).catch(() => {});
+      _schedule(); return;
+    }
 
       // Rule 2: Audio position should not be wildly off from video
       if (!vPaused && !aPaused && vt > 0.5) {
@@ -2396,13 +2405,18 @@ document.addEventListener("DOMContentLoaded", () => {
           if (!_frozenSince) _frozenSince = now();
 
           if (_frozenFrames >= FROZEN_FRAME_THRESHOLD && (now() - _lastKickAt) > STALL_KICK_COOLDOWN_MS) {
-            _lastKickAt = now();
-            _frozenFrames = 0;
-            _frozenSince = 0;
-
             // Video is NOT paused but frames aren't advancing — stale compositor.
             // Micro-seek to flush the GPU surface, then re-play.
+            // IMPORTANT: Only consume the frozen state (reset counters) if we
+            // actually fire the kick. When canDoMicroSeek() is blocked (e.g. the
+            // 400ms play/pause transition window), we keep _frozenFrames high so
+            // the next tick retries immediately — without this, the frozen state
+            // is lost and we re-accumulate from scratch, adding ~200ms of extra
+            // freeze time on every play/pause.
             if (canDoMicroSeek()) {
+              _lastKickAt = now();
+              _frozenFrames = 0;
+              _frozenSince = 0;
               recordMicroSeek();
               state._isMicroSeek = true;
               try { vNode.currentTime = vt > 0.01 ? vt - 0.01 : 0; } catch {}
@@ -7661,10 +7675,12 @@ const HAVE_ENOUGH_DATA = 4;
     // operation). Check isProgrammaticVideoPlay/Pause flags to avoid false blocks.
     // Also don't block during recent user actions or video play in-flight — video.play()
     // can take 50-200ms to resolve, during which getVideoPaused() still returns true.
+    // Extend user action window to 3s to prevent audio from being blocked while
+    // video.play() promise is still resolving after a user toggle.
     if (getVideoPaused() && !isHiddenBackground() &&
         !state.isProgrammaticVideoPlay && !state.isProgrammaticVideoPause &&
         !state.seekResumeInFlight && !state.videoPlayInFlight &&
-        (now() - state.lastUserActionTime) > 2000) return true;
+        (now() - state.lastUserActionTime) > 3000) return true;
 
     // These checks must run BEFORE the bgPlaybackAllowed early-return (bgPlaybackAllowed is always true).
     // Block audio when video is actively buffering/stalled — but with a safety timeout.
@@ -8961,12 +8977,15 @@ const HAVE_ENOUGH_DATA = 4;
         isWindowFocused() &&
         requireVisibleVideoHealth;
       // Align audio to video position. During startup and background returns,
-      // ALWAYS sync regardless of drift — both elements may be at arbitrary
-      // positions. For mid-playback play/pause, only hard-sync on large drift
-      // (>1.5s) — the sync loop handles smaller drift via rate correction.
+      // sync on medium drift — both elements may be at arbitrary positions.
+      // For mid-playback play/pause, only hard-sync on large drift (>1.5s).
+      // The 0.15s old threshold caused decoder resets on every startup even
+      // for tiny drift, adding 100-300ms of audio pipeline latency before
+      // sound could start. 0.4s is still very small and the sync loop handles
+      // anything under that via rate correction without a decoder flush.
       const _isStartupOrBgSync = state.startupPhase || !state.firstPlayCommitted ||
         !state.audioEverStarted || inBgReturnGrace() || isTabReturnImmune();
-      const _syncThreshold = _isStartupOrBgSync ? 0.15 : 1.5;
+      const _syncThreshold = _isStartupOrBgSync ? 0.3 : 1.5;
       if (!shouldDeferAudioAlignmentForVideoLead &&
           isFinite(vt) &&
           isFinite(at) &&
@@ -9047,8 +9066,10 @@ const HAVE_ENOUGH_DATA = 4;
             safeSetAudioTime(vNow);
           }
           aPlayP = execProgrammaticAudioPlay({
-            squelchMs: canKickFirstAudio ? 300 : 400,
-            minGapMs: canKickFirstAudio ? 0 : 100,
+            // Use minimal squelch so audio starts simultaneously with video.
+            // 80ms is enough to let the play() call settle without audible artifacts.
+            squelchMs: canKickFirstAudio ? 80 : 80,
+            minGapMs: 0,
             force: true
           });
         }
@@ -12896,7 +12917,14 @@ const HAVE_ENOUGH_DATA = 4;
       if (coupledMode && audio && audio.paused && state.intendedPlaying && !state.seeking && !state.seekBuffering &&
           !state.syncing && !(state.seekAudioMustStartUntil > now())) {
         const _resumeVt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
-        safeSetAudioTime(_resumeVt);
+        // Only hard-sync audio position if drift is significant (>0.3s).
+        // For small drift, skip the decoder-resetting seek — the rate sync loop
+        // converges small drift without the 100-300ms pipeline reset latency.
+        // This prevents the audible "cut" on every play/pause toggle.
+        const _resumeAt = Number(audio.currentTime) || 0;
+        if (Math.abs(_resumeAt - _resumeVt) > 0.3) {
+          safeSetAudioTime(_resumeVt);
+        }
         try { audio.volume = targetVolFromVideo(); } catch {}
         // 800ms grace protects audio from being killed by the buffer monitor or
         // stall detector when readyState briefly dips during play resume. Covers the
