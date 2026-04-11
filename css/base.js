@@ -31,18 +31,6 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
 // before DOMContentLoaded. Ensures both video and audio start at 00:00
 // even if the browser pre-buffers to a non-zero keyframe position.
 // This runs in a try-catch because elements might not exist yet.
- // IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
-// before DOMContentLoaded. Ensures both video and audio start at 00:00
-// even if the browser pre-buffers to a non-zero keyframe position.
-// This runs in a try-catch because elements might not exist yet.
- // IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
-// before DOMContentLoaded. Ensures both video and audio start at 00:00
-// even if the browser pre-buffers to a non-zero keyframe position.
-// This runs in a try-catch because elements might not exist yet.
- // IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
-// before DOMContentLoaded. Ensures both video and audio start at 00:00
-// even if the browser pre-buffers to a non-zero keyframe position.
-// This runs in a try-catch because elements might not exist yet.
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -699,7 +687,12 @@ document.addEventListener("DOMContentLoaded", () => {
     lastVideoPlayingAt: 0,
     _syncTabReturnKickDone: false
   };
-  const PLAY_PAUSE_MICRO_SEEK_BLOCK_MS = 300;
+  // Block micro-seeks during play/pause transitions. 500ms covers the full
+  // decoder warmup window — the old 300ms allowed micro-seeks to land during
+  // the transition, causing visible "scene flash" and "random seeks" on
+  // every play/pause press. 500ms is still short enough that genuine freezes
+  // (detected at >600ms stuck) get kicked promptly after the transition.
+  const PLAY_PAUSE_MICRO_SEEK_BLOCK_MS = 500;
   const MICRO_SEEK_TOGGLE_SUPPRESS_MS = 900;
   const MICRO_SEEK_SEEK_SUPPRESS_MS = 1200;
 
@@ -2338,10 +2331,18 @@ document.addEventListener("DOMContentLoaded", () => {
     let _wasPlayingBeforeHide = false;
 
     const SYNC_PRECISION = 0.1;   // max tolerable A/V drift in seconds
-    const FROZEN_FRAME_THRESHOLD = 2; // rAF ticks before declaring stall (was 3 — catches it in ~160ms at 80ms tick interval)
+    // 3 consecutive rAF ticks (~240ms at 80ms interval) without frame
+    // advancement before declaring stall. Was lowered to 2, but that
+    // caused false positives during GC pauses and normal jank — the
+    // micro-seek showed up as "random seeks during playback."
+    const FROZEN_FRAME_THRESHOLD = 3;
     const WATCHDOG_MS = 400;      // fallback timer interval (was 200→300→400 — rAF is primary, this is backup only)
     const MICRO_SEEK_OFFSET = 0.01; // large enough for demuxer to treat as real seek
-    const STALL_KICK_COOLDOWN_MS = 600; // don't re-kick faster than this (was 800; forward micro-seeks are lightweight — no decoder seek)
+    // Don't re-kick (micro-seek) faster than this. 1000ms prevents the RAF
+    // freeze detector from firing micro-seeks every 600ms during normal
+    // playback when GC/jank causes brief frame drops. Forward micro-seeks
+    // are lightweight but still fire seeking/seeked events that cascade.
+    const STALL_KICK_COOLDOWN_MS = 1000;
     // CPU OPTIMIZATION: skip every other rAF tick. Freeze detection at 30fps
     // is fast enough to catch single-frame stalls (166ms window) while cutting
     // detection work in half. Still rAF-based so it scales with monitor refresh.
@@ -2935,7 +2936,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let _startFrameCount = -1;      // frame count at arm-time (fallback path)
 
     const MAX_FLUSH_ATTEMPTS = 4;
-    const FRAME_DEADLINE_MS = 120;   // if no frame in 120ms after play, flush
+    const FRAME_DEADLINE_MS = 350;   // if no frame in 350ms after play, flush (was 120 — too aggressive, caused micro-seeks on slower machines)
     const FLUSH_COOLDOWN_MS = 200;   // min gap between flush attempts
     const RECHECK_DELAY_MS = 60;     // delay before re-arming after a flush
 
@@ -6916,11 +6917,13 @@ const HAVE_ENOUGH_DATA = 4;
     if (document.visibilityState === "hidden" || !isWindowFocused()) return false;
     // Never fire during tab-return or startup immunity
     if (state.tabReturnImmuneUntil > now()) return false;
-    if (now() < state.loopPreventionCooldownUntil) return true;
+    // CRITICAL: user action bypass MUST come BEFORE the cooldown check.
+    // Without this, once the cooldown triggers, the user can't play/pause
+    // at all for the full cooldown period — this is the "can't play" bug.
     if ((now() - state.lastUserActionTime) < 2500) return false;
-    // Also bypass if the user explicitly wants play or pause right now —
-    // loop detection must NEVER block a real user toggle.
     if (userWantsPlayNow(2000) || userWantsPauseNow(2000)) return false;
+    if (directUserToggleActive(2000)) return false;
+    if (now() < state.loopPreventionCooldownUntil) return true;
     if (state.rapidPlayPauseCount >= MAX_LOOP_EVENTS) {
       state.loopPreventionCooldownUntil = now() + LOOP_COOLDOWN_MS;
       return true;
@@ -11425,10 +11428,11 @@ const HAVE_ENOUGH_DATA = 4;
                               (nowTs - _hbFreezeLastKickAt) >= HB_FREEZE_KICK_COOLDOWN_MS) {
                             _hbFreezeLastKickAt = nowTs;
                             _hbFreezeStuckSince = 0;
-                            // Safe micro-seek: +0.01s forward, never backward,
+                            // Safe micro-seek: +0.001s forward, never backward,
                             // never past EOF. Marked as _isMicroSeek so it
                             // doesn't cascade into the seek retry chain.
-                            const _kickTarget = _frzVt > 0.01 ? _frzVt - 0.01 : 0;
+                            // Forward seeks stay in the current GOP — no keyframe flash.
+                            const _kickTarget = _frzVt + 0.001;
                             if (_frzVt > 0.01 && (_frzDur <= 0 || _kickTarget < _frzDur - 0.5) && canDoMicroSeek()) {
                               recordMicroSeek();
                               state._isMicroSeek = true;
@@ -13267,8 +13271,10 @@ const HAVE_ENOUGH_DATA = 4;
         if ((_prfvAfterTabReturn || _prfvAfterLongPause || _prfvDirectUserResume) &&
             typeof HTMLVideoElement !== "undefined" &&
             typeof HTMLVideoElement.prototype.requestVideoFrameCallback === "function") {
-          const _rvfcGen = ++state.playSessionId; // use session ID to stale-check
-          state.playSessionId = _rvfcGen; // restore (++ already set it)
+          // Use a local generation counter — do NOT increment playSessionId.
+          // Incrementing playSessionId here invalidates other session-gated
+          // timers (playTogether, drift repair, etc.) causing play instability.
+          const _rvfcGen = state.playSessionId;
           let _rvfcGotFrame = false;
           const _rvfcVNode = getVideoNode();
           if (_rvfcVNode && !_rvfcVNode.paused) {
@@ -13282,8 +13288,12 @@ const HAVE_ENOUGH_DATA = 4;
               if (!_kickVN || _kickVN.paused || !state.intendedPlaying) return;
               // Compositor stuck — forward micro-seek to flush. Forward
               // seeks don't cause keyframe flash (stays in current GOP).
+              // MUST check canDoMicroSeek() — without this, every play
+              // press fires a micro-seek at 250ms that the user sees as
+              // a "random seek" and can flash the wrong frame.
               const _kickVT = Number(_kickVN.currentTime) || 0;
-              if (_kickVT > 0.02) {
+              if (_kickVT > 0.02 && canDoMicroSeek()) {
+                recordMicroSeek();
                 state._isMicroSeek = true;
                 try { _kickVN.currentTime = _kickVT + 0.001; } catch {}
                 setTimeout(() => { state._isMicroSeek = false; }, 150);
@@ -15797,7 +15807,7 @@ const HAVE_ENOUGH_DATA = 4;
     _handlePlayerCrash(msg, "promise", reason ? (reason.stack || "") : "");
   }, { passive: true });
 });
- 
+
 //////////////// THE PLAYER, END ////////////////////////
  
   
