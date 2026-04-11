@@ -39,6 +39,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
 // before DOMContentLoaded. Ensures both video and audio start at 00:00
 // even if the browser pre-buffers to a non-zero keyframe position.
 // This runs in a try-catch because elements might not exist yet.
+ // IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
+// before DOMContentLoaded. Ensures both video and audio start at 00:00
+// even if the browser pre-buffers to a non-zero keyframe position.
+// This runs in a try-catch because elements might not exist yet.
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -1574,10 +1578,12 @@ document.addEventListener("DOMContentLoaded", () => {
         // decoder already has frames (HAVE_FUTURE_DATA), the compositor likely has
         // a fresh texture and the micro-seek would just cause a visible glitch.
         // VCFM handles the case where readyState is high but compositor is still stale.
+        // Forward micro-seek (+0.001) — forward stays in current GOP, no keyframe flash.
+        // Backward seeks force decoder to previous I-frame which shows a brief old frame.
         if (vt > 0 && _nmpRS < HAVE_FUTURE_DATA && canDoMicroSeek()) {
           recordMicroSeek();
           state._isMicroSeek = true;
-          try { vn.currentTime = vt > 0.01 ? vt - 0.01 : 0; } catch {}
+          try { vn.currentTime = vt + 0.001; } catch {}
           setTimeout(() => { state._isMicroSeek = false; }, 200);
         }
 
@@ -9185,29 +9191,7 @@ const HAVE_ENOUGH_DATA = 4;
         }
       }
 
-      let vtStart = Number(video.currentTime()) || 0;
-
-      // FIX: On play after pause, the browser's decoder may regress to the
-      // previous keyframe (0.5-2s before the pause position). This causes
-      // "replaying the last few seconds" visually. If we saved the user's
-      // real pause position (lastKnownGoodVT) and it's ahead of where the
-      // decoder ended up, snap video forward to avoid the replay.
-      if (state.lastKnownGoodVT > 0.5 &&
-          (now() - state.lastKnownGoodVTts) < 8000 &&
-          vtStart > 0.5 &&
-          state.lastKnownGoodVT > vtStart + 0.3 &&
-          state.lastKnownGoodVT < vtStart + 4.0 &&
-          !state.seeking && !state.seekBuffering &&
-          (directUserToggleActive(3000) || userWantsPlayNow(3000))) {
-        const _snapTarget = state.lastKnownGoodVT;
-        try {
-          const _snapVN = getVideoNode();
-          if (_snapVN) _snapVN.currentTime = _snapTarget;
-        } catch {}
-        vtStart = _snapTarget;
-        // Clear so we don't re-snap on subsequent playTogether calls
-        state.lastKnownGoodVTts = 0;
-      }
+      const vtStart = Number(video.currentTime()) || 0;
 
       // only seek audio if it's not primed yet AND audio position is actually wrong.
       // if audio is already playing in sync, seeking causes an audible skip.
@@ -10566,11 +10550,12 @@ const HAVE_ENOUGH_DATA = 4;
           // visible jitter/shaking that the user perceives as "random seeks".
           const _trVNode = getVideoNode();
           const _trRS = _trVNode ? Number(_trVNode.readyState || 0) : 4;
+          // Forward micro-seek — stays in current GOP, no keyframe flash.
           if (_trRS < HAVE_CURRENT_DATA && vt > 0 && !state._syncTabReturnKickDone && canDoMicroSeek()) {
             state._syncTabReturnKickDone = true;
             recordMicroSeek();
             state._isMicroSeek = true;
-            try { _trVNode.currentTime = vt > 0.01 ? vt - 0.01 : 0; } catch {}
+            try { _trVNode.currentTime = vt + 0.001; } catch {}
             setTimeout(() => { state._isMicroSeek = false; }, 150);
           }
         }
@@ -13182,7 +13167,7 @@ const HAVE_ENOUGH_DATA = 4;
           // Must advance by at least 0.08s (not just 0.04) to consider it recovered.
           // Forward micro-seeks (+0.001) advance position slightly, so 0.04 threshold
           // was triggering false "recovered" exits. 0.08 requires real frame decode progress.
-          if (Math.abs(_currentVTCheck - _waitVTSnapshot) > 0.08) return;
+          if (Math.abs(_currentVTCheck - _waitVTSnapshot) > 0.12) return;
           // bypassGrace: the deferred kill has confirmed the stall survived
           // the grace window, so we can now legitimately pause audio.
           if (canKillAudio({ bypassGrace: true })) {
@@ -13429,10 +13414,13 @@ const HAVE_ENOUGH_DATA = 4;
         }
 
         // video is playing, start audio (unless NMPBFN or playTogether is already handling it)
+        // During startup (startupPhase=true, firstPlayCommitted=false), always kick
+        // audio when video starts — don't let freshVideoProgressPending delay it.
+        const _skipAudioKickForFreshProgress = _freshVideoProgressPending && state.firstPlayCommitted && !state.startupPhase;
         if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           !userPauseLockActive() && !mediaSessionForcedPauseActive() &&
           !state.seeking && !state.seekBuffering && !NotMakePlayBackFixingNoticable.isActive() &&
-          !state.strictBufferHold && !_freshVideoProgressPending &&
+          !state.strictBufferHold && !_skipAudioKickForFreshProgress &&
           !state.syncing) { // syncing = playTogether is in-flight, don't compete
           const _vtNow = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
           const _shouldGatePlayingAudioKick =
@@ -15809,7 +15797,7 @@ const HAVE_ENOUGH_DATA = 4;
     _handlePlayerCrash(msg, "promise", reason ? (reason.stack || "") : "");
   }, { passive: true });
 });
-
+ 
 //////////////// THE PLAYER, END ////////////////////////
  
   
