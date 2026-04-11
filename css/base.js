@@ -35,6 +35,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
 // before DOMContentLoaded. Ensures both video and audio start at 00:00
 // even if the browser pre-buffers to a non-zero keyframe position.
 // This runs in a try-catch because elements might not exist yet.
+// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
+// before DOMContentLoaded. Ensures both video and audio start at 00:00
+// even if the browser pre-buffers to a non-zero keyframe position.
+// This runs in a try-catch because elements might not exist yet.
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -3031,6 +3035,11 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!vn) return;
       const vt = Number(vn.currentTime) || 0;
       if (vt <= 0) return;
+      // Respect the play/pause transition guard. Without this, last-resort
+      // flushes fire micro-seeks during the 400ms transition block, causing
+      // the "video seeks a tiny amount on play/pause" artifact.
+      if (!canDoMicroSeek()) return;
+      recordMicroSeek();
       const _nPlay = HTMLMediaElement.prototype.play;
 
       state._isMicroSeek = true;
@@ -3213,6 +3222,10 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!vn || gen !== _gen) return;
       const vt = Number(vn.currentTime) || 0;
       if (vt <= 0.2) return;
+      // Respect the play/pause transition guard to prevent micro-seeks
+      // during user play/pause toggles that the user perceives as "random seeks."
+      if (!canDoMicroSeek()) return;
+      recordMicroSeek();
 
       // Full pause→seek→play cycle — guaranteed to flush all browsers
       state._isMicroSeek = true;
@@ -6298,7 +6311,21 @@ const HAVE_ENOUGH_DATA = 4;
     // Disarm VCFM on pause — no point checking compositor when paused.
     // Also prevents stale VCFM arms from firing micro-seeks after pause.
     try { VideoCompositorFlushManager.disarm(); } catch {}
+    // Disarm PRFV on pause — prevents stale frame checks from micro-seeking
+    try { PlayResumeFrameVerifier.disarm(); } catch {}
     state.audioPlayGeneration++;
+    // SAFETY NET: directly pause audio here. The video pause event handler
+    // has 15+ early-exit paths (seeking, seekBuffering, tab return immunity,
+    // etc.) that can skip pauseHard(). If any of them fires, audio keeps
+    // playing while video is paused — the #1 user-reported pause bug.
+    // Pausing audio here (50-100ms before video visually pauses) is
+    // imperceptible and guarantees audio always stops on user pause.
+    if (coupledMode && audio && !audio.paused) {
+      state.isProgrammaticAudioPause = true;
+      squelchAudioEvents(250);
+      try { audio.pause(); } catch {}
+      setTimeout(() => { state.isProgrammaticAudioPause = false; }, 200);
+    }
     state.rapidPlayPauseCount = 0;
     state.rapidToggleDetected = false;
     state.rapidToggleUntil = 0;
@@ -9006,6 +9033,28 @@ const HAVE_ENOUGH_DATA = 4;
       let aPlayP = null;
 
       if (getVideoPaused() && !vPlayP) {
+        // COMPOSITOR FLUSH: when resuming from pause, the browser's decode
+        // pipeline may have decoded 1-2 frames ahead. Calling play() directly
+        // causes the compositor to briefly flash one of those future frames
+        // before the render loop catches up — the "frozen frame from the
+        // future" artifact. A tiny backward nudge (0.001s) forces the decoder
+        // to re-produce the frame at the current position, flushing stale
+        // decoded-ahead frames. 0.001s is completely imperceptible.
+        // Only do this for mid-playback play/pause (not startup or tab return
+        // where we need maximum speed and the compositor isn't stale).
+        if (state.firstPlayCommitted && !inBgReturnGrace() && !isTabReturnImmune()) {
+          try {
+            const _flushVN = getVideoNode();
+            if (_flushVN) {
+              const _flushVT = Number(_flushVN.currentTime) || 0;
+              if (_flushVT > 0.002) {
+                state._isMicroSeek = true;
+                _flushVN.currentTime = _flushVT - 0.001;
+                setTimeout(() => { state._isMicroSeek = false; }, 120);
+              }
+            }
+          } catch {}
+        }
         try {
           vPlayP = execProgrammaticVideoPlay();
         } catch {}
@@ -12410,10 +12459,15 @@ const HAVE_ENOUGH_DATA = 4;
     });
 
     video.on("pause", () => {
-      if (state.seeking || state.seekBuffering) return;
+      // CRITICAL: never skip the pause handler when the user explicitly paused.
+      // The old code returned early on seeking/seekBuffering unconditionally,
+      // which caused audio to keep playing when the user paused during a seek
+      // or when seekBuffering was stale from a previous operation.
+      const _userWantsPauseHere = userWantsPauseNow(2400);
+      if ((state.seeking || state.seekBuffering) && !_userWantsPauseHere) return;
       // Also check the native element's seeking flag — the "seeking" event handler
       // may not have fired yet, but the element is already seeking
-      try { if (getVideoNode()?.seeking) return; } catch {}
+      try { if (getVideoNode()?.seeking && !_userWantsPauseHere) return; } catch {}
       // Disarm PRFV on pause — no compositor check needed when paused
       try { PlayResumeFrameVerifier.disarm(); } catch {}
       if (restartFromEndedGuardActive() &&
