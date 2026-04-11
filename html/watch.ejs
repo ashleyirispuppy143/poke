@@ -2780,7 +2780,12 @@ VideoData?.recommendedVideos.forEach(video => {
     
 <!-- SCRIPTS -->
 <script id="video" type="application/json"><%- JSON.stringify(VideoData).replace(/(\bip=)[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/g, "$1[REDACTED]").replace(/https:\/\/iv\.duti\.dev/g, "https://invid-api.poketube.fun") %></script><script id="comments" type="application/json"><%- JSON.stringify(inv.comments) %></script>
-
+<script>Object.defineProperty(HTMLVideoElement.prototype, 'playbackActive', {
+    get: function() {
+        return !!(this.currentTime > 0 && !this.paused && !this.ended && this.readyState > 2);
+    },
+    configurable: true
+});</script>
 <!-- AUTOPLAY -->
  <script>
 document.addEventListener("DOMContentLoaded", () => {
