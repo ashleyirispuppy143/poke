@@ -27,7 +27,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  
  
 //////////////// THE PLAYER, START ////////////////////////
- // IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
+// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
 // before DOMContentLoaded. Ensures both video and audio start at 00:00
 // even if the browser pre-buffers to a non-zero keyframe position.
 // This runs in a try-catch because elements might not exist yet.
@@ -2735,7 +2735,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (_at2 > 1.0) _finalSeekTarget = _at2;
           } catch {}
         }
-        const _flushTarget = _finalSeekTarget > 0.01 ? _finalSeekTarget - 0.01 : 0;
+        const _flushTarget = _finalSeekTarget + 0.001;
         let _flushVideoDuration = 0;
         try { _flushVideoDuration = Number(vNode.duration) || 0; } catch {}
         const _flushSafe =
@@ -14132,6 +14132,15 @@ const HAVE_ENOUGH_DATA = 4;
           // not real seeks.
           if (state._isMicroSeek) return;
 
+          // During a play/pause transition, small currentTime adjustments from
+          // the decoder warming up should not trigger the full seek machinery.
+          // These small drifts (<0.15s) are normal decoder behavior, not real seeks.
+          if (directUserToggleActive(800) || now() < state._playPauseTransitionUntil) {
+            const _transVt = Number(videoEl.currentTime) || 0;
+            const _transGood = state.lastKnownGoodVT || 0;
+            if (Math.abs(_transVt - _transGood) < 0.15) return;
+          }
+
           // phantom loop detection: if video suddenly jumps to near-0 from well
           // into the track, and nobody asked for it, revert immediately. browsers
           // sometimes fire bogus seeking-to-0 on buffer refill or codec flush.
@@ -14156,7 +14165,9 @@ const HAVE_ENOUGH_DATA = 4;
           // on slow connections. 2s caused reverts on legitimate seeks.
           if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.isPhantomRestart(_phVt) &&
               !_phUserSeek && !_phProgrammatic && (now() - state.lastUserActionTime) > 5000) {
+            state._isMicroSeek = true;
             try { videoEl.currentTime = _phPrev > 0.5 ? _phPrev : videoEl.duration || _phPrev; } catch {}
+            setTimeout(() => { state._isMicroSeek = false; }, 300);
             try { if (!videoEl.paused) videoEl.pause(); } catch {}
             return;
           }
@@ -14170,7 +14181,9 @@ const HAVE_ENOUGH_DATA = 4;
             if (!MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.isPhantomRestart(_phVt)) {
               // Rate limiter said "enough reverts" — let this seek through
             } else {
+              state._isMicroSeek = true;
               try { videoEl.currentTime = _phPrev; } catch {}
+              setTimeout(() => { state._isMicroSeek = false; }, 300);
               return;
             }
           }
@@ -14218,10 +14231,10 @@ const HAVE_ENOUGH_DATA = 4;
           state.seekWantedPlaying = state.intendedPlaying;
           if (state.seekWantedPlaying) {
             armSeekResumeIntent(5000);
-            state.seekStabilizeUntil = Math.max(state.seekStabilizeUntil, now() + 2500);
+            state.seekStabilizeUntil = Math.max(state.seekStabilizeUntil, now() + 1500);
           } else {
             clearSeekResumeIntent();
-            state.seekStabilizeUntil = Math.max(state.seekStabilizeUntil, now() + 800);
+            state.seekStabilizeUntil = Math.max(state.seekStabilizeUntil, now() + 500);
           }
           state.playRequestedDuringSeek = state.intendedPlaying;
           state.seekCompleted = false;
@@ -14279,7 +14292,7 @@ const HAVE_ENOUGH_DATA = 4;
             state.lastKnownGoodVT = seekTime;
             state.lastKnownGoodVTts = now();
           }
-          state.seekCooldownUntil = now() + 1200;
+          state.seekCooldownUntil = now() + 600;
 
           state.videoWaiting = false;
           state.audioWaiting = false;
@@ -14377,12 +14390,14 @@ const HAVE_ENOUGH_DATA = 4;
               (now() - state.lastUserActionTime) > 3500 &&
               state.endedNaturally && !state.restarting) {
             // Video ended and something tried to restart it — revert
+            state._isMicroSeek = true;
             if (isFinite(expectedSeekTime) && expectedSeekTime > 0.8) {
               try { video.currentTime(expectedSeekTime); } catch {}
               try { videoEl.currentTime = expectedSeekTime; } catch {}
             } else if (prevBeforeSeeked > 0.9) {
               try { videoEl.currentTime = prevBeforeSeeked; } catch {}
             }
+            setTimeout(() => { state._isMicroSeek = false; }, 300);
             if (coupledMode && audio && state._seekPreVolume != null) {
               try { audio.volume = state._seekPreVolume; } catch {}
               state._seekPreVolume = null;
