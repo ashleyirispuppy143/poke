@@ -43,6 +43,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
 // before DOMContentLoaded. Ensures both video and audio start at 00:00
 // even if the browser pre-buffers to a non-zero keyframe position.
 // This runs in a try-catch because elements might not exist yet.
+
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -699,6 +700,9 @@ document.addEventListener("DOMContentLoaded", () => {
     lastVideoPlayingAt: 0,
     _syncTabReturnKickDone: false
   };
+  const PLAY_PAUSE_MICRO_SEEK_BLOCK_MS = 450;
+  const MICRO_SEEK_TOGGLE_SUPPRESS_MS = 900;
+  const MICRO_SEEK_SEEK_SUPPRESS_MS = 1200;
 
   // Audio play() gate — the single chokepoint for ALL audio playback.
   // Rule: audio NEVER plays in visible foreground unless video has decoded data.
@@ -2643,10 +2647,12 @@ document.addEventListener("DOMContentLoaded", () => {
       // back would jump the user to a position they already watched.
       // The "few seconds before" bug: video advanced 3s in bg → old code seeked
       // back 3s → user sees a rewind. Fix: only seek forward, never backward.
+      let didForwardResync = false;
       if (targetTime > 0.5 && isFinite(currentVt) &&
           currentVt < targetTime - 1.5 &&   // only seek if video is BEHIND target
           Math.abs(currentVt - targetTime) < 300) { // cap at 5 min
         state._isMicroSeek = true;
+        didForwardResync = true;
         try { vNode.currentTime = targetTime; } catch {}
         if (coupledMode && audio) {
           state._allowAudioTimeWrite = true;
@@ -2673,50 +2679,44 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch {}
       }
 
-      // Mark as micro-seek so seeking/seeked handlers ignore this
-      state._isMicroSeek = true;
+      // Only do the eager compositor-flush micro-seek when we already had to
+      // hard-resync position or the decoder is still genuinely suspended.
+      // Otherwise let VCFM verify a real frame before we touch currentTime.
+      const shouldForceFlush = didForwardResync || vRS < HAVE_CURRENT_DATA || currentVt < 0.1;
+      if (shouldForceFlush) {
+        // Mark as micro-seek so seeking/seeked handlers ignore this recovery.
+        state._isMicroSeek = true;
 
-      // Seek to flush the stale compositor frame. Use +0.01 offset — large enough
-      // for the demuxer to treat it as a real seek, small enough to be invisible.
-      // Use the SAFE targetTime — never fall back to currentVt if it would be 0.
-      const seekTarget = targetTime > 0 ? targetTime : currentVt;
-      // Additional guard: if seekTarget is 0 and we KNOW audio is well into the
-      // track (audio.currentTime > 1), prefer audio time over letting video reset.
-      let _finalSeekTarget = seekTarget;
-      if (_finalSeekTarget < 0.5 && coupledMode && audio) {
-        try {
-          const _at2 = Number(audio.currentTime) || 0;
-          if (_at2 > 1.0) _finalSeekTarget = _at2;
-        } catch {}
-      }
-      // COMPOSITOR FLUSH: force the decoder to produce a fresh frame.
-      //
-      // CRITICAL FIX: removed the old `_decoderSuspended` (readyState < HAVE_CURRENT_DATA)
-      // gate. Chromium can report readyState >= HAVE_CURRENT_DATA (demuxer has data)
-      // while the COMPOSITOR still shows a stale GPU texture from when the tab was
-      // backgrounded. The old code skipped the flush in that case — this was THE root
-      // cause of the "video appears frozen for a few seconds on tab return" bug.
-      //
-      // The +0.01s seek is invisible but forces the demuxer to re-feed the decoder,
-      // which pushes a fresh frame to the compositor.
-      //
-      // Guards:
-      //   (a) _finalSeekTarget must not land near zero (seek-to-0 bug)
-      //   (b) must not overshoot duration (would trigger ended event)
-      const _flushTarget = _finalSeekTarget > 0.01 ? _finalSeekTarget - 0.01 : 0;
-      let _flushVideoDuration = 0;
-      try { _flushVideoDuration = Number(vNode.duration) || 0; } catch {}
-      const _flushSafe =
-        _finalSeekTarget >= 0.5 &&
-        _flushTarget >= 0 &&
-        (_flushVideoDuration <= 0 || _flushTarget < _flushVideoDuration - 0.5);
-      if (_flushSafe && canDoMicroSeek()) {
-        recordMicroSeek();
-        try { vNode.currentTime = _flushTarget; } catch {}
-      }
+        // Seek to flush the stale compositor frame. Use +0.01 offset — large enough
+        // for the demuxer to treat it as a real seek, small enough to be invisible.
+        // Use the SAFE targetTime — never fall back to currentVt if it would be 0.
+        const seekTarget = targetTime > 0 ? targetTime : currentVt;
+        // Additional guard: if seekTarget is 0 and we KNOW audio is well into the
+        // track (audio.currentTime > 1), prefer audio time over letting video reset.
+        let _finalSeekTarget = seekTarget;
+        if (_finalSeekTarget < 0.5 && coupledMode && audio) {
+          try {
+            const _at2 = Number(audio.currentTime) || 0;
+            if (_at2 > 1.0) _finalSeekTarget = _at2;
+          } catch {}
+        }
+        const _flushTarget = _finalSeekTarget > 0.01 ? _finalSeekTarget - 0.01 : 0;
+        let _flushVideoDuration = 0;
+        try { _flushVideoDuration = Number(vNode.duration) || 0; } catch {}
+        const _flushSafe =
+          _finalSeekTarget >= 0.5 &&
+          _flushTarget >= 0 &&
+          (_flushVideoDuration <= 0 || _flushTarget < _flushVideoDuration - 0.5);
+        if (_flushSafe && canDoMicroSeek()) {
+          recordMicroSeek();
+          try { vNode.currentTime = _flushTarget; } catch {}
+        }
 
-      // Clear micro-seek flag after a short delay
-      setTimeout(() => { state._isMicroSeek = false; }, 200);
+        // Clear micro-seek flag after a short delay
+        setTimeout(() => { state._isMicroSeek = false; }, 200);
+      } else {
+        state._isMicroSeek = false;
+      }
 
       // Arm VCFM to verify a frame actually reaches the compositor.
       // If the seek+play didn't unstick it, VCFM escalates automatically.
@@ -6294,10 +6294,13 @@ const HAVE_ENOUGH_DATA = 4;
     state.userPauseIntentPresetAt = now();
     state.userPlayIntentPresetAt = 0;
     state.audioStartGraceUntil = 0;
-    // Block micro-seeks for 200ms after user pause. Prevents "random seeks"
-    // during the brief transition window. 200ms (down from 400ms) lets the
-    // RAF freeze detector kick faster if the compositor IS stuck.
-    state._playPauseTransitionUntil = Math.max(state._playPauseTransitionUntil, now() + 200);
+    // Block micro-seeks through the full pause transition. The shorter 200ms
+    // window still let recovery nudges land during normal pause settle, which
+    // showed up as tiny random seeks and brief frozen-frame flashes.
+    state._playPauseTransitionUntil = Math.max(
+      state._playPauseTransitionUntil,
+      now() + PLAY_PAUSE_MICRO_SEEK_BLOCK_MS
+    );
     state.userGesturePauseIntent = true;
     state.firstPlayCommitted = true;
     state.startupKickDone = true;
@@ -6365,9 +6368,13 @@ const HAVE_ENOUGH_DATA = 4;
     // Without this, rapid play/pause leaves the compositor stuck because the
     // 1200ms cooldown from a previous kick blocks detection of new freezes.
     try { MakeVideoNotFreezeAfterPlaybackAfterAltTabHapenns.resetKickCooldown(); } catch {}
-    // Block micro-seeks for 200ms after user play. Prevents "random seeks"
-    // while still letting the RAF freeze detector kick at 200ms if frozen.
-    state._playPauseTransitionUntil = Math.max(state._playPauseTransitionUntil, now() + 200);
+    // Keep micro-seek recovery out of the direct user play window. The old
+    // 200ms guard was short enough that normal decoder warmup still triggered
+    // a visible one-frame freeze/micro-seek cycle on play->pause->play.
+    state._playPauseTransitionUntil = Math.max(
+      state._playPauseTransitionUntil,
+      now() + PLAY_PAUSE_MICRO_SEEK_BLOCK_MS
+    );
     state.bgSuppressionSessionCount = 0;
     state.bgPauseSuppressionCount = 0;
     state.rapidPlayPauseCount = 0;
@@ -7272,6 +7279,20 @@ const HAVE_ENOUGH_DATA = 4;
     // CRITICAL: never micro-seek during a play/pause transition. The user
     // perceives these as "random seeks" and they can flash wrong keyframes.
     if (t < state._playPauseTransitionUntil) return false;
+    // Also stay out of the broader direct user toggle window. Recovery systems
+    // competing with a deliberate click/keypress are the main source of the
+    // audible/visible play-pause-play artifacts.
+    if (userToggleTxnActive() || directUserToggleActive(MICRO_SEEK_TOGGLE_SUPPRESS_MS)) return false;
+    // Explicit seeks own the timeline for a short settle window; micro-seeks in
+    // that period move the target away from where the user just asked to go.
+    if (
+      userSeekIntentActive() ||
+      state.pendingSeekTarget != null ||
+      state.seeking ||
+      state.seekBuffering ||
+      state.seekResumeInFlight ||
+      seekRecoveryActive(MICRO_SEEK_SEEK_SUPPRESS_MS)
+    ) return false;
     if (t - state._lastMicroSeekAt < MICRO_SEEK_MIN_GAP_MS) return false;
     // Block micro-seeks when video is paused in foreground — nothing to flush
     // when the compositor isn't running. Only allow during tab return recovery.
@@ -7958,6 +7979,14 @@ const HAVE_ENOUGH_DATA = 4;
       document.visibilityState === "visible" &&
       isWindowFocused();
     const _epTime = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
+    const _epDirectUserResume =
+      userImmediate ||
+      directUserToggleActive(MICRO_SEEK_TOGGLE_SUPPRESS_MS) ||
+      userWantsPlayNow(MICRO_SEEK_TOGGLE_SUPPRESS_MS) ||
+      userToggleExpectingPlay();
+    const _epActuallyBuffering =
+      _epVisibleForeground &&
+      isForegroundVideoActuallyBuffering();
     const _epNeedsStableVideo =
       _epVisibleForeground &&
       state.firstPlayCommitted &&
@@ -7975,7 +8004,7 @@ const HAVE_ENOUGH_DATA = 4;
     if (shouldBlockLeadingAudioForForegroundPlay()) {
       return false;
     }
-    if (!force && _epNeedsStableVideo && !videoReadyForAudioResume(_epTime)) return false;
+    if (!force && _epNeedsStableVideo && !_epDirectUserResume && !videoReadyForAudioResume(_epTime)) return false;
     // Allow forced audio start to bypass buffer hold — EXCEPT when video is
     // genuinely starved in visible foreground. Without this exception, audio
     // plays over a frozen/buffering video during tab return and NMPBFN recovery.
@@ -8005,8 +8034,11 @@ const HAVE_ENOUGH_DATA = 4;
     // seek resume, causing "audio plays while video is buffering."
     const _epInSeekResume = state.seekResumeInFlight ||
       (state.seekKickAudioAllowedUntil > 0 && now() < state.seekKickAudioAllowedUntil);
+    const _epAllowCurrentDataResume =
+      (_epInSeekResume && _epRS >= HAVE_CURRENT_DATA) ||
+      (_epDirectUserResume && _epRS >= HAVE_CURRENT_DATA && !_epActuallyBuffering);
     if (_epVisibleForeground && state.firstPlayCommitted &&
-        _epRS < HAVE_FUTURE_DATA && !(_epInSeekResume && _epRS >= HAVE_CURRENT_DATA)) {
+        _epRS < HAVE_FUTURE_DATA && !_epAllowCurrentDataResume) {
       return false;
     }
     // skip if video is genuinely buffering (readyState < 3)
@@ -8052,9 +8084,21 @@ const HAVE_ENOUGH_DATA = 4;
     if (!force && t < state.audioPauseUntil) return !audio.paused;
     if (!force && t < state.audioPlayUntil) return !audio.paused;
     if (state.audioPlayInFlight) {
-      if (!force) { try { await state.audioPlayInFlight; } catch {} return !audio.paused; }
-      // force: don't wait for previous play — just cancel and proceed
-      state.audioPlayInFlight = null;
+      const inFlight = state.audioPlayInFlight;
+      if (!force) {
+        try { await inFlight; } catch {}
+        return !audio.paused;
+      }
+      // Forced resume paths used to stack another play() on top of an already
+      // running audio.play() promise. That caused audible cut/restart glitches
+      // on rapid play-pause-play and during post-seek recovery.
+      try {
+        await Promise.race([
+          Promise.resolve(inFlight).catch(() => {}),
+          new Promise(resolve => setTimeout(resolve, 180))
+        ]);
+      } catch {}
+      if (!audio.paused) return true;
     }
     state.audioPlayUntil = t + resolvedMinGapMs;
     state.audioPauseUntil = 0;
@@ -12147,7 +12191,7 @@ const HAVE_ENOUGH_DATA = 4;
         state.seekWantedPlaying = state.intendedPlaying;
         if (state.seekWantedPlaying) armSeekResumeIntent(9000);
         state.seekStabilizeUntil = Math.max(state.seekStabilizeUntil, now() + 5000);
-        video.currentTime(newTime);
+        safeSetVideoTime(newTime, { force: true });
       });
       navigator.mediaSession.setActionHandler("seekbackward", d => {
         const dec = Number(d?.seekOffset) || 10;
@@ -12158,7 +12202,7 @@ const HAVE_ENOUGH_DATA = 4;
         state.seekWantedPlaying = state.intendedPlaying;
         if (state.seekWantedPlaying) armSeekResumeIntent(9000);
         state.seekStabilizeUntil = Math.max(state.seekStabilizeUntil, now() + 5000);
-        video.currentTime(newTime);
+        safeSetVideoTime(newTime, { force: true });
       });
       navigator.mediaSession.setActionHandler("seekto", d => {
         if (!d || typeof d.seekTime !== "number") return;
@@ -12169,7 +12213,7 @@ const HAVE_ENOUGH_DATA = 4;
         state.seekWantedPlaying = state.intendedPlaying;
         if (state.seekWantedPlaying) armSeekResumeIntent(9000);
         state.seekStabilizeUntil = Math.max(state.seekStabilizeUntil, now() + 5000);
-        video.currentTime(newTime);
+        safeSetVideoTime(newTime, { force: true });
       });
     } catch {}
   }
@@ -14909,14 +14953,22 @@ const HAVE_ENOUGH_DATA = 4;
         return;
       }
 
-      const _recentVisibilityReturn = (_focusTs - (state.lastVisibleReturnHandledAt || 0)) < 700;
+      const _recentVisibilityReturn = (_focusTs - (state.lastVisibleReturnHandledAt || 0)) < 1600;
       // Let tab-return manager handle immunity, intercept, rapid counter resets,
       // alt-tab flag clearing, instant play, and bbtab/wakeup retry.
       if (!_recentVisibilityReturn) {
-        SmoothTabWelcomeBackManagement.onTabReturn();
         VisibilityGuard.onTabShow();
         BackgroundPlaybackManager.onBecomeForeground();
         BackgroundPlaybackManagerManager.onForegroundReturn();
+        const _focusPlaybackHealthy =
+          state.intendedPlaying &&
+          !getVideoPaused() &&
+          (!coupledMode || (audio && !audio.paused));
+        if (_focusPlaybackHealthy) {
+          try { VideoCompositorFlushManager.arm(); } catch {}
+        } else {
+          SmoothTabWelcomeBackManagement.onTabReturn();
+        }
       }
 
       state.lastBgReturnAt = Math.max(state.lastBgReturnAt, _focusTs);
