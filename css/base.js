@@ -43,7 +43,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
 // before DOMContentLoaded. Ensures both video and audio start at 00:00
 // even if the browser pre-buffers to a non-zero keyframe position.
 // This runs in a try-catch because elements might not exist yet.
-
+ // IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
+// before DOMContentLoaded. Ensures both video and audio start at 00:00
+// even if the browser pre-buffers to a non-zero keyframe position.
+// This runs in a try-catch because elements might not exist yet.
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -12453,6 +12456,19 @@ const HAVE_ENOUGH_DATA = 4;
                     directUserToggleActive(2800) ||
                     userToggleExpectingPlay()
                   );
+                const canFastKickDirectVisibleAudio =
+                  directVisibleUserPlay &&
+                  (() => {
+                    const _fvVNode = getVideoNode();
+                    const _fvVRS = _fvVNode ? Number(_fvVNode.readyState || 0) : 0;
+                    return (
+                      _fvVRS >= HAVE_CURRENT_DATA &&
+                      !state.videoWaiting &&
+                      !state.videoStallAudioPaused &&
+                      !isForegroundVideoActuallyBuffering() &&
+                      !shouldHoldAudioForForegroundStall({ allowRecovery: false })
+                    );
+                  })();
                 if (!audio.paused && state.audioEverStarted) {
                   const vt = Number(video.currentTime());
                   const at = Number(audio.currentTime);
@@ -12475,7 +12491,13 @@ const HAVE_ENOUGH_DATA = 4;
                 // playTogether() has awaits that add 50-150ms of latency.
                 // Set audio position and fire play() directly, then let
                 // playTogether handle the full sync in the background.
-                if (audio && audio.paused && !freshVideoFirst && !requireVisibleVideoLead && !directVisibleUserPlay) {
+                if (
+                  audio &&
+                  audio.paused &&
+                  !freshVideoFirst &&
+                  !requireVisibleVideoLead &&
+                  (!directVisibleUserPlay || canFastKickDirectVisibleAudio)
+                ) {
                   const _fastVt = Number(video.currentTime()) || 0;
                   if (isFinite(_fastVt) && _fastVt >= 0) {
                     state._allowAudioTimeWrite = true;
@@ -12483,9 +12505,9 @@ const HAVE_ENOUGH_DATA = 4;
                     state._allowAudioTimeWrite = false;
                   }
                   try { audio.volume = targetVolFromVideo(); } catch {}
-                  squelchAudioEvents(300);
-                  state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 600);
-                  try { audio.play().catch(() => {}); } catch {}
+                  squelchAudioEvents(220);
+                  state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 450);
+                  execProgrammaticAudioPlay({ squelchMs: 80, force: true, minGapMs: 0 }).catch(() => {});
                   state.audioEverStarted = true;
                 }
                 playTogether().catch(() => {});
@@ -12521,6 +12543,9 @@ const HAVE_ENOUGH_DATA = 4;
       try { if (getVideoNode()?.seeking && !_userWantsPauseHere) return; } catch {}
       // Disarm PRFV on pause — no compositor check needed when paused
       try { PlayResumeFrameVerifier.disarm(); } catch {}
+      // Disarm VCFM too — stale frame checks from the previous play session can
+      // otherwise wake back up during pause/resume churn and create fake freezes.
+      try { VideoCompositorFlushManager.disarm(); } catch {}
       if (restartFromEndedGuardActive() &&
           !state.isProgrammaticVideoPause &&
           !userWantsPauseNow(2400) &&
@@ -12989,16 +13014,22 @@ const HAVE_ENOUGH_DATA = 4;
       try { MakeVideoNotFreezeAfterPlaybackAfterAltTabHapens.start(); } catch {}
       // Verify compositor is actually rendering frames after play resumes.
       // Catches "video.paused=false but screen frozen" on all browsers.
-      // ONLY arm when compositor staleness is likely — NOT on normal play/pause.
-      // Normal play/pause: RAF freeze detector (INVARIANT 2) handles it.
-      // Arming PRFV on every play causes false-positive micro-seeks that the
-      // user sees as "seek back then forward" and "frozen frame flash."
+      // With the stronger micro-seek suppression we can safely arm this for
+      // direct visible user resumes too, not just tab-return/long-pause cases.
       {
         const _prfvNow = now();
         const _prfvGapMs = _prevPlayingAt > 0 ? (_prfvNow - _prevPlayingAt) : Infinity;
         const _prfvAfterTabReturn = state.lastBgReturnAt > 0 && (_prfvNow - state.lastBgReturnAt) < 8000;
         const _prfvAfterLongPause = _prfvGapMs > 2000;
-        if (_prfvAfterTabReturn || _prfvAfterLongPause) {
+        const _prfvDirectUserResume =
+          document.visibilityState === "visible" &&
+          isWindowFocused() &&
+          (
+            directUserToggleActive(1800) ||
+            userWantsPlayNow(1800) ||
+            userToggleExpectingPlay()
+          );
+        if (_prfvAfterTabReturn || _prfvAfterLongPause || _prfvDirectUserResume) {
           try { PlayResumeFrameVerifier.arm(); } catch {}
         }
       }
