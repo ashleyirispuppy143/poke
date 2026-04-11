@@ -31,6 +31,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
 // before DOMContentLoaded. Ensures both video and audio start at 00:00
 // even if the browser pre-buffers to a non-zero keyframe position.
 // This runs in a try-catch because elements might not exist yet.
+ // IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
+// before DOMContentLoaded. Ensures both video and audio start at 00:00
+// even if the browser pre-buffers to a non-zero keyframe position.
+// This runs in a try-catch because elements might not exist yet.
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -2429,16 +2433,33 @@ document.addEventListener("DOMContentLoaded", () => {
               _frozenFrames = 0;
               _frozenSince = 0;
               recordMicroSeek();
+              // STRATEGY: Use pause→play cycle first (no seek = no keyframe flash).
+              // The compositor re-requests a frame on play() without triggering a
+              // decoder seek. Only if this doesn't work (VCFM will catch it), we
+              // escalate to a micro-seek. This eliminates the "flashing scene"
+              // artifact caused by the decoder briefly displaying the nearest
+              // keyframe (0.5-2s away) during a backward seek.
               state._isMicroSeek = true;
-              try { vNode.currentTime = vt > 0.01 ? vt - 0.01 : 0; } catch {}
-              setTimeout(() => { state._isMicroSeek = false; }, 200);
               DONTMAKEITDOUBLEPLAY.resetAll();
-              if (getVideoPaused()) {
+              if (!getVideoPaused()) {
+                // pause→play cycle to flush compositor without seek
+                state.isProgrammaticVideoPause = true;
+                try { vNode.pause(); } catch {}
+                setTimeout(() => {
+                  state.isProgrammaticVideoPause = false;
+                  state._isMicroSeek = false;
+                  if (!state.intendedPlaying) return;
+                  const p = execProgrammaticVideoPlay();
+                  if (p && typeof p.catch === "function") p.catch(() => {});
+                  try { VideoCompositorFlushManager.arm(); } catch {}
+                }, 16); // one frame at 60fps
+              } else {
+                // Video is paused — just play it
+                setTimeout(() => { state._isMicroSeek = false; }, 200);
                 const p = execProgrammaticVideoPlay();
                 if (p && typeof p.catch === "function") p.catch(() => {});
+                try { VideoCompositorFlushManager.arm(); } catch {}
               }
-              // Arm VCFM to verify the frame actually rendered after our kick.
-              try { VideoCompositorFlushManager.arm(); } catch {}
             }
           }
         } else {
@@ -3005,21 +3026,26 @@ document.addEventListener("DOMContentLoaded", () => {
       const vt = Number(vn.currentTime) || 0;
       if (vt <= 0) { _armed = false; return; }
 
-      // Micro-seek: forces the decoder to flush the stale GPU texture.
+      // Flush compositor with pause→play cycle (no seek = no keyframe flash).
+      // Any micro-seek — even 0.001s backward — triggers the decoder to find
+      // the nearest keyframe, causing a visible flash of the wrong frame.
       if (!canDoMicroSeek()) {
-        // Too many micro-seeks recently — retry after cooldown
         setTimeout(() => _doFlush(gen), MICRO_SEEK_MIN_GAP_MS);
         return;
       }
       recordMicroSeek();
       state._isMicroSeek = true;
-      try {
-        const dur = Number(vn.duration) || 0;
-        // Always seek backward — never forward — to avoid flashing a future keyframe
-        const seekTo = vt > 0.001 ? vt - 0.001 : 0.001;
-        vn.currentTime = seekTo;
-      } catch {}
-      setTimeout(() => { state._isMicroSeek = false; }, 150);
+      state.isProgrammaticVideoPause = true;
+      try { vn.pause(); } catch {}
+      setTimeout(() => {
+        state.isProgrammaticVideoPause = false;
+        state._isMicroSeek = false;
+        if (gen !== _armGen || !_armed) return;
+        if (!state.intendedPlaying) { _armed = false; return; }
+        DONTMAKEITDOUBLEPLAY.resetAll();
+        const p = execProgrammaticVideoPlay();
+        if (p && typeof p.catch === "function") p.catch(() => {});
+      }, 16);
 
       // Re-arm: schedule another RVFC check to verify the flush worked
       _startFrameCount = getVideoPresentedFrameCount(vn);
@@ -3047,7 +3073,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
       state._isMicroSeek = true;
       try { vn.pause(); } catch {}
-      try { vn.currentTime = vt > 0.01 ? vt - 0.01 : 0; } catch {}
+      // Forward micro-seek (+0.001) instead of backward to avoid keyframe flash.
+      try { vn.currentTime = vt + 0.001; } catch {}
       DONTMAKEITDOUBLEPLAY.resetAll();
       // Use rAF to wait for the compositor to process the seek before playing.
       // This ensures the fresh frame is available when play() resumes rendering.
@@ -3201,14 +3228,23 @@ document.addEventListener("DOMContentLoaded", () => {
           const vn4 = getVideoNode();
           if (!vn4 || vn4.paused || !state.intendedPlaying) return;
 
-          // Single micro-seek to flush compositor — backward to avoid future frame flash
-          const vt = Number(vn4.currentTime) || 0;
-          if (vt > 0.2 && canDoMicroSeek()) {
+          // Flush compositor with pause→play cycle instead of micro-seek.
+          // Micro-seeks (even 0.002s) trigger the decoder to seek to the nearest
+          // keyframe, briefly flashing a frame from a different position. pause→play
+          // forces the compositor to re-request the current frame without seeking.
+          if (canDoMicroSeek()) {
             recordMicroSeek();
             state._isMicroSeek = true;
-            const target = vt > 0.002 ? vt - 0.002 : 0.002;
-            try { vn4.currentTime = target; } catch {}
-            setTimeout(() => { state._isMicroSeek = false; }, 200);
+            state.isProgrammaticVideoPause = true;
+            try { vn4.pause(); } catch {}
+            setTimeout(() => {
+              state.isProgrammaticVideoPause = false;
+              state._isMicroSeek = false;
+              if (!state.intendedPlaying) return;
+              DONTMAKEITDOUBLEPLAY.resetAll();
+              const p = execProgrammaticVideoPlay();
+              if (p && typeof p.catch === "function") p.catch(() => {});
+            }, 16);
           }
 
           // Re-check after micro-seek
@@ -3238,7 +3274,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const vn2 = getVideoNode();
         if (!vn2 || !state.intendedPlaying) { state._isMicroSeek = false; return; }
         const vt2 = Number(vn2.currentTime) || 0;
-        try { vn2.currentTime = vt2 > 0.01 ? vt2 - 0.01 : 0; } catch {}
+        // Use FORWARD micro-seek (+0.001) instead of backward (-0.01).
+        // Backward seeks trigger the decoder to seek to the nearest I-frame
+        // which can be 0.5-2s away, causing a visible "flash" of the wrong
+        // frame. Forward seeks decode the next P/B-frame from the current
+        // position — no keyframe flash.
+        try { vn2.currentTime = vt2 + 0.001; } catch {}
         setTimeout(() => {
           state._isMicroSeek = false;
           if (gen !== _gen) return;
@@ -3251,6 +3292,97 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     return { arm, disarm };
+  })();
+
+  // --- NuclearFreezeWatchdog (NFW)
+  // HARD LAST RESORT: If video is "playing" but frames haven't advanced in
+  // 2 seconds, ALL gentler systems have failed. Force a hard fix:
+  // pause → forward seek +0.1s → play. This is the most aggressive fix —
+  // it will show a tiny position jump but is guaranteed to unstick the
+  // compositor on every browser. Only fires once per 8s to avoid loops.
+  const NuclearFreezeWatchdog = (() => {
+    let _timer = null;
+    let _lastFrameCount = -1;
+    let _lastFrameCheckAt = 0;
+    let _lastNuclearAt = 0;
+    const CHECK_MS = 2000;
+    const COOLDOWN_MS = 8000;
+
+    function _tick() {
+      _timer = null;
+      if (!state.intendedPlaying) return;
+      if (document.visibilityState !== "visible") { _schedule(); return; }
+      if (state.seeking || state.seekBuffering || state.restarting) { _schedule(); return; }
+      if (state.endedNaturally) return;
+
+      const vn = getVideoNode();
+      if (!vn || vn.paused) { _schedule(); return; }
+
+      const fc = getVideoPresentedFrameCount(vn);
+      const vt = Number(vn.currentTime) || 0;
+
+      if (_lastFrameCheckAt > 0 && isFinite(fc) && isFinite(_lastFrameCount)) {
+        const elapsed = now() - _lastFrameCheckAt;
+        const framesAdvanced = fc > _lastFrameCount;
+        const timeAdvanced = Math.abs(vt - (state._nfwLastVT || 0)) > 0.01;
+
+        if (!framesAdvanced && !timeAdvanced && elapsed >= CHECK_MS * 0.9 &&
+            (now() - _lastNuclearAt) > COOLDOWN_MS) {
+          // NUCLEAR: video says playing, but nothing is moving. Force fix.
+          _lastNuclearAt = now();
+          state._isMicroSeek = true;
+          state.isProgrammaticVideoPause = true;
+          try { vn.pause(); } catch {}
+          setTimeout(() => {
+            state.isProgrammaticVideoPause = false;
+            if (!state.intendedPlaying) { state._isMicroSeek = false; return; }
+            const vn2 = getVideoNode();
+            if (!vn2) { state._isMicroSeek = false; return; }
+            // Forward seek by 0.1s to force decoder to produce a fresh frame
+            const curVT = Number(vn2.currentTime) || 0;
+            try { vn2.currentTime = curVT + 0.1; } catch {}
+            setTimeout(() => {
+              state._isMicroSeek = false;
+              if (!state.intendedPlaying) return;
+              DONTMAKEITDOUBLEPLAY.resetAll();
+              const p = execProgrammaticVideoPlay();
+              if (p && typeof p.catch === "function") p.catch(() => {});
+              // Also kick audio to stay in sync
+              if (coupledMode && audio) {
+                const newVT = Number(getVideoNode()?.currentTime) || 0;
+                if (Math.abs(Number(audio.currentTime) - newVT) > 0.3) {
+                  state._allowAudioTimeWrite = true;
+                  try { audio.currentTime = newVT; } catch {}
+                  state._allowAudioTimeWrite = false;
+                }
+                if (audio.paused && !shouldBlockNewAudioStart()) {
+                  execProgrammaticAudioPlay({ squelchMs: 200, force: true, minGapMs: 0 }).catch(() => {});
+                }
+              }
+            }, 50);
+          }, 30);
+        }
+      }
+
+      _lastFrameCount = isFinite(fc) ? fc : -1;
+      _lastFrameCheckAt = now();
+      state._nfwLastVT = vt;
+      _schedule();
+    }
+
+    function _schedule() {
+      if (_timer) return;
+      _timer = setTimeout(_tick, CHECK_MS);
+    }
+
+    function start() { _schedule(); }
+    function stop() { if (_timer) { clearTimeout(_timer); _timer = null; } }
+    function reset() {
+      _lastFrameCount = -1;
+      _lastFrameCheckAt = 0;
+    }
+
+    return { start, stop, reset };
   })();
 
   // --- VisibilityGuard (VG)
@@ -4832,8 +4964,8 @@ const HAVE_ENOUGH_DATA = 4;
   const LOOP_DETECTION_WINDOW_MS = 2000;
   // Increased from 6→14: 6 events fires too easily during tab switches / buffering states.
   // 14 is still well below any real infinite loop scenario.
-  const MAX_LOOP_EVENTS = 14;
-  const LOOP_COOLDOWN_MS = 4000;
+  const MAX_LOOP_EVENTS = 18;
+  const LOOP_COOLDOWN_MS = 2500;
   const BG_RETURN_GRACE_MS = 3000;
   const TAB_RETURN_AUDIO_RETRY_DELAY_MS = 300;
   const BG_RETURN_WAKEUP_DELAY_CHROMIUM_MS = 180;
@@ -6354,6 +6486,7 @@ const HAVE_ENOUGH_DATA = 4;
       }, 40);
     }
     state.rapidPlayPauseCount = 0;
+    state.rapidPlayPauseResetAt = now();
     state.rapidToggleDetected = false;
     state.rapidToggleUntil = 0;
     state.loopPreventionCooldownUntil = 0;
@@ -6400,6 +6533,9 @@ const HAVE_ENOUGH_DATA = 4;
     state.rapidToggleDetected = false;
     state.rapidToggleUntil = 0;
     state.loopPreventionCooldownUntil = 0;
+    // Clear any stale counter so loop detection doesn't trip from
+    // leftover programmatic events before the user's explicit play.
+    state.rapidPlayPauseResetAt = now();
     // CRITICAL: Clear ended lock so user can restart playback.
     // Without this, keyboard play (Space/K) after video ended was blocked
     // because onUserPlay() was never called from the keyboard path.
@@ -6780,7 +6916,10 @@ const HAVE_ENOUGH_DATA = 4;
     // Never fire during tab-return or startup immunity
     if (state.tabReturnImmuneUntil > now()) return false;
     if (now() < state.loopPreventionCooldownUntil) return true;
-    if ((now() - state.lastUserActionTime) < 1500) return false;
+    if ((now() - state.lastUserActionTime) < 2500) return false;
+    // Also bypass if the user explicitly wants play or pause right now —
+    // loop detection must NEVER block a real user toggle.
+    if (userWantsPlayNow(2000) || userWantsPauseNow(2000)) return false;
     if (state.rapidPlayPauseCount >= MAX_LOOP_EVENTS) {
       state.loopPreventionCooldownUntil = now() + LOOP_COOLDOWN_MS;
       return true;
@@ -7611,10 +7750,13 @@ const HAVE_ENOUGH_DATA = 4;
     // OR focused, the user would see a random jump — that's the #1 cause of
     // "random seeks". Use OR (not AND) because during alt-tab the window can
     // briefly lose focus while still visible, or vice versa. Either condition
-    // means the user can see the seek.
+    // means the user can see the seek. Also block during tab-return grace —
+    // the first 500ms after return the page is visible but audio position may
+    // be far ahead from background playback, causing a visible forward jump.
     if (document.visibilityState === "visible" || isWindowFocused()) {
       return;
     }
+    if (inBgReturnGrace() || BringBackToTabManager.isLocked()) return;
     // Never silently sync video to 0 after first play (unless looping)
     if (t < 0.5 && state.firstPlayCommitted && !nearZeroSeekAuthorized(t) && !state.restarting && !isLoopDesired()) {
       const vt = Number(videoEl.currentTime) || 0;
@@ -8856,6 +8998,11 @@ const HAVE_ENOUGH_DATA = 4;
     const immediateUserPause = directUserToggleActive(1000) || userWantsPauseNow(1000) || userToggleExpectingPause();
     const pauseFadeMs = immediateUserPause ? USER_EXPLICIT_PAUSE_FADE_MS : AUDIO_FADE_DURATION_MS;
     const flagReleaseMs = immediateUserPause ? USER_PROGRAMMATIC_FLAG_CLEAR_MS : 250;
+    // Cancel deferred audio pause — pauseHard will handle audio directly
+    if (state._deferredAudioPauseTimer) {
+      clearTimeout(state._deferredAudioPauseTimer);
+      state._deferredAudioPauseTimer = null;
+    }
     state.userPauseIntentPresetAt = 0;
     state.restartFromEndedUntil = 0;
     state.seekAudioMustStartUntil = 0;
@@ -8869,6 +9016,7 @@ const HAVE_ENOUGH_DATA = 4;
     clearBgResumeRetryTimer();
     clearResumeAfterBufferTimer();
     try { MakeSureAudioOrVideoDoesntPauseUnlessUserReallyWantsTo.stop(); } catch {}
+    try { NuclearFreezeWatchdog.stop(); } catch {}
 
     state.isProgrammaticVideoPause = true;
     try { video.pause(); } catch {}
@@ -12712,7 +12860,15 @@ const HAVE_ENOUGH_DATA = 4;
               if (_vn && typeof _vn.play === "function") _vn.play().catch(() => {});
               return;
             }
-            // 7. Genuine foreground pause we can't explain → honour it
+            // 7. Ongoing user play toggle — our pause→play cycle or programmatic
+            //    code may have fired an unflagged pause. Counter-play.
+            if (directUserToggleActive(800) && userWantsPlayNow(2000) && !state.endedNaturally) {
+              VisibilityGuard.onPlayCalled();
+              const _vn = getVideoNode();
+              if (_vn && typeof _vn.play === "function") _vn.play().catch(() => {});
+              return;
+            }
+            // 8. Genuine foreground pause we can't explain → honour it
             state.intendedPlaying = false;
             state.bufferHoldIntendedPlaying = false;
             state.playSessionId++;
@@ -12941,6 +13097,15 @@ const HAVE_ENOUGH_DATA = 4;
                 return;
               }
 
+              // --- active user play toggle guard
+              // Our pause→play freeze fix or programmatic code may emit unflagged
+              // pause events during a user's play toggle. Counter-play.
+              if (directUserToggleActive(800) && userWantsPlayNow(2000) &&
+                  state.intendedPlaying && !state.endedNaturally) {
+                if (_shouldCounterPlay()) _counterPlay();
+                return;
+              }
+
               // --- real user pause
               // All guards passed. This is a real, unexplained pause on a focused, visible,
               // stable page with no transition or grace window active. Honour it.
@@ -13066,6 +13231,7 @@ const HAVE_ENOUGH_DATA = 4;
       _bufMonLastVT = -1;
       try { MakeSureAudioOrVideoDoesntPauseUnlessUserReallyWantsTo.start(); } catch {}
       try { MakeVideoNotFreezeAfterPlaybackAfterAltTabHapens.start(); } catch {}
+      try { NuclearFreezeWatchdog.reset(); NuclearFreezeWatchdog.start(); } catch {}
       // Verify compositor is actually rendering frames after play resumes.
       // Catches "video.paused=false but screen frozen" on all browsers.
       // With the stronger micro-seek suppression we can safely arm this for
@@ -13108,13 +13274,19 @@ const HAVE_ENOUGH_DATA = 4;
               if (state.playSessionId !== _rvfcGen) return; // stale
               const _kickVN = getVideoNode();
               if (!_kickVN || _kickVN.paused || !state.intendedPlaying) return;
-              // Compositor stuck — force a backward micro-seek to flush
-              const _kickVT = Number(_kickVN.currentTime) || 0;
-              if (_kickVT > 0.02) {
-                state._isMicroSeek = true;
-                try { _kickVN.currentTime = _kickVT - 0.005; } catch {}
-                setTimeout(() => { state._isMicroSeek = false; }, 150);
-              }
+              // Compositor stuck — use pause→play cycle to flush without
+              // triggering a decoder keyframe seek (which causes frame flash).
+              state._isMicroSeek = true;
+              state.isProgrammaticVideoPause = true;
+              try { _kickVN.pause(); } catch {}
+              setTimeout(() => {
+                state.isProgrammaticVideoPause = false;
+                state._isMicroSeek = false;
+                if (!state.intendedPlaying) return;
+                DONTMAKEITDOUBLEPLAY.resetAll();
+                const _p = execProgrammaticVideoPlay();
+                if (_p && typeof _p.catch === "function") _p.catch(() => {});
+              }, 16);
             }, 250);
           }
         }
