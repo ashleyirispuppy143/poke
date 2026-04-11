@@ -31,6 +31,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
 // before DOMContentLoaded. Ensures both video and audio start at 00:00
 // even if the browser pre-buffers to a non-zero keyframe position.
 // This runs in a try-catch because elements might not exist yet.
+// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
+// before DOMContentLoaded. Ensures both video and audio start at 00:00
+// even if the browser pre-buffers to a non-zero keyframe position.
+// This runs in a try-catch because elements might not exist yet.
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -693,7 +697,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // every play/pause press. 500ms is still short enough that genuine freezes
   // (detected at >600ms stuck) get kicked promptly after the transition.
   const PLAY_PAUSE_MICRO_SEEK_BLOCK_MS = 500;
-  const MICRO_SEEK_TOGGLE_SUPPRESS_MS = 900;
+  const MICRO_SEEK_TOGGLE_SUPPRESS_MS = 400;
   const MICRO_SEEK_SEEK_SUPPRESS_MS = 1200;
 
   // Audio play() gate — the single chokepoint for ALL audio playback.
@@ -2439,13 +2443,10 @@ document.addEventListener("DOMContentLoaded", () => {
           if (_frozenFrames >= FROZEN_FRAME_THRESHOLD && (now() - _lastKickAt) > STALL_KICK_COOLDOWN_MS) {
             // Video is NOT paused but frames aren't advancing — stale compositor.
             // Micro-seek to flush the GPU surface, then re-play.
-            // IMPORTANT: Only consume the frozen state (reset counters) if we
-            // actually fire the kick. When canDoMicroSeek() is blocked (e.g. the
-            // 400ms play/pause transition window), we keep _frozenFrames high so
-            // the next tick retries immediately — without this, the frozen state
-            // is lost and we re-accumulate from scratch, adding ~200ms of extra
-            // freeze time on every play/pause.
-            if (canDoMicroSeek()) {
+            // Use canDoCompositorFlush() — NOT canDoMicroSeek() — so compositor
+            // flushes can fire during play/pause transitions. The old code blocked
+            // for ~900ms, causing the "video freezes for a second after play/pause" bug.
+            if (canDoCompositorFlush()) {
               _lastKickAt = now();
               _frozenFrames = 0;
               _frozenSince = 0;
@@ -3045,8 +3046,10 @@ document.addEventListener("DOMContentLoaded", () => {
       // Forward seeks don't cause keyframe flash (decoder continues from
       // current GOP). DO NOT use pause→play — it causes decoder warm-up
       // delay that creates a worse multi-second freeze.
-      if (!canDoMicroSeek()) {
-        setTimeout(() => _doFlush(gen), MICRO_SEEK_MIN_GAP_MS);
+      // Use canDoCompositorFlush() — lighter check that allows flushes during
+      // play/pause transitions (when compositor is most likely stuck).
+      if (!canDoCompositorFlush()) {
+        setTimeout(() => _doFlush(gen), COMPOSITOR_FLUSH_MIN_GAP_MS);
         return;
       }
       recordMicroSeek();
@@ -3227,8 +3230,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         _attempts++;
 
-        // Wait for transition guard to expire before seeking
-        const waitMs = Math.max(0, state._playPauseTransitionUntil - now()) + 50;
+        // Fire compositor flush immediately — don't wait for transition guard.
+        // canDoCompositorFlush() allows flushes during play/pause transitions,
+        // which is exactly when the compositor is most likely stuck.
         _timer = setTimeout(() => {
           _timer = null;
           if (gen !== _gen || _resolved) return;
@@ -3238,7 +3242,7 @@ document.addEventListener("DOMContentLoaded", () => {
           // Forward micro-seek (+0.001s) to flush compositor. Forward seeks
           // don't cause keyframe flash (decoder stays in current GOP).
           const vt = Number(vn4.currentTime) || 0;
-          if (vt > 0.2 && canDoMicroSeek()) {
+          if (vt > 0.2 && canDoCompositorFlush()) {
             recordMicroSeek();
             state._isMicroSeek = true;
             try { vn4.currentTime = vt + 0.001; } catch {}
@@ -3250,7 +3254,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (gen !== _gen) return;
             _scheduleCheck(gen);
           }, RECHECK_MS);
-        }, waitMs);
+        }, 30);
       }, FRAME_WAIT_MS);
     }
 
@@ -7443,6 +7447,7 @@ const HAVE_ENOUGH_DATA = 4;
   // Returns true if a micro-seek is allowed right now. Minimum 500ms between
   // micro-seeks, max 3 per 5 seconds in foreground playback.
   const MICRO_SEEK_MIN_GAP_MS = 800;
+  const COMPOSITOR_FLUSH_MIN_GAP_MS = 250; // lighter rate limit for confirmed compositor flushes
   const MICRO_SEEK_WINDOW_MS = 5000;
   const MICRO_SEEK_MAX_IN_WINDOW = 2;
   function canDoMicroSeek() {
@@ -7500,6 +7505,29 @@ const HAVE_ENOUGH_DATA = 4;
       if (state._microSeekCount >= MICRO_SEEK_MAX_IN_WINDOW &&
           t - state._lastMicroSeekAt < MICRO_SEEK_WINDOW_MS) return false;
     }
+    return true;
+  }
+  // Lightweight check for CONFIRMED compositor-stuck paths (RVFC kick,
+  // VCFM flush, PRFV fix, RAF freeze detector). These paths have already
+  // verified the compositor is stuck (no frame rendered). Unlike canDoMicroSeek(),
+  // this does NOT block during play/pause transitions — that's exactly when
+  // compositor flushes are most needed. The +0.001 forward micro-seek is
+  // invisible to the user and marked _isMicroSeek so seeking/seeked handlers skip.
+  //
+  // WHY THIS EXISTS: canDoMicroSeek() blocks for 500ms (_playPauseTransitionUntil)
+  // + 900ms (directUserToggleActive). This means ALL compositor fix systems were
+  // blocked for ~900ms after every play/pause — causing the "video freezes for
+  // about a second after play/pause" bug. The user sees paused=false but stale frame.
+  function canDoCompositorFlush() {
+    // Block during active seeks — micro-seek would interfere with seek resolution
+    if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
+    if (userSeekIntentActive() || state.pendingSeekTarget != null) return false;
+    // Block when video is paused — no point flushing paused compositor
+    if (document.visibilityState === "visible" && getVideoPaused() &&
+        !isTabReturnImmune() && !NotMakePlayBackFixingNoticable.isActive() &&
+        !inBgReturnGrace()) return false;
+    // Lighter rate limit — compositor flushes can retry faster
+    if (now() - state._lastMicroSeekAt < COMPOSITOR_FLUSH_MIN_GAP_MS) return false;
     return true;
   }
   function recordMicroSeek() {
@@ -11433,7 +11461,7 @@ const HAVE_ENOUGH_DATA = 4;
                             // doesn't cascade into the seek retry chain.
                             // Forward seeks stay in the current GOP — no keyframe flash.
                             const _kickTarget = _frzVt + 0.001;
-                            if (_frzVt > 0.01 && (_frzDur <= 0 || _kickTarget < _frzDur - 0.5) && canDoMicroSeek()) {
+                            if (_frzVt > 0.01 && (_frzDur <= 0 || _kickTarget < _frzDur - 0.5) && canDoCompositorFlush()) {
                               recordMicroSeek();
                               state._isMicroSeek = true;
                               try { _frzVNode.currentTime = _kickTarget; } catch {}
@@ -13288,11 +13316,12 @@ const HAVE_ENOUGH_DATA = 4;
               if (!_kickVN || _kickVN.paused || !state.intendedPlaying) return;
               // Compositor stuck — forward micro-seek to flush. Forward
               // seeks don't cause keyframe flash (stays in current GOP).
-              // MUST check canDoMicroSeek() — without this, every play
-              // press fires a micro-seek at 250ms that the user sees as
-              // a "random seek" and can flash the wrong frame.
+              // Use canDoCompositorFlush() — NOT canDoMicroSeek() — because
+              // canDoMicroSeek blocks during the 500ms+900ms play/pause
+              // transition window, which is exactly when compositor flushes
+              // are most needed. RVFC has already confirmed no frame in 250ms.
               const _kickVT = Number(_kickVN.currentTime) || 0;
-              if (_kickVT > 0.02 && canDoMicroSeek()) {
+              if (_kickVT > 0.02 && canDoCompositorFlush()) {
                 recordMicroSeek();
                 state._isMicroSeek = true;
                 try { _kickVN.currentTime = _kickVT + 0.001; } catch {}
