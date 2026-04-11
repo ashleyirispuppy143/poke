@@ -31,22 +31,6 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
 // before DOMContentLoaded. Ensures both video and audio start at 00:00
 // even if the browser pre-buffers to a non-zero keyframe position.
 // This runs in a try-catch because elements might not exist yet.
-// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
-// before DOMContentLoaded. Ensures both video and audio start at 00:00
-// even if the browser pre-buffers to a non-zero keyframe position.
-// This runs in a try-catch because elements might not exist yet.
-// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
-// before DOMContentLoaded. Ensures both video and audio start at 00:00
-// even if the browser pre-buffers to a non-zero keyframe position.
-// This runs in a try-catch because elements might not exist yet.
- // IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
-// before DOMContentLoaded. Ensures both video and audio start at 00:00
-// even if the browser pre-buffers to a non-zero keyframe position.
-// This runs in a try-catch because elements might not exist yet.
- // IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
-// before DOMContentLoaded. Ensures both video and audio start at 00:00
-// even if the browser pre-buffers to a non-zero keyframe position.
-// This runs in a try-catch because elements might not exist yet.
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -703,7 +687,7 @@ document.addEventListener("DOMContentLoaded", () => {
     lastVideoPlayingAt: 0,
     _syncTabReturnKickDone: false
   };
-  const PLAY_PAUSE_MICRO_SEEK_BLOCK_MS = 450;
+  const PLAY_PAUSE_MICRO_SEEK_BLOCK_MS = 300;
   const MICRO_SEEK_TOGGLE_SUPPRESS_MS = 900;
   const MICRO_SEEK_SEEK_SUPPRESS_MS = 1200;
 
@@ -2083,9 +2067,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const aPaused = !!audio.paused;
 
     // Rule 1: Audio should not be paused when video is playing (and not buffering)
+    // Also block during play/pause transition — kicking audio here during the
+    // user's toggle creates audible "random play/pause" artifacts.
     if (!vPaused && aPaused && state.intendedPlaying && !state.videoStallAudioPaused &&
       !state.videoWaiting &&
-      t > state.stallAudioResumeHoldUntil && t > state.audioPauseUntil) {
+      t > state.stallAudioResumeHoldUntil && t > state.audioPauseUntil &&
+      t > state._playPauseTransitionUntil && !directUserToggleActive(600)) {
       // Only reset decoder position for significant drift (>0.3s). Small drift
       // from micro-seeks or play/pause transitions is handled by rate sync
       // without the audible pipeline-reset latency that safeSetAudioTime causes.
@@ -2245,7 +2232,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // video paused but nobody asked for it — restart
       // Use unified play lock to prevent racing with INVARIANT 3, watchdog, etc.
+      // Block during play/pause transition to avoid fighting user's toggle.
       if (vPaused && document.visibilityState === "visible" && _msVRS >= HAVE_FUTURE_DATA &&
+          now() > state._playPauseTransitionUntil &&
+          !directUserToggleActive(600) &&
           tryAcquireVideoPlayLock()) {
         DONTMAKEITDOUBLEPLAY.resetAll();
         execProgrammaticVideoPlay();
@@ -2253,11 +2243,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // audio paused but nobody asked for it — restart (foreground only)
       // Use unified canResumeAudio guard: centralized safety conditions.
+      // Also block during play/pause transition to prevent this watchdog from
+      // fighting with the user's intentional toggle (source of "random play/pauses").
       if (aPaused && canResumeAudio() &&
           !state.videoWaiting && !state.videoStallAudioPaused &&
-          now() > state.stallAudioResumeHoldUntil && now() > state.audioPauseUntil) {
+          now() > state.stallAudioResumeHoldUntil && now() > state.audioPauseUntil &&
+          now() > state._playPauseTransitionUntil &&
+          !directUserToggleActive(600)) {
         const vt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
-        safeSetAudioTime(vt);
+        // Only seek audio if drift is significant — small drifts resolve naturally
+        const _msAt = Number(audio.currentTime) || 0;
+        if (Math.abs(_msAt - vt) > 0.4) safeSetAudioTime(vt);
         try { audio.volume = targetVolFromVideo(); } catch {}
         state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 500);
         execProgrammaticAudioPlay({ squelchMs: 200, force: true, minGapMs: 0 }).catch(() => {});
@@ -2322,10 +2318,10 @@ document.addEventListener("DOMContentLoaded", () => {
     let _wasPlayingBeforeHide = false;
 
     const SYNC_PRECISION = 0.1;   // max tolerable A/V drift in seconds
-    const FROZEN_FRAME_THRESHOLD = 3; // rAF ticks before declaring stall (was 5 — too slow, 3 catches it in ~100ms)
+    const FROZEN_FRAME_THRESHOLD = 2; // rAF ticks before declaring stall (was 3 — catches it in ~160ms at 80ms tick interval)
     const WATCHDOG_MS = 400;      // fallback timer interval (was 200→300→400 — rAF is primary, this is backup only)
     const MICRO_SEEK_OFFSET = 0.01; // large enough for demuxer to treat as real seek
-    const STALL_KICK_COOLDOWN_MS = 1200; // don't re-kick faster than this (was 3500 — caused multi-second freezes)
+    const STALL_KICK_COOLDOWN_MS = 800; // don't re-kick faster than this (was 1200 — still caused noticeable freezes on tab return)
     // CPU OPTIMIZATION: skip every other rAF tick. Freeze detection at 30fps
     // is fast enough to catch single-frame stalls (166ms window) while cutting
     // detection work in half. Still rAF-based so it scales with monitor refresh.
@@ -3106,7 +3102,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let _resolved = false;
     let _attempts = 0;
     const MAX_ATTEMPTS = 2;
-    const FRAME_WAIT_MS = 500;       // time to wait for RVFC before acting (was 300 — caused false positives on cold play)
+    const FRAME_WAIT_MS = 350;       // time to wait for RVFC before acting (was 500 — too slow for freeze detection; 350ms avoids false positives while catching real freezes faster)
     const RECHECK_MS = 200;          // time to wait after micro-seek for RVFC
 
     function arm() {
@@ -6319,6 +6315,16 @@ const HAVE_ENOUGH_DATA = 4;
     state.bgPauseSuppressionCount = 0;
 
     cancelActiveFade();
+    // Snapshot the current video position on user pause — this is the
+    // user's "real" position. getBestResumePosition and tab-return recovery
+    // need this to resume from the right spot instead of drifting.
+    try {
+      const _pauseVT = Number(video.currentTime()) || 0;
+      if (_pauseVT > 0.1) {
+        state.lastKnownGoodVT = _pauseVT;
+        state.lastKnownGoodVTts = now();
+      }
+    } catch {}
     // Disarm VCFM on pause — no point checking compositor when paused.
     // Also prevents stale VCFM arms from firing micro-seeks after pause.
     try { VideoCompositorFlushManager.disarm(); } catch {}
@@ -6331,11 +6337,21 @@ const HAVE_ENOUGH_DATA = 4;
     // playing while video is paused — the #1 user-reported pause bug.
     // Pausing audio here (50-100ms before video visually pauses) is
     // imperceptible and guarantees audio always stops on user pause.
+    //
+    // Use a 40ms deferred pause so that rapid play/pause/play (<40ms) can
+    // cancel it before audio actually stops — prevents the audible audio cut
+    // on fast toggles. The timer ID is stored so markUserPlayIntent can cancel.
     if (coupledMode && audio && !audio.paused) {
-      state.isProgrammaticAudioPause = true;
-      squelchAudioEvents(250);
-      try { audio.pause(); } catch {}
-      setTimeout(() => { state.isProgrammaticAudioPause = false; }, 200);
+      if (state._deferredAudioPauseTimer) clearTimeout(state._deferredAudioPauseTimer);
+      state._deferredAudioPauseTimer = setTimeout(() => {
+        state._deferredAudioPauseTimer = null;
+        // Re-check: if user already hit play, don't pause audio
+        if (state.intendedPlaying) return;
+        state.isProgrammaticAudioPause = true;
+        squelchAudioEvents(200);
+        try { audio.pause(); } catch {}
+        setTimeout(() => { state.isProgrammaticAudioPause = false; }, 200);
+      }, 40);
     }
     state.rapidPlayPauseCount = 0;
     state.rapidToggleDetected = false;
@@ -6390,6 +6406,15 @@ const HAVE_ENOUGH_DATA = 4;
     MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.onUserPlay();
     DONTMAKEITDOUBLEPLAY.resetAll();
     clearAudioPauseLocks();
+    // Cancel deferred audio pause from markUserPauseIntent — user hit play
+    // before the 40ms timer fired, so audio should never stop.
+    if (state._deferredAudioPauseTimer) {
+      clearTimeout(state._deferredAudioPauseTimer);
+      state._deferredAudioPauseTimer = null;
+    }
+    // Clear any active squelch so audio.play() can go through immediately
+    state.audioEventsSquelchedUntil = 0;
+    state.isProgrammaticAudioPause = false;
     // User clicked play — clear any stale mute flags from programmatic pause
     if (state.userMutedAudio && audio && !audio.muted) state.userMutedAudio = false;
     if (state.userMutedVideo && !getVideoMutedState()) state.userMutedVideo = false;
@@ -7274,9 +7299,9 @@ const HAVE_ENOUGH_DATA = 4;
   // tab-return compositor flush) which the user perceives as "random seeks."
   // Returns true if a micro-seek is allowed right now. Minimum 500ms between
   // micro-seeks, max 3 per 5 seconds in foreground playback.
-  const MICRO_SEEK_MIN_GAP_MS = 500;
+  const MICRO_SEEK_MIN_GAP_MS = 800;
   const MICRO_SEEK_WINDOW_MS = 5000;
-  const MICRO_SEEK_MAX_IN_WINDOW = 3;
+  const MICRO_SEEK_MAX_IN_WINDOW = 2;
   function canDoMicroSeek() {
     const t = now();
     // CRITICAL: never micro-seek during a play/pause transition. The user
@@ -7303,6 +7328,31 @@ const HAVE_ENOUGH_DATA = 4;
         !isTabReturnImmune() && !NotMakePlayBackFixingNoticable.isActive() &&
         !inBgReturnGrace()) return false;
     // In foreground with healthy playback, limit rate
+    if (document.visibilityState === "visible" && !getVideoPaused() && state.intendedPlaying) {
+      if (state._microSeekCount >= MICRO_SEEK_MAX_IN_WINDOW &&
+          t - state._lastMicroSeekAt < MICRO_SEEK_WINDOW_MS) return false;
+    }
+    return true;
+  }
+  function canDoConfirmedRecoveryMicroSeek() {
+    const t = now();
+    // Still respect the immediate play/pause transition guard so we never
+    // seek during the click itself, but once that settles allow confirmed
+    // compositor-recovery paths to act even if the user toggle window is
+    // still open.
+    if (t < state._playPauseTransitionUntil) return false;
+    if (
+      userSeekIntentActive() ||
+      state.pendingSeekTarget != null ||
+      state.seeking ||
+      state.seekBuffering ||
+      state.seekResumeInFlight ||
+      seekRecoveryActive(MICRO_SEEK_SEEK_SUPPRESS_MS)
+    ) return false;
+    if (t - state._lastMicroSeekAt < MICRO_SEEK_MIN_GAP_MS) return false;
+    if (document.visibilityState === "visible" && getVideoPaused() &&
+        !isTabReturnImmune() && !NotMakePlayBackFixingNoticable.isActive() &&
+        !inBgReturnGrace()) return false;
     if (document.visibilityState === "visible" && !getVideoPaused() && state.intendedPlaying) {
       if (state._microSeekCount >= MICRO_SEEK_MAX_IN_WINDOW &&
           t - state._lastMicroSeekAt < MICRO_SEEK_WINDOW_MS) return false;
@@ -7558,9 +7608,11 @@ const HAVE_ENOUGH_DATA = 4;
     if (shouldKeepForegroundReturnVideoFirst() || shouldRequireVisibleVideoHealthForForegroundPlay()) return;
     // CRITICAL: Never seek video when the user is watching. This function is
     // ONLY for background sync (updating progress bar). If the tab is visible
-    // and focused, the user would see a random jump — that's the #1 cause of
-    // "random seeks". Only allow when actually hidden or during return grace.
-    if (document.visibilityState === "visible" && isWindowFocused()) {
+    // OR focused, the user would see a random jump — that's the #1 cause of
+    // "random seeks". Use OR (not AND) because during alt-tab the window can
+    // briefly lose focus while still visible, or vice versa. Either condition
+    // means the user can see the seek.
+    if (document.visibilityState === "visible" || isWindowFocused()) {
       return;
     }
     // Never silently sync video to 0 after first play (unless looping)
@@ -9733,7 +9785,7 @@ const HAVE_ENOUGH_DATA = 4;
         state.playRequestedDuringSeek = false;
         state.seekWantedPlaying = false;
         state.seekResumeWantedUntil = 0;
-        state.seekStabilizeUntil = Math.max(state.seekStabilizeUntil, now() + 2600);
+        state.seekStabilizeUntil = Math.max(state.seekStabilizeUntil, now() + 1800);
         state.videoWaiting = false;
         clearAudioPauseLocks();
         state.audioPlayGeneration++;
@@ -12706,13 +12758,15 @@ const HAVE_ENOUGH_DATA = 4;
                 if (_cpDur > 0.5 && _cpCT >= _cpDur - 0.5) return; // at the end — don't fight
               }
             } catch {}
-            // DEBOUNCE: collapse rapid pause events into at most one counter-play
-            // per 350ms. Chromium fires 2-5 rapid pause events during tab switches
-            // and alt-tabs in a ~200ms burst. 180ms was too tight — it still allowed
-            // 2 counter-plays, creating visible play-pause-play. 350ms collapses the
-            // entire burst into a single counter-play, making tab switches seamless.
+            // DEBOUNCE: collapse rapid pause events into at most one counter-play.
+            // Context-aware: during BBTM lock (tab return), use 60ms debounce so
+            // the counter-play fires almost immediately — 350ms was too slow and
+            // caused a visible play/pause cycle on alt-tab. Outside tab return,
+            // keep 350ms to collapse Chromium's 2-5 rapid pause events in a ~200ms
+            // burst into a single counter-play.
             const _cpNow = now();
-            if ((_cpNow - (state._counterPlayLastAt || 0)) < 350) return;
+            const _cpDebounce = BringBackToTabManager.isLocked() || inBgReturnGrace() ? 60 : 350;
+            if ((_cpNow - (state._counterPlayLastAt || 0)) < _cpDebounce) return;
             state._counterPlayLastAt = _cpNow;
             VisibilityGuard.onPlayCalled();
             // Set audio grace so the "playing" handler's audio resume isn't
@@ -13031,6 +13085,38 @@ const HAVE_ENOUGH_DATA = 4;
           );
         if (_prfvAfterTabReturn || _prfvAfterLongPause || _prfvDirectUserResume) {
           try { PlayResumeFrameVerifier.arm(); } catch {}
+        }
+        // FAST RVFC COMPOSITOR KICK: If video reports playing but the compositor
+        // is stuck on a stale GPU surface (common after alt-tab or long pause),
+        // the user sees a frozen frame even though paused=false. Use a direct
+        // RVFC check — if no frame renders within 250ms, do a micro-seek to
+        // force the decoder to push a fresh frame. This is MUCH faster than
+        // waiting for the RAF freeze detector (800ms cooldown + 160ms detect).
+        if ((_prfvAfterTabReturn || _prfvAfterLongPause || _prfvDirectUserResume) &&
+            typeof HTMLVideoElement !== "undefined" &&
+            typeof HTMLVideoElement.prototype.requestVideoFrameCallback === "function") {
+          const _rvfcGen = ++state.playSessionId; // use session ID to stale-check
+          state.playSessionId = _rvfcGen; // restore (++ already set it)
+          let _rvfcGotFrame = false;
+          const _rvfcVNode = getVideoNode();
+          if (_rvfcVNode && !_rvfcVNode.paused) {
+            try {
+              _rvfcVNode.requestVideoFrameCallback(() => { _rvfcGotFrame = true; });
+            } catch {}
+            setTimeout(() => {
+              if (_rvfcGotFrame) return; // compositor healthy
+              if (state.playSessionId !== _rvfcGen) return; // stale
+              const _kickVN = getVideoNode();
+              if (!_kickVN || _kickVN.paused || !state.intendedPlaying) return;
+              // Compositor stuck — force a backward micro-seek to flush
+              const _kickVT = Number(_kickVN.currentTime) || 0;
+              if (_kickVT > 0.02) {
+                state._isMicroSeek = true;
+                try { _kickVN.currentTime = _kickVT - 0.005; } catch {}
+                setTimeout(() => { state._isMicroSeek = false; }, 150);
+              }
+            }, 250);
+          }
         }
       }
 
