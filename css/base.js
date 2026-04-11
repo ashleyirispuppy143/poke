@@ -39,6 +39,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
 // before DOMContentLoaded. Ensures both video and audio start at 00:00
 // even if the browser pre-buffers to a non-zero keyframe position.
 // This runs in a try-catch because elements might not exist yet.
+// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
+// before DOMContentLoaded. Ensures both video and audio start at 00:00
+// even if the browser pre-buffers to a non-zero keyframe position.
+// This runs in a try-catch because elements might not exist yet.
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -674,6 +678,7 @@ document.addEventListener("DOMContentLoaded", () => {
     _isMicroSeek: false,
     _lastMicroSeekAt: 0,
     _microSeekCount: 0,
+    _playPauseTransitionUntil: 0,
     _lastSyncBackstopAt: 0,
     _seekPreVolume: null,
     _seekPostTimers: [],
@@ -1560,7 +1565,8 @@ document.addEventListener("DOMContentLoaded", () => {
         // demuxer treats it as a real seek (0.001 was sometimes no-oped).
         const vt = Number(vn.currentTime) || 0;
         const _nmpRS = Number(vn.readyState || 0);
-        if (vt > 0) {
+        if (vt > 0 && canDoMicroSeek()) {
+          recordMicroSeek();
           state._isMicroSeek = true;
           try { vn.currentTime = vt + 0.01; } catch {}
           setTimeout(() => { state._isMicroSeek = false; }, 200);
@@ -2197,7 +2203,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function _tick() {
       _timer = null;
-      if (!state.intendedPlaying) { _schedule(); return; }
+      // CPU: don't re-schedule when not playing — start() is called on "playing" event
+      if (!state.intendedPlaying) return;
       // CRITICAL: never restart after ended — this was a major loop cause
       if (state.endedNaturally || MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) { _schedule(); return; }
       if (state.seeking || state.seekBuffering || state.restarting || state.seekResumeInFlight) { _schedule(); return; }
@@ -2298,7 +2305,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const SYNC_PRECISION = 0.1;   // max tolerable A/V drift in seconds
     const FROZEN_FRAME_THRESHOLD = 3; // rAF ticks before declaring stall (was 5 — too slow, 3 catches it in ~100ms)
-    const WATCHDOG_MS = 200;      // fallback timer interval
+    const WATCHDOG_MS = 300;      // fallback timer interval (was 200 — 300 reduces CPU while still catching stalls)
     const MICRO_SEEK_OFFSET = 0.01; // large enough for demuxer to treat as real seek
     const STALL_KICK_COOLDOWN_MS = 1200; // don't re-kick faster than this (was 3500 — caused multi-second freezes)
     // CPU OPTIMIZATION: skip every other rAF tick. Freeze detection at 30fps
@@ -2400,18 +2407,20 @@ document.addEventListener("DOMContentLoaded", () => {
             _frozenSince = 0;
 
             // Video is NOT paused but frames aren't advancing — stale compositor.
-            // Micro-seek to flush the GPU surface, then re-play. The _isMicroSeek
-            // flag tells seeking/seeked handlers to ignore this.
-            state._isMicroSeek = true;
-            try { vNode.currentTime = vt + 0.01; } catch {}
-            setTimeout(() => { state._isMicroSeek = false; }, 200);
-            DONTMAKEITDOUBLEPLAY.resetAll();
-            if (getVideoPaused()) {
-              const p = execProgrammaticVideoPlay();
-              if (p && typeof p.catch === "function") p.catch(() => {});
+            // Micro-seek to flush the GPU surface, then re-play.
+            if (canDoMicroSeek()) {
+              recordMicroSeek();
+              state._isMicroSeek = true;
+              try { vNode.currentTime = vt + 0.01; } catch {}
+              setTimeout(() => { state._isMicroSeek = false; }, 200);
+              DONTMAKEITDOUBLEPLAY.resetAll();
+              if (getVideoPaused()) {
+                const p = execProgrammaticVideoPlay();
+                if (p && typeof p.catch === "function") p.catch(() => {});
+              }
+              // Arm VCFM to verify the frame actually rendered after our kick.
+              try { VideoCompositorFlushManager.arm(); } catch {}
             }
-            // Arm VCFM to verify the frame actually rendered after our kick.
-            try { VideoCompositorFlushManager.arm(); } catch {}
           }
         } else {
           _frozenFrames = 0;
@@ -2750,7 +2759,8 @@ document.addEventListener("DOMContentLoaded", () => {
               _finalSeekTarget >= 0.5 &&
               _finalSeekTarget >= _curAtRetry - 0.001 &&
               (_retryDur <= 0 || _finalSeekTarget < _retryDur - 0.5);
-            if (_retrySafeSeek) {
+            if (_retrySafeSeek && canDoMicroSeek()) {
+              recordMicroSeek();
               state._isMicroSeek = true;
               try { vNode.currentTime = _finalSeekTarget; } catch {}
               setTimeout(() => { state._isMicroSeek = false; }, 200);
@@ -3038,6 +3048,162 @@ document.addEventListener("DOMContentLoaded", () => {
     function getLastFrameAt() { return _lastFrameRenderedAt; }
 
     return { arm, disarm, isFrameRecent, isWaitingForFrame, getLastFrameAt };
+  })();
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // PlayResumeFrameVerifier (PRFV)
+  //
+  // Lightweight RVFC-based check that fires after EVERY play() resume.
+  // Detects the "video.paused=false but screen frozen" bug without using
+  // micro-seeks during the transition. Only acts AFTER the play/pause
+  // transition guard expires.
+  //
+  // Flow:
+  //   1. arm() called after play() resolves
+  //   2. Register RVFC callback
+  //   3. If RVFC fires within 300ms → compositor healthy, done
+  //   4. If not → wait for transition guard to expire, then ONE micro-seek
+  //   5. Re-check with RVFC. If still stuck → last-resort pause/seek/play
+  //
+  // This replaces the old approach of doing preemptive micro-seeks in
+  // playTogether which caused "random seeks" on every play/pause.
+  // ═══════════════════════════════════════════════════════════════════════
+  const PlayResumeFrameVerifier = (() => {
+    const RVFC_OK = typeof HTMLVideoElement !== "undefined" &&
+      typeof HTMLVideoElement.prototype.requestVideoFrameCallback === "function";
+
+    let _gen = 0;
+    let _timer = null;
+    let _resolved = false;
+    let _attempts = 0;
+    const MAX_ATTEMPTS = 2;
+    const FRAME_WAIT_MS = 300;       // time to wait for RVFC before acting
+    const RECHECK_MS = 250;          // time to wait after micro-seek for RVFC
+
+    function arm() {
+      const vn = getVideoNode();
+      if (!vn || vn.paused) return;
+      _gen++;
+      _resolved = false;
+      _attempts = 0;
+      _scheduleCheck(_gen);
+    }
+
+    function disarm() {
+      _gen++;
+      _resolved = true;
+      if (_timer) { clearTimeout(_timer); _timer = null; }
+    }
+
+    function _scheduleCheck(gen) {
+      if (_timer) { clearTimeout(_timer); _timer = null; }
+      const vn = getVideoNode();
+      if (!vn || vn.paused) return;
+
+      _resolved = false;
+
+      // Register RVFC — if a frame renders, we're good
+      if (RVFC_OK) {
+        try {
+          vn.requestVideoFrameCallback(() => {
+            if (gen !== _gen) return;
+            _resolved = true;
+            if (_timer) { clearTimeout(_timer); _timer = null; }
+          });
+        } catch {}
+      }
+
+      // Fallback: frame count comparison
+      let startFrames = -1;
+      try {
+        const q = vn.getVideoPlaybackQuality && vn.getVideoPlaybackQuality();
+        if (q) startFrames = q.totalVideoFrames;
+      } catch {}
+
+      // Deadline: if no frame in FRAME_WAIT_MS, compositor may be stuck
+      _timer = setTimeout(() => {
+        _timer = null;
+        if (gen !== _gen || _resolved) return;
+
+        // Check frame count fallback
+        if (isFinite(startFrames) && startFrames >= 0) {
+          try {
+            const vn2 = getVideoNode();
+            const q2 = vn2 && vn2.getVideoPlaybackQuality && vn2.getVideoPlaybackQuality();
+            if (q2 && q2.totalVideoFrames > startFrames) {
+              _resolved = true;
+              return; // frames advancing — healthy
+            }
+          } catch {}
+        }
+
+        // Video is paused now? User paused during the check — abort
+        const vn3 = getVideoNode();
+        if (!vn3 || vn3.paused || !state.intendedPlaying) return;
+
+        // Compositor stuck — try a micro-seek (respecting transition guard)
+        if (_attempts >= MAX_ATTEMPTS) {
+          // Exhausted — last resort: pause→seek→play
+          _lastResortFix(gen);
+          return;
+        }
+        _attempts++;
+
+        // Wait for transition guard to expire before seeking
+        const waitMs = Math.max(0, state._playPauseTransitionUntil - now()) + 50;
+        _timer = setTimeout(() => {
+          _timer = null;
+          if (gen !== _gen || _resolved) return;
+          const vn4 = getVideoNode();
+          if (!vn4 || vn4.paused || !state.intendedPlaying) return;
+
+          // Single micro-seek to flush compositor
+          const vt = Number(vn4.currentTime) || 0;
+          if (vt > 0.2) {
+            recordMicroSeek();
+            state._isMicroSeek = true;
+            const dur = Number(vn4.duration) || 0;
+            const target = (dur > 0 && vt + 0.001 >= dur - 0.5) ? vt - 0.001 : vt + 0.001;
+            try { vn4.currentTime = target; } catch {}
+            setTimeout(() => { state._isMicroSeek = false; }, 150);
+          }
+
+          // Re-check after micro-seek
+          setTimeout(() => {
+            if (gen !== _gen) return;
+            _scheduleCheck(gen);
+          }, RECHECK_MS);
+        }, waitMs);
+      }, FRAME_WAIT_MS);
+    }
+
+    function _lastResortFix(gen) {
+      const vn = getVideoNode();
+      if (!vn || gen !== _gen) return;
+      const vt = Number(vn.currentTime) || 0;
+      if (vt <= 0.2) return;
+
+      // Full pause→seek→play cycle — guaranteed to flush all browsers
+      state._isMicroSeek = true;
+      try { vn.pause(); } catch {}
+      setTimeout(() => {
+        if (gen !== _gen) { state._isMicroSeek = false; return; }
+        const vn2 = getVideoNode();
+        if (!vn2 || !state.intendedPlaying) { state._isMicroSeek = false; return; }
+        const vt2 = Number(vn2.currentTime) || 0;
+        try { vn2.currentTime = vt2 + 0.01; } catch {}
+        setTimeout(() => {
+          state._isMicroSeek = false;
+          if (gen !== _gen) return;
+          const vn3 = getVideoNode();
+          if (vn3 && vn3.paused && state.intendedPlaying) {
+            try { vn3.play().catch(() => {}); } catch {}
+          }
+        }, 50);
+      }, 30);
+    }
+
+    return { arm, disarm };
   })();
 
   // --- VisibilityGuard (VG)
@@ -6068,6 +6234,9 @@ const HAVE_ENOUGH_DATA = 4;
     state.userPauseIntentPresetAt = now();
     state.userPlayIntentPresetAt = 0;
     state.audioStartGraceUntil = 0;
+    // Block all micro-seeks for 400ms after user pause. Micro-seeks during
+    // transitions cause "random seeks" and compositor flashes.
+    state._playPauseTransitionUntil = Math.max(state._playPauseTransitionUntil, now() + 400);
     state.userGesturePauseIntent = true;
     state.firstPlayCommitted = true;
     state.startupKickDone = true;
@@ -6083,6 +6252,9 @@ const HAVE_ENOUGH_DATA = 4;
     state.bgPauseSuppressionCount = 0;
 
     cancelActiveFade();
+    // Disarm VCFM on pause — no point checking compositor when paused.
+    // Also prevents stale VCFM arms from firing micro-seeks after pause.
+    try { VideoCompositorFlushManager.disarm(); } catch {}
     state.audioPlayGeneration++;
     state.rapidPlayPauseCount = 0;
     state.rapidToggleDetected = false;
@@ -6114,6 +6286,9 @@ const HAVE_ENOUGH_DATA = 4;
     state.userPlayIntentPresetAt = now(); // reinforce preset
     state.userPauseIntentPresetAt = 0;    // clear opposite
     state.lastUserActionTime = now();
+    // Block all micro-seeks for 400ms after user play. Micro-seeks during
+    // transitions cause "random seeks" and compositor keyframe flashes.
+    state._playPauseTransitionUntil = Math.max(state._playPauseTransitionUntil, now() + 400);
     state.bgSuppressionSessionCount = 0;
     state.bgPauseSuppressionCount = 0;
     state.rapidPlayPauseCount = 0;
@@ -6152,11 +6327,16 @@ const HAVE_ENOUGH_DATA = 4;
     state.videoPlayInFlight = null;
     clearTransitionDriftTimers();
     updateMediaSessionPlaybackState();
-    // Arm VCFM when user resumes from a pause longer than 2s.
-    // The GPU compositor may have stopped refreshing during the pause,
-    // causing a stale frame on resume (same bug as tab return, just rarer).
-    if (state.userPauseIntentPresetAt > 0 && (now() - state.userPauseIntentPresetAt) > 2000) {
-      try { VideoCompositorFlushManager.arm(); } catch {}
+    // For long pauses (>5s), schedule a delayed VCFM arm AFTER the play transition
+    // settles. This avoids micro-seeks during the play/pause transition that the
+    // user perceives as "random seeks." The 400ms delay ensures play() has resolved
+    // and the decoder has started producing frames before we check.
+    if (state.userPauseIntentPresetAt > 0 && (now() - state.userPauseIntentPresetAt) > 5000) {
+      setTimeout(() => {
+        if (state.intendedPlaying && !getVideoPaused()) {
+          try { VideoCompositorFlushManager.arm(); } catch {}
+        }
+      }, 400);
     }
     state.audioPlayUntil = 0;
     state.startupAudioHoldUntil = 0;
@@ -6753,9 +6933,15 @@ const HAVE_ENOUGH_DATA = 4;
       return;
     }
     cancelActiveFade();
+    const duration = Math.max(10, Number(fadeMs) || AUDIO_FADE_DURATION_MS);
+    // CPU optimization: for very short fades, skip rAF loop — just set directly
+    if (duration <= 20) {
+      try { audio.volume = 0; audio.pause(); } catch {}
+      if (onDone) onDone();
+      return;
+    }
     const startVol = clamp01(audio.volume);
     const startTs = performance.now();
-    const duration = Math.max(10, Number(fadeMs) || AUDIO_FADE_DURATION_MS);
     const step = () => {
       const rawT = Math.min(1, (performance.now() - startTs) / duration);
       const easeT = 0.5 * (1 - Math.cos(Math.PI * rawT));
@@ -7004,6 +7190,9 @@ const HAVE_ENOUGH_DATA = 4;
   const MICRO_SEEK_MAX_IN_WINDOW = 3;
   function canDoMicroSeek() {
     const t = now();
+    // CRITICAL: never micro-seek during a play/pause transition. The user
+    // perceives these as "random seeks" and they can flash wrong keyframes.
+    if (t < state._playPauseTransitionUntil) return false;
     if (t - state._lastMicroSeekAt < MICRO_SEEK_MIN_GAP_MS) return false;
     // In foreground with healthy playback, limit rate
     if (document.visibilityState === "visible" && !getVideoPaused() && state.intendedPlaying) {
@@ -8693,25 +8882,16 @@ const HAVE_ENOUGH_DATA = 4;
         // frame. VCFM detects if the compositor is showing a stale GPU
         // texture and force-flushes it with micro-seeks. Without this,
         // video appears frozen for 1-5s while audio plays normally.
-        const _ptRecentReturn = shouldTreatUpcomingPlayAsFreshForegroundStart() ||
-          inBgReturnGrace() || isTabReturnImmune() ||
-          (state.lastBgReturnAt > 0 && (now() - state.lastBgReturnAt) < 30000);
-        if (_ptRecentReturn) {
-          // Also do a preemptive micro-seek to flush the stale frame.
-          // This is the CRITICAL fix for "video frozen on play after tab return":
-          // the user's video was paused before going to background, so NMPBFN
-          // never ran (it only runs for "was playing" scenarios). We need to
-          // flush the compositor here in the playTogether path.
-          const _ptVN = getVideoNode();
-          if (_ptVN && canDoMicroSeek()) {
-            const _ptVT = Number(_ptVN.currentTime) || 0;
-            if (_ptVT > 0.5) {
-              recordMicroSeek();
-              state._isMicroSeek = true;
-              try { _ptVN.currentTime = _ptVT + 0.01; } catch {}
-              setTimeout(() => { state._isMicroSeek = false; }, 200);
-            }
-          }
+        // Only do compositor flush for GENUINE tab returns (within 5s), not every
+        // play/pause for 30 seconds. The old 30s window caused "random seeks" on
+        // every play/pause toggle for half a minute after returning to the tab.
+        const _ptGenuineTabReturn = shouldTreatUpcomingPlayAsFreshForegroundStart() ||
+          inBgReturnGrace() || isTabReturnImmune();
+        if (_ptGenuineTabReturn) {
+          // Don't do preemptive micro-seeks here — they cause visible "random seek"
+          // on play/pause. Instead, just arm VCFM which uses RVFC (no-seek) to
+          // verify compositor health. If RVFC confirms freeze, VCFM will do ONE
+          // controlled micro-seek after the play/pause transition settles.
           try { VideoCompositorFlushManager.arm(); } catch {}
         }
       }
@@ -12134,6 +12314,8 @@ const HAVE_ENOUGH_DATA = 4;
       // Also check the native element's seeking flag — the "seeking" event handler
       // may not have fired yet, but the element is already seeking
       try { if (getVideoNode()?.seeking) return; } catch {}
+      // Disarm PRFV on pause — no compositor check needed when paused
+      try { PlayResumeFrameVerifier.disarm(); } catch {}
       if (restartFromEndedGuardActive() &&
           !state.isProgrammaticVideoPause &&
           !userWantsPauseNow(2400) &&
@@ -12599,6 +12781,9 @@ const HAVE_ENOUGH_DATA = 4;
       _bufMonLastVT = -1;
       try { MakeSureAudioOrVideoDoesntPauseUnlessUserReallyWantsTo.start(); } catch {}
       try { MakeVideoNotFreezeAfterPlaybackAfterAltTabHapens.start(); } catch {}
+      // Verify compositor is actually rendering frames after play resumes.
+      // Catches "video.paused=false but screen frozen" on all browsers.
+      try { PlayResumeFrameVerifier.arm(); } catch {}
 
       if (state._stallAudioPauseTimer) {
         clearTimeout(state._stallAudioPauseTimer);
