@@ -235,133 +235,114 @@ module.exports = function (app, config, renderTemplate) {
     }
 
     const u = await media_proxy(v);
-    
-const secure = ["poketube.fun"].includes(req.hostname);
+ const secure = ["poketube.fun"].includes(req.hostname);
     const verify = req.hostname === "poketube.sudovanilla.com";
 
     const officialHost = "poketube.fun";
  
    // Check if the host is unofficial AND they are still using your specific API
    if (req.hostname !== officialHost && config.invapi.includes("invid-api.poketube.fun")) {
+    
+    // A list of cozy/sad kaomojis to pick from randomly
+    const kaomojis = [
+      "( > < )", 
+      "( ╥﹏╥ )", 
+      "( ｡ •̀ ᴖ •́ ｡)", 
+      "( ˘︹˘ )", 
+      "( ´•̥̥̥ω•̥̥̥` )", 
+      "૮( > ﻌ < )ა",
+      "( ｡•́︿•̀｡ )"
+    ];
+    const randomKaomoji = kaomojis[Math.floor(Math.random() * kaomojis.length)];
+
     const message = `
       <style>
         body {
-          background-color: #fdf2f4;
-          background-image: radial-gradient(#ffcdd2 2px, transparent 2px);
-          background-size: 30px 30px;
-          color: #6a4f55;
-          font-family: system-ui, -apple-system, sans-serif;
+          /* Smooth, cozy pink gradient covering the whole page */
+          background: linear-gradient(135deg, #fff0f3 0%, #ffcdd2 100%);
+          color: #5a3d42;
+          font-family: 'Roboto', 'Segoe UI', -apple-system, sans-serif;
           margin: 0;
           height: 100vh;
           display: flex;
+          flex-direction: column;
           align-items: center;
           justify-content: center;
-        }
-        .error-container {
-          background: #ffffff;
-          max-width: 550px;
-          padding: 50px 40px;
-          border-radius: 30px;
-          border: 3px solid #ffd1dc;
-          box-shadow: 0 12px 40px rgba(255, 182, 193, 0.3);
           text-align: center;
-          position: relative;
+          padding: 0 20px;
         }
-        .error-code {
-          font-size: 4.5rem;
-          font-weight: 800;
-          color: #ffb6c1;
-          margin: 0;
-          line-height: 1;
-          letter-spacing: -2px;
-        }
-        .error-badge {
-          display: inline-block;
-          background: #ffe4e8;
-          color: #d16b88;
-          padding: 6px 14px;
-          border-radius: 20px;
-          font-size: 0.85rem;
-          font-weight: 700;
-          margin-top: 12px;
-          margin-bottom: 25px;
-          text-transform: uppercase;
-          letter-spacing: 1.5px;
+        .kaomoji {
+          font-size: 5.5rem;
+          color: #e57399;
+          margin-bottom: 20px;
+          font-weight: bold;
+          text-shadow: 0 4px 15px rgba(229, 115, 153, 0.2);
         }
         h1 { 
-          color: #ff8da1; 
-          font-size: 1.6rem; 
-          margin-top: 0;
-          margin-bottom: 15px;
+          font-size: 2.2rem; 
+          color: #d85a80; 
+          margin: 0 0 15px 0;
+          font-weight: 700;
         }
         p {
-          font-size: 1.05rem;
+          font-size: 1.1rem;
+          max-width: 580px;
           line-height: 1.6;
-          margin-bottom: 20px;
+          margin: 0 0 20px 0;
+          color: #6d4c53;
         }
         code { 
-          background: #fff0f3; 
-          color: #d16b88;
+          background: rgba(255, 255, 255, 0.6); 
+          color: #c2406f;
           padding: 4px 8px; 
-          border-radius: 8px; 
+          border-radius: 6px; 
           font-weight: 600;
+          font-size: 1rem;
         }
         .button {
           display: inline-block;
-          background: #ff8da1;
+          background: #f48fb1;
           color: #ffffff;
           text-decoration: none;
-          font-weight: 700;
-          padding: 14px 28px;
-          border-radius: 50px;
-          transition: transform 0.2s, background 0.2s;
-          box-shadow: 0 4px 15px rgba(255, 141, 161, 0.4);
-          margin-top: 10px;
+          font-weight: 600;
+          font-size: 1.05rem;
+          padding: 12px 30px;
+          /* YouTube style buttons are slightly squared, so we use a smaller border-radius */
+          border-radius: 4px; 
+          transition: background 0.2s;
+          box-shadow: 0 2px 8px rgba(244, 143, 177, 0.4);
+          margin-top: 15px;
         }
         .button:hover { 
-          background: #ff728a;
-          transform: translateY(-2px);
+          background: #f06292;
         }
-        .footer-text {
-          margin-top: 35px; 
-          color: #b59fa4; 
-          font-size: 0.9rem;
-          border-top: 2px dashed #ffe4e8;
-          padding-top: 20px;
-        }
-        .kaomoji {
-          font-size: 2.5rem;
-          color: #ffb6c1;
-          margin-bottom: 10px;
-          display: block;
+        .admin-note {
+          margin-top: 45px; 
+          font-size: 0.95rem;
+          color: #9c7b82;
+          background: rgba(255, 255, 255, 0.3);
+          padding: 15px 25px;
+          border-radius: 8px;
         }
       </style>
 
-      <div class="error-container">
-        <span class="kaomoji">( > < )</span>
-        <div class="error-code">500</div>
-        <div class="error-badge">Config Mismatch</div>
-        
-        <h1>Let's update your API! 🎀</h1>
-        
-        <p>
-          Hi there! It looks like your custom instance is trying to use the official <code>Poke</code> API endpoint.
-        </p>
+      <div class="kaomoji">${randomKaomoji}</div>
+      
+      <h1>Whoops! Something's not quite right.</h1>
+      
+      <p>
+        It looks like this custom instance is trying to borrow the official <code>Poke</code> API endpoint. 
+      </p>
 
-        <p>
-          To keep things cozy for everyone, our API is reserved just for the main site. 
-          When multiple instances share the same endpoint, the servers get a little sleepy and rate-limit everyone! 🥺
-        </p>
+      <p>
+        To keep the servers happy and prevent rate-limiting for everyone, our API is kept private for the main site. Hosting your own Invidious instance ensures your site will run smoothly without any shared limits! ✨
+      </p>
 
-        <p>
-          Setting up your own Invidious instance is super easy, and it makes sure your site stays fast, happy, and free from shared limits. ✨
-        </p>
+      <a href="https://docs.invidious.io" target="_blank" class="button">View Invidious Setup Guide</a>
 
-        <a href="https://docs.invidious.io" target="_blank" class="button">Read the Invidious Docs 🌸</a>
-
-        <div class="footer-text">
-          Fixing this is easy peasy! Just update your <code>config.json</code> with your new API, restart your server, and you'll be good to go. 💖
-        </div>
+      <div class="admin-note">
+        <strong>Are you the server admin?</strong> <br>
+        Just update your <code>config.json</code> with your new API, restart your server, and you'll be good to go. 💖
       </div>
     `;
 
