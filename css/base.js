@@ -39,6 +39,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
 // before DOMContentLoaded. Ensures both video and audio start at 00:00
 // even if the browser pre-buffers to a non-zero keyframe position.
 // This runs in a try-catch because elements might not exist yet.
+ // IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
+// before DOMContentLoaded. Ensures both video and audio start at 00:00
+// even if the browser pre-buffers to a non-zero keyframe position.
+// This runs in a try-catch because elements might not exist yet.
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -7575,13 +7579,19 @@ const HAVE_ENOUGH_DATA = 4;
     // Block during active seeks — micro-seek would interfere with seek resolution
     if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
     if (userSeekIntentActive() || state.pendingSeekTarget != null) return false;
-    // Block for the first 200ms of a play/pause transition. The decoder needs
-    // ~150-200ms to warm up after play() — during that window, frames haven't
-    // advanced yet but it's NOT a compositor freeze, just normal startup latency.
-    // Firing a micro-seek here causes the "random seek on play/pause" bug.
-    // 200ms is short enough that real compositor freezes (which persist >300ms)
-    // are still caught promptly after the guard expires.
-    if (now() < state._playPauseTransitionUntil - (PLAY_PAUSE_MICRO_SEEK_BLOCK_MS - 200)) return false;
+    // Block micro-seeks during play/pause transitions. Two regimes:
+    // 1) TAB RETURN: compositor is genuinely stuck on a stale GPU texture,
+    //    so only block the first 200ms (decoder warmup) then allow flushes.
+    // 2) NORMAL play/pause: the decoder is warming up, not a real freeze.
+    //    Block for the FULL transition (500ms) to prevent micro-seeks from
+    //    stacking into a visible "seeks a bit on play/pause/play" shift.
+    if (inBgReturnGrace() || isTabReturnImmune()) {
+      // Tab return — allow compositor flush after 200ms warmup
+      if (now() < state._playPauseTransitionUntil - (PLAY_PAUSE_MICRO_SEEK_BLOCK_MS - 200)) return false;
+    } else {
+      // Normal play/pause — block for full transition
+      if (now() < state._playPauseTransitionUntil) return false;
+    }
     // Block when video is paused — no point flushing paused compositor
     if (document.visibilityState === "visible" && getVideoPaused() &&
         !isTabReturnImmune() && !NotMakePlayBackFixingNoticable.isActive() &&
@@ -13376,10 +13386,9 @@ const HAVE_ENOUGH_DATA = 4;
               if (!_kickVN || _kickVN.paused || !state.intendedPlaying) return;
               // Compositor stuck — forward micro-seek to flush. Forward
               // seeks don't cause keyframe flash (stays in current GOP).
-              // Use canDoCompositorFlush() — NOT canDoMicroSeek() — because
-              // canDoMicroSeek blocks during the 500ms+900ms play/pause
-              // transition window, which is exactly when compositor flushes
-              // are most needed. RVFC has already confirmed no frame in 250ms.
+              // canDoCompositorFlush() blocks the full 500ms during normal
+              // play/pause (preventing false micro-seeks) but only 200ms
+              // during tab return (where compositor genuinely needs flushing).
               const _kickVT = Number(_kickVN.currentTime) || 0;
               if (_kickVT > 0.02 && canDoCompositorFlush()) {
                 recordMicroSeek();
@@ -15359,7 +15368,7 @@ const HAVE_ENOUGH_DATA = 4;
     window.addEventListener("focus", () => {
       const _focusTs = now();
       const _isVisible = document.visibilityState === "visible";
-      // Clear stale stall flags    but only if video actually has data.
+      // Clear stale stall flags but only if video actually has data.
       // If video is genuinely starved, keep the flags so audio stays paused.
       const _focusVNode = getVideoNode();
       const _focusVRS = _focusVNode ? Number(_focusVNode.readyState || 0) : 4;
