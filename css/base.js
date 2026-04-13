@@ -35,6 +35,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
 // before DOMContentLoaded. Ensures both video and audio start at 00:00
 // even if the browser pre-buffers to a non-zero keyframe position.
 // This runs in a try-catch because elements might not exist yet.
+// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
+// before DOMContentLoaded. Ensures both video and audio start at 00:00
+// even if the browser pre-buffers to a non-zero keyframe position.
+// This runs in a try-catch because elements might not exist yet.
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -735,7 +739,14 @@ document.addEventListener("DOMContentLoaded", () => {
       // while still catching real stalls immediately.
       if (_gateVisible && state.firstPlayCommitted && !inSeekKickWindow) {
         const _stallConfirmed = state.videoWaiting || state.videoStallAudioPaused;
-        if (_stallConfirmed && _gateRS < HAVE_FUTURE_DATA) {
+        // Only block audio for SUSTAINED stalls (400ms+). Brief transient stalls
+        // (<400ms) from normal keyframe decoding / segment boundaries set videoWaiting
+        // momentarily. Blocking audio on these causes random audio cuts during
+        // otherwise-smooth playback. videoStallAudioPaused is set by the deferred
+        // 1200ms timer, so it already represents a confirmed sustained stall.
+        const _stallSustained = state.videoStallAudioPaused ||
+          (state.videoWaiting && state.videoStallSince > 0 && (now() - state.videoStallSince) > 400);
+        if (_stallSustained && _gateRS < HAVE_FUTURE_DATA) {
           return Promise.resolve();
         }
         // Stall flags set but video has data — stale flags, clear them
@@ -2430,7 +2441,12 @@ document.addEventListener("DOMContentLoaded", () => {
       //   2. Re-play inside the NEXT rAF after the micro-seek lands.
       //      This ensures the browser has a paint cycle ready.
       // ════════════════════════════════════════════════════════════════
-      if (!vPaused && vRS >= HAVE_FUTURE_DATA) {
+      // Detect frozen compositor at HAVE_CURRENT_DATA too (not just HAVE_FUTURE_DATA).
+      // After tab return, readyState can be HAVE_CURRENT_DATA (2) — the decoder has
+      // one decoded frame but the compositor is stuck on a stale GPU texture. The old
+      // code only checked >= HAVE_FUTURE_DATA, so it MISSED these freezes entirely,
+      // causing "video appears frozen after tab return even though it says it's playing."
+      if (!vPaused && vRS >= HAVE_CURRENT_DATA) {
         const timeAdvanced = Math.abs(vt - _lastVideoTime) > 0.0005;
         const framesAdvanced = isFinite(frameCount) && isFinite(_lastFrameCount)
           ? frameCount > _lastFrameCount
@@ -2440,7 +2456,15 @@ document.addEventListener("DOMContentLoaded", () => {
           _frozenFrames++;
           if (!_frozenSince) _frozenSince = now();
 
-          if (_frozenFrames >= FROZEN_FRAME_THRESHOLD && (now() - _lastKickAt) > STALL_KICK_COOLDOWN_MS) {
+          // Use a higher threshold when readyState is low (HAVE_CURRENT_DATA)
+          // to avoid false positives from genuine buffering. At HAVE_FUTURE_DATA,
+          // the decoder has enough data — 3 ticks is enough to confirm freeze.
+          // At HAVE_CURRENT_DATA, give the decoder more time (5 ticks ~400ms).
+          const _effectiveThreshold = vRS >= HAVE_FUTURE_DATA
+            ? FROZEN_FRAME_THRESHOLD
+            : FROZEN_FRAME_THRESHOLD + 2;
+
+          if (_frozenFrames >= _effectiveThreshold && (now() - _lastKickAt) > STALL_KICK_COOLDOWN_MS) {
             // Video is NOT paused but frames aren't advancing — stale compositor.
             // Micro-seek to flush the GPU surface, then re-play.
             // Use canDoCompositorFlush() — NOT canDoMicroSeek() — so compositor
@@ -2477,15 +2501,15 @@ document.addEventListener("DOMContentLoaded", () => {
           // Without this, a transient stall sets videoWaiting=true and the
           // "playing" event doesn't re-fire for non-paused video, so the
           // stale flag blocks audio.play() through the gate indefinitely.
-          if (state.videoWaiting && vRS >= HAVE_FUTURE_DATA) {
+          if (state.videoWaiting && vRS >= HAVE_CURRENT_DATA) {
             state.videoWaiting = false;
             state.videoStallSince = 0;
           }
         }
       } else {
         _frozenFrames = 0;
-        if (!vPaused && vRS < HAVE_FUTURE_DATA) {
-          // Video is "playing" but starved — "waiting" event handler manages audio
+        if (!vPaused && vRS < HAVE_CURRENT_DATA) {
+          // Video is "playing" but fully starved — "waiting" event handler manages audio
         }
       }
 
@@ -2677,16 +2701,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const targetTime = _primaryTarget > 0 ? _primaryTarget : currentVt;
 
-      // Resync video only when it's BEHIND the target position (browser suspended
-      // video while the tab was hidden). Do NOT seek backward if video ran
-      // AHEAD — that means background playback continued normally, and seeking
-      // back would jump the user to a position they already watched.
-      // The "few seconds before" bug: video advanced 3s in bg → old code seeked
-      // back 3s → user sees a rewind. Fix: only seek forward, never backward.
+      // Resync video to the user's ACTUAL position (_preHideTime / targetTime).
+      // Two cases:
+      //   A. Video is BEHIND target (browser suspended video in bg) → seek forward.
+      //   B. Video is AHEAD of target (browser kept video playing in bg) → seek
+      //      backward. The user was on a different tab and couldn't see any of the
+      //      content that played. Leaving video at the advanced position causes the
+      //      "video forwards a bit on play/pause after tab return" bug.
+      //      Cap backward seeks at 60s — larger gaps likely mean the user intentionally
+      //      left video playing in background and expects it to continue.
       let didForwardResync = false;
-      if (targetTime > 0.5 && isFinite(currentVt) &&
-          currentVt < targetTime - 1.5 &&   // only seek if video is BEHIND target
-          Math.abs(currentVt - targetTime) < 300) { // cap at 5 min
+      const _videoAheadOfTarget = isFinite(currentVt) && currentVt > targetTime + 0.5;
+      const _videoBehindTarget = isFinite(currentVt) && currentVt < targetTime - 1.5;
+      const _needsResync = targetTime > 0.5 && (
+        (_videoBehindTarget && Math.abs(currentVt - targetTime) < 300) ||
+        (_videoAheadOfTarget && (currentVt - targetTime) < 60)
+      );
+      if (_needsResync) {
         state._isMicroSeek = true;
         didForwardResync = true;
         try { vNode.currentTime = targetTime; } catch {}
@@ -6121,6 +6152,14 @@ const HAVE_ENOUGH_DATA = 4;
     if (!state.firstPlayCommitted || !state.intendedPlaying || state.restarting) return false;
     if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
     if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
+    // During the post-seek audio kick window, the seeked handler's retry chain
+    // is managing audio resume. Don't report "buffering" based on stale stall
+    // flags — the seek just reset all positions and readyState is recovering.
+    if (now() < state.seekKickAudioAllowedUntil) return false;
+    // During a direct user play action, don't report buffering from stale flags.
+    // The user just pressed play; video is being kicked. Stall flags from before
+    // the play intent shouldn't block audio — video will recover.
+    if (userWantsPlayNow(1200) || directUserToggleActive(1200)) return false;
 
     const vNode = getVideoNode();
     const vRS = vNode ? Number(vNode.readyState || 0) : 4;
@@ -6146,7 +6185,14 @@ const HAVE_ENOUGH_DATA = 4;
       state.videoStallAudioPaused ||
       state.strictBufferHold ||
       now() < state.stallAudioResumeHoldUntil;
-    if (stallFlagsActive && (vPaused || vRS < HAVE_FUTURE_DATA)) return true;
+    // Require stall to have persisted at least 400ms before reporting buffering.
+    // Brief transient stalls (<400ms) from segment boundaries or keyframe decoding
+    // set videoWaiting momentarily. Reporting "buffering" for these causes random
+    // audio cuts during otherwise smooth playback.
+    const _stallPersisted = state.videoStallSince > 0 && (now() - state.videoStallSince) > 400;
+    if (stallFlagsActive && _stallPersisted && (vPaused || vRS < HAVE_FUTURE_DATA)) return true;
+    // For very short stalls (<400ms), only report buffering if readyState is very low
+    if (stallFlagsActive && !_stallPersisted && vRS < HAVE_CURRENT_DATA) return true;
     if (state.videoStallSince > 0 && (now() - state.videoStallSince) > 600 && vRS < HAVE_CURRENT_DATA) return true;
     if (frozenVisiblePlayback) return true;
     return false;
@@ -6274,6 +6320,13 @@ const HAVE_ENOUGH_DATA = 4;
     if (!state.firstPlayCommitted || !state.intendedPlaying || state.restarting) return false;
     if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
     if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
+    // During the seek kick window, the seeked handler's retry chain owns audio.
+    // Don't hold audio here — it fights the retry chain and causes late audio.
+    if (now() < state.seekKickAudioAllowedUntil) return false;
+    // During a direct user play action, don't hold audio for stale stall flags.
+    // The user clicked play and expects immediate response. Stall flags from
+    // before the play intent are stale — video is being kicked to play too.
+    if (userWantsPlayNow(1500) || directUserToggleActive(1500)) return false;
     if (foregroundBufferAudioHoldActive()) return true;
     if (isForegroundVideoActuallyBuffering()) return true;
 
@@ -7522,6 +7575,13 @@ const HAVE_ENOUGH_DATA = 4;
     // Block during active seeks — micro-seek would interfere with seek resolution
     if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
     if (userSeekIntentActive() || state.pendingSeekTarget != null) return false;
+    // Block for the first 200ms of a play/pause transition. The decoder needs
+    // ~150-200ms to warm up after play() — during that window, frames haven't
+    // advanced yet but it's NOT a compositor freeze, just normal startup latency.
+    // Firing a micro-seek here causes the "random seek on play/pause" bug.
+    // 200ms is short enough that real compositor freezes (which persist >300ms)
+    // are still caught promptly after the guard expires.
+    if (now() < state._playPauseTransitionUntil - (PLAY_PAUSE_MICRO_SEEK_BLOCK_MS - 200)) return false;
     // Block when video is paused — no point flushing paused compositor
     if (document.visibilityState === "visible" && getVideoPaused() &&
         !isTabReturnImmune() && !NotMakePlayBackFixingNoticable.isActive() &&
@@ -13468,7 +13528,11 @@ const HAVE_ENOUGH_DATA = 4;
             isWindowFocused() &&
             !state.startupPhase &&
             !state.seekResumeInFlight &&
-            state.seekAudioMustStartUntil <= now();
+            state.seekAudioMustStartUntil <= now() &&
+            // Don't gate during the seek kick window — the seeked handler's
+            // retry chain is actively managing audio resume. Re-setting
+            // videoWaiting here creates a feedback loop that blocks audio.
+            state.seekKickAudioAllowedUntil <= now();
           if (_shouldGatePlayingAudioKick && !videoReadyForAudioResume(_vtNow)) {
             armForegroundBufferAudioHold(Math.max(MIN_STALL_AUDIO_RESUME_MS, 500));
             state.videoWaiting = true;
@@ -14486,6 +14550,9 @@ const HAVE_ENOUGH_DATA = 4;
               state.videoStallAudioPaused = false;
               state.videoWaiting = false;
               state.stallAudioResumeHoldUntil = 0;
+              state.videoStallSince = 0;
+              state.stallAudioPausedSince = 0;
+              clearForegroundBufferAudioHold();
               // Long grace so buffer monitor doesn't kill audio during the
               // post-seek settle window.
               state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, _kickArmedAt + 1200);
@@ -14506,12 +14573,13 @@ const HAVE_ENOUGH_DATA = 4;
                 // video data arrives.
                 const _kickVNode = getVideoNode();
                 const _kickVRS = _kickVNode ? Number(_kickVNode.readyState || 0) : 0;
-                // For early retries (20ms, 80ms), require HAVE_FUTURE_DATA to avoid
-                // playing audio during genuine buffering. For later retries (250ms+),
-                // accept HAVE_CURRENT_DATA — the video has at least one decoded frame
-                // and the decoder is likely filling up. Waiting for HAVE_FUTURE_DATA
-                // on slow connections can add 500ms+ of unnecessary audio delay.
-                const _kickMinRS = attemptId <= 2 ? HAVE_FUTURE_DATA : HAVE_CURRENT_DATA;
+                // Accept HAVE_CURRENT_DATA from the very first kick. After a seek,
+                // both audio and video were just seeked to the same position — there's
+                // no stale buffer content to worry about. Requiring HAVE_FUTURE_DATA
+                // for the first 2 kicks (5ms, 40ms) added 100-400ms of audio delay
+                // because readyState briefly drops after seek. HAVE_CURRENT_DATA means
+                // the decoder has at least one decoded frame at the correct position.
+                const _kickMinRS = HAVE_CURRENT_DATA;
                 if (_kickVRS < _kickMinRS && document.visibilityState === "visible") {
                   return; // video not ready, next retry will handle it
                 }
@@ -15291,7 +15359,7 @@ const HAVE_ENOUGH_DATA = 4;
     window.addEventListener("focus", () => {
       const _focusTs = now();
       const _isVisible = document.visibilityState === "visible";
-      // Clear stale stall flags �� but only if video actually has data.
+      // Clear stale stall flags    but only if video actually has data.
       // If video is genuinely starved, keep the flags so audio stays paused.
       const _focusVNode = getVideoNode();
       const _focusVRS = _focusVNode ? Number(_focusVNode.readyState || 0) : 4;
