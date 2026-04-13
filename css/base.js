@@ -27,23 +27,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  
  
 //////////////// THE PLAYER, START ////////////////////////
-// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
-// before DOMContentLoaded. Ensures both video and audio start at 00:00
-// even if the browser pre-buffers to a non-zero keyframe position.
-// This runs in a try-catch because elements might not exist yet.
-// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
-// before DOMContentLoaded. Ensures both video and audio start at 00:00
-// even if the browser pre-buffers to a non-zero keyframe position.
-// This runs in a try-catch because elements might not exist yet.
-// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
-// before DOMContentLoaded. Ensures both video and audio start at 00:00
-// even if the browser pre-buffers to a non-zero keyframe position.
-// This runs in a try-catch because elements might not exist yet.
  // IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
-// before DOMContentLoaded. Ensures both video and audio start at 00:00
-// even if the browser pre-buffers to a non-zero keyframe position.
-// This runs in a try-catch because elements might not exist yet.
-// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
 // before DOMContentLoaded. Ensures both video and audio start at 00:00
 // even if the browser pre-buffers to a non-zero keyframe position.
 // This runs in a try-catch because elements might not exist yet.
@@ -1161,6 +1145,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // don't fire. If the flag has been set for 5s+, it's stale — clear it.
     if (state.seeking && state._seekStartedAt > 0 && (performance.now() - state._seekStartedAt) > 5000) {
       state.seeking = false; state.seekBuffering = false; state._seekStartedAt = 0;
+      state.seekResumeInFlight = false; state.seekCompleted = true;
+      clearAudioPauseLocks();
     }
     if (state.seeking || state.seekBuffering) return;
     if (NotMakePlayBackFixingNoticable.isRecovering()) return;
@@ -1192,6 +1178,7 @@ document.addEventListener("DOMContentLoaded", () => {
       state.audioPauseUntil = 0;
     }
     if (coupledMode && audio && audio.paused) {
+      state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 800);
       try { audio.play().catch(() => {}); } catch {}
     }
     const vn = getVideoNode();
@@ -2290,6 +2277,8 @@ document.addEventListener("DOMContentLoaded", () => {
           now() > state.stallAudioResumeHoldUntil && now() > state.audioPauseUntil &&
           now() > state._playPauseTransitionUntil &&
           !directUserToggleActive(600)) {
+        // Clear any stale foreground buffer hold that might block our play call
+        clearForegroundBufferAudioHold();
         const vt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
         // Only seek audio if drift is significant — small drifts resolve naturally
         const _msAt = Number(audio.currentTime) || 0;
@@ -2370,7 +2359,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // couldn't fire a second kick after the first one didn't unstick the
     // compositor. 600ms still prevents GC/jank false positives while allowing
     // faster recovery from real compositor stalls.
-    const STALL_KICK_COOLDOWN_MS = 600;
+    const STALL_KICK_COOLDOWN_MS = 350;
     // CPU OPTIMIZATION: skip every other rAF tick. Freeze detection at 30fps
     // is fast enough to catch single-frame stalls (166ms window) while cutting
     // detection work in half. Still rAF-based so it scales with monitor refresh.
@@ -2510,13 +2499,22 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
           _frozenFrames = 0;
           _frozenSince = 0;
-          // Frames ARE advancing — if videoWaiting is stale, clear it now.
-          // Without this, a transient stall sets videoWaiting=true and the
-          // "playing" event doesn't re-fire for non-paused video, so the
-          // stale flag blocks audio.play() through the gate indefinitely.
-          if (state.videoWaiting && vRS >= HAVE_CURRENT_DATA) {
-            state.videoWaiting = false;
-            state.videoStallSince = 0;
+          // Frames ARE advancing — if videoWaiting or videoStallAudioPaused
+          // are stale, clear them now. Without this, a transient stall sets
+          // these flags and the "playing" event doesn't re-fire for non-paused
+          // video, so the stale flags block audio.play() through the gate
+          // indefinitely. Also clear stallAudioResumeHoldUntil and
+          // foregroundBufferAudioHold since the stall is demonstrably over.
+          if (vRS >= HAVE_CURRENT_DATA) {
+            if (state.videoWaiting) {
+              state.videoWaiting = false;
+              state.videoStallSince = 0;
+            }
+            if (state.videoStallAudioPaused) {
+              state.videoStallAudioPaused = false;
+              state.stallAudioPausedSince = 0;
+              state.stallAudioResumeHoldUntil = 0;
+            }
           }
         }
       } else {
@@ -2980,10 +2978,10 @@ document.addEventListener("DOMContentLoaded", () => {
     let _armGen = 0;                // incremented each arm() — stale callbacks check this
     let _startFrameCount = -1;      // frame count at arm-time (fallback path)
 
-    const MAX_FLUSH_ATTEMPTS = 4;
-    const FRAME_DEADLINE_MS = 350;   // if no frame in 350ms after play, flush (was 120 — too aggressive, caused micro-seeks on slower machines)
-    const FLUSH_COOLDOWN_MS = 200;   // min gap between flush attempts
-    const RECHECK_DELAY_MS = 60;     // delay before re-arming after a flush
+    const MAX_FLUSH_ATTEMPTS = 5;
+    const FRAME_DEADLINE_MS = 280;   // if no frame in 280ms after play, flush (was 350 — faster detection without false positives)
+    const FLUSH_COOLDOWN_MS = 120;   // min gap between flush attempts (was 200 — faster retries for stuck compositor)
+    const RECHECK_DELAY_MS = 40;     // delay before re-arming after a flush (was 60)
 
     function arm() {
       const vn = getVideoNode();
@@ -3182,9 +3180,9 @@ document.addEventListener("DOMContentLoaded", () => {
     let _timer = null;
     let _resolved = false;
     let _attempts = 0;
-    const MAX_ATTEMPTS = 2;
-    const FRAME_WAIT_MS = 350;       // time to wait for RVFC before acting (was 500 — too slow for freeze detection; 350ms avoids false positives while catching real freezes faster)
-    const RECHECK_MS = 200;          // time to wait after micro-seek for RVFC
+    const MAX_ATTEMPTS = 3;
+    const FRAME_WAIT_MS = 250;       // time to wait for RVFC before acting (was 350 — faster freeze detection)
+    const RECHECK_MS = 150;          // time to wait after micro-seek for RVFC (was 200)
 
     function arm() {
       const vn = getVideoNode();
@@ -3351,8 +3349,8 @@ document.addEventListener("DOMContentLoaded", () => {
     let _lastFrameCount = -1;
     let _lastFrameCheckAt = 0;
     let _lastNuclearAt = 0;
-    const CHECK_MS = 1000;    // was 1500 — detect stuck compositor faster
-    const COOLDOWN_MS = 4000; // was 5000 — allow re-kicks sooner after failed fix
+    const CHECK_MS = 700;     // was 1000 — detect stuck compositor faster for rare play/pause freezes
+    const COOLDOWN_MS = 3000; // was 4000 — allow re-kicks sooner after failed fix
 
     function _tick() {
       _timer = null;
@@ -3365,7 +3363,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // window (was 1200ms) — that delays the nuclear fix too long, causing
       // visible 2+ second freezes after play/pause. 500ms is enough for the
       // decoder to produce its first frame if it's going to.
-      if (now() < state._playPauseTransitionUntil || directUserToggleActive(500)) { _schedule(); return; }
+      if (now() < state._playPauseTransitionUntil || directUserToggleActive(350)) { _schedule(); return; }
 
       const vn = getVideoNode();
       if (!vn || vn.paused) { _schedule(); return; }
@@ -3381,38 +3379,93 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!framesAdvanced && !timeAdvanced && elapsed >= CHECK_MS * 0.9 &&
             (now() - _lastNuclearAt) > COOLDOWN_MS) {
           // NUCLEAR: video says playing, but nothing is moving. Force fix.
+          // First try a lightweight RVFC micro-seek before the heavy pause→seek→play.
+          // This catches most compositor stalls without the visible pause.
           _lastNuclearAt = now();
-          state._isMicroSeek = true;
-          state.isProgrammaticVideoPause = true;
-          try { vn.pause(); } catch {}
-          setTimeout(() => {
-            state.isProgrammaticVideoPause = false;
-            if (!state.intendedPlaying) { state._isMicroSeek = false; return; }
-            const vn2 = getVideoNode();
-            if (!vn2) { state._isMicroSeek = false; return; }
-            // Forward seek by 0.1s to force decoder to produce a fresh frame
-            const curVT = Number(vn2.currentTime) || 0;
-            try { vn2.currentTime = curVT + 0.1; } catch {}
+          const _nfwLightVT = Number(vn.currentTime) || 0;
+          if (_nfwLightVT > 0.02 && canDoCompositorFlush()) {
+            recordMicroSeek();
+            state._isMicroSeek = true;
+            try { vn.currentTime = _nfwLightVT + 0.001; } catch {}
+            setTimeout(() => { state._isMicroSeek = false; }, 150);
+            try { VideoCompositorFlushManager.arm(); } catch {}
+            // If light flush doesn't work, the NEXT tick will escalate to heavy fix.
+            // Reset frame counters so we detect the ongoing freeze.
+            _lastFrameCount = -1;
+            _lastFrameCheckAt = 0;
+            // Schedule a heavy-fix fallback in case the light flush didn't work
+            const _nfwHeavyTimer = setTimeout(() => {
+              if (!state.intendedPlaying || state.seeking || state.seekBuffering) return;
+              const _hfVN = getVideoNode();
+              if (!_hfVN || _hfVN.paused) return;
+              const _hfFC = getVideoPresentedFrameCount(_hfVN);
+              const _hfVT = Number(_hfVN.currentTime) || 0;
+              // Check if frames advanced after our light flush
+              if (isFinite(_hfFC) && isFinite(fc) && _hfFC > fc) return; // fixed
+              if (Math.abs(_hfVT - _nfwLightVT) > 0.05) return; // time advanced, fixed
+              // Still stuck — do the heavy pause→seek→play
+              state._isMicroSeek = true;
+              state.isProgrammaticVideoPause = true;
+              try { _hfVN.pause(); } catch {}
+              setTimeout(() => {
+                state.isProgrammaticVideoPause = false;
+                if (!state.intendedPlaying) { state._isMicroSeek = false; return; }
+                const vn3 = getVideoNode();
+                if (!vn3) { state._isMicroSeek = false; return; }
+                const curVT = Number(vn3.currentTime) || 0;
+                try { vn3.currentTime = curVT + 0.1; } catch {}
+                setTimeout(() => {
+                  state._isMicroSeek = false;
+                  if (!state.intendedPlaying) return;
+                  DONTMAKEITDOUBLEPLAY.resetAll();
+                  const p = execProgrammaticVideoPlay();
+                  if (p && typeof p.catch === "function") p.catch(() => {});
+                  if (coupledMode && audio) {
+                    const newVT = Number(getVideoNode()?.currentTime) || 0;
+                    if (Math.abs(Number(audio.currentTime) - newVT) > 0.3) {
+                      state._allowAudioTimeWrite = true;
+                      try { audio.currentTime = newVT; } catch {}
+                      state._allowAudioTimeWrite = false;
+                    }
+                    if (audio.paused && !shouldBlockNewAudioStart()) {
+                      execProgrammaticAudioPlay({ squelchMs: 200, force: true, minGapMs: 0 }).catch(() => {});
+                    }
+                  }
+                }, 50);
+              }, 30);
+            }, 500);
+          } else {
+            // canDoCompositorFlush blocked — fall back to heavy fix directly
+            state._isMicroSeek = true;
+            state.isProgrammaticVideoPause = true;
+            try { vn.pause(); } catch {}
             setTimeout(() => {
-              state._isMicroSeek = false;
-              if (!state.intendedPlaying) return;
-              DONTMAKEITDOUBLEPLAY.resetAll();
-              const p = execProgrammaticVideoPlay();
-              if (p && typeof p.catch === "function") p.catch(() => {});
-              // Also kick audio to stay in sync
-              if (coupledMode && audio) {
-                const newVT = Number(getVideoNode()?.currentTime) || 0;
-                if (Math.abs(Number(audio.currentTime) - newVT) > 0.3) {
-                  state._allowAudioTimeWrite = true;
-                  try { audio.currentTime = newVT; } catch {}
-                  state._allowAudioTimeWrite = false;
+              state.isProgrammaticVideoPause = false;
+              if (!state.intendedPlaying) { state._isMicroSeek = false; return; }
+              const vn2 = getVideoNode();
+              if (!vn2) { state._isMicroSeek = false; return; }
+              const curVT = Number(vn2.currentTime) || 0;
+              try { vn2.currentTime = curVT + 0.1; } catch {}
+              setTimeout(() => {
+                state._isMicroSeek = false;
+                if (!state.intendedPlaying) return;
+                DONTMAKEITDOUBLEPLAY.resetAll();
+                const p = execProgrammaticVideoPlay();
+                if (p && typeof p.catch === "function") p.catch(() => {});
+                if (coupledMode && audio) {
+                  const newVT = Number(getVideoNode()?.currentTime) || 0;
+                  if (Math.abs(Number(audio.currentTime) - newVT) > 0.3) {
+                    state._allowAudioTimeWrite = true;
+                    try { audio.currentTime = newVT; } catch {}
+                    state._allowAudioTimeWrite = false;
+                  }
+                  if (audio.paused && !shouldBlockNewAudioStart()) {
+                    execProgrammaticAudioPlay({ squelchMs: 200, force: true, minGapMs: 0 }).catch(() => {});
+                  }
                 }
-                if (audio.paused && !shouldBlockNewAudioStart()) {
-                  execProgrammaticAudioPlay({ squelchMs: 200, force: true, minGapMs: 0 }).catch(() => {});
-                }
-              }
-            }, 50);
-          }, 30);
+              }, 50);
+            }, 30);
+          }
         }
       }
 
@@ -4977,7 +5030,7 @@ const HAVE_ENOUGH_DATA = 4;
   const AUDIO_SAFE_FADE_DURATION_MS = 80;
   const MIN_PLAY_PAUSE_GAP_MS = 90;
   const SEEK_READY_TIMEOUT_MS = 700;
-  const SEEK_WATCHDOG_MS = 6000; // max time to wait for seeked event before force-finalizing
+  const SEEK_WATCHDOG_MS = 4500; // max time to wait for seeked event before force-finalizing (was 6000)
   const STATE_CHANGE_COOLDOWN_MS = 55;
   const USER_TOGGLE_TXN_FAST_MS = 750;
   const USER_PLAY_INTENT_FAST_MS = 900;
@@ -5709,7 +5762,12 @@ const HAVE_ENOUGH_DATA = 4;
         // on playing elements fires events that cascade into audio re-kicks.
         if (_ipVPlaying && _ipAPlaying) return;
         if (_vn && _vn.paused) { try { _nIP.call(_vn).catch(() => {}); } catch {} }
-        if (coupledMode && audio && audio.paused) { try { _nIP.call(audio).catch(() => {}); } catch {} }
+        if (coupledMode && audio && audio.paused) {
+          // Set audio grace so buffer monitor doesn't immediately kill audio
+          // after tab return during the transient readyState dip.
+          state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 1200);
+          try { _nIP.call(audio).catch(() => {}); } catch {};
+        }
       } catch {}
     },
 
@@ -7602,7 +7660,7 @@ const HAVE_ENOUGH_DATA = 4;
   // Returns true if a micro-seek is allowed right now. Minimum 500ms between
   // micro-seeks, max 3 per 5 seconds in foreground playback.
   const MICRO_SEEK_MIN_GAP_MS = 800;
-  const COMPOSITOR_FLUSH_MIN_GAP_MS = 150; // lighter rate limit for confirmed compositor flushes (was 250 — too slow for play/pause freeze recovery)
+  const COMPOSITOR_FLUSH_MIN_GAP_MS = 100; // lighter rate limit for confirmed compositor flushes (was 150 — even faster for play/pause freeze recovery)
   const MICRO_SEEK_WINDOW_MS = 5000;
   const MICRO_SEEK_MAX_IN_WINDOW = 2;
   function canDoMicroSeek() {
@@ -7683,7 +7741,7 @@ const HAVE_ENOUGH_DATA = 4;
     // the visible "frozen frame for 1 second after play/pause" bug. 150ms
     // gives the decoder enough warmup while allowing much faster flush detection.
     // The _isMicroSeek flag ensures the seeking handler ignores these.
-    if (now() < state._playPauseTransitionUntil - (PLAY_PAUSE_MICRO_SEEK_BLOCK_MS - 350)) return false;
+    if (now() < state._playPauseTransitionUntil - (PLAY_PAUSE_MICRO_SEEK_BLOCK_MS - 400)) return false;
     // Block when video is paused — no point flushing paused compositor
     if (document.visibilityState === "visible" && getVideoPaused() &&
         !isTabReturnImmune() && !NotMakePlayBackFixingNoticable.isActive() &&
@@ -10255,9 +10313,9 @@ const HAVE_ENOUGH_DATA = 4;
       // Don't clear seekResumeInFlight synchronously — the video "waiting" event
       // often fires 50-200ms after seek finalize because the decoder needs to refill.
       // If we clear the flag now, the waiting handler kills audio immediately (play-pause).
-      // Keep the flag alive long enough that post-seek micro-stalls don't
-      // immediately kill audio and cause a late resume.
-      setTimeout(() => { state.seekResumeInFlight = false; }, 1200);
+      // 800ms is enough for the decoder to stabilize while not blocking other
+      // audio recovery paths too long (was 1200ms).
+      setTimeout(() => { state.seekResumeInFlight = false; }, 800);
       try { MakeSureAudioIsNotCuttingOrWeird.onSeekEnd(); } catch {}
     }
   }
@@ -10597,13 +10655,20 @@ const HAVE_ENOUGH_DATA = 4;
     // Anti-loop tick — catch phantom restarts every sync cycle
     try { MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.tick(); } catch {}
 
-    // Safety: unstick seeking if stuck >8s
+    // Safety: unstick seeking if stuck >5s (was 8s — too long, caused audio death)
     if ((state.seeking || state.seekBuffering) && state._seekStartedAt > 0 &&
-      (performance.now() - state._seekStartedAt) > 8000) {
+      (performance.now() - state._seekStartedAt) > 5000) {
       state.seeking = false;
     state.seekBuffering = false;
     state.seekResumeInFlight = false;
     state.seekCompleted = true; state._seekStartedAt = 0;
+    // Also clear stall flags that may have been set during the stuck seek
+    state.videoWaiting = false;
+    state.videoStallSince = 0;
+    state.videoStallAudioPaused = false;
+    state.stallAudioPausedSince = 0;
+    state.stallAudioResumeHoldUntil = 0;
+    clearAudioPauseLocks();
       }
 
       // Tab-return: DON'T skip sync entirely. The sync loop is the only system
@@ -10657,6 +10722,27 @@ const HAVE_ENOUGH_DATA = 4;
         }
         if (state.restarting) {
           scheduleSync(); return;
+        }
+        // STALE STALL FLAG CLEANUP: If videoWaiting or videoStallAudioPaused
+        // have been set for too long (>4s) but video now has data, they're
+        // stale leftovers from a past stall. These flags gate audio.play() in
+        // dozens of paths, so a stale flag = permanent audio death. The
+        // "playing" event should clear them, but if the video never paused
+        // (it can stall without pausing), the event never fires.
+        if (state.intendedPlaying && !state.seeking && !state.seekBuffering) {
+          const _staleVNode = getVideoNode();
+          const _staleRS = _staleVNode ? Number(_staleVNode.readyState || 0) : 0;
+          if (_staleRS >= HAVE_FUTURE_DATA) {
+            if (state.videoWaiting && state.videoStallSince > 0 && (now() - state.videoStallSince) > 4000) {
+              state.videoWaiting = false;
+              state.videoStallSince = 0;
+            }
+            if (state.videoStallAudioPaused && state.stallAudioPausedSince > 0 && (now() - state.stallAudioPausedSince) > 4000) {
+              state.videoStallAudioPaused = false;
+              state.stallAudioPausedSince = 0;
+              state.stallAudioResumeHoldUntil = 0;
+            }
+          }
         }
         // CPU FAST PATH: if both tracks are playing with small drift in foreground,
         // skip all the expensive checks. This covers 95%+ of sync ticks during
@@ -13582,7 +13668,7 @@ const HAVE_ENOUGH_DATA = 4;
             // FIX: Use shorter initial timeout (180ms) for direct user resumes
             // since users notice freeze immediately. Use 250ms for other cases
             // (tab return, long pause) where slight delay is acceptable.
-            const _rvfcTimeout = _prfvDirectUserResume ? 180 : 250;
+            const _rvfcTimeout = _prfvDirectUserResume ? 140 : 200;
             setTimeout(() => {
               if (_rvfcGotFrame) return; // compositor healthy
               if (state.playSessionId !== _rvfcGen) return; // stale
@@ -15399,6 +15485,12 @@ const HAVE_ENOUGH_DATA = 4;
             state.stallAudioPausedSince = 0;
             state.stallAudioResumeHoldUntil = 0;
             state.videoStallSince = 0;
+            // Also clear foreground buffer hold and programmatic audio pause
+            // flags — these can be stale from a pre-hide stall and block audio
+            // recovery on tab return even though video now has data.
+            clearForegroundBufferAudioHold();
+            state.isProgrammaticAudioPause = false;
+            state.audioEventsSquelchedUntil = 0;
           }
 
           // Let the consolidated tab-return manager perform the resume kick.
@@ -15528,6 +15620,11 @@ const HAVE_ENOUGH_DATA = 4;
         BackgroundPlaybackManager.onBecomeBackground();
         if (state.intendedPlaying) {
           startBgAudioKeepalive();
+          // Engage pause intercept BEFORE the browser fires its auto-pause.
+          // On tab switch, visibilitychange→hidden fires first, then Chromium
+          // queues auto-pause 50-200ms later. Intercepting here blocks that
+          // pause completely so the user never sees play→pause→play on return.
+          engagePauseIntercept();
           // Immunity so the capture-phase guard catches the browser's auto-pause
           // that fires right after visibilitychange→hidden, AND keeps catching
           // pauses for quick alt-tab round-trips (user returns within 3s).
@@ -15594,6 +15691,16 @@ const HAVE_ENOUGH_DATA = 4;
         startBgAudioKeepalive();
         // Immunity so capture guard catches browser's auto-pause on blur/alt-tab
         state.tabReturnImmuneUntil = Math.max(state.tabReturnImmuneUntil, now() + 2000);
+        // PROACTIVELY engage pause intercept on blur. Chromium fires
+        // auto-pause 50-200ms after blur — if we only engage the intercept
+        // on tab RETURN (focus/visibilitychange→visible), the browser's
+        // pause already went through and the user sees a visible
+        // play→pause→play cycle on every alt-tab. Engaging it HERE blocks
+        // the pause BEFORE it happens. The intercept auto-disengages after
+        // 2s, and disengagePauseIntercept is called from onTabLeave on
+        // real tab switches. For alt-tab, the focus handler's onTabReturn
+        // will re-engage/extend as needed.
+        engagePauseIntercept();
       }
       if (!platform.chromiumOnlyBrowser) return;
       state.lastFocusLoss = now();
@@ -15622,6 +15729,11 @@ const HAVE_ENOUGH_DATA = 4;
         state.videoStallAudioPaused = false;
         state.stallAudioPausedSince = 0;
         state.stallAudioResumeHoldUntil = 0;
+        state.videoWaiting = false;
+        state.videoStallSince = 0;
+        clearForegroundBufferAudioHold();
+        state.isProgrammaticAudioPause = false;
+        state.audioEventsSquelchedUntil = 0;
       }
 
       if (!_isVisible) {
