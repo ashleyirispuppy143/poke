@@ -236,54 +236,87 @@ module.exports = function (app, config, renderTemplate) {
 
     const u = await media_proxy(v);
     
-const secure = ["poketube.fun"].includes(req.hostname);
+    const secure = ["poketube.fun"].includes(req.hostname);
     const verify = req.hostname === "poketube.sudovanilla.com";
 
     const officialHost = "poketube.fun";
-    
- // Check if the host is unofficial AND they are still using our specific API
+ 
     if (req.hostname !== officialHost && config.invapi.includes("invid-api.poketube.fun")) {
     const message = `
       <style>
         body {
-          background: #0d1117;
-          color: #e6edf3;
-          font-family: system-ui, sans-serif;
-          padding: 40px;
-          line-height: 1.6;
+          background: #ffe9ec; /* Soft pastel pink */
+          color: #5a464c; /* Warm, soft brown-gray for readability */
+          font-family: system-ui, -apple-system, sans-serif;
+          padding: 40px 20px;
+          line-height: 1.7;
+          display: flex;
+          justify-content: center;
         }
-        h1 { color: #ff6b81; font-size: 1.7rem; }
-        code { background: #161b22; padding: 4px 6px; border-radius: 6px; }
-        a { color: #58a6ff; text-decoration: none; }
-        a:hover { text-decoration: underline; }
+        .cozy-card {
+          background: #ffffff;
+          max-width: 550px;
+          padding: 40px;
+          border-radius: 24px;
+          box-shadow: 0 10px 30px rgba(255, 182, 193, 0.4);
+          text-align: center;
+        }
+        h1 { 
+          color: #ff8da1; 
+          font-size: 1.8rem; 
+          margin-top: 0;
+        }
+        code { 
+          background: #fff0f3; 
+          color: #d16b88;
+          padding: 4px 8px; 
+          border-radius: 8px; 
+          font-weight: 500;
+        }
+        a { 
+          color: #ff6b81; 
+          text-decoration: none; 
+          font-weight: 600;
+          transition: color 0.2s ease;
+        }
+        a:hover { 
+          color: #ff4764;
+          text-decoration: underline; 
+        }
+        .footer-text {
+          margin-top: 2em; 
+          color: #a38f93; 
+          font-size: 0.95rem;
+        }
       </style>
 
-      <h1>⚠️ Configuration Error</h1>
-      <p>
-        It looks like you're using <code>Poke</code>'s own Invidious API endpoint for your custom instance.
-      </p>
+      <div class="cozy-card">
+        <h1>🌸 Let's update your config! 🌸</h1>
+        
+        <p>
+          Hi there! It looks like your custom instance is currently using the official <code>Poke</code> API endpoint.
+        </p>
 
-      <p>
-        Please edit your <code>config.json</code> to match your own setup — using
-        Poke’s shared API is kinda lame 😅 since it also rate-limits <b>poketube.fun</b>
-        itself when too many people use it.
-      </p>
+        <p>
+          To keep things running smoothly and cozy for everyone, this specific API is reserved just for <b>poketube.fun</b>. 
+          When multiple instances share the same endpoint, it gets a little overwhelmed and rate-limits everyone! 🥺
+        </p>
 
-      <p>
-        Set up your own Invidious instance instead — it’s easy!  
-        See the official setup guide:  
-        <a href="https://docs.invidious.io" target="_blank">docs.invidious.io</a>
-      </p>
+        <p>
+          Setting up your own Invidious instance is super easy, and it ensures your site will run perfectly without any shared limits. ✨<br><br>
+          Check out the official setup guide to get started:<br>
+          <a href="https://docs.invidious.io" target="_blank">docs.invidious.io</a>
+        </p>
 
-      <p style="margin-top: 1em; color: #999;">
-        Once you've updated <code>config.json</code>, restart your server and everything will work fine. 
-      </p>
+        <p class="footer-text">
+          Just update your <code>config.json</code> with your new API, restart your server, and you'll be good to go! 💖
+        </p>
+      </div>
     `;
 
     return res.status(500).send(message);
   }
-
-
+    
     INNERTUBE.getYouTubePlayerInfo(f, v, contentlang, contentregion).then(
       (data) => {
         try {
