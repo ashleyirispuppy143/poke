@@ -236,86 +236,137 @@ module.exports = function (app, config, renderTemplate) {
 
     const u = await media_proxy(v);
     
-    const secure = ["poketube.fun"].includes(req.hostname);
+const secure = ["poketube.fun"].includes(req.hostname);
     const verify = req.hostname === "poketube.sudovanilla.com";
 
     const officialHost = "poketube.fun";
  
-    if (req.hostname !== officialHost && config.invapi.includes("invid-api.poketube.fun")) {
+   // Check if the host is unofficial AND they are still using your specific API
+   if (req.hostname !== officialHost && config.invapi.includes("invid-api.poketube.fun")) {
     const message = `
       <style>
         body {
-          background: #ffe9ec; /* Soft pastel pink */
-          color: #5a464c; /* Warm, soft brown-gray for readability */
+          background-color: #fdf2f4;
+          background-image: radial-gradient(#ffcdd2 2px, transparent 2px);
+          background-size: 30px 30px;
+          color: #6a4f55;
           font-family: system-ui, -apple-system, sans-serif;
-          padding: 40px 20px;
-          line-height: 1.7;
+          margin: 0;
+          height: 100vh;
           display: flex;
+          align-items: center;
           justify-content: center;
         }
-        .cozy-card {
+        .error-container {
           background: #ffffff;
           max-width: 550px;
-          padding: 40px;
-          border-radius: 24px;
-          box-shadow: 0 10px 30px rgba(255, 182, 193, 0.4);
+          padding: 50px 40px;
+          border-radius: 30px;
+          border: 3px solid #ffd1dc;
+          box-shadow: 0 12px 40px rgba(255, 182, 193, 0.3);
           text-align: center;
+          position: relative;
+        }
+        .error-code {
+          font-size: 4.5rem;
+          font-weight: 800;
+          color: #ffb6c1;
+          margin: 0;
+          line-height: 1;
+          letter-spacing: -2px;
+        }
+        .error-badge {
+          display: inline-block;
+          background: #ffe4e8;
+          color: #d16b88;
+          padding: 6px 14px;
+          border-radius: 20px;
+          font-size: 0.85rem;
+          font-weight: 700;
+          margin-top: 12px;
+          margin-bottom: 25px;
+          text-transform: uppercase;
+          letter-spacing: 1.5px;
         }
         h1 { 
           color: #ff8da1; 
-          font-size: 1.8rem; 
+          font-size: 1.6rem; 
           margin-top: 0;
+          margin-bottom: 15px;
+        }
+        p {
+          font-size: 1.05rem;
+          line-height: 1.6;
+          margin-bottom: 20px;
         }
         code { 
           background: #fff0f3; 
           color: #d16b88;
           padding: 4px 8px; 
           border-radius: 8px; 
-          font-weight: 500;
-        }
-        a { 
-          color: #ff6b81; 
-          text-decoration: none; 
           font-weight: 600;
-          transition: color 0.2s ease;
         }
-        a:hover { 
-          color: #ff4764;
-          text-decoration: underline; 
+        .button {
+          display: inline-block;
+          background: #ff8da1;
+          color: #ffffff;
+          text-decoration: none;
+          font-weight: 700;
+          padding: 14px 28px;
+          border-radius: 50px;
+          transition: transform 0.2s, background 0.2s;
+          box-shadow: 0 4px 15px rgba(255, 141, 161, 0.4);
+          margin-top: 10px;
+        }
+        .button:hover { 
+          background: #ff728a;
+          transform: translateY(-2px);
         }
         .footer-text {
-          margin-top: 2em; 
-          color: #a38f93; 
-          font-size: 0.95rem;
+          margin-top: 35px; 
+          color: #b59fa4; 
+          font-size: 0.9rem;
+          border-top: 2px dashed #ffe4e8;
+          padding-top: 20px;
+        }
+        .kaomoji {
+          font-size: 2.5rem;
+          color: #ffb6c1;
+          margin-bottom: 10px;
+          display: block;
         }
       </style>
 
-      <div class="cozy-card">
-        <h1>🌸 Let's update your config! 🌸</h1>
+      <div class="error-container">
+        <span class="kaomoji">( > < )</span>
+        <div class="error-code">500</div>
+        <div class="error-badge">Config Mismatch</div>
+        
+        <h1>Let's update your API! 🎀</h1>
         
         <p>
-          Hi there! It looks like your custom instance is currently using the official <code>Poke</code> API endpoint.
+          Hi there! It looks like your custom instance is trying to use the official <code>Poke</code> API endpoint.
         </p>
 
         <p>
-          To keep things running smoothly and cozy for everyone, this specific API is reserved just for <b>poketube.fun</b>. 
-          When multiple instances share the same endpoint, it gets a little overwhelmed and rate-limits everyone! 🥺
+          To keep things cozy for everyone, our API is reserved just for the main site. 
+          When multiple instances share the same endpoint, the servers get a little sleepy and rate-limit everyone! 🥺
         </p>
 
         <p>
-          Setting up your own Invidious instance is super easy, and it ensures your site will run perfectly without any shared limits. ✨<br><br>
-          Check out the official setup guide to get started:<br>
-          <a href="https://docs.invidious.io" target="_blank">docs.invidious.io</a>
+          Setting up your own Invidious instance is super easy, and it makes sure your site stays fast, happy, and free from shared limits. ✨
         </p>
 
-        <p class="footer-text">
-          Just update your <code>config.json</code> with your new API, restart your server, and you'll be good to go! 💖
-        </p>
+        <a href="https://docs.invidious.io" target="_blank" class="button">Read the Invidious Docs 🌸</a>
+
+        <div class="footer-text">
+          Fixing this is easy peasy! Just update your <code>config.json</code> with your new API, restart your server, and you'll be good to go. 💖
+        </div>
       </div>
     `;
 
     return res.status(500).send(message);
-  }
+  } 
     
     INNERTUBE.getYouTubePlayerInfo(f, v, contentlang, contentregion).then(
       (data) => {
