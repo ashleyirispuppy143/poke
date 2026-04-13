@@ -235,13 +235,14 @@ module.exports = function (app, config, renderTemplate) {
     }
 
     const u = await media_proxy(v);
-
-    const secure = ["poketube.fun"].includes(req.hostname);
+    
+const secure = ["poketube.fun"].includes(req.hostname);
     const verify = req.hostname === "poketube.sudovanilla.com";
 
     const officialHost = "poketube.fun";
- 
-   if (req.hostname !== officialHost && config.invapi === config.invapi) {
+    
+ // Check if the host is unofficial AND they are still using our specific API
+    if (req.hostname !== officialHost && config.invapi.includes("invid-api.poketube.fun")) {
     const message = `
       <style>
         body {
@@ -281,7 +282,6 @@ module.exports = function (app, config, renderTemplate) {
 
     return res.status(500).send(message);
   }
-
 
 
     INNERTUBE.getYouTubePlayerInfo(f, v, contentlang, contentregion).then(
