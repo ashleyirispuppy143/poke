@@ -43,6 +43,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
 // before DOMContentLoaded. Ensures both video and audio start at 00:00
 // even if the browser pre-buffers to a non-zero keyframe position.
 // This runs in a try-catch because elements might not exist yet.
+// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
+// before DOMContentLoaded. Ensures both video and audio start at 00:00
+// even if the browser pre-buffers to a non-zero keyframe position.
+// This runs in a try-catch because elements might not exist yet.
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -682,6 +686,10 @@ document.addEventListener("DOMContentLoaded", () => {
     _lastSyncBackstopAt: 0,
     _seekPreVolume: null,
     _seekPostTimers: [],
+    // Position saved on user pause — restored on play to prevent browser
+    // keyframe adjustment from causing visible position jumps on play/pause/play.
+    _pauseSavedPosition: -1,
+    _pauseSavedAt: 0,
     // MakeSureUnintentionalLoopDoesntEverHappenAtALLManager state
     endedNaturally: false,
     endedAt: 0,
@@ -2357,11 +2365,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const FROZEN_FRAME_THRESHOLD = 3;
     const WATCHDOG_MS = 400;      // fallback timer interval (was 200→300→400 — rAF is primary, this is backup only)
     const MICRO_SEEK_OFFSET = 0.01; // large enough for demuxer to treat as real seek
-    // Don't re-kick (micro-seek) faster than this. 1000ms prevents the RAF
-    // freeze detector from firing micro-seeks every 600ms during normal
-    // playback when GC/jank causes brief frame drops. Forward micro-seeks
-    // are lightweight but still fire seeking/seeked events that cascade.
-    const STALL_KICK_COOLDOWN_MS = 1000;
+    // Don't re-kick (micro-seek) faster than this. Was 1000ms — too long,
+    // causing visible 1+ second freezes after play/pause because the detector
+    // couldn't fire a second kick after the first one didn't unstick the
+    // compositor. 600ms still prevents GC/jank false positives while allowing
+    // faster recovery from real compositor stalls.
+    const STALL_KICK_COOLDOWN_MS = 600;
     // CPU OPTIMIZATION: skip every other rAF tick. Freeze detection at 30fps
     // is fast enough to catch single-frame stalls (166ms window) while cutting
     // detection work in half. Still rAF-based so it scales with monitor refresh.
@@ -3342,8 +3351,8 @@ document.addEventListener("DOMContentLoaded", () => {
     let _lastFrameCount = -1;
     let _lastFrameCheckAt = 0;
     let _lastNuclearAt = 0;
-    const CHECK_MS = 1500;
-    const COOLDOWN_MS = 5000;
+    const CHECK_MS = 1000;    // was 1500 — detect stuck compositor faster
+    const COOLDOWN_MS = 4000; // was 5000 — allow re-kicks sooner after failed fix
 
     function _tick() {
       _timer = null;
@@ -3351,10 +3360,12 @@ document.addEventListener("DOMContentLoaded", () => {
       if (document.visibilityState !== "visible") { _schedule(); return; }
       if (state.seeking || state.seekBuffering || state.restarting) { _schedule(); return; }
       if (state.endedNaturally) return;
-      // Don't fire during play/pause transitions — the decoder needs time to
-      // warm up and produce frames. Firing +0.1 here causes visible "forward
-      // seek on play/pause".
-      if (now() < state._playPauseTransitionUntil || directUserToggleActive(1200)) { _schedule(); return; }
+      // Don't fire during the immediate play/pause transition — the decoder
+      // needs time to warm up. But DON'T wait the full directUserToggleActive
+      // window (was 1200ms) — that delays the nuclear fix too long, causing
+      // visible 2+ second freezes after play/pause. 500ms is enough for the
+      // decoder to produce its first frame if it's going to.
+      if (now() < state._playPauseTransitionUntil || directUserToggleActive(500)) { _schedule(); return; }
 
       const vn = getVideoNode();
       if (!vn || vn.paused) { _schedule(); return; }
@@ -5157,15 +5168,45 @@ const HAVE_ENOUGH_DATA = 4;
         clearStartupAutoplayRetryTimer();
         clearAudioForcePlayTimer();
         state.startupKickInFlight = false;
-        // If video is playing but audio isn't in coupled mode, just start audio
-        // without re-triggering the full startup machinery
+        // FIX: If video is playing but audio isn't in coupled mode, aggressively
+        // start audio with sync and retry. This is the "page fully loaded" fallback
+        // for the case where EARLY AUDIO STARTUP's retry chain hasn't succeeded yet.
         if (coupledMode && _loadVideoPlaying && !_loadAudioPlaying && audio &&
             state.intendedPlaying && !state.seeking &&
             !userPauseLockActive() && !mediaSessionForcedPauseActive()) {
-          state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 600);
+          // Sync audio position to video before starting
+          const _loadVt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
+          const _loadAt = Number(audio.currentTime) || 0;
+          if (isFinite(_loadVt) && Math.abs(_loadAt - _loadVt) > 0.3) {
+            state._allowAudioTimeWrite = true;
+            try { audio.currentTime = _loadVt; } catch {}
+            state._allowAudioTimeWrite = false;
+          }
+          state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 1200);
           const _loadVol = targetVolFromVideo();
           try { audio.volume = _loadVol; } catch {}
-          execProgrammaticAudioPlay({ squelchMs: 250, force: true, minGapMs: 0 }).catch(() => {});
+          const _loadPlaySession = state.playSessionId;
+          execProgrammaticAudioPlay({ squelchMs: 250, force: true, minGapMs: 0 })
+            .then(ok => { if (ok) state.audioEverStarted = true; })
+            .catch(() => {});
+          // Retry at 200ms and 600ms if first attempt fails (audio element may
+          // still be loading even at window.load time for large audio files)
+          [200, 600].forEach(delay => {
+            setTimeout(() => {
+              if (state.playSessionId !== _loadPlaySession) return;
+              if (!state.intendedPlaying || !coupledMode || !audio) return;
+              if (!audio.paused) { state.audioEverStarted = true; return; }
+              const _retryVt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
+              state._allowAudioTimeWrite = true;
+              try { audio.currentTime = _retryVt; } catch {}
+              state._allowAudioTimeWrite = false;
+              try { audio.volume = targetVolFromVideo(); } catch {}
+              state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 600);
+              execProgrammaticAudioPlay({ squelchMs: 200, force: true, minGapMs: 0 })
+                .then(ok => { if (ok) state.audioEverStarted = true; })
+                .catch(() => {});
+            }, delay);
+          });
         }
         return;
       }
@@ -6513,11 +6554,17 @@ const HAVE_ENOUGH_DATA = 4;
     // Snapshot the current video position on user pause — this is the
     // user's "real" position. getBestResumePosition and tab-return recovery
     // need this to resume from the right spot instead of drifting.
+    // FIX: Also save the position for play/pause/play restoration. When the
+    // user hits play after pausing, the browser may adjust currentTime to the
+    // nearest keyframe (0.5-2s forward). We restore the saved position to
+    // prevent visible position jumps.
     try {
       const _pauseVT = Number(video.currentTime()) || 0;
       if (_pauseVT > 0.1) {
         state.lastKnownGoodVT = _pauseVT;
         state.lastKnownGoodVTts = now();
+        state._pauseSavedPosition = _pauseVT;
+        state._pauseSavedAt = now();
       }
     } catch {}
     // Disarm VCFM on pause — no point checking compositor when paused.
@@ -6654,6 +6701,57 @@ const HAVE_ENOUGH_DATA = 4;
     state.audioPlayUntil = 0;
     state.startupAudioHoldUntil = 0;
     cancelActiveFade();
+    // FIX: Restore saved pause position on play resume to prevent browser
+    // keyframe adjustment from causing visible position jumps. The browser
+    // adjusts currentTime to the nearest keyframe on play() resume — offsets
+    // of 0.5-2s are normal. By pre-seeking to the saved position BEFORE
+    // play() fires, we force the decoder to resume from the exact pause point.
+    // Only restore if the saved position is recent (within 60s) and the current
+    // position has drifted more than 0.3s from where the user paused.
+    if (state._pauseSavedPosition > 0 && (now() - state._pauseSavedAt) < 60000) {
+      const _rpVN = getVideoNode() || videoEl;
+      const _rpCurrentVT = _rpVN ? (Number(_rpVN.currentTime) || 0) : 0;
+      const _rpSavedPos = state._pauseSavedPosition;
+      const _rpDrift = Math.abs(_rpCurrentVT - _rpSavedPos);
+      // If position has drifted from saved point, restore it
+      if (_rpDrift > 0.3 && isFinite(_rpSavedPos)) {
+        state._isMicroSeek = true;
+        try { _rpVN.currentTime = _rpSavedPos; } catch {}
+        if (_rpVN !== videoEl) try { videoEl.currentTime = _rpSavedPos; } catch {}
+        if (coupledMode && audio) {
+          state._allowAudioTimeWrite = true;
+          try { audio.currentTime = _rpSavedPos; } catch {}
+          state._allowAudioTimeWrite = false;
+        }
+        state.lastKnownGoodVT = _rpSavedPos;
+        state.lastKnownGoodVTts = now();
+        setTimeout(() => { state._isMicroSeek = false; }, 200);
+      }
+      // Also schedule a post-play() verification to catch cases where the
+      // browser re-adjusts to a keyframe after our restore
+      const _rpSession = state.playSessionId;
+      setTimeout(() => {
+        if (state.playSessionId !== _rpSession || !state.intendedPlaying) return;
+        const _rpVN2 = getVideoNode() || videoEl;
+        const _rpVT2 = _rpVN2 ? (Number(_rpVN2.currentTime) || 0) : 0;
+        const _rpDrift2 = Math.abs(_rpVT2 - _rpSavedPos);
+        if (_rpDrift2 > 0.5 && isFinite(_rpSavedPos) && !state.seeking) {
+          state._isMicroSeek = true;
+          try { _rpVN2.currentTime = _rpSavedPos; } catch {}
+          if (coupledMode && audio) {
+            const _rpAT2 = Number(audio.currentTime) || 0;
+            if (Math.abs(_rpAT2 - _rpSavedPos) > 0.3) {
+              state._allowAudioTimeWrite = true;
+              try { audio.currentTime = _rpSavedPos; } catch {}
+              state._allowAudioTimeWrite = false;
+            }
+          }
+          setTimeout(() => { state._isMicroSeek = false; }, 200);
+        }
+      }, 120);
+      state._pauseSavedPosition = -1;
+      state._pauseSavedAt = 0;
+    }
     if (platform.chromiumOnlyBrowser) {
       state.chromiumPauseGuardUntil = 0;
       state.chromiumBgSettlingUntil = 0;
@@ -7504,7 +7602,7 @@ const HAVE_ENOUGH_DATA = 4;
   // Returns true if a micro-seek is allowed right now. Minimum 500ms between
   // micro-seeks, max 3 per 5 seconds in foreground playback.
   const MICRO_SEEK_MIN_GAP_MS = 800;
-  const COMPOSITOR_FLUSH_MIN_GAP_MS = 250; // lighter rate limit for confirmed compositor flushes
+  const COMPOSITOR_FLUSH_MIN_GAP_MS = 150; // lighter rate limit for confirmed compositor flushes (was 250 — too slow for play/pause freeze recovery)
   const MICRO_SEEK_WINDOW_MS = 5000;
   const MICRO_SEEK_MAX_IN_WINDOW = 2;
   function canDoMicroSeek() {
@@ -7579,19 +7677,13 @@ const HAVE_ENOUGH_DATA = 4;
     // Block during active seeks — micro-seek would interfere with seek resolution
     if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
     if (userSeekIntentActive() || state.pendingSeekTarget != null) return false;
-    // Block micro-seeks during play/pause transitions. Two regimes:
-    // 1) TAB RETURN: compositor is genuinely stuck on a stale GPU texture,
-    //    so only block the first 200ms (decoder warmup) then allow flushes.
-    // 2) NORMAL play/pause: the decoder is warming up, not a real freeze.
-    //    Block for the FULL transition (500ms) to prevent micro-seeks from
-    //    stacking into a visible "seeks a bit on play/pause/play" shift.
-    if (inBgReturnGrace() || isTabReturnImmune()) {
-      // Tab return — allow compositor flush after 200ms warmup
-      if (now() < state._playPauseTransitionUntil - (PLAY_PAUSE_MICRO_SEEK_BLOCK_MS - 200)) return false;
-    } else {
-      // Normal play/pause — block for full transition
-      if (now() < state._playPauseTransitionUntil) return false;
-    }
+    // FIX: Reduce blocking window from 300ms to 150ms. The old 200ms offset
+    // from PLAY_PAUSE_MICRO_SEEK_BLOCK_MS(500) = 300ms block was too long —
+    // compositor flushes need to fire within 200-350ms of play() to prevent
+    // the visible "frozen frame for 1 second after play/pause" bug. 150ms
+    // gives the decoder enough warmup while allowing much faster flush detection.
+    // The _isMicroSeek flag ensures the seeking handler ignores these.
+    if (now() < state._playPauseTransitionUntil - (PLAY_PAUSE_MICRO_SEEK_BLOCK_MS - 350)) return false;
     // Block when video is paused — no point flushing paused compositor
     if (document.visibilityState === "visible" && getVideoPaused() &&
         !isTabReturnImmune() && !NotMakePlayBackFixingNoticable.isActive() &&
@@ -13309,15 +13401,123 @@ const HAVE_ENOUGH_DATA = 4;
         state.videoStallSince = 0;
         clearForegroundBufferAudioHold();
       }
-      // STARTUP ZERO ENFORCEMENT — DISABLED.
-      // forceZeroBeforeFirstPlay() already handles this BEFORE play() is called.
-      // Re-zeroing here in the "playing" handler caused a visible play→seek→play
-      // double-play glitch because:
-      //   1. playTogether calls forceZeroBeforeFirstPlay (sets ct=0)
-      //   2. play() fires, browser starts playing from 0
-      //   3. "playing" event fires with _playingNow slightly > 0 due to decode latency
-      //   4. Old code would seek back to 0 → visible restart/double-play
-      // The pre-play zeroing in forceZeroBeforeFirstPlay + playTogether is sufficient.
+      // EARLY AUDIO STARTUP: If video autoplayed before our startup machinery
+      // ran (Video.js autoplay fires before window.load), kick audio immediately
+      // on the first "playing" event instead of waiting for window.load.
+      // This fixes "video autoplays but audio doesn't start until page loads."
+      if (coupledMode && audio && audio.paused && !state.firstPlayCommitted &&
+          wantsStartupAutoplay() && !state.endedNaturally &&
+          !state.seeking && !state.seekBuffering) {
+        state.intendedPlaying = true;
+        state.bufferHoldIntendedPlaying = true;
+        // Sync audio to video position (both should be near 0 at startup)
+        const _earlyAudioVt = _playingNow;
+        const _earlyAudioAt = Number(audio.currentTime) || 0;
+        if (Math.abs(_earlyAudioAt - _earlyAudioVt) > 0.3) {
+          state._allowAudioTimeWrite = true;
+          try { audio.currentTime = _earlyAudioVt; } catch {}
+          state._allowAudioTimeWrite = false;
+        }
+        try { audio.volume = targetVolFromVideo(); } catch {}
+        state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 1200);
+        // FIX: Don't set audioEverStarted until audio ACTUALLY starts.
+        // Setting it prematurely prevents all retry paths from firing
+        // if this initial play() fails (e.g. audio not loaded yet).
+        // Also add a retry chain so audio starts as soon as possible.
+        const _earlyAudioPlaySession = state.playSessionId;
+        execProgrammaticAudioPlay({ squelchMs: 400, force: true, minGapMs: 0 })
+          .then(ok => {
+            if (ok) state.audioEverStarted = true;
+          })
+          .catch(() => {});
+        // Retry chain: if audio.play() fails (element not loaded yet, autoplay
+        // policy, etc.), retry at escalating intervals until it works. This is
+        // the primary fix for "video autoplays but audio doesn't until page loads."
+        const _earlyAudioRetryDelays = [80, 200, 400, 700, 1200, 2000, 3000];
+        let _earlyAudioRetryIdx = 0;
+        const _earlyAudioRetry = () => {
+          if (_earlyAudioRetryIdx >= _earlyAudioRetryDelays.length) return;
+          if (state.playSessionId !== _earlyAudioPlaySession) return;
+          if (!state.intendedPlaying || state.endedNaturally) return;
+          if (state.audioEverStarted && audio && !audio.paused) return;
+          if (state.seeking || state.seekBuffering) return;
+          const delay = _earlyAudioRetryDelays[_earlyAudioRetryIdx++];
+          setTimeout(() => {
+            if (state.playSessionId !== _earlyAudioPlaySession) return;
+            if (!state.intendedPlaying || state.endedNaturally) return;
+            if (!audio.paused) { state.audioEverStarted = true; return; }
+            // Re-sync position before retry
+            const _retryVt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
+            const _retryAt = Number(audio.currentTime) || 0;
+            if (isFinite(_retryVt) && Math.abs(_retryAt - _retryVt) > 0.3) {
+              state._allowAudioTimeWrite = true;
+              try { audio.currentTime = _retryVt; } catch {}
+              state._allowAudioTimeWrite = false;
+            }
+            try { audio.volume = targetVolFromVideo(); } catch {}
+            state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 800);
+            execProgrammaticAudioPlay({ squelchMs: 200, force: true, minGapMs: 0 })
+              .then(ok => {
+                if (ok) state.audioEverStarted = true;
+                else _earlyAudioRetry();
+              })
+              .catch(() => { _earlyAudioRetry(); });
+          }, delay);
+        };
+        // Start the retry chain immediately — first retry fires after 80ms
+        _earlyAudioRetry();
+      }
+      // STARTUP ZERO ENFORCEMENT: If browser keyframe buffering moved
+      // currentTime forward (to 0.5-2s) despite forceZeroBeforeFirstPlay(),
+      // seek both tracks back to 0. Only fires once on first play, and only
+      // for genuine keyframe skips (>0.5s), not small decode latency.
+      // Uses _isMicroSeek so the seeking handler ignores this correction.
+      // FIX: Also add a verification loop — after seeking to 0, the browser
+      // can AGAIN move to a keyframe. We verify and re-zero up to 3 times
+      // with escalating delays (50/150/400ms) to ensure it sticks.
+      if (!state.firstPlayCommitted && wantsStartupAutoplay() &&
+          !startupZeroSuppressed() && _playingNow > 0.5) {
+        state._isMicroSeek = true;
+        try { videoEl.currentTime = 0; } catch {}
+        try { const _zVN = getVideoNode(); if (_zVN && _zVN !== videoEl) _zVN.currentTime = 0; } catch {}
+        if (coupledMode && audio) {
+          state._allowAudioTimeWrite = true;
+          try { audio.currentTime = 0; } catch {}
+          state._allowAudioTimeWrite = false;
+        }
+        setTimeout(() => { state._isMicroSeek = false; }, 300);
+        // Verification loop: browser can move currentTime forward again after
+        // our zero-set due to keyframe alignment. Check 3 times and re-zero.
+        const _zeroVerifyDelays = [50, 150, 400];
+        _zeroVerifyDelays.forEach((delay, idx) => {
+          setTimeout(() => {
+            if (state.firstPlayCommitted || startupZeroSuppressed()) return;
+            const _zvVN = getVideoNode() || videoEl;
+            const _zvVT = _zvVN ? (Number(_zvVN.currentTime) || 0) : 0;
+            if (_zvVT > 0.5) {
+              state._isMicroSeek = true;
+              try { _zvVN.currentTime = 0; } catch {}
+              if (_zvVN !== videoEl) try { videoEl.currentTime = 0; } catch {}
+              if (coupledMode && audio) {
+                state._allowAudioTimeWrite = true;
+                try { audio.currentTime = 0; } catch {}
+                state._allowAudioTimeWrite = false;
+              }
+              setTimeout(() => { state._isMicroSeek = false; }, 200);
+            }
+            // On last check, also sync audio position to video if there's drift
+            if (idx === _zeroVerifyDelays.length - 1 && coupledMode && audio) {
+              const _zvFinalVT = Number((_zvVN || videoEl).currentTime) || 0;
+              const _zvFinalAT = Number(audio.currentTime) || 0;
+              if (Math.abs(_zvFinalAT - _zvFinalVT) > 0.3) {
+                state._allowAudioTimeWrite = true;
+                try { audio.currentTime = _zvFinalVT; } catch {}
+                state._allowAudioTimeWrite = false;
+              }
+            }
+          }, delay);
+        });
+      }
       // Anti-loop: if video is playing after it ended naturally, kill it
       if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) {
         const _playingVt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
@@ -13379,6 +13579,10 @@ const HAVE_ENOUGH_DATA = 4;
             try {
               _rvfcVNode.requestVideoFrameCallback(() => { _rvfcGotFrame = true; });
             } catch {}
+            // FIX: Use shorter initial timeout (180ms) for direct user resumes
+            // since users notice freeze immediately. Use 250ms for other cases
+            // (tab return, long pause) where slight delay is acceptable.
+            const _rvfcTimeout = _prfvDirectUserResume ? 180 : 250;
             setTimeout(() => {
               if (_rvfcGotFrame) return; // compositor healthy
               if (state.playSessionId !== _rvfcGen) return; // stale
@@ -13386,17 +13590,49 @@ const HAVE_ENOUGH_DATA = 4;
               if (!_kickVN || _kickVN.paused || !state.intendedPlaying) return;
               // Compositor stuck — forward micro-seek to flush. Forward
               // seeks don't cause keyframe flash (stays in current GOP).
-              // canDoCompositorFlush() blocks the full 500ms during normal
-              // play/pause (preventing false micro-seeks) but only 200ms
-              // during tab return (where compositor genuinely needs flushing).
               const _kickVT = Number(_kickVN.currentTime) || 0;
               if (_kickVT > 0.02 && canDoCompositorFlush()) {
                 recordMicroSeek();
                 state._isMicroSeek = true;
                 try { _kickVN.currentTime = _kickVT + 0.001; } catch {}
                 setTimeout(() => { state._isMicroSeek = false; }, 150);
+                // FIX: After the first micro-seek, verify it worked with a
+                // second RVFC check. If still stuck, do a stronger fix:
+                // pause→seek→play. This catches the rare case where a single
+                // +0.001 micro-seek isn't enough to unstick the compositor.
+                let _rvfcGotFrame2 = false;
+                try {
+                  _kickVN.requestVideoFrameCallback(() => { _rvfcGotFrame2 = true; });
+                } catch {}
+                setTimeout(() => {
+                  if (_rvfcGotFrame2) return; // fixed
+                  if (state.playSessionId !== _rvfcGen) return;
+                  const _kickVN2 = getVideoNode();
+                  if (!_kickVN2 || _kickVN2.paused || !state.intendedPlaying) return;
+                  if (state.seeking || state.seekBuffering) return;
+                  // Stronger fix: pause → forward seek → play
+                  const _kickVT2 = Number(_kickVN2.currentTime) || 0;
+                  if (_kickVT2 > 0.02) {
+                    recordMicroSeek();
+                    state._isMicroSeek = true;
+                    state.isProgrammaticVideoPause = true;
+                    try { _kickVN2.pause(); } catch {}
+                    try { _kickVN2.currentTime = _kickVT2 + 0.01; } catch {}
+                    requestAnimationFrame(() => {
+                      state.isProgrammaticVideoPause = false;
+                      if (state.playSessionId !== _rvfcGen || !state.intendedPlaying) {
+                        state._isMicroSeek = false; return;
+                      }
+                      DONTMAKEITDOUBLEPLAY.resetAll();
+                      const p = execProgrammaticVideoPlay();
+                      if (p && typeof p.catch === "function") p.catch(() => {});
+                      state._isMicroSeek = false;
+                    });
+                    setTimeout(() => { state._isMicroSeek = false; }, 300);
+                  }
+                }, 300);
               }
-            }, 250);
+            }, _rvfcTimeout);
           }
         }
       }
@@ -14234,13 +14470,18 @@ const HAVE_ENOUGH_DATA = 4;
           // not real seeks.
           if (state._isMicroSeek) return;
 
-          // During a play/pause transition, small currentTime adjustments from
-          // the decoder warming up should not trigger the full seek machinery.
-          // These small drifts (<0.15s) are normal decoder behavior, not real seeks.
-          if (directUserToggleActive(800) || now() < state._playPauseTransitionUntil) {
-            const _transVt = Number(videoEl.currentTime) || 0;
-            const _transGood = state.lastKnownGoodVT || 0;
-            if (Math.abs(_transVt - _transGood) < 0.15) return;
+          // During a play/pause transition, ignore ALL browser-initiated seeking
+          // events. Chromium adjusts currentTime to the nearest keyframe on play
+          // resume — adjustments up to ~2s are normal. The old 0.15s threshold
+          // let these through, triggering full seek machinery (audio mute/pause,
+          // state.seeking=true, seek finalize chain) which disrupts playback and
+          // causes "video starts at wrong position on play/pause/play".
+          // Only let real user seeks through (timeline click, keyboard, etc.).
+          // FIX: Extended from 800ms to 1200ms. Browser keyframe adjustments on
+          // play() resume can happen 500-1000ms after the play event, especially
+          // on slower machines or with large GOP sizes. 800ms missed late adjustments.
+          if (directUserToggleActive(1200) || now() < state._playPauseTransitionUntil) {
+            if (!userSeekIntentActive()) return;
           }
 
           // phantom loop detection: if video suddenly jumps to near-0 from well
@@ -14508,7 +14749,12 @@ const HAVE_ENOUGH_DATA = 4;
           }
           state.lastKnownGoodVT = newTime;
           state.lastKnownGoodVTts = now();
-          state.pendingSeekTarget = newTime;
+          // Clear pendingSeekTarget — the seek is RESOLVED. Leaving it set
+          // to newTime causes the NEXT seeking event to use this stale value
+          // as the seek target (line ~14331 prioritizes pendingSeekTarget over
+          // the native element's actual position). This corrupts seekTargetTime,
+          // lastKnownGoodVT, and audio position for subsequent seeks.
+          state.pendingSeekTarget = null;
           if (coupledMode && audio && isFinite(newTime) && newTime >= 0) {
             const _curAudioTime = Number(audio.currentTime) || 0;
             // Guard: never seek audio to near-0 when it's well into playback
@@ -15368,7 +15614,7 @@ const HAVE_ENOUGH_DATA = 4;
     window.addEventListener("focus", () => {
       const _focusTs = now();
       const _isVisible = document.visibilityState === "visible";
-      // Clear stale stall flags but only if video actually has data.
+      // Clear stale stall flags -- but only if video actually has data.
       // If video is genuinely starved, keep the flags so audio stays paused.
       const _focusVNode = getVideoNode();
       const _focusVRS = _focusVNode ? Number(_focusVNode.readyState || 0) : 4;
