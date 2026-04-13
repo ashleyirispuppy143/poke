@@ -235,33 +235,46 @@ module.exports = function (app, config, renderTemplate) {
     }
 
     const u = await media_proxy(v);
+    
  const secure = ["poketube.fun"].includes(req.hostname);
     const verify = req.hostname === "poketube.sudovanilla.com";
 
     const officialHost = "poketube.fun";
  
-   // Check if the host is unofficial AND they are still using your specific API
-   if (req.hostname !== officialHost && config.invapi.includes("invid-api.poketube.fun")) {
+    if (req.hostname !== officialHost && config.invapi.includes("invid-api.poketube.fun")) {
     
-    // A list of cozy/sad kaomojis to pick from randomly
-    const kaomojis = [
-      "( > < )", 
-      "( ╥﹏╥ )", 
+     const kaomojis = [
+      "(ó﹏ò｡)", 
       "( ｡ •̀ ᴖ •́ ｡)", 
-      "( ˘︹˘ )", 
-      "( ´•̥̥̥ω•̥̥̥` )", 
+      "(｡>﹏<｡)", 
+      "( ´△｀)", 
       "૮( > ﻌ < )ა",
-      "( ｡•́︿•̀｡ )"
+      "( ╥﹏╥ )",
+      "(=^-ω-^=)"
     ];
     const randomKaomoji = kaomojis[Math.floor(Math.random() * kaomojis.length)];
 
     const message = `
       <style>
+         @keyframes gradient {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+
+         @keyframes float {
+          0% { transform: translateY(0px); }
+          50% { transform: translateY(-12px); }
+          100% { transform: translateY(0px); }
+        }
+
         body {
-          /* Smooth, cozy pink gradient covering the whole page */
-          background: linear-gradient(135deg, #fff0f3 0%, #ffcdd2 100%);
-          color: #5a3d42;
-          font-family: 'Roboto', 'Segoe UI', -apple-system, sans-serif;
+          background: linear-gradient(-45deg, #fff0f3, #ffe4e8, #ffcdd2, #fce4ec);
+          background-size: 400% 400%;
+          animation: gradient 12s ease infinite;
+          color: #704c54;
+          /* Offline-safe rounded system fonts! */
+          font-family: ui-rounded, 'Segoe UI Rounded', 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
           margin: 0;
           height: 100vh;
           display: flex;
@@ -271,83 +284,102 @@ module.exports = function (app, config, renderTemplate) {
           text-align: center;
           padding: 0 20px;
         }
+
         .kaomoji {
-          font-size: 5.5rem;
-          color: #e57399;
-          margin-bottom: 20px;
-          font-weight: bold;
-          text-shadow: 0 4px 15px rgba(229, 115, 153, 0.2);
+          font-size: 6rem;
+          color: #f080a0;
+          margin-bottom: 10px;
+          font-weight: 700;
+          text-shadow: 0 8px 20px rgba(240, 128, 160, 0.25);
+          animation: float 3s ease-in-out infinite;
         }
+
         h1 { 
-          font-size: 2.2rem; 
-          color: #d85a80; 
+          font-size: 2.4rem; 
+          color: #e06c8f; 
           margin: 0 0 15px 0;
           font-weight: 700;
+          letter-spacing: -0.5px;
         }
+
         p {
-          font-size: 1.1rem;
-          max-width: 580px;
+          font-size: 1.15rem;
+          max-width: 600px;
           line-height: 1.6;
           margin: 0 0 20px 0;
-          color: #6d4c53;
+          font-weight: 500;
         }
+
         code { 
-          background: rgba(255, 255, 255, 0.6); 
-          color: #c2406f;
-          padding: 4px 8px; 
-          border-radius: 6px; 
-          font-weight: 600;
-          font-size: 1rem;
+          background: rgba(255, 255, 255, 0.7); 
+          color: #d16b88;
+          padding: 4px 10px; 
+          border-radius: 10px; 
+          font-weight: 700;
+          font-size: 1.05rem;
+          box-shadow: 0 2px 5px rgba(0,0,0,0.02);
         }
+
         .button {
           display: inline-block;
           background: #f48fb1;
           color: #ffffff;
           text-decoration: none;
-          font-weight: 600;
-          font-size: 1.05rem;
-          padding: 12px 30px;
-          /* YouTube style buttons are slightly squared, so we use a smaller border-radius */
-          border-radius: 4px; 
-          transition: background 0.2s;
-          box-shadow: 0 2px 8px rgba(244, 143, 177, 0.4);
-          margin-top: 15px;
+          font-weight: 700;
+          font-size: 1.1rem;
+          padding: 14px 32px;
+          /* Super rounded corners for maximum coziness */
+          border-radius: 25px; 
+          transition: all 0.3s ease;
+          box-shadow: 0 6px 15px rgba(244, 143, 177, 0.35);
+          margin-top: 20px;
         }
+
         .button:hover { 
           background: #f06292;
+          transform: translateY(-3px);
+          box-shadow: 0 8px 20px rgba(240, 98, 146, 0.4);
         }
+
         .admin-note {
-          margin-top: 45px; 
-          font-size: 0.95rem;
-          color: #9c7b82;
-          background: rgba(255, 255, 255, 0.3);
-          padding: 15px 25px;
-          border-radius: 8px;
+          margin-top: 40px; 
+          font-size: 1rem;
+          color: #a38189;
+          background: rgba(255, 255, 255, 0.4);
+          padding: 18px 30px;
+          border-radius: 20px;
+          font-weight: 600;
+          border: 2px dashed rgba(244, 143, 177, 0.3);
+          max-width: 550px;
         }
       </style>
 
       <div class="kaomoji">${randomKaomoji}</div>
       
-      <h1>Whoops! Something's not quite right.</h1>
+      <h1>Uh oh! A tiny configuration hiccup... ☁️</h1>
       
       <p>
-        It looks like this custom instance is trying to borrow the official <code>Poke</code> API endpoint. 
+        It looks like this custom instance is trying to use the official <code>Poke</code> API endpoint. 
       </p>
 
       <p>
-        To keep the servers happy and prevent rate-limiting for everyone, our API is kept private for the main site. Hosting your own Invidious instance ensures your site will run smoothly without any shared limits! ✨
+        <strong>Why is this an issue?</strong> YouTube strictly limits how many videos a single server can request. When multiple sites share the exact same API, the servers quickly get overwhelmed and rate-limited. This causes videos to buffer forever or completely break for everyone! 🥺
       </p>
 
-      <a href="https://docs.invidious.io" target="_blank" class="button">View Invidious Setup Guide</a>
+      <p>
+        To keep things running smoothly, every instance needs its own dedicated API. Hosting your own Invidious backend ensures your site runs perfectly without any shared limits or sleepy servers! ✨
+      </p>
+
+      <a href="https://docs.invidious.io/installation/" target="_blank" class="button">View the Installation Guide 🌸</a>
 
       <div class="admin-note">
-        <strong>Are you the server admin?</strong> <br>
-        Just update your <code>config.json</code> with your new API, restart your server, and you'll be good to go. 💖
+        <strong>Are you the server admin? 💌</strong> <br>
+        Fixing this is a breeze! Just update your <code>config.json</code> with your newly hosted API link, give your server a quick restart, and you'll be good to go. 
       </div>
     `;
 
     return res.status(500).send(message);
-  } 
+  }
     
     INNERTUBE.getYouTubePlayerInfo(f, v, contentlang, contentregion).then(
       (data) => {
