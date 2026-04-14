@@ -27,11 +27,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  
  
 //////////////// THE PLAYER, START ////////////////////////
-// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
-// before DOMContentLoaded. Ensures both video and audio start at 00:00
-// even if the browser pre-buffers to a non-zero keyframe position.
-// This runs in a try-catch because elements might not exist yet.
-// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
+ // IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
 // before DOMContentLoaded. Ensures both video and audio start at 00:00
 // even if the browser pre-buffers to a non-zero keyframe position.
 // This runs in a try-catch because elements might not exist yet.
@@ -5933,16 +5929,21 @@ const HAVE_ENOUGH_DATA = 4;
     if (inBgReturnGrace()) return false;
     if (freshForegroundVideoFirstPending()) return true;
     if (now() < state.foregroundReturnUserPlayUntil &&
-        (directUserToggleActive(2600) || userWantsPlayNow(3200) || userToggleExpectingPlay())) {
+        (directUserToggleActive(1200) || userWantsPlayNow(1500) || userToggleExpectingPlay())) {
       return true;
     }
+    // FIX: Reduced from 10s to 3s. The old 10s window caused audio to be held
+    // for up to 10 seconds after tab return, waiting for video to 'prove' it's
+    // rendering frames. The user sees video 'playing' but hears no audio and
+    // the frame appears frozen — the 'waits for something' bug. 3s is enough
+    // for the decoder to warm up; beyond that, force audio through.
     const recentlyReturnedToForeground =
       state.lastBgReturnAt > 0 &&
-      (now() - state.lastBgReturnAt) < 10000;
+      (now() - state.lastBgReturnAt) < 3000;
     if (!recentlyReturnedToForeground) return false;
     return (
-      directUserToggleActive(2200) ||
-      userWantsPlayNow(2800) ||
+      directUserToggleActive(1200) ||
+      userWantsPlayNow(1500) ||
       userToggleExpectingPlay()
     );
   }
@@ -6161,7 +6162,7 @@ const HAVE_ENOUGH_DATA = 4;
     if (forwardProgress && vrs >= HAVE_CURRENT_DATA) return true;
     if (requireProgress) return false;
     if (armedAt > 0 && state.lastVideoPlayingAt >= (armedAt - 25) && vrs >= HAVE_CURRENT_DATA) return true;
-    return vrs >= HAVE_FUTURE_DATA && !state.videoWaiting && armedAt > 0 && (now() - armedAt) > 260;
+    return vrs >= HAVE_FUTURE_DATA && !state.videoWaiting && armedAt > 0 && (now() - armedAt) > 150;
   }
   function startForegroundUserPlayRetry() {
     clearForegroundUserPlayRetryTimers();
@@ -14840,14 +14841,12 @@ const HAVE_ENOUGH_DATA = 4;
           // During immunity, if this seeked event is from a spurious browser seek
           // (not from our programmatic seek machinery), skip the audio sync.
           if (isTabReturnImmune() && !state.seeking) return;
-          // FIX: If another seek is already pending (user is scrubbing rapidly),
-          // don't finalize this seeked event — it's from the PREVIOUS seek and
-          // would sync audio to the wrong position. Let the pending seek's
-          // seeked event handle finalization with the correct target.
-          if (state.pendingSeekTarget != null && state.seeking) {
-            clearSeekWatchdog();
-            return;
-          }
+          // NOTE: Do NOT gate on pendingSeekTarget here. pendingSeekTarget is
+          // set in the seeking handler and cleared below at line ~14861. It is
+          // ALWAYS non-null when seeked fires, so gating on it would block
+          // every single seeked event — preventing audio sync, volume restore,
+          // and seek finalization. The seekId check in the post-seek kick chain
+          // (line ~14879) already handles the rapid-scrubbing dedup case.
           clearSeekWatchdog();
           clearAudioPauseLocks();
           state.audioWaiting = false;
