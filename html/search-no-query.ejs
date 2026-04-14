@@ -18,47 +18,99 @@
     along with this program. If not, see https://www.gnu.org/licenses/.
 -->
 <%
-  function FilterVideos(videos, blockedAuthors, blockedTerms, limit) {
-    var allowed = videos.filter(function(item) {
-       var authorSafe = blockedAuthors.indexOf(item.author) === -1;
-      
-       var titleLengthSafe = item.title && item.title.trim().length >= 3;
-      
-       var titleSafe = true;
-      if (item.title) {
-        var lowerTitle = item.title.toLowerCase();
-        for (var i = 0; i < blockedTerms.length; i++) {
-          if (lowerTitle.indexOf(blockedTerms[i]) !== -1) {
-            titleSafe = false;
-            break; // Stop checking this title as soon as we find a bad word
-          }
-        }
+  function calculateSlopScore(title) {
+    if (!title) return 100;
+    var score = 0;
+    var lowerTitle = title.toLowerCase();
+
+    // 1. The "Nuclear Brainrot" List (Instant 100 points - Instant Reject)
+    // These words have zero redeeming value in a title.
+    var nuclearBrainrot = [
+      "skibidi", "rizz", "sigma", "gyatt", "fanum tax", "mewing", 
+      "looksmaxxing", "grimace shake", "baby gronk", "livvy dunne", 
+      "smurf cat", "pibby", "only in ohio", "brainrot", "lankybox",
+      "isquared"
+    ];
+    for (var i = 0; i < nuclearBrainrot.length; i++) {
+      if (lowerTitle.indexOf(nuclearBrainrot[i]) !== -1) return 100; 
+    }
+
+    // 2. Mascot Horror / "ElsaGate 2.0" (+60 points)
+    // Often used for farming kids' views, but occasionally discussed in actual video essays.
+    var mascotSlop = [
+      "garten of banban", "huggy wuggy", "poppy playtime", 
+      "rainbow friends", "pomni", "digital circus", "monster school",
+      "friday night funkin", "fnf"
+    ];
+    for (var j = 0; j < mascotSlop.length; j++) {
+      if (lowerTitle.indexOf(mascotSlop[j]) !== -1) score += 60;
+    }
+
+    // 3. Contextual Roblox Slop (+80 points)
+    // Checks if the video is about Roblox AND uses garbage tropes.
+    // This allows good Roblox videos to pass, but kills the slop.
+    if (lowerTitle.indexOf("roblox") !== -1) {
+      var robloxTriggers = [
+        "free robux", "slender", "brookhaven secret", "online dater", "mic up", "admin abuse", "sad story"
+      ];
+      for (var k = 0; k < robloxTriggers.length; k++) {
+        if (lowerTitle.indexOf(robloxTriggers[k]) !== -1) score += 80;
       }
-      
-      return authorSafe && titleLengthSafe && titleSafe;
+    }
+
+    // 4. Clickbait Phrasing (+40 points)
+    var clickbaitPhrases = [
+      "gone wrong", "you won't believe", "literally died",
+      "don't watch at 3am", "100% real", "not clickbait", "caught on camera"
+    ];
+    for (var l = 0; l < clickbaitPhrases.length; l++) {
+      if (lowerTitle.indexOf(clickbaitPhrases[l]) !== -1) score += 40;
+    }
+
+    // 5. Excessive ALL CAPS (+40 points)
+    var letters = title.replace(/[^a-zA-Z]/g, '');
+    if (letters.length > 5) {
+      var caps = title.replace(/[^A-Z]/g, '');
+      var capsRatio = caps.length / letters.length;
+      if (capsRatio > 0.6) score += 40; 
+    }
+
+    // 6. Punctuation Spam (+30 points)
+    if (/[!?]{3,}/.test(title)) score += 30;
+
+    // 7. Emoji Spam (+30 points)
+    var emojiRegex = /[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu;
+    var emojis = title.match(emojiRegex);
+    if (emojis && emojis.length >= 3) score += 30;
+
+    return score;
+  }
+
+  function FilterVideos(videos, blockedAuthors, limit, maxSlopScore) {
+    var allowed = videos.filter(function(item) {
+      var authorSafe = blockedAuthors.indexOf(item.author) === -1;
+      if (!authorSafe) return false;
+
+      if (!item.title || item.title.trim().length < 3) return false;
+
+      var slopScore = calculateSlopScore(item.title);
+      return slopScore < maxSlopScore; 
     });
 
-    // Return up to `limit` allowed videos
     return allowed.slice(0, limit);
   }
 
   var blockedAuthors = [
-    "TheBurntPeanut",
-    "Asmongold TV  ",
-    "Tyler & Snowi"
+    "TheBurntPeanut", "kreekcraft", "Asmongold TV  ", "Tyler & Snowi"
   ];
 
-  // Blocked Brainrot / Gen Alpha Terms
-  var blockedTerms = [
-    "skibidi", "rizz", "sigma", "gyatt", "fanum tax",
-    "mewing", "looksmaxxing", "grimace shake", "garten of banban", "brainrot", "smurf cat", "pibby",
-    "ohio", "baby gronk", "livvy dunne", "huggy wuggy", "amanda the adventurer"
-  ];
+  // A score of 70 allows a video to have ONE major red flag (like a Mascot name)
+  // but blocks it if it pairs that mascot name with emojis or ALL CAPS.
+  var SLOP_THRESHOLD = 70; 
 
-  // Get up to 32 filtered videos
-  var filteredVideos = FilterVideos(inv, blockedAuthors, blockedTerms, 32);
+  var filteredVideos = FilterVideos(inv, blockedAuthors, 32, SLOP_THRESHOLD);
 %>
-      
+
 <!DOCTYPE html>
 <html lang="en" class="no-js">
 <head>
