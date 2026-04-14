@@ -23,8 +23,7 @@
     var score = 0;
     var lowerTitle = title.toLowerCase();
 
-    // 1. The "Nuclear Brainrot" List (Instant 100 points - Instant Reject)
-    // These words have zero redeeming value in a title.
+     // These words have zero redeeming value in a title.
     var nuclearBrainrot = [
       "skibidi", "rizz", "sigma", "gyatt", "fanum tax", "mewing", 
       "looksmaxxing", "grimace shake", "baby gronk", "livvy dunne", 
@@ -35,8 +34,7 @@
       if (lowerTitle.indexOf(nuclearBrainrot[i]) !== -1) return 100; 
     }
 
-    // 2. Mascot Horror / "ElsaGate 2.0" (+60 points)
-    // Often used for farming kids' views, but occasionally discussed in actual video essays.
+     // Often used for farming kids' views, but occasionally discussed in actual video essays.
     var mascotSlop = [
       "garten of banban", "huggy wuggy", "poppy playtime", 
       "rainbow friends", "pomni", "digital circus", "monster school",
@@ -47,9 +45,7 @@
     }
 
     // 3. Contextual Roblox Slop (+80 points)
-    // Checks if the video is about Roblox AND uses garbage tropes.
-    // This allows good Roblox videos to pass, but kills the slop.
-    if (lowerTitle.indexOf("roblox") !== -1) {
+     if (lowerTitle.indexOf("roblox") !== -1) {
       var robloxTriggers = [
         "free robux", "slender", "brookhaven secret", "online dater", "mic up", "admin abuse", "sad story"
       ];
