@@ -31,6 +31,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
 // before DOMContentLoaded. Ensures both video and audio start at 00:00
 // even if the browser pre-buffers to a non-zero keyframe position.
 // This runs in a try-catch because elements might not exist yet.
+// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
+// before DOMContentLoaded. Ensures both video and audio start at 00:00
+// even if the browser pre-buffers to a non-zero keyframe position.
+// This runs in a try-catch because elements might not exist yet.
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -696,7 +700,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // the transition, causing visible "scene flash" and "random seeks" on
   // every play/pause press. 500ms is still short enough that genuine freezes
   // (detected at >600ms stuck) get kicked promptly after the transition.
-  const PLAY_PAUSE_MICRO_SEEK_BLOCK_MS = 500;
+  const PLAY_PAUSE_MICRO_SEEK_BLOCK_MS = 300;
   const MICRO_SEEK_TOGGLE_SUPPRESS_MS = 400;
   const MICRO_SEEK_SEEK_SUPPRESS_MS = 1200;
 
@@ -1566,33 +1570,12 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!vn) return;
 
       try {
-        // Seek to current position + small offset to flush stale decoder pipeline
-        // AND the Chromium GPU compositor texture cache. This micro-seek is now
-        // UNCONDITIONAL (removed the old readyState < HAVE_CURRENT_DATA gate).
-        //
-        // Why: Chromium caches the last composited frame as a GPU texture when
-        // backgrounding a tab. On return, readyState can report >= HAVE_CURRENT_DATA
-        // (the demuxer has data in its buffer) but the COMPOSITOR still shows the
-        // stale cached texture. The old code skipped the flush in that case,
-        // causing the "video appears frozen for a few seconds" bug. The micro-seek
-        // forces the decoder to produce a fresh frame → compositor displays it.
-        //
-        // The 0.01s offset is invisible to the user but large enough that the
-        // demuxer treats it as a real seek (0.001 was sometimes no-oped).
+        // Compositor flush moved to POST-PLAY: VCFM and PRFV detect frozen
+        // frames after play() using RVFC/frame-count, then micro-seek only
+        // if confirmed stuck. Pre-play micro-seeks caused the visible "bit of
+        // a seek" on tab return because they fire while video is still paused.
         const vt = Number(vn.currentTime) || 0;
         const _nmpRS = Number(vn.readyState || 0);
-        // Only micro-seek to flush compositor when readyState is low — if the
-        // decoder already has frames (HAVE_FUTURE_DATA), the compositor likely has
-        // a fresh texture and the micro-seek would just cause a visible glitch.
-        // VCFM handles the case where readyState is high but compositor is still stale.
-        // Forward micro-seek (+0.001) — forward stays in current GOP, no keyframe flash.
-        // Backward seeks force decoder to previous I-frame which shows a brief old frame.
-        if (vt > 0 && _nmpRS < HAVE_FUTURE_DATA && canDoMicroSeek()) {
-          recordMicroSeek();
-          state._isMicroSeek = true;
-          try { vn.currentTime = vt + 0.001; } catch {}
-          setTimeout(() => { state._isMicroSeek = false; }, 200);
-        }
 
         // Play VIDEO only. Do NOT play audio yet — video decoder needs to
         // recover first. Playing audio before video has data causes audio
@@ -2938,31 +2921,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ═══════════════════════════════════════════════════════════════════════
   // VideoCompositorFlushManager (VCFM)
-  //
-  // Uses requestVideoFrameCallback (RVFC) — the only Web API that fires
-  // when a video frame is ACTUALLY composited to the screen — to detect
-  // and fix the Chromium "stale GPU texture" bug.
-  //
-  // The bug: Chromium caches the last composited video frame as a GPU
-  // texture when a tab goes to background. On return, the media pipeline
-  // reports playing (paused=false, currentTime advances) but the visual
-  // frame is stuck on the cached texture. readyState can be ≥ HAVE_FUTURE_DATA
-  // because the demuxer has data, but the compositor hasn't been flushed.
-  //
-  // Detection strategy:
-  //   1. On tab return or user play-after-return, arm() is called.
-  //   2. We register an RVFC callback + a deadline timeout.
-  //   3. If RVFC fires within the deadline → compositor is healthy, disarm.
-  //   4. If deadline expires without RVFC → compositor is stuck.
-  //      Do a micro-seek to force the decoder to produce a fresh frame.
-  //   5. Re-arm and verify. Up to MAX_FLUSH_ATTEMPTS.
-  //
-  // Fallback (no RVFC): compare getVideoPlaybackQuality().totalVideoFrames
-  // at arm-time vs deadline-time. If frame count hasn't advanced, flush.
-  //
-  // Integration: armed from SmoothTabWelcomeBackManagement.onTabReturn(),
-  // NMPBFN._doSingleCleanPlay(), playTogether() on tab-return user play,
-  // and the visibilitychange→visible handler.
+  // Detects stale GPU compositor texture (video says playing but frame frozen)
+  // using RVFC + frame-count fallback. Arms on tab return / user play.
+  // Micro-seeks to flush compositor if no frame renders within deadline.
   // ═══════════════════════════════════════════════════════════════════════
   const VideoCompositorFlushManager = (() => {
     const RVFC_AVAILABLE = typeof HTMLVideoElement !== "undefined" &&
@@ -3116,10 +3077,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!vn) return;
       const vt = Number(vn.currentTime) || 0;
       if (vt <= 0) return;
-      // Respect the play/pause transition guard. Without this, last-resort
-      // flushes fire micro-seeks during the 400ms transition block, causing
-      // the "video seeks a tiny amount on play/pause" artifact.
-      if (!canDoMicroSeek()) return;
+    // Use canDoCompositorFlush (40ms block) instead of canDoMicroSeek (400ms)
+      // so last-resort fires quickly after play/pause.
+      if (!canDoCompositorFlush()) return;
       recordMicroSeek();
       const _nPlay = HTMLMediaElement.prototype.play;
 
@@ -3156,21 +3116,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ═══════════════════════════════════════════════════════════════════════
   // PlayResumeFrameVerifier (PRFV)
-  //
-  // Lightweight RVFC-based check that fires after EVERY play() resume.
-  // Detects the "video.paused=false but screen frozen" bug without using
-  // micro-seeks during the transition. Only acts AFTER the play/pause
-  // transition guard expires.
-  //
-  // Flow:
-  //   1. arm() called after play() resolves
-  //   2. Register RVFC callback
-  //   3. If RVFC fires within 300ms → compositor healthy, done
-  //   4. If not → wait for transition guard to expire, then ONE micro-seek
-  //   5. Re-check with RVFC. If still stuck → last-resort pause/seek/play
-  //
-  // This replaces the old approach of doing preemptive micro-seeks in
-  // playTogether which caused "random seeks" on every play/pause.
+  // RVFC-based check after every play() resume. Detects compositor freeze
+  // without micro-seeking during transition. Only acts after guard expires.
   // ═══════════════════════════════════════════════════════════════════════
   const PlayResumeFrameVerifier = (() => {
     const RVFC_OK = typeof HTMLVideoElement !== "undefined" &&
@@ -3305,9 +3252,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!vn || gen !== _gen) return;
       const vt = Number(vn.currentTime) || 0;
       if (vt <= 0.2) return;
-      // Respect the play/pause transition guard to prevent micro-seeks
-      // during user play/pause toggles that the user perceives as "random seeks."
-      if (!canDoMicroSeek()) return;
+      // Use canDoCompositorFlush (40ms block) not canDoMicroSeek (400ms block)
+      // so last-resort fires quickly after play/pause transition.
+      if (!canDoCompositorFlush()) return;
       recordMicroSeek();
 
       // Full pause→seek→play cycle — guaranteed to flush all browsers
@@ -3338,12 +3285,10 @@ document.addEventListener("DOMContentLoaded", () => {
     return { arm, disarm };
   })();
 
-  // --- NuclearFreezeWatchdog (NFW)
-  // HARD LAST RESORT: If video is "playing" but frames haven't advanced in
-  // 2 seconds, ALL gentler systems have failed. Force a hard fix:
-  // pause → forward seek +0.1s → play. This is the most aggressive fix —
-  // it will show a tiny position jump but is guaranteed to unstick the
-  // compositor on every browser. Only fires once per 8s to avoid loops.
+  // NuclearFreezeWatchdog (NFW)
+  // Hard last resort: if video is "playing" but frames haven't advanced in
+  // 500ms, ALL gentler systems failed. Pause → forward seek +0.1s → play.
+  // Fires once per 2.5s to avoid loops.
   const NuclearFreezeWatchdog = (() => {
     let _timer = null;
     let _lastFrameCount = -1;
@@ -7758,11 +7703,9 @@ const HAVE_ENOUGH_DATA = 4;
     if (userSeekIntentActive() || state.pendingSeekTarget != null) return false;
     // FIX: Reduce blocking window from 300ms to 150ms. The old 200ms offset
     // from PLAY_PAUSE_MICRO_SEEK_BLOCK_MS(500) = 300ms block was too long —
-    // compositor flushes need to fire within 200-350ms of play() to prevent
-    // the visible "frozen frame for 1 second after play/pause" bug. 150ms
-    // gives the decoder enough warmup while allowing much faster flush detection.
-    // The _isMicroSeek flag ensures the seeking handler ignores these.
-    if (now() < state._playPauseTransitionUntil - (PLAY_PAUSE_MICRO_SEEK_BLOCK_MS - 460)) return false;
+    // Block compositor flushes for only 40ms into the transition — just enough
+    // for the decoder to start, then allow immediate flush if frozen.
+    if (now() < state._playPauseTransitionUntil - (PLAY_PAUSE_MICRO_SEEK_BLOCK_MS - 40)) return false;
     // Block when video is paused — no point flushing paused compositor
     if (document.visibilityState === "visible" && getVideoPaused() &&
         !isTabReturnImmune() && !NotMakePlayBackFixingNoticable.isActive() &&
