@@ -31,6 +31,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
 // before DOMContentLoaded. Ensures both video and audio start at 00:00
 // even if the browser pre-buffers to a non-zero keyframe position.
 // This runs in a try-catch because elements might not exist yet.
+// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
+// before DOMContentLoaded. Ensures both video and audio start at 00:00
+// even if the browser pre-buffers to a non-zero keyframe position.
+// This runs in a try-catch because elements might not exist yet.
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -3180,9 +3184,9 @@ document.addEventListener("DOMContentLoaded", () => {
     let _timer = null;
     let _resolved = false;
     let _attempts = 0;
-    const MAX_ATTEMPTS = 3;
-    const FRAME_WAIT_MS = 250;       // time to wait for RVFC before acting (was 350 — faster freeze detection)
-    const RECHECK_MS = 150;          // time to wait after micro-seek for RVFC (was 200)
+    const MAX_ATTEMPTS = 4;
+    const FRAME_WAIT_MS = 180;       // time to wait for RVFC before acting (was 250→180 — faster freeze detection, matches playTogether RVFC kick timing)
+    const RECHECK_MS = 120;          // time to wait after micro-seek for RVFC (was 150→120)
 
     function arm() {
       const vn = getVideoNode();
@@ -3349,8 +3353,8 @@ document.addEventListener("DOMContentLoaded", () => {
     let _lastFrameCount = -1;
     let _lastFrameCheckAt = 0;
     let _lastNuclearAt = 0;
-    const CHECK_MS = 700;     // was 1000 — detect stuck compositor faster for rare play/pause freezes
-    const COOLDOWN_MS = 3000; // was 4000 — allow re-kicks sooner after failed fix
+    const CHECK_MS = 500;     // was 700 — detect stuck compositor faster for rare play/pause freezes
+    const COOLDOWN_MS = 2500; // was 3000 — allow re-kicks sooner after failed fix
 
     function _tick() {
       _timer = null;
@@ -3360,10 +3364,10 @@ document.addEventListener("DOMContentLoaded", () => {
       if (state.endedNaturally) return;
       // Don't fire during the immediate play/pause transition — the decoder
       // needs time to warm up. But DON'T wait the full directUserToggleActive
-      // window (was 1200ms) — that delays the nuclear fix too long, causing
-      // visible 2+ second freezes after play/pause. 500ms is enough for the
-      // decoder to produce its first frame if it's going to.
-      if (now() < state._playPauseTransitionUntil || directUserToggleActive(350)) { _schedule(); return; }
+      // window — that delays the nuclear fix too long, causing visible freezes
+      // after play/pause. 200ms is enough for the decoder to start producing
+      // frames; if it hasn't by then, the compositor is genuinely stuck.
+      if (now() < state._playPauseTransitionUntil || directUserToggleActive(200)) { _schedule(); return; }
 
       const vn = getVideoNode();
       if (!vn || vn.paused) { _schedule(); return; }
@@ -6404,16 +6408,11 @@ const HAVE_ENOUGH_DATA = 4;
     // Never kill during the seek kick window — seeked handler owns audio there.
     if (nowMs < state.seekKickAudioAllowedUntil) return false;
     if (state.seekResumeInFlight || state.seeking || state.seekBuffering) return false;
-    // FIX: Require minimum stall age of 800ms before cutting audio. Transient
-    // stalls from segment boundaries, keyframe decoding, and buffer refills
-    // set videoWaiting momentarily (<500ms). Cutting audio for these creates
-    // random audio drops during otherwise smooth playback. Only cut audio
-    // for real sustained stalls that the user would actually notice.
-    if (state.videoStallSince > 0 && (nowMs - state.videoStallSince) < 800) return false;
     // FIX: Don't cut audio during recent user play intent — the user just
     // pressed play and expects immediate audio. Stall flags from decoder
-    // warmup shouldn't prevent audio start.
-    if (userWantsPlayNow(1500) || directUserToggleActive(1500)) return false;
+    // warmup shouldn't prevent audio start. Use a tight 800ms window to
+    // only protect the immediate post-click period.
+    if (userWantsPlayNow(800) || directUserToggleActive(800)) return false;
     _lastStallKillAt = nowMs;
     const holdUntil = nowMs + Math.max(0, Number(holdMs) || 0);
     state.videoStallAudioPaused = true;
@@ -7680,10 +7679,10 @@ const HAVE_ENOUGH_DATA = 4;
   // tab-return compositor flush) which the user perceives as "random seeks."
   // Returns true if a micro-seek is allowed right now. Minimum 500ms between
   // micro-seeks, max 3 per 5 seconds in foreground playback.
-  const MICRO_SEEK_MIN_GAP_MS = 800;
-  const COMPOSITOR_FLUSH_MIN_GAP_MS = 100; // lighter rate limit for confirmed compositor flushes (was 150 — even faster for play/pause freeze recovery)
+  const MICRO_SEEK_MIN_GAP_MS = 400; // was 800 — reduced so compositor-fix systems (VCFM, PRFV, NFW, MVNFAPAAT, playTogether kick) don't exhaust the budget competing with each other
+  const COMPOSITOR_FLUSH_MIN_GAP_MS = 80; // lighter rate limit for confirmed compositor flushes (was 100 — even faster for play/pause freeze recovery)
   const MICRO_SEEK_WINDOW_MS = 5000;
-  const MICRO_SEEK_MAX_IN_WINDOW = 2;
+  const MICRO_SEEK_MAX_IN_WINDOW = 4; // was 2 — 5 compositor-fix systems share this budget, 2 was too small
   function canDoMicroSeek() {
     const t = now();
     // CRITICAL: never micro-seek during a play/pause transition. The user
@@ -7762,7 +7761,7 @@ const HAVE_ENOUGH_DATA = 4;
     // the visible "frozen frame for 1 second after play/pause" bug. 150ms
     // gives the decoder enough warmup while allowing much faster flush detection.
     // The _isMicroSeek flag ensures the seeking handler ignores these.
-    if (now() < state._playPauseTransitionUntil - (PLAY_PAUSE_MICRO_SEEK_BLOCK_MS - 400)) return false;
+    if (now() < state._playPauseTransitionUntil - (PLAY_PAUSE_MICRO_SEEK_BLOCK_MS - 460)) return false;
     // Block when video is paused — no point flushing paused compositor
     if (document.visibilityState === "visible" && getVideoPaused() &&
         !isTabReturnImmune() && !NotMakePlayBackFixingNoticable.isActive() &&
@@ -8388,50 +8387,6 @@ const HAVE_ENOUGH_DATA = 4;
         state.isProgrammaticVideoPlay = false;
       }, 3000);
       wrapped.finally(() => clearTimeout(_playFlightSafety));
-
-      // FIX 1: PostPlayCompositorVerifier — after play() resolves, verify that
-      // the GPU compositor is actually rendering new frames. The browser can
-      // report paused=false and advance currentTime while showing a stale GPU
-      // texture ("video visually frozen"). This uses requestVideoFrameCallback
-      // (RVFC) to detect if a real frame rendered within 400ms. If not, force
-      // a tiny micro-seek to flush the compositor. This bypasses the normal
-      // micro-seek rate limiter because it only fires once per play() and is
-      // confirmed frozen (no false positives).
-      try {
-        const _ppcvVn = vNode || getVideoNode();
-        if (_ppcvVn && typeof _ppcvVn.requestVideoFrameCallback === 'function' &&
-            document.visibilityState === 'visible' && !state._isMicroSeek) {
-          let _ppcvFrameRendered = false;
-          let _ppcvTimerId = null;
-          const _ppcvSession = state.playSessionId;
-          // Register RVFC callback — fires when browser actually paints a frame
-          _ppcvVn.requestVideoFrameCallback(() => {
-            _ppcvFrameRendered = true;
-            if (_ppcvTimerId) { clearTimeout(_ppcvTimerId); _ppcvTimerId = null; }
-          });
-          // After 400ms, if no frame rendered, compositor is stuck — flush it
-          _ppcvTimerId = setTimeout(() => {
-            _ppcvTimerId = null;
-            if (_ppcvFrameRendered) return;
-            if (state.playSessionId !== _ppcvSession) return;
-            if (!state.intendedPlaying || getVideoPaused()) return;
-            if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return;
-            if (state.endedNaturally) return;
-            // Confirmed: video is "playing" but no frame rendered in 400ms.
-            // Force micro-seek to flush the GPU compositor texture.
-            try {
-              const _ppcvCt = Number(_ppcvVn.currentTime) || 0;
-              if (_ppcvCt > 0.01) {
-                state._isMicroSeek = true;
-                _ppcvVn.currentTime = _ppcvCt + 0.001;
-                recordMicroSeek();
-                setTimeout(() => { state._isMicroSeek = false; }, 250);
-              }
-            } catch {}
-          }, 400);
-        }
-      } catch {}
-
       return wrapped.catch(() => {});
     } catch (e) {
       state.isProgrammaticVideoPlay = false;
