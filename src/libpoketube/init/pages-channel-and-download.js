@@ -233,7 +233,7 @@ app.get("/channel/", async (req, res) => {
   var ID = req.query.id;
 
   if (!ID) {
-    return res.redirect("/search");
+   renderTemplate(res, req, "404.ejs");
   }
 
   if (ID.endsWith("@youtube.com")) {
