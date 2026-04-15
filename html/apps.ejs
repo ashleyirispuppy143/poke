@@ -5,29 +5,30 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Poke — Apps</title>
   <meta name="description" content="Poke is free software: a privacy-first suite with a player, translator, maps, notes, calendar, and more." />
-  <meta name="theme-color" content="#0b0e14" />
+  <meta name="theme-color" content="#1e1e2e" />
   
   <link href="https://p.poketube.fun/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css" rel="stylesheet" />
   
   <style>
     :root {
-      /* Palette */
-      --bg-deep: #050608;
-      --bg-card: #11141d;
-      --bg-card-hover: #1a1f2b;
-      
-      --ink: #f1f5f9;
-      --muted: #94a3b8;
-      
-      --accent: #0ea5e9;       /* Sky Blue */
-      --accent-glow: rgba(14, 165, 233, 0.4);
-      --border: rgba(255, 255, 255, 0.1);
-      --border-hover: rgba(255, 255, 255, 0.25);
-      
-      /* Layout */
-      --maxw: 1080px;
-      --radius: 16px;
-      --transition: 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+      --ctp-base: #1e1e2e;
+      --ctp-mantle: #181825;
+      --ctp-crust: #11111b;
+      --ctp-surface0: #313244;
+      --ctp-surface1: #45475a;
+      --ctp-surface2: #585b70;
+      --ctp-text: #cdd6f4;
+      --ctp-subtext0: #a6adc8;
+      --ctp-subtext1: #bac2de;
+      --ctp-pink: #f5c2e7;
+      --ctp-mauve: #cba6f7;
+      --ctp-green: #a6e3a1;
+
+      --md-radius-l: 28px;
+      --md-radius-m: 16px;
+      --md-radius-s: 12px;
+      --md-elevation: 0 4px 8px 3px rgba(17, 17, 27, 0.15), 0 1px 3px rgba(17, 17, 27, 0.3);
+      --transition: 0.25s cubic-bezier(0.2, 0, 0, 1);
     }
 
     * { box-sizing: border-box; }
@@ -36,234 +37,246 @@
     
     body {
       margin: 0;
-      color: var(--ink);
-      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      background: var(--bg-deep);
+      color: var(--ctp-text);
+      font-family: "Google Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+      background-color: var(--ctp-base);
+      background-image: 
+        radial-gradient(circle at 15% 50%, rgba(245, 194, 231, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 85% 30%, rgba(203, 166, 247, 0.08) 0%, transparent 50%);
+      background-attachment: fixed;
       overflow-x: hidden;
+      line-height: 1.5;
     }
 
-    /* === Background Video === */
-    .bg {
-      position: fixed; inset: 0; z-index: -2;
-      background: var(--bg-deep);
-    }
-    .bg video {
-      position: absolute; inset: 0; width: 100%; height: 100%;
-      object-fit: cover;
-      opacity: 0.4; /* Dimmed for readability */
-      filter: saturate(110%);
-    }
-    .bg::after {
-      /* Gradient overlay to fade video into bottom/edges */
-      content: ""; position: absolute; inset: 0; z-index: 1;
-      background: radial-gradient(circle at 50% 30%, transparent 0%, var(--bg-deep) 90%);
-    }
-
-    /* === Layout Wrapper === */
-    .page {
+    .dashboard {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 32px;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 40px;
       min-height: 100dvh;
+      align-items: start;
+    }
+
+    .hero-pane {
+      position: sticky;
+      top: 40px;
       display: flex;
       flex-direction: column;
-      padding: 20px;
-      max-width: var(--maxw);
-      margin: 0 auto;
-    }
-
-    /* === Hero Section === */
-    .hero {
-      margin-top: clamp(40px, 10vh, 100px);
-      margin-bottom: 40px;
-      text-align: center;
-      position: relative;
+      background: var(--ctp-mantle);
+      padding: 40px;
+      border-radius: var(--md-radius-l);
+      box-shadow: var(--md-elevation);
     }
 
     h1.title {
-      margin: 0 0 16px 0;
-      font-weight: 900;
-      font-size: clamp(36px, 5vw, 64px);
-      letter-spacing: -1px;
-      background: linear-gradient(to bottom right, #fff 30%, #cbd5e1 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      text-shadow: 0 0 30px rgba(255,255,255,0.1);
+      margin: 0 0 12px 0;
+      font-weight: 700;
+      font-size: clamp(32px, 4vw, 48px);
+      color: var(--ctp-pink);
+      letter-spacing: -0.5px;
     }
 
     .subtitle {
-      margin: 0 auto 32px auto;
-      color: var(--muted);
-      font-size: clamp(16px, 2vw, 19px);
-      max-width: 600px;
-      line-height: 1.6;
+      margin: 0 0 32px 0;
+      color: var(--ctp-subtext1);
+      font-size: 1.1rem;
     }
 
-    .cta-row {
+    .cta-column {
       display: flex;
-      justify-content: center;
-      gap: 16px;
-      flex-wrap: wrap;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: auto;
     }
 
     .cta {
-      display: inline-flex; align-items: center; gap: 10px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
       text-decoration: none;
-      padding: 14px 24px;
-      border-radius: 50px;
-      font-weight: 700;
+      padding: 0 24px;
+      height: 48px;
+      border-radius: 9999px;
+      font-weight: 600;
       font-size: 15px;
+      transition: var(--transition);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .cta::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: currentColor;
+      opacity: 0;
       transition: var(--transition);
     }
 
-    /* Primary Button */
+    .cta:hover::after {
+      opacity: 0.08;
+    }
+
     .cta.primary {
-      background: var(--accent);
-      color: #fff;
-      box-shadow: 0 4px 20px var(--accent-glow);
-      border: 1px solid rgba(255,255,255,0.1);
-    }
-    .cta.primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 30px var(--accent-glow);
+      background: var(--ctp-pink);
+      color: var(--ctp-crust);
     }
 
-    /* Secondary Button */
     .cta.ghost {
-      background: rgba(255,255,255,0.05);
-      color: var(--ink);
-      border: 1px solid var(--border);
-    }
-    .cta.ghost:hover {
-      background: rgba(255,255,255,0.1);
-      border-color: #fff;
+      background: transparent;
+      color: var(--ctp-pink);
+      border: 1px solid var(--ctp-surface2);
     }
 
-    /* === App Grid === */
     .apps {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 20px;
-      padding-bottom: 60px;
+      gap: 16px;
     }
 
     .card {
       position: relative;
-      display: flex; flex-direction: column; gap: 12px;
-      text-decoration: none; color: var(--ink);
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
+      display: flex;
+      flex-direction: column;
+      text-decoration: none;
+      color: var(--ctp-text);
+      background: var(--ctp-surface0);
+      border-radius: var(--md-radius-m);
       padding: 24px;
       transition: var(--transition);
       overflow: hidden;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.2);
     }
 
-    /* Hover Effects */
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-color: var(--ctp-pink);
+      opacity: 0;
+      transition: var(--transition);
+      z-index: 1;
+    }
+
     .card:hover {
-      transform: translateY(-5px);
-      background: var(--bg-card-hover);
-      border-color: var(--border-hover);
-      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
-    }
-    .card:hover .badge {
-      background: var(--accent);
-      color: white;
-      border-color: transparent;
-      transform: scale(1.1) rotate(-5deg);
+      background: var(--ctp-surface1);
+      transform: translateY(-2px);
+      box-shadow: var(--md-elevation);
     }
 
-    /* Focus State */
+    .card:hover::before {
+      opacity: 0.04;
+    }
+
     .card:focus-visible {
-      outline: 2px solid var(--accent);
+      outline: 2px solid var(--ctp-pink);
       outline-offset: 2px;
     }
 
-    /* Card Content */
-    .row { display: flex; align-items: center; gap: 16px; margin-bottom: 4px; }
+    .card > * {
+      position: relative;
+      z-index: 2;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
     
     .badge {
-      display: grid; place-items: center;
-      width: 48px; height: 48px;
-      border-radius: 12px;
-      background: rgba(255,255,255,0.07);
-      border: 1px solid rgba(255,255,255,0.1);
-      color: var(--ink);
+      display: grid;
+      place-items: center;
+      width: 48px;
+      height: 48px;
+      border-radius: var(--md-radius-s);
+      background: var(--ctp-mantle);
+      color: var(--ctp-pink);
       font-size: 20px;
       transition: var(--transition);
     }
 
+    .card:hover .badge {
+      background: var(--ctp-pink);
+      color: var(--ctp-crust);
+    }
+
     .name {
-      font-weight: 700;
-      font-size: 1.1rem;
-      letter-spacing: 0.3px;
+      font-weight: 600;
+      font-size: 1.15rem;
+      letter-spacing: 0.1px;
     }
 
     .hint {
-      color: var(--muted);
+      color: var(--ctp-subtext0);
       font-size: 0.95rem;
-      line-height: 1.5;
     }
 
-    /* Special Badges */
     .ext {
-      position: absolute; top: 16px; right: 16px;
-      color: var(--muted); opacity: 0.5;
+      position: absolute;
+      top: 24px;
+      right: 24px;
+      color: var(--ctp-surface2);
       transition: var(--transition);
+      z-index: 2;
     }
-    .card:hover .ext { opacity: 1; color: var(--accent); }
+
+    .card:hover .ext {
+      color: var(--ctp-pink);
+    }
 
     .e2e-badge {
-      position: absolute; top: 12px; right: 12px;
-      background: rgba(34, 197, 94, 0.2);
-      color: #4ade80;
-      border: 1px solid rgba(34, 197, 94, 0.3);
-      font-size: 10px; font-weight: 800;
-      letter-spacing: 0.5px;
-      padding: 4px 8px;
-      border-radius: 6px;
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: rgba(166, 227, 161, 0.15);
+      color: var(--ctp-green);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 9999px;
       text-transform: uppercase;
+      z-index: 2;
     }
 
-    /* Reduced Motion */
     @media (prefers-reduced-motion: reduce) {
-      *, ::after, ::before { animation: none !important; transition: none !important; }
+      *, ::after, ::before { transition: none !important; animation: none !important; }
     }
     
-    /* Mobile Adjustments */
-    @media (max-width: 600px) {
-      .hero { margin-top: 40px; }
-      .apps { grid-template-columns: 1fr; }
+    @media (max-width: 900px) {
+      .dashboard { grid-template-columns: 1fr; padding: 20px; gap: 24px; }
+      .hero-pane { position: relative; top: 0; padding: 32px 24px; }
+      .cta-column { flex-direction: row; flex-wrap: wrap; margin-top: 24px; }
+      .cta { flex: 1; min-width: max-content; }
     }
   </style>
 </head>
 <body>
 
-  <div class="bg" aria-hidden="true">
-    <video id="bgvid" playsinline muted loop autoplay>
-      <source src="/bg-480.webm" type="video/webm"/>
-    </video>
-  </div>
-
-  <div class="page">
+  <div class="dashboard">
     
-    <section class="hero" aria-labelledby="title">
+    <aside class="hero-pane" aria-labelledby="title">
       <h1 id="title" class="title">Poke Apps</h1>
-      <p class="subtitle">Youtube Front-end, translator, maps, notes, calendar, and moar! and they are cool as heck!!</p>
+      <p class="subtitle">YouTube front-end, translator, maps, notes, calendar, and more! Designed with privacy in mind.</p>
       
-      <div class="cta-row">
+      <div class="cta-column">
         <a class="cta primary" href="/app">
-          <i class="fa-regular fa-compass"></i> Discover!
+          <i class="fa-solid fa-compass"></i> Discover!
         </a>
         <a class="cta ghost" href="#apps">
-          <i class="fa-regular fa-grid-2"></i> Browse Apps
+          <i class="fa-solid fa-grid-2"></i> Browse Apps
         </a>
       </div>
-    </section>
+    </aside>
 
-    <nav id="apps" class="apps" aria-label="Apps">
+    <main id="apps" class="apps" aria-label="Apps">
       
       <a class="card" href="/game-hub" aria-label="Games">
         <div class="row">
-          <span class="badge"><i class="fa-light fa-gamepad"></i></span>
+          <span class="badge"><i class="fa-solid fa-gamepad"></i></span>
           <span class="name">Games</span>
         </div>
         <span class="hint">Amazing games :3</span>
@@ -271,22 +284,22 @@
 
       <a class="card" href="/translate" aria-label="Translate">
         <div class="row">
-          <span class="badge"><i class="fa-light fa-language"></i></span>
+          <span class="badge"><i class="fa-solid fa-language"></i></span>
           <span class="name">Translate</span>
         </div>
-        <span class="hint">fast & accurate and free software translation!!</span>
+        <span class="hint">Fast & accurate free software translation!!</span>
       </a>
 
       <a class="card" href="/map" aria-label="Maps">
         <div class="row">
-          <span class="badge"><i class="fa-light fa-map-location-dot"></i></span>
+          <span class="badge"><i class="fa-solid fa-map-location-dot"></i></span>
           <span class="name">Maps</span>
         </div>
-        <span class="hint">A good map-view for web!</span>
+        <span class="hint">A good map-view for the web!</span>
       </a>
 
       <a class="card" href="https://social.poketube.fun" target="_blank" rel="noopener" aria-label="Fediverse">
-        <span class="ext"><i class="fa-regular fa-arrow-up-right-from-square"></i></span>
+        <span class="ext"><i class="fa-solid fa-arrow-up-right-from-square"></i></span>
         <div class="row">
           <span class="badge"><i class="fa-brands fa-mastodon"></i></span>
           <span class="name">Fediverse</span>
@@ -296,7 +309,7 @@
 
       <a class="card" href="/calendar" aria-label="Calendar">
         <div class="row">
-          <span class="badge"><i class="fa-light fa-calendar"></i></span>
+          <span class="badge"><i class="fa-solid fa-calendar"></i></span>
           <span class="name">Calendar</span>
         </div>
         <span class="hint">NO javascript!!! calendar :3</span>
@@ -305,7 +318,7 @@
       <a class="card" href="/notepad" aria-label="Pokepad">
         <span class="e2e-badge">E2E</span>
         <div class="row">
-          <span class="badge"><i class="fa-light fa-memo-pad"></i></span>
+          <span class="badge"><i class="fa-solid fa-memo-pad"></i></span>
           <span class="name">Pokepad!</span>
         </div>
         <span class="hint">End-to-End Encrypted Feature rich web Notepad!</span>
@@ -313,33 +326,33 @@
 
       <a class="card" href="/app" aria-label="Watch">
         <div class="row">
-          <span class="badge"><i class="fa-light fa-play"></i></span>
+          <span class="badge"><i class="fa-solid fa-play"></i></span>
           <span class="name">Watch</span>
         </div>
-        <span class="hint">the biggest part of poke - the best-looking youtube front end ever!</span>
+        <span class="hint">The biggest part of Poke - the best-looking YouTube front end ever!</span>
       </a>
 
       <a class="card" href="/settings" aria-label="Settings">
         <div class="row">
-          <span class="badge"><i class="fa-light fa-gear"></i></span>
+          <span class="badge"><i class="fa-solid fa-gear"></i></span>
           <span class="name">Settings</span>
         </div>
-        <span class="hint">settings lol idk wha to tell ya mate </span>
+        <span class="hint">Settings lol idk wha to tell ya mate</span>
       </a>
 
-    </nav>
+    </main>
   </div>
 
   <script>
-     (function(){
+    (function(){
       const cards = Array.from(document.querySelectorAll('.card'));
       cards.forEach(c => c.tabIndex = 0);
       
       const getGridCols = () => {
         const grid = document.querySelector('.apps');
         if (!grid) return 1;
-        const colWidth = 280; // Min-width from CSS
-        const gap = 20;
+        const colWidth = 280;
+        const gap = 16;
         const available = grid.clientWidth;
         return Math.floor((available + gap) / (colWidth + gap)) || 1;
       };
@@ -356,7 +369,9 @@
           else if(e.key === 'Home') t = 0;
           else if(e.key === 'End') t = cards.length - 1;
           else if(e.key === 'Enter' || e.key === ' ') { 
-            e.preventDefault(); el.click(); return; 
+            e.preventDefault(); 
+            el.click(); 
+            return; 
           }
           
           if(t !== null){ 
@@ -365,22 +380,6 @@
           }
         });
       });
-    })();
-
-    // Video handling for reduced motion/performance
-    (function(){
-      const v = document.getElementById('bgvid');
-      if(!v) return;
-      
-      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      if(reduce){ 
-        v.pause(); 
-        v.removeAttribute('autoplay'); 
-        v.currentTime = 0; 
-      } else {
-        // Ensure playback
-        v.play().catch(() => {});
-      }
     })();
   </script>
 </body>
