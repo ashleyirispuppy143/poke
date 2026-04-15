@@ -3,14 +3,18 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Poke — Apps</title>
+  <title>Poke — Apps ✧</title>
   <meta name="description" content="Poke is free software: a privacy-first suite with a player, translator, maps, notes, calendar, and more." />
   <meta name="theme-color" content="#1e1e2e" />
   
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700;800&family=Nunito:wght@500;700;800&display=swap" rel="stylesheet">
   <link href="https://p.poketube.fun/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css" rel="stylesheet" />
   
   <style>
     :root {
+      /* Catppuccin Mocha */
       --ctp-base: #1e1e2e;
       --ctp-mantle: #181825;
       --ctp-crust: #11111b;
@@ -24,11 +28,12 @@
       --ctp-mauve: #cba6f7;
       --ctp-green: #a6e3a1;
 
-      --md-radius-l: 28px;
-      --md-radius-m: 16px;
-      --md-radius-s: 12px;
-      --md-elevation: 0 4px 8px 3px rgba(17, 17, 27, 0.15), 0 1px 3px rgba(17, 17, 27, 0.3);
-      --transition: 0.25s cubic-bezier(0.2, 0, 0, 1);
+      /* M3 but softer/kawaii */
+      --md-radius-l: 36px;
+      --md-radius-m: 24px;
+      --md-radius-s: 16px;
+      --md-elevation: 0 8px 16px rgba(17, 17, 27, 0.2), 0 2px 6px rgba(245, 194, 231, 0.05);
+      --transition: 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); /* Bouncy cute transition */
     }
 
     * { box-sizing: border-box; }
@@ -38,56 +43,79 @@
     body {
       margin: 0;
       color: var(--ctp-text);
-      font-family: "Google Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+      /* Cute, rounded typography */
+      font-family: 'Nunito', ui-sans-serif, system-ui, sans-serif;
       background-color: var(--ctp-base);
+      /* Polka dot overlay + Soft radial gradients */
       background-image: 
-        radial-gradient(circle at 15% 50%, rgba(245, 194, 231, 0.08) 0%, transparent 50%),
-        radial-gradient(circle at 85% 30%, rgba(203, 166, 247, 0.08) 0%, transparent 50%);
+        radial-gradient(var(--ctp-surface0) 2px, transparent 2px),
+        radial-gradient(circle at 10% 40%, rgba(245, 194, 231, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 90% 60%, rgba(203, 166, 247, 0.08) 0%, transparent 40%);
+      background-size: 24px 24px, 100% 100%, 100% 100%;
       background-attachment: fixed;
       overflow-x: hidden;
-      line-height: 1.5;
+      line-height: 1.6;
     }
 
     .dashboard {
       display: grid;
-      grid-template-columns: 380px 1fr;
-      gap: 32px;
+      grid-template-columns: 400px 1fr;
+      gap: 36px;
       max-width: 1400px;
       margin: 0 auto;
-      padding: 40px;
+      padding: 48px;
       min-height: 100dvh;
       align-items: start;
     }
 
     .hero-pane {
       position: sticky;
-      top: 40px;
+      top: 48px;
       display: flex;
       flex-direction: column;
       background: var(--ctp-mantle);
-      padding: 40px;
+      padding: 48px 40px;
       border-radius: var(--md-radius-l);
       box-shadow: var(--md-elevation);
+      border: 3px solid rgba(245, 194, 231, 0.08);
+      text-align: center;
     }
 
     h1.title {
-      margin: 0 0 12px 0;
-      font-weight: 700;
-      font-size: clamp(32px, 4vw, 48px);
-      color: var(--ctp-pink);
-      letter-spacing: -0.5px;
+      margin: 0 0 16px 0;
+      font-family: 'M PLUS Rounded 1c', sans-serif;
+      font-weight: 800;
+      font-size: clamp(36px, 4vw, 52px);
+      background: linear-gradient(135deg, var(--ctp-pink), var(--ctp-mauve));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -1px;
+      position: relative;
     }
 
+    h1.title::before, h1.title::after {
+      content: "✧";
+      position: absolute;
+      font-size: 24px;
+      color: var(--ctp-pink);
+      -webkit-text-fill-color: var(--ctp-pink);
+      opacity: 0.6;
+    }
+
+    h1.title::before { top: -10px; left: -10px; }
+    h1.title::after { bottom: -5px; right: -10px; transform: scale(0.8); }
+
     .subtitle {
-      margin: 0 0 32px 0;
+      margin: 0 0 40px 0;
       color: var(--ctp-subtext1);
-      font-size: 1.1rem;
+      font-size: 1.15rem;
+      font-weight: 700;
     }
 
     .cta-column {
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 16px;
       margin-top: auto;
     }
 
@@ -97,44 +125,42 @@
       justify-content: center;
       gap: 12px;
       text-decoration: none;
-      padding: 0 24px;
-      height: 48px;
-      border-radius: 9999px;
-      font-weight: 600;
-      font-size: 15px;
+      padding: 0 32px;
+      height: 56px;
+      border-radius: 9999px; /* Pill shape */
+      font-weight: 800;
+      font-size: 16px;
       transition: var(--transition);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .cta::after {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background: currentColor;
-      opacity: 0;
-      transition: var(--transition);
-    }
-
-    .cta:hover::after {
-      opacity: 0.08;
+      border: 3px solid transparent;
     }
 
     .cta.primary {
       background: var(--ctp-pink);
       color: var(--ctp-crust);
+      box-shadow: 0 4px 12px rgba(245, 194, 231, 0.3);
+    }
+
+    .cta.primary:hover {
+      transform: translateY(-4px) scale(1.02);
+      box-shadow: 0 8px 20px rgba(245, 194, 231, 0.4);
     }
 
     .cta.ghost {
-      background: transparent;
+      background: rgba(245, 194, 231, 0.05);
       color: var(--ctp-pink);
-      border: 1px solid var(--ctp-surface2);
+      border-color: rgba(245, 194, 231, 0.2);
+    }
+
+    .cta.ghost:hover {
+      background: rgba(245, 194, 231, 0.1);
+      transform: translateY(-4px) scale(1.02);
+      border-color: var(--ctp-pink);
     }
 
     .apps {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 16px;
+      gap: 24px;
     }
 
     .card {
@@ -145,74 +171,62 @@
       color: var(--ctp-text);
       background: var(--ctp-surface0);
       border-radius: var(--md-radius-m);
-      padding: 24px;
+      padding: 28px;
       transition: var(--transition);
-      overflow: hidden;
-    }
-
-    .card::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background-color: var(--ctp-pink);
-      opacity: 0;
-      transition: var(--transition);
-      z-index: 1;
+      border: 3px solid rgba(255, 255, 255, 0.02);
     }
 
     .card:hover {
       background: var(--ctp-surface1);
-      transform: translateY(-2px);
+      transform: translateY(-6px) scale(1.02);
+      border-color: rgba(245, 194, 231, 0.3);
       box-shadow: var(--md-elevation);
     }
 
-    .card:hover::before {
-      opacity: 0.04;
-    }
-
     .card:focus-visible {
-      outline: 2px solid var(--ctp-pink);
-      outline-offset: 2px;
-    }
-
-    .card > * {
-      position: relative;
-      z-index: 2;
+      outline: 4px solid var(--ctp-pink);
+      outline-offset: 4px;
+      border-radius: var(--md-radius-m);
     }
 
     .row {
       display: flex;
       align-items: center;
-      gap: 16px;
-      margin-bottom: 12px;
+      gap: 20px;
+      margin-bottom: 16px;
     }
     
     .badge {
       display: grid;
       place-items: center;
-      width: 48px;
-      height: 48px;
-      border-radius: var(--md-radius-s);
-      background: var(--ctp-mantle);
+      width: 56px;
+      height: 56px;
+      border-radius: 50%; /* Perfect circles for softer look */
+      background: var(--ctp-base);
       color: var(--ctp-pink);
-      font-size: 20px;
+      font-size: 24px;
       transition: var(--transition);
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
     }
 
     .card:hover .badge {
       background: var(--ctp-pink);
       color: var(--ctp-crust);
+      transform: rotate(-10deg) scale(1.1);
     }
 
     .name {
-      font-weight: 600;
-      font-size: 1.15rem;
-      letter-spacing: 0.1px;
+      font-family: 'M PLUS Rounded 1c', sans-serif;
+      font-weight: 800;
+      font-size: 1.3rem;
+      letter-spacing: 0.2px;
+      color: var(--ctp-text);
     }
 
     .hint {
       color: var(--ctp-subtext0);
-      font-size: 0.95rem;
+      font-size: 1rem;
+      font-weight: 500;
     }
 
     .ext {
@@ -221,25 +235,27 @@
       right: 24px;
       color: var(--ctp-surface2);
       transition: var(--transition);
-      z-index: 2;
+      font-size: 14px;
     }
 
     .card:hover .ext {
       color: var(--ctp-pink);
+      transform: translate(2px, -2px);
     }
 
     .e2e-badge {
       position: absolute;
-      top: 20px;
-      right: 20px;
+      top: 24px;
+      right: 24px;
       background: rgba(166, 227, 161, 0.15);
       color: var(--ctp-green);
-      font-size: 11px;
-      font-weight: 700;
-      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 800;
+      padding: 6px 14px;
       border-radius: 9999px;
       text-transform: uppercase;
-      z-index: 2;
+      letter-spacing: 0.5px;
+      border: 2px solid rgba(166, 227, 161, 0.3);
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -247,9 +263,9 @@
     }
     
     @media (max-width: 900px) {
-      .dashboard { grid-template-columns: 1fr; padding: 20px; gap: 24px; }
-      .hero-pane { position: relative; top: 0; padding: 32px 24px; }
-      .cta-column { flex-direction: row; flex-wrap: wrap; margin-top: 24px; }
+      .dashboard { grid-template-columns: 1fr; padding: 24px; gap: 32px; }
+      .hero-pane { position: relative; top: 0; padding: 40px 24px; }
+      .cta-column { flex-direction: row; flex-wrap: wrap; margin-top: 32px; }
       .cta { flex: 1; min-width: max-content; }
     }
   </style>
@@ -260,7 +276,7 @@
     
     <aside class="hero-pane" aria-labelledby="title">
       <h1 id="title" class="title">Poke Apps</h1>
-      <p class="subtitle">YouTube front-end, translator, maps, notes, calendar, and more! Designed with privacy in mind.</p>
+      <p class="subtitle">YouTube front-end, translator, maps, notes, calendar, and more! Designed with privacy in mind ♡</p>
       
       <div class="cta-column">
         <a class="cta primary" href="/app">
@@ -352,7 +368,7 @@
         const grid = document.querySelector('.apps');
         if (!grid) return 1;
         const colWidth = 280;
-        const gap = 16;
+        const gap = 24;
         const available = grid.clientWidth;
         return Math.floor((available + gap) / (colWidth + gap)) || 1;
       };
