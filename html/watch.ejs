@@ -4763,7 +4763,7 @@ const vid = document.getElementById("video");
 
   <% } %>
 <% } catch (error) { %>
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -4779,6 +4779,8 @@ const vid = document.getElementById("video");
             --yt-text-tertiary: #717171;
             --yt-blue: #3ea6ff;
             --yt-red: #ff4e45;
+            --yt-orange: #ffa500;
+            --yt-yellow: #f1c40f;
             --yt-hover-bg: rgba(255, 255, 255, 0.1);
             --yt-active-bg: rgba(255, 255, 255, 0.2);
         }
@@ -4833,38 +4835,6 @@ const vid = document.getElementById("video");
             line-height: 1.5;
         }
 
-         .system-note {
-            display: flex;
-            align-items: flex-start;
-            gap: 10px;
-            font-size: 14px;
-            background-color: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 12px 16px;
-            border-radius: 8px;
-            color: var(--yt-text-secondary);
-            margin: 8px 0 28px 0;
-            line-height: 1.5;
-            max-width: 450px;
-            text-align: left;
-        }
-
-        .system-note svg {
-            flex-shrink: 0;
-            width: 20px;
-            height: 20px;
-            fill: var(--yt-text-secondary);
-            margin-top: 1px;
-        }
-        
-         code {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 2px 4px;
-            border-radius: 4px;
-            font-family: monospace;
-            font-size: 13px;
-        }
-
         .might-be {
             font-size: 16px;
             color: var(--yt-text-primary);
@@ -4878,7 +4848,6 @@ const vid = document.getElementById("video");
             padding: 0;
             margin: 0 auto 36px auto;
             font-size: 14.5px;
-            color: var(--yt-text-secondary);
             line-height: 1.6;
             list-style-type: none;  
         }
@@ -4890,21 +4859,29 @@ const vid = document.getElementById("video");
         }
 
         .reasons-list li strong {
-            color: var(--yt-text-primary);
             font-weight: 500;
         }
 
-        .reasons-list li:last-child {
-            margin-bottom: 0;
-        }
+        /* Probability Colors */
+        .prob-high { color: var(--yt-red); }
+        .prob-high strong { color: #ff8a84; }
+        
+        .prob-med { color: var(--yt-orange); }
+        .prob-med strong { color: #ffcc66; }
+
+        .prob-low { color: var(--yt-text-secondary); }
+        .prob-low strong { color: var(--yt-text-primary); }
+
+        .prob-none { color: var(--yt-text-tertiary); }
 
         .reasons-list li::before {
             content: "•";
             position: absolute;
             left: 0;
-            color: var(--yt-text-tertiary); 
+            color: inherit; 
             font-size: 18px;
             line-height: 1.4;
+            opacity: 0.7;
         }
 
         a {
@@ -4924,7 +4901,6 @@ const vid = document.getElementById("video");
             justify-content: center;
         }
 
-        /* Upgraded Buttons */
         .btn {
             display: inline-flex;
             align-items: center;
@@ -4944,14 +4920,7 @@ const vid = document.getElementById("video");
             outline: none;
         }
 
-        .btn:active {
-            transform: scale(0.97);
-        }
-
-        .btn:focus-visible {
-            outline: 2px solid var(--yt-blue);
-            outline-offset: 2px;
-        }
+        .btn:active { transform: scale(0.97); }
 
         .btn svg {
             width: 18px;
@@ -4964,20 +4933,15 @@ const vid = document.getElementById("video");
             color: var(--yt-bg);
         }
 
-        .btn-primary:hover {
-            background-color: #d9d9d9;
-        }
+        .btn-primary:hover { background-color: #d9d9d9; }
 
         .btn-secondary {
             background-color: var(--yt-hover-bg);
             color: var(--yt-text-primary);
         }
 
-        .btn-secondary:hover {
-            background-color: var(--yt-active-bg);
-        }
+        .btn-secondary:hover { background-color: var(--yt-active-bg); }
 
-        /* Upgraded Backend Error Alert */
         .backend-error {
             font-size: 14px;
             color: var(--yt-red);
@@ -5004,27 +4968,14 @@ const vid = document.getElementById("video");
             color: var(--yt-text-secondary); 
         }
         
-        .report-issue a:hover {
-            color: var(--yt-text-primary);
-        }
-
-        /* Mobile Responsive Adjustments */
         @media (max-width: 480px) {
-            .error-image { width: 200px; margin-bottom: 20px; }
-            h1 { font-size: 22px; }
-            .reasons-list { font-size: 14px; }
+            .error-image { width: 200px; }
             .action-buttons { flex-direction: column; width: 100%; max-width: 250px; }
             .btn { width: 100%; }
         }
     </style>
 </head>
 <body>
-
-    <noscript>
-        <style>
-            #error-container { display: flex !important; animation: none; }
-        </style>
-    </noscript>
 
     <div id="error-container">
         <img class="error-image" src="<%- media_proxy_url %>/proxy?url=https://www.youtube.com/img/desktop/unavailable/unavailable_video_dark_theme.png" alt="Video Unavailable">
@@ -5035,17 +4986,17 @@ const vid = document.getElementById("video");
             We cannot load this video (╥﹏╥)
         </p>
 
-        <div class="might-be">This usually happens because:</div>
+        <div class="might-be">Possible reasons (ordered by likelihood):</div>
 
         <ul class="reasons-list">
-            <li>The video is set to <strong>Private</strong> or requires a <strong>Channel Membership</strong> to view.</li>
-            <li>It's a scheduled <strong>Premiere</strong> or livestream that hasn't officially started yet.</li>
-            <li>The <strong>video ID</strong> is invalid, incomplete, or the original video was deleted.</li>
-            <li><strong>YouTube is experiencing an outage</strong> (you can verify this on <a href="https://downdetector.com/status/youtube/" target="_blank">Downdetector</a>).</li>
-            <li><strong>Regional restrictions</strong> apply, or YouTube has temporarily blocked our servers.</li>
-            <li>Our backend server (<strong>Companion</strong>) is currently restarting...trying again in a minute usually fixes this.</li>
-            <li>There's an <strong>upstream bug</strong> affecting video extraction (check <a href="https://github.com/iv-org/invidious/issues" target="_blank">Invidious</a> or <a href="https://github.com/LuanRT/YouTube.js/issues" target="_blank">YouTube.js</a>).</li>
-            <li>its <strong>literally 1984...</strong></li>
+            <li class="prob-high"><strong>Server Blocked:</strong> YouTube has temporarily blocked our servers or applied regional restrictions.</li>
+            <li class="prob-high"><strong>Invalid Link:</strong> The <strong>video ID</strong> is incorrect, incomplete, or the original video was deleted.</li>
+            <li class="prob-high"><strong>Not Live Yet:</strong> It's a <strong>Premiere</strong> or livestream that hasn't officially started.</li>
+            <li class="prob-high"><strong>Extraction Error:</strong> There is an <strong>upstream bug</strong> affecting video playback (check <a href="https://github.com/iv-org/invidious/issues" target="_blank">Invidious</a>).</li>
+            <li class="prob-med"><strong>Server Reboot:</strong> Our backend (<strong>Companion</strong>) is restarting. Trying again in 60s usually fixes this.</li>
+            <li class="prob-med"><strong>Visibility:</strong> The video is <strong>Private</strong> or requires a <strong>Channel Membership</strong>.</li>
+            <li class="prob-low"><strong>YouTube Outage:</strong> YouTube itself is experiencing issues (check <a href="https://downdetector.com/status/youtube/" target="_blank">Downdetector</a>).</li>
+            <li class="prob-none">It's <strong>literally 1984...</strong></li>
         </ul>
 
         <div class="action-buttons">
@@ -5054,7 +5005,7 @@ const vid = document.getElementById("video");
                 Try Again
             </button>
             
-            <a href="/api/yturl?v=<%- queryid %>" target="_blanmk" rel="noopener noreferrer" class="btn btn-secondary">
+            <a href="/api/yturl?v=<%- queryid %>" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">
                 <svg viewBox="0 0 24 24"><path d="M19,19H5V5h7V3H5C3.89,3,3,3.9,3,5v14c0,1.1,0.89,2,2,2h14c1.1,0,2-0.9,2-2v-7h-2V19z M14,3v2h3.59l-9.83,9.83l1.41,1.41L19,6.41V10h2V3H14z"/></svg>
                 Try on YouTube
             </a>
@@ -5062,15 +5013,14 @@ const vid = document.getElementById("video");
 
         <% if (error) { %>
             <div class="backend-error">
-                <strong>Error:</strong> <%= error %>
+                <strong>Error Details:</strong> <%= error %>
             </div>
         <% } %> 
 
         <div class="report-issue">
             This incident has been auto-reported.<br>
-            Still none of these somehow? <a href="https://codeberg.org/ashleyirispuppy/poke/issues/new/choose" target="_blank">Report an issue here</a>.
+            Still stuck? <a href="https://codeberg.org/ashleyirispuppy/poke/issues/new/choose" target="_blank">Report an issue here</a>.
         </div>
-
     </div>
 
 </body>
