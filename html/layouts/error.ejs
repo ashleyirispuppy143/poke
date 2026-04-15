@@ -12,12 +12,10 @@
             --md-sys-color-on-surface: #e2e2e2;
             --md-sys-color-on-surface-variant: #c4c7c5;
 
-            /* Primary (YouTube Blue / Material Blue) */
             --md-sys-color-primary: #a8c7fa;
             --md-sys-color-on-primary: #062e6f;
             --md-sys-color-primary-container: #0842a0;
 
-            /* Shapes & Type */
             --md-sys-shape-corner-extra-large: 28px;
             --md-sys-shape-corner-full: 9999px;
             --font-family: "Roboto", "Google Sans", sans-serif;
@@ -254,12 +252,10 @@
             let clickCount = 0;
             let clickTimer;
 
-            // SECRET TRIGGER LOGIC
-            trigger.addEventListener('click', function() {
+             trigger.addEventListener('click', function() {
                 clickCount++;
 
-                // Visual feedback (shake) on clicks 3 and 4
-                if(clickCount > 2) {
+                 if(clickCount > 2) {
                     trigger.classList.add('shake');
                     setTimeout(() => trigger.classList.remove('shake'), 200);
                 }
@@ -286,7 +282,6 @@
                 }, 10);
             }
 
-            // CLOSE LOGIC
             closeBtn.addEventListener('click', function() {
                 overlay.classList.remove('active');
                 setTimeout(() => {
