@@ -793,6 +793,13 @@ document.addEventListener("DOMContentLoaded", () => {
       // video has data — let audio through
       if (_gateRS >= HAVE_FUTURE_DATA) return _origAudioPlay();
 
+      // During seek kick window: allow audio start even if video readyState is low.
+      // After seeking to an unbuffered position, readyState drops below HAVE_FUTURE_DATA
+      // while buffering. Blocking audio here silences playback after seek — the main
+      // cause of "audio cuts on seek". Both tracks were seeked to the same target so
+      // it's safe to start audio as soon as video has at least HAVE_CURRENT_DATA.
+      if (inSeekKickWindow && _gateRS >= HAVE_CURRENT_DATA) return _origAudioPlay();
+
       // no data and none of the bypass conditions matched — block
       return Promise.resolve();
     };
