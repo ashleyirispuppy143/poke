@@ -27,10 +27,6 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  
  
 //////////////// THE PLAYER, START ////////////////////////
-// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
-// before DOMContentLoaded. Ensures both video and audio start at 00:00
-// even if the browser pre-buffers to a non-zero keyframe position.
-// This runs in a try-catch because elements might not exist yet.
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -5628,35 +5624,42 @@ const HAVE_ENOUGH_DATA = 4;
           // can be stale even on short background sessions.
           try { VideoCompositorFlushManager.arm(); } catch {}
           if (coupledMode && audio) {
-            // Only set volume if it's wrong — avoid touching audio state
-            // when everything is already playing fine
             const _atTargetVol = targetVolFromVideo();
-            if (Math.abs(audio.volume - _atTargetVol) > 0.03) {
+            const _atVRS = _atVN ? Number(_atVN.readyState || 0) : 4;
+            const _atVT = (() => { try { return Number(video.currentTime()); } catch { return 0; } })();
+            const _atAT = Number(audio.currentTime) || 0;
+            const _atDrift = isFinite(_atVT) ? Math.abs(_atAT - _atVT) : 0;
+            // Sync audio position to video BEFORE resuming play. If audio paused
+            // behind where video currentTime now is, resuming from old position
+            // replays already-heard content. Keep muted until sync + play settle.
+            if (audio.paused && isFinite(_atVT) && _atVT > 0.1 && _atDrift > 0.2) {
+              try { audio.volume = 0; } catch {}
+              state._allowAudioTimeWrite = true;
+              try { audio.currentTime = _atVT; } catch {}
+              state._allowAudioTimeWrite = false;
+            } else if (Math.abs(audio.volume - _atTargetVol) > 0.03) {
               try { audio.volume = _atTargetVol; } catch {}
             }
-            const _atVRS = _atVN ? Number(_atVN.readyState || 0) : 4;
             if (audio.paused && _atVRS >= HAVE_CURRENT_DATA) {
               state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 800);
               try { _nativePlayAT.call(audio).catch(() => {}); } catch {}
             }
-            // Defer position correction 60ms — don't seek while play() is resuming,
-            // that creates an audible skip. Let the decoder resume first.
+            // Restore volume shortly after play — long enough for any audio decoder
+            // flush from the position write to settle inaudibly.
             setTimeout(() => {
               if (!coupledMode || !audio) return;
-              const _atVT = (() => { try { return Number(video.currentTime()); } catch { return 0; } })();
-              const _atAT = Number(audio.currentTime) || 0;
-              if (isFinite(_atVT) && _atVT > 0.1 && Math.abs(_atAT - _atVT) > 1.5) {
-                // Only correct large drift — small drift from alt-tab is normal
-                // and the rate sync system handles it smoothly. The old 0.5s
-                // threshold caused audible seeks on every alt-tab round trip.
+              const _atVT2 = (() => { try { return Number(video.currentTime()); } catch { return 0; } })();
+              const _atAT2 = Number(audio.currentTime) || 0;
+              if (isFinite(_atVT2) && _atVT2 > 0.1 && Math.abs(_atAT2 - _atVT2) > 1.2) {
                 state._allowAudioTimeWrite = true;
-                try { audio.currentTime = _atVT; } catch {}
+                try { audio.currentTime = _atVT2; } catch {}
                 state._allowAudioTimeWrite = false;
                 if (audio.paused) {
                   state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 600);
                   try { _nativePlayAT.call(audio).catch(() => {}); } catch {}
                 }
               }
+              try { audio.volume = _atTargetVol; } catch {}
             }, 60);
           }
         }
@@ -10387,10 +10390,15 @@ const HAVE_ENOUGH_DATA = 4;
     if (document.visibilityState === "hidden" || !isWindowFocused()) return true;
     const vNode = getVideoNode();
     const vRS = Number(vNode.readyState || 0);
-    // Only require VIDEO to be ready. Audio can start with play() even at
-    // readyState 0 — the browser queues the play and starts when data arrives.
-    // Waiting for audio readyState >= 2 delays startup by seconds on slow connections.
-    if (vRS >= 2) return true;
+    if (vRS < 2) return false;
+    // Prefer audio to be ready alongside video so both start in lockstep.
+    // Without this, video starts playing while audio is still loading and
+    // the user sees "video plays silently until audio finally joins."
+    // Fall back to video-only after ~6 retries (≈1.8s) so slow audio
+    // never blocks startup forever.
+    const aRS = audio ? Number(audio.readyState || 0) : 4;
+    if (aRS >= HAVE_CURRENT_DATA) return true;
+    if (state.startupAutoplayRetryCount >= 4) return true;
     return false;
   }
 
@@ -12755,6 +12763,14 @@ const HAVE_ENOUGH_DATA = 4;
         state.bufferHoldIntendedPlaying = true;
         return;
       }
+      // If user just clicked play, strip any stale pause-expecting txn and
+      // any stale loop-prevention cooldown that could turn this play into
+      // the visible play-pause-play cycle the user reported.
+      if (userWantsPlayNow(2400)) {
+        if (userToggleExpectingPause()) clearUserToggleTxn();
+        state.loopPreventionCooldownUntil = 0;
+        state.rapidPlayPauseCount = 0;
+      }
       // User just requested pause and browser emitted a stray play: keep paused.
       if (userToggleExpectingPause() && !state.isProgrammaticVideoPlay && !state.isProgrammaticVideoPause) {
         execProgrammaticVideoPause();
@@ -14997,11 +15013,9 @@ const HAVE_ENOUGH_DATA = 4;
                 if (_kickVRS < _kickMinRS && document.visibilityState === "visible") {
                   return; // video not ready, next retry will handle it
                 }
-                // Restore volume on the first kick (20ms). Later kicks skip
-                // this because volume is already set, or a new seek took over.
-                if (attemptId === 1 && _seekedPreVol != null && state._seekPreVolume == null) {
-                  try { audio.volume = _seekedPreVol; } catch {}
-                }
+                // Volume restore is handled by the audio-seeked listener +
+                // 220ms fallback below — don't restore here, or we re-expose
+                // the stale pre-seek buffer at full volume.
                 // Re-sync position to current video just before replay —
                 // catches cases where audio decoder seeked to wrong frame.
                 // Do this BEFORE the paused check so even playing-but-desynced
@@ -15024,11 +15038,26 @@ const HAVE_ENOUGH_DATA = 4;
                 DONTMAKEITDOUBLEPLAY.reset(audio);
                 execProgrammaticAudioPlay({ squelchMs: 80, force: true, minGapMs: 0 }).catch(() => {});
               };
-              // Kick chain: 5ms → 40ms → 150ms → 400ms → 800ms
-              // First kick at 5ms (near-synchronous) eliminates perceived delay.
-              // Restore volume IMMEDIATELY so audio starts at full level.
+              // Kick chain: 5ms → 40ms → 150ms → 400ms → 800ms.
+              // Volume restore is DEFERRED until the audio element emits its
+              // own "seeked" event (or 220ms fallback). Restoring volume
+              // synchronously before the audio seek completes lets the
+              // decoder briefly play stale pre-seek buffer at full volume —
+              // that's the "post-seek audio plays the part already played"
+              // glitch. Keeping volume at 0 through the seek flush is silent.
               if (_seekedPreVol != null) {
-                try { audio.volume = _seekedPreVol; } catch {}
+                let _volRestored = false;
+                const _restoreVol = () => {
+                  if (_volRestored) return;
+                  _volRestored = true;
+                  try { audio.removeEventListener("seeked", _onAudioSeeked); } catch {}
+                  if (state.seekId !== _kickSeekId) return;
+                  if (state._seekPreVolume != null) return;
+                  try { audio.volume = _seekedPreVol; } catch {}
+                };
+                const _onAudioSeeked = () => _restoreVol();
+                try { audio.addEventListener("seeked", _onAudioSeeked, { once: true, passive: true }); } catch {}
+                setTimeout(_restoreVol, 220);
                 state._seekPreVolume = null;
               }
               const _t1 = setTimeout(() => _kickAudio(1), 5);
