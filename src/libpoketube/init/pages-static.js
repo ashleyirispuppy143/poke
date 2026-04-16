@@ -31,8 +31,13 @@ app.get("/code-of-conduct", (req, res) => {
   res.redirect(301, "/policies/code-of-conduct");
 });
 
+
 app.get("/terms-of-service", (req, res) => {
   res.redirect(301, "/policies/code-of-conduct");
+});
+  
+app.get("/ribbon", (req, res) => {
+  res.redirect(301, "https://apnews.com/article/turkey-school-gunfire-9ba3a4a9512bf7b4c36b19077b53f705");
 });
 
 const tosRedirects = [
