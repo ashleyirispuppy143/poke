@@ -27,7 +27,10 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  
  
 //////////////// THE PLAYER, START ////////////////////////
-  
+// IMMEDIATE ZERO ENFORCEMENT — runs as soon as the script is parsed,
+// before DOMContentLoaded. Ensures both video and audio start at 00:00
+// even if the browser pre-buffers to a non-zero keyframe position.
+// This runs in a try-catch because elements might not exist yet.
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -695,7 +698,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // (detected at >600ms stuck) get kicked promptly after the transition.
   const PLAY_PAUSE_MICRO_SEEK_BLOCK_MS = 300;
   const MICRO_SEEK_TOGGLE_SUPPRESS_MS = 400;
-  const MICRO_SEEK_SEEK_SUPPRESS_MS = 1200;
+  const MICRO_SEEK_SEEK_SUPPRESS_MS = 600;
 
   // Audio play() gate — the single chokepoint for ALL audio playback.
   // Rule: audio NEVER plays in visible foreground unless video has decoded data.
@@ -2702,7 +2705,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const _videoBehindTarget = isFinite(currentVt) && currentVt < targetTime - 1.5;
       const _needsResync = targetTime > 0.5 && (
         (_videoBehindTarget && Math.abs(currentVt - targetTime) < 300) ||
-        (_videoAheadOfTarget && (currentVt - targetTime) < 60)
+        (_videoAheadOfTarget && (currentVt - targetTime) > 8 && (currentVt - targetTime) < 120)
       );
       if (_needsResync) {
         state._isMicroSeek = true;
@@ -6763,7 +6766,7 @@ const HAVE_ENOUGH_DATA = 4;
       const _rpSavedPos = state._pauseSavedPosition;
       const _rpDrift = Math.abs(_rpCurrentVT - _rpSavedPos);
       // If position has drifted from saved point, restore it
-      if (_rpDrift > 0.3 && isFinite(_rpSavedPos)) {
+      if (_rpDrift > 0.6 && isFinite(_rpSavedPos)) {
         state._isMicroSeek = true;
         try { _rpVN.currentTime = _rpSavedPos; } catch {}
         if (_rpVN !== videoEl) try { videoEl.currentTime = _rpSavedPos; } catch {}
@@ -6784,7 +6787,7 @@ const HAVE_ENOUGH_DATA = 4;
         const _rpVN2 = getVideoNode() || videoEl;
         const _rpVT2 = _rpVN2 ? (Number(_rpVN2.currentTime) || 0) : 0;
         const _rpDrift2 = Math.abs(_rpVT2 - _rpSavedPos);
-        if (_rpDrift2 > 0.5 && isFinite(_rpSavedPos) && !state.seeking) {
+        if (_rpDrift2 > 0.8 && isFinite(_rpSavedPos) && !state.seeking) {
           state._isMicroSeek = true;
           try { _rpVN2.currentTime = _rpSavedPos; } catch {}
           if (coupledMode && audio) {
@@ -9358,6 +9361,7 @@ const HAVE_ENOUGH_DATA = 4;
     // Allow re-runs — browser can move currentTime forward via keyframe buffering
     // after our first zero-set. Re-zeroing is harmless and prevents mid-video starts.
     state.startupZeroed = true;
+    state._isMicroSeek = true;
     try { video.currentTime(0); } catch {}
     try {
       safeSetCT(videoEl, 0);
@@ -9369,6 +9373,7 @@ const HAVE_ENOUGH_DATA = 4;
     }
     state.lastKnownGoodVT = 0;
     state.lastKnownGoodVTts = now();
+    setTimeout(() => { state._isMicroSeek = false; }, 250);
   }
 
   function ensureStartupZeroed() { forceZeroBeforeFirstPlay(); }
@@ -11219,7 +11224,7 @@ const HAVE_ENOUGH_DATA = 4;
   let _bufMonStallFrames = 0;        // tick count (100ms per tick) of frozen vt
   let _bufMonConfirmedStallAt = 0;   // timestamp when we confirmed a real stall
   let _bufMonLastKillAt = 0;         // last time we killed audio — cooldown gate
-  const BUF_MON_INTERVAL_MS = 250; // was 100→200→250 — still catches stalls within ~1.2s (5 ticks)
+  const BUF_MON_INTERVAL_MS = 300; // was 100→200→250→300 — still catches stalls within ~1.5s (5 ticks)
   const BUF_MON_STALL_TICKS = 5;     // 500ms of frozen time before we trust it (was 300 — too twitchy)
   const BUF_MON_SUSTAINED_STALL_MS = 1200; // stall must persist this long to kill audio (was 600→1200: cuts were still too frequent)
   const BUF_MON_KILL_COOLDOWN_MS = 4000; // min gap between audio kills (was 2500→4000: prevents rapid cut loop)
@@ -12106,9 +12111,9 @@ const HAVE_ENOUGH_DATA = 4;
 
     // Easter egg splash messages — like Minecraft crash logs
     const _splashMessages = [
-      "Have you tried mass producing mass produced goods?",
+      "Have you tried reinstalling the universe?",
       "This is fine. Everything is fine.",
-      "I blame the mass production of mass produced goods.",
+      "The codec took the day off.",
       "The audio was simply too powerful.",
       "Error 404: Good vibes not found.",
       "It's not a bug, it's a surprise feature.",
@@ -12126,7 +12131,7 @@ const HAVE_ENOUGH_DATA = 4;
       "POV: you found a rare error.",
       "The video was not the imposter. It was ejected anyway.",
       "Don't worry, the error is more scared of you than you are of it.",
-      "This error was mass produced.",
+      "The player tripped over its own feet.",
       "The media pipeline left the chat.",
       "L + ratio + no playback.",
       "Bro really said 'MEDIA_ERR' unironically.",
@@ -12433,6 +12438,7 @@ const HAVE_ENOUGH_DATA = 4;
       const isTechSurface = isTechSurfaceTarget(event.target);
       const isSeekControl = isSeekControlTarget(event.target);
       if (isSeekControl) markUserSeekIntent(3200);
+      if (isSeekControl) { state._pauseSavedPosition = -1; state._pauseSavedAt = 0; }
 
       if (isPlayCtrl || isTechSurface) {
         trackUserClickForSpam();
@@ -14598,8 +14604,16 @@ const HAVE_ENOUGH_DATA = 4;
           // FIX: Extended from 800ms to 1200ms. Browser keyframe adjustments on
           // play() resume can happen 500-1000ms after the play event, especially
           // on slower machines or with large GOP sizes. 800ms missed late adjustments.
-          if (directUserToggleActive(1200) || now() < state._playPauseTransitionUntil) {
-            if (!userSeekIntentActive()) return;
+          if (directUserToggleActive(500) || now() < state._playPauseTransitionUntil) {
+            if (!userSeekIntentActive()) {
+              // Still clear saved position so a dropped seek doesn't cause wrong position on play
+              const _dropVt = Number(videoEl.currentTime) || 0;
+              if (Math.abs(_dropVt - (state._pauseSavedPosition || 0)) > 0.5 && state._pauseSavedPosition > 0) {
+                state._pauseSavedPosition = -1;
+                state._pauseSavedAt = 0;
+              }
+              return;
+            }
           }
 
           // phantom loop detection: if video suddenly jumps to near-0 from well
@@ -15993,9 +16007,11 @@ const HAVE_ENOUGH_DATA = 4;
       }
       const vt = Number(videoEl.currentTime) || 0;
       if (vt > 0.5 && !state.firstPlayCommitted) {
+        state._isMicroSeek = true;
         try { video.currentTime(0); } catch {}
         try { videoEl.currentTime = 0; } catch {}
         if (audio) try { audio.currentTime = 0; } catch {}
+        setTimeout(() => { state._isMicroSeek = false; }, 200);
       }
     };
     try { videoEl.addEventListener("timeupdate", enforceStartAtZero, { passive: true }); } catch {}
@@ -16079,7 +16095,7 @@ const HAVE_ENOUGH_DATA = 4;
     bindStartupOnce(videoEl, "loadeddata");
     bindStartupOnce(videoEl, "loadedmetadata");
     bindStartupOnce(videoEl, "canplay");
-    [0, 120, 320].forEach(delay => {
+    [0, 50, 150, 400].forEach(delay => {
       setTimeout(() => {
         if (!coupledMode || !audio) return;
         if (state.firstPlayCommitted && state.audioEverStarted && !audio.paused) return;
@@ -16260,7 +16276,7 @@ const HAVE_ENOUGH_DATA = 4;
 
     // build full stack trace
     const _crashSplashMessages = [
-      "Have you tried mass producing mass produced goods?",
+      "The bits conspired against you.",
       "This is fine. Everything is fine.",
       "The audio was simply too powerful.",
       "Works on my machine ¯\\_(ツ)_/¯",
