@@ -10014,10 +10014,12 @@ const HAVE_ENOUGH_DATA = 4;
       const atCurrent = Number(audio.currentTime) || 0;
       const wouldRestart = vtAtFinalize < 0.5 && atCurrent > 1.0 && state.firstPlayCommitted && !state.restarting && !isLoopDesired();
       const _drift = Math.abs(atCurrent - vtAtFinalize);
-      // bigger threshold when audio is already playing (cut is audible).
-      // tighter threshold when audio is paused (no audible cut, and we
-      // want it to start at the right spot).
-      const _threshold = audio.paused ? 0.1 : 0.3;
+      // paused: tight threshold, we want the decoder landing exactly on target
+      // before resume. playing: 0.6 is the "something's really wrong" line —
+      // anything smaller gets corrected by the rate-based sync loop without
+      // rewinding the decoder. the old 0.3 was causing audible mid-playback
+      // rewinds right after seek ("plays the same part twice").
+      const _threshold = audio.paused ? 0.1 : 0.6;
       if (!wouldRestart && _drift > _threshold) {
         state._allowAudioTimeWrite = true;
         try { audio.currentTime = vtAtFinalize; } catch {}
@@ -10026,12 +10028,18 @@ const HAVE_ENOUGH_DATA = 4;
         setTimeout(() => {
           if (state.seekId !== _fSeekId && state.seeking) return;
           const _at = Number(audio.currentTime) || 0;
-          const _wouldRestart2 = vtAtFinalize < 0.5 && _at > 1.0 && state.firstPlayCommitted && !state.restarting && !isLoopDesired();
-          // recheck threshold against live drift — if the sync loop already
-          // pulled audio close, don't re-flush the decoder.
-          if (!_wouldRestart2 && Math.abs(_at - vtAtFinalize) > 0.35) {
+          // compare against CURRENT video time, not the stale vtAtFinalize
+          // snapshot from 60ms ago — video has advanced ~60ms since then.
+          // using the stale value would pin audio 60ms behind on every
+          // recheck, creating visible lag after seek.
+          const _vtNow = (() => { try { return Number(video.currentTime()) || 0; } catch { return vtAtFinalize; } })();
+          const _wouldRestart2 = _vtNow < 0.5 && _at > 1.0 && state.firstPlayCommitted && !state.restarting && !isLoopDesired();
+          // only re-pin if audio is paused (decoder flush is silent) or drift
+          // is egregious. playing audio gets corrected by the rate sync loop.
+          const _recheckThreshold = audio.paused ? 0.35 : 0.8;
+          if (!_wouldRestart2 && Math.abs(_at - _vtNow) > _recheckThreshold) {
             state._allowAudioTimeWrite = true;
-            try { audio.currentTime = vtAtFinalize; } catch {}
+            try { audio.currentTime = _vtNow; } catch {}
             state._allowAudioTimeWrite = false;
           }
         }, 60);
@@ -10118,14 +10126,18 @@ const HAVE_ENOUGH_DATA = 4;
 
     clearBufferHold();
 
-    // Final position sync before resuming — bypass gate but guard near-0 restart
-    // Only sync if drift is significant (>0.15s). The 0.05s threshold before caused
-    // audio decode buffer flushes on tiny drift, producing audible glitches on seek.
+    // Final position sync before resuming — bypass gate but guard near-0 restart.
+    // paused: 0.15 is fine, decoder flush is inaudible and we want a clean start.
+    // playing: 0.6 is the "something's really wrong" line. smaller drift is
+    // handled by the rate-based sync loop without the audible glitch. the old
+    // flat 0.15 threshold caused mid-playback rewinds right after seek — the
+    // "seek plays the same part twice" bug.
     const vt2 = Number(video.currentTime());
     if (isFinite(vt2) && coupledMode && audio) {
       const at2 = Number(audio.currentTime) || 0;
       const _fsWouldRestart = vt2 < 0.5 && at2 > 1.0 && state.firstPlayCommitted && !state.restarting && !isLoopDesired();
-      if (!_fsWouldRestart && Math.abs(at2 - vt2) > 0.15) {
+      const _fsThreshold = audio.paused ? 0.15 : 0.6;
+      if (!_fsWouldRestart && Math.abs(at2 - vt2) > _fsThreshold) {
         state._allowAudioTimeWrite = true;
         try { audio.currentTime = vt2; } catch {}
         state._allowAudioTimeWrite = false;
@@ -14739,7 +14751,6 @@ const HAVE_ENOUGH_DATA = 4;
           if (seekTime < 0.8 && (_isUserOrProgrammaticSeek || _seekLikelyUser)) {
             authorizeNearZeroSeek(2500);
           }
-          state.pendingSeekTarget = seekTime;
           const shouldKeepPreviousGoodVT =
             seekTime < 0.8 &&
             state.firstPlayCommitted &&
@@ -14959,6 +14970,12 @@ const HAVE_ENOUGH_DATA = 4;
                     document.visibilityState === "visible") {
                   return;
                 }
+                // CRITICAL: check paused BEFORE writing currentTime. writing
+                // audio.currentTime while audio is playing rewinds the decoder
+                // mid-playback — the "seek plays the same part twice" bug.
+                // the rate-based sync loop handles drift on playing audio without
+                // an audible cut; only hard-pin position while audio is paused.
+                if (!audio.paused) return;
                 // keep audio pinned to video's current position. decoder can
                 // land a frame or two off after a seek, and if we don't fix
                 // it now the sync loop takes 100-300ms to catch up.
@@ -14972,7 +14989,6 @@ const HAVE_ENOUGH_DATA = 4;
                     state._allowAudioTimeWrite = false;
                   }
                 } catch {}
-                if (!audio.paused) return; // already playing — don't touch it
                 // clear the play dedup so a recent audio.play() from another
                 // path (e.g. the "playing" handler) doesn't eat this kick.
                 DONTMAKEITDOUBLEPLAY.reset(audio);
