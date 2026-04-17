@@ -6752,48 +6752,10 @@ const HAVE_ENOUGH_DATA = 4;
     // currentTime to the nearest keyframe (0.5-2s offset is normal).
     // pre-seeking to the saved spot BEFORE play() forces the decoder
     // to resume from the exact pause point.
-    // only restore if the save is recent (<60s) and we've drifted >0.3s.
+    // Remove forced seeking back to _pauseSavedPosition on user play, as it
+    // triggers an explicit browser seek (buffering + visible pause) that manifests
+    // as "seeks a bit" on play. The native browser keyframe resume is much smoother.
     if (state._pauseSavedPosition > 0 && (now() - state._pauseSavedAt) < 60000) {
-      const _rpVN = getVideoNode() || videoEl;
-      const _rpCurrentVT = _rpVN ? (Number(_rpVN.currentTime) || 0) : 0;
-      const _rpSavedPos = state._pauseSavedPosition;
-      const _rpDrift = Math.abs(_rpCurrentVT - _rpSavedPos);
-      // If position has drifted from saved point, restore it
-      if (_rpDrift > 0.6 && isFinite(_rpSavedPos)) {
-        state._isMicroSeek = true;
-        try { _rpVN.currentTime = _rpSavedPos; } catch {}
-        if (_rpVN !== videoEl) try { videoEl.currentTime = _rpSavedPos; } catch {}
-        if (coupledMode && audio) {
-          state._allowAudioTimeWrite = true;
-          try { audio.currentTime = _rpSavedPos; } catch {}
-          state._allowAudioTimeWrite = false;
-        }
-        state.lastKnownGoodVT = _rpSavedPos;
-        state.lastKnownGoodVTts = now();
-        setTimeout(() => { state._isMicroSeek = false; }, 200);
-      }
-      // Also schedule a post-play() verification to catch cases where the
-      // browser re-adjusts to a keyframe after our restore
-      const _rpSession = state.playSessionId;
-      setTimeout(() => {
-        if (state.playSessionId !== _rpSession || !state.intendedPlaying) return;
-        const _rpVN2 = getVideoNode() || videoEl;
-        const _rpVT2 = _rpVN2 ? (Number(_rpVN2.currentTime) || 0) : 0;
-        const _rpDrift2 = Math.abs(_rpVT2 - _rpSavedPos);
-        if (_rpDrift2 > 0.8 && isFinite(_rpSavedPos) && !state.seeking) {
-          state._isMicroSeek = true;
-          try { _rpVN2.currentTime = _rpSavedPos; } catch {}
-          if (coupledMode && audio) {
-            const _rpAT2 = Number(audio.currentTime) || 0;
-            if (Math.abs(_rpAT2 - _rpSavedPos) > 0.3) {
-              state._allowAudioTimeWrite = true;
-              try { audio.currentTime = _rpSavedPos; } catch {}
-              state._allowAudioTimeWrite = false;
-            }
-          }
-          setTimeout(() => { state._isMicroSeek = false; }, 200);
-        }
-      }, 120);
       state._pauseSavedPosition = -1;
       state._pauseSavedAt = 0;
     }
