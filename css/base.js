@@ -10381,8 +10381,11 @@ const HAVE_ENOUGH_DATA = 4;
     const t0 = Number(video.currentTime()) || 0;
     const vNode = getVideoNode();
     const vOk = Number(vNode.readyState || 0) >= 2 || canPlayAt(vNode, t0);
-    const aOk = canStartAudioAt(t0);
-    return vOk && aOk;
+    // Do not require audio readyState — user wants audio to start as early
+    // as video can, not for startup to wait until audio has buffered.
+    // The "playing" event early-audio retry chain (+ forceAudioStartupPlay)
+    // takes care of firing audio.play() as soon as audio decodes.
+    return vOk;
   }
 
   function bothReadyForStartupKick() {
@@ -10391,15 +10394,12 @@ const HAVE_ENOUGH_DATA = 4;
     const vNode = getVideoNode();
     const vRS = Number(vNode.readyState || 0);
     if (vRS < 2) return false;
-    // Prefer audio to be ready alongside video so both start in lockstep.
-    // Without this, video starts playing while audio is still loading and
-    // the user sees "video plays silently until audio finally joins."
-    // Fall back to video-only after ~6 retries (≈1.8s) so slow audio
-    // never blocks startup forever.
-    const aRS = audio ? Number(audio.readyState || 0) : 4;
-    if (aRS >= HAVE_CURRENT_DATA) return true;
-    if (state.startupAutoplayRetryCount >= 4) return true;
-    return false;
+    // Do NOT wait for audio readyState: user wants audio to start as early
+    // as video, not video waiting for audio. If audio isn't yet ready it
+    // will be kicked into play and will start as soon as it decodes —
+    // any short silent-video window is unavoidable when the audio track
+    // simply hasn't arrived yet, but we never hold back video.
+    return true;
   }
 
   function scheduleStartupAutoplayKick() {
@@ -13494,7 +13494,10 @@ const HAVE_ENOUGH_DATA = 4;
           if (canKillAudio({ bypassGrace: true })) {
             pauseAudioForConfirmedVideoStall(Math.max(MIN_STALL_AUDIO_RESUME_MS, 400));
           }
-        }, 1200); // 1200ms: increased from 800 to prevent audio cuts from transient segment-boundary stalls
+        }, 2500); // 2500ms: bumped from 1200 — audio was still cutting on
+        // longer segment-boundary stalls. By 2.5s, if video's genuinely
+        // frozen the user already knows; audio silence adds nothing. Under
+        // that, transient decoder hiccups shouldn't kill audio.
       }
 
       if (platform.useBgControllerRetry && state.intendedPlaying) {
@@ -15039,12 +15042,13 @@ const HAVE_ENOUGH_DATA = 4;
                 execProgrammaticAudioPlay({ squelchMs: 80, force: true, minGapMs: 0 }).catch(() => {});
               };
               // Kick chain: 5ms → 40ms → 150ms → 400ms → 800ms.
-              // Volume restore is DEFERRED until the audio element emits its
-              // own "seeked" event (or 220ms fallback). Restoring volume
-              // synchronously before the audio seek completes lets the
-              // decoder briefly play stale pre-seek buffer at full volume —
-              // that's the "post-seek audio plays the part already played"
-              // glitch. Keeping volume at 0 through the seek flush is silent.
+              // Volume restore strategy:
+              //   - If audio is already at the target position (not seeking),
+              //     restore after a 10ms tick. No stale buffer to worry about.
+              //   - Otherwise wait for audio's own "seeked" event so the
+              //     decoder's stale pre-seek frames don't play audibly.
+              //   - Fallback: 100ms. Balances covering the stale-buffer
+              //     window against "audio comes late after seek".
               if (_seekedPreVol != null) {
                 let _volRestored = false;
                 const _restoreVol = () => {
@@ -15056,8 +15060,19 @@ const HAVE_ENOUGH_DATA = 4;
                   try { audio.volume = _seekedPreVol; } catch {}
                 };
                 const _onAudioSeeked = () => _restoreVol();
-                try { audio.addEventListener("seeked", _onAudioSeeked, { once: true, passive: true }); } catch {}
-                setTimeout(_restoreVol, 220);
+                let _audioNeedsSeek = true;
+                try {
+                  const _avCT = Number(audio.currentTime) || 0;
+                  const _vvCT = Number(video.currentTime()) || 0;
+                  _audioNeedsSeek = !!audio.seeking ||
+                    (isFinite(_avCT) && isFinite(_vvCT) && Math.abs(_avCT - _vvCT) > 0.25);
+                } catch {}
+                if (!_audioNeedsSeek) {
+                  setTimeout(_restoreVol, 10);
+                } else {
+                  try { audio.addEventListener("seeked", _onAudioSeeked, { once: true, passive: true }); } catch {}
+                  setTimeout(_restoreVol, 100);
+                }
                 state._seekPreVolume = null;
               }
               const _t1 = setTimeout(() => _kickAudio(1), 5);
