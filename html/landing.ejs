@@ -1383,12 +1383,30 @@ For more information, assets, and usage guidelines, visit <a href="https://codeb
         <div class="symbol-of-tolerance" role="img"></div>
 
         <script>
-        document.addEventListener('DOMContentLoaded', () => {
-  const elementsToHide = document.querySelectorAll('.hideonload');
-  
-  elementsToHide.forEach(el => {
-    el.style.display = 'none';
-  });
+document.addEventListener('DOMContentLoaded', () => {
+  const storageKey = 'remove_old_content';
+  const now = Date.now();
+  const expiry = localStorage.getItem(storageKey);
+
+  if (!expiry || now > parseInt(expiry)) {
+    
+    setTimeout(() => {
+      const elementsToHide = document.querySelectorAll('.hideonload');
+      
+      elementsToHide.forEach(el => {
+        el.style.display = 'none';
+      });
+
+      const newExpiry = Date.now() + (30 * 60 * 1000);
+      localStorage.setItem(storageKey, newExpiry.toString());
+      
+    }, 1900);
+
+  } else {
+    document.querySelectorAll('.hideonload').forEach(el => {
+      el.style.display = 'none';
+    });
+  }
 });
 
           (function () {
