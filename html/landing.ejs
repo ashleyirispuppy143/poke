@@ -1384,7 +1384,7 @@ For more information, assets, and usage guidelines, visit <a href="https://codeb
 
         <script>
 document.addEventListener('DOMContentLoaded', () => {
-  const storageKey = 'remove_old_content';
+  const storageKey = 'remove_old_contents';
   const now = Date.now();
   const expiry = localStorage.getItem(storageKey);
 
@@ -1400,7 +1400,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const newExpiry = Date.now() + (30 * 60 * 1000);
       localStorage.setItem(storageKey, newExpiry.toString());
       
-    }, 1900);
+    }, 800);
 
   } else {
     document.querySelectorAll('.hideonload').forEach(el => {
