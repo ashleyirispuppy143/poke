@@ -1400,7 +1400,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const newExpiry = Date.now() + (30 * 60 * 1000);
       localStorage.setItem(storageKey, newExpiry.toString());
       
-    }, 800);
+    }, 300);
 
   } else {
     document.querySelectorAll('.hideonload').forEach(el => {
