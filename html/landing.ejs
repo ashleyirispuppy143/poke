@@ -995,7 +995,7 @@ Take back control of how you explore the internet! Watch videos, translate text,
 
       const randomFeatures = features.sort(() => 0.5 - Math.random()).slice(0, 3);
     %>
-<!-- <div>
+ <div class="hideonload">
       <h1 style="margin-left: auto; margin-right: auto; text-align: center; margin-bottom: -1em; margin-top: 1em;">
         TOP 3 REASONS WHY POKE IZ COOL!!
       </h1>
@@ -1013,7 +1013,7 @@ Take back control of how you explore the internet! Watch videos, translate text,
       <% }) %>
     </div>
 
-    <div class="adaptive-grid">
+    <div class="adaptive-grid hideonload">
       <%- include('./partials/card',
         icon_background='transparent',
         icon="none",
@@ -1383,6 +1383,14 @@ For more information, assets, and usage guidelines, visit <a href="https://codeb
         <div class="symbol-of-tolerance" role="img"></div>
 
         <script>
+        document.addEventListener('DOMContentLoaded', () => {
+  const elementsToHide = document.querySelectorAll('.hideonload');
+  
+  elementsToHide.forEach(el => {
+    el.style.display = 'none';
+  });
+});
+
           (function () {
             var marquee = document.querySelector('.pk-marquee');
             if (!marquee) return;
