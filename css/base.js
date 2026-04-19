@@ -13385,11 +13385,30 @@ const HAVE_ENOUGH_DATA = 4;
           // Page is not visible at all. Video can't render in background, but keep
           // audio alive so there's no gap. Flag video for resume on return.
           if (document.visibilityState === "hidden") {
-            if (state.intendedPlaying && platform.useBgControllerRetry) {
+            if (state.intendedPlaying && platform.useBgControllerRetry &&
+                !state.endedNaturally &&
+                !MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) {
               state.resumeOnVisible = true;
               // Keep audio playing in background even though video can't render
               if (coupledMode && audio && audio.paused && !userPauseLockActive() && !mediaSessionForcedPauseActive()) {
                 try { audio.play().catch(() => {}); } catch {}
+              }
+              // Also restart video synchronously. Without this, the video
+              // element stays paused for up to 550ms (keepalive tick 250ms +
+              // backoff 300ms) — which stalls the audio clock and produces
+              // the audible "play pause then wait" pattern in bg. The 200ms
+              // rate-limit prevents play-pause-play oscillation if Chromium
+              // keeps re-pausing.
+              const _bgPauseNow = now();
+              if (_bgPauseNow - (state._bgVideoPauseKickAt || 0) > 200 &&
+                  !userPauseLockActive() && !mediaSessionForcedPauseActive() &&
+                  !state.seeking && !state.seekBuffering && !state.restarting &&
+                  !NotMakePlayBackFixingNoticable.isRecovering()) {
+                state._bgVideoPauseKickAt = _bgPauseNow;
+                const _bgPauseVN = getVideoNode();
+                if (_bgPauseVN && _bgPauseVN.paused) {
+                  try { _bgPauseVN.play().catch(() => {}); } catch {}
+                }
               }
             }
             return;
@@ -14315,6 +14334,31 @@ const HAVE_ENOUGH_DATA = 4;
 
         if (audioEventsSquelched() || state.restarting || state.isProgrammaticAudioPause || state.isProgrammaticVideoPause) return;
         if (now() < state.audioPauseUntil || now() < state.audioPlayUntil) return;
+
+        // Fast path for background audio pause: restart synchronously. The
+        // setTimeout(0) below gets throttled to ~1s by Chromium in bg tabs,
+        // and keepalive (250ms tick + 300-800ms backoff) adds another half-
+        // second gap — which the user hears as "play, pause, wait, resume".
+        // Firing play() here closes the gap entirely. 200ms rate-limit
+        // prevents oscillation if Chromium re-pauses aggressively.
+        if (state.intendedPlaying &&
+            document.visibilityState === "hidden" &&
+            !state.endedNaturally &&
+            !userPauseLockActive() &&
+            !mediaSessionForcedPauseActive() &&
+            !state.seeking && !state.seekBuffering &&
+            !state.videoWaiting &&
+            !NotMakePlayBackFixingNoticable.isRecovering() &&
+            !MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) {
+          const _bgAPNow = now();
+          if (_bgAPNow - (state._bgAudioPauseKickAt || 0) > 200) {
+            state._bgAudioPauseKickAt = _bgAPNow;
+            try {
+              state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, _bgAPNow + 800);
+              if (audio && audio.paused) audio.play().catch(() => {});
+            } catch {}
+          }
+        }
 
         // Snapshot grace state now. Use setTimeout(0) instead of rAF — rAF is
         // throttled to 0fps in background tabs, so audio pause events would
