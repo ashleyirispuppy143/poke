@@ -722,6 +722,19 @@ document.addEventListener("DOMContentLoaded", () => {
       // (stall flags fire during initial buffering and would block startup)
       if (!state.firstPlayCommitted && state.intendedPlaying) return _origAudioPlay();
 
+      // STARTUP SETTLE: for the first 15s after commit the decoder is still
+      // warming up and readyState dips / transient stall flags do NOT
+      // represent real audio-blocking conditions. Any audio re-start kicked
+      // during this window (e.g. after a brief pause from the seeked handler
+      // or the loop watchdog) MUST be allowed through — blocking here causes
+      // audible silence gaps clustered at the start of playback. User pauses
+      // disable startupSettleActive via userGesturePauseIntent so an explicit
+      // pause still wins.
+      if (startupSettleActive() && state.intendedPlaying &&
+          !userPauseLockActive() && !mediaSessionForcedPauseActive()) {
+        return _origAudioPlay();
+      }
+
       // Block audio when video is confirmed stalled/buffering in visible foreground.
       // readyState can flicker between 2 and 3 during normal playback — DON'T
       // block audio on readyState alone. Only block when BOTH conditions are true:
@@ -892,7 +905,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Seek kick window: the seeked handler armed this to let audio start.
     // Killing audio here creates the exact play-pause-play spam we're fighting.
     if (now() < state.seekKickAudioAllowedUntil) return false;
-    // Startup settle window: in the first ~1.5s after commit the video
+    // Startup settle window: in the first ~9s after commit the video
     // decoder has natural readyState dips that the buffer monitor, the
     // "waiting" handler, and the sync-loop stall detector all misread as
     // real stalls — they then pass bypassGrace:true and cut audio. The
@@ -5043,7 +5056,16 @@ const HAVE_ENOUGH_DATA = 4;
   const AUDIO_PLAY_ATTEMPT_RESET_MS = 5000;
   const AUDIO_STARTUP_PLAY_RETRY_MS = 300;
   const MAX_AUDIO_STARTUP_RETRIES = 20;
-  const STARTUP_SETTLE_MS = 1500; // balanced: covers slow loads without blocking too long
+  // Bumped from 1500→9000→15000: the browser decoder has natural readyState
+  // dips for the first 10-15 seconds after first play as segments buffer and
+  // the pipeline warms up. Users still reported audio cuts clustered in the
+  // first ~15s at 9s, so the window had to be widened to cover the full
+  // decoder-warmup envelope. 15s comfortably covers slow-network warm-up
+  // without meaningfully delaying legitimate mid-playback stall recovery
+  // (mid-playback stalls set their own flags/timestamps and don't depend on
+  // this window). Note: user pauses bypass this via userGesturePauseIntent
+  // (startupSettleActive returns false when that flag is set).
+  const STARTUP_SETTLE_MS = 15000;
   const LOOP_DETECTION_WINDOW_MS = 2000;
   // Increased from 6→14: 6 events fires too easily during tab switches / buffering states.
   // 14 is still well below any real infinite loop scenario.
@@ -6384,6 +6406,13 @@ const HAVE_ENOUGH_DATA = 4;
 
   function pauseAudioForConfirmedVideoStall(holdMs = MIN_STALL_AUDIO_RESUME_MS) {
     if (!coupledMode || !audio || audio.paused) return false;
+    // STARTUP SETTLE: the decoder's natural readyState dips during the first
+    // 15s after commit look identical to a real stall from the outside —
+    // waiting handler fires, readyState < HAVE_FUTURE_DATA, etc. Killing
+    // audio on those dips is the primary cause of "audio cuts for the first
+    // 15s" artifacts. User pauses bypass this (startupSettleActive respects
+    // userGesturePauseIntent) so an explicit pause still stops audio instantly.
+    if (startupSettleActive()) return false;
     // Reject if we just killed audio for a stall very recently — stops rapid
     // cut loops when the browser oscillates between "waiting" and "playing".
     const nowMs = now();
@@ -8382,6 +8411,12 @@ const HAVE_ENOUGH_DATA = 4;
 
   async function execProgrammaticAudioPause(ms = 500) {
     if (!coupledMode || !audio) return;
+    // STARTUP SETTLE: during the first 15s after commit, readyState dips and
+    // transient stall flags are decoder warm-up, not real pause triggers.
+    // Silently drop programmatic pauses that are firing on those conditions.
+    // User pauses are immune: startupSettleActive respects userGesturePauseIntent
+    // and pauseTogether pauses audio directly (not via this function).
+    if (startupSettleActive()) return;
     // During immunity or NMPBFN recovery, don't pause audio for non-buffering reasons.
     // BUT: if video is genuinely buffering (readyState < HAVE_FUTURE_DATA), audio
     // MUST pause regardless of immunity. The anti-ghost invariant overrides everything.
@@ -13477,12 +13512,22 @@ const HAVE_ENOUGH_DATA = 4;
       try { UltraStabilizer.onVideoStall(); } catch {}
       // During startup / page load, stalls are expected as data arrives.
       // Don't set videoWaiting — it blocks audio through every gate.
-      if (state.firstPlayCommitted) {
+      // Also skip the flag during the STARTUP SETTLE window: the decoder's
+      // natural readyState dips during the first 15s of playback trigger
+      // "waiting" events that, if they set videoWaiting, cause the audio
+      // gate to block audio re-start for the full stall-resume hold. Once
+      // firstPlayCommitted AND out of the settle window, real stalls are
+      // legit and must set the flag.
+      if (state.firstPlayCommitted && !startupSettleActive()) {
         state.videoWaiting = true;
         state.videoStallSince = state.videoStallSince || now();
       }
       if (!state.intendedPlaying || state.restarting) return;
       if (!state.firstPlayCommitted) return;
+      // During startup settle, don't arm stall holds or schedule deferred
+      // audio kills — the decoder is still warming up and any kill here
+      // produces an audible cut in the first 15s.
+      if (startupSettleActive()) return;
       if (!state.startupPrimed || state.startupKickInFlight || (state.startupPhase && !state.firstPlayCommitted)) return;
 
       // CRITICAL FIX for random audio cuts: the "waiting" event can fire during
@@ -14486,10 +14531,15 @@ const HAVE_ENOUGH_DATA = 4;
       if (!_audioFirstPlayedAt) _audioFirstPlayedAt = performance.now();
       // GUARD: if video is actually buffering/waiting, don't let audio play.
       // This catches any path that bypassed the audio.play() gate.
+      // Skip entirely during startup settle — decoder warm-up produces
+      // false-positive "buffering" conditions that would re-pause audio on
+      // every "playing" event and manifest as cuts in the first 15s.
       const _mustHoldAudioForVideo =
-        isForegroundVideoActuallyBuffering() ||
-        shouldHoldAudioForForegroundStall({ allowRecovery: false }) ||
-        isConfirmedForegroundVideoStall(120);
+        !startupSettleActive() && (
+          isForegroundVideoActuallyBuffering() ||
+          shouldHoldAudioForForegroundStall({ allowRecovery: false }) ||
+          isConfirmedForegroundVideoStall(120)
+        );
       if (_mustHoldAudioForVideo) {
         const _apVN = getVideoNode();
         const _apRS = _apVN ? Number(_apVN.readyState || 0) : 4;
