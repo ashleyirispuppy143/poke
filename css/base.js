@@ -881,6 +881,14 @@ document.addEventListener("DOMContentLoaded", () => {
     // Seek kick window: the seeked handler armed this to let audio start.
     // Killing audio here creates the exact play-pause-play spam we're fighting.
     if (now() < state.seekKickAudioAllowedUntil) return false;
+    // Startup settle window: in the first ~1.5s after commit the video
+    // decoder has natural readyState dips that the buffer monitor, the
+    // "waiting" handler, and the sync-loop stall detector all misread as
+    // real stalls — they then pass bypassGrace:true and cut audio. The
+    // result is audible cuts clustered at the start of playback. This is
+    // unconditional (even bypassGrace respects it) because mid-playback
+    // stalls set their own flags; startup is when decoder noise is loudest.
+    if (now() < state.startupPlaySettleUntil) return false;
     // Grace window: playing / seeked / resume just armed audio. bypassGrace
     // is only for confirmed waiting events with sustained starvation.
     if (!opts.bypassGrace && now() < state.audioStartGraceUntil) return false;
@@ -7761,13 +7769,23 @@ const HAVE_ENOUGH_DATA = 4;
         // prevent correction after seek, causing "audio plays late after seek."
         const _inSeekKick = state.seekKickAudioAllowedUntil > 0 && now() < state.seekKickAudioAllowedUntil;
 
-        // if audio is currently playing and we're in the first 3s of playback,
-        // only seek for large drift (>0.8s). small drift at startup is
-        // normal — decoders initialize at different speeds. the sync loop
+        // if audio is currently playing and we're in the first few seconds of
+        // playback, only seek for large drift (>0.8s). small drift at startup
+        // is normal — decoders initialize at different speeds. the sync loop
         // corrects it via rate nudging without any audible skip.
         // Exception: after a seek, always correct position regardless of playback age.
-        const inEarlyPlayback = !audio.paused && _audioFirstPlayedAt > 0 &&
+        //
+        // Detection is belt-and-suspenders: the time-based signal
+        // (_audioFirstPlayedAt) relies on the audio `playing` event firing,
+        // but squelchAudioEvents / DONTMAKEITDOUBLEPLAY / audioEventsSquelchedUntil
+        // frequently eat that event, leaving the timestamp at 0 and the guard
+        // dead. Fall back to audio position (<5s into the track) as a second
+        // signal so the protection still applies when the event was missed.
+        const _aEarlyCT = Number(audio.currentTime) || 0;
+        const _earlyByTime = _audioFirstPlayedAt > 0 &&
           (performance.now() - _audioFirstPlayedAt) < 5000;
+        const _earlyByPos = _aEarlyCT > 0.1 && _aEarlyCT < 5.0;
+        const inEarlyPlayback = !audio.paused && (_earlyByTime || _earlyByPos);
         if (inEarlyPlayback && timeDiff < 1.0 && !_inSeekKick) return;
 
         const isStartup = state.startupPhase || !state.firstPlayCommitted;
@@ -8306,11 +8324,15 @@ const HAVE_ENOUGH_DATA = 4;
       state.videoPlayInFlight = wrapped;
       // Safety timeout: clear flags if promise never resolves. Some browsers
       // swallow play() promises when the tab is backgrounded, leaving
-      // isProgrammaticVideoPlay=true forever → play/pause becomes unresponsive.
+      // isProgrammaticVideoPlay=true forever → play/pause becomes unresponsive
+      // AND tryAcquireVideoPlayLock (line ~898) refuses every new attempt.
+      // 3000 was too long — a user who hits play during that window sees
+      // nothing happen. 1500 covers realistic foreground play() resolves
+      // (~800ms worst case) without leaving the flag pinned.
       const _playFlightSafety = setTimeout(() => {
         if (state.videoPlayInFlight === wrapped) state.videoPlayInFlight = null;
         state.isProgrammaticVideoPlay = false;
-      }, 3000);
+      }, 1500);
       wrapped.finally(() => clearTimeout(_playFlightSafety));
       return wrapped.catch(() => {});
     } catch (e) {
@@ -10023,7 +10045,15 @@ const HAVE_ENOUGH_DATA = 4;
       const _audioBehindVideo = atCurrent < vtAtFinalize;
       const _shouldWrite = !wouldRestart && _drift > _threshold &&
         (audio.paused || _audioBehindVideo);
-      if (_shouldWrite) {
+      // The seeked handler owns the short retry chain and updates
+      // _lastSafeSeekAt every time it writes audio.currentTime. If it wrote
+      // in the last 350ms, another write here races with its decoder flush
+      // and manifests as a brief audio cut / replay. Skip and let the
+      // retry chain keep audio pinned.
+      const _finalizeNow = performance.now();
+      const _recentSeekedWrite = (_finalizeNow - _lastSafeSeekAt) < 350;
+      if (_shouldWrite && !_recentSeekedWrite) {
+        _lastSafeSeekAt = _finalizeNow;
         state._allowAudioTimeWrite = true;
         try { audio.currentTime = vtAtFinalize; } catch {}
         state._allowAudioTimeWrite = false;
@@ -13084,8 +13114,17 @@ const HAVE_ENOUGH_DATA = 4;
           }
         } catch {}
         const _vn = getVideoNode();
-      // Only call play if actually paused — play() on playing element fires events
-      if (_vn && _vn.paused && typeof _vn.play === 'function') _vn.play().catch(() => {});
+      // Throttle: if something keeps pausing us during immunity, fighting every
+      // pause produces a play/pause oscillation. Attempt resume at most once
+      // per 400ms, and route through the lock so the resulting events are
+      // flagged as programmatic (no re-entry via this same handler).
+      if (_vn && _vn.paused) {
+        const _nowImm = now();
+        if (_nowImm - (state._lastImmunityPlayKickAt || 0) > 400) {
+          state._lastImmunityPlayKickAt = _nowImm;
+          if (tryAcquireVideoPlayLock()) execProgrammaticVideoPlay();
+        }
+      }
       return;
         }
 
