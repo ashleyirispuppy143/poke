@@ -15791,9 +15791,25 @@ const HAVE_ENOUGH_DATA = 4;
             state.bgHiddenWasPlaying = false;
 
             if (_vcVPlaying && _vcAPlaying) {
-              // Already playing — just schedule a gentle sync for drift correction
+              // Instant resync on tab return. Background throttling drifts audio
+              // and video apart, and runSync's skipDrift gate blocks correction
+              // for the full 2s immunity window — so without this the user sees
+              // audio lag video until immunity expires. One-shot snap both
+              // volume (user may have dragged while hidden) and audio position
+              // to match video right now.
+              try { updateAudioGainImmediate(true); } catch {}
+              try {
+                if (coupledMode && audio && !audio.paused) {
+                  const _trVt = Number(video.currentTime()) || 0;
+                  const _trAt = Number(audio.currentTime) || 0;
+                  if (isFinite(_trVt) && isFinite(_trAt) && _trVt > 0.5 &&
+                      Math.abs(_trVt - _trAt) > 0.35) {
+                    safeSetAudioTime(_trVt);
+                  }
+                }
+              } catch {}
               setFastSync(600);
-              scheduleSync(200);
+              scheduleSync(0);
             } else {
               // onTabReturn() already called instantPlay() with a single play()
               // on both video and audio. Don't add more competing resume logic —
@@ -16255,8 +16271,12 @@ const HAVE_ENOUGH_DATA = 4;
         state.videoStallAudioPaused || NotMakePlayBackFixingNoticable.isActive()) {
       return;
     }
-    // During tab return grace, don't snap volume — let NMPBFN handle it
-    if (isTabReturnImmune() && state.firstPlayCommitted) return;
+    // During tab return grace, don't snap volume unless the user is actively
+    // changing it — NMPBFN manages volume for programmatic recovery, but a
+    // user dragging the slider within the 2s immunity window must propagate
+    // instantly. Without this, audio lags the slider by up to 2 seconds.
+    const _vcUserInitiated = (now() - state.lastUserActionTime) < 1500;
+    if (isTabReturnImmune() && state.firstPlayCommitted && !_vcUserInitiated) return;
     if (state.audioFading) cancelActiveFade();
     updateAudioGainImmediate(true);
     // Only track user-initiated mute: recent user action + no programmatic flags
