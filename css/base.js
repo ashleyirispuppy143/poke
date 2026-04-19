@@ -13629,10 +13629,14 @@ const HAVE_ENOUGH_DATA = 4;
           if (canKillAudio({ bypassGrace: true })) {
             pauseAudioForConfirmedVideoStall(Math.max(MIN_STALL_AUDIO_RESUME_MS, 400));
           }
-        }, 2500); // 2500ms: bumped from 1200 — audio was still cutting on
-        // longer segment-boundary stalls. By 2.5s, if video's genuinely
-        // frozen the user already knows; audio silence adds nothing. Under
-        // that, transient decoder hiccups shouldn't kill audio.
+        }, 3500); // 3500ms: bumped from 2500. Users were reporting random
+        // "audio just cuts sometimes" during otherwise-normal playback. Most
+        // of those are 2-3s network stalls where video catches up on its own
+        // before the user notices. Killing audio at 2.5s creates a visible
+        // cut for a stall that would have resolved silently. 3.5s means only
+        // genuinely sustained stalls (user already sees frozen video) kill
+        // audio — and the progress-check inside the timer means any video
+        // advance > 0.12s skips the kill entirely.
       }
 
       if (platform.useBgControllerRetry && state.intendedPlaying) {
@@ -15137,9 +15141,14 @@ const HAVE_ENOUGH_DATA = 4;
               const _kickArmedAt = now();
               state.seekAudioKickAt = _kickArmedAt;
               // Widen the kick window so late-arriving audio plays are still
-              // allowed through the gate. 3000 was sometimes too short.
-              state.seekKickAudioAllowedUntil = _kickArmedAt + 4000;
-              state.seekAudioMustStartUntil = _kickArmedAt + 4000;
+              // allowed through the gate AND the 2.5s deferred "waiting" kill
+              // timer (video.on("waiting") + 2500ms) can't fire within it.
+              // 4000 was occasionally too short: if "waiting" fired at seeked+1.6s,
+              // its kill timer at seeked+4.1s landed just past seekKickAudioAllowedUntil,
+              // producing an audible cut right when video was coming back.
+              // 6500 fully covers the 2.5s deferred kill plus a safety margin.
+              state.seekKickAudioAllowedUntil = _kickArmedAt + 6500;
+              state.seekAudioMustStartUntil = _kickArmedAt + 6500;
               state.isProgrammaticAudioPause = false;
               state.audioEventsSquelchedUntil = 0;
               state.audioPauseUntil = 0;
@@ -15249,7 +15258,52 @@ const HAVE_ENOUGH_DATA = 4;
               const _t4 = setTimeout(() => _kickAudio(4), 400);
               const _t5 = setTimeout(() => _kickAudio(5), 800);
               const _t6 = setTimeout(() => _kickAudio(6), 1400);
-              state._seekPostTimers.push(_t1, _t2, _t3, _t4, _t5, _t6);
+              // Post-seek drift finalize. The kick chain only snaps audio forward
+              // when it's BEHIND video (to avoid the "replay" bug mid-playback).
+              // But after a user-initiated seek to T, the authoritative position
+              // is video's currentTime — if audio ended up ahead (decoder ran
+              // faster than video during buffer refill), playback starts from a
+              // DIFFERENT place than where the user dropped the scrubber. This
+              // finalize fixes that by snapping audio backward to video's landing
+              // position once, at t=1800ms (after kick chain) and t=2800ms.
+              const _postSeekFinalize = () => {
+                if (state.seekId !== _kickSeekId) return;
+                if (!state.intendedPlaying || state.endedNaturally) return;
+                if (state.seeking || state.seekBuffering) return;
+                if (!coupledMode || !audio || audio.paused) return;
+                try {
+                  const _finVt = Number(video.currentTime()) || 0;
+                  const _finAt = Number(audio.currentTime) || 0;
+                  if (!isFinite(_finVt) || !isFinite(_finAt) || _finVt < 0.2) return;
+                  const _finDrift = _finAt - _finVt; // positive = audio ahead
+                  // Require video to actually be playing with data — don't snap
+                  // while video is still buffering, or audio gets yanked to a
+                  // stale position that video then moves past.
+                  const _finVN = getVideoNode();
+                  const _finVRS = _finVN ? Number(_finVN.readyState || 0) : 0;
+                  if (_finVRS < HAVE_FUTURE_DATA) return;
+                  if (_finVN && _finVN.paused) return;
+                  // Snap audio backward IF ahead by > 0.5s. Post-seek only —
+                  // safe to rewind because video's position is the user intent.
+                  if (_finDrift > 0.5) {
+                    squelchAudioEvents(300);
+                    state._allowAudioTimeWrite = true;
+                    try { audio.currentTime = _finVt; } catch {}
+                    state._allowAudioTimeWrite = false;
+                    _lastSafeSeekAt = performance.now();
+                  } else if (_finDrift < -0.5) {
+                    // Audio behind video — push forward (kick chain usually got
+                    // this, but cover the case where all six retries couldn't).
+                    state._allowAudioTimeWrite = true;
+                    try { audio.currentTime = _finVt; } catch {}
+                    state._allowAudioTimeWrite = false;
+                    _lastSafeSeekAt = performance.now();
+                  }
+                } catch {}
+              };
+              const _t7 = setTimeout(_postSeekFinalize, 1800);
+              const _t8 = setTimeout(_postSeekFinalize, 2800);
+              state._seekPostTimers.push(_t1, _t2, _t3, _t4, _t5, _t6, _t7, _t8);
               // Legacy name retained for the line below that references it
               const _audioKickTimer = _t1;
               // NO 400ms safety retry. The old retry raced with the buffer monitor:
@@ -16096,6 +16150,41 @@ const HAVE_ENOUGH_DATA = 4;
         armForegroundReturnUserPlay(45000);
       } else {
         clearForegroundReturnUserPlay();
+      }
+      // Alt-tab (window-blur then focus WITHOUT visibility change) also drifts
+      // audio/video — the OS deprioritizes the window without marking the tab
+      // hidden, so keepalive keeps audio running at normal rate while video's
+      // rVFC/rAF-driven decode gets throttled by compositor. On return, snap
+      // video forward to audio's clock so the user resumes where they actually
+      // are, not at a stale frame that rubber-bands via drift correction.
+      // Only do this if visibility handler didn't already run (otherwise we'd
+      // double-snap on tab-switch-with-blur).
+      if (_isVisible && !_recentVisibilityReturn && state.intendedPlaying &&
+          coupledMode && audio && !audio.paused && !getVideoPaused() &&
+          !state.seeking && !state.seekBuffering && !state.seekResumeInFlight) {
+        try {
+          const _fVt = Number(video.currentTime()) || 0;
+          const _fAt = Number(audio.currentTime) || 0;
+          const _fDrift = _fAt - _fVt;
+          if (isFinite(_fVt) && isFinite(_fAt) && _fVt > 0.5 &&
+              Math.abs(_fDrift) > 0.35) {
+            if (_fDrift > 0.35) {
+              try {
+                state._isMicroSeek = true;
+                state.bgSilentTimeSyncing = true;
+                const _fVN = getVideoNode();
+                if (_fVN) _fVN.currentTime = _fAt;
+                if (videoEl && videoEl !== _fVN) videoEl.currentTime = _fAt;
+                setTimeout(() => {
+                  state._isMicroSeek = false;
+                  state.bgSilentTimeSyncing = false;
+                }, 250);
+              } catch {}
+            } else {
+              safeSetAudioTime(_fVt);
+            }
+          }
+        } catch {}
       }
       state.focusStableUntil = _focusTs + 300;
       state.pauseEventCount = 0;
