@@ -869,9 +869,20 @@ document.addEventListener("DOMContentLoaded", () => {
   // Callers pass { reason } for forensics and { bypassGrace: true } only
   // when the browser itself signaled a confirmed stall (waiting event with
   // readyState < HAVE_FUTURE_DATA that persisted past a short settling window).
+  // Global audio-kill rate limiter. Even when every individual guard agrees
+  // that audio should be paused, two independent kill paths firing within a
+  // few hundred ms produce the "cut, resume, cut" artifact. A single global
+  // cooldown across ALL kill sites eliminates this class of bug.
+  let _lastGlobalAudioKillAt = 0;
+  const GLOBAL_AUDIO_KILL_COOLDOWN_MS = 2500;
+
   function canKillAudio(opts) {
     opts = opts || {};
     if (!coupledMode || !audio) return false;
+    // Global cooldown: never pause audio within 2.5s of the previous kill.
+    // Any caller that passes { force: true } (only user actions / unmount)
+    // bypasses this. Every *automatic* kill path respects it.
+    if (!opts.force && now() - _lastGlobalAudioKillAt < GLOBAL_AUDIO_KILL_COOLDOWN_MS) return false;
     // Never kill in background — keepalive depends on audio staying alive.
     if (document.visibilityState === "hidden") return false;
     // Don't kill during active seek — seek handlers own audio state there.
@@ -1942,14 +1953,24 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       // --- Check 5: Audio position frozen (decoder stalled) ---
+      // Only cut audio when we're CERTAIN the decoder is wedged: position
+      // hasn't advanced for 6+ ticks (3s), audio.readyState indicates the
+      // decoder has no buffered frames to play, AND canKillAudio agrees.
+      // Previous 2s window + bare readyState-less check was cutting audio
+      // on normal segment-boundary micro-stalls.
       if (coupledMode && audio && !audioPaused) {
         const currentPos = Number(audio.currentTime) || 0;
         if (_lastWatchdogAudioPos > 0 && Math.abs(currentPos - _lastWatchdogAudioPos) < 0.01) {
           _audioFrozenCount++;
-          if (_audioFrozenCount >= 4) { // 2 seconds of frozen audio
-            // Audio is "playing" but position isn't moving — decoder is stalled.
-            // Pause and re-play to force decoder reset.
+          const _aRS = Number(audio.readyState || 0);
+          const _decoderActuallyStarved = _aRS < HAVE_CURRENT_DATA;
+          if (_audioFrozenCount >= 6 && _decoderActuallyStarved &&
+              canKillAudio({ bypassGrace: true, reason: "recovery-frozen-audio" }) &&
+              (now() - _lastGlobalAudioKillAt) >= GLOBAL_AUDIO_KILL_COOLDOWN_MS) {
+            // Audio is "playing" but position isn't moving AND the decoder
+            // has no data — real stall. Pause and re-play to force reset.
             _audioFrozenCount = 0;
+            _lastGlobalAudioKillAt = now();
             try {
               audio.pause();
               audio.volume = 0;
@@ -2117,12 +2138,20 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       // Rule 3: Audio should not be frozen (position not advancing while playing)
+      // Only fire when the decoder is ACTUALLY starved (readyState < HAVE_CURRENT_DATA).
+      // A stopped position with decoder data means something else (paused rate,
+      // visibility throttle, etc.) — not a decoder wedge. Previously this fired
+      // on any frozen position and cut audio during normal playback.
       if (!aPaused && !vPaused) {
         if (Math.abs(at - _lastAudioPos) < 0.01 && (t - _lastCheckAt) > TICK_MS * 0.8) {
           _frozenCount++;
-          if (_frozenCount >= FROZEN_THRESHOLD) {
-            // Audio decoder is stuck — restart it
+          const _aRSRule3 = Number(audio.readyState || 0);
+          const _decoderStarved = _aRSRule3 < HAVE_CURRENT_DATA;
+          if (_frozenCount >= FROZEN_THRESHOLD && _decoderStarved &&
+              canKillAudio({ bypassGrace: true, reason: "MSAINCOW-frozen" })) {
+            // Audio decoder is stuck AND actually has no data — restart it
             _frozenCount = 0;
+            _lastGlobalAudioKillAt = t;
             state.isProgrammaticAudioPause = true;
             try { audio.pause(); } catch {}
             setTimeout(() => {
@@ -4501,8 +4530,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
       function _fixSilence() {
         _silentSince = 0;
-        _silenceFixed++;
         if (!coupledMode || !audio || !state.intendedPlaying) return;
+        // Only intervene if canKillAudio agrees AND the decoder is genuinely
+        // starved. A "silent but not advancing" state with buffered data is
+        // usually audio waiting for the video to catch up — the sync loop
+        // handles that without cutting audio.
+        const _aRSSilence = Number(audio.readyState || 0);
+        if (_aRSSilence >= HAVE_CURRENT_DATA) return;
+        if (!canKillAudio({ bypassGrace: true, reason: "silence-guard" })) return;
+        _silenceFixed++;
+        _lastGlobalAudioKillAt = _now();
         try {
           const vt = Number(video.currentTime()) || 0;
           squelchAudioEvents(600);
@@ -6359,6 +6396,7 @@ const HAVE_ENOUGH_DATA = 4;
     // 800ms window — just the immediate post-click period.
     if (userWantsPlayNow(800) || directUserToggleActive(800)) return false;
     _lastStallKillAt = nowMs;
+    _lastGlobalAudioKillAt = nowMs;
     const holdUntil = nowMs + Math.max(0, Number(holdMs) || 0);
     state.videoStallAudioPaused = true;
     state.stallAudioPausedSince = state.stallAudioPausedSince || nowMs;
