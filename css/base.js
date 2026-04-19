@@ -8987,8 +8987,29 @@ const HAVE_ENOUGH_DATA = 4;
       if (mySession !== state.playSessionId || !state.intendedPlaying) return;
 
       if (!aPausedNow && !vPausedNow && isFinite(atNow) && isFinite(vtNow)) {
-        // Both playing — just let the sync loop handle drift. No seeks needed.
-        // Seeking here causes the visible "skip forward" on tab return.
+        // Both playing — but bg throttling commonly leaves audio ahead of
+        // video by several seconds. Without a one-shot correction, drift
+        // slowly rubber-bands via rate sync / sync-loop seeks over seconds,
+        // which the user reads as "it's playing from a different place."
+        // Snap video to audio if drift is meaningful; otherwise leave alone.
+        const _sbcDrift = atNow - vtNow;
+        if (Math.abs(_sbcDrift) > 0.35 && atNow > 0.5 && !isHiddenBackground()) {
+          if (_sbcDrift > 0.35) {
+            try {
+              state._isMicroSeek = true;
+              state.bgSilentTimeSyncing = true;
+              const _sbcVN2 = getVideoNode();
+              if (_sbcVN2) _sbcVN2.currentTime = atNow;
+              if (videoEl && videoEl !== _sbcVN2) videoEl.currentTime = atNow;
+              setTimeout(() => {
+                state._isMicroSeek = false;
+                state.bgSilentTimeSyncing = false;
+              }, 250);
+            } catch {}
+          } else {
+            safeSetAudioTime(vtNow);
+          }
+        }
         state.bgHiddenWasPlaying = false;
         state.resumeOnVisible = false;
         setFastSync(1000);
@@ -9003,9 +9024,26 @@ const HAVE_ENOUGH_DATA = 4;
           // Background only: silently update video time to keep progress bar in sync.
           bgSilentSyncVideoTime(atNow);
         }
-        // Foreground: do NOT seek video to audio position — it causes visible skip.
-        // Just restart video from its current position, sync loop handles drift.
+        // Foreground: if audio is clearly ahead of video, snap video forward
+        // to audio's position BEFORE restarting it. Audio ran continuously
+        // via keepalive in bg, so audio.currentTime is the real elapsed time
+        // — starting video at its stale position and letting drift correction
+        // rubber-band over several seconds is what the user perceives as
+        // "plays from a different place". One clean forward seek is better.
         if (!inBg && vPausedNow && !state.isProgrammaticVideoPlay) {
+          if (isFinite(vtNow) && (atNow - vtNow) > 0.35 && atNow > 0.5) {
+            try {
+              state._isMicroSeek = true;
+              state.bgSilentTimeSyncing = true;
+              const _sbcVN = getVideoNode();
+              if (_sbcVN) _sbcVN.currentTime = atNow;
+              if (videoEl && videoEl !== _sbcVN) videoEl.currentTime = atNow;
+              setTimeout(() => {
+                state._isMicroSeek = false;
+                state.bgSilentTimeSyncing = false;
+              }, 250);
+            } catch {}
+          }
           execProgrammaticVideoPlay();
         }
         state.bgHiddenWasPlaying = false;
@@ -15838,17 +15876,40 @@ const HAVE_ENOUGH_DATA = 4;
               // Instant resync on tab return. Background throttling drifts audio
               // and video apart, and runSync's skipDrift gate blocks correction
               // for the full 2s immunity window — so without this the user sees
-              // audio lag video until immunity expires. One-shot snap both
-              // volume (user may have dragged while hidden) and audio position
-              // to match video right now.
+              // audio lag video until immunity expires.
               try { updateAudioGainImmediate(true); } catch {}
               try {
                 if (coupledMode && audio && !audio.paused) {
                   const _trVt = Number(video.currentTime()) || 0;
                   const _trAt = Number(audio.currentTime) || 0;
+                  const _trDrift = _trAt - _trVt; // positive = audio ahead
                   if (isFinite(_trVt) && isFinite(_trAt) && _trVt > 0.5 &&
-                      Math.abs(_trVt - _trAt) > 0.35) {
-                    safeSetAudioTime(_trVt);
+                      Math.abs(_trDrift) > 0.35) {
+                    if (_trDrift > 0.35) {
+                      // Audio ahead — audio was the reliable clock during bg
+                      // (keepalive kept it running; video decode is throttled
+                      // by Chromium in hidden tabs). audio.currentTime reflects
+                      // real elapsed time, so snap video FORWARD to match.
+                      // Without this the user returns to a stale frame that
+                      // then rubber-bands via drift correction over several
+                      // seconds — or worse, audio gets yanked BACKWARD to the
+                      // stale video position, replaying already-heard content.
+                      try {
+                        state._isMicroSeek = true;
+                        state.bgSilentTimeSyncing = true;
+                        const _trVN = getVideoNode();
+                        if (_trVN) _trVN.currentTime = _trAt;
+                        if (videoEl && videoEl !== _trVN) videoEl.currentTime = _trAt;
+                        setTimeout(() => {
+                          state._isMicroSeek = false;
+                          state.bgSilentTimeSyncing = false;
+                        }, 250);
+                      } catch {}
+                    } else {
+                      // Video ahead of audio (rare — audio stalled in bg
+                      // while video kept decoding). Snap audio to video.
+                      safeSetAudioTime(_trVt);
+                    }
                   }
                 }
               } catch {}
