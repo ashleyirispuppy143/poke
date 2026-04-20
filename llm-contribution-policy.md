@@ -2,7 +2,7 @@
 
 **Version:** 2.1.3-final • **Last Review:** 2026-04-20
 
-**Author:** Güneş Şevval Arjinya Melisoy AKA Ashley Íris Celeste([https://ashleyirispup.cat](https://ashleyirispup.cat))
+**Author:** Güneş Şevval Arjinya Melisoy AKA Ashley Íris Celeste ([https://ashleyirispup.cat](https://ashleyirispup.cat))
 
 *Originally adapted from the [Fedora Project AI Contribution Policy](https://docs.fedoraproject.org/en-US/council/policy/ai-contribution-policy/)*
 
