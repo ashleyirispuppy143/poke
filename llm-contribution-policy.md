@@ -1,6 +1,6 @@
 # Algorithmic Collaboration and Contribution Guidelines
 
-**Version:** 2.1.3-final • **Last Review:** 2026-04-20
+**Version:** 2.1.4-final • **Last Review:** 2026-04-20
 
 **Author:** Güneş Şevval Arjinya Melisoy AKA Ashley Íris Celeste ([https://ashleyirispup.cat](https://ashleyirispup.cat))
 
@@ -45,7 +45,7 @@ When utilizing AI assistance for software development, you **SHOULD** use models
 #### The 75% Standard Limit
 For the vast majority of contributions, you **MAY** use generative AI to author up to **75%** of the submitted code. The remaining 25% (or more) must consist of contributor-authored logic, structural design, manual refactoring, or integration wiring to make certain the code fits organically into the project architecture.
 * **Where this applies:**
-   * Core feature development and business logic implementation.
+  * Core feature development and business logic implementation.
   * Bug fixes, patch creations, and issue resolutions.
   * API integrations, endpoint creations, and data fetching pipelines.
   * Complex algorithmic problem-solving and mathematical models.
@@ -99,6 +99,11 @@ If the AI-generated code constitutes less than 50% of the submission, you **MUST
 
 ### Documentation Fragments
 While 100% AI documentation is banned, if you use AI to draft, format, or structure minor sections of a larger document, you **SHOULD** disclose this in the PR description or as a footnote at the bottom of the document file.
+
+### External Sources and False Positives
+We recognize that code origins can sometimes be ambiguous. 
+* **Unknown Origins (e.g., StackOverflow):** If you incorporate code snippets from external forums, documentation, or other open-source repositories and are genuinely unsure if the original author used generative AI, you do not need to apply an AI disclosure trailer. You are still fully accountable for the code's quality and must follow standard open-source attribution practices.
+* **False Positives:** The Poke Project does not rely on automated "AI detection" tools, as they are notoriously unreliable. If you manually author code that happens to resemble common AI outputs, or if a third-party tool inaccurately flags your work, you will not be penalized. You are only required to disclose actual, active use of generative AI tools during your contribution process.
 
 ### Prompt Context (Optional but Encouraged)
 Contributors are highly encouraged to include the core prompts they used to generate major logic blocks in the PR description. Providing the prompt context helps reviewers understand the intent behind the generated code, trace logical decisions, and evaluate potential edge cases more effectively.
@@ -156,8 +161,11 @@ Adherence to this policy is mandatory. Failure to comply with these guidelines w
 
 ## Changelog
 
-**v2.1.3-final (2026-04-20)**
+**v2.1.4-final (2026-04-20)**
 * **Final Version:** Marked as the final, definitive draft for the 2.x policy line.
+* Added the "External Sources and False Positives" section to clarify rules around copying code of unknown origins (e.g., StackOverflow) and address concerns regarding unreliable AI detection tools.
+
+**v2.1.3 (2026-04-20)**
 * Formatted the author attribution to include the website link next to the name, rather than as a direct name hyperlink.
 * Overhauled section formatting for better readability, utilizing sub-headers, rationale blocks ("Why we do this"), and bulleted lists.
 * Expanded the "Community Conduct" section to explicitly explain the philosophy behind the policy (preventing gatekeeping, prioritizing merit over method, fostering safety).
