@@ -1,6 +1,6 @@
 # Algorithmic Collaboration and Contribution Guidelines
 
-**Version:** 2.1.4-final • **Last Review:** 2026-04-20
+**Version:** 2.1.5-final • **Last Review:** 2026-04-20
 
 **Author:** Güneş Şevval Arjinya Melisoy AKA Ashley Íris Celeste ([https://ashleyirispup.cat](https://ashleyirispup.cat))
 
@@ -44,21 +44,23 @@ When utilizing AI assistance for software development, you **SHOULD** use models
 
 #### The 75% Standard Limit
 For the vast majority of contributions, you **MAY** use generative AI to author up to **75%** of the submitted code. The remaining 25% (or more) must consist of contributor-authored logic, structural design, manual refactoring, or integration wiring to make certain the code fits organically into the project architecture.
-* **Where this applies:**
-  * Core feature development and business logic implementation.
-  * Bug fixes, patch creations, and issue resolutions.
-  * API integrations, endpoint creations, and data fetching pipelines.
-  * Complex algorithmic problem-solving and mathematical models.
-  * UI/UX component building and front-end styling.
+
+**Applicable Scenarios for the 75% Limit:**
+* Core feature development and business logic implementation.
+* Bug fixes, patch creations, and issue resolutions.
+* API integrations, endpoint creations, and data fetching pipelines.
+* Complex algorithmic problem-solving and mathematical models.
+* UI/UX component building and front-end styling.
 
 #### The 90% Exception Limit
 You **MAY** use generative AI to author up to **90%** of the code *only* for highly specific, routine, or strictly structured scenarios where manual typing is primarily drudgery. Utilizing this higher threshold generally requires prior discussion with project maintainers before submission.
-* **Where this applies:**
-  * Generating massive boilerplate files or initial project structural foundations.
-  * Creating large and repetitive data arrays (e.g., configuration maps, dictionaries, localized language strings).
-  * Automated repository-wide refactoring (e.g., bulk-renaming, structural updates across hundreds of files).
-  * Porting libraries from one language or syntax to another.
-  * Autogenerating API clients or SDK wrappers directly from schemas.
+
+**Applicable Scenarios for the 90% Limit:**
+* Generating massive boilerplate files or initial project structural foundations.
+* Creating large and repetitive data arrays (e.g., configuration maps, dictionaries, localized language strings).
+* Automated repository-wide refactoring (e.g., bulk-renaming, structural updates across hundreds of files).
+* Porting libraries from one language or syntax to another.
+* Autogenerating API clients or SDK wrappers directly from schemas.
 
 ### Other Permitted Usages
 The Poke Project explicitly allows and encourages the use of AI tools for the following workflow enhancements:
@@ -101,9 +103,19 @@ If the AI-generated code constitutes less than 50% of the submission, you **MUST
 While 100% AI documentation is banned, if you use AI to draft, format, or structure minor sections of a larger document, you **SHOULD** disclose this in the PR description or as a footnote at the bottom of the document file.
 
 ### External Sources and False Positives
-We recognize that code origins can sometimes be ambiguous. 
-* **Unknown Origins (e.g., StackOverflow):** If you incorporate code snippets from external forums, documentation, or other open-source repositories and are genuinely unsure if the original author used generative AI, you do not need to apply an AI disclosure trailer. You are still fully accountable for the code's quality and must follow standard open-source attribution practices.
-* **False Positives:** The Poke Project does not rely on automated "AI detection" tools, as they are notoriously unreliable. If you manually author code that happens to resemble common AI outputs, or if a third-party tool inaccurately flags your work, you will not be penalized. You are only required to disclose actual, active use of generative AI tools during your contribution process.
+We recognize that code origins can sometimes be ambiguous, and AI detection tools are deeply flawed. To protect contributors and maintain a welcoming environment, we operate on a principle of trust.
+
+**Code from External Platforms (e.g., StackOverflow, Forums):**
+If you incorporate code snippets from external forums, documentation, or other free software repositories and are genuinely unsure if the original author used generative AI, you do not need to apply an AI disclosure trailer. You are still fully accountable for the code's quality, security, and license compliance, and you must follow standard free software attribution practices.
+
+**Legacy Code and Older Projects:**
+Copying boilerplate, logic, or scripts from older, pre-LLM codebases does not require disclosure, even if a modern AI model would generate something remarkably similar today. 
+
+**The "False Positive" Rule:**
+The Poke Project does not rely on automated "AI detection" tools, as they are notoriously unreliable and frequently flag neurodivergent phrasing, non-native English writing, or highly structured coding styles as AI-generated.
+* You will never be penalized if a third-party tool inaccurately flags your work.
+* Project maintainers **MUST NOT** reject code, block PRs, or aggressively interrogate contributors based purely on "AI vibes" or suspicions that code "looks generated."
+* You are only required to disclose actual, active use of generative AI tools during your personal contribution process.
 
 ### Prompt Context (Optional but Encouraged)
 Contributors are highly encouraged to include the core prompts they used to generate major logic blocks in the PR description. Providing the prompt context helps reviewers understand the intent behind the generated code, trace logical decisions, and evaluate potential edge cases more effectively.
@@ -161,11 +173,16 @@ Adherence to this policy is mandatory. Failure to comply with these guidelines w
 
 ## Changelog
 
+**v2.1.5-final (2026-04-20)**
+* **Final Version:** Marked as the ultimate, definitive draft for the 2.x policy line.
+* Replaced all instances of "open-source" with "free software" to better align with project terminology.
+* Greatly expanded the "External Sources and False Positives" section. Added explicit protections for contributors against unreliable AI-detection tools and "AI vibes" accusations, and clarified rules around legacy code and external forum snippets.
+* Improved formatting and readability of "Permitted Usage and Prohibitions" and "Transparency and Disclosure Thresholds" by utilizing flatter list structures and bolded headers for easier scanning.
+
 **v2.1.4-final (2026-04-20)**
-* **Final Version:** Marked as the final, definitive draft for the 2.x policy line.
 * Added the "External Sources and False Positives" section to clarify rules around copying code of unknown origins (e.g., StackOverflow) and address concerns regarding unreliable AI detection tools.
 
-**v2.1.3 (2026-04-20)**
+**v2.1.3-final (2026-04-20)**
 * Formatted the author attribution to include the website link next to the name, rather than as a direct name hyperlink.
 * Overhauled section formatting for better readability, utilizing sub-headers, rationale blocks ("Why we do this"), and bulleted lists.
 * Expanded the "Community Conduct" section to explicitly explain the philosophy behind the policy (preventing gatekeeping, prioritizing merit over method, fostering safety).
