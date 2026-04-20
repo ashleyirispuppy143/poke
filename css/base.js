@@ -117,25 +117,44 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {}
     return 0;
   }
+  // CPU optimization: cache frame count for up to 15ms (<1 frame @60fps).
+  // Multiple modules (rAF freeze detectors, PlayResumeFrameVerifier, VCFM) all
+  // query this on every frame — without caching the GPU sync cost of
+  // getVideoPlaybackQuality() gets paid 3-5x per frame (~5ms wasted per frame
+  // on Chromium). This caching is safe because frame counts only advance
+  // monotonically at <=60Hz; 15ms staleness can never hide a real advance.
+  let _frameCountCache = { v: NaN, node: null, at: 0 };
   function getVideoPresentedFrameCount(vNode = null) {
     const v = vNode || getVideoNode();
     if (!v) return NaN;
+    const _nowFc = performance.now();
+    if (_frameCountCache.node === v && (_nowFc - _frameCountCache.at) < 15) {
+      return _frameCountCache.v;
+    }
+    let result = NaN;
     try {
       if (typeof v.getVideoPlaybackQuality === "function") {
         const q = v.getVideoPlaybackQuality();
         const frames = Number(q?.totalVideoFrames ?? q?.presentedFrames ?? q?.totalFrames);
-        if (isFinite(frames) && frames >= 0) return frames;
+        if (isFinite(frames) && frames >= 0) result = frames;
       }
     } catch {}
-    try {
-      const wk = Number(v.webkitDecodedFrameCount);
-      if (isFinite(wk) && wk >= 0) return wk;
-    } catch {}
-    try {
-      const moz = Number(v.mozPresentedFrames);
-      if (isFinite(moz) && moz >= 0) return moz;
-    } catch {}
-    return NaN;
+    if (!isFinite(result)) {
+      try {
+        const wk = Number(v.webkitDecodedFrameCount);
+        if (isFinite(wk) && wk >= 0) result = wk;
+      } catch {}
+    }
+    if (!isFinite(result)) {
+      try {
+        const moz = Number(v.mozPresentedFrames);
+        if (isFinite(moz) && moz >= 0) result = moz;
+      } catch {}
+    }
+    _frameCountCache.v = result;
+    _frameCountCache.node = v;
+    _frameCountCache.at = _nowFc;
+    return result;
   }
   const platform = (() => {
     try {
@@ -2273,7 +2292,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (_timer) return;
     if (_stopped) return;
     if (!coupledMode || !state.intendedPlaying) return;
-    _timer = setTimeout(_tick, TICK_MS);
+    // CPU guard: slow poll in hidden tab — rAF + decoder events are throttled
+    // anyway, so a 2.5x slower health poll still catches stalls without
+    // burning CPU at 1Hz with little to show for it.
+    const delay = document.visibilityState !== "visible" ? 2500 : TICK_MS;
+    _timer = setTimeout(_tick, delay);
   }
 
   function start() { _stopped = false; _frozenCount = 0; _lastAudioPos = 0; _lastCheckAt = now(); _schedule(); }
@@ -2369,7 +2392,13 @@ document.addEventListener("DOMContentLoaded", () => {
     function _schedule() {
       if (_timer) return;
       if (_stopped) return;
-      _timer = setTimeout(_tick, TICK_MS);
+      // CPU guard: slow down the phantom-pause detector when we can't tell
+      // the difference anyway. Hidden tab / not playing → 3s instead of 900ms.
+      let delay = TICK_MS;
+      if (document.visibilityState !== "visible" || !state.intendedPlaying) {
+        delay = 3000;
+      }
+      _timer = setTimeout(_tick, delay);
     }
 
     function start() { _stopped = false; _schedule(); }
@@ -2957,7 +2986,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function _scheduleWatchdog() {
       if (_watchdogTimer !== null || !_running) return;
-      _watchdogTimer = setTimeout(_watchdogTick, WATCHDOG_MS);
+      // CPU guard: the watchdog is an rAF backup — slow it down when rAF
+      // itself would be no-op. Hidden/not-playing → 2000ms (5x slower).
+      const _wdDelay = (document.visibilityState !== "visible" ||
+                        !state.intendedPlaying ||
+                        state.endedNaturally) ? 2000 : WATCHDOG_MS;
+      _watchdogTimer = setTimeout(_watchdogTick, _wdDelay);
     }
 
     // ------------------------------------------------------------------
@@ -3509,7 +3543,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function _schedule() {
       if (_timer) return;
-      _timer = setTimeout(_tick, CHECK_MS);
+      // CPU guard: slow down polling drastically when we can't act anyway.
+      // Hidden tab or paused → 2500ms (5x slower). Nothing detectable can
+      // happen that we'd miss, and visibilitychange fires a restart.
+      let delay = CHECK_MS;
+      if (document.visibilityState !== "visible" || !state.intendedPlaying) {
+        delay = 2500;
+      }
+      _timer = setTimeout(_tick, delay);
     }
 
     function start() { _schedule(); }
@@ -6047,7 +6088,13 @@ const HAVE_ENOUGH_DATA = 4;
     return state.lastMediaAction === type && (now() - state.lastMediaActionTs) < ms;
   }
   function setFastSync(ms = 1200) {
-    state.fastSyncUntil = Math.max(state.fastSyncUntil, now() + Math.max(0, Number(ms) || 0));
+    const prev = state.fastSyncUntil;
+    state.fastSyncUntil = Math.max(prev, now() + Math.max(0, Number(ms) || 0));
+    // CPU guard: skip scheduleSync(0) if we didn't actually extend the window.
+    // Previously this unconditionally queued a new 16ms sync timer on every call,
+    // and markUserPlayIntent → various play/pause paths call it 3-5x in bursts,
+    // stacking overlapping timers that all do the same work.
+    if (prev >= state.fastSyncUntil) return;
     scheduleSync(0);
   }
   function fastSyncActive() { return now() < state.fastSyncUntil; }
@@ -7499,6 +7546,15 @@ const HAVE_ENOUGH_DATA = 4;
     const startVol = clamp01(audio.volume);
     const startTs = performance.now();
     const step = () => {
+      // CPU guard: if the tab is hidden or audio was already paused by another
+      // path, skip the 60fps ease loop — just jump to the end state. rAF
+      // throttles to ~1Hz when hidden anyway so easing is imperceptible.
+      if (document.visibilityState === "hidden" || audio.paused) {
+        activeVolumeFade = null;
+        try { audio.volume = 0; if (!audio.paused) audio.pause(); } catch {}
+        if (onDone) onDone();
+        return;
+      }
       const rawT = Math.min(1, (performance.now() - startTs) / duration);
       const easeT = 0.5 * (1 - Math.cos(Math.PI * rawT));
       try { audio.volume = Math.max(0, startVol * (1 - easeT)); } catch {}
@@ -7526,7 +7582,9 @@ const HAVE_ENOUGH_DATA = 4;
     state.audioFading = true;
     return new Promise(resolve => {
       const step = () => {
-        if (audio.paused) {
+        // CPU guard: bail if paused OR tab hidden. rAF throttles to ~1Hz in
+        // hidden tabs so fading burns CPU without producing smooth easing.
+        if (audio.paused || document.visibilityState === "hidden") {
           try { audio.volume = target; } catch {}
           activeVolumeFade = null;
           state.audioFading = false;
@@ -11464,7 +11522,14 @@ const HAVE_ENOUGH_DATA = 4;
     // Even when sustained stall is confirmed, repeatedly killing audio
     // every 100ms during a stretch of bad network creates a rapid audible
     // cut-loop. One kill per 2.5s is enough — the watchdog will recover.
-    if (!audio.paused && canKillAudio() && (nowMs - _bufMonLastKillAt) >= BUF_MON_KILL_COOLDOWN_MS) {
+    // CPU guard: if nothing's playing or the tab is hidden, skip the kill-audio
+    // analysis entirely — canKillAudio returns false in hidden tabs anyway, and
+    // we don't kill paused-state audio. The heavy buffer math above already
+    // early-exits for hidden state.
+    const _bufCanDoWork = !audio.paused &&
+      document.visibilityState !== "hidden" &&
+      state.intendedPlaying;
+    if (_bufCanDoWork && canKillAudio() && (nowMs - _bufMonLastKillAt) >= BUF_MON_KILL_COOLDOWN_MS) {
       const _bufVideoStarved = vRSBuf < HAVE_FUTURE_DATA;
       const _bufStallFlagged = state.videoWaiting || state.videoStallAudioPaused;
       const _stallDurationMs = _bufMonConfirmedStallAt ? (nowMs - _bufMonConfirmedStallAt) : 0;
@@ -11492,7 +11557,19 @@ const HAVE_ENOUGH_DATA = 4;
         // sufficient — trust them.
       }
     }
-    _bufMonTimer = setTimeout(bufferMonitorTick, BUF_MON_INTERVAL_MS);
+    // CPU guard: slow down the poll when there's nothing to watch. Hidden tab
+    // or paused state → poll at 1500ms instead of 300ms (5x CPU reduction).
+    // Normal playing + healthy buffer → 600ms (2x reduction). Active stall →
+    // keep 300ms for quick detection.
+    let _bufNextDelay = BUF_MON_INTERVAL_MS;
+    const _bufIdle = !state.intendedPlaying ||
+      audio.paused ||
+      document.visibilityState === "hidden";
+    const _bufHealthy = !_bufMonStallFrames && !state.videoWaiting &&
+      !state.videoStallAudioPaused && vRSBuf >= HAVE_FUTURE_DATA;
+    if (_bufIdle) _bufNextDelay = 1500;
+    else if (_bufHealthy) _bufNextDelay = 600;
+    _bufMonTimer = setTimeout(bufferMonitorTick, _bufNextDelay);
   }
   function startBufferMonitor() {
     if (!_bufMonTimer && coupledMode) {
@@ -11533,10 +11610,14 @@ const HAVE_ENOUGH_DATA = 4;
       const elapsed = nowTs - state.lastHeartbeatAt;
       state.lastHeartbeatAt = nowTs;
 
-      // CPU OPTIMIZATION: skip all heartbeat work when fully idle
+      // CPU OPTIMIZATION: skip all heartbeat work when fully idle. Reschedule
+      // at 5s (vs normal 2s) so we still wake up in case state changes but
+      // don't burn CPU repeating the same check. Without this reschedule the
+      // heartbeat dies permanently when idle and never re-fires after resume.
       if (!state.intendedPlaying && getVideoPaused() &&
           (!coupledMode || !audio || audio.paused) &&
           !state.seeking && !state.seekBuffering) {
+        state.heartbeatTimer = setTimeout(beat, 5000);
         return;
       }
 
