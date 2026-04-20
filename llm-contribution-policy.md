@@ -1,8 +1,8 @@
 # Algorithmic Collaboration and Contribution Guidelines
 
-**Version:** 2.1.2 • **Last Review:** 2026-04-20
+**Version:** 2.1.3-final • **Last Review:** 2026-04-20
 
-**Author:** [Ashley Íris Celeste](https://ashleyirispup.cat)
+**Author:** Güneş Şevval Arjinya Melisoy AKA Ashley Íris Celeste([https://ashleyirispup.cat](https://ashleyirispup.cat))
 
 *Originally adapted from the [Fedora Project AI Contribution Policy](https://docs.fedoraproject.org/en-US/council/policy/ai-contribution-policy/)*
 
@@ -26,11 +26,12 @@
 
 > **In short:** If you submit it, you own it. You are responsible for verifying the AI didn't write broken, insecure, or legally sketchy code.
 
-You **MUST** take full responsibility for your contribution. Submitting to Poke means you personally vouch for the code's quality, security, license compliance, and overall usefulness.
+Because AI models lack legal, ethical, and technical agency, you **MUST** take full responsibility for your contribution. Submitting to Poke means you personally vouch for the code's quality, security, license compliance, and overall usefulness. 
 
-All contributions must meet the project's standards for inclusion, regardless of whether they originate from an individual author or are assisted by generative AI tools. 
+All contributions must meet the project's standards for inclusion, regardless of whether they originate entirely from an individual author or are heavily assisted by generative AI tools. 
 
-When utilizing AI assistance for software development, you **SHOULD** use models explicitly trained, fine-tuned, and licensed for programming tasks to minimize the risk of submitting broken, vulnerable, or legally ambiguous code (e.g., Claude Opus, Codex, Gemini Code Assist, Qwen coding models). The contributor remains the sole author of record and is fully accountable for the entirety of the submission.
+**Best Practices for Accountability:**
+When utilizing AI assistance for software development, you **SHOULD** use models explicitly trained, fine-tuned, and licensed for programming tasks. This minimizes the risk of submitting broken, vulnerable, or legally ambiguous code (e.g., Claude Opus, Codex, Gemini Code Assist, Qwen coding models). The contributor remains the sole author of record and is fully accountable for the entirety of the submission.
 
 ---
 
@@ -39,42 +40,40 @@ When utilizing AI assistance for software development, you **SHOULD** use models
 > **In short:** You can use AI for up to 75% of your code in most cases, or 90% for specific routine tasks. Generative AI assets, 100% AI documentation, and using AI for security logic without extreme oversight are banned.
 
 ### Code Generation Thresholds (75% vs. 90%)
-To guarantee contributors maintain a thorough understanding of the logic they submit, we enforce strict limits on how much of a single contribution can be entirely AI-generated.
+**Why do we have limits?** To guarantee that contributors maintain a thorough, working understanding of the logic they submit. We want to avoid "black box" merges where neither the author nor the reviewer fully understands how the underlying code operates.
 
-* **The 75% Standard Limit:** For the vast majority of contributions, you **MAY** use generative AI to author up to **75%** of the submitted code. The remaining 25% (or more) must consist of contributor-authored logic, structural design, manual refactoring, or integration wiring to make certain the code fits organically into the project architecture.
-  
-  > **Primary Applications for the 75% Limit:**
-  > * **Core Logic:** Standard feature development, business logic implementation, and system architecture design.
-  > * **Maintenance:** Bug fixes, patch creations, issue resolutions, and logic refactoring.
-  > * **Networking & Data:** API integrations, endpoint creations, data fetching pipelines, and database query building.
-  > * **Algorithms:** Complex algorithmic problem-solving and mathematical models.
-  > * **Design:** UI/UX component building, front-end styling, and accessibility standard implementations.
-  > * **Supporting Files:** Writing documentation comments, standard configuration files, and foundational test scripts.
+#### The 75% Standard Limit
+For the vast majority of contributions, you **MAY** use generative AI to author up to **75%** of the submitted code. The remaining 25% (or more) must consist of contributor-authored logic, structural design, manual refactoring, or integration wiring to make certain the code fits organically into the project architecture.
+* **Where this applies:**
+   * Core feature development and business logic implementation.
+  * Bug fixes, patch creations, and issue resolutions.
+  * API integrations, endpoint creations, and data fetching pipelines.
+  * Complex algorithmic problem-solving and mathematical models.
+  * UI/UX component building and front-end styling.
 
-* **The 90% Exception Limit:** You **MAY** use generative AI to author up to **90%** of the code *only* for highly specific, routine, or strictly structured scenarios. Utilizing this higher threshold generally requires prior discussion with project maintainers before submission.
-  
-  > **Approved Scenarios for the 90% Limit:**
-  > * **Boilerplate & Scaffolding:** Generating massive boilerplate files or initial project structural foundations.
-  > * **Data Structures:** Creating large and repetitive data arrays (e.g., massive configuration maps, dictionaries, localized language strings, or enums).
-  > * **Bulk Refactoring:** Automated repository-wide refactoring (e.g., bulk-renaming, structural updates, or migrating deprecated function calls across hundreds of files).
-  > * **Code Translations/Migrations:** Porting libraries from one language or syntax to another (e.g., migrating a large JavaScript library to strictly typed TypeScript).
-  > * **Generated Clients:** Autogenerating API clients or SDK wrappers directly from OpenAPI specifications or similar schemas.
-  > * **Styling resets:** Compiling massive CSS/styling resets or thematic variable stylesheets.
+#### The 90% Exception Limit
+You **MAY** use generative AI to author up to **90%** of the code *only* for highly specific, routine, or strictly structured scenarios where manual typing is primarily drudgery. Utilizing this higher threshold generally requires prior discussion with project maintainers before submission.
+* **Where this applies:**
+  * Generating massive boilerplate files or initial project structural foundations.
+  * Creating large and repetitive data arrays (e.g., configuration maps, dictionaries, localized language strings).
+  * Automated repository-wide refactoring (e.g., bulk-renaming, structural updates across hundreds of files).
+  * Porting libraries from one language or syntax to another.
+  * Autogenerating API clients or SDK wrappers directly from schemas.
 
 ### Other Permitted Usages
-The Poke Project explicitly allows and encourages the use of AI tools for the following tasks:
-* **Reviewing Bugs & Code:** Utilizing AI-Assisted Review Tools to find bugs, suggest code improvements, or analyze potential flaws during general code reviews is explicitly allowed and encouraged.
+The Poke Project explicitly allows and encourages the use of AI tools for the following workflow enhancements:
+* **Reviewing Bugs & Code:** Utilizing AI-Assisted Review Tools to find bugs, suggest code improvements, or analyze potential flaws during general code reviews.
 * **Test Generation:** Writing unit, integration, or end-to-end tests for existing contributor-verified logic.
 * **Code Explanation:** Using AI to summarize, document, or explain complex legacy codebases.
-* **Translation Assistance:** Translating application strings or localization files, provided an individual reviews the final output for cultural context.
+* **Translation Assistance:** Translating application strings or localization files (provided an individual reviews the final output for cultural context).
 
 ### Strict Prohibitions
-The Poke project places absolute limits on specific types of generative content to maintain project integrity and security:
+To protect project security, maintainability, and copyright integrity, the following are strictly banned:
 * **Generative AI Assets:** You **MUST NOT** submit Generative AI Assets of any kind (images, video, audio, 3D models) in Pull Requests, Merge Requests, or repository assets. 
-* **Fully Automated Documentation:** You **MUST NOT** submit documentation that is exclusively (100%) generated by GenAI. Substantial individual authorship and structuring are required.
-* **Security & Cryptographic Logic:** You **MUST NOT** use AI to independently write or alter cryptographic implementations, authentication flows, or security-critical logic without explicit, documented expert review.
+* **Fully Automated Documentation:** You **MUST NOT** submit documentation that is exclusively (100%) generated by GenAI. Documentation requires substantial individual authorship and structuring to remain accurate and helpful.
+* **Security & Cryptographic Logic:** You **MUST NOT** use AI to independently write or alter cryptographic implementations, authentication flows, or security-critical logic without explicit, documented expert review. AI models frequently hallucinate secure logic.
 * **Proprietary Data Leakage:** You **MUST NOT** paste proprietary, unreleased, or sensitive project data into public, consumer-grade AI models that use inputs for training.
-* **Obfuscated Code Submission:** You **MUST NOT** submit unreadable, AI-generated "spaghetti code" or heavily obfuscated logic just because it mathematically functions; all code must remain maintainable by individual contributors.
+* **Obfuscated Code Submission:** You **MUST NOT** submit unreadable, AI-generated "spaghetti code" or heavily obfuscated logic just because it mathematically functions.
 
 ---
 
@@ -82,21 +81,21 @@ The Poke project places absolute limits on specific types of generative content 
 
 > **In short:** Tell us if you used AI and which tools you used. The more AI you use, the more formal the disclosure needs to be.
 
-Information regarding the use of AI tools helps project maintainers evaluate impact, build better review practices, and improve our automated pipelines. Disclosure requirements scale with the level of AI reliance.
+**Why disclose?** Transparency helps project maintainers properly gauge the effort required for a code review, track the impact of AI on our codebase over time, and adjust our CI/CD pipelines to look for common generative pitfalls.
 
 ### Estimating Thresholds
 We do not require exact line-by-line automated percentage counts. Threshold percentages (50%, 75%, 90%) are based on a good-faith estimate of the overall logic, structure, and text contributed by generative AI versus individual authorship within a given PR or commit.
 
 ### Major Assistance (50% or more)
-You **MUST** formally disclose the use of AI tools when **50% or more** of the code in your contribution is generated via an LLM or GenAI. 
-* **Git Commits:** You must add an `Assisted-by:` commit message trailer at the very bottom of your commit message. You can view a formatting example in [this commit](https://codeberg.org/ashleyirispuppy/poke/commit/3976cbded877098146daa8a83da47ebf860bbc4d).
-* **Trailer Format:** `Assisted-by: [Tool Name]`
-* **Multiple Tools:** If you used multiple tools, you must list them all, either comma-separated or on separate trailer lines (e.g., `Assisted-by: ChatGPT, GitHub Copilot`).
+If your contribution crosses the 50% threshold of generated content, formal git-level disclosure is required.
+* **How to disclose:** You **MUST** add an `Assisted-by:` commit message trailer at the very bottom of your commit message. 
+* **Format:** `Assisted-by: [Tool Name]` (If multiple tools were used, list them comma-separated: `Assisted-by: ChatGPT, GitHub Copilot`).
+* **Example:** You can view a formatting example in [this commit](https://codeberg.org/ashleyirispuppy/poke/commit/3976cbded877098146daa8a83da47ebf860bbc4d).
 
 ### Minor Assistance (Under 50%)
-Even if the AI-generated code constitutes less than 50% of the submission, you **MUST** still declare its use to assist reviewers.
-* **Location:** This declaration belongs in your Pull Request (PR) or Merge Request (MR) description. 
-* **Declaration Format:** A simple contextual note such as *"I used a generic LLM coder for portions of this pull request"* or *"AI was used to generate the regex and boilerplate for this feature"* is completely sufficient.
+If the AI-generated code constitutes less than 50% of the submission, you **MUST** still declare its use to assist reviewers, but git trailers are not required.
+* **How to disclose:** Leave a simple contextual note in your Pull Request (PR) or Merge Request (MR) description. 
+* **Example:** *"I used a generic LLM coder to help write the regex and boilerplate for this feature."*
 
 ### Documentation Fragments
 While 100% AI documentation is banned, if you use AI to draft, format, or structure minor sections of a larger document, you **SHOULD** disclose this in the PR description or as a footnote at the bottom of the document file.
@@ -112,11 +111,11 @@ Contributors are highly encouraged to include the core prompts they used to gene
 
 > **In short:** Be respectful. Review the code, not the tool. Harassing someone for using AI is a Code of Conduct violation.
 
-We recognize that generative AI in software development evokes strong opinions. However, the Poke Project prioritizes code quality, inclusivity, and collaboration over tooling preferences.
+**Why we have this policy:** Software development tooling is evolving rapidly, and individual workflows vary wildly. The Poke Project enacted these guidelines to establish clear boundaries, prevent gatekeeping, and foster a psychologically safe environment for all contributors. We evaluate the *merit* of the contribution, not the *method* of its generation. 
 
-Community members **MUST NOT** harass, gatekeep, or demean contributors for their policy-compliant use of AI assistance. 
-
-All technical reviews, discussions, and community feedback **MUST** remain strictly focused on the quality, security, license compliance, and technical merit of the contribution itself, rather than the specific AI tools utilized during its creation. 
+* **No Gatekeeping:** Community members **MUST NOT** harass, gatekeep, mock, or demean contributors for their policy-compliant use of AI assistance. 
+* **Focus on the Code:** All technical reviews, discussions, and community feedback **MUST** remain strictly focused on the quality, security, license compliance, and technical merit of the contribution itself. Debates about the validity of AI as a tool do not belong in PR review threads.
+* **Enforcement:** Hostility toward contributors utilizing AI within these guidelines will be treated as a severe breach of the Code of Conduct.
 
 ---
 
@@ -125,7 +124,7 @@ All technical reviews, discussions, and community feedback **MUST** remain stric
 > **In short:** AI can help review code, but contributors have the final say on merges and community decisions.
 
 * **AI-Assisted Review Tools** **MAY** be used to assist individual reviewers by providing static analysis and suggestions.
-* You **MUST NOT** use AI as the sole or final authority in making substantive or subjective decisions about a contribution's merge status.
+* You **MUST NOT** use AI as the sole or final authority in making substantive or subjective decisions about a contribution's merge status. AI cannot press the "Merge" button.
 * AI **MUST NOT** be used to evaluate a person's standing within the community (e.g., funding decisions, leadership roles, or conduct matters).
 
 This does not prohibit the use of **Deterministic Automation** systems for objective technical validation, such as CI/CD pipelines, static linters, automated testing, or spam filtering. Final accountability for accepting any contribution rests exclusively with the individual reviewer who authorizes the merge.
@@ -136,9 +135,9 @@ This does not prohibit the use of **Deterministic Automation** systems for objec
 
 > **In short:** Break the rules, and your PR gets closed. Keep breaking them, and you may be banned from contributing.
 
-Adherence to this policy is mandatory. Failure to comply with these guidelines will result in the following actions:
+Adherence to this policy is mandatory. Failure to comply with these guidelines will result in the following progressive actions:
 
-1.  **Rejected Contributions:** PRs or MRs found to violate the 75%/90% code caps (without prior exception), or containing prohibited Generative AI Assets, documentation, or security flaws, **WILL** be immediately closed. 
+1.  **Rejected Contributions:** PRs or MRs found to violate the 75%/90% code caps (without prior exception), or containing prohibited Generative AI Assets, automated documentation, or security flaws, **WILL** be immediately closed. 
 2.  **Undeclared Usage:** If AI usage meeting the disclosure thresholds is discovered to be undeclared, the contributor will be issued a warning and asked to amend their PR/commit history.
 3.  **Repeated Violations:** Contributors who repeatedly ignore disclosure rules or submit prohibited AI content **MAY** face temporary or permanent bans from the repository.
 4.  **Conduct Violations:** Harassment regarding AI usage is treated as a severe breach of the project's Code of Conduct and will result in disciplinary action up to and including a permanent ban from the community.
@@ -156,6 +155,13 @@ Adherence to this policy is mandatory. Failure to comply with these guidelines w
 ---
 
 ## Changelog
+
+**v2.1.3-final (2026-04-20)**
+* **Final Version:** Marked as the final, definitive draft for the 2.x policy line.
+* Formatted the author attribution to include the website link next to the name, rather than as a direct name hyperlink.
+* Overhauled section formatting for better readability, utilizing sub-headers, rationale blocks ("Why we do this"), and bulleted lists.
+* Expanded the "Community Conduct" section to explicitly explain the philosophy behind the policy (preventing gatekeeping, prioritizing merit over method, fostering safety).
+* Streamlined "Transparency and Disclosure Thresholds" to clearly separate *how* to disclose from *when* to disclose.
 
 **v2.1.2 (2026-04-20)**
 * Added explicit author attribution to the document header.
