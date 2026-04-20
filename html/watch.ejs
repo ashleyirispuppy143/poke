@@ -3149,20 +3149,46 @@ if (!hasSD360) {
   if (AMaudio) pauseHandler(AMaudio);
 }
 
+// Robust check to see if an element is actively playing
+const isMediaPlaying = (el) => {
+  return (
+    el &&
+    el.currentTime > 0 &&      // Has started
+    !el.paused &&              // Is not paused
+    !el.ended &&               // Has not finished
+    el.readyState > 2          // Has enough data to play (HAVE_FUTURE_DATA or HAVE_ENOUGH_DATA)
+  );
+};
+
 const forcePlay = async () => {
   if (!pageFullyLoaded || isPlayPending) return;
+
+  const videoNeedsPlay = AMvideo && !isMediaPlaying(AMvideo);
+  const audioNeedsPlay = AMaudio && !isMediaPlaying(AMaudio);
+
+  // If both are already playing fine, exit early and do nothing
+  if (!videoNeedsPlay && !audioNeedsPlay) return;
+
   isPlayPending = true;
 
-  if (AMvideo.currentTime < 0.5) {
+  // Only reset currentTime if the specific element needs to be played and is near the start
+  if (videoNeedsPlay && AMvideo.currentTime < 0.5) {
     AMvideo.currentTime = 0;
-    if (AMaudio) AMaudio.currentTime = 0;
+  }
+  if (audioNeedsPlay && AMaudio.currentTime < 0.5) {
+    AMaudio.currentTime = 0;
   }
 
   try {
-    const promises = [AMvideo.play()];
-    if (AMaudio) promises.push(AMaudio.play());
-    await Promise.all(promises);
+    const promises = [];
+    if (videoNeedsPlay) promises.push(AMvideo.play());
+    if (audioNeedsPlay) promises.push(AMaudio.play());
+    
+    if (promises.length > 0) {
+      await Promise.all(promises);
+    }
   } catch (e) {
+    // Catch autoplay rejections or DOMExceptions silently
   } finally {
     setTimeout(() => { isPlayPending = false; }, 50);
   }
