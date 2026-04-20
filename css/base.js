@@ -14,7 +14,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  * <https://github.com/mozilla/vtt.js/blob/main/LICENSE>
  * /////////////////////////////////////////////////////////////////////////////////////
  * credits:
- * thanks stackoverflow, Claude Opus 4.6, Codex, w3c schools, mdn and more for help in the code for poke player.
+ * thanks stackoverflow, Claude Opus 4.6/4.7, Codex, w3c schools, mdn and more for help in the code for poke player.
  * 100% puppy made code! 0 slop guarenteed!
  * also, legit fuck claude's weekly limit #antrophicdobetter #wokeai or something i have no idea,,,they are making claude have pronouns(???)
  * this works, 100%! no issues..at all!!
@@ -409,6 +409,9 @@ document.addEventListener("DOMContentLoaded", () => {
       };
         document.addEventListener("fullscreenchange", onFullscreenChange, { passive: true });
         document.addEventListener("webkitfullscreenchange", onFullscreenChange, { passive: true });
+        // Store on video element so beforeunload can remove them — anonymous
+        // listeners registered here accumulate on SPA page reuse if not removed.
+        try { video.el()._fsChangeHandler = onFullscreenChange; } catch {}
         onFullscreenChange();
   });
 
@@ -1909,9 +1912,14 @@ document.addEventListener("DOMContentLoaded", () => {
       _stopWatchdog();
       _lastWatchdogAudioPos = 0;
       _audioFrozenCount = 0;
+      const _watchdogStart = now();
+      // Hard safety: cap watchdog at RECOVERY_DURATION_MS + SETTLING_DURATION_MS + 4s
+      // so a state-machine deadlock never leaves setInterval running forever.
+      const _maxWatchdogMs = (RECOVERY_DURATION_MS || 3000) + (SETTLING_DURATION_MS || 2000) + 4000;
       _watchdogId = setInterval(() => {
         if (_recoveryGen !== gen) { _stopWatchdog(); return; }
         if (!state.intendedPlaying) { _stopWatchdog(); return; }
+        if ((now() - _watchdogStart) > _maxWatchdogMs) { _stopWatchdog(); _goIdle(); return; }
         _watchdogTick(gen);
       }, 500);
     }
@@ -2085,6 +2093,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Single source of truth for "is audio healthy right now?"
   const MakeSureAudioIsNotCuttingOrWeird = (() => {
     let _timer = null;
+    let _stopped = false;
     let _lastAudioPos = 0;
     let _lastCheckAt = 0;
     let _frozenCount = 0;
@@ -2228,17 +2237,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function _schedule() {
     if (_timer) return;
+    if (_stopped) return;
     if (!coupledMode || !state.intendedPlaying) return;
     _timer = setTimeout(_tick, TICK_MS);
   }
 
-  function start() { _frozenCount = 0; _lastAudioPos = 0; _lastCheckAt = now(); _schedule(); }
-  function stop() { if (_timer) { clearTimeout(_timer); _timer = null; } _frozenCount = 0; }
-  function reset() { stop(); _lastAudioPos = 0; _lastCheckAt = 0; }
-  function onPlay() { start(); }
+  function start() { _stopped = false; _frozenCount = 0; _lastAudioPos = 0; _lastCheckAt = now(); _schedule(); }
+  function stop() { _stopped = true; if (_timer) { clearTimeout(_timer); _timer = null; } _frozenCount = 0; }
+  function reset() { stop(); _stopped = false; _lastAudioPos = 0; _lastCheckAt = 0; }
+  function onPlay() { _stopped = false; start(); }
   function onPause() { stop(); }
-  function onSeekStart() { stop(); _frozenCount = 0; }
-  function onSeekEnd() { _lastAudioPos = Number(audio?.currentTime) || 0; _lastCheckAt = now(); start(); }
+  function onSeekStart() { stop(); _stopped = false; _frozenCount = 0; }
+  function onSeekEnd() { _stopped = false; _lastAudioPos = Number(audio?.currentTime) || 0; _lastCheckAt = now(); start(); }
 
   return { start, stop, reset, onPlay, onPause, onSeekStart, onSeekEnd };
   })();
@@ -2251,6 +2261,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // random Chromium glitches, media focus loss, phantom pause events.
   const MakeSureAudioOrVideoDoesntPauseUnlessUserReallyWantsTo = (() => {
     let _timer = null;
+    let _stopped = false;
     const TICK_MS = 900; // was 500→700→900 — phantom pause detection at ~1Hz is sufficient
 
     function _isUserPauseEvident() {
@@ -2323,11 +2334,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function _schedule() {
       if (_timer) return;
+      if (_stopped) return;
       _timer = setTimeout(_tick, TICK_MS);
     }
 
-    function start() { _schedule(); }
-    function stop() { if (_timer) { clearTimeout(_timer); _timer = null; } }
+    function start() { _stopped = false; _schedule(); }
+    function stop() { _stopped = true; if (_timer) { clearTimeout(_timer); _timer = null; } }
 
     return { start, stop };
   })();
@@ -3329,6 +3341,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Fires once per 2.5s to avoid loops.
   const NuclearFreezeWatchdog = (() => {
     let _timer = null;
+    let _heavyTimer = null; // tracked so stop() can cancel the deferred heavy-fix
     let _lastFrameCount = -1;
     let _lastFrameCheckAt = 0;
     let _lastNuclearAt = 0;
@@ -3377,7 +3390,9 @@ document.addEventListener("DOMContentLoaded", () => {
             _lastFrameCount = -1;
             _lastFrameCheckAt = 0;
             // Schedule a heavy-fix fallback in case the light flush didn't work
-            const _nfwHeavyTimer = setTimeout(() => {
+            if (_heavyTimer) { clearTimeout(_heavyTimer); _heavyTimer = null; }
+            _heavyTimer = setTimeout(() => {
+              _heavyTimer = null;
               if (!state.intendedPlaying || state.seeking || state.seekBuffering) return;
               const _hfVN = getVideoNode();
               if (!_hfVN || _hfVN.paused) return;
@@ -3464,7 +3479,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function start() { _schedule(); }
-    function stop() { if (_timer) { clearTimeout(_timer); _timer = null; } }
+    function stop() {
+      if (_timer) { clearTimeout(_timer); _timer = null; }
+      if (_heavyTimer) { clearTimeout(_heavyTimer); _heavyTimer = null; }
+    }
     function reset() {
       _lastFrameCount = -1;
       _lastFrameCheckAt = 0;
@@ -8589,10 +8607,14 @@ const HAVE_ENOUGH_DATA = 4;
       // Forced resume paths used to stack another play() on top of an already
       // running audio.play() promise. That caused audible cut/restart glitches
       // on rapid play-pause-play and during post-seek recovery.
+      // For DIRECT user toggles, cap the wait at 40ms — any longer is audible
+      // as "audio comes late after I pressed play". For non-user forces, 180ms
+      // is fine (recovery paths where timing doesn't matter).
+      const _inFlightCap = userImmediate || _epDirectUserResume ? 40 : 180;
       try {
         await Promise.race([
           Promise.resolve(inFlight).catch(() => {}),
-          new Promise(resolve => setTimeout(resolve, 180))
+          new Promise(resolve => setTimeout(resolve, _inFlightCap))
         ]);
       } catch {}
       if (!audio.paused) return true;
@@ -10496,12 +10518,28 @@ const HAVE_ENOUGH_DATA = 4;
     const vNode = getVideoNode();
     const vRS = Number(vNode.readyState || 0);
     if (vRS < 2) return false;
-    // Do NOT wait for audio readyState: user wants audio to start as early
-    // as video, not video waiting for audio. If audio isn't yet ready it
-    // will be kicked into play and will start as soon as it decodes —
-    // any short silent-video window is unavoidable when the audio track
-    // simply hasn't arrived yet, but we never hold back video.
-    return true;
+    // Wait for audio metadata (readyState >= 1) so both start synced. Short
+    // silent-video windows ("video played for 0.3s before audio arrived") were
+    // the main complaint. Audio metadata arrives within 50-300ms of load start
+    // for typical tracks — the retry schedule (80/150/300/500ms etc) will
+    // re-check and proceed quickly.
+    // SAFETY: if video has been ready for a while (full future data) and audio
+    // still has no metadata after 1.2s of trying, proceed without it —
+    // network-dead audio must not block video forever.
+    const ars = Number(audio && audio.readyState || 0);
+    if (ars >= 1) return true; // metadata present — both can start in lockstep
+    const _startupWaitStarted = state._startupAudioWaitStartedAt || 0;
+    if (!_startupWaitStarted) {
+      state._startupAudioWaitStartedAt = now();
+      return false;
+    }
+    // Proceed anyway after 1.2s of waiting for audio metadata.
+    if ((now() - _startupWaitStarted) > 1200) return true;
+    // Also proceed if video has full data and audio element hasn't started
+    // loading at all (readyState=0 with no network activity) — the track is
+    // likely missing/broken. Don't hang video on a dead audio track.
+    if (vRS >= 4 && audio && Number(audio.networkState) === 3 /* NETWORK_NO_SOURCE */) return true;
+    return false;
   }
 
   function scheduleStartupAutoplayKick() {
@@ -10581,6 +10619,7 @@ const HAVE_ENOUGH_DATA = 4;
         }
 
         state.startupKickDone = true;
+        state._startupAudioWaitStartedAt = 0; // clear stale wait timestamp once kick committed
         if (!state.firstPlayCommitted) {
           state.firstPlayCommitted = true;
           setTimeout(() => { state.startupPhase = false; }, 800);
@@ -11339,8 +11378,10 @@ const HAVE_ENOUGH_DATA = 4;
   const BUF_MON_STALL_TICKS = 5;     // 500ms of frozen time before we trust it (was 300 — too twitchy)
   const BUF_MON_SUSTAINED_STALL_MS = 1200; // stall must persist this long to kill audio (was 600→1200: cuts were still too frequent)
   const BUF_MON_KILL_COOLDOWN_MS = 4000; // min gap between audio kills (was 2500→4000: prevents rapid cut loop)
+  let _bufMonStopped = false; // set by stopBufferMonitor() — prevents reschedule
   function bufferMonitorTick() {
     _bufMonTimer = null;
+    if (_bufMonStopped) return; // cleanup requested — do not reschedule
     if (!coupledMode || !audio) { _bufMonTimer = setTimeout(bufferMonitorTick, BUF_MON_INTERVAL_MS); return; }
 
     const nowMs = now();
@@ -11418,6 +11459,10 @@ const HAVE_ENOUGH_DATA = 4;
     if (!_bufMonTimer && coupledMode) {
       _bufMonTimer = setTimeout(bufferMonitorTick, BUF_MON_INTERVAL_MS);
     }
+  }
+  function stopBufferMonitor() {
+    _bufMonStopped = true;
+    if (_bufMonTimer) { clearTimeout(_bufMonTimer); _bufMonTimer = null; }
   }
 
   // --- heartbeat-level frozen video backup detector ---
@@ -13817,25 +13862,26 @@ const HAVE_ENOUGH_DATA = 4;
         const _prfvNow = now();
         const _prfvGapMs = _prevPlayingAt > 0 ? (_prfvNow - _prevPlayingAt) : Infinity;
         const _prfvAfterTabReturn = state.lastBgReturnAt > 0 && (_prfvNow - state.lastBgReturnAt) < 8000;
-        const _prfvAfterLongPause = _prfvGapMs > 2000;
-        const _prfvDirectUserResume =
-          document.visibilityState === "visible" &&
-          isWindowFocused() &&
-          (
-            directUserToggleActive(1800) ||
-            userWantsPlayNow(1800) ||
-            userToggleExpectingPlay()
-          );
-        if (_prfvAfterTabReturn || _prfvAfterLongPause || _prfvDirectUserResume) {
+        // Normal user play/pause toggles have gaps of 1-5s. Arming the RVFC
+        // compositor kick on those caused a visible micro-seek ("video randomly
+        // seeks when I play/pause") because the +0.001s fallback fired even
+        // when the compositor was actually fine — the RVFC callback just hadn't
+        // had time to return yet. Raise long-pause threshold to 6s so only real
+        // "left the player sitting paused" scenarios trigger it.
+        const _prfvAfterLongPause = _prfvGapMs > 6000;
+        // REMOVED _prfvDirectUserResume from the RVFC kick trigger set. Direct
+        // user play after a short pause does NOT need a compositor kick —
+        // Chromium keeps the GPU surface warm, and the kick's micro-seek was
+        // perceived as "video randomly seeking" on every resume.
+        if (_prfvAfterTabReturn || _prfvAfterLongPause) {
           try { PlayResumeFrameVerifier.arm(); } catch {}
         }
         // FAST RVFC COMPOSITOR KICK: If video reports playing but the compositor
         // is stuck on a stale GPU surface (common after alt-tab or long pause),
         // the user sees a frozen frame even though paused=false. Use a direct
-        // RVFC check — if no frame renders within 250ms, do a micro-seek to
-        // force the decoder to push a fresh frame. This is MUCH faster than
-        // waiting for the RAF freeze detector (800ms cooldown + 160ms detect).
-        if ((_prfvAfterTabReturn || _prfvAfterLongPause || _prfvDirectUserResume) &&
+        // RVFC check — if no frame renders, do a micro-seek to force the
+        // decoder to push a fresh frame.
+        if ((_prfvAfterTabReturn || _prfvAfterLongPause) &&
             typeof HTMLVideoElement !== "undefined" &&
             typeof HTMLVideoElement.prototype.requestVideoFrameCallback === "function") {
           // Use a local generation counter — do NOT increment playSessionId.
@@ -13848,10 +13894,11 @@ const HAVE_ENOUGH_DATA = 4;
             try {
               _rvfcVNode.requestVideoFrameCallback(() => { _rvfcGotFrame = true; });
             } catch {}
-            // tighter timeout (140ms) for direct user play — they see
-            // freeze instantly. 200ms is fine for tab return / long pause
-            // where a touch of delay is ok.
-            const _rvfcTimeout = _prfvDirectUserResume ? 140 : 200;
+            // 300ms timeout. Only tab-return / long-pause reach this path now,
+            // both of which can tolerate a touch of delay. Longer timeout also
+            // reduces false positives — the RVFC callback has more time to
+            // return naturally before we decide the compositor is stuck.
+            const _rvfcTimeout = 300;
             setTimeout(() => {
               if (_rvfcGotFrame) return; // compositor healthy
               if (state.playSessionId !== _rvfcGen) return; // stale
@@ -16197,6 +16244,7 @@ const HAVE_ENOUGH_DATA = 4;
       }
     }, { passive: true, capture: true });
     window.addEventListener("beforeunload", () => {
+      // ── timers / intervals ────────────────────────────────────────────
       stopBgAudioKeepalive();
       clearBgResumeRetryTimer();
       clearResumeAfterBufferTimer();
@@ -16204,18 +16252,39 @@ const HAVE_ENOUGH_DATA = 4;
       clearSeekWatchdog();
       clearStartupAutoplayRetryTimer();
       clearAudioForcePlayTimer();
+      clearForegroundUserPlayRetryTimers();
+      clearTransitionDriftTimers();
       clearTimeout(state.wakeupTimer);
       clearTimeout(state.heartbeatTimer);
       clearTimeout(state.bgSilentTimeSyncTimer);
       if (state._stallAudioPauseTimer) { clearTimeout(state._stallAudioPauseTimer); state._stallAudioPauseTimer = null; }
-      if (_playLockRafId) { cancelAnimationFrame(_playLockRafId); _playLockRafId = null; }
+      if (state._stallVideoPauseTimer) { clearTimeout(state._stallVideoPauseTimer); state._stallVideoPauseTimer = null; }
       if (_playLockTimer) { clearTimeout(_playLockTimer); _playLockTimer = null; }
       if (_ncBufferWaitCleanup) { try { _ncBufferWaitCleanup(); } catch {} _ncBufferWaitCleanup = null; }
       if (state._seekPostTimers.length) { state._seekPostTimers.forEach(t => clearTimeout(t)); state._seekPostTimers = []; }
       if (state._wakeupRetryTimers.length) { state._wakeupRetryTimers.forEach(t => clearTimeout(t)); state._wakeupRetryTimers = []; }
-      if (state.bbtabRetryRafId) { cancelAnimationFrame(state.bbtabRetryRafId); state.bbtabRetryRafId = null; }
       if (state.bbtabRetryTimer) { clearTimeout(state.bbtabRetryTimer); state.bbtabRetryTimer = null; }
       if (state.bbtabAudioSyncTimer) { clearTimeout(state.bbtabAudioSyncTimer); state.bbtabAudioSyncTimer = null; }
+      // ── rAF handles ──────────────────────────────────────────────────
+      if (_playLockRafId) { cancelAnimationFrame(_playLockRafId); _playLockRafId = null; }
+      if (state.bbtabRetryRafId) { cancelAnimationFrame(state.bbtabRetryRafId); state.bbtabRetryRafId = null; }
+      cancelActiveFade(); // cancels the volume-fade rAF loop
+      // ── module watchdogs / polling loops ─────────────────────────────
+      try { MakeSureAudioIsNotCuttingOrWeird.stop(); } catch {}
+      try { MakeSureAudioOrVideoDoesntPauseUnlessUserReallyWantsTo.stop(); } catch {}
+      try { NuclearFreezeWatchdog.stop(); } catch {}
+      try { stopBufferMonitor(); } catch {}
+      try { NotMakePlayBackFixingNoticable.abort(); } catch {}
+      try { MakeVideoNotFreezeAfterPlaybackAfterAltTabHapenns.destroy(); } catch {}
+      // ── fullscreen listeners ─────────────────────────────────────────
+      try {
+        const _fsH = video.el()._fsChangeHandler;
+        if (_fsH) {
+          document.removeEventListener("fullscreenchange", _fsH);
+          document.removeEventListener("webkitfullscreenchange", _fsH);
+          video.el()._fsChangeHandler = null;
+        }
+      } catch {}
       clearSyncLoop();
     });
   }
