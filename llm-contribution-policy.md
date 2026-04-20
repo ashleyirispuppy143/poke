@@ -1,104 +1,126 @@
-# AI-Assisted Contributions Policy
+# Algorithmic Collaboration and Contribution Guidelines
 
-Poke Project Version 1.1
+**Project:** Poke • **Version:** 2.0 • **Last Review:** 2026-04-20
 
-Last review: 2026-04-09
+*Adapted from the [Fedora Project AI Contribution Policy](https://docs.fedoraproject.org/en-US/council/policy/ai-contribution-policy/)*
 
-*Adapted from:
-[https://docs.fedoraproject.org/en-US/council/policy/ai-contribution-policy/](https://docs.fedoraproject.org/en-US/council/policy/ai-contribution-policy/)*
+> **Document Distribution & Modification:** Everyone is permitted to copy and distribute verbatim copies of this document, but changing it is not allowed. Official modifications to this policy for the Poke Project may only be enacted by the project founder or through formal community consensus and voting mechanisms.
 
 ---
 
-You MAY use AI assistance for contributing to Poke, as long as you
-follow the principles described below.
+## 1. Definitions
 
-## Accountability
+> **In short:** Clarifying what we mean by AI, automation, and the specific terms used in this policy.
 
-You MUST take responsibility for your contribution. Contributing to Poke
-means vouching for the quality, license compliance, and usefulness of
-your submission.
+* **RFC Terminology:** The key words "MAY", "MUST", "MUST NOT", and "SHOULD" in this document are to be interpreted as described in RFC 2119.
+* **LLM / Generative AI Coding:** The automated synthesis of functional source code, scripts, or configuration files by neural network models in response to natural language prompts or broad context windows. This refers to generating multi-line logic, algorithms, or architectural scaffolding. It does *not* include standard IDE auto-completion (e.g., closing brackets or single-line syntax suggestions).
+* **AI-Assisted Review Tools:** Applications or bots that use Large Language Models to summarize Pull Requests, suggest code improvements, or analyze security flaws during the review process.
+* **Deterministic Automation:** Traditional software tools like standard static linters, CI/CD pipelines, and regex-based code formatters (e.g., Prettier, Black). These follow explicit rules rather than predictive generation and are not restricted by this policy.
+* **Generative AI Assets:** Any non-text media, including images, video, audio, or 3D models, synthesized by machine learning algorithms (e.g., Midjourney, DALL-E, Stable Diffusion).
 
-All contributions, whether from a non-generative AI author or assisted by large
-language models (LLMs) or other generative AI tools, must meet the
-project's standards for inclusion.
+---
 
-When using AI assistance for software development, you SHOULD use models specifically designed or fine-tuned for programming to minimize the risk of submitting broken or low-quality code. Recommended tools include Claude Opus, Codex, Gemini Code Assist, Qwen coding models, or any other coding-oriented model.
+## 2. Accountability
 
-The contributor is always the author and is fully accountable for the
-entirety of these contributions.
+> **In short:** If you submit it, you own it. You are responsible for ensuring the AI didn't write broken, insecure, or legally sketchy code.
 
-## Transparency
+You **MUST** take full responsibility for your contribution. Submitting to Poke means you personally vouch for the code's quality, security, license compliance, and overall usefulness.
 
-You MUST disclose the use of AI tools when a significant part of the
-contribution is taken from a tool without changes.
+All contributions must meet the project's standards for inclusion, regardless of whether they originate from an individual author or are assisted by generative AI tools. 
 
-You SHOULD disclose other uses of AI tools where it may be useful.
-Routine use of assistive tools for correcting grammar and spelling, or
-clarifying language, does not require disclosure.
+When utilizing AI assistance for software development, you **SHOULD** use models explicitly trained, fine-tuned, and licensed for programming tasks to minimize the risk of submitting broken, vulnerable, or legally ambiguous code (e.g., Claude Opus, Codex, Gemini Code Assist, Qwen coding models). The contributor remains the sole author of record and is fully accountable for the entirety of the submission.
 
-Information about the use of AI tools helps evaluate their impact, build
-best practices, and improve project processes.
+---
 
-Disclosures should be made where authorship is normally indicated. For
-contributions tracked in git, the recommended method is an
-`Assisted-by:` commit message trailer.
+## 3. Permitted Usage and Prohibitions
 
-For other contributions, acceptable methods of disclosure may include:
-* Document preambles or headers
-* Design file metadata
-* Translation notes
-* Wiki page categories
-* Pull Request (PR) or Merge Request (MR) descriptions
-* Inline code comments block at the top of a heavily assisted script
-* Issue tracker tags or labels (e.g., `ai-assisted`)
-* Dedicated `ACKNOWLEDGMENTS` or `AUTHORS` files
+> **In short:** You can use AI for up to 90% of your code and for routine tasks. AI-generated images, 100% AI documentation, and using AI for security logic without extreme oversight are banned.
 
-### Examples
+### Permitted Usages
+The Poke Project explicitly allows and encourages the use of AI tools for the following tasks:
+* **Code Generation (Up to 90%):** You **MAY** use generative AI to author up to **90%** of the code in a single contribution. 
+* **Boilerplate & Scaffolding:** Generating routine repetitive code, data structures, or project scaffolding.
+* **Test Generation:** Writing unit, integration, or end-to-end tests for existing contributor-verified logic.
+* **Code Explanation:** Using AI to summarize, document, or explain complex legacy codebases.
+* **Translation Assistance:** Translating application strings or localization files, provided an individual reviews the final output for cultural context.
 
--   Assisted-by: generic LLM chatbot
--   Assisted-by: ChatGPTv5
--   Assisted-by: Gemini Code Assist
+*(Note: Minor exceptions to exceed the 90% cap may be granted on a case-by-case basis for highly specific tasks like automated refactoring, provided it is discussed with project maintainers before submission.)*
 
-## Community Conduct Regarding AI Tools
+### Strict Prohibitions
+The Poke project places absolute limits on specific types of generative content to maintain project integrity and security:
+* **Generative AI Images:** You **MUST NOT** submit GenAI-generated images of any kind in Pull Requests, Merge Requests, or repository assets. 
+* **Fully Automated Documentation:** You **MUST NOT** submit documentation that is exclusively (100%) generated by GenAI. Substantial individual authorship and structuring are required.
+* **Security & Cryptographic Logic:** You **MUST NOT** use AI to independently write or alter cryptographic implementations, authentication flows, or security-critical logic without explicit, documented expert review.
+* **Proprietary Data Leakage:** You **MUST NOT** paste proprietary, unreleased, or sensitive project data into public, consumer-grade AI models that use inputs for training.
+* **Obfuscated Code Submission:** You **MUST NOT** submit unreadable, AI-generated "spaghetti code" or heavily obfuscated logic just because it mathematically functions; all code must remain maintainable by individual contributors.
 
-We recognize that the use of generative AI in software development can be a sensitive topic that evokes strong opinions. However, the Poke Project prioritizes code quality, inclusivity, and collaboration over tooling preferences.
+---
 
-Community members MUST NOT harass, gatekeep, or demean contributors for their policy-compliant use of AI assistance. 
+## 4. Transparency and Disclosure Thresholds
 
-All technical reviews, discussions, and community feedback MUST remain strictly focused on the quality, security, license compliance, and technical merit of the contribution itself, rather than the specific AI tools utilized during its creation. Policy violations regarding conduct will be treated as a breach of the project's Code of Conduct.
+> **In short:** Tell us if you used AI and which tools you used. The more AI you use, the more formal the disclosure needs to be.
 
-## Contribution & Community Evaluation
+Information regarding the use of AI tools helps project maintainers evaluate impact, build better review practices, and improve our automated pipelines. 
 
-AI tools may be used to assist non-generative AI reviewers by providing analysis and
-suggestions.
+### Major Assistance (50% to 90%)
+You **MUST** formally disclose the use of AI tools when **50% or more** of the code in your contribution is generated via an LLM or GenAI. 
+* **Git Commits:** You must add an `Assisted-by:` commit message trailer at the very bottom of your commit message (e.g., `Assisted-by: Gemini Code Assist`).
+* **Multiple Tools:** If you used multiple tools, you must list them all (e.g., `Assisted-by: ChatGPT, GitHub Copilot`).
 
-You MUST NOT use AI as the sole or final authority in making substantive
-or subjective decisions about a contribution.
+### Minor Assistance (Under 50%)
+Even if the AI-generated code constitutes less than 50% of the submission, you **MUST** still declare its use in your Pull Request (PR) or Merge Request (MR) description. A simple note such as *"I used a generic LLM coder for portions of this pull request"* is sufficient.
 
-AI MUST NOT be used to evaluate a person's standing within the community
-(such as funding decisions, leadership roles, or conduct matters).
+### Documentation Fragments
+While 100% AI documentation is banned, if you use AI to draft or format minor sections of a larger document, you **SHOULD** disclose this in the PR description or at the bottom of the document file.
 
-This does not prohibit the use of automated systems for objective
-technical validation, such as CI/CD pipelines, automated testing, or
-spam filtering.
+### Prompt Context (Optional but Encouraged)
+Contributors are highly encouraged to include the core prompts they used to generate major logic blocks in the PR description. This helps reviewers understand the intent behind the generated code.
 
-Final accountability for accepting a contribution always rests with the
-non-generative AI contributor who authorizes the action.
+*(Note: Routine use of assistive tools strictly for correcting grammar, spelling, or clarifying contributor-written language does not require disclosure.)*
 
-## Large Scale Initiatives
+---
 
-This policy does not cover large-scale initiatives that significantly
-change how the project operates or could lead to exponential growth in
-contributions.
+## 5. Community Conduct
 
-Such initiatives should be discussed separately within the project.
+> **In short:** Be respectful. Review the code, not the tool. Harassing someone for using AI is a Code of Conduct violation.
 
-## Reporting Concerns
+We recognize that generative AI in software development evokes strong opinions. However, the Poke Project prioritizes code quality, inclusivity, and collaboration over tooling preferences.
 
-Concerns about possible policy violations should be reported through
-appropriate private or secure project channels.
+Community members **MUST NOT** harass, gatekeep, or demean contributors for their policy-compliant use of AI assistance. 
 
-## Terminology
+All technical reviews, discussions, and community feedback **MUST** remain strictly focused on the quality, security, license compliance, and technical merit of the contribution itself, rather than the specific AI tools utilized during its creation. 
 
-The key words "MAY", "MUST", "MUST NOT", and "SHOULD" in this document
-are to be interpreted as described in RFC 2119.
+---
+
+## 6. Evaluation and Automated Approvals
+
+> **In short:** AI can help review code, but contributors have the final say on merges and community decisions.
+
+* AI tools **MAY** be used to assist individual reviewers by providing static analysis and suggestions.
+* You **MUST NOT** use AI as the sole or final authority in making substantive or subjective decisions about a contribution's merge status.
+* AI **MUST NOT** be used to evaluate a person's standing within the community (e.g., funding decisions, leadership roles, or conduct matters).
+
+This does not prohibit the use of deterministic, automated systems for objective technical validation, such as CI/CD pipelines, static linters, automated testing, or spam filtering. Final accountability for accepting any contribution rests exclusively with the individual reviewer who authorizes the merge.
+
+---
+
+## 7. Policy Violations and Consequences
+
+> **In short:** Break the rules, and your PR gets closed. Keep breaking them, and you may be banned from contributing.
+
+Adherence to this policy is mandatory. Failure to comply with these guidelines will result in the following actions:
+
+1.  **Rejected Contributions:** PRs or MRs found to violate the 90% code cap (without prior exception), or containing prohibited AI-generated images, documentation, or security flaws, **WILL** be immediately closed. 
+2.  **Undeclared Usage:** If AI usage meeting the disclosure thresholds is discovered to be undeclared, the contributor will be issued a warning and asked to amend their PR/commit history.
+3.  **Repeated Violations:** Contributors who repeatedly ignore disclosure rules or submit prohibited AI content **MAY** face temporary or permanent bans from the repository.
+4.  **Conduct Violations:** Harassment regarding AI usage is treated as a severe breach of the project's Code of Conduct and will result in disciplinary action up to and including a permanent ban from the community.
+
+---
+
+## 8. Large Scale Initiatives & Reporting Concerns
+
+> **In short:** Mass-automated PR bots need special permission. Report bad behavior privately.
+
+**Large Scale Initiatives:** This policy does not cover large-scale, automated initiatives that significantly change how the project operates or could lead to an exponential flood of automated contributions. Such initiatives require separate, prior discussion and approval by the project council.
+
+**Reporting Concerns:** Concerns about possible policy violations, including undeclared AI use or AI-related Code of Conduct breaches, should be reported through appropriate private or secure project channels.
