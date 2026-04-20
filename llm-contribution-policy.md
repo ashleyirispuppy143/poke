@@ -1,6 +1,8 @@
 # Algorithmic Collaboration and Contribution Guidelines
 
-**Version:** 2.1.1 • **Last Review:** 2026-04-20
+**Version:** 2.1.2 • **Last Review:** 2026-04-20
+
+**Author:** [Ashley Íris Celeste](https://ashleyirispup.cat)
 
 *Originally adapted from the [Fedora Project AI Contribution Policy](https://docs.fedoraproject.org/en-US/council/policy/ai-contribution-policy/)*
 
@@ -42,18 +44,22 @@ To guarantee contributors maintain a thorough understanding of the logic they su
 * **The 75% Standard Limit:** For the vast majority of contributions, you **MAY** use generative AI to author up to **75%** of the submitted code. The remaining 25% (or more) must consist of contributor-authored logic, structural design, manual refactoring, or integration wiring to make certain the code fits organically into the project architecture.
   
   > **Primary Applications for the 75% Limit:**
-  > * **Core Logic:** Standard feature development and business logic implementation.
-  > * **Maintenance:** Bug fixes, patch creations, and issue resolutions.
-  > * **Networking:** API integrations, endpoint creations, and data fetching.
-  > * **Algorithms:** Complex algorithmic problem-solving.
-  > * **Design:** UI/UX component building and front-end styling.
+  > * **Core Logic:** Standard feature development, business logic implementation, and system architecture design.
+  > * **Maintenance:** Bug fixes, patch creations, issue resolutions, and logic refactoring.
+  > * **Networking & Data:** API integrations, endpoint creations, data fetching pipelines, and database query building.
+  > * **Algorithms:** Complex algorithmic problem-solving and mathematical models.
+  > * **Design:** UI/UX component building, front-end styling, and accessibility standard implementations.
+  > * **Supporting Files:** Writing documentation comments, standard configuration files, and foundational test scripts.
 
 * **The 90% Exception Limit:** You **MAY** use generative AI to author up to **90%** of the code *only* for highly specific, routine, or strictly structured scenarios. Utilizing this higher threshold generally requires prior discussion with project maintainers before submission.
   
   > **Approved Scenarios for the 90% Limit:**
   > * **Boilerplate & Scaffolding:** Generating massive boilerplate files or initial project structural foundations.
-  > * **Data Structures:** Creating large and repetitive data arrays (e.g., massive configuration maps, dictionaries, or enums).
-  > * **Bulk Refactoring:** Automated repository-wide refactoring (e.g., bulk-renaming or migrating deprecated function calls across hundreds of files).
+  > * **Data Structures:** Creating large and repetitive data arrays (e.g., massive configuration maps, dictionaries, localized language strings, or enums).
+  > * **Bulk Refactoring:** Automated repository-wide refactoring (e.g., bulk-renaming, structural updates, or migrating deprecated function calls across hundreds of files).
+  > * **Code Translations/Migrations:** Porting libraries from one language or syntax to another (e.g., migrating a large JavaScript library to strictly typed TypeScript).
+  > * **Generated Clients:** Autogenerating API clients or SDK wrappers directly from OpenAPI specifications or similar schemas.
+  > * **Styling resets:** Compiling massive CSS/styling resets or thematic variable stylesheets.
 
 ### Other Permitted Usages
 The Poke Project explicitly allows and encourages the use of AI tools for the following tasks:
@@ -76,21 +82,27 @@ The Poke project places absolute limits on specific types of generative content 
 
 > **In short:** Tell us if you used AI and which tools you used. The more AI you use, the more formal the disclosure needs to be.
 
-Information regarding the use of AI tools helps project maintainers evaluate impact, build better review practices, and improve our automated pipelines. 
+Information regarding the use of AI tools helps project maintainers evaluate impact, build better review practices, and improve our automated pipelines. Disclosure requirements scale with the level of AI reliance.
+
+### Estimating Thresholds
+We do not require exact line-by-line automated percentage counts. Threshold percentages (50%, 75%, 90%) are based on a good-faith estimate of the overall logic, structure, and text contributed by generative AI versus individual authorship within a given PR or commit.
 
 ### Major Assistance (50% or more)
 You **MUST** formally disclose the use of AI tools when **50% or more** of the code in your contribution is generated via an LLM or GenAI. 
-* **Git Commits:** You must add an `Assisted-by:` commit message trailer at the very bottom of your commit message (e.g., `Assisted-by: Gemini Code Assist`). You can view a formatting example in [this commit](https://codeberg.org/ashleyirispuppy/poke/commit/3976cbded877098146daa8a83da47ebf860bbc4d).
-* **Multiple Tools:** If you used multiple tools, you must list them all (e.g., `Assisted-by: ChatGPT, GitHub Copilot`).
+* **Git Commits:** You must add an `Assisted-by:` commit message trailer at the very bottom of your commit message. You can view a formatting example in [this commit](https://codeberg.org/ashleyirispuppy/poke/commit/3976cbded877098146daa8a83da47ebf860bbc4d).
+* **Trailer Format:** `Assisted-by: [Tool Name]`
+* **Multiple Tools:** If you used multiple tools, you must list them all, either comma-separated or on separate trailer lines (e.g., `Assisted-by: ChatGPT, GitHub Copilot`).
 
 ### Minor Assistance (Under 50%)
-Even if the AI-generated code constitutes less than 50% of the submission, you **MUST** still declare its use in your Pull Request (PR) or Merge Request (MR) description. A simple note such as *"I used a generic LLM coder for portions of this pull request"* is sufficient.
+Even if the AI-generated code constitutes less than 50% of the submission, you **MUST** still declare its use to assist reviewers.
+* **Location:** This declaration belongs in your Pull Request (PR) or Merge Request (MR) description. 
+* **Declaration Format:** A simple contextual note such as *"I used a generic LLM coder for portions of this pull request"* or *"AI was used to generate the regex and boilerplate for this feature"* is completely sufficient.
 
 ### Documentation Fragments
-While 100% AI documentation is banned, if you use AI to draft or format minor sections of a larger document, you **SHOULD** disclose this in the PR description or at the bottom of the document file.
+While 100% AI documentation is banned, if you use AI to draft, format, or structure minor sections of a larger document, you **SHOULD** disclose this in the PR description or as a footnote at the bottom of the document file.
 
 ### Prompt Context (Optional but Encouraged)
-Contributors are highly encouraged to include the core prompts they used to generate major logic blocks in the PR description. This helps reviewers understand the intent behind the generated code.
+Contributors are highly encouraged to include the core prompts they used to generate major logic blocks in the PR description. Providing the prompt context helps reviewers understand the intent behind the generated code, trace logical decisions, and evaluate potential edge cases more effectively.
 
 *(Note: Routine use of assistive tools strictly for correcting grammar, spelling, or clarifying contributor-written language does not require disclosure.)*
 
@@ -144,6 +156,11 @@ Adherence to this policy is mandatory. Failure to comply with these guidelines w
 ---
 
 ## Changelog
+
+**v2.1.2 (2026-04-20)**
+* Added explicit author attribution to the document header.
+* Expanded and refined the "Code Generation Thresholds" section to include more concrete examples for both the 75% standard limit and the 90% exception limit.
+* Significantly enhanced the "Transparency and Disclosure Thresholds" section, adding guidance on estimating thresholds and clarifying formats for git trailers and PR descriptions.
 
 **v2.1.1 (2026-04-20)**
 * Added a practical commit example link demonstrating the `Assisted-by:` git trailer format.
