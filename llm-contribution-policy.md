@@ -1,6 +1,6 @@
 # Algorithmic Collaboration and Contribution Guidelines
 
-**Version:** 2.1.0 • **Last Review:** 2026-04-20
+**Version:** 2.1.1 • **Last Review:** 2026-04-20
 
 *Originally adapted from the [Fedora Project AI Contribution Policy](https://docs.fedoraproject.org/en-US/council/policy/ai-contribution-policy/)*
 
@@ -80,7 +80,7 @@ Information regarding the use of AI tools helps project maintainers evaluate imp
 
 ### Major Assistance (50% or more)
 You **MUST** formally disclose the use of AI tools when **50% or more** of the code in your contribution is generated via an LLM or GenAI. 
-* **Git Commits:** You must add an `Assisted-by:` commit message trailer at the very bottom of your commit message (e.g., `Assisted-by: Gemini Code Assist`).
+* **Git Commits:** You must add an `Assisted-by:` commit message trailer at the very bottom of your commit message (e.g., `Assisted-by: Gemini Code Assist`). You can view a formatting example in [this commit](https://codeberg.org/ashleyirispuppy/poke/commit/3976cbded877098146daa8a83da47ebf860bbc4d).
 * **Multiple Tools:** If you used multiple tools, you must list them all (e.g., `Assisted-by: ChatGPT, GitHub Copilot`).
 
 ### Minor Assistance (Under 50%)
@@ -144,6 +144,9 @@ Adherence to this policy is mandatory. Failure to comply with these guidelines w
 ---
 
 ## Changelog
+
+**v2.1.1 (2026-04-20)**
+* Added a practical commit example link demonstrating the `Assisted-by:` git trailer format.
 
 **v2.1.0 (2026-04-20)**
 * Lowered the standard permitted code generation limit to 75%, retaining the 90% allowance strictly for specific scenarios like automated refactoring and heavy boilerplate.
