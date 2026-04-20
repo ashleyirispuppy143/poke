@@ -415,6 +415,19 @@ document.addEventListener("DOMContentLoaded", () => {
         onFullscreenChange();
   });
 
+  // ─── Global event-listener registry ───────────────────────────────────────
+  // Tracks every window / document addEventListener call so beforeunload
+  // can removeEventListener them all, preventing accumulation in SPA reloads.
+  // Usage: replace  window.addEventListener(t, fn, opts)
+  //           with  _on(window, t, fn, opts)
+  const _globalListeners = [];
+  function _on(target, type, fn, opts) {
+    target.addEventListener(type, fn, opts);
+    _globalListeners.push([target, type, fn, opts]);
+    return fn;
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   const state = {
     intendedPlaying: false,
     playSessionId: 0,
@@ -1178,6 +1191,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (state.endedNaturally) return;
     if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) return;
     if (userPauseLockActive() || mediaSessionForcedPauseActive()) return;
+    // In background, evaluateBufferHoldNeed always returns false so strictBufferHold
+    // can never be cleared by normal means. Clear it here so keepalive isn't permanently
+    // blocked after the tab was hidden while a buffer-hold was active.
+    if (document.visibilityState === "hidden" && state.strictBufferHold) {
+      clearBufferHold();
+    }
     if (state.restarting || state.strictBufferHold) return;
     // In background, seeking/seekBuffering flags can get stuck because seeked events
     // don't fire. If the flag has been set for 5s+, it's stale — clear it.
@@ -1635,6 +1654,21 @@ document.addEventListener("DOMContentLoaded", () => {
           const _audioCurrentlyPlaying = !audio.paused;
           if (!_audioCurrentlyPlaying) {
             try { audio.volume = 0; } catch {}
+            // Safety net: restore volume within 400ms even if canplay never fires.
+            // Without this, a long background session (>60s) could leave audio at
+            // volume=0 for the full 2500ms adaptive timeout — the user's "huge delay
+            // applying saved volume" bug. At 400ms we restore if _cpStartAudio hasn't
+            // already done it.
+            const _volRestoreGen = gen;
+            setTimeout(() => {
+              if (_recoveryGen !== _volRestoreGen) return; // generation mismatch, newer recovery owns it
+              if (!audio || _cpCleaned) return;           // _cpStartAudio already ran
+              if (!state.intendedPlaying) return;
+              const _currentVol = Number(audio.volume);
+              if (_currentVol < 0.02) {
+                try { audio.volume = targetVolFromVideo(); } catch {}
+              }
+            }, 400);
           }
           try { if (audio.muted && !state.userMutedAudio) audio.muted = false; } catch {}
         }
@@ -5214,7 +5248,7 @@ const HAVE_ENOUGH_DATA = 4;
   }
 
   if (!state.pageFullyLoaded) {
-    window.addEventListener("load", () => {
+    _on(window, "load", () => {
       state.pageFullyLoaded = true;
       // If startup already succeeded OR media is already playing, skip all
       // startup machinery. Re-running it causes a redundant audio seek
@@ -6767,6 +6801,11 @@ const HAVE_ENOUGH_DATA = 4;
     MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.onUserPlay();
     DONTMAKEITDOUBLEPLAY.resetAll();
     clearAudioPauseLocks();
+    // Clear buffer hold — if strictBufferHold was set (e.g. from background
+    // buffer stall), user explicit play must always be able to start regardless.
+    // evaluateBufferHoldNeed returns false in background so hold is never
+    // auto-cleared there, causing "cannot play video at all" in background sessions.
+    clearBufferHold();
     // Cancel deferred audio pause from markUserPauseIntent — user hit play
     // before the 40ms timer fired, so audio should never stop.
     if (state._deferredAudioPauseTimer) {
@@ -12392,9 +12431,9 @@ const HAVE_ENOUGH_DATA = 4;
         }, 500);
       }
     };
-    try { videoEl.addEventListener("error", onVideoError, { passive: true }); } catch {}
+    try { _on(videoEl, "error", onVideoError, { passive: true }); } catch {}
     if (audio) {
-      try { audio.addEventListener("error", onAudioError, { passive: true }); } catch {}
+      try { _on(audio, "error", onAudioError, { passive: true }); } catch {}
     }
     // Video.js-level error handler — catches "All candidate resources failed to load"
     // and other Video.js errors that don't fire on the native <video> element.
@@ -12457,30 +12496,39 @@ const HAVE_ENOUGH_DATA = 4;
       }, 300);
       scheduleSync(200);
     };
-    try { videoEl.addEventListener("stalled", onVideoStalled, { passive: true }); } catch {}
+    try { _on(videoEl, "stalled", onVideoStalled, { passive: true }); } catch {}
     if (audio) {
-      try { audio.addEventListener("stalled", onAudioStalled, { passive: true }); } catch {}
-      try { audio.addEventListener("waiting", onAudioWaiting, { passive: true }); } catch {}
+      try { _on(audio, "stalled", onAudioStalled, { passive: true }); } catch {}
+      try { _on(audio, "waiting", onAudioWaiting, { passive: true }); } catch {}
     }
     // CORS / HTTP error detection (502, 403, etc.) — catch network errors that
     // don't fire the <video>/<audio> error event. Monitor both elements' networkState
     // periodically and also intercept fetch failures for media URLs.
-    const _corsCheckInterval = setInterval(() => {
-      if (_errorOverlayShown) { clearInterval(_corsCheckInterval); return; }
+    // Store in state so beforeunload can clear it. Previously ran forever
+    // at 3s intervals for the full page lifetime (CPU leak).
+    if (state._corsCheckInterval) clearInterval(state._corsCheckInterval);
+    state._corsCheckInterval = setInterval(() => {
+      if (_errorOverlayShown) { clearInterval(state._corsCheckInterval); state._corsCheckInterval = null; return; }
       // networkState 3 = NETWORK_NO_SOURCE (failed to load)
       const vNS = videoEl ? Number(videoEl.networkState || 0) : 0;
       const aNS = audio ? Number(audio.networkState || 0) : 0;
       if (vNS === 3) {
-        clearInterval(_corsCheckInterval);
+        clearInterval(state._corsCheckInterval); state._corsCheckInterval = null;
         handleFatalMediaError("video", { code: 2, message: "Network error — video source failed to load" });
         return;
       }
       if (aNS === 3 && coupledMode) {
-        clearInterval(_corsCheckInterval);
+        clearInterval(state._corsCheckInterval); state._corsCheckInterval = null;
         handleFatalMediaError("audio", { code: 2, message: "Network error (CORS/HTTP failure)" });
         return;
       }
+      // After firstPlayCommitted + 30s, we've clearly passed the fragile startup
+      // phase. The poll has nothing useful to do; disable it to save CPU.
+      if (state.firstPlayCommitted && (now() - (state._corsCheckStartedAt || 0)) > 30000) {
+        clearInterval(state._corsCheckInterval); state._corsCheckInterval = null;
+      }
     }, 3000);
+    state._corsCheckStartedAt = now();
     // Intercept HTTP errors on media segment fetches (CORS 502, etc.)
     // Override fetch to detect failed requests to video/audio source domains
     try {
@@ -12518,7 +12566,7 @@ const HAVE_ENOUGH_DATA = 4;
     } catch {}
 
     // Network online recovery
-    window.addEventListener("online", () => {
+    _on(window, "online", () => {
       state.networkOnline = true;
       state.mediaErrorCount = 0;
       state.mediaErrorCooldownUntil = 0;
@@ -12529,7 +12577,7 @@ const HAVE_ENOUGH_DATA = 4;
         }, 800);
       }
     }, { passive: true });
-    window.addEventListener("offline", () => {
+    _on(window, "offline", () => {
       state.networkOnline = false;
       try { UltraStabilizer.onNetworkOffline(); } catch {}
     }, { passive: true });
@@ -12740,14 +12788,14 @@ const HAVE_ENOUGH_DATA = 4;
     };
     try {
       if ("PointerEvent" in window) {
-        root.addEventListener("pointerdown", onPressStart, { capture: true, passive: true });
+        _on(root, "pointerdown", onPressStart, { capture: true, passive: true });
       } else {
-        root.addEventListener("mousedown", onPressStart, { capture: true, passive: true });
-        root.addEventListener("touchstart", onPressStart, { capture: true, passive: true });
+        _on(root, "mousedown", onPressStart, { capture: true, passive: true });
+        _on(root, "touchstart", onPressStart, { capture: true, passive: true });
       }
     } catch {}
-    try { root.addEventListener("click", onClick, { capture: true, passive: true }); } catch {}
-    try { document.addEventListener("keydown", onKeyDown, true); } catch {}
+    try { _on(root, "click", onClick, { capture: true, passive: true }); } catch {}
+    try { _on(document, "keydown", onKeyDown, true); } catch {}
   }
 
   function setupMediaSession() {
@@ -13407,6 +13455,12 @@ const HAVE_ENOUGH_DATA = 4;
             // Don't call play() if video is already playing — it fires play/playing
             // events that cascade into audio kicks and create visible play-pause-play.
             if (vn && vn.paused && typeof vn.play === 'function') vn.play().catch(() => {});
+            // Also restart audio — _counterPlay previously only restarted video,
+            // leaving audio silent when Chromium auto-paused both tracks in background.
+            if (coupledMode && audio && audio.paused && !state.endedNaturally) {
+              state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 800);
+              try { audio.play().catch(() => {}); } catch {}
+            }
           };
 
           // --- suppressed-context detection
@@ -14646,8 +14700,8 @@ const HAVE_ENOUGH_DATA = 4;
         }
       }
     };
-    audio.addEventListener("play", onAudioPlay, { passive: true });
-    audio.addEventListener("playing", () => {
+    _on(audio, "play", onAudioPlay, { passive: true });
+    _on(audio, "playing", () => {
       if (shouldBlockLeadingAudioForForegroundPlay()) {
         const _leadVt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
         try { squelchAudioEvents(220); } catch {}
@@ -14697,23 +14751,23 @@ const HAVE_ENOUGH_DATA = 4;
         }
       }
     }, { passive: true });
-    audio.addEventListener("pause", onAudioPause, { passive: true });
+    _on(audio, "pause", onAudioPause, { passive: true });
     // Install capture-phase pause guards on both video and audio.
     // Must be called AFTER listeners are registered so guards fire FIRST (capture phase).
     installImmunityPauseGuards();
     DONTMAKEITDOUBLEPLAY.install();
-    audio.addEventListener("seeking", () => {
+    _on(audio, "seeking", () => {
       // Only react if this is a user-initiated audio seek, not our programmatic sync
       if (state.restarting || !state.seeking) return;
       if (state.seekCompleted || state.seekBuffering) return;
       // Don't pause — the video seeked handler owns the flow
     }, { passive: true });
-      audio.addEventListener("seeked", () => {
+      _on(audio, "seeked", () => {
         if (state.restarting || !state.seeking) return;
         if (state.seekCompleted || state.seekBuffering) return;
         // Don't schedule finalize — video's seeked handler does that
       }, { passive: true });
-        audio.addEventListener("ended", () => {
+        _on(audio, "ended", () => {
           if (state.restarting) return;
           if (state.seeking || state.seekBuffering) return;
           if (now() < state.suppressEndedUntil) return;
@@ -14736,10 +14790,10 @@ const HAVE_ENOUGH_DATA = 4;
           updateMediaSessionPlaybackState();
           pauseHard();
         }, { passive: true });
-        audio.addEventListener("canplay", onReadyish, { passive: true });
-        audio.addEventListener("canplaythrough", onReadyish, { passive: true });
-        audio.addEventListener("loadeddata", onReadyish, { passive: true });
-        videoEl.addEventListener("canplay", () => {
+        _on(audio, "canplay", onReadyish, { passive: true });
+        _on(audio, "canplaythrough", onReadyish, { passive: true });
+        _on(audio, "loadeddata", onReadyish, { passive: true });
+        _on(videoEl, "canplay", () => {
           const _canplayVt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
           const _canplayReadyForResume =
             !state.firstPlayCommitted ||
@@ -14798,10 +14852,10 @@ const HAVE_ENOUGH_DATA = 4;
           }
           onReadyish();
         }, { passive: true });
-        videoEl.addEventListener("canplaythrough", onReadyish, { passive: true });
-        videoEl.addEventListener("loadeddata", () => { try { UltraStabilizer.notifyVideoLoadeddata(); } catch {} onReadyish(); }, { passive: true });
+        _on(videoEl, "canplaythrough", onReadyish, { passive: true });
+        _on(videoEl, "loadeddata", () => { try { UltraStabilizer.notifyVideoLoadeddata(); } catch {} onReadyish(); }, { passive: true });
 
-        videoEl.addEventListener("loadedmetadata", () => {
+        _on(videoEl, "loadedmetadata", () => {
           if (state.startupPhase && !state.firstPlayCommitted && wantsStartupAutoplay()) {
             forceZeroBeforeFirstPlay();
           }
@@ -15426,11 +15480,16 @@ const HAVE_ENOUGH_DATA = 4;
           } catch {}
           // Watchdog: after ending, monitor for phantom restarts and kill them.
           // Self-clears when endedNaturally is cleared by user play intent.
-          // No fixed timeout — stays active until user explicitly plays again.
-          const _endedKill = setInterval(() => {
+          // Hard cap at 60s so it can't run forever in pathological states.
+          // Store in state so beforeunload can clear it (prevents memory/CPU leak).
+          if (state._endedKillInterval) clearInterval(state._endedKillInterval);
+          if (state._endedKillHardStop) { clearTimeout(state._endedKillHardStop); state._endedKillHardStop = null; }
+          state._endedKillInterval = setInterval(() => {
             // If user cleared the ended state (via onUserPlay), stop watching
             if (!state.endedNaturally) {
-              clearInterval(_endedKill);
+              clearInterval(state._endedKillInterval);
+              state._endedKillInterval = null;
+              if (state._endedKillHardStop) { clearTimeout(state._endedKillHardStop); state._endedKillHardStop = null; }
               return;
             }
             const vn = getVideoNode();
@@ -15448,6 +15507,16 @@ const HAVE_ENOUGH_DATA = 4;
               }
             }
           }, 150);
+          // Hard safety: stop the 150ms poll after 60s no matter what.
+          // Prevents the worst-case "ended state stuck on" scenario from
+          // burning CPU for the entire page lifetime.
+          state._endedKillHardStop = setTimeout(() => {
+            if (state._endedKillInterval) {
+              clearInterval(state._endedKillInterval);
+              state._endedKillInterval = null;
+            }
+            state._endedKillHardStop = null;
+          }, 60000);
         });
   }
 
@@ -15809,7 +15878,7 @@ const HAVE_ENOUGH_DATA = 4;
 
   function setupVisibilityLifecycle() {
     try {
-      document.addEventListener("freeze", () => {
+      _on(document, "freeze", () => {
         if (!platform.useBgControllerRetry) return;
         if (state.intendedPlaying) {
           noteBackgroundEntry();
@@ -15817,13 +15886,13 @@ const HAVE_ENOUGH_DATA = 4;
           clearSyncLoop();
         }
       }, { passive: true, capture: true });
-      document.addEventListener("resume", () => {
+      _on(document, "resume", () => {
         if (!platform.useBgControllerRetry) return;
         executeSeamlessWakeup();
       }, { passive: true, capture: true });
     } catch {}
     try {
-      window.addEventListener("pageshow", e => {
+      _on(window, "pageshow", e => {
         if (!platform.useBgControllerRetry) return;
         // BFCache restore or normal page show
         if (e && e.persisted) {
@@ -15843,7 +15912,7 @@ const HAVE_ENOUGH_DATA = 4;
         }
       }, { passive: true, capture: true });
       // iOS pagehide — save state before the page may be frozen
-      window.addEventListener("pagehide", e => {
+      _on(window, "pagehide", e => {
         if (state.intendedPlaying) {
           updateLastKnownGoodVT();
           if (platform.useBgControllerRetry) {
@@ -15853,7 +15922,7 @@ const HAVE_ENOUGH_DATA = 4;
         }
       }, { passive: true, capture: true });
     } catch {}
-    window.addEventListener("visibilitychange", () => {
+    _on(window, "visibilitychange", () => {
       const newState = document.visibilityState;
       state.previousVisibilityState = state.lastVisibilityState;
       state.lastVisibilityState = newState;
@@ -16104,7 +16173,7 @@ const HAVE_ENOUGH_DATA = 4;
         }
       }
     }, { passive: true, capture: true });
-    window.addEventListener("blur", () => {
+    _on(window, "blur", () => {
       // Do NOT call SmoothTabWelcomeBackManagement.onTabLeave() on blur.
       // Blur fires for many non-tab-switch reasons (status panel, devtools,
       // address bar, alt-tab). Calling onTabLeave() here disengages the
@@ -16151,7 +16220,7 @@ const HAVE_ENOUGH_DATA = 4;
         setChromiumPauseEventSuppress(ALT_TAB_TRANSITION_MS);
       }
     }, { passive: true, capture: true });
-    window.addEventListener("focus", () => {
+    _on(window, "focus", () => {
       const _focusTs = now();
       const _isVisible = document.visibilityState === "visible";
       // Clear stale stall flags -- but only if video actually has data.
@@ -16243,7 +16312,7 @@ const HAVE_ENOUGH_DATA = 4;
         setChromiumBgPauseBlock(CHROMIUM_BG_PAUSE_BLOCK_MS);
       }
     }, { passive: true, capture: true });
-    window.addEventListener("beforeunload", () => {
+    _on(window, "beforeunload", () => {
       // ── timers / intervals ────────────────────────────────────────────
       stopBgAudioKeepalive();
       clearBgResumeRetryTimer();
@@ -16286,6 +16355,28 @@ const HAVE_ENOUGH_DATA = 4;
         }
       } catch {}
       clearSyncLoop();
+      // ── tracked global listeners ─────────────────────────────────────
+      // Remove all listeners registered via _on() so we don't leak them
+      // across navigation or page reuse (BFCache).
+      try {
+        _globalListeners.forEach(([t, type, fn, opts]) => {
+          try { t.removeEventListener(type, fn, opts); } catch {}
+        });
+        _globalListeners.length = 0;
+      } catch {}
+      // ── _endedKill interval ──────────────────────────────────────────
+      if (state._endedKillInterval) {
+        clearInterval(state._endedKillInterval);
+        state._endedKillInterval = null;
+      }
+      if (state._endedKillHardStop) {
+        clearTimeout(state._endedKillHardStop);
+        state._endedKillHardStop = null;
+      }
+      if (state._corsCheckInterval) {
+        clearInterval(state._corsCheckInterval);
+        state._corsCheckInterval = null;
+      }
     });
   }
 
@@ -16554,7 +16645,7 @@ const HAVE_ENOUGH_DATA = 4;
   });
   if (coupledMode) {
     try {
-      audio.addEventListener("volumechange", () => {
+      _on(audio, "volumechange", () => {
         // Only track user-initiated mute: recent user action + no programmatic flags
         const _isUser = (now() - state.lastUserActionTime) < 1000;
         const _isProg = state.isProgrammaticAudioPause || state.audioFading ||
@@ -16757,7 +16848,7 @@ const HAVE_ENOUGH_DATA = 4;
     });
   }
 
-  window.addEventListener("error", (e) => {
+  _on(window, "error", (e) => {
     if (_globalErrorCaught) return;
     // only catch errors from the player script (this file) or inline scripts.
     // ignore errors from unrelated third-party scripts.
@@ -16772,7 +16863,7 @@ const HAVE_ENOUGH_DATA = 4;
     _handlePlayerCrash(msg, src, e.error ? (e.error.stack || "") : "");
   }, { passive: true });
 
-  window.addEventListener("unhandledrejection", (e) => {
+  _on(window, "unhandledrejection", (e) => {
     if (_globalErrorCaught) return;
     const reason = e && e.reason;
     const msg = reason ? (reason.message || reason.stack || String(reason)) : "";
