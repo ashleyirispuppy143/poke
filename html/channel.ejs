@@ -31,26 +31,33 @@
 <meta name="darkreader-lock">
 
 <% 
+  // Title logic with pronouns
   const titleSuffix = (cinv?.pronouns && cinv.pronouns.trim() !== "") 
-    ? ` (${cinv.pronouns}) - ${subs} subs - Poke` 
-    : ` - ${subs} subs - Poke`;
-    
-  const fullTitle = `${cinv?.author}${titleSuffix}`;
+    ? ` (${cinv.pronouns})` 
+    : "";
+  const fullTitle = `${cinv?.author}${titleSuffix} - ${subs} subs - Poke`;
+
+  const handle = cinv?.channelHandle ? `${cinv.channelHandle} • ` : "";
+  const fullDescription = `${handle}\n${cinv?.description || ""}`;
 %>
 
 <meta property="og:type" content="website">
 <meta property="og:title" content="<%= fullTitle %>">
-<meta property="og:description" content="<%- cinv?.description %>">
+<meta property="og:description" content="<%- fullDescription %>">
 <meta property="og:image" content="<%=cinv?.authorThumbnails?.[5]?.url%>">
 
 <meta name="twitter:title" content="<%= fullTitle %>">
-<meta name="twitter:description" content="<%- cinv?.description %>">
+<meta name="twitter:description" content="<%- fullDescription %>">
 <meta name="twitter:image" content="<%=cinv?.authorThumbnails?.[5]?.url%>">
 
-<meta property="facebook:title" content="<%= fullTitle %>">
-<meta property="facebook:description" content="<%- cinv?.description %>">
-<meta property="facebook:image" content="<%=cinv?.authorThumbnails?.[5]?.url%>">
+<% if (cinv?.channelHandle) { %>
+  <meta name="twitter:label1" value="Handle">
+  <meta name="twitter:data1" value="<%= cinv.channelHandle %>">
+<% } %>
 
+<meta property="facebook:title" content="<%= fullTitle %>">
+<meta property="facebook:description" content="<%- fullDescription %>">
+<meta property="facebook:image" content="<%=cinv?.authorThumbnails?.[5]?.url%>">
                          <% if (embedchannelsubsfeed) { %>  
  <style>
 .channel-info-container {
