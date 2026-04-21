@@ -24,10 +24,8 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  * "It takes a lot of hard work to make something simple." ~ Steve Jobs 
  */
 
- 
- 
 //////////////// THE PLAYER, START ////////////////////////
-try {
+ try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -7185,6 +7183,17 @@ const HAVE_ENOUGH_DATA = 4;
     if (state.lastVideoPlayingAt > 0 && (now() - state.lastVideoPlayingAt) < 2600) return true;
     return false;
   }
+  function shouldUseRelaxedCpuHousekeeping() {
+    if (!state.intendedPlaying || state.endedNaturally) return false;
+    if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
+    if (!state.firstPlayCommitted) return false;
+    if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
+    if (state.syncing || state.restarting || state.strictBufferHold) return false;
+    if (state.videoWaiting || state.videoStallAudioPaused || state.audioWaiting) return false;
+    if (state.videoPlayInFlight || state.audioPlayInFlight) return false;
+    if (foregroundRecoveryActive(1200) || isTabReturnImmune() || inBgReturnGrace()) return false;
+    return !shouldUseAggressiveForegroundMonitoring();
+  }
   function shouldForceForegroundResume() {
     if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
     if (state.endedNaturally) return false;
@@ -7638,10 +7647,21 @@ const HAVE_ENOUGH_DATA = 4;
     try { getVideoNode().muted = !!val; } catch {}
     try { videoEl.muted = !!val; } catch {}
   }
+  let _targetVolCacheAt = 0;
+  let _targetVolCacheValue = 1;
+  let _targetVolCacheUserMuted = false;
   function targetVolFromVideo() {
+    const nowTs = now();
+    const userMutedVideo = !!state.userMutedVideo;
+    if ((nowTs - _targetVolCacheAt) < 30 && _targetVolCacheUserMuted === userMutedVideo) {
+      return _targetVolCacheValue;
+    }
     const vVol = clamp01(typeof video.volume === "function" ? video.volume() : (videoEl.volume ?? 1));
     const vMuted = !!(typeof video.muted === "function" ? video.muted() : videoEl.muted);
-    return (vMuted || state.userMutedVideo) ? 0 : vVol;
+    _targetVolCacheAt = nowTs;
+    _targetVolCacheUserMuted = userMutedVideo;
+    _targetVolCacheValue = (vMuted || userMutedVideo) ? 0 : vVol;
+    return _targetVolCacheValue;
   }
   let activeVolumeFade = null;
   function cancelActiveFade(clearFadingFlag = true) {
@@ -8326,30 +8346,43 @@ const HAVE_ENOUGH_DATA = 4;
     }, 500);
   }
 
-  function timeInBuffered(media, t) {
+  const _bufferProbeCache = new WeakMap();
+  function getBufferedProbe(media, t) {
+    if (!media || !isFinite(t)) return { inBuffered: false, ahead: 0 };
     try {
-      const br = media.buffered;
-      if (!br || br.length === 0 || !isFinite(t)) return false;
-      for (let i = 0; i < br.length; i++) {
-        const s = br.start(i) - EPS;
-        const e = br.end(i) + EPS;
-        if (t >= s && t <= e) return true;
+      const nowTs = now();
+      const keyT = Math.round(Number(t) * 100) / 100;
+      const cached = _bufferProbeCache.get(media);
+      if (cached && cached.t === keyT && (nowTs - cached.at) < 40) {
+        return cached;
       }
+      const br = media.buffered;
+      let inBuffered = false;
+      let ahead = 0;
+      if (br && br.length > 0) {
+        for (let i = 0; i < br.length; i++) {
+          const s = br.start(i) - EPS;
+          const e = br.end(i) + EPS;
+          if (t >= s && t <= e) {
+            inBuffered = true;
+            ahead = Math.max(0, e - t);
+            break;
+          }
+        }
+      }
+      const probe = { t: keyT, at: nowTs, inBuffered, ahead };
+      _bufferProbeCache.set(media, probe);
+      return probe;
     } catch {}
-    return false;
+    return { inBuffered: false, ahead: 0 };
+  }
+
+  function timeInBuffered(media, t) {
+    return !!getBufferedProbe(media, t).inBuffered;
   }
 
   function bufferedAhead(media, t) {
-    try {
-      const br = media.buffered;
-      if (!br || br.length === 0 || !isFinite(t)) return 0;
-      for (let i = 0; i < br.length; i++) {
-        const s = br.start(i) - EPS;
-        const e = br.end(i) + EPS;
-        if (t >= s && t <= e) return Math.max(0, e - t);
-      }
-    } catch {}
-    return 0;
+    return Number(getBufferedProbe(media, t).ahead) || 0;
   }
 
   function canPlaySmoothAt(media, t, minAhead = STRICT_BUFFER_AHEAD_SEC) {
@@ -9108,7 +9141,7 @@ const HAVE_ENOUGH_DATA = 4;
       // OPT: 800→1500. Drift correction only needs to fire 2-3x/sec at most
       // to catch user-visible misalignment. Human ear tolerates 30-60ms drift
       // invisibly; sync can fix it on next cycle without perception of lag.
-      delay = 1500;
+      delay = shouldUseRelaxedCpuHousekeeping() ? 2200 : 1500;
     } else {
       delay = 3500; // paused state: sync has almost nothing to do
     }
@@ -11771,7 +11804,7 @@ const HAVE_ENOUGH_DATA = 4;
     const _bufHealthy = !_bufMonStallFrames && !state.videoWaiting &&
       !state.videoStallAudioPaused && vRSBuf >= HAVE_FUTURE_DATA;
     if (_bufIdle) _bufNextDelay = 1500;
-    else if (_bufHealthy) _bufNextDelay = 600;
+    else if (_bufHealthy) _bufNextDelay = shouldUseRelaxedCpuHousekeeping() ? 1200 : 600;
     _bufMonTimer = setTimeout(bufferMonitorTick, _bufNextDelay);
   }
   function startBufferMonitor() {
@@ -11812,6 +11845,7 @@ const HAVE_ENOUGH_DATA = 4;
       const nowTs = now();
       const elapsed = nowTs - state.lastHeartbeatAt;
       state.lastHeartbeatAt = nowTs;
+      const _relaxedHousekeeping = shouldUseRelaxedCpuHousekeeping();
 
       // CPU OPTIMIZATION: skip all heartbeat work when fully idle. Reschedule
       // at 5s (vs normal 2s) so we still wake up in case state changes but
@@ -12132,7 +12166,8 @@ const HAVE_ENOUGH_DATA = 4;
                     state.seeking || state.seekBuffering ||
                     state.restarting || state.strictBufferHold ||
                     !state.firstPlayCommitted;
-                  if (_usUrgent || (state._usTickCounter % 2) === 1) {
+                  const _usCadence = _relaxedHousekeeping ? 3 : 2;
+                  if (_usUrgent || (state._usTickCounter % _usCadence) === 1) {
                     try { UltraStabilizer.tick(); } catch {}
                   }
 
@@ -12261,7 +12296,8 @@ const HAVE_ENOUGH_DATA = 4;
                     _hbFreezeStuckSince = 0;
                   }
 
-                  state.heartbeatTimer = setTimeout(beat, HEARTBEAT_INTERVAL_MS);
+                  const _nextBeatDelay = _relaxedHousekeeping ? 2800 : HEARTBEAT_INTERVAL_MS;
+                  state.heartbeatTimer = setTimeout(beat, _nextBeatDelay);
     };
     state.heartbeatTimer = setTimeout(beat, HEARTBEAT_INTERVAL_MS);
   }
