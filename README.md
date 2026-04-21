@@ -125,6 +125,7 @@ TL;DR: we dont collect or share your personal info that's it lol
 <hr>
 
 <p align="center"> <a href="https://www.amd.com/en/products/processors/server/epyc/7003-series/amd-epyc-7543.html"> <img width="65" height="65" src="https://codeberg.org/ashleyirispuppy/pages/raw/branch/main/amd.jpeg" alt="AMD EPYC"> </a> <a href="https://ubuntu.com/server"> <img width="65" height="65" src="https://res.cloudinary.com/canonical/image/fetch/f_auto,q_auto,fl_sanitize,w_317/https%3A%2F%2Fassets.ubuntu.com%2Fv1%2Ff76dd871-ubuntu-certified.png" alt="Ubuntu Certified"> </a> </p> <p align="center"> <small>Poke is proudly powered by AMD + Ubuntu servers!!!!!!!!!! (via Skrime Hosting). Parts of Poke ran on Glitch.com from <i>2021–2023</i>.</small> </p> <p align="center"> <a href="https://glitch.com/"> <img src="https://blog.glitch.com/apple-touch-icon.png" alt="Glitch logo"> </a> </p>
+  <p align="center"> 
+Poke contains some LLM-assisted code. Please look <a href="https://codeberg.org/ashleyirispuppy/poke/src/branch/main/llm-contribution-policy.md"> here for </a> more information. If you have a problem with that, please know that this is the best compromise we could've made for the sake of the project. We do not have 100% knowledge on and don't require knowledge of whether someone used a LLM while making a pull-request or LLM assistence unless they specify.</p>
 
-
-  <p align="center"> Poke Might include LLM assisted code. please look at <a href="https://codeberg.org/ashleyirispuppy/poke/src/branch/main/llm-contribution-policy.md"> here </a> for more information. if you have a problem with that, please know that this is the best comprimise we couldve made that didint upset anyone. we cannot know if someone used a LLM while making a pullrequest or like if a code was assited by LLM unless they say so.</p>
+ 
