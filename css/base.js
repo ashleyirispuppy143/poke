@@ -547,6 +547,7 @@ document.addEventListener("DOMContentLoaded", () => {
     bufferHoldIntendedPlaying: false,
     mediaSessionInitiatedPlay: false,
     hiddenPlayRequestUntil: 0,
+    hiddenVideoBootstrapUntil: 0,
     foregroundResumeBoostUntil: 0,
     pendingSeekTarget: null,
     nearZeroSeekAuthorizedUntil: 0,
@@ -738,7 +739,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const _origAudioPlay = audio.play.bind(audio);
     audio.play = function() {
       // background tab: always let through (keepalive needs this)
-      if (document.visibilityState === "hidden") return _origAudioPlay();
+      if (document.visibilityState === "hidden") {
+        if (hiddenBootstrapNeedsVideoLead()) return Promise.resolve();
+        return _origAudioPlay();
+      }
 
       const _gateVNode = getVideoNode();
       const _gateRS = _gateVNode ? Number(_gateVNode.readyState || 0) : 4;
@@ -1257,11 +1261,24 @@ document.addEventListener("DOMContentLoaded", () => {
       state.audioEventsSquelchedUntil = 0;
       state.audioPauseUntil = 0;
     }
+    const vn = getVideoNode();
+    if (!isVisible && coupledMode && audio && !audio.paused && vn) {
+      const atNow = Number(audio.currentTime) || 0;
+      const vtNow = Number(vn.currentTime) || 0;
+      const vRSNow = Number(vn.readyState || 0);
+      if (atNow > 0.05 &&
+          (vn.paused || Math.abs(atNow - vtNow) > 0.35) &&
+          !state.bgSilentTimeSyncing) {
+        bgSilentSyncVideoTime(atNow);
+      }
+      if (!vn.paused && (vRSNow >= HAVE_CURRENT_DATA || atNow > 0.05)) {
+        clearHiddenVideoBootstrap();
+      }
+    }
     if (coupledMode && audio && audio.paused) {
       state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 800);
       try { audio.play().catch(() => {}); } catch {}
     }
-    const vn = getVideoNode();
     try {
       if (vn && vn.paused) vn.play().catch(() => {});
     } catch {}
@@ -2299,7 +2316,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // CPU guard: slow poll in hidden tab — rAF + decoder events are throttled
     // anyway, so a 2.5x slower health poll still catches stalls without
     // burning CPU at 1Hz with little to show for it.
-    const delay = document.visibilityState !== "visible" ? 2500 : TICK_MS;
+    const delay = document.visibilityState !== "visible"
+      ? 2500
+      : (shouldUseAggressiveForegroundMonitoring() ? TICK_MS : 1600);
     _timer = setTimeout(_tick, delay);
   }
 
@@ -2401,6 +2420,8 @@ document.addEventListener("DOMContentLoaded", () => {
       let delay = TICK_MS;
       if (document.visibilityState !== "visible" || !state.intendedPlaying) {
         delay = 3000;
+      } else if (!shouldUseAggressiveForegroundMonitoring()) {
+        delay = 1700;
       }
       _timer = setTimeout(_tick, delay);
     }
@@ -2516,16 +2537,32 @@ document.addEventListener("DOMContentLoaded", () => {
         state.endedNaturally ||
         state.restarting ||
         document.visibilityState !== "visible" ||
+        !isWindowFocused() ||
         !state.firstPlayCommitted;
       if (_hardGateFails) {
+        _frozenFrames = 0;
+        _frozenSince = 0;
         if (_idleRafTimer === null && _running) {
-          // When tab is hidden, poll at 2000ms (50x less than 60fps). When
-          // paused but visible, 600ms. Previously fixed 400ms regardless.
-          const _idleDelay = document.visibilityState === "hidden" ? 2000 : 600;
+          // Healthy focused playback no longer needs continuous frame polling.
+          // Keep a slow heartbeat so we can re-arm instantly when a new play,
+          // tab return, or stall signal happens.
+          const _idleDelay = shouldUseAggressiveForegroundMonitoring()
+            ? 700
+            : (document.visibilityState === "hidden" || !isWindowFocused() ? 2200 : 1500);
           _idleRafTimer = setTimeout(() => {
             _idleRafTimer = null;
             if (_running) _scheduleRaf();
           }, _idleDelay);
+        }
+        return;
+      }
+
+      if (!shouldUseAggressiveForegroundMonitoring()) {
+        if (_idleRafTimer === null && _running) {
+          _idleRafTimer = setTimeout(() => {
+            _idleRafTimer = null;
+            if (_running) _scheduleRaf();
+          }, 1500);
         }
         return;
       }
@@ -3021,7 +3058,9 @@ document.addEventListener("DOMContentLoaded", () => {
       // itself would be no-op. Hidden/not-playing → 2000ms (5x slower).
       const _wdDelay = (document.visibilityState !== "visible" ||
                         !state.intendedPlaying ||
-                        state.endedNaturally) ? 2000 : WATCHDOG_MS;
+                        state.endedNaturally)
+        ? 2200
+        : (shouldUseAggressiveForegroundMonitoring() ? WATCHDOG_MS : 1800);
       _watchdogTimer = setTimeout(_watchdogTick, _wdDelay);
     }
 
@@ -3581,6 +3620,8 @@ document.addEventListener("DOMContentLoaded", () => {
       let delay = CHECK_MS;
       if (document.visibilityState !== "visible" || !state.intendedPlaying) {
         delay = 2500;
+      } else if (!shouldUseAggressiveForegroundMonitoring()) {
+        delay = 2200;
       }
       _timer = setTimeout(_tick, delay);
     }
@@ -7032,6 +7073,11 @@ const HAVE_ENOUGH_DATA = 4;
   function userPauseIntentActive() { return now() < state.userPauseUntil; }
   function userPauseLockActive() { return now() < state.userPauseLockUntil; }
   function userPlayIntentActive() { return now() < state.userPlayUntil; }
+  function armHiddenVideoBootstrap(ms = 1200) {
+    const dur = Math.max(250, Number(ms) || 0);
+    state.hiddenVideoBootstrapUntil = Math.max(state.hiddenVideoBootstrapUntil, now() + dur);
+  }
+  function clearHiddenVideoBootstrap() { state.hiddenVideoBootstrapUntil = 0; }
   function setHiddenMediaSessionPlay(ms = 5000) {
     if (!platform.chromiumOnlyBrowser) return;
     state.hiddenMediaPlayUntil = Math.max(state.hiddenMediaPlayUntil, now() + Math.max(0, Number(ms) || 0));
@@ -7044,6 +7090,7 @@ const HAVE_ENOUGH_DATA = 4;
     const dur = Math.max(1000, Number(ms) || 0);
     const until = now() + dur;
     state.hiddenPlayRequestUntil = Math.max(state.hiddenPlayRequestUntil, until);
+    armHiddenVideoBootstrap(Math.min(dur, 1400));
     state.foregroundResumeBoostUntil = Math.max(state.foregroundResumeBoostUntil, now() + Math.min(dur, 12000));
     state.mediaSessionInitiatedPlay = true;
     state.resumeOnVisible = true;
@@ -7055,7 +7102,25 @@ const HAVE_ENOUGH_DATA = 4;
     state.hiddenPlayRequestUntil = 0;
     state.foregroundResumeBoostUntil = 0;
     state.mediaSessionInitiatedPlay = false;
+    clearHiddenVideoBootstrap();
     clearHiddenMediaSessionPlay();
+  }
+  function hiddenBootstrapNeedsVideoLead() {
+    if (!coupledMode || !audio) return false;
+    if (document.visibilityState !== "hidden") return false;
+    const bootstrapActive = now() < state.hiddenVideoBootstrapUntil;
+    if (!bootstrapActive) return false;
+    const vNode = getVideoNode();
+    if (!vNode) return false;
+    const vRS = Number(vNode.readyState || 0);
+    const vt = Number(vNode.currentTime) || 0;
+    const bgProgress = state.bgHiddenSince > 0 ? hasPlaybackProgressFromBackground(0.02) : false;
+    const videoPrimed = !vNode.paused && (vRS >= HAVE_CURRENT_DATA || vt > 0.05 || bgProgress);
+    if (videoPrimed) {
+      clearHiddenVideoBootstrap();
+      return false;
+    }
+    return now() < state.hiddenVideoBootstrapUntil;
   }
   function hasPlaybackProgressFromBackground(minDelta = 0.05) {
     if (!state.bgHiddenSince) return true;
@@ -7106,6 +7171,19 @@ const HAVE_ENOUGH_DATA = 4;
       state.bbtabAudioSyncTimer != null ||
       state.lastBgReturnAt > 0 && (t - state.lastBgReturnAt) < (800 + tail)
     );
+  }
+  function shouldUseAggressiveForegroundMonitoring() {
+    if (!state.intendedPlaying || state.endedNaturally) return false;
+    if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
+    if (!state.firstPlayCommitted) return true;
+    if (state.startupKickInFlight || state.videoPlayInFlight || state.audioPlayInFlight) return true;
+    if (foregroundRecoveryActive(1200) || isTabReturnImmune() || inBgReturnGrace()) return true;
+    if (state.videoWaiting || state.videoStallAudioPaused || state.audioWaiting) return true;
+    if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return true;
+    if (state.restarting || state.strictBufferHold) return true;
+    if (directUserToggleActive(2200) || userPlayIntentActive() || userToggleExpectingPlay()) return true;
+    if (state.lastVideoPlayingAt > 0 && (now() - state.lastVideoPlayingAt) < 2600) return true;
+    return false;
   }
   function shouldForceForegroundResume() {
     if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
@@ -8404,12 +8482,13 @@ const HAVE_ENOUGH_DATA = 4;
       }
     }
 
-    if (state.audioPausedSince > 0 && (now() - state.audioPausedSince) > AUDIO_STUCK_HARD_MS) return false;
-    if (state.bgPlaybackAllowed) return false;
     const allowHiddenBootstrap =
     (document.visibilityState === "hidden" &&
       (hiddenPlayPendingActive() || hiddenMediaSessionPlayActive() || state.mediaSessionInitiatedPlay));
+    if (hiddenBootstrapNeedsVideoLead()) return true;
     if (document.visibilityState === "hidden" && !allowHiddenBootstrap) return true;
+    if (state.audioPausedSince > 0 && (now() - state.audioPausedSince) > AUDIO_STUCK_HARD_MS) return false;
+    if (state.bgPlaybackAllowed) return false;
     if (chromiumPauseGuardActive() && !allowHiddenBootstrap) return true;
     if (chromiumAudioStartLocked() && !allowHiddenBootstrap) return true;
     if (chromiumBgSettlingActive() && getVideoPaused() && !allowHiddenBootstrap) return true;
@@ -8531,6 +8610,9 @@ const HAVE_ENOUGH_DATA = 4;
     state.videoPlayUntil = nowTs + resolvedMinGapMs;
     VisibilityGuard.onPlayCalled(); // VG: suppress spurious pause after our play()
     state.isProgrammaticVideoPlay = true;
+    if (coupledMode && audio && document.visibilityState === "hidden" && state.intendedPlaying) {
+      armHiddenVideoBootstrap(force ? 1400 : 1000);
+    }
     _bufMonStallFrames = 0;  // reset stale stall count
     try {
       let p = null;
@@ -8719,6 +8801,7 @@ const HAVE_ENOUGH_DATA = 4;
         inBgReturnGrace() ||
         NotMakePlayBackFixingNoticable.isActive()
       );
+    if (hiddenBootstrapNeedsVideoLead() && !inSeekKickWindow) return false;
     if (shouldHoldAudioForForegroundStall({ allowRecovery: _forceBufferBypass })) return false;
 
     // Hard block: Don't start audio in visible foreground when video doesn't have
@@ -13961,6 +14044,7 @@ const HAVE_ENOUGH_DATA = 4;
     video.on("playing", () => {
       const _prevPlayingAt = state.lastVideoPlayingAt;
       state.lastVideoPlayingAt = now();
+      clearHiddenVideoBootstrap();
       const _freshVideoProgressPending = freshForegroundVideoProgressPending(0.08);
       if (!_freshVideoProgressPending) {
         clearFreshForegroundVideoFirst();
@@ -14626,7 +14710,11 @@ const HAVE_ENOUGH_DATA = 4;
       state.audioStallSince = 0;
       try { MakeSureAudioIsNotCuttingOrWeird.onPlay(); } catch {}
       try { MakeSureAudioOrVideoDoesntPauseUnlessUserReallyWantsTo.start(); } catch {}
-      try { MakeVideoNotFreezeAfterPlaybackAfterAltTabHapens.start(); } catch {}
+      try {
+        if (!getVideoPaused() || shouldUseAggressiveForegroundMonitoring()) {
+          MakeVideoNotFreezeAfterPlaybackAfterAltTabHapens.start();
+        }
+      } catch {}
       if (!state.firstPlayCommitted && !state.startupKickInFlight) {
         state.firstPlayCommitted = true;
         state.startupKickDone = true;
@@ -14655,6 +14743,17 @@ const HAVE_ENOUGH_DATA = 4;
       }
       if (!state.syncing && !state.seeking && getVideoPaused()) {
         if (isHiddenBackground() && state.bgPlaybackAllowed) {
+          armHiddenVideoBootstrap(1200);
+          const _hiddenAudioTime = Number(audio.currentTime) || 0;
+          if (_hiddenAudioTime > 0.05 && !state.bgSilentTimeSyncing) {
+            bgSilentSyncVideoTime(_hiddenAudioTime);
+          }
+          if (tryAcquireVideoPlayLock()) {
+            const _hiddenVideoKick = execProgrammaticVideoPlay({ force: true, minGapMs: 0 });
+            if (_hiddenVideoKick && typeof _hiddenVideoKick.catch === "function") {
+              _hiddenVideoKick.catch(() => {});
+            }
+          }
           scheduleSync(0);
         } else {
           playTogether().catch(() => {});
@@ -16161,6 +16260,7 @@ const HAVE_ENOUGH_DATA = 4;
       state.visibilityStableUntil = now() + VISIBILITY_TRANSITION_MS;
       state.tabVisibilityChangeUntil = now() + TAB_VISIBILITY_STABLE_MS;
       if (newState === "visible") {
+        clearHiddenVideoBootstrap();
         // Don't stop keepalive immediately — keep it running during immunity
         // so it catches any late browser pauses. Stop after immunity expires.
         setTimeout(() => {
