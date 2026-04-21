@@ -1216,10 +1216,6 @@ document.addEventListener("DOMContentLoaded", () => {
   let _bgKeepaliveFailResetAt = 0;
   function _bgKeepaliveTick() {
     if (!state.intendedPlaying) return;
-    // CPU: keepalive's purpose is to compensate for background tab throttling.
-    // When visible, the main scheduler runs at full speed, so this tick is
-    // pure overhead. Early-exit saves ~4 CPU-ticks/sec in foreground.
-    if (document.visibilityState === "visible" && !isTabReturnImmune()) return;
     // Never restart after ended — this was causing phantom loops
     if (state.endedNaturally) return;
     if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) return;
@@ -3070,6 +3066,8 @@ document.addEventListener("DOMContentLoaded", () => {
       // itself would be no-op. Hidden/not-playing → 2000ms (5x slower).
       const _wdDelay = (document.visibilityState !== "visible" ||
                         !state.intendedPlaying ||
+                        state.seeking ||
+                        state.seekBuffering ||
                         state.endedNaturally)
         ? 2200
         : (shouldUseAggressiveForegroundMonitoring() ? WATCHDOG_MS : 1800);
@@ -5376,19 +5374,20 @@ const HAVE_ENOUGH_DATA = 4;
   if (!state.pageFullyLoaded) {
     _on(window, "load", () => {
       state.pageFullyLoaded = true;
-      // BG-LOAD PROTECTION: If the page finishes loading while the tab is
-      // hidden AND the user has already clicked play (firstPlayCommitted),
-      // defer the startup machinery until the tab becomes visible. Running
-      // force-audio-start / startup kicks in background fires play()+seek on
-      // media elements that Chromium may have auto-paused, producing the
-      // visible play→pause→play cycle the moment the user alt-tabs back.
-      // The visibilitychange→visible handler already contains the same
-      // startup retry logic (scheduleStartupAutoplayKick), so we lose
-      // nothing by skipping here.
-      if (document.visibilityState === "hidden" &&
-          (state.firstPlayCommitted || state.intendedPlaying || state.startupKickInFlight)) {
-        // Still mark loaded so other gates work; just skip the kick work.
-        return;
+      // BG-LOAD PROTECTION (NARROWED): only skip when the user has actually
+      // already committed a play (firstPlayCommitted=true) AND media is
+      // currently playing — running startup machinery then causes the visible
+      // play→pause→play on tab return. But for pure background AUTOPLAY
+      // (intendedPlaying=true but firstPlayCommitted=false because audio
+      // hasn't actually landed yet), we MUST run the startup kick or video
+      // never starts in the background.
+      if (document.visibilityState === "hidden" && state.firstPlayCommitted) {
+        const _bgProtectVNode = getVideoNode();
+        const _bgProtectVideoPlaying = _bgProtectVNode && !_bgProtectVNode.paused;
+        const _bgProtectAudioPlaying = coupledMode && audio && !audio.paused;
+        if (_bgProtectVideoPlaying || _bgProtectAudioPlaying) {
+          return;
+        }
       }
       // If startup already succeeded OR media is already playing, skip all
       // startup machinery. Re-running it causes a redundant audio seek
@@ -8532,6 +8531,12 @@ const HAVE_ENOUGH_DATA = 4;
     if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
     if (allowSeekKick && now() < state.seekKickAudioAllowedUntil) return false;
     if (allowHiddenBootstrap && hiddenBootstrapNeedsVideoLead()) return false;
+    // Tab-return/startup/direct-user exceptions: transient readyState dips
+    // during these windows should NOT block audio. Real stalls get caught
+    // on the next tick once the transient has settled.
+    if (isTabReturnImmune() || inBgReturnGrace()) return false;
+    if (state.startupPhase && !state.firstPlayCommitted) return false;
+    if (directUserToggleActive(250)) return false;
 
     const vNode = getVideoNode();
     const vRS = vNode ? Number(vNode.readyState || 0) : 0;
@@ -8550,6 +8555,14 @@ const HAVE_ENOUGH_DATA = 4;
     if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
     if (allowSeekKick && now() < state.seekKickAudioAllowedUntil) return false;
     if (allowHiddenBootstrap && hiddenBootstrapNeedsVideoLead()) return false;
+    // Tab-return/startup/direct-user exceptions: transient audio readyState
+    // dips during these windows should NOT block video. Blocking video here
+    // was causing the "play-pause-play on first alt-tab" bug — audio briefly
+    // drops to readyState 1 on tab return, blocking video resume, then the
+    // next recovery tick re-plays it a moment later.
+    if (isTabReturnImmune() || inBgReturnGrace()) return false;
+    if (state.startupPhase && !state.firstPlayCommitted) return false;
+    if (directUserToggleActive(250)) return false;
 
     const targetTime = (() => {
       try { return Number(video.currentTime()) || Number(audio.currentTime) || 0; } catch { return Number(audio.currentTime) || 0; }
@@ -9220,7 +9233,12 @@ const HAVE_ENOUGH_DATA = 4;
       // Hidden tab: no visible drift possible. Dramatic CPU saving here since
       // users leave tabs backgrounded for long periods. Previously 1200-1500ms.
       delay = platform.useBgControllerRetry ? 2500 : 3500;
-    } else if (fastSyncActive() || state.syncing || state.seeking || state.videoWaiting || state.strictBufferHold) {
+    } else if (state.seeking || state.seekBuffering) {
+      // CPU OPT: during active seek the seek machinery (seeked handler, kick
+      // chain, startSeekBufferWait) owns all recovery work. runSync has nothing
+      // productive to do here — it's just safety-netting. 500ms is plenty.
+      delay = 500;
+    } else if (fastSyncActive() || state.syncing || state.videoWaiting || state.strictBufferHold) {
       delay = 250;
     } else if (state.intendedPlaying) {
       // OPT: 800→1500. Drift correction only needs to fire 2-3x/sec at most
@@ -11238,30 +11256,6 @@ const HAVE_ENOUGH_DATA = 4;
     state.syncScheduledAt = 0;
     // Error overlay active — don't sync anything, media is dead
     if (_errorOverlayShown) return;
-    // CPU FAST-PATH: if state is quiescent (nothing to fix), reschedule and
-    // return without doing the full sync work. Covers the common case of a
-    // user watching a video with no drift, no seeking, no buffering.
-    // Conditions: everything stable AND last drift <50ms AND visible.
-    if (state.firstPlayCommitted &&
-        state.intendedPlaying &&
-        !state.seeking && !state.seekBuffering && !state.seekResumeInFlight &&
-        !state.videoWaiting && !state.audioWaiting &&
-        !state.strictBufferHold && !state.restarting &&
-        !state.syncing && !fastSyncActive() &&
-        document.visibilityState === "visible" &&
-        Math.abs(state.lastDrift || 0) < 0.05 &&
-        coupledMode && audio && !audio.paused && !getVideoPaused()) {
-      // Quick drift sample — if still tiny, skip.
-      try {
-        const _fpVt = Number(video.currentTime()) || 0;
-        const _fpAt = Number(audio.currentTime) || 0;
-        if (isFinite(_fpVt) && isFinite(_fpAt) && Math.abs(_fpVt - _fpAt) < 0.06) {
-          state.driftStableFrames = (state.driftStableFrames || 0) + 1;
-          scheduleSync();
-          return;
-        }
-      } catch {}
-    }
     enforcePlaybackRateSync();
     // Anti-loop tick — throttled. Runs every 3rd sync to save CPU; phantom
     // restart detection only needs ~1Hz (it's a safety net, not a hot path).
@@ -11271,8 +11265,9 @@ const HAVE_ENOUGH_DATA = 4;
     }
 
     // Safety: unstick seeking if stuck >5s (was 8s — too long, caused audio death)
-    if ((state.seeking || state.seekBuffering) && state._seekStartedAt > 0 &&
-      (performance.now() - state._seekStartedAt) > 5000) {
+    const _seekStuck = (state.seeking || state.seekBuffering) && state._seekStartedAt > 0 &&
+      (performance.now() - state._seekStartedAt) > 5000;
+    if (_seekStuck) {
       state.seeking = false;
     state.seekBuffering = false;
     state.seekResumeInFlight = false;
@@ -11285,6 +11280,14 @@ const HAVE_ENOUGH_DATA = 4;
     state.stallAudioResumeHoldUntil = 0;
     clearAudioPauseLocks();
       }
+
+    // CPU OPT: during active seek (and not stuck), the seek machinery owns
+    // recovery. runSync's drift/kick/health work is redundant and expensive
+    // (currentTime reads, readyState probes, peer checks). Just reschedule.
+    if (!_seekStuck && (state.seeking || state.seekBuffering)) {
+      scheduleSync();
+      return;
+    }
 
       // Tab-return: DON'T skip sync entirely. The sync loop is the only system
       // that can detect "video playing but frozen" and restart it. Blocking sync
@@ -14166,7 +14169,7 @@ const HAVE_ENOUGH_DATA = 4;
       if (_waitRS < HAVE_FUTURE_DATA && coupledMode && audio && !audio.paused) {
         // Only arm the hold and defer the kill. The timer re-checks all
         // conditions at fire-time — if video recovered meanwhile, no kill.
-        armForegroundBufferAudioHold(Math.max(MIN_STALL_AUDIO_RESUME_MS, 480));
+        armForegroundBufferAudioHold(Math.max(MIN_STALL_AUDIO_RESUME_MS, 600));
         state._stallAudioPauseTimer = setTimeout(() => {
           state._stallAudioPauseTimer = null;
           if (!coupledMode || !audio || audio.paused) return;
@@ -14307,7 +14310,8 @@ const HAVE_ENOUGH_DATA = 4;
       // keyframe AGAIN. check and re-zero up to 3 times at 50/150/400ms
       // until it sticks.
       if (!state.firstPlayCommitted && wantsStartupAutoplay() &&
-          !startupZeroSuppressed() && _playingNow > 0.5) {
+          !startupZeroSuppressed() && _playingNow > 0.5 &&
+          (now() - (state.startupPrimeStartedAt || 0)) < 4000) {
         state._isMicroSeek = true;
         try { videoEl.currentTime = 0; } catch {}
         try { const _zVN = getVideoNode(); if (_zVN && _zVN !== videoEl) _zVN.currentTime = 0; } catch {}
