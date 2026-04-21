@@ -424,8 +424,8 @@ document.addEventListener("DOMContentLoaded", () => {
         if (fs) createTitleBar();
         else removeTitleBar();
       };
-        document.addEventListener("fullscreenchange", onFullscreenChange, { passive: true });
-        document.addEventListener("webkitfullscreenchange", onFullscreenChange, { passive: true });
+        _on(document, "fullscreenchange", onFullscreenChange, { passive: true });
+        _on(document, "webkitfullscreenchange", onFullscreenChange, { passive: true });
         // Store on video element so beforeunload can remove them — anonymous
         // listeners registered here accumulate on SPA page reuse if not removed.
         try { video.el()._fsChangeHandler = onFullscreenChange; } catch {}
@@ -2546,6 +2546,8 @@ document.addEventListener("DOMContentLoaded", () => {
         !state.intendedPlaying ||
         state.endedNaturally ||
         state.restarting ||
+        state.seeking ||
+        state.seekBuffering ||
         document.visibilityState !== "visible" ||
         !isWindowFocused() ||
         !state.firstPlayCommitted;
@@ -5783,6 +5785,7 @@ const HAVE_ENOUGH_DATA = 4;
         // still be showing a stale GPU texture. Arm VCFM to verify a real
         // frame rendered — if not, it will force-flush the compositor.
         try { VideoCompositorFlushManager.arm(); } catch {}
+        state.tabReturnImmuneUntil = Math.max(state.tabReturnImmuneUntil, now() + 2000);
         return;
       }
 
