@@ -1765,7 +1765,34 @@ function authorVerifiedChecker4000() {
         let iconClass = 'fa-list';
         let unitText = 'Video';
 
-        if (title.includes('LETS PLAY')) {
+        const games = [
+            'MARIO', 'ZELDA', 'POKEMON', 'MINECRAFT', 'FORTNITE', 'ROBLOX', 'GTA', 'SONIC', 
+            'HALO', 'COD', 'VALORANT', 'ELDEN RING', 'DARK SOULS', 'SKYRIM', 'FALLOUT', 
+            'PORTAL', 'DOOM', 'METROID', 'KIRBY', 'SPLATOON', 'ANIMAL CROSSING', 'TETRIS', 
+            'PACMAN', 'STREET FIGHTER', 'TEKKEN', 'MORTAL KOMBAT', 'WITCHER', 'CYBERPUNK', 
+            'OVERWATCH', 'APEX', 'DESTINY', 'BATTLEFIELD', 'RESIDENT EVIL', 'SILENT HILL', 
+            'FINAL FANTASY', 'KINGDOM HEARTS', 'PERSONA', 'MONSTER HUNTER', 'AMONG US', 
+            'FALL GUYS', 'TERRARIA', 'STARDEW VALLEY', 'HOLLOW KNIGHT', 'HADES', 'CUPHEAD', 
+            'UNDERTALE', 'DELTARUNE', 'RED DEAD', 'ASSASSINS CREED', 'FAR CRY', 'WATCH DOGS', 
+            'RATCHET', 'SPYRO', 'CRASH BANDICOOT', 'GOD OF WAR', 'UNCHARTED', 'GENSHIN', 
+            'HONKAI', 'LEAGUE OF LEGENDS', 'DOTA', 'CSGO', 'COUNTER-STRIKE', 'PUBG', 
+            'MOBILE LEGENDS', 'FREE FIRE', 'ROCKET LEAGUE', 'BLOONS', 'GEOMETRY DASH', 
+            'FIVE NIGHTS AT FREDDYS', 'FNAF', 'WARZONE', 'CASTLEVANIA', 'MEGA MAN', 
+            'SHOVEL KNIGHT', 'CELESTE', 'OMORI', 'BIOSHOCK', 'BORDERLANDS', 'DIABLO', 
+            'WARCRAFT', 'STARCRAFT', 'TOTAL WAR', 'CIVILIZATION', 'CITIES SKYLINES', 
+            'EURO TRUCK', 'FORZA', 'GRAN TURISMO', 'NEED FOR SPEED', 'TONY HAWK', 
+            'YAKUZA', 'METAL GEAR', 'TOMB RAIDER', 'LAST OF US', 'HORIZON ZERO DAWN', 
+            'GHOST OF TSUSHIMA', 'DRAGON AGE', 'MASS EFFECT', 'DETROIT BECOME HUMAN'
+        ];
+
+        const genericGames = ['BULLY', 'SIMS', 'JAK', 'LIMBO', 'INSIDE', 'DOOM'];
+        const gameKeywords = ['GAMEPLAY', 'WALKTHROUGH', 'PLAYTHROUGH', 'LETS PLAY', 'PART', 'EPISODE', 'MOD'];
+        
+        const hasGameKeyword = gameKeywords.some(k => title.includes(k));
+        const matchesMainList = games.some(game => title.includes(game));
+        const matchesGenericList = genericGames.some(game => title.includes(game)) && hasGameKeyword;
+
+        if (matchesMainList || matchesGenericList || title.includes('LETS PLAY')) {
             iconClass = 'fa-gamepad-modern';
         } else if (title.includes('LIVE') || title.includes('LIVESTREAM')) {
             iconClass = 'fa-broadcast-tower';
