@@ -1763,11 +1763,13 @@ function authorVerifiedChecker4000() {
     <% 
         const title = x.title.toUpperCase(); 
         let iconClass = 'fa-list';
+        let unitText = 'Video';
 
         if (title.includes('LETS PLAY')) {
             iconClass = 'fa-gamepad-modern';
         } else if (title.includes('LIVE') || title.includes('LIVESTREAM')) {
             iconClass = 'fa-broadcast-tower';
+            unitText = 'Stream';
         } else if (title.includes('NEWS')) {
             iconClass = 'fa-newspaper';
         } else if (title.includes('MUSIC') || title.includes('SONG')) {
@@ -1779,7 +1781,7 @@ function authorVerifiedChecker4000() {
         <div class="thumbnail" style="background-image: url('<%- media_proxy_url %>/proxy?url=<%- x.playlistThumbnail %>?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw');border-radius: 9.5px;">
             <span class="video-length">
                 <i class="fa-light <%- iconClass %>"></i>
-                <%- x.videoCount %> <%- x.videoCount == 1 ? 'Video' : 'Videos' %> 
+                <%- x.videoCount %> <%- x.videoCount == 1 ? unitText : unitText + 's' %> 
             </span>
         </div>
         <div class="info">
