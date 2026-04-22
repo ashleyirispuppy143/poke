@@ -369,13 +369,13 @@ app.get("/api/getEngagementData", async (req, res) => {
         const respon = {
           like_count: likes,
           dislike_count: dislikes,
-          rating: engagement.rating,
-          userScore: {
+          YouTube_rating: engagement.rating,
+          user_ReceptionScore: {
             label: userScoreLabel,
             score: userScore,
             color: userScoreColor,
           },
-          engagement: {
+          display: {
             likeColor: likeColor,
             dislikeColor: dislikeColor,
             percentage: {
@@ -383,7 +383,7 @@ app.get("/api/getEngagementData", async (req, res) => {
               dislikePercentage: `${dislikePercentage}%`,
             },
           },
-          ReturnYouTubeDislikesApiRawResponse: engagement,
+          raw_stats: engagement,
         };
 
         res.send(respon);
