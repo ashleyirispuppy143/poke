@@ -111,6 +111,12 @@ function convert(value) {
   }).format(value);
 }
 
+function convertLegacy(value) {
+  return new Intl.NumberFormat("en-GB", {
+    notation: "compact",
+  }).format(value);
+}
+
 /**
  * Extracts the first line of text before the first occurrence of "<br>".
  * @param {string} text - The input text.
