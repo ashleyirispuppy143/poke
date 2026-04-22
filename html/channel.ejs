@@ -1760,15 +1760,25 @@ function authorVerifiedChecker4000() {
    
              <%  if (Array.isArray(playlist.playlists)) { %> 
 <% playlist.playlists.forEach(x => { %>
+    <% 
+        const title = x.title.toUpperCase(); 
+        let iconClass = 'fa-list';
+
+        if (title.includes('LETS PLAY')) {
+            iconClass = 'fa-gamepad-modern';
+        } else if (title.includes('LIVE') || title.includes('LIVESTREAM')) {
+            iconClass = 'fa-broadcast-tower';
+        } else if (title.includes('NEWS')) {
+            iconClass = 'fa-newspaper';
+        } else if (title.includes('MUSIC') || title.includes('SONG')) {
+            iconClass = 'fa-music';
+        }
+    %>
+
     <a href="/playlist?list=<%- x.playlistId %>" class="video">
         <div class="thumbnail" style="background-image: url('<%- media_proxy_url %>/proxy?url=<%- x.playlistThumbnail %>?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw');border-radius: 9.5px;">
             <span class="video-length">
-                <% if (x.title.toUpperCase().includes('LETS PLAY')) { %>
-                    <i class="fa-light fa-gamepad-modern"></i>
-                <% } else { %>
-                    <i class="fa-light fa-list"></i>
-                <% } %>
-                
+                <i class="fa-light <%- iconClass %>"></i>
                 <%- x.videoCount %> <%- x.videoCount == 1 ? 'Video' : 'Videos' %> 
             </span>
         </div>
