@@ -3015,7 +3015,6 @@ document.addEventListener('DOMContentLoaded', checkTheaterMode);
 const AMvideo = document.getElementById("video");
 const canvas1 = document.getElementById("ambient-canvas-1");
 const canvas2 = document.getElementById("ambient-canvas-2");
-
 if (canvas2) canvas2.style.display = "none";
 
 const CONFIG = {
@@ -3047,13 +3046,12 @@ const ctx = canvas1.getContext("2d", {
 });
 ctx.globalAlpha = 0.4;
 
-// Detect once instead of per-frame property lookup
 const hasRVFC = "requestVideoFrameCallback" in HTMLVideoElement.prototype;
-
 let ambientEnabled = localStorage.getItem("ambientState") !== "false";
 let isVisible = true;
 let running = false;
 let rafId = 0;
+let rvfcId = 0;  
 let lastDrawTime = 0;
 
 const observer = new IntersectionObserver(
@@ -3065,26 +3063,22 @@ const observer = new IntersectionObserver(
 );
 observer.observe(AMvideo);
 
-// Single consolidated check — JIT-inlineable
 const canRun = () =>
   ambientEnabled && isVisible && !document.hidden && !AMvideo.paused && !AMvideo.ended;
 
-// Unified render loop
 const loop = (now) => {
   if (!running || !canRun()) {
     running = false;
     return;
   }
-
   if (now - lastDrawTime >= CONFIG.interval) {
     lastDrawTime = now;
     try {
       ctx.drawImage(AMvideo, 0, 0, CONFIG.internalWidth, CONFIG.internalHeight);
     } catch (e) {}
   }
-
   if (hasRVFC) {
-    AMvideo.requestVideoFrameCallback(loop);
+    rvfcId = AMvideo.requestVideoFrameCallback(loop);
   } else {
     rafId = requestAnimationFrame(loop);
   }
@@ -3093,43 +3087,53 @@ const loop = (now) => {
 const drawStart = () => {
   if (running || !canRun()) return;
   running = true;
-  
-  // FIX: Force an immediate, synchronous draw right now.
-  // This bypasses the browser's rAF/rVFC scheduling delay when returning from a background tab.
+
   try {
     ctx.drawImage(AMvideo, 0, 0, CONFIG.internalWidth, CONFIG.internalHeight);
   } catch (e) {}
-  
-  lastDrawTime = performance.now(); // Sync the throttle timer with our forced draw
 
+  lastDrawTime = performance.now();
   if (hasRVFC) {
-    AMvideo.requestVideoFrameCallback(loop);
+    if (rvfcId) AMvideo.cancelVideoFrameCallback(rvfcId);  
+    rvfcId = AMvideo.requestVideoFrameCallback(loop);
   } else {
+    if (rafId) cancelAnimationFrame(rafId);  
     rafId = requestAnimationFrame(loop);
   }
 };
 
 const drawPause = () => {
   running = false;
-  // Only need to cancel rAF; rVFC exits via the running flag
-  if (!hasRVFC && rafId) {
+  if (hasRVFC && rvfcId) {
+    AMvideo.cancelVideoFrameCallback(rvfcId); // FIX: Properly cancel rVFC
+    rvfcId = 0;
+  } else if (!hasRVFC && rafId) {
     cancelAnimationFrame(rafId);
     rafId = 0;
   }
 };
 
-document.addEventListener(
-  "visibilitychange",
-  () => {
-    document.hidden ? drawPause() : drawStart();
-  },
-  { passive: true }
-);
+ const watchdog = () => {
+  // If video is playing but loop hasn't run in 500ms, reboot it automatically
+  if (canRun() && (!running || performance.now() - lastDrawTime > 500)) {
+    running = false;
+    drawStart(); 
+  }
+};
+
+const handleVisibilityChange = () => {
+  if (document.hidden) {
+    drawPause();
+  } else {
+     requestAnimationFrame(() => drawStart());
+  }
+};
+
+document.addEventListener("visibilitychange", handleVisibilityChange, { passive: true });
 
 const AMaudio = document.getElementById("aud");
 let isPlayPending = false;
 let pageFullyLoaded = false;
-
 window.addEventListener("load", () => { pageFullyLoaded = true; }, { once: true });
 
 const pauseHandler = (el) => {
@@ -3139,46 +3143,40 @@ const pauseHandler = (el) => {
       if (isPlayPending) return;
       return origPause.apply(this, arguments);
     };
-  } catch {}
+  } catch { }
 };
 
 const hasSD360 = !!AMvideo.querySelector('source[label="sd360"]');
-
 if (!hasSD360) {
   pauseHandler(AMvideo);
   if (AMaudio) pauseHandler(AMaudio);
 }
 
-// Robust check to see if an element is actively playing
 const isMediaPlaying = (el) => {
   return (
     el &&
-    el.currentTime > 0 &&      // Has started
-    !el.paused &&              // Is not paused
-    !el.ended &&               // Has not finished
-    el.readyState > 2          // Has enough data to play (HAVE_FUTURE_DATA or HAVE_ENOUGH_DATA)
+    el.currentTime > 0 &&      
+    !el.paused &&              
+    !el.ended &&               
+    el.readyState > 2          
   );
 };
 
 const forcePlay = async () => {
   if (!pageFullyLoaded || isPlayPending) return;
-
   const videoNeedsPlay = AMvideo && !isMediaPlaying(AMvideo);
   const audioNeedsPlay = AMaudio && !isMediaPlaying(AMaudio);
-
-  // If both are already playing fine, exit early and do nothing
+  
   if (!videoNeedsPlay && !audioNeedsPlay) return;
-
   isPlayPending = true;
-
-  // Only reset currentTime if the specific element needs to be played and is near the start
+  
   if (videoNeedsPlay && AMvideo.currentTime < 0.5) {
     AMvideo.currentTime = 0;
   }
   if (audioNeedsPlay && AMaudio.currentTime < 0.5) {
     AMaudio.currentTime = 0;
   }
-
+  
   try {
     const promises = [];
     if (videoNeedsPlay) promises.push(AMvideo.play());
@@ -3188,7 +3186,6 @@ const forcePlay = async () => {
       await Promise.all(promises);
     }
   } catch (e) {
-    // Catch autoplay rejections or DOMExceptions silently
   } finally {
     setTimeout(() => { isPlayPending = false; }, 50);
   }
@@ -3204,7 +3201,6 @@ const setupAmbientToggle = () => {
     'a[title*="Ambient light mode uses a very cool ahh effect"]'
   );
   if (!toggleBtn) return;
-
   const syncUI = () => {
     if (ambientEnabled) {
       toggleBtn.innerHTML = `<i class="fa-light fa-lightbulb-on"></i> Ambient Mode • on`;
@@ -3217,24 +3213,22 @@ const setupAmbientToggle = () => {
       drawPause();
     }
   };
-
   toggleBtn.addEventListener("click", (e) => {
     e.preventDefault();
     ambientEnabled = !ambientEnabled;
     localStorage.setItem("ambientState", ambientEnabled ? "true" : "false");
     syncUI();
   });
-
   syncUI();
 };
 
 const init = () => {
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-
+  
+   AMvideo.addEventListener("timeupdate", watchdog, { passive: true });
   AMvideo.addEventListener("play", drawStart, { passive: true });
   AMvideo.addEventListener("pause", drawPause, { passive: true });
   AMvideo.addEventListener("ended", drawPause, { passive: true });
-
   AMvideo.addEventListener(
     "loadedmetadata",
     () => {
@@ -3245,16 +3239,17 @@ const init = () => {
     },
     { once: true }
   );
-
   setupAmbientToggle();
   forcePlay();
 };
 
 const cleanup = () => {
+  AMvideo.removeEventListener("timeupdate", watchdog); 
   AMvideo.removeEventListener("play", drawStart);
   AMvideo.removeEventListener("pause", drawPause);
   AMvideo.removeEventListener("ended", drawPause);
   document.removeEventListener("fullscreenchange", handleFullscreen);
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
   observer.disconnect();
   drawPause();
 };
