@@ -302,8 +302,7 @@ app.get("/api/yturl", async function (req, res) {
       res.status(500).json({ error: "Proxy error" });
     }
   });
-
-  app.get("/api/getEngagementData", async (req, res) => {
+app.get("/api/getEngagementData", async (req, res) => {
     const { fetch } = await import("undici");
 
     const id = req.query.v;
@@ -351,7 +350,7 @@ app.get("/api/yturl", async function (req, res) {
         ).toFixed(2);
 
         const getUserScoreLabel = (score) => {
-          if (score >= 98) return "Masterpiece Video";
+          if (score >= 98) return "Masterpiece";
           else if (score >= 80) return "Overwhelmingly Positive";
           else if (score >= 60) return "Positive";
           else if (score >= 40) return "Mixed";
@@ -360,7 +359,9 @@ app.get("/api/yturl", async function (req, res) {
         };
 
         const userScoreLabel = getUserScoreLabel(userScore);
+        
         const userScoreColor =
+          userScore >= 98 ? "rainbow" :
           userScore >= 80 ? "green" :
           userScore >= 50 ? "orange" :
           "red";
