@@ -1765,7 +1765,7 @@ function authorVerifiedChecker4000() {
         let iconClass = 'fa-list';
         let unitText = 'Video';
         
-         const displayCount = x.videoCount < 1 ? 1 : x.videoCount;
+        const displayCount = x.videoCount < 1 ? 1 : x.videoCount;
 
         const games = [
             'MARIO', 'ZELDA', 'POKEMON', 'MINECRAFT', 'FORTNITE', 'ROBLOX', 'GTA', 'SONIC', 
@@ -1794,7 +1794,9 @@ function authorVerifiedChecker4000() {
         const matchesMainList = games.some(game => title.includes(game));
         const matchesGenericList = genericGames.some(game => title.includes(game)) && hasGameKeyword;
 
-        if (title.includes('SHORTS')) {
+        if (title.includes('COLLAB') || title.includes('FEATURING') || title.includes('COLLABORATION')) {
+            iconClass = 'fa-users';
+        } else if (title.includes('SHORTS')) {
             iconClass = 'fa-bolt-lightning';
             unitText = 'Short';
         } else if (matchesMainList || matchesGenericList || title.includes('LETS PLAY')) {
