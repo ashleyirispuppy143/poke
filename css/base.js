@@ -720,7 +720,8 @@ document.addEventListener("DOMContentLoaded", () => {
     _transitionDriftTimers: [],
     lastTransitionDriftRepairAt: 0,
     lastVideoPlayingAt: 0,
-    _syncTabReturnKickDone: false
+    _syncTabReturnKickDone: false,
+    _hiddenAudioNativeKickAt: 0
   };
   // Block micro-seeks during play/pause transitions. 500ms covers the full
   // decoder warmup window — the old 300ms allowed micro-seeks to land during
@@ -2322,7 +2323,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // CPU guard: slow poll in hidden tab — rAF + decoder events are throttled
     // anyway, so a 2.5x slower health poll still catches stalls without
     // burning CPU at 1Hz with little to show for it.
-    const delay = document.visibilityState !== "visible"
+    const delay = seekRecoveryCpuActive(600)
+      ? 2200
+      : document.visibilityState !== "visible"
       ? 2500
       : (shouldUseAggressiveForegroundMonitoring() ? TICK_MS : 1600);
     _timer = setTimeout(_tick, delay);
@@ -2426,6 +2429,8 @@ document.addEventListener("DOMContentLoaded", () => {
       let delay = TICK_MS;
       if (document.visibilityState !== "visible" || !state.intendedPlaying) {
         delay = 3000;
+      } else if (seekRecoveryCpuActive(600)) {
+        delay = 2200;
       } else if (!shouldUseAggressiveForegroundMonitoring()) {
         delay = 1700;
       }
@@ -3630,6 +3635,8 @@ document.addEventListener("DOMContentLoaded", () => {
       let delay = CHECK_MS;
       if (document.visibilityState !== "visible" || !state.intendedPlaying) {
         delay = 2500;
+      } else if (seekRecoveryCpuActive(600)) {
+        delay = 2600;
       } else if (!shouldUseAggressiveForegroundMonitoring()) {
         delay = 2200;
       }
@@ -5773,6 +5780,39 @@ const HAVE_ENOUGH_DATA = 4;
       // startBringBackRetry/executeSeamlessWakeup when media is healthy.
       const videoPlaying = !getVideoPaused();
       const audioPlaying = !coupledMode || (audio && !audio.paused);
+      const startupAutoplayPending =
+        wantsStartupAutoplay() &&
+        !state.firstPlayCommitted &&
+        !state.endedNaturally;
+      if (startupAutoplayPending) {
+        state.tabReturnImmuneUntil = Math.max(state.tabReturnImmuneUntil, now() + 2200);
+        if (videoPlaying && audioPlaying) {
+          commitStartupFromActivePlayback();
+          state.resumeOnVisible = false;
+          state.bgHiddenWasPlaying = false;
+          clearHiddenPlayPending();
+          try { VideoCompositorFlushManager.arm(); } catch {}
+          scheduleSync(0);
+          return;
+        }
+        state.resumeOnVisible = false;
+        state.bgHiddenWasPlaying = false;
+        clearHiddenPlayPending();
+        clearHiddenMediaSessionPlay();
+        clearAudioPauseLocks();
+        state.startupAutoplayRetryCount = 0;
+        state.startupKickInFlight = false;
+        maybePrimeStartup();
+        bootstrapStartupAudioNow();
+        if (state.startupPrimed) {
+          scheduleStartupAutoplayKick();
+        } else {
+          scheduleStartupAutoplayRetry();
+        }
+        try { VideoCompositorFlushManager.arm(); } catch {}
+        scheduleSync(0);
+        return;
+      }
       if (videoPlaying && audioPlaying && document.visibilityState === "visible") {
         state.rapidPlayPauseCount = 0;
         state.rapidPlayPauseResetAt = now();
@@ -6344,7 +6384,7 @@ const HAVE_ENOUGH_DATA = 4;
   function armTransitionDriftSettleForSeek(seekId, playSession = state.playSessionId) {
     if (!coupledMode || !audio) return;
     clearTransitionDriftTimers();
-    [120, 260, 520, 900, 1400].forEach(delay => {
+    [180, 650, 1350].forEach(delay => {
       const tid = trackTransitionDriftTimer(setTimeout(() => {
         untrackTransitionDriftTimer(tid);
         if (state.seekId !== seekId || state.playSessionId !== playSession) return;
@@ -6771,6 +6811,15 @@ const HAVE_ENOUGH_DATA = 4;
     const tail = Math.max(0, Number(tailMs) || 0);
     return now() < (state.seekStabilizeUntil + tail);
   }
+  function seekRecoveryCpuActive(tailMs = 0) {
+    const tail = Math.max(0, Number(tailMs) || 0);
+    const t = now();
+    return state.seeking ||
+      state.seekBuffering ||
+      state.seekResumeInFlight ||
+      t < (state.seekStabilizeUntil + tail) ||
+      t < (state.seekKickAudioAllowedUntil + tail);
+  }
   function beginUserToggleTxn(wantPlay, ms = USER_TOGGLE_TXN_FAST_MS) {
     const until = now() + Math.max(0, Number(ms) || 0);
     state.userToggleExpectedPlay = !!wantPlay;
@@ -7134,6 +7183,52 @@ const HAVE_ENOUGH_DATA = 4;
     }
     return now() < state.hiddenVideoBootstrapUntil;
   }
+  function tryNativeHiddenAudioResume(targetTime = NaN) {
+    if (!coupledMode || !audio) return false;
+    if (document.visibilityState !== "hidden") return false;
+    if (!state.intendedPlaying || state.endedNaturally || state.restarting) return false;
+    if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
+    if (userPauseLockActive() || mediaSessionForcedPauseActive()) return false;
+    if (hiddenBootstrapNeedsVideoLead()) return false;
+    if (isVideoBufferingForCoupledPlayback({ allowHiddenBootstrap: true, allowSeekKick: true })) return false;
+
+    const kickAt = now();
+    if ((kickAt - Number(state._hiddenAudioNativeKickAt || 0)) < 140) {
+      return !audio.paused;
+    }
+    state._hiddenAudioNativeKickAt = kickAt;
+
+    clearAudioPauseLocks();
+    state.videoWaiting = false;
+    state.videoStallAudioPaused = false;
+    state.stallAudioPausedSince = 0;
+    state.stallAudioResumeHoldUntil = 0;
+    state.videoStallSince = 0;
+    state.audioPauseUntil = 0;
+    state.audioPlayUntil = 0;
+    state.audioEventsSquelchedUntil = 0;
+    state.isProgrammaticAudioPause = false;
+    state.audioPlayInFlight = null;
+    state.stateChangeCooldownUntil = 0;
+    state.audioFadeCompleteUntil = 0;
+    cancelActiveFade();
+
+    const t = Number(targetTime);
+    if (isFinite(t) && t >= 0) {
+      safeSetAudioTime(t);
+    }
+    try { audio.volume = targetVolFromVideo(); } catch {}
+    state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, kickAt + 900);
+    try { DONTMAKEITDOUBLEPLAY.reset(audio); } catch {}
+    try {
+      const p = HTMLMediaElement.prototype.play.call(audio);
+      if (p && typeof p.then === "function") {
+        p.then(() => { state.audioEverStarted = true; }).catch(() => {});
+      }
+      return true;
+    } catch {}
+    return false;
+  }
   function kickHiddenCoupledBootstrap(opts = {}) {
     const { kickAudio = true, forceVideo = true } = opts || {};
     if (!coupledMode || !audio) return false;
@@ -7162,11 +7257,26 @@ const HAVE_ENOUGH_DATA = 4;
     if (!kickAudio || stillNeedsLead || !audio.paused) return !stillNeedsLead;
     if (isVideoBufferingForCoupledPlayback({ allowHiddenBootstrap: true, allowSeekKick: true })) return false;
 
+    clearAudioPauseLocks();
+    state.videoWaiting = false;
+    state.videoStallAudioPaused = false;
+    state.stallAudioPausedSince = 0;
+    state.stallAudioResumeHoldUntil = 0;
+    state.videoStallSince = 0;
+    state.audioPauseUntil = 0;
+    state.audioPlayUntil = 0;
+    state.audioEventsSquelchedUntil = 0;
+    state.isProgrammaticAudioPause = false;
     if (isFinite(targetTime) && targetTime >= 0) {
       safeSetAudioTime(targetTime);
     }
     state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 800);
-    execProgrammaticAudioPlay({ squelchMs: 80, force: true, minGapMs: 0 }).catch(() => {});
+    execProgrammaticAudioPlay({ squelchMs: 80, force: true, minGapMs: 0 })
+      .then(ok => {
+        if (ok || !audio.paused || document.visibilityState !== "hidden") return;
+        tryNativeHiddenAudioResume(targetTime);
+      })
+      .catch(() => { tryNativeHiddenAudioResume(targetTime); });
     return true;
   }
   function hasPlaybackProgressFromBackground(minDelta = 0.05) {
@@ -9127,6 +9237,40 @@ const HAVE_ENOUGH_DATA = 4;
       _seekAudioReadyKickCleanup = null;
     }
   }
+  function settleSeekRecoveryIfStable() {
+    if (!coupledMode || !audio) return false;
+    if (!state.intendedPlaying || state.restarting || state.seeking || state.seekBuffering) return false;
+    const seekRecoveryOpen =
+      state.seekResumeInFlight ||
+      now() < state.seekStabilizeUntil ||
+      now() < state.seekKickAudioAllowedUntil ||
+      now() < state.seekAudioMustStartUntil ||
+      state._seekPostTimers.length > 0;
+    if (!seekRecoveryOpen) return false;
+
+    const vNode = getVideoNode();
+    if (!vNode || vNode.paused || audio.paused) return false;
+    const vRS = Number(vNode.readyState || 0);
+    const aRS = Number(audio.readyState || 0);
+    if (vRS < HAVE_CURRENT_DATA || aRS < HAVE_CURRENT_DATA) return false;
+
+    const vt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
+    const at = Number(audio.currentTime) || 0;
+    if (!isFinite(vt) || !isFinite(at) || Math.abs(at - vt) > 0.18) return false;
+    if (state.seekResumeStartedAt > 0 && (now() - state.seekResumeStartedAt) < 140) return false;
+
+    state.seekResumeInFlight = false;
+    state.seekResumeStartedAt = 0;
+    state.seekKickAudioAllowedUntil = 0;
+    state.seekAudioMustStartUntil = 0;
+    if (state.seekStabilizeUntil > now()) state.seekStabilizeUntil = now();
+    clearSeekAudioReadyKick();
+    if (state._seekPostTimers.length) {
+      state._seekPostTimers.forEach(t => clearTimeout(t));
+      state._seekPostTimers = [];
+    }
+    return true;
+  }
   function armSeekAudioReadyKick(seekId = state.seekId, timeoutMs = 2600) {
     if (!coupledMode || !audio) return;
     clearSeekAudioReadyKick();
@@ -9201,7 +9345,7 @@ const HAVE_ENOUGH_DATA = 4;
     try { audio.addEventListener("progress", onReady, { passive: true }); } catch {}
     try { audio.addEventListener("playing", onPlaying, { passive: true }); } catch {}
 
-    [0, 45, 95, 170, 280, 420, 650, 950].forEach(delay => {
+    [0, 80, 210, 430, 760].forEach(delay => {
       timers.push(setTimeout(tryKick, delay));
     });
     timers.push(setTimeout(cleanup, Math.max(500, Number(timeoutMs) || 0)));
@@ -9238,6 +9382,8 @@ const HAVE_ENOUGH_DATA = 4;
       // chain, startSeekBufferWait) owns all recovery work. runSync has nothing
       // productive to do here — it's just safety-netting. 500ms is plenty.
       delay = 500;
+    } else if (state.seekResumeInFlight) {
+      delay = 450;
     } else if (fastSyncActive() || state.syncing || state.videoWaiting || state.strictBufferHold) {
       delay = 250;
     } else if (state.intendedPlaying) {
@@ -10442,6 +10588,7 @@ const HAVE_ENOUGH_DATA = 4;
     state.loopPreventionCooldownUntil = now() + 8000;
 
     let done = false;
+    const pollTimers = [];
     const resume = () => {
       if (done) return;
       done = true;
@@ -10450,7 +10597,7 @@ const HAVE_ENOUGH_DATA = 4;
       try { vNode.removeEventListener("playing", onReady); } catch {}
       try { vNode.removeEventListener("progress", onReady); } catch {}
       try { clearTimeout(fallbackTimer); } catch {}
-      try { clearInterval(pollTimer); } catch {}
+      pollTimers.forEach(t => clearTimeout(t));
       state.seekBuffering = false;
       state.seekBufferResumeTimer = null;
       clearBufferHold();
@@ -10525,13 +10672,13 @@ const HAVE_ENOUGH_DATA = 4;
       const rs = Number(vNode?.readyState || 0);
       if (rs >= HAVE_CURRENT_DATA) resume();
     };
-      try { vNode.addEventListener("canplay", onReady, { passive: true }); } catch {}
-      try { vNode.addEventListener("canplaythrough", onReady, { passive: true }); } catch {}
-      try { vNode.addEventListener("playing", onReady, { passive: true }); } catch {}
-      // Also listen for progress/timeupdate events as buffer-ready signals
-      try { vNode.addEventListener("progress", onReady, { passive: true }); } catch {}
-      const pollTimer = setInterval(() => {
-        if (done) { clearInterval(pollTimer); return; }
+    try { vNode.addEventListener("canplay", onReady, { passive: true }); } catch {}
+    try { vNode.addEventListener("canplaythrough", onReady, { passive: true }); } catch {}
+    try { vNode.addEventListener("playing", onReady, { passive: true }); } catch {}
+    // Also listen for progress/timeupdate events as buffer-ready signals
+    try { vNode.addEventListener("progress", onReady, { passive: true }); } catch {}
+    const pollReady = () => {
+        if (done) return;
         const rs = Number(vNode?.readyState || 0);
         let vBuf = false;
         try {
@@ -10542,10 +10689,14 @@ const HAVE_ENOUGH_DATA = 4;
           }
         } catch {}
         if (rs >= HAVE_CURRENT_DATA || vBuf) resume();
-      }, fastUserSeek ? 80 : 150);
-        const fallbackTimer = setTimeout(resume, fastUserSeek ? 700 : 1200);
-        state.seekBufferResumeTimer = fallbackTimer;
-        return true;
+    };
+    const pollPlan = fastUserSeek ? [90, 220, 420, 760] : [150, 340, 620, 980];
+    pollPlan.forEach(delay => {
+      pollTimers.push(setTimeout(pollReady, delay));
+    });
+    const fallbackTimer = setTimeout(resume, fastUserSeek ? 850 : 1350);
+    state.seekBufferResumeTimer = fallbackTimer;
+    return true;
   }
 
   async function finalizeSeekSync(currentSeekId) {
@@ -10750,7 +10901,7 @@ const HAVE_ENOUGH_DATA = 4;
     if (state.seekId !== currentSeekId) return;
 
     state.seekCooldownUntil = now() + 200;
-    setFastSync(1800);
+    setFastSync(1200);
 
     if (state.seekId === currentSeekId) {
       state.seeking = false;
@@ -10850,7 +11001,7 @@ const HAVE_ENOUGH_DATA = 4;
       // DO NOT clear state._seekPostTimers here — the seeked handler pushed
       // its own retry chain into that array. Clearing would cancel them.
       const _seekGuaranteeSession = state.playSessionId;
-      [1200, 1900, 2800, 4000, 5400].forEach(delay => {
+      [1600, 3200, 5200].forEach(delay => {
         const tid = setTimeout(() => {
           if (state.playSessionId !== _seekGuaranteeSession) return;
           if (!state.intendedPlaying || state.seeking || state.restarting) return;
@@ -10898,7 +11049,7 @@ const HAVE_ENOUGH_DATA = 4;
       // If we clear the flag now, the waiting handler kills audio immediately (play-pause).
       // 800ms is enough for the decoder to stabilize while not blocking other
       // audio recovery paths too long (was 1200ms).
-      setTimeout(() => { state.seekResumeInFlight = false; }, 800);
+      setTimeout(() => { state.seekResumeInFlight = false; }, 650);
       try { MakeSureAudioIsNotCuttingOrWeird.onSeekEnd(); } catch {}
     }
   }
@@ -10975,13 +11126,44 @@ const HAVE_ENOUGH_DATA = 4;
       state._startupAudioWaitStartedAt = now();
       return false;
     }
-    // Proceed anyway after 1.2s of waiting for audio metadata.
-    if ((now() - _startupWaitStarted) > 1200) return true;
+    // Proceed anyway after a short wait. This keeps startup synced without
+    // letting audio arrive obviously late behind already-ready video.
+    if ((now() - _startupWaitStarted) > 700) return true;
     // Also proceed if video has full data and audio element hasn't started
     // loading at all (readyState=0 with no network activity) — the track is
     // likely missing/broken. Don't hang video on a dead audio track.
     if (vRS >= 4 && audio && Number(audio.networkState) === 3 /* NETWORK_NO_SOURCE */) return true;
     return false;
+  }
+
+  function tryHiddenStartupAutoplayKick() {
+    if (!coupledMode || !audio) return false;
+    if (document.visibilityState !== "hidden") return false;
+    if (state.endedNaturally || state.restarting) return false;
+    if (!wantsStartupAutoplay() && !state.intendedPlaying) return false;
+    if (mediaSessionForcedPauseActive() || userPauseLockActive()) return false;
+
+    state.intendedPlaying = true;
+    state.bufferHoldIntendedPlaying = true;
+    state.resumeOnVisible = true;
+    state.startupPrimed = true;
+    clearBufferHold();
+    armHiddenPlayPending(45000);
+    state.tabReturnImmuneUntil = Math.max(state.tabReturnImmuneUntil, now() + 1800);
+    updateMediaSessionPlaybackState();
+
+    kickHiddenCoupledBootstrap({ kickAudio: true, forceVideo: true });
+    const hiddenTarget = (() => {
+      try { return Number(video.currentTime()) || Number(audio.currentTime) || 0; } catch { return Number(audio.currentTime) || 0; }
+    })();
+    if (audio.paused) {
+      tryNativeHiddenAudioResume(hiddenTarget);
+    } else {
+      state.audioEverStarted = true;
+    }
+    scheduleSync(0);
+    if (commitStartupFromActivePlayback()) return true;
+    return !getVideoPaused() && !audio.paused;
   }
 
   function scheduleStartupAutoplayKick() {
@@ -11016,14 +11198,10 @@ const HAVE_ENOUGH_DATA = 4;
       try {
         if (!state.startupPrimed || mediaSessionForcedPauseActive() || state.firstPlayCommitted) return;
 
-        // In background, Chrome will just kill any play() we fire. Don't churn —
-        // flag for resume on tab return and retry slowly.
         if (document.visibilityState === "hidden") {
-          state.resumeOnVisible = true;
-          state.intendedPlaying = true;
-          state.bufferHoldIntendedPlaying = true;
+          const hiddenKickStarted = tryHiddenStartupAutoplayKick();
           state.startupKickInFlight = false;
-          scheduleStartupAutoplayRetry();
+          if (!hiddenKickStarted) scheduleStartupAutoplayRetry();
           return;
         }
 
@@ -11092,6 +11270,11 @@ const HAVE_ENOUGH_DATA = 4;
       if (mediaSessionForcedPauseActive() || userPauseLockActive()) return;
       if (state.bgResumeInFlight) {
         scheduleStartupAutoplayRetry();
+        return;
+      }
+      if (document.visibilityState === "hidden") {
+        const hiddenRetryStarted = tryHiddenStartupAutoplayKick();
+        if (!hiddenRetryStarted) scheduleStartupAutoplayRetry();
         return;
       }
 
@@ -11378,6 +11561,7 @@ const HAVE_ENOUGH_DATA = 4;
         if (!isFinite(vtRaw) || !isFinite(atRaw)) {
           scheduleSync(); return;
         }
+        settleSeekRecoveryIfStable();
         // CPU FAST PATH: both tracks playing, small drift, foreground, no flags
         {
           const _fpVP = getVideoPaused();
@@ -14514,6 +14698,7 @@ const HAVE_ENOUGH_DATA = 4;
         state.videoStallSince = 0;
         return;
       }
+      settleSeekRecoveryIfStable();
       // Tab-return immunity: video is playing — that's exactly what we want. Accept it.
       if (state.tabReturnImmuneUntil > now() && (state.intendedPlaying || !state.firstPlayCommitted)) {
         state.videoWaiting = false;
@@ -14876,6 +15061,7 @@ const HAVE_ENOUGH_DATA = 4;
       state.audioEverStarted = true;
       state.seekAudioMustStartUntil = 0;
       state.audioStallSince = 0;
+      settleSeekRecoveryIfStable();
       try { MakeSureAudioIsNotCuttingOrWeird.onPlay(); } catch {}
       try { MakeSureAudioOrVideoDoesntPauseUnlessUserReallyWantsTo.start(); } catch {}
       try {
@@ -15197,6 +15383,7 @@ const HAVE_ENOUGH_DATA = 4;
       // track when audio first started playing — safeSetAudioTime uses this
       // to avoid seeking during the first 3s of playback
       if (!_audioFirstPlayedAt) _audioFirstPlayedAt = performance.now();
+      settleSeekRecoveryIfStable();
       // GUARD: if video is actually buffering/waiting, don't let audio play.
       // This catches any path that bypassed the audio.play() gate.
       // Skip entirely during startup settle — decoder warm-up produces
@@ -15618,13 +15805,13 @@ const HAVE_ENOUGH_DATA = 4;
             clearSeekResumeIntent();
             execProgrammaticVideoPause();
           } else {
-            state.intendedPlaying = true;
-            state.bufferHoldIntendedPlaying = true;
+          state.intendedPlaying = true;
+          state.bufferHoldIntendedPlaying = true;
           }
 
           state.driftStableFrames = 0;
           state.lastDrift = 0;
-          setFastSync(1800);
+          setFastSync(1200);
           scheduleSync(0);
         });
         video.on("seeked", () => {
@@ -15849,15 +16036,13 @@ const HAVE_ENOUGH_DATA = 4;
                 }
                 state._seekPreVolume = null;
               }
-              // kick chain: 5 / 40 / 150 / 400 / 800 / 1400 ms.
-              // first three try the readyState gate; the last three bypass it
-              // so audio eventually starts even if video stays slow to recover.
-              const _t1 = setTimeout(() => _kickAudio(1), 5);
-              const _t2 = setTimeout(() => _kickAudio(2), 40);
-              const _t3 = setTimeout(() => _kickAudio(3), 150);
-              const _t4 = setTimeout(() => _kickAudio(4), 400);
-              const _t5 = setTimeout(() => _kickAudio(5), 800);
-              const _t6 = setTimeout(() => _kickAudio(6), 1400);
+              // keep the post-seek kick chain short and high-signal — enough to
+              // recover real late starts without spawning a wall of timers on
+              // every seek.
+              const _t1 = setTimeout(() => _kickAudio(1), 15);
+              const _t2 = setTimeout(() => _kickAudio(2), 110);
+              const _t3 = setTimeout(() => _kickAudio(3), 360);
+              const _t4 = setTimeout(() => _kickAudio(4), 900);
               // Post-seek drift finalize. The kick chain only snaps audio forward
               // when it's BEHIND video (to avoid the "replay" bug mid-playback).
               // But after a user-initiated seek to T, the authoritative position
@@ -15901,9 +16086,9 @@ const HAVE_ENOUGH_DATA = 4;
                   }
                 } catch {}
               };
-              const _t7 = setTimeout(_postSeekFinalize, 1800);
-              const _t8 = setTimeout(_postSeekFinalize, 2800);
-              state._seekPostTimers.push(_t1, _t2, _t3, _t4, _t5, _t6, _t7, _t8);
+              const _t5 = setTimeout(_postSeekFinalize, 1700);
+              const _t6 = setTimeout(_postSeekFinalize, 2600);
+              state._seekPostTimers.push(_t1, _t2, _t3, _t4, _t5, _t6);
               // Legacy name retained for the line below that references it
               const _audioKickTimer = _t1;
               // NO 400ms safety retry. The old retry raced with the buffer monitor:
@@ -15931,7 +16116,7 @@ const HAVE_ENOUGH_DATA = 4;
           // for finalizeSeekSync at 500ms meant sync was visibly late —
           // audio ran ahead or behind video for half a second post-seek
           // before rate correction kicked in.
-          setFastSync(2000);
+          setFastSync(1300);
           scheduleSync(60);
           scheduleSeekFinalize(SEEK_FINALIZE_DELAY_MS, state.seekId);
         });
@@ -16902,14 +17087,17 @@ const HAVE_ENOUGH_DATA = 4;
         state.audioEverStarted = true;
         return;
       }
-      // In background, don't fight Chrome's throttle — it'll just pause us again and
-      // we end up in a play→pause→play→pause loop that's audible as stuttering.
-      // Instead, flag for resume when the user actually comes to the tab.
       if (document.visibilityState === "hidden") {
         state.resumeOnVisible = true;
+        armHiddenPlayPending(45000);
+        tryHiddenStartupAutoplayKick();
+        if (!audio.paused) {
+          state.audioEverStarted = true;
+          state.audioStartupPlayRetries = 0;
+          return;
+        }
         state.audioStartupPlayRetries++;
-        // Retry slowly in bg — just in case Chrome allows it (some versions do)
-        state.audioForcePlayTimer = setTimeout(tryPlay, 2000);
+        state.audioForcePlayTimer = setTimeout(tryPlay, 700);
         return;
       }
       if (state.startupKickInFlight) {
