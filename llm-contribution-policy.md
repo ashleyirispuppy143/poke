@@ -1,6 +1,6 @@
 # Algorithmic Collaboration and Contribution Guidelines
 
-**Version:** 2.1.5-final2 • **Last Review:** 2026-04-20
+**Version:** 2.1.5-final3 • **Last Review:** 2026-04-21
 
 **Author:** Güneş Şevval Arjinya Melisoy AKA Ashley Íris Celeste ([https://ashleyirispup.cat](https://ashleyirispup.cat))
 
@@ -118,7 +118,7 @@ The Poke Project strictly prohibits relying on automated "AI detection" tools. T
 * You will never be penalized if a third-party tool inaccurately flags your work.
 * Project maintainers **MUST NOT** reject code, block PRs, or aggressively interrogate contributors based purely on subjective "AI vibes" or suspicions that code "looks generated." 
 * *Clarification:* Questioning a contributor because they clearly do not understand the code they submitted is valid (enforcing the ban on vibecoding). Rejecting code simply because of its stylistic "vibe" is not.
-* You are only required to disclose actual, active use of generative AI tools during your personal contribution process.
+* You are only required to disclose, active use of actual generative AI tools during your personal contribution process.
 
 ### Prompt Context (Optional but Encouraged)
 Contributors are highly encouraged to include the core prompts they used to generate major logic blocks in the PR description. Providing the prompt context helps reviewers understand the intent behind the generated code, trace logical decisions, and evaluate potential edge cases more effectively.
@@ -175,7 +175,9 @@ Adherence to this policy is mandatory. Failure to comply with these guidelines w
 ---
 
 ## Changelog
-
+**v2.1.5-final3 (2026-04-21)**
+* Better wording
+  
 **v2.1.5-final2 (2026-04-20)**
 * Defined and strictly banned the practice of "vibecoding" to enforce code comprehension and accountability.
 * Further expanded the "External Sources and False Positives" section to provide explicit guidance on handling ambiguous snippets from external forums without falling into proxy vibecoding.
