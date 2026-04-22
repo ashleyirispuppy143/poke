@@ -48,7 +48,7 @@
 <meta content="{canplayhd: true, redesign_feburary_2023:true, poke-rebrand:true, universe:2, ImmersiveAmbientMode:true, november2023_poke_rebrand:true, rebrand_2024:true, faster_load:true, AudioSyncV2:false, AudioSyncV3:true }" name="flags">
 <%
   const desc = `Watch this ${turntomins(VideoData?.lengthSeconds) || "LIVE"} long video from ${VideoData?.author.replace("- Topic", "")} On Poke! 
-👍 ${convert(engagement?.likes)} | 👎 ${convert(engagement?.dislikes)} | 📈 ${convert(engagement?.viewCount)} Views 🗓️ ${date.replace("Premiered", " ")} 💬 ${!isNaN(inv.commentCount) ? inv.commentCount.toLocaleString() : 0}`;
+👍 ${convertLegacy(engagement?.likes)} | 👎 ${convertLegacy(engagement?.dislikes)} | 📈 ${convertLegacy(engagement?.viewCount)} Views 🗓️ ${date.replace("Premiered", " ")} 💬 ${!isNaN(inv.commentCount) ? inv.commentCount.toLocaleString() : 0}`;
 
   const image = `https://i.ytimg.com/vi/${VideoData.videoId}/maxresdefault.jpg`;
   const url   = `https://${hostname}/watch?v=${VideoData?.videoId}`;
@@ -1604,7 +1604,7 @@ for (const format of (VideoData.adaptiveFormats || [])) {
 <div title="<%= likesValue.toLocaleString() %> Likes">
   <div class="pill-button" style="margin-right: 5.5px;">
     <i class="fa-light <%= VideoData.genre === 'Pets & Animals' ? 'fa-paw' : 'fa-thumbs-up' %>"></i>
-    <%= convert(likesValue) %>
+    <%= convertLegacy(likesValue) %>
   </div>
 </div>
       
@@ -1616,7 +1616,7 @@ for (const format of (VideoData.adaptiveFormats || [])) {
 
 <div style="margin-left: -7.5px;" title="<%= dislikesValue.toLocaleString() %> Dislikes">
   <div class="pill-button">
-    <%= convert(dislikesValue) %>
+    <%= convertLegacy(dislikesValue) %>
     <i class="fa-light fa-thumbs-down" style="margin-left: 1.5px;"></i>
   </div>
 </div>
@@ -1753,7 +1753,7 @@ WIP!                                                 </a>
     <details class="description-new">
 <% } %>         
          	<summary style="color:#fff;">
-                                <%=convert(engagement?.viewCount) %> Views  •  <%=date%> • Click to toggle off description</summary>
+                                <%=convertLegacy(engagement?.viewCount) %> Views  •  <%=date%> • Click to toggle off description</summary>
    
           <% if (String(VideoData.descriptionHtml) != "undefined")  { %>
          <% if (String(VideoData.descriptionHtml) != " ")  { %>
@@ -2454,10 +2454,10 @@ const platforms = [
   
  					<div title="<%=engagement?.likes?.toLocaleString()%> Likes">
   <i class="fa-light fa-thumbs-up"></i>
-     <%=convert(engagement?.likes)%>
+     <%=convertLegacy(engagement?.likes)%>
           </div>
 					<div title="<%=engagement?.dislikes?.toLocaleString()%> Dislikes">
-<i class="fa-light fa-thumbs-down"></i> <%=convert(engagement?.dislikes)%>
+<i class="fa-light fa-thumbs-down"></i> <%=convertLegacy(engagement?.dislikes)%>
 					</div>
 
             <div>
@@ -2531,7 +2531,7 @@ const platforms = [
   </p>    
                                         
                                                    </div>
-<% inv.comments.forEach(x =>{ %> <div class="fade-in<%- x.commentId %><%- btoa(x.commentId) %>"><div class="_ comment_<%- x.commentId %><%- btoa(btoa(x.commentId)) %>" style="padding:10px"><div class="comment-list left-padding" style="background:#333;padding-top:1px;padding:10px;border-radius:30px;padding-top:0"><div class="d-flex justify-content-between single-comment" style="padding-top:none"><div class="d-flex justify-content-between user"><div class="desc"><h5 style="display:flex;margin-top:7px;padding-top:10px"><div class="thumb"><a href="/channel?id=<%- x.authorId%>@youtube.com" style="width:40px;height:40px" class="avatar"><img loading="lazy" src="<%- media_proxy_url %>/proxy?url=<%= x.authorThumbnails[0].url.replace("https://yt3.ggpht.com/", "https://vid.puffyan.us/ggpht/") %>"></a></div> <% if (!x.authorIsChannelOwner) { %> <p class="comments-author"><a href="/channel?id=<%- x.authorId%>" style="color:var(--text-color);text-decoration:none"> <%- x.author%><% if (x.verified) { %><i class="icon ion ion-md-checkmark-circle"></i><% } %> <p class="date-publish"><%- x.publishedText %></p></a></p> <% } %><% if (x.authorIsChannelOwner) { %> <p class="comments-author owner"><a href="/channel?id=<%- x.authorId%>@youtube.com" style="color:var(--text-color);text-decoration:none"> <%- x.author%><% if (x.verified) { %><i class="icon ion ion-md-checkmark-circle"></i><% } %> <p class="date-publish"><%- x.publishedText %></p></a> <% } %> </p></h5><p class="comment" style="font-weight:700"> <%- x.contentHtml.replace(/\n/g, "<br />"); %><br><br> <% if (x.likeCount === 0) { %><i class="fa-light fa-thumbs-up"></i>|<i class="fa-light fa-thumbs-down"></i><% } else { %><i class="fa-light fa-thumbs-up"></i> <%= convert(x.likeCount) %> |<i class="fa-light fa-thumbs-down" style="margin-left: 2px;"></i><% } %>    <% if (x.replies?.replyCount != 0) { %> <i class="fa-light fa-reply"></i> <%- x.replies?.replyCount || "0" %> <% } %> <% if(x.creatorHeart) { %> <i class="icon creator-heart-small-container ion-ios-heart" style="color:#ffabcc" title="<%= x.creatorHeart.creatorName%> marked it with a ❤ owo"></i><% } %> </p></div></div></div></div></div></div> <% }) %>
+<% inv.comments.forEach(x =>{ %> <div class="fade-in<%- x.commentId %><%- btoa(x.commentId) %>"><div class="_ comment_<%- x.commentId %><%- btoa(btoa(x.commentId)) %>" style="padding:10px"><div class="comment-list left-padding" style="background:#333;padding-top:1px;padding:10px;border-radius:30px;padding-top:0"><div class="d-flex justify-content-between single-comment" style="padding-top:none"><div class="d-flex justify-content-between user"><div class="desc"><h5 style="display:flex;margin-top:7px;padding-top:10px"><div class="thumb"><a href="/channel?id=<%- x.authorId%>@youtube.com" style="width:40px;height:40px" class="avatar"><img loading="lazy" src="<%- media_proxy_url %>/proxy?url=<%= x.authorThumbnails[0].url.replace("https://yt3.ggpht.com/", "https://vid.puffyan.us/ggpht/") %>"></a></div> <% if (!x.authorIsChannelOwner) { %> <p class="comments-author"><a href="/channel?id=<%- x.authorId%>" style="color:var(--text-color);text-decoration:none"> <%- x.author%><% if (x.verified) { %><i class="icon ion ion-md-checkmark-circle"></i><% } %> <p class="date-publish"><%- x.publishedText %></p></a></p> <% } %><% if (x.authorIsChannelOwner) { %> <p class="comments-author owner"><a href="/channel?id=<%- x.authorId%>@youtube.com" style="color:var(--text-color);text-decoration:none"> <%- x.author%><% if (x.verified) { %><i class="icon ion ion-md-checkmark-circle"></i><% } %> <p class="date-publish"><%- x.publishedText %></p></a> <% } %> </p></h5><p class="comment" style="font-weight:700"> <%- x.contentHtml.replace(/\n/g, "<br />"); %><br><br> <% if (x.likeCount === 0) { %><i class="fa-light fa-thumbs-up"></i>|<i class="fa-light fa-thumbs-down"></i><% } else { %><i class="fa-light fa-thumbs-up"></i> <%= convertLegacy(x.likeCount) %> |<i class="fa-light fa-thumbs-down" style="margin-left: 2px;"></i><% } %>    <% if (x.replies?.replyCount != 0) { %> <i class="fa-light fa-reply"></i> <%- x.replies?.replyCount || "0" %> <% } %> <% if(x.creatorHeart) { %> <i class="icon creator-heart-small-container ion-ios-heart" style="color:#ffabcc" title="<%= x.creatorHeart.creatorName%> marked it with a ❤ owo"></i><% } %> </p></div></div></div></div></div></div> <% }) %>
       <center>
                   <a href="#top">Go To Top</a>
                     </center>
@@ -2579,7 +2579,7 @@ const platforms = [
              </div>        
                                                              
                                                              
-                                                                     <div>    <i class="fa-light fa-thumbs-up"></i>  <%=convert(engagement?.likes)%> ||  <i class="fa-light fa-thumbs-down"></i>  <%=convert(engagement?.dislikes)%>  </div>
+                                                                     <div>    <i class="fa-light fa-thumbs-up"></i>  <%=convertLegacy(engagement?.likes)%> ||  <i class="fa-light fa-thumbs-down"></i>  <%=convertLegacy(engagement?.dislikes)%>  </div>
                 
                      <% } %>
 
@@ -2716,7 +2716,7 @@ VideoData?.recommendedVideos.forEach(video => {
                                     </a>
                                     <div class="video-views">
                                           
-                                                <%= convert(x.viewCount) %> views
+                                                <%= convertLegacy(x.viewCount) %> views
  
                                     </div>
                                 </div>
@@ -3681,14 +3681,14 @@ font-size: 13px;margin:0;padding:0;white-space: nowrap;
 
 <div class="pill-button" style="margin-right: 7.5px;">
     <i class="fa-light fa-thumbs-up"></i>
-     <%=convert(engagement?.likes)%>
+     <%=convertLegacy(engagement?.likes)%>
        </div>
        
         <div class = "vertical"></div>
       
 					<div style="margin-left: -7.5px;" title="<%=engagement?.dislikes.toLocaleString()%> Dislikes">
                 <div class="pill-button">
-<i class="fa-light fa-thumbs-down"></i>  <%=convert(engagement?.dislikes)%> 
+<i class="fa-light fa-thumbs-down"></i>  <%=convertLegacy(engagement?.dislikes)%> 
 					</div>					</div>
 
 
@@ -3707,7 +3707,7 @@ font-size: 13px;margin:0;padding:0;white-space: nowrap;
                             <div class="pill-button">
 
             <i class="fa-light fa-comments"></i>
-           <%- convert(inv.commentCount) %> Comments
+           <%- convertLegacy(inv.commentCount) %> Comments
             </div>
 					</a>
                                                                                                              <% }%>      
@@ -3824,7 +3824,7 @@ font-size: 13px;margin:0;padding:0;white-space: nowrap;
   
   <%  if (Array.isArray( inv.comments)) { %> 
 <div style="padding: 0em;background: #0009;border-radius: 16px;align-self: center;align-items: center;margin-left: 8px;margin-right: 12px;padding-bottom: 0;padding-top:1em;margin-bottom: 13px;margin-top: -4px;">
-            <div class="video-title" style="font-family:'PokeTube flex';font-weight:1000;white-space:yes;margin-top: -0.5em;margin-left: 0.4em;">Comments - <%- convert(inv.commentCount) %>
+            <div class="video-title" style="font-family:'PokeTube flex';font-weight:1000;white-space:yes;margin-top: -0.5em;margin-left: 0.4em;">Comments - <%- convertLegacy(inv.commentCount) %>
                     <a id="language-button" href="#comments-container" style="float: right;margin-right: 0.5em;" class="switch">
 <i class="fa-thin fa-chevron-down"></i>
 </a> 
@@ -3951,7 +3951,7 @@ font-size: 13px;margin:0;padding:0;white-space: nowrap;
     
  <div style="text-align: center;font-size: x-large;margin: 9px;">
     	<p>
-        <%=convert(engagement?.viewCount)%>  
+        <%=convertLegacy(engagement?.viewCount)%>  
       <br>
  </p><p style="font-size: 17px;">Views</p>
 
@@ -3959,7 +3959,7 @@ font-size: 13px;margin:0;padding:0;white-space: nowrap;
   </div>
 <div style="text-align: center;font-size: x-large;margin: 9px;">
     	<p>
-        <%=convert(engagement?.likes)%>  
+        <%=convertLegacy(engagement?.likes)%>  
       <br>
  </p><p style="font-size: 17px;">Likes</p>
 
@@ -3969,7 +3969,7 @@ font-size: 13px;margin:0;padding:0;white-space: nowrap;
              <div>
     <div style="text-align: center;font-size: x-large;margin: 9px;">
     	<p>
-        <%=convert(engagement?.dislikes)%>  
+        <%=convertLegacy(engagement?.dislikes)%>  
       <br>
  </p><p style="font-size: 17px;">Dislikes</p>
 
@@ -4386,7 +4386,7 @@ More Epic options owo~
               <p class="comment" style="font-weight: bold;">
 <%- x.contentHtml.replace(/\n/g, "<br>"); %>      
         <span style="  white-space: nowrap;">   <i class="fa-light fa-thumbs-up"></i>
- <%- convert(x.likeCount) %> | <i class="fa-light fa-thumbs-down"></i> 
+ <%- convertLegacy(x.likeCount) %> | <i class="fa-light fa-thumbs-down"></i> 
    
    <%   if(x.creatorHeart) { %> 
 
