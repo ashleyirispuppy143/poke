@@ -2048,10 +2048,8 @@ document.getElementById('search').addEventListener('keyup', function () {
 
 var isPopupOpen = false;
 
-// 1. Create the overlay element dynamically
-var overlay = document.createElement('div');
+ var overlay = document.createElement('div');
 overlay.id = 'popup-overlay';
-// Apply styles via JS
 Object.assign(overlay.style, {
     display: 'none',
     position: 'fixed',
@@ -2063,18 +2061,16 @@ Object.assign(overlay.style, {
     zIndex: '998'
 });
 
-// 2. Add the click-to-close functionality to the overlay
-overlay.addEventListener('click', closePopup);
+ overlay.addEventListener('click', closePopup);
 
-// 3. Attach it to the body
-document.body.appendChild(overlay);
+ document.body.appendChild(overlay);
 
 function togglePopup() {
     if (isPopupOpen) {
         closePopup();
     } else {
         document.getElementById('popup-container').style.display = 'block';
-        overlay.style.display = 'block'; // Show the dynamic overlay
+        overlay.style.display = 'block';  
         document.body.style.overflow = 'hidden';
         isPopupOpen = true;
     }
@@ -2082,13 +2078,12 @@ function togglePopup() {
 
 function closePopup() {
     document.getElementById('popup-container').style.display = 'none';
-    overlay.style.display = 'none'; // Hide the dynamic overlay
+    overlay.style.display = 'none';  
     document.body.style.overflow = 'auto';
     isPopupOpen = false;
 }
 
-// Your existing event listeners
-document.getElementById('popup-trigger').addEventListener('click', function (event) {
+ document.getElementById('popup-trigger').addEventListener('click', function (event) {
     event.preventDefault();
     togglePopup();
 });
