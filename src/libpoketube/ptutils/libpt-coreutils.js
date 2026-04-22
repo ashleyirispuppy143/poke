@@ -304,6 +304,7 @@ module.exports = {
   lightOrDark,
   toObject,
   IsInArray,
+  convertLegacy,
   getRandomInt,
   capitalizeFirstLetter,
   escapeHtml,
