@@ -2047,30 +2047,47 @@ document.getElementById('search').addEventListener('keyup', function () {
 });
 
 var isPopupOpen = false;
-var popupContainer = document.getElementById('popup-container');
+
+// 1. Create the overlay element dynamically
+var overlay = document.createElement('div');
+overlay.id = 'popup-overlay';
+// Apply styles via JS
+Object.assign(overlay.style, {
+    display: 'none',
+    position: 'fixed',
+    top: '0',
+    left: '0',
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: '998'
+});
+
+// 2. Add the click-to-close functionality to the overlay
+overlay.addEventListener('click', closePopup);
+
+// 3. Attach it to the body
+document.body.appendChild(overlay);
 
 function togglePopup() {
     if (isPopupOpen) {
         closePopup();
     } else {
-        popupContainer.style.display = 'flex'; // Changed to flex to help center content
+        document.getElementById('popup-container').style.display = 'block';
+        overlay.style.display = 'block'; // Show the dynamic overlay
         document.body.style.overflow = 'hidden';
         isPopupOpen = true;
     }
 }
 
 function closePopup() {
-    popupContainer.style.display = 'none';
+    document.getElementById('popup-container').style.display = 'none';
+    overlay.style.display = 'none'; // Hide the dynamic overlay
     document.body.style.overflow = 'auto';
     isPopupOpen = false;
 }
 
- popupContainer.addEventListener('click', function (event) {
-     if (event.target === popupContainer) {
-        closePopup();
-    }
-});
-
+// Your existing event listeners
 document.getElementById('popup-trigger').addEventListener('click', function (event) {
     event.preventDefault();
     togglePopup();
@@ -2081,6 +2098,7 @@ document.addEventListener('keydown', function (event) {
         closePopup();
     }
 });
+
 // @license-end
 
      </script>                                                                                           <% } %>
