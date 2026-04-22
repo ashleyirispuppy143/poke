@@ -1764,6 +1764,8 @@ function authorVerifiedChecker4000() {
         const title = x.title.toUpperCase(); 
         let iconClass = 'fa-list';
         let unitText = 'Video';
+        
+         const displayCount = x.videoCount < 1 ? 1 : x.videoCount;
 
         const games = [
             'MARIO', 'ZELDA', 'POKEMON', 'MINECRAFT', 'FORTNITE', 'ROBLOX', 'GTA', 'SONIC', 
@@ -1792,7 +1794,10 @@ function authorVerifiedChecker4000() {
         const matchesMainList = games.some(game => title.includes(game));
         const matchesGenericList = genericGames.some(game => title.includes(game)) && hasGameKeyword;
 
-        if (matchesMainList || matchesGenericList || title.includes('LETS PLAY')) {
+        if (title.includes('SHORTS')) {
+            iconClass = 'fa-bolt-lightning';
+            unitText = 'Short';
+        } else if (matchesMainList || matchesGenericList || title.includes('LETS PLAY')) {
             iconClass = 'fa-gamepad-modern';
         } else if (title.includes('LIVE') || title.includes('LIVESTREAM')) {
             iconClass = 'fa-broadcast-tower';
@@ -1808,7 +1813,7 @@ function authorVerifiedChecker4000() {
         <div class="thumbnail" style="background-image: url('<%- media_proxy_url %>/proxy?url=<%- x.playlistThumbnail %>?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw');border-radius: 9.5px;">
             <span class="video-length">
                 <i class="fa-light <%- iconClass %>"></i>
-                <%- x.videoCount %> <%- x.videoCount == 1 ? unitText : unitText + 's' %> 
+                <%- displayCount %> <%- displayCount == 1 ? unitText : unitText + 's' %> 
             </span>
         </div>
         <div class="info">
