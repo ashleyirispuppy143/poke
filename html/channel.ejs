@@ -2047,32 +2047,40 @@ document.getElementById('search').addEventListener('keyup', function () {
 });
 
 var isPopupOpen = false;
+var popupContainer = document.getElementById('popup-container');
 
 function togglePopup() {
-if (isPopupOpen) {
-closePopup();
-} else {
-document.getElementById('popup-container').style.display = 'block';
-document.body.style.overflow = 'hidden';
+    if (isPopupOpen) {
+        closePopup();
+    } else {
+        popupContainer.style.display = 'flex'; // Changed to flex to help center content
+        document.body.style.overflow = 'hidden';
+        isPopupOpen = true;
+    }
 }
-isPopupOpen = !isPopupOpen;
-   }
 
 function closePopup() {
-            document.getElementById('popup-container').style.display = 'none';
-            document.body.style.overflow = 'auto';
-            isPopupOpen = false;
-        }
+    popupContainer.style.display = 'none';
+    document.body.style.overflow = 'auto';
+    isPopupOpen = false;
+}
+
+ popupContainer.addEventListener('click', function (event) {
+     if (event.target === popupContainer) {
+        closePopup();
+    }
+});
 
 document.getElementById('popup-trigger').addEventListener('click', function (event) {
-            event.preventDefault();
-            togglePopup();
-        }); 
-   document.addEventListener('keydown', function (event) {
-        if (event.key === 'Escape' && isPopupOpen) {
-            closePopup();
-        }
-    });
+    event.preventDefault();
+    togglePopup();
+});
+
+document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && isPopupOpen) {
+        closePopup();
+    }
+});
 // @license-end
 
      </script>                                                                                           <% } %>
