@@ -99,13 +99,15 @@ function IsJsonString(str) {
 }
 
 /**
- * Converts a number into a compact string representation using the en-GB locale.
+ * Converts a number into a compact string representation with decimals.
  * @param {number} value - The number to be converted.
- * @returns {string} - The compact string representation of the number.
+ * @returns {string} - The compact string representation (e.g., 14.3M).
  */
 function convert(value) {
   return new Intl.NumberFormat("en-GB", {
     notation: "compact",
+    compactDisplay: "short", // Standard short form (K, M, B)
+    maximumFractionDigits: 1, // Ensures 14.3M instead of 14M
   }).format(value);
 }
 
