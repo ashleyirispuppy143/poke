@@ -1724,8 +1724,12 @@ function authorVerifiedChecker4000() {
 
    <% released.playlists.forEach (x =>  { %>
 			<a href="/playlist?list=<%- x.playlistId %>" class="video">
-				<div class="thumbnail" style="background-image: url('<%- media_proxy_url %>/proxy?url=<%- x.playlistThumbnail %>?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw');border-radius: 9.5px;"><span class="video-length"> <i class="fa-light fa-music-note"></i> <%- x.videoCount %> Songs </span></div>
-				<div class="info">
+<div class="thumbnail" style="background-image: url('<%- media_proxy_url %>/proxy?url=<%- x.playlistThumbnail %>?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw');border-radius: 9.5px;">
+    <span class="video-length"> 
+        <i class="fa-light fa-music-note"></i> 
+        <%- x.videoCount %> <%- x.videoCount == 1 ? 'Song' : 'Songs' %> 
+    </span>
+</div>				<div class="info">
 					<span class="title max-lines-2" style="font-family:PokeTube flex,sans-serif;font-weight: 1000;font-stretch: ultra-expanded;"><%- x.title %></span>
 			 
             </div>
