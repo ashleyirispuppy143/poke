@@ -96,7 +96,7 @@ module.exports = function (app, config, renderTemplate) {
   });
 
   app.get("/search", async (req, res) => {
-    const query = req.query.query ? req.query.query.replace("ohio", "things to do in ohio") : '';
+    const query = req.query.query 
     const tab = req.query.tab;
     const { fetch } = await import("undici");
 
