@@ -1794,7 +1794,9 @@ function authorVerifiedChecker4000() {
         const matchesMainList = games.some(game => title.includes(game));
         const matchesGenericList = genericGames.some(game => title.includes(game)) && hasGameKeyword;
 
-        if (title.includes('COLLAB') || title.includes('FEATURING') || title.includes('COLLABORATION')) {
+      if (title.includes('FAVORITE') || title.includes('FAVOURITE')) {
+            iconClass = 'fa-star';
+        } else if (title.includes('COLLAB') || title.includes('FEATURING') || title.includes('COLLABORATION')) {
             iconClass = 'fa-users';
         } else if (title.includes('SHORTS')) {
             iconClass = 'fa-bolt-lightning';
