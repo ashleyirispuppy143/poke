@@ -25,7 +25,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 //////////////// THE PLAYER, START ////////////////////////
- try {
+try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -10193,6 +10193,27 @@ const HAVE_ENOUGH_DATA = 4;
     // If endedNaturally is still true here, it's a programmatic call — block it.
     if (state.endedNaturally && !state.restarting && !isLoopDesired()) return;
     state.userPlayIntentPresetAt = 0;
+    // ALREADY-HEALTHY EARLY-EXIT: this is the root cause of "autoplay does
+    // play-pause-play after it's already playing fine" and "video+audio tries
+    // to start many times on autoplay". 30+ call sites invoke playTogether()
+    // unconditionally (autoplay retry, unmute path, micro-seek finalizer,
+    // visibility handlers, sync loop). When both tracks are already playing
+    // in sync, calling execProgrammaticVideoPlay/execProgrammaticAudioPlay
+    // again triggers the play-event handler, which can race with stale stall
+    // flags and produce a brief pause-then-replay. Detect the healthy case
+    // and bail before any media call. Skip during seek/restart.
+    if (state.firstPlayCommitted && state.intendedPlaying &&
+        !state.seeking && !state.seekBuffering && !state.restarting &&
+        !state.seekResumeInFlight) {
+      const _ptVN = getVideoNode();
+      const _ptVideoPlaying = _ptVN && !_ptVN.paused && Number(_ptVN.readyState || 0) >= HAVE_CURRENT_DATA;
+      const _ptAudioOK = !coupledMode || (audio && !audio.paused);
+      if (_ptVideoPlaying && _ptAudioOK) {
+        // Refresh sync timing without making any play() call
+        if (state.startupKickInFlight) state.startupKickDone = true;
+        return;
+      }
+    }
     // Never trigger loop detection during tab-return immunity
     if (!(state.tabReturnImmuneUntil > now()) && detectLoop()) {
       state.intendedPlaying = false;
@@ -10810,11 +10831,17 @@ const HAVE_ENOUGH_DATA = 4;
         setTimeout(() => { state.seekResumeInFlight = false; }, 600);
       } else {
         state.isProgrammaticVideoPlay = true;
-        try { video.play(); } catch {}
-        try { videoEl.play(); } catch {}
+        // DOMEXCEPTION FIX: video.play() / videoEl.play() return Promises that
+        // reject with "fetching aborted by user agent at user's request" when
+        // a pause() or load() interrupts them mid-flight (common during seek
+        // resume + medium-quality switching). Without .catch(), Chromium
+        // surfaces these as Uncaught (in promise) DOMException — visible in
+        // devtools and counted by error reporters. Always swallow.
+        try { const _vp = video.play(); if (_vp && _vp.catch) _vp.catch(() => {}); } catch {}
+        try { const _vep = videoEl.play(); if (_vep && _vep.catch) _vep.catch(() => {}); } catch {}
         try {
           const inner = video?.el?.()?.querySelector?.("video");
-          if (inner) inner.play().catch(() => {});
+          if (inner) { const _ip = inner.play(); if (_ip && _ip.catch) _ip.catch(() => {}); }
         } catch {}
         setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 250);
         updateMediaSessionPlaybackState();
@@ -10889,8 +10916,9 @@ const HAVE_ENOUGH_DATA = 4;
         state.seekBuffering = false;
         clearBufferHold();
         state.isProgrammaticVideoPlay = true;
-        try { video.play(); } catch {}
-        try { videoEl.play(); } catch {}
+        // DOMEXCEPTION FIX: catch interrupted-by-pause/load promise rejections.
+        try { const _vp2 = video.play(); if (_vp2 && _vp2.catch) _vp2.catch(() => {}); } catch {}
+        try { const _vep2 = videoEl.play(); if (_vep2 && _vep2.catch) _vep2.catch(() => {}); } catch {}
         try {
           const inner = video?.el?.()?.querySelector?.("video");
           if (inner && inner !== videoEl) inner.play().catch(() => {});
@@ -14305,6 +14333,23 @@ const HAVE_ENOUGH_DATA = 4;
             const _cpNow = now();
             const _cpDebounce = BringBackToTabManager.isLocked() || inBgReturnGrace() ? 60 : 350;
             if ((_cpNow - (state._counterPlayLastAt || 0)) < _cpDebounce) return;
+            // OSCILLATION BREAKER: if counter-play has fired 4+ times in the
+            // last 2.5s, the browser is fighting us — every play() we issue
+            // immediately gets paused again. Continuing causes the visible
+            // "video gets stuck in play-pause loop". Bail and let the pause
+            // stick; the user can hit play to recover.
+            const _cpBurstWindow = 2500;
+            if (!state._counterPlayBurstStart || (_cpNow - state._counterPlayBurstStart) > _cpBurstWindow) {
+              state._counterPlayBurstStart = _cpNow;
+              state._counterPlayBurstCount = 0;
+            }
+            state._counterPlayBurstCount = (state._counterPlayBurstCount || 0) + 1;
+            if (state._counterPlayBurstCount > 4) {
+              // Surrender. Mark intent paused so other systems also stop fighting.
+              state.intendedPlaying = false;
+              state.bufferHoldIntendedPlaying = false;
+              return;
+            }
             state._counterPlayLastAt = _cpNow;
             VisibilityGuard.onPlayCalled();
             // Set audio grace so the "playing" handler's audio resume isn't
@@ -16349,6 +16394,13 @@ const HAVE_ENOUGH_DATA = 4;
           if (isLoopDesired()) { restartLoop().catch(() => {}); return; }
           // Tell the anti-loop manager playback ended naturally
           MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.onEnded();
+          // MQM LOOP FIX: in medium quality (non-coupled) MQM was never
+          // informed that playback ended naturally, so its 2-min pause-intent
+          // window would lapse and auto-resume guards would re-allow playback,
+          // causing the video to silently loop back to 0 a few minutes later.
+          // Treat natural end as an implicit user-pause so shouldBlockAutoResume
+          // returns true. The user clicking play clears this via markUserPlayed.
+          try { MediumQualityManager.markUserPaused(); } catch {}
           // Kill autoplay so Video.js/browser doesn't auto-restart
           stripAutoplayAfterFirstPlay();
           state.tabReturnImmuneUntil = 0;
