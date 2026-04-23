@@ -25,7 +25,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 //////////////// THE PLAYER, START ////////////////////////
-try {
+ try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -404,30 +404,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const metaTitle = document.querySelector('meta[name="title"]')?.content || "";
     const metaDesc = document.querySelector('meta[name="twitter:description"]')?.content || "";
     let stats = "";
-    // Matches the YT-style description: 👍 N | 👎 N | 📈 N Views — and now
-    // also captures an optional trailing publication-age clause introduced by
-    // a calendar emoji (🗓 / 🗓️ / 📅), e.g. "🗓 7 months ago". The age clause
-    // is optional so legacy descriptions without it still match.
-    const _emoUp   = "👍";
-    const _emoDn   = "👎";
-    const _emoView = "📈";
-    const _emoCal  = "(?:🗓\\uFE0F?|📅)";
-    const _num     = "[\\d.,KMB]+";
-    const _sep     = "\\s*\\|?\\s*";
-    const _ago     = "\\s*\\d+\\s*(?:second|minute|hour|day|week|month|year)s?\\s*ago";
-    const _statsRe = new RegExp(
-      _emoUp + "\\s*" + _num + _sep +
-      _emoDn + "\\s*" + _num + _sep +
-      _emoView + "\\s*" + _num + "\\s*(?:Views?)?" +
-      "(?:\\s*" + _emoCal + _ago + ")?",
-      "i"
-    );
+    // Matches: 👍 N | 👎 N | 📈 N Views | 🗓 N ago  (all separators/suffixes optional, lenient)
+    // 👍/👎 with optional skin-tone/VS16, numbers with K/M/B suffix, pipes/bullets/dashes as separators
+    const _statsRe = /\uD83D\uDC4D(?:\uFE0F|\uD83C[\uDFFB-\uDFFF])*\s*[\d][\d.,]*[KMBTkmbt]?[|\s\u2022\u00B7\u2013\u2014-]*\uD83D\uDC4E(?:\uFE0F|\uD83C[\uDFFB-\uDFFF])*\s*[\d][\d.,]*[KMBTkmbt]?(?:\s*[\uD83D\uDCC8](?:\uFE0F|\uD83C[\uDFFB-\uDFFF])*\s*[\d][\d.,]*[KMBTkmbt]?\s*(?:Views?|Watch(?:e[sd])?|Plays?)?)?(?:\s*(?:\uD83D\uDDD3|\uD83D\uDCC5|\uD83D\uDCC6|\uD83D\uDDD2)(?:\uFE0F|\uD83C[\uDFFB-\uDFFF])*\s*\d+\s*(?:second|minute|hour|day|week|month|year)s?\s*ago)?/i;
     const statsMatch = metaDesc.match(_statsRe);
     if (statsMatch) {
-      stats = statsMatch[0]
-        .replace(/\s*\|\s*/g, " | ")
-        .replace(/\s+/g, " ")
-        .trim();
+      stats = statsMatch[0].replace(/\s*\|\s*/g, " | ").replace(/\s+/g, " ").trim();
     }
     const createTitleBar = () => {
       const existing = video.getChild("TitleBar");
@@ -3772,6 +3754,12 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!enabled) return;
       _intentPaused = false;
       _lastUserPlayAt = performance.now();
+      // Reset the kick burst counter so an explicit user play reopens the
+      // auto-resume gate. Otherwise a surrender during background silence
+      // would permanently lock autoplay for this session.
+      _kickBurstStart = 0;
+      _kickBurstCount = 0;
+      _lastKickAt = 0;
     }
 
     // True when user has explicitly paused within the last INTENT_WINDOW_MS.
@@ -3804,6 +3792,46 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function getPauseSerial() { return _pauseSerial; }
 
+    // PLAY-KICK DEBOUNCE + OSCILLATION BREAKER for medium (non-coupled) mode.
+    // In medium mode, many paths (heartbeat hidden-bg kicker at line 12541/12565,
+    // runSync auto-resume, consistency check, counter-play) can all fire
+    // vn.play() within a few hundred ms of each other. When the browser throttles
+    // or pauses right back, these overlap into a visible play-pause-play spam.
+    //
+    // `tryKick(reason)` returns true if the caller should proceed with vn.play();
+    // false to abort. It enforces a 400ms debounce and, after 4 kicks inside 2.5s,
+    // a hard surrender (sets intentPaused) — same pattern as _counterPlay's
+    // burst breaker but scoped to non-coupled video-only plays.
+    let _lastKickAt = 0;
+    let _kickBurstStart = 0;
+    let _kickBurstCount = 0;
+    const _KICK_DEBOUNCE_MS = 400;
+    const _KICK_BURST_WINDOW_MS = 2500;
+    const _KICK_BURST_MAX = 4;
+    function tryKick(_reason) {
+      if (!enabled) return true; // coupled mode: no-op, allow
+      const n = performance.now();
+      if ((n - _lastKickAt) < _KICK_DEBOUNCE_MS) return false;
+      if (!_kickBurstStart || (n - _kickBurstStart) > _KICK_BURST_WINDOW_MS) {
+        _kickBurstStart = n;
+        _kickBurstCount = 0;
+      }
+      _kickBurstCount++;
+      if (_kickBurstCount > _KICK_BURST_MAX) {
+        // Surrender — browser is fighting every play(). Stop the spam.
+        _intentPaused = true;
+        _lastUserPauseAt = n;
+        return false;
+      }
+      _lastKickAt = n;
+      return true;
+    }
+    function resetKickBurst() {
+      _kickBurstStart = 0;
+      _kickBurstCount = 0;
+      _lastKickAt = 0;
+    }
+
     return {
       get enabled() { return enabled; },
                                 markUserPaused,
@@ -3813,6 +3841,8 @@ document.addEventListener("DOMContentLoaded", () => {
                                 shouldBlockAutoResume,
                                 intentExpired,
                                 getPauseSerial,
+                                tryKick,
+                                resetKickBurst,
                                 get intentPaused() { return _intentPaused; },
     };
   })();
@@ -9013,8 +9043,19 @@ const HAVE_ENOUGH_DATA = 4;
             const p2 = vn ? vn.play() : video.play();
             if (p2 && p2.catch) p2.catch(() => {});
           } catch {}
+          return; // recovered
         }
-        throw err;
+        // Swallow AbortError silently. This is the DOMException "The fetching
+        // process for the media resource was aborted by the user agent at the
+        // user's request" that shows up in the console when play() is
+        // interrupted by pause()/load()/another seek — non-fatal, happens every
+        // medium-quality segment switch. Re-throwing created unhandled promise
+        // rejections because state.videoPlayInFlight had no .catch attached.
+        if (err && (err.name === "AbortError" ||
+                    (err.message && err.message.indexOf("aborted") !== -1))) {
+          return;
+        }
+        // Real error — still return (don't rethrow) so no unhandled rejection.
       }).finally(() => {
         if (state.videoPlayInFlight === wrapped) state.videoPlayInFlight = null;
         finish();
@@ -9506,10 +9547,11 @@ const HAVE_ENOUGH_DATA = 4;
     } else if (state.seeking || state.seekBuffering) {
       // CPU OPT: during active seek the seek machinery (seeked handler, kick
       // chain, startSeekBufferWait) owns all recovery work. runSync has nothing
-      // productive to do here — it's just safety-netting. 500ms is plenty.
-      delay = 500;
+      // productive to do here — it's just safety-netting. 800ms reduces per-tick
+      // main-thread work during fast scrub from ~20/s to ~1.25/s.
+      delay = 800;
     } else if (state.seekResumeInFlight) {
-      delay = 450;
+      delay = 600;
     } else if (
       playPauseRecoveryCpuActive(220) &&
       state.intendedPlaying &&
@@ -10414,9 +10456,38 @@ const HAVE_ENOUGH_DATA = 4;
         try {
           vPlayP = execProgrammaticVideoPlay();
         } catch {}
+        // AUDIO-LATE FIX: kick audio in parallel RIGHT HERE (synchronously
+        // adjacent to video's play() call). The original code let a 60-line
+        // gate block run between the video kick and the audio kick, during
+        // which the audio decoder sat idle. By issuing audio.play() in the
+        // same event-loop tick, the two decoders warm up together and audio
+        // no longer "arrives late" after video has a head start. Skip on
+        // startup autoplay only when we need visible-video-lead gating;
+        // the full gate below still handles edge cases (user pause lock,
+        // strictBufferHold, stall) by pausing audio if shouldHoldAudio flips.
+        if (coupledMode && audio && audio.paused &&
+            !state.strictBufferHold &&
+            !requireVisibleVideoHealth &&
+            !userPauseLockActive() &&
+            !shouldBlockNewAudioStart()) {
+          const _earlyIsRecentUser = userWantsPlayNow(2400) || userSeekIntentActive();
+          const _earlyIsStartup = state.startupPhase || !state.firstPlayCommitted || state.startupKickInFlight;
+          if (_earlyIsRecentUser || _earlyIsStartup) {
+            try {
+              aPlayP = execProgrammaticAudioPlay({
+                squelchMs: 60,
+                minGapMs: 0,
+                force: true
+              });
+            } catch {}
+          }
+        }
       }
 
-      if (coupledMode && audio && audio.paused) {
+      if (coupledMode && audio && audio.paused && !aPlayP) {
+        // (Skip this whole block if the AUDIO-LATE FIX above already kicked
+        // the audio play promise — re-kicking here would cancel the in-flight
+        // play and delay audio onset by ~200ms.)
         const vNow = Number(video.currentTime()) || 0;
         const aNow = Number(audio.currentTime) || 0;
         const avDrift = Math.abs(aNow - vNow);
@@ -11470,6 +11541,28 @@ const HAVE_ENOUGH_DATA = 4;
     if (!state.intendedPlaying && !wantsStartupAutoplay()) return;
     if (mediaSessionForcedPauseActive() || userPauseLockActive()) return;
 
+    // SHORT-CIRCUIT: if playback is already healthy (video advancing, audio running
+    // in coupled mode), commit firstPlay right now and stop retrying. Prevents the
+    // "plays fine but still tries to start play" visible play-pause-play spam where
+    // the retry chain keeps firing after the first play already succeeded but the
+    // commit flag hadn't been flipped yet.
+    try {
+      const _ssVN = getVideoNode();
+      if (_ssVN && !_ssVN.paused && Number(_ssVN.readyState || 0) >= HAVE_CURRENT_DATA) {
+        const _ssVT = Number(_ssVN.currentTime) || 0;
+        const _ssAudioOK = !coupledMode || (audio && !audio.paused);
+        if (_ssVT > 0.15 && _ssAudioOK) {
+          state.startupKickDone = true;
+          if (!state.firstPlayCommitted) {
+            state.firstPlayCommitted = true;
+            setTimeout(() => { state.startupPhase = false; }, 800);
+          }
+          clearStartupAutoplayRetryTimer();
+          return;
+        }
+      }
+    } catch {}
+
     clearStartupAutoplayRetryTimer();
     const count = state.startupAutoplayRetryCount;
     if (count >= 40) return;
@@ -11653,6 +11746,21 @@ const HAVE_ENOUGH_DATA = 4;
     state.syncScheduledAt = 0;
     // Error overlay active — don't sync anything, media is dead
     if (_errorOverlayShown) return;
+
+    // CPU OPT (seek fast path): jump to the seek short-circuit BEFORE doing
+    // enforcePlaybackRateSync or the anti-loop tick — both read currentTime
+    // and readyState under the hood, and neither does anything useful while
+    // the seek machinery owns recovery. Shaves ~2–3ms per tick × ~10 ticks
+    // during a seek = ~25ms of main-thread work eliminated.
+    if (state.seeking || state.seekBuffering) {
+      const _ss = state._seekStartedAt;
+      if (!(_ss > 0 && (performance.now() - _ss) > 5000)) {
+        scheduleSync();
+        return;
+      }
+      // fall through to stuck-seek recovery below
+    }
+
     enforcePlaybackRateSync();
     // Anti-loop tick — throttled. Runs every 3rd sync to save CPU; phantom
     // restart detection only needs ~1Hz (it's a safety net, not a hot path).
@@ -11729,8 +11837,14 @@ const HAVE_ENOUGH_DATA = 4;
             // Triple-guard for non-coupled auto-resume
             if (!MediumQualityManager.intentPaused &&
               (now() - state.lastUserActionTime) > 2000) {
-              try { await Promise.resolve(execProgrammaticVideoPlay()); } catch {}
+              // Bypass MQM.tryKick debounce when recovering immediately after a
+              // seek (seekRecoveryActive within 2s) — otherwise the 400ms debounce
+              // blocks this kick and the video stalls visibly after scrubbing.
+              const _syncSeekRecent = seekRecoveryActive(2000);
+              if (_syncSeekRecent || MediumQualityManager.tryKick("runSync-noncoupled-auto-resume")) {
+                try { await Promise.resolve(execProgrammaticVideoPlay()); } catch {}
               }
+            }
             }
             scheduleSync();
             return;
@@ -12391,6 +12505,9 @@ const HAVE_ENOUGH_DATA = 4;
       const elapsed = nowTs - state.lastHeartbeatAt;
       state.lastHeartbeatAt = nowTs;
       const _relaxedHousekeeping = shouldUseRelaxedCpuHousekeeping();
+      // Recoverable error overlay: check each heartbeat so a slow network
+      // recovery (no "playing" event yet, but media is now canplay) auto-dismisses.
+      if (_errorOverlayShown && _errorIsRecoverable) _checkErrorRecovery();
 
       // CPU OPTIMIZATION: skip all heartbeat work when fully idle. Reschedule
       // at 5s (vs normal 2s) so we still wake up in case state changes but
@@ -12400,6 +12517,20 @@ const HAVE_ENOUGH_DATA = 4;
           (!coupledMode || !audio || audio.paused) &&
           !state.seeking && !state.seekBuffering) {
         state.heartbeatTimer = setTimeout(beat, 5000);
+        return;
+      }
+
+      // CPU OPTIMIZATION: during an active seek the seeked-handler retry
+      // chain + startSeekBufferWait own all recovery work. Every currentTime /
+      // readyState read in the heartbeat body below is redundant work that
+      // forces the browser to compute timing info mid-scrub. Skip the full
+      // body and just re-arm at the relaxed interval. Only the <5s stuck-seek
+      // safety at runSync needs to keep ticking, and runSync is a separate
+      // timer. Exit here and let the next beat (1.5s later) run normally
+      // once the seek has completed.
+      if ((state.seeking || state.seekBuffering) && state._seekStartedAt > 0 &&
+          (performance.now() - state._seekStartedAt) < 4500) {
+        state.heartbeatTimer = setTimeout(beat, 1200);
         return;
       }
 
@@ -12542,8 +12673,15 @@ const HAVE_ENOUGH_DATA = 4;
           if (!aPausedBg && vPausedBg && !state.bgSilentTimeSyncing) {
             const atBg = Number(audio.currentTime);
             if (isFinite(atBg) && atBg > 0.1) bgSilentSyncVideoTime(atBg);
-            if (!state.isProgrammaticVideoPlay && !state.bgResumeInFlight) {
-              try { const vn = getVideoNode(); if (vn) vn.play().catch(() => {}); } catch {}
+            if (!state.isProgrammaticVideoPlay && !state.bgResumeInFlight &&
+                (coupledMode || MediumQualityManager.tryKick("heartbeat-bg-audio-playing"))) {
+              try {
+                const vn = getVideoNode();
+                if (vn && vn.paused) {
+                  const _vp = vn.play();
+                  if (_vp && _vp.catch) _vp.catch(() => {});
+                }
+              } catch {}
             }
           } else if (aPausedBg && vPausedBg && !state.bgResumeInFlight &&
             BackgroundPlaybackManagerManager.shouldAttemptBgResume() &&
@@ -12563,11 +12701,18 @@ const HAVE_ENOUGH_DATA = 4;
           getVideoPaused() && !state.seeking && !state.seekBuffering && !state.strictBufferHold && !state.bgResumeInFlight &&
           !userPauseLockActive() && !mediaSessionForcedPauseActive() &&
           !MediumQualityManager.shouldBlockAutoResume() &&
-          !MediumQualityManager.intentPaused) {
+          !MediumQualityManager.intentPaused &&
+          MediumQualityManager.tryKick("heartbeat-hidden-bg")) {
           try {
             VisibilityGuard.onPlayCalled();
             const vn = getVideoNode();
-            if (vn) vn.play().catch(() => {});
+            // Guard .play() promise — pause/load during autoplay kick makes Chrome
+            // reject with DOMException "fetching aborted by user agent". Already
+            // caught by .catch, but wrap in try for defensive parity with other sites.
+            if (vn && vn.paused && typeof vn.play === "function") {
+              const _vp = vn.play();
+              if (_vp && _vp.catch) _vp.catch(() => {});
+            }
           } catch {}
           }
 
@@ -13041,42 +13186,68 @@ const HAVE_ENOUGH_DATA = 4;
   let _videoErrorObj = null;
   let _audioErrorObj = null;
   let _errorOverlayShown = false;
+  // true when the current error is potentially transient (network / aborted)
+  // and the overlay should auto-dismiss if media resumes playing on its own.
+  let _errorIsRecoverable = false;
 
-  // unique error IDs — 10 per source (video, audio, player)
+  // RECOVERY WATCHER: if the overlay is shown for a recoverable error and the
+  // media element fires "playing" or "canplaythrough", the network/decode issue
+  // resolved itself — hide the overlay and let playback continue naturally.
+  function _checkErrorRecovery() {
+    if (!_errorOverlayShown || !_errorIsRecoverable || _globalErrorCaught) return;
+    try {
+      const vn = getVideoNode();
+      const videoOk = vn && !vn.paused && Number(vn.readyState || 0) >= 3;
+      const audioOk = !coupledMode || !audio || (!audio.paused && Number(audio.readyState || 0) >= 3);
+      if (videoOk && audioOk) {
+        _errorOverlayShown = false;
+        _errorIsRecoverable = false;
+        _videoErrorObj = null;
+        _audioErrorObj = null;
+        PlayerErrorOverlay.hide();
+        // Restore intent so sync loop can keep things running
+        if (!state.intendedPlaying) {
+          state.intendedPlaying = true;
+          state.bufferHoldIntendedPlaying = true;
+          scheduleSync(0);
+        }
+      }
+    } catch {}
+  }
+
+  // Error codes — short, readable IDs shown in the overlay "Error code:" line.
+  // Format: VID_ / AUD_ / PLR_ prefix + what broke, in plain words.
   const ERROR_IDS = {
-    // video errors (1-10)
-    "video-1":  "MEDIA_ERR_ABORTED",
-    "video-2":  "MEDIA_ERR_NETWORK",
-    "video-3":  "MEDIA_ERR_DECODE",
-    "video-4":  "MEDIA_ERR_SRC_NOT_SUPPORTED",
-    "video-5":  "MEDIA_ERR_ENCRYPTED",
-    "video-6":  "MEDIA_ERR_STALL_TIMEOUT",
-    "video-7":  "MEDIA_ERR_BUFFER_FULL",
-    "video-8":  "MEDIA_ERR_RENDERER_FAILED",
-    "video-9":  "MEDIA_ERR_CODEC_UNSUPPORTED",
-    "video-10": "MEDIA_ERR_UNKNOWN",
-    // audio errors (1-10)
-    "audio-1":  "AUDIO_ERR_ABORTED",
-    "audio-2":  "AUDIO_ERR_NETWORK",
-    "audio-3":  "AUDIO_ERR_DECODE",
-    "audio-4":  "AUDIO_ERR_SRC_NOT_SUPPORTED",
-    "audio-5":  "AUDIO_ERR_ENCRYPTED",
-    "audio-6":  "AUDIO_ERR_STALL_TIMEOUT",
-    "audio-7":  "AUDIO_ERR_BUFFER_FULL",
-    "audio-8":  "AUDIO_ERR_SYNC_LOST",
-    "audio-9":  "AUDIO_ERR_CODEC_UNSUPPORTED",
-    "audio-10": "AUDIO_ERR_UNKNOWN",
-    // player errors (both, 1-10)
-    "player-1":  "PLAYER_ERR_ABORTED",
-    "player-2":  "PLAYER_ERR_NETWORK",
-    "player-3":  "PLAYER_ERR_DECODE",
-    "player-4":  "PLAYER_ERR_SRC_NOT_SUPPORTED",
-    "player-5":  "PLAYER_ERR_ENCRYPTED",
-    "player-6":  "PLAYER_ERR_STALL_TIMEOUT",
-    "player-7":  "PLAYER_ERR_BUFFER_FULL",
-    "player-8":  "PLAYER_ERR_STATE_CORRUPT",
-    "player-9":  "PLAYER_ERR_CODEC_UNSUPPORTED",
-    "player-10": "PLAYER_ERR_UNKNOWN"
+    "video-1":  "VID_STOPPED",       // playback was aborted
+    "video-2":  "VID_NO_CONNECTION", // network failed while loading
+    "video-3":  "VID_CANT_DECODE",   // file corrupt or unreadable
+    "video-4":  "VID_NOT_SUPPORTED", // format/container not supported
+    "video-5":  "VID_DRM_BLOCKED",   // DRM / decryption failed
+    "video-6":  "VID_FROZE",         // stalled too long, gave up
+    "video-7":  "VID_BUFFER_FULL",   // couldn't fit data in buffer
+    "video-8":  "VID_RENDERER_DEAD", // GPU/renderer pipeline crash
+    "video-9":  "VID_CODEC_MISSING", // codec not available in browser
+    "video-10": "VID_OOPS",          // something else went wrong
+    "audio-1":  "AUD_STOPPED",
+    "audio-2":  "AUD_NO_CONNECTION",
+    "audio-3":  "AUD_CANT_DECODE",
+    "audio-4":  "AUD_NOT_SUPPORTED",
+    "audio-5":  "AUD_DRM_BLOCKED",
+    "audio-6":  "AUD_FROZE",
+    "audio-7":  "AUD_BUFFER_FULL",
+    "audio-8":  "AUD_LOST_SYNC",     // video + audio drifted unrecoverably
+    "audio-9":  "AUD_CODEC_MISSING",
+    "audio-10": "AUD_OOPS",
+    "player-1":  "PLR_STOPPED",
+    "player-2":  "PLR_NO_CONNECTION",
+    "player-3":  "PLR_CANT_DECODE",
+    "player-4":  "PLR_NOT_SUPPORTED",
+    "player-5":  "PLR_DRM_BLOCKED",
+    "player-6":  "PLR_FROZE",
+    "player-7":  "PLR_BUFFER_FULL",
+    "player-8":  "PLR_STATE_BROKEN", // internal state machine got confused
+    "player-9":  "PLR_CODEC_MISSING",
+    "player-10": "PLR_OOPS"
   };
 
   function handleFatalMediaError(source, errorObj) {
@@ -13096,81 +13267,83 @@ const HAVE_ENOUGH_DATA = 4;
     const aCode = _audioErrorObj ? (_audioErrorObj.code || 0) : 0;
     const worstCode = Math.max(vCode, aCode, code);
 
+    // Titles — short, plain-English label shown at the top of the overlay.
     const scopeTitles = {
       video: {
-        1:  "Video playback aborted",
-        2:  "Video network error",
-        3:  "Video decode error",
-        4:  "Video player configuration error",
-        5:  "Video encryption error",
-        6:  "Video stall timeout",
-        7:  "Video buffer overflow",
-        8:  "Video renderer failed",
-        9:  "Video codec unsupported",
+        1:  "Video stopped",
+        2:  "Can't load the video",
+        3:  "Video file is broken",
+        4:  "Video format not supported",
+        5:  "Video is DRM-protected",
+        6:  "Video got stuck",
+        7:  "Video buffer is full",
+        8:  "Video renderer crashed",
+        9:  "Video codec missing",
         10: "Video error"
       },
       audio: {
-        1:  "Audio playback aborted",
-        2:  "Audio network error",
-        3:  "Audio decode error",
-        4:  "Audio source not supported",
-        5:  "Audio encryption error",
-        6:  "Audio stall timeout",
-        7:  "Audio buffer overflow",
-        8:  "Audio sync lost",
-        9:  "Audio codec unsupported",
+        1:  "Audio stopped",
+        2:  "Can't load the audio",
+        3:  "Audio file is broken",
+        4:  "Audio format not supported",
+        5:  "Audio is DRM-protected",
+        6:  "Audio got stuck",
+        7:  "Audio buffer is full",
+        8:  "Audio fell out of sync",
+        9:  "Audio codec missing",
         10: "Audio error"
       },
       player: {
-        1:  "Playback aborted",
-        2:  "Network error",
-        3:  "Decode error",
-        4:  "Player configuration error",
-        5:  "Encryption error",
-        6:  "Stall timeout",
-        7:  "Buffer overflow",
-        8:  "Player state error",
-        9:  "Codec unsupported",
-        10: "Player error"
+        1:  "Playback stopped",
+        2:  "No internet connection",
+        3:  "Media file is broken",
+        4:  "Format not supported",
+        5:  "Media is DRM-protected",
+        6:  "Playback got stuck",
+        7:  "Buffer is full",
+        8:  "Player ran into a problem",
+        9:  "Codec missing",
+        10: "Playback error"
       }
     };
 
+    // Messages — one sentence telling the user what happened and what to do.
     const scopeMessages = {
       video: {
-        1:  "The video playback was aborted.",
-        2:  "A network error caused the video to fail. Check your connection and try again.",
-        3:  "The video could not be decoded. The file may be corrupt or unsupported.",
-        4:  "The video format or source is not supported by your browser.",
-        5:  "The video is encrypted and the key could not be retrieved.",
-        6:  "The video stalled and could not recover. Try reloading.",
-        7:  "The video buffer is full and playback cannot continue.",
-        8:  "The video renderer encountered a fatal error.",
-        9:  "The video codec is not supported by your browser.",
-        10: "An unexpected video error occurred."
+        1:  "The video stopped on its own. Try reloading the page.",
+        2:  "Couldn't reach the video — check your internet and try again.",
+        3:  "The video file appears to be damaged or in a format the browser can't read.",
+        4:  "Your browser doesn't support this video format.",
+        5:  "This video is protected and the decryption key couldn't be fetched.",
+        6:  "The video froze and couldn't recover. Reload to try again.",
+        7:  "The video buffer ran out of space. Reload and try a lower quality.",
+        8:  "The graphics pipeline crashed while rendering the video.",
+        9:  "Your browser is missing the codec needed to play this video.",
+        10: "Something unexpected broke the video. Try reloading."
       },
       audio: {
-        1:  "The audio playback was aborted.",
-        2:  "A network error caused the audio to fail. Check your connection and try again.",
-        3:  "The audio could not be decoded. The file may be corrupt or unsupported.",
-        4:  "The audio format or source is not supported by your browser.",
-        5:  "The audio is encrypted and the key could not be retrieved.",
-        6:  "The audio stalled and could not recover. Try reloading.",
-        7:  "The audio buffer is full and playback cannot continue.",
-        8:  "Audio and video sync was lost and could not be restored.",
-        9:  "The audio codec is not supported by your browser.",
-        10: "An unexpected audio error occurred."
+        1:  "The audio stopped on its own. Try reloading the page.",
+        2:  "Couldn't reach the audio — check your internet and try again.",
+        3:  "The audio file appears to be damaged or unreadable.",
+        4:  "Your browser doesn't support this audio format.",
+        5:  "This audio is protected and the decryption key couldn't be fetched.",
+        6:  "The audio froze and couldn't recover. Reload to try again.",
+        7:  "The audio buffer ran out of space. Reload and try a lower quality.",
+        8:  "Audio and video drifted too far apart and couldn't re-sync.",
+        9:  "Your browser is missing the codec needed to play this audio.",
+        10: "Something unexpected broke the audio. Try reloading."
       },
       player: {
-        1:  "Both video and audio playback were aborted.",
-        2:  "A network error caused playback to fail. Check your connection and try again.",
-        3:  "The media could not be decoded. The files may be corrupt or unsupported.",
-        4:  "The media format or source is not supported by your browser.",
-        5:  "The media is encrypted and the key could not be retrieved.",
-        6:  "Playback stalled and could not recover. Try reloading.",
-        7:  "The media buffer is full and playback cannot continue.",
-        8:  "The player encountered an internal state error.",
-        9:  "The media codec is not supported by your browser.",
-        10: "An unexpected playback error occurred."
+        1:  "Playback stopped unexpectedly. Try reloading the page.",
+        2:  "Lost the connection while loading — check your internet and try again.",
+        3:  "The media file appears to be damaged or in an unsupported format.",
+        4:  "Your browser doesn't support the format this video uses.",
+        5:  "This media is protected and the decryption key couldn't be fetched.",
+        6:  "Playback froze and couldn't recover. Reload to try again.",
+        7:  "The buffer ran out of space. Reload and try a lower quality.",
+        8:  "The player's internal state got confused. Reload to fix it.",
+        9:  "Your browser is missing a codec needed for this media.",
+        10: "Something unexpected went wrong. Try reloading."
       }
     };
 
@@ -13185,6 +13358,9 @@ const HAVE_ENOUGH_DATA = 4;
     state.bufferHoldIntendedPlaying = false;
     try { pauseHard(); } catch {}
     _errorOverlayShown = true;
+    // Mark whether this error is potentially recoverable (network / aborted).
+    // Recovery watcher will dismiss the overlay if the media starts playing again.
+    _errorIsRecoverable = (worstCode === 1 || worstCode === 2) && !_globalErrorCaught;
 
     const _reportBase = "https://codeberg.org/ashleyirispuppy/poke/issues/new?template=issue_template%2fplayer-bug.yml";
 
@@ -13267,8 +13443,10 @@ const HAVE_ENOUGH_DATA = 4;
       _stack = parts.join("\n");
     } catch { _stack = "Failed to collect error details"; }
 
+    const _bugKaomoji = ["(ಥ﹏ಥ)", "(╥﹏╥)", "(´；ω；`)", "(⊙_⊙;)", "(；′⌒`)"];
+    const _bugFace = _bugKaomoji[Math.floor(Math.random() * _bugKaomoji.length)];
     PlayerErrorOverlay.show({
-      title: isBug ? "You found a bug! (ಥ﹏ಥ)" : (titles[worstCode] || "Playback error"),
+      title: isBug ? `You found a bug! ${_bugFace}` : (titles[worstCode] || "Playback error"),
       message: isBug
         ? "Well this is embarrassing. The player just did something illegal. Try reloading, or snitch on it below."
         : (messages[worstCode] || (msg || "An unexpected error occurred.")),
@@ -14310,9 +14488,21 @@ const HAVE_ENOUGH_DATA = 4;
           !state.seeking &&
           !state.seekResumeInFlight &&
           !state.bgResumeInFlight &&
-          !mediaSessionForcedPauseActive();
+          !mediaSessionForcedPauseActive() &&
+          // Non-coupled: don't counter-play when MQM says user paused — this is the
+          // primary source of medium-mode autoplay play-pause spam where _counterPlay
+          // fights a legitimate browser autoplay-policy pause and loops 4× before giving up.
+          (!MediumQualityManager.enabled || !MediumQualityManager.intentPaused);
 
           const _counterPlay = () => {
+            // MEDIUM MODE STARTUP: during initial autoplay before firstPlayCommitted,
+            // don't call vn.play() directly here — that creates the play-pause-play
+            // spam where _counterPlay fights browser autoplay restrictions. Instead,
+            // delegate to scheduleStartupAutoplayRetry which has proper backoff.
+            if (!coupledMode && !state.firstPlayCommitted && state.startupPhase) {
+              scheduleStartupAutoplayRetry();
+              return;
+            }
             // check for end-of-video before play(). pause fires BEFORE
             // ended so endedNaturally isn't set yet, and play() on an
             // ended video auto-seeks to 0 → phantom loop.
@@ -14648,6 +14838,9 @@ const HAVE_ENOUGH_DATA = 4;
       scheduleSync(0);
     });
     video.on("playing", () => {
+      // If a recoverable error overlay is up and video just started playing,
+      // the network/decode issue resolved itself — dismiss the overlay.
+      _checkErrorRecovery();
       const _prevPlayingAt = state.lastVideoPlayingAt;
       state.lastVideoPlayingAt = now();
       clearHiddenVideoBootstrap();
@@ -15630,6 +15823,9 @@ const HAVE_ENOUGH_DATA = 4;
     };
     _on(audio, "play", onAudioPlay, { passive: true });
     _on(audio, "playing", () => {
+      // Same recovery check as on video "playing" — audio resuming can also
+      // signal that a transient network/aborted error has cleared up.
+      _checkErrorRecovery();
       if (shouldBlockLeadingAudioForForegroundPlay()) {
         const _leadVt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
         try { squelchAudioEvents(220); } catch {}
@@ -16369,6 +16565,14 @@ const HAVE_ENOUGH_DATA = 4;
             state.intendedPlaying = true;
             state.bufferHoldIntendedPlaying = true;
             execProgrammaticVideoPlay();
+          }
+          // SEEK-LAG FIX (medium mode): the MQM.tryKick debounce (400ms) was
+          // blocking the runSync auto-resume path in non-coupled mode after a seek,
+          // because startup autoplay had called tryKick recently. After a real user
+          // seek succeeds we know the user wants to play → reset the kick burst
+          // counter so the next auto-resume in runSync fires without delay.
+          if (!coupledMode && userSeekIntentActive()) {
+            try { MediumQualityManager.resetKickBurst(); } catch {}
           }
           state.driftStableFrames = 0;
           state.lastDrift = 0;
@@ -17803,10 +18007,12 @@ const HAVE_ENOUGH_DATA = 4;
       _trace = parts.join("\n");
     } catch { _trace = String(errorMsg || "Unknown error") + "\n" + String(stack || ""); }
 
+    const _crashKaomoji = ["(ಥ﹏ಥ)", "(╥﹏╥)", "(´；ω；`)", "(⊙_⊙;)", "(；′⌒`)"];
+    const _crashFace = _crashKaomoji[Math.floor(Math.random() * _crashKaomoji.length)];
     PlayerErrorOverlay.show({
-      title: "You found a bug! (ಥ﹏ಥ)",
+      title: `You found a bug! ${_crashFace}`,
       message: "The player just crashed into a wall it didn't see coming. Reload to get back on track, or report it so we can move the wall.",
-      code: "PLAYER_ERR_UNCAUGHT",
+      code: "PLR_UNCAUGHT_CRASH",
       canRetry: true,
       reportUrl: _reportBase,
       stackTrace: _trace
@@ -17832,9 +18038,20 @@ const HAVE_ENOUGH_DATA = 4;
     if (_globalErrorCaught) return;
     const reason = e && e.reason;
     const msg = reason ? (reason.message || reason.stack || String(reason)) : "";
-    // ignore AbortError (from aborted play() calls) and NotAllowedError (autoplay policy)
-    if (typeof msg === "string" && (msg.includes("AbortError") || msg.includes("NotAllowedError") ||
-        msg.includes("play() request was interrupted"))) return;
+    const name = reason ? (reason.name || "") : "";
+    // Suppress benign media play() rejections:
+    //   • AbortError (name) — play() interrupted by pause()/load()/src change
+    //   • "fetching process...aborted" — DOMException text for the above on some browsers
+    //   • NotAllowedError — autoplay policy blocked (user hasn't interacted yet)
+    //   • "play() request was interrupted" — Chromium's internal message variant
+    if (name === "AbortError" || name === "NotAllowedError") return;
+    if (typeof msg === "string" && (
+        msg.includes("AbortError") ||
+        msg.includes("NotAllowedError") ||
+        msg.includes("play() request was interrupted") ||
+        msg.includes("fetching process") ||
+        msg.includes("aborted by the user agent") ||
+        msg.includes("The play() request was"))) return;
     _handlePlayerCrash(msg, "promise", reason ? (reason.stack || "") : "");
   }, { passive: true });
 });
