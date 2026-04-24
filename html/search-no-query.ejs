@@ -24,7 +24,7 @@
     var lowerTitle = title.toLowerCase();
 
      // These words have zero redeeming value in a title.
-    var nuclearBrainrot = [
+    var nuclearBrainrot =[
       "skibidi", "rizz", "sigma", "gyatt", "fanum tax", "mewing", 
       "looksmaxxing", "grimace shake", "baby gronk", "livvy dunne", 
       "smurf cat", "pibby", "only in ohio", "brainrot", "lankybox",
@@ -35,7 +35,7 @@
     }
 
      // Often used for farming kids' views, but occasionally discussed in actual video essays.
-    var mascotSlop = [
+    var mascotSlop =[
       "garten of banban", "huggy wuggy", "poppy playtime", 
       "rainbow friends", "pomni", "digital circus", "monster school",
       "friday night funkin", "fnf"
@@ -46,7 +46,7 @@
 
     // 3. Contextual Roblox Slop (+80 points)
      if (lowerTitle.indexOf("roblox") !== -1) {
-      var robloxTriggers = [
+      var robloxTriggers =[
         "free robux", "slender", "brookhaven secret", "online dater", "mic up", "admin abuse", "sad story"
       ];
       for (var k = 0; k < robloxTriggers.length; k++) {
@@ -55,7 +55,7 @@
     }
 
     // 4. Clickbait Phrasing (+40 points)
-    var clickbaitPhrases = [
+    var clickbaitPhrases =[
       "gone wrong", "you won't believe", "literally died",
       "don't watch at 3am", "100% real", "not clickbait", "caught on camera"
     ];
@@ -96,7 +96,7 @@
     return allowed.slice(0, limit);
   }
 
-  var blockedAuthors = [
+  var blockedAuthors =[
       "TheBurntPeanut", "KreekCraft", "Asmongold TV  ", "Tyler & Snowi"
   ];
 
@@ -414,8 +414,6 @@ input{
   color:var(--muted2);
   font-size:13px;
   font-variation-settings:"wdth" 126,"wght" 460;
-  /* Hidden by default, triggered randomly by JS */
-  display: none; 
 }
 
 .search-note a {
@@ -827,9 +825,11 @@ input{
           </div>
         </div>
 
+        <% if (Math.random() > 0.3) { %>
         <div id="random-bang-note" class="search-note">
           Want to unlock powerful search shortcuts? <a href="https://duckduckgo.com/bangs" target="_blank" rel="noopener noreferrer">Learn about Bangs</a>
         </div>
+        <% } %>
       </div>
 
      </div>
@@ -954,11 +954,6 @@ input{
         searchInput.setAttribute("autocomplete", "on"); 
       }
     });
-  }
-
-   var randomBangNote = document.getElementById("random-bang-note");
-  if (randomBangNote && Math.random() > 0.3) {
-    randomBangNote.style.display = "block";
   }
 })();
 </script>
