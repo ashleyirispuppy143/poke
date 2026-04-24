@@ -15267,9 +15267,35 @@ const HAVE_ENOUGH_DATA = 4;
       });
       navigator.mediaSession.setActionHandler("pause", handlePauseLike);
       try { navigator.mediaSession.setActionHandler("stop", handlePauseLike); } catch {}
+      // Robust "where are we now?" reader. Used by relative seek handlers
+      // (seekforward / seekbackward) where reading 0 by accident from the
+      // video element would relocate the user to the start. Tries every
+      // source we trust, in best-known-good order, and only falls back to
+      // 0 if literally every source agrees on 0 / NaN.
+      const _stReadCurrentPos = () => {
+        const cands = [];
+        try { const v = Number(video.currentTime()); if (isFinite(v) && v > 0) cands.push(v); } catch {}
+        try { const v = Number(videoEl.currentTime); if (isFinite(v) && v > 0) cands.push(v); } catch {}
+        try {
+          const inner = video?.el?.()?.querySelector?.("video");
+          const v = inner ? Number(inner.currentTime) : NaN;
+          if (isFinite(v) && v > 0) cands.push(v);
+        } catch {}
+        // lastKnownGoodVT is updated continuously by the sync loop, so it's
+        // a safe ground-truth fallback if all element reads happen to be 0
+        // at this instant.
+        const lkg = Number(state.lastKnownGoodVT) || 0;
+        if (lkg > 0) cands.push(lkg);
+        if (!cands.length) return 0;
+        // Return the highest reading: a stale 0 from one source can't drag
+        // the position down when another knows we're well into the track.
+        return Math.max(...cands);
+      };
       navigator.mediaSession.setActionHandler("seekforward", d => {
         const inc = Number(d?.seekOffset) || 10;
-        const newTime = Math.min((video.currentTime() || 0) + inc, Number(video.duration()) || 0);
+        const dur = Number(video.duration()) || 0;
+        const cur = _stReadCurrentPos();
+        const newTime = dur > 0 ? Math.min(cur + inc, dur) : (cur + inc);
         markUserSeekIntent(3000);
         if (newTime < 0.8) authorizeNearZeroSeek(2500);
         state.pendingSeekTarget = newTime;
@@ -15280,7 +15306,8 @@ const HAVE_ENOUGH_DATA = 4;
       });
       navigator.mediaSession.setActionHandler("seekbackward", d => {
         const dec = Number(d?.seekOffset) || 10;
-        const newTime = Math.max((video.currentTime() || 0) - dec, 0);
+        const cur = _stReadCurrentPos();
+        const newTime = Math.max(cur - dec, 0);
         markUserSeekIntent(3000);
         if (newTime < 0.8) authorizeNearZeroSeek(2500);
         state.pendingSeekTarget = newTime;
@@ -17556,19 +17583,127 @@ const HAVE_ENOUGH_DATA = 4;
 
           clearSeekSyncFinalizeTimer();
           clearSeekWatchdog();
-          // Get seek target from multiple sources — video.js currentTime() may
-          // not reflect the target yet during 'seeking', so also check the native element.
+          // ─────────────────────────────────────────────────────────────
+          // HARDENED SEEK-TARGET PICKER — fixes "video sometimes seeks to 0
+          // when you seek somewhere else". Three concrete failure modes
+          // this picker eliminates:
+          //
+          //  1. RACE-READ ZERO: the user clicks the timeline at, say, 60min.
+          //     video.js writes the new time onto the underlying element,
+          //     which fires 'seeking'. On some browsers / under load, the
+          //     read of videoEl.currentTime inside the seeking handler
+          //     briefly returns 0 instead of the new target — the assignment
+          //     hasn't propagated through the element's internal state yet.
+          //     The old code accepted that 0 (it's finite) and slammed the
+          //     player to the start.
+          //
+          //  2. STALE-CACHE ZERO: video.js's currentTime() may return a
+          //     cached old value, or 0 if the tech is mid-reset. innerTime
+          //     can return 0 if the inner <video> got reattached.
+          //
+          //  3. LITERAL FALLBACK: the old ternary ended in `: 0`. If every
+          //     source was non-finite (NaN), we'd intentionally seek to 0
+          //     even though we had no idea what the user wanted.
+          //
+          // Strategy: trust pendingSeekTarget when explicitly set; otherwise
+          // take the MAX of all VALID positive candidates. If the only
+          // signals are 0 / NaN, AND the previous good position was well
+          // into the track, AND there's no near-zero authorization or
+          // restart/loop in progress, treat it as a phantom and ABORT the
+          // seek by reverting to the previous good position.
+          // ─────────────────────────────────────────────────────────────
           const vjsTime = Number(video.currentTime());
           const nativeTime = Number(videoEl.currentTime);
           const innerEl = video?.el?.()?.querySelector?.("video");
           const innerTime = innerEl ? Number(innerEl.currentTime) : NaN;
-          // Use pendingSeekTarget if it was set by mediaSession/keyboard handlers,
-          // otherwise pick the most likely seek target (they should all agree after seeking fires)
-          const seekTime = state.pendingSeekTarget != null ? Number(state.pendingSeekTarget) :
-          isFinite(nativeTime) ? nativeTime :
-          isFinite(vjsTime) ? vjsTime :
-          isFinite(innerTime) ? innerTime : 0;
           const previousGoodVT = state.lastKnownGoodVT || 0;
+
+          // Phantom-detection inputs.
+          const _stPendingNum = state.pendingSeekTarget != null ? Number(state.pendingSeekTarget) : NaN;
+          const _stPendingValid = isFinite(_stPendingNum) && _stPendingNum >= 0;
+          const _stUserActionRecent = (now() - state.lastUserActionTime) < 1500;
+          const _stUserSeekIntent = (typeof userSeekIntentActive === "function") && userSeekIntentActive();
+          const _stRestartLike = state.restarting || state.endedNaturally || (typeof isLoopDesired === "function" && isLoopDesired());
+
+          let seekTime;
+          let _stAbortPhantom = false;
+
+          if (_stPendingValid) {
+            // Explicit target wins. mediaSession / keyboard / programmatic
+            // seek paths set this; it is the ground truth.
+            seekTime = _stPendingNum;
+          } else {
+            // Aggregate every candidate that LOOKS real. We deliberately
+            // discard 0-valued reads when previousGoodVT > 1.0 because they
+            // are almost certainly the race-read described above. If the
+            // user actually wanted to seek to 0, either pendingSeekTarget
+            // would be set or near-zero authorization would already be
+            // armed (authorizeNearZeroSeek); _stUserActionRecent + an
+            // explicit click-to-zero gets handled below.
+            const _stRawCandidates = [vjsTime, nativeTime, innerTime].filter(v => isFinite(v) && v >= 0);
+            const _stAtLeastOneNonZero = _stRawCandidates.some(v => v > 0.5);
+            const _stAllZero = _stRawCandidates.length > 0 && !_stAtLeastOneNonZero;
+
+            // If we have at least one positive reading, that's the truth.
+            // This is the picker that defeats race-read zero: a stale 0
+            // from one source can't drag the seek down when another source
+            // already shows the real new target.
+            if (_stAtLeastOneNonZero) {
+              seekTime = Math.max(..._stRawCandidates);
+            } else if (_stRawCandidates.length === 0) {
+              // No finite reading at all — never seen in practice but the
+              // old code's `: 0` fallback would have silently jumped to
+              // start. Refuse instead.
+              seekTime = previousGoodVT;
+              _stAbortPhantom = !_stRestartLike && previousGoodVT > 0.5;
+            } else {
+              // All sources read 0 / near-0. Two sub-cases:
+              //   (a) user genuinely wanted 0 — they'd have hit a restart
+              //       button or the timeline thumb at the start; that flow
+              //       sets _stUserActionRecent + authorizes near-zero, OR
+              //       sets pendingSeekTarget=0 explicitly above.
+              //   (b) phantom near-zero — browser fired a buffer-flush
+              //       seeking event with no real intent. previousGoodVT
+              //       is well into the track and the user did not click.
+              const _stAuthorized = (typeof nearZeroSeekAuthorized === "function") && nearZeroSeekAuthorized(0);
+              const _stLooksIntentional = _stUserActionRecent || _stUserSeekIntent || _stAuthorized || _stRestartLike;
+              if (_stLooksIntentional || previousGoodVT < 1.0 || !state.firstPlayCommitted) {
+                seekTime = 0;
+              } else {
+                // Phantom. Don't honor — abort the whole seek.
+                seekTime = previousGoodVT;
+                _stAbortPhantom = true;
+              }
+            }
+          }
+
+          if (_stAbortPhantom) {
+            // Revert the element so video doesn't actually go to 0.
+            // Mark as a micro-seek so our own seeking-event guard stays
+            // out of the way on the revert. Then unwind every piece of
+            // seek state we already set above and bail completely.
+            try {
+              state._isMicroSeek = true;
+              try { videoEl.currentTime = previousGoodVT; } catch {}
+              try { video.currentTime(previousGoodVT); } catch {}
+              try {
+                const _abVN = (typeof getVideoNode === "function") ? getVideoNode() : null;
+                if (_abVN && _abVN !== videoEl) _abVN.currentTime = previousGoodVT;
+              } catch {}
+              setTimeout(() => { state._isMicroSeek = false; }, 300);
+            } catch {}
+            // Roll back seek-state mutations from earlier in this handler.
+            state.seeking = false;
+            state.seekCompleted = true;
+            state.seekTargetTime = previousGoodVT;
+            state.seekResolvedTime = previousGoodVT;
+            state.pendingSeekTarget = null;
+            try { clearSeekResumeIntent(); } catch {}
+            try { clearSeekWatchdog(); } catch {}
+            try { UltraStabilizer.onSeekEnd?.(); } catch {}
+            try { SeekCpuController.onSeekEnd?.(); } catch {}
+            return;
+          }
 
           // Only commit firstPlay from user-initiated or programmatic seeks.
           // Browser-fired seeks (buffer adjustments, autoplay setup) should NOT
