@@ -406,7 +406,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let stats = "";
     // Matches: 👍 N | 👎 N | 📈 N Views | 🗓 N ago  (all separators/suffixes optional, lenient)
     // 👍/👎 with optional skin-tone/VS16, numbers with K/M/B suffix, pipes/bullets/dashes as separators
-    const _statsRe = /\uD83D\uDC4D(?:\uFE0F|\uD83C[\uDFFB-\uDFFF])*\s*[\d][\d.,]*[KMBTkmbt]?[|\s\u2022\u00B7\u2013\u2014-]*\uD83D\uDC4E(?:\uFE0F|\uD83C[\uDFFB-\uDFFF])*\s*[\d][\d.,]*[KMBTkmbt]?(?:\s*[\uD83D\uDCC8](?:\uFE0F|\uD83C[\uDFFB-\uDFFF])*\s*[\d][\d.,]*[KMBTkmbt]?\s*(?:Views?|Watch(?:e[sd])?|Plays?)?)?(?:\s*(?:\uD83D\uDDD3|\uD83D\uDCC5|\uD83D\uDCC6|\uD83D\uDDD2)(?:\uFE0F|\uD83C[\uDFFB-\uDFFF])*\s*\d+\s*(?:second|minute|hour|day|week|month|year)s?\s*ago)?/i;
+    const _statsRe = /\uD83D\uDC4D(?:\uFE0F|\uD83C[\uDFFB-\uDFFF])*\s*[\d][\d.,]*[KMBTkmbt]?[|\s\u2022\u00B7\u2013\u2014-]*\uD83D\uDC4E(?:\uFE0F|\uD83C[\uDFFB-\uDFFF])*\s*[\d][\d.,]*[KMBTkmbt]?(?:[|\s\u2022\u00B7\u2013\u2014-]*\uD83D\uDCC8(?:\uFE0F|\uD83C[\uDFFB-\uDFFF])*\s*[\d][\d.,]*[KMBTkmbt]?\s*(?:Views?|Watch(?:e[sd])?|Plays?)?)?(?:[|\s\u2022\u00B7\u2013\u2014-]*(?:\uD83D\uDDD3|\uD83D\uDCC5|\uD83D\uDCC6|\uD83D\uDDD2)(?:\uFE0F|\uD83C[\uDFFB-\uDFFF])*\s*\d+\s*(?:second|minute|hour|day|week|month|year)s?\s*ago)?/i;
     const statsMatch = metaDesc.match(_statsRe);
     if (statsMatch) {
       stats = statsMatch[0].replace(/\s*\|\s*/g, " | ").replace(/\s+/g, " ").trim();
@@ -9015,6 +9015,19 @@ const HAVE_ENOUGH_DATA = 4;
     state.isProgrammaticVideoPlay = true;
     // (hiddenVideoBootstrap already armed above before the gate check)
     _bufMonStallFrames = 0;  // reset stale stall count
+    // SIMULTANEOUS-START (video side): if audio is paused while we're about
+    // to play video, kick audio in the same synchronous call so both
+    // elements start together. This covers paths (recovery, heartbeat, etc.)
+    // that call execProgrammaticVideoPlay without a paired audio kick.
+    // Only fire when: coupled, audio actually paused, no audio play in
+    // flight, not seeking. execProgrammaticAudioPlay's own gates then
+    // decide if it's safe to start audio right now.
+    if (coupledMode && audio && audio.paused && state.intendedPlaying &&
+        !state.seeking && !state.seekBuffering &&
+        !state.isProgrammaticAudioPlay && !state.audioPlayInFlight &&
+        !shouldBlockNewAudioStart()) {
+      execProgrammaticAudioPlay({ squelchMs: 60, force: true, minGapMs: 0 }).catch(() => {});
+    }
     try {
       let p = null;
       const vNode = getVideoNode();
@@ -9295,6 +9308,21 @@ const HAVE_ENOUGH_DATA = 4;
       const isUserPlay = (now() - state.lastUserActionTime) < 2000;
       if (audioActuallyPaused) {
         cancelActiveFade();
+      }
+
+      // SIMULTANEOUS-START: if video is paused right now and we're about to
+      // start audio, co-kick video in the SAME event-loop tick so both
+      // decoders warm up together. Without this, paths that call
+      // execProgrammaticAudioPlay directly (recovery timers, video "playing"
+      // handlers, etc.) can leave video paused while audio plays, or vice
+      // versa, for the duration of the next sync cycle (250-800ms).
+      // Guard: only co-kick when video should be playing, no play already
+      // in flight, and we can acquire the video play lock.
+      if (coupledMode && audioActuallyPaused && getVideoPaused() &&
+          state.intendedPlaying && !state.seeking && !state.seekBuffering &&
+          !state.isProgrammaticVideoPlay && !state.videoPlayInFlight &&
+          tryAcquireVideoPlayLock()) {
+        try { execProgrammaticVideoPlay({ force: true, minGapMs: 0 }); } catch {}
       }
 
       const p = audio.play();
