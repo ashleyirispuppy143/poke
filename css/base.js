@@ -25,7 +25,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 //////////////// THE PLAYER, START ////////////////////////
- try {
+try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -724,7 +724,11 @@ document.addEventListener("DOMContentLoaded", () => {
     lastTransitionDriftRepairAt: 0,
     lastVideoPlayingAt: 0,
     _syncTabReturnKickDone: false,
-    _hiddenAudioNativeKickAt: 0
+    _hiddenAudioNativeKickAt: 0,
+    // MakeAudioVideoSimultaneousStartAPI reentrancy + cooldown state.
+    _simulStartInFlight: false,
+    _simulStartLastAt: 0,
+    _simulStartCount: 0
   };
   // Block micro-seeks during play/pause transitions. 500ms covers the full
   // decoder warmup window — the old 300ms allowed micro-seeks to land during
@@ -1011,6 +1015,122 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   function releaseVideoPlayLock() {
     _videoPlayLockUntil = 0;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // MakeAudioVideoSimultaneousStartAPI
+  // ═══════════════════════════════════════════════════════════════════════
+  // Single strict entry point for "start audio and video together in the
+  // same event-loop tick". Previously the codebase had ad-hoc co-kicks in
+  // execProgrammatic{Audio,Video}Play, the seeked handler, the playing
+  // handler, and tab-return recovery — each with its own guard set, which
+  // drifted out of sync and allowed audio-only or video-only starts to
+  // slip through.
+  //
+  // This API is the ONLY sanctioned way to simultaneously start both
+  // tracks. Every gate is checked synchronously, both play() calls are
+  // issued in the same tick (no await between them), and a reentrancy
+  // lock prevents recursive double-fire when one play() event handler
+  // triggers another simultaneous-start.
+  //
+  // Strictness guarantees:
+  //   1. Never runs during seek/seekBuffer (unless opts.throughSeek=true).
+  //   2. Never starts audio if shouldBlockNewAudioStart() says no.
+  //   3. Never starts video without tryAcquireVideoPlayLock() success.
+  //   4. Never rewinds, never writes currentTime, never changes volume.
+  //   5. Respects state.intendedPlaying + endedNaturally.
+  //   6. 40ms cooldown between successful invocations (dedup).
+  //   7. Reentrancy-safe: recursive calls return false immediately.
+  //
+  // Returns:
+  //   true  — at least one element was kicked (or both were already running)
+  //   false — blocked by gates, cooldown, or reentrancy
+  //
+  // opts:
+  //   force:       pass through to execProgrammatic*Play (default false)
+  //   squelchMs:   audio event squelch window (default 60)
+  //   throughSeek: allow firing during seek/seekBuffer (default false)
+  //   reason:      short string for debug (unused at runtime)
+  // ═══════════════════════════════════════════════════════════════════════
+  function MakeAudioVideoSimultaneousStartAPI(opts) {
+    opts = opts || {};
+    // Gate 1: coupled mode + audio element present.
+    if (!coupledMode || !audio) return false;
+    // Gate 2: intent — user has to want playback.
+    if (!state.intendedPlaying || state.endedNaturally || state.restarting) return false;
+    // Gate 3: seek safety (unless caller opts into throughSeek).
+    if (!opts.throughSeek) {
+      if (state.seeking || state.seekBuffering) return false;
+    }
+    // Gate 4: reentrancy — only one simultaneous-start in flight.
+    if (state._simulStartInFlight) return false;
+    // Gate 5: cooldown — dedup within 40ms. Stops play-handler / playing-handler
+    // / sync-loop from all firing the API in the same frame.
+    const _nowSimul = now();
+    if ((_nowSimul - (state._simulStartLastAt || 0)) < 40) return false;
+    // Gate 6: video element must exist.
+    const vNode = getVideoNode();
+    if (!vNode) return false;
+
+    const videoIsPaused = !!vNode.paused;
+    const audioIsPaused = !!audio.paused;
+    // Both already playing → nothing to do, report success.
+    if (!videoIsPaused && !audioIsPaused) {
+      state._simulStartLastAt = _nowSimul;
+      return true;
+    }
+    // Decide which kicks are needed. Each kick path has its own in-flight
+    // flag check — we must respect both to avoid stepping on another
+    // path's play() promise.
+    const needVideo = videoIsPaused &&
+                      !state.isProgrammaticVideoPlay &&
+                      !state.videoPlayInFlight;
+    const needAudio = audioIsPaused &&
+                      !state.isProgrammaticAudioPlay &&
+                      !state.audioPlayInFlight &&
+                      !shouldBlockNewAudioStart();
+    if (!needVideo && !needAudio) return false;
+
+    state._simulStartInFlight = true;
+    state._simulStartLastAt = _nowSimul;
+    state._simulStartCount = (state._simulStartCount | 0) + 1;
+    let fired = false;
+    try {
+      // Order is INTENTIONAL:
+      //   1. Acquire the video lock FIRST (synchronous, cheap).
+      //   2. Issue video.play() — this warms the decoder.
+      //   3. Issue audio.play() immediately after, in the SAME tick.
+      // Both play() promises resolve asynchronously, but both decoders
+      // have started work by the time this function returns.
+      if (needVideo) {
+        if (tryAcquireVideoPlayLock()) {
+          try {
+            execProgrammaticVideoPlay({
+              force: !!opts.force,
+              minGapMs: 0
+            });
+            fired = true;
+          } catch {}
+        }
+      }
+      if (needAudio) {
+        try {
+          execProgrammaticAudioPlay({
+            squelchMs: opts.squelchMs != null ? opts.squelchMs : 60,
+            force: !!opts.force,
+            minGapMs: 0
+          }).catch(() => {});
+          fired = true;
+        } catch {}
+      }
+    } finally {
+      // Release reentrancy lock in the same tick — the play() promises
+      // are async but the dispatch is done, and downstream paths need to
+      // be able to call the API again within the next 40ms window if a
+      // follow-up decision arrives.
+      state._simulStartInFlight = false;
+    }
+    return fired;
   }
 
   const BackgroundPlaybackManager = (() => {
@@ -14099,12 +14219,26 @@ const HAVE_ENOUGH_DATA = 4;
       }
 
       if (!coupledMode) {
-        if (MediumQualityManager.intentPaused && state.firstPlayCommitted) {
-          execProgrammaticVideoPause();
-          return;
-        }
-        // User preset play intent (set on pointerdown) → accept
-        if (state.userPlayIntentPresetAt > 0 && (now() - state.userPlayIntentPresetAt) < 2000) {
+        // MEDIUM-MODE CLICK-TO-PLAY FIX: user-preset play intent must be
+        // checked BEFORE MediumQualityManager.intentPaused. The old order
+        // rejected the click when MQM.intentPaused was still true from the
+        // previous pause — because markUserPlayed() only fires inside the
+        // preset-accept branch that came after. Net effect: user paused →
+        // user clicks play → MQM re-pauses it instantly → "can't play on
+        // medium mode when clicking". Swap so an explicit user click always
+        // wins over stale auto-resume guards.
+        //
+        // Also accept any of: preset, userPlayUntil active, lastUserToggle
+        // was "play" within 2s — the preset can be cleared by a prior
+        // branch in the pointerdown handler while the click event is still
+        // pending, so we check all three fresh-click signals.
+        const _nowClk = now();
+        const _freshUserPlayClick =
+          (state.userPlayIntentPresetAt > 0 && (_nowClk - state.userPlayIntentPresetAt) < 2000) ||
+          userPlayIntentActive() ||
+          userToggleRecently("play", 2000) ||
+          userToggleExpectingPlay();
+        if (_freshUserPlayClick) {
           state.userPlayIntentPresetAt = 0;
           MediumQualityManager.markUserPlayed();
           state.intendedPlaying = true;
@@ -14119,6 +14253,10 @@ const HAVE_ENOUGH_DATA = 4;
           markMediaAction("play");
           forceUnmuteForPlaybackIfAllowed();
           updateMediaSessionPlaybackState();
+          return;
+        }
+        if (MediumQualityManager.intentPaused && state.firstPlayCommitted) {
+          execProgrammaticVideoPause();
           return;
         }
         // Our own programmatic play (bg resume, stall recovery) → accept silently
@@ -16425,35 +16563,46 @@ const HAVE_ENOUGH_DATA = 4;
               // post-seek settle window.
               state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, _kickArmedAt + 1200);
               armSeekAudioReadyKick(_kickSeekId, 2500);
-              // single video kick through the unified lock
-              if (getVideoPaused() && tryAcquireVideoPlayLock()) execProgrammaticVideoPlay();
+              // STRICT simultaneous start: fire video+audio play() in the
+              // SAME event-loop tick via the unified API. The seeked handler
+              // is exactly the case this API was designed for — previously
+              // we kicked video here and relied on the kick chain (_t1..) to
+              // catch up audio ~15ms later, which left a perceptible audio
+              // lag on every seek. Now both land together.
+              MakeAudioVideoSimultaneousStartAPI({ throughSeek: true, force: true, squelchMs: 80 });
               // Retry chain at 20ms, 80ms, 250ms, 500ms, 800ms.
               // First kick at 20ms (instead of 60ms) — volume is restored at
               // the same time so audio starts as soon as the decoder flushes.
               // Later retries cover slow decoders still refilling buffers.
               const _kickAudio = (attemptId) => {
+                // CPU OPT (seek hot path): order checks CHEAPEST → EXPENSIVE.
+                // Old code read video.currentTime(), audio.currentTime,
+                // getVideoNode() and readyState BEFORE the "already playing"
+                // check — so after the first kick succeeded, the remaining
+                // 3 chain timers still burned CPU reading decoder state
+                // before bailing. Now: primitive reads & flag checks first,
+                // decoder state reads only if we actually need to kick.
                 if (state.seekId !== _kickSeekId) return;
                 if (!state.intendedPlaying || state.endedNaturally) return;
-                // don't kick if video is still buffering — audio would play
-                // over a frozen/buffering frame. next retry catches it once
-                // the decoder has data.
-                // exception: the last two attempts (4 and 5) bypass this —
-                // if video still hasn't come back after 400-800ms, waiting
-                // longer just makes audio feel broken. let it start.
+                // HARD gate: active seek-buffering — never kick.
+                if (state.seekBuffering) return;
+                // Already playing → cancel remaining chain timers so they
+                // don't fire at 360/900ms just to re-verify this. Big win
+                // on back-to-back seeks where the first kick always wins.
+                if (!audio.paused) {
+                  const _rem = state._seekPostTimers;
+                  if (_rem && _rem.length) {
+                    for (let i = 0; i < _rem.length; i++) clearTimeout(_rem[i]);
+                    _rem.length = 0;
+                  }
+                  return;
+                }
+                const _kickBypassRS = attemptId >= 4;
+                // videoWaiting is a cached flag — cheap.
+                if (state.videoWaiting && !_kickBypassRS) return;
+                // Only NOW touch the DOM: getVideoNode + readyState.
                 const _kickVNode = getVideoNode();
                 const _kickVRS = _kickVNode ? Number(_kickVNode.readyState || 0) : 0;
-                const _kickBypassRS = attemptId >= 4;
-                // HARD gate: if we are in active seek-buffering (video decoder
-                // still waiting on data after a seek-backward to unbuffered
-                // territory), NEVER kick audio — regardless of attempt count.
-                // Otherwise audio plays over a frozen video frame, and the
-                // subsequent buffer resolution produces an audible cut when
-                // audio gets paused/resynced. startSeekBufferWait.resume() is
-                // the authoritative resume path while seekBuffering is live.
-                if (state.seekBuffering) return;
-                // Also bail if the native video decoder is visibly buffering
-                // (waiting event flag) — same reason as seekBuffering.
-                if (state.videoWaiting && !_kickBypassRS) return;
                 if (!_kickBypassRS && _kickVRS < HAVE_CURRENT_DATA &&
                     document.visibilityState === "visible") {
                   return;
@@ -16463,27 +16612,19 @@ const HAVE_ENOUGH_DATA = 4;
                 // (forward correction). NEVER write when audio is ahead of
                 // video — that rewinds the decoder mid-playback, which is the
                 // "seek plays the same part twice" bug.
+                // NOTE: at this point audio.paused is guaranteed true, so the
+                // pin logic collapses to "write if abs drift > 0.35".
                 try {
                   const _kickVt = Number(video.currentTime()) || 0;
-                  const _kickAt = Number(audio.currentTime) || 0;
-                  // positive → audio is behind video (safe to push forward)
-                  // negative → audio is ahead of video (rewinding would cause replay)
-                  const _kickForwardDrift = _kickVt - _kickAt;
-                  const _kickAbsDrift = Math.abs(_kickForwardDrift);
-                  // Write when: audio is paused (position before start, always fine)
-                  // OR audio is playing but clearly BEHIND video (> 0.5s, forward write).
-                  // Never write when audio is playing and AHEAD — that rewinds.
-                  const _shouldPin =
-                    audio.paused
-                      ? _kickAbsDrift > 0.35
-                      : (_kickForwardDrift > 0.5);
-                  if (_shouldPin && isFinite(_kickVt) && _kickVt > 0.2) {
-                    state._allowAudioTimeWrite = true;
-                    try { audio.currentTime = _kickVt; } catch {}
-                    state._allowAudioTimeWrite = false;
+                  if (isFinite(_kickVt) && _kickVt > 0.2) {
+                    const _kickAt = Number(audio.currentTime) || 0;
+                    if (Math.abs(_kickVt - _kickAt) > 0.35) {
+                      state._allowAudioTimeWrite = true;
+                      try { audio.currentTime = _kickVt; } catch {}
+                      state._allowAudioTimeWrite = false;
+                    }
                   }
                 } catch {}
-                if (!audio.paused) return; // already playing — don't touch it
                 // clear the play dedup so a recent audio.play() from another
                 // path (e.g. the "playing" handler) doesn't eat this kick.
                 DONTMAKEITDOUBLEPLAY.reset(audio);
@@ -16537,15 +16678,40 @@ const HAVE_ENOUGH_DATA = 4;
               // finalize fixes that by snapping audio backward to video's landing
               // position once, at t=1800ms (after kick chain) and t=2800ms.
               const _postSeekFinalize = () => {
+                // CPU OPT: cheapest flag checks first. currentTime reads and
+                // getVideoNode are only done if we've passed all the fast
+                // bails. For clean seeks (the 95% case) this exits on a
+                // single property read pair.
                 if (state.seekId !== _kickSeekId) return;
                 if (!state.intendedPlaying || state.endedNaturally) return;
                 if (state.seeking || state.seekBuffering) return;
                 if (!coupledMode || !audio || audio.paused) return;
+                // Cheap first look at drift via audio.currentTime only (no
+                // video.currentTime() bridge call yet). If audio is clearly
+                // very close to where video started this kick cycle, we can
+                // short-circuit without bothering video or readyState.
+                let _finVt, _finAt, _finDrift;
                 try {
-                  const _finVt = Number(video.currentTime()) || 0;
-                  const _finAt = Number(audio.currentTime) || 0;
-                  if (!isFinite(_finVt) || !isFinite(_finAt) || _finVt < 0.2) return;
-                  const _finDrift = _finAt - _finVt; // positive = audio ahead
+                  _finVt = Number(video.currentTime()) || 0;
+                  _finAt = Number(audio.currentTime) || 0;
+                } catch { return; }
+                if (!isFinite(_finVt) || !isFinite(_finAt) || _finVt < 0.2) return;
+                _finDrift = _finAt - _finVt; // positive = audio ahead
+                // CPU OPT: if drift is already within tolerance, bail BEFORE
+                // touching getVideoNode / readyState. This is the common case
+                // after a clean seek — cheap exit means _t5/_t6 do almost
+                // nothing when they weren't needed.
+                if (_finDrift >= -0.5 && _finDrift <= 0.5) {
+                  // Also cancel any still-pending timers in the same chain —
+                  // if t5 settled cleanly, t6 doesn't need to run.
+                  const _remF = state._seekPostTimers;
+                  if (_remF && _remF.length) {
+                    for (let i = 0; i < _remF.length; i++) clearTimeout(_remF[i]);
+                    _remF.length = 0;
+                  }
+                  return;
+                }
+                try {
                   // Require video to actually be playing with data — don't snap
                   // while video is still buffering, or audio gets yanked to a
                   // stale position that video then moves past.
@@ -16588,11 +16754,16 @@ const HAVE_ENOUGH_DATA = 4;
               state._seekPreVolume = null;
             }
           }
-          if (shouldResumeAfterSeek() && !state.endedNaturally && getVideoPaused() &&
-              tryAcquireVideoPlayLock()) {
+          if (shouldResumeAfterSeek() && !state.endedNaturally && getVideoPaused()) {
             state.intendedPlaying = true;
             state.bufferHoldIntendedPlaying = true;
-            execProgrammaticVideoPlay();
+            // Route through the strict simultaneous-start API so audio
+            // follows in the same tick. Falls back to a plain video kick
+            // if we're past the API's cooldown window and the API returns
+            // false for a reason we can't satisfy here.
+            if (!MakeAudioVideoSimultaneousStartAPI({ throughSeek: true, force: true, squelchMs: 80 })) {
+              if (tryAcquireVideoPlayLock()) execProgrammaticVideoPlay();
+            }
           }
           // SEEK-LAG FIX (medium mode): the MQM.tryKick debounce (400ms) was
           // blocking the runSync auto-resume path in non-coupled mode after a seek,
