@@ -25,7 +25,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 //////////////// THE PLAYER, START ////////////////////////
-try {
+ try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -747,8 +747,12 @@ document.addEventListener("DOMContentLoaded", () => {
   // Audio play() gate — the single chokepoint for ALL audio playback.
   // Rule: audio NEVER plays in visible foreground unless video has decoded data.
   // 4s safety valve prevents stale flags from permanently blocking audio.
+  // Hoisted to outer scope so the post-seek watchdog and the
+  // forceAudioPlayNoMatterWhat() escape hatch can bypass the override gate
+  // when audio absolutely MUST start (post-seek, user-confirmed playback).
+  let _origAudioPlay = null;
   if (audio && typeof audio.play === "function") {
-    const _origAudioPlay = audio.play.bind(audio);
+    _origAudioPlay = audio.play.bind(audio);
     audio.play = function() {
       // background tab: always let through (keepalive needs this)
       if (document.visibilityState === "hidden") {
@@ -9863,6 +9867,99 @@ const HAVE_ENOUGH_DATA = 4;
   })();
 
   // ═══════════════════════════════════════════════════════════════════════
+  // Audio guarantee helpers
+  // ═══════════════════════════════════════════════════════════════════════
+  // These three helpers exist to answer the user's directive that audio
+  // MUST play after seek "no matter what" and that the seek/buffer must
+  // NOT complete if audio can't play. They are the universal answer to
+  // every layered gate in the audio.play() override + execProgrammaticAudioPlay
+  // path that any one of can swallow a play attempt.
+  //
+  //   audioActuallyPlaying()       — true iff audio is unpaused AND advancing.
+  //                                  This is the ONLY truth signal: not "tried
+  //                                  to play", not "play promise resolved",
+  //                                  not "readyState=4" — actually running.
+  //   audioIsCold()                — true if audio is paused, or stuck at the
+  //                                  same currentTime for >180ms while
+  //                                  unpaused. The "stuck unpaused" case is
+  //                                  the silent-video-playing pathology the
+  //                                  user keeps reporting.
+  //   forceAudioPlayNoMatterWhat() — calls the *original* audio.play() bound
+  //                                  via _origAudioPlay (captured BEFORE we
+  //                                  installed the override). Skips ALL
+  //                                  gates: seeking/seekBuffering, stall
+  //                                  flags, readyState floors, user pause
+  //                                  locks, fade locks, dedup. Used ONLY
+  //                                  by the watchdog after the gentle paths
+  //                                  have failed for 1.5+ seconds.
+  let _audioPlayingLastAT = 0;
+  let _audioPlayingLastChangeAt = 0;
+  function audioActuallyPlaying() {
+    if (!audio || audio.paused) {
+      _audioPlayingLastAT = 0;
+      _audioPlayingLastChangeAt = 0;
+      return false;
+    }
+    const _at = Number(audio.currentTime) || 0;
+    const _t = now();
+    if (_at > _audioPlayingLastAT + 0.001) {
+      _audioPlayingLastAT = _at;
+      _audioPlayingLastChangeAt = _t;
+      return true;
+    }
+    // Unpaused but not advancing in this window — caller treats as "not
+    // actually playing" so the watchdog keeps kicking.
+    return false;
+  }
+  function audioIsCold() {
+    if (!audio) return true;
+    if (audio.paused) return true;
+    const _at = Number(audio.currentTime) || 0;
+    const _t = now();
+    if (_at > _audioPlayingLastAT + 0.001) {
+      _audioPlayingLastAT = _at;
+      _audioPlayingLastChangeAt = _t;
+      return false;
+    }
+    if (!_audioPlayingLastChangeAt) {
+      _audioPlayingLastChangeAt = _t;
+      _audioPlayingLastAT = _at;
+      return false;
+    }
+    return (_t - _audioPlayingLastChangeAt) > 180;
+  }
+  // The escape hatch. Use this when the gentle path has failed and we
+  // truly must start audio. It deliberately bypasses the audio.play()
+  // override and every gate inside execProgrammaticAudioPlay. Caller
+  // is responsible for the surrounding safety (volume, position).
+  function forceAudioPlayNoMatterWhat() {
+    if (!audio || !_origAudioPlay) return Promise.resolve(false);
+    try {
+      // Clear every latch that could re-pause audio in the next tick.
+      clearAudioPauseLocks();
+      state.audioPauseUntil = 0;
+      state.audioPlayUntil = 0;
+      state.audioEventsSquelchedUntil = 0;
+      state.audioFadeCompleteUntil = 0;
+      state.stateChangeCooldownUntil = 0;
+      state.videoStallAudioPaused = false;
+      state.stallAudioPausedSince = 0;
+      state.stallAudioResumeHoldUntil = 0;
+      state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 1500);
+      state.isProgrammaticAudioPlay = true;
+      try { cancelActiveFade(); } catch {}
+      try { DONTMAKEITDOUBLEPLAY.reset(audio); } catch {}
+      try { audio.muted = false; } catch {}
+      try { if (audio.volume === 0) audio.volume = targetVolFromVideo(); } catch {}
+    } catch {}
+    let p;
+    try { p = _origAudioPlay(); } catch { p = Promise.resolve(); }
+    return Promise.resolve(p)
+      .then(() => !audio.paused)
+      .catch(() => false);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
   // PostSeekAudioWatchdog
   // ═══════════════════════════════════════════════════════════════════════
   // The "audio doesn't play after seek / audio comes late / video plays
@@ -9872,15 +9969,25 @@ const HAVE_ENOUGH_DATA = 4;
   // large videos where buffer fills slowly, or on seeks into unbuffered
   // ranges where audio readyState stays at HAVE_METADATA for 1-3 seconds.
   //
-  // This watchdog is the PERSISTENT safety net. Unlike the other kick chains
-  // it polls at 220ms cadence for up to 8 seconds and WILL fire audio.play()
-  // the moment audio becomes playable, regardless of what blocked the earlier
-  // kicks. It exits the moment audio is actually running (!audio.paused AND
-  // audio advancing), so it has zero cost during healthy playback.
+  // This watchdog is the PERSISTENT GUARANTEE. It polls at 200ms cadence for
+  // up to 30 seconds with PROGRESSIVE GATE DROPPING:
+  //   t < 1500ms  → gentle: respects video readyState, video.paused, and
+  //                 audio readyState. Uses execProgrammaticAudioPlay (gated).
+  //   t < 4000ms  → audio readyState floor lifted (audio.play() can warm a
+  //                 cold decoder). Still uses gated path.
+  //   t < 6000ms  → video.paused tolerance lifted (audio leads video if
+  //                 needed; video kick is co-fired).
+  //   t >= 6000ms → forceAudioPlayNoMatterWhat() — bypass every override
+  //                 and every gate. This is the user's "no matter what."
+  // The watchdog only exits when audioActuallyPlaying() is true, the seekId
+  // changed, intent is paused, or the 30s ceiling is hit.
   let _postSeekAudioWatchdogTimer = null;
   let _postSeekAudioWatchdogSeekId = -1;
   let _postSeekAudioWatchdogStart = 0;
   let _postSeekAudioWatchdogLastAT = 0;
+  let _postSeekAudioWatchdogKickCount = 0;
+  // Bounded recursion guard: each kick we fire counts; if we hit a ceiling
+  // without success we still keep polling but stop spamming play().
   function clearPostSeekAudioWatchdog() {
     if (_postSeekAudioWatchdogTimer) {
       clearTimeout(_postSeekAudioWatchdogTimer);
@@ -9888,6 +9995,10 @@ const HAVE_ENOUGH_DATA = 4;
     }
     _postSeekAudioWatchdogSeekId = -1;
     _postSeekAudioWatchdogStart = 0;
+    _postSeekAudioWatchdogKickCount = 0;
+  }
+  function postSeekAudioWatchdogActive() {
+    return _postSeekAudioWatchdogTimer != null;
   }
   function armPostSeekAudioWatchdog(seekId = state.seekId) {
     if (!coupledMode || !audio) return;
@@ -9895,71 +10006,131 @@ const HAVE_ENOUGH_DATA = 4;
     _postSeekAudioWatchdogSeekId = Number(seekId);
     _postSeekAudioWatchdogStart = now();
     _postSeekAudioWatchdogLastAT = Number(audio.currentTime) || 0;
-    const WATCHDOG_MAX_MS = 8000;
-    const TICK_MS = 220;
+    _postSeekAudioWatchdogKickCount = 0;
+    const WATCHDOG_MAX_MS = 30000;          // user said "no matter what"
+    const TICK_MS = 200;
+    const PHASE2_AT_MS = 1500;              // drop audio readyState floor
+    const PHASE3_AT_MS = 4000;              // drop video.paused tolerance
+    const PHASE4_AT_MS = 6000;              // bypass gate via _origAudioPlay
+    const KICK_HARD_CAP = 60;               // max kicks across whole window
     const _tick = () => {
       _postSeekAudioWatchdogTimer = null;
-      // Stop conditions
+      // Stop conditions (cheap first)
       if (_postSeekAudioWatchdogSeekId !== state.seekId) return;
       if (!state.intendedPlaying || state.endedNaturally || state.restarting) return;
       if (userPauseLockActive() || mediaSessionForcedPauseActive()) return;
+      // While the seek/buffer wait is still active, hold off — startSeekBufferWait
+      // owns the pre-resume kick. We pick up at the moment buffer wait ends.
       if (state.seeking || state.seekBuffering) {
-        // Still seeking — reschedule, don't give up.
         _postSeekAudioWatchdogTimer = setTimeout(_tick, TICK_MS);
         return;
       }
-      if ((now() - _postSeekAudioWatchdogStart) > WATCHDOG_MAX_MS) return;
-      // Audio is actually running? Verify by checking advancement since last tick.
+      const _elapsed = now() - _postSeekAudioWatchdogStart;
+      if (_elapsed > WATCHDOG_MAX_MS) return;
+
+      // Truth check: actually playing? (unpaused AND advancing)
       const _at = Number(audio.currentTime) || 0;
       if (!audio.paused && _at > _postSeekAudioWatchdogLastAT + 0.02) {
         // Audio is advancing — done. Healthy state.
         return;
       }
       _postSeekAudioWatchdogLastAT = _at;
-      // If audio is already unpaused but not advancing, the decoder is still
-      // warming. Give it another tick rather than re-kicking (another kick
-      // would start a play-pause race).
-      if (!audio.paused) {
-        _postSeekAudioWatchdogTimer = setTimeout(_tick, TICK_MS);
-        return;
-      }
-      // Don't kick while video is genuinely starved — audio would play over
-      // a frozen frame.
       const _wdVN = getVideoNode();
       const _wdVRS = _wdVN ? Number(_wdVN.readyState || 0) : 0;
-      if (_wdVRS < HAVE_FUTURE_DATA && document.visibilityState === "visible") {
-        _postSeekAudioWatchdogTimer = setTimeout(_tick, TICK_MS);
-        return;
-      }
-      // Don't kick if video itself is paused — that would desync.
-      if (_wdVN && _wdVN.paused) {
-        _postSeekAudioWatchdogTimer = setTimeout(_tick, TICK_MS);
-        return;
-      }
-      // Audio readyState check — need at least HAVE_CURRENT_DATA to play
       const _aRS = Number(audio.readyState || 0);
-      if (_aRS < HAVE_CURRENT_DATA) {
-        _postSeekAudioWatchdogTimer = setTimeout(_tick, TICK_MS);
-        return;
-      }
-      // All gates clear — try to start audio.
-      try {
-        const _wdVt = Number(video.currentTime()) || 0;
-        if (isFinite(_wdVt) && _wdVt > 0.05) {
-          // Snap audio to video if drifted
-          if (Math.abs(_at - _wdVt) > 0.35) {
+      const _phase4 = _elapsed >= PHASE4_AT_MS;
+      const _phase3 = _elapsed >= PHASE3_AT_MS;
+      const _phase2 = _elapsed >= PHASE2_AT_MS;
+
+      // PHASE 4: nuclear bypass. Skip every gate. Snap position, force play.
+      if (_phase4 && audio.paused) {
+        try {
+          const _wdVt = Number(video.currentTime()) || 0;
+          if (isFinite(_wdVt) && _wdVt > 0.05 && Math.abs(_at - _wdVt) > 0.35) {
             state._allowAudioTimeWrite = true;
             try { audio.currentTime = _wdVt; } catch {}
             state._allowAudioTimeWrite = false;
           }
+          // Co-kick video if it's also stalled — keeps tracks together.
+          if (_wdVN && _wdVN.paused && state.intendedPlaying) {
+            try { execProgrammaticVideoPlay({ force: true, minGapMs: 0 }); } catch {}
+          }
+          if (_postSeekAudioWatchdogKickCount < KICK_HARD_CAP) {
+            _postSeekAudioWatchdogKickCount++;
+            forceAudioPlayNoMatterWhat();
+          }
+        } catch {}
+        _postSeekAudioWatchdogTimer = setTimeout(_tick, TICK_MS);
+        return;
+      }
+
+      // If audio is unpaused but stuck (silent decoder), poke it via the
+      // bypass path on phase 3+ — gated path will refuse since audio.paused
+      // is false, but the pathology is "unpaused but not advancing".
+      if (!audio.paused) {
+        if (_phase3 && audioIsCold() &&
+            _postSeekAudioWatchdogKickCount < KICK_HARD_CAP) {
+          try {
+            // The decoder is wedged. Pause briefly, snap position, force replay.
+            try { audio.pause(); } catch {}
+            const _wdVt = Number(video.currentTime()) || 0;
+            if (isFinite(_wdVt) && _wdVt > 0.05) {
+              state._allowAudioTimeWrite = true;
+              try { audio.currentTime = _wdVt; } catch {}
+              state._allowAudioTimeWrite = false;
+            }
+            _postSeekAudioWatchdogKickCount++;
+            forceAudioPlayNoMatterWhat();
+          } catch {}
         }
-        // Clear blockers that might have latched
+        _postSeekAudioWatchdogTimer = setTimeout(_tick, TICK_MS);
+        return;
+      }
+
+      // Gated paths (phase 1-3). Earlier we required HAVE_FUTURE_DATA on
+      // video — drop that on phase 3 so audio leads when video drags.
+      if (!_phase3 && _wdVRS < HAVE_FUTURE_DATA &&
+          document.visibilityState === "visible") {
+        _postSeekAudioWatchdogTimer = setTimeout(_tick, TICK_MS);
+        return;
+      }
+      if (!_phase3 && _wdVN && _wdVN.paused) {
+        _postSeekAudioWatchdogTimer = setTimeout(_tick, TICK_MS);
+        return;
+      }
+      // Audio readyState floor — drop on phase 2.
+      if (!_phase2 && _aRS < HAVE_CURRENT_DATA) {
+        _postSeekAudioWatchdogTimer = setTimeout(_tick, TICK_MS);
+        return;
+      }
+
+      // Try the gated path.
+      try {
+        const _wdVt = Number(video.currentTime()) || 0;
+        if (isFinite(_wdVt) && _wdVt > 0.05 && Math.abs(_at - _wdVt) > 0.35) {
+          state._allowAudioTimeWrite = true;
+          try { audio.currentTime = _wdVt; } catch {}
+          state._allowAudioTimeWrite = false;
+        }
         clearAudioPauseLocks();
         state.audioPauseUntil = 0;
         state.audioEventsSquelchedUntil = 0;
         state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 800);
+        // Renew the seek kick window so audio.play() override + the
+        // execProgrammaticAudioPlay gate let us through.
+        state.seekKickAudioAllowedUntil = Math.max(state.seekKickAudioAllowedUntil, now() + 1000);
         DONTMAKEITDOUBLEPLAY.reset(audio);
-        execProgrammaticAudioPlay({ squelchMs: 120, force: true, minGapMs: 0 }).catch(() => {});
+        if (_postSeekAudioWatchdogKickCount < KICK_HARD_CAP) {
+          _postSeekAudioWatchdogKickCount++;
+          execProgrammaticAudioPlay({ squelchMs: 120, force: true, minGapMs: 0 })
+            .then(ok => {
+              // If gated path returned false (gate refused), escalate immediately.
+              if (!ok && audio.paused && _phase2) {
+                forceAudioPlayNoMatterWhat();
+              }
+            })
+            .catch(() => {});
+        }
       } catch {}
       _postSeekAudioWatchdogTimer = setTimeout(_tick, TICK_MS);
     };
@@ -11383,6 +11554,24 @@ const HAVE_ENOUGH_DATA = 4;
     // Both buffered → no wait needed.
     if (videoBuffered && audioBuffered && vRS >= HAVE_CURRENT_DATA) return false;
 
+    // LONG-VIDEO AUDIO-LAG fix: on 3-4 hour HLS streams, audio segments are
+    // fetched on a SEPARATE schedule from video segments. After a seek the
+    // video buffer can fill in 200-800ms while the audio buffer takes
+    // 3-8 seconds (the audio fetcher hasn't been scheduled yet for the new
+    // position). Without long-video awareness, our 2200ms fallback kicks in,
+    // resume() runs, video plays, but audio.buffered is still empty at the
+    // seek position so audio.play() is a silent no-op — exactly the user's
+    // bug: "video plays but audio doesn't buffer".
+    //
+    // The flag tells the rest of this function to:
+    //   • use a much longer fallback timeout (12s vs 2.2s)
+    //   • pause video during the wait so it doesn't play silently
+    //   • watch audio.buffered for growth, not just readyState
+    //   • call audio.load() if buffered never grows for >2s
+    const _isLong = (typeof isLongVideo === "function") ? !!isLongVideo() : false;
+    const _audioIsTheHoldout = forCoupled && audio && !audioBuffered;
+    const _longAudioWait = _isLong && _audioIsTheHoldout;
+
     // Enter seek-buffering state
     state.seekBuffering = true;
     state.strictBufferHold = true;
@@ -11394,6 +11583,60 @@ const HAVE_ENOUGH_DATA = 4;
     // Gives the user visual feedback that the seek is still working even
     // when video has data but audio is still fetching segments.
     setSeekBufferingUIVisible(true);
+
+    // LONG-VIDEO: pause video while we wait for audio. Otherwise on a
+    // 4-hour stream the user sees the video advance silently for 5-8s
+    // before audio catches up — the exact "video plays but audio doesn't"
+    // pathology. Video is unpaused inside resume() once audio has data.
+    if (_longAudioWait && vNode && !vNode.paused) {
+      try {
+        state.isProgrammaticVideoPause = true;
+        vNode.pause();
+        setTimeout(() => { state.isProgrammaticVideoPause = false; }, 200);
+      } catch {}
+    }
+
+    // Audio buffer-growth watchdog. If audio.buffered.end isn't moving
+    // forward for >2s while we're waiting on it, the fetcher is stalled —
+    // call audio.load() to force a fresh fetch sequence. Capped at 2 calls
+    // per seek so we don't thrash on permanently dead networks.
+    let _audioBufferLastEnd = -1;
+    let _audioBufferLastGrowAt = now();
+    let _audioLoadCalls = 0;
+    const _checkAudioBufferGrowth = () => {
+      if (!_audioIsTheHoldout || !audio) return;
+      try {
+        const _buf = audio.buffered;
+        let _maxEnd = 0;
+        for (let i = 0; i < _buf.length; i++) {
+          if (_buf.end(i) > _maxEnd) _maxEnd = _buf.end(i);
+        }
+        if (_maxEnd > _audioBufferLastEnd + 0.05) {
+          _audioBufferLastEnd = _maxEnd;
+          _audioBufferLastGrowAt = now();
+          return;
+        }
+        // Buffer hasn't grown for 2s+ → force a new fetch.
+        if ((now() - _audioBufferLastGrowAt) > 2000 && _audioLoadCalls < 2) {
+          _audioLoadCalls++;
+          _audioBufferLastGrowAt = now();   // reset, give load() a chance
+          // Snap audio.currentTime first — that re-arms the segment fetcher
+          // at the seek target without a full reload.
+          const _curVt = Number(video.currentTime()) || 0;
+          if (isFinite(_curVt) && _curVt > 0.05) {
+            state._allowAudioTimeWrite = true;
+            try { audio.currentTime = _curVt; } catch {}
+            state._allowAudioTimeWrite = false;
+          }
+          // If that didn't help on the first call, do a hard load() on the
+          // second. load() is heavy (drops all buffer + fetch state) but
+          // it's the only reliable way to unwedge a stuck audio fetcher.
+          if (_audioLoadCalls >= 2) {
+            try { audio.load(); } catch {}
+          }
+        }
+      } catch {}
+    };
 
     let done = false;
     const pollTimers = [];
@@ -11415,10 +11658,14 @@ const HAVE_ENOUGH_DATA = 4;
       state.seekBuffering = false;
       state.seekBufferResumeTimer = null;
       clearBufferHold();
-      // Hide the spinner — resume is starting.
-      setSeekBufferingUIVisible(false);
-      if (state.restarting) return;
-      if (!shouldResumeAfterSeek()) return;
+      // DO NOT hide the spinner yet. The user's directive is: "if the audio
+      // is not playing/cannot play it doesn't finish the seek or buffer."
+      // The spinner stays up until audioActuallyPlaying() is true (or there's
+      // no audio in this mode). The verification loop below clears it when
+      // audio is confirmed running. If audio never comes, the watchdog keeps
+      // trying via forceAudioPlayNoMatterWhat() and the spinner stays visible.
+      if (state.restarting) { setSeekBufferingUIVisible(false); return; }
+      if (!shouldResumeAfterSeek()) { setSeekBufferingUIVisible(false); return; }
       state.intendedPlaying = true;
       state.bufferHoldIntendedPlaying = true;
       state.seekStabilizeUntil = Math.max(state.seekStabilizeUntil, now() + 1500);
@@ -11450,6 +11697,10 @@ const HAVE_ENOUGH_DATA = 4;
         state.audioPauseUntil = 0;
         state.audioEventsSquelchedUntil = 0;
         state.isProgrammaticAudioPause = false;
+        // Renew the seek kick window so the audio.play() override and the
+        // execProgrammaticAudioPlay gate let kicks through during this resume.
+        state.seekKickAudioAllowedUntil = Math.max(state.seekKickAudioAllowedUntil, now() + 6500);
+        state.seekAudioMustStartUntil = Math.max(state.seekAudioMustStartUntil, now() + 6500);
         // Resume seek as soon as video becomes minimally playable.
         // Directly kick both tracks first (low latency), then run playTogether
         // as a fast follow-up aligner.
@@ -11461,12 +11712,68 @@ const HAVE_ENOUGH_DATA = 4;
           state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 500);
           execProgrammaticAudioPlay({ squelchMs: 140, force: true, minGapMs: 0 }).catch(() => {});
           armSeekAudioReadyKick(state.seekId, 2800);
+          // PERSISTENT GUARANTEE: spin up the 30s post-seek audio watchdog
+          // so even if every gentle path here fails, audio gets started by
+          // forceAudioPlayNoMatterWhat() once the bypass phase opens.
+          armPostSeekAudioWatchdog(state.seekId);
         }
         setTimeout(() => {
           if (!state.intendedPlaying || state.restarting || state.seeking) return;
           playTogether().catch(() => {});
         }, 80);
         setTimeout(() => { state.seekResumeInFlight = false; }, 600);
+        // SPINNER GATE: keep the loading spinner visible until audio is
+        // verified playing. This is the "doesn't finish the seek/buffer
+        // without audio" behaviour the user asked for. Polls every 120ms.
+        // After 1500ms with no audio, escalate to the bypass path. After
+        // ~10s without audio at all, give up the visual gate (the watchdog
+        // continues trying in the background up to its 30s ceiling).
+        const _spinnerSeekId = state.seekId;
+        const _spinnerStart = now();
+        let _spinnerEscalated = false;
+        const _spinnerVerify = () => {
+          if (_spinnerSeekId !== state.seekId) {
+            // Newer seek took over — let its own resume drive the spinner.
+            return;
+          }
+          if (!state.intendedPlaying || state.restarting) {
+            setSeekBufferingUIVisible(false);
+            return;
+          }
+          if (state.seeking || state.seekBuffering) {
+            // A new seek is in progress — let its handler own the UI.
+            return;
+          }
+          // Audio confirmed running? Drop the spinner.
+          if (audioActuallyPlaying()) {
+            setSeekBufferingUIVisible(false);
+            return;
+          }
+          // No audio yet. Decide whether to escalate.
+          const _ageSpinner = now() - _spinnerStart;
+          if (_ageSpinner > 10000) {
+            // 10s grace: hide spinner so UI isn't permanently stuck. The
+            // watchdog keeps poking audio in the background.
+            setSeekBufferingUIVisible(false);
+            return;
+          }
+          if (!_spinnerEscalated && _ageSpinner > 1500 && audio && audio.paused) {
+            _spinnerEscalated = true;
+            // Bypass every gate. Snap audio to video first.
+            try {
+              const _vtNow = Number(video.currentTime()) || 0;
+              if (isFinite(_vtNow) && _vtNow > 0.05) {
+                state._allowAudioTimeWrite = true;
+                try { audio.currentTime = _vtNow; } catch {}
+                state._allowAudioTimeWrite = false;
+              }
+              try { audio.volume = targetVolFromVideo(); } catch {}
+            } catch {}
+            forceAudioPlayNoMatterWhat();
+          }
+          setTimeout(_spinnerVerify, 120);
+        };
+        setTimeout(_spinnerVerify, 120);
       } else {
         state.isProgrammaticVideoPlay = true;
         // DOMEXCEPTION FIX: video.play() / videoEl.play() return Promises that
@@ -11483,6 +11790,8 @@ const HAVE_ENOUGH_DATA = 4;
         } catch {}
         setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 250);
         updateMediaSessionPlaybackState();
+        // Non-coupled path: no audio to wait for, hide the spinner now.
+        setSeekBufferingUIVisible(false);
       }
       setTimeout(() => {
         if (!state.seeking && !state.seekBuffering && !state.restarting) {
@@ -11504,6 +11813,29 @@ const HAVE_ENOUGH_DATA = 4;
       if (forCoupled && audio) {
         const aRS = Number(audio.readyState || 0);
         const pos = Number(video.currentTime()) || 0;
+        // LONG VIDEO: be STRICTER about audio readiness. The user reported
+        // that on 3-4 hour videos, audio.buffered showed data but audio
+        // wouldn't actually play — because the buffered range was very
+        // small (a single segment that started 0.1s after the seek pos)
+        // and audio.readyState was HAVE_METADATA. Require BOTH a real
+        // buffered range AT the seek position AND readyState >=
+        // HAVE_CURRENT_DATA. This is the difference between "audio fetcher
+        // landed something" and "audio is actually decodable".
+        if (_longAudioWait) {
+          if (aRS < HAVE_CURRENT_DATA) return false;
+          if (!isTrackBufferedAt(audio, pos, 0.05)) return false;
+          // Demand at least 0.5s of audio AHEAD of seek pos so playback
+          // doesn't immediately stall after starting.
+          let _maxEnd = 0;
+          try {
+            const _b = audio.buffered;
+            for (let i = 0; i < _b.length; i++) {
+              if (_b.start(i) <= pos + 0.05 && _b.end(i) > _maxEnd) _maxEnd = _b.end(i);
+            }
+          } catch {}
+          if (_maxEnd < pos + 0.5) return false;
+          return true;
+        }
         // Audio must have decodable data at seek position. HAVE_CURRENT_DATA
         // is enough to start playing; the watchdog will catch late warmup.
         if (aRS < HAVE_CURRENT_DATA && !isTrackBufferedAt(audio, pos, 0.1)) {
@@ -11532,9 +11864,18 @@ const HAVE_ENOUGH_DATA = 4;
     }
     const pollReady = () => {
       if (done) return;
+      // LONG-VIDEO: every poll, also check if audio.buffered is growing.
+      // If it's stalled, force a re-fetch via currentTime nudge or load().
+      _checkAudioBufferGrowth();
       if (bothTracksReady()) resume();
     };
-    const pollPlan = fastUserSeek ? [90, 220, 420, 760, 1200, 1800] : [150, 340, 620, 980, 1500, 2200];
+    // LONG-VIDEO: longer poll plan covering up to 12s, since audio segments
+    // on 3-4 hour HLS streams routinely take 3-8s to land.
+    const pollPlan = _longAudioWait
+      ? [120, 280, 500, 800, 1200, 1700, 2400, 3300, 4500, 6000, 8000, 10500]
+      : (fastUserSeek
+          ? [90, 220, 420, 760, 1200, 1800]
+          : [150, 340, 620, 980, 1500, 2200]);
     pollPlan.forEach(delay => {
       pollTimers.push(setTimeout(pollReady, delay));
     });
@@ -11542,7 +11883,16 @@ const HAVE_ENOUGH_DATA = 4;
     // eventually give up waiting and start video so the UI doesn't freeze
     // indefinitely. The post-seek audio watchdog will keep trying to start
     // audio in the background.
-    const fallbackTimer = setTimeout(resume, fastUserSeek ? 1200 : 2200);
+    //
+    // LONG-VIDEO: 12s fallback. On 3-4 hour HLS streams the audio fetcher
+    // can take 5-8s to land its first segment after a seek. The previous
+    // 2200ms fallback fired well before audio data arrived, causing the
+    // exact bug the user reported: video plays, audio doesn't, because the
+    // audio.buffered ranges were empty at resume time. 12s is enough for
+    // even slow connections; the post-seek audio watchdog continues for
+    // another 30s if needed.
+    const _fallbackMs = _longAudioWait ? 12000 : (fastUserSeek ? 1200 : 2200);
+    const fallbackTimer = setTimeout(resume, _fallbackMs);
     state.seekBufferResumeTimer = fallbackTimer;
     return true;
   }
@@ -17128,13 +17478,102 @@ const HAVE_ENOUGH_DATA = 4;
               // post-seek settle window.
               state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, _kickArmedAt + 1200);
               armSeekAudioReadyKick(_kickSeekId, 2500);
-              // PERSISTENT SAFETY NET: if armSeekAudioReadyKick exhausts its
-              // 2.5s window without audio starting (common on large videos
-              // seeking into unbuffered ranges), this watchdog keeps polling
-              // for up to 8s and fires audio.play() the instant audio becomes
-              // decodable. Root fix for "video plays silently after seek then
-              // pauses, user has to click play to get audio".
+              // PERSISTENT GUARANTEE: 30s watchdog with progressive gate
+              // dropping. After the gentle kick chain exhausts at ~600ms,
+              // this watchdog keeps polling at 200ms cadence, lifts the
+              // audio readyState floor at 1.5s, the video.paused tolerance
+              // at 4s, and at 6s fires forceAudioPlayNoMatterWhat() — a
+              // direct call to the original audio.play() bound BEFORE the
+              // override was installed, bypassing every layered gate. This
+              // is the root fix for "video plays silently after seek".
               armPostSeekAudioWatchdog(_kickSeekId);
+              // SPINNER GATE: keep the buffering spinner visible until audio
+              // is verified playing. Implements the user's directive: "if
+              // audio is not playing/cannot play it doesn't finish the seek
+              // or buffer." Polls every 120ms; auto-escalates to bypass at
+              // 1.5s; auto-hides spinner at 10s so UI isn't permanently
+              // stuck (watchdog continues trying in the background).
+              if (coupledMode && audio) {
+                setSeekBufferingUIVisible(true);
+                const _seekedSpinnerId = _kickSeekId;
+                const _seekedSpinnerStart = now();
+                let _seekedSpinnerEscalated = false;
+                const _seekedSpinnerVerify = () => {
+                  if (_seekedSpinnerId !== state.seekId) return;
+                  if (!state.intendedPlaying || state.restarting) {
+                    setSeekBufferingUIVisible(false);
+                    return;
+                  }
+                  if (state.seeking || state.seekBuffering) return;
+                  if (audioActuallyPlaying()) {
+                    setSeekBufferingUIVisible(false);
+                    return;
+                  }
+                  const _ageSeekedSpin = now() - _seekedSpinnerStart;
+                  if (_ageSeekedSpin > 10000) {
+                    setSeekBufferingUIVisible(false);
+                    return;
+                  }
+                  if (!_seekedSpinnerEscalated && _ageSeekedSpin > 1500 &&
+                      audio && audio.paused) {
+                    _seekedSpinnerEscalated = true;
+                    try {
+                      const _vtSp = Number(video.currentTime()) || 0;
+                      if (isFinite(_vtSp) && _vtSp > 0.05) {
+                        state._allowAudioTimeWrite = true;
+                        try { audio.currentTime = _vtSp; } catch {}
+                        state._allowAudioTimeWrite = false;
+                      }
+                      try { audio.volume = targetVolFromVideo(); } catch {}
+                    } catch {}
+                    forceAudioPlayNoMatterWhat();
+                  }
+                  setTimeout(_seekedSpinnerVerify, 120);
+                };
+                setTimeout(_seekedSpinnerVerify, 120);
+              }
+              // LONG-VIDEO GUARD: on 3-4 hour HLS streams audio segments fetch
+              // on a separate schedule from video. If audio has NO buffered
+              // data at the seek position right now, starting video here means
+              // video plays silently while audio fetches in the background —
+              // the exact bug the user reported. Hand the resume off to
+              // startSeekBufferWait which will wait up to 12s for audio,
+              // pause video during the wait, and force-fetch via load() if
+              // the audio fetcher stalls.
+              const _seekedSeekVt = Number(video.currentTime()) || 0;
+              const _seekedAudioReady =
+                !coupledMode || !audio ||
+                (Number(audio.readyState || 0) >= HAVE_CURRENT_DATA &&
+                 isTrackBufferedAt(audio, _seekedSeekVt, 0.05));
+              const _seekedIsLong = (typeof isLongVideo === "function") && isLongVideo();
+              if (_seekedIsLong && coupledMode && audio && !_seekedAudioReady) {
+                // Re-enter buffer-wait mode. seekBuffering=true makes the audio
+                // gate keep video paused via the spinner+wait machinery.
+                state.seekBuffering = true;
+                state.strictBufferHold = true;
+                state.bufferHoldIntendedPlaying = true;
+                state.seekCompleted = false;
+                if (!state.bufferHoldSince) state.bufferHoldSince = now();
+                setSeekBufferingUIVisible(true);
+                const _seekedVN = getVideoNode();
+                if (_seekedVN && !_seekedVN.paused) {
+                  try {
+                    state.isProgrammaticVideoPause = true;
+                    _seekedVN.pause();
+                    setTimeout(() => { state.isProgrammaticVideoPause = false; }, 200);
+                  } catch {}
+                }
+                if (videoEl && !videoEl.paused) { try { videoEl.pause(); } catch {} }
+                // Hand off to the buffer wait path — it will resume both
+                // tracks once audio actually has data.
+                if (!startSeekBufferWait(true)) {
+                  // Surprise: buffer wait returned false (already buffered).
+                  // Clear the hold and continue the normal kick path.
+                  state.seekBuffering = false;
+                  clearBufferHold();
+                  state.seekCompleted = true;
+                }
+              }
               // STRICT simultaneous start: fire video+audio play() in the
               // SAME event-loop tick via the unified API. The seeked handler
               // is exactly the case this API was designed for — previously
