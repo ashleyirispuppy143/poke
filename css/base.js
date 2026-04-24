@@ -25,7 +25,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 //////////////// THE PLAYER, START ////////////////////////
- try {
+try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -11512,22 +11512,357 @@ const HAVE_ENOUGH_DATA = 4;
     return false;
   }
 
-  // Helper: add / remove the vjs-waiting class on the player container so the
-  // built-in video.js loading spinner shows during audio-only buffering
-  // (default video.js only shows it when VIDEO stalls, not audio).
+  // ═══════════════════════════════════════════════════════════════════════
+  // BufferGuard family — YouTube-style "pause both tracks until real buffer"
+  // ═══════════════════════════════════════════════════════════════════════
+  // Two user-reported bugs this family fixes:
+  //   1. "video keeps playing even when the buffer indicator is up"
+  //      — spinner-visible must imply BOTH tracks paused, period.
+  //   2. "it starts the video while audio is still buffering, then pauses
+  //      a few seconds later when audio runs out"
+  //      — the previous code resumed when audio had 0.5s buffered ahead,
+  //      which on a long video runs out in 1-2s of playback. YouTube waits
+  //      for MEANINGFUL buffer ahead (several seconds) before resuming.
+  //
+  // Public surface:
+  //   BUFFER_AHEAD_REQUIRED_SEC      — YouTube-style minimum (3s ahead)
+  //   BUFFER_AHEAD_RESUME_SEC        — slightly higher to add hysteresis
+  //   bufferAheadAt(el, pos)         — seconds of contiguous buffer at pos
+  //   hasYouTubeStyleBufferAhead(t)  — both tracks have ≥ required ahead
+  //   setSeekBufferingUIVisible(on)  — show/hide spinner AND pause/keep
+  //                                    paused both tracks (atomic)
+  //   armBufferGuardMonitor()        — live ticker: while playing, if any
+  //                                    track's buffer-ahead falls below
+  //                                    threshold, pause both, show spinner,
+  //                                    resume only when both refill.
+  //   clearBufferGuardMonitor()      — stop the ticker (e.g. on dispose)
+  const BUFFER_AHEAD_REQUIRED_SEC = 3.0;   // hard minimum to start playback
+  const BUFFER_AHEAD_RESUME_SEC   = 4.5;   // hysteresis: resume needs more
+  const BUFFER_AHEAD_PAUSE_SEC    = 1.0;   // re-pause if either drops below
+  const BUFFER_GUARD_TICK_MS      = 250;
+
+  function bufferAheadAt(el, pos) {
+    if (!el) return Infinity; // non-coupled / null elements never gate
+    try {
+      const buf = el.buffered;
+      let bestEnd = -Infinity;
+      for (let i = 0; i < buf.length; i++) {
+        if (buf.start(i) <= pos + 0.05 && buf.end(i) > pos) {
+          if (buf.end(i) > bestEnd) bestEnd = buf.end(i);
+        }
+      }
+      if (!isFinite(bestEnd) || bestEnd === -Infinity) return 0;
+      return Math.max(0, bestEnd - pos);
+    } catch {
+      return 0;
+    }
+  }
+
+  // Returns true iff BOTH video and audio have at least the required amount
+  // of contiguous buffer ahead of the playback position. This is the gate
+  // that MUST pass before video is allowed to play during a buffer wait.
+  function hasYouTubeStyleBufferAhead(opts = {}) {
+    const minAhead = Number(opts.minAhead) || BUFFER_AHEAD_REQUIRED_SEC;
+    let pos;
+    try { pos = Number(video.currentTime()) || 0; } catch { pos = 0; }
+    const vN = getVideoNode();
+    const vAhead = bufferAheadAt(vN, pos);
+    if (vAhead < minAhead) {
+      // Allow short remaining streams: if video ends within minAhead, that's
+      // still "enough buffer" because there is no more content.
+      const vDur = (vN && isFinite(vN.duration)) ? Number(vN.duration) : 0;
+      if (!(vDur > 0 && (vDur - pos) < minAhead && vAhead >= Math.max(0, vDur - pos - 0.2))) {
+        return false;
+      }
+    }
+    if (coupledMode && audio) {
+      const aAhead = bufferAheadAt(audio, pos);
+      if (aAhead < minAhead) {
+        const aDur = isFinite(audio.duration) ? Number(audio.duration) : 0;
+        if (!(aDur > 0 && (aDur - pos) < minAhead && aAhead >= Math.max(0, aDur - pos - 0.2))) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  // Atomic show/hide: when the spinner is visible we ALSO pause both
+  // tracks. This is the answer to bug #1 — it can no longer be the case
+  // that "the spinner is up but video is playing." The two states are
+  // welded together. Pause is marked programmatic so our own pause-watcher
+  // doesn't fight it, and resume() paths inside the seek/buffer code are
+  // the ones that flip the spinner off and start playback again.
+  let _bufferGuardSpinnerOn = false;
   function setSeekBufferingUIVisible(on) {
     try {
       const rootEl = video?.el?.();
       if (!rootEl) return;
       if (on) {
+        _bufferGuardSpinnerOn = true;
         if (!rootEl.classList.contains("vjs-waiting")) rootEl.classList.add("vjs-waiting");
         rootEl.classList.add("vjs-seeking");
+        // PAUSE both tracks while the spinner is up. This is the user's
+        // "fix bug #1" requirement: spinner-visible iff playback paused.
+        try {
+          const _vN = getVideoNode();
+          if (_vN && !_vN.paused) {
+            state.isProgrammaticVideoPause = true;
+            try { _vN.pause(); } catch {}
+            setTimeout(() => { state.isProgrammaticVideoPause = false; }, 200);
+          }
+          if (videoEl && !videoEl.paused) { try { videoEl.pause(); } catch {} }
+        } catch {}
+        // Pause audio too — otherwise audio plays without video, also wrong.
+        try {
+          if (coupledMode && audio && !audio.paused) {
+            squelchAudioEvents(180);
+            try { audio.pause(); } catch {}
+          }
+        } catch {}
       } else {
+        _bufferGuardSpinnerOn = false;
         rootEl.classList.remove("vjs-waiting");
         rootEl.classList.remove("vjs-seeking");
       }
     } catch {}
   }
+  function bufferGuardSpinnerActive() { return _bufferGuardSpinnerOn; }
+
+  // Stuck-spinner sweep — answers the user's report:
+  // "buffer indicator shows but both video and audio play fine."
+  // video.js itself toggles vjs-waiting on its native 'waiting' event and
+  // vjs-seeking on its 'seeking' event. Sometimes the matching 'playing' /
+  // 'seeked' event is suppressed (squelchAudioEvents, programmatic pauses,
+  // sync logic) and the class is never removed — the spinner sticks on top
+  // of perfectly normal playback. This sweep is the truth-restoring check:
+  // if our logical state says the spinner SHOULDN'T be showing, AND playback
+  // is actually advancing, AND we are not in the middle of a seek, then the
+  // class on the DOM is a lie and we strip it.
+  let _spinnerSweepLastV = 0;
+  let _spinnerSweepLastA = 0;
+  let _spinnerSweepLastTs = 0;
+  function _sweepStuckSpinner() {
+    try {
+      if (_bufferGuardSpinnerOn) return;            // we own it, don't fight
+      if (state.seeking || state.seekBuffering) return; // seek owns spinner
+      const rootEl = video?.el?.();
+      if (!rootEl) return;
+      const hasWaiting = rootEl.classList.contains("vjs-waiting");
+      const hasSeeking = rootEl.classList.contains("vjs-seeking");
+      if (!hasWaiting && !hasSeeking) return;        // nothing to clean up
+
+      const vN = getVideoNode();
+      if (!vN) return;
+      const vPaused = !!vN.paused;
+      const aPaused = (coupledMode && audio) ? !!audio.paused : false;
+
+      // If either track is genuinely paused, the spinner might be legit
+      // (e.g. a real waiting state). Don't strip in that case.
+      if (vPaused) return;
+      if (coupledMode && audio && aPaused) return;
+
+      // Confirm advance since last sweep — paused-but-not-paused decoders
+      // shouldn't get the green light.
+      const tNow = now();
+      const vT = Number(vN.currentTime) || 0;
+      const aT = (coupledMode && audio) ? (Number(audio.currentTime) || 0) : vT;
+      if (_spinnerSweepLastTs > 0 && (tNow - _spinnerSweepLastTs) < 800) {
+        const vAdvanced = (vT - _spinnerSweepLastV) > 0.05;
+        const aAdvanced = !coupledMode || !audio || ((aT - _spinnerSweepLastA) > 0.03);
+        if (!vAdvanced || !aAdvanced) {
+          // Don't strip yet — wait for real advance proof. Update sample.
+          _spinnerSweepLastV = vT;
+          _spinnerSweepLastA = aT;
+          _spinnerSweepLastTs = tNow;
+          return;
+        }
+      }
+      _spinnerSweepLastV = vT;
+      _spinnerSweepLastA = aT;
+      _spinnerSweepLastTs = tNow;
+
+      // Truth: playback is fine. Spinner is a lie. Strip both classes.
+      if (hasWaiting) rootEl.classList.remove("vjs-waiting");
+      if (hasSeeking) rootEl.classList.remove("vjs-seeking");
+    } catch {}
+  }
+
+  // Spinner enforcement sweep — the symmetric counterpart to the stuck-
+  // spinner sweep. The user's bug here is the OPPOSITE direction:
+  //   "video continues playing fine if there's buffer indicator since
+  //    audio is buffering."
+  // Cause: video.js raises vjs-waiting on its own 'waiting' event whenever
+  // the *audio* element fires waiting (or some non-BufferGuard path puts
+  // the class up). Video, however, has its own buffer ahead and never
+  // entered waiting state, so it keeps playing. Result: spinner visible,
+  // video advancing — wrong, and exactly what the user reported.
+  //
+  // The atomic invariant is "spinner-visible iff playback paused." This
+  // sweep ENFORCES that direction: if the spinner DOM is up AND audio is
+  // buffering (paused or not advancing) AND video is still playing, pause
+  // the video. We only commit the pause after a short sample window so a
+  // single transient frame doesn't trigger us.
+  let _spinnerEnforceLastV = 0;
+  let _spinnerEnforceLastA = 0;
+  let _spinnerEnforceLastTs = 0;
+  function _enforceSpinnerPausesVideo() {
+    try {
+      if (state.seeking || state.seekBuffering) return; // seek owns spinner
+      if (state.restarting || state.endedNaturally) return;
+      const rootEl = video?.el?.();
+      if (!rootEl) return;
+      const hasWaiting = rootEl.classList.contains("vjs-waiting");
+      const hasSeeking = rootEl.classList.contains("vjs-seeking");
+      if (!hasWaiting && !hasSeeking) return;          // no spinner up
+
+      const vN = getVideoNode();
+      if (!vN) return;
+      if (vN.paused) return;                             // video already obeys
+
+      // If we're not in coupled mode, audio doesn't matter; just trust the
+      // stuck-spinner sweep to clean up if the spinner is bogus.
+      if (!coupledMode || !audio) return;
+
+      const tNow = now();
+      const vT = Number(vN.currentTime) || 0;
+      const aT = Number(audio.currentTime) || 0;
+      const aPaused = !!audio.paused;
+
+      // Compute audio buffer-ahead at current position. If audio has
+      // plenty of buffer AND is unpaused AND advancing, the spinner is
+      // bogus — leave it alone (the stuck-spinner sweep will strip it).
+      let aAhead = 0;
+      try { aAhead = bufferAheadAt(audio, aT); } catch { aAhead = 0; }
+      let aAdvancing = false;
+      if (_spinnerEnforceLastTs > 0 && (tNow - _spinnerEnforceLastTs) < 800) {
+        aAdvancing = (aT - _spinnerEnforceLastA) > 0.03;
+      }
+      _spinnerEnforceLastV = vT;
+      _spinnerEnforceLastA = aT;
+      _spinnerEnforceLastTs = tNow;
+
+      // Audio is "buffering / not ready" if it is paused, OR if it is
+      // unpaused but stuck (no advance in the last sample window) OR
+      // has under PAUSE-threshold of buffer ahead. Any of those means
+      // the spinner is legit and video must obey it.
+      const audioIsBuffering = aPaused
+        || (!aAdvancing && _spinnerEnforceLastTs > 0)
+        || (aAhead < BUFFER_AHEAD_PAUSE_SEC);
+
+      if (!audioIsBuffering) return;                     // spinner bogus
+
+      // Audio is genuinely buffering and the spinner reflects that.
+      // Pause video to honor the atomic invariant. Mark programmatic so
+      // our own pause-watcher doesn't fight it. Also engage logical
+      // BufferGuard state so the resume path knows to await both tracks.
+      if (!_bufferGuardSpinnerOn) {
+        // Take ownership of the spinner via the canonical entry point so
+        // resume bookkeeping is consistent. setSeekBufferingUIVisible
+        // also pauses audio (already paused or about to be, fine) and
+        // marks the video pause programmatic.
+        setSeekBufferingUIVisible(true);
+      } else {
+        // We already own the spinner but somehow video resumed. Re-pause.
+        try {
+          state.isProgrammaticVideoPause = true;
+          vN.pause();
+          setTimeout(() => { state.isProgrammaticVideoPause = false; }, 200);
+        } catch {}
+      }
+    } catch {}
+  }
+
+  // Live buffer monitor — answers bug #2's tail end. Even after a seek
+  // resume succeeds, if buffer runs out during playback we must pause and
+  // re-show the spinner instantly (YouTube does this within 1 frame).
+  // The monitor ticks at 250ms while intendedPlaying is true, checks
+  // both tracks' buffer-ahead, and:
+  //   • if EITHER track has < BUFFER_AHEAD_PAUSE_SEC ahead → spinner ON.
+  //   • once spinner is ON, only releases when BOTH have
+  //     ≥ BUFFER_AHEAD_RESUME_SEC ahead (hysteresis, prevents flicker).
+  let _bufferGuardMonitorTimer = null;
+  let _bufferGuardMonitorReleaseAt = 0;
+  function clearBufferGuardMonitor() {
+    if (_bufferGuardMonitorTimer) {
+      clearTimeout(_bufferGuardMonitorTimer);
+      _bufferGuardMonitorTimer = null;
+    }
+  }
+  function _bufferGuardTick() {
+    _bufferGuardMonitorTimer = null;
+    // Always run BOTH spinner-truth sweeps before any early-exits.
+    // _sweepStuckSpinner: spinner DOM up but playback fine → strip the class
+    // _enforceSpinnerPausesVideo: spinner DOM up and audio buffering, but
+    //   video is still playing → pause the video. The pair welds the atomic
+    //   invariant "spinner-visible iff playback paused" in both directions
+    //   regardless of which code path raised the class.
+    _sweepStuckSpinner();
+    _enforceSpinnerPausesVideo();
+    if (state.restarting || state.endedNaturally) {
+      // Keep ticker alive so the sweep keeps running.
+      _bufferGuardMonitorTimer = setTimeout(_bufferGuardTick, BUFFER_GUARD_TICK_MS);
+      return;
+    }
+    if (!state.intendedPlaying) {
+      _bufferGuardMonitorTimer = setTimeout(_bufferGuardTick, BUFFER_GUARD_TICK_MS);
+      return;
+    }
+    if (state.seeking || state.seekBuffering) {
+      // Seek machinery owns the spinner during seeks; we just reschedule.
+      _bufferGuardMonitorTimer = setTimeout(_bufferGuardTick, BUFFER_GUARD_TICK_MS);
+      return;
+    }
+    if (userPauseLockActive() || mediaSessionForcedPauseActive()) return;
+    let pos;
+    try { pos = Number(video.currentTime()) || 0; } catch { pos = 0; }
+    const vN = getVideoNode();
+    const vAhead = bufferAheadAt(vN, pos);
+    const aAhead = (coupledMode && audio) ? bufferAheadAt(audio, pos) : Infinity;
+    const minAhead = Math.min(vAhead, aAhead);
+
+    if (_bufferGuardSpinnerOn) {
+      // Already showing — only release when we have hysteresis amount.
+      if (minAhead >= BUFFER_AHEAD_RESUME_SEC) {
+        // Need a brief settle before unpausing, in case audio just landed
+        // a single segment that's about to flush.
+        if (!_bufferGuardMonitorReleaseAt) {
+          _bufferGuardMonitorReleaseAt = now() + 120;
+        } else if (now() >= _bufferGuardMonitorReleaseAt) {
+          _bufferGuardMonitorReleaseAt = 0;
+          setSeekBufferingUIVisible(false);
+          // Restart playback. Use the simultaneous-start API so both
+          // tracks come up together.
+          try {
+            if (typeof MakeAudioVideoSimultaneousStartAPI === "function") {
+              MakeAudioVideoSimultaneousStartAPI({ throughSeek: false, force: true, squelchMs: 80 });
+            } else {
+              const _vN2 = getVideoNode();
+              if (_vN2 && _vN2.paused) execProgrammaticVideoPlay({ force: true, minGapMs: 0 });
+              if (audio && audio.paused) execProgrammaticAudioPlay({ squelchMs: 80, force: true, minGapMs: 0 }).catch(() => {});
+            }
+          } catch {}
+        }
+      } else {
+        _bufferGuardMonitorReleaseAt = 0;
+      }
+    } else {
+      // Not showing — engage if either track is starving.
+      if (minAhead < BUFFER_AHEAD_PAUSE_SEC && state.firstPlayCommitted) {
+        setSeekBufferingUIVisible(true);
+        _bufferGuardMonitorReleaseAt = 0;
+      }
+    }
+    _bufferGuardMonitorTimer = setTimeout(_bufferGuardTick, BUFFER_GUARD_TICK_MS);
+  }
+  function armBufferGuardMonitor() {
+    if (_bufferGuardMonitorTimer) return;
+    _bufferGuardMonitorTimer = setTimeout(_bufferGuardTick, BUFFER_GUARD_TICK_MS);
+  }
+  // Start the guard ticker right away. The tick itself early-exits when
+  // playback isn't intended, so it costs nothing while the player is idle —
+  // but it ensures the stuck-spinner sweep runs from the very first frame.
+  try { armBufferGuardMonitor(); } catch {}
 
   function startSeekBufferWait(forCoupled) {
     const wantedPlaying = shouldResumeAfterSeek();
