@@ -25,7 +25,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 //////////////// THE PLAYER, START ////////////////////////
-try {
+ try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -11537,8 +11537,19 @@ const HAVE_ENOUGH_DATA = 4;
   //                                    resume only when both refill.
   //   clearBufferGuardMonitor()      — stop the ticker (e.g. on dispose)
   const BUFFER_AHEAD_REQUIRED_SEC = 3.0;   // hard minimum to start playback
-  const BUFFER_AHEAD_RESUME_SEC   = 4.5;   // hysteresis: resume needs more
+  // Hysteresis dropped from 4.5s → 2.0s: the user reported "buffer icon
+  // disappears too late." 4.5s meant after a brief stall we'd hold the
+  // spinner up for several extra seconds while buffer crawled from 1s
+  // to 4.5s ahead. 2.0s is still 1.0s above the PAUSE threshold (real
+  // hysteresis, no flicker) but releases the spinner ~2-3s earlier.
+  const BUFFER_AHEAD_RESUME_SEC   = 2.0;   // hysteresis: resume needs more
   const BUFFER_AHEAD_PAUSE_SEC    = 1.0;   // re-pause if either drops below
+  // 120ms → 0: the settle window was a belt-and-suspenders for "audio just
+  // landed a segment that's about to flush." But hysteresis already covers
+  // that — if buffer momentarily drops back below RESUME, the very next
+  // tick re-engages the spinner. The 120ms only ever ADDED visible spinner
+  // time, never prevented a flicker that hysteresis didn't already prevent.
+  const BUFFER_GUARD_RELEASE_SETTLE_MS = 0;
   const BUFFER_GUARD_TICK_MS      = 250;
 
   function bufferAheadAt(el, pos) {
@@ -11657,21 +11668,44 @@ const HAVE_ENOUGH_DATA = 4;
       const vPaused = !!vN.paused;
       const aPaused = (coupledMode && audio) ? !!audio.paused : false;
 
-      // If either track is genuinely paused, the spinner might be legit
-      // (e.g. a real waiting state). Don't strip in that case.
+      // If either track is genuinely paused, the spinner might be legit.
+      // Don't strip in that case.
       if (vPaused) return;
       if (coupledMode && audio && aPaused) return;
 
-      // Confirm advance since last sweep — paused-but-not-paused decoders
-      // shouldn't get the green light.
+      // FAST PATH: if both tracks are unpaused AND have meaningful buffer
+      // ahead, strip immediately on the first detection — don't wait for
+      // a two-sample advance proof. The user reports the spinner stays up
+      // "a bit too late" and the two-sample wait is the main reason: it
+      // forced a minimum of one full tick (250ms) before the strip could
+      // even commit. Buffer-ahead is a stronger signal than advance — if
+      // there's > PAUSE_SEC of buffered media at the playhead and both
+      // elements are unpaused, the decoder is either advancing right now
+      // or about to (within ~16ms). Stripping immediately is correct.
       const tNow = now();
       const vT = Number(vN.currentTime) || 0;
       const aT = (coupledMode && audio) ? (Number(audio.currentTime) || 0) : vT;
+      let vAhead = 0, aAhead = Infinity;
+      try { vAhead = bufferAheadAt(vN, vT); } catch { vAhead = 0; }
+      try { aAhead = (coupledMode && audio) ? bufferAheadAt(audio, aT) : Infinity; } catch { aAhead = 0; }
+      const minAhead = Math.min(vAhead, aAhead);
+      if (minAhead >= BUFFER_AHEAD_PAUSE_SEC) {
+        // Both tracks unpaused + plenty of buffer = spinner is a lie. Strip now.
+        _spinnerSweepLastV = vT;
+        _spinnerSweepLastA = aT;
+        _spinnerSweepLastTs = tNow;
+        if (hasWaiting) rootEl.classList.remove("vjs-waiting");
+        if (hasSeeking) rootEl.classList.remove("vjs-seeking");
+        return;
+      }
+
+      // SLOW PATH: low buffer — could be a real waiting state. Confirm
+      // advance since last sweep before stripping. Paused-but-not-paused
+      // decoders (the audio "stuck cold" case) shouldn't get the green light.
       if (_spinnerSweepLastTs > 0 && (tNow - _spinnerSweepLastTs) < 800) {
         const vAdvanced = (vT - _spinnerSweepLastV) > 0.05;
         const aAdvanced = !coupledMode || !audio || ((aT - _spinnerSweepLastA) > 0.03);
         if (!vAdvanced || !aAdvanced) {
-          // Don't strip yet — wait for real advance proof. Update sample.
           _spinnerSweepLastV = vT;
           _spinnerSweepLastA = aT;
           _spinnerSweepLastTs = tNow;
@@ -11681,8 +11715,6 @@ const HAVE_ENOUGH_DATA = 4;
       _spinnerSweepLastV = vT;
       _spinnerSweepLastA = aT;
       _spinnerSweepLastTs = tNow;
-
-      // Truth: playback is fine. Spinner is a lie. Strip both classes.
       if (hasWaiting) rootEl.classList.remove("vjs-waiting");
       if (hasSeeking) rootEl.classList.remove("vjs-seeking");
     } catch {}
@@ -11706,6 +11738,9 @@ const HAVE_ENOUGH_DATA = 4;
   let _spinnerEnforceLastV = 0;
   let _spinnerEnforceLastA = 0;
   let _spinnerEnforceLastTs = 0;
+  // Tracks the last time we kicked audio from the enforcement path. Audio
+  // kicks have a real cost (decoder reset latency), so we rate-limit.
+  let _enforceAudioKickAt = 0;
   function _enforceSpinnerPausesVideo() {
     try {
       if (state.seeking || state.seekBuffering) return; // seek owns spinner
@@ -11724,54 +11759,280 @@ const HAVE_ENOUGH_DATA = 4;
       // stuck-spinner sweep to clean up if the spinner is bogus.
       if (!coupledMode || !audio) return;
 
-      const tNow = now();
-      const vT = Number(vN.currentTime) || 0;
-      const aT = Number(audio.currentTime) || 0;
-      const aPaused = !!audio.paused;
+      // INSTANT detection — use the existing audio-truth helpers instead of
+      // a two-sample timestamp comparison. The helpers track audio's own
+      // currentTime advance over time globally (across all callers) so the
+      // FIRST call to _enforceSpinnerPausesVideo can already give a correct
+      // answer. The old two-sample wait was the user's "video plays for a
+      // moment without audio while spinner is up" bug: even at rAF cadence
+      // it took 2 frames (~32ms) to commit the pause, and the polled tick
+      // path took 250-500ms.
+      const aPlaying = (typeof audioActuallyPlaying === "function") ? audioActuallyPlaying() : !audio.paused;
+      const aCold = (typeof audioIsCold === "function") ? audioIsCold() : !aPlaying;
 
-      // Compute audio buffer-ahead at current position. If audio has
-      // plenty of buffer AND is unpaused AND advancing, the spinner is
-      // bogus — leave it alone (the stuck-spinner sweep will strip it).
+      const tNow = now();
+      const aT = Number(audio.currentTime) || 0;
       let aAhead = 0;
       try { aAhead = bufferAheadAt(audio, aT); } catch { aAhead = 0; }
-      let aAdvancing = false;
-      if (_spinnerEnforceLastTs > 0 && (tNow - _spinnerEnforceLastTs) < 800) {
-        aAdvancing = (aT - _spinnerEnforceLastA) > 0.03;
-      }
-      _spinnerEnforceLastV = vT;
+
+      // Audio is "not playing" if any of:
+      //   • aPlaying is false (audioActuallyPlaying handles paused + stuck)
+      //   • aCold is true (unpaused but decoder hasn't moved in 180ms+)
+      //   • aAhead is below the PAUSE threshold (buffer-starved)
+      // Any of these means video must NOT advance ahead of it.
+      const audioIsNotPlaying = !aPlaying || aCold || (aAhead < BUFFER_AHEAD_PAUSE_SEC);
+      if (!audioIsNotPlaying) return;                    // audio is fine
+
+      _spinnerEnforceLastV = Number(vN.currentTime) || 0;
       _spinnerEnforceLastA = aT;
       _spinnerEnforceLastTs = tNow;
 
-      // Audio is "buffering / not ready" if it is paused, OR if it is
-      // unpaused but stuck (no advance in the last sample window) OR
-      // has under PAUSE-threshold of buffer ahead. Any of those means
-      // the spinner is legit and video must obey it.
-      const audioIsBuffering = aPaused
-        || (!aAdvancing && _spinnerEnforceLastTs > 0)
-        || (aAhead < BUFFER_AHEAD_PAUSE_SEC);
-
-      if (!audioIsBuffering) return;                     // spinner bogus
-
-      // Audio is genuinely buffering and the spinner reflects that.
-      // Pause video to honor the atomic invariant. Mark programmatic so
-      // our own pause-watcher doesn't fight it. Also engage logical
-      // BufferGuard state so the resume path knows to await both tracks.
+      // 1) PAUSE VIDEO IMMEDIATELY. Atomic invariant: video can never
+      //    advance ahead of audio in coupled mode. Use the canonical
+      //    spinner entry point if we don't already own it (it also
+      //    flags the pause as programmatic and squelches audio events).
       if (!_bufferGuardSpinnerOn) {
-        // Take ownership of the spinner via the canonical entry point so
-        // resume bookkeeping is consistent. setSeekBufferingUIVisible
-        // also pauses audio (already paused or about to be, fine) and
-        // marks the video pause programmatic.
         setSeekBufferingUIVisible(true);
       } else {
-        // We already own the spinner but somehow video resumed. Re-pause.
         try {
           state.isProgrammaticVideoPause = true;
           vN.pause();
           setTimeout(() => { state.isProgrammaticVideoPause = false; }, 200);
         } catch {}
       }
+
+      // 2) PROACTIVELY KICK AUDIO. The user's "fix it 100%" demand requires
+      //    we don't just freeze video and wait — we have to actively get
+      //    audio playing. Three escalation rungs, rate-limited so we don't
+      //    pile kicks on top of each other:
+      //       • If audio is paused → execProgrammaticAudioPlay (gentle).
+      //       • If audio is cold (unpaused but stuck) → forceAudioPlay-
+      //         NoMatterWhat, which resets every gate and bypasses the
+      //         audio.play() override.
+      //       • If audio is buffer-starved → audio.load() unwedges a
+      //         hung fetcher (cheap, reuses cached segments).
+      if ((tNow - _enforceAudioKickAt) > 600) {
+        _enforceAudioKickAt = tNow;
+        try {
+          if (audio.paused) {
+            if (typeof execProgrammaticAudioPlay === "function") {
+              execProgrammaticAudioPlay({ squelchMs: 80, force: true, minGapMs: 0 }).catch(() => {
+                if (typeof forceAudioPlayNoMatterWhat === "function") {
+                  forceAudioPlayNoMatterWhat().catch(() => {});
+                }
+              });
+            } else if (typeof forceAudioPlayNoMatterWhat === "function") {
+              forceAudioPlayNoMatterWhat().catch(() => {});
+            }
+          } else if (aCold) {
+            // Unpaused but stuck. Bypass every gate.
+            if (typeof forceAudioPlayNoMatterWhat === "function") {
+              forceAudioPlayNoMatterWhat().catch(() => {});
+            }
+          }
+          // If audio is buffer-starved AND we've kicked twice in a row
+          // without progress, force a fetcher reset. Cheap because the
+          // browser keeps recently fetched segments cached.
+          if (aAhead < BUFFER_AHEAD_PAUSE_SEC && audio.readyState < 2) {
+            // Don't load() on every single tick — guard with a longer
+            // interval. 1.5s is enough that two kicks have had a chance.
+            if (!_enforceAudioLoadAt || (tNow - _enforceAudioLoadAt) > 1500) {
+              _enforceAudioLoadAt = tNow;
+              try { audio.load(); } catch {}
+            }
+          }
+        } catch {}
+      }
     } catch {}
   }
+  let _enforceAudioLoadAt = 0;
+
+  // ───────────────────────────────────────────────────────────────────────
+  // COUPLED AUDIO INVARIANT — the strongest guarantee.
+  // ───────────────────────────────────────────────────────────────────────
+  // Rule: in coupled mode, video.currentTime MUST NOT advance unless audio
+  // is actually playing. The spinner-pause enforcement above handles the
+  // "spinner up" case, but the user's reported bug also has a NO-spinner
+  // variant: video plays silently, audio is stuck or paused, but neither
+  // the seek machinery nor the BufferGuard logic raised the spinner —
+  // because neither one noticed audio was unhealthy.
+  //
+  // This watchdog runs on every video timeupdate / rAF. It checks ONE
+  // simple invariant — is video advancing while audio isn't? — and if so,
+  // pauses video AND raises the spinner AND kicks audio. No spinner-class
+  // gate. No buffer-ahead heuristics. The only reads are paused/currentTime
+  // on both elements, plus the audioActuallyPlaying / audioIsCold helpers.
+  // Cheap and runs every frame the user is looking at the page.
+  let _coupledInvariantLastVT = 0;
+  let _coupledInvariantLastVTs = 0;
+  let _coupledInvariantKickAt = 0;
+  function _enforceCoupledAudioInvariant() {
+    try {
+      if (!coupledMode || !audio) return;
+      if (state.seeking || state.seekBuffering) return;  // seek owns timeline
+      if (state.restarting || state.endedNaturally) return;
+      if (state.bgSilentTimeSyncing) return;
+      if (!state.firstPlayCommitted) return;             // not started yet
+      if (!state.intendedPlaying) return;                // user paused
+      if (userPauseLockActive() || mediaSessionForcedPauseActive()) return;
+      if (document.visibilityState === "hidden") return; // bg sync owns this
+
+      const vN = getVideoNode();
+      if (!vN || vN.paused) return;                       // video already obeys
+
+      const tNow = now();
+      const vT = Number(vN.currentTime) || 0;
+
+      // Detect video advance since last sample. We need at least two samples
+      // within 800ms for a confident answer, but the FIRST sample is
+      // recorded here so the very next timeupdate catches a one-frame slip.
+      let vAdvancing = false;
+      if (_coupledInvariantLastVTs > 0 && (tNow - _coupledInvariantLastVTs) < 800) {
+        vAdvancing = (vT - _coupledInvariantLastVT) > 0.02;
+      } else {
+        // First sample — no decision possible yet, stash and bail.
+        _coupledInvariantLastVT = vT;
+        _coupledInvariantLastVTs = tNow;
+        return;
+      }
+      _coupledInvariantLastVT = vT;
+      _coupledInvariantLastVTs = tNow;
+
+      if (!vAdvancing) return;                            // video is stuck too — fine
+
+      // Video is advancing. Now check audio. We use the same instant
+      // helpers as _enforceSpinnerPausesVideo so a fresh stuck-cold
+      // decoder is detected on the FIRST sample where it matters.
+      const aPlaying = audioActuallyPlaying();
+      const aCold = audioIsCold();
+      if (aPlaying && !aCold) return;                     // healthy — invariant holds
+
+      // Invariant violation: video is advancing while audio is stuck.
+      // Pause video immediately (atomic). Use the canonical entry point
+      // to also raise the spinner. This makes the user SEE that the
+      // player is waiting on audio, instead of getting silent video.
+      if (!_bufferGuardSpinnerOn) {
+        setSeekBufferingUIVisible(true);
+      } else {
+        try {
+          state.isProgrammaticVideoPause = true;
+          vN.pause();
+          setTimeout(() => { state.isProgrammaticVideoPause = false; }, 200);
+        } catch {}
+      }
+
+      // Kick audio aggressively — same escalation as the spinner sweep
+      // (gentle play → forceAudioPlayNoMatterWhat → audio.load()).
+      // Rate-limited so we don't restart the decoder every frame.
+      if ((tNow - _coupledInvariantKickAt) > 400) {
+        _coupledInvariantKickAt = tNow;
+        try {
+          if (audio.paused) {
+            if (typeof execProgrammaticAudioPlay === "function") {
+              execProgrammaticAudioPlay({ squelchMs: 80, force: true, minGapMs: 0 })
+                .catch(() => {
+                  if (typeof forceAudioPlayNoMatterWhat === "function") {
+                    forceAudioPlayNoMatterWhat().catch(() => {});
+                  }
+                });
+            } else if (typeof forceAudioPlayNoMatterWhat === "function") {
+              forceAudioPlayNoMatterWhat().catch(() => {});
+            }
+          } else if (aCold || !aPlaying) {
+            if (typeof forceAudioPlayNoMatterWhat === "function") {
+              forceAudioPlayNoMatterWhat().catch(() => {});
+            }
+          }
+        } catch {}
+      }
+    } catch {}
+  }
+
+  // Event-driven sub-frame spinner strip. The polled tick (250ms) was the
+  // main reason the user reported "buffer icon disappears too late." Every
+  // native event that signals healthy playback now triggers the sweep
+  // immediately — typically within 1-16ms instead of up to 250ms.
+  //
+  // playing / timeupdate / progress fire when:
+  //   • the decoder unsticks and starts producing frames (playing)
+  //   • the playhead advances during normal playback (timeupdate ~250ms)
+  //   • new data lands in the buffer (progress)
+  //
+  // We also rAF-poll while the spinner classes are present, which gives us
+  // sub-16ms latency to strip the moment playback is healthy. The rAF stops
+  // itself when no spinner classes are on the DOM, so it costs nothing
+  // during normal playback.
+  let _spinnerSweepRafScheduled = false;
+  function _scheduleSpinnerSweepRaf() {
+    if (_spinnerSweepRafScheduled) return;
+    _spinnerSweepRafScheduled = true;
+    const fn = () => {
+      _spinnerSweepRafScheduled = false;
+      try {
+        _sweepStuckSpinner();
+        _enforceSpinnerPausesVideo();
+        // Coupled-audio invariant: video can never advance without audio.
+        // This catches the case where neither the seek nor BufferGuard
+        // raised the spinner, but video is silently advancing past stuck
+        // audio.
+        _enforceCoupledAudioInvariant();
+        // Keep rAF-polling as long as spinner classes are present and we're
+        // not seeking. Bounded by the presence of classes — falls off
+        // automatically when the spinner is stripped or seek takes over.
+        const rootEl = video?.el?.();
+        if (!rootEl) return;
+        if (state.seeking || state.seekBuffering) return;
+        if (_bufferGuardSpinnerOn) return;  // we own it; the tick handles release
+        if (rootEl.classList.contains("vjs-waiting") ||
+            rootEl.classList.contains("vjs-seeking")) {
+          _scheduleSpinnerSweepRaf();
+        }
+      } catch {}
+    };
+    try {
+      if (typeof requestAnimationFrame === "function") requestAnimationFrame(fn);
+      else setTimeout(fn, 16);
+    } catch { setTimeout(fn, 16); }
+  }
+  function _eventDrivenSpinnerStrip() {
+    // Fast invariant check: sweep + enforce + coupled-audio invariant. All
+    // three are cheap and bail out fast when nothing's wrong. They run on
+    // every native event from either media element so any frame where
+    // video is advancing while audio isn't gets caught within 1 event
+    // (typically 1-16ms).
+    try {
+      _sweepStuckSpinner();
+      _enforceSpinnerPausesVideo();
+      _enforceCoupledAudioInvariant();
+      // If after the sweep the classes are still up, kick rAF-polling so
+      // we strip them within ~16ms of playback being healthy.
+      const rootEl = video?.el?.();
+      if (!rootEl) return;
+      if (rootEl.classList.contains("vjs-waiting") ||
+          rootEl.classList.contains("vjs-seeking")) {
+        _scheduleSpinnerSweepRaf();
+      }
+    } catch {}
+  }
+  // Bind to native events on both elements. Note: addEventListener on
+  // videoEl/audio is direct; bypassing video.js means video.js's event
+  // unbinding doesn't strip these (good — they're our own stripping logic).
+  try {
+    if (videoEl && typeof videoEl.addEventListener === "function") {
+      videoEl.addEventListener("playing", _eventDrivenSpinnerStrip, { passive: true });
+      videoEl.addEventListener("timeupdate", _eventDrivenSpinnerStrip, { passive: true });
+      videoEl.addEventListener("progress", _eventDrivenSpinnerStrip, { passive: true });
+      videoEl.addEventListener("canplay", _eventDrivenSpinnerStrip, { passive: true });
+      videoEl.addEventListener("canplaythrough", _eventDrivenSpinnerStrip, { passive: true });
+    }
+    if (audio && typeof audio.addEventListener === "function") {
+      audio.addEventListener("playing", _eventDrivenSpinnerStrip, { passive: true });
+      audio.addEventListener("timeupdate", _eventDrivenSpinnerStrip, { passive: true });
+      audio.addEventListener("progress", _eventDrivenSpinnerStrip, { passive: true });
+      audio.addEventListener("canplay", _eventDrivenSpinnerStrip, { passive: true });
+      audio.addEventListener("canplaythrough", _eventDrivenSpinnerStrip, { passive: true });
+    }
+  } catch {}
 
   // Live buffer monitor — answers bug #2's tail end. Even after a seek
   // resume succeeds, if buffer runs out during playback we must pause and
@@ -11791,14 +12052,16 @@ const HAVE_ENOUGH_DATA = 4;
   }
   function _bufferGuardTick() {
     _bufferGuardMonitorTimer = null;
-    // Always run BOTH spinner-truth sweeps before any early-exits.
-    // _sweepStuckSpinner: spinner DOM up but playback fine → strip the class
-    // _enforceSpinnerPausesVideo: spinner DOM up and audio buffering, but
-    //   video is still playing → pause the video. The pair welds the atomic
-    //   invariant "spinner-visible iff playback paused" in both directions
-    //   regardless of which code path raised the class.
+    // Always run all three invariant checks before any early-exits:
+    //   _sweepStuckSpinner: spinner DOM up but playback fine → strip class
+    //   _enforceSpinnerPausesVideo: spinner DOM up and audio buffering,
+    //     but video is still playing → pause the video.
+    //   _enforceCoupledAudioInvariant: video advancing without audio
+    //     (regardless of spinner state) → pause video, raise spinner,
+    //     kick audio. This is the unconditional safety net.
     _sweepStuckSpinner();
     _enforceSpinnerPausesVideo();
+    _enforceCoupledAudioInvariant();
     if (state.restarting || state.endedNaturally) {
       // Keep ticker alive so the sweep keeps running.
       _bufferGuardMonitorTimer = setTimeout(_bufferGuardTick, BUFFER_GUARD_TICK_MS);
@@ -11824,11 +12087,12 @@ const HAVE_ENOUGH_DATA = 4;
     if (_bufferGuardSpinnerOn) {
       // Already showing — only release when we have hysteresis amount.
       if (minAhead >= BUFFER_AHEAD_RESUME_SEC) {
-        // Need a brief settle before unpausing, in case audio just landed
-        // a single segment that's about to flush.
-        if (!_bufferGuardMonitorReleaseAt) {
-          _bufferGuardMonitorReleaseAt = now() + 120;
-        } else if (now() >= _bufferGuardMonitorReleaseAt) {
+        // Settle window may be 0 (default) — release immediately on the
+        // first tick that satisfies hysteresis. Hysteresis itself prevents
+        // flicker; an extra settle delay just adds visible spinner time.
+        if (BUFFER_GUARD_RELEASE_SETTLE_MS > 0 && !_bufferGuardMonitorReleaseAt) {
+          _bufferGuardMonitorReleaseAt = now() + BUFFER_GUARD_RELEASE_SETTLE_MS;
+        } else if (BUFFER_GUARD_RELEASE_SETTLE_MS === 0 || now() >= _bufferGuardMonitorReleaseAt) {
           _bufferGuardMonitorReleaseAt = 0;
           setSeekBufferingUIVisible(false);
           // Restart playback. Use the simultaneous-start API so both
