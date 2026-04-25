@@ -16,7 +16,7 @@
     You should have received a copy of the GNU General Public License
     along with this program. If not, see https://www.gnu.org/licenses/.
 -->
-<% const languageOptions = [
+<% const languageOptions =[
   { code: 'auto', name: 'Detect Language' },
   { code: 'ab', name: 'Abkhaz' },
   { code: 'ace', name: 'Acehnese' },
@@ -421,7 +421,10 @@
         flex-direction: column;
     }
     .input-panel { border-right: 1px solid var(--divider-subtle); }
-    .output-panel { background: var(--bg-output); }
+    .output-panel { 
+        background: var(--bg-output); 
+        position: relative;
+    }
 
     textarea {
         width: 100%;
@@ -482,6 +485,39 @@
     /* Sparkle Icon for Detect Language */
     .sparkle-icon { font-size: 16px; margin-left: 6px; color: var(--text-muted); }
     .lang-item.selected .sparkle-icon { color: var(--accent-pink); }
+
+    /* Throbber and loading states */
+    .throbber-container {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        display: none;
+        align-items: center;
+        justify-content: center;
+    }
+    .throbber-container.active {
+        display: flex;
+    }
+    .spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid var(--divider-subtle);
+        border-top: 4px solid var(--accent-pink);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    .text-hidden {
+        opacity: 0 !important;
+    }
+    .text-loading {
+        opacity: 0.5 !important;
+        transition: opacity 0.2s ease-in-out;
+    }
 
     /* ---------------------------------
        No-JS Fallback Base Styling
@@ -626,6 +662,9 @@
                 </div>
                 <div class="editor-panel output-panel">
                     <textarea id="output" readonly placeholder="Translation"><%= (typeof translation !== 'undefined' ? translation : '') %></textarea>
+                    <div id="throbber" class="throbber-container">
+                        <div class="spinner"></div>
+                    </div>
                 </div>
             </div>
 
@@ -648,7 +687,7 @@
   
     <div style="text-align: center; padding: 24px; color: var(--text-muted); font-size: 0.85rem;">
         <p>&copy; 2021-2026 PokeTranslate</p><br>
-        <p>Powered By Google Translate! - <a href="/privacy">privacy</a> </p>
+        <p><a href="/privacy">privacy</a></p>
     </div>
            <div class="symbol-of-tolerance" role="img"></div>
            
@@ -668,6 +707,7 @@
             tabsTo: document.getElementById('tabs_to'),
             input: document.getElementById('input'),
             output: document.getElementById('output'),
+            throbber: document.getElementById('throbber'),
             swapBtn: document.getElementById('swapBtn'),
             modal: document.getElementById('langModal'),
             modalGrid: document.getElementById('modalLangGrid'),
@@ -679,7 +719,7 @@
             currentFrom: DOM.nativeFrom.value,
             currentTo: DOM.nativeTo.value,
             recentFrom: [],
-            recentTo: [],
+            recentTo:[],
             modalMode: null 
         };
 
@@ -696,7 +736,7 @@
                 let sT = JSON.parse(localStorage.getItem(STORAGE_KEYS.TO));
                 
                 state.recentFrom = Array.isArray(sF) && sF.length ? sF : ['en', 'es', 'fr'];
-                state.recentTo = Array.isArray(sT) && sT.length ? sT : ['en', 'es', 'fr'];
+                state.recentTo = Array.isArray(sT) && sT.length ? sT :['en', 'es', 'fr'];
                 
                 state.recentFrom = state.recentFrom.filter(c => c !== 'auto');
                 state.recentTo = state.recentTo.filter(c => c !== 'auto');
@@ -853,8 +893,19 @@
             const text = DOM.input.value.trim();
             if (!text) {
                 DOM.output.value = "";
+                DOM.output.classList.remove('text-loading');
+                DOM.output.classList.remove('text-hidden');
+                DOM.throbber.classList.remove('active');
                 resize(DOM.output);
                 return;
+            }
+
+            // Show proper loading indicator depending on current state
+            if (!DOM.output.value) {
+                DOM.throbber.classList.add('active');
+                DOM.output.classList.add('text-hidden');
+            } else {
+                DOM.output.classList.add('text-loading');
             }
 
             const queryParams = new URLSearchParams({
@@ -877,6 +928,11 @@
                 }
             } catch (error) {
                 console.error("Translation Error:", error);
+            } finally {
+                // Remove all loading states once request resolves
+                DOM.throbber.classList.remove('active');
+                DOM.output.classList.remove('text-hidden');
+                DOM.output.classList.remove('text-loading');
             }
         };
 
