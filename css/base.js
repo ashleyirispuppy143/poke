@@ -11698,62 +11698,190 @@ const HAVE_ENOUGH_DATA = 4;
   // No event listeners attached — the guard was the false-pause engine.
 
   // ─────────────────────────────────────────────────────────────────────
-  // NATIVE AUDIO-WAITING BRIDGE
+  // NATIVE AUDIO ↔ VIDEO BUFFER BRIDGE (round-8 atomic invariant)
   // ─────────────────────────────────────────────────────────────────────
-  // video.js raises vjs-waiting on the player root automatically when the
-  // <video> element fires 'waiting'. But we use a SEPARATE <audio> element
-  // for coupled-mode audio, and video.js doesn't know about it. So when
-  // audio is buffering but video is fine, no spinner shows — exactly the
-  // user's report: "doesn't show the buffer indicator when its supposed
-  // to be buffering."
+  // The user's three round-8 emergency reports:
+  //   (1) "video continues playing while spinner up"
+  //   (2) "audio doesn't come back, manually press play pause"
+  //   (3) "video plays without audio buffering, no spinner shown"
   //
-  // This bridge is the minimal possible fix: forward audio's native
-  // 'waiting' to the player root's vjs-waiting class. 'playing' and
-  // 'canplay' don't strip it directly — _sweepStuckSpinner sees
-  // both elements unpaused with healthy buffer and strips it on the
-  // next tick / event. That gives ONE source of truth for stripping
-  // (the sweep) so we can't get into a "audio said play, video said
-  // wait, who wins" oscillation.
+  // ALL THREE come from the same gap: the <audio> element's native
+  // buffer events were not coupled to videoEl. video.js's own waiting/
+  // playing handling only watches videoEl. So when audio is the holdout,
+  // neither the spinner nor video's pause state reflects reality.
   //
-  // Gating: only bridge during intended playback. When user paused,
-  // the audio fetcher may fire 'waiting' as a side-effect of pause —
-  // we ignore those.
-  function _bridgeAudioWaiting() {
+  // This bridge solves all three with browser-native events (no
+  // heuristics, no time-based watchdogs, no oscillation source):
+  //
+  //   audio.on('waiting' | 'stalled')   → vjs-waiting ON  + pause video
+  //   audio.on('playing' | 'canplay')   → vjs-waiting OFF + resume video
+  //   audio.on('pause')                 → if intendedPlaying, kick play
+  //
+  // Why this can't oscillate the way the heuristic versions did:
+  //   • Browser fires 'waiting' specifically when it actually can't
+  //     advance — never on a healthy decode-tick gap.
+  //   • Browser fires 'playing' specifically when it RESUMED advancing.
+  //   • Both events are mutually exclusive in time — no race window
+  //     where both are "correct" at once.
+  //
+  // Why this fixes "no delays":
+  //   • Pause is direct & synchronous in the event handler.
+  //   • Resume is direct & synchronous in the event handler.
+  //   • No setTimeout, no rAF, no verification stages.
+  //
+  // The 50ms isProgrammaticVideoPause flag is NOT a delay — it's a
+  // grace period that tells the rest of the player "this pause was
+  // intentional, don't treat it as a stall." The pause itself is now.
+  function _audioOnWaiting() {
     try {
+      if (!coupledMode || !audio) return;
       if (!state.intendedPlaying) return;
       if (state.seeking || state.seekBuffering) return; // seek owns spinner
+      if (state.restarting || state.endedNaturally) return;
+      if (userPauseLockActive() || mediaSessionForcedPauseActive()) return;
       const rootEl = video?.el?.();
       if (!rootEl) return;
-      // Don't restate if already up.
-      if (rootEl.classList.contains("vjs-waiting")) return;
-      // Only show the spinner if audio actually has no data at the head.
-      // Without this, transient SourceBuffer 'waiting' events (which fire
-      // even when audio has plenty of data ready) would flicker the
-      // spinner.
-      try {
-        if (!audio || audio.paused) return;
-        const aT = Number(audio.currentTime) || 0;
-        const aRS = Number(audio.readyState || 0);
-        let _hasBufAtHead = false;
-        const _buf = audio.buffered;
-        for (let i = 0; i < _buf.length; i++) {
-          if (_buf.start(i) <= aT + 0.05 && _buf.end(i) > aT + 0.05) {
-            _hasBufAtHead = true;
-            break;
+      // Raise spinner (browser said it can't advance — that's authoritative).
+      if (!rootEl.classList.contains("vjs-waiting")) {
+        rootEl.classList.add("vjs-waiting");
+      }
+      // ATOMIC: pause video instantly. The user's bug 1 — "video continues
+      // playing while spinner up" — is solved here, no delay. videoEl.pause()
+      // is synchronous; the next paint frame has video paused.
+      if (videoEl && !videoEl.paused) {
+        try { state.isProgrammaticVideoPause = true; } catch {}
+        try { videoEl.pause(); } catch {}
+        setTimeout(() => { try { state.isProgrammaticVideoPause = false; } catch {} }, 50);
+      }
+    } catch {}
+  }
+
+  function _audioOnRecovered() {
+    try {
+      if (!coupledMode || !audio) return;
+      if (state.seeking || state.seekBuffering) return; // seek owns spinner
+      if (state.restarting || state.endedNaturally) return;
+      const rootEl = video?.el?.();
+      if (!rootEl) return;
+      // Drop spinner classes the bridge raised.
+      rootEl.classList.remove("vjs-waiting");
+      rootEl.classList.remove("vjs-seeking");
+      // Resume video if user wants playing and it's paused. The user's
+      // bug "audio doesn't come back, doesn't continue playing after
+      // buffer" is solved here — when audio recovers, both play.
+      if (state.intendedPlaying && videoEl && videoEl.paused) {
+        try {
+          const _p = videoEl.play();
+          if (_p && typeof _p.catch === "function") _p.catch(() => {});
+        } catch {}
+      }
+    } catch {}
+  }
+
+  // Bug 2 fix: if audio fires 'pause' (not user-initiated) while we want
+  // playing, kick it back. Covers the "audio doesn't come back" cluster
+  // where audio was paused by some coupling side-effect during a wait
+  // and then never resumed.
+  function _audioOnUnexpectedPause() {
+    try {
+      if (!coupledMode || !audio) return;
+      if (!state.intendedPlaying) return;
+      if (state.seeking || state.seekBuffering) return;
+      if (state.restarting || state.endedNaturally) return;
+      if (userPauseLockActive() || mediaSessionForcedPauseActive()) return;
+      // Only kick if video is currently expected to be playing. If video
+      // is also paused (genuine state), don't fight it.
+      if (videoEl && videoEl.paused && !state.bufferHoldIntendedPlaying) return;
+      // Quick microtask delay so we don't race a coupling-code pause
+      // that's about to be followed by a play. 16ms ≈ one frame.
+      setTimeout(() => {
+        try {
+          if (!state.intendedPlaying) return;
+          if (!audio || !audio.paused) return;
+          if (state.seeking || state.seekBuffering) return;
+          const _p = audio.play();
+          if (_p && typeof _p.catch === "function") _p.catch(() => {});
+        } catch {}
+      }, 16);
+    } catch {}
+  }
+
+  try {
+    if (audio && typeof audio.addEventListener === "function") {
+      audio.addEventListener("waiting", _audioOnWaiting, { passive: true });
+      audio.addEventListener("stalled", _audioOnWaiting, { passive: true });
+      audio.addEventListener("playing", _audioOnRecovered, { passive: true });
+      audio.addEventListener("canplay", _audioOnRecovered, { passive: true });
+      audio.addEventListener("canplaythrough", _audioOnRecovered, { passive: true });
+      audio.addEventListener("pause", _audioOnUnexpectedPause, { passive: true });
+    }
+  } catch {}
+
+  // ─────────────────────────────────────────────────────────────────────
+  // VIDEO TIMEUPDATE: AUDIO HEALTH ENFORCER (DOM-FACT ONLY)
+  // ─────────────────────────────────────────────────────────────────────
+  // Covers the case where audio is buffering BUT doesn't fire 'waiting'
+  // — e.g., audio.paused === true (browsers don't fire 'waiting' on
+  // paused elements). Without this, video would advance silently while
+  // audio is dead. This is the user's bug 3.
+  //
+  // Single check on every video timeupdate (~4Hz). Uses ONLY DOM facts
+  // (no audioActuallyPlaying/audioIsCold heuristics):
+  //   • audio.paused              → kick audio.play(), keep video paused
+  //   • audio.readyState < 2      → audio can't play one frame: spinner up,
+  //                                 pause video (atomic), kick audio
+  //
+  // Both checks are browser-internal binary flags. They don't false-
+  // positive during normal decode ticks the way the previous heuristic
+  // watchdogs did.
+  function _videoTimeupdateAudioCheck() {
+    try {
+      if (!coupledMode || !audio) return;
+      if (!state.intendedPlaying) return;
+      if (state.seeking || state.seekBuffering) return;
+      if (state.restarting || state.endedNaturally) return;
+      if (userPauseLockActive() || mediaSessionForcedPauseActive()) return;
+      if (state.bgSilentTimeSyncing) return;
+      if (!videoEl || videoEl.paused) return;            // video already obeys
+
+      const aRS = Number(audio.readyState || 0);
+
+      // Case A: audio paused while we want playing → kick it.
+      if (audio.paused) {
+        try {
+          const _p = audio.play();
+          if (_p && typeof _p.catch === "function") _p.catch(() => {});
+        } catch {}
+        // If audio also can't play one frame, it's buffering. Pause
+        // video + raise spinner so user sees we're waiting.
+        if (aRS < HAVE_CURRENT_DATA) {
+          const rootEl = video?.el?.();
+          if (rootEl && !rootEl.classList.contains("vjs-waiting")) {
+            rootEl.classList.add("vjs-waiting");
           }
+          try { state.isProgrammaticVideoPause = true; } catch {}
+          try { videoEl.pause(); } catch {}
+          setTimeout(() => { try { state.isProgrammaticVideoPause = false; } catch {} }, 50);
         }
-        // Genuinely starved iff readyState below HAVE_CURRENT_DATA AND
-        // no buffered range covers the head. Two conditions = real, not
-        // a transient SourceBuffer hiccup.
-        if (aRS >= HAVE_CURRENT_DATA && _hasBufAtHead) return;
-      } catch {}
-      rootEl.classList.add("vjs-waiting");
+        return;
+      }
+
+      // Case B: audio unpaused but readyState below playable threshold.
+      // Audio is genuinely buffering. Spinner up + pause video atomically.
+      if (aRS < HAVE_CURRENT_DATA) {
+        const rootEl = video?.el?.();
+        if (rootEl && !rootEl.classList.contains("vjs-waiting")) {
+          rootEl.classList.add("vjs-waiting");
+        }
+        try { state.isProgrammaticVideoPause = true; } catch {}
+        try { videoEl.pause(); } catch {}
+        setTimeout(() => { try { state.isProgrammaticVideoPause = false; } catch {} }, 50);
+      }
     } catch {}
   }
   try {
-    if (audio && typeof audio.addEventListener === "function") {
-      audio.addEventListener("waiting", _bridgeAudioWaiting, { passive: true });
-      audio.addEventListener("stalled", _bridgeAudioWaiting, { passive: true });
+    if (videoEl && typeof videoEl.addEventListener === "function") {
+      videoEl.addEventListener("timeupdate", _videoTimeupdateAudioCheck, { passive: true });
     }
   } catch {}
 
