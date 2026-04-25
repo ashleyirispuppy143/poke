@@ -11741,11 +11741,39 @@ const HAVE_ENOUGH_DATA = 4;
 
   // Cheap helper that reads only DOM. Returns true if audio CAN advance
   // right now, by the browser's own statement of readiness.
+  // ROUND-11 STRENGTHEN (fix "buffer indicator doesn't show"):
+  // The previous version only checked paused + readyState. But during MSE
+  // SourceBuffer underruns, the browser can still report:
+  //   audio.paused = false (browser hasn't fired 'pause' yet)
+  //   audio.readyState = HAVE_FUTURE_DATA (about to drop)
+  // …while audio.currentTime is at the END of a buffered range with
+  // nothing ahead. The atomic invariant saw "alive" and didn't raise
+  // the spinner — so the user reported "buffer indicator doesn't show
+  // up at all" right before audio actually stalled. Buffer-ahead check
+  // closes that gap: if there's no decodable data ahead of the playhead,
+  // audio is about to die regardless of what readyState claims.
   function _audioAliveByDom() {
     if (!audio) return true;                        // no audio = no constraint
     if (audio.paused) return false;                 // browser-binary fact
     const rs = Number(audio.readyState || 0);
     if (rs < HAVE_FUTURE_DATA) return false;        // can't keep advancing
+    // Buffer-ahead: must have at least 0.1s of decodable audio after the
+    // current playhead. Without this, MSE underruns silently false-positive
+    // as "alive" until the browser finally fires a stalled/waiting event,
+    // which can be 200-800ms after the actual underrun starts.
+    try {
+      const aT = Number(audio.currentTime) || 0;
+      const buf = audio.buffered;
+      let aheadEnd = -1;
+      for (let i = 0; i < buf.length; i++) {
+        if (buf.start(i) <= aT + 0.02 && buf.end(i) > aT) {
+          aheadEnd = buf.end(i);
+          break;
+        }
+      }
+      if (aheadEnd < 0) return false;               // playhead in a hole
+      if ((aheadEnd - aT) < 0.1) return false;      // about to stall
+    } catch {}
     return true;
   }
 
@@ -11911,6 +11939,93 @@ const HAVE_ENOUGH_DATA = 4;
       for (const ev of evs) {
         videoEl.addEventListener(ev, _atomicScheduleOnce, { passive: true });
       }
+    }
+  } catch {}
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // SYNCHRONOUS HARD-PAUSE GATE (round-11)
+  // ═══════════════════════════════════════════════════════════════════════
+  // The user reported: "video continues playing fine even if there's the
+  // buffer indicator — please just fix this bug." The throttled atomic
+  // invariant catches it within ~30-60ms but that's still 1-2 frames of
+  // video advance under the spinner, which the user sees and which costs
+  // bandwidth (video segment fetches stealing from audio buffer fill).
+  //
+  // This synchronous gate listens to the videoEl's NATIVE 'play', 'playing',
+  // and 'timeupdate' events with NO throttle, NO bail conditions. Every
+  // time video tries to advance:
+  //   1. Check if vjs-waiting is on the root element
+  //   2. Check if audio is alive (buffer-ahead-aware)
+  //   3. If spinner up OR audio not alive → pause video THIS TICK
+  //
+  // Plus: same gate fires on AUDIO buffer-loss events (waiting, stalled,
+  // emptied) — pre-emptively pauses video before the next paint. This is
+  // the "don't let video play at all if there's buffer indicator" rule
+  // the user asked for. No throttle, no rate-limit, no waiting for the
+  // next rAF. Synchronous. Works at startup, mid-playback, post-seek.
+  //
+  // Side benefit: also fixes "autoplay skips a bit at start" — when video
+  // tries to autoplay before audio is ready, this gate pauses it before
+  // a single frame is painted. Audio catches up; atomic invariant resumes.
+  function _hardPauseIfSpinnerOrAudioDead() {
+    try {
+      if (!coupledMode || !audio) return;
+      if (!videoEl || videoEl.paused) return;
+      const rootEl = video?.el?.();
+      if (!rootEl) return;
+      const hasWaitingClass =
+        rootEl.classList.contains("vjs-waiting") ||
+        rootEl.classList.contains("vjs-seeking") ||
+        _bufferGuardSpinnerOn;
+      const audioOk = _audioAliveByDom();
+      // HARD PAUSE conditions (no intendedPlaying gate — see below):
+      //   1. Spinner is up at all
+      //   2. Audio is not alive (dead/buffering/paused while video plays)
+      // No bail on intendedPlaying. If user paused, videoEl.paused==true
+      // already (we bailed at the top), so this never fires for legit
+      // user-paused state. If video is somehow playing without state.
+      // intendedPlaying=true (autoplay startup race, or coupling slip),
+      // we MUST pause it — that's the "autoplay skips a bit at start"
+      // fix: video plays a few frames before intendedPlaying flips to
+      // true and atomic invariant catches up. Synchronous pause here
+      // means zero frames painted under the spinner.
+      if (hasWaitingClass || !audioOk) {
+        try { state.isProgrammaticVideoPause = true; } catch {}
+        try { videoEl.pause(); } catch {}
+        setTimeout(() => { try { state.isProgrammaticVideoPause = false; } catch {} }, 30);
+        // Also raise the spinner if audio is dead but no spinner is showing.
+        // This is the "buffer indicator does not show up at all" fix:
+        // when audio underruns mid-playback, the browser may not fire
+        // 'waiting' on the video element (audio is the issue, not video),
+        // so video.js's native vjs-waiting handler doesn't trigger. We
+        // raise it here to give the user immediate visual feedback.
+        if (!hasWaitingClass && !audioOk && state.intendedPlaying) {
+          try { rootEl.classList.add("vjs-waiting"); } catch {}
+        }
+      }
+    } catch {}
+  }
+  try {
+    if (videoEl && typeof videoEl.addEventListener === "function") {
+      // Native video element events. These fire synchronously from the
+      // browser/Chromium media pipeline, BEFORE any video.js wrapper or our
+      // atomic invariant rAF. Hard-pausing here means video literally
+      // doesn't advance one frame under the spinner.
+      videoEl.addEventListener("play", _hardPauseIfSpinnerOrAudioDead, { passive: true });
+      videoEl.addEventListener("playing", _hardPauseIfSpinnerOrAudioDead, { passive: true });
+      videoEl.addEventListener("timeupdate", _hardPauseIfSpinnerOrAudioDead, { passive: true });
+    }
+  } catch {}
+  try {
+    if (audio && typeof audio.addEventListener === "function") {
+      // Audio buffer-loss events: when audio underruns, immediately pause
+      // video before its next frame paints. This is the pre-emptive half
+      // of the gate — without it, video advances 1-2 frames between the
+      // audio underrun and our atomic invariant catching up.
+      audio.addEventListener("waiting", _hardPauseIfSpinnerOrAudioDead, { passive: true });
+      audio.addEventListener("stalled", _hardPauseIfSpinnerOrAudioDead, { passive: true });
+      audio.addEventListener("emptied", _hardPauseIfSpinnerOrAudioDead, { passive: true });
+      audio.addEventListener("pause", _hardPauseIfSpinnerOrAudioDead, { passive: true });
     }
   } catch {}
 
