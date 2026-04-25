@@ -25,7 +25,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 //////////////// THE PLAYER, START ////////////////////////
- try {
+try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -11610,11 +11610,23 @@ const HAVE_ENOUGH_DATA = 4;
   // hard-pause guard MUST stay out of the way. Without it the guard would
   // race the resume's play() call and re-pause video before it can start.
   let _spinnerReleaseWindowUntil = 0;
+  // Timestamp of when the spinner was raised. Used by _bufferGuardTick's
+  // stuck-spinner safety to force-release after >5s with ample buffer.
+  // Declared up here (not inside _bufferGuardTick) so setSeekBufferingUIVisible
+  // can write to it without a TDZ violation during module init.
+  let _bufferGuardSpinnerRaisedAt = 0;
   function setSeekBufferingUIVisible(on) {
     try {
       const rootEl = video?.el?.();
       if (!rootEl) return;
       if (on) {
+        // Track raise timestamp for the stuck-spinner safety in
+        // _bufferGuardTick. Only stamp on the FIRST raise of an episode
+        // (idempotent if already on) so a re-entrant call doesn't reset
+        // the clock and let the spinner stay up forever.
+        if (!_bufferGuardSpinnerOn) {
+          try { _bufferGuardSpinnerRaisedAt = now(); } catch {}
+        }
         _bufferGuardSpinnerOn = true;
         _spinnerReleaseWindowUntil = 0;
         if (!rootEl.classList.contains("vjs-waiting")) rootEl.classList.add("vjs-waiting");
@@ -11641,6 +11653,7 @@ const HAVE_ENOUGH_DATA = 4;
         } catch {}
       } else {
         _bufferGuardSpinnerOn = false;
+        _bufferGuardSpinnerRaisedAt = 0;
         rootEl.classList.remove("vjs-waiting");
         rootEl.classList.remove("vjs-seeking");
       }
@@ -11661,42 +11674,86 @@ const HAVE_ENOUGH_DATA = 4;
   // (and we're not in the release window), we pause it again instantly.
   // This is event-driven (zero CPU cost when nothing's happening) and
   // bulletproof — it doesn't matter who called play(), we always see it.
-  function _hardPauseGuard() {
-    if (!_bufferGuardSpinnerOn) return;
-    if (now() < _spinnerReleaseWindowUntil) return;  // release in progress
-    if (!videoEl || videoEl.paused) return;
+  // ─────────────────────────────────────────────────────────────────────
+  // HARD-PAUSE GUARD — DISABLED (round-7 emergency rollback).
+  // ─────────────────────────────────────────────────────────────────────
+  // The guard intercepted ANY play() call while the spinner flag was up,
+  // including legitimate user clicks, the seek-resume path, and the
+  // BufferGuard's own _audioFirstRelease. That created the user-reported
+  // pathology cluster:
+  //   • "fully buffered but it doesn't let user play" — guard intercepts
+  //     the user's click and re-pauses video.
+  //   • "I have to manually click play to unfreeze" — release fires but
+  //     the play() call gets intercepted by the guard for the next 1500ms
+  //     window, and if any timing race trips it, video stays paused.
+  //   • "play-pause-play spam" — guard intercepts a play, releases, the
+  //     buffer watchdog re-raises, guard re-intercepts.
+  // With native vjs-waiting/playing handling, the guard is unnecessary —
+  // the browser already pauses video natively when buffer drops out, and
+  // the audio coupling code (separate from BufferGuard) handles pausing
+  // audio when video pauses. Stubbed out as no-op functions so any
+  // remaining call sites still resolve without throwing.
+  function _hardPauseGuard() { /* no-op (disabled) */ }
+  function _hardPauseAudioGuard() { /* no-op (disabled) */ }
+  // No event listeners attached — the guard was the false-pause engine.
+
+  // ─────────────────────────────────────────────────────────────────────
+  // NATIVE AUDIO-WAITING BRIDGE
+  // ─────────────────────────────────────────────────────────────────────
+  // video.js raises vjs-waiting on the player root automatically when the
+  // <video> element fires 'waiting'. But we use a SEPARATE <audio> element
+  // for coupled-mode audio, and video.js doesn't know about it. So when
+  // audio is buffering but video is fine, no spinner shows — exactly the
+  // user's report: "doesn't show the buffer indicator when its supposed
+  // to be buffering."
+  //
+  // This bridge is the minimal possible fix: forward audio's native
+  // 'waiting' to the player root's vjs-waiting class. 'playing' and
+  // 'canplay' don't strip it directly — _sweepStuckSpinner sees
+  // both elements unpaused with healthy buffer and strips it on the
+  // next tick / event. That gives ONE source of truth for stripping
+  // (the sweep) so we can't get into a "audio said play, video said
+  // wait, who wins" oscillation.
+  //
+  // Gating: only bridge during intended playback. When user paused,
+  // the audio fetcher may fire 'waiting' as a side-effect of pause —
+  // we ignore those.
+  function _bridgeAudioWaiting() {
     try {
-      state.isProgrammaticVideoPause = true;
-      videoEl.pause();
-      setTimeout(() => { state.isProgrammaticVideoPause = false; }, 150);
-    } catch {}
-    // Also pause audio if it tries to start while spinner is up.
-    try {
-      if (coupledMode && audio && !audio.paused) {
-        squelchAudioEvents(120);
-        audio.pause();
-      }
-    } catch {}
-  }
-  // Mirror guard for audio: if audio starts while spinner is up but video
-  // hasn't been released yet, pause audio too (atomic invariant).
-  function _hardPauseAudioGuard() {
-    if (!_bufferGuardSpinnerOn) return;
-    if (now() < _spinnerReleaseWindowUntil) return;
-    if (!coupledMode || !audio || audio.paused) return;
-    try {
-      squelchAudioEvents(120);
-      audio.pause();
+      if (!state.intendedPlaying) return;
+      if (state.seeking || state.seekBuffering) return; // seek owns spinner
+      const rootEl = video?.el?.();
+      if (!rootEl) return;
+      // Don't restate if already up.
+      if (rootEl.classList.contains("vjs-waiting")) return;
+      // Only show the spinner if audio actually has no data at the head.
+      // Without this, transient SourceBuffer 'waiting' events (which fire
+      // even when audio has plenty of data ready) would flicker the
+      // spinner.
+      try {
+        if (!audio || audio.paused) return;
+        const aT = Number(audio.currentTime) || 0;
+        const aRS = Number(audio.readyState || 0);
+        let _hasBufAtHead = false;
+        const _buf = audio.buffered;
+        for (let i = 0; i < _buf.length; i++) {
+          if (_buf.start(i) <= aT + 0.05 && _buf.end(i) > aT + 0.05) {
+            _hasBufAtHead = true;
+            break;
+          }
+        }
+        // Genuinely starved iff readyState below HAVE_CURRENT_DATA AND
+        // no buffered range covers the head. Two conditions = real, not
+        // a transient SourceBuffer hiccup.
+        if (aRS >= HAVE_CURRENT_DATA && _hasBufAtHead) return;
+      } catch {}
+      rootEl.classList.add("vjs-waiting");
     } catch {}
   }
   try {
-    if (videoEl) {
-      videoEl.addEventListener("play", _hardPauseGuard, { passive: true });
-      videoEl.addEventListener("playing", _hardPauseGuard, { passive: true });
-    }
-    if (audio) {
-      audio.addEventListener("play", _hardPauseAudioGuard, { passive: true });
-      audio.addEventListener("playing", _hardPauseAudioGuard, { passive: true });
+    if (audio && typeof audio.addEventListener === "function") {
+      audio.addEventListener("waiting", _bridgeAudioWaiting, { passive: true });
+      audio.addEventListener("stalled", _bridgeAudioWaiting, { passive: true });
     }
   } catch {}
 
@@ -11727,86 +11784,45 @@ const HAVE_ENOUGH_DATA = 4;
     _audioFirstReleaseInFlight = true;
     _audioFirstReleaseStartedAt = now();
 
-    const _finishRelease = (audioOk) => {
-      _audioFirstReleaseInFlight = false;
-      // Open release window BEFORE setSeekBufferingUIVisible(false) to
-      // prevent the hard-pause guard from intercepting our resume.
-      _spinnerReleaseWindowUntil = now() + 1500;
-      setSeekBufferingUIVisible(false);
-      // Start video. If audioOk=false we're in graceful-degradation mode
-      // (video plays without audio) — better than infinite spinner.
-      try {
-        if (videoEl && videoEl.paused) {
-          execProgrammaticVideoPlay({ force: true, minGapMs: 0 });
-        }
-      } catch {}
-      // One more audio kick after release in case it slipped between checks.
-      if (audioOk && audio && audio.paused) {
-        try { execProgrammaticAudioPlay({ squelchMs: 80, force: true, minGapMs: 0 }).catch(() => {}); } catch {}
-      } else if (!audioOk && audio) {
-        // Final desperate kick — even if we're degrading, give audio one
-        // last chance.
-        try { forceAudioPlayNoMatterWhat().catch(() => {}); } catch {}
-      }
-    };
-
-    // Helper: check audio health right now.
-    const _audioHealthy = () => {
-      if (!audio) return true;  // no audio coupling required
-      if (!coupledMode) return true;
-      try {
-        return audioActuallyPlaying() && !audioIsCold();
-      } catch {
-        return !audio.paused;
-      }
-    };
-
-    // Stage 0: gentle kick.
+    // ─────────────────────────────────────────────────────────────────
+    // ROUND-7 EMERGENCY ROLLBACK: DIRECT RELEASE.
+    // ─────────────────────────────────────────────────────────────────
+    // The verification ladder ("verify audio is healthy, escalate to
+    // forceAudioPlayNoMatterWhat, then audio.load(), then graceful
+    // degrade after 4s") was the FREEZE source the user kept reporting:
+    //
+    //   "video+audio just freezes when it actually finishes buffering,
+    //    and I have to click play pause to unfreeze it."
+    //
+    // The ladder's _audioHealthy() check returned false on healthy audio
+    // mid-decode-tick — so _finishRelease never fired, the hard-pause
+    // guard kept playback locked, and only a manual user click could
+    // break out. Even after switching to DOM-fact health checks, a
+    // surprising number of healthy states still returned "not healthy
+    // enough yet" (e.g. readyState briefly drops to 2 after a buffer
+    // append). Every check we add is another way to fail.
+    //
+    // The fix is to TRUST THE BROWSER. Drop the spinner. Call play() on
+    // both elements. If the browser can't actually play, IT will fire
+    // 'waiting' again and the native vjs-waiting class will go back up.
+    // That's how every other media player on the web works. No ladder.
+    // No verification. No escalation. The release is a single atomic op.
+    _audioFirstReleaseInFlight = false;
+    _spinnerReleaseWindowUntil = now() + 800;
+    setSeekBufferingUIVisible(false);
+    try { state.intendedPlaying = true; } catch {}
     try {
-      if (audio && coupledMode && audio.paused) {
-        execProgrammaticAudioPlay({ squelchMs: 80, force: true, minGapMs: 0 }).catch(() => {});
+      if (videoEl && videoEl.paused) {
+        const _p = videoEl.play();
+        if (_p && typeof _p.catch === "function") _p.catch(() => {});
       }
     } catch {}
-
-    // Verify in stages. Each stage gets ~200ms before escalating.
-    let stage = 0;
-    const _verify = () => {
-      if (!_audioFirstReleaseInFlight) return;
-      // Bail if user paused or seek took over.
-      if (!state.intendedPlaying || state.seeking || state.seekBuffering ||
-          state.restarting || state.endedNaturally) {
-        _audioFirstReleaseInFlight = false;
-        return;
+    try {
+      if (coupledMode && audio && audio.paused) {
+        const _p = audio.play();
+        if (_p && typeof _p.catch === "function") _p.catch(() => {});
       }
-      const elapsed = now() - _audioFirstReleaseStartedAt;
-      if (_audioHealthy()) { _finishRelease(true); return; }
-      if (elapsed >= 4000) { _finishRelease(false); return; }
-      // Escalate.
-      if (elapsed >= 1500 && stage < 3) {
-        stage = 3;
-        try { audio.load(); } catch {}
-        setTimeout(() => {
-          if (typeof forceAudioPlayNoMatterWhat === "function") {
-            forceAudioPlayNoMatterWhat().catch(() => {});
-          }
-        }, 100);
-      } else if (elapsed >= 600 && stage < 2) {
-        stage = 2;
-        try { audio.load(); } catch {}
-        setTimeout(() => {
-          if (typeof forceAudioPlayNoMatterWhat === "function") {
-            forceAudioPlayNoMatterWhat().catch(() => {});
-          }
-        }, 80);
-      } else if (elapsed >= 200 && stage < 1) {
-        stage = 1;
-        if (typeof forceAudioPlayNoMatterWhat === "function") {
-          forceAudioPlayNoMatterWhat().catch(() => {});
-        }
-      }
-      setTimeout(_verify, 100);
-    };
-    setTimeout(_verify, 100);
+    } catch {}
   }
 
   // Stuck-spinner sweep — answers the user's report:
@@ -11920,6 +11936,17 @@ const HAVE_ENOUGH_DATA = 4;
   // kicks have a real cost (decoder reset latency), so we rate-limit.
   let _enforceAudioKickAt = 0;
   function _enforceSpinnerPausesVideo() {
+    // ─── DISABLED (round-7 emergency rollback) ───────────────────────
+    // This watchdog was raising the spinner and pausing video on
+    // heuristic detection of "stuck audio" (currentTime hasn't advanced
+    // in N ms, etc.). Even after switching to DOM facts it generated
+    // the false-positive cluster the user reported — paused playback
+    // while audio was just between decoder ticks. With native vjs-
+    // waiting / playing events driving the spinner directly from the
+    // browser's own buffer state, this watchdog is unnecessary AND
+    // harmful. Stubbed.
+    return;
+    /* eslint-disable-next-line no-unreachable */
     try {
       if (state.seeking || state.seekBuffering) return; // seek owns spinner
       if (state.restarting || state.endedNaturally) return;
@@ -11940,39 +11967,47 @@ const HAVE_ENOUGH_DATA = 4;
       // stuck-spinner sweep to clean up if the spinner is bogus.
       if (!coupledMode || !audio) return;
 
-      // INSTANT detection — use the existing audio-truth helpers instead of
-      // a two-sample timestamp comparison. The helpers track audio's own
-      // currentTime advance over time globally (across all callers) so the
-      // FIRST call to _enforceSpinnerPausesVideo can already give a correct
-      // answer. The old two-sample wait was the user's "video plays for a
-      // moment without audio while spinner is up" bug: even at rAF cadence
-      // it took 2 frames (~32ms) to commit the pause, and the polled tick
-      // path took 250-500ms.
-      const aPlaying = (typeof audioActuallyPlaying === "function") ? audioActuallyPlaying() : !audio.paused;
-      const aCold = (typeof audioIsCold === "function") ? audioIsCold() : !aPlaying;
-
-      const tNow = now();
+      // ─────────────────────────────────────────────────────────────────
+      // STRICT DOM-FACT detection (round-6 emergency fix).
+      // ─────────────────────────────────────────────────────────────────
+      // Old version used audioActuallyPlaying / audioIsCold which fired on
+      // healthy 180ms stalls → false positives. Now we use ONLY DOM facts:
+      // audio.paused, audio.readyState, audio.buffered. These don't lie.
+      // If audio.paused=false AND readyState>=HAVE_CURRENT_DATA AND a
+      // buffered range covers the playhead → audio is healthy. Period.
       const aT = Number(audio.currentTime) || 0;
       let aAhead = 0;
       try { aAhead = bufferAheadAt(audio, aT); } catch { aAhead = 0; }
+      const aRS = Number(audio.readyState || 0);
+      let _aHasBufferAtHead = false;
+      try {
+        const _buf = audio.buffered;
+        for (let i = 0; i < _buf.length; i++) {
+          if (_buf.start(i) <= aT + 0.05 && _buf.end(i) > aT + 0.05) {
+            _aHasBufferAtHead = true;
+            break;
+          }
+        }
+      } catch {}
+      const audioGenuinelyDead = audio.paused || aRS < HAVE_CURRENT_DATA || !_aHasBufferAtHead;
+      if (!audioGenuinelyDead) return;                    // audio is fine
 
-      // Audio is "not playing" if any of:
-      //   • aPlaying is false (audioActuallyPlaying handles paused + stuck)
-      //   • aCold is true (unpaused but decoder hasn't moved in 180ms+)
-      //   • aAhead is below the PAUSE threshold (buffer-starved)
-      // Any of these means video must NOT advance ahead of it.
-      const audioIsNotPlaying = !aPlaying || aCold || (aAhead < BUFFER_AHEAD_PAUSE_SEC);
-      if (!audioIsNotPlaying) return;                    // audio is fine
-
+      const tNow = now();
       _spinnerEnforceLastV = Number(vN.currentTime) || 0;
       _spinnerEnforceLastA = aT;
       _spinnerEnforceLastTs = tNow;
 
-      // 1) PAUSE VIDEO IMMEDIATELY. Atomic invariant: video can never
-      //    advance ahead of audio in coupled mode. Use the canonical
-      //    spinner entry point if we don't already own it (it also
-      //    flags the pause as programmatic and squelches audio events).
+      // PAUSE VIDEO IMMEDIATELY (atomic invariant: in coupled mode video
+      // must not advance ahead of dead audio). If spinner isn't already up,
+      // RAISE it so the user sees what's happening — the user reported
+      // "doesn't show buffer indicator when supposed to be buffering",
+      // which we cover here with strict-DOM detection.
       if (!_bufferGuardSpinnerOn) {
+        // Don't raise during release cool-down — that's the play-pause-
+        // play spam path. The buffer-tick will catch genuine starvation
+        // at its next sample; here we only act on confirmed dead audio
+        // OUTSIDE the cool-down.
+        if (now() < _spinnerReleaseWindowUntil) return;
         setSeekBufferingUIVisible(true);
       } else {
         try {
@@ -11982,16 +12017,7 @@ const HAVE_ENOUGH_DATA = 4;
         } catch {}
       }
 
-      // 2) PROACTIVELY KICK AUDIO. The user's "fix it 100%" demand requires
-      //    we don't just freeze video and wait — we have to actively get
-      //    audio playing. Three escalation rungs, rate-limited so we don't
-      //    pile kicks on top of each other:
-      //       • If audio is paused → execProgrammaticAudioPlay (gentle).
-      //       • If audio is cold (unpaused but stuck) → forceAudioPlay-
-      //         NoMatterWhat, which resets every gate and bypasses the
-      //         audio.play() override.
-      //       • If audio is buffer-starved → audio.load() unwedges a
-      //         hung fetcher (cheap, reuses cached segments).
+      // Kick audio (DOM-confirmed dead). Rate-limited.
       if ((tNow - _enforceAudioKickAt) > 600) {
         _enforceAudioKickAt = tNow;
         try {
@@ -12005,18 +12031,14 @@ const HAVE_ENOUGH_DATA = 4;
             } else if (typeof forceAudioPlayNoMatterWhat === "function") {
               forceAudioPlayNoMatterWhat().catch(() => {});
             }
-          } else if (aCold) {
-            // Unpaused but stuck. Bypass every gate.
-            if (typeof forceAudioPlayNoMatterWhat === "function") {
-              forceAudioPlayNoMatterWhat().catch(() => {});
-            }
           }
-          // If audio is buffer-starved AND we've kicked twice in a row
-          // without progress, force a fetcher reset. Cheap because the
-          // browser keeps recently fetched segments cached.
-          if (aAhead < BUFFER_AHEAD_PAUSE_SEC && audio.readyState < 2) {
-            // Don't load() on every single tick — guard with a longer
-            // interval. 1.5s is enough that two kicks have had a chance.
+          // Buffer-starved path: only call audio.load() if readyState is
+          // genuinely below HAVE_CURRENT_DATA — meaning the decoder can't
+          // even play one frame at the playhead. This was firing on
+          // readyState < 2 which was correct, but we add the buffer-at-
+          // head check to be doubly sure we're not load()-thrashing
+          // healthy audio.
+          if (aAhead < BUFFER_AHEAD_PAUSE_SEC && aRS < HAVE_CURRENT_DATA && !_aHasBufferAtHead) {
             if (!_enforceAudioLoadAt || (tNow - _enforceAudioLoadAt) > 1500) {
               _enforceAudioLoadAt = tNow;
               try { audio.load(); } catch {}
@@ -12048,6 +12070,17 @@ const HAVE_ENOUGH_DATA = 4;
   let _coupledInvariantLastVTs = 0;
   let _coupledInvariantKickAt = 0;
   function _enforceCoupledAudioInvariant() {
+    // ─── DISABLED (round-7 emergency rollback) ───────────────────────
+    // This watchdog ran on every video timeupdate / rAF and raised the
+    // spinner when "video advancing while audio not advancing." Even
+    // after the strict-DOM-facts revision, it false-positived during
+    // normal decode-tick gaps and was the source of the play-pause
+    // spam the user reported. Audio coupling (audio paused-when-video-
+    // paused) is handled by the separate coupling layer; the spinner
+    // is handled by native vjs-waiting events. We don't need a third
+    // overlapping enforcer. Stubbed.
+    return;
+    /* eslint-disable-next-line no-unreachable */
     try {
       if (!coupledMode || !audio) return;
       if (state.seeking || state.seekBuffering) return;  // seek owns timeline
@@ -12081,18 +12114,45 @@ const HAVE_ENOUGH_DATA = 4;
 
       if (!vAdvancing) return;                            // video is stuck too — fine
 
-      // Video is advancing. Now check audio. We use the same instant
-      // helpers as _enforceSpinnerPausesVideo so a fresh stuck-cold
-      // decoder is detected on the FIRST sample where it matters.
-      const aPlaying = audioActuallyPlaying();
-      const aCold = audioIsCold();
-      if (aPlaying && !aCold) return;                     // healthy — invariant holds
+      // ─────────────────────────────────────────────────────────────────
+      // STRICT DOM-FACT AUDIO DEATH CHECK (no global-state heuristics).
+      // ─────────────────────────────────────────────────────────────────
+      // The user's emergency: "buffer indicator has false positives. a lot."
+      // The previous version used audioActuallyPlaying() / audioIsCold() —
+      // global-state heuristics that fire on any 180ms-class stall, even
+      // healthy ones. We now require ALL of these DOM-level facts before
+      // declaring audio dead:
+      //   • audio.paused === true, OR
+      //   • audio.readyState < HAVE_CURRENT_DATA (decoder can't even play
+      //     one frame at the playhead), OR
+      //   • no buffered range covers audio.currentTime (truly out of data).
+      // Any of those = real dead. Anything else = audio is fine (even if
+      // its currentTime hasn't advanced in the last frame — that's normal
+      // between decoder ticks).
+      const aT = Number(audio.currentTime) || 0;
+      const aRS = Number(audio.readyState || 0);
+      let _aHasBufferAtHead = false;
+      try {
+        const _buf = audio.buffered;
+        for (let i = 0; i < _buf.length; i++) {
+          if (_buf.start(i) <= aT + 0.05 && _buf.end(i) > aT + 0.05) {
+            _aHasBufferAtHead = true;
+            break;
+          }
+        }
+      } catch {}
+      const audioDeadByDom = audio.paused || aRS < HAVE_CURRENT_DATA || !_aHasBufferAtHead;
+      if (!audioDeadByDom) return;                        // audio is healthy by DOM
 
-      // Invariant violation: video is advancing while audio is stuck.
-      // Pause video immediately (atomic). Use the canonical entry point
-      // to also raise the spinner. This makes the user SEE that the
-      // player is waiting on audio, instead of getting silent video.
+      // Invariant violation, confirmed by DOM: video is advancing while
+      // audio is genuinely dead at the element level. Raise the spinner
+      // (this is now the safe path — DOM facts don't false-positive) so
+      // the user SEES we're waiting on audio.
       if (!_bufferGuardSpinnerOn) {
+        // Don't raise during the post-release cool-down — that causes the
+        // play-pause-play spam the user reports. Buffer-tick will catch it
+        // on the next regular tick if it persists.
+        if (now() < _spinnerReleaseWindowUntil) return;
         setSeekBufferingUIVisible(true);
       } else {
         try {
@@ -12102,9 +12162,7 @@ const HAVE_ENOUGH_DATA = 4;
         } catch {}
       }
 
-      // Kick audio aggressively — same escalation as the spinner sweep
-      // (gentle play → forceAudioPlayNoMatterWhat → audio.load()).
-      // Rate-limited so we don't restart the decoder every frame.
+      // Kick audio. Rate-limited so we don't restart the decoder per frame.
       if ((tNow - _coupledInvariantKickAt) > 400) {
         _coupledInvariantKickAt = tNow;
         try {
@@ -12117,10 +12175,6 @@ const HAVE_ENOUGH_DATA = 4;
                   }
                 });
             } else if (typeof forceAudioPlayNoMatterWhat === "function") {
-              forceAudioPlayNoMatterWhat().catch(() => {});
-            }
-          } else if (aCold || !aPlaying) {
-            if (typeof forceAudioPlayNoMatterWhat === "function") {
               forceAudioPlayNoMatterWhat().catch(() => {});
             }
           }
@@ -12301,6 +12355,15 @@ const HAVE_ENOUGH_DATA = 4;
   //     ≥ BUFFER_AHEAD_RESUME_SEC ahead (hysteresis, prevents flicker).
   let _bufferGuardMonitorTimer = null;
   let _bufferGuardMonitorReleaseAt = 0;
+  // Sustained-low-buffer counter — prevents single-tick false positives
+  // from raising the spinner. We require N consecutive ticks below
+  // PAUSE_SEC before raising. Resets to 0 the moment a tick reads back
+  // above PAUSE_SEC. Combined with the post-release cool-down (below)
+  // this kills the play-pause-play spam loop the user reported.
+  let _bufferGuardLowBufferTicks = 0;
+  // Stuck-spinner detection uses _bufferGuardSpinnerRaisedAt declared
+  // up at the spinner-state block (TDZ safety). The tick reads it; the
+  // setSeekBufferingUIVisible(true) writes it on raise; releases zero it.
   function clearBufferGuardMonitor() {
     if (_bufferGuardMonitorTimer) {
       clearTimeout(_bufferGuardMonitorTimer);
@@ -12325,11 +12388,13 @@ const HAVE_ENOUGH_DATA = 4;
       return;
     }
     if (!state.intendedPlaying) {
+      _bufferGuardLowBufferTicks = 0;
       _bufferGuardMonitorTimer = setTimeout(_bufferGuardTick, BUFFER_GUARD_TICK_MS);
       return;
     }
     if (state.seeking || state.seekBuffering) {
       // Seek machinery owns the spinner during seeks; we just reschedule.
+      _bufferGuardLowBufferTicks = 0;
       _bufferGuardMonitorTimer = setTimeout(_bufferGuardTick, BUFFER_GUARD_TICK_MS);
       return;
     }
@@ -12341,35 +12406,48 @@ const HAVE_ENOUGH_DATA = 4;
     const aAhead = (coupledMode && audio) ? bufferAheadAt(audio, pos) : Infinity;
     const minAhead = Math.min(vAhead, aAhead);
 
+    // ─── ROUND-7 EMERGENCY ROLLBACK ─────────────────────────────────────
+    // The buffer-guard auto-RAISE used heuristic buffer-ahead numbers
+    // and false-positived against healthy playback (decode-tick gaps,
+    // brief network jitter, etc.). It also caused the play-pause-play
+    // spam by oscillating with the release path. Disabled — native
+    // vjs-waiting events from the browser's own buffer state are now
+    // the only thing that puts up the spinner.
+    //
+    // We KEEP the release path because seek-buffer-wait still calls
+    // setSeekBufferingUIVisible(true) directly during seeks — and once
+    // the seek is done, we need to drop the spinner and resume. But the
+    // verification ladder is replaced with a SIMPLE direct resume:
+    // drop spinner, video.play(), audio.play(). No escalation, no
+    // staged checks — those were the freeze source.
     if (_bufferGuardSpinnerOn) {
-      // Already showing — only release when we have hysteresis amount.
+      // Drop spinner the instant minAhead is at the resume threshold.
+      // No settle, no verification ladder. Native HTMLMediaElement is
+      // perfectly capable of stopping playback again on its own if the
+      // buffer dips during the resume — and it'll fire a fresh native
+      // 'waiting' event which video.js handles.
       if (minAhead >= BUFFER_AHEAD_RESUME_SEC) {
-        if (BUFFER_GUARD_RELEASE_SETTLE_MS > 0 && !_bufferGuardMonitorReleaseAt) {
-          _bufferGuardMonitorReleaseAt = now() + BUFFER_GUARD_RELEASE_SETTLE_MS;
-        } else if (BUFFER_GUARD_RELEASE_SETTLE_MS === 0 || now() >= _bufferGuardMonitorReleaseAt) {
-          _bufferGuardMonitorReleaseAt = 0;
-          // AUDIO-FIRST RELEASE: kicks audio first, verifies it's actually
-          // advancing, then drops the spinner and starts video. If audio
-          // refuses, escalates through forceAudioPlayNoMatterWhat and
-          // audio.load() before falling back to graceful degradation.
-          // The release function is idempotent (guarded by inFlight flag)
-          // so repeated tick calls won't pile up.
-          _audioFirstRelease();
-        }
-      } else {
         _bufferGuardMonitorReleaseAt = 0;
+        _spinnerReleaseWindowUntil = now() + 800;  // brief cooldown
+        setSeekBufferingUIVisible(false);
+        // Direct resume — bare play() with .catch silenced. If state
+        // says we shouldn't be playing (user paused, etc.), skip.
+        try {
+          if (state.intendedPlaying && videoEl && videoEl.paused) {
+            const _p = videoEl.play();
+            if (_p && typeof _p.catch === "function") _p.catch(() => {});
+          }
+        } catch {}
+        try {
+          if (state.intendedPlaying && coupledMode && audio && audio.paused) {
+            const _p = audio.play();
+            if (_p && typeof _p.catch === "function") _p.catch(() => {});
+          }
+        } catch {}
       }
-    } else {
-      // Not showing — engage only if intendedPlaying AND a track is
-      // genuinely starving. We add the intendedPlaying check here as the
-      // accuracy guarantee: when the user paused, no spinner should
-      // appear regardless of buffer state.
-      if (state.intendedPlaying && state.firstPlayCommitted &&
-          minAhead < BUFFER_AHEAD_PAUSE_SEC) {
-        setSeekBufferingUIVisible(true);
-        _bufferGuardMonitorReleaseAt = 0;
-      }
+      _bufferGuardLowBufferTicks = 0;
     }
+    // No auto-raise branch. Native events own the spinner now.
     _bufferGuardMonitorTimer = setTimeout(_bufferGuardTick, BUFFER_GUARD_TICK_MS);
   }
   function armBufferGuardMonitor() {
@@ -15873,6 +15951,25 @@ const HAVE_ENOUGH_DATA = 4;
         state.bufferHoldIntendedPlaying = true;
         return;
       }
+      // ─── USER-GESTURE ESCAPE HATCH ────────────────────────────────────
+      // The user reports: "fully buffered but it doesn't let user play"
+      // and "I have to manually play pause to unfreeze it." If the user
+      // is RIGHT NOW clicking play, the buffer-guard spinner — whether
+      // legit or a false positive — must yield. The user's gesture is
+      // ground truth. We force-release immediately, open the cool-down
+      // window so watchdogs don't re-raise during the resume, and let
+      // the existing play handler continue to resume both tracks.
+      try {
+        if (userWantsPlayNow(2400) &&
+            (typeof bufferGuardSpinnerActive === "function") &&
+            bufferGuardSpinnerActive()) {
+          _spinnerReleaseWindowUntil = now() + 1500;
+          setSeekBufferingUIVisible(false);
+          // Cancel any in-flight verification ladder so the next tick
+          // doesn't pile a second release on top of this one.
+          _audioFirstReleaseInFlight = false;
+        }
+      } catch {}
       // If user just clicked play, strip any stale pause-expecting txn and
       // any stale loop-prevention cooldown that could turn this play into
       // the visible play-pause-play cycle the user reported.
