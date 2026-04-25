@@ -25,7 +25,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 //////////////// THE PLAYER, START ////////////////////////
- try {
+try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -5050,6 +5050,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (state.audioRateNudgeActive) return; // player intentionally adjusting rate
         if (state.seeking || state.syncing) return;
         if ((_now() - _lastCorrectionAt) < CORRECTION_COOLDOWN) return;
+        // Spinner-lock owns playbackRate=0 for buffer-pause enforcement.
+        // Don't fight it.
+        try { if (typeof _spinnerLockActive === "function" && _spinnerLockActive()) return; } catch {}
         try {
           const vNode = getVideoNode();
           const rate = Number(vNode.playbackRate);
@@ -12029,144 +12032,247 @@ const HAVE_ENOUGH_DATA = 4;
     }
   } catch {}
 
-  // Spinner-video lock. Uses playbackRate=0 as the primary brake — even if
-  // some path un-pauses videoEl, frames cannot advance while playbackRate
-  // is 0. Pause is layered on top. Both must be reset for video to play.
+  // Spinner-video lock. Element-agnostic: applies to whatever video element
+  // is currently active per getVideoNode() (which can return either the
+  // outer videoEl OR an inner <video> element that video.js creates for HLS).
+  // Earlier versions only locked videoEl, so when video.js was using the
+  // inner element, the lock had no effect — that was the user's recurring
+  // "video keeps playing during buffering" bug.
 
-  let _spinnerLockEngagedRate = -1; // saved playbackRate while locked
-  let _spinnerLockEngaged = false;
+  const _SPINNER_LOCK_KEY = "__spinnerLockState_v2";
+  const _spinnerLockedEls = new WeakSet();
+  let _audioPlayingSinceIntendedAt = 0; // timestamp audio went playing after intend
+  let _intendedPlayingSinceAt = 0;
+
+  // Audio-start watchdog: if intendedPlaying has been true for >1000ms but
+  // audio still hasn't started/buffered, lock video.
+  function _audioStartedInTime() {
+    try {
+      if (!coupledMode || !audio) return true;
+      if (!state.intendedPlaying) return true;
+      if (audio.paused) {
+        if (_intendedPlayingSinceAt > 0 && (now() - _intendedPlayingSinceAt) > 1000) {
+          return false;
+        }
+        return true;
+      }
+      const ars = Number(audio.readyState || 0);
+      if (ars < HAVE_FUTURE_DATA) {
+        if (_intendedPlayingSinceAt > 0 && (now() - _intendedPlayingSinceAt) > 1000) {
+          return false;
+        }
+      }
+      return true;
+    } catch { return true; }
+  }
+
+  // Track when intendedPlaying flips on, so we know how long audio has had
+  // to start. Reset to 0 when intendedPlaying drops.
+  function _updateIntendedPlayingTimer() {
+    try {
+      if (state.intendedPlaying) {
+        if (_intendedPlayingSinceAt === 0) _intendedPlayingSinceAt = now();
+        // also track audio playing
+        if (audio && !audio.paused && Number(audio.readyState || 0) >= HAVE_FUTURE_DATA) {
+          _audioPlayingSinceIntendedAt = now();
+        }
+      } else {
+        _intendedPlayingSinceAt = 0;
+      }
+    } catch {}
+  }
 
   function _spinnerLockActive() {
     try {
+      _updateIntendedPlayingTimer();
+      // 1. Buffer indicator visible (CSS class on root or our custom guard)
       const rootEl = video?.el?.();
       if (rootEl) {
         if (rootEl.classList.contains("vjs-waiting")) return true;
         if (rootEl.classList.contains("vjs-seeking")) return true;
       }
       if (_bufferGuardSpinnerOn === true) return true;
-      // Audio dead implies user-visible spinner per atomic invariant logic.
-      if (coupledMode && audio && state.intendedPlaying && !state.seeking) {
+      // Skip during deliberate seek window — seek path owns the lock.
+      if (state.seeking || state.seekBuffering) {
+        // still lock, because seek-buffering = spinner up
+        return true;
+      }
+      if (coupledMode && audio && state.intendedPlaying) {
+        // 2. Audio not playing but intend to play → lock
         if (audio.paused) return true;
+        // 3. Audio is buffering (readyState below HAVE_FUTURE_DATA)
         const ars = Number(audio.readyState || 0);
         if (ars < HAVE_FUTURE_DATA) return true;
+        // Also: audio is technically not paused but its current position is
+        // not advancing because the buffer underran. Detected via the
+        // existing _audioAliveByDom helper which checks buffer-ahead.
+        try {
+          if (typeof _audioAliveByDom === "function" && !_audioAliveByDom()) return true;
+        } catch {}
       }
+      // 4. Audio failed to start in 1000ms despite intendedPlaying
+      if (!_audioStartedInTime()) return true;
       return false;
     } catch { return false; }
   }
 
-  function _spinnerLockEngage() {
-    if (!videoEl || _spinnerLockEngaged) return;
-    _spinnerLockEngaged = true;
+  // Patch a single video element with the play() override. Idempotent —
+  // if already patched we skip. Must be called on every element returned
+  // by getVideoNode(), since video.js can swap the element at runtime.
+  function _patchVideoElPlay(el) {
     try {
-      const r = Number(videoEl.playbackRate);
-      if (r > 0) _spinnerLockEngagedRate = r;
-    } catch {}
-    try { videoEl.playbackRate = 0; } catch {}
-    try { state.isProgrammaticVideoPause = true; } catch {}
-    try { videoEl.pause(); } catch {}
-  }
-
-  function _spinnerLockRelease() {
-    if (!_spinnerLockEngaged) return;
-    _spinnerLockEngaged = false;
-    try {
-      const restoreRate = _spinnerLockEngagedRate > 0 ? _spinnerLockEngagedRate : 1;
-      _spinnerLockEngagedRate = -1;
-      if (videoEl && Number(videoEl.playbackRate) === 0) {
-        videoEl.playbackRate = restoreRate;
-      }
-    } catch {}
-    try { state.isProgrammaticVideoPause = false; } catch {}
-  }
-
-  // Method-level intercept on videoEl.play: refuses while locked.
-  try {
-    if (videoEl && typeof videoEl.play === "function" && !videoEl.__spinnerLockedPlay) {
-      const _origVideoPlayMethod = videoEl.play.bind(videoEl);
-      videoEl.__origPlayMethod = _origVideoPlayMethod;
-      const _wrapped = function _spinnerLockedPlay() {
-        try { if (_spinnerLockActive()) return Promise.resolve(); } catch {}
+      if (!el || _spinnerLockedEls.has(el)) return;
+      if (typeof el.play !== "function") return;
+      // Don't wrap play() — the pause + playbackRate=0 enforcement handles
+      // actual blocking. Wrapping play() risks a stuck state where the
+      // user's click play gets swallowed and audio coupling never fires.
+      // Just attach a synchronous re-pause: any 'play' event while locked
+      // immediately re-pauses + sets rate=0.
+      const _reassert = function () {
         try {
-          const ret = _origVideoPlayMethod.apply(this, arguments);
-          return (ret && typeof ret.then === "function") ? ret : Promise.resolve(ret);
-        } catch (e) { return Promise.reject(e); }
-      };
-      try {
-        Object.defineProperty(videoEl, "play", {
-          value: _wrapped,
-          writable: false,
-          configurable: false,
-        });
-      } catch {
-        try { videoEl.play = _wrapped; } catch {}
-      }
-      videoEl.__spinnerLockedPlay = true;
-    }
-  } catch {}
-
-  // Fast sweep: every 25ms, engage/release lock based on spinner state.
-  try {
-    setInterval(function _spinnerLockSweep() {
-      try {
-        if (!videoEl) return;
-        const locked = _spinnerLockActive();
-        if (locked) {
-          if (!_spinnerLockEngaged) _spinnerLockEngage();
-          else {
-            // Already engaged — but something may have reset playbackRate
-            // or un-paused. Re-assert.
-            if (Number(videoEl.playbackRate) !== 0) {
-              try { videoEl.playbackRate = 0; } catch {}
-            }
-            if (!videoEl.paused) {
-              try { state.isProgrammaticVideoPause = true; } catch {}
-              try { videoEl.pause(); } catch {}
-              setTimeout(() => {
-                try { state.isProgrammaticVideoPause = false; } catch {}
-              }, 200);
-            }
-          }
-        } else if (_spinnerLockEngaged) {
-          _spinnerLockRelease();
-        }
-      } catch {}
-    }, 25);
-  } catch {}
-
-  // rAF sweep: same logic but per-frame, guarantees no painted frame under
-  // spinner. setInterval can be throttled by browser; rAF runs at vsync.
-  try {
-    const _rafSpinnerSweep = function () {
-      try {
-        if (videoEl) {
           if (_spinnerLockActive()) {
-            if (!_spinnerLockEngaged) _spinnerLockEngage();
-            else if (Number(videoEl.playbackRate) !== 0) {
-              try { videoEl.playbackRate = 0; } catch {}
-            }
-          } else if (_spinnerLockEngaged) {
-            _spinnerLockRelease();
-          }
-        }
-      } catch {}
-      try { requestAnimationFrame(_rafSpinnerSweep); } catch {}
-    };
-    requestAnimationFrame(_rafSpinnerSweep);
-  } catch {}
-
-  // ratechange listener: if anything sets playbackRate>0 while locked,
-  // remember it for restore and snap back to 0.
-  try {
-    if (videoEl && typeof videoEl.addEventListener === "function") {
-      videoEl.addEventListener("ratechange", function () {
-        try {
-          const cur = Number(videoEl.playbackRate);
-          if (_spinnerLockActive() && cur !== 0) {
-            if (cur > 0) _spinnerLockEngagedRate = cur;
-            videoEl.playbackRate = 0;
+            try {
+              const r = Number(el.playbackRate);
+              if (r > 0) el[_SPINNER_LOCK_KEY] = { savedRate: r };
+            } catch {}
+            try { el.playbackRate = 0; } catch {}
+            try { state.isProgrammaticVideoPause = true; } catch {}
+            try { el.pause(); } catch {}
+            setTimeout(() => {
+              try { state.isProgrammaticVideoPause = false; } catch {}
+            }, 200);
           }
         } catch {}
-      }, { passive: true });
+      };
+      try {
+        el.addEventListener("play", _reassert, { passive: true });
+        el.addEventListener("playing", _reassert, { passive: true });
+        el.addEventListener("timeupdate", _reassert, { passive: true });
+        el.addEventListener("ratechange", function () {
+          try {
+            const cur = Number(el.playbackRate);
+            if (_spinnerLockActive() && cur !== 0) {
+              if (cur > 0) el[_SPINNER_LOCK_KEY] = { savedRate: cur };
+              el.playbackRate = 0;
+            }
+          } catch {}
+        }, { passive: true });
+      } catch {}
+      _spinnerLockedEls.add(el);
+    } catch {}
+  }
+
+  // Apply lock on a single element. Saves prior playbackRate so user's
+  // chosen speed survives the lock.
+  function _applyLockToEl(el) {
+    if (!el) return;
+    try {
+      const r = Number(el.playbackRate);
+      if (r > 0) el[_SPINNER_LOCK_KEY] = { savedRate: r };
+    } catch {}
+    try { el.playbackRate = 0; } catch {}
+    try {
+      if (!el.paused) {
+        try { state.isProgrammaticVideoPause = true; } catch {}
+        try { el.pause(); } catch {}
+      }
+    } catch {}
+  }
+  function _releaseLockOnEl(el) {
+    if (!el) return;
+    try {
+      const saved = el[_SPINNER_LOCK_KEY];
+      const restoreRate = (saved && saved.savedRate > 0) ? saved.savedRate : 1;
+      try { el[_SPINNER_LOCK_KEY] = null; } catch {}
+      if (Number(el.playbackRate) === 0) {
+        el.playbackRate = restoreRate;
+      }
+    } catch {}
+  }
+
+  // Returns the list of elements to lock — both outer videoEl and any
+  // inner element returned by getVideoNode/getPlayableVideoEl. We lock ALL
+  // of them, defensively, since we don't know which one will be played.
+  function _allVideoElsToLock() {
+    const out = [];
+    try { if (videoEl) out.push(videoEl); } catch {}
+    try {
+      const inner = (typeof getPlayableVideoEl === "function") ? getPlayableVideoEl() : null;
+      if (inner && out.indexOf(inner) === -1) out.push(inner);
+    } catch {}
+    try {
+      const node = (typeof getVideoNode === "function") ? getVideoNode() : null;
+      if (node && out.indexOf(node) === -1) out.push(node);
+    } catch {}
+    try {
+      const rootEl = video?.el?.();
+      if (rootEl) {
+        const nested = rootEl.querySelectorAll && rootEl.querySelectorAll("video");
+        if (nested) {
+          for (let i = 0; i < nested.length; i++) {
+            if (out.indexOf(nested[i]) === -1) out.push(nested[i]);
+          }
+        }
+      }
+    } catch {}
+    return out;
+  }
+
+  function _enforceSpinnerLock() {
+    try {
+      const els = _allVideoElsToLock();
+      // patch each element's play() once
+      for (let i = 0; i < els.length; i++) _patchVideoElPlay(els[i]);
+      const locked = _spinnerLockActive();
+      if (locked) {
+        try { state.isProgrammaticVideoPause = true; } catch {}
+        for (let i = 0; i < els.length; i++) {
+          const el = els[i];
+          if (Number(el.playbackRate) !== 0) {
+            try {
+              const r = Number(el.playbackRate);
+              if (r > 0) el[_SPINNER_LOCK_KEY] = { savedRate: r };
+            } catch {}
+            try { el.playbackRate = 0; } catch {}
+          }
+          if (!el.paused) {
+            try { el.pause(); } catch {}
+          }
+        }
+      } else {
+        for (let i = 0; i < els.length; i++) _releaseLockOnEl(els[i]);
+        // schedule clearing the programmatic flag a short time later
+        setTimeout(() => {
+          try { state.isProgrammaticVideoPause = false; } catch {}
+        }, 200);
+      }
+    } catch {}
+  }
+
+  // Fast 25ms sweep
+  try { setInterval(_enforceSpinnerLock, 25); } catch {}
+
+  // Per-frame rAF sweep — sub-frame guarantee. setInterval can be throttled
+  // by the browser; rAF runs at the vsync rate when paint is happening.
+  try {
+    const _rafLoop = function () {
+      _enforceSpinnerLock();
+      try { requestAnimationFrame(_rafLoop); } catch {}
+    };
+    requestAnimationFrame(_rafLoop);
+  } catch {}
+
+  // Synchronous native event listeners on audio: any audio buffer-loss event
+  // immediately re-evaluates the lock. Fires before the next paint.
+  try {
+    if (audio && typeof audio.addEventListener === "function") {
+      const _audioReassert = () => { try { _enforceSpinnerLock(); } catch {} };
+      audio.addEventListener("waiting", _audioReassert, { passive: true });
+      audio.addEventListener("stalled", _audioReassert, { passive: true });
+      audio.addEventListener("emptied", _audioReassert, { passive: true });
+      audio.addEventListener("pause", _audioReassert, { passive: true });
+      audio.addEventListener("ended", _audioReassert, { passive: true });
+      audio.addEventListener("suspend", _audioReassert, { passive: true });
     }
   } catch {}
 
