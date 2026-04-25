@@ -25,7 +25,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 //////////////// THE PLAYER, START ////////////////////////
-try {
+ try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -6169,7 +6169,9 @@ const HAVE_ENOUGH_DATA = 4;
       // Don't clear immunity here — the hidden handler sets it right after
       // this call to protect against browser auto-pause. Clearing it first
       // creates a race where pause events slip through unguarded.
-      disengagePauseIntercept();
+      if (!state.intendedPlaying) {
+        disengagePauseIntercept();
+      }
       cancelTabReturnAudioMute();
       this.clearTimers();
       try { QuantumReturnOrchestrator.snapshotState(); } catch {}
@@ -11810,9 +11812,7 @@ const HAVE_ENOUGH_DATA = 4;
       if (hasWaitingClass && videoEl && !videoEl.paused) {
         try { state.isProgrammaticVideoPause = true; } catch {}
         try { videoEl.pause(); } catch {}
-        // Short clear: next throttled tick will re-evaluate. If spinner is
-        // gone by then, the ALIVE branch below will resume video.
-        setTimeout(() => { try { state.isProgrammaticVideoPause = false; } catch {} }, 30);
+        setTimeout(() => { try { state.isProgrammaticVideoPause = false; } catch {} }, 200);
       }
 
       const audioAlive = _audioAliveByDom();
@@ -11992,7 +11992,7 @@ const HAVE_ENOUGH_DATA = 4;
       if (hasWaitingClass || !audioOk) {
         try { state.isProgrammaticVideoPause = true; } catch {}
         try { videoEl.pause(); } catch {}
-        setTimeout(() => { try { state.isProgrammaticVideoPause = false; } catch {} }, 30);
+        setTimeout(() => { try { state.isProgrammaticVideoPause = false; } catch {} }, 200);
         // Also raise the spinner if audio is dead but no spinner is showing.
         // This is the "buffer indicator does not show up at all" fix:
         // when audio underruns mid-playback, the browser may not fire
@@ -12028,6 +12028,59 @@ const HAVE_ENOUGH_DATA = 4;
       audio.addEventListener("pause", _hardPauseIfSpinnerOrAudioDead, { passive: true });
     }
   } catch {}
+
+  // ───────────────────────────────────────────────────────────────────────
+  // Multi-layer spinner-video lock: play() override + fast sweep
+  // ───────────────────────────────────────────────────────────────────────
+
+  function _spinnerLockActive() {
+    try {
+      const rootEl = video?.el?.();
+      if (!rootEl) return false;
+      return (
+        rootEl.classList.contains("vjs-waiting") ||
+        rootEl.classList.contains("vjs-seeking") ||
+        _bufferGuardSpinnerOn === true
+      );
+    } catch { return false; }
+  }
+
+  try {
+    if (videoEl && typeof videoEl.play === "function" && !videoEl.__spinnerLockedPlay) {
+      const _origVideoPlayMethod = videoEl.play.bind(videoEl);
+      videoEl.__origPlayMethod = _origVideoPlayMethod;
+      videoEl.play = function _spinnerLockedPlay() {
+        try {
+          if (_spinnerLockActive()) {
+            return Promise.resolve();
+          }
+        } catch {}
+        try {
+          const ret = _origVideoPlayMethod.apply(this, arguments);
+          return (ret && typeof ret.then === "function") ? ret : Promise.resolve(ret);
+        } catch (e) {
+          return Promise.reject(e);
+        }
+      };
+      videoEl.__spinnerLockedPlay = true;
+    }
+  } catch {}
+
+  try {
+    setInterval(function _spinnerLockSweep() {
+      try {
+        if (!videoEl || videoEl.paused) return;
+        if (!_spinnerLockActive()) return;
+        try { state.isProgrammaticVideoPause = true; } catch {}
+        try { videoEl.pause(); } catch {}
+        setTimeout(() => {
+          try { state.isProgrammaticVideoPause = false; } catch {}
+        }, 200);
+      } catch {}
+    }, 25);
+  } catch {}
+
+
 
   // ───────────────────────────────────────────────────────────────────────
   // AUDIO-FIRST RELEASE — guarantees audio comes back when buffered
@@ -19824,8 +19877,7 @@ const HAVE_ENOUGH_DATA = 4;
                   const _trVt = Number(video.currentTime()) || 0;
                   const _trAt = Number(audio.currentTime) || 0;
                   const _trDrift = _trAt - _trVt; // positive = audio ahead
-                  if (isFinite(_trVt) && isFinite(_trAt) && _trVt > 0.5 &&
-                      Math.abs(_trDrift) > 0.35) {
+                  if (isFinite(_trVt) && isFinite(_trAt) && _trVt > 0.5) {
                     if (_trDrift > 0.35) {
                       // Audio ahead — audio was the reliable clock during bg
                       // (keepalive kept it running; video decode is throttled
@@ -19846,9 +19898,7 @@ const HAVE_ENOUGH_DATA = 4;
                           state.bgSilentTimeSyncing = false;
                         }, 250);
                       } catch {}
-                    } else {
-                      // Video ahead of audio (rare — audio stalled in bg
-                      // while video kept decoding). Snap audio to video.
+                    } else if (_trDrift < -1.2) {
                       safeSetAudioTime(_trVt);
                     }
                   }
@@ -20664,7 +20714,7 @@ const HAVE_ENOUGH_DATA = 4;
     _handlePlayerCrash(msg, "promise", reason ? (reason.stack || "") : "");
   }, { passive: true });
 });
-
+ 
 //////////////// THE PLAYER, END ////////////////////////
  
   
