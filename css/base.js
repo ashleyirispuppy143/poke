@@ -12029,55 +12029,145 @@ const HAVE_ENOUGH_DATA = 4;
     }
   } catch {}
 
-  // ───────────────────────────────────────────────────────────────────────
-  // Multi-layer spinner-video lock: play() override + fast sweep
-  // ───────────────────────────────────────────────────────────────────────
+  // Spinner-video lock. Uses playbackRate=0 as the primary brake — even if
+  // some path un-pauses videoEl, frames cannot advance while playbackRate
+  // is 0. Pause is layered on top. Both must be reset for video to play.
+
+  let _spinnerLockEngagedRate = -1; // saved playbackRate while locked
+  let _spinnerLockEngaged = false;
 
   function _spinnerLockActive() {
     try {
       const rootEl = video?.el?.();
-      if (!rootEl) return false;
-      return (
-        rootEl.classList.contains("vjs-waiting") ||
-        rootEl.classList.contains("vjs-seeking") ||
-        _bufferGuardSpinnerOn === true
-      );
+      if (rootEl) {
+        if (rootEl.classList.contains("vjs-waiting")) return true;
+        if (rootEl.classList.contains("vjs-seeking")) return true;
+      }
+      if (_bufferGuardSpinnerOn === true) return true;
+      // Audio dead implies user-visible spinner per atomic invariant logic.
+      if (coupledMode && audio && state.intendedPlaying && !state.seeking) {
+        if (audio.paused) return true;
+        const ars = Number(audio.readyState || 0);
+        if (ars < HAVE_FUTURE_DATA) return true;
+      }
+      return false;
     } catch { return false; }
   }
 
+  function _spinnerLockEngage() {
+    if (!videoEl || _spinnerLockEngaged) return;
+    _spinnerLockEngaged = true;
+    try {
+      const r = Number(videoEl.playbackRate);
+      if (r > 0) _spinnerLockEngagedRate = r;
+    } catch {}
+    try { videoEl.playbackRate = 0; } catch {}
+    try { state.isProgrammaticVideoPause = true; } catch {}
+    try { videoEl.pause(); } catch {}
+  }
+
+  function _spinnerLockRelease() {
+    if (!_spinnerLockEngaged) return;
+    _spinnerLockEngaged = false;
+    try {
+      const restoreRate = _spinnerLockEngagedRate > 0 ? _spinnerLockEngagedRate : 1;
+      _spinnerLockEngagedRate = -1;
+      if (videoEl && Number(videoEl.playbackRate) === 0) {
+        videoEl.playbackRate = restoreRate;
+      }
+    } catch {}
+    try { state.isProgrammaticVideoPause = false; } catch {}
+  }
+
+  // Method-level intercept on videoEl.play: refuses while locked.
   try {
     if (videoEl && typeof videoEl.play === "function" && !videoEl.__spinnerLockedPlay) {
       const _origVideoPlayMethod = videoEl.play.bind(videoEl);
       videoEl.__origPlayMethod = _origVideoPlayMethod;
-      videoEl.play = function _spinnerLockedPlay() {
-        try {
-          if (_spinnerLockActive()) {
-            return Promise.resolve();
-          }
-        } catch {}
+      const _wrapped = function _spinnerLockedPlay() {
+        try { if (_spinnerLockActive()) return Promise.resolve(); } catch {}
         try {
           const ret = _origVideoPlayMethod.apply(this, arguments);
           return (ret && typeof ret.then === "function") ? ret : Promise.resolve(ret);
-        } catch (e) {
-          return Promise.reject(e);
-        }
+        } catch (e) { return Promise.reject(e); }
       };
+      try {
+        Object.defineProperty(videoEl, "play", {
+          value: _wrapped,
+          writable: false,
+          configurable: false,
+        });
+      } catch {
+        try { videoEl.play = _wrapped; } catch {}
+      }
       videoEl.__spinnerLockedPlay = true;
     }
   } catch {}
 
+  // Fast sweep: every 25ms, engage/release lock based on spinner state.
   try {
     setInterval(function _spinnerLockSweep() {
       try {
-        if (!videoEl || videoEl.paused) return;
-        if (!_spinnerLockActive()) return;
-        try { state.isProgrammaticVideoPause = true; } catch {}
-        try { videoEl.pause(); } catch {}
-        setTimeout(() => {
-          try { state.isProgrammaticVideoPause = false; } catch {}
-        }, 200);
+        if (!videoEl) return;
+        const locked = _spinnerLockActive();
+        if (locked) {
+          if (!_spinnerLockEngaged) _spinnerLockEngage();
+          else {
+            // Already engaged — but something may have reset playbackRate
+            // or un-paused. Re-assert.
+            if (Number(videoEl.playbackRate) !== 0) {
+              try { videoEl.playbackRate = 0; } catch {}
+            }
+            if (!videoEl.paused) {
+              try { state.isProgrammaticVideoPause = true; } catch {}
+              try { videoEl.pause(); } catch {}
+              setTimeout(() => {
+                try { state.isProgrammaticVideoPause = false; } catch {}
+              }, 200);
+            }
+          }
+        } else if (_spinnerLockEngaged) {
+          _spinnerLockRelease();
+        }
       } catch {}
     }, 25);
+  } catch {}
+
+  // rAF sweep: same logic but per-frame, guarantees no painted frame under
+  // spinner. setInterval can be throttled by browser; rAF runs at vsync.
+  try {
+    const _rafSpinnerSweep = function () {
+      try {
+        if (videoEl) {
+          if (_spinnerLockActive()) {
+            if (!_spinnerLockEngaged) _spinnerLockEngage();
+            else if (Number(videoEl.playbackRate) !== 0) {
+              try { videoEl.playbackRate = 0; } catch {}
+            }
+          } else if (_spinnerLockEngaged) {
+            _spinnerLockRelease();
+          }
+        }
+      } catch {}
+      try { requestAnimationFrame(_rafSpinnerSweep); } catch {}
+    };
+    requestAnimationFrame(_rafSpinnerSweep);
+  } catch {}
+
+  // ratechange listener: if anything sets playbackRate>0 while locked,
+  // remember it for restore and snap back to 0.
+  try {
+    if (videoEl && typeof videoEl.addEventListener === "function") {
+      videoEl.addEventListener("ratechange", function () {
+        try {
+          const cur = Number(videoEl.playbackRate);
+          if (_spinnerLockActive() && cur !== 0) {
+            if (cur > 0) _spinnerLockEngagedRate = cur;
+            videoEl.playbackRate = 0;
+          }
+        } catch {}
+      }, { passive: true });
+    }
   } catch {}
 
 
@@ -20714,7 +20804,7 @@ const HAVE_ENOUGH_DATA = 4;
     _handlePlayerCrash(msg, "promise", reason ? (reason.stack || "") : "");
   }, { passive: true });
 });
- 
+
 //////////////// THE PLAYER, END ////////////////////////
  
   
