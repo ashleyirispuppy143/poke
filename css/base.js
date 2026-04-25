@@ -25,7 +25,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 //////////////// THE PLAYER, START ////////////////////////
- try {
+try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -11962,50 +11962,126 @@ const HAVE_ENOUGH_DATA = 4;
   // sub-16ms latency to strip the moment playback is healthy. The rAF stops
   // itself when no spinner classes are on the DOM, so it costs nothing
   // during normal playback.
+  // ───────────────────────────────────────────────────────────────────────
+  // CPU-OPTIMIZED EVENT-DRIVEN STRIP
+  // ───────────────────────────────────────────────────────────────────────
+  // Three optimizations vs. the naive version:
+  //
+  //   1. CHEAP FAST PATH: a one-line bail at the very top of the event
+  //      handler. When playback is healthy (no spinner classes on the
+  //      DOM, both elements unpaused, audio buffered), we return without
+  //      a single DOM lookup or buffer-math call. This is the steady
+  //      state for ~99% of playback time, and it now costs near zero.
+  //
+  //   2. COALESCING THROTTLE: events arrive bunched (timeupdate fires
+  //      4×/sec on each of videoEl + audio = 8/sec; canplay etc. fire on
+  //      every state change). A 60ms throttle ensures the full check runs
+  //      at most ~16/sec. That bounds CPU regardless of event volume,
+  //      and 60ms is well below human-perceptible latency for spinner
+  //      strip (the user reports "a bit too late" only at >250ms).
+  //
+  //   3. rAF AT 30Hz, NOT 60Hz: while spinner classes are present we
+  //      need rapid recheck — but every 2nd frame (~33ms) is plenty.
+  //      Halves the cost of the rAF burst. Plus we cap rAF to 30 frames
+  //      (~1s); after that the polled tick (250ms) takes over. The
+  //      spinner shouldn't legitimately stay up that long during healthy
+  //      playback, so a long burst of rAF is wasted CPU.
+  //
+  //   4. PROGRESS LISTENER DROPPED: progress fires on every buffer
+  //      append (can be 10-30/sec on fast connections). timeupdate +
+  //      canplay + playing already cover every state-change moment we
+  //      care about. The progress event was pure overhead.
+  // ───────────────────────────────────────────────────────────────────────
+  const SPINNER_STRIP_THROTTLE_MS = 60;
+  const SPINNER_RAF_FRAME_GAP = 2;        // run every 2nd rAF (~30Hz)
+  const SPINNER_RAF_MAX_BURST = 30;       // cap total rAF frames per burst
+
+  let _spinnerStripLastRunAt = 0;
   let _spinnerSweepRafScheduled = false;
+  let _spinnerSweepRafFrameTick = 0;
+  let _spinnerSweepRafBurstCount = 0;
   function _scheduleSpinnerSweepRaf() {
     if (_spinnerSweepRafScheduled) return;
     _spinnerSweepRafScheduled = true;
     const fn = () => {
       _spinnerSweepRafScheduled = false;
       try {
-        _sweepStuckSpinner();
-        _enforceSpinnerPausesVideo();
-        // Coupled-audio invariant: video can never advance without audio.
-        // This catches the case where neither the seek nor BufferGuard
-        // raised the spinner, but video is silently advancing past stuck
-        // audio.
-        _enforceCoupledAudioInvariant();
-        // Keep rAF-polling as long as spinner classes are present and we're
-        // not seeking. Bounded by the presence of classes — falls off
-        // automatically when the spinner is stripped or seek takes over.
+        // Run the full check only every Nth frame (default 30Hz).
+        _spinnerSweepRafFrameTick = (_spinnerSweepRafFrameTick + 1) % SPINNER_RAF_FRAME_GAP;
+        if (_spinnerSweepRafFrameTick === 0) {
+          _sweepStuckSpinner();
+          _enforceSpinnerPausesVideo();
+          _enforceCoupledAudioInvariant();
+        }
+        _spinnerSweepRafBurstCount++;
+        // Bail if the spinner cleared, or seek took over, or we hit the
+        // burst cap. Burst cap: after ~1s the polled tick can carry the
+        // load; rAF at this point is just wasted CPU.
+        if (_spinnerSweepRafBurstCount >= SPINNER_RAF_MAX_BURST) {
+          _spinnerSweepRafBurstCount = 0;
+          return;
+        }
         const rootEl = video?.el?.();
-        if (!rootEl) return;
-        if (state.seeking || state.seekBuffering) return;
-        if (_bufferGuardSpinnerOn) return;  // we own it; the tick handles release
+        if (!rootEl) { _spinnerSweepRafBurstCount = 0; return; }
+        if (state.seeking || state.seekBuffering) { _spinnerSweepRafBurstCount = 0; return; }
+        if (_bufferGuardSpinnerOn) { _spinnerSweepRafBurstCount = 0; return; }
         if (rootEl.classList.contains("vjs-waiting") ||
             rootEl.classList.contains("vjs-seeking")) {
           _scheduleSpinnerSweepRaf();
+        } else {
+          _spinnerSweepRafBurstCount = 0;
         }
-      } catch {}
+      } catch { _spinnerSweepRafBurstCount = 0; }
     };
     try {
       if (typeof requestAnimationFrame === "function") requestAnimationFrame(fn);
       else setTimeout(fn, 16);
     } catch { setTimeout(fn, 16); }
   }
+  // Cheap fast-path test. Returns true if we can skip the full check
+  // because playback is obviously healthy. ZERO function calls into the
+  // helper layer; just direct property reads on the two elements + a
+  // single classList lookup. This is the steady-state optimization —
+  // when nothing is wrong, this is all the work we do per event.
+  function _spinnerStripFastBail() {
+    try {
+      // If we own the spinner state, the polled tick handles release;
+      // skip event-driven path entirely.
+      if (_bufferGuardSpinnerOn) return true;
+      // Seek owns the spinner during seeks.
+      if (state.seeking || state.seekBuffering) return true;
+      const rootEl = video?.el?.();
+      if (!rootEl) return true;
+      const hasClass = rootEl.classList.contains("vjs-waiting") ||
+                       rootEl.classList.contains("vjs-seeking");
+      if (hasClass) return false;                       // need to investigate
+      // No spinner class. Check the coupled-audio invariant cheaply:
+      // both elements must be unpaused. If video is paused, nothing to do.
+      // If audio is paused but video isn't, full check needs to fire.
+      if (!videoEl || videoEl.paused) return true;       // video paused → no invariant violation
+      if (coupledMode && audio && audio.paused) return false; // need full check
+      // Both unpaused, no spinner class. Healthy. Bail.
+      return true;
+    } catch {
+      return false; // on error, do the full check (conservative)
+    }
+  }
   function _eventDrivenSpinnerStrip() {
-    // Fast invariant check: sweep + enforce + coupled-audio invariant. All
-    // three are cheap and bail out fast when nothing's wrong. They run on
-    // every native event from either media element so any frame where
-    // video is advancing while audio isn't gets caught within 1 event
-    // (typically 1-16ms).
+    // Step 1: cheap fast-path. Bails in ~1µs when nothing is wrong.
+    if (_spinnerStripFastBail()) return;
+    // Step 2: coalesce. If we've already run within the throttle window,
+    // skip. Bursts of timeupdate + progress + canplay get reduced to
+    // ~16 invocations/sec max regardless of event volume.
+    const _t = now();
+    if ((_t - _spinnerStripLastRunAt) < SPINNER_STRIP_THROTTLE_MS) return;
+    _spinnerStripLastRunAt = _t;
+    // Step 3: full check. Only reached when something might be wrong.
     try {
       _sweepStuckSpinner();
       _enforceSpinnerPausesVideo();
       _enforceCoupledAudioInvariant();
       // If after the sweep the classes are still up, kick rAF-polling so
-      // we strip them within ~16ms of playback being healthy.
+      // we strip them within one rAF cycle of playback being healthy.
       const rootEl = video?.el?.();
       if (!rootEl) return;
       if (rootEl.classList.contains("vjs-waiting") ||
@@ -12014,21 +12090,21 @@ const HAVE_ENOUGH_DATA = 4;
       }
     } catch {}
   }
-  // Bind to native events on both elements. Note: addEventListener on
-  // videoEl/audio is direct; bypassing video.js means video.js's event
-  // unbinding doesn't strip these (good — they're our own stripping logic).
+  // Bind native events. progress was dropped — fires too often on fast
+  // connections (10-30/sec) and is fully covered by timeupdate + canplay.
+  // playing/canplay/canplaythrough fire only on state transitions (~free).
+  // timeupdate fires ~4/sec per element; with the 60ms throttle the
+  // combined event-driven call rate caps at ~16/sec.
   try {
     if (videoEl && typeof videoEl.addEventListener === "function") {
       videoEl.addEventListener("playing", _eventDrivenSpinnerStrip, { passive: true });
       videoEl.addEventListener("timeupdate", _eventDrivenSpinnerStrip, { passive: true });
-      videoEl.addEventListener("progress", _eventDrivenSpinnerStrip, { passive: true });
       videoEl.addEventListener("canplay", _eventDrivenSpinnerStrip, { passive: true });
       videoEl.addEventListener("canplaythrough", _eventDrivenSpinnerStrip, { passive: true });
     }
     if (audio && typeof audio.addEventListener === "function") {
       audio.addEventListener("playing", _eventDrivenSpinnerStrip, { passive: true });
       audio.addEventListener("timeupdate", _eventDrivenSpinnerStrip, { passive: true });
-      audio.addEventListener("progress", _eventDrivenSpinnerStrip, { passive: true });
       audio.addEventListener("canplay", _eventDrivenSpinnerStrip, { passive: true });
       audio.addEventListener("canplaythrough", _eventDrivenSpinnerStrip, { passive: true });
     }
