@@ -11761,47 +11761,66 @@ const HAVE_ENOUGH_DATA = 4;
     try {
       // Bail #1: nothing to enforce without coupled audio.
       if (!coupledMode || !audio) return;
-      // Bail #2: seek owns the spinner+pause state during seeks.
-      if (state.seeking || state.seekBuffering) return;
-      // Bail #3: never fight user-paused state. The user wins.
+      // Bail #2: never fight user-paused state. The user wins.
       if (!state.intendedPlaying) return;
 
       const rootEl = video?.el?.();
       if (!rootEl) return;
       const tNow = now();
 
+      const hasWaitingClass = rootEl.classList.contains("vjs-waiting");
+      const inSeek = state.seeking || state.seekBuffering;
+
+      // ═══ HARD INVARIANT (round-10): spinner-up implies video-paused ═══
+      // The user's emphatic directive: video MUST NEVER play while the
+      // buffer indicator is showing. Runs UNCONDITIONALLY — even during
+      // seek, even during seekBuffering, even when audio is alive (because
+      // if the spinner is genuinely up, our other layers must be in the
+      // middle of doing something, and video advancing through it makes
+      // audio buffer slower since the network bandwidth is split with
+      // video segment fetches that aren't being consumed yet).
+      if (hasWaitingClass && videoEl && !videoEl.paused) {
+        try { state.isProgrammaticVideoPause = true; } catch {}
+        try { videoEl.pause(); } catch {}
+        // Short clear: next throttled tick will re-evaluate. If spinner is
+        // gone by then, the ALIVE branch below will resume video.
+        setTimeout(() => { try { state.isProgrammaticVideoPause = false; } catch {} }, 30);
+      }
+
+      const audioAlive = _audioAliveByDom();
+
+      // ─── SPINNER UI MANAGEMENT ──────────────────────────────────────
+      // When audio is genuinely alive (DOM-fact: !paused && readyState
+      // >= HAVE_FUTURE_DATA), the spinner is by definition wrong. Strip
+      // the classes immediately. This catches the BROWSER's transient
+      // vjs-waiting that fires during keyframe-switching seeks even when
+      // buffer is full — the lingering spinner the user reports.
+      if (audioAlive) {
+        if (hasWaitingClass) rootEl.classList.remove("vjs-waiting");
+        if (rootEl.classList.contains("vjs-seeking")) rootEl.classList.remove("vjs-seeking");
+        try { _bufferGuardSpinnerOn = false; _bufferGuardSpinnerRaisedAt = 0; } catch {}
+      } else if (!inSeek) {
+        // Audio dead AND not in seek → raise spinner so user sees buffering.
+        // Don't add during seek; seek path owns the spinner during its window.
+        if (!hasWaitingClass) rootEl.classList.add("vjs-waiting");
+      }
+
+      // ─── PLAY/PAUSE COUPLING (skipped during seek) ──────────────────
+      // Seek path owns video play/pause + audio kick during seeks/buffer
+      // waits. The hard-invariant above still applies (spinner→pause).
+      if (inSeek) return;
+
       // POST-SEEK KICK WINDOW DETECTOR — fixes "audio plays 1 second twice
-      // on seek." When the kick chain (_kickAudio at 6/80/320ms + watchdog)
-      // is still actively owning audio resume, raw audio.play() from this
-      // invariant races with it: the decoder is mid-seek to T but
-      // audio.play() starts output from whatever the decoder has buffered
-      // (usually OLD position pre-seek), so we hear ~1s of pre-seek audio
-      // before the seek lands and audio jumps to T. Defer to the kick
-      // chain during this window — it does volume restore + currentTime
-      // pin + execProgrammaticAudioPlay (gated, position-aware).
+      // on seek." During the post-seek window the dedicated kick chain
+      // owns audio.play() (it does volume + currentTime pin). If we fire
+      // raw play() here, the decoder plays OLD-position buffer briefly
+      // before its seek to the new position lands.
       const _seekKickActive =
         (state.seekKickAudioAllowedUntil > tNow) ||
         (state.seekAudioKickAt > 0 && (tNow - state.seekAudioKickAt) < 1500);
 
-      const audioAlive = _audioAliveByDom();
-      const hasWaitingClass = rootEl.classList.contains("vjs-waiting");
-
       if (audioAlive) {
-        // ─── HEALTHY: drop spinner, ensure video plays ─────────────────
-        if (hasWaitingClass) {
-          rootEl.classList.remove("vjs-waiting");
-        }
-        if (rootEl.classList.contains("vjs-seeking")) {
-          rootEl.classList.remove("vjs-seeking");
-        }
-        // BUG-1 FIX: when audio is alive but the seek-buffering bookkeeping
-        // flag is still on, clear it now so the next time setSeekBufferingUIVisible
-        // runs it doesn't think we're already showing the spinner and skip
-        // the raise-timestamp reset.
-        try { _bufferGuardSpinnerOn = false; _bufferGuardSpinnerRaisedAt = 0; } catch {}
-        // BUG-3 FIX: resume video aggressively when audio is alive and user
-        // wants playing. Tightened rate-limit (40ms vs 80ms) so post-seek
-        // resume is essentially instant once audio confirms playing.
+        // ALIVE: video must be playing (spinner already cleared above).
         if (videoEl && videoEl.paused && (tNow - _atomicLastVideoResumeAt) > 40) {
           _atomicLastVideoResumeAt = tNow;
           try {
@@ -11810,24 +11829,7 @@ const HAVE_ENOUGH_DATA = 4;
           } catch {}
         }
       } else {
-        // ─── DEAD: spinner up, pause video, kick audio ─────────────────
-        if (!hasWaitingClass) {
-          rootEl.classList.add("vjs-waiting");
-        }
-        // ATOMIC pause — synchronous, no delay, no setTimeout-gated wait.
-        // Rate-limited only to avoid setting/clearing the programmatic
-        // flag 60 times/sec; the pause itself is idempotent if already paused.
-        if (videoEl && !videoEl.paused && (tNow - _atomicLastVideoPauseAt) > 80) {
-          _atomicLastVideoPauseAt = tNow;
-          try { state.isProgrammaticVideoPause = true; } catch {}
-          try { videoEl.pause(); } catch {}
-          setTimeout(() => { try { state.isProgrammaticVideoPause = false; } catch {} }, 50);
-        }
-        // BUG-2 FIX: only kick audio.play() if we're NOT in the post-seek
-        // kick window. The kick chain owns audio resume during that window
-        // (it does volume + position sync that raw play() skips). If we
-        // fire raw play() during the window, the decoder plays OLD position
-        // briefly before the seek lands → "1 second of audio plays twice."
+        // DEAD: video already paused above (hard-invariant). Kick audio.
         if (!_seekKickActive && audio.paused && (tNow - _atomicLastAudioKickAt) > 120) {
           _atomicLastAudioKickAt = tNow;
           try {
@@ -11839,12 +11841,43 @@ const HAVE_ENOUGH_DATA = 4;
     } catch {}
   }
 
+  // ─── CPU THROTTLE ────────────────────────────────────────────────────
+  // Coalesces the invariant calls. The trigger mesh (rAF + setInterval +
+  // 21 event listeners) can fire 100+ times/sec during a seek (progress,
+  // timeupdate, ratechange, canplay, etc. all firing rapidly while the
+  // audio buffer fills). Without this throttle we'd evaluate the invariant
+  // 100 times/sec → tens of property reads per call adds up. With this:
+  // capped at ~33 evaluations/sec regardless of trigger volume.
+  //
+  // This is the round-10 fix for "seeking uses a lot of CPU." The
+  // invariant remains correct because event-driven calls schedule a
+  // pending eval if throttled, so no state transition is missed.
+  let _atomicLastEvalAt = 0;
+  let _atomicCoalescedTimer = null;
+  const _ATOMIC_MIN_INTERVAL_MS = 30;
+  function _atomicScheduleOnce() {
+    if (_atomicCoalescedTimer) return;
+    const tNow = now();
+    const sinceLast = tNow - _atomicLastEvalAt;
+    if (sinceLast >= _ATOMIC_MIN_INTERVAL_MS) {
+      _atomicLastEvalAt = tNow;
+      _atomicAVInvariant();
+      return;
+    }
+    _atomicCoalescedTimer = setTimeout(() => {
+      _atomicCoalescedTimer = null;
+      _atomicLastEvalAt = now();
+      _atomicAVInvariant();
+    }, _ATOMIC_MIN_INTERVAL_MS - sinceLast);
+  }
+
   // ─── TRIGGER MESH: rAF + setInterval + every relevant event ─────────
-  // RAF: ~60Hz when foregrounded. Stops when tab is hidden.
+  // All triggers route through _atomicScheduleOnce (the throttled gate).
+  // rAF runs at ~60Hz when foregrounded but throttle caps work to ~33/sec.
   let _atomicRafScheduled = false;
   function _atomicRafLoop() {
     _atomicRafScheduled = false;
-    _atomicAVInvariant();
+    _atomicScheduleOnce();
     if (!_atomicRafScheduled) {
       _atomicRafScheduled = true;
       try { requestAnimationFrame(_atomicRafLoop); } catch { setTimeout(_atomicRafLoop, 16); }
@@ -11858,7 +11891,7 @@ const HAVE_ENOUGH_DATA = 4;
   }
   // setInterval(100ms): fires even when tab hidden. Doubles as belt for
   // the rAF and ensures the invariant runs in background tabs too.
-  try { setInterval(_atomicAVInvariant, 100); } catch {}
+  try { setInterval(_atomicScheduleOnce, 100); } catch {}
   // Audio events: every signal the audio element can give us.
   try {
     if (audio && typeof audio.addEventListener === "function") {
@@ -11866,7 +11899,7 @@ const HAVE_ENOUGH_DATA = 4;
                    "pause", "play", "progress", "loadeddata", "timeupdate",
                    "suspend", "emptied", "ratechange"];
       for (const ev of evs) {
-        audio.addEventListener(ev, _atomicAVInvariant, { passive: true });
+        audio.addEventListener(ev, _atomicScheduleOnce, { passive: true });
       }
     }
   } catch {}
@@ -11876,7 +11909,7 @@ const HAVE_ENOUGH_DATA = 4;
       const evs = ["timeupdate", "playing", "play", "pause", "waiting",
                    "canplay", "seeked", "loadeddata"];
       for (const ev of evs) {
-        videoEl.addEventListener(ev, _atomicAVInvariant, { passive: true });
+        videoEl.addEventListener(ev, _atomicScheduleOnce, { passive: true });
       }
     }
   } catch {}
