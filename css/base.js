@@ -11770,6 +11770,19 @@ const HAVE_ENOUGH_DATA = 4;
       if (!rootEl) return;
       const tNow = now();
 
+      // POST-SEEK KICK WINDOW DETECTOR — fixes "audio plays 1 second twice
+      // on seek." When the kick chain (_kickAudio at 6/80/320ms + watchdog)
+      // is still actively owning audio resume, raw audio.play() from this
+      // invariant races with it: the decoder is mid-seek to T but
+      // audio.play() starts output from whatever the decoder has buffered
+      // (usually OLD position pre-seek), so we hear ~1s of pre-seek audio
+      // before the seek lands and audio jumps to T. Defer to the kick
+      // chain during this window — it does volume restore + currentTime
+      // pin + execProgrammaticAudioPlay (gated, position-aware).
+      const _seekKickActive =
+        (state.seekKickAudioAllowedUntil > tNow) ||
+        (state.seekAudioKickAt > 0 && (tNow - state.seekAudioKickAt) < 1500);
+
       const audioAlive = _audioAliveByDom();
       const hasWaitingClass = rootEl.classList.contains("vjs-waiting");
 
@@ -11781,9 +11794,15 @@ const HAVE_ENOUGH_DATA = 4;
         if (rootEl.classList.contains("vjs-seeking")) {
           rootEl.classList.remove("vjs-seeking");
         }
-        // Resume video if it's paused and we want playing. Rate-limit to
-        // avoid spamming play() promises (60Hz × 100ms = 6 calls/100ms).
-        if (videoEl && videoEl.paused && (tNow - _atomicLastVideoResumeAt) > 80) {
+        // BUG-1 FIX: when audio is alive but the seek-buffering bookkeeping
+        // flag is still on, clear it now so the next time setSeekBufferingUIVisible
+        // runs it doesn't think we're already showing the spinner and skip
+        // the raise-timestamp reset.
+        try { _bufferGuardSpinnerOn = false; _bufferGuardSpinnerRaisedAt = 0; } catch {}
+        // BUG-3 FIX: resume video aggressively when audio is alive and user
+        // wants playing. Tightened rate-limit (40ms vs 80ms) so post-seek
+        // resume is essentially instant once audio confirms playing.
+        if (videoEl && videoEl.paused && (tNow - _atomicLastVideoResumeAt) > 40) {
           _atomicLastVideoResumeAt = tNow;
           try {
             const _p = videoEl.play();
@@ -11804,9 +11823,12 @@ const HAVE_ENOUGH_DATA = 4;
           try { videoEl.pause(); } catch {}
           setTimeout(() => { try { state.isProgrammaticVideoPause = false; } catch {} }, 50);
         }
-        // If audio is paused (the most common "audio doesn't come back"
-        // shape), kick it. Rate-limited.
-        if (audio.paused && (tNow - _atomicLastAudioKickAt) > 120) {
+        // BUG-2 FIX: only kick audio.play() if we're NOT in the post-seek
+        // kick window. The kick chain owns audio resume during that window
+        // (it does volume + position sync that raw play() skips). If we
+        // fire raw play() during the window, the decoder plays OLD position
+        // briefly before the seek lands → "1 second of audio plays twice."
+        if (!_seekKickActive && audio.paused && (tNow - _atomicLastAudioKickAt) > 120) {
           _atomicLastAudioKickAt = tNow;
           try {
             const _p = audio.play();
@@ -12763,13 +12785,36 @@ const HAVE_ENOUGH_DATA = 4;
         const _spinnerSeekId = state.seekId;
         const _spinnerStart = now();
         let _spinnerEscalated = false;
+        let _spinnerCleared = false;
+        // BUG-1 FIX: event-driven spinner clear. The old 120ms poll meant
+        // the spinner could linger up to 120ms after audio was already
+        // running fine — visible to the user as "buffer icon shows for a
+        // little bit even if its already buffered fine." Now: audio's
+        // 'playing' event clears the spinner in the same tick the audio
+        // element confirms decoder is producing output.
+        const _spinnerOnAudioPlaying = () => {
+          if (_spinnerCleared) return;
+          if (_spinnerSeekId !== state.seekId) return;
+          if (state.seeking || state.seekBuffering) return;
+          if (!audio || audio.paused) return;
+          _spinnerCleared = true;
+          setSeekBufferingUIVisible(false);
+          try { audio.removeEventListener("playing", _spinnerOnAudioPlaying); } catch {}
+          try { audio.removeEventListener("canplaythrough", _spinnerOnAudioPlaying); } catch {}
+        };
+        try { audio.addEventListener("playing", _spinnerOnAudioPlaying, { passive: true }); } catch {}
+        try { audio.addEventListener("canplaythrough", _spinnerOnAudioPlaying, { passive: true }); } catch {}
         const _spinnerVerify = () => {
+          if (_spinnerCleared) return;
           if (_spinnerSeekId !== state.seekId) {
             // Newer seek took over — let its own resume drive the spinner.
             return;
           }
           if (!state.intendedPlaying || state.restarting) {
+            _spinnerCleared = true;
             setSeekBufferingUIVisible(false);
+            try { audio.removeEventListener("playing", _spinnerOnAudioPlaying); } catch {}
+            try { audio.removeEventListener("canplaythrough", _spinnerOnAudioPlaying); } catch {}
             return;
           }
           if (state.seeking || state.seekBuffering) {
@@ -12778,7 +12823,10 @@ const HAVE_ENOUGH_DATA = 4;
           }
           // Audio confirmed running? Drop the spinner.
           if (audioActuallyPlaying()) {
+            _spinnerCleared = true;
             setSeekBufferingUIVisible(false);
+            try { audio.removeEventListener("playing", _spinnerOnAudioPlaying); } catch {}
+            try { audio.removeEventListener("canplaythrough", _spinnerOnAudioPlaying); } catch {}
             return;
           }
           // No audio yet. Decide whether to escalate.
@@ -12786,7 +12834,10 @@ const HAVE_ENOUGH_DATA = 4;
           if (_ageSpinner > 10000) {
             // 10s grace: hide spinner so UI isn't permanently stuck. The
             // watchdog keeps poking audio in the background.
+            _spinnerCleared = true;
             setSeekBufferingUIVisible(false);
+            try { audio.removeEventListener("playing", _spinnerOnAudioPlaying); } catch {}
+            try { audio.removeEventListener("canplaythrough", _spinnerOnAudioPlaying); } catch {}
             return;
           }
           if (!_spinnerEscalated && _ageSpinner > 1500 && audio && audio.paused) {
@@ -12803,9 +12854,13 @@ const HAVE_ENOUGH_DATA = 4;
             } catch {}
             forceAudioPlayNoMatterWhat();
           }
-          setTimeout(_spinnerVerify, 120);
+          // BUG-1 FIX: tightened poll cadence 120→40ms. Even when the
+          // audio 'playing' event misses (some browsers don't fire it for
+          // seek-resume on MSE), the poll catches the audioActuallyPlaying()
+          // transition within 40ms instead of 120ms.
+          setTimeout(_spinnerVerify, 40);
         };
-        setTimeout(_spinnerVerify, 120);
+        setTimeout(_spinnerVerify, 40);
       } else {
         state.isProgrammaticVideoPlay = true;
         // DOMEXCEPTION FIX: video.play() / videoEl.play() return Promises that
@@ -18673,50 +18728,40 @@ const HAVE_ENOUGH_DATA = 4;
               // override was installed, bypassing every layered gate. This
               // is the root fix for "video plays silently after seek".
               armPostSeekAudioWatchdog(_kickSeekId);
-              // SPINNER GATE: keep the buffering spinner visible until audio
-              // is verified playing. Implements the user's directive: "if
-              // audio is not playing/cannot play it doesn't finish the seek
-              // or buffer." Polls every 120ms; auto-escalates to bypass at
-              // 1.5s; auto-hides spinner at 10s so UI isn't permanently
-              // stuck (watchdog continues trying in the background).
+              // BUG-1 FIX: removed the unconditional setSeekBufferingUIVisible(true)
+              // + 120ms verify loop. That code raised the spinner on EVERY seek
+              // and kept it visible until a poll caught audioActuallyPlaying() —
+              // a 0-240ms forced spinner showing even on clean seeks where the
+              // buffer was fine the entire time. The atomic invariant is now the
+              // sole owner of vjs-waiting class for non-buffer-wait seeks; it
+              // raises within 16ms when audio is actually dead and clears within
+              // 16ms when audio is alive. Result: spinner only ever shows when
+              // audio truly can't advance, never as bookkeeping artifact.
+              //
+              // The 1.5s "force audio if still paused" escalation is preserved
+              // below as a lightweight watchdog — no spinner raise, just a
+              // single forceAudioPlayNoMatterWhat() call if audio refuses to
+              // resume after the kick chain exhausts.
               if (coupledMode && audio) {
-                setSeekBufferingUIVisible(true);
-                const _seekedSpinnerId = _kickSeekId;
-                const _seekedSpinnerStart = now();
-                let _seekedSpinnerEscalated = false;
-                const _seekedSpinnerVerify = () => {
-                  if (_seekedSpinnerId !== state.seekId) return;
-                  if (!state.intendedPlaying || state.restarting) {
-                    setSeekBufferingUIVisible(false);
-                    return;
-                  }
+                const _forceSeekId = _kickSeekId;
+                setTimeout(() => {
+                  if (_forceSeekId !== state.seekId) return;
+                  if (!state.intendedPlaying || state.restarting) return;
                   if (state.seeking || state.seekBuffering) return;
-                  if (audioActuallyPlaying()) {
-                    setSeekBufferingUIVisible(false);
-                    return;
-                  }
-                  const _ageSeekedSpin = now() - _seekedSpinnerStart;
-                  if (_ageSeekedSpin > 10000) {
-                    setSeekBufferingUIVisible(false);
-                    return;
-                  }
-                  if (!_seekedSpinnerEscalated && _ageSeekedSpin > 1500 &&
-                      audio && audio.paused) {
-                    _seekedSpinnerEscalated = true;
-                    try {
-                      const _vtSp = Number(video.currentTime()) || 0;
-                      if (isFinite(_vtSp) && _vtSp > 0.05) {
-                        state._allowAudioTimeWrite = true;
-                        try { audio.currentTime = _vtSp; } catch {}
-                        state._allowAudioTimeWrite = false;
-                      }
-                      try { audio.volume = targetVolFromVideo(); } catch {}
-                    } catch {}
-                    forceAudioPlayNoMatterWhat();
-                  }
-                  setTimeout(_seekedSpinnerVerify, 120);
-                };
-                setTimeout(_seekedSpinnerVerify, 120);
+                  if (!audio || !audio.paused) return;
+                  // Audio still paused 1.5s after seek with the kick chain
+                  // exhausted. Snap to video pos + force play.
+                  try {
+                    const _vtSp = Number(video.currentTime()) || 0;
+                    if (isFinite(_vtSp) && _vtSp > 0.05) {
+                      state._allowAudioTimeWrite = true;
+                      try { audio.currentTime = _vtSp; } catch {}
+                      state._allowAudioTimeWrite = false;
+                    }
+                    try { audio.volume = targetVolFromVideo(); } catch {}
+                  } catch {}
+                  forceAudioPlayNoMatterWhat();
+                }, 1500);
               }
               // LONG-VIDEO GUARD: on 3-4 hour HLS streams audio segments fetch
               // on a separate schedule from video. If audio has NO buffered
