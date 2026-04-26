@@ -8604,93 +8604,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // --- play/pause toggle debounce (YouTube-style spam protection)
-  // When user spams the play/pause button, we don't immediately execute
-  // every toggle. Instead: each click cancels the pending action and starts
-  // a short timer. Only the LAST click in a rapid burst actually executes.
-  // This prevents state thrashing, audio pops, and glitchy play-pause loops.
-  let _toggleDebounceTimer = null;
-  let _toggleDebounceCount = 0;
-  let _toggleDebounceWindowStart = 0;
-  const TOGGLE_DEBOUNCE_WINDOW_MS = 1000; // 1-second window
-  const TOGGLE_DEBOUNCE_THRESHOLD = 30;   // 30+ clicks in 1s = extreme spam only
-  const TOGGLE_DEBOUNCE_DELAY_MS = 200;   // wait 200ms for spam to settle
-
-  function isToggleSpamming() {
-    const elapsed = now() - _toggleDebounceWindowStart;
-    if (elapsed > TOGGLE_DEBOUNCE_WINDOW_MS) {
-      _toggleDebounceCount = 0;
-      _toggleDebounceWindowStart = now();
-    }
-    return _toggleDebounceCount >= TOGGLE_DEBOUNCE_THRESHOLD;
-  }
-
-  function trackToggleClick() {
-    const elapsed = now() - _toggleDebounceWindowStart;
-    if (elapsed > TOGGLE_DEBOUNCE_WINDOW_MS) {
-      _toggleDebounceCount = 0;
-      _toggleDebounceWindowStart = now();
-    }
-    _toggleDebounceCount++;
-  }
-
-  // Debounced toggle: schedules the actual play or pause to run after a
-  // short delay. If the user clicks again before the delay expires, the
-  // previous pending action is cancelled and replaced with the new one.
-  // wantPlay: true = play, false = pause
-  // immediate: if true, skip debounce (used for first/second click)
-  let _lastToggleTime = 0;
-  function debouncedToggle(wantPlay, immediate) {
-    const t = now();
-    const doAction = () => {
-      _toggleDebounceTimer = null;
-      if (wantPlay) {
-        // Reset audio state that may have been trashed by rapid pause/play spam.
-        // Without this, audio can get stuck muted or paused after spam settles.
-        state.isProgrammaticAudioPause = false;
-        state.audioPlayGeneration++;
-        state.audioPausedSince = 0;
-        state.audioPauseUntil = 0;
-        state.videoStallAudioPaused = false;
-        state.stallAudioPausedSince = 0;
-        cancelActiveFade();
-        markUserPlayIntent(USER_PLAY_INTENT_FAST_MS);
-        playTogether().catch(() => { });
-        // Belt: after a short settle, force audio to play if video is playing
-        if (coupledMode && audio) {
-          setTimeout(() => {
-            if (!state.intendedPlaying) return;
-            if (!getVideoPaused() && audio.paused) {
-              const vt = Number(video.currentTime()) || 0;
-              if (isFinite(vt)) safeSetAudioTime(vt);
-              audio.play().catch(() => { });
-            }
-            // Restore volume in case it's stuck at 0
-            const tv = targetVolFromVideo();
-            if (audio.volume < tv - 0.05) {
-              softUnmuteAudio(80).catch(() => { });
-            }
-          }, 150);
-        }
-      } else {
-        markUserPauseIntent(USER_PAUSE_INTENT_FAST_MS);
-        clearPendingPlayResumesForPause();
-        pauseTogether();
-      }
-    };
-
-    if (immediate || (t - _lastToggleTime > TOGGLE_DEBOUNCE_DELAY_MS)) {
-      if (_toggleDebounceTimer) { clearTimeout(_toggleDebounceTimer); _toggleDebounceTimer = null; }
-      _lastToggleTime = t;
-      doAction();
-    } else {
-      if (_toggleDebounceTimer) clearTimeout(_toggleDebounceTimer);
-      _toggleDebounceTimer = setTimeout(() => {
-        _lastToggleTime = now();
-        doAction();
-      }, Math.max(10, TOGGLE_DEBOUNCE_DELAY_MS - (t - _lastToggleTime)));
-    }
-  }
-
   function checkAudioPlayAttempt() {
     const nowTs = now();
     if ((nowTs - state.audioPlayAttemptResetAt) > AUDIO_PLAY_ATTEMPT_RESET_MS) {
@@ -16530,25 +16443,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
 
-      // Spam debounce: if user is clicking too fast, debounce the toggle.
-      // Only the last click in a rapid burst actually executes. This prevents
-      // glitchy play-pause-play loops from button spamming.
-      if (isPlayCtrl || isTechSurface) {
-        if (isToggleSpamming()) {
-          const wantPlay = getVideoPaused();
-          beginUserToggleTxn(wantPlay, USER_TOGGLE_TXN_FAST_MS);
-          // During spam, prevent video.js from processing the native event
-          // by setting our intent flags so the event handlers accept it quietly
-          if (wantPlay) {
-            state.userPlayIntentPresetAt = now();
-          } else {
-            state.userPauseIntentPresetAt = now();
-          }
-          debouncedToggle(wantPlay, false);
-          pendingTechTogglePausedState = null;
-          return;
-        }
-      }
+
 
       if (isPlayCtrl) {
         pendingTechTogglePausedState = null;
