@@ -607,12 +607,7 @@ document.addEventListener("DOMContentLoaded", () => {
     audioZeroVolumeConfirmed: false,
     rapidPlayPauseCount: 0,
     rapidPlayPauseResetAt: 0,
-    // Separate user-click spam tracker — only counts deliberate pointer/key events,
-    // NOT background/auto play-pause events. Used for audio protection.
-    userClickSpamCount: 0,
-    userClickSpamWindowStart: 0,
-    userClickSpamActive: false,
-    userClickSpamUntil: 0,
+    rapidPlayPauseResetAt: 0,
     userToggleTxnUntil: 0,
     userToggleExpectedPlay: null,
     audioPlayAttemptCount: 0,
@@ -8575,35 +8570,7 @@ document.addEventListener("DOMContentLoaded", () => {
     try { if (audio && !state.userMutedAudio && audio.muted) audio.muted = false; } catch { }
   }
 
-  function checkRapidPlayPause() {
-    // NOTE: This function is called from audio play path.
-    if (state.userClickSpamActive && now() < state.userClickSpamUntil) {
-      return true;
-    }
-    state.userClickSpamActive = false;
-    return false;
-  }
 
-  // Track a deliberate user play/pause click for spam detection.
-  // Call this from onPressStart / onKeyDown (NOT from event handlers for background events).
-  function trackUserClickForSpam() {
-    const nowTs = now();
-    if ((nowTs - state.userClickSpamWindowStart) > USER_SPAM_CLICK_WINDOW_MS) {
-      state.userClickSpamCount = 0;
-      state.userClickSpamWindowStart = nowTs;
-    }
-    state.userClickSpamCount++;
-    if (state.userClickSpamCount >= USER_SPAM_CLICK_THRESHOLD) {
-      state.userClickSpamActive = true;
-      state.userClickSpamUntil = nowTs + USER_SPAM_ACTIVE_MS;
-      state.userClickSpamCount = 0;
-      state.userClickSpamWindowStart = nowTs;
-      return true;
-    }
-    return false;
-  }
-
-  // --- play/pause toggle debounce (YouTube-style spam protection)
   function checkAudioPlayAttempt() {
     const nowTs = now();
     if ((nowTs - state.audioPlayAttemptResetAt) > AUDIO_PLAY_ATTEMPT_RESET_MS) {
@@ -9736,7 +9703,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const myGeneration = state.audioPlayGeneration;
     const mySession = state.playSessionId;
 
-    if (!force && checkRapidPlayPause()) return !audio.paused;
     if (!force && !checkAudioPlayAttempt()) return !audio.paused;
     if (!force && !audio.paused) return true;
 
@@ -16422,8 +16388,6 @@ document.addEventListener("DOMContentLoaded", () => {
       if (isSeekControl) { state._pauseSavedPosition = -1; state._pauseSavedAt = 0; }
 
       if (isPlayCtrl || isTechSurface) {
-        trackUserClickForSpam();
-        trackToggleClick();
         beginUserToggleTxn(getVideoPaused(), USER_TOGGLE_TXN_FAST_MS);
         // Pre-set user intent only for actual toggle surfaces. Setting this on
         // all pointer events (seek/menus/sliders) creates false play/pause intents.
