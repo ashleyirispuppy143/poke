@@ -8638,12 +8638,9 @@ document.addEventListener("DOMContentLoaded", () => {
   // previous pending action is cancelled and replaced with the new one.
   // wantPlay: true = play, false = pause
   // immediate: if true, skip debounce (used for first/second click)
+  let _lastToggleTime = 0;
   function debouncedToggle(wantPlay, immediate) {
-    if (_toggleDebounceTimer) {
-      clearTimeout(_toggleDebounceTimer);
-      _toggleDebounceTimer = null;
-    }
-
+    const t = now();
     const doAction = () => {
       _toggleDebounceTimer = null;
       if (wantPlay) {
@@ -8681,10 +8678,16 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     };
 
-    if (immediate) {
+    if (immediate || (t - _lastToggleTime > TOGGLE_DEBOUNCE_DELAY_MS)) {
+      if (_toggleDebounceTimer) { clearTimeout(_toggleDebounceTimer); _toggleDebounceTimer = null; }
+      _lastToggleTime = t;
       doAction();
     } else {
-      _toggleDebounceTimer = setTimeout(doAction, TOGGLE_DEBOUNCE_DELAY_MS);
+      if (_toggleDebounceTimer) clearTimeout(_toggleDebounceTimer);
+      _toggleDebounceTimer = setTimeout(() => {
+        _lastToggleTime = now();
+        doAction();
+      }, Math.max(10, TOGGLE_DEBOUNCE_DELAY_MS - (t - _lastToggleTime)));
     }
   }
 
@@ -16473,8 +16476,8 @@ document.addEventListener("DOMContentLoaded", () => {
       try {
         const el = getTargetEl(target);
         if (!el) return false;
-        if (el.closest?.(".vjs-control-bar, .vjs-menu, .vjs-menu-content, .vjs-slider, .vjs-control")) return false;
-        return !!el.closest?.(".vjs-tech, video");
+        if (el.closest?.(".vjs-control-bar, .vjs-menu, .vjs-menu-content, .vjs-slider, .vjs-control, .vjs-button")) return false;
+        return !!el.closest?.(".video-js, .vjs-tech, video");
       } catch { }
       return false;
     };
@@ -16634,6 +16637,16 @@ document.addEventListener("DOMContentLoaded", () => {
         } else if (!wasPaused && paused) {
           markUserPauseIntent(USER_PAUSE_INTENT_FAST_MS);
           clearPendingPlayResumesForPause();
+        } else if (wasPaused === paused) {
+          // Native Video.js failed or ignored the click! We force the toggle ourselves
+          // so the user's click isn't completely ignored ("doesn't let me pause at all").
+          if (wasPaused) {
+            markUserPlayIntent(USER_PLAY_INTENT_FAST_MS);
+            execProgrammaticVideoPlay({ force: true, minGapMs: 0 });
+          } else {
+            markUserPauseIntent(USER_PAUSE_INTENT_FAST_MS);
+            pauseHard();
+          }
         }
       });
     };
