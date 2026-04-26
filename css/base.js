@@ -16414,25 +16414,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 
-      if (isPlayCtrl) {
-        pendingTechTogglePausedState = null;
-        if (getVideoPaused()) markUserPlayIntent(USER_PLAY_INTENT_FAST_MS, { skipImmediateAudioKick: true, skipImmediateVideoKick: true });
-        else {
-          markUserPauseIntent(USER_PAUSE_INTENT_FAST_MS);
-          clearPendingPlayResumesForPause();
-        }
-        return;
-      }
-      if (isTechSurface) {
+      if (isPlayCtrl || isTechSurface) {
         pendingTechTogglePausedState = getVideoPaused();
         beginUserToggleTxn(!!pendingTechTogglePausedState, USER_TOGGLE_TXN_FAST_MS);
         if (!getVideoPaused()) {
           state.userPauseUntil = Math.max(state.userPauseUntil, now() + USER_PAUSE_INTENT_FAST_MS);
         }
-        // FIX: Set play/pause intent for ALL modes at pointerdown time, not
-        // just non-coupled. Without this, coupled mode tech-surface clicks
-        // relied on the onClick RAF callback which fires AFTER Video.js and
-        // AFTER the pause event handler - causing missed pause intent.
+        // Set play/pause intent for ALL modes at pointerdown time
         if (getVideoPaused()) {
           if (!coupledMode) {
             state.intendedPlaying = true;
@@ -16455,73 +16443,53 @@ document.addEventListener("DOMContentLoaded", () => {
       pendingTechTogglePausedState = null;
     };
     const onClick = event => {
-      if (isPlayControlTarget(event.target)) {
-        const clickTs = now();
+      const isPlayCtrl = isPlayControlTarget(event.target);
+      const isTechSurface = isTechSurfaceTarget(event.target);
+      
+      if (isPlayCtrl || isTechSurface) {
+        // Prevent Video.js from double-toggling (it often toggles on both mousedown and click)
+        try { event.stopPropagation(); } catch {}
+
+        const wasPaused = pendingTechTogglePausedState;
         pendingTechTogglePausedState = null;
-        // ─── INTENT FROM POINTERDOWN ───────────────────────────────────
-        // Trust the pointerdown handler's intent capture FIRST. Reading
-        // wasPaused at click time is unreliable: an autoplay-queued play
-        // can fire between pointerdown and click, flipping paused→false.
-        // Without this check, the else branch would mis-mark the click
-        // as a pause request and call markUserPauseIntent — the EXACT
-        // root of "click play button → play-pauses".
-        const _pdPlayRecent = state.userPlayIntentPresetAt > 0 &&
-          (clickTs - state.userPlayIntentPresetAt) < 650;
-        const _pdPauseRecent = state.userPauseIntentPresetAt > 0 &&
-          (clickTs - state.userPauseIntentPresetAt) < 650;
-        if (_pdPlayRecent && !_pdPauseRecent) {
-          // Pointerdown set play intent for THIS click. Don't double-mark.
-          // markUserPlayIntent already ran in onPressStart.
-          return;
-        }
-        if (_pdPauseRecent && !_pdPlayRecent) {
-          // Pointerdown set pause intent for THIS click. Don't double-mark.
-          return;
-        }
-        // Fallback when neither pointerdown intent flag is fresh
-        // (browsers/UI paths where pointerdown didn't surface to us).
-        const wasPaused = getVideoPaused();
-        if (wasPaused) {
-          const haveRecentPlayIntent =
-            userToggleRecently("play", 650) ||
-            userToggleExpectingPlay();
-          if (!haveRecentPlayIntent) {
-            markUserPlayIntent(USER_PLAY_INTENT_FAST_MS, { skipImmediateAudioKick: true, skipImmediateVideoKick: true });
-          }
-        } else {
-          const haveRecentPauseIntent =
-            userToggleRecently("pause", 650) ||
-            userToggleExpectingPause();
-          if (!haveRecentPauseIntent) {
-            markUserPauseIntent(USER_PAUSE_INTENT_FAST_MS);
-            clearPendingPlayResumesForPause();
-          }
-        }
-        return;
-      }
-      if (!isTechSurfaceTarget(event.target)) { pendingTechTogglePausedState = null; return; }
-      const wasPaused = pendingTechTogglePausedState;
-      pendingTechTogglePausedState = null;
-      if (typeof wasPaused !== "boolean") return;
-      requestAnimationFrame(() => {
-        const paused = getVideoPaused();
-        if (wasPaused && !paused) {
-          markUserPlayIntent(USER_PLAY_INTENT_FAST_MS);
-        } else if (!wasPaused && paused) {
-          markUserPauseIntent(USER_PAUSE_INTENT_FAST_MS);
-          clearPendingPlayResumesForPause();
-        } else if (wasPaused === paused) {
-          // Native Video.js failed or ignored the click! We force the toggle ourselves
-          // so the user's click isn't completely ignored ("doesn't let me pause at all").
-          if (wasPaused) {
+
+        if (typeof wasPaused !== "boolean") {
+          // Fallback if onPressStart didn't fire for some reason
+          const paused = getVideoPaused();
+          if (paused) {
             markUserPlayIntent(USER_PLAY_INTENT_FAST_MS);
-            execProgrammaticVideoPlay({ force: true, minGapMs: 0 });
+            try { execProgrammaticVideoPlay({ force: true, minGapMs: 0 }); } catch {}
           } else {
             markUserPauseIntent(USER_PAUSE_INTENT_FAST_MS);
             pauseHard();
           }
+          return;
         }
-      });
+
+        requestAnimationFrame(() => {
+          const paused = getVideoPaused();
+          if (wasPaused && !paused) {
+            // Video.js successfully started it (likely via mousedown)
+            markUserPlayIntent(USER_PLAY_INTENT_FAST_MS);
+          } else if (!wasPaused && paused) {
+            // Video.js successfully paused it
+            markUserPauseIntent(USER_PAUSE_INTENT_FAST_MS);
+            clearPendingPlayResumesForPause();
+          } else if (wasPaused === paused) {
+            // Native Video.js failed, ignored the interaction, or we stopped propagation! 
+            // We force the toggle ourselves so the user's click isn't ignored.
+            if (wasPaused) {
+              markUserPlayIntent(USER_PLAY_INTENT_FAST_MS);
+              try { execProgrammaticVideoPlay({ force: true, minGapMs: 0 }); } catch {}
+            } else {
+              markUserPauseIntent(USER_PAUSE_INTENT_FAST_MS);
+              pauseHard();
+            }
+          }
+        });
+        return;
+      }
+      pendingTechTogglePausedState = null;
     };
     const onKeyDown = event => {
       // Unlock AudioContext on keyboard interaction too
