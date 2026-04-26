@@ -25,7 +25,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 //////////////// THE PLAYER, START ////////////////////////
- try {
+try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -7286,6 +7286,7 @@ const HAVE_ENOUGH_DATA = 4;
     const intentMs = Math.max(400, Number(ms) || USER_PLAY_INTENT_FAST_MS);
     const txnMs = Math.max(USER_TOGGLE_TXN_FAST_MS, Math.min(intentMs, 1200));
     const skipImmediateAudioKick = !!(opts && opts.skipImmediateAudioKick);
+    const skipImmediateVideoKick = !!(opts && opts.skipImmediateVideoKick);
     noteUserToggle("play");
     beginUserToggleTxn(true, txnMs);
     // Snapshot the pause-intent timestamp BEFORE we clear it below — the long-
@@ -7408,7 +7409,12 @@ const HAVE_ENOUGH_DATA = 4;
     // Kick video immediately on real foreground play intent instead of waiting for
     // playTogether/sync bookkeeping to get around to it. This removes the "late play"
     // feeling when another internal path is still in flight.
-    if (document.visibilityState === "visible" &&
+    // skipImmediateVideoKick: set by UI click/keyboard handlers where Video.js's own
+    // toggle handler will fire shortly after (on click/keyup). Pre-playing here causes
+    // Video.js to see the video already playing and PAUSE it (toggle behaviour),
+    // producing the "play-pause" double-toggle the user reported.
+    if (!skipImmediateVideoKick &&
+        document.visibilityState === "visible" &&
         !state.seeking && !state.seekBuffering && !state.restarting &&
         !mediaSessionForcedPauseActive() && !userPauseLockActive()) {
       startForegroundUserPlayRetry();
@@ -16289,7 +16295,7 @@ const HAVE_ENOUGH_DATA = 4;
 
       if (isPlayCtrl) {
         pendingTechTogglePausedState = null;
-        if (getVideoPaused()) markUserPlayIntent(USER_PLAY_INTENT_FAST_MS, { skipImmediateAudioKick: true });
+        if (getVideoPaused()) markUserPlayIntent(USER_PLAY_INTENT_FAST_MS, { skipImmediateAudioKick: true, skipImmediateVideoKick: true });
         else {
           markUserPauseIntent(USER_PAUSE_INTENT_FAST_MS);
           clearPendingPlayResumesForPause();
@@ -16331,7 +16337,7 @@ const HAVE_ENOUGH_DATA = 4;
             userToggleRecently("play", 650) ||
             userToggleExpectingPlay();
           if (!haveRecentPlayIntent) {
-            markUserPlayIntent(USER_PLAY_INTENT_FAST_MS, { skipImmediateAudioKick: true });
+            markUserPlayIntent(USER_PLAY_INTENT_FAST_MS, { skipImmediateAudioKick: true, skipImmediateVideoKick: true });
           }
         } else {
           const haveRecentPauseIntent =
@@ -16372,10 +16378,9 @@ const HAVE_ENOUGH_DATA = 4;
         markUserSeekIntent(2800);
       }
       if (code === "Space" || code === "KeyK" || code === "MediaPlayPause") {
-        if (code === "Space" && event.target && event.target.tagName === "BUTTON") {
-          event.preventDefault(); // Prevent synthetic click to avoid double-toggle
-        }
-        if (getVideoPaused()) markUserPlayIntent(USER_PLAY_INTENT_FAST_MS);
+        // skipImmediateVideoKick: Video.js handles Space/K internally and toggles
+        // play/pause itself. If we pre-play here, Video.js sees playing → pauses.
+        if (getVideoPaused()) markUserPlayIntent(USER_PLAY_INTENT_FAST_MS, { skipImmediateVideoKick: true });
         else {
           markUserPauseIntent(USER_PAUSE_INTENT_FAST_MS);
           clearPendingPlayResumesForPause();
