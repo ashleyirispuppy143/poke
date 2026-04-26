@@ -25,7 +25,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 //////////////// THE PLAYER, START ////////////////////////
-try {
+ try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -740,7 +740,18 @@ document.addEventListener("DOMContentLoaded", () => {
     // calls vn.play() / audio.play() to recover from a spurious bg pause
     // funnels through canKickBackgroundPlay() + markBackgroundPlayKicked().
     // Single dedup clock across heartbeat, BPM, MQM, seamlessBgCatchUp.
-    _bgLastPlayKickAt: 0
+    _bgLastPlayKickAt: 0,
+    // ─── PlayCommitGuard state ─────────────────────────────────────────
+    // 5-second nuclear protection window after user clicks play.
+    // During this window: no stall-based audio kills, no counter-play
+    // surrenders, no audio gate stall blocks, no waiting-handler stall
+    // flag cascades. A dedicated watchdog re-kicks both tracks if
+    // either stops. This is the definitive fix for "click play → video
+    // + audio stops after a few seconds".
+    _playCommitGuardUntil: 0,
+    _playCommitWatchdogTimer: null,
+    _playCommitWatchdogSession: 0,
+    _playCommitLastKickAt: 0
   };
   // Block micro-seeks during play/pause transitions. 500ms covers the full
   // decoder warmup window — the old 300ms allowed micro-seeks to land during
@@ -750,6 +761,97 @@ document.addEventListener("DOMContentLoaded", () => {
   const PLAY_PAUSE_MICRO_SEEK_BLOCK_MS = 300;
   const MICRO_SEEK_TOGGLE_SUPPRESS_MS = 400;
   const MICRO_SEEK_SEEK_SUPPRESS_MS = 600;
+
+  // ─── PlayCommitGuard ──────────────────────────────────────────────────
+  // Returns true when the user recently clicked play and we are inside the
+  // nuclear protection window. ALL stall-based pauses / audio kills / burst
+  // breaker surrenders MUST check this and yield to the user's intent.
+  // 5 seconds covers the full decoder warmup + initial buffer fill on even
+  // the slowest connections / oldest hardware.
+  const PLAY_COMMIT_GUARD_DURATION_MS = 5000;
+  function playCommitGuardActive() {
+    return state._playCommitGuardUntil > 0 && now() < state._playCommitGuardUntil;
+  }
+  function armPlayCommitGuard() {
+    state._playCommitGuardUntil = now() + PLAY_COMMIT_GUARD_DURATION_MS;
+    _startPlayCommitWatchdog();
+  }
+  function clearPlayCommitGuard() {
+    state._playCommitGuardUntil = 0;
+    _stopPlayCommitWatchdog();
+  }
+  // Watchdog: polls every 350ms during the guard window. If video or audio
+  // is paused while intendedPlaying is true, it re-kicks them. This catches
+  // every edge case that the event-driven guards miss — browser internal
+  // pauses, decoder pipeline resets, async promise rejections, etc.
+  function _startPlayCommitWatchdog() {
+    _stopPlayCommitWatchdog();
+    const session = ++state._playCommitWatchdogSession;
+    const poll = () => {
+      // Guard expired or session changed → stop
+      if (session !== state._playCommitWatchdogSession) return;
+      if (!playCommitGuardActive()) { _stopPlayCommitWatchdog(); return; }
+      // User changed their mind → stop
+      if (!state.intendedPlaying || state.endedNaturally || state.restarting) {
+        _stopPlayCommitWatchdog(); return;
+      }
+      // Don't interfere with seeking
+      if (state.seeking || state.seekBuffering) {
+        state._playCommitWatchdogTimer = setTimeout(poll, 350);
+        return;
+      }
+      const _wcNow = now();
+      // Debounce kicks — at most once per 300ms
+      if ((_wcNow - (state._playCommitLastKickAt || 0)) < 300) {
+        state._playCommitWatchdogTimer = setTimeout(poll, 350);
+        return;
+      }
+      try {
+        const vn = getVideoNode();
+        // Re-kick video if it's paused
+        if (vn && vn.paused && state.intendedPlaying &&
+            !state.endedNaturally && !state.restarting) {
+          state._playCommitLastKickAt = _wcNow;
+          state.isProgrammaticVideoPlay = true;
+          try { vn.play().catch(() => {}); } catch {}
+          setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 200);
+        }
+        // Re-kick audio if it's paused (coupled mode)
+        if (coupledMode && audio && audio.paused && state.intendedPlaying &&
+            !state.endedNaturally && !state.restarting) {
+          state._playCommitLastKickAt = _wcNow;
+          // Clear stale stall flags that would block audio.play() gate
+          state.videoStallAudioPaused = false;
+          state.stallAudioPausedSince = 0;
+          state.stallAudioResumeHoldUntil = 0;
+          state.foregroundBufferAudioHoldUntil = 0;
+          state.audioEventsSquelchedUntil = 0;
+          state.isProgrammaticAudioPause = false;
+          // Sync audio position to video
+          try {
+            const vt = Number(getVideoNode()?.currentTime || 0);
+            const at = Number(audio.currentTime || 0);
+            if (isFinite(vt) && Math.abs(at - vt) > 0.8) {
+              audio.currentTime = vt;
+            }
+          } catch {}
+          try {
+            if (audio.muted && !state.userMutedAudio) audio.muted = false;
+          } catch {}
+          try { audio.play().catch(() => {}); } catch {}
+        }
+      } catch {}
+      state._playCommitWatchdogTimer = setTimeout(poll, 350);
+    };
+    // First check after 400ms — gives the initial play() call time to settle
+    state._playCommitWatchdogTimer = setTimeout(poll, 400);
+  }
+  function _stopPlayCommitWatchdog() {
+    if (state._playCommitWatchdogTimer) {
+      clearTimeout(state._playCommitWatchdogTimer);
+      state._playCommitWatchdogTimer = null;
+    }
+  }
 
   // Audio play() gate — the single chokepoint for ALL audio playback.
   // Rule: audio NEVER plays in visible foreground unless video has decoded data.
@@ -802,7 +904,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Block audio only when BOTH video readyState < HAVE_FUTURE_DATA AND
       // a stall flag is sustained (>400ms). readyState alone flickers 2↔3.
-      if (_gateVisible && state.firstPlayCommitted && !inSeekKickWindow) {
+      // PLAY COMMIT GUARD: during the 5s post-user-play window, NEVER block
+      // audio for stalls. Decoder warmup stalls are expected and temporary;
+      // killing audio here is what causes "plays then stops in a few seconds".
+      if (_gateVisible && state.firstPlayCommitted && !inSeekKickWindow && !playCommitGuardActive()) {
         const _stallConfirmed = state.videoWaiting || state.videoStallAudioPaused;
         const _stallSustained = state.videoStallAudioPaused ||
           (state.videoWaiting && state.videoStallSince > 0 && (now() - state.videoStallSince) > 400);
@@ -1772,6 +1877,10 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!state.intendedPlaying) return true;
       if (state.endedNaturally || state.restarting) return true;
       if (state.seeking || state.seekBuffering) return true;
+      // PLAY COMMIT GUARD: during the post-user-play window, stall flags
+      // must NOT prevent audio counter-play. The stall is from decoder
+      // warmup — the user just clicked play and expects sound.
+      if (playCommitGuardActive()) return false;
       if (state.videoStallAudioPaused) return true;
       if (state.strictBufferHold) return true;
       return false;
@@ -7073,7 +7182,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (state.seekResumeInFlight || state.seeking || state.seekBuffering) return false;
     // don't cut audio right after the user pressed play. they expect
     // instant sound; stall flags from decoder warmup shouldn't block it.
-    // 800ms window — just the immediate post-click period.
+    // PLAY COMMIT GUARD: extends this protection to a full 5 seconds.
+    // The old 800ms window was too short — decoder warmup on slow hardware
+    // can take 2-4 seconds, and the 3500ms stall timer would fire AFTER
+    // the 800ms protection expired, killing audio. This was THE primary
+    // cause of "click play → audio stops after a few seconds".
+    if (playCommitGuardActive()) return false;
     if (userWantsPlayNow(800) || directUserToggleActive(800)) return false;
     _lastStallKillAt = nowMs;
     _lastGlobalAudioKillAt = nowMs;
@@ -7112,6 +7226,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // During a direct user play action, don't hold audio for stale stall flags.
     // The user clicked play and expects immediate response. Stall flags from
     // before the play intent are stale — video is being kicked to play too.
+    // PLAY COMMIT GUARD: extends this to the full 5s guard window.
+    if (playCommitGuardActive()) return false;
     if (userWantsPlayNow(1500) || directUserToggleActive(1500)) return false;
     if (foregroundBufferAudioHoldActive()) return true;
     if (isForegroundVideoActuallyBuffering()) return true;
@@ -7402,6 +7518,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // Without this, buffer-wait spinner / stall handler / waiting event
     // could fire pause within 50-500ms of play, killing the playback.
     state.userPlayLockUntil = Math.max(state.userPlayLockUntil, now() + 2500);
+    // Arm the nuclear PlayCommitGuard protection window
+    armPlayCommitGuard();
     state.lastUserActionTime = now();
     // Reset freeze detector cooldown so it can act immediately after this play.
     // Without this, rapid play/pause leaves the compositor stuck because the
