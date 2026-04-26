@@ -7280,6 +7280,8 @@ document.addEventListener("DOMContentLoaded", () => {
     state.userSeekIntentUntil = Math.max(state.userSeekIntentUntil, until);
     suppressStartupZero(15000);
     state.lastUserActionTime = now();
+    state.lastKnownGoodVT = 0;
+    state._pauseSavedPosition = -1;
     if (platform.chromiumOnlyBrowser) {
       state.chromiumPauseGuardUntil = 0;
       state.chromiumBgSettlingUntil = 0;
@@ -20134,8 +20136,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 const _trDrift = _trAt - _trVt; // positive = audio ahead
                 if (isFinite(_trVt) && isFinite(_trAt) && _trVt > 0.5) {
                   const _trAbs = Math.abs(_trDrift);
-                  if (_trAbs > 2.5) {
-                    // Hard snap (rate-nudge would take too long).
+                  if (_trAbs > 0.30) {
+                    // Hard snap (rate-nudge removed to prevent randomly speeding up video)
                     try {
                       state._isMicroSeek = true;
                       state.bgSilentTimeSyncing = true;
@@ -20152,35 +20154,6 @@ document.addEventListener("DOMContentLoaded", () => {
                         state._isMicroSeek = false;
                         state.bgSilentTimeSyncing = false;
                       }, 250);
-                    } catch { }
-                  } else if (_trAbs > 0.30) {
-                    // Rate-nudge: invisible to user.
-                    try {
-                      const _trVN = getVideoNode();
-                      if (_trVN && !_trVN.paused) {
-                        // Speed up if behind, slow down if ahead.
-                        const _trRate = _trDrift > 0 ? 1.10 : 0.92;
-                        // Duration: drift / abs(rate-1.0) * 1000 ms,
-                        // clamped to [400, 2500]. Larger drift → longer ramp.
-                        const _trDur = Math.max(400, Math.min(2500,
-                          (_trAbs / Math.abs(_trRate - 1.0)) * 1000));
-                        state._tabReturnRateRampUntil = now() + _trDur;
-                        state._tabReturnRateRampPrev = Number(_trVN.playbackRate) || 1.0;
-                        try { _trVN.playbackRate = _trRate; } catch { }
-                        if (videoEl && videoEl !== _trVN) {
-                          try { videoEl.playbackRate = _trRate; } catch { }
-                        }
-                        // Restore rate at end of ramp.
-                        setTimeout(() => {
-                          try {
-                            if (_trVN) _trVN.playbackRate = state._tabReturnRateRampPrev || 1.0;
-                            if (videoEl && videoEl !== _trVN) {
-                              videoEl.playbackRate = state._tabReturnRateRampPrev || 1.0;
-                            }
-                          } catch { }
-                          state._tabReturnRateRampUntil = 0;
-                        }, _trDur);
-                      }
                     } catch { }
                   }
                   // |drift| < 0.30s : do nothing; runSync handles it.
