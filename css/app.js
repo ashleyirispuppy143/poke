@@ -283,7 +283,7 @@ var loopedIndicator = document.getElementById("loopedIndicator");
 loopedIndicator.style.display = "none";
 
 let audioCtx, source, gainNode, compressorNode, analyzer;
-let audioState = localStorage.getItem("audioMode") || "normalize"; 
+let audioState = localStorage.getItem("audioMode") || "none"; 
 let normalizerInterval = null;
 let dataArray = null;
 let freqDataArray = null;
