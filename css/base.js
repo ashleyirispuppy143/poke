@@ -16444,31 +16444,29 @@ document.addEventListener("DOMContentLoaded", () => {
       if (isPlayControlTarget(event.target)) {
         const clickTs = now();
         pendingTechTogglePausedState = null;
-        const wasPaused = getVideoPaused();
-
-        requestAnimationFrame(() => {
-          const paused = getVideoPaused();
-          if (wasPaused === paused) {
-            // Native Video.js failed to toggle via play button! Force it.
-            if (wasPaused) {
-              markUserPlayIntent(USER_PLAY_INTENT_FAST_MS);
-              execProgrammaticVideoPlay({ force: true, minGapMs: 0 });
-            } else {
-              markUserPauseIntent(USER_PAUSE_INTENT_FAST_MS);
-              pauseHard();
-            }
-          }
-        });
-
         // ─── INTENT FROM POINTERDOWN ───────────────────────────────────
+        // Trust the pointerdown handler's intent capture FIRST. Reading
+        // wasPaused at click time is unreliable: an autoplay-queued play
+        // can fire between pointerdown and click, flipping paused→false.
+        // Without this check, the else branch would mis-mark the click
+        // as a pause request and call markUserPauseIntent — the EXACT
+        // root of "click play button → play-pauses".
         const _pdPlayRecent = state.userPlayIntentPresetAt > 0 &&
           (clickTs - state.userPlayIntentPresetAt) < 650;
         const _pdPauseRecent = state.userPauseIntentPresetAt > 0 &&
           (clickTs - state.userPauseIntentPresetAt) < 650;
-        if (_pdPlayRecent && !_pdPauseRecent) return;
-        if (_pdPauseRecent && !_pdPlayRecent) return;
-
+        if (_pdPlayRecent && !_pdPauseRecent) {
+          // Pointerdown set play intent for THIS click. Don't double-mark.
+          // markUserPlayIntent already ran in onPressStart.
+          return;
+        }
+        if (_pdPauseRecent && !_pdPlayRecent) {
+          // Pointerdown set pause intent for THIS click. Don't double-mark.
+          return;
+        }
         // Fallback when neither pointerdown intent flag is fresh
+        // (browsers/UI paths where pointerdown didn't surface to us).
+        const wasPaused = getVideoPaused();
         if (wasPaused) {
           const haveRecentPlayIntent =
             userToggleRecently("play", 650) ||
@@ -16524,29 +16522,12 @@ document.addEventListener("DOMContentLoaded", () => {
         markUserSeekIntent(2800);
       }
       if (code === "Space" || code === "KeyK" || code === "MediaPlayPause") {
-        const activeEl = document.activeElement;
-        const isButtonFocused = activeEl && activeEl.tagName === "BUTTON";
-
-        if (code === "Space" && isButtonFocused) {
-          // If a button is focused, Spacebar natively clicks it.
-          // Stop propagation so Video.js doesn't ALSO handle the Spacebar, causing a double-toggle stutter!
-          event.stopPropagation();
-          return; // The synthetic click event will handle the rest via onClick.
-        }
-
-        // We handle the Spacebar toggle to guarantee it works 100% of the time,
-        // preventing Video.js from ignoring it or double-toggling.
-        event.preventDefault();
-        event.stopPropagation();
-
-        const wasPaused = getVideoPaused();
-        if (wasPaused) {
-          markUserPlayIntent(USER_PLAY_INTENT_FAST_MS);
-          execProgrammaticVideoPlay({ force: true, minGapMs: 0 });
-        } else {
+        // skipImmediateVideoKick: Video.js handles Space/K internally and toggles
+        // play/pause itself. If we pre-play here, Video.js sees playing → pauses.
+        if (getVideoPaused()) markUserPlayIntent(USER_PLAY_INTENT_FAST_MS, { skipImmediateVideoKick: true });
+        else {
           markUserPauseIntent(USER_PAUSE_INTENT_FAST_MS);
           clearPendingPlayResumesForPause();
-          pauseHard();
         }
       } else if (code === "MediaPause" || code === "MediaStop") {
         markUserPauseIntent(USER_PAUSE_INTENT_FAST_MS);
