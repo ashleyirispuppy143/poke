@@ -5956,26 +5956,26 @@ document.addEventListener("DOMContentLoaded", () => {
   // / accessibility tools / OS media keys can each set a different flag).
   function _isUserDrivenPause() {
     const t = now();
-    // EARLY EXITS: explicit PLAY intent → never allow pause through.
-    // (lastUserActionTime is set by ANY user gesture incl. play — not enough
-    // alone, was the root cause of "click play → play+pause" bug.)
-    if (state.userPlayLockUntil > t) return false;
-    if (state.userPlayIntentPresetAt > 0 && (t - state.userPlayIntentPresetAt) < 2400) return false;
-    if (state.userPlayUntil > t) return false;
-    try { if (typeof userToggleExpectingPlay === "function" && userToggleExpectingPlay()) return false; } catch { }
-    try { if (typeof userPlayIntentActive === "function" && userPlayIntentActive()) return false; } catch { }
-    // PAUSE-ONLY signals.
-    if (state.userPauseIntentPresetAt > 0 && (t - state.userPauseIntentPresetAt) < 2400) return true;
+    // PAUSE-ONLY signals checked FIRST. Even if play-lock is active,
+    // user explicitly clicking pause/space-while-playing must win — that
+    // was the bug "cannot pause video by clicking over it".
+    const pauseIntentRecent =
+      (state.userPauseIntentPresetAt > 0 && (t - state.userPauseIntentPresetAt) < 2400);
+    if (pauseIntentRecent) return true;
     if (state.userPauseUntil > t) return true;
     if (state.userPauseLockUntil > t) return true;
     try { if (typeof userWantsPauseNow === "function" && userWantsPauseNow(2400)) return true; } catch { }
     try { if (typeof userToggleExpectingPause === "function" && userToggleExpectingPause()) return true; } catch { }
     try { if (typeof userPauseIntentActive === "function" && userPauseIntentActive()) return true; } catch { }
     if (state.userGesturePauseIntent) return true;
-    // Terminal states.
+    // Terminal states (always allow pause).
     if (state.endedNaturally) return true;
     if (state.restarting) return true;
     if (!state.intendedPlaying) return true;
+    // PLAY intent (block non-user pauses) — only after pause signals.
+    if (state.userPlayLockUntil > t) return false;
+    if (state.userPlayIntentPresetAt > 0 && (t - state.userPlayIntentPresetAt) < 2400) return false;
+    if (state.userPlayUntil > t) return false;
     return false;
   }
 
@@ -10949,14 +10949,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function pauseHard() {
     const immediateUserPause = directUserToggleActive(1000) || userWantsPauseNow(1000) || userToggleExpectingPause();
-    // ─── PLAY-LOCK GUARD ──────────────────────────────────────────────
-    // If the user just clicked play (userPlayLockUntil active) and this
-    // isn't an actual user-driven pause / end / error / seek path, REFUSE
-    // to pause. 30+ sites call pauseHard from various recovery / loop /
-    // stall paths — any one firing during the 2.5s post-play window was
-    // the source of "click play button → play-pause" oscillation.
+    // ─── PLAY-LOCK GUARD (CORRECTED) ─────────────────────────────────
+    // CRITICAL: must use PAUSE-ONLY signals here. immediateUserPause
+    // includes userWantsPlayNow (via directUserToggleActive) — so using
+    // !immediateUserPause as a bypass let pauseHard fire freely after a
+    // user PLAY click, which IS the "click play button → play-pauses"
+    // bug. PAUSE-only signals: userWantsPauseNow, userToggleExpectingPause,
+    // userGesturePauseIntent, isProgrammaticVideoPause set EXPLICITLY for
+    // pause (but pauseHard sets that itself — we read it BEFORE the set).
+    const _plPauseSignal =
+      userWantsPauseNow(2400) ||
+      userToggleExpectingPause() ||
+      state.userGesturePauseIntent;
     if (state.userPlayLockUntil > now() &&
-        !immediateUserPause &&
+        !_plPauseSignal &&
         !state.endedNaturally &&
         !state.restarting &&
         !_errorOverlayShown &&
@@ -16387,10 +16393,15 @@ document.addEventListener("DOMContentLoaded", () => {
         beginUserToggleTxn(getVideoPaused(), USER_TOGGLE_TXN_FAST_MS);
         // Pre-set user intent only for actual toggle surfaces. Setting this on
         // all pointer events (seek/menus/sliders) creates false play/pause intents.
+        // ALWAYS clear the opposite intent to avoid stale-flag confusion.
         if (!getVideoPaused()) {
           state.userPauseIntentPresetAt = now();
+          state.userPlayIntentPresetAt = 0;
+          state.userPlayLockUntil = 0;
         } else {
           state.userPlayIntentPresetAt = now();
+          state.userPauseIntentPresetAt = 0;
+          state.userPauseUntil = 0;
           // User wants to play — clear ended lock so restart is allowed
           MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.onUserPlay();
           // Reset play dedup so user's play() goes through immediately
@@ -16452,13 +16463,32 @@ document.addEventListener("DOMContentLoaded", () => {
     const onClick = event => {
       if (isPlayControlTarget(event.target)) {
         const clickTs = now();
-        const wasPaused = getVideoPaused();
         pendingTechTogglePausedState = null;
-        // Fallback for browsers/UI paths where pointerdown doesn't surface to us.
-        // Without this, restart-from-ended can be misread as auto-play and get paused.
+        // ─── INTENT FROM POINTERDOWN ───────────────────────────────────
+        // Trust the pointerdown handler's intent capture FIRST. Reading
+        // wasPaused at click time is unreliable: an autoplay-queued play
+        // can fire between pointerdown and click, flipping paused→false.
+        // Without this check, the else branch would mis-mark the click
+        // as a pause request and call markUserPauseIntent — the EXACT
+        // root of "click play button → play-pauses".
+        const _pdPlayRecent = state.userPlayIntentPresetAt > 0 &&
+          (clickTs - state.userPlayIntentPresetAt) < 650;
+        const _pdPauseRecent = state.userPauseIntentPresetAt > 0 &&
+          (clickTs - state.userPauseIntentPresetAt) < 650;
+        if (_pdPlayRecent && !_pdPauseRecent) {
+          // Pointerdown set play intent for THIS click. Don't double-mark.
+          // markUserPlayIntent already ran in onPressStart.
+          return;
+        }
+        if (_pdPauseRecent && !_pdPlayRecent) {
+          // Pointerdown set pause intent for THIS click. Don't double-mark.
+          return;
+        }
+        // Fallback when neither pointerdown intent flag is fresh
+        // (browsers/UI paths where pointerdown didn't surface to us).
+        const wasPaused = getVideoPaused();
         if (wasPaused) {
           const haveRecentPlayIntent =
-            ((state.userPlayIntentPresetAt > 0) && ((clickTs - state.userPlayIntentPresetAt) < 650)) ||
             userToggleRecently("play", 650) ||
             userToggleExpectingPlay();
           if (!haveRecentPlayIntent) {
@@ -16466,7 +16496,6 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         } else {
           const haveRecentPauseIntent =
-            ((state.userPauseIntentPresetAt > 0) && ((clickTs - state.userPauseIntentPresetAt) < 650)) ||
             userToggleRecently("pause", 650) ||
             userToggleExpectingPause();
           if (!haveRecentPauseIntent) {
