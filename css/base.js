@@ -805,15 +805,15 @@ document.addEventListener("DOMContentLoaded", () => {
         const vn = getVideoNode();
         // Re-kick video if it's paused
         if (vn && vn.paused && state.intendedPlaying &&
-            !state.endedNaturally && !state.restarting) {
+          !state.endedNaturally && !state.restarting) {
           state._playCommitLastKickAt = _wcNow;
           state.isProgrammaticVideoPlay = true;
-          try { vn.play().catch(() => {}); } catch {}
+          try { vn.play().catch(() => { }); } catch { }
           setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 200);
         }
         // Re-kick audio if it's paused (coupled mode)
         if (coupledMode && audio && audio.paused && state.intendedPlaying &&
-            !state.endedNaturally && !state.restarting) {
+          !state.endedNaturally && !state.restarting) {
           state._playCommitLastKickAt = _wcNow;
           // Clear stale stall flags that would block audio.play() gate
           state.videoStallAudioPaused = false;
@@ -829,13 +829,13 @@ document.addEventListener("DOMContentLoaded", () => {
             if (isFinite(vt) && Math.abs(at - vt) > 0.8) {
               audio.currentTime = vt;
             }
-          } catch {}
+          } catch { }
           try {
             if (audio.muted && !state.userMutedAudio) audio.muted = false;
-          } catch {}
-          try { audio.play().catch(() => {}); } catch {}
+          } catch { }
+          try { audio.play().catch(() => { }); } catch { }
         }
-      } catch {}
+      } catch { }
       state._playCommitWatchdogTimer = setTimeout(poll, 350);
     };
     // First check after 400ms — gives the initial play() call time to settle
@@ -7416,6 +7416,11 @@ document.addEventListener("DOMContentLoaded", () => {
     state.startupKickDone = true;
     state.startupPhase = false;
     state.playSessionId = (state.playSessionId || 0) + 1;
+    // FIX: Clear the PlayCommitGuard on explicit user pause. Without this,
+    // the 5s play-protection window from a previous play could cause stale
+    // playCommitGuardActive() returns, letting subsystems (audio gate, stall
+    // handlers) treat the pause phase as still in play-protection.
+    clearPlayCommitGuard();
     MediumQualityManager.markUserPaused(); // MQM: record authoritative user pause intent
     PlaybackStabilityManager.onUserAction();
     try { UltraStabilizer.onUserAction(); } catch { }
@@ -10962,11 +10967,11 @@ document.addEventListener("DOMContentLoaded", () => {
       userToggleExpectingPause() ||
       state.userGesturePauseIntent;
     if (state.userPlayLockUntil > now() &&
-        !_plPauseSignal &&
-        !state.endedNaturally &&
-        !state.restarting &&
-        !_errorOverlayShown &&
-        state.intendedPlaying) {
+      !_plPauseSignal &&
+      !state.endedNaturally &&
+      !state.restarting &&
+      !_errorOverlayShown &&
+      state.intendedPlaying) {
       return;
     }
     const pauseFadeMs = immediateUserPause ? USER_EXPLICIT_PAUSE_FADE_MS : AUDIO_FADE_DURATION_MS;
@@ -16424,17 +16429,26 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!getVideoPaused()) {
           state.userPauseUntil = Math.max(state.userPauseUntil, now() + USER_PAUSE_INTENT_FAST_MS);
         }
-        if (!coupledMode) {
-          if (getVideoPaused()) {
+        // FIX: Set play/pause intent for ALL modes at pointerdown time, not
+        // just non-coupled. Without this, coupled mode tech-surface clicks
+        // relied on the onClick RAF callback which fires AFTER Video.js and
+        // AFTER the pause event handler - causing missed pause intent.
+        if (getVideoPaused()) {
+          if (!coupledMode) {
             state.intendedPlaying = true;
             state.userPlayUntil = now() + 600;
-          } else {
+          }
+          markUserPlayIntent(USER_PLAY_INTENT_FAST_MS, { skipImmediateAudioKick: true, skipImmediateVideoKick: true });
+        } else {
+          if (!coupledMode) {
             state.intendedPlaying = false;
             state.bufferHoldIntendedPlaying = false;
             MediumQualityManager.markUserPaused();
-            state.userGesturePauseIntent = true;
-            setTimeout(() => { state.userGesturePauseIntent = false; }, USER_GESTURE_PAUSE_HOLD_MS);
           }
+          state.userGesturePauseIntent = true;
+          setTimeout(() => { state.userGesturePauseIntent = false; }, USER_GESTURE_PAUSE_HOLD_MS);
+          markUserPauseIntent(USER_PAUSE_INTENT_FAST_MS);
+          clearPendingPlayResumesForPause();
         }
         return;
       }
@@ -17065,13 +17079,13 @@ document.addEventListener("DOMContentLoaded", () => {
       // pause events can also arrive from within the browser pipeline
       // (decoder underflow, network stall) — we handle those here.
       if (state.userPlayLockUntil > now() &&
-          !state.isProgrammaticVideoPause &&
-          !state._allowVideoPause &&
-          !userWantsPauseNow(2400) &&
-          !state.endedNaturally &&
-          !state.restarting &&
-          !state.seeking &&
-          !state.seekBuffering) {
+        !state.isProgrammaticVideoPause &&
+        !state._allowVideoPause &&
+        !userWantsPauseNow(2400) &&
+        !state.endedNaturally &&
+        !state.restarting &&
+        !state.seeking &&
+        !state.seekBuffering) {
         // Debounce: collapse rapid pause events into one counter-play.
         const _plNow = now();
         if ((_plNow - (state._playLockCounterPlayLastAt || 0)) < 80) return;
@@ -17081,7 +17095,7 @@ document.addEventListener("DOMContentLoaded", () => {
           state.intendedPlaying = true;
           state.bufferHoldIntendedPlaying = true;
           if (typeof tryAcquireVideoPlayLock === "function" &&
-              tryAcquireVideoPlayLock()) {
+            tryAcquireVideoPlayLock()) {
             try { execProgrammaticVideoPlay({ force: true, minGapMs: 0 }); } catch { }
           } else {
             _plVN.play().catch(() => { });
