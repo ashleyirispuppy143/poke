@@ -16333,16 +16333,6 @@ const HAVE_ENOUGH_DATA = 4;
           if (!haveRecentPlayIntent) {
             markUserPlayIntent(USER_PLAY_INTENT_FAST_MS, { skipImmediateAudioKick: true });
           }
-          requestAnimationFrame(() => {
-            if (!getVideoPaused()) return;
-            if (!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) return;
-            const _pcVn = getVideoNode();
-            if (_pcVn && typeof _pcVn.play === "function" && _pcVn.paused) _pcVn.play().catch(() => {});
-            if (coupledMode && audio && audio.paused) {
-              execProgrammaticAudioPlay({ squelchMs: 120, force: true, minGapMs: 0 }).catch(() => {});
-            }
-            scheduleSync(0);
-          });
         } else {
           const haveRecentPauseIntent =
             ((state.userPauseIntentPresetAt > 0) && ((clickTs - state.userPauseIntentPresetAt) < 650)) ||
@@ -16382,6 +16372,9 @@ const HAVE_ENOUGH_DATA = 4;
         markUserSeekIntent(2800);
       }
       if (code === "Space" || code === "KeyK" || code === "MediaPlayPause") {
+        if (code === "Space" && event.target && event.target.tagName === "BUTTON") {
+          event.preventDefault(); // Prevent synthetic click to avoid double-toggle
+        }
         if (getVideoPaused()) markUserPlayIntent(USER_PLAY_INTENT_FAST_MS);
         else {
           markUserPauseIntent(USER_PAUSE_INTENT_FAST_MS);
