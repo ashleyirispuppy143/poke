@@ -7280,6 +7280,11 @@ document.addEventListener("DOMContentLoaded", () => {
     state.userSeekIntentUntil = Math.max(state.userSeekIntentUntil, until);
     suppressStartupZero(15000);
     state.lastUserActionTime = now();
+    if (platform.chromiumOnlyBrowser) {
+      state.chromiumPauseGuardUntil = 0;
+      state.chromiumBgSettlingUntil = 0;
+      state.chromiumAudioStartLockUntil = 0;
+    }
   }
   function userSeekIntentActive() { return now() < state.userSeekIntentUntil; }
   function startupZeroSuppressed() {
@@ -7625,7 +7630,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (platform.chromiumOnlyBrowser) {
       state.chromiumPauseGuardUntil = 0;
       state.chromiumBgSettlingUntil = 0;
-      state.chromiumAudioStartLockUntil = Math.max(state.chromiumAudioStartLockUntil, now() + 70);
+      state.chromiumAudioStartLockUntil = 0;
     }
     // Kick video immediately on real foreground play intent instead of waiting for
     // playTogether/sync bookkeeping to get around to it. This removes the "late play"
