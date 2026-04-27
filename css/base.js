@@ -1954,12 +1954,27 @@ document.addEventListener("DOMContentLoaded", () => {
     // PHASE 2: RECOVERING — tab just returned, resume playback
     // -----------------------------------------------------------------------
     function onReturn() {
-      // never restart after ended — this was a big loop cause.
+      // never restart after ended - this was a big loop cause.
       if (state.endedNaturally) return;
       if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) return;
       if (!state.intendedPlaying && !state.resumeOnVisible &&
         !(wantsStartupAutoplay() && !state.firstPlayCommitted) &&
         !state.startupPhase) return;
+
+      // EARLY EXIT: if both video and audio are already playing, skip the
+      // entire RECOVERING phase. On quick tab switches Chromium doesn't actually
+      // pause anything, so NMPBFN would enter RECOVERING -> play() -> canplay
+      // listeners -> watchdog -> settling - all creating unnecessary event noise
+      // and stutter. Just arm VCFM and do a quick sync instead.
+      const _retVN = getVideoNode();
+      const _retVPlaying = _retVN && !_retVN.paused;
+      const _retAPlaying = !coupledMode || (audio && !audio.paused);
+      if (_retVPlaying && _retAPlaying && state.firstPlayCommitted) {
+        try { VideoCompositorFlushManager.arm(); } catch { }
+        setFastSync(400);
+        scheduleSync(0);
+        return;
+      }
 
       // If already recovering from a very recent return (<500ms), skip
       if (_phase === PHASE_RECOVERING && (now() - _phaseAt) < 500) return;
@@ -3254,19 +3269,17 @@ document.addEventListener("DOMContentLoaded", () => {
       // Two cases:
       //   A. Video is BEHIND target (browser suspended video in bg) → seek forward.
       //   B. Video is AHEAD of target (browser kept video playing in bg) → seek
-      //      backward. The user was on a different tab and couldn't see any of the
-      //      content that played. Leaving video at the advanced position causes the
-      //      "video forwards a bit on play/pause after tab return" bug.
-      //      Cap backward seeks at 60s — larger gaps likely mean the user intentionally
-      //      left video playing in background and expects it to continue.
+      //      If video is AHEAD (played in bg), accept the advanced position.
+      //      The user wasn't watching - seeking backward replays content they
+      //      didn't see, creating the "plays the same section twice" bug.
+      //      Just sync audio to wherever video currently is.
       let didForwardResync = false;
       const _videoAheadOfTarget = isFinite(currentVt) && currentVt > targetTime + 0.5;
       const _videoBehindTarget = isFinite(currentVt) && currentVt < targetTime - 1.5;
-      const _needsResync = targetTime > 0.5 && (
-        (_videoBehindTarget && Math.abs(currentVt - targetTime) < 300) ||
-        (_videoAheadOfTarget && (currentVt - targetTime) > 8 && (currentVt - targetTime) < 120)
-      );
-      if (_needsResync) {
+      // Only seek forward when video is behind - never seek backward on tab return
+      const _needsForwardResync = targetTime > 0.5 &&
+        _videoBehindTarget && Math.abs(currentVt - targetTime) < 300;
+      if (_needsForwardResync) {
         state._isMicroSeek = true;
         didForwardResync = true;
         try { vNode.currentTime = targetTime; } catch { }
@@ -3274,6 +3287,18 @@ document.addEventListener("DOMContentLoaded", () => {
           state._allowAudioTimeWrite = true;
           try { audio.currentTime = targetTime; } catch { }
           state._allowAudioTimeWrite = false;
+        }
+      } else if (_videoAheadOfTarget && coupledMode && audio) {
+        // Video advanced in bg - sync audio to current video position
+        // (accept the advanced position, don't rewind video)
+        const _advancedPos = currentVt;
+        if (isFinite(_advancedPos) && _advancedPos > 0.2) {
+          const _tabAt = Number(audio.currentTime) || 0;
+          if (Math.abs(_tabAt - _advancedPos) > 0.5) {
+            state._allowAudioTimeWrite = true;
+            try { audio.currentTime = _advancedPos; } catch { }
+            state._allowAudioTimeWrite = false;
+          }
         }
       } else if (coupledMode && audio) {
         // No video seek needed — sync audio to currentVt (not _preHideTime).
@@ -3346,7 +3371,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // Play immediately — don't wait for canplay or rAF.
       // If readyState is low, the browser will buffer naturally and fire "playing"
       // when ready. This is much better than showing a frozen frame for 1-3s.
-      if (_wasPlayingBeforeHide) {
+      if (_wasPlayingBeforeHide && !state.endedNaturally) {
         DONTMAKEITDOUBLEPLAY.resetAll();
         if (vNode.paused) {
           try { HTMLMediaElement.prototype.play.call(vNode).catch(() => { }); } catch { }
@@ -3395,12 +3420,14 @@ document.addEventListener("DOMContentLoaded", () => {
               setTimeout(() => { state._isMicroSeek = false; }, 200);
             }
             DONTMAKEITDOUBLEPLAY.resetAll();
-            try { HTMLMediaElement.prototype.play.call(vNode).catch(() => { }); } catch { }
+            if (!state.endedNaturally) {
+              try { HTMLMediaElement.prototype.play.call(vNode).catch(() => { }); } catch { }
+            }
           }
           // Give up after 2s — the rAF freeze detector takes over
           if (_retryCount >= 20) {
             clearInterval(_tabReturnPollTimer); _tabReturnPollTimer = null;
-            if (vNode.paused && state.intendedPlaying) {
+            if (vNode.paused && state.intendedPlaying && !state.endedNaturally) {
               DONTMAKEITDOUBLEPLAY.resetAll();
               try { HTMLMediaElement.prototype.play.call(vNode).catch(() => { }); } catch { }
             }
@@ -3857,8 +3884,9 @@ document.addEventListener("DOMContentLoaded", () => {
     let _lastFrameCount = -1;
     let _lastFrameCheckAt = 0;
     let _lastNuclearAt = 0;
-    const CHECK_MS = 500;     // was 700 — detect stuck compositor faster for rare play/pause freezes
-    const COOLDOWN_MS = 2500; // was 3000 — allow re-kicks sooner after failed fix
+    let _consecutiveFrozen = 0; // require 2 consecutive frozen checks before acting
+    const CHECK_MS = 800;     // was 500 - 500ms is within normal Chromium decoder latency at segment boundaries
+    const COOLDOWN_MS = 2500;
 
     function _tick() {
       _timer = null;
@@ -3884,10 +3912,25 @@ document.addEventListener("DOMContentLoaded", () => {
         const framesAdvanced = fc > _lastFrameCount;
         const timeAdvanced = Math.abs(vt - (state._nfwLastVT || 0)) > 0.01;
 
+        if (framesAdvanced || timeAdvanced) {
+          _consecutiveFrozen = 0;
+        }
+
         if (!framesAdvanced && !timeAdvanced && elapsed >= CHECK_MS * 0.9 &&
           (now() - _lastNuclearAt) > COOLDOWN_MS) {
-          // NUCLEAR: video says playing, but nothing is moving. Force fix.
-          // First try a lightweight RVFC micro-seek before the heavy pause→seek→play.
+          _consecutiveFrozen++;
+          // Require 2 consecutive frozen checks before acting. A single frozen
+          // check can be a normal decode latency at segment boundaries.
+          if (_consecutiveFrozen < 2) {
+            _lastFrameCount = fc;
+            _lastFrameCheckAt = now();
+            state._nfwLastVT = vt;
+            _schedule();
+            return;
+          }
+          _consecutiveFrozen = 0;
+          // NUCLEAR: video says playing, but nothing is moving for 2+ checks. Force fix.
+          // First try a lightweight RVFC micro-seek before the heavy pause->seek->play.
           // This catches most compositor stalls without the visible pause.
           _lastNuclearAt = now();
           const _nfwLightVT = Number(vn.currentTime) || 0;
@@ -4521,8 +4564,10 @@ document.addEventListener("DOMContentLoaded", () => {
       let _audioStallCount = 0;
       let _audioBlockLog = 0;     // how many times we blocked audio (debug)
 
-      // The lock is released when video plays OR after 12s (failsafe)
-      const STARTUP_LOCK_TIMEOUT_MS = 3000;
+      // The lock is released when video plays OR after 1.5s (failsafe).
+      // Was 3s but that's too long - on slow connections audio stays blocked
+      // for the full duration, making the player appear broken/unresponsive.
+      const STARTUP_LOCK_TIMEOUT_MS = 1500;
       const _startTs = _now();
 
       function _maybeReleaseLock() {
@@ -5178,6 +5223,12 @@ document.addEventListener("DOMContentLoaded", () => {
       let _vrsDropCount = 0;
       let _arsDropCount = 0;
       let _lastCheckAt = 0;
+      // Hysteresis state - require drops to persist before acting
+      let _vrsPendingDrop = false;
+      let _vrsPendingDropAt = 0;
+      let _arsPendingDrop = false;
+      let _arsPendingDropAt = 0;
+      let _lastRsVideoTime = -1; // for checking if video time advances during RS dip
       const CHECK_MS = 400;
       const DROP_RECOVER_MS = 3000;
 
@@ -5187,12 +5238,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
         try {
           const vrs = Number(getVideoNode().readyState || 0);
+          // Hysteresis: require readyState to stay below 2 for TWO consecutive
+          // checks (800ms+) before counting as a genuine drop. Chromium's
+          // readyState flickers at segment boundaries during normal playback -
+          // instant detection triggers false stall recovery on every segment.
           if (_lastVRS >= 3 && vrs < 2 && !state.seeking) {
-            _vrsDrop = true;
-            _vrsDropAt = _now();
-            _vrsDropCount++;
-          } else if (vrs >= 3 && _vrsDrop) {
-            _vrsDrop = false;
+            if (!_vrsPendingDrop) {
+              _vrsPendingDrop = true;
+              _vrsPendingDropAt = _now();
+            } else if ((_now() - _vrsPendingDropAt) >= 800) {
+              _vrsDrop = true;
+              _vrsDropAt = _now();
+              _vrsDropCount++;
+              _vrsPendingDrop = false;
+            }
+          } else {
+            _vrsPendingDrop = false;
+            if (vrs >= 3 && _vrsDrop) _vrsDrop = false;
           }
           _lastVRS = vrs;
         } catch { }
@@ -5201,16 +5263,38 @@ document.addEventListener("DOMContentLoaded", () => {
           try {
             const ars = Number(audio.readyState || 0);
             if (_lastARS >= 3 && ars < 2 && !audio.paused) {
-              _arsDrop = true;
-              _arsDropAt = _now();
-              _arsDropCount++;
-              // Immediately pause audio if video is fine — don't play with partial buffer
-              if (!getVideoPaused() && state.intendedPlaying && !state.strictBufferHold) {
-                execProgrammaticAudioPause(800);
-                armResumeAfterBuffer(8000);
+              // Check if video currentTime is still advancing despite the
+              // readyState dip. If it is, this is a transient decode boundary
+              // not a real stall - don't kill audio for it.
+              let _videoStillAdvancing = false;
+              try {
+                const _rsVT = Number(getVideoNode().currentTime || 0);
+                if (_lastRsVideoTime >= 0 && Math.abs(_rsVT - _lastRsVideoTime) > 0.05) {
+                  _videoStillAdvancing = true;
+                }
+                _lastRsVideoTime = _rsVT;
+              } catch { }
+              if (!_videoStillAdvancing) {
+                if (!_arsPendingDrop) {
+                  _arsPendingDrop = true;
+                  _arsPendingDropAt = _now();
+                } else if ((_now() - _arsPendingDropAt) >= 800) {
+                  _arsDrop = true;
+                  _arsDropAt = _now();
+                  _arsDropCount++;
+                  _arsPendingDrop = false;
+                  // Only pause audio after confirmed sustained drop
+                  if (!getVideoPaused() && state.intendedPlaying && !state.strictBufferHold) {
+                    execProgrammaticAudioPause(800);
+                    armResumeAfterBuffer(8000);
+                  }
+                }
+              } else {
+                _arsPendingDrop = false;
               }
-            } else if (ars >= 3 && _arsDrop) {
-              _arsDrop = false;
+            } else {
+              _arsPendingDrop = false;
+              if (ars >= 3 && _arsDrop) _arsDrop = false;
             }
             _lastARS = ars;
           } catch { }
@@ -5911,6 +5995,18 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!coupledMode || !audio) return;
     if (state.tabReturnSettleTimer) clearTimeout(state.tabReturnSettleTimer);
     state.tabReturnAudioMuted = false;
+    // EARLY EXIT: if audio is already playing with good sync, don't touch it.
+    // Redundant time writes + play() calls on healthy audio create audible
+    // glitches and event storms during tab switches.
+    if (!audio.paused && state.intendedPlaying) {
+      try {
+        const _btVt = Number(video.currentTime()) || 0;
+        const _btAt = Number(audio.currentTime) || 0;
+        if (isFinite(_btVt) && isFinite(_btAt) && Math.abs(_btAt - _btVt) < 0.5) {
+          return; // audio is playing and synced - nothing to do
+        }
+      } catch { }
+    }
     // In the foreground, never move visible video to chase audio. That creates
     // the exact "video waits and catches up" feel we want to avoid. Keep video
     // as the timeline owner and pull audio back if drift exists.
@@ -5921,8 +6017,8 @@ document.addEventListener("DOMContentLoaded", () => {
         safeSetAudioTime(vt);
       }
     } catch { }
-    // Resume audio immediately — let the browser handle decode buffer naturally.
-    // Don't seek or manipulate currentTime — that adds latency and glitches.
+    // Resume audio immediately - let the browser handle decode buffer naturally.
+    // Don't seek or manipulate currentTime - that adds latency and glitches.
     if (audio.paused && state.intendedPlaying) {
       try { audio.play().catch(() => { }); } catch { }
     }
@@ -5966,21 +6062,27 @@ document.addEventListener("DOMContentLoaded", () => {
       if (_suppVN) {
         const _suppCT = Number(_suppVN.currentTime) || 0;
         const _suppDur = Number(_suppVN.duration) || 0;
-        if (_suppDur > 0.5 && _suppCT >= _suppDur - 0.5) return; // at the end — let it pause naturally
+        if (_suppDur > 0.5 && _suppCT >= _suppDur - 1.5) return; // at the end - let it pause naturally
       }
     } catch { }
-    // Swallow the event — no other listener sees it (including video.js)
+    // Swallow the event - no other listener sees it (including video.js)
     e.stopImmediatePropagation();
     e.stopPropagation();
-    // Synchronous counter-play to minimize visible freeze to zero frames.
-    // Because this runs in the capture phase, play() fires before the browser
-    // has a chance to render a paused frame.
-    try {
-      const vn = getVideoNode();
-      if (vn && vn.paused) vn.play().catch(() => { });
-      // Also hit the other element if they differ
-      if (videoEl && videoEl !== vn && videoEl.paused) videoEl.play().catch(() => { });
-    } catch { }
+    // DEFERRED counter-play: wait 30ms instead of playing synchronously.
+    // Chromium's transient auto-pause on tab switch reverses itself within
+    // ~20ms in most cases. Synchronous play() during the transient creates
+    // a play-pause-play stutter because we're fighting a pause that the
+    // browser was going to undo anyway. By deferring, we only call play()
+    // if the element is actually still paused after the transient settles.
+    setTimeout(() => {
+      try {
+        if (!state.intendedPlaying) return;
+        if (state.endedNaturally) return;
+        const vn = getVideoNode();
+        if (vn && vn.paused) vn.play().catch(() => { });
+        if (videoEl && videoEl !== vn && videoEl.paused) videoEl.play().catch(() => { });
+      } catch { }
+    }, 30);
   }
 
   function _audioEventPauseSuppressor(e) {
@@ -6023,17 +6125,29 @@ document.addEventListener("DOMContentLoaded", () => {
       if (state.intendedPlaying) {
         try {
           const vn = getVideoNode();
-          // check if we're at the end before play() — play() on an ended
-          // video auto-seeks to 0 and phantom-loops.
+          // check if we're at the end before play() - play() on an ended
+          // video auto-seeks to 0 and phantom-loops. Use 1.5s tolerance
+          // to catch near-end states where the decoder might report ended
+          // slightly after the duration check passes.
           const _plCT = vn ? (Number(vn.currentTime) || 0) : 0;
           const _plDur = vn ? (Number(vn.duration) || 0) : 0;
-          if (_plDur > 0.5 && _plCT >= _plDur - 0.5) return;
-          // debounce play() to max one per 100ms. calling it every rAF
-          // (16ms) fires 50 play/playing events in 800ms, each cascading
+          if (_plDur > 0.5 && _plCT >= _plDur - 1.5) return;
+          // Skip if both elements are already playing - calling play() on
+          // an already-playing element fires play/playing events that cascade
           // through video.js into audio kicks, volume writes, state flips.
-          // that's the "play-pause-play" storm you see on alt-tab return.
+          const _vnPlaying = vn && !vn.paused;
+          const _aPlaying = !coupledMode || (audio && !audio.paused);
+          if (_vnPlaying && _aPlaying) {
+            _playLockRafId = requestAnimationFrame(rafPump);
+            return;
+          }
+          // debounce play() to max one per 250ms. At 100ms the lock fires
+          // 8 play/playing events in 800ms, each cascading through video.js
+          // into audio kicks, volume writes, state flips. 250ms = max 3
+          // events, which is enough to counter browser auto-pauses without
+          // creating visible stutter.
           const _plNow = now();
-          if ((_plNow - _playLockLastPlayAt) >= 100) {
+          if ((_plNow - _playLockLastPlayAt) >= 250) {
             _playLockLastPlayAt = _plNow;
             if (vn && vn.paused) vn.play().catch(() => { });
             if (videoEl && videoEl !== vn && videoEl.paused) videoEl.play().catch(() => { });
@@ -6214,19 +6328,11 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      // ALWAYS engage pause intercept on tab return — even if both tracks are
-      // playing. Chromium fires async pause events 50-200ms after visibility
-      // change, which create the visible "play-pause-play" at start/end.
-      // This blocks those pauses before they reach the UI.
-      if (this.shouldResume() || state.intendedPlaying) {
-        engagePauseIntercept();
-      }
-
-      // If both tracks are already playing, don't do anything — no play() calls,
-      // no NMPBFN recovery, no wakeup retries, no aggressive kicks. This is the
-      // key fix for "tab switch causes play-pause-play when video is already
-      // playing." MUST come BEFORE shouldAggressiveKick to prevent unnecessary
-      // startBringBackRetry/executeSeamlessWakeup when media is healthy.
+      // Check if both tracks are already playing BEFORE engaging pause intercept.
+      // If both are healthy, we don't need any recovery machinery - engaging
+      // pause intercept + play-lock on already-playing elements floods video.js
+      // with play/playing events that cascade into audio kicks, volume writes,
+      // and the visible "play-pause-play" stutter on every tab switch.
       const videoPlaying = !getVideoPaused();
       const audioPlaying = !coupledMode || (audio && !audio.paused);
       const startupAutoplayPending =
@@ -6234,6 +6340,7 @@ document.addEventListener("DOMContentLoaded", () => {
         !state.firstPlayCommitted &&
         !state.endedNaturally;
       if (startupAutoplayPending) {
+        engagePauseIntercept();
         state.tabReturnImmuneUntil = Math.max(state.tabReturnImmuneUntil, now() + 2200);
         if (videoPlaying && audioPlaying) {
           commitStartupFromActivePlayback();
@@ -6269,12 +6376,19 @@ document.addEventListener("DOMContentLoaded", () => {
         state.altTabTransitionUntil = 0;
         state.resumeOnVisible = false;
         state.bgHiddenWasPlaying = false;
-        // Even though both tracks report "playing", the video compositor may
-        // still be showing a stale GPU texture. Arm VCFM to verify a real
-        // frame rendered — if not, it will force-flush the compositor.
+        // Both tracks playing - DON'T engage pause intercept or play-lock.
+        // Just arm VCFM to verify compositor has a real frame and set
+        // a lightweight immunity window to absorb any straggler browser pauses
+        // via the existing capture-phase guards (DONTLETANYTHINGPAUSEVIDEO etc.)
         try { VideoCompositorFlushManager.arm(); } catch { }
         state.tabReturnImmuneUntil = Math.max(state.tabReturnImmuneUntil, now() + 2000);
         return;
+      }
+
+      // Both tracks are NOT already playing - engage pause intercept to block
+      // Chromium's async pause events during recovery.
+      if (this.shouldResume() || state.intendedPlaying) {
+        engagePauseIntercept();
       }
 
       const shouldResumeNow = this.shouldResume() && !state.endedNaturally;
@@ -6364,38 +6478,29 @@ document.addEventListener("DOMContentLoaded", () => {
             const _atVT = (() => { try { return Number(video.currentTime()); } catch { return 0; } })();
             const _atAT = Number(audio.currentTime) || 0;
             const _atDrift = isFinite(_atVT) ? Math.abs(_atAT - _atVT) : 0;
-            // Sync audio position to video BEFORE resuming play. If audio paused
-            // behind where video currentTime now is, resuming from old position
-            // replays already-heard content. Keep muted until sync + play settle.
-            if (audio.paused && isFinite(_atVT) && _atVT > 0.1 && _atDrift > 0.2) {
-              try { audio.volume = 0; } catch { }
-              state._allowAudioTimeWrite = true;
-              try { audio.currentTime = _atVT; } catch { }
-              state._allowAudioTimeWrite = false;
-            } else if (Math.abs(audio.volume - _atTargetVol) > 0.03) {
-              try { audio.volume = _atTargetVol; } catch { }
-            }
-            if (audio.paused && _atVRS >= HAVE_CURRENT_DATA) {
-              state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 800);
-              try { _nativePlayAT.call(audio).catch(() => { }); } catch { }
-            }
-            // Restore volume shortly after play — long enough for any audio decoder
-            // flush from the position write to settle inaudibly.
-            setTimeout(() => {
-              if (!coupledMode || !audio) return;
-              const _atVT2 = (() => { try { return Number(video.currentTime()); } catch { return 0; } })();
-              const _atAT2 = Number(audio.currentTime) || 0;
-              if (isFinite(_atVT2) && _atVT2 > 0.1 && Math.abs(_atAT2 - _atVT2) > 1.2) {
+            // SIMPLIFIED: if audio is already playing with good sync, leave it alone.
+            // The old vol=0 -> sync -> play -> restore dance caused audible dips
+            // on every alt-tab even when audio was perfectly healthy.
+            if (!audio.paused && _atDrift < 0.5) {
+              // Audio playing, synced - just ensure volume is correct
+              if (Math.abs(audio.volume - _atTargetVol) > 0.03) {
+                try { audio.volume = _atTargetVol; } catch { }
+              }
+            } else {
+              // Audio paused or drifted - sync position and restart WITHOUT
+              // vol=0 dance. The brief silence from paused state is shorter
+              // than the audible vol=0 dip.
+              if (audio.paused && isFinite(_atVT) && _atVT > 0.1 && _atDrift > 0.3) {
                 state._allowAudioTimeWrite = true;
-                try { audio.currentTime = _atVT2; } catch { }
+                try { audio.currentTime = _atVT; } catch { }
                 state._allowAudioTimeWrite = false;
-                if (audio.paused) {
-                  state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 600);
-                  try { _nativePlayAT.call(audio).catch(() => { }); } catch { }
-                }
               }
               try { audio.volume = _atTargetVol; } catch { }
-            }, 60);
+              if (audio.paused && _atVRS >= HAVE_CURRENT_DATA) {
+                state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 800);
+                try { _nativePlayAT.call(audio).catch(() => { }); } catch { }
+              }
+            }
           }
         }
       }
@@ -6724,10 +6829,26 @@ document.addEventListener("DOMContentLoaded", () => {
     if (state.endedNaturally || state.restarting) { _deadAudioStreak = 0; return; }
     if (state.seeking || state.seekBuffering) { _deadAudioStreak = 0; return; }
     if (state.strictBufferHold && state.firstPlayCommitted) { _deadAudioStreak = 0; return; }
-    // User explicitly paused — leave alone.
+    // User explicitly paused - leave alone.
     try { if (typeof userWantsPauseNow === "function" && userWantsPauseNow(2400)) { _deadAudioStreak = 0; return; } } catch { }
     if (state.userPauseUntil > now()) { _deadAudioStreak = 0; return; }
     if (state.userPauseLockUntil > now()) { _deadAudioStreak = 0; return; }
+
+    // STALE-FLAG CLEANUP: if video is healthy but stall flags are stuck,
+    // clear them. This catches the case where video recovers from a brief
+    // stall without firing 'playing' (e.g. readyState recovered), leaving
+    // videoStallAudioPaused permanently true and audio permanently silent.
+    if (state.videoStallAudioPaused || state.stallAudioResumeHoldUntil > now()) {
+      const _darVN = getVideoNode();
+      const _darVRS = _darVN ? Number(_darVN.readyState || 0) : 0;
+      const _darVPaused = _darVN ? _darVN.paused : true;
+      if (_darVRS >= 3 && !_darVPaused) {
+        // Video is healthy (readyState >= HAVE_FUTURE_DATA and playing)
+        // but stall flags say audio should be paused. Clear the stale flags.
+        clearAudioPauseLocks();
+      }
+    }
+
     if (!audio.paused) { _deadAudioStreak = 0; return; }
     // Video must actually be running for this to be the "audio dead" bug.
     const vn = getVideoNode();
@@ -7528,6 +7649,17 @@ document.addEventListener("DOMContentLoaded", () => {
     // Arm the nuclear PlayCommitGuard protection window
     armPlayCommitGuard();
     state.lastUserActionTime = now();
+    // Clear chromium locks from a previous pause intent - they were set for
+    // pause but if user now wants play, they must not block audio restart.
+    // Without this, audio stays locked out for the remainder of the pause
+    // lock window even after the user explicitly clicks play.
+    if (platform.chromiumOnlyBrowser) {
+      state.chromiumAudioStartLockUntil = 0;
+      state.chromiumPauseGuardUntil = 0;
+      state.chromiumBgSettlingUntil = 0;
+    }
+    // Also clear any stale stall flags that would block audio
+    if (state.videoStallAudioPaused) clearAudioPauseLocks();
     // Reset freeze detector cooldown so it can act immediately after this play.
     // Without this, rapid play/pause leaves the compositor stuck because the
     // 1200ms cooldown from a previous kick blocks detection of new freezes.
@@ -19760,6 +19892,11 @@ document.addEventListener("DOMContentLoaded", () => {
       if (state.endedNaturally || MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) return;
       if (!state.intendedPlaying && !state.firstPlayCommitted && wantsStartupAutoplay()) { state.intendedPlaying = true; state.bufferHoldIntendedPlaying = true; }
       if (!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) return;
+      // Early-exit: if both tracks are already playing, don't fire redundant kicks
+      if (_isHealthyReturnVideoPlayback() && (!coupledMode || (audio && !audio.paused))) {
+        BringBackToTabManager.onVideoConfirmedPlaying();
+        return;
+      }
       // clear stale stall flags
       state.videoStallAudioPaused = false;
       state.stallAudioResumeHoldUntil = 0;
@@ -19779,6 +19916,11 @@ document.addEventListener("DOMContentLoaded", () => {
       if (state.endedNaturally || MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) return;
       if (!state.intendedPlaying && !state.firstPlayCommitted && wantsStartupAutoplay()) { state.intendedPlaying = true; state.bufferHoldIntendedPlaying = true; }
       if (!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) return;
+      // Early-exit: if both tracks are already playing, don't fire redundant kicks
+      if (_isHealthyReturnVideoPlayback() && (!coupledMode || (audio && !audio.paused))) {
+        BringBackToTabManager.onVideoConfirmedPlaying();
+        return;
+      }
       // clear stale stall flags
       state.videoStallAudioPaused = false;
       state.stallAudioResumeHoldUntil = 0;
@@ -19834,24 +19976,27 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 420));
     state.bbtabRetryTimer = _shot420;
 
-    // Late safety shots: catches cases where browsers report "playing" early
-    // but decoder/pipeline actually resumes much later after tab return.
-    [800, 1300, 1900].forEach((delay, idx) => {
-      const _lateShot = trackWakeupRetryTimer(setTimeout(() => {
-        untrackWakeupRetryTimer(_lateShot);
-        if (state.tabReturnGen !== bbtGen) return;
-        if (state.endedNaturally || MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) return;
-        if (!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) return;
-        if (_isHealthyReturnVideoPlayback()) {
-          BringBackToTabManager.onVideoConfirmedPlaying();
-          _kickReturnAudio(false);
-          return;
-        }
-        _kickReturnPlayback(true);
-        // Don't arm buffer hold on tab return — just keep calling play().
-        // 12-second buffer holds cause the "frozen video for 2-3 seconds" bug.
-      }, delay));
-    });
+    // Single late safety shot at 1300ms - catches cases where browsers report
+    // "playing" early but decoder actually resumes much later. Reduced from
+    // 3 shots (800/1300/1900) to 1 since the earlier shots already cover the
+    // immediate window and each redundant shot creates play() event noise.
+    const _lateShot = trackWakeupRetryTimer(setTimeout(() => {
+      untrackWakeupRetryTimer(_lateShot);
+      if (state.tabReturnGen !== bbtGen) return;
+      if (state.endedNaturally || MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) return;
+      if (!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) return;
+      // Early-exit: if both tracks are already playing, done
+      if (_isHealthyReturnVideoPlayback() && (!coupledMode || (audio && !audio.paused))) {
+        BringBackToTabManager.onVideoConfirmedPlaying();
+        return;
+      }
+      if (_isHealthyReturnVideoPlayback()) {
+        BringBackToTabManager.onVideoConfirmedPlaying();
+        _kickReturnAudio(false);
+        return;
+      }
+      _kickReturnPlayback(true);
+    }, 1300));
   }
 
   // _doBringBackRetry is no longer used but kept as a no-op to avoid errors.
@@ -19919,14 +20064,21 @@ document.addEventListener("DOMContentLoaded", () => {
         state._wakeupRetryTimers.forEach(t => clearTimeout(t));
         state._wakeupRetryTimers = [];
       }
-      [80, 200, 500, 900].forEach(retryDelay => {
+      // Reduced from 4 shots (80/200/500/900) to 2 (200/800).
+      // startBringBackRetry already covers the same window with its own shots.
+      // Each redundant shot fires play()/seek() calls that cause stutter.
+      [200, 800].forEach(retryDelay => {
         const tid = setTimeout(() => {
           // Remove self from tracked list
           const idx = state._wakeupRetryTimers.indexOf(tid);
           if (idx !== -1) state._wakeupRetryTimers.splice(idx, 1);
           if (state.tabReturnGen !== myGen) return;
           if (!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) return;
-          if (!getVideoPaused()) {
+          // Early-exit: if both tracks are playing, nothing to do
+          const _wkVPlaying = !getVideoPaused();
+          const _wkAPlaying = !coupledMode || (audio && !audio.paused);
+          if (_wkVPlaying && _wkAPlaying) return;
+          if (_wkVPlaying) {
             if (coupledMode && audio && !state.tabReturnAudioMuted && audio.paused && !state.isProgrammaticAudioPause &&
               !shouldBlockNewAudioStart()) {
               const vtRetry = Number(video.currentTime()) || 0;
@@ -20136,18 +20288,22 @@ document.addEventListener("DOMContentLoaded", () => {
                 const _trDrift = _trAt - _trVt; // positive = audio ahead
                 if (isFinite(_trVt) && isFinite(_trAt) && _trVt > 0.5) {
                   const _trAbs = Math.abs(_trDrift);
-                  if (_trAbs > 0.30) {
-                    // Hard snap (rate-nudge removed to prevent randomly speeding up video)
+                  // Only hard-snap for drifts > 0.8s. Smaller drifts are
+                  // handled by the sync loop without a visible jump.
+                  // The old 0.30s threshold caused visible seek glitches
+                  // on every tab switch because Chromium's background
+                  // throttling always creates ~0.3-0.5s drift.
+                  if (_trAbs > 0.8) {
                     try {
                       state._isMicroSeek = true;
                       state.bgSilentTimeSyncing = true;
                       const _trVN = getVideoNode();
                       if (_trDrift > 0) {
-                        // Audio ahead — snap video forward to audio.
+                        // Audio ahead - snap video forward to audio.
                         if (_trVN) _trVN.currentTime = _trAt;
                         if (videoEl && videoEl !== _trVN) videoEl.currentTime = _trAt;
                       } else {
-                        // Video ahead — snap audio forward (less common).
+                        // Video ahead - snap audio forward (less common).
                         safeSetAudioTime(_trVt);
                       }
                       setTimeout(() => {
@@ -20156,7 +20312,7 @@ document.addEventListener("DOMContentLoaded", () => {
                       }, 250);
                     } catch { }
                   }
-                  // |drift| < 0.30s : do nothing; runSync handles it.
+                  // |drift| < 0.8s : do nothing; runSync handles it smoothly.
                 }
               }
             } catch { }
