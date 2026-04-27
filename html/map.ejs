@@ -6,10 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
   <meta name="color-scheme" content="dark light" />
   <meta name="theme-color" content="#202124" />
-  
-  <link rel="preconnect" href="https://fonts.bunny.net">
+    <link rel="preconnect" href="https://fonts.bunny.net">
   <link href="https://fonts.bunny.net/css?family=roboto:400,500,700&display=swap" rel="stylesheet">
-
   <style>
     :root {
       --accent: #8ab4f8;
@@ -21,16 +19,13 @@
       --text-main: #e8eaed;
       --text-sub: #9aa0a6;
       --danger: #f28b82;
-      
-       --radius: 8px;
+      --radius: 8px;
       --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 2px 6px 2px rgba(0,0,0,0.15);
       --font: 'Roboto', system-ui, sans-serif;
-      
       --marker-size: 20px;
       --marker-color: #ef4444;
-    }
-
-     body.light-mode {
+    } 
+    body.light-mode {
       --bg: #f8f9fa;
       --panel-bg: #ffffff;
       --panel-hover: #f1f3f4;
@@ -42,30 +37,22 @@
       --danger: #d93025;
       --shadow: 0 1px 2px rgba(60,64,67,0.3), 0 2px 6px 2px rgba(60,64,67,0.15);
     }
-
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
     body { font-family: var(--font); background: var(--bg); color: var(--text-main); }
     button { font-family: inherit; }
-
-    /* --- ICONS --- */
     svg.icon { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-
-    /* --- MAP --- */
     .app-shell { position: relative; width: 100%; height: 100%; }
     #map-container { position: absolute; inset: 0; z-index: 0; background: var(--bg); }
     iframe#map { width: 100%; height: 100%; border: 0; display: block; }
-
-    /* Brand Tag (Bottom Center) - Hidden on Mobile */
     .brand {
       position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
       padding: 6px 12px; font-size: 13px; font-weight: 500; opacity: 0.9;
       background: var(--panel-bg); color: var(--text-main);
       border-radius: 16px; box-shadow: var(--shadow);
       pointer-events: none; z-index: 5;
-    }
-
-     .marker-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 10; display: flex; align-items: center; justify-content: center; }
+    } 
+    .marker-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 10; display: flex; align-items: center; justify-content: center; }
     .center-marker {
       width: var(--marker-size); height: var(--marker-size); border-radius: 50%;
       background: var(--marker-color);
@@ -76,25 +63,21 @@
       content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
       width: 4px; height: 4px; background: rgba(0,0,0,0.6); border-radius: 50%;
     }
-
-     .ui-layer { position: absolute; inset: 0; z-index: 20; pointer-events: none; }
-    .ui-layer > * { pointer-events: auto; }
-
-     .btn {
+    .ui-layer { position: absolute; inset: 0; z-index: 20; pointer-events: none; }
+    .ui-layer > * { pointer-events: auto; } 
+    .btn {
       display: flex; align-items: center; justify-content: center; gap: 8px;
       border: none; background: transparent; color: var(--text-main);
       border-radius: var(--radius); padding: 8px 16px; font-size: 14px; font-weight: 500;
       cursor: pointer; transition: background 0.2s;
     }
     .btn:hover { background: var(--panel-hover); }
-    
     .btn-filled {
       background: var(--accent); color: var(--bg); border: none; border-radius: var(--radius);
       padding: 8px 16px; font-weight: 500; font-size: 14px; cursor: pointer; transition: background 0.2s;
     }
     .btn-filled:hover { background: var(--accent-hover); }
-
-     .suggestions {
+    .suggestions {
       background: var(--panel-bg);
       border-radius: var(--radius);
       margin: 8px 0 0 0; padding: 8px 0; list-style: none;
@@ -102,19 +85,16 @@
       animation: slideDown 0.2s ease-out; z-index: 1000;
     }
     @keyframes slideDown { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
-    
     .suggestions li {
       padding: 12px 16px; cursor: pointer;
       display: flex; align-items: center; gap: 16px;
     }
     .suggestions li:hover { background: var(--panel-hover); }
-    
     .sug-icon { color: var(--text-sub); display: flex; align-items: center; }
     .sug-text { display: flex; flex-direction: column; overflow: hidden; }
     .sug-title { font-weight: 500; font-size: 14px; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .sug-sub { font-size: 13px; color: var(--text-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
-
-     .gm-tool-stack { display: flex; flex-direction: column; gap: 0; background: var(--panel-bg); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+    .gm-tool-stack { display: flex; flex-direction: column; gap: 0; background: var(--panel-bg); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
     .gm-fab {
       width: 40px; height: 40px; border: none; background: transparent; color: var(--text-sub);
       display: flex; align-items: center; justify-content: center; cursor: pointer;
@@ -123,10 +103,8 @@
     .gm-fab:last-child { border-bottom: none; }
     .gm-fab:hover { background: var(--panel-hover); color: var(--text-main); }
     .gm-fab.active { color: var(--accent); }
-    .stack-spacer { height: 16px; background: transparent; }
-
-     .popover {
-      position: absolute; right: 56px; /* Offset from tools */
+    .popover {
+      position: absolute; right: 56px; 
       width: 320px; background: var(--panel-bg);
       border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px;
       display: none; flex-direction: column; gap: 12px;
@@ -134,15 +112,13 @@
     .popover.open { display: flex; }
     .popover-header { font-weight: 500; font-size: 16px; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center; }
     .row { display: flex; justify-content: space-between; align-items: center; }
+    .disclaimer { font-size: 11px; color: var(--text-sub); line-height: 1.4; margin-top: 8px; font-style: italic; }
 
-    /* --- DESKTOP LAYOUT --- */
     @media (min-width: 769px) {
-      .mobile-only { display: none !important; }
-
-       .absolute-top-right {
-        position: absolute; top: 16px; right: 16px; width: 380px; z-index: 50;
+      .mobile-only { display: none !important; } 
+      .absolute-top-left {
+        position: absolute; top: 16px; left: 16px; width: 380px; z-index: 50;
       }
-
       .gm-search-box {
         background: var(--panel-bg); border-radius: 24px; box-shadow: var(--shadow);
         display: flex; align-items: center; height: 48px; padding: 0 16px;
@@ -155,25 +131,17 @@
       }
       .search-input::placeholder { color: var(--text-sub); }
       .search-icon-btn { background: transparent; border: none; color: var(--text-sub); cursor: pointer; display: flex; padding: 0; }
-      .search-icon-btn:hover { color: var(--text-main); }
-
-      /* Tools Bottom Right */
       .absolute-bottom-right {
         position: absolute; bottom: 24px; right: 16px; z-index: 50;
         display: flex; flex-direction: column; align-items: flex-end; gap: 16px;
       }
-      
-      /* Popover Placement relative to tools */
       #pop-settings { bottom: 0; }
       #pop-pins { bottom: 82px; }
     }
 
-    /* --- MOBILE LAYOUT --- */
     @media (max-width: 768px) {
       .desktop-only { display: none !important; }
       .brand { display: none !important; }
-
-      /* Mobile Search Top Right Floating Button */
       .mobile-search-fab {
         position: absolute; top: 16px; right: 16px; z-index: 30;
         width: 48px; height: 48px; border-radius: 50%; border: none;
@@ -181,22 +149,15 @@
         display: flex; align-items: center; justify-content: center;
         color: var(--text-main); cursor: pointer;
       }
-
-      /* Mobile Dock Bottom */
       .mobile-dock {
         position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
         display: flex; align-items: center; gap: 8px;
         background: var(--panel-bg); padding: 8px 16px; border-radius: 32px;
         box-shadow: var(--shadow); z-index: 30;
       }
-      .dock-btn { 
-        background: none; border: none; color: var(--text-sub); 
-        padding: 12px 20px; border-radius: 24px; cursor: pointer; 
-      }
+      .dock-btn { background: none; border: none; color: var(--text-sub); padding: 12px 20px; border-radius: 24px; cursor: pointer; }
       .dock-btn:active { background: var(--panel-hover); }
       .dock-btn.main { background: var(--accent); color: var(--bg); padding: 12px 24px; }
-
-      /* Bottom Sheets */
       .bottom-sheet {
         position: fixed; left: 0; right: 0; bottom: 0;
         background: var(--panel-bg); border-radius: 16px 16px 0 0;
@@ -208,49 +169,29 @@
       .bottom-sheet.open { transform: translateY(0); }
       .sheet-handle { width: 32px; height: 4px; background: var(--border); border-radius: 4px; margin: 12px auto; }
       .sheet-content { padding: 16px 24px 40px; overflow-y: auto; }
-
-      /* Mobile Full Width Input */
       .m-input-container {
         display: flex; align-items: center; background: var(--bg);
         border: 1px solid var(--border); border-radius: var(--radius);
         padding: 0 16px; height: 48px; margin-bottom: 12px;
       }
-      .m-input-container input {
-        flex: 1; background: transparent; border: none; outline: none;
-        color: var(--text-main); font-size: 15px; margin-left: 12px;
-      }
-      
+      .m-input-container input { flex: 1; background: transparent; border: none; outline: none; color: var(--text-main); font-size: 15px; margin-left: 12px; }
       #m-suggestions { position: static; box-shadow: none; border: 1px solid var(--border); }
     }
-
-    /* --- UTILITIES --- */
-    .pin-item {
-      padding: 12px; border-bottom: 1px solid var(--border);
-      display: flex; justify-content: space-between; align-items: center;
-    }
-    .pin-item:last-child { border-bottom: none; }
+    .pin-item { padding: 12px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
     .pin-info strong { display: block; font-size: 14px; margin-bottom: 4px; color: var(--text-main); }
     .pin-info span { font-size: 12px; color: var(--text-sub); }
     .pin-actions { display: flex; gap: 8px; }
-    .pin-btn { background: var(--panel-hover); border: none; border-radius: 4px; padding: 6px 10px; color: var(--text-main); cursor: pointer; font-size: 12px; font-weight: 500;}
+    .pin-btn { background: var(--panel-hover); border: none; border-radius: 4px; padding: 6px 10px; color: var(--text-main); cursor: pointer; font-size: 12px; }
     .pin-btn.del { color: var(--danger); }
-
-    select.std-select {
-      width: 100%; padding: 10px; border-radius: var(--radius); border: 1px solid var(--border);
-      background: var(--bg); color: var(--text-main); outline: none; cursor: pointer; font-family: var(--font);
-    }
+    select.std-select { width: 100%; padding: 10px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--bg); color: var(--text-main); outline: none; }
     input[type="range"] { accent-color: var(--accent); width: 120px; }
-    input[type="color"] { background: none; border: 1px solid var(--border); border-radius: 4px; width: 32px; height: 32px; cursor: pointer; padding: 0; }
+    input[type="color"] { background: none; border: 1px solid var(--border); border-radius: 4px; width: 32px; height: 32px; cursor: pointer; }
     label { font-size: 14px; color: var(--text-main); font-weight: 500; }
-    
     .link-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
     .link-pill { font-size: 12px; color: var(--accent); text-decoration: none; font-weight: 500; }
-    .link-pill:hover { text-decoration: underline; }
-
   </style>
 </head>
 <body>
-
 <div style="display:none">
   <svg id="icons">
     <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></symbol>
@@ -264,7 +205,6 @@
 </div>
 
 <div class="app-shell">
-  
   <div id="map-container">
     <iframe id="map" title="Map"></iframe>
     <div class="marker-overlay">
@@ -274,17 +214,15 @@
   </div>
 
   <div class="ui-layer">
-
-    <div class="desktop-only absolute-top-right">
+    <div class="desktop-only absolute-top-left">
       <div class="gm-search-box">
          <input type="text" id="d-search" class="search-input" placeholder="Search Poke Maps..." autocomplete="off">
-        <button class="search-icon-btn"><svg class="icon"><use href="#icon-search"/></svg></button>
+        <button class="search-icon-btn" id="d-search-btn"><svg class="icon"><use href="#icon-search"/></svg></button>
       </div>
       <ul id="d-suggestions" class="suggestions"></ul>
     </div>
 
     <div class="desktop-only absolute-bottom-right">
-      
       <div class="popover" id="pop-pins">
         <div class="popover-header">
           <span>Saved Locations</span>
@@ -305,10 +243,7 @@
               <option value="hot">Humanitarian</option>
             </select>
           </div>
-          <div class="row">
-            <label>Follow Location</label>
-            <input type="checkbox" id="d-follow" style="width:18px; height:18px; accent-color:var(--accent);">
-          </div>
+          <div class="row"><label>Follow Location</label><input type="checkbox" id="d-follow" style="width:18px; height:18px; accent-color:var(--accent);"></div>
           <div class="row">
             <label>Theme</label>
             <select id="d-theme" class="std-select" style="width:120px;">
@@ -319,6 +254,11 @@
           <hr style="border:0; border-top:1px solid var(--border); margin:0;">
           <div class="row"><label>Marker Size</label><input type="range" id="d-m-size" min="10" max="50" value="20"></div>
           <div class="row"><label>Marker Color</label><input type="color" id="d-m-color" value="#ef4444"></div>
+          
+          <div class="disclaimer">
+            Content is not proxied and 3rd party domains may be used. By using this service, you agree to the OpenStreetMap Terms of Service.
+          </div>
+
           <div class="link-row" style="padding-top:8px; border-top:1px solid var(--border);">
             <a href="/privacy" class="link-pill">Privacy</a>
             <a href="https://wiki.osmfoundation.org/wiki/Terms_of_Use" target="_blank" class="link-pill">Terms</a>
@@ -335,13 +275,9 @@
         <button class="gm-fab" id="d-btn-settings" title="Settings"><svg class="icon"><use href="#icon-settings"/></svg></button>
         <button class="gm-fab" id="d-share" title="Share Link"><svg class="icon"><use href="#icon-share"/></svg></button>
       </div>
-
     </div>
 
-    <button class="mobile-only mobile-search-fab" id="m-btn-search">
-      <svg class="icon"><use href="#icon-search"/></svg>
-    </button>
-
+    <button class="mobile-only mobile-search-fab" id="m-btn-search"><svg class="icon"><use href="#icon-search"/></svg></button>
     <div class="mobile-only mobile-dock">
       <button class="dock-btn" id="m-btn-pins"><svg class="icon"><use href="#icon-pin"/></svg></button>
       <button class="dock-btn main" id="m-btn-locate"><svg class="icon"><use href="#icon-nav"/></svg></button>
@@ -394,6 +330,11 @@
             <option value="light">Light</option>
           </select>
         </div>
+
+        <div class="disclaimer" style="padding:14px 0; border-top:1px solid var(--border)">
+          Content is not proxied and 3rd party domains may be used. By using this service, you agree to the OpenStreetMap Terms of Service.
+        </div>
+
         <div style="margin-top:20px; padding-top:20px; border-top:1px solid var(--border)">
           <div class="link-row">
             <a class="link-pill" href="https://wiki.osmfoundation.org/wiki/Terms_of_Use">OSM Terms</a>
@@ -402,49 +343,49 @@
         </div>
       </div>
     </div>
-
   </div>
 </div>
-    <script type="text/javascript">
-	<!--//--><![CDATA[//><!-- 
-	/**
-	 * @licstart The following is the entire license notice for the JavaScript
-	 * code in this page.
-	 *
-	 *  Copyright (C) 2021-2023 POKETUBE (https://github.com/iamashley0/poketube)
-	 *
-	 * The JavaScript code in this page is free software: you can redistribute
-	 * it and/or modify it under the terms of the GNU General Public License
-	 * (GNU GPL) as published by the Free Software Foundation, either version 3
-	 * of the License, or (at your option) any later version.  The code is
-	 * distributed WITHOUT ANY WARRANTY; without even the implied warranty of
-	 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU GPL
-	 * for more details.
-	 *
-	 * As additional permission under GNU GPL version 3 section 7, you may
-	 * distribute non-source (e.g., minimized or compacted) forms of that code
-	 * without the copy of the GNU GPL normally required by section 4, provided
-	 * you include this license notice and a URL through which recipients can
-	 * access the Corresponding Source.
-	 *
-	 * @licend The above is the entire license notice for the JavaScript code
-	 * in this page.
-	 */
-	
-	//--><!]]>
-	</script>
+ <script type="text/javascript">
+		<!--//--><![CDATA[//><!-- 
+		/**
+		 * @licstart The following is the entire license notice for the JavaScript
+		 * code in this page.
+		 *
+		 *  Copyright (C) 2021-2023 POKETUBE (https://github.com/iamashley0/poketube)
+		 *
+		 * The JavaScript code in this page is free software: you can redistribute
+		 * it and/or modify it under the terms of the GNU General Public License
+		 * (GNU GPL) as published by the Free Software Foundation, either version 3
+		 * of the License, or (at your option) any later version.  The code is
+		 * distributed WITHOUT ANY WARRANTY; without even the implied warranty of
+		 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU GPL
+		 * for more details.
+		 *
+		 * As additional permission under GNU GPL version 3 section 7, you may
+		 * distribute non-source (e.g., minimized or compacted) forms of that code
+		 * without the copy of the GNU GPL normally required by section 4, provided
+		 * you include this license notice and a URL through which recipients can
+		 * access the Corresponding Source.
+		 *
+		 * @licend The above is the entire license notice for the JavaScript code
+		 * in this page.
+		 */
+		
+		//--><!]]>
+		</script> 
 <script>
 ;(() => {
-  const mapState = { lat: 30.41, lon: 72.44, delta: 0.25, layer: 'mapnik', following: false };
+  // Start with a World View
+  const mapState = { lat: 20, lon: 0, delta: 60, layer: 'mapnik', following: false };
   let savedPins = [];
   try { savedPins = JSON.parse(localStorage.getItem('pm_pins') || '[]'); } catch(e){}
 
   const select = (s) => document.querySelector(s);
-
   const ui = {
     mapFrame: select('#map'),
     centerMarker: select('#center-marker'),
     desktopSearch: select('#d-search'),
+    desktopSearchBtn: select('#d-search-btn'),
     desktopSuggestions: select('#d-suggestions'),
     desktopLocate: select('#d-locate'),
     desktopSavePin: select('#d-save-pin'),
@@ -476,17 +417,16 @@
   };
 
   const refreshMap = (pushHistory = false) => {
-    mapState.delta = Math.max(0.0005, Math.min(45, mapState.delta));
+    mapState.delta = Math.max(0.0001, Math.min(180, mapState.delta));
     const bbox = {
       l: (mapState.lon - mapState.delta).toFixed(6),
-      b: (mapState.lat - mapState.delta).toFixed(6),
+      b: (mapState.lat - mapState.delta/2).toFixed(6),
       r: (mapState.lon + mapState.delta).toFixed(6),
-      t: (mapState.lat + mapState.delta).toFixed(6)
+      t: (mapState.lat + mapState.delta/2).toFixed(6)
     };
-
     const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox.l}%2C${bbox.b}%2C${bbox.r}%2C${bbox.t}&layer=${mapState.layer}`;
     if (ui.mapFrame.src !== src) ui.mapFrame.src = src;
-
+    
     if (pushHistory) {
       const url = new URL(location);
       url.searchParams.set('lat', mapState.lat.toFixed(5));
@@ -495,57 +435,36 @@
       url.searchParams.set('l', mapState.layer);
       history.pushState(mapState, '', url);
     }
-
-    if(ui.desktopLayer.value !== mapState.layer) ui.desktopLayer.value = mapState.layer;
-    if(ui.mobileLayer.value !== mapState.layer) ui.mobileLayer.value = mapState.layer;
-
     ui.desktopFollow.checked = mapState.following;
     ui.mobileFollow.checked = mapState.following;
   };
 
   let searchTimer;
-
   const performSearch = (value, list) => {
-    if (!value || value.length < 3) {
+    if (!value || value.trim().length < 2) {
       list.style.display = 'none';
       return;
     }
 
-    const coords = value.match(/([+-]?\d+\.?\d*)\s*,\s*([+-]?\d+\.?\d*)/);
-    if(coords) {
-      const lat = parseFloat(coords[1]);
-      const lon = parseFloat(coords[2]);
-
-      list.innerHTML = `
-        <li onclick="goTo(${lat},${lon})">
-          <div class="sug-icon"><svg class="icon"><use href="#icon-loc"/></svg></div>
-          <div class="sug-text">
-            <span class="sug-title">${lat.toFixed(4)}, ${lon.toFixed(4)}</span>
-            <span class="sug-sub">Coordinates</span>
-          </div>
-        </li>`;
-      list.style.display = 'block';
-      return;
-    }
-
     clearTimeout(searchTimer);
-
     searchTimer = setTimeout(async () => {
       try {
+        list.innerHTML = `<li style="justify-content:center; opacity:0.7; font-size:13px;">Searching...</li>`;
+        list.style.display = 'block';
+
         const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(value)}`);
         const data = await res.json();
-
         list.innerHTML = '';
+
         if(!data.length) {
-          list.style.display = 'none';
+          list.innerHTML = `<li style="justify-content:center; opacity:0.7; font-size:13px;">No results found</li>`;
           return;
         }
 
-        data.slice(0,5).forEach(item => {
+        data.slice(0,6).forEach(item => {
           const parts = item.display_name.split(',');
           const title = parts[0];
           const subtitle = parts.slice(1).join(',').trim();
-
           const li = document.createElement('li');
           li.innerHTML = `
             <div class="sug-icon"><svg class="icon"><use href="#icon-loc"/></svg></div>
@@ -554,7 +473,6 @@
               <span class="sug-sub">${subtitle}</span>
             </div>
           `;
-
           li.onclick = () => {
             goTo(parseFloat(item.lat), parseFloat(item.lon));
             list.style.display = 'none';
@@ -562,34 +480,30 @@
             ui.mobileSearch.value = title;
             closeAllPanels();
           };
-
           list.appendChild(li);
         });
-
-        list.style.display = 'block';
-      } catch(e){}
-    }, 400);
+      } catch(e){
+        list.style.display = 'none';
+      }
+    }, 500);
   };
 
   window.goTo = (lat, lon) => {
     mapState.lat = lat;
     mapState.lon = lon;
+    mapState.delta = 0.005; // Zoom in when picking a location
     mapState.following = false;
     refreshMap(true);
   };
 
   let geoWatchId = null;
-
   const toggleFollowLocation = () => {
     if (mapState.following) {
       mapState.following = false;
       if (geoWatchId) navigator.geolocation.clearWatch(geoWatchId);
-      refreshMap();
     } else {
       if (!navigator.geolocation) return alert("Geolocation not supported");
-
       mapState.following = true;
-
       geoWatchId = navigator.geolocation.watchPosition(
         p => {
           mapState.lat = p.coords.latitude;
@@ -598,25 +512,25 @@
         },
         () => {
           mapState.following = false;
-          refreshMap();
           alert("Location access denied");
         },
         { enableHighAccuracy: true }
       );
-
-      refreshMap();
     }
+    refreshMap();
   };
 
   const locateOnce = () => {
+    if (!navigator.geolocation) return alert("Geolocation not supported");
     navigator.geolocation.getCurrentPosition(
       p => {
         mapState.lat = p.coords.latitude;
         mapState.lon = p.coords.longitude;
-        mapState.delta = 0.01;
+        mapState.delta = 0.005;
         refreshMap(true);
       },
-      () => alert("Could not locate")
+      (err) => alert("Could not locate: " + err.message),
+      { timeout: 10000, enableHighAccuracy: true }
     );
   };
 
@@ -635,7 +549,6 @@
         </div>
       `).join('')
       : '<div style="text-align:center; opacity:0.6; padding:20px; font-size:14px">No saved pins</div>';
-
     ui.desktopPinList.innerHTML = html;
     ui.mobilePinList.innerHTML = html;
   };
@@ -643,6 +556,7 @@
   window.loadPin = (i) => {
     mapState.lat = savedPins[i].lat;
     mapState.lon = savedPins[i].lon;
+    mapState.delta = 0.005;
     mapState.layer = savedPins[i].layer || 'mapnik';
     refreshMap(true);
     closeAllPanels();
@@ -659,13 +573,7 @@
   const saveCurrentPin = () => {
     const name = prompt("Name this location:", "New Place");
     if(name) {
-      savedPins.unshift({
-        name,
-        lat: mapState.lat,
-        lon: mapState.lon,
-        layer: mapState.layer
-      });
-
+      savedPins.unshift({ name, lat: mapState.lat, lon: mapState.lon, layer: mapState.layer });
       localStorage.setItem('pm_pins', JSON.stringify(savedPins));
       renderPinList();
     }
@@ -676,9 +584,6 @@
     document.documentElement.style.setProperty('--marker-color', ui.desktopMarkerColor.value);
   };
 
-  ui.desktopMarkerSize.oninput = updateMarkerStyle;
-  ui.desktopMarkerColor.oninput = updateMarkerStyle;
-
   const setTheme = (theme) => {
     document.body.classList.toggle('light-mode', theme === 'light');
     ui.desktopTheme.value = theme;
@@ -688,7 +593,6 @@
   const closeAllPanels = () => {
     document.querySelectorAll('.bottom-sheet').forEach(s => s.classList.remove('open'));
     document.querySelectorAll('.popover').forEach(p => p.classList.remove('open'));
-
     ui.desktopPinsButton.classList.remove('active');
     ui.desktopSettingsButton.classList.remove('active');
   };
@@ -702,85 +606,60 @@
   const togglePopover = (popover, button) => {
     const open = popover.classList.contains('open');
     closeAllPanels();
-
     if(!open) {
       popover.classList.add('open');
       button.classList.add('active');
     }
   };
 
+  // Search Listeners
+  const handleKey = (e, list) => {
+    if(e.key === 'Enter') {
+      const first = list.querySelector('li');
+      if(first) first.click();
+    }
+  };
+
   ui.desktopSearch.oninput = e => performSearch(e.target.value, ui.desktopSuggestions);
+  ui.desktopSearch.onkeydown = e => handleKey(e, ui.desktopSuggestions);
   ui.mobileSearch.oninput = e => performSearch(e.target.value, ui.mobileSuggestions);
+  ui.mobileSearch.onkeydown = e => handleKey(e, ui.mobileSuggestions);
 
   ui.desktopLocate.onclick = locateOnce;
   ui.mobileLocate.onclick = locateOnce;
-
   ui.desktopSavePin.onclick = saveCurrentPin;
   ui.mobileSave.onclick = saveCurrentPin;
-
   ui.desktopShare.onclick = () => {
     navigator.clipboard.writeText(location.href);
     alert("Link copied!");
   };
 
-  ui.desktopLayer.onchange = e => {
-    mapState.layer = e.target.value;
-    refreshMap(true);
-  };
-
-  ui.mobileLayer.onchange = e => {
-    mapState.layer = e.target.value;
-    refreshMap(true);
-  };
-
+  ui.desktopLayer.onchange = e => { mapState.layer = e.target.value; refreshMap(true); };
+  ui.mobileLayer.onchange = e => { mapState.layer = e.target.value; refreshMap(true); };
   ui.desktopFollow.onchange = toggleFollowLocation;
   ui.mobileFollow.onchange = toggleFollowLocation;
-
   ui.desktopTheme.onchange = e => setTheme(e.target.value);
   ui.mobileTheme.onchange = e => setTheme(e.target.value);
+  ui.desktopMarkerSize.oninput = updateMarkerStyle;
+  ui.desktopMarkerColor.oninput = updateMarkerStyle;
 
-  ui.desktopPinsButton.onclick = e => {
-    e.stopPropagation();
-    togglePopover(ui.pinsPopover, ui.desktopPinsButton);
-  };
-
-  ui.desktopSettingsButton.onclick = e => {
-    e.stopPropagation();
-    togglePopover(ui.settingsPopover, ui.desktopSettingsButton);
-  };
-
-  ui.pinsPopover.onclick = e => e.stopPropagation();
-  ui.settingsPopover.onclick = e => e.stopPropagation();
-
-  ui.mobileSearchButton.onclick = () => {
-    toggleSheet(ui.searchSheet);
-    setTimeout(() => ui.mobileSearch.focus(), 100);
-  };
-
+  ui.desktopPinsButton.onclick = e => { e.stopPropagation(); togglePopover(ui.pinsPopover, ui.desktopPinsButton); };
+  ui.desktopSettingsButton.onclick = e => { e.stopPropagation(); togglePopover(ui.settingsPopover, ui.desktopSettingsButton); };
+  ui.mobileSearchButton.onclick = () => { toggleSheet(ui.searchSheet); setTimeout(() => ui.mobileSearch.focus(), 200); };
   ui.mobilePinsButton.onclick = () => toggleSheet(ui.pinsSheet);
   ui.mobileMenuButton.onclick = () => toggleSheet(ui.menuSheet);
 
   document.body.onclick = (e) => {
-    if(!e.target.closest('.bottom-sheet') &&
-       !e.target.closest('.mobile-dock') &&
-       !e.target.closest('.mobile-search-fab') &&
-       !e.target.closest('.gm-search-box') &&
-       !e.target.closest('.gm-tool-stack')) closeAllPanels();
-
-    if(!e.target.closest('.gm-search-box') &&
-       !e.target.closest('.m-input-container')) {
-      ui.desktopSuggestions.style.display = 'none';
-    }
+    if(!e.target.closest('.bottom-sheet') && !e.target.closest('.mobile-dock') && !e.target.closest('.mobile-search-fab') && !e.target.closest('.gm-search-box') && !e.target.closest('.gm-tool-stack')) closeAllPanels();
+    if(!e.target.closest('.gm-search-box') && !e.target.closest('.m-input-container')) { ui.desktopSuggestions.style.display = 'none'; ui.mobileSuggestions.style.display = 'none'; }
   };
 
   const params = new URLSearchParams(location.search);
-
   if(params.has('lat')) {
     mapState.lat = parseFloat(params.get('lat'));
     mapState.lon = parseFloat(params.get('lon'));
+    mapState.delta = parseFloat(params.get('d')) || 0.05;
   }
-
-  if(params.has('l')) mapState.layer = params.get('l');
 
   setTheme('dark');
   renderPinList();
