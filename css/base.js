@@ -25,7 +25,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 //////////////// THE PLAYER, START ////////////////////////
- try {
+try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -8892,11 +8892,12 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         const currentPos = Number(audio.currentTime) || 0;
         const timeDiff = Math.abs(currentPos - t);
-        // Block backward seeks > 1.5s unless user-initiated or during restart.
+        // Block backward seeks > 0.3s unless user-initiated or during restart.
         // This catches programmatic code that accidentally syncs audio to a stale
-        // video position, causing audio to jump back mid-playback.
+        // video position, causing audio to jump back mid-playback (the 'plays
+        // same part twice' bug). Reduced from 1.5s to 0.3s to catch smaller jumps.
         const isBackward = t < currentPos - 0.1;
-        if (isBackward && (currentPos - t) > 1.5 && state.firstPlayCommitted &&
+        if (isBackward && (currentPos - t) > 0.3 && state.firstPlayCommitted &&
           !state.restarting && !state.seeking && !isLoopDesired()) {
           const userRecent = (now() - state.lastUserActionTime) < 1500;
           if (!userRecent) return;
@@ -10762,6 +10763,9 @@ document.addEventListener("DOMContentLoaded", () => {
               }, 250);
             } catch { }
           } else {
+            // Video ahead of audio. Snap video BACK? No - snap audio forward.
+            // safeSetAudioTime has backward-seek guards, and vtNow is ahead
+            // of atNow so this is a forward seek for audio.
             safeSetAudioTime(vtNow);
           }
         }
@@ -14798,14 +14802,34 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (state.intendedPlaying && !state.restarting && !state.seeking && !state.syncing && !skipDrift && !state.seekResumeInFlight && !state.seekBuffering) {
       if (state.audioEverStarted && !audio.paused && !inBgDrift && !state.startupPhase) {
-        const _syncDrift = Math.abs(at - vt);
+        const _syncDrift = at - vt; // positive = audio ahead of video
+        const _syncDriftAbs = Math.abs(_syncDrift);
         // only correct large drift (>1.5s). Drift under 1.5s is handled by the
-        // playback rate nudge system smoothly and invisibly. Previous thresholds
-        // (0.35s, 0.8s) caused constant audio seeks during normal playback,
-        // which the user perceives as "random seeks" and audio glitches.
-        if (_syncDrift > 1.5) {
-          await quietSeekAudio(vt);
-          at = vt;
+        // playback rate nudge system smoothly and invisibly.
+        if (_syncDriftAbs > 1.5) {
+          if (_syncDrift > 0) {
+            // Audio is AHEAD of video. Snap video forward to audio.
+            // NEVER seek audio backward here - the user already heard that
+            // content. Seeking audio back creates the 'plays same part twice'
+            // effect because the browser replays audio content.
+            try {
+              state._isMicroSeek = true;
+              state.bgSilentTimeSyncing = true;
+              const _driftVN = getVideoNode();
+              if (_driftVN) _driftVN.currentTime = at;
+              if (videoEl && videoEl !== _driftVN) videoEl.currentTime = at;
+              setTimeout(() => {
+                state._isMicroSeek = false;
+                state.bgSilentTimeSyncing = false;
+              }, 250);
+            } catch { }
+            vt = at;
+          } else {
+            // Video is ahead of audio. Seek audio forward to video.
+            // This is safe - audio hasn't played this content yet.
+            await quietSeekAudio(vt);
+            at = vt;
+          }
         }
       }
     }
@@ -14904,7 +14928,11 @@ document.addEventListener("DOMContentLoaded", () => {
             !shouldBlockNewAudioStart() &&
             inBgReturnGrace() &&
             videoReadyForAudioResume(vt)) {
-            safeSetAudioTime(vt);
+            // Use max(vt, at) to never seek audio backward - if audio was
+            // ahead from background playback, keep it there.
+            const _resumeAT = Number(audio.currentTime) || 0;
+            const _resumeTarget = (isFinite(_resumeAT) && _resumeAT > vt) ? _resumeAT : vt;
+            safeSetAudioTime(_resumeTarget);
             execProgrammaticAudioPlay({ squelchMs: 450, minGapMs: 0, force: true }).catch(() => false);
           }
         }
@@ -14916,7 +14944,11 @@ document.addEventListener("DOMContentLoaded", () => {
             !shouldBlockNewAudioStart() &&
             !state.bgResumeInFlight &&
             videoReadyForAudioResume(vt)) {
-            safeSetAudioTime(vt);
+            // Use max(vt, at) to never seek audio backward - if audio was
+            // ahead from background playback, keep it there.
+            const _resumeAT2 = Number(audio.currentTime) || 0;
+            const _resumeTarget2 = (isFinite(_resumeAT2) && _resumeAT2 > vt) ? _resumeAT2 : vt;
+            safeSetAudioTime(_resumeTarget2);
             execProgrammaticAudioPlay({ squelchMs: 450, minGapMs: 0, force: true }).catch(() => false);
           } else {
             enforceAudioPlayback();
@@ -19815,12 +19847,18 @@ document.addEventListener("DOMContentLoaded", () => {
         !isLoopDesired();
 
       if (isFinite(targetTime) && !wouldRestartNearZero) {
+        // NEVER seek audio backward on tab return. If audio ran ahead during
+        // background (keepalive), seeking it back replays content the user
+        // already heard - the 'plays same part twice' bug. Clamp to forward-only.
+        const _clampedTarget = (currentAt > targetTime + 0.3 && state.firstPlayCommitted && !state.restarting)
+          ? currentAt  // keep audio where it is - video will catch up
+          : targetTime;
         const shouldRealignAudio =
           audio.paused ||
           hard ||
           drift > 1.5 ||
           (_returnNeedsForegroundResume() && drift > 1.0);
-        if (shouldRealignAudio) safeSetAudioTime(targetTime);
+        if (shouldRealignAudio) safeSetAudioTime(_clampedTarget);
       }
 
       try { audio.volume = targetVolFromVideo(); } catch { }
