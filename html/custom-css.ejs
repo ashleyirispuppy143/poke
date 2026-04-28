@@ -18,7 +18,7 @@
   <meta name="twitter:image" content="/css/poke-embed.webp">
 
   <link href="/css/yt-ukraine.svg?v=6" rel="icon">
-  
+
   <style>
     @import url("https://p.poketube.fun/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css");
 
@@ -56,6 +56,12 @@
     body {
       margin: 0; padding: 0; color: var(--text); font-family: var(--font-main);
       background: var(--bg); overflow-x: hidden; min-height: 100vh;
+    }
+
+    /* Noscript styling */
+    noscript .noscript-banner {
+      display: block; background: #ff4757; color: #fff; text-align: center;
+      padding: 12px; font-weight: 600; font-size: 14px; position: relative; z-index: 10000;
     }
 
     a { color: var(--accent); text-decoration: none; transition: color 0.2s; }
@@ -231,7 +237,7 @@
       flex-direction: column; 
       height: 65vh;
       width: 100%;
-      margin-top: 20px; /* Fixed the gap issue here so it separates from the tabs/hero */
+      margin-top: 20px;
     }
 
     .editor-toolbar {
@@ -296,6 +302,18 @@
     .btn.danger { color: #ff6b6b; border-color: rgba(255,107,107,0.3); }
     .btn.danger:hover { background: rgba(255,107,107,0.1); }
 
+    .editor-footer.disclaimer {
+      padding: 10px 24px; 
+      background: rgba(255, 107, 107, 0.08); 
+      border-top: 1px solid rgba(255, 107, 107, 0.2);
+      color: #ff8c8c; 
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .editor-footer.disclaimer a { color: #fff; text-decoration: underline; cursor: pointer; margin-left: 4px; }
+
     /* CodeMirror Overrides */
     .CodeMirror {
       flex: 1; 
@@ -334,6 +352,26 @@
       to { transform: translateY(0) scale(1); opacity: 1; } 
     }
 
+    /* Custom Modal */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(8px);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 9999; opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+    }
+    .modal-overlay.active { opacity: 1; pointer-events: auto; }
+    .modal-box {
+      background: #111; border: 1px solid var(--surface-border);
+      border-radius: 16px; padding: 28px; max-width: 450px; width: 90%;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.8), 0 0 0 1px rgba(255, 171, 204, 0.1);
+      transform: translateY(20px); transition: transform 0.3s ease;
+    }
+    .modal-overlay.active .modal-box { transform: translateY(0); }
+    .modal-box h3 { margin-top: 0; color: #fff; font-family: var(--font-main); font-size: 20px; display: flex; align-items: center; gap: 10px;}
+    .modal-box h3 i { color: var(--accent); }
+    .modal-box p { color: var(--muted); font-size: 15px; line-height: 1.6; margin-bottom: 24px; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 12px; }
+
     @media (max-width: 800px) {
       .hero-branding { padding: 80px 20px 120px; }
       .doc-title { font-size: clamp(38px, 10vw, 60px); }
@@ -346,6 +384,12 @@
   </style>
 </head>
 <body>
+
+  <noscript>
+    <div class="noscript-banner">
+      <i class="fa-solid fa-triangle-exclamation"></i> JavaScript is disabled. Poke requires JavaScript for customization features to work properly. Please enable it in your browser settings.
+    </div>
+  </noscript>
 
   <nav class="navbar">
     <div class="navbar__left">
@@ -426,13 +470,25 @@
         </div>
       </div>
       <textarea id="js-area"></textarea>
+      <div class="editor-footer disclaimer">
+        <i class="fa-solid fa-triangle-exclamation"></i> Please make sure you know what code you pasted. <a onclick="showLearnMoreModal(event)">Learn more</a>
+      </div>
     </div>
     <% } %>
   </div>
 
   <div class="toast-container" id="toaster"></div>
 
- 
+  <!-- Modal Container -->
+  <div class="modal-overlay" id="custom-modal">
+    <div class="modal-box">
+      <h3 id="modal-title">Title</h3>
+      <p id="modal-body">Body</p>
+      <div class="modal-actions" id="modal-actions">
+      </div>
+    </div>
+  </div>
+
   <script>
     const CONFIG = {
       css: { key: 'poke-custom-css', mode: 'css', default: '/* \n  PokeTube Custom CSS\n  Go wild! \n*/\n\nbody {\n  \n}' },
@@ -441,7 +497,37 @@
 
     let editorInstance = null;
 
-     function loadEditorResources(callback) {
+    const modalOverlay = document.getElementById('custom-modal');
+    const modalTitle = document.getElementById('modal-title');
+    const modalBody = document.getElementById('modal-body');
+    const modalActions = document.getElementById('modal-actions');
+
+    function openModal(title, text, buttonsHtml) {
+      modalTitle.innerHTML = title;
+      modalBody.innerHTML = text;
+      modalActions.innerHTML = buttonsHtml;
+      modalOverlay.classList.add('active');
+    }
+
+    function closeModal() {
+      modalOverlay.classList.remove('active');
+    }
+
+    function acceptScriptWarning(href) {
+      localStorage.setItem('poke-js-warning-seen-custom', 'true');
+      window.location.href = href;
+    }
+
+    function showLearnMoreModal(e) {
+      if (e) e.preventDefault();
+      openModal(
+        `<i class="fa-solid fa-circle-info"></i> Code Safety`,
+        `Pasting unknown JavaScript can be highly dangerous. Malicious scripts have the ability to steal your session data, track your behavior, or perform unauthorized actions on your behalf.<br><br><strong>Only execute scripts from sources you completely trust.</strong>`,
+        `<button class="btn primary" onclick="closeModal()">Understood</button>`
+      );
+    }
+
+    function loadEditorResources(callback) {
       const styles = [
         "https://p.poketube.fun/https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css",
         "https://p.poketube.fun/https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css",
@@ -462,7 +548,6 @@
         document.head.appendChild(link);
       });
 
-      // Load scripts sequentially to ensure dependencies are met
       function loadNextScript(index) {
         if (index >= scripts.length) {
           if (callback) callback();
@@ -478,16 +563,17 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-       const scriptTabs = document.querySelectorAll('.script-tab');
+      const scriptTabs = document.querySelectorAll('.script-tab');
       scriptTabs.forEach(tab => {
         tab.addEventListener('click', function(e) {
-          if (!localStorage.getItem('poke-js-warning-seen')) {
+          if (!localStorage.getItem('poke-js-warning-seen-custom')) {
             e.preventDefault();
-            const warningMsg = "SECURITY WARNING: Executing unknown JavaScript can compromise your privacy and security. Please make sure you understand what you are doing before pasting any scripts here. Do you wish to continue?";
-            if (confirm(warningMsg)) {
-              localStorage.setItem('poke-js-warning-seen', 'true');
-              window.location.href = this.href;
-            }
+            openModal(
+              `<i class="fa-solid fa-triangle-exclamation"></i> Security Warning`,
+              `Executing unknown JavaScript can compromise your privacy and security. Please make sure you understand what you are doing before pasting any scripts here.<br><br>Do you wish to continue?`,
+              `<button class="btn" onclick="closeModal()">Cancel</button>
+               <button class="btn danger" onclick="acceptScriptWarning('${this.href}')">Continue</button>`
+            );
           }
         });
       });
@@ -538,11 +624,19 @@
     }
 
     function resetEditor(type) {
-      if(confirm('Are you sure you want to reset code? This cannot be undone.')) {
-        editorInstance.setValue(CONFIG[type].default);
-        saveEditor(type); /* Save the reset state */
-        showToast('warn', 'Editor Reset to Default');
-      }
+      openModal(
+        `<i class="fa-solid fa-trash-can"></i> Confirm Reset`,
+        `Are you sure you want to reset your code to the default state? This action cannot be undone.`,
+        `<button class="btn" onclick="closeModal()">Cancel</button>
+         <button class="btn danger" onclick="executeReset('${type}')">Reset Code</button>`
+      );
+    }
+
+    function executeReset(type) {
+      editorInstance.setValue(CONFIG[type].default);
+      saveEditor(type);
+      closeModal();
+      showToast('warn', 'Editor Reset to Default');
     }
 
     function copyEditor(type) {
@@ -566,7 +660,6 @@
       showToast('info', 'Download Started');
     }
 
- 
     function showToast(type, msg) {
       const container = document.getElementById('toaster');
       const el = document.createElement('div');
