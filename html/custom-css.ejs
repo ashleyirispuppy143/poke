@@ -2,14 +2,23 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>PokeTube | Customize</title>
+  <title>Poke | Customize</title>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Poke | Customize">
+  <meta property="og:description" content="Theme your experience with custom scripts and styles. Go wild!">
+  <meta property="og:image" content="/css/poke-embed.webp">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Poke | Customize">
+  <meta name="twitter:description" content="Theme your experience with custom scripts and styles. Go wild!">
+  <meta name="twitter:image" content="/css/poke-embed.webp">
+
   <link href="/css/yt-ukraine.svg?v=6" rel="icon">
   
-  <link rel="stylesheet" href="https://p.poketube.fun/https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
-  <link rel="stylesheet" href="https://p.poketube.fun/https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
-  <link rel="stylesheet" href="https://p.poketube.fun/https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/scroll/simplescrollbars.min.css">
-
   <style>
     @import url("https://p.poketube.fun/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css");
 
@@ -222,6 +231,7 @@
       flex-direction: column; 
       height: 65vh;
       width: 100%;
+      margin-top: 20px; /* Fixed the gap issue here so it separates from the tabs/hero */
     }
 
     .editor-toolbar {
@@ -346,7 +356,6 @@
       <button class="search-btn" type="submit"><i class="fa-light fa-search"></i></button>
     </form>
     <div class="navbar__actions">
-      <a class="nav-icon" href="/domains" title="Domains"><i class="fa-light fa-server"></i></a>
       <a class="nav-icon" href="/policies/privacy" title="Privacy"><i class="fa-light fa-shield"></i></a>
       <a class="nav-icon" href="/video/upload" title="Upload"><i class="fa-light fa-video"></i></a>
     </div>
@@ -354,13 +363,13 @@
 
   <section class="hero-branding">
     <div class="hype-container">
-      <div class="hype-text">YOUR PRIVACY APP OF YOUR DREAMS</div>
-      <div class="hype-text">YOUR PRIVACY APP OF YOUR DREAMS</div>
-      <div class="hype-text">YOUR PRIVACY APP OF YOUR DREAMS</div>
-      <div class="hype-text">YOUR PRIVACY APP OF YOUR DREAMS</div>
-      <div class="hype-text">YOUR PRIVACY APP OF YOUR DREAMS</div>
-      <div class="hype-text">YOUR PRIVACY APP OF YOUR DREAMS</div>
-      <div class="hype-text">YOUR PRIVACY APP OF YOUR DREAMS</div>
+      <div class="hype-text">LIBERATE THE WEB</div>
+      <div class="hype-text">LIBERATE THE WEB</div>
+      <div class="hype-text">LIBERATE THE WEB</div>
+      <div class="hype-text">LIBERATE THE WEB</div>
+      <div class="hype-text">LIBERATE THE WEB</div>
+      <div class="hype-text">LIBERATE THE WEB</div>
+      <div class="hype-text">LIBERATE THE WEB</div>
     </div>
     
      
@@ -375,10 +384,10 @@
     <div class="tabs-wrapper">
       <% if (!tab) { %>
         <a class="tab active" href="/customize"><i class="fa-brands fa-css3"></i> Styles</a>
-        <a class="tab" href="/customize?tab=js"><i class="fa-brands fa-js"></i> Scripts</a>
+        <a class="tab script-tab" href="/customize?tab=js"><i class="fa-brands fa-js"></i> Scripts</a>
       <% } else { %>
         <a class="tab" href="/customize"><i class="fa-brands fa-css3"></i> Styles</a>
-        <a class="tab active" href="/customize?tab=js"><i class="fa-brands fa-js"></i> Scripts</a>
+        <a class="tab script-tab active" href="/customize?tab=js"><i class="fa-brands fa-js"></i> Scripts</a>
       <% } %>
     </div>
 
@@ -423,22 +432,70 @@
 
   <div class="toast-container" id="toaster"></div>
 
-  <script src="https://p.poketube.fun/https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
-  <script src="https://p.poketube.fun/https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
-  <script src="https://p.poketube.fun/https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
-  <script src="https://p.poketube.fun/https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
-
+ 
   <script>
-     const CONFIG = {
+    const CONFIG = {
       css: { key: 'poke-custom-css', mode: 'css', default: '/* \n  PokeTube Custom CSS\n  Go wild! \n*/\n\nbody {\n  \n}' },
       js:  { key: 'poke-custom-script', mode: 'javascript', default: '/* \n PokeTube Custom Script\n Go wild! \n*/\n\nconsole.log("PokeTube Loaded");' }
     };
 
     let editorInstance = null;
 
+     function loadEditorResources(callback) {
+      const styles = [
+        "https://p.poketube.fun/https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css",
+        "https://p.poketube.fun/https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css",
+        "https://p.poketube.fun/https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/scroll/simplescrollbars.min.css"
+      ];
+      
+      const scripts = [
+        "https://p.poketube.fun/https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js",
+        "https://p.poketube.fun/https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js",
+        "https://p.poketube.fun/https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js",
+        "https://p.poketube.fun/https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"
+      ];
+
+      styles.forEach(href => {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = href;
+        document.head.appendChild(link);
+      });
+
+      // Load scripts sequentially to ensure dependencies are met
+      function loadNextScript(index) {
+        if (index >= scripts.length) {
+          if (callback) callback();
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = scripts[index];
+        script.onload = () => loadNextScript(index + 1);
+        document.body.appendChild(script);
+      }
+      
+      loadNextScript(0);
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
-      <% if (!tab) { %> initEditor('css'); <% } %>
-      <% if (tab) { %> initEditor('js'); <% } %>
+       const scriptTabs = document.querySelectorAll('.script-tab');
+      scriptTabs.forEach(tab => {
+        tab.addEventListener('click', function(e) {
+          if (!localStorage.getItem('poke-js-warning-seen')) {
+            e.preventDefault();
+            const warningMsg = "SECURITY WARNING: Executing unknown JavaScript can compromise your privacy and security. Please make sure you understand what you are doing before pasting any scripts here. Do you wish to continue?";
+            if (confirm(warningMsg)) {
+              localStorage.setItem('poke-js-warning-seen', 'true');
+              window.location.href = this.href;
+            }
+          }
+        });
+      });
+
+      loadEditorResources(() => {
+        <% if (!tab) { %> initEditor('css'); <% } %>
+        <% if (tab) { %> initEditor('js'); <% } %>
+      });
     });
 
     function initEditor(type) {
