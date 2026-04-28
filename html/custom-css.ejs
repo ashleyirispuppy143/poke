@@ -226,7 +226,6 @@
       box-shadow: 0 4px 15px var(--accent-glow); 
     }
 
-    /* New Improved Editor Panel */
     .editor-card {
       background: #0a0a0a; 
       border: 1px solid #222;
@@ -314,6 +313,53 @@
     }
     .editor-footer.disclaimer a { color: #fff; text-decoration: underline; cursor: pointer; margin-left: 4px; }
 
+    /* Tips / Helper Card Section */
+    .helper-card {
+      width: 100%;
+      background: rgba(25, 25, 25, 0.6);
+      border: 1px solid #2a2a2a;
+      border-radius: 16px;
+      padding: 24px;
+      margin-top: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+    }
+    .helper-card h4 {
+      margin: 0; color: #fff; font-size: 18px; display: flex; align-items: center; gap: 10px;
+    }
+    .helper-card h4 i { color: #ffb86c; } /* Slight yellowish tint for lightbulb */
+    .helper-card p {
+      margin: 0; color: var(--muted); font-size: 14px;
+    }
+    .resource-links {
+      display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px;
+    }
+    .resource-links a {
+      background: rgba(255,255,255,0.05); padding: 10px 16px; border-radius: 8px;
+      font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px;
+      border: 1px solid rgba(255,255,255,0.1); transition: all 0.2s; color: var(--text);
+    }
+    .resource-links a:hover {
+      background: rgba(255,255,255,0.1); border-color: var(--accent); color: var(--accent); text-decoration: none; transform: translateY(-2px);
+    }
+
+    /* Page Footer Disclaimer */
+    .page-disclaimer {
+      width: 100%;
+      text-align: center;
+      margin-top: 30px;
+      padding: 16px;
+      color: #666;
+      font-size: 13px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+    }
+    .page-disclaimer i { color: #888; }
+
     /* CodeMirror Overrides */
     .CodeMirror {
       flex: 1; 
@@ -352,25 +398,47 @@
       to { transform: translateY(0) scale(1); opacity: 1; } 
     }
 
-    /* Custom Modal */
+    /* Material UI Style Custom Modal */
     .modal-overlay {
       position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-      background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(8px);
+      background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px);
       display: flex; align-items: center; justify-content: center;
-      z-index: 9999; opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+      z-index: 9999; opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
     }
     .modal-overlay.active { opacity: 1; pointer-events: auto; }
+    
     .modal-box {
-      background: #111; border: 1px solid var(--surface-border);
-      border-radius: 16px; padding: 28px; max-width: 450px; width: 90%;
-      box-shadow: 0 20px 50px rgba(0,0,0,0.8), 0 0 0 1px rgba(255, 171, 204, 0.1);
-      transform: translateY(20px); transition: transform 0.3s ease;
+      background: #1e1e1e;  
+      border: none;
+      border-radius: 12px; 
+      padding: 24px 24px 16px 24px; 
+      max-width: 480px; width: 90%;
+      box-shadow: 0 11px 15px -7px rgba(0,0,0,0.2), 0 24px 38px 3px rgba(0,0,0,0.14), 0 9px 46px 8px rgba(0,0,0,0.12);
+      transform: scale(0.95); transition: transform 0.2s cubic-bezier(0.0, 0, 0.2, 1);
     }
-    .modal-overlay.active .modal-box { transform: translateY(0); }
-    .modal-box h3 { margin-top: 0; color: #fff; font-family: var(--font-main); font-size: 20px; display: flex; align-items: center; gap: 10px;}
-    .modal-box h3 i { color: var(--accent); }
-    .modal-box p { color: var(--muted); font-size: 15px; line-height: 1.6; margin-bottom: 24px; }
-    .modal-actions { display: flex; justify-content: flex-end; gap: 12px; }
+    .modal-overlay.active .modal-box { transform: scale(1); }
+    
+    .modal-box h3 { 
+      margin-top: 0; color: #fff; font-family: var(--font-main); 
+      font-size: 20px; font-weight: 500; letter-spacing: 0.0125em; 
+      display: flex; align-items: center; gap: 12px; margin-bottom: 16px;
+    }
+    .modal-box h3 i { color: var(--accent); font-size: 24px; }
+    .modal-box p { 
+      color: rgba(255,255,255,0.7); font-size: 15px; 
+      letter-spacing: 0.01428em; line-height: 1.5; margin-bottom: 24px; 
+    }
+    
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .modal-actions button {
+      background: transparent; border: none; font-family: var(--font-main);
+      color: var(--accent); font-size: 14px; font-weight: 500; text-transform: uppercase;
+      letter-spacing: 0.02857em; padding: 8px 16px; border-radius: 4px; cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .modal-actions button:hover { background: rgba(255, 171, 204, 0.08); }
+    .modal-actions button.danger { color: #ff6b6b; }
+    .modal-actions button.danger:hover { background: rgba(255, 107, 107, 0.08); }
 
     @media (max-width: 800px) {
       .hero-branding { padding: 80px 20px 120px; }
@@ -452,6 +520,16 @@
       </div>
       <textarea id="css-area"></textarea>
     </div>
+    
+    <div class="helper-card">
+      <h4><i class="fa-solid fa-lightbulb"></i> CSS Resources & Tips</h4>
+      <p>Need help styling your experience? Check out these awesome tutorial resources:</p>
+      <div class="resource-links">
+        <a href="https://developer.mozilla.org/en-US/docs/Web/CSS" target="_blank"><i class="fa-brands fa-firefox-browser"></i> MDN Web Docs</a>
+        <a href="https://www.w3schools.com/css/" target="_blank"><i class="fa-solid fa-graduation-cap"></i> W3Schools CSS</a>
+        <a href="https://css-tricks.com/" target="_blank"><i class="fa-brands fa-css3"></i> CSS-Tricks</a>
+      </div>
+    </div>
     <% } %>
 
     <% if (tab) { %>
@@ -475,17 +553,22 @@
       </div>
     </div>
     <% } %>
+
+    <div class="page-disclaimer">
+      <i class="fa-solid fa-circle-info"></i> Please note: Custom scripts and CSS styles may not work on every page or element due to layout changes and security constraints.
+    </div>
+
   </div>
 
   <div class="toast-container" id="toaster"></div>
 
-  <!-- Modal Container -->
-  <div class="modal-overlay" id="custom-modal">
+   <div class="modal-overlay" id="custom-modal">
     <div class="modal-box">
       <h3 id="modal-title">Title</h3>
       <p id="modal-body">Body</p>
       <div class="modal-actions" id="modal-actions">
-      </div>
+ 
+       </div>
     </div>
   </div>
 
@@ -497,7 +580,7 @@
 
     let editorInstance = null;
 
-    const modalOverlay = document.getElementById('custom-modal');
+     const modalOverlay = document.getElementById('custom-modal');
     const modalTitle = document.getElementById('modal-title');
     const modalBody = document.getElementById('modal-body');
     const modalActions = document.getElementById('modal-actions');
@@ -521,9 +604,11 @@
     function showLearnMoreModal(e) {
       if (e) e.preventDefault();
       openModal(
-        `<i class="fa-solid fa-circle-info"></i> Code Safety`,
-        `Pasting unknown JavaScript can be highly dangerous. Malicious scripts have the ability to steal your session data, track your behavior, or perform unauthorized actions on your behalf.<br><br><strong>Only execute scripts from sources you completely trust.</strong>`,
-        `<button class="btn primary" onclick="closeModal()">Understood</button>`
+        `<i class="fa-solid fa-circle-info"></i> Code Safety & Warranty`,
+        `Pasting unknown JavaScript can be highly dangerous. Malicious scripts have the ability to steal your session data, track your behavior, or perform unauthorized actions on your behalf. <strong>Only execute scripts from sources you completely trust.</strong><br><br>
+        Also, Poke comes with absolutely no warranty and no liability. We provide this tool "as is". We aren't responsible if custom code breaks your experience, causes data loss, or damages anything—even if things go completely wrong. <br><br>
+        <a href="/policies/privacy#warranty" style="color: var(--accent); text-decoration: underline;">Read our full warranty policy</a>`,
+        `<button onclick="closeModal()">Understood</button>`
       );
     }
 
@@ -571,8 +656,8 @@
             openModal(
               `<i class="fa-solid fa-triangle-exclamation"></i> Security Warning`,
               `Executing unknown JavaScript can compromise your privacy and security. Please make sure you understand what you are doing before pasting any scripts here.<br><br>Do you wish to continue?`,
-              `<button class="btn" onclick="closeModal()">Cancel</button>
-               <button class="btn danger" onclick="acceptScriptWarning('${this.href}')">Continue</button>`
+              `<button onclick="closeModal()">Cancel</button>
+               <button class="danger" onclick="acceptScriptWarning('${this.href}')">Continue</button>`
             );
           }
         });
@@ -627,8 +712,8 @@
       openModal(
         `<i class="fa-solid fa-trash-can"></i> Confirm Reset`,
         `Are you sure you want to reset your code to the default state? This action cannot be undone.`,
-        `<button class="btn" onclick="closeModal()">Cancel</button>
-         <button class="btn danger" onclick="executeReset('${type}')">Reset Code</button>`
+        `<button onclick="closeModal()">Cancel</button>
+         <button class="danger" onclick="executeReset('${type}')">Reset Code</button>`
       );
     }
 
