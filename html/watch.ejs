@@ -1812,8 +1812,7 @@ WIP!                                                 </a>
                        
 
 <a id="metadata"></a>
-
-<%
+ <%
   const likes = parseInt(engagement?.likes) || 0;
   const dislikes = parseInt(engagement?.dislikes) || 0;
   const total = likes + dislikes;
@@ -1860,16 +1859,24 @@ WIP!                                                 </a>
 
   const userScoreClass = parseFloat(userScore) >= 98 ? "meta-rainbow" : "";
 
-  const publishLabel = date.includes("Premiered") ? "Premiered" : "Uploaded At";
+  // Convert UNIX timestamp to DD.MM.YYYY
+  // Automatically handles if the timestamp is in seconds (10 digits) or milliseconds (13 digits)
+  const pubTimestamp = String(VideoData?.published).length <= 10 ? (VideoData?.published * 1000) : VideoData?.published;
+  const pubDateObj = new Date(pubTimestamp);
+  const dd = String(pubDateObj.getDate()).padStart(2, '0');
+  const mm = String(pubDateObj.getMonth() + 1).padStart(2, '0');
+  const yyyy = pubDateObj.getFullYear();
+  const formattedPublishDate = `${dd}.${mm}.${yyyy}`;
+
+  const publishLabel = date.includes("Premiered") ? "Premiered" : "Upload Date";
   const publishValue = date.includes("Premiered")
     ? `${date.replace("Premiered", "at")} ^^`
-    : `${date} ^^`;
+    : `${formattedPublishDate} ^^`;
 
   const genreValue = VideoData?.genre || "none listed";
 
   const licenseValue = VideoData?.license || "Standard YouTube License";
-%>
-
+%> 
 <style>
   .meta-clean {
     margin-top: 10px;
