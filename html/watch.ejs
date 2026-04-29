@@ -1873,8 +1873,8 @@ WIP!                                                 </a>
 
   const publishLabel = date.includes("Premiered") ? "Premiered" : "Upload Date";
   const publishValue = date.includes("Premiered")
-    ? `${date.replace("Premiered", "at")} ^^`
-    : `${formattedPublishDate} (${date}) ^^`;
+    ? `${date.replace("Premiered", "at")}`
+    : `${formattedPublishDate} (${date})`;
 
   const genreValue = VideoData?.genre || "none listed";
 
