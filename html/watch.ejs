@@ -1859,24 +1859,28 @@ WIP!                                                 </a>
 
   const userScoreClass = parseFloat(userScore) >= 98 ? "meta-rainbow" : "";
 
-  // Convert UNIX timestamp to DD.MM.YYYY
+  // Convert UNIX timestamp to DD MonthName YYYY
   // Automatically handles if the timestamp is in seconds (10 digits) or milliseconds (13 digits)
   const pubTimestamp = String(VideoData?.published).length <= 10 ? (VideoData?.published * 1000) : VideoData?.published;
   const pubDateObj = new Date(pubTimestamp);
-  const dd = String(pubDateObj.getDate()).padStart(2, '0');
-  const mm = String(pubDateObj.getMonth() + 1).padStart(2, '0');
+  
+  const dd = pubDateObj.getDate();
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const monthName = monthNames[pubDateObj.getMonth()];
   const yyyy = pubDateObj.getFullYear();
-  const formattedPublishDate = `${dd}.${mm}.${yyyy}`;
+  
+  const formattedPublishDate = `${dd} ${monthName} ${yyyy}`;
 
   const publishLabel = date.includes("Premiered") ? "Premiered" : "Upload Date";
   const publishValue = date.includes("Premiered")
     ? `${date.replace("Premiered", "at")} ^^`
-    : `${formattedPublishDate} ^^`;
+    : `${formattedPublishDate} (${date}) ^^`;
 
   const genreValue = VideoData?.genre || "none listed";
 
   const licenseValue = VideoData?.license || "Standard YouTube License";
-%> 
+%>
+
 <style>
   .meta-clean {
     margin-top: 10px;
