@@ -557,8 +557,8 @@
     }
     return true;
   }
-
-  function banIP(data, ip, reasons) {
+  
+function banIP(data, ip, reasons) {
     data.strikes++;
     data.lastStrike = Date.now();
     data.reasons = reasons;
@@ -566,8 +566,12 @@
     data.banned = true;
     data.banExpires = Date.now() + duration;
     const reasonStr = reasons.join(" + ");
+    
+    // Anonymize the IP by replacing the last two octets
+    const maskedIp = ip.replace(/\.\d+\.\d+$/, '.xxx.xxx');
+    
     initlog(
-      `[PokeStopSkids] banned ${ip} for ${Math.round(duration / 1000)}s ` +
+      `[PokeStopSkids] banned ${maskedIp} for ${Math.round(duration / 1000)}s ` +
       `(${reasonStr}, strike #${data.strikes})`
     );
   }
