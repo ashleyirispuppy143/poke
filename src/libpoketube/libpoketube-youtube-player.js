@@ -380,6 +380,7 @@ class InnerTubePokeVidious {
         this.initError(vid, `ID: ${v}`);
       }
     } catch (error) {
+      // If it's a known unrecoverable error, return the pretty message
       if (knownErrors[error.message]) {
         return { 
           error: true, 
@@ -388,8 +389,13 @@ class InnerTubePokeVidious {
         };
       }
 
+      // If it's an unknown error, report the actual error message without blocking the video
       this.initError(`Error getting video ${v}`, error);
-      return { error: true, message: "An unexpected error occurred qwq" };
+      return { 
+        error: true, 
+        message: error.message || "An unexpected error occurred qwq",
+        reason: "UNKNOWN_ERROR" 
+      };
     }
   }
 
