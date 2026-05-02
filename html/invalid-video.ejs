@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video Unavailable</title>
+    <title>Video Unavailable <%= (locals.v) ? '- ' + v : '' %></title>
     <style>
          @import url('https://p.poketube.fun/https://fonts.bunny.net/css?family=roboto:400,500&display=swap');
 
@@ -69,24 +69,16 @@
             padding-left: 18px;
         }
 
-        .reasons-list li:last-child {
-            margin-bottom: 0;
+        .reasons-list li.active-reason {
+            color: #ff4e4e;
+            font-weight: 500;
         }
 
-         .reasons-list li::before {
+        .reasons-list li::before {
             content: "•";
             position: absolute;
             left: 0;
             color: #717171; 
-        }
-
-        a {
-            color: #3ea6ff;  
-            text-decoration: none;
-        }
-
-        a:hover {
-            text-decoration: underline;
         }
 
         .btn-home {
@@ -107,10 +99,6 @@
             background-color: #d9d9d9;
         }
 
-        .btn-home:active {
-            opacity: 0.8;
-        }
-
         .report-issue {
             font-size: 13px;
             color: #717171;
@@ -120,10 +108,21 @@
         .report-issue a {
             font-weight: 500;
             color: #aaaaaa; 
+            text-decoration: none;
         }
         
         .report-issue a:hover {
             color: #f1f1f1;
+            text-decoration: underline;
+        }
+
+        .debug-info {
+            margin-top: 15px;
+            font-family: monospace;
+            font-size: 11px;
+            opacity: 0.4;
+            border-top: 1px solid #333;
+            padding-top: 10px;
         }
     </style>
 </head>
@@ -138,17 +137,29 @@
         <h1>Video unavailable</h1>
         
         <p class="subtitle">
-            This video isn't available any more. (╥﹏╥)
+            <% if (locals.error_message) { %>
+                <%= error_message %>
+            <% } else { %>
+                This video isn't available right now.
+            <% } %> 
+            (╥﹏╥)
         </p>
 
-        <div class="might-be">This usually happens because...</div>
-
-        <ul class="reasons-list">
-            <li>The video was removed by the uploader.</li>
-            <li>The uploader closed their account.</li>
-            <li>The video was taken down for Terms of Service violations.</li>
-            <li>The video ID provided is invalid.</li>
-        </ul>
+        <!-- Check if knownErrors exists and if the current err_reason is mapped within it -->
+        <% if (locals.knownErrors && locals.err_reason && knownErrors[err_reason]) { %>
+            <div class="might-be">Reason:</div>
+            <ul class="reasons-list">
+                <li class="active-reason"><%= knownErrors[err_reason] %></li>
+            </ul>
+        <% } else { %>
+            <div class="might-be">This usually happens because...</div>
+            <ul class="reasons-list">
+                <li>The video was removed by the uploader.</li>
+                <li>The uploader closed their account.</li>
+                <li>The video was taken down for Terms of Service violations.</li>
+                <li>The video ID provided is invalid.</li>
+            </ul>
+        <% } %>
 
         <div>
             <button class="btn-home" onclick="window.location.href='/';">
@@ -158,7 +169,12 @@
 
         <div class="report-issue">
             Think this is a Poke mistake?<br>
-            <a href="https://codeberg.org/ashleyirispuppy/poke/issues/new/choose" target="_blank">Report an issue here</a>.
+            <a href="https://codeberg.org/ashleyirispuppy/poke/issues/new/choose?title=Video+Error+<%= locals.v || 'Unknown' %>" target="_blank">Report an issue here</a>.
+            
+            <div class="debug-info">
+                ID: <%= locals.v || "N/A" %> | 
+                Code: <%= locals.err_reason || "None" %>
+            </div>
         </div>
 
     </div>
