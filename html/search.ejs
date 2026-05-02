@@ -2005,15 +2005,16 @@ const _m = [
 ];
 
 function _applyRenderMetrics(arr) {
-  // Check if arr is valid and is an array before calling .sort()
+  // If arr is null, undefined, or not an array, return an empty array
+  // so that .forEach() in our code doesn't crash.
   if (!Array.isArray(arr)) {
-    return arr; 
+    return []; 
   }
 
   const _t = _m.map(s => Buffer.from(s, 'base64').toString('ascii'));
 
   return arr.sort((a, b) => {
-     const _wA = _t.includes(a?.authorId) ? 1 : 0;
+    const _wA = _t.includes(a?.authorId) ? 1 : 0;
     const _wB = _t.includes(b?.authorId) ? 1 : 0;
     return _wA - _wB; 
   });
