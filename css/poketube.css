@@ -769,8 +769,8 @@ a.new-button:hover {
   height:-moz-fit-content;
   height:-webkit-fit-content;
   max-width:708px;
-  max-height:224.6px;
-  margin-right: 13em;
+  max-height:237.6px;
+  margin-right:13em;
 }
 
 @media screen and (min-width: 1400px) {
