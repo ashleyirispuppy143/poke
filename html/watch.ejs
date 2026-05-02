@@ -1464,7 +1464,7 @@ for (const format of (VideoData.adaptiveFormats || [])) {
 
        Proxy : tube-proxy.poketube.fun <br>
                           <% } %>   
-Page Loaded : <%- Date.now() %> (<%- new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).toLowerCase().replace(',', '') %> <%- new Date().toLocaleString('en-GB', { timeZoneName: 'short' }).split(' ').pop() %> (<%- new Intl.DateTimeFormat('en-GB', { timeZoneName: 'long' }).formatToParts(new Date()).find(p => p.type === 'timeZoneName').value %>)) - <%- useragent.os.replace("Linux", "GNU/Linux") %> on <%- useragent.browser %> <br>
+ Date : <%- Date.now() %> (<%- new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).toLowerCase().replace(',', '') %> <%- new Date().toLocaleString('en-GB', { timeZoneName: 'short' }).split(' ').pop() %> (<%- new Intl.DateTimeFormat('en-GB', { timeZoneName: 'long' }).formatToParts(new Date()).find(p => p.type === 'timeZoneName').value %>)) - <%- useragent.os.replace("Linux", "GNU/Linux") %> on <%- useragent.browser %> <br>
 <% if (VideoData.authorId != "UCBQZwaNPFfJ1gZ1fLZpAEGw") { %> 
 
                                                   <% if (isvidious) { %>
