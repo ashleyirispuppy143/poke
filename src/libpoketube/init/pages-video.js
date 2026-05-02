@@ -202,48 +202,48 @@ module.exports = function (app, config, renderTemplate) {
       v,
     });
   });
-app.get("/watch", async (req, res) => {
-    const { dm, region, hl, v, e, r, f, m, quality: q, a, universe, dyx} = req.query; 
+ app.get("/watch", async (req, res) => {
+  const { dm, region, hl, v, e, r, f, m, quality: q, a, universe, dyx} = req.query; 
 
-    if (!v) {
-      return res.redirect("/");
-    }
+  if (!v) {
+    return res.redirect("/");
+  }
 
-    const regex = new RegExp("^([a-zA-Z0-9_-]{11})");
-    const isMatch = regex.test(v);
+  const regex = new RegExp("^([a-zA-Z0-9_-]{11})");
+  const isMatch = regex.test(v);
 
-    if (!isMatch) {
-              res.status(500); 
-              res.header('X-Robots-Tag', 'noindex, nofollow');
-              renderTemplate(res, req, "invalid-video.ejs", {
-              v,
-              err_reason:"not found"
-              });
- }
-    
-    var contentlang = hl || "en-US";
-    var contentregion = region || "US";
+  if (!isMatch) {
+    res.status(500); 
+    res.header('X-Robots-Tag', 'noindex, nofollow');
+    return renderTemplate(res, req, "invalid-video.ejs", {
+      v,
+      err_reason:"not found"
+    });
+  }
+  
+  var contentlang = hl || "en-US";
+  var contentregion = region || "US";
 
-    const isVideoValid = await INNERTUBE.isvalidvideo(v);
-    if (!isVideoValid) {
-   res.status(500); 
-              res.header('X-Robots-Tag', 'noindex, nofollow');
-              renderTemplate(res, req, "invalid-video.ejs", {
-              v,
-              err_reason:"not found"
-              });
-    }
+  const isVideoValid = await INNERTUBE.isvalidvideo(v);
+  if (!isVideoValid) {
+    res.status(500); 
+    res.header('X-Robots-Tag', 'noindex, nofollow');
+    return renderTemplate(res, req, "invalid-video.ejs", {
+      v,
+      err_reason:"not found"
+    });
+  }
 
-    const u = await media_proxy(v);
-    
- const secure = ["poketube.fun"].includes(req.hostname);
-    const verify = req.hostname === "poketube.sudovanilla.com";
+  const u = await media_proxy(v);
+  
+  const secure = ["poketube.fun"].includes(req.hostname);
+  const verify = req.hostname === "poketube.sudovanilla.com";
 
-    const officialHost = "poketube.fun";
+  const officialHost = "poketube.fun";
  
-    if (req.hostname !== officialHost && config.invapi.includes("invid-api.poketube.fun")) {
+  if (req.hostname !== officialHost && config.invapi.includes("invid-api.poketube.fun")) {
     
-     const kaomojis = [
+    const kaomojis = [
       "(ó﹏ò｡)", 
       "( ｡ •̀ ᴖ •́ ｡)", 
       "(｡>﹏<｡)", 
@@ -381,210 +381,206 @@ app.get("/watch", async (req, res) => {
     return res.status(500).send(message);
   }
     
-    INNERTUBE.getYouTubePlayerInfo(f, v, contentlang, contentregion).then(
-      (data) => {
-        try {
-           const knownErrors = {
-            "COPYRIGHT_BLOCKED": "This video contains content from a copyright holder who has blocked it.",
-            "UPLOADER_REMOVED": "This video has been removed by the uploader.",
-            "VIDEO_UNAVAILABLE": "Video unavailable.",
-            "INAPPROPRIATE": "This video may be inappropriate for some users."
-          };
+  INNERTUBE.getYouTubePlayerInfo(f, v, contentlang, contentregion).then(
+    (data) => {
+      try {
+        const knownErrors = {
+          "COPYRIGHT_BLOCKED": "This video contains content from a copyright holder who has blocked it.",
+          "UPLOADER_REMOVED": "This video has been removed by the uploader.",
+          "VIDEO_UNAVAILABLE": "Video unavailable.",
+          "INAPPROPRIATE": "This video may be inappropriate for some users."
+        };
 
-          if (data?.error) {
-            res.status(500);
-            res.header('X-Robots-Tag', 'noindex, nofollow');
-            return renderTemplate(res, req, "invalid-video.ejs", {
-              v,
-              error: true,
-              error_message: data.message || "An error occurred",
-              knownErrors: knownErrors,
-              err_reason: data.reason || data.message
-            });
-          }
- 
-          const channel_uploads = data?.channel_uploads;
-          const json = data?.json;
-          const engagement = data?.engagement;
-          const inv_comments = data?.comments || "Disabled";
-          const inv_vid = data?.vid;
-          const desc = data?.desc || "";
-
- 
-          let d = false;
-          if (desc !== "[object Object]") {
-            d = desc.toString().replace(/\n/g, " <br> ");
-          }
-
-          const descriptionString = String(inv_vid?.description).replace(/\bx.com\b/, "twitter.com")
-
-          function extractInfo(regex) {
-            return descriptionString !== "[object Object]"
-              ? (regex.exec(descriptionString) ?? {}).groups
-              : undefined;
-          }
-
-          const support = extractInfo(PATREON_REGEX);
-          const STUPID_ELON_MUSK_WEBSITE_HE_IS_TRYING_TO_CALL_IT_X_FOR_SOME_REASON_WHICH_IS_A_STUPID_NAME_WE_WILL_FOREVER_CALL_IT_TWITTER_AND_HE_CAN_DO_NOTHING_ABOUT_IT_LOL_FUCK_YOU_ELON_TRANS_RIGHTS_BTW = extractInfo(TWITTER_REGEX);
-          const linkto = extractInfo(LNKTO_REGEX);
-          const discord = extractInfo(CORD_REGEX);
-          const twitch = extractInfo(TWITCH_REGEX);
-          const reddit = extractInfo(REDDIT_REGEX);
-          const tiktok = extractInfo(TIKTOK_REGEX);
-          const github = extractInfo(GITHUB_REGEX);
-          const steam = extractInfo(STEAM_REGEX);
-          const soundcloud = extractInfo(SOUNDCLOUD_REGEX);
-          const floatplane = extractInfo(FLOATPLANE_REGEX);
-          const bluesky = extractInfo(BLUESKY_REGEX);
-          
-          /* meta software */
-          const instagram = extractInfo(INSTAGRAM_REGEX);
-          const threads_by_instagram = extractInfo(THREADS_BY_INSTAGRAM_REGEX);
-         const facebook = extractInfo(FACEBOOK_REGEX);
-
-          const videoObject = inv_vid?.adaptiveFormats;
-          function findItag(adaptiveFormats) {
-          return;
-          }
-          
-          const itag_hd = findItag(videoObject);
-          var proxyurl = config.p_url;
-          var vidurl = u.url;
-          var isvidious = u.isInvidiousURL;
-          var mediaproxy = config.media_proxy;
-
-          if (inv_vid?.genre === "Music") {
-            var vidurl = u.losslessurl;
-          }
-
-          var vidurl = config.videourl;
-          var isvidious = true;
-
-          if (req.useragent.source.includes("Pardus")) {
-            var vidurl = "https://iv.ggtyler.dev";
-            var mediaproxy = "https://nyc1.pokejan.ggtyler.dev/";
-            var isvidious = true;
-            var isSchoolProxy = "";
-          }
-
-          // unused
-          let badges = "";
-          let comments = "";
-          let nnn = "";
-
-          const dnt_val = isDntEnabled(req);
-
-          if (
-            inv_vid?.error ===
-              "The uploader has not made this video available in your country" ||
-            inv_vid?.error === "This video is not available"
-          ) {
-            res.send(
-              "error: " + inv_vid.error + " please refresh the page please qt"
-            );
-          }
-
-          if (inv_vid?.error) {
-            renderTemplate(res, req, "404.ejs", {
-              v,
-            });
-          }
-
-          var uaos = req.useragent.os;
-          const browser = req.useragent.browser;
-          const IsOldWindows =
-            (uaos === "Windows 7" || uaos === "Windows 8") &&
-            browser === "Firefox";
-
-          if (req.query.from === "short") var shortsui = true;
-
-          try {
-            
-            res.header('X-Robots-Tag', 'noindex, nofollow');
-            renderTemplate(res, req, "watch.ejs", {
-              color: data?.color,
-              color2: data?.color2,
-              linkify,
-              engagement,
-              linkto,
-              IsOldWindows,
-              channelurlfixer,
-              itag_hd,
-              facebook,
-              support,
-              dyx,
-              shortsui,
-              queryid:v,
-              u: vidurl,
-              isvidious: isvidious,
-              video: json,
-              date: inv_vid?.publishedText    ,
-              e,
-              a,
-              twitter:STUPID_ELON_MUSK_WEBSITE_HE_IS_TRYING_TO_CALL_IT_X_FOR_SOME_REASON_WHICH_IS_A_STUPID_NAME_WE_WILL_FOREVER_CALL_IT_TWITTER_AND_HE_CAN_DO_NOTHING_ABOUT_IT_LOL_FUCK_YOU_ELON_TRANS_RIGHTS_BTW,
-               dm,
-              proxyurl,
-              media_proxy_url: mediaproxy,
-              instagram,
-              useragent: req.useragent,
-              config,
-              verify,
-              discord,
-              turntomins,
-              twitch,
-              github,
-              steam,
-              tiktok,
-              bluesky,
-              floatplane,
-              soundcloud,
-              dnt_val,
-              reddit,
-              channel_uploads,
-              secure,
-              process,
-              VideoData:inv_vid,
-              isSchoolProxy,
-              sha384,
-              lightOrDark,
-              isMobile: req.useragent.isMobile,
-              tj: data?.channel,
-              r,
-              threads:threads_by_instagram,
-              hostname:req.hostname,
-              qua: q,
-              inv: inv_comments,
-              convert,
-              convertLegacy,
-              universe,
-              wiki: data?.wiki,
-              escapeHtml,
-              f,
-              t: config.t_url,
-              optout: m,
-              badges,
-              desc,
-              comments,
-              n: nnn,
-              inv_vid,
-              lyrics: "",
-            });
-          } catch (err) {
-              res.status(500); 
-              res.header('X-Robots-Tag', 'noindex, nofollow');
-              renderTemplate(res, req, "video-error.ejs", {
-              v,
-              err_reason:err
-            });
-            console.log(err)
-          }
-        } catch (error) {
-          console.error(error);
-          return res.redirect(`/watch?v=${req.query.v}&fx=1&err=${error}`);
+        if (data?.error) {
+          res.status(500);
+          res.header('X-Robots-Tag', 'noindex, nofollow');
+          return renderTemplate(res, req, "invalid-video.ejs", {
+            v,
+            error: true,
+            error_message: data.message || "An error occurred",
+            knownErrors: knownErrors,
+            err_reason: data.reason || data.message
+          });
         }
+ 
+        const channel_uploads = data?.channel_uploads;
+        const json = data?.json;
+        const engagement = data?.engagement;
+        const inv_comments = data?.comments || "Disabled";
+        const inv_vid = data?.vid;
+        const desc = data?.desc || "";
+
+ 
+        let d = false;
+        if (desc !== "[object Object]") {
+          d = desc.toString().replace(/\n/g, " <br> ");
+        }
+
+        const descriptionString = String(inv_vid?.description).replace(/\bx.com\b/, "twitter.com")
+
+        function extractInfo(regex) {
+          return descriptionString !== "[object Object]"
+            ? (regex.exec(descriptionString) ?? {}).groups
+            : undefined;
+        }
+
+        const support = extractInfo(PATREON_REGEX);
+        const STUPID_ELON_MUSK_WEBSITE_HE_IS_TRYING_TO_CALL_IT_X_FOR_SOME_REASON_WHICH_IS_A_STUPID_NAME_WE_WILL_FOREVER_CALL_IT_TWITTER_AND_HE_CAN_DO_NOTHING_ABOUT_IT_LOL_FUCK_YOU_ELON_TRANS_RIGHTS_BTW = extractInfo(TWITTER_REGEX);
+        const linkto = extractInfo(LNKTO_REGEX);
+        const discord = extractInfo(CORD_REGEX);
+        const twitch = extractInfo(TWITCH_REGEX);
+        const reddit = extractInfo(REDDIT_REGEX);
+        const tiktok = extractInfo(TIKTOK_REGEX);
+        const github = extractInfo(GITHUB_REGEX);
+        const steam = extractInfo(STEAM_REGEX);
+        const soundcloud = extractInfo(SOUNDCLOUD_REGEX);
+        const floatplane = extractInfo(FLOATPLANE_REGEX);
+        const bluesky = extractInfo(BLUESKY_REGEX);
+        
+        /* meta software */
+        const instagram = extractInfo(INSTAGRAM_REGEX);
+        const threads_by_instagram = extractInfo(THREADS_BY_INSTAGRAM_REGEX);
+        const facebook = extractInfo(FACEBOOK_REGEX);
+
+        const videoObject = inv_vid?.adaptiveFormats;
+        function findItag(adaptiveFormats) {
+        return;
+        }
+        
+        const itag_hd = findItag(videoObject);
+        var proxyurl = config.p_url;
+        var vidurl = u.url;
+        var isvidious = u.isInvidiousURL;
+        var mediaproxy = config.media_proxy;
+
+        if (inv_vid?.genre === "Music") {
+          var vidurl = u.losslessurl;
+        }
+
+        var vidurl = config.videourl;
+        var isvidious = true;
+
+        if (req.useragent.source.includes("Pardus")) {
+          var vidurl = "https://iv.ggtyler.dev";
+          var mediaproxy = "https://nyc1.pokejan.ggtyler.dev/";
+          var isvidious = true;
+          var isSchoolProxy = "";
+        }
+
+        // unused
+        let badges = "";
+        let comments = "";
+        let nnn = "";
+
+        const dnt_val = isDntEnabled(req);
+
+        if (
+          inv_vid?.error ===
+            "The uploader has not made this video available in your country" ||
+          inv_vid?.error === "This video is not available"
+        ) {
+          return res.send(
+            "error: " + inv_vid.error + " please refresh the page please qt"
+          );
+        }
+
+        // REMOVED the 404.ejs redirect block so it correctly falls through to watch.ejs!
+
+        var uaos = req.useragent.os;
+        const browser = req.useragent.browser;
+        const IsOldWindows =
+          (uaos === "Windows 7" || uaos === "Windows 8") &&
+          browser === "Firefox";
+
+        if (req.query.from === "short") var shortsui = true;
+
+        try {
+          
+          res.header('X-Robots-Tag', 'noindex, nofollow');
+          renderTemplate(res, req, "watch.ejs", {
+            color: data?.color,
+            color2: data?.color2,
+            linkify,
+            engagement,
+            linkto,
+            IsOldWindows,
+            channelurlfixer,
+            itag_hd,
+            facebook,
+            support,
+            dyx,
+            shortsui,
+            queryid:v,
+            u: vidurl,
+            isvidious: isvidious,
+            video: json,
+            date: inv_vid?.publishedText    ,
+            e,
+            a,
+            twitter:STUPID_ELON_MUSK_WEBSITE_HE_IS_TRYING_TO_CALL_IT_X_FOR_SOME_REASON_WHICH_IS_A_STUPID_NAME_WE_WILL_FOREVER_CALL_IT_TWITTER_AND_HE_CAN_DO_NOTHING_ABOUT_IT_LOL_FUCK_YOU_ELON_TRANS_RIGHTS_BTW,
+             dm,
+            proxyurl,
+            media_proxy_url: mediaproxy,
+            instagram,
+            useragent: req.useragent,
+            config,
+            verify,
+            discord,
+            turntomins,
+            twitch,
+            github,
+            steam,
+            tiktok,
+            bluesky,
+            floatplane,
+            soundcloud,
+            dnt_val,
+            reddit,
+            channel_uploads,
+            secure,
+            process,
+            VideoData:inv_vid,
+            isSchoolProxy,
+            sha384,
+            lightOrDark,
+            isMobile: req.useragent.isMobile,
+            tj: data?.channel,
+            r,
+            threads:threads_by_instagram,
+            hostname:req.hostname,
+            qua: q,
+            inv: inv_comments,
+            convert,
+            convertLegacy,
+            universe,
+            wiki: data?.wiki,
+            escapeHtml,
+            f,
+            t: config.t_url,
+            optout: m,
+            badges,
+            desc,
+            comments,
+            n: nnn,
+            inv_vid,
+            lyrics: "",
+          });
+        } catch (err) {
+            res.status(500); 
+            res.header('X-Robots-Tag', 'noindex, nofollow');
+            renderTemplate(res, req, "video-error.ejs", {
+            v,
+            err_reason:err
+          });
+          console.log(err)
+        }
+      } catch (error) {
+        console.error(error);
+        return res.redirect(`/watch?v=${req.query.v}&fx=1&err=${error}`);
       }
-    );
-  });
+    }
+  );
+});
   
   app.get("/lite", async (req, res) => {
        const { dm, region, hl, v, e, r, f, m, quality: q, a, universe, } = req.query; 
