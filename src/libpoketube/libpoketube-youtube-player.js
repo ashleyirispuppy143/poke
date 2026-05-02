@@ -360,13 +360,7 @@ class InnerTubePokeVidious {
 
       // Check for specific API errors or fetch failures
       if (!vid || vid.error || vid.isInternalError) {
-        const errorMsg = vid?.error || vid?.reason || "Unknown API response error";
-        
-        // DEBUG LOG: If the response is unknown, log the whole object to see what's inside
-        if (errorMsg === "Unknown API response error") {
-          console.log("[LIBPT DEBUG] Unknown API response detected for video:", v);
-          console.dir(vid, { depth: null });
-        }
+        const errorMsg = vid?.error || vid?.reason || "This video is probably about to premiere.";
 
         this.initError("Video info fetch error", `${v} - ${errorMsg}`);
         return {
