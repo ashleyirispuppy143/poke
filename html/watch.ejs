@@ -1185,7 +1185,7 @@ Offical Discord Server! :3
 
 <noscript>
   <div class="error-card">
-    <p>JavaScript is disabled. Please switch to "SD" manually if you want audio support.</p>
+    <p>JavaScript is disabled, leading to no audio for HD quality and above. Manually change to SD quality for audio. </p>
   </div>
 </noscript>
    
@@ -3012,6 +3012,12 @@ document.addEventListener('DOMContentLoaded', checkTheaterMode);
 	} else {
 	     anchor.href = "/account-create"
 	 } 
+
+     const removeAttributeifjsvideo = document.getElementById('video');
+    if (removeAttributeifjsvideo) {
+        removeAttributeifjsvideo.removeAttribute('controls');
+        removeAttributeifjsvideo.removeAttribute('autoplay');
+    }
 	 </script>
 
    
