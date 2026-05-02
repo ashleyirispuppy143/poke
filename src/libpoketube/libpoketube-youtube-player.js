@@ -136,12 +136,16 @@ class InnerTubePokeVidious {
               this.addBlockedVideo(v);
               throw new Error("UPLOADER_REMOVED");
             }
+            if (resp.status === 500 && text.includes("This video may be inappropriate for some users")) {
+              this.addBlockedVideo(v);
+              throw new Error("INAPPROPRIATE");
+            }
             if (resp.status === 404 && text.includes("Video unavailable")) {
               this.addBlockedVideo(v);
               throw new Error("VIDEO_UNAVAILABLE");
             }
           } catch (err) {
-            if (["COPYRIGHT_BLOCKED", "UPLOADER_REMOVED", "VIDEO_UNAVAILABLE"].includes(err.message)) {
+            if (["COPYRIGHT_BLOCKED", "UPLOADER_REMOVED", "VIDEO_UNAVAILABLE", "INAPPROPRIATE"].includes(err.message)) {
               throw err;
             }
           }
@@ -240,7 +244,7 @@ class InnerTubePokeVidious {
         } catch (err) {
           if (callerSignal && callerSignal.aborted) throw err;
           // Re-throw our custom errors so it bubbles up to break everything gracefully
-          if (["COPYRIGHT_BLOCKED", "UPLOADER_REMOVED", "VIDEO_UNAVAILABLE"].includes(err.message)) throw err;
+          if (["COPYRIGHT_BLOCKED", "UPLOADER_REMOVED", "VIDEO_UNAVAILABLE", "INAPPROPRIATE"].includes(err.message)) throw err;
 
           lastError = err;
           const remaining2 = maxRetryTime - (Date.now() - retryStart);
@@ -264,7 +268,6 @@ class InnerTubePokeVidious {
 
     try {
       // PERF: Execute all fetches in parallel using Promise.all
-      // This prevents the "waterfall" effect where we wait for video -> then dislikes -> then colors.
       const [invComments, vidObj, dislikesData, colorData] = await Promise.all([
         // 1. Comments
         fetchWithRetry(
@@ -276,7 +279,6 @@ class InnerTubePokeVidious {
         // 2. Video Info
         (async () => {
           let fetchError = null;
-          // Reduced maxRetryTime here to 2000ms to failover faster between retries
           const MAX_ATTEMPTS = 3;
           for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
             try {
@@ -294,8 +296,7 @@ class InnerTubePokeVidious {
                 // parse failed, loop and retry
               }
             } catch (err) {
-              // Bail out completely if it hit an unrecoverable state
-              if (["COPYRIGHT_BLOCKED", "UPLOADER_REMOVED", "VIDEO_UNAVAILABLE"].includes(err.message)) throw err;
+              if (["COPYRIGHT_BLOCKED", "UPLOADER_REMOVED", "VIDEO_UNAVAILABLE", "INAPPROPRIATE"].includes(err.message)) throw err;
               fetchError = err;
             }
           }
@@ -344,8 +345,6 @@ class InnerTubePokeVidious {
         };
       }
 
-      // If we are here, we have the video object.
-      // Dislikes and colors are already fetched (or defaulted) in parallel.
       if (this.checkUnexistingObject(vid)) {
         this.cache[v] = {
           result: {
@@ -366,16 +365,23 @@ class InnerTubePokeVidious {
         this.initError(vid, `ID: ${v}`);
       }
     } catch (error) {
-      if (error.message === "COPYRIGHT_BLOCKED") {
-        return { error: true, message: "This video contains content from a copyright holder who has blocked it." };
+       const knownErrors = {
+        "COPYRIGHT_BLOCKED": "This video contains content from a copyright holder who has blocked it.",
+        "UPLOADER_REMOVED": "This video has been removed by the uploader.",
+        "VIDEO_UNAVAILABLE": "Video unavailable.",
+        "INAPPROPRIATE": "This video may be inappropriate for some users."
+      };
+
+      if (knownErrors[error.message]) {
+        return { 
+          error: true, 
+          message: knownErrors[error.message],
+          reason: error.message 
+        };
       }
-      if (error.message === "UPLOADER_REMOVED") {
-        return { error: true, message: "This video has been removed by the uploader." };
-      }
-      if (error.message === "VIDEO_UNAVAILABLE") {
-        return { error: true, message: "Video unavailable." };
-      }
+
       this.initError(`Error getting video ${v}`, error);
+      return { error: true, message: "An unexpected error occurred qwq" };
     }
   }
 
