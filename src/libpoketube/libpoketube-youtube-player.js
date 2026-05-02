@@ -318,6 +318,7 @@ class InnerTubePokeVidious {
 
           if (fetchError) {
             this.initError("All video info fetch attempts failed", fetchError);
+            return { isInternalError: true, reason: fetchError.message || fetchError.toString() };
           }
           return null;
         })(),
@@ -351,12 +352,14 @@ class InnerTubePokeVidious {
       const comments = this.getJson(invComments);
       const vid = vidObj;
 
-      if (!vid) {
-        this.initError("Video info missing/unparsable", v);
+      // Handle fetch failures or internal retry errors
+      if (!vid || vid.isInternalError) {
+        const errorReason = vid?.reason || "Unknown API response error";
+        this.initError("Video info missing/unparsable", `${v} - Reason: ${errorReason}`);
         return {
           error: true,
-          message:
-            "Sorry nya, we couldn't find any information about that video qwq",
+          message: `Sorry nya, we couldn't find any information about that video: ${errorReason}`,
+          reason: "FETCH_FAILED"
         };
       }
 
@@ -378,6 +381,11 @@ class InnerTubePokeVidious {
         return this.cache[v].result;
       } else {
         this.initError(vid, `ID: ${v}`);
+        return {
+          error: true,
+          message: "Sorry nya, the video data was returned but looks incomplete (missing authorId).",
+          reason: "INCOMPLETE_DATA"
+        };
       }
     } catch (error) {
       // If it's a known unrecoverable error, return the pretty message
