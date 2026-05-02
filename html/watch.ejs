@@ -2687,10 +2687,21 @@ VideoData?.recommendedVideos.forEach(video => {
                             <% } %>
                         </span>
                     </a>
-                    <div class="video-views">
-                      <viewcounttext style="margin-right: 6px;margin-left: 1px;"><i class="fa-light fa-play"></i> <%= x.viewCountText %></viewcounttext>  <%= x.publishedText %>  
-                    </div>
-                    
+                   <div class="video-views">
+  <viewcounttext style="margin-right: 6px;margin-left: 1px;">
+    <i class="fa-light fa-play"></i> <%= x.viewCountText %>
+  </viewcounttext>
+
+  <% 
+     const shortText = x.publishedText.replace(/\byears?\b/gi, 'yr').replace(/\bmonths?\b/gi, 'mo');
+    
+     const wasShortened = /\b(year|month)s?\b/i.test(x.publishedText);
+  %>
+
+  <span <%- wasShortened ? `title="${x.publishedText}"` : '' %>>
+    <%= shortText %>
+  </span>
+</div>
                 </div>
             </div>
         </div>
