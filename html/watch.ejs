@@ -2687,29 +2687,11 @@ VideoData?.recommendedVideos.forEach(video => {
                             <% } %>
                         </span>
                     </a>
- <div class="video-views">
+<div class="video-views">
   <viewcounttext style="margin-right: 6px;margin-left: 1px;">
     <i class="fa-light fa-play"></i> <%= x.viewCountText %>
-  </viewcounttext>
-
-  <% 
-    const isShortenedVariant = Math.random() < 0.2;
-    
-    let displayValue = x.publishedText;
-    let hoverTitle = '';
-
-    if (isShortenedVariant) {
-      displayValue = x.publishedText.replace(/\byears?\b/gi, 'yr').replace(/\bmonths?\b/gi, 'mo');
-      
-      if (/\b(year|month)s?\b/i.test(x.publishedText)) {
-        hoverTitle = `title="${x.publishedText}"`;
-      }
-    }
-  %>
-
-  <span <%- hoverTitle %> >
-    <%= displayValue %>
-  </span>
+  </viewcounttext>  
+  <%= x.publishedText %>  
 </div>
                 </div>
             </div>
