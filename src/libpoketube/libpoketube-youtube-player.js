@@ -303,6 +303,11 @@ class InnerTubePokeVidious {
               const text = await r.text();
               try {
                 const parsed = JSON.parse(text);
+                
+                if (parsed === null) {
+                  return null;
+                }
+
                 if (this.checkUnexistingObject(parsed)) {
                   return parsed; // SUCCESS
                 }
@@ -312,7 +317,8 @@ class InnerTubePokeVidious {
                    return parsed;
                 }
 
-                console.log(`[LIBPT INFO] Soft fail on attempt ${attempt + 1}: Valid JSON but missing authorId. Retrying...`);
+                // If valid JSON but missing expected data (like authorId), stop at 1 attempt
+                return null;
               } catch (parseErr) {
                 // parse failed, loop and retry
               }
