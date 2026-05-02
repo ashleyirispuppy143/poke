@@ -306,6 +306,12 @@ class InnerTubePokeVidious {
                 if (this.checkUnexistingObject(parsed)) {
                   return parsed; // SUCCESS
                 }
+                
+                // If it contains an error property from the API, return it immediately
+                if (parsed && parsed.error) {
+                   return parsed;
+                }
+
                 console.log(`[LIBPT INFO] Soft fail on attempt ${attempt + 1}: Valid JSON but missing authorId. Retrying...`);
               } catch (parseErr) {
                 // parse failed, loop and retry
@@ -352,14 +358,14 @@ class InnerTubePokeVidious {
       const comments = this.getJson(invComments);
       const vid = vidObj;
 
-      // Handle fetch failures or internal retry errors
-      if (!vid || vid.isInternalError) {
-        const errorReason = vid?.reason || "Unknown API response error";
-        this.initError("Video info missing/unparsable", `${v} - Reason: ${errorReason}`);
+      // Check for specific API errors or fetch failures
+      if (!vid || vid.error || vid.isInternalError) {
+        const errorMsg = vid?.error || vid?.reason || "Unknown API response error";
+        this.initError("Video info fetch error", `${v} - ${errorMsg}`);
         return {
           error: true,
-          message: `Sorry nya, we couldn't find any information about that video: ${errorReason}`,
-          reason: "FETCH_FAILED"
+          message: errorMsg,
+          reason: vid?.isInternalError ? "FETCH_FAILED" : "API_ERROR"
         };
       }
 
@@ -383,7 +389,7 @@ class InnerTubePokeVidious {
         this.initError(vid, `ID: ${v}`);
         return {
           error: true,
-          message: "Sorry nya, the video data was returned but looks incomplete (missing authorId).",
+          message: "Data returned but was incomplete (missing authorId).",
           reason: "INCOMPLETE_DATA"
         };
       }
