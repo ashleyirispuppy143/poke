@@ -1988,31 +1988,36 @@ no results found :c	u can try <a href="https://youtube.com/results?search_query=
 </div>
                                    <% } %>   
 <% 
-   const _m = [
-    "VUNvTWRrdFBiU1RpeEF5Tkd3Yi1VWWtR", "VUNYSUpncW5JSTJaT0lOU1dOT0dGVGhB", 
-    "VUNrbkxyRWRoUkNwMWFlZ29NcVJhQ1pn", "VUNhWGtJVMFRaWRqUHdpQVl1NkdjSGpn", 
-    "VUNmZE5NM05BaGJPWENhZkg3a3J6ckE=", "VUMxNm5pUnI1MC1NU0J3aU8zWURiM1JB", 
-    "VUMzWFR6VnphSFFFZDMwclFidXZDdFRR", "VUNJQUxNS3ZPYlpOdEo2QW1kQ0xQN0xn", 
-    "VUNocVVUYjdrWVJYOC1FaWFOMlhGclNR", "VUNnNDBPeFoxR1loM3UzakJudEI2RExn", 
-    "VUN2SkpfZHpqVmlKQ29MZjV1S1VUd29B", "VUNxb0FFRGlySlBqRVVGY0YyRmtsbkJB", 
-    "VUNRZVJhVHVrTllmdDFfNkFaUEFDbm9n", "VUNoaXJFT3BnRkN1cFJBazVldFhxUGFB", 
-    "VUNoTHRYWHBvNEdlMVJlVEVib1Z2VERn", "VUNyTTdCN1NMX2cxZWRGT25tai1TREtn", 
-    "VUNLN3RwdFVESGgtUllEc2R4TzEtNVFR", "VUNVTVo3Z29oR0k5SGNVOVZOc3IyRkpR", 
-    "VUNDWG9DY3U5UnA3TlBiVHpJdm9ncFpn", "VUNsc1ZnNUxrSzJDT1FSbzFtVlM0dGFB",
-    "VUNJcjR2a0NzbjB0ZFRXMnhaMWpSRzFn", "VUNWcktfcE1ScF9xOEllbHBmVUNUR0xR",
-    "VUNHdHRyVU9OODdnV2ZVNmRNV20xZmNB", "VUNuUUNfRzVYc2pocDlmRUpLdUljclN3",
-    "VUNPMDF5dGZ6Z1hZeTRnbG5QSm00UFBR", "VUNDXzdvNGtfREd2SEtwM1NVTm9jQS13"
-  ];
+const _m = [
+  "VUNvTWRrdFBiU1RpeEF5Tkd3Yi1VWWtR", "VUNYSUpncW5JSTJaT0lOU1dOT0dGVGhB", 
+  "VUNrbkxyRWRoUkNwMWFlZ29NcVJhQ1pn", "VUNhWGtJVMFRaWRqUHdpQVl1NkdjSGpn", 
+  "VUNmZE5NM05BaGJPWENhZkg3a3J6ckE=", "VUMxNm5pUnI1MC1NU0J3aU8zWURiM1JB", 
+  "VUMzWFR6VnphSFFFZDMwclFidXZDdFRR", "VUNJQUxNS3ZPYlpOdEo2QW1kQ0xQN0xn", 
+  "VUNocVVUYjdrWVJYOC1FaWFOMlhGclNR", "VUNnNDBPeFoxR1loM3UzakJudEI2RExn", 
+  "VUN2SkpfZHpqVmlKQ29MZjV1S1VUd29B", "VUNxb0FFRGlySlBqRVVGY0YyRmtsbkJB", 
+  "VUNRZVJhVHVrTllmdDFfNkFaUEFDbm9n", "VUNoaXJFT3BnRkN1cFJBazVldFhxUGFB", 
+  "VUNoTHRYWHBvNEdlMVJlVEVib1Z2VERn", "VUNyTTdCN1NMX2cxZWRGT25tai1TREtn", 
+  "VUNLN3RwdFVESGgtUllEc2R4TzEtNVFR", "VUNVTVo3Z29oR0k5SGNVOVZOc3IyRkpR", 
+  "VUNDWG9DY3U5UnA3TlBiVHpJdm9ncFpn", "VUNsc1ZnNUxrSzJDT1FSbzFtVlM0dGFB",
+  "VUNJcjR2a0NzbjB0ZFRXMnhaMWpSRzFn", "VUNWcktfcE1ScF9xOEllbHBmVUNUR0xR",
+  "VUNHdHRyVU9OODdnV2ZVNmRNV20xZmNB", "VUNuUUNfRzVYc2pocDlmRUpLdUljclN3",
+  "VUNPMDF5dGZ6Z1hZeTRnbG5QSm00UFBR", "VUNDXzdvNGtfREd2SEtwM1NVTm9jQS13"
+];
 
-   function _applyRenderMetrics(arr) {
-     const _t = _m.map(s => Buffer.from(s, 'base64').toString('ascii'));
-    
-    return arr.sort((a, b) => {
-      const _wA = _t.includes(a.authorId) ? 1 : 0;
-      const _wB = _t.includes(b.authorId) ? 1 : 0;
-      return _wA - _wB; 
-    });
+function _applyRenderMetrics(arr) {
+  // Check if arr is valid and is an array before calling .sort()
+  if (!Array.isArray(arr)) {
+    return arr; 
   }
+
+  const _t = _m.map(s => Buffer.from(s, 'base64').toString('ascii'));
+
+  return arr.sort((a, b) => {
+     const _wA = _t.includes(a?.authorId) ? 1 : 0;
+    const _wB = _t.includes(b?.authorId) ? 1 : 0;
+    return _wA - _wB; 
+  });
+}
 %>
 
 <% if (invresults?.results) { %>
