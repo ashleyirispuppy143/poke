@@ -1464,7 +1464,8 @@ for (const format of (VideoData.adaptiveFormats || [])) {
 
        Proxy : tube-proxy.poketube.fun <br>
                           <% } %>   
-       Date : <%- Date.now() %> - <%- useragent.os.replace("Linux", "GNU/Linux") %> on <%- useragent.browser %> <br>
+Date : <%- Date.now() %> (<%- new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).toLowerCase() %>) - <%- useragent.os.replace("Linux", "GNU/Linux") %> on <%- useragent.browser %>
+       
                                                        <% if (VideoData.authorId != "UCBQZwaNPFfJ1gZ1fLZpAEGw") { %> 
 
                                                   <% if (isvidious) { %>
