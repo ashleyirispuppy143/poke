@@ -145,12 +145,7 @@
             (╥﹏╥)
         </p>
 
-        <!-- Check if knownErrors exists and if the current err_reason is mapped within it -->
         <% if (locals.knownErrors && locals.err_reason && knownErrors[err_reason]) { %>
-            <div class="might-be">Reason:</div>
-            <ul class="reasons-list">
-                <li class="active-reason"><%= knownErrors[err_reason] %></li>
-            </ul>
         <% } else { %>
             <div class="might-be">This usually happens because...</div>
             <ul class="reasons-list">
