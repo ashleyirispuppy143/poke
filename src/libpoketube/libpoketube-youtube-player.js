@@ -33,8 +33,8 @@ class InnerTubePokeVidious {
     this.region = "region=US";
     this.sqp =
       "-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw";
-    this.blockedFile = "blocked.txt";
-    this.blockedVideos = new Set();
+    this.blockedFile = "blockedreasons.txt";
+    this.blockedVideos = new Map();
     this.loadBlockedVideos();
   }
 
@@ -44,21 +44,24 @@ class InnerTubePokeVidious {
         const content = fs.readFileSync(this.blockedFile, "utf8");
         content.split("\n").forEach((line) => {
           const trimmed = line.trim();
-          if (trimmed) this.blockedVideos.add(trimmed);
+          if (trimmed && trimmed.includes("|")) {
+            const [videoId, reason] = trimmed.split("|");
+            this.blockedVideos.set(videoId, reason);
+          }
         });
       }
     } catch (e) {
-      console.error("[LIBPT ERROR] Could not load blocked.txt", e);
+      console.error("[LIBPT ERROR] Could not load blockedreasons.txt", e);
     }
   }
 
-  addBlockedVideo(videoId) {
+  addBlockedVideo(videoId, reason) {
     if (!this.blockedVideos.has(videoId)) {
-      this.blockedVideos.add(videoId);
+      this.blockedVideos.set(videoId, reason);
       try {
-        fs.appendFileSync(this.blockedFile, videoId + "\n");
+        fs.appendFileSync(this.blockedFile, videoId + "|" + reason + "\n");
       } catch (e) {
-        console.error("[LIBPT ERROR] Could not write to blocked.txt", e);
+        console.error("[LIBPT ERROR] Could not write to blockedreasons.txt", e);
       }
     }
   }
@@ -84,13 +87,25 @@ class InnerTubePokeVidious {
   async getYouTubePlayerInfo(f, v, contentlang, contentregion) {
     const { fetch } = await import("undici");
 
+    const knownErrors = {
+      "COPYRIGHT_BLOCKED": "This video contains content from a copyright holder who has blocked it.",
+      "UPLOADER_REMOVED": "This video has been removed by the uploader.",
+      "VIDEO_UNAVAILABLE": "Video unavailable.",
+      "INAPPROPRIATE": "This video may be inappropriate for some users."
+    };
+
     if (!v) {
       this.initError("Missing video ID", null);
       return { error: true, message: "No video ID provided" };
     }
 
     if (this.blockedVideos.has(v)) {
-      return { error: true, message: "This video is blocked, removed, or unavailable." };
+      const reasonKey = this.blockedVideos.get(v);
+      return { 
+        error: true, 
+        message: knownErrors[reasonKey] || "This video is blocked, removed, or unavailable.",
+        reason: reasonKey
+      };
     }
 
     if (this.cache[v] && Date.now() - this.cache[v].timestamp < 3600000) {
@@ -129,19 +144,19 @@ class InnerTubePokeVidious {
             const text = await clone.text();
             
             if (resp.status === 500 && text.includes("who has blocked it on copyright grounds")) {
-              this.addBlockedVideo(v);
+              this.addBlockedVideo(v, "COPYRIGHT_BLOCKED");
               throw new Error("COPYRIGHT_BLOCKED");
             }
             if (resp.status === 500 && text.includes("This video has been removed by the uploader")) {
-              this.addBlockedVideo(v);
+              this.addBlockedVideo(v, "UPLOADER_REMOVED");
               throw new Error("UPLOADER_REMOVED");
             }
             if (resp.status === 500 && text.includes("This video may be inappropriate for some users")) {
-              this.addBlockedVideo(v);
+              this.addBlockedVideo(v, "INAPPROPRIATE");
               throw new Error("INAPPROPRIATE");
             }
             if (resp.status === 404 && text.includes("Video unavailable")) {
-              this.addBlockedVideo(v);
+              this.addBlockedVideo(v, "VIDEO_UNAVAILABLE");
               throw new Error("VIDEO_UNAVAILABLE");
             }
           } catch (err) {
@@ -365,13 +380,6 @@ class InnerTubePokeVidious {
         this.initError(vid, `ID: ${v}`);
       }
     } catch (error) {
-       const knownErrors = {
-        "COPYRIGHT_BLOCKED": "This video contains content from a copyright holder who has blocked it.",
-        "UPLOADER_REMOVED": "This video has been removed by the uploader.",
-        "VIDEO_UNAVAILABLE": "Video unavailable.",
-        "INAPPROPRIATE": "This video may be inappropriate for some users."
-      };
-
       if (knownErrors[error.message]) {
         return { 
           error: true, 
