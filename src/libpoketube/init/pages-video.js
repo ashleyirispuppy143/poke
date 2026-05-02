@@ -202,8 +202,7 @@ module.exports = function (app, config, renderTemplate) {
       v,
     });
   });
-
-  app.get("/watch", async (req, res) => {
+app.get("/watch", async (req, res) => {
     const { dm, region, hl, v, e, r, f, m, quality: q, a, universe, dyx} = req.query; 
 
     if (!v) {
@@ -385,7 +384,26 @@ module.exports = function (app, config, renderTemplate) {
     INNERTUBE.getYouTubePlayerInfo(f, v, contentlang, contentregion).then(
       (data) => {
         try {
-           const channel_uploads = data?.channel_uploads;
+           const knownErrors = {
+            "COPYRIGHT_BLOCKED": "This video contains content from a copyright holder who has blocked it.",
+            "UPLOADER_REMOVED": "This video has been removed by the uploader.",
+            "VIDEO_UNAVAILABLE": "Video unavailable.",
+            "INAPPROPRIATE": "This video may be inappropriate for some users."
+          };
+
+          if (data?.error) {
+            res.status(500);
+            res.header('X-Robots-Tag', 'noindex, nofollow');
+            return renderTemplate(res, req, "invalid-video.ejs", {
+              v,
+              error: true,
+              error_message: data.message || "An error occurred",
+              knownErrors: knownErrors,
+              err_reason: data.reason || data.message
+            });
+          }
+ 
+          const channel_uploads = data?.channel_uploads;
           const json = data?.json;
           const engagement = data?.engagement;
           const inv_comments = data?.comments || "Disabled";
@@ -500,7 +518,7 @@ module.exports = function (app, config, renderTemplate) {
               u: vidurl,
               isvidious: isvidious,
               video: json,
-              date: inv_vid?.publishedText	,
+              date: inv_vid?.publishedText    ,
               e,
               a,
               twitter:STUPID_ELON_MUSK_WEBSITE_HE_IS_TRYING_TO_CALL_IT_X_FOR_SOME_REASON_WHICH_IS_A_STUPID_NAME_WE_WILL_FOREVER_CALL_IT_TWITTER_AND_HE_CAN_DO_NOTHING_ABOUT_IT_LOL_FUCK_YOU_ELON_TRANS_RIGHTS_BTW,
@@ -567,7 +585,7 @@ module.exports = function (app, config, renderTemplate) {
       }
     );
   });
-
+  
   app.get("/lite", async (req, res) => {
        const { dm, region, hl, v, e, r, f, m, quality: q, a, universe, } = req.query; 
 
