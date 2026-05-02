@@ -364,18 +364,37 @@ class InnerTubePokeVidious {
       const comments = this.getJson(invComments);
       const vid = vidObj;
 
-      // Check for specific API errors or fetch failures
-      if (!vid || vid.error || vid.isInternalError) {
-        const errorMsg = vid?.error || vid?.reason || "This video is probably about to premiere.";
-
-        this.initError("Video info fetch error", `${v} - ${errorMsg}`);
+      // 1. Check for specific API errors natively returned from Invidious
+      if (vid && vid.error) {
         return {
-          error: true,
-          message: errorMsg,
-          reason: vid?.isInternalError ? "FETCH_FAILED" : "API_ERROR"
+          vid: vid, // Pass the raw API error down to trigger your 404.ejs
+          comments: comments,
+          channel_uploads: " ",
+          engagement: dislikesData.engagement,
+          wiki: "",
+          desc: "",
+          color: colorData.color,
+          color2: colorData.color2,
         };
       }
 
+      // 2. Check for fetch failures (timeout, bad gateway, or null response)
+      if (!vid || vid.isInternalError) {
+        this.initError("Video info fetch error", `${v} - ${vid?.reason || "No data returned"}`);
+        // Return a mock object so your app treats it like a standard API error (like premiere)
+        return {
+          vid: { error: "This video is probably about to premiere." },
+          comments: comments,
+          channel_uploads: " ",
+          engagement: dislikesData.engagement,
+          wiki: "",
+          desc: "",
+          color: colorData.color,
+          color2: colorData.color2,
+        };
+      }
+
+      // 3. Process Successful Response
       if (this.checkUnexistingObject(vid)) {
         this.cache[v] = {
           result: {
@@ -395,13 +414,18 @@ class InnerTubePokeVidious {
       } else {
         this.initError(vid, `ID: ${v}`);
         return {
-          error: true,
-          message: "Data returned but was incomplete (missing authorId).",
-          reason: "INCOMPLETE_DATA"
+          vid: { error: "Data returned but was incomplete (missing authorId)." },
+          comments: comments,
+          channel_uploads: " ",
+          engagement: dislikesData.engagement,
+          wiki: "",
+          desc: "",
+          color: colorData.color,
+          color2: colorData.color2,
         };
       }
     } catch (error) {
-      // If it's a known unrecoverable error, return the pretty message
+      // If it's a known unrecoverable error, trigger the data.error UI
       if (knownErrors[error.message]) {
         return { 
           error: true, 
@@ -410,12 +434,14 @@ class InnerTubePokeVidious {
         };
       }
 
-      // If it's an unknown error, report the actual error message without blocking the video
+      // If it's an unknown catastrophic error, fallback to your standard UI 
       this.initError(`Error getting video ${v}`, error);
-      return { 
-        error: true, 
-        message: error.message || "An unexpected error occurred qwq",
-        reason: "UNKNOWN_ERROR" 
+      return {
+        vid: { error: "An unexpected error occurred qwq" },
+        comments: null,
+        engagement: null,
+        color: "#0ea5e9",
+        color2: "#111827"
       };
     }
   }
