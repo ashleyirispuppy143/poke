@@ -1040,7 +1040,8 @@ startupPrimeStartedAt: performance.now(),
                               if (numV < 0.5 && state.firstPlayCommitted && !state.restarting) {
                                 const curAt = _origGet.call(this) || 0;
                                 if (curAt > 1.0) {
-                                  if (!isLoopDesired()) return;
+                                  const isUserSeek = state.seeking || state.seekBuffering || state.seekResumeInFlight || (typeof userSeekIntentActive === 'function' && userSeekIntentActive()) || state.pendingSeekTarget != null || (now() - state.lastUserActionTime) < 1200;
+                                  if (!isLoopDesired() && !isUserSeek) return;
                                 }
                               }
                               // Gate 2.5: while the tab is hidden, never rewind audio during
@@ -14091,17 +14092,12 @@ async function finalizeSeekSync(currentSeekId) {
   // the track.
   if (isFinite(vtAtFinalize) && coupledMode && audio) {
     const atCurrent = Number(audio.currentTime) || 0;
-    const wouldRestart = vtAtFinalize < 0.5 && atCurrent > 1.0 && state.firstPlayCommitted && !state.restarting && !isLoopDesired();
     const _drift = Math.abs(atCurrent - vtAtFinalize);
     // bigger threshold when audio is already playing (cut is audible).
     // tighter threshold when audio is paused (no audible cut, and we
     // want it to start at the right spot).
     const _threshold = audio.paused ? 0.1 : 0.3;
-    // DIRECTIONAL: only rewind playing audio if it's actually behind video.
-    // Rewinding when audio is AHEAD of video = "plays same part twice" bug.
-    const _audioBehindVideo = atCurrent < vtAtFinalize;
-    const _shouldWrite = !wouldRestart && _drift > _threshold &&
-    (audio.paused || _audioBehindVideo);
+    const _shouldWrite = _drift > _threshold;
     // The seeked handler owns the short retry chain and updates
     // _lastSafeSeekAt every time it writes audio.currentTime. If it wrote
     // in the last 350ms, another write here races with its decoder flush
@@ -14125,10 +14121,7 @@ async function finalizeSeekSync(currentSeekId) {
         const _at = Number(audio.currentTime) || 0;
         // compare against CURRENT video time — vtAtFinalize is 60ms stale.
         const _vtNow = (() => { try { return Number(video.currentTime()) || 0; } catch { return vtAtFinalize; } })();
-        const _wouldRestart2 = _vtNow < 0.5 && _at > 1.0 && state.firstPlayCommitted && !state.restarting && !isLoopDesired();
-        // directional: only pin if audio is behind video (forward write).
-        const _recheckBehind = _at < _vtNow;
-        if (!_wouldRestart2 && Math.abs(_at - _vtNow) > 0.35 && (audio.paused || _recheckBehind)) {
+        if (Math.abs(_at - _vtNow) > 0.35) {
           state._allowAudioTimeWrite = true;
           try { audio.currentTime = _vtNow; } catch { }
           state._allowAudioTimeWrite = false;
@@ -14227,9 +14220,7 @@ async function finalizeSeekSync(currentSeekId) {
   const vt2 = Number(video.currentTime());
   if (isFinite(vt2) && coupledMode && audio) {
     const at2 = Number(audio.currentTime) || 0;
-    const _fsWouldRestart = vt2 < 0.5 && at2 > 1.0 && state.firstPlayCommitted && !state.restarting && !isLoopDesired();
-    const _fsBehind = at2 < vt2; // audio is behind video → safe to push forward
-    if (!_fsWouldRestart && Math.abs(at2 - vt2) > 0.15 && (audio.paused || _fsBehind)) {
+    if (Math.abs(at2 - vt2) > 0.15) {
       state._allowAudioTimeWrite = true;
       try { audio.currentTime = vt2; } catch { }
       state._allowAudioTimeWrite = false;
@@ -14353,13 +14344,11 @@ async function finalizeSeekSync(currentSeekId) {
           // imperceptible and seeking for it flushes the audio decode buffer,
           // causing the audible glitch/pop on seek.
           if (drift > 0.25) {
-            const _sgAt = Number(audio.currentTime) || 0;
-            const _sgWouldRestart = vt < 0.5 && _sgAt > 1.0 && state.firstPlayCommitted && !state.restarting && !isLoopDesired();
-            if (!_sgWouldRestart) {
-              const _bufAhead = bufferedAhead(audio, vt);
-              if (_bufAhead > 0.1) {
-                safeSetAudioTime(vt);
-              }
+            const _bufAhead = bufferedAhead(audio, vt);
+            if (_bufAhead > 0.1) {
+              state._allowAudioTimeWrite = true;
+              try { audio.currentTime = vt; } catch { }
+              state._allowAudioTimeWrite = false;
             }
           }
           return;
