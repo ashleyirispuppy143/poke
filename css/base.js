@@ -19357,6 +19357,10 @@ function bindCommonMediaEvents() {
           try { videoEl.currentTime = _phPrev > 0.5 ? _phPrev : videoEl.duration || _phPrev; } catch { }
           setTimeout(() => { state._isMicroSeek = false; }, 300);
           try { if (!videoEl.paused) videoEl.pause(); } catch { }
+          if (coupledMode && audio) {
+            try { audio.volume = 0; } catch { }
+            try { if (!audio.paused) audio.pause(); } catch { }
+          }
           return;
             }
             // Standalone near-zero revert: only fires if isPhantomRestart didn't
@@ -19371,6 +19375,11 @@ function bindCommonMediaEvents() {
                 state._isMicroSeek = true;
                 try { videoEl.currentTime = _phPrev; } catch { }
                 setTimeout(() => { state._isMicroSeek = false; }, 300);
+                try { if (!videoEl.paused) videoEl.pause(); } catch { }
+                if (coupledMode && audio) {
+                  try { audio.volume = 0; } catch { }
+                  try { if (!audio.paused) audio.pause(); } catch { }
+                }
                 return;
               }
               }
@@ -19660,9 +19669,11 @@ function bindCommonMediaEvents() {
             try { videoEl.currentTime = prevBeforeSeeked; } catch { }
           }
           setTimeout(() => { state._isMicroSeek = false; }, 300);
-          if (coupledMode && audio && state._seekPreVolume != null) {
-            try { audio.volume = state._seekPreVolume; } catch { }
-            state._seekPreVolume = null;
+          try { if (!videoEl.paused) videoEl.pause(); } catch { }
+          if (coupledMode && audio) {
+            try { audio.volume = 0; } catch { }
+            try { if (!audio.paused) audio.pause(); } catch { }
+            state._seekPreVolume = null; // discard pre-seek volume
           }
           return;
             }
