@@ -1185,12 +1185,14 @@ Offical Discord Server! :3
   <audio id="aud"></audio>
 <% } %>
 
+<% if (qua !== "medium") { %>
 <noscript>
   <div class="error-card">
     <p>JavaScript is disabled, leading to no audio for HD quality and above. Manually change to SD quality for audio. </p>
   </div>
 </noscript>
-   
+       <% } %>
+
 <video poster="<%- media_proxy_url %>/proxy?url=https://i.ytimg.com/vi/<%= VideoData.videoId %>/maxresdefault.jpg" class="video-js player video-ambient-container" id="video" crossorigin="anonymous" style="border-radius: 16px; box-sizing: border-box; min-width: 100%; display: block;" preload autoplay controls> 
   <% if (isvidious) { %>
     <% if (!qua) { %>
