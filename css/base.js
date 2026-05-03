@@ -19474,22 +19474,28 @@ function bindCommonMediaEvents() {
               seekTime = previousGoodVT;
               _stAbortPhantom = !_stRestartLike && !_stUserSeekIntent && !_stUserActionRecent && previousGoodVT > 0.5;
             } else {
-              // All sources read 0/near-0: either intentional zero
-              // (recent user action / authorized) or phantom buffer flush.
+              // All sources read 0/near-0: either intentional zero or phantom buffer flush.
               const _stAuthorized = (typeof nearZeroSeekAuthorized === "function") && nearZeroSeekAuthorized(0);
-              const _stLooksIntentional = _stUserActionRecent || _stUserSeekIntent || _stAuthorized || _stRestartLike;
-              if (_stLooksIntentional || previousGoodVT < 1.0 || !state.firstPlayCommitted) {
+              
+              // CRITICAL BUG FIX: "video+audio seeks to 0 then comes back".
+              // Whether during a drag or immediately after a click, the browser
+              // frequently emits 'seeking' events with currentTime=0 while flushing
+              // the decoder. We NEVER trust a 0 during any user interaction unless
+              // it's explicitly authorized (e.g. pendingSeekTarget=0 or nearZeroSeekAuthorized).
+              // We also MUST NOT abort the seek (revert to previousGoodVT) because
+              // the real target time is coming in the next event. We just ride out
+              // the phantom 0 by keeping seekTime at previousGoodVT so audio doesn't jump.
+              if ((_stUserSeekIntent || _stUserActionRecent) && !_stAuthorized) {
+                seekTime = previousGoodVT;
+                _stAbortPhantom = false; // ride it out
+              } else if (_stAuthorized || _stRestartLike || previousGoodVT < 1.0 || !state.firstPlayCommitted) {
                 seekTime = 0;
               } else {
-                // Phantom. Don't honor — abort the whole seek.
-              // But NEVER abort if the user just interacted — progress bar
-              // drags cause brief all-zero readings during the seeking event.
-              if (!_stUserSeekIntent && !_stUserActionRecent) {
+                // Phantom 0 reading WITHOUT any recent user action (e.g. background
+                // tab flush, or broken programmatic seek). Abort it completely to
+                // prevent a random jump to 0.
                 seekTime = previousGoodVT;
                 _stAbortPhantom = true;
-              } else {
-                seekTime = 0; // user wants 0, trust them
-              }
               }
             }
           }
