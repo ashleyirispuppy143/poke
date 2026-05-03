@@ -25,7 +25,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 //////////////// THE PLAYER, START ////////////////////////
-try {
+ try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -48,6 +48,7 @@ try {
   }
   // Also strip loop attribute early to prevent browser-native looping
   if (_earlyVideo) { _earlyVideo.removeAttribute("loop"); _earlyVideo.loop = false; }
+  if (_earlyAudio) { _earlyAudio.removeAttribute("loop"); _earlyAudio.loop = false; }
   // Re-check on loadedmetadata (browser can move currentTime after our zero-set)
   const _earlyZero = (el) => {
     if (!el) return;
@@ -83,17 +84,59 @@ document.addEventListener("DOMContentLoaded", () => {
   } catch { }
 
   let cachedInnerVideoEl = null;
-  function getPlayableVideoEl() {
+  let installPlayWrapperForDiscoveredMedia = null;
+  function loopPreferenceDesired() {
+    try { if (videoEl && videoEl.loop) return true; } catch { }
+    try { if (audio && audio.loop) return true; } catch { }
+    return false;
+  }
+  function syncLoopPreferenceToMedia() {
+    const desiredLoop = loopPreferenceDesired();
+    const syncLoopFlag = (el) => {
+      if (!el) return;
+      try { el.loop = desiredLoop; } catch { }
+      try {
+        if (desiredLoop) el.setAttribute("loop", "");
+        else el.removeAttribute("loop");
+      } catch { }
+    };
+    syncLoopFlag(videoEl);
+    syncLoopFlag(audio);
     try {
-      if (videoEl && typeof videoEl.play === "function") return videoEl;
+      const root = video?.el?.();
+      const inner = root?.querySelector?.("video");
+      if (inner && inner !== videoEl) syncLoopFlag(inner);
+    } catch { }
+  }
+  function getPlayableVideoEl() {
+    let root = null;
+    try { root = video?.el?.(); } catch { }
+    try {
+      const inner = root?.querySelector?.("video");
+      if (inner && typeof inner.play === "function") {
+        if (cachedInnerVideoEl !== inner) {
+          cachedInnerVideoEl = inner;
+          try { syncLoopPreferenceToMedia(); } catch { }
+          try {
+            if (typeof installPlayWrapperForDiscoveredMedia === "function") {
+              installPlayWrapperForDiscoveredMedia(inner);
+            }
+          } catch { }
+        }
+      }
     } catch { }
     try {
-      if (cachedInnerVideoEl && typeof cachedInnerVideoEl.play === "function") return cachedInnerVideoEl;
-      const inner = video?.el?.()?.querySelector?.("video");
-      if (inner && typeof inner.play === "function") {
-        cachedInnerVideoEl = inner;
-        return inner;
+      if (cachedInnerVideoEl) {
+        const detached = cachedInnerVideoEl.isConnected === false;
+        const outsideRoot = !!(root && !root.contains(cachedInnerVideoEl));
+        if (detached || outsideRoot) cachedInnerVideoEl = null;
       }
+    } catch { cachedInnerVideoEl = null; }
+    try {
+      if (cachedInnerVideoEl && typeof cachedInnerVideoEl.play === "function") return cachedInnerVideoEl;
+    } catch { }
+    try {
+      if (videoEl && typeof videoEl.play === "function") return videoEl;
     } catch { }
     return null;
   }
@@ -321,25 +364,23 @@ document.addEventListener("DOMContentLoaded", () => {
     // Ensure it can never accidentally play
     try { if (!audio.paused) audio.pause(); } catch { }
   }
-  // --- loop: use native videoEl.loop as the source of truth.
-  // Fix: some pages / Video.js configs set the "loop" attribute on the <video> tag
-  // unintentionally. Strip it on startup so videos don't auto-restart unless
-  // loop is explicitly set AFTER init by application code.
-  // This preserves loop functionality for when it's actually wanted.
+  // --- loop: use the explicit top-level video/audio loop flags as the source of truth.
+  // Inner Video.js tech nodes can be recreated or can inherit stale loop flags.
+  // If the user did not ask for looping on the real media elements, force every
+  // live tech node to stay non-looping so no hidden inner element can restart.
   try { videoEl.loop = false; } catch { }
   try { videoEl.removeAttribute("loop"); } catch { }
-  // Also strip from Video.js inner element (it creates a new <video> inside its container)
+  try {
+    if (audio) {
+      audio.loop = false;
+      audio.removeAttribute("loop");
+    }
+  } catch { }
   video.ready(() => {
-    try {
-      const inner = video.el()?.querySelector?.("video");
-      if (inner && inner !== videoEl) {
-        inner.loop = false;
-        try { inner.removeAttribute("loop"); } catch { }
-      }
-    } catch { }
+    try { syncLoopPreferenceToMedia(); } catch { }
   });
   function isLoopDesired() {
-    try { return videoEl.loop; } catch { return false; }
+    return loopPreferenceDesired();
   }
   // THE ROOT CAUSE OF PHANTOM LOOPING:
   // Video.js's "autoplay: true" config causes it to call play() after ended.
@@ -1664,6 +1705,12 @@ startupPrimeStartedAt: performance.now(),
         }
         const t = performance.now();
         const userDrivenPlay = userWantsPlayNow(2400) || userToggleExpectingPlay() || userPlayIntentActive();
+        if (userDrivenPlay && restartFromEndedGuardActive() && !isLoopDesired()) {
+          try { prepareRestartFromEndedPlayback(true); } catch { }
+        }
+        if (state.endedNaturally && !state.restarting && !isLoopDesired()) {
+          return Promise.resolve();
+        }
         const suppressedUntil = _stormSuppressUntil.get(el) || 0;
         if (!userDrivenPlay && t < suppressedUntil) {
           return _playPromises.get(el) || Promise.resolve();
@@ -1699,20 +1746,20 @@ startupPrimeStartedAt: performance.now(),
       };
     }
 
+    function installFor(el) {
+      if (el && typeof el.play === "function" && !_origPlay.has(el)) {
+        _makeWrapper(el);
+      }
+    }
+
     function install() {
       // Patch audio element
-      if (audio && typeof audio.play === 'function' && !_origPlay.has(audio)) {
-        _makeWrapper(audio);
-      }
+      installFor(audio);
       // Patch all video elements (Video.js may use inner <video>)
       try {
         const vn = getVideoNode();
-        if (vn && typeof vn.play === 'function' && !_origPlay.has(vn)) {
-          _makeWrapper(vn);
-        }
-        if (videoEl && videoEl !== vn && typeof videoEl.play === 'function' && !_origPlay.has(videoEl)) {
-          _makeWrapper(videoEl);
-        }
+        installFor(vn);
+        if (videoEl && videoEl !== vn) installFor(videoEl);
       } catch { }
     }
 
@@ -1732,8 +1779,11 @@ startupPrimeStartedAt: performance.now(),
       if (videoEl) reset(videoEl);
     }
 
-    return { install, reset, resetAll };
+    return { install, installFor, reset, resetAll };
   })();
+  installPlayWrapperForDiscoveredMedia = (el) => {
+    try { DONTMAKEITDOUBLEPLAY.installFor(el); } catch { }
+  };
 
   // ─── DONTLETANYTHINGPAUSEVIDEO ────────────────────────────────────────
   // Permanent video.pause() guard. Specifically targets the "click play
@@ -7461,6 +7511,42 @@ function suppressStartupZero(ms = 15000) {
   } catch { }
 }
 function restartFromEndedGuardActive() { return now() < state.restartFromEndedUntil; }
+function prepareRestartFromEndedPlayback(force = false) {
+  if (isLoopDesired()) return false;
+  if (!force && !state.endedNaturally && !restartFromEndedGuardActive()) return false;
+  authorizeNearZeroSeek(3200);
+  state.pendingSeekTarget = null;
+  state.seekWantedPlaying = true;
+  armSeekResumeIntent(7000);
+  state.seekStabilizeUntil = Math.max(state.seekStabilizeUntil, now() + 1800);
+  state.seekCooldownUntil = 0;
+  state.seekTargetTime = 0;
+  state.seekResolvedTime = 0;
+  state.intendedPlaying = true;
+  state.bufferHoldIntendedPlaying = true;
+  state.videoWaiting = false;
+  state.audioWaiting = false;
+  state.videoStallAudioPaused = false;
+  state.audioStallVideoPaused = false;
+  try { clearAudioPauseLocks(); } catch { }
+  try { clearBufferHold(); } catch { }
+  state._allowZeroSeek = true;
+  try { video.currentTime(0); } catch { }
+  try { safeSetCT(videoEl, 0); } catch { }
+  try {
+    const vn = getVideoNode();
+    if (vn && vn !== videoEl) safeSetCT(vn, 0);
+  } catch { }
+  state._allowZeroSeek = false;
+  if (coupledMode && audio) {
+    state._allowAudioTimeWrite = true;
+    try { audio.currentTime = 0; } catch { }
+    state._allowAudioTimeWrite = false;
+  }
+  state.lastKnownGoodVT = 0;
+  state.lastKnownGoodVTts = now();
+  return true;
+}
 function authorizeNearZeroSeek(ms = 2400) {
   state.nearZeroSeekAuthorizedUntil = Math.max(
     state.nearZeroSeekAuthorizedUntil,
@@ -8342,6 +8428,7 @@ const MakeSureUnintentionalLoopDoesntEverHappenAtALLManager = (() => {
       state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 500);
       state.userPauseIntentPresetAt = 0;
       clearMediaSessionForcedPause();
+      prepareRestartFromEndedPlayback(true);
     }
   }
 
@@ -9711,6 +9798,9 @@ function execProgrammaticVideoPlay(opts = {}) {
   if (_errorOverlayShown) return;
   // Never restart after ended. User play clears endedNaturally first.
   if (state.endedNaturally && !state.restarting && !isLoopDesired()) return;
+  if (restartFromEndedGuardActive() && !isLoopDesired()) {
+    try { prepareRestartFromEndedPlayback(true); } catch { }
+  }
   // BG-AUTOPLAY FIX: when hidden, arm hiddenVideoBootstrap BEFORE the audio
   // buffer gate. Otherwise the gate sees audio readyState=0 (uncached audio
   // element on bg autoplay) → blocks → video never starts → audio gate stays
@@ -12474,12 +12564,39 @@ function _atomicAVInvariant() {
 // pending eval if throttled, so no state transition is missed.
 let _atomicLastEvalAt = 0;
 let _atomicCoalescedTimer = null;
-const _ATOMIC_MIN_INTERVAL_MS = 30;
+const ATOMIC_MIN_INTERVAL_ACTIVE_MS = 45;
+const ATOMIC_MIN_INTERVAL_STEADY_MS = 90;
+const ATOMIC_MIN_INTERVAL_RELAXED_MS = 180;
+const ATOMIC_MIN_INTERVAL_IDLE_MS = 350;
+function getAtomicMinIntervalMs() {
+  if (!coupledMode || !audio) return ATOMIC_MIN_INTERVAL_IDLE_MS;
+  if (!state.intendedPlaying || state.endedNaturally) return ATOMIC_MIN_INTERVAL_IDLE_MS;
+  if (document.visibilityState !== "visible" || !isWindowFocused()) return 220;
+  if (state.seeking || state.seekBuffering || state.seekResumeInFlight) {
+    return Math.max(90, SeekCpuController.cadenceFor(45));
+  }
+  if (
+    state.videoWaiting ||
+    state.audioWaiting ||
+    state.videoStallAudioPaused ||
+    state.strictBufferHold ||
+    !state.firstPlayCommitted ||
+    foregroundRecoveryActive(450) ||
+    state.videoPlayInFlight ||
+    state.audioPlayInFlight
+  ) {
+    return ATOMIC_MIN_INTERVAL_ACTIVE_MS;
+  }
+  if (playPauseRecoveryCpuActive(260)) return 130;
+  if (shouldUseRelaxedCpuHousekeeping()) return ATOMIC_MIN_INTERVAL_RELAXED_MS;
+  return ATOMIC_MIN_INTERVAL_STEADY_MS;
+}
 function _atomicScheduleOnce() {
   if (_atomicCoalescedTimer) return;
+  const minInterval = getAtomicMinIntervalMs();
   const tNow = now();
   const sinceLast = tNow - _atomicLastEvalAt;
-  if (sinceLast >= _ATOMIC_MIN_INTERVAL_MS) {
+  if (sinceLast >= minInterval) {
     _atomicLastEvalAt = tNow;
     _atomicAVInvariant();
     return;
@@ -12488,7 +12605,7 @@ function _atomicScheduleOnce() {
     _atomicCoalescedTimer = null;
     _atomicLastEvalAt = now();
     _atomicAVInvariant();
-  }, _ATOMIC_MIN_INTERVAL_MS - sinceLast);
+  }, Math.max(0, minInterval - sinceLast));
 }
 
 // ─── TRIGGER MESH: rAF + setInterval + every relevant event ─────────
@@ -12509,9 +12626,9 @@ try {
 } catch {
   setTimeout(_atomicRafLoop, 16);
 }
-// setInterval(100ms): fires even when tab hidden. Doubles as belt for
+// setInterval(250ms): fires even when tab hidden. Doubles as belt for
 // the rAF and ensures the invariant runs in background tabs too.
-try { setInterval(_atomicScheduleOnce, 100); } catch { }
+try { setInterval(_atomicScheduleOnce, 250); } catch { }
 // Audio events: every signal the audio element can give us.
 try {
   if (audio && typeof audio.addEventListener === "function") {
@@ -12747,9 +12864,11 @@ function _evaluateSpinnerLock() {
 }
 
 // Triggers:
-// 1. setInterval(100ms) — coarse poll for state-flag and class changes
+// 1. setInterval(180ms) — coarse poll for state-flag and class changes.
+// Event listeners + MutationObserver handle the fast edges; the poll is just a
+// backstop for plain JS state flips, so it does not need to wake 10x/sec.
 //    that don't fire DOM events (state.seeking, _bufferGuardSpinnerOn)
-try { setInterval(_evaluateSpinnerLock, 100); } catch { }
+try { setInterval(_evaluateSpinnerLock, 180); } catch { }
 
 // 2. MutationObserver on root class list — catches vjs-waiting/vjs-seeking
 //    add/remove instantly without polling
@@ -17417,10 +17536,11 @@ function bindCommonMediaEvents() {
         !state.isProgrammaticVideoPause &&
         !userWantsPauseNow(2400) &&
         !mediaSessionForcedPauseActive()) {
+        prepareRestartFromEndedPlayback(true);
         state.intendedPlaying = true;
       state.bufferHoldIntendedPlaying = true;
-      const _reVn = getVideoNode();
-      if (_reVn && typeof _reVn.play === "function" && _reVn.paused) _reVn.play().catch(() => { });
+      const _reKick = execProgrammaticVideoPlay({ force: true, minGapMs: 0 });
+      if (_reKick && typeof _reKick.catch === "function") _reKick.catch(() => { });
       if (coupledMode && audio && audio.paused && !state.isProgrammaticAudioPause) {
         state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 500);
         execProgrammaticAudioPlay({ squelchMs: 80, force: true, minGapMs: 0 }).catch(() => { });
@@ -18745,8 +18865,7 @@ function bindCommonMediaEvents() {
         !state.isProgrammaticAudioPause &&
         !userWantsPauseNow(2400) &&
         !mediaSessionForcedPauseActive()) {
-        const _endedRestartVt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
-      safeSetAudioTime(_endedRestartVt);
+        prepareRestartFromEndedPlayback(true);
       state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 500);
       execProgrammaticAudioPlay({ squelchMs: 80, force: true, minGapMs: 0 }).catch(() => { });
       scheduleSync(0);
