@@ -8466,7 +8466,7 @@ const MakeSureUnintentionalLoopDoesntEverHappenAtALLManager = (() => {
     const lastGood = state.lastKnownGoodVT || 0;
     if (!nearZeroSeekAuthorized(videoTime) && lastGood > 0.9 && videoTime < 0.8) {
       // big backward jump nobody asked for
-      const userRecent = (_prNow - state.lastUserActionTime) < 1500;
+      const userRecent = userSeekIntentActive();
       const userPlay = state.userPlayIntentPresetAt > 0 && (_prNow - state.userPlayIntentPresetAt) < 2000;
       const programmatic = state.pendingSeekTarget != null;
       if (!userRecent && !userPlay && !programmatic) {
@@ -19340,7 +19340,7 @@ function bindCommonMediaEvents() {
           const _phProgrammatic = state.pendingSeekTarget != null || state.seeking || state.restarting ||
           (state.seekStabilizeUntil && now() < state.seekStabilizeUntil) ||
           (state.seekCooldownUntil && now() < state.seekCooldownUntil);
-          const _phUserSeek = userSeekIntentActive() || (now() - state.lastUserActionTime) < 4000;
+          const _phUserSeek = userSeekIntentActive();
           const _phRequestedNearZero = state.pendingSeekTarget != null && Number(state.pendingSeekTarget) < 0.8;
           const _phNearZeroAuthorized =
           nearZeroSeekAuthorized(_phVt) ||
@@ -19352,7 +19352,7 @@ function bindCommonMediaEvents() {
           // User action window: 5s (was 2s). Seeks can resolve slowly, especially
           // on slow connections. 2s caused reverts on legitimate seeks.
           if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.isPhantomRestart(_phVt) &&
-            !_phUserSeek && !_phProgrammatic && (now() - state.lastUserActionTime) > 5000) {
+            !_phUserSeek && !_phProgrammatic) {
             state._isMicroSeek = true;
           try { videoEl.currentTime = _phPrev > 0.5 ? _phPrev : videoEl.duration || _phPrev; } catch { }
           setTimeout(() => { state._isMicroSeek = false; }, 300);
@@ -19363,8 +19363,7 @@ function bindCommonMediaEvents() {
             // already catch it. Also subject to the rate limiter — if we've reverted
             // 2+ times in the phantom revert window, let the seek through.
             if (_phVt < 0.5 && _phPrev > 0.9 && state.firstPlayCommitted &&
-              !_phNearZeroAuthorized && !_phProgrammatic && !isLoopDesired() &&
-              (now() - state.lastUserActionTime) > 8000) {
+              !_phNearZeroAuthorized && !_phProgrammatic && !isLoopDesired()) {
               // Check rate limiter from isPhantomRestart — reuse the same counter
               if (!MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.isPhantomRestart(_phVt)) {
                 // Rate limiter said "enough reverts" — let this seek through
@@ -19651,7 +19650,6 @@ function bindCommonMediaEvents() {
           const prevBeforeSeeked = state.lastKnownGoodVT || 0;
           if (newTime < 0.5 && state.firstPlayCommitted && !isLoopDesired() &&
             !nearZeroSeekAuthorized(newTime) && !userSeekIntentActive() &&
-            (now() - state.lastUserActionTime) > 3500 &&
             state.endedNaturally && !state.restarting) {
             // Video ended and something tried to restart it — revert
             state._isMicroSeek = true;
@@ -21476,6 +21474,7 @@ _on(window, "unhandledrejection", (e) => {
   _handlePlayerCrash(msg, "promise", reason ? (reason.stack || "") : "");
 }, { passive: true });
 });
+
 //////////////// THE PLAYER, END ////////////////////////
  
   
