@@ -21672,18 +21672,17 @@ _on(window, "unhandledrejection", (e) => {
 
 //////////////// THE PLAYER, END ////////////////////////
  
-  
-  (function () {
+ (function () {
   'use strict';
 
-   const SEEK_STEP     = 10;   // seconds for j/l/arrow keys
+  const SEEK_STEP     = 10;   // seconds for j/l/arrow keys
   const SEEK_STEP_BIG = 30;   // seconds for J/L (shift held)
   const VOLUME_STEP   = 0.1;
   const SPEED_STEP    = 0.25;
   const SPEED_MIN     = 0.25;
   const SPEED_MAX     = 3;
 
-   const EDITABLE_SELECTOR = [
+  const EDITABLE_SELECTOR = [
     'input:not([type="button"]):not([type="checkbox"]):not([type="color"])'
       + ':not([type="file"]):not([type="hidden"]):not([type="image"])'
       + ':not([type="radio"]):not([type="range"]):not([type="reset"])'
@@ -21705,21 +21704,19 @@ _on(window, "unhandledrejection", (e) => {
   }
 
   // every possible way an element could be focused.
-  // Capture-phase keydown can fire before activeElement updates, so we cast
-  // a wide net: event target, activeElement, AND querySelector(:focus).
   function isUserTyping(e) {
     if (isEditableEl(e.target)) return true;
     if (isEditableEl(document.activeElement)) return true;
 
-     const focused = document.querySelector(':focus');
+    const focused = document.querySelector(':focus');
     if (focused && isEditableEl(focused)) return true;
 
-     if (e.target && e.target.closest && e.target.closest('form')) return true;
+    if (e.target && e.target.closest && e.target.closest('form')) return true;
 
     return false;
   }
 
-   function getPlayer() {
+  function getPlayer() {
     if (typeof videojs === 'undefined') return null;
     const el = document.querySelector('.video-js');
     if (!el) return null;
@@ -21730,7 +21727,7 @@ _on(window, "unhandledrejection", (e) => {
     }
   }
 
-   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   const round1 = (v) => Math.round(v * 10) / 10;
 
   function seekBy(player, delta) {
@@ -21769,11 +21766,16 @@ _on(window, "unhandledrejection", (e) => {
     player.muted(!player.muted());
   }
 
-   // Shift variants use uppercase key names.
+  // Shift variants use uppercase key names.
   const KEY_MAP = {
     // Play / pause
     'k':          (p) => { togglePlay(p); return true; },
-    ' ':          (p) => { togglePlay(p); return true; },
+    ' ':          (p) => { 
+      // NEW: Drop focus from any active button to prevent double-triggering
+      if (document.activeElement) document.activeElement.blur(); 
+      togglePlay(p); 
+      return true; 
+    },
 
     // Fullscreen
     'f':          (p) => { toggleFullscreen(p); return true; },
@@ -21821,7 +21823,7 @@ _on(window, "unhandledrejection", (e) => {
     if (e.ctrlKey || e.altKey || e.metaKey) return;
     if (e.isComposing || e.keyCode === 229) return;
 
-     if (isUserTyping(e)) return;
+    if (isUserTyping(e)) return;
 
     const player = getPlayer();
     if (!player) return;
@@ -21837,7 +21839,7 @@ _on(window, "unhandledrejection", (e) => {
       e.preventDefault();
       e.stopPropagation();
     }
-  }, false); 
+  }, true); // NEW: Changed from 'false' to 'true' to use the Capture Phase
 })();
 
 // https://codeberg.org/ashleyirispuppy/poke/src/branch/main/src/libpoketube/libpoketube-youtubei-objects.json
