@@ -755,6 +755,7 @@ startupPrimeStartedAt: performance.now(),
                               endedNaturally: false,
                               endedAt: 0,
                               endedLockUntil: 0,
+                              terminalAudioEndedUntil: 0,
                               restartFromEndedUntil: 0,
                               // Wakeup retry timer IDs — tracked for explicit cancellation to prevent timer leaks
                               _wakeupRetryTimers: [],
@@ -899,6 +900,11 @@ startupPrimeStartedAt: performance.now(),
   if (audio && typeof audio.play === "function") {
     _origAudioPlay = audio.play.bind(audio);
     audio.play = function () {
+      if (terminalAudioStartBlocked()) return Promise.resolve();
+      // Prevent browser from natively rewinding to 0 if we call play() at the end
+      if (Number(audio.currentTime) >= (Number(audio.duration) || 0) - 0.2 && audio.duration > 0 && !isLoopDesired()) {
+        return Promise.resolve();
+      }
       // background tab: always let through (keepalive needs this)
       if (document.visibilityState === "hidden") {
         if (hiddenBootstrapNeedsVideoLead()) {
@@ -1040,7 +1046,8 @@ startupPrimeStartedAt: performance.now(),
                               if (numV < 0.5 && state.firstPlayCommitted && !state.restarting) {
                                 const curAt = _origGet.call(this) || 0;
                                 if (curAt > 1.0) {
-                                  if (!isLoopDesired()) return;
+                                  const isUserSeek = state.seeking || state.seekBuffering || state.seekResumeInFlight || (typeof userSeekIntentActive === 'function' && userSeekIntentActive()) || state.pendingSeekTarget != null || (now() - state.lastUserActionTime) < 1200;
+                                  if (!isLoopDesired() && !isUserSeek) return;
                                 }
                               }
                               // Gate 2.5: while the tab is hidden, never rewind audio during
@@ -2232,7 +2239,7 @@ startupPrimeStartedAt: performance.now(),
       // Set volume and play
       try { audio.volume = targetVol; } catch { }
       state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 800);
-      if (audio.paused && !state.endedNaturally) {
+      if (audio.paused && !state.endedNaturally && !terminalAudioStartBlocked()) {
         try { _nPlay.call(audio).catch(() => { }); } catch { }
       }
       state.audioEverStarted = true;
@@ -6580,7 +6587,7 @@ const SmoothTabWelcomeBackManagement = {
               }
             }
             try { audio.volume = _atTargetVol; } catch { }
-            if (audio.paused && _atVRS >= HAVE_CURRENT_DATA) {
+            if (audio.paused && _atVRS >= HAVE_CURRENT_DATA && !terminalAudioStartBlocked()) {
               state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 800);
               try { _nativePlayAT.call(audio).catch(() => { }); } catch { }
             }
@@ -6650,7 +6657,7 @@ const SmoothTabWelcomeBackManagement = {
       // on playing elements fires events that cascade into audio re-kicks.
       if (_ipVPlaying && _ipAPlaying) return;
       if (_vn && _vn.paused) { try { _nIP.call(_vn).catch(() => { }); } catch { } }
-      if (coupledMode && audio && audio.paused) {
+      if (coupledMode && audio && audio.paused && !terminalAudioStartBlocked()) {
         // Set audio grace so buffer monitor doesn't immediately kill audio
         // after tab return during the transient readyState dip.
         state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 1200);
@@ -7487,6 +7494,7 @@ function markUserSeekIntent(ms = 2600) {
   state.lastUserActionTime = now();
   state.lastKnownGoodVT = 0;
   state._pauseSavedPosition = -1;
+  clearTerminalAudioEndLock();
   if (platform.chromiumOnlyBrowser) {
     state.chromiumPauseGuardUntil = 0;
     state.chromiumBgSettlingUntil = 0;
@@ -7515,6 +7523,7 @@ function restartFromEndedGuardActive() { return now() < state.restartFromEndedUn
 function prepareRestartFromEndedPlayback(force = false) {
   if (isLoopDesired()) return false;
   if (!force && !state.endedNaturally && !restartFromEndedGuardActive()) return false;
+  clearTerminalAudioEndLock();
   authorizeNearZeroSeek(3200);
   state.pendingSeekTarget = null;
   state.seekWantedPlaying = true;
@@ -7566,6 +7575,95 @@ function nearZeroSeekAuthorized(target = NaN) {
   if (now() < state.nearZeroSeekAuthorizedUntil) return true;
   const pending = Number(state.pendingSeekTarget);
   if (state.pendingSeekTarget != null && isFinite(pending) && pending < 0.8) return true;
+  return false;
+}
+function shouldHonorNearZeroAudioSync(target = NaN) {
+  const t = Number(target);
+  if (!isFinite(t) || t >= 0.8) return false;
+  if (!state.firstPlayCommitted) return true;
+  if (state.restarting || isLoopDesired() || restartFromEndedGuardActive()) return true;
+  if (nearZeroSeekAuthorized(t) || userSeekIntentActive()) return true;
+  const targetTime = Number(state.seekTargetTime);
+  const resolvedTime = Number(state.seekResolvedTime);
+  const recentZeroSeek =
+  ((isFinite(targetTime) && targetTime < 0.8) ||
+  (isFinite(resolvedTime) && resolvedTime < 0.8)) &&
+  (state.seeking || state.seekBuffering || state.seekResumeInFlight ||
+  seekRecoveryActive(3500) || seekStabilizeActive(2000));
+  return !!recentZeroSeek;
+}
+function getVideoDurationForTerminalAudio() {
+  try {
+    const d = Number(typeof video?.duration === "function" ? video.duration() : video?.duration);
+    if (isFinite(d) && d > 0) return d;
+  } catch { }
+  try {
+    const d = Number(getVideoNode()?.duration);
+    if (isFinite(d) && d > 0) return d;
+  } catch { }
+  try {
+    const d = Number(videoEl?.duration);
+    if (isFinite(d) && d > 0) return d;
+  } catch { }
+  return 0;
+}
+function getVideoTimeForTerminalAudio() {
+  try {
+    const t = Number(typeof video?.currentTime === "function" ? video.currentTime() : video?.currentTime);
+    if (isFinite(t) && t >= 0) return t;
+  } catch { }
+  try {
+    const t = Number(getVideoNode()?.currentTime);
+    if (isFinite(t) && t >= 0) return t;
+  } catch { }
+  try {
+    const t = Number(videoEl?.currentTime);
+    if (isFinite(t) && t >= 0) return t;
+  } catch { }
+  return 0;
+}
+function videoTailActiveForTerminalAudio(tailSec = 2.5) {
+  const dur = getVideoDurationForTerminalAudio();
+  if (!isFinite(dur) || dur <= 4) return false;
+  const tail = Math.max(0.25, Number(tailSec) || 0);
+  const vt = getVideoTimeForTerminalAudio();
+  const lastGood = Number(state.lastKnownGoodVT || 0);
+  return vt >= Math.max(0, dur - tail) ||
+  lastGood >= Math.max(0, dur - (tail + 0.5));
+}
+function armTerminalAudioEndLock(ms = 6500) {
+  if (!coupledMode || !audio || state.restarting || isLoopDesired()) return;
+  state.terminalAudioEndedUntil = Math.max(
+    state.terminalAudioEndedUntil || 0,
+    now() + Math.max(0, Number(ms) || 0)
+  );
+  state.seekKickAudioAllowedUntil = 0;
+  state.seekAudioMustStartUntil = 0;
+  try { cancelActiveFade(); } catch { }
+  try { audio.volume = 0; } catch { }
+  try { if (!audio.paused) audio.pause(); } catch { }
+}
+function clearTerminalAudioEndLock() {
+  state.terminalAudioEndedUntil = 0;
+}
+function terminalAudioEndLockActive() {
+  if (!coupledMode || !audio || state.restarting || isLoopDesired()) return false;
+  if (state.seeking || state.seekBuffering || userSeekIntentActive() || state.pendingSeekTarget != null) return false;
+  return now() < (state.terminalAudioEndedUntil || 0);
+}
+function shouldBlockTailResetAudioStart() {
+  if (!coupledMode || !audio || state.restarting || isLoopDesired()) return false;
+  if (!state.firstPlayCommitted || state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
+  if (!videoTailActiveForTerminalAudio(3.0)) return false;
+  const at = Number(audio.currentTime) || 0;
+  return at < 0.75;
+}
+function terminalAudioStartBlocked() {
+  if (terminalAudioEndLockActive()) return true;
+  if (shouldBlockTailResetAudioStart()) {
+    armTerminalAudioEndLock(6500);
+    return true;
+  }
   return false;
 }
 function armSeekResumeIntent(ms = 7000) {
@@ -8024,6 +8122,7 @@ function tryNativeHiddenAudioResume(targetTime = NaN) {
   try { audio.volume = targetVolFromVideo(); } catch { }
   state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, kickAt + 900);
   try { DONTMAKEITDOUBLEPLAY.reset(audio); } catch { }
+  if (terminalAudioStartBlocked()) return false;
   try {
     const p = HTMLMediaElement.prototype.play.call(audio);
     if (p && typeof p.then === "function") {
@@ -8428,6 +8527,7 @@ const MakeSureUnintentionalLoopDoesntEverHappenAtALLManager = (() => {
     state.endedNaturally = false;
     state.endedAt = 0;
     state.endedLockUntil = 0;
+    clearTerminalAudioEndLock();
     if (recentlyEnded) {
       state.restartFromEndedUntil = Math.max(state.restartFromEndedUntil, now() + 2600);
       state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 500);
@@ -9131,7 +9231,8 @@ function safeSetAudioTime(t) {
     if (isFinite(t) && t >= 0) {
       if (shouldBlockStableForegroundAudioSeek(t, 0.95)) return;
       // never seek audio backward to near 0 when it's already playing ahead
-      if (t < 0.5 && state.firstPlayCommitted && !state.restarting && !isLoopDesired()) {
+      if (t < 0.5 && state.firstPlayCommitted && !state.restarting && !isLoopDesired() &&
+        !shouldHonorNearZeroAudioSync(t)) {
         const currentAt = Number(audio.currentTime) || 0;
         if (currentAt > 0.5) return;
       }
@@ -9145,7 +9246,7 @@ function safeSetAudioTime(t) {
       if (isBackward && (currentPos - t) > 0.3 && state.firstPlayCommitted &&
         !state.restarting && !state.seeking && !isLoopDesired()) {
         const userRecent = (now() - state.lastUserActionTime) < 1500;
-      if (!userRecent) return;
+      if (!userRecent && !shouldHonorNearZeroAudioSync(t)) return;
         }
 
         // During seek kick window, use relaxed guards so audio syncs to the
@@ -9654,6 +9755,7 @@ function isAudioBufferingForCoupledPlayback(opts = {}) {
 
 function shouldBlockNewAudioStart() {
   if (!coupledMode) return false;
+  if (terminalAudioStartBlocked()) return true;
   if (state.seeking || state.seekBuffering) return true;
   if (!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) return true;
   if (shouldHoldAudioForForegroundStall({ allowRecovery: false })) return true;
@@ -9969,6 +10071,7 @@ async function execProgrammaticAudioPlay(opts = {}) {
   if (!coupledMode || !audio || typeof audio.play !== "function") return false;
   // Error overlay active — playback is dead, don't start anything
   if (_errorOverlayShown) return false;
+  if (terminalAudioStartBlocked()) return false;
   var userImmediate = !!directUserToggleActive();
   var resolvedMinGapMs = Math.max(0, Number(minGapMs != null ? minGapMs : (userImmediate ? 120 : 300)) || 0);
 
@@ -10568,6 +10671,7 @@ function audioIsCold() {
 // is responsible for the surrounding safety (volume, position).
 function forceAudioPlayNoMatterWhat() {
   if (!audio || !_origAudioPlay) return Promise.resolve(false);
+  if (terminalAudioStartBlocked()) return Promise.resolve(false);
   try {
     // Clear every latch that could re-pause audio in the next tick.
     clearAudioPauseLocks();
@@ -11145,7 +11249,7 @@ async function seamlessBgCatchUp() {
           const _nativePlay = HTMLMediaElement.prototype.play;
           const _vn = getVideoNode();
           if (_vn && _vn.paused) try { _nativePlay.call(_vn).catch(() => { }); } catch { }
-          if (coupledMode && audio && audio.paused) try { _nativePlay.call(audio).catch(() => { }); } catch { }
+          if (coupledMode && audio && audio.paused && !terminalAudioStartBlocked()) try { _nativePlay.call(audio).catch(() => { }); } catch { }
         }
       }
     } else if (!getVideoPaused() && state.intendedPlaying) {
@@ -11934,7 +12038,7 @@ async function playTogether(opts = {}) {
         setTimeout(() => {
           if (!state.intendedPlaying) return;
           if (_vn && _vn.paused) try { _nPlay.call(_vn).catch(() => { }); } catch { }
-          if (coupledMode && audio && audio.paused) try { _nPlay.call(audio).catch(() => { }); } catch { }
+          if (coupledMode && audio && audio.paused && !terminalAudioStartBlocked()) try { _nPlay.call(audio).catch(() => { }); } catch { }
         }, 200);
       } else if (isHiddenBackground() && state.intendedPlaying) {
         state.resumeOnVisible = true;
@@ -13783,7 +13887,7 @@ function startSeekBufferWait(forCoupled) {
       const _vt = Number(video.currentTime()) || 0;
       const _at = Number(audio.currentTime) || 0;
       // Never seek audio backward to near 0 when it's playing into the track
-      const _wouldRestart = _vt < 0.5 && _at > 0.5 && state.firstPlayCommitted && !state.restarting && !isLoopDesired();
+      const _wouldRestart = _vt < 0.5 && _at > 0.5 && state.firstPlayCommitted && !state.restarting && !isLoopDesired() && !shouldHonorNearZeroAudioSync(_vt);
       if (isFinite(_vt) && !_wouldRestart) {
         try { audio.currentTime = _vt; } catch { }
       }
@@ -14091,17 +14195,12 @@ async function finalizeSeekSync(currentSeekId) {
   // the track.
   if (isFinite(vtAtFinalize) && coupledMode && audio) {
     const atCurrent = Number(audio.currentTime) || 0;
-    const wouldRestart = vtAtFinalize < 0.5 && atCurrent > 1.0 && state.firstPlayCommitted && !state.restarting && !isLoopDesired();
     const _drift = Math.abs(atCurrent - vtAtFinalize);
     // bigger threshold when audio is already playing (cut is audible).
     // tighter threshold when audio is paused (no audible cut, and we
     // want it to start at the right spot).
     const _threshold = audio.paused ? 0.1 : 0.3;
-    // DIRECTIONAL: only rewind playing audio if it's actually behind video.
-    // Rewinding when audio is AHEAD of video = "plays same part twice" bug.
-    const _audioBehindVideo = atCurrent < vtAtFinalize;
-    const _shouldWrite = !wouldRestart && _drift > _threshold &&
-    (audio.paused || _audioBehindVideo);
+    const _shouldWrite = _drift > _threshold;
     // The seeked handler owns the short retry chain and updates
     // _lastSafeSeekAt every time it writes audio.currentTime. If it wrote
     // in the last 350ms, another write here races with its decoder flush
@@ -14125,10 +14224,7 @@ async function finalizeSeekSync(currentSeekId) {
         const _at = Number(audio.currentTime) || 0;
         // compare against CURRENT video time — vtAtFinalize is 60ms stale.
         const _vtNow = (() => { try { return Number(video.currentTime()) || 0; } catch { return vtAtFinalize; } })();
-        const _wouldRestart2 = _vtNow < 0.5 && _at > 1.0 && state.firstPlayCommitted && !state.restarting && !isLoopDesired();
-        // directional: only pin if audio is behind video (forward write).
-        const _recheckBehind = _at < _vtNow;
-        if (!_wouldRestart2 && Math.abs(_at - _vtNow) > 0.35 && (audio.paused || _recheckBehind)) {
+        if (Math.abs(_at - _vtNow) > 0.35) {
           state._allowAudioTimeWrite = true;
           try { audio.currentTime = _vtNow; } catch { }
           state._allowAudioTimeWrite = false;
@@ -14227,9 +14323,7 @@ async function finalizeSeekSync(currentSeekId) {
   const vt2 = Number(video.currentTime());
   if (isFinite(vt2) && coupledMode && audio) {
     const at2 = Number(audio.currentTime) || 0;
-    const _fsWouldRestart = vt2 < 0.5 && at2 > 1.0 && state.firstPlayCommitted && !state.restarting && !isLoopDesired();
-    const _fsBehind = at2 < vt2; // audio is behind video → safe to push forward
-    if (!_fsWouldRestart && Math.abs(at2 - vt2) > 0.15 && (audio.paused || _fsBehind)) {
+    if (Math.abs(at2 - vt2) > 0.15) {
       state._allowAudioTimeWrite = true;
       try { audio.currentTime = vt2; } catch { }
       state._allowAudioTimeWrite = false;
@@ -14353,13 +14447,11 @@ async function finalizeSeekSync(currentSeekId) {
           // imperceptible and seeking for it flushes the audio decode buffer,
           // causing the audible glitch/pop on seek.
           if (drift > 0.25) {
-            const _sgAt = Number(audio.currentTime) || 0;
-            const _sgWouldRestart = vt < 0.5 && _sgAt > 1.0 && state.firstPlayCommitted && !state.restarting && !isLoopDesired();
-            if (!_sgWouldRestart) {
-              const _bufAhead = bufferedAhead(audio, vt);
-              if (_bufAhead > 0.1) {
-                safeSetAudioTime(vt);
-              }
+            const _bufAhead = bufferedAhead(audio, vt);
+            if (_bufAhead > 0.1) {
+              state._allowAudioTimeWrite = true;
+              try { audio.currentTime = vt; } catch { }
+              state._allowAudioTimeWrite = false;
             }
           }
           return;
@@ -15095,22 +15187,27 @@ async function runSync() {
           // playback rate nudge system smoothly and invisibly.
           if (_syncDriftAbs > 1.5) {
             if (_syncDrift > 0) {
-              // Audio is AHEAD of video. Snap video forward to audio.
-              // NEVER seek audio backward here - the user already heard that
-              // content. Seeking audio back creates the 'plays same part twice'
-              // effect because the browser replays audio content.
-              try {
-                state._isMicroSeek = true;
-                state.bgSilentTimeSyncing = true;
-                const _driftVN = getVideoNode();
-                if (_driftVN) _driftVN.currentTime = at;
-                if (videoEl && videoEl !== _driftVN) videoEl.currentTime = at;
-                setTimeout(() => {
-                  state._isMicroSeek = false;
-                  state.bgSilentTimeSyncing = false;
-                }, 250);
-              } catch { }
-              vt = at;
+              if (shouldHonorNearZeroAudioSync(vt)) {
+                await quietSeekAudio(vt);
+                at = vt;
+              } else {
+                // Audio is AHEAD of video. Snap video forward to audio.
+                // NEVER seek audio backward here - the user already heard that
+                // content. Seeking audio back creates the 'plays same part twice'
+                // effect because the browser replays audio content.
+                try {
+                  state._isMicroSeek = true;
+                  state.bgSilentTimeSyncing = true;
+                  const _driftVN = getVideoNode();
+                  if (_driftVN) _driftVN.currentTime = at;
+                  if (videoEl && videoEl !== _driftVN) videoEl.currentTime = at;
+                  setTimeout(() => {
+                    state._isMicroSeek = false;
+                    state.bgSilentTimeSyncing = false;
+                  }, 250);
+                } catch { }
+                vt = at;
+              }
             } else {
               // Video is ahead of audio. Seek audio forward to video.
               // This is safe - audio hasn't played this content yet.
@@ -15218,7 +15315,7 @@ async function runSync() {
                 // Use max(vt, at) to never seek audio backward - if audio was
                 // ahead from background playback, keep it there.
                 const _resumeAT = Number(audio.currentTime) || 0;
-              const _resumeTarget = (isFinite(_resumeAT) && _resumeAT > vt) ? _resumeAT : vt;
+              const _resumeTarget = (!shouldHonorNearZeroAudioSync(vt) && isFinite(_resumeAT) && _resumeAT > vt) ? _resumeAT : vt;
               safeSetAudioTime(_resumeTarget);
               execProgrammaticAudioPlay({ squelchMs: 450, minGapMs: 0, force: true }).catch(() => false);
                 }
@@ -15234,7 +15331,7 @@ async function runSync() {
                 // Use max(vt, at) to never seek audio backward - if audio was
                 // ahead from background playback, keep it there.
                 const _resumeAT2 = Number(audio.currentTime) || 0;
-              const _resumeTarget2 = (isFinite(_resumeAT2) && _resumeAT2 > vt) ? _resumeAT2 : vt;
+              const _resumeTarget2 = (!shouldHonorNearZeroAudioSync(vt) && isFinite(_resumeAT2) && _resumeAT2 > vt) ? _resumeAT2 : vt;
               safeSetAudioTime(_resumeTarget2);
               execProgrammaticAudioPlay({ squelchMs: 450, minGapMs: 0, force: true }).catch(() => false);
                 } else {
@@ -15296,6 +15393,7 @@ async function runSync() {
                       // goes backward. After this resume, clear the stall position.
                       const _resumePos = (() => {
                         const sp = getStallPauseAudioPos();
+                        if (shouldHonorNearZeroAudioSync(vt)) return vt;
                         return (sp > 0 && vt < sp - 0.05) ? sp : vt;
                       })();
                     safeSetAudioTime(_resumePos);
@@ -19195,10 +19293,19 @@ function bindCommonMediaEvents() {
           if (state.seeking || state.seekBuffering) return;
           if (now() < state.suppressEndedUntil) return;
           try {
-            const dur = Number(video.duration()) || 0;
+            const dur = getVideoDurationForTerminalAudio();
+            const vt = getVideoTimeForTerminalAudio();
+            const lastGood = Number(state.lastKnownGoodVT || 0);
             const ct = Number(audio.currentTime) || 0;
-            if (dur > 1 && ct < dur - 2) return;
-            if (dur > 5 && ct < 1) return;
+            const nearVideoEnd =
+            dur <= 1 ||
+            (dur > 0 && (
+              vt >= Math.max(0, dur - 2) ||
+              lastGood >= Math.max(0, dur - 2.5)
+            ));
+            if (dur > 1 && ct < dur - 2 && !nearVideoEnd) return;
+            if (dur > 5 && ct < 1 && !nearVideoEnd) return;
+            if (nearVideoEnd) armTerminalAudioEndLock(6500);
           } catch { }
           if (isLoopDesired()) { restartLoop().catch(() => { }); return; }
           // Tell the anti-loop manager playback ended naturally
@@ -19611,7 +19718,8 @@ function bindCommonMediaEvents() {
             // Move audio position to seek target eagerly — gives the decoder
             // a head-start fetching new data, cutting audio latency by 150-400ms.
             const _seekAudioAt = Number(audio.currentTime) || 0;
-            const _seekWouldRestart = seekTime < 0.5 && _seekAudioAt > 1.0 && state.firstPlayCommitted && !state.restarting && !isLoopDesired();
+            const _allowNearZeroAudioSeek = shouldHonorNearZeroAudioSync(seekTime);
+            const _seekWouldRestart = seekTime < 0.5 && _seekAudioAt > 1.0 && state.firstPlayCommitted && !state.restarting && !isLoopDesired() && !_allowNearZeroAudioSeek;
             if (!_seekWouldRestart && isFinite(seekTime) && seekTime >= 0) {
               state._allowAudioTimeWrite = true;
               try { audio.currentTime = seekTime; } catch { }
@@ -19686,11 +19794,9 @@ function bindCommonMediaEvents() {
             state.pendingSeekTarget = null;
             if (coupledMode && audio && isFinite(newTime) && newTime >= 0) {
               const _curAudioTime = Number(audio.currentTime) || 0;
-              // Guard: never seek audio to near-0 when it's well into playback
-              const _wouldRestart = newTime < 0.5 && _curAudioTime > 1.0 && state.firstPlayCommitted && !state.restarting && !isLoopDesired();
               // Sync audio only if drift > 0.2s (smaller flushes decode buffer
               // and causes pops). Debounce: skip if we just wrote recently.
-              if (!_wouldRestart && Math.abs(_curAudioTime - newTime) > 0.2) {
+              if (Math.abs(_curAudioTime - newTime) > 0.2) {
                 const _seekedWriteNow = performance.now();
                 if ((_seekedWriteNow - _lastSafeSeekAt) > 100) {
                   _lastSafeSeekAt = _seekedWriteNow;
