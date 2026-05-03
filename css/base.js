@@ -7529,16 +7529,20 @@ function prepareRestartFromEndedPlayback(force = false) {
   state.audioWaiting = false;
   state.videoStallAudioPaused = false;
   state.audioStallVideoPaused = false;
+  try { cancelActiveFade(); } catch { }
   try { clearAudioPauseLocks(); } catch { }
   try { clearBufferHold(); } catch { }
-  state._allowZeroSeek = true;
-  try { video.currentTime(0); } catch { }
-  try { safeSetCT(videoEl, 0); } catch { }
-  try {
-    const vn = getVideoNode();
-    if (vn && vn !== videoEl) safeSetCT(vn, 0);
-  } catch { }
-  state._allowZeroSeek = false;
+  const _vtCurrent = Number(videoEl.currentTime) || 0;
+  if (!state.seeking || _vtCurrent > 0.5) {
+    state._allowZeroSeek = true;
+    try { video.currentTime(0); } catch { }
+    try { safeSetCT(videoEl, 0); } catch { }
+    try {
+      const vn = getVideoNode();
+      if (vn && vn !== videoEl) safeSetCT(vn, 0);
+    } catch { }
+    state._allowZeroSeek = false;
+  }
   if (coupledMode && audio) {
     state._allowAudioTimeWrite = true;
     try { audio.currentTime = 0; } catch { }
@@ -19412,6 +19416,7 @@ function bindCommonMediaEvents() {
           // Audio is always muted during seeking to prevent old buffer playback.
           if (coupledMode && audio) {
             state._seekPreVolume = audio.paused ? targetVolFromVideo() : audio.volume;
+            try { audio.volume = 0; } catch { } // Physically mute to stop ghost leaks
           }
           try { MakeSureAudioIsNotCuttingOrWeird.onSeekStart(); } catch { }
           state.seekWantedPlaying = state.intendedPlaying;
@@ -21471,7 +21476,6 @@ _on(window, "unhandledrejection", (e) => {
   _handlePlayerCrash(msg, "promise", reason ? (reason.stack || "") : "");
 }, { passive: true });
 });
-
 //////////////// THE PLAYER, END ////////////////////////
  
   
