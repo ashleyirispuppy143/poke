@@ -603,9 +603,12 @@ startupPrimeStartedAt: performance.now(),
                             playRequestedDuringSeek: false,
                             seekCompleted: false,
                             seekKickAudioAllowedUntil: 0,
-                            seekAudioKickAt: 0,
-                            seekAudioMustStartUntil: 0,
-                            seekResumeWantedUntil: 0,
+                              seekAudioKickAt: 0,
+                              seekAudioMustStartUntil: 0,
+                              seekAudioHoldUntilVideoReadyUntil: 0,
+                              seekAudioHoldSeekId: -1,
+                              seekAudioHoldPollTimer: null,
+                              seekResumeWantedUntil: 0,
                             seekStabilizeUntil: 0,
                             audioVolumeBeforePause: 1,
                             stateChangeCooldownUntil: 0,
@@ -900,6 +903,7 @@ startupPrimeStartedAt: performance.now(),
   if (audio && typeof audio.play === "function") {
     _origAudioPlay = audio.play.bind(audio);
     audio.play = function () {
+      if (seekAudioHoldUntilVideoReadyActive()) return Promise.resolve();
       if (terminalAudioStartBlocked()) return Promise.resolve();
       // Prevent browser from natively rewinding to 0 if we call play() at the end
       if (Number(audio.currentTime) >= (Number(audio.duration) || 0) - 0.2 && audio.duration > 0 && !isLoopDesired()) {
@@ -7666,6 +7670,78 @@ function terminalAudioStartBlocked() {
   }
   return false;
 }
+function clearSeekAudioHoldUntilVideoReady() {
+  state.seekAudioHoldUntilVideoReadyUntil = 0;
+  state.seekAudioHoldSeekId = -1;
+  if (state.seekAudioHoldPollTimer) {
+    clearTimeout(state.seekAudioHoldPollTimer);
+    state.seekAudioHoldPollTimer = null;
+  }
+}
+function armSeekAudioHoldUntilVideoReady(seekId = state.seekId, ms = 7000) {
+  if (!coupledMode || !audio) return;
+  state.seekAudioHoldSeekId = Number(seekId);
+  state.seekAudioHoldUntilVideoReadyUntil = Math.max(
+    state.seekAudioHoldUntilVideoReadyUntil || 0,
+    now() + Math.max(0, Number(ms) || 0)
+  );
+  state.seekKickAudioAllowedUntil = 0;
+  state.seekAudioMustStartUntil = 0;
+  clearSeekAudioReadyKick();
+  clearPostSeekAudioWatchdog();
+  try {
+    cancelActiveFade();
+    audio.volume = 0;
+    if (!audio.paused) audio.pause();
+  } catch { }
+  const pollSeekId = state.seekAudioHoldSeekId;
+  const poll = () => {
+    state.seekAudioHoldPollTimer = null;
+    if (!seekAudioHoldUntilVideoReadyActive()) return;
+    if (releaseSeekAudioAfterVideoReady("seek-hold-poll")) return;
+    if (pollSeekId !== state.seekAudioHoldSeekId) return;
+    if (now() >= (state.seekAudioHoldUntilVideoReadyUntil || 0)) return;
+    state.seekAudioHoldPollTimer = setTimeout(poll, 80);
+  };
+  if (state.seekAudioHoldPollTimer) clearTimeout(state.seekAudioHoldPollTimer);
+  state.seekAudioHoldPollTimer = setTimeout(poll, 40);
+}
+function seekAudioHoldUntilVideoReadyActive() {
+  if (!coupledMode || !audio) return false;
+  if (!state.intendedPlaying || state.endedNaturally || state.restarting) return false;
+  if (state.seekAudioHoldSeekId !== state.seekId) return false;
+  if (!state.seekAudioHoldUntilVideoReadyUntil) return false;
+  try {
+    if (!audio.paused) {
+      audio.volume = 0;
+      audio.pause();
+    }
+  } catch { }
+  return true;
+}
+function releaseSeekAudioAfterVideoReady(reason = "") {
+  if (!seekAudioHoldUntilVideoReadyActive()) return false;
+  const vn = getVideoNode();
+  if (!vn || vn.paused) return false;
+  const vt = (() => { try { return Number(video.currentTime()) || Number(vn.currentTime) || 0; } catch { return 0; } })();
+  if (!videoReadyForAudioResume(vt)) return false;
+  clearSeekAudioHoldUntilVideoReady();
+  clearAudioPauseLocks();
+  state.audioPauseUntil = 0;
+  state.audioEventsSquelchedUntil = 0;
+  state.audioPlayUntil = 0;
+  state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 800);
+  try {
+    state._allowAudioTimeWrite = true;
+    if (isFinite(vt) && vt >= 0) audio.currentTime = vt;
+    state._allowAudioTimeWrite = false;
+    audio.volume = targetVolFromVideo();
+  } catch {
+    state._allowAudioTimeWrite = false;
+  }
+  execProgrammaticAudioPlay({ squelchMs: 120, force: true, minGapMs: 0 }).catch(() => { });
+  return true;
+}
 function armSeekResumeIntent(ms = 7000) {
   const until = now() + Math.max(0, Number(ms) || 0);
   state.seekResumeWantedUntil = Math.max(state.seekResumeWantedUntil, until);
@@ -8122,6 +8198,7 @@ function tryNativeHiddenAudioResume(targetTime = NaN) {
   try { audio.volume = targetVolFromVideo(); } catch { }
   state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, kickAt + 900);
   try { DONTMAKEITDOUBLEPLAY.reset(audio); } catch { }
+  if (seekAudioHoldUntilVideoReadyActive()) return false;
   if (terminalAudioStartBlocked()) return false;
   try {
     const p = HTMLMediaElement.prototype.play.call(audio);
@@ -9755,6 +9832,7 @@ function isAudioBufferingForCoupledPlayback(opts = {}) {
 
 function shouldBlockNewAudioStart() {
   if (!coupledMode) return false;
+  if (seekAudioHoldUntilVideoReadyActive()) return true;
   if (terminalAudioStartBlocked()) return true;
   if (state.seeking || state.seekBuffering) return true;
   if (!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) return true;
@@ -10671,6 +10749,7 @@ function audioIsCold() {
 // is responsible for the surrounding safety (volume, position).
 function forceAudioPlayNoMatterWhat() {
   if (!audio || !_origAudioPlay) return Promise.resolve(false);
+  if (seekAudioHoldUntilVideoReadyActive()) return Promise.resolve(false);
   if (terminalAudioStartBlocked()) return Promise.resolve(false);
   try {
     // Clear every latch that could re-pause audio in the next tick.
@@ -18235,6 +18314,7 @@ function bindCommonMediaEvents() {
         state.videoStallSince = 0;
         clearForegroundBufferAudioHold();
       }
+      releaseSeekAudioAfterVideoReady("video-playing");
       // EARLY AUDIO STARTUP: If video autoplayed before our startup machinery
       // ran (Video.js autoplay fires before window.load), kick audio immediately
       // on the first "playing" event instead of waiting for window.load.
@@ -19821,8 +19901,7 @@ function bindCommonMediaEvents() {
                 state.seekAudioKickAt = _kickArmedAt;
                 // 6500ms kick window: covers late audio plays + the 2.5s
                 // deferred "waiting" kill so it can't cut audio coming back.
-                state.seekKickAudioAllowedUntil = _kickArmedAt + 6500;
-                state.seekAudioMustStartUntil = _kickArmedAt + 6500;
+                armSeekAudioHoldUntilVideoReady(_kickSeekId, 8000);
                 state.isProgrammaticAudioPause = false;
                 state.audioEventsSquelchedUntil = 0;
                 state.audioPauseUntil = 0;
@@ -19836,15 +19915,15 @@ function bindCommonMediaEvents() {
                 clearForegroundBufferAudioHold();
                 // Long grace so buffer monitor doesn't kill audio mid-settle.
                 state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, _kickArmedAt + 1200);
-                armSeekAudioReadyKick(_kickSeekId, 2500);
+                // Audio release is driven by video "playing", not by audio-ready timers.
                 // 30s persistent watchdog: progressively drops gates and
                 // ultimately calls the un-overridden audio.play() — root
                 // fix for "video plays silently after seek".
-                armPostSeekAudioWatchdog(_kickSeekId);
+                // Keep audio held until video catches on.
                 // 1.5s lightweight watchdog: force-plays audio if it's still
                 // paused after the kick chain exhausts. No spinner raise —
                 // atomic invariant owns vjs-waiting for non-buffer-wait seeks.
-                if (coupledMode && audio) {
+                if (false && coupledMode && audio) {
                   const _forceSeekId = _kickSeekId;
                   setTimeout(() => {
                     if (_forceSeekId !== state.seekId) return;
@@ -19908,8 +19987,8 @@ function bindCommonMediaEvents() {
                     state.seekCompleted = true;
                   }
                 }
-                // Strict simultaneous start: video+audio play() in same tick.
-                MakeAudioVideoSimultaneousStartAPI({ throughSeek: true, force: true, squelchMs: 80 });
+                // Start video only. Audio stays held until video fires "playing".
+                if (tryAcquireVideoPlayLock()) execProgrammaticVideoPlay({ force: true, minGapMs: 0 });
                 const _kickAudio = (attemptId) => {
                   // Order: cheap flag checks → DOM/decoder reads only when
                   // we'd actually kick. Saves CPU when first kick succeeded.
@@ -20076,10 +20155,9 @@ function bindCommonMediaEvents() {
             if (shouldResumeAfterSeek() && !state.endedNaturally && getVideoPaused()) {
               state.intendedPlaying = true;
               state.bufferHoldIntendedPlaying = true;
-              // Strict simultaneous-start; fall back to plain video kick.
-              if (!MakeAudioVideoSimultaneousStartAPI({ throughSeek: true, force: true, squelchMs: 80 })) {
-                if (tryAcquireVideoPlayLock()) execProgrammaticVideoPlay();
-              }
+              // After seeking, only restart video here; audio is released by
+              // video "playing" once frames are actually moving.
+              if (tryAcquireVideoPlayLock()) execProgrammaticVideoPlay({ force: true, minGapMs: 0 });
             }
             // Medium-mode seek-lag fix: reset MQM kick burst so next runSync
             // auto-resume fires without 400ms tryKick debounce.
