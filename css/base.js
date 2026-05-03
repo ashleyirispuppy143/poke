@@ -25,7 +25,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 //////////////// THE PLAYER, START ////////////////////////
- try {
+try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -1638,9 +1638,10 @@ startupPrimeStartedAt: performance.now(),
     try {
       const _guardEl = e.target;
       if (_guardEl) {
-        const _gCT = Number(_guardEl.currentTime) || 0;
-        const _gDur = Number(_guardEl.duration) || 0;
-        if (_gDur > 0.5 && _gCT >= _gDur - 0.5) return; // at the end — don't fight
+        // Only bail if the element truly ended — checking .ended is definitive.
+        // The old dur - 0.5 threshold stopped counter-play too early, causing
+        // the video to get stuck 0.5s before the end and never fire 'ended'.
+        if (_guardEl.ended) return;
       }
     } catch { }
     // In bg, don't fight auto-pause (keepalive handles it w/ backoff).
@@ -6166,9 +6167,9 @@ function _audioEventPauseSuppressor(e) {
   try {
     const _aVN = getVideoNode();
     if (_aVN) {
-      const _aCT = Number(_aVN.currentTime) || 0;
-      const _aDur = Number(_aVN.duration) || 0;
-      if (_aDur > 0.5 && _aCT >= _aDur - 0.5) return;
+      // Only bail if video truly ended — the old dur - 0.5 threshold
+      // stopped counter-play too early, preventing natural end.
+      if (_aVN.ended) return;
       // Don't swallow audio pause when video lacks data. The pause was
       // likely intentional (stall detection paused audio because video
       // is buffering). Swallowing it lets the rAF play-lock restart audio.
@@ -8508,6 +8509,12 @@ const MakeSureUnintentionalLoopDoesntEverHappenAtALLManager = (() => {
       if (isLoopDesired()) { _loopWdLastVt = 0; _loopWdLastVtAt = 0; return; }
       const vn = getVideoNode();
       if (!vn) return;
+      // If endedNaturally is already set, the ended handler already ran — don't
+      // redundantly flag or kill; the post-ended watchdog handles cleanup.
+      if (state.endedNaturally) { _loopWdLastVt = 0; _loopWdLastVtAt = 0; return; }
+      // If the native element says it ended, this is the natural end-of-video
+      // state, not a phantom loop. Let the 'ended' event handler deal with it.
+      if (vn.ended) { _loopWdLastVt = 0; _loopWdLastVtAt = 0; return; }
       const vt = Number(vn.currentTime) || 0;
       const dur = Number(vn.duration) || 0;
       if (!isFinite(dur) || dur < 5) return;
@@ -8519,8 +8526,11 @@ const MakeSureUnintentionalLoopDoesntEverHappenAtALLManager = (() => {
       const programmatic = state.pendingSeekTarget != null ||
       userSeekIntentActive() ||
       state.restartFromEndedUntil > t;
+      // Also skip if video is paused — during the natural end sequence the browser
+      // fires pause before ended, so currentTime might look like a jump if the
+      // previous sample was near-end. Don't false-positive on the pause→ended gap.
       if (wasNearEnd && isNearStart && recentSample &&
-        !userRecent && !programmatic && state.firstPlayCommitted) {
+        !userRecent && !programmatic && state.firstPlayCommitted && !vn.paused) {
         // Unauthorized loop — kill it.
         state.endedNaturally = true;
       state.endedAt = t;
@@ -17555,9 +17565,8 @@ function bindCommonMediaEvents() {
           !mediaSessionForcedPauseActive()) {
           try {
             const _txVN = getVideoNode();
-            const _txCt = Number(_txVN?.currentTime || 0);
-            const _txDur = Number(_txVN?.duration || 0);
-            if (_txDur > 0.5 && _txCt >= _txDur - 0.4) return;
+            // Only bail if video truly ended — not just near the end
+            if (_txVN?.ended) return;
           } catch { }
           state.intendedPlaying = true;
         state.bufferHoldIntendedPlaying = true;
@@ -17582,10 +17591,10 @@ function bindCommonMediaEvents() {
             try {
               const _pauseVN = getVideoNode();
               if (_pauseVN) {
-                const _pCT = Number(_pauseVN.currentTime) || 0;
-                const _pDur = Number(_pauseVN.duration) || 0;
-                if (_pDur > 0.5 && _pCT >= _pDur - 0.5) {
-                  // Video is at its end — this is the natural end pause, don't fight it
+                // Only bail if video truly ended — the old dur - 0.5 threshold
+                // stopped counter-play too early, preventing the ended event.
+                if (_pauseVN.ended) {
+                  // Video has truly ended — this is the natural end pause, don't fight it
                   // The ended event will fire next and handle cleanup
                   return;
                 }
@@ -17651,11 +17660,8 @@ function bindCommonMediaEvents() {
                 // End-of-video guard — don't relaunch at the tail.
                 try {
                   const _vn0 = getVideoNode();
-                  if (_vn0) {
-                    const _ct = Number(_vn0.currentTime) || 0;
-                    const _dur = Number(_vn0.duration) || 0;
-                    if (_dur > 0.5 && _ct >= _dur - 0.5) return;
-                  }
+                  // Only bail if video truly ended — not just near the end
+                  if (_vn0?.ended) return;
                 } catch { }
                 const _debounce = BringBackToTabManager.isLocked() || inBgReturnGrace() ? 80 : 350;
                 if ((_now - (state._medCounterPlayLastAt || 0)) < _debounce) return;
@@ -17764,11 +17770,10 @@ function bindCommonMediaEvents() {
                 // ended video auto-seeks to 0 → phantom loop.
                 try {
                   const _cpVN = getVideoNode();
-                  if (_cpVN) {
-                    const _cpCT = Number(_cpVN.currentTime) || 0;
-                    const _cpDur = Number(_cpVN.duration) || 0;
-                    if (_cpDur > 0.5 && _cpCT >= _cpDur - 0.5) return; // at the end — don't fight
-                  }
+                  // Only bail if video truly ended — the old dur - 0.5 threshold
+                  // caused the video to stop 0.5s before the end because counter-play
+                  // gave up, the pause stuck, and the 'ended' event never fired.
+                  if (_cpVN?.ended) return;
                 } catch { }
                 // DEBOUNCE: collapse rapid pause events into at most one counter-play.
                 // Context-aware: during BBTM lock (tab return), use 60ms debounce so
@@ -19202,6 +19207,15 @@ function bindCommonMediaEvents() {
           state.playSessionId++;
           clearSyncLoop();
           updateMediaSessionPlaybackState();
+          // IMMEDIATE audio kill — must happen BEFORE pauseHard().
+          // pauseHard() uses fadeAndPauseAudio which takes time. During
+          // that fade, if the browser resets audio.currentTime to 0, a
+          // few seconds of audio from the start leak out audibly.
+          if (coupledMode && audio) {
+            cancelActiveFade();
+            try { audio.volume = 0; } catch { }
+            try { if (!audio.paused) audio.pause(); } catch { }
+          }
           pauseHard();
         }, { passive: true });
         _on(audio, "canplay", onReadyish, { passive: true });
@@ -19322,7 +19336,7 @@ function bindCommonMediaEvents() {
           const _phProgrammatic = state.pendingSeekTarget != null || state.seeking || state.restarting ||
           (state.seekStabilizeUntil && now() < state.seekStabilizeUntil) ||
           (state.seekCooldownUntil && now() < state.seekCooldownUntil);
-          const _phUserSeek = userSeekIntentActive() || (now() - state.lastUserActionTime) < 1500;
+          const _phUserSeek = userSeekIntentActive() || (now() - state.lastUserActionTime) < 4000;
           const _phRequestedNearZero = state.pendingSeekTarget != null && Number(state.pendingSeekTarget) < 0.8;
           const _phNearZeroAuthorized =
           nearZeroSeekAuthorized(_phVt) ||
@@ -19346,7 +19360,7 @@ function bindCommonMediaEvents() {
             // 2+ times in the phantom revert window, let the seek through.
             if (_phVt < 0.5 && _phPrev > 0.9 && state.firstPlayCommitted &&
               !_phNearZeroAuthorized && !_phProgrammatic && !isLoopDesired() &&
-              (now() - state.lastUserActionTime) > 5000) {
+              (now() - state.lastUserActionTime) > 8000) {
               // Check rate limiter from isPhantomRestart — reuse the same counter
               if (!MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.isPhantomRestart(_phVt)) {
                 // Rate limiter said "enough reverts" — let this seek through
@@ -19434,7 +19448,7 @@ function bindCommonMediaEvents() {
           // Phantom-detection inputs.
           const _stPendingNum = state.pendingSeekTarget != null ? Number(state.pendingSeekTarget) : NaN;
           const _stPendingValid = isFinite(_stPendingNum) && _stPendingNum >= 0;
-          const _stUserActionRecent = (now() - state.lastUserActionTime) < 1500;
+          const _stUserActionRecent = (now() - state.lastUserActionTime) < 4000;
           const _stUserSeekIntent = (typeof userSeekIntentActive === "function") && userSeekIntentActive();
           const _stRestartLike = state.restarting || state.endedNaturally || (typeof isLoopDesired === "function" && isLoopDesired());
 
@@ -19458,7 +19472,7 @@ function bindCommonMediaEvents() {
             } else if (_stRawCandidates.length === 0) {
               // No finite reading — refuse the seek (old code jumped to 0).
               seekTime = previousGoodVT;
-              _stAbortPhantom = !_stRestartLike && previousGoodVT > 0.5;
+              _stAbortPhantom = !_stRestartLike && !_stUserSeekIntent && !_stUserActionRecent && previousGoodVT > 0.5;
             } else {
               // All sources read 0/near-0: either intentional zero
               // (recent user action / authorized) or phantom buffer flush.
@@ -19468,8 +19482,14 @@ function bindCommonMediaEvents() {
                 seekTime = 0;
               } else {
                 // Phantom. Don't honor — abort the whole seek.
+              // But NEVER abort if the user just interacted — progress bar
+              // drags cause brief all-zero readings during the seeking event.
+              if (!_stUserSeekIntent && !_stUserActionRecent) {
                 seekTime = previousGoodVT;
                 _stAbortPhantom = true;
+              } else {
+                seekTime = 0; // user wants 0, trust them
+              }
               }
             }
           }
@@ -19972,23 +19992,25 @@ function bindCommonMediaEvents() {
           if (isLoopDesired()) { restartLoop().catch(() => { }); return; }
           // Tell the anti-loop manager playback ended naturally
           MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.onEnded();
-          // MQM LOOP FIX: in medium quality (non-coupled) MQM was never
-          // informed that playback ended naturally, so its 2-min pause-intent
-          // window would lapse and auto-resume guards would re-allow playback,
-          // causing the video to silently loop back to 0 a few minutes later.
-          // Treat natural end as an implicit user-pause so shouldBlockAutoResume
-          // returns true. The user clicking play clears this via markUserPlayed.
           try { MediumQualityManager.markUserPaused(); } catch { }
-          // Kill autoplay so Video.js/browser doesn't auto-restart
           stripAutoplayAfterFirstPlay();
           state.tabReturnImmuneUntil = 0;
           state.resumeOnVisible = false;
           state.bgHiddenWasPlaying = false;
           disengagePauseIntercept();
           state.playSessionId++;
-          // Kill sync loop — nothing should be syncing after ended
           clearSyncLoop();
           updateMediaSessionPlaybackState();
+          // IMMEDIATE audio kill — must happen BEFORE pauseHard().
+          // pauseHard() uses fadeAndPauseAudio which takes time. During
+          // that fade, if the browser resets audio.currentTime to 0, a
+          // few seconds of audio from the start leak out audibly. Kill
+          // volume and pause synchronously so there’s zero leakage window.
+          if (coupledMode && audio) {
+            cancelActiveFade();
+            try { audio.volume = 0; } catch { }
+            try { if (!audio.paused) audio.pause(); } catch { }
+          }
           pauseHard();
           // Patch native element play() to block phantom restarts at the lowest level
           const _endedGen = state.playSessionId;
@@ -20027,13 +20049,13 @@ function bindCommonMediaEvents() {
                 const vt = Number(vn.currentTime) || 0;
                 if (vt < 3.0) {
                   try { vn.pause(); } catch { }
-                  if (coupledMode && audio && !audio.paused) { try { audio.pause(); } catch { } }
+                  if (coupledMode && audio && !audio.paused) { try { audio.volume = 0; audio.pause(); } catch { } }
                 }
               }
               if (coupledMode && audio && !audio.paused && !state.restarting && !isLoopDesired()) {
                 const at2 = Number(audio.currentTime) || 0;
                 if (at2 < 3.0) {
-                  try { audio.pause(); } catch { }
+                  try { audio.volume = 0; audio.pause(); } catch { }
                 }
               }
               const watchAge = state.endedAt > 0 ? (now() - state.endedAt) : 0;
@@ -21320,6 +21342,15 @@ window.__test_ended_lock = () => {
 };
 window.__test_clear_ended = () => {
   MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.onUserPlay();
+};
+window.__test_audio_loop_indictaor = (forceShow) => {
+  const indicator = getLoopedIndicatorEl();
+  if (!indicator) return;
+  if (forceShow === true || (forceShow === undefined && indicator.dataset.playerAudioWarning !== "1")) {
+    showAudioNotPlayingWarning();
+  } else {
+    hideAudioNotPlayingWarning();
+  }
 };
 
 // =========================================================================
