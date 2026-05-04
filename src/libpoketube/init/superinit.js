@@ -17,14 +17,14 @@ const MODULE_SETTINGS = [
 ];
 
 const MODULES_TO_LOAD = [
-  { id: "video", name: "video pages", path: "../init/pages-video.js" },
-  { id: "redir", name: "redirects/old pages", path: "../init/pages-redir.js" },
-  { id: "channel", name: "Download and channel pages", path: "../init/pages-channel-and-download.js" },
-  { id: "api", name: "api pages", path: "../init/pages-api.js" },
-  { id: "telemetry", name: "telemetry [api/stats]", path: "../init/telemetry.js" },
-  { id: "static", name: "static pages", path: "../init/pages-static.js" },
-  { id: "account", name: "account pages", path: "../init/pages-account.js" },
-  { id: "main", name: "main pages", path: "../init/pages-404-and-main.js" },
+  { id: "video", name: "video pages", path: "../init/pages-video.js", desc: "where the magic moving pictures live" },
+  { id: "redir", name: "redirects/old pages", path: "../init/pages-redir.js", desc: "the professional procrastinator that sends u elsewhere" },
+  { id: "channel", name: "Download and channel pages", path: "../init/pages-channel-and-download.js", desc: "da place where people dump their cool stuff" },
+  { id: "api", name: "api pages", path: "../init/pages-api.js", desc: "the secret robot handshake system" },
+  { id: "telemetry", name: "telemetry [api/stats]", path: "../init/telemetry.js", desc: "counting your beans while u watch stuff" },
+  { id: "static", name: "static pages", path: "../init/pages-static.js", desc: "boring pages that refuse to move an inch" },
+  { id: "account", name: "account pages", path: "../init/pages-account.js", desc: "your digital identity crisis" },
+  { id: "main", name: "main pages", path: "../init/pages-404-and-main.js", desc: "the glue holding this whole mess together" },
 ];
 
 function blockIEMiddleware(req, res, next) {
@@ -78,16 +78,27 @@ function init(app, config, rendertemplate) {
     }
 
     try {
-      // Dynamically load page modules
       for (const moduleInfo of MODULES_TO_LOAD) {
-        // Find the setting for this module
         const setting = MODULE_SETTINGS.find(s => s.moduleId === moduleInfo.id);
-        
-        // If the setting is missing, we assume true. Otherwise, check the 'enabled' flag.
         const isEnabled = setting ? setting.enabled : true;
 
+        const mandatory = ["main", "video", "channel", "static"];
+        const suggested = ["redir", "api"];
+
+        //  Refuse to boot if mandatory modules are disabled
+        if (!isEnabled && mandatory.includes(moduleInfo.id)) {
+          initlog(`[FATAL ERROR] You tried to disable ${moduleInfo.id} but Poke literally cannot exist without it.`);
+          initlog(`[FATAL ERROR] Refusing to boot. Please enable ${moduleInfo.id} in your config and try again.`);
+          process.exit(1); // Stop everything
+        }
+
+        // Log warning if recommended modules are disabled
+        if (!isEnabled && suggested.includes(moduleInfo.id)) {
+          initlog(`[WARNING] You disabled ${moduleInfo.id}. Users are going to have a very bad time and it is definitely not suggested.`);
+        }
+
         if (isEnabled) {
-          initlog(`Loading ${moduleInfo.name}`);
+          initlog(`Loading [${moduleInfo.id}] (enabled: ${isEnabled}) - ${moduleInfo.desc}`);
           require(moduleInfo.path)(app, config, rendertemplate);
           initlog(`Loaded ${moduleInfo.name}`);
         } else {
