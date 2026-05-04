@@ -96,6 +96,13 @@
     return allowed.slice(0, limit);
   }
 
+  function formatViews(num) {
+    if (num === null || num === undefined) return "0";
+    if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+    return num.toString();
+  }
+
   var blockedAuthors =[
       "TheBurntPeanut", "KreekCraft", "Asmongold TV  ", "Tyler & Snowi"
   ];
@@ -135,16 +142,16 @@ document.documentElement.className = document.documentElement.className.replace(
 @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
 
 :root {
-  --yt-bg: #0f0f0f;
-  --yt-text-primary: #f1f1f1;
-  --yt-text-secondary: #aaaaaa;
-  --yt-accent: #3ea6ff;
-  --yt-searchbox-bg: #121212;
-  --yt-searchbox-border: #303030;
-  --yt-searchbtn-bg: #222222;
-  --yt-chip-bg: #272727;
-  --yt-chip-hover: #3f3f3f;
-  --yt-border: #272727;
+  --ptc-bg: #0f0f0f;
+  --ptc-text-primary: #f1f1f1;
+  --ptc-text-secondary: #aaaaaa;
+  --ptc-accent: #3ea6ff;
+  --ptc-searchbox-bg: #121212;
+  --ptc-searchbox-border: #303030;
+  --ptc-searchbtn-bg: #222222;
+  --ptc-chip-bg: #272727;
+  --ptc-chip-hover: #3f3f3f;
+  --ptc-border: #272727;
   
   --container: min(1280px, 94vw);
 }
@@ -154,14 +161,14 @@ document.documentElement.className = document.documentElement.className.replace(
 }
 
 html {
-  background: var(--yt-bg);
+  background: var(--ptc-bg);
 }
 
 body {
   margin: 0;
   min-height: 100vh;
-  background: var(--yt-bg);
-  color: var(--yt-text-primary);
+  background: var(--ptc-bg);
+  color: var(--ptc-text-primary);
   font-family: "Roboto", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
@@ -201,7 +208,7 @@ button, input {
 }
 
 .logo {
-  width: 180px; /* Sized down slightly to match typical YT logo prominence */
+  width: 180px;
   max-width: 74vw;
 }
 
@@ -222,11 +229,11 @@ button, input {
   flex: 1;
   height: 100%;
   padding: 0 16px 0 24px;
-  background: var(--yt-searchbox-bg);
-  border: 1px solid var(--yt-searchbox-border);
+  background: var(--ptc-searchbox-bg);
+  border: 1px solid var(--ptc-searchbox-border);
   border-right: none;
   border-radius: 40px 0 0 40px;
-  color: var(--yt-text-primary);
+  color: var(--ptc-text-primary);
   outline: none;
   font-size: 16px;
   box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
@@ -239,16 +246,16 @@ button, input {
 
 .search-bar:focus {
   border: 1px solid #1c62b9;
-  margin-left: -1px; /* Prevent layout shift from border */
+  margin-left: -1px;
 }
 
 .search-btn {
   height: 100%;
   width: 64px;
-  background: var(--yt-searchbtn-bg);
-  border: 1px solid var(--yt-searchbox-border);
+  background: var(--ptc-searchbtn-bg);
+  border: 1px solid var(--ptc-searchbox-border);
   border-radius: 0 40px 40px 0;
-  color: var(--yt-text-primary);
+  color: var(--ptc-text-primary);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -262,7 +269,7 @@ button, input {
 
 .search-btn i {
   font-size: 16px;
-  color: var(--yt-text-primary);
+  color: var(--ptc-text-primary);
   opacity: 0.8;
 }
 
@@ -273,7 +280,7 @@ button, input {
   left: 0;
   right: 0;
   background: #323232;
-  color: var(--yt-text-primary);
+  color: var(--ptc-text-primary);
   padding: 12px 16px;
   border-radius: 8px;
   font-size: 14px;
@@ -293,7 +300,7 @@ button, input {
 }
 
 .bang-indicator a {
-  color: var(--yt-accent);
+  color: var(--ptc-accent);
   text-decoration: none;
 }
 
@@ -316,8 +323,8 @@ button, input {
 }
 
 .quick-chip {
-  background: var(--yt-chip-bg);
-  color: var(--yt-text-primary);
+  background: var(--ptc-chip-bg);
+  color: var(--ptc-text-primary);
   border-radius: 8px;
   padding: 0 12px;
   height: 32px;
@@ -333,7 +340,7 @@ button, input {
 }
 
 .quick-chip:hover {
-  background: var(--yt-chip-hover);
+  background: var(--ptc-chip-hover);
 }
 
 .quick-chip i {
@@ -344,12 +351,12 @@ button, input {
 .search-note {
   margin-top: 24px;
   text-align: center;
-  color: var(--yt-text-secondary);
+  color: var(--ptc-text-secondary);
   font-size: 13px;
 }
 
 .search-note a {
-  color: var(--yt-accent);
+  color: var(--ptc-accent);
   text-decoration: none;
 }
 
@@ -375,7 +382,7 @@ button, input {
 
 .section-title {
   margin: 0;
-  color: var(--yt-text-primary);
+  color: var(--ptc-text-primary);
   font-size: 20px;
   font-weight: 700;
   display: flex;
@@ -383,13 +390,9 @@ button, input {
   gap: 10px;
 }
 
-.section-title i {
-  color: #ff0000; /* YouTube Red touch for the icon */
-}
-
 .discover-toggle {
   background: transparent;
-  color: var(--yt-accent);
+  color: var(--ptc-accent);
   border: none;
   font-size: 14px;
   font-weight: 500;
@@ -408,40 +411,44 @@ button, input {
 .video-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 40px 16px; /* YT standard gap (tall rows, tighter columns) */
+  gap: 40px 16px; 
 }
 
-/* Video Cards */
+/* Video Cards (Modern YouTube Style) */
 .video {
   display: flex;
   flex-direction: column;
   position: relative;
   text-decoration: none;
-  cursor: pointer;
 }
 
 .video-cover-link {
   position: absolute;
   inset: 0;
-  z-index: 2;
+  z-index: 1; /* Allows links inside the card to be clickable */
 }
 
-.thumbnail {
+.thumbnail-container {
   position: relative;
   width: 100%;
   aspect-ratio: 16/9;
-  background-color: var(--yt-chip-bg);
+  background-color: var(--ptc-chip-bg);
   background-position: center;
   background-size: cover;
   background-repeat: no-repeat;
   border-radius: 12px;
   overflow: hidden;
+  transition: border-radius 0.2s;
+}
+
+.video:hover .thumbnail-container {
+  border-radius: 0;
 }
 
 .video-length {
   position: absolute;
-  right: 4px;
-  bottom: 4px;
+  right: 6px;
+  bottom: 6px;
   z-index: 1;
   padding: 3px 4px;
   border-radius: 4px;
@@ -452,14 +459,35 @@ button, input {
   line-height: 1;
 }
 
+.details {
+  display: flex;
+  gap: 12px;
+  padding-top: 12px;
+  align-items: flex-start;
+}
+
+.avatar-link {
+  flex-shrink: 0;
+  position: relative;
+  z-index: 3;
+}
+
+.author-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  background-color: var(--ptc-chip-bg);
+}
+
 .info {
   display: flex;
   flex-direction: column;
-  padding-top: 12px;
+  min-width: 0;
 }
 
 .title {
-  color: var(--yt-text-primary);
+  color: var(--ptc-text-primary);
   font-size: 16px;
   font-weight: 500;
   line-height: 1.4;
@@ -469,19 +497,36 @@ button, input {
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.byline {
   position: relative;
   z-index: 3;
-  color: var(--yt-text-secondary);
+}
+
+.metadata {
+  display: flex;
+  flex-direction: column;
+  color: var(--ptc-text-secondary);
   font-size: 14px;
   font-weight: 400;
   line-height: 1.4;
 }
 
+.byline {
+  color: var(--ptc-text-secondary);
+  text-decoration: none;
+  position: relative;
+  z-index: 3;
+  transition: color 0.1s;
+}
+
 .byline:hover {
-  color: var(--yt-text-primary);
+  color: var(--ptc-text-primary);
+}
+
+.stats {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  column-gap: 4px;
 }
 
 /* Responsive Breakpoints */
@@ -501,8 +546,8 @@ button, input {
     grid-template-columns: 1fr; 
     gap: 24px;
   }
-  .thumbnail { border-radius: 0; } /* Edge-to-edge on mobile like YT */
-  .info { padding: 12px 12px 0; }
+  .thumbnail-container { border-radius: 0; } 
+  .details { padding: 12px 12px 0; }
   
   .search-bar { font-size: 14px; padding-left: 16px; }
   .search-btn { width: 48px; }
@@ -517,7 +562,6 @@ button, input {
 <div class="page">
   <div class="hero">
     <div class="logo-wrap">
-      <!-- You can keep your logo here -->
       <img src="/static/logo-poke.svg" class="logo" alt="Poke Logo">
     </div>
  
@@ -530,7 +574,7 @@ button, input {
           </button>
           
           <div id="bang-indicator" class="bang-indicator hidden">
-            <i class="fa-solid fa-bolt" style="color: var(--yt-accent); margin-right: 6px;"></i>
+            <i class="fa-solid fa-bolt" style="color: var(--ptc-accent); margin-right: 6px;"></i>
             You are using bangs! <a href="https://duckduckgo.com/bangs" target="_blank" rel="noopener noreferrer">Learn more here.</a>
           </div>
         </div>
@@ -540,10 +584,6 @@ button, input {
         <div class="quick-links" aria-label="Poke tools">
           <a class="quick-chip" href="/translate" title="Translate">
             <i class="fa-solid fa-language" aria-hidden="true"></i> Translate
-          </a>
-
-          <a class="quick-chip" href="/weather" title="Weather">
-            <i class="fa-solid fa-cloud-sun" aria-hidden="true"></i> Weather
           </a>
 
           <a class="quick-chip" href="/map" title="Maps">
@@ -569,7 +609,7 @@ button, input {
     <section class="discover-wrap">
       <div class="discover-header">
         <h2 class="section-title">
-             Poke Gaming
+          Poke Gaming
         </h2>
         <button type="button" class="discover-toggle" id="discover-toggle" aria-controls="discover-section" aria-expanded="true">
           Hide videos
@@ -587,14 +627,31 @@ button, input {
               <div class="video canloadhd" data-author="<%- item.author %>">
                 <a href="/watch?v=<%- item.videoId %>" class="video-cover-link" aria-label="Watch <%- item.title %>"></a>
                 
-                <div class="thumbnail" style="background-image:url('/vi/<%= item.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw');">
+                <div class="thumbnail-container" style="background-image:url('/vi/<%= item.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw');">
                   <span class="video-length"><%- turntomins(item.lengthSeconds) %></span>
                 </div>
 
-                <div class="info">
-                  <span class="title" title="<%- item.title %>"><%- item.title %></span>
-                  <a href="/channel?id=<%- item.authorId %>" class="byline" title="Visit channel: <%- item.author %>"><%- item.author %></a>
+                <div class="details">
+                  <a href="/channel?id=<%- item.authorId %>" class="avatar-link" aria-label="Visit <%- item.author %>'s channel">
+                    <img class="author-avatar" src="https://ui-avatars.com/api/?name=<%- encodeURIComponent(item.author) %>&background=333&color=fff&rounded=true" alt="" loading="lazy">
+                  </a>
+                  
+                  <div class="info">
+                    <a href="/watch?v=<%- item.videoId %>" class="title" title="<%- item.title %>"><%- item.title %></a>
+                    
+                    <div class="metadata">
+                      <a href="/channel?id=<%- item.authorId %>" class="byline" title="Visit channel: <%- item.author %>">
+                        <%- item.author %>
+                      </a>
+                      <div class="stats">
+                        <span>▷ <%- formatViews(item.viewCount) %></span>
+                        <span>•</span>
+                        <span><%- item.publishedText || 'Recently' %></span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
+
               </div>
             <% }); %>
           </div>
