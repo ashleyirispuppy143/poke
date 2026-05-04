@@ -375,8 +375,8 @@ button, input {
 
 .discover-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: flex-start;
   padding-bottom: 24px;
 }
 
@@ -385,28 +385,14 @@ button, input {
   color: var(--ptc-text-primary);
   font-size: 20px;
   font-weight: 700;
-  display: flex;
-  align-items: center;
-  gap: 10px;
 }
 
-.discover-toggle {
-  background: transparent;
-  color: var(--ptc-accent);
-  border: none;
+.section-sub {
+  margin: 4px 0 0 0;
+  color: var(--ptc-text-secondary);
   font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  padding: 8px 16px;
-  border-radius: 18px;
-  transition: background 0.2s;
+  font-weight: 400;
 }
-
-.discover-toggle:hover {
-  background: rgba(62, 166, 255, 0.1);
-}
-
-.js .native-toggle { display: none; }
 
 .video-grid {
   display: grid;
@@ -438,11 +424,6 @@ button, input {
   background-repeat: no-repeat;
   border-radius: 12px;
   overflow: hidden;
-  transition: border-radius 0.2s;
-}
-
-.video:hover .thumbnail-container {
-  border-radius: 0;
 }
 
 .video-length {
@@ -461,29 +442,15 @@ button, input {
 
 .details {
   display: flex;
-  gap: 12px;
   padding-top: 12px;
   align-items: flex-start;
-}
-
-.avatar-link {
-  flex-shrink: 0;
-  position: relative;
-  z-index: 3;
-}
-
-.author-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  object-fit: cover;
-  background-color: var(--ptc-chip-bg);
 }
 
 .info {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  width: 100%;
 }
 
 .title {
@@ -608,115 +575,46 @@ button, input {
   <div class="content">
     <section class="discover-wrap">
       <div class="discover-header">
-        <h2 class="section-title">
-          Poke Gaming
-        </h2>
-        <button type="button" class="discover-toggle" id="discover-toggle" aria-controls="discover-section" aria-expanded="true">
-          Hide videos
-        </button>
+        <h2 class="section-title">Poke Gaming</h2>
+        <p class="section-sub">Discover popular gaming videos on Poke</p>
       </div>
 
-      <details class="discover-details" id="discover-section" open>
-        <summary class="native-toggle">
-          Toggle Videos
-        </summary>
+      <div class="discover-body">
+        <div class="video-grid">
+          <% filteredVideos.forEach(function(item) { %>
+            <div class="video canloadhd" data-author="<%- item.author %>">
+              <a href="/watch?v=<%- item.videoId %>" class="video-cover-link" aria-label="Watch <%- item.title %>"></a>
+              
+              <div class="thumbnail-container" style="background-image:url('/vi/<%= item.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw');">
+                <span class="video-length"><%- turntomins(item.lengthSeconds) %></span>
+              </div>
 
-        <div class="discover-body">
-          <div class="video-grid">
-            <% filteredVideos.forEach(function(item) { %>
-              <div class="video canloadhd" data-author="<%- item.author %>">
-                <a href="/watch?v=<%- item.videoId %>" class="video-cover-link" aria-label="Watch <%- item.title %>"></a>
-                
-                <div class="thumbnail-container" style="background-image:url('/vi/<%= item.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw');">
-                  <span class="video-length"><%- turntomins(item.lengthSeconds) %></span>
-                </div>
-
-                <div class="details">
-                  <a href="/channel?id=<%- item.authorId %>" class="avatar-link" aria-label="Visit <%- item.author %>'s channel">
-                    <img class="author-avatar" src="https://ui-avatars.com/api/?name=<%- encodeURIComponent(item.author) %>&background=333&color=fff&rounded=true" alt="" loading="lazy">
-                  </a>
+              <div class="details">
+                <div class="info">
+                  <a href="/watch?v=<%- item.videoId %>" class="title" title="<%- item.title %>"><%- item.title %></a>
                   
-                  <div class="info">
-                    <a href="/watch?v=<%- item.videoId %>" class="title" title="<%- item.title %>"><%- item.title %></a>
-                    
-                    <div class="metadata">
-                      <a href="/channel?id=<%- item.authorId %>" class="byline" title="Visit channel: <%- item.author %>">
-                        <%- item.author %>
-                      </a>
-                      <div class="stats">
-                        <span>▷ <%- formatViews(item.viewCount) %></span>
-                        <span>•</span>
-                        <span><%- item.publishedText || 'Recently' %></span>
-                      </div>
+                  <div class="metadata">
+                    <a href="/channel?id=<%- item.authorId %>" class="byline" title="Visit channel: <%- item.author %>">
+                      <%- item.author %>
+                    </a>
+                    <div class="stats">
+                      <span>▷ <%- formatViews(item.viewCount) %></span>
+                      <span>•</span>
+                      <span><%- item.publishedText || 'Recently' %></span>
                     </div>
                   </div>
                 </div>
-
               </div>
-            <% }); %>
-          </div>
+
+            </div>
+          <% }); %>
         </div>
-      </details>
+      </div>
     </section>
   </div>
 </div>
 
 <script>
-// Toggle Discover Videos  
-(function () {
-  var section = document.getElementById("discover-section");
-  var button = document.getElementById("discover-toggle");
-  var storageKey = "poke_discover_videos_open";
-
-  if (!section || !button) return;
-
-  function isOpen() {
-    return section.hasAttribute("open");
-  }
-
-  function setOpenState(open) {
-    if (open) {
-      section.setAttribute("open", "");
-    } else {
-      section.removeAttribute("open");
-    }
-    updateButton();
-    saveState();
-  }
-
-  function updateButton() {
-    var open = isOpen();
-    button.textContent = open ? "Hide videos" : "Show videos";
-    button.setAttribute("aria-expanded", open ? "true" : "false");
-  }
-
-  function saveState() {
-    try {
-      localStorage.setItem(storageKey, isOpen() ? "1" : "0");
-    } catch (e) {}
-  }
-
-  try {
-    var saved = localStorage.getItem(storageKey);
-    if (saved === "0") {
-      section.removeAttribute("open");
-    } else if (saved === "1") {
-      section.setAttribute("open", "");
-    }
-  } catch (e) {}
-
-  updateButton();
-
-  button.addEventListener("click", function () {
-    setOpenState(!isOpen());
-  });
-
-  section.addEventListener("toggle", function () {
-    updateButton();
-    saveState();
-  });
-})();
-
  (function () {
   var searchInput = document.getElementById("fname");
   var bangIndicator = document.getElementById("bang-indicator");
