@@ -151,7 +151,7 @@ if (typeof query === 'string') {
     
 if (!query) {
 
-  const invtrend = await fetch(`${config.invapi}/trending?type=Gaming&hl=en-US&region=U`, {
+  const invtrend = await fetch(`${config.invapi}/trending?type=Gaming&hl=en-US&region=US`, {
     headers: { "User-Agent": config.useragent },
   });
 
