@@ -132,643 +132,382 @@ document.documentElement.className = document.documentElement.className.replace(
 
 <style>
 @import url("https://p.poketube.fun/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css");
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
 
-@font-face {
-  font-family: "PokeTube Flex";
-  src: url("/static/robotoflex.ttf");
-  font-style: normal;
-  font-stretch: 1% 800%;
-  font-display: swap;
+:root {
+  --yt-bg: #0f0f0f;
+  --yt-text-primary: #f1f1f1;
+  --yt-text-secondary: #aaaaaa;
+  --yt-accent: #3ea6ff;
+  --yt-searchbox-bg: #121212;
+  --yt-searchbox-border: #303030;
+  --yt-searchbtn-bg: #222222;
+  --yt-chip-bg: #272727;
+  --yt-chip-hover: #3f3f3f;
+  --yt-border: #272727;
+  
+  --container: min(1280px, 94vw);
 }
 
-:root{
-  --bg:#0b0c10;
-  --panel:#141821;
-  --panel2:#191d27;
-  --panel3:#1e2330;
-  --text:#f4f6ff;
-  --muted:#9fa7bc;
-  --muted2:#7f879b;
-  --border:#2a3040;
-  --border-strong:#394154;
-  --accent:#df03a8;
-  --accent-soft:rgba(223,3,168,.18);
-  --shadow:0 16px 34px rgba(0,0,0,.34);
-  --shadow-soft:0 8px 18px rgba(0,0,0,.18);
-  --radius:20px;
-  --radius-sm:15px;
-  --container:min(1240px,92vw);
+* {
+  box-sizing: border-box;
 }
 
-*{
-  box-sizing:border-box;
+html {
+  background: var(--yt-bg);
 }
 
-html{
-  background:var(--bg);
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--yt-bg);
+  color: var(--yt-text-primary);
+  font-family: "Roboto", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-body{
-  margin:0;
-  min-height:100vh;
-  background:var(--bg);
-  color:var(--text);
-  font-family:"PokeTube Flex",Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
-  font-variation-settings:"wdth" 118,"wght" 430;
+a {
+  color: inherit;
+  text-decoration: none;
 }
 
-a{
-  color:inherit;
-  text-decoration:none;
+img {
+  display: block;
+  max-width: 100%;
 }
 
-img{
-  display:block;
-  max-width:100%;
+button, input {
+  font: inherit;
 }
 
-button,
-input{
-  font:inherit;
+/* Page Layout */
+.page {
+  width: var(--container);
+  margin: 0 auto;
+  padding: 40px 0 60px;
 }
 
-.page{
-  width:var(--container);
-  margin:0 auto;
-  padding:42px 0 56px;
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 20px 0 40px;
 }
 
-.hero{
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  justify-content:center;
-  text-align:center;
-  padding:34px 0 12px;
+.logo-wrap {
+  margin-bottom: 24px;
 }
 
-.logo-wrap{
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  margin-bottom:18px;
+.logo {
+  width: 180px; /* Sized down slightly to match typical YT logo prominence */
+  max-width: 74vw;
 }
 
-.logo{
-  width:252px;
-  max-width:74vw;
-  filter:drop-shadow(0 10px 18px rgba(0,0,0,.22));
+/* Search Bar (YouTube Style) */
+.search-wrap {
+  width: min(600px, 100%);
+  margin: 0 auto;
 }
 
-.hero-copy{
-  max-width:780px;
-  margin-bottom:22px;
+.search-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 40px;
 }
 
-.hero-title{
-  margin:0 0 8px;
-  color:var(--text);
-  font-size:18px;
-  line-height:1.2;
-  letter-spacing:.1px;
-  font-variation-settings:"wdth" 140,"wght" 640;
+.search-bar {
+  flex: 1;
+  height: 100%;
+  padding: 0 16px 0 24px;
+  background: var(--yt-searchbox-bg);
+  border: 1px solid var(--yt-searchbox-border);
+  border-right: none;
+  border-radius: 40px 0 0 40px;
+  color: var(--yt-text-primary);
+  outline: none;
+  font-size: 16px;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
 }
 
-.hero-sub{
-  margin:0;
-  color:var(--muted);
-  font-size:14px;
-  line-height:1.5;
-  font-variation-settings:"wdth" 122,"wght" 430;
+.search-bar::placeholder {
+  color: #888;
+  font-weight: 400;
 }
 
-.search-wrap{
-  width:min(760px,92vw);
-  margin:0 auto;
+.search-bar:focus {
+  border: 1px solid #1c62b9;
+  margin-left: -1px; /* Prevent layout shift from border */
 }
 
-.search-form{
-  display:block;
+.search-btn {
+  height: 100%;
+  width: 64px;
+  background: var(--yt-searchbtn-bg);
+  border: 1px solid var(--yt-searchbox-border);
+  border-radius: 0 40px 40px 0;
+  color: var(--yt-text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s;
 }
 
-.search-field{
-  position:relative;
+.search-btn:hover {
+  background: #303030;
 }
 
-.search-bar{
-  width:100%;
-  min-height:58px;
-  padding:15px 20px;
-  border-radius:999px;
-  border:1px solid var(--border);
-  background:var(--panel);
-  color:var(--text);
-  outline:none;
-  box-shadow:var(--shadow-soft);
-  transition:border-color .18s ease, box-shadow .18s ease, transform .18s ease, background .18s ease;
-  font-size:16px;
-  font-variation-settings:"wdth" 132,"wght" 455;
+.search-btn i {
+  font-size: 16px;
+  color: var(--yt-text-primary);
+  opacity: 0.8;
 }
 
-.search-bar::placeholder{
-  color:#8c95aa;
-}
-
-.search-bar:hover{
-  border-color:var(--border-strong);
-  background:#171b25;
-}
-
-.search-bar:focus{
-  border-color:var(--accent);
-  box-shadow:0 0 0 3px var(--accent-soft), var(--shadow-soft);
-  transform:translateY(-1px);
-}
-
-/* Bang Indicator Styles */
+/* Bang Indicator */
 .bang-indicator {
   position: absolute;
-  top: calc(100% + 10px);
-  left: 20px;
-  background: var(--panel2);
-  border: 1px solid var(--accent);
-  color: var(--text);
-  padding: 10px 14px;
-  border-radius: 10px;
-  font-size: 13.5px;
-  box-shadow: var(--shadow);
+  top: calc(100% + 12px);
+  left: 0;
+  right: 0;
+  background: #323232;
+  color: var(--yt-text-primary);
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
   z-index: 20;
   opacity: 1;
   visibility: visible;
   transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
-  font-variation-settings: "wdth" 126, "wght" 500;
+  text-align: left;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
 
 .bang-indicator.hidden {
   opacity: 0;
   visibility: hidden;
-  transform: translateY(-8px);
+  transform: translateY(-4px);
   pointer-events: none;
 }
 
 .bang-indicator a {
-  color: var(--accent);
-  text-decoration: underline;
-  margin-left: 4px;
-  transition: filter 0.2s ease;
+  color: var(--yt-accent);
+  text-decoration: none;
 }
 
 .bang-indicator a:hover {
-  filter: brightness(1.2);
+  text-decoration: underline;
 }
 
-/* Home Extras Wrapper */
+/* Quick Links (YouTube Chips Style) */
 .home-extras-wrapper {
-  transition: opacity 0.2s ease, transform 0.2s ease;
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(0);
+  margin-top: 24px;
+  width: 100%;
 }
 
-.quick-links{
-  margin-top:22px;
-  display:flex;
-  align-items:flex-start;
-  justify-content:center;
-  gap:28px;
-  flex-wrap:wrap;
+.quick-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
-.quick-tool{
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  justify-content:flex-start;
-  gap:9px;
-  min-width:76px;
+.quick-chip {
+  background: var(--yt-chip-bg);
+  color: var(--yt-text-primary);
+  border-radius: 8px;
+  padding: 0 12px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+  cursor: pointer;
+  border: none;
 }
 
-.quick-link{
-  width:60px;
-  height:60px;
-  border-radius:999px;
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  color:#ffffff;
-  box-shadow:var(--shadow-soft);
-  border:1px solid rgba(255,255,255,.10);
-  transition:transform .18s ease, box-shadow .18s ease, filter .18s ease, border-color .18s ease;
+.quick-chip:hover {
+  background: var(--yt-chip-hover);
 }
 
-.quick-link i{
-  font-size:20px;
-  line-height:1;
+.quick-chip i {
+  font-size: 14px;
+  opacity: 0.8;
 }
 
-.quick-link:hover,
-.quick-link:focus{
-  transform:translateY(-2px);
-  box-shadow:0 14px 24px rgba(0,0,0,.26);
-  filter:brightness(1.06);
-  border-color:rgba(255,255,255,.18);
-}
-
-.quick-link:focus{
-  outline:none;
-}
-
-.quick-label{
-  color:var(--muted);
-  font-size:12.5px;
-  line-height:1.2;
-  text-align:center;
-  font-variation-settings:"wdth" 126,"wght" 500;
-  transition:color .18s ease;
-}
-
-.quick-tool:hover .quick-label,
-.quick-tool:focus-within .quick-label{
-  color:var(--text);
-}
-
-.quick-link.translate{
-  background:linear-gradient(180deg, #a84dff 0%, #7a32db 100%);
-}
-
-.quick-link.weather{
-  background:linear-gradient(180deg, #42b8ff 0%, #1d89df 100%);
-}
-
-.quick-link.maps{
-  background:linear-gradient(180deg, #34d399 0%, #1fa870 100%);
-}
-
-.quick-link.calendar{
-  background:linear-gradient(180deg, #ff9c42 0%, #e5761e 100%);
-}
-
-.search-note{
-  margin-top:24px;
-  text-align:center;
-  color:var(--muted2);
-  font-size:13px;
-  font-variation-settings:"wdth" 126,"wght" 460;
+.search-note {
+  margin-top: 24px;
+  text-align: center;
+  color: var(--yt-text-secondary);
+  font-size: 13px;
 }
 
 .search-note a {
-  color: var(--muted);
-  text-decoration: underline;
-  transition: color 0.2s ease;
+  color: var(--yt-accent);
+  text-decoration: none;
 }
 
 .search-note a:hover {
-  color: var(--text);
+  text-decoration: underline;
 }
 
-.content{
-  margin-top:28px;
+/* Discover Section / Grid */
+.content {
+  margin-top: 16px;
 }
 
-.discover-wrap{
-  width:100%;
-  background:var(--panel);
-  border:1px solid var(--border);
-  border-radius:var(--radius);
-  box-shadow:var(--shadow);
-  overflow:hidden;
+.discover-wrap {
+  width: 100%;
 }
 
-.discover-header{
-  display:flex;
-  align-items:flex-start;
-  justify-content:space-between;
-  gap:16px;
-  padding:18px 20px;
-  border-bottom:1px solid var(--border);
-  background:var(--panel2);
-}
-
-.discover-heading{
-  min-width:0;
-}
-
-.section-title{
-  margin:0;
-  color:var(--text);
-  font-size:17px;
-  line-height:1.2;
-  font-variation-settings:"wdth" 138,"wght" 650;
+.discover-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  padding-bottom: 24px;
 }
 
-.section-sub{
-  margin:5px 0 0;
-  color:var(--muted);
-  font-size:13px;
-  line-height:1.45;
-  font-variation-settings:"wdth" 126,"wght" 430;
+.section-title {
+  margin: 0;
+  color: var(--yt-text-primary);
+  font-size: 20px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.discover-toggle{
-  display:none;
-  flex:0 0 auto;
-  align-items:center;
-  justify-content:center;
-  min-width:108px;
-  padding:10px 14px;
-  border-radius:999px;
-  border:1px solid var(--border-strong);
-  background:var(--panel3);
-  color:var(--text);
-  cursor:pointer;
-  transition:border-color .18s ease, background .18s ease, transform .18s ease, box-shadow .18s ease;
-  font-size:13px;
-  line-height:1;
-  font-variation-settings:"wdth" 132,"wght" 580;
+.section-title i {
+  color: #ff0000; /* YouTube Red touch for the icon */
 }
 
-.js .discover-toggle{
-  display:inline-flex;
+.discover-toggle {
+  background: transparent;
+  color: var(--yt-accent);
+  border: none;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 8px 16px;
+  border-radius: 18px;
+  transition: background 0.2s;
 }
 
-.discover-toggle:hover{
-  border-color:var(--accent);
-  background:#24293a;
+.discover-toggle:hover {
+  background: rgba(62, 166, 255, 0.1);
 }
 
-.discover-toggle:focus{
-  outline:none;
-  border-color:var(--accent);
-  box-shadow:0 0 0 3px var(--accent-soft);
+.js .native-toggle { display: none; }
+
+.video-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 40px 16px; /* YT standard gap (tall rows, tighter columns) */
 }
 
-.discover-toggle:active{
-  transform:translateY(1px);
+/* Video Cards */
+.video {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  text-decoration: none;
+  cursor: pointer;
 }
 
-.discover-details{
-  display:block;
+.video-cover-link {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
 }
 
-.native-toggle{
-  list-style:none;
-  cursor:pointer;
-  padding:14px 18px;
-  border-bottom:1px solid var(--border);
-  background:#171b25;
-  color:var(--text);
-  user-select:none;
-  font-size:13px;
-  font-variation-settings:"wdth" 128,"wght" 560;
+.thumbnail {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16/9;
+  background-color: var(--yt-chip-bg);
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  border-radius: 12px;
+  overflow: hidden;
 }
 
-.native-toggle::-webkit-details-marker{
-  display:none;
+.video-length {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  z-index: 1;
+  padding: 3px 4px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
 }
 
-.native-toggle::marker{
-  content:"";
+.info {
+  display: flex;
+  flex-direction: column;
+  padding-top: 12px;
 }
 
-.native-toggle-inner{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:14px;
+.title {
+  color: var(--yt-text-primary);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.4;
+  margin-bottom: 4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.native-toggle-left{
-  display:flex;
-  align-items:center;
-  gap:10px;
+.byline {
+  position: relative;
+  z-index: 3;
+  color: var(--yt-text-secondary);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
 }
 
-.native-dot{
-  width:10px;
-  height:10px;
-  border-radius:999px;
-  background:var(--accent);
-  box-shadow:0 0 0 4px rgba(223,3,168,.12);
-  flex:0 0 auto;
+.byline:hover {
+  color: var(--yt-text-primary);
 }
 
-.native-toggle-arrow{
-  color:var(--muted);
-  transition:transform .18s ease;
+/* Responsive Breakpoints */
+@media (max-width: 1140px) {
+  .video-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
-.discover-details[open] .native-toggle-arrow{
-  transform:rotate(180deg);
+@media (max-width: 860px) {
+  .video-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .logo { width: 140px; }
+  .search-wrap { width: 90%; }
 }
 
-.js .native-toggle{
-  display:none;
-}
-
-.discover-body{
-  padding:16px;
-  background:var(--panel);
-}
-
-.video-grid{
-  display:grid;
-  grid-template-columns:repeat(4,minmax(0,1fr));
-  gap:14px;
-}
-
-.video{
-  display:block;
-  position:relative;
-  border:1px solid var(--border);
-  border-radius:16px;
-  background:var(--panel2);
-  overflow:hidden;
-  box-shadow:0 6px 18px rgba(0,0,0,.16);
-  transition:transform .18s ease, border-color .18s ease, box-shadow .18s ease, background .18s ease;
-}
-
-.video:hover{
-  transform:translateY(-2px);
-  border-color:rgba(223,3,168,.58);
-  background:#1d2230;
-  box-shadow:0 14px 28px rgba(0,0,0,.24);
-}
-
-.video-cover-link{
-  position:absolute;
-  inset:0;
-  z-index:1;
-}
-
-.thumbnail{
-  position:relative;
-  width:100%;
-  aspect-ratio:16/9;
-  background-position:center;
-  background-size:cover;
-  background-repeat:no-repeat;
-  border-bottom:1px solid rgba(255,255,255,.05);
-}
-
-.thumbnail::after{
-  content:"";
-  position:absolute;
-  inset:0;
-  background:linear-gradient(180deg, rgba(0,0,0,0) 52%, rgba(0,0,0,.40) 100%);
-  pointer-events:none;
-}
-
-.video-length{
-  position:absolute;
-  right:8px;
-  bottom:8px;
-  z-index:1;
-  padding:5px 7px;
-  border-radius:7px;
-  background:rgba(9,11,16,.88);
-  color:#f6f8ff;
-  border:1px solid rgba(255,255,255,.10);
-  font-size:11.5px;
-  line-height:1;
-  font-variation-settings:"wdth" 128,"wght" 560;
-}
-
-.info{
-  padding:12px 12px 13px;
-  display:flex;
-  flex-direction:column;
-  gap:6px;
-}
-
-.title{
-  color:var(--text);
-  font-size:14px;
-  line-height:1.32;
-  font-variation-settings:"wdth" 128,"wght" 590;
-}
-
-.byline{
-  position:relative;
-  z-index:2;
-  color:var(--muted);
-  font-size:12.5px;
-  line-height:1.35;
-  font-variation-settings:"wdth" 122,"wght" 430;
-  transition:color .18s ease;
-}
-
-.byline:hover{
-  text-decoration:underline;
-  color:var(--text);
-}
-
-.max-lines-2{
-  display:-webkit-box;
-  -webkit-line-clamp:2;
-  -webkit-box-orient:vertical;
-  overflow:hidden;
-}
-
-@media (max-width:1100px){
-  .video-grid{
-    grid-template-columns:repeat(3,minmax(0,1fr));
+@media (max-width: 560px) {
+  .page { padding-top: 20px; }
+  .video-grid { 
+    grid-template-columns: 1fr; 
+    gap: 24px;
   }
-}
-
-@media (max-width:820px){
-  .page{
-    padding-top:28px;
-  }
-
-  .hero{
-    padding-top:16px;
-  }
-
-  .logo{
-    width:224px;
-  }
-
-  .discover-header{
-    flex-direction:column;
-    align-items:flex-start;
-  }
-
-  .discover-toggle{
-    min-width:0;
-  }
-
-  .video-grid{
-    grid-template-columns:repeat(2,minmax(0,1fr));
-  }
-}
-
-@media (max-width:560px){
-  .page{
-    width:min(96vw,1240px);
-    padding-bottom:36px;
-  }
-
-  .hero-title{
-    font-size:16px;
-  }
-
-  .hero-sub{
-    font-size:13px;
-  }
-
-  .search-bar{
-    min-height:54px;
-    font-size:15px;
-  }
-
-  .bang-indicator {
-    left: 10px;
-    right: 10px;
-    text-align: center;
-  }
-
-  .quick-links{
-    gap:18px;
-    margin-top:18px;
-  }
-
-  .quick-tool{
-    min-width:68px;
-    gap:8px;
-  }
-
-  .quick-link{
-    width:54px;
-    height:54px;
-  }
-
-  .quick-link i{
-    font-size:18px;
-  }
-
-  .quick-label{
-    font-size:12px;
-  }
-
-  .discover-header{
-    padding:16px;
-  }
-
-  .discover-body{
-    padding:12px;
-  }
-
-  .video-grid{
-    grid-template-columns:1fr;
-    gap:12px;
-  }
-
-  .native-toggle{
-    padding:14px 16px;
-  }
+  .thumbnail { border-radius: 0; } /* Edge-to-edge on mobile like YT */
+  .info { padding: 12px 12px 0; }
+  
+  .search-bar { font-size: 14px; padding-left: 16px; }
+  .search-btn { width: 48px; }
+  
+  .discover-header { padding: 0 12px 16px; }
 }
 </style>
 </head>
@@ -778,51 +517,42 @@ input{
 <div class="page">
   <div class="hero">
     <div class="logo-wrap">
+      <!-- You can keep your logo here -->
       <img src="/static/logo-poke.svg" class="logo" alt="Poke Logo">
     </div>
  
     <div class="search-wrap">
       <form class="search-form" action="/search" method="get">
         <div class="search-field">
-          <input class="search-bar" autocomplete="on" id="fname" name="query" type="text" placeholder="Search Videos, use bangs, do math, and more...">
+          <input class="search-bar" autocomplete="on" id="fname" name="query" type="text" placeholder="Search">
+          <button type="submit" class="search-btn" aria-label="Search">
+            <i class="fa-solid fa-magnifying-glass"></i>
+          </button>
           
           <div id="bang-indicator" class="bang-indicator hidden">
-            <i class="fa-solid fa-bolt" style="color: var(--accent); margin-right: 4px;"></i>
+            <i class="fa-solid fa-bolt" style="color: var(--yt-accent); margin-right: 6px;"></i>
             You are using bangs! <a href="https://duckduckgo.com/bangs" target="_blank" rel="noopener noreferrer">Learn more here.</a>
           </div>
-
         </div>
       </form>
 
       <div id="home-extras" class="home-extras-wrapper">
         <div class="quick-links" aria-label="Poke tools">
-          <div class="quick-tool">
-            <a class="quick-link translate" href="/translate" aria-label="Translate" title="Translate">
-              <i class="fa-solid fa-language" aria-hidden="true"></i>
-            </a>
-            <span class="quick-label">Translate</span>
-          </div>
+          <a class="quick-chip" href="/translate" title="Translate">
+            <i class="fa-solid fa-language" aria-hidden="true"></i> Translate
+          </a>
 
-          <div class="quick-tool">
-            <a class="quick-link weather" href="/weather" aria-label="Weather" title="Weather">
-              <i class="fa-solid fa-cloud-sun" aria-hidden="true"></i>
-            </a>
-            <span class="quick-label">Weather</span>
-          </div>
+          <a class="quick-chip" href="/weather" title="Weather">
+            <i class="fa-solid fa-cloud-sun" aria-hidden="true"></i> Weather
+          </a>
 
-          <div class="quick-tool">
-            <a class="quick-link maps" href="/map" aria-label="Maps" title="Maps">
-              <i class="fa-solid fa-map-location-dot" aria-hidden="true"></i>
-            </a>
-            <span class="quick-label">Maps</span>
-          </div>
+          <a class="quick-chip" href="/map" title="Maps">
+            <i class="fa-solid fa-map-location-dot" aria-hidden="true"></i> Maps
+          </a>
 
-          <div class="quick-tool">
-            <a class="quick-link calendar" href="/calendar" aria-label="Calendar" title="Calendar">
-              <i class="fa-solid fa-calendar-days" aria-hidden="true"></i>
-            </a>
-            <span class="quick-label">Calendar</span>
-          </div>
+          <a class="quick-chip" href="/calendar" title="Calendar">
+            <i class="fa-solid fa-calendar-days" aria-hidden="true"></i> Calendar
+          </a>
         </div>
 
         <% if (Math.random() > 0.3) { %>
@@ -838,11 +568,9 @@ input{
   <div class="content">
     <section class="discover-wrap">
       <div class="discover-header">
-        <div class="discover-heading">
-          <h2 class="section-title"><i class="fa-solid fa-gamepad"></i> Poke Gaming</h2>
-          <p class="section-sub">Discover Popular Gaming Videos!</p>
-        </div>
-
+        <h2 class="section-title">
+             Poke Gaming
+        </h2>
         <button type="button" class="discover-toggle" id="discover-toggle" aria-controls="discover-section" aria-expanded="true">
           Hide videos
         </button>
@@ -850,13 +578,7 @@ input{
 
       <details class="discover-details" id="discover-section" open>
         <summary class="native-toggle">
-          <span class="native-toggle-inner">
-            <span class="native-toggle-left">
-              <span class="native-dot"></span>
-              <span>Show or hide trending gaming videos</span>
-            </span>
-            <span class="native-toggle-arrow">▾</span>
-          </span>
+          Toggle Videos
         </summary>
 
         <div class="discover-body">
@@ -870,8 +592,8 @@ input{
                 </div>
 
                 <div class="info">
-                  <span class="title max-lines-2" title="<%- item.title %>"><%- item.title %></span>
-                  <a href="/channel?id=<%- item.authorId %>" class="byline max-lines-2" title="Visit channel: <%- item.author %>"><%- item.author %></a>
+                  <span class="title" title="<%- item.title %>"><%- item.title %></span>
+                  <a href="/channel?id=<%- item.authorId %>" class="byline" title="Visit channel: <%- item.author %>"><%- item.author %></a>
                 </div>
               </div>
             <% }); %>
@@ -946,11 +668,9 @@ input{
     searchInput.addEventListener("input", function (e) {
       if (e.target.value.includes("!")) {
         bangIndicator.classList.remove("hidden");
-        // Turn off autocomplete when using bangs
         searchInput.setAttribute("autocomplete", "off"); 
       } else {
         bangIndicator.classList.add("hidden");
-        // Re-enable autocomplete when the bang is removed
         searchInput.setAttribute("autocomplete", "on"); 
       }
     });
