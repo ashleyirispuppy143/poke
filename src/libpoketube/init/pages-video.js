@@ -583,12 +583,11 @@ module.exports = function (app, config, renderTemplate) {
 });
   
   app.get("/lite", async (req, res) => {
-       const { dm, region, hl, v, e, r, f, m, quality: q, a, universe, } = req.query; 
+       const { v } = req.query; 
 
-            renderTemplate(res, req, "lite.ejs", {
-            videoid:v,
-            });
-        
+      renderTemplate(res, req, "lite.ejs", {
+      videoid:v,
+      }); 
   });
  
 };
