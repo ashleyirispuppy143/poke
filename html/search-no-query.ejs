@@ -139,7 +139,7 @@ document.documentElement.className = document.documentElement.className.replace(
 
 <style>
 @import url("https://p.poketube.fun/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css");
-@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+@import url('https://p.poketube.fun/https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
 
 :root {
   --ptc-bg: #0f0f0f;
@@ -375,9 +375,40 @@ button, input {
 
 .discover-header {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: space-between;
   padding-bottom: 24px;
+}
+
+.header-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.header-tabs {
+  display: flex;
+  gap: 12px;
+}
+
+.category-tab {
+  background: var(--ptc-chip-bg);
+  color: var(--ptc-text-primary);
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.category-tab.active {
+  background: var(--ptc-text-primary);
+  color: var(--ptc-bg);
+}
+
+.category-tab:hover:not(.active) {
+  background: var(--ptc-chip-hover);
 }
 
 .section-title {
@@ -424,7 +455,10 @@ button, input {
   background-repeat: no-repeat;
   border-radius: 12px;
   overflow: hidden;
+  transition: border-radius 0.2s;
 }
+
+/* Removed the hover border-radius reset */
 
 .video-length {
   position: absolute;
@@ -519,7 +553,12 @@ button, input {
   .search-bar { font-size: 14px; padding-left: 16px; }
   .search-btn { width: 48px; }
   
-  .discover-header { padding: 0 12px 16px; }
+  .discover-header { 
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 0 12px 16px; 
+  }
 }
 </style>
 </head>
@@ -575,8 +614,14 @@ button, input {
   <div class="content">
     <section class="discover-wrap">
       <div class="discover-header">
-        <h2 class="section-title">Poke Gaming</h2>
-        <p class="section-sub">Discover popular gaming videos on Poke</p>
+        <div class="header-text">
+          <h2 class="section-title">Poke Gaming</h2>
+          <p class="section-sub">Discover popular gaming videos on Poke</p>
+        </div>
+        <div class="header-tabs">
+          <button class="category-tab active">Gaming</button>
+          <button class="category-tab" onclick="alert('Coming soon!')">Music</button>
+        </div>
       </div>
 
       <div class="discover-body">
@@ -594,9 +639,15 @@ button, input {
                   <a href="/watch?v=<%- item.videoId %>" class="title" title="<%- item.title %>"><%- item.title %></a>
                   
                   <div class="metadata">
-                    <a href="/channel?id=<%- item.authorId %>" class="byline" title="Visit channel: <%- item.author %>">
-                      <%- item.author %>
-                    </a>
+                    <% if (item.authorId) { %>
+                      <a href="/channel?id=<%- item.authorId %>" class="byline" title="Visit channel: <%- item.author %>">
+                        <%- item.author %>
+                      </a>
+                    <% } else { %>
+                      <span class="byline" title="Author: <%- item.author %>">
+                        <%- item.author %>
+                      </span>
+                    <% } %>
                     <div class="stats">
                       <span>▷ <%- formatViews(item.viewCount) %></span>
                       <span>•</span>
