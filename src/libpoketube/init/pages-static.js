@@ -13,6 +13,13 @@ function getJson(str) {
   }
 }
 
+/**
+ * Returns a random integer between min (inclusive) and max (inclusive).
+ */
+function getWholeRandom(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
 
 
 module.exports = function (app, config, renderTemplate) {
@@ -80,7 +87,8 @@ app.get("/request", (req, res) => {
   });
  
 app.get("/143", (req, res) => {
-  const numberEasterEgg = getRandomArbitrary(0, 143);
+  const numberEasterEgg = getWholeRandom(1, 143);
+
   const { number, something } = req.query;
 
   const shouldRender =
@@ -94,6 +102,8 @@ app.get("/143", (req, res) => {
 
   return res.redirect(`/?number=${numberEasterEgg}`);
 });
+
+  
 // GET /weather — SSR + hydrates the same EJS for no-JS users.
 // Query options:
 //   ?q=Izmir            (free text place)
