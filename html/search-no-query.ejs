@@ -75,7 +75,6 @@
     return score;
   }
 
-  // Comprehensive list for auto game detection
   var POPULAR_GAMES = [
     "Minecraft", "Roblox", "Fortnite", "GTA V", "GTA 5", "GTA", "Grand Theft Auto", 
     "Valorant", "Apex Legends", "Call of Duty", "Warzone", "League of Legends", 
@@ -92,10 +91,8 @@
   function detectGame(title) {
     if (!title) return null;
     for (var i = 0; i < POPULAR_GAMES.length; i++) {
-      // Use word boundaries for strict, highly accurate matching
       var regex = new RegExp("\\b" + escapeRegExp(POPULAR_GAMES[i]) + "\\b", "i");
       if (regex.test(title)) {
-        // Standardize GTA names
         if (POPULAR_GAMES[i].includes("GTA") || POPULAR_GAMES[i] === "Grand Theft Auto") return "GTA";
         if (POPULAR_GAMES[i].includes("FNAF") || POPULAR_GAMES[i].includes("Freddy")) return "FNAF";
         if (POPULAR_GAMES[i] === "CS:GO" || POPULAR_GAMES[i] === "Counter-Strike") return "CS2";
@@ -105,29 +102,6 @@
     return null;
   }
 
-  function FilterVideos(videos, blockedAuthors, limit, maxSlopScore) {
-    var allowed = videos.filter(function(item) {
-      var authorSafe = blockedAuthors.indexOf(item.author) === -1;
-      if (!authorSafe) return false;
-
-      if (!item.title || item.title.trim().length < 3) return false;
-
-      var slopScore = calculateSlopScore(item.title);
-      return slopScore < maxSlopScore; 
-    });
-
-    // Shuffle the allowed array if isMobile is true
-    if (isMobile) {
-      for (let i = allowed.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [allowed[i], allowed[j]] = [allowed[j], allowed[i]];
-      }
-    }
-
-    // Return the max items available if mobile, otherwise return limit
-    return isMobile ? allowed : allowed.slice(0, limit);
-  }
-
   function formatViews(num) {
     if (num === null || num === undefined) return "0";
     if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
@@ -135,22 +109,46 @@
     return num.toString();
   }
 
-  var blockedAuthors =[
+  var blockedAuthors = [
       "TheBurntPeanut", "KreekCraft", "Asmongold TV  ", "Tyler & Snowi"
   ];
 
   var SLOP_THRESHOLD = 70; 
 
-  var filteredVideos = FilterVideos(inv, blockedAuthors, 32, SLOP_THRESHOLD);
+  var gameCounts = {};
+  var isMobileVar = (typeof isMobile !== 'undefined' ? isMobile : false);
 
-  // Extract unique games for the mobile filter chip bar
-  var availableGames = new Set();
-  filteredVideos.forEach(function(vid) {
-     var game = detectGame(vid.title);
-     vid.detectedGame = game || "Other";
-     if (game) availableGames.add(game);
+  var allSafeVideos = inv.filter(function(item) {
+    if (blockedAuthors.indexOf(item.author) !== -1) return false;
+    if (!item.title || item.title.trim().length < 3) return false;
+    return true;
   });
-  var gameFilters = Array.from(availableGames);
+
+  allSafeVideos.forEach(function(item) {
+    item.isSlop = calculateSlopScore(item.title) >= SLOP_THRESHOLD;
+    item.detectedGame = detectGame(item.title) || "Other";
+    if (item.detectedGame !== "Other") {
+      gameCounts[item.detectedGame] = (gameCounts[item.detectedGame] || 0) + 1;
+    }
+  });
+
+  var gameFilters = Object.keys(gameCounts).filter(function(g) {
+    return gameCounts[g] >= 3;
+  });
+
+  var finalVideos;
+
+  if (isMobileVar) {
+    finalVideos = allSafeVideos.slice();
+    for (let i = finalVideos.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [finalVideos[i], finalVideos[j]] = [finalVideos[j], finalVideos[i]];
+    }
+  } else {
+    finalVideos = allSafeVideos.filter(function(item) {
+      return !item.isSlop;
+    }).slice(0, 32);
+  }
 %>
 
 <!DOCTYPE html>
@@ -184,7 +182,7 @@ document.documentElement.className = document.documentElement.className.replace(
   --ptc-bg: #0f0f0f;
   --ptc-text-primary: #f1f1f1;
   --ptc-text-secondary: #aaaaaa;
-  --ptc-accent: #ffabcc; /* Updated accent color */
+  --ptc-accent: #ffabcc;
   --ptc-searchbox-bg: #121212;
   --ptc-searchbox-border: #303030;
   --ptc-searchbtn-bg: #222222;
@@ -228,16 +226,10 @@ button, input {
   font: inherit;
 }
 
-/* =========================================
-   MOBILE-ONLY UI (Hidden on Desktop)
-========================================= */
 .mobile-top-bar, .mobile-search-form, .mobile-chip-bar, .mobile-bottom-nav {
   display: none;
 }
 
-/* =========================================
-   DESKTOP UI
-========================================= */
 .page {
   flex: 1;
   width: var(--container);
@@ -611,16 +603,13 @@ button, input {
   );
 }
 
-/* =========================================
-   MODAL STYLES (for Plus Upload Button)
-========================================= */
 .modal-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
   background: rgba(0, 0, 0, 0.6);
   z-index: 1000;
   display: flex;
-  align-items: flex-end; /* Mobile bottom sheet style */
+  align-items: flex-end; 
   justify-content: center;
   opacity: 1;
   visibility: visible;
@@ -694,7 +683,6 @@ button, input {
   text-decoration: underline;
 }
 
-/* Responsive Breakpoints */
 @media (max-width: 1140px) {
   .video-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
@@ -705,21 +693,16 @@ button, input {
   .search-wrap { width: 90%; }
 }
 
-/* =========================================
-   MOBILE 1:1 YT HOMESCREEN (max-width: 560px)
-========================================= */
 @media (max-width: 560px) {
-  /* Hide Desktop Search/Hero/Headers */
   .hero, .discover-header, .home-extras-wrapper { display: none; }
   
   .page {
     width: 100%;
-    padding: 0 0 60px 0; /* Space for bottom nav */
+    padding: 0 0 60px 0; 
   }
 
   .content { margin-top: 0; }
 
-  /* Mobile Top Bar */
   .mobile-top-bar {
     display: flex;
     justify-content: space-between;
@@ -742,7 +725,6 @@ button, input {
     color: var(--ptc-text-primary);
   }
 
-  /* Hidden Mobile Search Expansion */
   .mobile-search-form {
     display: none;
     position: sticky;
@@ -755,12 +737,10 @@ button, input {
   
   .mobile-search-form.active { display: flex; }
   
-  /* Fallback for noscript */
   .no-js .mobile-search-form {
     display: flex;
   }
 
-  /* Target the toggle button only in no-js */
   .no-js .search-toggle-btn {
     display: none; 
   }
@@ -784,7 +764,6 @@ button, input {
     cursor: pointer;
   }
 
-  /* Mobile Scrollable Chips (Under Top Bar) */
   .mobile-chip-bar {
     display: flex;
     overflow-x: auto;
@@ -792,16 +771,16 @@ button, input {
     gap: 8px;
     background: var(--ptc-bg);
     position: sticky;
-    top: 48px; /* sits right under top bar */
+    top: 48px; 
     z-index: 90;
-    scrollbar-width: none; /* Firefox */
+    scrollbar-width: none; 
   }
   
   .no-js .mobile-chip-bar {
     top: 100px;
   }
 
-  .mobile-chip-bar::-webkit-scrollbar { display: none; } /* Chrome */
+  .mobile-chip-bar::-webkit-scrollbar { display: none; } 
   
   .m-chip {
     white-space: nowrap;
@@ -819,7 +798,6 @@ button, input {
     color: var(--ptc-bg);
   }
 
-  /* Video Grid tweaks for mobile edge-to-edge */
   .video-grid { 
     grid-template-columns: 1fr; 
     gap: 0; 
@@ -830,7 +808,7 @@ button, input {
   }
 
   .thumbnail-container { 
-    border-radius: 0; /* Edge to edge */
+    border-radius: 0; 
   } 
   
   .details { 
@@ -847,7 +825,6 @@ button, input {
     font-size: 12px;
   }
 
-  /* Mobile Bottom Navigation */
   .mobile-bottom-nav {
     display: flex;
     justify-content: space-around;
@@ -884,11 +861,11 @@ button, input {
   .nav-item.add-btn i { font-size: 32px; font-weight: 300; opacity: 1; }
 
   .site-footer {
-    display: none; /* Hide standard footer on mobile */
+    display: none; 
   }
   
   .symbol-of-tolerance {
-    margin-bottom: 48px; /* Keep above nav bar */
+    margin-bottom: 48px; 
   }
 }
 </style>
@@ -896,7 +873,6 @@ button, input {
 
 <body>
 
-<!-- Mobile Header Elements (Visible only on max-width: 560px) -->
 <div class="mobile-top-bar">
   <img src="/static/logo-poke.svg" class="mobile-logo" alt="Poke">
   <div class="mobile-top-actions">
@@ -920,7 +896,6 @@ button, input {
   <a class="m-chip" href="/calendar">Calendar</a>
 </div>
 
-<!-- Desktop/Tablet UI Container -->
 <div class="page">
   <div class="hero">
     <div class="logo-wrap">
@@ -984,8 +959,8 @@ button, input {
 
       <div class="discover-body">
         <div class="video-grid">
-          <% filteredVideos.forEach(function(item) { %>
-            <div class="video canloadhd" data-author="<%- item.author %>" data-game="<%- item.detectedGame %>">
+          <% finalVideos.forEach(function(item) { %>
+            <div class="video canloadhd" data-author="<%- item.author %>" data-game="<%- item.detectedGame %>" data-isslop="<%- item.isSlop %>" style="<%- item.isSlop ? 'display:none;' : '' %>">
               <a href="/watch?v=<%- item.videoId %>" class="video-cover-link" aria-label="Watch <%- item.title %>"></a>
               
               <div class="thumbnail-container" style="background-image:url('/vi/<%= item.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw');">
@@ -1025,13 +1000,10 @@ button, input {
 
 <footer class="site-footer">
   <a href="/privacy">Privacy</a>
-  <a href="/terms">Terms</a>
-  <a href="/about">About</a>
 </footer>
 
 <div class="symbol-of-tolerance"></div>
 
-<!-- Create Modal -->
 <div id="create-modal" class="modal-overlay hidden" onclick="closeCreateModal(event)">
   <div class="modal-content" onclick="event.stopPropagation()">
     <div class="modal-header">
@@ -1050,7 +1022,6 @@ button, input {
   </div>
 </div>
 
-<!-- Mobile Bottom Navigation -->
 <div class="mobile-bottom-nav">
   <a href="/" class="nav-item active">
     <i class="fa-solid fa-house"></i>
@@ -1090,7 +1061,6 @@ button, input {
     });
   }
 
-  // Mobile Game  
   var filterChips = document.querySelectorAll('#game-filter-bar .m-chip[data-filter]');
   var videos = document.querySelectorAll('.video-grid .video');
 
@@ -1105,7 +1075,11 @@ button, input {
 
       videos.forEach(function(vid) {
         if (filterTarget === 'all') {
-          vid.style.display = '';
+          if (vid.getAttribute('data-isslop') === 'true') {
+            vid.style.display = 'none';
+          } else {
+            vid.style.display = '';
+          }
         } else {
           if (vid.getAttribute('data-game') === filterTarget) {
             vid.style.display = '';
