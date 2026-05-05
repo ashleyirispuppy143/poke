@@ -47,27 +47,27 @@ module.exports = function (app, config, renderTemplate) {
     return res.redirect("/search");
   }
 
+  // If the user IS on mobile, but there is no mobilesearch query, redirect to /search
+  if (isMobile && !req.query.mobilesearch) {
+    return res.redirect("/search");
+  }
+
   const { fetch } = await import("undici");
   const currentTab = req.query.tab;
-   
-  if (isMobile && currentTab !== "search" && !req.query.mobilesearch) {
-    return res.redirect("/app?tab=search");
-  }
 
   let tab = "";
   if (req.query.tab) {
     tab = `/?type=${capitalizeFirstLetter(req.query.tab)}`;
   }
- 
+  
   const t = [];
-
-   
+    
   const p = "";
 
-  let j = { results:[], meta: {} };
+  let j = { results: [], meta: {} };
 
   const normalizeSearchData = (data) => {
-    if (!data) return { results:[] };
+    if (!data) return { results: [] };
     if (Array.isArray(data)) return { results: data };
     if (Array.isArray(data.results))
       return { results: data.results, meta: data.meta || {} };
@@ -75,7 +75,7 @@ module.exports = function (app, config, renderTemplate) {
       return { results: data.items, meta: data.meta || {} };
     if (Array.isArray(data.videos))
       return { results: data.videos, meta: data.meta || {} };
-    return { results:[], meta: { note: "unrecognized search payload shape" } };
+    return { results: [], meta: { note: "unrecognized search payload shape" } };
   };
 
   try {
@@ -99,7 +99,7 @@ module.exports = function (app, config, renderTemplate) {
 
       if (!r.ok) {
         j = {
-          results:[],
+          results: [],
           error: true,
           meta: { status: r.status, statusText: r.statusText, url: searchUrl },
         };
@@ -118,7 +118,7 @@ module.exports = function (app, config, renderTemplate) {
         j = normalizeSearchData(data);
       }
     } else {
-      j = { results:[], error: true, meta: { reason: "missing query" } };
+      j = { results: [], error: true, meta: { reason: "missing query" } };
       console.warn(
         "[mobilesearch] Missing query parameter (mobilesearch/q/query)"
       );
@@ -127,7 +127,7 @@ module.exports = function (app, config, renderTemplate) {
     j.meta = { ...(j.meta || {}), continuation };
   } catch (err) {
     j = {
-      results:[],
+      results: [],
       error: true,
       meta: {
         reason: "exception",
