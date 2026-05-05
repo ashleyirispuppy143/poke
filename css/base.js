@@ -25,7 +25,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 //////////////// THE PLAYER, START ////////////////////////
-try {
+ try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -34,6 +34,10 @@ try {
   };
   const _earlyVideo = document.getElementById("video");
   const _earlyAudio = document.getElementById("aud");
+  try {
+    window.__playerInitialVideoLoopDesired = !!(_earlyVideo && (_earlyVideo.loop || _earlyVideo.hasAttribute("loop")));
+    window.__playerInitialAudioLoopDesired = !!(_earlyAudio && (_earlyAudio.loop || _earlyAudio.hasAttribute("loop")));
+  } catch { }
   if (_earlyVideo && !_startupZeroSuppressed()) { _earlyVideo.currentTime = 0; }
   if (_earlyAudio && !_startupZeroSuppressed()) { _earlyAudio.currentTime = 0; }
   if (_earlyAudio) {
@@ -85,11 +89,39 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let cachedInnerVideoEl = null;
   let installPlayWrapperForDiscoveredMedia = null;
+  const restoreInitialLoopFlags = () => {
+    try {
+      if (window.__playerInitialVideoLoopDesired === true && videoEl) {
+        videoEl.loop = true;
+        videoEl.setAttribute("loop", "");
+      }
+    } catch { }
+    try {
+      if (window.__playerInitialAudioLoopDesired === true && audio) {
+        audio.loop = true;
+        audio.setAttribute("loop", "");
+      }
+    } catch { }
+  };
+  const explicitLoopRequested = (() => {
+    try {
+      const q = (qs.get("loop") || "").toLowerCase();
+      if (q === "1" || q === "true" || q === "yes") return true;
+    } catch { }
+    try { if (window.__playerLoopDesired === true) return true; } catch { }
+    try {
+      const attr = (videoEl?.getAttribute?.("data-loop") || audio?.getAttribute?.("data-loop") || "").toLowerCase();
+      if (attr === "1" || attr === "true" || attr === "yes") return true;
+    } catch { }
+    return false;
+  })();
   function loopPreferenceDesired() {
+    if (explicitLoopRequested) return true;
     try { if (videoEl && videoEl.loop) return true; } catch { }
     try { if (audio && audio.loop) return true; } catch { }
     return false;
   }
+  restoreInitialLoopFlags();
   function syncLoopPreferenceToMedia() {
     const desiredLoop = loopPreferenceDesired();
     const syncLoopFlag = (el) => {
@@ -368,14 +400,16 @@ document.addEventListener("DOMContentLoaded", () => {
   // Inner Video.js tech nodes can be recreated or can inherit stale loop flags.
   // If the user did not ask for looping on the real media elements, force every
   // live tech node to stay non-looping so no hidden inner element can restart.
-  try { videoEl.loop = false; } catch { }
-  try { videoEl.removeAttribute("loop"); } catch { }
-  try {
-    if (audio) {
-      audio.loop = false;
-      audio.removeAttribute("loop");
-    }
-  } catch { }
+  if (!loopPreferenceDesired()) {
+    try { videoEl.loop = false; } catch { }
+    try { videoEl.removeAttribute("loop"); } catch { }
+    try {
+      if (audio) {
+        audio.loop = false;
+        audio.removeAttribute("loop");
+      }
+    } catch { }
+  }
   video.ready(() => {
     try { syncLoopPreferenceToMedia(); } catch { }
   });
@@ -603,12 +637,12 @@ startupPrimeStartedAt: performance.now(),
                             playRequestedDuringSeek: false,
                             seekCompleted: false,
                             seekKickAudioAllowedUntil: 0,
-                              seekAudioKickAt: 0,
-                              seekAudioMustStartUntil: 0,
-                              seekAudioHoldUntilVideoReadyUntil: 0,
-                              seekAudioHoldSeekId: -1,
-                              seekAudioHoldPollTimer: null,
-                              seekResumeWantedUntil: 0,
+                            seekAudioKickAt: 0,
+                            seekAudioMustStartUntil: 0,
+                            seekAudioHoldUntilVideoReadyUntil: 0,
+                            seekAudioHoldSeekId: -1,
+                            seekAudioHoldPollTimer: null,
+                            seekResumeWantedUntil: 0,
                             seekStabilizeUntil: 0,
                             audioVolumeBeforePause: 1,
                             stateChangeCooldownUntil: 0,
@@ -1070,9 +1104,9 @@ startupPrimeStartedAt: performance.now(),
                               ) {
                                 const curHiddenAt = _origGet.call(this) || 0;
                                 const hiddenUserSeek =
-                                  userSeekIntentActive() ||
-                                  state.pendingSeekTarget != null ||
-                                  (now() - state.lastUserActionTime) < 1200;
+                                userSeekIntentActive() ||
+                                state.pendingSeekTarget != null ||
+                                (now() - state.lastUserActionTime) < 1200;
                                 if (!hiddenUserSeek && curHiddenAt > 0.8 && numV < curHiddenAt - 0.2) {
                                   return;
                                 }
@@ -7491,12 +7525,29 @@ function setMediaSessionForcedPause(ms = 2600) {
 }
 function clearMediaSessionForcedPause() { state.mediaForcedPauseUntil = 0; }
 function mediaSessionForcedPauseActive() { return now() < state.mediaForcedPauseUntil; }
+function clearEndedStateForUserSeek() {
+  if (!state.endedNaturally && !state.endedAt && !restartFromEndedGuardActive()) return;
+  state.endedNaturally = false;
+  state.endedAt = 0;
+  state.endedLockUntil = 0;
+  state.restartFromEndedUntil = 0;
+  state.suppressEndedUntil = Math.max(state.suppressEndedUntil, now() + 900);
+  clearTerminalAudioEndLock();
+  if (state._endedKillInterval) {
+    clearTimeout(state._endedKillInterval);
+    state._endedKillInterval = null;
+  }
+  if (state._endedKillHardStop) {
+    clearTimeout(state._endedKillHardStop);
+    state._endedKillHardStop = null;
+  }
+}
 function markUserSeekIntent(ms = 2600) {
   const until = now() + Math.max(0, Number(ms) || 0);
   state.userSeekIntentUntil = Math.max(state.userSeekIntentUntil, until);
+  clearEndedStateForUserSeek();
   suppressStartupZero(15000);
   state.lastUserActionTime = now();
-  state.lastKnownGoodVT = 0;
   state._pauseSavedPosition = -1;
   clearTerminalAudioEndLock();
   if (platform.chromiumOnlyBrowser) {
@@ -7506,6 +7557,28 @@ function markUserSeekIntent(ms = 2600) {
   }
 }
 function userSeekIntentActive() { return now() < state.userSeekIntentUntil; }
+function prepareExplicitUserSeekTarget(t, ms = 5200) {
+  const target = Number(t);
+  if (!isFinite(target) || target < 0) return false;
+  markUserSeekIntent(ms);
+  if (target < 0.8) authorizeNearZeroSeek(Math.max(ms, 3200));
+  state.pendingSeekTarget = target;
+  state.seekWantedPlaying = state.intendedPlaying;
+  if (state.seekWantedPlaying) armSeekResumeIntent(Math.max(ms, 7000));
+  state.seekStabilizeUntil = Math.max(state.seekStabilizeUntil, now() + Math.max(1200, ms));
+  state.loopPreventionCooldownUntil = 0;
+  if (coupledMode && audio) {
+    try { state._seekPreVolume = audio.paused ? targetVolFromVideo() : audio.volume; } catch { }
+    try { cancelActiveFade(); } catch { }
+    try { audio.volume = 0; } catch { }
+    try { squelchAudioEvents(700); } catch { }
+    try { if (!audio.paused) audio.pause(); } catch { }
+    state._allowAudioTimeWrite = true;
+    try { audio.currentTime = target; } catch { }
+    state._allowAudioTimeWrite = false;
+  }
+  return true;
+}
 function startupZeroSuppressed() {
   const globalUntil = (() => {
     try { return Number(window.__playerStartupZeroSuppressedUntil) || 0; } catch { return 0; }
@@ -8575,18 +8648,56 @@ function detectLoop() {
 // shouldn't — browser-native loop, phantom seeks to 0, ended→play races,
 // sync machinery accidentally restarting, etc. This is the final safety net.
 const MakeSureUnintentionalLoopDoesntEverHappenAtALLManager = (() => {
-  function onEnded() {
+  function lockEndedPlayback() {
     state.endedNaturally = true;
     state.endedAt = now();
     state.intendedPlaying = false;
     state.bufferHoldIntendedPlaying = false;
     state.resumeOnVisible = false;
     state.bgHiddenWasPlaying = false;
+    try { MediumQualityManager.markUserPaused(); } catch { }
+    stripAutoplayAfterFirstPlay();
+  }
+
+  function onEnded() {
+    lockEndedPlayback();
     // strip autoplay off video.js AND the DOM attribute so nothing
     // auto-restarts after ended. both the video.js config and the
     // <video autoplay> attr will re-call play() on their own, even
     // with loop=false.
-    stripAutoplayAfterFirstPlay();
+  }
+
+  function terminalRestartLooksUnauthorized(videoTime = NaN) {
+    if (!state.firstPlayCommitted) return false;
+    if (state.restarting || state.seeking || state.seekBuffering) return false;
+    if (isLoopDesired()) return false;
+    const t = now();
+    if ((t - state.lastUserActionTime) < 2500) return false;
+    if (userSeekIntentActive() || state.pendingSeekTarget != null || restartFromEndedGuardActive()) return false;
+    let vt = Number(videoTime);
+    if (!isFinite(vt)) {
+      try { vt = Number(getVideoNode()?.currentTime); } catch { vt = NaN; }
+    }
+    if (!isFinite(vt)) return false;
+    const dur = getPlaybackDurationCached();
+    if (!isFinite(dur) || dur < 5) return false;
+    const lastGood = Number(state.lastKnownGoodVT || 0);
+    const wasAtTail = lastGood >= Math.max(0, dur - Math.max(2.5, dur * 0.02));
+    const nowAtStart = vt < Math.min(5.0, Math.max(1.0, dur * 0.05));
+    return wasAtTail && nowAtStart;
+  }
+
+  function blockUnauthorizedTailRestart(videoTime = NaN) {
+    if (!terminalRestartLooksUnauthorized(videoTime)) return false;
+    lockEndedPlayback();
+    const vn = getVideoNode();
+    try { if (vn && !vn.paused) vn.pause(); } catch { }
+    try { if (videoEl && videoEl !== vn && !videoEl.paused) videoEl.pause(); } catch { }
+    if (coupledMode && audio) {
+      try { audio.volume = 0; } catch { }
+      try { if (!audio.paused) audio.pause(); } catch { }
+    }
+    return true;
   }
 
   // call this before any auto-play/resume to see if it should be blocked.
@@ -8686,6 +8797,7 @@ const MakeSureUnintentionalLoopDoesntEverHappenAtALLManager = (() => {
   let _loopWdLastVtAt = 0;
   function loopWatchdogTick() {
     try {
+      try { syncLoopPreferenceToMedia(); } catch { }
       if (state.restarting || state.seeking || state.seekBuffering) return;
       if (isLoopDesired()) { _loopWdLastVt = 0; _loopWdLastVtAt = 0; return; }
       const vn = getVideoNode();
@@ -8702,37 +8814,31 @@ const MakeSureUnintentionalLoopDoesntEverHappenAtALLManager = (() => {
       const t = now();
       const wasNearEnd = _loopWdLastVt > 0 && (_loopWdLastVt / dur) > 0.95;
       const isNearStart = vt < (dur * 0.05);
-      const recentSample = (t - _loopWdLastVtAt) < 800;
+      const recentSample = (t - _loopWdLastVtAt) < 6000;
       const userRecent = (t - state.lastUserActionTime) < 1500;
       const programmatic = state.pendingSeekTarget != null ||
       userSeekIntentActive() ||
       state.restartFromEndedUntil > t;
-      // Also skip if video is paused — during the natural end sequence the browser
-      // fires pause before ended, so currentTime might look like a jump if the
-      // previous sample was near-end. Don't false-positive on the pause→ended gap.
+      // Treat a tail→start jump as ended even if it lands paused. Browser
+      // resets can happen before recovery code replays the element from 0.
       if (wasNearEnd && isNearStart && recentSample &&
-        !userRecent && !programmatic && state.firstPlayCommitted && !vn.paused) {
-        // Unauthorized loop — kill it.
-        state.endedNaturally = true;
-      state.endedAt = t;
-      state.intendedPlaying = false;
-      state.bufferHoldIntendedPlaying = false;
-      state.resumeOnVisible = false;
-      try { if (!vn.paused) vn.pause(); } catch { }
-      if (videoEl && videoEl !== vn && !videoEl.paused) { try { videoEl.pause(); } catch { } }
-      if (coupledMode && audio && !audio.paused) {
-        state.isProgrammaticAudioPause = true;
-        try { audio.pause(); } catch { }
-        setTimeout(() => { state.isProgrammaticAudioPause = false; }, 200);
-      }
-      stripAutoplayAfterFirstPlay();
+        !userRecent && !programmatic && state.firstPlayCommitted) {
+        // Unauthorized loop/reset — lock ended even if the reset landed paused.
+        lockEndedPlayback();
+        try { if (!vn.paused) vn.pause(); } catch { }
+        if (videoEl && videoEl !== vn && !videoEl.paused) { try { videoEl.pause(); } catch { } }
+        if (coupledMode && audio && !audio.paused) {
+          state.isProgrammaticAudioPause = true;
+          try { audio.pause(); } catch { }
+          setTimeout(() => { state.isProgrammaticAudioPause = false; }, 200);
+        }
         }
         _loopWdLastVt = vt;
         _loopWdLastVtAt = t;
     } catch { }
   }
 
-  return { onEnded, shouldBlockAutoRestart, onUserPlay, isPhantomRestart, tick, loopWatchdogTick };
+  return { onEnded, shouldBlockAutoRestart, onUserPlay, isPhantomRestart, tick, loopWatchdogTick, blockUnauthorizedTailRestart };
 })();
 
 function shouldIgnorePauseAsTransient() {
@@ -9311,9 +9417,9 @@ function safeSetAudioTime(t) {
       if (t < 0.5 && state.firstPlayCommitted && !state.restarting && !isLoopDesired() &&
         !shouldHonorNearZeroAudioSync(t)) {
         const currentAt = Number(audio.currentTime) || 0;
-        if (currentAt > 0.5) return;
-      }
-      const currentPos = Number(audio.currentTime) || 0;
+      if (currentAt > 0.5) return;
+        }
+        const currentPos = Number(audio.currentTime) || 0;
       const timeDiff = Math.abs(currentPos - t);
       // Block backward seeks > 0.3s unless user-initiated or during restart.
       // This catches programmatic code that accidentally syncs audio to a stale
@@ -9990,6 +10096,10 @@ function execProgrammaticVideoPause() {
 function execProgrammaticVideoPlay(opts = {}) {
   const { force = false, minGapMs = null } = opts || {};
   if (_errorOverlayShown) return;
+  try {
+    const _playVt = Number(getVideoNode()?.currentTime);
+    if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.blockUnauthorizedTailRestart(_playVt)) return;
+  } catch { }
   // Never restart after ended. User play clears endedNaturally first.
   if (state.endedNaturally && !state.restarting && !isLoopDesired()) return;
   if (restartFromEndedGuardActive() && !isLoopDesired()) {
@@ -11271,9 +11381,9 @@ async function seamlessBgCatchUp() {
     // that later audio position is what the user actually heard. Never rewind
     // it just because lastKnownGoodVT/video lag behind.
     const hiddenAudioFloor =
-      hiddenResume && isFinite(atNow) && atNow > 0.5
-        ? atNow
-        : bestPos;
+    hiddenResume && isFinite(atNow) && atNow > 0.5
+    ? atNow
+    : bestPos;
     // Seek video forward to bestPos only when it's BEHIND (browser suspended
     // video in background). If video is AHEAD of bestPos — background playback
     // continued naturally — don't seek it back. Update bestPos to vtNow so
@@ -12779,8 +12889,8 @@ function getAtomicMinIntervalMs() {
     state.strictBufferHold ||
     !state.firstPlayCommitted ||
     foregroundRecoveryActive(450) ||
-    state.videoPlayInFlight ||
-    state.audioPlayInFlight
+      state.videoPlayInFlight ||
+      state.audioPlayInFlight
   ) {
     return ATOMIC_MIN_INTERVAL_ACTIVE_MS;
   }
@@ -17008,6 +17118,19 @@ function setupUserPauseIntentDetection() {
     } catch { }
     return false;
   };
+  const getPointerSeekTarget = event => {
+    try {
+      const el = getTargetEl(event.target);
+      const holder = el?.closest?.(".vjs-progress-holder, .vjs-progress-control");
+      if (!holder) return NaN;
+      const rect = holder.getBoundingClientRect?.();
+      const clientX = Number(event.clientX ?? event.touches?.[0]?.clientX ?? event.changedTouches?.[0]?.clientX);
+      const dur = Number(video.duration()) || Number(getVideoNode()?.duration) || Number(videoEl?.duration) || 0;
+      if (!rect || !isFinite(clientX) || !isFinite(dur) || dur <= 0 || rect.width <= 0) return NaN;
+      const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      return ratio * dur;
+    } catch { return NaN; }
+  };
   const onPressStart = event => {
     if (!isPrimaryActivation(event)) return;
     tryUnlockAudioContext();
@@ -17021,11 +17144,16 @@ function setupUserPauseIntentDetection() {
       scheduleStartupAutoplayKick();
       }
 
-      const isPlayCtrl = isPlayControlTarget(event.target);
+    const isPlayCtrl = isPlayControlTarget(event.target);
     const isTechSurface = isTechSurfaceTarget(event.target);
     const isSeekControl = isSeekControlTarget(event.target);
-    if (isSeekControl) markUserSeekIntent(3200);
-    if (isSeekControl) { state._pauseSavedPosition = -1; state._pauseSavedAt = 0; }
+    if (isSeekControl) {
+      const pointerSeekTarget = getPointerSeekTarget(event);
+      if (isFinite(pointerSeekTarget)) prepareExplicitUserSeekTarget(pointerSeekTarget, 5200);
+      else markUserSeekIntent(3200);
+      state._pauseSavedPosition = -1;
+      state._pauseSavedAt = 0;
+    }
 
     if (isPlayCtrl || isTechSurface) {
       beginUserToggleTxn(getVideoPaused(), USER_TOGGLE_TXN_FAST_MS);
@@ -17130,6 +17258,35 @@ function setupUserPauseIntentDetection() {
     // Unlock AudioContext on keyboard interaction too
     tryUnlockAudioContext();
     const code = event.code || event.key || "";
+    const keyTarget = getTargetEl(event.target);
+    const typingTarget = !!(keyTarget && (
+      keyTarget.isContentEditable ||
+      keyTarget.tagName === "INPUT" ||
+      keyTarget.tagName === "TEXTAREA" ||
+      keyTarget.tagName === "SELECT"
+    ));
+    const numberSeekKey = (() => {
+      if (typingTarget || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return NaN;
+      if (/^Digit[0-9]$/.test(code)) return Number(code.slice(5));
+      if (/^Numpad[0-9]$/.test(code)) return Number(code.slice(6));
+      if (/^[0-9]$/.test(event.key || "")) return Number(event.key);
+      return NaN;
+    })();
+    const directSeekTarget = (() => {
+      if (typingTarget || event.altKey || event.ctrlKey || event.metaKey) return NaN;
+      const dur = Number(video.duration()) || Number(getVideoNode()?.duration) || Number(videoEl?.duration) || 0;
+      if (!isFinite(dur) || dur <= 0) return NaN;
+      if (isFinite(numberSeekKey)) return dur * (numberSeekKey / 10);
+      if (code === "Home") return 0;
+      if (code === "End") return dur;
+      return NaN;
+    })();
+    if (isFinite(directSeekTarget)) {
+      prepareExplicitUserSeekTarget(directSeekTarget, 5600);
+      safeSetVideoTime(directSeekTarget, { force: true });
+      try { event.preventDefault(); } catch { }
+      return;
+    }
     if (
       code === "ArrowLeft" || code === "ArrowRight" ||
       code === "Home" || code === "End" ||
@@ -17173,9 +17330,9 @@ function setupMediaSession() {
       artist: typeof authorchannelname !== "undefined" ? authorchannelname : "",
       artwork: vidKey ? [
         { src: mediaThumbSrc("default.jpg"), sizes: "120x90", type: "image/jpeg" },
-        { src: mediaThumbSrc("mqdefault.jpg"), sizes: "320x180", type: "image/jpeg" },
-        { src: mediaThumbSrc("hqdefault.jpg"), sizes: "480x360", type: "image/jpeg" },
-        { src: mediaThumbSrc("maxresdefault.jpg"), sizes: "1280x720", type: "image/jpeg" }
+                                                        { src: mediaThumbSrc("mqdefault.jpg"), sizes: "320x180", type: "image/jpeg" },
+                                                        { src: mediaThumbSrc("hqdefault.jpg"), sizes: "480x360", type: "image/jpeg" },
+                                                        { src: mediaThumbSrc("maxresdefault.jpg"), sizes: "1280x720", type: "image/jpeg" }
       ] : []
     });
   } catch { }
@@ -17339,6 +17496,13 @@ function bindCommonMediaEvents() {
       if (coupledMode && audio && !audio.paused) { try { audio.pause(); } catch { } }
       return;
     }
+    try {
+      const _playEvtVt = Number(video.currentTime());
+      if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.blockUnauthorizedTailRestart(_playEvtVt)) {
+        execProgrammaticVideoPause();
+        return;
+      }
+    } catch { }
     // If seeking, don't silently eat the play — mark intent so seek finalize resumes
     if (state.seeking || state.seekBuffering) {
       state.playRequestedDuringSeek = true;
@@ -17728,7 +17892,7 @@ function bindCommonMediaEvents() {
         !userWantsPauseNow(2400) &&
         !mediaSessionForcedPauseActive()) {
         prepareRestartFromEndedPlayback(true);
-        state.intendedPlaying = true;
+      state.intendedPlaying = true;
       state.bufferHoldIntendedPlaying = true;
       const _reKick = execProgrammaticVideoPlay({ force: true, minGapMs: 0 });
       if (_reKick && typeof _reKick.catch === "function") _reKick.catch(() => { });
@@ -19524,6 +19688,7 @@ function bindCommonMediaEvents() {
           // page-set video.loop=true override, and post-ended restarts.
           const _phVt = Number(videoEl.currentTime) || 0;
           const _phPrev = state.lastKnownGoodVT || 0;
+          const _phRecentUserAction = (now() - state.lastUserActionTime) < 3500;
           const _phProgrammatic = state.pendingSeekTarget != null || state.seeking || state.restarting ||
           (state.seekStabilizeUntil && now() < state.seekStabilizeUntil) ||
           (state.seekCooldownUntil && now() < state.seekCooldownUntil);
@@ -19533,13 +19698,17 @@ function bindCommonMediaEvents() {
           nearZeroSeekAuthorized(_phVt) ||
           _phUserSeek ||
           _phRequestedNearZero;
+          if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.blockUnauthorizedTailRestart(_phVt)) return;
+          if (state.endedNaturally && (_phProgrammatic || _phUserSeek || _phRecentUserAction)) {
+            clearEndedStateForUserSeek();
+          }
           // Phantom restart detection — only block if video ended AND no user action.
           // Skip during any user interaction or programmatic seek to prevent false
           // positives that cause video to get stuck in a revert loop.
           // User action window: 5s (was 2s). Seeks can resolve slowly, especially
           // on slow connections. 2s caused reverts on legitimate seeks.
           if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.isPhantomRestart(_phVt) &&
-            !_phUserSeek && !_phProgrammatic) {
+            !_phUserSeek && !_phProgrammatic && !_phRecentUserAction) {
             state._isMicroSeek = true;
           try { videoEl.currentTime = _phPrev > 0.5 ? _phPrev : videoEl.duration || _phPrev; } catch { }
           setTimeout(() => { state._isMicroSeek = false; }, 300);
@@ -19554,7 +19723,7 @@ function bindCommonMediaEvents() {
             // already catch it. Also subject to the rate limiter — if we've reverted
             // 2+ times in the phantom revert window, let the seek through.
             if (_phVt < 0.5 && _phPrev > 0.9 && state.firstPlayCommitted &&
-              !_phNearZeroAuthorized && !_phProgrammatic && !isLoopDesired()) {
+              !_phNearZeroAuthorized && !_phProgrammatic && !_phRecentUserAction && !isLoopDesired()) {
               // Check rate limiter from isPhantomRestart — reuse the same counter
               if (!MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.isPhantomRestart(_phVt)) {
                 // Rate limiter said "enough reverts" — let this seek through
@@ -19578,6 +19747,13 @@ function bindCommonMediaEvents() {
               userSeekIntentActive() ||
               ((now() - state.lastUserActionTime) < 3500) ||
               (document.visibilityState === "visible" && isWindowFocused() && !isVisibilityTransitionActive());
+              const _endedSeekLikelyUser =
+              state.pendingSeekTarget != null ||
+              userSeekIntentActive() ||
+              ((now() - state.lastUserActionTime) < 3500);
+              if (state.endedNaturally && _endedSeekLikelyUser) {
+                clearEndedStateForUserSeek();
+              }
               if (isTabReturnImmune() && !state.seeking &&
                 (now() - state.lastUserActionTime) > 2000 && !_seekLikelyUser) return;
 
@@ -19657,7 +19833,15 @@ function bindCommonMediaEvents() {
 
           if (_stPendingValid) {
             // Explicit target wins (mediaSession / keyboard / programmatic).
-            seekTime = _stPendingNum;
+            const _stPendingRawCandidates = [vjsTime, nativeTime, innerTime].filter(v => isFinite(v) && v > 0.5);
+            const _stPendingBestRaw = _stPendingRawCandidates.length ? Math.max(..._stPendingRawCandidates) : NaN;
+            const _stPendingLooksLikeDraggedSlider =
+            _stUserSeekIntent &&
+            isFinite(_stPendingBestRaw) &&
+            previousGoodVT > 0.5 &&
+            Math.abs(_stPendingBestRaw - _stPendingNum) > 0.75 &&
+            Math.abs(_stPendingBestRaw - previousGoodVT) > 0.5;
+            seekTime = _stPendingLooksLikeDraggedSlider ? _stPendingBestRaw : _stPendingNum;
           } else {
             // Aggregate every real-looking candidate; race-read zeroes get
             // discarded when previousGoodVT > 1.0 (intent comes from
@@ -19676,7 +19860,7 @@ function bindCommonMediaEvents() {
             } else {
               // All sources read 0/near-0: either intentional zero or phantom buffer flush.
               const _stAuthorized = (typeof nearZeroSeekAuthorized === "function") && nearZeroSeekAuthorized(0);
-              
+
               // CRITICAL BUG FIX: "video+audio seeks to 0 then comes back".
               // Whether during a drag or immediately after a click, the browser
               // frequently emits 'seeking' events with currentTime=0 while flushing
@@ -20172,7 +20356,7 @@ function bindCommonMediaEvents() {
             scheduleSync(60);
             scheduleSeekFinalize(SEEK_FINALIZE_DELAY_MS, state.seekId);
         });
-        video.on("ended", () => {
+        const handleVideoEnded = () => {
           if (state.restarting) return;
           if (state.seeking || state.seekBuffering) return;
           if (now() < state.suppressEndedUntil) return;
@@ -20278,7 +20462,9 @@ function bindCommonMediaEvents() {
             }
             state._endedKillHardStop = null;
           }, 20000);
-        });
+        };
+        video.on("ended", handleVideoEnded);
+        try { _on(videoEl, "ended", handleVideoEnded, { passive: true }); } catch { }
 }
 
 async function restartLoop() {
