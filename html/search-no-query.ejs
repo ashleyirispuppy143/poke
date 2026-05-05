@@ -23,7 +23,6 @@
     var score = 0;
     var lowerTitle = title.toLowerCase();
 
-     // These words have zero redeeming value in a title.
     var nuclearBrainrot =[
       "skibidi", "rizz", "sigma", "gyatt", "fanum tax", "mewing", 
       "looksmaxxing", "grimace shake", "baby gronk", "livvy dunne", 
@@ -34,7 +33,6 @@
       if (lowerTitle.indexOf(nuclearBrainrot[i]) !== -1) return 100; 
     }
 
-     // Often used for farming kids' views, but occasionally discussed in actual video essays.
     var mascotSlop =[
       "garten of banban", "huggy wuggy", "poppy playtime", 
       "rainbow friends", "pomni", "digital circus", "monster school",
@@ -44,7 +42,6 @@
       if (lowerTitle.indexOf(mascotSlop[j]) !== -1) score += 60;
     }
 
-    // 3. Contextual Roblox Slop (+80 points)
      if (lowerTitle.indexOf("roblox") !== -1) {
       var robloxTriggers =[
         "free robux", "slender", "brookhaven secret", "online dater", "mic up", "admin abuse", "sad story"
@@ -54,7 +51,6 @@
       }
     }
 
-    // 4. Clickbait Phrasing (+40 points)
     var clickbaitPhrases =[
       "gone wrong", "you won't believe", "literally died",
       "don't watch at 3am", "100% real", "not clickbait", "caught on camera"
@@ -63,7 +59,6 @@
       if (lowerTitle.indexOf(clickbaitPhrases[l]) !== -1) score += 40;
     }
 
-    // 5. Excessive ALL CAPS (+40 points)
     var letters = title.replace(/[^a-zA-Z]/g, '');
     if (letters.length > 5) {
       var caps = title.replace(/[^A-Z]/g, '');
@@ -71,10 +66,8 @@
       if (capsRatio > 0.6) score += 40; 
     }
 
-    // 6. Punctuation Spam (+30 points)
     if (/[!?]{3,}/.test(title)) score += 30;
 
-    // 7. Emoji Spam (+30 points)
     var emojiRegex = /[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu;
     var emojis = title.match(emojiRegex);
     if (emojis && emojis.length >= 3) score += 30;
@@ -107,8 +100,6 @@
       "TheBurntPeanut", "KreekCraft", "Asmongold TV  ", "Tyler & Snowi"
   ];
 
-  // A score of 70 allows a video to have ONE major red flag (like a Mascot name)
-  // but blocks it if it pairs that mascot name with emojis or ALL CAPS.
   var SLOP_THRESHOLD = 70; 
 
   var filteredVideos = FilterVideos(inv, blockedAuthors, 32, SLOP_THRESHOLD);
@@ -167,6 +158,8 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   background: var(--ptc-bg);
   color: var(--ptc-text-primary);
   font-family: "Roboto", Arial, sans-serif;
@@ -189,9 +182,10 @@ button, input {
 
 /* Page Layout */
 .page {
+  flex: 1;
   width: var(--container);
   margin: 0 auto;
-  padding: 40px 0 60px;
+  padding: 40px 0 20px;
 }
 
 .hero {
@@ -212,7 +206,8 @@ button, input {
   max-width: 74vw;
 }
 
- .search-wrap {
+/* Search Bar (YouTube Style) */
+.search-wrap {
   width: min(600px, 100%);
   margin: 0 auto;
 }
@@ -307,6 +302,7 @@ button, input {
   text-decoration: underline;
 }
 
+/* Quick Links (YouTube Chips Style) */
 .home-extras-wrapper {
   margin-top: 24px;
   width: 100%;
@@ -373,14 +369,47 @@ button, input {
 
 .discover-header {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   padding-bottom: 24px;
+  border-bottom: 1px solid var(--ptc-border);
+  margin-bottom: 24px;
 }
 
 .header-text {
   display: flex;
   flex-direction: column;
+}
+
+.section-title {
+  margin: 0;
+  color: var(--ptc-text-primary);
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.section-sub {
+  margin: 6px 0 0 0;
+  color: var(--ptc-text-secondary);
+  font-size: 14px;
+  font-weight: 400;
+  display: flex;
+  align-items: center;
+}
+
+.region-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--ptc-chip-bg);
+  color: var(--ptc-text-secondary);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  margin-left: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .header-tabs {
@@ -409,20 +438,6 @@ button, input {
   background: var(--ptc-chip-hover);
 }
 
-.section-title {
-  margin: 0;
-  color: var(--ptc-text-primary);
-  font-size: 20px;
-  font-weight: 700;
-}
-
-.section-sub {
-  margin: 4px 0 0 0;
-  color: var(--ptc-text-secondary);
-  font-size: 14px;
-  font-weight: 400;
-}
-
 .video-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -440,7 +455,7 @@ button, input {
 .video-cover-link {
   position: absolute;
   inset: 0;
-  z-index: 1; /* Allows links inside the card to be clickable */
+  z-index: 1; 
 }
 
 .thumbnail-container {
@@ -453,10 +468,7 @@ button, input {
   background-repeat: no-repeat;
   border-radius: 12px;
   overflow: hidden;
-  transition: border-radius 0.2s;
 }
-
-/* Removed the hover border-radius reset */
 
 .video-length {
   position: absolute;
@@ -528,6 +540,47 @@ button, input {
   column-gap: 4px;
 }
 
+/* Footer elements */
+.site-footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 24px;
+  padding: 40px 0 20px;
+  color: var(--ptc-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.site-footer a {
+  transition: color 0.2s;
+}
+
+.site-footer a:hover {
+  color: var(--ptc-text-primary);
+}
+
+/* Symbol of Tolerance */
+.symbol-of-tolerance {
+  margin-top: 1em;
+  height: .25em;
+  width: 100%;
+  background: linear-gradient(
+    90deg,
+    #ea392f 0% 9.091%,
+    #f28917 9.091% 18.182%,
+    #eecb12 18.182% 27.273%,
+    #78b82a 27.273% 36.364%,
+    #4375ca 36.364% 45.455%,
+    #c346e3 45.455% 54.545%,
+    #7bcce5 54.545% 63.636%,
+    #eaeaea 63.636% 72.727%,
+    #f4aec8 72.727% 81.818%,
+    #000    81.818% 90.909%,
+    #945516 90.909% 100%
+  );
+}
+
 /* Responsive Breakpoints */
 @media (max-width: 1140px) {
   .video-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -556,6 +609,14 @@ button, input {
     align-items: flex-start;
     gap: 16px;
     padding: 0 12px 16px; 
+  }
+  .section-sub {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .region-badge {
+    margin-left: 0;
   }
 }
 </style>
@@ -614,7 +675,10 @@ button, input {
       <div class="discover-header">
         <div class="header-text">
           <h2 class="section-title">Poke Gaming</h2>
-          <p class="section-sub">Discover popular gaming videos (Uses the United States gaming trending page)</p>
+          <p class="section-sub">
+            Discover popular gaming videos
+            <span class="region-badge"><i class="fa-solid fa-globe"></i> Region: US</span>
+          </p>
         </div>
         <div class="header-tabs">
           <button class="category-tab active">Gaming</button>
@@ -662,6 +726,12 @@ button, input {
     </section>
   </div>
 </div>
+
+<footer class="site-footer">
+  <a href="/privacy">Privacy</a> 
+</footer>
+
+<div class="symbol-of-tolerance"></div>
 
 <script>
  (function () {
