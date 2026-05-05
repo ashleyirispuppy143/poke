@@ -75,6 +75,36 @@
     return score;
   }
 
+  // Comprehensive list for auto game detection
+  var POPULAR_GAMES = [
+    "Minecraft", "Roblox", "Fortnite", "GTA V", "GTA 5", "GTA", "Grand Theft Auto", 
+    "Valorant", "Apex Legends", "Call of Duty", "Warzone", "League of Legends", 
+    "CS:GO", "CS2", "Counter-Strike", "Overwatch", "Rocket League", "Terraria", 
+    "Among Us", "Fall Guys", "Genshin Impact", "Elden Ring", "Helldivers", 
+    "Palworld", "Lethal Company", "FNAF", "Five Nights at Freddy's", "Zelda", 
+    "Super Mario", "Pokemon", "Cyberpunk 2077", "Baldur's Gate", "The Sims"
+  ];
+
+  function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function detectGame(title) {
+    if (!title) return null;
+    for (var i = 0; i < POPULAR_GAMES.length; i++) {
+      // Use word boundaries for strict, highly accurate matching
+      var regex = new RegExp("\\b" + escapeRegExp(POPULAR_GAMES[i]) + "\\b", "i");
+      if (regex.test(title)) {
+        // Standardize GTA names
+        if (POPULAR_GAMES[i].includes("GTA") || POPULAR_GAMES[i] === "Grand Theft Auto") return "GTA";
+        if (POPULAR_GAMES[i].includes("FNAF") || POPULAR_GAMES[i].includes("Freddy")) return "FNAF";
+        if (POPULAR_GAMES[i] === "CS:GO" || POPULAR_GAMES[i] === "Counter-Strike") return "CS2";
+        return POPULAR_GAMES[i];
+      }
+    }
+    return null;
+  }
+
   function FilterVideos(videos, blockedAuthors, limit, maxSlopScore) {
     var allowed = videos.filter(function(item) {
       var authorSafe = blockedAuthors.indexOf(item.author) === -1;
@@ -112,6 +142,15 @@
   var SLOP_THRESHOLD = 70; 
 
   var filteredVideos = FilterVideos(inv, blockedAuthors, 32, SLOP_THRESHOLD);
+
+  // Extract unique games for the mobile filter chip bar
+  var availableGames = new Set();
+  filteredVideos.forEach(function(vid) {
+     var game = detectGame(vid.title);
+     vid.detectedGame = game || "Other";
+     if (game) availableGames.add(game);
+  });
+  var gameFilters = Array.from(availableGames);
 %>
 
 <!DOCTYPE html>
@@ -772,6 +811,7 @@ button, input {
     border-radius: 8px;
     font-size: 14px;
     font-weight: 500;
+    text-decoration: none;
   }
   
   .m-chip.active {
@@ -869,8 +909,11 @@ button, input {
   <button type="submit" aria-label="Search"><i class="fa-solid fa-magnifying-glass"></i></button>
 </form>
 
-<div class="mobile-chip-bar">
-  <a class="m-chip active">Gaming (US Trending)</a>
+<div class="mobile-chip-bar" id="game-filter-bar">
+  <a class="m-chip active" href="#" data-filter="all">All Games</a>
+  <% gameFilters.forEach(function(g) { %>
+    <a class="m-chip" href="#" data-filter="<%- g %>"><%- g %></a>
+  <% }); %>
   <a class="m-chip" onclick="alert('Coming soon!')">Music</a>
   <a class="m-chip" href="/translate">Translate</a>
   <a class="m-chip" href="/map">Maps</a>
@@ -942,7 +985,7 @@ button, input {
       <div class="discover-body">
         <div class="video-grid">
           <% filteredVideos.forEach(function(item) { %>
-            <div class="video canloadhd" data-author="<%- item.author %>">
+            <div class="video canloadhd" data-author="<%- item.author %>" data-game="<%- item.detectedGame %>">
               <a href="/watch?v=<%- item.videoId %>" class="video-cover-link" aria-label="Watch <%- item.title %>"></a>
               
               <div class="thumbnail-container" style="background-image:url('/vi/<%= item.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw');">
@@ -1046,6 +1089,34 @@ button, input {
       }
     });
   }
+
+  // Mobile Game  
+  var filterChips = document.querySelectorAll('#game-filter-bar .m-chip[data-filter]');
+  var videos = document.querySelectorAll('.video-grid .video');
+
+  filterChips.forEach(function(chip) {
+    chip.addEventListener('click', function(e) {
+      e.preventDefault();
+      
+      filterChips.forEach(function(c) { c.classList.remove('active'); });
+      this.classList.add('active');
+
+      var filterTarget = this.getAttribute('data-filter');
+
+      videos.forEach(function(vid) {
+        if (filterTarget === 'all') {
+          vid.style.display = '';
+        } else {
+          if (vid.getAttribute('data-game') === filterTarget) {
+            vid.style.display = '';
+          } else {
+            vid.style.display = 'none';
+          }
+        }
+      });
+    });
+  });
+
 })();
 
 function toggleMobileSearch() {
