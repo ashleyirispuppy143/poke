@@ -453,24 +453,20 @@
     fallbackIndex++;
   }
   
-  gameFilters = gameFilters.slice(0, 6); // Allow up to 6 smart chips
+  gameFilters = gameFilters.slice(0, 6);
 
-  var finalVideos;
+  var displayVideos = allSafeVideos.slice();
 
   if (isMobileVar) {
-    finalVideos = allSafeVideos.slice();
-
-    for (var shuffleIndex = finalVideos.length - 1; shuffleIndex > 0; shuffleIndex--) {
+    for (var shuffleIndex = displayVideos.length - 1; shuffleIndex > 0; shuffleIndex--) {
       var randomIndex = Math.floor(Math.random() * (shuffleIndex + 1));
-      var tempVideo = finalVideos[shuffleIndex];
-      finalVideos[shuffleIndex] = finalVideos[randomIndex];
-      finalVideos[randomIndex] = tempVideo;
+      var tempVideo = displayVideos[shuffleIndex];
+      displayVideos[shuffleIndex] = displayVideos[randomIndex];
+      displayVideos[randomIndex] = tempVideo;
     }
-  } else {
-    finalVideos = allSafeVideos.filter(function(item) {
-      return !item.isSlop;
-    }).slice(0, 32);
   }
+  
+  var visibleGamingCount = 0;
 %>
 
 <!DOCTYPE html>
@@ -693,30 +689,6 @@ button {
   width: 100%;
 }
 
-.quick-links {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.quick-chip {
-  background: var(--ptc-chip-bg);
-  color: var(--ptc-text-primary);
-  border-radius: 8px;
-  padding: 0 12px;
-  height: 32px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
-}
-
 .search-note {
   margin-top: 24px;
   text-align: center;
@@ -787,6 +759,49 @@ button {
   color: var(--ptc-bg);
 }
 
+/* Feed Dropdown Container */
+.feed-dropdown-container {
+  position: relative;
+  display: inline-block;
+}
+
+.feed-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: var(--ptc-chip-bg);
+  border: 1px solid var(--ptc-border);
+  border-radius: 8px;
+  display: none;
+  flex-direction: column;
+  min-width: 140px;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.feed-dropdown-menu.show {
+  display: flex;
+}
+
+.feed-dropdown-menu button {
+  background: none;
+  border: none;
+  color: var(--ptc-text-primary);
+  padding: 12px 16px;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.feed-dropdown-menu button:hover {
+  background: var(--ptc-chip-hover);
+}
+
+.feed-dropdown-menu button.active {
+  background: var(--ptc-chip-hover);
+  font-weight: 600;
+}
+
 .video-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -836,19 +851,6 @@ button {
   padding-top: 12px;
   align-items: flex-start;
   gap: 12px;
-}
-
-.channel-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background-color: var(--ptc-chip-hover);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  color: var(--ptc-text-secondary);
-  font-size: 16px;
 }
 
 .info {
@@ -1172,6 +1174,111 @@ button {
   font: inherit;
 }
 
+/* Sidebar styling */
+.sidebar-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 1999;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.sidebar-overlay.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.desktop-sidebar {
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  width: 240px;
+  background: var(--ptc-bg);
+  z-index: 2000;
+  transform: translateX(-100%);
+  transition: transform 0.2s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.desktop-sidebar.visible {
+  transform: translateX(0);
+}
+
+.sidebar-header {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 16px;
+}
+
+.sidebar-content {
+  padding: 12px;
+  overflow-y: auto;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 10px 12px;
+  color: var(--ptc-text-primary);
+  border-radius: 10px;
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.sidebar-item:hover {
+  background: var(--ptc-chip-bg);
+}
+
+.sidebar-item.active {
+  background: var(--ptc-chip-bg);
+  font-weight: 500;
+}
+
+.sidebar-item i {
+  font-size: 20px;
+  width: 24px;
+  text-align: center;
+}
+
+/* Desktop Dropdown menu */
+.desktop-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: var(--ptc-chip-bg);
+  border: 1px solid var(--ptc-border);
+  border-radius: 8px;
+  width: 220px;
+  padding: 8px 0;
+  display: none;
+  flex-direction: column;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.desktop-dropdown-menu.show {
+  display: flex;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  color: var(--ptc-text-primary);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.dropdown-item:hover {
+  background: var(--ptc-chip-hover);
+}
+
 @media (min-width: 861px) {
   .thumbnail-container {
     border-radius: 12px;
@@ -1185,17 +1292,6 @@ button {
 
   .video:hover .thumbnail-container {
     border-radius: 0;
-  }
-
-  .quick-chip {
-    transition: transform 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
-  }
-
-  .quick-chip:hover {
-    transform: translateY(-3px) scale(1.02);
-    box-shadow: 0 6px 12px rgba(0,0,0,0.4);
-    background: var(--ptc-chip-hover);
-    color: #fff;
   }
 
   .category-tab {
@@ -1273,23 +1369,13 @@ button {
     cursor: pointer;
     padding: 8px;
     border-radius: 50%;
+    background: none;
+    border: none;
+    color: var(--ptc-text-primary);
   }
 
   .nav-icon-btn:hover {
     background: var(--ptc-chip-bg);
-  }
-
-  .nav-avatar {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: var(--ptc-accent);
-    color: var(--ptc-bg);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    font-size: 14px;
   }
 }
 
@@ -1476,11 +1562,6 @@ button {
     gap: 12px;
     flex-direction: row;
   }
-  
-  .channel-avatar {
-    width: 36px;
-    height: 36px;
-  }
 
   .title {
     font-size: 15px;
@@ -1607,6 +1688,21 @@ button {
 
 <input type="checkbox" id="mobile-search-toggle" hidden>
 
+<!-- Sidebar Implementation -->
+<div id="desktop-sidebar-overlay" class="sidebar-overlay"></div>
+<div id="desktop-sidebar" class="desktop-sidebar">
+  <div class="sidebar-header">
+    <i class="fa-solid fa-bars hamburger" id="sidebar-hamburger"></i>
+    <img src="/static/logo-poke.svg" class="nav-logo" alt="Poke">
+  </div>
+  <div class="sidebar-content">
+    <a href="/" class="sidebar-item active"><i class="fa-solid fa-house"></i> Home</a>
+    <a href="https://social.poketube.fun/" class="sidebar-item"><i class="fa-solid fa-users"></i> Social</a>
+    <a href="/account-create" class="sidebar-item"><i class="fa-solid fa-tv"></i> Subscriptions</a>
+    <a href="#" class="sidebar-item js-only" data-library-open><i class="fa-regular fa-folder"></i> Library</a>
+  </div>
+</div>
+
 <!-- Desktop Sticky Navbar -->
 <div id="desktop-sticky-nav" class="desktop-sticky-nav">
   <div class="nav-left">
@@ -1623,9 +1719,16 @@ button {
       </div>
     </form>
   </div>
-  <div class="nav-right">
-    <label for="create-modal-toggle" class="nav-icon-btn" aria-label="Create"><i class="fa-solid fa-video"></i></label>
-    <div class="nav-avatar"><i class="fa-solid fa-user"></i></div>
+  <div class="nav-right" style="position: relative;">
+    <button type="button" class="nav-icon-btn" id="desktop-create-btn" aria-label="Create"><i class="fa-solid fa-video"></i></button>
+    
+    <div id="desktop-create-dropdown" class="desktop-dropdown-menu">
+      <a href="/video/upload" class="dropdown-item"><i class="fa-solid fa-arrow-up-from-bracket"></i> Upload Video</a>
+      <a href="/translate" class="dropdown-item"><i class="fa-solid fa-language"></i> Translate</a>
+      <a href="/map" class="dropdown-item"><i class="fa-solid fa-map-location-dot"></i> Maps</a>
+      <a href="/calendar" class="dropdown-item"><i class="fa-solid fa-calendar-days"></i> Calendar</a>
+      <a href="/privacy" class="dropdown-item"><i class="fa-solid fa-shield-halved"></i> Privacy Policy</a>
+    </div>
   </div>
 </div>
 
@@ -1674,20 +1777,6 @@ button {
       </form>
 
       <div id="home-extras" class="home-extras-wrapper">
-        <div class="quick-links" aria-label="Poke tools">
-          <a class="quick-chip" href="/translate" title="Translate">
-            <i class="fa-solid fa-language" aria-hidden="true"></i> Translate
-          </a>
-
-          <a class="quick-chip" href="/map" title="Maps">
-            <i class="fa-solid fa-map-location-dot" aria-hidden="true"></i> Maps
-          </a>
-
-          <a class="quick-chip" href="/calendar" title="Calendar">
-            <i class="fa-solid fa-calendar-days" aria-hidden="true"></i> Calendar
-          </a>
-        </div>
-
         <% if (Math.random() > 0.3) { %>
         <div id="random-bang-note" class="search-note">
           Want to unlock powerful search shortcuts? <a href="https://duckduckgo.com/bangs" target="_blank" rel="noopener noreferrer">Learn about Bangs</a>
@@ -1707,16 +1796,28 @@ button {
           </p>
         </div>
         <div class="header-tabs">
-          <button class="category-tab active" type="button">Gaming</button>
-          <button type="button" class="category-tab js-only" onclick="alert('Music is coming soon!')">Music</button>
+          <div class="feed-dropdown-container">
+            <button class="category-tab active" id="feed-dropdown-btn" type="button">Gaming <i class="fa-solid fa-chevron-down" style="margin-left: 4px; font-size: 12px;"></i></button>
+            <div class="feed-dropdown-menu" id="feed-dropdown-menu">
+              <button type="button" class="feed-option active" data-feed="gaming">Gaming</button>
+              <button type="button" class="feed-option" data-feed="unlimited">Unlimited</button>
+            </div>
+          </div>
+          <button type="button" class="category-tab js-only" data-library-open>Music</button>
           <a href="/privacy" class="category-tab no-js-only">Privacy</a>
         </div>
       </div>
 
       <div class="discover-body">
         <div class="video-grid">
-          <% finalVideos.forEach(function(item) { %>
-            <div class="video canloadhd" data-author="<%- item.author %>" data-game="<%- item.detectedGame %>" data-genre="<%- item.detectedGenre %>" data-category="<%- item.detectedCategory %>" data-isslop="<%- item.isSlop %>" style="<%- item.isSlop ? 'display:none;' : '' %>">
+          <% displayVideos.forEach(function(item) { 
+               var isDefaultVisible = false;
+               if (!item.isSlop && visibleGamingCount < 32) {
+                 isDefaultVisible = true;
+                 visibleGamingCount++;
+               }
+          %>
+            <div class="video canloadhd" data-author="<%- item.author %>" data-game="<%- item.detectedGame %>" data-genre="<%- item.detectedGenre %>" data-category="<%- item.detectedCategory %>" data-isslop="<%- item.isSlop %>" style="<%- isDefaultVisible ? '' : 'display:none;' %>">
               <a href="/watch?v=<%- item.videoId %>" class="video-cover-link" aria-label="Watch <%- item.title %>"></a>
 
               <div class="thumbnail-container" style="background-image:url('/vi/<%= item.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw');">
@@ -1724,9 +1825,6 @@ button {
               </div>
 
               <div class="details">
-                <div class="channel-avatar">
-                  <i class="fa-solid fa-user"></i>
-                </div>
                 <div class="info">
                   <a href="/watch?v=<%- item.videoId %>" class="title" title="<%- item.title %>"><%- item.title %></a>
 
@@ -1908,8 +2006,111 @@ button {
     }
   });
 
+  // Sidebar Logic
+  var hamburgers = document.querySelectorAll(".hamburger");
+  var sidebar = document.getElementById("desktop-sidebar");
+  var sidebarOverlay = document.getElementById("desktop-sidebar-overlay");
+
+  function toggleSidebar() {
+    if(sidebar && sidebarOverlay) {
+      sidebar.classList.toggle("visible");
+      sidebarOverlay.classList.toggle("visible");
+    }
+  }
+
+  hamburgers.forEach(function(hb) {
+    hb.addEventListener("click", toggleSidebar);
+  });
+
+  if (sidebarOverlay) {
+    sidebarOverlay.addEventListener("click", toggleSidebar);
+  }
+
+  // Desktop Create Dropdown Logic
+  var desktopCreateBtn = document.getElementById("desktop-create-btn");
+  var desktopCreateDropdown = document.getElementById("desktop-create-dropdown");
+
+  if (desktopCreateBtn && desktopCreateDropdown) {
+    desktopCreateBtn.addEventListener("click", function(e) {
+      e.stopPropagation();
+      desktopCreateDropdown.classList.toggle("show");
+    });
+  }
+
+  // Feed and Chip Logic
+  var currentFeed = "gaming";
+  var currentChip = "all";
   var filterChips = document.querySelectorAll("#game-filter-bar .m-chip[data-filter]");
   var videos = document.querySelectorAll(".video-grid .video");
+  var feedDropdownBtn = document.getElementById("feed-dropdown-btn");
+  var feedDropdownMenu = document.getElementById("feed-dropdown-menu");
+  var feedOptions = document.querySelectorAll(".feed-option");
+
+  function applyFilters() {
+    var visibleCount = 0;
+    videos.forEach(function(vid) {
+      var isSlop = vid.getAttribute("data-isslop") === "true";
+      var game = vid.getAttribute("data-game");
+      var genre = vid.getAttribute("data-genre");
+      var category = vid.getAttribute("data-category");
+
+      var matchesChip = false;
+      if (currentChip === "all") {
+        matchesChip = true;
+      } else if (game === currentChip || genre === currentChip || category === currentChip) {
+        matchesChip = true;
+      }
+
+      var matchesFeed = true;
+      if (currentFeed === "gaming") {
+        if (isSlop) matchesFeed = false;
+      }
+
+      if (matchesChip && matchesFeed) {
+        if (currentFeed === "gaming" && visibleCount >= 32) {
+          vid.style.display = "none";
+        } else {
+          vid.style.display = "";
+          if (currentFeed === "gaming") {
+            visibleCount++;
+          }
+        }
+      } else {
+        vid.style.display = "none";
+      }
+    });
+  }
+
+  if (feedDropdownBtn && feedDropdownMenu) {
+    feedDropdownBtn.addEventListener("click", function(e) {
+      e.stopPropagation();
+      feedDropdownMenu.classList.toggle("show");
+    });
+    
+    feedOptions.forEach(function(btn) {
+      btn.addEventListener("click", function(e) {
+        e.stopPropagation();
+        var feedType = this.getAttribute("data-feed");
+        currentFeed = feedType;
+        
+        feedOptions.forEach(function(b) { b.classList.remove("active"); });
+        this.classList.add("active");
+        feedDropdownBtn.innerHTML = this.textContent + ' <i class="fa-solid fa-chevron-down" style="margin-left: 4px; font-size: 12px;"></i>';
+        feedDropdownMenu.classList.remove("show");
+        
+        applyFilters();
+      });
+    });
+  }
+
+  document.addEventListener("click", function(e) {
+    if (feedDropdownMenu && !e.target.closest(".feed-dropdown-container")) {
+      feedDropdownMenu.classList.remove("show");
+    }
+    if (desktopCreateDropdown && !e.target.closest(".nav-right")) {
+      desktopCreateDropdown.classList.remove("show");
+    }
+  });
 
   filterChips.forEach(function(chip) {
     chip.addEventListener("click", function(e) {
@@ -1920,26 +2121,8 @@ button {
       });
 
       this.classList.add("active");
-
-      var filterTarget = this.getAttribute("data-filter");
-
-      videos.forEach(function(vid) {
-        var isSlop = vid.getAttribute("data-isslop") === "true";
-        var game = vid.getAttribute("data-game");
-        var genre = vid.getAttribute("data-genre");
-        var category = vid.getAttribute("data-category");
-
-        if (filterTarget === "all") {
-          vid.style.display = isSlop ? "none" : "";
-          return;
-        }
-
-        if (game === filterTarget || genre === filterTarget || category === filterTarget) {
-          vid.style.display = "";
-        } else {
-          vid.style.display = "none";
-        }
-      });
+      currentChip = this.getAttribute("data-filter");
+      applyFilters();
     });
   });
 
