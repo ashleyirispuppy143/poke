@@ -145,7 +145,7 @@ document.documentElement.className = document.documentElement.className.replace(
   --ptc-bg: #0f0f0f;
   --ptc-text-primary: #f1f1f1;
   --ptc-text-secondary: #aaaaaa;
-  --ptc-accent: #3ea6ff;
+  --ptc-accent: #ffabcc; /* Updated accent color */
   --ptc-searchbox-bg: #121212;
   --ptc-searchbox-border: #303030;
   --ptc-searchbtn-bg: #222222;
@@ -256,7 +256,7 @@ button, input {
 }
 
 .search-bar:focus {
-  border: 1px solid #1c62b9;
+  border: 1px solid var(--ptc-accent);
   margin-left: -1px;
 }
 
@@ -572,6 +572,89 @@ button, input {
   );
 }
 
+/* =========================================
+   MODAL STYLES (for Plus Upload Button)
+========================================= */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 1000;
+  display: flex;
+  align-items: flex-end; /* Mobile bottom sheet style */
+  justify-content: center;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+.modal-overlay.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.modal-content {
+  background: var(--ptc-bg);
+  width: 100%;
+  max-width: 500px; 
+  border-radius: 16px 16px 0 0;
+  padding: 16px 16px 32px 16px;
+  transform: translateY(0);
+  transition: transform 0.2s ease;
+}
+.modal-overlay.hidden .modal-content {
+  transform: translateY(100%);
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--ptc-border);
+}
+.modal-header h3 { 
+  margin: 0; 
+  font-size: 18px; 
+  color: var(--ptc-text-primary);
+}
+.close-btn {
+  background: none; 
+  border: none; 
+  color: var(--ptc-text-primary);
+  font-size: 28px; 
+  cursor: pointer; 
+  padding: 0;
+  line-height: 1;
+}
+.modal-action-btn {
+  display: flex; 
+  align-items: center; 
+  gap: 12px;
+  padding: 16px; 
+  background: var(--ptc-chip-bg);
+  border-radius: 8px; 
+  text-decoration: none; 
+  color: var(--ptc-text-primary);
+  font-size: 16px; 
+  font-weight: 500; 
+  margin-bottom: 16px;
+}
+.modal-action-btn:hover { 
+  background: var(--ptc-chip-hover); 
+}
+.modal-footer-links {
+  text-align: center; 
+  font-size: 13px; 
+  color: var(--ptc-text-secondary);
+}
+.modal-footer-links a { 
+  color: var(--ptc-accent); 
+  text-decoration: none; 
+}
+.modal-footer-links a:hover {
+  text-decoration: underline;
+}
+
 /* Responsive Breakpoints */
 @media (max-width: 1140px) {
   .video-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -749,6 +832,7 @@ button, input {
     color: var(--ptc-text-primary);
     font-size: 10px;
     opacity: 0.8;
+    text-decoration: none;
   }
 
   .nav-item.active { 
@@ -904,20 +988,39 @@ button, input {
 
 <div class="symbol-of-tolerance"></div>
 
+<!-- Create Modal -->
+<div id="create-modal" class="modal-overlay hidden" onclick="closeCreateModal(event)">
+  <div class="modal-content" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Create</h3>
+      <button class="close-btn" onclick="closeCreateModal(event)" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <a href="/upload" class="modal-action-btn">
+        <i class="fa-solid fa-arrow-up-from-bracket"></i> 
+        Upload Video
+      </a>
+      <div class="modal-footer-links">
+        <a href="/privacy">Privacy Policy</a>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Mobile Bottom Navigation -->
 <div class="mobile-bottom-nav">
   <a href="/" class="nav-item active">
     <i class="fa-solid fa-house"></i>
     <span>Home</span>
   </a>
-  <a href="#" class="nav-item" onclick="alert('Coming soon!')">
-    <i class="fa-solid fa-bolt"></i>
-    <span>Shorts</span>
+  <a href="https://social.poketube.fun/" class="nav-item">
+    <i class="fa-solid fa-users"></i>
+    <span>Social</span>
   </a>
-  <a href="#" class="nav-item add-btn" aria-label="Create">
+  <a href="#" class="nav-item add-btn" aria-label="Create" onclick="openCreateModal(event)">
     <i class="fa-regular fa-circle-plus"></i>
   </a>
-  <a href="#" class="nav-item" onclick="alert('Coming soon!')">
+  <a href="/account-create" class="nav-item">
     <i class="fa-solid fa-tv"></i>
     <span>Subscriptions</span>
   </a>
@@ -951,6 +1054,16 @@ function toggleMobileSearch() {
   if(form.classList.contains('active')) {
     document.getElementById('mobile-search-input').focus();
   }
+}
+
+function openCreateModal(e) {
+  e.preventDefault();
+  document.getElementById('create-modal').classList.remove('hidden');
+}
+
+function closeCreateModal(e) {
+  if (e) e.preventDefault();
+  document.getElementById('create-modal').classList.add('hidden');
 }
 </script>
 
