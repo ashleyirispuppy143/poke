@@ -553,7 +553,7 @@ button {
   cursor: pointer;
 }
 
-.mobile-top-bar, .mobile-search-form, .mobile-bottom-nav {
+.mobile-top-bar, .mobile-search-form, .mobile-bottom-nav, .mobile-chip-bar {
   display: none;
 }
 
@@ -714,7 +714,8 @@ button {
   align-items: flex-end;
   justify-content: space-between;
   padding-bottom: 24px;
-  margin-bottom: 12px;
+  border-bottom: 1px solid var(--ptc-border);
+  margin-bottom: 24px;
 }
 
 .header-text {
@@ -738,94 +739,34 @@ button {
   align-items: center;
 }
 
-/* Global Chip Bar replacing old header-tabs & mobile-chip-bar */
-.global-chip-bar {
+.header-tabs {
   display: flex;
-  gap: 12px;
-  padding: 12px 0;
-  margin-bottom: 24px;
-  overflow-x: auto;
-  background: var(--ptc-bg);
-  position: sticky;
-  top: 56px;
-  z-index: 900;
-  scrollbar-width: none;
-  border-bottom: 1px solid var(--ptc-border);
+  gap: 8px;
 }
 
-.global-chip-bar::-webkit-scrollbar {
-  display: none;
-}
-
-.m-chip {
+.category-tab {
   background: var(--ptc-chip-bg);
   color: var(--ptc-text-primary);
-  padding: 6px 12px;
   border-radius: 8px;
+  padding: 8px 16px;
   font-size: 14px;
   font-weight: 500;
-  text-decoration: none;
-  white-space: nowrap;
-  display: inline-flex;
-  align-items: center;
+  cursor: pointer;
   border: none;
   transition: background-color 0.2s, transform 0.1s;
 }
 
-.m-chip:hover {
-  background: var(--ptc-chip-hover);
-}
-
-.m-chip.active {
+.category-tab.active {
   background: var(--ptc-text-primary);
   color: var(--ptc-bg);
 }
 
-.m-chip:active {
+.category-tab:not(.active):hover {
+  background: var(--ptc-chip-hover);
+}
+
+.category-tab:active {
   transform: scale(0.96);
-}
-
-/* Feed Dropdown Container inside chip bar */
-.feed-dropdown-container {
-  position: relative;
-  display: inline-flex;
-}
-
-.feed-dropdown-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  background: var(--ptc-chip-bg);
-  border: 1px solid var(--ptc-border);
-  border-radius: 8px;
-  display: none;
-  flex-direction: column;
-  min-width: 140px;
-  z-index: 1000;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-}
-
-.feed-dropdown-menu.show {
-  display: flex;
-}
-
-.feed-dropdown-menu button {
-  background: none;
-  border: none;
-  color: var(--ptc-text-primary);
-  padding: 12px 16px;
-  text-align: left;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.feed-dropdown-menu button:hover {
-  background: var(--ptc-chip-hover);
-}
-
-.feed-dropdown-menu button.active {
-  background: var(--ptc-chip-hover);
-  font-weight: 600;
 }
 
 .video-grid {
@@ -981,10 +922,17 @@ button {
   pointer-events: none;
 }
 
-#create-modal, #settings-modal {
+#create-modal {
   z-index: 1000;
   align-items: flex-end;
   justify-content: center;
+}
+
+#settings-modal {
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
 }
 
 .modal-toggle:checked + .modal-overlay {
@@ -1013,8 +961,26 @@ button {
   z-index: 2;
 }
 
-.modal-toggle:checked + .modal-overlay .bottom-sheet {
+.modal-toggle:checked + #create-modal .bottom-sheet {
   transform: translateY(0);
+}
+
+.settings-dialog {
+  background: var(--yt-dialog-bg);
+  border: 1px solid var(--yt-dialog-border);
+  border-radius: 12px;
+  padding: 24px;
+  width: min(400px, 100%);
+  color: var(--ptc-text-primary);
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65);
+  transform: translateY(8px) scale(0.98);
+  transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.modal-toggle:checked + #settings-modal .settings-dialog {
+  transform: translateY(0) scale(1);
 }
 
 .modal-header {
@@ -1331,7 +1297,8 @@ button {
 
 /* Classic Layout Overrides */
 html.layout-classic body .hero { display: none !important; }
-html.layout-classic body .discover-header { display: none !important; }
+html.layout-classic body .discover-header .header-text { display: none !important; }
+html.layout-classic body .discover-header { border-bottom: none; margin-bottom: 16px; padding-bottom: 0; margin-top: 24px; }
 html.layout-classic body .desktop-sticky-nav {
     transform: translateY(0) !important;
     position: fixed;
@@ -1465,6 +1432,10 @@ html.layout-classic body .page { padding-top: 72px; }
 }
 
 @media (max-width: 560px) {
+  .desktop-sidebar, .sidebar-overlay {
+    display: none !important;
+  }
+
   .hero, .discover-header, .home-extras-wrapper {
     display: none;
   }
@@ -1494,6 +1465,7 @@ html.layout-classic body .page { padding-top: 72px; }
     z-index: 100;
   }
 
+  /* Notice no hamburger in top bar */
   .mobile-logo {
     height: 20px;
   }
@@ -1539,14 +1511,50 @@ html.layout-classic body .page { padding-top: 72px; }
     cursor: pointer;
   }
   
-  .global-chip-bar {
-    top: 48px;
+  .mobile-chip-bar {
+    display: flex;
+    overflow-x: auto;
     padding: 8px 16px;
-    margin: 0 -16px 16px -16px;
+    gap: 8px;
+    background: var(--ptc-bg);
+    position: sticky;
+    top: 48px;
+    z-index: 90;
+    scrollbar-width: none;
+    white-space: nowrap;
+    flex-wrap: nowrap;
   }
 
-  .no-js .global-chip-bar {
+  .no-js .mobile-chip-bar {
     top: 100px;
+  }
+
+  .mobile-chip-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .m-chip {
+    background: var(--ptc-chip-bg);
+    color: var(--ptc-text-primary);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    border: none;
+    transition: background-color 0.2s, transform 0.1s;
+  }
+
+  .m-chip:active {
+    transform: scale(0.92);
+  }
+
+  .m-chip.active {
+    background: var(--ptc-text-primary);
+    color: var(--ptc-bg);
   }
 
   .video-grid {
@@ -1728,10 +1736,16 @@ html.layout-classic body .page { padding-top: 72px; }
     <button type="button" class="sidebar-item" id="open-settings-btn"><i class="fa-solid fa-gear"></i> Settings</button>
   </div>
   <div class="sidebar-footer" style="padding: 16px; border-top: 1px solid var(--ptc-border);">
-    <p style="margin-top: 10px; color: #aaa; font-size: 12px;">
+    <ul style="list-style: none; padding: 0; margin: 0 0 16px 0; display: flex; flex-direction: column; gap: 12px;">
+      <li><a href="/policies" style="color: #ccc; text-decoration: none; font-size: 13px;">Terms & Policies</a></li>
+      <li><a href="https://codeberg.org/ashleyirispuppy/poke/src/branch/main/llm-contribution-policy.md" style="color: #ccc; text-decoration: none; font-size: 13px;">LLM contribution Policy</a></li>
+      <li><a href="/request" style="color: #ccc; text-decoration: none; font-size: 13px;">Legal request</a></li>
+      <li><a href="https://codeberg.org/ashleyirispuppy/poke/src/branch/main#hosting-poke" style="color: #ccc; text-decoration: none; font-size: 13px;">How 2 Host?</a></li>
+    </ul>
+    <p style="margin: 0; color: #aaa; font-size: 12px;">
       &copy; copyleft <a href="https://codeberg.org/ashleyirispuppy/poke/commit/23928eff491d074824815dc50bcb1c6de0e20dad" style="color:#aaa">2021</a>-<%= new Date().getFullYear() %>
       <a style="text-decoration: none; color: #aaa;" href="https://initiative.poketube.fun/">Poke Project Initiative</a>
-      With Love!! &#10084;&#65039; - Licensed under <a style="color:#aaa" href="https://www.gnu.org/licenses/gpl-3.0.html">GNU GPL v3+</a>
+      <br>With Love!! &#10084;&#65039; - Licensed under <a style="color:#aaa" href="https://www.gnu.org/licenses/gpl-3.0.html">GNU GPL v3+</a>
     </p>
   </div>
 </div>
@@ -1769,6 +1783,7 @@ html.layout-classic body .page { padding-top: 72px; }
   </div>
 </div>
 
+<!-- Mobile Top Bar -->
 <div class="mobile-top-bar">
   <img src="/static/logo-poke.svg" class="mobile-logo" alt="Poke">
   <div class="mobile-top-actions">
@@ -1780,6 +1795,18 @@ html.layout-classic body .page { padding-top: 72px; }
   <input type="text" id="mobile-search-input" name="mobilesearch" placeholder="Search Poke">
   <button type="submit" aria-label="Search"><i class="fa-solid fa-magnifying-glass"></i></button>
 </form>
+
+<!-- Mobile Chip Bar -->
+<div class="mobile-chip-bar" id="game-filter-bar">
+  <a class="m-chip active" href="#" data-filter-type="all" data-filter="all">All Games</a>
+  <% gameFilters.forEach(function(g) { %>
+    <a class="m-chip" href="#" data-filter-type="smart" data-filter="<%- g %>"><%- g %></a>
+  <% }); %>
+  <a class="m-chip" href="https://charts.youtube.com">Music & Youtube Charts</a>
+  <a class="m-chip" href="/translate">Translate</a>
+  <a class="m-chip" href="/map">Maps</a>
+  <a class="m-chip" href="/calendar">Calendar</a>
+</div>
 
 <div class="page">
   <div class="hero">
@@ -1821,24 +1848,12 @@ html.layout-classic body .page { padding-top: 72px; }
             Discover popular gaming videos
           </p>
         </div>
-      </div>
-
-      <div class="global-chip-bar" id="game-filter-bar">
-        <a class="m-chip active" href="#" data-filter-type="all" data-filter="all">All</a>
-        
-        <div class="feed-dropdown-container">
-          <a class="m-chip" href="#" id="feed-dropdown-btn">Gaming <i class="fa-solid fa-chevron-down" style="font-size: 10px; margin-left: 4px;"></i></a>
-          <div class="feed-dropdown-menu" id="feed-dropdown-menu">
-            <button type="button" class="feed-option active" data-feed="gaming">Gaming</button>
-            <button type="button" class="feed-option" data-feed="unlimited">Unlimited</button>
-          </div>
+        <div class="header-tabs">
+          <button type="button" class="category-tab feed-btn active" data-feed="gaming">Gaming</button>
+          <button type="button" class="category-tab feed-btn" data-feed="unlimited">Unlimited</button>
+          <button type="button" class="category-tab js-only" data-library-open>Music</button>
+          <a href="/privacy" class="category-tab no-js-only">Privacy</a>
         </div>
-
-        <% gameFilters.forEach(function(g) { %>
-          <a class="m-chip" href="#" data-filter-type="smart" data-filter="<%- g %>"><%- g %></a>
-        <% }); %>
-        <a class="m-chip js-only" href="#" data-library-open>Music</a>
-        <a class="m-chip no-js-only" href="/privacy">Privacy</a>
       </div>
 
       <div class="discover-body">
@@ -1886,13 +1901,13 @@ html.layout-classic body .page { padding-top: 72px; }
 
 <div class="symbol-of-tolerance"></div>
 
-<!-- Create Modal (Mobile) -->
+<!-- Create/More Modal (Mobile) -->
 <input type="checkbox" id="create-modal-toggle" class="modal-toggle" hidden>
 <div id="create-modal" class="modal-overlay" aria-hidden="true">
   <label for="create-modal-toggle" class="modal-dismiss-bg" aria-label="Close modal"></label>
   <div class="bottom-sheet">
     <div class="modal-header">
-      <h3>Create</h3>
+      <h3>More</h3>
       <label for="create-modal-toggle" class="close-btn" aria-label="Close">&times;</label>
     </div>
     <div class="modal-body">
@@ -1920,11 +1935,11 @@ html.layout-classic body .page { padding-top: 72px; }
   </div>
 </div>
 
-<!-- Settings Modal -->
+<!-- Settings Modal (Desktop Style) -->
 <input type="checkbox" id="settings-modal-toggle" class="modal-toggle" hidden>
 <div id="settings-modal" class="modal-overlay" aria-hidden="true">
   <label for="settings-modal-toggle" class="modal-dismiss-bg" aria-label="Close modal"></label>
-  <div class="bottom-sheet">
+  <div class="settings-dialog">
     <div class="modal-header">
       <h3>Settings</h3>
       <label for="settings-modal-toggle" class="close-btn" aria-label="Close">&times;</label>
@@ -1932,14 +1947,14 @@ html.layout-classic body .page { padding-top: 72px; }
     <div class="modal-body" style="display: flex; flex-direction: column; gap: 16px;">
       <div>
         <label style="display:block; margin-bottom: 8px; color: var(--ptc-text-secondary);">Layout</label>
-        <select id="setting-layout" style="width: 100%; padding: 12px; background: var(--ptc-chip-bg); border: 1px solid var(--ptc-border); color: var(--ptc-text-primary); border-radius: 8px; font-size: 16px;">
+        <select id="setting-layout" style="width: 100%; padding: 12px; background: var(--ptc-chip-bg); border: 1px solid var(--ptc-border); color: var(--ptc-text-primary); border-radius: 8px; font-size: 16px; outline: none;">
           <option value="hero">Hero (Default)</option>
           <option value="classic">Classic (No Hero)</option>
         </select>
       </div>
       <div>
         <label style="display:block; margin-bottom: 8px; color: var(--ptc-text-secondary);">Default Feed</label>
-        <select id="setting-feed" style="width: 100%; padding: 12px; background: var(--ptc-chip-bg); border: 1px solid var(--ptc-border); color: var(--ptc-text-primary); border-radius: 8px; font-size: 16px;">
+        <select id="setting-feed" style="width: 100%; padding: 12px; background: var(--ptc-chip-bg); border: 1px solid var(--ptc-border); color: var(--ptc-text-primary); border-radius: 8px; font-size: 16px; outline: none;">
           <option value="gaming">Gaming</option>
           <option value="unlimited">Unlimited</option>
         </select>
@@ -1999,9 +2014,8 @@ html.layout-classic body .page { padding-top: 72px; }
     <span>Social</span>
   </a>
 
-  <label for="create-modal-toggle" class="nav-item add-btn" aria-label="Create">
+  <label for="create-modal-toggle" class="nav-item add-btn" aria-label="More">
     <i class="fa-regular fa-circle-plus"></i>
-    <span>More</span>
   </label>
 
   <a href="/account-create" class="nav-item">
@@ -2057,8 +2071,7 @@ html.layout-classic body .page { padding-top: 72px; }
     var hero = document.querySelector(".hero");
     if (!stickyNav) return;
     
-    // Do not alter visibility if layout-classic is active
-    if(document.documentElement.classList.contains('layout-classic')) return;
+     if(document.documentElement.classList.contains('layout-classic')) return;
 
     if (!hero) return;
     var heroBottom = hero.offsetTop + hero.offsetHeight;
@@ -2069,8 +2082,7 @@ html.layout-classic body .page { padding-top: 72px; }
     }
   });
 
-  // Sidebar  
-  var hamburgers = document.querySelectorAll(".hamburger");
+   var hamburgers = document.querySelectorAll(".hamburger");
   var sidebar = document.getElementById("desktop-sidebar");
   var sidebarOverlay = document.getElementById("desktop-sidebar-overlay");
 
@@ -2089,8 +2101,7 @@ html.layout-classic body .page { padding-top: 72px; }
     sidebarOverlay.addEventListener("click", toggleSidebar);
   }
 
-  // Desktop Create Dropdown  
-  var desktopCreateBtn = document.getElementById("desktop-create-btn");
+   var desktopCreateBtn = document.getElementById("desktop-create-btn");
   var desktopCreateDropdown = document.getElementById("desktop-create-dropdown");
 
   if (desktopCreateBtn && desktopCreateDropdown) {
@@ -2100,8 +2111,7 @@ html.layout-classic body .page { padding-top: 72px; }
     });
   }
 
-  // Settings  
-  var openSettingsBtn = document.getElementById("open-settings-btn");
+   var openSettingsBtn = document.getElementById("open-settings-btn");
   var saveSettingsBtn = document.getElementById("save-settings-btn");
   var settingsModalToggle = document.getElementById("settings-modal-toggle");
 
@@ -2115,38 +2125,11 @@ html.layout-classic body .page { padding-top: 72px; }
     });
   }
 
-  if(saveSettingsBtn) {
-    saveSettingsBtn.addEventListener("click", function(e) {
-      e.preventDefault();
-      var newLayout = document.getElementById('setting-layout').value;
-      var newFeed = document.getElementById('setting-feed').value;
-
-      localStorage.setItem('poke_layout', newLayout);
-      localStorage.setItem('poke_feed', newFeed);
-
-      if (newLayout === 'classic') {
-        document.documentElement.classList.add('layout-classic');
-      } else {
-        document.documentElement.classList.remove('layout-classic');
-        var stickyNav = document.getElementById("desktop-sticky-nav");
-        if (stickyNav && window.scrollY < 100) stickyNav.classList.remove("visible");
-      }
-
-      var targetFeedOpt = document.querySelector('.feed-option[data-feed="'+newFeed+'"]');
-      if(targetFeedOpt) targetFeedOpt.click();
-
-      settingsModalToggle.checked = false;
-    });
-  }
-
-  // Feed and Chip  
-  var currentFeed = localStorage.getItem('poke_feed') || 'gaming';
+   var currentFeed = localStorage.getItem('poke_feed') || 'gaming';
   var currentChip = "all";
+  var desktopFeedBtns = document.querySelectorAll(".feed-btn");
   var filterChips = document.querySelectorAll("#game-filter-bar .m-chip[data-filter]");
   var videos = document.querySelectorAll(".video-grid .video");
-  var feedDropdownBtn = document.getElementById("feed-dropdown-btn");
-  var feedDropdownMenu = document.getElementById("feed-dropdown-menu");
-  var feedOptions = document.querySelectorAll(".feed-option");
 
   function applyFilters() {
     var visibleCount = 0;
@@ -2183,42 +2166,52 @@ html.layout-classic body .page { padding-top: 72px; }
 
   // Init UI to saved feed
   if(currentFeed !== 'gaming') {
-      var initFeedOpt = document.querySelector('.feed-option[data-feed="'+currentFeed+'"]');
+      var initFeedOpt = document.querySelector('.feed-btn[data-feed="'+currentFeed+'"]');
       if(initFeedOpt) {
-          feedOptions.forEach(function(b) { b.classList.remove("active"); });
+          desktopFeedBtns.forEach(function(b) { b.classList.remove("active"); });
           initFeedOpt.classList.add("active");
-          if(feedDropdownBtn) feedDropdownBtn.innerHTML = initFeedOpt.textContent + ' <i class="fa-solid fa-chevron-down" style="font-size: 10px; margin-left: 4px;"></i>';
       }
   }
   applyFilters(); // Initial render setup
 
-  if (feedDropdownBtn && feedDropdownMenu) {
-    feedDropdownBtn.addEventListener("click", function(e) {
-      e.stopPropagation();
+  if(saveSettingsBtn) {
+    saveSettingsBtn.addEventListener("click", function(e) {
       e.preventDefault();
-      feedDropdownMenu.classList.toggle("show");
+      var newLayout = document.getElementById('setting-layout').value;
+      var newFeed = document.getElementById('setting-feed').value;
+
+      localStorage.setItem('poke_layout', newLayout);
+      localStorage.setItem('poke_feed', newFeed);
+
+      if (newLayout === 'classic') {
+        document.documentElement.classList.add('layout-classic');
+      } else {
+        document.documentElement.classList.remove('layout-classic');
+        var stickyNav = document.getElementById("desktop-sticky-nav");
+        if (stickyNav && window.scrollY < 100) stickyNav.classList.remove("visible");
+      }
+
+      var targetFeedOpt = document.querySelector('.feed-btn[data-feed="'+newFeed+'"]');
+      if(targetFeedOpt) targetFeedOpt.click();
+
+      settingsModalToggle.checked = false;
     });
-    
-    feedOptions.forEach(function(btn) {
+  }
+
+  if (desktopFeedBtns) {
+    desktopFeedBtns.forEach(function(btn) {
       btn.addEventListener("click", function(e) {
-        e.stopPropagation();
+        e.preventDefault();
         var feedType = this.getAttribute("data-feed");
         currentFeed = feedType;
-        
-        feedOptions.forEach(function(b) { b.classList.remove("active"); });
+        desktopFeedBtns.forEach(function(b) { b.classList.remove("active"); });
         this.classList.add("active");
-        feedDropdownBtn.innerHTML = this.textContent + ' <i class="fa-solid fa-chevron-down" style="font-size: 10px; margin-left: 4px;"></i>';
-        feedDropdownMenu.classList.remove("show");
-        
         applyFilters();
       });
     });
   }
 
   document.addEventListener("click", function(e) {
-    if (feedDropdownMenu && !e.target.closest(".feed-dropdown-container")) {
-      feedDropdownMenu.classList.remove("show");
-    }
     if (desktopCreateDropdown && !e.target.closest(".nav-right")) {
       desktopCreateDropdown.classList.remove("show");
     }
