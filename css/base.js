@@ -22413,6 +22413,7 @@ _on(window, "unhandledrejection", (e) => {
 
 // https://codeberg.org/ashleyirispuppy/poke/src/branch/main/src/libpoketube/libpoketube-youtubei-objects.json
 
+var _boobs = "boobs"
 
  const FORMATS = {
     "5": { ext: "flv", width: 400, height: 240, acodec: "mp3", abr: 64, vcodec: "h263" },
