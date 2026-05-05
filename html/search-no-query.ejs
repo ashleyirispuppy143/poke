@@ -18,8 +18,6 @@
     along with this program. If not, see https://www.gnu.org/licenses/.
 -->
 <%
-  var currentLang = (typeof lang !== 'undefined') ? lang : ((typeof req !== 'undefined' && req.query && req.query.lang) ? req.query.lang : 'en');
-
   function calculateSlopScore(title) {
     if (!title) return 100;
     var score = 0;
@@ -599,6 +597,10 @@ button {
   display: none !important;
 }
 
+.no-js .header-tabs {
+  display: none !important;
+}
+
 .page {
   flex: 1;
   width: var(--container);
@@ -773,9 +775,12 @@ button {
   padding: 16px 0;
   margin-bottom: 16px;
   border-bottom: 1px solid var(--ptc-border);
+  overflow-x: auto;
+  scrollbar-width: none;
+  white-space: nowrap;
 }
 
-html.show-game-feeds .header-tabs {
+.header-tabs::-webkit-scrollbar {
   display: none;
 }
 
@@ -789,6 +794,7 @@ html.show-game-feeds .header-tabs {
   cursor: pointer;
   border: none;
   transition: background-color 0.2s, transform 0.1s, color 0.2s;
+  white-space: nowrap;
 }
 
 .category-tab.active {
@@ -804,6 +810,19 @@ html.show-game-feeds .header-tabs {
   transform: scale(0.96);
 }
 
+.game-feed-tab {
+  display: none;
+}
+
+html.show-game-feeds .default-feed-tab {
+  display: none;
+}
+
+html.show-game-feeds .game-feed-tab {
+  display: inline-flex;
+  align-items: center;
+}
+
 .chip-bar-wrapper {
   display: none;
   overflow-x: auto;
@@ -815,12 +834,6 @@ html.show-game-feeds .header-tabs {
 
 .chip-bar-wrapper::-webkit-scrollbar {
   display: none;
-}
-
-html.show-game-feeds .chip-bar-wrapper.desktop-only {
-  display: flex;
-  padding: 0 0 16px 0;
-  margin-bottom: 8px;
 }
 
 .m-chip {
@@ -1629,7 +1642,7 @@ html.layout-classic body .desktop-sticky-nav {
     display: none !important;
   }
 
-  .hero, .discover-header, .home-extras-wrapper, .header-tabs, .chip-bar-wrapper.desktop-only {
+  .hero, .discover-header, .home-extras-wrapper, .header-tabs {
     display: none !important;
   }
 
@@ -1890,12 +1903,12 @@ html.layout-classic body .desktop-sticky-nav {
   </div>
 
   <div class="sidebar-content">
-    <a href="/" class="sidebar-item active"><i class="fa-solid fa-house"></i> <%= currentLang === 'es' ? 'Inicio' : 'Home' %></a>
-    <a href="https://social.poketube.fun/" class="sidebar-item"><i class="fa-solid fa-users"></i> <%= currentLang === 'es' ? 'Social' : 'Social' %></a>
-    <a href="/account-create" class="sidebar-item"><i class="fa-solid fa-tv"></i> <%= currentLang === 'es' ? 'Suscripciones' : 'Subscriptions' %></a>
-    <a href="#" class="sidebar-item js-only" data-library-open><i class="fa-regular fa-folder"></i> <%= currentLang === 'es' ? 'Biblioteca' : 'Library' %></a>
-    <a href="https://codeberg.org/ashleyirispuppy/poke" class="sidebar-item"><i class="fa-solid fa-code"></i> <%= currentLang === 'es' ? 'Código fuente' : 'Source Code' %></a>
-    <button type="button" class="sidebar-item" id="open-settings-btn"><i class="fa-solid fa-gear"></i> <%= currentLang === 'es' ? 'Ajustes' : 'Settings' %></button>
+    <a href="/" class="sidebar-item active"><i class="fa-solid fa-house"></i> Home</a>
+    <a href="https://social.poketube.fun/" class="sidebar-item"><i class="fa-solid fa-users"></i> Social</a>
+    <a href="/account-create" class="sidebar-item"><i class="fa-solid fa-tv"></i> Subscriptions</a>
+    <a href="#" class="sidebar-item js-only" data-library-open><i class="fa-regular fa-folder"></i> Library</a>
+    <a href="https://codeberg.org/ashleyirispuppy/poke" class="sidebar-item"><i class="fa-solid fa-code"></i> Source Code</a>
+    <button type="button" class="sidebar-item" id="open-settings-btn"><i class="fa-solid fa-gear"></i> Settings</button>
   </div>
 
   <div class="sidebar-footer" style="padding: 16px; border-top: 1px solid var(--ptc-border);">
@@ -1923,7 +1936,7 @@ html.layout-classic body .desktop-sticky-nav {
   <div class="nav-center">
     <form class="search-form" action="/search" method="get">
       <div class="search-field">
-        <input class="search-bar" id="sticky-fname" autocomplete="on" name="query" type="text" placeholder="<%= currentLang === 'es' ? 'Buscar Poke' : 'Search Poke' %>">
+        <input class="search-bar" id="sticky-fname" autocomplete="on" name="query" type="text" placeholder="Search Poke">
         <button type="submit" class="search-btn" aria-label="Search">
           <i class="fa-solid fa-magnifying-glass"></i>
         </button>
@@ -1961,16 +1974,16 @@ html.layout-classic body .desktop-sticky-nav {
 </form>
 
 <div class="chip-bar-wrapper mobile-only" id="mobile-game-filter-bar">
-  <a class="m-chip active" href="#" data-filter-type="all" data-filter="all"><%= currentLang === 'es' ? 'Todos los juegos' : 'All Games' %></a>
+  <a class="m-chip active" href="#" data-filter-type="all" data-filter="all">All Games</a>
 
   <% gameFilters.forEach(function(g) { %>
     <a class="m-chip" href="#" data-filter-type="smart" data-filter="<%- g %>"><%- g %></a>
   <% }); %>
 
-  <a class="m-chip" href="https://charts.youtube.com"><%= currentLang === 'es' ? 'Música y Rankings' : 'Music & Youtube Charts' %></a>
-  <a class="m-chip" href="/translate"><%= currentLang === 'es' ? 'Traductor' : 'Translate' %></a>
-  <a class="m-chip" href="/map"><%= currentLang === 'es' ? 'Mapas' : 'Maps' %></a>
-  <a class="m-chip" href="/calendar"><%= currentLang === 'es' ? 'Calendario' : 'Calendar' %></a>
+  <a class="m-chip" href="https://charts.youtube.com">Music & Youtube Charts</a>
+  <a class="m-chip" href="/translate">Translate</a>
+  <a class="m-chip" href="/map">Maps</a>
+  <a class="m-chip" href="/calendar">Calendar</a>
 </div>
 
 <div class="page">
@@ -1982,7 +1995,7 @@ html.layout-classic body .desktop-sticky-nav {
     <div class="search-wrap">
       <form class="search-form" action="/search" method="get">
         <div class="search-field">
-          <input class="search-bar" autocomplete="on" id="fname" name="query" type="text" placeholder="<%= currentLang === 'es' ? '¿Qué quieres ver hoy?' : 'whatchya wanna watch today?' %>">
+          <input class="search-bar" autocomplete="on" id="fname" name="query" type="text" placeholder="whatchya wanna watch today?">
           <button type="submit" class="search-btn" aria-label="Search">
             <i class="fa-solid fa-magnifying-glass"></i>
           </button>
@@ -2008,25 +2021,22 @@ html.layout-classic body .desktop-sticky-nav {
     <section class="discover-wrap">
       <div class="discover-header">
         <div class="header-text">
-          <h2 class="section-title"><%= currentLang === 'es' ? 'Poke Juegos' : 'Poke Gaming' %></h2>
+          <h2 class="section-title">Poke Gaming</h2>
           <p class="section-sub">discover epic gaming moments in poke!</p>
         </div>
       </div>
 
       <div class="header-tabs">
-        <button type="button" class="category-tab feed-btn active js-only" data-feed="gaming"><%= currentLang === 'es' ? 'Juegos' : 'Gaming' %></button>
-        <button type="button" class="category-tab feed-btn js-only" data-feed="unlimited"><%= currentLang === 'es' ? 'Ilimitado' : 'Unlimited' %></button>
-        <a href="/privacy" class="category-tab no-js-only"><%= currentLang === 'es' ? 'Privacidad' : 'Privacy' %></a>
-      </div>
+        <button type="button" class="category-tab feed-btn default-feed-tab active js-only" data-feed="gaming">Gaming</button>
+        <button type="button" class="category-tab feed-btn default-feed-tab js-only" data-feed="unlimited">Unlimited</button>
 
-      <div class="chip-bar-wrapper desktop-only" id="desktop-game-filter-bar">
-        <a class="m-chip active" href="#" data-filter-type="all" data-filter="all"><%= currentLang === 'es' ? 'Todos los juegos' : 'All Games' %></a>
+        <button type="button" class="category-tab game-feed-tab active js-only" data-filter-type="all" data-filter="all">All Games</button>
 
         <% gameFilters.forEach(function(g) { %>
-          <a class="m-chip" href="#" data-filter-type="smart" data-filter="<%- g %>"><%- g %></a>
+          <button type="button" class="category-tab game-feed-tab js-only" data-filter-type="smart" data-filter="<%- g %>"><%- g %></button>
         <% }); %>
 
-        <a class="m-chip" href="https://charts.youtube.com"><%= currentLang === 'es' ? 'Música y Rankings' : 'Music & Youtube Charts' %></a>
+        <a href="https://charts.youtube.com" class="category-tab game-feed-tab js-only">Music & Youtube Charts</a>
       </div>
 
       <div class="discover-body">
@@ -2070,7 +2080,7 @@ html.layout-classic body .desktop-sticky-nav {
 </div>
 
 <footer class="site-footer">
-  <a href="/privacy"><%= currentLang === 'es' ? 'Privacidad' : 'Privacy' %></a>
+  <a href="/privacy">Privacy</a>
 </footer>
 
 <div class="symbol-of-tolerance"></div>
@@ -2122,59 +2132,59 @@ html.layout-classic body .desktop-sticky-nav {
     <label for="settings-modal-toggle" class="close-btn" style="position:absolute; top: 16px; right: 24px; z-index: 10;" aria-label="Close">&times;</label>
 
     <div class="settings-sidebar">
-      <div class="settings-sidebar-header"><%= currentLang === 'es' ? 'Ajustes' : 'Settings' %></div>
-      <div class="settings-tab active"><%= currentLang === 'es' ? 'Página de descubrir' : 'Discover page' %></div>
+      <div class="settings-sidebar-header">Settings</div>
+      <div class="settings-tab active">Discover page</div>
     </div>
 
     <div class="settings-content">
-      <h3 style="margin-top: 0; margin-bottom: 24px; font-size: 20px;"><%= currentLang === 'es' ? 'Página de descubrir' : 'Discover page' %></h3>
+      <h3 style="margin-top: 0; margin-bottom: 24px; font-size: 20px;">Discover page</h3>
 
       <div style="display: flex; flex-direction: column; gap: 24px;">
         <div>
-          <label style="display:block; margin-bottom: 8px; font-weight: 500;"><%= currentLang === 'es' ? 'Diseño' : 'Layout' %></label>
-          <p style="font-size: 13px; color: var(--ptc-text-secondary); margin-bottom: 12px;"><%= currentLang === 'es' ? 'Elige cómo debe abrirse la página principal. Grande y comfy, o limpio y directo al feed.' : 'Choose how the front page should open. Big and comfy, or clean and straight to the feed.' %></p>
+          <label style="display:block; margin-bottom: 8px; font-weight: 500;">Layout</label>
+          <p style="font-size: 13px; color: var(--ptc-text-secondary); margin-bottom: 12px;">Hero gives u the big cute front page. Classic skips the intro and gets straight to the videos.</p>
 
           <select id="setting-layout" style="width: 100%; max-width: 300px; padding: 10px; background: transparent; border: 1px solid var(--ptc-border); color: var(--ptc-text-primary); border-radius: 8px; font-size: 14px; outline: none;">
-            <option value="hero" style="background: var(--ptc-bg);"><%= currentLang === 'es' ? 'Héroe (Por defecto)' : 'Hero (Default)' %></option>
-            <option value="classic" style="background: var(--ptc-bg);"><%= currentLang === 'es' ? 'Clásico (Sin Héroe)' : 'Classic (No Hero)' %></option>
+            <option value="hero" style="background: var(--ptc-bg);">Hero (Default)</option>
+            <option value="classic" style="background: var(--ptc-bg);">Classic (No Hero)</option>
           </select>
         </div>
 
         <div style="height: 1px; background: var(--ptc-border); width: 100%;"></div>
 
         <div>
-          <label style="display:block; margin-bottom: 8px; font-weight: 500;"><%= currentLang === 'es' ? 'Feed Predeterminado' : 'Default Feed' %></label>
-          <p style="font-size: 13px; color: var(--ptc-text-secondary); margin-bottom: 12px;"><%= currentLang === 'es' ? 'Elige si Poke debe mantenerlo gamer primero, o abrir la puerta y mostrar de todo un poco.' : 'Pick whether Poke should keep it gaming first, or open the gates and show a bit of everything.' %></p>
+          <label style="display:block; margin-bottom: 8px; font-weight: 500;">Default Feed</label>
+          <p style="font-size: 13px; color: var(--ptc-text-secondary); margin-bottom: 12px;">Gaming keeps things cleaner. Unlimited shows every single video, even if its slop.</p>
 
           <select id="setting-feed" style="width: 100%; max-width: 300px; padding: 10px; background: transparent; border: 1px solid var(--ptc-border); color: var(--ptc-text-primary); border-radius: 8px; font-size: 14px; outline: none;">
-            <option value="gaming" style="background: var(--ptc-bg);"><%= currentLang === 'es' ? 'Juegos' : 'Gaming' %></option>
-            <option value="unlimited" style="background: var(--ptc-bg);"><%= currentLang === 'es' ? 'Ilimitado' : 'Unlimited' %></option>
+            <option value="gaming" style="background: var(--ptc-bg);">Gaming</option>
+            <option value="unlimited" style="background: var(--ptc-bg);">Unlimited</option>
           </select>
         </div>
 
         <div style="height: 1px; background: var(--ptc-border); width: 100%;"></div>
 
         <div>
-          <label style="display:block; margin-bottom: 8px; font-weight: 500;"><%= currentLang === 'es' ? 'Filtros de Juegos en Escritorio' : 'Desktop Game Feeds' %></label>
-          <p style="font-size: 13px; color: var(--ptc-text-secondary); margin-bottom: 12px;"><%= currentLang === 'es' ? 'Muestra filtros rápidos de juegos en escritorio, para saltar al tipo de chaos correcto sin dar vueltas.' : 'Show quick game filters on desktop, so you can jump to the right flavor of chaos without digging around.' %></p>
+          <label style="display:block; margin-bottom: 8px; font-weight: 500;">Desktop Game Feeds</label>
+          <p style="font-size: 13px; color: var(--ptc-text-secondary); margin-bottom: 12px;">Turns the top tabs into quick game picks, so they stay with u while u scroll.</p>
 
           <select id="setting-gamefeeds" style="width: 100%; max-width: 300px; padding: 10px; background: transparent; border: 1px solid var(--ptc-border); color: var(--ptc-text-primary); border-radius: 8px; font-size: 14px; outline: none;">
-            <option value="false" style="background: var(--ptc-bg);"><%= currentLang === 'es' ? 'Apagado' : 'Off' %></option>
-            <option value="true" style="background: var(--ptc-bg);"><%= currentLang === 'es' ? 'Encendido' : 'On' %></option>
+            <option value="false" style="background: var(--ptc-bg);">Off</option>
+            <option value="true" style="background: var(--ptc-bg);">On</option>
           </select>
         </div>
 
         <div style="height: 1px; background: var(--ptc-border); width: 100%;"></div>
 
         <div>
-          <label style="display:block; margin-bottom: 8px; font-weight: 500;"><%= currentLang === 'es' ? 'Color de Acento' : 'Accent Color' %></label>
-          <p style="font-size: 13px; color: var(--ptc-text-secondary); margin-bottom: 12px;"><%= currentLang === 'es' ? 'Cambia el color de los detalles. Pequeño cambio, gran mood.' : 'Change the highlight color for the little details. Tiny tweak, big mood.' %></p>
+          <label style="display:block; margin-bottom: 8px; font-weight: 500;">Accent Color</label>
+          <p style="font-size: 13px; color: var(--ptc-text-secondary); margin-bottom: 12px;">Pick the tiny highlight color for chips, buttons, and the little bits that need some drip.</p>
 
           <input type="color" id="setting-accent" value="#ffabcc" style="width: 100%; max-width: 100px; height: 40px; border: none; border-radius: 8px; background: transparent; cursor: pointer;">
         </div>
 
         <div style="margin-top: 16px;">
-          <button type="button" id="save-settings-btn" class="save-settings-button"><%= currentLang === 'es' ? 'Guardar Cambios' : 'Save Changes' %></button>
+          <button type="button" id="save-settings-btn" class="save-settings-button">Save Changes</button>
         </div>
       </div>
     </div>
@@ -2226,12 +2236,12 @@ html.layout-classic body .desktop-sticky-nav {
 <div class="mobile-bottom-nav">
   <a href="/" class="nav-item active">
     <i class="fa-solid fa-house"></i>
-    <span><%= currentLang === 'es' ? 'Inicio' : 'Home' %></span>
+    <span>Home</span>
   </a>
 
   <a href="https://social.poketube.fun/" class="nav-item">
     <i class="fa-solid fa-users"></i>
-    <span><%= currentLang === 'es' ? 'Social' : 'Social' %></span>
+    <span>Social</span>
   </a>
 
   <label for="create-modal-toggle" class="nav-item add-btn" aria-label="More">
@@ -2240,17 +2250,17 @@ html.layout-classic body .desktop-sticky-nav {
 
   <a href="/account-create" class="nav-item">
     <i class="fa-solid fa-tv"></i>
-    <span><%= currentLang === 'es' ? 'Suscripciones' : 'Subscriptions' %></span>
+    <span>Subscriptions</span>
   </a>
 
   <button type="button" class="nav-item js-only" data-library-open>
     <i class="fa-regular fa-folder"></i>
-    <span><%= currentLang === 'es' ? 'Biblioteca' : 'Library' %></span>
+    <span>Library</span>
   </button>
 
   <a href="/privacy" class="nav-item no-js-only">
     <i class="fa-solid fa-shield-halved"></i>
-    <span><%= currentLang === 'es' ? 'Privacidad' : 'Privacy' %></span>
+    <span>Privacy</span>
   </a>
 </div>
 
@@ -2358,7 +2368,7 @@ html.layout-classic body .desktop-sticky-nav {
   var currentFeed = localStorage.getItem("poke_feed") || "gaming";
   var currentChip = "all";
   var desktopFeedBtns = document.querySelectorAll(".feed-btn");
-  var filterChips = document.querySelectorAll(".m-chip[data-filter]");
+  var filterChips = document.querySelectorAll("[data-filter]");
   var videos = document.querySelectorAll(".video-grid .video");
 
   function applyFilters() {
