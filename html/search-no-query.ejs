@@ -75,28 +75,33 @@
     return score;
   }
 
-  var POPULAR_GAMES = [
-    "Minecraft", "Roblox", "Fortnite", "GTA V", "GTA 5", "GTA", "Grand Theft Auto", 
-    "Valorant", "Apex Legends", "Call of Duty", "Warzone", "League of Legends", 
-    "CS:GO", "CS2", "Counter-Strike", "Overwatch", "Rocket League", "Terraria", 
-    "Among Us", "Fall Guys", "Genshin Impact", "Elden Ring", "Helldivers", 
-    "Palworld", "Lethal Company", "FNAF", "Five Nights at Freddy's", "Zelda", 
-    "Super Mario", "Pokemon", "Cyberpunk 2077", "Baldur's Gate", "The Sims",
-    "World of Warcraft", "Dota 2", "Rainbow Six Siege", "Destiny 2", "Dead by Daylight",
-    "Rust", "Ark", "Final Fantasy", "Halo", "Super Smash Bros", "Mario Kart",
-    "Animal Crossing", "Stardew Valley", "Hollow Knight", "Hades", "The Witcher",
-    "Red Dead Redemption", "FIFA", "Madden", "NBA 2K", "EA Sports FC", "Street Fighter",
-    "Tekken", "Mortal Kombat", "Geometry Dash", "Brawl Stars", "Clash Royale",
-    "Clash of Clans", "Free Fire", "PUBG", "Resident Evil", "Silent Hill",
-    "Tomb Raider", "Assassin's Creed", "Far Cry", "Fallout", "Skyrim", "The Elder Scrolls",
-    "Borderlands", "Mass Effect", "Dragon Age", "Persona", "Yakuza", "Monster Hunter",
-    "Dark Souls", "Bloodborne", "Sekiro", "Ghost of Tsushima", "Spider-Man", "God of War",
-    "The Last of Us", "Uncharted", "Horizon", "Ratchet & Clank", "Crash Bandicoot",
-    "Spyro", "Sonic", "Mega Man", "Metroid", "Castlevania", "Tetris", "Pac-Man",
-    "Doom", "Quake", "Half-Life", "Portal", "Left 4 Dead", "Team Fortress 2",
-    "Garry's Mod", "Phasmophobia", "VRChat", "Beat Saber", "FiveM", "Osu", "Subnautica",
-    "Undertale", "Deltarune", "Celeste", "Dead Cells", "Binding of Isaac", "Spelunky",
-    "Cuphead", "Bendy", "Poppy Playtime", "Garten of Banban", "Smite", "Paladins"
+  // Improved strict game detection rules with aliases and strict boundaries
+  var GAME_RULES = [
+    { id: "Minecraft", triggers: ["minecraft", "mcpe", "bedrock"] },
+    { id: "Roblox", triggers: ["roblox", "bloxfruits", "brookhaven", "adopt me"] },
+    { id: "Fortnite", triggers: ["fortnite", "fncs"] },
+    { id: "GTA", triggers: ["gta v", "gta 5", "gta online", "grand theft auto", "gta"] },
+    { id: "Valorant", triggers: ["valorant", "vct"] },
+    { id: "Call of Duty", triggers: ["call of duty", "warzone", "modern warfare", "black ops"] },
+    { id: "CS2", triggers: ["cs:go", "csgo", "cs2", "counter-strike"] },
+    { id: "League of Legends", triggers: ["league of legends", "lol esports"] },
+    { id: "Clash of Clans", triggers: ["clash of clans", "coc"] },
+    { id: "Genshin Impact", triggers: ["genshin impact", "genshin"] },
+    { id: "Elden Ring", triggers: ["elden ring", "shadow of the erdtree"] },
+    { id: "Helldivers", triggers: ["helldivers"] },
+    { id: "FNAF", triggers: ["fnaf", "five nights at freddy", "five nights at freddy's"] },
+    { id: "Zelda", triggers: ["zelda", "tears of the kingdom", "breath of the wild"] },
+    { id: "Pokemon", triggers: ["pokemon", "pokémon"] },
+    { id: "Super Mario", triggers: ["super mario", "mario kart", "mario bros"] },
+    { id: "Apex Legends", triggers: ["apex legends"] },
+    { id: "Overwatch", triggers: ["overwatch"] },
+    { id: "Terraria", triggers: ["terraria"] },
+    { id: "Geometry Dash", triggers: ["geometry dash"] },
+    { id: "Brawl Stars", triggers: ["brawl stars"] },
+    { id: "Clash Royale", triggers: ["clash royale"] },
+    { id: "The Sims", triggers: ["the sims", "sims 4", "sims 3"] },
+    { id: "Cyberpunk 2077", triggers: ["cyberpunk 2077", "cyberpunk"] },
+    { id: "World of Warcraft", triggers: ["world of warcraft", "wow classic"] }
   ];
 
   function escapeRegExp(string) {
@@ -104,16 +109,17 @@
   }
 
   function detectGame(title, author) {
-    var combinedText = (title || "") + " " + (author || "");
-    if (!combinedText.trim()) return null;
+    var combinedText = " " + (title || "").toLowerCase() + " | " + (author || "").toLowerCase() + " ";
+    if (combinedText.trim().length <= 3) return null;
     
-    for (var i = 0; i < POPULAR_GAMES.length; i++) {
-      var regex = new RegExp("\\b" + escapeRegExp(POPULAR_GAMES[i]) + "\\b", "i");
-      if (regex.test(combinedText)) {
-        if (POPULAR_GAMES[i].includes("GTA") || POPULAR_GAMES[i] === "Grand Theft Auto") return "GTA";
-        if (POPULAR_GAMES[i].includes("FNAF") || POPULAR_GAMES[i].includes("Freddy")) return "FNAF";
-        if (POPULAR_GAMES[i] === "CS:GO" || POPULAR_GAMES[i] === "Counter-Strike") return "CS2";
-        return POPULAR_GAMES[i];
+    for (var i = 0; i < GAME_RULES.length; i++) {
+      var rule = GAME_RULES[i];
+      for (var j = 0; j < rule.triggers.length; j++) {
+        var trigger = rule.triggers[j];
+        var regex = new RegExp("\\b" + escapeRegExp(trigger) + "\\b", "i");
+        if (regex.test(combinedText)) {
+          return rule.id;
+        }
       }
     }
     return null;
@@ -149,9 +155,17 @@
     }
   });
 
-  var gameFilters = Object.keys(gameCounts).sort(function(a, b) {
+  var sortedGames = Object.keys(gameCounts).sort(function(a, b) {
     return gameCounts[b] - gameCounts[a];
-  }).slice(0, 3);
+  });
+
+  // Strict check: only include games with more than 1 video, unless we really need fallbacks
+  var validGames = sortedGames.filter(function(g) { return gameCounts[g] > 1; });
+  if (validGames.length === 0) {
+    validGames = sortedGames; // fail-safe if absolute no games have > 1
+  }
+  
+  var gameFilters = validGames.slice(0, 3);
 
   var finalVideos;
 
@@ -380,13 +394,8 @@ button, input {
   gap: 8px;
   font-size: 14px;
   font-weight: 500;
-  transition: background-color 0.2s;
   cursor: pointer;
   border: none;
-}
-
-.quick-chip:hover {
-  background: var(--ptc-chip-hover);
 }
 
 .search-note {
@@ -467,16 +476,11 @@ button, input {
   font-weight: 500;
   cursor: pointer;
   border: none;
-  transition: background-color 0.2s, color 0.2s;
 }
 
 .category-tab.active {
   background: var(--ptc-text-primary);
   color: var(--ptc-bg);
-}
-
-.category-tab:hover:not(.active) {
-  background: var(--ptc-chip-hover);
 }
 
 .video-grid {
@@ -506,7 +510,6 @@ button, input {
   background-position: center;
   background-size: cover;
   background-repeat: no-repeat;
-  border-radius: 12px;
   overflow: hidden;
 }
 
@@ -620,22 +623,30 @@ button, input {
   );
 }
 
+/* Modal Checkbox Hack for No-JS compatibility */
 .modal-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
   z-index: 1000;
   display: flex;
   align-items: flex-end; 
   justify-content: center;
-  opacity: 1;
-  visibility: visible;
-  transition: opacity 0.2s ease, visibility 0.2s ease;
-}
-.modal-overlay.hidden {
   opacity: 0;
   visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
   pointer-events: none;
+}
+.modal-toggle:checked ~ .modal-overlay {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+.modal-dismiss-bg {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 1;
+  cursor: default;
 }
 .modal-content {
   background: var(--ptc-bg);
@@ -643,11 +654,13 @@ button, input {
   max-width: 500px; 
   border-radius: 16px 16px 0 0;
   padding: 16px 16px calc(32px + env(safe-area-inset-bottom, 0px)) 16px;
-  transform: translateY(0);
-  transition: transform 0.2s ease;
-}
-.modal-overlay.hidden .modal-content {
   transform: translateY(100%);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  z-index: 2;
+}
+.modal-toggle:checked ~ .modal-overlay .modal-content {
+  transform: translateY(0);
 }
 .modal-header {
   display: flex;
@@ -684,8 +697,44 @@ button, input {
   font-weight: 500; 
   margin-bottom: 16px;
 }
-.modal-action-btn:hover { 
-  background: var(--ptc-chip-hover); 
+
+/* 
+  =============================
+  Desktop UI & Hover Effects 
+  =============================
+*/
+@media (min-width: 561px) {
+  .thumbnail-container {
+    border-radius: 12px;
+  }
+  .video {
+    transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .video:hover {
+    transform: translateY(-8px);
+  }
+  .video:hover .thumbnail-container {
+    box-shadow: 0 12px 24px rgba(0,0,0,0.5);
+  }
+  .quick-chip {
+    transition: transform 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .quick-chip:hover {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.4);
+    background: var(--ptc-chip-hover);
+    color: #fff;
+  }
+  .category-tab {
+    transition: transform 0.2s ease, background-color 0.2s ease;
+  }
+  .category-tab:not(.active):hover {
+    transform: translateY(-2px);
+    background: var(--ptc-chip-hover);
+  }
+  .modal-action-btn:hover { 
+    background: var(--ptc-chip-hover); 
+  }
 }
 
 @media (max-width: 1140px) {
@@ -698,6 +747,11 @@ button, input {
   .search-wrap { width: 90%; }
 }
 
+/* 
+  =============================
+  Mobile UI & Tap Effects 
+  =============================
+*/
 @media (max-width: 560px) {
   .hero, .discover-header, .home-extras-wrapper { display: none; }
   
@@ -730,6 +784,7 @@ button, input {
     color: var(--ptc-text-primary);
   }
 
+  /* No-JS toggle hack for mobile search */
   .mobile-search-form {
     display: none;
     position: sticky;
@@ -740,14 +795,8 @@ button, input {
     border-bottom: 1px solid var(--ptc-border);
   }
   
-  .mobile-search-form.active { display: flex; }
-  
-  .no-js .mobile-search-form {
-    display: flex;
-  }
-
-  .no-js .search-toggle-btn {
-    display: none; 
+  #mobile-search-toggle:checked ~ .mobile-search-form { 
+    display: flex; 
   }
 
   .mobile-search-form input {
@@ -796,11 +845,16 @@ button, input {
     font-size: 14px;
     font-weight: 500;
     text-decoration: none;
+    transition: transform 0.1s, background-color 0.2s;
   }
   
   .m-chip.active {
     background: var(--ptc-text-primary);
     color: var(--ptc-bg);
+  }
+
+  .m-chip:active {
+    transform: scale(0.92);
   }
 
   .video-grid { 
@@ -811,6 +865,13 @@ button, input {
   .video {
     margin-bottom: 24px;
     padding: 0 12px; 
+    transition: transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.15s;
+    border-radius: 16px;
+  }
+
+  .video:active {
+    transform: scale(0.96);
+    opacity: 0.85;
   }
 
   .thumbnail-container { 
@@ -900,11 +961,18 @@ button, input {
     text-decoration: none;
     height: 48px;
     flex: 1; 
+    transition: transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s;
+    cursor: pointer;
   }
 
   .nav-item.active { 
     opacity: 1; 
     font-weight: bold; 
+  }
+
+  .nav-item:active {
+    transform: scale(0.85);
+    opacity: 0.6;
   }
 
   .nav-item i { font-size: 20px; }
@@ -935,10 +1003,12 @@ button, input {
 
 <body>
 
+<input type="checkbox" id="mobile-search-toggle" hidden>
+
 <div class="mobile-top-bar">
   <img src="/static/logo-poke.svg" class="mobile-logo" alt="Poke">
   <div class="mobile-top-actions">
-    <i class="fa-solid fa-magnifying-glass search-toggle-btn" onclick="toggleMobileSearch()"></i>
+    <label for="mobile-search-toggle" class="fa-solid fa-magnifying-glass search-toggle-btn"></label>
   </div>
 </div>
 
@@ -1065,11 +1135,16 @@ button, input {
 
 <div class="symbol-of-tolerance"></div>
 
-<div id="create-modal" class="modal-overlay hidden" onclick="closeCreateModal(event)">
-  <div class="modal-content" onclick="event.stopPropagation()">
+<!-- CSS-based Modal Checkbox Hack -->
+<input type="checkbox" id="create-modal-toggle" class="modal-toggle" hidden>
+
+<div id="create-modal" class="modal-overlay">
+  <!-- Clickable background layer to dismiss modal -->
+  <label for="create-modal-toggle" class="modal-dismiss-bg" aria-label="Close modal"></label>
+  <div class="modal-content">
     <div class="modal-header">
       <h3>Create</h3>
-      <button class="close-btn" onclick="closeCreateModal(event)" aria-label="Close">&times;</button>
+      <label for="create-modal-toggle" class="close-btn" aria-label="Close">&times;</label>
     </div>
     <div class="modal-body">
       <a href="/video/upload" class="modal-action-btn">
@@ -1105,9 +1180,10 @@ button, input {
     <i class="fa-solid fa-users"></i>
     <span>Social</span>
   </a>
-  <a href="#" class="nav-item add-btn" aria-label="Create" onclick="openCreateModal(event)">
+  <!-- No-JS Modal trigger via label -->
+  <label for="create-modal-toggle" class="nav-item add-btn" aria-label="Create">
     <i class="fa-regular fa-circle-plus"></i>
-  </a>
+  </label>
   <a href="/account-create" class="nav-item">
     <i class="fa-solid fa-tv"></i>
     <span>Subscriptions</span>
@@ -1131,6 +1207,17 @@ button, input {
       } else {
         bangIndicator.classList.add("hidden");
         searchInput.setAttribute("autocomplete", "on"); 
+      }
+    });
+  }
+
+  // JS enhancement for Mobile Search Form Focus
+  var searchToggle = document.getElementById("mobile-search-toggle");
+  if (searchToggle) {
+    searchToggle.addEventListener("change", function () {
+      if (this.checked) {
+        var mobileInput = document.getElementById("mobile-search-input");
+        if(mobileInput) mobileInput.focus();
       }
     });
   }
@@ -1167,24 +1254,6 @@ button, input {
   });
 
 })();
-
-function toggleMobileSearch() {
-  var form = document.getElementById('mobile-search-form');
-  form.classList.toggle('active');
-  if(form.classList.contains('active')) {
-    document.getElementById('mobile-search-input').focus();
-  }
-}
-
-function openCreateModal(e) {
-  e.preventDefault();
-  document.getElementById('create-modal').classList.remove('hidden');
-}
-
-function closeCreateModal(e) {
-  if (e) e.preventDefault();
-  document.getElementById('create-modal').classList.add('hidden');
-}
 </script>
 
 </body>
