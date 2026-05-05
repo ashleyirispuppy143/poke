@@ -86,7 +86,16 @@
       return slopScore < maxSlopScore; 
     });
 
-    return allowed.slice(0, limit);
+    // Shuffle the allowed array if isMobile is true
+    if (isMobile) {
+      for (let i = allowed.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [allowed[i], allowed[j]] = [allowed[j], allowed[i]];
+      }
+    }
+
+    // Return the max items available if mobile, otherwise return limit
+    return isMobile ? allowed : allowed.slice(0, limit);
   }
 
   function formatViews(num) {
@@ -474,20 +483,6 @@ button, input {
   gap: 12px;
 }
 
-.avatar-link {
-  flex-shrink: 0;
-  position: relative;
-  z-index: 3;
-}
-
-.author-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  object-fit: cover;
-  background-color: var(--ptc-chip-bg);
-}
-
 .info {
   display: flex;
   flex-direction: column;
@@ -625,12 +620,6 @@ button, input {
     color: var(--ptc-text-primary);
   }
 
-  .mobile-avatar {
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-  }
-
   /* Hidden Mobile Search Expansion */
   .mobile-search-form {
     display: none;
@@ -644,6 +633,16 @@ button, input {
   
   .mobile-search-form.active { display: flex; }
   
+  /* Fallback for noscript */
+  .no-js .mobile-search-form {
+    display: flex;
+  }
+
+  /* Target the toggle button only in no-js */
+  .no-js .search-toggle-btn {
+    display: none; 
+  }
+
   .mobile-search-form input {
     flex: 1;
     background: var(--ptc-searchbox-bg);
@@ -676,6 +675,10 @@ button, input {
     scrollbar-width: none; /* Firefox */
   }
   
+  .no-js .mobile-chip-bar {
+    top: 100px;
+  }
+
   .mobile-chip-bar::-webkit-scrollbar { display: none; } /* Chrome */
   
   .m-chip {
@@ -710,11 +713,6 @@ button, input {
   .details { 
     padding: 12px 16px 4px 16px; 
     gap: 12px;
-  }
-
-  .author-avatar {
-    width: 36px;
-    height: 36px;
   }
 
   .title {
@@ -778,10 +776,7 @@ button, input {
 <div class="mobile-top-bar">
   <img src="/static/logo-poke.svg" class="mobile-logo" alt="Poke">
   <div class="mobile-top-actions">
-    <i class="fa-solid fa-chromecast"></i>
-    <i class="fa-regular fa-bell"></i>
-    <i class="fa-solid fa-magnifying-glass" onclick="toggleMobileSearch()"></i>
-    <img src="https://ui-avatars.com/api/?name=User&background=333&color=fff&rounded=true" class="mobile-avatar" alt="Profile">
+    <i class="fa-solid fa-magnifying-glass search-toggle-btn" onclick="toggleMobileSearch()"></i>
   </div>
 </div>
 
@@ -871,16 +866,6 @@ button, input {
               </div>
 
               <div class="details">
-                <% if (item.authorId) { %>
-                  <a href="/channel?id=<%- item.authorId %>" class="avatar-link" aria-label="Visit <%- item.author %>'s channel">
-                    <img class="author-avatar" src="https://ui-avatars.com/api/?name=<%- encodeURIComponent(item.author) %>&background=333&color=fff&rounded=true" alt="" loading="lazy">
-                  </a>
-                <% } else { %>
-                  <span class="avatar-link">
-                    <img class="author-avatar" src="https://ui-avatars.com/api/?name=<%- encodeURIComponent(item.author) %>&background=333&color=fff&rounded=true" alt="" loading="lazy">
-                  </span>
-                <% } %>
-                
                 <div class="info">
                   <a href="/watch?v=<%- item.videoId %>" class="title" title="<%- item.title %>"><%- item.title %></a>
                   
