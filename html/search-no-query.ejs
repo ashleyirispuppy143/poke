@@ -553,7 +553,7 @@ button {
   cursor: pointer;
 }
 
-.mobile-top-bar, .mobile-search-form, .mobile-bottom-nav, .mobile-chip-bar {
+.mobile-search-form, .mobile-bottom-nav, .mobile-chip-bar {
   display: none;
 }
 
@@ -782,6 +782,14 @@ button {
   text-decoration: none;
 }
 
+.no-js .video.is-slop-false {
+  display: flex !important;
+}
+
+.no-js .video.is-slop-true {
+  display: none !important;
+}
+
 .video-cover-link {
   position: absolute;
   inset: 0;
@@ -932,7 +940,6 @@ button {
   z-index: 1000;
   align-items: center;
   justify-content: center;
-  padding: 24px;
 }
 
 .modal-toggle:checked + .modal-overlay {
@@ -966,21 +973,65 @@ button {
 }
 
 .settings-dialog {
-  background: var(--yt-dialog-bg);
+  background: var(--ptc-bg);
   border: 1px solid var(--yt-dialog-border);
   border-radius: 12px;
-  padding: 24px;
-  width: min(400px, 100%);
+  padding: 0;
+  width: min(850px, 95vw);
+  min-height: 500px;
   color: var(--ptc-text-primary);
   position: relative;
   z-index: 2;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65);
   transform: translateY(8px) scale(0.98);
   transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
 }
 
 .modal-toggle:checked + #settings-modal .settings-dialog {
   transform: translateY(0) scale(1);
+}
+
+.settings-sidebar {
+  width: 240px;
+  border-right: 1px solid var(--ptc-border);
+  display: flex;
+  flex-direction: column;
+  padding: 12px 0;
+}
+
+.settings-sidebar-title {
+  font-size: 16px;
+  font-weight: 500;
+  padding: 12px 24px;
+}
+
+.settings-tab {
+  padding: 10px 24px;
+  background: transparent;
+  border: none;
+  color: var(--ptc-text-secondary);
+  text-align: left;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.settings-tab.active {
+  background: var(--ptc-chip-bg);
+  color: var(--ptc-text-primary);
+  font-weight: 500;
+  border-radius: 8px;
+  margin: 0 8px;
+  padding: 10px 16px;
+}
+
+.settings-content-area {
+  flex: 1;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
 }
 
 .modal-header {
@@ -1166,7 +1217,6 @@ button {
   font: inherit;
 }
 
-/* Sidebar styling */
 .sidebar-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
@@ -1242,7 +1292,6 @@ button {
   text-align: center;
 }
 
-/* Desktop Dropdown menu */
 .desktop-dropdown-menu {
   position: absolute;
   top: 100%;
@@ -1276,7 +1325,6 @@ button {
   background: var(--ptc-chip-hover);
 }
 
-/* My Poke Button */
 .my-poke-btn {
   display: flex;
   align-items: center;
@@ -1295,7 +1343,6 @@ button {
   background: var(--ptc-chip-hover);
 }
 
-/* Classic Layout Overrides */
 html.layout-classic body .hero { display: none !important; }
 html.layout-classic body .discover-header .header-text { display: none !important; }
 html.layout-classic body .discover-header { border-bottom: none; margin-bottom: 16px; padding-bottom: 0; margin-top: 24px; }
@@ -1431,6 +1478,24 @@ html.layout-classic body .page { padding-top: 72px; }
   }
 }
 
+@media (max-width: 768px) {
+  .settings-dialog {
+    flex-direction: column;
+    height: auto;
+    border-radius: 16px 16px 0 0;
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    min-height: auto;
+  }
+  .settings-sidebar {
+    display: none;
+  }
+  .settings-content-area {
+    padding: 16px;
+  }
+}
+
 @media (max-width: 560px) {
   .desktop-sidebar, .sidebar-overlay {
     display: none !important;
@@ -1453,43 +1518,14 @@ html.layout-classic body .page { padding-top: 72px; }
     display: none !important;
   }
 
-  .mobile-top-bar {
+  .mobile-search-form {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0 16px;
-    height: 48px;
-    background: var(--ptc-bg);
     position: sticky;
     top: 0;
-    z-index: 100;
-  }
-
-  /* Notice no hamburger in top bar */
-  .mobile-logo {
-    height: 20px;
-  }
-
-  .mobile-top-actions {
-    display: flex;
-    gap: 20px;
-    align-items: center;
-    font-size: 20px;
-    color: var(--ptc-text-primary);
-  }
-
-  .mobile-search-form {
-    display: none;
-    position: sticky;
-    top: 48px;
     background: var(--ptc-bg);
     padding: 8px 16px;
-    z-index: 99;
+    z-index: 100;
     border-bottom: 1px solid var(--ptc-border);
-  }
-
-  #mobile-search-toggle:checked ~ .mobile-search-form {
-    display: flex;
   }
 
   .mobile-search-form input {
@@ -1518,15 +1554,16 @@ html.layout-classic body .page { padding-top: 72px; }
     gap: 8px;
     background: var(--ptc-bg);
     position: sticky;
-    top: 48px;
+    top: 50px;
     z-index: 90;
     scrollbar-width: none;
     white-space: nowrap;
     flex-wrap: nowrap;
+    margin-bottom: 16px;
   }
 
   .no-js .mobile-chip-bar {
-    top: 100px;
+    top: 50px;
   }
 
   .mobile-chip-bar::-webkit-scrollbar {
@@ -1718,9 +1755,6 @@ html.layout-classic body .page { padding-top: 72px; }
 
 <body>
 
-<input type="checkbox" id="mobile-search-toggle" hidden>
-
-<!-- Sidebar Implementation -->
 <div id="desktop-sidebar-overlay" class="sidebar-overlay"></div>
 <div id="desktop-sidebar" class="desktop-sidebar">
   <div class="sidebar-header">
@@ -1750,7 +1784,6 @@ html.layout-classic body .page { padding-top: 72px; }
   </div>
 </div>
 
-<!-- Desktop Sticky Navbar -->
 <div id="desktop-sticky-nav" class="desktop-sticky-nav">
   <div class="nav-left">
     <i class="fa-solid fa-bars hamburger"></i>
@@ -1783,20 +1816,11 @@ html.layout-classic body .page { padding-top: 72px; }
   </div>
 </div>
 
-<!-- Mobile Top Bar -->
-<div class="mobile-top-bar">
-  <img src="/static/logo-poke.svg" class="mobile-logo" alt="Poke">
-  <div class="mobile-top-actions">
-    <label for="mobile-search-toggle" class="fa-solid fa-magnifying-glass search-toggle-btn" aria-label="Open search"></label>
-  </div>
-</div>
-
-<form class="mobile-search-form" id="mobile-search-form" action="/app" method="get">
-  <input type="text" id="mobile-search-input" name="mobilesearch" placeholder="Search Poke">
+<form class="mobile-search-form" id="mobile-search-form" action="/search" method="get">
+  <input type="text" id="mobile-search-input" name="query" placeholder="Search Poke">
   <button type="submit" aria-label="Search"><i class="fa-solid fa-magnifying-glass"></i></button>
 </form>
 
-<!-- Mobile Chip Bar -->
 <div class="mobile-chip-bar" id="game-filter-bar">
   <a class="m-chip active" href="#" data-filter-type="all" data-filter="all">All Games</a>
   <% gameFilters.forEach(function(g) { %>
@@ -1851,15 +1875,13 @@ html.layout-classic body .page { padding-top: 72px; }
         <div class="header-tabs">
           <button type="button" class="category-tab feed-btn active" data-feed="gaming">Gaming</button>
           <button type="button" class="category-tab feed-btn" data-feed="unlimited">Unlimited</button>
-          <button type="button" class="category-tab js-only" data-library-open>Music</button>
-          <a href="/privacy" class="category-tab no-js-only">Privacy</a>
         </div>
       </div>
 
       <div class="discover-body">
         <div class="video-grid">
           <% displayVideos.forEach(function(item) { %>
-            <div class="video canloadhd" data-author="<%- item.author %>" data-game="<%- item.detectedGame %>" data-genre="<%- item.detectedGenre %>" data-category="<%- item.detectedCategory %>" data-isslop="<%- item.isSlop %>" style="display:none;">
+            <div class="video canloadhd is-slop-<%- item.isSlop %>" data-author="<%- item.author %>" data-game="<%- item.detectedGame %>" data-genre="<%- item.detectedGenre %>" data-category="<%- item.detectedCategory %>" data-isslop="<%- item.isSlop %>" style="display:none;">
               <a href="/watch?v=<%- item.videoId %>" class="video-cover-link" aria-label="Watch <%- item.title %>"></a>
 
               <div class="thumbnail-container" style="background-image:url('/vi/<%= item.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw');">
@@ -1901,7 +1923,6 @@ html.layout-classic body .page { padding-top: 72px; }
 
 <div class="symbol-of-tolerance"></div>
 
-<!-- Create/More Modal (Mobile) -->
 <input type="checkbox" id="create-modal-toggle" class="modal-toggle" hidden>
 <div id="create-modal" class="modal-overlay" aria-hidden="true">
   <label for="create-modal-toggle" class="modal-dismiss-bg" aria-label="Close modal"></label>
@@ -1935,36 +1956,42 @@ html.layout-classic body .page { padding-top: 72px; }
   </div>
 </div>
 
-<!-- Settings Modal (Desktop Style) -->
 <input type="checkbox" id="settings-modal-toggle" class="modal-toggle" hidden>
 <div id="settings-modal" class="modal-overlay" aria-hidden="true">
   <label for="settings-modal-toggle" class="modal-dismiss-bg" aria-label="Close modal"></label>
   <div class="settings-dialog">
-    <div class="modal-header">
-      <h3>Settings</h3>
-      <label for="settings-modal-toggle" class="close-btn" aria-label="Close">&times;</label>
+    <div class="settings-sidebar">
+      <div class="settings-sidebar-title">Settings</div>
+      <button class="settings-tab active">Account</button>
+      <button class="settings-tab">Playback and performance</button>
+      <button class="settings-tab">Privacy</button>
     </div>
-    <div class="modal-body" style="display: flex; flex-direction: column; gap: 16px;">
-      <div>
-        <label style="display:block; margin-bottom: 8px; color: var(--ptc-text-secondary);">Layout</label>
-        <select id="setting-layout" style="width: 100%; padding: 12px; background: var(--ptc-chip-bg); border: 1px solid var(--ptc-border); color: var(--ptc-text-primary); border-radius: 8px; font-size: 16px; outline: none;">
-          <option value="hero">Hero (Default)</option>
-          <option value="classic">Classic (No Hero)</option>
-        </select>
+    <div class="settings-content-area">
+      <div class="modal-header" style="border: none; margin-bottom: 0;">
+        <h3 style="font-size: 20px;">Account</h3>
+        <label for="settings-modal-toggle" class="close-btn" aria-label="Close">&times;</label>
       </div>
-      <div>
-        <label style="display:block; margin-bottom: 8px; color: var(--ptc-text-secondary);">Default Feed</label>
-        <select id="setting-feed" style="width: 100%; padding: 12px; background: var(--ptc-chip-bg); border: 1px solid var(--ptc-border); color: var(--ptc-text-primary); border-radius: 8px; font-size: 16px; outline: none;">
-          <option value="gaming">Gaming</option>
-          <option value="unlimited">Unlimited</option>
-        </select>
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: 24px;">
+        <div>
+          <label style="display:block; margin-bottom: 8px; font-size: 15px; color: var(--ptc-text-primary);">Layout</label>
+          <select id="setting-layout" style="width: 100%; max-width: 300px; padding: 10px; background: transparent; border: 1px solid var(--ptc-border); color: var(--ptc-text-primary); border-radius: 8px; font-size: 14px; outline: none;">
+            <option value="hero" style="background: var(--ptc-chip-bg)">Hero (Default)</option>
+            <option value="classic" style="background: var(--ptc-chip-bg)">Classic (No Hero)</option>
+          </select>
+        </div>
+        <div>
+          <label style="display:block; margin-bottom: 8px; font-size: 15px; color: var(--ptc-text-primary);">Default Feed</label>
+          <select id="setting-feed" style="width: 100%; max-width: 300px; padding: 10px; background: transparent; border: 1px solid var(--ptc-border); color: var(--ptc-text-primary); border-radius: 8px; font-size: 14px; outline: none;">
+            <option value="gaming" style="background: var(--ptc-chip-bg)">Gaming</option>
+            <option value="unlimited" style="background: var(--ptc-chip-bg)">Unlimited</option>
+          </select>
+        </div>
+        <button type="button" id="save-settings-btn" style="padding: 10px 24px; background: var(--yt-dialog-button); color: #000; font-weight: 500; border: none; border-radius: 18px; cursor: pointer; align-self: flex-start; margin-top: 16px;">Save Changes</button>
       </div>
-      <button type="button" id="save-settings-btn" style="padding: 12px; background: var(--yt-dialog-button); color: #000; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; margin-top: 8px;">Save Changes</button>
     </div>
   </div>
 </div>
 
-<!-- Library Coming Soon Modal -->
 <div id="library-modal" class="modal-overlay library-modal js-only" role="dialog" aria-modal="true" aria-labelledby="library-dialog-title" aria-hidden="true">
   <button type="button" class="library-backdrop" data-library-close aria-label="Close library dialog"></button>
   <div class="library-dialog" role="document">
@@ -2055,23 +2082,12 @@ html.layout-classic body .page { padding-top: 72px; }
   if (searchInput) searchInput.addEventListener("input", handleBangIndicator);
   if (stickySearchInput) stickySearchInput.addEventListener("input", handleBangIndicator);
 
-  var searchToggle = document.getElementById("mobile-search-toggle");
-
-  if (searchToggle) {
-    searchToggle.addEventListener("change", function () {
-      if (this.checked) {
-        var mobileInput = document.getElementById("mobile-search-input");
-        if (mobileInput) mobileInput.focus();
-      }
-    });
-  }
-
   window.addEventListener("scroll", function() {
     var stickyNav = document.getElementById("desktop-sticky-nav");
     var hero = document.querySelector(".hero");
     if (!stickyNav) return;
     
-     if(document.documentElement.classList.contains('layout-classic')) return;
+    if(document.documentElement.classList.contains('layout-classic')) return;
 
     if (!hero) return;
     var heroBottom = hero.offsetTop + hero.offsetHeight;
@@ -2082,7 +2098,7 @@ html.layout-classic body .page { padding-top: 72px; }
     }
   });
 
-   var hamburgers = document.querySelectorAll(".hamburger");
+  var hamburgers = document.querySelectorAll(".hamburger");
   var sidebar = document.getElementById("desktop-sidebar");
   var sidebarOverlay = document.getElementById("desktop-sidebar-overlay");
 
@@ -2101,7 +2117,7 @@ html.layout-classic body .page { padding-top: 72px; }
     sidebarOverlay.addEventListener("click", toggleSidebar);
   }
 
-   var desktopCreateBtn = document.getElementById("desktop-create-btn");
+  var desktopCreateBtn = document.getElementById("desktop-create-btn");
   var desktopCreateDropdown = document.getElementById("desktop-create-dropdown");
 
   if (desktopCreateBtn && desktopCreateDropdown) {
@@ -2111,7 +2127,7 @@ html.layout-classic body .page { padding-top: 72px; }
     });
   }
 
-   var openSettingsBtn = document.getElementById("open-settings-btn");
+  var openSettingsBtn = document.getElementById("open-settings-btn");
   var saveSettingsBtn = document.getElementById("save-settings-btn");
   var settingsModalToggle = document.getElementById("settings-modal-toggle");
 
@@ -2125,7 +2141,7 @@ html.layout-classic body .page { padding-top: 72px; }
     });
   }
 
-   var currentFeed = localStorage.getItem('poke_feed') || 'gaming';
+  var currentFeed = localStorage.getItem('poke_feed') || 'gaming';
   var currentChip = "all";
   var desktopFeedBtns = document.querySelectorAll(".feed-btn");
   var filterChips = document.querySelectorAll("#game-filter-bar .m-chip[data-filter]");
@@ -2164,7 +2180,6 @@ html.layout-classic body .page { padding-top: 72px; }
     });
   }
 
-  // Init UI to saved feed
   if(currentFeed !== 'gaming') {
       var initFeedOpt = document.querySelector('.feed-btn[data-feed="'+currentFeed+'"]');
       if(initFeedOpt) {
@@ -2172,7 +2187,7 @@ html.layout-classic body .page { padding-top: 72px; }
           initFeedOpt.classList.add("active");
       }
   }
-  applyFilters(); // Initial render setup
+  applyFilters(); 
 
   if(saveSettingsBtn) {
     saveSettingsBtn.addEventListener("click", function(e) {
