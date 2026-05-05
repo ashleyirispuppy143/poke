@@ -23,47 +23,51 @@
     var score = 0;
     var lowerTitle = title.toLowerCase();
 
-    var nuclearBrainrot =[
-      "skibidi", "rizz", "sigma", "gyatt", "fanum tax", "mewing", 
-      "looksmaxxing", "grimace shake", "baby gronk", "livvy dunne", 
+    var nuclearBrainrot = [
+      "skibidi", "rizz", "sigma", "gyatt", "fanum tax", "mewing",
+      "looksmaxxing", "grimace shake", "baby gronk", "livvy dunne",
       "smurf cat", "pibby", "only in ohio", "brainrot", "lankybox",
       "isquared"
     ];
+
     for (var i = 0; i < nuclearBrainrot.length; i++) {
-      if (lowerTitle.indexOf(nuclearBrainrot[i]) !== -1) return 100; 
+      if (lowerTitle.indexOf(nuclearBrainrot[i]) !== -1) return 100;
     }
 
-    var mascotSlop =[
-      "garten of banban", "huggy wuggy", "poppy playtime", 
+    var mascotSlop = [
+      "garten of banban", "huggy wuggy", "poppy playtime",
       "rainbow friends", "pomni", "digital circus", "monster school",
       "friday night funkin", "fnf"
     ];
+
     for (var j = 0; j < mascotSlop.length; j++) {
       if (lowerTitle.indexOf(mascotSlop[j]) !== -1) score += 60;
     }
 
-     if (lowerTitle.indexOf("roblox") !== -1) {
-      var robloxTriggers =[
+    if (lowerTitle.indexOf("roblox") !== -1) {
+      var robloxTriggers = [
         "free robux", "slender", "brookhaven secret", "online dater", "mic up", "admin abuse", "sad story"
       ];
+
       for (var k = 0; k < robloxTriggers.length; k++) {
         if (lowerTitle.indexOf(robloxTriggers[k]) !== -1) score += 80;
       }
     }
 
-    var clickbaitPhrases =[
+    var clickbaitPhrases = [
       "gone wrong", "you won't believe", "literally died",
       "don't watch at 3am", "100% real", "not clickbait", "caught on camera"
     ];
+
     for (var l = 0; l < clickbaitPhrases.length; l++) {
       if (lowerTitle.indexOf(clickbaitPhrases[l]) !== -1) score += 40;
     }
 
-    var letters = title.replace(/[^a-zA-Z]/g, '');
+    var letters = title.replace(/[^a-zA-Z]/g, "");
     if (letters.length > 5) {
-      var caps = title.replace(/[^A-Z]/g, '');
+      var caps = title.replace(/[^A-Z]/g, "");
       var capsRatio = caps.length / letters.length;
-      if (capsRatio > 0.6) score += 40; 
+      if (capsRatio > 0.6) score += 40;
     }
 
     if (/[!?]{3,}/.test(title)) score += 30;
@@ -75,71 +79,306 @@
     return score;
   }
 
-  // Improved strict game detection rules with aliases and strict boundaries
   var GAME_RULES = [
-    { id: "Minecraft", triggers: ["minecraft", "mcpe", "bedrock"] },
-    { id: "Roblox", triggers: ["roblox", "bloxfruits", "brookhaven", "adopt me"] },
-    { id: "Fortnite", triggers: ["fortnite", "fncs"] },
-    { id: "GTA", triggers: ["gta v", "gta 5", "gta online", "grand theft auto", "gta"] },
-    { id: "Valorant", triggers: ["valorant", "vct"] },
-    { id: "Call of Duty", triggers: ["call of duty", "warzone", "modern warfare", "black ops"] },
-    { id: "CS2", triggers: ["cs:go", "csgo", "cs2", "counter-strike"] },
-    { id: "League of Legends", triggers: ["league of legends", "lol esports"] },
-    { id: "Clash of Clans", triggers: ["clash of clans", "coc"] },
-    { id: "Genshin Impact", triggers: ["genshin impact", "genshin"] },
-    { id: "Elden Ring", triggers: ["elden ring", "shadow of the erdtree"] },
-    { id: "Helldivers", triggers: ["helldivers"] },
-    { id: "FNAF", triggers: ["fnaf", "five nights at freddy", "five nights at freddy's"] },
-    { id: "Zelda", triggers: ["zelda", "tears of the kingdom", "breath of the wild"] },
-    { id: "Pokemon", triggers: ["pokemon", "pokémon"] },
-    { id: "Super Mario", triggers: ["super mario", "mario kart", "mario bros"] },
-    { id: "Apex Legends", triggers: ["apex legends"] },
-    { id: "Overwatch", triggers: ["overwatch"] },
-    { id: "Terraria", triggers: ["terraria"] },
-    { id: "Geometry Dash", triggers: ["geometry dash"] },
-    { id: "Brawl Stars", triggers: ["brawl stars"] },
-    { id: "Clash Royale", triggers: ["clash royale"] },
-    { id: "The Sims", triggers: ["the sims", "sims 4", "sims 3"] },
-    { id: "Cyberpunk 2077", triggers: ["cyberpunk 2077", "cyberpunk"] },
-    { id: "World of Warcraft", triggers: ["world of warcraft", "wow classic"] }
+    { id: "Minecraft", genre: "Sandbox", category: "Survival Crafting", triggers: ["minecraft", "mcpe", "minecraft pe", "minecraft pocket edition", "minecraft bedrock", "minecraft java", "bedrock edition", "hypixel", "herobrine"] },
+    { id: "Roblox", genre: "Sandbox", category: "Platform Games", triggers: ["roblox", "blox fruits", "bloxfruits", "brookhaven", "adopt me", "doors roblox", "pet simulator", "dress to impress", "murder mystery 2", "mm2 roblox", "blade ball"] },
+    { id: "Fortnite", genre: "Battle Royale", category: "Action Games", triggers: ["fortnite", "fortnite battle royale", "fncs", "fortnite creative", "lego fortnite", "fortnite festival"] },
+    { id: "Grand Theft Auto", genre: "Action Adventure", category: "Open World", triggers: ["gta v", "gta 5", "gta online", "grand theft auto", "gta", "gta vi", "gta 6", "san andreas", "vice city"] },
+    { id: "Valorant", genre: "Tactical Shooter", category: "FPS", triggers: ["valorant", "vct", "valorant champions", "valorant ranked"] },
+    { id: "Call of Duty", genre: "Shooter", category: "FPS", triggers: ["call of duty", "cod", "warzone", "modern warfare", "black ops", "mw3", "mw2", "cod mobile", "call of duty mobile"] },
+    { id: "Counter-Strike 2", genre: "Tactical Shooter", category: "FPS", triggers: ["cs:go", "csgo", "cs2", "counter-strike", "counter strike", "counter-strike 2", "counter strike 2"] },
+    { id: "League of Legends", genre: "MOBA", category: "Strategy Games", triggers: ["league of legends", "lol esports", "league ranked", "summoner's rift", "wild rift"] },
+    { id: "Clash of Clans", genre: "Strategy", category: "Mobile Strategy", triggers: ["clash of clans", "coc", "town hall 16", "town hall 15", "builder base"] },
+    { id: "Genshin Impact", genre: "Action RPG", category: "Gacha Games", triggers: ["genshin impact", "genshin", "hoyoverse genshin", "spiral abyss"] },
+    { id: "Elden Ring", genre: "Action RPG", category: "Soulslike", triggers: ["elden ring", "shadow of the erdtree", "malenia", "lands between"] },
+    { id: "Helldivers 2", genre: "Co-op Shooter", category: "Action Games", triggers: ["helldivers", "helldivers 2", "super earth"] },
+    { id: "Five Nights at Freddy's", genre: "Horror", category: "Horror Games", triggers: ["fnaf", "five nights at freddy", "five nights at freddy's", "freddy fazbear", "security breach", "help wanted"] },
+    { id: "The Legend of Zelda", genre: "Action Adventure", category: "Adventure Games", triggers: ["zelda", "tears of the kingdom", "breath of the wild", "ocarina of time", "majora's mask"] },
+    { id: "Pokemon", genre: "RPG", category: "Creature Collecting", triggers: ["pokemon", "pokémon", "pokemon scarlet", "pokemon violet", "pokemon go", "pokemon unite", "nuzlocke"] },
+    { id: "Super Mario", genre: "Platformer", category: "Platform Games", triggers: ["super mario", "mario kart", "mario bros", "mario wonder", "mario odyssey", "mario party"] },
+    { id: "Apex Legends", genre: "Battle Royale", category: "FPS", triggers: ["apex legends", "apex ranked", "apex season"] },
+    { id: "Overwatch 2", genre: "Hero Shooter", category: "FPS", triggers: ["overwatch", "overwatch 2", "ow2", "overwatch league"] },
+    { id: "Terraria", genre: "Sandbox", category: "Survival Crafting", triggers: ["terraria", "calamity mod", "tmodloader"] },
+    { id: "Geometry Dash", genre: "Rhythm Platformer", category: "Rhythm Games", triggers: ["geometry dash", "gd demon", "gd level"] },
+    { id: "Brawl Stars", genre: "Action", category: "Mobile Action", triggers: ["brawl stars", "brawlstars", "supercell brawl"] },
+    { id: "Clash Royale", genre: "Card Battler", category: "Mobile Strategy", triggers: ["clash royale", "clashroyale", "royale arena"] },
+    { id: "The Sims", genre: "Life Simulation", category: "Simulation", triggers: ["the sims", "sims 4", "sims 3", "sims 2", "sims cc"] },
+    { id: "Cyberpunk 2077", genre: "Action RPG", category: "Open World", triggers: ["cyberpunk 2077", "cyberpunk", "phantom liberty"] },
+    { id: "World of Warcraft", genre: "MMORPG", category: "RPG", triggers: ["world of warcraft", "wow classic", "dragonflight", "war within", "azeroth"] },
+    { id: "Among Us", genre: "Social Deduction", category: "Party Games", triggers: ["among us", "impostor", "imposter among us", "crewmate"] },
+    { id: "Fall Guys", genre: "Party Royale", category: "Party Games", triggers: ["fall guys", "fallguys", "ultimate knockout"] },
+    { id: "Rocket League", genre: "Sports", category: "Competitive Sports", triggers: ["rocket league", "rlcs", "rocket racing"] },
+    { id: "Dota 2", genre: "MOBA", category: "Strategy Games", triggers: ["dota 2", "dota2", "the international dota", "ti dota"] },
+    { id: "Team Fortress 2", genre: "Hero Shooter", category: "FPS", triggers: ["team fortress 2", "tf2", "tf2 spy", "tf2 medic"] },
+    { id: "Destiny 2", genre: "Looter Shooter", category: "FPS", triggers: ["destiny 2", "destiny raid", "final shape destiny"] },
+    { id: "Warframe", genre: "Looter Shooter", category: "Action Games", triggers: ["warframe", "tenno", "warframe build"] },
+    { id: "Rainbow Six Siege", genre: "Tactical Shooter", category: "FPS", triggers: ["rainbow six siege", "r6 siege", "r6s", "siege ranked"] },
+    { id: "PUBG", genre: "Battle Royale", category: "FPS", triggers: ["pubg", "pubg mobile", "playerunknown", "battlegrounds mobile"] },
+    { id: "Free Fire", genre: "Battle Royale", category: "Mobile Action", triggers: ["free fire", "garena free fire", "freefire"] },
+    { id: "Mobile Legends", genre: "MOBA", category: "Mobile Strategy", triggers: ["mobile legends", "mlbb", "bang bang mobile legends"] },
+    { id: "Arena of Valor", genre: "MOBA", category: "Mobile Strategy", triggers: ["arena of valor", "aov game", "honor of kings global"] },
+    { id: "Honor of Kings", genre: "MOBA", category: "Mobile Strategy", triggers: ["honor of kings", "hok game", "王者荣耀"] },
+    { id: "Honkai Star Rail", genre: "Turn-Based RPG", category: "Gacha Games", triggers: ["honkai star rail", "star rail", "hsr build", "penacony"] },
+    { id: "Honkai Impact 3rd", genre: "Action RPG", category: "Gacha Games", triggers: ["honkai impact", "honkai impact 3rd", "hi3"] },
+    { id: "Zenless Zone Zero", genre: "Action RPG", category: "Gacha Games", triggers: ["zenless zone zero", "zzz hoyoverse", "new eridu"] },
+    { id: "Wuthering Waves", genre: "Action RPG", category: "Gacha Games", triggers: ["wuthering waves", "wuwa", "kuro games"] },
+    { id: "Arknights", genre: "Tower Defense", category: "Gacha Games", triggers: ["arknights", "rhodes island", "arknights operator"] },
+    { id: "Blue Archive", genre: "Tactical RPG", category: "Gacha Games", triggers: ["blue archive", "kivotos", "blue archive global"] },
+    { id: "Nikke", genre: "Shooter RPG", category: "Gacha Games", triggers: ["nikke", "goddess of victory nikke", "nikke build"] },
+    { id: "Azur Lane", genre: "Side-Scrolling Shooter", category: "Gacha Games", triggers: ["azur lane", "azurlane", "shipgirl"] },
+    { id: "Girls' Frontline", genre: "Tactical RPG", category: "Gacha Games", triggers: ["girls frontline", "girls' frontline", "gfl"] },
+    { id: "Fate Grand Order", genre: "Turn-Based RPG", category: "Gacha Games", triggers: ["fate grand order", "fgo", "fate go"] },
+    { id: "Monster Hunter", genre: "Action RPG", category: "Action Games", triggers: ["monster hunter", "monster hunter world", "monster hunter rise", "mh wilds", "monster hunter wilds"] },
+    { id: "Final Fantasy", genre: "RPG", category: "JRPG", triggers: ["final fantasy", "ffxiv", "ff14", "ff7 rebirth", "final fantasy vii", "final fantasy 14"] },
+    { id: "Dragon Quest", genre: "RPG", category: "JRPG", triggers: ["dragon quest", "dq11", "dragon quest xi"] },
+    { id: "Persona", genre: "RPG", category: "JRPG", triggers: ["persona 5", "persona 4", "persona 3", "persona reload", "p5r"] },
+    { id: "Shin Megami Tensei", genre: "RPG", category: "JRPG", triggers: ["shin megami tensei", "smt v", "smt 5", "smtvv"] },
+    { id: "Fire Emblem", genre: "Tactical RPG", category: "Strategy Games", triggers: ["fire emblem", "three houses", "fire emblem engage"] },
+    { id: "Xenoblade Chronicles", genre: "Action RPG", category: "JRPG", triggers: ["xenoblade", "xenoblade chronicles", "xenoblade 3"] },
+    { id: "Kingdom Hearts", genre: "Action RPG", category: "JRPG", triggers: ["kingdom hearts", "kh3", "kingdom hearts 3"] },
+    { id: "NieR", genre: "Action RPG", category: "JRPG", triggers: ["nier automata", "nier replicant", "nier"] },
+    { id: "Yakuza", genre: "Action Adventure", category: "Story Games", triggers: ["yakuza", "like a dragon", "ryu ga gotoku", "infinite wealth"] },
+    { id: "Tekken", genre: "Fighting", category: "Fighting Games", triggers: ["tekken", "tekken 8", "tekken 7"] },
+    { id: "Street Fighter", genre: "Fighting", category: "Fighting Games", triggers: ["street fighter", "street fighter 6", "sf6"] },
+    { id: "Mortal Kombat", genre: "Fighting", category: "Fighting Games", triggers: ["mortal kombat", "mk1", "mk11"] },
+    { id: "Super Smash Bros", genre: "Platform Fighter", category: "Fighting Games", triggers: ["super smash bros", "smash ultimate", "ssbu", "melee smash"] },
+    { id: "Guilty Gear", genre: "Fighting", category: "Fighting Games", triggers: ["guilty gear", "guilty gear strive", "ggst"] },
+    { id: "Dragon Ball FighterZ", genre: "Fighting", category: "Fighting Games", triggers: ["dragon ball fighterz", "dbfz"] },
+    { id: "EA Sports FC", genre: "Sports", category: "Sports Games", triggers: ["ea sports fc", "fc 24", "fc 25", "fifa 23", "fifa 22", "ultimate team"] },
+    { id: "NBA 2K", genre: "Sports", category: "Sports Games", triggers: ["nba 2k", "nba2k", "mycareer 2k", "myteam 2k"] },
+    { id: "Madden NFL", genre: "Sports", category: "Sports Games", triggers: ["madden nfl", "madden 25", "madden 24", "mut madden"] },
+    { id: "MLB The Show", genre: "Sports", category: "Sports Games", triggers: ["mlb the show", "diamond dynasty"] },
+    { id: "WWE 2K", genre: "Sports", category: "Sports Games", triggers: ["wwe 2k", "wwe2k", "myrise"] },
+    { id: "Forza Horizon", genre: "Racing", category: "Racing Games", triggers: ["forza horizon", "fh5", "fh4"] },
+    { id: "Forza Motorsport", genre: "Racing", category: "Racing Games", triggers: ["forza motorsport"] },
+    { id: "Gran Turismo", genre: "Racing", category: "Racing Games", triggers: ["gran turismo", "gt7", "gran turismo 7"] },
+    { id: "Need for Speed", genre: "Racing", category: "Racing Games", triggers: ["need for speed", "nfs unbound", "nfs heat"] },
+    { id: "Assetto Corsa", genre: "Racing Simulation", category: "Racing Games", triggers: ["assetto corsa", "assetto corsa competizione", "acc racing"] },
+    { id: "F1", genre: "Racing", category: "Racing Games", triggers: ["f1 24", "f1 23", "formula 1 game", "f1 manager"] },
+    { id: "iRacing", genre: "Racing Simulation", category: "Racing Games", triggers: ["iracing", "i racing"] },
+    { id: "The Crew", genre: "Racing", category: "Racing Games", triggers: ["the crew motorfest", "the crew 2"] },
+    { id: "Stardew Valley", genre: "Farming Simulation", category: "Cozy Games", triggers: ["stardew valley", "stardew", "pelican town"] },
+    { id: "Animal Crossing", genre: "Life Simulation", category: "Cozy Games", triggers: ["animal crossing", "new horizons", "acnh"] },
+    { id: "Harvest Moon", genre: "Farming Simulation", category: "Cozy Games", triggers: ["harvest moon", "story of seasons"] },
+    { id: "Palworld", genre: "Survival Crafting", category: "Survival Crafting", triggers: ["palworld", "paldeck", "pal sphere"] },
+    { id: "ARK", genre: "Survival Crafting", category: "Survival Crafting", triggers: ["ark survival", "ark ascended", "ark evolved", "ark survival ascended"] },
+    { id: "Rust", genre: "Survival", category: "Survival Crafting", triggers: ["rust game", "rust wipe", "rust base", "rust raid"] },
+    { id: "DayZ", genre: "Survival", category: "Survival Crafting", triggers: ["dayz", "day z"] },
+    { id: "The Forest", genre: "Survival Horror", category: "Survival Crafting", triggers: ["the forest game", "sons of the forest"] },
+    { id: "Valheim", genre: "Survival Crafting", category: "Survival Crafting", triggers: ["valheim", "valheim ashlands"] },
+    { id: "Subnautica", genre: "Survival Adventure", category: "Survival Crafting", triggers: ["subnautica", "below zero subnautica"] },
+    { id: "Don't Starve", genre: "Survival", category: "Survival Crafting", triggers: ["don't starve", "dont starve", "dst game", "don't starve together"] },
+    { id: "No Man's Sky", genre: "Survival Adventure", category: "Open World", triggers: ["no man's sky", "no mans sky", "nms game"] },
+    { id: "Sea of Thieves", genre: "Adventure", category: "Open World", triggers: ["sea of thieves", "sot game", "pirate legend"] },
+    { id: "Red Dead Redemption", genre: "Action Adventure", category: "Open World", triggers: ["red dead redemption", "rdr2", "red dead online"] },
+    { id: "Assassin's Creed", genre: "Action Adventure", category: "Open World", triggers: ["assassin's creed", "assassins creed", "ac valhalla", "ac mirage", "ac shadows"] },
+    { id: "Far Cry", genre: "Action Adventure", category: "Open World", triggers: ["far cry", "far cry 6", "far cry 5"] },
+    { id: "Watch Dogs", genre: "Action Adventure", category: "Open World", triggers: ["watch dogs", "watchdogs", "watch dogs legion"] },
+    { id: "The Witcher", genre: "Action RPG", category: "Open World", triggers: ["the witcher", "witcher 3", "wild hunt"] },
+    { id: "Baldur's Gate 3", genre: "CRPG", category: "RPG", triggers: ["baldur's gate 3", "baldurs gate 3", "bg3"] },
+    { id: "Diablo", genre: "Action RPG", category: "RPG", triggers: ["diablo 4", "diablo iv", "diablo immortal", "diablo 3"] },
+    { id: "Path of Exile", genre: "Action RPG", category: "RPG", triggers: ["path of exile", "poe 2", "path of exile 2"] },
+    { id: "Skyrim", genre: "RPG", category: "Open World", triggers: ["skyrim", "elder scrolls v", "tes v"] },
+    { id: "Fallout", genre: "RPG", category: "Open World", triggers: ["fallout", "fallout 4", "fallout 76", "new vegas"] },
+    { id: "Starfield", genre: "RPG", category: "Open World", triggers: ["starfield", "starfield gameplay"] },
+    { id: "Mass Effect", genre: "Action RPG", category: "Story Games", triggers: ["mass effect", "mass effect legendary"] },
+    { id: "Dragon Age", genre: "RPG", category: "Story Games", triggers: ["dragon age", "veilguard", "inquisition"] },
+    { id: "Hades", genre: "Roguelike", category: "Indie Games", triggers: ["hades", "hades 2", "hades ii"] },
+    { id: "Dead Cells", genre: "Roguelike", category: "Indie Games", triggers: ["dead cells", "deadcells"] },
+    { id: "The Binding of Isaac", genre: "Roguelike", category: "Indie Games", triggers: ["binding of isaac", "isaac repentance"] },
+    { id: "Slay the Spire", genre: "Deckbuilder", category: "Indie Games", triggers: ["slay the spire", "sts game"] },
+    { id: "Balatro", genre: "Deckbuilder", category: "Indie Games", triggers: ["balatro", "balatro game", "joker build"] },
+    { id: "Vampire Survivors", genre: "Roguelite", category: "Indie Games", triggers: ["vampire survivors", "vampire survivor"] },
+    { id: "Hollow Knight", genre: "Metroidvania", category: "Indie Games", triggers: ["hollow knight", "silksong", "hollow knight silksong"] },
+    { id: "Celeste", genre: "Platformer", category: "Indie Games", triggers: ["celeste", "celeste speedrun", "farewell celeste"] },
+    { id: "Undertale", genre: "RPG", category: "Indie Games", triggers: ["undertale", "sans fight", "deltarune"] },
+    { id: "Cuphead", genre: "Run and Gun", category: "Indie Games", triggers: ["cuphead", "mugman", "delicious last course"] },
+    { id: "Ori", genre: "Metroidvania", category: "Indie Games", triggers: ["ori and the blind forest", "ori and the will of the wisps", "ori game"] },
+    { id: "Limbo", genre: "Puzzle Platformer", category: "Indie Games", triggers: ["limbo game"] },
+    { id: "Inside", genre: "Puzzle Platformer", category: "Indie Games", triggers: ["inside game", "playdead inside"] },
+    { id: "Outer Wilds", genre: "Adventure", category: "Indie Games", triggers: ["outer wilds", "echoes of the eye"] },
+    { id: "Disco Elysium", genre: "CRPG", category: "Story Games", triggers: ["disco elysium", "harry du bois"] },
+    { id: "Papers Please", genre: "Simulation", category: "Indie Games", triggers: ["papers please", "arstotzka"] },
+    { id: "RimWorld", genre: "Colony Simulation", category: "Simulation", triggers: ["rimworld", "rim world"] },
+    { id: "Factorio", genre: "Automation", category: "Simulation", triggers: ["factorio", "factory must grow"] },
+    { id: "Satisfactory", genre: "Automation", category: "Simulation", triggers: ["satisfactory game", "satisfactory factory"] },
+    { id: "Cities Skylines", genre: "City Builder", category: "Simulation", triggers: ["cities skylines", "cities skylines 2", "city skylines"] },
+    { id: "Planet Zoo", genre: "Management Simulation", category: "Simulation", triggers: ["planet zoo", "planet zoo habitat"] },
+    { id: "Planet Coaster", genre: "Management Simulation", category: "Simulation", triggers: ["planet coaster", "planet coaster 2"] },
+    { id: "Two Point Hospital", genre: "Management Simulation", category: "Simulation", triggers: ["two point hospital", "two point campus"] },
+    { id: "Football Manager", genre: "Sports Management", category: "Simulation", triggers: ["football manager", "fm24", "fm25", "fm 2024", "fm 2025"] },
+    { id: "Euro Truck Simulator", genre: "Driving Simulation", category: "Simulation", triggers: ["euro truck simulator", "ets2", "american truck simulator", "ats truck"] },
+    { id: "Microsoft Flight Simulator", genre: "Flight Simulation", category: "Simulation", triggers: ["microsoft flight simulator", "msfs", "flight simulator 2024"] },
+    { id: "Kerbal Space Program", genre: "Space Simulation", category: "Simulation", triggers: ["kerbal space program", "ksp2", "ksp game"] },
+    { id: "Civilization", genre: "4X Strategy", category: "Strategy Games", triggers: ["civilization vi", "civilization 6", "civ 6", "civ vi", "civilization vii", "civ 7"] },
+    { id: "Age of Empires", genre: "RTS", category: "Strategy Games", triggers: ["age of empires", "aoe2", "aoe4", "age of empires 4"] },
+    { id: "StarCraft", genre: "RTS", category: "Strategy Games", triggers: ["starcraft", "starcraft 2", "sc2"] },
+    { id: "Warcraft III", genre: "RTS", category: "Strategy Games", triggers: ["warcraft 3", "warcraft iii", "warcraft reforged"] },
+    { id: "Total War", genre: "Grand Strategy", category: "Strategy Games", triggers: ["total war", "warhammer total war", "total war warhammer", "rome total war"] },
+    { id: "Crusader Kings", genre: "Grand Strategy", category: "Strategy Games", triggers: ["crusader kings", "ck3", "crusader kings 3"] },
+    { id: "Europa Universalis", genre: "Grand Strategy", category: "Strategy Games", triggers: ["europa universalis", "eu4", "europa universalis 4"] },
+    { id: "Hearts of Iron", genre: "Grand Strategy", category: "Strategy Games", triggers: ["hearts of iron", "hoi4", "hearts of iron 4"] },
+    { id: "Stellaris", genre: "Grand Strategy", category: "Strategy Games", triggers: ["stellaris", "stellaris build"] },
+    { id: "XCOM", genre: "Tactical Strategy", category: "Strategy Games", triggers: ["xcom", "xcom 2", "enemy unknown"] },
+    { id: "Plants vs Zombies", genre: "Tower Defense", category: "Strategy Games", triggers: ["plants vs zombies", "pvz", "garden warfare"] },
+    { id: "Bloons TD", genre: "Tower Defense", category: "Strategy Games", triggers: ["bloons td", "btd6", "bloons tower defense"] },
+    { id: "Minesweeper", genre: "Puzzle", category: "Puzzle Games", triggers: ["minesweeper"] },
+    { id: "Tetris", genre: "Puzzle", category: "Puzzle Games", triggers: ["tetris", "tetris effect", "tetris 99"] },
+    { id: "Portal", genre: "Puzzle", category: "Puzzle Games", triggers: ["portal 2", "portal game", "aperture science"] },
+    { id: "The Talos Principle", genre: "Puzzle", category: "Puzzle Games", triggers: ["talos principle", "the talos principle"] },
+    { id: "Professor Layton", genre: "Puzzle Adventure", category: "Puzzle Games", triggers: ["professor layton", "layton game"] },
+    { id: "Ace Attorney", genre: "Visual Novel", category: "Story Games", triggers: ["ace attorney", "phoenix wright", "apollo justice"] },
+    { id: "Doki Doki Literature Club", genre: "Visual Novel", category: "Horror Games", triggers: ["doki doki literature club", "ddlc"] },
+    { id: "Life is Strange", genre: "Adventure", category: "Story Games", triggers: ["life is strange", "max caulfield"] },
+    { id: "The Walking Dead", genre: "Adventure", category: "Story Games", triggers: ["walking dead game", "telltale walking dead", "clementine walking dead"] },
+    { id: "Detroit Become Human", genre: "Adventure", category: "Story Games", triggers: ["detroit become human", "connor detroit"] },
+    { id: "Until Dawn", genre: "Horror Adventure", category: "Horror Games", triggers: ["until dawn", "the quarry game", "dark pictures anthology"] },
+    { id: "Resident Evil", genre: "Survival Horror", category: "Horror Games", triggers: ["resident evil", "re4 remake", "resident evil 4", "biohazard game"] },
+    { id: "Silent Hill", genre: "Survival Horror", category: "Horror Games", triggers: ["silent hill", "silent hill 2", "silent hill remake"] },
+    { id: "Outlast", genre: "Horror", category: "Horror Games", triggers: ["outlast", "outlast trials"] },
+    { id: "Phasmophobia", genre: "Horror", category: "Horror Games", triggers: ["phasmophobia", "phasmo", "ghost hunting game"] },
+    { id: "Dead by Daylight", genre: "Asymmetric Horror", category: "Horror Games", triggers: ["dead by daylight", "dbd killer", "dbd survivor"] },
+    { id: "Lethal Company", genre: "Co-op Horror", category: "Horror Games", triggers: ["lethal company", "quota lethal company"] },
+    { id: "Content Warning", genre: "Co-op Horror", category: "Horror Games", triggers: ["content warning game", "spooktube"] },
+    { id: "Poppy Playtime", genre: "Mascot Horror", category: "Horror Games", triggers: ["poppy playtime", "huggy wuggy", "mommy long legs"] },
+    { id: "Garten of Banban", genre: "Mascot Horror", category: "Horror Games", triggers: ["garten of banban", "banban game"] },
+    { id: "The Amazing Digital Circus", genre: "Mascot Media", category: "Animation Games", triggers: ["digital circus", "pomni", "caine digital circus"] },
+    { id: "Friday Night Funkin", genre: "Rhythm", category: "Rhythm Games", triggers: ["friday night funkin", "fnf", "boyfriend fnf"] },
+    { id: "Osu", genre: "Rhythm", category: "Rhythm Games", triggers: ["osu!", "osu game", "osu beatmap"] },
+    { id: "Beat Saber", genre: "Rhythm VR", category: "Rhythm Games", triggers: ["beat saber", "beatsaber"] },
+    { id: "Just Dance", genre: "Rhythm", category: "Rhythm Games", triggers: ["just dance", "just dance 2025", "just dance 2024"] },
+    { id: "Project Sekai", genre: "Rhythm", category: "Rhythm Games", triggers: ["project sekai", "colorful stage", "pjsk"] },
+    { id: "BanG Dream", genre: "Rhythm", category: "Rhythm Games", triggers: ["bang dream", "bandori"] },
+    { id: "Doom", genre: "FPS", category: "FPS", triggers: ["doom eternal", "doom 2016", "doom game"] },
+    { id: "Halo", genre: "FPS", category: "FPS", triggers: ["halo infinite", "halo reach", "master chief", "halo game"] },
+    { id: "Battlefield", genre: "FPS", category: "FPS", triggers: ["battlefield 2042", "battlefield 5", "battlefield v", "bf2042"] },
+    { id: "Escape from Tarkov", genre: "Extraction Shooter", category: "FPS", triggers: ["escape from tarkov", "tarkov", "eft wipe"] },
+    { id: "The Finals", genre: "Arena Shooter", category: "FPS", triggers: ["the finals game", "the finals ranked"] },
+    { id: "Splatoon", genre: "Shooter", category: "Action Games", triggers: ["splatoon", "splatoon 3", "splatfest"] },
+    { id: "Metroid", genre: "Metroidvania", category: "Adventure Games", triggers: ["metroid", "metroid dread", "metroid prime"] },
+    { id: "Kirby", genre: "Platformer", category: "Platform Games", triggers: ["kirby", "forgotten land", "kirby game"] },
+    { id: "Sonic", genre: "Platformer", category: "Platform Games", triggers: ["sonic the hedgehog", "sonic frontiers", "sonic mania", "sonic game"] },
+    { id: "Crash Bandicoot", genre: "Platformer", category: "Platform Games", triggers: ["crash bandicoot", "crash team racing"] },
+    { id: "Spyro", genre: "Platformer", category: "Platform Games", triggers: ["spyro", "spyro reignited"] },
+    { id: "LittleBigPlanet", genre: "Platformer", category: "Platform Games", triggers: ["littlebigplanet", "little big planet", "sackboy"] },
+    { id: "It Takes Two", genre: "Co-op Adventure", category: "Party Games", triggers: ["it takes two", "hazelight game"] },
+    { id: "Unravel", genre: "Puzzle Platformer", category: "Indie Games", triggers: ["unravel two", "unravel game"] },
+    { id: "Rayman", genre: "Platformer", category: "Platform Games", triggers: ["rayman legends", "rayman origins", "rayman game"] }
+  ];
+
+  var CATEGORY_FALLBACKS = [
+    "Action Games",
+    "Strategy Games",
+    "Indie Games",
+    "RPG",
+    "Simulation",
+    "FPS",
+    "Open World",
+    "Horror Games",
+    "Sports Games",
+    "Racing Games",
+    "Cozy Games",
+    "Puzzle Games",
+    "Rhythm Games"
   ];
 
   function escapeRegExp(string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 
-  function detectGame(title, author) {
-    var combinedText = " " + (title || "").toLowerCase() + " | " + (author || "").toLowerCase() + " ";
-    if (combinedText.trim().length <= 3) return null;
-    
+  function normalizeGameText(text) {
+    return (" " + (text || "") + " ")
+      .toLowerCase()
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[\u201c\u201d]/g, "\"")
+      .replace(/[_\-]+/g, " ")
+      .replace(/\s+/g, " ");
+  }
+
+  function hasStrictTrigger(text, trigger) {
+    var normalizedTrigger = normalizeGameText(trigger).trim();
+    if (!normalizedTrigger) return false;
+
+    var needsLooseBoundary = /[^a-z0-9]/i.test(normalizedTrigger);
+    var escapedTrigger = escapeRegExp(normalizedTrigger).replace(/\s+/g, "\\s+");
+    var pattern;
+
+    if (needsLooseBoundary) {
+      pattern = "(^|[^a-z0-9])" + escapedTrigger + "([^a-z0-9]|$)";
+    } else {
+      pattern = "\\b" + escapedTrigger + "\\b";
+    }
+
+    return new RegExp(pattern, "i").test(text);
+  }
+
+  function detectGameInfo(title, author) {
+    var combinedText = normalizeGameText((title || "") + " | " + (author || ""));
+    if (combinedText.trim().length <= 3) {
+      return {
+        id: "Other",
+        genre: "Other",
+        category: "Other"
+      };
+    }
+
+    var bestMatch = null;
+    var bestScore = 0;
+
     for (var i = 0; i < GAME_RULES.length; i++) {
       var rule = GAME_RULES[i];
+
       for (var j = 0; j < rule.triggers.length; j++) {
         var trigger = rule.triggers[j];
-        var regex = new RegExp("\\b" + escapeRegExp(trigger) + "\\b", "i");
-        if (regex.test(combinedText)) {
-          return rule.id;
+
+        if (hasStrictTrigger(combinedText, trigger)) {
+          var score = trigger.length;
+
+          if (trigger.indexOf(" ") !== -1) score += 20;
+          if (trigger.length >= 8) score += 10;
+          if (normalizeGameText(title).indexOf(normalizeGameText(trigger).trim()) !== -1) score += 15;
+          if (normalizeGameText(author).indexOf(normalizeGameText(trigger).trim()) !== -1) score += 6;
+
+          if (score > bestScore) {
+            bestScore = score;
+            bestMatch = rule;
+          }
         }
       }
     }
-    return null;
+
+    if (!bestMatch) {
+      return {
+        id: "Other",
+        genre: "Other",
+        category: "Other"
+      };
+    }
+
+    return {
+      id: bestMatch.id,
+      genre: bestMatch.genre,
+      category: bestMatch.category
+    };
   }
 
   function formatViews(num) {
     if (num === null || num === undefined) return "0";
-    if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
-    if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+    if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, "") + "M";
+    if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, "") + "K";
     return num.toString();
   }
 
   var blockedAuthors = [
-      "TheBurntPeanut", "KreekCraft", "Asmongold TV  ", "Tyler & Snowi"
+    "TheBurntPeanut", "KreekCraft", "Asmongold TV  ", "Tyler & Snowi"
   ];
 
-  var SLOP_THRESHOLD = 70; 
+  var SLOP_THRESHOLD = 70;
 
   var gameCounts = {};
-  var isMobileVar = (typeof isMobile !== 'undefined' ? isMobile : false);
+  var categoryCounts = {};
+  var genreCounts = {};
+  var isMobileVar = (typeof isMobile !== "undefined" ? isMobile : false);
 
   var allSafeVideos = inv.filter(function(item) {
     if (blockedAuthors.indexOf(item.author) !== -1) return false;
@@ -148,10 +387,23 @@
   });
 
   allSafeVideos.forEach(function(item) {
+    var detectedInfo = detectGameInfo(item.title, item.author);
+
     item.isSlop = calculateSlopScore(item.title) >= SLOP_THRESHOLD;
-    item.detectedGame = detectGame(item.title, item.author) || "Other";
+    item.detectedGame = detectedInfo.id || "Other";
+    item.detectedGenre = detectedInfo.genre || "Other";
+    item.detectedCategory = detectedInfo.category || "Other";
+
     if (item.detectedGame !== "Other") {
       gameCounts[item.detectedGame] = (gameCounts[item.detectedGame] || 0) + 1;
+    }
+
+    if (item.detectedCategory !== "Other") {
+      categoryCounts[item.detectedCategory] = (categoryCounts[item.detectedCategory] || 0) + 1;
+    }
+
+    if (item.detectedGenre !== "Other") {
+      genreCounts[item.detectedGenre] = (genreCounts[item.detectedGenre] || 0) + 1;
     }
   });
 
@@ -159,17 +411,44 @@
     return gameCounts[b] - gameCounts[a];
   });
 
-  // Strict check: only include detected games with more than 0 videos
-  var validGames = sortedGames.filter(function(g) { return gameCounts[g] > 0; });
-  
-  var gameFilters = validGames.slice(0, 3);
-  
-  // Guarantee exactly 3 tags even if no specific games are detected
-  var fallbackCategories = ["Action Games", "Strategy Games", "Indie Games", "RPG", "Simulation"];
+  var sortedCategories = Object.keys(categoryCounts).sort(function(a, b) {
+    return categoryCounts[b] - categoryCounts[a];
+  });
+
+  var sortedGenres = Object.keys(genreCounts).sort(function(a, b) {
+    return genreCounts[b] - genreCounts[a];
+  });
+
+  var validGames = sortedGames.filter(function(g) {
+    return gameCounts[g] > 0;
+  });
+
+  var validCategories = sortedCategories.filter(function(g) {
+    return categoryCounts[g] > 0;
+  });
+
+  var validGenres = sortedGenres.filter(function(g) {
+    return genreCounts[g] > 0;
+  });
+
+  var gameFilters = [];
+
+  validGames.slice(0, 3).forEach(function(g) {
+    if (gameFilters.indexOf(g) === -1) gameFilters.push(g);
+  });
+
+  validCategories.slice(0, 4).forEach(function(g) {
+    if (gameFilters.indexOf(g) === -1) gameFilters.push(g);
+  });
+
+  validGenres.slice(0, 2).forEach(function(g) {
+    if (gameFilters.indexOf(g) === -1) gameFilters.push(g);
+  });
+
   var fallbackIndex = 0;
-  while (gameFilters.length < 3) {
-    if (!gameFilters.includes(fallbackCategories[fallbackIndex])) {
-      gameFilters.push(fallbackCategories[fallbackIndex]);
+  while (gameFilters.length < 6 && fallbackIndex < CATEGORY_FALLBACKS.length) {
+    if (gameFilters.indexOf(CATEGORY_FALLBACKS[fallbackIndex]) === -1) {
+      gameFilters.push(CATEGORY_FALLBACKS[fallbackIndex]);
     }
     fallbackIndex++;
   }
@@ -178,9 +457,12 @@
 
   if (isMobileVar) {
     finalVideos = allSafeVideos.slice();
-    for (let i = finalVideos.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [finalVideos[i], finalVideos[j]] = [finalVideos[j], finalVideos[i]];
+
+    for (var shuffleIndex = finalVideos.length - 1; shuffleIndex > 0; shuffleIndex--) {
+      var randomIndex = Math.floor(Math.random() * (shuffleIndex + 1));
+      var tempVideo = finalVideos[shuffleIndex];
+      finalVideos[shuffleIndex] = finalVideos[randomIndex];
+      finalVideos[randomIndex] = tempVideo;
     }
   } else {
     finalVideos = allSafeVideos.filter(function(item) {
@@ -214,7 +496,7 @@ document.documentElement.className = document.documentElement.className.replace(
 
 <style>
 @import url("https://p.poketube.fun/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css");
-@import url('https://p.poketube.fun/https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&display=swap');
+@import url("https://p.poketube.fun/https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&display=swap");
 
 :root {
   --ptc-bg: #0f0f0f;
@@ -227,7 +509,10 @@ document.documentElement.className = document.documentElement.className.replace(
   --ptc-chip-bg: #272727;
   --ptc-chip-hover: #3f3f3f;
   --ptc-border: #272727;
-  
+  --yt-dialog-bg: #212121;
+  --yt-dialog-border: #3f3f3f;
+  --yt-dialog-button: #3ea6ff;
+  --yt-dialog-muted: #aaa;
   --container: min(1280px, 94vw);
 }
 
@@ -264,8 +549,28 @@ button, input {
   font: inherit;
 }
 
+button {
+  color: inherit;
+}
+
 .mobile-top-bar, .mobile-search-form, .mobile-chip-bar, .mobile-bottom-nav {
   display: none;
+}
+
+.no-js-only {
+  display: none;
+}
+
+.no-js .no-js-only {
+  display: flex;
+}
+
+.no-js .js-only {
+  display: none !important;
+}
+
+.js .no-js-only {
+  display: none !important;
 }
 
 .page {
@@ -478,7 +783,7 @@ button, input {
 .video-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 40px 16px; 
+  gap: 40px 16px;
 }
 
 .video {
@@ -491,7 +796,7 @@ button, input {
 .video-cover-link {
   position: absolute;
   inset: 0;
-  z-index: 1; 
+  z-index: 1;
 }
 
 .thumbnail-container {
@@ -615,24 +920,31 @@ button, input {
   );
 }
 
-/* Modal Checkbox Hack for No-JS compatibility */
 .modal-overlay {
   position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  z-index: 1000;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
-  align-items: flex-end; 
-  justify-content: center;
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.2s ease, visibility 0.2s ease;
   pointer-events: none;
 }
-.modal-toggle:checked ~ .modal-overlay {
+
+#create-modal {
+  z-index: 1000;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+#create-modal-toggle:checked + #create-modal {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
 }
+
 .modal-dismiss-bg {
   position: absolute;
   inset: 0;
@@ -641,11 +953,10 @@ button, input {
   cursor: default;
 }
 
-/* Bottom Sheet Style (Create Modal) */
 .bottom-sheet {
   background: var(--ptc-bg);
   width: 100%;
-  max-width: 500px; 
+  max-width: 500px;
   border-radius: 16px 16px 0 0;
   padding: 16px 16px calc(32px + env(safe-area-inset-bottom, 0px)) 16px;
   transform: translateY(100%);
@@ -653,9 +964,11 @@ button, input {
   position: relative;
   z-index: 2;
 }
-.modal-toggle:checked ~ .modal-overlay .bottom-sheet {
+
+#create-modal-toggle:checked + #create-modal .bottom-sheet {
   transform: translateY(0);
 }
+
 .modal-header {
   display: flex;
   justify-content: space-between;
@@ -664,97 +977,187 @@ button, input {
   padding-bottom: 8px;
   border-bottom: 1px solid var(--ptc-border);
 }
-.modal-header h3 { 
-  margin: 0; 
-  font-size: 18px; 
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
   color: var(--ptc-text-primary);
 }
+
 .close-btn {
-  background: none; 
-  border: none; 
+  background: none;
+  border: none;
   color: var(--ptc-text-primary);
-  font-size: 28px; 
-  cursor: pointer; 
+  font-size: 28px;
+  cursor: pointer;
   padding: 0;
   line-height: 1;
 }
+
 .modal-action-btn {
-  display: flex; 
-  align-items: center; 
+  display: flex;
+  align-items: center;
   gap: 12px;
-  padding: 16px; 
+  padding: 16px;
   background: var(--ptc-chip-bg);
-  border-radius: 8px; 
-  text-decoration: none; 
+  border-radius: 8px;
+  text-decoration: none;
   color: var(--ptc-text-primary);
-  font-size: 16px; 
-  font-weight: 500; 
+  font-size: 16px;
+  font-weight: 500;
   margin-bottom: 16px;
 }
 
-/* Center Dialog Style (Library Modal) */
-#library-modal {
+.library-modal {
+  z-index: 1200;
   align-items: center;
+  justify-content: center;
+  padding: 24px;
 }
-.dialog-content {
-  background: var(--ptc-chip-bg);
-  border-radius: 16px;
-  padding: 32px 24px;
-  width: 90%;
-  max-width: 380px;
-  text-align: center;
+
+.js .library-modal.is-open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.library-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(0, 0, 0, 0.72);
+  z-index: 1;
+  cursor: default;
+}
+
+.library-dialog {
+  width: min(420px, 100%);
+  background: var(--yt-dialog-bg);
+  border: 1px solid var(--yt-dialog-border);
+  border-radius: 12px;
+  color: var(--ptc-text-primary);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65);
   position: relative;
   z-index: 2;
-  transform: scale(0.95);
+  overflow: hidden;
+  transform: translateY(8px) scale(0.98);
   opacity: 0;
-  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s ease;
-  box-shadow: 0 16px 32px rgba(0,0,0,0.5);
-}
-.modal-toggle:checked ~ #library-modal .dialog-content {
-  transform: scale(1);
-  opacity: 1;
-}
-.dialog-icon {
-  font-size: 48px;
-  color: var(--ptc-accent);
-  margin-bottom: 16px;
-}
-.dialog-content h4 {
-  margin: 0 0 12px;
-  color: var(--ptc-text-primary);
-  font-size: 20px;
-}
-.dialog-content p {
-  margin: 0 0 28px;
-  color: var(--ptc-text-secondary);
-  font-size: 14px;
-  line-height: 1.5;
-}
-.dialog-btn {
-  display: inline-block;
-  background: var(--ptc-text-primary);
-  color: var(--ptc-bg);
-  padding: 12px 32px;
-  border-radius: 20px;
-  font-weight: 600;
-  font-size: 15px;
-  cursor: pointer;
-  transition: transform 0.1s;
-}
-.dialog-btn:active {
-  transform: scale(0.95);
+  transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.18s ease;
 }
 
-/* 
-  =============================
-  Desktop UI & Hover Effects 
-  =============================
-*/
+.js .library-modal.is-open .library-dialog {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+.library-dialog-top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 24px 24px 8px;
+}
+
+.library-dialog-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #303030;
+  color: #f1f1f1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 21px;
+  flex: 0 0 auto;
+}
+
+.library-dialog-title-block {
+  min-width: 0;
+}
+
+.library-dialog-title {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.3;
+  font-weight: 500;
+  color: #f1f1f1;
+}
+
+.library-dialog-subtitle {
+  margin: 4px 0 0;
+  color: var(--yt-dialog-muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.library-dialog-body {
+  padding: 12px 24px 8px;
+}
+
+.library-dialog-body p {
+  margin: 0;
+  color: #e6e6e6;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.library-preview-list {
+  margin-top: 18px;
+  border-top: 1px solid #3a3a3a;
+  border-bottom: 1px solid #3a3a3a;
+  padding: 8px 0;
+}
+
+.library-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 44px;
+  color: #f1f1f1;
+  font-size: 14px;
+}
+
+.library-preview-row i {
+  width: 24px;
+  color: #aaa;
+  text-align: center;
+  font-size: 18px;
+}
+
+.library-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px 16px 16px;
+}
+
+.library-dialog-button {
+  border: 0;
+  background: transparent;
+  color: var(--yt-dialog-button);
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 18px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.library-dialog-button:hover {
+  background: rgba(62, 166, 255, 0.12);
+}
+
+.library-open-control {
+  appearance: none;
+  border: 0;
+  font: inherit;
+}
+
 @media (min-width: 861px) {
   .thumbnail-container {
     border-radius: 12px;
     transition: border-radius 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
+
   .video {
     transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.3s ease;
     border-radius: 12px;
@@ -762,75 +1165,94 @@ button, input {
     z-index: 1;
     background: transparent;
   }
+
   .video:hover {
     transform: scale(1.04);
     z-index: 10;
     background: var(--ptc-chip-bg);
     box-shadow: 0 12px 24px rgba(0,0,0,0.6);
   }
+
   .video:hover .thumbnail-container {
     border-radius: 0;
   }
+
   .details {
     transition: padding 0.3s ease;
   }
+
   .video:hover .details {
     padding-left: 12px;
     padding-right: 12px;
     padding-bottom: 12px;
   }
+
   .quick-chip {
     transition: transform 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
   }
+
   .quick-chip:hover {
     transform: translateY(-3px) scale(1.02);
     box-shadow: 0 6px 12px rgba(0,0,0,0.4);
     background: var(--ptc-chip-hover);
     color: #fff;
   }
+
   .category-tab {
     transition: transform 0.2s ease, background-color 0.2s ease;
   }
+
   .category-tab:not(.active):hover {
     transform: translateY(-2px);
     background: var(--ptc-chip-hover);
   }
-  .modal-action-btn:hover { 
-    background: var(--ptc-chip-hover); 
+
+  .modal-action-btn:hover {
+    background: var(--ptc-chip-hover);
   }
 }
 
 @media (max-width: 1140px) {
-  .video-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .video-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
-/* 
-  =============================
-  Tablet UI adjustments
-  =============================
-*/
 @media (min-width: 561px) and (max-width: 860px) {
-  .video-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .logo { width: 150px; }
-  .search-wrap { width: 85%; }
-  .thumbnail-container { border-radius: 12px; }
-  .video:hover { transform: scale(1.02); }
-}
-
-/* 
-  =============================
-  Mobile UI & Tap Effects 
-  =============================
-*/
-@media (max-width: 560px) {
-  .hero, .discover-header, .home-extras-wrapper { display: none; }
-  
-  .page {
-    width: 100%;
-    padding: 0 0 calc(60px + env(safe-area-inset-bottom, 0px)) 0; 
+  .video-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .content { margin-top: 0; }
+  .logo {
+    width: 150px;
+  }
+
+  .search-wrap {
+    width: 85%;
+  }
+
+  .thumbnail-container {
+    border-radius: 12px;
+  }
+
+  .video:hover {
+    transform: scale(1.02);
+  }
+}
+
+@media (max-width: 560px) {
+  .hero, .discover-header, .home-extras-wrapper {
+    display: none;
+  }
+
+  .page {
+    width: 100%;
+    padding: 0 0 calc(60px + env(safe-area-inset-bottom, 0px)) 0;
+  }
+
+  .content {
+    margin-top: 0;
+  }
 
   .mobile-top-bar {
     display: flex;
@@ -844,8 +1266,10 @@ button, input {
     z-index: 100;
   }
 
-  .mobile-logo { height: 20px; }
-  
+  .mobile-logo {
+    height: 20px;
+  }
+
   .mobile-top-actions {
     display: flex;
     gap: 20px;
@@ -854,7 +1278,6 @@ button, input {
     color: var(--ptc-text-primary);
   }
 
-  /* No-JS toggle hack for mobile search */
   .mobile-search-form {
     display: none;
     position: sticky;
@@ -864,9 +1287,9 @@ button, input {
     z-index: 99;
     border-bottom: 1px solid var(--ptc-border);
   }
-  
-  #mobile-search-toggle:checked ~ .mobile-search-form { 
-    display: flex; 
+
+  #mobile-search-toggle:checked ~ .mobile-search-form {
+    display: flex;
   }
 
   .mobile-search-form input {
@@ -878,7 +1301,7 @@ button, input {
     color: white;
     outline: none;
   }
-  
+
   .mobile-search-form button {
     background: var(--ptc-searchbtn-bg);
     border: 1px solid var(--ptc-searchbox-border);
@@ -895,17 +1318,19 @@ button, input {
     gap: 8px;
     background: var(--ptc-bg);
     position: sticky;
-    top: 48px; 
+    top: 48px;
     z-index: 90;
-    scrollbar-width: none; 
+    scrollbar-width: none;
   }
-  
+
   .no-js .mobile-chip-bar {
     top: 100px;
   }
 
-  .mobile-chip-bar::-webkit-scrollbar { display: none; } 
-  
+  .mobile-chip-bar::-webkit-scrollbar {
+    display: none;
+  }
+
   .m-chip {
     white-space: nowrap;
     background: var(--ptc-chip-bg);
@@ -917,7 +1342,7 @@ button, input {
     text-decoration: none;
     transition: transform 0.1s, background-color 0.2s;
   }
-  
+
   .m-chip.active {
     background: var(--ptc-text-primary);
     color: var(--ptc-bg);
@@ -927,14 +1352,14 @@ button, input {
     transform: scale(0.92);
   }
 
-  .video-grid { 
-    grid-template-columns: 1fr; 
-    gap: 0; 
+  .video-grid {
+    grid-template-columns: 1fr;
+    gap: 0;
   }
-  
+
   .video {
     margin-bottom: 24px;
-    padding: 0 12px; 
+    padding: 0 12px;
     transition: transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.15s;
     border-radius: 16px;
   }
@@ -944,10 +1369,10 @@ button, input {
     opacity: 0.85;
   }
 
-  .thumbnail-container { 
-    border-radius: 16px; 
+  .thumbnail-container {
+    border-radius: 16px;
     width: 100%;
-  } 
+  }
 
   .video-length {
     right: 8px;
@@ -958,9 +1383,9 @@ button, input {
     font-size: 12px;
     font-weight: 500;
   }
-  
-  .details { 
-    padding: 10px 4px 0 4px; 
+
+  .details {
+    padding: 10px 4px 0 4px;
     gap: 0;
     flex-direction: column;
   }
@@ -988,7 +1413,7 @@ button, input {
   .byline {
     display: inline-block;
   }
-  
+
   .byline::after {
     display: none;
   }
@@ -998,7 +1423,7 @@ button, input {
     align-items: center;
     column-gap: 8px;
   }
-  
+
   .stats span {
     display: inline-block;
   }
@@ -1030,14 +1455,17 @@ button, input {
     opacity: 0.8;
     text-decoration: none;
     height: 48px;
-    flex: 1; 
+    flex: 1;
     transition: transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s;
     cursor: pointer;
+    border: 0;
+    background: transparent;
+    padding: 0;
   }
 
-  .nav-item.active { 
-    opacity: 1; 
-    font-weight: bold; 
+  .nav-item.active {
+    opacity: 1;
+    font-weight: bold;
   }
 
   .nav-item:active {
@@ -1045,17 +1473,19 @@ button, input {
     opacity: 0.6;
   }
 
-  .nav-item i { font-size: 20px; }
-  
+  .nav-item i {
+    font-size: 20px;
+  }
+
   .nav-item.add-btn {
     opacity: 1;
     flex: none;
     width: 60px;
   }
-  
-  .nav-item.add-btn i { 
-    font-size: 38px; 
-    font-weight: 300; 
+
+  .nav-item.add-btn i {
+    font-size: 38px;
+    font-weight: 300;
     line-height: 1;
     display: flex;
     align-items: center;
@@ -1063,11 +1493,19 @@ button, input {
   }
 
   .site-footer {
-    display: none; 
+    display: none;
   }
-  
+
   .symbol-of-tolerance {
-    margin-bottom: 0; 
+    margin-bottom: 0;
+  }
+
+  .library-modal {
+    padding: 20px;
+  }
+
+  .library-dialog {
+    align-self: center;
   }
 }
 </style>
@@ -1080,7 +1518,7 @@ button, input {
 <div class="mobile-top-bar">
   <img src="/static/logo-poke.svg" class="mobile-logo" alt="Poke">
   <div class="mobile-top-actions">
-    <label for="mobile-search-toggle" class="fa-solid fa-magnifying-glass search-toggle-btn"></label>
+    <label for="mobile-search-toggle" class="fa-solid fa-magnifying-glass search-toggle-btn" aria-label="Open search"></label>
   </div>
 </div>
 
@@ -1090,9 +1528,9 @@ button, input {
 </form>
 
 <div class="mobile-chip-bar" id="game-filter-bar">
-  <a class="m-chip active" href="#" data-filter="all">All Games</a>
+  <a class="m-chip active" href="#" data-filter-type="all" data-filter="all">All Games</a>
   <% gameFilters.forEach(function(g) { %>
-    <a class="m-chip" href="#" data-filter="<%- g %>"><%- g %></a>
+    <a class="m-chip" href="#" data-filter-type="smart" data-filter="<%- g %>"><%- g %></a>
   <% }); %>
   <a class="m-chip" href="https://charts.youtube.com">Music & Youtube Charts</a>
   <a class="m-chip" href="/translate">Translate</a>
@@ -1105,7 +1543,7 @@ button, input {
     <div class="logo-wrap">
       <img src="/static/logo-poke.svg" class="logo" alt="Poke Logo">
     </div>
- 
+
     <div class="search-wrap">
       <form class="search-form" action="/search" method="get">
         <div class="search-field">
@@ -1113,7 +1551,7 @@ button, input {
           <button type="submit" class="search-btn" aria-label="Search">
             <i class="fa-solid fa-magnifying-glass"></i>
           </button>
-          
+
           <div id="bang-indicator" class="bang-indicator hidden">
             <i class="fa-solid fa-bolt" style="color: var(--ptc-accent); margin-right: 6px;"></i>
             You are using bangs! <a href="https://duckduckgo.com/bangs" target="_blank" rel="noopener noreferrer">Learn more here.</a>
@@ -1155,17 +1593,18 @@ button, input {
           </p>
         </div>
         <div class="header-tabs">
-          <button class="category-tab active">Gaming</button>
-          <label for="library-modal-toggle" class="category-tab">Music</label>
+          <button class="category-tab active" type="button">Gaming</button>
+          <button type="button" class="category-tab library-open-control js-only" data-library-open>Music</button>
+          <a href="/privacy" class="category-tab no-js-only">Privacy</a>
         </div>
       </div>
 
       <div class="discover-body">
         <div class="video-grid">
           <% finalVideos.forEach(function(item) { %>
-            <div class="video canloadhd" data-author="<%- item.author %>" data-game="<%- item.detectedGame %>" data-isslop="<%- item.isSlop %>" style="<%- item.isSlop ? 'display:none;' : '' %>">
+            <div class="video canloadhd" data-author="<%- item.author %>" data-game="<%- item.detectedGame %>" data-genre="<%- item.detectedGenre %>" data-category="<%- item.detectedCategory %>" data-isslop="<%- item.isSlop %>" style="<%- item.isSlop ? 'display:none;' : '' %>">
               <a href="/watch?v=<%- item.videoId %>" class="video-cover-link" aria-label="Watch <%- item.title %>"></a>
-              
+
               <div class="thumbnail-container" style="background-image:url('/vi/<%= item.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw');">
                 <span class="video-length"><%- turntomins(item.lengthSeconds) %></span>
               </div>
@@ -1173,7 +1612,7 @@ button, input {
               <div class="details">
                 <div class="info">
                   <a href="/watch?v=<%- item.videoId %>" class="title" title="<%- item.title %>"><%- item.title %></a>
-                  
+
                   <div class="metadata">
                     <% if (item.authorId) { %>
                       <a href="/channel?id=<%- item.authorId %>" class="byline" title="Visit channel: <%- item.author %>">
@@ -1186,12 +1625,11 @@ button, input {
                     <% } %>
                     <div class="stats">
                       <span>▷ <%- formatViews(item.viewCount) %></span>
-                      <span><%- item.publishedText || 'Recently' %></span>
+                      <span><%- item.publishedText || "Recently" %></span>
                     </div>
                   </div>
                 </div>
               </div>
-
             </div>
           <% }); %>
         </div>
@@ -1206,9 +1644,8 @@ button, input {
 
 <div class="symbol-of-tolerance"></div>
 
-<!-- Create Menu Modal -->
 <input type="checkbox" id="create-modal-toggle" class="modal-toggle" hidden>
-<div id="create-modal" class="modal-overlay">
+<div id="create-modal" class="modal-overlay" aria-hidden="true">
   <label for="create-modal-toggle" class="modal-dismiss-bg" aria-label="Close modal"></label>
   <div class="bottom-sheet">
     <div class="modal-header">
@@ -1217,38 +1654,64 @@ button, input {
     </div>
     <div class="modal-body">
       <a href="/video/upload" class="modal-action-btn">
-        <i class="fa-solid fa-arrow-up-from-bracket"></i> 
+        <i class="fa-solid fa-arrow-up-from-bracket"></i>
         Upload Video
       </a>
       <a href="/translate" class="modal-action-btn">
-        <i class="fa-solid fa-language"></i> 
+        <i class="fa-solid fa-language"></i>
         Translate
       </a>
       <a href="/map" class="modal-action-btn">
-        <i class="fa-solid fa-map-location-dot"></i> 
+        <i class="fa-solid fa-map-location-dot"></i>
         Maps
       </a>
       <a href="/calendar" class="modal-action-btn">
-        <i class="fa-solid fa-calendar-days"></i> 
+        <i class="fa-solid fa-calendar-days"></i>
         Calendar
       </a>
       <a href="/privacy" class="modal-action-btn">
-        <i class="fa-solid fa-shield-halved"></i> 
+        <i class="fa-solid fa-shield-halved"></i>
         Privacy Policy
       </a>
     </div>
   </div>
 </div>
 
-<!-- Library Coming Soon Modal -->
-<input type="checkbox" id="library-modal-toggle" class="modal-toggle" hidden>
-<div id="library-modal" class="modal-overlay">
-  <label for="library-modal-toggle" class="modal-dismiss-bg" aria-label="Close modal"></label>
-  <div class="dialog-content">
-    <div class="dialog-icon"><i class="fa-solid fa-boxes-packing"></i></div>
-    <h4>Library Coming Soon</h4>
-    <p>The Library feature is currently under development. Please check back in a future update to see your saved playlists and history!</p>
-    <label for="library-modal-toggle" class="dialog-btn">Got it</label>
+<div id="library-modal" class="modal-overlay library-modal js-only" role="dialog" aria-modal="true" aria-labelledby="library-dialog-title" aria-hidden="true">
+  <button type="button" class="library-backdrop" data-library-close aria-label="Close library dialog"></button>
+  <div class="library-dialog" role="document">
+    <div class="library-dialog-top">
+      <div class="library-dialog-icon">
+        <i class="fa-regular fa-folder"></i>
+      </div>
+      <div class="library-dialog-title-block">
+        <h4 id="library-dialog-title" class="library-dialog-title">Library is coming soon</h4>
+        <p class="library-dialog-subtitle">Your Poke library is not ready yet</p>
+      </div>
+    </div>
+
+    <div class="library-dialog-body">
+      <p>Saved videos, playlists, history, and later tools are still being worked on. For now, you can keep browsing Poke privately.</p>
+
+      <div class="library-preview-list" aria-label="Upcoming library features">
+        <div class="library-preview-row">
+          <i class="fa-regular fa-clock"></i>
+          <span>Watch history</span>
+        </div>
+        <div class="library-preview-row">
+          <i class="fa-regular fa-bookmark"></i>
+          <span>Saved videos</span>
+        </div>
+        <div class="library-preview-row">
+          <i class="fa-solid fa-list"></i>
+          <span>Playlists</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="library-dialog-actions">
+      <button type="button" class="library-dialog-button" data-library-close>Got it</button>
+    </div>
   </div>
 </div>
 
@@ -1257,83 +1720,135 @@ button, input {
     <i class="fa-solid fa-house"></i>
     <span>Home</span>
   </a>
+
   <a href="https://social.poketube.fun/" class="nav-item">
     <i class="fa-solid fa-users"></i>
     <span>Social</span>
   </a>
-  <!-- No-JS Modal trigger via label, text removed -->
+
   <label for="create-modal-toggle" class="nav-item add-btn" aria-label="Create">
     <i class="fa-regular fa-circle-plus"></i>
   </label>
+
   <a href="/account-create" class="nav-item">
     <i class="fa-solid fa-tv"></i>
     <span>Subscriptions</span>
   </a>
-  <label for="library-modal-toggle" class="nav-item">
+
+  <button type="button" class="nav-item js-only" data-library-open>
     <i class="fa-regular fa-folder"></i>
     <span>Library</span>
-  </label>
+  </button>
+
+  <a href="/privacy" class="nav-item no-js-only">
+    <i class="fa-solid fa-shield-halved"></i>
+    <span>Privacy</span>
+  </a>
 </div>
 
 <script>
- (function () {
+(function () {
   var searchInput = document.getElementById("fname");
   var bangIndicator = document.getElementById("bang-indicator");
 
   if (searchInput && bangIndicator) {
     searchInput.addEventListener("input", function (e) {
-      if (e.target.value.includes("!")) {
+      if (e.target.value.indexOf("!") !== -1) {
         bangIndicator.classList.remove("hidden");
-        searchInput.setAttribute("autocomplete", "off"); 
+        searchInput.setAttribute("autocomplete", "off");
       } else {
         bangIndicator.classList.add("hidden");
-        searchInput.setAttribute("autocomplete", "on"); 
+        searchInput.setAttribute("autocomplete", "on");
       }
     });
   }
 
-  // JS enhancement for Mobile Search Form Focus
   var searchToggle = document.getElementById("mobile-search-toggle");
+
   if (searchToggle) {
     searchToggle.addEventListener("change", function () {
       if (this.checked) {
         var mobileInput = document.getElementById("mobile-search-input");
-        if(mobileInput) mobileInput.focus();
+        if (mobileInput) mobileInput.focus();
       }
     });
   }
 
-  var filterChips = document.querySelectorAll('#game-filter-bar .m-chip[data-filter]');
-  var videos = document.querySelectorAll('.video-grid .video');
+  var filterChips = document.querySelectorAll("#game-filter-bar .m-chip[data-filter]");
+  var videos = document.querySelectorAll(".video-grid .video");
 
   filterChips.forEach(function(chip) {
-    chip.addEventListener('click', function(e) {
+    chip.addEventListener("click", function(e) {
       e.preventDefault();
-      
-      filterChips.forEach(function(c) { c.classList.remove('active'); });
-      this.classList.add('active');
 
-      var filterTarget = this.getAttribute('data-filter');
+      filterChips.forEach(function(c) {
+        c.classList.remove("active");
+      });
+
+      this.classList.add("active");
+
+      var filterTarget = this.getAttribute("data-filter");
 
       videos.forEach(function(vid) {
-        if (filterTarget === 'all') {
-          if (vid.getAttribute('data-isslop') === 'true') {
-            vid.style.display = 'none';
-          } else {
-            vid.style.display = '';
-          }
+        var isSlop = vid.getAttribute("data-isslop") === "true";
+        var game = vid.getAttribute("data-game");
+        var genre = vid.getAttribute("data-genre");
+        var category = vid.getAttribute("data-category");
+
+        if (filterTarget === "all") {
+          vid.style.display = isSlop ? "none" : "";
+          return;
+        }
+
+        if (game === filterTarget || genre === filterTarget || category === filterTarget) {
+          vid.style.display = "";
         } else {
-          // If a specific game is selected, slop filter is completely ignored
-          if (vid.getAttribute('data-game') === filterTarget) {
-            vid.style.display = '';
-          } else {
-            vid.style.display = 'none';
-          }
+          vid.style.display = "none";
         }
       });
     });
   });
 
+  var libraryModal = document.getElementById("library-modal");
+  var libraryOpenButtons = document.querySelectorAll("[data-library-open]");
+  var libraryCloseButtons = document.querySelectorAll("[data-library-close]");
+
+  function openLibraryModal() {
+    if (!libraryModal) return;
+
+    libraryModal.classList.add("is-open");
+    libraryModal.setAttribute("aria-hidden", "false");
+
+    var firstCloseButton = libraryModal.querySelector("[data-library-close]");
+    if (firstCloseButton) firstCloseButton.focus();
+  }
+
+  function closeLibraryModal() {
+    if (!libraryModal) return;
+
+    libraryModal.classList.remove("is-open");
+    libraryModal.setAttribute("aria-hidden", "true");
+  }
+
+  libraryOpenButtons.forEach(function(button) {
+    button.addEventListener("click", function(e) {
+      e.preventDefault();
+      openLibraryModal();
+    });
+  });
+
+  libraryCloseButtons.forEach(function(button) {
+    button.addEventListener("click", function(e) {
+      e.preventDefault();
+      closeLibraryModal();
+    });
+  });
+
+  document.addEventListener("keydown", function(e) {
+    if (e.key === "Escape") {
+      closeLibraryModal();
+    }
+  });
 })();
 </script>
 
