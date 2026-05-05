@@ -159,13 +159,20 @@
     return gameCounts[b] - gameCounts[a];
   });
 
-  // Strict check: only include games with more than 1 video, unless we really need fallbacks
-  var validGames = sortedGames.filter(function(g) { return gameCounts[g] > 1; });
-  if (validGames.length === 0) {
-    validGames = sortedGames; // fail-safe if absolute no games have > 1
-  }
+  // Strict check: only include detected games with more than 0 videos
+  var validGames = sortedGames.filter(function(g) { return gameCounts[g] > 0; });
   
   var gameFilters = validGames.slice(0, 3);
+  
+  // Guarantee exactly 3 tags even if no specific games are detected
+  var fallbackCategories = ["Action Games", "Strategy Games", "Indie Games", "RPG", "Simulation"];
+  var fallbackIndex = 0;
+  while (gameFilters.length < 3) {
+    if (!gameFilters.includes(fallbackCategories[fallbackIndex])) {
+      gameFilters.push(fallbackCategories[fallbackIndex]);
+    }
+    fallbackIndex++;
+  }
 
   var finalVideos;
 
@@ -447,21 +454,6 @@ button, input {
   align-items: center;
 }
 
-.region-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: var(--ptc-chip-bg);
-  color: var(--ptc-text-secondary);
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
-  margin-left: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
 .header-tabs {
   display: flex;
   gap: 12px;
@@ -648,7 +640,9 @@ button, input {
   z-index: 1;
   cursor: default;
 }
-.modal-content {
+
+/* Bottom Sheet Style (Create Modal) */
+.bottom-sheet {
   background: var(--ptc-bg);
   width: 100%;
   max-width: 500px; 
@@ -659,7 +653,7 @@ button, input {
   position: relative;
   z-index: 2;
 }
-.modal-toggle:checked ~ .modal-overlay .modal-content {
+.modal-toggle:checked ~ .modal-overlay .bottom-sheet {
   transform: translateY(0);
 }
 .modal-header {
@@ -698,23 +692,92 @@ button, input {
   margin-bottom: 16px;
 }
 
+/* Center Dialog Style (Library Modal) */
+#library-modal {
+  align-items: center;
+}
+.dialog-content {
+  background: var(--ptc-chip-bg);
+  border-radius: 16px;
+  padding: 32px 24px;
+  width: 90%;
+  max-width: 380px;
+  text-align: center;
+  position: relative;
+  z-index: 2;
+  transform: scale(0.95);
+  opacity: 0;
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s ease;
+  box-shadow: 0 16px 32px rgba(0,0,0,0.5);
+}
+.modal-toggle:checked ~ #library-modal .dialog-content {
+  transform: scale(1);
+  opacity: 1;
+}
+.dialog-icon {
+  font-size: 48px;
+  color: var(--ptc-accent);
+  margin-bottom: 16px;
+}
+.dialog-content h4 {
+  margin: 0 0 12px;
+  color: var(--ptc-text-primary);
+  font-size: 20px;
+}
+.dialog-content p {
+  margin: 0 0 28px;
+  color: var(--ptc-text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.dialog-btn {
+  display: inline-block;
+  background: var(--ptc-text-primary);
+  color: var(--ptc-bg);
+  padding: 12px 32px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+.dialog-btn:active {
+  transform: scale(0.95);
+}
+
 /* 
   =============================
   Desktop UI & Hover Effects 
   =============================
 */
-@media (min-width: 561px) {
+@media (min-width: 861px) {
   .thumbnail-container {
     border-radius: 12px;
+    transition: border-radius 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
   .video {
-    transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.3s ease;
+    border-radius: 12px;
+    padding: 0;
+    z-index: 1;
+    background: transparent;
   }
   .video:hover {
-    transform: translateY(-8px);
+    transform: scale(1.04);
+    z-index: 10;
+    background: var(--ptc-chip-bg);
+    box-shadow: 0 12px 24px rgba(0,0,0,0.6);
   }
   .video:hover .thumbnail-container {
-    box-shadow: 0 12px 24px rgba(0,0,0,0.5);
+    border-radius: 0;
+  }
+  .details {
+    transition: padding 0.3s ease;
+  }
+  .video:hover .details {
+    padding-left: 12px;
+    padding-right: 12px;
+    padding-bottom: 12px;
   }
   .quick-chip {
     transition: transform 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
@@ -741,10 +804,17 @@ button, input {
   .video-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
-@media (max-width: 860px) {
+/* 
+  =============================
+  Tablet UI adjustments
+  =============================
+*/
+@media (min-width: 561px) and (max-width: 860px) {
   .video-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .logo { width: 140px; }
-  .search-wrap { width: 90%; }
+  .logo { width: 150px; }
+  .search-wrap { width: 85%; }
+  .thumbnail-container { border-radius: 12px; }
+  .video:hover { transform: scale(1.02); }
 }
 
 /* 
@@ -979,10 +1049,12 @@ button, input {
   
   .nav-item.add-btn {
     opacity: 1;
+    flex: none;
+    width: 60px;
   }
   
   .nav-item.add-btn i { 
-    font-size: 32px; 
+    font-size: 38px; 
     font-weight: 300; 
     line-height: 1;
     display: flex;
@@ -1080,12 +1152,11 @@ button, input {
           <h2 class="section-title">Poke Gaming</h2>
           <p class="section-sub">
             Discover popular gaming videos
-            <span class="region-badge"><i class="fa-solid fa-globe"></i> Region: US</span>
           </p>
         </div>
         <div class="header-tabs">
           <button class="category-tab active">Gaming</button>
-          <button class="category-tab" onclick="alert('Coming soon!')">Music</button>
+          <label for="library-modal-toggle" class="category-tab">Music</label>
         </div>
       </div>
 
@@ -1135,13 +1206,11 @@ button, input {
 
 <div class="symbol-of-tolerance"></div>
 
-<!-- CSS-based Modal Checkbox Hack -->
+<!-- Create Menu Modal -->
 <input type="checkbox" id="create-modal-toggle" class="modal-toggle" hidden>
-
 <div id="create-modal" class="modal-overlay">
-  <!-- Clickable background layer to dismiss modal -->
   <label for="create-modal-toggle" class="modal-dismiss-bg" aria-label="Close modal"></label>
-  <div class="modal-content">
+  <div class="bottom-sheet">
     <div class="modal-header">
       <h3>Create</h3>
       <label for="create-modal-toggle" class="close-btn" aria-label="Close">&times;</label>
@@ -1171,6 +1240,18 @@ button, input {
   </div>
 </div>
 
+<!-- Library Coming Soon Modal -->
+<input type="checkbox" id="library-modal-toggle" class="modal-toggle" hidden>
+<div id="library-modal" class="modal-overlay">
+  <label for="library-modal-toggle" class="modal-dismiss-bg" aria-label="Close modal"></label>
+  <div class="dialog-content">
+    <div class="dialog-icon"><i class="fa-solid fa-boxes-packing"></i></div>
+    <h4>Library Coming Soon</h4>
+    <p>The Library feature is currently under development. Please check back in a future update to see your saved playlists and history!</p>
+    <label for="library-modal-toggle" class="dialog-btn">Got it</label>
+  </div>
+</div>
+
 <div class="mobile-bottom-nav">
   <a href="/" class="nav-item active">
     <i class="fa-solid fa-house"></i>
@@ -1180,7 +1261,7 @@ button, input {
     <i class="fa-solid fa-users"></i>
     <span>Social</span>
   </a>
-  <!-- No-JS Modal trigger via label -->
+  <!-- No-JS Modal trigger via label, text removed -->
   <label for="create-modal-toggle" class="nav-item add-btn" aria-label="Create">
     <i class="fa-regular fa-circle-plus"></i>
   </label>
@@ -1188,10 +1269,10 @@ button, input {
     <i class="fa-solid fa-tv"></i>
     <span>Subscriptions</span>
   </a>
-  <a href="#" class="nav-item" onclick="alert('Coming soon!')">
+  <label for="library-modal-toggle" class="nav-item">
     <i class="fa-regular fa-folder"></i>
     <span>Library</span>
-  </a>
+  </label>
 </div>
 
 <script>
