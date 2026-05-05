@@ -814,53 +814,62 @@ button, input {
   }
 
   .thumbnail-container { 
-    border-radius: 12px; 
+    border-radius: 16px; 
     width: 100%;
   } 
 
   .video-length {
     right: 8px;
     bottom: 8px;
-    padding: 3px 6px;
+    padding: 4px 6px;
     border-radius: 6px;
     background: rgba(0, 0, 0, 0.8);
     font-size: 12px;
+    font-weight: 500;
   }
   
   .details { 
-    padding: 12px 4px 0 4px; 
-    gap: 12px;
+    padding: 10px 4px 0 4px; 
+    gap: 0;
+    flex-direction: column;
   }
 
   .title {
-    font-size: 16px;
-    font-weight: 600;
+    font-size: 15px;
+    font-weight: 500;
     line-height: 1.3;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
+    color: var(--ptc-text-primary);
   }
 
   .metadata {
-    display: block;
-    font-size: 13px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    font-size: 12px;
     color: var(--ptc-text-secondary);
-    line-height: 1.4;
+    line-height: 1.2;
+    column-gap: 8px;
+    row-gap: 4px;
   }
 
   .byline {
-    display: inline;
+    display: inline-block;
   }
   
   .byline::after {
-    content: " • ";
-    white-space: pre;
+    display: none;
   }
 
   .stats {
-    display: inline;
+    display: flex;
+    align-items: center;
+    column-gap: 8px;
   }
   
   .stats span {
-    display: inline;
+    display: inline-block;
   }
 
   .mobile-bottom-nav {
@@ -908,6 +917,9 @@ button, input {
     font-size: 32px; 
     font-weight: 300; 
     line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .site-footer {
@@ -1033,7 +1045,6 @@ button, input {
                     <% } %>
                     <div class="stats">
                       <span>▷ <%- formatViews(item.viewCount) %></span>
-                      <span style="display:none;">•</span> <!-- Hidden but kept in DOM to not break existing spacing if reused -->
                       <span><%- item.publishedText || 'Recently' %></span>
                     </div>
                   </div>
