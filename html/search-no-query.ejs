@@ -81,7 +81,20 @@
     "CS:GO", "CS2", "Counter-Strike", "Overwatch", "Rocket League", "Terraria", 
     "Among Us", "Fall Guys", "Genshin Impact", "Elden Ring", "Helldivers", 
     "Palworld", "Lethal Company", "FNAF", "Five Nights at Freddy's", "Zelda", 
-    "Super Mario", "Pokemon", "Cyberpunk 2077", "Baldur's Gate", "The Sims"
+    "Super Mario", "Pokemon", "Cyberpunk 2077", "Baldur's Gate", "The Sims",
+    "World of Warcraft", "Dota 2", "Rainbow Six Siege", "Destiny 2", "Dead by Daylight",
+    "Rust", "Ark", "Final Fantasy", "Halo", "Super Smash Bros", "Mario Kart",
+    "Animal Crossing", "Stardew Valley", "Hollow Knight", "Hades", "The Witcher",
+    "Red Dead Redemption", "FIFA", "Madden", "NBA 2K", "EA Sports FC", "Street Fighter",
+    "Tekken", "Mortal Kombat", "Geometry Dash", "Brawl Stars", "Clash Royale",
+    "Clash of Clans", "Free Fire", "PUBG", "Resident Evil", "Silent Hill",
+    "Tomb Raider", "Assassin's Creed", "Far Cry", "Fallout", "Skyrim", "The Elder Scrolls",
+    "Borderlands", "Mass Effect", "Dragon Age", "Persona", "Yakuza", "Monster Hunter",
+    "Dark Souls", "Bloodborne", "Sekiro", "Ghost of Tsushima", "Spider-Man", "God of War",
+    "The Last of Us", "Uncharted", "Horizon", "Ratchet & Clank", "Crash Bandicoot",
+    "Spyro", "Sonic", "Mega Man", "Metroid", "Castlevania", "Tetris", "Pac-Man",
+    "Doom", "Quake", "Half-Life", "Portal", "Left 4 Dead", "Team Fortress 2",
+    "Garry's Mod", "Phasmophobia", "VRChat", "Beat Saber", "FiveM", "Osu", "Subnautica"
   ];
 
   function escapeRegExp(string) {
@@ -132,9 +145,7 @@
     }
   });
 
-  var gameFilters = Object.keys(gameCounts).filter(function(g) {
-    return gameCounts[g] >= 3;
-  });
+  var gameFilters = Object.keys(gameCounts);
 
   var finalVideos;
 
@@ -670,18 +681,6 @@ button, input {
 .modal-action-btn:hover { 
   background: var(--ptc-chip-hover); 
 }
-.modal-footer-links {
-  text-align: center; 
-  font-size: 13px; 
-  color: var(--ptc-text-secondary);
-}
-.modal-footer-links a { 
-  color: var(--ptc-accent); 
-  text-decoration: none; 
-}
-.modal-footer-links a:hover {
-  text-decoration: underline;
-}
 
 @media (max-width: 1140px) {
   .video-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -880,8 +879,8 @@ button, input {
   </div>
 </div>
 
-<form class="mobile-search-form" id="mobile-search-form" action="/search" method="get">
-  <input type="text" id="mobile-search-input" name="query" placeholder="Search Poke">
+<form class="mobile-search-form" id="mobile-search-form" action="/app" method="get">
+  <input type="text" id="mobile-search-input" name="mobilesearch" placeholder="Search Poke">
   <button type="submit" aria-label="Search"><i class="fa-solid fa-magnifying-glass"></i></button>
 </form>
 
@@ -1015,9 +1014,22 @@ button, input {
         <i class="fa-solid fa-arrow-up-from-bracket"></i> 
         Upload Video
       </a>
-      <div class="modal-footer-links">
-        <a href="/privacy">Privacy Policy</a>
-      </div>
+      <a href="/translate" class="modal-action-btn">
+        <i class="fa-solid fa-language"></i> 
+        Translate
+      </a>
+      <a href="/map" class="modal-action-btn">
+        <i class="fa-solid fa-map-location-dot"></i> 
+        Maps
+      </a>
+      <a href="/calendar" class="modal-action-btn">
+        <i class="fa-solid fa-calendar-days"></i> 
+        Calendar
+      </a>
+      <a href="/privacy" class="modal-action-btn">
+        <i class="fa-solid fa-shield-halved"></i> 
+        Privacy Policy
+      </a>
     </div>
   </div>
 </div>
