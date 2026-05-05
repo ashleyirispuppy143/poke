@@ -601,6 +601,25 @@ button {
   display: none !important;
 }
 
+.external-link-icon {
+  margin-left: 6px;
+  font-size: 0.78em;
+  opacity: 0.72;
+}
+
+.dropdown-item .external-link-icon,
+.sidebar-item .external-link-icon,
+.modal-action-btn .external-link-icon {
+  margin-left: auto;
+}
+
+.category-tab .external-link-icon,
+.m-chip .external-link-icon,
+.search-note .external-link-icon,
+.site-footer .external-link-icon {
+  margin-left: 5px;
+}
+
 .page {
   flex: 1;
   width: var(--container);
@@ -1904,25 +1923,25 @@ html.layout-classic body .desktop-sticky-nav {
 
   <div class="sidebar-content">
     <a href="/" class="sidebar-item active"><i class="fa-solid fa-house"></i> Home</a>
-    <a href="https://social.poketube.fun/" class="sidebar-item"><i class="fa-solid fa-users"></i> Social</a>
+    <a href="https://social.poketube.fun/" class="sidebar-item"><i class="fa-solid fa-users"></i> Social <i class="fa-solid fa-arrow-up-right-from-square external-link-icon" aria-hidden="true"></i></a>
     <a href="/account-create" class="sidebar-item"><i class="fa-solid fa-tv"></i> Subscriptions</a>
     <a href="#" class="sidebar-item js-only" data-library-open><i class="fa-regular fa-folder"></i> Library</a>
-    <a href="https://codeberg.org/ashleyirispuppy/poke" class="sidebar-item"><i class="fa-solid fa-code"></i> Source Code</a>
+    <a href="https://codeberg.org/ashleyirispuppy/poke" class="sidebar-item"><i class="fa-solid fa-code"></i> Source Code <i class="fa-solid fa-arrow-up-right-from-square external-link-icon" aria-hidden="true"></i></a>
     <button type="button" class="sidebar-item" id="open-settings-btn"><i class="fa-solid fa-gear"></i> Settings</button>
   </div>
 
   <div class="sidebar-footer" style="padding: 16px; border-top: 1px solid var(--ptc-border);">
     <ul style="list-style: none; padding: 0; margin: 0 0 16px 0; display: flex; flex-direction: column; gap: 12px;">
       <li><a href="/policies" style="color: #ccc; text-decoration: none; font-size: 13px;">Terms & Policies</a></li>
-      <li><a href="https://codeberg.org/ashleyirispuppy/poke/src/branch/main/llm-contribution-policy.md" style="color: #ccc; text-decoration: none; font-size: 13px;">LLM Contribution Policy</a></li>
+      <li><a href="https://codeberg.org/ashleyirispuppy/poke/src/branch/main/llm-contribution-policy.md" style="color: #ccc; text-decoration: none; font-size: 13px;">LLM contribution Policy <i class="fa-solid fa-arrow-up-right-from-square external-link-icon" aria-hidden="true"></i></a></li>
       <li><a href="/request" style="color: #ccc; text-decoration: none; font-size: 13px;">Legal request</a></li>
-      <li><a href="https://codeberg.org/ashleyirispuppy/poke/src/branch/main#hosting-poke" style="color: #ccc; text-decoration: none; font-size: 13px;">How 2 Host?</a></li>
+      <li><a href="https://codeberg.org/ashleyirispuppy/poke/src/branch/main#hosting-poke" style="color: #ccc; text-decoration: none; font-size: 13px;">How 2 Host? <i class="fa-solid fa-arrow-up-right-from-square external-link-icon" aria-hidden="true"></i></a></li>
     </ul>
 
     <p style="margin: 0; color: #aaa; font-size: 12px;">
-      &copy; copyleft <a href="https://codeberg.org/ashleyirispuppy/poke/commit/23928eff491d074824815dc50bcb1c6de0e20dad" style="color:#aaa">2021</a>-<%= new Date().getFullYear() %>
-      <a style="text-decoration: none; color: #aaa;" href="https://initiative.poketube.fun/">Poke Project Initiative</a>
-      <br>With Love!! &#10084;&#65039; - Licensed under <a style="color:#aaa" href="https://www.gnu.org/licenses/gpl-3.0.html">GNU GPL v3+</a>
+      &copy; copyleft <a href="https://codeberg.org/ashleyirispuppy/poke/commit/23928eff491d074824815dc50bcb1c6de0e20dad" style="color:#aaa">2021 <i class="fa-solid fa-arrow-up-right-from-square external-link-icon" aria-hidden="true"></i></a>-<%= new Date().getFullYear() %>
+      <a style="text-decoration: none; color: #aaa;" href="https://initiative.poketube.fun/">Poke Project Initiative <i class="fa-solid fa-arrow-up-right-from-square external-link-icon" aria-hidden="true"></i></a>
+      <br>With Love!! &#10084;&#65039; - Licensed under <a style="color:#aaa" href="https://www.gnu.org/licenses/gpl-3.0.html">GNU GPL v3+ <i class="fa-solid fa-arrow-up-right-from-square external-link-icon" aria-hidden="true"></i></a>
     </p>
   </div>
 </div>
@@ -1980,7 +1999,7 @@ html.layout-classic body .desktop-sticky-nav {
     <a class="m-chip" href="#" data-filter-type="smart" data-filter="<%- g %>"><%- g %></a>
   <% }); %>
 
-  <a class="m-chip" href="https://charts.youtube.com">Music & Youtube Charts</a>
+  <a class="m-chip" href="https://charts.youtube.com">Music & Youtube Charts <i class="fa-solid fa-arrow-up-right-from-square external-link-icon" aria-hidden="true"></i></a>
   <a class="m-chip" href="/translate">Translate</a>
   <a class="m-chip" href="/map">Maps</a>
   <a class="m-chip" href="/calendar">Calendar</a>
@@ -2002,7 +2021,7 @@ html.layout-classic body .desktop-sticky-nav {
 
           <div id="bang-indicator" class="bang-indicator hidden">
             <i class="fa-solid fa-bolt" style="color: var(--ptc-accent); margin-right: 6px;"></i>
-            You are using bangs! <a href="https://duckduckgo.com/bangs" target="_blank" rel="noopener noreferrer">Learn more here.</a>
+            You are using bangs! <a href="https://duckduckgo.com/bangs" target="_blank" rel="noopener noreferrer">Learn more here <i class="fa-solid fa-arrow-up-right-from-square external-link-icon" aria-hidden="true"></i></a>
           </div>
         </div>
       </form>
@@ -2010,7 +2029,7 @@ html.layout-classic body .desktop-sticky-nav {
       <div id="home-extras" class="home-extras-wrapper">
         <% if (Math.random() > 0.3) { %>
         <div id="random-bang-note" class="search-note">
-          Want to unlock powerful search shortcuts? <a href="https://duckduckgo.com/bangs" target="_blank" rel="noopener noreferrer">Learn about Bangs</a>
+          Want to unlock powerful search shortcuts? <a href="https://duckduckgo.com/bangs" target="_blank" rel="noopener noreferrer">Learn about Bangs <i class="fa-solid fa-arrow-up-right-from-square external-link-icon" aria-hidden="true"></i></a>
         </div>
         <% } %>
       </div>
@@ -2036,7 +2055,7 @@ html.layout-classic body .desktop-sticky-nav {
           <button type="button" class="category-tab game-feed-tab js-only" data-filter-type="smart" data-filter="<%- g %>"><%- g %></button>
         <% }); %>
 
-        <a href="https://charts.youtube.com" class="category-tab game-feed-tab js-only">Music & Youtube Charts</a>
+        <a href="https://charts.youtube.com" class="category-tab game-feed-tab js-only">Music & Youtube Charts <i class="fa-solid fa-arrow-up-right-from-square external-link-icon" aria-hidden="true"></i></a>
       </div>
 
       <div class="discover-body">
@@ -2241,7 +2260,7 @@ html.layout-classic body .desktop-sticky-nav {
 
   <a href="https://social.poketube.fun/" class="nav-item">
     <i class="fa-solid fa-users"></i>
-    <span>Social</span>
+    <span>Social <i class="fa-solid fa-arrow-up-right-from-square external-link-icon" aria-hidden="true"></i></span>
   </a>
 
   <label for="create-modal-toggle" class="nav-item add-btn" aria-label="More">
