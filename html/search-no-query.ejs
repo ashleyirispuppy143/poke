@@ -110,7 +110,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Poke | Search</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
 <link href="/css/yt-ukraine.svg?v=7" rel="icon">
 <meta name="darkreader-lock">
@@ -180,7 +180,16 @@ button, input {
   font: inherit;
 }
 
-/* Page Layout */
+/* =========================================
+   MOBILE-ONLY UI (Hidden on Desktop)
+========================================= */
+.mobile-top-bar, .mobile-search-form, .mobile-chip-bar, .mobile-bottom-nav {
+  display: none;
+}
+
+/* =========================================
+   DESKTOP UI
+========================================= */
 .page {
   flex: 1;
   width: var(--container);
@@ -206,7 +215,6 @@ button, input {
   max-width: 74vw;
 }
 
-/* Search Bar (YouTube Style) */
 .search-wrap {
   width: min(600px, 100%);
   margin: 0 auto;
@@ -261,13 +269,6 @@ button, input {
   background: #303030;
 }
 
-.search-btn i {
-  font-size: 16px;
-  color: var(--ptc-text-primary);
-  opacity: 0.8;
-}
-
-/* Bang Indicator */
 .bang-indicator {
   position: absolute;
   top: calc(100% + 12px);
@@ -295,14 +296,8 @@ button, input {
 
 .bang-indicator a {
   color: var(--ptc-accent);
-  text-decoration: none;
 }
 
-.bang-indicator a:hover {
-  text-decoration: underline;
-}
-
-/* Quick Links (YouTube Chips Style) */
 .home-extras-wrapper {
   margin-top: 24px;
   width: 100%;
@@ -337,11 +332,6 @@ button, input {
   background: var(--ptc-chip-hover);
 }
 
-.quick-chip i {
-  font-size: 14px;
-  opacity: 0.8;
-}
-
 .search-note {
   margin-top: 24px;
   text-align: center;
@@ -351,14 +341,8 @@ button, input {
 
 .search-note a {
   color: var(--ptc-accent);
-  text-decoration: none;
 }
 
-.search-note a:hover {
-  text-decoration: underline;
-}
-
-/* Discover Section / Grid */
 .content {
   margin-top: 16px;
 }
@@ -444,7 +428,6 @@ button, input {
   gap: 40px 16px; 
 }
 
-/* Video Cards (Modern YouTube Style) */
 .video {
   display: flex;
   flex-direction: column;
@@ -488,6 +471,21 @@ button, input {
   display: flex;
   padding-top: 12px;
   align-items: flex-start;
+  gap: 12px;
+}
+
+.avatar-link {
+  flex-shrink: 0;
+  position: relative;
+  z-index: 3;
+}
+
+.author-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  background-color: var(--ptc-chip-bg);
 }
 
 .info {
@@ -540,7 +538,6 @@ button, input {
   column-gap: 4px;
 }
 
-/* Footer elements */
 .site-footer {
   display: flex;
   justify-content: center;
@@ -560,7 +557,6 @@ button, input {
   color: var(--ptc-text-primary);
 }
 
-/* Symbol of Tolerance */
 .symbol-of-tolerance {
   margin-top: 1em;
   height: .25em;
@@ -592,31 +588,185 @@ button, input {
   .search-wrap { width: 90%; }
 }
 
+/* =========================================
+   MOBILE 1:1 YT HOMESCREEN (max-width: 560px)
+========================================= */
 @media (max-width: 560px) {
-  .page { padding-top: 20px; }
+  /* Hide Desktop Search/Hero/Headers */
+  .hero, .discover-header, .home-extras-wrapper { display: none; }
+  
+  .page {
+    width: 100%;
+    padding: 0 0 60px 0; /* Space for bottom nav */
+  }
+
+  .content { margin-top: 0; }
+
+  /* Mobile Top Bar */
+  .mobile-top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 16px;
+    height: 48px;
+    background: var(--ptc-bg);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .mobile-logo { height: 20px; }
+  
+  .mobile-top-actions {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    font-size: 20px;
+    color: var(--ptc-text-primary);
+  }
+
+  .mobile-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+  }
+
+  /* Hidden Mobile Search Expansion */
+  .mobile-search-form {
+    display: none;
+    position: sticky;
+    top: 48px;
+    background: var(--ptc-bg);
+    padding: 8px 16px;
+    z-index: 99;
+    border-bottom: 1px solid var(--ptc-border);
+  }
+  
+  .mobile-search-form.active { display: flex; }
+  
+  .mobile-search-form input {
+    flex: 1;
+    background: var(--ptc-searchbox-bg);
+    border: 1px solid var(--ptc-searchbox-border);
+    border-radius: 20px 0 0 20px;
+    padding: 8px 16px;
+    color: white;
+    outline: none;
+  }
+  
+  .mobile-search-form button {
+    background: var(--ptc-searchbtn-bg);
+    border: 1px solid var(--ptc-searchbox-border);
+    border-radius: 0 20px 20px 0;
+    padding: 0 16px;
+    color: white;
+    cursor: pointer;
+  }
+
+  /* Mobile Scrollable Chips (Under Top Bar) */
+  .mobile-chip-bar {
+    display: flex;
+    overflow-x: auto;
+    padding: 8px 16px;
+    gap: 8px;
+    background: var(--ptc-bg);
+    position: sticky;
+    top: 48px; /* sits right under top bar */
+    z-index: 90;
+    scrollbar-width: none; /* Firefox */
+  }
+  
+  .mobile-chip-bar::-webkit-scrollbar { display: none; } /* Chrome */
+  
+  .m-chip {
+    white-space: nowrap;
+    background: var(--ptc-chip-bg);
+    color: var(--ptc-text-primary);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  
+  .m-chip.active {
+    background: var(--ptc-text-primary);
+    color: var(--ptc-bg);
+  }
+
+  /* Video Grid tweaks for mobile edge-to-edge */
   .video-grid { 
     grid-template-columns: 1fr; 
-    gap: 24px;
+    gap: 0; 
   }
-  .thumbnail-container { border-radius: 0; } 
-  .details { padding: 12px 12px 0; }
   
-  .search-bar { font-size: 14px; padding-left: 16px; }
-  .search-btn { width: 48px; }
+  .video {
+    margin-bottom: 16px;
+  }
+
+  .thumbnail-container { 
+    border-radius: 0; /* Edge to edge */
+  } 
   
-  .discover-header { 
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 16px;
-    padding: 0 12px 16px; 
+  .details { 
+    padding: 12px 16px 4px 16px; 
+    gap: 12px;
   }
-  .section-sub {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
+
+  .author-avatar {
+    width: 36px;
+    height: 36px;
   }
-  .region-badge {
-    margin-left: 0;
+
+  .title {
+    font-size: 14px;
+    margin-bottom: 2px;
+  }
+
+  .metadata {
+    font-size: 12px;
+  }
+
+  /* Mobile Bottom Navigation */
+  .mobile-bottom-nav {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 48px;
+    background: var(--ptc-bg);
+    border-top: 1px solid var(--ptc-border);
+    z-index: 100;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    color: var(--ptc-text-primary);
+    font-size: 10px;
+    opacity: 0.8;
+  }
+
+  .nav-item.active { 
+    opacity: 1; 
+    font-weight: bold; 
+  }
+
+  .nav-item i { font-size: 20px; }
+  .nav-item.add-btn i { font-size: 32px; font-weight: 300; opacity: 1; }
+
+  .site-footer {
+    display: none; /* Hide standard footer on mobile */
+  }
+  
+  .symbol-of-tolerance {
+    margin-bottom: 48px; /* Keep above nav bar */
   }
 }
 </style>
@@ -624,6 +774,31 @@ button, input {
 
 <body>
 
+<!-- Mobile Header Elements (Visible only on max-width: 560px) -->
+<div class="mobile-top-bar">
+  <img src="/static/logo-poke.svg" class="mobile-logo" alt="Poke">
+  <div class="mobile-top-actions">
+    <i class="fa-solid fa-chromecast"></i>
+    <i class="fa-regular fa-bell"></i>
+    <i class="fa-solid fa-magnifying-glass" onclick="toggleMobileSearch()"></i>
+    <img src="https://ui-avatars.com/api/?name=User&background=333&color=fff&rounded=true" class="mobile-avatar" alt="Profile">
+  </div>
+</div>
+
+<form class="mobile-search-form" id="mobile-search-form" action="/search" method="get">
+  <input type="text" id="mobile-search-input" name="query" placeholder="Search Poke">
+  <button type="submit" aria-label="Search"><i class="fa-solid fa-magnifying-glass"></i></button>
+</form>
+
+<div class="mobile-chip-bar">
+  <a class="m-chip active">Gaming (US Trending)</a>
+  <a class="m-chip" onclick="alert('Coming soon!')">Music</a>
+  <a class="m-chip" href="/translate">Translate</a>
+  <a class="m-chip" href="/map">Maps</a>
+  <a class="m-chip" href="/calendar">Calendar</a>
+</div>
+
+<!-- Desktop/Tablet UI Container -->
 <div class="page">
   <div class="hero">
     <div class="logo-wrap">
@@ -666,7 +841,6 @@ button, input {
         </div>
         <% } %>
       </div>
-
      </div>
   </div>
 
@@ -697,6 +871,16 @@ button, input {
               </div>
 
               <div class="details">
+                <% if (item.authorId) { %>
+                  <a href="/channel?id=<%- item.authorId %>" class="avatar-link" aria-label="Visit <%- item.author %>'s channel">
+                    <img class="author-avatar" src="https://ui-avatars.com/api/?name=<%- encodeURIComponent(item.author) %>&background=333&color=fff&rounded=true" alt="" loading="lazy">
+                  </a>
+                <% } else { %>
+                  <span class="avatar-link">
+                    <img class="author-avatar" src="https://ui-avatars.com/api/?name=<%- encodeURIComponent(item.author) %>&background=333&color=fff&rounded=true" alt="" loading="lazy">
+                  </span>
+                <% } %>
+                
                 <div class="info">
                   <a href="/watch?v=<%- item.videoId %>" class="title" title="<%- item.title %>"><%- item.title %></a>
                   
@@ -728,10 +912,35 @@ button, input {
 </div>
 
 <footer class="site-footer">
-  <a href="/privacy">Privacy</a> 
+  <a href="/privacy">Privacy</a>
+  <a href="/terms">Terms</a>
+  <a href="/about">About</a>
 </footer>
 
 <div class="symbol-of-tolerance"></div>
+
+<!-- Mobile Bottom Navigation -->
+<div class="mobile-bottom-nav">
+  <a href="/" class="nav-item active">
+    <i class="fa-solid fa-house"></i>
+    <span>Home</span>
+  </a>
+  <a href="#" class="nav-item" onclick="alert('Coming soon!')">
+    <i class="fa-solid fa-bolt"></i>
+    <span>Shorts</span>
+  </a>
+  <a href="#" class="nav-item add-btn" aria-label="Create">
+    <i class="fa-regular fa-circle-plus"></i>
+  </a>
+  <a href="#" class="nav-item" onclick="alert('Coming soon!')">
+    <i class="fa-solid fa-tv"></i>
+    <span>Subscriptions</span>
+  </a>
+  <a href="#" class="nav-item" onclick="alert('Coming soon!')">
+    <i class="fa-regular fa-folder"></i>
+    <span>Library</span>
+  </a>
+</div>
 
 <script>
  (function () {
@@ -750,6 +959,14 @@ button, input {
     });
   }
 })();
+
+function toggleMobileSearch() {
+  var form = document.getElementById('mobile-search-form');
+  form.classList.toggle('active');
+  if(form.classList.contains('active')) {
+    document.getElementById('mobile-search-input').focus();
+  }
+}
 </script>
 
 </body>
