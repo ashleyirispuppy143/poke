@@ -214,6 +214,13 @@
     }
 
     /* ── Content Area ── */
+    .app-body {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      min-height: 0; /* Ensures flex children don't overflow */
+    }
+
     .content-area {
       flex: 1;
       display: flex;
@@ -221,6 +228,7 @@
       background-color: var(--bg-base);
       position: relative;
       overflow: hidden;
+      min-height: 0; /* Ensures flex children don't overflow */
     }
 
     /* ── Horizontal Channel Carousel ── */
@@ -358,25 +366,27 @@
 
     .feed-viewport {
       flex: 1;
-      position: relative;
+      display: flex;
+      flex-direction: column; /* Makes iframe a flex item */
       background-color: #000;
+      position: relative;
       overflow: hidden;
+      min-height: 0; /* CRITICAL: Prevents nested flex containers from collapsing */
     }
 
     iframe {
-      position: absolute;
-      top: 0;
-      left: 0;
+      flex: 1;
       width: 100%;
       height: 100%;
       border: none;
       display: none;
+      background-color: #000;
     }
     iframe.active { display: block; }
 
     .empty-state {
       position: absolute;
-      top: 0; left: 0; right: 0; bottom: 0;
+      inset: 0;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -384,6 +394,7 @@
       color: var(--text-secondary);
       text-align: center;
       font-size: 15px;
+      z-index: 10;
     }
     
     .empty-state svg {
@@ -544,8 +555,9 @@
               <div class="channel-avatar-wrapper">
                 <img src="<%= c.avatar %>" alt="" loading="lazy">
                 <!-- Inline JS onclick for bulletproof unsubscription event stopping -->
-                <button class="unsub-overlay" 
-                        onclick="event.stopPropagation(); if(confirm('Are you sure you want to unsubscribe from <%= c.name.replace(/'/g, '\\\'').replace(/\"/g, '&quot;') %>?')) { window.location.href='/api/remove-channel-sub?ID=<%= encodeURIComponent(userid) %>&channelID=<%= c.id %>'; }"
+                <button class="unsub-overlay js-unsub-btn" 
+                        data-url="/api/remove-channel-sub?ID=<%= encodeURIComponent(userid) %>&channelID=<%= c.id %>" 
+                        data-name="<%= c.name.replace(/"/g, '&quot;') %>" 
                         title="Unsubscribe">
                   Unsub
                 </button>
@@ -592,6 +604,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ── Smart Scroll Buttons Visibility ──────────────────────────
   function updateScrollButtons() {
+    if (!channelList) return;
     // Check if the content overflows the container
     if (channelList.scrollWidth > channelList.clientWidth) {
       // Show left button if we scrolled away from the very start
@@ -624,6 +637,20 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') overlay.classList.remove('open');
+  });
+
+  // ── Unsubscribe Confirmation Popup ───────────────────────
+  const unsubBtns = document.querySelectorAll('.js-unsub-btn');
+  unsubBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevents the channel from opening in the iframe
+      const channelName = btn.getAttribute('data-name');
+      const url = btn.getAttribute('data-url');
+      
+      if (confirm(`Are you sure you want to unsubscribe from ${channelName}?`)) {
+        window.location.href = url;
+      }
+    });
   });
 
   // ── Search & Filter ──────────────────────────────────────
@@ -697,7 +724,7 @@ document.addEventListener("DOMContentLoaded", () => {
   closeViewer.addEventListener('click', () => {
     iframe.src = '';
     iframe.classList.remove('active');
-    emptyState.style.display = 'flex'; // Changed to flex to maintain centering
+    emptyState.style.display = 'flex'; // Changed back to flex to maintain centering
     toolbarTitle.textContent = 'Select a channel to view content';
     closeViewer.style.display = 'none';
     channels.forEach(c => c.classList.remove('selected'));
