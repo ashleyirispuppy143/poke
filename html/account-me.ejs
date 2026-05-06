@@ -121,12 +121,38 @@
       flex-shrink: 0;
     }
 
+    .user-info-container {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
     .user-info {
       font-size: 14px;
       color: var(--text-secondary);
     }
-    .user-info strong {
+    
+    .blurred-id {
       color: var(--text-primary);
+      filter: blur(5px);
+      transition: filter 0.3s ease;
+      cursor: pointer;
+      user-select: none;
+    }
+    .blurred-id:hover {
+      filter: blur(0);
+      user-select: auto;
+    }
+
+    .user-warning {
+      font-size: 11px;
+      color: var(--text-secondary);
+      font-weight: 400;
+    }
+    
+    .user-warning span {
+      color: var(--danger-color);
+      font-weight: 500;
     }
 
     .filter-section {
@@ -218,7 +244,7 @@
       display: flex;
       flex: 1;
       overflow: hidden;
-      min-height: 0; /* Ensures flex children don't overflow */
+      min-height: 0; 
     }
 
     .content-area {
@@ -228,7 +254,7 @@
       background-color: var(--bg-base);
       position: relative;
       overflow: hidden;
-      min-height: 0; /* Ensures flex children don't overflow */
+      min-height: 0; 
     }
 
     /* ── Horizontal Channel Carousel ── */
@@ -251,7 +277,7 @@
       height: 40px;
       border-radius: 50%;
       cursor: pointer;
-      display: none; /* Controlled by JS */
+      display: none; 
       align-items: center;
       justify-content: center;
       position: absolute;
@@ -267,10 +293,10 @@
       gap: 16px;
       overflow-x: auto;
       scroll-behavior: smooth;
-      padding: 0 50px; /* Space for scroll buttons */
+      padding: 0 50px; 
       width: 100%;
-      -ms-overflow-style: none;  /* IE and Edge */
-      scrollbar-width: none;  /* Firefox */
+      -ms-overflow-style: none;
+      scrollbar-width: none;
     }
     .channel-ribbon::-webkit-scrollbar { display: none; }
 
@@ -298,7 +324,14 @@
       box-shadow: 0 0 0 2px var(--text-primary);
     }
 
-    .channel-avatar-wrapper img {
+    .channel-avatar-link {
+      display: block;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+    }
+
+    .channel-avatar-link img {
       width: 100%;
       height: 100%;
       border-radius: 50%;
@@ -321,6 +354,7 @@
       transition: opacity 0.2s;
       border: none;
       cursor: pointer;
+      z-index: 5;
     }
     .channel-avatar-wrapper:hover .unsub-overlay { opacity: 1; }
 
@@ -332,6 +366,7 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      display: block;
     }
     .channel-card.selected .channel-title {
       color: var(--text-primary);
@@ -367,11 +402,11 @@
     .feed-viewport {
       flex: 1;
       display: flex;
-      flex-direction: column; /* Makes iframe a flex item */
+      flex-direction: column; 
       background-color: #000;
       position: relative;
       overflow: hidden;
-      min-height: 0; /* CRITICAL: Prevents nested flex containers from collapsing */
+      min-height: 0; 
     }
 
     iframe {
@@ -401,6 +436,59 @@
       margin-bottom: 16px;
       fill: var(--border-color);
     }
+
+    /* ── YouTube-Style Unsub Modal ── */
+    .yt-modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 3000;
+      align-items: center;
+      justify-content: center;
+      animation: fadeIn 0.15s ease;
+    }
+    .yt-modal-overlay.open { display: flex; }
+
+    .yt-modal {
+      background: #212121;
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 350px;
+      width: 90%;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+      font-family: "Roboto", Arial, sans-serif;
+    }
+
+    .yt-modal-content {
+      font-size: 15px;
+      color: #f1f1f1;
+      margin-bottom: 32px;
+      line-height: 1.4;
+    }
+
+    .yt-modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .yt-modal-actions button {
+      background: none;
+      border: none;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      padding: 10px 16px;
+      border-radius: 18px;
+      transition: background 0.2s;
+    }
+
+    .yt-btn-cancel { color: #f1f1f1; }
+    .yt-btn-cancel:hover { background: rgba(255, 255, 255, 0.1); }
+
+    .yt-btn-confirm { color: var(--accent-color); }
+    .yt-btn-confirm:hover { background: rgba(62, 166, 255, 0.15); }
 
     /* ── E2EE Modal ── */
     .e2ee-overlay {
@@ -472,7 +560,7 @@
 
   <noscript>
     <strong style="color:var(--danger-color); display:block; margin-bottom:8px;">JavaScript Disabled</strong>
-    Search and horizontal scrolling are unavailable. Channels can still be opened via standard links.
+    Search and horizontal scrolling are unavailable. Channels can still be opened natively via the links.
   </noscript>
 
   <!-- E2EE Modal -->
@@ -486,6 +574,17 @@
         <li>Only you can decrypt your subscription list</li>
       </ul>
       <button class="modal-close-btn" id="e2eeClose">Acknowledge</button>
+    </div>
+  </div>
+
+  <!-- YouTube-Style Unsub Modal -->
+  <div class="yt-modal-overlay" id="ytUnsubModal" role="dialog" aria-modal="true">
+    <div class="yt-modal">
+      <div class="yt-modal-content" id="ytUnsubText">Unsubscribe from Channel?</div>
+      <div class="yt-modal-actions">
+        <button class="yt-btn-cancel" id="ytUnsubCancel">Cancel</button>
+        <button class="yt-btn-confirm" id="ytUnsubConfirm">Unsubscribe</button>
+      </div>
     </div>
   </div>
 
@@ -510,7 +609,11 @@
 
   <!-- Utilities Bar (Filter, Sort, Account) -->
   <div class="utilities-bar">
-    <div class="user-info">Account: <strong><%= userid %></strong></div>
+    
+    <div class="user-info-container">
+      <div class="user-info">Account: <strong class="blurred-id" title="Hover to reveal"><%= userid %></strong></div>
+      <div class="user-warning"><span>⚠️</span> Do not share your user ID. More account features coming soon!</div>
+    </div>
     
     <div class="filter-section">
       <div class="filter-bar">
@@ -553,16 +656,19 @@
           <% subs.forEach(c => { %>
             <div class="channel-card" data-id="<%= c.id %>" data-name="<%= c.name.toLowerCase() %>">
               <div class="channel-avatar-wrapper">
-                <img src="<%= c.avatar %>" alt="" loading="lazy">
-                <!-- Inline JS onclick for bulletproof unsubscription event stopping -->
-                <button class="unsub-overlay js-unsub-btn" 
-                        data-url="/api/remove-channel-sub?ID=<%= encodeURIComponent(userid) %>&channelID=<%= c.id %>" 
-                        data-name="<%= c.name.replace(/"/g, '&quot;') %>" 
-                        title="Unsubscribe">
+                <!-- Fallback NO-JS Navigation Anchor -->
+                <a href="/channel?id=<%= encodeURIComponent(c.id) %>" class="channel-avatar-link">
+                  <img src="<%= c.avatar %>" alt="" loading="lazy">
+                </a>
+                <!-- Unsubscribe Button Anchor -->
+                <a class="unsub-overlay js-unsub-btn" 
+                   href="/api/remove-channel-sub?ID=<%= encodeURIComponent(userid) %>&channelID=<%= c.id %>" 
+                   data-name="<%= c.name.replace(/"/g, '&quot;') %>" 
+                   title="Unsubscribe">
                   Unsub
-                </button>
+                </a>
               </div>
-              <div class="channel-title" title="<%= c.name %>"><%= c.name %></div>
+              <a class="channel-title" href="/channel?id=<%= encodeURIComponent(c.id) %>" title="<%= c.name %>"><%= c.name %></a>
             </div>
           <% }) %>
         </div>
@@ -605,24 +711,17 @@ document.addEventListener("DOMContentLoaded", () => {
   // ── Smart Scroll Buttons Visibility ──────────────────────────
   function updateScrollButtons() {
     if (!channelList) return;
-    // Check if the content overflows the container
     if (channelList.scrollWidth > channelList.clientWidth) {
-      // Show left button if we scrolled away from the very start
       scrollLeftBtn.style.display = channelList.scrollLeft > 5 ? 'flex' : 'none';
-      // Show right button if we haven't reached the very end
       scrollRightBtn.style.display = channelList.scrollLeft < (channelList.scrollWidth - channelList.clientWidth - 5) ? 'flex' : 'none';
     } else {
-      // Not overflowing at all, hide both
       scrollLeftBtn.style.display = 'none';
       scrollRightBtn.style.display = 'none';
     }
   }
 
-  // Update button visibility on scroll and window resize
   channelList.addEventListener('scroll', updateScrollButtons);
   window.addEventListener('resize', updateScrollButtons);
-  
-  // Initial check (slight delay ensures rendering is complete)
   setTimeout(updateScrollButtons, 100);
 
   // ── E2EE Modal ──────────────────────────────────────────
@@ -635,22 +734,52 @@ document.addEventListener("DOMContentLoaded", () => {
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) overlay.classList.remove('open');
   });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') overlay.classList.remove('open');
-  });
 
-  // ── Unsubscribe Confirmation Popup ───────────────────────
+  // ── YouTube-Style Unsubscribe Modal ───────────────────────
+  const ytUnsubModal = document.getElementById('ytUnsubModal');
+  const ytUnsubText = document.getElementById('ytUnsubText');
+  const ytUnsubCancel = document.getElementById('ytUnsubCancel');
+  const ytUnsubConfirm = document.getElementById('ytUnsubConfirm');
+  let currentUnsubUrl = "";
+
   const unsubBtns = document.querySelectorAll('.js-unsub-btn');
   unsubBtns.forEach(btn => {
     btn.addEventListener('click', (e) => {
-      e.stopPropagation(); // Prevents the channel from opening in the iframe
-      const channelName = btn.getAttribute('data-name');
-      const url = btn.getAttribute('data-url');
+      // Prevent browser from following the <a href="..."> natively when JS is active
+      e.preventDefault();
+      e.stopPropagation(); 
       
-      if (confirm(`Are you sure you want to unsubscribe from ${channelName}?`)) {
-        window.location.href = url;
-      }
+      const channelName = btn.getAttribute('data-name');
+      currentUnsubUrl = btn.getAttribute('href'); 
+      
+      ytUnsubText.textContent = `Unsubscribe from ${channelName}?`;
+      ytUnsubModal.classList.add('open');
     });
+  });
+
+  ytUnsubCancel.addEventListener('click', () => {
+    ytUnsubModal.classList.remove('open');
+    currentUnsubUrl = "";
+  });
+
+  ytUnsubConfirm.addEventListener('click', () => {
+    if (currentUnsubUrl) {
+      window.location.href = currentUnsubUrl;
+    }
+  });
+
+  ytUnsubModal.addEventListener('click', (e) => {
+    if (e.target === ytUnsubModal) {
+      ytUnsubModal.classList.remove('open');
+    }
+  });
+
+  // Global keydown (Escape handles both modals)
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      overlay.classList.remove('open');
+      ytUnsubModal.classList.remove('open');
+    }
   });
 
   // ── Search & Filter ──────────────────────────────────────
@@ -665,7 +794,6 @@ document.addEventListener("DOMContentLoaded", () => {
         ch.style.display = 'none';
       }
     });
-    // Re-evaluate scroll buttons after filtering
     setTimeout(updateScrollButtons, 50);
   }
 
@@ -689,7 +817,6 @@ document.addEventListener("DOMContentLoaded", () => {
           : b.dataset.name.localeCompare(a.dataset.name))
         .forEach(node => channelList.appendChild(node));
       
-      // Reset scroll
       channelList.scrollLeft = 0;
       updateScrollButtons();
     });
@@ -705,7 +832,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ── Channel Selection & Iframe ───────────────────────────
   channels.forEach(ch => {
-    ch.addEventListener('click', () => {
+    ch.addEventListener('click', (e) => {
+      // If clicking the unsub button, ignore here (handled by the unsub click listener)
+      if (e.target.closest('.js-unsub-btn')) return;
+      
+      // Stop the native <a> navigation since JS is running
+      e.preventDefault();
+
       channels.forEach(c => c.classList.remove('selected'));
       ch.classList.add('selected');
 
@@ -724,7 +857,7 @@ document.addEventListener("DOMContentLoaded", () => {
   closeViewer.addEventListener('click', () => {
     iframe.src = '';
     iframe.classList.remove('active');
-    emptyState.style.display = 'flex'; // Changed back to flex to maintain centering
+    emptyState.style.display = 'flex'; 
     toolbarTitle.textContent = 'Select a channel to view content';
     closeViewer.style.display = 'none';
     channels.forEach(c => c.classList.remove('selected'));
