@@ -437,6 +437,19 @@ function yeast() {
     var currentCaptchaText = "";
     var policiesRead = false;
 
+    var rparamWords = ["poke", "liberate", "web", "mascot", "fun", "video", "stream", "chat", "friends", "hype", "pink", "dark", "light"];
+
+    function generateBase64Rparam() {
+      var sentenceLength = Math.floor(Math.random() * 4) + 3; /* Sentence will be 3 to 6 words long */
+      var selectedWords = [];
+      for (var i = 0; i < sentenceLength; i++) {
+        var randomIndex = Math.floor(Math.random() * rparamWords.length);
+        selectedWords.push(rparamWords[randomIndex]);
+      }
+      var sentence = selectedWords.join(" ");
+      return btoa(sentence);
+    }
+
     function markPoliciesRead() {
       policiesRead = true;
     }
@@ -528,7 +541,7 @@ function yeast() {
     }
 
     if (currentUserId) {
-      location.href = "/my-acc?ID=" + currentUserId + "&rparam=1";
+      location.href = "/my-acc?ID=" + currentUserId + "&rparam=" + generateBase64Rparam();
     } else {
       document.getElementById('loading-state').classList.add('hidden');
       document.getElementById('setup-state').classList.remove('hidden');
@@ -560,7 +573,7 @@ function yeast() {
         
         localStorage.setItem('UserID', `<%- userid %>`);
         <% db.set(`user.${userid}`, userid) %>
-        location.href = "/my-acc?ID=" + `<%- userid %>` + "&rparam=1";
+        location.href = "/my-acc?ID=" + `<%- userid %>` + "&rparam=" + generateBase64Rparam();
       }
     }
     
@@ -595,7 +608,7 @@ function yeast() {
       }
       
       localStorage.setItem("UserID", inputId);
-      location.href = "/my-acc?ID=" + inputId + "&rparam=1";
+      location.href = "/my-acc?ID=" + inputId + "&rparam=" + generateBase64Rparam();
     }
   </script>
 </body>
