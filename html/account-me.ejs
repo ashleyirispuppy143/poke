@@ -459,6 +459,35 @@
       fill: var(--border-color);
     }
 
+    /* ── Loading State ── */
+    .loading-state {
+      position: absolute;
+      inset: 0;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-secondary);
+      text-align: center;
+      font-size: 15px;
+      z-index: 15;
+      background-color: #000;
+    }
+
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid var(--border-color);
+      border-top-color: var(--accent-color);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 16px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
     /* ── Confirmation Modal ── */
     .confirm-overlay {
       display: none;
@@ -707,6 +736,12 @@
       </div>
       
       <div class="feed-viewport">
+        <!-- Loading State -->
+        <div class="loading-state" id="loadingState">
+          <div class="spinner"></div>
+          <p>loading... please wait...!</p>
+        </div>
+
         <div class="empty-state" id="emptyState">
           <svg viewBox="0 0 24 24" width="64" height="64">
             <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8 12.5v-9l6 4.5-6 4.5z"/>
@@ -727,6 +762,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const channels     = document.querySelectorAll('.channel-card');
   const iframe       = document.getElementById('mainFrame');
   const emptyState   = document.getElementById('emptyState');
+  const loadingState = document.getElementById('loadingState');
   const toolbarTitle = document.getElementById('toolbarTitle');
   const closeViewer  = document.getElementById('closeViewer');
   const openChannelBtn = document.getElementById('openChannelBtn');
@@ -865,16 +901,20 @@ document.addEventListener("DOMContentLoaded", () => {
       openChannelBtn.href = `/channel?id=${encodeURIComponent(id)}`;
       openChannelBtn.style.display = 'inline-flex';
       closeViewer.style.display = 'inline-block';
+      
+      // Handle visibility for loading state
       emptyState.style.display = 'none';
+      iframe.classList.remove('active'); // hide iframe while loading
+      loadingState.style.display = 'flex'; // show loading throbber
       
       iframe.src = `/channel?id=${encodeURIComponent(id)}&embedchannelsubsfeed=true`;
-      iframe.classList.add('active');
     });
   });
 
   closeViewer.addEventListener('click', () => {
     iframe.src = '';
     iframe.classList.remove('active');
+    loadingState.style.display = 'none';
     emptyState.style.display = 'flex'; 
     toolbarTitle.textContent = 'Select a channel to view content';
     openChannelBtn.style.display = 'none';
@@ -883,6 +923,12 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   iframe.addEventListener("load", () => {
+    // Only show the iframe if we are actually loading a channel (not clearing it)
+    if (iframe.src && iframe.src !== window.location.href && iframe.src !== 'about:blank') {
+      loadingState.style.display = 'none';
+      iframe.classList.add('active');
+    }
+    
     try {
       const doc = iframe.contentDocument || iframe.contentWindow.document;
       doc.querySelectorAll("a").forEach(a => a.setAttribute("target", "_blank"));
