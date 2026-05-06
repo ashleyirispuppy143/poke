@@ -58,100 +58,24 @@
     .brand-section {
       display: flex;
       align-items: center;
-      gap: 16px;
-      min-width: 200px;
+      min-width: 150px;
     }
 
-    .menu-icon {
-      background: none;
-      border: none;
-      color: var(--text-primary);
-      font-size: 20px;
-      cursor: pointer;
+    .brand-logo {
+      display: flex;
+      align-items: center;
       padding: 8px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .menu-icon:hover { background-color: var(--bg-surface); }
-
-    .brand-title {
-      font-size: 1.25rem;
-      font-weight: 600;
-      letter-spacing: -0.5px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
     }
     
-    .brand-title img {
-      width: 24px;
+    .brand-logo img {
       height: 24px;
       object-fit: contain;
     }
-
-    .search-section {
-      flex: 1;
-      display: flex;
-      justify-content: center;
-      max-width: 720px;
-      margin: 0 40px;
-    }
-
-    .search-bar {
-      display: flex;
-      align-items: center;
-      width: 100%;
-      height: 40px;
-      background-color: #121212;
-      border: 1px solid var(--border-color);
-      border-radius: 40px;
-      overflow: hidden;
-      position: relative;
-    }
-
-    .search-bar input {
-      flex: 1;
-      background: transparent;
-      border: none;
-      color: var(--text-primary);
-      font-size: 16px;
-      padding: 0 16px 0 24px;
-      outline: none;
-    }
-
-    .clear-search-btn {
-      background: none;
-      border: none;
-      color: var(--text-secondary);
-      cursor: pointer;
-      padding: 0 10px;
-      display: none;
-      font-size: 14px;
-    }
-    .clear-search-btn.visible { display: block; }
-
-    .search-btn {
-      width: 64px;
-      height: 100%;
-      background-color: var(--bg-surface);
-      border: none;
-      border-left: 1px solid var(--border-color);
-      color: var(--text-primary);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 16px;
-    }
-    .search-btn:hover { background-color: var(--bg-surface-hover); }
 
     .actions-section {
       display: flex;
       align-items: center;
       gap: 16px;
-      min-width: 200px;
       justify-content: flex-end;
     }
 
@@ -168,14 +92,7 @@
     }
     .action-btn:hover { background: var(--bg-surface); }
 
-    /* ── Main Layout ── */
-    .app-body {
-      display: flex;
-      flex: 1;
-      overflow: hidden;
-    }
-
-    /* ── E2EE Badge (Top Bar) ── */
+    /* ── E2EE Badge ── */
     .e2ee-badge {
       display: flex;
       align-items: center;
@@ -190,6 +107,111 @@
     .e2ee-badge:hover { background: rgba(76, 175, 125, 0.2); }
     .e2ee-badge svg { width: 14px; height: 14px; fill: var(--e2ee-color); }
     .e2ee-badge span { font-size: 13px; font-weight: 500; color: var(--e2ee-color); }
+
+    /* ── Utilities Bar (Filter, Sort, Account) ── */
+    .utilities-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 24px;
+      background-color: var(--bg-base);
+      border-bottom: 1px solid var(--border-color);
+      flex-wrap: wrap;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+
+    .user-info {
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+    .user-info strong {
+      color: var(--text-primary);
+    }
+
+    .filter-section {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      max-width: 400px;
+      margin: 0 auto;
+    }
+
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      height: 36px;
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 18px;
+      overflow: hidden;
+      padding: 0 12px;
+      transition: border-color 0.2s;
+    }
+    .filter-bar:focus-within {
+      border-color: var(--accent-color);
+    }
+
+    .filter-bar svg {
+      fill: var(--text-secondary);
+      margin-right: 8px;
+    }
+
+    .filter-bar input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-size: 14px;
+      outline: none;
+    }
+
+    .clear-search-btn {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: none;
+      font-size: 14px;
+      padding: 0 4px;
+    }
+    .clear-search-btn.visible { display: block; }
+    .clear-search-btn:hover { color: var(--text-primary); }
+
+    .organize-section {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .sidebar-section-title {
+      font-size: 14px;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .sort-container {
+      display: flex;
+      gap: 6px;
+    }
+    
+    .sort-chip {
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 6px 12px;
+      border-radius: 16px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    .sort-chip:hover { background-color: var(--bg-surface-hover); }
+    .sort-chip.active {
+      background-color: var(--text-primary);
+      color: var(--bg-base);
+      border-color: var(--text-primary);
+    }
 
     /* ── Content Area ── */
     .content-area {
@@ -209,6 +231,7 @@
       padding: 12px 0;
       background-color: var(--bg-base);
       border-bottom: 1px solid var(--border-color);
+      flex-shrink: 0;
     }
 
     .ribbon-scroll-btn {
@@ -286,6 +309,8 @@
       font-weight: bold;
       opacity: 0;
       transition: opacity 0.2s;
+      border: none;
+      cursor: pointer;
     }
     .channel-avatar-wrapper:hover .unsub-overlay { opacity: 1; }
 
@@ -310,20 +335,24 @@
       justify-content: space-between;
       padding: 12px 24px;
       background: var(--bg-base);
+      border-bottom: 1px solid var(--border-color);
+      flex-shrink: 0;
     }
     
     .feed-title { font-size: 1.1rem; font-weight: 600; margin: 0; }
     
     .close-feed-btn {
       background: none;
-      border: none;
-      color: var(--text-secondary);
-      font-size: 14px;
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 4px 10px;
+      border-radius: 14px;
+      font-size: 13px;
       cursor: pointer;
       display: none;
       font-weight: 500;
     }
-    .close-feed-btn:hover { color: var(--text-primary); }
+    .close-feed-btn:hover { background: var(--bg-surface); }
 
     .feed-viewport {
       flex: 1;
@@ -400,9 +429,8 @@
 
     /* ── Responsive ── */
     @media(max-width: 768px) {
-      .search-section { margin: 0 10px; }
-      .brand-section { min-width: auto; }
-      .actions-section { min-width: auto; }
+      .utilities-bar { justify-content: center; }
+      .filter-section { max-width: 100%; margin-bottom: 8px; }
       .action-btn { display: none; } /* Hide JSON button on mobile */
     }
 
@@ -436,25 +464,12 @@
     </div>
   </div>
 
-   <header class="top-navbar">
+  <!-- Top Header Navigation -->
+  <header class="top-navbar">
     <div class="brand-section">
-      <button class="menu-icon" title="Menu">☰</button>
-      <div class="brand-title">
-        <img src="/css/poke.svg" alt="Poke Logo">
-        My Poke
-      </div>
-    </div>
-
-    <div class="search-section">
-      <div class="search-bar">
-        <input type="text" id="searchInput" placeholder="Search channels..." autocomplete="off">
-        <button id="clearSearch" class="clear-search-btn" title="Clear search">✖</button>
-        <button class="search-btn" title="Search">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-             <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
-          </svg>
-        </button>
-      </div>
+      <a href="/" class="brand-logo" title="Home">
+        <img src="/css/logo.svg" alt="Logo">
+      </a>
     </div>
 
     <div class="actions-section">
@@ -467,6 +482,30 @@
       <a href="/api/get-channel-subs?ID=<%= encodeURIComponent(userid) %>" target="_blank" class="action-btn">Export JSON</a>
     </div>
   </header>
+
+  <!-- Utilities Bar (Filter, Sort, Account) -->
+  <div class="utilities-bar">
+    <div class="user-info">Account: <strong><%= userid %></strong></div>
+    
+    <div class="filter-section">
+      <div class="filter-bar">
+        <!-- Funnel/Filter Icon instead of magnifying glass -->
+        <svg viewBox="0 0 24 24" width="16" height="16">
+          <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/>
+        </svg>
+        <input type="text" id="searchInput" placeholder="Filter subscriptions..." autocomplete="off">
+        <button id="clearSearch" class="clear-search-btn" title="Clear filter">✖</button>
+      </div>
+    </div>
+
+    <div class="organize-section">
+      <span class="sidebar-section-title">Organize</span>
+      <div class="sort-container">
+        <button class="sort-chip active" data-sort="asc">A-Z</button>
+        <button class="sort-chip" data-sort="desc">Z-A</button>
+      </div>
+    </div>
+  </div>
 
   <div class="app-body">
     <!-- Main View: Top Channel Ribbon + Iframe -->
@@ -490,7 +529,12 @@
             <div class="channel-card" data-id="<%= c.id %>" data-name="<%= c.name.toLowerCase() %>">
               <div class="channel-avatar-wrapper">
                 <img src="<%= c.avatar %>" alt="" loading="lazy">
-                <a class="unsub-overlay" href="/api/remove-channel-sub?ID=<%= encodeURIComponent(userid) %>&channelID=<%= c.id %>" onclick="event.stopPropagation();" title="Unsubscribe">Unsub</a>
+                <button class="unsub-overlay js-unsub-btn" 
+                        data-url="/api/remove-channel-sub?ID=<%= encodeURIComponent(userid) %>&channelID=<%= c.id %>" 
+                        data-name="<%= c.name %>" 
+                        title="Unsubscribe">
+                  Unsub
+                </button>
               </div>
               <div class="channel-title" title="<%= c.name %>"><%= c.name %></div>
             </div>
@@ -521,6 +565,7 @@
 document.addEventListener("DOMContentLoaded", () => {
   const searchInput  = document.getElementById('searchInput');
   const clearBtn     = document.getElementById('clearSearch');
+  const sortBtns     = document.querySelectorAll('.sort-chip');
   const channelList  = document.getElementById('channelList');
   const channels     = document.querySelectorAll('.channel-card');
   const iframe       = document.getElementById('mainFrame');
@@ -545,6 +590,20 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.key === 'Escape') overlay.classList.remove('open');
   });
 
+  // ── Unsubscribe Confirmation Popup ───────────────────────
+  const unsubBtns = document.querySelectorAll('.js-unsub-btn');
+  unsubBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevents the channel from opening in the iframe
+      const channelName = btn.getAttribute('data-name');
+      const url = btn.getAttribute('data-url');
+      
+      if (confirm(`Are you sure you want to unsubscribe from ${channelName}?`)) {
+        window.location.href = url;
+      }
+    });
+  });
+
   // ── Search & Filter ──────────────────────────────────────
   function filterChannels() {
     const term = searchInput.value.toLowerCase();
@@ -564,6 +623,24 @@ document.addEventListener("DOMContentLoaded", () => {
     searchInput.value = '';
     filterChannels();
     searchInput.focus();
+  });
+
+  // ── Sort Horizontal Ribbon ───────────────────────────────
+  sortBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      sortBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      const dir = btn.dataset.sort;
+      Array.from(channels)
+        .sort((a, b) => dir === 'asc'
+          ? a.dataset.name.localeCompare(b.dataset.name)
+          : b.dataset.name.localeCompare(a.dataset.name))
+        .forEach(node => channelList.appendChild(node));
+      
+      // Reset scroll
+      channelList.scrollLeft = 0;
+    });
   });
 
   // ── Ribbon Scrolling ─────────────────────────────────────
