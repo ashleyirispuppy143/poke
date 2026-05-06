@@ -79,6 +79,43 @@
       justify-content: flex-end;
     }
 
+    /* ── Account Info (Moved to header) ── */
+    .account-info-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      margin-right: 8px;
+    }
+
+    .user-info {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    
+    .blurred-id {
+      color: var(--text-primary);
+      filter: blur(5px);
+      transition: filter 0.3s ease;
+      cursor: pointer;
+      user-select: none;
+    }
+    .blurred-id:hover {
+      filter: blur(0);
+      user-select: auto;
+    }
+
+    .user-warning {
+      font-size: 11px;
+      color: var(--text-secondary);
+      font-weight: 400;
+      margin-top: 2px;
+    }
+    
+    .user-warning span {
+      color: var(--danger-color);
+      font-weight: 500;
+    }
+
     .action-btn {
       background: none;
       border: 1px solid var(--border-color);
@@ -108,7 +145,7 @@
     .e2ee-badge svg { width: 14px; height: 14px; fill: var(--e2ee-color); }
     .e2ee-badge span { font-size: 13px; font-weight: 500; color: var(--e2ee-color); }
 
-    /* ── Utilities Bar (Filter, Sort, Account) ── */
+    /* ── Utilities Bar (Filter, Sort) ── */
     .utilities-bar {
       display: flex;
       align-items: center;
@@ -121,46 +158,10 @@
       flex-shrink: 0;
     }
 
-    .user-info-container {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .user-info {
-      font-size: 14px;
-      color: var(--text-secondary);
-    }
-    
-    .blurred-id {
-      color: var(--text-primary);
-      filter: blur(5px);
-      transition: filter 0.3s ease;
-      cursor: pointer;
-      user-select: none;
-    }
-    .blurred-id:hover {
-      filter: blur(0);
-      user-select: auto;
-    }
-
-    .user-warning {
-      font-size: 11px;
-      color: var(--text-secondary);
-      font-weight: 400;
-    }
-    
-    .user-warning span {
-      color: var(--danger-color);
-      font-weight: 500;
-    }
-
     .filter-section {
       flex: 1;
       display: flex;
-      justify-content: center;
       max-width: 400px;
-      margin: 0 auto;
     }
 
     .filter-bar {
@@ -209,6 +210,7 @@
       display: flex;
       align-items: center;
       gap: 12px;
+      margin-left: auto;
     }
 
     .sidebar-section-title {
@@ -383,8 +385,28 @@
       border-bottom: 1px solid var(--border-color);
       flex-shrink: 0;
     }
+
+    .feed-title-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
     
     .feed-title { font-size: 1.1rem; font-weight: 600; margin: 0; }
+
+    .open-channel-link {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-secondary);
+      transition: color 0.2s;
+      padding: 4px;
+      border-radius: 50%;
+    }
+    .open-channel-link:hover {
+      color: var(--text-primary);
+      background-color: var(--bg-surface);
+    }
     
     .close-feed-btn {
       background: none;
@@ -437,8 +459,8 @@
       fill: var(--border-color);
     }
 
-    /* ── YouTube-Style Unsub Modal ── */
-    .yt-modal-overlay {
+    /* ── Confirmation Modal ── */
+    .confirm-overlay {
       display: none;
       position: fixed;
       inset: 0;
@@ -448,9 +470,9 @@
       justify-content: center;
       animation: fadeIn 0.15s ease;
     }
-    .yt-modal-overlay.open { display: flex; }
+    .confirm-overlay.open { display: flex; }
 
-    .yt-modal {
+    .confirm-modal {
       background: #212121;
       border-radius: 12px;
       padding: 24px;
@@ -460,20 +482,20 @@
       font-family: "Roboto", Arial, sans-serif;
     }
 
-    .yt-modal-content {
+    .confirm-content {
       font-size: 15px;
       color: #f1f1f1;
       margin-bottom: 32px;
       line-height: 1.4;
     }
 
-    .yt-modal-actions {
+    .confirm-actions {
       display: flex;
       justify-content: flex-end;
       gap: 8px;
     }
 
-    .yt-modal-actions button {
+    .confirm-actions button {
       background: none;
       border: none;
       font-size: 14px;
@@ -484,11 +506,11 @@
       transition: background 0.2s;
     }
 
-    .yt-btn-cancel { color: #f1f1f1; }
-    .yt-btn-cancel:hover { background: rgba(255, 255, 255, 0.1); }
+    .btn-cancel { color: #f1f1f1; }
+    .btn-cancel:hover { background: rgba(255, 255, 255, 0.1); }
 
-    .yt-btn-confirm { color: var(--accent-color); }
-    .yt-btn-confirm:hover { background: rgba(62, 166, 255, 0.15); }
+    .btn-confirm { color: var(--accent-color); }
+    .btn-confirm:hover { background: rgba(62, 166, 255, 0.15); }
 
     /* ── E2EE Modal ── */
     .e2ee-overlay {
@@ -544,7 +566,7 @@
     @media(max-width: 768px) {
       .utilities-bar { justify-content: center; }
       .filter-section { max-width: 100%; margin-bottom: 8px; }
-      .action-btn { display: none; } /* Hide JSON button on mobile */
+      .action-btn, .account-info-wrapper { display: none; } 
     }
 
     noscript {
@@ -573,17 +595,17 @@
         <li>Keys are derived from your user ID using SHA-384</li>
         <li>Only you can decrypt your subscription list</li>
       </ul>
-      <button class="modal-close-btn" id="e2eeClose">Acknowledge</button>
+      <button class="modal-close-btn" id="e2eeClose">Got it</button>
     </div>
   </div>
 
-  <!-- YouTube-Style Unsub Modal -->
-  <div class="yt-modal-overlay" id="ytUnsubModal" role="dialog" aria-modal="true">
-    <div class="yt-modal">
-      <div class="yt-modal-content" id="ytUnsubText">Unsubscribe from Channel?</div>
-      <div class="yt-modal-actions">
-        <button class="yt-btn-cancel" id="ytUnsubCancel">Cancel</button>
-        <button class="yt-btn-confirm" id="ytUnsubConfirm">Unsubscribe</button>
+  <!-- Unsubscribe Confirmation Modal -->
+  <div class="confirm-overlay" id="confirmUnsubModal" role="dialog" aria-modal="true">
+    <div class="confirm-modal">
+      <div class="confirm-content" id="confirmUnsubText">Unsubscribe from Channel?</div>
+      <div class="confirm-actions">
+        <button class="btn-cancel" id="confirmUnsubCancel">Nah</button>
+        <button class="btn-confirm" id="confirmUnsubConfirm">Unsub</button>
       </div>
     </div>
   </div>
@@ -597,31 +619,30 @@
     </div>
 
     <div class="actions-section">
+      <div class="account-info-wrapper">
+        <div class="user-info">Account: <strong class="blurred-id" title="Hover to reveal"><%= userid %></strong></div>
+        <div class="user-warning"><span>⚠️</span> Don't share ur ID. More account features comin soon!</div>
+      </div>
+
       <button class="e2ee-badge" id="e2eeBadge" title="End-to-end encrypted">
         <svg viewBox="0 0 24 24">
           <path d="M18 8h-1V6A5 5 0 0 0 7 6v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zm-6 9a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm3.1-9H8.9V6a3.1 3.1 0 0 1 6.2 0v2z"/>
         </svg>
         <span>Secure</span>
       </button>
-      <a href="/api/get-channel-subs?ID=<%= encodeURIComponent(userid) %>" target="_blank" class="action-btn">Export JSON</a>
+      <a href="/api/get-channel-subs?ID=<%= encodeURIComponent(userid) %>" target="_blank" class="action-btn">Export Data</a>
     </div>
   </header>
 
-  <!-- Utilities Bar (Filter, Sort, Account) -->
+  <!-- Utilities Bar (Filter, Sort) -->
   <div class="utilities-bar">
-    
-    <div class="user-info-container">
-      <div class="user-info">Account: <strong class="blurred-id" title="Hover to reveal"><%= userid %></strong></div>
-      <div class="user-warning"><span>⚠️</span> Do not share your user ID. More account features coming soon!</div>
-    </div>
     
     <div class="filter-section">
       <div class="filter-bar">
-        <!-- Funnel/Filter Icon instead of magnifying glass -->
         <svg viewBox="0 0 24 24" width="16" height="16">
           <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/>
         </svg>
-        <input type="text" id="searchInput" placeholder="Filter subscriptions..." autocomplete="off">
+        <input type="text" id="searchInput" placeholder="Search ur channels..." autocomplete="off">
         <button id="clearSearch" class="clear-search-btn" title="Clear filter">✖</button>
       </div>
     </div>
@@ -677,7 +698,14 @@
 
       <!-- Feed Container -->
       <div class="feed-header">
-        <h2 class="feed-title" id="toolbarTitle">Select a channel to view content</h2>
+        <div class="feed-title-wrapper">
+          <h2 class="feed-title" id="toolbarTitle">Select a channel to view content</h2>
+          <a href="#" id="openChannelBtn" class="open-channel-link" target="_blank" title="Open actual channel page">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+              <path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/>
+            </svg>
+          </a>
+        </div>
         <button class="close-feed-btn" id="closeViewer">✖ Close Feed</button>
       </div>
       
@@ -704,6 +732,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const emptyState   = document.getElementById('emptyState');
   const toolbarTitle = document.getElementById('toolbarTitle');
   const closeViewer  = document.getElementById('closeViewer');
+  const openChannelBtn = document.getElementById('openChannelBtn');
   
   const scrollLeftBtn  = document.getElementById('scrollLeft');
   const scrollRightBtn = document.getElementById('scrollRight');
@@ -735,11 +764,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.target === overlay) overlay.classList.remove('open');
   });
 
-  // ── YouTube-Style Unsubscribe Modal ───────────────────────
-  const ytUnsubModal = document.getElementById('ytUnsubModal');
-  const ytUnsubText = document.getElementById('ytUnsubText');
-  const ytUnsubCancel = document.getElementById('ytUnsubCancel');
-  const ytUnsubConfirm = document.getElementById('ytUnsubConfirm');
+  // ── Unsubscribe Confirmation Modal ───────────────────────
+  const confirmUnsubModal = document.getElementById('confirmUnsubModal');
+  const confirmUnsubText = document.getElementById('confirmUnsubText');
+  const confirmUnsubCancel = document.getElementById('confirmUnsubCancel');
+  const confirmUnsubConfirm = document.getElementById('confirmUnsubConfirm');
   let currentUnsubUrl = "";
 
   const unsubBtns = document.querySelectorAll('.js-unsub-btn');
@@ -752,25 +781,25 @@ document.addEventListener("DOMContentLoaded", () => {
       const channelName = btn.getAttribute('data-name');
       currentUnsubUrl = btn.getAttribute('href'); 
       
-      ytUnsubText.textContent = `Unsubscribe from ${channelName}?`;
-      ytUnsubModal.classList.add('open');
+      confirmUnsubText.textContent = `Unsubscribe from ${channelName}?`;
+      confirmUnsubModal.classList.add('open');
     });
   });
 
-  ytUnsubCancel.addEventListener('click', () => {
-    ytUnsubModal.classList.remove('open');
+  confirmUnsubCancel.addEventListener('click', () => {
+    confirmUnsubModal.classList.remove('open');
     currentUnsubUrl = "";
   });
 
-  ytUnsubConfirm.addEventListener('click', () => {
+  confirmUnsubConfirm.addEventListener('click', () => {
     if (currentUnsubUrl) {
       window.location.href = currentUnsubUrl;
     }
   });
 
-  ytUnsubModal.addEventListener('click', (e) => {
-    if (e.target === ytUnsubModal) {
-      ytUnsubModal.classList.remove('open');
+  confirmUnsubModal.addEventListener('click', (e) => {
+    if (e.target === confirmUnsubModal) {
+      confirmUnsubModal.classList.remove('open');
     }
   });
 
@@ -778,7 +807,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       overlay.classList.remove('open');
-      ytUnsubModal.classList.remove('open');
+      confirmUnsubModal.classList.remove('open');
     }
   });
 
@@ -846,8 +875,11 @@ document.addEventListener("DOMContentLoaded", () => {
       const realName = ch.querySelector('.channel-title').textContent;
 
       toolbarTitle.textContent = realName;
+      openChannelBtn.href = `/channel?id=${encodeURIComponent(id)}`;
+      openChannelBtn.style.display = 'inline-flex';
       closeViewer.style.display = 'inline-block';
       emptyState.style.display = 'none';
+      
       iframe.src = `/channel?id=${encodeURIComponent(id)}&embedchannelsubsfeed=true`;
       iframe.classList.add('active');
     });
@@ -859,6 +891,7 @@ document.addEventListener("DOMContentLoaded", () => {
     iframe.classList.remove('active');
     emptyState.style.display = 'flex'; 
     toolbarTitle.textContent = 'Select a channel to view content';
+    openChannelBtn.style.display = 'none';
     closeViewer.style.display = 'none';
     channels.forEach(c => c.classList.remove('selected'));
   });
