@@ -243,7 +243,7 @@
       height: 40px;
       border-radius: 50%;
       cursor: pointer;
-      display: flex;
+      display: none; /* Controlled by JS */
       align-items: center;
       justify-content: center;
       position: absolute;
@@ -261,6 +261,8 @@
       scroll-behavior: smooth;
       padding: 0 50px; /* Space for scroll buttons */
       width: 100%;
+      -ms-overflow-style: none;  /* IE and Edge */
+      scrollbar-width: none;  /* Firefox */
     }
     .channel-ribbon::-webkit-scrollbar { display: none; }
 
@@ -358,9 +360,13 @@
       flex: 1;
       position: relative;
       background-color: #000;
+      overflow: hidden;
     }
 
     iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
       width: 100%;
       height: 100%;
       border: none;
@@ -370,11 +376,19 @@
 
     .empty-state {
       position: absolute;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
+      top: 0; left: 0; right: 0; bottom: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
       color: var(--text-secondary);
       text-align: center;
       font-size: 15px;
+    }
+    
+    .empty-state svg {
+      margin-bottom: 16px;
+      fill: var(--border-color);
     }
 
     /* ── E2EE Modal ── */
@@ -529,9 +543,9 @@
             <div class="channel-card" data-id="<%= c.id %>" data-name="<%= c.name.toLowerCase() %>">
               <div class="channel-avatar-wrapper">
                 <img src="<%= c.avatar %>" alt="" loading="lazy">
-                <button class="unsub-overlay js-unsub-btn" 
-                        data-url="/api/remove-channel-sub?ID=<%= encodeURIComponent(userid) %>&channelID=<%= c.id %>" 
-                        data-name="<%= c.name %>" 
+                <!-- Inline JS onclick for bulletproof unsubscription event stopping -->
+                <button class="unsub-overlay" 
+                        onclick="event.stopPropagation(); if(confirm('Are you sure you want to unsubscribe from <%= c.name.replace(/'/g, '\\\'').replace(/\"/g, '&quot;') %>?')) { window.location.href='/api/remove-channel-sub?ID=<%= encodeURIComponent(userid) %>&channelID=<%= c.id %>'; }"
                         title="Unsubscribe">
                   Unsub
                 </button>
@@ -551,7 +565,7 @@
       
       <div class="feed-viewport">
         <div class="empty-state" id="emptyState">
-          <svg viewBox="0 0 24 24" width="64" height="64" fill="var(--border-color)" style="margin-bottom:16px;">
+          <svg viewBox="0 0 24 24" width="64" height="64">
             <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8 12.5v-9l6 4.5-6 4.5z"/>
           </svg>
           <p>Your subscription feed will appear here.</p>
@@ -576,6 +590,28 @@ document.addEventListener("DOMContentLoaded", () => {
   const scrollLeftBtn  = document.getElementById('scrollLeft');
   const scrollRightBtn = document.getElementById('scrollRight');
 
+  // ── Smart Scroll Buttons Visibility ──────────────────────────
+  function updateScrollButtons() {
+    // Check if the content overflows the container
+    if (channelList.scrollWidth > channelList.clientWidth) {
+      // Show left button if we scrolled away from the very start
+      scrollLeftBtn.style.display = channelList.scrollLeft > 5 ? 'flex' : 'none';
+      // Show right button if we haven't reached the very end
+      scrollRightBtn.style.display = channelList.scrollLeft < (channelList.scrollWidth - channelList.clientWidth - 5) ? 'flex' : 'none';
+    } else {
+      // Not overflowing at all, hide both
+      scrollLeftBtn.style.display = 'none';
+      scrollRightBtn.style.display = 'none';
+    }
+  }
+
+  // Update button visibility on scroll and window resize
+  channelList.addEventListener('scroll', updateScrollButtons);
+  window.addEventListener('resize', updateScrollButtons);
+  
+  // Initial check (slight delay ensures rendering is complete)
+  setTimeout(updateScrollButtons, 100);
+
   // ── E2EE Modal ──────────────────────────────────────────
   const overlay   = document.getElementById('e2eeOverlay');
   const badge     = document.getElementById('e2eeBadge');
@@ -590,20 +626,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.key === 'Escape') overlay.classList.remove('open');
   });
 
-  // ── Unsubscribe Confirmation Popup ───────────────────────
-  const unsubBtns = document.querySelectorAll('.js-unsub-btn');
-  unsubBtns.forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation(); // Prevents the channel from opening in the iframe
-      const channelName = btn.getAttribute('data-name');
-      const url = btn.getAttribute('data-url');
-      
-      if (confirm(`Are you sure you want to unsubscribe from ${channelName}?`)) {
-        window.location.href = url;
-      }
-    });
-  });
-
   // ── Search & Filter ──────────────────────────────────────
   function filterChannels() {
     const term = searchInput.value.toLowerCase();
@@ -616,6 +638,8 @@ document.addEventListener("DOMContentLoaded", () => {
         ch.style.display = 'none';
       }
     });
+    // Re-evaluate scroll buttons after filtering
+    setTimeout(updateScrollButtons, 50);
   }
 
   searchInput.addEventListener('input', filterChannels);
@@ -640,10 +664,11 @@ document.addEventListener("DOMContentLoaded", () => {
       
       // Reset scroll
       channelList.scrollLeft = 0;
+      updateScrollButtons();
     });
   });
 
-  // ── Ribbon Scrolling ─────────────────────────────────────
+  // ── Ribbon Scrolling Actions ─────────────────────────────
   scrollLeftBtn.addEventListener('click', () => {
     channelList.scrollBy({ left: -300, behavior: 'smooth' });
   });
@@ -672,7 +697,7 @@ document.addEventListener("DOMContentLoaded", () => {
   closeViewer.addEventListener('click', () => {
     iframe.src = '';
     iframe.classList.remove('active');
-    emptyState.style.display = 'block';
+    emptyState.style.display = 'flex'; // Changed to flex to maintain centering
     toolbarTitle.textContent = 'Select a channel to view content';
     closeViewer.style.display = 'none';
     channels.forEach(c => c.classList.remove('selected'));
