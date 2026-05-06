@@ -2085,7 +2085,7 @@ function _applyRenderMetrics(arr) {
       <div class="info" style="color:#fff;text-align: left;font-weight: 1000;">
         <a style="font-family: 'PokeTube Flex';font-size: large;text-align: left;font-stretch: extra-expanded;font-weight: 1000;" href="/watch?v=<%= x.videoId %>" class="title max-lines-2"><%= x.title %></a>
         <div style="display: flex; flex-direction: column; row-gap: 8px;font-weight:bold">
-          <a href="/watch?v=<%= x.videoId %>"><span><i class="fa-light fa-play"></i> <%= x.viewCountText.replace("views", "") %></span> <span></span> <span><%= x.publishedText %></span></a>
+          <a href="/watch?v=<%= x.videoId %>"><span><i class="fa-light fa-play"></i> <%= x.viewCountText.replace("views", "") %></span> <span style="margin-right: 6px;margin-left: 1px;"></span> <span><%= x.publishedText %></span></a>
           <div style="display: flex;margin-bottom: 0px;">
              <img src="<%- media_proxy_url %>/proxy?url=<%= x.authorThumbnails[1].url %>" style="width: fit-content;height: 23px;border-radius: 1em;">
       <a href="/channel?id=<%= x.authorId %>" style="margin:4px"><%= x.author %><% if (x?.authorVerified) { %> 
@@ -2109,10 +2109,12 @@ function _applyRenderMetrics(arr) {
 </div>
 
           <div style="display: inline-flex;flex-direction: row;min-width: 6em;gap: 4px;">
+          <!--
          <a href="/download?v=<%= x.videoId %>" class="new-button">
     <span class="icon"><i class="fa-light fa-download"></i></span>
     <span class="label">Download</span>
   </a>
+-->
 
   <a href="https://youtube.com/watch?v=<%= x.videoId %>" class="new-button">
     <span class="icon"><i class="fa-brands fa-youtube"></i></span>
