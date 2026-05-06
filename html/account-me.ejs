@@ -743,8 +743,8 @@
         <span>Secure</span>
       </button>
       
-      <button class="action-btn" id="viewJsonBtn" data-url="/api/get-channel-subs?ID=<%= encodeURIComponent(userid) %>">View JSON</button>
-      <button class="action-btn" id="downloadJsonBtn" data-url="/api/get-channel-subs?ID=<%= encodeURIComponent(userid) %>">Download .JSON</button>
+      <a class="action-btn" id="viewJsonBtn" href="/api/get-channel-subs?ID=<%= encodeURIComponent(userid) %>" target="_blank">View JSON</a>
+      <a class="action-btn" id="downloadJsonBtn" href="/api/get-channel-subs?ID=<%= encodeURIComponent(userid) %>" download="subscriptions.json">Download .JSON</a>
     </div>
   </header>
 
@@ -770,7 +770,6 @@
   </div>
 
   <div class="app-body">
-    <!-- Main View: Top Channel Ribbon + Iframe -->
     <main class="content-area">
 
       <%
@@ -870,7 +869,6 @@ document.addEventListener("DOMContentLoaded", () => {
   window.addEventListener('resize', updateScrollButtons);
   setTimeout(updateScrollButtons, 100);
 
-
   const overlay   = document.getElementById('e2eeOverlay');
   const badge     = document.getElementById('e2eeBadge');
   const closeE2ee = document.getElementById('e2eeClose');
@@ -881,7 +879,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.target === overlay) overlay.classList.remove('open');
   });
 
-  // JSON View and Download 
   const viewJsonBtn = document.getElementById('viewJsonBtn');
   const downloadJsonBtn = document.getElementById('downloadJsonBtn');
   const jsonOverlay = document.getElementById('jsonViewerOverlay');
@@ -900,10 +897,11 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   if (viewJsonBtn) {
-    viewJsonBtn.addEventListener('click', async () => {
+    viewJsonBtn.addEventListener('click', async (e) => {
+      e.preventDefault(); // Stop native navigation, use JS modal instead
       jsonOverlay.classList.add('open');
       jsonOutput.textContent = 'Loading...';
-      const url = viewJsonBtn.getAttribute('data-url');
+      const url = viewJsonBtn.getAttribute('href');
       const data = await fetchJsonData(url);
       jsonOutput.textContent = JSON.stringify(data, null, 2);
     });
@@ -922,8 +920,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   if (downloadJsonBtn) {
-    downloadJsonBtn.addEventListener('click', async () => {
-      const url = downloadJsonBtn.getAttribute('data-url');
+    downloadJsonBtn.addEventListener('click', async (e) => {
+      e.preventDefault(); // Stop native navigation, use JS blob download instead
+      const url = downloadJsonBtn.getAttribute('href');
       const data = await fetchJsonData(url);
       
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -938,7 +937,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Unsubscribe Confirmation Modal
   const confirmUnsubModal = document.getElementById('confirmUnsubModal');
   const confirmUnsubText = document.getElementById('confirmUnsubText');
   const confirmUnsubCancel = document.getElementById('confirmUnsubCancel');
@@ -984,7 +982,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Filter Logic
   function filterChannels() {
     const term = searchInput.value.toLowerCase();
     clearBtn.classList.toggle('visible', term.length > 0);
@@ -1006,8 +1003,7 @@ document.addEventListener("DOMContentLoaded", () => {
     searchInput.focus();
   });
 
-  // Sort Logic
-   sortBtns.forEach(btn => {
+    sortBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       sortBtns.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
@@ -1024,7 +1020,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // Scroll Logic
   scrollLeftBtn.addEventListener('click', () => {
     channelList.scrollBy({ left: -300, behavior: 'smooth' });
   });
@@ -1032,7 +1027,6 @@ document.addEventListener("DOMContentLoaded", () => {
     channelList.scrollBy({ left: 300, behavior: 'smooth' });
   });
 
-  // Iframe Viewer Logic
   channels.forEach(ch => {
     ch.addEventListener('click', (e) => {
       if (e.target.closest('.js-unsub-btn')) return;
