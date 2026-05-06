@@ -602,10 +602,10 @@
   <!-- Unsubscribe Confirmation Modal -->
   <div class="confirm-overlay" id="confirmUnsubModal" role="dialog" aria-modal="true">
     <div class="confirm-modal">
-      <div class="confirm-content" id="confirmUnsubText">Unsubscribe from Channel?</div>
+      <div class="confirm-content" id="confirmUnsubText">unsubscribe from Channel?</div>
       <div class="confirm-actions">
         <button class="btn-cancel" id="confirmUnsubCancel">Nah</button>
-        <button class="btn-confirm" id="confirmUnsubConfirm">Unsub</button>
+        <button class="btn-confirm" id="confirmUnsubConfirm">Unsubscribe</button>
       </div>
     </div>
   </div>
@@ -614,7 +614,7 @@
   <header class="top-navbar">
     <div class="brand-section">
       <a href="/" class="brand-logo" title="Home">
-        <img src="/css/logo.svg" alt="Logo">
+        <img src="/css/logo-poke.svg" alt="Logo">
       </a>
     </div>
 
@@ -634,8 +634,7 @@
     </div>
   </header>
 
-  <!-- Utilities Bar (Filter, Sort) -->
-  <div class="utilities-bar">
+   <div class="utilities-bar">
     
     <div class="filter-section">
       <div class="filter-bar">
@@ -670,15 +669,13 @@
         subs.sort((a,b) => a.name.localeCompare(b.name, 'en', {sensitivity:'base'}));
       %>
 
-      <!-- Top Horizontal Subscriptions Bar -->
-      <div class="channel-ribbon-wrapper">
+       <div class="channel-ribbon-wrapper">
         <button class="ribbon-scroll-btn left" id="scrollLeft">‹</button>
         <div class="channel-ribbon" id="channelList">
           <% subs.forEach(c => { %>
             <div class="channel-card" data-id="<%= c.id %>" data-name="<%= c.name.toLowerCase() %>">
               <div class="channel-avatar-wrapper">
-                <!-- Fallback NO-JS Navigation Anchor -->
-                <a href="/channel?id=<%= encodeURIComponent(c.id) %>" class="channel-avatar-link">
+                 <a href="/channel?id=<%= encodeURIComponent(c.id) %>" class="channel-avatar-link">
                   <img src="<%= c.avatar %>" alt="" loading="lazy">
                 </a>
                 <!-- Unsubscribe Button Anchor -->
@@ -714,7 +711,7 @@
           <svg viewBox="0 0 24 24" width="64" height="64">
             <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8 12.5v-9l6 4.5-6 4.5z"/>
           </svg>
-          <p>Your subscription feed will appear here.</p>
+          <p>Your subscription feed will appear here!! How cool is that :o</p>
         </div>
         <iframe id="mainFrame" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>
       </div>
@@ -737,7 +734,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const scrollLeftBtn  = document.getElementById('scrollLeft');
   const scrollRightBtn = document.getElementById('scrollRight');
 
-  // ── Smart Scroll Buttons Visibility ──────────────────────────
   function updateScrollButtons() {
     if (!channelList) return;
     if (channelList.scrollWidth > channelList.clientWidth) {
@@ -753,7 +749,6 @@ document.addEventListener("DOMContentLoaded", () => {
   window.addEventListener('resize', updateScrollButtons);
   setTimeout(updateScrollButtons, 100);
 
-  // ── E2EE Modal ──────────────────────────────────────────
   const overlay   = document.getElementById('e2eeOverlay');
   const badge     = document.getElementById('e2eeBadge');
   const closeE2ee = document.getElementById('e2eeClose');
@@ -764,7 +759,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.target === overlay) overlay.classList.remove('open');
   });
 
-  // ── Unsubscribe Confirmation Modal ───────────────────────
   const confirmUnsubModal = document.getElementById('confirmUnsubModal');
   const confirmUnsubText = document.getElementById('confirmUnsubText');
   const confirmUnsubCancel = document.getElementById('confirmUnsubCancel');
@@ -803,7 +797,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Global keydown (Escape handles both modals)
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       overlay.classList.remove('open');
@@ -811,7 +804,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // ── Search & Filter ──────────────────────────────────────
   function filterChannels() {
     const term = searchInput.value.toLowerCase();
     clearBtn.classList.toggle('visible', term.length > 0);
@@ -833,8 +825,7 @@ document.addEventListener("DOMContentLoaded", () => {
     searchInput.focus();
   });
 
-  // ── Sort Horizontal Ribbon ───────────────────────────────
-  sortBtns.forEach(btn => {
+   sortBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       sortBtns.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
@@ -851,7 +842,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // ── Ribbon Scrolling Actions ─────────────────────────────
   scrollLeftBtn.addEventListener('click', () => {
     channelList.scrollBy({ left: -300, behavior: 'smooth' });
   });
@@ -859,13 +849,10 @@ document.addEventListener("DOMContentLoaded", () => {
     channelList.scrollBy({ left: 300, behavior: 'smooth' });
   });
 
-  // ── Channel Selection & Iframe ───────────────────────────
   channels.forEach(ch => {
     ch.addEventListener('click', (e) => {
-      // If clicking the unsub button, ignore here (handled by the unsub click listener)
       if (e.target.closest('.js-unsub-btn')) return;
       
-      // Stop the native <a> navigation since JS is running
       e.preventDefault();
 
       channels.forEach(c => c.classList.remove('selected'));
@@ -885,7 +872,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // ── Close Viewer ─────────────────────────────────────────
   closeViewer.addEventListener('click', () => {
     iframe.src = '';
     iframe.classList.remove('active');
