@@ -8,16 +8,18 @@
   <meta name="librejs-license" content="GPL-3.0-or-later">
   <style>
     :root {
-      --bg-body: #121212;
-      --bg-sidebar: #181818;
-      --bg-element: #252525;
-      --bg-hover: #333333;
-      --border: #333333;
-      --text-main: #e0e0e0;
-      --text-muted: #a0a0a0;
-      --accent: #3ea6ff; 
-      --danger: #ff4e45;
-      --e2ee: #4caf7d;
+      --bg-base: #0f0f0f;
+      --bg-surface: #212121;
+      --bg-surface-hover: #3d3d3d;
+      --border-color: #303030;
+      --text-primary: #f1f1f1;
+      --text-secondary: #aaaaaa;
+      --accent-color: #3ea6ff;
+      --accent-bg: #263850;
+      --danger-color: #ff4e45;
+      --e2ee-color: #4caf7d;
+      --scrollbar-bg: transparent;
+      --scrollbar-thumb: #717171;
     }
 
     * { box-sizing: border-box; }
@@ -26,309 +28,307 @@
       margin: 0;
       padding: 0;
       height: 100vh;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background-color: var(--bg-body);
-      color: var(--text-main);
+      font-family: "Roboto", Arial, sans-serif;
+      background-color: var(--bg-base);
+      color: var(--text-primary);
       display: flex;
+      flex-direction: column;
       overflow: hidden;
     }
 
     a { text-decoration: none; color: inherit; }
     button, input { font-family: inherit; }
 
-    aside {
-      width: 320px;
-      background-color: var(--bg-sidebar);
-      border-right: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      flex-shrink: 0;
-    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 8px; height: 8px; background: var(--scrollbar-bg); }
+    ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #909090; }
 
-    header {
-      padding: 16px;
-      border-bottom: 1px solid var(--border);
+    /* ── Top Header Bar ── */
+    .top-navbar {
+      height: 56px;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      padding: 0 16px;
+      background-color: var(--bg-base);
+      flex-shrink: 0;
     }
 
-    h1 {
-      margin: 0;
-      font-size: 1.2rem;
-      font-weight: 700;
-      color: var(--text-main);
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      min-width: 200px;
+    }
+
+    .menu-icon {
+      background: none;
+      border: none;
+      color: var(--text-primary);
+      font-size: 20px;
+      cursor: pointer;
+      padding: 8px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .menu-icon:hover { background-color: var(--bg-surface); }
+
+    .brand-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      letter-spacing: -0.5px;
       display: flex;
       align-items: center;
       gap: 8px;
     }
+    
+    .brand-title img {
+      width: 24px;
+      height: 24px;
+      object-fit: contain;
+    }
 
-    /* ── E2EE Badge ── */
-    .e2ee-badge {
+    .search-section {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      max-width: 720px;
+      margin: 0 40px;
+    }
+
+    .search-bar {
       display: flex;
       align-items: center;
-      gap: 5px;
-      background: rgba(76, 175, 125, 0.12);
-      border: 1px solid rgba(76, 175, 125, 0.35);
-      border-radius: 20px;
-      padding: 4px 10px 4px 7px;
-      cursor: pointer;
-      transition: background 0.2s, border-color 0.2s;
-      user-select: none;
-      flex-shrink: 0;
-    }
-    .e2ee-badge:hover {
-      background: rgba(76, 175, 125, 0.22);
-      border-color: var(--e2ee);
-    }
-    .e2ee-badge svg {
-      width: 13px;
-      height: 13px;
-      fill: var(--e2ee);
-      flex-shrink: 0;
-    }
-    .e2ee-badge span {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--e2ee);
-      letter-spacing: 0.03em;
-    }
-
-    /* ── E2EE Modal Overlay ── */
-    .e2ee-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.65);
-      z-index: 1000;
-      align-items: center;
-      justify-content: center;
-      animation: fadeIn 0.15s ease;
-    }
-    .e2ee-overlay.open { display: flex; }
-
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to   { opacity: 1; }
-    }
-
-    .e2ee-modal {
-      background: var(--bg-sidebar);
-      border: 1px solid var(--border);
-      border-top: 3px solid var(--e2ee);
-      border-radius: 10px;
-      padding: 28px 28px 22px;
-      max-width: 360px;
-      width: 90%;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.7);
-      animation: popIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+      width: 100%;
+      height: 40px;
+      background-color: #121212;
+      border: 1px solid var(--border-color);
+      border-radius: 40px;
+      overflow: hidden;
       position: relative;
     }
 
-    @keyframes popIn {
-      from { transform: scale(0.88); opacity: 0; }
-      to   { transform: scale(1);    opacity: 1; }
+    .search-bar input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-size: 16px;
+      padding: 0 16px 0 24px;
+      outline: none;
     }
 
-    .e2ee-modal-icon {
-      width: 48px;
-      height: 48px;
-      background: rgba(76, 175, 125, 0.15);
+    .clear-search-btn {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 0 10px;
+      display: none;
+      font-size: 14px;
+    }
+    .clear-search-btn.visible { display: block; }
+
+    .search-btn {
+      width: 64px;
+      height: 100%;
+      background-color: var(--bg-surface);
+      border: none;
+      border-left: 1px solid var(--border-color);
+      color: var(--text-primary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+    .search-btn:hover { background-color: var(--bg-surface-hover); }
+
+    .actions-section {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      min-width: 200px;
+      justify-content: flex-end;
+    }
+
+    .action-btn {
+      background: none;
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 6px 12px;
+      border-radius: 18px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .action-btn:hover { background: var(--bg-surface); }
+
+    /* ── Main Layout ── */
+    .app-body {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── E2EE Badge (Top Bar) ── */
+    .e2ee-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(76, 175, 125, 0.1);
+      border: 1px solid rgba(76, 175, 125, 0.2);
+      border-radius: 18px;
+      padding: 6px 12px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .e2ee-badge:hover { background: rgba(76, 175, 125, 0.2); }
+    .e2ee-badge svg { width: 14px; height: 14px; fill: var(--e2ee-color); }
+    .e2ee-badge span { font-size: 13px; font-weight: 500; color: var(--e2ee-color); }
+
+    /* ── Content Area ── */
+    .content-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background-color: var(--bg-base);
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* ── Horizontal Channel Carousel ── */
+    .channel-ribbon-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+      padding: 12px 0;
+      background-color: var(--bg-base);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .ribbon-scroll-btn {
+      background: var(--bg-base);
+      border: none;
+      color: var(--text-primary);
+      font-size: 24px;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: absolute;
+      z-index: 10;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    }
+    .ribbon-scroll-btn:hover { background: var(--bg-surface); }
+    .ribbon-scroll-btn.left { left: 8px; }
+    .ribbon-scroll-btn.right { right: 8px; }
+
+    .channel-ribbon {
+      display: flex;
+      gap: 16px;
+      overflow-x: auto;
+      scroll-behavior: smooth;
+      padding: 0 50px; /* Space for scroll buttons */
+      width: 100%;
+    }
+    .channel-ribbon::-webkit-scrollbar { display: none; }
+
+    .channel-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 72px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .channel-avatar-wrapper {
+      position: relative;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      margin-bottom: 6px;
+      transition: transform 0.1s;
+    }
+    
+    .channel-card:hover .channel-avatar-wrapper { transform: scale(1.05); }
+    
+    .channel-card.selected .channel-avatar-wrapper {
+      box-shadow: 0 0 0 2px var(--text-primary);
+    }
+
+    .channel-avatar-wrapper img {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      object-fit: cover;
+      background-color: var(--bg-surface);
+    }
+
+    .unsub-overlay {
+      position: absolute;
+      inset: 0;
+      background-color: rgba(0, 0, 0, 0.7);
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      margin-bottom: 16px;
+      color: var(--danger-color);
+      font-size: 11px;
+      font-weight: bold;
+      opacity: 0;
+      transition: opacity 0.2s;
     }
-    .e2ee-modal-icon svg {
-      width: 24px;
-      height: 24px;
-      fill: var(--e2ee);
-    }
+    .channel-avatar-wrapper:hover .unsub-overlay { opacity: 1; }
 
-    .e2ee-modal h2 {
-      margin: 0 0 10px;
-      font-size: 1rem;
-      font-weight: 700;
-      color: var(--text-main);
-    }
-
-    .e2ee-modal p {
-      margin: 0 0 8px;
-      font-size: 13px;
-      color: var(--text-muted);
-      line-height: 1.6;
-    }
-
-    .e2ee-detail-list {
-      margin: 14px 0 0;
-      padding: 0;
-      list-style: none;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .e2ee-detail-list li {
+    .channel-title {
       font-size: 12px;
-      color: var(--text-muted);
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-      line-height: 1.5;
-    }
-    .e2ee-detail-list li::before {
-      content: "✦";
-      color: var(--e2ee);
-      flex-shrink: 0;
-      margin-top: 1px;
-      font-size: 10px;
-    }
-
-    .e2ee-modal-close {
-      margin-top: 20px;
+      color: var(--text-secondary);
+      text-align: center;
       width: 100%;
-      padding: 9px;
-      background: rgba(76, 175, 125, 0.15);
-      border: 1px solid rgba(76, 175, 125, 0.3);
-      border-radius: 6px;
-      color: var(--e2ee);
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-    .e2ee-modal-close:hover { background: rgba(76, 175, 125, 0.25); }
-
-    /* Controls (Search & Sort) */
-    .controls {
-      padding: 10px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .search-wrapper {
-      display: flex;
-      gap: 5px;
-    }
-
-    input[type="text"] {
-      flex: 1;
-      background: var(--bg-body);
-      border: 1px solid var(--border);
-      padding: 8px 10px;
-      border-radius: 4px;
-      color: var(--text-main);
-      font-size: 14px;
-    }
-    input[type="text"]:focus {
-      outline: 2px solid var(--accent);
-      border-color: transparent;
-    }
-
-    .btn {
-      padding: 6px 12px;
-      background: var(--bg-element);
-      border: 1px solid var(--border);
-      color: var(--text-main);
-      cursor: pointer;
-      border-radius: 4px;
-      font-size: 13px;
-    }
-    .btn:hover { background: var(--bg-hover); }
-    .btn.active { background: var(--accent); color: #000; font-weight: bold; border-color: var(--accent); }
-
-    .sort-buttons { display: flex; gap: 5px; }
-    .sort-buttons button { flex: 1; }
-
-    /* Channel List */
-    .channel-list { flex: 1; overflow-y: auto; }
-
-    .channel {
-      display: flex;
-      align-items: center;
-      padding: 10px 16px;
-      border-bottom: 1px solid var(--border);
-      cursor: pointer;
-      transition: background 0.15s;
-    }
-
-    .channel:hover { background-color: var(--bg-hover); }
-    .channel.selected {
-      background-color: var(--bg-element);
-      border-left: 4px solid var(--accent);
-      padding-left: 12px;
-    }
-
-    .channel img {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      margin-right: 12px;
-      background: var(--bg-element);
-    }
-
-    .channel-info { flex: 1; overflow: hidden; }
-
-    .channel-name {
-      font-size: 14px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
-
-    .unsub-btn {
-      font-size: 11px;
-      color: var(--danger);
-      border: 1px solid var(--border);
-      padding: 4px 8px;
-      border-radius: 4px;
-      margin-left: 10px;
-      opacity: 0.6;
-      transition: 0.2s;
-    }
-    .unsub-btn:hover {
-      opacity: 1;
-      background: rgba(255, 78, 69, 0.1);
-      border-color: var(--danger);
+    .channel-card.selected .channel-title {
+      color: var(--text-primary);
+      font-weight: 500;
     }
 
-    .sidebar-footer {
-      padding: 12px;
-      border-top: 1px solid var(--border);
-      font-size: 12px;
-      color: var(--text-muted);
-      display: flex;
-      justify-content: space-between;
-      background: var(--bg-body);
-    }
-
-    /* Main Content */
-    main {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      background-color: var(--bg-body);
-      position: relative;
-    }
-
-    .toolbar {
-      height: 50px;
-      border-bottom: 1px solid var(--border);
+    /* ── Iframe Feed Viewer ── */
+    .feed-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 20px;
-      background: var(--bg-sidebar);
+      padding: 12px 24px;
+      background: var(--bg-base);
     }
+    
+    .feed-title { font-size: 1.1rem; font-weight: 600; margin: 0; }
+    
+    .close-feed-btn {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 14px;
+      cursor: pointer;
+      display: none;
+      font-weight: 500;
+    }
+    .close-feed-btn:hover { color: var(--text-primary); }
 
-    .current-channel { font-weight: 600; font-size: 14px; }
-
-    .viewer-container {
+    .feed-viewport {
       flex: 1;
       position: relative;
-      background: #000;
+      background-color: #000;
     }
 
     iframe {
@@ -343,163 +343,193 @@
       position: absolute;
       top: 50%; left: 50%;
       transform: translate(-50%, -50%);
-      color: var(--text-muted);
+      color: var(--text-secondary);
       text-align: center;
+      font-size: 15px;
     }
 
-    .close-btn {
+    /* ── E2EE Modal ── */
+    .e2ee-overlay {
       display: none;
-      background: none; border: none; font-size: 20px; color: var(--text-muted); cursor: pointer;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      z-index: 2000;
+      align-items: center;
+      justify-content: center;
+      animation: fadeIn 0.15s ease;
     }
-    .close-btn:hover { color: var(--text-main); }
+    .e2ee-overlay.open { display: flex; }
 
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    .e2ee-modal {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 32px;
+      max-width: 400px;
+      width: 90%;
+      box-shadow: 0 24px 38px 3px rgba(0,0,0,0.14), 0 9px 46px 8px rgba(0,0,0,0.12), 0 11px 15px -7px rgba(0,0,0,0.2);
+      animation: popIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    @keyframes popIn {
+      from { transform: scale(0.9); opacity: 0; }
+      to   { transform: scale(1); opacity: 1; }
+    }
+
+    .e2ee-modal h2 { margin: 0 0 16px; font-size: 1.25rem; font-weight: 600; }
+    .e2ee-modal p { margin: 0 0 16px; font-size: 14px; color: var(--text-secondary); line-height: 1.5; }
+    
+    .e2ee-list { margin: 0 0 24px; padding-left: 20px; color: var(--text-secondary); font-size: 14px; line-height: 1.6; }
+    .e2ee-list li { margin-bottom: 8px; }
+    
+    .modal-close-btn {
+      width: 100%;
+      padding: 10px;
+      background: var(--e2ee-color);
+      border: none;
+      border-radius: 18px;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .modal-close-btn:hover { filter: brightness(1.1); }
+
+    /* ── Responsive ── */
     @media(max-width: 768px) {
-      body { flex-direction: column; }
-      aside { width: 100%; height: 40vh; }
-      main { height: 60vh; }
+      .search-section { margin: 0 10px; }
+      .brand-section { min-width: auto; }
+      .actions-section { min-width: auto; }
+      .action-btn { display: none; } /* Hide JSON button on mobile */
     }
 
     noscript {
       position: fixed;
-      bottom: 24px;
-      right: 24px;
-      z-index: 9999;
-      width: 300px;
-      background-color: var(--bg-element);
-      border: 1px solid var(--border);
-      border-left: 4px solid var(--danger);
-      border-radius: 8px;
-      padding: 16px;
-      box-shadow: 0 8px 30px rgba(0,0,0,0.6);
-      color: var(--text-main);
-      font-size: 13px;
-      line-height: 1.5;
-      animation: slideIn 0.5s ease-out;
-    }
-    noscript strong {
-      display: block;
-      color: var(--danger);
-      margin-bottom: 4px;
-      font-size: 14px;
-    }
-
-    @keyframes slideIn {
-      from { transform: translateY(20px); opacity: 0; }
-      to { transform: translateY(0); opacity: 1; }
+      bottom: 24px; right: 24px; z-index: 9999;
+      width: 320px; background-color: var(--bg-surface);
+      border: 1px solid var(--danger-color); border-radius: 8px; padding: 16px;
+      color: var(--text-primary); font-size: 14px; line-height: 1.5;
     }
   </style>
 </head>
 <body>
 
   <noscript>
-    <strong>JavaScript Disabled</strong>
-    Search and sorting features are unavailable. You can still click channel names to open them.
+    <strong style="color:var(--danger-color); display:block; margin-bottom:8px;">JavaScript Disabled</strong>
+    Search and horizontal scrolling are unavailable. Channels can still be opened via standard links.
   </noscript>
 
   <!-- E2EE Modal -->
-  <div class="e2ee-overlay" id="e2eeOverlay" role="dialog" aria-modal="true" aria-label="End-to-end encryption info">
+  <div class="e2ee-overlay" id="e2eeOverlay" role="dialog" aria-modal="true">
     <div class="e2ee-modal">
-      <div class="e2ee-modal-icon">
-        <!-- Lock icon -->
-        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path d="M18 8h-1V6A5 5 0 0 0 7 6v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zm-6 9a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm3.1-9H8.9V6a3.1 3.1 0 0 1 6.2 0v2z"/>
-        </svg>
-      </div>
       <h2>End-to-End Encrypted</h2>
-      <p>Your subscriptions are protected with end-to-end encryption. Nobody not even the server.. can read them in plaintext.</p>
-      <ul class="e2ee-detail-list">
+      <p>Your subscriptions are protected with end-to-end encryption. Nobody, not even the server, can read them in plaintext.</p>
+      <ul class="e2ee-list">
         <li>Encrypted with AES-256-GCM before being stored</li>
         <li>Keys are derived from your user ID using SHA-384</li>
         <li>Only you can decrypt your subscription list</li>
       </ul>
-      <button class="e2ee-modal-close" id="e2eeClose">Got it</button>
+      <button class="modal-close-btn" id="e2eeClose">Acknowledge</button>
     </div>
   </div>
 
-  <aside>
-    <header>
-      <h1>My Poke</h1>
-      <button class="e2ee-badge" id="e2eeBadge" title="Subscriptions are end-to-end encrypted" aria-haspopup="dialog">
-        <!-- Inline lock SVG -->
-        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+   <header class="top-navbar">
+    <div class="brand-section">
+      <button class="menu-icon" title="Menu">☰</button>
+      <div class="brand-title">
+        <img src="/css/poke.svg" alt="Poke Logo">
+        My Poke
+      </div>
+    </div>
+
+    <div class="search-section">
+      <div class="search-bar">
+        <input type="text" id="searchInput" placeholder="Search channels..." autocomplete="off">
+        <button id="clearSearch" class="clear-search-btn" title="Clear search">✖</button>
+        <button class="search-btn" title="Search">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+             <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="actions-section">
+      <button class="e2ee-badge" id="e2eeBadge" title="End-to-end encrypted">
+        <svg viewBox="0 0 24 24">
           <path d="M18 8h-1V6A5 5 0 0 0 7 6v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zm-6 9a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm3.1-9H8.9V6a3.1 3.1 0 0 1 6.2 0v2z"/>
         </svg>
-        <span>E2EE</span>
+        <span>Secure</span>
       </button>
-    </header>
-
-    <div class="controls">
-      <div class="search-wrapper">
-        <input type="text" id="searchInput" placeholder="Search ur channels..." autocomplete="off">
-        <button class="btn" id="clearSearch" title="Clear">X</button>
-      </div>
-      <div class="sort-buttons">
-        <button class="btn active" data-sort="asc">A-Z</button>
-        <button class="btn" data-sort="desc">Z-A</button>
-      </div>
+      <a href="/api/get-channel-subs?ID=<%= encodeURIComponent(userid) %>" target="_blank" class="action-btn">Export JSON</a>
     </div>
+  </header>
 
-    <%
-      const subKeys = (userSubs && Object.keys(userSubs)) || [];
-      const subs = subKeys.map(id => ({
-        id,
-        name: userSubs[id]?.channelName || "Unknown Channel",
-        avatar: userSubs[id]?.avatar || ""
-      }));
-      subs.sort((a,b) => a.name.localeCompare(b.name, 'en', {sensitivity:'base'}));
-    %>
+  <div class="app-body">
+    <!-- Main View: Top Channel Ribbon + Iframe -->
+    <main class="content-area">
 
-    <div class="channel-list" id="channelList">
-      <% subs.forEach(c => { %>
-        <div class="channel" data-id="<%= c.id %>" data-name="<%= c.name.toLowerCase() %>">
-          <img src="<%= c.avatar %>" alt="" loading="lazy">
-          <div class="channel-info">
-            <div class="channel-name"><%= c.name %></div>
-          </div>
-          <a class="unsub-btn"
-             href="/api/remove-channel-sub?ID=<%= encodeURIComponent(userid) %>&channelID=<%= c.id %>"
-             onclick="event.stopPropagation();"
-             title="Unsubscribe">
-            Unsub
-          </a>
+      <%
+        const subKeys = (userSubs && Object.keys(userSubs)) || [];
+        const subs = subKeys.map(id => ({
+          id,
+          name: userSubs[id]?.channelName || "Unknown Channel",
+          avatar: userSubs[id]?.avatar || ""
+        }));
+        subs.sort((a,b) => a.name.localeCompare(b.name, 'en', {sensitivity:'base'}));
+      %>
+
+      <!-- Top Horizontal Subscriptions Bar -->
+      <div class="channel-ribbon-wrapper">
+        <button class="ribbon-scroll-btn left" id="scrollLeft">‹</button>
+        <div class="channel-ribbon" id="channelList">
+          <% subs.forEach(c => { %>
+            <div class="channel-card" data-id="<%= c.id %>" data-name="<%= c.name.toLowerCase() %>">
+              <div class="channel-avatar-wrapper">
+                <img src="<%= c.avatar %>" alt="" loading="lazy">
+                <a class="unsub-overlay" href="/api/remove-channel-sub?ID=<%= encodeURIComponent(userid) %>&channelID=<%= c.id %>" onclick="event.stopPropagation();" title="Unsubscribe">Unsub</a>
+              </div>
+              <div class="channel-title" title="<%= c.name %>"><%= c.name %></div>
+            </div>
+          <% }) %>
         </div>
-      <% }) %>
-    </div>
-
-    <div class="sidebar-footer">
-      <span>User: <%= userid %></span>
-      <a href="/privacy" style="text-decoration: underline;">Privacy</a>
-    </div>
-  </aside>
-
-  <main>
-    <div class="toolbar">
-      <span class="current-channel" id="toolbarTitle">Select a channel</span>
-      <div>
-        <button class="btn close-btn" id="closeViewer" title="Close View">✖</button>
-        <a href="/api/get-channel-subs?ID=<%= encodeURIComponent(userid) %>" target="_blank" class="btn">JSON</a>
+        <button class="ribbon-scroll-btn right" id="scrollRight">›</button>
       </div>
-    </div>
 
-    <div class="viewer-container">
-      <div class="empty-state" id="emptyState">
-        <p>Select a channel from the list to view feed.</p>
+      <!-- Feed Container -->
+      <div class="feed-header">
+        <h2 class="feed-title" id="toolbarTitle">Select a channel to view content</h2>
+        <button class="close-feed-btn" id="closeViewer">✖ Close Feed</button>
       </div>
-      <iframe id="mainFrame" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>
-    </div>
-  </main>
+      
+      <div class="feed-viewport">
+        <div class="empty-state" id="emptyState">
+          <svg viewBox="0 0 24 24" width="64" height="64" fill="var(--border-color)" style="margin-bottom:16px;">
+            <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8 12.5v-9l6 4.5-6 4.5z"/>
+          </svg>
+          <p>Your subscription feed will appear here.</p>
+        </div>
+        <iframe id="mainFrame" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>
+      </div>
+    </main>
+  </div>
 
 <script>
 document.addEventListener("DOMContentLoaded", () => {
   const searchInput  = document.getElementById('searchInput');
   const clearBtn     = document.getElementById('clearSearch');
-  const sortBtns     = document.querySelectorAll('.sort-buttons .btn');
   const channelList  = document.getElementById('channelList');
-  const channels     = document.querySelectorAll('.channel');
+  const channels     = document.querySelectorAll('.channel-card');
   const iframe       = document.getElementById('mainFrame');
   const emptyState   = document.getElementById('emptyState');
   const toolbarTitle = document.getElementById('toolbarTitle');
   const closeViewer  = document.getElementById('closeViewer');
+  
+  const scrollLeftBtn  = document.getElementById('scrollLeft');
+  const scrollRightBtn = document.getElementById('scrollRight');
 
   // ── E2EE Modal ──────────────────────────────────────────
   const overlay   = document.getElementById('e2eeOverlay');
@@ -515,11 +545,17 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.key === 'Escape') overlay.classList.remove('open');
   });
 
-  // ── Search ───────────────────────────────────────────────
+  // ── Search & Filter ──────────────────────────────────────
   function filterChannels() {
     const term = searchInput.value.toLowerCase();
+    clearBtn.classList.toggle('visible', term.length > 0);
+    
     channels.forEach(ch => {
-      ch.style.display = ch.dataset.name.includes(term) ? 'flex' : 'none';
+      if (ch.dataset.name.includes(term)) {
+        ch.style.display = 'flex';
+      } else {
+        ch.style.display = 'none';
+      }
     });
   }
 
@@ -530,19 +566,12 @@ document.addEventListener("DOMContentLoaded", () => {
     searchInput.focus();
   });
 
-  // ── Sort ─────────────────────────────────────────────────
-  sortBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      sortBtns.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-
-      const dir = btn.dataset.sort;
-      Array.from(channels)
-        .sort((a, b) => dir === 'asc'
-          ? a.dataset.name.localeCompare(b.dataset.name)
-          : b.dataset.name.localeCompare(a.dataset.name))
-        .forEach(node => channelList.appendChild(node));
-    });
+  // ── Ribbon Scrolling ─────────────────────────────────────
+  scrollLeftBtn.addEventListener('click', () => {
+    channelList.scrollBy({ left: -300, behavior: 'smooth' });
+  });
+  scrollRightBtn.addEventListener('click', () => {
+    channelList.scrollBy({ left: 300, behavior: 'smooth' });
   });
 
   // ── Channel Selection & Iframe ───────────────────────────
@@ -552,7 +581,7 @@ document.addEventListener("DOMContentLoaded", () => {
       ch.classList.add('selected');
 
       const id = ch.dataset.id;
-      const realName = ch.querySelector('.channel-name').textContent;
+      const realName = ch.querySelector('.channel-title').textContent;
 
       toolbarTitle.textContent = realName;
       closeViewer.style.display = 'inline-block';
@@ -567,7 +596,7 @@ document.addEventListener("DOMContentLoaded", () => {
     iframe.src = '';
     iframe.classList.remove('active');
     emptyState.style.display = 'block';
-    toolbarTitle.textContent = 'Select a channel';
+    toolbarTitle.textContent = 'Select a channel to view content';
     closeViewer.style.display = 'none';
     channels.forEach(c => c.classList.remove('selected'));
   });
