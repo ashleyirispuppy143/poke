@@ -591,6 +591,76 @@
     }
     .modal-close-btn:hover { filter: brightness(1.1); }
 
+    /* ── JSON Viewer Modal ── */
+    .json-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 4000;
+      align-items: center;
+      justify-content: center;
+      animation: fadeIn 0.15s ease;
+    }
+    .json-overlay.open { display: flex; }
+
+    .json-modal {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      max-width: 800px;
+      width: 90%;
+      max-height: 80vh;
+      box-shadow: 0 24px 38px 3px rgba(0,0,0,0.2);
+      animation: popIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .json-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border-color);
+      flex-shrink: 0;
+    }
+
+    .json-header h3 { 
+      margin: 0; 
+      font-size: 1.1rem; 
+      color: var(--text-primary);
+    }
+
+    .close-json-btn { 
+      background: none; 
+      border: none; 
+      color: var(--text-secondary); 
+      font-size: 1.2rem; 
+      cursor: pointer; 
+      padding: 4px;
+    }
+    .close-json-btn:hover { color: var(--text-primary); }
+
+    .json-content {
+      padding: 16px 24px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .json-content pre {
+      margin: 0;
+      background: var(--bg-base);
+      padding: 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      color: var(--accent-color);
+      font-family: "Consolas", "Monaco", monospace;
+      font-size: 13px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
     /* ── Responsive ── */
     @media(max-width: 768px) {
       .utilities-bar { justify-content: center; }
@@ -639,6 +709,19 @@
     </div>
   </div>
 
+  <!-- JSON Viewer Modal -->
+  <div class="json-overlay" id="jsonViewerOverlay" role="dialog" aria-modal="true">
+    <div class="json-modal">
+      <div class="json-header">
+        <h3>Raw JSON Data</h3>
+        <button class="close-json-btn" id="closeJsonViewer" title="Close">✖</button>
+      </div>
+      <div class="json-content">
+        <pre id="jsonOutput">Loading data...</pre>
+      </div>
+    </div>
+  </div>
+
   <!-- Top Header Navigation -->
   <header class="top-navbar">
     <div class="brand-section">
@@ -659,7 +742,9 @@
         </svg>
         <span>Secure</span>
       </button>
-      <a href="/api/get-channel-subs?ID=<%= encodeURIComponent(userid) %>" target="_blank" class="action-btn">Export Data</a>
+      
+      <button class="action-btn" id="viewJsonBtn" data-url="/api/get-channel-subs?ID=<%= encodeURIComponent(userid) %>">View JSON</button>
+      <button class="action-btn" id="downloadJsonBtn" data-url="/api/get-channel-subs?ID=<%= encodeURIComponent(userid) %>">Download .JSON</button>
     </div>
   </header>
 
@@ -785,6 +870,7 @@ document.addEventListener("DOMContentLoaded", () => {
   window.addEventListener('resize', updateScrollButtons);
   setTimeout(updateScrollButtons, 100);
 
+
   const overlay   = document.getElementById('e2eeOverlay');
   const badge     = document.getElementById('e2eeBadge');
   const closeE2ee = document.getElementById('e2eeClose');
@@ -795,6 +881,64 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.target === overlay) overlay.classList.remove('open');
   });
 
+  // JSON View and Download 
+  const viewJsonBtn = document.getElementById('viewJsonBtn');
+  const downloadJsonBtn = document.getElementById('downloadJsonBtn');
+  const jsonOverlay = document.getElementById('jsonViewerOverlay');
+  const closeJsonViewer = document.getElementById('closeJsonViewer');
+  const jsonOutput = document.getElementById('jsonOutput');
+
+  async function fetchJsonData(url) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Network response was not ok');
+      return await res.json();
+    } catch (err) {
+      console.error('Error fetching JSON:', err);
+      return { error: 'Failed to fetch data.' };
+    }
+  }
+
+  if (viewJsonBtn) {
+    viewJsonBtn.addEventListener('click', async () => {
+      jsonOverlay.classList.add('open');
+      jsonOutput.textContent = 'Loading...';
+      const url = viewJsonBtn.getAttribute('data-url');
+      const data = await fetchJsonData(url);
+      jsonOutput.textContent = JSON.stringify(data, null, 2);
+    });
+  }
+
+  if (closeJsonViewer) {
+    closeJsonViewer.addEventListener('click', () => {
+      jsonOverlay.classList.remove('open');
+    });
+  }
+
+  if (jsonOverlay) {
+    jsonOverlay.addEventListener('click', (e) => {
+      if (e.target === jsonOverlay) jsonOverlay.classList.remove('open');
+    });
+  }
+
+  if (downloadJsonBtn) {
+    downloadJsonBtn.addEventListener('click', async () => {
+      const url = downloadJsonBtn.getAttribute('data-url');
+      const data = await fetchJsonData(url);
+      
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = 'subscriptions.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    });
+  }
+
+  // Unsubscribe Confirmation Modal
   const confirmUnsubModal = document.getElementById('confirmUnsubModal');
   const confirmUnsubText = document.getElementById('confirmUnsubText');
   const confirmUnsubCancel = document.getElementById('confirmUnsubCancel');
@@ -804,7 +948,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const unsubBtns = document.querySelectorAll('.js-unsub-btn');
   unsubBtns.forEach(btn => {
     btn.addEventListener('click', (e) => {
-      // Prevent browser from following the <a href="..."> natively when JS is active
       e.preventDefault();
       e.stopPropagation(); 
       
@@ -837,9 +980,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.key === 'Escape') {
       overlay.classList.remove('open');
       confirmUnsubModal.classList.remove('open');
+      if (jsonOverlay) jsonOverlay.classList.remove('open');
     }
   });
 
+  // Filter Logic
   function filterChannels() {
     const term = searchInput.value.toLowerCase();
     clearBtn.classList.toggle('visible', term.length > 0);
@@ -861,6 +1006,7 @@ document.addEventListener("DOMContentLoaded", () => {
     searchInput.focus();
   });
 
+  // Sort Logic
    sortBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       sortBtns.forEach(b => b.classList.remove('active'));
@@ -878,6 +1024,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  // Scroll Logic
   scrollLeftBtn.addEventListener('click', () => {
     channelList.scrollBy({ left: -300, behavior: 'smooth' });
   });
@@ -885,6 +1032,7 @@ document.addEventListener("DOMContentLoaded", () => {
     channelList.scrollBy({ left: 300, behavior: 'smooth' });
   });
 
+  // Iframe Viewer Logic
   channels.forEach(ch => {
     ch.addEventListener('click', (e) => {
       if (e.target.closest('.js-unsub-btn')) return;
@@ -902,10 +1050,9 @@ document.addEventListener("DOMContentLoaded", () => {
       openChannelBtn.style.display = 'inline-flex';
       closeViewer.style.display = 'inline-block';
       
-      // Handle visibility for loading state
       emptyState.style.display = 'none';
-      iframe.classList.remove('active'); // hide iframe while loading
-      loadingState.style.display = 'flex'; // show loading throbber
+      iframe.classList.remove('active'); 
+      loadingState.style.display = 'flex'; 
       
       iframe.src = `/channel?id=${encodeURIComponent(id)}&embedchannelsubsfeed=true`;
     });
@@ -923,7 +1070,6 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   iframe.addEventListener("load", () => {
-    // Only show the iframe if we are actually loading a channel (not clearing it)
     if (iframe.src && iframe.src !== window.location.href && iframe.src !== 'about:blank') {
       loadingState.style.display = 'none';
       iframe.classList.add('active');
