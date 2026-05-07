@@ -150,15 +150,7 @@ if (typeof query === 'string') {
     }
     
 if (!query) {
-
-  const invtrend = await fetch(`${config.invapi}/trending?type=Gaming&hl=en-US&region=US`, {
-    headers: { "User-Agent": config.useragent },
-  });
-
-  const inv = getJson(await invtrend.text());
-
-  renderTemplate(res, req, "search-no-query.ejs", { inv, turntomins, isMobile: req.useragent.isMobile,});
-
+res.redirect("/home")
 }
 
     let continuation = req.query.continuation || "";
@@ -210,6 +202,16 @@ if (!query) {
     res.send("WIP");
   });
 
+app.get("/home", function (req, res) {
+const invtrend = await fetch(`${config.invapi}/trending?type=Gaming&hl=en-US&region=US`, {
+    headers: { "User-Agent": config.useragent },
+});
+
+  const inv = getJson(await invtrend.text());
+  renderTemplate(res, req, "search-no-query.ejs", { inv, turntomins, isMobile: req.useragent.isMobile,});
+});
+
+  
   app.get("/web", async (req, res) => {
     res.redirect("/");
   });
