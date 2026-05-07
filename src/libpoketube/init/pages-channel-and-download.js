@@ -202,7 +202,7 @@ res.redirect("/home")
     res.send("WIP");
   });
 
-app.get("/home", function (req, res) {
+  app.get("/home", async (req, res) => {
 const invtrend = await fetch(`${config.invapi}/trending?type=Gaming&hl=en-US&region=US`, {
     headers: { "User-Agent": config.useragent },
 });
