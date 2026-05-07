@@ -22,6 +22,7 @@
   <img src="https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/badges/StandWithUkraine.svg" alt="Stand with Ukraine">    <img src="https://codeberg.org/ashleyirispuppy/pages/raw/branch/main/images/pr.svg?v=5">
   <img src="https://codeberg.org/ashleyirispuppy/pages/raw/branch/main/images/trans-badge.svg">
   <img src="https://codeberg.org/ashleyirispuppy/pages/raw/branch/main/images/free-Palestine.svg"><br>
+<img src="https://img.shields.io/liberapay/goal/poke_software_initiative.svg?logo=liberapay">
 
   <a href="https://codeberg.org/ashleyirispuppy/poke/src/branch/main/LICENSE">
 <img src="https://img.shields.io/badge/License-GPL--3.0--or--later-FF6666" alt="GPL-3.0-or-later SPDX License">
