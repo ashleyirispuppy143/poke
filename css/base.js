@@ -95,8 +95,8 @@ document.addEventListener("DOMContentLoaded", () => {
       saveData,
       lowEnd,
       veryLowEnd,
-      timerScale: veryLowEnd ? 1.75 : (lowEnd ? 1.35 : 1),
-      mediaNodeCacheMs: veryLowEnd ? 500 : (lowEnd ? 320 : 120)
+      timerScale: veryLowEnd ? 2.1 : (lowEnd ? 1.45 : 1),
+      mediaNodeCacheMs: veryLowEnd ? 850 : (lowEnd ? 420 : 120)
     };
   })();
   try {
@@ -6492,6 +6492,11 @@ function syncVideoJsEndedControlState(ended) {
     if (typeof video?.addClass === "function" && typeof video?.removeClass === "function") {
       if (isEnded) video.addClass("vjs-ended");
       else video.removeClass("vjs-ended");
+      if (isEnded) {
+        video.removeClass("vjs-waiting");
+        video.removeClass("vjs-seeking");
+        video.removeClass("vjs-stalled");
+      }
     }
   } catch { }
   let rootEl = null;
@@ -6500,6 +6505,7 @@ function syncVideoJsEndedControlState(ended) {
     if (rootEl?.classList) {
       rootEl.classList.toggle("vjs-ended", isEnded);
       if (isEnded) {
+        rootEl.classList.remove("vjs-waiting", "vjs-seeking", "vjs-stalled");
         rootEl.classList.remove("vjs-playing");
         rootEl.classList.add("vjs-paused");
       }
@@ -6525,6 +6531,44 @@ function syncVideoJsEndedControlState(ended) {
       playToggle.controlText(isEnded ? "Replay" : (getVideoPaused() ? "Play" : "Pause"));
     }
   } catch { }
+}
+function clearTerminalBufferingUiState() {
+  state.videoWaiting = false;
+  state.audioWaiting = false;
+  state.videoStallAudioPaused = false;
+  state.audioStallVideoPaused = false;
+  state.videoStallSince = 0;
+  state.audioStallSince = 0;
+  state.stallAudioPausedSince = 0;
+  state.stallAudioResumeHoldUntil = 0;
+  state.strictBufferHold = false;
+  state.bufferHoldSince = 0;
+  state.bufferHoldIntendedPlaying = false;
+  state.seekResumeInFlight = false;
+  try { clearForegroundBufferAudioHold(); } catch { }
+  try { clearBufferHold(); } catch { }
+  try { clearResumeAfterBufferTimer(); } catch { }
+  try { clearPostSeekPlaybackRecoveryTimers(); } catch { }
+  try { clearSeekAudioReadyKick(); } catch { }
+  try { clearPostSeekAudioWatchdog(); } catch { }
+  try { if (state._stallAudioPauseTimer) { clearTimeout(state._stallAudioPauseTimer); state._stallAudioPauseTimer = null; } } catch { }
+  try { if (state._stallVideoPauseTimer) { clearTimeout(state._stallVideoPauseTimer); state._stallVideoPauseTimer = null; } } catch { }
+  try {
+    if (typeof video?.removeClass === "function") {
+      video.removeClass("vjs-waiting");
+      video.removeClass("vjs-seeking");
+      video.removeClass("vjs-stalled");
+    }
+  } catch { }
+  try {
+    const rootEl = video?.el?.();
+    rootEl?.classList?.remove("vjs-waiting", "vjs-seeking", "vjs-stalled");
+  } catch { }
+}
+function forceEndedUiState() {
+  clearTerminalBufferingUiState();
+  syncVideoJsEndedControlState(true);
+  try { queuePlayerTimeDisplayUpdate(); } catch { }
 }
 function terminalEndFallbackShouldFire() {
   if (!state.firstPlayCommitted || state.restarting || state.endedNaturally) return false;
@@ -6637,6 +6681,10 @@ function prepareRestartFromEndedPlayback(force = false) {
   if (!force && !state.endedNaturally && !restartFromEndedGuardActive()) return false;
   clearTerminalAudioEndLock();
   authorizeNearZeroSeek(3200);
+  state.endedNaturally = false;
+  state.endedAt = 0;
+  state.endedLockUntil = 0;
+  state.restartFromEndedUntil = Math.max(state.restartFromEndedUntil, now() + 3200);
   state.pendingSeekTarget = null;
   state.seekWantedPlaying = true;
   armSeekResumeIntent(7000);
@@ -6650,6 +6698,8 @@ function prepareRestartFromEndedPlayback(force = false) {
   state.audioWaiting = false;
   state.videoStallAudioPaused = false;
   state.audioStallVideoPaused = false;
+  state.noHoverPlaybackKickUntil = 0;
+  state.bufferReadyPlaybackKickUntil = 0;
   syncVideoJsEndedControlState(false);
   try { cancelActiveFade(); } catch { }
   try { clearAudioPauseLocks(); } catch { }
@@ -7377,6 +7427,21 @@ function scaleHealthyCpuDelay(ms) {
   if (!perfProfile.lowEnd && !perfProfile.saveData) return base;
   return Math.ceil(base * perfProfile.timerScale);
 }
+function stableHealthyPlaybackForCpu() {
+  if (!state.intendedPlaying || state.endedNaturally || !state.firstPlayCommitted) return false;
+  if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
+  if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
+  if (state.syncing || state.restarting || state.strictBufferHold) return false;
+  if (state.videoWaiting || state.videoStallAudioPaused || state.audioWaiting) return false;
+  if (state.videoPlayInFlight || state.audioPlayInFlight) return false;
+  if (foregroundRecoveryActive(900) || directUserToggleActive(700)) return false;
+  if (getVideoPaused()) return false;
+  if (coupledMode && audio && audio.paused) return false;
+  const vn = getVideoNode();
+  const vrs = vn ? Number(vn.readyState || 0) : 0;
+  if (vrs < HAVE_CURRENT_DATA) return false;
+  return true;
+}
 function shouldForceForegroundResume() {
   if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
   if (state.endedNaturally) return false;
@@ -7589,7 +7654,7 @@ const MakeSureUnintentionalLoopDoesntEverHappenAtALLManager = (() => {
     state.bgHiddenWasPlaying = false;
     try { MediumQualityManager.markUserPaused(); } catch { }
     stripAutoplayAfterFirstPlay();
-    syncVideoJsEndedControlState(true);
+    forceEndedUiState();
   }
 
   function onEnded() {
@@ -8827,10 +8892,10 @@ function execProgrammaticVideoPlay(opts = {}) {
     const _playVt = Number(getVideoNode()?.currentTime);
     if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.blockUnauthorizedTailRestart(_playVt)) return;
   } catch { }
-  if (state.endedNaturally && !state.restarting && !isLoopDesired()) return;
   if (restartFromEndedGuardActive() && !isLoopDesired()) {
     try { prepareRestartFromEndedPlayback(true); } catch { }
   }
+  if (state.endedNaturally && !state.restarting && !isLoopDesired()) return;
   if (coupledMode && audio && document.visibilityState === "hidden" && state.intendedPlaying) {
     armHiddenVideoBootstrap(force ? 1400 : 1000);
   }
@@ -9640,6 +9705,9 @@ function scheduleSync(minDelay = null) {
   if (typeof minDelay === "number") {
     delay = Math.max(32, minDelay); // floor raised 16→32ms — halves worst-case timer churn
     if (minDelay <= 32 && shouldUseDeepRelaxedCpuHousekeeping()) delay = 120;
+    if (minDelay <= 32 && stableHealthyPlaybackForCpu()) {
+      delay = Math.max(delay, perfProfile.veryLowEnd ? 900 : (perfProfile.lowEnd ? 650 : 220));
+    }
   } else if (document.visibilityState === "hidden") {
     delay = platform.useBgControllerRetry ? 2500 : 3500;
   } else if (state.seeking || state.seekBuffering) {
@@ -10877,6 +10945,11 @@ function _spinnerInFlapCooldown() {
 
 function _spinnerActuallyRaise() {
   try {
+    if (state.endedNaturally || terminalEndFallbackShouldFire()) {
+      MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.onEnded();
+      forceEndedUiState();
+      return;
+    }
     const rootEl = video?.el?.();
     if (!rootEl) return;
     if (!_bufferGuardSpinnerOn) {
@@ -10919,6 +10992,11 @@ function _spinnerActuallyClear() {
 
 function setSeekBufferingUIVisible(on) {
   const want = !!on;
+  if (want && (state.endedNaturally || terminalEndFallbackShouldFire())) {
+    MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.onEnded();
+    forceEndedUiState();
+    return;
+  }
   if (want === _spinnerLogicalState && want === _bufferGuardSpinnerOn) return;
   _spinnerNoteFlap();
   _spinnerLogicalState = want;
@@ -11687,6 +11765,11 @@ function _scheduleSpinnerSweepRaf() {
 }
 function _spinnerStripFastBail() {
   try {
+    if (state.endedNaturally || terminalEndFallbackShouldFire()) {
+      MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.onEnded();
+      forceEndedUiState();
+      return true;
+    }
     if (_bufferGuardSpinnerOn) return true;
     if (state.seeking || state.seekBuffering) return true;
     const rootEl = video?.el?.();
@@ -14592,6 +14675,12 @@ function setupMediaErrorHandlers() {
     });
   } catch { }
   const onVideoStalled = () => {
+    if (state.endedNaturally || terminalEndFallbackShouldFire()) {
+      MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.onEnded();
+      forceEndedUiState();
+      clearSyncLoop();
+      return;
+    }
     if (!state.intendedPlaying) return;
     if (state.firstPlayCommitted) {
       state.videoWaiting = true;
@@ -14836,6 +14925,8 @@ function setupUserPauseIntentDetection() {
             const p = execProgrammaticVideoPlay({ force: true, minGapMs: 0 });
             if (p && typeof p.catch === "function") p.catch(() => { });
           } catch { }
+          scheduleNoHoverPlaybackKick("restart-click");
+          scheduleBufferReadyPlaybackKick("restart-click", { immediate: true, force: true });
         }
       } else {
         if (!coupledMode) {
@@ -14875,6 +14966,10 @@ function setupUserPauseIntentDetection() {
             try { prepareRestartFromEndedPlayback(true); } catch { }
           }
           try { execProgrammaticVideoPlay({ force: true, minGapMs: 0 }); } catch {}
+          if (terminalRestart) {
+            scheduleNoHoverPlaybackKick("restart-click");
+            scheduleBufferReadyPlaybackKick("restart-click", { immediate: true, force: true });
+          }
         } else {
           markUserPauseIntent(USER_PAUSE_INTENT_FAST_MS);
           pauseHard();
@@ -14897,6 +14992,10 @@ function setupUserPauseIntentDetection() {
               try { prepareRestartFromEndedPlayback(true); } catch { }
             }
             try { execProgrammaticVideoPlay({ force: true, minGapMs: 0 }); } catch {}
+            if (terminalRestart) {
+              scheduleNoHoverPlaybackKick("restart-click");
+              scheduleBufferReadyPlaybackKick("restart-click", { immediate: true, force: true });
+            }
           } else {
             markUserPauseIntent(USER_PAUSE_INTENT_FAST_MS);
             pauseHard();
@@ -15893,6 +15992,19 @@ function bindCommonMediaEvents() {
 
   video.on("waiting", () => {
     try { UltraStabilizer.onVideoStall(); } catch { }
+    if (state.endedNaturally || terminalEndFallbackShouldFire()) {
+      MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.onEnded();
+      forceEndedUiState();
+      clearSyncLoop();
+      if (coupledMode && audio) {
+        try { cancelActiveFade(); } catch { }
+        try { audio.volume = 0; } catch { }
+        try { if (!audio.paused) audio.pause(); } catch { }
+      }
+      try { pauseHard(); } catch { }
+      forceEndedUiState();
+      return;
+    }
     if (state.firstPlayCommitted && !startupSettleActive()) {
       state.videoWaiting = true;
       state.videoStallSince = state.videoStallSince || now();
@@ -16883,7 +16995,7 @@ function bindCommonMediaEvents() {
             try { if (!audio.paused) audio.pause(); } catch { }
           }
           pauseHard();
-          syncVideoJsEndedControlState(true);
+          forceEndedUiState();
         }, { passive: true });
         _on(audio, "canplay", onReadyish, { passive: true });
         _on(audio, "canplaythrough", onReadyish, { passive: true });
@@ -17532,7 +17644,7 @@ function bindCommonMediaEvents() {
           } catch { }
           if (isLoopDesired()) { restartLoop().catch(() => { }); return; }
           MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.onEnded();
-          syncVideoJsEndedControlState(true);
+          forceEndedUiState();
           try { MediumQualityManager.markUserPaused(); } catch { }
           stripAutoplayAfterFirstPlay();
           state.tabReturnImmuneUntil = 0;
@@ -17548,7 +17660,7 @@ function bindCommonMediaEvents() {
             try { if (!audio.paused) audio.pause(); } catch { }
           }
           pauseHard();
-          syncVideoJsEndedControlState(true);
+          forceEndedUiState();
           const _endedGen = state.playSessionId;
           try {
             const _nativeVN = getVideoNode();
@@ -17556,7 +17668,13 @@ function bindCommonMediaEvents() {
               const _origNativePlay = _nativeVN.play.bind(_nativeVN);
               _nativeVN.play = function () {
                 if (state.endedNaturally && !state.restarting && !isLoopDesired()) {
-                  return Promise.resolve();
+                  const _endedUserPlay =
+                  directUserToggleActive(2200) ||
+                  userPlayIntentActive() ||
+                  userWantsPlayNow(2600) ||
+                  restartFromEndedGuardActive();
+                  if (!_endedUserPlay) return Promise.resolve();
+                  try { prepareRestartFromEndedPlayback(true); } catch { }
                 }
                 return _origNativePlay();
               };
@@ -17572,6 +17690,7 @@ function bindCommonMediaEvents() {
                 if (state._endedKillHardStop) { clearTimeout(state._endedKillHardStop); state._endedKillHardStop = null; }
                 return;
               }
+              forceEndedUiState();
               const vn = getVideoNode();
               if (vn && !vn.paused && !state.restarting && !isLoopDesired()) {
                 const vt = Number(vn.currentTime) || 0;
@@ -18547,8 +18666,10 @@ function setupVisibilityLifecycle() {
     _on(document, "resume", () => {
       if (!platform.useBgControllerRetry) return;
       executeSeamlessWakeup();
-      scheduleNoHoverPlaybackKick("resume");
-      scheduleBufferReadyPlaybackKick("resume", { immediate: true, force: true });
+      if (!tabReturnPlaybackAlreadyHealthy()) {
+        scheduleNoHoverPlaybackKick("resume");
+        scheduleBufferReadyPlaybackKick("resume", { immediate: true, force: true });
+      }
     }, { passive: true, capture: true });
   } catch { }
   try {
@@ -18563,8 +18684,10 @@ function setupVisibilityLifecycle() {
           setChromiumPauseEventSuppress(BG_RETURN_GRACE_MS);
         }
         executeSeamlessWakeup();
-        scheduleNoHoverPlaybackKick("pageshow");
-        scheduleBufferReadyPlaybackKick("pageshow", { immediate: true, force: true });
+        if (!tabReturnPlaybackAlreadyHealthy()) {
+          scheduleNoHoverPlaybackKick("pageshow");
+          scheduleBufferReadyPlaybackKick("pageshow", { immediate: true, force: true });
+        }
       }
       if (state.startupPhase && !state.startupPrimed) {
         maybePrimeStartup();
@@ -18758,8 +18881,13 @@ function setupVisibilityLifecycle() {
       try { MakeVideoNotFreezeAfterPlaybackAfterAltTabHapenns.onTabHide(); } catch { }
       BackgroundPlaybackManager.onBecomeBackground();
       if (state.intendedPlaying) {
+        const _hideVNode = getVideoNode();
+        const _hideVideoPlaying = !!(_hideVNode && !_hideVNode.paused);
+        const _hideAudioPlaying = !coupledMode || !!(audio && !audio.paused);
         startBgAudioKeepalive();
-        kickHiddenCoupledBootstrap({ kickAudio: true });
+        if (!_hideVideoPlaying || !_hideAudioPlaying) {
+          kickHiddenCoupledBootstrap({ kickAudio: true });
+        }
       }
 
       if (state.intendedPlaying) {
@@ -19481,7 +19609,7 @@ _on(window, "unhandledrejection", (e) => {
   _handlePlayerCrash(msg, "promise", reason ? (reason.stack || "") : "");
 }, { passive: true });
 }, { once: true });
- 
+
 //////////////// THE PLAYER, END ////////////////////////
  
  (function () {
