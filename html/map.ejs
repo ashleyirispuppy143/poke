@@ -373,14 +373,19 @@
 		
 		//--><!]]>
 		</script> 
-<script>
+ <script>
 ;(() => {
-  // Start with a World View
   const mapState = { lat: 20, lon: 0, delta: 60, layer: 'mapnik', following: false };
   let savedPins = [];
-  try { savedPins = JSON.parse(localStorage.getItem('pm_pins') || '[]'); } catch(e){}
 
-  const select = (s) => document.querySelector(s);
+  try {
+    savedPins = JSON.parse(localStorage.getItem('pm_pins') || '[]');
+  } catch (e) {
+    savedPins = [];
+  }
+
+  const select = s => document.querySelector(s);
+
   const ui = {
     mapFrame: select('#map'),
     centerMarker: select('#center-marker'),
@@ -416,30 +421,89 @@
     menuSheet: select('#sheet-menu')
   };
 
+  const refreshControls = () => {
+    ui.desktopFollow.checked = mapState.following;
+    ui.mobileFollow.checked = mapState.following;
+    ui.desktopLayer.value = mapState.layer;
+    ui.mobileLayer.value = mapState.layer;
+  };
+
   const refreshMap = (pushHistory = false) => {
     mapState.delta = Math.max(0.0001, Math.min(180, mapState.delta));
+
     const bbox = {
       l: (mapState.lon - mapState.delta).toFixed(6),
-      b: (mapState.lat - mapState.delta/2).toFixed(6),
+      b: (mapState.lat - mapState.delta / 2).toFixed(6),
       r: (mapState.lon + mapState.delta).toFixed(6),
-      t: (mapState.lat + mapState.delta/2).toFixed(6)
+      t: (mapState.lat + mapState.delta / 2).toFixed(6)
     };
+
     const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox.l}%2C${bbox.b}%2C${bbox.r}%2C${bbox.t}&layer=${mapState.layer}`;
-    if (ui.mapFrame.src !== src) ui.mapFrame.src = src;
-    
+
+    if (ui.mapFrame.src !== src) {
+      ui.mapFrame.src = src;
+    }
+
     if (pushHistory) {
       const url = new URL(location);
       url.searchParams.set('lat', mapState.lat.toFixed(5));
       url.searchParams.set('lon', mapState.lon.toFixed(5));
       url.searchParams.set('d', mapState.delta.toFixed(4));
       url.searchParams.set('l', mapState.layer);
-      history.pushState(mapState, '', url);
+      history.pushState({ ...mapState }, '', url);
     }
-    ui.desktopFollow.checked = mapState.following;
-    ui.mobileFollow.checked = mapState.following;
+
+    refreshControls();
+  };
+
+  const makeIcon = id => {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+    svg.setAttribute('class', 'icon');
+    use.setAttribute('href', id);
+    svg.appendChild(use);
+    return svg;
+  };
+
+  const createSuggestion = item => {
+    const parts = item.display_name.split(',');
+    const title = parts[0].trim();
+    const subtitle = parts.slice(1).join(',').trim();
+
+    const li = document.createElement('li');
+
+    const icon = document.createElement('div');
+    icon.className = 'sug-icon';
+    icon.appendChild(makeIcon('#icon-loc'));
+
+    const text = document.createElement('div');
+    text.className = 'sug-text';
+
+    const titleEl = document.createElement('span');
+    titleEl.className = 'sug-title';
+    titleEl.textContent = title;
+
+    const subEl = document.createElement('span');
+    subEl.className = 'sug-sub';
+    subEl.textContent = subtitle;
+
+    text.append(titleEl, subEl);
+    li.append(icon, text);
+
+    li.onclick = () => {
+      goTo(parseFloat(item.lat), parseFloat(item.lon));
+      ui.desktopSearch.value = title;
+      ui.mobileSearch.value = title;
+      ui.desktopSuggestions.style.display = 'none';
+      ui.mobileSuggestions.style.display = 'none';
+      closeAllPanels();
+    };
+
+    return li;
   };
 
   let searchTimer;
+
   const performSearch = (value, list) => {
     if (!value || value.trim().length < 2) {
       list.style.display = 'none';
@@ -447,42 +511,26 @@
     }
 
     clearTimeout(searchTimer);
+
     searchTimer = setTimeout(async () => {
       try {
-        list.innerHTML = `<li style="justify-content:center; opacity:0.7; font-size:13px;">Searching...</li>`;
+        list.innerHTML = '<li style="justify-content:center; opacity:0.7; font-size:13px;">Searching...</li>';
         list.style.display = 'block';
 
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(value)}`);
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=6&q=${encodeURIComponent(value.trim())}`);
         const data = await res.json();
+
         list.innerHTML = '';
 
-        if(!data.length) {
-          list.innerHTML = `<li style="justify-content:center; opacity:0.7; font-size:13px;">No results found</li>`;
+        if (!Array.isArray(data) || !data.length) {
+          list.innerHTML = '<li style="justify-content:center; opacity:0.7; font-size:13px;">No results found</li>';
           return;
         }
 
-        data.slice(0,6).forEach(item => {
-          const parts = item.display_name.split(',');
-          const title = parts[0];
-          const subtitle = parts.slice(1).join(',').trim();
-          const li = document.createElement('li');
-          li.innerHTML = `
-            <div class="sug-icon"><svg class="icon"><use href="#icon-loc"/></svg></div>
-            <div class="sug-text">
-              <span class="sug-title">${title}</span>
-              <span class="sug-sub">${subtitle}</span>
-            </div>
-          `;
-          li.onclick = () => {
-            goTo(parseFloat(item.lat), parseFloat(item.lon));
-            list.style.display = 'none';
-            ui.desktopSearch.value = title;
-            ui.mobileSearch.value = title;
-            closeAllPanels();
-          };
-          list.appendChild(li);
+        data.slice(0, 6).forEach(item => {
+          list.appendChild(createSuggestion(item));
         });
-      } catch(e){
+      } catch (e) {
         list.style.display = 'none';
       }
     }, 500);
@@ -491,89 +539,257 @@
   window.goTo = (lat, lon) => {
     mapState.lat = lat;
     mapState.lon = lon;
-    mapState.delta = 0.005; // Zoom in when picking a location
+    mapState.delta = 0.005;
     mapState.following = false;
     refreshMap(true);
   };
 
-  let geoWatchId = null;
-  const toggleFollowLocation = () => {
-    if (mapState.following) {
-      mapState.following = false;
-      if (geoWatchId) navigator.geolocation.clearWatch(geoWatchId);
-    } else {
-      if (!navigator.geolocation) return alert("Geolocation not supported");
-      mapState.following = true;
-      geoWatchId = navigator.geolocation.watchPosition(
-        p => {
-          mapState.lat = p.coords.latitude;
-          mapState.lon = p.coords.longitude;
-          refreshMap();
-        },
-        () => {
-          mapState.following = false;
-          alert("Location access denied");
-        },
-        { enableHighAccuracy: true }
-      );
+  const geoOptions = {
+    quick: {
+      enableHighAccuracy: false,
+      timeout: 20000,
+      maximumAge: 600000
+    },
+    precise: {
+      enableHighAccuracy: true,
+      timeout: 45000,
+      maximumAge: 0
+    },
+    watch: {
+      enableHighAccuracy: false,
+      timeout: 30000,
+      maximumAge: 60000
     }
-    refreshMap();
   };
 
-  const locateOnce = () => {
-    if (!navigator.geolocation) return alert("Geolocation not supported");
-    navigator.geolocation.getCurrentPosition(
-      p => {
-        mapState.lat = p.coords.latitude;
-        mapState.lon = p.coords.longitude;
-        mapState.delta = 0.005;
-        refreshMap(true);
+  const getPosition = options => new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, options);
+  });
+
+  const saveLastPosition = position => {
+    try {
+      localStorage.setItem('pm_last_position', JSON.stringify({
+        lat: position.coords.latitude,
+        lon: position.coords.longitude,
+        time: Date.now()
+      }));
+    } catch (e) {}
+  };
+
+  const loadLastPosition = () => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('pm_last_position') || 'null');
+      if (!stored || typeof stored.lat !== 'number' || typeof stored.lon !== 'number') return null;
+      if (Date.now() - stored.time > 86400000) return null;
+      return stored;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const applyPosition = (position, pushHistory = false) => {
+    mapState.lat = position.coords.latitude;
+    mapState.lon = position.coords.longitude;
+    mapState.delta = 0.005;
+    saveLastPosition(position);
+    refreshMap(pushHistory);
+  };
+
+  const geoErrorMessage = err => {
+    if (!err) return 'Location failed for an unknown reason.';
+    if (err.code === 1) return 'Location permission was denied. Please allow location access in your browser settings.';
+    if (err.code === 2) return 'Your position is currently unavailable. Try enabling Wi-Fi, mobile data, or system location services.';
+    if (err.code === 3) return 'Location timed out. Try again, or move near a window if GPS/Wi-Fi positioning is weak.';
+    return err.message || 'Could not get your location.';
+  };
+
+  const setLocateBusy = busy => {
+    [ui.desktopLocate, ui.mobileLocate].forEach(btn => {
+      btn.disabled = busy;
+      btn.style.opacity = busy ? '0.6' : '';
+      btn.style.cursor = busy ? 'wait' : '';
+    });
+  };
+
+  let geoWatchId = null;
+
+  const locateOnce = async () => {
+    if (!navigator.geolocation) {
+      alert('Geolocation not supported');
+      return;
+    }
+
+    setLocateBusy(true);
+
+    try {
+      const quickPosition = await getPosition(geoOptions.quick);
+      applyPosition(quickPosition, true);
+
+      getPosition(geoOptions.precise)
+        .then(position => applyPosition(position, true))
+        .catch(() => {});
+    } catch (firstErr) {
+      try {
+        const precisePosition = await getPosition(geoOptions.precise);
+        applyPosition(precisePosition, true);
+      } catch (secondErr) {
+        const fallback = loadLastPosition();
+
+        if (fallback) {
+          mapState.lat = fallback.lat;
+          mapState.lon = fallback.lon;
+          mapState.delta = 0.005;
+          refreshMap(true);
+          alert('Current location timed out, so PokeMaps used your last known location.');
+        } else {
+          alert('Could not locate: ' + geoErrorMessage(secondErr || firstErr));
+        }
+      }
+    } finally {
+      setLocateBusy(false);
+    }
+  };
+
+  const stopFollowLocation = () => {
+    mapState.following = false;
+
+    if (geoWatchId !== null) {
+      navigator.geolocation.clearWatch(geoWatchId);
+      geoWatchId = null;
+    }
+
+    refreshControls();
+  };
+
+  const toggleFollowLocation = () => {
+    if (mapState.following) {
+      stopFollowLocation();
+      refreshMap();
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      alert('Geolocation not supported');
+      refreshControls();
+      return;
+    }
+
+    mapState.following = true;
+    refreshControls();
+
+    getPosition(geoOptions.quick)
+      .then(position => applyPosition(position, true))
+      .catch(() => {});
+
+    geoWatchId = navigator.geolocation.watchPosition(
+      position => {
+        mapState.following = true;
+        applyPosition(position, false);
       },
-      (err) => alert("Could not locate: " + err.message),
-      { timeout: 10000, enableHighAccuracy: true }
+      err => {
+        stopFollowLocation();
+        alert('Location tracking stopped: ' + geoErrorMessage(err));
+      },
+      geoOptions.watch
     );
   };
 
   const renderPinList = () => {
-    const html = savedPins.length
-      ? savedPins.map((p, i) => `
-        <div class="pin-item">
-          <div class="pin-info">
-            <strong>${p.name}</strong>
-            <span>${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</span>
-          </div>
-          <div class="pin-actions">
-            <button class="pin-btn" onclick="loadPin(${i})">Go</button>
-            <button class="pin-btn del" onclick="delPin(${i})">✕</button>
-          </div>
-        </div>
-      `).join('')
-      : '<div style="text-align:center; opacity:0.6; padding:20px; font-size:14px">No saved pins</div>';
-    ui.desktopPinList.innerHTML = html;
-    ui.mobilePinList.innerHTML = html;
+    ui.desktopPinList.innerHTML = '';
+    ui.mobilePinList.innerHTML = '';
+
+    if (!savedPins.length) {
+      const empty = document.createElement('div');
+      empty.style.textAlign = 'center';
+      empty.style.opacity = '0.6';
+      empty.style.padding = '20px';
+      empty.style.fontSize = '14px';
+      empty.textContent = 'No saved pins';
+
+      ui.desktopPinList.appendChild(empty.cloneNode(true));
+      ui.mobilePinList.appendChild(empty);
+      return;
+    }
+
+    savedPins.forEach((p, i) => {
+      const item = document.createElement('div');
+      item.className = 'pin-item';
+
+      const info = document.createElement('div');
+      info.className = 'pin-info';
+
+      const strong = document.createElement('strong');
+      strong.textContent = p.name;
+
+      const coords = document.createElement('span');
+      coords.textContent = `${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}`;
+
+      info.append(strong, coords);
+
+      const actions = document.createElement('div');
+      actions.className = 'pin-actions';
+
+      const go = document.createElement('button');
+      go.className = 'pin-btn';
+      go.textContent = 'Go';
+      go.onclick = () => loadPin(i);
+
+      const del = document.createElement('button');
+      del.className = 'pin-btn del';
+      del.textContent = '✕';
+      del.onclick = () => delPin(i);
+
+      actions.append(go, del);
+      item.append(info, actions);
+
+      ui.desktopPinList.appendChild(item.cloneNode(true));
+      ui.mobilePinList.appendChild(item);
+    });
+
+    ui.desktopPinList.querySelectorAll('.pin-btn').forEach((button, index) => {
+      const pinIndex = Math.floor(index / 2);
+      button.onclick = index % 2 === 0 ? () => loadPin(pinIndex) : () => delPin(pinIndex);
+    });
+
+    ui.mobilePinList.querySelectorAll('.pin-btn').forEach((button, index) => {
+      const pinIndex = Math.floor(index / 2);
+      button.onclick = index % 2 === 0 ? () => loadPin(pinIndex) : () => delPin(pinIndex);
+    });
   };
 
-  window.loadPin = (i) => {
+  window.loadPin = i => {
+    if (!savedPins[i]) return;
+
     mapState.lat = savedPins[i].lat;
     mapState.lon = savedPins[i].lon;
     mapState.delta = 0.005;
     mapState.layer = savedPins[i].layer || 'mapnik';
+    mapState.following = false;
+
+    stopFollowLocation();
     refreshMap(true);
     closeAllPanels();
   };
 
-  window.delPin = (i) => {
-    if(confirm("Remove pin?")){
-      savedPins.splice(i,1);
+  window.delPin = i => {
+    if (confirm('Remove pin?')) {
+      savedPins.splice(i, 1);
       localStorage.setItem('pm_pins', JSON.stringify(savedPins));
       renderPinList();
     }
   };
 
   const saveCurrentPin = () => {
-    const name = prompt("Name this location:", "New Place");
-    if(name) {
-      savedPins.unshift({ name, lat: mapState.lat, lon: mapState.lon, layer: mapState.layer });
+    const name = prompt('Name this location:', 'New Place');
+
+    if (name && name.trim()) {
+      savedPins.unshift({
+        name: name.trim(),
+        lat: mapState.lat,
+        lon: mapState.lon,
+        layer: mapState.layer
+      });
+
       localStorage.setItem('pm_pins', JSON.stringify(savedPins));
       renderPinList();
     }
@@ -584,10 +800,14 @@
     document.documentElement.style.setProperty('--marker-color', ui.desktopMarkerColor.value);
   };
 
-  const setTheme = (theme) => {
+  const setTheme = theme => {
     document.body.classList.toggle('light-mode', theme === 'light');
     ui.desktopTheme.value = theme;
     ui.mobileTheme.value = theme;
+
+    try {
+      localStorage.setItem('pm_theme', theme);
+    } catch (e) {}
   };
 
   const closeAllPanels = () => {
@@ -597,26 +817,36 @@
     ui.desktopSettingsButton.classList.remove('active');
   };
 
-  const toggleSheet = (sheet) => {
+  const toggleSheet = sheet => {
     const open = sheet.classList.contains('open');
     closeAllPanels();
-    if(!open) sheet.classList.add('open');
+
+    if (!open) {
+      sheet.classList.add('open');
+    }
   };
 
   const togglePopover = (popover, button) => {
     const open = popover.classList.contains('open');
     closeAllPanels();
-    if(!open) {
+
+    if (!open) {
       popover.classList.add('open');
       button.classList.add('active');
     }
   };
 
-  // Search Listeners
+  const clickFirstSuggestion = list => {
+    const first = list.querySelector('li');
+
+    if (first) {
+      first.click();
+    }
+  };
+
   const handleKey = (e, list) => {
-    if(e.key === 'Enter') {
-      const first = list.querySelector('li');
-      if(first) first.click();
+    if (e.key === 'Enter') {
+      clickFirstSuggestion(list);
     }
   };
 
@@ -625,47 +855,97 @@
   ui.mobileSearch.oninput = e => performSearch(e.target.value, ui.mobileSuggestions);
   ui.mobileSearch.onkeydown = e => handleKey(e, ui.mobileSuggestions);
 
+  ui.desktopSearchBtn.onclick = () => {
+    if (ui.desktopSuggestions.style.display === 'block') {
+      clickFirstSuggestion(ui.desktopSuggestions);
+    } else {
+      performSearch(ui.desktopSearch.value, ui.desktopSuggestions);
+    }
+  };
+
   ui.desktopLocate.onclick = locateOnce;
   ui.mobileLocate.onclick = locateOnce;
   ui.desktopSavePin.onclick = saveCurrentPin;
   ui.mobileSave.onclick = saveCurrentPin;
-  ui.desktopShare.onclick = () => {
-    navigator.clipboard.writeText(location.href);
-    alert("Link copied!");
+
+  ui.desktopShare.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(location.href);
+      alert('Link copied!');
+    } catch (e) {
+      prompt('Copy this link:', location.href);
+    }
   };
 
-  ui.desktopLayer.onchange = e => { mapState.layer = e.target.value; refreshMap(true); };
-  ui.mobileLayer.onchange = e => { mapState.layer = e.target.value; refreshMap(true); };
+  ui.desktopLayer.onchange = e => {
+    mapState.layer = e.target.value;
+    refreshMap(true);
+  };
+
+  ui.mobileLayer.onchange = e => {
+    mapState.layer = e.target.value;
+    refreshMap(true);
+  };
+
   ui.desktopFollow.onchange = toggleFollowLocation;
   ui.mobileFollow.onchange = toggleFollowLocation;
+
   ui.desktopTheme.onchange = e => setTheme(e.target.value);
   ui.mobileTheme.onchange = e => setTheme(e.target.value);
+
   ui.desktopMarkerSize.oninput = updateMarkerStyle;
   ui.desktopMarkerColor.oninput = updateMarkerStyle;
 
-  ui.desktopPinsButton.onclick = e => { e.stopPropagation(); togglePopover(ui.pinsPopover, ui.desktopPinsButton); };
-  ui.desktopSettingsButton.onclick = e => { e.stopPropagation(); togglePopover(ui.settingsPopover, ui.desktopSettingsButton); };
-  ui.mobileSearchButton.onclick = () => { toggleSheet(ui.searchSheet); setTimeout(() => ui.mobileSearch.focus(), 200); };
+  ui.desktopPinsButton.onclick = e => {
+    e.stopPropagation();
+    togglePopover(ui.pinsPopover, ui.desktopPinsButton);
+  };
+
+  ui.desktopSettingsButton.onclick = e => {
+    e.stopPropagation();
+    togglePopover(ui.settingsPopover, ui.desktopSettingsButton);
+  };
+
+  ui.mobileSearchButton.onclick = () => {
+    toggleSheet(ui.searchSheet);
+    setTimeout(() => ui.mobileSearch.focus(), 200);
+  };
+
   ui.mobilePinsButton.onclick = () => toggleSheet(ui.pinsSheet);
   ui.mobileMenuButton.onclick = () => toggleSheet(ui.menuSheet);
 
-  document.body.onclick = (e) => {
-    if(!e.target.closest('.bottom-sheet') && !e.target.closest('.mobile-dock') && !e.target.closest('.mobile-search-fab') && !e.target.closest('.gm-search-box') && !e.target.closest('.gm-tool-stack')) closeAllPanels();
-    if(!e.target.closest('.gm-search-box') && !e.target.closest('.m-input-container')) { ui.desktopSuggestions.style.display = 'none'; ui.mobileSuggestions.style.display = 'none'; }
+  document.body.onclick = e => {
+    const insidePanel = e.target.closest('.bottom-sheet') || e.target.closest('.popover');
+    const insideButton = e.target.closest('.mobile-dock') || e.target.closest('.mobile-search-fab') || e.target.closest('.gm-search-box') || e.target.closest('.gm-tool-stack');
+
+    if (!insidePanel && !insideButton) {
+      closeAllPanels();
+    }
+
+    const insideSearch = e.target.closest('.gm-search-box') || e.target.closest('.m-input-container') || e.target.closest('.suggestions');
+
+    if (!insideSearch) {
+      ui.desktopSuggestions.style.display = 'none';
+      ui.mobileSuggestions.style.display = 'none';
+    }
   };
 
   const params = new URLSearchParams(location.search);
-  if(params.has('lat')) {
+
+  if (params.has('lat')) {
     mapState.lat = parseFloat(params.get('lat'));
     mapState.lon = parseFloat(params.get('lon'));
     mapState.delta = parseFloat(params.get('d')) || 0.05;
+    mapState.layer = params.get('l') || 'mapnik';
   }
 
-  setTheme('dark');
+  const savedTheme = localStorage.getItem('pm_theme') || 'dark';
+
+  setTheme(savedTheme);
   renderPinList();
   refreshMap();
   updateMarkerStyle();
 })();
-</script>
+</script> 
 </body>
 </html>
