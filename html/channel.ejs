@@ -1996,8 +1996,19 @@ function authorVerifiedChecker4000() {
 
                  
                <% } %>
+<p style="display:flex;align-items:center;gap:14px;margin:0;color:#f1f1f1;font-size:14px;font-weight:500;line-height:32px;">
+  <span style="display:inline-flex;align-items:center;gap:6px;">
+    <i class="fa-light fa-thumbs-up" style="width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;font-size:22px;color:#f1f1f1;"></i>
+    <span><%- convert(x.likeCount) %></span>
+  </span>
 
-<p>   <i class="fa-light fa-thumbs-up"></i> <%- convert(x.likeCount) %>  - <i class="fa-light fa-reply"></i> <%- convert(x.replyCount) %> </p>
+  <i class="fa-light fa-thumbs-down" style="width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;font-size:22px;color:#f1f1f1;"></i>
+
+  <span style="display:inline-flex;align-items:center;gap:6px;">
+    <i class="fa-light fa-reply" style="width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;font-size:22px;color:#f1f1f1;"></i>
+    <span><%- convert(x.replyCount) %></span>
+  </span>
+</p>
               </div>
 
                   
