@@ -5090,8 +5090,11 @@ function loadTimeDisplayMode() {
 function saveTimeDisplayMode() {
   try { localStorage.setItem(TIME_DISPLAY_MODE_STORAGE_KEY, playerTimeDisplayMode); } catch { }
 }
+function playerClockWholeSeconds(seconds) {
+  return Math.max(0, Math.floor(Number(seconds) || 0));
+}
 function formatPlayerClock(seconds) {
-  let total = Math.max(0, Math.floor(Number(seconds) || 0));
+  let total = playerClockWholeSeconds(seconds);
   const h = Math.floor(total / 3600);
   total -= h * 3600;
   const m = Math.floor(total / 60);
@@ -5126,10 +5129,16 @@ function updatePlayerTimeDisplay() {
   if (!playerTimeDisplayText) return;
   const dur = getPlayerDisplayDuration();
   const cur = Math.min(getPlayerDisplayTime(), dur || Infinity);
-  const totalText = formatPlayerClock(dur);
+  const totalWhole = playerClockWholeSeconds(dur);
+  const remaining = Math.max(0, dur > 0 ? dur - cur : 0);
+  const remainingWhole = playerClockWholeSeconds(remaining);
+  const elapsedForDisplay = dur > 0 && totalWhole > 0 && remainingWhole === 0
+    ? totalWhole
+    : cur;
+  const totalText = formatPlayerClock(totalWhole);
   const valueText = playerTimeDisplayMode === "remaining"
-    ? "-" + formatPlayerClock(Math.max(0, dur - cur))
-    : formatPlayerClock(cur);
+    ? "-" + formatPlayerClock(remainingWhole)
+    : formatPlayerClock(elapsedForDisplay);
   const text = valueText + " / " + totalText;
   playerTimeDisplayText.textContent = text;
   if (playerTimeDisplayButton) {
@@ -19472,7 +19481,7 @@ _on(window, "unhandledrejection", (e) => {
   _handlePlayerCrash(msg, "promise", reason ? (reason.stack || "") : "");
 }, { passive: true });
 }, { once: true });
-
+ 
 //////////////// THE PLAYER, END ////////////////////////
  
  (function () {
