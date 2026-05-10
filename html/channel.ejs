@@ -1882,28 +1882,66 @@ function authorVerifiedChecker4000() {
                       <%- x.contentHtml %>
              <% if (x.attachment) { %>
                       <% if (x.attachment.type === "video") { %>
-                      <a href="/watch?v=<%=x.attachment.videoId%>">watch video on watch page</a>
-               <% } %>
+                <% } %>
                <% } %>
 
                             </p>
 
              <% if (x.attachment) { %>
                       <% if (x.attachment.type === "video") { %>
- 
- 		<div class="video-player-container">
+ <style>
+   .video-player-container {
+    position: relative;
+    display: inline-block; 
+    width: 100%;
+  }
 
-<video class="player"  style="border-radius: 16px;
-"  controls   
-       
-       poster="<%- media_proxy_url %>/proxy?url=https://i.ytimg.com/vi/<%=x.attachment.videoId%>/maxresdefault.jpg?v=607ddcd4">
-        
-                           
-                                                <source src="https://woke-proxy.poketube.fun/companion/latest_version?id=<%=x.attachment.videoId%>&itag=18&local=true" type="video/mp4; codecs=&quot;avc1.64001F, mp4a.40.2&quot;" label="hd720" selected="false">
+  /* Your provided CSS with the hover trigger added */
+  .hover-text {
+    display: none; 
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    backdrop-filter: blur(12px);
+    color: white;
+    font-size: 24px;
+    font-weight: bold;
+    background-color: rgba(0, 0, 0, 0.5);  
+    padding: 10px 20px;
+    border-radius: 12px;
+    z-index: 10;
+    pointer-events: none;  
+    transition: all 0.3s ease;
+    text-align: center;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
 
-                                                                           
-                                                                             </video>
-                                                                                   </div>
+   .video-player-container:hover .hover-text {
+    display: block;
+  }
+
+  .video-link-wrapper {
+    text-decoration: none;
+    display: block;
+    line-height: 0; /* Prevents tiny gaps at the bottom of the video */
+  }
+</style>
+
+<div class="video-player-container">
+  <a href="/watch?v=<%=x.attachment.videoId%>" class="video-link-wrapper">
+    <video 
+      class="player" 
+      style="border-radius: 16px; width: 100%;" 
+      controls 
+      poster="<%- media_proxy_url %>/proxy?url=https://i.ytimg.com/vi/<%=x.attachment.videoId%>/maxresdefault.jpg?v=607ddcd4">
+    </video>
+    
+    <div class="hover-text">
+      Watch :3
+    </div>
+  </a>
+</div>
 
                         
                <% } %>
