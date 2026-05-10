@@ -1504,21 +1504,33 @@ html.show-game-feeds .game-feed-tab {
 }
 
 .my-poke-btn {
-  display: flex;
+  height: 36px;
+  padding: 0 15px 0 10px;
+  border: 1px solid #3f3f3f;
+  border-radius: 18px;
+  background: transparent;
+  color: #f1f1f1;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
-  border: 1px solid var(--ptc-border);
-  border-radius: 20px;
-  color: var(--ptc-text-primary);
+  justify-content: center;
+  gap: 7px;
   font-size: 14px;
   font-weight: 600;
+  line-height: 36px;
   text-decoration: none;
-  transition: background 0.2s;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.my-poke-btn i {
+  color: #f1f1f1;
+  font-size: 22px;
+  line-height: 1;
 }
 
 .my-poke-btn:hover {
-  background: var(--ptc-chip-hover);
+  background: #263850;
+  border-color: #3f3f3f;
 }
 
 .save-settings-button {
@@ -2093,7 +2105,7 @@ html.layout-mix body .hero {
     </div>
 
     <a href="/account-create" class="my-poke-btn">
-      <i class="fa-regular fa-user"></i> My Poke
+      <i class="fa-regular fa-circle-user"></i> My Poke
     </a>
   </div>
 </div>
@@ -2127,7 +2139,7 @@ html.layout-mix body .hero {
     </div>
 
     <a href="/account-create" class="my-poke-btn">
-      <i class="fa-regular fa-user"></i> My Poke
+      <i class="fa-regular fa-circle-user"></i> My Poke
     </a>
   </div>
 </div>
@@ -2314,7 +2326,7 @@ html.layout-mix body .hero {
       <div style="display: flex; flex-direction: column; gap: 24px;">
         <div>
           <label style="display:block; margin-bottom: 8px; font-weight: 500;">Layout</label>
-          <p style="font-size: 13px; color: var(--ptc-text-secondary); margin-bottom: 12px;">Hero gives u the big cute front page. Classic skips the intro and gets straight to the videos. Mix em up keeps the hero but adds the desktop menu, Create, and My Poke buttons.</p>
+          <p style="font-size: 13px; color: var(--ptc-text-secondary); margin-bottom: 12px;">Hero is the big cute front page. Classic is for when ur like ok move, show me the videos. Mix em up keeps the big front page, but yeets the menu, Create, and My Poke up top too.</p>
 
           <select id="setting-layout" style="width: 100%; max-width: 300px; padding: 10px; background: transparent; border: 1px solid var(--ptc-border); color: var(--ptc-text-primary); border-radius: 8px; font-size: 14px; outline: none;">
             <option value="hero" style="background: var(--ptc-bg);">Hero (Default)</option>
@@ -2327,33 +2339,33 @@ html.layout-mix body .hero {
 
         <div>
           <label style="display:block; margin-bottom: 8px; font-weight: 500;">Default Feed</label>
-          <p style="font-size: 13px; color: var(--ptc-text-secondary); margin-bottom: 12px;">Gaming keeps things cleaner. Unlimited shows every single video, even if its slop. If Desktop Game Feeds is on, Default Feed is locked to Gaming and cannot be changed.</p>
+          <p style="font-size: 13px; color: var(--ptc-text-secondary); margin-bottom: 12px;">Gaming keeps the feed cleaner. Unlimited lets the chaos walk in wearing shoes on the carpet. If Desktop Game Feeds is on, this stays on Gaming, bc the game tabs need the clean feed or they start acting goofy.</p>
 
           <select id="setting-feed" style="width: 100%; max-width: 300px; padding: 10px; background: transparent; border: 1px solid var(--ptc-border); color: var(--ptc-text-primary); border-radius: 8px; font-size: 14px; outline: none;">
             <option value="gaming" style="background: var(--ptc-bg);">Gaming</option>
             <option value="unlimited" style="background: var(--ptc-bg);">Unlimited</option>
           </select>
-          <p id="setting-feed-helper" class="setting-helper-disabled">Default Feed is locked because Desktop Game Feeds is on.</p>
+          <p id="setting-feed-helper" class="setting-helper-disabled">Default Feed is locked rn bc Desktop Game Feeds is on. It has to stay Gaming or the game tabs get confused.</p>
         </div>
 
         <div style="height: 1px; background: var(--ptc-border); width: 100%;"></div>
 
         <div>
           <label style="display:block; margin-bottom: 8px; font-weight: 500;">Desktop Game Feeds</label>
-          <p style="font-size: 13px; color: var(--ptc-text-secondary); margin-bottom: 12px;">Turns the top tabs into quick game picks, so they stay with u while u scroll. This can only be turned on while Default Feed is Gaming.</p>
+          <p style="font-size: 13px; color: var(--ptc-text-secondary); margin-bottom: 12px;">This swaps the top tabs into quick game picks while u scroll. It only turns on when Default Feed is Gaming, bc Unlimited is too messy for the game tabs to behave.</p>
 
           <select id="setting-gamefeeds" style="width: 100%; max-width: 300px; padding: 10px; background: transparent; border: 1px solid var(--ptc-border); color: var(--ptc-text-primary); border-radius: 8px; font-size: 14px; outline: none;">
             <option value="false" style="background: var(--ptc-bg);">Off</option>
             <option value="true" style="background: var(--ptc-bg);">On</option>
           </select>
-          <p id="setting-gamefeeds-helper" class="setting-helper-disabled">Desktop Game Feeds is locked because Default Feed is not Gaming.</p>
+          <p id="setting-gamefeeds-helper" class="setting-helper-disabled">Desktop Game Feeds is locked rn bc Default Feed is on Unlimited. Set it back to Gaming first, then it can party.</p>
         </div>
 
         <div style="height: 1px; background: var(--ptc-border); width: 100%;"></div>
 
         <div>
           <label style="display:block; margin-bottom: 8px; font-weight: 500;">Accent Color</label>
-          <p style="font-size: 13px; color: var(--ptc-text-secondary); margin-bottom: 12px;">Pick the tiny highlight color for chips, buttons, and the little bits that need some drip.</p>
+          <p style="font-size: 13px; color: var(--ptc-text-secondary); margin-bottom: 12px;">Pick the tiny drip color for chips, buttons, and the little shiny bits. basically the outfit color for Poke.</p>
 
           <input type="color" id="setting-accent" value="#ffabcc" style="width: 100%; max-width: 100px; height: 40px; border: none; border-radius: 8px; background: transparent; cursor: pointer;">
         </div>
