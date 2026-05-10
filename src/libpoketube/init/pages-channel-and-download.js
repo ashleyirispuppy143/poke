@@ -208,7 +208,7 @@ const invtrend = await fetch(`${config.invapi}/trending?type=Gaming&hl=en-US&reg
 });
 
   const inv = getJson(await invtrend.text());
-  renderTemplate(res, req, "search-no-query.ejs", { inv, turntomins, isMobile: req.useragent.isMobile,});
+  renderTemplate(res, req, "home.ejs", { inv, turntomins, isMobile: req.useragent.isMobile,});
 });
 
   
