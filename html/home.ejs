@@ -506,6 +506,10 @@ if (localStorage.getItem("poke_layout") === "classic") {
   document.documentElement.classList.add("layout-classic");
 }
 
+if (localStorage.getItem("poke_layout") === "mix") {
+  document.documentElement.classList.add("layout-mix");
+}
+
 var savedAccent = localStorage.getItem("poke_accent");
 if (savedAccent) {
   document.documentElement.style.setProperty("--ptc-accent", savedAccent);
@@ -629,6 +633,10 @@ button {
 }
 
 .desktop-sticky-nav {
+  display: none;
+}
+
+.desktop-mix-nav {
   display: none;
 }
 
@@ -1554,6 +1562,10 @@ html.layout-classic body .desktop-sticky-nav {
   border-bottom: 1px solid var(--ptc-border);
 }
 
+html.layout-mix body .hero {
+  padding-top: 56px;
+}
+
 @media (min-width: 861px) {
   .thumbnail-container {
     border-radius: 12px;
@@ -1595,6 +1607,30 @@ html.layout-classic body .desktop-sticky-nav {
 
   .desktop-sticky-nav.visible {
     transform: translateY(0);
+  }
+
+  .desktop-mix-nav {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    background: transparent;
+    align-items: center;
+    padding: 0 16px;
+    z-index: 100;
+    pointer-events: none;
+  }
+
+  html.layout-mix .desktop-mix-nav {
+    display: grid;
+    grid-template-columns: minmax(170px, 1fr) minmax(260px, 600px) minmax(170px, 1fr);
+    column-gap: 24px;
+  }
+
+  .desktop-mix-nav .nav-left,
+  .desktop-mix-nav .nav-right {
+    pointer-events: auto;
   }
 
   .nav-left {
@@ -1744,6 +1780,10 @@ html.layout-classic body .desktop-sticky-nav {
     padding-top: 0 !important;
   }
 
+  html.layout-mix body .hero {
+    padding-top: 20px;
+  }
+
   .desktop-sidebar, .sidebar-overlay {
     display: none !important;
   }
@@ -1761,7 +1801,7 @@ html.layout-classic body .desktop-sticky-nav {
     margin-top: 0;
   }
 
-  .desktop-sticky-nav {
+  .desktop-sticky-nav, .desktop-mix-nav {
     display: none !important;
   }
 
@@ -2034,6 +2074,30 @@ html.layout-classic body .desktop-sticky-nav {
   </div>
 </div>
 
+<div id="desktop-mix-nav" class="desktop-mix-nav">
+  <div class="nav-left">
+    <i class="fa-solid fa-bars hamburger"></i>
+  </div>
+
+  <div class="nav-center"></div>
+
+  <div class="nav-right" style="position: relative;">
+    <button type="button" class="yt-create-btn desktop-create-trigger" id="desktop-mix-create-btn" data-create-menu="desktop-mix-create-dropdown" aria-label="Create"><i class="fa-solid fa-plus"></i><span>Create</span></button>
+
+    <div id="desktop-mix-create-dropdown" class="desktop-dropdown-menu">
+      <a href="/video/upload" class="dropdown-item"><i class="fa-solid fa-arrow-up-from-bracket"></i> Upload Video <i class="fa-solid fa-arrow-up-right-from-square external-link-icon" aria-hidden="true"></i></a>
+      <a href="/translate" class="dropdown-item"><i class="fa-solid fa-language"></i> Translate</a>
+      <a href="/map" class="dropdown-item"><i class="fa-solid fa-map-location-dot"></i> Maps</a>
+      <a href="/calendar" class="dropdown-item"><i class="fa-solid fa-calendar-days"></i> Calendar</a>
+      <a href="/privacy" class="dropdown-item"><i class="fa-solid fa-shield-halved"></i> Privacy Policy</a>
+    </div>
+
+    <a href="/account-create" class="my-poke-btn">
+      <i class="fa-regular fa-user"></i> My Poke
+    </a>
+  </div>
+</div>
+
 <div id="desktop-sticky-nav" class="desktop-sticky-nav">
   <div class="nav-left">
     <i class="fa-solid fa-bars hamburger"></i>
@@ -2052,7 +2116,7 @@ html.layout-classic body .desktop-sticky-nav {
   </div>
 
   <div class="nav-right" style="position: relative;">
-    <button type="button" class="yt-create-btn" id="desktop-create-btn" aria-label="Create"><i class="fa-solid fa-plus"></i><span>Create</span></button>
+    <button type="button" class="yt-create-btn desktop-create-trigger" id="desktop-create-btn" data-create-menu="desktop-create-dropdown" aria-label="Create"><i class="fa-solid fa-plus"></i><span>Create</span></button>
 
     <div id="desktop-create-dropdown" class="desktop-dropdown-menu">
       <a href="/video/upload" class="dropdown-item"><i class="fa-solid fa-arrow-up-from-bracket"></i> Upload Video <i class="fa-solid fa-arrow-up-right-from-square external-link-icon" aria-hidden="true"></i></a>
@@ -2250,11 +2314,12 @@ html.layout-classic body .desktop-sticky-nav {
       <div style="display: flex; flex-direction: column; gap: 24px;">
         <div>
           <label style="display:block; margin-bottom: 8px; font-weight: 500;">Layout</label>
-          <p style="font-size: 13px; color: var(--ptc-text-secondary); margin-bottom: 12px;">Hero gives u the big cute front page. Classic skips the intro and gets straight to the videos.</p>
+          <p style="font-size: 13px; color: var(--ptc-text-secondary); margin-bottom: 12px;">Hero gives u the big cute front page. Classic skips the intro and gets straight to the videos. Mix em up keeps the hero but adds the desktop menu, Create, and My Poke buttons.</p>
 
           <select id="setting-layout" style="width: 100%; max-width: 300px; padding: 10px; background: transparent; border: 1px solid var(--ptc-border); color: var(--ptc-text-primary); border-radius: 8px; font-size: 14px; outline: none;">
             <option value="hero" style="background: var(--ptc-bg);">Hero (Default)</option>
             <option value="classic" style="background: var(--ptc-bg);">Classic (No Hero)</option>
+            <option value="mix" style="background: var(--ptc-bg);">Mix em up!</option>
           </select>
         </div>
 
@@ -2452,15 +2517,29 @@ html.layout-classic body .desktop-sticky-nav {
     sidebarOverlay.addEventListener("click", toggleSidebar);
   }
 
-  var desktopCreateBtn = document.getElementById("desktop-create-btn");
-  var desktopCreateDropdown = document.getElementById("desktop-create-dropdown");
+  var desktopCreateBtns = document.querySelectorAll(".desktop-create-trigger");
+  var desktopCreateDropdowns = document.querySelectorAll(".desktop-dropdown-menu");
 
-  if (desktopCreateBtn && desktopCreateDropdown) {
-    desktopCreateBtn.addEventListener("click", function(e) {
-      e.stopPropagation();
-      desktopCreateDropdown.classList.toggle("show");
+  function closeDesktopCreateDropdowns(exceptDropdown) {
+    desktopCreateDropdowns.forEach(function(dropdown) {
+      if (dropdown !== exceptDropdown) {
+        dropdown.classList.remove("show");
+      }
     });
   }
+
+  desktopCreateBtns.forEach(function(button) {
+    button.addEventListener("click", function(e) {
+      e.stopPropagation();
+
+      var menuId = this.getAttribute("data-create-menu");
+      var dropdown = document.getElementById(menuId);
+      if (!dropdown) return;
+
+      closeDesktopCreateDropdowns(dropdown);
+      dropdown.classList.toggle("show");
+    });
+  });
 
   var openSettingsBtn = document.getElementById("open-settings-btn");
   var saveSettingsBtn = document.getElementById("save-settings-btn");
@@ -2612,8 +2691,16 @@ html.layout-classic body .desktop-sticky-nav {
 
       if (newLayout === "classic") {
         document.documentElement.classList.add("layout-classic");
+        document.documentElement.classList.remove("layout-mix");
+      } else if (newLayout === "mix") {
+        document.documentElement.classList.add("layout-mix");
+        document.documentElement.classList.remove("layout-classic");
+
+        var stickyNavForMix = document.getElementById("desktop-sticky-nav");
+        if (stickyNavForMix && window.scrollY < 100) stickyNavForMix.classList.remove("visible");
       } else {
         document.documentElement.classList.remove("layout-classic");
+        document.documentElement.classList.remove("layout-mix");
 
         var stickyNav = document.getElementById("desktop-sticky-nav");
         if (stickyNav && window.scrollY < 100) stickyNav.classList.remove("visible");
@@ -2661,8 +2748,8 @@ html.layout-classic body .desktop-sticky-nav {
   }
 
   document.addEventListener("click", function(e) {
-    if (desktopCreateDropdown && !e.target.closest(".nav-right")) {
-      desktopCreateDropdown.classList.remove("show");
+    if (!e.target.closest(".nav-right")) {
+      closeDesktopCreateDropdowns();
     }
   });
 
@@ -2723,6 +2810,7 @@ html.layout-classic body .desktop-sticky-nav {
   document.addEventListener("keydown", function(e) {
     if (e.key === "Escape") {
       closeLibraryModal();
+      closeDesktopCreateDropdowns();
     }
   });
 })();
