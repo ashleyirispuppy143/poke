@@ -113,76 +113,178 @@ function fadeInElements() {
     }
   });
 }
+ const VideoToSkipToPlayer = document.getElementById("video");
+const AudioToSkipToPlayer = document.getElementById("aud");
 
-function jumpToTime(e) {
-  e.preventDefault();
-  
-  const link = e.target;
-  const video = document.getElementById('video');
-  const time = link.dataset.jumpTime;
+function shouldUseSeparateAudio() {
+  const quality = new URLSearchParams(window.location.search).get("quality") || "";
+  return quality !== "medium" && AudioToSkipToPlayer;
+}
 
-  const qualityforaudiostuff = new URLSearchParams(window.location.search).get("quality") || "";
-  
-  if (qualityforaudiostuff !== "medium") {
-  var audiojumptotime = document.getElementById('aud');
-  audiojumptotime.currentTime = time;
+function parseJumpTime(value) {
+  if (!value) return null;
+
+  const raw = String(value).trim();
+
+  if (/^\d+(\.\d+)?$/.test(raw)) {
+    return Number(raw);
   }
-  
-  video.currentTime = time;
 
-  window.location.hash = 'top'; // Add #top to the URL
+  const hmsMatch = raw.match(/^(?:(\d+):)?(\d{1,2}):(\d{2})$/);
+
+  if (hmsMatch) {
+    const hours = Number(hmsMatch[1] || 0);
+    const minutes = Number(hmsMatch[2]);
+    const seconds = Number(hmsMatch[3]);
+
+    return hours * 3600 + minutes * 60 + seconds;
+  }
+
+  const youtubeStyleMatch = raw.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/);
+
+  if (youtubeStyleMatch && youtubeStyleMatch[0]) {
+    const hours = Number(youtubeStyleMatch[1] || 0);
+    const minutes = Number(youtubeStyleMatch[2] || 0);
+    const seconds = Number(youtubeStyleMatch[3] || 0);
+
+    return hours * 3600 + minutes * 60 + seconds;
+  }
+
+  return null;
+}
+
+function getJumpTimeFromLink(link) {
+  if (link.dataset.jumpTime) {
+    return parseJumpTime(link.dataset.jumpTime);
+  }
+
+  const href = link.getAttribute("href");
+
+  if (!href) return null;
+
+  try {
+    const url = new URL(href, window.location.href);
+    return parseJumpTime(url.searchParams.get("t"));
+  } catch {
+    return null;
+  }
+}
+
+function clampTime(media, seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return 0;
+
+  if (Number.isFinite(media.duration) && media.duration > 0) {
+    return Math.min(seconds, Math.max(0, media.duration - 0.05));
+  }
+
+  return seconds;
+}
+
+function seekMedia(media, seconds) {
+  if (!media) return;
+
+  const targetTime = clampTime(media, seconds);
+
+  if (media.readyState >= 1) {
+    media.currentTime = targetTime;
+    return;
+  }
+
+  media.addEventListener(
+    "loadedmetadata",
+    () => {
+      media.currentTime = clampTime(media, targetTime);
+    },
+    { once: true }
+  );
+}
+
+function jumpTopBriefly() {
+  window.location.hash = "top";
 
   setTimeout(() => {
-    history.replaceState(null, null, ' '); // Remove #top after 250MS
+    history.replaceState(
+      null,
+      "",
+      window.location.pathname + window.location.search
+    );
   }, 250);
 }
 
+function seekTo(seconds) {
+  const targetTime = Number(seconds);
 
-// Handle click events for time-based links
-const timeLinks = document.querySelectorAll('a[data-onclick="jump_to_time"]');
-timeLinks.forEach(link => {
-  const href = link.getAttribute('href');
-  if (link.dataset.jumpTime && href && href.includes('&t=')) {
-    const params = new URLSearchParams(href.split('?')[1]);
-    const time = params.get('t');
-    if (time) {
-      link.dataset.jumpTime = time;
-      link.addEventListener('click', jumpToTime);
-      link.removeAttribute('href');
+  if (!Number.isFinite(targetTime)) return;
+  if (!VideoToSkipToPlayer) return;
+
+  const wasPlaying = !VideoToSkipToPlayer.paused;
+
+  if (shouldUseSeparateAudio()) {
+    seekMedia(AudioToSkipToPlayer, targetTime);
+  }
+
+  seekMedia(VideoToSkipToPlayer, targetTime);
+
+  if (wasPlaying) {
+    const videoPlayResult = VideoToSkipToPlayer.play();
+
+    if (videoPlayResult && typeof videoPlayResult.catch === "function") {
+      videoPlayResult.catch(() => {});
+    }
+
+    if (shouldUseSeparateAudio()) {
+      const audioPlayResult = AudioToSkipToPlayer.play();
+
+      if (audioPlayResult && typeof audioPlayResult.catch === "function") {
+        audioPlayResult.catch(() => {});
+      }
     }
   }
-});
 
-const videoPlayer = document.getElementById('video');
-
-function time(seconds) {
-  videoPlayer.currentTime = seconds;
-
-  window.location.hash = 'top'; 
-
-  setTimeout(() => {   
-    history.replaceState(null, null, ' '); 
-  }, 250);  
+  jumpTopBriefly();
 }
 
+function jumpToTime(event) {
+  const link = event.target.closest('a[data-onclick="jump_to_time"]');
 
- document.addEventListener('click', function(event) {
-  const clickedElement = event.target; 
+  if (!link) return;
 
-   if (clickedElement.classList.contains('comment')) {
-    const commentText = clickedElement.textContent.trim();
+  const seconds = getJumpTimeFromLink(link);
 
-     const timestampMatch = commentText.match(/(\d{1,2}:\d{2})/);
+  if (seconds === null) return;
 
-    if (timestampMatch) {
-      const timestamp = timestampMatch[0];  
-      let parts = timestamp.split(':');
-      let seconds = (+parts[0]) * 60 + (+parts[1]); 
+  event.preventDefault();
+  seekTo(seconds);
+}
 
-       time(seconds);
-    }
+function time(seconds) {
+  seekTo(seconds);
+}
+
+document.addEventListener("click", function (event) {
+  const timeLink = event.target.closest('a[data-onclick="jump_to_time"]');
+
+  if (timeLink) {
+    jumpToTime(event);
+    return;
   }
-});
+
+  const comment = event.target.closest(".comment");
+
+  if (!comment) return;
+
+  const commentText = comment.textContent.trim();
+  const timestampMatch = commentText.match(/(?:(\d+):)?(\d{1,2}):(\d{2})/);
+
+  if (!timestampMatch) return;
+
+  const hours = Number(timestampMatch[1] || 0);
+  const minutes = Number(timestampMatch[2]);
+  const seconds = Number(timestampMatch[3]);
+  const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+
+  seekTo(totalSeconds);
+}); 
 
 const videoElement = document.getElementById("video");
 videoElement.addEventListener("fullscreenchange", () => {
