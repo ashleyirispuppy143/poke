@@ -100,7 +100,7 @@ app.get("/143", (req, res) => {
     return renderTemplate(res, req, "143.ejs", { something });
   }
 
-  return res.redirect(`/`);
+  return res.redirect(`/home`);
 });
 
   
