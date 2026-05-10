@@ -1909,7 +1909,7 @@ function authorVerifiedChecker4000() {
   }
 
   .player {
-    width: calc(100% - 4px); 
+    width: calc(100% - 10px); 
     display: block;
     pointer-events: none;
     transition: transform 0.3s ease;
@@ -1920,28 +1920,30 @@ function authorVerifiedChecker4000() {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 68px;
-    height: 48px;
-    background-color: #FF0000;
-    border-radius: 12px;
+    width: 70px;
+    height: 70px;
+    background-color: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 2;
-    opacity: 0.9;
-    transition: background-color 0.2s ease, transform 0.2s ease;
+    opacity: 0;
+    transition: all 0.2s ease-in-out;
   }
 
   .video-player-container:hover .play-button-overlay {
-    background-color: #FF0000;
-    transform: translate(-50%, -50%) scale(1.1);
     opacity: 1;
+    transform: translate(-50%, -50%) scale(1.1);
   }
 
   .play-icon {
-    width: 20px;
-    height: 20px;
+    width: 40px;
+    height: 40px;
     fill: white;
+    filter: drop-shadow(0 0 5px rgba(0,0,0,0.5));
+    margin-left: 4px;
   }
 </style>
 
@@ -1949,7 +1951,7 @@ function authorVerifiedChecker4000() {
   <a href="/watch?v=<%=x.attachment.videoId%>" class="video-link-wrapper">
     <video 
       class="player" 
-      style="border-radius: 14px;" 
+      style="border-radius: 12px;" 
       poster="<%- media_proxy_url %>/proxy?url=https://i.ytimg.com/vi/<%=x.attachment.videoId%>/maxresdefault.jpg?v=607ddcd4">
     </video>
     
