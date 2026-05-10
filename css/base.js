@@ -25,7 +25,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 //////////////// THE PLAYER, START ////////////////////////
-try {
+ try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -84,14 +84,10 @@ document.addEventListener("DOMContentLoaded", () => {
     let cores = 4;
     let memoryGb = 4;
     let saveData = false;
-    let ua = "";
     try { cores = Math.max(1, Number(navigator.hardwareConcurrency) || 4); } catch { }
     try { memoryGb = Math.max(0, Number(navigator.deviceMemory) || 0); } catch { memoryGb = 0; }
     try { saveData = !!navigator.connection?.saveData; } catch { }
-    try { ua = String(navigator.userAgent || ""); } catch { }
-    const desktopMac = /Macintosh/.test(ua) && !/AppleWebKit\/.*Mobile/.test(ua);
-    const oldIntelMac = desktopMac && cores <= 8 && (memoryGb === 0 || memoryGb <= 8);
-    const lowEnd = saveData || cores <= 4 || (memoryGb > 0 && memoryGb <= 4) || oldIntelMac;
+    const lowEnd = saveData || cores <= 4 || (memoryGb > 0 && memoryGb <= 4);
     const veryLowEnd = saveData || cores <= 2 || (memoryGb > 0 && memoryGb <= 2);
     return {
       cores,
@@ -278,11 +274,6 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch { return false; }
       })();
       const mobile = (() => {
-        try {
-          if (typeof navigator.userAgentData?.mobile === "boolean") {
-            return navigator.userAgentData.mobile;
-          }
-        } catch { }
         try {
           return navigator.maxTouchPoints > 0 && window.matchMedia("(pointer: coarse)").matches;
         } catch { }
@@ -1445,8 +1436,8 @@ startupPrimeStartedAt: performance.now(),
     const t = now();
     if (t > _bgKeepaliveFailResetAt) _bgKeepaliveFailCount = 0;
     const backoffMs = isVisible ? 400 :
-    _bgKeepaliveFailCount < 4 ? 300 :
-    _bgKeepaliveFailCount < 10 ? 500 : 800;
+    _bgKeepaliveFailCount < 2 ? 2500 :
+    _bgKeepaliveFailCount < 6 ? 5000 : 9000;
     if (t - _lastKeepalivePlayAt < backoffMs) return;
     _lastKeepalivePlayAt = t;
     if (!isVisible) {
@@ -1498,13 +1489,13 @@ startupPrimeStartedAt: performance.now(),
     if (_bgWorker || _bgFallbackId) return;
     _bgKeepaliveFailCount = 0;
     try {
-      const _bgTickMs = perfProfile.lowEnd ? 1000 : 500;
+      const _bgTickMs = perfProfile.lowEnd ? 7000 : 5000;
       const blob = new Blob([`setInterval(()=>postMessage(0),${_bgTickMs})`], { type: "application/javascript" });
       _bgWorkerUrl = URL.createObjectURL(blob);
       _bgWorker = new Worker(_bgWorkerUrl);
       _bgWorker.onmessage = _bgKeepaliveTick;
     } catch {
-      _bgFallbackId = setInterval(_bgKeepaliveTick, perfProfile.lowEnd ? 1400 : 750);
+      _bgFallbackId = setInterval(_bgKeepaliveTick, perfProfile.lowEnd ? 8000 : 6000);
     }
   }
   function stopBgAudioKeepalive() {
@@ -2453,7 +2444,7 @@ startupPrimeStartedAt: performance.now(),
     : playPauseRecoveryCpuActive(240)
     ? 2000
     : document.visibilityState !== "visible"
-    ? 2500
+    ? 8000
     : (shouldUseAggressiveForegroundMonitoring() ? TICK_MS : scaleHealthyCpuDelay(1600));
     _timer = setTimeout(_tick, delay);
   }
@@ -2530,7 +2521,7 @@ startupPrimeStartedAt: performance.now(),
       if (_stopped) return;
       let delay = TICK_MS;
       if (document.visibilityState !== "visible" || !state.intendedPlaying) {
-        delay = 3000;
+        delay = document.visibilityState !== "visible" ? 8000 : 3000;
       } else if (seekRecoveryCpuActive(600)) {
         delay = 2200;
       } else if (playPauseRecoveryCpuActive(240)) {
@@ -3425,7 +3416,7 @@ startupPrimeStartedAt: performance.now(),
       if (_timer) return;
       let delay = CHECK_MS;
       if (document.visibilityState !== "visible" || !state.intendedPlaying) {
-        delay = 2500;
+        delay = 8000;
       } else if (seekRecoveryCpuActive(600)) {
         delay = 2600;
       } else if (playPauseRecoveryCpuActive(240)) {
@@ -5081,8 +5072,152 @@ function saveVolume() {
   }, 200);
 }
 
+const TIME_DISPLAY_MODE_STORAGE_KEY = "videoPlayerTimeDisplayMode";
+let playerTimeDisplayMode = "elapsed";
+let playerTimeDisplayButton = null;
+let playerTimeDisplayText = null;
+let playerTimeDisplayQueued = false;
+let playerTimeDisplayBound = false;
+function loadTimeDisplayMode() {
+  try {
+    playerTimeDisplayMode = localStorage.getItem(TIME_DISPLAY_MODE_STORAGE_KEY) === "remaining"
+      ? "remaining"
+      : "elapsed";
+  } catch {
+    playerTimeDisplayMode = "elapsed";
+  }
+}
+function saveTimeDisplayMode() {
+  try { localStorage.setItem(TIME_DISPLAY_MODE_STORAGE_KEY, playerTimeDisplayMode); } catch { }
+}
+function formatPlayerClock(seconds) {
+  let total = Math.max(0, Math.floor(Number(seconds) || 0));
+  const h = Math.floor(total / 3600);
+  total -= h * 3600;
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  if (h > 0) return h + ":" + String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+  return m + ":" + String(s).padStart(2, "0");
+}
+function getPlayerDisplayDuration() {
+  let d = 0;
+  try { d = Number(video.duration()) || 0; } catch { }
+  if (!isFinite(d) || d <= 0) {
+    try { d = Number(getVideoNode()?.duration) || 0; } catch { }
+  }
+  if (!isFinite(d) || d <= 0) {
+    try { d = Number(videoEl?.duration) || 0; } catch { }
+  }
+  return isFinite(d) && d > 0 ? d : 0;
+}
+function getPlayerDisplayTime() {
+  let t = 0;
+  try { t = Number(video.currentTime()) || 0; } catch { }
+  if (!isFinite(t) || t < 0) {
+    try { t = Number(getVideoNode()?.currentTime) || 0; } catch { }
+  }
+  if (!isFinite(t) || t < 0) {
+    try { t = Number(videoEl?.currentTime) || 0; } catch { }
+  }
+  return isFinite(t) && t > 0 ? t : 0;
+}
+function updatePlayerTimeDisplay() {
+  playerTimeDisplayQueued = false;
+  if (!playerTimeDisplayText) return;
+  const dur = getPlayerDisplayDuration();
+  const cur = Math.min(getPlayerDisplayTime(), dur || Infinity);
+  const totalText = formatPlayerClock(dur);
+  const valueText = playerTimeDisplayMode === "remaining"
+    ? "-" + formatPlayerClock(Math.max(0, dur - cur))
+    : formatPlayerClock(cur);
+  const text = valueText + " / " + totalText;
+  playerTimeDisplayText.textContent = text;
+  if (playerTimeDisplayButton) {
+    const label = playerTimeDisplayMode === "remaining" ? "Remaining time" : "Elapsed time";
+    playerTimeDisplayButton.setAttribute("aria-label", label + ": " + text);
+    playerTimeDisplayButton.title = "Switch time display";
+  }
+}
+function queuePlayerTimeDisplayUpdate() {
+  if (playerTimeDisplayQueued) return;
+  playerTimeDisplayQueued = true;
+  try { requestAnimationFrame(updatePlayerTimeDisplay); }
+  catch { setTimeout(updatePlayerTimeDisplay, 100); }
+}
+function injectPlayerTimeDisplayStyles() {
+  if (document.getElementById("player-time-display-css")) return;
+  const style = document.createElement("style");
+  style.id = "player-time-display-css";
+  style.textContent = `.vjs-has-player-time-toggle .vjs-remaining-time,.vjs-has-player-time-toggle .vjs-current-time,.vjs-has-player-time-toggle .vjs-time-divider,.vjs-has-player-time-toggle .vjs-duration{display:none!important}.vjs-player-time-toggle{min-width:7.2em;width:auto;padding:0 .45em!important;cursor:pointer}.vjs-player-time-toggle .vjs-player-time-text{display:inline-block;white-space:nowrap;font-variant-numeric:tabular-nums;line-height:3em}`;
+  try { document.head.appendChild(style); } catch { }
+}
+function setupPlayerTimeDisplayToggle() {
+  loadTimeDisplayMode();
+  injectPlayerTimeDisplayStyles();
+  const root = (() => { try { return video.el(); } catch { return videoEl?.parentElement || null; } })();
+  const bar = (() => {
+    try { return video.controlBar?.el?.() || root?.querySelector?.(".vjs-control-bar") || null; } catch { return null; }
+  })();
+  if (!root || !bar) return;
+  try { root.classList.add("vjs-has-player-time-toggle"); } catch { }
+  playerTimeDisplayButton = bar.querySelector(".vjs-player-time-toggle");
+  if (!playerTimeDisplayButton) {
+    playerTimeDisplayButton = document.createElement("button");
+    playerTimeDisplayButton.type = "button";
+    playerTimeDisplayButton.className = "vjs-control vjs-button vjs-player-time-toggle";
+    playerTimeDisplayButton.innerHTML = `<span class="vjs-player-time-text"></span>`;
+    const before = bar.querySelector(".vjs-fullscreen-control") || bar.querySelector(".vjs-picture-in-picture-control");
+    try { bar.insertBefore(playerTimeDisplayButton, before || null); } catch { bar.appendChild(playerTimeDisplayButton); }
+    _on(playerTimeDisplayButton, "click", e => {
+      try { e.preventDefault(); e.stopPropagation(); } catch { }
+      playerTimeDisplayMode = playerTimeDisplayMode === "remaining" ? "elapsed" : "remaining";
+      saveTimeDisplayMode();
+      updatePlayerTimeDisplay();
+    });
+  }
+  playerTimeDisplayText = playerTimeDisplayButton.querySelector(".vjs-player-time-text");
+  if (!playerTimeDisplayBound) {
+    playerTimeDisplayBound = true;
+    const events = ["timeupdate", "durationchange", "loadedmetadata", "loadeddata", "seeked", "ended", "play", "pause", "waiting", "playing", "emptied"];
+    for (const ev of events) {
+      try { _on(videoEl, ev, queuePlayerTimeDisplayUpdate, { passive: true }); } catch { }
+    }
+    try {
+      const vn = getVideoNode();
+      if (vn && vn !== videoEl) {
+        for (const ev of events) _on(vn, ev, queuePlayerTimeDisplayUpdate, { passive: true });
+      }
+    } catch { }
+    try { _on(document, "visibilitychange", queuePlayerTimeDisplayUpdate, { passive: true }); } catch { }
+  }
+  updatePlayerTimeDisplay();
+}
+
 function isHiddenBackground() {
   return document.visibilityState === "hidden";
+}
+
+function backgroundLowPowerModeActive() {
+  return document.visibilityState === "hidden" &&
+  !state.seeking &&
+  !state.seekBuffering &&
+  !state.seekResumeInFlight &&
+  !state.strictBufferHold &&
+  !state.videoWaiting &&
+  !state.audioWaiting &&
+  !state.videoStallAudioPaused;
+}
+
+function backgroundSyncDelayFloor() {
+  if (document.visibilityState !== "hidden") return 0;
+  if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return 0;
+  if (state.strictBufferHold || state.videoWaiting || state.audioWaiting || state.videoStallAudioPaused) return 1200;
+  if (!state.intendedPlaying || state.endedNaturally || state.restarting) return 10000;
+  if (!state.firstPlayCommitted || state.startupKickInFlight || state.startupAutoplayRetryTimer) return 3000;
+  if (coupledMode && audio && audio.paused) return 3500;
+  const vn = (() => { try { return getVideoNode(); } catch { return null; } })();
+  if (vn && vn.paused) return 3500;
+  return 7000;
 }
 
 function inBgReturnGrace() {
@@ -5852,6 +5987,7 @@ function _deadAudioRecoveryTick() {
   if (!state.intendedPlaying) { _deadAudioStreak = 0; return; }
   if (state.endedNaturally || state.restarting) { _deadAudioStreak = 0; return; }
   if (state.seeking || state.seekBuffering) { _deadAudioStreak = 0; return; }
+  if (backgroundLowPowerModeActive()) { _deadAudioStreak = 0; return; }
   if (state.strictBufferHold && state.firstPlayCommitted) { _deadAudioStreak = 0; return; }
   try { if (typeof userWantsPauseNow === "function" && userWantsPauseNow(2400)) { _deadAudioStreak = 0; return; } } catch { }
   if (state.userPauseUntil > now()) { _deadAudioStreak = 0; return; }
@@ -5900,7 +6036,7 @@ function _deadAudioRecoveryTick() {
 let _deadAudioRecoveryInterval = null;
 function startDeadAudioRecovery() {
   if (_deadAudioRecoveryInterval) return;
-  _deadAudioRecoveryInterval = setInterval(_deadAudioRecoveryTick, perfProfile.lowEnd ? 1600 : 1000);
+  _deadAudioRecoveryInterval = setInterval(_deadAudioRecoveryTick, perfProfile.lowEnd ? 3000 : 2200);
 }
 function stopDeadAudioRecovery() {
   if (!_deadAudioRecoveryInterval) return;
@@ -7968,7 +8104,9 @@ function startAudioNotPlayingMonitor() {
     _audioNotPlayingMonitorTimer = null;
     if (!coupledMode || !audio) return;
     updateAudioNotPlayingWarning();
-    const nextDelay = shouldWatchForSilentAudio()
+    const nextDelay = document.visibilityState === "hidden"
+      ? 8000
+      : shouldWatchForSilentAudio()
       ? (_audioNotPlayingSilentSince ? (perfProfile.lowEnd ? 1000 : 650) : scaleHealthyCpuDelay(1400))
       : scaleHealthyCpuDelay(2200);
     _audioNotPlayingMonitorTimer = setTimeout(tick, nextDelay);
@@ -9533,6 +9671,8 @@ function scheduleSync(minDelay = null) {
   } else {
     delay = 3500; // paused state: sync has almost nothing to do
   }
+  const bgFloor = backgroundSyncDelayFloor();
+  if (bgFloor > 0) delay = Math.max(delay, bgFloor);
   const targetAt = now() + delay;
   if (state.syncTimer && state.syncScheduledAt <= targetAt + (delay * 0.2)) return;
   if (state.syncTimer) clearTimeout(state.syncTimer);
@@ -10912,7 +11052,7 @@ const ATOMIC_MIN_INTERVAL_IDLE_MS = perfProfile.lowEnd ? 600 : 350;
 function getAtomicMinIntervalMs() {
   if (!coupledMode || !audio) return ATOMIC_MIN_INTERVAL_IDLE_MS;
   if (!state.intendedPlaying || state.endedNaturally) return ATOMIC_MIN_INTERVAL_IDLE_MS;
-  if (document.visibilityState !== "visible" || !isWindowFocused()) return perfProfile.lowEnd ? 450 : 220;
+  if (document.visibilityState !== "visible" || !isWindowFocused()) return perfProfile.lowEnd ? 3500 : 2500;
   if (state.seeking || state.seekBuffering || state.seekResumeInFlight) {
     return Math.max(90, SeekCpuController.cadenceFor(45));
   }
@@ -10992,7 +11132,7 @@ function _atomicTrigger() {
 }
 function startAtomicInvariantLoop() {
   if (!coupledMode || !audio) return;
-  if (!_atomicIntervalId) _atomicIntervalId = setInterval(_atomicTrigger, perfProfile.lowEnd ? 950 : 650);
+  if (!_atomicIntervalId) _atomicIntervalId = setInterval(_atomicTrigger, perfProfile.lowEnd ? 3500 : 2500);
   _atomicTrigger();
 }
 function stopAtomicInvariantLoop() {
@@ -11184,6 +11324,7 @@ function _releaseLock() {
 }
 
 function _evaluateSpinnerLock() {
+  if (document.visibilityState === "hidden" && !_spinnerLockEngaged) return;
   const want = _spinnerLockActive();
   if (want === _spinnerLockEngaged) return;
   if (want) _engageLock(); else _releaseLock();
@@ -11206,7 +11347,7 @@ function stopSpinnerLockTriggers() {
   }
 }
 
-try { _spinnerLockPollInterval = setInterval(_evaluateSpinnerLock, perfProfile.lowEnd ? 800 : 300); } catch { }
+try { _spinnerLockPollInterval = setInterval(_evaluateSpinnerLock, perfProfile.lowEnd ? 5000 : 4000); } catch { }
 
 try {
   const rootEl = video?.el?.();
@@ -11231,6 +11372,7 @@ try {
 
 try {
   _spinnerLockFailSafeInterval = setInterval(() => {
+    if (document.visibilityState === "hidden" && !_spinnerLockEngaged) return;
     if (!_spinnerLockEngaged) return;
     if ((now() - _spinnerLockEngagedAt) < 8000) return;
     const rootEl = video?.el?.();
@@ -12826,6 +12968,17 @@ async function runSync() {
   return;
     }
 
+    if (backgroundLowPowerModeActive() && state.intendedPlaying &&
+      state.firstPlayCommitted && !state.strictBufferHold) {
+      const _bgSyncVNode = getVideoNode();
+      const _bgVideoOk = !!(_bgSyncVNode && !_bgSyncVNode.paused);
+      const _bgAudioOk = !coupledMode || !audio || !audio.paused;
+      if (_bgVideoOk && _bgAudioOk) {
+        scheduleSync();
+        return;
+      }
+    }
+
     enforcePlaybackRateSync();
     state._antiLoopTickCounter = (state._antiLoopTickCounter || 0) + 1;
     if ((state._antiLoopTickCounter % 3) === 1) {
@@ -13400,7 +13553,8 @@ function bufferMonitorTick() {
   _bufHealthy &&
   !getVideoPaused();
   const _bufTailActive = mediaNearNaturalEnd(vNodeBuf, vNodeBuf ? (Number(vNodeBuf.currentTime) || 0) : 0, 30);
-  if (_bufIdle) _bufNextDelay = scaleHealthyCpuDelay(1500);
+  if (document.visibilityState === "hidden") _bufNextDelay = backgroundLowPowerModeActive() ? 8000 : 5000;
+  else if (_bufIdle) _bufNextDelay = scaleHealthyCpuDelay(1500);
   else if (_bufPlayPauseCpu) _bufNextDelay = _bufTailActive ? scaleHealthyCpuDelay(2200) : scaleHealthyCpuDelay(1600);
   else if (_bufHealthy) _bufNextDelay = _bufTailActive ? scaleHealthyCpuDelay(1800) : (shouldUseRelaxedCpuHousekeeping() ? scaleHealthyCpuDelay(1200) : (perfProfile.lowEnd ? 900 : 600));
   _bufMonTimer = setTimeout(bufferMonitorTick, _bufNextDelay);
@@ -13442,6 +13596,37 @@ function setupHeartbeat() {
         (performance.now() - state._seekStartedAt) < 4500) {
         state.heartbeatTimer = setTimeout(beat, 1200);
       return;
+        }
+
+        if (backgroundLowPowerModeActive()) {
+          if (elapsed > WAKE_DETECT_THRESHOLD_MS) {
+            state.lastBgReturnAt = nowTs;
+            if (state.intendedPlaying) state.resumeOnVisible = true;
+          }
+          const _hbBgVNode = getVideoNode();
+          const _hbBgVideoPaused = !_hbBgVNode || _hbBgVNode.paused;
+          const _hbBgAudioPaused = coupledMode && audio ? audio.paused : false;
+          if (state.intendedPlaying && !state.endedNaturally &&
+            (_hbBgVideoPaused || _hbBgAudioPaused) &&
+            !userPauseLockActive() && !mediaSessionForcedPauseActive() &&
+            !MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) {
+            if (coupledMode && audio) {
+              kickHiddenCoupledBootstrap({ kickAudio: true });
+            } else if (!MediumQualityManager.shouldBlockAutoResume() &&
+              !MediumQualityManager.intentPaused &&
+              canKickBackgroundPlay()) {
+              scheduleNoHoverPlaybackKick("hidden-heartbeat");
+            }
+          } else if (coupledMode && audio && !_hbBgVideoPaused && !_hbBgAudioPaused &&
+            !state.bgSilentTimeSyncing) {
+            const _hbBgAt = Number(audio.currentTime);
+            const _hbBgVt = Number(_hbBgVNode.currentTime);
+            if (isFinite(_hbBgAt) && isFinite(_hbBgVt) && Math.abs(_hbBgAt - _hbBgVt) > 0.45) {
+              bgSilentSyncVideoTime(_hbBgAt);
+            }
+          }
+          state.heartbeatTimer = setTimeout(beat, (_hbBgVideoPaused || _hbBgAudioPaused) ? 4500 : 9000);
+          return;
         }
 
         if (coupledMode && audio && !audio.paused && state.videoWaiting && canKillAudio({ bypassGrace: true }) &&
@@ -18979,6 +19164,8 @@ if (wantsStartupAutoplay() && !state.firstPlayCommitted && !startupZeroSuppresse
 
 setupUserPauseIntentDetection();
 loadSavedVolume();
+setupPlayerTimeDisplayToggle();
+try { video.ready(setupPlayerTimeDisplayToggle); } catch { }
 if (coupledMode && audio) {
   try {
     const _initTarget = targetVolFromVideo();
