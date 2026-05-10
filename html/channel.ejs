@@ -1890,81 +1890,69 @@ function authorVerifiedChecker4000() {
              <% if (x.attachment) { %>
                       <% if (x.attachment.type === "video") { %>
  <style>
-  /* The main container */
   .video-player-container {
     position: relative;
     width: 100%;
     display: inline-block;
     overflow: hidden;
-    border-radius: 16px; /* Matching your video radius */
+    border-radius: 16px;
+    background-color: #000;
   }
 
-  /* The link wrapper - ensures the whole area is clickable */
   .video-link-wrapper {
     text-decoration: none;
-    display: block;
+    display: flex;
+    justify-content: center;
+    align-items: center;
     cursor: pointer;
     line-height: 0;
   }
 
-  /* The Video element */
   .player {
-    width: 100%;
+    width: calc(100% - 4px); 
     display: block;
-    pointer-events: none; /* Crucial: This allows clicks to pass through to the <a> tag */
+    pointer-events: none;
     transition: transform 0.3s ease;
   }
 
-  /* The Play Button Overlay */
   .play-button-overlay {
     position: absolute;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -50%) scale(0.9);
-    width: 80px;
-    height: 80px;
-    background-color: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(12px);
-    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    width: 68px;
+    height: 48px;
+    background-color: #FF0000;
+    border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 2;
-    opacity: 0; /* Hidden by default */
-    transition: all 0.3s ease;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    opacity: 0.9;
+    transition: background-color 0.2s ease, transform 0.2s ease;
   }
 
-  /* Hover States */
   .video-player-container:hover .play-button-overlay {
+    background-color: #FF0000;
+    transform: translate(-50%, -50%) scale(1.1);
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
   }
 
-  /* Subtle zoom effect on the video for a "pro" feel */
-  .video-player-container:hover .player {
-    transform: scale(1.02);
-  }
-
-  /* The Play Icon (Triangle) */
   .play-icon {
-    width: 30px;
-    height: 30px;
+    width: 20px;
+    height: 20px;
     fill: white;
-    margin-left: 5px; /* Visual centering for triangles */
   }
 </style>
 
 <div class="video-player-container">
   <a href="/watch?v=<%=x.attachment.videoId%>" class="video-link-wrapper">
-    <!-- Removed "controls" as requested -->
     <video 
       class="player" 
-      style="border-radius: 16px;" 
+      style="border-radius: 14px;" 
       poster="<%- media_proxy_url %>/proxy?url=https://i.ytimg.com/vi/<%=x.attachment.videoId%>/maxresdefault.jpg?v=607ddcd4">
     </video>
     
-    <!-- Centered Play Button -->
     <div class="play-button-overlay">
       <svg class="play-icon" viewBox="0 0 24 24">
         <path d="M8 5v14l11-7z"></path>
@@ -1972,7 +1960,6 @@ function authorVerifiedChecker4000() {
     </div>
   </a>
 </div>
-                        
                <% } %>
                                        <% if (x.attachment.type === "image") { %>
  
