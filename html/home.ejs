@@ -513,6 +513,7 @@ if (savedAccent) {
 
 var showGameFeeds = localStorage.getItem("poke_gamefeeds") === "true";
 if (showGameFeeds) {
+  localStorage.setItem("poke_feed", "gaming");
   document.documentElement.classList.add("show-game-feeds");
 }
 </script>
@@ -933,7 +934,7 @@ html.show-game-feeds .game-feed-tab {
 
 .details {
   display: flex;
-  padding-top: 12px;
+  padding-top: 10px;
   align-items: flex-start;
   gap: 0;
 }
@@ -949,8 +950,8 @@ html.show-game-feeds .game-feed-tab {
   color: var(--ptc-text-primary);
   font-size: 16px;
   font-weight: 500;
-  line-height: 1.4;
-  margin-bottom: 6px;
+  line-height: 22px;
+  margin-bottom: 3px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -962,12 +963,16 @@ html.show-game-feeds .game-feed-tab {
 
 .metadata {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: nowrap;
   color: var(--ptc-text-secondary);
   font-size: 14px;
   font-weight: 400;
-  line-height: 1.25;
-  gap: 2px;
+  line-height: 20px;
+  min-width: 0;
+  width: 100%;
+  column-gap: 4px;
 }
 
 .byline {
@@ -976,10 +981,12 @@ html.show-game-feeds .game-feed-tab {
   position: relative;
   z-index: 3;
   transition: color 0.1s;
-  display: block;
-  white-space: nowrap;
+  display: inline-block;
+  max-width: 58%;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 0 1 auto;
 }
 
 .byline:hover {
@@ -989,8 +996,11 @@ html.show-game-feeds .game-feed-tab {
 .stats {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   column-gap: 4px;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 0 0 auto;
 }
 
 .site-footer {
@@ -1147,6 +1157,11 @@ html.show-game-feeds .game-feed-tab {
   padding: 32px;
   overflow-y: auto;
   background: var(--ptc-bg);
+}
+
+.settings-content select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 @media (max-width: 768px) {
@@ -1600,7 +1615,7 @@ html.layout-classic body .desktop-sticky-nav {
   .nav-right {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
   }
 
   .nav-icon-btn {
@@ -1620,6 +1635,54 @@ html.layout-classic body .desktop-sticky-nav {
 
   .nav-icon-btn:hover {
     background: var(--ptc-chip-bg);
+  }
+
+  .yt-create-btn {
+    height: 36px;
+    min-width: 96px;
+    padding: 0 16px 0 12px;
+    border: 0;
+    border-radius: 18px;
+    background: #272727;
+    color: var(--ptc-text-primary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 36px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .yt-create-btn i {
+    font-size: 20px;
+    line-height: 1;
+  }
+
+  .yt-create-btn:hover {
+    background: #3f3f3f;
+  }
+
+  .video-grid {
+    gap: 38px 16px;
+  }
+
+  .details {
+    padding-top: 8px;
+  }
+
+  .title {
+    font-size: 16px;
+    line-height: 22px;
+    margin-bottom: 2px;
+  }
+
+  .metadata {
+    font-size: 14px;
+    line-height: 20px;
   }
 }
 
@@ -1815,6 +1878,7 @@ html.layout-classic body .desktop-sticky-nav {
 
   .byline {
     display: inline-block;
+    max-width: 100%;
   }
 
   .byline::after {
@@ -1969,7 +2033,7 @@ html.layout-classic body .desktop-sticky-nav {
   </div>
 
   <div class="nav-right" style="position: relative;">
-    <button type="button" class="nav-icon-btn" id="desktop-create-btn" aria-label="Create"><i class="fa-solid fa-plus"></i></button>
+    <button type="button" class="yt-create-btn" id="desktop-create-btn" aria-label="Create"><i class="fa-solid fa-plus"></i><span>Create</span></button>
 
     <div id="desktop-create-dropdown" class="desktop-dropdown-menu">
       <a href="/video/upload" class="dropdown-item"><i class="fa-solid fa-arrow-up-from-bracket"></i> Upload Video <i class="fa-solid fa-arrow-up-right-from-square external-link-icon" aria-hidden="true"></i></a>
@@ -2090,7 +2154,6 @@ html.layout-classic body .desktop-sticky-nav {
 
                     <div class="stats">
                       <span>▷ <%- formatViews(item.viewCount) %></span>
-                      <span>•</span>
                       <span><%- item.publishedText || "Recently" %></span>
                     </div>
                   </div>
@@ -2378,38 +2441,39 @@ html.layout-classic body .desktop-sticky-nav {
     });
   }
 
-  function syncSettingsState() {
-    var feedSetting = document.getElementById("setting-feed");
-    var gameFeedsSetting = document.getElementById("setting-gamefeeds");
-    if (!feedSetting || !gameFeedsSetting) return;
-
-    if (gameFeedsSetting.value === "true") {
-      feedSetting.value = "gaming";
-      feedSetting.disabled = true;
-    } else {
-      feedSetting.disabled = false;
-    }
-
-    if (feedSetting.value === "unlimited") {
-      gameFeedsSetting.value = "false";
-      gameFeedsSetting.disabled = true;
-    } else {
-      if (feedSetting.value === "gaming") {
-        gameFeedsSetting.disabled = false;
-      }
-    }
-  }
-
-  var fsNode = document.getElementById("setting-feed");
-  var gfsNode = document.getElementById("setting-gamefeeds");
-  if (fsNode && gfsNode) {
-    fsNode.addEventListener("change", syncSettingsState);
-    gfsNode.addEventListener("change", syncSettingsState);
-  }
-
   var openSettingsBtn = document.getElementById("open-settings-btn");
   var saveSettingsBtn = document.getElementById("save-settings-btn");
   var settingsModalToggle = document.getElementById("settings-modal-toggle");
+  var feedSettingControl = document.getElementById("setting-feed");
+  var gameFeedsSettingControl = document.getElementById("setting-gamefeeds");
+
+  function syncSettingsAvailability() {
+    if (!feedSettingControl || !gameFeedsSettingControl) return;
+
+    if (gameFeedsSettingControl.value === "true") {
+      feedSettingControl.value = "gaming";
+      feedSettingControl.disabled = true;
+      gameFeedsSettingControl.disabled = false;
+      return;
+    }
+
+    feedSettingControl.disabled = false;
+
+    if (feedSettingControl.value !== "gaming") {
+      gameFeedsSettingControl.value = "false";
+      gameFeedsSettingControl.disabled = true;
+    } else {
+      gameFeedsSettingControl.disabled = false;
+    }
+  }
+
+  if (feedSettingControl) {
+    feedSettingControl.addEventListener("change", syncSettingsAvailability);
+  }
+
+  if (gameFeedsSettingControl) {
+    gameFeedsSettingControl.addEventListener("change", syncSettingsAvailability);
+  }
 
   if (openSettingsBtn) {
     openSettingsBtn.addEventListener("click", function(e) {
@@ -2423,9 +2487,10 @@ html.layout-classic body .desktop-sticky-nav {
       if (layoutSetting) layoutSetting.value = localStorage.getItem("poke_layout") || "hero";
       if (feedSetting) feedSetting.value = localStorage.getItem("poke_feed") || "gaming";
       if (gameFeedsSetting) gameFeedsSetting.value = localStorage.getItem("poke_gamefeeds") || "false";
+      if (gameFeedsSetting && gameFeedsSetting.value === "true" && feedSetting) feedSetting.value = "gaming";
       if (accentInput) accentInput.value = localStorage.getItem("poke_accent") || "#ffabcc";
 
-      syncSettingsState();
+      syncSettingsAvailability();
 
       settingsModalToggle.checked = true;
       toggleSidebar();
@@ -2433,6 +2498,12 @@ html.layout-classic body .desktop-sticky-nav {
   }
 
   var currentFeed = localStorage.getItem("poke_feed") || "gaming";
+
+  if (localStorage.getItem("poke_gamefeeds") === "true") {
+    currentFeed = "gaming";
+    localStorage.setItem("poke_feed", "gaming");
+  }
+
   var currentChip = "all";
   var desktopFeedBtns = document.querySelectorAll(".feed-btn");
   var filterChips = document.querySelectorAll("[data-filter]");
@@ -2497,6 +2568,14 @@ html.layout-classic body .desktop-sticky-nav {
       var newGameFeeds = document.getElementById("setting-gamefeeds").value;
       var newAccent = document.getElementById("setting-accent").value;
 
+      if (newGameFeeds === "true") {
+        newFeed = "gaming";
+      }
+
+      if (newFeed !== "gaming") {
+        newGameFeeds = "false";
+      }
+
       localStorage.setItem("poke_layout", newLayout);
       localStorage.setItem("poke_feed", newFeed);
       localStorage.setItem("poke_gamefeeds", newGameFeeds);
@@ -2519,9 +2598,17 @@ html.layout-classic body .desktop-sticky-nav {
 
       document.documentElement.style.setProperty("--ptc-accent", newAccent);
 
-      var targetFeedOpt = document.querySelector(".feed-btn[data-feed=\"" + newFeed + "\"]");
-      if (targetFeedOpt) targetFeedOpt.click();
+      currentFeed = newFeed;
 
+      desktopFeedBtns.forEach(function(b) {
+        if (b.getAttribute("data-feed") === newFeed) {
+          b.classList.add("active");
+        } else {
+          b.classList.remove("active");
+        }
+      });
+
+      applyFilters();
       settingsModalToggle.checked = false;
     });
   }
