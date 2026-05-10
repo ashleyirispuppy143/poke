@@ -1909,21 +1909,20 @@ function authorVerifiedChecker4000() {
   }
 
   .player {
-    width: calc(100% - 10px); 
+    width: calc(100% - 4px); 
     display: block;
     pointer-events: none;
-    transition: transform 0.3s ease;
+    transition: filter 0.3s ease;
   }
 
   .play-button-overlay {
     position: absolute;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -50%);
-    width: 70px;
-    height: 70px;
-    background-color: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(8px);
+    transform: translate(-50%, -50%) scale(1.2);
+    width: 60px;
+    height: 60px;
+    background-color: rgba(0, 0, 0, 0.4);
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -1935,15 +1934,33 @@ function authorVerifiedChecker4000() {
 
   .video-player-container:hover .play-button-overlay {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1.1);
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  .video-player-container:hover .player {
+    filter: brightness(0.8);
   }
 
   .play-icon {
-    width: 40px;
-    height: 40px;
+    width: 32px;
+    height: 32px;
     fill: white;
-    filter: drop-shadow(0 0 5px rgba(0,0,0,0.5));
-    margin-left: 4px;
+    margin-left: 3px;
+  }
+
+  .video-duration {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 3px 6px;
+    border-radius: 4px;
+    font-family: sans-serif;
+    font-size: 12px;
+    font-weight: bold;
+    z-index: 3;
+    pointer-events: none;
   }
 </style>
 
@@ -1951,7 +1968,7 @@ function authorVerifiedChecker4000() {
   <a href="/watch?v=<%=x.attachment.videoId%>" class="video-link-wrapper">
     <video 
       class="player" 
-      style="border-radius: 12px;" 
+      style="border-radius: 14px;" 
       poster="<%- media_proxy_url %>/proxy?url=https://i.ytimg.com/vi/<%=x.attachment.videoId%>/maxresdefault.jpg?v=607ddcd4">
     </video>
     
@@ -1959,6 +1976,10 @@ function authorVerifiedChecker4000() {
       <svg class="play-icon" viewBox="0 0 24 24">
         <path d="M8 5v14l11-7z"></path>
       </svg>
+    </div>
+
+    <div class="video-duration">
+      <%= turntomins(x.attachment.lengthSeconds) %>
     </div>
   </a>
 </div>
