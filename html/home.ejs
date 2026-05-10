@@ -1164,6 +1164,18 @@ html.show-game-feeds .game-feed-tab {
   cursor: not-allowed;
 }
 
+.setting-helper-disabled {
+  display: none;
+  margin-top: 8px;
+  color: var(--ptc-text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.setting-helper-disabled.is-visible {
+  display: block;
+}
+
 @media (max-width: 768px) {
   .settings-dialog {
     flex-direction: column;
@@ -1564,7 +1576,9 @@ html.layout-classic body .desktop-sticky-nav {
 
 @media (min-width: 561px) {
   .desktop-sticky-nav {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(170px, 1fr) minmax(260px, 600px) minmax(170px, 1fr);
+    column-gap: 24px;
     position: fixed;
     top: 0;
     left: 0;
@@ -1572,7 +1586,6 @@ html.layout-classic body .desktop-sticky-nav {
     height: 56px;
     background: var(--ptc-bg);
     align-items: center;
-    justify-content: space-between;
     padding: 0 16px;
     z-index: 1000;
     transform: translateY(-100%);
@@ -1587,7 +1600,9 @@ html.layout-classic body .desktop-sticky-nav {
   .nav-left {
     display: flex;
     align-items: center;
+    justify-self: start;
     gap: 16px;
+    min-width: 0;
   }
 
   .hamburger {
@@ -1607,15 +1622,19 @@ html.layout-classic body .desktop-sticky-nav {
   }
 
   .nav-center {
-    flex: 1;
+    width: 100%;
     max-width: 600px;
-    margin: 0 40px;
+    margin: 0;
+    justify-self: center;
+    min-width: 0;
   }
 
   .nav-right {
     display: flex;
     align-items: center;
+    justify-self: end;
     gap: 12px;
+    min-width: 0;
   }
 
   .nav-icon-btn {
@@ -2243,24 +2262,26 @@ html.layout-classic body .desktop-sticky-nav {
 
         <div>
           <label style="display:block; margin-bottom: 8px; font-weight: 500;">Default Feed</label>
-          <p style="font-size: 13px; color: var(--ptc-text-secondary); margin-bottom: 12px;">Gaming keeps things cleaner. Unlimited shows every single video, even if its slop.</p>
+          <p style="font-size: 13px; color: var(--ptc-text-secondary); margin-bottom: 12px;">Gaming keeps things cleaner. Unlimited shows every single video, even if its slop. If Desktop Game Feeds is on, Default Feed is locked to Gaming and cannot be changed.</p>
 
           <select id="setting-feed" style="width: 100%; max-width: 300px; padding: 10px; background: transparent; border: 1px solid var(--ptc-border); color: var(--ptc-text-primary); border-radius: 8px; font-size: 14px; outline: none;">
             <option value="gaming" style="background: var(--ptc-bg);">Gaming</option>
             <option value="unlimited" style="background: var(--ptc-bg);">Unlimited</option>
           </select>
+          <p id="setting-feed-helper" class="setting-helper-disabled">Default Feed is locked because Desktop Game Feeds is on.</p>
         </div>
 
         <div style="height: 1px; background: var(--ptc-border); width: 100%;"></div>
 
         <div>
           <label style="display:block; margin-bottom: 8px; font-weight: 500;">Desktop Game Feeds</label>
-          <p style="font-size: 13px; color: var(--ptc-text-secondary); margin-bottom: 12px;">Turns the top tabs into quick game picks, so they stay with u while u scroll.</p>
+          <p style="font-size: 13px; color: var(--ptc-text-secondary); margin-bottom: 12px;">Turns the top tabs into quick game picks, so they stay with u while u scroll. This can only be turned on while Default Feed is Gaming.</p>
 
           <select id="setting-gamefeeds" style="width: 100%; max-width: 300px; padding: 10px; background: transparent; border: 1px solid var(--ptc-border); color: var(--ptc-text-primary); border-radius: 8px; font-size: 14px; outline: none;">
             <option value="false" style="background: var(--ptc-bg);">Off</option>
             <option value="true" style="background: var(--ptc-bg);">On</option>
           </select>
+          <p id="setting-gamefeeds-helper" class="setting-helper-disabled">Desktop Game Feeds is locked because Default Feed is not Gaming.</p>
         </div>
 
         <div style="height: 1px; background: var(--ptc-border); width: 100%;"></div>
@@ -2446,6 +2467,8 @@ html.layout-classic body .desktop-sticky-nav {
   var settingsModalToggle = document.getElementById("settings-modal-toggle");
   var feedSettingControl = document.getElementById("setting-feed");
   var gameFeedsSettingControl = document.getElementById("setting-gamefeeds");
+  var feedSettingHelper = document.getElementById("setting-feed-helper");
+  var gameFeedsSettingHelper = document.getElementById("setting-gamefeeds-helper");
 
   function syncSettingsAvailability() {
     if (!feedSettingControl || !gameFeedsSettingControl) return;
@@ -2454,16 +2477,22 @@ html.layout-classic body .desktop-sticky-nav {
       feedSettingControl.value = "gaming";
       feedSettingControl.disabled = true;
       gameFeedsSettingControl.disabled = false;
+
+      if (feedSettingHelper) feedSettingHelper.classList.add("is-visible");
+      if (gameFeedsSettingHelper) gameFeedsSettingHelper.classList.remove("is-visible");
       return;
     }
 
     feedSettingControl.disabled = false;
+    if (feedSettingHelper) feedSettingHelper.classList.remove("is-visible");
 
     if (feedSettingControl.value !== "gaming") {
       gameFeedsSettingControl.value = "false";
       gameFeedsSettingControl.disabled = true;
+      if (gameFeedsSettingHelper) gameFeedsSettingHelper.classList.add("is-visible");
     } else {
       gameFeedsSettingControl.disabled = false;
+      if (gameFeedsSettingHelper) gameFeedsSettingHelper.classList.remove("is-visible");
     }
   }
 
