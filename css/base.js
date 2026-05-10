@@ -14206,6 +14206,7 @@ const PlayerErrorOverlay = (() => {
   return { show, hide, isVisible, destroy };
 })();
 
+let _globalErrorCaught = false;
 let _videoErrorObj = null;
 let _audioErrorObj = null;
 let _errorOverlayShown = false;
@@ -19376,8 +19377,7 @@ window.__test_audio_loop_indictaor = (forceShow) => {
   }
 };
 
-let _globalErrorCaught = false;
-const _reportBase = "https://codeberg.org/ashleyirispuppy/poke/issues/new?template=issue_template%2fplayer-bug.yml";
+const _crashReportBase = "https://codeberg.org/ashleyirispuppy/poke/issues/new?template=issue_template%2fplayer-bug.yml";
 
 function _handlePlayerCrash(errorMsg, source, stack) {
   if (_globalErrorCaught || _errorOverlayShown) return;
@@ -19440,7 +19440,7 @@ function _handlePlayerCrash(errorMsg, source, stack) {
     message: "The player just crashed into a wall it didn't see coming. Reload to get back on track, or report it so we can move the wall.",
     code: "PLR_UNCAUGHT_CRASH",
     canRetry: true,
-    reportUrl: _reportBase,
+    reportUrl: _crashReportBase,
     stackTrace: _trace
   });
 }
