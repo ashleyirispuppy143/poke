@@ -1909,58 +1909,60 @@ function authorVerifiedChecker4000() {
   }
 
   .player {
-    width: calc(100% - 4px); 
+    width: calc(100% - 2px); 
     display: block;
     pointer-events: none;
-    transition: filter 0.3s ease;
+    transition: filter 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .play-button-overlay {
     position: absolute;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -50%) scale(1.2);
-    width: 60px;
-    height: 60px;
-    background-color: rgba(0, 0, 0, 0.4);
+    transform: translate(-50%, -50%) scale(1);
+    width: 68px;
+    height: 68px;
+    background-color: rgba(0, 0, 0, 0.5);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 2;
     opacity: 0;
-    transition: all 0.2s ease-in-out;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .video-player-container:hover .play-button-overlay {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
+    transform: translate(-50%, -50%) scale(1.1);
   }
 
   .video-player-container:hover .player {
-    filter: brightness(0.8);
+    filter: brightness(0.9);
   }
 
   .play-icon {
-    width: 32px;
-    height: 32px;
+    width: 34px;
+    height: 34px;
     fill: white;
-    margin-left: 3px;
+    margin-left: 2px;
   }
 
-  .video-duration {
+  .attachedvideoduration {
     position: absolute;
     bottom: 8px;
     right: 8px;
     background-color: rgba(0, 0, 0, 0.8);
-    color: white;
-    padding: 3px 6px;
+    color: #fff;
+    padding: 1px 4px;
     border-radius: 4px;
-    font-family: sans-serif;
+    font-family: "Roboto", "Arial", sans-serif;
     font-size: 12px;
-    font-weight: bold;
+    font-weight: 500;
+    line-height: 18px;
     z-index: 3;
     pointer-events: none;
+    letter-spacing: 0.5px;
   }
 </style>
 
@@ -1968,7 +1970,7 @@ function authorVerifiedChecker4000() {
   <a href="/watch?v=<%=x.attachment.videoId%>" class="video-link-wrapper">
     <video 
       class="player" 
-      style="border-radius: 14px;" 
+      style="border-radius: 15px;" 
       poster="<%- media_proxy_url %>/proxy?url=https://i.ytimg.com/vi/<%=x.attachment.videoId%>/maxresdefault.jpg?v=607ddcd4">
     </video>
     
@@ -1978,7 +1980,7 @@ function authorVerifiedChecker4000() {
       </svg>
     </div>
 
-    <div class="video-duration">
+    <div class="attachedvideoduration">
       <%= turntomins(x.attachment.lengthSeconds) %>
     </div>
   </a>
