@@ -25,7 +25,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 //////////////// THE PLAYER, START ////////////////////////
-try {
+ try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -1522,7 +1522,7 @@ startupPrimeStartedAt: performance.now(),
       if (!_shouldRun()) { stop(1200); return false; }
       const t = now();
       if (!_active || !_ctx || !_source || !_gain) start(reason);
-      else if ((t - _lastPulseAt) > 60) {
+      else if ((t - _lastPulseAt) > 30) {
         _resumeContext(_ctx);
         _lastPulseAt = t;
       }
@@ -1532,8 +1532,8 @@ startupPrimeStartedAt: performance.now(),
           _lastAudioTime = at;
           _lastAudioMoveAt = t;
         }
-        const stalled = _lastAudioMoveAt > 0 && (t - _lastAudioMoveAt) > 80;
-        if (audio.paused || stalled || (t - _lastNativePokeAt) > 200) {
+        const stalled = _lastAudioMoveAt > 0 && (t - _lastAudioMoveAt) > 40;
+        if (audio.paused || stalled || (t - _lastNativePokeAt) > 100) {
           _lastNativePokeAt = t;
           try { refreshHiddenAudioMediaSession(reason || "background-audio-sentinel"); } catch { }
           try {
@@ -1916,7 +1916,7 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
       } catch { }
       try {
         // Tighter retry schedule - minimize audible gap during Chromium bg pause
-        [0, 3, 8, 18, 40, 90, 180, 400, 800].forEach(delay => setTimeout(nativePlay, delay));
+        [0, 1, 2, 4, 8, 16, 32, 64, 120, 240, 480].forEach(delay => setTimeout(nativePlay, delay));
       } catch { }
       try {
         setTimeout(() => {
@@ -2071,6 +2071,8 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
     const vn = getVideoNode();
     let hiddenAudioNoSeekAttempted = false;
     if (!isVisible && platform.chromiumOnlyBrowser && coupledMode && audio && audio.paused && hiddenAudioPauseShieldActive()) {
+      // Immediate native play from the worker tick - zero delay
+      try { HTMLMediaElement.prototype.play.call(audio).catch(() => {}); } catch {}
       hiddenAudioNoSeekAttempted = hiddenAudioNoSeekResume("keepalive-audio-paused", { retry: true });
     }
     if (urgentHiddenResume && !hiddenAudioNoSeekAttempted) {
@@ -2129,13 +2131,13 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
     try { BackgroundAudioSentinel.start("keepalive-start"); } catch { }
     try {
       // Faster tick interval on Chromium to catch auto-pauses immediately
-      const _bgTickMs = platform.chromiumOnlyBrowser ? (perfProfile.lowEnd ? 250 : 100) : (perfProfile.lowEnd ? 2200 : 1600);
+      const _bgTickMs = platform.chromiumOnlyBrowser ? (perfProfile.lowEnd ? 120 : 50) : (perfProfile.lowEnd ? 2200 : 1600);
       const blob = new Blob([`setInterval(()=>postMessage(0),${_bgTickMs})`], { type: "application/javascript" });
       _bgWorkerUrl = URL.createObjectURL(blob);
       _bgWorker = new Worker(_bgWorkerUrl);
       _bgWorker.onmessage = _bgKeepaliveTick;
     } catch {
-      _bgFallbackId = setInterval(_bgKeepaliveTick, platform.chromiumOnlyBrowser ? (perfProfile.lowEnd ? 400 : 150) : (perfProfile.lowEnd ? 2600 : 1900));
+      _bgFallbackId = setInterval(_bgKeepaliveTick, platform.chromiumOnlyBrowser ? (perfProfile.lowEnd ? 200 : 80) : (perfProfile.lowEnd ? 2600 : 1900));
     }
     // Immediate burst at startup to ensure fast first response
     try { setTimeout(_bgKeepaliveTick, 0); } catch { }
@@ -2439,7 +2441,7 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
         } catch { }
         // Fast retry burst for hidden tab (browser may re-pause between attempts)
         if (document.visibilityState === "hidden") {
-          [0, 4, 12, 30, 80, 180].forEach(d => {
+          [0, 2, 6, 12, 24, 48, 80, 180].forEach(d => {
             try { setTimeout(_immediateResume, d); } catch {}
           });
         }
@@ -9926,29 +9928,28 @@ function shouldBlockNewAudioStart() {
 
 function updateMediaSessionPlaybackState() {
   let effectivePlaying = false;
+  let actualPlaying = false;
   try {
-    let actualPlaying = false;
     try { actualPlaying = actualPlaying || !getVideoPaused(); } catch { }
     try { actualPlaying = actualPlaying || !!(coupledMode && audio && !audio.paused); } catch { }
-    // Consider intendedPlaying during transient pauses (bg transitions, buffering)
-    // so MediaSession controls remain responsive and show the right icon
+    // For MediaSession (OS controls): report "playing" during transient states
+    // so the OS doesn't remove/disable the media controls prematurely
     const transitionallyPlaying = state.intendedPlaying && !state.endedNaturally && (
       mediaPlayActionPendingActive() ||
       isTabReturnImmune() ||
       state.bgResumeInFlight ||
       state.seekResumeInFlight ||
-      (document.visibilityState === "hidden" && !userPauseLockActive() && !mediaSessionForcedPauseActive()) ||
-      state.visibilityTransitionActive ||
-      state.altTabTransitionActive ||
-      playCommitGuardActive() ||
-      state.bgTransitionInProgress
+      (document.visibilityState === "hidden" && !userPauseLockActive() && !mediaSessionForcedPauseActive())
     );
     effectivePlaying = actualPlaying || transitionallyPlaying;
     if ("mediaSession" in navigator) {
       try { navigator.mediaSession.playbackState = effectivePlaying ? "playing" : "paused"; } catch { }
     }
   } catch { }
-  try { syncVideoJsPlayPauseControlState(effectivePlaying); } catch { }
+  // IMPORTANT: VideoJS control state must always reflect actual DOM state,
+  // NOT the transitional state. Otherwise the play button shows wrong icon
+  // and user can't click play when video is actually paused.
+  try { syncVideoJsPlayPauseControlState(actualPlaying); } catch { }
 }
 
 function getMediaSessionDuration() {
@@ -10062,7 +10063,8 @@ function directExternalMediaControlPlay(reason = "external-media-play", serial =
     if (coupledMode && audio) {
       try { state._allowAudioTimeWrite = true; audio.currentTime = 0; state._allowAudioTimeWrite = false; } catch { state._allowAudioTimeWrite = false; }
     }
-    setTimeout(() => { state.restarting = false; }, 1200);
+    // Short restarting window — 1200ms was blocking _shouldDropPlay and killing audio recovery
+    setTimeout(() => { state.restarting = false; }, 300);
   }
 
   const target = getBestResumePosition();
