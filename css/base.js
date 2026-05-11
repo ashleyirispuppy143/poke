@@ -25,7 +25,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 //////////////// THE PLAYER, START ////////////////////////
-try {
+ try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -592,12 +592,15 @@ lastMediaActionTs: 0,
 syncTimer: null,
 syncScheduledAt: 0,
 fastSyncUntil: 0,
-                          bgResumeRetryTimer: null,
-                          resumeAfterBufferTimer: null,
-                          mediaSessionActionSerial: 0,
-                          mediaSessionSeekTarget: null,
-                          mediaSessionSeekUntil: 0,
-                          mediaPositionNextAt: 0,
+                           bgResumeRetryTimer: null,
+                           resumeAfterBufferTimer: null,
+                           mediaSessionActionSerial: 0,
+                           mediaSessionPlayPendingUntil: 0,
+                           mediaSessionPlayGuardUntil: 0,
+                           mediaSessionPlayPendingSerial: 0,
+                           mediaSessionSeekTarget: null,
+                           mediaSessionSeekUntil: 0,
+                           mediaPositionNextAt: 0,
                           hiddenInstantResumeAt: 0,
                           hiddenInstantResumeCount: 0,
                           hiddenInstantResumeResetAt: 0,
@@ -1801,7 +1804,10 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
     if (!hiddenAudioMediaSessionShouldStayPlaying()) return false;
     try {
       if ("mediaSession" in navigator) {
-        navigator.mediaSession.playbackState = "playing";
+        const hiddenActuallyPlaying = !!(audio && !audio.paused) || (() => {
+          try { const vn = getVideoNode(); return !!(vn && !vn.paused); } catch { return false; }
+        })();
+        navigator.mediaSession.playbackState = hiddenActuallyPlaying ? "playing" : "paused";
         const forcePosition = /pause|stall|sentinel|intercept|method|shield/i.test(String(reason || ""));
         const t = now();
         if (navigator.mediaSession.setPositionState && (forcePosition || t >= (state.mediaPositionNextAt || 0))) {
@@ -6627,18 +6633,38 @@ function externalMediaControlLooksPlaying() {
   let audioPlaying = false;
   try { videoPlaying = !getVideoPaused(); } catch { }
   try { audioPlaying = !!(coupledMode && audio && !audio.paused); } catch { }
-  if (videoPlaying || audioPlaying) return true;
-  return !!(state.intendedPlaying && (
-    state.bufferHoldIntendedPlaying ||
-    state.seekResumeInFlight ||
-    state.bgResumeInFlight ||
-    state.strictBufferHold ||
-    state.videoWaiting ||
-    userPlayIntentActive() ||
-    mediaPlayTxnActive() ||
-    hiddenPlayPendingActive() ||
-    (state.mediaSessionInitiatedPlay && mediaActionRecently("play", 4500))
-  ));
+  return videoPlaying || audioPlaying;
+}
+function clearMediaPlayActionPending() {
+  state.mediaSessionPlayPendingUntil = 0;
+  state.mediaSessionPlayGuardUntil = 0;
+  state.mediaSessionPlayPendingSerial = 0;
+}
+function armMediaPlayActionPending(serial = state.mediaSessionActionSerial, pendingMs = 1900, guardMs = 700) {
+  const t = now();
+  state.mediaSessionPlayPendingSerial = Number(serial) || state.mediaSessionActionSerial || 0;
+  state.mediaSessionPlayPendingUntil = Math.max(
+    state.mediaSessionPlayPendingUntil || 0,
+    t + Math.max(400, Number(pendingMs) || 0)
+  );
+  state.mediaSessionPlayGuardUntil = Math.max(
+    state.mediaSessionPlayGuardUntil || 0,
+    t + Math.max(180, Number(guardMs) || 0)
+  );
+}
+function mediaPlayActionPendingActive() {
+  const t = now();
+  if (!(Number(state.mediaSessionPlayPendingUntil) > t)) return false;
+  const serial = Number(state.mediaSessionPlayPendingSerial) || 0;
+  if (serial && serial !== state.mediaSessionActionSerial) return false;
+  if (!state.intendedPlaying || state.endedNaturally || state.restarting) return false;
+  if (userPauseLockActive() || mediaSessionForcedPauseActive()) return false;
+  return true;
+}
+function shouldIgnoreStaleMediaPauseAction() {
+  if (!(Number(state.mediaSessionPlayGuardUntil) > now())) return false;
+  if (!mediaPlayActionPendingActive()) return false;
+  return !externalMediaControlLooksPlaying();
 }
 function shouldTreatUpcomingPlayAsFreshForegroundStart() {
   if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
@@ -7417,6 +7443,52 @@ function syncVideoJsEndedControlState(ended) {
     }
   } catch { }
 }
+function syncVideoJsPlayPauseControlState(playing) {
+  const isPlaying = !!playing;
+  if (state.endedNaturally || nativeVideoEnded()) {
+    syncVideoJsEndedControlState(true);
+    return;
+  }
+  try {
+    if (typeof video?.addClass === "function" && typeof video?.removeClass === "function") {
+      video.removeClass("vjs-ended");
+      if (isPlaying) {
+        video.addClass("vjs-playing");
+        video.removeClass("vjs-paused");
+      } else {
+        video.removeClass("vjs-playing");
+        video.addClass("vjs-paused");
+      }
+    }
+  } catch { }
+  let rootEl = null;
+  try { rootEl = video?.el?.() || null; } catch { rootEl = null; }
+  try {
+    if (rootEl?.classList) {
+      rootEl.classList.remove("vjs-ended");
+      rootEl.classList.toggle("vjs-playing", isPlaying);
+      rootEl.classList.toggle("vjs-paused", !isPlaying);
+    }
+  } catch { }
+  const label = isPlaying ? "Pause" : "Play";
+  try {
+    const playButton = rootEl?.querySelector?.(".vjs-play-control");
+    if (playButton) {
+      playButton.setAttribute("title", label);
+      playButton.setAttribute("aria-label", label);
+      playButton.classList.remove("vjs-ended");
+      playButton.classList.toggle("vjs-playing", isPlaying);
+      playButton.classList.toggle("vjs-paused", !isPlaying);
+    }
+  } catch { }
+  try {
+    const playToggle = video?.controlBar?.playToggle ||
+    video?.getChild?.("controlBar")?.getChild?.("playToggle");
+    if (playToggle && typeof playToggle.controlText === "function") {
+      playToggle.controlText(label);
+    }
+  } catch { }
+}
 function clearTerminalBufferingUiState() {
   state.videoWaiting = false;
   state.audioWaiting = false;
@@ -7870,6 +7942,7 @@ function markUserPauseIntent(ms = USER_PAUSE_INTENT_FAST_MS) {
   noteUserToggle("pause");
   beginUserToggleTxn(false, txnMs);
   clearSeekResumeIntent();
+  clearMediaPlayActionPending();
   clearForegroundUserPlayRetryTimers();
   clearTransitionDriftTimers();
   clearFreshForegroundVideoFirst();
@@ -9830,29 +9903,29 @@ function shouldBlockNewAudioStart() {
 }
 
 function updateMediaSessionPlaybackState() {
-  if (!("mediaSession" in navigator)) return;
+  let effectivePlaying = false;
   try {
-    const hiddenPlaying = typeof hiddenAudioMediaSessionShouldStayPlaying === "function" &&
-      hiddenAudioMediaSessionShouldStayPlaying();
     let actualPlaying = false;
     try { actualPlaying = actualPlaying || !getVideoPaused(); } catch { }
     try { actualPlaying = actualPlaying || !!(coupledMode && audio && !audio.paused); } catch { }
-    const pendingPlay =
-    state.intendedPlaying &&
-    !state.endedNaturally &&
-    !state.restarting &&
-    (
-      userPlayIntentActive() ||
-      mediaPlayTxnActive() ||
-      hiddenPlayPendingActive() ||
-      state.seekResumeInFlight ||
-      state.bgResumeInFlight ||
-      (state.strictBufferHold && state.bufferHoldIntendedPlaying) ||
-      state.videoWaiting ||
-      (state.mediaSessionInitiatedPlay && mediaActionRecently("play", 4500))
-    );
-    navigator.mediaSession.playbackState = (hiddenPlaying || actualPlaying || pendingPlay) ? "playing" : "paused";
+    // During active transitions, reflect intendedPlaying so the OS media
+    // control button stays in sync with what the user actually requested
+    // rather than the momentary element state mid-transition.
+    const inTransition = !!(state.isProgrammaticVideoPlay || state.isProgrammaticVideoPause ||
+      state.isProgrammaticAudioPlay || state.isProgrammaticAudioPause ||
+      state.videoPlayInFlight || state.audioPlayInFlight ||
+      mediaPlayTxnActive() || mediaPauseTxnActive() ||
+      (state.audioFading && coupledMode));
+    if (inTransition) {
+      effectivePlaying = !!state.intendedPlaying;
+    } else {
+      effectivePlaying = actualPlaying || mediaPlayActionPendingActive();
+    }
+    if ("mediaSession" in navigator) {
+      try { navigator.mediaSession.playbackState = effectivePlaying ? "playing" : "paused"; } catch { }
+    }
   } catch { }
+  try { syncVideoJsPlayPauseControlState(effectivePlaying); } catch { }
 }
 
 function getMediaSessionDuration() {
@@ -9949,6 +10022,167 @@ function getBestResumePosition() {
   } catch {
     return 0;
   }
+}
+
+function directExternalMediaControlPlay(reason = "external-media-play", serial = state.mediaSessionActionSerial) {
+  if (_errorOverlayShown) return Promise.resolve(false);
+  // Immediately clear any pause locks from a previous media session pause
+  // so the play action can take effect without being blocked.
+  clearMediaSessionForcedPause();
+  state.userPauseLockUntil = 0;
+  state.userPauseUntil = 0;
+  state.mediaForcedPauseUntil = 0;
+  state.chromiumPauseGuardUntil = 0;
+  state.pauseEventGuardUntil = 0;
+  if (state.endedNaturally && !state.restarting && !isLoopDesired()) {
+    try { prepareRestartFromEndedPlayback(true); } catch { }
+  }
+  if (state.endedNaturally && !state.restarting && !isLoopDesired()) return Promise.resolve(false);
+
+  const target = getBestResumePosition();
+  armMediaPlayActionPending(serial);
+  try {
+    markUserPlayIntent(USER_PLAY_INTENT_FAST_MS, {
+      skipImmediateVideoKick: false,
+      skipImmediateAudioKick: false
+    });
+  } catch {
+    state.intendedPlaying = true;
+    state.bufferHoldIntendedPlaying = true;
+    state.firstPlayCommitted = true;
+    state.startupKickDone = true;
+    state.startupPhase = false;
+  }
+  clearMediaSessionForcedPause();
+  clearMediaPausePassThrough();
+  clearAudioPauseLocks();
+  clearBufferHold();
+  clearForegroundBufferAudioHold();
+  clearForegroundUserPlayRetryTimers();
+  state.videoWaiting = false;
+  state.videoStallAudioPaused = false;
+  state.stallAudioPausedSince = 0;
+  state.stallAudioResumeHoldUntil = 0;
+  state.audioPauseUntil = 0;
+  state.audioPlayUntil = 0;
+  state.startupAudioHoldUntil = 0;
+  state.isProgrammaticAudioPause = false;
+  state.audioEventsSquelchedUntil = 0;
+  state.mediaSessionInitiatedPlay = true;
+  state.intendedPlaying = true;
+  state.bufferHoldIntendedPlaying = true;
+  state.resumeOnVisible = document.visibilityState === "hidden";
+  markMediaAction("play");
+  setMediaPlayTxn(1800);
+  setPauseEventGuard(1200);
+  setFastSync(1800);
+  updateMediaSessionPlaybackState();
+  updateMediaSessionPositionNow(target, reason);
+
+  if (isFinite(target) && target > 0.1) {
+    try {
+      const vt = Number(video.currentTime()) || 0;
+      if (Math.abs(vt - target) > 1.0) safeSetVideoTime(target, { force: true });
+    } catch { }
+    if (coupledMode && audio) {
+      try {
+        const at = Number(audio.currentTime) || 0;
+        if (Math.abs(at - target) > 1.0) {
+          state._allowAudioTimeWrite = true;
+          audio.currentTime = target;
+          state._allowAudioTimeWrite = false;
+        }
+      } catch {
+        state._allowAudioTimeWrite = false;
+      }
+    }
+  }
+
+  const nativePlay = (() => {
+    try { return HTMLMediaElement.prototype.play; } catch { return null; }
+  })();
+  const playOne = (el) => {
+    if (!el || typeof el.play !== "function") return Promise.resolve(false);
+    try {
+      const p = nativePlay ? nativePlay.call(el) : el.play();
+      return Promise.resolve(p).then(() => true, err => {
+        if (err && err.name === "NotAllowedError") {
+          try { el.muted = true; } catch { }
+          try {
+            const retry = nativePlay ? nativePlay.call(el) : el.play();
+            return Promise.resolve(retry).then(() => true, () => false);
+          } catch { return false; }
+        }
+        return false;
+      });
+    } catch { return Promise.resolve(false); }
+  };
+
+  state.isProgrammaticVideoPlay = true;
+  try { VisibilityGuard.onPlayCalled(); } catch { }
+  const vNode = getVideoNode();
+  const plays = [];
+  try {
+    const managedPlay = execProgrammaticVideoPlay({ force: true, minGapMs: 0 });
+    if (managedPlay && typeof managedPlay.then === "function") {
+      plays.push(Promise.resolve(managedPlay).then(() => !getVideoPaused(), () => false));
+    }
+  } catch { }
+  if (vNode) plays.push(playOne(vNode));
+  if (videoEl && videoEl !== vNode) plays.push(playOne(videoEl));
+  try {
+    const vp = video.play();
+    if (vp && typeof vp.then === "function") plays.push(Promise.resolve(vp).then(() => true, () => false));
+  } catch { }
+
+  if (coupledMode && audio) {
+    try { audio.volume = targetVolFromVideo(); } catch { }
+    try { updateAudioGainImmediate(true); } catch { }
+    state.isProgrammaticAudioPlay = true;
+    state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 1500);
+    plays.push(playOne(audio).finally(() => {
+      setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 250);
+    }));
+  }
+
+  const verify = (delay) => {
+    setTimeout(() => {
+      if (serial !== state.mediaSessionActionSerial) return;
+      if (!state.intendedPlaying || userPauseLockActive() || mediaSessionForcedPauseActive()) return;
+      const videoStillPaused = getVideoPaused();
+      const audioStillPaused = coupledMode && audio ? audio.paused : false;
+      if (!videoStillPaused || !audioStillPaused) {
+        clearMediaPlayActionPending();
+      }
+      if (videoStillPaused) {
+        try { playOne(getVideoNode()); } catch { }
+        try { if (videoEl && videoEl !== getVideoNode()) playOne(videoEl); } catch { }
+      }
+      if (audioStillPaused) {
+        try { playOne(audio); } catch { }
+      }
+      if (delay >= 1400 && videoStillPaused && audioStillPaused) {
+        clearMediaPlayActionPending();
+      }
+      updateMediaSessionPlaybackState();
+      updateMediaSessionPositionNow(NaN, reason + "-verify");
+    }, delay);
+  };
+  [80, 260, 700, 1400].forEach(verify);
+
+  return Promise.allSettled(plays).then(results => {
+    setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 300);
+    const played = results.some(r => r.status === "fulfilled" && r.value === true) || externalMediaControlLooksPlaying();
+    if (played) clearMediaPlayActionPending();
+    else if (!mediaPlayActionPendingActive()) clearMediaPlayActionPending();
+    updateMediaSessionPlaybackState();
+    return played;
+  }, () => {
+    setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 300);
+    clearMediaPlayActionPending();
+    updateMediaSessionPlaybackState();
+    return false;
+  });
 }
 
 function execProgrammaticVideoPause() {
@@ -11741,6 +11975,7 @@ function pauseHard() {
     !state.endedNaturally &&
     !state.restarting &&
     !_errorOverlayShown &&
+    !mediaSessionForcedPauseActive() &&
     state.intendedPlaying) {
     return;
     }
@@ -16634,7 +16869,9 @@ function setupUserPauseIntentDetection() {
   };
   const onKeyDown = event => {
     tryUnlockAudioContext();
-    const code = event.code || event.key || "";
+    const rawCode = String(event.code || "");
+    const keyName = String(event.key || "");
+    const code = rawCode && rawCode !== "Unidentified" ? rawCode : keyName;
     const keyTarget = getTargetEl(event.target);
     const overlayTarget = !!(keyTarget && isErrorOverlayTarget(keyTarget));
     const typingTarget = !!(keyTarget && (
@@ -16710,29 +16947,13 @@ function setupUserPauseIntentDetection() {
     ) {
       markUserSeekIntent(2800);
     }
-    const keyName = String(event.key || "");
     const isExplicitMediaPlay = code === "MediaPlay";
     if (isExplicitMediaPlay && !typingTarget && !event.altKey && !event.ctrlKey && !event.metaKey) {
       try { event.preventDefault(); } catch { }
       try { event.stopPropagation(); } catch { }
       try { event.stopImmediatePropagation(); } catch { }
-      ++state.mediaSessionActionSerial;
-      const terminalRestart = terminalEndFallbackShouldFire();
-      markUserPlayIntent(USER_PLAY_INTENT_FAST_MS);
-      if (terminalRestart) {
-        try { prepareRestartFromEndedPlayback(true); } catch { }
-      }
-      try {
-        const p = execProgrammaticVideoPlay({ force: true, minGapMs: 0 });
-        if (p && typeof p.catch === "function") p.catch(() => { });
-      } catch { }
-      if (coupledMode && audio && audio.paused) {
-        try { execProgrammaticAudioPlay({ squelchMs: 120, force: true, minGapMs: 0 }).catch(() => { }); } catch { }
-      }
-      scheduleNoHoverPlaybackKick("keyboard-media-play");
-      scheduleBufferReadyPlaybackKick("keyboard-media-play", { immediate: true, force: true });
-      updateMediaSessionPlaybackState();
-      updateMediaSessionPositionNow(NaN, "keyboard-media-play");
+      const serial = ++state.mediaSessionActionSerial;
+      directExternalMediaControlPlay("keyboard-media-play", serial).catch(() => { });
       return;
     }
     const isToggleKey =
@@ -16764,6 +16985,11 @@ function setupUserPauseIntentDetection() {
         const repeatNow = now();
         if ((repeatNow - (state._lastKeyboardPlayRetryAt || 0)) < 220) return;
         state._lastKeyboardPlayRetryAt = repeatNow;
+        if (code === "MediaPlayPause") {
+          const serial = ++state.mediaSessionActionSerial;
+          directExternalMediaControlPlay("keyboard-media-toggle-repeat", serial).catch(() => { });
+          return;
+        }
         markUserPlayIntent(USER_PLAY_INTENT_FAST_MS);
         try {
           const p = execProgrammaticVideoPlay({ force: true, minGapMs: 0 });
@@ -16778,6 +17004,11 @@ function setupUserPauseIntentDetection() {
       keyboardToggleHeld = true;
       keyboardToggleHeldWantsPlay = !!shouldPlay;
       if (shouldPlay) {
+        if (code === "MediaPlayPause") {
+          const serial = ++state.mediaSessionActionSerial;
+          directExternalMediaControlPlay("keyboard-media-toggle-play", serial).catch(() => { });
+          return;
+        }
         markUserPlayIntent(USER_PLAY_INTENT_FAST_MS);
         if (terminalRestart) {
           try { prepareRestartFromEndedPlayback(true); } catch { }
@@ -16797,13 +17028,21 @@ function setupUserPauseIntentDetection() {
     } else if (code === "MediaPause" || code === "MediaStop") {
       try { event.preventDefault(); } catch { }
       try { event.stopPropagation(); } catch { }
+      if (code === "MediaPause" && shouldIgnoreStaleMediaPauseAction()) {
+        updateMediaSessionPlaybackState();
+        updateMediaSessionPositionNow(NaN, "keyboard-media-stale-pause");
+        return;
+      }
       ++state.mediaSessionActionSerial;
       markMediaAction("pause");
-      setMediaSessionForcedPause(4500);
+      setMediaSessionForcedPause(1600);
       setPauseEventGuard(1600);
       setMediaPauseTxn(2000);
       markUserPauseIntent(USER_PAUSE_INTENT_FAST_MS);
       clearPendingPlayResumesForPause();
+      // Clear play lock so keyboard pause takes immediate effect
+      state.userPlayLockUntil = 0;
+      clearPlayCommitGuard();
       state.intendedPlaying = false;
       state.bufferHoldIntendedPlaying = false;
       updateMediaSessionPlaybackState();
@@ -16843,15 +17082,23 @@ function setupMediaSession() {
     });
   } catch { }
   updateMediaSessionPlaybackState();
-  const handlePauseLike = () => {
+  const handlePauseLike = (kind = "pause") => {
+    if (kind === "pause" && shouldIgnoreStaleMediaPauseAction()) {
+      updateMediaSessionPlaybackState();
+      updateMediaSessionPositionNow(NaN, "media-session-stale-pause");
+      return;
+    }
     ++state.mediaSessionActionSerial;
     const pauseTxnMs = 2200;
     markMediaAction("pause");
-    setMediaSessionForcedPause(5000);
+    setMediaSessionForcedPause(1600);
     markUserPauseIntent(1500);
     clearPendingPlayResumesForPause();
     setPauseEventGuard(1600);
     setMediaPauseTxn(pauseTxnMs);
+    // Clear play lock so pause takes immediate effect
+    state.userPlayLockUntil = 0;
+    clearPlayCommitGuard();
     state.intendedPlaying = false;
     state.bufferHoldIntendedPlaying = false;
     state.mediaSessionInitiatedPlay = false;
@@ -16869,6 +17116,8 @@ function setupMediaSession() {
   try {
     navigator.mediaSession.setActionHandler("play", () => {
       const serial = ++state.mediaSessionActionSerial;
+      directExternalMediaControlPlay("media-session-play", serial).catch(() => { });
+      return;
       const resumePos = getBestResumePosition();
       MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.onUserPlay();
       clearMediaSessionForcedPause();
@@ -16951,8 +17200,8 @@ function setupMediaSession() {
         }, 0);
       });
     });
-    navigator.mediaSession.setActionHandler("pause", handlePauseLike);
-    try { navigator.mediaSession.setActionHandler("stop", handlePauseLike); } catch { }
+    navigator.mediaSession.setActionHandler("pause", () => handlePauseLike("pause"));
+    try { navigator.mediaSession.setActionHandler("stop", () => handlePauseLike("stop")); } catch { }
     const _stReadCurrentPos = () => {
       const freshValues = [];
       let viaPlayer = NaN;
@@ -17058,6 +17307,37 @@ function setupMediaSession() {
         _applyMediaSessionSeek(dur > 0 ? Math.min(cur + 10, dur) : cur + 10);
       });
     } catch { }
+  } catch { }
+
+  // Bind native element events to keep MediaSession playbackState tightly
+  // synced with actual element state once transitions settle.
+  // Per web.dev / Chromium best practice: always update playbackState
+  // from the element's own play/pause events as the source of truth.
+  try {
+    const _mssSyncDebounceMs = 120;
+    let _mssSyncTimer = null;
+    const _debouncedMediaSessionSync = () => {
+      if (_mssSyncTimer) clearTimeout(_mssSyncTimer);
+      _mssSyncTimer = setTimeout(() => {
+        _mssSyncTimer = null;
+        updateMediaSessionPlaybackState();
+        updateMediaSessionPositionNow(NaN, "element-event-sync", 500);
+      }, _mssSyncDebounceMs);
+    };
+    const _bindNativeSync = (el) => {
+      if (!el) return;
+      try { _on(el, "play", _debouncedMediaSessionSync, { passive: true }); } catch { }
+      try { _on(el, "pause", _debouncedMediaSessionSync, { passive: true }); } catch { }
+      try { _on(el, "playing", _debouncedMediaSessionSync, { passive: true }); } catch { }
+      try { _on(el, "ended", () => {
+        if ("mediaSession" in navigator) {
+          try { navigator.mediaSession.playbackState = "paused"; } catch { }
+        }
+      }, { passive: true }); } catch { }
+    };
+    _bindNativeSync(videoEl);
+    try { _bindNativeSync(getVideoNode()); } catch { }
+    if (coupledMode && audio) _bindNativeSync(audio);
   } catch { }
 }
 
@@ -17381,6 +17661,7 @@ function bindCommonMediaEvents() {
   });
 
   video.on("pause", () => {
+    updateMediaSessionPlaybackState();
     if (!coupledMode && noteMediumPlayPauseEvent("pause")) return;
     if (!coupledMode && mediumPlayPauseStormActive()) return;
     if (state.userPlayLockUntil > now() &&
@@ -17842,6 +18123,8 @@ function bindCommonMediaEvents() {
       _checkErrorRecovery();
       const _prevPlayingAt = state.lastVideoPlayingAt;
       state.lastVideoPlayingAt = now();
+      clearMediaPlayActionPending();
+      updateMediaSessionPlaybackState();
       clearHiddenVideoBootstrap();
       const _freshVideoProgressPending = freshForegroundVideoProgressPending(0.08);
       if (!_freshVideoProgressPending) {
@@ -18497,6 +18780,7 @@ function bindCommonMediaEvents() {
         try { event?.stopPropagation?.(); } catch { }
         return;
       }
+      updateMediaSessionPlaybackState();
       if (userToggleExpectingPause()) clearUserToggleTxn();
       if (restartFromEndedGuardActive() &&
         state.intendedPlaying &&
@@ -18744,6 +19028,8 @@ function bindCommonMediaEvents() {
         scheduleSync(0);
         return;
       }
+      clearMediaPlayActionPending();
+      updateMediaSessionPlaybackState();
       try { UltraStabilizer.onAudioPlaying(); } catch { }
       finalizeForegroundReturnRecovery();
       if (!_audioFirstPlayedAt) _audioFirstPlayedAt = performance.now();
@@ -21521,6 +21807,7 @@ _on(window, "unhandledrejection", (e) => {
   _handlePlayerCrash(msg, "promise", reason ? (reason.stack || "") : "");
 }, { passive: true });
 }, { once: true });
+
 
 //////////////// THE PLAYER, END ////////////////////////
  
