@@ -201,11 +201,11 @@
         const issueBody = [
             "Haiiii random Poke user that ran into this silly little video problem D:",
             "",
-            "We are so so sorry this happened. Poke tried its best to load the video, but something went bonk, tripped over its own shoelaces, and sent you to the unavailable page instead.",
+            "We are so so sorry this happened. Poke tried its best to load the video, but something went bonk, like a cat knocking a glass off a table or a dog stepping on the Wi-Fi cable.",
             "",
-            "Good news though: this report already has the boring techy bits filled in for you. You can leave them here, then add anything you noticed below so the Poke humans can chase the bug gremlin faster.",
+            "Good news though: this report already has the boring techy bits filled in for you. You can leave them here, then add anything you noticed below so the Poke contributors can figure out what happened faster.",
             "",
-            "Auto-filled bug gremlin details:",
+            "Auto-filled bug details:",
             `Video ID: ${issueVideoId}`,
             `Error message: ${issueErrorMessage}`,
             `Error reason: ${issueReason}`,
@@ -232,7 +232,8 @@
             "",
             "Extra clue corner:",
             "- You can paste screenshots, weird behavior, console messages, or anything else that feels useful here.",
-            "- No pressure to fill out everything. Even a tiny clue can help a lot."
+            "- No pressure to fill out everything. Even a tiny clue can help the Poke contributors a lot.",
+            "- Thank you for helping make Poke better. Very cool of you, honestly."
         ].join("\n");
 
         const issueUrl = `https://codeberg.org/ashleyirispuppy/poke/issues/new?title=${encodeURIComponent(issueTitle)}&body=${encodeURIComponent(issueBody)}&labels=${encodeURIComponent(issueLabel)}`;
