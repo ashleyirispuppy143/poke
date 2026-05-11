@@ -25,7 +25,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 //////////////// THE PLAYER, START ////////////////////////
-try {
+ try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -14370,6 +14370,8 @@ const PlayerErrorOverlay = (() => {
   }
 
   function show({ title, message, code, canRetry, reportUrl, stackTrace }) {
+    try { _errorOverlayShown = true; } catch { }
+    try { forcePausePlaybackForErrorOverlay("overlay-show"); } catch { }
     const el = _create();
     const titleEl = el.querySelector(".pe-overlay-title");
     titleEl.textContent = title || "An error occurred";
@@ -14441,6 +14443,75 @@ let _videoErrorObj = null;
 let _audioErrorObj = null;
 let _errorOverlayShown = false;
 let _errorIsRecoverable = false;
+
+function forcePausePlaybackForErrorOverlay(reason = "error-overlay") {
+  try { cancelActiveFade(); } catch { }
+  try { clearSyncLoop(); } catch { }
+  try { clearSeekPostTimers(); } catch { }
+  try { clearTransitionDriftTimers(); } catch { }
+  try { clearHiddenPlayPending(); } catch { }
+  try { clearBgResumeRetryTimer(); } catch { }
+  try { clearResumeAfterBufferTimer(); } catch { }
+  try { stopBgAudioKeepalive(); } catch { }
+  try { stopAudioNotPlayingMonitor(); } catch { }
+  try { disengagePauseIntercept(); } catch { }
+  try { DONTMAKEITDOUBLEPLAY.resetAll(); } catch { }
+
+  state.intendedPlaying = false;
+  state.bufferHoldIntendedPlaying = false;
+  state.resumeOnVisible = false;
+  state.bgHiddenWasPlaying = false;
+  state.bgAutoResumeSuppressed = false;
+  state.seekResumeInFlight = false;
+  state.bgResumeInFlight = false;
+  state.startupKickInFlight = false;
+  state.audioStartGraceUntil = 0;
+  state.seekAudioMustStartUntil = 0;
+  state.videoPlayUntil = 0;
+  state.audioPlayUntil = 0;
+  state.audioPauseUntil = Math.max(state.audioPauseUntil || 0, now() + 1200);
+  state.mediaSessionPauseBlockedUntil = 0;
+
+  const releaseAt = now() + 1200;
+  state.isProgrammaticVideoPause = true;
+  state.isProgrammaticAudioPause = true;
+  state._allowVideoPause = true;
+  state._allowAudioPause = true;
+
+  try { if (video && typeof video.pause === "function") video.pause(); } catch { }
+  try {
+    const vn = getVideoNode();
+    if (vn && typeof vn.pause === "function" && !vn.paused) vn.pause();
+  } catch { }
+  try { if (videoEl && typeof videoEl.pause === "function" && !videoEl.paused) videoEl.pause(); } catch { }
+  try {
+    const inner = video?.el?.()?.querySelector?.("video");
+    if (inner && inner !== videoEl && typeof inner.pause === "function" && !inner.paused) inner.pause();
+  } catch { }
+
+  if (audio) {
+    try { squelchAudioEvents(1200); } catch { }
+    try { resetAudioPlaybackRate(); } catch { }
+    try {
+      const origPause = DONTLETBROWSERPAUSEUS &&
+        typeof DONTLETBROWSERPAUSEUS.getOriginalPause === "function"
+        ? DONTLETBROWSERPAUSEUS.getOriginalPause()
+        : null;
+      if (typeof origPause === "function") origPause();
+      else if (typeof audio.pause === "function") audio.pause();
+    } catch {
+      try { if (typeof audio.pause === "function") audio.pause(); } catch { }
+    }
+  }
+
+  setTimeout(() => {
+    if (now() < releaseAt) return;
+    state.isProgrammaticVideoPause = false;
+    state.isProgrammaticAudioPause = false;
+    state._allowVideoPause = false;
+    state._allowAudioPause = false;
+  }, 1250);
+}
 
 function _checkErrorRecovery() {
   if (!_errorOverlayShown || !_errorIsRecoverable || _globalErrorCaught) return;
@@ -14645,10 +14716,12 @@ function handleFatalMediaError(source, errorObj) {
   const errorId = ERROR_IDS[scope + "-" + worstCode] || ("ERR_UNKNOWN_" + worstCode);
   const isBug = !titles[worstCode];
 
+  _errorOverlayShown = true;
   state.intendedPlaying = false;
   state.bufferHoldIntendedPlaying = false;
+  try { forcePausePlaybackForErrorOverlay("fatal-" + scope); } catch { }
   try { pauseHard(); } catch { }
-  _errorOverlayShown = true;
+  try { forcePausePlaybackForErrorOverlay("fatal-" + scope + "-after-pause"); } catch { }
   _errorIsRecoverable = (worstCode === 1 || worstCode === 2) && !_globalErrorCaught;
 
   const _reportBase = "https://codeberg.org/ashleyirispuppy/poke/issues/new?template=issue_template%2fplayer-bug.yml";
@@ -15431,9 +15504,8 @@ function bindCommonMediaEvents() {
     } catch { }
   });
   video.on("play", () => {
-    if (_errorOverlayShown) {
-      execProgrammaticVideoPause();
-      if (coupledMode && audio && !audio.paused) { try { audio.pause(); } catch { } }
+    if (_errorOverlayShown || (PlayerErrorOverlay && PlayerErrorOverlay.isVisible && PlayerErrorOverlay.isVisible())) {
+      forcePausePlaybackForErrorOverlay("video-play-while-overlay");
       return;
     }
     try {
@@ -16205,6 +16277,10 @@ function bindCommonMediaEvents() {
     if (!state.seeking && !state.seekBuffering) scheduleSync(0);
   });
     video.on("playing", () => {
+      if (_errorOverlayShown || (PlayerErrorOverlay && PlayerErrorOverlay.isVisible && PlayerErrorOverlay.isVisible())) {
+        forcePausePlaybackForErrorOverlay("video-playing-while-overlay");
+        return;
+      }
       _checkErrorRecovery();
       const _prevPlayingAt = state.lastVideoPlayingAt;
       state.lastVideoPlayingAt = now();
@@ -16732,6 +16808,10 @@ function bindCommonMediaEvents() {
     });
     if (!coupledMode) return;
     const onAudioPlay = () => {
+      if (_errorOverlayShown || (PlayerErrorOverlay && PlayerErrorOverlay.isVisible && PlayerErrorOverlay.isVisible())) {
+        forcePausePlaybackForErrorOverlay("audio-play-while-overlay");
+        return;
+      }
       if (isTabReturnImmune()) return; // never fight audio during tab return
       if (shouldBlockLeadingAudioForForegroundPlay()) {
         const _leadVt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
@@ -17065,6 +17145,10 @@ function bindCommonMediaEvents() {
     };
     _on(audio, "play", onAudioPlay, { passive: true });
     _on(audio, "playing", () => {
+      if (_errorOverlayShown || (PlayerErrorOverlay && PlayerErrorOverlay.isVisible && PlayerErrorOverlay.isVisible())) {
+        forcePausePlaybackForErrorOverlay("audio-playing-while-overlay");
+        return;
+      }
       _checkErrorRecovery();
       if (shouldBlockLeadingAudioForForegroundPlay()) {
         const _leadVt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
