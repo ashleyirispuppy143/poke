@@ -25,7 +25,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 //////////////// THE PLAYER, START ////////////////////////
- try {
+try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -1414,6 +1414,81 @@ startupPrimeStartedAt: performance.now(),
   let _lastKeepalivePlayAt = 0;
   let _bgKeepaliveFailCount = 0;
   let _bgKeepaliveFailResetAt = 0;
+  let _hiddenBgResumeTimers = [];
+  let _lastHiddenBgResumeBurstAt = 0;
+  function clearHiddenBackgroundResumeTimers() {
+    try {
+      for (let i = 0; i < _hiddenBgResumeTimers.length; i++) clearTimeout(_hiddenBgResumeTimers[i]);
+      _hiddenBgResumeTimers.length = 0;
+    } catch { _hiddenBgResumeTimers = []; }
+  }
+  function hiddenBackgroundResumeStep(reason = "hidden-resume", attempt = 0) {
+    if (!coupledMode || !audio) return false;
+    if (document.visibilityState !== "hidden") return false;
+    if (!state.intendedPlaying || state.endedNaturally || state.restarting) return false;
+    if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
+    if (userPauseLockActive() || mediaSessionForcedPauseActive()) return false;
+    if (_errorOverlayShown) return false;
+
+    state.resumeOnVisible = true;
+    state.bgAutoResumeSuppressed = true;
+    state.videoWaiting = false;
+    state.videoStallAudioPaused = false;
+    state.stallAudioResumeHoldUntil = 0;
+    state.stallAudioPausedSince = 0;
+    state.videoStallSince = 0;
+    state.foregroundBufferAudioHoldUntil = 0;
+    state.audioPauseUntil = 0;
+    state.audioPlayUntil = 0;
+    state.audioEventsSquelchedUntil = 0;
+    state.isProgrammaticAudioPause = false;
+    if (platform.chromiumOnlyBrowser) {
+      setChromiumBgPauseBlock(1800);
+      setChromiumPauseEventSuppress(1200);
+      setChromiumAutoPauseBlock(1800);
+    }
+
+    const vn = getVideoNode();
+    const vt = vn ? (Number(vn.currentTime) || 0) : 0;
+    const at = Number(audio.currentTime) || 0;
+    const target = at > 0.05 ? Math.max(at, vt) : vt;
+    if (vn && at > 0.05 && (vn.paused || Math.abs(at - vt) > 0.35) && !state.bgSilentTimeSyncing) {
+      try { bgSilentSyncVideoTime(at); } catch { }
+    }
+
+    const bootstrapMs = platform.chromiumOnlyBrowser ? (attempt === 0 ? 240 : 140) : 420;
+    const kicked = kickHiddenCoupledBootstrap({
+      kickAudio: true,
+      forceVideo: true,
+      bootstrapMs,
+      allowAudioDuringVideoLead: platform.chromiumOnlyBrowser && attempt > 0
+    });
+    if (audio.paused && platform.chromiumOnlyBrowser && attempt > 0) {
+      try { tryNativeHiddenAudioResume(target, { allowDuringVideoLead: true }); } catch { }
+    }
+    try { scheduleSync(0); } catch { }
+    return !!kicked || !audio.paused || !!(vn && !vn.paused);
+  }
+  function scheduleHiddenBackgroundResumeBurst(reason = "hidden-pause") {
+    if (document.visibilityState !== "hidden") return false;
+    if (!state.intendedPlaying || state.endedNaturally || state.restarting) return false;
+    if (userPauseLockActive() || mediaSessionForcedPauseActive()) return false;
+    startBgAudioKeepalive();
+    const t = now();
+    if ((t - _lastHiddenBgResumeBurstAt) < 120) return true;
+    _lastHiddenBgResumeBurstAt = t;
+    clearHiddenBackgroundResumeTimers();
+    const delays = platform.chromiumOnlyBrowser ? [0, 70, 160, 340, 720, 1350] : [0, 180, 520, 1200];
+    for (let i = 0; i < delays.length; i++) {
+      const timer = setTimeout(() => {
+        const idx = _hiddenBgResumeTimers.indexOf(timer);
+        if (idx !== -1) _hiddenBgResumeTimers.splice(idx, 1);
+        hiddenBackgroundResumeStep(reason, i);
+      }, delays[i]);
+      _hiddenBgResumeTimers.push(timer);
+    }
+    return true;
+  }
   function _bgKeepaliveTick() {
     if (!state.intendedPlaying) return;
     if (state.endedNaturally) return;
@@ -1466,7 +1541,11 @@ startupPrimeStartedAt: performance.now(),
         }
     }
     if (!isVisible && coupledMode && audio) {
-      kickHiddenCoupledBootstrap({ kickAudio: true });
+      kickHiddenCoupledBootstrap({
+        kickAudio: true,
+        bootstrapMs: platform.chromiumOnlyBrowser && audio.paused ? 300 : null,
+        allowAudioDuringVideoLead: platform.chromiumOnlyBrowser && audio.paused
+      });
     } else {
       try {
         if (vn && vn.paused) {
@@ -1497,6 +1576,7 @@ startupPrimeStartedAt: performance.now(),
     } catch {
       _bgFallbackId = setInterval(_bgKeepaliveTick, perfProfile.lowEnd ? 8000 : 6000);
     }
+    try { setTimeout(_bgKeepaliveTick, 0); } catch { }
   }
   function stopBgAudioKeepalive() {
     if (_bgWorker) {
@@ -1511,6 +1591,7 @@ startupPrimeStartedAt: performance.now(),
       clearInterval(_bgFallbackId);
       _bgFallbackId = null;
     }
+    clearHiddenBackgroundResumeTimers();
   }
 
   const _guardPlayTimes = new WeakMap();
@@ -7271,13 +7352,14 @@ function hiddenBootstrapNeedsVideoLead() {
   }
   return now() < state.hiddenVideoBootstrapUntil;
 }
-function tryNativeHiddenAudioResume(targetTime = NaN) {
+function tryNativeHiddenAudioResume(targetTime = NaN, opts = {}) {
+  const { allowDuringVideoLead = false } = opts || {};
   if (!coupledMode || !audio) return false;
   if (document.visibilityState !== "hidden") return false;
   if (!state.intendedPlaying || state.endedNaturally || state.restarting) return false;
   if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
   if (userPauseLockActive() || mediaSessionForcedPauseActive()) return false;
-  if (hiddenBootstrapNeedsVideoLead()) return false;
+  if (!allowDuringVideoLead && hiddenBootstrapNeedsVideoLead()) return false;
   if (isVideoBufferingForCoupledPlayback({ allowHiddenBootstrap: true, allowSeekKick: true })) return false;
 
   const kickAt = now();
@@ -7320,7 +7402,12 @@ function tryNativeHiddenAudioResume(targetTime = NaN) {
   return false;
 }
 function kickHiddenCoupledBootstrap(opts = {}) {
-  const { kickAudio = true, forceVideo = true } = opts || {};
+  const {
+    kickAudio = true,
+    forceVideo = true,
+    bootstrapMs = null,
+    allowAudioDuringVideoLead = false
+  } = opts || {};
   if (!coupledMode || !audio) return false;
   if (document.visibilityState !== "hidden") return false;
   if (!state.intendedPlaying || state.endedNaturally || state.restarting) return false;
@@ -7332,7 +7419,10 @@ function kickHiddenCoupledBootstrap(opts = {}) {
   const atNow = Number(audio.currentTime) || 0;
   const targetTime = vtNow > 0.05 ? vtNow : atNow;
 
-  armHiddenVideoBootstrap(forceVideo ? 1500 : 1100);
+  const leadMs = bootstrapMs == null
+    ? (forceVideo ? 1500 : 1100)
+    : Math.max(80, Number(bootstrapMs) || 0);
+  armHiddenVideoBootstrap(leadMs);
   if (vn && atNow > 0.05 &&
     (vn.paused || Math.abs((Number(vn.currentTime) || 0) - atNow) > 0.35) &&
     !state.bgSilentTimeSyncing) {
@@ -7344,7 +7434,8 @@ function kickHiddenCoupledBootstrap(opts = {}) {
     }
 
     const stillNeedsLead = hiddenBootstrapNeedsVideoLead();
-  if (!kickAudio || stillNeedsLead || !audio.paused) return !stillNeedsLead;
+  if (!kickAudio || !audio.paused) return !stillNeedsLead;
+  if (stillNeedsLead && !allowAudioDuringVideoLead) return false;
   if (isVideoBufferingForCoupledPlayback({ allowHiddenBootstrap: true, allowSeekKick: true })) return false;
 
   clearAudioPauseLocks();
@@ -7364,9 +7455,9 @@ function kickHiddenCoupledBootstrap(opts = {}) {
   execProgrammaticAudioPlay({ squelchMs: 80, force: true, minGapMs: 0 })
   .then(ok => {
     if (ok || !audio.paused || document.visibilityState !== "hidden") return;
-    tryNativeHiddenAudioResume(targetTime);
+    tryNativeHiddenAudioResume(targetTime, { allowDuringVideoLead: allowAudioDuringVideoLead });
   })
-  .catch(() => { tryNativeHiddenAudioResume(targetTime); });
+  .catch(() => { tryNativeHiddenAudioResume(targetTime, { allowDuringVideoLead: allowAudioDuringVideoLead }); });
   return true;
 }
 function hasPlaybackProgressFromBackground(minDelta = 0.05) {
@@ -15888,14 +15979,18 @@ function bindCommonMediaEvents() {
             !(!coupledMode && mediumStartupAutoplayGuardActive())) {
             try {
               const _pauseVN = getVideoNode();
-              if (_pauseVN) {
-                if (_pauseVN.ended) {
-                  return;
-                }
-              }
-            } catch { }
-            const _vn = getVideoNode();
-            if (_vn && _vn.paused) {
+          if (_pauseVN) {
+            if (_pauseVN.ended) {
+              return;
+            }
+          }
+        } catch { }
+        if (document.visibilityState === "hidden") {
+          scheduleHiddenBackgroundResumeBurst("video-pause-immunity");
+          return;
+        }
+        const _vn = getVideoNode();
+        if (_vn && _vn.paused) {
               const _nowImm = now();
               if (_nowImm - (state._lastImmunityPlayKickAt || 0) > 400) {
                 state._lastImmunityPlayKickAt = _nowImm;
@@ -16124,23 +16219,7 @@ function bindCommonMediaEvents() {
                   !state.endedNaturally &&
                   !MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) {
                   state.resumeOnVisible = true;
-                if (coupledMode && audio && audio.paused && !userPauseLockActive() && !mediaSessionForcedPauseActive()) {
-                  try { execProgrammaticAudioPlay({ squelchMs: 80, force: true, minGapMs: 0 }).catch(() => { }); } catch { }
-                }
-                const _bgPauseNow = now();
-                if (_bgPauseNow - (state._bgVideoPauseKickAt || 0) > 200 &&
-                  !userPauseLockActive() && !mediaSessionForcedPauseActive() &&
-                  !state.seeking && !state.seekBuffering && !state.restarting &&
-                  !NotMakePlayBackFixingNoticable.isRecovering()) {
-                  state._bgVideoPauseKickAt = _bgPauseNow;
-                const _bgPauseVN = getVideoNode();
-                if (_bgPauseVN && _bgPauseVN.paused) {
-                  try {
-                    const _bgPausePlay = execProgrammaticVideoPlay({ force: true, minGapMs: 0 });
-                    if (_bgPausePlay && typeof _bgPausePlay.catch === "function") _bgPausePlay.catch(() => { });
-                  } catch { }
-                }
-                  }
+                  scheduleHiddenBackgroundResumeBurst("video-pause-hidden");
                   }
                   return;
               }
@@ -16925,6 +17004,10 @@ function bindCommonMediaEvents() {
         }
         if (isTabReturnImmune() && state.intendedPlaying && !state.videoWaiting &&
           !(state.userPauseIntentPresetAt > 0 && (now() - state.userPauseIntentPresetAt) < 2000)) {
+          if (document.visibilityState === "hidden") {
+            scheduleHiddenBackgroundResumeBurst("audio-pause-immunity");
+            return;
+          }
           try {
             if (audio && audio.paused) {
               execProgrammaticAudioPlay({ squelchMs: 80, force: true, minGapMs: 0 }).catch(() => { });
@@ -16951,13 +17034,8 @@ function bindCommonMediaEvents() {
             !state.videoWaiting &&
             !NotMakePlayBackFixingNoticable.isRecovering() &&
             !MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) {
-            const _bgAPNow = now();
-          if (_bgAPNow - (state._bgAudioPauseKickAt || 0) > 200) {
-            state._bgAudioPauseKickAt = _bgAPNow;
-            state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, _bgAPNow + 800);
-            kickHiddenCoupledBootstrap({ kickAudio: true });
-            scheduleSync(0);
-          }
+            scheduleHiddenBackgroundResumeBurst("audio-pause-hidden");
+            return;
             }
 
             const _inGraceAtPauseFire = inBgReturnGrace();
@@ -18935,6 +19013,7 @@ function setupVisibilityLifecycle() {
     state.visibilityStableUntil = now() + VISIBILITY_TRANSITION_MS;
     state.tabVisibilityChangeUntil = now() + TAB_VISIBILITY_STABLE_MS;
     if (newState === "visible") {
+      clearHiddenBackgroundResumeTimers();
       clearHiddenVideoBootstrap();
       setTimeout(() => {
         if (!isTabReturnImmune()) stopBgAudioKeepalive();
@@ -19083,8 +19162,11 @@ function setupVisibilityLifecycle() {
         const _hideVideoPlaying = !!(_hideVNode && !_hideVNode.paused);
         const _hideAudioPlaying = !coupledMode || !!(audio && !audio.paused);
         startBgAudioKeepalive();
+        if (platform.chromiumOnlyBrowser) {
+          scheduleHiddenBackgroundResumeBurst("visibility-hide");
+        }
         if (!_hideVideoPlaying || !_hideAudioPlaying) {
-          kickHiddenCoupledBootstrap({ kickAudio: true });
+          scheduleHiddenBackgroundResumeBurst("visibility-hide-paused");
         }
       }
 
