@@ -595,6 +595,8 @@ fastSyncUntil: 0,
                           bgResumeRetryTimer: null,
                           resumeAfterBufferTimer: null,
                           mediaSessionActionSerial: 0,
+                          mediaSessionSeekTarget: null,
+                          mediaSessionSeekUntil: 0,
                           mediaPositionNextAt: 0,
                           hiddenInstantResumeAt: 0,
                           hiddenInstantResumeCount: 0,
@@ -6619,6 +6621,25 @@ function directUserToggleActive(windowMs = 950) {
   const win = Math.max(0, Number(windowMs) || 0);
   return userWantsPlayNow(win) || userWantsPauseNow(win) || userToggleExpectingPlay() || userToggleExpectingPause();
 }
+function externalMediaControlLooksPlaying() {
+  if (state.endedNaturally || state.restarting) return false;
+  let videoPlaying = false;
+  let audioPlaying = false;
+  try { videoPlaying = !getVideoPaused(); } catch { }
+  try { audioPlaying = !!(coupledMode && audio && !audio.paused); } catch { }
+  if (videoPlaying || audioPlaying) return true;
+  return !!(state.intendedPlaying && (
+    state.bufferHoldIntendedPlaying ||
+    state.seekResumeInFlight ||
+    state.bgResumeInFlight ||
+    state.strictBufferHold ||
+    state.videoWaiting ||
+    userPlayIntentActive() ||
+    mediaPlayTxnActive() ||
+    hiddenPlayPendingActive() ||
+    (state.mediaSessionInitiatedPlay && mediaActionRecently("play", 4500))
+  ));
+}
 function shouldTreatUpcomingPlayAsFreshForegroundStart() {
   if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
   if (now() < state.foregroundReturnUserPlayUntil &&
@@ -7339,15 +7360,6 @@ function mediaPlayTxnActive() { return now() < state.mediaPlayTxnUntil; }
 function mediaPauseTxnActive() { return now() < state.mediaPauseTxnUntil; }
 function mediaActionLocked() { return now() < state.mediaLockUntil; }
 function inMediaTxnWindow() { return mediaActionLocked() || mediaPlayTxnActive() || mediaPauseTxnActive(); }
-function shouldSuppressStaleMediaSessionPause() {
-  if (!platform.chromiumOnlyBrowser) return false;
-  if (!state.intendedPlaying || state.endedNaturally || state.restarting) return false;
-  if (userWantsPauseNow(220) || userToggleExpectingPause()) return false;
-  const playAge = state.lastMediaAction === "play" ? (now() - state.lastMediaActionTs) : Infinity;
-  return playAge >= 0 &&
-    playAge < 900 &&
-    (state.mediaSessionInitiatedPlay || mediaPlayTxnActive() || now() < state.mediaSessionPauseBlockedUntil);
-}
 function setMediaSessionForcedPause(ms = 2600) {
   state.mediaForcedPauseUntil = Math.max(state.mediaForcedPauseUntil, now() + Math.max(0, Number(ms) || 0));
 }
@@ -7560,6 +7572,8 @@ function prepareRestartFromEndedPlayback(force = false) {
   state.endedLockUntil = 0;
   state.restartFromEndedUntil = Math.max(state.restartFromEndedUntil, now() + 3200);
   state.pendingSeekTarget = null;
+  state.mediaSessionSeekTarget = null;
+  state.mediaSessionSeekUntil = 0;
   state.seekWantedPlaying = true;
   armSeekResumeIntent(7000);
   state.seekStabilizeUntil = Math.max(state.seekStabilizeUntil, now() + 1800);
@@ -9820,7 +9834,24 @@ function updateMediaSessionPlaybackState() {
   try {
     const hiddenPlaying = typeof hiddenAudioMediaSessionShouldStayPlaying === "function" &&
       hiddenAudioMediaSessionShouldStayPlaying();
-    navigator.mediaSession.playbackState = (state.intendedPlaying || hiddenPlaying) ? "playing" : "paused";
+    let actualPlaying = false;
+    try { actualPlaying = actualPlaying || !getVideoPaused(); } catch { }
+    try { actualPlaying = actualPlaying || !!(coupledMode && audio && !audio.paused); } catch { }
+    const pendingPlay =
+    state.intendedPlaying &&
+    !state.endedNaturally &&
+    !state.restarting &&
+    (
+      userPlayIntentActive() ||
+      mediaPlayTxnActive() ||
+      hiddenPlayPendingActive() ||
+      state.seekResumeInFlight ||
+      state.bgResumeInFlight ||
+      (state.strictBufferHold && state.bufferHoldIntendedPlaying) ||
+      state.videoWaiting ||
+      (state.mediaSessionInitiatedPlay && mediaActionRecently("play", 4500))
+    );
+    navigator.mediaSession.playbackState = (hiddenPlaying || actualPlaying || pendingPlay) ? "playing" : "paused";
   } catch { }
 }
 
@@ -13678,6 +13709,8 @@ async function finalizeSeekSync(currentSeekId) {
     state.seeking = false;
     state.firstSeekDone = true;
     state.pendingSeekTarget = null;
+    state.mediaSessionSeekTarget = null;
+    state.mediaSessionSeekUntil = 0;
     state.seekTargetTime = 0;
     state.seekResolvedTime = NaN;
     state.seekCompleted = true; state._seekStartedAt = 0;
@@ -13745,6 +13778,8 @@ async function finalizeSeekSync(currentSeekId) {
       state.audioPlayUntil = 0;
       state.audioPauseUntil = 0;
       state.pendingSeekTarget = null;
+      state.mediaSessionSeekTarget = null;
+      state.mediaSessionSeekUntil = 0;
       state.seekTargetTime = 0;
       state.seekResolvedTime = NaN;
       state.seekCooldownUntil = now() + 200;
@@ -13766,6 +13801,8 @@ async function finalizeSeekSync(currentSeekId) {
 
   if (!state.seeking || state.seekId !== currentSeekId) return;
   if (state.pendingSeekTarget != null) state.pendingSeekTarget = null;
+  state.mediaSessionSeekTarget = null;
+  state.mediaSessionSeekUntil = 0;
   state.seekTargetTime = 0;
   state.seekResolvedTime = NaN;
 
@@ -15512,6 +15549,8 @@ function setupHeartbeat() {
                             state.seekCompleted = true;
                             state._seekStartedAt = 0;
                             state.pendingSeekTarget = null;
+                            state.mediaSessionSeekTarget = null;
+                            state.mediaSessionSeekUntil = 0;
                             state.seekTargetTime = 0;
                             state.seekResolvedTime = NaN;
                             clearSeekSyncFinalizeTimer();
@@ -16627,6 +16666,42 @@ function setupUserPauseIntentDetection() {
       try { event.preventDefault(); } catch { }
       return;
     }
+    if ((code === "MediaSeekBackward" || code === "MediaSeekForward") &&
+      !typingTarget && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      try { event.preventDefault(); } catch { }
+      try { event.stopPropagation(); } catch { }
+      const dur = getMediaSessionDuration();
+      const cur = (() => {
+        try {
+          const at = coupledMode && audio ? Number(audio.currentTime) : NaN;
+          if (isFinite(at) && at >= 0 && !audio.paused) return at;
+        } catch { }
+        try { const vt = Number(video.currentTime()); if (isFinite(vt) && vt >= 0) return vt; } catch { }
+        try { const vn = getVideoNode(); const vt = Number(vn?.currentTime); if (isFinite(vt) && vt >= 0) return vt; } catch { }
+        return 0;
+      })();
+      const offset = 10;
+      const target = code === "MediaSeekForward"
+        ? (dur > 0 ? Math.min(cur + offset, dur) : cur + offset)
+        : Math.max(cur - offset, 0);
+      prepareExplicitUserSeekTarget(target, 5600);
+      state.mediaSessionSeekTarget = target;
+      state.mediaSessionSeekUntil = now() + 7000;
+      safeSetVideoTime(target, { force: true });
+      if (coupledMode && audio) {
+        try {
+          squelchAudioEvents(700);
+          state._allowAudioTimeWrite = true;
+          audio.currentTime = target;
+          state._allowAudioTimeWrite = false;
+        } catch {
+          state._allowAudioTimeWrite = false;
+        }
+      }
+      updateMediaSessionPositionNow(target, "keyboard-media-seek");
+      updateMediaSessionPlaybackState();
+      return;
+    }
     if (
       code === "ArrowLeft" || code === "ArrowRight" ||
       code === "Home" || code === "End" ||
@@ -16636,6 +16711,30 @@ function setupUserPauseIntentDetection() {
       markUserSeekIntent(2800);
     }
     const keyName = String(event.key || "");
+    const isExplicitMediaPlay = code === "MediaPlay";
+    if (isExplicitMediaPlay && !typingTarget && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      try { event.preventDefault(); } catch { }
+      try { event.stopPropagation(); } catch { }
+      try { event.stopImmediatePropagation(); } catch { }
+      ++state.mediaSessionActionSerial;
+      const terminalRestart = terminalEndFallbackShouldFire();
+      markUserPlayIntent(USER_PLAY_INTENT_FAST_MS);
+      if (terminalRestart) {
+        try { prepareRestartFromEndedPlayback(true); } catch { }
+      }
+      try {
+        const p = execProgrammaticVideoPlay({ force: true, minGapMs: 0 });
+        if (p && typeof p.catch === "function") p.catch(() => { });
+      } catch { }
+      if (coupledMode && audio && audio.paused) {
+        try { execProgrammaticAudioPlay({ squelchMs: 120, force: true, minGapMs: 0 }).catch(() => { }); } catch { }
+      }
+      scheduleNoHoverPlaybackKick("keyboard-media-play");
+      scheduleBufferReadyPlaybackKick("keyboard-media-play", { immediate: true, force: true });
+      updateMediaSessionPlaybackState();
+      updateMediaSessionPositionNow(NaN, "keyboard-media-play");
+      return;
+    }
     const isToggleKey =
     code === "Space" ||
     code === "KeyK" ||
@@ -16654,11 +16753,11 @@ function setupUserPauseIntentDetection() {
       const shouldPlay =
       recentlyPausedForToggle ||
       userToggleExpectingPlay() ||
-      getVideoPaused() ||
       state.endedNaturally ||
       restartFromEndedGuardActive() ||
       nativeVideoEnded() ||
-      terminalRestart;
+      terminalRestart ||
+      !externalMediaControlLooksPlaying();
       const keyNow = now();
       if (event.repeat || keyboardToggleHeld) {
         if (!keyboardToggleHeldWantsPlay) return;
@@ -16698,11 +16797,6 @@ function setupUserPauseIntentDetection() {
     } else if (code === "MediaPause" || code === "MediaStop") {
       try { event.preventDefault(); } catch { }
       try { event.stopPropagation(); } catch { }
-      if (shouldSuppressStaleMediaSessionPause()) {
-        updateMediaSessionPlaybackState();
-        updateMediaSessionPositionNow(NaN, "keyboard-media-stale-pause");
-        return;
-      }
       ++state.mediaSessionActionSerial;
       markMediaAction("pause");
       setMediaSessionForcedPause(4500);
@@ -16750,11 +16844,6 @@ function setupMediaSession() {
   } catch { }
   updateMediaSessionPlaybackState();
   const handlePauseLike = () => {
-    if (shouldSuppressStaleMediaSessionPause()) {
-      updateMediaSessionPlaybackState();
-      updateMediaSessionPositionNow(NaN, "media-session-stale-pause");
-      return;
-    }
     ++state.mediaSessionActionSerial;
     const pauseTxnMs = 2200;
     markMediaAction("pause");
@@ -16780,6 +16869,7 @@ function setupMediaSession() {
   try {
     navigator.mediaSession.setActionHandler("play", () => {
       const serial = ++state.mediaSessionActionSerial;
+      const resumePos = getBestResumePosition();
       MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.onUserPlay();
       clearMediaSessionForcedPause();
       state.mediaSessionInitiatedPlay = true;
@@ -16806,7 +16896,6 @@ function setupMediaSession() {
         state.foregroundResumeBoostUntil = Math.max(state.foregroundResumeBoostUntil, now() + 2500);
         clearHiddenMediaSessionPlay();
       }
-      const resumePos = getBestResumePosition();
       const currentVT = (() => { try { return Number(video.currentTime()); } catch { return 0; } })();
       const currentAT = coupledMode ? (() => { try { return Number(audio.currentTime); } catch { return 0; } })() : resumePos;
       const needsSeek = resumePos > 0.5 && (currentVT < 0.5 || currentAT < 0.5 || Math.abs(resumePos - currentVT) > 1.0);
@@ -16865,18 +16954,31 @@ function setupMediaSession() {
     navigator.mediaSession.setActionHandler("pause", handlePauseLike);
     try { navigator.mediaSession.setActionHandler("stop", handlePauseLike); } catch { }
     const _stReadCurrentPos = () => {
-      const cands = [];
-      try { const v = Number(video.currentTime()); if (isFinite(v) && v > 0) cands.push(v); } catch { }
-      try { const v = Number(videoEl.currentTime); if (isFinite(v) && v > 0) cands.push(v); } catch { }
+      const freshValues = [];
+      let viaPlayer = NaN;
+      let viaEl = NaN;
+      let viaInner = NaN;
+      let viaAudio = NaN;
+      try { viaPlayer = Number(video.currentTime()); } catch { }
+      try { viaEl = Number(videoEl.currentTime); } catch { }
       try {
         const inner = getVideoNode();
-        const v = inner ? Number(inner.currentTime) : NaN;
-        if (inner !== videoEl && isFinite(v) && v > 0) cands.push(v);
+        viaInner = inner ? Number(inner.currentTime) : NaN;
       } catch { }
+      try { if (coupledMode && audio) viaAudio = Number(audio.currentTime); } catch { }
+      if (isFinite(viaPlayer) && viaPlayer >= 0) freshValues.push(viaPlayer);
+      if (isFinite(viaInner) && viaInner >= 0) freshValues.push(viaInner);
+      if (isFinite(viaEl) && viaEl >= 0) freshValues.push(viaEl);
+      const audioIsTimelineOwner = coupledMode && audio && isFinite(viaAudio) && viaAudio >= 0 &&
+        (!audio.paused || document.visibilityState === "hidden" || getVideoPaused());
+      if (audioIsTimelineOwner) return viaAudio;
+      for (const value of freshValues) {
+        if (value >= 0) return value;
+      }
+      if (isFinite(viaAudio) && viaAudio >= 0) return viaAudio;
       const lkg = Number(state.lastKnownGoodVT) || 0;
-      if (lkg > 0) cands.push(lkg);
-      if (!cands.length) return 0;
-      return Math.max(...cands);
+      if (lkg > 0 && (now() - Number(state.lastKnownGoodVTts || 0)) < 120000) return lkg;
+      return 0;
     };
     const _applyMediaSessionSeek = (newTime, details = {}) => {
       const target = Number(newTime);
@@ -16894,25 +16996,20 @@ function setupMediaSession() {
         state.mediaSessionInitiatedPlay
       );
       state.pendingSeekTarget = target;
+      state.mediaSessionSeekTarget = target;
+      state.mediaSessionSeekUntil = now() + 7000;
       state.seekWantedPlaying = wasIntendedPlaying;
       if (state.seekWantedPlaying) {
         armSeekResumeIntent(9000);
         state.mediaSessionPauseBlockedUntil = Math.max(state.mediaSessionPauseBlockedUntil || 0, now() + 1200);
       }
       state.seekStabilizeUntil = Math.max(state.seekStabilizeUntil, now() + 5000);
-      try {
-        const vn = getVideoNode();
-        if (details && details.fastSeek && vn && typeof vn.fastSeek === "function") {
-          vn.fastSeek(target);
-        }
-      } catch { }
       safeSetVideoTime(target, { force: true });
       if (coupledMode && audio) {
         try {
           squelchAudioEvents(700);
           state._allowAudioTimeWrite = true;
-          if (details && details.fastSeek && typeof audio.fastSeek === "function") audio.fastSeek(target);
-          else audio.currentTime = target;
+          audio.currentTime = target;
           state._allowAudioTimeWrite = false;
         } catch {
           state._allowAudioTimeWrite = false;
@@ -16948,6 +17045,19 @@ function setupMediaSession() {
       const newTime = dur > 0 ? Math.min(rawTime, dur) : rawTime;
       _applyMediaSessionSeek(newTime, d);
     });
+    try {
+      navigator.mediaSession.setActionHandler("previoustrack", () => {
+        const cur = _stReadCurrentPos();
+        _applyMediaSessionSeek(Math.max(cur - 10, 0));
+      });
+    } catch { }
+    try {
+      navigator.mediaSession.setActionHandler("nexttrack", () => {
+        const dur = getMediaSessionDuration();
+        const cur = _stReadCurrentPos();
+        _applyMediaSessionSeek(dur > 0 ? Math.min(cur + 10, dur) : cur + 10);
+      });
+    } catch { }
   } catch { }
 }
 
@@ -18927,6 +19037,12 @@ function bindCommonMediaEvents() {
 
           const _stPendingNum = state.pendingSeekTarget != null ? Number(state.pendingSeekTarget) : NaN;
           const _stPendingValid = isFinite(_stPendingNum) && _stPendingNum >= 0;
+          const _stMediaSessionSeekTarget = Number(state.mediaSessionSeekTarget);
+          const _stMediaSessionSeek =
+          _stPendingValid &&
+          isFinite(_stMediaSessionSeekTarget) &&
+          now() < Number(state.mediaSessionSeekUntil || 0) &&
+          Math.abs(_stMediaSessionSeekTarget - _stPendingNum) < 0.35;
           const _stUserActionRecent = (now() - state.lastUserActionTime) < 4000;
           const _stUserSeekIntent = (typeof userSeekIntentActive === "function") && userSeekIntentActive();
           const _stRestartLike = state.restarting || state.endedNaturally || (typeof isLoopDesired === "function" && isLoopDesired());
@@ -18934,7 +19050,9 @@ function bindCommonMediaEvents() {
           let seekTime;
           let _stAbortPhantom = false;
 
-          if (_stPendingValid) {
+          if (_stPendingValid && _stMediaSessionSeek) {
+            seekTime = _stPendingNum;
+          } else if (_stPendingValid) {
             const _stPendingRawCandidates = [vjsTime, nativeTime, innerTime].filter(v => isFinite(v) && v > 0.5);
             const _stPendingBestRaw = _stPendingRawCandidates.length ? Math.max(..._stPendingRawCandidates) : NaN;
             const _stPendingLooksLikeDraggedSlider =
@@ -18985,6 +19103,8 @@ function bindCommonMediaEvents() {
             state.seekTargetTime = previousGoodVT;
             state.seekResolvedTime = previousGoodVT;
             state.pendingSeekTarget = null;
+            state.mediaSessionSeekTarget = null;
+            state.mediaSessionSeekUntil = 0;
             try { clearSeekResumeIntent(); } catch { }
             try { clearSeekWatchdog(); } catch { }
             try { UltraStabilizer.onSeekEnd?.(); } catch { }
@@ -19112,6 +19232,8 @@ function bindCommonMediaEvents() {
             state.seekResolvedTime = newTime;
             state.seekTargetTime = newTime;
             state.pendingSeekTarget = null;
+            state.mediaSessionSeekTarget = null;
+            state.mediaSessionSeekUntil = 0;
             if (coupledMode && audio && isFinite(newTime) && newTime >= 0) {
               const _curAudioTime = Number(audio.currentTime) || 0;
               if (Math.abs(_curAudioTime - newTime) > 0.2) {
