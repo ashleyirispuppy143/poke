@@ -180,15 +180,18 @@
         const issueErrorMessage = locals.error_message || "No error message provided";
         const issueReason = locals.err_reason || "Unknown";
         const issuePageUrl = locals.url || locals.page_url || "Please paste the Poke page URL here";
+        const issueLabel = "bug";
 
         const issueTitle = `[Video Error] ${issueVideoId} | ${issueErrorMessage}`;
 
         const issueBody = [
-            "Hi! Thanks for reporting this video issue.",
+            "Haiiii random Poke user that had this video issue D:",
             "",
-            "Please keep the auto-filled details below, then add anything else that could help us understand or reproduce the problem.",
+            "We are so so sorry this happened. Poke tried to load the video, but something went bonk and sent you to the unavailable page instead.",
             "",
-            "Auto-filled details:",
+            "This report has some helpful details filled in already, so you do not have to do all the boring detective work yourself. Please keep the info below if you can, then add anything else you noticed.",
+            "",
+            "Auto-filled little bug details:",
             `Video ID: ${issueVideoId}`,
             `Error message: ${issueErrorMessage}`,
             `Error reason: ${issueReason}`,
@@ -196,20 +199,21 @@
             `Page URL: ${issuePageUrl}`,
             "",
             "What happened?",
-            "- The video opened the unavailable page.",
+            "- The video opened the unavailable page instead of playing.",
             "",
             "What did you expect to happen?",
-            "- The video should have loaded normally, or Poke should have shown a clearer reason.",
+            "- The video should have loaded normally, or Poke should have explained the problem more clearly.",
             "",
-            "Can you help us with a few extra details?",
+            "Tiny questions that would help a lot:",
             "- Does the video work when you press Try on YouTube?",
             "- What browser are you using?",
             "- What device or operating system are you using?",
             "- Does this happen every time you open this video?",
-            "- Any extra notes:"
+            "- Did refreshing the page change anything?",
+            "- Any extra notes, weird behavior, or tiny clues:"
         ].join("\n");
 
-        const issueUrl = `https://codeberg.org/ashleyirispuppy/poke/issues/new?title=${encodeURIComponent(issueTitle)}&body=${encodeURIComponent(issueBody)}`;
+        const issueUrl = `https://codeberg.org/ashleyirispuppy/poke/issues/new?title=${encodeURIComponent(issueTitle)}&body=${encodeURIComponent(issueBody)}&labels=${encodeURIComponent(issueLabel)}`;
     %>
 
     <div id="error-container">
