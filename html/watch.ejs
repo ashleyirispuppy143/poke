@@ -1655,33 +1655,32 @@ for (const format of (VideoData.adaptiveFormats || [])) {
           <i class="fa-light fa-music-note"></i>
           Stream!
         </div>
-      </a>
-    </div>
-  <% } %>
 
-  <% if (support != undefined) { %>
+    </div>
+      </a>
+  <% } else if (support != undefined) { %>
     <div class="new-button button-encryption">
       <a title="Support the Creator of the video!" style="color:var(--text-color);text-decoration: none;" href="https://www.patreon.com/join/<%- support.name %>">
         <div class="pill-button">
           <i class="fa-light fa-heart"></i>
           Support
         </div>
-      </a>
-    </div>
-  <% } %>
 
-  <% if (support == undefined && linkto == undefined) { %>
+    </div>
+      </a>
+  <% } else { %>
     <div class="new-button button-encryption">
       <a title="open the video on youtube.com!" style="color:var(--text-color);text-decoration: none;" href="/api/yturl?v=<%= VideoData.videoId %>">
         <div class="pill-button">
           <i class="fa-brands fa-youtube"></i>
           Open On Youtube
         </div>
-      </a>
+
     </div>
+      </a>
   <% } %>
 
-<% } %>
+<% } %> 
                             <% if (video?.Channel.Name.endsWith(' - Topic') || VideoData.title.endsWith('IGNORE_THIS_PLEASE_THIS_IS_DEPRACTED_LOL_SORRY_THIS_WAS_USED_IN_2023_AND_IM_LAZY_TO_REMOVE_THIS)'))  { %> 
                                                  					<a  class="new-button" title="open this song in poketube music player :3" style="color:var(--text-color);text-decoration: none;" href="/">
                                                                                                     <div class="pill-button">
