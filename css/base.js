@@ -25,7 +25,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 //////////////// THE PLAYER, START ////////////////////////
- try {
+try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -1522,7 +1522,7 @@ startupPrimeStartedAt: performance.now(),
       if (!_shouldRun()) { stop(1200); return false; }
       const t = now();
       if (!_active || !_ctx || !_source || !_gain) start(reason);
-      else if ((t - _lastPulseAt) > 160) {
+      else if ((t - _lastPulseAt) > 60) {
         _resumeContext(_ctx);
         _lastPulseAt = t;
       }
@@ -1532,8 +1532,8 @@ startupPrimeStartedAt: performance.now(),
           _lastAudioTime = at;
           _lastAudioMoveAt = t;
         }
-        const stalled = _lastAudioMoveAt > 0 && (t - _lastAudioMoveAt) > 180;
-        if (audio.paused || stalled || (t - _lastNativePokeAt) > 520) {
+        const stalled = _lastAudioMoveAt > 0 && (t - _lastAudioMoveAt) > 80;
+        if (audio.paused || stalled || (t - _lastNativePokeAt) > 200) {
           _lastNativePokeAt = t;
           try { refreshHiddenAudioMediaSession(reason || "background-audio-sentinel"); } catch { }
           try {
@@ -1915,7 +1915,8 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
         }
       } catch { }
       try {
-        [0, 8, 24, 55, 110, 220, 480, 900, 1600].forEach(delay => setTimeout(nativePlay, delay));
+        // Tighter retry schedule - minimize audible gap during Chromium bg pause
+        [0, 3, 8, 18, 40, 90, 180, 400, 800].forEach(delay => setTimeout(nativePlay, delay));
       } catch { }
       try {
         setTimeout(() => {
@@ -1930,7 +1931,7 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
               ignoreVideoBuffering: true
             });
           } catch { }
-        }, 120);
+        }, 40);
       } catch { }
     }
     try { updateMediaSessionPlaybackState(); } catch { }
@@ -1941,6 +1942,12 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
     const t = now();
     markHiddenAudioPauseDetected(reason);
     try { refreshHiddenAudioMediaSession(reason); } catch { }
+    // Immediate native play - don't wait for any scheduling
+    try {
+      if (audio && audio.paused) {
+        HTMLMediaElement.prototype.play.call(audio).catch(() => {});
+      }
+    } catch {}
     if (t > (state.hiddenAudioPauseShieldResetAt || 0)) {
       state.hiddenAudioPauseShieldCount = 0;
       state.hiddenAudioPauseShieldResetAt = t + 1200;
@@ -1956,7 +1963,7 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
           kickHiddenCoupledBootstrap({
             kickAudio: true,
             forceVideo: false,
-            bootstrapMs: 180,
+            bootstrapMs: 80,
             allowAudioDuringVideoLead: true,
             urgentAudio: true,
             noAudioSeek: true,
@@ -1964,7 +1971,7 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
             ignoreVideoBuffering: true
           });
         } catch { }
-      }, 180);
+      }, 60);
     } catch { }
     return true;
   }
@@ -1990,7 +1997,7 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
     if ((t - _lastHiddenBgResumeBurstAt) < 90) return immediateOk || true;
     _lastHiddenBgResumeBurstAt = t;
     clearHiddenBackgroundResumeTimers();
-    const delays = platform.chromiumOnlyBrowser ? [40, 100, 220, 520, 1100] : [120, 360, 900];
+    const delays = platform.chromiumOnlyBrowser ? [10, 30, 70, 160, 400, 800] : [120, 360, 900];
     for (let i = 0; i < delays.length; i++) {
       const timer = setTimeout(() => {
         const idx = _hiddenBgResumeTimers.indexOf(timer);
@@ -2044,10 +2051,10 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
       );
     } catch { }
     const backoffMs = isVisible ? 400 :
-    urgentHiddenResume ? 120 :
-    hiddenNeedsRecovery ? 900 :
-    _bgKeepaliveFailCount < 2 ? 3200 :
-    _bgKeepaliveFailCount < 6 ? 6000 : 10000;
+    urgentHiddenResume ? 50 :
+    hiddenNeedsRecovery ? 400 :
+    _bgKeepaliveFailCount < 2 ? 1200 :
+    _bgKeepaliveFailCount < 6 ? 3000 : 8000;
     if (t - _lastKeepalivePlayAt < backoffMs) return;
     _lastKeepalivePlayAt = t;
     if (!isVisible) {
@@ -2121,15 +2128,21 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
     _bgKeepaliveFailCount = 0;
     try { BackgroundAudioSentinel.start("keepalive-start"); } catch { }
     try {
-      const _bgTickMs = platform.chromiumOnlyBrowser ? (perfProfile.lowEnd ? 420 : 220) : (perfProfile.lowEnd ? 2200 : 1600);
+      // Faster tick interval on Chromium to catch auto-pauses immediately
+      const _bgTickMs = platform.chromiumOnlyBrowser ? (perfProfile.lowEnd ? 250 : 100) : (perfProfile.lowEnd ? 2200 : 1600);
       const blob = new Blob([`setInterval(()=>postMessage(0),${_bgTickMs})`], { type: "application/javascript" });
       _bgWorkerUrl = URL.createObjectURL(blob);
       _bgWorker = new Worker(_bgWorkerUrl);
       _bgWorker.onmessage = _bgKeepaliveTick;
     } catch {
-      _bgFallbackId = setInterval(_bgKeepaliveTick, platform.chromiumOnlyBrowser ? (perfProfile.lowEnd ? 620 : 320) : (perfProfile.lowEnd ? 2600 : 1900));
+      _bgFallbackId = setInterval(_bgKeepaliveTick, platform.chromiumOnlyBrowser ? (perfProfile.lowEnd ? 400 : 150) : (perfProfile.lowEnd ? 2600 : 1900));
     }
+    // Immediate burst at startup to ensure fast first response
     try { setTimeout(_bgKeepaliveTick, 0); } catch { }
+    if (platform.chromiumOnlyBrowser) {
+      try { setTimeout(_bgKeepaliveTick, 20); } catch { }
+      try { setTimeout(_bgKeepaliveTick, 60); } catch { }
+    }
   }
   function stopBgAudioKeepalive() {
     if (_bgWorker) {
@@ -2398,29 +2411,38 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
         if (!_shouldDrop()) return _origPause();
         _droppedCount++;
         _lastDropAt = now();
+        // Use native play to bypass all gating - we KNOW we want audio playing
+        const _nativePlay = HTMLMediaElement.prototype.play;
+        const _immediateResume = () => {
+          try {
+            if (!state.intendedPlaying || !audio || !audio.paused || _shouldDropPlay()) return;
+            _nativePlay.call(audio).catch(() => {});
+          } catch {}
+        };
         try {
           if (document.visibilityState === "hidden") {
             markHiddenAudioPauseDetected("audio-pause-method-shield");
             refreshHiddenAudioMediaSession("audio-pause-method-shield");
+            // Immediate synchronous play attempt before any async scheduling
+            _immediateResume();
             hiddenAudioNoSeekResume("audio-pause-method-shield", { retry: true });
           }
         } catch { }
-        Promise.resolve().then(() => {
-          try {
-            if (state.intendedPlaying && audio && audio.paused && !_shouldDropPlay()) {
-              audio.play().catch(() => { });
-            }
-          } catch { }
-        });
+        // Synchronous attempt first (fastest possible)
+        _immediateResume();
+        // Then microtask (next in queue)
+        try { queueMicrotask(_immediateResume); } catch {}
+        Promise.resolve().then(_immediateResume);
+        // Then rAF
         try {
-          requestAnimationFrame(() => {
-            try {
-              if (state.intendedPlaying && audio && audio.paused && !_shouldDropPlay()) {
-                audio.play().catch(() => { });
-              }
-            } catch { }
-          });
+          requestAnimationFrame(_immediateResume);
         } catch { }
+        // Fast retry burst for hidden tab (browser may re-pause between attempts)
+        if (document.visibilityState === "hidden") {
+          [0, 4, 12, 30, 80, 180].forEach(d => {
+            try { setTimeout(_immediateResume, d); } catch {}
+          });
+        }
         return Promise.resolve();
       };
     }
@@ -9908,7 +9930,20 @@ function updateMediaSessionPlaybackState() {
     let actualPlaying = false;
     try { actualPlaying = actualPlaying || !getVideoPaused(); } catch { }
     try { actualPlaying = actualPlaying || !!(coupledMode && audio && !audio.paused); } catch { }
-    effectivePlaying = actualPlaying || mediaPlayActionPendingActive();
+    // Consider intendedPlaying during transient pauses (bg transitions, buffering)
+    // so MediaSession controls remain responsive and show the right icon
+    const transitionallyPlaying = state.intendedPlaying && !state.endedNaturally && (
+      mediaPlayActionPendingActive() ||
+      isTabReturnImmune() ||
+      state.bgResumeInFlight ||
+      state.seekResumeInFlight ||
+      (document.visibilityState === "hidden" && !userPauseLockActive() && !mediaSessionForcedPauseActive()) ||
+      state.visibilityTransitionActive ||
+      state.altTabTransitionActive ||
+      playCommitGuardActive() ||
+      state.bgTransitionInProgress
+    );
+    effectivePlaying = actualPlaying || transitionallyPlaying;
     if ("mediaSession" in navigator) {
       try { navigator.mediaSession.playbackState = effectivePlaying ? "playing" : "paused"; } catch { }
     }
@@ -10017,7 +10052,18 @@ function directExternalMediaControlPlay(reason = "external-media-play", serial =
   if (state.endedNaturally && !state.restarting && !isLoopDesired()) {
     try { prepareRestartFromEndedPlayback(true); } catch { }
   }
-  if (state.endedNaturally && !state.restarting && !isLoopDesired()) return Promise.resolve(false);
+  // Force-clear ended state for external media control: user clicked play, they want it to play
+  if (state.endedNaturally && !state.restarting && !isLoopDesired()) {
+    state.endedNaturally = false;
+    state.endedAt = 0;
+    state.endedLockUntil = 0;
+    state.restarting = true;
+    try { safeSetVideoTime(0, { force: true }); } catch {}
+    if (coupledMode && audio) {
+      try { state._allowAudioTimeWrite = true; audio.currentTime = 0; state._allowAudioTimeWrite = false; } catch { state._allowAudioTimeWrite = false; }
+    }
+    setTimeout(() => { state.restarting = false; }, 1200);
+  }
 
   const target = getBestResumePosition();
   armMediaPlayActionPending(serial);
@@ -17041,6 +17087,8 @@ function setupUserPauseIntentDetection() {
   try { _on(document, "visibilitychange", resetKeyboardToggleHold, { passive: true }); } catch { }
 }
 
+let _mediaSessionSetupDone = false;
+let _mediaSessionSetupAttempts = 0;
 function setupMediaSession() {
   if (!("mediaSession" in navigator)) return;
   try {
@@ -17089,7 +17137,33 @@ function setupMediaSession() {
   try {
     navigator.mediaSession.setActionHandler("play", () => {
       const serial = ++state.mediaSessionActionSerial;
-      directExternalMediaControlPlay("media-session-play", serial).catch(() => { });
+      // Clear any stale forced-pause state before acting on user intent
+      clearMediaSessionForcedPause();
+      clearMediaPausePassThrough();
+      state.mediaSessionInitiatedPlay = true;
+      state.intendedPlaying = true;
+      state.bufferHoldIntendedPlaying = true;
+      markMediaAction("play");
+      setPauseEventGuard(1200);
+      setMediaPlayTxn(1800);
+      updateMediaSessionPlaybackState();
+      directExternalMediaControlPlay("media-session-play", serial).catch(() => {
+        // If directExternalMediaControlPlay fails, try native play as fallback
+        try {
+          const nPlay = HTMLMediaElement.prototype.play;
+          const vn = getVideoNode();
+          if (vn && vn.paused) {
+            nPlay.call(vn).catch(() => {
+              // Last resort: mute and retry
+              try { vn.muted = true; nPlay.call(vn).catch(() => {}); } catch {}
+            });
+          }
+          if (coupledMode && audio && audio.paused) {
+            try { audio.volume = targetVolFromVideo(); } catch {}
+            nPlay.call(audio).catch(() => {});
+          }
+        } catch {}
+      });
       return;
       const resumePos = getBestResumePosition();
       MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.onUserPlay();
@@ -17281,6 +17355,12 @@ function setupMediaSession() {
       });
     } catch { }
   } catch { }
+  _mediaSessionSetupDone = true;
+  _mediaSessionSetupAttempts++;
+}
+function ensureMediaSessionSetup() {
+  if (_mediaSessionSetupDone && _mediaSessionSetupAttempts > 0) return;
+  try { setupMediaSession(); } catch {}
 }
 
 function bindCommonMediaEvents() {
@@ -18767,6 +18847,11 @@ function bindCommonMediaEvents() {
             !state.videoWaiting &&
             !NotMakePlayBackFixingNoticable.isRecovering() &&
             !MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart()) {
+            // Immediate native play - fastest possible recovery, no scheduling delay
+            try {
+              const _nPlayHidden = HTMLMediaElement.prototype.play;
+              if (audio && audio.paused) _nPlayHidden.call(audio).catch(() => {});
+            } catch {}
             hiddenAudioNoSeekResume("audio-pause-hidden", { retry: true });
             return;
             }
@@ -21454,6 +21539,22 @@ if (coupledMode && audio) {
   } catch { }
 }
 setupMediaSession();
+// Re-setup MediaSession after player is ready (handles late-init race conditions)
+try {
+  video.ready(() => {
+    try { ensureMediaSessionSetup(); } catch {}
+    // Also update playback state once ready
+    try { updateMediaSessionPlaybackState(); } catch {}
+  });
+} catch {}
+// Deferred retries in case the player/metadata isn't ready at call time
+[1000, 3000, 6000, 12000].forEach(delay => {
+  setTimeout(() => {
+    try { ensureMediaSessionSetup(); } catch {}
+    try { updateMediaSessionPlaybackState(); } catch {}
+    try { updateMediaSessionPositionNow(NaN, "deferred-init", 0); } catch {}
+  }, delay);
+});
 bindCommonMediaEvents();
 setupVisibilityLifecycle();
 setupMediaErrorHandlers();
@@ -21749,7 +21850,6 @@ _on(window, "unhandledrejection", (e) => {
   _handlePlayerCrash(msg, "promise", reason ? (reason.stack || "") : "");
 }, { passive: true });
 }, { once: true });
-
 
 //////////////// THE PLAYER, END ////////////////////////
  
