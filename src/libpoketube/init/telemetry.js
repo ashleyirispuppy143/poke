@@ -1,6 +1,3 @@
-//  At Poke, we do not collect or share any personal information. That's our privacy promise in a nutshell. To improve Poke we use a completely anonymous, local-only way to figure out how the site is being used.
-//Any anonymous stats recorded by this instance come from the /api/stats system. You can read exactly what is measured (and what is not) in our privacy policy.
-
 const fs = require("fs")
 const path = require("path")
 
@@ -8,6 +5,14 @@ const telemetryConfig = { telemetry: true }
 
 const statsFile = path.join(__dirname, "stats.json")
 const statsFileV2 = path.join(__dirname, "stats-v2.json")
+const statsDir = path.join(__dirname, "stats")
+const chunkPrefix = "stats-chunk-"
+const chunkExt = ".json"
+const baseChunkCount = 12
+const extendedChunkCount = 16
+const maxLinesPerChunk = 6000
+const recentVideoLimit = 300
+const maxJsonLimit = 3000
 
 const getEmptyStats = () => ({
   videos: {},
@@ -17,31 +22,381 @@ const getEmptyStats = () => ({
   recentVideos: []
 })
 
-function parseUA(ua) {
-  let browser = "unknown"
-  let os = "unknown"
+function normalizeStats(input) {
+  const stats = getEmptyStats()
 
-  if (/firefox/i.test(ua)) browser = "firefox"
-  else if (/chrome|chromium|crios/i.test(ua)) browser = "chrome"
-  else if (/safari/i.test(ua)) browser = "safari"
-  else if (/edge/i.test(ua)) browser = "edge"
+  if (!input || typeof input !== "object") return stats
 
-  if (/windows/i.test(ua)) os = "windows"
-  else if (/android/i.test(ua)) os = "android"
-  else if (/mac os|macintosh/i.test(ua)) os = "macos"
-  else if (/linux/i.test(ua)) os = "gnu-linux"
-  else if (/iphone|ipad|ios/i.test(ua)) os = "ios"
+  if (input.videos && typeof input.videos === "object") {
+    for (const [key, value] of Object.entries(input.videos)) {
+      const id = String(key || "").trim()
+      const count = Math.max(0, Number(value) || 0)
+      if (id && count > 0) stats.videos[id] = (stats.videos[id] || 0) + count
+    }
+  }
 
-  return { browser, os }
+  if (input.browsers && typeof input.browsers === "object") {
+    for (const [key, value] of Object.entries(input.browsers)) {
+      const name = String(key || "unknown").trim() || "unknown"
+      const count = Math.max(0, Number(value) || 0)
+      if (count > 0) stats.browsers[name] = (stats.browsers[name] || 0) + count
+    }
+  }
+
+  if (input.os && typeof input.os === "object") {
+    for (const [key, value] of Object.entries(input.os)) {
+      const name = String(key || "unknown").trim() || "unknown"
+      const count = Math.max(0, Number(value) || 0)
+      if (count > 0) stats.os[name] = (stats.os[name] || 0) + count
+    }
+  }
+
+  if (input.users && typeof input.users === "object") {
+    for (const key of Object.keys(input.users)) {
+      const userId = String(key || "").trim()
+      if (userId) stats.users[userId] = true
+    }
+  }
+
+  if (Array.isArray(input.recentVideos)) {
+    for (const rawId of input.recentVideos) {
+      const id = String(rawId || "").trim()
+      if (!id) continue
+      stats.recentVideos = stats.recentVideos.filter((item) => item !== id)
+      stats.recentVideos.push(id)
+    }
+
+    if (stats.recentVideos.length > recentVideoLimit) {
+      stats.recentVideos = stats.recentVideos.slice(-recentVideoLimit)
+    }
+  }
+
+  return stats
+}
+
+function mergeStats(target, source) {
+  const clean = normalizeStats(source)
+
+  for (const [id, count] of Object.entries(clean.videos)) {
+    target.videos[id] = (target.videos[id] || 0) + count
+  }
+
+  for (const [name, count] of Object.entries(clean.browsers)) {
+    target.browsers[name] = (target.browsers[name] || 0) + count
+  }
+
+  for (const [name, count] of Object.entries(clean.os)) {
+    target.os[name] = (target.os[name] || 0) + count
+  }
+
+  for (const userId of Object.keys(clean.users)) {
+    target.users[userId] = true
+  }
+
+  if (Array.isArray(clean.recentVideos)) {
+    for (const id of clean.recentVideos) {
+      target.recentVideos = (target.recentVideos || []).filter((item) => item !== id)
+      target.recentVideos.push(id)
+    }
+
+    if (target.recentVideos.length > recentVideoLimit) {
+      target.recentVideos = target.recentVideos.slice(-recentVideoLimit)
+    }
+  }
+
+  return target
 }
 
 function safeRead(filePath) {
   try {
-    if (!fs.existsSync(filePath)) return null
-    return JSON.parse(fs.readFileSync(filePath, "utf8"))
-  } catch (e) {
-    return null
+    if (!fs.existsSync(filePath)) return { ok: true, data: null }
+    const raw = fs.readFileSync(filePath, "utf8")
+    if (!raw.trim()) return { ok: false, data: null, error: new Error("file is empty") }
+    return { ok: true, data: JSON.parse(raw) }
+  } catch (error) {
+    return { ok: false, data: null, error }
   }
+}
+
+function ensureStatsDir() {
+  if (!fs.existsSync(statsDir)) {
+    fs.mkdirSync(statsDir, { recursive: true })
+  }
+}
+
+function atomicWriteJson(filePath, data) {
+  const dir = path.dirname(filePath)
+  const tmpPath = path.join(dir, `${path.basename(filePath)}.${process.pid}.${Date.now()}.tmp`)
+  const backupPath = `${filePath}.bak`
+  const json = JSON.stringify(data, null, 2)
+
+  fs.writeFileSync(tmpPath, json)
+
+  if (fs.existsSync(filePath)) {
+    try {
+      fs.copyFileSync(filePath, backupPath)
+    } catch (error) {
+      console.error("Could not create backup for", filePath, error)
+    }
+  }
+
+  fs.renameSync(tmpPath, filePath)
+}
+
+function countJsonLines(data) {
+  return JSON.stringify(data, null, 2).split("\n").length
+}
+
+function getChunkPath(index) {
+  return path.join(statsDir, `${chunkPrefix}${String(index).padStart(2, "0")}${chunkExt}`)
+}
+
+function getEmptyChunk(index) {
+  return {
+    version: 3,
+    chunk: index,
+    videos: {},
+    browsers: {},
+    os: {},
+    users: {},
+    recentVideos: []
+  }
+}
+
+function getStatsSize(stats) {
+  return (
+    Object.keys(stats.videos || {}).length +
+    Object.keys(stats.browsers || {}).length +
+    Object.keys(stats.os || {}).length +
+    Object.keys(stats.users || {}).length +
+    (Array.isArray(stats.recentVideos) ? stats.recentVideos.length : 0)
+  )
+}
+
+function resetStatsStorage() {
+  ensureStatsDir()
+
+  for (let i = 1; i <= extendedChunkCount; i++) {
+    const filePath = getChunkPath(i)
+    if (fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath)
+      } catch (error) {
+        console.error("Could not delete stats chunk", filePath, error)
+      }
+    }
+  }
+
+  const emptyChunk = getEmptyChunk(1)
+  atomicWriteJson(getChunkPath(1), emptyChunk)
+
+  return getEmptyStats()
+}
+
+function addObjectEntriesToChunks(chunks, obj, objectKey, startChunkIndex, maxChunkCount) {
+  let chunkIndex = startChunkIndex
+
+  for (const [key, value] of Object.entries(obj || {})) {
+    let placed = false
+
+    while (chunkIndex < maxChunkCount) {
+      const chunk = chunks[chunkIndex]
+      chunk[objectKey][key] = value
+
+      if (countJsonLines(chunk) <= maxLinesPerChunk) {
+        placed = true
+        break
+      }
+
+      delete chunk[objectKey][key]
+      chunkIndex++
+    }
+
+    if (!placed) return false
+  }
+
+  return true
+}
+
+function addArrayEntriesToChunks(chunks, arr, arrayKey, startChunkIndex, maxChunkCount) {
+  let chunkIndex = startChunkIndex
+
+  for (const value of arr || []) {
+    let placed = false
+
+    while (chunkIndex < maxChunkCount) {
+      const chunk = chunks[chunkIndex]
+      chunk[arrayKey].push(value)
+
+      if (countJsonLines(chunk) <= maxLinesPerChunk) {
+        placed = true
+        break
+      }
+
+      chunk[arrayKey].pop()
+      chunkIndex++
+    }
+
+    if (!placed) return false
+  }
+
+  return true
+}
+
+function buildChunks(stats, maxChunkCount) {
+  const clean = normalizeStats(stats)
+  const chunks = Array.from({ length: maxChunkCount }, (_, index) => getEmptyChunk(index + 1))
+
+  const sortedVideos = Object.fromEntries(
+    Object.entries(clean.videos).sort((a, b) => b[1] - a[1])
+  )
+
+  const sortedBrowsers = Object.fromEntries(
+    Object.entries(clean.browsers).sort((a, b) => b[1] - a[1])
+  )
+
+  const sortedOs = Object.fromEntries(
+    Object.entries(clean.os).sort((a, b) => b[1] - a[1])
+  )
+
+  const sortedUsers = Object.fromEntries(
+    Object.keys(clean.users)
+      .sort()
+      .map((userId) => [userId, true])
+  )
+
+  const newestFirstRecent = Array.isArray(clean.recentVideos)
+    ? clean.recentVideos.slice(-recentVideoLimit)
+    : []
+
+  if (!addObjectEntriesToChunks(chunks, sortedBrowsers, "browsers", 0, maxChunkCount)) return null
+  if (!addObjectEntriesToChunks(chunks, sortedOs, "os", 0, maxChunkCount)) return null
+  if (!addArrayEntriesToChunks(chunks, newestFirstRecent, "recentVideos", 0, maxChunkCount)) return null
+  if (!addObjectEntriesToChunks(chunks, sortedUsers, "users", 0, maxChunkCount)) return null
+  if (!addObjectEntriesToChunks(chunks, sortedVideos, "videos", 0, maxChunkCount)) return null
+
+  return chunks.filter((chunk, index) => {
+    if (index === 0) return true
+    return getStatsSize(chunk) > 0
+  })
+}
+
+function saveStatsToChunks(stats) {
+  ensureStatsDir()
+
+  let chunks = buildChunks(stats, baseChunkCount)
+
+  if (!chunks) {
+    chunks = buildChunks(stats, extendedChunkCount)
+  }
+
+  if (!chunks) {
+    console.error("Stats chunks reached 16 files with the configured line limit. Clearing stats........")
+    resetStatsStorage()
+    return getEmptyStats()
+  }
+
+  for (let i = 1; i <= extendedChunkCount; i++) {
+    const filePath = getChunkPath(i)
+
+    if (i <= chunks.length) {
+      atomicWriteJson(filePath, chunks[i - 1])
+    } else if (fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath)
+      } catch (error) {
+        console.error("Could not delete unused stats chunk", filePath, error)
+      }
+    }
+  }
+
+  return normalizeStats(stats)
+}
+
+function readChunkedStats() {
+  ensureStatsDir()
+
+  const stats = getEmptyStats()
+  let foundAnyChunk = false
+  let hadBrokenChunk = false
+
+  for (let i = 1; i <= extendedChunkCount; i++) {
+    const filePath = getChunkPath(i)
+    if (!fs.existsSync(filePath)) continue
+
+    foundAnyChunk = true
+    const result = safeRead(filePath)
+
+    if (!result.ok) {
+      hadBrokenChunk = true
+      console.error("Could not read stats chunk", filePath, result.error)
+      continue
+    }
+
+    mergeStats(stats, result.data)
+  }
+
+  return {
+    foundAnyChunk,
+    hadBrokenChunk,
+    stats: normalizeStats(stats)
+  }
+}
+
+function migrateOldStatsIfNeeded() {
+  ensureStatsDir()
+
+  const chunked = readChunkedStats()
+  const oldStats = getEmptyStats()
+  let foundOldFile = false
+  let oldFileHadReadError = false
+
+  const oldFiles = [statsFile, statsFileV2]
+
+  for (const filePath of oldFiles) {
+    if (!fs.existsSync(filePath)) continue
+
+    foundOldFile = true
+    const result = safeRead(filePath)
+
+    if (!result.ok) {
+      oldFileHadReadError = true
+      console.error("Could not read old stats file, not deleting it:", filePath, result.error)
+      continue
+    }
+
+    mergeStats(oldStats, result.data)
+  }
+
+  let finalStats = getEmptyStats()
+  mergeStats(finalStats, chunked.stats)
+  mergeStats(finalStats, oldStats)
+
+  if (foundOldFile && !oldFileHadReadError) {
+    finalStats = saveStatsToChunks(finalStats)
+
+    for (const filePath of oldFiles) {
+      if (!fs.existsSync(filePath)) continue
+
+      const migratedPath = `${filePath}.migrated-${Date.now()}`
+
+      try {
+        fs.renameSync(filePath, migratedPath)
+      } catch (error) {
+        console.error("Could not rename migrated old stats file", filePath, error)
+      }
+    }
+  }
+
+  if (!chunked.foundAnyChunk && !foundOldFile) {
+    finalStats = saveStatsToChunks(finalStats)
+  }
+
+  if (chunked.hadBrokenChunk) {
+    console.error("One or more stats chunks could not be read. Broken chunks were skipped, and readable data was kept in memory.")
+  }
+
+  return normalizeStats(finalStats)
 }
 
 function sumObjectValues(obj) {
@@ -77,92 +432,109 @@ function computeEstimatedTotalUsers(stats) {
   return Math.max(uniqueUserIds, Math.round(uniqueUserIds * multiplier))
 }
 
+function parseUA(ua) {
+  let browser = "unknown"
+  let os = "unknown"
+  const userAgent = String(ua || "")
+
+  if (/firefox|fxios/i.test(userAgent)) browser = "firefox"
+  else if (/edg|edge|edgios|edga/i.test(userAgent)) browser = "edge"
+  else if (/opr|opera/i.test(userAgent)) browser = "opera"
+  else if (/chrome|chromium|crios/i.test(userAgent)) browser = "chrome"
+  else if (/safari/i.test(userAgent)) browser = "safari"
+
+  if (/android/i.test(userAgent)) os = "android"
+  else if (/iphone|ipad|ipod|ios/i.test(userAgent)) os = "ios"
+  else if (/windows/i.test(userAgent)) os = "windows"
+  else if (/mac os|macintosh/i.test(userAgent)) os = "macos"
+  else if (/linux/i.test(userAgent)) os = "gnu-linux"
+
+  return { browser, os }
+}
+
+function isSafeId(value, maxLength) {
+  if (typeof value !== "string") return false
+  if (!value.trim()) return false
+  if (value.length > maxLength) return false
+  return true
+}
+
 module.exports = function (app, config, renderTemplate) {
-  let memoryStats = getEmptyStats()
+  let memoryStats = migrateOldStatsIfNeeded()
   let needsSave = false
+  let saveInProgress = false
+  let pendingSave = false
 
   function touchRecentVideo(videoId) {
     if (!videoId) return
+
     memoryStats.recentVideos = (memoryStats.recentVideos || []).filter((id) => id !== videoId)
-    memoryStats.recentVideos.unshift(videoId)
-    if (memoryStats.recentVideos.length > 300) {
-      memoryStats.recentVideos.length = 300
+    memoryStats.recentVideos.push(videoId)
+
+    if (memoryStats.recentVideos.length > recentVideoLimit) {
+      memoryStats.recentVideos = memoryStats.recentVideos.slice(-recentVideoLimit)
     }
   }
 
-  const v1 = safeRead(statsFile)
-  const v2 = safeRead(statsFileV2)
-
-  const mergeData = (source) => {
-    if (!source) return
-
-    if (source.videos) {
-      for (const [id, count] of Object.entries(source.videos)) {
-        memoryStats.videos[id] = (memoryStats.videos[id] || 0) + count
-      }
-    }
-
-    if (source.browsers) {
-      for (const [name, count] of Object.entries(source.browsers)) {
-        memoryStats.browsers[name] = (memoryStats.browsers[name] || 0) + count
-      }
-    }
-
-    if (source.os) {
-      for (const [name, count] of Object.entries(source.os)) {
-        memoryStats.os[name] = (memoryStats.os[name] || 0) + count
-      }
-    }
-
-    if (source.users) {
-      Object.assign(memoryStats.users, source.users)
-    }
-
-    if (Array.isArray(source.recentVideos)) {
-      for (let i = source.recentVideos.length - 1; i >= 0; i--) {
-        touchRecentVideo(source.recentVideos[i])
-      }
-    }
-  }
-
-  mergeData(v1)
-  mergeData(v2)
-
-  fs.writeFileSync(statsFile, JSON.stringify(memoryStats, null, 2))
-
-  if (fs.existsSync(statsFileV2)) {
-    try {
-      fs.unlinkSync(statsFileV2)
-    } catch (e) {
-      console.error("Could not delete legacy stats-v2.json", e)
-    }
-  }
-
-  setInterval(() => {
+  function saveNow() {
     if (!needsSave) return
+    if (saveInProgress) {
+      pendingSave = true
+      return
+    }
 
-    fs.writeFile(statsFile, JSON.stringify(memoryStats, null, 2), (err) => {
-      if (err) {
-        console.error("Failed to save stats", err)
-      } else {
-        needsSave = false
+    saveInProgress = true
+
+    try {
+      memoryStats = saveStatsToChunks(memoryStats)
+      needsSave = false
+    } catch (error) {
+      console.error("Failed to save stats", error)
+    } finally {
+      saveInProgress = false
+
+      if (pendingSave) {
+        pendingSave = false
+        needsSave = true
+        setTimeout(saveNow, 100)
       }
-    })
-  }, 5000)
+    }
+  }
+
+  setInterval(saveNow, 5000)
+
+  process.once("SIGINT", () => {
+    try {
+      saveNow()
+    } finally {
+      process.exit(0)
+    }
+  })
+
+  process.once("SIGTERM", () => {
+    try {
+      saveNow()
+    } finally {
+      process.exit(0)
+    }
+  })
 
   app.post(["/api/stats", "/api/nexus"], (req, res) => {
     if (!telemetryConfig.telemetry) return res.status(200).json({ ok: true })
 
-    const { videoId, userId } = req.body
-    if (!videoId) return res.status(400).json({ error: "missing videoId" })
-    if (!userId) return res.status(400).json({ error: "missing userId" })
+    const body = req.body || {}
+    const videoId = typeof body.videoId === "string" ? body.videoId.trim() : ""
+    const userId = typeof body.userId === "string" ? body.userId.trim() : ""
+
+    if (!isSafeId(videoId, 128)) return res.status(400).json({ error: "missing or invalid videoId" })
+    if (!isSafeId(userId, 256)) return res.status(400).json({ error: "missing or invalid userId" })
 
     const ua = req.headers["user-agent"] || ""
-    const { browser, os } = parseUA(ua)
+    const parsed = parseUA(ua)
 
     memoryStats.videos[videoId] = (memoryStats.videos[videoId] || 0) + 1
-    memoryStats.browsers[browser] = (memoryStats.browsers[browser] || 0) + 1
-    memoryStats.os[os] = (memoryStats.os[os] || 0) + 1
+    memoryStats.browsers[parsed.browser] = (memoryStats.browsers[parsed.browser] || 0) + 1
+    memoryStats.os[parsed.os] = (memoryStats.os[parsed.os] || 0) + 1
     memoryStats.users[userId] = true
     touchRecentVideo(videoId)
 
@@ -201,20 +573,20 @@ module.exports = function (app, config, renderTemplate) {
       line-height: 1.6;
     }
     ul{
-      font-family:"poketube flex";
+      font-family:"PokeTube Flex",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
       font-weight:500;
       font-stretch:extra-expanded;
       padding-left:1.2rem;
     }
     h2{
-      font-family:"poketube flex",sans-serif;
+      font-family:"PokeTube Flex",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
       font-weight:700;
       font-stretch:extra-expanded;
       margin-top:1.5rem;
       margin-bottom:.3rem;
     }
     h1{
-      font-family:"poketube flex",sans-serif;
+      font-family:"PokeTube Flex",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
       font-weight:1000;
       font-stretch:ultra-expanded;
       margin-top:0;
@@ -247,7 +619,7 @@ module.exports = function (app, config, renderTemplate) {
     <h1>Stats opt-out</h1>
     <p>
       This page lets you turn off <strong>anonymous usage stats</strong> for this browser.
-      Poke will remember this choice using <code>localStorage</code> only (no cookies).
+      Poke will remember this choice using <code>localStorage</code> only.
     </p>
 
     <p class="note">
@@ -260,7 +632,7 @@ module.exports = function (app, config, renderTemplate) {
     <div id="status" class="status note"></div>
 
     <p class="note" style="margin-top:1.5rem;">
-      • To see the stats UI (if enabled on this instance), visit
+      • To see the stats UI, visit
       <code><a href="/api/stats?view=gui">/api/stats?view=gui</a></code>.<br>
       • For raw JSON, use <code><a href="/api/stats?view=json">/api/stats?view=json</a></code>.
     </p>
@@ -268,39 +640,39 @@ module.exports = function (app, config, renderTemplate) {
 
   <script>
     (function () {
-      var KEY = "poke_stats_optout";
-      var btn = document.getElementById("optout-btn");
-      var status = document.getElementById("status");
+      var KEY = "poke_stats_optout"
+      var btn = document.getElementById("optout-btn")
+      var status = document.getElementById("status")
 
       function updateStatus() {
         try {
-          var v = localStorage.getItem(KEY);
+          var v = localStorage.getItem(KEY)
           if (v === "1") {
-            status.textContent = "Anonymous stats are currently DISABLED in this browser.";
-            btn.textContent = "Re-enable anonymous stats";
+            status.textContent = "Anonymous stats are currently DISABLED in this browser."
+            btn.textContent = "Re-enable anonymous stats"
           } else {
-            status.textContent = "Anonymous stats are currently ENABLED in this browser.";
-            btn.textContent = "Opt out of anonymous stats";
+            status.textContent = "Anonymous stats are currently ENABLED in this browser."
+            btn.textContent = "Opt out of anonymous stats"
           }
         } catch (e) {
-          status.textContent = "Your browser blocked localStorage, so we cannot store your opt-out choice.";
+          status.textContent = "Your browser blocked localStorage, so we cannot store your opt-out choice."
         }
       }
 
       btn.addEventListener("click", function (ev) {
-        ev.preventDefault();
+        ev.preventDefault()
         try {
-          var v = localStorage.getItem(KEY);
+          var v = localStorage.getItem(KEY)
           if (v === "1") {
-            localStorage.removeItem(KEY);
+            localStorage.removeItem(KEY)
           } else {
-            localStorage.setItem(KEY, "1");
+            localStorage.setItem(KEY, "1")
           }
-          updateStatus();
+          updateStatus()
         } catch (e) {
-          status.textContent = "Could not save opt-out preference (localStorage error).";
+          status.textContent = "Could not save opt-out preference because localStorage is unavailable."
         }
-      });
+      })
 
       updateStatus()
     })()
@@ -349,26 +721,26 @@ module.exports = function (app, config, renderTemplate) {
       const hasLimit = typeof req.query.limit !== "undefined"
       const rawLimit = parseInt((hasLimit ? req.query.limit : "8").toString(), 10)
       const limit = Number.isFinite(rawLimit)
-        ? Math.max(1, Math.min(rawLimit, 3000))
+        ? Math.max(1, Math.min(rawLimit, maxJsonLimit))
         : 8
 
-      const sortedVideos = Object.entries(memoryStats.videos)
+      const sortedVideos = Object.entries(memoryStats.videos || {})
         .sort((a, b) => b[1] - a[1])
         .slice(0, limit)
 
       const topVideos = Object.fromEntries(sortedVideos)
-      const totalUsers = Object.keys(memoryStats.users).length
+      const totalUsers = Object.keys(memoryStats.users || {}).length
       const estimatedTotalUsers = computeEstimatedTotalUsers(memoryStats)
       const totalDetections = Math.max(sumObjectValues(memoryStats.os), sumObjectValues(memoryStats.browsers))
 
       return res.json({
         videos: topVideos,
-        recentVideos: (memoryStats.recentVideos || []).slice(0, 32),
-        browsers: memoryStats.browsers,
-        os: memoryStats.os,
+        recentVideos: (memoryStats.recentVideos || []).slice(-32).reverse(),
+        browsers: memoryStats.browsers || {},
+        os: memoryStats.os || {},
         totalUsers,
         estimatedTotalUsers,
-        totalVideoIds: Object.keys(memoryStats.videos).length,
+        totalVideoIds: Object.keys(memoryStats.videos || {}).length,
         totalDetections,
         limit
       })
@@ -413,21 +785,21 @@ module.exports = function (app, config, renderTemplate) {
       line-height:1.6;
     }
     h2{
-      font-family:"poketube flex",sans-serif;
+      font-family:"PokeTube Flex",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
       font-weight:700;
       font-stretch:extra-expanded;
       margin-top:0;
       margin-bottom:.4rem;
     }
     h1{
-      font-family:"poketube flex",sans-serif;
+      font-family:"PokeTube Flex",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
       font-weight:1000;
       font-stretch:ultra-expanded;
       margin-top:0;
       margin-bottom:.35rem;
     }
     h3{
-      font-family:"poketube flex",sans-serif;
+      font-family:"PokeTube Flex",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
       font-weight:700;
       font-stretch:extra-expanded;
       margin:0 0 .75rem 0;
@@ -702,7 +1074,7 @@ module.exports = function (app, config, renderTemplate) {
 
     .recent-summary{
       display:grid;
-      grid-template-columns:repeat(3,minmax(0,1fr));
+      grid-template-columns:repeat(2,minmax(0,1fr));
       gap:12px;
       margin-bottom:16px;
     }
@@ -722,6 +1094,7 @@ module.exports = function (app, config, renderTemplate) {
       font-size:1.2rem;
       font-weight:700;
       font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+      word-break:break-word;
     }
     .summary-sub{
       margin-top:.35rem;
@@ -894,7 +1267,7 @@ module.exports = function (app, config, renderTemplate) {
       margin-bottom:10px;
     }
     .modal-title{
-      font-family:"poketube flex",sans-serif;
+      font-family:"PokeTube Flex",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
       font-weight:700;
       font-stretch:extra-expanded;
       font-size:1.05rem;
@@ -972,7 +1345,7 @@ module.exports = function (app, config, renderTemplate) {
       <div class="hero-main">
         <h1>Anonymous stats</h1>
         <p class="note">
-          These stats are aggregated locally on this Poke instance. For what is collected (and what is not),
+          These stats are aggregated locally on this Poke instance. For what is collected and what is not,
           see <a href="/policies/privacy#stats">privacy policy</a>.
         </p>
         <p class="note" style="margin-top:.7rem;">
@@ -1065,7 +1438,6 @@ module.exports = function (app, config, renderTemplate) {
             <div id="recent-latest" class="summary-value">Loading…</div>
             <div class="summary-sub">The first item in the recency queue, if any recent ID exists.</div>
           </div>
- 
         </div>
 
         <ul id="recent-videos" class="recent-grid"></ul>
@@ -1119,8 +1491,8 @@ module.exports = function (app, config, renderTemplate) {
       <div class="section-card api-lines">
         <h2>API usage</h2>
         <p class="note">
-          • GUI view (this page): <code><a href="/api/stats?view=gui">/api/stats?view=gui</a></code><br>
-          • JSON view (for scripts/tools): <code><a href="/api/stats?view=json">/api/stats?view=json</a></code><br>
+          • GUI view: <code><a href="/api/stats?view=gui">/api/stats?view=gui</a></code><br>
+          • JSON view: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code><br>
           • JSON default limit: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code> (8 videos)<br>
           • JSON with custom limit: <code><a href="/api/stats?view=json&limit=3000">/api/stats?view=json&limit=3000</a></code><br>
           • Opt out for this browser: <code><a href="/api/stats/optout">/api/stats/optout</a></code>
@@ -1136,7 +1508,7 @@ module.exports = function (app, config, renderTemplate) {
         <button type="button" id="privacy-modal-close" class="modal-close" aria-label="Close">×</button>
       </div>
       <p class="note" style="margin:0;">
-        This estimate is based on already-aggregated anonymous stats only. It does not add personal profiles, cookies, account linking, or unique page-viewer tracking for this page.
+        This estimate is based on already-aggregated anonymous stats only. It does not add personal profiles, account linking, or unique page-viewer tracking for this page.
       </p>
       <p class="note">
         For more detail about what is measured and what is not, see <a href="/policies/privacy#stats">our privacy policy</a>.
@@ -1335,7 +1707,7 @@ module.exports = function (app, config, renderTemplate) {
 
     function sumValues(obj) {
       return Object.values(obj || {}).reduce(function (sum, value) {
-        return sum + value
+        return sum + (Number(value) || 0)
       }, 0)
     }
 
@@ -1354,6 +1726,7 @@ module.exports = function (app, config, renderTemplate) {
       if (name === "chrome") return "Chromium browser"
       if (name === "safari") return "Safari"
       if (name === "edge") return "Edge"
+      if (name === "opera") return "Opera"
       if (name === "unknown") return "Unknown"
       return name
     }
@@ -1361,9 +1734,16 @@ module.exports = function (app, config, renderTemplate) {
     function renderBreakdown(targetEl, data, kind) {
       targetEl.innerHTML = ""
 
-      var entries = Object.entries(data || {}).sort(function (a, b) {
-        return b[1] - a[1]
-      })
+      var entries = Object.entries(data || {})
+        .map(function (entry) {
+          return [entry[0], Number(entry[1]) || 0]
+        })
+        .filter(function (entry) {
+          return entry[1] > 0
+        })
+        .sort(function (a, b) {
+          return b[1] - a[1]
+        })
 
       if (entries.length === 0) {
         var empty = document.createElement("div")
@@ -1373,7 +1753,9 @@ module.exports = function (app, config, renderTemplate) {
         return
       }
 
-      var total = sumValues(data)
+      var total = entries.reduce(function (sum, entry) {
+        return sum + entry[1]
+      }, 0)
 
       entries.forEach(function (entry) {
         var key = entry[0]
@@ -1389,7 +1771,7 @@ module.exports = function (app, config, renderTemplate) {
 
         var labelEl = document.createElement("div")
         labelEl.className = "breakdown-label"
-        labelEl.textContent = label + " -" + percent + "% of total " + (kind === "os" ? "OS detections" : "browser detections")
+        labelEl.textContent = label + " · " + percent + "% of total " + (kind === "os" ? "OS detections" : "browser detections")
 
         var countEl = document.createElement("div")
         countEl.className = "breakdown-count"
@@ -1509,16 +1891,7 @@ module.exports = function (app, config, renderTemplate) {
       updateRecentSummary()
 
       if (!Array.isArray(recentVideoIds) || recentVideoIds.length === 0) {
-        var empty = document.createElement("div")
-        empty.className = "recent-empty"
-        empty.textContent = "No recent video IDs recorded yet."
-        recentVideos.replaceWith(empty)
-
-        var replacementList = document.createElement("ul")
-        replacementList.id = "recent-videos"
-        replacementList.className = "recent-grid"
-        empty.insertAdjacentElement("afterend", replacementList)
-        empty.remove()
+        recentVideos.innerHTML = '<li class="recent-empty">No recent video IDs recorded yet.</li>'
         return
       }
 
@@ -1540,7 +1913,7 @@ module.exports = function (app, config, renderTemplate) {
       var entries = getLimitedEntries()
 
       if (entries.length === 0) {
-        topVideos.innerHTML = "<li class=\\"error-box\\">No stats recorded yet.</li>"
+        topVideos.innerHTML = '<li class="error-box">No stats recorded yet.</li>'
         paginationWrap.style.display = "none"
         return
       }
@@ -1628,8 +2001,8 @@ module.exports = function (app, config, renderTemplate) {
     }
 
     function setDisabledState(message) {
-      topVideos.innerHTML = "<li class=\\"error-box\\">" + message + "</li>"
-      recentVideos.innerHTML = "<li class=\\"error-box\\">" + message + "</li>"
+      topVideos.innerHTML = '<li class="error-box">' + message + "</li>"
+      recentVideos.innerHTML = '<li class="error-box">' + message + "</li>"
       videoLimitSelect.disabled = true
       downloadRecentJsonBtn.disabled = true
       paginationWrap.style.display = "none"
@@ -1640,7 +2013,7 @@ module.exports = function (app, config, renderTemplate) {
     }
 
     if (!TELEMETRY_ON) {
-      setDisabledState("No data (telemetry disabled).")
+      setDisabledState("No data because telemetry is disabled.")
       userIdCount.textContent = "0"
       estimatedTotalUsers.textContent = "0"
       totalVideoIdCount.textContent = "0"
@@ -1651,7 +2024,7 @@ module.exports = function (app, config, renderTemplate) {
       } catch (e) {}
 
       if (optedOut) {
-        setDisabledState("Opt-out active (no stats loaded).")
+        setDisabledState("Opt-out active, so no stats loaded.")
         userIdCount.textContent = "Opt-out active"
         estimatedTotalUsers.textContent = "Opt-out active"
         totalVideoIdCount.textContent = "Opt-out active"
@@ -1737,20 +2110,20 @@ module.exports = function (app, config, renderTemplate) {
       line-height:1.6;
     }
     ul{
-      font-family:"poketube flex";
+      font-family:"PokeTube Flex",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
       font-weight:500;
       font-stretch:extra-expanded;
       padding-left:1.2rem;
     }
     h2{
-      font-family:"poketube flex",sans-serif;
+      font-family:"PokeTube Flex",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
       font-weight:700;
       font-stretch:extra-expanded;
       margin-top:1.5rem;
       margin-bottom:.3rem;
     }
     h1{
-      font-family:"poketube flex",sans-serif;
+      font-family:"PokeTube Flex",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
       font-weight:1000;
       font-stretch:ultra-expanded;
       margin-top:0;
@@ -1779,7 +2152,7 @@ module.exports = function (app, config, renderTemplate) {
 
     <p>
       Any anonymous stats recorded by this instance come from the <code>/api/stats</code> system.
-      You can read exactly what is measured (and what is <em>not</em>) in our privacy policy:
+      You can read exactly what is measured and what is <em>not</em> in our privacy policy:
       <a href="/policies/privacy#stats">here</a>.
     </p>
 
@@ -1787,8 +2160,8 @@ module.exports = function (app, config, renderTemplate) {
 
     <h2>API usage</h2>
     <p class="note">
-      • GUI view (stats UI): <code><a href="/api/stats?view=gui">/api/stats?view=gui</a></code><br>
-      • JSON view (for scripts/tools): <code><a href="/api/stats?view=json">/api/stats?view=json</a></code><br>
+      • GUI view: <code><a href="/api/stats?view=gui">/api/stats?view=gui</a></code><br>
+      • JSON view: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code><br>
       • JSON default limit: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code> (8 videos)<br>
       • JSON with custom limit: <code><a href="/api/stats?view=json&limit=3000">/api/stats?view=json&limit=3000</a></code><br>
       • Opt out for this browser: <code><a href="/api/stats/optout">/api/stats/optout</a></code>
