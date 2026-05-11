@@ -156,6 +156,62 @@
 </head>
 <body>
 
+    <%
+        const issueNow = new Date();
+        const issueMonths = [
+            "january",
+            "february",
+            "march",
+            "april",
+            "may",
+            "june",
+            "july",
+            "august",
+            "september",
+            "october",
+            "november",
+            "december"
+        ];
+
+        const padIssueNumber = value => String(value).padStart(2, "0");
+
+        const issueDateFormatted = `${issueNow.getUTCDate()} ${issueMonths[issueNow.getUTCMonth()]} ${issueNow.getUTCFullYear()}, ${padIssueNumber(issueNow.getUTCHours())}:${padIssueNumber(issueNow.getUTCMinutes())} UTC`;
+        const issueVideoId = locals.v || "Unknown";
+        const issueErrorMessage = locals.error_message || "No error message provided";
+        const issueReason = locals.err_reason || "Unknown";
+        const issuePageUrl = locals.url || locals.page_url || "Please paste the Poke page URL here";
+
+        const issueTitle = `[Video Error] ${issueVideoId} | ${issueErrorMessage} - ${issueDateFormatted}`;
+
+        const issueBody = [
+            "Hi! Thanks for reporting this video issue.",
+            "",
+            "Please keep the auto-filled details below, then add anything else that could help us understand or reproduce the problem.",
+            "",
+            "Auto-filled details:",
+            `Video ID: ${issueVideoId}`,
+            `Error message: ${issueErrorMessage}`,
+            `Error reason: ${issueReason}`,
+            `Reported at: ${issueDateFormatted}`,
+            `Page URL: ${issuePageUrl}`,
+            "",
+            "What happened?",
+            "- The video opened the unavailable page.",
+            "",
+            "What did you expect to happen?",
+            "- The video should have loaded normally, or Poke should have shown a clearer reason.",
+            "",
+            "Can you help us with a few extra details?",
+            "- Does the video work when you press Try on YouTube?",
+            "- What browser are you using?",
+            "- What device or operating system are you using?",
+            "- Does this happen every time you open this video?",
+            "- Any extra notes:"
+        ].join("\n");
+
+        const issueUrl = `https://codeberg.org/ashleyirispuppy/poke/issues/new?title=${encodeURIComponent(issueTitle)}&body=${encodeURIComponent(issueBody)}`;
+    %>
+
     <div id="error-container">
 
         <svg class="error-icon" viewBox="0 0 24 24">
@@ -199,7 +255,7 @@
 
         <div class="report-issue">
             Think this is a Poke mistake?<br>
-            <a href="https://codeberg.org/ashleyirispuppy/poke/issues/new?title=Video+Error+<%= encodeURIComponent(locals.v || 'Unknown') %>" target="_blank" rel="noopener noreferrer">Report an issue here</a>.
+            <a href="<%= issueUrl %>" target="_blank" rel="noopener noreferrer">Report an issue here</a>.
         </div>
 
     </div>
