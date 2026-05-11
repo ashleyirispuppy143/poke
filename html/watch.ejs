@@ -1639,11 +1639,9 @@ for (const format of (VideoData.adaptiveFormats || [])) {
             Download
             </div>
 					</a>
-  
-<%
+  <%
   const shouldShowButtons =
-    !video?.Channel?.Name.endsWith(' - Topic') &&
-    !VideoData.title.endsWith('IGNORE_THIS_PLEASE_THIS_IS_DEPRACTED_LOL_SORRY_THIS_WAS_USED_IN_2023_AND_IM_LAZY_TO_REMOVE_THIS)');
+    !video?.Channel?.Name.endsWith(' - Topic');
 %>
 
 <% if (shouldShowButtons) { %>
@@ -1680,7 +1678,7 @@ for (const format of (VideoData.adaptiveFormats || [])) {
       </a>
   <% } %>
 
-<% } %> 
+<% } %>
                             <% if (video?.Channel.Name.endsWith(' - Topic') || VideoData.title.endsWith('IGNORE_THIS_PLEASE_THIS_IS_DEPRACTED_LOL_SORRY_THIS_WAS_USED_IN_2023_AND_IM_LAZY_TO_REMOVE_THIS)'))  { %> 
                                                  					<a  class="new-button" title="open this song in poketube music player :3" style="color:var(--text-color);text-decoration: none;" href="/">
                                                                                                     <div class="pill-button">
