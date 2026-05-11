@@ -9908,19 +9908,7 @@ function updateMediaSessionPlaybackState() {
     let actualPlaying = false;
     try { actualPlaying = actualPlaying || !getVideoPaused(); } catch { }
     try { actualPlaying = actualPlaying || !!(coupledMode && audio && !audio.paused); } catch { }
-    // During active transitions, reflect intendedPlaying so the OS media
-    // control button stays in sync with what the user actually requested
-    // rather than the momentary element state mid-transition.
-    const inTransition = !!(state.isProgrammaticVideoPlay || state.isProgrammaticVideoPause ||
-      state.isProgrammaticAudioPlay || state.isProgrammaticAudioPause ||
-      state.videoPlayInFlight || state.audioPlayInFlight ||
-      mediaPlayTxnActive() || mediaPauseTxnActive() ||
-      (state.audioFading && coupledMode));
-    if (inTransition) {
-      effectivePlaying = !!state.intendedPlaying;
-    } else {
-      effectivePlaying = actualPlaying || mediaPlayActionPendingActive();
-    }
+    effectivePlaying = actualPlaying || mediaPlayActionPendingActive();
     if ("mediaSession" in navigator) {
       try { navigator.mediaSession.playbackState = effectivePlaying ? "playing" : "paused"; } catch { }
     }
@@ -10026,14 +10014,6 @@ function getBestResumePosition() {
 
 function directExternalMediaControlPlay(reason = "external-media-play", serial = state.mediaSessionActionSerial) {
   if (_errorOverlayShown) return Promise.resolve(false);
-  // Immediately clear any pause locks from a previous media session pause
-  // so the play action can take effect without being blocked.
-  clearMediaSessionForcedPause();
-  state.userPauseLockUntil = 0;
-  state.userPauseUntil = 0;
-  state.mediaForcedPauseUntil = 0;
-  state.chromiumPauseGuardUntil = 0;
-  state.pauseEventGuardUntil = 0;
   if (state.endedNaturally && !state.restarting && !isLoopDesired()) {
     try { prepareRestartFromEndedPlayback(true); } catch { }
   }
@@ -10043,8 +10023,8 @@ function directExternalMediaControlPlay(reason = "external-media-play", serial =
   armMediaPlayActionPending(serial);
   try {
     markUserPlayIntent(USER_PLAY_INTENT_FAST_MS, {
-      skipImmediateVideoKick: false,
-      skipImmediateAudioKick: false
+      skipImmediateVideoKick: true,
+      skipImmediateAudioKick: true
     });
   } catch {
     state.intendedPlaying = true;
@@ -11975,7 +11955,6 @@ function pauseHard() {
     !state.endedNaturally &&
     !state.restarting &&
     !_errorOverlayShown &&
-    !mediaSessionForcedPauseActive() &&
     state.intendedPlaying) {
     return;
     }
@@ -17035,14 +17014,11 @@ function setupUserPauseIntentDetection() {
       }
       ++state.mediaSessionActionSerial;
       markMediaAction("pause");
-      setMediaSessionForcedPause(1600);
+      setMediaSessionForcedPause(4500);
       setPauseEventGuard(1600);
       setMediaPauseTxn(2000);
       markUserPauseIntent(USER_PAUSE_INTENT_FAST_MS);
       clearPendingPlayResumesForPause();
-      // Clear play lock so keyboard pause takes immediate effect
-      state.userPlayLockUntil = 0;
-      clearPlayCommitGuard();
       state.intendedPlaying = false;
       state.bufferHoldIntendedPlaying = false;
       updateMediaSessionPlaybackState();
@@ -17091,14 +17067,11 @@ function setupMediaSession() {
     ++state.mediaSessionActionSerial;
     const pauseTxnMs = 2200;
     markMediaAction("pause");
-    setMediaSessionForcedPause(1600);
+    setMediaSessionForcedPause(5000);
     markUserPauseIntent(1500);
     clearPendingPlayResumesForPause();
     setPauseEventGuard(1600);
     setMediaPauseTxn(pauseTxnMs);
-    // Clear play lock so pause takes immediate effect
-    state.userPlayLockUntil = 0;
-    clearPlayCommitGuard();
     state.intendedPlaying = false;
     state.bufferHoldIntendedPlaying = false;
     state.mediaSessionInitiatedPlay = false;
@@ -17307,37 +17280,6 @@ function setupMediaSession() {
         _applyMediaSessionSeek(dur > 0 ? Math.min(cur + 10, dur) : cur + 10);
       });
     } catch { }
-  } catch { }
-
-  // Bind native element events to keep MediaSession playbackState tightly
-  // synced with actual element state once transitions settle.
-  // Per web.dev / Chromium best practice: always update playbackState
-  // from the element's own play/pause events as the source of truth.
-  try {
-    const _mssSyncDebounceMs = 120;
-    let _mssSyncTimer = null;
-    const _debouncedMediaSessionSync = () => {
-      if (_mssSyncTimer) clearTimeout(_mssSyncTimer);
-      _mssSyncTimer = setTimeout(() => {
-        _mssSyncTimer = null;
-        updateMediaSessionPlaybackState();
-        updateMediaSessionPositionNow(NaN, "element-event-sync", 500);
-      }, _mssSyncDebounceMs);
-    };
-    const _bindNativeSync = (el) => {
-      if (!el) return;
-      try { _on(el, "play", _debouncedMediaSessionSync, { passive: true }); } catch { }
-      try { _on(el, "pause", _debouncedMediaSessionSync, { passive: true }); } catch { }
-      try { _on(el, "playing", _debouncedMediaSessionSync, { passive: true }); } catch { }
-      try { _on(el, "ended", () => {
-        if ("mediaSession" in navigator) {
-          try { navigator.mediaSession.playbackState = "paused"; } catch { }
-        }
-      }, { passive: true }); } catch { }
-    };
-    _bindNativeSync(videoEl);
-    try { _bindNativeSync(getVideoNode()); } catch { }
-    if (coupledMode && audio) _bindNativeSync(audio);
   } catch { }
 }
 
