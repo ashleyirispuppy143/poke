@@ -5,13 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Video Unavailable <%= (locals.v) ? '- ' + v : '' %></title>
     <style>
-         @import url('https://p.poketube.fun/https://fonts.bunny.net/css?family=roboto:400,500&display=swap');
+        @import url('https://p.poketube.fun/https://fonts.bunny.net/css?family=roboto:400,500&display=swap');
 
         body {
             margin: 0;
             padding: 0;
             font-family: 'Roboto', Arial, sans-serif;
-            background-color: #000000;  
+            background-color: #000000;
             color: #f1f1f1;
             display: flex;
             align-items: center;
@@ -34,7 +34,7 @@
 
         h1 {
             font-size: 24px;
-            font-weight: 400;  
+            font-weight: 400;
             margin: 0 0 12px 0;
             color: #ffffff;
         }
@@ -54,13 +54,13 @@
 
         .reasons-list {
             text-align: left;
-            display: inline-block;  
+            display: inline-block;
             padding: 0;
             margin: 0 auto 36px auto;
             font-size: 14px;
             color: #aaaaaa;
             line-height: 1.6;
-            list-style-type: none; 
+            list-style-type: none;
         }
 
         .reasons-list li {
@@ -78,25 +78,53 @@
             content: "•";
             position: absolute;
             left: 0;
-            color: #717171; 
+            color: #717171;
+        }
+
+        .actions {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+        }
+
+        .btn-home,
+        .btn-youtube {
+            border: none;
+            min-height: 36px;
+            padding: 0 16px;
+            font-size: 14px;
+            font-weight: 500;
+            border-radius: 18px;
+            cursor: pointer;
+            transition: background-color 0.2s, opacity 0.2s;
+            font-family: 'Roboto', Arial, sans-serif;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+            white-space: nowrap;
         }
 
         .btn-home {
             background-color: #f1f1f1;
             color: #0f0f0f;
-            border: none;
-            padding: 9px 16px;
-            font-size: 14px;
-            font-weight: 500;
-            border-radius: 18px; 
-            cursor: pointer;
-            transition: background-color 0.2s, opacity 0.2s;
-            font-family: 'Roboto', Arial, sans-serif;
-            margin-bottom: 32px;
         }
 
         .btn-home:hover {
             background-color: #d9d9d9;
+        }
+
+        .btn-youtube {
+            background-color: #272727;
+            color: #f1f1f1;
+        }
+
+        .btn-youtube:hover {
+            background-color: #3f3f3f;
         }
 
         .report-issue {
@@ -107,10 +135,10 @@
 
         .report-issue a {
             font-weight: 500;
-            color: #aaaaaa; 
+            color: #aaaaaa;
             text-decoration: none;
         }
-        
+
         .report-issue a:hover {
             color: #f1f1f1;
             text-decoration: underline;
@@ -129,24 +157,24 @@
 <body>
 
     <div id="error-container">
-        
+
         <svg class="error-icon" viewBox="0 0 24 24">
             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
         </svg>
 
         <h1>Video unavailable</h1>
-        
-<p class="subtitle">
-    <% if (locals.error_message) { %>
-        <% if (error_message === "Video unavailable.") { %>
-            This video isn't available any more (╥﹏╥)
-        <% } else { %>
-            <%= error_message %>
-        <% } %>
-    <% } else { %>
-        This video isn't available right now. (╥﹏╥)
-    <% } %>
-</p>
+
+        <p class="subtitle">
+            <% if (locals.error_message) { %>
+                <% if (error_message === "Video unavailable.") { %>
+                    This video isn't available any more (╥﹏╥)
+                <% } else { %>
+                    <%= error_message %>
+                <% } %>
+            <% } else { %>
+                This video isn't available right now. (╥﹏╥)
+            <% } %>
+        </p>
 
         <% if (locals.knownErrors && locals.err_reason && knownErrors[err_reason]) { %>
         <% } else { %>
@@ -159,16 +187,19 @@
             </ul>
         <% } %>
 
-        <div>
-            <button class="btn-home" onclick="window.location.href='/';">
-                Go Home
-            </button>
+        <div class="actions">
+            <a class="btn-home" href="/home">Go Home</a>
+
+            <% if (locals.v) { %>
+                <a class="btn-youtube" href="https://www.youtube.com/watch?v=<%= encodeURIComponent(v) %>" target="_blank" rel="noopener noreferrer">Try on YouTube</a>
+            <% } else { %>
+                <a class="btn-youtube" href="https://www.youtube.com/" target="_blank" rel="noopener noreferrer">Try on YouTube</a>
+            <% } %>
         </div>
 
         <div class="report-issue">
             Think this is a Poke mistake?<br>
-            <a href="https://codeberg.org/ashleyirispuppy/poke/issues/new/choose?title=Video+Error+<%= locals.v || 'Unknown' %>" target="_blank">Report an issue here</a>.
-             
+            <a href="https://codeberg.org/ashleyirispuppy/poke/issues/new?title=Video+Error+<%= encodeURIComponent(locals.v || 'Unknown') %>" target="_blank" rel="noopener noreferrer">Report an issue here</a>.
         </div>
 
     </div>
