@@ -25,7 +25,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 //////////////// THE PLAYER, START ////////////////////////
- try {
+try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -601,6 +601,8 @@ fastSyncUntil: 0,
                            mediaSessionSeekTarget: null,
                            mediaSessionSeekUntil: 0,
                            mediaPositionNextAt: 0,
+                           mediaSessionEnsureNextAt: 0,
+                           hiddenAudioNativeResumeBurstAt: 0,
                           hiddenInstantResumeAt: 0,
                           hiddenInstantResumeCount: 0,
                           hiddenInstantResumeResetAt: 0,
@@ -1804,19 +1806,36 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
     if (!hiddenAudioMediaSessionShouldStayPlaying()) return false;
     try {
       if ("mediaSession" in navigator) {
-        const hiddenActuallyPlaying = !!(audio && !audio.paused) || (() => {
-          try { const vn = getVideoNode(); return !!(vn && !vn.paused); } catch { return false; }
-        })();
-        navigator.mediaSession.playbackState = hiddenActuallyPlaying ? "playing" : "paused";
+        try { ensureMediaSessionSetup(false); } catch { }
+        navigator.mediaSession.playbackState = "playing";
         const forcePosition = /pause|stall|sentinel|intercept|method|shield/i.test(String(reason || ""));
         const t = now();
         if (navigator.mediaSession.setPositionState && (forcePosition || t >= (state.mediaPositionNextAt || 0))) {
-          const pos = Number(audio.currentTime) || Number(video.currentTime()) || 0;
+          const pos = getMediaSessionPosition(Number(audio.currentTime) || NaN);
           updateMediaSessionPositionNow(pos, reason || "hidden-audio", forcePosition ? 0 : 1000);
         }
       }
     } catch { }
     return true;
+  }
+  function nativeAudioPlayNow(reason = "audio-native-play") {
+    if (!audio || terminalAudioStartBlocked()) return false;
+    try { refreshHiddenAudioMediaSession(reason); } catch { }
+    try { keepMediaSessionVisible(reason, false); } catch { }
+    try { audio.volume = targetVolFromVideo(); } catch { }
+    try { audio.muted = playerMutedFromVideo(); } catch { }
+    try {
+      const p = HTMLMediaElement.prototype.play.call(audio);
+      if (p && typeof p.then === "function") {
+        p.then(() => {
+          state.audioEverStarted = true;
+          try { updateMediaSessionPlaybackState(); } catch { }
+          try { updateMediaSessionPositionNow(Number(audio.currentTime) || NaN, reason, 0); } catch { }
+        }).catch(() => { });
+      }
+      return true;
+    } catch { }
+    return false;
   }
   function maybeCatchUpHiddenAudioAfterPause(reason = "") {
     if (!hiddenAudioMediaSessionShouldStayPlaying() || !audio || !audio.paused) return false;
@@ -1825,24 +1844,20 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
     if (!pauseAt || !isFinite(pauseMediaAt)) return false;
     const ageSec = Math.max(0, (now() - pauseAt) / 1000);
     if (ageSec < 0.14) return false;
-    let target = NaN;
+    let vt = NaN;
     try {
       const vn = getVideoNode();
       if (!vn || vn.paused) return false;
-      const vt = Number(vn.currentTime);
-      if (!isFinite(vt) || vt <= pauseMediaAt + 0.18) return false;
-      target = Math.min(vt, pauseMediaAt + Math.min(ageSec + 0.06, 2.4));
+      vt = Number(vn.currentTime);
     } catch { return false; }
-    const current = Number(audio.currentTime) || 0;
-    if (!isFinite(target) || target <= current + 0.16) return false;
-    if (bufferedAhead(audio, target) < 0.06) return false;
+    const audioTime = Number(audio.currentTime) || pauseMediaAt || 0;
+    if (!isFinite(vt) || !isFinite(audioTime) || vt <= audioTime + 0.55) return false;
     try {
-      state._allowAudioTimeWrite = true;
-      audio.currentTime = target;
-      state._allowAudioTimeWrite = false;
+      state.lastHiddenTimelineTarget = audioTime;
+      state.lastHiddenTimelineTargetAt = now();
+      bgSilentSyncVideoTime(audioTime);
       return true;
     } catch {
-      state._allowAudioTimeWrite = false;
     }
     return false;
   }
@@ -1871,6 +1886,7 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
     try { BackgroundAudioSentinel.start(reason); } catch { }
     try { startBgAudioKeepalive(); } catch { }
     try { refreshHiddenAudioMediaSession(reason); } catch { }
+    try { keepMediaSessionVisible(reason || "hidden-audio-resume", true); } catch { }
     try { audio.volume = targetVolFromVideo(); } catch { }
     try { audio.muted = playerMutedFromVideo(); } catch { }
     state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, t + 1400);
@@ -1883,19 +1899,17 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
       if (terminalAudioStartBlocked()) return false;
       try { refreshHiddenAudioMediaSession(reason); } catch { }
       try { maybeCatchUpHiddenAudioAfterPause(reason); } catch { }
-      try {
-        const p = HTMLMediaElement.prototype.play.call(audio);
-        if (p && typeof p.then === "function") {
-          p.then(() => { state.audioEverStarted = true; }).catch(() => { });
-        }
-        return true;
-      } catch { }
-      return false;
+      return nativeAudioPlayNow(reason || "hidden-audio-resume");
     };
 
     nativePlay();
-    const retryAllowed = retry && (t - Number(state.hiddenAudioNoSeekRetryAt || 0)) > 45;
-    if (retryAllowed) state.hiddenAudioNoSeekRetryAt = t;
+    const retryAllowed = retry &&
+      (t - Number(state.hiddenAudioNoSeekRetryAt || 0)) > 45 &&
+      t >= Number(state.hiddenAudioNativeResumeBurstAt || 0);
+    if (retryAllowed) {
+      state.hiddenAudioNoSeekRetryAt = t;
+      state.hiddenAudioNativeResumeBurstAt = t + 260;
+    }
     if (retryAllowed) {
       try { queueMicrotask(nativePlay); } catch { }
       try { Promise.resolve().then(nativePlay); } catch { }
@@ -1942,12 +1956,7 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
     const t = now();
     markHiddenAudioPauseDetected(reason);
     try { refreshHiddenAudioMediaSession(reason); } catch { }
-    // Immediate native play - don't wait for any scheduling
-    try {
-      if (audio && audio.paused) {
-        HTMLMediaElement.prototype.play.call(audio).catch(() => {});
-      }
-    } catch {}
+    try { if (audio && audio.paused) nativeAudioPlayNow(reason || "hidden-audio-pause"); } catch { }
     if (t > (state.hiddenAudioPauseShieldResetAt || 0)) {
       state.hiddenAudioPauseShieldCount = 0;
       state.hiddenAudioPauseShieldResetAt = t + 1200;
@@ -2413,18 +2422,17 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
         if (!_shouldDrop()) return _origPause();
         _droppedCount++;
         _lastDropAt = now();
-        // Use native play to bypass all gating - we KNOW we want audio playing
-        const _nativePlay = HTMLMediaElement.prototype.play;
         const _immediateResume = () => {
           try {
             if (!state.intendedPlaying || !audio || !audio.paused || _shouldDropPlay()) return;
-            _nativePlay.call(audio).catch(() => {});
+            nativeAudioPlayNow("audio-pause-method-shield");
           } catch {}
         };
         try {
           if (document.visibilityState === "hidden") {
             markHiddenAudioPauseDetected("audio-pause-method-shield");
             refreshHiddenAudioMediaSession("audio-pause-method-shield");
+            keepMediaSessionVisible("audio-pause-method-shield", true);
             // Immediate synchronous play attempt before any async scheduling
             _immediateResume();
             hiddenAudioNoSeekResume("audio-pause-method-shield", { retry: true });
@@ -2445,7 +2453,7 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
             try { setTimeout(_immediateResume, d); } catch {}
           });
         }
-        return Promise.resolve();
+        return undefined;
       };
     }
     function _shouldDropPlay() {
@@ -6329,10 +6337,12 @@ function engagePauseIntercept() {
       if (document.visibilityState === "hidden" && hiddenAudioPauseShieldActive()) {
         try { markHiddenAudioPauseDetected("audio-pause-intercept"); } catch { }
         try { refreshHiddenAudioMediaSession("audio-pause-intercept"); } catch { }
+        try { keepMediaSessionVisible("audio-pause-intercept", true); } catch { }
+        try { if (audio.paused) nativeAudioPlayNow("audio-pause-intercept"); } catch { }
         hiddenAudioNoSeekResume("audio-pause-intercept", { retry: true });
-        return Promise.resolve();
+        return undefined;
       }
-      return Promise.resolve();
+      return undefined;
     };
   }
 
@@ -10013,6 +10023,14 @@ function updateMediaSessionPositionNow(preferred = NaN, reason = "", throttleMs 
   return false;
 }
 
+function keepMediaSessionVisible(reason = "", forceSetup = false) {
+  if (!("mediaSession" in navigator)) return false;
+  try { ensureMediaSessionSetup(!!forceSetup); } catch { }
+  try { updateMediaSessionPlaybackState(); } catch { }
+  try { updateMediaSessionPositionNow(NaN, reason || "media-session-visible", forceSetup ? 0 : 1000); } catch { }
+  return true;
+}
+
 function maybeUpdateMediaSessionPosition(vt) {
   if (!("mediaSession" in navigator) || !navigator.mediaSession.setPositionState) return;
   if (now() < state.mediaPositionNextAt) return;
@@ -10104,6 +10122,7 @@ function directExternalMediaControlPlay(reason = "external-media-play", serial =
   setMediaPlayTxn(1800);
   setPauseEventGuard(1200);
   setFastSync(1800);
+  keepMediaSessionVisible(reason || "external-media-play", true);
   updateMediaSessionPlaybackState();
   updateMediaSessionPositionNow(target, reason);
 
@@ -17091,8 +17110,11 @@ function setupUserPauseIntentDetection() {
 
 let _mediaSessionSetupDone = false;
 let _mediaSessionSetupAttempts = 0;
+let _mediaSessionSetupActive = false;
 function setupMediaSession() {
   if (!("mediaSession" in navigator)) return;
+  if (_mediaSessionSetupActive) return;
+  _mediaSessionSetupActive = true;
   try {
     const thumbProxy = typeof window.proxyurl === "string" ? window.proxyurl : "";
     const mediaThumbSrc = (fileName) => `${thumbProxy}https://i.ytimg.com/vi/${vidKey}/${fileName}`;
@@ -17148,6 +17170,7 @@ function setupMediaSession() {
       markMediaAction("play");
       setPauseEventGuard(1200);
       setMediaPlayTxn(1800);
+      keepMediaSessionVisible("media-session-play", true);
       updateMediaSessionPlaybackState();
       directExternalMediaControlPlay("media-session-play", serial).catch(() => {
         // If directExternalMediaControlPlay fails, try native play as fallback
@@ -17257,6 +17280,10 @@ function setupMediaSession() {
       let viaEl = NaN;
       let viaInner = NaN;
       let viaAudio = NaN;
+      const pendingSeekTarget = Number(state.mediaSessionSeekTarget ?? state.pendingSeekTarget);
+      if (isFinite(pendingSeekTarget) && pendingSeekTarget >= 0 && now() < Number(state.mediaSessionSeekUntil || 0)) {
+        return pendingSeekTarget;
+      }
       try { viaPlayer = Number(video.currentTime()); } catch { }
       try { viaEl = Number(videoEl.currentTime); } catch { }
       try {
@@ -17267,12 +17294,16 @@ function setupMediaSession() {
       if (isFinite(viaPlayer) && viaPlayer >= 0) freshValues.push(viaPlayer);
       if (isFinite(viaInner) && viaInner >= 0) freshValues.push(viaInner);
       if (isFinite(viaEl) && viaEl >= 0) freshValues.push(viaEl);
+      const videoPos = freshValues.find(value => isFinite(value) && value >= 0);
+      const audioCloseToVideo = isFinite(videoPos) && Math.abs(viaAudio - videoPos) < 1.25;
       const audioIsTimelineOwner = coupledMode && audio && isFinite(viaAudio) && viaAudio >= 0 &&
-        (!audio.paused || document.visibilityState === "hidden" || getVideoPaused());
+        state.intendedPlaying &&
+        (
+          (document.visibilityState === "hidden" && (audio.paused || hiddenAudioMediaSessionShouldStayPlaying())) ||
+          (!audio.paused && (!isFinite(videoPos) || audioCloseToVideo || viaAudio > videoPos))
+        );
       if (audioIsTimelineOwner) return viaAudio;
-      for (const value of freshValues) {
-        if (value >= 0) return value;
-      }
+      if (isFinite(videoPos) && videoPos >= 0) return videoPos;
       if (isFinite(viaAudio) && viaAudio >= 0) return viaAudio;
       const lkg = Number(state.lastKnownGoodVT) || 0;
       if (lkg > 0 && (now() - Number(state.lastKnownGoodVTts || 0)) < 120000) return lkg;
@@ -17359,9 +17390,17 @@ function setupMediaSession() {
   } catch { }
   _mediaSessionSetupDone = true;
   _mediaSessionSetupAttempts++;
+  _mediaSessionSetupActive = false;
 }
-function ensureMediaSessionSetup() {
-  if (_mediaSessionSetupDone && _mediaSessionSetupAttempts > 0) return;
+function ensureMediaSessionSetup(force = false) {
+  if (!("mediaSession" in navigator)) return;
+  const t = now();
+  const metadataMissing = (() => {
+    try { return !navigator.mediaSession.metadata; } catch { return false; }
+  })();
+  if (!force && _mediaSessionSetupDone && _mediaSessionSetupAttempts > 0 && !metadataMissing) return;
+  if (!force && t < (state.mediaSessionEnsureNextAt || 0)) return;
+  state.mediaSessionEnsureNextAt = t + (force ? 300 : 2500);
   try { setupMediaSession(); } catch {}
 }
 
@@ -17382,6 +17421,7 @@ function bindCommonMediaEvents() {
       forcePausePlaybackForErrorOverlay("video-play-while-overlay");
       return;
     }
+    try { keepMediaSessionVisible("video-play", true); } catch { }
     try {
       const _playEvtVt = Number(video.currentTime());
       if (MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.blockUnauthorizedTailRestart(_playEvtVt)) {
@@ -18148,7 +18188,7 @@ function bindCommonMediaEvents() {
       const _prevPlayingAt = state.lastVideoPlayingAt;
       state.lastVideoPlayingAt = now();
       clearMediaPlayActionPending();
-      updateMediaSessionPlaybackState();
+      keepMediaSessionVisible("video-playing", false);
       clearHiddenVideoBootstrap();
       const _freshVideoProgressPending = freshForegroundVideoProgressPending(0.08);
       if (!_freshVideoProgressPending) {
@@ -18692,6 +18732,7 @@ function bindCommonMediaEvents() {
         forcePausePlaybackForErrorOverlay("audio-play-while-overlay");
         return;
       }
+      try { keepMediaSessionVisible("audio-play", true); } catch { }
       if (state.intendedPlaying) {
         try { BackgroundAudioSentinel.start("audio-play"); } catch { }
       }
@@ -19058,7 +19099,7 @@ function bindCommonMediaEvents() {
         return;
       }
       clearMediaPlayActionPending();
-      updateMediaSessionPlaybackState();
+      keepMediaSessionVisible("audio-playing", false);
       try { UltraStabilizer.onAudioPlaying(); } catch { }
       finalizeForegroundReturnRecovery();
       if (!_audioFirstPlayedAt) _audioFirstPlayedAt = performance.now();
@@ -21087,6 +21128,7 @@ function setupVisibilityLifecycle() {
       clearStalePlaybackIntentIfActuallyPausedForTabTransition("visibility-hidden");
       if (state.intendedPlaying) {
         armSeamlessReturnWindow("visibility-hide", 2600);
+        try { keepMediaSessionVisible("visibility-hidden", true); } catch { }
         engagePauseIntercept();
         state.tabReturnImmuneUntil = Math.max(state.tabReturnImmuneUntil || 0, now() + 2000);
       }
@@ -21164,6 +21206,7 @@ function setupVisibilityLifecycle() {
     NotMakePlayBackFixingNoticable.onGoBackground();
     if (state.intendedPlaying) {
       armSeamlessReturnWindow("blur", 2200);
+      try { keepMediaSessionVisible("blur", true); } catch { }
       if (document.visibilityState === "hidden" && coupledMode) noteBackgroundEntry();
       startBgAudioKeepalive();
       if (document.visibilityState === "hidden" && platform.chromiumOnlyBrowser && coupledMode) {
