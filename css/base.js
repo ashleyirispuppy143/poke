@@ -3960,6 +3960,13 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
     let _armedAt = 0;
     let _flushAttempts = 0;
     let _deadlineTimer = null;
+    let _retryTimer = null;
+    let _recheckTimer = null;
+    let _clearMicroSeekTimer = null;
+    let _lastResortRaf = 0;
+    let _lastResortClearTimer = null;
+    let _rvfcId = null;
+    let _rvfcNode = null;
     let _rvfcResolved = false;
     let _lastFrameRenderedAt = 0;   // last confirmed frame render (RVFC)
   let _lastFlushAt = 0;
@@ -3970,6 +3977,34 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
   const FRAME_DEADLINE_MS = 280;   // if no frame in 280ms after play, flush (was 350 — faster detection without false positives)
   const FLUSH_COOLDOWN_MS = 120;   // min gap between flush attempts (was 200 — faster retries for stuck compositor)
   const RECHECK_DELAY_MS = 40;     // delay before re-arming after a flush (was 60)
+
+  function _cancelFrameCallback() {
+    try {
+      if (_rvfcNode && _rvfcId != null && typeof _rvfcNode.cancelVideoFrameCallback === "function") {
+        _rvfcNode.cancelVideoFrameCallback(_rvfcId);
+      }
+    } catch { }
+    _rvfcId = null;
+    _rvfcNode = null;
+  }
+
+  function _clearPendingWork() {
+    if (_deadlineTimer) { clearTimeout(_deadlineTimer); _deadlineTimer = null; }
+    if (_retryTimer) { clearTimeout(_retryTimer); _retryTimer = null; }
+    if (_recheckTimer) { clearTimeout(_recheckTimer); _recheckTimer = null; }
+    if (_clearMicroSeekTimer) {
+      clearTimeout(_clearMicroSeekTimer);
+      _clearMicroSeekTimer = null;
+      state._isMicroSeek = false;
+    }
+    if (_lastResortRaf) { cancelAnimationFrame(_lastResortRaf); _lastResortRaf = 0; }
+    if (_lastResortClearTimer) {
+      clearTimeout(_lastResortClearTimer);
+      _lastResortClearTimer = null;
+      state._isMicroSeek = false;
+    }
+    _cancelFrameCallback();
+  }
 
   function arm() {
     if (document.visibilityState === "hidden") return;
@@ -3989,7 +4024,7 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
   function disarm() {
     _armed = false;
     _armGen++;
-    if (_deadlineTimer) { clearTimeout(_deadlineTimer); _deadlineTimer = null; }
+    _clearPendingWork();
   }
 
   function _scheduleFrameCheck(gen) {
@@ -4014,8 +4049,12 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
 
     if (RVFC_AVAILABLE) {
       try {
-        vn.requestVideoFrameCallback((_nowTs, _metadata) => {
+        _cancelFrameCallback();
+        _rvfcNode = vn;
+        _rvfcId = vn.requestVideoFrameCallback((_nowTs, _metadata) => {
           if (gen !== _armGen) return; // stale
+          _rvfcId = null;
+          _rvfcNode = null;
           _rvfcResolved = true;
           _lastFrameRenderedAt = now();
           _armed = false;
@@ -4053,7 +4092,11 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
       return;
     }
     if ((now() - _lastFlushAt) < FLUSH_COOLDOWN_MS) {
-      setTimeout(() => _doFlush(gen), FLUSH_COOLDOWN_MS);
+      if (_retryTimer) clearTimeout(_retryTimer);
+      _retryTimer = setTimeout(() => {
+        _retryTimer = null;
+        _doFlush(gen);
+      }, FLUSH_COOLDOWN_MS);
       return;
     }
 
@@ -4067,16 +4110,26 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
     if (vt <= 0) { _armed = false; return; }
 
     if (!canDoCompositorFlush()) {
-      setTimeout(() => _doFlush(gen), COMPOSITOR_FLUSH_MIN_GAP_MS);
+      if (_retryTimer) clearTimeout(_retryTimer);
+      _retryTimer = setTimeout(() => {
+        _retryTimer = null;
+        _doFlush(gen);
+      }, COMPOSITOR_FLUSH_MIN_GAP_MS);
       return;
     }
     recordMicroSeek();
     state._isMicroSeek = true;
     try { vn.currentTime = vt + 0.001; } catch { }
-    setTimeout(() => { state._isMicroSeek = false; }, 150);
+    if (_clearMicroSeekTimer) clearTimeout(_clearMicroSeekTimer);
+    _clearMicroSeekTimer = setTimeout(() => {
+      _clearMicroSeekTimer = null;
+      state._isMicroSeek = false;
+    }, 150);
 
     _startFrameCount = getVideoPresentedFrameCount(vn);
-    setTimeout(() => {
+    if (_recheckTimer) clearTimeout(_recheckTimer);
+    _recheckTimer = setTimeout(() => {
+      _recheckTimer = null;
       if (gen !== _armGen || !_armed) return;
       _rvfcResolved = false;
       _scheduleFrameCheck(gen);
@@ -4096,13 +4149,19 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
     try { vn.pause(); } catch { }
     try { vn.currentTime = vt + 0.001; } catch { }
     DONTMAKEITDOUBLEPLAY.resetAll();
-    requestAnimationFrame(() => {
+    if (_lastResortRaf) cancelAnimationFrame(_lastResortRaf);
+    _lastResortRaf = requestAnimationFrame(() => {
+      _lastResortRaf = 0;
       if (gen !== _armGen) return;
       try { _nPlay.call(vn).catch(() => { }); } catch { }
       state._isMicroSeek = false;
       _lastFrameRenderedAt = now();
     });
-    setTimeout(() => { state._isMicroSeek = false; }, 300);
+    if (_lastResortClearTimer) clearTimeout(_lastResortClearTimer);
+    _lastResortClearTimer = setTimeout(() => {
+      _lastResortClearTimer = null;
+      state._isMicroSeek = false;
+    }, 300);
   }
 
   function isFrameRecent(ms = 500) {
@@ -4124,12 +4183,41 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
 
     let _gen = 0;
     let _timer = null;
+    let _earlyCheckTimer = null;
+    let _recheckTimer = null;
+    let _microSeekClearTimer = null;
+    let _lastResortTimer = null;
+    let _lastResortClearTimer = null;
+    let _rvfcId = null;
+    let _rvfcNode = null;
     let _resolved = false;
     let _attempts = 0;
     let _lastArmAt = 0;
     const MAX_ATTEMPTS = 4;
     const FRAME_WAIT_MS = 180;       // time to wait for RVFC before acting (was 250→180 — faster freeze detection, matches playTogether RVFC kick timing)
   const RECHECK_MS = 120;          // time to wait after micro-seek for RVFC (was 150→120)
+
+  function _cancelFrameCallback() {
+    try {
+      if (_rvfcNode && _rvfcId != null && typeof _rvfcNode.cancelVideoFrameCallback === "function") {
+        _rvfcNode.cancelVideoFrameCallback(_rvfcId);
+      }
+    } catch { }
+    _rvfcId = null;
+    _rvfcNode = null;
+  }
+
+  function _clearPendingTimers(resetMicroSeek = false) {
+    let clearedMicroSeekOwner = false;
+    if (_timer) { clearTimeout(_timer); _timer = null; }
+    if (_earlyCheckTimer) { clearTimeout(_earlyCheckTimer); _earlyCheckTimer = null; }
+    if (_recheckTimer) { clearTimeout(_recheckTimer); _recheckTimer = null; }
+    if (_microSeekClearTimer) { clearTimeout(_microSeekClearTimer); _microSeekClearTimer = null; clearedMicroSeekOwner = true; }
+    if (_lastResortTimer) { clearTimeout(_lastResortTimer); _lastResortTimer = null; }
+    if (_lastResortClearTimer) { clearTimeout(_lastResortClearTimer); _lastResortClearTimer = null; clearedMicroSeekOwner = true; }
+    if (resetMicroSeek || clearedMicroSeekOwner) state._isMicroSeek = false;
+    _cancelFrameCallback();
+  }
 
   function arm() {
     if (document.visibilityState === "hidden") return;
@@ -4147,11 +4235,11 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
   function disarm() {
     _gen++;
     _resolved = true;
-    if (_timer) { clearTimeout(_timer); _timer = null; }
+    _clearPendingTimers(true);
   }
 
   function _scheduleCheck(gen) {
-    if (_timer) { clearTimeout(_timer); _timer = null; }
+    _clearPendingTimers(false);
     const vn = getVideoNode();
     if (!vn || vn.paused) return;
 
@@ -4159,8 +4247,11 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
 
     if (RVFC_OK) {
       try {
-        vn.requestVideoFrameCallback(() => {
+        _rvfcNode = vn;
+        _rvfcId = vn.requestVideoFrameCallback(() => {
           if (gen !== _gen) return;
+          _rvfcId = null;
+          _rvfcNode = null;
           _resolved = true;
           if (_timer) { clearTimeout(_timer); _timer = null; }
         });
@@ -4173,7 +4264,8 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
       if (q) startFrames = q.totalVideoFrames;
     } catch { }
 
-    let _earlyCheckTimer = setTimeout(() => {
+    _earlyCheckTimer = setTimeout(() => {
+      _earlyCheckTimer = null;
       if (gen !== _gen || _resolved) return;
       if (isFinite(startFrames) && startFrames >= 0) {
         try {
@@ -4189,7 +4281,7 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
 
     _timer = setTimeout(() => {
       _timer = null;
-      clearTimeout(_earlyCheckTimer);
+      if (_earlyCheckTimer) { clearTimeout(_earlyCheckTimer); _earlyCheckTimer = null; }
       if (gen !== _gen || _resolved) return;
 
       if (isFinite(startFrames) && startFrames >= 0) {
@@ -4223,10 +4315,16 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
           recordMicroSeek();
           state._isMicroSeek = true;
           try { vn4.currentTime = vt + 0.001; } catch { }
-          setTimeout(() => { state._isMicroSeek = false; }, 200);
+          if (_microSeekClearTimer) clearTimeout(_microSeekClearTimer);
+          _microSeekClearTimer = setTimeout(() => {
+            _microSeekClearTimer = null;
+            state._isMicroSeek = false;
+          }, 200);
         }
 
-        setTimeout(() => {
+        if (_recheckTimer) clearTimeout(_recheckTimer);
+        _recheckTimer = setTimeout(() => {
+          _recheckTimer = null;
           if (gen !== _gen) return;
           _scheduleCheck(gen);
         }, RECHECK_MS);
@@ -4244,13 +4342,17 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
 
     state._isMicroSeek = true;
     try { vn.pause(); } catch { }
-    setTimeout(() => {
+    if (_lastResortTimer) clearTimeout(_lastResortTimer);
+    _lastResortTimer = setTimeout(() => {
+      _lastResortTimer = null;
       if (gen !== _gen) { state._isMicroSeek = false; return; }
       const vn2 = getVideoNode();
       if (!vn2 || !state.intendedPlaying) { state._isMicroSeek = false; return; }
       const vt2 = Number(vn2.currentTime) || 0;
       try { vn2.currentTime = vt2 + 0.001; } catch { }
-      setTimeout(() => {
+      if (_lastResortClearTimer) clearTimeout(_lastResortClearTimer);
+      _lastResortClearTimer = setTimeout(() => {
+        _lastResortClearTimer = null;
         state._isMicroSeek = false;
         if (gen !== _gen) return;
         const vn3 = getVideoNode();
@@ -4267,12 +4369,50 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
   const NuclearFreezeWatchdog = (() => {
     let _timer = null;
     let _heavyTimer = null; // tracked so stop() can cancel the deferred heavy-fix
+    let _lightClearTimer = null;
+    let _pauseStepTimer = null;
+    let _resumeStepTimer = null;
     let _lastFrameCount = -1;
     let _lastFrameCheckAt = 0;
     let _lastNuclearAt = 0;
     let _consecutiveFrozen = 0; // require 2 consecutive frozen checks before acting
     const CHECK_MS = perfProfile.lowEnd ? 1200 : 800;
     const COOLDOWN_MS = perfProfile.lowEnd ? 4000 : 2500;
+
+    function _clearDeferredWork(resetFlags = false) {
+      if (_lightClearTimer) { clearTimeout(_lightClearTimer); _lightClearTimer = null; }
+      if (_heavyTimer) { clearTimeout(_heavyTimer); _heavyTimer = null; }
+      if (_pauseStepTimer) { clearTimeout(_pauseStepTimer); _pauseStepTimer = null; }
+      if (_resumeStepTimer) { clearTimeout(_resumeStepTimer); _resumeStepTimer = null; }
+      if (resetFlags) {
+        state._isMicroSeek = false;
+        state.isProgrammaticVideoPause = false;
+      }
+    }
+
+    function _scheduleMicroSeekClear(delay = 150) {
+      if (_lightClearTimer) clearTimeout(_lightClearTimer);
+      _lightClearTimer = setTimeout(() => {
+        _lightClearTimer = null;
+        state._isMicroSeek = false;
+      }, Math.max(50, Number(delay) || 150));
+    }
+
+    function _schedulePauseStep(fn, delay = 30) {
+      if (_pauseStepTimer) clearTimeout(_pauseStepTimer);
+      _pauseStepTimer = setTimeout(() => {
+        _pauseStepTimer = null;
+        fn();
+      }, Math.max(0, Number(delay) || 0));
+    }
+
+    function _scheduleResumeStep(fn, delay = 50) {
+      if (_resumeStepTimer) clearTimeout(_resumeStepTimer);
+      _resumeStepTimer = setTimeout(() => {
+        _resumeStepTimer = null;
+        fn();
+      }, Math.max(0, Number(delay) || 0));
+    }
 
     function _tick() {
       _timer = null;
@@ -4314,7 +4454,7 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
           recordMicroSeek();
           state._isMicroSeek = true;
           try { vn.currentTime = _nfwLightVT + 0.001; } catch { }
-          setTimeout(() => { state._isMicroSeek = false; }, 150);
+          _scheduleMicroSeekClear(150);
           try { VideoCompositorFlushManager.arm(); } catch { }
           _lastFrameCount = -1;
           _lastFrameCheckAt = 0;
@@ -4331,14 +4471,14 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
             state._isMicroSeek = true;
             state.isProgrammaticVideoPause = true;
             try { _hfVN.pause(); } catch { }
-            setTimeout(() => {
+            _schedulePauseStep(() => {
               state.isProgrammaticVideoPause = false;
               if (!state.intendedPlaying) { state._isMicroSeek = false; return; }
               const vn3 = getVideoNode();
               if (!vn3) { state._isMicroSeek = false; return; }
               const curVT = Number(vn3.currentTime) || 0;
               try { vn3.currentTime = curVT + 0.1; } catch { }
-              setTimeout(() => {
+              _scheduleResumeStep(() => {
                 state._isMicroSeek = false;
                 if (!state.intendedPlaying) return;
                 DONTMAKEITDOUBLEPLAY.resetAll();
@@ -4362,14 +4502,14 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
           state._isMicroSeek = true;
           state.isProgrammaticVideoPause = true;
           try { vn.pause(); } catch { }
-          setTimeout(() => {
+          _schedulePauseStep(() => {
             state.isProgrammaticVideoPause = false;
             if (!state.intendedPlaying) { state._isMicroSeek = false; return; }
             const vn2 = getVideoNode();
             if (!vn2) { state._isMicroSeek = false; return; }
             const curVT = Number(vn2.currentTime) || 0;
             try { vn2.currentTime = curVT + 0.1; } catch { }
-            setTimeout(() => {
+            _scheduleResumeStep(() => {
               state._isMicroSeek = false;
               if (!state.intendedPlaying) return;
               DONTMAKEITDOUBLEPLAY.resetAll();
@@ -4416,11 +4556,12 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
     function start() { _schedule(); }
     function stop() {
       if (_timer) { clearTimeout(_timer); _timer = null; }
-      if (_heavyTimer) { clearTimeout(_heavyTimer); _heavyTimer = null; }
+      _clearDeferredWork(true);
     }
     function reset() {
       _lastFrameCount = -1;
       _lastFrameCheckAt = 0;
+      _consecutiveFrozen = 0;
     }
 
   return { start, stop, reset };
@@ -4428,6 +4569,8 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
 
   const ForegroundFreezeSentinel = (() => {
     let _timer = null;
+    let _stopped = true;
+    let _wakeTimers = [];
     let _lastVt = -1;
     let _lastFrameCount = NaN;
     let _lastSampleAt = 0;
@@ -4443,6 +4586,38 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
     const KICK_COOLDOWN_MS = perfProfile.lowEnd ? 1800 : 1050;
     const KICK_WINDOW_MS = 12000;
     const MAX_KICKS_PER_WINDOW = 5;
+
+    function _trackWakeTimer(id) {
+      if (id != null) _wakeTimers.push(id);
+      return id;
+    }
+
+    function _untrackWakeTimer(id) {
+      const idx = _wakeTimers.indexOf(id);
+      if (idx >= 0) _wakeTimers.splice(idx, 1);
+    }
+
+    function _clearWakeTimers(resetFlags = false) {
+      for (const id of _wakeTimers) {
+        try { clearTimeout(id); } catch { }
+      }
+      _wakeTimers = [];
+      if (resetFlags) {
+        state._isMicroSeek = false;
+        state.bgSilentTimeSyncing = false;
+        state.isProgrammaticVideoPause = false;
+      }
+    }
+
+    function _idleDelay() {
+      if (document.visibilityState !== "visible") return perfProfile.lowEnd ? 9000 : 7000;
+      if (!state.intendedPlaying || state.endedNaturally || state.restarting) return perfProfile.lowEnd ? 6500 : 5000;
+      if (state.seeking || state.seekBuffering || state.seekResumeInFlight || state._isMicroSeek) return perfProfile.lowEnd ? 3000 : 2100;
+      try {
+        if (getVideoPaused()) return perfProfile.lowEnd ? 4200 : 3200;
+      } catch { }
+      return IDLE_MS;
+    }
 
     function _resetSamples() {
       _lastVt = -1;
@@ -4532,7 +4707,9 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
           state.isProgrammaticVideoPause = true;
           try { vn.pause(); } catch { }
         }
-        setTimeout(() => {
+        const wakeTimer = setTimeout(() => {
+          _untrackWakeTimer(wakeTimer);
+          if (_stopped) return;
           try {
             const live = getVideoNode() || vn;
             if (!live || !state.intendedPlaying || state.endedNaturally || state.seeking || state.seekBuffering) return;
@@ -4546,13 +4723,16 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
               execProgrammaticAudioPlay({ squelchMs: 120, force: true, minGapMs: 0 }).catch(() => { });
             }
           } finally {
-            setTimeout(() => {
+            const clearTimer = setTimeout(() => {
+              _untrackWakeTimer(clearTimer);
               state._isMicroSeek = false;
               state.bgSilentTimeSyncing = false;
               state.isProgrammaticVideoPause = false;
             }, hard ? 260 : 160);
+            _trackWakeTimer(clearTimer);
           }
         }, hard ? 35 : 0);
+        _trackWakeTimer(wakeTimer);
         try { VideoCompositorFlushManager.arm(); } catch { }
         try { PlayResumeFrameVerifier.arm(); } catch { }
         try { setFastSync(hard ? 1400 : 900); } catch { }
@@ -4562,15 +4742,16 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
 
     function _tick() {
       _timer = null;
+      if (_stopped) return;
       if (!_eligible()) {
         _resetSamples();
-        _schedule(IDLE_MS);
+        _schedule(_idleDelay());
         return;
       }
       const vn = getVideoNode();
       if (!vn) {
         _resetSamples();
-        _schedule(IDLE_MS);
+        _schedule(_idleDelay());
         return;
       }
       const t = now();
@@ -4616,24 +4797,29 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
     }
 
     function _schedule(delay = SAMPLE_MS) {
-      if (_timer) return;
+      if (_stopped || _timer) return;
       _timer = setTimeout(_tick, Math.max(250, Number(delay) || SAMPLE_MS));
     }
 
     function start() {
-      _schedule(SAMPLE_MS);
+      if (!_stopped && _timer) return;
+      _stopped = false;
+      _schedule(_idleDelay());
     }
 
     function stop() {
+      _stopped = true;
       if (_timer) {
         clearTimeout(_timer);
         _timer = null;
       }
+      _clearWakeTimers(true);
       _resetSamples();
     }
 
     function reset() {
       _resetSamples();
+      _clearWakeTimers(true);
       _lastKickAt = 0;
       _kickCount = 0;
       _kickWindowStart = 0;
@@ -12195,8 +12381,14 @@ function forceSetAudioTimeForTimelineRepair(t) {
   state._allowAudioTimeWrite = prevAllow;
   state.seeking = prevSeeking;
 }
+let _timelineRepairFlagTimer = null;
 function clearTimelineRepairFlag(delay = 250) {
-  setTimeout(() => {
+  if (_timelineRepairFlagTimer) {
+    clearTimeout(_timelineRepairFlagTimer);
+    _timelineRepairFlagTimer = null;
+  }
+  _timelineRepairFlagTimer = setTimeout(() => {
+    _timelineRepairFlagTimer = null;
     state._isMicroSeek = false;
     state.bgSilentTimeSyncing = false;
   }, Math.max(80, Number(delay) || 250));
@@ -12453,6 +12645,17 @@ function beginSmoothForegroundReturn(reason = "", opts = {}) {
 
   let cleanupEvents = null;
   let returnFinished = false;
+  let frameCallbackId = null;
+  let frameCallbackNode = null;
+  const cancelSmoothFrameCallback = () => {
+    try {
+      if (frameCallbackNode && frameCallbackId != null && typeof frameCallbackNode.cancelVideoFrameCallback === "function") {
+        frameCallbackNode.cancelVideoFrameCallback(frameCallbackId);
+      }
+    } catch { }
+    frameCallbackId = null;
+    frameCallbackNode = null;
+  };
   const finish = (ok, label = "") => {
     if (returnFinished) return;
     returnFinished = true;
@@ -12545,7 +12748,13 @@ function beginSmoothForegroundReturn(reason = "", opts = {}) {
     };
     try {
       if (typeof vn.requestVideoFrameCallback === "function") {
-        vn.requestVideoFrameCallback(() => settle(true));
+        cancelSmoothFrameCallback();
+        frameCallbackNode = vn;
+        frameCallbackId = vn.requestVideoFrameCallback(() => {
+          frameCallbackId = null;
+          frameCallbackNode = null;
+          settle(true);
+        });
         try { if (state.smoothForegroundReturnFrameTimer) clearTimeout(state.smoothForegroundReturnFrameTimer); } catch { }
         state.smoothForegroundReturnFrameTimer = setTimeout(retryFrame, perfProfile.lowEnd ? 220 : 150);
         return;
@@ -12605,6 +12814,7 @@ function beginSmoothForegroundReturn(reason = "", opts = {}) {
 
   const onReady = () => { tryReturn(reason || "smooth-return-event", 0); };
   cleanupEvents = () => {
+    cancelSmoothFrameCallback();
     try { vn.removeEventListener("seeked", onReady); } catch { }
     try { vn.removeEventListener("loadeddata", onReady); } catch { }
     try { vn.removeEventListener("canplay", onReady); } catch { }
@@ -16681,6 +16891,7 @@ function bufferMonitorTick() {
   _bufMonTimer = setTimeout(bufferMonitorTick, _bufNextDelay);
 }
 function startBufferMonitor() {
+  _bufMonStopped = false;
   if (!_bufMonTimer && coupledMode) {
     _bufMonTimer = setTimeout(bufferMonitorTick, BUF_MON_INTERVAL_MS);
   }
@@ -19592,62 +19803,6 @@ function bindCommonMediaEvents() {
             if (_prfvAfterTabReturn || _prfvAfterLongPause) {
               try { PlayResumeFrameVerifier.arm(); } catch { }
             }
-            if ((_prfvAfterTabReturn || _prfvAfterLongPause) &&
-              typeof HTMLVideoElement !== "undefined" &&
-              typeof HTMLVideoElement.prototype.requestVideoFrameCallback === "function") {
-              const _rvfcGen = state.playSessionId;
-            let _rvfcGotFrame = false;
-            const _rvfcVNode = getVideoNode();
-            if (_rvfcVNode && !_rvfcVNode.paused) {
-              try {
-                _rvfcVNode.requestVideoFrameCallback(() => { _rvfcGotFrame = true; });
-              } catch { }
-              const _rvfcTimeout = 300;
-              setTimeout(() => {
-                if (_rvfcGotFrame) return; // compositor healthy
-                if (state.playSessionId !== _rvfcGen) return; // stale
-                const _kickVN = getVideoNode();
-                if (!_kickVN || _kickVN.paused || !state.intendedPlaying) return;
-                const _kickVT = Number(_kickVN.currentTime) || 0;
-                if (_kickVT > 0.02 && canDoCompositorFlush()) {
-                  recordMicroSeek();
-                  state._isMicroSeek = true;
-                  try { _kickVN.currentTime = _kickVT + 0.001; } catch { }
-                  setTimeout(() => { state._isMicroSeek = false; }, 150);
-                  let _rvfcGotFrame2 = false;
-                  try {
-                    _kickVN.requestVideoFrameCallback(() => { _rvfcGotFrame2 = true; });
-                  } catch { }
-                  setTimeout(() => {
-                    if (_rvfcGotFrame2) return; // fixed
-                    if (state.playSessionId !== _rvfcGen) return;
-                    const _kickVN2 = getVideoNode();
-                    if (!_kickVN2 || _kickVN2.paused || !state.intendedPlaying) return;
-                    if (state.seeking || state.seekBuffering) return;
-                    const _kickVT2 = Number(_kickVN2.currentTime) || 0;
-                    if (_kickVT2 > 0.02) {
-                      recordMicroSeek();
-                      state._isMicroSeek = true;
-                      state.isProgrammaticVideoPause = true;
-                      try { _kickVN2.pause(); } catch { }
-                      try { _kickVN2.currentTime = _kickVT2 + 0.01; } catch { }
-                      requestAnimationFrame(() => {
-                        state.isProgrammaticVideoPause = false;
-                        if (state.playSessionId !== _rvfcGen || !state.intendedPlaying) {
-                          state._isMicroSeek = false; return;
-                        }
-                        DONTMAKEITDOUBLEPLAY.resetAll();
-                        const p = execProgrammaticVideoPlay();
-                        if (p && typeof p.catch === "function") p.catch(() => { });
-                        state._isMicroSeek = false;
-                      });
-                      setTimeout(() => { state._isMicroSeek = false; }, 300);
-                    }
-                  }, 300);
-                }
-              }, _rvfcTimeout);
-            }
-              }
           }
 
           if (state._stallAudioPauseTimer) {
@@ -22199,6 +22354,7 @@ function cleanupPlaybackRuntimeResources(reason = "") {
   try { if (state._endedKillInterval) { clearTimeout(state._endedKillInterval); state._endedKillInterval = null; } } catch { }
   try { if (state._endedKillHardStop) { clearTimeout(state._endedKillHardStop); state._endedKillHardStop = null; } } catch { }
   try { if (state._corsCheckInterval) { clearInterval(state._corsCheckInterval); state._corsCheckInterval = null; } } catch { }
+  try { if (_timelineRepairFlagTimer) { clearTimeout(_timelineRepairFlagTimer); _timelineRepairFlagTimer = null; } } catch { }
   try { clearSeekPostTimers(); } catch { }
 
   try { _stopPlayCommitWatchdog(); } catch { }
@@ -22208,6 +22364,8 @@ function cleanupPlaybackRuntimeResources(reason = "") {
   try { if (_ncBufferWaitCleanup) { _ncBufferWaitCleanup(); _ncBufferWaitCleanup = null; } } catch { }
   try { cancelActiveFade(); } catch { }
 
+  try { VideoCompositorFlushManager.disarm(); } catch { }
+  try { PlayResumeFrameVerifier.disarm(); } catch { }
   try { MakeSureAudioIsNotCuttingOrWeird.stop(); } catch { }
   try { MakeSureAudioOrVideoDoesntPauseUnlessUserReallyWantsTo.stop(); } catch { }
   try { NuclearFreezeWatchdog.stop(); } catch { }
@@ -23352,8 +23510,7 @@ _on(window, "unhandledrejection", (e) => {
     // Play / pause
     'k':          (p) => { togglePlay(p); return true; },
     ' ':          (p) => { 
-      // NEW: Drop focus from any active button to prevent double-triggering
-      if (document.activeElement) document.activeElement.blur(); 
+       if (document.activeElement) document.activeElement.blur(); 
       togglePlay(p); 
       return true; 
     },
@@ -23420,7 +23577,7 @@ _on(window, "unhandledrejection", (e) => {
       e.preventDefault();
       e.stopPropagation();
     }
-  }, true); // NEW: Changed from 'false' to 'true' to use the Capture Phase
+  }, true);  
 })();
 
 // https://codeberg.org/ashleyirispuppy/poke/src/branch/main/src/libpoketube/libpoketube-youtubei-objects.json
@@ -23822,6 +23979,7 @@ try {
 
 // custom video.js ui for POKE PLAYER 
 // if u dont want it, u can use DisableCustomPlayerUI localstroage variable :3
+// No LLMs, AIs or anything like that was used in the making of the custom ui, it was done by all hard work :D
 let shouldUseCustomVideoJsUI = true;
 
 try {
