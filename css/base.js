@@ -3749,9 +3749,6 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
     const vNode = getVideoNode();
     if (!vNode) return;
 
-    const _trBothPlaying = !vNode.paused && (!coupledMode || (audio && !audio.paused));
-    if (_trBothPlaying && state.intendedPlaying) return;
-
     const vRS = Number(vNode.readyState || 0);
     const currentVt = Number(vNode.currentTime || 0);
 
@@ -4424,6 +4421,222 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
     function reset() {
       _lastFrameCount = -1;
       _lastFrameCheckAt = 0;
+    }
+
+  return { start, stop, reset };
+  })();
+
+  const ForegroundFreezeSentinel = (() => {
+    let _timer = null;
+    let _lastVt = -1;
+    let _lastFrameCount = NaN;
+    let _lastSampleAt = 0;
+    let _frozenSince = 0;
+    let _lastKickAt = 0;
+    let _kickCount = 0;
+    let _kickWindowStart = 0;
+
+    const SAMPLE_MS = perfProfile.lowEnd ? 950 : 650;
+    const IDLE_MS = perfProfile.lowEnd ? 2600 : 1800;
+    const CONFIRM_MS = perfProfile.lowEnd ? 2600 : 1800;
+    const HARD_MS = perfProfile.lowEnd ? 4600 : 3300;
+    const KICK_COOLDOWN_MS = perfProfile.lowEnd ? 1800 : 1050;
+    const KICK_WINDOW_MS = 12000;
+    const MAX_KICKS_PER_WINDOW = 5;
+
+    function _resetSamples() {
+      _lastVt = -1;
+      _lastFrameCount = NaN;
+      _lastSampleAt = 0;
+      _frozenSince = 0;
+    }
+
+    function _nearEnd(vn, vt) {
+      try {
+        const dur = Number(vn?.duration) || Number(video.duration()) || Number(videoEl?.duration) || 0;
+        return isFinite(dur) && dur > 0 && isFinite(vt) && vt >= Math.max(0, dur - 0.45);
+      } catch { return false; }
+    }
+
+    function _eligible() {
+      if (!state.intendedPlaying || state.endedNaturally || state.restarting) return false;
+      if (state.seeking || state.seekBuffering || state.seekResumeInFlight || state._isMicroSeek) return false;
+      if (document.visibilityState !== "visible") return false;
+      if (userPauseLockActive() || mediaSessionForcedPauseActive() || _errorOverlayShown) return false;
+      if (!state.firstPlayCommitted && !state.startupKickDone) return false;
+      const vn = getVideoNode();
+      if (!vn || vn.paused || getVideoPaused()) return false;
+      const vt = Number(vn.currentTime) || 0;
+      if (nativeVideoEnded() || _nearEnd(vn, vt)) return false;
+      return true;
+    }
+
+    function _sample(vn) {
+      const vt = (() => { try { return Number(vn.currentTime) || 0; } catch { return 0; } })();
+      const rs = (() => { try { return Number(vn.readyState || 0); } catch { return 0; } })();
+      const fc = getVideoPresentedFrameCount(vn);
+      const buffer = (() => { try { return bufferedAhead(vn, vt); } catch { return 0; } })();
+      return { vt, rs, fc, buffer, at: coupledMode && audio ? (Number(audio.currentTime) || 0) : NaN };
+    }
+
+    function _markHealthy(s, t) {
+      _lastVt = s.vt;
+      _lastFrameCount = s.fc;
+      _lastSampleAt = t;
+      _frozenSince = 0;
+      if ((t - _lastKickAt) > KICK_WINDOW_MS) {
+        _kickCount = 0;
+        _kickWindowStart = 0;
+      }
+    }
+
+    function _canKick(t, hard) {
+      if ((t - _lastKickAt) < KICK_COOLDOWN_MS) return false;
+      if (!_kickWindowStart || (t - _kickWindowStart) > KICK_WINDOW_MS) {
+        _kickWindowStart = t;
+        _kickCount = 0;
+      }
+      if (_kickCount >= MAX_KICKS_PER_WINDOW && !hard) return false;
+      _kickCount++;
+      _lastKickAt = t;
+      return true;
+    }
+
+    function _targetForWake(vn, s, hard) {
+      let target = Number(s.vt) || 0;
+      if (coupledMode && audio && !audio.paused && isFinite(s.at) && s.at > target + (hard ? 0.55 : 0.85)) {
+        target = clampKnownTimelineTarget(s.at, 0.08);
+      } else {
+        target += hard ? 0.035 : 0.001;
+      }
+      try {
+        const dur = Number(vn.duration) || 0;
+        if (isFinite(dur) && dur > 0) target = Math.min(target, Math.max(0, dur - 0.12));
+      } catch { }
+      return Math.max(0, target);
+    }
+
+    function _wake(vn, s, hard, reason = "foreground-freeze") {
+      const t = now();
+      const target = _targetForWake(vn, s, hard);
+      if (!isFinite(target) || target < 0.01 || _nearEnd(vn, target)) return;
+      const canFlush = canDoCompositorFlush();
+      if (!canFlush && !hard) return;
+      if (!_canKick(t, hard)) return;
+      if (canFlush || hard) {
+        try { recordMicroSeek(); } catch { }
+        state._isMicroSeek = true;
+        state.bgSilentTimeSyncing = true;
+        try { DONTMAKEITDOUBLEPLAY.resetAll(); } catch { }
+        if (hard) {
+          state.isProgrammaticVideoPause = true;
+          try { vn.pause(); } catch { }
+        }
+        setTimeout(() => {
+          try {
+            const live = getVideoNode() || vn;
+            if (!live || !state.intendedPlaying || state.endedNaturally || state.seeking || state.seekBuffering) return;
+            try { live.currentTime = target; } catch { }
+            try { if (videoEl && videoEl !== live) videoEl.currentTime = target; } catch { }
+            state.isProgrammaticVideoPause = false;
+            const p = execProgrammaticVideoPlay({ force: true, minGapMs: 0, noAudioStart: true });
+            if (p && typeof p.catch === "function") p.catch(() => { });
+            if (coupledMode && audio && audio.paused && !shouldBlockNewAudioStart()) {
+              try { safeSetAudioTime(target); } catch { }
+              execProgrammaticAudioPlay({ squelchMs: 120, force: true, minGapMs: 0 }).catch(() => { });
+            }
+          } finally {
+            setTimeout(() => {
+              state._isMicroSeek = false;
+              state.bgSilentTimeSyncing = false;
+              state.isProgrammaticVideoPause = false;
+            }, hard ? 260 : 160);
+          }
+        }, hard ? 35 : 0);
+        try { VideoCompositorFlushManager.arm(); } catch { }
+        try { PlayResumeFrameVerifier.arm(); } catch { }
+        try { setFastSync(hard ? 1400 : 900); } catch { }
+        try { scheduleSync(hard ? 80 : 0); } catch { }
+      }
+    }
+
+    function _tick() {
+      _timer = null;
+      if (!_eligible()) {
+        _resetSamples();
+        _schedule(IDLE_MS);
+        return;
+      }
+      const vn = getVideoNode();
+      if (!vn) {
+        _resetSamples();
+        _schedule(IDLE_MS);
+        return;
+      }
+      const t = now();
+      const s = _sample(vn);
+      const firstSample = !_lastSampleAt || _lastVt < 0;
+      if (firstSample) {
+        _markHealthy(s, t);
+        _schedule(SAMPLE_MS);
+        return;
+      }
+      const elapsed = Math.max(1, t - _lastSampleAt);
+      const frameUsable = isFinite(s.fc) && isFinite(_lastFrameCount) && (s.fc > 0 || _lastFrameCount > 0);
+      const framesAdvanced = frameUsable && s.fc > _lastFrameCount + 0.5;
+      const playbackRate = (() => {
+        try {
+          const rate = Number(vn.playbackRate) || Number(video.playbackRate()) || 1;
+          return Math.max(0.05, Math.min(4, rate));
+        } catch { return 1; }
+      })();
+      const minTimeAdvance = Math.max(0.012, Math.min(0.14, (elapsed / 1000) * playbackRate * 0.16));
+      const timeAdvanced = Math.abs(s.vt - _lastVt) > minTimeAdvance;
+      const healthy = frameUsable ? framesAdvanced : timeAdvanced;
+      if (healthy) {
+        _markHealthy(s, t);
+        _schedule(SAMPLE_MS);
+        return;
+      }
+      _lastVt = s.vt;
+      _lastFrameCount = s.fc;
+      _lastSampleAt = t;
+      if (s.rs < HAVE_CURRENT_DATA && s.buffer <= 0.03) {
+        _frozenSince = 0;
+        _schedule(SAMPLE_MS);
+        return;
+      }
+      if (!_frozenSince) _frozenSince = t;
+      const frozenFor = t - _frozenSince;
+      if (frozenFor >= CONFIRM_MS) {
+        const hard = frozenFor >= HARD_MS || _kickCount >= 2;
+        _wake(vn, s, hard, hard ? "foreground-freeze-hard" : "foreground-freeze-soft");
+      }
+      _schedule(frozenFor >= CONFIRM_MS ? Math.max(350, SAMPLE_MS * 0.75) : SAMPLE_MS);
+    }
+
+    function _schedule(delay = SAMPLE_MS) {
+      if (_timer) return;
+      _timer = setTimeout(_tick, Math.max(250, Number(delay) || SAMPLE_MS));
+    }
+
+    function start() {
+      _schedule(SAMPLE_MS);
+    }
+
+    function stop() {
+      if (_timer) {
+        clearTimeout(_timer);
+        _timer = null;
+      }
+      _resetSamples();
+    }
+
+    function reset() {
+      _resetSamples();
+      _lastKickAt = 0;
+      _kickCount = 0;
+      _kickWindowStart = 0;
     }
 
     return { start, stop, reset };
@@ -12231,6 +12444,12 @@ function beginSmoothForegroundReturn(reason = "", opts = {}) {
   try { if (vn.preload !== "auto") vn.preload = "auto"; } catch { }
   try { if (Number(vn.networkState) === 0 && typeof vn.load === "function") vn.load(); } catch { }
   try { keepMediaSessionVisible(reason || "smooth-return", true); } catch { }
+  try { armFreshForegroundVideoFirst(Number(vn.currentTime) || 0, duration + 900); } catch { }
+  try {
+    MakeVideoNotFreezeAfterPlaybackAfterAltTabHapenns.resetKickCooldown();
+    MakeVideoNotFreezeAfterPlaybackAfterAltTabHapenns.start();
+  } catch { }
+  try { VideoCompositorFlushManager.arm(); } catch { }
 
   let cleanupEvents = null;
   let returnFinished = false;
@@ -12262,6 +12481,16 @@ function beginSmoothForegroundReturn(reason = "", opts = {}) {
       clearBackgroundTimelineAnchor();
       state.bgResumeInFlight = false;
       try { VideoCompositorFlushManager.arm(); } catch { }
+    } else if (document.visibilityState === "visible" && state.intendedPlaying &&
+      !state.endedNaturally && !userPauseLockActive() && !mediaSessionForcedPauseActive()) {
+      try {
+        MakeVideoNotFreezeAfterPlaybackAfterAltTabHapenns.reset();
+        MakeVideoNotFreezeAfterPlaybackAfterAltTabHapenns.onTabReturn();
+        MakeVideoNotFreezeAfterPlaybackAfterAltTabHapenns.start();
+      } catch { }
+      try { VideoCompositorFlushManager.arm(); } catch { }
+      try { scheduleNoHoverPlaybackKick(`smooth-return-${label || "fallback"}`); } catch { }
+      try { scheduleBufferReadyPlaybackKick(`smooth-return-${label || "fallback"}`, { immediate: true, force: true }); } catch { }
     }
     setFastSync(ok ? 900 : 600);
     scheduleSync(ok ? 160 : 220);
@@ -12270,22 +12499,60 @@ function beginSmoothForegroundReturn(reason = "", opts = {}) {
   const waitForPresentedFrame = (label) => {
     if (serial !== state.smoothForegroundReturnSerial) return;
     let frameSettled = false;
-    const settle = () => {
+    let frameChecks = 0;
+    const frameBase = getVideoPresentedFrameCount(vn);
+    const vtBase = (() => { try { return Number(vn.currentTime) || 0; } catch { return 0; } })();
+    const frameLooksAdvanced = () => {
+      try {
+        const fc = getVideoPresentedFrameCount(vn);
+        if (isFinite(frameBase) && isFinite(fc) && fc > frameBase + 0.5) return true;
+        if (!isFinite(frameBase)) {
+          const vtNow = Number(vn.currentTime) || 0;
+          if (vtNow > vtBase + 0.035 && Number(vn.readyState || 0) >= HAVE_CURRENT_DATA) return true;
+        }
+      } catch { }
+      return false;
+    };
+    const settle = (confirmed = false) => {
       if (returnFinished || serial !== state.smoothForegroundReturnSerial) return;
       if (frameSettled) return;
+      if (!confirmed && !frameLooksAdvanced()) return;
       frameSettled = true;
       finish(true, label);
     };
+    const retryFrame = () => {
+      if (returnFinished || serial !== state.smoothForegroundReturnSerial) return;
+      if (frameLooksAdvanced()) {
+        settle(true);
+        return;
+      }
+      if (now() >= deadline || frameChecks >= 6) {
+        finish(false, `${label || "smooth-return"}-no-frame`);
+        return;
+      }
+      frameChecks++;
+      try { VideoCompositorFlushManager.arm(); } catch { }
+      const delay = perfProfile.lowEnd ? Math.min(260, 90 + frameChecks * 35) : Math.min(180, 55 + frameChecks * 22);
+      try { if (state.smoothForegroundReturnFrameTimer) clearTimeout(state.smoothForegroundReturnFrameTimer); } catch { }
+      state.smoothForegroundReturnFrameTimer = setTimeout(() => {
+        if (returnFinished || serial !== state.smoothForegroundReturnSerial) return;
+        if (frameLooksAdvanced()) {
+          settle(true);
+          return;
+        }
+        tryReturn(`${label || "smooth-return"}-frame-retry`, frameChecks);
+      }, delay);
+    };
     try {
       if (typeof vn.requestVideoFrameCallback === "function") {
-        vn.requestVideoFrameCallback(() => settle());
+        vn.requestVideoFrameCallback(() => settle(true));
         try { if (state.smoothForegroundReturnFrameTimer) clearTimeout(state.smoothForegroundReturnFrameTimer); } catch { }
-        state.smoothForegroundReturnFrameTimer = setTimeout(settle, perfProfile.lowEnd ? 180 : 110);
+        state.smoothForegroundReturnFrameTimer = setTimeout(retryFrame, perfProfile.lowEnd ? 220 : 150);
         return;
       }
     } catch { }
     try { if (state.smoothForegroundReturnFrameTimer) clearTimeout(state.smoothForegroundReturnFrameTimer); } catch { }
-    state.smoothForegroundReturnFrameTimer = setTimeout(settle, perfProfile.lowEnd ? 130 : 80);
+    state.smoothForegroundReturnFrameTimer = setTimeout(retryFrame, perfProfile.lowEnd ? 160 : 110);
   };
 
   const tryReturn = (label = "smooth-return", attempt = 0) => {
@@ -19316,6 +19583,7 @@ function bindCommonMediaEvents() {
           try { MakeSureAudioOrVideoDoesntPauseUnlessUserReallyWantsTo.start(); } catch { }
           try { MakeVideoNotFreezeAfterPlaybackAfterAltTabHapens.start(); } catch { }
           try { NuclearFreezeWatchdog.reset(); NuclearFreezeWatchdog.start(); } catch { }
+          try { ForegroundFreezeSentinel.reset(); ForegroundFreezeSentinel.start(); } catch { }
           {
             const _prfvNow = now();
             const _prfvGapMs = _prevPlayingAt > 0 ? (_prfvNow - _prevPlayingAt) : Infinity;
@@ -19767,6 +20035,7 @@ function bindCommonMediaEvents() {
         if (!getVideoPaused() || shouldUseAggressiveForegroundMonitoring()) {
           MakeVideoNotFreezeAfterPlaybackAfterAltTabHapens.start();
         }
+        ForegroundFreezeSentinel.start();
       } catch { }
       if (!state.firstPlayCommitted && !state.startupKickInFlight) {
         state.firstPlayCommitted = true;
@@ -20971,10 +21240,32 @@ function tabReturnPlaybackAlreadyHealthy() {
   if (!vn || vn.paused) return false;
   const vrs = Number(vn.readyState || 0);
   const progressed = hasPlaybackProgressFromBackground(0.035);
+  const visibleFrameGuardActive =
+  document.visibilityState === "visible" &&
+  now() < Number(state.freshForegroundVideoFirstUntil || 0);
+  if (visibleFrameGuardActive &&
+    !foregroundVideoMadeVisibleProgress(Number(state.freshForegroundVideoFirstBaseVT), 0.035) &&
+    !VideoCompositorFlushManager.isFrameRecent(850)) return false;
   if (vrs < HAVE_CURRENT_DATA && !progressed) return false;
   if (state.strictBufferHold) return false;
   if ((state.videoWaiting || state.videoStallAudioPaused) && vrs < HAVE_FUTURE_DATA) return false;
   if (coupledMode && (!audio || audio.paused)) return false;
+  return true;
+}
+
+function armTabReturnVisibleFrameGuard(reason = "", ms = 3000) {
+  if (document.visibilityState !== "visible") return false;
+  if (!state.intendedPlaying || state.endedNaturally || state.restarting) return false;
+  if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
+  const vn = getVideoNode();
+  if (!vn) return false;
+  const vt = (() => { try { return Number(vn.currentTime) || Number(video.currentTime()) || 0; } catch { return 0; } })();
+  armFreshForegroundVideoFirst(vt, Math.max(1200, Number(ms) || 0));
+  try { VideoCompositorFlushManager.arm(); } catch { }
+  try {
+    MakeVideoNotFreezeAfterPlaybackAfterAltTabHapenns.resetKickCooldown();
+    MakeVideoNotFreezeAfterPlaybackAfterAltTabHapenns.start();
+  } catch { }
   return true;
 }
 
@@ -21060,6 +21351,7 @@ function startBringBackRetry() {
   if (!state.intendedPlaying && !state.resumeOnVisible &&
     !(wantsStartupAutoplay() && !state.firstPlayCommitted)) return;
   armSeamlessReturnWindow("bbtab", 2600);
+  try { armTabReturnVisibleFrameGuard("bbtab", 3200); } catch { }
   try { preAlignForSeamlessReturn("bbtab-start"); } catch { }
   if (tabReturnPlaybackAlreadyHealthy()) {
     settleHealthyTabReturn("bbtab-start");
@@ -21081,6 +21373,9 @@ function startBringBackRetry() {
     if (getVideoPaused()) return false;
     const vrs = getVideoReadyState();
     const progressed = hasPlaybackProgressFromBackground(0.035);
+    if (now() < Number(state.freshForegroundVideoFirstUntil || 0) &&
+      !foregroundVideoMadeVisibleProgress(Number(state.freshForegroundVideoFirstBaseVT), 0.035) &&
+      !VideoCompositorFlushManager.isFrameRecent(850)) return false;
     if (vrs < HAVE_CURRENT_DATA && !progressed) return false;
     if (_returnNeedsForegroundResume() && !progressed && vrs < HAVE_FUTURE_DATA) return false;
     return true;
@@ -21916,6 +22211,7 @@ function cleanupPlaybackRuntimeResources(reason = "") {
   try { MakeSureAudioIsNotCuttingOrWeird.stop(); } catch { }
   try { MakeSureAudioOrVideoDoesntPauseUnlessUserReallyWantsTo.stop(); } catch { }
   try { NuclearFreezeWatchdog.stop(); } catch { }
+  try { ForegroundFreezeSentinel.stop(); } catch { }
   try { stopBufferMonitor(); } catch { }
   try { NotMakePlayBackFixingNoticable.abort(); } catch { }
   try { MakeVideoNotFreezeAfterPlaybackAfterAltTabHapenns.destroy(); } catch { }
@@ -21951,6 +22247,7 @@ function setupVisibilityLifecycle() {
       if (!platform.useBgControllerRetry) return;
       armSeamlessReturnWindow("resume", 2400);
       try { exitHiddenAudioExclusiveMode("resume"); } catch { }
+      try { armTabReturnVisibleFrameGuard("resume", 3200); } catch { }
       let smoothReturnHandled = smoothForegroundReturnActive(200);
       try { smoothReturnHandled = beginSmoothForegroundReturn("resume", { force: smoothReturnHandled }) || smoothReturnHandled; } catch { }
       try { if (!smoothReturnHandled) preAlignForSeamlessReturn("resume"); } catch { }
@@ -21970,6 +22267,7 @@ function setupVisibilityLifecycle() {
         state.lastVisibleReturnHandledAt = state.lastBgReturnAt;
         armSeamlessReturnWindow("pageshow", 2600);
         try { exitHiddenAudioExclusiveMode("pageshow"); } catch { }
+        try { armTabReturnVisibleFrameGuard("pageshow", 3400); } catch { }
         let smoothReturnHandled = smoothForegroundReturnActive(200);
         try { smoothReturnHandled = beginSmoothForegroundReturn("pageshow", { force: smoothReturnHandled }) || smoothReturnHandled; } catch { }
         try { if (!smoothReturnHandled) preAlignForSeamlessReturn("pageshow"); } catch { }
@@ -22034,6 +22332,7 @@ function setupVisibilityLifecycle() {
       clearHiddenVideoBootstrap();
       armSeamlessReturnWindow("visibility-return", 2600);
       try { exitHiddenAudioExclusiveMode("visibility-return"); } catch { }
+      try { armTabReturnVisibleFrameGuard("visibility-return", 3400); } catch { }
       let smoothReturnHandled = smoothForegroundReturnActive(200);
       try { smoothReturnHandled = beginSmoothForegroundReturn("visibility-return", { force: smoothReturnHandled }) || smoothReturnHandled; } catch { }
       try { if (!smoothReturnHandled) preAlignForSeamlessReturn("visibility-return"); } catch { }
@@ -22054,16 +22353,7 @@ function setupVisibilityLifecycle() {
           state.audioEventsSquelchedUntil = 0;
         }
 
-        const _vcAlreadyHealthy =
-        state.intendedPlaying &&
-        _vcVNode &&
-        !_vcVNode.paused &&
-        (!coupledMode || (audio && !audio.paused)) &&
-        _vcRS >= HAVE_CURRENT_DATA &&
-        !state.seeking &&
-        !state.seekBuffering &&
-        !state.strictBufferHold &&
-        !state.videoWaiting;
+        const _vcAlreadyHealthy = tabReturnPlaybackAlreadyHealthy();
         if (_vcAlreadyHealthy && !smoothReturnHandled) {
           settleHealthyTabReturn("visibility-return");
         } else if (!smoothReturnHandled) {
@@ -22308,22 +22598,14 @@ function setupVisibilityLifecycle() {
     }
     armSeamlessReturnWindow("focus", 2200);
     try { exitHiddenAudioExclusiveMode("focus"); } catch { }
+    try { armTabReturnVisibleFrameGuard("focus", 3000); } catch { }
     let smoothReturnHandled = smoothForegroundReturnActive(200);
     try { smoothReturnHandled = beginSmoothForegroundReturn("focus", { force: smoothReturnHandled }) || smoothReturnHandled; } catch { }
     try { if (!smoothReturnHandled) preAlignForSeamlessReturn("focus"); } catch { }
     if (smoothReturnHandled) quietSmoothForegroundReturnVisuals(1500);
 
     const _recentVisibilityReturn = (_focusTs - (state.lastVisibleReturnHandledAt || 0)) < 1600;
-    const _focusPlaybackHealthy =
-    state.intendedPlaying &&
-    _focusVNode &&
-    !_focusVNode.paused &&
-    _focusVRS >= HAVE_CURRENT_DATA &&
-    (!coupledMode || (audio && !audio.paused)) &&
-    !state.seeking &&
-    !state.seekBuffering &&
-    !state.strictBufferHold &&
-    !state.videoWaiting;
+    const _focusPlaybackHealthy = tabReturnPlaybackAlreadyHealthy();
     if (!_recentVisibilityReturn) {
       VisibilityGuard.onTabShow();
       BackgroundPlaybackManager.onBecomeForeground();
@@ -22677,6 +22959,7 @@ setupVisibilityLifecycle();
 setupMediaErrorHandlers();
 setupHeartbeat();
 startBufferMonitor();
+try { ForegroundFreezeSentinel.start(); } catch { }
 
 if (coupledMode) {
   try {
@@ -23538,11 +23821,22 @@ try {
 
 
 // custom video.js ui for POKE PLAYER 
- const customVideoJsUI = document.createElement("style");
+// if u dont want it, u can use DisableCustomPlayerUI localstroage variable :3
+let shouldUseCustomVideoJsUI = true;
 
-customVideoJsUI.innerHTML = `:root{--poke-accent-1:#ff0045;--poke-accent-2:#ff0e55;--poke-accent-3:#ff1d79;--glass-bg:rgba(20, 20, 20, 0.38);--glass-bg-hover:rgba(20, 20, 20, 0.46);--glass-border:rgba(255, 255, 255, 0.22);--glass-border-strong:rgba(255, 255, 255, 0.30);--glass-shadow:0 10px 30px rgba(0,0,0,0.32), inset 0 0 0 1px rgba(255,255,255,0.10);--scene-contrast-wash:rgba(0,0,0,0.10);--ui-text:rgba(255,255,255,0.96);--ui-text-soft:rgba(255,255,255,0.86);--ui-text-shadow:0 1px 2px rgba(0,0,0,0.65);--ui-text-outline:0 0 1px rgba(0,0,0,0.70);--r-outer:16px;--r-pill:999px;--r-bubble:1em;--btn:38px;--btn-mobile:34px;--bar-bottom:12px;--bar-bottom-mobile:10px}.video-js,.video-js .vjs-poster,.video-js .vjs-poster img,.video-js .vjs-tech{border-radius:var(--r-outer) !important}.vjs-title-bar{background:none !important;border-radius:var(--r-outer);overflow:hidden}.vjs-title-bar-title{font-family:"PokeTube Flex", sans-serif !important;font-stretch:ultra-expanded;font-weight:1000;font-size:1.5em;color:var(--ui-text) !important;text-shadow:var(--ui-text-shadow);-webkit-text-stroke:0.35px rgba(0,0,0,0.35)}.vjs-title-bar-description{width:fit-content;border-radius:var(--r-bubble);padding:1em;font-family:"PokeTube Flex", "poketube flex", sans-serif;font-weight:600;font-stretch:semi-expanded;color:var(--ui-text);text-shadow:var(--ui-text-shadow);filter:drop-shadow(0 8px 22px rgba(0,0,0,0.25));background:linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.06)), linear-gradient(180deg, var(--scene-contrast-wash), var(--scene-contrast-wash)), var(--glass-bg);border:1px solid var(--glass-border);-webkit-backdrop-filter:blur(14px) saturate(170%);backdrop-filter:blur(14px) saturate(170%)}.video-js .vjs-control-bar{bottom:var(--bar-bottom) !important}.vjs-control-bar{background:transparent !important;border:none !important;box-shadow:none !important;display:flex !important;align-items:center !important;gap:2px;padding:6px 10px;border-radius:var(--r-outer);background:linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.05)), linear-gradient(180deg, var(--scene-contrast-wash), var(--scene-contrast-wash)) !important;-webkit-backdrop-filter:blur(12px) saturate(160%);backdrop-filter:blur(12px) saturate(160%);border:1px solid rgba(255,255,255,0.12) !important;box-shadow:0 12px 34px rgba(0,0,0,0.26) !important}.vjs-control-bar .vjs-button{width:var(--btn);height:var(--btn);min-width:var(--btn);border-radius:50%;background:linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.08)), linear-gradient(180deg, var(--scene-contrast-wash), var(--scene-contrast-wash)), var(--glass-bg);-webkit-backdrop-filter:blur(12px) saturate(160%);backdrop-filter:blur(12px) saturate(160%);border:1px solid var(--glass-border);box-shadow:var(--glass-shadow);display:inline-flex;align-items:center;justify-content:center;margin:0 6px;transition:transform 0.12s ease, box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;vertical-align:middle}.vjs-control-bar .vjs-button:hover{background:linear-gradient(180deg, rgba(255,255,255,0.24), rgba(255,255,255,0.12)), linear-gradient(180deg, rgba(0,0,0,0.12), rgba(0,0,0,0.12)), var(--glass-bg-hover);border-color:var(--glass-border-strong);box-shadow:0 12px 32px rgba(0,0,0,0.36), inset 0 0 0 1px rgba(255,255,255,0.16);transform:translateY(-1px)}.vjs-control-bar .vjs-button:active{transform:translateY(0)}.vjs-control-bar .vjs-button:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(255,0,90,0.35), inset 0 0 0 1px rgba(255,255,255,0.20), 0 12px 34px rgba(0,0,0,0.32);border-color:rgba(255,255,255,0.30)}.vjs-control-bar .vjs-icon-placeholder:before{font-size:18px;line-height:var(--btn);color:var(--ui-text);text-shadow:var(--ui-text-shadow);filter:drop-shadow(var(--ui-text-outline))}.vjs-current-time,.vjs-duration,.vjs-remaining-time,.vjs-time-divider{background:transparent;padding:0 8px;border-radius:var(--r-pill);box-shadow:none;margin:0;height:var(--btn);line-height:1;display:inline-flex;align-items:center;color:var(--ui-text-soft) !important;text-shadow:var(--ui-text-shadow)}.vjs-fullscreen-control,.vjs-remaining-time{background-color:transparent !important}.vjs-progress-control{flex:1 1 auto;display:flex !important;align-items:center !important;margin:0 6px;padding:0;height:var(--btn)}.vjs-progress-control .vjs-progress-holder{height:8px !important;border-radius:var(--r-pill) !important;background:transparent !important;border:none;box-shadow:none;position:relative;margin:0;width:100%;overflow:hidden}.vjs-progress-control .vjs-progress-holder::before{content:"";position:absolute;inset:0;border-radius:inherit;background:linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.08)), linear-gradient(180deg, rgba(0,0,0,0.14), rgba(0,0,0,0.14)), rgba(20,20,20,0.34);-webkit-backdrop-filter:blur(12px) saturate(160%);backdrop-filter:blur(12px) saturate(160%);border:1px solid rgba(255,255,255,0.18);box-shadow:0 8px 24px rgba(0,0,0,0.25), inset 0 0 0 1px rgba(255,255,255,0.10);pointer-events:none}.vjs-progress-control .vjs-load-progress,.vjs-progress-control .vjs-play-progress{position:relative;z-index:1;border-radius:inherit !important}.vjs-play-progress,.vjs-progress-control .vjs-play-progress{background-image:linear-gradient(to right, var(--poke-accent-1), var(--poke-accent-2), var(--poke-accent-3)) !important}.vjs-progress-control .vjs-slider-handle{width:14px !important;height:14px !important;border-radius:50% !important;background:rgba(255,255,255,0.95) !important;border:1px solid rgba(255,255,255,0.95);box-shadow:0 8px 20px rgba(0,0,0,0.35), 0 0 0 3px rgba(255,0,90,0.22);top:-4px !important;z-index:2}.vjs-volume-panel{gap:8px;align-items:center !important;padding:0;height:var(--btn)}.vjs-volume-bar{height:6px !important;border-radius:var(--r-pill) !important;background:linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06)), linear-gradient(180deg, rgba(0,0,0,0.18), rgba(0,0,0,0.18)), rgba(18,18,18,0.40) !important;border:1px solid rgba(255,255,255,0.16);box-shadow:0 8px 20px rgba(0,0,0,0.20);position:relative;overflow:hidden}.vjs-volume-level{border-radius:inherit !important;background-image:linear-gradient(to right, var(--poke-accent-1), var(--poke-accent-3)) !important}.vjs-volume-bar .vjs-slider-handle{width:12px !important;height:12px !important;border-radius:50% !important;background:rgba(255,255,255,0.95) !important;border:1px solid rgba(255,255,255,0.95);top:-3px !important;box-shadow:0 6px 16px rgba(0,0,0,0.28), 0 0 0 3px rgba(255,0,90,0.20)}@media (max-width: 640px){.video-js .vjs-control-bar{bottom:var(--bar-bottom-mobile) !important}.vjs-control-bar{gap:8px;padding:6px 8px}.vjs-control-bar .vjs-button{width:var(--btn-mobile);height:var(--btn-mobile);min-width:var(--btn-mobile)}.vjs-control-bar .vjs-icon-placeholder:before{font-size:16px;line-height:var(--btn-mobile)}.vjs-current-time,.vjs-duration,.vjs-remaining-time,.vjs-time-divider{height:var(--btn-mobile)}.vjs-progress-control{height:var(--btn-mobile)}.vjs-progress-control .vjs-slider-handle{width:12px !important;height:12px !important;top:-3px !important}}@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))){.vjs-control-bar,.vjs-control-bar .vjs-button,.vjs-progress-control .vjs-progress-holder::before,.vjs-title-bar-description,.vjs-volume-bar{-webkit-backdrop-filter:none !important;backdrop-filter:none !important;background:rgba(18,18,18,0.72) !important;border-color:rgba(255,255,255,0.18) !important}}.vjs-control-bar .vjs-button.vjs-player-time-toggle,.vjs-control-bar .vjs-player-time-toggle,.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle,.video-js .vjs-control-bar .vjs-player-time-toggle{width:auto !important;min-width:0 !important;height:var(--btn) !important;line-height:1 !important;padding:0 8px !important;margin:0 !important;border:0 !important;border-radius:0 !important;background:none !important;background-color:transparent !important;background-image:none !important;box-shadow:none !important;-webkit-backdrop-filter:none !important;backdrop-filter:none !important;display:inline-flex !important;align-items:center !important;justify-content:center !important;color:var(--ui-text-soft) !important;text-shadow:var(--ui-text-shadow) !important;font-family:"PokeTube Flex", "poketube flex", sans-serif !important;font-weight:600 !important;font-size:1em !important;font-stretch:semi-expanded !important;transform:none !important;transition:color 0.15s ease, opacity 0.15s ease !important}.vjs-control-bar .vjs-button.vjs-player-time-toggle:hover,.vjs-control-bar .vjs-player-time-toggle:hover,.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle:hover,.video-js .vjs-control-bar .vjs-player-time-toggle:hover{border:0 !important;background:none !important;background-color:transparent !important;background-image:none !important;box-shadow:none !important;-webkit-backdrop-filter:none !important;backdrop-filter:none !important;color:var(--ui-text) !important;transform:none !important}.vjs-control-bar .vjs-button.vjs-player-time-toggle:active,.vjs-control-bar .vjs-player-time-toggle:active,.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle:active,.video-js .vjs-control-bar .vjs-player-time-toggle:active{transform:none !important;background:none !important;background-color:transparent !important;background-image:none !important;box-shadow:none !important}.vjs-control-bar .vjs-button.vjs-player-time-toggle:focus-visible,.vjs-control-bar .vjs-player-time-toggle:focus-visible,.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle:focus-visible,.video-js .vjs-control-bar .vjs-player-time-toggle:focus-visible{outline:2px solid rgba(255,255,255,0.45) !important;outline-offset:2px !important;border:0 !important;background:none !important;background-color:transparent !important;background-image:none !important;box-shadow:none !important}.vjs-control-bar .vjs-button.vjs-player-time-toggle .vjs-icon-placeholder,.vjs-control-bar .vjs-player-time-toggle .vjs-icon-placeholder,.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle .vjs-icon-placeholder,.video-js .vjs-control-bar .vjs-player-time-toggle .vjs-icon-placeholder{display:none !important}.vjs-control-bar .vjs-button.vjs-player-time-toggle:before,.vjs-control-bar .vjs-button.vjs-player-time-toggle:after,.vjs-control-bar .vjs-player-time-toggle:before,.vjs-control-bar .vjs-player-time-toggle:after,.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle:before,.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle:after,.video-js .vjs-control-bar .vjs-player-time-toggle:before,.video-js .vjs-control-bar .vjs-player-time-toggle:after{display:none !important;content:none !important}.vjs-control-bar .vjs-button.vjs-player-time-toggle .vjs-control-text,.vjs-control-bar .vjs-player-time-toggle .vjs-control-text,.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle .vjs-control-text,.video-js .vjs-control-bar .vjs-player-time-toggle .vjs-control-text{position:static !important;width:auto !important;height:auto !important;clip:auto !important;clip-path:none !important;overflow:visible !important;white-space:nowrap !important;margin:0 !important;padding:0 !important;border:0 !important;color:inherit !important;font:inherit !important}@media (max-width: 640px){.vjs-control-bar .vjs-button.vjs-player-time-toggle,.vjs-control-bar .vjs-player-time-toggle,.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle,.video-js .vjs-control-bar .vjs-player-time-toggle{height:var(--btn-mobile) !important;padding:0 6px !important;font-size:0.95em !important}}`;
+try {
+  shouldUseCustomVideoJsUI = localStorage.getItem("DisableCustomPlayerUI") === null;
+} catch (error) {
+  shouldUseCustomVideoJsUI = true;
+}
 
-document.head.appendChild(customVideoJsUI);
+if (shouldUseCustomVideoJsUI) {
+  const customVideoJsUI = document.createElement("style");
+
+  customVideoJsUI.innerHTML = `:root{--poke-custom-player-accent-1:#ff0033;--poke-custom-player-accent-2:#ff0a45;--poke-custom-player-accent-3:#ff1d79;--poke-custom-player-radius:16px;--poke-custom-player-text:rgba(255,255,255,.98);--poke-custom-player-text-soft:rgba(255,255,255,.86);--poke-custom-player-track:rgba(255,255,255,.34);--poke-custom-player-loaded:rgba(255,255,255,.48);--poke-custom-player-volume-track:rgba(255,255,255,.18);--poke-custom-player-volume-level:rgba(255,255,255,.98);--poke-custom-player-button-bg:rgba(0,0,0,.48);--poke-custom-player-button-bg-hover:rgba(0,0,0,.64);--poke-custom-player-button-border:rgba(255,255,255,.08);--poke-custom-player-button-border-hover:rgba(255,255,255,.14);--poke-custom-player-button-shadow:0 8px 22px rgba(0,0,0,.34);--poke-custom-player-title-bg:rgba(0,0,0,.58);--poke-custom-player-title-bg-hover:rgba(0,0,0,.7);--poke-custom-player-title-border:rgba(255,255,255,.1);--poke-custom-player-title-border-hover:rgba(255,255,255,.16);--poke-custom-player-title-shadow:0 8px 22px rgba(0,0,0,.34);--poke-custom-player-title-wash:rgba(0,0,0,.1);--poke-custom-player-control-height:92px;--poke-custom-player-control-height-mobile:78px;--poke-custom-player-button-size:42px;--poke-custom-player-button-size-mobile:36px;--poke-custom-player-progress-left:38px;--poke-custom-player-progress-right:38px;--poke-custom-player-progress-top:16px;--poke-custom-player-description-bottom:calc(var(--poke-custom-player-control-height) - var(--poke-custom-player-progress-top) + 10px);--poke-custom-player-description-bottom-mobile:calc(var(--poke-custom-player-control-height-mobile) - var(--poke-custom-player-progress-top) + 8px)}.video-js,.video-js *{font-family:"poketube flex","PokeTube Flex",sans-serif!important}.video-js .vjs-icon-placeholder,.video-js .vjs-icon-placeholder:before,.video-js .vjs-button>.vjs-icon-placeholder,.video-js .vjs-button>.vjs-icon-placeholder:before,.video-js .vjs-big-play-button .vjs-icon-placeholder,.video-js .vjs-big-play-button .vjs-icon-placeholder:before,.video-js [class^="vjs-icon-"],.video-js [class^="vjs-icon-"]:before,.video-js [class*=" vjs-icon-"],.video-js [class*=" vjs-icon-"]:before{font-family:VideoJS!important;font-weight:400!important;font-style:normal!important}.video-js,.video-js .vjs-poster,.video-js .vjs-poster img,.video-js .vjs-tech{border-radius:var(--poke-custom-player-radius)!important}.video-js.vjs-fullscreen,.video-js.vjs-fullscreen .vjs-poster,.video-js.vjs-fullscreen .vjs-poster img,.video-js.vjs-fullscreen .vjs-tech,.video-js.vjs-fullscreen .vjs-control-bar,.video-js:fullscreen,.video-js:fullscreen .vjs-poster,.video-js:fullscreen .vjs-poster img,.video-js:fullscreen .vjs-tech,.video-js:fullscreen .vjs-control-bar,.video-js:-webkit-full-screen,.video-js:-webkit-full-screen .vjs-poster,.video-js:-webkit-full-screen .vjs-poster img,.video-js:-webkit-full-screen .vjs-tech,.video-js:-webkit-full-screen .vjs-control-bar{border-radius:0!important}.video-js{overflow:hidden!important;background:#000!important}.video-js .vjs-title-bar,.video-js .vjs-title-bar.vjs-hidden{position:absolute!important;inset:0!important;z-index:8!important;display:block!important;visibility:visible!important;width:auto!important;height:auto!important;padding:0!important;margin:0!important;background:0 0!important;background-color:transparent!important;background-image:none!important;border:0!important;border-radius:var(--poke-custom-player-radius)!important;box-shadow:none!important;pointer-events:none!important;opacity:1!important;transform:none!important;transition:opacity .24s ease,transform .24s ease,visibility 0s linear 0s!important}.video-js.vjs-fullscreen .vjs-title-bar,.video-js:fullscreen .vjs-title-bar,.video-js:-webkit-full-screen .vjs-title-bar{border-radius:0!important}.video-js.vjs-user-inactive.vjs-playing .vjs-title-bar,.video-js.vjs-user-inactive.vjs-playing .vjs-title-bar.vjs-hidden{opacity:0!important;visibility:hidden!important;transform:translateY(-8px)!important;transition:opacity .24s ease,transform .24s ease,visibility 0s linear .24s!important}.video-js.vjs-user-active .vjs-title-bar,.video-js.vjs-user-active .vjs-title-bar.vjs-hidden,.video-js.vjs-paused .vjs-title-bar,.video-js.vjs-paused .vjs-title-bar.vjs-hidden,.video-js.vjs-ended .vjs-title-bar,.video-js.vjs-ended .vjs-title-bar.vjs-hidden{opacity:1!important;visibility:visible!important;transform:translateY(0)!important;transition:opacity .18s ease,transform .18s ease,visibility 0s linear 0s!important}.video-js .vjs-title-bar-title,.video-js .vjs-title-bar-title.vjs-hidden{position:absolute!important;top:18px!important;left:22px!important;display:block!important;visibility:visible!important;width:fit-content!important;max-width:min(82%,920px)!important;margin:0!important;padding:0!important;background:0 0!important;background-color:transparent!important;background-image:none!important;border:0!important;box-shadow:none!important;color:var(--poke-custom-player-text)!important;font-size:1.5em!important;font-weight:1000!important;font-stretch:ultra-expanded!important;line-height:1.08!important;text-shadow:0 1px 2px rgba(0,0,0,.72)!important;-webkit-text-stroke:.35px rgba(0,0,0,.35)!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;opacity:1!important}.video-js .vjs-title-bar-description,.video-js .vjs-title-bar-description.vjs-hidden{position:absolute!important;right:var(--poke-custom-player-progress-right)!important;bottom:var(--poke-custom-player-description-bottom)!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;visibility:visible!important;width:fit-content!important;max-width:min(56%,680px)!important;min-height:42px!important;margin:0!important;padding:.78em 1.08em!important;border-radius:999px!important;color:var(--poke-custom-player-text)!important;font-size:.95em!important;font-weight:790!important;font-stretch:semi-expanded!important;line-height:1.24!important;text-shadow:0 1px 2px rgba(0,0,0,.86)!important;background:var(--poke-custom-player-title-bg)!important;background-color:var(--poke-custom-player-title-bg)!important;background-image:none!important;border:1px solid var(--poke-custom-player-title-border)!important;box-shadow:var(--poke-custom-player-title-shadow)!important;-webkit-backdrop-filter:blur(12px) saturate(160%)!important;backdrop-filter:blur(12px) saturate(160%)!important;filter:none!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;opacity:1!important;pointer-events:none!important}.video-js .vjs-title-bar-description:hover{background:var(--poke-custom-player-title-bg-hover)!important;background-color:var(--poke-custom-player-title-bg-hover)!important;border-color:var(--poke-custom-player-title-border-hover)!important}.video-js .vjs-control-bar{position:absolute!important;left:0!important;right:0!important;bottom:0!important;width:100%!important;height:var(--poke-custom-player-control-height)!important;display:flex!important;align-items:flex-end!important;gap:8px!important;padding:38px 28px 14px!important;box-sizing:border-box!important;background:0 0!important;background-color:transparent!important;background-image:none!important;border:0!important;border-radius:0 0 var(--poke-custom-player-radius) var(--poke-custom-player-radius)!important;box-shadow:none!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;opacity:1!important;transform:none!important;pointer-events:auto!important}.video-js.vjs-fullscreen .vjs-control-bar,.video-js:fullscreen .vjs-control-bar,.video-js:-webkit-full-screen .vjs-control-bar{border-radius:0!important}.video-js.vjs-user-inactive.vjs-playing .vjs-control-bar{opacity:0!important;transform:translateY(10px)!important;transition:opacity .24s ease,transform .24s ease!important}.video-js.vjs-user-active .vjs-control-bar,.video-js.vjs-paused .vjs-control-bar,.video-js.vjs-ended .vjs-control-bar{opacity:1!important;transform:translateY(0)!important;transition:opacity .18s ease,transform .18s ease!important}.video-js .vjs-control{width:var(--poke-custom-player-button-size)!important;height:var(--poke-custom-player-button-size)!important;min-width:var(--poke-custom-player-button-size)!important;margin:0!important;padding:0!important;border:0!important;border-radius:50%!important;background:0 0!important;background-color:transparent!important;background-image:none!important;box-shadow:none!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;color:var(--poke-custom-player-text)!important;text-shadow:0 1px 2px rgba(0,0,0,.86)!important;transition:background-color .14s ease,transform .12s ease,opacity .14s ease,border-color .14s ease!important}.video-js .vjs-button,.video-js .vjs-picture-in-picture-control,.video-js .vjs-subs-caps-button,.video-js .vjs-audio-button,.video-js .vjs-playback-rate,.video-js .vjs-chapters-button,.video-js .vjs-descriptions-button,.video-js .vjs-captions-button,.video-js .vjs-quality-selector,.video-js .vjs-quality-menu-wrapper,.video-js .vjs-menu-button,.video-js .vjs-fullscreen-control{width:var(--poke-custom-player-button-size)!important;height:var(--poke-custom-player-button-size)!important;min-width:var(--poke-custom-player-button-size)!important;cursor:pointer!important;border-radius:50%!important;background:var(--poke-custom-player-button-bg)!important;background-color:var(--poke-custom-player-button-bg)!important;background-image:none!important;border:1px solid var(--poke-custom-player-button-border)!important;box-shadow:var(--poke-custom-player-button-shadow)!important}.video-js .vjs-button:hover,.video-js .vjs-picture-in-picture-control:hover,.video-js .vjs-subs-caps-button:hover,.video-js .vjs-audio-button:hover,.video-js .vjs-playback-rate:hover,.video-js .vjs-chapters-button:hover,.video-js .vjs-descriptions-button:hover,.video-js .vjs-captions-button:hover,.video-js .vjs-quality-selector:hover,.video-js .vjs-quality-menu-wrapper:hover,.video-js .vjs-menu-button:hover,.video-js .vjs-fullscreen-control:hover{background:var(--poke-custom-player-button-bg-hover)!important;background-color:var(--poke-custom-player-button-bg-hover)!important;background-image:none!important;border-color:var(--poke-custom-player-button-border-hover)!important}.video-js .vjs-button:active{transform:scale(.94)!important}.video-js .vjs-button:focus,.video-js .vjs-button:focus-visible{outline:0!important}.video-js .vjs-button:focus-visible{background:var(--poke-custom-player-button-bg-hover)!important;background-color:var(--poke-custom-player-button-bg-hover)!important;box-shadow:0 0 0 3px rgba(255,0,70,.24),var(--poke-custom-player-button-shadow)!important}.video-js .vjs-control .vjs-icon-placeholder:before,.video-js .vjs-button>.vjs-icon-placeholder:before{position:static!important;display:block!important;width:100%!important;height:100%!important;font-family:VideoJS!important;font-weight:400!important;font-style:normal!important;font-size:24px!important;line-height:var(--poke-custom-player-button-size)!important;color:var(--poke-custom-player-text)!important;text-align:center!important;text-shadow:0 1px 2px rgba(0,0,0,.9)!important}.video-js .vjs-play-control{order:10!important;margin-right:6px!important}.video-js .vjs-play-control .vjs-icon-placeholder:before{font-family:VideoJS!important;font-size:28px!important}.video-js .vjs-volume-panel{order:20!important;width:auto!important;min-width:var(--poke-custom-player-button-size)!important;height:var(--poke-custom-player-button-size)!important;display:flex!important;align-items:center!important;gap:0!important;margin:0!important;padding:0!important;border-radius:999px!important;background:0 0!important;background-color:transparent!important;background-image:none!important;border:0!important;box-shadow:none!important;overflow:visible!important}.video-js .vjs-volume-panel:hover,.video-js .vjs-volume-panel:focus-within{background:var(--poke-custom-player-button-bg)!important;background-color:var(--poke-custom-player-button-bg)!important;border:1px solid var(--poke-custom-player-button-border)!important;box-shadow:var(--poke-custom-player-button-shadow)!important}.video-js .vjs-volume-panel .vjs-mute-control{width:var(--poke-custom-player-button-size)!important;height:var(--poke-custom-player-button-size)!important;min-width:var(--poke-custom-player-button-size)!important;margin:0!important;border-radius:50%!important;background:var(--poke-custom-player-button-bg)!important;background-color:var(--poke-custom-player-button-bg)!important;background-image:none!important;border:1px solid var(--poke-custom-player-button-border)!important;box-shadow:var(--poke-custom-player-button-shadow)!important}.video-js .vjs-volume-panel:hover .vjs-mute-control,.video-js .vjs-volume-panel:focus-within .vjs-mute-control{background:0 0!important;background-color:transparent!important;border-color:transparent!important;box-shadow:none!important}.video-js .vjs-volume-control,.video-js .vjs-volume-control.vjs-control,.video-js .vjs-volume-horizontal{width:0!important;min-width:0!important;height:var(--poke-custom-player-button-size)!important;opacity:0!important;overflow:hidden!important;display:flex!important;align-items:center!important;margin:0!important;padding:0!important;border-radius:999px!important;background:0 0!important;background-color:transparent!important;background-image:none!important;border:0!important;box-shadow:none!important;transition:width .18s ease,min-width .18s ease,opacity .18s ease!important}.video-js .vjs-volume-panel:hover .vjs-volume-control,.video-js .vjs-volume-panel:focus-within .vjs-volume-control,.video-js .vjs-volume-panel:hover .vjs-volume-control.vjs-control,.video-js .vjs-volume-panel:focus-within .vjs-volume-control.vjs-control,.video-js .vjs-volume-panel:hover .vjs-volume-horizontal,.video-js .vjs-volume-panel:focus-within .vjs-volume-horizontal{width:82px!important;min-width:82px!important;opacity:1!important}.video-js .vjs-volume-control .vjs-mouse-display,.video-js .vjs-volume-control .vjs-time-tooltip,.video-js .vjs-volume-control .vjs-volume-tooltip,.video-js .vjs-volume-control.vjs-control .vjs-mouse-display,.video-js .vjs-volume-control.vjs-control .vjs-time-tooltip,.video-js .vjs-volume-control.vjs-control .vjs-volume-tooltip,.video-js .vjs-volume-horizontal .vjs-mouse-display,.video-js .vjs-volume-horizontal .vjs-time-tooltip,.video-js .vjs-volume-horizontal .vjs-volume-tooltip,.video-js .vjs-volume-bar .vjs-mouse-display,.video-js .vjs-volume-bar .vjs-time-tooltip,.video-js .vjs-volume-bar .vjs-volume-tooltip,.video-js .vjs-volume-bar.vjs-slider .vjs-mouse-display,.video-js .vjs-volume-bar.vjs-slider .vjs-time-tooltip,.video-js .vjs-volume-bar.vjs-slider .vjs-volume-tooltip,.video-js .vjs-volume-bar.vjs-slider-horizontal .vjs-mouse-display,.video-js .vjs-volume-bar.vjs-slider-horizontal .vjs-time-tooltip,.video-js .vjs-volume-bar.vjs-slider-horizontal .vjs-volume-tooltip,.video-js .vjs-volume-control .vjs-slider-bar .vjs-mouse-display,.video-js .vjs-volume-control .vjs-slider-bar .vjs-time-tooltip,.video-js .vjs-volume-control .vjs-slider-bar .vjs-volume-tooltip,.video-js .vjs-volume-panel .vjs-mouse-display,.video-js .vjs-volume-panel .vjs-time-tooltip,.video-js .vjs-volume-panel .vjs-volume-tooltip{display:none!important;visibility:hidden!important;opacity:0!important;width:0!important;height:0!important;pointer-events:none!important}.video-js .vjs-volume-bar,.video-js .vjs-volume-bar.vjs-slider,.video-js .vjs-volume-bar.vjs-slider-horizontal{position:relative!important;width:66px!important;height:5px!important;margin:0 12px 0 2px!important;border-radius:999px!important;background:var(--poke-custom-player-volume-track)!important;background-color:var(--poke-custom-player-volume-track)!important;background-image:none!important;border:0!important;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06),0 1px 5px rgba(0,0,0,.42)!important;overflow:visible!important}.video-js .vjs-volume-bar:before,.video-js .vjs-volume-bar:after,.video-js .vjs-volume-bar.vjs-slider:before,.video-js .vjs-volume-bar.vjs-slider:after{display:none!important;content:none!important}.video-js .vjs-volume-level,.video-js .vjs-volume-bar .vjs-volume-level,.video-js .vjs-volume-bar.vjs-slider-horizontal .vjs-volume-level{position:absolute!important;display:block!important;visibility:visible!important;opacity:1!important;left:0!important;top:0!important;bottom:auto!important;height:5px!important;min-width:3px!important;border-radius:999px!important;background:var(--poke-custom-player-volume-level)!important;background-color:var(--poke-custom-player-volume-level)!important;background-image:none!important;box-shadow:0 0 0 1px rgba(255,255,255,.1),0 1px 5px rgba(0,0,0,.42)!important;z-index:2!important;overflow:visible!important}.video-js .vjs-volume-level:before,.video-js .vjs-volume-bar .vjs-volume-level:before,.video-js .vjs-volume-bar.vjs-slider-horizontal .vjs-volume-level:before{content:""!important;position:absolute!important;display:block!important;visibility:visible!important;opacity:1!important;right:-7px!important;top:50%!important;width:14px!important;height:14px!important;margin-top:-7px!important;border-radius:50%!important;background:var(--poke-custom-player-volume-level)!important;background-color:var(--poke-custom-player-volume-level)!important;background-image:none!important;box-shadow:0 0 0 1px rgba(255,255,255,.2),0 2px 6px rgba(0,0,0,.55)!important;z-index:3!important}.video-js .vjs-volume-level .vjs-control-text,.video-js .vjs-volume-bar .vjs-volume-level .vjs-control-text{display:none!important}.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle,.video-js .vjs-control-bar .vjs-player-time-toggle{order:30!important;width:auto!important;min-width:0!important;height:var(--poke-custom-player-button-size)!important;padding:0 13px!important;margin:0 7px 0 -1px!important;border:1px solid var(--poke-custom-player-button-border)!important;border-radius:999px!important;background:var(--poke-custom-player-button-bg)!important;background-color:var(--poke-custom-player-button-bg)!important;background-image:none!important;box-shadow:var(--poke-custom-player-button-shadow)!important;color:var(--poke-custom-player-text)!important;font-family:"poketube flex","PokeTube Flex",sans-serif!important;font-size:14px!important;font-weight:700!important;line-height:1!important;text-shadow:0 1px 2px rgba(0,0,0,.9)!important;transform:none!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;white-space:nowrap!important}.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle:hover,.video-js .vjs-control-bar .vjs-player-time-toggle:hover{background:var(--poke-custom-player-button-bg-hover)!important;background-color:var(--poke-custom-player-button-bg-hover)!important;border-color:var(--poke-custom-player-button-border-hover)!important;color:var(--poke-custom-player-text)!important;transform:none!important}.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle:active,.video-js .vjs-control-bar .vjs-player-time-toggle:active{transform:scale(.98)!important}.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle .vjs-icon-placeholder,.video-js .vjs-control-bar .vjs-player-time-toggle .vjs-icon-placeholder{display:none!important}.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle:before,.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle:after,.video-js .vjs-control-bar .vjs-player-time-toggle:before,.video-js .vjs-control-bar .vjs-player-time-toggle:after{display:none!important;content:none!important}.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle .vjs-control-text,.video-js .vjs-control-bar .vjs-player-time-toggle .vjs-control-text{position:static!important;width:auto!important;height:auto!important;clip:auto!important;clip-path:none!important;overflow:visible!important;white-space:nowrap!important;margin:0!important;padding:0!important;border:0!important;color:inherit!important;font:inherit!important}.video-js .vjs-progress-control{position:absolute!important;left:var(--poke-custom-player-progress-left)!important;right:var(--poke-custom-player-progress-right)!important;top:var(--poke-custom-player-progress-top)!important;width:auto!important;height:18px!important;min-width:0!important;display:flex!important;align-items:center!important;margin:0!important;padding:0!important;cursor:pointer!important;touch-action:none!important;z-index:5!important;background:0 0!important;background-color:transparent!important;background-image:none!important;border:0!important;box-shadow:none!important}.video-js .vjs-progress-control:hover{height:22px!important;top:calc(var(--poke-custom-player-progress-top) - 2px)!important}.video-js .vjs-progress-control .vjs-progress-holder{width:100%!important;height:4px!important;margin:0!important;border-radius:999px!important;background:var(--poke-custom-player-track)!important;background-color:var(--poke-custom-player-track)!important;background-image:none!important;border:0!important;box-shadow:0 1px 4px rgba(0,0,0,.34)!important;overflow:visible!important;transition:height .12s ease!important}.video-js .vjs-progress-control:hover .vjs-progress-holder{height:6px!important}.video-js .vjs-progress-control .vjs-progress-holder:before,.video-js .vjs-progress-control .vjs-progress-holder:after{display:none!important;content:none!important}.video-js .vjs-load-progress{height:100%!important;border-radius:999px!important;background:var(--poke-custom-player-loaded)!important;background-color:var(--poke-custom-player-loaded)!important;background-image:none!important}.video-js .vjs-load-progress div{height:100%!important;border-radius:999px!important;background:var(--poke-custom-player-loaded)!important;background-color:var(--poke-custom-player-loaded)!important;background-image:none!important}.video-js .vjs-play-progress{height:100%!important;border-radius:999px!important;background:linear-gradient(to right,var(--poke-custom-player-accent-1),var(--poke-custom-player-accent-2),var(--poke-custom-player-accent-3))!important}.video-js .vjs-play-progress:before{content:""!important;position:absolute!important;right:-6px!important;top:50%!important;width:13px!important;height:13px!important;margin-top:-6.5px!important;border-radius:50%!important;background:var(--poke-custom-player-accent-2)!important;box-shadow:0 0 0 1px rgba(255,0,51,.2),0 1px 6px rgba(0,0,0,.45)!important;opacity:0!important;transform:scale(.72)!important;transition:opacity .12s ease,transform .12s ease!important}.video-js .vjs-progress-control:hover .vjs-play-progress:before,.video-js.vjs-seeking .vjs-play-progress:before{opacity:1!important;transform:scale(1)!important}.video-js .vjs-progress-control .vjs-slider-handle{display:none!important}.video-js .vjs-progress-control .vjs-mouse-display,.video-js .vjs-progress-control .vjs-time-tooltip,.video-js .vjs-play-progress .vjs-time-tooltip{font-family:"poketube flex","PokeTube Flex",sans-serif!important}.video-js .vjs-progress-control .vjs-mouse-display .vjs-time-tooltip,.video-js .vjs-play-progress .vjs-time-tooltip{bottom:22px!important;padding:5px 8px!important;border-radius:4px!important;background:rgba(20,20,20,.96)!important;color:var(--poke-custom-player-text)!important;font-family:"poketube flex","PokeTube Flex",sans-serif!important;font-size:12px!important;font-weight:700!important;line-height:1!important;text-shadow:none!important}.video-js .vjs-control-text,.video-js .vjs-current-time,.video-js .vjs-duration,.video-js .vjs-time-divider,.video-js .vjs-current-time-display,.video-js .vjs-duration-display,.video-js .vjs-remaining-time-display{font-family:"poketube flex","PokeTube Flex",sans-serif!important}.video-js .vjs-current-time,.video-js .vjs-duration,.video-js .vjs-time-divider,.video-js .vjs-current-time-display,.video-js .vjs-duration-display{display:none!important}.video-js .vjs-remaining-time{display:none!important}.video-js .vjs-time-control{width:auto!important;min-width:0!important;height:var(--poke-custom-player-button-size)!important;align-items:center!important;justify-content:center!important;padding:0!important;margin:0!important;background:0 0!important;background-color:transparent!important;background-image:none!important;border:0!important;border-radius:0!important;box-shadow:none!important;color:var(--poke-custom-player-text)!important;font-family:"poketube flex","PokeTube Flex",sans-serif!important;font-size:14px!important;font-weight:700!important;line-height:1!important;text-shadow:0 1px 2px rgba(0,0,0,.9)!important}.video-js .vjs-spacer{order:800!important;display:block!important;flex:1 1 auto!important}.video-js .vjs-picture-in-picture-control,.video-js .vjs-subs-caps-button,.video-js .vjs-audio-button,.video-js .vjs-playback-rate,.video-js .vjs-chapters-button,.video-js .vjs-descriptions-button,.video-js .vjs-captions-button,.video-js .vjs-quality-selector,.video-js .vjs-quality-menu-wrapper,.video-js .vjs-menu-button{order:900!important}.video-js .vjs-menu-button-popup .vjs-menu{bottom:48px!important}.video-js .vjs-menu-content{border-radius:10px!important;background:rgba(28,28,28,.96)!important;color:var(--poke-custom-player-text)!important;font-family:"poketube flex","PokeTube Flex",sans-serif!important;box-shadow:0 8px 28px rgba(0,0,0,.55)!important;overflow:hidden!important}.video-js .vjs-menu li{color:var(--poke-custom-player-text)!important;font-family:"poketube flex","PokeTube Flex",sans-serif!important;font-size:13px!important;font-weight:650!important;text-transform:none!important}.video-js .vjs-menu li.vjs-selected,.video-js .vjs-menu li:hover{background:rgba(255,255,255,.16)!important}.video-js .vjs-big-play-button{width:72px!important;height:52px!important;margin-left:-36px!important;margin-top:-26px!important;border:0!important;border-radius:14px!important;background:rgba(0,0,0,.72)!important;box-shadow:none!important;color:var(--poke-custom-player-text)!important;transition:background-color .15s ease,transform .12s ease!important}.video-js:hover .vjs-big-play-button,.video-js .vjs-big-play-button:focus{background:rgba(0,0,0,.86)!important;border:0!important;box-shadow:none!important}.video-js .vjs-big-play-button:active{transform:scale(.96)!important}.video-js .vjs-big-play-button .vjs-icon-placeholder:before{font-family:VideoJS!important;font-size:42px!important;line-height:52px!important;color:var(--poke-custom-player-text)!important}.video-js .vjs-fullscreen-control{order:950!important}@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.video-js .vjs-title-bar-description{-webkit-backdrop-filter:none!important;backdrop-filter:none!important;background:rgba(18,18,18,.72)!important;border-color:rgba(255,255,255,.18)!important}}@media (max-width:640px){:root{--poke-custom-player-progress-left:14px;--poke-custom-player-progress-right:14px;--poke-custom-player-progress-top:14px}.video-js .vjs-title-bar-title{top:14px!important;left:14px!important;max-width:92%!important;font-size:1.12em!important}.video-js .vjs-title-bar-description{right:var(--poke-custom-player-progress-right)!important;bottom:var(--poke-custom-player-description-bottom-mobile)!important;max-width:min(76%,460px)!important;min-height:36px!important;padding:.62em .9em!important;font-size:.8em!important}.video-js .vjs-control-bar{height:var(--poke-custom-player-control-height-mobile)!important;gap:6px!important;padding:34px 12px 9px!important}.video-js .vjs-control,.video-js .vjs-button,.video-js .vjs-volume-panel .vjs-mute-control,.video-js .vjs-picture-in-picture-control,.video-js .vjs-subs-caps-button,.video-js .vjs-audio-button,.video-js .vjs-playback-rate,.video-js .vjs-chapters-button,.video-js .vjs-descriptions-button,.video-js .vjs-captions-button,.video-js .vjs-quality-selector,.video-js .vjs-quality-menu-wrapper,.video-js .vjs-menu-button,.video-js .vjs-fullscreen-control{width:var(--poke-custom-player-button-size-mobile)!important;height:var(--poke-custom-player-button-size-mobile)!important;min-width:var(--poke-custom-player-button-size-mobile)!important}.video-js .vjs-control .vjs-icon-placeholder:before,.video-js .vjs-button>.vjs-icon-placeholder:before{font-family:VideoJS!important;font-size:20px!important;line-height:var(--poke-custom-player-button-size-mobile)!important}.video-js .vjs-play-control{order:10!important;margin-right:4px!important}.video-js .vjs-play-control .vjs-icon-placeholder:before{font-family:VideoJS!important;font-size:24px!important}.video-js .vjs-volume-panel{order:20!important;min-width:var(--poke-custom-player-button-size-mobile)!important;height:var(--poke-custom-player-button-size-mobile)!important;margin-right:0!important}.video-js .vjs-volume-panel .vjs-mute-control{width:var(--poke-custom-player-button-size-mobile)!important;height:var(--poke-custom-player-button-size-mobile)!important;min-width:var(--poke-custom-player-button-size-mobile)!important}.video-js .vjs-volume-control,.video-js .vjs-volume-control.vjs-control,.video-js .vjs-volume-horizontal{display:none!important}.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle,.video-js .vjs-control-bar .vjs-player-time-toggle{order:30!important;height:var(--poke-custom-player-button-size-mobile)!important;padding:0 10px!important;margin:0 6px 0 -1px!important;font-size:12px!important}.video-js .vjs-progress-control{left:var(--poke-custom-player-progress-left)!important;right:var(--poke-custom-player-progress-right)!important;top:var(--poke-custom-player-progress-top)!important}.video-js .vjs-progress-control:hover{top:calc(var(--poke-custom-player-progress-top) - 2px)!important}.video-js .vjs-time-control{height:var(--poke-custom-player-button-size-mobile)!important;font-size:12px!important}.video-js .vjs-picture-in-picture-control,.video-js .vjs-subs-caps-button,.video-js .vjs-audio-button,.video-js .vjs-playback-rate,.video-js .vjs-chapters-button,.video-js .vjs-descriptions-button,.video-js .vjs-captions-button{display:none!important}}`;
+
+  document.head.appendChild(customVideoJsUI);
+}
 
 window.pokePlayer = {
     ver:`21-6740c111-vjs-${videojs.VERSION}`,
