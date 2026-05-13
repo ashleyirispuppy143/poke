@@ -1245,6 +1245,9 @@ const MAX_RECENT_SLOW_REQUESTS = Number(process.env.POKE_MAX_RECENT_SLOW_REQUEST
 const DIAGNOSTIC_REPORT_DIR = process.env.POKE_DIAGNOSTIC_REPORT_DIR || nodePath.join(process.cwd(), "reports");
 const ENABLE_DIAGNOSTIC_REPORTS = process.env.POKE_DIAGNOSTIC_REPORTS !== "0";
 
+const LAG_LOG_STYLE = String(process.env.POKE_LAG_LOG_STYLE || "pretty").toLowerCase();
+const LAG_LOG_JSON = process.env.POKE_LAG_JSON_LOGS === "1" || LAG_LOG_STYLE === "json";
+
 let lagStrikeTimes = [];
 let lastLagLogAt = 0;
 let lastReportAt = 0;
@@ -1287,6 +1290,26 @@ function roundRatio(value) {
   }
 
   return Math.round(value * 10000) / 10000;
+}
+
+function formatPercent(value) {
+  if (!Number.isFinite(value)) {
+    return "0%";
+  }
+
+  return (value * 100).toFixed(2) + "%";
+}
+
+function formatSecondsFromMs(value) {
+  if (!Number.isFinite(value)) {
+    return "0s";
+  }
+
+  if (value < 1000) {
+    return roundMs(value) + "ms";
+  }
+
+  return roundMs(value / 1000) + "s";
 }
 
 function normalizePathname(pathname) {
@@ -1407,15 +1430,27 @@ function getSeverity(currentLagMs, delaySnapshot, eluSnapshot) {
     return "restarting";
   }
 
-  if (currentLagMs >= INSANE_LAG_MS || p99LagMs >= INSANE_P99_LAG_MS || maxLagMs >= INSANE_LAG_MS || elu >= INSANE_ELU) {
+  if (
+    currentLagMs >= INSANE_LAG_MS ||
+    p99LagMs >= INSANE_P99_LAG_MS ||
+    (elu >= INSANE_ELU && currentLagMs >= TOOBUSY_MAX_LAG_MS)
+  ) {
     return "insane";
   }
 
-  if (currentLagMs >= TOOBUSY_MAX_LAG_MS || p99LagMs >= TOOBUSY_MAX_LAG_MS || maxLagMs >= TOOBUSY_MAX_LAG_MS) {
+  if (
+    currentLagMs >= TOOBUSY_MAX_LAG_MS ||
+    p99LagMs >= TOOBUSY_MAX_LAG_MS ||
+    maxLagMs >= INSANE_LAG_MS
+  ) {
     return "overloaded";
   }
 
-  if (currentLagMs >= EVENT_LOOP_WARN_LAG_MS || p99LagMs >= EVENT_LOOP_WARN_LAG_MS || maxLagMs >= EVENT_LOOP_WARN_LAG_MS) {
+  if (
+    currentLagMs >= EVENT_LOOP_WARN_LAG_MS ||
+    p99LagMs >= EVENT_LOOP_WARN_LAG_MS ||
+    maxLagMs >= EVENT_LOOP_WARN_LAG_MS
+  ) {
     return "warning";
   }
 
@@ -1479,8 +1514,181 @@ function createLagSnapshot(currentLag, extra) {
   };
 }
 
+function formatRouteList(routes) {
+  if (!routes || routes.length === 0) {
+    return "none";
+  }
+
+  return routes
+    .map(function (route) {
+      return route.key + " x" + route.count;
+    })
+    .join(", ");
+}
+
+function formatOldestRequests(requests) {
+  if (!requests || requests.length === 0) {
+    return "none";
+  }
+
+  return requests
+    .slice(0, 5)
+    .map(function (request) {
+      return request.key + " age=" + formatSecondsFromMs(request.ageMs);
+    })
+    .join(", ");
+}
+
+function formatRecentSlowRequests(requests) {
+  if (!requests || requests.length === 0) {
+    return "none";
+  }
+
+  return requests
+    .slice(0, 5)
+    .map(function (request) {
+      return request.key + " status=" + request.statusCode + " duration=" + formatSecondsFromMs(request.durationMs);
+    })
+    .join(", ");
+}
+
+function formatResourceCounts(resources) {
+  const entries = Object.entries(resources || {});
+
+  if (entries.length === 0) {
+    return "none";
+  }
+
+  return entries
+    .sort(function (a, b) {
+      return b[1] - a[1];
+    })
+    .slice(0, 10)
+    .map(function (entry) {
+      return entry[0] + "=" + entry[1];
+    })
+    .join(", ");
+}
+
+function getLikelyLagHints(snapshot) {
+  const hints = [];
+
+  if (snapshot.requests.activeByRoute.length > 0) {
+    hints.push("busy routes: " + formatRouteList(snapshot.requests.activeByRoute.slice(0, 3)));
+  }
+
+  if (snapshot.requests.oldestActive.length > 0) {
+    hints.push("oldest active: " + formatOldestRequests(snapshot.requests.oldestActive.slice(0, 3)));
+  }
+
+  if (snapshot.requests.recentSlow.length > 0) {
+    hints.push("recent slow: " + formatRecentSlowRequests(snapshot.requests.recentSlow.slice(0, 3)));
+  }
+
+  const resources = formatResourceCounts(snapshot.resources);
+  if (resources !== "none") {
+    hints.push("active resources: " + resources);
+  }
+
+  if (hints.length === 0) {
+    hints.push("no active request clue captured; likely sync CPU work, GC, startup work, dependency code, or another callback before this sample");
+  }
+
+  return hints;
+}
+
+function formatLagPretty(message, snapshot) {
+  const lines = [];
+  const lag = snapshot.lag;
+  const delay = snapshot.eventLoopDelay;
+  const elu = snapshot.eventLoopUtilization;
+  const cpu = snapshot.cpu;
+  const memory = snapshot.memory;
+  const proc = snapshot.process;
+  const system = snapshot.system;
+  const hints = getLikelyLagHints(snapshot);
+
+  lines.push("[POKE-toobusy] " + message);
+  lines.push("  severity: " + snapshot.severity);
+  lines.push(
+    "  lag: current=" + lag.currentMs + "ms" +
+    " warn=" + lag.warningMs + "ms" +
+    " toobusy=" + lag.tooBusyMs + "ms" +
+    " insane=" + lag.insaneMs + "ms" +
+    " strikes=" + lag.strikes + "/" + INSANE_LAG_STRIKES
+  );
+  lines.push(
+    "  event loop delay: p50=" + delay.p50Ms + "ms" +
+    " p90=" + delay.p90Ms + "ms" +
+    " p99=" + delay.p99Ms + "ms" +
+    " max=" + delay.maxMs + "ms" +
+    " mean=" + delay.meanMs + "ms"
+  );
+  lines.push(
+    "  event loop use: " + formatPercent(elu.utilization) +
+    " active=" + formatSecondsFromMs(elu.activeMs) +
+    " idle=" + formatSecondsFromMs(elu.idleMs)
+  );
+  lines.push(
+    "  cpu: user=" + formatSecondsFromMs(cpu.userMs) +
+    " system=" + formatSecondsFromMs(cpu.systemMs) +
+    " total=" + formatSecondsFromMs(cpu.totalMs)
+  );
+  lines.push(
+    "  memory: rss=" + memory.rss +
+    " heap=" + memory.heapUsed + "/" + memory.heapTotal +
+    " external=" + memory.external +
+    " arrayBuffers=" + memory.arrayBuffers
+  );
+  lines.push(
+    "  process: pid=" + proc.pid +
+    " uptime=" + proc.uptimeSeconds + "s" +
+    " node=" + proc.node +
+    " platform=" + proc.platform +
+    " arch=" + proc.arch
+  );
+  lines.push(
+    "  system: loadavg=" + system.loadavg.join(",") +
+    " free=" + system.freeMemory +
+    " total=" + system.totalMemory
+  );
+  lines.push(
+    "  requests: active=" + snapshot.requests.active +
+    " top=[" + formatRouteList(snapshot.requests.activeByRoute.slice(0, 5)) + "]"
+  );
+  lines.push("  oldest active: " + formatOldestRequests(snapshot.requests.oldestActive));
+  lines.push("  recent slow: " + formatRecentSlowRequests(snapshot.requests.recentSlow));
+  lines.push("  resources: " + formatResourceCounts(snapshot.resources));
+  lines.push("  likely clues:");
+  for (const hint of hints) {
+    lines.push("    - " + hint);
+  }
+
+  if (snapshot.restart) {
+    lines.push(
+      "  restart: grace=" + snapshot.restart.exitGraceMs + "ms" +
+      " retryAfter=" + snapshot.restart.retryAfterSeconds + "s" +
+      " report=" + (snapshot.restart.diagnosticReport || "not written")
+    );
+  }
+
+  if (snapshot.diagnosticReport) {
+    lines.push("  diagnostic report: " + snapshot.diagnosticReport);
+  }
+
+  lines.push("  note: exact blocking function cannot be recovered from this callback alone");
+  lines.push("  set POKE_LAG_LOG_STYLE=json for machine-readable JSON logs");
+
+  return lines.join("\n");
+}
+
 function logLag(message, snapshot) {
-  console.error("[POKE-toobusy] " + message + " " + JSON.stringify(snapshot));
+  if (LAG_LOG_JSON) {
+    console.error("[POKE-toobusy] " + message + " " + JSON.stringify(snapshot));
+    return;
+  }
+
+  console.error(formatLagPretty(message, snapshot));
 }
 
 function shouldWriteDiagnosticReport() {
@@ -1564,8 +1772,10 @@ function isInsaneLag(currentLag, snapshot) {
   return (
     currentLag >= INSANE_LAG_MS ||
     snapshot.eventLoopDelay.p99Ms >= INSANE_P99_LAG_MS ||
-    snapshot.eventLoopDelay.maxMs >= INSANE_LAG_MS ||
-    snapshot.eventLoopUtilization.utilization >= INSANE_ELU
+    (
+      snapshot.eventLoopUtilization.utilization >= INSANE_ELU &&
+      currentLag >= TOOBUSY_MAX_LAG_MS
+    )
   );
 }
 
@@ -1719,9 +1929,15 @@ toobusy.onLag(function (currentLag) {
     }
   };
 
+  const reportPath = writeDiagnosticReport(strikeSnapshot);
+  const loggedStrikeSnapshot = {
+    ...strikeSnapshot,
+    diagnosticReport: reportPath
+  };
+
   logLag(
     "insane event-loop lag strike " + strikeCount + "/" + INSANE_LAG_STRIKES,
-    strikeSnapshot
+    loggedStrikeSnapshot
   );
 
   if (strikeCount >= INSANE_LAG_STRIKES) {
@@ -1729,7 +1945,6 @@ toobusy.onLag(function (currentLag) {
     return;
   }
 
-  writeDiagnosticReport(strikeSnapshot);
   eventLoopDelay.reset();
 });
 
