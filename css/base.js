@@ -2099,6 +2099,7 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
         }
       } catch { }
       try {
+        // Tighter retry schedule - minimize audible gap during Chromium bg pause
         [0, 1, 2, 4, 8, 16, 32, 64, 120, 240, 480].forEach(delay => {
           const tid = setTimeout(() => {
             const timers = state.hiddenAudioNoSeekRetryTimers || [];
@@ -2284,6 +2285,7 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
         forceNonLoopTerminalEnd("keepalive-audio-paused");
         return;
       }
+      // Immediate native play from the worker tick - zero delay
       try { HTMLMediaElement.prototype.play.call(audio).catch(() => {}); } catch {}
       hiddenAudioNoSeekAttempted = hiddenAudioNoSeekResume("keepalive-audio-paused", { retry: true });
     }
@@ -2350,6 +2352,7 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
     } catch {
       _bgFallbackId = setInterval(_bgKeepaliveTick, platform.chromiumOnlyBrowser ? (perfProfile.lowEnd ? 280 : 150) : (perfProfile.lowEnd ? 2800 : 2000));
     }
+    // Immediate burst at startup to ensure fast first response
     try { setTimeout(_bgKeepaliveTick, 0); } catch { }
     if (platform.chromiumOnlyBrowser) {
       try { setTimeout(_bgKeepaliveTick, 20); } catch { }
@@ -2436,7 +2439,7 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
     const _stormCount = new WeakMap();
     const _stormWindowStart = new WeakMap();
     const _stormSuppressUntil = new WeakMap();
-    const DEDUP_MS = 350;
+    const DEDUP_MS = 350; // was 200 — too short, allowed double-play on rapid toggle
     const STORM_WINDOW_MS = 1800;
     const STORM_MAX_ATTEMPTS = 8;
     const STORM_SUPPRESS_MS = 900;
@@ -2625,6 +2628,7 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
             nativeAudioPlayNow("audio-pause-method-shield");
           } catch {}
         };
+        // Immediate synchronous play attempt before any async scheduling
         try {
           if (document.visibilityState === "hidden") {
             markHiddenAudioPauseDetected("audio-pause-method-shield");
@@ -2634,12 +2638,16 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
             hiddenAudioNoSeekResume("audio-pause-method-shield", { retry: true });
           }
         } catch { }
+        // Synchronous attempt first (fastest possible)
         _immediateResume();
+        // Then microtask (next in queue)
         try { queueMicrotask(_immediateResume); } catch {}
         Promise.resolve().then(_immediateResume);
+        // Then rAF
         try {
           requestAnimationFrame(_immediateResume);
         } catch { }
+        // Fast retry burst for hidden tab (browser may re-pause between attempts)
         if (document.visibilityState === "hidden") {
           [0, 2, 6, 12, 24, 48, 80, 180].forEach(d => {
             try { setTimeout(_immediateResume, d); } catch {}
@@ -2675,16 +2683,16 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
     const PHASE_GUARDING = 1;
     const PHASE_RECOVERING = 2;
     const PHASE_SETTLING = 3;
-    const RECOVERY_DURATION_MS = 250;
-  const SETTLING_DURATION_MS = 400;
+    const RECOVERY_DURATION_MS = 250;   // How long RECOVERING phase lasts (was 500ms — still too slow)
+  const SETTLING_DURATION_MS = 400;   // How long SETTLING phase lasts (was 1000ms — 400ms is plenty)
   const DRIFT_CORRECTION_MIN = 0.3;   // Only correct drift > 300ms
   const RETRY_INTERVALS = [50, 120, 300]; // Progressive retry delays (faster for snappy tab return)
   const PLAY_CHECK_MS = 100;   // How soon to verify play() worked
   let _phase = PHASE_IDLE;
   let _phaseAt = 0;
-  let _bgEnteredAt = 0;
-  let _snapshotVt = 0;
-  let _snapshotAt = 0;
+  let _bgEnteredAt = 0;     // Timestamp when we entered background (for bgDuration calc)
+  let _snapshotVt = 0;     // Video position when we went to background
+  let _snapshotAt = 0;     // Audio position when we went to background
   let _snapshotVol = 1;     // Audio volume when we went to background
   let _snapshotVideoVol = 1; // Video volume when we went to background
   let _recoveryGen = 0;     // Incremented each recovery — stale timers check this
@@ -2697,7 +2705,7 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
     if (_phase === PHASE_GUARDING) return;
     _phase = PHASE_GUARDING;
     _phaseAt = now();
-    _bgEnteredAt = now();
+    _bgEnteredAt = now(); // record when we went to background for warm-start calc
     _takeSnapshot();
     if (state.intendedPlaying) {
       state.tabReturnImmuneUntil = Math.max(state.tabReturnImmuneUntil, now() + RECOVERY_DURATION_MS);
@@ -3730,9 +3738,9 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
   let _armGen = 0;                // incremented each arm() — stale callbacks check this
   let _startFrameCount = -1;      // frame count at arm-time (fallback path)
   const MAX_FLUSH_ATTEMPTS = 5;
-  const FRAME_DEADLINE_MS = 280;
-  const FLUSH_COOLDOWN_MS = 120;
-  const RECHECK_DELAY_MS = 40;
+  const FRAME_DEADLINE_MS = 280;   // if no frame in 280ms after play, flush (was 350 — faster detection without false positives)
+  const FLUSH_COOLDOWN_MS = 120;   // min gap between flush attempts (was 200 — faster retries for stuck compositor)
+  const RECHECK_DELAY_MS = 40;     // delay before re-arming after a flush (was 60)
   function _cancelFrameCallback() {
     try {
       if (_rvfcNode && _rvfcId != null && typeof _rvfcNode.cancelVideoFrameCallback === "function") {
@@ -3924,8 +3932,8 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
     let _attempts = 0;
     let _lastArmAt = 0;
     const MAX_ATTEMPTS = 4;
-    const FRAME_WAIT_MS = 180;
-  const RECHECK_MS = 120;
+    const FRAME_WAIT_MS = 180;       // time to wait for RVFC before acting (was 250→180 — faster freeze detection, matches playTogether RVFC kick timing)
+  const RECHECK_MS = 120;          // time to wait after micro-seek for RVFC (was 150→120)
   function _cancelFrameCallback() {
     try {
       if (_rvfcNode && _rvfcId != null && typeof _rvfcNode.cancelVideoFrameCallback === "function") {
@@ -5784,7 +5792,7 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
   const HAVE_ENOUGH_DATA = 4;
   const STRICT_BUFFER_AHEAD_SEC = 0.25;
   const STARTUP_BUFFER_AHEAD_SEC = 1.0;
-  const MICRO_DRIFT = 0.15;
+  const MICRO_DRIFT = 0.15;  // was 0.08 — too sensitive, caused constant rate changes
   const BIG_DRIFT = 1.5;
   const BIG_DRIFT_BACKGROUND = 6.0;
   const MAX_RATE_NUDGE = 0.003;
@@ -6016,7 +6024,14 @@ let playerTimeDisplayButton = null;
 let playerTimeDisplayText = null;
 let playerTimeDisplayQueued = false;
 let playerTimeDisplayBound = false;
+let playerTimeDisplaySaveTimer = null;
+let playerTimeDisplayLastText = "";
+let playerTimeDisplayLastAria = "";
+let playerTimeDisplayLastWidthCh = 0;
+let playerTimeDisplayModeLoaded = false;
 function loadTimeDisplayMode() {
+  if (playerTimeDisplayModeLoaded) return;
+  playerTimeDisplayModeLoaded = true;
   try {
     playerTimeDisplayMode = localStorage.getItem(TIME_DISPLAY_MODE_STORAGE_KEY) === "remaining"
       ? "remaining"
@@ -6025,8 +6040,20 @@ function loadTimeDisplayMode() {
     playerTimeDisplayMode = "elapsed";
   }
 }
-function saveTimeDisplayMode() {
-  try { localStorage.setItem(TIME_DISPLAY_MODE_STORAGE_KEY, playerTimeDisplayMode); } catch { }
+function saveTimeDisplayMode(immediate = false) {
+  if (playerTimeDisplaySaveTimer) {
+    clearTimeout(playerTimeDisplaySaveTimer);
+    playerTimeDisplaySaveTimer = null;
+  }
+  const save = () => {
+    playerTimeDisplaySaveTimer = null;
+    try { localStorage.setItem(TIME_DISPLAY_MODE_STORAGE_KEY, playerTimeDisplayMode); } catch { }
+  };
+  if (immediate) {
+    save();
+    return;
+  }
+  playerTimeDisplaySaveTimer = setTimeout(save, 120);
 }
 function playerClockWholeSeconds(seconds) {
   return Math.max(0, Math.floor(Number(seconds) || 0));
@@ -6068,6 +6095,24 @@ function getPlayerDisplayTime() {
   }
   return isFinite(t) && t > 0 ? t : 0;
 }
+function playerTimeDisplayTerminalState(dur, remaining) {
+  if (state.endedNaturally) return true;
+  try { if (nativeVideoEnded()) return true; } catch { }
+  if (!isFinite(dur) || dur <= 0 || !isFinite(remaining)) return false;
+  if (state.seeking || state.seekBuffering || state.seekResumeInFlight || state.restarting) return false;
+  if (remaining <= 0.08) return true;
+  try {
+    return remaining <= 0.3 && state.firstPlayCommitted && !isLoopDesired();
+  } catch { return remaining <= 0.12; }
+}
+function updatePlayerTimeDisplayWidth(totalText) {
+  if (!playerTimeDisplayButton) return;
+  const totalLen = String(totalText || "0:00").length;
+  const widthCh = Math.max(11, Math.min(22, totalLen * 2 + 4));
+  if (Math.abs(widthCh - playerTimeDisplayLastWidthCh) < 0.5) return;
+  playerTimeDisplayLastWidthCh = widthCh;
+  try { playerTimeDisplayButton.style.setProperty("--vjs-player-time-width", widthCh + "ch"); } catch { }
+}
 function updatePlayerTimeDisplay() {
   playerTimeDisplayQueued = false;
   if (!playerTimeDisplayText) return;
@@ -6075,11 +6120,7 @@ function updatePlayerTimeDisplay() {
   const cur = Math.min(getPlayerDisplayTime(), dur || Infinity);
   const totalWhole = playerClockWholeSeconds(dur);
   const remaining = Math.max(0, dur > 0 ? dur - cur : 0);
-  let terminalDisplay = false;
-  try {
-    terminalDisplay = !!(state.endedNaturally || nativeVideoEnded() ||
-      (dur > 0 && remaining <= 0.3 && terminalEndFallbackShouldFire()));
-  } catch { terminalDisplay = dur > 0 && remaining <= 0.12; }
+  const terminalDisplay = playerTimeDisplayTerminalState(dur, remaining);
   const remainingWhole = dur > 0
     ? Math.min(totalWhole, playerClockRemainingSeconds(remaining, terminalDisplay))
     : playerClockRemainingSeconds(remaining, terminalDisplay);
@@ -6091,11 +6132,19 @@ function updatePlayerTimeDisplay() {
     ? "-" + formatPlayerClock(remainingWhole)
     : formatPlayerClock(elapsedForDisplay);
   const text = valueText + " / " + totalText;
-  playerTimeDisplayText.textContent = text;
+  updatePlayerTimeDisplayWidth(totalText);
+  if (text !== playerTimeDisplayLastText) {
+    playerTimeDisplayLastText = text;
+    playerTimeDisplayText.textContent = text;
+  }
   if (playerTimeDisplayButton) {
     const label = playerTimeDisplayMode === "remaining" ? "Remaining time" : "Elapsed time";
-    playerTimeDisplayButton.setAttribute("aria-label", label + ": " + text);
-    playerTimeDisplayButton.title = "Switch time display";
+    const aria = label + ": " + text;
+    if (aria !== playerTimeDisplayLastAria) {
+      playerTimeDisplayLastAria = aria;
+      playerTimeDisplayButton.setAttribute("aria-label", aria);
+    }
+    if (playerTimeDisplayButton.title !== "Switch time display") playerTimeDisplayButton.title = "Switch time display";
   }
 }
 function queuePlayerTimeDisplayUpdate() {
@@ -6108,7 +6157,7 @@ function injectPlayerTimeDisplayStyles() {
   if (document.getElementById("player-time-display-css")) return;
   const style = document.createElement("style");
   style.id = "player-time-display-css";
-  style.textContent = `.vjs-has-player-time-toggle .vjs-remaining-time,.vjs-has-player-time-toggle .vjs-current-time,.vjs-has-player-time-toggle .vjs-time-divider,.vjs-has-player-time-toggle .vjs-duration{display:none!important}.vjs-player-time-toggle{min-width:7.2em;width:auto;padding:0 .45em!important;cursor:pointer}.vjs-player-time-toggle .vjs-player-time-text{display:inline-block;white-space:nowrap;font-variant-numeric:tabular-nums;line-height:3em}`;
+  style.textContent = `.vjs-has-player-time-toggle .vjs-remaining-time,.vjs-has-player-time-toggle .vjs-current-time,.vjs-has-player-time-toggle .vjs-time-divider,.vjs-has-player-time-toggle .vjs-duration{display:none!important}.vjs-player-time-toggle{--vjs-player-time-width:12ch;inline-size:var(--vjs-player-time-width);min-inline-size:var(--vjs-player-time-width);max-inline-size:var(--vjs-player-time-width);flex:0 0 var(--vjs-player-time-width);padding:0 .45em!important;cursor:pointer;contain:layout paint style}.vjs-player-time-toggle .vjs-player-time-text{display:inline-block;inline-size:100%;overflow:hidden;white-space:nowrap;text-align:center;font-variant-numeric:tabular-nums;line-height:3em}`;
   try { document.head.appendChild(style); } catch { }
 }
 function placePlayerTimeDisplayButton(bar) {
@@ -6135,11 +6184,18 @@ function setupPlayerTimeDisplayToggle() {
     playerTimeDisplayButton.type = "button";
     playerTimeDisplayButton.className = "vjs-control vjs-button vjs-player-time-toggle";
     playerTimeDisplayButton.innerHTML = `<span class="vjs-player-time-text"></span>`;
+    const stopControlEvent = e => {
+      try { e.stopPropagation(); } catch { }
+    };
+    for (const ev of ["pointerdown", "mousedown", "touchstart", "dblclick"]) {
+      try { _on(playerTimeDisplayButton, ev, stopControlEvent, { capture: true }); } catch { }
+    }
     _on(playerTimeDisplayButton, "click", e => {
       try { e.preventDefault(); e.stopPropagation(); } catch { }
+      try { if (typeof e.stopImmediatePropagation === "function") e.stopImmediatePropagation(); } catch { }
       playerTimeDisplayMode = playerTimeDisplayMode === "remaining" ? "elapsed" : "remaining";
       saveTimeDisplayMode();
-      updatePlayerTimeDisplay();
+      queuePlayerTimeDisplayUpdate();
     });
   }
   placePlayerTimeDisplayButton(bar);
@@ -6159,7 +6215,7 @@ function setupPlayerTimeDisplayToggle() {
     } catch { }
     try { _on(document, "visibilitychange", queuePlayerTimeDisplayUpdate, { passive: true }); } catch { }
   }
-  updatePlayerTimeDisplay();
+  queuePlayerTimeDisplayUpdate();
 }
 function isHiddenBackground() {
   return document.visibilityState === "hidden";
@@ -9530,10 +9586,10 @@ function safeSetCT(media, t) {
       media.currentTime = t;
   } catch { }
 }
-const MICRO_SEEK_MIN_GAP_MS = 400;
-const COMPOSITOR_FLUSH_MIN_GAP_MS = 80;
+const MICRO_SEEK_MIN_GAP_MS = 400; // was 800 — reduced so compositor-fix systems (VCFM, PRFV, NFW, MVNFAPAAT, playTogether kick) don't exhaust the budget competing with each other
+const COMPOSITOR_FLUSH_MIN_GAP_MS = 80; // lighter rate limit for confirmed compositor flushes (was 100 — even faster for play/pause freeze recovery)
 const MICRO_SEEK_WINDOW_MS = 5000;
-const MICRO_SEEK_MAX_IN_WINDOW = 4;
+const MICRO_SEEK_MAX_IN_WINDOW = 4; // was 2 — 5 compositor-fix systems share this budget, 2 was too small
 function canDoMicroSeek() {
   const t = now();
   if (t < state._playPauseTransitionUntil) return false;
@@ -16875,10 +16931,42 @@ function handleFatalMediaError(source, errorObj) {
     "This is fine. Everything is fine.",
     "The codec took the day off.",
     "The audio was simply too powerful.",
+    "Error 404: Good vibes not found.",
+    "It's not a bug, it's a surprise feature.",
+    "The bits are revolting!",
     "Something went wrong. Probably.",
     "Works on my machine ¯\\_(ツ)_/¯",
-    "The media pipeline left the chat.",
-    "The sync loop did a little too much looping."
+                          "This wouldn't happen in Minecraft.",
+                          "Have you tried turning it off and on again?",
+                          "The video element chose violence today.",
+                          "Skill issue (from the browser).",
+                          "The codec said 'no thank you' and left.",
+                          "I'm in your walls (and your error logs).",
+                          "Bazinga! Just kidding, this is real.",
+                          "Achievement unlocked: Break the player!",
+                          "POV: you found a rare error.",
+                          "The video was not the imposter. It was ejected anyway.",
+                          "Don't worry, the error is more scared of you than you are of it.",
+                          "The player tripped over its own feet.",
+                          "The media pipeline left the chat.",
+                          "L + ratio + no playback.",
+                          "Bro really said 'MEDIA_ERR' unironically.",
+                          "Certified bruh moment.",
+                          "The sync loop did a little too much looping.",
+                          "Told the audio to play. It chose emotional damage instead.",
+                          "This is why we can't have nice things.",
+                          "Someone call an ambulance... but not for me!",
+                          "It's giving... error.",
+                          "The browser ran out of vibes.",
+                          "Plot twist: the real error was the friends we made along the way.",
+                          "No thoughts, just errors.",
+                          "We do a little crashing.",
+                          "The media pipeline went on a coffee break.",
+                          "The video said: 'I'm tired, boss.'",
+                          "Looks like the decoder had a bad day at work.",
+                          "Unexpected token: disappointment.",
+                          "The electrons got confused.",
+                          "Error: success was not an option."
   ];
   const _splashMsg = _splashMessages[Math.floor(Math.random() * _splashMessages.length)];
   let _stack = "";
@@ -21210,6 +21298,7 @@ function cleanupPlaybackRuntimeResources(reason = "") {
   try { if (state._endedKillHardStop) { clearTimeout(state._endedKillHardStop); state._endedKillHardStop = null; } } catch { }
   try { if (state._corsCheckInterval) { clearInterval(state._corsCheckInterval); state._corsCheckInterval = null; } } catch { }
   try { if (_timelineRepairFlagTimer) { clearTimeout(_timelineRepairFlagTimer); _timelineRepairFlagTimer = null; } } catch { }
+  try { if (playerTimeDisplaySaveTimer) saveTimeDisplayMode(true); } catch { }
   try { clearSeekPostTimers(); } catch { }
   try { _stopPlayCommitWatchdog(); } catch { }
   try { disengagePauseIntercept(); } catch { }
@@ -21907,10 +21996,12 @@ if (wantsStartupAutoplay() && !state.firstPlayCommitted && !startupZeroSuppresse
   }, 12000);
   try { _on(videoEl, "seeking", onStartupZeroSeeking, { passive: true }); } catch { }
 }
+
 setupUserPauseIntentDetection();
 loadSavedVolume();
 setupPlayerTimeDisplayToggle();
 try { video.ready(setupPlayerTimeDisplayToggle); } catch { }
+
 if (coupledMode && audio) {
   try {
     const _initTarget = targetVolFromVideo();
@@ -21918,13 +22009,17 @@ if (coupledMode && audio) {
     if (state.userMutedAudio) audio.muted = true;
   } catch { }
 }
+
 setupMediaSession();
+// Re-setup MediaSession after player is ready (handles late-init race conditions)
 try {
   video.ready(() => {
     try { ensureMediaSessionSetup(); } catch {}
+    // Also update playback state once ready
     try { updateMediaSessionPlaybackState(); } catch {}
   });
 } catch {}
+// Deferred retries in case the player/metadata isn't ready at call time
 [1000, 3000, 6000, 12000].forEach(delay => {
   setTimeout(() => {
     try { ensureMediaSessionSetup(); } catch {}
@@ -22134,11 +22229,20 @@ function _handlePlayerCrash(errorMsg, source, stack) {
   state.resumeOnVisible = false;
   try { pauseHard(); } catch { }
   const _crashSplashMessages = [
+    "The bits conspired against you.",
     "This is fine. Everything is fine.",
     "The audio was simply too powerful.",
     "Works on my machine ¯\\_(ツ)_/¯",
-    "The media pipeline left the chat.",
-    "The sync loop did a little too much looping."
+                          "Achievement unlocked: Break the player!",
+                          "The video element chose violence today.",
+                          "Skill issue (from the browser).",
+                          "Certified bruh moment.",
+                          "The sync loop did a little too much looping.",
+                          "This is why we can't have nice things.",
+                          "No thoughts, just errors.",
+                          "We do a little crashing.",
+                          "The electrons got confused.",
+                          "Error: success was not an option."
   ];
   const _crashSplash = _crashSplashMessages[Math.floor(Math.random() * _crashSplashMessages.length)];
   let _trace = "";
