@@ -5111,10 +5111,10 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
       let _correctionCount = 0;
       let _lastCorrectionAt = 0;
       const CHECK_INTERVAL_MS = perfProfile.lowEnd ? 900 : 500;  // reduced CPU on slow devices
-      const CRITICAL_DRIFT_MS = 400;  // 400ms A/V drift = critical
+      const CRITICAL_DRIFT_MS = 800;  // was 400 — raised to 800ms to avoid over-correcting during normal playback (seekbar stability)
       const RUNAWAY_THRESHOLD = 5;    // 5 consecutive growing-drift checks = runaway
-      const CRITICAL_THRESHOLD = 3;    // 3 consecutive critical checks = correct
-      const CORRECTION_COOLDOWN = 2000; // min ms between UltraStabilizer drift corrections
+      const CRITICAL_THRESHOLD = 4;    // was 3 — raised to 4 to require more sustained critical drift before correcting
+      const CORRECTION_COOLDOWN = 4000; // was 2000 — raised to 4s min between UltraStabilizer drift corrections to stop seekbar jumping
       function tick() {
         if (!coupledMode || !audio) return;
         if ((_now() - _lastCheckAt) < CHECK_INTERVAL_MS) return;
@@ -5846,10 +5846,10 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
   const STRICT_BUFFER_AHEAD_SEC = 0.25;
   const STARTUP_BUFFER_AHEAD_SEC = 1.0;
   const MICRO_DRIFT = 0.15;  // was 0.08 — too sensitive, caused constant rate changes
-  const BIG_DRIFT = 1.5;
+  const BIG_DRIFT = 2.5;     // was 1.5 — too low, triggered constant video currentTime writes that destabilized seekbar
   const BIG_DRIFT_BACKGROUND = 6.0;
   const MAX_RATE_NUDGE = 0.003;
-  const DRIFT_PERSIST_CYCLES = 3;
+  const DRIFT_PERSIST_CYCLES = 5;  // was 3 — required more sustained drift before correction to avoid seekbar jumping
   const AUDIO_FADE_DURATION_MS = 60;
   const AUDIO_SAFE_FADE_DURATION_MS = 80;
   const MIN_PLAY_PAUSE_GAP_MS = 90;
@@ -8111,7 +8111,7 @@ function reassertExplicitSeekTargetIfNeeded(observedTime, reason = "") {
   Math.abs(prevTarget - target) > 0.08 ||
   now() >= Number(state.explicitSeekUntil || 0);
   const correctionCount = targetChanged ? 0 : (Number(state.explicitSeekCorrectionCount) || 0);
-  if (correctionCount >= 5) return false;
+  if (correctionCount >= 3) return false;  // was 5 — reduced to 3 to limit seek-reassert feedback loop that destabilizes seekbar
   state.pendingSeekTarget = target;
   rememberExplicitSeekTarget(target, 7000);
   state.explicitSeekCorrectionCount = correctionCount + 1;
@@ -10019,7 +10019,7 @@ function filterAutoVideoRepairTarget(target, current, opts = {}) {
   if (!opts.allowLargeForward && isFinite(forwardLimit) && forwardLimit > 0 && t > c + forwardLimit) return NaN;
   const minStep = Math.max(0.01, Number(opts.minStep == null ? 0.12 : opts.minStep));
   if (Math.abs(t - c) < minStep) return NaN;
-  const gap = Math.max(0, Number(opts.minGapMs == null ? (hiddenLike ? 900 : 360) : opts.minGapMs));
+  const gap = Math.max(0, Number(opts.minGapMs == null ? (hiddenLike ? 900 : 900) : opts.minGapMs));  // was 360 for foreground — raised to 900 to prevent rapid-fire video time repairs that jerk the seekbar
   const retarget = Math.max(0.05, Number(opts.retargetThreshold == null ? 0.55 : opts.retargetThreshold));
   const ts = now();
   if (gap && (ts - _lastAutoVideoRepairSeekAt) < gap &&
@@ -10234,7 +10234,7 @@ function applyNormalPlaybackAudioDriftCorrection(drift, vt, at, opts = {}) {
     state.lastDrift = d;
   }
   const allowHard = opts.allowHard !== false;
-  const hardThreshold = Math.max(0.32, Number(opts.hardThreshold == null ? 0.55 : opts.hardThreshold));
+  const hardThreshold = Math.max(0.50, Number(opts.hardThreshold == null ? 0.70 : opts.hardThreshold));  // was 0.32/0.55 — raised to 0.50/0.70 to reduce hard audio corrections that destabilize seekbar
   if (allowHard && abs > hardThreshold && state.driftStableFrames >= DRIFT_PERSIST_CYCLES) {
     const lastHard = Number(state.normalAudioDriftHardCorrectAt || 0);
     if ((now() - lastHard) > 1200) {
@@ -16149,10 +16149,10 @@ async function runSync() {
         const _normalDrift = vtRaw - atRaw;
         const _driftFixing = applyNormalPlaybackAudioDriftCorrection(_normalDrift, vtRaw, atRaw, {
           allowHard: true,
-          hardThreshold: 0.42,
+          hardThreshold: 0.70,  // was 0.42 — raised to reduce hard audio seeks that cause seekbar jumps
           trackDrift: true
         });
-        scheduleSync(_driftFixing || Math.abs(_normalDrift) > MICRO_DRIFT ? (perfProfile.lowEnd ? 420 : 260) : null);
+        scheduleSync(_driftFixing || Math.abs(_normalDrift) > MICRO_DRIFT ? (perfProfile.lowEnd ? 550 : 380) : null);  // was 420/260 — longer intervals to reduce correction frequency
         return;
         }
     }
@@ -16228,7 +16228,7 @@ async function runSync() {
         if (state.audioEverStarted && !audio.paused && !inBgDrift && !state.startupPhase) {
           const _syncDrift = at - vt; // positive = audio ahead of video
           const _syncDriftAbs = Math.abs(_syncDrift);
-          if (_syncDriftAbs > 1.5) {
+          if (_syncDriftAbs > BIG_DRIFT) {
             const _bigDriftSign = _syncDrift > 0 ? 1 : -1;
             if (state._bigDriftSign === _bigDriftSign) state._bigDriftCount = (state._bigDriftCount || 0) + 1;
             else {
@@ -16236,9 +16236,9 @@ async function runSync() {
               state._bigDriftCount = 1;
             }
             state._bigDriftSeenAt = now();
-            const _stableBigDrift = state._bigDriftCount >= 2 || foregroundRecoveryActive(700) || inBgReturnGrace();
+            const _stableBigDrift = state._bigDriftCount >= 4 || foregroundRecoveryActive(700) || inBgReturnGrace();  // was >= 2 — raised to 4 to require more confirmation before large timeline correction
             if (!_stableBigDrift) {
-              scheduleSync(180);
+              scheduleSync(250);  // was 180 — slightly longer to let drift settle naturally
               return;
             }
             if (_syncDrift > 0) {
@@ -16257,10 +16257,10 @@ async function runSync() {
                 } else {
                 const guardedAt = filterAutoVideoRepairTarget(at, vt, {
                   backwardLimit: 0.12,
-                  forwardLimit: foregroundRecoveryActive(700) || inBgReturnGrace() ? 3.0 : 1.6,
-                  minGapMs: 420,
-                  minStep: 0.65,
-                  retargetThreshold: 0.5
+                  forwardLimit: foregroundRecoveryActive(700) || inBgReturnGrace() ? 4.0 : 3.0,  // was 3.0/1.6 — relaxed to reduce unnecessary video jumps
+                  minGapMs: 900,   // was 420 — raised significantly to stop rapid video time writes from jerking the seekbar
+                  minStep: 0.85,   // was 0.65 — raised to ignore smaller drifts
+                  retargetThreshold: 0.7  // was 0.5 — wider retarget window to avoid re-triggering
                 });
                 if (isFinite(guardedAt)) {
                   try {
@@ -20510,14 +20510,14 @@ function bindCommonMediaEvents() {
           if (state.restarting) return;
           if (state.bgSilentTimeSyncing) return;
           if (state._isMicroSeek) {
-            const _msVt = Number(videoEl.currentTime) || 0;
-            const _msPrev = Number(state.lastKnownGoodVT) || 0;
-            const _msDelta = Math.abs(_msVt - _msPrev);
+            // Always bail out for micro-seeks / drift corrections — the old delta-based guard
+            // let drift repairs (>0.25s) fall through and trigger the full seek flow, which
+            // caused the seekbar to jump around constantly during normal playback.
             const _msHasUserIntent =
             state.pendingSeekTarget != null ||
             (typeof userSeekIntentActive === "function" && userSeekIntentActive()) ||
             ((now() - state.lastUserActionTime) < 1200);
-            if (_msDelta < 0.25 && !_msHasUserIntent) return;
+            if (!_msHasUserIntent) return;
             state._isMicroSeek = false;
           }
           if (directUserToggleActive(500) || now() < state._playPauseTransitionUntil) {
@@ -23394,7 +23394,7 @@ _on(window, "unhandledrejection", (e) => {
   _handlePlayerCrash(msg, "promise", reason ? (reason.stack || "") : "");
 }, { passive: true });
 }, { once: true });
- 
+
 //////////////// THE PLAYER, END ////////////////////////
  
  (function () {
