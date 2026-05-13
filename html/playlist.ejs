@@ -1,4 +1,4 @@
- <!--
+<!--
     This Source Code Form is subject to the terms of the GNU General Public License:
    
     Copyright (C) 2021-2025 PokeTube Of Poke Project, a part of The Poke Project Initiative (initiative.poketube.fun) 
@@ -16,17 +16,43 @@
 
     You should have received a copy of the GNU General Public License
     along with this program. If not, see https://www.gnu.org/licenses/.
---><!DOCTYPE html><html style="background:#000000">
+-->
+<%
+  const playlist = typeof p !== "undefined" && p !== null && typeof p === "object" ? p : null;
+  const hasPlaylist = playlist !== null;
+
+  const safeMediaProxy = typeof mediaproxy !== "undefined" && mediaproxy ? mediaproxy : "";
+  const proxyBase = safeMediaProxy ? `${safeMediaProxy}/proxy?url=` : "/proxy?url=";
+
+  const playlistTitle = hasPlaylist && playlist.title ? playlist.title : "Playlist unavailable";
+  const playlistDescription = hasPlaylist && playlist.description ? playlist.description : "";
+  const playlistThumbnail = hasPlaylist && playlist.playlistThumbnail ? playlist.playlistThumbnail : "";
+  const playlistAuthor = hasPlaylist && playlist.author ? playlist.author : "Unknown";
+  const playlistVideoCount = hasPlaylist && playlist.videoCount ? playlist.videoCount : 0;
+  const playlistViewCount = hasPlaylist && typeof playlist.viewCount === "number" ? playlist.viewCount.toLocaleString() : "0";
+  const playlistMixId = hasPlaylist && playlist.mixId ? playlist.mixId : null;
+  const playlistVideos = hasPlaylist && Array.isArray(playlist.videos) ? playlist.videos : [];
+
+  let firstVideoId = null;
+
+  if (playlistThumbnail && playlistThumbnail.includes("/vi/")) {
+    firstVideoId = playlistThumbnail.split("/vi/")[1].split("/")[0];
+  }
+%>
+<!DOCTYPE html>
+<html style="background:#000000">
 <head>
-    <title>Poke | <%- p?.title %> </title>
-     <link href="/css/yt-ukraine.svg?v=6" rel=icon>
+    <title>Poke | <%- playlistTitle %></title>
+    <link href="/css/yt-ukraine.svg?v=6" rel=icon>
     <link rel="manifest" href="/manifest.json">
     <meta content=website property=og:type>
-      <meta name="viewport" content="width=device-1200px, initial-scale=1.0, shrink-to-fit=yes, viewport-fit=cover">
-    <meta content="Poke - <%- p.title %> " property=og:title>
-    <meta content="<%- p.description %>" property=twitter:description>
-    <meta content="<%- mediaproxy %>/proxy?url=<%- p.playlistThumbnail %>" property="og:image"  />
-      <meta content=summary_large_image name=twitter:card>
+    <meta name="viewport" content="width=device-1200px, initial-scale=1.0, shrink-to-fit=yes, viewport-fit=cover">
+    <meta content="Poke - <%- playlistTitle %>" property=og:title>
+    <meta content="<%- playlistDescription %>" property=twitter:description>
+    <% if (playlistThumbnail) { %>
+    <meta content="<%- proxyBase %><%- playlistThumbnail %>" property="og:image" />
+    <% } %>
+    <meta content=summary_large_image name=twitter:card>
     <link href="/css/app-cdn.min.css?v=2" rel=stylesheet>
     <link href="/css/app.main.css?v=44600" rel=stylesheet>
     <link href="/css/watch.main.css?v=56" rel=stylesheet>
@@ -38,14 +64,14 @@
   summary{
     color:gray;
 }
-summary:hove
+summary:hover {
     color:white;
 }
 
 </style>
    <style>
     body{
-        overflow-x: hidden; /* Hide horizontal scrollbar */
+        overflow-x: hidden;
         color:#111111;
     }
 
@@ -160,6 +186,7 @@ font-family:Ubuntu
   top:0;
 }
 
+<% if (playlistThumbnail) { %>
 .playlist-info::before {
   content: '';
   position: absolute;
@@ -171,8 +198,34 @@ font-family:Ubuntu
   filter: blur(53px);
   backdrop-filter: blur(157px);
   z-index: -1;
-  background-image: url(<%- mediaproxy %>/proxy?url=<%- p.playlistThumbnail %>?sqp=-oaymwEWCKgBEF5IWvKriqkDCQgBFQAAiEIYAQ==&rs=AOn4CLA9kTQiXKs92q5RXRPYMkL6jKhNJQsqp=-oaymwEXCNACELwBSFryq4qpAwkIARUAAIhCGAE=&amp;rs=AOn4CLCLG7gzsIdtlp7ugZJH8YaAHX5bIw&amp;days_since_epoch=19755);
+  background-image: url(<%- proxyBase %><%- playlistThumbnail %>?sqp=-oaymwEWCKgBEF5IWvKriqkDCQgBFQAAiEIYAQ==&rs=AOn4CLA9kTQiXKs92q5RXRPYMkL6jKhNJQsqp=-oaymwEXCNACELwBSFryq4qpAwkIARUAAIhCGAE=&amp;rs=AOn4CLCLG7gzsIdtlp7ugZJH8YaAHX5bIw&amp;days_since_epoch=19755);
   margin-left: 82px;
+}
+<% } %>
+
+.playlist-error {
+  margin-left: auto;
+  margin-right: auto;
+  width: 56em;
+  color: white;
+  font-family: Inter, sans-serif;
+  padding-top: 7em;
+}
+
+.playlist-error-box {
+  background: #181818;
+  border: 1px solid #333;
+  border-radius: 1em;
+  padding: 2em;
+}
+
+.playlist-error-box h1 {
+  margin-top: 0;
+  color: white;
+}
+
+.playlist-error-box p {
+  color: #aaa;
 }
   
   </style>
@@ -204,49 +257,44 @@ font-family:Ubuntu
         
       </div>
     </nav>
+
+<% if (hasPlaylist) { %>
 <div class="playlist-page" style="margin-left: auto;margin-right: auto;width: 56em;">
 <div class="playlist-info" style="max-height: fit-content;border-radius: 1em;">
-            <% if (!p.mixId) { %>  
-<% 
-  let videoId = null; 
-  if (p.playlistThumbnail && p.playlistThumbnail.includes("/vi/")) {
-    videoId = p.playlistThumbnail.split("/vi/")[1].split("/")[0];
-  }
-%>
-
-		<a href="/watch?v=<%= videoId || '' %>" class="thumbnail" style="background-image: url('<%- mediaproxy %>/proxy?url=<%- p.playlistThumbnail %>sqp=-oaymwEXCNACELwBSFryq4qpAwkIARUAAIhCGAE=&amp;rs=AOn4CLCLG7gzsIdtlp7ugZJH8YaAHX5bIw&amp;days_since_epoch=19755');border-radius: 13px;border: 1px solid #ff0064">
+            <% if (!playlistMixId && playlistThumbnail) { %>  
+		<a href="/watch?v=<%= firstVideoId || '' %>" class="thumbnail" style="background-image: url('<%- proxyBase %><%- playlistThumbnail %>sqp=-oaymwEXCNACELwBSFryq4qpAwkIARUAAIhCGAE=&amp;rs=AOn4CLCLG7gzsIdtlp7ugZJH8YaAHX5bIw&amp;days_since_epoch=19755');border-radius: 13px;border: 1px solid #ff0064">
         <span class="hover-text">Watch :3</span>
 		</a>	
     
       <% } %>
 
-		<p class="title"><%- p.title %> </p>
-          <% if (!p.mixId) { %>  
-		<span class="info"><%- p.videoCount %> videos • <%- p?.viewCount?.toLocaleString() %> views  • by <%- p.author %> </span>
+		<p class="title"><%- playlistTitle %> </p>
+          <% if (!playlistMixId) { %>  
+		<span class="info"><%- playlistVideoCount %> videos • <%- playlistViewCount %> views  • by <%- playlistAuthor %> </span>
 	  <% } %>
 
-      <span class="description"><%- p.description %></span>
+      <span class="description"><%- playlistDescription %></span>
 		<div class="channel-info">
 		 
 		</div>
 	</div>
 	<div class="video-list playlist-video-list">
-		     <% p.?videos?.forEach(x => { %>
+		     <% playlistVideos.forEach(video => { %>
   
     <div class="playlist-video">
-      <a href="/watch?v=<%- x.videoId %>" class="index">
-           <%- x.index + 1 %>
+      <a href="/watch?v=<%- video.videoId || '' %>" class="index">
+           <%- typeof video.index === "number" ? video.index + 1 : "" %>
        </a>
- 				<a href="/watch?v=<%- x.videoId %>" class="thumbnail"
-				   style="background-image: url('<%- mediaproxy %>/proxy?url=https://i.ytimg.com/vi/<%- x.videoId %>/hqdefault.jpg?sqp=-oaymwEjCNACELwBSFryq4qpAxUIARUAAAAAGAElAADIQj0AgKJDeAE=&amp;rs=AOn4CLBibY6d4Dg0K69NC-0b7NFsD7AH1w');">
+ 				<a href="/watch?v=<%- video.videoId || '' %>" class="thumbnail"
+				   style="background-image: url('<%- proxyBase %>https://i.ytimg.com/vi/<%- video.videoId || '' %>/hqdefault.jpg?sqp=-oaymwEjCNACELwBSFryq4qpAxUIARUAAAAAGAElAADIQj0AgKJDeAE=&amp;rs=AOn4CLBibY6d4Dg0K69NC-0b7NFsD7AH1w');">
  				</a>
 				<div class="info">
-					<a href="/watch?v=<%- x.videoId %>" class="title max-lines-2">
-        <%- x.title %>
+					<a href="/watch?v=<%- video.videoId || '' %>" class="title max-lines-2">
+        <%- video.title || "Untitled video" %>
           </a>
 					<div>
-						<a href="/channel?id=<%- x.authorId %>" style="border-radius:0em"><%- x.author %></a><br>
-            <a href="/download?v=<%- x.videoId %>" style="border-radius:0em"> Download </a>
+						<a href="/channel?id=<%- video.authorId || '' %>" style="border-radius:0em"><%- video.author || "Unknown" %></a><br>
+            <a href="/download?v=<%- video.videoId || '' %>" style="border-radius:0em"> Download </a>
  					</div>
 				</div>
 			</div>
@@ -259,6 +307,15 @@ font-family:Ubuntu
 
 </div>
 </div>
+<% } else { %>
+<div class="playlist-error">
+  <div class="playlist-error-box">
+    <h1>Playlist unavailable</h1>
+    <p>This playlist could not be loaded because its data was missing or invalid.</p>
+    <a href="/" style="color:#3ea6ff;text-decoration:none;">Go home</a>
+  </div>
+</div>
+<% } %>
       
 <script src="/css/custom-css.js"> </script>
  
