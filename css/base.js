@@ -25,7 +25,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 //////////////// THE PLAYER, START ////////////////////////
-try {
+ try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -67,7 +67,6 @@ try {
   _earlyZero(_earlyVideo);
   _earlyZero(_earlyAudio);
 } catch { }
-
 document.addEventListener("DOMContentLoaded", () => {
   const video = videojs("video", {
     controls: true,
@@ -660,6 +659,11 @@ startupPrimeStartedAt: performance.now(),
                           seamlessReturnReason: "",
                           seamlessReturnTimer: null,
                             pendingSeekTarget: null,
+                            explicitSeekTarget: null,
+                            explicitSeekUntil: 0,
+                            explicitSeekCorrectionCount: 0,
+                            explicitSeekLastWriteAt: 0,
+                            explicitSeekLastWriteTarget: NaN,
                             nearZeroSeekAuthorizedUntil: 0,
                             playRequestedDuringSeek: false,
                             seekCompleted: false,
@@ -7790,6 +7794,109 @@ function markUserSeekIntent(ms = 2600) {
   }
 }
 function userSeekIntentActive() { return now() < state.userSeekIntentUntil; }
+function getExplicitSeekDuration() {
+  try {
+    const d = Number(video?.duration?.());
+    if (isFinite(d) && d > 0) return d;
+  } catch { }
+  try {
+    const d = Number(getVideoNode()?.duration);
+    if (isFinite(d) && d > 0) return d;
+  } catch { }
+  try {
+    const d = Number(videoEl?.duration);
+    if (isFinite(d) && d > 0) return d;
+  } catch { }
+  return 0;
+}
+function getActiveExplicitSeekTarget() {
+  const pending = Number(state.pendingSeekTarget);
+  if (state.pendingSeekTarget != null && isFinite(pending) && pending >= 0) return pending;
+  const mediaTarget = Number(state.mediaSessionSeekTarget);
+  if (isFinite(mediaTarget) && mediaTarget >= 0 && now() < Number(state.mediaSessionSeekUntil || 0)) return mediaTarget;
+  const explicitTarget = Number(state.explicitSeekTarget);
+  if (isFinite(explicitTarget) && explicitTarget >= 0 && now() < Number(state.explicitSeekUntil || 0)) return explicitTarget;
+  return NaN;
+}
+function rememberExplicitSeekTarget(t, ms = 5200) {
+  const target = Number(t);
+  if (!isFinite(target) || target < 0) return false;
+  const prev = Number(state.explicitSeekTarget);
+  if (!isFinite(prev) || Math.abs(prev - target) > 0.08 || now() >= Number(state.explicitSeekUntil || 0)) {
+    state.explicitSeekCorrectionCount = 0;
+  }
+  state.explicitSeekTarget = target;
+  state.explicitSeekUntil = Math.max(state.explicitSeekUntil || 0, now() + Math.max(1200, Number(ms) || 0));
+  state.seekTargetTime = target;
+  state.seekResolvedTime = NaN;
+  return true;
+}
+function clearExplicitSeekTarget() {
+  state.explicitSeekTarget = null;
+  state.explicitSeekUntil = 0;
+  state.explicitSeekCorrectionCount = 0;
+  state.explicitSeekLastWriteTarget = NaN;
+}
+function explicitSeekTolerance(target) {
+  const dur = getExplicitSeekDuration();
+  const t = Number(target);
+  if (isFinite(dur) && dur > 1 && isFinite(t) && t >= dur - 0.4) return 0.8;
+  return 0.42;
+}
+function writeExplicitSeekTargetToMedia(t, opts = {}) {
+  const target = Number(t);
+  if (!isFinite(target) || target < 0) return false;
+  const ts = now();
+  const lastTarget = Number(state.explicitSeekLastWriteTarget);
+  if (!opts.force && isFinite(lastTarget) &&
+    Math.abs(lastTarget - target) < 0.03 &&
+    (ts - Number(state.explicitSeekLastWriteAt || 0)) < 70) {
+    return true;
+  }
+  state.explicitSeekLastWriteAt = ts;
+  state.explicitSeekLastWriteTarget = target;
+  const nearZero = target < 0.5;
+  if (nearZero) {
+    authorizeNearZeroSeek(Math.max(3200, Number(opts.ms) || 0));
+    state._allowZeroSeek = true;
+  }
+  try { video.currentTime(target); } catch { }
+  try { safeSetCT(videoEl, target); } catch { }
+  try {
+    const vn = getVideoNode();
+    if (vn && vn !== videoEl) safeSetCT(vn, target);
+  } catch { }
+  if (nearZero) state._allowZeroSeek = false;
+  if (opts.audio !== false && coupledMode && audio) {
+    try { squelchAudioEvents(Math.max(450, Number(opts.audioSquelchMs) || 0)); } catch { }
+    state._allowAudioTimeWrite = true;
+    try { audio.currentTime = target; } catch { }
+    state._allowAudioTimeWrite = false;
+  }
+  return true;
+}
+function reassertExplicitSeekTargetIfNeeded(observedTime, reason = "") {
+  const target = getActiveExplicitSeekTarget();
+  if (!isFinite(target) || target < 0) return false;
+  const observed = Number(observedTime);
+  const tolerance = explicitSeekTolerance(target);
+  if (isFinite(observed) && Math.abs(observed - target) <= tolerance) return false;
+  const prevTarget = Number(state.explicitSeekTarget);
+  const targetChanged = !isFinite(prevTarget) ||
+  Math.abs(prevTarget - target) > 0.08 ||
+  now() >= Number(state.explicitSeekUntil || 0);
+  const correctionCount = targetChanged ? 0 : (Number(state.explicitSeekCorrectionCount) || 0);
+  if (correctionCount >= 5) return false;
+  state.pendingSeekTarget = target;
+  rememberExplicitSeekTarget(target, 7000);
+  state.explicitSeekCorrectionCount = correctionCount + 1;
+  state.seekStabilizeUntil = Math.max(state.seekStabilizeUntil, now() + 2200);
+  state.suppressEndedUntil = Math.max(state.suppressEndedUntil, now() + 4200);
+  writeExplicitSeekTargetToMedia(target, { force: true, audio: true, audioSquelchMs: 700 });
+  try { setFastSync(1500); } catch { }
+  try { scheduleSync(0); } catch { }
+  return true;
+}
 function prepareExplicitUserSeekTarget(t, ms = 5200) {
   const target = Number(t);
   if (!isFinite(target) || target < 0) return false;
@@ -7798,6 +7905,8 @@ function prepareExplicitUserSeekTarget(t, ms = 5200) {
   if (target < 0.8) authorizeNearZeroSeek(Math.max(ms, 3200));
   state.pendingSeekTarget = target;
   state.seekWantedPlaying = state.intendedPlaying;
+  rememberExplicitSeekTarget(target, Math.max(ms, 6500));
+  writeExplicitSeekTargetToMedia(target, { force: true, audio: false, ms });
   if (state.seekWantedPlaying) armSeekResumeIntent(Math.max(ms, 7000));
   state.seekStabilizeUntil = Math.max(state.seekStabilizeUntil, now() + Math.max(1200, ms));
   state.loopPreventionCooldownUntil = 0;
@@ -7847,6 +7956,7 @@ function prepareRestartFromEndedPlayback(force = false) {
   state.pendingSeekTarget = null;
   state.mediaSessionSeekTarget = null;
   state.mediaSessionSeekUntil = 0;
+  clearExplicitSeekTarget();
   state.seekWantedPlaying = true;
   armSeekResumeIntent(7000);
   state.seekStabilizeUntil = Math.max(state.seekStabilizeUntil, now() + 1800);
@@ -9576,9 +9686,15 @@ function checkAudioPlayAttempt() {
 function safeSetCT(media, t) {
   try {
     if (!media || !isFinite(t) || t < 0) return;
+    const allowExplicitNearZero =
+    state._allowZeroSeek ||
+    state.restarting ||
+    userSeekIntentActive() ||
+    state.pendingSeekTarget != null ||
+    nearZeroSeekAuthorized(t);
     if (t < 0.5 && state.firstPlayCommitted &&
       !state.restarting && !state.endedNaturally && !isLoopDesired() &&
-      !state._allowZeroSeek) {
+      !allowExplicitNearZero) {
       let _curT = 0;
     try { _curT = Number(media.currentTime) || 0; } catch { }
     if (_curT > 1.0) return;
@@ -14579,6 +14695,11 @@ function startSeekBufferWait(forCoupled) {
 async function finalizeSeekSync(currentSeekId) {
   if (!coupledMode) {
     if (state.seekId !== currentSeekId) return;
+    const vtNow = (() => { try { return Number(video.currentTime()); } catch { return NaN; } })();
+    if (reassertExplicitSeekTargetIfNeeded(vtNow, "finalize-noncoupled")) {
+      scheduleSeekFinalize(SEEK_FINALIZE_DELAY_MS, currentSeekId);
+      return;
+    }
     const wantedPlaying = shouldResumeAfterSeek();
     if (wantedPlaying) {
       state.intendedPlaying = true;
@@ -14596,6 +14717,7 @@ async function finalizeSeekSync(currentSeekId) {
     state.pendingSeekTarget = null;
     state.mediaSessionSeekTarget = null;
     state.mediaSessionSeekUntil = 0;
+    clearExplicitSeekTarget();
     state.seekTargetTime = 0;
     state.seekResolvedTime = NaN;
     state.seekCompleted = true; state._seekStartedAt = 0;
@@ -14622,6 +14744,10 @@ async function finalizeSeekSync(currentSeekId) {
   const vtAtFinalize = isFinite(Number(state.seekResolvedTime))
   ? Number(state.seekResolvedTime)
   : Number(video.currentTime());
+  if (reassertExplicitSeekTargetIfNeeded(vtAtFinalize, "finalize")) {
+    scheduleSeekFinalize(SEEK_FINALIZE_DELAY_MS, currentSeekId);
+    return;
+  }
   if (isFinite(vtAtFinalize) && coupledMode && audio) {
     const atCurrent = Number(audio.currentTime) || 0;
     const _drift = Math.abs(atCurrent - vtAtFinalize);
@@ -14661,6 +14787,7 @@ async function finalizeSeekSync(currentSeekId) {
       state.pendingSeekTarget = null;
       state.mediaSessionSeekTarget = null;
       state.mediaSessionSeekUntil = 0;
+      clearExplicitSeekTarget();
       state.seekTargetTime = 0;
       state.seekResolvedTime = NaN;
       state.seekCooldownUntil = now() + 200;
@@ -14681,6 +14808,7 @@ async function finalizeSeekSync(currentSeekId) {
   if (state.pendingSeekTarget != null) state.pendingSeekTarget = null;
   state.mediaSessionSeekTarget = null;
   state.mediaSessionSeekUntil = 0;
+  clearExplicitSeekTarget();
   state.seekTargetTime = 0;
   state.seekResolvedTime = NaN;
   if (!shouldResumeAfterSeek() || mediaSessionForcedPauseActive()) {
@@ -16376,6 +16504,7 @@ function setupHeartbeat() {
                             state.pendingSeekTarget = null;
                             state.mediaSessionSeekTarget = null;
                             state.mediaSessionSeekUntil = 0;
+                            clearExplicitSeekTarget();
                             state.seekTargetTime = 0;
                             state.seekResolvedTime = NaN;
                             clearSeekSyncFinalizeTimer();
@@ -17820,6 +17949,7 @@ function setupMediaSession() {
       state.pendingSeekTarget = target;
       state.mediaSessionSeekTarget = target;
       state.mediaSessionSeekUntil = now() + 7000;
+      rememberExplicitSeekTarget(target, 7000);
       state.seekWantedPlaying = wasIntendedPlaying;
       if (state.seekWantedPlaying) {
         armSeekResumeIntent(9000);
@@ -19815,7 +19945,13 @@ function bindCommonMediaEvents() {
             seekTime = _stPendingNum;
           } else if (_stPendingValid) {
             const _stPendingRawCandidates = [vjsTime, nativeTime, innerTime].filter(v => isFinite(v) && v > 0.5);
-            const _stPendingBestRaw = _stPendingRawCandidates.length ? Math.max(..._stPendingRawCandidates) : NaN;
+            const _stPendingBestRaw = _stPendingRawCandidates.length
+            ? (_stUserSeekIntent && previousGoodVT > 0.5
+            ? _stPendingRawCandidates.reduce((best, v) =>
+            Math.abs(v - previousGoodVT) > Math.abs(best - previousGoodVT) ? v : best,
+                                             _stPendingRawCandidates[0])
+            : Math.max(..._stPendingRawCandidates))
+            : NaN;
             const _stPendingLooksLikeDraggedSlider =
             _stUserSeekIntent &&
             isFinite(_stPendingBestRaw) &&
@@ -19823,12 +19959,27 @@ function bindCommonMediaEvents() {
             Math.abs(_stPendingBestRaw - _stPendingNum) > 0.75 &&
             Math.abs(_stPendingBestRaw - previousGoodVT) > 0.5;
             seekTime = _stPendingLooksLikeDraggedSlider ? _stPendingBestRaw : _stPendingNum;
+            if (_stPendingLooksLikeDraggedSlider && isFinite(seekTime) && seekTime >= 0) {
+              state.pendingSeekTarget = seekTime;
+              rememberExplicitSeekTarget(seekTime, 7000);
+            }
           } else {
             const _stRawCandidates = [vjsTime, nativeTime, innerTime].filter(v => isFinite(v) && v >= 0);
             const _stAtLeastOneNonZero = _stRawCandidates.some(v => v > 0.5);
             const _stAllZero = _stRawCandidates.length > 0 && !_stAtLeastOneNonZero;
             if (_stAtLeastOneNonZero) {
-              seekTime = Math.max(..._stRawCandidates);
+              if (_stUserSeekIntent && previousGoodVT > 0.5) {
+                const _stBestMovedRaw = _stRawCandidates.reduce((best, v) =>
+                Math.abs(v - previousGoodVT) > Math.abs(best - previousGoodVT) ? v : best,
+                                                                 _stRawCandidates[0]);
+                const _stBestWouldUnauthorizedZero =
+                _stBestMovedRaw < 0.5 &&
+                previousGoodVT > 0.9 &&
+                !nearZeroSeekAuthorized(_stBestMovedRaw);
+                seekTime = _stBestWouldUnauthorizedZero ? Math.max(..._stRawCandidates) : _stBestMovedRaw;
+              } else {
+                seekTime = Math.max(..._stRawCandidates);
+              }
             } else if (_stRawCandidates.length === 0) {
               seekTime = previousGoodVT;
               _stAbortPhantom = !_stRestartLike && !_stUserSeekIntent && !_stUserActionRecent && previousGoodVT > 0.5;
@@ -19844,6 +19995,10 @@ function bindCommonMediaEvents() {
                 _stAbortPhantom = true;
               }
             }
+          }
+          if (isFinite(seekTime) && seekTime >= 0 &&
+            (_stPendingValid || _stUserSeekIntent)) {
+            rememberExplicitSeekTarget(seekTime, 7000);
           }
           if (_stAbortPhantom) {
             try {
@@ -19863,6 +20018,7 @@ function bindCommonMediaEvents() {
             state.pendingSeekTarget = null;
             state.mediaSessionSeekTarget = null;
             state.mediaSessionSeekUntil = 0;
+            clearExplicitSeekTarget();
             try { clearSeekResumeIntent(); } catch { }
             try { clearSeekWatchdog(); } catch { }
             try { UltraStabilizer.onSeekEnd?.(); } catch { }
@@ -19953,6 +20109,17 @@ function bindCommonMediaEvents() {
           state.audioStallVideoPaused = false;
           const newTime = Number(video.currentTime());
           const expectedSeekTime = Number(state.seekTargetTime);
+          if (reassertExplicitSeekTargetIfNeeded(newTime, "seeked")) {
+            const retrySeekId = state.seekId;
+            clearSeekWatchdog();
+            state.seekWatchdogTimer = setTimeout(() => {
+              state.seekWatchdogTimer = null;
+              if (state.seeking && state.seekId === retrySeekId) {
+                scheduleSeekFinalize(0, retrySeekId);
+              }
+            }, SEEK_WATCHDOG_MS);
+            return;
+          }
           if (newTime > 0.35) {
             commitStartupFromResolvedPlaybackPosition(newTime, { fromSeek: true, suppressMs: 20000 });
           }
@@ -19983,6 +20150,7 @@ function bindCommonMediaEvents() {
             state.pendingSeekTarget = null;
             state.mediaSessionSeekTarget = null;
             state.mediaSessionSeekUntil = 0;
+            clearExplicitSeekTarget();
             if (coupledMode && audio && isFinite(newTime) && newTime >= 0) {
               const _curAudioTime = Number(audio.currentTime) || 0;
               if (Math.abs(_curAudioTime - newTime) > 0.2) {
