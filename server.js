@@ -32,6 +32,9 @@
   const { sinit } = require("./src/libpoketube/init/superinit.js");
   const innertube = require("./src/libpoketube/libpoketube-youtubei-objects.json");
   const fs = require("fs");
+  const os = require("os");
+  const nodePath = require("path");
+  const { performance, monitorEventLoopDelay } = require("perf_hooks");
   const config = require("./config.json");
   const u = await media_proxy();
 
@@ -1200,42 +1203,333 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
       }
     }
   };
-  
-const TOOBUSY_INTERVAL_MS = 110;
-const TOOBUSY_MAX_LAG_MS = 3500;
 
-const INSANE_LAG_MS = 5000;
-const INSANE_LAG_STRIKES = 3;
-const INSANE_LAG_WINDOW_MS = 30_000;
-const LAG_LOG_COOLDOWN_MS = 5_000;
-const EXIT_GRACE_MS = 10_000;
-const RETRY_AFTER_SECONDS = 15;
+/*
+ * POKE-toobusy
+ *
+ * This handles overload in two layers:
+ *
+ * 1. toobusy-js still does the fast middleware decision. If the event loop
+ *    is lagging too much, new requests get a 503 before they make things worse.
+ *
+ * 2. Node core diagnostics add context around the lag event:
+ *    event-loop delay percentiles, event-loop utilization, CPU delta, memory,
+ *    active route counts, oldest active requests, recent slow requests,
+ *    active resource types, and optional diagnostic reports.
+ *
+ * toobusy-js can tell us that the event loop was delayed. It cannot tell us
+ * the exact blocking line after the fact, so this logs the best surrounding
+ * evidence without adding a heavy profiler dependency.
+ */
+const TOOBUSY_INTERVAL_MS = Number(process.env.POKE_TOOBUSY_INTERVAL_MS || 110);
+const TOOBUSY_MAX_LAG_MS = Number(process.env.POKE_TOOBUSY_MAX_LAG_MS || 2500);
+
+const EVENT_LOOP_WARN_LAG_MS = Number(process.env.POKE_EVENT_LOOP_WARN_LAG_MS || 750);
+const INSANE_LAG_MS = Number(process.env.POKE_INSANE_LAG_MS || Math.max(7500, TOOBUSY_MAX_LAG_MS * 3));
+const INSANE_P99_LAG_MS = Number(process.env.POKE_INSANE_P99_LAG_MS || Math.max(4000, TOOBUSY_MAX_LAG_MS * 2));
+const INSANE_ELU = Number(process.env.POKE_INSANE_ELU || 0.98);
+
+const INSANE_LAG_STRIKES = Number(process.env.POKE_INSANE_LAG_STRIKES || 3);
+const INSANE_LAG_WINDOW_MS = Number(process.env.POKE_INSANE_LAG_WINDOW_MS || 30_000);
+
+const LAG_LOG_COOLDOWN_MS = Number(process.env.POKE_LAG_LOG_COOLDOWN_MS || 5_000);
+const REPORT_COOLDOWN_MS = Number(process.env.POKE_LAG_REPORT_COOLDOWN_MS || 60_000);
+
+const EXIT_GRACE_MS = Number(process.env.POKE_EXIT_GRACE_MS || 10_000);
+const RETRY_AFTER_SECONDS = Number(process.env.POKE_RETRY_AFTER_SECONDS || 15);
+
+const REQUEST_SLOW_MS = Number(process.env.POKE_REQUEST_SLOW_MS || 3000);
+const MAX_TRACKED_ACTIVE_REQUESTS = Number(process.env.POKE_MAX_TRACKED_ACTIVE_REQUESTS || 1000);
+const MAX_RECENT_SLOW_REQUESTS = Number(process.env.POKE_MAX_RECENT_SLOW_REQUESTS || 20);
+
+const DIAGNOSTIC_REPORT_DIR = process.env.POKE_DIAGNOSTIC_REPORT_DIR || nodePath.join(process.cwd(), "reports");
+const ENABLE_DIAGNOSTIC_REPORTS = process.env.POKE_DIAGNOSTIC_REPORTS !== "0";
 
 let lagStrikeTimes = [];
 let lastLagLogAt = 0;
+let lastReportAt = 0;
 let lagRestarting = false;
+
+let requestSequence = 0;
+const activeRequests = new Map();
+const activeRequestCounts = new Map();
+const recentSlowRequests = [];
+
+let lastEventLoopUtilization = performance.eventLoopUtilization();
+let lastCpuUsage = process.cpuUsage();
+
+const eventLoopDelay = monitorEventLoopDelay({ resolution: 20 });
+eventLoopDelay.enable();
 
 function bytesToMb(bytes) {
   return Math.round(bytes / 1024 / 1024) + "MB";
 }
 
-function getLagSnapshot(currentLag, extra) {
-  const memory = process.memoryUsage();
+function nsToMs(ns) {
+  if (!Number.isFinite(ns) || ns <= 0 || ns > 3_600_000_000_000) {
+    return 0;
+  }
 
-  return JSON.stringify({
+  return Math.round((ns / 1_000_000) * 100) / 100;
+}
+
+function roundMs(value) {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.round(value * 100) / 100;
+}
+
+function roundRatio(value) {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.round(value * 10000) / 10000;
+}
+
+function normalizePathname(pathname) {
+  return String(pathname || "/")
+    .replace(/[a-f0-9]{24}/gi, ":objectId")
+    .replace(/[a-f0-9]{32,}/gi, ":hex")
+    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi, ":uuid")
+    .replace(/\/\d{3,}(?=\/|$)/g, "/:number")
+    .replace(/\/[A-Za-z0-9_-]{11}(?=\/|$)/g, "/:id");
+}
+
+function getRequestKey(req) {
+  const url = req.originalUrl || req.url || "/";
+  const pathname = url.split("?")[0] || "/";
+  return req.method + " " + normalizePathname(pathname);
+}
+
+function incrementMapCount(map, key) {
+  map.set(key, (map.get(key) || 0) + 1);
+}
+
+function decrementMapCount(map, key) {
+  const nextValue = (map.get(key) || 0) - 1;
+
+  if (nextValue <= 0) {
+    map.delete(key);
+    return;
+  }
+
+  map.set(key, nextValue);
+}
+
+function getTopMapEntries(map, limit) {
+  return Array.from(map.entries())
+    .sort(function (a, b) {
+      return b[1] - a[1];
+    })
+    .slice(0, limit)
+    .map(function (entry) {
+      return {
+        key: entry[0],
+        count: entry[1]
+      };
+    });
+}
+
+function getActiveRequestSummary(limit) {
+  const now = performance.now();
+
+  return Array.from(activeRequests.values())
+    .map(function (request) {
+      return {
+        id: request.id,
+        key: request.key,
+        ageMs: roundMs(now - request.startedAt)
+      };
+    })
+    .sort(function (a, b) {
+      return b.ageMs - a.ageMs;
+    })
+    .slice(0, limit);
+}
+
+function getActiveResourceCounts() {
+  if (typeof process.getActiveResourcesInfo !== "function") {
+    return {};
+  }
+
+  const counts = {};
+
+  for (const resource of process.getActiveResourcesInfo()) {
+    counts[resource] = (counts[resource] || 0) + 1;
+  }
+
+  return counts;
+}
+
+function getEventLoopDelaySnapshot() {
+  return {
+    minMs: nsToMs(eventLoopDelay.min),
+    meanMs: nsToMs(eventLoopDelay.mean),
+    maxMs: nsToMs(eventLoopDelay.max),
+    stddevMs: nsToMs(eventLoopDelay.stddev),
+    p50Ms: nsToMs(eventLoopDelay.percentile(50)),
+    p90Ms: nsToMs(eventLoopDelay.percentile(90)),
+    p99Ms: nsToMs(eventLoopDelay.percentile(99))
+  };
+}
+
+function getEventLoopUtilizationSnapshot() {
+  const delta = performance.eventLoopUtilization(lastEventLoopUtilization);
+  lastEventLoopUtilization = performance.eventLoopUtilization();
+
+  return {
+    idleMs: roundMs(delta.idle),
+    activeMs: roundMs(delta.active),
+    utilization: roundRatio(delta.utilization)
+  };
+}
+
+function getCpuUsageSnapshot() {
+  const delta = process.cpuUsage(lastCpuUsage);
+  lastCpuUsage = process.cpuUsage();
+
+  return {
+    userMs: roundMs(delta.user / 1000),
+    systemMs: roundMs(delta.system / 1000),
+    totalMs: roundMs((delta.user + delta.system) / 1000)
+  };
+}
+
+function getSeverity(currentLagMs, delaySnapshot, eluSnapshot) {
+  const p99LagMs = delaySnapshot.p99Ms;
+  const maxLagMs = delaySnapshot.maxMs;
+  const elu = eluSnapshot.utilization;
+
+  if (lagRestarting) {
+    return "restarting";
+  }
+
+  if (currentLagMs >= INSANE_LAG_MS || p99LagMs >= INSANE_P99_LAG_MS || maxLagMs >= INSANE_LAG_MS || elu >= INSANE_ELU) {
+    return "insane";
+  }
+
+  if (currentLagMs >= TOOBUSY_MAX_LAG_MS || p99LagMs >= TOOBUSY_MAX_LAG_MS || maxLagMs >= TOOBUSY_MAX_LAG_MS) {
+    return "overloaded";
+  }
+
+  if (currentLagMs >= EVENT_LOOP_WARN_LAG_MS || p99LagMs >= EVENT_LOOP_WARN_LAG_MS || maxLagMs >= EVENT_LOOP_WARN_LAG_MS) {
+    return "warning";
+  }
+
+  return "ok";
+}
+
+function createLagSnapshot(currentLag, extra) {
+  const currentLagMs = roundMs(currentLag);
+  const memory = process.memoryUsage();
+  const delaySnapshot = getEventLoopDelaySnapshot();
+  const eluSnapshot = getEventLoopUtilizationSnapshot();
+  const cpuSnapshot = getCpuUsageSnapshot();
+  const severity = getSeverity(currentLagMs, delaySnapshot, eluSnapshot);
+
+  return {
     reason: "event_loop_lag",
-    currentLagMs: Math.round(currentLag),
-    maxLagMs: TOOBUSY_MAX_LAG_MS,
-    insaneLagMs: INSANE_LAG_MS,
-    pid: process.pid,
-    uptimeSeconds: Math.round(process.uptime()),
-    rss: bytesToMb(memory.rss),
-    heapUsed: bytesToMb(memory.heapUsed),
-    heapTotal: bytesToMb(memory.heapTotal),
-    external: bytesToMb(memory.external),
-    strikes: lagStrikeTimes.length,
+    severity,
+    source: {
+      detector: "toobusy-js",
+      note: "toobusy-js detected delayed event-loop polling; exact blocking call cannot be known from this callback alone"
+    },
+    lag: {
+      currentMs: currentLagMs,
+      warningMs: EVENT_LOOP_WARN_LAG_MS,
+      tooBusyMs: TOOBUSY_MAX_LAG_MS,
+      insaneMs: INSANE_LAG_MS,
+      insaneP99Ms: INSANE_P99_LAG_MS,
+      strikes: lagStrikeTimes.length,
+      strikeWindowMs: INSANE_LAG_WINDOW_MS
+    },
+    eventLoopDelay: delaySnapshot,
+    eventLoopUtilization: eluSnapshot,
+    cpu: cpuSnapshot,
+    memory: {
+      rss: bytesToMb(memory.rss),
+      heapUsed: bytesToMb(memory.heapUsed),
+      heapTotal: bytesToMb(memory.heapTotal),
+      external: bytesToMb(memory.external),
+      arrayBuffers: bytesToMb(memory.arrayBuffers || 0)
+    },
+    process: {
+      pid: process.pid,
+      node: process.version,
+      uptimeSeconds: Math.round(process.uptime()),
+      platform: process.platform,
+      arch: process.arch
+    },
+    system: {
+      loadavg: os.loadavg().map(roundMs),
+      freeMemory: bytesToMb(os.freemem()),
+      totalMemory: bytesToMb(os.totalmem())
+    },
+    requests: {
+      active: activeRequests.size,
+      activeByRoute: getTopMapEntries(activeRequestCounts, 10),
+      oldestActive: getActiveRequestSummary(10),
+      recentSlow: recentSlowRequests.slice(-10).reverse()
+    },
+    resources: getActiveResourceCounts(),
     ...extra
-  });
+  };
+}
+
+function logLag(message, snapshot) {
+  console.error("[POKE-toobusy] " + message + " " + JSON.stringify(snapshot));
+}
+
+function shouldWriteDiagnosticReport() {
+  if (!ENABLE_DIAGNOSTIC_REPORTS) {
+    return false;
+  }
+
+  if (!process.report || typeof process.report.writeReport !== "function") {
+    return false;
+  }
+
+  const now = Date.now();
+
+  if (now - lastReportAt < REPORT_COOLDOWN_MS) {
+    return false;
+  }
+
+  lastReportAt = now;
+  return true;
+}
+
+function writeDiagnosticReport(snapshot) {
+  if (!shouldWriteDiagnosticReport()) {
+    return null;
+  }
+
+  try {
+    fs.mkdirSync(DIAGNOSTIC_REPORT_DIR, { recursive: true });
+
+    const filename = nodePath.join(
+      DIAGNOSTIC_REPORT_DIR,
+      "event-loop-lag-" + Date.now() + "-pid-" + process.pid + ".json"
+    );
+
+    const err = new Error(
+      "Sustained event-loop lag: " +
+      snapshot.lag.currentMs +
+      "ms, p99: " +
+      snapshot.eventLoopDelay.p99Ms +
+      "ms, max: " +
+      snapshot.eventLoopDelay.maxMs +
+      "ms"
+    );
+
+    return process.report.writeReport(filename, err);
+  } catch (err) {
+    console.error("[POKE-toobusy] failed to write diagnostic report", err);
+    return null;
+  }
 }
 
 function recordInsaneLagStrike() {
@@ -1250,6 +1544,31 @@ function recordInsaneLagStrike() {
   return lagStrikeTimes.length;
 }
 
+function resetInsaneLagStrikesIfHealthy(currentLag, snapshot) {
+  if (currentLag >= TOOBUSY_MAX_LAG_MS) {
+    return;
+  }
+
+  if (snapshot.eventLoopDelay.p99Ms >= TOOBUSY_MAX_LAG_MS) {
+    return;
+  }
+
+  if (snapshot.eventLoopUtilization.utilization >= 0.9) {
+    return;
+  }
+
+  lagStrikeTimes = [];
+}
+
+function isInsaneLag(currentLag, snapshot) {
+  return (
+    currentLag >= INSANE_LAG_MS ||
+    snapshot.eventLoopDelay.p99Ms >= INSANE_P99_LAG_MS ||
+    snapshot.eventLoopDelay.maxMs >= INSANE_LAG_MS ||
+    snapshot.eventLoopUtilization.utilization >= INSANE_ELU
+  );
+}
+
 function shutdownToobusy() {
   if (typeof toobusy.shutdown !== "function") {
     return;
@@ -1262,34 +1581,85 @@ function shutdownToobusy() {
   }
 }
 
-function beginLagRestart(currentLag) {
+function beginLagRestart(currentLag, snapshot) {
   if (lagRestarting) {
     return;
   }
 
   lagRestarting = true;
 
-  console.error(
-    "[POKE-toobusy] sustained insane event loop lag, refusing new requests and restarting",
-    getLagSnapshot(currentLag, {
-      exitGraceMs: EXIT_GRACE_MS
-    })
+  const reportPath = writeDiagnosticReport(snapshot);
+
+  logLag(
+    "sustained insane event-loop lag, refusing new requests and restarting",
+    {
+      ...snapshot,
+      restart: {
+        exitGraceMs: EXIT_GRACE_MS,
+        retryAfterSeconds: RETRY_AFTER_SECONDS,
+        diagnosticReport: reportPath
+      }
+    }
   );
 
   shutdownToobusy();
 
   const exitTimer = setTimeout(function () {
-    console.error("[POKE-toobusy] exiting after sustained insane event loop lag");
+    console.error("[POKE-toobusy] exiting after sustained insane event-loop lag");
     process.exit(1);
   }, EXIT_GRACE_MS);
 
   exitTimer.unref();
 }
 
-toobusy.interval(TOOBUSY_INTERVAL_MS);
-toobusy.maxLag(TOOBUSY_MAX_LAG_MS);
+function requestLagTracker(req, res, next) {
+  const id = ++requestSequence;
+  const key = getRequestKey(req);
+  const startedAt = performance.now();
 
-app.use(function (req, res, next) {
+  if (activeRequests.size < MAX_TRACKED_ACTIVE_REQUESTS) {
+    activeRequests.set(id, {
+      id,
+      key,
+      startedAt
+    });
+
+    incrementMapCount(activeRequestCounts, key);
+  }
+
+  res.on("finish", function () {
+    const finishedAt = performance.now();
+    const durationMs = roundMs(finishedAt - startedAt);
+
+    if (activeRequests.has(id)) {
+      activeRequests.delete(id);
+      decrementMapCount(activeRequestCounts, key);
+    }
+
+    if (durationMs >= REQUEST_SLOW_MS) {
+      recentSlowRequests.push({
+        key,
+        statusCode: res.statusCode,
+        durationMs
+      });
+
+      while (recentSlowRequests.length > MAX_RECENT_SLOW_REQUESTS) {
+        recentSlowRequests.shift();
+      }
+    }
+  });
+
+  res.on("close", function () {
+    if (activeRequests.has(id)) {
+      activeRequests.delete(id);
+      decrementMapCount(activeRequestCounts, key);
+    }
+  });
+
+  next();
+}
+
+function tooBusyMiddleware(req, res, next) {
   if (lagRestarting) {
     res.set("Connection", "close");
     res.set("Retry-After", String(RETRY_AFTER_SECONDS));
@@ -1302,38 +1672,73 @@ app.use(function (req, res, next) {
   }
 
   next();
-});
+}
+
+function handleToobusyShutdownSignal(signal) {
+  lagRestarting = true;
+  shutdownToobusy();
+
+  console.error("[POKE-toobusy] received " + signal + ", shutting down toobusy monitor");
+
+  const signalExitTimer = setTimeout(function () {
+    process.exit(0);
+  }, 1000);
+
+  signalExitTimer.unref();
+}
+
+toobusy.interval(TOOBUSY_INTERVAL_MS);
+toobusy.maxLag(TOOBUSY_MAX_LAG_MS);
+
+app.use(requestLagTracker);
+app.use(tooBusyMiddleware);
 
 toobusy.onLag(function (currentLag) {
   const now = Date.now();
-  const roundedLag = Math.round(currentLag);
+  const snapshot = createLagSnapshot(currentLag);
+  const insane = isInsaneLag(currentLag, snapshot);
 
-  if (now - lastLagLogAt >= LAG_LOG_COOLDOWN_MS || currentLag >= INSANE_LAG_MS) {
+  if (now - lastLagLogAt >= LAG_LOG_COOLDOWN_MS || insane) {
     lastLagLogAt = now;
-
-    console.error(
-      "[POKE-toobusy] event loop lag detected",
-      getLagSnapshot(currentLag)
-    );
+    logLag("event-loop lag detected", snapshot);
   }
 
-  if (currentLag < INSANE_LAG_MS) {
+  if (!insane) {
+    resetInsaneLagStrikesIfHealthy(currentLag, snapshot);
+    eventLoopDelay.reset();
     return;
   }
 
   const strikeCount = recordInsaneLagStrike();
 
-  console.error(
-    "[POKE-toobusy] insane lag strike " + strikeCount + "/" + INSANE_LAG_STRIKES,
-    getLagSnapshot(currentLag, {
-      lagMs: roundedLag,
-      windowMs: INSANE_LAG_WINDOW_MS
-    })
+  const strikeSnapshot = {
+    ...snapshot,
+    lag: {
+      ...snapshot.lag,
+      strikes: strikeCount
+    }
+  };
+
+  logLag(
+    "insane event-loop lag strike " + strikeCount + "/" + INSANE_LAG_STRIKES,
+    strikeSnapshot
   );
 
   if (strikeCount >= INSANE_LAG_STRIKES) {
-    beginLagRestart(currentLag);
+    beginLagRestart(currentLag, strikeSnapshot);
+    return;
   }
+
+  writeDiagnosticReport(strikeSnapshot);
+  eventLoopDelay.reset();
+});
+
+process.once("SIGTERM", function () {
+  handleToobusyShutdownSignal("SIGTERM");
+});
+
+process.once("SIGINT", function () {
+  handleToobusyShutdownSignal("SIGINT");
 });
   
   initlog("inited anti ddos");
