@@ -2,7 +2,7 @@
 
     Poke is an Free/Libre youtube front-end. this is our main file.
   
-    Copyright (C) 2021-2025 Poke (https://codeberg.org/ashleyirispuppy/poke)
+    Copyright (C) 2021-2026 Poke (https://codeberg.org/ashleyirispuppy/poke)
     
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -1215,7 +1215,7 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
  * 2. Node core diagnostics add context around the lag event:
  *    event-loop delay percentiles, event-loop utilization, CPU delta, memory,
  *    active route counts, oldest active requests, recent slow requests,
- *    active resource types, and optional diagnostic reports.
+ *    active resource types, dynamic thresholds, and optional diagnostic reports.
  *
  * toobusy-js can tell us that the event loop was delayed. It cannot tell us
  * the exact blocking line after the fact, so this logs the best surrounding
@@ -1224,9 +1224,27 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
 const TOOBUSY_INTERVAL_MS = Number(process.env.POKE_TOOBUSY_INTERVAL_MS || 110);
 const TOOBUSY_MAX_LAG_MS = Number(process.env.POKE_TOOBUSY_MAX_LAG_MS || 2500);
 
-const EVENT_LOOP_WARN_LAG_MS = Number(process.env.POKE_EVENT_LOOP_WARN_LAG_MS || 750);
-const INSANE_LAG_MS = Number(process.env.POKE_INSANE_LAG_MS || Math.max(7500, TOOBUSY_MAX_LAG_MS * 3));
-const INSANE_P99_LAG_MS = Number(process.env.POKE_INSANE_P99_LAG_MS || Math.max(4000, TOOBUSY_MAX_LAG_MS * 2));
+const EVENT_LOOP_WARN_LAG_MS_FLOOR = Number(process.env.POKE_EVENT_LOOP_WARN_LAG_MS || 750);
+const INSANE_LAG_MS_FLOOR = Number(process.env.POKE_INSANE_LAG_MS || Math.max(7500, TOOBUSY_MAX_LAG_MS * 3));
+const INSANE_P99_LAG_MS_FLOOR = Number(process.env.POKE_INSANE_P99_LAG_MS || Math.max(5000, TOOBUSY_MAX_LAG_MS * 2));
+
+const EVENT_LOOP_WARN_LAG_MS_CAP = Number(process.env.POKE_EVENT_LOOP_WARN_LAG_MS_CAP || 2500);
+const TOOBUSY_MAX_LAG_MS_CAP = Number(process.env.POKE_TOOBUSY_MAX_LAG_MS_CAP || 6000);
+const INSANE_LAG_MS_CAP = Number(process.env.POKE_INSANE_LAG_MS_CAP || 30000);
+const INSANE_P99_LAG_MS_CAP = Number(process.env.POKE_INSANE_P99_LAG_MS_CAP || 20000);
+
+const DYNAMIC_EVENT_LOOP_MS = process.env.POKE_DYNAMIC_EVENT_LOOP_MS !== "0";
+const DYNAMIC_TOOBUSY_MAX_LAG = process.env.POKE_DYNAMIC_TOOBUSY_MAX_LAG === "1";
+const DYNAMIC_EVENT_LOOP_SAMPLE_INTERVAL_MS = Number(process.env.POKE_DYNAMIC_EVENT_LOOP_SAMPLE_INTERVAL_MS || 15_000);
+const DYNAMIC_EVENT_LOOP_MIN_BASELINE_MS = Number(process.env.POKE_DYNAMIC_EVENT_LOOP_MIN_BASELINE_MS || 10);
+const DYNAMIC_EVENT_LOOP_MAX_HEALTHY_BASELINE_MS = Number(process.env.POKE_DYNAMIC_EVENT_LOOP_MAX_HEALTHY_BASELINE_MS || 1000);
+const DYNAMIC_EVENT_LOOP_ALPHA = Number(process.env.POKE_DYNAMIC_EVENT_LOOP_ALPHA || 0.22);
+
+const DYNAMIC_WARN_MULTIPLIER = Number(process.env.POKE_DYNAMIC_WARN_MULTIPLIER || 20);
+const DYNAMIC_TOOBUSY_MULTIPLIER = Number(process.env.POKE_DYNAMIC_TOOBUSY_MULTIPLIER || 45);
+const DYNAMIC_INSANE_MULTIPLIER = Number(process.env.POKE_DYNAMIC_INSANE_MULTIPLIER || 120);
+const DYNAMIC_INSANE_P99_MULTIPLIER = Number(process.env.POKE_DYNAMIC_INSANE_P99_MULTIPLIER || 80);
+
 const INSANE_ELU = Number(process.env.POKE_INSANE_ELU || 0.98);
 
 const INSANE_LAG_STRIKES = Number(process.env.POKE_INSANE_LAG_STRIKES || 3);
@@ -1261,8 +1279,28 @@ const recentSlowRequests = [];
 let lastEventLoopUtilization = performance.eventLoopUtilization();
 let lastCpuUsage = process.cpuUsage();
 
+let dynamicThresholds = {
+  enabled: DYNAMIC_EVENT_LOOP_MS,
+  dynamicToobusy: DYNAMIC_TOOBUSY_MAX_LAG,
+  samples: 0,
+  baselineMs: 0,
+  baselineP90Ms: 0,
+  baselineP99Ms: 0,
+  lastSampleP90Ms: 0,
+  lastSampleP99Ms: 0,
+  lastSampleMeanMs: 0,
+  lastSampleMaxMs: 0,
+  lastUpdatedAt: 0,
+  warningMs: EVENT_LOOP_WARN_LAG_MS_FLOOR,
+  tooBusyMs: TOOBUSY_MAX_LAG_MS,
+  insaneMs: INSANE_LAG_MS_FLOOR,
+  insaneP99Ms: INSANE_P99_LAG_MS_FLOOR
+};
+
 const eventLoopDelay = monitorEventLoopDelay({ resolution: 20 });
+const eventLoopBaselineDelay = monitorEventLoopDelay({ resolution: 20 });
 eventLoopDelay.enable();
+eventLoopBaselineDelay.enable();
 
 function bytesToMb(bytes) {
   return Math.round(bytes / 1024 / 1024) + "MB";
@@ -1290,6 +1328,14 @@ function roundRatio(value) {
   }
 
   return Math.round(value * 10000) / 10000;
+}
+
+function clampNumber(value, min, max) {
+  if (!Number.isFinite(value)) {
+    return min;
+  }
+
+  return Math.max(min, Math.min(max, value));
 }
 
 function formatPercent(value) {
@@ -1399,6 +1445,18 @@ function getEventLoopDelaySnapshot() {
   };
 }
 
+function getEventLoopBaselineDelaySnapshot() {
+  return {
+    minMs: nsToMs(eventLoopBaselineDelay.min),
+    meanMs: nsToMs(eventLoopBaselineDelay.mean),
+    maxMs: nsToMs(eventLoopBaselineDelay.max),
+    stddevMs: nsToMs(eventLoopBaselineDelay.stddev),
+    p50Ms: nsToMs(eventLoopBaselineDelay.percentile(50)),
+    p90Ms: nsToMs(eventLoopBaselineDelay.percentile(90)),
+    p99Ms: nsToMs(eventLoopBaselineDelay.percentile(99))
+  };
+}
+
 function getEventLoopUtilizationSnapshot() {
   const delta = performance.eventLoopUtilization(lastEventLoopUtilization);
   lastEventLoopUtilization = performance.eventLoopUtilization();
@@ -1421,7 +1479,125 @@ function getCpuUsageSnapshot() {
   };
 }
 
+function getCurrentLagThresholds() {
+  return {
+    dynamic: dynamicThresholds.enabled,
+    dynamicToobusy: dynamicThresholds.dynamicToobusy,
+    samples: dynamicThresholds.samples,
+    baselineMs: dynamicThresholds.baselineMs,
+    baselineP90Ms: dynamicThresholds.baselineP90Ms,
+    baselineP99Ms: dynamicThresholds.baselineP99Ms,
+    lastSampleP90Ms: dynamicThresholds.lastSampleP90Ms,
+    lastSampleP99Ms: dynamicThresholds.lastSampleP99Ms,
+    lastSampleMeanMs: dynamicThresholds.lastSampleMeanMs,
+    lastSampleMaxMs: dynamicThresholds.lastSampleMaxMs,
+    lastUpdatedAt: dynamicThresholds.lastUpdatedAt,
+    warningMs: dynamicThresholds.warningMs,
+    tooBusyMs: dynamicThresholds.tooBusyMs,
+    insaneMs: dynamicThresholds.insaneMs,
+    insaneP99Ms: dynamicThresholds.insaneP99Ms,
+    insaneElu: INSANE_ELU
+  };
+}
+
+function maybeUpdateToobusyMaxLag() {
+  if (!DYNAMIC_TOOBUSY_MAX_LAG) {
+    return;
+  }
+
+  try {
+    toobusy.maxLag(dynamicThresholds.tooBusyMs);
+  } catch (err) {
+    console.error("[POKE-toobusy] failed to update dynamic maxLag:", err.message);
+  }
+}
+
+function updateDynamicEventLoopThresholds(reason) {
+  if (!DYNAMIC_EVENT_LOOP_MS) {
+    eventLoopBaselineDelay.reset();
+    return;
+  }
+
+  const sample = getEventLoopBaselineDelaySnapshot();
+  const sampleCandidateMs = Math.max(
+    DYNAMIC_EVENT_LOOP_MIN_BASELINE_MS,
+    sample.p90Ms,
+    sample.p99Ms,
+    sample.meanMs * 3
+  );
+
+  dynamicThresholds.lastSampleP90Ms = sample.p90Ms;
+  dynamicThresholds.lastSampleP99Ms = sample.p99Ms;
+  dynamicThresholds.lastSampleMeanMs = sample.meanMs;
+  dynamicThresholds.lastSampleMaxMs = sample.maxMs;
+  dynamicThresholds.lastUpdatedAt = Date.now();
+
+  const sampleLooksUseful =
+    Number.isFinite(sampleCandidateMs) &&
+    sampleCandidateMs > 0 &&
+    sampleCandidateMs <= DYNAMIC_EVENT_LOOP_MAX_HEALTHY_BASELINE_MS;
+
+  if (!sampleLooksUseful) {
+    eventLoopBaselineDelay.reset();
+    return;
+  }
+
+  dynamicThresholds.samples++;
+
+  if (dynamicThresholds.baselineMs <= 0) {
+    dynamicThresholds.baselineMs = sampleCandidateMs;
+    dynamicThresholds.baselineP90Ms = Math.max(DYNAMIC_EVENT_LOOP_MIN_BASELINE_MS, sample.p90Ms);
+    dynamicThresholds.baselineP99Ms = Math.max(DYNAMIC_EVENT_LOOP_MIN_BASELINE_MS, sample.p99Ms);
+  } else {
+    dynamicThresholds.baselineMs =
+      (dynamicThresholds.baselineMs * (1 - DYNAMIC_EVENT_LOOP_ALPHA)) +
+      (sampleCandidateMs * DYNAMIC_EVENT_LOOP_ALPHA);
+
+    dynamicThresholds.baselineP90Ms =
+      (dynamicThresholds.baselineP90Ms * (1 - DYNAMIC_EVENT_LOOP_ALPHA)) +
+      (Math.max(DYNAMIC_EVENT_LOOP_MIN_BASELINE_MS, sample.p90Ms) * DYNAMIC_EVENT_LOOP_ALPHA);
+
+    dynamicThresholds.baselineP99Ms =
+      (dynamicThresholds.baselineP99Ms * (1 - DYNAMIC_EVENT_LOOP_ALPHA)) +
+      (Math.max(DYNAMIC_EVENT_LOOP_MIN_BASELINE_MS, sample.p99Ms) * DYNAMIC_EVENT_LOOP_ALPHA);
+  }
+
+  const baseline = Math.max(DYNAMIC_EVENT_LOOP_MIN_BASELINE_MS, dynamicThresholds.baselineMs);
+  const proposedWarningMs = baseline * DYNAMIC_WARN_MULTIPLIER;
+  const proposedTooBusyMs = baseline * DYNAMIC_TOOBUSY_MULTIPLIER;
+  const proposedInsaneMs = Math.max(proposedTooBusyMs * 3, baseline * DYNAMIC_INSANE_MULTIPLIER);
+  const proposedInsaneP99Ms = Math.max(proposedTooBusyMs * 2, baseline * DYNAMIC_INSANE_P99_MULTIPLIER);
+
+  dynamicThresholds.warningMs = roundMs(clampNumber(
+    proposedWarningMs,
+    EVENT_LOOP_WARN_LAG_MS_FLOOR,
+    EVENT_LOOP_WARN_LAG_MS_CAP
+  ));
+
+  dynamicThresholds.tooBusyMs = Math.round(clampNumber(
+    proposedTooBusyMs,
+    TOOBUSY_MAX_LAG_MS,
+    TOOBUSY_MAX_LAG_MS_CAP
+  ));
+
+  dynamicThresholds.insaneMs = Math.round(clampNumber(
+    proposedInsaneMs,
+    INSANE_LAG_MS_FLOOR,
+    INSANE_LAG_MS_CAP
+  ));
+
+  dynamicThresholds.insaneP99Ms = Math.round(clampNumber(
+    proposedInsaneP99Ms,
+    INSANE_P99_LAG_MS_FLOOR,
+    INSANE_P99_LAG_MS_CAP
+  ));
+
+  maybeUpdateToobusyMaxLag();
+  eventLoopBaselineDelay.reset();
+}
+
 function getSeverity(currentLagMs, delaySnapshot, eluSnapshot) {
+  const thresholds = getCurrentLagThresholds();
   const p99LagMs = delaySnapshot.p99Ms;
   const maxLagMs = delaySnapshot.maxMs;
   const elu = eluSnapshot.utilization;
@@ -1431,25 +1607,25 @@ function getSeverity(currentLagMs, delaySnapshot, eluSnapshot) {
   }
 
   if (
-    currentLagMs >= INSANE_LAG_MS ||
-    p99LagMs >= INSANE_P99_LAG_MS ||
-    (elu >= INSANE_ELU && currentLagMs >= TOOBUSY_MAX_LAG_MS)
+    currentLagMs >= thresholds.insaneMs ||
+    p99LagMs >= thresholds.insaneP99Ms ||
+    (elu >= thresholds.insaneElu && currentLagMs >= thresholds.tooBusyMs)
   ) {
     return "insane";
   }
 
   if (
-    currentLagMs >= TOOBUSY_MAX_LAG_MS ||
-    p99LagMs >= TOOBUSY_MAX_LAG_MS ||
-    maxLagMs >= INSANE_LAG_MS
+    currentLagMs >= thresholds.tooBusyMs ||
+    p99LagMs >= thresholds.tooBusyMs ||
+    maxLagMs >= thresholds.insaneMs
   ) {
     return "overloaded";
   }
 
   if (
-    currentLagMs >= EVENT_LOOP_WARN_LAG_MS ||
-    p99LagMs >= EVENT_LOOP_WARN_LAG_MS ||
-    maxLagMs >= EVENT_LOOP_WARN_LAG_MS
+    currentLagMs >= thresholds.warningMs ||
+    p99LagMs >= thresholds.warningMs ||
+    maxLagMs >= thresholds.warningMs
   ) {
     return "warning";
   }
@@ -1463,6 +1639,7 @@ function createLagSnapshot(currentLag, extra) {
   const delaySnapshot = getEventLoopDelaySnapshot();
   const eluSnapshot = getEventLoopUtilizationSnapshot();
   const cpuSnapshot = getCpuUsageSnapshot();
+  const thresholds = getCurrentLagThresholds();
   const severity = getSeverity(currentLagMs, delaySnapshot, eluSnapshot);
 
   return {
@@ -1474,13 +1651,17 @@ function createLagSnapshot(currentLag, extra) {
     },
     lag: {
       currentMs: currentLagMs,
-      warningMs: EVENT_LOOP_WARN_LAG_MS,
-      tooBusyMs: TOOBUSY_MAX_LAG_MS,
-      insaneMs: INSANE_LAG_MS,
-      insaneP99Ms: INSANE_P99_LAG_MS,
+      warningMs: thresholds.warningMs,
+      tooBusyMs: thresholds.tooBusyMs,
+      staticTooBusyMs: TOOBUSY_MAX_LAG_MS,
+      dynamicTooBusyEnabled: thresholds.dynamicToobusy,
+      insaneMs: thresholds.insaneMs,
+      insaneP99Ms: thresholds.insaneP99Ms,
+      insaneElu: thresholds.insaneElu,
       strikes: lagStrikeTimes.length,
       strikeWindowMs: INSANE_LAG_WINDOW_MS
     },
+    dynamicThresholds: thresholds,
     eventLoopDelay: delaySnapshot,
     eventLoopUtilization: eluSnapshot,
     cpu: cpuSnapshot,
@@ -1600,6 +1781,7 @@ function getLikelyLagHints(snapshot) {
 function formatLagPretty(message, snapshot) {
   const lines = [];
   const lag = snapshot.lag;
+  const dynamic = snapshot.dynamicThresholds;
   const delay = snapshot.eventLoopDelay;
   const elu = snapshot.eventLoopUtilization;
   const cpu = snapshot.cpu;
@@ -1615,7 +1797,22 @@ function formatLagPretty(message, snapshot) {
     " warn=" + lag.warningMs + "ms" +
     " toobusy=" + lag.tooBusyMs + "ms" +
     " insane=" + lag.insaneMs + "ms" +
+    " insaneP99=" + lag.insaneP99Ms + "ms" +
     " strikes=" + lag.strikes + "/" + INSANE_LAG_STRIKES
+  );
+  lines.push(
+    "  dynamic thresholds: enabled=" + dynamic.dynamic +
+    " dynamicToobusy=" + dynamic.dynamicToobusy +
+    " samples=" + dynamic.samples +
+    " baseline=" + roundMs(dynamic.baselineMs) + "ms" +
+    " baselineP90=" + roundMs(dynamic.baselineP90Ms) + "ms" +
+    " baselineP99=" + roundMs(dynamic.baselineP99Ms) + "ms"
+  );
+  lines.push(
+    "  last threshold sample: p90=" + dynamic.lastSampleP90Ms + "ms" +
+    " p99=" + dynamic.lastSampleP99Ms + "ms" +
+    " mean=" + dynamic.lastSampleMeanMs + "ms" +
+    " max=" + dynamic.lastSampleMaxMs + "ms"
   );
   lines.push(
     "  event loop delay: p50=" + delay.p50Ms + "ms" +
@@ -1753,11 +1950,13 @@ function recordInsaneLagStrike() {
 }
 
 function resetInsaneLagStrikesIfHealthy(currentLag, snapshot) {
-  if (currentLag >= TOOBUSY_MAX_LAG_MS) {
+  const thresholds = getCurrentLagThresholds();
+
+  if (currentLag >= thresholds.tooBusyMs) {
     return;
   }
 
-  if (snapshot.eventLoopDelay.p99Ms >= TOOBUSY_MAX_LAG_MS) {
+  if (snapshot.eventLoopDelay.p99Ms >= thresholds.tooBusyMs) {
     return;
   }
 
@@ -1769,12 +1968,14 @@ function resetInsaneLagStrikesIfHealthy(currentLag, snapshot) {
 }
 
 function isInsaneLag(currentLag, snapshot) {
+  const thresholds = getCurrentLagThresholds();
+
   return (
-    currentLag >= INSANE_LAG_MS ||
-    snapshot.eventLoopDelay.p99Ms >= INSANE_P99_LAG_MS ||
+    currentLag >= thresholds.insaneMs ||
+    snapshot.eventLoopDelay.p99Ms >= thresholds.insaneP99Ms ||
     (
-      snapshot.eventLoopUtilization.utilization >= INSANE_ELU &&
-      currentLag >= TOOBUSY_MAX_LAG_MS
+      snapshot.eventLoopUtilization.utilization >= thresholds.insaneElu &&
+      currentLag >= thresholds.tooBusyMs
     )
   );
 }
@@ -1902,6 +2103,14 @@ toobusy.maxLag(TOOBUSY_MAX_LAG_MS);
 
 app.use(requestLagTracker);
 app.use(tooBusyMiddleware);
+
+updateDynamicEventLoopThresholds("startup");
+
+const dynamicThresholdTimer = setInterval(function () {
+  updateDynamicEventLoopThresholds("interval");
+}, DYNAMIC_EVENT_LOOP_SAMPLE_INTERVAL_MS);
+
+dynamicThresholdTimer.unref();
 
 toobusy.onLag(function (currentLag) {
   const now = Date.now();
