@@ -5563,23 +5563,16 @@ function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
         if (state._tabReturnRateRampUntil > _now()) return;
         try {
           const vNode = getVideoNode();
-          const rate = Number(vNode.playbackRate);
-          if (isFinite(rate) && Math.abs(rate - 1.0) > RATE_TOLERANCE) {
-            vNode.playbackRate = 1.0;
-            try { video.playbackRate(1.0); } catch { }
-            _correctionCount++;
-            _lastCorrectionAt = _now();
+          const targetRate = Number(video.playbackRate()) || Number(vNode.playbackRate) || 1.0;
+          if (coupledMode && audio && !state.audioRateNudgeActive) {
+            const aRate = Number(audio.playbackRate);
+            if (isFinite(aRate) && Math.abs(aRate - targetRate) > RATE_TOLERANCE) {
+              audio.playbackRate = targetRate;
+              _correctionCount++;
+              _lastCorrectionAt = _now();
+            }
           }
         } catch { }
-        if (coupledMode && audio && !state.audioRateNudgeActive) {
-          try {
-            const aRate = Number(audio.playbackRate);
-            if (isFinite(aRate) && Math.abs(aRate - 1.0) > RATE_TOLERANCE) {
-              audio.playbackRate = 1.0;
-              _correctionCount++;
-            }
-          } catch { }
-        }
       }
       function getCorrectionCount() { return _correctionCount; }
       return { tick, getCorrectionCount };
