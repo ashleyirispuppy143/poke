@@ -17,11 +17,11 @@ const innertube = require("../libpoketube-youtubei-objects.json");
 const { execSync } = require('child_process'); // DO NOT ABBRV THIS :SOB:
 const fs = require('fs');
 
-const verfull = "v26.00";
-const versmol = "v26.00";
+const verfull = "v26.UPDATE2";
+const versmol = "v26.UPDATE2";
 const branch = "dev/master";
-const codename = "poke-chan";
-const versionnumber = "2600";
+const codename = "nudge";
+const versionnumber = "261045";
 const updatequote = "i created this world.....to feel some control...";
 
 module.exports = function (app, config, renderTemplate) {
@@ -165,7 +165,7 @@ module.exports = function (app, config, renderTemplate) {
     res.redirect(url);
   });
 
-app.get("/api/yturl", async function (req, res) {
+app.get("/api/getYoutubeUrl", async function (req, res) {
   var v = req.query.v;
 
   if (!v) {
