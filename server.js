@@ -1200,24 +1200,141 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
       }
     }
   };
+  
+const TOOBUSY_INTERVAL_MS = 110;
+const TOOBUSY_MAX_LAG_MS = 3500;
 
-  toobusy.interval(110);
-  toobusy.maxLag(3500);
+const INSANE_LAG_MS = 5000;
+const INSANE_LAG_STRIKES = 3;
+const INSANE_LAG_WINDOW_MS = 30_000;
+const LAG_LOG_COOLDOWN_MS = 5_000;
+const EXIT_GRACE_MS = 10_000;
+const RETRY_AFTER_SECONDS = 15;
 
-  app.use(function (req, res, next) {
-    if (toobusy()) {
-      return res.status(503).send("I'm busy right now, sorry.");
-    }
-    next();
+let lagStrikeTimes = [];
+let lastLagLogAt = 0;
+let lagRestarting = false;
+
+function bytesToMb(bytes) {
+  return Math.round(bytes / 1024 / 1024) + "MB";
+}
+
+function getLagSnapshot(currentLag, extra) {
+  const memory = process.memoryUsage();
+
+  return JSON.stringify({
+    reason: "event_loop_lag",
+    currentLagMs: Math.round(currentLag),
+    maxLagMs: TOOBUSY_MAX_LAG_MS,
+    insaneLagMs: INSANE_LAG_MS,
+    pid: process.pid,
+    uptimeSeconds: Math.round(process.uptime()),
+    rss: bytesToMb(memory.rss),
+    heapUsed: bytesToMb(memory.heapUsed),
+    heapTotal: bytesToMb(memory.heapTotal),
+    external: bytesToMb(memory.external),
+    strikes: lagStrikeTimes.length,
+    ...extra
+  });
+}
+
+function recordInsaneLagStrike() {
+  const now = Date.now();
+
+  lagStrikeTimes = lagStrikeTimes.filter(function (time) {
+    return now - time <= INSANE_LAG_WINDOW_MS;
   });
 
-  toobusy.onLag(function (currentLag) {
-    console.error("[POKE-toobusy] event loop lag: " + currentLag + "ms");
-    if (currentLag > 5000) {
-      console.error("[POKE-toobusy] lag is insane (" + currentLag + "ms), restarting");
-      process.exit(1);
-    }
-  });
+  lagStrikeTimes.push(now);
+
+  return lagStrikeTimes.length;
+}
+
+function shutdownToobusy() {
+  if (typeof toobusy.shutdown !== "function") {
+    return;
+  }
+
+  try {
+    toobusy.shutdown();
+  } catch (err) {
+    console.error("[POKE-toobusy] failed to shutdown toobusy monitor", err);
+  }
+}
+
+function beginLagRestart(currentLag) {
+  if (lagRestarting) {
+    return;
+  }
+
+  lagRestarting = true;
+
+  console.error(
+    "[POKE-toobusy] sustained insane event loop lag, refusing new requests and restarting",
+    getLagSnapshot(currentLag, {
+      exitGraceMs: EXIT_GRACE_MS
+    })
+  );
+
+  shutdownToobusy();
+
+  const exitTimer = setTimeout(function () {
+    console.error("[POKE-toobusy] exiting after sustained insane event loop lag");
+    process.exit(1);
+  }, EXIT_GRACE_MS);
+
+  exitTimer.unref();
+}
+
+toobusy.interval(TOOBUSY_INTERVAL_MS);
+toobusy.maxLag(TOOBUSY_MAX_LAG_MS);
+
+app.use(function (req, res, next) {
+  if (lagRestarting) {
+    res.set("Connection", "close");
+    res.set("Retry-After", String(RETRY_AFTER_SECONDS));
+    return res.status(503).send("Server is recovering from high load. Please retry shortly.");
+  }
+
+  if (toobusy()) {
+    res.set("Retry-After", String(RETRY_AFTER_SECONDS));
+    return res.status(503).send("I'm busy right now, sorry.");
+  }
+
+  next();
+});
+
+toobusy.onLag(function (currentLag) {
+  const now = Date.now();
+  const roundedLag = Math.round(currentLag);
+
+  if (now - lastLagLogAt >= LAG_LOG_COOLDOWN_MS || currentLag >= INSANE_LAG_MS) {
+    lastLagLogAt = now;
+
+    console.error(
+      "[POKE-toobusy] event loop lag detected",
+      getLagSnapshot(currentLag)
+    );
+  }
+
+  if (currentLag < INSANE_LAG_MS) {
+    return;
+  }
+
+  const strikeCount = recordInsaneLagStrike();
+
+  console.error(
+    "[POKE-toobusy] insane lag strike " + strikeCount + "/" + INSANE_LAG_STRIKES,
+    getLagSnapshot(currentLag, {
+      lagMs: roundedLag,
+      windowMs: INSANE_LAG_WINDOW_MS
+    })
+  );
+
+  if (strikeCount >= INSANE_LAG_STRIKES) {
+    beginLagRestart(currentLag);
+  }
+});
   
   initlog("inited anti ddos");
 
