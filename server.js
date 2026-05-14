@@ -18,8 +18,7 @@
    along with this program. If not, see https://www.gnu.org/licenses/.
  */
 (async function () {
-  // --- ADDED: Global error handlers to prevent crashes from fetch timeouts ---
-  process.on("unhandledRejection", (reason, promise) => {
+   process.on("unhandledRejection", (reason, promise) => {
     console.error("[POKE-error] Unhandled Rejection at:", promise, "reason:", reason);
     if (reason && reason.code === "UND_ERR_CONNECT_TIMEOUT") {
       console.error("[POKE-error] Blocked server crash from Undici ConnectTimeoutError.");
@@ -32,8 +31,7 @@
       console.error("[POKE-error] Blocked server crash from Undici ConnectTimeoutError.");
     }
   });
-  // ---------------------------------------------------------------------------
-
+ 
   const {
     fetcher,
     core,
