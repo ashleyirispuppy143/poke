@@ -6609,6 +6609,15 @@ function syncPlayerSeekbarToDisplayTime(durHint = NaN, curHint = NaN) {
   playerSeekbarLastText = text;
   try {
     if (playProgress) {
+      const jumpyUpdate =
+        state.seeking ||
+        state.seekBuffering ||
+        state.seekResumeInFlight ||
+        state.restarting ||
+        terminalEndPlaybackLocked(100) ||
+        (isFinite(domPercent) && Math.abs(domPercent - percent) > 1.4);
+      playProgress.style.transition = jumpyUpdate ? "none" : "width 220ms linear";
+      playProgress.style.willChange = jumpyUpdate ? "" : "width";
       playProgress.style.width = percent.toFixed(3) + "%";
       playProgress.setAttribute("aria-hidden", "true");
     }
@@ -6670,7 +6679,7 @@ function injectPlayerTimeDisplayStyles() {
   if (document.getElementById("player-time-display-css")) return;
   const style = document.createElement("style");
   style.id = "player-time-display-css";
-  style.textContent = `.vjs-has-player-time-toggle .vjs-remaining-time,.vjs-has-player-time-toggle .vjs-current-time,.vjs-has-player-time-toggle .vjs-time-divider,.vjs-has-player-time-toggle .vjs-duration{display:none!important}.vjs-player-time-toggle{--vjs-player-time-width:12ch;inline-size:var(--vjs-player-time-width);min-inline-size:var(--vjs-player-time-width);max-inline-size:var(--vjs-player-time-width);flex:0 0 var(--vjs-player-time-width);padding:0 .45em!important;cursor:pointer;contain:layout paint style}.vjs-player-time-toggle .vjs-player-time-text{display:inline-block;inline-size:100%;white-space:nowrap;text-align:center;font-variant-numeric:tabular-nums;line-height:3em}`;
+  style.textContent = `.vjs-has-player-time-toggle .vjs-remaining-time,.vjs-has-player-time-toggle .vjs-current-time,.vjs-has-player-time-toggle .vjs-time-divider,.vjs-has-player-time-toggle .vjs-duration{display:none!important}.vjs-player-time-toggle{--vjs-player-time-width:12ch;inline-size:var(--vjs-player-time-width);min-inline-size:var(--vjs-player-time-width);max-inline-size:var(--vjs-player-time-width);flex:0 0 var(--vjs-player-time-width);padding:0 .45em!important;cursor:pointer;contain:layout paint style}.vjs-player-time-toggle .vjs-player-time-text{display:inline-block;inline-size:100%;white-space:nowrap;text-align:center;font-variant-numeric:tabular-nums;line-height:3em}.vjs-play-progress{transition:width 220ms linear}`;
   try { document.head.appendChild(style); } catch { }
 }
 function placePlayerTimeDisplayButton(bar) {
