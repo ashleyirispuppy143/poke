@@ -48,6 +48,7 @@
   const fs = require("fs");
   const os = require("os");
   const net = require("net");
+  const crypto = require("crypto");
   const config = require("./config.json");
   const u = await media_proxy();
 
@@ -138,21 +139,6 @@
       cidrContains("127.0.0.0/8", clean) ||
       cidrContains("169.254.0.0/16", clean)
     );
-  }
-
-  function maskIP(ip) {
-    const clean = cleanIP(ip);
-
-    if (net.isIPv4(clean)) {
-      return clean.replace(/\.\d+\.\d+$/, ".xxx.xxx");
-    }
-
-    if (net.isIPv6(clean)) {
-      const parts = clean.split(":");
-      return parts.slice(0, 3).join(":") + ":xxxx:xxxx:xxxx:xxxx";
-    }
-
-    return "unknown";
   }
 
   /*
@@ -415,10 +401,19 @@
    * - O(1) Time & Space sliding window counters per IP (No more massive timestamp arrays)
    * - O(1) LRU Map Cache Eviction (Saves server during multi-IP DDOS attacks)
    * - Advanced Client prioritization based on request type
+   * - High Resolution CPU accuracy tracking
+   * - Cryptographic log anonymity
    */
   (function PokeResourceGuard() {
-    const { monitorEventLoopDelay } = require("perf_hooks");
+    const { monitorEventLoopDelay, performance } = require("perf_hooks");
     
+    // Privacy Setup
+    const guardSalt = crypto.randomBytes(16).toString("hex");
+    function anonymizeIP(ip) {
+      if (!ip) return "unknown";
+      return "anon-" + crypto.createHash("sha256").update(ip + guardSalt).digest("hex").slice(0, 8);
+    }
+
     // Delayed initialization flag
     let isGuardActive = false;
 
@@ -573,7 +568,7 @@
     let currentSecondKindCounts = new Map();
     let currentSecondRouteCounts = new Map();
 
-    let lastSampleAt = Date.now();
+    let lastSampleAt = performance.now();
     let lastCpuUsage = process.cpuUsage();
 
     let requestSequence = 0;
@@ -650,7 +645,10 @@
 
     function isIgnoredRoute(req) {
       const path = getRequestPath(req);
-      return path === "/api/nexus" || path === "/api/stats";
+      return path === "/api/nexus" || 
+             path === "/api/stats" || 
+             path.startsWith("/static/") || 
+             path.startsWith("/css/");
     }
 
     function normalizePathname(pathname) {
@@ -855,10 +853,6 @@
           cooldownUntil: 0,
           cooldownLevel: 0,
           lastCooldownAt: 0,
-          lastPath: "",
-          lastKind: "",
-          lastDecision: "",
-          lastUserAgent: "",
           trustedBot: false,
           currentSec: Math.floor(now / 1000),
           currentSecCount: 0,
@@ -885,10 +879,7 @@
     function rememberClientRequest(req, client, kind, cost) {
       const now = Date.now();
       client.lastSeen = now;
-      client.lastPath = getRequestPath(req);
-      client.lastKind = kind;
-      client.lastUserAgent = String(req.headers["user-agent"] || "").slice(0, 160);
-      client.trustedBot = isKnownBot(client.lastUserAgent);
+      client.trustedBot = isKnownBot(String(req.headers["user-agent"] || "").slice(0, 160));
 
       const sec = Math.floor(now / 1000);
       if (client.currentSec !== sec) {
@@ -907,7 +898,6 @@
 
     function rememberDecision(client, decision) {
       const now = Date.now();
-      client.lastDecision = decision;
       updateClientWindow(client, now);
 
       if (decision === "reject") client.current.rejects++;
@@ -971,14 +961,12 @@
         JSON.stringify({
           reason, cooldownMs, cooldownLevel: client.cooldownLevel,
           client: {
-            ip: maskIP(client.key),
+            ip: anonymizeIP(client.key),
             requests: Math.round(getMetric(client, "total", now)),
             oneSecondRequests: client.currentSecCount,
             heavyRequests: Math.round(getMetric(client, "heavy", now)),
             rejects: Math.round(getMetric(client, "rejects", now)),
             cost: Math.round(getMetric(client, "cost", now) * 100) / 100,
-            lastPath: client.lastPath,
-            lastKind: client.lastKind,
             pressure: Math.round(getClientPressure(client, now) * 100) / 100
           }
         })
@@ -987,14 +975,18 @@
 
     function sampleCpuAndMemory(reason) {
       const now = Date.now();
-      const elapsedMs = Math.max(1, now - lastSampleAt);
+      const currentPerf = performance.now();
+      const elapsedMs = Math.max(1, currentPerf - lastSampleAt);
 
       const cpuDelta = process.cpuUsage(lastCpuUsage);
       lastCpuUsage = process.cpuUsage();
+      lastSampleAt = currentPerf;
 
+      // cpuUsage returns microseconds, so divide by 1000 to get Ms
       const cpuUserMs = cpuDelta.user / 1000;
       const cpuSystemMs = cpuDelta.system / 1000;
       const cpuTotalMs = cpuUserMs + cpuSystemMs;
+      // Exact Node.js single-thread 100% CPU accuracy calculating actual execution vs elapsed real time
       const cpuRatio = cpuTotalMs / elapsedMs;
 
       // Extract Event Loop Delay Metrics
@@ -1066,7 +1058,7 @@
       const shouldLog = now - lastStateLogAt >= resourceConfig.logging.stateCooldownMs;
 
       resourceState = snapshot;
-      lastSampleAt = now;
+      
       currentSecondRequests = 0;
       currentSecondKindCounts = new Map();
       currentSecondRouteCounts = new Map();
@@ -1125,11 +1117,12 @@
       if (now - lastRejectLogAt < resourceConfig.logging.rejectCooldownMs) return;
       lastRejectLogAt = now;
 
+      // Anonymize logging completely, exclude sensitive metadata
       console.error(
         "[POKE-resource] rejected " +
         JSON.stringify({
           reason, status, state: resourceState.state, score: resourceState.score,
-          path: getRequestPath(req), kind, ip: maskIP(client.key),
+          kind, ip: anonymizeIP(client.key),
           client: {
             requests: Math.round(getMetric(client, "total", now)),
             oneSecondRequests: client.currentSecCount,
@@ -1444,21 +1437,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" href="/favicon.ico">
 <style>
-@font-face {
-  font-family: "PokeTube Flex";
-  src: url("/static/robotoflex.ttf");
-  font-style: normal;
-  font-stretch: 1% 800%;
-  font-display: swap;
-}
 :root{color-scheme:dark}
-body{color:#fff;background:#1c1b22;margin:0;}
+body{color:#fff;background:#1c1b22;margin:0; font-family: sans-serif;}
 a{color:#0ab7f0}:visited{color:#00c0ff}
 .app{max-width:1100px;margin:0 auto;padding:24px;}
-h1,h2{font-family:"PokeTube Flex",system-ui,sans-serif;font-stretch:extra-expanded;}
+h1,h2{font-stretch:extra-expanded;}
 h1{font-weight:1000;font-stretch:ultra-expanded;margin-top:0;}
 h2{margin-top:28px;}
-p,li,code,pre{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;line-height:1.6;}
+p,li,code,pre{line-height:1.6;}
 hr{border:0;border-top:1px solid #333;margin:28px 0;}
 .logo{float:right;margin:.3em 0 1em 2em;max-width:130px;}
 
@@ -1481,13 +1467,13 @@ hr{border:0;border-top:1px solid #333;margin:28px 0;}
   box-shadow: 0 4px 6px rgba(0,0,0,0.3);
   border: 1px solid #333;
 }
-.stat-num{font-size: 1.6rem; color: #0ab7f0; display: block; font-weight: bold;}
+.stat-num{font-size: 1.6rem; color: #0ab7f0; display: block; font-weight: bold; text-transform: capitalize;}
 .stat-label{font-size: .9rem; color: #aaa; display: block; margin-top: 4px;}
 
 .green{color:#4caf50} .orange{color:#ff9800} .red{color:#f44336}
 code,pre{background:#2a2930;padding:2px 6px;border-radius:4px;}
 pre{overflow:auto;padding:14px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 1px solid #333;}
-.banner{padding:16px 20px;border-radius:8px;background:#2a2930;box-shadow: 0 4px 6px rgba(0,0,0,0.3);border: 1px solid #333;}
+.banner{padding:16px 20px;border-radius:8px;background:#2a2930;box-shadow: 0 4px 6px rgba(0,0,0,0.3);border: 1px solid #333; transition: border-left 0.3s ease;}
 .banner.green{border-left:5px solid #4caf50}
 .banner.orange{border-left:5px solid #ff9800}
 .banner.red{border-left:5px solid #f44336}
@@ -1504,7 +1490,7 @@ pre{overflow:auto;padding:14px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 1
   margin-bottom: 24px;
   box-shadow: 0 4px 6px rgba(0,0,0,0.3);
 }
-summary { font-size: 1.2rem; cursor: pointer; color: #0ab7f0; user-select: none; margin-bottom: 12px; }
+summary { font-size: 1.2rem; cursor: pointer; color: #0ab7f0; user-select: none; margin-bottom: 12px; font-weight: bold; }
 summary:hover { color: #00c0ff; }
 </style>
 </head>
@@ -1515,10 +1501,10 @@ summary:hover { color: #00c0ff; }
 <h1>Poke Server Health</h1>
 <p class="small">Live metrics and traffic protection</p>
 
-<div class="banner ${stateClass}">
-  <b>Current Status:</b> <span class="${stateClass}" style="font-size: 1.2rem; text-transform: capitalize;">${stats.state.state}</span>
+<div id="banner-container" class="banner ${stateClass}">
+  <b>Current Status:</b> <span id="banner-state" class="${stateClass}" style="font-size: 1.2rem; text-transform: capitalize;">${stats.state.state}</span>
   <br>
-  <span class="small" style="display:inline-block; margin-top: 6px;">
+  <span id="banner-subtext" class="small" style="display:inline-block; margin-top: 6px;">
     System Load Score: ${stats.state.score} &bull; Process Delay: ${stats.state.eventLoop.p99Ms}ms &bull; CPU: ${stats.state.cpu.percent}% &bull; Memory: ${formatPercent(stats.state.memory.rssRatio)}
   </span>
 </div>
@@ -1526,41 +1512,41 @@ summary:hover { color: #00c0ff; }
 <h2>What is this page?</h2>
 <div class="explanation">
   Poke keeps an eye on how much brainpower (CPU) and memory it has left. Just like a personal computer, the server only has so much energy to go around! <br><br>
-  If a sudden wave of traffic hits, or if someone tries to overload the site, Poke will automatically prioritize normal users watching videos. It gently pauses "heavy" background tasks until the server catches its breath. This ensures Poke stays smooth, fast, and online for everyone.
+  If a sudden wave of traffic hits, or if someone tries to overload the site, Poke will automatically prioritize normal users watching videos. It gently pauses "heavy" background tasks until the server catches its breath. This guarantees Poke stays smooth, fast, and online for everyone.
 </div>
 
 <h2>Live Server Vitals</h2>
 <div class="stat-grid">
   <div class="stat-box">
-    <span class="stat-num ${stateClass}">${stats.state.state}</span>
+    <span id="stat-state" class="stat-num ${stateClass}">${stats.state.state}</span>
     <span class="stat-label">Health State</span>
   </div>
   <div class="stat-box">
-    <span class="stat-num">${stats.state.eventLoop.p99Ms}ms</span>
+    <span id="stat-p99" class="stat-num">${stats.state.eventLoop.p99Ms}ms</span>
     <span class="stat-label">Process Delay (p99)</span>
   </div>
   <div class="stat-box">
-    <span class="stat-num">${stats.state.cpu.percent}%</span>
+    <span id="stat-cpu" class="stat-num">${stats.state.cpu.percent}%</span>
     <span class="stat-label">CPU Usage</span>
   </div>
   <div class="stat-box">
-    <span class="stat-num">${stats.state.memory.rssMb}MB</span>
+    <span id="stat-rss" class="stat-num">${stats.state.memory.rssMb}MB</span>
     <span class="stat-label">Memory Used (RSS)</span>
   </div>
   <div class="stat-box">
-    <span class="stat-num">${stats.state.requests.rps}</span>
+    <span id="stat-rps" class="stat-num">${stats.state.requests.rps}</span>
     <span class="stat-label">Requests per Second</span>
   </div>
   <div class="stat-box">
-    <span class="stat-num">${stats.clients.tracked}</span>
+    <span id="stat-tracked" class="stat-num">${stats.clients.tracked}</span>
     <span class="stat-label">Active Users</span>
   </div>
   <div class="stat-box">
-    <span class="stat-num">${stats.clients.cooldown}</span>
+    <span id="stat-cooldown" class="stat-num">${stats.clients.cooldown}</span>
     <span class="stat-label">Spammers Blocked</span>
   </div>
   <div class="stat-box">
-    <span class="stat-num">${stats.state.score}</span>
+    <span id="stat-score" class="stat-num">${stats.state.score}</span>
     <span class="stat-label">Pressure Score</span>
   </div>
 </div>
@@ -1571,13 +1557,13 @@ summary:hover { color: #00c0ff; }
   <summary>View Nerd Stats (Raw Data & APIs)</summary>
   
   <h3>Pressure Reasons</h3>
-  <pre>${stats.state.pressureReasons.length ? stats.state.pressureReasons.join("\n") : "None currently. System is healthy."}</pre>
+  <pre id="pre-reasons">${stats.state.pressureReasons.length ? stats.state.pressureReasons.join("\n") : "None currently. System is healthy."}</pre>
 
   <h3>Request Mix (This Second)</h3>
-  <pre>${JSON.stringify(stats.state.requests.kinds, null, 2)}</pre>
+  <pre id="pre-mix">${JSON.stringify(stats.state.requests.kinds, null, 2)}</pre>
 
   <h3>Top Routes (This Second)</h3>
-  <pre>${JSON.stringify(stats.state.topRoutes, null, 2)}</pre>
+  <pre id="pre-routes">${JSON.stringify(stats.state.topRoutes, null, 2)}</pre>
 
   <h3>API Endpoints</h3>
   <p>
@@ -1589,6 +1575,55 @@ summary:hover { color: #00c0ff; }
 <hr>
 <p class="small">powered by poke. <a href="/">go back to watching videos</a></p>
 </div>
+
+<script>
+// Auto-refresh stats if JS is enabled
+document.addEventListener("DOMContentLoaded", function() {
+  const fetchStats = async function() {
+    try {
+      const res = await fetch("/_pokeresource/stats");
+      if (!res.ok) return;
+      const data = await res.json();
+      
+      const state = data.state.state;
+      let stateClass = "green";
+      if (state === "warm" || state === "stressed") stateClass = "orange";
+      if (state === "critical") stateClass = "red";
+      
+      // Update DOM components dynamically
+      document.getElementById("banner-container").className = "banner " + stateClass;
+      document.getElementById("banner-state").className = stateClass;
+      document.getElementById("banner-state").innerText = state;
+      
+      const rssRatio = (data.state.memory.rssRatio * 100).toFixed(2) + "%";
+      document.getElementById("banner-subtext").innerHTML = 
+        "System Load Score: " + data.state.score + " &bull; Process Delay: " + data.state.eventLoop.p99Ms + "ms &bull; CPU: " + data.state.cpu.percent + "% &bull; Memory: " + rssRatio;
+      
+      document.getElementById("stat-state").className = "stat-num " + stateClass;
+      document.getElementById("stat-state").innerText = state;
+      
+      document.getElementById("stat-p99").innerText = data.state.eventLoop.p99Ms + "ms";
+      document.getElementById("stat-cpu").innerText = data.state.cpu.percent + "%";
+      document.getElementById("stat-rss").innerText = data.state.memory.rssMb + "MB";
+      document.getElementById("stat-rps").innerText = data.state.requests.rps;
+      document.getElementById("stat-tracked").innerText = data.clients.tracked;
+      document.getElementById("stat-cooldown").innerText = data.clients.cooldown;
+      document.getElementById("stat-score").innerText = data.state.score;
+      
+      document.getElementById("pre-reasons").innerText = data.state.pressureReasons.length ? data.state.pressureReasons.join("\\n") : "None currently. System is healthy.";
+      document.getElementById("pre-mix").innerText = JSON.stringify(data.state.requests.kinds, null, 2);
+      document.getElementById("pre-routes").innerText = JSON.stringify(data.state.topRoutes, null, 2);
+      
+    } catch (err) {
+      // Quiet fail if network disconnects temporarily
+    }
+  };
+  
+  // Refresh loop every 1 second
+  setInterval(fetchStats, 1000);
+});
+</script>
+
 </body>
 </html>`);
     }
@@ -1602,10 +1637,10 @@ summary:hover { color: #00c0ff; }
     app.get("/_pokeoverload/stats", sendResourceStats);
     app.get("/_antiddos*", sendAntiddosPage);
 
-    // 2-Second Delayed Initialization
+    // 30-Millisecond Delayed Initialization
     setTimeout(() => {
       isGuardActive = true;
-      initlog("[PokeResourceGuard] is now ACTIVE after 2-second boot delay.");
+      initlog("[PokeResourceGuard] is now ACTIVE after 30ms boot delay.");
       sampleCpuAndMemory("startup");
 
       const sampleTimer = setInterval(function () {
@@ -1620,7 +1655,7 @@ summary:hover { color: #00c0ff; }
         "[PokeResourceGuard] loaded - EventLoop/CPU/memory optimized shedder, " +
         "EL p99 warm/stressed/critical: " + resourceConfig.system.eventLoop.warmMs + "/" + resourceConfig.system.eventLoop.stressedMs + "/" + resourceConfig.system.eventLoop.criticalMs
       );
-    }, 2000);
+    }, 30);
 
   })();
 
