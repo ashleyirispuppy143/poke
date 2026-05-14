@@ -1205,1488 +1205,1700 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
   };
 
 /*
- * POKE-toobusy
+ * PokeOverloadShield
  *
- * This handles overload in three layers:
+ * This is the nicer toobusy layer.
  *
- * 1. toobusy-js still does the fast overload signal.
+ * It uses toobusy-js as the quick event-loop lag signal, then adds Node core
+ * diagnostics and a defensive admission policy:
  *
- * 2. Human-facing page requests get a short grace wait and a tiny soft-pass
- *    budget during normal overload. This means a normal person usually sees a
- *    slightly slower page instead of a 503.
+ * - cheap static/status requests survive soft overload
+ * - human page navigations get a short grace wait
+ * - trusted-looking page navigations can spend a small soft-pass budget
+ * - media, API, proxy, and background requests are shed first
+ * - noisy clients get an overload-only cooldown
+ * - critical lag still protects the process with hard rejects and restart
  *
- * 3. Heavy/background/API/media requests are shed first. If the server enters
- *    insane lag or restart mode, all non-essential traffic is rejected because
- *    saving the process is better for everyone.
+ * This does not attack anyone back. It just makes bad traffic pay first.
  */
-const TOOBUSY_INTERVAL_MS = Number(process.env.POKE_TOOBUSY_INTERVAL_MS || 110);
-const TOOBUSY_MAX_LAG_MS = Number(process.env.POKE_TOOBUSY_MAX_LAG_MS || 2500);
+(function PokeOverloadShield() {
+  const OVERLOAD_CHECK_INTERVAL_MS = Number(process.env.POKE_OVERLOAD_CHECK_INTERVAL_MS || process.env.POKE_TOOBUSY_INTERVAL_MS || 110);
+  const OVERLOAD_BASE_REJECT_LAG_MS = Number(process.env.POKE_OVERLOAD_REJECT_LAG_MS || process.env.POKE_TOOBUSY_MAX_LAG_MS || 2500);
 
-const EVENT_LOOP_WARN_LAG_MS_FLOOR = Number(process.env.POKE_EVENT_LOOP_WARN_LAG_MS || 750);
-const INSANE_LAG_MS_FLOOR = Number(process.env.POKE_INSANE_LAG_MS || Math.max(7500, TOOBUSY_MAX_LAG_MS * 3));
-const INSANE_P99_LAG_MS_FLOOR = Number(process.env.POKE_INSANE_P99_LAG_MS || Math.max(5000, TOOBUSY_MAX_LAG_MS * 2));
+  const LOOP_WARN_LAG_MS_FLOOR = Number(process.env.POKE_LOOP_WARN_LAG_MS || process.env.POKE_EVENT_LOOP_WARN_LAG_MS || 750);
+  const LOOP_CRITICAL_LAG_MS_FLOOR = Number(process.env.POKE_LOOP_CRITICAL_LAG_MS || process.env.POKE_INSANE_LAG_MS || Math.max(7500, OVERLOAD_BASE_REJECT_LAG_MS * 3));
+  const LOOP_CRITICAL_P99_MS_FLOOR = Number(process.env.POKE_LOOP_CRITICAL_P99_MS || process.env.POKE_INSANE_P99_LAG_MS || Math.max(5000, OVERLOAD_BASE_REJECT_LAG_MS * 2));
 
-const EVENT_LOOP_WARN_LAG_MS_CAP = Number(process.env.POKE_EVENT_LOOP_WARN_LAG_MS_CAP || 2500);
-const TOOBUSY_MAX_LAG_MS_CAP = Number(process.env.POKE_TOOBUSY_MAX_LAG_MS_CAP || 6000);
-const INSANE_LAG_MS_CAP = Number(process.env.POKE_INSANE_LAG_MS_CAP || 30000);
-const INSANE_P99_LAG_MS_CAP = Number(process.env.POKE_INSANE_P99_LAG_MS_CAP || 20000);
+  const LOOP_WARN_LAG_MS_CAP = Number(process.env.POKE_LOOP_WARN_LAG_MS_CAP || process.env.POKE_EVENT_LOOP_WARN_LAG_MS_CAP || 2500);
+  const LOOP_REJECT_LAG_MS_CAP = Number(process.env.POKE_LOOP_REJECT_LAG_MS_CAP || process.env.POKE_TOOBUSY_MAX_LAG_MS_CAP || 6000);
+  const LOOP_CRITICAL_LAG_MS_CAP = Number(process.env.POKE_LOOP_CRITICAL_LAG_MS_CAP || process.env.POKE_INSANE_LAG_MS_CAP || 30000);
+  const LOOP_CRITICAL_P99_MS_CAP = Number(process.env.POKE_LOOP_CRITICAL_P99_MS_CAP || process.env.POKE_INSANE_P99_LAG_MS_CAP || 20000);
 
-const DYNAMIC_EVENT_LOOP_MS = process.env.POKE_DYNAMIC_EVENT_LOOP_MS !== "0";
-const DYNAMIC_TOOBUSY_MAX_LAG = process.env.POKE_DYNAMIC_TOOBUSY_MAX_LAG === "1";
-const DYNAMIC_EVENT_LOOP_SAMPLE_INTERVAL_MS = Number(process.env.POKE_DYNAMIC_EVENT_LOOP_SAMPLE_INTERVAL_MS || 15_000);
-const DYNAMIC_EVENT_LOOP_MIN_BASELINE_MS = Number(process.env.POKE_DYNAMIC_EVENT_LOOP_MIN_BASELINE_MS || 10);
-const DYNAMIC_EVENT_LOOP_MAX_HEALTHY_BASELINE_MS = Number(process.env.POKE_DYNAMIC_EVENT_LOOP_MAX_HEALTHY_BASELINE_MS || 1000);
-const DYNAMIC_EVENT_LOOP_ALPHA = Number(process.env.POKE_DYNAMIC_EVENT_LOOP_ALPHA || 0.22);
+  const LOOP_DYNAMIC_LIMITS_ENABLED = process.env.POKE_LOOP_DYNAMIC_LIMITS !== "0" && process.env.POKE_DYNAMIC_EVENT_LOOP_MS !== "0";
+  const LOOP_DYNAMIC_TOOBUSY_ENABLED = process.env.POKE_LOOP_DYNAMIC_TOOBUSY === "1" || process.env.POKE_DYNAMIC_TOOBUSY_MAX_LAG === "1";
+  const LOOP_BASELINE_SAMPLE_INTERVAL_MS = Number(process.env.POKE_LOOP_BASELINE_SAMPLE_INTERVAL_MS || process.env.POKE_DYNAMIC_EVENT_LOOP_SAMPLE_INTERVAL_MS || 15_000);
+  const LOOP_BASELINE_MIN_MS = Number(process.env.POKE_LOOP_BASELINE_MIN_MS || process.env.POKE_DYNAMIC_EVENT_LOOP_MIN_BASELINE_MS || 10);
+  const LOOP_BASELINE_MAX_HEALTHY_MS = Number(process.env.POKE_LOOP_BASELINE_MAX_HEALTHY_MS || process.env.POKE_DYNAMIC_EVENT_LOOP_MAX_HEALTHY_BASELINE_MS || 1000);
+  const LOOP_BASELINE_ALPHA = Number(process.env.POKE_LOOP_BASELINE_ALPHA || process.env.POKE_DYNAMIC_EVENT_LOOP_ALPHA || 0.22);
 
-const DYNAMIC_WARN_MULTIPLIER = Number(process.env.POKE_DYNAMIC_WARN_MULTIPLIER || 20);
-const DYNAMIC_TOOBUSY_MULTIPLIER = Number(process.env.POKE_DYNAMIC_TOOBUSY_MULTIPLIER || 45);
-const DYNAMIC_INSANE_MULTIPLIER = Number(process.env.POKE_DYNAMIC_INSANE_MULTIPLIER || 120);
-const DYNAMIC_INSANE_P99_MULTIPLIER = Number(process.env.POKE_DYNAMIC_INSANE_P99_MULTIPLIER || 80);
+  const LOOP_WARN_MULTIPLIER = Number(process.env.POKE_LOOP_WARN_MULTIPLIER || process.env.POKE_DYNAMIC_WARN_MULTIPLIER || 20);
+  const LOOP_REJECT_MULTIPLIER = Number(process.env.POKE_LOOP_REJECT_MULTIPLIER || process.env.POKE_DYNAMIC_TOOBUSY_MULTIPLIER || 45);
+  const LOOP_CRITICAL_MULTIPLIER = Number(process.env.POKE_LOOP_CRITICAL_MULTIPLIER || process.env.POKE_DYNAMIC_INSANE_MULTIPLIER || 120);
+  const LOOP_CRITICAL_P99_MULTIPLIER = Number(process.env.POKE_LOOP_CRITICAL_P99_MULTIPLIER || process.env.POKE_DYNAMIC_INSANE_P99_MULTIPLIER || 80);
 
-const INSANE_ELU = Number(process.env.POKE_INSANE_ELU || 0.98);
+  const LOOP_CRITICAL_ELU = Number(process.env.POKE_LOOP_CRITICAL_ELU || process.env.POKE_INSANE_ELU || 0.98);
+  const LOOP_BUSY_ELU = Number(process.env.POKE_LOOP_BUSY_ELU || 0.92);
 
-const INSANE_LAG_STRIKES = Number(process.env.POKE_INSANE_LAG_STRIKES || 3);
-const INSANE_LAG_WINDOW_MS = Number(process.env.POKE_INSANE_LAG_WINDOW_MS || 30_000);
+  const CRITICAL_STRIKES_TO_RESTART = Number(process.env.POKE_CRITICAL_STRIKES_TO_RESTART || process.env.POKE_INSANE_LAG_STRIKES || 3);
+  const CRITICAL_STRIKE_WINDOW_MS = Number(process.env.POKE_CRITICAL_STRIKE_WINDOW_MS || process.env.POKE_INSANE_LAG_WINDOW_MS || 30_000);
 
-const LAG_LOG_COOLDOWN_MS = Number(process.env.POKE_LAG_LOG_COOLDOWN_MS || 5_000);
-const REPORT_COOLDOWN_MS = Number(process.env.POKE_LAG_REPORT_COOLDOWN_MS || 60_000);
+  const OVERLOAD_LOG_COOLDOWN_MS = Number(process.env.POKE_OVERLOAD_LOG_COOLDOWN_MS || process.env.POKE_LAG_LOG_COOLDOWN_MS || 5_000);
+  const OVERLOAD_POLICY_LOG_COOLDOWN_MS = Number(process.env.POKE_OVERLOAD_POLICY_LOG_COOLDOWN_MS || process.env.POKE_TOOBUSY_POLICY_LOG_COOLDOWN_MS || 15_000);
+  const DIAGNOSTIC_REPORT_COOLDOWN_MS = Number(process.env.POKE_DIAGNOSTIC_REPORT_COOLDOWN_MS || process.env.POKE_LAG_REPORT_COOLDOWN_MS || 60_000);
 
-const EXIT_GRACE_MS = Number(process.env.POKE_EXIT_GRACE_MS || 10_000);
-const RETRY_AFTER_SECONDS = Number(process.env.POKE_RETRY_AFTER_SECONDS || 15);
+  const RESTART_EXIT_GRACE_MS = Number(process.env.POKE_RESTART_EXIT_GRACE_MS || process.env.POKE_EXIT_GRACE_MS || 10_000);
+  const CLIENT_RETRY_AFTER_SECONDS = Number(process.env.POKE_CLIENT_RETRY_AFTER_SECONDS || process.env.POKE_RETRY_AFTER_SECONDS || 15);
 
-const REQUEST_SLOW_MS = Number(process.env.POKE_REQUEST_SLOW_MS || 3000);
-const MAX_TRACKED_ACTIVE_REQUESTS = Number(process.env.POKE_MAX_TRACKED_ACTIVE_REQUESTS || 1000);
-const MAX_RECENT_SLOW_REQUESTS = Number(process.env.POKE_MAX_RECENT_SLOW_REQUESTS || 20);
+  const REQUEST_SLOW_LOG_MS = Number(process.env.POKE_REQUEST_SLOW_LOG_MS || process.env.POKE_REQUEST_SLOW_MS || 3000);
+  const REQUEST_TRACK_MAX_ACTIVE = Number(process.env.POKE_REQUEST_TRACK_MAX_ACTIVE || process.env.POKE_MAX_TRACKED_ACTIVE_REQUESTS || 1000);
+  const REQUEST_TRACK_MAX_RECENT_SLOW = Number(process.env.POKE_REQUEST_TRACK_MAX_RECENT_SLOW || process.env.POKE_MAX_RECENT_SLOW_REQUESTS || 20);
 
-const NORMAL_USER_TOOBUSY_PROTECTION = process.env.POKE_NORMAL_USER_TOOBUSY_PROTECTION !== "0";
-const NORMAL_USER_GRACE_MS = Number(process.env.POKE_NORMAL_USER_GRACE_MS || 1400);
-const NORMAL_USER_GRACE_STEP_MS = Number(process.env.POKE_NORMAL_USER_GRACE_STEP_MS || 140);
-const NORMAL_USER_GRACE_JITTER_MS = Number(process.env.POKE_NORMAL_USER_GRACE_JITTER_MS || 180);
-const NORMAL_USER_SOFT_PASS_ON_PAGE = process.env.POKE_NORMAL_USER_SOFT_PASS_ON_PAGE !== "0";
+  const USER_GRACE_ENABLED = process.env.POKE_USER_GRACE_ENABLED !== "0" && process.env.POKE_NORMAL_USER_TOOBUSY_PROTECTION !== "0";
+  const USER_GRACE_TOTAL_MS = Number(process.env.POKE_USER_GRACE_TOTAL_MS || process.env.POKE_NORMAL_USER_GRACE_MS || 1400);
+  const USER_GRACE_POLL_MS = Number(process.env.POKE_USER_GRACE_POLL_MS || process.env.POKE_NORMAL_USER_GRACE_STEP_MS || 140);
+  const USER_GRACE_JITTER_MS = Number(process.env.POKE_USER_GRACE_JITTER_MS || process.env.POKE_NORMAL_USER_GRACE_JITTER_MS || 180);
+  const USER_PAGE_SOFT_PASS_ENABLED = process.env.POKE_USER_PAGE_SOFT_PASS !== "0" && process.env.POKE_NORMAL_USER_SOFT_PASS_ON_PAGE !== "0";
 
-const TOOBUSY_CLIENT_WINDOW_MS = Number(process.env.POKE_TOOBUSY_CLIENT_WINDOW_MS || 30_000);
-const NORMAL_USER_MAX_REQUESTS_PER_WINDOW = Number(process.env.POKE_NORMAL_USER_MAX_REQUESTS_PER_WINDOW || 45);
-const NORMAL_USER_MAX_SOFT_PASSES_PER_WINDOW = Number(process.env.POKE_NORMAL_USER_MAX_SOFT_PASSES_PER_WINDOW || 6);
-const NORMAL_USER_MAX_HARD_REJECTS_PER_WINDOW = Number(process.env.POKE_NORMAL_USER_MAX_HARD_REJECTS_PER_WINDOW || 2);
-const NORMAL_USER_MAX_ACTIVE_FOR_SOFT_PASS = Number(process.env.POKE_NORMAL_USER_MAX_ACTIVE_FOR_SOFT_PASS || 800);
+  const CLIENT_WINDOW_MS = Number(process.env.POKE_OVERLOAD_CLIENT_WINDOW_MS || process.env.POKE_TOOBUSY_CLIENT_WINDOW_MS || 30_000);
+  const CLIENT_MAX_REQUESTS_PER_WINDOW = Number(process.env.POKE_OVERLOAD_CLIENT_MAX_REQUESTS_PER_WINDOW || process.env.POKE_NORMAL_USER_MAX_REQUESTS_PER_WINDOW || 45);
+  const CLIENT_MAX_PAGE_SOFT_PASSES_PER_WINDOW = Number(process.env.POKE_OVERLOAD_CLIENT_MAX_PAGE_SOFT_PASSES_PER_WINDOW || process.env.POKE_NORMAL_USER_MAX_SOFT_PASSES_PER_WINDOW || 6);
+  const CLIENT_MAX_REJECTS_BEFORE_COOLDOWN = Number(process.env.POKE_OVERLOAD_CLIENT_MAX_REJECTS_BEFORE_COOLDOWN || 4);
+  const CLIENT_MAX_ACTIVE_REQUESTS_FOR_SOFT_PASS = Number(process.env.POKE_OVERLOAD_MAX_ACTIVE_FOR_SOFT_PASS || process.env.POKE_NORMAL_USER_MAX_ACTIVE_FOR_SOFT_PASS || 800);
 
-const TOOBUSY_ALLOW_STATIC_DURING_SOFT_OVERLOAD = process.env.POKE_TOOBUSY_ALLOW_STATIC_DURING_SOFT_OVERLOAD !== "0";
-const TOOBUSY_ALLOW_HEALTH_DURING_SOFT_OVERLOAD = process.env.POKE_TOOBUSY_ALLOW_HEALTH_DURING_SOFT_OVERLOAD !== "0";
-const TOOBUSY_POLICY_CLEANUP_INTERVAL_MS = Number(process.env.POKE_TOOBUSY_POLICY_CLEANUP_INTERVAL_MS || 60_000);
-const TOOBUSY_POLICY_LOG_COOLDOWN_MS = Number(process.env.POKE_TOOBUSY_POLICY_LOG_COOLDOWN_MS || 15_000);
+  const CLIENT_HEAVY_REJECTS_BEFORE_COOLDOWN = Number(process.env.POKE_OVERLOAD_HEAVY_REJECTS_BEFORE_COOLDOWN || 3);
+  const CLIENT_COOLDOWN_MS = Number(process.env.POKE_OVERLOAD_CLIENT_COOLDOWN_MS || 60_000);
+  const CLIENT_COOLDOWN_MAX_MS = Number(process.env.POKE_OVERLOAD_CLIENT_COOLDOWN_MAX_MS || 10 * 60_000);
 
-const DIAGNOSTIC_REPORT_DIR = process.env.POKE_DIAGNOSTIC_REPORT_DIR || nodePath.join(process.cwd(), "reports");
-const ENABLE_DIAGNOSTIC_REPORTS = process.env.POKE_DIAGNOSTIC_REPORTS !== "0";
+  const ALLOW_STATIC_DURING_SOFT_OVERLOAD = process.env.POKE_OVERLOAD_ALLOW_STATIC !== "0" && process.env.POKE_TOOBUSY_ALLOW_STATIC_DURING_SOFT_OVERLOAD !== "0";
+  const ALLOW_STATUS_DURING_SOFT_OVERLOAD = process.env.POKE_OVERLOAD_ALLOW_STATUS !== "0" && process.env.POKE_TOOBUSY_ALLOW_HEALTH_DURING_SOFT_OVERLOAD !== "0";
+  const CLIENT_STATE_CLEANUP_INTERVAL_MS = Number(process.env.POKE_OVERLOAD_CLIENT_CLEANUP_INTERVAL_MS || process.env.POKE_TOOBUSY_POLICY_CLEANUP_INTERVAL_MS || 60_000);
 
-const LAG_LOG_STYLE = String(process.env.POKE_LAG_LOG_STYLE || "pretty").toLowerCase();
-const LAG_LOG_JSON = process.env.POKE_LAG_JSON_LOGS === "1" || LAG_LOG_STYLE === "json";
+  const DIAGNOSTIC_REPORT_DIR = process.env.POKE_DIAGNOSTIC_REPORT_DIR || nodePath.join(process.cwd(), "reports");
+  const DIAGNOSTIC_REPORTS_ENABLED = process.env.POKE_DIAGNOSTIC_REPORTS !== "0";
 
-let lagStrikeTimes = [];
-let lastLagLogAt = 0;
-let lastReportAt = 0;
-let lagRestarting = false;
+  const OVERLOAD_LOG_STYLE = String(process.env.POKE_OVERLOAD_LOG_STYLE || process.env.POKE_LAG_LOG_STYLE || "pretty").toLowerCase();
+  const OVERLOAD_JSON_LOGS = process.env.POKE_OVERLOAD_JSON_LOGS === "1" || process.env.POKE_LAG_JSON_LOGS === "1" || OVERLOAD_LOG_STYLE === "json";
 
-let requestSequence = 0;
-const activeRequests = new Map();
-const activeRequestCounts = new Map();
-const recentSlowRequests = [];
+  let criticalStrikeTimes = [];
+  let lastLagLogAt = 0;
+  let lastPolicyLogAt = 0;
+  let lastReportAt = 0;
+  let overloadRestarting = false;
 
-const busyClients = new Map();
-let lastTooBusyPolicyLogAt = 0;
-let lastLagPolicySnapshot = null;
-let lastLagPolicySnapshotAt = 0;
+  let requestSequence = 0;
+  const activeRequests = new Map();
+  const activeRequestCounts = new Map();
+  const recentSlowRequests = [];
 
-const tooBusyPolicyStats = {
-  allowedNotBusy: 0,
-  allowedStatic: 0,
-  allowedHealth: 0,
-  gracePassed: 0,
-  softPassed: 0,
-  rejectedHard: 0,
-  rejectedBackground: 0,
-  rejectedHeavy: 0,
-  rejectedNoBudget: 0,
-  rejectedRestarting: 0,
-  rejectedInsane: 0
-};
+  const overloadClients = new Map();
+  let lastOverloadSnapshot = null;
+  let lastOverloadSnapshotAt = 0;
 
-let lastEventLoopUtilization = performance.eventLoopUtilization();
-let lastCpuUsage = process.cpuUsage();
+  const overloadStats = {
+    allowedHealthy: 0,
+    allowedStatus: 0,
+    allowedStatic: 0,
+    pageGracePassed: 0,
+    pageSoftPassed: 0,
+    rejectedRestarting: 0,
+    rejectedCritical: 0,
+    rejectedCooldown: 0,
+    rejectedHeavy: 0,
+    rejectedBackground: 0,
+    rejectedNoBudget: 0,
+    rejectedGraceExpired: 0,
+    cooldownsIssued: 0
+  };
 
-let dynamicThresholds = {
-  enabled: DYNAMIC_EVENT_LOOP_MS,
-  dynamicToobusy: DYNAMIC_TOOBUSY_MAX_LAG,
-  samples: 0,
-  baselineMs: 0,
-  baselineP90Ms: 0,
-  baselineP99Ms: 0,
-  lastSampleP90Ms: 0,
-  lastSampleP99Ms: 0,
-  lastSampleMeanMs: 0,
-  lastSampleMaxMs: 0,
-  lastUpdatedAt: 0,
-  warningMs: EVENT_LOOP_WARN_LAG_MS_FLOOR,
-  tooBusyMs: TOOBUSY_MAX_LAG_MS,
-  insaneMs: INSANE_LAG_MS_FLOOR,
-  insaneP99Ms: INSANE_P99_LAG_MS_FLOOR
-};
+  let lastEventLoopUtilization = performance.eventLoopUtilization();
+  let lastCpuUsage = process.cpuUsage();
 
-const eventLoopDelay = monitorEventLoopDelay({ resolution: 20 });
-const eventLoopBaselineDelay = monitorEventLoopDelay({ resolution: 20 });
-eventLoopDelay.enable();
-eventLoopBaselineDelay.enable();
+  const adaptiveLoopLimits = {
+    enabled: LOOP_DYNAMIC_LIMITS_ENABLED,
+    dynamicToobusy: LOOP_DYNAMIC_TOOBUSY_ENABLED,
+    samples: 0,
+    baselineMs: 0,
+    baselineP90Ms: 0,
+    baselineP99Ms: 0,
+    lastSampleP90Ms: 0,
+    lastSampleP99Ms: 0,
+    lastSampleMeanMs: 0,
+    lastSampleMaxMs: 0,
+    lastUpdatedAt: 0,
+    warnLagMs: LOOP_WARN_LAG_MS_FLOOR,
+    rejectLagMs: OVERLOAD_BASE_REJECT_LAG_MS,
+    criticalLagMs: LOOP_CRITICAL_LAG_MS_FLOOR,
+    criticalP99Ms: LOOP_CRITICAL_P99_MS_FLOOR
+  };
 
-function bytesToMb(bytes) {
-  return Math.round(bytes / 1024 / 1024) + "MB";
-}
+  const loopDelay = monitorEventLoopDelay({ resolution: 20 });
+  const loopBaselineDelay = monitorEventLoopDelay({ resolution: 20 });
 
-function nsToMs(ns) {
-  if (!Number.isFinite(ns) || ns <= 0 || ns > 3_600_000_000_000) {
-    return 0;
+  loopDelay.enable();
+  loopBaselineDelay.enable();
+
+  function bytesToMb(bytes) {
+    return Math.round(bytes / 1024 / 1024) + "MB";
   }
 
-  return Math.round((ns / 1_000_000) * 100) / 100;
-}
+  function nsToMs(ns) {
+    if (!Number.isFinite(ns) || ns <= 0 || ns > 3_600_000_000_000) {
+      return 0;
+    }
 
-function roundMs(value) {
-  if (!Number.isFinite(value)) {
-    return 0;
+    return Math.round((ns / 1_000_000) * 100) / 100;
   }
 
-  return Math.round(value * 100) / 100;
-}
+  function roundMs(value) {
+    if (!Number.isFinite(value)) {
+      return 0;
+    }
 
-function roundRatio(value) {
-  if (!Number.isFinite(value)) {
-    return 0;
+    return Math.round(value * 100) / 100;
   }
 
-  return Math.round(value * 10000) / 10000;
-}
+  function roundRatio(value) {
+    if (!Number.isFinite(value)) {
+      return 0;
+    }
 
-function clampNumber(value, min, max) {
-  if (!Number.isFinite(value)) {
-    return min;
+    return Math.round(value * 10000) / 10000;
   }
 
-  return Math.max(min, Math.min(max, value));
-}
+  function clampNumber(value, min, max) {
+    if (!Number.isFinite(value)) {
+      return min;
+    }
 
-function formatPercent(value) {
-  if (!Number.isFinite(value)) {
-    return "0%";
+    return Math.max(min, Math.min(max, value));
   }
 
-  return (value * 100).toFixed(2) + "%";
-}
+  function formatPercent(value) {
+    if (!Number.isFinite(value)) {
+      return "0%";
+    }
 
-function formatSecondsFromMs(value) {
-  if (!Number.isFinite(value)) {
-    return "0s";
+    return (value * 100).toFixed(2) + "%";
   }
 
-  if (value < 1000) {
-    return roundMs(value) + "ms";
+  function formatDuration(value) {
+    if (!Number.isFinite(value)) {
+      return "0s";
+    }
+
+    if (value < 1000) {
+      return roundMs(value) + "ms";
+    }
+
+    return roundMs(value / 1000) + "s";
   }
 
-  return roundMs(value / 1000) + "s";
-}
-
-function delay(ms) {
-  return new Promise(function (resolve) {
-    setTimeout(resolve, ms);
-  });
-}
-
-function normalizePathname(pathname) {
-  return String(pathname || "/")
-    .replace(/[a-f0-9]{24}/gi, ":objectId")
-    .replace(/[a-f0-9]{32,}/gi, ":hex")
-    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi, ":uuid")
-    .replace(/\/\d{3,}(?=\/|$)/g, "/:number")
-    .replace(/\/[A-Za-z0-9_-]{11}(?=\/|$)/g, "/:id");
-}
-
-function getRequestKey(req) {
-  const url = req.originalUrl || req.url || "/";
-  const pathname = url.split("?")[0] || "/";
-  return req.method + " " + normalizePathname(pathname);
-}
-
-function getRequestPath(req) {
-  const url = req.originalUrl || req.url || "/";
-  return (url.split("?")[0] || "/").toLowerCase();
-}
-
-function incrementMapCount(map, key) {
-  map.set(key, (map.get(key) || 0) + 1);
-}
-
-function decrementMapCount(map, key) {
-  const nextValue = (map.get(key) || 0) - 1;
-
-  if (nextValue <= 0) {
-    map.delete(key);
-    return;
-  }
-
-  map.set(key, nextValue);
-}
-
-function getTopMapEntries(map, limit) {
-  return Array.from(map.entries())
-    .sort(function (a, b) {
-      return b[1] - a[1];
-    })
-    .slice(0, limit)
-    .map(function (entry) {
-      return {
-        key: entry[0],
-        count: entry[1]
-      };
+  function sleep(ms) {
+    return new Promise(function (resolve) {
+      setTimeout(resolve, ms);
     });
-}
+  }
 
-function getActiveRequestSummary(limit) {
-  const now = performance.now();
+  function normalizePathname(pathname) {
+    return String(pathname || "/")
+      .replace(/[a-f0-9]{24}/gi, ":objectId")
+      .replace(/[a-f0-9]{32,}/gi, ":hex")
+      .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi, ":uuid")
+      .replace(/\/\d{3,}(?=\/|$)/g, "/:number")
+      .replace(/\/[A-Za-z0-9_-]{11}(?=\/|$)/g, "/:id");
+  }
 
-  return Array.from(activeRequests.values())
-    .map(function (request) {
-      return {
-        id: request.id,
-        key: request.key,
-        ageMs: roundMs(now - request.startedAt)
+  function getRequestPath(req) {
+    const url = req.originalUrl || req.url || "/";
+    return (url.split("?")[0] || "/").toLowerCase();
+  }
+
+  function getRequestKey(req) {
+    const pathname = getRequestPath(req);
+    return req.method + " " + normalizePathname(pathname);
+  }
+
+  function incrementMapCount(map, key) {
+    map.set(key, (map.get(key) || 0) + 1);
+  }
+
+  function decrementMapCount(map, key) {
+    const nextValue = (map.get(key) || 0) - 1;
+
+    if (nextValue <= 0) {
+      map.delete(key);
+      return;
+    }
+
+    map.set(key, nextValue);
+  }
+
+  function getTopMapEntries(map, limit) {
+    return Array.from(map.entries())
+      .sort(function (a, b) {
+        return b[1] - a[1];
+      })
+      .slice(0, limit)
+      .map(function (entry) {
+        return {
+          key: entry[0],
+          count: entry[1]
+        };
+      });
+  }
+
+  function getActiveRequestSummary(limit) {
+    const now = performance.now();
+
+    return Array.from(activeRequests.values())
+      .map(function (request) {
+        return {
+          id: request.id,
+          key: request.key,
+          ageMs: roundMs(now - request.startedAt)
+        };
+      })
+      .sort(function (a, b) {
+        return b.ageMs - a.ageMs;
+      })
+      .slice(0, limit);
+  }
+
+  function getActiveResourceCounts() {
+    if (typeof process.getActiveResourcesInfo !== "function") {
+      return {};
+    }
+
+    const counts = {};
+
+    for (const resource of process.getActiveResourcesInfo()) {
+      counts[resource] = (counts[resource] || 0) + 1;
+    }
+
+    return counts;
+  }
+
+  function getLoopDelaySnapshot() {
+    return {
+      minMs: nsToMs(loopDelay.min),
+      meanMs: nsToMs(loopDelay.mean),
+      maxMs: nsToMs(loopDelay.max),
+      stddevMs: nsToMs(loopDelay.stddev),
+      p50Ms: nsToMs(loopDelay.percentile(50)),
+      p90Ms: nsToMs(loopDelay.percentile(90)),
+      p99Ms: nsToMs(loopDelay.percentile(99))
+    };
+  }
+
+  function getLoopBaselineSnapshot() {
+    return {
+      minMs: nsToMs(loopBaselineDelay.min),
+      meanMs: nsToMs(loopBaselineDelay.mean),
+      maxMs: nsToMs(loopBaselineDelay.max),
+      stddevMs: nsToMs(loopBaselineDelay.stddev),
+      p50Ms: nsToMs(loopBaselineDelay.percentile(50)),
+      p90Ms: nsToMs(loopBaselineDelay.percentile(90)),
+      p99Ms: nsToMs(loopBaselineDelay.percentile(99))
+    };
+  }
+
+  function getEventLoopUtilizationSnapshot() {
+    const delta = performance.eventLoopUtilization(lastEventLoopUtilization);
+    lastEventLoopUtilization = performance.eventLoopUtilization();
+
+    return {
+      idleMs: roundMs(delta.idle),
+      activeMs: roundMs(delta.active),
+      utilization: roundRatio(delta.utilization)
+    };
+  }
+
+  function getCpuUsageSnapshot() {
+    const delta = process.cpuUsage(lastCpuUsage);
+    lastCpuUsage = process.cpuUsage();
+
+    return {
+      userMs: roundMs(delta.user / 1000),
+      systemMs: roundMs(delta.system / 1000),
+      totalMs: roundMs((delta.user + delta.system) / 1000)
+    };
+  }
+
+  function getLoopLimits() {
+    return {
+      dynamic: adaptiveLoopLimits.enabled,
+      dynamicToobusy: adaptiveLoopLimits.dynamicToobusy,
+      samples: adaptiveLoopLimits.samples,
+      baselineMs: adaptiveLoopLimits.baselineMs,
+      baselineP90Ms: adaptiveLoopLimits.baselineP90Ms,
+      baselineP99Ms: adaptiveLoopLimits.baselineP99Ms,
+      lastSampleP90Ms: adaptiveLoopLimits.lastSampleP90Ms,
+      lastSampleP99Ms: adaptiveLoopLimits.lastSampleP99Ms,
+      lastSampleMeanMs: adaptiveLoopLimits.lastSampleMeanMs,
+      lastSampleMaxMs: adaptiveLoopLimits.lastSampleMaxMs,
+      lastUpdatedAt: adaptiveLoopLimits.lastUpdatedAt,
+      warnLagMs: adaptiveLoopLimits.warnLagMs,
+      rejectLagMs: adaptiveLoopLimits.rejectLagMs,
+      criticalLagMs: adaptiveLoopLimits.criticalLagMs,
+      criticalP99Ms: adaptiveLoopLimits.criticalP99Ms,
+      criticalElu: LOOP_CRITICAL_ELU,
+      busyElu: LOOP_BUSY_ELU
+    };
+  }
+
+  function updateToobusyRejectLag() {
+    if (!LOOP_DYNAMIC_TOOBUSY_ENABLED) {
+      return;
+    }
+
+    try {
+      toobusy.maxLag(adaptiveLoopLimits.rejectLagMs);
+    } catch (err) {
+      console.error("[POKE-overload] failed to update toobusy maxLag:", err.message);
+    }
+  }
+
+  function updateAdaptiveLoopLimits(reason) {
+    if (!LOOP_DYNAMIC_LIMITS_ENABLED) {
+      loopBaselineDelay.reset();
+      return;
+    }
+
+    const sample = getLoopBaselineSnapshot();
+    const sampleCandidateMs = Math.max(
+      LOOP_BASELINE_MIN_MS,
+      sample.p90Ms,
+      sample.p99Ms,
+      sample.meanMs * 3
+    );
+
+    adaptiveLoopLimits.lastSampleP90Ms = sample.p90Ms;
+    adaptiveLoopLimits.lastSampleP99Ms = sample.p99Ms;
+    adaptiveLoopLimits.lastSampleMeanMs = sample.meanMs;
+    adaptiveLoopLimits.lastSampleMaxMs = sample.maxMs;
+    adaptiveLoopLimits.lastUpdatedAt = Date.now();
+
+    const usefulSample =
+      Number.isFinite(sampleCandidateMs) &&
+      sampleCandidateMs > 0 &&
+      sampleCandidateMs <= LOOP_BASELINE_MAX_HEALTHY_MS;
+
+    if (!usefulSample) {
+      loopBaselineDelay.reset();
+      return;
+    }
+
+    adaptiveLoopLimits.samples++;
+
+    if (adaptiveLoopLimits.baselineMs <= 0) {
+      adaptiveLoopLimits.baselineMs = sampleCandidateMs;
+      adaptiveLoopLimits.baselineP90Ms = Math.max(LOOP_BASELINE_MIN_MS, sample.p90Ms);
+      adaptiveLoopLimits.baselineP99Ms = Math.max(LOOP_BASELINE_MIN_MS, sample.p99Ms);
+    } else {
+      adaptiveLoopLimits.baselineMs =
+        (adaptiveLoopLimits.baselineMs * (1 - LOOP_BASELINE_ALPHA)) +
+        (sampleCandidateMs * LOOP_BASELINE_ALPHA);
+
+      adaptiveLoopLimits.baselineP90Ms =
+        (adaptiveLoopLimits.baselineP90Ms * (1 - LOOP_BASELINE_ALPHA)) +
+        (Math.max(LOOP_BASELINE_MIN_MS, sample.p90Ms) * LOOP_BASELINE_ALPHA);
+
+      adaptiveLoopLimits.baselineP99Ms =
+        (adaptiveLoopLimits.baselineP99Ms * (1 - LOOP_BASELINE_ALPHA)) +
+        (Math.max(LOOP_BASELINE_MIN_MS, sample.p99Ms) * LOOP_BASELINE_ALPHA);
+    }
+
+    const baseline = Math.max(LOOP_BASELINE_MIN_MS, adaptiveLoopLimits.baselineMs);
+    const proposedWarnLagMs = baseline * LOOP_WARN_MULTIPLIER;
+    const proposedRejectLagMs = baseline * LOOP_REJECT_MULTIPLIER;
+    const proposedCriticalLagMs = Math.max(proposedRejectLagMs * 3, baseline * LOOP_CRITICAL_MULTIPLIER);
+    const proposedCriticalP99Ms = Math.max(proposedRejectLagMs * 2, baseline * LOOP_CRITICAL_P99_MULTIPLIER);
+
+    adaptiveLoopLimits.warnLagMs = roundMs(clampNumber(
+      proposedWarnLagMs,
+      LOOP_WARN_LAG_MS_FLOOR,
+      LOOP_WARN_LAG_MS_CAP
+    ));
+
+    adaptiveLoopLimits.rejectLagMs = Math.round(clampNumber(
+      proposedRejectLagMs,
+      OVERLOAD_BASE_REJECT_LAG_MS,
+      LOOP_REJECT_LAG_MS_CAP
+    ));
+
+    adaptiveLoopLimits.criticalLagMs = Math.round(clampNumber(
+      proposedCriticalLagMs,
+      LOOP_CRITICAL_LAG_MS_FLOOR,
+      LOOP_CRITICAL_LAG_MS_CAP
+    ));
+
+    adaptiveLoopLimits.criticalP99Ms = Math.round(clampNumber(
+      proposedCriticalP99Ms,
+      LOOP_CRITICAL_P99_MS_FLOOR,
+      LOOP_CRITICAL_P99_MS_CAP
+    ));
+
+    updateToobusyRejectLag();
+    loopBaselineDelay.reset();
+  }
+
+  function getOverloadState(currentLagMs, delaySnapshot, eluSnapshot) {
+    const limits = getLoopLimits();
+    const p99LagMs = delaySnapshot.p99Ms;
+    const maxLagMs = delaySnapshot.maxMs;
+    const elu = eluSnapshot.utilization;
+
+    if (overloadRestarting) {
+      return "restarting";
+    }
+
+    if (
+      currentLagMs >= limits.criticalLagMs ||
+      p99LagMs >= limits.criticalP99Ms ||
+      (elu >= limits.criticalElu && currentLagMs >= limits.rejectLagMs)
+    ) {
+      return "critical";
+    }
+
+    if (
+      currentLagMs >= limits.rejectLagMs ||
+      p99LagMs >= limits.rejectLagMs ||
+      maxLagMs >= limits.criticalLagMs ||
+      elu >= limits.busyElu
+    ) {
+      return "overloaded";
+    }
+
+    if (
+      currentLagMs >= limits.warnLagMs ||
+      p99LagMs >= limits.warnLagMs ||
+      maxLagMs >= limits.warnLagMs
+    ) {
+      return "warm";
+    }
+
+    return "healthy";
+  }
+
+  function createOverloadSnapshot(currentLag, extra) {
+    const currentLagMs = roundMs(currentLag);
+    const memory = process.memoryUsage();
+    const delaySnapshot = getLoopDelaySnapshot();
+    const eluSnapshot = getEventLoopUtilizationSnapshot();
+    const cpuSnapshot = getCpuUsageSnapshot();
+    const limits = getLoopLimits();
+    const state = getOverloadState(currentLagMs, delaySnapshot, eluSnapshot);
+
+    return {
+      reason: "event_loop_lag",
+      state,
+      source: {
+        detector: "toobusy-js",
+        note: "toobusy-js detected delayed event-loop polling; exact blocking call cannot be known from this callback alone"
+      },
+      lag: {
+        currentMs: currentLagMs,
+        warnMs: limits.warnLagMs,
+        rejectMs: limits.rejectLagMs,
+        baseRejectMs: OVERLOAD_BASE_REJECT_LAG_MS,
+        dynamicToobusyEnabled: limits.dynamicToobusy,
+        criticalMs: limits.criticalLagMs,
+        criticalP99Ms: limits.criticalP99Ms,
+        criticalElu: limits.criticalElu,
+        strikes: criticalStrikeTimes.length,
+        strikeWindowMs: CRITICAL_STRIKE_WINDOW_MS
+      },
+      adaptiveLimits: limits,
+      eventLoopDelay: delaySnapshot,
+      eventLoopUtilization: eluSnapshot,
+      cpu: cpuSnapshot,
+      memory: {
+        rss: bytesToMb(memory.rss),
+        heapUsed: bytesToMb(memory.heapUsed),
+        heapTotal: bytesToMb(memory.heapTotal),
+        external: bytesToMb(memory.external),
+        arrayBuffers: bytesToMb(memory.arrayBuffers || 0)
+      },
+      process: {
+        pid: process.pid,
+        node: process.version,
+        uptimeSeconds: Math.round(process.uptime()),
+        platform: process.platform,
+        arch: process.arch
+      },
+      system: {
+        loadavg: os.loadavg().map(roundMs),
+        freeMemory: bytesToMb(os.freemem()),
+        totalMemory: bytesToMb(os.totalmem())
+      },
+      requests: {
+        active: activeRequests.size,
+        activeByRoute: getTopMapEntries(activeRequestCounts, 10),
+        oldestActive: getActiveRequestSummary(10),
+        recentSlow: recentSlowRequests.slice(-10).reverse()
+      },
+      resources: getActiveResourceCounts(),
+      admission: {
+        clients: overloadClients.size,
+        userGraceEnabled: USER_GRACE_ENABLED,
+        userGraceMs: USER_GRACE_TOTAL_MS,
+        pageSoftPassEnabled: USER_PAGE_SOFT_PASS_ENABLED,
+        stats: { ...overloadStats }
+      },
+      ...extra
+    };
+  }
+
+  function formatRouteList(routes) {
+    if (!routes || routes.length === 0) {
+      return "none";
+    }
+
+    return routes
+      .map(function (route) {
+        return route.key + " x" + route.count;
+      })
+      .join(", ");
+  }
+
+  function formatOldestRequests(requests) {
+    if (!requests || requests.length === 0) {
+      return "none";
+    }
+
+    return requests
+      .slice(0, 5)
+      .map(function (request) {
+        return request.key + " age=" + formatDuration(request.ageMs);
+      })
+      .join(", ");
+  }
+
+  function formatRecentSlowRequests(requests) {
+    if (!requests || requests.length === 0) {
+      return "none";
+    }
+
+    return requests
+      .slice(0, 5)
+      .map(function (request) {
+        return request.key + " status=" + request.statusCode + " duration=" + formatDuration(request.durationMs);
+      })
+      .join(", ");
+  }
+
+  function formatResourceCounts(resources) {
+    const entries = Object.entries(resources || {});
+
+    if (entries.length === 0) {
+      return "none";
+    }
+
+    return entries
+      .sort(function (a, b) {
+        return b[1] - a[1];
+      })
+      .slice(0, 10)
+      .map(function (entry) {
+        return entry[0] + "=" + entry[1];
+      })
+      .join(", ");
+  }
+
+  function getLikelyLagHints(snapshot) {
+    const hints = [];
+
+    if (snapshot.requests.activeByRoute.length > 0) {
+      hints.push("busy routes: " + formatRouteList(snapshot.requests.activeByRoute.slice(0, 3)));
+    }
+
+    if (snapshot.requests.oldestActive.length > 0) {
+      hints.push("oldest active: " + formatOldestRequests(snapshot.requests.oldestActive.slice(0, 3)));
+    }
+
+    if (snapshot.requests.recentSlow.length > 0) {
+      hints.push("recent slow: " + formatRecentSlowRequests(snapshot.requests.recentSlow.slice(0, 3)));
+    }
+
+    const resources = formatResourceCounts(snapshot.resources);
+    if (resources !== "none") {
+      hints.push("active resources: " + resources);
+    }
+
+    if (hints.length === 0) {
+      hints.push("no active request clue captured; likely sync CPU work, GC, startup work, dependency code, or another callback before this sample");
+    }
+
+    return hints;
+  }
+
+  function formatOverloadPretty(message, snapshot) {
+    const lines = [];
+    const lag = snapshot.lag;
+    const limits = snapshot.adaptiveLimits;
+    const delay = snapshot.eventLoopDelay;
+    const elu = snapshot.eventLoopUtilization;
+    const cpu = snapshot.cpu;
+    const memory = snapshot.memory;
+    const proc = snapshot.process;
+    const system = snapshot.system;
+    const hints = getLikelyLagHints(snapshot);
+
+    lines.push("[POKE-overload] " + message);
+    lines.push("  state: " + snapshot.state);
+    lines.push(
+      "  lag: current=" + lag.currentMs + "ms" +
+      " warn=" + lag.warnMs + "ms" +
+      " reject=" + lag.rejectMs + "ms" +
+      " critical=" + lag.criticalMs + "ms" +
+      " criticalP99=" + lag.criticalP99Ms + "ms" +
+      " strikes=" + lag.strikes + "/" + CRITICAL_STRIKES_TO_RESTART
+    );
+    lines.push(
+      "  adaptive limits: enabled=" + limits.dynamic +
+      " dynamicToobusy=" + limits.dynamicToobusy +
+      " samples=" + limits.samples +
+      " baseline=" + roundMs(limits.baselineMs) + "ms" +
+      " baselineP90=" + roundMs(limits.baselineP90Ms) + "ms" +
+      " baselineP99=" + roundMs(limits.baselineP99Ms) + "ms"
+    );
+    lines.push(
+      "  last baseline sample: p90=" + limits.lastSampleP90Ms + "ms" +
+      " p99=" + limits.lastSampleP99Ms + "ms" +
+      " mean=" + limits.lastSampleMeanMs + "ms" +
+      " max=" + limits.lastSampleMaxMs + "ms"
+    );
+    lines.push(
+      "  event loop delay: p50=" + delay.p50Ms + "ms" +
+      " p90=" + delay.p90Ms + "ms" +
+      " p99=" + delay.p99Ms + "ms" +
+      " max=" + delay.maxMs + "ms" +
+      " mean=" + delay.meanMs + "ms"
+    );
+    lines.push(
+      "  event loop use: " + formatPercent(elu.utilization) +
+      " active=" + formatDuration(elu.activeMs) +
+      " idle=" + formatDuration(elu.idleMs)
+    );
+    lines.push(
+      "  cpu: user=" + formatDuration(cpu.userMs) +
+      " system=" + formatDuration(cpu.systemMs) +
+      " total=" + formatDuration(cpu.totalMs)
+    );
+    lines.push(
+      "  memory: rss=" + memory.rss +
+      " heap=" + memory.heapUsed + "/" + memory.heapTotal +
+      " external=" + memory.external +
+      " arrayBuffers=" + memory.arrayBuffers
+    );
+    lines.push(
+      "  process: pid=" + proc.pid +
+      " uptime=" + proc.uptimeSeconds + "s" +
+      " node=" + proc.node +
+      " platform=" + proc.platform +
+      " arch=" + proc.arch
+    );
+    lines.push(
+      "  system: loadavg=" + system.loadavg.join(",") +
+      " free=" + system.freeMemory +
+      " total=" + system.totalMemory
+    );
+    lines.push(
+      "  requests: active=" + snapshot.requests.active +
+      " top=[" + formatRouteList(snapshot.requests.activeByRoute.slice(0, 5)) + "]"
+    );
+    lines.push("  oldest active: " + formatOldestRequests(snapshot.requests.oldestActive));
+    lines.push("  recent slow: " + formatRecentSlowRequests(snapshot.requests.recentSlow));
+    lines.push("  resources: " + formatResourceCounts(snapshot.resources));
+    lines.push(
+      "  admission: clients=" + snapshot.admission.clients +
+      " graceMs=" + snapshot.admission.userGraceMs +
+      " graceEnabled=" + snapshot.admission.userGraceEnabled +
+      " pageSoftPass=" + snapshot.admission.pageSoftPassEnabled +
+      " stats=" + JSON.stringify(snapshot.admission.stats)
+    );
+    lines.push("  likely clues:");
+    for (const hint of hints) {
+      lines.push("    - " + hint);
+    }
+
+    if (snapshot.restart) {
+      lines.push(
+        "  restart: grace=" + snapshot.restart.exitGraceMs + "ms" +
+        " retryAfter=" + snapshot.restart.retryAfterSeconds + "s" +
+        " report=" + (snapshot.restart.diagnosticReport || "not written")
+      );
+    }
+
+    if (snapshot.diagnosticReport) {
+      lines.push("  diagnostic report: " + snapshot.diagnosticReport);
+    }
+
+    lines.push("  note: exact blocking function cannot be recovered from this callback alone");
+    lines.push("  set POKE_OVERLOAD_LOG_STYLE=json for machine-readable logs");
+
+    return lines.join("\n");
+  }
+
+  function logOverload(message, snapshot) {
+    if (OVERLOAD_JSON_LOGS) {
+      console.error("[POKE-overload] " + message + " " + JSON.stringify(snapshot));
+      return;
+    }
+
+    console.error(formatOverloadPretty(message, snapshot));
+  }
+
+  function shouldWriteDiagnosticReport() {
+    if (!DIAGNOSTIC_REPORTS_ENABLED) {
+      return false;
+    }
+
+    if (!process.report || typeof process.report.writeReport !== "function") {
+      return false;
+    }
+
+    const now = Date.now();
+
+    if (now - lastReportAt < DIAGNOSTIC_REPORT_COOLDOWN_MS) {
+      return false;
+    }
+
+    lastReportAt = now;
+    return true;
+  }
+
+  function writeDiagnosticReport(snapshot) {
+    if (!shouldWriteDiagnosticReport()) {
+      return null;
+    }
+
+    try {
+      fs.mkdirSync(DIAGNOSTIC_REPORT_DIR, { recursive: true });
+
+      const filename = nodePath.join(
+        DIAGNOSTIC_REPORT_DIR,
+        "event-loop-lag-" + Date.now() + "-pid-" + process.pid + ".json"
+      );
+
+      const err = new Error(
+        "Sustained event-loop lag: " +
+        snapshot.lag.currentMs +
+        "ms, p99: " +
+        snapshot.eventLoopDelay.p99Ms +
+        "ms, max: " +
+        snapshot.eventLoopDelay.maxMs +
+        "ms"
+      );
+
+      return process.report.writeReport(filename, err);
+    } catch (err) {
+      console.error("[POKE-overload] failed to write diagnostic report", err);
+      return null;
+    }
+  }
+
+  function recordCriticalStrike() {
+    const now = Date.now();
+
+    criticalStrikeTimes = criticalStrikeTimes.filter(function (time) {
+      return now - time <= CRITICAL_STRIKE_WINDOW_MS;
+    });
+
+    criticalStrikeTimes.push(now);
+
+    return criticalStrikeTimes.length;
+  }
+
+  function resetCriticalStrikesIfHealthy(currentLag, snapshot) {
+    const limits = getLoopLimits();
+
+    if (currentLag >= limits.rejectLagMs) {
+      return;
+    }
+
+    if (snapshot.eventLoopDelay.p99Ms >= limits.rejectLagMs) {
+      return;
+    }
+
+    if (snapshot.eventLoopUtilization.utilization >= LOOP_BUSY_ELU) {
+      return;
+    }
+
+    criticalStrikeTimes = [];
+  }
+
+  function isCriticalLag(currentLag, snapshot) {
+    const limits = getLoopLimits();
+
+    return (
+      currentLag >= limits.criticalLagMs ||
+      snapshot.eventLoopDelay.p99Ms >= limits.criticalP99Ms ||
+      (
+        snapshot.eventLoopUtilization.utilization >= limits.criticalElu &&
+        currentLag >= limits.rejectLagMs
+      )
+    );
+  }
+
+  function getClientKey(req) {
+    return String(req.ip || req.socket.remoteAddress || "unknown").replace("::ffff:", "");
+  }
+
+  function pruneClientState(client, now) {
+    const oldest = now - CLIENT_WINDOW_MS;
+
+    while (client.requestTimes.length > 0 && client.requestTimes[0] < oldest) {
+      client.requestTimes.shift();
+    }
+
+    while (client.pageSoftPassTimes.length > 0 && client.pageSoftPassTimes[0] < oldest) {
+      client.pageSoftPassTimes.shift();
+    }
+
+    while (client.pageGracePassTimes.length > 0 && client.pageGracePassTimes[0] < oldest) {
+      client.pageGracePassTimes.shift();
+    }
+
+    while (client.rejectTimes.length > 0 && client.rejectTimes[0] < oldest) {
+      client.rejectTimes.shift();
+    }
+
+    while (client.heavyRejectTimes.length > 0 && client.heavyRejectTimes[0] < oldest) {
+      client.heavyRejectTimes.shift();
+    }
+
+    if (client.cooldownUntil > 0 && client.cooldownUntil <= now) {
+      client.cooldownUntil = 0;
+      client.cooldownLevel = Math.max(0, client.cooldownLevel - 1);
+    }
+  }
+
+  function getClientState(req) {
+    const key = getClientKey(req);
+    const now = Date.now();
+    let client = overloadClients.get(key);
+
+    if (!client) {
+      client = {
+        key,
+        requestTimes: [],
+        pageSoftPassTimes: [],
+        pageGracePassTimes: [],
+        rejectTimes: [],
+        heavyRejectTimes: [],
+        cooldownUntil: 0,
+        cooldownLevel: 0,
+        lastSeen: now,
+        lastPath: "",
+        lastKind: "",
+        lastDecision: ""
       };
-    })
-    .sort(function (a, b) {
-      return b.ageMs - a.ageMs;
-    })
-    .slice(0, limit);
-}
+      overloadClients.set(key, client);
+    }
 
-function getActiveResourceCounts() {
-  if (typeof process.getActiveResourcesInfo !== "function") {
-    return {};
+    client.lastSeen = now;
+    pruneClientState(client, now);
+    return client;
   }
 
-  const counts = {};
-
-  for (const resource of process.getActiveResourcesInfo()) {
-    counts[resource] = (counts[resource] || 0) + 1;
+  function rememberRequest(req, client, kind) {
+    const now = Date.now();
+    client.lastSeen = now;
+    client.lastPath = getRequestPath(req);
+    client.lastKind = kind;
+    client.requestTimes.push(now);
+    pruneClientState(client, now);
   }
 
-  return counts;
-}
+  function rememberDecision(client, decision, kind) {
+    const now = Date.now();
+    client.lastDecision = decision;
 
-function getEventLoopDelaySnapshot() {
-  return {
-    minMs: nsToMs(eventLoopDelay.min),
-    meanMs: nsToMs(eventLoopDelay.mean),
-    maxMs: nsToMs(eventLoopDelay.max),
-    stddevMs: nsToMs(eventLoopDelay.stddev),
-    p50Ms: nsToMs(eventLoopDelay.percentile(50)),
-    p90Ms: nsToMs(eventLoopDelay.percentile(90)),
-    p99Ms: nsToMs(eventLoopDelay.percentile(99))
-  };
-}
+    if (decision === "page-soft-pass") {
+      client.pageSoftPassTimes.push(now);
+    }
 
-function getEventLoopBaselineDelaySnapshot() {
-  return {
-    minMs: nsToMs(eventLoopBaselineDelay.min),
-    meanMs: nsToMs(eventLoopBaselineDelay.mean),
-    maxMs: nsToMs(eventLoopBaselineDelay.max),
-    stddevMs: nsToMs(eventLoopBaselineDelay.stddev),
-    p50Ms: nsToMs(eventLoopBaselineDelay.percentile(50)),
-    p90Ms: nsToMs(eventLoopBaselineDelay.percentile(90)),
-    p99Ms: nsToMs(eventLoopBaselineDelay.percentile(99))
-  };
-}
+    if (decision === "page-grace-pass") {
+      client.pageGracePassTimes.push(now);
+    }
 
-function getEventLoopUtilizationSnapshot() {
-  const delta = performance.eventLoopUtilization(lastEventLoopUtilization);
-  lastEventLoopUtilization = performance.eventLoopUtilization();
+    if (decision === "reject") {
+      client.rejectTimes.push(now);
+    }
 
-  return {
-    idleMs: roundMs(delta.idle),
-    activeMs: roundMs(delta.active),
-    utilization: roundRatio(delta.utilization)
-  };
-}
+    if (decision === "reject" && (kind === "heavy" || kind === "background")) {
+      client.heavyRejectTimes.push(now);
+    }
 
-function getCpuUsageSnapshot() {
-  const delta = process.cpuUsage(lastCpuUsage);
-  lastCpuUsage = process.cpuUsage();
-
-  return {
-    userMs: roundMs(delta.user / 1000),
-    systemMs: roundMs(delta.system / 1000),
-    totalMs: roundMs((delta.user + delta.system) / 1000)
-  };
-}
-
-function getCurrentLagThresholds() {
-  return {
-    dynamic: dynamicThresholds.enabled,
-    dynamicToobusy: dynamicThresholds.dynamicToobusy,
-    samples: dynamicThresholds.samples,
-    baselineMs: dynamicThresholds.baselineMs,
-    baselineP90Ms: dynamicThresholds.baselineP90Ms,
-    baselineP99Ms: dynamicThresholds.baselineP99Ms,
-    lastSampleP90Ms: dynamicThresholds.lastSampleP90Ms,
-    lastSampleP99Ms: dynamicThresholds.lastSampleP99Ms,
-    lastSampleMeanMs: dynamicThresholds.lastSampleMeanMs,
-    lastSampleMaxMs: dynamicThresholds.lastSampleMaxMs,
-    lastUpdatedAt: dynamicThresholds.lastUpdatedAt,
-    warningMs: dynamicThresholds.warningMs,
-    tooBusyMs: dynamicThresholds.tooBusyMs,
-    insaneMs: dynamicThresholds.insaneMs,
-    insaneP99Ms: dynamicThresholds.insaneP99Ms,
-    insaneElu: INSANE_ELU
-  };
-}
-
-function maybeUpdateToobusyMaxLag() {
-  if (!DYNAMIC_TOOBUSY_MAX_LAG) {
-    return;
+    pruneClientState(client, now);
   }
 
-  try {
-    toobusy.maxLag(dynamicThresholds.tooBusyMs);
-  } catch (err) {
-    console.error("[POKE-toobusy] failed to update dynamic maxLag:", err.message);
-  }
-}
+  function applyClientCooldown(client, reason) {
+    const now = Date.now();
 
-function updateDynamicEventLoopThresholds(reason) {
-  if (!DYNAMIC_EVENT_LOOP_MS) {
-    eventLoopBaselineDelay.reset();
-    return;
-  }
+    client.cooldownLevel++;
+    const cooldownMs = Math.min(
+      CLIENT_COOLDOWN_MAX_MS,
+      CLIENT_COOLDOWN_MS * Math.pow(2, Math.max(0, client.cooldownLevel - 1))
+    );
 
-  const sample = getEventLoopBaselineDelaySnapshot();
-  const sampleCandidateMs = Math.max(
-    DYNAMIC_EVENT_LOOP_MIN_BASELINE_MS,
-    sample.p90Ms,
-    sample.p99Ms,
-    sample.meanMs * 3
-  );
+    client.cooldownUntil = now + cooldownMs;
+    overloadStats.cooldownsIssued++;
 
-  dynamicThresholds.lastSampleP90Ms = sample.p90Ms;
-  dynamicThresholds.lastSampleP99Ms = sample.p99Ms;
-  dynamicThresholds.lastSampleMeanMs = sample.meanMs;
-  dynamicThresholds.lastSampleMaxMs = sample.maxMs;
-  dynamicThresholds.lastUpdatedAt = Date.now();
-
-  const sampleLooksUseful =
-    Number.isFinite(sampleCandidateMs) &&
-    sampleCandidateMs > 0 &&
-    sampleCandidateMs <= DYNAMIC_EVENT_LOOP_MAX_HEALTHY_BASELINE_MS;
-
-  if (!sampleLooksUseful) {
-    eventLoopBaselineDelay.reset();
-    return;
+    console.error(
+      "[POKE-overload-policy] cooldown issued " +
+      JSON.stringify({
+        reason,
+        cooldownMs,
+        cooldownLevel: client.cooldownLevel,
+        client: {
+          requests: client.requestTimes.length,
+          rejects: client.rejectTimes.length,
+          heavyRejects: client.heavyRejectTimes.length,
+          lastPath: client.lastPath,
+          lastKind: client.lastKind
+        }
+      })
+    );
   }
 
-  dynamicThresholds.samples++;
-
-  if (dynamicThresholds.baselineMs <= 0) {
-    dynamicThresholds.baselineMs = sampleCandidateMs;
-    dynamicThresholds.baselineP90Ms = Math.max(DYNAMIC_EVENT_LOOP_MIN_BASELINE_MS, sample.p90Ms);
-    dynamicThresholds.baselineP99Ms = Math.max(DYNAMIC_EVENT_LOOP_MIN_BASELINE_MS, sample.p99Ms);
-  } else {
-    dynamicThresholds.baselineMs =
-      (dynamicThresholds.baselineMs * (1 - DYNAMIC_EVENT_LOOP_ALPHA)) +
-      (sampleCandidateMs * DYNAMIC_EVENT_LOOP_ALPHA);
-
-    dynamicThresholds.baselineP90Ms =
-      (dynamicThresholds.baselineP90Ms * (1 - DYNAMIC_EVENT_LOOP_ALPHA)) +
-      (Math.max(DYNAMIC_EVENT_LOOP_MIN_BASELINE_MS, sample.p90Ms) * DYNAMIC_EVENT_LOOP_ALPHA);
-
-    dynamicThresholds.baselineP99Ms =
-      (dynamicThresholds.baselineP99Ms * (1 - DYNAMIC_EVENT_LOOP_ALPHA)) +
-      (Math.max(DYNAMIC_EVENT_LOOP_MIN_BASELINE_MS, sample.p99Ms) * DYNAMIC_EVENT_LOOP_ALPHA);
+  function isSafeMethod(req) {
+    return req.method === "GET" || req.method === "HEAD";
   }
 
-  const baseline = Math.max(DYNAMIC_EVENT_LOOP_MIN_BASELINE_MS, dynamicThresholds.baselineMs);
-  const proposedWarningMs = baseline * DYNAMIC_WARN_MULTIPLIER;
-  const proposedTooBusyMs = baseline * DYNAMIC_TOOBUSY_MULTIPLIER;
-  const proposedInsaneMs = Math.max(proposedTooBusyMs * 3, baseline * DYNAMIC_INSANE_MULTIPLIER);
-  const proposedInsaneP99Ms = Math.max(proposedTooBusyMs * 2, baseline * DYNAMIC_INSANE_P99_MULTIPLIER);
+  function isStaticRequest(req) {
+    const pathname = getRequestPath(req);
 
-  dynamicThresholds.warningMs = roundMs(clampNumber(
-    proposedWarningMs,
-    EVENT_LOOP_WARN_LAG_MS_FLOOR,
-    EVENT_LOOP_WARN_LAG_MS_CAP
-  ));
+    if (/^\/(css|js|img|font|static|favicon\.ico|manifest\.json|robots\.txt)(\/|$)/i.test(pathname)) {
+      return true;
+    }
 
-  dynamicThresholds.tooBusyMs = Math.round(clampNumber(
-    proposedTooBusyMs,
-    TOOBUSY_MAX_LAG_MS,
-    TOOBUSY_MAX_LAG_MS_CAP
-  ));
-
-  dynamicThresholds.insaneMs = Math.round(clampNumber(
-    proposedInsaneMs,
-    INSANE_LAG_MS_FLOOR,
-    INSANE_LAG_MS_CAP
-  ));
-
-  dynamicThresholds.insaneP99Ms = Math.round(clampNumber(
-    proposedInsaneP99Ms,
-    INSANE_P99_LAG_MS_FLOOR,
-    INSANE_P99_LAG_MS_CAP
-  ));
-
-  maybeUpdateToobusyMaxLag();
-  eventLoopBaselineDelay.reset();
-}
-
-function getSeverity(currentLagMs, delaySnapshot, eluSnapshot) {
-  const thresholds = getCurrentLagThresholds();
-  const p99LagMs = delaySnapshot.p99Ms;
-  const maxLagMs = delaySnapshot.maxMs;
-  const elu = eluSnapshot.utilization;
-
-  if (lagRestarting) {
-    return "restarting";
+    return /\.(css|js|mjs|png|jpg|jpeg|webp|gif|svg|ico|woff|woff2|ttf|otf|map|txt)$/i.test(pathname);
   }
 
-  if (
-    currentLagMs >= thresholds.insaneMs ||
-    p99LagMs >= thresholds.insaneP99Ms ||
-    (elu >= thresholds.insaneElu && currentLagMs >= thresholds.tooBusyMs)
-  ) {
-    return "insane";
+  function isStatusRequest(req) {
+    const pathname = getRequestPath(req);
+
+    return (
+      pathname === "/robots.txt" ||
+      pathname === "/favicon.ico" ||
+      pathname === "/_pokestopskids/stats" ||
+      pathname === "/_pokeoverload/stats" ||
+      pathname === "/_antiddos" ||
+      pathname.startsWith("/_antiddos/")
+    );
   }
 
-  if (
-    currentLagMs >= thresholds.tooBusyMs ||
-    p99LagMs >= thresholds.tooBusyMs ||
-    maxLagMs >= thresholds.insaneMs
-  ) {
+  function isLikelyAutomationUserAgent(req) {
+    const ua = String(req.headers["user-agent"] || "").toLowerCase();
+
+    if (!ua) {
+      return false;
+    }
+
+    return (
+      ua.includes("curl") ||
+      ua.includes("wget") ||
+      ua.includes("python-requests") ||
+      ua.includes("python/") ||
+      ua.includes("aiohttp") ||
+      ua.includes("httpx") ||
+      ua.includes("axios") ||
+      ua.includes("node-fetch") ||
+      ua.includes("undici") ||
+      ua.includes("go-http-client") ||
+      ua.includes("java/") ||
+      ua.includes("okhttp") ||
+      ua.includes("libwww") ||
+      ua.includes("scrapy") ||
+      ua.includes("crawler") ||
+      ua.includes("spider")
+    );
+  }
+
+  function isHeavyRequest(req) {
+    const pathname = getRequestPath(req);
+
+    if (!isSafeMethod(req)) {
+      return true;
+    }
+
+    return (
+      pathname.startsWith("/api/") ||
+      pathname.startsWith("/proxy/") ||
+      pathname.startsWith("/videoplayback") ||
+      pathname.startsWith("/vi/") ||
+      pathname.startsWith("/ggpht/") ||
+      pathname.startsWith("/avatars/") ||
+      pathname.startsWith("/storyboard") ||
+      pathname.startsWith("/sb/") ||
+      pathname.startsWith("/manifest") ||
+      pathname.startsWith("/channel_uploads") ||
+      pathname.startsWith("/music")
+    );
+  }
+
+  function isBackgroundRequest(req) {
+    const accept = String(req.headers.accept || "").toLowerCase();
+    const secFetchDest = String(req.headers["sec-fetch-dest"] || "").toLowerCase();
+    const secFetchMode = String(req.headers["sec-fetch-mode"] || "").toLowerCase();
+
+    if (!isSafeMethod(req)) {
+      return true;
+    }
+
+    if (accept.includes("application/json") && !accept.includes("text/html")) {
+      return true;
+    }
+
+    if (secFetchDest === "empty" && secFetchMode === "cors") {
+      return true;
+    }
+
+    return false;
+  }
+
+  function isPageNavigation(req) {
+    const pathname = getRequestPath(req);
+    const accept = String(req.headers.accept || "").toLowerCase();
+    const secFetchDest = String(req.headers["sec-fetch-dest"] || "").toLowerCase();
+    const secFetchMode = String(req.headers["sec-fetch-mode"] || "").toLowerCase();
+
+    if (!isSafeMethod(req)) {
+      return false;
+    }
+
+    if (isStaticRequest(req) || isHeavyRequest(req) || isBackgroundRequest(req)) {
+      return false;
+    }
+
+    if (
+      pathname === "/" ||
+      pathname === "/watch" ||
+      pathname === "/search" ||
+      pathname === "/hashtag" ||
+      pathname.startsWith("/watch/") ||
+      pathname.startsWith("/search/") ||
+      pathname.startsWith("/channel/") ||
+      pathname.startsWith("/user/") ||
+      pathname.startsWith("/playlist")
+    ) {
+      return true;
+    }
+
+    if (accept.includes("text/html")) {
+      return true;
+    }
+
+    if (secFetchDest === "document" || secFetchMode === "navigate") {
+      return true;
+    }
+
+    return false;
+  }
+
+  function classifyRequest(req) {
+    if (isStatusRequest(req)) {
+      return "status";
+    }
+
+    if (isStaticRequest(req)) {
+      return "static";
+    }
+
+    if (isHeavyRequest(req)) {
+      return "heavy";
+    }
+
+    if (isBackgroundRequest(req)) {
+      return "background";
+    }
+
+    if (isPageNavigation(req)) {
+      return "page";
+    }
+
+    return "other";
+  }
+
+  function getCurrentPolicyState() {
+    if (overloadRestarting) {
+      return "restarting";
+    }
+
+    if (lastOverloadSnapshot && Date.now() - lastOverloadSnapshotAt <= Math.max(30_000, OVERLOAD_LOG_COOLDOWN_MS * 4)) {
+      return lastOverloadSnapshot.state || "overloaded";
+    }
+
     return "overloaded";
   }
 
-  if (
-    currentLagMs >= thresholds.warningMs ||
-    p99LagMs >= thresholds.warningMs ||
-    maxLagMs >= thresholds.warningMs
-  ) {
-    return "warning";
+  function isHardOverloadState() {
+    const state = getCurrentPolicyState();
+    return state === "critical" || state === "restarting";
   }
 
-  return "ok";
-}
+  function canSpendPageSoftPass(req, client) {
+    if (!USER_GRACE_ENABLED || !USER_PAGE_SOFT_PASS_ENABLED) {
+      return false;
+    }
+
+    if (isLikelyAutomationUserAgent(req)) {
+      return false;
+    }
+
+    if (client.requestTimes.length > CLIENT_MAX_REQUESTS_PER_WINDOW) {
+      return false;
+    }
+
+    if (client.pageSoftPassTimes.length >= CLIENT_MAX_PAGE_SOFT_PASSES_PER_WINDOW) {
+      return false;
+    }
+
+    if (client.rejectTimes.length >= CLIENT_MAX_REJECTS_BEFORE_COOLDOWN) {
+      return false;
+    }
+
+    if (activeRequests.size >= CLIENT_MAX_ACTIVE_REQUESTS_FOR_SOFT_PASS) {
+      return false;
+    }
 
-function createLagSnapshot(currentLag, extra) {
-  const currentLagMs = roundMs(currentLag);
-  const memory = process.memoryUsage();
-  const delaySnapshot = getEventLoopDelaySnapshot();
-  const eluSnapshot = getEventLoopUtilizationSnapshot();
-  const cpuSnapshot = getCpuUsageSnapshot();
-  const thresholds = getCurrentLagThresholds();
-  const severity = getSeverity(currentLagMs, delaySnapshot, eluSnapshot);
-
-  return {
-    reason: "event_loop_lag",
-    severity,
-    source: {
-      detector: "toobusy-js",
-      note: "toobusy-js detected delayed event-loop polling; exact blocking call cannot be known from this callback alone"
-    },
-    lag: {
-      currentMs: currentLagMs,
-      warningMs: thresholds.warningMs,
-      tooBusyMs: thresholds.tooBusyMs,
-      staticTooBusyMs: TOOBUSY_MAX_LAG_MS,
-      dynamicTooBusyEnabled: thresholds.dynamicToobusy,
-      insaneMs: thresholds.insaneMs,
-      insaneP99Ms: thresholds.insaneP99Ms,
-      insaneElu: thresholds.insaneElu,
-      strikes: lagStrikeTimes.length,
-      strikeWindowMs: INSANE_LAG_WINDOW_MS
-    },
-    dynamicThresholds: thresholds,
-    eventLoopDelay: delaySnapshot,
-    eventLoopUtilization: eluSnapshot,
-    cpu: cpuSnapshot,
-    memory: {
-      rss: bytesToMb(memory.rss),
-      heapUsed: bytesToMb(memory.heapUsed),
-      heapTotal: bytesToMb(memory.heapTotal),
-      external: bytesToMb(memory.external),
-      arrayBuffers: bytesToMb(memory.arrayBuffers || 0)
-    },
-    process: {
-      pid: process.pid,
-      node: process.version,
-      uptimeSeconds: Math.round(process.uptime()),
-      platform: process.platform,
-      arch: process.arch
-    },
-    system: {
-      loadavg: os.loadavg().map(roundMs),
-      freeMemory: bytesToMb(os.freemem()),
-      totalMemory: bytesToMb(os.totalmem())
-    },
-    requests: {
-      active: activeRequests.size,
-      activeByRoute: getTopMapEntries(activeRequestCounts, 10),
-      oldestActive: getActiveRequestSummary(10),
-      recentSlow: recentSlowRequests.slice(-10).reverse()
-    },
-    resources: getActiveResourceCounts(),
-    toobusyPolicy: {
-      normalUserProtection: NORMAL_USER_TOOBUSY_PROTECTION,
-      graceMs: NORMAL_USER_GRACE_MS,
-      softPassOnPage: NORMAL_USER_SOFT_PASS_ON_PAGE,
-      activeClients: busyClients.size,
-      stats: { ...tooBusyPolicyStats }
-    },
-    ...extra
-  };
-}
-
-function formatRouteList(routes) {
-  if (!routes || routes.length === 0) {
-    return "none";
-  }
-
-  return routes
-    .map(function (route) {
-      return route.key + " x" + route.count;
-    })
-    .join(", ");
-}
-
-function formatOldestRequests(requests) {
-  if (!requests || requests.length === 0) {
-    return "none";
-  }
-
-  return requests
-    .slice(0, 5)
-    .map(function (request) {
-      return request.key + " age=" + formatSecondsFromMs(request.ageMs);
-    })
-    .join(", ");
-}
-
-function formatRecentSlowRequests(requests) {
-  if (!requests || requests.length === 0) {
-    return "none";
-  }
-
-  return requests
-    .slice(0, 5)
-    .map(function (request) {
-      return request.key + " status=" + request.statusCode + " duration=" + formatSecondsFromMs(request.durationMs);
-    })
-    .join(", ");
-}
-
-function formatResourceCounts(resources) {
-  const entries = Object.entries(resources || {});
-
-  if (entries.length === 0) {
-    return "none";
-  }
-
-  return entries
-    .sort(function (a, b) {
-      return b[1] - a[1];
-    })
-    .slice(0, 10)
-    .map(function (entry) {
-      return entry[0] + "=" + entry[1];
-    })
-    .join(", ");
-}
-
-function getLikelyLagHints(snapshot) {
-  const hints = [];
-
-  if (snapshot.requests.activeByRoute.length > 0) {
-    hints.push("busy routes: " + formatRouteList(snapshot.requests.activeByRoute.slice(0, 3)));
-  }
-
-  if (snapshot.requests.oldestActive.length > 0) {
-    hints.push("oldest active: " + formatOldestRequests(snapshot.requests.oldestActive.slice(0, 3)));
-  }
-
-  if (snapshot.requests.recentSlow.length > 0) {
-    hints.push("recent slow: " + formatRecentSlowRequests(snapshot.requests.recentSlow.slice(0, 3)));
-  }
-
-  const resources = formatResourceCounts(snapshot.resources);
-  if (resources !== "none") {
-    hints.push("active resources: " + resources);
-  }
-
-  if (hints.length === 0) {
-    hints.push("no active request clue captured; likely sync CPU work, GC, startup work, dependency code, or another callback before this sample");
-  }
-
-  return hints;
-}
-
-function formatLagPretty(message, snapshot) {
-  const lines = [];
-  const lag = snapshot.lag;
-  const dynamic = snapshot.dynamicThresholds;
-  const delay = snapshot.eventLoopDelay;
-  const elu = snapshot.eventLoopUtilization;
-  const cpu = snapshot.cpu;
-  const memory = snapshot.memory;
-  const proc = snapshot.process;
-  const system = snapshot.system;
-  const hints = getLikelyLagHints(snapshot);
-
-  lines.push("[POKE-toobusy] " + message);
-  lines.push("  severity: " + snapshot.severity);
-  lines.push(
-    "  lag: current=" + lag.currentMs + "ms" +
-    " warn=" + lag.warningMs + "ms" +
-    " toobusy=" + lag.tooBusyMs + "ms" +
-    " insane=" + lag.insaneMs + "ms" +
-    " insaneP99=" + lag.insaneP99Ms + "ms" +
-    " strikes=" + lag.strikes + "/" + INSANE_LAG_STRIKES
-  );
-  lines.push(
-    "  dynamic thresholds: enabled=" + dynamic.dynamic +
-    " dynamicToobusy=" + dynamic.dynamicToobusy +
-    " samples=" + dynamic.samples +
-    " baseline=" + roundMs(dynamic.baselineMs) + "ms" +
-    " baselineP90=" + roundMs(dynamic.baselineP90Ms) + "ms" +
-    " baselineP99=" + roundMs(dynamic.baselineP99Ms) + "ms"
-  );
-  lines.push(
-    "  last threshold sample: p90=" + dynamic.lastSampleP90Ms + "ms" +
-    " p99=" + dynamic.lastSampleP99Ms + "ms" +
-    " mean=" + dynamic.lastSampleMeanMs + "ms" +
-    " max=" + dynamic.lastSampleMaxMs + "ms"
-  );
-  lines.push(
-    "  event loop delay: p50=" + delay.p50Ms + "ms" +
-    " p90=" + delay.p90Ms + "ms" +
-    " p99=" + delay.p99Ms + "ms" +
-    " max=" + delay.maxMs + "ms" +
-    " mean=" + delay.meanMs + "ms"
-  );
-  lines.push(
-    "  event loop use: " + formatPercent(elu.utilization) +
-    " active=" + formatSecondsFromMs(elu.activeMs) +
-    " idle=" + formatSecondsFromMs(elu.idleMs)
-  );
-  lines.push(
-    "  cpu: user=" + formatSecondsFromMs(cpu.userMs) +
-    " system=" + formatSecondsFromMs(cpu.systemMs) +
-    " total=" + formatSecondsFromMs(cpu.totalMs)
-  );
-  lines.push(
-    "  memory: rss=" + memory.rss +
-    " heap=" + memory.heapUsed + "/" + memory.heapTotal +
-    " external=" + memory.external +
-    " arrayBuffers=" + memory.arrayBuffers
-  );
-  lines.push(
-    "  process: pid=" + proc.pid +
-    " uptime=" + proc.uptimeSeconds + "s" +
-    " node=" + proc.node +
-    " platform=" + proc.platform +
-    " arch=" + proc.arch
-  );
-  lines.push(
-    "  system: loadavg=" + system.loadavg.join(",") +
-    " free=" + system.freeMemory +
-    " total=" + system.totalMemory
-  );
-  lines.push(
-    "  requests: active=" + snapshot.requests.active +
-    " top=[" + formatRouteList(snapshot.requests.activeByRoute.slice(0, 5)) + "]"
-  );
-  lines.push("  oldest active: " + formatOldestRequests(snapshot.requests.oldestActive));
-  lines.push("  recent slow: " + formatRecentSlowRequests(snapshot.requests.recentSlow));
-  lines.push("  resources: " + formatResourceCounts(snapshot.resources));
-  lines.push(
-    "  policy: clients=" + snapshot.toobusyPolicy.activeClients +
-    " graceMs=" + snapshot.toobusyPolicy.graceMs +
-    " softPagePass=" + snapshot.toobusyPolicy.softPassOnPage +
-    " stats=" + JSON.stringify(snapshot.toobusyPolicy.stats)
-  );
-  lines.push("  likely clues:");
-  for (const hint of hints) {
-    lines.push("    - " + hint);
-  }
-
-  if (snapshot.restart) {
-    lines.push(
-      "  restart: grace=" + snapshot.restart.exitGraceMs + "ms" +
-      " retryAfter=" + snapshot.restart.retryAfterSeconds + "s" +
-      " report=" + (snapshot.restart.diagnosticReport || "not written")
-    );
-  }
-
-  if (snapshot.diagnosticReport) {
-    lines.push("  diagnostic report: " + snapshot.diagnosticReport);
-  }
-
-  lines.push("  note: exact blocking function cannot be recovered from this callback alone");
-  lines.push("  set POKE_LAG_LOG_STYLE=json for machine-readable JSON logs");
-
-  return lines.join("\n");
-}
-
-function logLag(message, snapshot) {
-  if (LAG_LOG_JSON) {
-    console.error("[POKE-toobusy] " + message + " " + JSON.stringify(snapshot));
-    return;
-  }
-
-  console.error(formatLagPretty(message, snapshot));
-}
-
-function shouldWriteDiagnosticReport() {
-  if (!ENABLE_DIAGNOSTIC_REPORTS) {
-    return false;
-  }
-
-  if (!process.report || typeof process.report.writeReport !== "function") {
-    return false;
-  }
-
-  const now = Date.now();
-
-  if (now - lastReportAt < REPORT_COOLDOWN_MS) {
-    return false;
-  }
-
-  lastReportAt = now;
-  return true;
-}
-
-function writeDiagnosticReport(snapshot) {
-  if (!shouldWriteDiagnosticReport()) {
-    return null;
-  }
-
-  try {
-    fs.mkdirSync(DIAGNOSTIC_REPORT_DIR, { recursive: true });
-
-    const filename = nodePath.join(
-      DIAGNOSTIC_REPORT_DIR,
-      "event-loop-lag-" + Date.now() + "-pid-" + process.pid + ".json"
-    );
-
-    const err = new Error(
-      "Sustained event-loop lag: " +
-      snapshot.lag.currentMs +
-      "ms, p99: " +
-      snapshot.eventLoopDelay.p99Ms +
-      "ms, max: " +
-      snapshot.eventLoopDelay.maxMs +
-      "ms"
-    );
-
-    return process.report.writeReport(filename, err);
-  } catch (err) {
-    console.error("[POKE-toobusy] failed to write diagnostic report", err);
-    return null;
-  }
-}
-
-function recordInsaneLagStrike() {
-  const now = Date.now();
-
-  lagStrikeTimes = lagStrikeTimes.filter(function (time) {
-    return now - time <= INSANE_LAG_WINDOW_MS;
-  });
-
-  lagStrikeTimes.push(now);
-
-  return lagStrikeTimes.length;
-}
-
-function resetInsaneLagStrikesIfHealthy(currentLag, snapshot) {
-  const thresholds = getCurrentLagThresholds();
-
-  if (currentLag >= thresholds.tooBusyMs) {
-    return;
-  }
-
-  if (snapshot.eventLoopDelay.p99Ms >= thresholds.tooBusyMs) {
-    return;
-  }
-
-  if (snapshot.eventLoopUtilization.utilization >= 0.9) {
-    return;
-  }
-
-  lagStrikeTimes = [];
-}
-
-function isInsaneLag(currentLag, snapshot) {
-  const thresholds = getCurrentLagThresholds();
-
-  return (
-    currentLag >= thresholds.insaneMs ||
-    snapshot.eventLoopDelay.p99Ms >= thresholds.insaneP99Ms ||
-    (
-      snapshot.eventLoopUtilization.utilization >= thresholds.insaneElu &&
-      currentLag >= thresholds.tooBusyMs
-    )
-  );
-}
-
-function getBusyClientKey(req) {
-  return String(req.ip || req.socket.remoteAddress || "unknown").replace("::ffff:", "");
-}
-
-function pruneBusyClientData(data, now) {
-  const oldest = now - TOOBUSY_CLIENT_WINDOW_MS;
-
-  while (data.requestTimes.length > 0 && data.requestTimes[0] < oldest) {
-    data.requestTimes.shift();
-  }
-
-  while (data.softPassTimes.length > 0 && data.softPassTimes[0] < oldest) {
-    data.softPassTimes.shift();
-  }
-
-  while (data.hardRejectTimes.length > 0 && data.hardRejectTimes[0] < oldest) {
-    data.hardRejectTimes.shift();
-  }
-
-  while (data.gracePassTimes.length > 0 && data.gracePassTimes[0] < oldest) {
-    data.gracePassTimes.shift();
-  }
-}
-
-function getBusyClientData(req) {
-  const key = getBusyClientKey(req);
-  const now = Date.now();
-  let data = busyClients.get(key);
-
-  if (!data) {
-    data = {
-      key,
-      requestTimes: [],
-      softPassTimes: [],
-      hardRejectTimes: [],
-      gracePassTimes: [],
-      lastSeen: now,
-      lastPath: "",
-      lastDecision: ""
-    };
-    busyClients.set(key, data);
-  }
-
-  data.lastSeen = now;
-  pruneBusyClientData(data, now);
-  return data;
-}
-
-function rememberBusyRequest(req, data) {
-  const now = Date.now();
-  data.lastSeen = now;
-  data.lastPath = getRequestPath(req);
-  data.requestTimes.push(now);
-  pruneBusyClientData(data, now);
-}
-
-function rememberBusyDecision(data, decision) {
-  const now = Date.now();
-  data.lastDecision = decision;
-
-  if (decision === "soft-pass") {
-    data.softPassTimes.push(now);
-  }
-
-  if (decision === "grace-pass") {
-    data.gracePassTimes.push(now);
-  }
-
-  if (decision === "hard-reject") {
-    data.hardRejectTimes.push(now);
-  }
-
-  pruneBusyClientData(data, now);
-}
-
-function isSafeMethod(req) {
-  return req.method === "GET" || req.method === "HEAD";
-}
-
-function isStaticRequest(req) {
-  const pathname = getRequestPath(req);
-
-  if (/^\/(css|js|img|font|static|favicon\.ico|manifest\.json|robots\.txt)(\/|$)/i.test(pathname)) {
     return true;
   }
 
-  return /\.(css|js|mjs|png|jpg|jpeg|webp|gif|svg|ico|woff|woff2|ttf|otf|map|txt)$/i.test(pathname);
-}
+  function maybeCooldownClient(client, kind, reason) {
+    if (client.cooldownUntil > Date.now()) {
+      return;
+    }
 
-function isHealthRequest(req) {
-  const pathname = getRequestPath(req);
+    if (client.rejectTimes.length >= CLIENT_MAX_REJECTS_BEFORE_COOLDOWN) {
+      applyClientCooldown(client, reason || "too many overload rejects");
+      return;
+    }
 
-  return (
-    pathname === "/robots.txt" ||
-    pathname === "/favicon.ico" ||
-    pathname === "/_pokestopskids/stats" ||
-    pathname === "/_antiddos" ||
-    pathname.startsWith("/_antiddos/")
-  );
-}
-
-function isHeavyOrBackgroundRequest(req) {
-  const pathname = getRequestPath(req);
-  const accept = String(req.headers.accept || "").toLowerCase();
-  const secFetchDest = String(req.headers["sec-fetch-dest"] || "").toLowerCase();
-  const secFetchMode = String(req.headers["sec-fetch-mode"] || "").toLowerCase();
-
-  if (!isSafeMethod(req)) {
-    return true;
+    if ((kind === "heavy" || kind === "background") && client.heavyRejectTimes.length >= CLIENT_HEAVY_REJECTS_BEFORE_COOLDOWN) {
+      applyClientCooldown(client, reason || "too many heavy overload rejects");
+    }
   }
 
-  if (
-    pathname.startsWith("/api/") ||
-    pathname.startsWith("/proxy/") ||
-    pathname.startsWith("/videoplayback") ||
-    pathname.startsWith("/vi/") ||
-    pathname.startsWith("/ggpht/") ||
-    pathname.startsWith("/avatars/") ||
-    pathname.startsWith("/storyboard") ||
-    pathname.startsWith("/sb/") ||
-    pathname.startsWith("/manifest") ||
-    pathname.startsWith("/channel_uploads") ||
-    pathname.startsWith("/music")
-  ) {
-    return true;
-  }
+  function getAdmissionDecision(req, client, kind) {
+    const state = getCurrentPolicyState();
+    const now = Date.now();
 
-  if (accept.includes("application/json") && !accept.includes("text/html")) {
-    return true;
-  }
+    if (overloadRestarting || state === "restarting") {
+      return {
+        action: "reject",
+        reason: "restarting",
+        status: 503,
+        retryAfter: CLIENT_RETRY_AFTER_SECONDS,
+        message: "Server is recovering from high load. Please retry shortly."
+      };
+    }
 
-  if (secFetchDest === "empty" && secFetchMode === "cors") {
-    return true;
-  }
+    if (client.cooldownUntil > now) {
+      return {
+        action: "reject",
+        reason: "client-overload-cooldown",
+        status: 429,
+        retryAfter: Math.ceil((client.cooldownUntil - now) / 1000),
+        message: "Too many expensive requests during overload. Please retry shortly."
+      };
+    }
 
-  return false;
-}
+    if (state === "critical") {
+      if (ALLOW_STATUS_DURING_SOFT_OVERLOAD && kind === "status") {
+        return {
+          action: "allow",
+          reason: "status-critical-pass"
+        };
+      }
 
-function isLikelyAutomationUserAgent(req) {
-  const ua = String(req.headers["user-agent"] || "").toLowerCase();
+      return {
+        action: "reject",
+        reason: "critical-overload",
+        status: 503,
+        retryAfter: CLIENT_RETRY_AFTER_SECONDS,
+        message: "Server is under heavy load. Please retry shortly."
+      };
+    }
 
-  if (!ua) {
-    return false;
-  }
+    if (ALLOW_STATUS_DURING_SOFT_OVERLOAD && kind === "status") {
+      return {
+        action: "allow",
+        reason: "status-soft-pass"
+      };
+    }
 
-  return (
-    ua.includes("curl") ||
-    ua.includes("wget") ||
-    ua.includes("python-requests") ||
-    ua.includes("python/") ||
-    ua.includes("aiohttp") ||
-    ua.includes("httpx") ||
-    ua.includes("axios") ||
-    ua.includes("node-fetch") ||
-    ua.includes("undici") ||
-    ua.includes("go-http-client") ||
-    ua.includes("java/") ||
-    ua.includes("okhttp") ||
-    ua.includes("libwww") ||
-    ua.includes("scrapy") ||
-    ua.includes("crawler") ||
-    ua.includes("spider")
-  );
-}
+    if (ALLOW_STATIC_DURING_SOFT_OVERLOAD && kind === "static" && isSafeMethod(req)) {
+      return {
+        action: "allow",
+        reason: "static-soft-pass"
+      };
+    }
 
-function requestLooksLikePageNavigation(req) {
-  const pathname = getRequestPath(req);
-  const accept = String(req.headers.accept || "").toLowerCase();
-  const secFetchDest = String(req.headers["sec-fetch-dest"] || "").toLowerCase();
-  const secFetchMode = String(req.headers["sec-fetch-mode"] || "").toLowerCase();
+    if (kind === "heavy") {
+      return {
+        action: "reject",
+        reason: "heavy-shed-first",
+        status: 503,
+        retryAfter: CLIENT_RETRY_AFTER_SECONDS,
+        message: "Server is busy. Please retry shortly."
+      };
+    }
 
-  if (!isSafeMethod(req)) {
-    return false;
-  }
+    if (kind === "background") {
+      return {
+        action: "reject",
+        reason: "background-shed-first",
+        status: 503,
+        retryAfter: CLIENT_RETRY_AFTER_SECONDS,
+        message: "Server is busy. Please retry shortly."
+      };
+    }
 
-  if (isStaticRequest(req)) {
-    return false;
-  }
+    if (kind === "page" && canSpendPageSoftPass(req, client)) {
+      return {
+        action: "grace",
+        reason: "page-grace"
+      };
+    }
 
-  if (isHeavyOrBackgroundRequest(req)) {
-    return false;
-  }
-
-  if (
-    pathname === "/" ||
-    pathname === "/watch" ||
-    pathname === "/search" ||
-    pathname === "/hashtag" ||
-    pathname.startsWith("/watch/") ||
-    pathname.startsWith("/search/") ||
-    pathname.startsWith("/channel/") ||
-    pathname.startsWith("/user/") ||
-    pathname.startsWith("/playlist")
-  ) {
-    return true;
-  }
-
-  if (accept.includes("text/html")) {
-    return true;
-  }
-
-  if (secFetchDest === "document" || secFetchMode === "navigate") {
-    return true;
-  }
-
-  return false;
-}
-
-function getPolicySeverity() {
-  if (lagRestarting) {
-    return "restarting";
-  }
-
-  if (lastLagPolicySnapshot && Date.now() - lastLagPolicySnapshotAt <= Math.max(30_000, LAG_LOG_COOLDOWN_MS * 4)) {
-    return lastLagPolicySnapshot.severity || "overloaded";
-  }
-
-  return "overloaded";
-}
-
-function isHardOverloadForPolicy() {
-  const severity = getPolicySeverity();
-  return severity === "insane" || severity === "restarting";
-}
-
-function canProtectNormalUser(req, data) {
-  if (!NORMAL_USER_TOOBUSY_PROTECTION) {
-    return false;
-  }
-
-  if (!requestLooksLikePageNavigation(req)) {
-    return false;
-  }
-
-  if (isLikelyAutomationUserAgent(req)) {
-    return false;
-  }
-
-  if (data.requestTimes.length > NORMAL_USER_MAX_REQUESTS_PER_WINDOW) {
-    return false;
-  }
-
-  if (data.softPassTimes.length >= NORMAL_USER_MAX_SOFT_PASSES_PER_WINDOW) {
-    return false;
-  }
-
-  if (data.hardRejectTimes.length >= NORMAL_USER_MAX_HARD_REJECTS_PER_WINDOW) {
-    return false;
-  }
-
-  if (activeRequests.size >= NORMAL_USER_MAX_ACTIVE_FOR_SOFT_PASS) {
-    return false;
-  }
-
-  return true;
-}
-
-function getTooBusyDecision(req, data) {
-  const severity = getPolicySeverity();
-
-  if (lagRestarting || severity === "restarting") {
     return {
       action: "reject",
-      reason: "restarting",
+      reason: "no-soft-pass-budget",
       status: 503,
-      retryAfter: RETRY_AFTER_SECONDS,
-      message: "Server is recovering from high load. Please retry shortly."
-    };
-  }
-
-  if (severity === "insane") {
-    return {
-      action: "reject",
-      reason: "insane-overload",
-      status: 503,
-      retryAfter: RETRY_AFTER_SECONDS,
-      message: "Server is under heavy load. Please retry shortly."
-    };
-  }
-
-  if (TOOBUSY_ALLOW_HEALTH_DURING_SOFT_OVERLOAD && isHealthRequest(req)) {
-    return {
-      action: "allow",
-      reason: "health-soft-pass"
-    };
-  }
-
-  if (TOOBUSY_ALLOW_STATIC_DURING_SOFT_OVERLOAD && isStaticRequest(req) && isSafeMethod(req)) {
-    return {
-      action: "allow",
-      reason: "static-soft-pass"
-    };
-  }
-
-  if (isHeavyOrBackgroundRequest(req)) {
-    return {
-      action: "reject",
-      reason: "heavy-or-background",
-      status: 503,
-      retryAfter: RETRY_AFTER_SECONDS,
+      retryAfter: CLIENT_RETRY_AFTER_SECONDS,
       message: "Server is busy. Please retry shortly."
     };
   }
 
-  if (canProtectNormalUser(req, data)) {
-    return {
-      action: "grace",
-      reason: "normal-user-page-navigation"
-    };
-  }
+  function logAdmission(message, client) {
+    const now = Date.now();
 
-  return {
-    action: "reject",
-    reason: "no-soft-pass-budget",
-    status: 503,
-    retryAfter: RETRY_AFTER_SECONDS,
-    message: "Server is busy. Please retry shortly."
-  };
-}
-
-function logTooBusyPolicy(message, data) {
-  const now = Date.now();
-
-  if (now - lastTooBusyPolicyLogAt < TOOBUSY_POLICY_LOG_COOLDOWN_MS) {
-    return;
-  }
-
-  lastTooBusyPolicyLogAt = now;
-
-  console.error(
-    "[POKE-toobusy-policy] " + message + " " +
-    JSON.stringify({
-      clients: busyClients.size,
-      activeRequests: activeRequests.size,
-      severity: getPolicySeverity(),
-      client: data
-        ? {
-            requests: data.requestTimes.length,
-            softPasses: data.softPassTimes.length,
-            gracePasses: data.gracePassTimes.length,
-            hardRejects: data.hardRejectTimes.length,
-            lastPath: data.lastPath,
-            lastDecision: data.lastDecision
-          }
-        : null,
-      stats: tooBusyPolicyStats
-    })
-  );
-}
-
-function sendTooBusyResponse(req, res, data, decision) {
-  rememberBusyDecision(data, "hard-reject");
-
-  if (decision.reason === "restarting") {
-    tooBusyPolicyStats.rejectedRestarting++;
-  } else if (decision.reason === "insane-overload") {
-    tooBusyPolicyStats.rejectedInsane++;
-  } else if (decision.reason === "heavy-or-background") {
-    tooBusyPolicyStats.rejectedHeavy++;
-  } else if (decision.reason === "no-soft-pass-budget") {
-    tooBusyPolicyStats.rejectedNoBudget++;
-  } else {
-    tooBusyPolicyStats.rejectedHard++;
-  }
-
-  logTooBusyPolicy("rejected request during overload: " + decision.reason, data);
-
-  res.set("Retry-After", String(decision.retryAfter || RETRY_AFTER_SECONDS));
-  res.set("Cache-Control", "no-store");
-  res.set("X-Poke-Overload-Policy", decision.reason);
-  return res.status(decision.status || 503).send(decision.message || "Server is busy. Please retry shortly.");
-}
-
-async function handleNormalUserGrace(req, res, next, data, decision) {
-  const jitter = NORMAL_USER_GRACE_JITTER_MS > 0
-    ? Math.floor(Math.random() * NORMAL_USER_GRACE_JITTER_MS)
-    : 0;
-
-  const graceBudget = Math.max(0, NORMAL_USER_GRACE_MS + jitter);
-  const startedAt = performance.now();
-
-  while (!res.headersSent && performance.now() - startedAt < graceBudget) {
-    if (lagRestarting || isHardOverloadForPolicy()) {
-      break;
+    if (now - lastPolicyLogAt < OVERLOAD_POLICY_LOG_COOLDOWN_MS) {
+      return;
     }
 
-    if (!toobusy()) {
-      rememberBusyDecision(data, "grace-pass");
-      tooBusyPolicyStats.gracePassed++;
+    lastPolicyLogAt = now;
+
+    console.error(
+      "[POKE-overload-policy] " + message + " " +
+      JSON.stringify({
+        clients: overloadClients.size,
+        activeRequests: activeRequests.size,
+        state: getCurrentPolicyState(),
+        client: client
+          ? {
+              requests: client.requestTimes.length,
+              pageSoftPasses: client.pageSoftPassTimes.length,
+              pageGracePasses: client.pageGracePassTimes.length,
+              rejects: client.rejectTimes.length,
+              heavyRejects: client.heavyRejectTimes.length,
+              cooldownUntil: client.cooldownUntil,
+              cooldownLevel: client.cooldownLevel,
+              lastPath: client.lastPath,
+              lastKind: client.lastKind,
+              lastDecision: client.lastDecision
+            }
+          : null,
+        stats: overloadStats
+      })
+    );
+  }
+
+  function rejectDuringOverload(req, res, client, kind, decision) {
+    rememberDecision(client, "reject", kind);
+
+    if (decision.reason === "restarting") {
+      overloadStats.rejectedRestarting++;
+    } else if (decision.reason === "critical-overload") {
+      overloadStats.rejectedCritical++;
+    } else if (decision.reason === "client-overload-cooldown") {
+      overloadStats.rejectedCooldown++;
+    } else if (decision.reason === "heavy-shed-first") {
+      overloadStats.rejectedHeavy++;
+    } else if (decision.reason === "background-shed-first") {
+      overloadStats.rejectedBackground++;
+    } else if (decision.reason === "normal-page-grace-expired") {
+      overloadStats.rejectedGraceExpired++;
+    } else if (decision.reason === "no-soft-pass-budget") {
+      overloadStats.rejectedNoBudget++;
+    } else {
+      overloadStats.rejectedNoBudget++;
+    }
+
+    maybeCooldownClient(client, kind, decision.reason);
+    logAdmission("rejected request during overload: " + decision.reason, client);
+
+    res.set("Retry-After", String(decision.retryAfter || CLIENT_RETRY_AFTER_SECONDS));
+    res.set("Cache-Control", "no-store");
+    res.set("Connection", "close");
+    res.set("X-Poke-Overload-Policy", decision.reason);
+    return res.status(decision.status || 503).send(decision.message || "Server is busy. Please retry shortly.");
+  }
+
+  async function handlePageGrace(req, res, next, client, kind) {
+    const jitter = USER_GRACE_JITTER_MS > 0
+      ? Math.floor(Math.random() * USER_GRACE_JITTER_MS)
+      : 0;
+
+    const graceBudgetMs = Math.max(0, USER_GRACE_TOTAL_MS + jitter);
+    const startedAt = performance.now();
+
+    while (!res.headersSent && performance.now() - startedAt < graceBudgetMs) {
+      if (overloadRestarting || isHardOverloadState()) {
+        break;
+      }
+
+      if (!toobusy()) {
+        rememberDecision(client, "page-grace-pass", kind);
+        overloadStats.pageGracePassed++;
+        return next();
+      }
+
+      await sleep(USER_GRACE_POLL_MS);
+    }
+
+    if (
+      !res.headersSent &&
+      USER_PAGE_SOFT_PASS_ENABLED &&
+      !overloadRestarting &&
+      !isHardOverloadState() &&
+      canSpendPageSoftPass(req, client)
+    ) {
+      rememberDecision(client, "page-soft-pass", kind);
+      overloadStats.pageSoftPassed++;
+      logAdmission("soft-passed page request during overload", client);
       return next();
     }
 
-    await delay(NORMAL_USER_GRACE_STEP_MS);
-  }
-
-  if (
-    !res.headersSent &&
-    NORMAL_USER_SOFT_PASS_ON_PAGE &&
-    !lagRestarting &&
-    !isHardOverloadForPolicy() &&
-    canProtectNormalUser(req, data)
-  ) {
-    rememberBusyDecision(data, "soft-pass");
-    tooBusyPolicyStats.softPassed++;
-    logTooBusyPolicy("soft-passed normal page request during overload", data);
-    return next();
-  }
-
-  return sendTooBusyResponse(req, res, data, {
-    action: "reject",
-    reason: "normal-user-grace-expired",
-    status: 503,
-    retryAfter: RETRY_AFTER_SECONDS,
-    message: "Server is busy. Please retry shortly."
-  });
-}
-
-function shutdownToobusy() {
-  if (typeof toobusy.shutdown !== "function") {
-    return;
-  }
-
-  try {
-    toobusy.shutdown();
-  } catch (err) {
-    console.error("[POKE-toobusy] failed to shutdown toobusy monitor", err);
-  }
-}
-
-function beginLagRestart(currentLag, snapshot) {
-  if (lagRestarting) {
-    return;
-  }
-
-  lagRestarting = true;
-
-  const reportPath = writeDiagnosticReport(snapshot);
-
-  logLag(
-    "sustained insane event-loop lag, refusing new requests and restarting",
-    {
-      ...snapshot,
-      restart: {
-        exitGraceMs: EXIT_GRACE_MS,
-        retryAfterSeconds: RETRY_AFTER_SECONDS,
-        diagnosticReport: reportPath
-      }
-    }
-  );
-
-  shutdownToobusy();
-
-  const exitTimer = setTimeout(function () {
-    console.error("[POKE-toobusy] exiting after sustained insane event-loop lag");
-    process.exit(1);
-  }, EXIT_GRACE_MS);
-
-  exitTimer.unref();
-}
-
-function requestLagTracker(req, res, next) {
-  const id = ++requestSequence;
-  const key = getRequestKey(req);
-  const startedAt = performance.now();
-
-  if (activeRequests.size < MAX_TRACKED_ACTIVE_REQUESTS) {
-    activeRequests.set(id, {
-      id,
-      key,
-      startedAt
+    return rejectDuringOverload(req, res, client, kind, {
+      action: "reject",
+      reason: "normal-page-grace-expired",
+      status: 503,
+      retryAfter: CLIENT_RETRY_AFTER_SECONDS,
+      message: "Server is busy. Please retry shortly."
     });
-
-    incrementMapCount(activeRequestCounts, key);
   }
 
-  res.on("finish", function () {
-    const finishedAt = performance.now();
-    const durationMs = roundMs(finishedAt - startedAt);
-
-    if (activeRequests.has(id)) {
-      activeRequests.delete(id);
-      decrementMapCount(activeRequestCounts, key);
+  function shutdownToobusy() {
+    if (typeof toobusy.shutdown !== "function") {
+      return;
     }
 
-    if (durationMs >= REQUEST_SLOW_MS) {
-      recentSlowRequests.push({
+    try {
+      toobusy.shutdown();
+    } catch (err) {
+      console.error("[POKE-overload] failed to shutdown toobusy monitor", err);
+    }
+  }
+
+  function beginOverloadRestart(currentLag, snapshot) {
+    if (overloadRestarting) {
+      return;
+    }
+
+    overloadRestarting = true;
+
+    const reportPath = writeDiagnosticReport(snapshot);
+
+    logOverload(
+      "sustained critical event-loop lag, refusing new requests and restarting",
+      {
+        ...snapshot,
+        restart: {
+          exitGraceMs: RESTART_EXIT_GRACE_MS,
+          retryAfterSeconds: CLIENT_RETRY_AFTER_SECONDS,
+          diagnosticReport: reportPath
+        }
+      }
+    );
+
+    shutdownToobusy();
+
+    const exitTimer = setTimeout(function () {
+      console.error("[POKE-overload] exiting after sustained critical event-loop lag");
+      process.exit(1);
+    }, RESTART_EXIT_GRACE_MS);
+
+    exitTimer.unref();
+  }
+
+  function requestActivityTracker(req, res, next) {
+    const id = ++requestSequence;
+    const key = getRequestKey(req);
+    const startedAt = performance.now();
+
+    if (activeRequests.size < REQUEST_TRACK_MAX_ACTIVE) {
+      activeRequests.set(id, {
+        id,
         key,
-        statusCode: res.statusCode,
-        durationMs
+        startedAt
       });
 
-      while (recentSlowRequests.length > MAX_RECENT_SLOW_REQUESTS) {
-        recentSlowRequests.shift();
+      incrementMapCount(activeRequestCounts, key);
+    }
+
+    res.on("finish", function () {
+      const finishedAt = performance.now();
+      const durationMs = roundMs(finishedAt - startedAt);
+
+      if (activeRequests.has(id)) {
+        activeRequests.delete(id);
+        decrementMapCount(activeRequestCounts, key);
+      }
+
+      if (durationMs >= REQUEST_SLOW_LOG_MS) {
+        recentSlowRequests.push({
+          key,
+          statusCode: res.statusCode,
+          durationMs
+        });
+
+        while (recentSlowRequests.length > REQUEST_TRACK_MAX_RECENT_SLOW) {
+          recentSlowRequests.shift();
+        }
+      }
+    });
+
+    res.on("close", function () {
+      if (activeRequests.has(id)) {
+        activeRequests.delete(id);
+        decrementMapCount(activeRequestCounts, key);
+      }
+    });
+
+    next();
+  }
+
+  function overloadAdmissionMiddleware(req, res, next) {
+    const client = getClientState(req);
+    const kind = classifyRequest(req);
+
+    rememberRequest(req, client, kind);
+
+    if (overloadRestarting) {
+      return rejectDuringOverload(req, res, client, kind, {
+        action: "reject",
+        reason: "restarting",
+        status: 503,
+        retryAfter: CLIENT_RETRY_AFTER_SECONDS,
+        message: "Server is recovering from high load. Please retry shortly."
+      });
+    }
+
+    if (!toobusy()) {
+      overloadStats.allowedHealthy++;
+      return next();
+    }
+
+    const decision = getAdmissionDecision(req, client, kind);
+
+    if (decision.action === "allow") {
+      if (kind === "status") {
+        overloadStats.allowedStatus++;
+      } else if (kind === "static") {
+        overloadStats.allowedStatic++;
+      }
+
+      client.lastDecision = decision.reason;
+      return next();
+    }
+
+    if (decision.action === "grace") {
+      return handlePageGrace(req, res, next, client, kind).catch(next);
+    }
+
+    return rejectDuringOverload(req, res, client, kind, decision);
+  }
+
+  function handleShutdownSignal(signal) {
+    overloadRestarting = true;
+    shutdownToobusy();
+
+    console.error("[POKE-overload] received " + signal + ", shutting down overload monitor");
+
+    const signalExitTimer = setTimeout(function () {
+      process.exit(0);
+    }, 1000);
+
+    signalExitTimer.unref();
+  }
+
+  toobusy.interval(OVERLOAD_CHECK_INTERVAL_MS);
+  toobusy.maxLag(OVERLOAD_BASE_REJECT_LAG_MS);
+
+  app.use(requestActivityTracker);
+  app.use(overloadAdmissionMiddleware);
+
+  app.get("/_pokeoverload/stats", function (req, res) {
+    const state = getCurrentPolicyState();
+    const limits = getLoopLimits();
+    const now = Date.now();
+
+    let clientsInCooldown = 0;
+    let activeClients = 0;
+
+    for (const [, client] of overloadClients) {
+      pruneClientState(client, now);
+
+      if (client.cooldownUntil > now) {
+        clientsInCooldown++;
+      }
+
+      if (client.requestTimes.length > 0) {
+        activeClients++;
       }
     }
-  });
 
-  res.on("close", function () {
-    if (activeRequests.has(id)) {
-      activeRequests.delete(id);
-      decrementMapCount(activeRequestCounts, key);
-    }
-  });
-
-  next();
-}
-
-function tooBusyMiddleware(req, res, next) {
-  const data = getBusyClientData(req);
-  rememberBusyRequest(req, data);
-
-  if (lagRestarting) {
-    return sendTooBusyResponse(req, res, data, {
-      action: "reject",
-      reason: "restarting",
-      status: 503,
-      retryAfter: RETRY_AFTER_SECONDS,
-      message: "Server is recovering from high load. Please retry shortly."
+    res.json({
+      state,
+      restarting: overloadRestarting,
+      clients: {
+        tracked: overloadClients.size,
+        active: activeClients,
+        cooldown: clientsInCooldown,
+        window_ms: CLIENT_WINDOW_MS
+      },
+      requests: {
+        active: activeRequests.size,
+        top_active_routes: getTopMapEntries(activeRequestCounts, 10),
+        oldest_active: getActiveRequestSummary(10),
+        recent_slow: recentSlowRequests.slice(-10).reverse()
+      },
+      limits,
+      policy: {
+        user_grace_enabled: USER_GRACE_ENABLED,
+        user_grace_ms: USER_GRACE_TOTAL_MS,
+        user_grace_poll_ms: USER_GRACE_POLL_MS,
+        user_page_soft_pass_enabled: USER_PAGE_SOFT_PASS_ENABLED,
+        client_max_requests_per_window: CLIENT_MAX_REQUESTS_PER_WINDOW,
+        client_max_page_soft_passes_per_window: CLIENT_MAX_PAGE_SOFT_PASSES_PER_WINDOW,
+        client_max_rejects_before_cooldown: CLIENT_MAX_REJECTS_BEFORE_COOLDOWN,
+        client_cooldown_ms: CLIENT_COOLDOWN_MS,
+        client_cooldown_max_ms: CLIENT_COOLDOWN_MAX_MS
+      },
+      stats: overloadStats,
+      last_snapshot: lastOverloadSnapshot
+        ? {
+            state: lastOverloadSnapshot.state,
+            lag: lastOverloadSnapshot.lag,
+            eventLoopDelay: lastOverloadSnapshot.eventLoopDelay,
+            eventLoopUtilization: lastOverloadSnapshot.eventLoopUtilization,
+            requests: lastOverloadSnapshot.requests
+          }
+        : null
     });
-  }
+  });
 
-  if (!toobusy()) {
-    tooBusyPolicyStats.allowedNotBusy++;
-    return next();
-  }
+  updateAdaptiveLoopLimits("startup");
 
-  const decision = getTooBusyDecision(req, data);
+  const adaptiveLimitTimer = setInterval(function () {
+    updateAdaptiveLoopLimits("interval");
+  }, LOOP_BASELINE_SAMPLE_INTERVAL_MS);
 
-  if (decision.action === "allow") {
-    if (decision.reason === "health-soft-pass") {
-      tooBusyPolicyStats.allowedHealth++;
-    } else if (decision.reason === "static-soft-pass") {
-      tooBusyPolicyStats.allowedStatic++;
+  adaptiveLimitTimer.unref();
+
+  const clientCleanupTimer = setInterval(function () {
+    const now = Date.now();
+    const maxAge = CLIENT_WINDOW_MS * 3;
+
+    for (const [key, client] of overloadClients) {
+      pruneClientState(client, now);
+
+      if (
+        client.requestTimes.length === 0 &&
+        client.pageSoftPassTimes.length === 0 &&
+        client.pageGracePassTimes.length === 0 &&
+        client.rejectTimes.length === 0 &&
+        client.heavyRejectTimes.length === 0 &&
+        client.cooldownUntil <= now &&
+        now - client.lastSeen > maxAge
+      ) {
+        overloadClients.delete(key);
+      }
+    }
+  }, CLIENT_STATE_CLEANUP_INTERVAL_MS);
+
+  clientCleanupTimer.unref();
+
+  toobusy.onLag(function (currentLag) {
+    const now = Date.now();
+    const snapshot = createOverloadSnapshot(currentLag);
+    const critical = isCriticalLag(currentLag, snapshot);
+
+    lastOverloadSnapshot = snapshot;
+    lastOverloadSnapshotAt = now;
+
+    if (now - lastLagLogAt >= OVERLOAD_LOG_COOLDOWN_MS || critical) {
+      lastLagLogAt = now;
+      logOverload("event-loop lag detected", snapshot);
     }
 
-    data.lastDecision = decision.reason;
-    return next();
-  }
-
-  if (decision.action === "grace") {
-    return handleNormalUserGrace(req, res, next, data, decision).catch(next);
-  }
-
-  return sendTooBusyResponse(req, res, data, decision);
-}
-
-function handleToobusyShutdownSignal(signal) {
-  lagRestarting = true;
-  shutdownToobusy();
-
-  console.error("[POKE-toobusy] received " + signal + ", shutting down toobusy monitor");
-
-  const signalExitTimer = setTimeout(function () {
-    process.exit(0);
-  }, 1000);
-
-  signalExitTimer.unref();
-}
-
-toobusy.interval(TOOBUSY_INTERVAL_MS);
-toobusy.maxLag(TOOBUSY_MAX_LAG_MS);
-
-app.use(requestLagTracker);
-app.use(tooBusyMiddleware);
-
-updateDynamicEventLoopThresholds("startup");
-
-const dynamicThresholdTimer = setInterval(function () {
-  updateDynamicEventLoopThresholds("interval");
-}, DYNAMIC_EVENT_LOOP_SAMPLE_INTERVAL_MS);
-
-dynamicThresholdTimer.unref();
-
-const tooBusyPolicyCleanupTimer = setInterval(function () {
-  const now = Date.now();
-  const maxAge = TOOBUSY_CLIENT_WINDOW_MS * 3;
-
-  for (const [key, data] of busyClients) {
-    pruneBusyClientData(data, now);
-
-    if (
-      data.requestTimes.length === 0 &&
-      data.softPassTimes.length === 0 &&
-      data.hardRejectTimes.length === 0 &&
-      data.gracePassTimes.length === 0 &&
-      now - data.lastSeen > maxAge
-    ) {
-      busyClients.delete(key);
+    if (!critical) {
+      resetCriticalStrikesIfHealthy(currentLag, snapshot);
+      loopDelay.reset();
+      return;
     }
-  }
-}, TOOBUSY_POLICY_CLEANUP_INTERVAL_MS);
 
-tooBusyPolicyCleanupTimer.unref();
+    const strikeCount = recordCriticalStrike();
 
-toobusy.onLag(function (currentLag) {
-  const now = Date.now();
-  const snapshot = createLagSnapshot(currentLag);
-  const insane = isInsaneLag(currentLag, snapshot);
+    const strikeSnapshot = {
+      ...snapshot,
+      lag: {
+        ...snapshot.lag,
+        strikes: strikeCount
+      }
+    };
 
-  lastLagPolicySnapshot = snapshot;
-  lastLagPolicySnapshotAt = now;
+    const reportPath = writeDiagnosticReport(strikeSnapshot);
+    const loggedStrikeSnapshot = {
+      ...strikeSnapshot,
+      diagnosticReport: reportPath
+    };
 
-  if (now - lastLagLogAt >= LAG_LOG_COOLDOWN_MS || insane) {
-    lastLagLogAt = now;
-    logLag("event-loop lag detected", snapshot);
-  }
+    logOverload(
+      "critical event-loop lag strike " + strikeCount + "/" + CRITICAL_STRIKES_TO_RESTART,
+      loggedStrikeSnapshot
+    );
 
-  if (!insane) {
-    resetInsaneLagStrikesIfHealthy(currentLag, snapshot);
-    eventLoopDelay.reset();
-    return;
-  }
-
-  const strikeCount = recordInsaneLagStrike();
-
-  const strikeSnapshot = {
-    ...snapshot,
-    lag: {
-      ...snapshot.lag,
-      strikes: strikeCount
+    if (strikeCount >= CRITICAL_STRIKES_TO_RESTART) {
+      beginOverloadRestart(currentLag, strikeSnapshot);
+      return;
     }
-  };
 
-  const reportPath = writeDiagnosticReport(strikeSnapshot);
-  const loggedStrikeSnapshot = {
-    ...strikeSnapshot,
-    diagnosticReport: reportPath
-  };
+    loopDelay.reset();
+  });
 
-  logLag(
-    "insane event-loop lag strike " + strikeCount + "/" + INSANE_LAG_STRIKES,
-    loggedStrikeSnapshot
+  process.once("SIGTERM", function () {
+    handleShutdownSignal("SIGTERM");
+  });
+
+  process.once("SIGINT", function () {
+    handleShutdownSignal("SIGINT");
+  });
+
+  initlog(
+    "[PokeOverloadShield] loaded - " +
+    "rejectLag: " + OVERLOAD_BASE_REJECT_LAG_MS + "ms, " +
+    "dynamicLimits: " + LOOP_DYNAMIC_LIMITS_ENABLED + ", " +
+    "dynamicToobusy: " + LOOP_DYNAMIC_TOOBUSY_ENABLED + ", " +
+    "pageGrace: " + USER_GRACE_TOTAL_MS + "ms, " +
+    "clientWindow: " + CLIENT_WINDOW_MS + "ms, " +
+    "cooldown: " + CLIENT_COOLDOWN_MS + "ms"
   );
-
-  if (strikeCount >= INSANE_LAG_STRIKES) {
-    beginLagRestart(currentLag, strikeSnapshot);
-    return;
-  }
-
-  eventLoopDelay.reset();
-});
-
-process.once("SIGTERM", function () {
-  handleToobusyShutdownSignal("SIGTERM");
-});
-
-process.once("SIGINT", function () {
-  handleToobusyShutdownSignal("SIGINT");
-});
+})();
   
   initlog("inited anti ddos");
 
