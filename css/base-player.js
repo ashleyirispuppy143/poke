@@ -8324,6 +8324,33 @@ function getTerminalEndTimelineDuration() {
   }
   return isFinite(dur) && dur > 0 ? dur : 0;
 }
+function mediaAlreadyAtTerminalTail(el, dur, tailSec = 1.25) {
+  if (!el || !isFinite(dur) || dur <= 0) return false;
+  try { if (el.ended) return true; } catch { }
+  try {
+    const ct = Number(el.currentTime);
+    return isFinite(ct) && ct >= Math.max(0, dur - Math.max(0.2, Number(tailSec) || 1.25));
+  } catch { return false; }
+}
+function freezeTerminalMediaWithoutTailSeek(reason = "") {
+  const dur = getTerminalEndTimelineDuration();
+  try {
+    const vn = getVideoNode();
+    const pauseOnly = el => {
+      if (!el) return;
+      try { if (!el.paused) el.pause(); } catch { }
+      try { el.autoplay = false; el.removeAttribute("autoplay"); } catch { }
+      try { if (mediaAlreadyAtTerminalTail(el, dur)) el.preload = "none"; } catch { }
+    };
+    pauseOnly(vn);
+    if (videoEl && videoEl !== vn) pauseOnly(videoEl);
+  } catch { }
+  if (coupledMode && audio) {
+    try { if (!audio.paused) audio.pause(); } catch { }
+    try { if (mediaAlreadyAtTerminalTail(audio, dur)) audio.preload = "none"; } catch { }
+  }
+  return dur;
+}
 function forceTerminalEndPosition(reason = "") {
   if (state.restarting) return false;
   try { if (isLoopDesired()) return false; } catch { }
@@ -8342,22 +8369,7 @@ function forceTerminalEndPosition(reason = "") {
   try { clearReturnVisualSyncGuard(true); } catch { }
   try { VideoCompositorFlushManager.disarm(); } catch { }
   try { MakeVideoNotFreezeAfterPlaybackAfterAltTabHapenns.stop(); } catch { }
-  try {
-    const vn = getVideoNode();
-    if (vn) vn.currentTime = target;
-    if (videoEl && videoEl !== vn) videoEl.currentTime = target;
-    if (typeof video?.currentTime === "function") video.currentTime(target);
-  } catch {
-    try { if (videoEl) safeSetCT(videoEl, Math.max(0, target - 0.001)); } catch { }
-  }
-  if (coupledMode && audio) {
-    try {
-      const ad = Number(audio.duration) || target;
-      state._allowAudioTimeWrite = true;
-      audio.currentTime = isFinite(ad) && ad > 0 ? Math.min(ad, target) : target;
-      state._allowAudioTimeWrite = false;
-    } catch { state._allowAudioTimeWrite = false; }
-  }
+  try { freezeTerminalMediaWithoutTailSeek(reason || "terminal-end-position"); } catch { }
   try { updateMediaSessionPositionNow(target, reason || "terminal-end-position", 0); } catch { }
   try { queuePlayerTimeDisplayUpdate(); } catch { }
   return true;
@@ -8655,6 +8667,9 @@ function prepareRestartFromEndedPlayback(force = false) {
   try { cancelActiveFade(); } catch { }
   try { clearAudioPauseLocks(); } catch { }
   try { clearBufferHold(); } catch { }
+  try { videoEl.preload = "auto"; } catch { }
+  try { const vn = getVideoNode(); if (vn) vn.preload = "auto"; } catch { }
+  try { if (coupledMode && audio) audio.preload = "auto"; } catch { }
   const _vtCurrent = Number(videoEl.currentTime) || 0;
   if (!state.seeking || _vtCurrent > 0.5) {
     state._allowZeroSeek = true;
