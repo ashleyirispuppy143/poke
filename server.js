@@ -567,6 +567,7 @@
     let currentSecondRequests = 0;
     let currentSecondKindCounts = new Map();
     let currentSecondRouteCounts = new Map();
+    let allTimeRouteCounts = new Map();
 
     let lastSampleAt = performance.now();
     let lastCpuUsage = process.cpuUsage();
@@ -1287,7 +1288,22 @@
       const startedAt = Date.now();
 
       activeRequests.set(id, { id, key, kind, startedAt });
-      incrementMapCount(activeRequestCounts, key);
+      
+      // Do not pollute route counters with status endpoints
+      if (!isStatusRequest(req)) {
+        incrementMapCount(activeRequestCounts, key);
+        incrementMapCount(currentSecondRouteCounts, key);
+        incrementMapCount(allTimeRouteCounts, key);
+        
+        // Anti-memory leak for all-time tracking
+        if (allTimeRouteCounts.size > 5000) {
+          let evicted = 0;
+          for (const oldKey of allTimeRouteCounts.keys()) {
+            allTimeRouteCounts.delete(oldKey);
+            if (++evicted >= 1000) break;
+          }
+        }
+      }
 
       res.on("finish", function () {
         const finishedAt = Date.now();
@@ -1295,7 +1311,9 @@
 
         if (activeRequests.has(id)) {
           activeRequests.delete(id);
-          decrementMapCount(activeRequestCounts, key);
+          if (!isStatusRequest(req)) {
+            decrementMapCount(activeRequestCounts, key);
+          }
         }
 
         if (durationMs >= resourceConfig.logging.slowRequestMs) {
@@ -1309,7 +1327,9 @@
       res.on("close", function () {
         if (activeRequests.has(id)) {
           activeRequests.delete(id);
-          decrementMapCount(activeRequestCounts, key);
+          if (!isStatusRequest(req)) {
+            decrementMapCount(activeRequestCounts, key);
+          }
         }
       });
 
@@ -1328,7 +1348,6 @@
 
       currentSecondRequests++;
       incrementMapCount(currentSecondKindCounts, kind);
-      incrementMapCount(currentSecondRouteCounts, getRequestKey(req));
 
       const decision = getAdmissionDecision(req, client, kind);
 
@@ -1398,7 +1417,8 @@
         clients: countClientStates(),
         active_requests: {
           total: activeRequests.size,
-          by_route: getTopMapEntries(activeRequestCounts, resourceConfig.logging.maxTopRoutes),
+          by_route: getTopMapEntries(currentSecondRouteCounts, resourceConfig.logging.maxTopRoutes),
+          all_time_top_routes: getTopMapEntries(allTimeRouteCounts, 10),
           oldest: getActiveRequestSummary(resourceConfig.logging.maxTopRoutes),
           recent_slow: recentSlowRequests.slice(-resourceConfig.logging.maxRecentSlow).reverse()
         },
@@ -1492,6 +1512,48 @@ pre{overflow:auto;padding:14px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 1
 }
 summary { font-size: 1.2rem; cursor: pointer; color: #0ab7f0; user-select: none; margin-bottom: 12px; font-weight: bold; }
 summary:hover { color: #00c0ff; }
+
+/* Route Popularity Layout */
+.route-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+.route-item {
+  background: #2a2930;
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid #333;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+.route-bar {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: rgba(10, 183, 240, 0.15);
+  z-index: 1;
+  transition: width 0.5s ease;
+}
+.route-name {
+  font-family: monospace;
+  font-size: 1.05rem;
+  color: #ddd;
+  z-index: 2;
+}
+.route-count {
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: #0ab7f0;
+  z-index: 2;
+  background: rgba(0,0,0,0.4);
+  padding: 4px 10px;
+  border-radius: 12px;
+}
 </style>
 </head>
 <body>
@@ -1512,7 +1574,24 @@ summary:hover { color: #00c0ff; }
 <h2>What is this page?</h2>
 <div class="explanation">
   Poke keeps an eye on how much brainpower (CPU) and memory it has left. Just like a personal computer, the server only has so much energy to go around! <br><br>
-  If a sudden wave of traffic hits, or if someone tries to overload the site, Poke will automatically prioritize normal users watching videos. It gently pauses "heavy" background tasks until the server catches its breath. This guarantees Poke stays smooth, fast, and online for everyone.
+  If a sudden wave of traffic hits, or if someone tries to overload the site, Poke will automatically prioritize normal users watching videos. It gently pauses "heavy" background tasks until the server catches its breath. This keeps Poke smooth, fast, and online for everyone.
+</div>
+
+<h2>Popular Destinations (Since Boot)</h2>
+<div id="route-list-container" class="route-list">
+  ${(() => {
+    const topRoutes = stats.active_requests.all_time_top_routes;
+    if (!topRoutes || topRoutes.length === 0) return `<div class="route-item" style="justify-content: center; color: #aaa;">Gathering data...</div>`;
+    const maxCount = topRoutes[0].count;
+    return topRoutes.map(r => {
+      const pct = (r.count / maxCount) * 100;
+      return `<div class="route-item">
+        <div class="route-bar" style="width: ${pct}%"></div>
+        <span class="route-name">${r.key}</span>
+        <span class="route-count">${r.count}</span>
+      </div>`;
+    }).join('');
+  })()}
 </div>
 
 <h2>Live Server Vitals</h2>
@@ -1609,6 +1688,21 @@ document.addEventListener("DOMContentLoaded", function() {
       document.getElementById("stat-tracked").innerText = data.clients.tracked;
       document.getElementById("stat-cooldown").innerText = data.clients.cooldown;
       document.getElementById("stat-score").innerText = data.state.score;
+
+      // Update popular routes dynamically
+      const topRoutes = data.active_requests.all_time_top_routes;
+      if (topRoutes && topRoutes.length > 0) {
+          const maxCount = topRoutes[0].count;
+          const routeHtml = topRoutes.map(r => {
+              const pct = (r.count / maxCount) * 100;
+              return '<div class="route-item">' +
+                  '<div class="route-bar" style="width: ' + pct + '%"></div>' +
+                  '<span class="route-name">' + r.key + '</span>' +
+                  '<span class="route-count">' + r.count + '</span>' +
+              '</div>';
+          }).join('');
+          document.getElementById("route-list-container").innerHTML = routeHtml;
+      }
       
       document.getElementById("pre-reasons").innerText = data.state.pressureReasons.length ? data.state.pressureReasons.join("\\n") : "None currently. System is healthy.";
       document.getElementById("pre-mix").innerText = JSON.stringify(data.state.requests.kinds, null, 2);
