@@ -46,6 +46,7 @@
 
     console.log(data);
   });
+
   initlog("Loading. everything... ever....");
   initlog(
     "[Welcome] Welcome To Poke, where you can LIBERATE THE WEB! - :3 " +
@@ -98,7 +99,6 @@
   const net = require("net");
   const path = require("path");
 
-  // try loading .env if it exists, no big deal if it doesnt
   const dotenvPath = path.resolve(process.cwd(), ".env");
 
   try {
@@ -107,7 +107,6 @@
       require("dotenv").config({ path: dotenvPath });
       initlog("[POKE-trust-proxy] found .env, loaded it");
     } catch (e) {
-      // dotenv package isnt installed, just parse it ourselves
       initlog("[POKE-trust-proxy] .env exists but no dotenv package, parsing manually");
       try {
         const raw = fs.readFileSync(dotenvPath, "utf8");
@@ -132,7 +131,6 @@
     initlog("[POKE-trust-proxy] no .env file, thats fine");
   }
 
-  // ip math stuff for checking if an ip is in a cidr range
   function ipToLong(ip) {
     return ip.split(".").reduce((acc, oct) => (acc << 8) + parseInt(oct, 10), 0) >>> 0;
   }
@@ -158,7 +156,6 @@
     );
   }
 
-  // checks for cloud platform / container env vars
   function detectEnvSignals() {
     const signals = {
       "DYNO": "Heroku",
@@ -186,7 +183,6 @@
     return detected;
   }
 
-  // checks for docker/podman/k8s files on disk
   function detectFilesystemSignals() {
     const signals = [];
 
@@ -225,7 +221,6 @@
     return signals;
   }
 
-  // checks for container-looking network interfaces
   function detectNetworkSignals() {
     const signals = [];
     const ifaces = os.networkInterfaces();
@@ -239,7 +234,6 @@
     return signals;
   }
 
-  // only trusts private ips, never the whole internet
   function buildTrustFunction() {
     return function pokeTrustProxy(addr) {
       const ip = addr.replace("::ffff:", "");
@@ -259,7 +253,6 @@
     }
   }
 
-  // let people override via env var if they want
   function checkUserOverride() {
     const val = (process.env.TRUST_PROXY || "").toLowerCase().trim();
     if (!val) return null;
@@ -273,7 +266,6 @@
     return val;
   }
 
-  // ok lets actually do the thing
   const override = checkUserOverride();
 
   if (override === "force-off") {
@@ -300,7 +292,6 @@
     return;
   }
 
-  // no override, auto-detect
   const envSignals = detectEnvSignals();
   const fsSignals = detectFilesystemSignals();
   const netSignals = detectNetworkSignals();
@@ -317,13 +308,10 @@
 
   if (totalConfidence >= 2) {
     app.set("trust proxy", buildTrustFunction());
-    initlog("[POKE-trust-proxy] ✓ auto-enabled (confidence: " + totalConfidence + ")");
+    initlog("[POKE-trust-proxy] auto-enabled (confidence: " + totalConfidence + ")");
     return;
   }
 
-  // not sure if theres a proxy, so we'll sniff the first real request.
-  // this middleware sits BEFORE the rate limiter in the stack so by the
-  // time express-rate-limit runs, trust proxy is already configured.
   initlog("[POKE-trust-proxy] not sure yet, will check on first request");
 
   let probeComplete = false;
@@ -355,16 +343,13 @@
     const remoteIsPrivate = isPrivateIP(remoteAddr);
 
     if (headerScore >= 3 && remoteIsPrivate) {
-      // yep theres a proxy, and its coming from a local ip so its legit
       app.set("trust proxy", buildTrustFunction());
-      initlog("[POKE-trust-proxy] ✓ confirmed proxy on first request (score: " + headerScore + ")");
+      initlog("[POKE-trust-proxy] confirmed proxy on first request (score: " + headerScore + ")");
       logProxyHeaders(req);
     } else if (headerScore >= 3 && !remoteIsPrivate) {
-      // someone sending proxy headers from a public ip... nah
       app.set("trust proxy", false);
-      initlog("[POKE-trust-proxy] ⚠ proxy headers from public ip " + remoteAddr + ", ignoring");
+      initlog("[POKE-trust-proxy] proxy headers from public ip " + remoteAddr + ", ignoring");
     } else {
-      // no proxy headers, direct connection
       app.set("trust proxy", false);
       initlog("[POKE-trust-proxy] no proxy headers, disabled");
     }
@@ -372,7 +357,6 @@
     next();
   });
 
-  // re-check every minute in case environment changes (container stuff)
   setInterval(() => {
     const freshEnv = detectEnvSignals();
     const freshFs = detectFilesystemSignals();
@@ -380,7 +364,7 @@
 
     if (freshScore >= 2 && !probeComplete) {
       app.set("trust proxy", buildTrustFunction());
-      initlog("[POKE-trust-proxy] ✓ periodic re-check found proxy (score: " + freshScore + ")");
+      initlog("[POKE-trust-proxy] periodic re-check found proxy (score: " + freshScore + ")");
     }
   }, 60_000).unref();
 
@@ -396,7 +380,6 @@
   const net = require("net");
   const rateLimit = require("express-rate-limit");
 
-  // cloudflare's published ip ranges - https://www.cloudflare.com/ips/
   const CLOUDFLARE_V4 = [
     "173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22",
     "103.31.4.0/22", "141.101.64.0/18", "108.162.192.0/18",
@@ -422,29 +405,21 @@
     return CLOUDFLARE_V4.some(cidr => cidrContains(cidr, clean));
   }
 
-  // bots we like :3
   const KNOWN_BOT_PATTERNS = [
-    // search
     /googlebot/i, /bingbot/i, /slurp/i, /duckduckbot/i,
     /baiduspider/i, /yandexbot/i, /sogou/i, /exabot/i,
     /facebot/i, /ia_archiver/i, /archive\.org_bot/i,
     /qwantify/i, /seznambot/i, /mojeekbot/i,
     /petalsearch/i, /applebot/i,
-    // social / previews
     /discordbot/i, /telegrambot/i, /twitterbot/i,
     /whatsapp/i, /slackbot/i, /linkedinbot/i,
-    // fediverse <3
     /mastodon/i, /pleroma/i, /misskey/i, /akkoma/i,
     /lemmy/i, /kbin/i, /pixelfed/i, /gotosocial/i,
-    // uptime
     /uptimerobot/i, /pingdom/i, /statuscake/i,
     /site24x7/i, /hetrixtools/i, /freshping/i,
-    // cdn
     /cloudflare/i, /cloudfront/i, /fastly/i,
-    // feeds
     /feedfetcher/i, /feedly/i, /newsblur/i,
     /tiny\s?tiny\s?rss/i, /miniflux/i,
-    // seo
     /researchscan/i, /censys/i, /semrush/i, /ahrefs/i,
   ];
 
@@ -453,7 +428,6 @@
     return KNOWN_BOT_PATTERNS.some(p => p.test(ua));
   }
 
-  // messages for skids. rotated randomly. have fun reading these in
   const SKID_MESSAGES = [
     "lol",
     "nope",
@@ -483,41 +457,31 @@
     return SKID_MESSAGES[Math.floor(Math.random() * SKID_MESSAGES.length)];
   }
 
-  // per-ip tracking
   const ipData = new Map();
 
-  // global flood tracking for siege mode
   let globalRequestsLastSecond = 0;
   let globalRequestsThisSecond = 0;
   let siegeMode = false;
   let siegeStartedAt = 0;
   let lastSecondTick = Date.now();
 
-  // thresholds
-  const BURST_LIMIT = 50;           // req/1s per ip (no human)
-  const SUSTAINED_LIMIT = 200;      // req/10s per ip
+  const BURST_LIMIT = 50;
+  const SUSTAINED_LIMIT = 200;
   const SUSTAINED_WINDOW = 10000;
-  const BAN_BASE_MS = 30000;        // first ban 30s
-  const BAN_MAX_MS = 600000;        // max ban 10min
-  const STRIKE_DECAY_MS = 300000;   // forgive after 5min
+  const BAN_BASE_MS = 30000;
+  const BAN_MAX_MS = 600000;
+  const STRIKE_DECAY_MS = 300000;
   const CLEANUP_INTERVAL = 60000;
   const MAX_TRACKED_IPS = 50000;
 
-  // /watch gets tighter limits because thats what people target
-  const WATCH_BURST_LIMIT = 20;     // 20 /watch req/sec is still insane
-  const WATCH_SUSTAINED_LIMIT = 80; // 80 /watch in 10s, come on
+  const WATCH_BURST_LIMIT = 20;
+  const WATCH_SUSTAINED_LIMIT = 80;
 
-  // pattern detection thresholds
-  // if the time between requests has very low variance, its a script.
-  // humans are messy and random, bots are precise.
-  const TIMING_VARIANCE_THRESHOLD = 5; // ms - if stdev is under this, sus
-  const TIMING_MIN_SAMPLES = 15;       // need at least this many to judge
+  const TIMING_VARIANCE_THRESHOLD = 5;
+  const TIMING_MIN_SAMPLES = 15;
 
-  // siege mode: if the whole server is getting hit this hard,
-  // stop serving non-essential stuff and only let through
-  // requests that look legit
-  const SIEGE_THRESHOLD = 2000;        // global req/sec to trigger siege
-  const SIEGE_COOLDOWN_MS = 30000;     // stay in siege for at least 30s
+  const SIEGE_THRESHOLD = 2000;
+  const SIEGE_COOLDOWN_MS = 30000;
 
   function getIPData(ip) {
     let data = ipData.get(ip);
@@ -537,15 +501,15 @@
         if (oldestKey) ipData.delete(oldestKey);
       }
       data = {
-        ts: [],           // all request timestamps (last 10s)
-        watchTs: [],      // /watch request timestamps (last 10s)
-        intervals: [],    // time gaps between requests (for pattern detection)
+        ts: [],
+        watchTs: [],
+        intervals: [],
         banned: false,
         banExpires: 0,
         strikes: 0,
         lastStrike: 0,
-        reasons: [],      // what triggered the ban (for logging)
-        wasSkid: false,   // got caught by pattern detection, not just volume
+        reasons: [],
+        wasSkid: false,
       };
       ipData.set(ip, data);
     }
@@ -561,7 +525,7 @@
     return true;
   }
   
-function banIP(data, ip, reasons) {
+  function banIP(data, ip, reasons) {
     data.strikes++;
     data.lastStrike = Date.now();
     data.reasons = reasons;
@@ -569,9 +533,7 @@ function banIP(data, ip, reasons) {
     data.banned = true;
     data.banExpires = Date.now() + duration;
     const reasonStr = reasons.join(" + ");
-    
-    // Anonymize the IP by replacing the last two octets
-    const maskedIp = ip.replace(/\.\d+\.\d+$/, '.xxx.xxx');
+    const maskedIp = ip.replace(/\.\d+\.\d+$/, ".xxx.xxx");
     
     initlog(
       `[PokeStopSkids] banned ${maskedIp} for ${Math.round(duration / 1000)}s ` +
@@ -579,24 +541,15 @@ function banIP(data, ip, reasons) {
     );
   }
 
-  // check if request timing looks like a script
-  // real humans have random, messy timing between clicks.
-  // scripts and botnets have very consistent intervals.
-  // we calculate the standard deviation of the gaps between requests.
-  // low stdev = robotic = sus
   function checkTimingPattern(data) {
     const intervals = data.intervals;
     if (intervals.length < TIMING_MIN_SAMPLES) return null;
 
-    // only look at the last 30 intervals
     const recent = intervals.slice(-30);
     const mean = recent.reduce((a, b) => a + b, 0) / recent.length;
     const variance = recent.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / recent.length;
     const stdev = Math.sqrt(variance);
 
-    // if the timing is robotically consistent AND the mean interval is small
-    // (they're going fast), thats a bot. a human with low stdev but slow
-    // requests (like reading an article every 30s) is fine.
     if (stdev < TIMING_VARIANCE_THRESHOLD && mean < 500) {
       return "robotic timing (stdev: " + stdev.toFixed(1) + "ms, avg: " + mean.toFixed(0) + "ms)";
     }
@@ -608,22 +561,18 @@ function banIP(data, ip, reasons) {
     const ts = data.ts;
     const reasons = [];
 
-    // record timing interval between this and last request
     if (ts.length > 0) {
       const gap = now - ts[ts.length - 1];
       data.intervals.push(gap);
-      // only keep last 50 intervals
       if (data.intervals.length > 50) data.intervals.shift();
     }
 
     ts.push(now);
 
-    // trim timestamps older than 10s
     while (ts.length > 0 && ts[0] < now - SUSTAINED_WINDOW) {
       ts.shift();
     }
 
-    // burst check: requests in last 1 second
     const oneSecAgo = now - 1000;
     let burstCount = 0;
     for (let i = ts.length - 1; i >= 0; i--) {
@@ -634,12 +583,10 @@ function banIP(data, ip, reasons) {
       reasons.push("burst (" + burstCount + " req/1s)");
     }
 
-    // sustained check
     if (ts.length >= SUSTAINED_LIMIT) {
       reasons.push("sustained (" + ts.length + " req/10s)");
     }
 
-    // /watch specific checks (tighter because thats the expensive endpoint)
     if (isWatch) {
       data.watchTs.push(now);
       while (data.watchTs.length > 0 && data.watchTs[0] < now - SUSTAINED_WINDOW) {
@@ -659,7 +606,6 @@ function banIP(data, ip, reasons) {
       }
     }
 
-    // timing pattern check (catches bots that stay under volume limits)
     const timingResult = checkTimingPattern(data);
     if (timingResult) {
       data.wasSkid = true;
@@ -669,7 +615,6 @@ function banIP(data, ip, reasons) {
     return reasons.length > 0 ? reasons : null;
   }
 
-  // global per-second counter for siege mode
   setInterval(() => {
     globalRequestsLastSecond = globalRequestsThisSecond;
     globalRequestsThisSecond = 0;
@@ -688,7 +633,6 @@ function banIP(data, ip, reasons) {
     }
   }, 1000).unref();
 
-  // cleanup stale ip entries
   setInterval(() => {
     const now = Date.now();
     for (const [ip, data] of ipData) {
@@ -707,7 +651,6 @@ function banIP(data, ip, reasons) {
     }
   }, CLEANUP_INTERVAL).unref();
 
-  // the main middleware
   app.use(function PokeStopSkids(req, res, next) {
     const ip = req.ip || req.socket.remoteAddress || "unknown";
     const ua = req.headers["user-agent"] || "";
@@ -716,20 +659,14 @@ function banIP(data, ip, reasons) {
 
     globalRequestsThisSecond++;
 
-    // cloudflare handles itself
     const rawIP = (req.socket.remoteAddress || "").replace("::ffff:", "");
     if (isCloudflareIP(rawIP)) return next();
 
-    // let good bots through
     if (isKnownBot(ua)) return next();
 
-    // siege mode: if the whole server is under attack,
-    // only let through requests that arent from already-tracked IPs
-    // with high activity. basically: if we're drowning, be stricter.
     if (siegeMode) {
       const existing = ipData.get(ip);
       if (existing && existing.ts.length > 20) {
-        // this ip is already being noisy during a siege. nope.
         if (!existing.banned) {
           banIP(existing, ip, ["active during siege mode"]);
           existing.wasSkid = true;
@@ -738,8 +675,6 @@ function banIP(data, ip, reasons) {
         return res.status(503).send(getSkidMessage());
       }
 
-      // during siege, tighten limits for everyone: new connections
-      // get half the normal thresholds
       if (existing && existing.ts.length > BURST_LIMIT / 2) {
         if (!existing.banned) {
           banIP(existing, ip, ["exceeded siege limits"]);
@@ -751,11 +686,9 @@ function banIP(data, ip, reasons) {
 
     const data = getIPData(ip);
 
-    // already banned?
     if (isBanned(data)) {
       const retryAfter = Math.ceil((data.banExpires - now) / 1000);
       res.set("Retry-After", String(retryAfter));
-      // skids get roasted. normal rate limit hits get a polite message.
       if (data.wasSkid || data.strikes >= 3) {
         return res.status(429).send(getSkidMessage());
       }
@@ -764,7 +697,6 @@ function banIP(data, ip, reasons) {
       );
     }
 
-    // check for abuse
     const reasons = checkAbuse(data, now, isWatch);
     if (reasons) {
       banIP(data, ip, reasons);
@@ -781,7 +713,6 @@ function banIP(data, ip, reasons) {
     next();
   });
 
-  // softer rate limiter underneath
   const limiter = rateLimit({
     windowMs: 15 * 1000,
     max: 150,
@@ -797,7 +728,6 @@ function banIP(data, ip, reasons) {
   });
   app.use(limiter);
 
-  // json stats api
   app.get("/_pokestopskids/stats", (req, res) => {
     const now = Date.now();
     let bannedCount = 0;
@@ -828,7 +758,6 @@ function banIP(data, ip, reasons) {
     });
   });
 
-  // the about page, served inline
   app.get("/_antiddos*", (req, res) => {
     const now = Date.now();
     let bannedCount = 0;
@@ -1119,7 +1048,6 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
  */
 (function PokeResponseGuard() {
   app.use(function pokeResponseGuard(req, res, next) {
-    // api routes are on their own, dont mess with them
     if (req.path.startsWith("/api/")) return next();
 
     const originalSend = res.send.bind(res);
@@ -1207,104 +1135,114 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
 /*
  * PokeOverloadShield
  *
- * This is the nicer toobusy layer.
+ * This is the nicer overload layer.
  *
- * It uses toobusy-js as the quick event-loop lag signal, then adds Node core
+ * It uses toobusy-js as the fast event-loop lag signal, then adds Node core
  * diagnostics and a defensive admission policy:
  *
  * - cheap static/status requests survive soft overload
- * - human page navigations get a short grace wait
- * - trusted-looking page navigations can spend a small soft-pass budget
+ * - page navigations get a short grace wait
+ * - page navigations can spend a small soft-pass budget
  * - media, API, proxy, and background requests are shed first
  * - noisy clients get an overload-only cooldown
  * - critical lag still protects the process with hard rejects and restart
- *
- * This does not attack anyone back. It just makes bad traffic pay first.
  */
 (function PokeOverloadShield() {
-  const OVERLOAD_CHECK_INTERVAL_MS = Number(process.env.POKE_OVERLOAD_CHECK_INTERVAL_MS || process.env.POKE_TOOBUSY_INTERVAL_MS || 110);
-  const OVERLOAD_BASE_REJECT_LAG_MS = Number(process.env.POKE_OVERLOAD_REJECT_LAG_MS || process.env.POKE_TOOBUSY_MAX_LAG_MS || 2500);
+  const shieldConfig = {
+    loop: {
+      pollMs: 110,
+      rejectLagMs: 2500,
+      warnFloorMs: 750,
+      warnCapMs: 2500,
+      rejectCapMs: 6000,
+      criticalFloorMs: 7500,
+      criticalCapMs: 30000,
+      criticalP99FloorMs: 5000,
+      criticalP99CapMs: 20000,
+      dynamicLimits: true,
+      dynamicToobusyMaxLag: false,
+      baselineSampleMs: 15000,
+      baselineMinMs: 10,
+      baselineMaxHealthyMs: 1000,
+      baselineAlpha: 0.22,
+      warnMultiplier: 20,
+      rejectMultiplier: 45,
+      criticalMultiplier: 120,
+      criticalP99Multiplier: 80,
+      busyUtilization: 0.92,
+      criticalUtilization: 0.98
+    },
+    strikes: {
+      neededForRestart: 3,
+      windowMs: 30000
+    },
+    logging: {
+      lagCooldownMs: 5000,
+      policyCooldownMs: 15000,
+      reportCooldownMs: 60000,
+      json: false,
+      reportDir: nodePath.join(process.cwd(), "reports"),
+      reports: true
+    },
+    restart: {
+      exitGraceMs: 10000,
+      retryAfterSeconds: 15
+    },
+    requests: {
+      slowMs: 3000,
+      maxActiveTracked: 1000,
+      maxRecentSlow: 20
+    },
+    userPass: {
+      enabled: true,
+      pageSoftPass: true,
+      graceMs: 1400,
+      gracePollMs: 140,
+      graceJitterMs: 180
+    },
+    clients: {
+      windowMs: 30000,
+      maxRequestsPerWindow: 45,
+      maxPageSoftPassesPerWindow: 6,
+      maxRejectsBeforeCooldown: 4,
+      maxHeavyRejectsBeforeCooldown: 3,
+      maxActiveRequestsForSoftPass: 800,
+      cooldownMs: 60000,
+      maxCooldownMs: 600000,
+      cleanupMs: 60000
+    },
+    allow: {
+      statusDuringOverload: true,
+      staticDuringSoftOverload: true
+    }
+  };
 
-  const LOOP_WARN_LAG_MS_FLOOR = Number(process.env.POKE_LOOP_WARN_LAG_MS || process.env.POKE_EVENT_LOOP_WARN_LAG_MS || 750);
-  const LOOP_CRITICAL_LAG_MS_FLOOR = Number(process.env.POKE_LOOP_CRITICAL_LAG_MS || process.env.POKE_INSANE_LAG_MS || Math.max(7500, OVERLOAD_BASE_REJECT_LAG_MS * 3));
-  const LOOP_CRITICAL_P99_MS_FLOOR = Number(process.env.POKE_LOOP_CRITICAL_P99_MS || process.env.POKE_INSANE_P99_LAG_MS || Math.max(5000, OVERLOAD_BASE_REJECT_LAG_MS * 2));
+  shieldConfig.loop.criticalFloorMs = Math.max(
+    shieldConfig.loop.criticalFloorMs,
+    shieldConfig.loop.rejectLagMs * 3
+  );
 
-  const LOOP_WARN_LAG_MS_CAP = Number(process.env.POKE_LOOP_WARN_LAG_MS_CAP || process.env.POKE_EVENT_LOOP_WARN_LAG_MS_CAP || 2500);
-  const LOOP_REJECT_LAG_MS_CAP = Number(process.env.POKE_LOOP_REJECT_LAG_MS_CAP || process.env.POKE_TOOBUSY_MAX_LAG_MS_CAP || 6000);
-  const LOOP_CRITICAL_LAG_MS_CAP = Number(process.env.POKE_LOOP_CRITICAL_LAG_MS_CAP || process.env.POKE_INSANE_LAG_MS_CAP || 30000);
-  const LOOP_CRITICAL_P99_MS_CAP = Number(process.env.POKE_LOOP_CRITICAL_P99_MS_CAP || process.env.POKE_INSANE_P99_LAG_MS_CAP || 20000);
-
-  const LOOP_DYNAMIC_LIMITS_ENABLED = process.env.POKE_LOOP_DYNAMIC_LIMITS !== "0" && process.env.POKE_DYNAMIC_EVENT_LOOP_MS !== "0";
-  const LOOP_DYNAMIC_TOOBUSY_ENABLED = process.env.POKE_LOOP_DYNAMIC_TOOBUSY === "1" || process.env.POKE_DYNAMIC_TOOBUSY_MAX_LAG === "1";
-  const LOOP_BASELINE_SAMPLE_INTERVAL_MS = Number(process.env.POKE_LOOP_BASELINE_SAMPLE_INTERVAL_MS || process.env.POKE_DYNAMIC_EVENT_LOOP_SAMPLE_INTERVAL_MS || 15_000);
-  const LOOP_BASELINE_MIN_MS = Number(process.env.POKE_LOOP_BASELINE_MIN_MS || process.env.POKE_DYNAMIC_EVENT_LOOP_MIN_BASELINE_MS || 10);
-  const LOOP_BASELINE_MAX_HEALTHY_MS = Number(process.env.POKE_LOOP_BASELINE_MAX_HEALTHY_MS || process.env.POKE_DYNAMIC_EVENT_LOOP_MAX_HEALTHY_BASELINE_MS || 1000);
-  const LOOP_BASELINE_ALPHA = Number(process.env.POKE_LOOP_BASELINE_ALPHA || process.env.POKE_DYNAMIC_EVENT_LOOP_ALPHA || 0.22);
-
-  const LOOP_WARN_MULTIPLIER = Number(process.env.POKE_LOOP_WARN_MULTIPLIER || process.env.POKE_DYNAMIC_WARN_MULTIPLIER || 20);
-  const LOOP_REJECT_MULTIPLIER = Number(process.env.POKE_LOOP_REJECT_MULTIPLIER || process.env.POKE_DYNAMIC_TOOBUSY_MULTIPLIER || 45);
-  const LOOP_CRITICAL_MULTIPLIER = Number(process.env.POKE_LOOP_CRITICAL_MULTIPLIER || process.env.POKE_DYNAMIC_INSANE_MULTIPLIER || 120);
-  const LOOP_CRITICAL_P99_MULTIPLIER = Number(process.env.POKE_LOOP_CRITICAL_P99_MULTIPLIER || process.env.POKE_DYNAMIC_INSANE_P99_MULTIPLIER || 80);
-
-  const LOOP_CRITICAL_ELU = Number(process.env.POKE_LOOP_CRITICAL_ELU || process.env.POKE_INSANE_ELU || 0.98);
-  const LOOP_BUSY_ELU = Number(process.env.POKE_LOOP_BUSY_ELU || 0.92);
-
-  const CRITICAL_STRIKES_TO_RESTART = Number(process.env.POKE_CRITICAL_STRIKES_TO_RESTART || process.env.POKE_INSANE_LAG_STRIKES || 3);
-  const CRITICAL_STRIKE_WINDOW_MS = Number(process.env.POKE_CRITICAL_STRIKE_WINDOW_MS || process.env.POKE_INSANE_LAG_WINDOW_MS || 30_000);
-
-  const OVERLOAD_LOG_COOLDOWN_MS = Number(process.env.POKE_OVERLOAD_LOG_COOLDOWN_MS || process.env.POKE_LAG_LOG_COOLDOWN_MS || 5_000);
-  const OVERLOAD_POLICY_LOG_COOLDOWN_MS = Number(process.env.POKE_OVERLOAD_POLICY_LOG_COOLDOWN_MS || process.env.POKE_TOOBUSY_POLICY_LOG_COOLDOWN_MS || 15_000);
-  const DIAGNOSTIC_REPORT_COOLDOWN_MS = Number(process.env.POKE_DIAGNOSTIC_REPORT_COOLDOWN_MS || process.env.POKE_LAG_REPORT_COOLDOWN_MS || 60_000);
-
-  const RESTART_EXIT_GRACE_MS = Number(process.env.POKE_RESTART_EXIT_GRACE_MS || process.env.POKE_EXIT_GRACE_MS || 10_000);
-  const CLIENT_RETRY_AFTER_SECONDS = Number(process.env.POKE_CLIENT_RETRY_AFTER_SECONDS || process.env.POKE_RETRY_AFTER_SECONDS || 15);
-
-  const REQUEST_SLOW_LOG_MS = Number(process.env.POKE_REQUEST_SLOW_LOG_MS || process.env.POKE_REQUEST_SLOW_MS || 3000);
-  const REQUEST_TRACK_MAX_ACTIVE = Number(process.env.POKE_REQUEST_TRACK_MAX_ACTIVE || process.env.POKE_MAX_TRACKED_ACTIVE_REQUESTS || 1000);
-  const REQUEST_TRACK_MAX_RECENT_SLOW = Number(process.env.POKE_REQUEST_TRACK_MAX_RECENT_SLOW || process.env.POKE_MAX_RECENT_SLOW_REQUESTS || 20);
-
-  const USER_GRACE_ENABLED = process.env.POKE_USER_GRACE_ENABLED !== "0" && process.env.POKE_NORMAL_USER_TOOBUSY_PROTECTION !== "0";
-  const USER_GRACE_TOTAL_MS = Number(process.env.POKE_USER_GRACE_TOTAL_MS || process.env.POKE_NORMAL_USER_GRACE_MS || 1400);
-  const USER_GRACE_POLL_MS = Number(process.env.POKE_USER_GRACE_POLL_MS || process.env.POKE_NORMAL_USER_GRACE_STEP_MS || 140);
-  const USER_GRACE_JITTER_MS = Number(process.env.POKE_USER_GRACE_JITTER_MS || process.env.POKE_NORMAL_USER_GRACE_JITTER_MS || 180);
-  const USER_PAGE_SOFT_PASS_ENABLED = process.env.POKE_USER_PAGE_SOFT_PASS !== "0" && process.env.POKE_NORMAL_USER_SOFT_PASS_ON_PAGE !== "0";
-
-  const CLIENT_WINDOW_MS = Number(process.env.POKE_OVERLOAD_CLIENT_WINDOW_MS || process.env.POKE_TOOBUSY_CLIENT_WINDOW_MS || 30_000);
-  const CLIENT_MAX_REQUESTS_PER_WINDOW = Number(process.env.POKE_OVERLOAD_CLIENT_MAX_REQUESTS_PER_WINDOW || process.env.POKE_NORMAL_USER_MAX_REQUESTS_PER_WINDOW || 45);
-  const CLIENT_MAX_PAGE_SOFT_PASSES_PER_WINDOW = Number(process.env.POKE_OVERLOAD_CLIENT_MAX_PAGE_SOFT_PASSES_PER_WINDOW || process.env.POKE_NORMAL_USER_MAX_SOFT_PASSES_PER_WINDOW || 6);
-  const CLIENT_MAX_REJECTS_BEFORE_COOLDOWN = Number(process.env.POKE_OVERLOAD_CLIENT_MAX_REJECTS_BEFORE_COOLDOWN || 4);
-  const CLIENT_MAX_ACTIVE_REQUESTS_FOR_SOFT_PASS = Number(process.env.POKE_OVERLOAD_MAX_ACTIVE_FOR_SOFT_PASS || process.env.POKE_NORMAL_USER_MAX_ACTIVE_FOR_SOFT_PASS || 800);
-
-  const CLIENT_HEAVY_REJECTS_BEFORE_COOLDOWN = Number(process.env.POKE_OVERLOAD_HEAVY_REJECTS_BEFORE_COOLDOWN || 3);
-  const CLIENT_COOLDOWN_MS = Number(process.env.POKE_OVERLOAD_CLIENT_COOLDOWN_MS || 60_000);
-  const CLIENT_COOLDOWN_MAX_MS = Number(process.env.POKE_OVERLOAD_CLIENT_COOLDOWN_MAX_MS || 10 * 60_000);
-
-  const ALLOW_STATIC_DURING_SOFT_OVERLOAD = process.env.POKE_OVERLOAD_ALLOW_STATIC !== "0" && process.env.POKE_TOOBUSY_ALLOW_STATIC_DURING_SOFT_OVERLOAD !== "0";
-  const ALLOW_STATUS_DURING_SOFT_OVERLOAD = process.env.POKE_OVERLOAD_ALLOW_STATUS !== "0" && process.env.POKE_TOOBUSY_ALLOW_HEALTH_DURING_SOFT_OVERLOAD !== "0";
-  const CLIENT_STATE_CLEANUP_INTERVAL_MS = Number(process.env.POKE_OVERLOAD_CLIENT_CLEANUP_INTERVAL_MS || process.env.POKE_TOOBUSY_POLICY_CLEANUP_INTERVAL_MS || 60_000);
-
-  const DIAGNOSTIC_REPORT_DIR = process.env.POKE_DIAGNOSTIC_REPORT_DIR || nodePath.join(process.cwd(), "reports");
-  const DIAGNOSTIC_REPORTS_ENABLED = process.env.POKE_DIAGNOSTIC_REPORTS !== "0";
-
-  const OVERLOAD_LOG_STYLE = String(process.env.POKE_OVERLOAD_LOG_STYLE || process.env.POKE_LAG_LOG_STYLE || "pretty").toLowerCase();
-  const OVERLOAD_JSON_LOGS = process.env.POKE_OVERLOAD_JSON_LOGS === "1" || process.env.POKE_LAG_JSON_LOGS === "1" || OVERLOAD_LOG_STYLE === "json";
+  shieldConfig.loop.criticalP99FloorMs = Math.max(
+    shieldConfig.loop.criticalP99FloorMs,
+    shieldConfig.loop.rejectLagMs * 2
+  );
 
   let criticalStrikeTimes = [];
   let lastLagLogAt = 0;
   let lastPolicyLogAt = 0;
   let lastReportAt = 0;
-  let overloadRestarting = false;
+  let shieldRestarting = false;
 
   let requestSequence = 0;
   const activeRequests = new Map();
   const activeRequestCounts = new Map();
   const recentSlowRequests = [];
 
-  const overloadClients = new Map();
-  let lastOverloadSnapshot = null;
-  let lastOverloadSnapshotAt = 0;
+  const clientStates = new Map();
+  let lastLagSnapshot = null;
+  let lastLagSnapshotAt = 0;
 
-  const overloadStats = {
+  const shieldStats = {
     allowedHealthy: 0,
     allowedStatus: 0,
     allowedStatic: 0,
@@ -1323,9 +1261,9 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
   let lastEventLoopUtilization = performance.eventLoopUtilization();
   let lastCpuUsage = process.cpuUsage();
 
-  const adaptiveLoopLimits = {
-    enabled: LOOP_DYNAMIC_LIMITS_ENABLED,
-    dynamicToobusy: LOOP_DYNAMIC_TOOBUSY_ENABLED,
+  const adaptiveLimits = {
+    enabled: shieldConfig.loop.dynamicLimits,
+    dynamicToobusy: shieldConfig.loop.dynamicToobusyMaxLag,
     samples: 0,
     baselineMs: 0,
     baselineP90Ms: 0,
@@ -1335,17 +1273,17 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
     lastSampleMeanMs: 0,
     lastSampleMaxMs: 0,
     lastUpdatedAt: 0,
-    warnLagMs: LOOP_WARN_LAG_MS_FLOOR,
-    rejectLagMs: OVERLOAD_BASE_REJECT_LAG_MS,
-    criticalLagMs: LOOP_CRITICAL_LAG_MS_FLOOR,
-    criticalP99Ms: LOOP_CRITICAL_P99_MS_FLOOR
+    warnMs: shieldConfig.loop.warnFloorMs,
+    rejectMs: shieldConfig.loop.rejectLagMs,
+    criticalMs: shieldConfig.loop.criticalFloorMs,
+    criticalP99Ms: shieldConfig.loop.criticalP99FloorMs
   };
 
   const loopDelay = monitorEventLoopDelay({ resolution: 20 });
-  const loopBaselineDelay = monitorEventLoopDelay({ resolution: 20 });
+  const baselineDelay = monitorEventLoopDelay({ resolution: 20 });
 
   loopDelay.enable();
-  loopBaselineDelay.enable();
+  baselineDelay.enable();
 
   function bytesToMb(bytes) {
     return Math.round(bytes / 1024 / 1024) + "MB";
@@ -1500,15 +1438,15 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
     };
   }
 
-  function getLoopBaselineSnapshot() {
+  function getBaselineDelaySnapshot() {
     return {
-      minMs: nsToMs(loopBaselineDelay.min),
-      meanMs: nsToMs(loopBaselineDelay.mean),
-      maxMs: nsToMs(loopBaselineDelay.max),
-      stddevMs: nsToMs(loopBaselineDelay.stddev),
-      p50Ms: nsToMs(loopBaselineDelay.percentile(50)),
-      p90Ms: nsToMs(loopBaselineDelay.percentile(90)),
-      p99Ms: nsToMs(loopBaselineDelay.percentile(99))
+      minMs: nsToMs(baselineDelay.min),
+      meanMs: nsToMs(baselineDelay.mean),
+      maxMs: nsToMs(baselineDelay.max),
+      stddevMs: nsToMs(baselineDelay.stddev),
+      p50Ms: nsToMs(baselineDelay.percentile(50)),
+      p90Ms: nsToMs(baselineDelay.percentile(90)),
+      p99Ms: nsToMs(baselineDelay.percentile(99))
     };
   }
 
@@ -1536,153 +1474,157 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
 
   function getLoopLimits() {
     return {
-      dynamic: adaptiveLoopLimits.enabled,
-      dynamicToobusy: adaptiveLoopLimits.dynamicToobusy,
-      samples: adaptiveLoopLimits.samples,
-      baselineMs: adaptiveLoopLimits.baselineMs,
-      baselineP90Ms: adaptiveLoopLimits.baselineP90Ms,
-      baselineP99Ms: adaptiveLoopLimits.baselineP99Ms,
-      lastSampleP90Ms: adaptiveLoopLimits.lastSampleP90Ms,
-      lastSampleP99Ms: adaptiveLoopLimits.lastSampleP99Ms,
-      lastSampleMeanMs: adaptiveLoopLimits.lastSampleMeanMs,
-      lastSampleMaxMs: adaptiveLoopLimits.lastSampleMaxMs,
-      lastUpdatedAt: adaptiveLoopLimits.lastUpdatedAt,
-      warnLagMs: adaptiveLoopLimits.warnLagMs,
-      rejectLagMs: adaptiveLoopLimits.rejectLagMs,
-      criticalLagMs: adaptiveLoopLimits.criticalLagMs,
-      criticalP99Ms: adaptiveLoopLimits.criticalP99Ms,
-      criticalElu: LOOP_CRITICAL_ELU,
-      busyElu: LOOP_BUSY_ELU
+      dynamic: adaptiveLimits.enabled,
+      dynamicToobusy: adaptiveLimits.dynamicToobusy,
+      samples: adaptiveLimits.samples,
+      baselineMs: adaptiveLimits.baselineMs,
+      baselineP90Ms: adaptiveLimits.baselineP90Ms,
+      baselineP99Ms: adaptiveLimits.baselineP99Ms,
+      lastSampleP90Ms: adaptiveLimits.lastSampleP90Ms,
+      lastSampleP99Ms: adaptiveLimits.lastSampleP99Ms,
+      lastSampleMeanMs: adaptiveLimits.lastSampleMeanMs,
+      lastSampleMaxMs: adaptiveLimits.lastSampleMaxMs,
+      lastUpdatedAt: adaptiveLimits.lastUpdatedAt,
+      warnMs: adaptiveLimits.warnMs,
+      rejectMs: adaptiveLimits.rejectMs,
+      criticalMs: adaptiveLimits.criticalMs,
+      criticalP99Ms: adaptiveLimits.criticalP99Ms,
+      busyUtilization: shieldConfig.loop.busyUtilization,
+      criticalUtilization: shieldConfig.loop.criticalUtilization
     };
   }
 
   function updateToobusyRejectLag() {
-    if (!LOOP_DYNAMIC_TOOBUSY_ENABLED) {
+    if (!shieldConfig.loop.dynamicToobusyMaxLag) {
       return;
     }
 
     try {
-      toobusy.maxLag(adaptiveLoopLimits.rejectLagMs);
+      toobusy.maxLag(adaptiveLimits.rejectMs);
     } catch (err) {
       console.error("[POKE-overload] failed to update toobusy maxLag:", err.message);
     }
   }
 
   function updateAdaptiveLoopLimits(reason) {
-    if (!LOOP_DYNAMIC_LIMITS_ENABLED) {
-      loopBaselineDelay.reset();
+    if (!shieldConfig.loop.dynamicLimits) {
+      baselineDelay.reset();
       return;
     }
 
-    const sample = getLoopBaselineSnapshot();
-    const sampleCandidateMs = Math.max(
-      LOOP_BASELINE_MIN_MS,
+    const sample = getBaselineDelaySnapshot();
+    const candidateMs = Math.max(
+      shieldConfig.loop.baselineMinMs,
       sample.p90Ms,
       sample.p99Ms,
       sample.meanMs * 3
     );
 
-    adaptiveLoopLimits.lastSampleP90Ms = sample.p90Ms;
-    adaptiveLoopLimits.lastSampleP99Ms = sample.p99Ms;
-    adaptiveLoopLimits.lastSampleMeanMs = sample.meanMs;
-    adaptiveLoopLimits.lastSampleMaxMs = sample.maxMs;
-    adaptiveLoopLimits.lastUpdatedAt = Date.now();
+    adaptiveLimits.lastSampleP90Ms = sample.p90Ms;
+    adaptiveLimits.lastSampleP99Ms = sample.p99Ms;
+    adaptiveLimits.lastSampleMeanMs = sample.meanMs;
+    adaptiveLimits.lastSampleMaxMs = sample.maxMs;
+    adaptiveLimits.lastUpdatedAt = Date.now();
 
     const usefulSample =
-      Number.isFinite(sampleCandidateMs) &&
-      sampleCandidateMs > 0 &&
-      sampleCandidateMs <= LOOP_BASELINE_MAX_HEALTHY_MS;
+      Number.isFinite(candidateMs) &&
+      candidateMs > 0 &&
+      candidateMs <= shieldConfig.loop.baselineMaxHealthyMs;
 
     if (!usefulSample) {
-      loopBaselineDelay.reset();
+      baselineDelay.reset();
       return;
     }
 
-    adaptiveLoopLimits.samples++;
+    adaptiveLimits.samples++;
 
-    if (adaptiveLoopLimits.baselineMs <= 0) {
-      adaptiveLoopLimits.baselineMs = sampleCandidateMs;
-      adaptiveLoopLimits.baselineP90Ms = Math.max(LOOP_BASELINE_MIN_MS, sample.p90Ms);
-      adaptiveLoopLimits.baselineP99Ms = Math.max(LOOP_BASELINE_MIN_MS, sample.p99Ms);
+    if (adaptiveLimits.baselineMs <= 0) {
+      adaptiveLimits.baselineMs = candidateMs;
+      adaptiveLimits.baselineP90Ms = Math.max(shieldConfig.loop.baselineMinMs, sample.p90Ms);
+      adaptiveLimits.baselineP99Ms = Math.max(shieldConfig.loop.baselineMinMs, sample.p99Ms);
     } else {
-      adaptiveLoopLimits.baselineMs =
-        (adaptiveLoopLimits.baselineMs * (1 - LOOP_BASELINE_ALPHA)) +
-        (sampleCandidateMs * LOOP_BASELINE_ALPHA);
+      adaptiveLimits.baselineMs =
+        (adaptiveLimits.baselineMs * (1 - shieldConfig.loop.baselineAlpha)) +
+        (candidateMs * shieldConfig.loop.baselineAlpha);
 
-      adaptiveLoopLimits.baselineP90Ms =
-        (adaptiveLoopLimits.baselineP90Ms * (1 - LOOP_BASELINE_ALPHA)) +
-        (Math.max(LOOP_BASELINE_MIN_MS, sample.p90Ms) * LOOP_BASELINE_ALPHA);
+      adaptiveLimits.baselineP90Ms =
+        (adaptiveLimits.baselineP90Ms * (1 - shieldConfig.loop.baselineAlpha)) +
+        (Math.max(shieldConfig.loop.baselineMinMs, sample.p90Ms) * shieldConfig.loop.baselineAlpha);
 
-      adaptiveLoopLimits.baselineP99Ms =
-        (adaptiveLoopLimits.baselineP99Ms * (1 - LOOP_BASELINE_ALPHA)) +
-        (Math.max(LOOP_BASELINE_MIN_MS, sample.p99Ms) * LOOP_BASELINE_ALPHA);
+      adaptiveLimits.baselineP99Ms =
+        (adaptiveLimits.baselineP99Ms * (1 - shieldConfig.loop.baselineAlpha)) +
+        (Math.max(shieldConfig.loop.baselineMinMs, sample.p99Ms) * shieldConfig.loop.baselineAlpha);
     }
 
-    const baseline = Math.max(LOOP_BASELINE_MIN_MS, adaptiveLoopLimits.baselineMs);
-    const proposedWarnLagMs = baseline * LOOP_WARN_MULTIPLIER;
-    const proposedRejectLagMs = baseline * LOOP_REJECT_MULTIPLIER;
-    const proposedCriticalLagMs = Math.max(proposedRejectLagMs * 3, baseline * LOOP_CRITICAL_MULTIPLIER);
-    const proposedCriticalP99Ms = Math.max(proposedRejectLagMs * 2, baseline * LOOP_CRITICAL_P99_MULTIPLIER);
+    const baseline = Math.max(shieldConfig.loop.baselineMinMs, adaptiveLimits.baselineMs);
+    const proposedWarnMs = baseline * shieldConfig.loop.warnMultiplier;
+    const proposedRejectMs = baseline * shieldConfig.loop.rejectMultiplier;
+    const proposedCriticalMs = Math.max(proposedRejectMs * 3, baseline * shieldConfig.loop.criticalMultiplier);
+    const proposedCriticalP99Ms = Math.max(proposedRejectMs * 2, baseline * shieldConfig.loop.criticalP99Multiplier);
 
-    adaptiveLoopLimits.warnLagMs = roundMs(clampNumber(
-      proposedWarnLagMs,
-      LOOP_WARN_LAG_MS_FLOOR,
-      LOOP_WARN_LAG_MS_CAP
+    adaptiveLimits.warnMs = roundMs(clampNumber(
+      proposedWarnMs,
+      shieldConfig.loop.warnFloorMs,
+      shieldConfig.loop.warnCapMs
     ));
 
-    adaptiveLoopLimits.rejectLagMs = Math.round(clampNumber(
-      proposedRejectLagMs,
-      OVERLOAD_BASE_REJECT_LAG_MS,
-      LOOP_REJECT_LAG_MS_CAP
+    adaptiveLimits.rejectMs = Math.round(clampNumber(
+      proposedRejectMs,
+      shieldConfig.loop.rejectLagMs,
+      shieldConfig.loop.rejectCapMs
     ));
 
-    adaptiveLoopLimits.criticalLagMs = Math.round(clampNumber(
-      proposedCriticalLagMs,
-      LOOP_CRITICAL_LAG_MS_FLOOR,
-      LOOP_CRITICAL_LAG_MS_CAP
+    adaptiveLimits.criticalMs = Math.round(clampNumber(
+      proposedCriticalMs,
+      shieldConfig.loop.criticalFloorMs,
+      shieldConfig.loop.criticalCapMs
     ));
 
-    adaptiveLoopLimits.criticalP99Ms = Math.round(clampNumber(
+    adaptiveLimits.criticalP99Ms = Math.round(clampNumber(
       proposedCriticalP99Ms,
-      LOOP_CRITICAL_P99_MS_FLOOR,
-      LOOP_CRITICAL_P99_MS_CAP
+      shieldConfig.loop.criticalP99FloorMs,
+      shieldConfig.loop.criticalP99CapMs
     ));
 
     updateToobusyRejectLag();
-    loopBaselineDelay.reset();
+    baselineDelay.reset();
+
+    if (reason === "startup") {
+      logPolicy("adaptive limits initialized", null);
+    }
   }
 
-  function getOverloadState(currentLagMs, delaySnapshot, eluSnapshot) {
+  function getLagState(currentLagMs, delaySnapshot, utilizationSnapshot) {
     const limits = getLoopLimits();
     const p99LagMs = delaySnapshot.p99Ms;
     const maxLagMs = delaySnapshot.maxMs;
-    const elu = eluSnapshot.utilization;
+    const utilization = utilizationSnapshot.utilization;
 
-    if (overloadRestarting) {
+    if (shieldRestarting) {
       return "restarting";
     }
 
     if (
-      currentLagMs >= limits.criticalLagMs ||
+      currentLagMs >= limits.criticalMs ||
       p99LagMs >= limits.criticalP99Ms ||
-      (elu >= limits.criticalElu && currentLagMs >= limits.rejectLagMs)
+      (utilization >= limits.criticalUtilization && currentLagMs >= limits.rejectMs)
     ) {
       return "critical";
     }
 
     if (
-      currentLagMs >= limits.rejectLagMs ||
-      p99LagMs >= limits.rejectLagMs ||
-      maxLagMs >= limits.criticalLagMs ||
-      elu >= limits.busyElu
+      currentLagMs >= limits.rejectMs ||
+      p99LagMs >= limits.rejectMs ||
+      maxLagMs >= limits.criticalMs ||
+      utilization >= limits.busyUtilization
     ) {
-      return "overloaded";
+      return "busy";
     }
 
     if (
-      currentLagMs >= limits.warnLagMs ||
-      p99LagMs >= limits.warnLagMs ||
-      maxLagMs >= limits.warnLagMs
+      currentLagMs >= limits.warnMs ||
+      p99LagMs >= limits.warnMs ||
+      maxLagMs >= limits.warnMs
     ) {
       return "warm";
     }
@@ -1690,37 +1632,37 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
     return "healthy";
   }
 
-  function createOverloadSnapshot(currentLag, extra) {
+  function createLagSnapshot(currentLag, extra) {
     const currentLagMs = roundMs(currentLag);
     const memory = process.memoryUsage();
     const delaySnapshot = getLoopDelaySnapshot();
-    const eluSnapshot = getEventLoopUtilizationSnapshot();
+    const utilizationSnapshot = getEventLoopUtilizationSnapshot();
     const cpuSnapshot = getCpuUsageSnapshot();
     const limits = getLoopLimits();
-    const state = getOverloadState(currentLagMs, delaySnapshot, eluSnapshot);
+    const state = getLagState(currentLagMs, delaySnapshot, utilizationSnapshot);
 
     return {
       reason: "event_loop_lag",
       state,
       source: {
         detector: "toobusy-js",
-        note: "toobusy-js detected delayed event-loop polling; exact blocking call cannot be known from this callback alone"
+        note: "event-loop polling was delayed; exact blocking function cannot be recovered from this callback alone"
       },
       lag: {
         currentMs: currentLagMs,
-        warnMs: limits.warnLagMs,
-        rejectMs: limits.rejectLagMs,
-        baseRejectMs: OVERLOAD_BASE_REJECT_LAG_MS,
+        warnMs: limits.warnMs,
+        rejectMs: limits.rejectMs,
+        baseRejectMs: shieldConfig.loop.rejectLagMs,
         dynamicToobusyEnabled: limits.dynamicToobusy,
-        criticalMs: limits.criticalLagMs,
+        criticalMs: limits.criticalMs,
         criticalP99Ms: limits.criticalP99Ms,
-        criticalElu: limits.criticalElu,
+        criticalUtilization: limits.criticalUtilization,
         strikes: criticalStrikeTimes.length,
-        strikeWindowMs: CRITICAL_STRIKE_WINDOW_MS
+        strikeWindowMs: shieldConfig.strikes.windowMs
       },
       adaptiveLimits: limits,
       eventLoopDelay: delaySnapshot,
-      eventLoopUtilization: eluSnapshot,
+      eventLoopUtilization: utilizationSnapshot,
       cpu: cpuSnapshot,
       memory: {
         rss: bytesToMb(memory.rss),
@@ -1749,11 +1691,11 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
       },
       resources: getActiveResourceCounts(),
       admission: {
-        clients: overloadClients.size,
-        userGraceEnabled: USER_GRACE_ENABLED,
-        userGraceMs: USER_GRACE_TOTAL_MS,
-        pageSoftPassEnabled: USER_PAGE_SOFT_PASS_ENABLED,
-        stats: { ...overloadStats }
+        clients: clientStates.size,
+        userGraceEnabled: shieldConfig.userPass.enabled,
+        userGraceMs: shieldConfig.userPass.graceMs,
+        pageSoftPassEnabled: shieldConfig.userPass.pageSoftPass,
+        stats: { ...shieldStats }
       },
       ...extra
     };
@@ -1815,7 +1757,7 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
       .join(", ");
   }
 
-  function getLikelyLagHints(snapshot) {
+  function getLagHints(snapshot) {
     const hints = [];
 
     if (snapshot.requests.activeByRoute.length > 0) {
@@ -1842,17 +1784,17 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
     return hints;
   }
 
-  function formatOverloadPretty(message, snapshot) {
+  function formatLagPretty(message, snapshot) {
     const lines = [];
     const lag = snapshot.lag;
     const limits = snapshot.adaptiveLimits;
     const delay = snapshot.eventLoopDelay;
-    const elu = snapshot.eventLoopUtilization;
+    const utilization = snapshot.eventLoopUtilization;
     const cpu = snapshot.cpu;
     const memory = snapshot.memory;
     const proc = snapshot.process;
     const system = snapshot.system;
-    const hints = getLikelyLagHints(snapshot);
+    const hints = getLagHints(snapshot);
 
     lines.push("[POKE-overload] " + message);
     lines.push("  state: " + snapshot.state);
@@ -1862,18 +1804,17 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
       " reject=" + lag.rejectMs + "ms" +
       " critical=" + lag.criticalMs + "ms" +
       " criticalP99=" + lag.criticalP99Ms + "ms" +
-      " strikes=" + lag.strikes + "/" + CRITICAL_STRIKES_TO_RESTART
+      " strikes=" + lag.strikes + "/" + shieldConfig.strikes.neededForRestart
     );
     lines.push(
-      "  adaptive limits: enabled=" + limits.dynamic +
-      " dynamicToobusy=" + limits.dynamicToobusy +
+      "  adaptive: enabled=" + limits.dynamic +
       " samples=" + limits.samples +
       " baseline=" + roundMs(limits.baselineMs) + "ms" +
-      " baselineP90=" + roundMs(limits.baselineP90Ms) + "ms" +
-      " baselineP99=" + roundMs(limits.baselineP99Ms) + "ms"
+      " p90=" + roundMs(limits.baselineP90Ms) + "ms" +
+      " p99=" + roundMs(limits.baselineP99Ms) + "ms"
     );
     lines.push(
-      "  last baseline sample: p90=" + limits.lastSampleP90Ms + "ms" +
+      "  last sample: p90=" + limits.lastSampleP90Ms + "ms" +
       " p99=" + limits.lastSampleP99Ms + "ms" +
       " mean=" + limits.lastSampleMeanMs + "ms" +
       " max=" + limits.lastSampleMaxMs + "ms"
@@ -1886,9 +1827,9 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
       " mean=" + delay.meanMs + "ms"
     );
     lines.push(
-      "  event loop use: " + formatPercent(elu.utilization) +
-      " active=" + formatDuration(elu.activeMs) +
-      " idle=" + formatDuration(elu.idleMs)
+      "  event loop use: " + formatPercent(utilization.utilization) +
+      " active=" + formatDuration(utilization.activeMs) +
+      " idle=" + formatDuration(utilization.idleMs)
     );
     lines.push(
       "  cpu: user=" + formatDuration(cpu.userMs) +
@@ -1927,7 +1868,7 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
       " pageSoftPass=" + snapshot.admission.pageSoftPassEnabled +
       " stats=" + JSON.stringify(snapshot.admission.stats)
     );
-    lines.push("  likely clues:");
+    lines.push("  clues:");
     for (const hint of hints) {
       lines.push("    - " + hint);
     }
@@ -1945,22 +1886,64 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
     }
 
     lines.push("  note: exact blocking function cannot be recovered from this callback alone");
-    lines.push("  set POKE_OVERLOAD_LOG_STYLE=json for machine-readable logs");
 
     return lines.join("\n");
   }
 
-  function logOverload(message, snapshot) {
-    if (OVERLOAD_JSON_LOGS) {
+  function logLag(message, snapshot) {
+    if (shieldConfig.logging.json) {
       console.error("[POKE-overload] " + message + " " + JSON.stringify(snapshot));
       return;
     }
 
-    console.error(formatOverloadPretty(message, snapshot));
+    console.error(formatLagPretty(message, snapshot));
+  }
+
+  function getClientLogView(client) {
+    if (!client) {
+      return null;
+    }
+
+    return {
+      requests: client.requestTimes.length,
+      pageSoftPasses: client.pageSoftPassTimes.length,
+      pageGracePasses: client.pageGracePassTimes.length,
+      rejects: client.rejectTimes.length,
+      heavyRejects: client.heavyRejectTimes.length,
+      cooldownUntil: client.cooldownUntil,
+      cooldownLevel: client.cooldownLevel,
+      lastPath: client.lastPath,
+      lastKind: client.lastKind,
+      lastDecision: client.lastDecision,
+      pressure: getClientPressure(client)
+    };
+  }
+
+  function logPolicy(message, client, extra) {
+    const now = Date.now();
+
+    if (now - lastPolicyLogAt < shieldConfig.logging.policyCooldownMs) {
+      return;
+    }
+
+    lastPolicyLogAt = now;
+
+    console.error(
+      "[POKE-overload-policy] " +
+      JSON.stringify({
+        message,
+        state: getCurrentShieldState(),
+        clients: clientStates.size,
+        activeRequests: activeRequests.size,
+        client: getClientLogView(client),
+        stats: shieldStats,
+        ...extra
+      })
+    );
   }
 
   function shouldWriteDiagnosticReport() {
-    if (!DIAGNOSTIC_REPORTS_ENABLED) {
+    if (!shieldConfig.logging.reports) {
       return false;
     }
 
@@ -1970,7 +1953,7 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
 
     const now = Date.now();
 
-    if (now - lastReportAt < DIAGNOSTIC_REPORT_COOLDOWN_MS) {
+    if (now - lastReportAt < shieldConfig.logging.reportCooldownMs) {
       return false;
     }
 
@@ -1984,10 +1967,10 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
     }
 
     try {
-      fs.mkdirSync(DIAGNOSTIC_REPORT_DIR, { recursive: true });
+      fs.mkdirSync(shieldConfig.logging.reportDir, { recursive: true });
 
       const filename = nodePath.join(
-        DIAGNOSTIC_REPORT_DIR,
+        shieldConfig.logging.reportDir,
         "event-loop-lag-" + Date.now() + "-pid-" + process.pid + ".json"
       );
 
@@ -2012,7 +1995,7 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
     const now = Date.now();
 
     criticalStrikeTimes = criticalStrikeTimes.filter(function (time) {
-      return now - time <= CRITICAL_STRIKE_WINDOW_MS;
+      return now - time <= shieldConfig.strikes.windowMs;
     });
 
     criticalStrikeTimes.push(now);
@@ -2023,15 +2006,15 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
   function resetCriticalStrikesIfHealthy(currentLag, snapshot) {
     const limits = getLoopLimits();
 
-    if (currentLag >= limits.rejectLagMs) {
+    if (currentLag >= limits.rejectMs) {
       return;
     }
 
-    if (snapshot.eventLoopDelay.p99Ms >= limits.rejectLagMs) {
+    if (snapshot.eventLoopDelay.p99Ms >= limits.rejectMs) {
       return;
     }
 
-    if (snapshot.eventLoopUtilization.utilization >= LOOP_BUSY_ELU) {
+    if (snapshot.eventLoopUtilization.utilization >= shieldConfig.loop.busyUtilization) {
       return;
     }
 
@@ -2042,11 +2025,11 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
     const limits = getLoopLimits();
 
     return (
-      currentLag >= limits.criticalLagMs ||
+      currentLag >= limits.criticalMs ||
       snapshot.eventLoopDelay.p99Ms >= limits.criticalP99Ms ||
       (
-        snapshot.eventLoopUtilization.utilization >= limits.criticalElu &&
-        currentLag >= limits.rejectLagMs
+        snapshot.eventLoopUtilization.utilization >= limits.criticalUtilization &&
+        currentLag >= limits.rejectMs
       )
     );
   }
@@ -2056,7 +2039,7 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
   }
 
   function pruneClientState(client, now) {
-    const oldest = now - CLIENT_WINDOW_MS;
+    const oldest = now - shieldConfig.clients.windowMs;
 
     while (client.requestTimes.length > 0 && client.requestTimes[0] < oldest) {
       client.requestTimes.shift();
@@ -2087,7 +2070,7 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
   function getClientState(req) {
     const key = getClientKey(req);
     const now = Date.now();
-    let client = overloadClients.get(key);
+    let client = clientStates.get(key);
 
     if (!client) {
       client = {
@@ -2104,7 +2087,7 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
         lastKind: "",
         lastDecision: ""
       };
-      overloadClients.set(key, client);
+      clientStates.set(key, client);
     }
 
     client.lastSeen = now;
@@ -2144,31 +2127,35 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
     pruneClientState(client, now);
   }
 
+  function getClientPressure(client) {
+    return (
+      client.requestTimes.length +
+      client.rejectTimes.length * 5 +
+      client.heavyRejectTimes.length * 7 +
+      client.pageSoftPassTimes.length * 2
+    );
+  }
+
   function applyClientCooldown(client, reason) {
     const now = Date.now();
 
     client.cooldownLevel++;
     const cooldownMs = Math.min(
-      CLIENT_COOLDOWN_MAX_MS,
-      CLIENT_COOLDOWN_MS * Math.pow(2, Math.max(0, client.cooldownLevel - 1))
+      shieldConfig.clients.maxCooldownMs,
+      shieldConfig.clients.cooldownMs * Math.pow(2, Math.max(0, client.cooldownLevel - 1))
     );
 
     client.cooldownUntil = now + cooldownMs;
-    overloadStats.cooldownsIssued++;
+    shieldStats.cooldownsIssued++;
 
     console.error(
-      "[POKE-overload-policy] cooldown issued " +
+      "[POKE-overload-policy] " +
       JSON.stringify({
+        message: "cooldown issued",
         reason,
         cooldownMs,
         cooldownLevel: client.cooldownLevel,
-        client: {
-          requests: client.requestTimes.length,
-          rejects: client.rejectTimes.length,
-          heavyRejects: client.heavyRejectTimes.length,
-          lastPath: client.lastPath,
-          lastKind: client.lastKind
-        }
+        client: getClientLogView(client)
       })
     );
   }
@@ -2332,25 +2319,25 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
     return "other";
   }
 
-  function getCurrentPolicyState() {
-    if (overloadRestarting) {
+  function getCurrentShieldState() {
+    if (shieldRestarting) {
       return "restarting";
     }
 
-    if (lastOverloadSnapshot && Date.now() - lastOverloadSnapshotAt <= Math.max(30_000, OVERLOAD_LOG_COOLDOWN_MS * 4)) {
-      return lastOverloadSnapshot.state || "overloaded";
+    if (lastLagSnapshot && Date.now() - lastLagSnapshotAt <= Math.max(30000, shieldConfig.logging.lagCooldownMs * 4)) {
+      return lastLagSnapshot.state || "busy";
     }
 
-    return "overloaded";
+    return "busy";
   }
 
-  function isHardOverloadState() {
-    const state = getCurrentPolicyState();
+  function isHardShieldState() {
+    const state = getCurrentShieldState();
     return state === "critical" || state === "restarting";
   }
 
   function canSpendPageSoftPass(req, client) {
-    if (!USER_GRACE_ENABLED || !USER_PAGE_SOFT_PASS_ENABLED) {
+    if (!shieldConfig.userPass.enabled || !shieldConfig.userPass.pageSoftPass) {
       return false;
     }
 
@@ -2358,19 +2345,19 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
       return false;
     }
 
-    if (client.requestTimes.length > CLIENT_MAX_REQUESTS_PER_WINDOW) {
+    if (client.requestTimes.length > shieldConfig.clients.maxRequestsPerWindow) {
       return false;
     }
 
-    if (client.pageSoftPassTimes.length >= CLIENT_MAX_PAGE_SOFT_PASSES_PER_WINDOW) {
+    if (client.pageSoftPassTimes.length >= shieldConfig.clients.maxPageSoftPassesPerWindow) {
       return false;
     }
 
-    if (client.rejectTimes.length >= CLIENT_MAX_REJECTS_BEFORE_COOLDOWN) {
+    if (client.rejectTimes.length >= shieldConfig.clients.maxRejectsBeforeCooldown) {
       return false;
     }
 
-    if (activeRequests.size >= CLIENT_MAX_ACTIVE_REQUESTS_FOR_SOFT_PASS) {
+    if (activeRequests.size >= shieldConfig.clients.maxActiveRequestsForSoftPass) {
       return false;
     }
 
@@ -2382,26 +2369,31 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
       return;
     }
 
-    if (client.rejectTimes.length >= CLIENT_MAX_REJECTS_BEFORE_COOLDOWN) {
+    if (client.rejectTimes.length >= shieldConfig.clients.maxRejectsBeforeCooldown) {
       applyClientCooldown(client, reason || "too many overload rejects");
       return;
     }
 
-    if ((kind === "heavy" || kind === "background") && client.heavyRejectTimes.length >= CLIENT_HEAVY_REJECTS_BEFORE_COOLDOWN) {
+    if ((kind === "heavy" || kind === "background") && client.heavyRejectTimes.length >= shieldConfig.clients.maxHeavyRejectsBeforeCooldown) {
       applyClientCooldown(client, reason || "too many heavy overload rejects");
+      return;
+    }
+
+    if (getClientPressure(client) >= 70) {
+      applyClientCooldown(client, reason || "client pressure too high during overload");
     }
   }
 
   function getAdmissionDecision(req, client, kind) {
-    const state = getCurrentPolicyState();
+    const state = getCurrentShieldState();
     const now = Date.now();
 
-    if (overloadRestarting || state === "restarting") {
+    if (shieldRestarting || state === "restarting") {
       return {
         action: "reject",
         reason: "restarting",
         status: 503,
-        retryAfter: CLIENT_RETRY_AFTER_SECONDS,
+        retryAfter: shieldConfig.restart.retryAfterSeconds,
         message: "Server is recovering from high load. Please retry shortly."
       };
     }
@@ -2417,7 +2409,7 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
     }
 
     if (state === "critical") {
-      if (ALLOW_STATUS_DURING_SOFT_OVERLOAD && kind === "status") {
+      if (shieldConfig.allow.statusDuringOverload && kind === "status") {
         return {
           action: "allow",
           reason: "status-critical-pass"
@@ -2428,19 +2420,19 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
         action: "reject",
         reason: "critical-overload",
         status: 503,
-        retryAfter: CLIENT_RETRY_AFTER_SECONDS,
+        retryAfter: shieldConfig.restart.retryAfterSeconds,
         message: "Server is under heavy load. Please retry shortly."
       };
     }
 
-    if (ALLOW_STATUS_DURING_SOFT_OVERLOAD && kind === "status") {
+    if (shieldConfig.allow.statusDuringOverload && kind === "status") {
       return {
         action: "allow",
         reason: "status-soft-pass"
       };
     }
 
-    if (ALLOW_STATIC_DURING_SOFT_OVERLOAD && kind === "static" && isSafeMethod(req)) {
+    if (shieldConfig.allow.staticDuringSoftOverload && kind === "static" && isSafeMethod(req)) {
       return {
         action: "allow",
         reason: "static-soft-pass"
@@ -2452,7 +2444,7 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
         action: "reject",
         reason: "heavy-shed-first",
         status: 503,
-        retryAfter: CLIENT_RETRY_AFTER_SECONDS,
+        retryAfter: shieldConfig.restart.retryAfterSeconds,
         message: "Server is busy. Please retry shortly."
       };
     }
@@ -2462,7 +2454,7 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
         action: "reject",
         reason: "background-shed-first",
         status: 503,
-        retryAfter: CLIENT_RETRY_AFTER_SECONDS,
+        retryAfter: shieldConfig.restart.retryAfterSeconds,
         message: "Server is busy. Please retry shortly."
       };
     }
@@ -2478,70 +2470,40 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
       action: "reject",
       reason: "no-soft-pass-budget",
       status: 503,
-      retryAfter: CLIENT_RETRY_AFTER_SECONDS,
+      retryAfter: shieldConfig.restart.retryAfterSeconds,
       message: "Server is busy. Please retry shortly."
     };
-  }
-
-  function logAdmission(message, client) {
-    const now = Date.now();
-
-    if (now - lastPolicyLogAt < OVERLOAD_POLICY_LOG_COOLDOWN_MS) {
-      return;
-    }
-
-    lastPolicyLogAt = now;
-
-    console.error(
-      "[POKE-overload-policy] " + message + " " +
-      JSON.stringify({
-        clients: overloadClients.size,
-        activeRequests: activeRequests.size,
-        state: getCurrentPolicyState(),
-        client: client
-          ? {
-              requests: client.requestTimes.length,
-              pageSoftPasses: client.pageSoftPassTimes.length,
-              pageGracePasses: client.pageGracePassTimes.length,
-              rejects: client.rejectTimes.length,
-              heavyRejects: client.heavyRejectTimes.length,
-              cooldownUntil: client.cooldownUntil,
-              cooldownLevel: client.cooldownLevel,
-              lastPath: client.lastPath,
-              lastKind: client.lastKind,
-              lastDecision: client.lastDecision
-            }
-          : null,
-        stats: overloadStats
-      })
-    );
   }
 
   function rejectDuringOverload(req, res, client, kind, decision) {
     rememberDecision(client, "reject", kind);
 
     if (decision.reason === "restarting") {
-      overloadStats.rejectedRestarting++;
+      shieldStats.rejectedRestarting++;
     } else if (decision.reason === "critical-overload") {
-      overloadStats.rejectedCritical++;
+      shieldStats.rejectedCritical++;
     } else if (decision.reason === "client-overload-cooldown") {
-      overloadStats.rejectedCooldown++;
+      shieldStats.rejectedCooldown++;
     } else if (decision.reason === "heavy-shed-first") {
-      overloadStats.rejectedHeavy++;
+      shieldStats.rejectedHeavy++;
     } else if (decision.reason === "background-shed-first") {
-      overloadStats.rejectedBackground++;
+      shieldStats.rejectedBackground++;
     } else if (decision.reason === "normal-page-grace-expired") {
-      overloadStats.rejectedGraceExpired++;
+      shieldStats.rejectedGraceExpired++;
     } else if (decision.reason === "no-soft-pass-budget") {
-      overloadStats.rejectedNoBudget++;
+      shieldStats.rejectedNoBudget++;
     } else {
-      overloadStats.rejectedNoBudget++;
+      shieldStats.rejectedNoBudget++;
     }
 
     maybeCooldownClient(client, kind, decision.reason);
-    logAdmission("rejected request during overload: " + decision.reason, client);
+    logPolicy("rejected request during overload", client, {
+      reason: decision.reason,
+      kind,
+      path: getRequestPath(req)
+    });
 
-    res.set("Retry-After", String(decision.retryAfter || CLIENT_RETRY_AFTER_SECONDS));
+    res.set("Retry-After", String(decision.retryAfter || shieldConfig.restart.retryAfterSeconds));
     res.set("Cache-Control", "no-store");
     res.set("Connection", "close");
     res.set("X-Poke-Overload-Policy", decision.reason);
@@ -2549,37 +2511,39 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
   }
 
   async function handlePageGrace(req, res, next, client, kind) {
-    const jitter = USER_GRACE_JITTER_MS > 0
-      ? Math.floor(Math.random() * USER_GRACE_JITTER_MS)
+    const jitter = shieldConfig.userPass.graceJitterMs > 0
+      ? Math.floor(Math.random() * shieldConfig.userPass.graceJitterMs)
       : 0;
 
-    const graceBudgetMs = Math.max(0, USER_GRACE_TOTAL_MS + jitter);
+    const graceBudgetMs = Math.max(0, shieldConfig.userPass.graceMs + jitter);
     const startedAt = performance.now();
 
     while (!res.headersSent && performance.now() - startedAt < graceBudgetMs) {
-      if (overloadRestarting || isHardOverloadState()) {
+      if (shieldRestarting || isHardShieldState()) {
         break;
       }
 
       if (!toobusy()) {
         rememberDecision(client, "page-grace-pass", kind);
-        overloadStats.pageGracePassed++;
+        shieldStats.pageGracePassed++;
         return next();
       }
 
-      await sleep(USER_GRACE_POLL_MS);
+      await sleep(shieldConfig.userPass.gracePollMs);
     }
 
     if (
       !res.headersSent &&
-      USER_PAGE_SOFT_PASS_ENABLED &&
-      !overloadRestarting &&
-      !isHardOverloadState() &&
+      shieldConfig.userPass.pageSoftPass &&
+      !shieldRestarting &&
+      !isHardShieldState() &&
       canSpendPageSoftPass(req, client)
     ) {
       rememberDecision(client, "page-soft-pass", kind);
-      overloadStats.pageSoftPassed++;
-      logAdmission("soft-passed page request during overload", client);
+      shieldStats.pageSoftPassed++;
+      logPolicy("soft-passed page request during overload", client, {
+        path: getRequestPath(req)
+      });
       return next();
     }
 
@@ -2587,7 +2551,7 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
       action: "reject",
       reason: "normal-page-grace-expired",
       status: 503,
-      retryAfter: CLIENT_RETRY_AFTER_SECONDS,
+      retryAfter: shieldConfig.restart.retryAfterSeconds,
       message: "Server is busy. Please retry shortly."
     });
   }
@@ -2605,21 +2569,21 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
   }
 
   function beginOverloadRestart(currentLag, snapshot) {
-    if (overloadRestarting) {
+    if (shieldRestarting) {
       return;
     }
 
-    overloadRestarting = true;
+    shieldRestarting = true;
 
     const reportPath = writeDiagnosticReport(snapshot);
 
-    logOverload(
+    logLag(
       "sustained critical event-loop lag, refusing new requests and restarting",
       {
         ...snapshot,
         restart: {
-          exitGraceMs: RESTART_EXIT_GRACE_MS,
-          retryAfterSeconds: CLIENT_RETRY_AFTER_SECONDS,
+          exitGraceMs: shieldConfig.restart.exitGraceMs,
+          retryAfterSeconds: shieldConfig.restart.retryAfterSeconds,
           diagnosticReport: reportPath
         }
       }
@@ -2630,7 +2594,7 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
     const exitTimer = setTimeout(function () {
       console.error("[POKE-overload] exiting after sustained critical event-loop lag");
       process.exit(1);
-    }, RESTART_EXIT_GRACE_MS);
+    }, shieldConfig.restart.exitGraceMs);
 
     exitTimer.unref();
   }
@@ -2640,7 +2604,7 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
     const key = getRequestKey(req);
     const startedAt = performance.now();
 
-    if (activeRequests.size < REQUEST_TRACK_MAX_ACTIVE) {
+    if (activeRequests.size < shieldConfig.requests.maxActiveTracked) {
       activeRequests.set(id, {
         id,
         key,
@@ -2659,14 +2623,14 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
         decrementMapCount(activeRequestCounts, key);
       }
 
-      if (durationMs >= REQUEST_SLOW_LOG_MS) {
+      if (durationMs >= shieldConfig.requests.slowMs) {
         recentSlowRequests.push({
           key,
           statusCode: res.statusCode,
           durationMs
         });
 
-        while (recentSlowRequests.length > REQUEST_TRACK_MAX_RECENT_SLOW) {
+        while (recentSlowRequests.length > shieldConfig.requests.maxRecentSlow) {
           recentSlowRequests.shift();
         }
       }
@@ -2688,18 +2652,18 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
 
     rememberRequest(req, client, kind);
 
-    if (overloadRestarting) {
+    if (shieldRestarting) {
       return rejectDuringOverload(req, res, client, kind, {
         action: "reject",
         reason: "restarting",
         status: 503,
-        retryAfter: CLIENT_RETRY_AFTER_SECONDS,
+        retryAfter: shieldConfig.restart.retryAfterSeconds,
         message: "Server is recovering from high load. Please retry shortly."
       });
     }
 
     if (!toobusy()) {
-      overloadStats.allowedHealthy++;
+      shieldStats.allowedHealthy++;
       return next();
     }
 
@@ -2707,9 +2671,9 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
 
     if (decision.action === "allow") {
       if (kind === "status") {
-        overloadStats.allowedStatus++;
+        shieldStats.allowedStatus++;
       } else if (kind === "static") {
-        overloadStats.allowedStatic++;
+        shieldStats.allowedStatic++;
       }
 
       client.lastDecision = decision.reason;
@@ -2724,7 +2688,7 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
   }
 
   function handleShutdownSignal(signal) {
-    overloadRestarting = true;
+    shieldRestarting = true;
     shutdownToobusy();
 
     console.error("[POKE-overload] received " + signal + ", shutting down overload monitor");
@@ -2736,21 +2700,21 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
     signalExitTimer.unref();
   }
 
-  toobusy.interval(OVERLOAD_CHECK_INTERVAL_MS);
-  toobusy.maxLag(OVERLOAD_BASE_REJECT_LAG_MS);
+  toobusy.interval(shieldConfig.loop.pollMs);
+  toobusy.maxLag(shieldConfig.loop.rejectLagMs);
 
   app.use(requestActivityTracker);
   app.use(overloadAdmissionMiddleware);
 
   app.get("/_pokeoverload/stats", function (req, res) {
-    const state = getCurrentPolicyState();
+    const state = getCurrentShieldState();
     const limits = getLoopLimits();
     const now = Date.now();
 
     let clientsInCooldown = 0;
     let activeClients = 0;
 
-    for (const [, client] of overloadClients) {
+    for (const [, client] of clientStates) {
       pruneClientState(client, now);
 
       if (client.cooldownUntil > now) {
@@ -2764,12 +2728,12 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
 
     res.json({
       state,
-      restarting: overloadRestarting,
+      restarting: shieldRestarting,
       clients: {
-        tracked: overloadClients.size,
+        tracked: clientStates.size,
         active: activeClients,
         cooldown: clientsInCooldown,
-        window_ms: CLIENT_WINDOW_MS
+        window_ms: shieldConfig.clients.windowMs
       },
       requests: {
         active: activeRequests.size,
@@ -2779,24 +2743,25 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
       },
       limits,
       policy: {
-        user_grace_enabled: USER_GRACE_ENABLED,
-        user_grace_ms: USER_GRACE_TOTAL_MS,
-        user_grace_poll_ms: USER_GRACE_POLL_MS,
-        user_page_soft_pass_enabled: USER_PAGE_SOFT_PASS_ENABLED,
-        client_max_requests_per_window: CLIENT_MAX_REQUESTS_PER_WINDOW,
-        client_max_page_soft_passes_per_window: CLIENT_MAX_PAGE_SOFT_PASSES_PER_WINDOW,
-        client_max_rejects_before_cooldown: CLIENT_MAX_REJECTS_BEFORE_COOLDOWN,
-        client_cooldown_ms: CLIENT_COOLDOWN_MS,
-        client_cooldown_max_ms: CLIENT_COOLDOWN_MAX_MS
+        user_grace_enabled: shieldConfig.userPass.enabled,
+        user_grace_ms: shieldConfig.userPass.graceMs,
+        user_grace_poll_ms: shieldConfig.userPass.gracePollMs,
+        user_page_soft_pass_enabled: shieldConfig.userPass.pageSoftPass,
+        client_max_requests_per_window: shieldConfig.clients.maxRequestsPerWindow,
+        client_max_page_soft_passes_per_window: shieldConfig.clients.maxPageSoftPassesPerWindow,
+        client_max_rejects_before_cooldown: shieldConfig.clients.maxRejectsBeforeCooldown,
+        client_max_heavy_rejects_before_cooldown: shieldConfig.clients.maxHeavyRejectsBeforeCooldown,
+        client_cooldown_ms: shieldConfig.clients.cooldownMs,
+        client_cooldown_max_ms: shieldConfig.clients.maxCooldownMs
       },
-      stats: overloadStats,
-      last_snapshot: lastOverloadSnapshot
+      stats: shieldStats,
+      last_snapshot: lastLagSnapshot
         ? {
-            state: lastOverloadSnapshot.state,
-            lag: lastOverloadSnapshot.lag,
-            eventLoopDelay: lastOverloadSnapshot.eventLoopDelay,
-            eventLoopUtilization: lastOverloadSnapshot.eventLoopUtilization,
-            requests: lastOverloadSnapshot.requests
+            state: lastLagSnapshot.state,
+            lag: lastLagSnapshot.lag,
+            eventLoopDelay: lastLagSnapshot.eventLoopDelay,
+            eventLoopUtilization: lastLagSnapshot.eventLoopUtilization,
+            requests: lastLagSnapshot.requests
           }
         : null
     });
@@ -2806,15 +2771,15 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
 
   const adaptiveLimitTimer = setInterval(function () {
     updateAdaptiveLoopLimits("interval");
-  }, LOOP_BASELINE_SAMPLE_INTERVAL_MS);
+  }, shieldConfig.loop.baselineSampleMs);
 
   adaptiveLimitTimer.unref();
 
   const clientCleanupTimer = setInterval(function () {
     const now = Date.now();
-    const maxAge = CLIENT_WINDOW_MS * 3;
+    const maxAge = shieldConfig.clients.windowMs * 3;
 
-    for (const [key, client] of overloadClients) {
+    for (const [key, client] of clientStates) {
       pruneClientState(client, now);
 
       if (
@@ -2826,24 +2791,24 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
         client.cooldownUntil <= now &&
         now - client.lastSeen > maxAge
       ) {
-        overloadClients.delete(key);
+        clientStates.delete(key);
       }
     }
-  }, CLIENT_STATE_CLEANUP_INTERVAL_MS);
+  }, shieldConfig.clients.cleanupMs);
 
   clientCleanupTimer.unref();
 
   toobusy.onLag(function (currentLag) {
     const now = Date.now();
-    const snapshot = createOverloadSnapshot(currentLag);
+    const snapshot = createLagSnapshot(currentLag);
     const critical = isCriticalLag(currentLag, snapshot);
 
-    lastOverloadSnapshot = snapshot;
-    lastOverloadSnapshotAt = now;
+    lastLagSnapshot = snapshot;
+    lastLagSnapshotAt = now;
 
-    if (now - lastLagLogAt >= OVERLOAD_LOG_COOLDOWN_MS || critical) {
+    if (now - lastLagLogAt >= shieldConfig.logging.lagCooldownMs || critical) {
       lastLagLogAt = now;
-      logOverload("event-loop lag detected", snapshot);
+      logLag("event-loop lag detected", snapshot);
     }
 
     if (!critical) {
@@ -2868,12 +2833,12 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
       diagnosticReport: reportPath
     };
 
-    logOverload(
-      "critical event-loop lag strike " + strikeCount + "/" + CRITICAL_STRIKES_TO_RESTART,
+    logLag(
+      "critical event-loop lag strike " + strikeCount + "/" + shieldConfig.strikes.neededForRestart,
       loggedStrikeSnapshot
     );
 
-    if (strikeCount >= CRITICAL_STRIKES_TO_RESTART) {
+    if (strikeCount >= shieldConfig.strikes.neededForRestart) {
       beginOverloadRestart(currentLag, strikeSnapshot);
       return;
     }
@@ -2891,17 +2856,16 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
 
   initlog(
     "[PokeOverloadShield] loaded - " +
-    "rejectLag: " + OVERLOAD_BASE_REJECT_LAG_MS + "ms, " +
-    "dynamicLimits: " + LOOP_DYNAMIC_LIMITS_ENABLED + ", " +
-    "dynamicToobusy: " + LOOP_DYNAMIC_TOOBUSY_ENABLED + ", " +
-    "pageGrace: " + USER_GRACE_TOTAL_MS + "ms, " +
-    "clientWindow: " + CLIENT_WINDOW_MS + "ms, " +
-    "cooldown: " + CLIENT_COOLDOWN_MS + "ms"
+    "rejectLag: " + shieldConfig.loop.rejectLagMs + "ms, " +
+    "dynamicLimits: " + shieldConfig.loop.dynamicLimits + ", " +
+    "dynamicToobusy: " + shieldConfig.loop.dynamicToobusyMaxLag + ", " +
+    "pageGrace: " + shieldConfig.userPass.graceMs + "ms, " +
+    "clientWindow: " + shieldConfig.clients.windowMs + "ms, " +
+    "cooldown: " + shieldConfig.clients.cooldownMs + "ms"
   );
 })();
   
   initlog("inited anti ddos");
-
 
   const initPokeTube = function () {
     sinit(app, config, renderTemplate);
@@ -2921,7 +2885,6 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
       }
       res.header("secure-poketube-instance", "1");
 
-      // opt out of googles "FLOC" bs :p See https://spreadprivacy.com/block-floc-with-duckduckgo/
       res.header("Permissions-Policy", "interest-cohort=()");
       res.header("software-name", "poke");
       next();
@@ -2944,7 +2907,6 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
     });
 
     app.use(function (req, res, next) {
- 
       res.header(
         "X-PokeTube-Youtube-Client-Name",
         innertube.innertube.CONTEXT_CLIENT.INNERTUBE_CONTEXT_CLIENT_NAME
@@ -2967,12 +2929,12 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
         res.setHeader(
           "Cache-Control",
           "public, max-age=" + config.cacher_max_age
-        ); // cache header
+        );
         res.setHeader("poketube-cacher", "STATIC_FILES");
       }
       const a = 890;
       if (!req.url.match(/^\/(css|js|img|font)\/.+/)) {
-        res.setHeader("Cache-Control", "public, max-age=" + a); // cache header
+        res.setHeader("Cache-Control", "public, max-age=" + a);
         res.setHeader("poketube-cacher", "PAGE");
       }
       next();
@@ -2993,7 +2955,8 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
     initlog("[FAILED] load robots.txt");
   }
 
-  // last-resort error catcher. has to be registered last.
+  initPokeTube();
+
   app.use(function pokeErrorHandler(err, req, res, next) {
     console.error("[POKE-error]", req.method, req.originalUrl, ":", err.message);
     if (process.env.NODE_ENV !== "production") {
@@ -3003,6 +2966,4 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
       res.status(500).send("Something went wrong. Please try again.");
     }
   });
-
-  initPokeTube();
 })();
