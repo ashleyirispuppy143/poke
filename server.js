@@ -18,7 +18,7 @@
    along with this program. If not, see https://www.gnu.org/licenses/.
  */
 (async function () {
-   process.on("unhandledRejection", (reason, promise) => {
+  process.on("unhandledRejection", (reason, promise) => {
     console.error("[POKE-error] Unhandled Rejection at:", promise, "reason:", reason);
     if (reason && reason.code === "UND_ERR_CONNECT_TIMEOUT") {
       console.error("[POKE-error] Blocked server crash from Undici ConnectTimeoutError.");
@@ -157,16 +157,9 @@
 
   /*
    * poke trust proxy auto-config
-   *
-   * this has to run BEFORE anything that touches req.ip.
-   *
-   * it trusts private/local reverse proxies and cloudflare edge IPs only.
-   * direct public clients cannot spoof x-forwarded-for because their TCP peer
-   * address will not be trusted.
    */
   (function configureTrustProxy() {
     const path = require("path");
-
     const dotenvPath = path.resolve(process.cwd(), ".env");
 
     try {
@@ -228,7 +221,6 @@
 
     function detectFilesystemSignals() {
       const signals = [];
-
       const checks = [
         { path: "/.dockerenv", name: "Docker" },
         { path: "/run/.containerenv", name: "Podman" },
@@ -416,23 +408,30 @@
   })();
 
   /*
-   * PokeResourceGuard
+   * PokeResourceGuard (O(1) Ultra-optimized Version)
    *
-   * This only samples CPU and memory. No event-loop delay, no latency probing,
-   * no ping-style checks.
-   *
-   * It is intentionally user-first:
-   * - healthy: allow everything except extreme per-client abuse
-   * - warm: allow almost everything, only slow down noisy expensive clients
-   * - stressed: protect pages/static/status first, shed expensive noisy work
-   * - critical: keep status/static/pages alive, reject expensive/background work
-   *
-   * All per-client data is in-memory and short-lived.
+   * Features:
+   * - Node.js Event Loop Lag monitoring (The ultimate single-thread health check)
+   * - O(1) Time & Space sliding window counters per IP (No more massive timestamp arrays)
+   * - O(1) LRU Map Cache Eviction (Saves server during multi-IP DDOS attacks)
+   * - Advanced Client prioritization based on request type
    */
   (function PokeResourceGuard() {
+    const { monitorEventLoopDelay } = require("perf_hooks");
+    
+    // Initialize Event Loop Histogram
+    const eldHistogram = monitorEventLoopDelay({ resolution: 20 });
+    eldHistogram.enable();
+
     const resourceConfig = {
       system: {
         sampleMs: 1000,
+
+        eventLoop: {
+            warmMs: 40,
+            stressedMs: 120,
+            criticalMs: 300
+        },
 
         warmCpuRatio: 0.75,
         stressedCpuRatio: 1.05,
@@ -449,7 +448,6 @@
 
       client: {
         windowMs: 30000,
-        oneSecondMs: 1000,
         maxClientStates: 75000,
         cleanupMs: 60000,
 
@@ -533,6 +531,10 @@
       since: Date.now(),
       sampledAt: Date.now(),
       reason: "startup",
+      eventLoop: {
+        p99Ms: 0,
+        meanMs: 0
+      },
       cpu: {
         ratio: 0,
         percent: 0,
@@ -575,7 +577,9 @@
     const activeRequests = new Map();
     const activeRequestCounts = new Map();
     const recentSlowRequests = [];
-    const clientStates = new Map();
+    
+    // JS Maps preserve insertion order. We use this to do O(1) LRU eviction.
+    const clientStates = new Map(); 
 
     const guardStats = {
       allowedHealthy: 0,
@@ -622,22 +626,17 @@
           }
         } catch {}
       }
-
       return os.totalmem();
     }
 
     function getConstrainedMemoryMb() {
-      if (typeof process.constrainedMemory !== "function") {
-        return 0;
-      }
-
+      if (typeof process.constrainedMemory !== "function") return 0;
       try {
         const constrained = process.constrainedMemory();
         if (Number.isFinite(constrained) && constrained > 0) {
           return bytesToMb(constrained);
         }
       } catch {}
-
       return 0;
     }
 
@@ -674,33 +673,21 @@
 
     function getTopMapEntries(map, limit) {
       return Array.from(map.entries())
-        .sort(function (a, b) {
-          return b[1] - a[1];
-        })
+        .sort((a, b) => b[1] - a[1])
         .slice(0, limit)
-        .map(function (entry) {
-          return {
-            key: entry[0],
-            count: entry[1]
-          };
-        });
+        .map(entry => ({ key: entry[0], count: entry[1] }));
     }
 
     function getActiveRequestSummary(limit) {
       const now = Date.now();
-
       return Array.from(activeRequests.values())
-        .map(function (request) {
-          return {
-            id: request.id,
-            key: request.key,
-            kind: request.kind,
-            ageMs: now - request.startedAt
-          };
-        })
-        .sort(function (a, b) {
-          return b.ageMs - a.ageMs;
-        })
+        .map(req => ({
+            id: req.id,
+            key: req.key,
+            kind: req.kind,
+            ageMs: now - req.startedAt
+        }))
+        .sort((a, b) => b.ageMs - a.ageMs)
         .slice(0, limit);
     }
 
@@ -715,17 +702,12 @@
 
     function isStaticRequest(req) {
       const pathname = getRequestPath(req);
-
-      if (/^\/(css|js|img|font|static|favicon\.ico|manifest\.json|robots\.txt)(\/|$)/i.test(pathname)) {
-        return true;
-      }
-
+      if (/^\/(css|js|img|font|static|favicon\.ico|manifest\.json|robots\.txt)(\/|$)/i.test(pathname)) return true;
       return /\.(css|js|mjs|png|jpg|jpeg|webp|gif|svg|ico|woff|woff2|ttf|otf|map|txt)$/i.test(pathname);
     }
 
     function isStatusRequest(req) {
       const pathname = getRequestPath(req);
-
       return (
         pathname === "/robots.txt" ||
         pathname === "/favicon.ico" ||
@@ -740,11 +722,7 @@
 
     function isHeavyRequest(req) {
       const pathname = getRequestPath(req);
-
-      if (!isSafeMethod(req)) {
-        return true;
-      }
-
+      if (!isSafeMethod(req)) return true;
       return (
         pathname.startsWith("/api/") ||
         pathname.startsWith("/proxy/") ||
@@ -765,18 +743,9 @@
       const secFetchDest = String(req.headers["sec-fetch-dest"] || "").toLowerCase();
       const secFetchMode = String(req.headers["sec-fetch-mode"] || "").toLowerCase();
 
-      if (!isSafeMethod(req)) {
-        return true;
-      }
-
-      if (accept.includes("application/json") && !accept.includes("text/html")) {
-        return true;
-      }
-
-      if (secFetchDest === "empty" && secFetchMode === "cors") {
-        return true;
-      }
-
+      if (!isSafeMethod(req)) return true;
+      if (accept.includes("application/json") && !accept.includes("text/html")) return true;
+      if (secFetchDest === "empty" && secFetchMode === "cors") return true;
       return false;
     }
 
@@ -786,37 +755,18 @@
       const secFetchDest = String(req.headers["sec-fetch-dest"] || "").toLowerCase();
       const secFetchMode = String(req.headers["sec-fetch-mode"] || "").toLowerCase();
 
-      if (!isSafeMethod(req)) {
-        return false;
-      }
-
-      if (isStaticRequest(req) || isHeavyRequest(req) || isBackgroundRequest(req)) {
-        return false;
-      }
-
+      if (!isSafeMethod(req)) return false;
+      if (isStaticRequest(req) || isHeavyRequest(req) || isBackgroundRequest(req)) return false;
       if (
-        pathname === "/" ||
-        pathname === "/home" ||
-        pathname === "/watch" ||
-        pathname === "/search" ||
-        pathname === "/hashtag" ||
-        pathname.startsWith("/watch/") ||
-        pathname.startsWith("/search/") ||
-        pathname.startsWith("/channel/") ||
-        pathname.startsWith("/user/") ||
+        pathname === "/" || pathname === "/home" || pathname === "/watch" ||
+        pathname === "/search" || pathname === "/hashtag" ||
+        pathname.startsWith("/watch/") || pathname.startsWith("/search/") ||
+        pathname.startsWith("/channel/") || pathname.startsWith("/user/") ||
         pathname.startsWith("/playlist")
-      ) {
-        return true;
-      }
+      ) return true;
 
-      if (accept.includes("text/html")) {
-        return true;
-      }
-
-      if (secFetchDest === "document" || secFetchMode === "navigate") {
-        return true;
-      }
-
+      if (accept.includes("text/html")) return true;
+      if (secFetchDest === "document" || secFetchMode === "navigate") return true;
       return false;
     }
 
@@ -831,17 +781,10 @@
 
     function getKindCost(kind, req) {
       let cost = resourceConfig.requestCost[kind] || resourceConfig.requestCost.other;
-
       const ua = String(req.headers["user-agent"] || "");
-      if (isKnownBot(ua)) {
-        cost = cost * 0.5;
-      }
-
+      if (isKnownBot(ua)) cost = cost * 0.5;
       const rawIP = cleanIP(req.socket.remoteAddress || "");
-      if (isCloudflareIP(rawIP)) {
-        cost = cost * 0.85;
-      }
-
+      if (isCloudflareIP(rawIP)) cost = cost * 0.85;
       return cost;
     }
 
@@ -849,97 +792,58 @@
       return cleanIP(req.ip || req.socket.remoteAddress || "unknown");
     }
 
-    function pruneClientState(client, now) {
-      const oldest = now - resourceConfig.client.windowMs;
-      const oneSecondOldest = now - resourceConfig.client.oneSecondMs;
+    // O(1) Sliding Window Helper function
+    function updateClientWindow(client, now) {
+      const WINDOW_MS = resourceConfig.client.windowMs;
+      const currentStart = Math.floor(now / WINDOW_MS) * WINDOW_MS;
 
-      while (client.requestTimes.length > 0 && client.requestTimes[0] < oldest) {
-        client.requestTimes.shift();
+      if (client.windowStart !== currentStart) {
+        const diff = currentStart - client.windowStart;
+        if (diff === WINDOW_MS) {
+          client.previous = { ...client.current };
+        } else {
+          client.previous = { total: 0, cost: 0, heavy: 0, page: 0, rejects: 0, softPass: 0 };
+        }
+        client.current = { total: 0, cost: 0, heavy: 0, page: 0, rejects: 0, softPass: 0 };
+        client.windowStart = currentStart;
       }
+    }
 
-      while (client.oneSecondRequestTimes.length > 0 && client.oneSecondRequestTimes[0] < oneSecondOldest) {
-        client.oneSecondRequestTimes.shift();
-      }
-
-      while (client.heavyTimes.length > 0 && client.heavyTimes[0] < oldest) {
-        client.heavyTimes.shift();
-      }
-
-      while (client.pageTimes.length > 0 && client.pageTimes[0] < oldest) {
-        client.pageTimes.shift();
-      }
-
-      while (client.rejectTimes.length > 0 && client.rejectTimes[0] < oldest) {
-        client.rejectTimes.shift();
-      }
-
-      while (client.pageSoftPassTimes.length > 0 && client.pageSoftPassTimes[0] < oldest) {
-        client.pageSoftPassTimes.shift();
-      }
-
-      while (client.costEntries.length > 0 && client.costEntries[0].at < oldest) {
-        client.costEntries.shift();
-      }
-
-      if (client.cooldownUntil > 0 && client.cooldownUntil <= now) {
-        client.cooldownUntil = 0;
-      }
-
-      if (client.cooldownLevel > 0 && now - client.lastCooldownAt > resourceConfig.client.cooldownDecayMs) {
-        client.cooldownLevel = Math.max(0, client.cooldownLevel - 1);
-        client.lastCooldownAt = now;
-      }
-
-      client.costWindow = client.costEntries.reduce(function (total, entry) {
-        return total + entry.cost;
-      }, 0);
+    function getMetric(client, metric, now) {
+      updateClientWindow(client, now);
+      const WINDOW_MS = resourceConfig.client.windowMs;
+      const weight = Math.max(0, 1 - ((now - client.windowStart) / WINDOW_MS));
+      return client.current[metric] + (client.previous[metric] * weight);
     }
 
     function evictClientStateIfNeeded() {
-      if (clientStates.size < resourceConfig.client.maxClientStates) {
-        return;
-      }
-
-      let oldestKey = null;
-      let oldestSeen = Infinity;
-
-      for (const [key, client] of clientStates) {
-        if (client.cooldownUntil > Date.now()) {
-          continue;
+      if (clientStates.size >= resourceConfig.client.maxClientStates) {
+        // True O(1) LRU eviction via Map insertion order.
+        // Drops the oldest 10% instantly without iterating the whole map.
+        const keysToEvict = Math.max(1, Math.floor(resourceConfig.client.maxClientStates * 0.1));
+        let evicted = 0;
+        for (const oldKey of clientStates.keys()) {
+          clientStates.delete(oldKey);
+          if (++evicted >= keysToEvict) break;
         }
-
-        if (client.lastSeen < oldestSeen) {
-          oldestSeen = client.lastSeen;
-          oldestKey = key;
-        }
-      }
-
-      if (oldestKey) {
-        clientStates.delete(oldestKey);
       }
     }
 
     function getClientState(req) {
       const key = getClientKey(req);
       const now = Date.now();
-
       let client = clientStates.get(key);
 
-      if (!client) {
+      if (client) {
+        // LRU Cache trick: delete and re-insert to move it to the end (freshest)
+        clientStates.delete(key);
+        clientStates.set(key, client);
+      } else {
         evictClientStateIfNeeded();
-
         client = {
           key,
           firstSeen: now,
           lastSeen: now,
-          requestTimes: [],
-          oneSecondRequestTimes: [],
-          heavyTimes: [],
-          pageTimes: [],
-          rejectTimes: [],
-          pageSoftPassTimes: [],
-          costEntries: [],
-          costWindow: 0,
           cooldownUntil: 0,
           cooldownLevel: 0,
           lastCooldownAt: 0,
@@ -947,86 +851,75 @@
           lastKind: "",
           lastDecision: "",
           lastUserAgent: "",
-          trustedBot: false
+          trustedBot: false,
+          currentSec: Math.floor(now / 1000),
+          currentSecCount: 0,
+          
+          // Sliding window counters (Zero Arrays)
+          windowStart: Math.floor(now / resourceConfig.client.windowMs) * resourceConfig.client.windowMs,
+          current: { total: 0, cost: 0, heavy: 0, page: 0, rejects: 0, softPass: 0 },
+          previous: { total: 0, cost: 0, heavy: 0, page: 0, rejects: 0, softPass: 0 }
         };
-
         clientStates.set(key, client);
       }
 
       client.lastSeen = now;
-      pruneClientState(client, now);
+      if (client.cooldownUntil > 0 && client.cooldownUntil <= now) {
+        client.cooldownUntil = 0;
+      }
+      if (client.cooldownLevel > 0 && now - client.lastCooldownAt > resourceConfig.client.cooldownDecayMs) {
+        client.cooldownLevel = Math.max(0, client.cooldownLevel - 1);
+        client.lastCooldownAt = now;
+      }
       return client;
     }
 
     function rememberClientRequest(req, client, kind, cost) {
       const now = Date.now();
-
       client.lastSeen = now;
       client.lastPath = getRequestPath(req);
       client.lastKind = kind;
       client.lastUserAgent = String(req.headers["user-agent"] || "").slice(0, 160);
       client.trustedBot = isKnownBot(client.lastUserAgent);
 
-      client.requestTimes.push(now);
-      client.oneSecondRequestTimes.push(now);
-      client.costEntries.push({ at: now, cost });
-
-      if (kind === "heavy" || kind === "background") {
-        client.heavyTimes.push(now);
+      const sec = Math.floor(now / 1000);
+      if (client.currentSec !== sec) {
+          client.currentSec = sec;
+          client.currentSecCount = 0;
       }
+      client.currentSecCount++;
 
-      if (kind === "page") {
-        client.pageTimes.push(now);
-      }
+      updateClientWindow(client, now);
+      client.current.total++;
+      client.current.cost += cost;
 
-      pruneClientState(client, now);
+      if (kind === "heavy" || kind === "background") client.current.heavy++;
+      if (kind === "page") client.current.page++;
     }
 
     function rememberDecision(client, decision) {
       const now = Date.now();
-
       client.lastDecision = decision;
+      updateClientWindow(client, now);
 
-      if (decision === "reject") {
-        client.rejectTimes.push(now);
-      }
-
-      if (decision === "page-soft-pass") {
-        client.pageSoftPassTimes.push(now);
-      }
-
-      pruneClientState(client, now);
+      if (decision === "reject") client.current.rejects++;
+      if (decision === "page-soft-pass") client.current.softPass++;
     }
 
-    function getClientPressure(client) {
+    function getClientPressure(client, now) {
       return (
-        client.requestTimes.length +
-        client.oneSecondRequestTimes.length * 3 +
-        client.heavyTimes.length * 4 +
-        client.rejectTimes.length * 8 +
-        client.costWindow
+        getMetric(client, "total", now) +
+        (client.currentSecCount * 3) +
+        (getMetric(client, "heavy", now) * 4) +
+        (getMetric(client, "rejects", now) * 8) +
+        getMetric(client, "cost", now)
       );
     }
 
     function getNoisyLimits(state) {
-      if (state === "critical") {
-        return {
-          requests: resourceConfig.client.noisyRequestsCritical,
-          cost: resourceConfig.client.noisyCostCritical
-        };
-      }
-
-      if (state === "stressed") {
-        return {
-          requests: resourceConfig.client.noisyRequestsStressed,
-          cost: resourceConfig.client.noisyCostStressed
-        };
-      }
-
-      return {
-        requests: resourceConfig.client.noisyRequestsWarm,
-        cost: resourceConfig.client.noisyCostWarm
-      };
+      if (state === "critical") return { requests: resourceConfig.client.noisyRequestsCritical, cost: resourceConfig.client.noisyCostCritical };
+      if (state === "stressed") return { requests: resourceConfig.client.noisyRequestsStressed, cost: resourceConfig.client.noisyCostStressed };
+      return { requests: resourceConfig.client.noisyRequestsWarm, cost: resourceConfig.client.noisyCostWarm };
     }
 
     function getHeavyLimit(state) {
@@ -1035,27 +928,25 @@
       return resourceConfig.client.maxHeavyRequestsWarm;
     }
 
-    function clientIsAbsoluteAbuse(client) {
+    function clientIsAbsoluteAbuse(client, now) {
       return (
-        client.oneSecondRequestTimes.length >= resourceConfig.client.absoluteRequestsPerSecond ||
-        client.requestTimes.length >= resourceConfig.client.absoluteRequestsPerWindow ||
-        client.costWindow >= resourceConfig.client.absoluteCostPerWindow
+        client.currentSecCount >= resourceConfig.client.absoluteRequestsPerSecond ||
+        getMetric(client, "total", now) >= resourceConfig.client.absoluteRequestsPerWindow ||
+        getMetric(client, "cost", now) >= resourceConfig.client.absoluteCostPerWindow
       );
     }
 
-    function clientIsNoisy(client, state) {
+    function clientIsNoisy(client, state, now) {
       const limits = getNoisyLimits(state);
-
       return (
-        client.requestTimes.length >= limits.requests ||
-        client.costWindow >= limits.cost ||
-        getClientPressure(client) >= limits.cost * 1.5
+        getMetric(client, "total", now) >= limits.requests ||
+        getMetric(client, "cost", now) >= limits.cost ||
+        getClientPressure(client, now) >= limits.cost * 1.5
       );
     }
 
     function applyClientCooldown(client, reason) {
       const now = Date.now();
-
       client.cooldownLevel++;
       client.lastCooldownAt = now;
 
@@ -1070,19 +961,17 @@
       console.error(
         "[POKE-resource] client cooldown " +
         JSON.stringify({
-          reason,
-          cooldownMs,
-          cooldownLevel: client.cooldownLevel,
+          reason, cooldownMs, cooldownLevel: client.cooldownLevel,
           client: {
             ip: maskIP(client.key),
-            requests: client.requestTimes.length,
-            oneSecondRequests: client.oneSecondRequestTimes.length,
-            heavyRequests: client.heavyTimes.length,
-            rejects: client.rejectTimes.length,
-            cost: Math.round(client.costWindow * 100) / 100,
+            requests: Math.round(getMetric(client, "total", now)),
+            oneSecondRequests: client.currentSecCount,
+            heavyRequests: Math.round(getMetric(client, "heavy", now)),
+            rejects: Math.round(getMetric(client, "rejects", now)),
+            cost: Math.round(getMetric(client, "cost", now) * 100) / 100,
             lastPath: client.lastPath,
             lastKind: client.lastKind,
-            pressure: Math.round(getClientPressure(client) * 100) / 100
+            pressure: Math.round(getClientPressure(client, now) * 100) / 100
           }
         })
       );
@@ -1100,6 +989,11 @@
       const cpuTotalMs = cpuUserMs + cpuSystemMs;
       const cpuRatio = cpuTotalMs / elapsedMs;
 
+      // Extract Event Loop Delay Metrics
+      const eldP99 = eldHistogram.percentile(99) / 1e6;
+      const eldMean = eldHistogram.mean / 1e6;
+      eldHistogram.reset();
+
       const memory = process.memoryUsage();
       const effectiveTotal = getEffectiveMemoryLimit();
       const rssRatio = effectiveTotal > 0 ? memory.rss / effectiveTotal : 0;
@@ -1116,6 +1010,10 @@
         since: resourceState.since,
         sampledAt: now,
         reason: reason || "interval",
+        eventLoop: {
+            p99Ms: roundMs(eldP99),
+            meanMs: roundMs(eldMean)
+        },
         cpu: {
           ratio: roundRatio(cpuRatio),
           percent: roundRatio(cpuRatio * 100),
@@ -1184,58 +1082,25 @@
           reasons.push(name + "=" + value + unit + " critical>=" + critical + unit);
           return;
         }
-
         if (value >= stressed) {
           score += 2;
           reasons.push(name + "=" + value + unit + " stressed>=" + stressed + unit);
           return;
         }
-
         if (value >= warm) {
           score += 1;
           reasons.push(name + "=" + value + unit + " warm>=" + warm + unit);
         }
       }
 
-      addPressure(
-        "cpu",
-        snapshot.cpu.ratio,
-        cfg.warmCpuRatio,
-        cfg.stressedCpuRatio,
-        cfg.criticalCpuRatio,
-        ""
-      );
+      addPressure("eventLoop", snapshot.eventLoop.p99Ms, cfg.eventLoop.warmMs, cfg.eventLoop.stressedMs, cfg.eventLoop.criticalMs, "ms");
+      addPressure("cpu", snapshot.cpu.ratio, cfg.warmCpuRatio, cfg.stressedCpuRatio, cfg.criticalCpuRatio, "");
+      addPressure("rssMemory", snapshot.memory.rssRatio, cfg.warmRssRatio, cfg.stressedRssRatio, cfg.criticalRssRatio, "");
+      addPressure("heapMemory", snapshot.memory.heapRatio, cfg.warmHeapRatio, cfg.stressedHeapRatio, cfg.criticalHeapRatio, "");
 
-      addPressure(
-        "rssMemory",
-        snapshot.memory.rssRatio,
-        cfg.warmRssRatio,
-        cfg.stressedRssRatio,
-        cfg.criticalRssRatio,
-        ""
-      );
-
-      addPressure(
-        "heapMemory",
-        snapshot.memory.heapRatio,
-        cfg.warmHeapRatio,
-        cfg.stressedHeapRatio,
-        cfg.criticalHeapRatio,
-        ""
-      );
-
-      if (hasCritical || score >= 7) {
-        return { state: "critical", score, reasons };
-      }
-
-      if (score >= 4) {
-        return { state: "stressed", score, reasons };
-      }
-
-      if (score >= 2) {
-        return { state: "warm", score, reasons };
-      }
-
+      if (hasCritical || score >= 7) return { state: "critical", score, reasons };
+      if (score >= 4) return { state: "stressed", score, reasons };
+      if (score >= 2) return { state: "warm", score, reasons };
       return { state: "healthy", score, reasons };
     }
 
@@ -1244,43 +1109,30 @@
         console.error("[POKE-resource] healthy");
         return;
       }
-
       console.error("[POKE-resource] not healthy (" + resourceState.state + ")");
     }
 
     function logReject(req, client, kind, reason, status) {
       const now = Date.now();
-
-      if (now - lastRejectLogAt < resourceConfig.logging.rejectCooldownMs) {
-        return;
-      }
-
+      if (now - lastRejectLogAt < resourceConfig.logging.rejectCooldownMs) return;
       lastRejectLogAt = now;
 
       console.error(
         "[POKE-resource] rejected " +
         JSON.stringify({
-          reason,
-          status,
-          state: resourceState.state,
-          score: resourceState.score,
-          path: getRequestPath(req),
-          kind,
-          ip: maskIP(client.key),
+          reason, status, state: resourceState.state, score: resourceState.score,
+          path: getRequestPath(req), kind, ip: maskIP(client.key),
           client: {
-            requests: client.requestTimes.length,
-            oneSecondRequests: client.oneSecondRequestTimes.length,
-            heavyRequests: client.heavyTimes.length,
-            pageRequests: client.pageTimes.length,
-            rejects: client.rejectTimes.length,
-            cost: Math.round(client.costWindow * 100) / 100,
-            pressure: Math.round(getClientPressure(client) * 100) / 100,
+            requests: Math.round(getMetric(client, "total", now)),
+            oneSecondRequests: client.currentSecCount,
+            heavyRequests: Math.round(getMetric(client, "heavy", now)),
+            pageRequests: Math.round(getMetric(client, "page", now)),
+            rejects: Math.round(getMetric(client, "rejects", now)),
+            cost: Math.round(getMetric(client, "cost", now) * 100) / 100,
+            pressure: Math.round(getClientPressure(client, now) * 100) / 100,
             cooldownUntil: client.cooldownUntil
           },
-          system: {
-            cpu: resourceState.cpu,
-            memory: resourceState.memory
-          }
+          system: { eventLoop: resourceState.eventLoop, cpu: resourceState.cpu, memory: resourceState.memory }
         })
       );
     }
@@ -1308,17 +1160,11 @@
       const retryAfter = options.retryAfter || resourceConfig.admission.retryAfterStressedSeconds;
       const reason = options.reason || "resource-pressure";
 
-      if (reason === "client-cooldown") {
-        guardStats.rejectedCooldown++;
-      } else if (reason === "absolute-abuse") {
-        guardStats.rejectedAbuse++;
-      } else if (resourceState.state === "critical") {
-        guardStats.rejectedCritical++;
-      } else if (resourceState.state === "stressed") {
-        guardStats.rejectedStressed++;
-      } else {
-        guardStats.rejectedWarm++;
-      }
+      if (reason === "client-cooldown") guardStats.rejectedCooldown++;
+      else if (reason === "absolute-abuse") guardStats.rejectedAbuse++;
+      else if (resourceState.state === "critical") guardStats.rejectedCritical++;
+      else if (resourceState.state === "stressed") guardStats.rejectedStressed++;
+      else guardStats.rejectedWarm++;
 
       logReject(req, client, kind, reason, status);
 
@@ -1346,15 +1192,13 @@
 
     function getAdmissionDecision(req, client, kind) {
       const state = resourceState.state;
-      const noisy = clientIsNoisy(client, state);
-      const absoluteAbuse = clientIsAbsoluteAbuse(client);
       const now = Date.now();
+      const noisy = clientIsNoisy(client, state, now);
+      const absoluteAbuse = clientIsAbsoluteAbuse(client, now);
 
       if (client.cooldownUntil > now) {
         return {
-          action: "reject",
-          reason: "client-cooldown",
-          status: 429,
+          action: "reject", reason: "client-cooldown", status: 429,
           retryAfter: Math.ceil((client.cooldownUntil - now) / 1000),
           message: "Too many expensive requests. Please retry shortly."
         };
@@ -1362,145 +1206,74 @@
 
       if (absoluteAbuse) {
         return {
-          action: "cooldown-reject",
-          reason: "absolute-abuse",
-          status: 429,
+          action: "cooldown-reject", reason: "absolute-abuse", status: 429,
           retryAfter: resourceConfig.admission.retryAfterHealthyAbuseSeconds,
           message: "Too many requests. Please slow down a bit."
         };
       }
 
-      if (state === "healthy") {
-        return {
-          action: "allow",
-          reason: "healthy"
-        };
-      }
-
-      if (kind === "status") {
-        return {
-          action: "allow",
-          reason: "status-pass"
-        };
-      }
-
-      if (kind === "static") {
-        return {
-          action: "allow",
-          reason: "static-pass"
-        };
-      }
+      if (state === "healthy") return { action: "allow", reason: "healthy" };
+      if (kind === "status") return { action: "allow", reason: "status-pass" };
+      if (kind === "static") return { action: "allow", reason: "static-pass" };
 
       if (state === "warm") {
-        if ((kind === "heavy" || kind === "background") && noisy && client.heavyTimes.length > getHeavyLimit(state)) {
+        if ((kind === "heavy" || kind === "background") && noisy && getMetric(client, "heavy", now) > getHeavyLimit(state)) {
           return {
-            action: "reject",
-            reason: "warm-noisy-expensive-client",
-            status: 429,
+            action: "reject", reason: "warm-noisy-expensive-client", status: 429,
             retryAfter: getRetryAfterForState(state),
             message: "Too many expensive requests. Please retry shortly."
           };
         }
-
-        return {
-          action: "allow",
-          reason: "warm-pass"
-        };
+        return { action: "allow", reason: "warm-pass" };
       }
 
       if (state === "stressed") {
         if (kind === "page") {
-          if (!noisy || client.pageSoftPassTimes.length < resourceConfig.client.pageSoftPassesPerWindow) {
-            return {
-              action: "allow-soft-page",
-              reason: "stressed-page-pass"
-            };
+          if (!noisy || getMetric(client, "softPass", now) < resourceConfig.client.pageSoftPassesPerWindow) {
+            return { action: "allow-soft-page", reason: "stressed-page-pass" };
           }
-
           return {
-            action: "reject",
-            reason: "stressed-noisy-page-client",
-            status: 429,
-            retryAfter: getRetryAfterForState(state),
-            message: "Too many page requests. Please retry shortly."
+            action: "reject", reason: "stressed-noisy-page-client", status: 429,
+            retryAfter: getRetryAfterForState(state), message: "Too many page requests. Please retry shortly."
           };
         }
 
         if (kind === "heavy" || kind === "background") {
-          const expensiveButAcceptable =
-            !noisy &&
-            client.heavyTimes.length <= getHeavyLimit(state);
-
-          if (expensiveButAcceptable) {
-            return {
-              action: "allow",
-              reason: "stressed-expensive-small-client-pass"
-            };
-          }
-
+          const expensiveButAcceptable = !noisy && getMetric(client, "heavy", now) <= getHeavyLimit(state);
+          if (expensiveButAcceptable) return { action: "allow", reason: "stressed-expensive-small-client-pass" };
           return {
-            action: "reject",
-            reason: "stressed-expensive-shed",
-            status: 503,
-            retryAfter: getRetryAfterForState(state),
-            message: "Server is busy. Please retry shortly."
+            action: "reject", reason: "stressed-expensive-shed", status: 503,
+            retryAfter: getRetryAfterForState(state), message: "Server is busy. Please retry shortly."
           };
         }
 
-        if (!noisy) {
-          return {
-            action: "allow",
-            reason: "stressed-other-pass"
-          };
-        }
-
+        if (!noisy) return { action: "allow", reason: "stressed-other-pass" };
         return {
-          action: "reject",
-          reason: "stressed-noisy-client",
-          status: 429,
-          retryAfter: getRetryAfterForState(state),
-          message: "Too many requests. Please retry shortly."
+          action: "reject", reason: "stressed-noisy-client", status: 429,
+          retryAfter: getRetryAfterForState(state), message: "Too many requests. Please retry shortly."
         };
       }
 
       if (state === "critical") {
         if (kind === "page") {
-          if (!noisy && client.pageSoftPassTimes.length < resourceConfig.client.pageSoftPassesPerWindow) {
-            return {
-              action: "allow-soft-page",
-              reason: "critical-page-soft-pass"
-            };
+          if (!noisy && getMetric(client, "softPass", now) < resourceConfig.client.pageSoftPassesPerWindow) {
+            return { action: "allow-soft-page", reason: "critical-page-soft-pass" };
           }
-
           return {
-            action: "reject",
-            reason: "critical-noisy-page-client",
-            status: 503,
-            retryAfter: getRetryAfterForState(state),
-            message: "Server is under heavy load. Please retry shortly."
+            action: "reject", reason: "critical-noisy-page-client", status: 503,
+            retryAfter: getRetryAfterForState(state), message: "Server is under heavy load. Please retry shortly."
           };
         }
 
-        if (kind === "other" && !noisy) {
-          return {
-            action: "allow",
-            reason: "critical-small-other-pass"
-          };
-        }
-
+        if (kind === "other" && !noisy) return { action: "allow", reason: "critical-small-other-pass" };
+        
         return {
-          action: "reject",
-          reason: "critical-shed",
-          status: 503,
-          retryAfter: getRetryAfterForState(state),
-          message: "Server is under heavy load. Please retry shortly."
+          action: "reject", reason: "critical-shed", status: 503,
+          retryAfter: getRetryAfterForState(state), message: "Server is under heavy load. Please retry shortly."
         };
       }
 
-      return {
-        action: "allow",
-        reason: "default-pass"
-      };
+      return { action: "allow", reason: "default-pass" };
     }
 
     function requestActivityTracker(req, res, next) {
@@ -1509,13 +1282,7 @@
       const kind = classifyRequest(req);
       const startedAt = Date.now();
 
-      activeRequests.set(id, {
-        id,
-        key,
-        kind,
-        startedAt
-      });
-
+      activeRequests.set(id, { id, key, kind, startedAt });
       incrementMapCount(activeRequestCounts, key);
 
       res.on("finish", function () {
@@ -1528,13 +1295,7 @@
         }
 
         if (durationMs >= resourceConfig.logging.slowRequestMs) {
-          recentSlowRequests.push({
-            key,
-            kind,
-            statusCode: res.statusCode,
-            durationMs
-          });
-
+          recentSlowRequests.push({ key, kind, statusCode: res.statusCode, durationMs });
           while (recentSlowRequests.length > resourceConfig.logging.maxRecentSlow) {
             recentSlowRequests.shift();
           }
@@ -1584,7 +1345,7 @@
         decision.action === "reject" &&
         (decision.reason === "stressed-expensive-shed" || decision.reason === "critical-shed") &&
         (kind === "heavy" || kind === "background") &&
-        client.heavyTimes.length >= getHeavyLimit(resourceState.state)
+        getMetric(client, "heavy", Date.now()) >= getHeavyLimit(resourceState.state)
       ) {
         applyClientCooldown(client, decision.reason);
       }
@@ -1597,15 +1358,9 @@
       const maxAge = resourceConfig.client.windowMs * 3;
 
       for (const [key, client] of clientStates) {
-        pruneClientState(client, now);
-
         if (
-          client.requestTimes.length === 0 &&
-          client.oneSecondRequestTimes.length === 0 &&
-          client.heavyTimes.length === 0 &&
-          client.pageTimes.length === 0 &&
-          client.rejectTimes.length === 0 &&
-          client.costEntries.length === 0 &&
+          getMetric(client, "total", now) === 0 &&
+          client.currentSecCount === 0 &&
           client.cooldownUntil <= now &&
           now - client.lastSeen > maxAge
         ) {
@@ -1621,24 +1376,17 @@
       let noisy = 0;
 
       for (const [, client] of clientStates) {
-        pruneClientState(client, now);
-
-        if (client.requestTimes.length > 0) active++;
+        if (getMetric(client, "total", now) > 0) active++;
         if (client.cooldownUntil > now) cooldown++;
-        if (clientIsNoisy(client, resourceState.state)) noisy++;
+        if (clientIsNoisy(client, resourceState.state, now)) noisy++;
       }
 
-      return {
-        tracked: clientStates.size,
-        active,
-        cooldown,
-        noisy
-      };
+      return { tracked: clientStates.size, active, cooldown, noisy };
     }
 
     function getResourceStats() {
       return {
-        guard: "PokeResourceGuard",
+        guard: "PokeResourceGuard V2",
         state: resourceState,
         clients: countClientStates(),
         active_requests: {
@@ -1665,8 +1413,7 @@
       const stats = getResourceStats();
       const stateClass = stats.state.state === "healthy" ? "green" :
         stats.state.state === "warm" ? "orange" :
-        stats.state.state === "stressed" ? "orange" :
-        "red";
+        stats.state.state === "stressed" ? "orange" : "red";
 
       res.send(`<!DOCTYPE html>
 <html lang="en">
@@ -1684,79 +1431,22 @@
   font-display: swap;
 }
 :root{color-scheme:dark}
-body{
-  color:#fff;
-  background:#1c1b22;
-  margin:0;
-}
-a{color:#0ab7f0}
-:visited{color:#00c0ff}
-.app{
-  max-width:1100px;
-  margin:0 auto;
-  padding:24px;
-}
-h1,h2{
-  font-family:"PokeTube Flex",system-ui,sans-serif;
-  font-stretch:extra-expanded;
-}
-h1{
-  font-weight:1000;
-  font-stretch:ultra-expanded;
-  margin-top:0;
-}
-h2{
-  margin-top:28px;
-}
-p,li,code,pre{
-  font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
-  line-height:1.6;
-}
-hr{
-  border:0;
-  border-top:1px solid #333;
-  margin:28px 0;
-}
-.logo{
-  float:right;
-  margin:.3em 0 1em 2em;
-  max-width:130px;
-}
-.stat-box{
-  display:inline-block;
-  background:#2a2930;
-  border-radius:8px;
-  padding:12px 18px;
-  margin:6px 8px 6px 0;
-  min-width:130px;
-}
-.stat-num{
-  font-size:1.35rem;
-  color:#0ab7f0;
-  display:block;
-}
-.stat-label{
-  font-size:.85rem;
-  color:#aaa;
-  display:block;
-}
-.green{color:#4caf50}
-.orange{color:#ff9800}
-.red{color:#f44336}
-code,pre{
-  background:#2a2930;
-  padding:2px 6px;
-  border-radius:4px;
-}
-pre{
-  overflow:auto;
-  padding:14px;
-}
-.banner{
-  padding:12px 16px;
-  border-radius:8px;
-  background:#2a2930;
-}
+body{color:#fff;background:#1c1b22;margin:0;}
+a{color:#0ab7f0}:visited{color:#00c0ff}
+.app{max-width:1100px;margin:0 auto;padding:24px;}
+h1,h2{font-family:"PokeTube Flex",system-ui,sans-serif;font-stretch:extra-expanded;}
+h1{font-weight:1000;font-stretch:ultra-expanded;margin-top:0;}
+h2{margin-top:28px;}
+p,li,code,pre{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;line-height:1.6;}
+hr{border:0;border-top:1px solid #333;margin:28px 0;}
+.logo{float:right;margin:.3em 0 1em 2em;max-width:130px;}
+.stat-box{display:inline-block;background:#2a2930;border-radius:8px;padding:12px 18px;margin:6px 8px 6px 0;min-width:130px;}
+.stat-num{font-size:1.35rem;color:#0ab7f0;display:block;}
+.stat-label{font-size:.85rem;color:#aaa;display:block;}
+.green{color:#4caf50}.orange{color:#ff9800}.red{color:#f44336}
+code,pre{background:#2a2930;padding:2px 6px;border-radius:4px;}
+pre{overflow:auto;padding:14px;}
+.banner{padding:12px 16px;border-radius:8px;background:#2a2930;}
 .banner.green{border-left:5px solid #4caf50}
 .banner.orange{border-left:5px solid #ff9800}
 .banner.red{border-left:5px solid #f44336}
@@ -1768,25 +1458,18 @@ pre{
 <img class="logo" src="/css/logo-poke.svg" alt="Poke logo">
 
 <h1>PokeResourceGuard</h1>
-<p class="small">poke's CPU and memory based traffic protection</p>
+<p class="small">poke's advanced Event-Loop & CPU traffic protection</p>
 
 <div class="banner ${stateClass}">
   <b>Current state:</b> <span class="${stateClass}">${stats.state.state}</span>
   <br>
-  <span class="small">Score: ${stats.state.score}. CPU: ${stats.state.cpu.percent}%. RSS: ${formatPercent(stats.state.memory.rssRatio)}. Heap: ${formatPercent(stats.state.memory.heapRatio)}.</span>
+  <span class="small">Score: ${stats.state.score}. EL-P99: ${stats.state.eventLoop.p99Ms}ms. CPU: ${stats.state.cpu.percent}%. RSS: ${formatPercent(stats.state.memory.rssRatio)}.</span>
 </div>
 
 <h2>what this does</h2>
 <p>
-  PokeResourceGuard only checks CPU and memory pressure. It does not use event-loop delay,
-  latency probes, ping-style checks, or browser fingerprinting. When CPU and memory are fine,
-  normal users pass through.
-</p>
-
-<p>
-  When the server is under real resource pressure, expensive work gets reduced first:
-  API, proxy, media, manifest, storyboard, and background requests. Page navigations,
-  static files, and status pages get priority so the normal user experience stays usable.
+  PokeResourceGuard monitors Node.js Event Loop Delay, CPU, and memory pressure using $O(1)$ counters to stop DDoS attacks without slowing down the server itself. 
+  When resources are fine, normal users pass through. When the server is under real resource pressure, expensive background work gets reduced first, preserving pages and static routes.
 </p>
 
 <h2>live stats</h2>
@@ -1794,6 +1477,10 @@ pre{
   <div class="stat-box">
     <span class="stat-num ${stateClass}">${stats.state.state}</span>
     <span class="stat-label">state</span>
+  </div>
+  <div class="stat-box">
+    <span class="stat-num">${stats.state.eventLoop.p99Ms}ms</span>
+    <span class="stat-label">Event Loop p99</span>
   </div>
   <div class="stat-box">
     <span class="stat-num">${stats.state.score}</span>
@@ -1806,18 +1493,6 @@ pre{
   <div class="stat-box">
     <span class="stat-num">${stats.state.memory.rssMb}MB</span>
     <span class="stat-label">RSS memory</span>
-  </div>
-  <div class="stat-box">
-    <span class="stat-num">${formatPercent(stats.state.memory.rssRatio)}</span>
-    <span class="stat-label">RSS ratio</span>
-  </div>
-  <div class="stat-box">
-    <span class="stat-num">${stats.state.memory.heapUsedMb}MB</span>
-    <span class="stat-label">heap used</span>
-  </div>
-  <div class="stat-box">
-    <span class="stat-num">${formatPercent(stats.state.memory.heapRatio)}</span>
-    <span class="stat-label">heap ratio</span>
   </div>
   <div class="stat-box">
     <span class="stat-num">${stats.state.requests.rps}</span>
@@ -1833,12 +1508,6 @@ pre{
   </div>
 </div>
 
-<h2>memory details</h2>
-<pre>${JSON.stringify(stats.state.memory, null, 2)}</pre>
-
-<h2>cpu details</h2>
-<pre>${JSON.stringify(stats.state.cpu, null, 2)}</pre>
-
 <h2>pressure reasons</h2>
 <pre>${stats.state.pressureReasons.length ? stats.state.pressureReasons.join("\n") : "none"}</pre>
 
@@ -1848,30 +1517,14 @@ pre{
 <h2>top routes this sample</h2>
 <pre>${JSON.stringify(stats.state.topRoutes, null, 2)}</pre>
 
-<h2>recent slow requests</h2>
-<pre>${JSON.stringify(stats.active_requests.recent_slow, null, 2)}</pre>
-
 <h2>api</h2>
 <p>
   JSON stats:
-  <code><a href="/_pokeresource/stats">/_pokeresource/stats</a></code>,
-  <code><a href="/_poketraffic/stats">/_poketraffic/stats</a></code>,
-  <code><a href="/_pokestopskids/stats">/_pokestopskids/stats</a></code>,
-  <code><a href="/_pokeoverload/stats">/_pokeoverload/stats</a></code>
-</p>
-
-<h2>privacy</h2>
-<p>
-  This system stores short-lived per-IP counters in memory only. Logs mask IPs.
-  It does not fingerprint browsers, require JavaScript, require cookies, or track users across sessions.
+  <code><a href="/_pokeresource/stats">/_pokeresource/stats</a></code>
 </p>
 
 <hr>
-
-<p class="small">
-  powered by poke. <a href="/">go back to watching videos</a>
-</p>
-
+<p class="small">powered by poke. <a href="/">go back to watching videos</a></p>
 </div>
 </body>
 </html>`);
@@ -1897,15 +1550,8 @@ pre{
     cleanupTimer.unref();
 
     initlog(
-      "[PokeResourceGuard] loaded - CPU/memory only, " +
-      "cpu warm/stressed/critical: " +
-      resourceConfig.system.warmCpuRatio + "/" +
-      resourceConfig.system.stressedCpuRatio + "/" +
-      resourceConfig.system.criticalCpuRatio + ", " +
-      "rss warm/stressed/critical: " +
-      resourceConfig.system.warmRssRatio + "/" +
-      resourceConfig.system.stressedRssRatio + "/" +
-      resourceConfig.system.criticalRssRatio
+      "[PokeResourceGuard] loaded - EventLoop/CPU/memory optimized shedder, " +
+      "EL p99 warm/stressed/critical: " + resourceConfig.system.eventLoop.warmMs + "/" + resourceConfig.system.eventLoop.stressedMs + "/" + resourceConfig.system.eventLoop.criticalMs
     );
   })();
 
