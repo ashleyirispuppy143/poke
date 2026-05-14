@@ -8289,6 +8289,27 @@ function terminalEndPlaybackLocked(extraMs = 0) {
   } catch { }
   return false;
 }
+function terminalEndHardStop(reason = "terminal-hard-stop") {
+  if (state.restarting) return false;
+  try { if (isLoopDesired()) return false; } catch { }
+  try { MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.onEnded(); } catch { }
+  try { forceEndedUiState(); } catch { }
+  try { pauseHard(); } catch { }
+  try {
+    const vn = getVideoNode();
+    if (vn && !vn.paused) vn.pause();
+    if (videoEl && videoEl !== vn && !videoEl.paused) videoEl.pause();
+  } catch { }
+  try {
+    if (coupledMode && audio && !audio.paused) {
+      state.isProgrammaticAudioPause = true;
+      audio.pause();
+      setTimeout(() => { state.isProgrammaticAudioPause = false; }, 220);
+    }
+  } catch { state.isProgrammaticAudioPause = false; }
+  try { updateMediaSessionPositionNow(getTerminalEndTimelineDuration(), reason || "terminal-hard-stop", 0); } catch { }
+  return true;
+}
 function getTerminalEndTimelineDuration() {
   let dur = 0;
   try { dur = Number(video.duration()) || 0; } catch { }
@@ -8369,18 +8390,32 @@ function terminalEndFallbackShouldFire() {
   }
   if (!isFinite(dur) || dur <= 0 || !isFinite(ct)) return false;
   const remaining = dur - ct;
-  const pausedAtTail = getVideoPaused() && remaining >= -0.5 && remaining <= 0.45;
+  const tailObserved =
+    ct >= Math.max(0, dur - 1.25) ||
+    Number(state.lastKnownGoodVT || 0) >= Math.max(0, dur - 1.25) ||
+    Number(playerDisplayLastTime || 0) >= Math.max(0, dur - 1.25);
+  const pausedAtTail = getVideoPaused() && remaining >= -0.75 && remaining <= 1.1;
+  const playingAtTail =
+    !getVideoPaused() &&
+    tailObserved &&
+    remaining >= -0.75 &&
+    remaining <= 1.1;
   let audioTerminal = false;
   try {
     const ad = Number(audio?.duration) || dur;
     const at = Number(audio?.currentTime) || 0;
-    audioTerminal = !!(coupledMode && audio && (audio.ended || (ad > 0 && at >= ad - 0.12) || terminalAudioEndLockActive()));
+    audioTerminal = !!(coupledMode && audio && (
+      audio.ended ||
+      (ad > 0 && at >= ad - 0.75) ||
+      terminalAudioEndLockActive()
+    ));
   } catch { audioTerminal = false; }
   const hardTerminalTail =
     nativeVideoEnded() ||
-    (remaining >= -0.5 && remaining <= 0.08) ||
-    (pausedAtTail && remaining <= 0.18) ||
-    (audioTerminal && remaining >= -0.5 && remaining <= 0.18);
+    (remaining >= -0.75 && remaining <= 0.2) ||
+    (pausedAtTail && remaining <= 1.1) ||
+    (playingAtTail && remaining <= 1.1) ||
+    (audioTerminal && remaining >= -0.75 && remaining <= 1.1);
   const recentUserTimelineAction =
     now() < state.suppressEndedUntil ||
     (now() - (state.lastUserActionTime || 0)) < 5200 ||
@@ -8388,8 +8423,8 @@ function terminalEndFallbackShouldFire() {
     seekStabilizeActive(2200) ||
     state.restartFromEndedUntil > now();
   if (recentUserTimelineAction && !hardTerminalTail) return false;
-  if (remaining >= -0.5 && remaining <= 0.3) return true;
-  return pausedAtTail || (audioTerminal && remaining >= -0.5 && remaining <= 0.5);
+  if (remaining >= -0.75 && remaining <= 0.65) return true;
+  return pausedAtTail || playingAtTail || (audioTerminal && remaining >= -0.75 && remaining <= 1.1);
 }
 function clearEndedStateForUserSeek(ms = 6500) {
   const suppressMs = Math.max(900, Number(ms) || 0);
@@ -11521,6 +11556,16 @@ function updateMediaSessionPlaybackState() {
   let effectivePlaying = false;
   let actualPlaying = false;
   try {
+    if (!state.endedNaturally && terminalEndFallbackShouldFire()) {
+      terminalEndHardStop("media-session-terminal-tail");
+    }
+    if (state.endedNaturally && !state.restarting && !isLoopDesired()) {
+      if ("mediaSession" in navigator) {
+        try { navigator.mediaSession.playbackState = "paused"; } catch { }
+      }
+      try { syncVideoJsEndedControlState(true); } catch { }
+      return;
+    }
     try { actualPlaying = actualPlaying || !getVideoPaused(); } catch { }
     try { actualPlaying = actualPlaying || !!(coupledMode && audio && !audio.paused); } catch { }
     const transitionallyPlaying = state.intendedPlaying && !state.endedNaturally && (
