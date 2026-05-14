@@ -447,15 +447,28 @@ app.get("/feeds/videos.xml", async (req, res) => {
     f.body.pipe(res);
   });
 
-  app.get("/api/redirect", async (req, res) => {
-    const red_url = atob(req.query.u);
+app.get("/api/redirect", async (req, res) => {
+  const u = req.query.u;
 
-    if (!red_url) {
-      res.redirect("/");
-    }
+  if (!u || typeof u !== "string") {
+    return res.redirect("/");
+  }
 
-    res.redirect(red_url + "?f=" + req.query.u);
-  });
+  let red_url;
+
+  try {
+     red_url = Buffer.from(u, "base64").toString("utf-8");
+  } catch (error) {
+    // Catch any malformed Base64 strings so they don't crash the server
+    return res.redirect("/");
+  }
+
+  if (!red_url) {
+    return res.redirect("/");
+  }
+
+  res.redirect(red_url + "?f=" + u);
+});
 
   app.get("/api", async (req, res) => {
     res.redirect("/api/version.json");
