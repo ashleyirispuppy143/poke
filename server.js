@@ -1560,7 +1560,7 @@ hr{border:0;border-top:1px solid rgba(255,255,255,0.1);margin:32px 0;}
 /* Hero Stats Box (Clean Version) */
 .hero-stat {
   padding: 16px 0 32px 0;
-  text-align: center;
+  text-align: left;
 }
 .hero-label {
   font-size: 1.1rem;
