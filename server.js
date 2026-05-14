@@ -685,6 +685,7 @@
       const path = getRequestPath(req);
       return path === "/api/nexus" || 
              path === "/api/stats" || 
+             path === "/health" ||
              path.startsWith("/static/") || 
              path.startsWith("/css/");
     }
@@ -770,8 +771,8 @@
         pathname === "/_poketraffic/stats" ||
         pathname === "/_pokestopskids/stats" ||
         pathname === "/_pokeoverload/stats" ||
-        pathname === "/_antiddos" ||
-        pathname.startsWith("/_antiddos/")
+        pathname === "/health" ||
+        pathname.startsWith("/health/")
       );
     }
 
@@ -1513,32 +1514,52 @@
 <link rel="icon" href="/favicon.ico">
 <style>
 :root{color-scheme:dark}
-body{color:#fff;background:#1c1b22;margin:0; font-family: sans-serif;}
+body{color:#fff;background:#1c1b22;margin:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;}
 a{color:#0ab7f0; text-decoration:none; transition: color 0.2s;}
 a:hover{color:#00c0ff; text-decoration:underline;}
 .app{max-width:1100px;margin:0 auto;padding:24px;}
 h1,h2{font-stretch:extra-expanded; letter-spacing: -0.5px;}
 h1{font-weight:900; font-size: 2.2rem; margin-top:0; margin-bottom: 4px;}
-h2{margin-top:32px; border-bottom: 1px solid #333; padding-bottom: 8px;}
+h2{margin-top:32px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;}
 p,li,code,pre{line-height:1.6;}
-hr{border:0;border-top:1px solid #333;margin:32px 0;}
+hr{border:0;border-top:1px solid rgba(255,255,255,0.1);margin:32px 0;}
 .logo{float:right;margin:.3em 0 1em 2em;max-width:130px;}
 
-/* Header & Tabs */
+/* Header & Tabs Container */
 .header-container { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; margin-bottom: 24px; gap: 16px; }
-.tabs { display: flex; gap: 8px; }
-.tab-btn { background: #2a2930; color: #aaa; border: 1px solid #333; padding: 8px 16px; border-radius: 20px; cursor: pointer; font-family: sans-serif; font-weight: bold; transition: all 0.2s ease; outline: none; }
-.tab-btn:hover { background: #333; color: #fff; }
-.tab-btn.active { background: #0ab7f0; color: #1c1b22; border-color: #0ab7f0; }
+
+/* Segmented Control / Pill Switch Tabs */
+.tabs { 
+  display: inline-flex; 
+  background: #15141a; 
+  border-radius: 24px; 
+  padding: 4px; 
+  border: 1px solid rgba(255,255,255,0.05); 
+}
+.tab-btn { 
+  background: transparent; 
+  color: #aaa; 
+  border: none; 
+  padding: 8px 20px; 
+  border-radius: 20px; 
+  cursor: pointer; 
+  font-family: inherit; 
+  font-weight: 600; 
+  font-size: 0.95rem;
+  transition: all 0.3s ease; 
+  outline: none; 
+}
+.tab-btn:hover:not(.active) { color: #fff; }
+.tab-btn.active { background: #0ab7f0; color: #1c1b22; box-shadow: 0 2px 8px rgba(10,183,240,0.3); }
+
+/* Tab Content Visibility */
 .tab-content { display: none; animation: fadeIn 0.3s ease; }
 .tab-content.active { display: block; }
-
 @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
-/* Hero Stats Box */
+/* Hero Stats Box (Clean Version) */
 .hero-stat {
-  padding: 24px 0;
-  margin: 20px 0;
+  padding: 16px 0 32px 0;
   text-align: center;
 }
 .hero-label {
@@ -1547,6 +1568,27 @@ hr{border:0;border-top:1px solid #333;margin:32px 0;}
   margin-top: 8px;
   text-transform: uppercase;
   letter-spacing: 2px;
+}
+.hero-num {
+  font-size: 4rem;
+  font-weight: 900;
+  color: #0ab7f0;
+  margin: 10px 0;
+  line-height: 1;
+}
+
+/* Privacy Badge */
+.privacy-badge {
+  display: inline-flex; 
+  align-items: center; 
+  background: rgba(76, 175, 80, 0.15); 
+  border: 1px solid rgba(76, 175, 80, 0.3); 
+  color: #4caf50; 
+  padding: 6px 12px; 
+  border-radius: 20px; 
+  font-size: 0.9rem; 
+  font-weight: bold; 
+  margin-bottom: 16px;
 }
 
 /* Upgraded Grid Layout */
@@ -1614,7 +1656,7 @@ summary { font-size: 1.2rem; cursor: pointer; color: #0ab7f0; user-select: none;
 .route-bar {
   position: absolute;
   left: 0; top: 0; bottom: 0;
-  background: linear-gradient(90deg, rgba(10, 183, 240, 0.05) 0%, rgba(10, 183, 240, 0.2) 100%);
+  background: linear-gradient(90deg, rgba(10, 183, 240, 0.05) 0%, rgba(10, 183, 240, 0.15) 100%);
   z-index: 1;
   transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -1635,11 +1677,12 @@ summary { font-size: 1.2rem; cursor: pointer; color: #0ab7f0; user-select: none;
 }
 .route-name {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   color: #eee;
-  padding: 0;
-  background: transparent;
-  letter-spacing: -0.3px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.05);
+  letter-spacing: -0.2px;
 }
 .route-count {
   font-size: 1.15rem;
@@ -1663,6 +1706,13 @@ function switchTab(tabId, btn) {
 </head>
 <body>
 <div class="app">
+
+<noscript>
+  <div class="banner red" style="margin-bottom: 24px;">
+    <b>Warning:</b> JavaScript is disabled. Live stats will not automatically update. Refresh the page to see the latest data.
+  </div>
+</noscript>
+
 <img class="logo" src="/css/logo-poke.svg" alt="Poke logo">
 
 <div class="header-container">
@@ -1738,9 +1788,6 @@ function switchTab(tabId, btn) {
     <h3>Request Mix (This Second)</h3>
     <pre id="pre-mix">${JSON.stringify(stats.state.requests.kinds, null, 2)}</pre>
 
-    <h3>Top Routes (This Second)</h3>
-    <pre id="pre-routes">${JSON.stringify(stats.state.topRoutes, null, 2)}</pre>
-
     <h3>API Endpoints</h3>
     <p>
       Raw JSON data is available at:
@@ -1751,8 +1798,12 @@ function switchTab(tabId, btn) {
 
 <div id="tab-requests" class="tab-content">
   <div class="hero-stat">
+    <div class="privacy-badge">
+      <svg style="width:16px;height:16px;margin-right:6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+      100% Anonymous & Private
+    </div>
     <div class="hero-label">Total Global Requests Processed</div>
-    <div id="hero-total" style="font-size: 3.5rem; font-weight: 900; color: #0ab7f0; margin: 10px 0;">
+    <div id="hero-total" class="hero-num">
       ${stats.active_requests.total_global_requests.toLocaleString()}
     </div>
     <div class="small" style="color: #888; font-size: 1rem;">
@@ -1850,7 +1901,6 @@ document.addEventListener("DOMContentLoaded", function() {
       
       document.getElementById("pre-reasons").innerText = data.state.pressureReasons.length ? data.state.pressureReasons.join("\\n") : "None currently. System is healthy.";
       document.getElementById("pre-mix").innerText = JSON.stringify(data.state.requests.kinds, null, 2);
-      document.getElementById("pre-routes").innerText = JSON.stringify(data.state.topRoutes, null, 2);
       
     } catch (err) {
       // Quiet fail if network disconnects temporarily
@@ -1873,7 +1923,8 @@ document.addEventListener("DOMContentLoaded", function() {
     app.get("/_poketraffic/stats", sendResourceStats);
     app.get("/_pokestopskids/stats", sendResourceStats);
     app.get("/_pokeoverload/stats", sendResourceStats);
-    app.get("/_antiddos*", sendAntiddosPage);
+    app.get("/health", sendAntiddosPage);
+    app.get("/_antiddos*", (req, res) => res.redirect("/health"));
 
     // 30-Millisecond Delayed Initialization
     setTimeout(() => {
@@ -1923,7 +1974,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
         if (res.headersSent) {
           try {
-            res.write("\n<!-- Poke render error: " + String(template).replace(/-->/g, "--&gt;") + " -->");
+            res.write("\n/g, "--&gt;") + " -->");
             return res.end();
           } catch (writeErr) {
             console.error("[POKE-render] could not write render error after headers were sent:", writeErr.message);
