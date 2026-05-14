@@ -906,6 +906,11 @@ startupPrimeStartedAt: performance.now(),
     _playCommitLastKickAt: 0,
     _microSeekClearTimer: null
   };
+  Object.defineProperty(state, 'strictBufferHold', { get: () => false, set: () => {}, configurable: true, enumerable: true });
+  Object.defineProperty(state, 'videoWaiting', { get: () => false, set: () => {}, configurable: true, enumerable: true });
+  Object.defineProperty(state, 'videoStallAudioPaused', { get: () => false, set: () => {}, configurable: true, enumerable: true });
+  Object.defineProperty(state, 'audioWaiting', { get: () => false, set: () => {}, configurable: true, enumerable: true });
+  Object.defineProperty(state, 'audioStallVideoPaused', { get: () => false, set: () => {}, configurable: true, enumerable: true });
   const PLAY_PAUSE_MICRO_SEEK_BLOCK_MS = 300;
   const MICRO_SEEK_TOGGLE_SUPPRESS_MS = 400;
   const MICRO_SEEK_SEEK_SUPPRESS_MS = 600;
@@ -6732,7 +6737,7 @@ function setupPlayerTimeDisplayToggle() {
       }
     } catch { }
     if (coupledMode && audio) {
-      const audioEvents = ["timeupdate", "durationchange", "seeked", "ended", "play", "pause", "playing"];
+      const audioEvents = ["durationchange", "seeked", "ended", "play", "pause", "playing"];
       for (const ev of audioEvents) {
         try { _on(audio, ev, queuePlayerTimeDisplayUpdate, { passive: true }); } catch { }
       }
