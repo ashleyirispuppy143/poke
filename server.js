@@ -415,6 +415,7 @@
    * - O(1) Time & Space sliding window counters per IP (No more massive timestamp arrays)
    * - O(1) LRU Map Cache Eviction (Saves server during multi-IP DDOS attacks)
    * - Advanced Client prioritization based on request type
+   * - Ignoring specified API endpoints 
    */
   (function PokeResourceGuard() {
     const { monitorEventLoopDelay } = require("perf_hooks");
@@ -656,6 +657,11 @@
 
     function getRequestKey(req) {
       return req.method + " " + normalizePathname(getRequestPath(req));
+    }
+    
+    function isIgnoredRoute(req) {
+      const pathname = getRequestPath(req);
+      return pathname === "/api/nexus" || pathname === "/api/stats";
     }
 
     function incrementMapCount(map, key, amount) {
@@ -1277,6 +1283,8 @@
     }
 
     function requestActivityTracker(req, res, next) {
+      if (isIgnoredRoute(req)) return next();
+
       const id = ++requestSequence;
       const key = getRequestKey(req);
       const kind = classifyRequest(req);
@@ -1313,6 +1321,8 @@
     }
 
     function resourceAdmissionMiddleware(req, res, next) {
+      if (isIgnoredRoute(req)) return next();
+
       const kind = classifyRequest(req);
       const cost = getKindCost(kind, req);
       const client = getClientState(req);
@@ -1430,27 +1440,100 @@
   font-stretch: 1% 800%;
   font-display: swap;
 }
-:root{color-scheme:dark}
-body{color:#fff;background:#1c1b22;margin:0;}
-a{color:#0ab7f0}:visited{color:#00c0ff}
-.app{max-width:1100px;margin:0 auto;padding:24px;}
-h1,h2{font-family:"PokeTube Flex",system-ui,sans-serif;font-stretch:extra-expanded;}
-h1{font-weight:1000;font-stretch:ultra-expanded;margin-top:0;}
-h2{margin-top:28px;}
-p,li,code,pre{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;line-height:1.6;}
-hr{border:0;border-top:1px solid #333;margin:28px 0;}
-.logo{float:right;margin:.3em 0 1em 2em;max-width:130px;}
-.stat-box{display:inline-block;background:#2a2930;border-radius:8px;padding:12px 18px;margin:6px 8px 6px 0;min-width:130px;}
-.stat-num{font-size:1.35rem;color:#0ab7f0;display:block;}
-.stat-label{font-size:.85rem;color:#aaa;display:block;}
-.green{color:#4caf50}.orange{color:#ff9800}.red{color:#f44336}
-code,pre{background:#2a2930;padding:2px 6px;border-radius:4px;}
-pre{overflow:auto;padding:14px;}
-.banner{padding:12px 16px;border-radius:8px;background:#2a2930;}
-.banner.green{border-left:5px solid #4caf50}
-.banner.orange{border-left:5px solid #ff9800}
-.banner.red{border-left:5px solid #f44336}
-.small{color:#bbb;font-size:.95rem}
+:root {
+  --bg-color: #0f172a;
+  --card-bg: #1e293b;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --accent: #38bdf8;
+  --accent-hover: #7dd3fc;
+  --green: #22c55e;
+  --orange: #f59e0b;
+  --red: #ef4444;
+  --border: #334155;
+}
+body {
+  color: var(--text-main);
+  background: var(--bg-color);
+  margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+  line-height: 1.6;
+}
+.app { 
+  max-width: 1200px; 
+  margin: 0 auto; 
+  padding: 40px 24px; 
+}
+h1, h2 { font-family: "PokeTube Flex", system-ui, sans-serif; font-stretch: extra-expanded; }
+h1 { font-weight: 800; font-size: 2.5rem; margin-top: 0; margin-bottom: 0.5rem; }
+h2 { font-size: 1.5rem; margin-top: 2.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: var(--accent-hover); text-decoration: underline; }
+hr { border: 0; border-top: 1px solid var(--border); margin: 32px 0; }
+.logo { float: right; height: 60px; max-width: 150px; margin-left: 20px; margin-bottom: 20px; }
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+  margin-top: 1.5rem;
+}
+.stat-box {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.stat-box:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+.stat-num {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+.stat-label {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.green { color: var(--green) !important; }
+.orange { color: var(--orange) !important; }
+.red { color: var(--red) !important; }
+
+code, pre {
+  background: #0b1121;
+  color: #e2e8f0;
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+pre {
+  overflow-x: auto;
+  padding: 16px;
+  border: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+code { padding: 2px 6px; font-size: 0.9em; }
+
+.banner {
+  padding: 20px;
+  border-radius: 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  margin: 24px 0;
+}
+.banner.green { border-left: 6px solid var(--green); }
+.banner.orange { border-left: 6px solid var(--orange); }
+.banner.red { border-left: 6px solid var(--red); }
+.small { color: var(--text-muted); font-size: 0.95rem; }
 </style>
 </head>
 <body>
@@ -1466,14 +1549,14 @@ pre{overflow:auto;padding:14px;}
   <span class="small">Score: ${stats.state.score}. EL-P99: ${stats.state.eventLoop.p99Ms}ms. CPU: ${stats.state.cpu.percent}%. RSS: ${formatPercent(stats.state.memory.rssRatio)}.</span>
 </div>
 
-<h2>what this does</h2>
+<h2>What this does</h2>
 <p>
   PokeResourceGuard monitors Node.js Event Loop Delay, CPU, and memory pressure using $O(1)$ counters to stop DDoS attacks without slowing down the server itself. 
   When resources are fine, normal users pass through. When the server is under real resource pressure, expensive background work gets reduced first, preserving pages and static routes.
 </p>
 
-<h2>live stats</h2>
-<div>
+<h2>Live Stats</h2>
+<div class="stat-grid">
   <div class="stat-box">
     <span class="stat-num ${stateClass}">${stats.state.state}</span>
     <span class="stat-label">state</span>
@@ -1508,19 +1591,18 @@ pre{overflow:auto;padding:14px;}
   </div>
 </div>
 
-<h2>pressure reasons</h2>
+<h2>Pressure Reasons</h2>
 <pre>${stats.state.pressureReasons.length ? stats.state.pressureReasons.join("\n") : "none"}</pre>
 
-<h2>request mix</h2>
+<h2>Request Mix</h2>
 <pre>${JSON.stringify(stats.state.requests.kinds, null, 2)}</pre>
 
-<h2>top routes this sample</h2>
+<h2>Top Routes This Sample</h2>
 <pre>${JSON.stringify(stats.state.topRoutes, null, 2)}</pre>
 
-<h2>api</h2>
+<h2>API Endpoints</h2>
 <p>
-  JSON stats:
-  <code><a href="/_pokeresource/stats">/_pokeresource/stats</a></code>
+  JSON stats are available at: <code><a href="/_pokeresource/stats">/_pokeresource/stats</a></code>
 </p>
 
 <hr>
