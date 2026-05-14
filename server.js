@@ -33,7 +33,6 @@
   const innertube = require("./src/libpoketube/libpoketube-youtubei-objects.json");
   const fs = require("fs");
   const os = require("os");
-  const nodePath = require("path");
   const net = require("net");
   const config = require("./config.json");
   const u = await media_proxy();
@@ -1144,9 +1143,7 @@
         snapshot.since = resourceState.since;
       }
 
-      const shouldLog =
-        snapshot.state !== resourceState.state ||
-        (snapshot.state !== "healthy" && now - lastStateLogAt >= resourceConfig.logging.stateCooldownMs);
+      const shouldLog = now - lastStateLogAt >= resourceConfig.logging.stateCooldownMs;
 
       resourceState = snapshot;
       lastSampleAt = now;
@@ -1156,7 +1153,7 @@
 
       if (shouldLog) {
         lastStateLogAt = now;
-        logResourceState("state sample");
+        logResourceState();
       }
     }
 
@@ -1228,21 +1225,13 @@
       return { state: "healthy", score, reasons };
     }
 
-    function logResourceState(message) {
-      console.error(
-        "[POKE-resource] " +
-        message +
-        " " +
-        JSON.stringify({
-          state: resourceState.state,
-          score: resourceState.score,
-          cpu: resourceState.cpu,
-          memory: resourceState.memory,
-          requests: resourceState.requests,
-          reasons: resourceState.pressureReasons,
-          topRoutes: resourceState.topRoutes
-        })
-      );
+    function logResourceState() {
+      if (resourceState.state === "healthy") {
+        console.error("[POKE-resource] healthy");
+        return;
+      }
+
+      console.error("[POKE-resource] not healthy (" + resourceState.state + ")");
     }
 
     function logReject(req, client, kind, reason, status) {
@@ -1916,25 +1905,52 @@ pre{
   app.use(modules.express.json());
 
   const renderTemplate = async (res, req, template, data = {}) => {
-    if (res.headersSent || res.writableEnded || res.destroyed) {
-      console.error("[POKE-render] response already committed, skipping:", template);
-      return;
-    }
-
     const templatePath = modules.path.resolve(`${templateDir}${modules.path.sep}${template}`);
 
     res.render(templatePath, Object.assign(data), function (err, html) {
       if (err) {
         console.error("[POKE-render] error on", template, ":", err.message);
-        if (!res.headersSent && !res.writableEnded && !res.destroyed) {
-          res.status(500).send("Internal server error");
+
+        if (res.destroyed) {
+          return;
         }
+
+        if (res.writableEnded) {
+          return;
+        }
+
+        if (res.headersSent) {
+          try {
+            res.write("\n<!-- Poke render error: " + String(template).replace(/-->/g, "--&gt;") + " -->");
+            return res.end();
+          } catch (writeErr) {
+            console.error("[POKE-render] could not write render error after headers were sent:", writeErr.message);
+            return;
+          }
+        }
+
+        return res.status(500).send("Internal server error");
+      }
+
+      if (res.destroyed) {
         return;
       }
 
-      if (!res.headersSent && !res.writableEnded && !res.destroyed) {
-        res.send(html);
+      if (res.writableEnded) {
+        return;
       }
+
+      if (res.headersSent) {
+        try {
+          res.write(html);
+          return res.end();
+        } catch (writeErr) {
+          console.error("[POKE-render] could not write rendered html after headers were sent:", writeErr.message);
+          return;
+        }
+      }
+
+      return res.send(html);
     });
   };
 
@@ -2035,8 +2051,15 @@ pre{
     if (process.env.NODE_ENV !== "production") {
       console.error(err.stack);
     }
-    if (!res.headersSent && !res.writableEnded && !res.destroyed) {
-      res.status(500).send("Something went wrong. Please try again.");
+
+    if (res.destroyed || res.writableEnded) {
+      return;
     }
+
+    if (res.headersSent) {
+      return next(err);
+    }
+
+    res.status(500).send("Something went wrong. Please try again.");
   });
 })();
