@@ -1594,6 +1594,14 @@ startupPrimeStartedAt: performance.now(),
             stop(0);
             return false;
           }
+          // Skip native play poke if audio has ended or is at the tail -- prevents bg restart/loop
+          const _pokeAudioDur = Number(audio.duration) || 0;
+          const _pokeAudioAt = Number(audio.currentTime) || 0;
+          const _pokeAudioEnded = audio.ended || (_pokeAudioDur > 3 && _pokeAudioAt >= _pokeAudioDur - 0.25);
+          if (_pokeAudioEnded && !isLoopDesired()) {
+            stop(0);
+            return false;
+          }
           _lastNativePokeAt = t;
           try { refreshHiddenAudioMediaSession(reason || "background-audio-sentinel"); } catch { }
           try {
@@ -6383,6 +6391,15 @@ function stabilizePlayerDisplayTime(raw, dur) {
     playerDisplayLastTimeAt = ts;
     return value;
   }
+  // Allow regression during return alignment settling -- the sync engine has
+  // intentionally set a new position, so holding the old high-water mark causes jitter.
+  try {
+    if (returnAlignmentSettlingActive(200) || smoothForegroundReturnActive(200)) {
+      playerDisplayLastTime = value;
+      playerDisplayLastTimeAt = ts;
+      return value;
+    }
+  } catch { }
   const transitionHold = (() => {
     try {
       return returnSmoothingActive(0) || inBgReturnGrace() || isTabReturnImmune();
@@ -6442,6 +6459,23 @@ function getPlayerDisplayTime(durHint = NaN) {
     !inBgReturnGrace() &&
     !isTabReturnImmune();
   if (visibleForegroundStable) return stabilizePlayerDisplayTime(clamp(vt), dur);
+  // During a foreground return transition, pick one source (audio or video) and stick with it
+  // for the entire transition window. Re-evaluating every frame causes the seekbar to
+  // flip between audio and video positions, creating visible jitter.
+  const _returnTransitionActive = (() => {
+    try {
+      return foregroundReturnContextActive(0) ||
+        smoothForegroundReturnActive(0) ||
+        returnAlignmentSettlingActive(0) ||
+        inBgReturnGrace() ||
+        isTabReturnImmune();
+    } catch { return false; }
+  })();
+  if (_returnTransitionActive && !audio.paused && at > 0.05) {
+    // During return, always prefer audio as the single source of truth --
+    // audio was the active playback reference while hidden.
+    return stabilizePlayerDisplayTime(clamp(at), dur);
+  }
   const preferAudio =
     document.visibilityState === "hidden" ||
     state.hiddenAudioExclusiveMode ||
@@ -6556,10 +6590,14 @@ function syncPlayerSeekbarToDisplayTime(durHint = NaN, curHint = NaN) {
   const domPercent = (() => {
     try { return parseFloat(playProgress?.style?.width || ""); } catch { return NaN; }
   })();
-  if (Math.abs(percent - playerSeekbarLastPercent) < 0.05 &&
+  // Scale the seekbar update threshold by duration. On shorter videos each percent
+  // represents more seconds, so a fixed 0.05% threshold is too aggressive (suppresses
+  // valid updates then jumps). On longer videos we can afford a bigger threshold.
+  const percentThreshold = dur > 0 ? Math.max(0.02, Math.min(0.08, 1.5 / dur)) : 0.05;
+  if (Math.abs(percent - playerSeekbarLastPercent) < percentThreshold &&
     text === playerSeekbarLastText &&
     isFinite(domPercent) &&
-    Math.abs(domPercent - percent) < 0.05) return;
+    Math.abs(domPercent - percent) < percentThreshold) return;
   playerSeekbarLastPercent = percent;
   playerSeekbarLastText = text;
   try {
@@ -9797,7 +9835,7 @@ function hiddenNonLoopTerminalEndLikely(reason = "") {
   const tailSeenAt = Number(state.hiddenNonLoopTailSeenAt || 0);
   const tailMediaAt = Number(state.hiddenNonLoopTailMediaAt || 0);
   const tailDur = Number(state.hiddenNonLoopTailDuration || ad || 0);
-  const recentlySawTail = tailSeenAt > 0 && (t - tailSeenAt) < 12000 && tailDur > 3;
+  const recentlySawTail = tailSeenAt > 0 && (t - tailSeenAt) < 20000 && tailDur > 3;
   if (!recentlySawTail || !isFinite(at)) return false;
   const snappedBackToStart =
     at < Math.min(0.85, Math.max(0.28, tailDur * 0.01)) &&
@@ -11158,6 +11196,14 @@ function bgSilentSyncVideoTime(t) {
   if (t < 0.5 && state.firstPlayCommitted && !nearZeroSeekAuthorized(t) && !state.restarting && !isLoopDesired()) {
     const vt = Number(videoEl.currentTime) || 0;
     if (vt > 0.9) return;
+  }
+  // Guard: do not sync video to near-zero audio when video was well-advanced (prevents bg loop artifact)
+  if (t < 1.5 && state.firstPlayCommitted && !state.restarting && !state.seeking && !isLoopDesired()) {
+    const curVideoTime = Number(videoEl.currentTime) || 0;
+    const lastGoodPos = Number(state.lastKnownGoodVT || 0) || 0;
+    if ((curVideoTime > 5.0 || lastGoodPos > 5.0) && !nearZeroSeekAuthorized(t) && !userSeekIntentActive()) {
+      return;
+    }
   }
   try {
     const vt = Number(videoEl.currentTime) || 0;
@@ -12877,6 +12923,10 @@ function clampBackgroundTimelineTarget(t, marginSec = 0.75) {
   if (!isFinite(raw) || raw < 0) return raw;
   const hiddenSince = Number(state.bgHiddenSince || 0);
   if (!hiddenSince || !state.bgHiddenWasPlaying || (now() - hiddenSince) > 180000) return raw;
+  // For long absences (60s+), the base+elapsed formula is unreliable because
+  // audio may have been paused/restarted by the browser at unpredictable positions.
+  // Trust the raw observed position directly to avoid clamping to stale anchors.
+  if ((now() - hiddenSince) > 60000) return raw;
   const rate = Math.max(0.1, Math.min(4, Number(state.bgHiddenBaseRate || 1) || 1));
   const base = Math.max(
     0,
@@ -12911,7 +12961,13 @@ function hiddenExpectedPlaybackTarget(vt = NaN, at = NaN, opts = {}) {
     const target = clampKnownTimelineTarget(audioUsable ? nAt : Math.max(0, nAt, nVt), 0.08);
     if (isFinite(target) && target >= 0) {
       const lastTarget = Number(state.lastHiddenTimelineTarget || 0) || 0;
-      if (!isLoopDesired() && lastTarget > 0.05 && target < lastTarget - 0.35) {
+      // Relaxed anti-backward guard: for long absences or when audio has clearly restarted
+      // from a much earlier position, trust the observed position rather than pinning to stale max.
+      // This prevents the "replay same section" artifact on tab return.
+      const bgAge = Number(state.bgHiddenSince || 0) ? (now() - Number(state.bgHiddenSince || 0)) : 0;
+      const longAbsence = bgAge > 30000;
+      const audioFarBehind = lastTarget > 0.05 && target < lastTarget - 2.0;
+      if (!isLoopDesired() && lastTarget > 0.05 && target < lastTarget - 0.35 && !longAbsence && !audioFarBehind) {
         return clampKnownTimelineTarget(lastTarget, 0.08);
       }
       state.lastHiddenTimelineTarget = !isLoopDesired() ? Math.max(lastTarget, target) : target;
@@ -23923,7 +23979,22 @@ function setupVisibilityLifecycle() {
       clearStalePlaybackIntentIfActuallyPausedForTabTransition("visibility-visible");
       clearHiddenBackgroundResumeTimers();
       clearHiddenVideoBootstrap();
+      // Clear stale bg sync flag immediately so getPlayerDisplayTime source selection isn't confused
+      state.bgSilentTimeSyncing = false;
+      if (state.bgSilentTimeSyncTimer) { clearTimeout(state.bgSilentTimeSyncTimer); state.bgSilentTimeSyncTimer = null; }
       try { exitHiddenAudioExclusiveMode("visibility-return"); } catch { }
+      // Reset the hidden timeline target to actual observed positions on return.
+      // This prevents the anti-backward guard from pinning to a stale max,
+      // which caused audio to replay an already-heard section after long absences.
+      try {
+        const _returnVt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
+        const _returnAt = coupledMode && audio ? (Number(audio.currentTime) || 0) : _returnVt;
+        const _returnObserved = Math.max(0, _returnVt, _returnAt);
+        if (_returnObserved > 0.05) {
+          state.lastHiddenTimelineTarget = _returnObserved;
+          state.lastHiddenTimelineTargetAt = now();
+        }
+      } catch { }
       try { tryImmediateForegroundReturnSync("visibility-return", { minDrift: perfProfile.lowEnd ? 0.34 : 0.22 }); } catch { }
       if (lightSettleHealthyTabReturn("visibility-return")) return;
       armSeamlessReturnWindow("visibility-return", 2600);
