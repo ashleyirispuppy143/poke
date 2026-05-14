@@ -1497,6 +1497,13 @@
         stats.state.state === "warm" ? "orange" :
         stats.state.state === "stressed" ? "orange" : "red";
 
+      const formatRouteCount = (c) => {
+        if (c === 67) return '67 <span style="font-size:0.85em; color:#aaa; font-weight:normal;">(really)</span>';
+        if (c === 69) return '69 <span style="font-size:0.85em; color:#aaa; font-weight:normal;">(haha nice)</span>';
+        if (c === 420) return '<span style="color:#4caf50;">420 <span style="font-size:0.85em; font-weight:normal;">(some weed everyday!)</span></span>';
+        return c.toLocaleString();
+      };
+
       res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1507,7 +1514,8 @@
 <style>
 :root{color-scheme:dark}
 body{color:#fff;background:#1c1b22;margin:0; font-family: sans-serif;}
-a{color:#0ab7f0}:visited{color:#00c0ff}
+a{color:#0ab7f0; text-decoration:none; transition: color 0.2s;}
+a:hover{color:#00c0ff; text-decoration:underline;}
 .app{max-width:1100px;margin:0 auto;padding:24px;}
 h1,h2{font-stretch:extra-expanded; letter-spacing: -0.5px;}
 h1{font-weight:900; font-size: 2.2rem; margin-top:0; margin-bottom: 4px;}
@@ -1516,15 +1524,22 @@ p,li,code,pre{line-height:1.6;}
 hr{border:0;border-top:1px solid #333;margin:32px 0;}
 .logo{float:right;margin:.3em 0 1em 2em;max-width:130px;}
 
+/* Header & Tabs */
+.header-container { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; margin-bottom: 24px; gap: 16px; }
+.tabs { display: flex; gap: 8px; }
+.tab-btn { background: #2a2930; color: #aaa; border: 1px solid #333; padding: 8px 16px; border-radius: 20px; cursor: pointer; font-family: sans-serif; font-weight: bold; transition: all 0.2s ease; outline: none; }
+.tab-btn:hover { background: #333; color: #fff; }
+.tab-btn.active { background: #0ab7f0; color: #1c1b22; border-color: #0ab7f0; }
+.tab-content { display: none; animation: fadeIn 0.3s ease; }
+.tab-content.active { display: block; }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
 /* Hero Stats Box */
 .hero-stat {
-  background: linear-gradient(135deg, #1c1b22 0%, #2a2930 100%);
-  border: 1px solid #333;
-  border-radius: 12px;
-  padding: 24px;
+  padding: 24px 0;
   margin: 20px 0;
   text-align: center;
-  box-shadow: 0 8px 16px rgba(0,0,0,0.4);
 }
 .hero-label {
   font-size: 1.1rem;
@@ -1543,15 +1558,14 @@ hr{border:0;border-top:1px solid #333;margin:32px 0;}
 }
 .stat-box {
   background: #2a2930;
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 16px;
   margin: 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: flex-start;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-  border: 1px solid #333;
+  border: 1px solid rgba(255,255,255,0.05);
 }
 .stat-num{font-size: 1.6rem; color: #0ab7f0; display: block; font-weight: bold; text-transform: capitalize;}
 .stat-label{font-size: .9rem; color: #aaa; display: block; margin-top: 4px;}
@@ -1559,8 +1573,8 @@ hr{border:0;border-top:1px solid #333;margin:32px 0;}
 .green{color:#4caf50} .orange{color:#ff9800} .red{color:#f44336}
 
 code,pre{background:#2a2930;padding:2px 6px;border-radius:4px;}
-pre{overflow:auto;padding:14px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 1px solid #333;}
-.banner{padding:16px 20px;border-radius:8px;background:#2a2930;box-shadow: 0 4px 6px rgba(0,0,0,0.3);border: 1px solid #333; transition: border-left 0.3s ease;}
+pre{overflow:auto;padding:14px; border: 1px solid #333;}
+.banner{padding:16px 20px;border-radius:12px;background:#2a2930;border: 1px solid rgba(255,255,255,0.05); transition: border-left 0.3s ease;}
 .banner.green{border-left:5px solid #4caf50}
 .banner.orange{border-left:5px solid #ff9800}
 .banner.red{border-left:5px solid #f44336}
@@ -1572,14 +1586,12 @@ pre{overflow:auto;padding:14px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 1
   color: #ddd;
   background: #2a2930;
   padding: 20px;
-  border-radius: 8px;
+  border-radius: 12px;
   border-left: 4px solid #0ab7f0;
   margin-bottom: 24px;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.3);
 }
 
-summary { font-size: 1.2rem; cursor: pointer; color: #0ab7f0; user-select: none; margin-bottom: 12px; font-weight: bold; }
-summary:hover { color: #00c0ff; }
+summary { font-size: 1.2rem; cursor: pointer; color: #0ab7f0; user-select: none; margin-bottom: 12px; font-weight: bold; transition: color 0.2s; }
 
 /* Route Popularity Layout */
 .route-list {
@@ -1589,23 +1601,22 @@ summary:hover { color: #00c0ff; }
   margin-top: 16px;
 }
 .route-item {
-  background: #2a2930;
-  border-radius: 8px;
-  padding: 14px 18px;
+  background: #25242b;
+  border-radius: 12px;
+  padding: 16px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border: 1px solid #333;
+  border: 1px solid rgba(255,255,255,0.05);
   position: relative;
   overflow: hidden;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 .route-bar {
   position: absolute;
   left: 0; top: 0; bottom: 0;
-  background: rgba(10, 183, 240, 0.12);
+  background: linear-gradient(90deg, rgba(10, 183, 240, 0.05) 0%, rgba(10, 183, 240, 0.2) 100%);
   z-index: 1;
-  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .route-info {
   display: flex;
@@ -1614,139 +1625,162 @@ summary:hover { color: #00c0ff; }
   z-index: 2;
 }
 .route-rank {
-  font-size: 1rem;
+  font-size: 0.85rem;
   font-weight: 900;
-  color: #666;
-  width: 24px;
+  color: #1c1b22;
+  background: #0ab7f0;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  display: flex; justify-content: center; align-items: center;
 }
 .route-name {
-  font-family: monospace;
-  font-size: 1.05rem;
-  color: #ddd;
-  background: rgba(0,0,0,0.3);
-  padding: 4px 8px;
-  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 1.1rem;
+  color: #eee;
+  padding: 0;
+  background: transparent;
+  letter-spacing: -0.3px;
 }
 .route-count {
-  font-size: 1.1rem;
-  font-weight: bold;
-  color: #0ab7f0;
+  font-size: 1.15rem;
+  font-weight: 900;
+  color: #fff;
   z-index: 2;
-  background: rgba(0,0,0,0.4);
-  padding: 4px 12px;
-  border-radius: 12px;
-  border: 1px solid #444;
+  background: rgba(0,0,0,0.3);
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.1);
 }
 </style>
+<script>
+function switchTab(tabId, btn) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + tabId).classList.add('active');
+  btn.classList.add('active');
+}
+</script>
 </head>
 <body>
 <div class="app">
 <img class="logo" src="/css/logo-poke.svg" alt="Poke logo">
 
-<h1>Poke Server Health</h1>
-<p class="small" style="margin-top:0;">Live metrics and traffic protection</p>
-
-<div class="hero-stat">
-  <div class="hero-label">Total Global Requests Processed</div>
-  <div id="hero-total" style="font-size: 3.5rem; font-weight: 900; color: #0ab7f0; margin: 10px 0; text-shadow: 0 0 20px rgba(10,183,240,0.3);">
-    ${stats.active_requests.total_global_requests.toLocaleString()}
+<div class="header-container">
+  <div>
+    <h1>Poke Server Health</h1>
+    <p class="small" style="margin-top:0;">Live metrics and traffic protection</p>
   </div>
-  <div class="small" style="color: #888; font-size: 1rem;">
-    Recording began on: <span id="tracking-start">${new Date(stats.active_requests.tracking_start_time).toLocaleString()}</span>
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('vitals', this)">Server Vitals</button>
+    <button class="tab-btn" onclick="switchTab('requests', this)">Requests</button>
   </div>
 </div>
 
-<div id="banner-container" class="banner ${stateClass}">
-  <b>Current Status:</b> <span id="banner-state" class="${stateClass}" style="font-size: 1.2rem; text-transform: capitalize;">${stats.state.state}</span>
-  <br>
-  <span id="banner-subtext" class="small" style="display:inline-block; margin-top: 8px;">
-    System Load Score: ${stats.state.score} &bull; Process Delay: ${stats.state.eventLoop.p99Ms}ms &bull; CPU: ${stats.state.cpu.percent}% &bull; Memory: ${formatPercent(stats.state.memory.rssRatio)}
-  </span>
+<div id="tab-vitals" class="tab-content active">
+  <div id="banner-container" class="banner ${stateClass}">
+    <b>Current Status:</b> <span id="banner-state" class="${stateClass}" style="font-size: 1.2rem; text-transform: capitalize;">${stats.state.state}</span>
+    <br>
+    <span id="banner-subtext" class="small" style="display:inline-block; margin-top: 8px;">
+      System Load Score: ${stats.state.score} &bull; Process Delay: ${stats.state.eventLoop.p99Ms}ms &bull; CPU: ${stats.state.cpu.percent}% &bull; Memory: ${formatPercent(stats.state.memory.rssRatio)}
+    </span>
+  </div>
+
+  <h2>What is this page?</h2>
+  <div class="explanation">
+    Poke keeps a close eye on how much brainpower (CPU) and memory it has left. Just like a personal computer, the server only has so much energy to go around! <br><br>
+    If a sudden wave of traffic hits, or if someone tries to overload the site, Poke will automatically prioritize normal users watching videos. It gently pauses heavy background tasks until the server catches its breath. This keeps Poke smooth, fast, and online for everyone.
+  </div>
+
+  <h2>Live Server Vitals</h2>
+  <div class="stat-grid">
+    <div class="stat-box">
+      <span id="stat-state" class="stat-num ${stateClass}">${stats.state.state}</span>
+      <span class="stat-label">Health State</span>
+    </div>
+    <div class="stat-box">
+      <span id="stat-p99" class="stat-num">${stats.state.eventLoop.p99Ms}ms</span>
+      <span class="stat-label">Process Delay (p99)</span>
+    </div>
+    <div class="stat-box">
+      <span id="stat-cpu" class="stat-num">${stats.state.cpu.percent}%</span>
+      <span class="stat-label">CPU Usage</span>
+    </div>
+    <div class="stat-box">
+      <span id="stat-rss" class="stat-num">${stats.state.memory.rssMb}MB</span>
+      <span class="stat-label">Memory Used (RSS)</span>
+    </div>
+    <div class="stat-box">
+      <span id="stat-rps" class="stat-num">${stats.state.requests.rps}</span>
+      <span class="stat-label">Requests per Second</span>
+    </div>
+    <div class="stat-box">
+      <span id="stat-tracked" class="stat-num">${stats.clients.tracked}</span>
+      <span class="stat-label">Active Users</span>
+    </div>
+    <div class="stat-box">
+      <span id="stat-cooldown" class="stat-num">${stats.clients.cooldown}</span>
+      <span class="stat-label">Spammers Blocked</span>
+    </div>
+    <div class="stat-box">
+      <span id="stat-score" class="stat-num">${stats.state.score}</span>
+      <span class="stat-label">Pressure Score</span>
+    </div>
+  </div>
+
+  <hr>
+
+  <details>
+    <summary>View Nerd Stats (Raw Data & APIs)</summary>
+    
+    <h3>Pressure Reasons</h3>
+    <pre id="pre-reasons">${stats.state.pressureReasons.length ? stats.state.pressureReasons.join("\n") : "None currently. System is healthy."}</pre>
+
+    <h3>Request Mix (This Second)</h3>
+    <pre id="pre-mix">${JSON.stringify(stats.state.requests.kinds, null, 2)}</pre>
+
+    <h3>Top Routes (This Second)</h3>
+    <pre id="pre-routes">${JSON.stringify(stats.state.topRoutes, null, 2)}</pre>
+
+    <h3>API Endpoints</h3>
+    <p>
+      Raw JSON data is available at:
+      <code><a href="/_pokeresource/stats">/_pokeresource/stats</a></code>
+    </p>
+  </details>
 </div>
 
-<h2>What is this page?</h2>
-<div class="explanation">
-  Poke keeps a close eye on how much brainpower (CPU) and memory it has left. Just like a personal computer, the server only has so much energy to go around! <br><br>
-  If a sudden wave of traffic hits, or if someone tries to overload the site, Poke will automatically prioritize normal users watching videos. It gently pauses heavy background tasks until the server catches its breath. This guarantees Poke stays smooth, fast, and online for everyone.
-</div>
+<div id="tab-requests" class="tab-content">
+  <div class="hero-stat">
+    <div class="hero-label">Total Global Requests Processed</div>
+    <div id="hero-total" style="font-size: 3.5rem; font-weight: 900; color: #0ab7f0; margin: 10px 0;">
+      ${stats.active_requests.total_global_requests.toLocaleString()}
+    </div>
+    <div class="small" style="color: #888; font-size: 1rem;">
+      Recording began on: <span id="tracking-start">${new Date(stats.active_requests.tracking_start_time).toLocaleDateString()}</span>
+    </div>
+  </div>
 
-<h2>Most Popular Destinations (All Time)</h2>
-<p class="small">The most heavily trafficked areas of Poke, calculated since records began.</p>
-<div id="route-list-container" class="route-list">
-  ${(() => {
-    const topRoutes = stats.active_requests.all_time_top_routes;
-    if (!topRoutes || topRoutes.length === 0) return `<div class="route-item" style="justify-content: center; color: #aaa;">Gathering data...</div>`;
-    const maxCount = topRoutes[0].count;
-    return topRoutes.map((r, i) => {
-      const pct = (r.count / maxCount) * 100;
-      return `<div class="route-item">
-        <div class="route-bar" style="width: ${pct}%"></div>
-        <div class="route-info">
-          <span class="route-rank">#${i + 1}</span>
-          <span class="route-name">${r.key}</span>
-        </div>
-        <span class="route-count">${r.count.toLocaleString()}</span>
-      </div>`;
-    }).join('');
-  })()}
-</div>
-
-<h2>Live Server Vitals</h2>
-<div class="stat-grid">
-  <div class="stat-box">
-    <span id="stat-state" class="stat-num ${stateClass}">${stats.state.state}</span>
-    <span class="stat-label">Health State</span>
-  </div>
-  <div class="stat-box">
-    <span id="stat-p99" class="stat-num">${stats.state.eventLoop.p99Ms}ms</span>
-    <span class="stat-label">Process Delay (p99)</span>
-  </div>
-  <div class="stat-box">
-    <span id="stat-cpu" class="stat-num">${stats.state.cpu.percent}%</span>
-    <span class="stat-label">CPU Usage</span>
-  </div>
-  <div class="stat-box">
-    <span id="stat-rss" class="stat-num">${stats.state.memory.rssMb}MB</span>
-    <span class="stat-label">Memory Used (RSS)</span>
-  </div>
-  <div class="stat-box">
-    <span id="stat-rps" class="stat-num">${stats.state.requests.rps}</span>
-    <span class="stat-label">Requests per Second</span>
-  </div>
-  <div class="stat-box">
-    <span id="stat-tracked" class="stat-num">${stats.clients.tracked}</span>
-    <span class="stat-label">Active Users</span>
-  </div>
-  <div class="stat-box">
-    <span id="stat-cooldown" class="stat-num">${stats.clients.cooldown}</span>
-    <span class="stat-label">Spammers Blocked</span>
-  </div>
-  <div class="stat-box">
-    <span id="stat-score" class="stat-num">${stats.state.score}</span>
-    <span class="stat-label">Pressure Score</span>
+  <h2>Most Popular Destinations (All Time)</h2>
+  <p class="small">The most heavily trafficked areas of Poke, calculated since records began.</p>
+  <div id="route-list-container" class="route-list">
+    ${(() => {
+      const topRoutes = stats.active_requests.all_time_top_routes;
+      if (!topRoutes || topRoutes.length === 0) return `<div class="route-item" style="justify-content: center; color: #aaa;">Gathering data...</div>`;
+      const maxCount = topRoutes[0].count;
+      return topRoutes.map((r, i) => {
+        const pct = (r.count / maxCount) * 100;
+        return `<div class="route-item">
+          <div class="route-bar" style="width: ${pct}%"></div>
+          <div class="route-info">
+            <span class="route-rank">#${i + 1}</span>
+            <span class="route-name">${r.key}</span>
+          </div>
+          <span class="route-count">${formatRouteCount(r.count)}</span>
+        </div>`;
+      }).join('');
+    })()}
   </div>
 </div>
-
-<hr>
-
-<details>
-  <summary>View Nerd Stats (Raw Data & APIs)</summary>
-  
-  <h3>Pressure Reasons</h3>
-  <pre id="pre-reasons">${stats.state.pressureReasons.length ? stats.state.pressureReasons.join("\n") : "None currently. System is healthy."}</pre>
-
-  <h3>Request Mix (This Second)</h3>
-  <pre id="pre-mix">${JSON.stringify(stats.state.requests.kinds, null, 2)}</pre>
-
-  <h3>Top Routes (This Second)</h3>
-  <pre id="pre-routes">${JSON.stringify(stats.state.topRoutes, null, 2)}</pre>
-
-  <h3>API Endpoints</h3>
-  <p>
-    Raw JSON data is available at:
-    <code><a href="/_pokeresource/stats">/_pokeresource/stats</a></code>
-  </p>
-</details>
 
 <hr>
 <p class="small">powered by poke. <a href="/">go back to watching videos</a></p>
@@ -1755,6 +1789,13 @@ summary:hover { color: #00c0ff; }
 <script>
 // Auto-refresh stats if JS is enabled
 document.addEventListener("DOMContentLoaded", function() {
+  const formatRouteCount = (c) => {
+    if (c === 67) return '67 <span style="font-size:0.85em; color:#aaa; font-weight:normal;">(really)</span>';
+    if (c === 69) return '69 <span style="font-size:0.85em; color:#aaa; font-weight:normal;">(haha nice)</span>';
+    if (c === 420) return '<span style="color:#4caf50;">420 <span style="font-size:0.85em; font-weight:normal;">(some weed everyday!)</span></span>';
+    return c.toLocaleString();
+  };
+
   const fetchStats = async function() {
     try {
       const res = await fetch("/_pokeresource/stats");
@@ -1768,7 +1809,7 @@ document.addEventListener("DOMContentLoaded", function() {
       
       // Update DOM components dynamically
       document.getElementById("hero-total").innerText = data.active_requests.total_global_requests.toLocaleString();
-      document.getElementById("tracking-start").innerText = new Date(data.active_requests.tracking_start_time).toLocaleString();
+      document.getElementById("tracking-start").innerText = new Date(data.active_requests.tracking_start_time).toLocaleDateString();
 
       document.getElementById("banner-container").className = "banner " + stateClass;
       document.getElementById("banner-state").className = stateClass;
@@ -1801,7 +1842,7 @@ document.addEventListener("DOMContentLoaded", function() {
                     '<span class="route-rank">#' + (i + 1) + '</span>' +
                     '<span class="route-name">' + r.key + '</span>' +
                   '</div>' +
-                  '<span class="route-count">' + r.count.toLocaleString() + '</span>' +
+                  '<span class="route-count">' + formatRouteCount(r.count) + '</span>' +
               '</div>';
           }).join('');
           document.getElementById("route-list-container").innerHTML = routeHtml;
