@@ -6572,6 +6572,13 @@ function syncPlayerSeekbarToDisplayTime(durHint = NaN, curHint = NaN) {
       }
     }
   } catch { }
+  try {
+    if (window.__pokeHardTerminalEndClampSeekbar) {
+      const _hardClamp = window.__pokeHardTerminalEndClampSeekbar(dur, cur, percent);
+      if (_hardClamp && isFinite(Number(_hardClamp.cur))) cur = Math.max(0, Math.min(Number(_hardClamp.cur), dur));
+      if (_hardClamp && isFinite(Number(_hardClamp.percent))) percent = Math.max(0, Math.min(100, Number(_hardClamp.percent)));
+    }
+  } catch { }
   const text = formatPlayerClock(playerClockWholeSeconds(cur)) + " / " +
     formatPlayerClock(playerClockWholeSeconds(dur));
   refreshPlayerSeekbarElementCache();
@@ -8444,6 +8451,7 @@ function forceNaturalEndTailIfNeeded(reason = "", opts = {}) {
 }
 /* POKE_END_STABILIZER_PATCH_V3_END */
 function terminalEndFallbackShouldFire() {
+  try { if (window.__pokeHardTerminalEndShouldLatch && window.__pokeHardTerminalEndShouldLatch("terminal-fallback-inner")) { window.__pokeHardTerminalEndLatch("terminal-fallback-inner"); return true; } } catch { }
   try { if (forceNaturalEndTailIfNeeded("terminal-fallback", { tailSec: 4.5 })) return true; naturalEndTailGraceActive("terminal-fallback", 4.5); } catch { }
   if (!state.firstPlayCommitted || state.restarting || state.endedNaturally) return false;
   if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
@@ -11507,6 +11515,7 @@ function isVideoBufferingForCoupledPlayback(opts = {}) {
   if (isTabReturnImmune() || inBgReturnGrace()) return false;
   if (state.startupPhase && !state.firstPlayCommitted) return false;
   if (directUserToggleActive(250)) return false;
+  try { if (window.__pokeHardTerminalEndShouldLatch && window.__pokeHardTerminalEndShouldLatch("video-buffering-inner")) { window.__pokeHardTerminalEndLatch("video-buffering-inner"); return false; } } catch { }
   if (restartFromEndedGuardActive()) return false;
   try { if (naturalEndTailGraceActive("video-buffering", 4.5)) return false; } catch { }
   if (document.visibilityState === "hidden") {
@@ -11533,6 +11542,7 @@ function isAudioBufferingForCoupledPlayback(opts = {}) {
   if (isTabReturnImmune() || inBgReturnGrace()) return false;
   if (state.startupPhase && !state.firstPlayCommitted) return false;
   if (directUserToggleActive(250)) return false;
+  try { if (window.__pokeHardTerminalEndShouldLatch && window.__pokeHardTerminalEndShouldLatch("audio-buffering-inner")) { window.__pokeHardTerminalEndLatch("audio-buffering-inner"); return false; } } catch { }
   if (restartFromEndedGuardActive()) return false;
   try { if (naturalEndTailGraceActive("audio-buffering", 4.5)) return false; } catch { }
   if (document.visibilityState === "hidden") {
@@ -15334,6 +15344,7 @@ function _spinnerInFlapCooldown() {
 }
 function _spinnerActuallyRaise() {
   try {
+    if (window.__pokeHardTerminalEndShouldLatch && window.__pokeHardTerminalEndShouldLatch("spinner-raise-inner")) { window.__pokeHardTerminalEndLatch("spinner-raise-inner"); return; }
     if (state.endedNaturally || terminalEndFallbackShouldFire()) {
       MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.onEnded();
       forceEndedUiState();
@@ -22544,7 +22555,7 @@ function bindCommonMediaEvents() {
         video.on("ended", handleVideoEnded);
         try { _on(videoEl, "ended", handleVideoEnded, { passive: true }); } catch { }
         try {
-          const terminalEndEvents = ["timeupdate", "pause", "waiting", "stalled", "suspend", "emptied", "playing"];
+          const terminalEndEvents = ["timeupdate", "pause", "waiting", "stalled", "suspend", "emptied", "playing", "play", "ended", "canplay", "canplaythrough"];
           const terminalNode = getVideoNode();
           for (const ev of terminalEndEvents) {
             if (videoEl) _on(videoEl, ev, maybeFinalizeTerminalEnd, { passive: true });
@@ -25251,6 +25262,599 @@ _on(window, "unhandledrejection", (e) => {
 }, { passive: true });
 }, { once: true });
 
+/* POKE_HARD_TERMINAL_END_GUARD_V1_START */
+;(function () {
+  "use strict";
+  var GUARD_VERSION = "POKE_HARD_TERMINAL_END_GUARD_V1";
+  if (window.__pokeHardTerminalEndGuardVersion === GUARD_VERSION) return;
+  window.__pokeHardTerminalEndGuardVersion = GUARD_VERSION;
+
+  function nowMs() {
+    try { return performance.now(); } catch (e) { return Date.now(); }
+  }
+
+  function installWhenReady() {
+    var videoEl = document.getElementById("video");
+    if (!videoEl) {
+      setTimeout(installWhenReady, 80);
+      return;
+    }
+    installHardTerminalEndGuard(videoEl);
+  }
+
+  function installHardTerminalEndGuard(videoEl) {
+    if (!videoEl || videoEl.__pokeHardTerminalGuardInstalled) return;
+    videoEl.__pokeHardTerminalGuardInstalled = GUARD_VERSION;
+
+    var audioEl = document.getElementById("aud");
+    var player = null;
+    var root = null;
+    var nativePlay = HTMLMediaElement.prototype.play;
+    var nativePause = HTMLMediaElement.prototype.pause;
+    var nativeCurrentTime = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "currentTime");
+    var originalPrototypePlay = nativePlay;
+    var originalPlayerPlay = null;
+    var originalPlayerCurrentTime = null;
+    var originalPlayerPause = null;
+
+    var guard = {
+      latched: false,
+      latchedAt: 0,
+      reason: "",
+      keepTimer: 0,
+      raf: 0,
+      lastUserTimelineAt: 0,
+      lastUserRestartAt: 0,
+      lastProgressAt: 0,
+      lastProgressMedia: 0,
+      lastDisplayTime: 0,
+      lastPercent: -1,
+      lastProgressWriteAt: 0,
+      lastFlapAt: 0,
+      flapCount: 0,
+      forceTimeWrite: false,
+      releasedForRestartUntil: 0,
+      lastLatchCheckAt: 0
+    };
+
+    function safeCall(fn) {
+      try { return fn(); } catch (e) { return undefined; }
+    }
+
+    function refreshPlayerRefs() {
+      safeCall(function () {
+        if (!player && window.videojs) {
+          if (typeof window.videojs.getPlayer === "function") player = window.videojs.getPlayer("video") || null;
+          if (!player && typeof window.videojs === "function") player = window.videojs("video");
+        }
+      });
+      root = safeCall(function () {
+        if (player && typeof player.el === "function") return player.el();
+        return videoEl.closest(".video-js") || videoEl.parentElement || null;
+      }) || root;
+      if (!audioEl) audioEl = document.getElementById("aud");
+    }
+
+    function rootEl() {
+      refreshPlayerRefs();
+      return root || videoEl.closest(".video-js") || videoEl.parentElement || null;
+    }
+
+    function loopDesired() {
+      var explicit = false;
+      safeCall(function () { if (window.__playerLoopDesired === true) explicit = true; });
+      safeCall(function () { if (videoEl.loop || videoEl.hasAttribute("loop")) explicit = true; });
+      safeCall(function () { if (audioEl && (audioEl.loop || audioEl.hasAttribute("loop"))) explicit = true; });
+      return !!explicit;
+    }
+
+    function forceLoopOff() {
+      safeCall(function () { videoEl.loop = false; videoEl.removeAttribute("loop"); });
+      safeCall(function () { if (audioEl) { audioEl.loop = false; audioEl.removeAttribute("loop"); } });
+      safeCall(function () { if (window.__playerLoopDesired !== true) window.__playerLoopDesired = false; });
+    }
+
+    function durationOf(el) {
+      var d = 0;
+      safeCall(function () { d = Math.max(d, Number(el && el.duration) || 0); });
+      return isFinite(d) && d > 0 ? d : 0;
+    }
+
+    function playerDuration() {
+      var d = 0;
+      refreshPlayerRefs();
+      safeCall(function () { if (player && typeof player.duration === "function") d = Math.max(d, Number(player.duration()) || 0); });
+      d = Math.max(d, durationOf(videoEl));
+      d = Math.max(d, durationOf(audioEl));
+      return isFinite(d) && d > 0 ? d : 0;
+    }
+
+    function currentOf(el) {
+      var t = 0;
+      safeCall(function () { t = Number(el && el.currentTime) || 0; });
+      return isFinite(t) && t >= 0 ? t : 0;
+    }
+
+    function playerCurrent() {
+      var t = 0;
+      refreshPlayerRefs();
+      safeCall(function () { if (player && typeof player.currentTime === "function") t = Math.max(t, Number(player.currentTime()) || 0); });
+      t = Math.max(t, currentOf(videoEl));
+      t = Math.max(t, currentOf(audioEl));
+      t = Math.max(t, Number(guard.lastDisplayTime) || 0);
+      return isFinite(t) && t >= 0 ? t : 0;
+    }
+
+    function terminalInfo() {
+      var d = playerDuration();
+      var vt = currentOf(videoEl);
+      var at = currentOf(audioEl);
+      var pt = 0;
+      refreshPlayerRefs();
+      safeCall(function () { if (player && typeof player.currentTime === "function") pt = Number(player.currentTime()) || 0; });
+      var media = Math.max(vt, at, pt, Number(guard.lastDisplayTime) || 0, Number(guard.lastProgressMedia) || 0);
+      var remaining = d > 0 ? d - media : Infinity;
+      var ended = false;
+      safeCall(function () { ended = ended || !!videoEl.ended; });
+      safeCall(function () { ended = ended || !!(audioEl && audioEl.ended); });
+      return {
+        duration: d,
+        videoTime: vt,
+        audioTime: at,
+        playerTime: pt,
+        mediaTime: media,
+        remaining: remaining,
+        ended: ended,
+        valid: isFinite(d) && d > 0 && isFinite(media) && media >= 0
+      };
+    }
+
+    function userTimelineActive(ms) {
+      var age = nowMs() - Number(guard.lastUserTimelineAt || 0);
+      return age >= 0 && age < (ms || 2800);
+    }
+
+    function restartIntentActive(ms) {
+      var t = nowMs();
+      if (t < guard.releasedForRestartUntil) return true;
+      var age = t - Number(guard.lastUserRestartAt || 0);
+      return age >= 0 && age < (ms || 3200);
+    }
+
+    function markTimelineUserAction(ms) {
+      var t = nowMs();
+      guard.lastUserTimelineAt = t;
+      guard.lastUserRestartAt = Math.max(guard.lastUserRestartAt || 0, t);
+      guard.releasedForRestartUntil = Math.max(guard.releasedForRestartUntil || 0, t + (ms || 3200));
+    }
+
+    function isControlEventTarget(target) {
+      var r = rootEl();
+      if (!target || !r) return false;
+      if (target === videoEl || target === audioEl) return true;
+      if (target.closest) {
+        if (target.closest(".vjs-control-bar")) return true;
+        if (target.closest(".vjs-big-play-button")) return true;
+        if (target.closest(".vjs-play-control")) return true;
+        if (target.closest(".vjs-progress-control")) return true;
+        if (target.closest(".vjs-progress-holder")) return true;
+        if (target.closest(".vjs-slider")) return true;
+      }
+      return r.contains(target);
+    }
+
+    function updateProgressUi(percent, text) {
+      var r = rootEl();
+      if (!r) return;
+      var p = null;
+      var h = null;
+      safeCall(function () { p = r.querySelector(".vjs-play-progress"); });
+      safeCall(function () { h = r.querySelector(".vjs-progress-holder[role='slider'], .vjs-progress-holder"); });
+      if (isFinite(percent)) {
+        percent = Math.max(0, Math.min(100, Number(percent)));
+        guard.lastPercent = Math.max(Number(guard.lastPercent) || 0, percent);
+      }
+      safeCall(function () {
+        if (p) {
+          p.style.transition = "none";
+          p.style.width = percent.toFixed(3) + "%";
+          p.setAttribute("aria-hidden", "true");
+        }
+      });
+      safeCall(function () {
+        if (h) {
+          h.setAttribute("aria-valuenow", String(Math.round(percent)));
+          h.setAttribute("aria-valuemin", "0");
+          h.setAttribute("aria-valuemax", "100");
+          if (text) h.setAttribute("aria-valuetext", text);
+        }
+      });
+    }
+
+    function formatTime(seconds) {
+      var n = Math.max(0, Math.floor(Number(seconds) || 0));
+      var h = Math.floor(n / 3600);
+      n -= h * 3600;
+      var m = Math.floor(n / 60);
+      var s = n % 60;
+      if (h > 0) return h + ":" + String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+      return m + ":" + String(s).padStart(2, "0");
+    }
+
+    function removeWaitingUi() {
+      var r = rootEl();
+      safeCall(function () {
+        if (player && typeof player.removeClass === "function") {
+          player.removeClass("vjs-waiting");
+          player.removeClass("vjs-seeking");
+          player.removeClass("vjs-stalled");
+          player.removeClass("vjs-playing");
+          player.addClass("vjs-paused");
+          if (guard.latched) player.addClass("vjs-ended");
+        }
+      });
+      safeCall(function () {
+        if (!r) return;
+        r.classList.remove("vjs-waiting", "vjs-seeking", "vjs-stalled", "vjs-playing");
+        r.classList.add("vjs-paused");
+        if (guard.latched) r.classList.add("vjs-ended", "vjs-poke-hard-ended");
+      });
+    }
+
+    function nativePauseMedia(el) {
+      if (!el) return;
+      safeCall(function () { nativePause.call(el); });
+    }
+
+    function nativeSetTime(el, t) {
+      if (!el || !isFinite(t)) return;
+      guard.forceTimeWrite = true;
+      try {
+        if (nativeCurrentTime && nativeCurrentTime.set) nativeCurrentTime.set.call(el, Math.max(0, t));
+        else el.currentTime = Math.max(0, t);
+      } catch (e) {
+        try { el.currentTime = Math.max(0, t); } catch (e2) { }
+      }
+      guard.forceTimeWrite = false;
+    }
+
+    function syncUiToEnd() {
+      var info = terminalInfo();
+      var d = info.duration;
+      if (d > 0) {
+        guard.lastDisplayTime = d;
+        guard.lastProgressMedia = d;
+        updateProgressUi(100, formatTime(d) + " / " + formatTime(d));
+      }
+      removeWaitingUi();
+      safeCall(function () { if (navigator.mediaSession) navigator.mediaSession.playbackState = "paused"; });
+      safeCall(function () { if (player && typeof player.pause === "function") originalPlayerPause ? originalPlayerPause.call(player) : player.pause(); });
+    }
+
+    function latchEnd(reason) {
+      if (loopDesired()) return false;
+      if (guard.latched) {
+        syncUiToEnd();
+        return true;
+      }
+      var info = terminalInfo();
+      if (!info.valid && !info.ended) return false;
+      guard.latched = true;
+      guard.latchedAt = nowMs();
+      guard.reason = String(reason || "terminal-end");
+      window.__pokeHardTerminalEndLatched = true;
+      window.__pokeHardTerminalEndReason = guard.reason;
+      forceLoopOff();
+      removeWaitingUi();
+      safeCall(function () {
+        var d = info.duration || playerDuration();
+        if (d > 0) {
+          var t = Math.max(0, d - 0.001);
+          nativeSetTime(videoEl, t);
+          if (audioEl) nativeSetTime(audioEl, t);
+          guard.lastDisplayTime = d;
+          guard.lastProgressMedia = d;
+        }
+      });
+      nativePauseMedia(videoEl);
+      nativePauseMedia(audioEl);
+      syncUiToEnd();
+      safeCall(function () { if (player && typeof player.trigger === "function") player.trigger("ended"); });
+      syncUiToEnd();
+      if (guard.keepTimer) clearInterval(guard.keepTimer);
+      guard.keepTimer = setInterval(function () {
+        if (!guard.latched) {
+          clearInterval(guard.keepTimer);
+          guard.keepTimer = 0;
+          return;
+        }
+        nativePauseMedia(videoEl);
+        nativePauseMedia(audioEl);
+        syncUiToEnd();
+        if (nowMs() - guard.latchedAt > 30000) {
+          clearInterval(guard.keepTimer);
+          guard.keepTimer = 0;
+        }
+      }, 120);
+      return true;
+    }
+
+    function releaseForRestart(reason) {
+      guard.latched = false;
+      window.__pokeHardTerminalEndLatched = false;
+      window.__pokeHardTerminalEndReason = "";
+      if (guard.keepTimer) {
+        clearInterval(guard.keepTimer);
+        guard.keepTimer = 0;
+      }
+      guard.releasedForRestartUntil = nowMs() + 4200;
+      guard.lastUserTimelineAt = nowMs();
+      guard.lastUserRestartAt = nowMs();
+      guard.lastDisplayTime = 0;
+      guard.lastProgressMedia = 0;
+      guard.lastPercent = -1;
+      forceLoopOff();
+      safeCall(function () {
+        var r = rootEl();
+        if (r) r.classList.remove("vjs-ended", "vjs-poke-hard-ended", "vjs-waiting", "vjs-seeking", "vjs-stalled");
+      });
+      safeCall(function () {
+        if (player && typeof player.removeClass === "function") {
+          player.removeClass("vjs-ended");
+          player.removeClass("vjs-poke-hard-ended");
+          player.removeClass("vjs-waiting");
+          player.removeClass("vjs-seeking");
+          player.removeClass("vjs-stalled");
+        }
+      });
+      nativeSetTime(videoEl, 0);
+      nativeSetTime(audioEl, 0);
+      updateProgressUi(0, "0:00 / " + formatTime(playerDuration()));
+      return true;
+    }
+
+    function noteFlap() {
+      var t = nowMs();
+      if (!guard.lastFlapAt || t - guard.lastFlapAt > 1800) guard.flapCount = 0;
+      guard.lastFlapAt = t;
+      guard.flapCount += 1;
+      return guard.flapCount;
+    }
+
+    function shouldLatch(reason) {
+      refreshPlayerRefs();
+      if (guard.latched) return true;
+      if (loopDesired()) return false;
+      if (restartIntentActive(2600)) return false;
+      var info = terminalInfo();
+      if (!info.valid) return !!info.ended;
+      if (info.duration < 1.5) return false;
+      var r = String(reason || "").toLowerCase();
+      if (info.ended) return true;
+      if (info.remaining <= 0.22 && info.remaining >= -1.0) return true;
+      var tail = Math.min(7.5, Math.max(3.25, info.duration * 0.006));
+      var inTail = info.remaining >= -1.0 && info.remaining <= tail;
+      if (!inTail) return false;
+      var userFresh = userTimelineActive(2600);
+      if (userFresh && !/ended|terminal|native-ended/.test(r)) return false;
+      var eventLooksBad = /waiting|stalled|suspend|emptied|buffer|spinner|stall|fallback|terminal/.test(r);
+      var playPauseFlap = /play|pause|playing/.test(r) && noteFlap() >= 2;
+      var closeEnough = info.remaining <= 1.2 && /timeupdate|pause|play|playing|waiting|stalled/.test(r);
+      if (eventLooksBad || playPauseFlap || closeEnough) return true;
+      var t = nowMs();
+      var movedForward = info.mediaTime > Number(guard.lastProgressMedia || 0) + 0.055;
+      if (movedForward) {
+        guard.lastProgressMedia = info.mediaTime;
+        guard.lastProgressAt = t;
+        return false;
+      }
+      var stagnantFor = t - Number(guard.lastProgressAt || t);
+      var anyPlaying = false;
+      safeCall(function () { anyPlaying = anyPlaying || !videoEl.paused; });
+      safeCall(function () { anyPlaying = anyPlaying || !!(audioEl && !audioEl.paused); });
+      if (anyPlaying && stagnantFor > 900 && info.remaining <= Math.min(5.5, tail)) return true;
+      return false;
+    }
+
+    function blockPlayForTerminal(el, reason) {
+      if (!el) return false;
+      var isOurs = el === videoEl || el === audioEl || (el.id === "video" || el.id === "aud");
+      if (!isOurs) return false;
+      if (guard.latched) {
+        if (restartIntentActive(3600)) {
+          releaseForRestart("restart-" + reason);
+          return false;
+        }
+        syncUiToEnd();
+        return true;
+      }
+      if (shouldLatch(reason || "play-call")) {
+        latchEnd(reason || "play-call");
+        return true;
+      }
+      return false;
+    }
+
+    function patchPlayMethods() {
+      if (!HTMLMediaElement.prototype.__pokeHardTerminalPlayPatched) {
+        HTMLMediaElement.prototype.__pokeHardTerminalPlayPatched = true;
+        HTMLMediaElement.prototype.play = function () {
+          try {
+            if (window.__pokeHardTerminalEndBlockPlayForElement && window.__pokeHardTerminalEndBlockPlayForElement(this, "native-play")) {
+              return Promise.resolve();
+            }
+          } catch (e) { }
+          return originalPrototypePlay.apply(this, arguments);
+        };
+      }
+      refreshPlayerRefs();
+      if (player && !player.__pokeHardTerminalPlayerPatched) {
+        player.__pokeHardTerminalPlayerPatched = true;
+        if (typeof player.play === "function") originalPlayerPlay = player.play;
+        if (typeof player.pause === "function") originalPlayerPause = player.pause;
+        if (typeof player.currentTime === "function") originalPlayerCurrentTime = player.currentTime;
+        if (originalPlayerPlay) {
+          player.play = function () {
+            try {
+              if (guard.latched) {
+                if (restartIntentActive(3600)) releaseForRestart("player-play");
+                else { syncUiToEnd(); return Promise.resolve(); }
+              } else if (shouldLatch("player-play")) {
+                latchEnd("player-play");
+                return Promise.resolve();
+              }
+            } catch (e) { }
+            return originalPlayerPlay.apply(player, arguments);
+          };
+        }
+        if (originalPlayerCurrentTime) {
+          player.currentTime = function (value) {
+            if (arguments.length > 0) {
+              var requested = Number(value);
+              if (isFinite(requested)) {
+                if (guard.latched && !restartIntentActive(3600)) return playerDuration();
+                var cur = playerCurrent();
+                var d = playerDuration();
+                var userSeeking = userTimelineActive(2200) || restartIntentActive(3600) || guard.forceTimeWrite;
+                if (!userSeeking && cur > 1.0 && requested < cur - 0.18 && !(d > 0 && requested >= d - 0.25)) {
+                  return cur;
+                }
+              }
+            }
+            return originalPlayerCurrentTime.apply(player, arguments);
+          };
+        }
+      }
+    }
+
+    function clampSeekbar() {
+      if (guard.latched) {
+        syncUiToEnd();
+        return;
+      }
+      var info = terminalInfo();
+      if (!info.valid) return;
+      var userSeeking = userTimelineActive(1800) || restartIntentActive(2800);
+      var cur = Math.max(0, Math.min(info.mediaTime, info.duration));
+      if (!userSeeking && cur < Number(guard.lastDisplayTime || 0) - 0.08) {
+        cur = Number(guard.lastDisplayTime || 0);
+      }
+      if (!userSeeking) guard.lastDisplayTime = Math.max(Number(guard.lastDisplayTime || 0), cur);
+      else guard.lastDisplayTime = cur;
+      var pct = info.duration > 0 ? (cur / info.duration) * 100 : 0;
+      if (!userSeeking && Number(guard.lastPercent) >= 0 && pct < Number(guard.lastPercent) - 0.08) pct = Number(guard.lastPercent);
+      guard.lastPercent = Math.max(Number(guard.lastPercent) || 0, pct);
+      updateProgressUi(pct, formatTime(cur) + " / " + formatTime(info.duration));
+    }
+
+    function eventGuard(reason) {
+      patchPlayMethods();
+      forceLoopOff();
+      if (shouldLatch(reason)) latchEnd(reason);
+      else if (guard.latched) syncUiToEnd();
+      else if (/timeupdate|playing|play|pause/.test(String(reason || ""))) clampSeekbar();
+    }
+
+    function installListeners() {
+      var events = ["ended", "waiting", "stalled", "suspend", "emptied", "pause", "play", "playing", "timeupdate", "durationchange", "loadedmetadata", "canplay", "canplaythrough"];
+      events.forEach(function (ev) {
+        safeCall(function () { videoEl.addEventListener(ev, function () { eventGuard("video-" + ev); }, true); });
+        safeCall(function () { if (audioEl) audioEl.addEventListener(ev, function () { eventGuard("audio-" + ev); }, true); });
+      });
+      var r = rootEl();
+      if (r && !r.__pokeHardTerminalUserActionBound) {
+        r.__pokeHardTerminalUserActionBound = true;
+        ["pointerdown", "mousedown", "touchstart", "click", "keydown"].forEach(function (ev) {
+          r.addEventListener(ev, function (event) {
+            if (!isControlEventTarget(event.target)) return;
+            markTimelineUserAction(3600);
+          }, true);
+        });
+      }
+      safeCall(function () {
+        document.addEventListener("keydown", function (event) {
+          var key = String(event.key || "").toLowerCase();
+          if (key === " " || key === "spacebar" || key === "k" || key === "arrowleft" || key === "arrowright" || key === "home" || key === "end") {
+            markTimelineUserAction(3600);
+          }
+        }, true);
+      });
+      var progress = null;
+      safeCall(function () { progress = rootEl() && rootEl().querySelector(".vjs-progress-control, .vjs-progress-holder"); });
+      if (progress && !progress.__pokeHardTerminalSeekBound) {
+        progress.__pokeHardTerminalSeekBound = true;
+        ["pointerdown", "mousedown", "touchstart", "input", "change"].forEach(function (ev) {
+          progress.addEventListener(ev, function () { markTimelineUserAction(4500); }, true);
+        });
+      }
+      safeCall(function () {
+        var r2 = rootEl();
+        if (!r2 || r2.__pokeHardTerminalObserverBound) return;
+        r2.__pokeHardTerminalObserverBound = true;
+        var obs = new MutationObserver(function () {
+          if (guard.latched) syncUiToEnd();
+          else clampSeekbar();
+        });
+        var target = r2.querySelector(".vjs-play-progress") || r2;
+        obs.observe(target, { attributes: true, attributeFilter: ["style", "class", "aria-valuenow", "aria-valuetext"] });
+      });
+    }
+
+    function tick() {
+      patchPlayMethods();
+      forceLoopOff();
+      if (guard.latched) syncUiToEnd();
+      else {
+        var info = terminalInfo();
+        if (info.valid) {
+          var movedForward = info.mediaTime > Number(guard.lastProgressMedia || 0) + 0.055;
+          if (movedForward) {
+            guard.lastProgressMedia = info.mediaTime;
+            guard.lastProgressAt = nowMs();
+          }
+          if (shouldLatch("interval")) latchEnd("interval");
+          else clampSeekbar();
+        }
+      }
+      guard.raf = requestAnimationFrame(tick);
+    }
+
+    window.__pokeHardTerminalEndShouldLatch = shouldLatch;
+    window.__pokeHardTerminalEndLatch = latchEnd;
+    window.__pokeHardTerminalEndReleaseForRestart = releaseForRestart;
+    window.__pokeHardTerminalEndBlockPlayForElement = blockPlayForTerminal;
+    window.__pokeHardTerminalEndClampSeekbar = function (dur, cur, percent) {
+      var d = Number(dur);
+      var c = Number(cur);
+      var p = Number(percent);
+      if (guard.latched && isFinite(d) && d > 0) return { cur: d, percent: 100 };
+      if (!isFinite(d) || d <= 0) return { cur: cur, percent: percent };
+      if (!userTimelineActive(1800) && !restartIntentActive(2800)) {
+        if (isFinite(c) && c < Number(guard.lastDisplayTime || 0) - 0.08) c = Number(guard.lastDisplayTime || 0);
+        if (isFinite(p) && Number(guard.lastPercent) >= 0 && p < Number(guard.lastPercent) - 0.08) p = Number(guard.lastPercent);
+      }
+      return { cur: isFinite(c) ? Math.min(d, Math.max(0, c)) : cur, percent: isFinite(p) ? Math.min(100, Math.max(0, p)) : percent };
+    };
+
+    var style = document.createElement("style");
+    style.textContent = ".vjs-poke-hard-ended .vjs-loading-spinner,.vjs-poke-hard-ended.vjs-waiting .vjs-loading-spinner,.vjs-poke-hard-ended.vjs-seeking .vjs-loading-spinner,.vjs-poke-hard-ended.vjs-stalled .vjs-loading-spinner{display:none!important;opacity:0!important;visibility:hidden!important}.vjs-poke-hard-ended.vjs-waiting,.vjs-poke-hard-ended.vjs-seeking,.vjs-poke-hard-ended.vjs-stalled{cursor:default!important}";
+    safeCall(function () { document.head.appendChild(style); });
+
+    forceLoopOff();
+    refreshPlayerRefs();
+    installListeners();
+    patchPlayMethods();
+    guard.lastProgressMedia = playerCurrent();
+    guard.lastProgressAt = nowMs();
+    tick();
+    setTimeout(function () { refreshPlayerRefs(); installListeners(); patchPlayMethods(); }, 300);
+    setTimeout(function () { refreshPlayerRefs(); installListeners(); patchPlayMethods(); }, 1200);
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", installWhenReady, { once: true });
+  else installWhenReady();
+})();
+ 
 //////////////// THE PLAYER, END ////////////////////////
  
  (function () {
