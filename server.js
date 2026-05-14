@@ -1207,19 +1207,17 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
 /*
  * POKE-toobusy
  *
- * This handles overload in two layers:
+ * This handles overload in three layers:
  *
- * 1. toobusy-js still does the fast middleware decision. If the event loop
- *    is lagging too much, new requests get a 503 before they make things worse.
+ * 1. toobusy-js still does the fast overload signal.
  *
- * 2. Node core diagnostics add context around the lag event:
- *    event-loop delay percentiles, event-loop utilization, CPU delta, memory,
- *    active route counts, oldest active requests, recent slow requests,
- *    active resource types, dynamic thresholds, and optional diagnostic reports.
+ * 2. Human-facing page requests get a short grace wait and a tiny soft-pass
+ *    budget during normal overload. This means a normal person usually sees a
+ *    slightly slower page instead of a 503.
  *
- * toobusy-js can tell us that the event loop was delayed. It cannot tell us
- * the exact blocking line after the fact, so this logs the best surrounding
- * evidence without adding a heavy profiler dependency.
+ * 3. Heavy/background/API/media requests are shed first. If the server enters
+ *    insane lag or restart mode, all non-essential traffic is rejected because
+ *    saving the process is better for everyone.
  */
 const TOOBUSY_INTERVAL_MS = Number(process.env.POKE_TOOBUSY_INTERVAL_MS || 110);
 const TOOBUSY_MAX_LAG_MS = Number(process.env.POKE_TOOBUSY_MAX_LAG_MS || 2500);
@@ -1260,6 +1258,23 @@ const REQUEST_SLOW_MS = Number(process.env.POKE_REQUEST_SLOW_MS || 3000);
 const MAX_TRACKED_ACTIVE_REQUESTS = Number(process.env.POKE_MAX_TRACKED_ACTIVE_REQUESTS || 1000);
 const MAX_RECENT_SLOW_REQUESTS = Number(process.env.POKE_MAX_RECENT_SLOW_REQUESTS || 20);
 
+const NORMAL_USER_TOOBUSY_PROTECTION = process.env.POKE_NORMAL_USER_TOOBUSY_PROTECTION !== "0";
+const NORMAL_USER_GRACE_MS = Number(process.env.POKE_NORMAL_USER_GRACE_MS || 1400);
+const NORMAL_USER_GRACE_STEP_MS = Number(process.env.POKE_NORMAL_USER_GRACE_STEP_MS || 140);
+const NORMAL_USER_GRACE_JITTER_MS = Number(process.env.POKE_NORMAL_USER_GRACE_JITTER_MS || 180);
+const NORMAL_USER_SOFT_PASS_ON_PAGE = process.env.POKE_NORMAL_USER_SOFT_PASS_ON_PAGE !== "0";
+
+const TOOBUSY_CLIENT_WINDOW_MS = Number(process.env.POKE_TOOBUSY_CLIENT_WINDOW_MS || 30_000);
+const NORMAL_USER_MAX_REQUESTS_PER_WINDOW = Number(process.env.POKE_NORMAL_USER_MAX_REQUESTS_PER_WINDOW || 45);
+const NORMAL_USER_MAX_SOFT_PASSES_PER_WINDOW = Number(process.env.POKE_NORMAL_USER_MAX_SOFT_PASSES_PER_WINDOW || 6);
+const NORMAL_USER_MAX_HARD_REJECTS_PER_WINDOW = Number(process.env.POKE_NORMAL_USER_MAX_HARD_REJECTS_PER_WINDOW || 2);
+const NORMAL_USER_MAX_ACTIVE_FOR_SOFT_PASS = Number(process.env.POKE_NORMAL_USER_MAX_ACTIVE_FOR_SOFT_PASS || 800);
+
+const TOOBUSY_ALLOW_STATIC_DURING_SOFT_OVERLOAD = process.env.POKE_TOOBUSY_ALLOW_STATIC_DURING_SOFT_OVERLOAD !== "0";
+const TOOBUSY_ALLOW_HEALTH_DURING_SOFT_OVERLOAD = process.env.POKE_TOOBUSY_ALLOW_HEALTH_DURING_SOFT_OVERLOAD !== "0";
+const TOOBUSY_POLICY_CLEANUP_INTERVAL_MS = Number(process.env.POKE_TOOBUSY_POLICY_CLEANUP_INTERVAL_MS || 60_000);
+const TOOBUSY_POLICY_LOG_COOLDOWN_MS = Number(process.env.POKE_TOOBUSY_POLICY_LOG_COOLDOWN_MS || 15_000);
+
 const DIAGNOSTIC_REPORT_DIR = process.env.POKE_DIAGNOSTIC_REPORT_DIR || nodePath.join(process.cwd(), "reports");
 const ENABLE_DIAGNOSTIC_REPORTS = process.env.POKE_DIAGNOSTIC_REPORTS !== "0";
 
@@ -1275,6 +1290,25 @@ let requestSequence = 0;
 const activeRequests = new Map();
 const activeRequestCounts = new Map();
 const recentSlowRequests = [];
+
+const busyClients = new Map();
+let lastTooBusyPolicyLogAt = 0;
+let lastLagPolicySnapshot = null;
+let lastLagPolicySnapshotAt = 0;
+
+const tooBusyPolicyStats = {
+  allowedNotBusy: 0,
+  allowedStatic: 0,
+  allowedHealth: 0,
+  gracePassed: 0,
+  softPassed: 0,
+  rejectedHard: 0,
+  rejectedBackground: 0,
+  rejectedHeavy: 0,
+  rejectedNoBudget: 0,
+  rejectedRestarting: 0,
+  rejectedInsane: 0
+};
 
 let lastEventLoopUtilization = performance.eventLoopUtilization();
 let lastCpuUsage = process.cpuUsage();
@@ -1358,6 +1392,12 @@ function formatSecondsFromMs(value) {
   return roundMs(value / 1000) + "s";
 }
 
+function delay(ms) {
+  return new Promise(function (resolve) {
+    setTimeout(resolve, ms);
+  });
+}
+
 function normalizePathname(pathname) {
   return String(pathname || "/")
     .replace(/[a-f0-9]{24}/gi, ":objectId")
@@ -1371,6 +1411,11 @@ function getRequestKey(req) {
   const url = req.originalUrl || req.url || "/";
   const pathname = url.split("?")[0] || "/";
   return req.method + " " + normalizePathname(pathname);
+}
+
+function getRequestPath(req) {
+  const url = req.originalUrl || req.url || "/";
+  return (url.split("?")[0] || "/").toLowerCase();
 }
 
 function incrementMapCount(map, key) {
@@ -1691,6 +1736,13 @@ function createLagSnapshot(currentLag, extra) {
       recentSlow: recentSlowRequests.slice(-10).reverse()
     },
     resources: getActiveResourceCounts(),
+    toobusyPolicy: {
+      normalUserProtection: NORMAL_USER_TOOBUSY_PROTECTION,
+      graceMs: NORMAL_USER_GRACE_MS,
+      softPassOnPage: NORMAL_USER_SOFT_PASS_ON_PAGE,
+      activeClients: busyClients.size,
+      stats: { ...tooBusyPolicyStats }
+    },
     ...extra
   };
 }
@@ -1856,6 +1908,12 @@ function formatLagPretty(message, snapshot) {
   lines.push("  oldest active: " + formatOldestRequests(snapshot.requests.oldestActive));
   lines.push("  recent slow: " + formatRecentSlowRequests(snapshot.requests.recentSlow));
   lines.push("  resources: " + formatResourceCounts(snapshot.resources));
+  lines.push(
+    "  policy: clients=" + snapshot.toobusyPolicy.activeClients +
+    " graceMs=" + snapshot.toobusyPolicy.graceMs +
+    " softPagePass=" + snapshot.toobusyPolicy.softPassOnPage +
+    " stats=" + JSON.stringify(snapshot.toobusyPolicy.stats)
+  );
   lines.push("  likely clues:");
   for (const hint of hints) {
     lines.push("    - " + hint);
@@ -1980,6 +2038,423 @@ function isInsaneLag(currentLag, snapshot) {
   );
 }
 
+function getBusyClientKey(req) {
+  return String(req.ip || req.socket.remoteAddress || "unknown").replace("::ffff:", "");
+}
+
+function pruneBusyClientData(data, now) {
+  const oldest = now - TOOBUSY_CLIENT_WINDOW_MS;
+
+  while (data.requestTimes.length > 0 && data.requestTimes[0] < oldest) {
+    data.requestTimes.shift();
+  }
+
+  while (data.softPassTimes.length > 0 && data.softPassTimes[0] < oldest) {
+    data.softPassTimes.shift();
+  }
+
+  while (data.hardRejectTimes.length > 0 && data.hardRejectTimes[0] < oldest) {
+    data.hardRejectTimes.shift();
+  }
+
+  while (data.gracePassTimes.length > 0 && data.gracePassTimes[0] < oldest) {
+    data.gracePassTimes.shift();
+  }
+}
+
+function getBusyClientData(req) {
+  const key = getBusyClientKey(req);
+  const now = Date.now();
+  let data = busyClients.get(key);
+
+  if (!data) {
+    data = {
+      key,
+      requestTimes: [],
+      softPassTimes: [],
+      hardRejectTimes: [],
+      gracePassTimes: [],
+      lastSeen: now,
+      lastPath: "",
+      lastDecision: ""
+    };
+    busyClients.set(key, data);
+  }
+
+  data.lastSeen = now;
+  pruneBusyClientData(data, now);
+  return data;
+}
+
+function rememberBusyRequest(req, data) {
+  const now = Date.now();
+  data.lastSeen = now;
+  data.lastPath = getRequestPath(req);
+  data.requestTimes.push(now);
+  pruneBusyClientData(data, now);
+}
+
+function rememberBusyDecision(data, decision) {
+  const now = Date.now();
+  data.lastDecision = decision;
+
+  if (decision === "soft-pass") {
+    data.softPassTimes.push(now);
+  }
+
+  if (decision === "grace-pass") {
+    data.gracePassTimes.push(now);
+  }
+
+  if (decision === "hard-reject") {
+    data.hardRejectTimes.push(now);
+  }
+
+  pruneBusyClientData(data, now);
+}
+
+function isSafeMethod(req) {
+  return req.method === "GET" || req.method === "HEAD";
+}
+
+function isStaticRequest(req) {
+  const pathname = getRequestPath(req);
+
+  if (/^\/(css|js|img|font|static|favicon\.ico|manifest\.json|robots\.txt)(\/|$)/i.test(pathname)) {
+    return true;
+  }
+
+  return /\.(css|js|mjs|png|jpg|jpeg|webp|gif|svg|ico|woff|woff2|ttf|otf|map|txt)$/i.test(pathname);
+}
+
+function isHealthRequest(req) {
+  const pathname = getRequestPath(req);
+
+  return (
+    pathname === "/robots.txt" ||
+    pathname === "/favicon.ico" ||
+    pathname === "/_pokestopskids/stats" ||
+    pathname === "/_antiddos" ||
+    pathname.startsWith("/_antiddos/")
+  );
+}
+
+function isHeavyOrBackgroundRequest(req) {
+  const pathname = getRequestPath(req);
+  const accept = String(req.headers.accept || "").toLowerCase();
+  const secFetchDest = String(req.headers["sec-fetch-dest"] || "").toLowerCase();
+  const secFetchMode = String(req.headers["sec-fetch-mode"] || "").toLowerCase();
+
+  if (!isSafeMethod(req)) {
+    return true;
+  }
+
+  if (
+    pathname.startsWith("/api/") ||
+    pathname.startsWith("/proxy/") ||
+    pathname.startsWith("/videoplayback") ||
+    pathname.startsWith("/vi/") ||
+    pathname.startsWith("/ggpht/") ||
+    pathname.startsWith("/avatars/") ||
+    pathname.startsWith("/storyboard") ||
+    pathname.startsWith("/sb/") ||
+    pathname.startsWith("/manifest") ||
+    pathname.startsWith("/channel_uploads") ||
+    pathname.startsWith("/music")
+  ) {
+    return true;
+  }
+
+  if (accept.includes("application/json") && !accept.includes("text/html")) {
+    return true;
+  }
+
+  if (secFetchDest === "empty" && secFetchMode === "cors") {
+    return true;
+  }
+
+  return false;
+}
+
+function isLikelyAutomationUserAgent(req) {
+  const ua = String(req.headers["user-agent"] || "").toLowerCase();
+
+  if (!ua) {
+    return false;
+  }
+
+  return (
+    ua.includes("curl") ||
+    ua.includes("wget") ||
+    ua.includes("python-requests") ||
+    ua.includes("python/") ||
+    ua.includes("aiohttp") ||
+    ua.includes("httpx") ||
+    ua.includes("axios") ||
+    ua.includes("node-fetch") ||
+    ua.includes("undici") ||
+    ua.includes("go-http-client") ||
+    ua.includes("java/") ||
+    ua.includes("okhttp") ||
+    ua.includes("libwww") ||
+    ua.includes("scrapy") ||
+    ua.includes("crawler") ||
+    ua.includes("spider")
+  );
+}
+
+function requestLooksLikePageNavigation(req) {
+  const pathname = getRequestPath(req);
+  const accept = String(req.headers.accept || "").toLowerCase();
+  const secFetchDest = String(req.headers["sec-fetch-dest"] || "").toLowerCase();
+  const secFetchMode = String(req.headers["sec-fetch-mode"] || "").toLowerCase();
+
+  if (!isSafeMethod(req)) {
+    return false;
+  }
+
+  if (isStaticRequest(req)) {
+    return false;
+  }
+
+  if (isHeavyOrBackgroundRequest(req)) {
+    return false;
+  }
+
+  if (
+    pathname === "/" ||
+    pathname === "/watch" ||
+    pathname === "/search" ||
+    pathname === "/hashtag" ||
+    pathname.startsWith("/watch/") ||
+    pathname.startsWith("/search/") ||
+    pathname.startsWith("/channel/") ||
+    pathname.startsWith("/user/") ||
+    pathname.startsWith("/playlist")
+  ) {
+    return true;
+  }
+
+  if (accept.includes("text/html")) {
+    return true;
+  }
+
+  if (secFetchDest === "document" || secFetchMode === "navigate") {
+    return true;
+  }
+
+  return false;
+}
+
+function getPolicySeverity() {
+  if (lagRestarting) {
+    return "restarting";
+  }
+
+  if (lastLagPolicySnapshot && Date.now() - lastLagPolicySnapshotAt <= Math.max(30_000, LAG_LOG_COOLDOWN_MS * 4)) {
+    return lastLagPolicySnapshot.severity || "overloaded";
+  }
+
+  return "overloaded";
+}
+
+function isHardOverloadForPolicy() {
+  const severity = getPolicySeverity();
+  return severity === "insane" || severity === "restarting";
+}
+
+function canProtectNormalUser(req, data) {
+  if (!NORMAL_USER_TOOBUSY_PROTECTION) {
+    return false;
+  }
+
+  if (!requestLooksLikePageNavigation(req)) {
+    return false;
+  }
+
+  if (isLikelyAutomationUserAgent(req)) {
+    return false;
+  }
+
+  if (data.requestTimes.length > NORMAL_USER_MAX_REQUESTS_PER_WINDOW) {
+    return false;
+  }
+
+  if (data.softPassTimes.length >= NORMAL_USER_MAX_SOFT_PASSES_PER_WINDOW) {
+    return false;
+  }
+
+  if (data.hardRejectTimes.length >= NORMAL_USER_MAX_HARD_REJECTS_PER_WINDOW) {
+    return false;
+  }
+
+  if (activeRequests.size >= NORMAL_USER_MAX_ACTIVE_FOR_SOFT_PASS) {
+    return false;
+  }
+
+  return true;
+}
+
+function getTooBusyDecision(req, data) {
+  const severity = getPolicySeverity();
+
+  if (lagRestarting || severity === "restarting") {
+    return {
+      action: "reject",
+      reason: "restarting",
+      status: 503,
+      retryAfter: RETRY_AFTER_SECONDS,
+      message: "Server is recovering from high load. Please retry shortly."
+    };
+  }
+
+  if (severity === "insane") {
+    return {
+      action: "reject",
+      reason: "insane-overload",
+      status: 503,
+      retryAfter: RETRY_AFTER_SECONDS,
+      message: "Server is under heavy load. Please retry shortly."
+    };
+  }
+
+  if (TOOBUSY_ALLOW_HEALTH_DURING_SOFT_OVERLOAD && isHealthRequest(req)) {
+    return {
+      action: "allow",
+      reason: "health-soft-pass"
+    };
+  }
+
+  if (TOOBUSY_ALLOW_STATIC_DURING_SOFT_OVERLOAD && isStaticRequest(req) && isSafeMethod(req)) {
+    return {
+      action: "allow",
+      reason: "static-soft-pass"
+    };
+  }
+
+  if (isHeavyOrBackgroundRequest(req)) {
+    return {
+      action: "reject",
+      reason: "heavy-or-background",
+      status: 503,
+      retryAfter: RETRY_AFTER_SECONDS,
+      message: "Server is busy. Please retry shortly."
+    };
+  }
+
+  if (canProtectNormalUser(req, data)) {
+    return {
+      action: "grace",
+      reason: "normal-user-page-navigation"
+    };
+  }
+
+  return {
+    action: "reject",
+    reason: "no-soft-pass-budget",
+    status: 503,
+    retryAfter: RETRY_AFTER_SECONDS,
+    message: "Server is busy. Please retry shortly."
+  };
+}
+
+function logTooBusyPolicy(message, data) {
+  const now = Date.now();
+
+  if (now - lastTooBusyPolicyLogAt < TOOBUSY_POLICY_LOG_COOLDOWN_MS) {
+    return;
+  }
+
+  lastTooBusyPolicyLogAt = now;
+
+  console.error(
+    "[POKE-toobusy-policy] " + message + " " +
+    JSON.stringify({
+      clients: busyClients.size,
+      activeRequests: activeRequests.size,
+      severity: getPolicySeverity(),
+      client: data
+        ? {
+            requests: data.requestTimes.length,
+            softPasses: data.softPassTimes.length,
+            gracePasses: data.gracePassTimes.length,
+            hardRejects: data.hardRejectTimes.length,
+            lastPath: data.lastPath,
+            lastDecision: data.lastDecision
+          }
+        : null,
+      stats: tooBusyPolicyStats
+    })
+  );
+}
+
+function sendTooBusyResponse(req, res, data, decision) {
+  rememberBusyDecision(data, "hard-reject");
+
+  if (decision.reason === "restarting") {
+    tooBusyPolicyStats.rejectedRestarting++;
+  } else if (decision.reason === "insane-overload") {
+    tooBusyPolicyStats.rejectedInsane++;
+  } else if (decision.reason === "heavy-or-background") {
+    tooBusyPolicyStats.rejectedHeavy++;
+  } else if (decision.reason === "no-soft-pass-budget") {
+    tooBusyPolicyStats.rejectedNoBudget++;
+  } else {
+    tooBusyPolicyStats.rejectedHard++;
+  }
+
+  logTooBusyPolicy("rejected request during overload: " + decision.reason, data);
+
+  res.set("Retry-After", String(decision.retryAfter || RETRY_AFTER_SECONDS));
+  res.set("Cache-Control", "no-store");
+  res.set("X-Poke-Overload-Policy", decision.reason);
+  return res.status(decision.status || 503).send(decision.message || "Server is busy. Please retry shortly.");
+}
+
+async function handleNormalUserGrace(req, res, next, data, decision) {
+  const jitter = NORMAL_USER_GRACE_JITTER_MS > 0
+    ? Math.floor(Math.random() * NORMAL_USER_GRACE_JITTER_MS)
+    : 0;
+
+  const graceBudget = Math.max(0, NORMAL_USER_GRACE_MS + jitter);
+  const startedAt = performance.now();
+
+  while (!res.headersSent && performance.now() - startedAt < graceBudget) {
+    if (lagRestarting || isHardOverloadForPolicy()) {
+      break;
+    }
+
+    if (!toobusy()) {
+      rememberBusyDecision(data, "grace-pass");
+      tooBusyPolicyStats.gracePassed++;
+      return next();
+    }
+
+    await delay(NORMAL_USER_GRACE_STEP_MS);
+  }
+
+  if (
+    !res.headersSent &&
+    NORMAL_USER_SOFT_PASS_ON_PAGE &&
+    !lagRestarting &&
+    !isHardOverloadForPolicy() &&
+    canProtectNormalUser(req, data)
+  ) {
+    rememberBusyDecision(data, "soft-pass");
+    tooBusyPolicyStats.softPassed++;
+    logTooBusyPolicy("soft-passed normal page request during overload", data);
+    return next();
+  }
+
+  return sendTooBusyResponse(req, res, data, {
+    action: "reject",
+    reason: "normal-user-grace-expired",
+    status: 503,
+    retryAfter: RETRY_AFTER_SECONDS,
+    message: "Server is busy. Please retry shortly."
+  });
+}
+
 function shutdownToobusy() {
   if (typeof toobusy.shutdown !== "function") {
     return;
@@ -2071,18 +2546,42 @@ function requestLagTracker(req, res, next) {
 }
 
 function tooBusyMiddleware(req, res, next) {
+  const data = getBusyClientData(req);
+  rememberBusyRequest(req, data);
+
   if (lagRestarting) {
-    res.set("Connection", "close");
-    res.set("Retry-After", String(RETRY_AFTER_SECONDS));
-    return res.status(503).send("Server is recovering from high load. Please retry shortly.");
+    return sendTooBusyResponse(req, res, data, {
+      action: "reject",
+      reason: "restarting",
+      status: 503,
+      retryAfter: RETRY_AFTER_SECONDS,
+      message: "Server is recovering from high load. Please retry shortly."
+    });
   }
 
-  if (toobusy()) {
-    res.set("Retry-After", String(RETRY_AFTER_SECONDS));
-    return res.status(503).send("I'm busy right now, sorry.");
+  if (!toobusy()) {
+    tooBusyPolicyStats.allowedNotBusy++;
+    return next();
   }
 
-  next();
+  const decision = getTooBusyDecision(req, data);
+
+  if (decision.action === "allow") {
+    if (decision.reason === "health-soft-pass") {
+      tooBusyPolicyStats.allowedHealth++;
+    } else if (decision.reason === "static-soft-pass") {
+      tooBusyPolicyStats.allowedStatic++;
+    }
+
+    data.lastDecision = decision.reason;
+    return next();
+  }
+
+  if (decision.action === "grace") {
+    return handleNormalUserGrace(req, res, next, data, decision).catch(next);
+  }
+
+  return sendTooBusyResponse(req, res, data, decision);
 }
 
 function handleToobusyShutdownSignal(signal) {
@@ -2112,10 +2611,34 @@ const dynamicThresholdTimer = setInterval(function () {
 
 dynamicThresholdTimer.unref();
 
+const tooBusyPolicyCleanupTimer = setInterval(function () {
+  const now = Date.now();
+  const maxAge = TOOBUSY_CLIENT_WINDOW_MS * 3;
+
+  for (const [key, data] of busyClients) {
+    pruneBusyClientData(data, now);
+
+    if (
+      data.requestTimes.length === 0 &&
+      data.softPassTimes.length === 0 &&
+      data.hardRejectTimes.length === 0 &&
+      data.gracePassTimes.length === 0 &&
+      now - data.lastSeen > maxAge
+    ) {
+      busyClients.delete(key);
+    }
+  }
+}, TOOBUSY_POLICY_CLEANUP_INTERVAL_MS);
+
+tooBusyPolicyCleanupTimer.unref();
+
 toobusy.onLag(function (currentLag) {
   const now = Date.now();
   const snapshot = createLagSnapshot(currentLag);
   const insane = isInsaneLag(currentLag, snapshot);
+
+  lastLagPolicySnapshot = snapshot;
+  lastLagPolicySnapshotAt = now;
 
   if (now - lastLagLogAt >= LAG_LOG_COOLDOWN_MS || insane) {
     lastLagLogAt = now;
