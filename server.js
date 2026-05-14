@@ -1557,10 +1557,9 @@ hr{border:0;border-top:1px solid rgba(255,255,255,0.1);margin:32px 0;}
 .tab-content.active { display: block; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
-/* Hero Stats Box (Clean Version) */
-.hero-stat {
+ .hero-stat {
   padding: 16px 0 32px 0;
-  text-align: left;
+  text-align: center;
 }
 .hero-label {
   font-size: 1.1rem;
@@ -1582,16 +1581,14 @@ hr{border:0;border-top:1px solid rgba(255,255,255,0.1);margin:32px 0;}
   display: inline-flex; 
   align-items: center; 
   background: rgba(76, 175, 80, 0.15); 
-  border: 1px solid rgba(76, 175, 80, 0.3); 
   color: #4caf50; 
   padding: 6px 12px; 
-  border-radius: 20px; 
+  border-radius: 10px; 
   font-size: 0.9rem; 
   font-weight: bold; 
   margin-bottom: 16px;
 }
 
-/* Upgraded Grid Layout */
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
