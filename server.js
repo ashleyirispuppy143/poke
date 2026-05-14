@@ -572,6 +572,7 @@
     // Persistent Data Setup
     let allTimeRouteCounts = new Map();
     let totalGlobalRequests = 0;
+    let trackingStartTime = Date.now();
     const STATS_FILE_PATH = 'popularpaths.json';
 
     try {
@@ -579,6 +580,9 @@
         const fileData = fs.readFileSync(STATS_FILE_PATH, 'utf8');
         const parsedData = JSON.parse(fileData);
         totalGlobalRequests = parsedData.totalRequests || 0;
+        if (parsedData.trackingStartTime) {
+          trackingStartTime = parsedData.trackingStartTime;
+        }
         if (parsedData.routes) {
           for (const [key, val] of Object.entries(parsedData.routes)) {
             allTimeRouteCounts.set(key, val);
@@ -596,7 +600,7 @@
       for (const [k, v] of allTimeRouteCounts.entries()) {
         routesObj[k] = v;
       }
-      const outData = { totalRequests: totalGlobalRequests, routes: routesObj };
+      const outData = { trackingStartTime, totalRequests: totalGlobalRequests, routes: routesObj };
       fs.writeFile(STATS_FILE_PATH, JSON.stringify(outData, null, 2), (err) => {
         if (err) console.error("[POKE-resource] Failed to save popularpaths.json:", err.message);
       });
@@ -695,6 +699,7 @@
       if (p.startsWith('/sb/')) return '/sb/';
       if (p.startsWith('/storyboard')) return '/storyboard';
       if (p.startsWith('/videoplayback')) return '/videoplayback';
+      if (p.startsWith('/hashtag/')) return '/hashtag/';
       
       return p
         .replace(/[a-f0-9]{24}/gi, ":objectId")
@@ -1459,6 +1464,7 @@
         active_requests: {
           total: activeRequests.size,
           total_global_requests: totalGlobalRequests,
+          tracking_start_time: trackingStartTime,
           by_route: getTopMapEntries(currentSecondRouteCounts, resourceConfig.logging.maxTopRoutes),
           all_time_top_routes: getTopMapEntries(allTimeRouteCounts, 12),
           oldest: getActiveRequestSummary(resourceConfig.logging.maxTopRoutes),
@@ -1520,13 +1526,6 @@ hr{border:0;border-top:1px solid #333;margin:32px 0;}
   text-align: center;
   box-shadow: 0 8px 16px rgba(0,0,0,0.4);
 }
-.hero-num {
-  font-size: 4rem;
-  font-weight: 900;
-  color: #0ab7f0;
-  line-height: 1;
-  text-shadow: 0 0 20px rgba(10,183,240,0.3);
-}
 .hero-label {
   font-size: 1.1rem;
   color: #aaa;
@@ -1558,20 +1557,6 @@ hr{border:0;border-top:1px solid #333;margin:32px 0;}
 .stat-label{font-size: .9rem; color: #aaa; display: block; margin-top: 4px;}
 
 .green{color:#4caf50} .orange{color:#ff9800} .red{color:#f44336}
-
-/* Pulsing Status Indicator */
-@keyframes pulse-green { 0% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(76, 175, 80, 0); } 100% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0); } }
-@keyframes pulse-orange { 0% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(255, 152, 0, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0); } }
-@keyframes pulse-red { 0% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(244, 67, 54, 0); } 100% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0); } }
-.status-dot {
-  display: inline-block;
-  width: 12px; height: 12px;
-  border-radius: 50%;
-  margin-right: 8px;
-}
-.status-dot.green { background: #4caf50; animation: pulse-green 2s infinite; }
-.status-dot.orange { background: #ff9800; animation: pulse-orange 2s infinite; }
-.status-dot.red { background: #f44336; animation: pulse-red 2s infinite; }
 
 code,pre{background:#2a2930;padding:2px 6px;border-radius:4px;}
 pre{overflow:auto;padding:14px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 1px solid #333;}
@@ -1662,12 +1647,17 @@ summary:hover { color: #00c0ff; }
 <p class="small" style="margin-top:0;">Live metrics and traffic protection</p>
 
 <div class="hero-stat">
-  <div id="hero-total" class="hero-num">${stats.active_requests.total_global_requests.toLocaleString()}</div>
   <div class="hero-label">Total Global Requests Processed</div>
+  <div id="hero-total" style="font-size: 3.5rem; font-weight: 900; color: #0ab7f0; margin: 10px 0; text-shadow: 0 0 20px rgba(10,183,240,0.3);">
+    ${stats.active_requests.total_global_requests.toLocaleString()}
+  </div>
+  <div class="small" style="color: #888; font-size: 1rem;">
+    Recording began on: <span id="tracking-start">${new Date(stats.active_requests.tracking_start_time).toLocaleString()}</span>
+  </div>
 </div>
 
 <div id="banner-container" class="banner ${stateClass}">
-  <b>Current Status:</b> <div id="status-dot" class="status-dot ${stateClass}"></div> <span id="banner-state" class="${stateClass}" style="font-size: 1.2rem; text-transform: capitalize;">${stats.state.state}</span>
+  <b>Current Status:</b> <span id="banner-state" class="${stateClass}" style="font-size: 1.2rem; text-transform: capitalize;">${stats.state.state}</span>
   <br>
   <span id="banner-subtext" class="small" style="display:inline-block; margin-top: 8px;">
     System Load Score: ${stats.state.score} &bull; Process Delay: ${stats.state.eventLoop.p99Ms}ms &bull; CPU: ${stats.state.cpu.percent}% &bull; Memory: ${formatPercent(stats.state.memory.rssRatio)}
@@ -1778,9 +1768,9 @@ document.addEventListener("DOMContentLoaded", function() {
       
       // Update DOM components dynamically
       document.getElementById("hero-total").innerText = data.active_requests.total_global_requests.toLocaleString();
+      document.getElementById("tracking-start").innerText = new Date(data.active_requests.tracking_start_time).toLocaleString();
 
       document.getElementById("banner-container").className = "banner " + stateClass;
-      document.getElementById("status-dot").className = "status-dot " + stateClass;
       document.getElementById("banner-state").className = stateClass;
       document.getElementById("banner-state").innerText = state;
       
