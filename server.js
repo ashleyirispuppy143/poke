@@ -1037,67 +1037,407 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
   initlog("Loaded express.js");
 
 /*
- * poke response guard
+ * PokeResponseGuard
  *
- * catches accidental double-sends before they crash the server with
- * ERR_HTTP_HEADERS_SENT. wraps res.send/json/redirect/render so the
- * second attempt just gets swallowed and logged instead of exploding.
+ * This does NOT mark res.render() as sent anymore.
  *
- * /api/ routes are skipped - they handle their own lifecycle and
- * some of them (stats, etc) do stuff that trips the guard unnecessarily.
+ * The old guard could mark render as "already sent" before bytes were actually
+ * sent to the client. If a route then tried to send a fallback response, the
+ * guard swallowed it and the request could hang forever.
+ *
+ * This version only marks actual response commits:
+ * - send
+ * - json
+ * - redirect
+ * - end
+ *
+ * render without a callback is converted into render + send, so render errors
+ * become a real 500 response instead of a silent hanging request.
+ *
+ * render with a callback is left alone. The user's callback is responsible for
+ * sending, and that send is guarded normally.
+ *
+ * It runs on every path. It does not skip /api routes.
  */
 (function PokeResponseGuard() {
-  app.use(function pokeResponseGuard(req, res, next) {
-    if (req.path.startsWith("/api/")) return next();
+  const RESPONSE_GUARD_TIMEOUT_MS = 120000;
+  const DUPLICATE_STACK_LINES = 8;
 
+  app.use(function pokeResponseGuard(req, res, next) {
     const originalSend = res.send.bind(res);
     const originalJson = res.json.bind(res);
     const originalRedirect = res.redirect.bind(res);
     const originalRender = res.render.bind(res);
+    const originalEnd = res.end.bind(res);
+    const originalWrite = res.write.bind(res);
+    const originalWriteHead = res.writeHead.bind(res);
 
-    let alreadySent = false;
+    let firstCommit = null;
+    let duplicateCount = 0;
+    let finished = false;
+    let closed = false;
+    let commitDepth = 0;
+    let fallbackScheduled = false;
 
-    function blockDoubleSend(method) {
-      if (alreadySent) {
-        console.error(`[POKE-response-guard] caught double-send (${method}) on ${req.method} ${req.originalUrl}`);
-        return true;
-      }
-      alreadySent = true;
-      return false;
+    const startedAt = Date.now();
+
+    function nowAgeMs() {
+      return Date.now() - startedAt;
     }
 
+    function cleanStack(stack) {
+      return String(stack || "")
+        .split("\n")
+        .slice(2, 2 + DUPLICATE_STACK_LINES)
+        .map(function (line) {
+          return line.trim();
+        })
+        .join(" | ");
+    }
+
+    function getCommitStack() {
+      return cleanStack(new Error().stack);
+    }
+
+    function requestLabel() {
+      return req.method + " " + (req.originalUrl || req.url || "/");
+    }
+
+    function responseClosed() {
+      return finished || closed || res.writableEnded || res.destroyed;
+    }
+
+    function responseCommittedToWire() {
+      return res.headersSent || responseClosed();
+    }
+
+    function logDuplicate(method) {
+      duplicateCount++;
+
+      const logBody = {
+        request: requestLabel(),
+        duplicateMethod: method,
+        duplicateCount,
+        ageMs: nowAgeMs(),
+        statusCode: res.statusCode,
+        headersSent: res.headersSent,
+        writableEnded: res.writableEnded,
+        destroyed: res.destroyed,
+        firstCommit,
+        duplicateStack: getCommitStack()
+      };
+
+      console.error("[POKE-response-guard] duplicate response blocked " + JSON.stringify(logBody));
+    }
+
+    function logLateNext() {
+      const logBody = {
+        request: requestLabel(),
+        ageMs: nowAgeMs(),
+        statusCode: res.statusCode,
+        headersSent: res.headersSent,
+        writableEnded: res.writableEnded,
+        destroyed: res.destroyed,
+        firstCommit
+      };
+
+      console.error("[POKE-response-guard] request finished after duplicate response attempt " + JSON.stringify(logBody));
+    }
+
+    function canStartCommit(method) {
+      if (commitDepth > 0) {
+        return true;
+      }
+
+      if (responseCommittedToWire()) {
+        logDuplicate(method);
+        return false;
+      }
+
+      if (firstCommit) {
+        logDuplicate(method);
+        scheduleNoHangFallback(method);
+        return false;
+      }
+
+      firstCommit = {
+        method,
+        at: Date.now(),
+        ageMs: nowAgeMs(),
+        statusCode: res.statusCode,
+        stack: getCommitStack()
+      };
+
+      return true;
+    }
+
+    function rollbackCommitIfNothingWasSent(method, err) {
+      if (!res.headersSent && !responseClosed() && firstCommit && firstCommit.method === method) {
+        firstCommit = null;
+      }
+
+      console.error(
+        "[POKE-response-guard] " +
+        method +
+        " threw before response was committed on " +
+        requestLabel() +
+        ": " +
+        (err && err.message ? err.message : err)
+      );
+    }
+
+    function scheduleNoHangFallback(method) {
+      if (fallbackScheduled) {
+        return;
+      }
+
+      fallbackScheduled = true;
+
+      setImmediate(function () {
+        if (responseCommittedToWire()) {
+          return;
+        }
+
+        try {
+          res.statusCode = 500;
+          res.setHeader("Cache-Control", "no-store");
+          res.setHeader("Connection", "close");
+          originalEnd("Internal server error");
+          console.error(
+            "[POKE-response-guard] forced fallback response after duplicate " +
+            method +
+            " on " +
+            requestLabel()
+          );
+        } catch (err) {
+          console.error(
+            "[POKE-response-guard] fallback failed on " +
+            requestLabel() +
+            ": " +
+            (err && err.message ? err.message : err)
+          );
+
+          try {
+            if (req.socket && !req.socket.destroyed) {
+              req.socket.destroy();
+            }
+          } catch {}
+        }
+      });
+    }
+
+    const timeout = setTimeout(function () {
+      if (responseCommittedToWire()) {
+        return;
+      }
+
+      console.error(
+        "[POKE-response-guard] request had no response after " +
+        RESPONSE_GUARD_TIMEOUT_MS +
+        "ms, forcing 504 on " +
+        requestLabel()
+      );
+
+      try {
+        res.statusCode = 504;
+        res.setHeader("Cache-Control", "no-store");
+        res.setHeader("Connection", "close");
+        originalEnd("Gateway timeout");
+      } catch (err) {
+        console.error(
+          "[POKE-response-guard] timeout fallback failed on " +
+          requestLabel() +
+          ": " +
+          (err && err.message ? err.message : err)
+        );
+
+        try {
+          if (req.socket && !req.socket.destroyed) {
+            req.socket.destroy();
+          }
+        } catch {}
+      }
+    }, RESPONSE_GUARD_TIMEOUT_MS);
+
+    timeout.unref();
+
+    res.on("finish", function () {
+      finished = true;
+      clearTimeout(timeout);
+
+      if (duplicateCount > 0) {
+        logLateNext();
+      }
+    });
+
+    res.on("close", function () {
+      closed = true;
+      clearTimeout(timeout);
+    });
+
+    res.writeHead = function (...args) {
+      if (commitDepth === 0 && !firstCommit && !responseCommittedToWire()) {
+        firstCommit = {
+          method: "writeHead",
+          at: Date.now(),
+          ageMs: nowAgeMs(),
+          statusCode: args[0] || res.statusCode,
+          stack: getCommitStack()
+        };
+      }
+
+      if (commitDepth === 0 && responseCommittedToWire()) {
+        logDuplicate("writeHead");
+        return res;
+      }
+
+      try {
+        commitDepth++;
+        return originalWriteHead(...args);
+      } catch (err) {
+        rollbackCommitIfNothingWasSent("writeHead", err);
+        throw err;
+      } finally {
+        commitDepth--;
+      }
+    };
+
+    res.write = function (...args) {
+      if (commitDepth === 0 && !firstCommit && !responseCommittedToWire()) {
+        firstCommit = {
+          method: "write",
+          at: Date.now(),
+          ageMs: nowAgeMs(),
+          statusCode: res.statusCode,
+          stack: getCommitStack()
+        };
+      }
+
+      if (commitDepth === 0 && responseClosed()) {
+        logDuplicate("write");
+        return false;
+      }
+
+      try {
+        commitDepth++;
+        return originalWrite(...args);
+      } catch (err) {
+        rollbackCommitIfNothingWasSent("write", err);
+        throw err;
+      } finally {
+        commitDepth--;
+      }
+    };
+
+    res.end = function (...args) {
+      if (!canStartCommit("end")) {
+        return res;
+      }
+
+      try {
+        commitDepth++;
+        return originalEnd(...args);
+      } catch (err) {
+        rollbackCommitIfNothingWasSent("end", err);
+        throw err;
+      } finally {
+        commitDepth--;
+      }
+    };
+
     res.send = function (...args) {
-      if (res.headersSent || blockDoubleSend("send")) return res;
-      return originalSend(...args);
+      if (!canStartCommit("send")) {
+        return res;
+      }
+
+      try {
+        commitDepth++;
+        return originalSend(...args);
+      } catch (err) {
+        rollbackCommitIfNothingWasSent("send", err);
+        throw err;
+      } finally {
+        commitDepth--;
+      }
     };
 
     res.json = function (...args) {
-      if (res.headersSent || blockDoubleSend("json")) return res;
-      return originalJson(...args);
+      if (!canStartCommit("json")) {
+        return res;
+      }
+
+      try {
+        commitDepth++;
+        return originalJson(...args);
+      } catch (err) {
+        rollbackCommitIfNothingWasSent("json", err);
+        throw err;
+      } finally {
+        commitDepth--;
+      }
     };
 
     res.redirect = function (...args) {
-      if (res.headersSent || blockDoubleSend("redirect")) return res;
-      return originalRedirect(...args);
+      if (!canStartCommit("redirect")) {
+        return res;
+      }
+
+      try {
+        commitDepth++;
+        return originalRedirect(...args);
+      } catch (err) {
+        rollbackCommitIfNothingWasSent("redirect", err);
+        throw err;
+      } finally {
+        commitDepth--;
+      }
     };
 
     res.render = function (view, data, callback) {
-      if (res.headersSent || blockDoubleSend("render")) return;
-      if (typeof callback !== "function") {
+      if (responseCommittedToWire()) {
+        logDuplicate("render");
+        return;
+      }
+
+      if (typeof data === "function") {
+        callback = data;
+        data = {};
+      }
+
+      if (typeof callback === "function") {
         return originalRender(view, data, function (err, html) {
           if (err) {
-            console.error("[POKE-response-guard] render broke for", view, ":", err.message);
-            if (!res.headersSent) {
-              res.status(500).send("Internal server error");
-            }
-            return;
+            return callback(err);
           }
-          if (!res.headersSent) {
-            originalSend(html);
-          }
+
+          return callback(null, html);
         });
       }
-      return originalRender(view, data, callback);
+
+      return originalRender(view, data || {}, function (err, html) {
+        if (err) {
+          console.error(
+            "[POKE-response-guard] render failed on " +
+            requestLabel() +
+            " view=" +
+            view +
+            ": " +
+            (err && err.message ? err.message : err)
+          );
+
+          if (!responseCommittedToWire()) {
+            return res.status(500).send("Internal server error");
+          }
+
+          return;
+        }
+
+        if (!responseCommittedToWire()) {
+          return res.send(html);
+        }
+
+        logDuplicate("render-callback-send");
+      });
     };
 
     next();
@@ -1115,21 +1455,26 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
   var toobusy = require("toobusy-js");
 
   const renderTemplate = async (res, req, template, data = {}) => {
-    if (res.headersSent) {
-      console.error("[POKE-render] headers already sent, skipping:", template);
+    if (res.headersSent || res.writableEnded || res.destroyed) {
+      console.error("[POKE-render] response already committed, skipping:", template);
       return;
     }
-    try {
-      res.render(
-        modules.path.resolve(`${templateDir}${modules.path.sep}${template}`),
-        Object.assign(data)
-      );
-    } catch (err) {
-      console.error("[POKE-render] error on", template, ":", err.message);
-      if (!res.headersSent) {
-        res.status(500).send("Internal server error");
+
+    const templatePath = modules.path.resolve(`${templateDir}${modules.path.sep}${template}`);
+
+    res.render(templatePath, Object.assign(data), function (err, html) {
+      if (err) {
+        console.error("[POKE-render] error on", template, ":", err.message);
+        if (!res.headersSent && !res.writableEnded && !res.destroyed) {
+          res.status(500).send("Internal server error");
+        }
+        return;
       }
-    }
+
+      if (!res.headersSent && !res.writableEnded && !res.destroyed) {
+        res.send(html);
+      }
+    });
   };
 
 /*
@@ -2962,7 +3307,7 @@ ${siegeMode ? '<div class="siege-banner">SIEGE MODE ACTIVE - we are currently un
     if (process.env.NODE_ENV !== "production") {
       console.error(err.stack);
     }
-    if (!res.headersSent) {
+    if (!res.headersSent && !res.writableEnded && !res.destroyed) {
       res.status(500).send("Something went wrong. Please try again.");
     }
   });
