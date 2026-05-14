@@ -415,11 +415,13 @@
    * - O(1) Time & Space sliding window counters per IP (No more massive timestamp arrays)
    * - O(1) LRU Map Cache Eviction (Saves server during multi-IP DDOS attacks)
    * - Advanced Client prioritization based on request type
-   * - Ignoring specified API endpoints 
    */
   (function PokeResourceGuard() {
     const { monitorEventLoopDelay } = require("perf_hooks");
     
+    // Delayed initialization flag
+    let isGuardActive = false;
+
     // Initialize Event Loop Histogram
     const eldHistogram = monitorEventLoopDelay({ resolution: 20 });
     eldHistogram.enable();
@@ -646,6 +648,11 @@
       return (url.split("?")[0] || "/").toLowerCase();
     }
 
+    function isIgnoredRoute(req) {
+      const path = getRequestPath(req);
+      return path === "/api/nexus" || path === "/api/stats";
+    }
+
     function normalizePathname(pathname) {
       return String(pathname || "/")
         .replace(/[a-f0-9]{24}/gi, ":objectId")
@@ -657,11 +664,6 @@
 
     function getRequestKey(req) {
       return req.method + " " + normalizePathname(getRequestPath(req));
-    }
-    
-    function isIgnoredRoute(req) {
-      const pathname = getRequestPath(req);
-      return pathname === "/api/nexus" || pathname === "/api/stats";
     }
 
     function incrementMapCount(map, key, amount) {
@@ -1283,6 +1285,7 @@
     }
 
     function requestActivityTracker(req, res, next) {
+      if (!isGuardActive) return next();
       if (isIgnoredRoute(req)) return next();
 
       const id = ++requestSequence;
@@ -1321,6 +1324,7 @@
     }
 
     function resourceAdmissionMiddleware(req, res, next) {
+      if (!isGuardActive) return next();
       if (isIgnoredRoute(req)) return next();
 
       const kind = classifyRequest(req);
@@ -1416,10 +1420,17 @@
     }
 
     function sendResourceStats(req, res) {
+      if (!isGuardActive) {
+        return res.status(503).json({ message: "Guard is initializing, please wait..." });
+      }
       res.json(getResourceStats());
     }
 
     function sendAntiddosPage(req, res) {
+      if (!isGuardActive) {
+        return res.status(503).send("Guard is currently initializing, please refresh in a moment.");
+      }
+      
       const stats = getResourceStats();
       const stateClass = stats.state.state === "healthy" ? "green" :
         stats.state.state === "warm" ? "orange" :
@@ -1429,7 +1440,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>PokeResourceGuard - Poke Resource Protection</title>
+<title>Poke Health & Resource Protection</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" href="/favicon.ico">
 <style>
@@ -1440,170 +1451,140 @@
   font-stretch: 1% 800%;
   font-display: swap;
 }
-:root {
-  --bg-color: #0f172a;
-  --card-bg: #1e293b;
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --accent: #38bdf8;
-  --accent-hover: #7dd3fc;
-  --green: #22c55e;
-  --orange: #f59e0b;
-  --red: #ef4444;
-  --border: #334155;
-}
-body {
-  color: var(--text-main);
-  background: var(--bg-color);
-  margin: 0;
-  font-family: system-ui, -apple-system, sans-serif;
-  line-height: 1.6;
-}
-.app { 
-  max-width: 1200px; 
-  margin: 0 auto; 
-  padding: 40px 24px; 
-}
-h1, h2 { font-family: "PokeTube Flex", system-ui, sans-serif; font-stretch: extra-expanded; }
-h1 { font-weight: 800; font-size: 2.5rem; margin-top: 0; margin-bottom: 0.5rem; }
-h2 { font-size: 1.5rem; margin-top: 2.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
-a { color: var(--accent); text-decoration: none; }
-a:hover { color: var(--accent-hover); text-decoration: underline; }
-hr { border: 0; border-top: 1px solid var(--border); margin: 32px 0; }
-.logo { float: right; height: 60px; max-width: 150px; margin-left: 20px; margin-bottom: 20px; }
+:root{color-scheme:dark}
+body{color:#fff;background:#1c1b22;margin:0;}
+a{color:#0ab7f0}:visited{color:#00c0ff}
+.app{max-width:1100px;margin:0 auto;padding:24px;}
+h1,h2{font-family:"PokeTube Flex",system-ui,sans-serif;font-stretch:extra-expanded;}
+h1{font-weight:1000;font-stretch:ultra-expanded;margin-top:0;}
+h2{margin-top:28px;}
+p,li,code,pre{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;line-height:1.6;}
+hr{border:0;border-top:1px solid #333;margin:28px 0;}
+.logo{float:right;margin:.3em 0 1em 2em;max-width:130px;}
 
+/* Upgraded Grid Layout */
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 16px;
-  margin-top: 1.5rem;
+  margin-top: 16px;
 }
 .stat-box {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 20px;
+  background: #2a2930;
+  border-radius: 8px;
+  padding: 16px;
+  margin: 0;
   display: flex;
   flex-direction: column;
+  justify-content: center;
   align-items: flex-start;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+  border: 1px solid #333;
 }
-.stat-box:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-.stat-num {
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: var(--accent);
-}
-.stat-label {
-  font-size: 0.875rem;
-  color: var(--text-muted);
-  margin-top: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
+.stat-num{font-size: 1.6rem; color: #0ab7f0; display: block; font-weight: bold;}
+.stat-label{font-size: .9rem; color: #aaa; display: block; margin-top: 4px;}
 
-.green { color: var(--green) !important; }
-.orange { color: var(--orange) !important; }
-.red { color: var(--red) !important; }
+.green{color:#4caf50} .orange{color:#ff9800} .red{color:#f44336}
+code,pre{background:#2a2930;padding:2px 6px;border-radius:4px;}
+pre{overflow:auto;padding:14px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 1px solid #333;}
+.banner{padding:16px 20px;border-radius:8px;background:#2a2930;box-shadow: 0 4px 6px rgba(0,0,0,0.3);border: 1px solid #333;}
+.banner.green{border-left:5px solid #4caf50}
+.banner.orange{border-left:5px solid #ff9800}
+.banner.red{border-left:5px solid #f44336}
+.small{color:#bbb;font-size:.95rem}
 
-code, pre {
-  background: #0b1121;
-  color: #e2e8f0;
-  border-radius: 8px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
-pre {
-  overflow-x: auto;
-  padding: 16px;
-  border: 1px solid var(--border);
-  font-size: 0.9rem;
-}
-code { padding: 2px 6px; font-size: 0.9em; }
-
-.banner {
+/* Explanation box */
+.explanation {
+  font-size: 1.1rem;
+  color: #ddd;
+  background: #2a2930;
   padding: 20px;
-  border-radius: 12px;
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  margin: 24px 0;
+  border-radius: 8px;
+  border-left: 4px solid #0ab7f0;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.3);
 }
-.banner.green { border-left: 6px solid var(--green); }
-.banner.orange { border-left: 6px solid var(--orange); }
-.banner.red { border-left: 6px solid var(--red); }
-.small { color: var(--text-muted); font-size: 0.95rem; }
+summary { font-size: 1.2rem; cursor: pointer; color: #0ab7f0; user-select: none; margin-bottom: 12px; }
+summary:hover { color: #00c0ff; }
 </style>
 </head>
 <body>
 <div class="app">
 <img class="logo" src="/css/logo-poke.svg" alt="Poke logo">
 
-<h1>PokeResourceGuard</h1>
-<p class="small">poke's advanced Event-Loop & CPU traffic protection</p>
+<h1>Poke Server Health</h1>
+<p class="small">Live metrics and traffic protection</p>
 
 <div class="banner ${stateClass}">
-  <b>Current state:</b> <span class="${stateClass}">${stats.state.state}</span>
+  <b>Current Status:</b> <span class="${stateClass}" style="font-size: 1.2rem; text-transform: capitalize;">${stats.state.state}</span>
   <br>
-  <span class="small">Score: ${stats.state.score}. EL-P99: ${stats.state.eventLoop.p99Ms}ms. CPU: ${stats.state.cpu.percent}%. RSS: ${formatPercent(stats.state.memory.rssRatio)}.</span>
+  <span class="small" style="display:inline-block; margin-top: 6px;">
+    System Load Score: ${stats.state.score} &bull; Process Delay: ${stats.state.eventLoop.p99Ms}ms &bull; CPU: ${stats.state.cpu.percent}% &bull; Memory: ${formatPercent(stats.state.memory.rssRatio)}
+  </span>
 </div>
 
-<h2>What this does</h2>
-<p>
-  PokeResourceGuard monitors Node.js Event Loop Delay, CPU, and memory pressure using $O(1)$ counters to stop DDoS attacks without slowing down the server itself. 
-  When resources are fine, normal users pass through. When the server is under real resource pressure, expensive background work gets reduced first, preserving pages and static routes.
-</p>
+<h2>What is this page?</h2>
+<div class="explanation">
+  Poke keeps an eye on how much brainpower (CPU) and memory it has left. Just like a personal computer, the server only has so much energy to go around! <br><br>
+  If a sudden wave of traffic hits, or if someone tries to overload the site, Poke will automatically prioritize normal users watching videos. It gently pauses "heavy" background tasks until the server catches its breath. This ensures Poke stays smooth, fast, and online for everyone.
+</div>
 
-<h2>Live Stats</h2>
+<h2>Live Server Vitals</h2>
 <div class="stat-grid">
   <div class="stat-box">
     <span class="stat-num ${stateClass}">${stats.state.state}</span>
-    <span class="stat-label">state</span>
+    <span class="stat-label">Health State</span>
   </div>
   <div class="stat-box">
     <span class="stat-num">${stats.state.eventLoop.p99Ms}ms</span>
-    <span class="stat-label">Event Loop p99</span>
-  </div>
-  <div class="stat-box">
-    <span class="stat-num">${stats.state.score}</span>
-    <span class="stat-label">pressure score</span>
+    <span class="stat-label">Process Delay (p99)</span>
   </div>
   <div class="stat-box">
     <span class="stat-num">${stats.state.cpu.percent}%</span>
-    <span class="stat-label">process CPU</span>
+    <span class="stat-label">CPU Usage</span>
   </div>
   <div class="stat-box">
     <span class="stat-num">${stats.state.memory.rssMb}MB</span>
-    <span class="stat-label">RSS memory</span>
+    <span class="stat-label">Memory Used (RSS)</span>
   </div>
   <div class="stat-box">
     <span class="stat-num">${stats.state.requests.rps}</span>
-    <span class="stat-label">requests/sec</span>
+    <span class="stat-label">Requests per Second</span>
   </div>
   <div class="stat-box">
     <span class="stat-num">${stats.clients.tracked}</span>
-    <span class="stat-label">tracked clients</span>
+    <span class="stat-label">Active Users</span>
   </div>
   <div class="stat-box">
     <span class="stat-num">${stats.clients.cooldown}</span>
-    <span class="stat-label">cooldowns</span>
+    <span class="stat-label">Spammers Blocked</span>
+  </div>
+  <div class="stat-box">
+    <span class="stat-num">${stats.state.score}</span>
+    <span class="stat-label">Pressure Score</span>
   </div>
 </div>
 
-<h2>Pressure Reasons</h2>
-<pre>${stats.state.pressureReasons.length ? stats.state.pressureReasons.join("\n") : "none"}</pre>
+<hr>
 
-<h2>Request Mix</h2>
-<pre>${JSON.stringify(stats.state.requests.kinds, null, 2)}</pre>
+<details>
+  <summary>View Nerd Stats (Raw Data & APIs)</summary>
+  
+  <h3>Pressure Reasons</h3>
+  <pre>${stats.state.pressureReasons.length ? stats.state.pressureReasons.join("\n") : "None currently. System is healthy."}</pre>
 
-<h2>Top Routes This Sample</h2>
-<pre>${JSON.stringify(stats.state.topRoutes, null, 2)}</pre>
+  <h3>Request Mix (This Second)</h3>
+  <pre>${JSON.stringify(stats.state.requests.kinds, null, 2)}</pre>
 
-<h2>API Endpoints</h2>
-<p>
-  JSON stats are available at: <code><a href="/_pokeresource/stats">/_pokeresource/stats</a></code>
-</p>
+  <h3>Top Routes (This Second)</h3>
+  <pre>${JSON.stringify(stats.state.topRoutes, null, 2)}</pre>
+
+  <h3>API Endpoints</h3>
+  <p>
+    Raw JSON data is available at:
+    <code><a href="/_pokeresource/stats">/_pokeresource/stats</a></code>
+  </p>
+</details>
 
 <hr>
 <p class="small">powered by poke. <a href="/">go back to watching videos</a></p>
@@ -1621,20 +1602,26 @@ code { padding: 2px 6px; font-size: 0.9em; }
     app.get("/_pokeoverload/stats", sendResourceStats);
     app.get("/_antiddos*", sendAntiddosPage);
 
-    sampleCpuAndMemory("startup");
+    // 2-Second Delayed Initialization
+    setTimeout(() => {
+      isGuardActive = true;
+      initlog("[PokeResourceGuard] is now ACTIVE after 2-second boot delay.");
+      sampleCpuAndMemory("startup");
 
-    const sampleTimer = setInterval(function () {
-      sampleCpuAndMemory("interval");
-    }, resourceConfig.system.sampleMs);
-    sampleTimer.unref();
+      const sampleTimer = setInterval(function () {
+        sampleCpuAndMemory("interval");
+      }, resourceConfig.system.sampleMs);
+      sampleTimer.unref();
 
-    const cleanupTimer = setInterval(cleanupClients, resourceConfig.client.cleanupMs);
-    cleanupTimer.unref();
+      const cleanupTimer = setInterval(cleanupClients, resourceConfig.client.cleanupMs);
+      cleanupTimer.unref();
+      
+      initlog(
+        "[PokeResourceGuard] loaded - EventLoop/CPU/memory optimized shedder, " +
+        "EL p99 warm/stressed/critical: " + resourceConfig.system.eventLoop.warmMs + "/" + resourceConfig.system.eventLoop.stressedMs + "/" + resourceConfig.system.eventLoop.criticalMs
+      );
+    }, 2000);
 
-    initlog(
-      "[PokeResourceGuard] loaded - EventLoop/CPU/memory optimized shedder, " +
-      "EL p99 warm/stressed/critical: " + resourceConfig.system.eventLoop.warmMs + "/" + resourceConfig.system.eventLoop.stressedMs + "/" + resourceConfig.system.eventLoop.criticalMs
-    );
   })();
 
   app.use(ieBlockMiddleware);
