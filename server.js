@@ -1,23 +1,39 @@
 /*
 
-    Poke is an Free/Libre youtube front-end. this is our main file.
+   Poke is an Free/Libre youtube front-end. this is our main file.
   
-    Copyright (C) 2021-2026 Poke (https://codeberg.org/ashleyirispuppy/poke)
+   Copyright (C) 2021-2026 Poke (https://codeberg.org/ashleyirispuppy/poke)
     
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
     
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with this program. If not, see https://www.gnu.org/licenses/.
-  */
+   You should have received a copy of the GNU General Public License
+   along with this program. If not, see https://www.gnu.org/licenses/.
+ */
 (async function () {
+  // --- ADDED: Global error handlers to prevent crashes from fetch timeouts ---
+  process.on("unhandledRejection", (reason, promise) => {
+    console.error("[POKE-error] Unhandled Rejection at:", promise, "reason:", reason);
+    if (reason && reason.code === "UND_ERR_CONNECT_TIMEOUT") {
+      console.error("[POKE-error] Blocked server crash from Undici ConnectTimeoutError.");
+    }
+  });
+
+  process.on("uncaughtException", (err) => {
+    console.error("[POKE-error] Uncaught Exception:", err);
+    if (err && err.code === "UND_ERR_CONNECT_TIMEOUT") {
+      console.error("[POKE-error] Blocked server crash from Undici ConnectTimeoutError.");
+    }
+  });
+  // ---------------------------------------------------------------------------
+
   const {
     fetcher,
     core,
