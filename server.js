@@ -1972,15 +1972,19 @@ document.addEventListener("DOMContentLoaded", function() {
           return;
         }
 
-        if (res.headersSent) {
-          try {
-            res.write("\n/g, "--&gt;") + " -->");
-            return res.end();
-          } catch (writeErr) {
-            console.error("[POKE-render] could not write render error after headers were sent:", writeErr.message);
-            return;
-          }
-        }
+       if (res.headersSent) {
+  try {
+    const safeRenderErrorMessage = String(err && err.message ? err.message : err)
+      .replace(/-->/g, "--&gt;")
+      .replace(/\r?\n/g, " ");
+
+    res.write("\n<!-- POKE-render error: " + safeRenderErrorMessage + " -->");
+    return res.end();
+  } catch (writeErr) {
+    console.error("[POKE-render] could not write render error after headers were sent:", writeErr.message);
+    return;
+  }
+}
 
         return res.status(500).send("Internal server error");
       }
