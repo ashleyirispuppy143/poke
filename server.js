@@ -35,7 +35,6 @@
   const os = require("os");
   const nodePath = require("path");
   const net = require("net");
-  const { performance, monitorEventLoopDelay } = require("perf_hooks");
   const config = require("./config.json");
   const u = await media_proxy();
 
@@ -79,9 +78,6 @@
 
   var app = modules.express();
 
-  /*
-   * Shared IP helpers.
-   */
   const CLOUDFLARE_V4 = [
     "173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22",
     "103.31.4.0/22", "141.101.64.0/18", "108.162.192.0/18",
@@ -404,474 +400,38 @@
         initlog("[POKE-trust-proxy] periodic re-check found proxy (score: " + freshScore + ")");
       }
     }, 60_000).unref();
-
   })();
 
   /*
-   * PokeResponseGuard
+   * PokeResourceGuard
    *
-   * This catches accidental double responses without turning the request into
-   * a forever-hanging socket.
+   * This only samples CPU and memory. No event-loop delay, no latency probing,
+   * no ping-style checks.
    *
-   * Important detail: write and writeHead are allowed to be followed by end.
-   * That keeps streaming responses working while still blocking send-after-send.
+   * It is intentionally user-first:
+   * - healthy: allow everything except extreme per-client abuse
+   * - warm: allow almost everything, only slow down noisy expensive clients
+   * - stressed: protect pages/static/status first, shed expensive noisy work
+   * - critical: keep status/static/pages alive, reject expensive/background work
+   *
+   * All per-client data is in-memory and short-lived.
    */
-  (function PokeResponseGuard() {
-    const RESPONSE_GUARD_TIMEOUT_MS = 120000;
-    const DUPLICATE_STACK_LINES = 8;
-
-    app.use(function pokeResponseGuard(req, res, next) {
-      const originalSend = res.send.bind(res);
-      const originalJson = res.json.bind(res);
-      const originalRedirect = res.redirect.bind(res);
-      const originalRender = res.render.bind(res);
-      const originalEnd = res.end.bind(res);
-      const originalWrite = res.write.bind(res);
-      const originalWriteHead = res.writeHead.bind(res);
-
-      let firstCommit = null;
-      let duplicateCount = 0;
-      let finished = false;
-      let closed = false;
-      let commitDepth = 0;
-      let fallbackScheduled = false;
-
-      const startedAt = Date.now();
-
-      function nowAgeMs() {
-        return Date.now() - startedAt;
-      }
-
-      function cleanStack(stack) {
-        return String(stack || "")
-          .split("\n")
-          .slice(2, 2 + DUPLICATE_STACK_LINES)
-          .map(function (line) {
-            return line.trim();
-          })
-          .join(" | ");
-      }
-
-      function getCommitStack() {
-        return cleanStack(new Error().stack);
-      }
-
-      function requestLabel() {
-        return req.method + " " + (req.originalUrl || req.url || "/");
-      }
-
-      function responseDone() {
-        return finished || closed || res.writableEnded || res.destroyed;
-      }
-
-      function logDuplicate(method) {
-        duplicateCount++;
-
-        const logBody = {
-          request: requestLabel(),
-          duplicateMethod: method,
-          duplicateCount,
-          ageMs: nowAgeMs(),
-          statusCode: res.statusCode,
-          headersSent: res.headersSent,
-          writableEnded: res.writableEnded,
-          destroyed: res.destroyed,
-          firstCommit,
-          duplicateStack: getCommitStack()
-        };
-
-        console.error("[POKE-response-guard] duplicate response blocked " + JSON.stringify(logBody));
-      }
-
-      function canWriteMore(method) {
-        if (commitDepth > 0) {
-          return true;
-        }
-
-        if (responseDone()) {
-          logDuplicate(method);
-          return false;
-        }
-
-        if (method === "write") {
-          if (!firstCommit) {
-            firstCommit = {
-              method: "write",
-              at: Date.now(),
-              ageMs: nowAgeMs(),
-              statusCode: res.statusCode,
-              stack: getCommitStack()
-            };
-          }
-          return true;
-        }
-
-        if (method === "writeHead") {
-          if (res.headersSent) {
-            logDuplicate(method);
-            return false;
-          }
-
-          if (!firstCommit) {
-            firstCommit = {
-              method: "writeHead",
-              at: Date.now(),
-              ageMs: nowAgeMs(),
-              statusCode: res.statusCode,
-              stack: getCommitStack()
-            };
-          }
-
-          return true;
-        }
-
-        if (method === "end") {
-          if (!firstCommit) {
-            firstCommit = {
-              method: "end",
-              at: Date.now(),
-              ageMs: nowAgeMs(),
-              statusCode: res.statusCode,
-              stack: getCommitStack()
-            };
-            return true;
-          }
-
-          if (firstCommit.method === "write" || firstCommit.method === "writeHead") {
-            return true;
-          }
-
-          logDuplicate(method);
-          return false;
-        }
-
-        if (res.headersSent) {
-          logDuplicate(method);
-          return false;
-        }
-
-        if (firstCommit) {
-          logDuplicate(method);
-          scheduleNoHangFallback(method);
-          return false;
-        }
-
-        firstCommit = {
-          method,
-          at: Date.now(),
-          ageMs: nowAgeMs(),
-          statusCode: res.statusCode,
-          stack: getCommitStack()
-        };
-
-        return true;
-      }
-
-      function rollbackCommitIfNothingWasSent(method, err) {
-        if (!res.headersSent && !responseDone() && firstCommit && firstCommit.method === method) {
-          firstCommit = null;
-        }
-
-        console.error(
-          "[POKE-response-guard] " +
-          method +
-          " threw before response was committed on " +
-          requestLabel() +
-          ": " +
-          (err && err.message ? err.message : err)
-        );
-      }
-
-      function scheduleNoHangFallback(method) {
-        if (fallbackScheduled) {
-          return;
-        }
-
-        fallbackScheduled = true;
-
-        setImmediate(function () {
-          if (res.headersSent || responseDone()) {
-            return;
-          }
-
-          try {
-            res.statusCode = 500;
-            res.setHeader("Cache-Control", "no-store");
-            res.setHeader("Connection", "close");
-            originalEnd("Internal server error");
-            console.error(
-              "[POKE-response-guard] forced fallback response after duplicate " +
-              method +
-              " on " +
-              requestLabel()
-            );
-          } catch (err) {
-            console.error(
-              "[POKE-response-guard] fallback failed on " +
-              requestLabel() +
-              ": " +
-              (err && err.message ? err.message : err)
-            );
-
-            try {
-              if (req.socket && !req.socket.destroyed) {
-                req.socket.destroy();
-              }
-            } catch {}
-          }
-        });
-      }
-
-      const timeout = setTimeout(function () {
-        if (res.headersSent || responseDone()) {
-          return;
-        }
-
-        console.error(
-          "[POKE-response-guard] request had no response after " +
-          RESPONSE_GUARD_TIMEOUT_MS +
-          "ms, forcing 504 on " +
-          requestLabel()
-        );
-
-        try {
-          res.statusCode = 504;
-          res.setHeader("Cache-Control", "no-store");
-          res.setHeader("Connection", "close");
-          originalEnd("Gateway timeout");
-        } catch (err) {
-          console.error(
-            "[POKE-response-guard] timeout fallback failed on " +
-            requestLabel() +
-            ": " +
-            (err && err.message ? err.message : err)
-          );
-
-          try {
-            if (req.socket && !req.socket.destroyed) {
-              req.socket.destroy();
-            }
-          } catch {}
-        }
-      }, RESPONSE_GUARD_TIMEOUT_MS);
-
-      timeout.unref();
-
-      res.on("finish", function () {
-        finished = true;
-        clearTimeout(timeout);
-
-        if (duplicateCount > 0) {
-          console.error(
-            "[POKE-response-guard] request finished after duplicate response attempt " +
-            JSON.stringify({
-              request: requestLabel(),
-              ageMs: nowAgeMs(),
-              statusCode: res.statusCode,
-              duplicateCount,
-              firstCommit
-            })
-          );
-        }
-      });
-
-      res.on("close", function () {
-        closed = true;
-        clearTimeout(timeout);
-      });
-
-      res.writeHead = function (...args) {
-        if (!canWriteMore("writeHead")) {
-          return res;
-        }
-
-        try {
-          commitDepth++;
-          return originalWriteHead(...args);
-        } catch (err) {
-          rollbackCommitIfNothingWasSent("writeHead", err);
-          throw err;
-        } finally {
-          commitDepth--;
-        }
-      };
-
-      res.write = function (...args) {
-        if (!canWriteMore("write")) {
-          return false;
-        }
-
-        try {
-          commitDepth++;
-          return originalWrite(...args);
-        } catch (err) {
-          rollbackCommitIfNothingWasSent("write", err);
-          throw err;
-        } finally {
-          commitDepth--;
-        }
-      };
-
-      res.end = function (...args) {
-        if (!canWriteMore("end")) {
-          return res;
-        }
-
-        try {
-          commitDepth++;
-          return originalEnd(...args);
-        } catch (err) {
-          rollbackCommitIfNothingWasSent("end", err);
-          throw err;
-        } finally {
-          commitDepth--;
-        }
-      };
-
-      res.send = function (...args) {
-        if (!canWriteMore("send")) {
-          return res;
-        }
-
-        try {
-          commitDepth++;
-          return originalSend(...args);
-        } catch (err) {
-          rollbackCommitIfNothingWasSent("send", err);
-          throw err;
-        } finally {
-          commitDepth--;
-        }
-      };
-
-      res.json = function (...args) {
-        if (!canWriteMore("json")) {
-          return res;
-        }
-
-        try {
-          commitDepth++;
-          return originalJson(...args);
-        } catch (err) {
-          rollbackCommitIfNothingWasSent("json", err);
-          throw err;
-        } finally {
-          commitDepth--;
-        }
-      };
-
-      res.redirect = function (...args) {
-        if (!canWriteMore("redirect")) {
-          return res;
-        }
-
-        try {
-          commitDepth++;
-          return originalRedirect(...args);
-        } catch (err) {
-          rollbackCommitIfNothingWasSent("redirect", err);
-          throw err;
-        } finally {
-          commitDepth--;
-        }
-      };
-
-      res.render = function (view, data, callback) {
-        if (res.headersSent || responseDone()) {
-          logDuplicate("render");
-          return;
-        }
-
-        if (typeof data === "function") {
-          callback = data;
-          data = {};
-        }
-
-        if (typeof callback === "function") {
-          return originalRender(view, data || {}, function (err, html) {
-            return callback(err, html);
-          });
-        }
-
-        return originalRender(view, data || {}, function (err, html) {
-          if (err) {
-            console.error(
-              "[POKE-response-guard] render failed on " +
-              requestLabel() +
-              " view=" +
-              view +
-              ": " +
-              (err && err.message ? err.message : err)
-            );
-
-            if (!res.headersSent && !responseDone()) {
-              return res.status(500).send("Internal server error");
-            }
-
-            return;
-          }
-
-          if (!res.headersSent && !responseDone()) {
-            return res.send(html);
-          }
-
-          logDuplicate("render-callback-send");
-        });
-      };
-
-      next();
-    });
-
-    initlog("[POKE-response-guard] loaded");
-  })();
-
-  /*
-   * PokeTrafficGuard
-   *
-   * A pressure-aware traffic guard.
-   *
-   * Main behavior:
-   * - healthy server: almost everything passes
-   * - warm server: log and watch, shed only very noisy expensive clients
-   * - stressed server: protect expensive API, proxy, media, and background work first
-   * - critical server: allow status/static, protect page navigation where possible, shed expensive work
-   *
-   * It does not try to punish normal users for clicking around quickly.
-   * It only gets strict when the process is actually showing pressure.
-   */
-  (function PokeTrafficGuard() {
-    const trafficConfig = {
+  (function PokeResourceGuard() {
+    const resourceConfig = {
       system: {
         sampleMs: 1000,
-        eventLoopResolutionMs: 20,
 
-        warmP99LagMs: 120,
-        stressedP99LagMs: 350,
-        criticalP99LagMs: 1200,
+        warmCpuRatio: 0.75,
+        stressedCpuRatio: 1.05,
+        criticalCpuRatio: 1.55,
 
-        warmMeanLagMs: 60,
-        stressedMeanLagMs: 180,
-        criticalMeanLagMs: 600,
+        warmRssRatio: 0.70,
+        stressedRssRatio: 0.82,
+        criticalRssRatio: 0.92,
 
-        warmEventLoopUse: 0.78,
-        stressedEventLoopUse: 0.90,
-        criticalEventLoopUse: 0.97,
-
-        warmCpuUse: 0.85,
-        stressedCpuUse: 1.15,
-        criticalCpuUse: 1.75,
-
-        warmRps: 600,
-        stressedRps: 1400,
-        criticalRps: 3000,
-
-        warmActiveRequests: 250,
-        stressedActiveRequests: 650,
-        criticalActiveRequests: 1400,
-
-        warmMemoryRssRatio: 0.82,
-        stressedMemoryRssRatio: 0.90,
-        criticalMemoryRssRatio: 0.96
+        warmHeapRatio: 0.55,
+        stressedHeapRatio: 0.70,
+        criticalHeapRatio: 0.85
       },
 
       client: {
@@ -880,18 +440,24 @@
         maxClientStates: 75000,
         cleanupMs: 60000,
 
-        absoluteRequestsPerSecond: 90,
-        absoluteRequestsPerWindow: 500,
-        absoluteCostPerWindow: 1800,
+        absoluteRequestsPerSecond: 160,
+        absoluteRequestsPerWindow: 1200,
+        absoluteCostPerWindow: 6000,
 
-        noisyRequestsWarm: 180,
-        noisyCostWarm: 700,
-        noisyRequestsStressed: 90,
-        noisyCostStressed: 300,
-        noisyRequestsCritical: 35,
-        noisyCostCritical: 120,
+        noisyRequestsWarm: 350,
+        noisyCostWarm: 1400,
 
-        pageSoftPassesPerWindow: 10,
+        noisyRequestsStressed: 160,
+        noisyCostStressed: 650,
+
+        noisyRequestsCritical: 70,
+        noisyCostCritical: 280,
+
+        pageSoftPassesPerWindow: 20,
+
+        maxHeavyRequestsWarm: 80,
+        maxHeavyRequestsStressed: 25,
+        maxHeavyRequestsCritical: 8,
 
         cooldownBaseMs: 30000,
         cooldownMaxMs: 600000,
@@ -908,8 +474,6 @@
       },
 
       admission: {
-        pageGraceMs: 700,
-        pageGracePollMs: 70,
         retryAfterHealthyAbuseSeconds: 20,
         retryAfterWarmSeconds: 10,
         retryAfterStressedSeconds: 8,
@@ -950,40 +514,38 @@
       "The server is under pressure. Please try again in a moment."
     ];
 
-    let trafficState = {
+    let resourceState = {
       state: "healthy",
       score: 0,
       since: Date.now(),
       sampledAt: Date.now(),
       reason: "startup",
-      rps: 0,
-      activeRequests: 0,
-      loop: {
-        p50Ms: 0,
-        p90Ms: 0,
-        p99Ms: 0,
-        meanMs: 0,
-        maxMs: 0,
-        utilization: 0
-      },
       cpu: {
         ratio: 0,
+        percent: 0,
         userMs: 0,
         systemMs: 0,
-        totalMs: 0
+        totalMs: 0,
+        elapsedMs: 0
       },
       memory: {
         rssMb: 0,
         heapUsedMb: 0,
         heapTotalMb: 0,
-        rssRatio: 0
+        externalMb: 0,
+        arrayBuffersMb: 0,
+        rssRatio: 0,
+        heapRatio: 0,
+        effectiveTotalMb: 0,
+        systemFreeMb: 0,
+        systemTotalMb: 0,
+        constrainedMb: 0
       },
-      system: {
-        loadavg: [],
-        freeMemoryMb: 0,
-        totalMemoryMb: 0
+      requests: {
+        rps: 0,
+        active: 0,
+        kinds: {}
       },
-      kinds: {},
       pressureReasons: []
     };
 
@@ -993,20 +555,14 @@
     let currentSecondKindCounts = new Map();
     let currentSecondRouteCounts = new Map();
 
-    let lastSampleAt = performance.now();
+    let lastSampleAt = Date.now();
     let lastCpuUsage = process.cpuUsage();
-    let lastEventLoopUtilization = performance.eventLoopUtilization();
 
     let requestSequence = 0;
     const activeRequests = new Map();
     const activeRequestCounts = new Map();
     const recentSlowRequests = [];
     const clientStates = new Map();
-
-    const loopDelay = monitorEventLoopDelay({
-      resolution: trafficConfig.system.eventLoopResolutionMs
-    });
-    loopDelay.enable();
 
     const guardStats = {
       allowedHealthy: 0,
@@ -1022,20 +578,11 @@
       rejectedWarm: 0,
       rejectedStressed: 0,
       rejectedCritical: 0,
-      pageGracePassed: 0,
       cooldownsIssued: 0
     };
 
     function bytesToMb(bytes) {
       return Math.round(bytes / 1024 / 1024);
-    }
-
-    function nsToMs(ns) {
-      if (!Number.isFinite(ns) || ns <= 0 || ns > 3_600_000_000_000) {
-        return 0;
-      }
-
-      return Math.round((ns / 1_000_000) * 100) / 100;
     }
 
     function roundMs(value) {
@@ -1051,6 +598,34 @@
     function formatPercent(value) {
       if (!Number.isFinite(value)) return "0%";
       return (value * 100).toFixed(2) + "%";
+    }
+
+    function getEffectiveMemoryLimit() {
+      if (typeof process.constrainedMemory === "function") {
+        try {
+          const constrained = process.constrainedMemory();
+          if (Number.isFinite(constrained) && constrained > 0) {
+            return constrained;
+          }
+        } catch {}
+      }
+
+      return os.totalmem();
+    }
+
+    function getConstrainedMemoryMb() {
+      if (typeof process.constrainedMemory !== "function") {
+        return 0;
+      }
+
+      try {
+        const constrained = process.constrainedMemory();
+        if (Number.isFinite(constrained) && constrained > 0) {
+          return bytesToMb(constrained);
+        }
+      } catch {}
+
+      return 0;
     }
 
     function getRequestPath(req) {
@@ -1099,7 +674,7 @@
     }
 
     function getActiveRequestSummary(limit) {
-      const now = performance.now();
+      const now = Date.now();
 
       return Array.from(activeRequests.values())
         .map(function (request) {
@@ -1107,7 +682,7 @@
             id: request.id,
             key: request.key,
             kind: request.kind,
-            ageMs: roundMs(now - request.startedAt)
+            ageMs: now - request.startedAt
           };
         })
         .sort(function (a, b) {
@@ -1141,6 +716,7 @@
       return (
         pathname === "/robots.txt" ||
         pathname === "/favicon.ico" ||
+        pathname === "/_pokeresource/stats" ||
         pathname === "/_poketraffic/stats" ||
         pathname === "/_pokestopskids/stats" ||
         pathname === "/_pokeoverload/stats" ||
@@ -1241,7 +817,7 @@
     }
 
     function getKindCost(kind, req) {
-      let cost = trafficConfig.requestCost[kind] || trafficConfig.requestCost.other;
+      let cost = resourceConfig.requestCost[kind] || resourceConfig.requestCost.other;
 
       const ua = String(req.headers["user-agent"] || "");
       if (isKnownBot(ua)) {
@@ -1261,8 +837,8 @@
     }
 
     function pruneClientState(client, now) {
-      const oldest = now - trafficConfig.client.windowMs;
-      const oneSecondOldest = now - trafficConfig.client.oneSecondMs;
+      const oldest = now - resourceConfig.client.windowMs;
+      const oneSecondOldest = now - resourceConfig.client.oneSecondMs;
 
       while (client.requestTimes.length > 0 && client.requestTimes[0] < oldest) {
         client.requestTimes.shift();
@@ -1296,7 +872,7 @@
         client.cooldownUntil = 0;
       }
 
-      if (client.cooldownLevel > 0 && now - client.lastCooldownAt > trafficConfig.client.cooldownDecayMs) {
+      if (client.cooldownLevel > 0 && now - client.lastCooldownAt > resourceConfig.client.cooldownDecayMs) {
         client.cooldownLevel = Math.max(0, client.cooldownLevel - 1);
         client.lastCooldownAt = now;
       }
@@ -1307,7 +883,7 @@
     }
 
     function evictClientStateIfNeeded() {
-      if (clientStates.size < trafficConfig.client.maxClientStates) {
+      if (clientStates.size < resourceConfig.client.maxClientStates) {
         return;
       }
 
@@ -1422,29 +998,35 @@
     function getNoisyLimits(state) {
       if (state === "critical") {
         return {
-          requests: trafficConfig.client.noisyRequestsCritical,
-          cost: trafficConfig.client.noisyCostCritical
+          requests: resourceConfig.client.noisyRequestsCritical,
+          cost: resourceConfig.client.noisyCostCritical
         };
       }
 
       if (state === "stressed") {
         return {
-          requests: trafficConfig.client.noisyRequestsStressed,
-          cost: trafficConfig.client.noisyCostStressed
+          requests: resourceConfig.client.noisyRequestsStressed,
+          cost: resourceConfig.client.noisyCostStressed
         };
       }
 
       return {
-        requests: trafficConfig.client.noisyRequestsWarm,
-        cost: trafficConfig.client.noisyCostWarm
+        requests: resourceConfig.client.noisyRequestsWarm,
+        cost: resourceConfig.client.noisyCostWarm
       };
+    }
+
+    function getHeavyLimit(state) {
+      if (state === "critical") return resourceConfig.client.maxHeavyRequestsCritical;
+      if (state === "stressed") return resourceConfig.client.maxHeavyRequestsStressed;
+      return resourceConfig.client.maxHeavyRequestsWarm;
     }
 
     function clientIsAbsoluteAbuse(client) {
       return (
-        client.oneSecondRequestTimes.length >= trafficConfig.client.absoluteRequestsPerSecond ||
-        client.requestTimes.length >= trafficConfig.client.absoluteRequestsPerWindow ||
-        client.costWindow >= trafficConfig.client.absoluteCostPerWindow
+        client.oneSecondRequestTimes.length >= resourceConfig.client.absoluteRequestsPerSecond ||
+        client.requestTimes.length >= resourceConfig.client.absoluteRequestsPerWindow ||
+        client.costWindow >= resourceConfig.client.absoluteCostPerWindow
       );
     }
 
@@ -1465,15 +1047,15 @@
       client.lastCooldownAt = now;
 
       const cooldownMs = Math.min(
-        trafficConfig.client.cooldownMaxMs,
-        trafficConfig.client.cooldownBaseMs * Math.pow(2, Math.max(0, client.cooldownLevel - 1))
+        resourceConfig.client.cooldownMaxMs,
+        resourceConfig.client.cooldownBaseMs * Math.pow(2, Math.max(0, client.cooldownLevel - 1))
       );
 
       client.cooldownUntil = now + cooldownMs;
       guardStats.cooldownsIssued++;
 
       console.error(
-        "[POKE-traffic] client cooldown " +
+        "[POKE-resource] client cooldown " +
         JSON.stringify({
           reason,
           cooldownMs,
@@ -1493,18 +1075,93 @@
       );
     }
 
-    function getLoopDelaySnapshot() {
-      return {
-        p50Ms: nsToMs(loopDelay.percentile(50)),
-        p90Ms: nsToMs(loopDelay.percentile(90)),
-        p99Ms: nsToMs(loopDelay.percentile(99)),
-        meanMs: nsToMs(loopDelay.mean),
-        maxMs: nsToMs(loopDelay.max)
+    function sampleCpuAndMemory(reason) {
+      const now = Date.now();
+      const elapsedMs = Math.max(1, now - lastSampleAt);
+
+      const cpuDelta = process.cpuUsage(lastCpuUsage);
+      lastCpuUsage = process.cpuUsage();
+
+      const cpuUserMs = cpuDelta.user / 1000;
+      const cpuSystemMs = cpuDelta.system / 1000;
+      const cpuTotalMs = cpuUserMs + cpuSystemMs;
+      const cpuRatio = cpuTotalMs / elapsedMs;
+
+      const memory = process.memoryUsage();
+      const effectiveTotal = getEffectiveMemoryLimit();
+      const rssRatio = effectiveTotal > 0 ? memory.rss / effectiveTotal : 0;
+      const heapRatio = effectiveTotal > 0 ? memory.heapUsed / effectiveTotal : 0;
+
+      const kinds = {};
+      for (const [kind, count] of currentSecondKindCounts) {
+        kinds[kind] = count;
+      }
+
+      const snapshot = {
+        state: resourceState.state,
+        score: resourceState.score,
+        since: resourceState.since,
+        sampledAt: now,
+        reason: reason || "interval",
+        cpu: {
+          ratio: roundRatio(cpuRatio),
+          percent: roundRatio(cpuRatio * 100),
+          userMs: roundMs(cpuUserMs),
+          systemMs: roundMs(cpuSystemMs),
+          totalMs: roundMs(cpuTotalMs),
+          elapsedMs: roundMs(elapsedMs)
+        },
+        memory: {
+          rssMb: bytesToMb(memory.rss),
+          heapUsedMb: bytesToMb(memory.heapUsed),
+          heapTotalMb: bytesToMb(memory.heapTotal),
+          externalMb: bytesToMb(memory.external),
+          arrayBuffersMb: bytesToMb(memory.arrayBuffers || 0),
+          rssRatio: roundRatio(rssRatio),
+          heapRatio: roundRatio(heapRatio),
+          effectiveTotalMb: bytesToMb(effectiveTotal),
+          systemFreeMb: bytesToMb(os.freemem()),
+          systemTotalMb: bytesToMb(os.totalmem()),
+          constrainedMb: getConstrainedMemoryMb()
+        },
+        requests: {
+          rps: currentSecondRequests,
+          active: activeRequests.size,
+          kinds
+        },
+        topRoutes: getTopMapEntries(currentSecondRouteCounts, resourceConfig.logging.maxTopRoutes),
+        pressureReasons: []
       };
+
+      const pressure = classifyResourcePressure(snapshot);
+      snapshot.state = pressure.state;
+      snapshot.score = pressure.score;
+      snapshot.pressureReasons = pressure.reasons;
+
+      if (snapshot.state !== resourceState.state) {
+        snapshot.since = now;
+      } else {
+        snapshot.since = resourceState.since;
+      }
+
+      const shouldLog =
+        snapshot.state !== resourceState.state ||
+        (snapshot.state !== "healthy" && now - lastStateLogAt >= resourceConfig.logging.stateCooldownMs);
+
+      resourceState = snapshot;
+      lastSampleAt = now;
+      currentSecondRequests = 0;
+      currentSecondKindCounts = new Map();
+      currentSecondRouteCounts = new Map();
+
+      if (shouldLog) {
+        lastStateLogAt = now;
+        logResourceState("state sample");
+      }
     }
 
-    function classifySystemPressure(snapshot) {
-      const cfg = trafficConfig.system;
+    function classifyResourcePressure(snapshot) {
+      const cfg = resourceConfig.system;
       const reasons = [];
       let score = 0;
       let hasCritical = false;
@@ -1529,15 +1186,34 @@
         }
       }
 
-      addPressure("loopP99", snapshot.loop.p99Ms, cfg.warmP99LagMs, cfg.stressedP99LagMs, cfg.criticalP99LagMs, "ms");
-      addPressure("loopMean", snapshot.loop.meanMs, cfg.warmMeanLagMs, cfg.stressedMeanLagMs, cfg.criticalMeanLagMs, "ms");
-      addPressure("eventLoopUse", snapshot.loop.utilization, cfg.warmEventLoopUse, cfg.stressedEventLoopUse, cfg.criticalEventLoopUse, "");
-      addPressure("cpu", snapshot.cpu.ratio, cfg.warmCpuUse, cfg.stressedCpuUse, cfg.criticalCpuUse, "");
-      addPressure("rps", snapshot.rps, cfg.warmRps, cfg.stressedRps, cfg.criticalRps, "");
-      addPressure("activeRequests", snapshot.activeRequests, cfg.warmActiveRequests, cfg.stressedActiveRequests, cfg.criticalActiveRequests, "");
-      addPressure("rssMemory", snapshot.memory.rssRatio, cfg.warmMemoryRssRatio, cfg.stressedMemoryRssRatio, cfg.criticalMemoryRssRatio, "");
+      addPressure(
+        "cpu",
+        snapshot.cpu.ratio,
+        cfg.warmCpuRatio,
+        cfg.stressedCpuRatio,
+        cfg.criticalCpuRatio,
+        ""
+      );
 
-      if (hasCritical || score >= 8) {
+      addPressure(
+        "rssMemory",
+        snapshot.memory.rssRatio,
+        cfg.warmRssRatio,
+        cfg.stressedRssRatio,
+        cfg.criticalRssRatio,
+        ""
+      );
+
+      addPressure(
+        "heapMemory",
+        snapshot.memory.heapRatio,
+        cfg.warmHeapRatio,
+        cfg.stressedHeapRatio,
+        cfg.criticalHeapRatio,
+        ""
+      );
+
+      if (hasCritical || score >= 7) {
         return { state: "critical", score, reasons };
       }
 
@@ -1552,117 +1228,19 @@
       return { state: "healthy", score, reasons };
     }
 
-    function sampleTrafficState(reason) {
-      const now = Date.now();
-      const nowPerf = performance.now();
-      const elapsedMs = Math.max(1, nowPerf - lastSampleAt);
-
-      const cpuDelta = process.cpuUsage(lastCpuUsage);
-      lastCpuUsage = process.cpuUsage();
-
-      const eluDelta = performance.eventLoopUtilization(lastEventLoopUtilization);
-      lastEventLoopUtilization = performance.eventLoopUtilization();
-
-      const delaySnapshot = getLoopDelaySnapshot();
-      loopDelay.reset();
-
-      const memory = process.memoryUsage();
-      const totalMemory = os.totalmem();
-      const rssRatio = totalMemory > 0 ? memory.rss / totalMemory : 0;
-
-      const cpuUserMs = cpuDelta.user / 1000;
-      const cpuSystemMs = cpuDelta.system / 1000;
-      const cpuTotalMs = cpuUserMs + cpuSystemMs;
-      const cpuRatio = cpuTotalMs / elapsedMs;
-
-      const kinds = {};
-      for (const [kind, count] of currentSecondKindCounts) {
-        kinds[kind] = count;
-      }
-
-      const routeCounts = getTopMapEntries(currentSecondRouteCounts, trafficConfig.logging.maxTopRoutes);
-
-      const snapshot = {
-        state: trafficState.state,
-        score: trafficState.score,
-        since: trafficState.since,
-        sampledAt: now,
-        reason: reason || "interval",
-        rps: currentSecondRequests,
-        activeRequests: activeRequests.size,
-        loop: {
-          p50Ms: delaySnapshot.p50Ms,
-          p90Ms: delaySnapshot.p90Ms,
-          p99Ms: delaySnapshot.p99Ms,
-          meanMs: delaySnapshot.meanMs,
-          maxMs: delaySnapshot.maxMs,
-          utilization: roundRatio(eluDelta.utilization)
-        },
-        cpu: {
-          ratio: roundRatio(cpuRatio),
-          userMs: roundMs(cpuUserMs),
-          systemMs: roundMs(cpuSystemMs),
-          totalMs: roundMs(cpuTotalMs)
-        },
-        memory: {
-          rssMb: bytesToMb(memory.rss),
-          heapUsedMb: bytesToMb(memory.heapUsed),
-          heapTotalMb: bytesToMb(memory.heapTotal),
-          rssRatio: roundRatio(rssRatio)
-        },
-        system: {
-          loadavg: os.loadavg().map(roundMs),
-          freeMemoryMb: bytesToMb(os.freemem()),
-          totalMemoryMb: bytesToMb(totalMemory)
-        },
-        kinds,
-        topRoutes: routeCounts,
-        pressureReasons: []
-      };
-
-      const pressure = classifySystemPressure(snapshot);
-      snapshot.state = pressure.state;
-      snapshot.score = pressure.score;
-      snapshot.pressureReasons = pressure.reasons;
-
-      if (snapshot.state !== trafficState.state) {
-        snapshot.since = now;
-      } else {
-        snapshot.since = trafficState.since;
-      }
-
-      const shouldLog =
-        snapshot.state !== trafficState.state ||
-        (snapshot.state !== "healthy" && now - lastStateLogAt >= trafficConfig.logging.stateCooldownMs);
-
-      trafficState = snapshot;
-      lastSampleAt = nowPerf;
-      currentSecondRequests = 0;
-      currentSecondKindCounts = new Map();
-      currentSecondRouteCounts = new Map();
-
-      if (shouldLog) {
-        lastStateLogAt = now;
-        logTrafficState("state sample");
-      }
-    }
-
-    function logTrafficState(message) {
+    function logResourceState(message) {
       console.error(
-        "[POKE-traffic] " +
+        "[POKE-resource] " +
         message +
         " " +
         JSON.stringify({
-          state: trafficState.state,
-          score: trafficState.score,
-          rps: trafficState.rps,
-          active: trafficState.activeRequests,
-          loop: trafficState.loop,
-          cpu: trafficState.cpu,
-          memory: trafficState.memory,
-          kinds: trafficState.kinds,
-          reasons: trafficState.pressureReasons,
-          topRoutes: trafficState.topRoutes
+          state: resourceState.state,
+          score: resourceState.score,
+          cpu: resourceState.cpu,
+          memory: resourceState.memory,
+          requests: resourceState.requests,
+          reasons: resourceState.pressureReasons,
+          topRoutes: resourceState.topRoutes
         })
       );
     }
@@ -1670,19 +1248,19 @@
     function logReject(req, client, kind, reason, status) {
       const now = Date.now();
 
-      if (now - lastRejectLogAt < trafficConfig.logging.rejectCooldownMs) {
+      if (now - lastRejectLogAt < resourceConfig.logging.rejectCooldownMs) {
         return;
       }
 
       lastRejectLogAt = now;
 
       console.error(
-        "[POKE-traffic] rejected " +
+        "[POKE-resource] rejected " +
         JSON.stringify({
           reason,
           status,
-          state: trafficState.state,
-          score: trafficState.score,
+          state: resourceState.state,
+          score: resourceState.score,
           path: getRequestPath(req),
           kind,
           ip: maskIP(client.key),
@@ -1697,12 +1275,8 @@
             cooldownUntil: client.cooldownUntil
           },
           system: {
-            rps: trafficState.rps,
-            active: trafficState.activeRequests,
-            loopP99Ms: trafficState.loop.p99Ms,
-            eventLoopUse: trafficState.loop.utilization,
-            cpu: trafficState.cpu.ratio,
-            memoryRssRatio: trafficState.memory.rssRatio
+            cpu: resourceState.cpu,
+            memory: resourceState.memory
           }
         })
       );
@@ -1712,25 +1286,32 @@
       return GUARD_MESSAGES[Math.floor(Math.random() * GUARD_MESSAGES.length)];
     }
 
-    function setTrafficHeaders(res, decision) {
-      res.set("X-Poke-Traffic-Guard", trafficState.state);
-      res.set("X-Poke-Traffic-Decision", decision);
+    function setResourceHeaders(res, decision) {
+      res.set("X-Poke-Resource-Guard", resourceState.state);
+      res.set("X-Poke-Resource-Decision", decision);
+    }
+
+    function getRetryAfterForState(state) {
+      if (state === "critical") return resourceConfig.admission.retryAfterCriticalSeconds;
+      if (state === "stressed") return resourceConfig.admission.retryAfterStressedSeconds;
+      if (state === "warm") return resourceConfig.admission.retryAfterWarmSeconds;
+      return resourceConfig.admission.retryAfterHealthyAbuseSeconds;
     }
 
     function sendGuardReject(req, res, client, kind, options) {
       rememberDecision(client, "reject");
 
       const status = options.status || 503;
-      const retryAfter = options.retryAfter || trafficConfig.admission.retryAfterStressedSeconds;
-      const reason = options.reason || "traffic-pressure";
+      const retryAfter = options.retryAfter || resourceConfig.admission.retryAfterStressedSeconds;
+      const reason = options.reason || "resource-pressure";
 
       if (reason === "client-cooldown") {
         guardStats.rejectedCooldown++;
       } else if (reason === "absolute-abuse") {
         guardStats.rejectedAbuse++;
-      } else if (trafficState.state === "critical") {
+      } else if (resourceState.state === "critical") {
         guardStats.rejectedCritical++;
-      } else if (trafficState.state === "stressed") {
+      } else if (resourceState.state === "stressed") {
         guardStats.rejectedStressed++;
       } else {
         guardStats.rejectedWarm++;
@@ -1741,34 +1322,27 @@
       res.set("Retry-After", String(retryAfter));
       res.set("Cache-Control", "no-store");
       res.set("Connection", "close");
-      res.set("X-Poke-Traffic-Guard", trafficState.state);
-      res.set("X-Poke-Traffic-Reason", reason);
+      res.set("X-Poke-Resource-Guard", resourceState.state);
+      res.set("X-Poke-Resource-Reason", reason);
       return res.status(status).send(options.message || getRandomGuardMessage());
     }
 
-    function getRetryAfterForState(state) {
-      if (state === "critical") return trafficConfig.admission.retryAfterCriticalSeconds;
-      if (state === "stressed") return trafficConfig.admission.retryAfterStressedSeconds;
-      if (state === "warm") return trafficConfig.admission.retryAfterWarmSeconds;
-      return trafficConfig.admission.retryAfterHealthyAbuseSeconds;
-    }
-
     function allowRequest(res, kind, decision) {
-      if (trafficState.state === "healthy") guardStats.allowedHealthy++;
-      if (trafficState.state === "warm") guardStats.allowedWarm++;
-      if (trafficState.state === "stressed") guardStats.allowedStressed++;
-      if (trafficState.state === "critical") guardStats.allowedCritical++;
+      if (resourceState.state === "healthy") guardStats.allowedHealthy++;
+      if (resourceState.state === "warm") guardStats.allowedWarm++;
+      if (resourceState.state === "stressed") guardStats.allowedStressed++;
+      if (resourceState.state === "critical") guardStats.allowedCritical++;
 
       if (kind === "status") guardStats.allowedStatus++;
       if (kind === "static") guardStats.allowedStatic++;
       if (kind === "page") guardStats.allowedPage++;
       if (kind === "heavy" || kind === "background") guardStats.allowedHeavy++;
 
-      setTrafficHeaders(res, decision || "allow");
+      setResourceHeaders(res, decision || "allow");
     }
 
     function getAdmissionDecision(req, client, kind) {
-      const state = trafficState.state;
+      const state = resourceState.state;
       const noisy = clientIsNoisy(client, state);
       const absoluteAbuse = clientIsAbsoluteAbuse(client);
       const now = Date.now();
@@ -1788,7 +1362,7 @@
           action: "cooldown-reject",
           reason: "absolute-abuse",
           status: 429,
-          retryAfter: trafficConfig.admission.retryAfterHealthyAbuseSeconds,
+          retryAfter: resourceConfig.admission.retryAfterHealthyAbuseSeconds,
           message: "Too many requests. Please slow down a bit."
         };
       }
@@ -1808,16 +1382,6 @@
       }
 
       if (kind === "static") {
-        if (state === "critical" && trafficState.activeRequests >= trafficConfig.system.criticalActiveRequests) {
-          return {
-            action: "reject",
-            reason: "critical-static-shed",
-            status: 503,
-            retryAfter: getRetryAfterForState(state),
-            message: "Server is under heavy load. Please retry shortly."
-          };
-        }
-
         return {
           action: "allow",
           reason: "static-pass"
@@ -1825,7 +1389,7 @@
       }
 
       if (state === "warm") {
-        if ((kind === "heavy" || kind === "background") && noisy) {
+        if ((kind === "heavy" || kind === "background") && noisy && client.heavyTimes.length > getHeavyLimit(state)) {
           return {
             action: "reject",
             reason: "warm-noisy-expensive-client",
@@ -1842,14 +1406,14 @@
       }
 
       if (state === "stressed") {
-        if (kind === "page" && !noisy) {
-          return {
-            action: "allow",
-            reason: "stressed-page-pass"
-          };
-        }
+        if (kind === "page") {
+          if (!noisy || client.pageSoftPassTimes.length < resourceConfig.client.pageSoftPassesPerWindow) {
+            return {
+              action: "allow-soft-page",
+              reason: "stressed-page-pass"
+            };
+          }
 
-        if (kind === "page" && noisy) {
           return {
             action: "reject",
             reason: "stressed-noisy-page-client",
@@ -1862,8 +1426,7 @@
         if (kind === "heavy" || kind === "background") {
           const expensiveButAcceptable =
             !noisy &&
-            client.heavyTimes.length <= 8 &&
-            trafficState.activeRequests < trafficConfig.system.stressedActiveRequests;
+            client.heavyTimes.length <= getHeavyLimit(state);
 
           if (expensiveButAcceptable) {
             return {
@@ -1898,14 +1461,24 @@
       }
 
       if (state === "critical") {
-        if (kind === "page" && !noisy && client.pageSoftPassTimes.length < trafficConfig.client.pageSoftPassesPerWindow) {
+        if (kind === "page") {
+          if (!noisy && client.pageSoftPassTimes.length < resourceConfig.client.pageSoftPassesPerWindow) {
+            return {
+              action: "allow-soft-page",
+              reason: "critical-page-soft-pass"
+            };
+          }
+
           return {
-            action: "page-grace",
-            reason: "critical-page-grace"
+            action: "reject",
+            reason: "critical-noisy-page-client",
+            status: 503,
+            retryAfter: getRetryAfterForState(state),
+            message: "Server is under heavy load. Please retry shortly."
           };
         }
 
-        if (kind === "other" && !noisy && trafficState.activeRequests < trafficConfig.system.criticalActiveRequests * 0.75) {
+        if (kind === "other" && !noisy) {
           return {
             action: "allow",
             reason: "critical-small-other-pass"
@@ -1915,7 +1488,7 @@
         return {
           action: "reject",
           reason: "critical-shed",
-          status: kind === "page" ? 503 : 503,
+          status: 503,
           retryAfter: getRetryAfterForState(state),
           message: "Server is under heavy load. Please retry shortly."
         };
@@ -1927,56 +1500,11 @@
       };
     }
 
-    function sleep(ms) {
-      return new Promise(function (resolve) {
-        setTimeout(resolve, ms);
-      });
-    }
-
-    async function handlePageGrace(req, res, next, client, kind, decision) {
-      const startedAt = performance.now();
-
-      while (!res.headersSent && !res.writableEnded && !res.destroyed) {
-        if (trafficState.state !== "critical") {
-          rememberDecision(client, "page-soft-pass");
-          guardStats.pageGracePassed++;
-          allowRequest(res, kind, "page-grace-recovered");
-          return next();
-        }
-
-        if (performance.now() - startedAt >= trafficConfig.admission.pageGraceMs) {
-          break;
-        }
-
-        await sleep(trafficConfig.admission.pageGracePollMs);
-      }
-
-      if (
-        !res.headersSent &&
-        !res.writableEnded &&
-        !res.destroyed &&
-        trafficState.activeRequests < trafficConfig.system.criticalActiveRequests * 0.5 &&
-        !clientIsNoisy(client, "critical")
-      ) {
-        rememberDecision(client, "page-soft-pass");
-        guardStats.pageGracePassed++;
-        allowRequest(res, kind, "critical-page-soft-pass");
-        return next();
-      }
-
-      return sendGuardReject(req, res, client, kind, {
-        reason: decision.reason,
-        status: 503,
-        retryAfter: getRetryAfterForState("critical"),
-        message: "Server is under heavy load. Please retry shortly."
-      });
-    }
-
     function requestActivityTracker(req, res, next) {
       const id = ++requestSequence;
       const key = getRequestKey(req);
       const kind = classifyRequest(req);
-      const startedAt = performance.now();
+      const startedAt = Date.now();
 
       activeRequests.set(id, {
         id,
@@ -1988,15 +1516,15 @@
       incrementMapCount(activeRequestCounts, key);
 
       res.on("finish", function () {
-        const finishedAt = performance.now();
-        const durationMs = roundMs(finishedAt - startedAt);
+        const finishedAt = Date.now();
+        const durationMs = finishedAt - startedAt;
 
         if (activeRequests.has(id)) {
           activeRequests.delete(id);
           decrementMapCount(activeRequestCounts, key);
         }
 
-        if (durationMs >= trafficConfig.logging.slowRequestMs) {
+        if (durationMs >= resourceConfig.logging.slowRequestMs) {
           recentSlowRequests.push({
             key,
             kind,
@@ -2004,7 +1532,7 @@
             durationMs
           });
 
-          while (recentSlowRequests.length > trafficConfig.logging.maxRecentSlow) {
+          while (recentSlowRequests.length > resourceConfig.logging.maxRecentSlow) {
             recentSlowRequests.shift();
           }
         }
@@ -2020,7 +1548,7 @@
       next();
     }
 
-    function trafficAdmissionMiddleware(req, res, next) {
+    function resourceAdmissionMiddleware(req, res, next) {
       const kind = classifyRequest(req);
       const cost = getKindCost(kind, req);
       const client = getClientState(req);
@@ -2038,8 +1566,10 @@
         return next();
       }
 
-      if (decision.action === "page-grace") {
-        return handlePageGrace(req, res, next, client, kind, decision).catch(next);
+      if (decision.action === "allow-soft-page") {
+        rememberDecision(client, "page-soft-pass");
+        allowRequest(res, kind, decision.reason);
+        return next();
       }
 
       if (decision.action === "cooldown-reject") {
@@ -2051,7 +1581,7 @@
         decision.action === "reject" &&
         (decision.reason === "stressed-expensive-shed" || decision.reason === "critical-shed") &&
         (kind === "heavy" || kind === "background") &&
-        client.heavyTimes.length >= trafficConfig.client.maxHeavyRejectsBeforeCooldown
+        client.heavyTimes.length >= getHeavyLimit(resourceState.state)
       ) {
         applyClientCooldown(client, decision.reason);
       }
@@ -2061,7 +1591,7 @@
 
     function cleanupClients() {
       const now = Date.now();
-      const maxAge = trafficConfig.client.windowMs * 3;
+      const maxAge = resourceConfig.client.windowMs * 3;
 
       for (const [key, client] of clientStates) {
         pruneClientState(client, now);
@@ -2092,7 +1622,7 @@
 
         if (client.requestTimes.length > 0) active++;
         if (client.cooldownUntil > now) cooldown++;
-        if (clientIsNoisy(client, trafficState.state)) noisy++;
+        if (clientIsNoisy(client, resourceState.state)) noisy++;
       }
 
       return {
@@ -2103,33 +1633,33 @@
       };
     }
 
-    function getTrafficStats() {
+    function getResourceStats() {
       return {
-        guard: "PokeTrafficGuard",
-        state: trafficState,
+        guard: "PokeResourceGuard",
+        state: resourceState,
         clients: countClientStates(),
         active_requests: {
           total: activeRequests.size,
-          by_route: getTopMapEntries(activeRequestCounts, trafficConfig.logging.maxTopRoutes),
-          oldest: getActiveRequestSummary(trafficConfig.logging.maxTopRoutes),
-          recent_slow: recentSlowRequests.slice(-trafficConfig.logging.maxRecentSlow).reverse()
+          by_route: getTopMapEntries(activeRequestCounts, resourceConfig.logging.maxTopRoutes),
+          oldest: getActiveRequestSummary(resourceConfig.logging.maxTopRoutes),
+          recent_slow: recentSlowRequests.slice(-resourceConfig.logging.maxRecentSlow).reverse()
         },
         stats: guardStats,
         config: {
-          system: trafficConfig.system,
-          client: trafficConfig.client,
-          admission: trafficConfig.admission,
-          request_cost: trafficConfig.requestCost
+          system: resourceConfig.system,
+          client: resourceConfig.client,
+          admission: resourceConfig.admission,
+          request_cost: resourceConfig.requestCost
         }
       };
     }
 
-    function sendTrafficStats(req, res) {
-      res.json(getTrafficStats());
+    function sendResourceStats(req, res) {
+      res.json(getResourceStats());
     }
 
     function sendAntiddosPage(req, res) {
-      const stats = getTrafficStats();
+      const stats = getResourceStats();
       const stateClass = stats.state.state === "healthy" ? "green" :
         stats.state.state === "warm" ? "orange" :
         stats.state.state === "stressed" ? "orange" :
@@ -2139,7 +1669,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>PokeTrafficGuard - Poke Traffic Protection</title>
+<title>PokeResourceGuard - Poke Resource Protection</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" href="/favicon.ico">
 <style>
@@ -2234,27 +1764,26 @@ pre{
 <div class="app">
 <img class="logo" src="/css/logo-poke.svg" alt="Poke logo">
 
-<h1>PokeTrafficGuard</h1>
-<p class="small">poke's pressure-aware anti-DDoS and overload protection</p>
+<h1>PokeResourceGuard</h1>
+<p class="small">poke's CPU and memory based traffic protection</p>
 
 <div class="banner ${stateClass}">
   <b>Current state:</b> <span class="${stateClass}">${stats.state.state}</span>
   <br>
-  <span class="small">Score: ${stats.state.score}. RPS: ${stats.state.rps}. Active requests: ${stats.state.activeRequests}.</span>
+  <span class="small">Score: ${stats.state.score}. CPU: ${stats.state.cpu.percent}%. RSS: ${formatPercent(stats.state.memory.rssRatio)}. Heap: ${formatPercent(stats.state.memory.heapRatio)}.</span>
 </div>
 
-<h2>what changed</h2>
+<h2>what this does</h2>
 <p>
-  This guard does not block normal users just because they made a few requests quickly.
-  It first checks whether the server is actually under pressure. It looks at event-loop
-  delay, event-loop utilization, CPU usage, active requests, requests per second, and
-  memory pressure. When the server is healthy, almost everything passes.
+  PokeResourceGuard only checks CPU and memory pressure. It does not use event-loop delay,
+  latency probes, ping-style checks, or browser fingerprinting. When CPU and memory are fine,
+  normal users pass through.
 </p>
 
 <p>
-  When the server is stressed, expensive work gets shed first: API, proxy, media,
-  manifest, storyboard, and background requests. Page navigations and static files
-  are protected as much as possible, because those matter most for user experience.
+  When the server is under real resource pressure, expensive work gets reduced first:
+  API, proxy, media, manifest, storyboard, and background requests. Page navigations,
+  static files, and status pages get priority so the normal user experience stays usable.
 </p>
 
 <h2>live stats</h2>
@@ -2268,24 +1797,28 @@ pre{
     <span class="stat-label">pressure score</span>
   </div>
   <div class="stat-box">
-    <span class="stat-num">${stats.state.rps}</span>
+    <span class="stat-num">${stats.state.cpu.percent}%</span>
+    <span class="stat-label">process CPU</span>
+  </div>
+  <div class="stat-box">
+    <span class="stat-num">${stats.state.memory.rssMb}MB</span>
+    <span class="stat-label">RSS memory</span>
+  </div>
+  <div class="stat-box">
+    <span class="stat-num">${formatPercent(stats.state.memory.rssRatio)}</span>
+    <span class="stat-label">RSS ratio</span>
+  </div>
+  <div class="stat-box">
+    <span class="stat-num">${stats.state.memory.heapUsedMb}MB</span>
+    <span class="stat-label">heap used</span>
+  </div>
+  <div class="stat-box">
+    <span class="stat-num">${formatPercent(stats.state.memory.heapRatio)}</span>
+    <span class="stat-label">heap ratio</span>
+  </div>
+  <div class="stat-box">
+    <span class="stat-num">${stats.state.requests.rps}</span>
     <span class="stat-label">requests/sec</span>
-  </div>
-  <div class="stat-box">
-    <span class="stat-num">${stats.state.activeRequests}</span>
-    <span class="stat-label">active requests</span>
-  </div>
-  <div class="stat-box">
-    <span class="stat-num">${stats.state.loop.p99Ms}ms</span>
-    <span class="stat-label">loop p99</span>
-  </div>
-  <div class="stat-box">
-    <span class="stat-num">${formatPercent(stats.state.loop.utilization)}</span>
-    <span class="stat-label">event loop use</span>
-  </div>
-  <div class="stat-box">
-    <span class="stat-num">${formatPercent(stats.state.cpu.ratio)}</span>
-    <span class="stat-label">cpu use</span>
   </div>
   <div class="stat-box">
     <span class="stat-num">${stats.clients.tracked}</span>
@@ -2297,14 +1830,20 @@ pre{
   </div>
 </div>
 
+<h2>memory details</h2>
+<pre>${JSON.stringify(stats.state.memory, null, 2)}</pre>
+
+<h2>cpu details</h2>
+<pre>${JSON.stringify(stats.state.cpu, null, 2)}</pre>
+
 <h2>pressure reasons</h2>
 <pre>${stats.state.pressureReasons.length ? stats.state.pressureReasons.join("\n") : "none"}</pre>
 
 <h2>request mix</h2>
-<pre>${JSON.stringify(stats.state.kinds, null, 2)}</pre>
+<pre>${JSON.stringify(stats.state.requests.kinds, null, 2)}</pre>
 
-<h2>top active routes</h2>
-<pre>${JSON.stringify(stats.active_requests.by_route, null, 2)}</pre>
+<h2>top routes this sample</h2>
+<pre>${JSON.stringify(stats.state.topRoutes, null, 2)}</pre>
 
 <h2>recent slow requests</h2>
 <pre>${JSON.stringify(stats.active_requests.recent_slow, null, 2)}</pre>
@@ -2312,6 +1851,7 @@ pre{
 <h2>api</h2>
 <p>
   JSON stats:
+  <code><a href="/_pokeresource/stats">/_pokeresource/stats</a></code>,
   <code><a href="/_poketraffic/stats">/_poketraffic/stats</a></code>,
   <code><a href="/_pokestopskids/stats">/_pokestopskids/stats</a></code>,
   <code><a href="/_pokeoverload/stats">/_pokeoverload/stats</a></code>
@@ -2335,46 +1875,34 @@ pre{
     }
 
     app.use(requestActivityTracker);
-    app.use(trafficAdmissionMiddleware);
+    app.use(resourceAdmissionMiddleware);
 
-    app.get("/_poketraffic/stats", sendTrafficStats);
-    app.get("/_pokestopskids/stats", sendTrafficStats);
-    app.get("/_pokeoverload/stats", sendTrafficStats);
+    app.get("/_pokeresource/stats", sendResourceStats);
+    app.get("/_poketraffic/stats", sendResourceStats);
+    app.get("/_pokestopskids/stats", sendResourceStats);
+    app.get("/_pokeoverload/stats", sendResourceStats);
     app.get("/_antiddos*", sendAntiddosPage);
 
-    sampleTrafficState("startup");
+    sampleCpuAndMemory("startup");
 
     const sampleTimer = setInterval(function () {
-      sampleTrafficState("interval");
-    }, trafficConfig.system.sampleMs);
+      sampleCpuAndMemory("interval");
+    }, resourceConfig.system.sampleMs);
     sampleTimer.unref();
 
-    const cleanupTimer = setInterval(cleanupClients, trafficConfig.client.cleanupMs);
+    const cleanupTimer = setInterval(cleanupClients, resourceConfig.client.cleanupMs);
     cleanupTimer.unref();
 
-    process.once("SIGTERM", function () {
-      try {
-        loopDelay.disable();
-      } catch {}
-    });
-
-    process.once("SIGINT", function () {
-      try {
-        loopDelay.disable();
-      } catch {}
-    });
-
     initlog(
-      "[PokeTrafficGuard] loaded - " +
-      "healthy-first, pressure-aware, " +
-      "p99 warm/stressed/critical: " +
-      trafficConfig.system.warmP99LagMs + "/" +
-      trafficConfig.system.stressedP99LagMs + "/" +
-      trafficConfig.system.criticalP99LagMs + "ms, " +
-      "rps warm/stressed/critical: " +
-      trafficConfig.system.warmRps + "/" +
-      trafficConfig.system.stressedRps + "/" +
-      trafficConfig.system.criticalRps
+      "[PokeResourceGuard] loaded - CPU/memory only, " +
+      "cpu warm/stressed/critical: " +
+      resourceConfig.system.warmCpuRatio + "/" +
+      resourceConfig.system.stressedCpuRatio + "/" +
+      resourceConfig.system.criticalCpuRatio + ", " +
+      "rss warm/stressed/critical: " +
+      resourceConfig.system.warmRssRatio + "/" +
+      resourceConfig.system.stressedRssRatio + "/" +
+      resourceConfig.system.criticalRssRatio
     );
   })();
 
