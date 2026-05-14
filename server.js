@@ -403,6 +403,7 @@
    * - Advanced Client prioritization based on request type
    * - High Resolution CPU accuracy tracking
    * - Cryptographic log anonymity
+   * - Persistent route tracking JSON
    */
   (function PokeResourceGuard() {
     const { monitorEventLoopDelay, performance } = require("perf_hooks");
@@ -567,7 +568,39 @@
     let currentSecondRequests = 0;
     let currentSecondKindCounts = new Map();
     let currentSecondRouteCounts = new Map();
+    
+    // Persistent Data Setup
     let allTimeRouteCounts = new Map();
+    let totalGlobalRequests = 0;
+    const STATS_FILE_PATH = 'popularpaths.json';
+
+    try {
+      if (fs.existsSync(STATS_FILE_PATH)) {
+        const fileData = fs.readFileSync(STATS_FILE_PATH, 'utf8');
+        const parsedData = JSON.parse(fileData);
+        totalGlobalRequests = parsedData.totalRequests || 0;
+        if (parsedData.routes) {
+          for (const [key, val] of Object.entries(parsedData.routes)) {
+            allTimeRouteCounts.set(key, val);
+          }
+        }
+        initlog(`[POKE-resource] Loaded previous traffic stats: ${totalGlobalRequests} total global requests.`);
+      }
+    } catch (err) {
+      console.error("[POKE-resource] Could not load popularpaths.json:", err.message);
+    }
+
+    // Save persistent data every 15 seconds
+    setInterval(() => {
+      const routesObj = {};
+      for (const [k, v] of allTimeRouteCounts.entries()) {
+        routesObj[k] = v;
+      }
+      const outData = { totalRequests: totalGlobalRequests, routes: routesObj };
+      fs.writeFile(STATS_FILE_PATH, JSON.stringify(outData, null, 2), (err) => {
+        if (err) console.error("[POKE-resource] Failed to save popularpaths.json:", err.message);
+      });
+    }, 15000).unref();
 
     let lastSampleAt = performance.now();
     let lastCpuUsage = process.cpuUsage();
@@ -653,7 +686,17 @@
     }
 
     function normalizePathname(pathname) {
-      return String(pathname || "/")
+      const p = String(pathname || "/").toLowerCase();
+      
+      // Smart Route Truncation to keep lists clean
+      if (p.startsWith('/avatars/')) return '/avatars/';
+      if (p.startsWith('/vi/')) return '/vi/';
+      if (p.startsWith('/ggpht/')) return '/ggpht/';
+      if (p.startsWith('/sb/')) return '/sb/';
+      if (p.startsWith('/storyboard')) return '/storyboard';
+      if (p.startsWith('/videoplayback')) return '/videoplayback';
+      
+      return p
         .replace(/[a-f0-9]{24}/gi, ":objectId")
         .replace(/[a-f0-9]{32,}/gi, ":hex")
         .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi, ":uuid")
@@ -1291,17 +1334,15 @@
       
       // Do not pollute route counters with status endpoints
       if (!isStatusRequest(req)) {
+        totalGlobalRequests++;
         incrementMapCount(activeRequestCounts, key);
         incrementMapCount(currentSecondRouteCounts, key);
         incrementMapCount(allTimeRouteCounts, key);
         
-        // Anti-memory leak for all-time tracking
+        // Anti-memory leak for all-time tracking (Trim bottom if > 5000)
         if (allTimeRouteCounts.size > 5000) {
-          let evicted = 0;
-          for (const oldKey of allTimeRouteCounts.keys()) {
-            allTimeRouteCounts.delete(oldKey);
-            if (++evicted >= 1000) break;
-          }
+          const sorted = Array.from(allTimeRouteCounts.entries()).sort((a,b) => b[1] - a[1]);
+          allTimeRouteCounts = new Map(sorted.slice(0, 4000)); // Keep top 4000
         }
       }
 
@@ -1417,8 +1458,9 @@
         clients: countClientStates(),
         active_requests: {
           total: activeRequests.size,
+          total_global_requests: totalGlobalRequests,
           by_route: getTopMapEntries(currentSecondRouteCounts, resourceConfig.logging.maxTopRoutes),
-          all_time_top_routes: getTopMapEntries(allTimeRouteCounts, 10),
+          all_time_top_routes: getTopMapEntries(allTimeRouteCounts, 12),
           oldest: getActiveRequestSummary(resourceConfig.logging.maxTopRoutes),
           recent_slow: recentSlowRequests.slice(-resourceConfig.logging.maxRecentSlow).reverse()
         },
@@ -1453,7 +1495,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Poke Health & Resource Protection</title>
+<title>Poke Health & Traffic Stats</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" href="/favicon.ico">
 <style>
@@ -1461,12 +1503,37 @@
 body{color:#fff;background:#1c1b22;margin:0; font-family: sans-serif;}
 a{color:#0ab7f0}:visited{color:#00c0ff}
 .app{max-width:1100px;margin:0 auto;padding:24px;}
-h1,h2{font-stretch:extra-expanded;}
-h1{font-weight:1000;font-stretch:ultra-expanded;margin-top:0;}
-h2{margin-top:28px;}
+h1,h2{font-stretch:extra-expanded; letter-spacing: -0.5px;}
+h1{font-weight:900; font-size: 2.2rem; margin-top:0; margin-bottom: 4px;}
+h2{margin-top:32px; border-bottom: 1px solid #333; padding-bottom: 8px;}
 p,li,code,pre{line-height:1.6;}
-hr{border:0;border-top:1px solid #333;margin:28px 0;}
+hr{border:0;border-top:1px solid #333;margin:32px 0;}
 .logo{float:right;margin:.3em 0 1em 2em;max-width:130px;}
+
+/* Hero Stats Box */
+.hero-stat {
+  background: linear-gradient(135deg, #1c1b22 0%, #2a2930 100%);
+  border: 1px solid #333;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  text-align: center;
+  box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+}
+.hero-num {
+  font-size: 4rem;
+  font-weight: 900;
+  color: #0ab7f0;
+  line-height: 1;
+  text-shadow: 0 0 20px rgba(10,183,240,0.3);
+}
+.hero-label {
+  font-size: 1.1rem;
+  color: #aaa;
+  margin-top: 8px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
 
 /* Upgraded Grid Layout */
 .stat-grid {
@@ -1491,6 +1558,21 @@ hr{border:0;border-top:1px solid #333;margin:28px 0;}
 .stat-label{font-size: .9rem; color: #aaa; display: block; margin-top: 4px;}
 
 .green{color:#4caf50} .orange{color:#ff9800} .red{color:#f44336}
+
+/* Pulsing Status Indicator */
+@keyframes pulse-green { 0% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(76, 175, 80, 0); } 100% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0); } }
+@keyframes pulse-orange { 0% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(255, 152, 0, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0); } }
+@keyframes pulse-red { 0% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(244, 67, 54, 0); } 100% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0); } }
+.status-dot {
+  display: inline-block;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+.status-dot.green { background: #4caf50; animation: pulse-green 2s infinite; }
+.status-dot.orange { background: #ff9800; animation: pulse-orange 2s infinite; }
+.status-dot.red { background: #f44336; animation: pulse-red 2s infinite; }
+
 code,pre{background:#2a2930;padding:2px 6px;border-radius:4px;}
 pre{overflow:auto;padding:14px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 1px solid #333;}
 .banner{padding:16px 20px;border-radius:8px;background:#2a2930;box-shadow: 0 4px 6px rgba(0,0,0,0.3);border: 1px solid #333; transition: border-left 0.3s ease;}
@@ -1501,7 +1583,7 @@ pre{overflow:auto;padding:14px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 1
 
 /* Explanation box */
 .explanation {
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   color: #ddd;
   background: #2a2930;
   padding: 20px;
@@ -1510,6 +1592,7 @@ pre{overflow:auto;padding:14px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 1
   margin-bottom: 24px;
   box-shadow: 0 4px 6px rgba(0,0,0,0.3);
 }
+
 summary { font-size: 1.2rem; cursor: pointer; color: #0ab7f0; user-select: none; margin-bottom: 12px; font-weight: bold; }
 summary:hover { color: #00c0ff; }
 
@@ -1517,13 +1600,13 @@ summary:hover { color: #00c0ff; }
 .route-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   margin-top: 16px;
 }
 .route-item {
   background: #2a2930;
   border-radius: 8px;
-  padding: 12px 16px;
+  padding: 14px 18px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1535,15 +1618,29 @@ summary:hover { color: #00c0ff; }
 .route-bar {
   position: absolute;
   left: 0; top: 0; bottom: 0;
-  background: rgba(10, 183, 240, 0.15);
+  background: rgba(10, 183, 240, 0.12);
   z-index: 1;
-  transition: width 0.5s ease;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.route-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 2;
+}
+.route-rank {
+  font-size: 1rem;
+  font-weight: 900;
+  color: #666;
+  width: 24px;
 }
 .route-name {
   font-family: monospace;
   font-size: 1.05rem;
   color: #ddd;
-  z-index: 2;
+  background: rgba(0,0,0,0.3);
+  padding: 4px 8px;
+  border-radius: 4px;
 }
 .route-count {
   font-size: 1.1rem;
@@ -1551,8 +1648,9 @@ summary:hover { color: #00c0ff; }
   color: #0ab7f0;
   z-index: 2;
   background: rgba(0,0,0,0.4);
-  padding: 4px 10px;
+  padding: 4px 12px;
   border-radius: 12px;
+  border: 1px solid #444;
 }
 </style>
 </head>
@@ -1561,34 +1659,43 @@ summary:hover { color: #00c0ff; }
 <img class="logo" src="/css/logo-poke.svg" alt="Poke logo">
 
 <h1>Poke Server Health</h1>
-<p class="small">Live metrics and traffic protection</p>
+<p class="small" style="margin-top:0;">Live metrics and traffic protection</p>
+
+<div class="hero-stat">
+  <div id="hero-total" class="hero-num">${stats.active_requests.total_global_requests.toLocaleString()}</div>
+  <div class="hero-label">Total Global Requests Processed</div>
+</div>
 
 <div id="banner-container" class="banner ${stateClass}">
-  <b>Current Status:</b> <span id="banner-state" class="${stateClass}" style="font-size: 1.2rem; text-transform: capitalize;">${stats.state.state}</span>
+  <b>Current Status:</b> <div id="status-dot" class="status-dot ${stateClass}"></div> <span id="banner-state" class="${stateClass}" style="font-size: 1.2rem; text-transform: capitalize;">${stats.state.state}</span>
   <br>
-  <span id="banner-subtext" class="small" style="display:inline-block; margin-top: 6px;">
+  <span id="banner-subtext" class="small" style="display:inline-block; margin-top: 8px;">
     System Load Score: ${stats.state.score} &bull; Process Delay: ${stats.state.eventLoop.p99Ms}ms &bull; CPU: ${stats.state.cpu.percent}% &bull; Memory: ${formatPercent(stats.state.memory.rssRatio)}
   </span>
 </div>
 
 <h2>What is this page?</h2>
 <div class="explanation">
-  Poke keeps an eye on how much brainpower (CPU) and memory it has left. Just like a personal computer, the server only has so much energy to go around! <br><br>
-  If a sudden wave of traffic hits, or if someone tries to overload the site, Poke will automatically prioritize normal users watching videos. It gently pauses "heavy" background tasks until the server catches its breath. This keeps Poke smooth, fast, and online for everyone.
+  Poke keeps a close eye on how much brainpower (CPU) and memory it has left. Just like a personal computer, the server only has so much energy to go around! <br><br>
+  If a sudden wave of traffic hits, or if someone tries to overload the site, Poke will automatically prioritize normal users watching videos. It gently pauses heavy background tasks until the server catches its breath. This guarantees Poke stays smooth, fast, and online for everyone.
 </div>
 
-<h2>Popular Destinations (Since Boot)</h2>
+<h2>Most Popular Destinations (All Time)</h2>
+<p class="small">The most heavily trafficked areas of Poke, calculated since records began.</p>
 <div id="route-list-container" class="route-list">
   ${(() => {
     const topRoutes = stats.active_requests.all_time_top_routes;
     if (!topRoutes || topRoutes.length === 0) return `<div class="route-item" style="justify-content: center; color: #aaa;">Gathering data...</div>`;
     const maxCount = topRoutes[0].count;
-    return topRoutes.map(r => {
+    return topRoutes.map((r, i) => {
       const pct = (r.count / maxCount) * 100;
       return `<div class="route-item">
         <div class="route-bar" style="width: ${pct}%"></div>
-        <span class="route-name">${r.key}</span>
-        <span class="route-count">${r.count}</span>
+        <div class="route-info">
+          <span class="route-rank">#${i + 1}</span>
+          <span class="route-name">${r.key}</span>
+        </div>
+        <span class="route-count">${r.count.toLocaleString()}</span>
       </div>`;
     }).join('');
   })()}
@@ -1670,7 +1777,10 @@ document.addEventListener("DOMContentLoaded", function() {
       if (state === "critical") stateClass = "red";
       
       // Update DOM components dynamically
+      document.getElementById("hero-total").innerText = data.active_requests.total_global_requests.toLocaleString();
+
       document.getElementById("banner-container").className = "banner " + stateClass;
+      document.getElementById("status-dot").className = "status-dot " + stateClass;
       document.getElementById("banner-state").className = stateClass;
       document.getElementById("banner-state").innerText = state;
       
@@ -1693,12 +1803,15 @@ document.addEventListener("DOMContentLoaded", function() {
       const topRoutes = data.active_requests.all_time_top_routes;
       if (topRoutes && topRoutes.length > 0) {
           const maxCount = topRoutes[0].count;
-          const routeHtml = topRoutes.map(r => {
+          const routeHtml = topRoutes.map((r, i) => {
               const pct = (r.count / maxCount) * 100;
               return '<div class="route-item">' +
                   '<div class="route-bar" style="width: ' + pct + '%"></div>' +
-                  '<span class="route-name">' + r.key + '</span>' +
-                  '<span class="route-count">' + r.count + '</span>' +
+                  '<div class="route-info">' +
+                    '<span class="route-rank">#' + (i + 1) + '</span>' +
+                    '<span class="route-name">' + r.key + '</span>' +
+                  '</div>' +
+                  '<span class="route-count">' + r.count.toLocaleString() + '</span>' +
               '</div>';
           }).join('');
           document.getElementById("route-list-container").innerHTML = routeHtml;
