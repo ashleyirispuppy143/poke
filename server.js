@@ -19,17 +19,31 @@
  */
 (async function () {
   process.on("unhandledRejection", (reason, promise) => {
-    console.error("[POKE-error] Unhandled Rejection at:", promise, "reason:", reason);
-    if (reason && reason.code === "UND_ERR_CONNECT_TIMEOUT") {
-      console.error("[POKE-error] Blocked server crash from Undici ConnectTimeoutError.");
+    // Silently drop common network disconnects to prevent console I/O blocking
+    if (reason && (
+      reason.code === "UND_ERR_CONNECT_TIMEOUT" || 
+      reason.code === "UND_ERR_HEADERS_TIMEOUT" || 
+      reason.code === "ECONNRESET" || 
+      reason.code === "ECONNABORTED" || 
+      reason.code === "EPIPE"
+    )) {
+      return;
     }
+    console.error("[POKE-error] Unhandled Rejection at:", promise, "reason:", reason);
   });
 
   process.on("uncaughtException", (err) => {
-    console.error("[POKE-error] Uncaught Exception:", err);
-    if (err && err.code === "UND_ERR_CONNECT_TIMEOUT") {
-      console.error("[POKE-error] Blocked server crash from Undici ConnectTimeoutError.");
+    // Silently drop common network disconnects to prevent console I/O blocking
+    if (err && (
+      err.code === "UND_ERR_CONNECT_TIMEOUT" || 
+      err.code === "UND_ERR_HEADERS_TIMEOUT" || 
+      err.code === "ECONNRESET" || 
+      err.code === "ECONNABORTED" || 
+      err.code === "EPIPE"
+    )) {
+      return;
     }
+    console.error("[POKE-error] Uncaught Exception:", err);
   });
  
   const {
@@ -408,30 +422,29 @@
     const eldHistogram = monitorEventLoopDelay({ resolution: 20 });
     eldHistogram.enable();
 
-    // Rebalanced config so it doesn't block legitimate users trying to stream chunked video!
+    // EXTREMELY LENIENT CONFIG: Server will almost never throttle traffic or report "stressed".
     const resourceConfig = {
       system: {
         sampleMs: 1000,
 
         eventLoop: {
-            warmMs: 300,     // EJS and massive JSON APIs take time. Relaxing this stops false positives.
-            stressedMs: 800,
-            criticalMs: 1500
+            warmMs: 1000,     // Ignores event loop delays under 1 full second
+            stressedMs: 3000,
+            criticalMs: 5000
         },
 
-        // CPU Ratios massively increased. Node libuv threadpool utilizes multiple cores. 
-        // A ratio of 3.0 means 3 cores are working, which is completely normal under load!
-        warmCpuRatio: 2.50,
-        stressedCpuRatio: 4.50,
-        criticalCpuRatio: 7.00,
+        // Pushed to astronomical limits so standard usage will never trigger CPU shedding
+        warmCpuRatio: 10.00,
+        stressedCpuRatio: 15.00,
+        criticalCpuRatio: 20.00,
 
-        warmRssRatio: 0.85,
-        stressedRssRatio: 0.92,
-        criticalRssRatio: 0.98,
+        warmRssRatio: 0.95,
+        stressedRssRatio: 0.98,
+        criticalRssRatio: 0.99,
 
-        warmHeapRatio: 0.75,
-        stressedHeapRatio: 0.88,
-        criticalHeapRatio: 0.95
+        warmHeapRatio: 0.90,
+        stressedHeapRatio: 0.95,
+        criticalHeapRatio: 0.98
       },
 
       client: {
@@ -439,50 +452,50 @@
         maxClientStates: 75000,
         cleanupMs: 60000,
 
-        absoluteRequestsPerSecond: 600, // Video chunks can hit very fast.
-        absoluteRequestsPerWindow: 4000,
-        absoluteCostPerWindow: 12000,
+        absoluteRequestsPerSecond: 1000, 
+        absoluteRequestsPerWindow: 10000,
+        absoluteCostPerWindow: 30000,
 
-        noisyRequestsWarm: 800,
-        noisyCostWarm: 3000,
+        noisyRequestsWarm: 2000,
+        noisyCostWarm: 6000,
 
-        noisyRequestsStressed: 400,
-        noisyCostStressed: 1800,
+        noisyRequestsStressed: 1000,
+        noisyCostStressed: 4000,
 
-        noisyRequestsCritical: 250,
-        noisyCostCritical: 1000,
+        noisyRequestsCritical: 500,
+        noisyCostCritical: 2000,
 
-        pageSoftPassesPerWindow: 80,
+        pageSoftPassesPerWindow: 200,
 
-        maxHeavyRequestsWarm: 400, // Video chunks are heavy. Users need a lot of them.
-        maxHeavyRequestsStressed: 200,   
-        maxHeavyRequestsCritical: 80,
+        maxHeavyRequestsWarm: 1000, 
+        maxHeavyRequestsStressed: 500,   
+        maxHeavyRequestsCritical: 200,
 
-        cooldownBaseMs: 8000, // Reduced base penalty
-        cooldownMaxMs: 120000,
-        cooldownDecayMs: 60000
+        cooldownBaseMs: 5000, // Reduced base penalty
+        cooldownMaxMs: 60000,
+        cooldownDecayMs: 30000
       },
 
       requestCost: {
-        status: 0.05,
-        static: 0.10,
-        page: 1,
-        other: 1.5,
-        background: 4,
-        heavy: 6 // Reduced so regular chunk fetching doesn't instantly burn the limit
+        status: 0.01,
+        static: 0.05,
+        page: 0.5,
+        other: 1,
+        background: 2,
+        heavy: 3 
       },
 
       admission: {
-        retryAfterHealthyAbuseSeconds: 15,
-        retryAfterWarmSeconds: 10,
-        retryAfterStressedSeconds: 8,
-        retryAfterCriticalSeconds: 5
+        retryAfterHealthyAbuseSeconds: 10,
+        retryAfterWarmSeconds: 8,
+        retryAfterStressedSeconds: 5,
+        retryAfterCriticalSeconds: 3
       },
 
       logging: {
         stateCooldownMs: 30000,
         rejectCooldownMs: 5000,
-        slowRequestMs: 3000,
+        slowRequestMs: 5000,
         maxRecentSlow: 30,
         maxTopRoutes: 12
       }
@@ -1153,15 +1166,15 @@
       addPressure("rssMemory", snapshot.memory.rssRatio, cfg.warmRssRatio, cfg.stressedRssRatio, cfg.criticalRssRatio, "");
       addPressure("heapMemory", snapshot.memory.heapRatio, cfg.warmHeapRatio, cfg.stressedHeapRatio, cfg.criticalHeapRatio, "");
 
-      // STRIKE SYSTEM: Requires 3 consecutive critical strikes to actually enter CRITICAL mode.
-      // This eliminates 1-second micro-spikes blocking your users.
+      // STRIKE SYSTEM: Forgiving check that prevents the server from shedding instantly.
+      // Must hit critical score 5 times consecutively.
       if (hasCritical || score >= 7) {
         consecutiveCriticalSpikes++;
       } else {
         consecutiveCriticalSpikes = Math.max(0, consecutiveCriticalSpikes - 1);
       }
 
-      if (consecutiveCriticalSpikes >= 3) return { state: "critical", score, reasons };
+      if (consecutiveCriticalSpikes >= 5) return { state: "critical", score, reasons };
       if (score >= 4 || consecutiveCriticalSpikes > 0) return { state: "stressed", score, reasons };
       if (score >= 2) return { state: "warm", score, reasons };
       return { state: "healthy", score, reasons };
@@ -1257,6 +1270,10 @@
     function getAdmissionDecision(req, client, kind) {
       const state = resourceState.state;
       const now = Date.now();
+      
+      // Fast bypass for healthy state
+      if (state === "healthy") return { action: "allow", reason: "healthy" };
+
       const noisy = clientIsNoisy(client, state, now);
       const absoluteAbuse = clientIsAbsoluteAbuse(client, now);
 
@@ -1276,7 +1293,6 @@
         };
       }
 
-      if (state === "healthy") return { action: "allow", reason: "healthy" };
       if (kind === "status") return { action: "allow", reason: "status-pass" };
       if (kind === "static") return { action: "allow", reason: "static-pass" };
 
@@ -1467,7 +1483,7 @@
 
     function getResourceStats() {
       return {
-        guard: "PokeResourceGuard V3",
+        guard: "PokeResourceGuard V4 FastMode",
         state: resourceState,
         clients: countClientStates(),
         active_requests: {
@@ -2259,6 +2275,13 @@ document.addEventListener("DOMContentLoaded", function() {
   initPokeTube();
 
   app.use(function pokeErrorHandler(err, req, res, next) {
+     if (err.code === 'ECONNRESET' || err.code === 'ECONNABORTED' || err.code === 'EPIPE' || err.code === 'UND_ERR_CONNECT_TIMEOUT') {
+       if (!res.headersSent) {
+          res.status(500).end();
+       }
+       return;
+    }
+
     console.error("[POKE-error]", req.method, req.originalUrl, ":", err.message);
     if (process.env.NODE_ENV !== "production") {
       console.error(err.stack);
