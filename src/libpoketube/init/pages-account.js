@@ -3,16 +3,69 @@ const crypto = require("crypto");
 const sha384 = modules.hash;
 const configJson = require("../../../config.json");
 
-// ─── Config ───────────────────────────────────────────────────────────────────
+// Config
 
-const SERVER_SECRET = configJson.subSecret;
-if (!SERVER_SECRET) {
+const PLACEHOLDER_SUB_SECRETS = new Set([
+  "some-secret-thning",
+  "some-secret-thing",
+  "changeme",
+  "change-me",
+  "change_me",
+  "replace-me",
+  "replace_me",
+  "secret",
+  "subsecret",
+  "sub-secret",
+  "your-secret-here",
+  "your_sub_secret",
+  "your-sub-secret",
+  "put-a-secret-here",
+  "please-change-me",
+]);
+
+function throwInvalidSubSecret(reason) {
   throw new Error(
-    "[poketube-subs] Missing 'subSecret' in config.json — add it before starting the server."
+    `[poketube-subs] Invalid 'subSecret' in config.json: ${reason}. ` +
+      `Set a unique subSecret before starting the server. ` +
+      `Generate one with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
   );
 }
 
-// ─── E2EE helpers ────────────────────────────────────────────────────────────
+function getValidatedServerSecret(value) {
+  if (typeof value !== "string") {
+    throwInvalidSubSecret("it must be a string");
+  }
+
+  const secret = value.trim();
+
+  if (!secret) {
+    throwInvalidSubSecret("it is missing or empty");
+  }
+
+  const normalized = secret.toLowerCase();
+
+  if (PLACEHOLDER_SUB_SECRETS.has(normalized)) {
+    throwInvalidSubSecret(`'${secret}' is a placeholder value`);
+  }
+
+  if (normalized.includes("some-secret")) {
+    throwInvalidSubSecret(`'${secret}' looks like a placeholder value`);
+  }
+
+  if (secret.length < 19) {
+    throwInvalidSubSecret("it must be at least 19 characters long");
+  }
+
+  if (/^(.)\1+$/.test(secret)) {
+    throwInvalidSubSecret("it cannot be the same character repeated");
+  }
+
+  return secret;
+}
+
+const SERVER_SECRET = getValidatedServerSecret(configJson.subSecret);
+
+// Encryption helpers
 
 function deriveKey(userId) {
   return Buffer.from(sha384(userId + SERVER_SECRET), "hex").slice(0, 32);
@@ -22,36 +75,46 @@ function encrypt(userId, obj) {
   const key = deriveKey(userId);
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+
   const encrypted = Buffer.concat([
     cipher.update(JSON.stringify(obj), "utf8"),
     cipher.final(),
   ]);
+
   const tag = cipher.getAuthTag();
+
   return [iv.toString("hex"), tag.toString("hex"), encrypted.toString("hex")].join(":");
 }
 
 function decrypt(userId, stored) {
   try {
     const [ivHex, tagHex, encHex] = stored.split(":");
-    if (!ivHex || !tagHex || !encHex) return null;
+
+    if (!ivHex || !tagHex || !encHex) {
+      return null;
+    }
+
     const key = deriveKey(userId);
     const decipher = crypto.createDecipheriv(
       "aes-256-gcm",
       key,
       Buffer.from(ivHex, "hex")
     );
+
     decipher.setAuthTag(Buffer.from(tagHex, "hex"));
+
     const out = Buffer.concat([
       decipher.update(Buffer.from(encHex, "hex")),
       decipher.final(),
     ]);
+
     return JSON.parse(out.toString("utf8"));
   } catch {
     return null;
   }
 }
 
-// ─── Migration ────────────────────────────────────────────────────────────────
+// Migration
 
 const MIGRATION_FLAG = "meta.subsE2eeMigrated";
 
@@ -62,23 +125,31 @@ function isEncrypted(value) {
 /**
  * Migrates one user's plaintext subs in place.
  * Yields control back to the event loop between users via setImmediate
- * so startup / request handling is never blocked.
+ * so startup and request handling are never blocked.
  */
 function migrateUserAsync(db, userId) {
   return new Promise((resolve) => {
     setImmediate(() => {
       try {
         const raw = db.get(`user.${userId}.subs`);
-        if (!raw || typeof raw !== "object") return resolve(0);
+
+        if (!raw || typeof raw !== "object") {
+          return resolve(0);
+        }
 
         let migrated = 0;
+
         for (const [channelId, value] of Object.entries(raw)) {
-          if (isEncrypted(value)) continue;
+          if (isEncrypted(value)) {
+            continue;
+          }
+
           if (value && typeof value === "object") {
             db.set(`user.${userId}.subs.${channelId}`, encrypt(userId, value));
             migrated++;
           }
         }
+
         resolve(migrated);
       } catch {
         resolve(0);
@@ -88,7 +159,7 @@ function migrateUserAsync(db, userId) {
 }
 
 /**
- * Runs the full migration once, in the background, after the server is up.
+ * Runs the full migration once in the background after the server is up.
  * Skips entirely if the flag is already set in the DB.
  */
 async function runMigrationIfNeeded(db) {
@@ -98,51 +169,65 @@ async function runMigrationIfNeeded(db) {
   }
 
   const all = db.get("user");
+
   if (!all || typeof all !== "object") {
     db.set(MIGRATION_FLAG, true);
     return;
   }
 
   const userIds = Object.keys(all);
+
   if (userIds.length === 0) {
     db.set(MIGRATION_FLAG, true);
     return;
   }
 
-  console.log(`[poketube-subs] Checking DB — migrating ${userIds.length} user(s) to E2EE in background...`);
+  console.log(
+    `[poketube-subs] Checking DB. Migrating ${userIds.length} user(s) to E2EE in background...`
+  );
 
   let totalEntries = 0;
-  let totalUsers   = 0;
+  let totalUsers = 0;
 
   for (const userId of userIds) {
     const count = await migrateUserAsync(db, userId);
+
     if (count > 0) {
       totalUsers++;
       totalEntries += count;
     }
   }
 
-  // Mark migration as done so it never runs again
   db.set(MIGRATION_FLAG, true);
 
   if (totalEntries > 0) {
-    console.log(`[poketube-subs] Migration done — encrypted ${totalEntries} sub(s) across ${totalUsers} user(s).`);
+    console.log(
+      `[poketube-subs] Migration done. Encrypted ${totalEntries} sub(s) across ${totalUsers} user(s).`
+    );
   } else {
-    console.log("[poketube-subs] Migration done — everything was already encrypted.");
+    console.log("[poketube-subs] Migration done. Everything was already encrypted.");
   }
 }
 
-// ─── DB helpers ──────────────────────────────────────────────────────────────
+// DB helpers
 
 function getSubsDecrypted(db, userId) {
   const raw = db.get(`user.${userId}.subs`);
-  if (!raw) return null;
+
+  if (!raw) {
+    return null;
+  }
 
   const result = {};
+
   for (const [channelId, encValue] of Object.entries(raw)) {
     const plain = decrypt(userId, encValue);
-    if (plain) result[channelId] = plain;
+
+    if (plain) {
+      result[channelId] = plain;
+    }
   }
+
   return result;
 }
 
@@ -150,35 +235,45 @@ function setSubEncrypted(db, userId, channelId, channelData) {
   db.set(`user.${userId}.subs.${channelId}`, encrypt(userId, channelData));
 }
 
-// ─── Route validation ─────────────────────────────────────────────────────────
+// Route validation
 
 function validateId(id, res) {
   if (!id || typeof id !== "string" || id.length > 7) {
-    res.status(400).json({ error: "IDs can be 7 characters max silly :3" });
+    res.status(400).json({ error: "IDs can be 7 characters max" });
     return false;
   }
+
   return true;
 }
 
-// ─── Module export ────────────────────────────────────────────────────────────
+// Module export
 
 module.exports = function (app, config, renderTemplate) {
   const db = require("quick.db");
 
-  // Fire migration in background — doesn't block server startup at all
   setImmediate(() => runMigrationIfNeeded(db).catch(console.error));
 
   app.get("/api/get-channel-subs", async function (req, res) {
     const userId = req.query.ID;
-    if (!validateId(userId, res)) return;
-    if (!db.get(`user.${userId}`)) return res.json("no user found");
+
+    if (!validateId(userId, res)) {
+      return;
+    }
+
+    if (!db.get(`user.${userId}`)) {
+      return res.json("no user found");
+    }
+
     res.json(getSubsDecrypted(db, userId) ?? {});
   });
 
   app.get("/api/remove-channel-sub", async function (req, res) {
     const userId = req.query.ID;
     const channelToRemove = req.query.channelID;
-    if (!validateId(userId, res)) return;
+
+    if (!validateId(userId, res)) {
+      return;
+    }
 
     if (db.get(`user.${userId}.subs.${channelToRemove}`)) {
       db.delete(`user.${userId}.subs.${channelToRemove}`);
@@ -189,11 +284,14 @@ module.exports = function (app, config, renderTemplate) {
   });
 
   app.get("/api/set-channel-subs", async function (req, res) {
-    const userId      = req.query.ID;
-    const channelId   = req.query.channelID;
+    const userId = req.query.ID;
+    const channelId = req.query.channelID;
     const channelName = req.query.channelName;
-    const avatar      = req.query.avatar;
-    if (!validateId(userId, res)) return;
+    const avatar = req.query.avatar;
+
+    if (!validateId(userId, res)) {
+      return;
+    }
 
     const channelData = { channelName, avatar };
 
@@ -211,13 +309,21 @@ module.exports = function (app, config, renderTemplate) {
 
   app.get("/api/get-all-subs", async function (req, res) {
     const userId = req.query.ID;
-    if (!validateId(userId, res)) return;
+
+    if (!validateId(userId, res)) {
+      return;
+    }
+
     res.json(getSubsDecrypted(db, userId) ?? {});
   });
 
   app.get("/my-acc", async function (req, res) {
     const userId = req.query.ID;
-    if (!validateId(userId, res)) return;
+
+    if (!validateId(userId, res)) {
+      return;
+    }
+
     renderTemplate(res, req, "account-me.ejs", {
       userid: userId,
       userSubs: getSubsDecrypted(db, userId),
