@@ -302,8 +302,7 @@ app.get("/api/getYoutubeUrl", async function (req, res) {
       res.status(500).json({ error: "Proxy error" });
     }
   });
-  
-app.get("/api/getEngagementData", async (req, res) => {
+  app.get("/api/getEngagementData", async (req, res) => {
   const { fetch } = await import("undici");
   const id = req.query.v;
   const view = req.query.view;
@@ -400,6 +399,9 @@ app.get("/api/getEngagementData", async (req, res) => {
       };
 
       if (view === 'gui') {
+        const svgStar = `<svg viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>`;
+        const starsHTML = svgStar.repeat(5);
+
         const html = `
           <!DOCTYPE html>
           <html lang="en">
@@ -430,16 +432,16 @@ app.get("/api/getEngagementData", async (req, res) => {
                 justify-content: center; 
                 align-items: center; 
                 min-height: 100vh; 
-                padding: 24px 16px;
-                font-variation-settings: "wdth" 115, "wght" 400;
+                padding: 16px;
+                font-variation-settings: "wdth" 120, "wght" 400;
               }
               
               .card { 
                 background-color: #0f0f0f; 
-                padding: 28px; 
+                padding: 24px; 
                 border: 1px solid #272727; 
                 border-radius: 16px; 
-                max-width: 480px; 
+                max-width: 640px; 
                 width: 100%;
               }
               
@@ -449,7 +451,7 @@ app.get("/api/getEngagementData", async (req, res) => {
                 width: 100%;
                 aspect-ratio: 16/9;
                 border-radius: 12px;
-                margin-bottom: 20px;
+                margin-bottom: 16px;
                 overflow: hidden;
                 cursor: pointer;
                 border: 2px solid #000000;
@@ -498,20 +500,20 @@ app.get("/api/getEngagementData", async (req, res) => {
               }
               
               .video-title {
-                font-size: clamp(1.2rem, 4vw, 1.4rem);
+                font-size: clamp(1.3rem, 3vw, 1.6rem);
                 font-weight: 800;
-                margin-bottom: 8px;
-                font-variation-settings: "wdth" 140, "wght" 800;
-                line-height: 1.4;
+                margin-bottom: 6px;
+                font-variation-settings: "wdth" 150, "wght" 800;
+                line-height: 1.3;
                 word-wrap: break-word;
                 text-align: center;
               }
               
               .video-views {
-                font-size: 1rem;
+                font-size: 1.05rem;
                 color: #aaaaaa;
-                margin-bottom: 24px;
-                font-variation-settings: "wdth" 120, "wght" 500;
+                margin-bottom: 16px;
+                font-variation-settings: "wdth" 130, "wght" 500;
                 text-align: center;
               }
               
@@ -523,8 +525,8 @@ app.get("/api/getEngagementData", async (req, res) => {
                 padding: 0 16px; 
                 height: 40px; 
                 width: max-content; 
-                margin: 0 auto 20px auto;
-                font-variation-settings: "wdth" 125, "wght" 600;
+                margin: 0 auto 16px auto;
+                font-variation-settings: "wdth" 130, "wght" 600;
               }
               
               .pill-section { 
@@ -550,7 +552,7 @@ app.get("/api/getEngagementData", async (req, res) => {
                 border-radius: 4px; 
                 overflow: hidden; 
                 display: flex; 
-                margin-bottom: 28px; 
+                margin-bottom: 20px; 
               }
               
               .ratio-like { 
@@ -563,12 +565,16 @@ app.get("/api/getEngagementData", async (req, res) => {
               .reception { 
                 background: #1a1a1a; 
                 border: 1px solid #272727;
-                padding: 20px; 
-                border-radius: 14px; 
-                margin-bottom: 24px; 
+                padding: 16px; 
+                border-radius: 12px; 
+                margin-bottom: 16px; 
                 display: flex;
                 flex-direction: column;
                 align-items: center;
+                gap: 12px;
+              }
+
+              .reception-header {
                 text-align: center;
               }
               
@@ -577,63 +583,84 @@ app.get("/api/getEngagementData", async (req, res) => {
                 color: #aaaaaa; 
                 text-transform: uppercase; 
                 letter-spacing: 0.8px; 
-                margin-bottom: 10px; 
-                font-variation-settings: "wdth" 130, "wght" 700;
+                margin-bottom: 6px; 
+                font-variation-settings: "wdth" 140, "wght" 700;
               }
               
               .score-label { 
-                font-size: 22px; 
+                font-size: 24px; 
                 font-weight: bold; 
-                margin-bottom: 6px; 
-                font-variation-settings: "wdth" 135, "wght" 800;
+                font-variation-settings: "wdth" 150, "wght" 800;
+              }
+
+              .reception-stats {
+                display: flex;
+                justify-content: space-evenly;
+                align-items: center;
+                width: 100%;
+                background: #111111;
+                padding: 12px;
+                border-radius: 8px;
+                border: 1px solid #222;
               }
               
               .score-number { 
-                font-size: 15px; 
+                font-size: 16px; 
                 color: #aaaaaa; 
-                margin-bottom: 16px; 
-                font-variation-settings: "wdth" 115, "wght" 500;
+                font-variation-settings: "wdth" 125, "wght" 600;
               }
               
               .star-container {
                 display: flex;
                 align-items: center;
                 gap: 10px;
-                justify-content: center;
               }
               
-              .stars-outer {
-                display: inline-block;
+              /* Exact Fractional SVG Stars */
+              .star-rating-wrapper {
                 position: relative;
-                font-size: 22px;
-                color: #444;
-                letter-spacing: 3px;
+                display: flex;
+                width: 120px; /* 5 stars * 24px */
+                height: 24px;
               }
               
-              .stars-outer::before {
-                content: "★★★★★";
-              }
-              
-              .stars-inner {
+              .stars-bg, .stars-fg {
+                display: flex;
                 position: absolute;
                 top: 0;
                 left: 0;
-                white-space: nowrap;
-                overflow: hidden;
-                color: #f1c40f;
-                width: ${starPercentage}%;
-                text-shadow: 0 0 6px rgba(241, 196, 15, 0.4);
+                height: 100%;
+              }
+
+              .stars-bg svg {
+                width: 24px;
+                height: 24px;
+                fill: #333333;
               }
               
-              .stars-inner::before {
-                content: "★★★★★";
+              .stars-fg {
+                overflow: hidden;
+                width: ${starPercentage}%; /* Exact clipping */
+              }
+
+              .stars-fg div {
+                display: flex;
+                width: 120px; /* Force to full 5-star width inside the clipped div */
+              }
+              
+              .stars-fg svg {
+                width: 24px;
+                height: 24px;
+                fill: #f1c40f;
+                filter: drop-shadow(0px 0px 4px rgba(241, 196, 15, 0.4));
+                flex-shrink: 0;
               }
               
               .rating-text {
-                font-size: 16px;
+                font-size: 18px;
                 font-weight: bold;
                 color: #f1f1f1;
-                font-variation-settings: "wdth" 125, "wght" 800;
+                font-variation-settings: "wdth" 140, "wght" 800;
               }
 
               .green { color: #2ba640; }
@@ -646,6 +673,7 @@ app.get("/api/getEngagementData", async (req, res) => {
                   -webkit-text-fill-color: transparent;
                   animation: rainbow-anim 3s linear infinite;
                   background-size: 200% 100%;
+                  text-shadow: 0px 0px 10px rgba(255, 255, 255, 0.15);
               }
               
               @keyframes rainbow-anim { 
@@ -654,18 +682,18 @@ app.get("/api/getEngagementData", async (req, res) => {
               }
               
               .info-section {
-                margin-top: 24px;
+                margin-top: 16px;
                 font-size: 13px;
                 color: #aaaaaa;
                 text-align: center;
                 line-height: 1.6;
-                font-variation-settings: "wdth" 120, "wght" 500;
+                font-variation-settings: "wdth" 130, "wght" 500;
               }
               
               .info-section a {
                 color: #3ea6ff;
                 text-decoration: none;
-                font-variation-settings: "wdth" 120, "wght" 600;
+                font-variation-settings: "wdth" 130, "wght" 600;
                 transition: color 0.2s ease;
               }
               
@@ -678,11 +706,11 @@ app.get("/api/getEngagementData", async (req, res) => {
                 font-size: 13px; 
                 color: #aaa; 
                 background: #181818; 
-                padding: 14px; 
-                border-radius: 10px; 
+                padding: 12px; 
+                border-radius: 8px; 
                 border: 1px solid #272727; 
-                font-variation-settings: "wdth" 110, "wght" 500; 
-                margin-bottom: 12px; 
+                font-variation-settings: "wdth" 120, "wght" 500; 
+                margin-bottom: 8px; 
                 transition: background 0.2s ease;
               }
               
@@ -695,8 +723,8 @@ app.get("/api/getEngagementData", async (req, res) => {
                 user-select: none; 
                 font-weight: 600; 
                 outline: none; 
-                font-variation-settings: "wdth" 125, "wght" 700; 
-                margin-bottom: 6px; 
+                font-variation-settings: "wdth" 135, "wght" 700; 
+                margin-bottom: 4px; 
               }
               
               details p { 
@@ -708,12 +736,12 @@ app.get("/api/getEngagementData", async (req, res) => {
               pre { 
                 overflow-x: auto; 
                 color: #e1e1e1; 
-                margin-top: 12px; 
+                margin-top: 10px; 
                 font-family: monospace; 
                 font-variation-settings: normal; 
                 background: #121212; 
-                padding: 12px; 
-                border-radius: 8px;
+                padding: 10px; 
+                border-radius: 6px;
                 border: 1px solid #272727;
               }
               
@@ -760,15 +788,25 @@ app.get("/api/getEngagementData", async (req, res) => {
               </div>
               
               <div class="reception">
-                <div class="reception-title">Community Reception</div>
-                <div class="score-label ${userScoreColor}">${userScoreLabel}</div>
-                <div class="score-number">Score: <span class="${userScoreColor}">${userScore}</span></div>
-                
-                <div class="star-container" title="${ratingNum} out of 5">
-                  <div class="stars-outer">
-                    <div class="stars-inner"></div>
+                <div class="reception-header">
+                  <div class="reception-title">Community Reception</div>
+                  <div class="score-label ${userScoreColor}">${userScoreLabel}</div>
+                </div>
+                <div class="reception-stats">
+                  <div class="score-number">Score: <span class="${userScoreColor}">${userScore}</span></div>
+                  <div class="star-container" title="${ratingNum} out of 5">
+                    <div class="star-rating-wrapper">
+                      <div class="stars-bg">
+                        ${starsHTML}
+                      </div>
+                      <div class="stars-fg">
+                        <div>
+                          ${starsHTML}
+                        </div>
+                      </div>
+                    </div>
+                    <div class="rating-text">${ratingNum.toFixed(1)}</div>
                   </div>
-                  <div class="rating-text">${ratingNum.toFixed(1)}</div>
                 </div>
               </div>
 
@@ -800,8 +838,8 @@ app.get("/api/getEngagementData", async (req, res) => {
   } catch (error) {
     res.status(500).json("whoops (error 500) >~<");
   }
-});   
-  app.get("/feeds/videos.xml", async (req, res) => {
+});
+   app.get("/feeds/videos.xml", async (req, res) => {
   const channelId = req.query.channel_id;
   const playlistId = req.query.playlist_id;
 
