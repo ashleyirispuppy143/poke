@@ -303,16 +303,16 @@ app.get("/api/getYoutubeUrl", async function (req, res) {
     }
   });
   
- app.get("/api/getEngagementData", async (req, res) => {
+app.get("/api/getEngagementData", async (req, res) => {
   const { fetch } = await import("undici");
   const id = req.query.v;
-  const view = req.query.view;  
+  const view = req.query.view;
 
   try {
     if (id) {
       const apiUrl = `https://ryd-proxy.kavin.rocks/votes/${id}&hash=d0550b6e28c8f93533a569c314d5b4e2`;
       const response = await fetch(apiUrl, {
-        headers: headers,  
+        headers: headers,
       });
       
       if (response.status === 400) {
@@ -326,6 +326,8 @@ app.get("/api/getYoutubeUrl", async function (req, res) {
       const total = likes + dislikes;
       const likePercentage = total > 0 ? ((likes / total) * 100).toFixed(2) : 0;
       const dislikePercentage = total > 0 ? ((dislikes / total) * 100).toFixed(2) : 0;
+      const ratingNum = parseFloat(engagement.rating) || 0;
+      const stars = "★".repeat(Math.round(ratingNum)) + "☆".repeat(Math.max(0, 5 - Math.round(ratingNum)));
       
       const getLikePercentageColor = (percentage) => {
         if (percentage >= 80) return "green";
@@ -384,7 +386,7 @@ app.get("/api/getYoutubeUrl", async function (req, res) {
         raw_stats: engagement,
       };
 
-       if (view === 'gui') {
+      if (view === 'gui') {
         const html = `
           <!DOCTYPE html>
           <html lang="en">
@@ -393,9 +395,16 @@ app.get("/api/getYoutubeUrl", async function (req, res) {
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Engagement Stats</title>
             <style>
+              @font-face {
+                font-family: "PokeTube Flex";
+                src: url("/static/robotoflex.ttf");
+                font-style: normal;
+                font-stretch: 1% 800%;
+                font-display: swap;
+              }
               body { 
-                font-family: 'Roboto', 'Segoe UI', Arial, sans-serif; 
-                background-color: #0f0f0f; /* YouTube Dark Mode Background */
+                font-family: "PokeTube Flex", Arial, sans-serif; 
+                background-color: #0f0f0f;
                 color: #f1f1f1; 
                 display: flex; 
                 justify-content: center; 
@@ -411,9 +420,15 @@ app.get("/api/getYoutubeUrl", async function (req, res) {
                 max-width: 450px; 
                 width: 100%; 
               }
+              .thumbnail {
+                width: 100%;
+                aspect-ratio: 16/9;
+                object-fit: cover;
+                border-radius: 12px;
+                margin-bottom: 20px;
+              }
               h2 { margin-top: 0; font-size: 1.2rem; font-weight: 600; margin-bottom: 20px;}
-              
-               .pill { 
+              .pill { 
                 display: flex; 
                 align-items: center; 
                 background: #272727; 
@@ -421,30 +436,25 @@ app.get("/api/getYoutubeUrl", async function (req, res) {
                 padding: 0 15px; 
                 height: 36px; 
                 width: max-content; 
-                margin-bottom: 8px; 
+                margin: 0 auto 16px auto;
               }
               .pill-section { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; }
               .divider { width: 1px; height: 24px; background-color: #3f3f3f; margin: 0 12px; }
-              
-              /* Ratio Bar */
               .ratio-bar { 
                 width: 100%; 
-                height: 2px; 
-                background-color: #717171; /* Dislike gray */
-                border-radius: 2px; 
+                height: 3px; 
+                background-color: rgba(255, 255, 255, 0.2);
+                border-radius: 3px; 
                 overflow: hidden; 
                 display: flex; 
                 margin-bottom: 24px; 
               }
-              .ratio-like { width: ${likePercentage}%; background-color: #f1f1f1; height: 100%; }
-              
-              /* Reception Box */
+              .ratio-like { width: ${likePercentage}%; background-color: #ffffff; height: 100%; border-radius: 3px; }
               .reception { background: #272727; padding: 16px; border-radius: 12px; margin-bottom: 20px;}
               .reception-title { font-size: 12px; color: #aaaaaa; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
               .score-label { font-size: 20px; font-weight: bold; margin-bottom: 4px; }
-              .score-number { font-size: 14px; color: #aaaaaa; }
-              
-              /* Dynamic Colors */
+              .score-number { font-size: 14px; color: #aaaaaa; margin-bottom: 8px; }
+              .star-rating { font-size: 16px; color: #f1c40f; letter-spacing: 2px;}
               .green { color: #2ba640; }
               .orange { color: #f57c00; }
               .red { color: #cc0000; }
@@ -456,8 +466,6 @@ app.get("/api/getYoutubeUrl", async function (req, res) {
                   background-size: 200% 100%;
               }
               @keyframes rainbow-anim { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
-              
-              /* Nerd Stats */
               details { font-size: 12px; color: #aaa; background: #181818; padding: 12px; border-radius: 8px; border: 1px solid #3d3d3d; }
               summary { cursor: pointer; user-select: none; font-weight: 500; outline: none; }
               pre { overflow-x: auto; color: #e1e1e1; margin-top: 10px; font-family: monospace; }
@@ -465,6 +473,7 @@ app.get("/api/getYoutubeUrl", async function (req, res) {
           </head>
           <body>
             <div class="card">
+              <img src="https://i.ytimg.com/vi/${id}/hqdefault.jpg" onerror="this.src='https://i.ytimg.com/vi/${id}/default.jpg'" class="thumbnail" alt="Video Thumbnail" />
               <h2>📊 Engagement Stats</h2>
               
               <div class="pill">
@@ -485,6 +494,7 @@ app.get("/api/getYoutubeUrl", async function (req, res) {
                 <div class="reception-title">Community Reception</div>
                 <div class="score-label ${userScoreColor}">${userScoreLabel}</div>
                 <div class="score-number">Score: <span class="${userScoreColor}">${userScore}</span></div>
+                <div class="star-rating" title="${ratingNum} / 5">${stars}</div>
               </div>
 
               <details>
@@ -498,14 +508,14 @@ app.get("/api/getYoutubeUrl", async function (req, res) {
         return res.send(html);
       }
 
-       res.send(respon);
+      res.send(respon);
     } else {
       res.status(400).json("pls gib ID :3");
     }
   } catch (error) {
     res.status(500).json("whoops (error 500) >~<");
   }
-});  
+}); 
   
 app.get("/feeds/videos.xml", async (req, res) => {
   const channelId = req.query.channel_id;
