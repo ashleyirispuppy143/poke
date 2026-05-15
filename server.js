@@ -391,19 +391,7 @@
       }
     }, 60_000).unref();
   })();
-
-  /*
-   * PokeResourceGuard (O(1) Ultra-optimized Version)
-   *
-   * Features:
-   * - Node.js Event Loop Lag monitoring (The ultimate single-thread health check)
-   * - O(1) Time & Space sliding window counters per IP (No more massive timestamp arrays)
-   * - O(1) LRU Map Cache Eviction (Saves server during multi-IP DDOS attacks)
-   * - Advanced Client prioritization based on request type
-   * - High Resolution CPU accuracy tracking
-   * - Cryptographic log anonymity
-   * - Persistent route tracking JSON
-   */
+ 
   (function PokeResourceGuard() {
     const { monitorEventLoopDelay, performance } = require("perf_hooks");
     
@@ -414,16 +402,13 @@
       return "anon-" + crypto.createHash("sha256").update(ip + guardSalt).digest("hex").slice(0, 8);
     }
 
-    // Delayed initialization flag
-    let isGuardActive = false;
+     let isGuardActive = false;
     let consecutiveCriticalSpikes = 0; // The strike system for false positives
 
-    // Initialize Event Loop Histogram
-    const eldHistogram = monitorEventLoopDelay({ resolution: 20 });
+     const eldHistogram = monitorEventLoopDelay({ resolution: 20 });
     eldHistogram.enable();
 
-    // EXTREMELY LENIENT CONFIG: Server will almost never throttle traffic or report "stressed".
-    const resourceConfig = {
+     const resourceConfig = {
       system: {
         sampleMs: 1000,
 
@@ -433,8 +418,7 @@
             criticalMs: 5000
         },
 
-        // Pushed to astronomical limits so standard usage will never trigger CPU shedding
-        warmCpuRatio: 10.00,
+         warmCpuRatio: 10.00,
         stressedCpuRatio: 15.00,
         criticalCpuRatio: 20.00,
 
