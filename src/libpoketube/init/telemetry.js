@@ -1400,7 +1400,7 @@ module.exports = function (app, config, renderTemplate) {
     <div class="header-container">
       <div>
         <h1>Anonymous Stats</h1>
-        <p class="small" style="margin-top:0;">Local-only usage counts, platform stats, and privacy-friendly instance signals</p>
+        <p class="small" style="margin-top:0;">Privacy Stats system!</p>
       </div>
       <div class="tabs">
         <a class="tab-btn" href="/health">Server Vitals</a>
