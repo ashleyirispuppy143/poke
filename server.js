@@ -681,9 +681,15 @@
       return (url.split("?")[0] || "/").toLowerCase();
     }
 
+    function isAvatarRoutePath(pathname) {
+      const path = String(pathname || "/").toLowerCase();
+      return path === "/avatars" || path.startsWith("/avatars/");
+    }
+
     function isIgnoredRoute(req) {
       const path = getRequestPath(req);
-      return path === "/api/nexus" || 
+      return isAvatarRoutePath(path) ||
+             path === "/api/nexus" || 
              path === "/api/stats" || 
              path === "/health" ||
              path.startsWith("/static/") || 
@@ -779,13 +785,13 @@
     function isHeavyRequest(req) {
       const pathname = getRequestPath(req);
       if (!isSafeMethod(req)) return true;
+      if (isAvatarRoutePath(pathname)) return false;
       return (
         pathname.startsWith("/api/") ||
         pathname.startsWith("/proxy/") ||
         pathname.startsWith("/videoplayback") ||
         pathname.startsWith("/vi/") ||
         pathname.startsWith("/ggpht/") ||
-        pathname.startsWith("/avatars/") ||
         pathname.startsWith("/storyboard") ||
         pathname.startsWith("/sb/") ||
         pathname.startsWith("/manifest") ||
