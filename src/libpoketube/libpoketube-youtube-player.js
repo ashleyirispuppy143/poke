@@ -1,16 +1,17 @@
 /**
  * Poke is a Free/Libre YouTube front-end!
-	 *
-	 * This file was originally distributed under the GNU Lesser General Public
-	 * License (LGPL-3.0-or-later). Starting from commit 88a8acbac2, it has been
-	 * relicensed and is now distributed under the GNU General Public License
-	 * (GPL-3.0-or-later), which is the license used by the Poke project.
-	 *
-	 * See the GNU GPL license text here:
-	 * https://www.gnu.org/licenses/gpl-3.0.txt
-	 *
-	 * Please do not remove this notice when redistributing this file!
-*/
+ *
+ * This file was originally distributed under the GNU Lesser General Public
+ * License (LGPL-3.0-or-later). Starting from commit 88a8acbac2, it has been
+ * relicensed and is now distributed under the GNU General Public License
+ * (GPL-3.0-or-later), which is the license used by the Poke project.
+ *
+ * See the GNU GPL license text here:
+ * https://www.gnu.org/licenses/gpl-3.0.txt
+ *
+ * Please do not remove this notice when redistributing this file!
+ */
+
 
 const getdislikes = require("../libpoketube/libpoketube-dislikes.js");
 const getColors = require("get-image-colors");
