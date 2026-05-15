@@ -548,7 +548,7 @@ module.exports = function (app, config, renderTemplate) {
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Poke – Opt out of stats</title>
+  <title>Poke - Opt out of stats</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="icon" href="/favicon.ico">
   <style>
@@ -618,17 +618,17 @@ module.exports = function (app, config, renderTemplate) {
   <div class="app">
     <h1>Stats opt-out</h1>
     <p>
-      This page lets you turn off <strong>anonymous usage stats</strong> for this browser.
+      This page lets you turn off <strong>anonymous /watch page stats</strong> for this browser.
       Poke will remember this choice using <code>localStorage</code> only.
     </p>
 
     <p class="note">
-      Anonymous stats help us understand which videos are popular and which platforms people use,
+      Anonymous stats help us understand which videos are watched through Poke's <code>/watch</code> page and which platforms people use,
       without collecting personal data. You can read the full details here:
       <a href="/policies/privacy#stats">Privacy Policy</a>.
     </p>
 
-    <a href="#" id="optout-btn" class="btn">Opt out of anonymous stats</a>
+    <a href="#" id="optout-btn" class="btn">Opt out of anonymous /watch stats</a>
     <div id="status" class="status note"></div>
 
     <p class="note" style="margin-top:1.5rem;">
@@ -648,11 +648,11 @@ module.exports = function (app, config, renderTemplate) {
         try {
           var v = localStorage.getItem(KEY)
           if (v === "1") {
-            status.textContent = "Anonymous stats are currently DISABLED in this browser."
-            btn.textContent = "Re-enable anonymous stats"
+            status.textContent = "Anonymous /watch page stats are currently DISABLED in this browser."
+            btn.textContent = "Re-enable anonymous /watch stats"
           } else {
-            status.textContent = "Anonymous stats are currently ENABLED in this browser."
-            btn.textContent = "Opt out of anonymous stats"
+            status.textContent = "Anonymous /watch page stats are currently ENABLED in this browser."
+            btn.textContent = "Opt out of anonymous /watch stats"
           }
         } catch (e) {
           status.textContent = "Your browser blocked localStorage, so we cannot store your opt-out choice."
@@ -753,7 +753,7 @@ module.exports = function (app, config, renderTemplate) {
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Improving Poke – Stats</title>
+  <title>Improving Poke - Stats</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="icon" href="/favicon.ico">
   <style>
@@ -1388,7 +1388,7 @@ module.exports = function (app, config, renderTemplate) {
           This GUI stats page is designed as an interactive view, so without JavaScript it cannot load live instance numbers, switch between sections, paginate top videos, or generate the downloadable recent-video JSON file.
         </p>
         <ul>
-          <li>You can still read the raw local stats at <code>/api/stats?view=json</code>.</li>
+          <li>You can still read the raw local <code>/watch</code> page stats at <code>/api/stats?view=json</code>.</li>
           <li>You can still read the stats privacy details at <code>/policies/privacy#stats</code>.</li>
           <li>This warning itself does not enable any tracking, cookies, or extra data collection.</li>
         </ul>
@@ -1400,7 +1400,7 @@ module.exports = function (app, config, renderTemplate) {
     <div class="header-container">
       <div>
         <h1>Anonymous Stats</h1>
-        <p class="small" style="margin-top:0;">Privacy Stats system!</p>
+        <p class="small" style="margin-top:0;">Privacy stats for Poke's /watch page only!</p>
       </div>
       <div class="tabs">
         <a class="tab-btn" href="/health">Server Vitals</a>
@@ -1413,39 +1413,39 @@ module.exports = function (app, config, renderTemplate) {
       <div class="hero-main">
         <h2>Private by design</h2>
         <p class="note">
-          These stats are aggregated locally on this Poke instance. For what is collected and what is not,
+          These stats are aggregated locally on this Poke instance and are only for <code>/watch</code> page views. For what is collected and what is not,
           see <a href="/policies/privacy#stats">privacy policy</a>.
         </p>
         <p class="note" style="margin-top:.7rem;">
-          <strong>Important:</strong> these are local Poke instance numbers, not public YouTube view counts.
+          <strong>Important:</strong> these are local Poke <code>/watch</code> page numbers, not public YouTube view counts.
         </p>
       </div>
 
       <div class="hero-side">
         <div class="mini-stat">
-          <div class="mini-stat-label">anonymous user id count</div>
+          <div class="mini-stat-label">anonymous /watch user id count</div>
           <div id="user-id-count" class="mini-stat-value">Loading…</div>
           <div class="mini-stat-sub">
-            Conservative count from unique anonymous user IDs already recorded by this Poke instance.
+            Conservative count from unique anonymous user IDs recorded through this Poke instance's <code>/watch</code> page.
           </div>
         </div>
 
         <div class="mini-stat">
-          <div class="mini-stat-label">estimated total users</div>
+          <div class="mini-stat-label">estimated total /watch users</div>
           <div class="mini-stat-value">
             <span id="estimated-total-users">Loading…</span>
             <button type="button" id="estimated-users-info-btn" class="shield-btn" aria-label="About estimated total users">i</button>
           </div>
           <div class="mini-stat-sub">
-            Private estimate based on anonymous user IDs plus aggregate OS/browser detection patterns. No page-viewer tracking is used here.
+            Private estimate based on anonymous <code>/watch</code> page user IDs plus aggregate OS/browser detection patterns. No page-viewer tracking is used here.
           </div>
         </div>
 
         <div class="mini-stat">
-          <div class="mini-stat-label">total video ids seen in total</div>
+          <div class="mini-stat-label">total /watch video ids seen</div>
           <div id="total-video-id-count" class="mini-stat-value">Loading…</div>
           <div class="mini-stat-sub">
-            Unique video IDs this Poke instance has seen in its local stats data.
+            Unique video IDs this Poke instance has seen from its local <code>/watch</code> page stats data.
           </div>
         </div>
       </div>
@@ -1461,12 +1461,12 @@ module.exports = function (app, config, renderTemplate) {
     <section id="overview-panel" class="panel active">
       <div class="overview-grid">
         <div class="section-card">
-          <h3>Operating systems</h3>
+          <h3>Operating systems on /watch</h3>
           <div id="os-breakdown" class="breakdown-list"></div>
         </div>
 
         <div class="section-card">
-          <h3>Browsers</h3>
+          <h3>Browsers on /watch</h3>
           <div id="browser-breakdown" class="breakdown-list"></div>
         </div>
       </div>
@@ -1476,35 +1476,35 @@ module.exports = function (app, config, renderTemplate) {
       <div class="section-help">
         <h2>How to read recent videos</h2>
         <p class="note">
-          This section shows the most recently recorded video IDs from this Poke instance, in newest-first order. It is useful for checking what this instance has touched lately, not for measuring popularity.
+          This section shows the most recently recorded video IDs from this Poke instance's <code>/watch</code> page, in newest-first order. It is useful for checking what this instance has touched lately through <code>/watch</code>, not for measuring popularity.
         </p>
       </div>
 
       <div class="section-card">
         <div class="compact-head">
           <div>
-            <h2>Recently viewed video IDs</h2>
+            <h2>Recently viewed /watch video IDs</h2>
             <p class="note" style="margin:0;">
-              A rolling local list of recent video IDs recorded by this Poke instance. These are not public platform stats.
+              A rolling local list of recent video IDs recorded only from this Poke instance's <code>/watch</code> page. These are not public platform stats.
             </p>
           </div>
 
           <div class="compact-actions">
-            <button type="button" id="download-recent-json-btn" class="action-btn">Download recent video IDs</button>
+            <button type="button" id="download-recent-json-btn" class="action-btn">Download recent /watch video IDs</button>
           </div>
         </div>
 
         <div class="recent-summary">
           <div class="summary-card">
-            <div class="summary-label">recent IDs loaded</div>
+            <div class="summary-label">recent /watch IDs loaded</div>
             <div id="recent-count" class="summary-value">Loading…</div>
-            <div class="summary-sub">How many recent IDs are currently visible in this page session.</div>
+            <div class="summary-sub">How many recent <code>/watch</code> IDs are currently visible in this page session.</div>
           </div>
 
           <div class="summary-card">
-            <div class="summary-label">latest recorded ID</div>
+            <div class="summary-label">latest recorded /watch ID</div>
             <div id="recent-latest" class="summary-value">Loading…</div>
-            <div class="summary-sub">The first item in the recency queue, if any recent ID exists.</div>
+            <div class="summary-sub">The first item in the <code>/watch</code> recency queue, if any recent ID exists.</div>
           </div>
         </div>
 
@@ -1516,22 +1516,22 @@ module.exports = function (app, config, renderTemplate) {
       <div class="section-help">
         <h2>How to read top videos</h2>
         <p class="note">
-          Rankings here are based only on anonymous local detections on this Poke instance. A higher number means this instance saw that video more often here, not that the upstream platform reported more public views.
+          Rankings here are based only on anonymous local detections from this Poke instance's <code>/watch</code> page. A higher number means this instance saw that video more often on <code>/watch</code>, not that the upstream platform reported more public views.
         </p>
       </div>
 
       <div class="section-card">
         <div class="compact-head">
           <div>
-            <h2>Top videos (local-only)</h2>
+            <h2>Top videos from /watch only</h2>
             <p class="note" style="margin:0;">
-              Ranked by <strong>local Poke instance views</strong> only, not public YouTube totals.
+              Ranked by <strong>local Poke <code>/watch</code> page views</strong> only, not public YouTube totals.
             </p>
           </div>
         </div>
 
         <div class="controls">
-          <label for="video-limit">Show top videos:</label>
+          <label for="video-limit">Show top /watch videos:</label>
           <select id="video-limit">
             <option value="8">8</option>
             <option value="20">20</option>
@@ -1559,6 +1559,7 @@ module.exports = function (app, config, renderTemplate) {
       <div class="section-card api-lines">
         <h2>API usage</h2>
         <p class="note">
+          These API views expose anonymous local stats collected only from Poke's <code>/watch</code> page.<br><br>
           • GUI view: <code><a href="/api/stats?view=gui">/api/stats?view=gui</a></code><br>
           • JSON view: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code><br>
           • JSON default limit: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code> (8 videos)<br>
@@ -1572,11 +1573,11 @@ module.exports = function (app, config, renderTemplate) {
   <div id="privacy-modal-backdrop" class="modal-backdrop" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="privacy-modal-title">
       <div class="modal-head">
-        <div id="privacy-modal-title" class="modal-title">Estimated total users</div>
+        <div id="privacy-modal-title" class="modal-title">Estimated total /watch users</div>
         <button type="button" id="privacy-modal-close" class="modal-close" aria-label="Close">×</button>
       </div>
       <p class="note" style="margin:0;">
-        This estimate is based on already-aggregated anonymous stats only. It does not add personal profiles, account linking, or unique page-viewer tracking for this page.
+        This estimate is based on already-aggregated anonymous <code>/watch</code> page stats only. It does not add personal profiles, account linking, or unique page-viewer tracking for this page.
       </p>
       <p class="note">
         For more detail about what is measured and what is not, see <a href="/policies/privacy#stats">our privacy policy</a>.
@@ -1726,7 +1727,7 @@ module.exports = function (app, config, renderTemplate) {
 
       paginationInfo.textContent =
         "Showing " + startIndex + "–" + endIndex + " of " + entries.length +
-        " videos. These are local Poke instance view rankings, not YouTube public views."
+        " videos. These are local Poke /watch page rankings, not YouTube public views."
 
       paginationControls.appendChild(
         createPageButton("Prev", currentPage - 1, currentPage === 1, false)
@@ -1816,7 +1817,7 @@ module.exports = function (app, config, renderTemplate) {
       if (entries.length === 0) {
         var empty = document.createElement("div")
         empty.className = "breakdown-empty"
-        empty.textContent = "No data recorded yet."
+        empty.textContent = "No /watch page data recorded yet."
         targetEl.appendChild(empty)
         return
       }
@@ -1839,7 +1840,7 @@ module.exports = function (app, config, renderTemplate) {
 
         var labelEl = document.createElement("div")
         labelEl.className = "breakdown-label"
-        labelEl.textContent = label + " · " + percent + "% of total " + (kind === "os" ? "OS detections" : "browser detections")
+        labelEl.textContent = label + " · " + percent + "% of total " + (kind === "os" ? "/watch OS detections" : "/watch browser detections")
 
         var countEl = document.createElement("div")
         countEl.className = "breakdown-count"
@@ -1856,7 +1857,7 @@ module.exports = function (app, config, renderTemplate) {
         sub.className = "breakdown-sub"
         sub.textContent =
           label + " was detected " + count + " times out of " + total + " total " +
-          (kind === "os" ? "OS detections" : "browser detections") + " on this Poke instance."
+          (kind === "os" ? "OS detections" : "browser detections") + " from the /watch page on this Poke instance."
 
         barWrap.appendChild(bar)
         topLine.appendChild(labelEl)
@@ -1937,6 +1938,7 @@ module.exports = function (app, config, renderTemplate) {
       var payload = {
         exportedAt: new Date().toISOString(),
         source: "/api/stats?view=gui",
+        note: "These recent video IDs are from anonymous local /watch page stats only.",
         totalRecentVideoIds: recentVideoIds.length,
         recentVideoIds: recentVideoIds.slice()
       }
@@ -1945,7 +1947,7 @@ module.exports = function (app, config, renderTemplate) {
       var url = URL.createObjectURL(blob)
       var a = document.createElement("a")
       a.href = url
-      a.download = "poke-recent-video-ids.json"
+      a.download = "poke-recent-watch-video-ids.json"
       document.body.appendChild(a)
       a.click()
       a.remove()
@@ -1959,17 +1961,17 @@ module.exports = function (app, config, renderTemplate) {
       updateRecentSummary()
 
       if (!Array.isArray(recentVideoIds) || recentVideoIds.length === 0) {
-        recentVideos.innerHTML = '<li class="recent-empty">No recent video IDs recorded yet.</li>'
+        recentVideos.innerHTML = '<li class="recent-empty">No recent /watch video IDs recorded yet.</li>'
         return
       }
 
       recentVideoIds.slice(0, 12).forEach(function (videoId, index) {
         var card = createVideoCard(
           videoId,
-          "Recently recorded on this Poke instance. Position #" + (index + 1) + " in the live recent queue.",
-          "Thumbnail for recent video " + videoId,
+          "Recently recorded through the /watch page on this Poke instance. Position #" + (index + 1) + " in the live recent queue.",
+          "Thumbnail for recent /watch video " + videoId,
           "/watch?v=" + encodeURIComponent(videoId),
-          index === 0 ? "Newest recent ID" : "Recent position #" + (index + 1)
+          index === 0 ? "Newest /watch ID" : "/watch position #" + (index + 1)
         )
 
         card.className = "recent-card"
@@ -1981,7 +1983,7 @@ module.exports = function (app, config, renderTemplate) {
       var entries = getLimitedEntries()
 
       if (entries.length === 0) {
-        topVideos.innerHTML = '<li class="error-box">No stats recorded yet.</li>'
+        topVideos.innerHTML = '<li class="error-box">No /watch stats recorded yet.</li>'
         paginationWrap.style.display = "none"
         return
       }
@@ -2046,12 +2048,12 @@ module.exports = function (app, config, renderTemplate) {
 
         var viewsEl = document.createElement("div")
         viewsEl.className = "video-views"
-        viewsEl.textContent = views + " local Poke instance views"
+        viewsEl.textContent = views + " local /watch page views"
 
         var noteEl = document.createElement("div")
         noteEl.className = "video-note"
         noteEl.textContent =
-          "This number is counted only from anonymous requests on this Poke instance. It is not the video's public YouTube view count."
+          "This number is counted only from anonymous /watch page requests on this Poke instance. It is not the video's public YouTube view count."
 
         meta.appendChild(titleLink)
         meta.appendChild(rank)
@@ -2081,7 +2083,7 @@ module.exports = function (app, config, renderTemplate) {
     }
 
     if (!TELEMETRY_ON) {
-      setDisabledState("No data because telemetry is disabled.")
+      setDisabledState("No /watch page data because telemetry is disabled.")
       userIdCount.textContent = "0"
       estimatedTotalUsers.textContent = "0"
       totalVideoIdCount.textContent = "0"
@@ -2092,7 +2094,7 @@ module.exports = function (app, config, renderTemplate) {
       } catch (e) {}
 
       if (optedOut) {
-        setDisabledState("Opt-out active, so no stats loaded.")
+        setDisabledState("Opt-out active, so no /watch stats loaded.")
         userIdCount.textContent = "Opt-out active"
         estimatedTotalUsers.textContent = "Opt-out active"
         totalVideoIdCount.textContent = "Opt-out active"
@@ -2129,7 +2131,7 @@ module.exports = function (app, config, renderTemplate) {
             })
           })
           .catch(function () {
-            setDisabledState("Error loading data.")
+            setDisabledState("Error loading /watch page data.")
             userIdCount.textContent = "Error"
             estimatedTotalUsers.textContent = "Error"
             totalVideoIdCount.textContent = "Error"
@@ -2215,11 +2217,11 @@ module.exports = function (app, config, renderTemplate) {
     <p>
       At <a href="/">Poke</a>, we do not collect or share any personal information.
       That's our privacy promise in a nutshell.
-      To improve Poke we use a completely anonymous, local-only way to figure out how the site is being used.
+      To improve Poke we use a completely anonymous, local-only way to understand how the <code>/watch</code> page is being used.
     </p>
 
     <p>
-      Any anonymous stats recorded by this instance come from the <code>/api/stats</code> system.
+      Any anonymous stats recorded by this instance come from the <code>/watch</code> page through the <code>/api/stats</code> system.
       You can read exactly what is measured and what is <em>not</em> in our privacy policy:
       <a href="/policies/privacy#stats">here</a>.
     </p>
@@ -2228,6 +2230,7 @@ module.exports = function (app, config, renderTemplate) {
 
     <h2>API usage</h2>
     <p class="note">
+      These API views are for anonymous local <code>/watch</code> page stats only.<br><br>
       • GUI view: <code><a href="/api/stats?view=gui">/api/stats?view=gui</a></code><br>
       • JSON view: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code><br>
       • JSON default limit: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code> (8 videos)<br>
