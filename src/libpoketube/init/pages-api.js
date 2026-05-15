@@ -312,7 +312,7 @@ app.get("/api/getEngagementData", async (req, res) => {
     if (id) {
       const apiUrl = `https://ryd-proxy.kavin.rocks/votes/${id}&hash=d0550b6e28c8f93533a569c314d5b4e2`;
       const response = await fetch(apiUrl, {
-        headers: headers,
+        headers: typeof headers !== 'undefined' ? headers : {},
       });
       
       if (response.status === 400) {
@@ -327,7 +327,7 @@ app.get("/api/getEngagementData", async (req, res) => {
       const likePercentage = total > 0 ? ((likes / total) * 100).toFixed(2) : 0;
       const dislikePercentage = total > 0 ? ((dislikes / total) * 100).toFixed(2) : 0;
       const ratingNum = parseFloat(engagement.rating) || 0;
-      const stars = "★".repeat(Math.round(ratingNum)) + "☆".repeat(Math.max(0, 5 - Math.round(ratingNum)));
+      const starPercentage = (ratingNum / 5) * 100;
       
       const getLikePercentageColor = (percentage) => {
         if (percentage >= 80) return "green";
@@ -427,7 +427,13 @@ app.get("/api/getEngagementData", async (req, res) => {
                 border-radius: 12px;
                 margin-bottom: 20px;
               }
-              h2 { margin-top: 0; font-size: 1.2rem; font-weight: 600; margin-bottom: 20px;}
+              h2 { 
+                margin-top: 0; 
+                font-size: 1.2rem; 
+                font-weight: 600; 
+                margin-bottom: 20px;
+                text-align: center;
+              }
               .pill { 
                 display: flex; 
                 align-items: center; 
@@ -443,18 +449,51 @@ app.get("/api/getEngagementData", async (req, res) => {
               .ratio-bar { 
                 width: 100%; 
                 height: 3px; 
-                background-color: rgba(255, 255, 255, 0.2);
+                background-color: #cc0000;
                 border-radius: 3px; 
                 overflow: hidden; 
                 display: flex; 
                 margin-bottom: 24px; 
               }
-              .ratio-like { width: ${likePercentage}%; background-color: #ffffff; height: 100%; border-radius: 3px; }
+              .ratio-like { width: ${likePercentage}%; background-color: #2ba640; height: 100%; border-radius: 3px; }
               .reception { background: #272727; padding: 16px; border-radius: 12px; margin-bottom: 20px;}
               .reception-title { font-size: 12px; color: #aaaaaa; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
               .score-label { font-size: 20px; font-weight: bold; margin-bottom: 4px; }
-              .score-number { font-size: 14px; color: #aaaaaa; margin-bottom: 8px; }
-              .star-rating { font-size: 16px; color: #f1c40f; letter-spacing: 2px;}
+              .score-number { font-size: 14px; color: #aaaaaa; margin-bottom: 12px; }
+              
+              .star-container {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+              }
+              .stars-outer {
+                display: inline-block;
+                position: relative;
+                font-size: 20px;
+                color: #444;
+                letter-spacing: 2px;
+              }
+              .stars-outer::before {
+                content: "★★★★★";
+              }
+              .stars-inner {
+                position: absolute;
+                top: 0;
+                left: 0;
+                white-space: nowrap;
+                overflow: hidden;
+                color: #f1c40f;
+                width: ${starPercentage}%;
+              }
+              .stars-inner::before {
+                content: "★★★★★";
+              }
+              .rating-text {
+                font-size: 14px;
+                font-weight: bold;
+                color: #f1f1f1;
+              }
+
               .green { color: #2ba640; }
               .orange { color: #f57c00; }
               .red { color: #cc0000; }
@@ -494,7 +533,13 @@ app.get("/api/getEngagementData", async (req, res) => {
                 <div class="reception-title">Community Reception</div>
                 <div class="score-label ${userScoreColor}">${userScoreLabel}</div>
                 <div class="score-number">Score: <span class="${userScoreColor}">${userScore}</span></div>
-                <div class="star-rating" title="${ratingNum} / 5">${stars}</div>
+                
+                <div class="star-container" title="${ratingNum} out of 5">
+                  <div class="stars-outer">
+                    <div class="stars-inner"></div>
+                  </div>
+                  <div class="rating-text">${ratingNum.toFixed(1)}</div>
+                </div>
               </div>
 
               <details>
@@ -515,7 +560,7 @@ app.get("/api/getEngagementData", async (req, res) => {
   } catch (error) {
     res.status(500).json("whoops (error 500) >~<");
   }
-}); 
+});
   
 app.get("/feeds/videos.xml", async (req, res) => {
   const channelId = req.query.channel_id;
