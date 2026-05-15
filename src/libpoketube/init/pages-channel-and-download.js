@@ -224,58 +224,183 @@ function channelurlfixer(text) {
   return updatedDescription;
 }
 
-app.get("/channel/", async (req, res) => {
-  const { fetch } = await import("undici");
-  var media_proxy = config.media_proxy;
+const CHANNEL_PAGE_CACHE_TTL = 3600000;
+const CHANNEL_PAGE_CACHE_MAX = 1500;
+const CHANNEL_FETCH_TIMEOUT_MS = 9000;
 
-  if (req.useragent.source.includes("Pardus")) {
-    media_proxy = "https://media-proxy.ashley0143.xyz";
+const channelPageCache = new Map();
+const channelPageInFlight = new Map();
+const channelUrlCache = new Map();
+const channelUrlInFlight = new Map();
+const channelPublishedCache = new Map();
+const channelPublishedInFlight = new Map();
+
+let undiciFetchPromise = null;
+
+function getUndiciFetch() {
+  if (!undiciFetchPromise) {
+    undiciFetchPromise = import("undici").then(({ fetch }) => fetch);
   }
 
-  var ID = req.query.id;
+  return undiciFetchPromise;
+}
 
-  if (!ID) {
-   renderTemplate(res, req, "404.ejs");
+function getTimedFetchOptions(options, timeoutMs) {
+  const finalOptions = Object.assign({}, options || {});
+  let cancel = null;
+
+  if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
+    finalOptions.signal = AbortSignal.timeout(timeoutMs);
+    return { options: finalOptions, cancel };
   }
 
-  if (ID.endsWith("@youtube.com")) {
-    ID = ID.slice(0, -"@youtube.com".length);
+  if (typeof AbortController !== "undefined") {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    finalOptions.signal = controller.signal;
+    cancel = () => clearTimeout(timer);
   }
 
-  if (ID.endsWith("@poketube.fun")) {
-    ID = ID.slice(0, -"@poketube.fun".length);
+  return { options: finalOptions, cancel };
+}
+
+async function fetchTextWithTimeout(fetch, url, options, timeoutMs) {
+  const timed = getTimedFetchOptions(options, timeoutMs);
+
+  try {
+    const response = await fetch(url, timed.options);
+    const text = await response.text();
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      text
+    };
+  } finally {
+    if (typeof timed.cancel === "function") {
+      timed.cancel();
+    }
+  }
+}
+
+function getMapCacheValue(map, key, ttl) {
+  const item = map.get(key);
+
+  if (!item) {
+    return null;
   }
 
-  const tab = req.query.tab;
-  const cache = {};
+  if (Date.now() - item.timestamp >= ttl) {
+    map.delete(key);
+    return null;
+  }
 
-  async function fetchChannelPublishedJSON(id) {
-    // Check if this channel ID has a recent failure cached
-    if (fetchFailureCache[id] && (Date.now() - fetchFailureCache[id]) < FETCH_FAILURE_TTL) {
+  map.delete(key);
+  map.set(key, item);
+
+  return item.value;
+}
+
+function setMapCacheValue(map, key, value, maxEntries) {
+  map.set(key, {
+    value,
+    timestamp: Date.now()
+  });
+
+  while (map.size > maxEntries) {
+    const oldestKey = map.keys().next().value;
+    map.delete(oldestKey);
+  }
+
+  return value;
+}
+
+function getInFlightOrCreate(map, key, producer) {
+  if (map.has(key)) {
+    return map.get(key);
+  }
+
+  const promise = Promise.resolve()
+    .then(producer)
+    .finally(() => {
+      map.delete(key);
+    });
+
+  map.set(key, promise);
+
+  return promise;
+}
+
+function normalizeChannelId(rawId) {
+  const firstValue = Array.isArray(rawId) ? rawId[0] : rawId;
+  let id = String(firstValue || "").trim();
+
+  if (id.endsWith("@youtube.com")) {
+    id = id.slice(0, -"@youtube.com".length);
+  }
+
+  if (id.endsWith("@poketube.fun")) {
+    id = id.slice(0, -"@poketube.fun".length);
+  }
+
+  return id;
+}
+
+function getChannelPageCacheKey(ID, sort_by, continuation) {
+  return JSON.stringify({
+    ID,
+    sort_by,
+    continuation
+  });
+}
+
+function getUrlCacheKey(url) {
+  return String(url || "");
+}
+
+function isFreshFetchFailure(id) {
+  return fetchFailureCache[id] && Date.now() - fetchFailureCache[id] < FETCH_FAILURE_TTL;
+}
+
+async function fetchChannelPublishedJSON(fetch, id) {
+  const cached = getMapCacheValue(channelPublishedCache, id, CHANNEL_PAGE_CACHE_TTL);
+
+  if (cached) {
+    return cached;
+  }
+
+  return getInFlightOrCreate(channelPublishedInFlight, id, async () => {
+    if (isFreshFetchFailure(id)) {
       return { ID: id, published: " " };
     }
 
     try {
       const url = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(id)}`;
-      const res = await fetch(url, {
-        headers: {
-          accept: "application/atom+xml"
-        }
-      });
 
-      if (res.status === 404) {
+      const response = await fetchTextWithTimeout(
+        fetch,
+        url,
+        {
+          headers: {
+            accept: "application/atom+xml"
+          }
+        },
+        CHANNEL_FETCH_TIMEOUT_MS
+      );
+
+      if (response.status === 404) {
         fetchFailureCache[id] = Date.now();
         return { ID: id, published: " " };
       }
 
-      if (!res.ok) {
-        console.log(`HTTP ${res.status} for ${url}`);
+      if (!response.ok) {
+        console.log(`HTTP ${response.status} for ${url}`);
         fetchFailureCache[id] = Date.now();
         return { ID: id, published: " " };
       }
 
-      const xml = await res.text();
-      const match = xml.match(/<feed[\s\S]*?<published>([^<]+)<\/published>/i);
+      const match = response.text.match(/<feed[\s\S]*?<published>([^<]+)<\/published>/i);
+
       if (!match) {
         fetchFailureCache[id] = Date.now();
         return { ID: id, published: " " };
@@ -296,47 +421,64 @@ app.get("/channel/", async (req, res) => {
         timeZone: "UTC"
       }).format(date);
 
-      // Success - remove from failure cache if it was there before
       delete fetchFailureCache[id];
 
-      return {
-        ID: id,
-        published
-      };
+      return setMapCacheValue(
+        channelPublishedCache,
+        id,
+        {
+          ID: id,
+          published
+        },
+        CHANNEL_PAGE_CACHE_MAX
+      );
     } catch (error) {
       console.log(`fetchChannelPublishedJSON failed for ${id}:`, error.message);
       fetchFailureCache[id] = Date.now();
       return { ID: id, published: " " };
     }
+  });
+}
+
+async function getChannelData(fetch, url) {
+  const key = getUrlCacheKey(url);
+  const cached = getMapCacheValue(channelUrlCache, key, CHANNEL_PAGE_CACHE_TTL);
+
+  if (cached !== null) {
+    return cached;
   }
 
-  const createdAccountGetDate = await fetchChannelPublishedJSON(ID);
-
-  const continuation = req.query.continuation
-    ? `&continuation=${req.query.continuation}`
-    : "";
-  const continuationl = req.query.continuationl
-    ? `&continuation=${req.query.continuationl}`
-    : "";
-  const continuations = req.query.continuations
-    ? `&continuation=${req.query.continuations}`
-    : "";
-  const sort_by = req.query.sort_by || "newest";
-
-  const getChannelData = async (url) => {
+  return getInFlightOrCreate(channelUrlInFlight, key, async () => {
     try {
-      return await fetch(url, {
-        headers: {
-          "User-Agent": config.useragent
-        }
-      })
-        .then((res) => res.text())
-        .then((txt) => getJson(txt));
+      const response = await fetchTextWithTimeout(
+        fetch,
+        url,
+        {
+          headers: {
+            "User-Agent": config.useragent
+          }
+        },
+        CHANNEL_FETCH_TIMEOUT_MS
+      );
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const parsed = getJson(response.text);
+
+      if (parsed !== null && typeof parsed !== "undefined") {
+        return setMapCacheValue(channelUrlCache, key, parsed, CHANNEL_PAGE_CACHE_MAX * 8);
+      }
+
+      return null;
     } catch (error) {
       return null;
     }
-  };
+  });
+}
 
+async function getChannelBundle(fetch, ID, sort_by, continuation) {
   const apiUrl = config.invapi + "/channels/";
   const channelUrl = `${apiUrl}${ID}/${atob(ChannelTabs.videos)}?sort_by=${sort_by}${continuation}&h=${btoa(ChannelTabs.community)}`;
   const shortsUrl = `${apiUrl}${ID}/${atob(ChannelTabs.shorts)}?sort_by=${sort_by}${continuation}&h=${btoa(ChannelTabs.community)}`;
@@ -346,17 +488,94 @@ app.get("/channel/", async (req, res) => {
   const releasesUrl = `${apiUrl}${ID}/releases?hl=en-US&h=${btoa(ChannelTabs.community)}`;
   const channelINVUrl = `${apiUrl}${ID}/?h=${btoa(ChannelTabs.community)}`;
 
+  const pageCacheKey = getChannelPageCacheKey(ID, sort_by, continuation);
+  const cached = getMapCacheValue(channelPageCache, pageCacheKey, CHANNEL_PAGE_CACHE_TTL);
+
+  if (cached) {
+    return cached;
+  }
+
+  return getInFlightOrCreate(channelPageInFlight, pageCacheKey, async () => {
+    const [
+      createdAccountGetDate,
+      tj,
+      shorts,
+      playlist,
+      released,
+      stream,
+      c,
+      cinv
+    ] = await Promise.all([
+      fetchChannelPublishedJSON(fetch, ID),
+      getChannelData(fetch, channelUrl),
+      getChannelData(fetch, shortsUrl),
+      getChannelData(fetch, PlaylistUrl),
+      getChannelData(fetch, releasesUrl),
+      getChannelData(fetch, streamUrl),
+      getChannelData(fetch, communityUrl),
+      getChannelData(fetch, channelINVUrl)
+    ]);
+
+    return setMapCacheValue(
+      channelPageCache,
+      pageCacheKey,
+      {
+        createdAccountGetDate,
+        tj,
+        shorts,
+        playlist,
+        released,
+        stream,
+        c,
+        cinv
+      },
+      CHANNEL_PAGE_CACHE_MAX
+    );
+  });
+}
+
+app.get("/channel/", async (req, res) => {
+  const fetch = await getUndiciFetch();
+
+  var media_proxy = config.media_proxy;
+
+  if (req.useragent && req.useragent.source && req.useragent.source.includes("Pardus")) {
+    media_proxy = "https://media-proxy.ashley0143.xyz";
+  }
+
+  var ID = normalizeChannelId(req.query.id);
+
+  if (!ID) {
+    return renderTemplate(res, req, "404.ejs");
+  }
+
+  const tab = req.query.tab;
+
+  const continuation = req.query.continuation
+    ? `&continuation=${req.query.continuation}`
+    : "";
+
+  const continuationl = req.query.continuationl
+    ? `&continuation=${req.query.continuationl}`
+    : "";
+
+  const continuations = req.query.continuations
+    ? `&continuation=${req.query.continuations}`
+    : "";
+
+  const sort_by = req.query.sort_by || "newest";
   const pronoun = "no pronouns :c";
 
-  var [tj, shorts, playlist, released, stream, c, cinv] = await Promise.all([
-    getChannelData(channelUrl),
-    getChannelData(shortsUrl),
-    getChannelData(PlaylistUrl),
-    getChannelData(releasesUrl),
-    getChannelData(streamUrl),
-    getChannelData(communityUrl),
-    getChannelData(channelINVUrl)
-  ]);
+  var {
+    createdAccountGetDate,
+    tj,
+    shorts,
+    playlist,
+    released,
+    stream,
+    c,
+    cinv
+  } = await getChannelBundle(fetch, ID, sort_by, continuation);
 
   var bannedchannels = "";
   var bypassQuery = "";
@@ -378,7 +597,11 @@ app.get("/channel/", async (req, res) => {
   }
 
   function getThumbnailUrl(video) {
-    const maxresDefaultThumbnail = video.videoThumbnails.find(
+    const thumbnails = Array.isArray(video && video.videoThumbnails)
+      ? video.videoThumbnails
+      : [];
+
+    const maxresDefaultThumbnail = thumbnails.find(
       (thumbnail) => thumbnail.quality === "maxresdefault"
     );
 
@@ -389,22 +612,6 @@ app.get("/channel/", async (req, res) => {
     return `https://vid.puffyan.us/vi/${video.videoId}/hqdefault.jpg`;
   }
 
-  cache[ID] = {
-    result: {
-      tj,
-      shorts,
-      stream,
-      c,
-      cinv,
-      released
-    },
-    timestamp: Date.now()
-  };
-
-  if (cache[ID] && Date.now() - cache[ID].timestamp < 3600000) {
-    var { tj, shorts, stream, c } = cache[ID].result;
-  }
-
   const subscribers = convert(cinv?.subCount || 0);
 
   let ChannelFirstVideoObject = {
@@ -412,7 +619,7 @@ app.get("/channel/", async (req, res) => {
     authorVerified: false
   };
 
-  renderTemplate(res, req, "channel.ejs", {
+  return renderTemplate(res, req, "channel.ejs", {
     ID,
     tab,
     shorts,
