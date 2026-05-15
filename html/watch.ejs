@@ -1553,11 +1553,11 @@ for (const format of (VideoData.adaptiveFormats || [])) {
 
                        <% if (!VideoData.author.endsWith("- Topic")) { %> 
   <a href="/channel?id=<%=video?.Channel.id || VideoData.authorId%>@youtube.com" class="avatar">
-    <img loading="lazy" src="/avatars/<%= VideoData.authorThumbnails[1].url.replace("https://yt3.ggpht.com/", "") %>?fx=<%=VideoData.author%>">
+    <img loading="lazy" src="/avatars/<%= VideoData.authorThumbnails[1].url.replace("https://yt3.ggpht.com/", "") %>?fx=<%=VideoData.author%><%=btoa(Date.now())%>">
   </a>
 <% } else { %>
   <a class="avatar">
-    <img loading="lazy" src="/avatars/<%= VideoData.authorThumbnails[1].url.replace("https://yt3.ggpht.com/", "") %>?fx=<%=VideoData.author%>">
+    <img loading="lazy" src="/avatars/<%= VideoData.authorThumbnails[1].url.replace("https://yt3.ggpht.com/", "") %>?fx=<%=btoa(Date.now())%><%=VideoData.author%>">
   </a>
 <% } %>
 
