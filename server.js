@@ -117,19 +117,6 @@
     return String(ip || "").replace("::ffff:", "");
   }
 
-  function maskIP(ip) {
-    const clean = cleanIP(ip);
-    if (!clean) return "unknown";
-    if (net.isIPv4(clean)) {
-      const parts = clean.split(".");
-      return parts.length === 4 ? parts[0] + "." + parts[1] + ".x.x" : "unknown";
-    }
-    if (net.isIPv6(clean)) {
-      return clean.split(":").slice(0, 2).join(":") + ":xxxx";
-    }
-    return "unknown";
-  }
-
   function isCloudflareIP(ip) {
     const clean = cleanIP(ip);
     if (!net.isIPv4(clean)) return false;
@@ -432,49 +419,30 @@
     let isGuardActive = false;
 
     // Initialize Event Loop Histogram
-    const eldHistogram = monitorEventLoopDelay({ resolution: 50 });
+    const eldHistogram = monitorEventLoopDelay({ resolution: 20 });
     eldHistogram.enable();
 
     const resourceConfig = {
       system: {
-        sampleMs: 2000,
+        sampleMs: 1000,
 
         eventLoop: {
-          warmMs: 180,
-          stressedMs: 450,
-          criticalMs: 1200
+            warmMs: 40,
+            stressedMs: 120,
+            criticalMs: 300
         },
 
-        eventLoopUtilization: {
-          warm: 0.85,
-          stressed: 0.94,
-          critical: 0.985
-        },
+        warmCpuRatio: 0.75,
+        stressedCpuRatio: 1.05,
+        criticalCpuRatio: 1.55,
 
-        warmCpuRatio: 0.70,
-        stressedCpuRatio: 0.88,
-        criticalCpuRatio: 0.97,
+        warmRssRatio: 0.70,
+        stressedRssRatio: 0.82,
+        criticalRssRatio: 0.92,
 
-        warmRssRatio: 0.82,
-        stressedRssRatio: 0.90,
-        criticalRssRatio: 0.96,
-
-        warmHeapRatio: 0.70,
-        stressedHeapRatio: 0.82,
-        criticalHeapRatio: 0.92,
-
-        sustain: {
-          warmSamples: 2,
-          stressedSamples: 3,
-          criticalSamples: 4,
-          recoverSamples: 3
-        },
-
-        trafficGate: {
-          stressedMinRps: 120,
-          criticalMinRps: 220,
-          criticalMinActive: 60
-        }
+        warmHeapRatio: 0.55,
+        stressedHeapRatio: 0.70,
+        criticalHeapRatio: 0.85
       },
 
       client: {
@@ -482,50 +450,50 @@
         maxClientStates: 75000,
         cleanupMs: 60000,
 
-        absoluteRequestsPerSecond: 260,
-        absoluteRequestsPerWindow: 2600,
-        absoluteCostPerWindow: 12000,
+        absoluteRequestsPerSecond: 160,
+        absoluteRequestsPerWindow: 1200,
+        absoluteCostPerWindow: 6000,
 
-        noisyRequestsWarm: 900,
-        noisyCostWarm: 4500,
+        noisyRequestsWarm: 350,
+        noisyCostWarm: 1400,
 
-        noisyRequestsStressed: 700,
-        noisyCostStressed: 3500,
+        noisyRequestsStressed: 160,
+        noisyCostStressed: 650,
 
-        noisyRequestsCritical: 450,
-        noisyCostCritical: 2200,
+        noisyRequestsCritical: 70,
+        noisyCostCritical: 280,
 
-        pageSoftPassesPerWindow: 100,
+        pageSoftPassesPerWindow: 20,
 
-        maxHeavyRequestsWarm: 240,
-        maxHeavyRequestsStressed: 180,
-        maxHeavyRequestsCritical: 110,
+        maxHeavyRequestsWarm: 80,
+        maxHeavyRequestsStressed: 25,
+        maxHeavyRequestsCritical: 8,
 
-        cooldownBaseMs: 15000,
-        cooldownMaxMs: 180000,
-        cooldownDecayMs: 120000
+        cooldownBaseMs: 30000,
+        cooldownMaxMs: 600000,
+        cooldownDecayMs: 300000
       },
 
       requestCost: {
-        status: 0.01,
-        static: 0.03,
-        page: 0.6,
-        other: 0.8,
-        background: 1.2,
-        heavy: 3
+        status: 0.05,
+        static: 0.10,
+        page: 1,
+        other: 1.5,
+        background: 4,
+        heavy: 10
       },
 
       admission: {
-        retryAfterHealthyAbuseSeconds: 8,
-        retryAfterWarmSeconds: 5,
-        retryAfterStressedSeconds: 4,
-        retryAfterCriticalSeconds: 3
+        retryAfterHealthyAbuseSeconds: 20,
+        retryAfterWarmSeconds: 10,
+        retryAfterStressedSeconds: 8,
+        retryAfterCriticalSeconds: 5
       },
 
       logging: {
         stateCooldownMs: 30000,
         rejectCooldownMs: 5000,
-        slowRequestMs: 4500,
+        slowRequestMs: 3000,
         maxRecentSlow: 30,
         maxTopRoutes: 12
       }
@@ -640,14 +608,6 @@
 
     let lastSampleAt = performance.now();
     let lastCpuUsage = process.cpuUsage();
-    let lastElu = typeof performance.eventLoopUtilization === "function"
-      ? performance.eventLoopUtilization()
-      : null;
-
-    let rawPressureState = "healthy";
-    let rawPressureSamples = 0;
-    let stablePressureSamples = 0;
-    let recoverySamples = 0;
 
     let requestSequence = 0;
     const activeRequests = new Map();
@@ -714,27 +674,6 @@
         }
       } catch {}
       return 0;
-    }
-
-    function getCpuCapacity() {
-      if (typeof os.availableParallelism === "function") {
-        try {
-          const n = os.availableParallelism();
-          if (Number.isFinite(n) && n > 0) return n;
-        } catch {}
-      }
-      try {
-        const cpus = os.cpus();
-        if (Array.isArray(cpus) && cpus.length > 0) return cpus.length;
-      } catch {}
-      return 1;
-    }
-
-    function clamp01(value) {
-      if (!Number.isFinite(value)) return 0;
-      if (value < 0) return 0;
-      if (value > 1) return 1;
-      return value;
     }
 
     function getRequestPath(req) {
@@ -827,10 +766,6 @@
     function isStaticRequest(req) {
       const pathname = getRequestPath(req);
       if (/^\/(css|js|img|font|static|favicon\.ico|manifest\.json|robots\.txt)(\/|$)/i.test(pathname)) return true;
-      if (pathname.startsWith("/vi/")) return true;
-      if (pathname.startsWith("/ggpht/")) return true;
-      if (pathname.startsWith("/sb/")) return true;
-      if (pathname.startsWith("/storyboard")) return true;
       return /\.(css|js|mjs|png|jpg|jpeg|webp|gif|svg|ico|woff|woff2|ttf|otf|map|txt)$/i.test(pathname);
     }
 
@@ -853,11 +788,14 @@
       const pathname = getRequestPath(req);
       if (!isSafeMethod(req)) return true;
       if (isAvatarRoutePath(pathname)) return false;
-      if (isStaticRequest(req)) return false;
       return (
         pathname.startsWith("/api/") ||
         pathname.startsWith("/proxy/") ||
         pathname.startsWith("/videoplayback") ||
+        pathname.startsWith("/vi/") ||
+        pathname.startsWith("/ggpht/") ||
+        pathname.startsWith("/storyboard") ||
+        pathname.startsWith("/sb/") ||
         pathname.startsWith("/manifest") ||
         pathname.startsWith("/channel_uploads") ||
         pathname.startsWith("/music")
@@ -915,24 +853,7 @@
     }
 
     function getClientKey(req) {
-      const remote = cleanIP(req.socket.remoteAddress || "");
-      const cfConnectingIp = cleanIP(req.headers["cf-connecting-ip"] || "");
-      const xRealIp = cleanIP(req.headers["x-real-ip"] || "");
-      const xForwardedFor = String(req.headers["x-forwarded-for"] || "")
-        .split(",")
-        .map((item) => cleanIP(item.trim()))
-        .filter(Boolean);
-
-      if (cfConnectingIp && isCloudflareIP(remote)) {
-        return cfConnectingIp;
-      }
-
-      if (isTrustedProxyIP(remote)) {
-        if (xForwardedFor[0]) return xForwardedFor[0];
-        if (xRealIp) return xRealIp;
-      }
-
-      return cleanIP(req.ip || remote || "unknown");
+      return cleanIP(req.ip || req.socket.remoteAddress || "unknown");
     }
 
     // O(1) Sliding Window Helper function
@@ -1119,23 +1040,14 @@
       lastCpuUsage = process.cpuUsage();
       lastSampleAt = currentPerf;
 
+      // cpuUsage returns microseconds, so divide by 1000 to get Ms
       const cpuUserMs = cpuDelta.user / 1000;
       const cpuSystemMs = cpuDelta.system / 1000;
       const cpuTotalMs = cpuUserMs + cpuSystemMs;
-      const rawCpuRatio = cpuTotalMs / elapsedMs;
-      const cpuCapacity = getCpuCapacity();
-      const cpuRatio = clamp01(rawCpuRatio / cpuCapacity);
+      // Exact Node.js single-thread 100% CPU accuracy calculating actual execution vs elapsed real time
+      const cpuRatio = cpuTotalMs / elapsedMs;
 
-      let elu = { idle: 0, active: 0, utilization: 0 };
-      if (typeof performance.eventLoopUtilization === "function") {
-        try {
-          elu = performance.eventLoopUtilization(lastElu);
-          lastElu = performance.eventLoopUtilization();
-        } catch {
-          elu = { idle: 0, active: 0, utilization: 0 };
-        }
-      }
-
+      // Extract Event Loop Delay Metrics
       const eldP99 = eldHistogram.percentile(99) / 1e6;
       const eldMean = eldHistogram.mean / 1e6;
       eldHistogram.reset();
@@ -1152,24 +1064,17 @@
 
       const snapshot = {
         state: resourceState.state,
-        rawState: rawPressureState,
         score: resourceState.score,
         since: resourceState.since,
         sampledAt: now,
         reason: reason || "interval",
         eventLoop: {
-          p99Ms: roundMs(eldP99),
-          meanMs: roundMs(eldMean),
-          utilization: roundRatio(elu.utilization || 0),
-          activeMs: roundMs(elu.active || 0),
-          idleMs: roundMs(elu.idle || 0)
+            p99Ms: roundMs(eldP99),
+            meanMs: roundMs(eldMean)
         },
         cpu: {
           ratio: roundRatio(cpuRatio),
-          rawRatio: roundRatio(rawCpuRatio),
-          capacity: cpuCapacity,
           percent: roundRatio(cpuRatio * 100),
-          rawPercent: roundRatio(rawCpuRatio * 100),
           userMs: roundMs(cpuUserMs),
           systemMs: roundMs(cpuSystemMs),
           totalMs: roundMs(cpuTotalMs),
@@ -1198,7 +1103,6 @@
       };
 
       const pressure = classifyResourcePressure(snapshot);
-      snapshot.rawState = pressure.rawState;
       snapshot.state = pressure.state;
       snapshot.score = pressure.score;
       snapshot.pressureReasons = pressure.reasons;
@@ -1212,7 +1116,7 @@
       const shouldLog = now - lastStateLogAt >= resourceConfig.logging.stateCooldownMs;
 
       resourceState = snapshot;
-
+      
       currentSecondRequests = 0;
       currentSecondKindCounts = new Map();
       currentSecondRouteCounts = new Map();
@@ -1228,7 +1132,6 @@
       const reasons = [];
       let score = 0;
       let hasCritical = false;
-      let computedState = "healthy";
 
       function addPressure(name, value, warm, stressed, critical, unit) {
         if (value >= critical) {
@@ -1248,78 +1151,15 @@
         }
       }
 
-      addPressure("eventLoopDelay", snapshot.eventLoop.p99Ms, cfg.eventLoop.warmMs, cfg.eventLoop.stressedMs, cfg.eventLoop.criticalMs, "ms");
-      addPressure("eventLoopUtilization", snapshot.eventLoop.utilization, cfg.eventLoopUtilization.warm, cfg.eventLoopUtilization.stressed, cfg.eventLoopUtilization.critical, "");
+      addPressure("eventLoop", snapshot.eventLoop.p99Ms, cfg.eventLoop.warmMs, cfg.eventLoop.stressedMs, cfg.eventLoop.criticalMs, "ms");
       addPressure("cpu", snapshot.cpu.ratio, cfg.warmCpuRatio, cfg.stressedCpuRatio, cfg.criticalCpuRatio, "");
       addPressure("rssMemory", snapshot.memory.rssRatio, cfg.warmRssRatio, cfg.stressedRssRatio, cfg.criticalRssRatio, "");
       addPressure("heapMemory", snapshot.memory.heapRatio, cfg.warmHeapRatio, cfg.stressedHeapRatio, cfg.criticalHeapRatio, "");
 
-      const trafficIsReal =
-        snapshot.requests.rps >= cfg.trafficGate.stressedMinRps ||
-        snapshot.requests.active >= Math.max(20, Math.floor(cfg.trafficGate.criticalMinActive / 2));
-
-      const criticalTrafficIsReal =
-        snapshot.requests.rps >= cfg.trafficGate.criticalMinRps ||
-        snapshot.requests.active >= cfg.trafficGate.criticalMinActive;
-
-      if ((hasCritical && criticalTrafficIsReal) || (score >= 9 && criticalTrafficIsReal)) {
-        computedState = "critical";
-      } else if (score >= 5 && trafficIsReal) {
-        computedState = "stressed";
-      } else if (score >= 2) {
-        computedState = "warm";
-      }
-
-      if (computedState === rawPressureState) {
-        rawPressureSamples++;
-      } else {
-        rawPressureState = computedState;
-        rawPressureSamples = 1;
-      }
-
-      let nextState = resourceState.state;
-      const sustain = cfg.sustain;
-
-      if (computedState === "critical") {
-        recoverySamples = 0;
-        if (rawPressureSamples >= sustain.criticalSamples) {
-          nextState = "critical";
-          stablePressureSamples++;
-        }
-      } else if (computedState === "stressed") {
-        recoverySamples = 0;
-        if (resourceState.state === "critical") {
-          nextState = "stressed";
-          stablePressureSamples = 1;
-        } else if (rawPressureSamples >= sustain.stressedSamples) {
-          nextState = "stressed";
-          stablePressureSamples++;
-        }
-      } else if (computedState === "warm") {
-        recoverySamples = 0;
-        if (resourceState.state === "healthy" && rawPressureSamples >= sustain.warmSamples) {
-          nextState = "warm";
-          stablePressureSamples++;
-        } else if (resourceState.state === "stressed" || resourceState.state === "critical") {
-          nextState = "warm";
-          stablePressureSamples = 1;
-        }
-      } else {
-        recoverySamples++;
-        if (recoverySamples >= sustain.recoverSamples) {
-          nextState = "healthy";
-          stablePressureSamples = 0;
-        }
-      }
-
-      reasons.push(
-        "rawState=" + computedState +
-        " rawSamples=" + rawPressureSamples +
-        " stableState=" + nextState +
-        " recoverySamples=" + recoverySamples
-      );
-
-      return { state: nextState, rawState: computedState, score, reasons };
+      if (hasCritical || score >= 7) return { state: "critical", score, reasons };
+      if (score >= 4) return { state: "stressed", score, reasons };
+      if (score >= 2) return { state: "warm", score, reasons };
+      return { state: "healthy", score, reasons };
     }
 
     function logResourceState() {
@@ -1389,7 +1229,7 @@
 
       res.set("Retry-After", String(retryAfter));
       res.set("Cache-Control", "no-store");
-      if (status >= 500) res.set("Connection", "close");
+      res.set("Connection", "close");
       res.set("X-Poke-Resource-Guard", resourceState.state);
       res.set("X-Poke-Resource-Reason", reason);
       return res.status(status).send(options.message || getRandomGuardMessage());
@@ -1414,75 +1254,82 @@
       const now = Date.now();
       const noisy = clientIsNoisy(client, state, now);
       const absoluteAbuse = clientIsAbsoluteAbuse(client, now);
-      const heavyCount = getMetric(client, "heavy", now);
-      const totalCount = getMetric(client, "total", now);
-      const cost = getMetric(client, "cost", now);
 
       if (client.cooldownUntil > now) {
         return {
-          action: "reject",
-          reason: "client-cooldown",
-          status: 429,
+          action: "reject", reason: "client-cooldown", status: 429,
           retryAfter: Math.ceil((client.cooldownUntil - now) / 1000),
-          message: "Too many requests. Please retry shortly."
+          message: "Too many expensive requests. Please retry shortly."
         };
       }
 
       if (absoluteAbuse) {
         return {
-          action: "cooldown-reject",
-          reason: "absolute-abuse",
-          status: 429,
+          action: "cooldown-reject", reason: "absolute-abuse", status: 429,
           retryAfter: resourceConfig.admission.retryAfterHealthyAbuseSeconds,
           message: "Too many requests. Please slow down a bit."
         };
       }
 
-      if (kind === "status" || kind === "static") {
-        return { action: "allow", reason: kind + "-pass" };
-      }
-
-      if (state === "healthy") {
-        return { action: "allow", reason: "healthy" };
-      }
+      if (state === "healthy") return { action: "allow", reason: "healthy" };
+      if (kind === "status") return { action: "allow", reason: "status-pass" };
+      if (kind === "static") return { action: "allow", reason: "static-pass" };
 
       if (state === "warm") {
-        return { action: "allow", reason: "warm-observe-only" };
+        if ((kind === "heavy" || kind === "background") && noisy && getMetric(client, "heavy", now) > getHeavyLimit(state)) {
+          return {
+            action: "reject", reason: "warm-noisy-expensive-client", status: 429,
+            retryAfter: getRetryAfterForState(state),
+            message: "Too many expensive requests. Please retry shortly."
+          };
+        }
+        return { action: "allow", reason: "warm-pass" };
       }
 
       if (state === "stressed") {
-        return { action: "allow", reason: "stressed-observe-only" };
+        if (kind === "page") {
+          if (!noisy || getMetric(client, "softPass", now) < resourceConfig.client.pageSoftPassesPerWindow) {
+            return { action: "allow-soft-page", reason: "stressed-page-pass" };
+          }
+          return {
+            action: "reject", reason: "stressed-noisy-page-client", status: 429,
+            retryAfter: getRetryAfterForState(state), message: "Too many page requests. Please retry shortly."
+          };
+        }
+
+        if (kind === "heavy" || kind === "background") {
+          const expensiveButAcceptable = !noisy && getMetric(client, "heavy", now) <= getHeavyLimit(state);
+          if (expensiveButAcceptable) return { action: "allow", reason: "stressed-expensive-small-client-pass" };
+          return {
+            action: "reject", reason: "stressed-expensive-shed", status: 503,
+            retryAfter: getRetryAfterForState(state), message: "Server is busy. Please retry shortly."
+          };
+        }
+
+        if (!noisy) return { action: "allow", reason: "stressed-other-pass" };
+        return {
+          action: "reject", reason: "stressed-noisy-client", status: 429,
+          retryAfter: getRetryAfterForState(state), message: "Too many requests. Please retry shortly."
+        };
       }
 
       if (state === "critical") {
         if (kind === "page") {
-          return { action: "allow-soft-page", reason: "critical-page-pass" };
-        }
-
-        if (kind === "other" && !noisy) {
-          return { action: "allow", reason: "critical-small-other-pass" };
-        }
-
-        const isVeryNoisyHeavy =
-          (kind === "heavy" || kind === "background") &&
-          noisy &&
-          heavyCount >= resourceConfig.client.maxHeavyRequestsCritical &&
-          (
-            totalCount >= resourceConfig.client.noisyRequestsCritical ||
-            cost >= resourceConfig.client.noisyCostCritical
-          );
-
-        if (isVeryNoisyHeavy) {
+          if (!noisy && getMetric(client, "softPass", now) < resourceConfig.client.pageSoftPassesPerWindow) {
+            return { action: "allow-soft-page", reason: "critical-page-soft-pass" };
+          }
           return {
-            action: "cooldown-reject",
-            reason: "critical-very-noisy-heavy-client",
-            status: 429,
-            retryAfter: getRetryAfterForState(state),
-            message: "Too many requests. Please slow down a bit."
+            action: "reject", reason: "critical-noisy-page-client", status: 503,
+            retryAfter: getRetryAfterForState(state), message: "Server is under heavy load. Please retry shortly."
           };
         }
 
-        return { action: "allow", reason: "critical-observe-pass" };
+        if (kind === "other" && !noisy) return { action: "allow", reason: "critical-small-other-pass" };
+        
+        return {
+          action: "reject", reason: "critical-shed", status: 503,
+          retryAfter: getRetryAfterForState(state), message: "Server is under heavy load. Please retry shortly."
+        };
       }
 
       return { action: "allow", reason: "default-pass" };
@@ -2234,10 +2081,10 @@ document.addEventListener("DOMContentLoaded", function() {
     app.get("/traffic", sendTrafficPage);
     app.get("/_antiddos*", (req, res) => res.redirect("/health"));
 
-    // Delayed initialization so startup spikes do not cause false pressure.
+    // 30-Millisecond Delayed Initialization
     setTimeout(() => {
       isGuardActive = true;
-      initlog("[PokeResourceGuard] is now ACTIVE after 2500ms boot delay.");
+      initlog("[PokeResourceGuard] is now ACTIVE after 30ms boot delay.");
       sampleCpuAndMemory("startup");
 
       const sampleTimer = setInterval(function () {
@@ -2252,7 +2099,7 @@ document.addEventListener("DOMContentLoaded", function() {
         "[PokeResourceGuard] loaded - EventLoop/CPU/memory optimized shedder, " +
         "EL p99 warm/stressed/critical: " + resourceConfig.system.eventLoop.warmMs + "/" + resourceConfig.system.eventLoop.stressedMs + "/" + resourceConfig.system.eventLoop.criticalMs
       );
-    }, 2500);
+    }, 30);
 
   })();
 
