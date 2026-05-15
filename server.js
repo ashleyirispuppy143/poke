@@ -402,6 +402,7 @@
 
     // Delayed initialization flag
     let isGuardActive = false;
+    let consecutiveCriticalSpikes = 0; // The strike system for false positives
 
     // Initialize Event Loop Histogram
     const eldHistogram = monitorEventLoopDelay({ resolution: 20 });
@@ -413,21 +414,23 @@
         sampleMs: 1000,
 
         eventLoop: {
-            warmMs: 150,     // Node easily hits 100ms when parsing massive YouTube JSONs.
-            stressedMs: 350,
-            criticalMs: 800
+            warmMs: 300,     // EJS and massive JSON APIs take time. Relaxing this stops false positives.
+            stressedMs: 800,
+            criticalMs: 1500
         },
 
-        warmCpuRatio: 0.95,
-        stressedCpuRatio: 1.40,
-        criticalCpuRatio: 2.00,
+        // CPU Ratios massively increased. Node libuv threadpool utilizes multiple cores. 
+        // A ratio of 3.0 means 3 cores are working, which is completely normal under load!
+        warmCpuRatio: 2.50,
+        stressedCpuRatio: 4.50,
+        criticalCpuRatio: 7.00,
 
         warmRssRatio: 0.85,
         stressedRssRatio: 0.92,
         criticalRssRatio: 0.98,
 
-        warmHeapRatio: 0.70,
-        stressedHeapRatio: 0.85,
+        warmHeapRatio: 0.75,
+        stressedHeapRatio: 0.88,
         criticalHeapRatio: 0.95
       },
 
@@ -436,26 +439,26 @@
         maxClientStates: 75000,
         cleanupMs: 60000,
 
-        absoluteRequestsPerSecond: 300,
-        absoluteRequestsPerWindow: 2000,
-        absoluteCostPerWindow: 8000,
+        absoluteRequestsPerSecond: 600, // Video chunks can hit very fast.
+        absoluteRequestsPerWindow: 4000,
+        absoluteCostPerWindow: 12000,
 
-        noisyRequestsWarm: 600,
-        noisyCostWarm: 2400,
+        noisyRequestsWarm: 800,
+        noisyCostWarm: 3000,
 
-        noisyRequestsStressed: 300,
-        noisyCostStressed: 1200,
+        noisyRequestsStressed: 400,
+        noisyCostStressed: 1800,
 
-        noisyRequestsCritical: 150,
-        noisyCostCritical: 600,
+        noisyRequestsCritical: 250,
+        noisyCostCritical: 1000,
 
-        pageSoftPassesPerWindow: 50,
+        pageSoftPassesPerWindow: 80,
 
-        maxHeavyRequestsWarm: 200,
-        maxHeavyRequestsStressed: 80,   // Increased so streaming chunked media doesn't trigger DDOS locks.
-        maxHeavyRequestsCritical: 30,
+        maxHeavyRequestsWarm: 400, // Video chunks are heavy. Users need a lot of them.
+        maxHeavyRequestsStressed: 200,   
+        maxHeavyRequestsCritical: 80,
 
-        cooldownBaseMs: 10000, // Reduced from a massive 30s to 10s base.
+        cooldownBaseMs: 8000, // Reduced base penalty
         cooldownMaxMs: 120000,
         cooldownDecayMs: 60000
       },
@@ -466,11 +469,11 @@
         page: 1,
         other: 1.5,
         background: 4,
-        heavy: 10
+        heavy: 6 // Reduced so regular chunk fetching doesn't instantly burn the limit
       },
 
       admission: {
-        retryAfterHealthyAbuseSeconds: 20,
+        retryAfterHealthyAbuseSeconds: 15,
         retryAfterWarmSeconds: 10,
         retryAfterStressedSeconds: 8,
         retryAfterCriticalSeconds: 5
@@ -580,9 +583,8 @@
       console.error("[POKE-resource] Could not load popularpaths.json:", err.message);
     }
 
-    // Save persistent data every 15 seconds AND handle array cleanup off the main request thread!
+    // Interval extended to 60s to prevent CPU spiking from sorting arrays
     setInterval(() => {
-      // Moved the anti-memory leak here so it doesn't block the hot-path and cause CPU spikes!
       if (allTimeRouteCounts.size > 5000) {
         const sorted = Array.from(allTimeRouteCounts.entries()).sort((a,b) => b[1] - a[1]);
         allTimeRouteCounts = new Map(sorted.slice(0, 4000));
@@ -596,7 +598,7 @@
       fs.writeFile(STATS_FILE_PATH, JSON.stringify(outData, null, 2), (err) => {
         if (err) console.error("[POKE-resource] Failed to save popularpaths.json:", err.message);
       });
-    }, 15000).unref();
+    }, 60000).unref();
 
     let lastSampleAt = performance.now();
     let lastCpuUsage = process.cpuUsage();
@@ -1028,7 +1030,6 @@
       const currentPerf = performance.now();
       const elapsedMs = Math.max(1, currentPerf - lastSampleAt);
 
-      // Fixed calculating CPU usage without dropping microseconds
       const newCpuUsage = process.cpuUsage();
       const cpuDelta = process.cpuUsage(lastCpuUsage);
       lastCpuUsage = newCpuUsage;
@@ -1038,7 +1039,9 @@
       const cpuUserMs = cpuDelta.user / 1000;
       const cpuSystemMs = cpuDelta.system / 1000;
       const cpuTotalMs = cpuUserMs + cpuSystemMs;
-      // Exact Node.js single-thread 100% CPU accuracy calculating actual execution vs elapsed real time
+      
+      // Node's libuv thread pool uses multiple cores for networking.
+      // So CPU Ratio CAN easily go above 1.0. This is normal.
       const cpuRatio = cpuTotalMs / elapsedMs;
 
       // Extract Event Loop Delay Metrics
@@ -1150,8 +1153,16 @@
       addPressure("rssMemory", snapshot.memory.rssRatio, cfg.warmRssRatio, cfg.stressedRssRatio, cfg.criticalRssRatio, "");
       addPressure("heapMemory", snapshot.memory.heapRatio, cfg.warmHeapRatio, cfg.stressedHeapRatio, cfg.criticalHeapRatio, "");
 
-      if (hasCritical || score >= 7) return { state: "critical", score, reasons };
-      if (score >= 4) return { state: "stressed", score, reasons };
+      // STRIKE SYSTEM: Requires 3 consecutive critical strikes to actually enter CRITICAL mode.
+      // This eliminates 1-second micro-spikes blocking your users.
+      if (hasCritical || score >= 7) {
+        consecutiveCriticalSpikes++;
+      } else {
+        consecutiveCriticalSpikes = Math.max(0, consecutiveCriticalSpikes - 1);
+      }
+
+      if (consecutiveCriticalSpikes >= 3) return { state: "critical", score, reasons };
+      if (score >= 4 || consecutiveCriticalSpikes > 0) return { state: "stressed", score, reasons };
       if (score >= 2) return { state: "warm", score, reasons };
       return { state: "healthy", score, reasons };
     }
@@ -1291,6 +1302,7 @@
           };
         }
 
+        // Changed logic: DO NOT SHED heavy video chunk requests if the state is merely 'stressed'
         if (kind === "heavy" || kind === "background") {
           const expensiveButAcceptable = !noisy && getMetric(client, "heavy", now) <= getHeavyLimit(state);
           if (expensiveButAcceptable) return { action: "allow", reason: "stressed-expensive-small-client-pass" };
@@ -1346,7 +1358,6 @@
         incrementMapCount(activeRequestCounts, key);
         incrementMapCount(currentSecondRouteCounts, key);
         incrementMapCount(allTimeRouteCounts, key);
-        // The slow sort for Anti-Memory leak has been pushed to the background task!
       }
 
       res.on("finish", function () {
@@ -1456,7 +1467,7 @@
 
     function getResourceStats() {
       return {
-        guard: "PokeResourceGuard V2",
+        guard: "PokeResourceGuard V3",
         state: resourceState,
         clients: countClientStates(),
         active_requests: {
