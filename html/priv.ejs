@@ -96,9 +96,8 @@
       z-index: 2;
       max-width: 800px;
       margin: 0 auto;
-       padding: 40px;
+      padding: 40px;
       border-radius: 24px;
- 
     }
 
     .doc-title {
@@ -187,7 +186,7 @@
     details.block p:last-child, details.block ul:last-child { margin-bottom: 0; }
     details.block p:first-of-type { margin-top: 16px; }
 
-     .update-box {
+    .update-box {
       margin: 0 0 32px 0; padding: 20px; border-radius: 16px;
       background: linear-gradient(to right, #1a0a11, #141414);
       border: 1px solid rgba(255, 171, 204, 0.3);
@@ -214,7 +213,7 @@
     }
   </style>
 </head>
-<body>
+<body id="top">
 
   <header class="site" role="banner" aria-label="Site header">
     <div class="nav-row">
@@ -237,11 +236,11 @@
     <div class="hero-content">
       <h1 class="doc-title">we don't track <em>you</em>!</h1>
       <p class="doc-lede">
-        <strong>We don't collect personal data.</strong> No trackers, no third-party analytics. Because Poke is <strong>free software</strong>, you can read the code and self-host. For transparency: this instance keeps <strong>anonymous, local-only usage counts</strong> no IPs, no cookies, no fingerprinting.
+        <strong>We don't collect personal data.</strong> No third-party trackers and no third-party analytics. Because Poke is <strong>free software</strong>, you can read the code and self-host. For transparency: this instance keeps <strong>anonymous, local-only usage counts</strong> for video stats and traffic totals. No IPs in persistent stats, no cookies for analytics, no fingerprinting.
       </p>
       <div class="meta-row" aria-label="Document metadata">
         <span class="badge">Instance: <span class="mono">poketube.fun</span></span>
-        <span class="badge">Version date: <time datetime="2026-03-23">March 23, 2026</time></span>
+        <span class="badge">Version date: <time datetime="2026-05-15">May 15, 2026</time></span>
       </div>
     </div>
   </section>
@@ -258,7 +257,8 @@
           <li><a href="#initiative-privacy">Initiative Site Privacy</a></li>
           <li><a href="#what-we-collect">What We Do/Don't Collect</a></li>
           <li><a href="#stats">How we improve Poke</a></li>
-          <li><a href="#antiddos">Anti-DDoS (PokeStopSkids)</a></li>
+          <li><a href="#health-traffic">Health &amp; Traffic Pages</a></li>
+          <li><a href="#resource-guard">Anti-DDoS PokeResourceGuard</a></li>
           <li><a href="#cookies">Cookies &amp; Storage</a></li>
           <li><a href="#openstreetmap">OpenStreetMap</a></li>
           <li><a href="#weather">Weather Pages &amp; Services</a></li>
@@ -282,13 +282,15 @@
 
       <section id="whats-new" class="update-box" aria-labelledby="whats-new-heading" role="region">
         <h3 id="whats-new-heading">
-          What's New -Policy Update
-          <span class="when">March 23, 2026</span>
+          What's New - Policy Update
+          <span class="when">May 15, 2026</span>
         </h3>
         <p style="margin-top:6px; color: #eaeaea;">Highlights:</p>
         <ul>
-          <li><strong>New section: Anti-DDoS (PokeStopSkids).</strong> We added a section explaining how Poke's DDoS protection works and what data it does and does not use. Short version: no IPs are stored, no fingerprinting, no browser detection. It only counts requests per connection in memory and forgets everything after a few seconds.</li>
-          <li><strong>Improved:</strong> Expanded the <code>/api/stats</code> section with clearer language about what the anonymous viewer ID actually is and why we think this approach is better than doing nothing at all.</li>
+          <li><strong>New section: Health &amp; Traffic Pages.</strong> We added clear privacy notes for <code>/health</code>, <code>/traffic</code>, and <code>/_pokeresource/stats</code>.</li>
+          <li><strong>New traffic transparency wording.</strong> The <code>/traffic</code> page shows anonymous route popularity and total request counts. It stores route totals, not people.</li>
+          <li><strong>Updated anti-DDoS wording.</strong> The old PokeStopSkids wording has been replaced with the newer <strong>PokeResourceGuard</strong> behavior, including event loop, CPU, memory, route pressure, and temporary client cooldowns.</li>
+          <li><strong>Clarified persistent data.</strong> PokeResourceGuard can save <code>popularpaths.json</code>, which contains anonymous route counts, tracking start time, and total request count only.</li>
         </ul>
         <div class="update-actions" aria-label="Update actions">
           <button type="button" id="dismissUpdate" aria-label="Dismiss this update notice">Dismiss</button>
@@ -298,7 +300,10 @@
       <section id="overview" aria-labelledby="preamble-heading">
         <h2 id="preamble-heading" class="section">Preamble</h2>
         <p>
-          Welcome to Poke's Privacy Policy. We don't collect personal data and we don't use trackers. Poke is <strong>free software</strong> you can read, remix, and run yourself.
+          Welcome to Poke's Privacy Policy. We don't collect personal data and we don't use third-party trackers. Poke is <strong>free software</strong> you can read, remix, and run yourself.
+        </p>
+        <p>
+          Some parts of Poke keep anonymous operational counts so we can keep the instance fast, reliable, and less fragile. These counts are designed to answer boring maintenance questions like "which routes are busy?" and "is the server under pressure?" not "who is this person?"
         </p>
         <p class="callout">Not legal advice lol</p>
       </section>
@@ -308,16 +313,18 @@
         <div>
           <ul>
             <li><strong>No personal data collected.</strong></li>
-            <li><strong>Anonymous local-only stats enabled by default.</strong> No IPs, no cookies, no fingerprinting, no third parties.</li>
+            <li><strong>Anonymous local-only video stats are enabled by default.</strong> No IPs, no cookies, no fingerprinting, no third parties.</li>
+            <li><strong>Anonymous server health and traffic stats exist.</strong> <code>/health</code> and <code>/traffic</code> show aggregate server and route totals.</li>
+            <li><strong>The <code>/traffic</code> page stores route counts, not people.</strong> The persistent traffic file contains total request count, tracking start time, and normalized route totals.</li>
             <li><strong>No third-party trackers.</strong> Yippe!!</li>
             <li><strong>YouTube can't see what you watch here.</strong> It's all done on the backend.</li>
-            <li><strong>Anti-DDoS protection does not store IP addresses.</strong> It works entirely in memory using temporary request counts that are forgotten within seconds.</li>
+            <li><strong>Anti-DDoS protection does not store raw IP addresses in persistent stats.</strong> It uses temporary in-memory client counters and anonymous salted logging when needed.</li>
           </ul>
           <br>
           <ul>
             <li><strong>Poke Account:</strong> no email required, no personal info needed.</li>
-            <li><strong>Poke Maps:</strong> uses OpenStreetMap data; map tiles/attribution may have separate privacy rules depending on the tile server you use.</li>
-            <li><strong>No required cookies.</strong> Preferences and the anonymous stats ID live in local storage on your device.</li>
+            <li><strong>Poke Maps:</strong> uses OpenStreetMap data; map tiles and attribution may have separate privacy rules depending on the tile server you use.</li>
+            <li><strong>No required analytics cookies.</strong> Preferences and the anonymous video stats ID live in local storage on your device.</li>
           </ul>
         </div>
       </section>
@@ -344,17 +351,17 @@
         <details class="block" open>
           <summary>We collect <em>no personal data</em> about you</summary>
           <p>
-            We don't store IP addresses, fingerprinting data, emails, names-none of it. There's no third-party analytics or ads.
+            We don't store personal profiles, emails, names, advertising IDs, cross-site identifiers, or fingerprinting data. There's no third-party analytics and no ads.
           </p>
         </details>
         <details class="block">
           <summary>What exists briefly so the internet works</summary>
           <p>
-            Every time you open a page, your browser and Poke's server exchange a small amount of technical data -this is simply how the web works.
+            Every time you open a page, your browser and Poke's server exchange a small amount of technical data. This is simply how the web works.
             Without this back-and-forth, pages couldn't load, images wouldn't display, and requests wouldn't reach the right place.
           </p>
           <p>
-            When your browser requests a page, the server which uses <strong>Nginx</strong> momentarily processes information such as the requested URL,
+            When your browser requests a page, the server, which uses <strong>Nginx</strong>, momentarily processes information such as the requested URL,
             the response code, and the time it took to deliver the page. These details may appear in access logs briefly for operational health and security.
             On Poke's primary instance, these logs are kept for the shortest technically feasible duration and are not linked to any personal data.
           </p>
@@ -409,7 +416,7 @@
   </p>
 
   <p>
-    We think this is way better than using something like Google Analytics or Plausible
+    We think this is way better than using something like Google Analytics, Plausible,
     or any third-party service. Those tools collect more than we'd ever want,
     they send data off to someone else's servers, and they cost money or attention
     that could go toward making Poke better. Our system stays local, stays anonymous,
@@ -476,7 +483,7 @@
     <li><strong>What we do <em>not</em> collect:</strong>
       <ul>
         <li>No IP addresses</li>
-        <li>No cookies</li>
+        <li>No cookies for analytics</li>
         <li>No login or account data</li>
         <li>No personal information of any kind</li>
         <li>No full user-agent strings</li>
@@ -497,8 +504,8 @@
     <li><strong>Public API:</strong>
       <ul>
         <li><code>/api/stats</code> returns aggregate numbers only (browser totals, OS totals, popular video IDs)</li>
+        <li><code>/api/stats?view=gui</code> displays those anonymous aggregate numbers in a friendlier visual page</li>
         <li>Individual anonymous viewer IDs are never exposed</li>
-        <li>The stats page <code>/api/stats?view=human</code> just visualizes the same aggregates</li>
       </ul>
     </li>
   </ul>
@@ -623,7 +630,7 @@
     If you'd rather not contribute even these anonymous counts, you can opt out any time at
     <a href="/api/stats/optout">/api/stats/optout</a>.
     That stores a simple opt-out flag in your browser's <code>localStorage</code>, and
-    Poke will stop sending stats from that browser entirely.
+    Poke will stop sending video stats from that browser entirely.
   </p>
 
   <p>
@@ -642,118 +649,257 @@
   </p>
 </section>
 
-<section id="antiddos" aria-labelledby="antiddos-heading">
-  <h2 id="antiddos-heading" class="section">Anti-DDoS Protection <code>PokeStopSkids</code></h2>
+<section id="health-traffic" aria-labelledby="health-traffic-heading">
+  <h2 id="health-traffic-heading" class="section">Server Health &amp; Traffic Pages <code>/health</code> and <code>/traffic</code></h2>
 
   <p>
-    Poke has a built-in DDoS and botnet protection system called <strong>PokeStopSkids</strong>.
-    It protects the server from getting flooded with requests by script kiddies, botnets,
-    or anyone else trying to take the service down. If you're a person browsing Poke normally,
-    this system is completely invisible to you and you'll never trigger it.
+    Poke includes public status pages so people can see how the instance is doing.
+    These pages are meant to be transparent and useful, not invasive.
+    They show aggregate server health and route popularity, not personal activity.
+  </p>
+
+  <h3><code>/health</code></h3>
+
+  <p>
+    The <code>/health</code> page shows the current state of PokeResourceGuard.
+    It displays live server vitals such as the current health state, process delay,
+    CPU usage, memory usage, request rate, pressure score, active visitor counters,
+    and noisy-client cooldown counts.
   </p>
 
   <p>
-    We want to be upfront about how this works because we're a privacy project and
-    we think you should know exactly what happens when you visit Poke.
-  </p>
-
-  <h3>What PokeStopSkids does</h3>
-
-  <p>
-    The system counts how many requests are coming from each connection in a short
-    time window. If a single source sends 50+ requests in one second, or 200+ requests
-    in 10 seconds, it gets temporarily blocked. The <code>/watch</code> endpoint (the
-    video page) has tighter limits because it's the heaviest part of the server.
+    With JavaScript enabled, the page fetches <code>/_pokeresource/stats</code>
+    once per second so the numbers update live. With JavaScript disabled, the page
+    still works as a server-rendered snapshot. You can refresh the page to update it.
   </p>
 
   <p>
-    It also checks request timing patterns. Humans click at random, messy intervals.
-    Scripts fire at very consistent, robotic intervals. If the time gaps between your
-    requests have almost zero variance and you're going fast, the system flags that
-    as automated traffic. This catches smarter bots that try to stay just under
-    the volume limits.
+    The <code>/health</code> page itself is ignored by the route popularity tracker,
+    so loading the health page does not inflate the all-time traffic route list.
+  </p>
+
+  <h3><code>/traffic</code></h3>
+
+  <p>
+    The <code>/traffic</code> page shows anonymous traffic totals. It includes the
+    total global request count, the date that counting started, and the most popular
+    normalized routes on the instance.
   </p>
 
   <p>
-    If the entire server is getting hammered (2000+ requests per second globally),
-    the system enters "siege mode" and gets stricter with everyone temporarily until
-    the attack passes.
+    These route counts are intentionally broad. Dynamic paths are normalized where
+    possible, so long IDs, object IDs, UUIDs, and similar path fragments are folded
+    into generic labels. This keeps the route list readable and avoids turning it
+    into a list of overly specific URLs.
   </p>
 
-  <h3>What PokeStopSkids does NOT do</h3>
+  <p>
+    With JavaScript enabled, <code>/traffic</code> also fetches
+    <code>/_pokeresource/stats</code> once per second so totals update live. With
+    JavaScript disabled, it shows a static server-rendered snapshot.
+  </p>
 
   <p>
-    This is the important part:
+    The <code>/traffic</code> page itself is ignored by the route popularity tracker,
+    so visiting the traffic page does not make <code>/traffic</code> more popular
+    in its own chart.
+  </p>
+
+  <h3>What gets saved for traffic stats</h3>
+
+  <p>
+    PokeResourceGuard may save a local file called <code>popularpaths.json</code>.
+    This file is stored on the server and contains:
   </p>
 
   <ul>
-    <li><strong>No IP addresses are stored.</strong> The system works with temporary counters
-    in server memory that are tied to the current connection. These counters are automatically
-    deleted after a few seconds of inactivity. Nothing is written to disk. Nothing is logged
-    to a file. When the counters expire or the server restarts, everything is gone.</li>
-
-    <li><strong>No fingerprinting.</strong> The system does not look at your user agent,
-    your cookies, your screen size, your language headers, whether you have JavaScript
-    enabled, or any other browser characteristic. It literally cannot tell the difference
-    between Firefox and Chrome and it doesn't try to.</li>
-
-    <li><strong>No browser detection.</strong> Empty user agents are fine. Weird user agents
-    are fine. Tor Browser is fine. VPNs are fine. Brave, LibreWolf, curl, wget, lynx,
-    whatever you want to use. The system doesn't care what browser you're running.</li>
-
-    <li><strong>No persistent records.</strong> There is no database of "who got blocked" or
-    "which IPs visited." The temporary counters exist only in RAM and only for as long as
-    there's active traffic from that connection. Once traffic stops, the entry is cleaned
-    up within 60 seconds at most.</li>
-
-    <li><strong>No cross-request tracking.</strong> The system doesn't try to correlate your
-    visit today with your visit yesterday. Each time you show up, you're a fresh counter
-    that starts at zero.</li>
+    <li><strong><code>trackingStartTime</code>:</strong> when route counting began</li>
+    <li><strong><code>totalRequests</code>:</strong> total counted requests</li>
+    <li><strong><code>routes</code>:</strong> anonymous route names and their total counts</li>
   </ul>
 
-  <h3>What about shared IPs and NAT?</h3>
-
   <p>
-    If you're behind a shared IP (like a university, a corporate network, or a VPN exit node),
-    the rate limits are high enough that normal usage from many people sharing one IP won't
-    trigger anything. 50 requests per second from one IP is genuinely a lot. That's more
-    than a classroom full of people all clicking at the same time. Normal browsing generates
-    maybe 2-5 requests per page load, and people don't load pages every second.
+    This file does <strong>not</strong> contain IP addresses, cookies, user accounts,
+    full user-agent strings, headers, browser fingerprints, or personal information.
+    It is just aggregate route popularity.
   </p>
 
-  <h3>What about crawlers and bots?</h3>
+  <h3>What is ignored by the traffic counter</h3>
 
   <p>
-    Search engines, social media link preview bots, fediverse servers, feed readers, and
-    uptime monitors are all whitelisted. We match these by user agent purely to <em>exempt</em>
-    them from rate limiting, never to penalize based on user agent. The full list includes:
+    Some routes are deliberately excluded so the traffic stats stay useful and less noisy.
+    The guard ignores routes such as:
   </p>
+
   <ul>
-    <li>Search engines (Google, Bing, DuckDuckGo, Yandex, Baidu, Apple, Qwant, Mojeek, and others)</li>
-    <li>Social/link previews (Discord, Telegram, Twitter, WhatsApp, Slack, LinkedIn)</li>
-    <li>Fediverse (Mastodon, Pleroma, Misskey, Akkoma, Lemmy, Kbin, Pixelfed, GoToSocial)</li>
-    <li>Feed readers (Feedly, NewsBlur, Tiny Tiny RSS, Miniflux)</li>
-    <li>Uptime monitors (UptimeRobot, Pingdom, StatusCake, HetrixTools)</li>
-    <li>CDN/infrastructure (Cloudflare, CloudFront, Fastly)</li>
-    <li>Archive (Internet Archive, archive.org bot)</li>
+    <li><code>/health</code></li>
+    <li><code>/traffic</code></li>
+    <li><code>/avatars</code> and <code>/avatars/...</code></li>
+    <li><code>/static/...</code></li>
+    <li><code>/css/...</code></li>
+    <li><code>/api/nexus</code></li>
+    <li><code>/api/stats</code></li>
   </ul>
 
   <p>
-    Requests arriving directly from Cloudflare's IP ranges are also exempt since Cloudflare
-    already does its own DDoS filtering before traffic reaches us.
+    Status endpoints such as <code>/_pokeresource/stats</code>,
+    <code>/_poketraffic/stats</code>, <code>/_pokestopskids/stats</code>,
+    <code>/_pokeoverload/stats</code>, <code>/robots.txt</code>, and
+    <code>/favicon.ico</code> are treated as status-style requests and are not
+    added to persistent route popularity totals.
+  </p>
+
+  <h3>How this differs from <code>/api/stats</code></h3>
+
+  <p>
+    <code>/api/stats</code> is the anonymous video stats system.
+    <code>/health</code> and <code>/traffic</code> are server health and route
+    popularity views. They are separate systems with separate goals.
+  </p>
+
+  <p>
+    <code>/api/stats?view=gui</code> shows anonymous video stats in a GUI.
+    <code>/traffic</code> shows anonymous route traffic totals.
+    Both are aggregate-only and both are designed to avoid personal data.
+  </p>
+</section>
+
+<section id="resource-guard" aria-labelledby="resource-guard-heading">
+  <h2 id="resource-guard-heading" class="section">Anti-DDoS Protection <code>PokeResourceGuard</code></h2>
+
+  <p>
+    Poke has a built-in resource protection system called <strong>PokeResourceGuard</strong>.
+    It protects the server from request floods, overloaded routes, noisy clients, and sudden
+    spikes that could make the instance slow for everyone.
+  </p>
+
+  <p>
+    Older public endpoint names may still mention <strong>PokeStopSkids</strong> for compatibility,
+    but the newer system is PokeResourceGuard. It watches server pressure and decides when to
+    gently shed expensive requests so normal browsing and video watching can keep working.
+  </p>
+
+  <h3>What PokeResourceGuard watches</h3>
+
+  <p>
+    PokeResourceGuard samples server health about once per second. It checks:
+  </p>
+
+  <ul>
+    <li>Node.js event loop delay</li>
+    <li>CPU usage</li>
+    <li>memory usage</li>
+    <li>requests per second</li>
+    <li>active request counts</li>
+    <li>request kinds, such as status, static, page, background, heavy, or other</li>
+    <li>temporary per-client request pressure</li>
+  </ul>
+
+  <p>
+    The guard uses those signals to classify the server as <code>healthy</code>,
+    <code>warm</code>, <code>stressed</code>, or <code>critical</code>. When the server
+    is healthy, requests pass normally. When it is under pressure, the guard may slow down
+    or reject expensive requests before the whole instance becomes unusable.
+  </p>
+
+  <h3>Temporary in-memory client counters</h3>
+
+  <p>
+    To stop abuse, PokeResourceGuard keeps temporary client counters in memory.
+    These counters are used for sliding-window request totals, request cost totals,
+    heavy request totals, soft page passes, rejects, and cooldowns.
+  </p>
+
+  <p>
+    This means the server can temporarily tell whether a connection is making too many
+    expensive requests. That is necessary for abuse prevention. The important privacy
+    part is that these client counters are in memory, expire, and are not part of the
+    persistent traffic file.
+  </p>
+
+  <p>
+    Client state is cleaned up after inactivity, and cooldown levels decay over time.
+    When the server restarts, the in-memory client counters disappear.
+  </p>
+
+  <h3>What PokeResourceGuard does not save persistently</h3>
+
+  <ul>
+    <li>No raw IP addresses are stored in <code>popularpaths.json</code></li>
+    <li>No cookies are stored by the guard for route traffic stats</li>
+    <li>No browser fingerprints are created</li>
+    <li>No account identifiers are used</li>
+    <li>No full user-agent strings are saved in the traffic file</li>
+    <li>No per-person browsing profile is created</li>
+    <li>No cross-site tracking happens</li>
+  </ul>
+
+  <h3>Logging during abuse or rejection</h3>
+
+  <p>
+    If the guard rejects a request or applies a cooldown, it may print a server-side
+    operational log entry. These logs are meant for debugging abuse and overload.
+    They use a random boot-time salt to anonymize the client address into a short
+    value like <code>anon-xxxxxxxx</code>. The salt is generated when the server starts,
+    so the anonymized value is not a stable long-term identity.
+  </p>
+
+  <p>
+    Rejection logs may include aggregate counters such as recent request totals,
+    heavy request totals, reject counts, cost score, pressure score, current guard
+    state, CPU state, memory state, and event loop state. They are not meant to
+    identify a person.
+  </p>
+
+  <h3>Known bots and infrastructure</h3>
+
+  <p>
+    PokeResourceGuard recognizes some well-known bot and infrastructure user agents.
+    This can reduce request cost or avoid punishing useful automated traffic such as
+    search engines, feed readers, fediverse previews, link preview bots, uptime monitors,
+    and CDN infrastructure.
+  </p>
+
+  <p>
+    This is not used to build a personal fingerprint. It is a broad operational rule
+    so that a search crawler and a normal browser do not always get treated exactly
+    the same during server pressure.
+  </p>
+
+  <h3>Cloudflare and proxy awareness</h3>
+
+  <p>
+    Poke includes trust-proxy auto-configuration so it can work correctly behind
+    common deployment platforms and proxies. It may look at proxy-related headers
+    such as <code>x-forwarded-for</code>, <code>x-forwarded-proto</code>,
+    <code>x-real-ip</code>, <code>cf-ray</code>, and similar headers when deciding
+    whether the instance is behind a trusted proxy.
+  </p>
+
+  <p>
+    This is used for correct routing, HTTPS handling, and safe request handling.
+    It is not a third-party analytics system and it is not used to create personal
+    profiles.
   </p>
 
   <h3>Live stats and source code</h3>
 
   <p>
-    You can see the current state of the anti-DDoS system at
-    <a href="/_antiddos">/_antiddos</a>, including how many IPs are being tracked,
-    how many are currently blocked, and whether siege mode is active.
-    The JSON API is at <a href="/_pokestopskids/stats">/_pokestopskids/stats</a>.
+    You can see the current state of the resource guard at
+    <a href="/health">/health</a>. The traffic view is at
+    <a href="/traffic">/traffic</a>. Raw JSON is available at
+    <a href="/_pokeresource/stats">/_pokeresource/stats</a>.
   </p>
 
   <p>
-    The full implementation of PokeStopSkids is in the source code:
+    Compatibility endpoints may also exist:
+    <a href="/_poketraffic/stats">/_poketraffic/stats</a>,
+    <a href="/_pokestopskids/stats">/_pokestopskids/stats</a>, and
+    <a href="/_pokeoverload/stats">/_pokeoverload/stats</a>.
+  </p>
+
+  <p>
+    The full implementation is in the source code:
     <br>
     <code>
       <a href="https://codeberg.org/ashleyirispuppy/poke">
@@ -763,8 +909,8 @@
   </p>
 
   <p>
-    Anyone can read exactly how it works, verify that no IPs are stored, and
-    run their own instance with the same protection.
+    Anyone can read exactly how it works, verify what data is stored, and run their
+    own instance with their own settings.
   </p>
 </section>
 
@@ -777,8 +923,13 @@
       legitimate traffic and reduce automated abuse.
     </li>
     <li>
-      <strong>Local storage:</strong> used to save preferences such as theme and layout, and to store
-      a single <em>anonymous</em> random viewer ID used by <code>/api/stats</code>.
+      <strong>Local storage:</strong> used to save preferences such as theme and layout, to store
+      a single <em>anonymous</em> random viewer ID used by <code>/api/stats</code>, and to store
+      simple page preferences such as whether you've dismissed this policy update notice.
+    </li>
+    <li>
+      <strong><code>/health</code> and <code>/traffic</code>:</strong> these pages do not need cookies
+      or localStorage for their live stats. They fetch public aggregate JSON when JavaScript is enabled.
     </li>
   </ul>
   <p class="small">
@@ -795,14 +946,14 @@
       <section id="openstreetmap" aria-labelledby="osm-heading">
         <h2 id="osm-heading" class="section">OpenStreetMap</h2>
         <p>
-          Poke Maps uses data from <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener">OpenStreetMap</a> -a community-driven, free-licensed world map built by thousands of volunteer contributors.
+          Poke Maps uses data from <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener">OpenStreetMap</a>, a community-driven, free-licensed world map built by thousands of volunteer contributors.
         </p>
         <p>
           When you visit <a href="/map">/map</a>, Poke displays OpenStreetMap through a simple <strong>&lt;iframe&gt;</strong> element embedded directly into the site.
           This means the map interface and tiles are loaded from OpenStreetMap's tile servers rather than from Poke's infrastructure.
         </p>
         <p>
-          Poke does not proxy or modify these map requests -your browser connects directly to <strong>openstreetmap.org</strong> and its associated tile servers.
+          Poke does not proxy or modify these map requests. Your browser connects directly to <strong>openstreetmap.org</strong> and its associated tile servers.
           While Poke itself does not collect or log identifying information about your visit to the map, OpenStreetMap servers may process standard connection details for delivery.
           See the <a href="https://wiki.osmfoundation.org/wiki/Privacy_Policy" target="_blank" rel="noopener">OpenStreetMap Foundation Privacy Policy</a>.
         </p>
@@ -821,7 +972,7 @@
           </p>
           <p><strong>How it works:</strong></p>
           <ul>
-            <li>The request is proxied through Poke's backend -never directly from your browser.</li>
+            <li>The request is proxied through Poke's backend, never directly from your browser.</li>
           </ul>
         </details>
         <details class="block">
@@ -846,7 +997,7 @@
           <code>from</code> source language, <code>to</code> target language, and <code>text</code> the content you entered.
         </p>
         <p>
-          We rely on the community-run <a href="https://simplytranslate.org/" rel="noopener" target="_blank">SimplyTranslate</a> service a privacy-friendly translation front-end.
+          We rely on the community-run <a href="https://simplytranslate.org/" rel="noopener" target="_blank">SimplyTranslate</a> service, a privacy-friendly translation front-end.
           SimplyTranslate is a <strong>free software</strong> project: you can see the
           <a href="https://codeberg.org/ManeraKai/simplytranslate" rel="noopener" target="_blank">source code</a> and its
           <a href="https://codeberg.org/ManeraKai/simplytranslate/raw/branch/main/legal_notice.txt" rel="noopener" target="_blank">legal notice</a>.
@@ -858,12 +1009,12 @@
       <section id="api-logs" aria-labelledby="api-logs-heading">
         <h2 id="api-logs-heading" class="section">API Logs Policy</h2>
         <p>
-          When you request any resource from the Poke API for example: thumbnails, API endpoint information about the request may be logged for operational health.
+          When you request any resource from the Poke API, for example thumbnails or API endpoints, information about the request may be logged for operational health.
         </p>
         <details class="block">
           <summary>Information logged per request</summary>
           <p>
-            The information recorded for each API or resource request is <strong>strictly limited</strong> to the following items -and nothing else:
+            The information recorded for each API or resource request is <strong>strictly limited</strong> to the following items, and nothing else:
           </p>
           <ul>
             <li>the time the request was made</li>
@@ -875,6 +1026,7 @@
           <p>
             <strong>No identifying information is logged</strong> in API logs, such as the visitor's cookie or IP address.
             The <code>/api/stats</code> feature is separate and only stores anonymous aggregates listed above.
+            The <code>/health</code> and <code>/traffic</code> pages are also separate and only expose aggregate server and route counts.
           </p>
         </details>
         <details class="block">
@@ -899,10 +1051,10 @@
           <li><strong>Legitimate interest:</strong> Operating the Poke service safely and efficiently while collecting no personal data.</li>
           <li><strong>Consent:</strong> If one day we add an optional feature that needs personal information, you'll be clearly asked before it's processed.</li>
           <li><strong>Legal obligation:</strong> Even if an authority asks for user data, there's no personal data to hand over.
-          We don't store IPs, cookies, or identities.</li>
+          We don't store personal identities, account emails, or personal profiles.</li>
         </ul>
         <p>
-          This section is here for compliance transparency only -Poke simply doesn't process or retain personal data in the first place.
+          This section is here for compliance transparency only. Poke simply doesn't process or retain personal data in the first place.
         </p>
       </section>
 
@@ -910,23 +1062,23 @@
         <h2 id="rights-heading" class="section">Your Privacy Rights</h2>
         <p>
           Because Poke doesn't collect or store personal info, there's really nothing about you that we can give, sell, or lose.
-          You won't need to ask for "export my data" or "delete my profile" -we just don't have any of it.
+          You won't need to ask for "export my data" or "delete my profile" because we just don't have any of it.
         </p>
         <p>
-          Poke accounts don't require your name, email, or any identifying detail -you literally can't add them even if you tried.
+          Poke accounts don't require your name, email, or any identifying detail. You literally can't add them even if you tried.
         </p>
         <p>
           But outside Poke, you <em>do</em> have rights and tools to protect your privacy. Here are a few ideas:
         </p>
         <ul>
-          <li>Use a privacy-respecting search engine -e.g. <a href="https://duckduckgo.com/" target="_blank" rel="noopener">DuckDuckGo</a>.</li>
+          <li>Use a privacy-respecting search engine, e.g. <a href="https://duckduckgo.com/" target="_blank" rel="noopener">DuckDuckGo</a>.</li>
           <li>Run browser extensions that block trackers, fingerprinting, and sketchy scripts.</li>
           <li>Use HTTPS whenever possible, avoid sketchy public Wi-Fi, and keep your OS/browser updated.</li>
           <li>Check device permissions camera, mic, location and revoke ones you don't use.</li>
-          <li>Use a VPN on public or untrusted networks -try <a href="https://mullvad.net/" target="_blank" rel="noopener"><strong>Mullvad VPN</strong></a>.</li>
+          <li>Use a VPN on public or untrusted networks. Try <a href="https://mullvad.net/" target="_blank" rel="noopener"><strong>Mullvad VPN</strong></a>.</li>
           <li>Use a content blocker like <a href="https://ublockorigin.com/" target="_blank" rel="noopener"><strong>uBlock Origin</strong></a>.</li>
           <li>Try <a href="https://privacybadger.org/" target="_blank" rel="noopener"><strong>Privacy Badger</strong></a> EFF.</li>
-          <li>Use browsers built around privacy -<a href="https://www.mozilla.org/firefox/new/" target="_blank" rel="noopener"><strong>Firefox</strong></a> and forks,
+          <li>Use browsers built around privacy, such as <a href="https://www.mozilla.org/firefox/new/" target="_blank" rel="noopener"><strong>Firefox</strong></a> and forks,
             or <a href="https://www.mozilla.org/firefox/focus/" target="_blank" rel="noopener"><strong>Firefox Focus</strong></a> for mobile.</li>
           <li>Explore privacy tool directories like <a href="https://www.privacytools.io/" target="_blank" rel="noopener"><strong>PrivacyTools.io</strong></a>.</li>
         </ul>
@@ -936,15 +1088,23 @@
         <h2 id="retention-heading" class="section">Data Retention</h2>
         <ul>
           <li><strong>Server logs:</strong> minimal operational logs no personal data kept for the shortest technically feasible duration.</li>
-          <li><strong>Anonymous usage stats:</strong> counts are stored locally on this server; admins may reset or disable at any time.</li>
-          <li><strong>Anti-DDoS (PokeStopSkids):</strong> temporary request counters exist only in server memory (RAM). They are automatically cleaned up within 60 seconds of inactivity and are completely gone on server restart. Nothing is saved to disk.</li>
+          <li><strong>Anonymous video usage stats:</strong> counts are stored locally on this server; admins may reset or disable at any time.</li>
+          <li><strong>Health stats:</strong> live server health data is generated from current process state and temporary in-memory counters.</li>
+          <li><strong>Traffic route stats:</strong> anonymous aggregate route totals may be stored in <code>popularpaths.json</code>. This file contains route counts, total request count, and tracking start time only.</li>
+          <li><strong>PokeResourceGuard client counters:</strong> temporary request counters exist in server memory (RAM), are cleaned up after inactivity, and disappear on server restart.</li>
+          <li><strong>PokeResourceGuard rejection logs:</strong> may contain short salted anonymous labels and aggregate pressure information for operational debugging, not raw personal profiles.</li>
         </ul>
       </section>
 
       <section id="javascript" aria-labelledby="javascript-heading">
         <h2 id="javascript-heading" class="section">JavaScript &amp; No-JS</h2>
         <p>
-          JavaScript is <strong>optional</strong> on Poke's websites. Core features -including search -work without JavaScript.
+          JavaScript is <strong>optional</strong> on Poke's websites. Core features, including search, work without JavaScript.
+        </p>
+        <p>
+          The <code>/health</code> and <code>/traffic</code> pages are also usable without JavaScript.
+          Without JavaScript, they show a static server-rendered snapshot. With JavaScript, they fetch
+          <code>/_pokeresource/stats</code> every second to update public aggregate numbers.
         </p>
       </section>
 
@@ -953,6 +1113,9 @@
         <p>
           Poke is free software under the <strong>GNU GPL v3.0 or later</strong>. You can self-host it yourself!
           <a href="https://codeberg.org/ashleyirispuppy/poke/#hosting-poke">See here</a>.
+        </p>
+        <p>
+          Instance operators can inspect the telemetry and resource guard code, change settings, reset route totals, disable anonymous video stats, or run their own instance with different retention choices.
         </p>
       </section>
 
@@ -1006,7 +1169,7 @@
     !function(){
       const updateBox = document.getElementById('whats-new');
       const dismissBtn = document.getElementById('dismissUpdate');
-      const KEY = 'poke_privacy_update_2026_03_23_dismissed';
+      const KEY = 'poke_privacy_update_2026_05_15_dismissed';
       try{
         if(localStorage.getItem(KEY)==='1'){ updateBox && (updateBox.hidden = true); }
       }catch{}
