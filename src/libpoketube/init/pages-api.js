@@ -307,6 +307,13 @@ app.get("/api/getEngagementData", async (req, res) => {
   const { fetch } = await import("undici");
   const id = req.query.v;
   const view = req.query.view;
+  let videoTitle = "Unknown Title";
+
+  if (req.query.t) {
+    try {
+      videoTitle = Buffer.from(req.query.t, "base64").toString("utf-8");
+    } catch (e) {}
+  }
 
   try {
     if (id) {
@@ -323,6 +330,7 @@ app.get("/api/getEngagementData", async (req, res) => {
       const engagement = await response.json();
       const likes = parseInt(engagement.likes) || 0;
       const dislikes = parseInt(engagement.dislikes) || 0;
+      const views = parseInt(engagement.viewCount) || 0;
       const total = likes + dislikes;
       const likePercentage = total > 0 ? ((likes / total) * 100).toFixed(2) : 0;
       const dislikePercentage = total > 0 ? ((dislikes / total) * 100).toFixed(2) : 0;
@@ -367,6 +375,8 @@ app.get("/api/getEngagementData", async (req, res) => {
         "red";
         
       const respon = {
+        title: videoTitle,
+        view_count: views,
         like_count: likes,
         dislike_count: dislikes,
         YouTube_rating: engagement.rating,
@@ -411,6 +421,7 @@ app.get("/api/getEngagementData", async (req, res) => {
                 align-items: center; 
                 min-height: 100vh; 
                 margin: 0; 
+                font-variation-settings: "wdth" 110, "wght" 400;
               }
               .card { 
                 background-color: #0f0f0f; 
@@ -425,7 +436,21 @@ app.get("/api/getEngagementData", async (req, res) => {
                 aspect-ratio: 16/9;
                 object-fit: cover;
                 border-radius: 12px;
+                margin-bottom: 16px;
+              }
+              .video-title {
+                font-size: 1.3rem;
+                font-weight: 700;
+                margin: 0 0 8px 0;
+                font-variation-settings: "wdth" 130, "wght" 800;
+                line-height: 1.3;
+                word-wrap: break-word;
+              }
+              .video-views {
+                font-size: 0.95rem;
+                color: #aaaaaa;
                 margin-bottom: 20px;
+                font-variation-settings: "wdth" 115, "wght" 500;
               }
               h2 { 
                 margin-top: 0; 
@@ -433,6 +458,7 @@ app.get("/api/getEngagementData", async (req, res) => {
                 font-weight: 600; 
                 margin-bottom: 20px;
                 text-align: center;
+                font-variation-settings: "wdth" 125, "wght" 700;
               }
               .pill { 
                 display: flex; 
@@ -443,8 +469,9 @@ app.get("/api/getEngagementData", async (req, res) => {
                 height: 36px; 
                 width: max-content; 
                 margin: 0 auto 16px auto;
+                font-variation-settings: "wdth" 120, "wght" 600;
               }
-              .pill-section { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; }
+              .pill-section { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
               .divider { width: 1px; height: 24px; background-color: #3f3f3f; margin: 0 12px; }
               .ratio-bar { 
                 width: 100%; 
@@ -457,9 +484,26 @@ app.get("/api/getEngagementData", async (req, res) => {
               }
               .ratio-like { width: ${likePercentage}%; background-color: #2ba640; height: 100%; border-radius: 3px; }
               .reception { background: #272727; padding: 16px; border-radius: 12px; margin-bottom: 20px;}
-              .reception-title { font-size: 12px; color: #aaaaaa; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
-              .score-label { font-size: 20px; font-weight: bold; margin-bottom: 4px; }
-              .score-number { font-size: 14px; color: #aaaaaa; margin-bottom: 12px; }
+              .reception-title { 
+                font-size: 12px; 
+                color: #aaaaaa; 
+                text-transform: uppercase; 
+                letter-spacing: 0.5px; 
+                margin-bottom: 8px; 
+                font-variation-settings: "wdth" 120, "wght" 600;
+              }
+              .score-label { 
+                font-size: 20px; 
+                font-weight: bold; 
+                margin-bottom: 4px; 
+                font-variation-settings: "wdth" 125, "wght" 800;
+              }
+              .score-number { 
+                font-size: 14px; 
+                color: #aaaaaa; 
+                margin-bottom: 12px; 
+                font-variation-settings: "wdth" 110, "wght" 500;
+              }
               
               .star-container {
                 display: flex;
@@ -492,6 +536,7 @@ app.get("/api/getEngagementData", async (req, res) => {
                 font-size: 14px;
                 font-weight: bold;
                 color: #f1f1f1;
+                font-variation-settings: "wdth" 120, "wght" 700;
               }
 
               .green { color: #2ba640; }
@@ -505,14 +550,18 @@ app.get("/api/getEngagementData", async (req, res) => {
                   background-size: 200% 100%;
               }
               @keyframes rainbow-anim { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
-              details { font-size: 12px; color: #aaa; background: #181818; padding: 12px; border-radius: 8px; border: 1px solid #3d3d3d; }
-              summary { cursor: pointer; user-select: none; font-weight: 500; outline: none; }
-              pre { overflow-x: auto; color: #e1e1e1; margin-top: 10px; font-family: monospace; }
+              details { font-size: 12px; color: #aaa; background: #181818; padding: 12px; border-radius: 8px; border: 1px solid #3d3d3d; font-variation-settings: "wdth" 100, "wght" 400;}
+              summary { cursor: pointer; user-select: none; font-weight: 600; outline: none; font-variation-settings: "wdth" 115, "wght" 600; }
+              pre { overflow-x: auto; color: #e1e1e1; margin-top: 10px; font-family: monospace; font-variation-settings: normal;}
             </style>
           </head>
           <body>
             <div class="card">
               <img src="https://i.ytimg.com/vi/${id}/hqdefault.jpg" onerror="this.src='https://i.ytimg.com/vi/${id}/default.jpg'" class="thumbnail" alt="Video Thumbnail" />
+              
+              ${req.query.t ? `<h1 class="video-title">${videoTitle}</h1>` : ''}
+              <div class="video-views">${views.toLocaleString()} views</div>
+
               <h2>📊 Engagement Stats</h2>
               
               <div class="pill">
@@ -560,7 +609,7 @@ app.get("/api/getEngagementData", async (req, res) => {
   } catch (error) {
     res.status(500).json("whoops (error 500) >~<");
   }
-});
+}); 
   
 app.get("/feeds/videos.xml", async (req, res) => {
   const channelId = req.query.channel_id;
