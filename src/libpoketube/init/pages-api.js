@@ -302,98 +302,210 @@ app.get("/api/getYoutubeUrl", async function (req, res) {
       res.status(500).json({ error: "Proxy error" });
     }
   });
-app.get("/api/getEngagementData", async (req, res) => {
-    const { fetch } = await import("undici");
+  
+ app.get("/api/getEngagementData", async (req, res) => {
+  const { fetch } = await import("undici");
+  const id = req.query.v;
+  const view = req.query.view;  
 
-    const id = req.query.v;
-
-    try {
-      if (id) {
-        const apiUrl = `https://ryd-proxy.kavin.rocks/votes/${id}&hash=d0550b6e28c8f93533a569c314d5b4e2`;
-
-        const response = await fetch(apiUrl, {
-          headers: headers,
-        });
-
-        if (response.status === 400) {
-          const error = await response.json();
-          return res.status(400).send(error);
-        }
-
-        const engagement = await response.json();
-
-        const likes = parseInt(engagement.likes) || 0;
-        const dislikes = parseInt(engagement.dislikes) || 0;
-        const total = likes + dislikes;
-
-        const likePercentage = total > 0 ? ((likes / total) * 100).toFixed(2) : 0;
-        const dislikePercentage = total > 0 ? ((dislikes / total) * 100).toFixed(2) : 0;
-
-        const getLikePercentageColor = (percentage) => {
-          if (percentage >= 80) return "green";
-          else if (percentage >= 50) return "orange";
-          else return "red";
-        };
-
-        const getDislikePercentageColor = (percentage) => {
-          if (percentage >= 50) return "red";
-          else if (percentage >= 20) return "orange";
-          else return "green";
-        };
-
-        const likeColor = getLikePercentageColor(likePercentage);
-        const dislikeColor = getDislikePercentageColor(dislikePercentage);
-
-        const userScore = (
-          parseFloat(likePercentage) -
-          parseFloat(dislikePercentage) / 2
-        ).toFixed(2);
-
-        const getUserScoreLabel = (score) => {
-          if (score >= 98) return "Masterpiece";
-          else if (score >= 80) return "Overwhelmingly Positive";
-          else if (score >= 60) return "Positive";
-          else if (score >= 40) return "Mixed";
-          else if (score >= 20) return "Negative";
-          else return "Overwhelmingly Negative";
-        };
-
-        const userScoreLabel = getUserScoreLabel(userScore);
-        
-        const userScoreColor =
-          userScore >= 98 ? "rainbow" :
-          userScore >= 80 ? "green" :
-          userScore >= 50 ? "orange" :
-          "red";
-
-        const respon = {
-          like_count: likes,
-          dislike_count: dislikes,
-          YouTube_rating: engagement.rating,
-          user_ReceptionScore: {
-            label: userScoreLabel,
-            score: userScore,
-            color: userScoreColor,
-          },
-          display: {
-            likeColor: likeColor,
-            dislikeColor: dislikeColor,
-            percentage: {
-              likePercentage: `${likePercentage}%`,
-              dislikePercentage: `${dislikePercentage}%`,
-            },
-          },
-          raw_stats: engagement,
-        };
-
-        res.send(respon);
-      } else {
-        res.status(400).json("pls gib ID :3");
+  try {
+    if (id) {
+      const apiUrl = `https://ryd-proxy.kavin.rocks/votes/${id}&hash=d0550b6e28c8f93533a569c314d5b4e2`;
+      const response = await fetch(apiUrl, {
+        headers: headers,  
+      });
+      
+      if (response.status === 400) {
+        const error = await response.json();
+        return res.status(400).send(error);
       }
-    } catch (error) {
-      res.status(500).json("whoops (error 500) >~<");
+      
+      const engagement = await response.json();
+      const likes = parseInt(engagement.likes) || 0;
+      const dislikes = parseInt(engagement.dislikes) || 0;
+      const total = likes + dislikes;
+      const likePercentage = total > 0 ? ((likes / total) * 100).toFixed(2) : 0;
+      const dislikePercentage = total > 0 ? ((dislikes / total) * 100).toFixed(2) : 0;
+      
+      const getLikePercentageColor = (percentage) => {
+        if (percentage >= 80) return "green";
+        else if (percentage >= 50) return "orange";
+        else return "red";
+      };
+      
+      const getDislikePercentageColor = (percentage) => {
+        if (percentage >= 50) return "red";
+        else if (percentage >= 20) return "orange";
+        else return "green";
+      };
+      
+      const likeColor = getLikePercentageColor(likePercentage);
+      const dislikeColor = getDislikePercentageColor(dislikePercentage);
+      
+      const userScore = (
+        parseFloat(likePercentage) -
+        parseFloat(dislikePercentage) / 2
+      ).toFixed(2);
+      
+      const getUserScoreLabel = (score) => {
+        if (score >= 98) return "Masterpiece";
+        else if (score >= 80) return "Overwhelmingly Positive";
+        else if (score >= 60) return "Positive";
+        else if (score >= 40) return "Mixed";
+        else if (score >= 20) return "Negative";
+        else return "Overwhelmingly Negative";
+      };
+      
+      const userScoreLabel = getUserScoreLabel(userScore);
+      
+      const userScoreColor =
+        userScore >= 98 ? "rainbow" :
+        userScore >= 80 ? "green" :
+        userScore >= 50 ? "orange" :
+        "red";
+        
+      const respon = {
+        like_count: likes,
+        dislike_count: dislikes,
+        YouTube_rating: engagement.rating,
+        user_ReceptionScore: {
+          label: userScoreLabel,
+          score: userScore,
+          color: userScoreColor,
+        },
+        display: {
+          likeColor: likeColor,
+          dislikeColor: dislikeColor,
+          percentage: {
+            likePercentage: `${likePercentage}%`,
+            dislikePercentage: `${dislikePercentage}%`,
+          },
+        },
+        raw_stats: engagement,
+      };
+
+       if (view === 'gui') {
+        const html = `
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Engagement Stats</title>
+            <style>
+              body { 
+                font-family: 'Roboto', 'Segoe UI', Arial, sans-serif; 
+                background-color: #0f0f0f; /* YouTube Dark Mode Background */
+                color: #f1f1f1; 
+                display: flex; 
+                justify-content: center; 
+                align-items: center; 
+                min-height: 100vh; 
+                margin: 0; 
+              }
+              .card { 
+                background-color: #0f0f0f; 
+                padding: 24px; 
+                border: 1px solid #3d3d3d; 
+                border-radius: 12px; 
+                max-width: 450px; 
+                width: 100%; 
+              }
+              h2 { margin-top: 0; font-size: 1.2rem; font-weight: 600; margin-bottom: 20px;}
+              
+               .pill { 
+                display: flex; 
+                align-items: center; 
+                background: #272727; 
+                border-radius: 18px; 
+                padding: 0 15px; 
+                height: 36px; 
+                width: max-content; 
+                margin-bottom: 8px; 
+              }
+              .pill-section { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; }
+              .divider { width: 1px; height: 24px; background-color: #3f3f3f; margin: 0 12px; }
+              
+              /* Ratio Bar */
+              .ratio-bar { 
+                width: 100%; 
+                height: 2px; 
+                background-color: #717171; /* Dislike gray */
+                border-radius: 2px; 
+                overflow: hidden; 
+                display: flex; 
+                margin-bottom: 24px; 
+              }
+              .ratio-like { width: ${likePercentage}%; background-color: #f1f1f1; height: 100%; }
+              
+              /* Reception Box */
+              .reception { background: #272727; padding: 16px; border-radius: 12px; margin-bottom: 20px;}
+              .reception-title { font-size: 12px; color: #aaaaaa; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+              .score-label { font-size: 20px; font-weight: bold; margin-bottom: 4px; }
+              .score-number { font-size: 14px; color: #aaaaaa; }
+              
+              /* Dynamic Colors */
+              .green { color: #2ba640; }
+              .orange { color: #f57c00; }
+              .red { color: #cc0000; }
+              .rainbow { 
+                  background: linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3);
+                  -webkit-background-clip: text;
+                  -webkit-text-fill-color: transparent;
+                  animation: rainbow-anim 3s linear infinite;
+                  background-size: 200% 100%;
+              }
+              @keyframes rainbow-anim { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+              
+              /* Nerd Stats */
+              details { font-size: 12px; color: #aaa; background: #181818; padding: 12px; border-radius: 8px; border: 1px solid #3d3d3d; }
+              summary { cursor: pointer; user-select: none; font-weight: 500; outline: none; }
+              pre { overflow-x: auto; color: #e1e1e1; margin-top: 10px; font-family: monospace; }
+            </style>
+          </head>
+          <body>
+            <div class="card">
+              <h2>📊 Engagement Stats</h2>
+              
+              <div class="pill">
+                <div class="pill-section ${likeColor}">
+                  👍 ${likes.toLocaleString()}
+                </div>
+                <div class="divider"></div>
+                <div class="pill-section ${dislikeColor}">
+                  👎 ${dislikes.toLocaleString()}
+                </div>
+              </div>
+              
+              <div class="ratio-bar">
+                <div class="ratio-like"></div>
+              </div>
+              
+              <div class="reception">
+                <div class="reception-title">Community Reception</div>
+                <div class="score-label ${userScoreColor}">${userScoreLabel}</div>
+                <div class="score-number">Score: <span class="${userScoreColor}">${userScore}</span></div>
+              </div>
+
+              <details>
+                <summary>🤓 Nerd Stats (Raw JSON)</summary>
+                <pre><code>${JSON.stringify(respon, null, 2)}</code></pre>
+              </details>
+            </div>
+          </body>
+          </html>
+        `;
+        return res.send(html);
+      }
+
+       res.send(respon);
+    } else {
+      res.status(400).json("pls gib ID :3");
     }
-  });
+  } catch (error) {
+    res.status(500).json("whoops (error 500) >~<");
+  }
+});  
   
 app.get("/feeds/videos.xml", async (req, res) => {
   const channelId = req.query.channel_id;
