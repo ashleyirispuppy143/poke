@@ -692,6 +692,7 @@
              path === "/api/nexus" || 
              path === "/api/stats" || 
              path === "/health" ||
+             path === "/traffic" ||
              path.startsWith("/static/") || 
              path.startsWith("/css/");
     }
@@ -778,6 +779,7 @@
         pathname === "/_pokestopskids/stats" ||
         pathname === "/_pokeoverload/stats" ||
         pathname === "/health" ||
+        pathname === "/traffic" ||
         pathname.startsWith("/health/")
       );
     }
@@ -1494,6 +1496,297 @@
       res.json(getResourceStats());
     }
 
+    function getHealthCss() {
+      return `
+@font-face {
+  font-family: "PokeTube Flex";
+  src: url("/static/robotoflex.ttf");
+  font-style: normal;
+  font-stretch: 1% 800%;
+  font-display: swap;
+}
+:root{color-scheme:dark}
+body{
+  color:#fff;
+  background:#1c1b22;
+  margin:0;
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+}
+a{color:#0ab7f0;text-decoration:none;transition:color 0.2s;}
+a:hover{color:#00c0ff;text-decoration:underline;}
+.app{max-width:1100px;margin:0 auto;padding:24px;}
+h1,h2,h3,.tab-btn,.hero-label,.route-rank{
+  font-family:"PokeTube Flex",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+}
+h1,h2{
+  font-stretch:extra-expanded;
+  letter-spacing:-0.5px;
+}
+h1{
+  font-weight:900;
+  font-size:2.2rem;
+  margin-top:0;
+  margin-bottom:4px;
+}
+h2{
+  margin-top:32px;
+  border-bottom:1px solid rgba(255,255,255,0.1);
+  padding-bottom:8px;
+}
+p,li,code,pre{
+  line-height:1.6;
+}
+hr{
+  border:0;
+  border-top:1px solid rgba(255,255,255,0.1);
+  margin:32px 0;
+}
+.logo{
+  float:right;
+  margin:.3em 0 1em 2em;
+  max-width:130px;
+}
+.header-container{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-end;
+  flex-wrap:wrap;
+  margin-bottom:24px;
+  gap:16px;
+}
+.tabs{
+  display:inline-flex;
+  background:#15141a;
+  border-radius:24px;
+  padding:4px;
+  border:1px solid rgba(255,255,255,0.05);
+}
+.tab-btn{
+  background:transparent;
+  color:#aaa;
+  border:none;
+  padding:8px 20px;
+  border-radius:20px;
+  cursor:pointer;
+  font-weight:700;
+  font-size:0.95rem;
+  transition:all 0.3s ease;
+  outline:none;
+  display:inline-block;
+  line-height:1.2;
+}
+.tab-btn:hover:not(.active){
+  color:#fff;
+  text-decoration:none;
+}
+.tab-btn.active{
+  background:#0ab7f0;
+  color:#1c1b22;
+  box-shadow:0 2px 8px rgba(10,183,240,0.3);
+}
+.hero-stat{
+  padding:16px 0 32px 0;
+  text-align:center;
+}
+.hero-label{
+  font-size:1.1rem;
+  color:#aaa;
+  margin-top:8px;
+  text-transform:uppercase;
+  letter-spacing:2px;
+}
+.hero-num{
+  font-size:4rem;
+  font-weight:900;
+  color:#0ab7f0;
+  margin:10px 0;
+  line-height:1;
+}
+.privacy-badge{
+  display:inline-flex;
+  align-items:center;
+  background:rgba(76,175,80,0.15);
+  color:#4caf50;
+  padding:6px 12px;
+  border-radius:10px;
+  font-size:0.9rem;
+  font-weight:bold;
+  margin-bottom:16px;
+}
+.stat-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(180px,1fr));
+  gap:16px;
+  margin-top:16px;
+}
+.stat-box{
+  background:#2a2930;
+  border-radius:12px;
+  padding:16px;
+  margin:0;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:flex-start;
+  border:1px solid rgba(255,255,255,0.05);
+}
+.stat-num{
+  font-size:1.6rem;
+  color:#0ab7f0;
+  display:block;
+  font-weight:bold;
+  text-transform:capitalize;
+}
+.stat-label{
+  font-size:.9rem;
+  color:#aaa;
+  display:block;
+  margin-top:4px;
+}
+.green{color:#4caf50}
+.orange{color:#ff9800}
+.red{color:#f44336}
+code,pre{
+  background:#2a2930;
+  padding:2px 6px;
+  border-radius:4px;
+}
+pre{
+  overflow:auto;
+  padding:14px;
+  border:1px solid #333;
+}
+.banner{
+  padding:16px 20px;
+  border-radius:12px;
+  background:#2a2930;
+  border:1px solid rgba(255,255,255,0.05);
+  transition:border-left 0.3s ease;
+}
+.banner.green{border-left:5px solid #4caf50}
+.banner.orange{border-left:5px solid #ff9800}
+.banner.red{border-left:5px solid #f44336}
+.small{
+  color:#bbb;
+  font-size:.95rem;
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+}
+.explanation{
+  font-size:1.05rem;
+  color:#ddd;
+  background:#2a2930;
+  padding:20px;
+  border-radius:12px;
+  border-left:4px solid #0ab7f0;
+  margin-bottom:24px;
+}
+summary{
+  font-size:1.2rem;
+  cursor:pointer;
+  color:#0ab7f0;
+  user-select:none;
+  margin-bottom:12px;
+  font-weight:bold;
+  transition:color 0.2s;
+  font-family:"PokeTube Flex",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+}
+.route-list{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  margin-top:16px;
+}
+.route-item{
+  background:#25242b;
+  border-radius:12px;
+  padding:16px 20px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  border:1px solid rgba(255,255,255,0.05);
+  position:relative;
+  overflow:hidden;
+}
+.route-bar{
+  position:absolute;
+  left:0;
+  top:0;
+  bottom:0;
+  background:linear-gradient(90deg,rgba(10,183,240,0.05) 0%,rgba(10,183,240,0.15) 100%);
+  z-index:1;
+  transition:width 0.6s cubic-bezier(0.22,1,0.36,1);
+}
+.route-info{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  z-index:2;
+}
+.route-rank{
+  font-size:0.85rem;
+  font-weight:900;
+  color:#1c1b22;
+  background:#0ab7f0;
+  width:28px;
+  height:28px;
+  border-radius:50%;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+}
+.route-name{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+  font-size:1.05rem;
+  color:#eee;
+  padding:4px 8px;
+  border-radius:6px;
+  background:rgba(255,255,255,0.05);
+  letter-spacing:-0.2px;
+}
+.route-count{
+  font-size:1.15rem;
+  font-weight:900;
+  color:#fff;
+  z-index:2;
+  background:rgba(0,0,0,0.3);
+  padding:6px 14px;
+  border-radius:20px;
+  border:1px solid rgba(255,255,255,0.1);
+}
+@media (max-width:640px){
+  .hero-num{font-size:3rem}
+  .route-item{align-items:flex-start;gap:12px;flex-direction:column}
+  .route-count{align-self:flex-end}
+}
+`;
+    }
+
+    function formatRouteCount(c) {
+      if (c === 67) return '67 <span style="font-size:0.85em; color:#aaa; font-weight:normal;">(really)</span>';
+      if (c === 69) return '69 <span style="font-size:0.85em; color:#aaa; font-weight:normal;">(haha nice)</span>';
+      if (c === 420) return '<span style="color:#4caf50;">420 <span style="font-size:0.85em; font-weight:normal;">(some weed everyday!)</span></span>';
+      return Number(c || 0).toLocaleString();
+    }
+
+    function renderRouteList(topRoutes) {
+      if (!topRoutes || topRoutes.length === 0) {
+        return `<div class="route-item" style="justify-content:center;color:#aaa;">Gathering data...</div>`;
+      }
+
+      const maxCount = Math.max(1, topRoutes[0].count || 1);
+      return topRoutes.map((r, i) => {
+        const pct = ((r.count || 0) / maxCount) * 100;
+        return `<div class="route-item">
+          <div class="route-bar" style="width: ${pct}%"></div>
+          <div class="route-info">
+            <span class="route-rank">#${i + 1}</span>
+            <span class="route-name">${String(r.key || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span>
+          </div>
+          <span class="route-count">${formatRouteCount(r.count)}</span>
+        </div>`;
+      }).join("");
+    }
+
     function sendAntiddosPage(req, res) {
       if (!isGuardActive) {
         return res.status(503).send("Guard is currently initializing, please refresh in a moment.");
@@ -1504,215 +1797,23 @@
         stats.state.state === "warm" ? "orange" :
         stats.state.state === "stressed" ? "orange" : "red";
 
-      const formatRouteCount = (c) => {
-        if (c === 67) return '67 <span style="font-size:0.85em; color:#aaa; font-weight:normal;">(really)</span>';
-        if (c === 69) return '69 <span style="font-size:0.85em; color:#aaa; font-weight:normal;">(haha nice)</span>';
-        if (c === 420) return '<span style="color:#4caf50;">420 <span style="font-size:0.85em; font-weight:normal;">(some weed everyday!)</span></span>';
-        return c.toLocaleString();
-      };
-
       res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Poke Health & Traffic Stats</title>
+<title>Poke Server Health</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" href="/favicon.ico">
 <style>
-:root{color-scheme:dark}
-body{color:#fff;background:#1c1b22;margin:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;}
-a{color:#0ab7f0; text-decoration:none; transition: color 0.2s;}
-a:hover{color:#00c0ff; text-decoration:underline;}
-.app{max-width:1100px;margin:0 auto;padding:24px;}
-h1,h2{font-stretch:extra-expanded; letter-spacing: -0.5px;}
-h1{font-weight:900; font-size: 2.2rem; margin-top:0; margin-bottom: 4px;}
-h2{margin-top:32px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;}
-p,li,code,pre{line-height:1.6;}
-hr{border:0;border-top:1px solid rgba(255,255,255,0.1);margin:32px 0;}
-.logo{float:right;margin:.3em 0 1em 2em;max-width:130px;}
-
-/* Header & Tabs Container */
-.header-container { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; margin-bottom: 24px; gap: 16px; }
-
-/* Segmented Control / Pill Switch Tabs */
-.tabs { 
-  display: inline-flex; 
-  background: #15141a; 
-  border-radius: 24px; 
-  padding: 4px; 
-  border: 1px solid rgba(255,255,255,0.05); 
-}
-.tab-btn { 
-  background: transparent; 
-  color: #aaa; 
-  border: none; 
-  padding: 8px 20px; 
-  border-radius: 20px; 
-  cursor: pointer; 
-  font-family: inherit; 
-  font-weight: 600; 
-  font-size: 0.95rem;
-  transition: all 0.3s ease; 
-  outline: none; 
-}
-.tab-btn:hover:not(.active) { color: #fff; }
-.tab-btn.active { background: #0ab7f0; color: #1c1b22; box-shadow: 0 2px 8px rgba(10,183,240,0.3); }
-
-/* Tab Content Visibility */
-.tab-content { display: none; animation: fadeIn 0.3s ease; }
-.tab-content.active { display: block; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-
- .hero-stat {
-  padding: 16px 0 32px 0;
-  text-align: center;
-}
-.hero-label {
-  font-size: 1.1rem;
-  color: #aaa;
-  margin-top: 8px;
-  text-transform: uppercase;
-  letter-spacing: 2px;
-}
-.hero-num {
-  font-size: 4rem;
-  font-weight: 900;
-  color: #0ab7f0;
-  margin: 10px 0;
-  line-height: 1;
-}
-
-/* Privacy Badge */
-.privacy-badge {
-  display: inline-flex; 
-  align-items: center; 
-  background: rgba(76, 175, 80, 0.15); 
-  color: #4caf50; 
-  padding: 6px 12px; 
-  border-radius: 10px; 
-  font-size: 0.9rem; 
-  font-weight: bold; 
-  margin-bottom: 16px;
-}
-
-.stat-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 16px;
-  margin-top: 16px;
-}
-.stat-box {
-  background: #2a2930;
-  border-radius: 12px;
-  padding: 16px;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: flex-start;
-  border: 1px solid rgba(255,255,255,0.05);
-}
-.stat-num{font-size: 1.6rem; color: #0ab7f0; display: block; font-weight: bold; text-transform: capitalize;}
-.stat-label{font-size: .9rem; color: #aaa; display: block; margin-top: 4px;}
-
-.green{color:#4caf50} .orange{color:#ff9800} .red{color:#f44336}
-
-code,pre{background:#2a2930;padding:2px 6px;border-radius:4px;}
-pre{overflow:auto;padding:14px; border: 1px solid #333;}
-.banner{padding:16px 20px;border-radius:12px;background:#2a2930;border: 1px solid rgba(255,255,255,0.05); transition: border-left 0.3s ease;}
-.banner.green{border-left:5px solid #4caf50}
-.banner.orange{border-left:5px solid #ff9800}
-.banner.red{border-left:5px solid #f44336}
-.small{color:#bbb;font-size:.95rem}
-
-/* Explanation box */
-.explanation {
-  font-size: 1.05rem;
-  color: #ddd;
-  background: #2a2930;
-  padding: 20px;
-  border-radius: 12px;
-  border-left: 4px solid #0ab7f0;
-  margin-bottom: 24px;
-}
-
-summary { font-size: 1.2rem; cursor: pointer; color: #0ab7f0; user-select: none; margin-bottom: 12px; font-weight: bold; transition: color 0.2s; }
-
-/* Route Popularity Layout */
-.route-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 16px;
-}
-.route-item {
-  background: #25242b;
-  border-radius: 12px;
-  padding: 16px 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border: 1px solid rgba(255,255,255,0.05);
-  position: relative;
-  overflow: hidden;
-}
-.route-bar {
-  position: absolute;
-  left: 0; top: 0; bottom: 0;
-  background: linear-gradient(90deg, rgba(10, 183, 240, 0.05) 0%, rgba(10, 183, 240, 0.15) 100%);
-  z-index: 1;
-  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
-}
-.route-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  z-index: 2;
-}
-.route-rank {
-  font-size: 0.85rem;
-  font-weight: 900;
-  color: #1c1b22;
-  background: #0ab7f0;
-  width: 28px; height: 28px;
-  border-radius: 50%;
-  display: flex; justify-content: center; align-items: center;
-}
-.route-name {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 1.05rem;
-  color: #eee;
-  padding: 4px 8px;
-  border-radius: 6px;
-  background: rgba(255,255,255,0.05);
-  letter-spacing: -0.2px;
-}
-.route-count {
-  font-size: 1.15rem;
-  font-weight: 900;
-  color: #fff;
-  z-index: 2;
-  background: rgba(0,0,0,0.3);
-  padding: 6px 14px;
-  border-radius: 20px;
-  border: 1px solid rgba(255,255,255,0.1);
-}
+${getHealthCss()}
 </style>
-<script>
-function switchTab(tabId, btn) {
-  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-  document.getElementById('tab-' + tabId).classList.add('active');
-  btn.classList.add('active');
-}
-</script>
 </head>
 <body>
 <div class="app">
 
 <noscript>
-  <div class="banner red" style="margin-bottom: 24px;">
-    <b>Warning:</b> JavaScript is disabled. Live stats will not automatically update. Refresh the page to see the latest data.
+  <div class="banner orange" style="margin-bottom:24px;">
+    <b>JavaScript is disabled:</b> this page is showing a static server-rendered snapshot. Refresh the page to update the numbers.
   </div>
 </noscript>
 
@@ -1724,132 +1825,85 @@ function switchTab(tabId, btn) {
     <p class="small" style="margin-top:0;">Live metrics and traffic protection</p>
   </div>
   <div class="tabs">
-    <button class="tab-btn active" onclick="switchTab('vitals', this)">Server Vitals</button>
-    <button class="tab-btn" onclick="switchTab('requests', this)">Requests</button>
+    <a class="tab-btn active" href="/health">Server Vitals</a>
+    <a class="tab-btn" href="/traffic">Requests</a>
   </div>
 </div>
 
-<div id="tab-vitals" class="tab-content active">
-  <div id="banner-container" class="banner ${stateClass}">
-    <b>Current Status:</b> <span id="banner-state" class="${stateClass}" style="font-size: 1.2rem; text-transform: capitalize;">${stats.state.state}</span>
-    <br>
-    <span id="banner-subtext" class="small" style="display:inline-block; margin-top: 8px;">
-      System Load Score: ${stats.state.score} &bull; Process Delay: ${stats.state.eventLoop.p99Ms}ms &bull; CPU: ${stats.state.cpu.percent}% &bull; Memory: ${formatPercent(stats.state.memory.rssRatio)}
-    </span>
-  </div>
-
-  <h2>What is this page?</h2>
-  <div class="explanation">
-    Poke keeps a close eye on how much brainpower (CPU) and memory it has left. Just like a personal computer, the server only has so much energy to go around! <br><br>
-    If a sudden wave of traffic hits, or if someone tries to overload the site, Poke will automatically prioritize normal users watching videos. It gently pauses heavy background tasks until the server catches its breath. This keeps Poke smooth, fast, and online for everyone.
-  </div>
-
-  <h2>Live Server Vitals</h2>
-  <div class="stat-grid">
-    <div class="stat-box">
-      <span id="stat-state" class="stat-num ${stateClass}">${stats.state.state}</span>
-      <span class="stat-label">Health State</span>
-    </div>
-    <div class="stat-box">
-      <span id="stat-p99" class="stat-num">${stats.state.eventLoop.p99Ms}ms</span>
-      <span class="stat-label">Process Delay (p99)</span>
-    </div>
-    <div class="stat-box">
-      <span id="stat-cpu" class="stat-num">${stats.state.cpu.percent}%</span>
-      <span class="stat-label">CPU Usage</span>
-    </div>
-    <div class="stat-box">
-      <span id="stat-rss" class="stat-num">${stats.state.memory.rssMb}MB</span>
-      <span class="stat-label">Memory Used (RSS)</span>
-    </div>
-    <div class="stat-box">
-      <span id="stat-rps" class="stat-num">${stats.state.requests.rps}</span>
-      <span class="stat-label">Requests per Second</span>
-    </div>
-    <div class="stat-box">
-      <span id="stat-tracked" class="stat-num">${stats.clients.tracked}</span>
-      <span class="stat-label">Active Users</span>
-    </div>
-    <div class="stat-box">
-      <span id="stat-cooldown" class="stat-num">${stats.clients.cooldown}</span>
-      <span class="stat-label">Spammers Blocked</span>
-    </div>
-    <div class="stat-box">
-      <span id="stat-score" class="stat-num">${stats.state.score}</span>
-      <span class="stat-label">Pressure Score</span>
-    </div>
-  </div>
-
-  <hr>
-
-  <details>
-    <summary>View Nerd Stats (Raw Data & APIs)</summary>
-    
-    <h3>Pressure Reasons</h3>
-    <pre id="pre-reasons">${stats.state.pressureReasons.length ? stats.state.pressureReasons.join("\n") : "None currently. System is healthy."}</pre>
-
-    <h3>Request Mix (This Second)</h3>
-    <pre id="pre-mix">${JSON.stringify(stats.state.requests.kinds, null, 2)}</pre>
-
-    <h3>API Endpoints</h3>
-    <p>
-      Raw JSON data is available at:
-      <code><a href="/_pokeresource/stats">/_pokeresource/stats</a></code>
-    </p>
-  </details>
+<div id="banner-container" class="banner ${stateClass}">
+  <b>Current Status:</b> <span id="banner-state" class="${stateClass}" style="font-size:1.2rem;text-transform:capitalize;">${stats.state.state}</span>
+  <br>
+  <span id="banner-subtext" class="small" style="display:inline-block;margin-top:8px;">
+    System Load Score: ${stats.state.score} &bull; Process Delay: ${stats.state.eventLoop.p99Ms}ms &bull; CPU: ${stats.state.cpu.percent}% &bull; Memory: ${formatPercent(stats.state.memory.rssRatio)}
+  </span>
 </div>
 
-<div id="tab-requests" class="tab-content">
-  <div class="hero-stat">
-    <div class="privacy-badge">
-      <svg style="width:16px;height:16px;margin-right:6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-      100% Anonymous & Private
-    </div>
-    <div class="hero-label">Total Global Requests Processed</div>
-    <div id="hero-total" class="hero-num">
-      ${stats.active_requests.total_global_requests.toLocaleString()}
-    </div>
-    <div class="small" style="color: #888; font-size: 1rem;">
-      Recording began on: <span id="tracking-start">${new Date(stats.active_requests.tracking_start_time).toLocaleDateString()}</span>
-    </div>
-  </div>
+<h2>What is this page?</h2>
+<div class="explanation">
+  Poke keeps a close eye on how much brainpower (CPU) and memory it has left. Just like a personal computer, the server only has so much energy to go around! <br><br>
+  If a sudden wave of traffic hits, or if someone tries to overload the site, Poke will automatically prioritize normal users watching videos. It gently pauses heavy background tasks until the server catches its breath. This keeps Poke smooth, fast, and online for everyone.
+</div>
 
-  <h2>Most Popular Destinations (All Time)</h2>
-  <p class="small">The most heavily trafficked areas of Poke, calculated since records began.</p>
-  <div id="route-list-container" class="route-list">
-    ${(() => {
-      const topRoutes = stats.active_requests.all_time_top_routes;
-      if (!topRoutes || topRoutes.length === 0) return `<div class="route-item" style="justify-content: center; color: #aaa;">Gathering data...</div>`;
-      const maxCount = topRoutes[0].count;
-      return topRoutes.map((r, i) => {
-        const pct = (r.count / maxCount) * 100;
-        return `<div class="route-item">
-          <div class="route-bar" style="width: ${pct}%"></div>
-          <div class="route-info">
-            <span class="route-rank">#${i + 1}</span>
-            <span class="route-name">${r.key}</span>
-          </div>
-          <span class="route-count">${formatRouteCount(r.count)}</span>
-        </div>`;
-      }).join('');
-    })()}
+<h2>Live Server Vitals</h2>
+<div class="stat-grid">
+  <div class="stat-box">
+    <span id="stat-state" class="stat-num ${stateClass}">${stats.state.state}</span>
+    <span class="stat-label">Health State</span>
+  </div>
+  <div class="stat-box">
+    <span id="stat-p99" class="stat-num">${stats.state.eventLoop.p99Ms}ms</span>
+    <span class="stat-label">Process Delay (p99)</span>
+  </div>
+  <div class="stat-box">
+    <span id="stat-cpu" class="stat-num">${stats.state.cpu.percent}%</span>
+    <span class="stat-label">CPU Usage</span>
+  </div>
+  <div class="stat-box">
+    <span id="stat-rss" class="stat-num">${stats.state.memory.rssMb}MB</span>
+    <span class="stat-label">Memory Used (RSS)</span>
+  </div>
+  <div class="stat-box">
+    <span id="stat-rps" class="stat-num">${stats.state.requests.rps}</span>
+    <span class="stat-label">Requests per Second</span>
+  </div>
+  <div class="stat-box">
+    <span id="stat-tracked" class="stat-num">${stats.clients.tracked}</span>
+    <span class="stat-label">Active Users</span>
+  </div>
+  <div class="stat-box">
+    <span id="stat-cooldown" class="stat-num">${stats.clients.cooldown}</span>
+    <span class="stat-label">Spammers Blocked</span>
+  </div>
+  <div class="stat-box">
+    <span id="stat-score" class="stat-num">${stats.state.score}</span>
+    <span class="stat-label">Pressure Score</span>
   </div>
 </div>
+
+<hr>
+
+<details>
+  <summary>View Nerd Stats (Raw Data & APIs)</summary>
+  
+  <h3>Pressure Reasons</h3>
+  <pre id="pre-reasons">${stats.state.pressureReasons.length ? stats.state.pressureReasons.join("\n") : "None currently. System is healthy."}</pre>
+
+  <h3>Request Mix (This Second)</h3>
+  <pre id="pre-mix">${JSON.stringify(stats.state.requests.kinds, null, 2)}</pre>
+
+  <h3>API Endpoints</h3>
+  <p>
+    Raw JSON data is available at:
+    <code><a href="/_pokeresource/stats">/_pokeresource/stats</a></code>
+  </p>
+</details>
 
 <hr>
 <p class="small">powered by poke. <a href="/">go back to watching videos</a></p>
 </div>
 
 <script>
-// Auto-refresh stats if JS is enabled
 document.addEventListener("DOMContentLoaded", function() {
-  const formatRouteCount = (c) => {
-    if (c === 67) return '67 <span style="font-size:0.85em; color:#aaa; font-weight:normal;">(really)</span>';
-    if (c === 69) return '69 <span style="font-size:0.85em; color:#aaa; font-weight:normal;">(haha nice)</span>';
-    if (c === 420) return '<span style="color:#4caf50;">420 <span style="font-size:0.85em; font-weight:normal;">(some weed everyday!)</span></span>';
-    return c.toLocaleString();
-  };
-
   const fetchStats = async function() {
     try {
       const res = await fetch("/_pokeresource/stats");
@@ -1860,22 +1914,17 @@ document.addEventListener("DOMContentLoaded", function() {
       let stateClass = "green";
       if (state === "warm" || state === "stressed") stateClass = "orange";
       if (state === "critical") stateClass = "red";
-      
-      // Update DOM components dynamically
-      document.getElementById("hero-total").innerText = data.active_requests.total_global_requests.toLocaleString();
-      document.getElementById("tracking-start").innerText = new Date(data.active_requests.tracking_start_time).toLocaleDateString();
 
       document.getElementById("banner-container").className = "banner " + stateClass;
       document.getElementById("banner-state").className = stateClass;
       document.getElementById("banner-state").innerText = state;
       
       const rssRatio = (data.state.memory.rssRatio * 100).toFixed(2) + "%";
-      document.getElementById("banner-subtext").innerHTML = 
+      document.getElementById("banner-subtext").innerHTML =
         "System Load Score: " + data.state.score + " &bull; Process Delay: " + data.state.eventLoop.p99Ms + "ms &bull; CPU: " + data.state.cpu.percent + "% &bull; Memory: " + rssRatio;
       
       document.getElementById("stat-state").className = "stat-num " + stateClass;
       document.getElementById("stat-state").innerText = state;
-      
       document.getElementById("stat-p99").innerText = data.state.eventLoop.p99Ms + "ms";
       document.getElementById("stat-cpu").innerText = data.state.cpu.percent + "%";
       document.getElementById("stat-rss").innerText = data.state.memory.rssMb + "MB";
@@ -1883,34 +1932,132 @@ document.addEventListener("DOMContentLoaded", function() {
       document.getElementById("stat-tracked").innerText = data.clients.tracked;
       document.getElementById("stat-cooldown").innerText = data.clients.cooldown;
       document.getElementById("stat-score").innerText = data.state.score;
-
-      // Update popular routes dynamically
-      const topRoutes = data.active_requests.all_time_top_routes;
-      if (topRoutes && topRoutes.length > 0) {
-          const maxCount = topRoutes[0].count;
-          const routeHtml = topRoutes.map((r, i) => {
-              const pct = (r.count / maxCount) * 100;
-              return '<div class="route-item">' +
-                  '<div class="route-bar" style="width: ' + pct + '%"></div>' +
-                  '<div class="route-info">' +
-                    '<span class="route-rank">#' + (i + 1) + '</span>' +
-                    '<span class="route-name">' + r.key + '</span>' +
-                  '</div>' +
-                  '<span class="route-count">' + formatRouteCount(r.count) + '</span>' +
-              '</div>';
-          }).join('');
-          document.getElementById("route-list-container").innerHTML = routeHtml;
-      }
-      
       document.getElementById("pre-reasons").innerText = data.state.pressureReasons.length ? data.state.pressureReasons.join("\\n") : "None currently. System is healthy.";
       document.getElementById("pre-mix").innerText = JSON.stringify(data.state.requests.kinds, null, 2);
-      
     } catch (err) {
       // Quiet fail if network disconnects temporarily
     }
   };
-  
-  // Refresh loop every 1 second
+
+  setInterval(fetchStats, 1000);
+});
+</script>
+
+</body>
+</html>`);
+    }
+
+    function sendTrafficPage(req, res) {
+      if (!isGuardActive) {
+        return res.status(503).send("Guard is currently initializing, please refresh in a moment.");
+      }
+
+      const stats = getResourceStats();
+      const routesHtml = renderRouteList(stats.active_requests.all_time_top_routes);
+
+      res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Poke Traffic Stats</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="/favicon.ico">
+<style>
+${getHealthCss()}
+</style>
+</head>
+<body>
+<div class="app">
+
+<noscript>
+  <div class="banner orange" style="margin-bottom:24px;">
+    <b>JavaScript is disabled:</b> this page is showing a static server-rendered snapshot. Refresh the page to update the traffic stats.
+  </div>
+</noscript>
+
+<img class="logo" src="/css/logo-poke.svg" alt="Poke logo">
+
+<div class="header-container">
+  <div>
+    <h1>Poke Traffic Stats</h1>
+    <p class="small" style="margin-top:0;">Anonymous request totals and popular destinations</p>
+  </div>
+  <div class="tabs">
+    <a class="tab-btn" href="/health">Server Vitals</a>
+    <a class="tab-btn active" href="/traffic">Requests</a>
+  </div>
+</div>
+
+<div class="hero-stat">
+  <div class="privacy-badge">
+    <svg style="width:16px;height:16px;margin-right:6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+    100% Anonymous & Private
+  </div>
+  <div class="hero-label">Total Global Requests Processed</div>
+  <div id="hero-total" class="hero-num">
+    ${stats.active_requests.total_global_requests.toLocaleString()}
+  </div>
+  <div class="small" style="color:#888;font-size:1rem;">
+    Recording began on: <span id="tracking-start">${new Date(stats.active_requests.tracking_start_time).toLocaleDateString()}</span>
+  </div>
+</div>
+
+<h2>Most Popular Destinations (All Time)</h2>
+<p class="small">The most heavily trafficked areas of Poke, calculated since records began.</p>
+<div id="route-list-container" class="route-list">
+  ${routesHtml}
+</div>
+
+<hr>
+<p class="small">powered by poke. <a href="/health">view server health</a> or <a href="/">go back to watching videos</a></p>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  const formatRouteCount = function(c) {
+    if (c === 67) return '67 <span style="font-size:0.85em; color:#aaa; font-weight:normal;">(really)</span>';
+    if (c === 69) return '69 <span style="font-size:0.85em; color:#aaa; font-weight:normal;">(haha nice)</span>';
+    if (c === 420) return '<span style="color:#4caf50;">420 <span style="font-size:0.85em; font-weight:normal;">(some weed everyday!)</span></span>';
+    return Number(c || 0).toLocaleString();
+  };
+
+  const escapeHtml = function(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  };
+
+  const fetchStats = async function() {
+    try {
+      const res = await fetch("/_pokeresource/stats");
+      if (!res.ok) return;
+      const data = await res.json();
+
+      document.getElementById("hero-total").innerText = data.active_requests.total_global_requests.toLocaleString();
+      document.getElementById("tracking-start").innerText = new Date(data.active_requests.tracking_start_time).toLocaleDateString();
+
+      const topRoutes = data.active_requests.all_time_top_routes;
+      if (topRoutes && topRoutes.length > 0) {
+        const maxCount = topRoutes[0].count || 1;
+        const routeHtml = topRoutes.map(function(r, i) {
+          const pct = ((r.count || 0) / maxCount) * 100;
+          return '<div class="route-item">' +
+            '<div class="route-bar" style="width: ' + pct + '%"></div>' +
+            '<div class="route-info">' +
+              '<span class="route-rank">#' + (i + 1) + '</span>' +
+              '<span class="route-name">' + escapeHtml(r.key) + '</span>' +
+            '</div>' +
+            '<span class="route-count">' + formatRouteCount(r.count) + '</span>' +
+          '</div>';
+        }).join("");
+        document.getElementById("route-list-container").innerHTML = routeHtml;
+      }
+    } catch (err) {
+      // Quiet fail if network disconnects temporarily
+    }
+  };
+
   setInterval(fetchStats, 1000);
 });
 </script>
@@ -1927,6 +2074,7 @@ document.addEventListener("DOMContentLoaded", function() {
     app.get("/_pokestopskids/stats", sendResourceStats);
     app.get("/_pokeoverload/stats", sendResourceStats);
     app.get("/health", sendAntiddosPage);
+    app.get("/traffic", sendTrafficPage);
     app.get("/_antiddos*", (req, res) => res.redirect("/health"));
 
     // 30-Millisecond Delayed Initialization
