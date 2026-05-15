@@ -1,28 +1,29 @@
- <!--
-   This Source Code Form is subject to the terms of the GNU General Public License:
-   
-    Copyright (C) 2021-2026 PokeTube Of Poke Project, a part of The Poke Project Initiative (initiative.poketube.fun) 
-    source code :https://codeberg.org/ashleyirispuppy/poke
+<!--
+   This Source Code Form is subject to the terms of the GNU General Public License:
+   
+    Copyright (C) 2021-2026 PokeTube Of Poke Project, a part of The Poke Project Initiative (initiative.poketube.fun) 
+    source code :https://codeberg.org/ashleyirispuppy/poke
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with this program. If not, see https://www.gnu.org/licenses/.
+    You should have received a copy of the GNU General Public License
+    along with this program. If not, see https://www.gnu.org/licenses/.
 -->
+<% try { %>
 <!DOCTYPE html><html><head>
-   
-    <% if (ID === "UCFAiFyGs6oDiF1Nf-rRJpZA") { %> 
-    <!-- 🐷 🎗️ -->
-    <title>Technoblade Never Dies! | Poke</title>
- <% } %>
+   
+    <% if (ID === "UCFAiFyGs6oDiF1Nf-rRJpZA") { %> 
+    <!-- 🐷 🎗️ -->
+    <title>Technoblade Never Dies! | Poke</title>
+ <% } %>
 <title><%= cinv?.author ? `${cinv.author} | Poke` : 'Poke' %></title>
 <link rel="manifest" href="/manifest.json">
 <link href="css/yt-ukraine.svg?v=7" rel=icon>
@@ -30,12 +31,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1"> <!-- tells dark reader that the site has a dark theme and to turn itself off -->
 <meta name="darkreader-lock">
 
-<% 
-  const titleSuffix = (cinv?.pronouns && cinv.pronouns.trim() !== "") 
-    ? ` (${cinv.pronouns}) - ${subs} subs - Poke` 
-    : ` - ${subs} subs - Poke`;
-    
-  const fullTitle = `${cinv?.author}${titleSuffix}`;
+<% 
+  const titleSuffix = (cinv?.pronouns && cinv.pronouns.trim() !== "") 
+    ? ` (${cinv.pronouns}) - ${subs} subs - Poke` 
+    : ` - ${subs} subs - Poke`;
+    
+  const fullTitle = `${cinv?.author}${titleSuffix}`;
 %>
 
 <meta property="og:type" content="website">
@@ -51,624 +52,624 @@
 <meta property="facebook:description" content='<%= cinv?.description %>'>
 <meta property="facebook:image" content="<%=cinv?.authorThumbnails?.[5]?.url%>">
 
-                         <% if (embedchannelsubsfeed) { %>  
- <style>
+                         <% if (embedchannelsubsfeed) { %>  
+ <style>
 .channel-info-container {
-    display: none !important;
+    display: none !important;
 
 }
-.pagination-buttons {  
-  display: none !important;
+.pagination-buttons {  
+  display: none !important;
 }
 .tags.rec {
-  display: none !important;
+  display: none !important;
 }
 nav {
-  display: none !important;
+  display: none !important;
 }
- </style>
- <% } %>
+ </style>
+ <% } %>
 
-   <style> 
-       @font-face {
-  font-family: "PokeTube Flex";
-  src: url("/static/robotoflex.ttf");
-  font-style: normal;
-  font-stretch: 1% 800%;
-  font-display: swap;
+   <style> 
+       @font-face {
+  font-family: "PokeTube Flex";
+  src: url("/static/robotoflex.ttf");
+  font-style: normal;
+  font-stretch: 1% 800%;
+  font-display: swap;
 }
-    * {
-      color:#fff
-    }
-              @font-face {
-        font-family: 'Ginto Nord';
-        font-weight: 800;
-        src:url('https://p.poketube.fun/https://cdn.statically.io/gh/brecert/discord-quote-generator/main/Ginto-Nord-800.woff') format("woff");
-      }
-        
-         
-          .channel-info-container > img {
-  width: 98%;
-  border-radius: 1em;
-  margin-top: 6px;
-  margin-bottom: -9px;
+    * {
+      color:#fff
+    }
+              @font-face {
+        font-family: 'Ginto Nord';
+        font-weight: 800;
+        src:url('https://p.poketube.fun/https://cdn.statically.io/gh/brecert/discord-quote-generator/main/Ginto-Nord-800.woff') format("woff");
+      }
+        
+         
+          .channel-info-container > img {
+  width: 98%;
+  border-radius: 1em;
+  margin-top: 6px;
+  margin-bottom: -9px;
 }
-        :root {
-    --text-primary: #fff;
-    --text-secondary: #fff;
-    --text-link: #3ea6ff;
-          
-    --app-background: #000;
-    --context-menu-background: #000;
-    --border-color: #444;
-    --item-hover-background: #000;
-    --item-active-background: #000;
-    --top-bar-background: #000;
-    --guide-background: #000;
-    --thumbnail-background: #000;
-    --channel-info-background: #000;
-    --channel-contents-background: #000;
+        :root {
+    --text-primary: #fff;
+    --text-secondary: #fff;
+    --text-link: #3ea6ff;
+          
+    --app-background: #000;
+    --context-menu-background: #000;
+    --border-color: #444;
+    --item-hover-background: #000;
+    --item-active-background: #000;
+    --top-bar-background: #000;
+    --guide-background: #000;
+    --thumbnail-background: #000;
+    --channel-info-background: #000;
+    --channel-contents-background: #000;
 }
-    
-    
+    
+    
 .tags.rec {
-  font-weight: 600;
-  font-stretch: expanded;
-  overflow:hidden;
-  width: auto;
-  max-width: fit-content;
-  
-  margin-right: auto;
-  padding-left: 1.5em;
-  margin-top: 7px;
-  display: flex;
-  gap: 3px;
+  font-weight: 600;
+  font-stretch: expanded;
+  overflow:hidden;
+  width: auto;
+  max-width: fit-content;
+  
+  margin-right: auto;
+  padding-left: 1.5em;
+  margin-top: 7px;
+  display: flex;
+  gap: 3px;
 }
 
 .tags.rec:hover{
-  overflow-x:auto;
+  overflow-x:auto;
 }
 
 .tags.rec > .tag {
-  border-radius: 8px;
+  border-radius: 8px;
 }
 
 .tag {
-  background: #333;
-  padding: 5px;
-  border-radius: 4px;
-    border-radius: 8px;
-  word-break: break-all;
-  white-space: nowrap;
-  font-family: ubuntu, sans-serif;
+  background: #333;
+  padding: 5px;
+  border-radius: 4px;
+    border-radius: 8px;
+  word-break: break-all;
+  white-space: nowrap;
+  font-family: ubuntu, sans-serif;
 }
 
-  
+  
 
-      </style>  
-        <!-- STYLES START -->
-  
+      </style>  
+        <!-- STYLES START -->
+  
 <style>
-   a.class:hover {
-    text-decoration:none;
-    font-weight:bold
-   }
-   summary{
-     color:gray;
-   }
-   summary:hover{
-    color:white;
-    }
-  
-  :visited { color: #00c0ff }
-     
-  a{
-  color:#0ab7f0;
-   }
-  
-  .community {
-    display: flex;
+   a.class:hover {
+    text-decoration:none;
+    font-weight:bold
+   }
+   summary{
+     color:gray;
+   }
+   summary:hover{
+    color:white;
+    }
+  
+  :visited { color: #00c0ff }
+     
+  a{
+  color:#0ab7f0;
+   }
+  
+  .community {
+    display: flex;
 flex-direction: column;
 align-items: center;
 border-radius: 30px;
 padding: 10px;
-  padding-bottom: 10px;
+  padding-bottom: 10px;
 width: fit-content;
 margin-top: 12px;
 margin-left: auto;
 margin-right: auto;
 padding-bottom: 32px;
-  }
+  }
 .community-content {
-  margin-bottom: 1em;
-  margin-top: 1em;
-  padding: 13px;
-  text-align: left;
-  background: #111;
-  width:50.562em;
-  border-radius: 22px;
+  margin-bottom: 1em;
+  margin-top: 1em;
+  padding: 13px;
+  text-align: left;
+  background: #111;
+  width:50.562em;
+  border-radius: 22px;
 }
-  
-   .community-attachment-video {
- 
-  }
-  
-  .comments-author {
-  margin: 7px;
-    margin-top: -2px;
-  font-family: inter;
-  white-space: -moz-pre-wrap !important;
-  white-space: -pre-wrap;
-  white-space: -o-pre-wrap;
-  white-space: pre-wrap;
-  word-wrap: anywhere;
-  white-space: -webkit-pre-wrap;
-  word-break: break-all;
-  white-space: normal;
+  
+   .community-attachment-video {
+ 
+  }
+  
+  .comments-author {
+  margin: 7px;
+    margin-top: -2px;
+  font-family: inter;
+  white-space: -moz-pre-wrap !important;
+  white-space: -pre-wrap;
+  white-space: -o-pre-wrap;
+  white-space: pre-wrap;
+  word-wrap: anywhere;
+  white-space: -webkit-pre-wrap;
+  word-break: break-all;
+  white-space: normal;
 }
-  
-  .video-grid > .video {
-  border-radius: 16px;
-  background: black;
-  padding: 6px;
-  border: #333 solid;
+  
+  .video-grid > .video {
+  border-radius: 16px;
+  background: black;
+  padding: 6px;
+  border: #333 solid;
 }
-  .subscribe-button {
-  background-color: white !important;
-  color: black !important;
-  text-transform: none !important;
-  font-weight: bold !important;
-  padding: 0px 15px !important;
-  border: none !important;
-  margin: auto !important;
-  height: 37px !important;
-  border-radius: 34px !important;
+  .subscribe-button {
+  background-color: white !important;
+  color: black !important;
+  text-transform: none !important;
+  font-weight: bold !important;
+  padding: 0px 15px !important;
+  border: none !important;
+  margin: auto !important;
+  height: 37px !important;
+  border-radius: 34px !important;
 }
-  
-  .subs {
-    margin: 0.6em;text-align: left;margin-left: 0px;margin-top: -1em;font-family: "PokeTube flex";font-weight: 1000;font-stretch: ultra-expanded;
-  }
-  
-  
-  .tag.c:hover {
-  background: var(--chip-background-hover);
+  
+  .subs {
+    margin: 0.6em;text-align: left;margin-left: 0px;margin-top: -1em;font-family: "PokeTube flex";font-weight: 1000;font-stretch: ultra-expanded;
+  }
+  
+  
+  .tag.c:hover {
+  background: var(--chip-background-hover);
 }
-   </style>
-   
-  <!-- STYLES START -->
-  
+   </style>
+   
+  <!-- STYLES START -->
+  
 <style>
 
 .tags-channel {
-  display:flex;
-  flex-direction:row;
-  overflow-x:auto;
-  column-gap:3px
+  display:flex;
+  flex-direction:row;
+  overflow-x:auto;
+  column-gap:3px
 }
 .tag-channel {
-  background:#333;
-  padding:5px;
-  border-radius:4px;
-  word-break:break-all;
-  white-space:nowrap;
-  font-family:PokeTube Flex,sans-serif
+  background:#333;
+  padding:5px;
+  border-radius:4px;
+  word-break:break-all;
+  white-space:nowrap;
+  font-family:PokeTube Flex,sans-serif
 }
 
-   a.class:hover {
-    text-decoration:underline;
-    font-weight:bold
-   }
-   summary{
-     color:gray;
-   }
-   summary:hover{
-    color:white;
-    }
-  
-  :visited { color: #00c0ff }
-     
-  a{
-  color:#0ab7f0;
-   }
-   </style>
-  
-  <link href=/css/app-cdn.min.css rel=stylesheet>
-  <link href=/css/app.main.css?v=44600 rel=stylesheet>
-  <link href="/css/watch.main.css?v=56" rel=stylesheet>
-   <link href="/css/watch-util.css" rel=stylesheet>
+   a.class:hover {
+    text-decoration:underline;
+    font-weight:bold
+   }
+   summary{
+     color:gray;
+   }
+   summary:hover{
+    color:white;
+    }
+  
+  :visited { color: #00c0ff }
+     
+  a{
+  color:#0ab7f0;
+   }
+   </style>
+  
+  <link href=/css/app-cdn.min.css rel=stylesheet>
+  <link href=/css/app.main.css?v=44600 rel=stylesheet>
+  <link href="/css/watch.main.css?v=56" rel=stylesheet>
+   <link href="/css/watch-util.css" rel=stylesheet>
 <link href=https://p.poketube.fun/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css rel=stylesheet>
-  <link href="https://p.poketube.fun/https://cdn.jsdelivr.net/npm/ionicons@4.5.0-0/dist/css/ionicons.min.css" rel=stylesheet>
+  <link href="https://p.poketube.fun/https://cdn.jsdelivr.net/npm/ionicons@4.5.0-0/dist/css/ionicons.min.css" rel=stylesheet>
 
-    
-    <link href="/css/watch-navbar.css?v=56" rel=stylesheet>
+    
+    <link href="/css/watch-navbar.css?v=56" rel=stylesheet>
 
-  
-   <!-- STYLES END -->
+  
+   <!-- STYLES END -->
 
-      <style>section p {
-        
- font-family:Whitney, Helvetica Neue, Helvetica, Arial, sans-serif;
- font-weight:400;
- color:#fff;
- font-size:16px;
- line-height:24px;
- margin-top:12px
+      <style>section p {
+        
+ font-family:Whitney, Helvetica Neue, Helvetica, Arial, sans-serif;
+ font-weight:400;
+ color:#fff;
+ font-size:16px;
+ line-height:24px;
+ margin-top:12px
 }
-    
+    
 .sticky-top {
-	 position: sticky;
-	 top: 0px;
-	 z-index: 999;
+     position: sticky;
+     top: 0px;
+     z-index: 999;
 }
- .responsive {
-	 width: 100%;
-	 overflow-x: auto;
+ .responsive {
+     width: 100%;
+     overflow-x: auto;
 }
- .tabs {
-	 display: table;
-   font-family:inter;
-	 border-collapse: separate;
-	 table-layout: auto;
-	 border-spacing: 4px 0;
+ .tabs {
+     display: table;
+   font-family:inter;
+     border-collapse: separate;
+     table-layout: auto;
+     border-spacing: 4px 0;
 }
 .tabs.tabs-center {
-    margin-left: 2em;
-    margin-top: 3em !important;
-    font-size: 12px;
-    font-family: ubuntu;
-    border-top-right-radius: 11px;
-    border-top-left-radius: 11px;
-    background: #333;
+    margin-left: 2em;
+    margin-top: 3em !important;
+    font-size: 12px;
+    font-family: ubuntu;
+    border-top-right-radius: 11px;
+    border-top-left-radius: 11px;
+    background: #333;
 }
- .tabs.tabs-justify {
-	 width: 100%;
-	 table-layout: fixed;
+ .tabs.tabs-justify {
+     width: 100%;
+     table-layout: fixed;
 }
- .tabs a.tab {
-	 position: relative;
-	 display: table-cell;
+ .tabs a.tab {
+     position: relative;
+     display: table-cell;
 text-transform:uppercase;
-	 transition: all ease 0.3s;
-	 padding: 1em 1.6em;
-	 transform: translate3d(0, 0, 0);
-	 color: #898989;
-	 white-space: nowrap;
-	 cursor: pointer;
+     transition: all ease 0.3s;
+     padding: 1em 1.6em;
+     transform: translate3d(0, 0, 0);
+     color: #898989;
+     white-space: nowrap;
+     cursor: pointer;
 }
 
- .tabs a.tab:after {
-	 transition: all 0.3s cubic-bezier(1, 0, 0, 1);
-	 will-change: transform, box-shadow, opacity;
-	 position: absolute;
-	 content: '';
-	 height: 3px;
-	 bottom: 0px;
-	 left: 0px;
-	 right: 0px;
-	 border-radius: 3px 3px 0px 0px;
-	 background: #9fdafd;
-	 box-shadow: 0px 4px 10px 3px rgba(60, 180, 250, .15);
-	 opacity: 0;
-	 transform: scale(0, 1);
+ .tabs a.tab:after {
+     transition: all 0.3s cubic-bezier(1, 0, 0, 1);
+     will-change: transform, box-shadow, opacity;
+     position: absolute;
+     content: '';
+     height: 3px;
+     bottom: 0px;
+     left: 0px;
+     right: 0px;
+     border-radius: 3px 3px 0px 0px;
+     background: #9fdafd;
+     box-shadow: 0px 4px 10px 3px rgba(60, 180, 250, .15);
+     opacity: 0;
+     transform: scale(0, 1);
 }
- .tabs a.tab.active {
-	 color: #fff;
+ .tabs a.tab.active {
+     color: #fff;
 }
- .tabs a.tab.active:after {
-	 opacity: 1;
-	 transform: scale(1, 1);
-}            
-        
-       
-                     
-                     </style>
-                     
-  <% if(!isMobile) { %>
-    <noscript>
-    <style>
-    #search {
-  display: none;
+ .tabs a.tab.active:after {
+     opacity: 1;
+     transform: scale(1, 1);
+}            
+        
+       
+                     
+                     </style>
+                     
+  <% if(!isMobile) { %>
+    <noscript>
+    <style>
+    #search {
+  display: none;
 }
-      
+      
 .subscribe-button.needs-js {
-  display: none;
-}      
+  display: none;
+}      
 
 .subscribe-button {
-  margin-right: 6px !important;
-  margin-top: 10px !important;
-  margin-left: -4px !important;
+  margin-right: 6px !important;
+  margin-top: 10px !important;
+  margin-left: -4px !important;
 }
-    </style>
-    </noscript>
-    <style>
-      .channel-info > .avatar > img {
-  width: auto;
-  height: auto;
-  max-height: 150px;
+    </style>
+    </noscript>
+    <style>
+      .channel-info > .avatar > img {
+  width: auto;
+  height: auto;
+  max-height: 150px;
 }
-      
-      @media screen and (max-width: 1230px) {
-      .channel-info > .avatar > img {
-     margin-left: 1em;
+      
+      @media screen and (max-width: 1230px) {
+      .channel-info > .avatar > img {
+     margin-left: 1em;
 }
-        .name {
-            margin-left: 5em !important;
-        }
+        .name {
+            margin-left: 5em !important;
+        }
 }
 
-      .subscribe-button:hover {
-  animation: animateBg 2s infinite linear;
-  background-color: #fff;
-  background-image: linear-gradient(90deg,#da3287,#ffde5e,#da3287,#ffde5e);
-  background-size: 300% 100%;
-  box-shadow: 0 3px 14px #000;
-  cursor: pointer;
+      .subscribe-button:hover {
+  animation: animateBg 2s infinite linear;
+  background-color: #fff;
+  background-image: linear-gradient(90deg,#da3287,#ffde5e,#da3287,#ffde5e);
+  background-size: 300% 100%;
+  box-shadow: 0 3px 14px #000;
+  cursor: pointer;
 }
 
 @keyframes animateBg {
-  0% {
-    background-position:0 0
-  }
-  100% {
-    background-position:100% 0
-  }
+  0% {
+    background-position:0 0
+  }
+  100% {
+    background-position:100% 0
+  }
 }
-      .video:hover{
-        border:solid;
-      }
-      .name{
-        text-align: left;
-      }
-       .tabs a.tab:hover {
-	 color: #fff;
-   border: solid;
-   text-decoration: none;
-	 background: #333;
-	 border-top-left-radius: 1em;
-	 border-top-right-radius: 1em;
+      .video:hover{
+        border:solid;
+      }
+      .name{
+        text-align: left;
+      }
+       .tabs a.tab:hover {
+     color: #fff;
+   border: solid;
+   text-decoration: none;
+     background: #333;
+     border-top-left-radius: 1em;
+     border-top-right-radius: 1em;
 }
-        .subs {
-    margin: 0.6em;text-align: left;margin-left: 0px;margin-top: -1em;font-family: "PokeTube flex";font-weight: 1000;font-stretch: ultra-expanded;
-  }
+        .subs {
+    margin: 0.6em;text-align: left;margin-left: 0px;margin-top: -1em;font-family: "PokeTube flex";font-weight: 1000;font-stretch: ultra-expanded;
+  }
 
 #popup-container {
-  display: none;
-  position: fixed;               /* fixed keeps it centered when scrolling */
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background-color: #111;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
-  padding: 20px;
-  border-radius: 8px;
-  z-index: 9999;                 /* make sure its above other elements */
-  width: 45em;
-  height: 24em;
-  overflow: auto;
+  display: none;
+  position: fixed;               /* fixed keeps it centered when scrolling */
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: #111;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+  padding: 20px;
+  border-radius: 8px;
+  z-index: 9999;                 /* make sure its above other elements */
+  width: 45em;
+  height: 24em;
+  overflow: auto;
 }
 
-        #close-btn {
-            cursor: pointer;
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            font-size: 18px;
-            color: #555;
-        }
-          .video-grid {
-  display: flex;
-  flex-wrap: wrap;
-   row-gap: 40px;
-  padding: 16px;
-  max-inline-size: 164ch;
-  justify-content: space-around;
- } 
-      
+        #close-btn {
+            cursor: pointer;
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 18px;
+            color: #555;
+        }
+          .video-grid {
+  display: flex;
+  flex-wrap: wrap;
+   row-gap: 40px;
+  padding: 16px;
+  max-inline-size: 164ch;
+  justify-content: space-around;
+ } 
+      
 .shr {
 color:#ea9999 !important;
 }
 
 
-      .channel-page .video-grid {
-  background-color: black;
+      .channel-page .video-grid {
+  background-color: black;
 }
-      
-    </style>
-   <% } %>
+      
+    </style>
+   <% } %>
 
- 
-                       <% if (isMobile) { %>  
-                         
-                         
+ 
+                       <% if (isMobile) { %>  
+                         
+                         
 <style>
-  .community-content{ 
-  margin-bottom: 1em;
-  margin-top: 1em;
-  padding: 13px;
-   text-align: left;
-   background: #1a1a1a;
-  width: fit-content;
-  border-radius: 22px;
-  }
-  
-       .tabs a.tab:hover {
-	 color: #fff;
-   text-decoration: none;
+  .community-content{ 
+  margin-bottom: 1em;
+  margin-top: 1em;
+  padding: 13px;
+   text-align: left;
+   background: #1a1a1a;
+  width: fit-content;
+  border-radius: 22px;
+  }
+  
+       .tabs a.tab:hover {
+     color: #fff;
+   text-decoration: none;
 }
-  
-  .community {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  border-radius: 30px;
-  padding: 10px;
-    padding-bottom: 10px;
-  padding-bottom: 10px;
-  margin-top: 12px;
-  margin-left: auto;
-  margin-right: auto;
-  padding-bottom: 32px;
-  max-width: 37em;
+  
+  .community {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-radius: 30px;
+  padding: 10px;
+    padding-bottom: 10px;
+  padding-bottom: 10px;
+  margin-top: 12px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-bottom: 32px;
+  max-width: 37em;
 }
-  .subscribe-button {
-  background-color: white !important;
-  color: black !important;
-  text-transform: none !important;
-  font-weight: bold !important;
-  padding: 0px 15px !important;
-  border: none !important;
-  margin: auto !important;
-  height: 37px !important;
-  border-radius: 34px !important;
-  font-stretch: ultra-expanded !important;
-  font-family: "PokeTube flex";
-  width: 20em;
+  .subscribe-button {
+  background-color: white !important;
+  color: black !important;
+  text-transform: none !important;
+  font-weight: bold !important;
+  padding: 0px 15px !important;
+  border: none !important;
+  margin: auto !important;
+  height: 37px !important;
+  border-radius: 34px !important;
+  font-stretch: ultra-expanded !important;
+  font-family: "PokeTube flex";
+  width: 20em;
 }
-  .video-grid{
-    justify-content:center;
-  }       
+  .video-grid{
+    justify-content:center;
+  }       
 
-  .channel-info{
-    text-align:center;
-  }
-  
-  
+  .channel-info{
+    text-align:center;
+  }
+  
+  
 .sticky-top {
-	 position: sticky;
-	 top: 0px;
-	 z-index: 999;
+     position: sticky;
+     top: 0px;
+     z-index: 999;
 }
- .responsive {
-	 width: 100%;
-	 overflow-x: auto;
+ .responsive {
+     width: 100%;
+     overflow-x: auto;
 }
- .tabs {
-	 display: table;
-   font-family:inter;
-	 border-collapse: separate;
-	 table-layout: auto;
+ .tabs {
+     display: table;
+   font-family:inter;
+     border-collapse: separate;
+     table-layout: auto;
 }
- .tabs.tabs-center {
-	 margin: auto;
-   font-size:15px
+ .tabs.tabs-center {
+     margin: auto;
+   font-size:15px
 }
 
- .tabs.tabs-justify {
-	 width: 100%;
-	 table-layout: fixed;
+ .tabs.tabs-justify {
+     width: 100%;
+     table-layout: fixed;
 }
- .tabs a.tab {
-	 position: relative;
-	 display: table-cell;
-   text-transform:uppercase;
-	 transition: all ease 0.3s;
-	 padding: 1em 1.6em;
-	 transform: translate3d(0, 0, 0);
-	 color: #fff;
-	 white-space: nowrap;
-	 cursor: pointer;
+ .tabs a.tab {
+     position: relative;
+     display: table-cell;
+   text-transform:uppercase;
+     transition: all ease 0.3s;
+     padding: 1em 1.6em;
+     transform: translate3d(0, 0, 0);
+     color: #fff;
+     white-space: nowrap;
+     cursor: pointer;
 }
- .tabs a.tab:hover {
-	 color: #3cb4fa;
+ .tabs a.tab:hover {
+     color: #3cb4fa;
 }
- .tabs a.tab:after {
-	 transition: all 0.3s cubic-bezier(1, 0, 0, 1);
-	 will-change: transform, box-shadow, opacity;
-	 position: absolute;
-	 content: '';
-	 height: 3px;
-	 bottom: 0px;
-	 left: 0px;
-	 right: 0px;
-	 border-radius: 3px 3px 0px 0px;
-	 background: #9fdafd;
-	 box-shadow: 0px 4px 10px 3px rgba(60, 180, 250, .15);
-	 opacity: 0;
-	 transform: scale(0, 1);
+ .tabs a.tab:after {
+     transition: all 0.3s cubic-bezier(1, 0, 0, 1);
+     will-change: transform, box-shadow, opacity;
+     position: absolute;
+     content: '';
+     height: 3px;
+     bottom: 0px;
+     left: 0px;
+     right: 0px;
+     border-radius: 3px 3px 0px 0px;
+     background: #9fdafd;
+     box-shadow: 0px 4px 10px 3px rgba(60, 180, 250, .15);
+     opacity: 0;
+     transform: scale(0, 1);
 }
- .tabs a.tab.active {
-	 color: #fff;
+ .tabs a.tab.active {
+     color: #fff;
 }
- .tabs a.tab.active:after {
-	 opacity: 1;
-	 transform: scale(1, 1);
+ .tabs a.tab.active:after {
+     opacity: 1;
+     transform: scale(1, 1);
 }
-  body {
-    background-color:#111
-  }
-  
-    
- .subscribe-button:hover {
-	text-decoration: none !important;
-	background: #f2ebeb !important;
-	cursor: pointer;
+  body {
+    background-color:#111
+  }
+  
+    
+ .subscribe-button:hover {
+    text-decoration: none !important;
+    background: #f2ebeb !important;
+    cursor: pointer;
 }
-  </style>
-                 <% } %>
+  </style>
+                 <% } %>
 
-   <!-- STYLES END -->
-  </head>
+   <!-- STYLES END -->
+  </head>
 <body>
 
-                  <% if (!isMobile) { %>  
-     <nav>
-      <div class="left"><a class="class" href="/143" style=font-family:Inter,sans-serif;color:#fff> <img style="transform: scale(1.3);padding-left:0.9em;width: 8.5em;display: block;margin-left: auto;margin-right: auto;" src="/css/logo.svg?v=5">         </a>             </div>                                    
-      <div class="middle">
-      <div class="search" style="margin-right: 5em;">
-        
-        <form action="/search">
-   <input class="search-bar" autocomplete="on" id="fname" name="query" style="color:#fff;font-family:Inter,sans-serif;border-radius: 8px;"  >
-  
+                  <% if (!isMobile) { %>  
+     <nav>
+      <div class="left"><a class="class" href="/143" style=font-family:Inter,sans-serif;color:#fff> <img style="transform: scale(1.3);padding-left:0.9em;width: 8.5em;display: block;margin-left: auto;margin-right: auto;" src="/css/logo.svg?v=5">         </a>             </div>                                    
+      <div class="middle">
+      <div class="search" style="margin-right: 5em;">
+        
+        <form action="/search">
+   <input class="search-bar" autocomplete="on" id="fname" name="query" style="color:#fff;font-family:Inter,sans-serif;border-radius: 8px;"  >
+  
 
-          <button class="btn btn-success" type="submit"><i class="fa-light fa-search"></i></button>
-        
-        </form>
-  
-      </div>
- 
-      </div>
-      <div class="right" style="background: #333;border-radius: 2em;height: 49px;margin-top: 5px;">
-            <a href="https://youtube.com/channel/<%= ID %>" style="text-decoration: none;" title="Open on YouTube">
-          <i style="display: block;margin-left: auto;margin-right: auto;" class="fa-brands fa-youtube"></i>
-        </a>
-      <a href="/privacy" style="text-decoration: none;" title="Privacy Policy">
-          <i style="display: block;margin-left: auto;margin-right: auto;" class="fa-light fa-shield"></i>
-        </a>
-        <a href="/video/upload" style="text-decoration: none;" title="Upload Video">
-          <i style="display: block;margin-left: auto;margin-right: auto;" class="fa-light fa-video"></i>
-        </a>
-      </div>
-    </nav>
-	   
- 
-                                                                                      <% } %>
+          <button class="btn btn-success" type="submit"><i class="fa-light fa-search"></i></button>
+        
+        </form>
+  
+      </div>
+ 
+      </div>
+      <div class="right" style="background: #333;border-radius: 2em;height: 49px;margin-top: 5px;">
+            <a href="https://youtube.com/channel/<%= ID %>" style="text-decoration: none;" title="Open on YouTube">
+          <i style="display: block;margin-left: auto;margin-right: auto;" class="fa-brands fa-youtube"></i>
+        </a>
+      <a href="/privacy" style="text-decoration: none;" title="Privacy Policy">
+          <i style="display: block;margin-left: auto;margin-right: auto;" class="fa-light fa-shield"></i>
+        </a>
+        <a href="/video/upload" style="text-decoration: none;" title="Upload Video">
+          <i style="display: block;margin-left: auto;margin-right: auto;" class="fa-light fa-video"></i>
+        </a>
+      </div>
+    </nav>
+       
+ 
+                                                                                      <% } %>
 
 
-	   
-                         <% if (isMobile) { %>  
-      <nav style="background-color:#111">
-      <div class="left">
-  <i onclick="window.history.back()" style="color:#fff;padding: 10px;" class="fa-solid fa-chevron-left"></i>
-         
-  <p style="font-family:Poketube flex,sans-serif;font-weight:1000;font-stretch: extra-expanded;"><%=cinv.author%></p>
+       
+                         <% if (isMobile) { %>  
+      <nav style="background-color:#111">
+      <div class="left">
+  <i onclick="window.history.back()" style="color:#fff;padding: 10px;" class="fa-solid fa-chevron-left"></i>
+         
+  <p style="font-family:Poketube flex,sans-serif;font-weight:1000;font-stretch: extra-expanded;"><%=cinv.author%></p>
 
-        </div>                                    
-     
-        <div class="right">
-               
-       <a href="/app?tab=search" style="position: absolute;right: 0;margin: 2em;" ><i class="fa-light fa-search"></i></a> 
+        </div>                                    
+     
+        <div class="right">
+               
+       <a href="/app?tab=search" style="position: absolute;right: 0;margin: 2em;" ><i class="fa-light fa-search"></i></a> 
 
-            </div>
-     
- 
-         <hr style="clear: both;display: block;border: none;border-bottom: 0.5px solid #2f2f2f;/*! width: 4.5em; */height: 0;">
+            </div>
+     
+ 
+         <hr style="clear: both;display: block;border: none;border-bottom: 0.5px solid #2f2f2f;/*! width: 4.5em; */height: 0;">
 
- 
-    </nav>
+ 
+    </nav>
 
-                                                                                     <% } %>
-                         <% if (cinv?.error) { %>  
+                                                                                     <% } %>
+                         <% if (cinv?.error) { %>  
 <style>
 
 body {
@@ -676,508 +677,508 @@ background: #111 !important;
 height: 100%;
 }
 .banned-user {
-	border-radius: 50%;
-	margin-bottom: -2em;
-	pointer-events: none;
+    border-radius: 50%;
+    margin-bottom: -2em;
+    pointer-events: none;
 }
 .ban-reason {
-    background:  #b91f1f;
-  border-radius: 0.5px;
-  padding: 10px;
- } 
+    background:  #b91f1f;
+  border-radius: 0.5px;
+  padding: 10px;
+ } 
 
 </style>
-<p class="ban-reason"> 
-  <%- cinv?.error %> 
-  <% if (cinv?.error === "Could not get channel info.") { %>  
-    <a href="">Refresh?</a>
-  <% } %>
+<p class="ban-reason"> 
+  <%- cinv?.error %> 
+  <% if (cinv?.error === "Could not get channel info.") { %>  
+    <a href="">Refresh?</a>
+  <% } %>
 </p>
 
-                                                                                           <% } %>
+                                                                                           <% } %>
 
-        <section class=youtube-video>
+        <section class=youtube-video>
 <div class="channel-page">
 
 <div class="channel-page">
 
-                                                      <% if (!cinv?.error) { %>  
-    
-          <% if (!isMobile) { %>  
-            <div class="channel-info-container" style="text-align: center;">
-              
+                                                      <% if (!cinv?.error) { %>  
+    
+          <% if (!isMobile) { %>  
+            <div class="channel-info-container" style="text-align: center;">
+              
 <% if (cinv?.authorBanners) { %>
-    <% let bannerFound = false; %>
-    <% for (let i = 0; i < cinv.authorBanners.length; i++) { %>
-        <% if (cinv.authorBanners[i]?.url) { %>
-            <img src="<%- media_proxy_url %>/proxy?url=<%= cinv.authorBanners[i].url %>" style="height: 30em; object-fit: cover; pointer-events: none;" id="banner_ID_<%= i %>">
-            <% bannerFound = true; %>
-            <% break; %>
-        <% } %>
-    <% } %>
-    <% if (!bannerFound) { %>
-        <img src="/static/shapes-dark.png" style="height: 30em; object-fit: cover; pointer-events: none;" id="default_banner">
-    <% } %>
+    <% let bannerFound = false; %>
+    <% for (let i = 0; i < cinv.authorBanners.length; i++) { %>
+        <% if (cinv.authorBanners[i]?.url) { %>
+            <img src="<%- media_proxy_url %>/proxy?url=<%= cinv.authorBanners[i].url %>" style="height: 30em; object-fit: cover; pointer-events: none;" id="banner_ID_<%= i %>">
+            <% bannerFound = true; %>
+            <% break; %>
+        <% } %>
+    <% } %>
+    <% if (!bannerFound) { %>
+        <img src="/static/shapes-dark.png" style="height: 30em; object-fit: cover; pointer-events: none;" id="default_banner">
+    <% } %>
 <% } else { %>
-    <img src="/static/shapes-dark.png" style="height: 30em; object-fit: cover; pointer-events: none;" id="default_banner">
+    <img src="/static/shapes-dark.png" style="height: 30em; object-fit: cover; pointer-events: none;" id="default_banner">
 <% } %>
 
 
 <div class="channel-info" style="margin-bottom: 3em;margin-left:2em;margin-top: -11em;">
 <a
-  href="/avatars/<%= cinv?.authorThumbnails[5].url.replace('https://yt3.googleusercontent.com/', '') %>"
-  class="avatar"
-  onclick="event.preventDefault();(function(src){
-    var old=document.getElementById('avatar-lightbox');
-    if(old) old.remove();
-    var overlay=document.createElement('div');
-    overlay.id='avatar-lightbox';
-    overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:999999;padding:24px;cursor:pointer;flex-direction:column;gap:16px;';
-    overlay.onclick=function(){overlay.remove();};
-    var img=document.createElement('img');
-    img.src=src;
-    img.alt='Channel Avatar';
-    img.style.cssText='display:block;max-width:min(90vw,900px);max-height:80vh;width:auto;height:auto;object-fit:contain;border-radius:18px;box-shadow:0 12px 40px rgba(0,0,0,0.45);cursor:pointer;';
-    img.onclick=function(e){e.stopPropagation();overlay.remove();};
-    var btn=document.createElement('a');
-    btn.href=src;
-    btn.target='_blank';
-    btn.textContent='View full image';
-    btn.style.cssText='display:inline-block;height:36px;line-height:36px;padding:0 16px;background-color:#f1f1f1;color:#0f0f0f;text-decoration:none;border-radius:18px;font-family:\'Roboto\', Arial, sans-serif;font-weight:500;font-size:14px;transition:background-color 0.2s cubic-bezier(0.05, 0, 0, 1);';
-    btn.onmouseenter=function(){this.style.backgroundColor='#d9d9d9';};
-    btn.onmouseleave=function(){this.style.backgroundColor='#f1f1f1';};
-    btn.onclick=function(e){e.stopPropagation();};
-    overlay.appendChild(img);
-    overlay.appendChild(btn);
-    document.body.appendChild(overlay);
-  })(this.href);return false;"
+  href="/avatars/<%= cinv?.authorThumbnails[5].url.replace('https://yt3.googleusercontent.com/', '') %>"
+  class="avatar"
+  onclick="event.preventDefault();(function(src){
+    var old=document.getElementById('avatar-lightbox');
+    if(old) old.remove();
+    var overlay=document.createElement('div');
+    overlay.id='avatar-lightbox';
+    overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:999999;padding:24px;cursor:pointer;flex-direction:column;gap:16px;';
+    overlay.onclick=function(){overlay.remove();};
+    var img=document.createElement('img');
+    img.src=src;
+    img.alt='Channel Avatar';
+    img.style.cssText='display:block;max-width:min(90vw,900px);max-height:80vh;width:auto;height:auto;object-fit:contain;border-radius:18px;box-shadow:0 12px 40px rgba(0,0,0,0.45);cursor:pointer;';
+    img.onclick=function(e){e.stopPropagation();overlay.remove();};
+    var btn=document.createElement('a');
+    btn.href=src;
+    btn.target='_blank';
+    btn.textContent='View full image';
+    btn.style.cssText='display:inline-block;height:36px;line-height:36px;padding:0 16px;background-color:#f1f1f1;color:#0f0f0f;text-decoration:none;border-radius:18px;font-family:\'Roboto\', Arial, sans-serif;font-weight:500;font-size:14px;transition:background-color 0.2s cubic-bezier(0.05, 0, 0, 1);';
+    btn.onmouseenter=function(){this.style.backgroundColor='#d9d9d9';};
+    btn.onmouseleave=function(){this.style.backgroundColor='#f1f1f1';};
+    btn.onclick=function(e){e.stopPropagation();};
+    overlay.appendChild(img);
+    overlay.appendChild(btn);
+    document.body.appendChild(overlay);
+  })(this.href);return false;"
 >
-  <img
-    src="/avatars/<%= cinv?.authorThumbnails[5].url.replace('https://yt3.googleusercontent.com/', '') %>"
-    alt="Channel Avatar"
-    style="border: 1px solid gray; border-radius: 50%;"
-  >
+  <img
+    src="/avatars/<%= cinv?.authorThumbnails[5].url.replace('https://yt3.googleusercontent.com/', '') %>"
+    alt="Channel Avatar"
+    style="border: 1px solid gray; border-radius: 50%;"
+  >
 </a>
 
 
-<!-- yeah i know very funny name lol -->      
-    <% 
+<!-- yeah i know very funny name lol -->      
+    <% 
 function authorVerifiedChecker3000() {
-  const sources = [tj, shorts, stream];
+  const sources = [tj, shorts, stream];
 
-  const hasVerified = (source) =>
-    source?.videos?.[0]?.authorVerified === true;
+  const hasVerified = (source) =>
+    source?.videos?.[0]?.authorVerified === true;
 
-  return sources.some(hasVerified);
+  return sources.some(hasVerified);
 }
 
 %>
 
 <% if (authorVerifiedChecker3000()) { %>
-                <style>
+                <style>
 
-                              .name {
-              border:solid 1px #df80ff;
-                }  
-                
-                </style>
+                              .name {
+              border:solid 1px #df80ff;
+                }  
+                
+                </style>
 
-        
-                
-                                               <% } %>
+        
+                
+                                               <% } %>
 
-			<div class="name" style="background: #333;border-radius: 12px;padding: 17px;height: 7em;margin-left: 4em;margin-top: 7px;gap: 3px;">
-				<p style="font-family:PokeTube Flex,sans-serif;font-weight:1000;font-stretch: ultra-expanded;margin-top: 16px;margin-bottom: 15px;"><%=cinv.author%>
-          
+            <div class="name" style="background: #333;border-radius: 12px;padding: 17px;height: 7em;margin-left: 4em;margin-top: 7px;gap: 3px;">
+                <p style="font-family:PokeTube Flex,sans-serif;font-weight:1000;font-stretch: ultra-expanded;margin-top: 16px;margin-bottom: 15px;"><%=cinv.author%>
+          
 <% if (authorVerifiedChecker3000()) { %>
 
-  <span style="padding:1px;padding-top:2.5px !important;display:inline-flex;border-radius:3px;">
-<a href="https://support.google.com/youtube/answer/3046484?hl=en">
+  <span style="padding:1px;padding-top:2.5px !important;display:inline-flex;border-radius:3px;">
+<a href="https://support.google.com/youtube/answer/3046484?hl=en-GB">
 
-    <i class="icon ion ion-md-checkmark-circle" style="width:18px;margin-right:1px" title="Verified Channel"></i>
-    </a>
-  </span>
+    <i class="icon ion ion-md-checkmark-circle" style="width:18px;margin-right:1px" title="Verified Channel"></i>
+    </a>
+  </span>
 <% } %>
 
 <% if (cinv && cinv.channelHandle) { %>
-  <span style="font-size: 10px;color: gray;">
-    <%- cinv.channelHandle %>
-  </span>
+  <span style="font-size: 10px;color: gray;">
+    <%- cinv.channelHandle %>
+  </span>
 <% } %>
-</p>           
+</p>           
 <p style="margin-bottom: -17px;" class="subs">
-  <%= subs %> subscribers<%- cinv.pronouns ? ` - ${cinv.pronouns} <a href="https://support.google.com/youtube/answer/13871472" target="_blank" title="Learn more" style="text-decoration: none; font-size: 0.9em;">ⓘ</a>` : '' %>
+  <%= subs %> subscribers<%- cinv.pronouns ? ` - ${cinv.pronouns} <a href="https://support.google.com/youtube/answer/13871472" target="_blank" title="Learn more" style="text-decoration: none; font-size: 0.9em;">ⓘ</a>` : '' %>
 </p>
- 
-<p style="padding:0;font-weight:bold;max-inline-size: 37em;display: -webkit-box;-webkit-line-clamp: 3;-webkit-box-orient: vertical;"> 
- 
+ 
+<p style="padding:0;font-weight:bold;max-inline-size: 37em;display: -webkit-box;-webkit-line-clamp: 3;-webkit-box-orient: vertical;"> 
+ 
 <% try { %>
 <a href="/channel?id=<%=ID%>&tab=about&legacy=true" id="popup-trigger" style=" color: #fff !important;">
 <%- getFirstLine(cinv.description).substring(0, 41) + "..." || "See More from this channel..." %>
 <% } catch (error) { %>
-  <!-- Handle the error here, if it occurs -->
-  <p>Error: <%= error.message %></p>
+  <!-- Handle the error here, if it occurs -->
+  <p>Error: <%= error.message %></p>
 <% } %>
 
-  <i class="fa-thin fa-angle-right"></i></a><br><button class="subscribe-button needs-js" style="text-decoration: none;margin-right:6px !important;margin-top: 10px !important;margin-left: -4px !important;">    <a style="color: black;
-white-space: nowrap;text-decoration: none;" id="sub">Subscribe</a></button><button class="subscribe-button " style="text-decoration: none;">    <a style="color: black;
+  <i class="fa-thin fa-angle-right"></i></a><br><button class="subscribe-button needs-js" style="text-decoration: none;margin-right:6px !important;margin-top: 10px !important;margin-left: -4px !important;">    <a style="color: black;
+white-space: nowrap;text-decoration: none;" id="sub">Subscribe</a></button><button class="subscribe-button " style="text-decoration: none;">    <a style="color: black;
 white-space: nowrap;text-decoration: none;" href="/feeds/videos.xml?channel_id=<%=ID%>">RSS feed </a></button>
-      
-        </p>
-  
- 			</div>
-  
-      
-		</div>
-                                    <% if (!isMobile) { %>  
-                                      <div style="display: flex;
-  flex-direction: row;">
-                                      <div class="tabs  tabs-center" style="margin-top: 26px;">
-                        <% if (!tab) { %>
+      
+        </p>
+  
+             </div>
+  
+      
+        </div>
+                                    <% if (!isMobile) { %>  
+                                      <div style="display: flex;
+  flex-direction: row;">
+                                      <div class="tabs  tabs-center" style="margin-top: 26px;">
+                        <% if (!tab) { %>
 
-                <a href="/channel?id=<%=ID%>" class="tab active" style="color:#cfe2f3;">Videos</a>
-              
-<%  if (Array.isArray(shorts?.videos)) { %> 
-    <%  if (shorts.videos[0]) { %> 
-<%  if (turntomins(shorts.videos[0].lengthSeconds)  != "aN:aN" ) { %> 
+                <a href="/channel?id=<%=ID%>" class="tab active" style="color:#cfe2f3;">Videos</a>
+              
+<%  if (Array.isArray(shorts?.videos)) { %> 
+    <%  if (shorts.videos[0]) { %> 
+<%  if (turntomins(shorts.videos[0].lengthSeconds)  != "aN:aN" ) { %> 
 
 
-                   <a href="/channel?id=<%=ID%>&tab=shorts" class="tab shr">Shorts</a>
-  <% } %>
-      <% } %>
+                   <a href="/channel?id=<%=ID%>&tab=shorts" class="tab shr">Shorts</a>
+  <% } %>
+      <% } %>
 
-      <% } %>
-        
-                          <%  if (Array.isArray(stream?.videos)) { %> 
-                                <%  if (stream.videos[0]) { %> 
+      <% } %>
+        
+                          <%  if (Array.isArray(stream?.videos)) { %> 
+                                <%  if (stream.videos[0]) { %> 
 
-<%  if (turntomins(stream.videos[0].lengthSeconds)  != "aN:aN" ) { %> 
+<%  if (turntomins(stream.videos[0].lengthSeconds)  != "aN:aN" ) { %> 
 
-                   <a href="/channel?id=<%=ID%>&tab=live" class="tab" style="color:#d9ead3;">Live</a>
-  <% } %>
-      <% } %>
+                   <a href="/channel?id=<%=ID%>&tab=live" class="tab" style="color:#d9ead3;">Live</a>
+  <% } %>
+      <% } %>
 
-      <% } %>
+      <% } %>
 
-                           <%  if (Array.isArray(c?.comments)) { %> 
+                           <%  if (Array.isArray(c?.comments)) { %> 
 
-  <%  if (c.comments.length != "0") { %> 
+  <%  if (c.comments.length != "0") { %> 
 
-     <a  href="/channel?id=<%=ID%>&tab=community"  class="tab" style="color:pink">Posts</a>
-                                                                         <% } %>
-                                                                         <% } %>
+     <a  href="/channel?id=<%=ID%>&tab=community"  class="tab" style="color:pink">Posts</a>
+                                                                         <% } %>
+                                                                         <% } %>
 
-<%  if (Array.isArray(playlist?.playlists)) { %> 
+<%  if (Array.isArray(playlist?.playlists)) { %> 
 
-  <%  if (playlist.playlists.length != "0") { %> 
+  <%  if (playlist.playlists.length != "0") { %> 
 
-     <a  href="/channel?id=<%=ID%>&tab=playlist"  class="tab" style="color:pink">Playlists</a>
-                                                                         <% } %>
-                                                                         <% } %>
+     <a  href="/channel?id=<%=ID%>&tab=playlist"  class="tab" style="color:pink">Playlists</a>
+                                                                         <% } %>
+                                                                         <% } %>
 
-<%  if (Array.isArray(released?.playlists)) { %> 
+<%  if (Array.isArray(released?.playlists)) { %> 
 
-  <%  if (released.playlists.length != "0") { %> 
+  <%  if (released.playlists.length != "0") { %> 
 
-     <a  href="/channel?id=<%=ID%>&tab=releases"  class="tab" style="color:pink">Releases</a>
-                                                                         <% } %>
-                                                                         <% } %>
+     <a  href="/channel?id=<%=ID%>&tab=releases"  class="tab" style="color:pink">Releases</a>
+                                                                         <% } %>
+                                                                         <% } %>
 
- 
-                                                                <% } %>
-                                                                  
+ 
+                                                                <% } %>
+                                                                  
 <% if (tab === "playlist") { %>
 
-                <a href="/channel?id=<%=ID%>" class="tab" style="color:#cfe2f3;">Videos</a>
-              
-<%  if (Array.isArray(shorts?.videos)) { %> 
-    <%  if (shorts.videos[0]) { %> 
-<%  if (turntomins(shorts.videos[0].lengthSeconds)  != "aN:aN" ) { %> 
+                <a href="/channel?id=<%=ID%>" class="tab" style="color:#cfe2f3;">Videos</a>
+              
+<%  if (Array.isArray(shorts?.videos)) { %> 
+    <%  if (shorts.videos[0]) { %> 
+<%  if (turntomins(shorts.videos[0].lengthSeconds)  != "aN:aN" ) { %> 
 
 
-                   <a href="/channel?id=<%=ID%>&tab=shorts" class="tab shr">Shorts</a>
-  <% } %>
-      <% } %>
+                   <a href="/channel?id=<%=ID%>&tab=shorts" class="tab shr">Shorts</a>
+  <% } %>
+      <% } %>
 
-      <% } %>
-        
-                          <%  if (Array.isArray(stream?.videos)) { %> 
-                                <%  if (stream.videos[0]) { %> 
+      <% } %>
+        
+                          <%  if (Array.isArray(stream?.videos)) { %> 
+                                <%  if (stream.videos[0]) { %> 
 
-<%  if (turntomins(stream.videos[0].lengthSeconds)  != "aN:aN" ) { %> 
+<%  if (turntomins(stream.videos[0].lengthSeconds)  != "aN:aN" ) { %> 
 
-                   <a href="/channel?id=<%=ID%>&tab=live" class="tab" style="color:#d9ead3;">Live</a>
-  <% } %>
-      <% } %>
+                   <a href="/channel?id=<%=ID%>&tab=live" class="tab" style="color:#d9ead3;">Live</a>
+  <% } %>
+      <% } %>
 
-      <% } %>
+      <% } %>
 
-                           <%  if (Array.isArray(c?.comments)) { %> 
+                           <%  if (Array.isArray(c?.comments)) { %> 
 
-  <%  if (c.comments.length != "0") { %> 
+  <%  if (c.comments.length != "0") { %> 
 
-     <a  href="/channel?id=<%=ID%>&tab=community"  class="tab" style="color:pink">Posts</a>
-                                                                         <% } %>
-                                                                         <% } %>
+     <a  href="/channel?id=<%=ID%>&tab=community"  class="tab" style="color:pink">Posts</a>
+                                                                         <% } %>
+                                                                         <% } %>
 
-<%  if (Array.isArray(playlist?.playlists)) { %> 
+<%  if (Array.isArray(playlist?.playlists)) { %> 
 
-  <%  if (playlist.playlists.length != "0") { %> 
+  <%  if (playlist.playlists.length != "0") { %> 
 
-     <a  href="/channel?id=<%=ID%>&tab=playlist"  class="tab active" style="color:pink">Playlists</a>
-                                                                         <% } %>
-                                                                         <% } %>
+     <a  href="/channel?id=<%=ID%>&tab=playlist"  class="tab active" style="color:pink">Playlists</a>
+                                                                         <% } %>
+                                                                         <% } %>
 
-<%  if (Array.isArray(released?.playlists)) { %> 
+<%  if (Array.isArray(released?.playlists)) { %> 
 
-  <%  if (released.playlists.length != "0") { %> 
+  <%  if (released.playlists.length != "0") { %> 
 
-     <a  href="/channel?id=<%=ID%>&tab=releases"  class="tab" style="color:pink">Releases</a>
-                                                                         <% } %>
-                                                                         <% } %>
+     <a  href="/channel?id=<%=ID%>&tab=releases"  class="tab" style="color:pink">Releases</a>
+                                                                         <% } %>
+                                                                         <% } %>
 
- 
-                                                                <% } %>
-                                                                                                                                    
+ 
+                                                                <% } %>
+                                                                                                                                    
 <% if (tab === "releases") { %>
 
-                <a href="/channel?id=<%=ID%>" class="tab" style="color:#cfe2f3;">Videos</a>
-              
-<%  if (Array.isArray(shorts?.videos)) { %> 
-    <%  if (shorts.videos[0]) { %> 
-<%  if (turntomins(shorts.videos[0].lengthSeconds)  != "aN:aN" ) { %> 
+                <a href="/channel?id=<%=ID%>" class="tab" style="color:#cfe2f3;">Videos</a>
+              
+<%  if (Array.isArray(shorts?.videos)) { %> 
+    <%  if (shorts.videos[0]) { %> 
+<%  if (turntomins(shorts.videos[0].lengthSeconds)  != "aN:aN" ) { %> 
 
 
-                   <a href="/channel?id=<%=ID%>&tab=shorts" class="tab shr">Shorts</a>
-  <% } %>
-      <% } %>
+                   <a href="/channel?id=<%=ID%>&tab=shorts" class="tab shr">Shorts</a>
+  <% } %>
+      <% } %>
 
-      <% } %>
-        
-                          <%  if (Array.isArray(stream?.videos)) { %> 
-                                <%  if (stream.videos[0]) { %> 
+      <% } %>
+        
+                          <%  if (Array.isArray(stream?.videos)) { %> 
+                                <%  if (stream.videos[0]) { %> 
 
-<%  if (turntomins(stream.videos[0].lengthSeconds)  != "aN:aN" ) { %> 
+<%  if (turntomins(stream.videos[0].lengthSeconds)  != "aN:aN" ) { %> 
 
-                   <a href="/channel?id=<%=ID%>&tab=live" class="tab" style="color:#d9ead3;">Live</a>
-  <% } %>
-      <% } %>
+                   <a href="/channel?id=<%=ID%>&tab=live" class="tab" style="color:#d9ead3;">Live</a>
+  <% } %>
+      <% } %>
 
-      <% } %>
+      <% } %>
 
-                           <%  if (Array.isArray(c?.comments)) { %> 
+                           <%  if (Array.isArray(c?.comments)) { %> 
 
-  <%  if (c.comments.length != "0") { %> 
+  <%  if (c.comments.length != "0") { %> 
 
-     <a  href="/channel?id=<%=ID%>&tab=community"  class="tab" style="color:pink">Posts</a>
-                                                                         <% } %>
-                                                                         <% } %>
+     <a  href="/channel?id=<%=ID%>&tab=community"  class="tab" style="color:pink">Posts</a>
+                                                                         <% } %>
+                                                                         <% } %>
 
-<%  if (Array.isArray(playlist?.playlists)) { %> 
+<%  if (Array.isArray(playlist?.playlists)) { %> 
 
-  <%  if (playlist.playlists.length != "0") { %> 
+  <%  if (playlist.playlists.length != "0") { %> 
 
-     <a  href="/channel?id=<%=ID%>&tab=playlist"  class="tab" style="color:pink">Playlists</a>
-                                                                         <% } %>
-                                                                         <% } %>
+     <a  href="/channel?id=<%=ID%>&tab=playlist"  class="tab" style="color:pink">Playlists</a>
+                                                                         <% } %>
+                                                                         <% } %>
 
-<%  if (Array.isArray(released?.playlists)) { %> 
+<%  if (Array.isArray(released?.playlists)) { %> 
 
-  <%  if (released.playlists.length != "0") { %> 
+  <%  if (released.playlists.length != "0") { %> 
 
-     <a  href="/channel?id=<%=ID%>&tab=releases"  class="tab active" style="color:pink">Releases</a>
-                                                                         <% } %>
-                                                                         <% } %>
+     <a  href="/channel?id=<%=ID%>&tab=releases"  class="tab active" style="color:pink">Releases</a>
+                                                                         <% } %>
+                                                                         <% } %>
 
- 
-                                                                <% } %>
-                                                                             <% if (tab === "about") { %>
+ 
+                                                                <% } %>
+                                                                             <% if (tab === "about") { %>
 
-                <a href="/channel?id=<%=ID%>" class="tab" style="color:#cfe2f3;">Videos</a>
-<%  if (Array.isArray(shorts?.videos)) { %> 
-<%  if (shorts.videos[0]) { %> 
-<%  if (turntomins(shorts.videos[0].lengthSeconds)  != "aN:aN" ) { %> 
+                <a href="/channel?id=<%=ID%>" class="tab" style="color:#cfe2f3;">Videos</a>
+<%  if (Array.isArray(shorts?.videos)) { %> 
+<%  if (shorts.videos[0]) { %> 
+<%  if (turntomins(shorts.videos[0].lengthSeconds)  != "aN:aN" ) { %> 
 
-                   <a href="/channel?id=<%=ID%>&tab=shorts" class="tab shr">Shorts</a>
-  <% } %>
-                                                                             <% } %>
+                   <a href="/channel?id=<%=ID%>&tab=shorts" class="tab shr">Shorts</a>
+  <% } %>
+                                                                             <% } %>
 
-      <% } %>
+      <% } %>
 
- <%  if (Array?.isArray(stream?.videos)) { %> 
-<%  if (stream?.videos[0]) { %> 
-<%  if (turntomins(stream?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
-  
+ <%  if (Array?.isArray(stream?.videos)) { %> 
+<%  if (stream?.videos[0]) { %> 
+<%  if (turntomins(stream?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
+  
 
-                   <a href="/channel?id=<%=ID%>&tab=live" class="tab" style="color:#d9ead3;">Live</a>
-  <% } %>
-      <% } %>
-        <% } %>
-        
-  <%  if (Array?.isArray(c?.comments)) { %> 
+                   <a href="/channel?id=<%=ID%>&tab=live" class="tab" style="color:#d9ead3;">Live</a>
+  <% } %>
+      <% } %>
+        <% } %>
+        
+  <%  if (Array?.isArray(c?.comments)) { %> 
 
-  <%  if (c?.comments?.length != "0") { %> 
+  <%  if (c?.comments?.length != "0") { %> 
 
-     <a  href="/channel?id=<%=ID%>&tab=community"  class="tab" style="color:pink">Posts</a>
-                                                                             <% } %>
-                                             
-                                                                          <% } %>
+     <a  href="/channel?id=<%=ID%>&tab=community"  class="tab" style="color:pink">Posts</a>
+                                                                             <% } %>
+                                             
+                                                                          <% } %>
 
-                                                                <% } %>
-                                                                 
-                                                                      <% if (tab === "community") { %>
+                                                                <% } %>
+                                                                 
+                                                                      <% if (tab === "community") { %>
 
-                <a href="/channel?id=<%=ID%>" class="tab"  style="color:#cfe2f3;">Videos</a>
-                       <%  if (Array?.isArray(shorts?.videos)) { %> 
-<%  if (turntomins(shorts?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
+                <a href="/channel?id=<%=ID%>" class="tab"  style="color:#cfe2f3;">Videos</a>
+                       <%  if (Array?.isArray(shorts?.videos)) { %> 
+<%  if (turntomins(shorts?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
 
-                   <a href="/channel?id=<%=ID%>&tab=shorts" class="tab shr">Shorts</a>
-  <% } %>
-      <% } %>
-    
- <%  if (Array?.isArray(stream?.videos)) { %> 
-   <%  if (stream?.videos[0]) { %> 
+                   <a href="/channel?id=<%=ID%>&tab=shorts" class="tab shr">Shorts</a>
+  <% } %>
+      <% } %>
+    
+ <%  if (Array?.isArray(stream?.videos)) { %> 
+   <%  if (stream?.videos[0]) { %> 
 
-<%  if (turntomins(stream?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
+<%  if (turntomins(stream?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
 
-                   <a href="/channel?id=<%=ID%>&tab=live" class="tab" style="color:#d9ead3;">Live</a>
-  <% } %>
-      <% } %>
+                   <a href="/channel?id=<%=ID%>&tab=live" class="tab" style="color:#d9ead3;">Live</a>
+  <% } %>
+      <% } %>
 
-      <% } %>
+      <% } %>
 
-     <a  href="/channel?id=<%=ID%>&tab=community"  class="tab active" style="color:pink">Posts</a>
- 
-  
-<%  if (Array.isArray(playlist?.playlists)) { %> 
+     <a  href="/channel?id=<%=ID%>&tab=community"  class="tab active" style="color:pink">Posts</a>
+ 
+  
+<%  if (Array.isArray(playlist?.playlists)) { %> 
 
-  <%  if (playlist.playlists.length != "0") { %> 
+  <%  if (playlist.playlists.length != "0") { %> 
 
-     <a  href="/channel?id=<%=ID%>&tab=playlist"  class="tab" style="color:pink">Playlists</a>
-                                                                         <% } %>
-                                                                         <% } %>
+     <a  href="/channel?id=<%=ID%>&tab=playlist"  class="tab" style="color:pink">Playlists</a>
+                                                                         <% } %>
+                                                                         <% } %>
 
-<%  if (Array.isArray(released?.playlists)) { %> 
+<%  if (Array.isArray(released?.playlists)) { %> 
 
-  <%  if (released.playlists.length != "0") { %> 
+  <%  if (released.playlists.length != "0") { %> 
 
-     <a  href="/channel?id=<%=ID%>&tab=releases"  class="tab" style="color:pink">Releases</a>
-                                                                         <% } %>
-                                                                         <% } %>
+     <a  href="/channel?id=<%=ID%>&tab=releases"  class="tab" style="color:pink">Releases</a>
+                                                                         <% } %>
+                                                                         <% } %>
 
-                                                                <% } %>
+                                                                <% } %>
 
-                                                                                     <% if (tab === "shorts") { %>
- <%  if (Array?.isArray(tj?.videos)) { %> 
-   <%  if (tj?.videos[0]) { %> 
-<%  if (turntomins(tj?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
+                                                                                     <% if (tab === "shorts") { %>
+ <%  if (Array?.isArray(tj?.videos)) { %> 
+   <%  if (tj?.videos[0]) { %> 
+<%  if (turntomins(tj?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
 
-                <a href="/channel?id=<%=ID%>" class="tab" style="color:#cfe2f3;">Videos</a>
-  <% } %>
-      <% } %>
+                <a href="/channel?id=<%=ID%>" class="tab" style="color:#cfe2f3;">Videos</a>
+  <% } %>
+      <% } %>
 
-      <% } %>
-<%  if (Array?.isArray(shorts?.videos)) { %> 
+      <% } %>
+<%  if (Array?.isArray(shorts?.videos)) { %> 
 
-                   <a href="/channel?id=<%=ID%>&tab=shorts" class="tab active shr">Shorts</a>
-  <% } %>
- <%  if (Array?.isArray(stream?.videos)) { %> 
-   <%  if (stream?.videos[0]) { %> 
-<%  if (turntomins(stream?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
+                   <a href="/channel?id=<%=ID%>&tab=shorts" class="tab active shr">Shorts</a>
+  <% } %>
+ <%  if (Array?.isArray(stream?.videos)) { %> 
+   <%  if (stream?.videos[0]) { %> 
+<%  if (turntomins(stream?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
 
-                   <a href="/channel?id=<%=ID%>&tab=live" class="tab" style="color:#d9ead3;">Live</a>
-  <% } %>
-      <% } %>
+                   <a href="/channel?id=<%=ID%>&tab=live" class="tab" style="color:#d9ead3;">Live</a>
+  <% } %>
+      <% } %>
 
-      <% } %>
-        
-  <%  if (Array?.isArray(c?.comments)) { %> 
+      <% } %>
+        
+  <%  if (Array?.isArray(c?.comments)) { %> 
 
-  <%  if (c?.comments?.length != "0") { %> 
+  <%  if (c?.comments?.length != "0") { %> 
 
-     <a  href="/channel?id=<%=ID%>&tab=community"  class="tab" style="color:pink">Posts</a>
-                                                                         <% } %>
-                                                                         <% } %>
+     <a  href="/channel?id=<%=ID%>&tab=community"  class="tab" style="color:pink">Posts</a>
+                                                                         <% } %>
+                                                                         <% } %>
 
-                                                                           
-<%  if (Array.isArray(playlist?.playlists)) { %> 
+                                                                           
+<%  if (Array.isArray(playlist?.playlists)) { %> 
 
-  <%  if (playlist.playlists.length != "0") { %> 
+  <%  if (playlist.playlists.length != "0") { %> 
 
-     <a  href="/channel?id=<%=ID%>&tab=playlist"  class="tab" style="color:pink">Playlists</a>
-                                                                         <% } %>
-                                                                         <% } %>
-                                       
-<%  if (Array.isArray(released?.playlists)) { %> 
+     <a  href="/channel?id=<%=ID%>&tab=playlist"  class="tab" style="color:pink">Playlists</a>
+                                                                         <% } %>
+                                                                         <% } %>
+                                       
+<%  if (Array.isArray(released?.playlists)) { %> 
 
-  <%  if (released.playlists.length != "0") { %> 
+  <%  if (released.playlists.length != "0") { %> 
 
-     <a  href="/channel?id=<%=ID%>&tab=releases"  class="tab" style="color:pink">Releases</a>
-                                                                         <% } %>
-                                                                         <% } %>
-                                    
-                                                                <% } %>
-                                                                 
-    <% if (tab === "live") { %>
+     <a  href="/channel?id=<%=ID%>&tab=releases"  class="tab" style="color:pink">Releases</a>
+                                                                         <% } %>
+                                                                         <% } %>
+                                    
+                                                                <% } %>
+                                                                 
+    <% if (tab === "live") { %>
 
-                <a href="/channel?id=<%=ID%>" class="tab"  style="color:#cfe2f3;">Videos</a>
-<%  if (Array?.isArray(shorts?.videos)) { %> 
-  
-<%  if (turntomins(shorts?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
+                <a href="/channel?id=<%=ID%>" class="tab"  style="color:#cfe2f3;">Videos</a>
+<%  if (Array?.isArray(shorts?.videos)) { %> 
+  
+<%  if (turntomins(shorts?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
 
-                   <a href="/channel?id=<%=ID%>&tab=shorts" class="tab shr">Shorts</a>
-  <% } %>
-      <% } %>
-        
-     <%  if (Array?.isArray(stream?.videos)) { %> 
+                   <a href="/channel?id=<%=ID%>&tab=shorts" class="tab shr">Shorts</a>
+  <% } %>
+      <% } %>
+        
+     <%  if (Array?.isArray(stream?.videos)) { %> 
 
-                   <a href="/channel?id=<%=ID%>&tab=live" class="tab active" style="color:#d9ead3;">Live</a>
-  <% } %>
-    
-  <%  if (Array?.isArray(c?.comments)) { %> 
+                   <a href="/channel?id=<%=ID%>&tab=live" class="tab active" style="color:#d9ead3;">Live</a>
+  <% } %>
+    
+  <%  if (Array?.isArray(c?.comments)) { %> 
 
-  <%  if (c?.comments?.length != "0") { %> 
+  <%  if (c?.comments?.length != "0") { %> 
 
-     <a  href="/channel?id=<%=ID%>&tab=community"  class="tab" style="color:pink">Posts</a>
-                                                                         <% } %>
-                                                                         <% } %>
-                                        
-<%  if (Array.isArray(playlist?.playlists)) { %> 
+     <a  href="/channel?id=<%=ID%>&tab=community"  class="tab" style="color:pink">Posts</a>
+                                                                         <% } %>
+                                                                         <% } %>
+                                        
+<%  if (Array.isArray(playlist?.playlists)) { %> 
 
-  <%  if (playlist.playlists.length != "0") { %> 
+  <%  if (playlist.playlists.length != "0") { %> 
 
-     <a  href="/channel?id=<%=ID%>&tab=playlist"  class="tab" style="color:pink">Playlists</a>
-                                                                         <% } %>
-                                                                         <% } %>
+     <a  href="/channel?id=<%=ID%>&tab=playlist"  class="tab" style="color:pink">Playlists</a>
+                                                                         <% } %>
+                                                                         <% } %>
 
 
-<%  if (Array.isArray(released?.playlists)) { %> 
+<%  if (Array.isArray(released?.playlists)) { %> 
 
-  <%  if (released.playlists.length != "0") { %> 
+  <%  if (released.playlists.length != "0") { %> 
 
-     <a  href="/channel?id=<%=ID%>&tab=releases"  class="tab" style="color:pink">Releases</a>
-                                                                         <% } %>
-                                                                         <% } %>
+     <a  href="/channel?id=<%=ID%>&tab=releases"  class="tab" style="color:pink">Releases</a>
+                                                                         <% } %>
+                                                                         <% } %>
 
-                                                                <% } %>
-                                                                            
-            </div>
-     
-<input type="text" id="search" placeholder="Search :3" style="margin-top: 2em;height: 1em;color: #fff;background: #111;border-radius: 1em;padding: 7px;margin-left: auto;margin-right: 1em;">                                                                           </div>
-     
-     
-     <% } %>
-           
-	</div> 
-                                           <% } %>
-                                               <% if (isMobile) { %>  
-                   <div class="channel-info-container" style="text-align: center;">
-                                       <% if (cinv.authorBanners) { %>
+                                                                <% } %>
+                                                                            
+            </div>
+     
+<input type="text" id="search" placeholder="Search :3" style="margin-top: 2em;height: 1em;color: #fff;background: #111;border-radius: 1em;padding: 7px;margin-left: auto;margin-right: 1em;">                                                                           </div>
+     
+     
+     <% } %>
+           
+    </div> 
+                                           <% } %>
+                                               <% if (isMobile) { %>  
+                   <div class="channel-info-container" style="text-align: center;">
+                                       <% if (cinv.authorBanners) { %>
 
-          <img src="<%- media_proxy_url %>/proxy?url=<%=cinv?.authorBanners[3]?.url%>">
-                               <% } %>
-                                 
- 
+          <img src="<%- media_proxy_url %>/proxy?url=<%=cinv?.authorBanners[3]?.url%>">
+                               <% } %>
+                                 
+ 
 <div class="channel-info" style="display: flex;
 padding-bottom: 0;
 font-weight: bold;
@@ -1187,408 +1188,408 @@ gap: 0px;
 margin: auto;">
 
 
-			<a href="/channel?id=<%=ID%>" class="avatar" style="height: 6em;
+            <a href="/channel?id=<%=ID%>" class="avatar" style="height: 6em;
 display: flex;
 flex-direction: column;
 align-content: center;
 width: fit-content;
 margin-left: 10px;
 ">
-				<img  src="/avatars/<%=cinv.authorThumbnails[5].url.replace("https://yt3.googleusercontent.com/", "")%>" alt="Channel Avatar">
-        
-			</a>
-         <% 
+                <img  src="/avatars/<%=cinv.authorThumbnails[5].url.replace("https://yt3.googleusercontent.com/", "")%>" alt="Channel Avatar">
+        
+            </a>
+         <% 
 function authorVerifiedChecker4000() {
-  const sources = [tj, shorts, stream];
+  const sources = [tj, shorts, stream];
 
-  const hasVerified = (source) =>
-    source?.videos?.[0]?.authorVerified === true;
+  const hasVerified = (source) =>
+    source?.videos?.[0]?.authorVerified === true;
 
-  return sources.some(hasVerified);
+  return sources.some(hasVerified);
 }
 
 %>
-			<div class="name">
-				<p style="font-family:PokeTube Flex,sans-serif;font-weight:1000;font-stretch: ultra-expanded;white-space:yes;text-align: left;margin-left: 6.2em;margin-top: -7em;"> <%=cinv.author%> 
+            <div class="name">
+                <p style="font-family:PokeTube Flex,sans-serif;font-weight:1000;font-stretch: ultra-expanded;white-space:yes;text-align: left;margin-left: 6.2em;margin-top: -7em;"> <%=cinv.author%> 
 <% if (authorVerifiedChecker4000()) { %>
-<a href="https://support.google.com/youtube/answer/3046484?hl=en">
-    <i class="icon ion ion-md-checkmark-circle" style="width:18px;margin-right:1px" title="Verified Channel"></i>
-    </a>
+<a href="https://support.google.com/youtube/answer/3046484?hl=en-GB">
+    <i class="icon ion ion-md-checkmark-circle" style="width:18px;margin-right:1px" title="Verified Channel"></i>
+    </a>
 <% } %> </p>
-          <p style="margin: -9px;margin-left: 2em;margin-top:-1em">
-            			<%= subs %> subscribers <%- cinv.pronouns ? ` - ${cinv.pronouns} <a href="https://support.google.com/youtube/answer/13871472" target="_blank" title="Learn more" style="text-decoration: none; font-size: 0.9em;">ⓘ</a>` : '' %>
+          <p style="margin: -9px;margin-left: 2em;margin-top:-1em">
+                        <%= subs %> subscribers <%- cinv.pronouns ? ` - ${cinv.pronouns} <a href="https://support.google.com/youtube/answer/13871472" target="_blank" title="Learn more" style="text-decoration: none; font-size: 0.9em;">ⓘ</a>` : '' %>
 
-        </p>
-        <p style="margin-left: 2em;margin-bottom: -3em;font-size: 0.8em;color: gray;">@<%=ID%></p>
- 			</div>
-      <p style="padding:0;font-weight:bold;text-align:left;margin-left: 1em;margin-top: 0.2em;"> 
-     <%- getFirstLine(cinv.description).slice(0, 30) || "More from this channel (soon)"%> <a style="color:gray;margin-left:-2px" href="/channel?id=<%=ID%>&tab=about">
+        </p>
+        <p style="margin-left: 2em;margin-bottom: -3em;font-size: 0.8em;color: gray;">@<%=ID%></p>
+             </div>
+      <p style="padding:0;font-weight:bold;text-align:left;margin-left: 1em;margin-top: 0.2em;"> 
+     <%- getFirstLine(cinv.description).slice(0, 30) || "More from this channel (soon)"%> <a style="color:gray;margin-left:-2px" href="/channel?id=<%=ID%>&tab=about">
 ...more</a>
-        </p>
-         <a href="/feeds/videos.xml?channel_id=<%=ID%>"><button class="subscribe-button">RSS feed</button>
-</a> 
+        </p>
+         <a href="/feeds/videos.xml?channel_id=<%=ID%>"><button class="subscribe-button">RSS feed</button>
+</a> 
 
-    
-        <!-- MOBILE TABS -->
-  <% if (isMobile) { %>  
- 
-               
- 
-   <div style="text-align: center;padding: 3px;margin-top: 0px;">
-     
-     <div class="tabs tabs-center" style="overflow: scroll;width: 7em;font-size: 10px;margin-left: -1px;font-family: poketube flex !important;font-weight: 800 !important;font-stretch: ultra-expanded;">
+    
+        <!-- MOBILE TABS -->
+  <% if (isMobile) { %>  
+ 
+               
+ 
+   <div style="text-align: center;padding: 3px;margin-top: 0px;">
+     
+     <div class="tabs tabs-center" style="overflow: scroll;width: 7em;font-size: 10px;margin-left: -1px;font-family: poketube flex !important;font-weight: 800 !important;font-stretch: ultra-expanded;">
 
-       <% if (!tab) { %>
+       <% if (!tab) { %>
 
-                <a href="/channel?id=<%=ID%>" class="tab active">Videos</a>
-           
-<%  if (turntomins(shorts?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
+                <a href="/channel?id=<%=ID%>" class="tab active">Videos</a>
+           
+<%  if (turntomins(shorts?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
 
-                   <a href="/channel?id=<%=ID%>&tab=shorts" class="tab">Shorts</a>
-  <% } %>
+                   <a href="/channel?id=<%=ID%>&tab=shorts" class="tab">Shorts</a>
+  <% } %>
 
-  <%  if (turntomins(stream?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
-                     <a href="/channel?id=<%=ID%>&tab=live" class="tab">Live</a>
+  <%  if (turntomins(stream?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
+                     <a href="/channel?id=<%=ID%>&tab=live" class="tab">Live</a>
 
-  <% } %>
+  <% } %>
 
-    
-              <%  if (Array.isArray(c.comments)) { %> 
+    
+              <%  if (Array.isArray(c.comments)) { %> 
 
-  <%  if (c.comments.length != "0") { %> 
+  <%  if (c.comments.length != "0") { %> 
 
-     <a  href="/channel?id=<%=ID%>&tab=community"  class="tab">Posts</a>
-                                                                         <% } %>
-                                                                         <% } %>
-                                                                                                                                                                     <%  if (Array?.isArray(shorts?.videos)) { %> 
+     <a  href="/channel?id=<%=ID%>&tab=community"  class="tab">Posts</a>
+                                                                         <% } %>
+                                                                         <% } %>
+                                                                                                                                                                     <%  if (Array?.isArray(shorts?.videos)) { %> 
 
-      <% } %>                             
-                                                                <% } %>
-                                                                             <% if (tab ==="about") { %>
-                                                                          
-                <a href="/channel?id=<%=ID%>" class="tab">Videos</a>
+      <% } %>                             
+                                                                <% } %>
+                                                                             <% if (tab ==="about") { %>
+                                                                          
+                <a href="/channel?id=<%=ID%>" class="tab">Videos</a>
 
-<%  if (Array?.isArray(shorts?.videos)) { %> 
-  
-<%  if (turntomins(shorts?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
+<%  if (Array?.isArray(shorts?.videos)) { %> 
+  
+<%  if (turntomins(shorts?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
 
-                   <a href="/channel?id=<%=ID%>&tab=shorts" class="tab">Shorts</a>
-  <% } %>
-      <% } %>  <%  if (turntomins(stream?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
-                     <a href="/channel?id=<%=ID%>&tab=live" class="tab">Live</a>
+                   <a href="/channel?id=<%=ID%>&tab=shorts" class="tab">Shorts</a>
+  <% } %>
+      <% } %>  <%  if (turntomins(stream?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
+                     <a href="/channel?id=<%=ID%>&tab=live" class="tab">Live</a>
 
-  <% } %>
+  <% } %>
 
-                <a href="/channel?id=<%=ID%>&tab=community"  class="tab">Community</a>
-                                                                <% } %>
-                                                                 
-                                                                     <% if (tab ==="community") { %>
+                <a href="/channel?id=<%=ID%>&tab=community"  class="tab">Community</a>
+                                                                <% } %>
+                                                                 
+                                                                     <% if (tab ==="community") { %>
 
-                <a href="/channel?id=<%=ID%>" class="tab">Videos</a>
-                                                                                                                                                                                              <%  if (Array?.isArray(shorts?.videos)) { %> 
-  
-<%  if (turntomins(shorts?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
+                <a href="/channel?id=<%=ID%>" class="tab">Videos</a>
+                                                                                                                                                                                              <%  if (Array?.isArray(shorts?.videos)) { %> 
+  
+<%  if (turntomins(shorts?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
 
-                   <a href="/channel?id=<%=ID%>&tab=shorts" class="tab">Shorts</a>
-  <% } %>
-      <% } %>
-        <%  if (turntomins(stream?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
-                     <a href="/channel?id=<%=ID%>&tab=live" class="tab">Live</a>
+                   <a href="/channel?id=<%=ID%>&tab=shorts" class="tab">Shorts</a>
+  <% } %>
+      <% } %>
+        <%  if (turntomins(stream?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
+                     <a href="/channel?id=<%=ID%>&tab=live" class="tab">Live</a>
 
-  <% } %>
+  <% } %>
 
-                <a href="/channel?id=<%=ID%>&tab=community"  class="tab active">Posts</a>
-                                                                <% } %>
-        <% if (tab ==="shorts") { %>
+                <a href="/channel?id=<%=ID%>&tab=community"  class="tab active">Posts</a>
+                                                                <% } %>
+        <% if (tab ==="shorts") { %>
 
-                <a href="/channel?id=<%=ID%>" class="tab">Videos</a>
-                                                                                                                                                                                              <%  if (Array?.isArray(shorts?.videos)) { %> 
-  
-<%  if (turntomins(shorts?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
+                <a href="/channel?id=<%=ID%>" class="tab">Videos</a>
+                                                                                                                                                                                              <%  if (Array?.isArray(shorts?.videos)) { %> 
+  
+<%  if (turntomins(shorts?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
 
-                   <a href="/channel?id=<%=ID%>&tab=shorts" class="tab active">Shorts</a>
-  <% } %>
-      <% } %>
-        <%  if (turntomins(stream?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
-                     <a href="/channel?id=<%=ID%>&tab=live" class="tab">Live</a>
+                   <a href="/channel?id=<%=ID%>&tab=shorts" class="tab active">Shorts</a>
+  <% } %>
+      <% } %>
+        <%  if (turntomins(stream?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
+                     <a href="/channel?id=<%=ID%>&tab=live" class="tab">Live</a>
 
-  <% } %>
+  <% } %>
 
-   <%  if (Array.isArray(c.comments)) { %> 
+   <%  if (Array.isArray(c.comments)) { %> 
 
-  <%  if (c.comments.length != "0") { %> 
+  <%  if (c.comments.length != "0") { %> 
 
-                <a href="/channel?id=<%=ID%>&tab=community"  class="tab">Posts</a>                                                                <% } %>
-                                                                <% } %>
-                                                                                                                         <% } %>
+                <a href="/channel?id=<%=ID%>&tab=community"  class="tab">Posts</a>                                                                <% } %>
+                                                                <% } %>
+                                                                                                                         <% } %>
 
-                                                                  <% if (tab ==="live") { %>
+                                                                  <% if (tab ==="live") { %>
 
-                <a href="/channel?id=<%=ID%>" class="tab">Videos</a>
-                                                                                                                                                                                              <%  if (Array?.isArray(shorts?.videos)) { %> 
-  
-<%  if (turntomins(shorts?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
+                <a href="/channel?id=<%=ID%>" class="tab">Videos</a>
+                                                                                                                                                                                              <%  if (Array?.isArray(shorts?.videos)) { %> 
+  
+<%  if (turntomins(shorts?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
 
-                   <a href="/channel?id=<%=ID%>&tab=shorts" class="tab">Shorts</a>
-  <% } %>
-      <% } %>
-        <%  if (turntomins(stream?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
-                     <a href="/channel?id=<%=ID%>&tab=live" class="tab active">Live</a>
+                   <a href="/channel?id=<%=ID%>&tab=shorts" class="tab">Shorts</a>
+  <% } %>
+      <% } %>
+        <%  if (turntomins(stream?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
+                     <a href="/channel?id=<%=ID%>&tab=live" class="tab active">Live</a>
 
-  <% } %>
-             <%  if (Array.isArray(c.comments)) { %> 
+  <% } %>
+             <%  if (Array.isArray(c.comments)) { %> 
 
-  <%  if (c.comments.length != "0") { %> 
+  <%  if (c.comments.length != "0") { %> 
 
-                <a href="/channel?id=<%=ID%>&tab=community"  class="tab">Posts</a>                                                                <% } %>
-                                                                <% } %>
- 
-                                                                <% } %>
-            </div>
-     
-     
+                <a href="/channel?id=<%=ID%>&tab=community"  class="tab">Posts</a>                                                                <% } %>
+                                                                <% } %>
+ 
+                                                                <% } %>
+            </div>
+     
+     
 
-        </a>
+        </a>
 
- </a>
+ </a>
 </div>
- 
-   
-   </div>
-   
-                                              <% } %>
+ 
+   
+   </div>
+   
+                                              <% } %>
 
-        
-		</div>
-                
-	</div> 
-                               
-                                           <% } %>
-   
-     
-     <hr style="clear: both;display: block;border: none;border-bottom: 0.5px solid #2f2f2f;margin: 0 0;/*! width: 4.5em; */height: 0;">   
-                                             <% if (!tab) { %>  
-                                               
-                             
+        
+        </div>
+                
+    </div> 
+                               
+                                           <% } %>
+   
+     
+     <hr style="clear: both;display: block;border: none;border-bottom: 0.5px solid #2f2f2f;margin: 0 0;/*! width: 4.5em; */height: 0;">   
+                                             <% if (!tab) { %>  
+                                               
+                             
 
-             <div align="center">
-    <% if (!isMobile) { %>  
-            <div class="tags rec">
-                <% if (sort == "newest") { %>  
+             <div align="center">
+    <% if (!isMobile) { %>  
+            <div class="tags rec">
+                <% if (sort == "newest") { %>  
 
-              <a class="tag" style="background:var(--chip-background-hover)">
-                Recently Uploaded
-              </a>
-                    
-                  
-                                <a href="/channel?id=<%=ID%>&sort_by=popular" style="color:#fff;text-decoration:none;
+              <a class="tag" style="background:var(--chip-background-hover)">
+                Recently Uploaded
+              </a>
+                    
+                  
+                                <a href="/channel?id=<%=ID%>&sort_by=popular" style="color:#fff;text-decoration:none;
 " class="tag c">
-           Popular
-              </a>
-                  
-                       <a href="/channel?id=<%=ID%>&sort_by=oldest" style="color:#fff;text-decoration:none;
+           Popular
+              </a>
+                  
+                       <a href="/channel?id=<%=ID%>&sort_by=oldest" style="color:#fff;text-decoration:none;
 " class="tag c">
-           Oldest
-              </a>
-                  
-                   <% } %>
-                          <% if (sort) { %>  
+           Oldest
+              </a>
+                  
+                   <% } %>
+                          <% if (sort) { %>  
 
-                          <% if (sort === "popular") { %>  
+                          <% if (sort === "popular") { %>  
 
-            <a  href="/channel?id=<%=ID%>" style="color:#fff;text-decoration:none;
+            <a  href="/channel?id=<%=ID%>" style="color:#fff;text-decoration:none;
 " class="tag c" >
-                Recently Uploaded
-              </a>
-                  
-                                <a  style="background:var(--chip-background-hover)" class="tag">
-           Popular
-              </a>
-                            
-                                                   <a href="/channel?id=<%=ID%>&sort_by=oldest" style="color:#fff;text-decoration:none;
+                Recently Uploaded
+              </a>
+                  
+                                <a  style="background:var(--chip-background-hover)" class="tag">
+           Popular
+              </a>
+                            
+                                                   <a href="/channel?id=<%=ID%>&sort_by=oldest" style="color:#fff;text-decoration:none;
 " class="tag c">
-           Oldest
-              </a>
-                   <% } %>
-                     
-                     
-                          <% if (sort === "oldest") { %>  
+           Oldest
+              </a>
+                   <% } %>
+                     
+                     
+                          <% if (sort === "oldest") { %>  
 
-            <a  href="/channel?id=<%=ID%>" style="color:#fff;text-decoration:none;
+            <a  href="/channel?id=<%=ID%>" style="color:#fff;text-decoration:none;
 " class="tag c" >
-                Recently Uploaded
-              </a>
-                  
-                                <a    href="/channel?id=<%=ID%>&sort_by=popular" style="color:#fff;text-decoration:none;
+                Recently Uploaded
+              </a>
+                  
+                                <a    href="/channel?id=<%=ID%>&sort_by=popular" style="color:#fff;text-decoration:none;
 " class="tag">
-           Popular
-              </a>
-                            
-                                                   <a   style="background:var(--chip-background-hover)
+           Popular
+              </a>
+                            
+                                                   <a   style="background:var(--chip-background-hover)
 " class="tag c">
-           Oldest
-              </a>
-                   <% } %>
-                     
-                   <% } %>
+           Oldest
+              </a>
+                   <% } %>
+                     
+                   <% } %>
 
-              
+              
 
-                                       </div>
- <% } %>
+                                       </div>
+ <% } %>
 
-    <% if (isMobile) { %>  
-   
-      <details style="color:#fff;background:#0f0f0f">
-                        <summary style="color:#fff;text-align: left;margin-left: 5px;">Sort by</summary>
+    <% if (isMobile) { %>  
+   
+      <details style="color:#fff;background:#0f0f0f">
+                        <summary style="color:#fff;text-align: left;margin-left: 5px;">Sort by</summary>
 
-            <div class="tags rec" style="background:#0f0f0f;margin-left: auto;">
-                <% if (sort == "newest") { %>  
+            <div class="tags rec" style="background:#0f0f0f;margin-left: auto;">
+                <% if (sort == "newest") { %>  
 
-              <a class="tag" style="background:var(--chip-background-hover)">
-                Recently Uploaded
-              </a>
-                    
-                  
-                                <a href="/channel?id=<%=ID%>&sort_by=popular" style="color:#fff;text-decoration:none;
+              <a class="tag" style="background:var(--chip-background-hover)">
+                Recently Uploaded
+              </a>
+                    
+                  
+                                <a href="/channel?id=<%=ID%>&sort_by=popular" style="color:#fff;text-decoration:none;
 " class="tag c">
-           Popular
-              </a>
-                  
-                       <a href="/channel?id=<%=ID%>&sort_by=oldest" style="color:#fff;text-decoration:none;
+           Popular
+              </a>
+                  
+                       <a href="/channel?id=<%=ID%>&sort_by=oldest" style="color:#fff;text-decoration:none;
 " class="tag c">
-           Oldest
-              </a>
-                  
-                   <% } %>
-                          <% if (sort) { %>  
+           Oldest
+              </a>
+                  
+                   <% } %>
+                          <% if (sort) { %>  
 
-                          <% if (sort === "popular") { %>  
+                          <% if (sort === "popular") { %>  
 
-            <a  href="/channel?id=<%=ID%>" style="color:#fff;text-decoration:none;
+            <a  href="/channel?id=<%=ID%>" style="color:#fff;text-decoration:none;
 " class="tag c" >
-                Recently Uploaded
-              </a>
-                  
-                                <a  style="background:var(--chip-background-hover)" class="tag">
-           Popular
-              </a>
-                            
-                                                   <a href="/channel?id=<%=ID%>&sort_by=oldest" style="color:#fff;text-decoration:none;
+                Recently Uploaded
+              </a>
+                  
+                                <a  style="background:var(--chip-background-hover)" class="tag">
+           Popular
+              </a>
+                            
+                                                   <a href="/channel?id=<%=ID%>&sort_by=oldest" style="color:#fff;text-decoration:none;
 " class="tag c">
-           Oldest
-              </a>
-                   <% } %>
-                     
-                     
-                          <% if (sort === "oldest") { %>  
+           Oldest
+              </a>
+                   <% } %>
+                     
+                     
+                          <% if (sort === "oldest") { %>  
 
-            <a  href="/channel?id=<%=ID%>" style="color:#fff;text-decoration:none;
+            <a  href="/channel?id=<%=ID%>" style="color:#fff;text-decoration:none;
 " class="tag c" >
-                Recently Uploaded
-              </a>
-                  
-                                <a    href="/channel?id=<%=ID%>&sort_by=popular" style="color:#fff;text-decoration:none;
+                Recently Uploaded
+              </a>
+                  
+                                <a    href="/channel?id=<%=ID%>&sort_by=popular" style="color:#fff;text-decoration:none;
 " class="tag">
-           Popular
-              </a>
-                            
-                                                   <a   style="background:var(--chip-background-hover)
+           Popular
+              </a>
+                            
+                                                   <a   style="background:var(--chip-background-hover)
 " class="tag c">
-           Oldest
-              </a>
-                   <% } %>
-                     
-                   <% } %>
+           Oldest
+              </a>
+                   <% } %>
+                     
+                   <% } %>
 
-              
-                                                          </details>
+              
+                                                          </details>
 
-                                       </div>
- <% } %>
+                                       </div>
+ <% } %>
 
- 
-    	<div class="video-grid" >
-             <%  if (!Array.isArray( tj?.videos)) { %> 
-<p> No content on this channel :c <%  if (Array?.isArray( shorts.videos)) { %> try <a href="/channel?id=<%=ID%>&tab=shorts"> Try Looking at shorts maybe lol :p</a> </p>                              
-  <% } %>
-    <% } %>          
-   
-             <%  if (Array.isArray( tj?.videos)) { %> 
+ 
+        <div class="video-grid" >
+             <%  if (!Array.isArray( tj?.videos)) { %> 
+<p> No content on this channel :c <%  if (Array?.isArray( shorts.videos)) { %> try <a href="/channel?id=<%=ID%>&tab=shorts"> Try Looking at shorts maybe lol :p</a> </p>                              
+  <% } %>
+    <% } %>          
+   
+             <%  if (Array.isArray( tj?.videos)) { %> 
 
-   <% tj.videos.forEach (x =>  { %>
-			<a href="/watch?v=<%- x.videoId %>" class="video">
-				<div class="thumbnail" style="background-image: url('<%- media_proxy_url %>/proxy?url=https://i.ytimg.com/vi/<%= x.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw');border-radius: 9.5px;"><span class="video-length"><%- turntomins(x.lengthSeconds) %></span></div>
-				<div class="info">
-					<span class="title max-lines-2" style="font-family:PokeTube flex,sans-serif;font-weight: 1000;font-stretch: ultra-expanded;"><%- x.title %></span>
-			 
-            </div>
- 			</a>	
- 		 	               <% }) %>   
- <% } %>
-           
-  
+   <% tj.videos.forEach (x =>  { %>
+            <a href="/watch?v=<%- x.videoId %>" class="video">
+                <div class="thumbnail" style="background-image: url('<%- media_proxy_url %>/proxy?url=https://i.ytimg.com/vi/<%= x.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw');border-radius: 9.5px;"><span class="video-length"><%- turntomins(x.lengthSeconds) %></span></div>
+                <div class="info">
+                    <span class="title max-lines-2" style="font-family:PokeTube flex,sans-serif;font-weight: 1000;font-stretch: ultra-expanded;"><%- x.title %></span>
+             
+            </div>
+             </a>    
+                             <% }) %>   
+ <% } %>
+           
+  
 
 
-         
- 
-                       
-                       </div>
-                  
-            <% if (tj?.continuation) { %>
-	<div class="pagination-buttons" style="border-top: none;justify-content: center">
-    <a style="color:#fff" href="/channel?id=<%=ID%>&continuation=<%=tj.continuation%>">Next Page</a>
- 	</div>
-    <% if (!isMobile) { %>  
+         
+ 
+                       
+                       </div>
+                  
+            <% if (tj?.continuation) { %>
+    <div class="pagination-buttons" style="border-top: none;justify-content: center">
+    <a style="color:#fff" href="/channel?id=<%=ID%>&continuation=<%=tj.continuation%>">Next Page</a>
+     </div>
+    <% if (!isMobile) { %>  
 <!--
-  <script> 
-  window.addEventListener('scroll', function() {
-    if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight) {
-        var currentUrl = new URL(window.location.href);
-        var params = new URLSearchParams(currentUrl.search);
-        var continuationValue = '<%=tj.continuation%>';
+  <script> 
+  window.addEventListener('scroll', function() {
+    if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight) {
+        var currentUrl = new URL(window.location.href);
+        var params = new URLSearchParams(currentUrl.search);
+        var continuationValue = '<%=tj.continuation%>';
 
-        if (params.has('continuation')) {
-            params.set('continuation', continuationValue);
-        } else {
-            params.append('continuation', continuationValue);
-        }
+        if (params.has('continuation')) {
+            params.set('continuation', continuationValue);
+        } else {
+            params.append('continuation', continuationValue);
+        }
 
-        currentUrl.search = params.toString();
-        window.location.href = currentUrl.toString();
-    }
+        currentUrl.search = params.toString();
+        window.location.href = currentUrl.toString();
+    }
 });
-    </script>  -->
-    
-                         <% } %>
+    </script>  -->
+    
+                         <% } %>
 
-                       <% } %>
+                       <% } %>
 
- 
-          <% } %>
-                           <% if (tab === "shorts") { %>  
+ 
+          <% } %>
+                           <% if (tab === "shorts") { %>  
 
-             <div align="center">
-    <% if (!isMobile) { %>  
-       </div>
- <% } %>
+             <div align="center">
+    <% if (!isMobile) { %>  
+       </div>
+ <% } %>
 <div class="shorts-video-grid">
-  <%  if (Array?.isArray( shorts.videos)) { %> 
-    <% shorts.videos.forEach (x =>  { %>
-      <a href="/shorts/<%- x.videoId %>" class="shorts-video" >
-        <img load="lazy" onerror="this.src=`<%- media_proxy_url %>/proxy?url=https://i.ytimg.com/vi/<%= x.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw`" src='<%- media_proxy_url %>/proxy?url=https://i.ytimg.com/vi/<%= x.videoId %>/maxresdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw'>
-        <span class="shorts-title"><%- x.title %></span>
-      </a>
-    <% }) %>   
-  <% } %>
+  <%  if (Array?.isArray( shorts.videos)) { %> 
+    <% shorts.videos.forEach (x =>  { %>
+      <a href="/shorts/<%- x.videoId %>" class="shorts-video" >
+        <img load="lazy" onerror="this.src=`<%- media_proxy_url %>/proxy?url=https://i.ytimg.com/vi/<%= x.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw`" src='<%- media_proxy_url %>/proxy?url=https://i.ytimg.com/vi/<%= x.videoId %>/maxresdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw'>
+        <span class="shorts-title"><%- x.title %></span>
+      </a>
+    <% }) %>   
+  <% } %>
 </div>
 
 <% if (shorts?.continuation) { %>
 <div class="pagination-buttons">
-  <a style="color:#fff" href="/channel?id=<%=ID%>&tab=shorts&continuations=<%=shorts.continuation%>">Next Page</a>
+  <a style="color:#fff" href="/channel?id=<%=ID%>&tab=shorts&continuations=<%=shorts.continuation%>">Next Page</a>
 </div>
 <% } %>
-  
+  
 <!-- SHORTS-VIDEO --->
 <!-- SHORTS-VIDEO --->
 <!-- SHORTS-VIDEO --->
@@ -1600,28 +1601,28 @@ function authorVerifiedChecker4000() {
 
 <style nonce="IJD3y0awTwA2dd0pWOP+ZQ">
 .shorts-video-grid {
-  max-width: 1200px;
-  margin: auto;
-  display: grid;
-  grid-template-columns: repeat(auto-fit,minmax(200px,1fr));
-  grid-gap: 24px;
-  margin-top: 24px;
+  max-width: 1200px;
+  margin: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(200px,1fr));
+  grid-gap: 24px;
+  margin-top: 24px;
 }
 .shorts-video img {
-  width: 100%;
-  aspect-ratio: 9/16;
-  object-fit: cover;
-  border-radius: 9.5px;
+  width: 100%;
+  aspect-ratio: 9/16;
+  object-fit: cover;
+  border-radius: 9.5px;
 }
 .shorts-video {
-  display: block;
+  display: block;
 }
 .shorts-title {
-    overflow-wrap: break-word;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: clip;
+    overflow-wrap: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: clip;
 }
 </style>
 
@@ -1635,470 +1636,470 @@ function authorVerifiedChecker4000() {
 <!-- SHORTS-VIDEO --->
 
 <% } %>
-            
-              <% if (tab === "live") { %>  
-                                               
-                             
+            
+              <% if (tab === "live") { %>  
+                                               
+                             
 
-             <div align="center">
-    <% if (isMobile) { %>  
-         <div class="tags rec">
-                <% if (!sort) { %>  
+             <div align="center">
+    <% if (isMobile) { %>  
+         <div class="tags rec">
+                <% if (!sort) { %>  
 
-              <a class="tag" style="background:var(--chip-background-hover)">
-                Recently Uploaded
-              </a>
-                  
-                                <a href="/channel?id=<%=ID%>&sort_by=popular&tab=live" style="color:#fff;text-decoration:none;
+              <a class="tag" style="background:var(--chip-background-hover)">
+                Recently Uploaded
+              </a>
+                  
+                                <a href="/channel?id=<%=ID%>&sort_by=popular&tab=live" style="color:#fff;text-decoration:none;
 " class="tag c">
-           Popular
-              </a>
-                   <% } %>
+           Popular
+              </a>
+                   <% } %>
 
-                          <% if (sort) { %>  
+                          <% if (sort) { %>  
 
-            <a  href="/channel?id=<%=ID%>&tab=live" style="color:#fff;text-decoration:none;
+            <a  href="/channel?id=<%=ID%>&tab=live" style="color:#fff;text-decoration:none;
 " class="tag c" >
-                Recently Uploaded
-              </a>
-                  
-                                <a  style="background:var(--chip-background-hover)" class="tag">
-           Popular
-              </a>
-                   <% } %>
+                Recently Uploaded
+              </a>
+                  
+                                <a  style="background:var(--chip-background-hover)" class="tag">
+           Popular
+              </a>
+                   <% } %>
 
-              
+              
 
-                                       </div>
+                                       </div>
 
-              
+              
 
-                                       </div>
- <% } %>
+                                       </div>
+ <% } %>
 
- 
-    	<div class="video-grid" >
-            
-   
-             <%  if (Array.isArray( stream.videos)) { %> 
+ 
+        <div class="video-grid" >
+            
+   
+             <%  if (Array.isArray( stream.videos)) { %> 
 
-   <% stream.videos.forEach (x =>  { %>
-			<a href="/watch?v=<%- x.videoId %>" class="video">
-				<div class="thumbnail" style="background-image: url('<%- media_proxy_url %>/proxy?url=https://i.ytimg.com/vi/<%= x.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw');border-radius: 9.5px;"><span class="video-length"><%- turntomins(x.lengthSeconds) %></span></div>
-				<div class="info">
-					<span class="title max-lines-2" style="font-family:PokeTube flex,sans-serif;font-weight: 1000;font-stretch: ultra-expanded;"><%- x.title %></span>
-			 
-            </div>
- 			</a>	
- 		 	               <% }) %>   
- <% } %>
+   <% stream.videos.forEach (x =>  { %>
+            <a href="/watch?v=<%- x.videoId %>" class="video">
+                <div class="thumbnail" style="background-image: url('<%- media_proxy_url %>/proxy?url=https://i.ytimg.com/vi/<%= x.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw');border-radius: 9.5px;"><span class="video-length"><%- turntomins(x.lengthSeconds) %></span></div>
+                <div class="info">
+                    <span class="title max-lines-2" style="font-family:PokeTube flex,sans-serif;font-weight: 1000;font-stretch: ultra-expanded;"><%- x.title %></span>
+             
+            </div>
+             </a>    
+                             <% }) %>   
+ <% } %>
 
-                                             
- 
-         
- 
-                       
-                       </div>
-                  
-            <% if (stream?.continuation) { %>
-	<div class="pagination-buttons" style="border-top: none;justify-content: center">
-    <a style="color:#fff" href="/channel?id=<%=ID%>&tab=live&continuationl=<%=stream?.continuation%>">Next Page</a>
- 	</div>
-                           
-                       <% } %>
+                                             
+ 
+         
+ 
+                       
+                       </div>
+                  
+            <% if (stream?.continuation) { %>
+    <div class="pagination-buttons" style="border-top: none;justify-content: center">
+    <a style="color:#fff" href="/channel?id=<%=ID%>&tab=live&continuationl=<%=stream?.continuation%>">Next Page</a>
+     </div>
+                           
+                       <% } %>
 
- 
-          <% } %>
-               
-               <% if (tab === "releases") { %>  
-                                               
-                             
+ 
+          <% } %>
+               
+               <% if (tab === "releases") { %>  
+                                               
+                             
 
-             <div align="center">
-   
- 
-    	<div class="video-grid" >
-            
-   
-             <%  if (Array.isArray(released.playlists)) { %> 
+             <div align="center">
+   
+ 
+        <div class="video-grid" >
+            
+   
+             <%  if (Array.isArray(released.playlists)) { %> 
 
-   <% released.playlists.forEach (x =>  { %>
-			<a href="/playlist?list=<%- x.playlistId %>" class="video">
+   <% released.playlists.forEach (x =>  { %>
+            <a href="/playlist?list=<%- x.playlistId %>" class="video">
 <div class="thumbnail" style="background-image: url('<%- media_proxy_url %>/proxy?url=<%- x.playlistThumbnail %>?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw');border-radius: 9.5px;">
-    <span class="video-length"> 
-        <i class="fa-light fa-music-note"></i> 
-        <%- x.videoCount %> <%- x.videoCount == 1 ? 'Song' : 'Songs' %> 
-    </span>
-</div>				<div class="info">
-					<span class="title max-lines-2" style="font-family:PokeTube flex,sans-serif;font-weight: 1000;font-stretch: ultra-expanded;"><%- x.title %></span>
-			 
-            </div>
- 			</a>	
- 		 	               <% }) %>   
- <% } %>
+    <span class="video-length"> 
+        <i class="fa-light fa-music-note"></i> 
+        <%- x.videoCount %> <%- x.videoCount == 1 ? 'Song' : 'Songs' %> 
+    </span>
+</div>                <div class="info">
+                    <span class="title max-lines-2" style="font-family:PokeTube flex,sans-serif;font-weight: 1000;font-stretch: ultra-expanded;"><%- x.title %></span>
+             
+            </div>
+             </a>    
+                             <% }) %>   
+ <% } %>
 
-                                             
- 
-         
- 
-                       
-                       </div>
-          
+                                             
+ 
+         
+ 
+                       
+                       </div>
+          
 
- 
-          <% } %>
-            
-               <% if (tab === "playlist") { %>  
-                                               
-                             
+ 
+          <% } %>
+            
+               <% if (tab === "playlist") { %>  
+                                               
+                             
 
-             <div align="center">
-   
- 
-    	<div class="video-grid" >
-            
-   
-             <%  if (Array.isArray(playlist.playlists)) { %> 
+             <div align="center">
+   
+ 
+        <div class="video-grid" >
+            
+   
+             <%  if (Array.isArray(playlist.playlists)) { %> 
 <% playlist.playlists.forEach(x => { %>
-    <% 
-        const title = x.title.toUpperCase(); 
-        let iconClass = 'fa-list';
-        let unitText = 'Video';
-        
-        const displayCount = x.videoCount < 1 ? 1 : x.videoCount;
+    <% 
+        const title = x.title.toUpperCase(); 
+        let iconClass = 'fa-list';
+        let unitText = 'Video';
+        
+        const displayCount = x.videoCount < 1 ? 1 : x.videoCount;
 
-        const games = [
-            'MARIO', 'ZELDA', 'POKEMON', 'MINECRAFT', 'FORTNITE', 'ROBLOX', 'GTA', 'SONIC', 
-            'HALO', 'COD', 'VALORANT', 'ELDEN RING', 'DARK SOULS', 'SKYRIM', 'FALLOUT', 
-            'PORTAL', 'DOOM', 'METROID', 'KIRBY', 'SPLATOON', 'ANIMAL CROSSING', 'TETRIS', 
-            'PACMAN', 'STREET FIGHTER', 'TEKKEN', 'MORTAL KOMBAT', 'WITCHER', 'CYBERPUNK', 
-            'OVERWATCH', 'APEX', 'DESTINY', 'BATTLEFIELD', 'RESIDENT EVIL', 'SILENT HILL', 
-            'FINAL FANTASY', 'KINGDOM HEARTS', 'PERSONA', 'MONSTER HUNTER', 'AMONG US', 
-            'FALL GUYS', 'TERRARIA', 'STARDEW VALLEY', 'HOLLOW KNIGHT', 'HADES', 'CUPHEAD', 
-            'UNDERTALE', 'DELTARUNE', 'RED DEAD', 'ASSASSINS CREED', 'FAR CRY', 'WATCH DOGS', 
-            'RATCHET', 'SPYRO', 'CRASH BANDICOOT', 'GOD OF WAR', 'UNCHARTED', 'GENSHIN', 
-            'HONKAI', 'LEAGUE OF LEGENDS', 'DOTA', 'CSGO', 'COUNTER-STRIKE', 'PUBG', 
-            'MOBILE LEGENDS', 'FREE FIRE', 'ROCKET LEAGUE', 'BLOONS', 'GEOMETRY DASH', 
-            'FIVE NIGHTS AT FREDDYS', 'FNAF', 'WARZONE', 'CASTLEVANIA', 'MEGA MAN', 
-            'SHOVEL KNIGHT', 'CELESTE', 'OMORI', 'BIOSHOCK', 'BORDERLANDS', 'DIABLO', 
-            'WARCRAFT', 'STARCRAFT', 'TOTAL WAR', 'CIVILIZATION', 'CITIES SKYLINES', 
-            'EURO TRUCK', 'FORZA', 'GRAN TURISMO', 'NEED FOR SPEED', 'TONY HAWK', 
-            'YAKUZA', 'METAL GEAR', 'TOMB RAIDER', 'LAST OF US', 'HORIZON ZERO DAWN', 
-            'GHOST OF TSUSHIMA', 'DRAGON AGE', 'MASS EFFECT', 'DETROIT BECOME HUMAN'
-        ];
+        const games = [
+            'MARIO', 'ZELDA', 'POKEMON', 'MINECRAFT', 'FORTNITE', 'ROBLOX', 'GTA', 'SONIC', 
+            'HALO', 'COD', 'VALORANT', 'ELDEN RING', 'DARK SOULS', 'SKYRIM', 'FALLOUT', 
+            'PORTAL', 'DOOM', 'METROID', 'KIRBY', 'SPLATOON', 'ANIMAL CROSSING', 'TETRIS', 
+            'PACMAN', 'STREET FIGHTER', 'TEKKEN', 'MORTAL KOMBAT', 'WITCHER', 'CYBERPUNK', 
+            'OVERWATCH', 'APEX', 'DESTINY', 'BATTLEFIELD', 'RESIDENT EVIL', 'SILENT HILL', 
+            'FINAL FANTASY', 'KINGDOM HEARTS', 'PERSONA', 'MONSTER HUNTER', 'AMONG US', 
+            'FALL GUYS', 'TERRARIA', 'STARDEW VALLEY', 'HOLLOW KNIGHT', 'HADES', 'CUPHEAD', 
+            'UNDERTALE', 'DELTARUNE', 'RED DEAD', 'ASSASSINS CREED', 'FAR CRY', 'WATCH DOGS', 
+            'RATCHET', 'SPYRO', 'CRASH BANDICOOT', 'GOD OF WAR', 'UNCHARTED', 'GENSHIN', 
+            'HONKAI', 'LEAGUE OF LEGENDS', 'DOTA', 'CSGO', 'COUNTER-STRIKE', 'PUBG', 
+            'MOBILE LEGENDS', 'FREE FIRE', 'ROCKET LEAGUE', 'BLOONS', 'GEOMETRY DASH', 
+            'FIVE NIGHTS AT FREDDYS', 'FNAF', 'WARZONE', 'CASTLEVANIA', 'MEGA MAN', 
+            'SHOVEL KNIGHT', 'CELESTE', 'OMORI', 'BIOSHOCK', 'BORDERLANDS', 'DIABLO', 
+            'WARCRAFT', 'STARCRAFT', 'TOTAL WAR', 'CIVILIZATION', 'CITIES SKYLINES', 
+            'EURO TRUCK', 'FORZA', 'GRAN TURISMO', 'NEED FOR SPEED', 'TONY HAWK', 
+            'YAKUZA', 'METAL GEAR', 'TOMB RAIDER', 'LAST OF US', 'HORIZON ZERO DAWN', 
+            'GHOST OF TSUSHIMA', 'DRAGON AGE', 'MASS EFFECT', 'DETROIT BECOME HUMAN'
+        ];
 
-        const genericGames = ['BULLY', 'SIMS', 'JAK', 'LIMBO', 'INSIDE', 'DOOM'];
-        const gameKeywords = ['GAMEPLAY', 'WALKTHROUGH', 'PLAYTHROUGH', 'LETS PLAY', 'PART', 'EPISODE', 'MOD'];
-        
-        const hasGameKeyword = gameKeywords.some(k => title.includes(k));
-        const matchesMainList = games.some(game => title.includes(game));
-        const matchesGenericList = genericGames.some(game => title.includes(game)) && hasGameKeyword;
+        const genericGames = ['BULLY', 'SIMS', 'JAK', 'LIMBO', 'INSIDE', 'DOOM'];
+        const gameKeywords = ['GAMEPLAY', 'WALKTHROUGH', 'PLAYTHROUGH', 'LETS PLAY', 'PART', 'EPISODE', 'MOD'];
+        
+        const hasGameKeyword = gameKeywords.some(k => title.includes(k));
+        const matchesMainList = games.some(game => title.includes(game));
+        const matchesGenericList = genericGames.some(game => title.includes(game)) && hasGameKeyword;
 
-      if (title.includes('FAVORITE') || title.includes('FAVOURITE')) {
-            iconClass = 'fa-star';
-        } else if (title.includes('COLLAB') || title.includes('FEATURING') || title.includes('COLLABORATION')) {
-            iconClass = 'fa-users';
-        } else if (title.includes('SHORTS')) {
-            iconClass = 'fa-bolt-lightning';
-            unitText = 'Short';
-        } else if (matchesMainList || matchesGenericList || title.includes('LETS PLAY')) {
-            iconClass = 'fa-gamepad-modern';
-        } else if (title.includes('LIVE') || title.includes('LIVESTREAM')) {
-            iconClass = 'fa-broadcast-tower';
-            unitText = 'Stream';
-        } else if (title.includes('NEWS')) {
-            iconClass = 'fa-newspaper';
-        } else if (title.includes('MUSIC') || title.includes('SONG')) {
-            iconClass = 'fa-music';
-        }
-    %>
+      if (title.includes('FAVORITE') || title.includes('FAVOURITE')) {
+            iconClass = 'fa-star';
+        } else if (title.includes('COLLAB') || title.includes('FEATURING') || title.includes('COLLABORATION')) {
+            iconClass = 'fa-users';
+        } else if (title.includes('SHORTS')) {
+            iconClass = 'fa-bolt-lightning';
+            unitText = 'Short';
+        } else if (matchesMainList || matchesGenericList || title.includes('LETS PLAY')) {
+            iconClass = 'fa-gamepad-modern';
+        } else if (title.includes('LIVE') || title.includes('LIVESTREAM')) {
+            iconClass = 'fa-broadcast-tower';
+            unitText = 'Stream';
+        } else if (title.includes('NEWS')) {
+            iconClass = 'fa-newspaper';
+        } else if (title.includes('MUSIC') || title.includes('SONG')) {
+            iconClass = 'fa-music';
+        }
+    %>
 
-    <a href="/playlist?list=<%- x.playlistId %>" class="video">
-        <div class="thumbnail" style="background-image: url('<%- media_proxy_url %>/proxy?url=<%- x.playlistThumbnail %>?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw');border-radius: 9.5px;">
-            <span class="video-length">
-                <i class="fa-light <%- iconClass %>"></i>
-                <%- displayCount %> <%- displayCount == 1 ? unitText : unitText + 's' %> 
-            </span>
-        </div>
-        <div class="info">
-            <span class="title max-lines-2" style="font-family:PokeTube flex,sans-serif;font-weight: 1000;font-stretch: ultra-expanded;"><%- x.title %></span>
-        </div>
-    </a>     
+    <a href="/playlist?list=<%- x.playlistId %>" class="video">
+        <div class="thumbnail" style="background-image: url('<%- media_proxy_url %>/proxy?url=<%- x.playlistThumbnail %>?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw');border-radius: 9.5px;">
+            <span class="video-length">
+                <i class="fa-light <%- iconClass %>"></i>
+                <%- displayCount %> <%- displayCount == 1 ? unitText : unitText + 's' %> 
+            </span>
+        </div>
+        <div class="info">
+            <span class="title max-lines-2" style="font-family:PokeTube flex,sans-serif;font-weight: 1000;font-stretch: ultra-expanded;"><%- x.title %></span>
+        </div>
+    </a>     
 <% }) %>
- <% } %>
+ <% } %>
 
-                                             
- 
-         
- 
-                       
-                       </div>
-          
+                                             
+ 
+         
+ 
+                       
+                       </div>
+          
 
- 
-          <% } %>
-            
-                       
-    <% if (tab === "community") { %>
-    <%  if (Array?.isArray( c?.comments)) { %> 
- <div style="max-width: 800px;margin: 20px auto;padding: 20px;border-radius: 8px;display:none;background: linear-gradient( 135deg, #f97794 10%, #623aa2 100%, #8e6f7e 100% );box-shadow: 0 2px 4px rgba(0,0,0,0.1);margin-bottom: -1em;">
+ 
+          <% } %>
+            
+                       
+    <% if (tab === "community") { %>
+    <%  if (Array?.isArray( c?.comments)) { %> 
+ <div style="max-width: 800px;margin: 20px auto;padding: 20px;border-radius: 8px;display:none;background: linear-gradient( 135deg, #f97794 10%, #623aa2 100%, #8e6f7e 100% );box-shadow: 0 2px 4px rgba(0,0,0,0.1);margin-bottom: -1em;">
 <h1 style="color: #fff;font-family: 'PokeTube Flex';text-align: center !important;font-stretch: ultra-expanded;font-weight: 1000;">Welcoem to posts!!</h1>
-<p>in the future - u will be able to do some more stuff here,,,!! like pat catgirl- i mean um yeah... for now u can only see others's posts :c  </p>
-    </div>
+<p>in the future - u will be able to do some more stuff here,,,!! like pat catgirl- i mean um yeah... for now u can only see others's posts :c  </p>
+    </div>
 <div class="community">
-  
-   <% c?.comments?.forEach (x =>  { %>
-     <div class="community-content">
-    
+  
+   <% c?.comments?.forEach (x =>  { %>
+     <div class="community-content">
+    
 
-                     <h5 style="display: flex;margin-top: -1em;padding-top: 10px;margin-bottom:10px"><div class="thumb">
-				<a href="/channel?id=<%- x.authorId	%>" class="avatar" style="width: 40px;height: 40px;">
-					<img src="/avatars/<%=cinv.authorThumbnails[4].url.replace("https://yt3.googleusercontent.com/", "")%>">
-				</a>
-                       
-            </div>
-                                                           
+                     <h5 style="display: flex;margin-top: -1em;padding-top: 10px;margin-bottom:10px"><div class="thumb">
+                <a href="/channel?id=<%- x.authorId    %>" class="avatar" style="width: 40px;height: 40px;">
+                    <img src="/avatars/<%=cinv.authorThumbnails[4].url.replace("https://yt3.googleusercontent.com/", "")%>">
+                </a>
+                       
+            </div>
+                                                           
 
-                <p class="comments-author">
-                  				<a href="" style="color: var(--text-color);text-decoration: none;"><%=cinv.author%> 
+                <p class="comments-author">
+                                  <a href="" style="color: var(--text-color);text-decoration: none;"><%=cinv.author%> 
 
-                                                                                                  </a>
-                            
-                            <span>
-                                <br>  Posted <%- x.publishedText %> <span>   
-        </span>   
+                                                                                                  </a>
+                            
+                            <span>
+                                <br>  Posted <%- x.publishedText %> <span>   
+        </span>   
 
-                            </span>
+                            </span>
 
-                  
- 
-                                             
+                  
+ 
+                                             
 
-                  
-                </p>
+                  
+                </p>
 
-              </h5>
-             <p>
-                      <%- x.contentHtml %>
-             <% if (x.attachment) { %>
-                      <% if (x.attachment.type === "video") { %>
-                <% } %>
-               <% } %>
+              </h5>
+             <p>
+                      <%- x.contentHtml %>
+             <% if (x.attachment) { %>
+                      <% if (x.attachment.type === "video") { %>
+                <% } %>
+               <% } %>
 
-                            </p>
+                            </p>
 
-             <% if (x.attachment) { %>
-                      <% if (x.attachment.type === "video") { %>
- <style>
-  .video-player-container {
-    position: relative;
-    width: 100%;
-    display: inline-block;
-    overflow: hidden;
-    border-radius: 16px;
-    background-color: #000;
-  }
+             <% if (x.attachment) { %>
+                      <% if (x.attachment.type === "video") { %>
+ <style>
+  .video-player-container {
+    position: relative;
+    width: 100%;
+    display: inline-block;
+    overflow: hidden;
+    border-radius: 16px;
+    background-color: #000;
+  }
 
-  .video-link-wrapper {
-    text-decoration: none;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    cursor: pointer;
-    line-height: 0;
-  }
+  .video-link-wrapper {
+    text-decoration: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    line-height: 0;
+  }
 
-  .player {
-    width: calc(100% - 2px); 
-    display: block;
-    pointer-events: none;
-    transition: filter 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  }
+  .player {
+    width: calc(100% - 2px); 
+    display: block;
+    pointer-events: none;
+    transition: filter 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
 
-  .play-button-overlay {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) scale(1);
-    width: 68px;
-    height: 68px;
-    background-color: rgba(0, 0, 0, 0.5);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 2;
-    opacity: 0;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  }
+  .play-button-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(1);
+    width: 68px;
+    height: 68px;
+    background-color: rgba(0, 0, 0, 0.5);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+    opacity: 0;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
 
-  .video-player-container:hover .play-button-overlay {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1.1);
-  }
+  .video-player-container:hover .play-button-overlay {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.1);
+  }
 
-  .video-player-container:hover .player {
-    filter: brightness(0.9);
-  }
+  .video-player-container:hover .player {
+    filter: brightness(0.9);
+  }
 
-  .play-icon {
-    width: 34px;
-    height: 34px;
-    fill: white;
-    margin-left: 2px;
-  }
+  .play-icon {
+    width: 34px;
+    height: 34px;
+    fill: white;
+    margin-left: 2px;
+  }
 
-  .attachedvideoduration {
-    position: absolute;
-    bottom: 8px;
-    right: 8px;
-    background-color: rgba(0, 0, 0, 0.8);
-    color: #fff;
-    padding: 1px 4px;
-    border-radius: 4px;
-    font-family: "Roboto", "Arial", sans-serif;
-    font-size: 12px;
-    font-weight: 500;
-    line-height: 18px;
-    z-index: 3;
-    pointer-events: none;
-    letter-spacing: 0.5px;
-  }
+  .attachedvideoduration {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    background-color: rgba(0, 0, 0, 0.8);
+    color: #fff;
+    padding: 1px 4px;
+    border-radius: 4px;
+    font-family: "Roboto", "Arial", sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 18px;
+    z-index: 3;
+    pointer-events: none;
+    letter-spacing: 0.5px;
+  }
 </style>
 
 <div class="video-player-container">
-  <a href="/watch?v=<%=x.attachment.videoId%>" class="video-link-wrapper">
-    <video 
-      class="player" 
-      style="border-radius: 15px;" 
-      poster="<%- media_proxy_url %>/proxy?url=https://i.ytimg.com/vi/<%=x.attachment.videoId%>/maxresdefault.jpg?v=607ddcd4">
-    </video>
-    
-    <div class="play-button-overlay">
-      <svg class="play-icon" viewBox="0 0 24 24">
-        <path d="M8 5v14l11-7z"></path>
-      </svg>
-    </div>
+  <a href="/watch?v=<%=x.attachment.videoId%>" class="video-link-wrapper">
+    <video 
+      class="player" 
+      style="border-radius: 15px;" 
+      poster="<%- media_proxy_url %>/proxy?url=https://i.ytimg.com/vi/<%=x.attachment.videoId%>/maxresdefault.jpg?v=607ddcd4">
+    </video>
+    
+    <div class="play-button-overlay">
+      <svg class="play-icon" viewBox="0 0 24 24">
+        <path d="M8 5v14l11-7z"></path>
+      </svg>
+    </div>
 
-    <div class="attachedvideoduration">
-      <%= turntomins(x.attachment.lengthSeconds) %>
-    </div>
-  </a>
+    <div class="attachedvideoduration">
+      <%= turntomins(x.attachment.lengthSeconds) %>
+    </div>
+  </a>
 </div>
-               <% } %>
-                                       <% if (x.attachment.type === "image") { %>
- 
-                                                                                 <% if (x.attachment.imageThumbnails[4] ) { %>
- 
-                                                                                   <img style="  width: 100%;
-  border-radius: 26px;" src="<%- media_proxy_url %>/proxy?url=<%- x.attachment.imageThumbnails[4].url%>">
-               <% } %>               <% } %>
+               <% } %>
+                                       <% if (x.attachment.type === "image") { %>
+ 
+                                                                                 <% if (x.attachment.imageThumbnails[4] ) { %>
+ 
+                                                                                   <img style="  width: 100%;
+  border-radius: 26px;" src="<%- media_proxy_url %>/proxy?url=<%- x.attachment.imageThumbnails[4].url%>">
+               <% } %>               <% } %>
 
-                 
-               <% } %>
+                 
+               <% } %>
 <p style="display:flex;align-items:center;gap:18px;margin:6px 0 0 0;padding:0;color:#f1f1f1;font-size:14px;font-weight:500;line-height:32px;">
-  <span style="display:inline-flex;align-items:center;gap:7px;height:32px;">
-    <i class="fa-light fa-thumbs-up" style="width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;font-size:22px;color:#f1f1f1;"></i>
-    <span style="color:#aaa;font-size:14px;font-weight:500;"><%- convert(x.likeCount) %></span>
-  </span>
+  <span style="display:inline-flex;align-items:center;gap:7px;height:32px;">
+    <i class="fa-light fa-thumbs-up" style="width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;font-size:22px;color:#f1f1f1;"></i>
+    <span style="color:#aaa;font-size:14px;font-weight:500;"><%- convert(x.likeCount) %></span>
+  </span>
 
-  <span style="display:inline-flex;align-items:center;gap:7px;height:32px;">
-    <i class="fa-light fa-reply" style="width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;font-size:22px;color:#f1f1f1;"></i>
-    <span style="color:#aaa;font-size:14px;font-weight:500;"><%- convert(x.replyCount) %></span>
-  </span>
+  <span style="display:inline-flex;align-items:center;gap:7px;height:32px;">
+    <i class="fa-light fa-reply" style="width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;font-size:22px;color:#f1f1f1;"></i>
+    <span style="color:#aaa;font-size:14px;font-weight:500;"><%- convert(x.replyCount) %></span>
+  </span>
 </p>
-              </div>
+              </div>
 
-                  
-    <% }) %>   
+                  
+    <% }) %>   
 
-                                                               <% } %>                                                               <% } %>
+                                                               <% } %>                                                               <% } %>
 
 
-                                                                 
- <% if (tab === "about") { %>
-   
-   <% if (!isMobile) { %>  
-       
+                                                                 
+ <% if (tab === "about") { %>
+   
+   <% if (!isMobile) { %>  
+       
 
-               
+               
 <div style="display: flex;flex-direction: row;">
-  
- 
-  <div style="background: #333;display: flex;flex-direction: column;margin-top: 1em;margin-left: 1em;border-radius: 1em;margin-bottom: 1em;box-sizing: border-box;width: 100%;margin-right: 20px;min-height: 19em;">   
-     <h3 style="color:#fff;font-family:PokeTube flex,sans-serif;font-weight:1000;font-stretch:ultra-expanded:padding: 0px;margin: 0;margin-top: 7px;margin-left: 10px;">About</h3>
+  
+ 
+  <div style="background: #333;display: flex;flex-direction: column;margin-top: 1em;margin-left: 1em;border-radius: 1em;margin-bottom: 1em;box-sizing: border-box;width: 100%;margin-right: 20px;min-height: 19em;">   
+     <h3 style="color:#fff;font-family:PokeTube flex,sans-serif;font-weight:1000;font-stretch:ultra-expanded:padding: 0px;margin: 0;margin-top: 7px;margin-left: 10px;">About</h3>
 
-     <% if (cinv.descriptionHtml) { %>
+     <% if (cinv.descriptionHtml) { %>
 
- <p style="color:#fff;margin-left: 10px;font-weight: bold;"><%-cinv.descriptionHtml%></p>
-  <% } %>
-         </div>
+ <p style="color:#fff;margin-left: 10px;font-weight: bold;"><%-cinv.descriptionHtml%></p>
+  <% } %>
+         </div>
 
-       <% } %>
+       <% } %>
 
-    <% if (isMobile) { %>  
-       
+    <% if (isMobile) { %>  
+       
 
-              
+              
 
-    <div style="text-align: left;">   
-     <h3 style="color:#fff;font-family:Ginto Nord,sans-serif;font-weight:900;padding: 0px;margin: 0;margin-top: 7px;margin-left: 10px;">About</h3>
+    <div style="text-align: left;">   
+     <h3 style="color:#fff;font-family:Ginto Nord,sans-serif;font-weight:900;padding: 0px;margin: 0;margin-top: 7px;margin-left: 10px;">About</h3>
 
-     <% if (cinv.descriptionHtml) { %>
+     <% if (cinv.descriptionHtml) { %>
 
- <p style="color:#fff;margin-left: 10px;font-weight: bold;"><%-cinv.descriptionHtml%></p>
-  <% } %>
-  <p style="text-align: left;margin-left: 13px;">  <i class="fa-light fa-circle-info"></i> Joined <%= createdAccountGetDate.published %> </p>
+ <p style="color:#fff;margin-left: 10px;font-weight: bold;"><%-cinv.descriptionHtml%></p>
+  <% } %>
+  <p style="text-align: left;margin-left: 13px;">  <i class="fa-light fa-circle-info"></i> Joined <%= createdAccountGetDate.published %> </p>
 
-      <%  if (Array.isArray(cinv?.tags)) { %> 
-<div class="video-title" style=";font-stretch: extra-expanded;margin-top: 10px;margin-bottom: -10px;padding: 10px;border-top-left-radius: 11px;border-top-right-radius: 11px;font-family: &quot;poketube flex&quot; , sans-serif;font-weight: 1000;text-align: left;">Tags</div>	    
-    <div class="tags-channel" style="padding: 10px;margin-top: 10px;border-radius: 11px;">
-	 <br>
-	 <% cinv.tags.forEach(x => { %>
-	 <div class="tag-channel">
-	   <a href="/hashtag/<%=x %>" style="color:var(--text-color)">
-	   <%=x %>
-	     </a>
-	   </div>         <% }) %>  
-      <% } %>
-       <% } %>
-                       </div>
-   <% } %>
-           <% if (!isMobile) { %>  
+      <%  if (Array.isArray(cinv?.tags)) { %> 
+<div class="video-title" style=";font-stretch: extra-expanded;margin-top: 10px;margin-bottom: -10px;padding: 10px;border-top-left-radius: 11px;border-top-right-radius: 11px;font-family: &quot;poketube flex&quot; , sans-serif;font-weight: 1000;text-align: left;">Tags</div>        
+    <div class="tags-channel" style="padding: 10px;margin-top: 10px;border-radius: 11px;">
+     <br>
+     <% cinv.tags.forEach(x => { %>
+     <div class="tag-channel">
+       <a href="/hashtag/<%=x %>" style="color:var(--text-color)">
+       <%=x %>
+         </a>
+       </div>         <% }) %>  
+      <% } %>
+       <% } %>
+                       </div>
+   <% } %>
+           <% if (!isMobile) { %>  
 
-    <div onclick="closePopup()" id="popup-container">
-        <div id="close-btn" onclick="closePopup()">X</div>
-   <div class="video-title" style=";font-stretch: extra-expanded;margin-top: 10px;margin-bottom: -10px;padding: 10px;border-top-left-radius: 11px;border-top-right-radius: 11px;font-family: &quot;poketube flex&quot; , sans-serif;font-weight: 850;text-align: left;">About</div>
-                            <% if (cinv.descriptionHtml) { %>  
+    <div onclick="closePopup()" id="popup-container">
+        <div id="close-btn" onclick="closePopup()">X</div>
+   <div class="video-title" style=";font-stretch: extra-expanded;margin-top: 10px;margin-bottom: -10px;padding: 10px;border-top-left-radius: 11px;border-top-right-radius: 11px;font-family: &quot;poketube flex&quot; , sans-serif;font-weight: 850;text-align: left;">About</div>
+                            <% if (cinv.descriptionHtml) { %>  
 
 <p style="color:#fff;margin-left: 10px;font-weight: bold;text-align: left;"><%-cinv.descriptionHtml%></p>
 
-<p style="text-align: left;margin-left: 13px;">  <i class="fa-light fa-circle-info"></i> Joined <%= createdAccountGetDate.published %> </p>
+<p style="text-align: left;margin-left: 13px;">  <i class="fa-light fa-circle-info"></i> Joined <%= createdAccountGetDate.published %> </p>
 
-       <%  if (Array.isArray(cinv?.tags)) { %> 
-<div class="video-title" style=";font-stretch: extra-expanded;margin-top: 10px;margin-bottom: -10px;padding: 10px;border-top-left-radius: 11px;border-top-right-radius: 11px;font-family: &quot;poketube flex&quot; , sans-serif;font-weight: 1000;text-align: left;">Tags</div>	    
-    <div class="tags-channel" style="padding: 10px;background: #272727;margin-top: 10px;border-radius: 11px;">
-	 <br>
-	 <% cinv.tags.forEach(x => { %>
-	 <div class="tag-channel">
-	   <a href="/hashtag/<%=x %>" style="color:var(--text-color)">
-	   <%=x %>
-	     </a>
-	   </div>         <% }) %>  
-      <% } %>
-     </div>
-  
-      <% } %>
-           
+       <%  if (Array.isArray(cinv?.tags)) { %> 
+<div class="video-title" style=";font-stretch: extra-expanded;margin-top: 10px;margin-bottom: -10px;padding: 10px;border-top-left-radius: 11px;border-top-right-radius: 11px;font-family: &quot;poketube flex&quot; , sans-serif;font-weight: 1000;text-align: left;">Tags</div>        
+    <div class="tags-channel" style="padding: 10px;background: #272727;margin-top: 10px;border-radius: 11px;">
+     <br>
+     <% cinv.tags.forEach(x => { %>
+     <div class="tag-channel">
+       <a href="/hashtag/<%=x %>" style="color:var(--text-color)">
+       <%=x %>
+         </a>
+       </div>         <% }) %>  
+      <% } %>
+     </div>
+  
+      <% } %>
+           
 
-      <% } %>
-                                                                                           <% } %>
+      <% } %>
+                                                                                           <% } %>
 
 <script src="/css/custom-css.js?v=884"> </script>
-                                               <% if (!isMobile) { %>  
+                                               <% if (!isMobile) { %>  
 
-  <script>
-      // @license magnet:?xt=urn:btih:1f739d935676111cfff4b4693e3816e664797050&dn=gpl-3.0.txt GPL-3.0-or-later  
+  <script>
+      // @license magnet:?xt=urn:btih:1f739d935676111cfff4b4693e3816e664797050&dn=gpl-3.0.txt GPL-3.0-or-later  
 
 var anchor = document.getElementById("sub");
 
@@ -2106,93 +2107,123 @@ var anchor = document.getElementById("sub");
 var userID = localStorage.getItem("UserID");
 
 if (userID) {
-    // If user ID exists in localStorage, set the href attribute
-    anchor.href = `/api/set-channel-subs?ID=${userID}&channelName=<%=cinv?.author%>&avatar=<%- media_proxy_url %>/proxy?url=<%- cinv?.authorThumbnails?.[5]?.url %>&channelID=<%= ID %>`;
+    // If user ID exists in localStorage, set the href attribute
+    anchor.href = `/api/set-channel-subs?ID=${userID}&channelName=<%=cinv?.author%>&avatar=<%- media_proxy_url %>/proxy?url=<%- cinv?.authorThumbnails?.[5]?.url %>&channelID=<%= ID %>`;
 } else {
-    // If user ID doesn't exist in localStorage, you can handle it as needed
-     anchor.href = "/account-create"
-     // Optionally, you can set a default href or display an error message.
+    // If user ID doesn't exist in localStorage, you can handle it as needed
+     anchor.href = "/account-create"
+     // Optionally, you can set a default href or display an error message.
 }
-// this is how the search bar works :3    
+// this is how the search bar works :3    
 document.getElementById('search').addEventListener('keyup', function () {
-  var value = this.value.toLowerCase();
+  var value = this.value.toLowerCase();
 
-  // get the videos and the community posts from the document :3
-  var videos = document.querySelectorAll('.video, .shorts-video, .community-content');
+  // get the videos and the community posts from the document :3
+  var videos = document.querySelectorAll('.video, .shorts-video, .community-content');
 
 // get for each
-  videos.forEach(function (video) {
-   // LowerCase each text content 
-    var text = video.textContent.toLowerCase();
-    if (text.indexOf(value) > -1) {
-      video.style.visibility = 'visible';
-      //if its community content, use block instead of grid 
-      video.style.display = video.classList.contains('community-content') ? 'block' : 'grid';
-    } else {
-      // dont display if we cant find any, lol :3c
-      video.style.visibility = 'hidden';
-      video.style.display = 'none';
-    }
-  });
+  videos.forEach(function (video) {
+   // LowerCase each text content 
+    var text = video.textContent.toLowerCase();
+    if (text.indexOf(value) > -1) {
+      video.style.visibility = 'visible';
+      //if its community content, use block instead of grid 
+      video.style.display = video.classList.contains('community-content') ? 'block' : 'grid';
+    } else {
+      // dont display if we cant find any, lol :3c
+      video.style.visibility = 'hidden';
+      video.style.display = 'none';
+    }
+  });
 });
 
 var isPopupOpen = false;
 
- var overlay = document.createElement('div');
+ var overlay = document.createElement('div');
 overlay.id = 'popup-overlay';
 Object.assign(overlay.style, {
-    display: 'none',
-    position: 'fixed',
-    top: '0',
-    left: '0',
-    width: '100%',
-    height: '100%',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    zIndex: '998'
+    display: 'none',
+    position: 'fixed',
+    top: '0',
+    left: '0',
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: '998'
 });
 
- overlay.addEventListener('click', closePopup);
+ overlay.addEventListener('click', closePopup);
 
- document.body.appendChild(overlay);
+ document.body.appendChild(overlay);
 
 function togglePopup() {
-    if (isPopupOpen) {
-        closePopup();
-    } else {
-        document.getElementById('popup-container').style.display = 'block';
-        overlay.style.display = 'block';  
-        document.body.style.overflow = 'hidden';
-        isPopupOpen = true;
-    }
+    if (isPopupOpen) {
+        closePopup();
+    } else {
+        document.getElementById('popup-container').style.display = 'block';
+        overlay.style.display = 'block';  
+        document.body.style.overflow = 'hidden';
+        isPopupOpen = true;
+    }
 }
 
 function closePopup() {
-    document.getElementById('popup-container').style.display = 'none';
-    overlay.style.display = 'none';  
-    document.body.style.overflow = 'auto';
-    isPopupOpen = false;
+    document.getElementById('popup-container').style.display = 'none';
+    overlay.style.display = 'none';  
+    document.body.style.overflow = 'auto';
+    isPopupOpen = false;
 }
 
- document.getElementById('popup-trigger').addEventListener('click', function (event) {
-    event.preventDefault();
-    togglePopup();
+ document.getElementById('popup-trigger').addEventListener('click', function (event) {
+    event.preventDefault();
+    togglePopup();
 });
 
 document.addEventListener('keydown', function (event) {
-    if (event.key === 'Escape' && isPopupOpen) {
-        closePopup();
-    }
+    if (event.key === 'Escape' && isPopupOpen) {
+        closePopup();
+    }
 });
 
 // @license-end
 
-     </script>                                                                                           <% } %>
+     </script>                                                                                           <% } %>
 
-               </body>
- 
-   
- 
+               </body>
+ 
+   
+ 
 </html>
-
- 
- 
+<% } catch (err) { %>
+<!DOCTYPE html>
+<html>
+<head>
+<title>Error | Poke</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body {
+    background: #111 !important;
+    height: 100%;
+    color: white;
+}
+.banned-user {
+    border-radius: 50%;
+    margin-bottom: -2em;
+    pointer-events: none;
+}
+.ban-reason {
+    background: #b91f1f;
+    border-radius: 0.5px;
+    padding: 10px;
+} 
+</style>
+</head>
+<body>
+<p class="ban-reason"> 
+  <%- err?.message || "An unknown error occurred" %> 
+  <br>
+  <a href="" style="color: white; text-decoration: underline;">Refresh?</a>
+</p>
+</body>
+</html>
+<% } %>
