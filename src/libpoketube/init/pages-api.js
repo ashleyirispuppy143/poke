@@ -444,28 +444,44 @@ app.get("/api/getEngagementData", async (req, res) => {
                 margin-bottom: 16px;
                 overflow: hidden;
                 cursor: pointer;
+                border: 2px solid #000000;
+                box-sizing: border-box;
               }
               .thumbnail {
                 width: 100%;
                 height: 100%;
                 object-fit: cover;
                 transition: filter 0.2s ease;
+                display: block;
               }
               .play-button {
                 position: absolute;
                 top: 50%;
                 left: 50%;
                 transform: translate(-50%, -50%);
-                width: 68px;
-                height: 48px;
+                width: 60px;
+                height: 60px;
+                background-color: rgba(0, 0, 0, 0.6);
+                backdrop-filter: blur(4px);
+                border-radius: 50%;
+                display: flex;
+                justify-content: center;
+                align-items: center;
                 opacity: 0;
-                transition: opacity 0.2s ease;
+                transition: opacity 0.2s ease, transform 0.2s ease;
+              }
+              .play-button svg {
+                width: 32px;
+                height: 32px;
+                fill: #ffffff;
+                margin-left: 4px; /* Visually center the triangle */
               }
               .thumbnail-container:hover .thumbnail {
                 filter: brightness(0.6);
               }
               .thumbnail-container:hover .play-button {
                 opacity: 1;
+                transform: translate(-50%, -50%) scale(1.05);
               }
               .video-title {
                 font-size: 1.3rem;
@@ -600,10 +616,11 @@ app.get("/api/getEngagementData", async (req, res) => {
             <div class="card">
               <a href="/watch?v=${id}" class="thumbnail-container">
                 <img src="https://i.ytimg.com/vi/${id}/hqdefault.jpg" onerror="this.src='https://i.ytimg.com/vi/${id}/default.jpg'" class="thumbnail" alt="Video Thumbnail" />
-                <svg class="play-button" viewBox="0 0 68 48">
-                  <path d="M66.52,7.74c-0.78-2.93-2.49-5.41-5.42-6.19C55.79,.13,34,0,34,0S12.21,.13,6.9,1.55 C3.97,2.33,2.27,4.81,1.48,7.74C0.06,13.05,0,24,0,24s0.06,10.95,1.48,16.26c0.78,2.93,2.49,5.41,5.42,6.19 C12.21,47.87,34,48,34,48s21.79-0.13,27.1-1.55c2.93-0.78,4.64-3.26,5.42-6.19C67.94,34.95,68,24,68,24S67.94,13.05,66.52,7.74z" fill="#f00"></path>
-                  <path d="M 45,24 27,14 27,34" fill="#fff"></path>
-                </svg>
+                <div class="play-button">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z"></path>
+                  </svg>
+                </div>
               </a>
               
               <h1 class="video-title">${videoTitle}</h1>
@@ -664,8 +681,7 @@ app.get("/api/getEngagementData", async (req, res) => {
   } catch (error) {
     res.status(500).json("whoops (error 500) >~<");
   }
-});
-  
+});   
 app.get("/feeds/videos.xml", async (req, res) => {
   const channelId = req.query.channel_id;
   const playlistId = req.query.playlist_id;
