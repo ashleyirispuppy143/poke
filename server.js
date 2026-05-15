@@ -1560,6 +1560,8 @@ hr{
   border-radius:24px;
   padding:4px;
   border:1px solid rgba(255,255,255,0.05);
+  flex-wrap:wrap;
+  gap:2px;
 }
 .tab-btn{
   background:transparent;
@@ -1770,7 +1772,7 @@ summary{
 
     function renderRouteList(topRoutes) {
       if (!topRoutes || topRoutes.length === 0) {
-        return `<div class="route-item" style="justify-content:center;color:#aaa;">Gathering data...</div>`;
+        return `<div class="route-item" style="justify-content:center;color:#aaa;">Nothing big yet, Poke is still gathering cozy little traffic stats.</div>`;
       }
 
       const maxCount = Math.max(1, topRoutes[0].count || 1);
@@ -1789,7 +1791,7 @@ summary{
 
     function sendAntiddosPage(req, res) {
       if (!isGuardActive) {
-        return res.status(503).send("Guard is currently initializing, please refresh in a moment.");
+        return res.status(503).send("Poke is waking up the guard, please refresh in a moment.");
       }
       
       const stats = getResourceStats();
@@ -1813,7 +1815,7 @@ ${getHealthCss()}
 
 <noscript>
   <div class="banner orange" style="margin-bottom:24px;">
-    <b>JavaScript is disabled:</b> this page is showing a static server-rendered snapshot. Refresh the page to update the numbers.
+    <b>JavaScript is disabled:</b> this is a static little snapshot of Poke's server mood. Refresh the page whenever you want fresh numbers.
   </div>
 </noscript>
 
@@ -1822,11 +1824,12 @@ ${getHealthCss()}
 <div class="header-container">
   <div>
     <h1>Poke Server Health</h1>
-    <p class="small" style="margin-top:0;">Live metrics and traffic protection</p>
+    <p class="small" style="margin-top:0;">Live server vibes, traffic protection, and smoothness checks</p>
   </div>
   <div class="tabs">
     <a class="tab-btn active" href="/health">Server Vitals</a>
     <a class="tab-btn" href="/traffic">Requests</a>
+    <a class="tab-btn" href="/api/stats?view=gui">Anonymous Stats</a>
   </div>
 </div>
 
@@ -1834,45 +1837,45 @@ ${getHealthCss()}
   <b>Current Status:</b> <span id="banner-state" class="${stateClass}" style="font-size:1.2rem;text-transform:capitalize;">${stats.state.state}</span>
   <br>
   <span id="banner-subtext" class="small" style="display:inline-block;margin-top:8px;">
-    System Load Score: ${stats.state.score} &bull; Process Delay: ${stats.state.eventLoop.p99Ms}ms &bull; CPU: ${stats.state.cpu.percent}% &bull; Memory: ${formatPercent(stats.state.memory.rssRatio)}
+    Load Score: ${stats.state.score} &bull; Process Delay: ${stats.state.eventLoop.p99Ms}ms &bull; CPU: ${stats.state.cpu.percent}% &bull; Memory: ${formatPercent(stats.state.memory.rssRatio)}
   </span>
 </div>
 
 <h2>What is this page?</h2>
 <div class="explanation">
-  Poke keeps a close eye on how much brainpower (CPU) and memory it has left. Just like a personal computer, the server only has so much energy to go around! <br><br>
-  If a sudden wave of traffic hits, or if someone tries to overload the site, Poke will automatically prioritize normal users watching videos. It gently pauses heavy background tasks until the server catches its breath. This keeps Poke smooth, fast, and online for everyone.
+  This is Poke checking in on itself so everything stays fast and comfy. It watches CPU, memory, request pressure, and process delay in real time, then uses that info to keep the site feeling smooth. <br><br>
+  If traffic suddenly gets wild, Poke gently shields the server and tries to keep normal video watching flowing first. Basically, this page is the little heartbeat monitor for the whole instance!!
 </div>
 
-<h2>Live Server Vitals</h2>
+<h2>Live Server Vitals!!</h2>
 <div class="stat-grid">
   <div class="stat-box">
     <span id="stat-state" class="stat-num ${stateClass}">${stats.state.state}</span>
-    <span class="stat-label">Health State</span>
+    <span class="stat-label">Health Mood</span>
   </div>
   <div class="stat-box">
     <span id="stat-p99" class="stat-num">${stats.state.eventLoop.p99Ms}ms</span>
-    <span class="stat-label">Process Delay (p99)</span>
+    <span class="stat-label">Process Delay</span>
   </div>
   <div class="stat-box">
     <span id="stat-cpu" class="stat-num">${stats.state.cpu.percent}%</span>
-    <span class="stat-label">CPU Usage</span>
+    <span class="stat-label">CPU Busy Level</span>
   </div>
   <div class="stat-box">
     <span id="stat-rss" class="stat-num">${stats.state.memory.rssMb}MB</span>
-    <span class="stat-label">Memory Used (RSS)</span>
+    <span class="stat-label">Memory Used</span>
   </div>
   <div class="stat-box">
     <span id="stat-rps" class="stat-num">${stats.state.requests.rps}</span>
-    <span class="stat-label">Requests per Second</span>
+    <span class="stat-label">Requests Right Now</span>
   </div>
   <div class="stat-box">
     <span id="stat-tracked" class="stat-num">${stats.clients.tracked}</span>
-    <span class="stat-label">Active Users</span>
+    <span class="stat-label">Active Visitors</span>
   </div>
   <div class="stat-box">
     <span id="stat-cooldown" class="stat-num">${stats.clients.cooldown}</span>
-    <span class="stat-label">Spammers Blocked</span>
+    <span class="stat-label">Noisy Clients Cooling Down</span>
   </div>
   <div class="stat-box">
     <span id="stat-score" class="stat-num">${stats.state.score}</span>
@@ -1883,17 +1886,17 @@ ${getHealthCss()}
 <hr>
 
 <details>
-  <summary>View Nerd Stats (Raw Data & APIs)</summary>
+  <summary>View Nerdy Stats, Raw Data, and APIs</summary>
   
-  <h3>Pressure Reasons</h3>
-  <pre id="pre-reasons">${stats.state.pressureReasons.length ? stats.state.pressureReasons.join("\n") : "None currently. System is healthy."}</pre>
+  <h3>Why Poke feels this way</h3>
+  <pre id="pre-reasons">${stats.state.pressureReasons.length ? stats.state.pressureReasons.join("\n") : "No pressure reasons right now. Poke is feeling good."}</pre>
 
-  <h3>Request Mix (This Second)</h3>
+  <h3>Request Mix This Second</h3>
   <pre id="pre-mix">${JSON.stringify(stats.state.requests.kinds, null, 2)}</pre>
 
   <h3>API Endpoints</h3>
   <p>
-    Raw JSON data is available at:
+    Want the raw numbers too? They live at:
     <code><a href="/_pokeresource/stats">/_pokeresource/stats</a></code>
   </p>
 </details>
@@ -1921,7 +1924,7 @@ document.addEventListener("DOMContentLoaded", function() {
       
       const rssRatio = (data.state.memory.rssRatio * 100).toFixed(2) + "%";
       document.getElementById("banner-subtext").innerHTML =
-        "System Load Score: " + data.state.score + " &bull; Process Delay: " + data.state.eventLoop.p99Ms + "ms &bull; CPU: " + data.state.cpu.percent + "% &bull; Memory: " + rssRatio;
+        "Load Score: " + data.state.score + " &bull; Process Delay: " + data.state.eventLoop.p99Ms + "ms &bull; CPU: " + data.state.cpu.percent + "% &bull; Memory: " + rssRatio;
       
       document.getElementById("stat-state").className = "stat-num " + stateClass;
       document.getElementById("stat-state").innerText = state;
@@ -1932,7 +1935,7 @@ document.addEventListener("DOMContentLoaded", function() {
       document.getElementById("stat-tracked").innerText = data.clients.tracked;
       document.getElementById("stat-cooldown").innerText = data.clients.cooldown;
       document.getElementById("stat-score").innerText = data.state.score;
-      document.getElementById("pre-reasons").innerText = data.state.pressureReasons.length ? data.state.pressureReasons.join("\\n") : "None currently. System is healthy.";
+      document.getElementById("pre-reasons").innerText = data.state.pressureReasons.length ? data.state.pressureReasons.join("\\n") : "No pressure reasons right now. Poke is feeling good.";
       document.getElementById("pre-mix").innerText = JSON.stringify(data.state.requests.kinds, null, 2);
     } catch (err) {
       // Quiet fail if network disconnects temporarily
@@ -1949,7 +1952,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
     function sendTrafficPage(req, res) {
       if (!isGuardActive) {
-        return res.status(503).send("Guard is currently initializing, please refresh in a moment.");
+        return res.status(503).send("Poke is waking up the guard, please refresh in a moment.");
       }
 
       const stats = getResourceStats();
@@ -1971,7 +1974,7 @@ ${getHealthCss()}
 
 <noscript>
   <div class="banner orange" style="margin-bottom:24px;">
-    <b>JavaScript is disabled:</b> this page is showing a static server-rendered snapshot. Refresh the page to update the traffic stats.
+    <b>JavaScript is disabled:</b> this is a static snapshot of Poke's anonymous traffic stats. Refresh whenever you want the newest totals.
   </div>
 </noscript>
 
@@ -1980,11 +1983,12 @@ ${getHealthCss()}
 <div class="header-container">
   <div>
     <h1>Poke Traffic Stats</h1>
-    <p class="small" style="margin-top:0;">Anonymous request totals and popular destinations</p>
+    <p class="small" style="margin-top:0;">Anonymous request totals, popular paths, and little traffic wins</p>
   </div>
   <div class="tabs">
     <a class="tab-btn" href="/health">Server Vitals</a>
     <a class="tab-btn active" href="/traffic">Requests</a>
+    <a class="tab-btn" href="/api/stats?view=gui">Anonymous Stats</a>
   </div>
 </div>
 
@@ -1998,12 +2002,12 @@ ${getHealthCss()}
     ${stats.active_requests.total_global_requests.toLocaleString()}
   </div>
   <div class="small" style="color:#888;font-size:1rem;">
-    Recording began on: <span id="tracking-start">${new Date(stats.active_requests.tracking_start_time).toLocaleDateString()}</span>
+    Poke started counting these anonymous totals on: <span id="tracking-start">${new Date(stats.active_requests.tracking_start_time).toLocaleDateString()}</span>
   </div>
 </div>
 
-<h2>Most Popular Destinations (All Time)</h2>
-<p class="small">The most heavily trafficked areas of Poke, calculated since records began.</p>
+<h2>Most Popular Destinations!!</h2>
+<p class="small">The most heavily trafficked areas of Poke calculated since records began!!</p>
 <div id="route-list-container" class="route-list">
   ${routesHtml}
 </div>
