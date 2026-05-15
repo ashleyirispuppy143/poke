@@ -415,6 +415,13 @@ app.get("/api/getEngagementData", async (req, res) => {
                 font-stretch: 1% 800%;
                 font-display: swap;
               }
+              
+              * {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+              }
+
               body { 
                 font-family: "PokeTube Flex", Arial, sans-serif; 
                 background-color: #0f0f0f;
@@ -423,18 +430,19 @@ app.get("/api/getEngagementData", async (req, res) => {
                 justify-content: center; 
                 align-items: center; 
                 min-height: 100vh; 
-                margin: 0; 
+                padding: 24px 16px;
                 font-variation-settings: "wdth" 115, "wght" 400;
               }
+              
               .card { 
                 background-color: #0f0f0f; 
-                padding: 32px; 
-                border: 1px solid #3d3d3d; 
+                padding: 28px; 
+                border: 1px solid #272727; 
                 border-radius: 16px; 
                 max-width: 480px; 
                 width: 100%;
-                box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
               }
+              
               .thumbnail-container {
                 position: relative;
                 display: block;
@@ -445,9 +453,8 @@ app.get("/api/getEngagementData", async (req, res) => {
                 overflow: hidden;
                 cursor: pointer;
                 border: 2px solid #000000;
-                box-sizing: border-box;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
               }
+              
               .thumbnail {
                 width: 100%;
                 height: 100%;
@@ -455,6 +462,7 @@ app.get("/api/getEngagementData", async (req, res) => {
                 transition: filter 0.2s ease, transform 0.3s ease;
                 display: block;
               }
+              
               .play-button {
                 position: absolute;
                 top: 50%;
@@ -462,39 +470,43 @@ app.get("/api/getEngagementData", async (req, res) => {
                 transform: translate(-50%, -50%);
                 width: 64px;
                 height: 64px;
-                background-color: rgba(0, 0, 0, 0.5);
-                backdrop-filter: blur(8px);
+                background-color: rgba(0, 0, 0, 0.6);
+                backdrop-filter: blur(4px);
                 border-radius: 50%;
                 display: flex;
                 justify-content: center;
                 align-items: center;
                 opacity: 0;
                 transition: opacity 0.2s ease, transform 0.2s ease;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
               }
+              
               .play-button svg {
                 width: 32px;
                 height: 32px;
                 fill: #ffffff;
                 margin-left: 4px;
               }
+              
               .thumbnail-container:hover .thumbnail {
                 filter: brightness(0.6);
                 transform: scale(1.02);
               }
+              
               .thumbnail-container:hover .play-button {
                 opacity: 1;
                 transform: translate(-50%, -50%) scale(1.05);
               }
+              
               .video-title {
-                font-size: 1.4rem;
+                font-size: clamp(1.2rem, 4vw, 1.4rem);
                 font-weight: 800;
-                margin: 0 0 10px 0;
+                margin-bottom: 8px;
                 font-variation-settings: "wdth" 140, "wght" 800;
-                line-height: 1.3;
+                line-height: 1.4;
                 word-wrap: break-word;
                 text-align: center;
               }
+              
               .video-views {
                 font-size: 1rem;
                 color: #aaaaaa;
@@ -502,20 +514,35 @@ app.get("/api/getEngagementData", async (req, res) => {
                 font-variation-settings: "wdth" 120, "wght" 500;
                 text-align: center;
               }
+              
               .pill { 
                 display: flex; 
                 align-items: center; 
                 background: #272727; 
                 border-radius: 20px; 
-                padding: 0 18px; 
+                padding: 0 16px; 
                 height: 40px; 
                 width: max-content; 
                 margin: 0 auto 20px auto;
                 font-variation-settings: "wdth" 125, "wght" 600;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
               }
-              .pill-section { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; color: #f1f1f1; }
-              .divider { width: 1px; height: 26px; background-color: #3f3f3f; margin: 0 16px; }
+              
+              .pill-section { 
+                display: flex; 
+                align-items: center; 
+                gap: 8px; 
+                font-size: 15px; 
+                font-weight: 600; 
+                color: #f1f1f1; 
+              }
+              
+              .divider { 
+                width: 1px; 
+                height: 24px; 
+                background-color: #3f3f3f; 
+                margin: 0 16px; 
+              }
+              
               .ratio-bar { 
                 width: 100%; 
                 height: 4px; 
@@ -524,10 +551,27 @@ app.get("/api/getEngagementData", async (req, res) => {
                 overflow: hidden; 
                 display: flex; 
                 margin-bottom: 28px; 
-                box-shadow: inset 0 1px 2px rgba(0,0,0,0.3);
               }
-              .ratio-like { width: ${likePercentage}%; background-color: #2ba640; height: 100%; border-radius: 4px; }
-              .reception { background: #272727; padding: 20px; border-radius: 14px; margin-bottom: 24px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);}
+              
+              .ratio-like { 
+                width: ${likePercentage}%; 
+                background-color: #2ba640; 
+                height: 100%; 
+                border-radius: 4px; 
+              }
+              
+              .reception { 
+                background: #1a1a1a; 
+                border: 1px solid #272727;
+                padding: 20px; 
+                border-radius: 14px; 
+                margin-bottom: 24px; 
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                text-align: center;
+              }
+              
               .reception-title { 
                 font-size: 13px; 
                 color: #aaaaaa; 
@@ -536,12 +580,14 @@ app.get("/api/getEngagementData", async (req, res) => {
                 margin-bottom: 10px; 
                 font-variation-settings: "wdth" 130, "wght" 700;
               }
+              
               .score-label { 
                 font-size: 22px; 
                 font-weight: bold; 
                 margin-bottom: 6px; 
                 font-variation-settings: "wdth" 135, "wght" 800;
               }
+              
               .score-number { 
                 font-size: 15px; 
                 color: #aaaaaa; 
@@ -553,7 +599,9 @@ app.get("/api/getEngagementData", async (req, res) => {
                 display: flex;
                 align-items: center;
                 gap: 10px;
+                justify-content: center;
               }
+              
               .stars-outer {
                 display: inline-block;
                 position: relative;
@@ -561,9 +609,11 @@ app.get("/api/getEngagementData", async (req, res) => {
                 color: #444;
                 letter-spacing: 3px;
               }
+              
               .stars-outer::before {
                 content: "★★★★★";
               }
+              
               .stars-inner {
                 position: absolute;
                 top: 0;
@@ -574,9 +624,11 @@ app.get("/api/getEngagementData", async (req, res) => {
                 width: ${starPercentage}%;
                 text-shadow: 0 0 6px rgba(241, 196, 15, 0.4);
               }
+              
               .stars-inner::before {
                 content: "★★★★★";
               }
+              
               .rating-text {
                 font-size: 16px;
                 font-weight: bold;
@@ -587,15 +639,19 @@ app.get("/api/getEngagementData", async (req, res) => {
               .green { color: #2ba640; }
               .orange { color: #f57c00; }
               .red { color: #cc0000; }
+              
               .rainbow { 
                   background: linear-gradient(90deg, #ff6b6b, #feca57, #1dd1a1, #5f27cd, #ff9ff3);
                   -webkit-background-clip: text;
                   -webkit-text-fill-color: transparent;
                   animation: rainbow-anim 3s linear infinite;
                   background-size: 200% 100%;
-                  text-shadow: 0px 0px 10px rgba(255, 255, 255, 0.2);
               }
-              @keyframes rainbow-anim { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+              
+              @keyframes rainbow-anim { 
+                0% { background-position: 100% 0; } 
+                100% { background-position: -100% 0; } 
+              }
               
               .info-section {
                 margin-top: 24px;
@@ -605,22 +661,74 @@ app.get("/api/getEngagementData", async (req, res) => {
                 line-height: 1.6;
                 font-variation-settings: "wdth" 120, "wght" 500;
               }
+              
               .info-section a {
                 color: #3ea6ff;
                 text-decoration: none;
                 font-variation-settings: "wdth" 120, "wght" 600;
                 transition: color 0.2s ease;
               }
+              
               .info-section a:hover {
                 text-decoration: underline;
                 color: #6ebcff;
               }
               
-              details { font-size: 13px; color: #aaa; background: #181818; padding: 14px; border-radius: 10px; border: 1px solid #3d3d3d; font-variation-settings: "wdth" 110, "wght" 500; margin-bottom: 12px; transition: background 0.2s ease;}
-              details:hover { background: #1f1f1f; }
-              summary { cursor: pointer; user-select: none; font-weight: 600; outline: none; font-variation-settings: "wdth" 125, "wght" 700; margin-bottom: 6px; }
-              details p { margin: 8px 0 0 0; line-height: 1.5; color: #ccc; }
-              pre { overflow-x: auto; color: #e1e1e1; margin-top: 12px; font-family: monospace; font-variation-settings: normal; background: #121212; padding: 10px; border-radius: 6px;}
+              details { 
+                font-size: 13px; 
+                color: #aaa; 
+                background: #181818; 
+                padding: 14px; 
+                border-radius: 10px; 
+                border: 1px solid #272727; 
+                font-variation-settings: "wdth" 110, "wght" 500; 
+                margin-bottom: 12px; 
+                transition: background 0.2s ease;
+              }
+              
+              details:hover { 
+                background: #1f1f1f; 
+              }
+              
+              summary { 
+                cursor: pointer; 
+                user-select: none; 
+                font-weight: 600; 
+                outline: none; 
+                font-variation-settings: "wdth" 125, "wght" 700; 
+                margin-bottom: 6px; 
+              }
+              
+              details p { 
+                margin-top: 8px; 
+                line-height: 1.5; 
+                color: #ccc; 
+              }
+              
+              pre { 
+                overflow-x: auto; 
+                color: #e1e1e1; 
+                margin-top: 12px; 
+                font-family: monospace; 
+                font-variation-settings: normal; 
+                background: #121212; 
+                padding: 12px; 
+                border-radius: 8px;
+                border: 1px solid #272727;
+              }
+              
+              pre::-webkit-scrollbar {
+                height: 6px;
+              }
+              
+              pre::-webkit-scrollbar-thumb {
+                background: #444;
+                border-radius: 3px;
+              }
+              
+              pre::-webkit-scrollbar-track {
+                background: #121212;
+              }
             </style>
           </head>
           <body>
@@ -692,8 +800,7 @@ app.get("/api/getEngagementData", async (req, res) => {
   } catch (error) {
     res.status(500).json("whoops (error 500) >~<");
   }
-});
-  
+});   
   app.get("/feeds/videos.xml", async (req, res) => {
   const channelId = req.query.channel_id;
   const playlistId = req.query.playlist_id;
