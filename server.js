@@ -1824,7 +1824,7 @@ ${getHealthCss()}
 <div class="header-container">
   <div>
     <h1>Poke Server Health</h1>
-    <p class="small" style="margin-top:0;">Live server vibes, traffic protection, and smoothness checks</p>
+    <p class="small" style="margin-top:0;">Live server Health!!!</p>
   </div>
   <div class="tabs">
     <a class="tab-btn active" href="/health">Server Vitals</a>
@@ -1974,7 +1974,7 @@ ${getHealthCss()}
 
 <noscript>
   <div class="banner orange" style="margin-bottom:24px;">
-    <b>JavaScript is disabled:</b> this is a static snapshot of Poke's anonymous traffic stats. Refresh whenever you want the newest totals.
+    <b>JavaScript is disabled:</b> this is a static snapshot of Poke's anonymous traffic stats. Refresh whenever you want the newest totals! 
   </div>
 </noscript>
 
@@ -1983,7 +1983,7 @@ ${getHealthCss()}
 <div class="header-container">
   <div>
     <h1>Poke Traffic Stats</h1>
-    <p class="small" style="margin-top:0;">Anonymous request totals, popular paths, and little traffic wins</p>
+    <p class="small" style="margin-top:0;">ALLLL off the popular paths!!</p>
   </div>
   <div class="tabs">
     <a class="tab-btn" href="/health">Server Vitals</a>
