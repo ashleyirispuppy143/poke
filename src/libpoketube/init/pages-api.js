@@ -315,6 +315,10 @@ app.get("/api/getEngagementData", async (req, res) => {
     } catch (e) {}
   }
 
+  if (view === 'gui' && videoTitle === "Unknown Title") {
+    return res.status(400).json("pls gib base64 title via ?t= :3");
+  }
+
   try {
     if (id) {
       const apiUrl = `https://ryd-proxy.kavin.rocks/votes/${id}&hash=d0550b6e28c8f93533a569c314d5b4e2`;
@@ -431,12 +435,37 @@ app.get("/api/getEngagementData", async (req, res) => {
                 max-width: 450px; 
                 width: 100%; 
               }
-              .thumbnail {
+              .thumbnail-container {
+                position: relative;
+                display: block;
                 width: 100%;
                 aspect-ratio: 16/9;
-                object-fit: cover;
                 border-radius: 12px;
                 margin-bottom: 16px;
+                overflow: hidden;
+                cursor: pointer;
+              }
+              .thumbnail {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                transition: filter 0.2s ease;
+              }
+              .play-button {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                width: 68px;
+                height: 48px;
+                opacity: 0;
+                transition: opacity 0.2s ease;
+              }
+              .thumbnail-container:hover .thumbnail {
+                filter: brightness(0.6);
+              }
+              .thumbnail-container:hover .play-button {
+                opacity: 1;
               }
               .video-title {
                 font-size: 1.3rem;
@@ -445,20 +474,14 @@ app.get("/api/getEngagementData", async (req, res) => {
                 font-variation-settings: "wdth" 130, "wght" 800;
                 line-height: 1.3;
                 word-wrap: break-word;
+                text-align: center;
               }
               .video-views {
                 font-size: 0.95rem;
                 color: #aaaaaa;
                 margin-bottom: 20px;
                 font-variation-settings: "wdth" 115, "wght" 500;
-              }
-              h2 { 
-                margin-top: 0; 
-                font-size: 1.2rem; 
-                font-weight: 600; 
-                margin-bottom: 20px;
                 text-align: center;
-                font-variation-settings: "wdth" 125, "wght" 700;
               }
               .pill { 
                 display: flex; 
@@ -543,26 +566,48 @@ app.get("/api/getEngagementData", async (req, res) => {
               .orange { color: #f57c00; }
               .red { color: #cc0000; }
               .rainbow { 
-                  background: linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3);
+                  background: linear-gradient(90deg, #ff6b6b, #feca57, #1dd1a1, #5f27cd, #ff9ff3);
                   -webkit-background-clip: text;
                   -webkit-text-fill-color: transparent;
                   animation: rainbow-anim 3s linear infinite;
                   background-size: 200% 100%;
+                  text-shadow: 0px 0px 8px rgba(255, 255, 255, 0.15);
               }
               @keyframes rainbow-anim { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
-              details { font-size: 12px; color: #aaa; background: #181818; padding: 12px; border-radius: 8px; border: 1px solid #3d3d3d; font-variation-settings: "wdth" 100, "wght" 400;}
-              summary { cursor: pointer; user-select: none; font-weight: 600; outline: none; font-variation-settings: "wdth" 115, "wght" 600; }
+              
+              .info-section {
+                margin-top: 20px;
+                font-size: 12px;
+                color: #aaaaaa;
+                text-align: center;
+                line-height: 1.5;
+              }
+              .info-section a {
+                color: #3ea6ff;
+                text-decoration: none;
+              }
+              .info-section a:hover {
+                text-decoration: underline;
+              }
+              
+              details { font-size: 12px; color: #aaa; background: #181818; padding: 12px; border-radius: 8px; border: 1px solid #3d3d3d; font-variation-settings: "wdth" 100, "wght" 400; margin-bottom: 10px;}
+              summary { cursor: pointer; user-select: none; font-weight: 600; outline: none; font-variation-settings: "wdth" 115, "wght" 600; margin-bottom: 5px; }
+              details p { margin: 5px 0 0 0; line-height: 1.4; color: #ccc; }
               pre { overflow-x: auto; color: #e1e1e1; margin-top: 10px; font-family: monospace; font-variation-settings: normal;}
             </style>
           </head>
           <body>
             <div class="card">
-              <img src="https://i.ytimg.com/vi/${id}/hqdefault.jpg" onerror="this.src='https://i.ytimg.com/vi/${id}/default.jpg'" class="thumbnail" alt="Video Thumbnail" />
+              <a href="/watch?v=${id}" class="thumbnail-container">
+                <img src="https://i.ytimg.com/vi/${id}/hqdefault.jpg" onerror="this.src='https://i.ytimg.com/vi/${id}/default.jpg'" class="thumbnail" alt="Video Thumbnail" />
+                <svg class="play-button" viewBox="0 0 68 48">
+                  <path d="M66.52,7.74c-0.78-2.93-2.49-5.41-5.42-6.19C55.79,.13,34,0,34,0S12.21,.13,6.9,1.55 C3.97,2.33,2.27,4.81,1.48,7.74C0.06,13.05,0,24,0,24s0.06,10.95,1.48,16.26c0.78,2.93,2.49,5.41,5.42,6.19 C12.21,47.87,34,48,34,48s21.79-0.13,27.1-1.55c2.93-0.78,4.64-3.26,5.42-6.19C67.94,34.95,68,24,68,24S67.94,13.05,66.52,7.74z" fill="#f00"></path>
+                  <path d="M 45,24 27,14 27,34" fill="#fff"></path>
+                </svg>
+              </a>
               
-              ${req.query.t ? `<h1 class="video-title">${videoTitle}</h1>` : ''}
+              <h1 class="video-title">${videoTitle}</h1>
               <div class="video-views">${views.toLocaleString()} views</div>
-
-              <h2>📊 Engagement Stats</h2>
               
               <div class="pill">
                 <div class="pill-section ${likeColor}">
@@ -592,9 +637,19 @@ app.get("/api/getEngagementData", async (req, res) => {
               </div>
 
               <details>
+                <summary>ℹ️ About this data</summary>
+                <p>These stats are pulled entirely from the Return YouTube Dislike (RYD) API. RYD provides estimations for dislikes based on their extension users and historical data. They do not provide other video metadata like the title natively, which is why it must be passed manually.</p>
+              </details>
+
+              <details>
                 <summary>🤓 Nerd Stats (Raw JSON)</summary>
                 <pre><code>${JSON.stringify(respon, null, 2)}</code></pre>
               </details>
+
+              <div class="info-section">
+                Data is thanks to <a href="https://www.returnyoutubedislike.com/" target="_blank">Return YouTube Dislike</a>.<br>
+                Consider <a href="https://www.returnyoutubedislike.com/donate" target="_blank">donating</a> to help them out!
+              </div>
             </div>
           </body>
           </html>
@@ -609,7 +664,7 @@ app.get("/api/getEngagementData", async (req, res) => {
   } catch (error) {
     res.status(500).json("whoops (error 500) >~<");
   }
-}); 
+});
   
 app.get("/feeds/videos.xml", async (req, res) => {
   const channelId = req.query.channel_id;
