@@ -94,363 +94,129 @@ module.exports = function (app, config, renderTemplate) {
   app.get("/api/getchanneltabs", async function (req, res) {
     res.json(ChannelTabs);
   });
-
-const SEARCH_FETCH_TIMEOUT_MS = 4500;
-const SEARCH_CONNECT_TIMEOUT_MS = 3500;
-const SEARCH_HEADERS_TIMEOUT_MS = 4500;
-const SEARCH_BODY_TIMEOUT_MS = 4500;
-const SEARCH_MAX_RESPONSE_BYTES = 3 * 1024 * 1024;
-const SEARCH_QUERY_MAX_LENGTH = 500;
-const SEARCH_INFLIGHT_MAX = 250;
-const SEARCH_LOG_COOLDOWN_MS = 30000;
-
-let searchUndiciPromise = null;
-let searchAgent = null;
-
-const searchInFlight = new Map();
-const searchLogCooldown = new Map();
-
-function getSearchUndici() {
-  if (!searchUndiciPromise) {
-    searchUndiciPromise = import("undici").then((undici) => {
-      if (!searchAgent) {
-        searchAgent = new undici.Agent({
-          connections: 16,
-          connectTimeout: SEARCH_CONNECT_TIMEOUT_MS,
-          headersTimeout: SEARCH_HEADERS_TIMEOUT_MS,
-          bodyTimeout: SEARCH_BODY_TIMEOUT_MS,
-          keepAliveTimeout: 10000,
-          keepAliveMaxTimeout: 30000
-        });
-      }
-
-      return {
-        request: undici.request,
-        agent: searchAgent
-      };
-    });
-  }
-
-  return searchUndiciPromise;
-}
-
-function getSingleQueryValue(value) {
-  if (Array.isArray(value)) {
-    return value[0];
-  }
-
-  return value;
-}
-
-function getQueryStringValue(value) {
-  const singleValue = getSingleQueryValue(value);
-
-  if (typeof singleValue !== "string") {
-    return "";
-  }
-
-  return singleValue;
-}
-
-function clampSearchQuery(query) {
-  const text = String(query || "").trim();
-
-  if (!text) {
-    return "";
-  }
-
-  if (text.length > SEARCH_QUERY_MAX_LENGTH) {
-    return text.slice(0, SEARCH_QUERY_MAX_LENGTH);
-  }
-
-  return text;
-}
-
-function getSearchParam(value) {
-  const singleValue = getSingleQueryValue(value);
-
-  if (typeof singleValue === "undefined" || singleValue === null) {
-    return "";
-  }
-
-  return String(singleValue);
-}
-
-function getIsOldWindowsFirefox(req) {
-  const uaos = req.useragent && req.useragent.os ? req.useragent.os : "";
-  const browser = req.useragent && req.useragent.browser ? req.useragent.browser : "";
-
-  return (
-    browser === "Firefox" &&
-    (uaos === "Windows 7" || uaos === "Windows 8")
-  );
-}
-
-function getSearchRedirect(query) {
-  if (typeof query !== "string") {
-    return null;
-  }
-
-  const trimmedQuery = query.trim();
-
-  if (!trimmedQuery) {
-    return null;
-  }
-
-  const ytUrlMatch = trimmedQuery.match(/(?:youtube\.com\/watch\?.*v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-  const prefixMatch = trimmedQuery.match(/^(channel|video|watch):([a-zA-Z0-9_\-@]+)$/);
-
-  if (ytUrlMatch) {
-    return `/watch?v=${encodeURIComponent(ytUrlMatch[1])}`;
-  }
-
-  if (prefixMatch) {
-    const type = prefixMatch[1];
-    const id = prefixMatch[2];
-
-    if (type === "channel") {
-      return `/channel?id=${encodeURIComponent(id)}`;
-    }
-
-    if ((type === "video" || type === "watch") && id.length === 11) {
-      return `/watch?v=${encodeURIComponent(id)}`;
-    }
-  }
-
-  return null;
-}
-
-function buildSearchUrl(req, query, continuation, date, type, duration, sort) {
-  if (req.query.from === "hashtag") {
-    return `${config.invapi}/hashtag/${encodeURIComponent(query)}?hl=en-gb`;
-  }
-
-  const params = new URLSearchParams();
-
-  params.set("q", query);
-  params.set("page", continuation);
-  params.set("date", date);
-  params.set("type", type);
-  params.set("duration", duration);
-  params.set("sort", sort);
-  params.set("hl", "en-US");
-  params.set("region", "US");
-
-  return `${config.invapi}/search?${params.toString()}`;
-}
-
-function createSearchAbortSignal(timeoutMs) {
-  if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
-    return {
-      signal: AbortSignal.timeout(timeoutMs),
-      cancel: null
-    };
-  }
-
-  if (typeof AbortController !== "undefined") {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-    return {
-      signal: controller.signal,
-      cancel: () => clearTimeout(timer)
-    };
-  }
-
-  return {
-    signal: undefined,
-    cancel: null
-  };
-}
-
-function isSearchTimeoutError(error) {
-  if (!error) {
-    return false;
-  }
-
-  const cause = error.cause || {};
-
-  return (
-    error.name === "AbortError" ||
-    error.name === "TimeoutError" ||
-    error.code === "ABORT_ERR" ||
-    error.code === "UND_ERR_CONNECT_TIMEOUT" ||
-    error.code === "UND_ERR_HEADERS_TIMEOUT" ||
-    error.code === "UND_ERR_BODY_TIMEOUT" ||
-    cause.name === "AbortError" ||
-    cause.name === "TimeoutError" ||
-    cause.code === "ABORT_ERR" ||
-    cause.code === "UND_ERR_CONNECT_TIMEOUT" ||
-    cause.code === "UND_ERR_HEADERS_TIMEOUT" ||
-    cause.code === "UND_ERR_BODY_TIMEOUT"
-  );
-}
-
-function logSearchErrorOnce(key, message) {
-  const now = Date.now();
-  const lastLogAt = searchLogCooldown.get(key) || 0;
-
-  if (now - lastLogAt < SEARCH_LOG_COOLDOWN_MS) {
-    return;
-  }
-
-  searchLogCooldown.set(key, now);
-
-  if (searchLogCooldown.size > 1000) {
-    const oldestKey = searchLogCooldown.keys().next().value;
-    searchLogCooldown.delete(oldestKey);
-  }
-
-  console.log(message);
-}
-
-async function readSearchBodyText(body, maxBytes) {
-  const chunks = [];
-  let totalBytes = 0;
-
-  for await (const chunk of body) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-
-    totalBytes += buffer.length;
-
-    if (totalBytes > maxBytes) {
-      if (body && typeof body.destroy === "function") {
-        body.destroy();
-      }
-
-      const error = new Error("Search response was too large");
-      error.code = "POKE_SEARCH_RESPONSE_TOO_LARGE";
-      throw error;
-    }
-
-    chunks.push(buffer);
-  }
-
-  return Buffer.concat(chunks, totalBytes).toString("utf8");
-}
-
-async function requestSearchText(url) {
-  const { request, agent } = await getSearchUndici();
-  const abort = createSearchAbortSignal(SEARCH_FETCH_TIMEOUT_MS);
-
-  try {
-    const response = await request(url, {
-      method: "GET",
-      dispatcher: agent,
-      signal: abort.signal,
-      headersTimeout: SEARCH_HEADERS_TIMEOUT_MS,
-      bodyTimeout: SEARCH_BODY_TIMEOUT_MS,
-      headers: {
-        "User-Agent": config.useragent,
-        "Accept": "application/json,text/plain,*/*"
-      }
-    });
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      if (response.body && typeof response.body.destroy === "function") {
-        response.body.destroy();
-      }
-
-      const error = new Error(`Search upstream returned HTTP ${response.statusCode}`);
-      error.code = "POKE_SEARCH_UPSTREAM_HTTP";
-      error.statusCode = response.statusCode;
-      throw error;
-    }
-
-    const contentLength = Number(response.headers["content-length"] || 0);
-
-    if (Number.isFinite(contentLength) && contentLength > SEARCH_MAX_RESPONSE_BYTES) {
-      if (response.body && typeof response.body.destroy === "function") {
-        response.body.destroy();
-      }
-
-      const error = new Error("Search response content-length was too large");
-      error.code = "POKE_SEARCH_RESPONSE_TOO_LARGE";
-      throw error;
-    }
-
-    return await readSearchBodyText(response.body, SEARCH_MAX_RESPONSE_BYTES);
-  } finally {
-    if (typeof abort.cancel === "function") {
-      abort.cancel();
-    }
-  }
-}
-
-function getSearchInFlightKey(url) {
-  return String(url || "");
-}
-
-function getSearchInFlightOrCreate(key, producer) {
-  if (searchInFlight.has(key)) {
-    return searchInFlight.get(key);
-  }
-
-  if (searchInFlight.size >= SEARCH_INFLIGHT_MAX) {
-    const error = new Error("Too many active search requests");
-    error.code = "POKE_SEARCH_TOO_MANY_INFLIGHT";
-    return Promise.reject(error);
-  }
-
-  const promise = Promise.resolve()
-    .then(producer)
-    .finally(() => {
-      searchInFlight.delete(key);
-    });
-
-  searchInFlight.set(key, promise);
-
-  return promise;
-}
-
-async function getFreshSearchResults(searchUrl) {
-  const key = getSearchInFlightKey(searchUrl);
-
-  return getSearchInFlightOrCreate(key, async () => {
-    const text = await requestSearchText(searchUrl);
-    return getJson(text);
-  });
-}
+  
+ const GlobalSearchCache = new Map();
+const SEARCH_CACHE_TTL = 1800000; // Cache searches for 30 minutes
 
 app.get("/search", async (req, res) => {
-  const rawQuery = getQueryStringValue(req.query.query);
-  const query = clampSearchQuery(rawQuery);
+  const { fetch } = await import("undici");
+  const query = req.query.query;
   const tab = req.query.tab;
-
   var media_proxy = config.media_proxy;
+  var uaos = req.useragent.os;
+  var IsOldWindows = false;
 
-  const IsOldWindows = getIsOldWindowsFirefox(req);
+  if (
+    (uaos == "Windows 7" && req.useragent.browser == "Firefox") ||
+    (uaos == "Windows 8" && req.useragent.browser == "Firefox")
+  ) {
+    IsOldWindows = true;
+  }
+
+   if (typeof query === "string") {
+    const trimmedQuery = query.trim();
+    let redirectUrl = null;
+
+    const ytUrlMatch = trimmedQuery.match(/(?:youtube\.com\/watch\?.*v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+    const prefixMatch = trimmedQuery.match(/^(channel|video|watch):([a-zA-Z0-9_\-@]+)$/);
+
+    if (ytUrlMatch) {
+      redirectUrl = `/watch?v=${ytUrlMatch[1]}`;
+    } else if (prefixMatch) {
+      const type = prefixMatch[1];
+      const id = prefixMatch[2];
+
+      if (type === "channel") {
+        redirectUrl = `/channel?id=${id}`;
+      } else if ((type === "video" || type === "watch") && id.length === 11) {
+        redirectUrl = `/watch?v=${id}`;
+      }
+    }
+
+    if (redirectUrl) {
+      return res.redirect(redirectUrl);
+    }
+  }
+
+  if (query && query.startsWith("!") && query.length > 2) {
+    return res.redirect("https://lite.duckduckgo.com/lite/?q=" + query);
+  }
+
+  if (query && query.startsWith("Hey ChatGPT,") && query.length > 2) {
+    return res.redirect("https://chatgpt.com/?q=" + query + "- sent using pokeAI features");
+  }
 
   if (!query) {
     return res.redirect("/home");
   }
 
-  const redirectUrl = getSearchRedirect(query);
-
-  if (redirectUrl) {
-    return res.redirect(redirectUrl);
-  }
-
-  if (query.startsWith("!") && query.length > 2) {
-    return res.redirect("https://lite.duckduckgo.com/lite/?q=" + encodeURIComponent(query));
-  }
-
-  if (query.startsWith("Hey ChatGPT,") && query.length > 2) {
-    return res.redirect("https://chatgpt.com/?q=" + encodeURIComponent(query + " - sent using pokeAI features"));
-  }
-
-  let continuation = getSearchParam(req.query.continuation);
-  let date = getSearchParam(req.query.date);
+   let continuation = req.query.continuation || "";
+  let date = req.query.date || "";
   let type = "video";
-  let duration = getSearchParam(req.query.duration);
-  let sort = getSearchParam(req.query.sort);
+  let duration = req.query.duration || "";
+  let sort = req.query.sort || "";
 
-  const searchUrl = buildSearchUrl(req, query, continuation, date, type, duration, sort);
+  let searchUrl;
+  if (req.query.from === "hashtag") {
+    searchUrl = `${config.invapi}/hashtag/${query}?hl=en-gb`;
+  } else {
+    searchUrl = `${config.invapi}/search?q=${encodeURIComponent(query)}&page=${encodeURIComponent(continuation)}&date=${date}&type=${type}&duration=${duration}&sort=${sort}&hl=en-US&region=US`;
+  }
+
+  // OPTIMIZATION 1: Check Cache Before Network Request
+  const cachedData = GlobalSearchCache.get(searchUrl);
+  if (cachedData && Date.now() - cachedData.timestamp < SEARCH_CACHE_TTL) {
+    return renderTemplate(res, req, "search.ejs", {
+      invresults: cachedData.result,
+      turntomins,
+      date,
+      type,
+      duration,
+      sort,
+      IsOldWindows,
+      tab,
+      continuation,
+      media_proxy_url: media_proxy,
+      results: "",
+      q: query,
+      summary: "",
+    });
+  }
 
   try {
-    const xmlData = await getFreshSearchResults(searchUrl);
+    // OPTIMIZATION 2: Strict 5-second timeout to prevent server hanging
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-    return renderTemplate(res, req, "search.ejs", {
+    const response = await fetch(searchUrl, {
+      headers: {
+        "User-Agent": config.useragent,
+      },
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`Search API returned HTTP ${response.status}`);
+    }
+
+    const txt = await response.text();
+    const xmlData = getJson(txt);
+
+    if (!xmlData) {
+      throw new Error("Failed to parse JSON from search API");
+    }
+
+    // OPTIMIZATION 3: Save to cache and prevent memory leaks (Max 300 cached searches)
+    GlobalSearchCache.set(searchUrl, { result: xmlData, timestamp: Date.now() });
+    
+    if (GlobalSearchCache.size > 300) {
+      const firstKey = GlobalSearchCache.keys().next().value;
+      GlobalSearchCache.delete(firstKey);
+    }
+
+    renderTemplate(res, req, "search.ejs", {
       invresults: xmlData,
       turntomins,
       date,
@@ -463,38 +229,18 @@ app.get("/search", async (req, res) => {
       media_proxy_url: media_proxy,
       results: "",
       q: query,
-      summary: ""
+      summary: "",
     });
+    
   } catch (error) {
-    if (isSearchTimeoutError(error)) {
-      logSearchErrorOnce(
-        `timeout:${searchUrl}`,
-        `[POKE-search] upstream timeout while searching for '${query}'`
-      );
-    } else {
-      logSearchErrorOnce(
-        `error:${error.code || error.name || "unknown"}:${searchUrl}`,
-        `[POKE-search] upstream error while searching for '${query}': ${error.message}`
-      );
+    // Prevent unhandled promise rejection spam from timeouts
+    if (error.name !== 'AbortError' && error.code !== 'UND_ERR_CONNECT_TIMEOUT') {
+      console.log(`Error while searching for '${query}':`, error.message);
     }
-
-    return renderTemplate(res, req, "search.ejs", {
-      invresults: null,
-      turntomins,
-      date,
-      type,
-      duration,
-      sort,
-      IsOldWindows,
-      tab,
-      continuation,
-      media_proxy_url: media_proxy,
-      results: "",
-      q: query,
-      summary: ""
-    });
+    res.redirect("/");
   }
-}); 
+});
+  
   app.get("/im-feeling-lucky", function (req, res) {
     res.send("WIP");
   });
