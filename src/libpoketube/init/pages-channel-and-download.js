@@ -225,15 +225,98 @@ function channelurlfixer(text) {
 }
 
 const CHANNEL_PAGE_CACHE_TTL = 3600000;
-const CHANNEL_PAGE_CACHE_MAX = 1500;
-const CHANNEL_FETCH_TIMEOUT_MS = 9000;
+const CHANNEL_PUBLISHED_CACHE_TTL = 3600000;
+const CHANNEL_URL_CACHE_TTL = 1800000;
+const CHANNEL_URL_FAILURE_TTL = 45000;
+const CHANNEL_LOG_COOLDOWN_TTL = 30000;
+const CHANNEL_CACHE_MAX = 1500;
+const CHANNEL_URL_CACHE_MAX = CHANNEL_CACHE_MAX * 8;
+const CHANNEL_URL_FETCH_TIMEOUT_MS = 5500;
+const CHANNEL_FEED_FETCH_TIMEOUT_MS = 4000;
 
-const channelPageCache = new Map();
-const channelPageInFlight = new Map();
-const channelUrlCache = new Map();
-const channelUrlInFlight = new Map();
-const channelPublishedCache = new Map();
-const channelPublishedInFlight = new Map();
+class PokeTimedCache {
+  constructor(maxEntries, defaultTtlMs) {
+    this.maxEntries = maxEntries;
+    this.defaultTtlMs = defaultTtlMs;
+    this.items = new Map();
+  }
+
+  get(key) {
+    const item = this.items.get(key);
+
+    if (!item) {
+      return undefined;
+    }
+
+    if (Date.now() >= item.expiresAt) {
+      this.items.delete(key);
+      return undefined;
+    }
+
+    this.items.delete(key);
+    this.items.set(key, item);
+
+    return item.value;
+  }
+
+  set(key, value, ttlMs) {
+    const ttl = Number.isFinite(ttlMs) && ttlMs > 0 ? ttlMs : this.defaultTtlMs;
+
+    this.items.set(key, {
+      value,
+      expiresAt: Date.now() + ttl
+    });
+
+    this.trim();
+
+    return value;
+  }
+
+  delete(key) {
+    this.items.delete(key);
+  }
+
+  has(key) {
+    return this.get(key) !== undefined;
+  }
+
+  trim() {
+    while (this.items.size > this.maxEntries) {
+      const oldestKey = this.items.keys().next().value;
+      this.items.delete(oldestKey);
+    }
+  }
+}
+
+class PokeSingleFlight {
+  constructor() {
+    this.pending = new Map();
+  }
+
+  run(key, task) {
+    if (this.pending.has(key)) {
+      return this.pending.get(key);
+    }
+
+    const promise = Promise.resolve()
+      .then(task)
+      .finally(() => {
+        this.pending.delete(key);
+      });
+
+    this.pending.set(key, promise);
+    return promise;
+  }
+}
+
+const channelUrlCache = new PokeTimedCache(CHANNEL_URL_CACHE_MAX, CHANNEL_URL_CACHE_TTL);
+const channelUrlFailureCache = new PokeTimedCache(CHANNEL_URL_CACHE_MAX, CHANNEL_URL_FAILURE_TTL);
+const channelPublishedCache = new PokeTimedCache(CHANNEL_CACHE_MAX, CHANNEL_PUBLISHED_CACHE_TTL);
+const channelLogCooldown = new PokeTimedCache(2000, CHANNEL_LOG_COOLDOWN_TTL);
+
+const channelUrlInFlight = new PokeSingleFlight();
+const channelPublishedInFlight = new PokeSingleFlight();
+const channelBundleInFlight = new PokeSingleFlight();
 
 let undiciFetchPromise = null;
 
@@ -245,90 +328,134 @@ function getUndiciFetch() {
   return undiciFetchPromise;
 }
 
-function getTimedFetchOptions(options, timeoutMs) {
-  const finalOptions = Object.assign({}, options || {});
-  let cancel = null;
+function getPublishedFailureCache() {
+  if (typeof fetchFailureCache !== "undefined" && fetchFailureCache) {
+    return fetchFailureCache;
+  }
 
+  if (!globalThis.__pokeChannelPublishedFailureCache) {
+    globalThis.__pokeChannelPublishedFailureCache = Object.create(null);
+  }
+
+  return globalThis.__pokeChannelPublishedFailureCache;
+}
+
+function getPublishedFailureTtl() {
+  if (typeof FETCH_FAILURE_TTL !== "undefined" && Number.isFinite(FETCH_FAILURE_TTL)) {
+    return FETCH_FAILURE_TTL;
+  }
+
+  return CHANNEL_URL_FAILURE_TTL;
+}
+
+function isFreshPublishedFailure(id) {
+  const cache = getPublishedFailureCache();
+  const failedAt = cache[id];
+
+  return Number.isFinite(failedAt) && Date.now() - failedAt < getPublishedFailureTtl();
+}
+
+function rememberPublishedFailure(id) {
+  const cache = getPublishedFailureCache();
+  cache[id] = Date.now();
+}
+
+function forgetPublishedFailure(id) {
+  const cache = getPublishedFailureCache();
+  delete cache[id];
+}
+
+function logChannelIssue(key, message) {
+  if (channelLogCooldown.has(key)) {
+    return;
+  }
+
+  channelLogCooldown.set(key, true);
+  console.log(message);
+}
+
+function createTimeoutSignal(timeoutMs) {
   if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
-    finalOptions.signal = AbortSignal.timeout(timeoutMs);
-    return { options: finalOptions, cancel };
+    return {
+      signal: AbortSignal.timeout(timeoutMs),
+      cancel: null
+    };
   }
 
   if (typeof AbortController !== "undefined") {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
-    finalOptions.signal = controller.signal;
-    cancel = () => clearTimeout(timer);
-  }
-
-  return { options: finalOptions, cancel };
-}
-
-async function fetchTextWithTimeout(fetch, url, options, timeoutMs) {
-  const timed = getTimedFetchOptions(options, timeoutMs);
-
-  try {
-    const response = await fetch(url, timed.options);
-    const text = await response.text();
 
     return {
-      ok: response.ok,
+      signal: controller.signal,
+      cancel: () => clearTimeout(timer)
+    };
+  }
+
+  return {
+    signal: undefined,
+    cancel: null
+  };
+}
+
+function isTimeoutError(error) {
+  if (!error) {
+    return false;
+  }
+
+  return (
+    error.name === "AbortError" ||
+    error.name === "TimeoutError" ||
+    error.code === "ABORT_ERR" ||
+    error.code === "UND_ERR_HEADERS_TIMEOUT" ||
+    error.code === "UND_ERR_BODY_TIMEOUT" ||
+    error.code === "UND_ERR_CONNECT_TIMEOUT"
+  );
+}
+
+async function fetchTextFast(fetch, url, headers, timeoutMs) {
+  const timeout = createTimeoutSignal(timeoutMs);
+  const options = {
+    headers
+  };
+
+  if (timeout.signal) {
+    options.signal = timeout.signal;
+  }
+
+  try {
+    const response = await fetch(url, options);
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        text: "",
+        timedOut: false,
+        error: null
+      };
+    }
+
+    return {
+      ok: true,
       status: response.status,
-      text
+      text: await response.text(),
+      timedOut: false,
+      error: null
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: 0,
+      text: "",
+      timedOut: isTimeoutError(error),
+      error
     };
   } finally {
-    if (typeof timed.cancel === "function") {
-      timed.cancel();
+    if (typeof timeout.cancel === "function") {
+      timeout.cancel();
     }
   }
-}
-
-function getMapCacheValue(map, key, ttl) {
-  const item = map.get(key);
-
-  if (!item) {
-    return null;
-  }
-
-  if (Date.now() - item.timestamp >= ttl) {
-    map.delete(key);
-    return null;
-  }
-
-  map.delete(key);
-  map.set(key, item);
-
-  return item.value;
-}
-
-function setMapCacheValue(map, key, value, maxEntries) {
-  map.set(key, {
-    value,
-    timestamp: Date.now()
-  });
-
-  while (map.size > maxEntries) {
-    const oldestKey = map.keys().next().value;
-    map.delete(oldestKey);
-  }
-
-  return value;
-}
-
-function getInFlightOrCreate(map, key, producer) {
-  if (map.has(key)) {
-    return map.get(key);
-  }
-
-  const promise = Promise.resolve()
-    .then(producer)
-    .finally(() => {
-      map.delete(key);
-    });
-
-  map.set(key, promise);
-
-  return promise;
 }
 
 function normalizeChannelId(rawId) {
@@ -346,7 +473,202 @@ function normalizeChannelId(rawId) {
   return id;
 }
 
-function getChannelPageCacheKey(ID, sort_by, continuation) {
+function getSingleQueryValue(value) {
+  if (Array.isArray(value)) {
+    return value[0];
+  }
+
+  return value;
+}
+
+function getContinuationParam(value) {
+  const raw = getSingleQueryValue(value);
+  const text = String(raw || "").trim();
+
+  if (!text) {
+    return "";
+  }
+
+  return `&continuation=${encodeURIComponent(text)}`;
+}
+
+function getSortByValue(value) {
+  const raw = getSingleQueryValue(value);
+  const text = String(raw || "").trim();
+
+  return text || "newest";
+}
+
+function getUrlCacheKey(url) {
+  return String(url || "");
+}
+
+function makeChannelUrls(ID, sort_by, continuation) {
+  const apiUrl = config.invapi + "/channels/";
+
+  return {
+    videos: `${apiUrl}${ID}/${atob(ChannelTabs.videos)}?sort_by=${encodeURIComponent(sort_by)}${continuation}&h=${btoa(ChannelTabs.community)}`,
+    shorts: `${apiUrl}${ID}/${atob(ChannelTabs.shorts)}?sort_by=${encodeURIComponent(sort_by)}${continuation}&h=${btoa(ChannelTabs.community)}`,
+    streams: `${apiUrl}${ID}/${atob(ChannelTabs.streams)}?sort_by=${encodeURIComponent(sort_by)}${continuation}&h=${btoa(ChannelTabs.community)}`,
+    community: `${apiUrl}${ID}/${atob(ChannelTabs.community)}?hl=en-US&h=${ChannelTabs.community}`,
+    playlist: `${apiUrl}${ID}/${atob(ChannelTabs.playlist)}?hl=en-US&h=${btoa(ChannelTabs.community)}`,
+    releases: `${apiUrl}${ID}/releases?hl=en-US&h=${btoa(ChannelTabs.community)}`,
+    info: `${apiUrl}${ID}/?h=${btoa(ChannelTabs.community)}`
+  };
+}
+
+async function fetchChannelPublishedJSON(fetch, id) {
+  const cached = channelPublishedCache.get(id);
+
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  return channelPublishedInFlight.run(id, async () => {
+    if (isFreshPublishedFailure(id)) {
+      return {
+        ID: id,
+        published: " "
+      };
+    }
+
+    const url = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(id)}`;
+
+    const response = await fetchTextFast(
+      fetch,
+      url,
+      {
+        accept: "application/atom+xml"
+      },
+      CHANNEL_FEED_FETCH_TIMEOUT_MS
+    );
+
+    if (!response.ok) {
+      rememberPublishedFailure(id);
+
+      if (response.timedOut) {
+        logChannelIssue(`published-timeout:${id}`, `fetchChannelPublishedJSON timed out for ${id}`);
+      } else if (response.status) {
+        logChannelIssue(`published-http:${id}:${response.status}`, `HTTP ${response.status} for ${url}`);
+      } else if (response.error) {
+        logChannelIssue(`published-error:${id}`, `fetchChannelPublishedJSON failed for ${id}: ${response.error.message}`);
+      }
+
+      return {
+        ID: id,
+        published: " "
+      };
+    }
+
+    const match = response.text.match(/<feed[\s\S]*?<published>([^<]+)<\/published>/i);
+
+    if (!match) {
+      rememberPublishedFailure(id);
+
+      return {
+        ID: id,
+        published: " "
+      };
+    }
+
+    const iso = match[1].trim();
+    const date = new Date(iso);
+
+    if (Number.isNaN(date.getTime())) {
+      rememberPublishedFailure(id);
+
+      return {
+        ID: id,
+        published: " "
+      };
+    }
+
+    const published = new Intl.DateTimeFormat("en-GB", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: "UTC"
+    }).format(date);
+
+    const value = {
+      ID: id,
+      published
+    };
+
+    forgetPublishedFailure(id);
+    channelPublishedCache.set(id, value, CHANNEL_PUBLISHED_CACHE_TTL);
+
+    return value;
+  });
+}
+
+async function fetchChannelJson(fetch, name, url) {
+  const key = getUrlCacheKey(url);
+  const cached = channelUrlCache.get(key);
+
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  if (channelUrlFailureCache.has(key)) {
+    return null;
+  }
+
+  return channelUrlInFlight.run(key, async () => {
+    const secondCached = channelUrlCache.get(key);
+
+    if (secondCached !== undefined) {
+      return secondCached;
+    }
+
+    if (channelUrlFailureCache.has(key)) {
+      return null;
+    }
+
+    const response = await fetchTextFast(
+      fetch,
+      url,
+      {
+        "User-Agent": config.useragent
+      },
+      CHANNEL_URL_FETCH_TIMEOUT_MS
+    );
+
+    if (!response.ok) {
+      channelUrlFailureCache.set(key, true, CHANNEL_URL_FAILURE_TTL);
+
+      if (response.timedOut) {
+        logChannelIssue(`url-timeout:${name}:${key}`, `channel ${name} fetch timed out`);
+      } else if (response.status) {
+        logChannelIssue(`url-http:${name}:${response.status}:${key}`, `channel ${name} fetch returned HTTP ${response.status}`);
+      } else if (response.error) {
+        logChannelIssue(`url-error:${name}:${key}`, `channel ${name} fetch failed: ${response.error.message}`);
+      }
+
+      return null;
+    }
+
+    try {
+      const parsed = getJson(response.text);
+
+      if (parsed === null || typeof parsed === "undefined") {
+        channelUrlFailureCache.set(key, true, CHANNEL_URL_FAILURE_TTL);
+        return null;
+      }
+
+      channelUrlFailureCache.delete(key);
+      channelUrlCache.set(key, parsed, CHANNEL_URL_CACHE_TTL);
+
+      return parsed;
+    } catch (error) {
+      channelUrlFailureCache.set(key, true, CHANNEL_URL_FAILURE_TTL);
+      logChannelIssue(`json-error:${name}:${key}`, `channel ${name} JSON parse failed: ${error.message}`);
+      return null;
+    }
+  });
+}
+
+function getChannelBundleKey(ID, sort_by, continuation) {
   return JSON.stringify({
     ID,
     sort_by,
@@ -354,148 +676,11 @@ function getChannelPageCacheKey(ID, sort_by, continuation) {
   });
 }
 
-function getUrlCacheKey(url) {
-  return String(url || "");
-}
-
-function isFreshFetchFailure(id) {
-  return fetchFailureCache[id] && Date.now() - fetchFailureCache[id] < FETCH_FAILURE_TTL;
-}
-
-async function fetchChannelPublishedJSON(fetch, id) {
-  const cached = getMapCacheValue(channelPublishedCache, id, CHANNEL_PAGE_CACHE_TTL);
-
-  if (cached) {
-    return cached;
-  }
-
-  return getInFlightOrCreate(channelPublishedInFlight, id, async () => {
-    if (isFreshFetchFailure(id)) {
-      return { ID: id, published: " " };
-    }
-
-    try {
-      const url = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(id)}`;
-
-      const response = await fetchTextWithTimeout(
-        fetch,
-        url,
-        {
-          headers: {
-            accept: "application/atom+xml"
-          }
-        },
-        CHANNEL_FETCH_TIMEOUT_MS
-      );
-
-      if (response.status === 404) {
-        fetchFailureCache[id] = Date.now();
-        return { ID: id, published: " " };
-      }
-
-      if (!response.ok) {
-        console.log(`HTTP ${response.status} for ${url}`);
-        fetchFailureCache[id] = Date.now();
-        return { ID: id, published: " " };
-      }
-
-      const match = response.text.match(/<feed[\s\S]*?<published>([^<]+)<\/published>/i);
-
-      if (!match) {
-        fetchFailureCache[id] = Date.now();
-        return { ID: id, published: " " };
-      }
-
-      const iso = match[1].trim();
-      const date = new Date(iso);
-
-      if (Number.isNaN(date.getTime())) {
-        fetchFailureCache[id] = Date.now();
-        return { ID: id, published: " " };
-      }
-
-      const published = new Intl.DateTimeFormat("en-GB", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-        timeZone: "UTC"
-      }).format(date);
-
-      delete fetchFailureCache[id];
-
-      return setMapCacheValue(
-        channelPublishedCache,
-        id,
-        {
-          ID: id,
-          published
-        },
-        CHANNEL_PAGE_CACHE_MAX
-      );
-    } catch (error) {
-      console.log(`fetchChannelPublishedJSON failed for ${id}:`, error.message);
-      fetchFailureCache[id] = Date.now();
-      return { ID: id, published: " " };
-    }
-  });
-}
-
-async function getChannelData(fetch, url) {
-  const key = getUrlCacheKey(url);
-  const cached = getMapCacheValue(channelUrlCache, key, CHANNEL_PAGE_CACHE_TTL);
-
-  if (cached !== null) {
-    return cached;
-  }
-
-  return getInFlightOrCreate(channelUrlInFlight, key, async () => {
-    try {
-      const response = await fetchTextWithTimeout(
-        fetch,
-        url,
-        {
-          headers: {
-            "User-Agent": config.useragent
-          }
-        },
-        CHANNEL_FETCH_TIMEOUT_MS
-      );
-
-      if (!response.ok) {
-        return null;
-      }
-
-      const parsed = getJson(response.text);
-
-      if (parsed !== null && typeof parsed !== "undefined") {
-        return setMapCacheValue(channelUrlCache, key, parsed, CHANNEL_PAGE_CACHE_MAX * 8);
-      }
-
-      return null;
-    } catch (error) {
-      return null;
-    }
-  });
-}
-
 async function getChannelBundle(fetch, ID, sort_by, continuation) {
-  const apiUrl = config.invapi + "/channels/";
-  const channelUrl = `${apiUrl}${ID}/${atob(ChannelTabs.videos)}?sort_by=${sort_by}${continuation}&h=${btoa(ChannelTabs.community)}`;
-  const shortsUrl = `${apiUrl}${ID}/${atob(ChannelTabs.shorts)}?sort_by=${sort_by}${continuation}&h=${btoa(ChannelTabs.community)}`;
-  const streamUrl = `${apiUrl}${ID}/${atob(ChannelTabs.streams)}?sort_by=${sort_by}${continuation}&h=${btoa(ChannelTabs.community)}`;
-  const communityUrl = `${apiUrl}${ID}/${atob(ChannelTabs.community)}?hl=en-US&h=${ChannelTabs.community}`;
-  const PlaylistUrl = `${apiUrl}${ID}/${atob(ChannelTabs.playlist)}?hl=en-US&h=${btoa(ChannelTabs.community)}`;
-  const releasesUrl = `${apiUrl}${ID}/releases?hl=en-US&h=${btoa(ChannelTabs.community)}`;
-  const channelINVUrl = `${apiUrl}${ID}/?h=${btoa(ChannelTabs.community)}`;
+  const key = getChannelBundleKey(ID, sort_by, continuation);
+  const urls = makeChannelUrls(ID, sort_by, continuation);
 
-  const pageCacheKey = getChannelPageCacheKey(ID, sort_by, continuation);
-  const cached = getMapCacheValue(channelPageCache, pageCacheKey, CHANNEL_PAGE_CACHE_TTL);
-
-  if (cached) {
-    return cached;
-  }
-
-  return getInFlightOrCreate(channelPageInFlight, pageCacheKey, async () => {
+  return channelBundleInFlight.run(key, async () => {
     const [
       createdAccountGetDate,
       tj,
@@ -507,150 +692,141 @@ async function getChannelBundle(fetch, ID, sort_by, continuation) {
       cinv
     ] = await Promise.all([
       fetchChannelPublishedJSON(fetch, ID),
-      getChannelData(fetch, channelUrl),
-      getChannelData(fetch, shortsUrl),
-      getChannelData(fetch, PlaylistUrl),
-      getChannelData(fetch, releasesUrl),
-      getChannelData(fetch, streamUrl),
-      getChannelData(fetch, communityUrl),
-      getChannelData(fetch, channelINVUrl)
+      fetchChannelJson(fetch, "videos", urls.videos),
+      fetchChannelJson(fetch, "shorts", urls.shorts),
+      fetchChannelJson(fetch, "playlist", urls.playlist),
+      fetchChannelJson(fetch, "releases", urls.releases),
+      fetchChannelJson(fetch, "streams", urls.streams),
+      fetchChannelJson(fetch, "community", urls.community),
+      fetchChannelJson(fetch, "info", urls.info)
     ]);
 
-    return setMapCacheValue(
-      channelPageCache,
-      pageCacheKey,
-      {
-        createdAccountGetDate,
-        tj,
-        shorts,
-        playlist,
-        released,
-        stream,
-        c,
-        cinv
-      },
-      CHANNEL_PAGE_CACHE_MAX
-    );
+    return {
+      createdAccountGetDate,
+      tj,
+      shorts,
+      playlist,
+      released,
+      stream,
+      c,
+      cinv
+    };
   });
 }
 
-app.get("/channel/", async (req, res) => {
-  const fetch = await getUndiciFetch();
+function getChannelThumbnailUrl(video) {
+  const videoId = video && video.videoId ? video.videoId : "";
+  const thumbnails = Array.isArray(video && video.videoThumbnails)
+    ? video.videoThumbnails
+    : [];
 
-  var media_proxy = config.media_proxy;
+  const maxresDefaultThumbnail = thumbnails.find(
+    (thumbnail) => thumbnail && thumbnail.quality === "maxresdefault"
+  );
 
-  if (req.useragent && req.useragent.source && req.useragent.source.includes("Pardus")) {
-    media_proxy = "https://media-proxy.ashley0143.xyz";
+  if (maxresDefaultThumbnail) {
+    return `https://vid.puffyan.us/vi/${videoId}/maxresdefault.jpg`;
   }
 
-  var ID = normalizeChannelId(req.query.id);
+  return `https://vid.puffyan.us/vi/${videoId}/hqdefault.jpg`;
+}
 
-  if (!ID) {
-    return renderTemplate(res, req, "404.ejs");
-  }
+app.get("/channel/", async (req, res, next) => {
+  try {
+    const fetch = await getUndiciFetch();
 
-  const tab = req.query.tab;
+    var media_proxy = config.media_proxy;
 
-  const continuation = req.query.continuation
-    ? `&continuation=${req.query.continuation}`
-    : "";
-
-  const continuationl = req.query.continuationl
-    ? `&continuation=${req.query.continuationl}`
-    : "";
-
-  const continuations = req.query.continuations
-    ? `&continuation=${req.query.continuations}`
-    : "";
-
-  const sort_by = req.query.sort_by || "newest";
-  const pronoun = "no pronouns :c";
-
-  var {
-    createdAccountGetDate,
-    tj,
-    shorts,
-    playlist,
-    released,
-    stream,
-    c,
-    cinv
-  } = await getChannelBundle(fetch, ID, sort_by, continuation);
-
-  var bannedchannels = "";
-  var bypassQuery = "";
-
-  var bypassExists = req.query.bypass === bypassQuery;
-  var tabExists = "tab" in req.query;
-  var continuationExists = "continuation" in req.query;
-
-  if (
-    Array.isArray(bannedchannels) &&
-    bannedchannels.some((channel) => channel === ID) &&
-    !bypassExists &&
-    !tabExists &&
-    !continuationExists
-  ) {
-    cinv = {
-      error: `this channel may include disinformation. If you still wanna view content <a href="/channel?id=${ID}&bypass=${bypassQuery}">click here</a> to bypass this restriction.`
-    };
-  }
-
-  function getThumbnailUrl(video) {
-    const thumbnails = Array.isArray(video && video.videoThumbnails)
-      ? video.videoThumbnails
-      : [];
-
-    const maxresDefaultThumbnail = thumbnails.find(
-      (thumbnail) => thumbnail.quality === "maxresdefault"
-    );
-
-    if (maxresDefaultThumbnail) {
-      return `https://vid.puffyan.us/vi/${video.videoId}/maxresdefault.jpg`;
+    if (req.useragent && req.useragent.source && req.useragent.source.includes("Pardus")) {
+      media_proxy = "https://media-proxy.ashley0143.xyz";
     }
 
-    return `https://vid.puffyan.us/vi/${video.videoId}/hqdefault.jpg`;
+    var ID = normalizeChannelId(req.query.id);
+
+    if (!ID) {
+      return renderTemplate(res, req, "404.ejs");
+    }
+
+    const tab = req.query.tab;
+
+    const continuation = getContinuationParam(req.query.continuation);
+    const continuationl = getContinuationParam(req.query.continuationl);
+    const continuations = getContinuationParam(req.query.continuations);
+    const sort_by = getSortByValue(req.query.sort_by);
+    const pronoun = "no pronouns :c";
+
+    var {
+      createdAccountGetDate,
+      tj,
+      shorts,
+      playlist,
+      released,
+      stream,
+      c,
+      cinv
+    } = await getChannelBundle(fetch, ID, sort_by, continuation);
+
+    var bannedchannels = "";
+    var bypassQuery = "";
+
+    var bypassExists = req.query.bypass === bypassQuery;
+    var tabExists = "tab" in req.query;
+    var continuationExists = "continuation" in req.query;
+
+    if (
+      Array.isArray(bannedchannels) &&
+      bannedchannels.some((channel) => channel === ID) &&
+      !bypassExists &&
+      !tabExists &&
+      !continuationExists
+    ) {
+      cinv = {
+        error: `this channel may include disinformation. If you still wanna view content <a href="/channel?id=${ID}&bypass=${bypassQuery}">click here</a> to bypass this restriction.`
+      };
+    }
+
+    const subscribers = convert(cinv?.subCount || 0);
+
+    let ChannelFirstVideoObject = {
+      subCountText: "0",
+      authorVerified: false
+    };
+
+    return renderTemplate(res, req, "channel.ejs", {
+      ID,
+      tab,
+      shorts,
+      firstVideo: ChannelFirstVideoObject,
+      j: "",
+      dnoreplace: "",
+      sort: sort_by,
+      channelurlfixer,
+      stream,
+      tj,
+      c,
+      createdAccountGetDate,
+      cinv,
+      embedchannelsubsfeed: req.query.embedchannelsubsfeed,
+      convert,
+      turntomins,
+      pronoun,
+      media_proxy_url: media_proxy,
+      getThumbnailUrl: getChannelThumbnailUrl,
+      continuation,
+      released,
+      wiki: "",
+      getFirstLine,
+      isMobile: !!(req.useragent && req.useragent.isMobile),
+      about: "",
+      playlist,
+      subs:
+        typeof subscribers === "string"
+          ? subscribers.replace("subscribers", "")
+          : "None"
+    });
+  } catch (error) {
+    return next(error);
   }
-
-  const subscribers = convert(cinv?.subCount || 0);
-
-  let ChannelFirstVideoObject = {
-    subCountText: "0",
-    authorVerified: false
-  };
-
-  return renderTemplate(res, req, "channel.ejs", {
-    ID,
-    tab,
-    shorts,
-    firstVideo: ChannelFirstVideoObject,
-    j: "",
-    dnoreplace: "",
-    sort: sort_by,
-    channelurlfixer,
-    stream,
-    tj,
-    c,
-    createdAccountGetDate,
-    cinv,
-    embedchannelsubsfeed: req.query.embedchannelsubsfeed,
-    convert,
-    turntomins,
-    pronoun,
-    media_proxy_url: media_proxy,
-    getThumbnailUrl,
-    continuation,
-    released,
-    wiki: "",
-    getFirstLine,
-    isMobile: req.useragent.isMobile,
-    about: "",
-    playlist,
-    subs:
-      typeof subscribers === "string"
-        ? subscribers.replace("subscribers", "")
-        : "None"
-  });
 });
   
 };
