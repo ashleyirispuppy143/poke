@@ -278,7 +278,7 @@ app.get("/api/getYoutubeUrl", async function (req, res) {
     try {
       let url = `${config.videourl}/companion/api/v1/captions/${id}?label=${l}`;
 
-      res.send("j");
+      res.send("they are currently broken... see https://github.com/iv-org/invidious/issues/5571");
 
     } catch {}
   });
@@ -379,7 +379,6 @@ app.get("/api/getEngagementData", async (req, res) => {
         "red";
         
       const respon = {
-        title: videoTitle,
         view_count: views,
         like_count: likes,
         dislike_count: dislikes,
@@ -425,15 +424,16 @@ app.get("/api/getEngagementData", async (req, res) => {
                 align-items: center; 
                 min-height: 100vh; 
                 margin: 0; 
-                font-variation-settings: "wdth" 110, "wght" 400;
+                font-variation-settings: "wdth" 115, "wght" 400;
               }
               .card { 
                 background-color: #0f0f0f; 
-                padding: 24px; 
+                padding: 32px; 
                 border: 1px solid #3d3d3d; 
-                border-radius: 12px; 
-                max-width: 450px; 
-                width: 100%; 
+                border-radius: 16px; 
+                max-width: 480px; 
+                width: 100%;
+                box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
               }
               .thumbnail-container {
                 position: relative;
@@ -441,17 +441,18 @@ app.get("/api/getEngagementData", async (req, res) => {
                 width: 100%;
                 aspect-ratio: 16/9;
                 border-radius: 12px;
-                margin-bottom: 16px;
+                margin-bottom: 20px;
                 overflow: hidden;
                 cursor: pointer;
                 border: 2px solid #000000;
                 box-sizing: border-box;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
               }
               .thumbnail {
                 width: 100%;
                 height: 100%;
                 object-fit: cover;
-                transition: filter 0.2s ease;
+                transition: filter 0.2s ease, transform 0.3s ease;
                 display: block;
               }
               .play-button {
@@ -459,102 +460,106 @@ app.get("/api/getEngagementData", async (req, res) => {
                 top: 50%;
                 left: 50%;
                 transform: translate(-50%, -50%);
-                width: 60px;
-                height: 60px;
-                background-color: rgba(0, 0, 0, 0.6);
-                backdrop-filter: blur(4px);
+                width: 64px;
+                height: 64px;
+                background-color: rgba(0, 0, 0, 0.5);
+                backdrop-filter: blur(8px);
                 border-radius: 50%;
                 display: flex;
                 justify-content: center;
                 align-items: center;
                 opacity: 0;
                 transition: opacity 0.2s ease, transform 0.2s ease;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
               }
               .play-button svg {
                 width: 32px;
                 height: 32px;
                 fill: #ffffff;
-                margin-left: 4px; /* Visually center the triangle */
+                margin-left: 4px;
               }
               .thumbnail-container:hover .thumbnail {
                 filter: brightness(0.6);
+                transform: scale(1.02);
               }
               .thumbnail-container:hover .play-button {
                 opacity: 1;
                 transform: translate(-50%, -50%) scale(1.05);
               }
               .video-title {
-                font-size: 1.3rem;
-                font-weight: 700;
-                margin: 0 0 8px 0;
-                font-variation-settings: "wdth" 130, "wght" 800;
+                font-size: 1.4rem;
+                font-weight: 800;
+                margin: 0 0 10px 0;
+                font-variation-settings: "wdth" 140, "wght" 800;
                 line-height: 1.3;
                 word-wrap: break-word;
                 text-align: center;
               }
               .video-views {
-                font-size: 0.95rem;
+                font-size: 1rem;
                 color: #aaaaaa;
-                margin-bottom: 20px;
-                font-variation-settings: "wdth" 115, "wght" 500;
+                margin-bottom: 24px;
+                font-variation-settings: "wdth" 120, "wght" 500;
                 text-align: center;
               }
               .pill { 
                 display: flex; 
                 align-items: center; 
                 background: #272727; 
-                border-radius: 18px; 
-                padding: 0 15px; 
-                height: 36px; 
+                border-radius: 20px; 
+                padding: 0 18px; 
+                height: 40px; 
                 width: max-content; 
-                margin: 0 auto 16px auto;
-                font-variation-settings: "wdth" 120, "wght" 600;
+                margin: 0 auto 20px auto;
+                font-variation-settings: "wdth" 125, "wght" 600;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
               }
-              .pill-section { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
-              .divider { width: 1px; height: 24px; background-color: #3f3f3f; margin: 0 12px; }
+              .pill-section { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; color: #f1f1f1; }
+              .divider { width: 1px; height: 26px; background-color: #3f3f3f; margin: 0 16px; }
               .ratio-bar { 
                 width: 100%; 
-                height: 3px; 
+                height: 4px; 
                 background-color: #cc0000;
-                border-radius: 3px; 
+                border-radius: 4px; 
                 overflow: hidden; 
                 display: flex; 
-                margin-bottom: 24px; 
+                margin-bottom: 28px; 
+                box-shadow: inset 0 1px 2px rgba(0,0,0,0.3);
               }
-              .ratio-like { width: ${likePercentage}%; background-color: #2ba640; height: 100%; border-radius: 3px; }
-              .reception { background: #272727; padding: 16px; border-radius: 12px; margin-bottom: 20px;}
+              .ratio-like { width: ${likePercentage}%; background-color: #2ba640; height: 100%; border-radius: 4px; }
+              .reception { background: #272727; padding: 20px; border-radius: 14px; margin-bottom: 24px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);}
               .reception-title { 
-                font-size: 12px; 
+                font-size: 13px; 
                 color: #aaaaaa; 
                 text-transform: uppercase; 
-                letter-spacing: 0.5px; 
-                margin-bottom: 8px; 
-                font-variation-settings: "wdth" 120, "wght" 600;
+                letter-spacing: 0.8px; 
+                margin-bottom: 10px; 
+                font-variation-settings: "wdth" 130, "wght" 700;
               }
               .score-label { 
-                font-size: 20px; 
+                font-size: 22px; 
                 font-weight: bold; 
-                margin-bottom: 4px; 
-                font-variation-settings: "wdth" 125, "wght" 800;
+                margin-bottom: 6px; 
+                font-variation-settings: "wdth" 135, "wght" 800;
               }
               .score-number { 
-                font-size: 14px; 
+                font-size: 15px; 
                 color: #aaaaaa; 
-                margin-bottom: 12px; 
-                font-variation-settings: "wdth" 110, "wght" 500;
+                margin-bottom: 16px; 
+                font-variation-settings: "wdth" 115, "wght" 500;
               }
               
               .star-container {
                 display: flex;
                 align-items: center;
-                gap: 8px;
+                gap: 10px;
               }
               .stars-outer {
                 display: inline-block;
                 position: relative;
-                font-size: 20px;
+                font-size: 22px;
                 color: #444;
-                letter-spacing: 2px;
+                letter-spacing: 3px;
               }
               .stars-outer::before {
                 content: "★★★★★";
@@ -567,15 +572,16 @@ app.get("/api/getEngagementData", async (req, res) => {
                 overflow: hidden;
                 color: #f1c40f;
                 width: ${starPercentage}%;
+                text-shadow: 0 0 6px rgba(241, 196, 15, 0.4);
               }
               .stars-inner::before {
                 content: "★★★★★";
               }
               .rating-text {
-                font-size: 14px;
+                font-size: 16px;
                 font-weight: bold;
                 color: #f1f1f1;
-                font-variation-settings: "wdth" 120, "wght" 700;
+                font-variation-settings: "wdth" 125, "wght" 800;
               }
 
               .green { color: #2ba640; }
@@ -587,29 +593,34 @@ app.get("/api/getEngagementData", async (req, res) => {
                   -webkit-text-fill-color: transparent;
                   animation: rainbow-anim 3s linear infinite;
                   background-size: 200% 100%;
-                  text-shadow: 0px 0px 8px rgba(255, 255, 255, 0.15);
+                  text-shadow: 0px 0px 10px rgba(255, 255, 255, 0.2);
               }
               @keyframes rainbow-anim { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
               
               .info-section {
-                margin-top: 20px;
-                font-size: 12px;
+                margin-top: 24px;
+                font-size: 13px;
                 color: #aaaaaa;
                 text-align: center;
-                line-height: 1.5;
+                line-height: 1.6;
+                font-variation-settings: "wdth" 120, "wght" 500;
               }
               .info-section a {
                 color: #3ea6ff;
                 text-decoration: none;
+                font-variation-settings: "wdth" 120, "wght" 600;
+                transition: color 0.2s ease;
               }
               .info-section a:hover {
                 text-decoration: underline;
+                color: #6ebcff;
               }
               
-              details { font-size: 12px; color: #aaa; background: #181818; padding: 12px; border-radius: 8px; border: 1px solid #3d3d3d; font-variation-settings: "wdth" 100, "wght" 400; margin-bottom: 10px;}
-              summary { cursor: pointer; user-select: none; font-weight: 600; outline: none; font-variation-settings: "wdth" 115, "wght" 600; margin-bottom: 5px; }
-              details p { margin: 5px 0 0 0; line-height: 1.4; color: #ccc; }
-              pre { overflow-x: auto; color: #e1e1e1; margin-top: 10px; font-family: monospace; font-variation-settings: normal;}
+              details { font-size: 13px; color: #aaa; background: #181818; padding: 14px; border-radius: 10px; border: 1px solid #3d3d3d; font-variation-settings: "wdth" 110, "wght" 500; margin-bottom: 12px; transition: background 0.2s ease;}
+              details:hover { background: #1f1f1f; }
+              summary { cursor: pointer; user-select: none; font-weight: 600; outline: none; font-variation-settings: "wdth" 125, "wght" 700; margin-bottom: 6px; }
+              details p { margin: 8px 0 0 0; line-height: 1.5; color: #ccc; }
+              pre { overflow-x: auto; color: #e1e1e1; margin-top: 12px; font-family: monospace; font-variation-settings: normal; background: #121212; padding: 10px; border-radius: 6px;}
             </style>
           </head>
           <body>
@@ -627,11 +638,11 @@ app.get("/api/getEngagementData", async (req, res) => {
               <div class="video-views">${views.toLocaleString()} views</div>
               
               <div class="pill">
-                <div class="pill-section ${likeColor}">
+                <div class="pill-section">
                   👍 ${likes.toLocaleString()}
                 </div>
                 <div class="divider"></div>
-                <div class="pill-section ${dislikeColor}">
+                <div class="pill-section">
                   👎 ${dislikes.toLocaleString()}
                 </div>
               </div>
@@ -664,7 +675,7 @@ app.get("/api/getEngagementData", async (req, res) => {
               </details>
 
               <div class="info-section">
-                Data is thanks to <a href="https://www.returnyoutubedislike.com/" target="_blank">Return YouTube Dislike</a>.<br>
+                Data is fetched from <a href="https://www.returnyoutubedislike.com/" target="_blank">Return YouTube Dislike</a>.<br>
                 Consider <a href="https://www.returnyoutubedislike.com/donate" target="_blank">donating</a> to help them out!
               </div>
             </div>
@@ -681,8 +692,9 @@ app.get("/api/getEngagementData", async (req, res) => {
   } catch (error) {
     res.status(500).json("whoops (error 500) >~<");
   }
-});   
-app.get("/feeds/videos.xml", async (req, res) => {
+});
+  
+  app.get("/feeds/videos.xml", async (req, res) => {
   const channelId = req.query.channel_id;
   const playlistId = req.query.playlist_id;
 
