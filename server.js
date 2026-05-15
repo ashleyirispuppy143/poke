@@ -255,16 +255,6 @@
       return signals;
     }
 
-    function isTrustedProxyIP(ip) {
-      return isPrivateIP(ip) || isCloudflareIP(ip);
-    }
-
-    function buildTrustFunction() {
-      return function pokeTrustProxy(addr) {
-        return isTrustedProxyIP(addr);
-      };
-    }
-
     function logProxyHeaders(req) {
       const interesting = [
         "x-forwarded-for", "x-forwarded-proto", "x-forwarded-host",
@@ -299,7 +289,7 @@
     }
 
     if (override === "force-on") {
-      app.set("trust proxy", buildTrustFunction());
+      app.set("trust proxy", true);
       initlog("[POKE-trust-proxy] force-enabled via TRUST_PROXY=true");
       return;
     }
@@ -331,7 +321,7 @@
     initlog("[POKE-trust-proxy] confidence: " + totalConfidence);
 
     if (totalConfidence >= 2) {
-      app.set("trust proxy", buildTrustFunction());
+      app.set("trust proxy", true);
       initlog("[POKE-trust-proxy] auto-enabled (confidence: " + totalConfidence + ")");
       return;
     }
@@ -363,16 +353,11 @@
         (hasXRealIp ? 2 : 0) +
         (hasXAmznTraceId ? 3 : 0);
 
-      const remoteAddr = cleanIP(req.socket.remoteAddress || "");
-      const remoteIsTrustedProxy = isTrustedProxyIP(remoteAddr);
-
-      if (headerScore >= 3 && remoteIsTrustedProxy) {
-        app.set("trust proxy", buildTrustFunction());
+      // Relaxed to trust valid proxy headers even if IP is not recognized (fixes Docker/Custom Proxy IP blanket bans)
+      if (headerScore >= 3) {
+        app.set("trust proxy", true);
         initlog("[POKE-trust-proxy] confirmed proxy on first request (score: " + headerScore + ")");
         logProxyHeaders(req);
-      } else if (headerScore >= 3 && !remoteIsTrustedProxy) {
-        app.set("trust proxy", false);
-        initlog("[POKE-trust-proxy] proxy headers from untrusted ip " + maskIP(remoteAddr) + ", ignoring");
       } else {
         app.set("trust proxy", false);
         initlog("[POKE-trust-proxy] no proxy headers, disabled");
@@ -387,7 +372,7 @@
       const freshScore = freshEnv.length * 3 + freshFs.length * 2;
 
       if (freshScore >= 2 && !probeComplete) {
-        app.set("trust proxy", buildTrustFunction());
+        app.set("trust proxy", true);
         initlog("[POKE-trust-proxy] periodic re-check found proxy (score: " + freshScore + ")");
       }
     }, 60_000).unref();
@@ -422,27 +407,28 @@
     const eldHistogram = monitorEventLoopDelay({ resolution: 20 });
     eldHistogram.enable();
 
+    // Rebalanced config so it doesn't block legitimate users trying to stream chunked video!
     const resourceConfig = {
       system: {
         sampleMs: 1000,
 
         eventLoop: {
-            warmMs: 40,
-            stressedMs: 120,
-            criticalMs: 300
+            warmMs: 150,     // Node easily hits 100ms when parsing massive YouTube JSONs.
+            stressedMs: 350,
+            criticalMs: 800
         },
 
-        warmCpuRatio: 0.75,
-        stressedCpuRatio: 1.05,
-        criticalCpuRatio: 1.55,
+        warmCpuRatio: 0.95,
+        stressedCpuRatio: 1.40,
+        criticalCpuRatio: 2.00,
 
-        warmRssRatio: 0.70,
-        stressedRssRatio: 0.82,
-        criticalRssRatio: 0.92,
+        warmRssRatio: 0.85,
+        stressedRssRatio: 0.92,
+        criticalRssRatio: 0.98,
 
-        warmHeapRatio: 0.55,
-        stressedHeapRatio: 0.70,
-        criticalHeapRatio: 0.85
+        warmHeapRatio: 0.70,
+        stressedHeapRatio: 0.85,
+        criticalHeapRatio: 0.95
       },
 
       client: {
@@ -450,28 +436,28 @@
         maxClientStates: 75000,
         cleanupMs: 60000,
 
-        absoluteRequestsPerSecond: 160,
-        absoluteRequestsPerWindow: 1200,
-        absoluteCostPerWindow: 6000,
+        absoluteRequestsPerSecond: 300,
+        absoluteRequestsPerWindow: 2000,
+        absoluteCostPerWindow: 8000,
 
-        noisyRequestsWarm: 350,
-        noisyCostWarm: 1400,
+        noisyRequestsWarm: 600,
+        noisyCostWarm: 2400,
 
-        noisyRequestsStressed: 160,
-        noisyCostStressed: 650,
+        noisyRequestsStressed: 300,
+        noisyCostStressed: 1200,
 
-        noisyRequestsCritical: 70,
-        noisyCostCritical: 280,
+        noisyRequestsCritical: 150,
+        noisyCostCritical: 600,
 
-        pageSoftPassesPerWindow: 20,
+        pageSoftPassesPerWindow: 50,
 
-        maxHeavyRequestsWarm: 80,
-        maxHeavyRequestsStressed: 25,
-        maxHeavyRequestsCritical: 8,
+        maxHeavyRequestsWarm: 200,
+        maxHeavyRequestsStressed: 80,   // Increased so streaming chunked media doesn't trigger DDOS locks.
+        maxHeavyRequestsCritical: 30,
 
-        cooldownBaseMs: 30000,
-        cooldownMaxMs: 600000,
-        cooldownDecayMs: 300000
+        cooldownBaseMs: 10000, // Reduced from a massive 30s to 10s base.
+        cooldownMaxMs: 120000,
+        cooldownDecayMs: 60000
       },
 
       requestCost: {
@@ -594,8 +580,14 @@
       console.error("[POKE-resource] Could not load popularpaths.json:", err.message);
     }
 
-    // Save persistent data every 15 seconds
+    // Save persistent data every 15 seconds AND handle array cleanup off the main request thread!
     setInterval(() => {
+      // Moved the anti-memory leak here so it doesn't block the hot-path and cause CPU spikes!
+      if (allTimeRouteCounts.size > 5000) {
+        const sorted = Array.from(allTimeRouteCounts.entries()).sort((a,b) => b[1] - a[1]);
+        allTimeRouteCounts = new Map(sorted.slice(0, 4000));
+      }
+
       const routesObj = {};
       for (const [k, v] of allTimeRouteCounts.entries()) {
         routesObj[k] = v;
@@ -1036,8 +1028,10 @@
       const currentPerf = performance.now();
       const elapsedMs = Math.max(1, currentPerf - lastSampleAt);
 
+      // Fixed calculating CPU usage without dropping microseconds
+      const newCpuUsage = process.cpuUsage();
       const cpuDelta = process.cpuUsage(lastCpuUsage);
-      lastCpuUsage = process.cpuUsage();
+      lastCpuUsage = newCpuUsage;
       lastSampleAt = currentPerf;
 
       // cpuUsage returns microseconds, so divide by 1000 to get Ms
@@ -1352,12 +1346,7 @@
         incrementMapCount(activeRequestCounts, key);
         incrementMapCount(currentSecondRouteCounts, key);
         incrementMapCount(allTimeRouteCounts, key);
-        
-        // Anti-memory leak for all-time tracking (Trim bottom if > 5000)
-        if (allTimeRouteCounts.size > 5000) {
-          const sorted = Array.from(allTimeRouteCounts.entries()).sort((a,b) => b[1] - a[1]);
-          allTimeRouteCounts = new Map(sorted.slice(0, 4000)); // Keep top 4000
-        }
+        // The slow sort for Anti-Memory leak has been pushed to the background task!
       }
 
       res.on("finish", function () {
