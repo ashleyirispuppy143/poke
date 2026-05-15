@@ -769,6 +769,7 @@ module.exports = function (app, config, renderTemplate) {
     body{
       background:#1c1b22;
       margin:0;
+      font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
     }
     :visited{color:#00c0ff}
     a{color:#0ab7f0}
@@ -784,22 +785,22 @@ module.exports = function (app, config, renderTemplate) {
       font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
       line-height:1.6;
     }
-    h2{
+    h1,h2,h3,.tab-btn{
       font-family:"PokeTube Flex",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+    }
+    h2{
       font-weight:700;
       font-stretch:extra-expanded;
       margin-top:0;
       margin-bottom:.4rem;
     }
     h1{
-      font-family:"PokeTube Flex",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
       font-weight:1000;
       font-stretch:ultra-expanded;
       margin-top:0;
       margin-bottom:.35rem;
     }
     h3{
-      font-family:"PokeTube Flex",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
       font-weight:700;
       font-stretch:extra-expanded;
       margin:0 0 .75rem 0;
@@ -813,6 +814,58 @@ module.exports = function (app, config, renderTemplate) {
     .note{
       color:#bbb;
       font-size:.95rem;
+    }
+
+    .logo{
+      float:right;
+      margin:.3em 0 1em 2em;
+      max-width:130px;
+    }
+    .header-container{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-end;
+      flex-wrap:wrap;
+      margin-bottom:24px;
+      gap:16px;
+    }
+    .tabs{
+      display:inline-flex;
+      background:#15141a;
+      border-radius:24px;
+      padding:4px;
+      border:1px solid rgba(255,255,255,0.05);
+      flex-wrap:wrap;
+      gap:2px;
+    }
+    .tab-btn{
+      background:transparent;
+      color:#aaa;
+      border:none;
+      padding:8px 20px;
+      border-radius:20px;
+      cursor:pointer;
+      font-weight:700;
+      font-size:0.95rem;
+      transition:all 0.3s ease;
+      outline:none;
+      display:inline-block;
+      line-height:1.2;
+      text-decoration:none;
+    }
+    .tab-btn:hover:not(.active){
+      color:#fff;
+      text-decoration:none;
+    }
+    .tab-btn.active{
+      background:#0ab7f0;
+      color:#1c1b22;
+      box-shadow:0 2px 8px rgba(10,183,240,0.3);
+    }
+    .small{
+      color:#bbb;
+      font-size:.95rem;
+      font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
     }
 
     .nojs-warning{
@@ -905,6 +958,7 @@ module.exports = function (app, config, renderTemplate) {
       cursor:pointer;
       padding:0;
       font-size:1rem;
+      font-weight:700;
     }
     .shield-btn:hover{
       background:#2a2837;
@@ -1341,9 +1395,23 @@ module.exports = function (app, config, renderTemplate) {
       </div>
     </noscript>
 
+    <img class="logo" src="/css/logo-poke.svg" alt="Poke logo">
+
+    <div class="header-container">
+      <div>
+        <h1>Anonymous Stats</h1>
+        <p class="small" style="margin-top:0;">Local-only usage counts, platform stats, and privacy-friendly instance signals</p>
+      </div>
+      <div class="tabs">
+        <a class="tab-btn" href="/health">Server Vitals</a>
+        <a class="tab-btn" href="/traffic">Requests</a>
+        <a class="tab-btn active" href="/api/stats?view=gui">Anonymous Stats</a>
+      </div>
+    </div>
+
     <div class="hero">
       <div class="hero-main">
-        <h1>Anonymous stats</h1>
+        <h2>Private by design</h2>
         <p class="note">
           These stats are aggregated locally on this Poke instance. For what is collected and what is not,
           see <a href="/policies/privacy#stats">privacy policy</a>.
@@ -1366,7 +1434,7 @@ module.exports = function (app, config, renderTemplate) {
           <div class="mini-stat-label">estimated total users</div>
           <div class="mini-stat-value">
             <span id="estimated-total-users">Loading…</span>
-            <button type="button" id="estimated-users-info-btn" class="shield-btn" aria-label="About estimated total users">🛡️</button>
+            <button type="button" id="estimated-users-info-btn" class="shield-btn" aria-label="About estimated total users">i</button>
           </div>
           <div class="mini-stat-sub">
             Private estimate based on anonymous user IDs plus aggregate OS/browser detection patterns. No page-viewer tracking is used here.
