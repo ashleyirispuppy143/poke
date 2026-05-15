@@ -255,161 +255,223 @@ function channelurlfixer(text) {
   const updatedDescription = text.replace(regex, '<a href="/channel?id=$1"');
   return updatedDescription;
 }
-const { fetch, Agent } = require("undici");
-const undiciAgent = new Agent({ keepAliveTimeout: 10, keepAliveMaxTimeout: 10 });
-
-const GlobalChannelCache = new Map();
-const InFlightRequests = new Map();
+  
+ const channelCache = new Map();
 const fetchFailureCache = new Map();
-
-const FETCH_FAILURE_TTL = 60000;
-const CHANNEL_CACHE_TTL = 3600000;
-const MAX_CACHE_SIZE = 300;
-
-function getCleanID(id) {
-    if (!id) return null;
-    return id.replace(/@(youtube\.com|poketube\.fun)$/, "");
-}
+const FETCH_FAILURE_TTL = 3600000;
+let undiciFetch;
 
 app.get("/channel/", async (req, res) => {
-    const rawID = req.query.id;
-    const sanitizedID = getCleanID(rawID);
+  if (!undiciFetch) {
+    const undici = await import("undici");
+    undiciFetch = undici.fetch;
+  }
+  const fetch = undiciFetch;
 
-    if (!sanitizedID) {
-        return renderTemplate(res, req, "404.ejs");
+  let media_proxy = config.media_proxy;
+  if (req.useragent?.source?.includes("Pardus")) {
+    media_proxy = "https://media-proxy.ashley0143.xyz";
+  }
+
+  let ID = req.query.id;
+  if (!ID) {
+    return renderTemplate(res, req, "404.ejs");
+  }
+
+  if (ID.endsWith("@youtube.com")) {
+    ID = ID.slice(0, -12);
+  } else if (ID.endsWith("@poketube.fun")) {
+    ID = ID.slice(0, -13);
+  }
+
+  const tab = req.query.tab;
+  const continuation = req.query.continuation || req.query.continuationl || req.query.continuations || "";
+  const continuationParam = continuation ? `&continuation=${continuation}` : "";
+  const sort_by = req.query.sort_by || "newest";
+
+  const cacheKey = `${ID}_${sort_by}_${continuation}`;
+  const now = Date.now();
+
+  function getThumbnailUrl(video) {
+    const maxres = video?.videoThumbnails?.find(t => t.quality === "maxresdefault");
+    if (maxres) {
+      return `https://vid.puffyan.us/vi/${video.videoId}/maxresdefault.jpg`;
     }
+    return `https://vid.puffyan.us/vi/${video.videoId}/hqdefault.jpg`;
+  }
 
-    const tab = req.query.tab || "videos";
-    const sort_by = req.query.sort_by || "newest";
-    const continuation = req.query.continuation ? `&continuation=${req.query.continuation}` : "";
-
-    const cached = GlobalChannelCache.get(sanitizedID);
-    if (cached && (Date.now() - cached.timestamp < CHANNEL_CACHE_TTL)) {
-        return renderChannelPage(res, req, sanitizedID, tab, sort_by, continuation, cached.result);
+  if (channelCache.has(cacheKey)) {
+    const cached = channelCache.get(cacheKey);
+    if (now - cached.timestamp < 3600000) {
+      const subsCached = convert(cached.data.cinv?.subCount || 0);
+      return renderTemplate(res, req, "channel.ejs", {
+        ID,
+        tab,
+        shorts: cached.data.shorts,
+        firstVideo: { subCountText: "0", authorVerified: false },
+        j: "",
+        dnoreplace: "",
+        sort: sort_by,
+        channelurlfixer,
+        stream: cached.data.stream,
+        tj: cached.data.tj,
+        c: cached.data.c,
+        createdAccountGetDate: cached.data.createdAccountGetDate,
+        cinv: cached.data.cinv,
+        embedchannelsubsfeed: req.query.embedchannelsubsfeed,
+        convert,
+        turntomins,
+        pronoun: "no pronouns :c",
+        media_proxy_url: media_proxy,
+        getThumbnailUrl,
+        continuation,
+        released: cached.data.released,
+        wiki: "",
+        getFirstLine,
+        isMobile: req.useragent?.isMobile,
+        about: "",
+        playlist: cached.data.playlist,
+        subs: typeof subsCached === "string" ? subsCached.replace("subscribers", "").trim() : "None"
+      });
     }
+    channelCache.delete(cacheKey);
+  }
 
-    if (InFlightRequests.has(sanitizedID)) {
-        try {
-            const sharedResult = await InFlightRequests.get(sanitizedID);
-            return renderChannelPage(res, req, sanitizedID, tab, sort_by, continuation, sharedResult);
-        } catch (e) {
-        }
+  async function fetchChannelPublishedJSON(id) {
+    if (fetchFailureCache.has(id) && (now - fetchFailureCache.get(id)) < FETCH_FAILURE_TTL) {
+      return { ID: id, published: " " };
     }
-
-    const fetchPromise = (async () => {
-        const apiUrl = config.invapi + "/channels/";
-        const commHash = btoa(ChannelTabs.community);
-        
-        const safeFetch = async (url) => {
-            try {
-                const response = await fetch(url, { 
-                    dispatcher: undiciAgent,
-                    headers: { "User-Agent": config.useragent },
-                    signal: AbortSignal.timeout(6000) 
-                });
-                if (!response.ok) return null;
-                const txt = await response.text();
-                return typeof getJson === 'function' ? getJson(txt) : JSON.parse(txt);
-            } catch (e) { return null; }
-        };
-
-        const fetchRSS = async (id) => {
-            if (fetchFailureCache.has(id) && (Date.now() - fetchFailureCache.get(id) < FETCH_FAILURE_TTL)) {
-                return { ID: id, published: " " };
-            }
-            try {
-                const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(id)}`;
-                const rssRes = await fetch(rssUrl, { dispatcher: undiciAgent, signal: AbortSignal.timeout(4000) });
-                if (!rssRes.ok) throw new Error();
-                const xml = await rssRes.text();
-                const match = xml.match(/<published>([^<]+)<\/published>/);
-                const date = match ? new Date(match[1]) : new Date();
-                return { 
-                    ID: id, 
-                    published: new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric" }).format(date) 
-                };
-            } catch (e) {
-                fetchFailureCache.set(id, Date.now());
-                return { ID: id, published: " " };
-            }
-        };
-
-        const [createdAccountGetDate, tj, shorts, playlist, released, stream, c, cinv] = await Promise.all([
-            fetchRSS(sanitizedID),
-            safeFetch(`${apiUrl}${sanitizedID}/${atob(ChannelTabs.videos)}?sort_by=${sort_by}${continuation}&h=${commHash}`),
-            safeFetch(`${apiUrl}${sanitizedID}/${atob(ChannelTabs.shorts)}?sort_by=${sort_by}${continuation}&h=${commHash}`),
-            safeFetch(`${apiUrl}${sanitizedID}/${atob(ChannelTabs.playlist)}?hl=en-US&h=${commHash}`),
-            safeFetch(`${apiUrl}${sanitizedID}/releases?hl=en-US&h=${commHash}`),
-            safeFetch(`${apiUrl}${sanitizedID}/${atob(ChannelTabs.streams)}?sort_by=${sort_by}${continuation}&h=${commHash}`),
-            safeFetch(`${apiUrl}${sanitizedID}/${atob(ChannelTabs.community)}?hl=en-US&h=${commHash}`),
-            safeFetch(`${apiUrl}${sanitizedID}/?h=${commHash}`)
-        ]);
-
-        const finalData = { createdAccountGetDate, tj, shorts, playlist, released, stream, c, cinv };
-        
-        GlobalChannelCache.set(sanitizedID, { result: finalData, timestamp: Date.now() });
-        
-        if (GlobalChannelCache.size > MAX_CACHE_SIZE) {
-            const oldestKey = GlobalChannelCache.keys().next().value;
-            GlobalChannelCache.delete(oldestKey);
-        }
-
-        return finalData;
-    })();
-
-    InFlightRequests.set(sanitizedID, fetchPromise);
-
     try {
-        const result = await fetchPromise;
-        renderChannelPage(res, req, sanitizedID, tab, sort_by, continuation, result);
-    } catch (err) {
-        res.status(500).send("Channel Load Error");
-    } finally {
-        InFlightRequests.delete(sanitizedID);
+      const url = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(id)}`;
+      const response = await fetch(url, { headers: { accept: "application/atom+xml" } });
+
+      if (!response.ok) {
+        fetchFailureCache.set(id, now);
+        return { ID: id, published: " " };
+      }
+
+      const xml = await response.text();
+      const match = xml.match(/<feed[\s\S]*?<published>([^<]+)<\/published>/i);
+      
+      if (!match) {
+        fetchFailureCache.set(id, now);
+        return { ID: id, published: " " };
+      }
+
+      const date = new Date(match[1].trim());
+      if (Number.isNaN(date.getTime())) {
+        fetchFailureCache.set(id, now);
+        return { ID: id, published: " " };
+      }
+
+      fetchFailureCache.delete(id);
+      return {
+        ID: id,
+        published: new Intl.DateTimeFormat("en-GB", {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+          timeZone: "UTC"
+        }).format(date)
+      };
+    } catch {
+      fetchFailureCache.set(id, now);
+      return { ID: id, published: " " };
     }
+  }
+
+  const getChannelData = async (url) => {
+    try {
+      const response = await fetch(url, { headers: { "User-Agent": config.useragent } });
+      if (!response.ok) return null;
+      const txt = await response.text();
+      return getJson(txt);
+    } catch {
+      return null;
+    }
+  };
+
+  const apiUrl = config.invapi + "/channels/";
+  const btoaCommunity = btoa(ChannelTabs.community);
+  const channelUrl = `${apiUrl}${ID}/${atob(ChannelTabs.videos)}?sort_by=${sort_by}${continuationParam}&h=${btoaCommunity}`;
+  const shortsUrl = `${apiUrl}${ID}/${atob(ChannelTabs.shorts)}?sort_by=${sort_by}${continuationParam}&h=${btoaCommunity}`;
+  const streamUrl = `${apiUrl}${ID}/${atob(ChannelTabs.streams)}?sort_by=${sort_by}${continuationParam}&h=${btoaCommunity}`;
+  const communityUrl = `${apiUrl}${ID}/${atob(ChannelTabs.community)}?hl=en-US&h=${ChannelTabs.community}`;
+  const PlaylistUrl = `${apiUrl}${ID}/${atob(ChannelTabs.playlist)}?hl=en-US&h=${btoaCommunity}`;
+  const releasesUrl = `${apiUrl}${ID}/releases?hl=en-US&h=${btoaCommunity}`;
+  const channelINVUrl = `${apiUrl}${ID}/?h=${btoaCommunity}`;
+
+  let [
+    createdAccountGetDate,
+    tj,
+    shorts,
+    playlist,
+    released,
+    stream,
+    c,
+    cinv
+  ] = await Promise.all([
+    fetchChannelPublishedJSON(ID),
+    getChannelData(channelUrl),
+    getChannelData(shortsUrl),
+    getChannelData(PlaylistUrl),
+    getChannelData(releasesUrl),
+    getChannelData(streamUrl),
+    getChannelData(communityUrl),
+    getChannelData(channelINVUrl)
+  ]);
+
+  const bannedchannels = [];
+  const bypassQuery = "bypass";
+  
+  if (
+    bannedchannels.includes(ID) &&
+    req.query.bypass !== bypassQuery &&
+    !("tab" in req.query) &&
+    !("continuation" in req.query)
+  ) {
+    cinv = {
+      error: `this channel may include disinformation. If you still wanna view content <a href="/channel?id=${ID}&bypass=${bypassQuery}">click here</a> to bypass this restriction.`
+    };
+  }
+
+  channelCache.set(cacheKey, {
+    data: { tj, shorts, stream, c, cinv, released, playlist, createdAccountGetDate },
+    timestamp: now
+  });
+
+  const subscribers = convert(cinv?.subCount || 0);
+
+  renderTemplate(res, req, "channel.ejs", {
+    ID,
+    tab,
+    shorts,
+    firstVideo: { subCountText: "0", authorVerified: false },
+    j: "",
+    dnoreplace: "",
+    sort: sort_by,
+    channelurlfixer,
+    stream,
+    tj,
+    c,
+    createdAccountGetDate,
+    cinv,
+    embedchannelsubsfeed: req.query.embedchannelsubsfeed,
+    convert,
+    turntomins,
+    pronoun: "no pronouns :c",
+    media_proxy_url: media_proxy,
+    getThumbnailUrl,
+    continuation,
+    released,
+    wiki: "",
+    getFirstLine,
+    isMobile: req.useragent?.isMobile,
+    about: "",
+    playlist,
+    subs: typeof subscribers === "string" ? subscribers.replace("subscribers", "").trim() : "None"
+  });
 });
 
-function renderChannelPage(res, req, ID, tab, sort, continuation, data) {
-    const { tj, shorts, playlist, released, stream, c, cinv, createdAccountGetDate } = data;
-
-    let proxy = config.media_proxy;
-    if (req.useragent.source.includes("Pardus")) {
-        proxy = "https://media-proxy.ashley0143.xyz";
-    }
-
-    let displayInfo = cinv;
-    const banned = [""];
-    if (banned.includes(ID) && !req.query.bypass) {
-        displayInfo = { error: `Potential disinformation. <a href="/channel?id=${ID}&bypass=true">Bypass</a>` };
-    }
-
-    const subCount = cinv?.subCount || 0;
-    const formattedSubs = typeof convert === 'function' ? convert(subCount).replace("subscribers", "").trim() : subCount;
-
-    const getThumb = (v) => {
-        const isMax = v.videoThumbnails?.some(t => t.quality === "maxresdefault");
-        return isMax ? `https://vid.puffyan.us/vi/${v.videoId}/maxresdefault.jpg` : `https://vid.puffyan.us/vi/${v.videoId}/hqdefault.jpg`;
-    };
-
-    renderTemplate(res, req, "channel.ejs", {
-        ID, tab, shorts, tj, c, stream, playlist, released, cinv: displayInfo,
-        createdAccountGetDate,
-        firstVideo: { subCountText: "0", authorVerified: false },
-        sort,
-        channelurlfixer: typeof channelurlfixer !== 'undefined' ? channelurlfixer : (u)=>u,
-        embedchannelsubsfeed: req.query.embedchannelsubsfeed,
-        convert: typeof convert !== 'undefined' ? convert : (n)=>n,
-        turntomins: typeof turntomins !== 'undefined' ? turntomins : (s)=>s,
-        pronoun: "no pronouns :c",
-        media_proxy_url: proxy,
-        getThumbnailUrl: getThumb,
-        continuation,
-        wiki: "",
-        getFirstLine: typeof getFirstLine !== 'undefined' ? getFirstLine : (t)=>t,
-        isMobile: req.useragent.isMobile,
-        about: cinv?.description || "",
-        subs: formattedSubs
-    });
-}
   
 };
