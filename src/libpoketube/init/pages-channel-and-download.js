@@ -95,8 +95,7 @@ module.exports = function (app, config, renderTemplate) {
     res.json(ChannelTabs);
   });
   
- const GlobalSearchCache = new Map();
-const SEARCH_CACHE_TTL = 1800000; // Cache searches for 30 minutes
+const ActiveSearchRequests = new Map();
 
 app.get("/search", async (req, res) => {
   const { fetch } = await import("undici");
@@ -113,7 +112,7 @@ app.get("/search", async (req, res) => {
     IsOldWindows = true;
   }
 
-   if (typeof query === "string") {
+  if (typeof query === "string") {
     const trimmedQuery = query.trim();
     let redirectUrl = null;
 
@@ -150,7 +149,7 @@ app.get("/search", async (req, res) => {
     return res.redirect("/home");
   }
 
-   let continuation = req.query.continuation || "";
+  let continuation = req.query.continuation || "";
   let date = req.query.date || "";
   let type = "video";
   let duration = req.query.duration || "";
@@ -163,57 +162,48 @@ app.get("/search", async (req, res) => {
     searchUrl = `${config.invapi}/search?q=${encodeURIComponent(query)}&page=${encodeURIComponent(continuation)}&date=${date}&type=${type}&duration=${duration}&sort=${sort}&hl=en-US&region=US`;
   }
 
-  // OPTIMIZATION 1: Check Cache Before Network Request
-  const cachedData = GlobalSearchCache.get(searchUrl);
-  if (cachedData && Date.now() - cachedData.timestamp < SEARCH_CACHE_TTL) {
-    return renderTemplate(res, req, "search.ejs", {
-      invresults: cachedData.result,
-      turntomins,
-      date,
-      type,
-      duration,
-      sort,
-      IsOldWindows,
-      tab,
-      continuation,
-      media_proxy_url: media_proxy,
-      results: "",
-      q: query,
-      summary: "",
-    });
-  }
-
   try {
-    // OPTIMIZATION 2: Strict 5-second timeout to prevent server hanging
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    let xmlData;
 
-    const response = await fetch(searchUrl, {
-      headers: {
-        "User-Agent": config.useragent,
-      },
-      signal: controller.signal,
-    });
+    if (ActiveSearchRequests.has(searchUrl)) {
+      xmlData = await ActiveSearchRequests.get(searchUrl);
+    } else {
+      const fetchPromise = (async () => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        try {
+          const response = await fetch(searchUrl, {
+            headers: {
+              "User-Agent": config.useragent,
+            },
+            signal: controller.signal,
+          });
 
-    clearTimeout(timeoutId);
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
 
-    if (!response.ok) {
-      throw new Error(`Search API returned HTTP ${response.status}`);
-    }
+          const txt = await response.text();
+          const parsedData = getJson(txt);
 
-    const txt = await response.text();
-    const xmlData = getJson(txt);
+          if (!parsedData) {
+            throw new Error("Parse failed");
+          }
 
-    if (!xmlData) {
-      throw new Error("Failed to parse JSON from search API");
-    }
+          return parsedData;
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      })();
 
-    // OPTIMIZATION 3: Save to cache and prevent memory leaks (Max 300 cached searches)
-    GlobalSearchCache.set(searchUrl, { result: xmlData, timestamp: Date.now() });
-    
-    if (GlobalSearchCache.size > 300) {
-      const firstKey = GlobalSearchCache.keys().next().value;
-      GlobalSearchCache.delete(firstKey);
+      ActiveSearchRequests.set(searchUrl, fetchPromise);
+
+      try {
+        xmlData = await fetchPromise;
+      } finally {
+        ActiveSearchRequests.delete(searchUrl);
+      }
     }
 
     renderTemplate(res, req, "search.ejs", {
@@ -233,9 +223,8 @@ app.get("/search", async (req, res) => {
     });
     
   } catch (error) {
-    // Prevent unhandled promise rejection spam from timeouts
     if (error.name !== 'AbortError' && error.code !== 'UND_ERR_CONNECT_TIMEOUT') {
-      console.log(`Error while searching for '${query}':`, error.message);
+      console.log(`Error searching '${query}':`, error.message);
     }
     res.redirect("/");
   }
