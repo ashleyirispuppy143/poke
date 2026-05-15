@@ -84,6 +84,23 @@ class InnerTubePokeVidious {
     return Buffer.from(String(str)).toString("base64");
   }
 
+  // Async task to extract colors without blocking the main event loop
+  extractColorsBackground(v) {
+    getColors(`https://i.ytimg.com/vi/${v}/hqdefault.jpg?sqp=${this.sqp}`)
+      .then((palette) => {
+        if (Array.isArray(palette) && palette[0] && palette[1]) {
+          // If the video is in cache, silently update the colors for the NEXT request
+          if (this.cache[v] && this.cache[v].result) {
+            this.cache[v].result.color = palette[0].hex();
+            this.cache[v].result.color2 = palette[1].hex();
+          }
+        }
+      })
+      .catch(() => {
+        // Silently drop image extraction errors
+      });
+  }
+
   async getYouTubePlayerInfo(f, v, contentlang, contentregion) {
     const { fetch } = await import("undici");
 
@@ -99,6 +116,7 @@ class InnerTubePokeVidious {
       return { error: true, message: "No video ID provided" };
     }
 
+    // Fast O(1) Check for blocked videos
     if (this.blockedVideos.has(v)) {
       const reasonKey = this.blockedVideos.get(v);
       return { 
@@ -108,6 +126,7 @@ class InnerTubePokeVidious {
       };
     }
 
+    // Fast O(1) Check for cached data
     if (this.cache[v] && Date.now() - this.cache[v].timestamp < 3600000) {
       return this.cache[v].result;
     }
@@ -116,27 +135,11 @@ class InnerTubePokeVidious {
       "User-Agent": this.useragent,
     };
 
-    const fetchWithRetry = async (url, options = {}, maxRetryTime = 2500) => {
-      let lastError;
-
-      const isTrigger = (s) => (s === 500 || s === 502);
-      const RETRYABLE = new Set([429, 500, 502, 503, 504]);
-      const MIN_DELAY_MS = 150;
-      const BASE_DELAY_MS = 250;
-      const MAX_DELAY_MS = 1500;  
-      const JITTER_FACTOR = 3;
-      const PER_TRY_TIMEOUT_MS = 2000;
+    // Optimized linear-backoff retry fetcher
+    const fetchWithRetry = async (url, options = {}, maxRetries = 2) => {
+      const isTrigger = (s) => (s === 500 || s === 502 || s === 503 || s === 504 || s === 429);
       const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-      const parseRetryAfter = (hdr) => {
-        if (!hdr) return null;
-        const s = String(hdr).trim();
-        const delta = Number(s);
-        if (Number.isFinite(delta)) return Math.max(0, (delta * 1000) | 0);
-        const when = Date.parse(s);
-        if (!Number.isNaN(when)) return Math.max(0, when - Date.now());
-        return null;
-      };
-
+      
       const checkUnrecoverableErrors = async (resp) => {
         if (resp.status === 500 || resp.status === 404) {
           try {
@@ -167,113 +170,30 @@ class InnerTubePokeVidious {
         }
       };
 
-      let res;
-      try {
-        res = await fetch(url, {
-          ...options,
-          headers: {
-            ...options?.headers,
-            ...headers,
-          },
-        });
-      } catch (err) {
-        this?.initError?.(`Fetch error for ${url}`, err);
-        throw err;
-      }
-
-      if (res.ok) return res;
-      await checkUnrecoverableErrors(res);
-      if (!isTrigger(res.status)) return res;
-
-      const retryStart = Date.now();
-      let delayMs = BASE_DELAY_MS;
-      let attempt = 1;
-      const callerSignal = options?.signal || null;
-
-      const attemptWithTimeout = async (timeoutMs) => {
-        const controller = new AbortController();
-        const timer = setTimeout(
-          () => controller.abort(new Error("Fetch attempt timed out")),
-          timeoutMs > 0 ? timeoutMs : 1
-        );
-        const onCallerAbort = () =>
-          controller.abort(callerSignal?.reason || new Error("Aborted by caller"));
-        if (callerSignal) {
-          if (callerSignal.aborted) {
-            controller.abort(callerSignal.reason || new Error("Aborted by caller"));
-          } else {
-            callerSignal.addEventListener("abort", onCallerAbort, { once: true });
-          }
-        }
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
-          return await fetch(url, {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 3500); // 3.5s strict timeout
+
+          const res = await fetch(url, {
             ...options,
-            headers: {
-              ...options?.headers,
-              ...headers,
-            },
-            signal: controller.signal,
+            headers: { ...options?.headers, ...headers },
+            signal: controller.signal
           });
-        } finally {
-          clearTimeout(timer);
-          if (callerSignal) callerSignal.removeEventListener("abort", onCallerAbort);
-        }
-      };
+          
+          clearTimeout(timeoutId);
 
-      while (true) {
-        const elapsed = Date.now() - retryStart;
-        const remaining = maxRetryTime - elapsed;
-        if (remaining <= 0) {
-          throw new Error(`Fetch failed for ${url} after ${maxRetryTime}ms`);
-        }
-        const perTryTimeout = Math.min(PER_TRY_TIMEOUT_MS, Math.max(100, remaining - 50));
-
-        try {
-          const r = await attemptWithTimeout(perTryTimeout);
-          if (r.ok) return r;
-
-          await checkUnrecoverableErrors(r);
-
-          if (!RETRYABLE.has(r.status)) {
-            return r;
-          }
-
-          const retryAfterMs = parseRetryAfter(r.headers.get("Retry-After"));
-          let waitMs;
-          if (retryAfterMs != null) {
-            waitMs = Math.max(MIN_DELAY_MS, Math.min(retryAfterMs, Math.max(0, remaining - 10)));
-          } else {
-            const next = Math.min(MAX_DELAY_MS, Math.random() * delayMs * JITTER_FACTOR);
-            delayMs = next < MIN_DELAY_MS ? MIN_DELAY_MS : next;
-            waitMs = Math.min(delayMs, Math.max(0, remaining - 10));
-          }
-
-          if (waitMs <= 0) {
-            throw new Error(`Fetch failed for ${url} after ${maxRetryTime}ms (window depleted)`);
-          }
-
-          this?.initError?.(`Retrying fetch for ${url}`, r.status);
-          attempt++;
-          await sleep(waitMs);
-          continue;
+          if (res.ok) return res;
+          await checkUnrecoverableErrors(res);
+          
+          if (!isTrigger(res.status) || attempt === maxRetries) return res;
+          
+          // Fast linear backoff (150ms, 300ms)
+          await sleep(150 * (attempt + 1)); 
         } catch (err) {
-          if (callerSignal && callerSignal.aborted) throw err;
-          // Re-throw our custom errors so it bubbles up to break everything gracefully
           if (["COPYRIGHT_BLOCKED", "UPLOADER_REMOVED", "VIDEO_UNAVAILABLE", "INAPPROPRIATE"].includes(err.message)) throw err;
-
-          lastError = err;
-          const remaining2 = maxRetryTime - (Date.now() - retryStart);
-          if (remaining2 <= 0) throw lastError;
-
-          const next = Math.min(MAX_DELAY_MS, Math.random() * delayMs * JITTER_FACTOR);
-          delayMs = next < MIN_DELAY_MS ? MIN_DELAY_MS : next;
-          const waitMs = Math.min(delayMs, Math.max(0, remaining2 - 10));
-          if (waitMs <= 0) throw lastError;
-
-          this?.initError?.(`Fetch error for ${url}`, err);
-          attempt++;
-          await sleep(waitMs);
-          continue;
+          if (attempt === maxRetries) throw err;
+          await sleep(150 * (attempt + 1));
         }
       }
     };
@@ -282,104 +202,58 @@ class InnerTubePokeVidious {
     const videoUrl = `${this.config.invapi}/videos/${v}?hl=${contentlang}&region=${contentregion}&h=${this.toBase64(Date.now())}`;
 
     try {
-      // PERF: Execute all fetches in parallel using Promise.all
-      const [invComments, vidObj, dislikesData, colorData] = await Promise.all([
+      // Execute fast network fetches in parallel
+      const [invComments, vidObj, dislikesData] = await Promise.all([
         // 1. Comments
-        fetchWithRetry(
-          `${config.invapi}/comments/${v}?hl=${contentlang}&region=${contentregion}&h=${this.toBase64(
-            Date.now()
-          )}`
-        ).then((res) => res?.text()),
+        fetchWithRetry(`${config.invapi}/comments/${v}?hl=${contentlang}&region=${contentregion}&h=${this.toBase64(Date.now())}`)
+          .then((res) => res?.text())
+          .catch(() => null),
 
         // 2. Video Info
         (async () => {
-          let fetchError = null;
-          const MAX_ATTEMPTS = 3;
-          for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-            try {
-              const r = await fetchWithRetry(videoUrl, {}, 2000);
-              if (!r.ok) throw new Error(`HTTP Error ${r.status}`);
-
-              const text = await r.text();
-              try {
-                const parsed = JSON.parse(text);
-                
-                if (parsed === null) {
-                  return null;
-                }
-
-                if (this.checkUnexistingObject(parsed)) {
-                  return parsed; // SUCCESS
-                }
-                
-                // If it contains an error property from the API, return it immediately
-                if (parsed && parsed.error) {
-                   return parsed;
-                }
-
-                // If valid JSON but missing expected data (like authorId), stop at 1 attempt
-                return null;
-              } catch (parseErr) {
-                // parse failed, loop and retry
-              }
-            } catch (err) {
-              if (["COPYRIGHT_BLOCKED", "UPLOADER_REMOVED", "VIDEO_UNAVAILABLE", "INAPPROPRIATE"].includes(err.message)) throw err;
-              fetchError = err;
+          try {
+            const r = await fetchWithRetry(videoUrl);
+            if (!r || !r.ok) return null;
+            const text = await r.text();
+            const parsed = this.getJson(text);
+            if (parsed && (this.checkUnexistingObject(parsed) || parsed.error)) {
+              return parsed;
             }
+            return null;
+          } catch (err) {
+            if (["COPYRIGHT_BLOCKED", "UPLOADER_REMOVED", "VIDEO_UNAVAILABLE", "INAPPROPRIATE"].includes(err.message)) throw err;
+            return { isInternalError: true, reason: err.message };
           }
-
-          if (fetchError) {
-            this.initError("All video info fetch attempts failed", fetchError);
-            return { isInternalError: true, reason: fetchError.message || fetchError.toString() };
-          }
-          return null;
         })(),
 
         // 3. Dislikes
-        (async () => {
-          try {
-            return await getdislikes(v);
-          } catch (err) {
-            this.initError("Dislike API error", err);
-            return { engagement: null };
-          }
-        })(),
-
-        // 4. Thumbnail color palette
-        (async () => {
-          try {
-            const palette = await getColors(
-              `https://i.ytimg.com/vi/${v}/hqdefault.jpg?sqp=${this.sqp}`
-            );
-            if (Array.isArray(palette) && palette[0] && palette[1]) {
-              return { color: palette[0].hex(), color2: palette[1].hex() };
-            }
-          } catch (err) {
-            this.initError("Thumbnail color extraction error", err);
-          }
-          return { color: "#0ea5e9", color2: "#111827" }; // Defaults
-        })()
+        getdislikes(v).catch(() => ({ engagement: null }))
       ]);
 
       const comments = this.getJson(invComments);
       const vid = vidObj;
 
-      // Check for specific API errors or fetch failures. 
-      // Do NOT return `error: true` here so it bypasses the error page and renders `watch.ejs`.
+      // Extract colors silently in the background
+      this.extractColorsBackground(v);
+
+      // Default safe colors to render instantly
+      const defaultColor = "#0ea5e9";
+      const defaultColor2 = "#111827";
+
+      // Check for specific API errors or fetch failures
       if (!vid || vid.error || vid.isInternalError) {
         const errorMsg = vid?.error || vid?.reason || "This video is probably about to premiere.";
-
         this.initError("Video info fetch error", `${v} - ${errorMsg}`);
         
         return {
           vid: { error: errorMsg },
           comments,
           channel_uploads: " ",
-          engagement: dislikesData.engagement,
+          engagement: dislikesData?.engagement || null,
           wiki: "",
           desc: "",
-          color: colorData.color,
-          color2: colorData.color2,
+          color: defaultColor,
+          color2: defaultColor2,
         };
       }
 
@@ -389,33 +263,36 @@ class InnerTubePokeVidious {
             vid,
             comments,
             channel_uploads: " ",
-            engagement: dislikesData.engagement,
+            engagement: dislikesData?.engagement || null,
             wiki: "",
             desc: "",
-            color: colorData.color,
-            color2: colorData.color2,
+            color: defaultColor,
+            color2: defaultColor2,
           },
           timestamp: Date.now(),
         };
 
+        // Cache size management
+        if (Object.keys(this.cache).length > 200) {
+          const firstKey = Object.keys(this.cache)[0];
+          delete this.cache[firstKey];
+        }
+
         return this.cache[v].result;
       } else {
         this.initError(vid, `ID: ${v}`);
-        
-        // Also removed error: true here to ensure watch.ejs renders
         return {
           vid: vid || { error: "Incomplete data returned." },
           comments,
           channel_uploads: " ",
-          engagement: dislikesData.engagement,
+          engagement: dislikesData?.engagement || null,
           wiki: "",
           desc: "",
-          color: colorData.color,
-          color2: colorData.color2,
+          color: defaultColor,
+          color2: defaultColor2,
         };
       }
     } catch (error) {
-      // If it's a known unrecoverable error, return the pretty message (triggers the custom UI)
       if (knownErrors[error.message]) {
         return { 
           error: true, 
@@ -424,7 +301,6 @@ class InnerTubePokeVidious {
         };
       }
 
-      // If it's an unknown catastrophic error, report the actual error message.
       this.initError(`Error getting video ${v}`, error);
       return { 
         error: true, 
@@ -442,6 +318,8 @@ class InnerTubePokeVidious {
   }
 
   initError(context, error) {
+    // Prevent unhandled promise rejection spam from clogging console
+    if (error && (error.code === 'UND_ERR_CONNECT_TIMEOUT' || error.code === 'ECONNRESET' || error.name === 'AbortError')) return;
     console.log("[LIBPT CORE ERROR]", context, error?.stack || error || "");
   }
 }
