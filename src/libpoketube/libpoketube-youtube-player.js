@@ -1,16 +1,16 @@
 /**
  * Poke is a Free/Libre YouTube front-end!
- *
- * This file was originally distributed under the GNU Lesser General Public
- * License (LGPL-3.0-or-later). Starting from commit 88a8acbac2, it has been
- * relicensed and is now distributed under the GNU General Public License
- * (GPL-3.0-or-later), which is the license used by the Poke project.
- *
- * See the GNU GPL license text here:
- * https://www.gnu.org/licenses/gpl-3.0.txt
- *
- * Please do not remove this notice when redistributing this file!
- */
+	 *
+	 * This file was originally distributed under the GNU Lesser General Public
+	 * License (LGPL-3.0-or-later). Starting from commit 88a8acbac2, it has been
+	 * relicensed and is now distributed under the GNU General Public License
+	 * (GPL-3.0-or-later), which is the license used by the Poke project.
+	 *
+	 * See the GNU GPL license text here:
+	 * https://www.gnu.org/licenses/gpl-3.0.txt
+	 *
+	 * Please do not remove this notice when redistributing this file!
+*/
 
 const getdislikes = require("../libpoketube/libpoketube-dislikes.js");
 const getColors = require("get-image-colors");
@@ -19,7 +19,6 @@ const fs = require("fs");
 
 const VIDEO_ID_REGEX = /^[a-zA-Z0-9_-]{11}$/;
 const INVALID_ROUTES = new Set(["assets", "cdn-cgi", "404"]);
-const BLOCKED_REASONS_REGEX = /copyright grounds|removed by the uploader|may be inappropriate|unavailable/i;
 
 let fetchPromise = null;
 const getFetch = () => {
@@ -38,23 +37,127 @@ const getTimeoutSignal = (ms) => {
   return controller.signal;
 };
 
- const BLOCKED_REASON_MAP = {
-  "copyright grounds": "COPYRIGHT_BLOCKED",
-  "removed by the uploader": "UPLOADER_REMOVED",
-  "may be inappropriate": "INAPPROPRIATE",
-  "unavailable": "VIDEO_UNAVAILABLE"
-};
+class TurboCacheSystem {
+  constructor(maxSize = 500) {
+    this.data = new Map();
+    this.timestamps = new Map();
+    this.accessCount = new Map();
+    this.maxSize = maxSize;
+    this.ttl = 3600000;
+  }
+
+  get(key) {
+    if (!this.data.has(key)) return null;
+    
+    const now = Date.now();
+    if (now - this.timestamps.get(key) > this.ttl) {
+      this.data.delete(key);
+      this.timestamps.delete(key);
+      this.accessCount.delete(key);
+      return null;
+    }
+
+    this.accessCount.set(key, (this.accessCount.get(key) || 0) + 1);
+    return this.data.get(key);
+  }
+
+  set(key, value) {
+    if (this.data.size >= this.maxSize) {
+      let minAccess = Infinity;
+      let lruKey = null;
+
+      for (const [k, count] of this.accessCount.entries()) {
+        if (count < minAccess) {
+          minAccess = count;
+          lruKey = k;
+        }
+      }
+
+      if (lruKey) {
+        this.data.delete(lruKey);
+        this.timestamps.delete(lruKey);
+        this.accessCount.delete(lruKey);
+      }
+    }
+
+    this.data.set(key, value);
+    this.timestamps.set(key, Date.now());
+    this.accessCount.set(key, 1);
+  }
+
+  clear() {
+    this.data.clear();
+    this.timestamps.clear();
+    this.accessCount.clear();
+  }
+
+  size() {
+    return this.data.size;
+  }
+}
+
+class TurboColorCache {
+  constructor() {
+    this.colors = new Map();
+    this.pending = new Map();
+  }
+
+  getSync(videoId) {
+    return this.colors.get(videoId) || null;
+  }
+
+  async getAsync(videoId) {
+    if (this.colors.has(videoId)) {
+      return this.colors.get(videoId);
+    }
+
+    if (this.pending.has(videoId)) {
+      return this.pending.get(videoId);
+    }
+
+    const promise = this.fetchColors(videoId);
+    this.pending.set(videoId, promise);
+
+    try {
+      const colors = await promise;
+      this.colors.set(videoId, colors);
+      this.pending.delete(videoId);
+      return colors;
+    } catch (e) {
+      this.pending.delete(videoId);
+      return null;
+    }
+  }
+
+  async fetchColors(videoId) {
+    try {
+      const palette = await getColors(
+        `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`
+      ).catch(() => 
+        getColors(`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`)
+      );
+
+      if (Array.isArray(palette) && palette.length >= 2) {
+        return {
+          color: palette[0].hex(),
+          color2: palette[1].hex()
+        };
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+}
 
 class InnerTubePokeVidious {
   constructor(config) {
     this.config = config;
     
-     this.cache = new Map();
-    this.cacheOrder = []; 
-    this.maxCacheSize = 200;
-    
+    this.cache = new TurboCacheSystem(500);
+    this.colorCache = new TurboColorCache();
     this.blockedVideos = new Map();
-    this.blockedVideosPromise = null; 
+    this.blockedVideosLoaded = false;
 
     this.language = "hl=en-US";
     this.param = "2AMB";
@@ -80,41 +183,31 @@ class InnerTubePokeVidious {
   }
 
   loadBlockedVideos() {
-     if (this.blockedVideosPromise) return this.blockedVideosPromise;
+    if (this.blockedVideosLoaded) return;
     
-    this.blockedVideosPromise = (async () => {
-      try {
-        if (fs.existsSync(this.blockedFile)) {
-          const content = await fs.promises.readFile(this.blockedFile, "utf8");
-          const lines = content.split("\n");
-          
-           for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || !trimmed.includes("|")) continue;
-            
-            const [videoId, reason] = trimmed.split("|", 2);
-            this.blockedVideos.set(videoId.trim(), reason.trim());
-          }
-        }
-      } catch (e) {
-        console.error("[LIBPT ERROR] Could not load blockedreasons.txt", e);
+    fs.readFile(this.blockedFile, "utf8", (err, content) => {
+      if (err) return;
+      
+      const lines = content.split("\n");
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.includes("|")) continue;
+        
+        const [videoId, reason] = trimmed.split("|", 2);
+        this.blockedVideos.set(videoId.trim(), reason.trim());
       }
-    })();
-
-    return this.blockedVideosPromise;
+      
+      this.blockedVideosLoaded = true;
+    });
   }
 
   addBlockedVideo(videoId, reason) {
-    if (this.blockedVideos.has(videoId)) return; // Already tracked
+    if (this.blockedVideos.has(videoId)) return;
     
     this.blockedVideos.set(videoId, reason);
-    
-    // Fire-and-forget without awaiting
-    fs.promises.appendFile(this.blockedFile, `${videoId}|${reason}\n`)
-      .catch(e => console.error("[LIBPT ERROR] Could not write to blockedreasons.txt", e));
+    fs.appendFile(this.blockedFile, `${videoId}|${reason}\n`, () => {});
   }
 
-  // Performance: Inline JSON parsing with early bailout
   getJson(str) {
     if (!str || typeof str !== "string") return null;
     try {
@@ -133,152 +226,93 @@ class InnerTubePokeVidious {
     return Buffer.from(String(str)).toString("base64");
   }
 
-  // Performance: Non-blocking background color extraction
-  extractColorsBackground(v) {
-    // Don't wait for color extraction; it's non-critical
-    getColors(`https://i.ytimg.com/vi/${v}/hqdefault.jpg?sqp=${this.sqp}`)
-      .then((palette) => {
-        if (Array.isArray(palette) && palette.length >= 2) {
-          const cachedItem = this.cache.get(v);
-          if (cachedItem?.result) {
-            cachedItem.result.color = palette[0].hex();
-            cachedItem.result.color2 = palette[1].hex();
-          }
-        }
-      })
-      .catch(() => {
-        // Silently drop errors
-      });
-  }
-
-  // Performance: Smarter retry logic with exponential backoff
-  async fetchTextWithRetry(url, options = {}, maxRetries = 2, videoId) {
-    const isTrigger = (s) => s >= 500 && s < 600 || s === 429;
+  async fetchTextWithRetry(url, options = {}, maxRetries = 1, videoId) {
     const fetchFn = typeof globalThis.fetch === "function" ? globalThis.fetch : await getFetch();
-
-    let lastError = null;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        const signal = getTimeoutSignal(3500);
+        const signal = getTimeoutSignal(2800);
         const res = await fetchFn(url, { ...options, signal });
-
-        // Performance: Read text once, reuse it
         const text = await res.text();
 
         if (res.ok) return text;
 
-        // Fast path: Check for known blocks in response text
         if ((res.status === 500 || res.status === 404) && text.length < 10000) {
-          const lowerText = text.toLowerCase();
+          const lower = text.toLowerCase();
           
-          for (const [key, reason] of Object.entries(BLOCKED_REASON_MAP)) {
-            if (lowerText.includes(key)) {
-              this.addBlockedVideo(videoId, reason);
-              throw new Error(reason);
-            }
+          if (lower.includes("copyright") && lower.includes("blocked")) {
+            this.addBlockedVideo(videoId, "COPYRIGHT_BLOCKED");
+            throw new Error("COPYRIGHT_BLOCKED");
+          }
+          if (lower.includes("removed by the uploader")) {
+            this.addBlockedVideo(videoId, "UPLOADER_REMOVED");
+            throw new Error("UPLOADER_REMOVED");
+          }
+          if (lower.includes("inappropriate")) {
+            this.addBlockedVideo(videoId, "INAPPROPRIATE");
+            throw new Error("INAPPROPRIATE");
+          }
+          if (lower.includes("unavailable")) {
+            this.addBlockedVideo(videoId, "VIDEO_UNAVAILABLE");
+            throw new Error("VIDEO_UNAVAILABLE");
           }
         }
 
-        // Only retry on transient errors
-        if (!isTrigger(res.status) || attempt === maxRetries) return text;
+        if (res.status < 500 && res.status !== 429) return text;
         
       } catch (err) {
-        // Re-throw known errors immediately
         if (this.KNOWN_ERRORS[err.message]) throw err;
         if (attempt === maxRetries) throw err;
-        lastError = err;
       }
 
-      // Exponential backoff: 150ms, 300ms, 450ms
-      await new Promise((r) => setTimeout(r, 150 * (attempt + 1)));
-    }
-
-    throw lastError || new Error("Fetch failed after retries");
-  }
-
-  // Performance: Cache eviction with O(1) complexity
-  addToCache(videoId, result) {
-    // Remove from middle if exists
-    const idx = this.cacheOrder.indexOf(videoId);
-    if (idx !== -1) this.cacheOrder.splice(idx, 1);
-    
-    // Add to end (most recent)
-    this.cacheOrder.push(videoId);
-    
-    this.cache.set(videoId, {
-      result,
-      timestamp: Date.now(),
-    });
-
-    // Evict oldest if over limit
-    if (this.cacheOrder.length > this.maxCacheSize) {
-      const oldest = this.cacheOrder.shift();
-      this.cache.delete(oldest);
+      if (attempt < maxRetries) {
+        await new Promise((r) => setTimeout(r, 100 * (attempt + 1)));
+      }
     }
   }
 
   async getYouTubePlayerInfo(f, v, contentlang, contentregion) {
-    if (!v) {
-      this.initError("Missing video ID", null);
-      return { error: true, message: "No video ID provided" };
+    if (!v || !VIDEO_ID_REGEX.test(v) || INVALID_ROUTES.has(v)) {
+      return { error: true, message: "Invalid video ID" };
     }
 
-    // Validate early
-    if (!this.isvalidvideo(v)) {
-      return { error: true, message: "Invalid video ID format" };
-    }
-
-    // Fast O(1) Check for blocked videos
     if (this.blockedVideos.has(v)) {
       const reasonKey = this.blockedVideos.get(v);
       return { 
         error: true, 
-        message: this.KNOWN_ERRORS[reasonKey] || "This video is blocked, removed, or unavailable.",
+        message: this.KNOWN_ERRORS[reasonKey] || "Video blocked/removed/unavailable",
         reason: reasonKey
       };
     }
 
-    // Fast O(1) Check for cached data with TTL
-    const cachedItem = this.cache.get(v);
-    if (cachedItem && Date.now() - cachedItem.timestamp < 3600000) {
-      return cachedItem.result;
-    }
+    const cached = this.cache.get(v);
+    if (cached) return cached;
 
     const headers = { "User-Agent": this.useragent };
-    
-    // Performance: Generate cache buster once
     const cacheBuster = this.toBase64(Date.now().toString(36));
     
     const videoUrl = `${this.config.invapi}/videos/${v}?hl=${contentlang}&region=${contentregion}&h=${cacheBuster}`;
     const commentsUrl = `${this.config.invapi}/comments/${v}?hl=${contentlang}&region=${contentregion}&h=${cacheBuster}`;
 
-    // Default safe colors
     const defaultColor = "#0ea5e9";
     const defaultColor2 = "#111827";
 
     try {
-      // Performance: Parallel requests with fast-fail semantics
-      const [invCommentsText, vidObjRaw, dislikesData] = await Promise.allSettled([
-        this.fetchTextWithRetry(commentsUrl, { headers }, 2, v),
-        this.fetchTextWithRetry(videoUrl, { headers }, 2, v),
-        getdislikes(v)
-      ]).then(([c, v, d]) => [
-        c.status === "fulfilled" ? c.value : null,
-        v.status === "fulfilled" ? v.value : null,
-        d.status === "fulfilled" ? d.value : { engagement: null }
+      const colorPromise = this.colorCache.getAsync(v);
+
+      const [c, vid, dislikesData, colors] = await Promise.all([
+        this.fetchTextWithRetry(commentsUrl, { headers }, 1, v).catch(() => null),
+        this.fetchTextWithRetry(videoUrl, { headers }, 1, v).catch(() => null),
+        getdislikes(v).catch(() => ({ engagement: null })),
+        colorPromise
       ]);
 
-      const comments = this.getJson(invCommentsText);
-      const vid = this.getJson(vidObjRaw);
+      const comments = this.getJson(c);
+      const videoData = this.getJson(vid);
 
-      // Spawn color extraction in background (non-blocking)
-      this.extractColorsBackground(v);
-
-      // Handle missing video data
-      if (!vid || vid.error || vid.isInternalError) {
-        const errorMsg = vid?.error || vid?.reason || "This video is probably about to premiere.";
-        this.initError("Video info fetch error", `${v} - ${errorMsg}`);
+      if (!videoData || videoData.error || videoData.isInternalError) {
+        const errorMsg = videoData?.error || videoData?.reason || "Premiere pending";
+        this.initError("Video fetch error", `${v} - ${errorMsg}`);
         
         return {
           vid: { error: errorMsg },
@@ -292,36 +326,34 @@ class InnerTubePokeVidious {
         };
       }
 
-      if (this.checkUnexistingObject(vid)) {
+      if (this.checkUnexistingObject(videoData)) {
         const payload = {
-          vid,
+          vid: videoData,
           comments,
           channel_uploads: " ",
           engagement: dislikesData?.engagement || null,
           wiki: "",
           desc: "",
-          color: defaultColor,
-          color2: defaultColor2,
+          color: colors?.color || defaultColor,
+          color2: colors?.color2 || defaultColor2,
         };
 
-        // Performance: Optimized cache insertion
-        this.addToCache(v, payload);
+        this.cache.set(v, payload);
         return payload;
       } else {
-        this.initError(vid, `ID: ${v}`);
+        this.initError(videoData, `ID: ${v}`);
         return {
-          vid: vid || { error: "Incomplete data returned." },
+          vid: videoData || { error: "Incomplete data" },
           comments,
           channel_uploads: " ",
           engagement: dislikesData?.engagement || null,
           wiki: "",
           desc: "",
-          color: defaultColor,
-          color2: defaultColor2,
+          color: colors?.color || defaultColor,
+          color2: colors?.color2 || defaultColor2,
         };
       }
     } catch (error) {
-      // Known errors get fast-tracked responses
       if (this.KNOWN_ERRORS[error.message]) {
         return { 
           error: true, 
@@ -333,7 +365,7 @@ class InnerTubePokeVidious {
       this.initError(`Error getting video ${v}`, error);
       return { 
         error: true, 
-        message: error.message || "An unexpected error occurred qwq",
+        message: error.message || "Unexpected error",
         reason: "UNKNOWN_ERROR" 
       };
     }
@@ -344,12 +376,12 @@ class InnerTubePokeVidious {
   }
 
   initError(context, error) {
-     if (error?.code === 'UND_ERR_CONNECT_TIMEOUT' || 
+    if (error?.code === 'UND_ERR_CONNECT_TIMEOUT' || 
         error?.code === 'ECONNRESET' || 
         error?.name === 'AbortError') {
       return;
     }
-    console.log("[LIBPT CORE ERROR]", context, error?.stack || error || "");
+    console.log("[LIBPT ERROR]", context, error?.stack || error || "");
   }
 }
 
