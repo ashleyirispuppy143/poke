@@ -21,9 +21,9 @@ class InnerTubePokeVidious {
   constructor(config) {
     this.config = config;
     
-    // OPTIMIZATION: Bounded Cache (Map) to prevent catastrophic memory leaks over time.
     this.cache = new Map();
-    this.MAX_CACHE_SIZE = 2000; // Limits memory usage on long-running servers
+    this.inFlight = new Map();
+    this.MAX_CACHE_SIZE = 2000;
 
     this.language = "hl=en-US";
     this.param = "2AMB";
@@ -40,13 +40,11 @@ class InnerTubePokeVidious {
     this.blockedFile = "blockedreasons.txt";
     this.blockedVideos = new Map();
     
-    // Lazy loaded fetch function to save resource compilation times
     this._fetchFn = null; 
 
     this.loadBlockedVideos();
   }
 
-  // OPTIMIZATION: Get native fetch or fallback to undici once, not per request
   async getFetch() {
     if (this._fetchFn) return this._fetchFn;
     if (globalThis.fetch) {
@@ -75,7 +73,6 @@ class InnerTubePokeVidious {
     }
   }
 
-  // OPTIMIZATION: Switched to asynchronous appendFile so it doesn't block the Node event loop
   addBlockedVideo(videoId, reason) {
     if (!this.blockedVideos.has(videoId)) {
       this.blockedVideos.set(videoId, reason);
@@ -97,36 +94,26 @@ class InnerTubePokeVidious {
     return obj && "authorId" in obj;
   }
 
-  // OPTIMIZATION: Using fast native Buffers strictly, avoids evaluating `typeof` per request
   toBase64(str) {
     return Buffer.from(String(str)).toString("base64");
   }
 
-  // OPTIMIZATION: Extracted caching logic to prevent GC pressure and memory leaks
   _setCache(v, dataObj) {
     if (this.cache.size >= this.MAX_CACHE_SIZE) {
-      // Map maintains insertion order. Deleting the first key enforces a simple LRU cache.
       const firstKey = this.cache.keys().next().value;
       this.cache.delete(firstKey);
     }
     this.cache.set(v, { result: dataObj, timestamp: Date.now() });
   }
 
-  // OPTIMIZATION: Flattened and extracted retry loop to eliminate creating closures/functions on every single request
-  async _fetchWithRetry(url, options = {}, maxRetryTime = 2500) {
+  async _fetchWithRetry(url, options = {}, maxRetries = 2, timeoutMs = 2000) {
     const fetchFn = await this.getFetch();
     const RETRYABLE = new Set([429, 500, 502, 503, 504]);
-    const retryStart = Date.now();
     let delayMs = 250;
 
-    while (true) {
-      const elapsed = Date.now() - retryStart;
-      const remaining = maxRetryTime - elapsed;
-      if (remaining <= 0) throw new Error(`Fetch failed for ${url} after ${maxRetryTime}ms`);
-
-      const perTryTimeout = Math.min(2000, Math.max(100, remaining - 50));
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(new Error("Fetch attempt timed out")), perTryTimeout);
+      const timer = setTimeout(() => controller.abort(new Error("Fetch attempt timed out")), timeoutMs);
 
       try {
         const res = await fetchFn(url, { ...options, signal: controller.signal });
@@ -134,7 +121,6 @@ class InnerTubePokeVidious {
 
         if (res.ok) return res;
 
-        // Unrecoverable Errors Check
         if (res.status === 500 || res.status === 404) {
           const text = await res.clone().text().catch(() => "");
           if (res.status === 500 && text.includes("who has blocked it on copyright grounds")) throw new Error("COPYRIGHT_BLOCKED");
@@ -143,66 +129,57 @@ class InnerTubePokeVidious {
           if (res.status === 404 && text.includes("Video unavailable")) throw new Error("VIDEO_UNAVAILABLE");
         }
 
-        if (!RETRYABLE.has(res.status)) return res;
+        if (!RETRYABLE.has(res.status) || attempt === maxRetries) {
+          return res; 
+        }
 
       } catch (err) {
         clearTimeout(timer);
-        // Bubble up specific unrecoverable errors to be handled upstream
         if (["COPYRIGHT_BLOCKED", "UPLOADER_REMOVED", "VIDEO_UNAVAILABLE", "INAPPROPRIATE"].includes(err.message)) {
           throw err;
         }
-        
-        if (Date.now() - retryStart >= maxRetryTime) throw err;
+        if (attempt === maxRetries) throw err;
       }
 
       await new Promise((r) => setTimeout(r, delayMs));
-      delayMs = Math.min(1500, delayMs * 1.5); // Smoother jitter-free backoff
+      delayMs = Math.min(1000, delayMs * 1.5); 
     }
   }
 
-  // OPTIMIZATION: Extracted video API attempt logic to keep the main worker clean
   async _fetchVideoInfo(url, headers, v) {
-    let fetchError = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        const r = await this._fetchWithRetry(url, { headers }, 2000);
-        if (!r.ok) throw new Error(`HTTP Error ${r.status}`);
+    try {
+      const r = await this._fetchWithRetry(url, { headers }, 2, 2000); // Strict 3 tries total (0, 1, 2)
+      if (!r.ok) throw new Error(`HTTP Error ${r.status}`);
 
-        const text = await r.text();
-        const parsed = this.getJson(text);
+      const text = await r.text();
+      const parsed = this.getJson(text);
 
-        if (parsed === null) return null;
-        if (this.checkUnexistingObject(parsed) || parsed.error) return parsed;
-        
-        return null;
-      } catch (err) {
-        if (["COPYRIGHT_BLOCKED", "UPLOADER_REMOVED", "VIDEO_UNAVAILABLE", "INAPPROPRIATE"].includes(err.message)) {
-          this.addBlockedVideo(v, err.message);
-          throw err;
-        }
-        fetchError = err;
+      if (parsed === null) return null;
+      if (this.checkUnexistingObject(parsed) || parsed.error) return parsed;
+      
+      return null;
+    } catch (err) {
+      if (["COPYRIGHT_BLOCKED", "UPLOADER_REMOVED", "VIDEO_UNAVAILABLE", "INAPPROPRIATE"].includes(err.message)) {
+        this.addBlockedVideo(v, err.message);
+        throw err;
       }
+      this.initError("Video info fetch failed", err);
+      return { isInternalError: true, reason: err.message || err.toString() };
     }
-    
-    if (fetchError) {
-      this.initError("All video info fetch attempts failed", fetchError);
-      return { isInternalError: true, reason: fetchError.message || fetchError.toString() };
-    }
-    return null;
   }
 
   async getYouTubePlayerInfo(f, v, contentlang, contentregion) {
+    if (!v) {
+      this.initError("Missing video ID", null);
+      return { error: true, message: "No video ID provided" };
+    }
+
     const knownErrors = {
       "COPYRIGHT_BLOCKED": "This video contains content from a copyright holder who has blocked it.",
       "UPLOADER_REMOVED": "This video has been removed by the uploader.",
       "VIDEO_UNAVAILABLE": "Video unavailable.",
       "INAPPROPRIATE": "This video may be inappropriate for some users."
     };
-
-    if (!v) {
-      this.initError("Missing video ID", null);
-      return { error: true, message: "No video ID provided" };
-    }
 
     if (this.blockedVideos.has(v)) {
       const reasonKey = this.blockedVideos.get(v);
@@ -213,34 +190,45 @@ class InnerTubePokeVidious {
       };
     }
 
-    // Checking our bounded Map Cache
     const cached = this.cache.get(v);
     if (cached && Date.now() - cached.timestamp < 3600000) {
       return cached.result;
     }
 
+    // Request coalescing: Prevent multiple identical requests hitting the API at the exact same time
+    if (this.inFlight.has(v)) {
+      return this.inFlight.get(v);
+    }
+
+    const requestPromise = this._processVideoData(v, contentlang, contentregion, knownErrors);
+    this.inFlight.set(v, requestPromise);
+
+    try {
+      const result = await requestPromise;
+      return result;
+    } finally {
+      this.inFlight.delete(v);
+    }
+  }
+
+  async _processVideoData(v, contentlang, contentregion, knownErrors) {
     const headers = { "User-Agent": this.useragent };
     const videoUrl = `${this.config.invapi}/videos/${v}?hl=${contentlang}&region=${contentregion}&h=${this.toBase64(Date.now())}`;
 
     try {
-      // OPTIMIZATION: Flat Promise.all execution (Removes overhead from immediately-invoked async wrappers per request)
       const [comments, vidObj, dislikesData, colorData] = await Promise.all([
-        // 1. Comments
-        this._fetchWithRetry(`${config.invapi}/comments/${v}?hl=${contentlang}&region=${contentregion}&h=${this.toBase64(Date.now())}`, { headers })
+        this._fetchWithRetry(`${config.invapi}/comments/${v}?hl=${contentlang}&region=${contentregion}&h=${this.toBase64(Date.now())}`, { headers }, 1, 1500)
           .then((res) => res.text())
           .then((text) => this.getJson(text))
           .catch(() => null),
 
-        // 2. Video Info
         this._fetchVideoInfo(videoUrl, headers, v),
 
-        // 3. Dislikes
         getdislikes(v).catch((err) => {
           this.initError("Dislike API error", err);
           return { engagement: null };
         }),
 
-        // 4. Thumbnail color palette
         getColors(`https://i.ytimg.com/vi/${v}/hqdefault.jpg?sqp=${this.sqp}`)
           .then((palette) => {
             if (Array.isArray(palette) && palette[0] && palette[1]) {
@@ -250,13 +238,13 @@ class InnerTubePokeVidious {
           })
           .catch((err) => {
             this.initError("Thumbnail color extraction error", err);
-            return { color: "#0ea5e9", color2: "#111827" }; // Defaults
+            return { color: "#0ea5e9", color2: "#111827" }; 
           })
       ]);
 
       if (!vidObj || vidObj.error || vidObj.isInternalError) {
         const errorMsg = vidObj?.error || vidObj?.reason || "This video is probably about to premiere.";
-        this.initError("Video info fetch error", `${v} - ${errorMsg}`);
+        this.initError("Video info error", `${v} - ${errorMsg}`);
         
         return {
           vid: { error: errorMsg },
