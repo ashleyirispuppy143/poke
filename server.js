@@ -1169,7 +1169,29 @@
         console.error("[POKE-resource] healthy");
         return;
       }
-      console.error("[POKE-resource] not healthy (" + resourceState.state + ")");
+      
+      let msg = "[POKE-resource] not healthy (" + resourceState.state + ")";
+      const details = [];
+      
+      if (resourceState.pressureReasons && resourceState.pressureReasons.length > 0) {
+        details.push("System Limits Reached: " + resourceState.pressureReasons.join(", "));
+      }
+      
+      if (resourceState.topRoutes && resourceState.topRoutes.length > 0) {
+        const topRoute = resourceState.topRoutes[0];
+        if (topRoute.count > 15) { 
+          details.push("Too many requests in " + topRoute.key + " right now (" + topRoute.count + " requests in one second)");
+        }
+        
+        const topPaths = resourceState.topRoutes.slice(0, 4).map(r => r.count + "x " + r.key).join(", ");
+        details.push("Heavy paths right now: [" + topPaths + "]");
+      }
+
+      if (details.length > 0) {
+        msg += " -> Reasons: " + details.join(" | ");
+      }
+      
+      console.error(msg);
     }
 
     function logReject(req, client, kind, reason, status) {
