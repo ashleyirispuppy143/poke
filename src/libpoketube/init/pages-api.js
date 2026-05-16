@@ -30,16 +30,89 @@ module.exports = function (app, config, renderTemplate) {
     'User-Agent': config.useragent,  
   };
 
-  app.get("/vi/:v/:t", async function (req, res) {
-    var url = `https://image-proxy.poketube.fun/proxy?url=https://i.ytimg.com/vi/${req.params.v}/${req.params.t}`;
+const imageCache = new Map();
+const activeImageFetches = new Map();
 
-    let f = await modules.fetch(url + `?cachefixer=${btoa(Date.now())}`, {
+const IMAGE_CACHE_TTL = 1000 * 60 * 60 * 24;
+const MAX_CACHED_IMAGES = 50000;
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, value] of imageCache.entries()) {
+    if (now - value.timestamp >= IMAGE_CACHE_TTL) {
+      imageCache.delete(key);
+    }
+  }
+  
+  if (imageCache.size > MAX_CACHED_IMAGES) {
+    const entriesToDelete = imageCache.size - MAX_CACHED_IMAGES;
+    let deleted = 0;
+    for (const key of imageCache.keys()) {
+      imageCache.delete(key);
+      deleted++;
+      if (deleted >= entriesToDelete) break;
+    }
+  }
+}, 15 * 60 * 1000);
+
+app.get("/vi/:v/:t", async function (req, res) {
+  const { v, t } = req.params;
+  const cacheKey = `${v}_${t}`;
+
+  res.setHeader("Cache-Control", "public, max-age=2592000, immutable");
+
+  if (imageCache.has(cacheKey)) {
+    const cachedImage = imageCache.get(cacheKey);
+    res.setHeader("Content-Type", cachedImage.contentType);
+    return res.send(cachedImage.buffer);
+  }
+
+  if (activeImageFetches.has(cacheKey)) {
+    try {
+      const cachedImage = await activeImageFetches.get(cacheKey);
+      res.setHeader("Content-Type", cachedImage.contentType);
+      return res.send(cachedImage.buffer);
+    } catch (e) {
+    }
+  }
+
+  const fetchAndCacheImage = async () => {
+    const url = `https://image-proxy.poketube.fun/proxy?url=https://i.ytimg.com/vi/${v}/${t}`;
+    
+    const response = await modules.fetch(url, {
       method: req.method,
       headers: headers,
     });
 
-    f.body.pipe(res);
-  });
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.status}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const contentType = response.headers.get("content-type") || "image/jpeg";
+
+    return { buffer, contentType, timestamp: Date.now() };
+  };
+
+  const requestPromise = fetchAndCacheImage();
+  activeImageFetches.set(cacheKey, requestPromise);
+
+  try {
+    const result = await requestPromise;
+    
+    imageCache.set(cacheKey, result);
+    activeImageFetches.delete(cacheKey);
+
+    res.setHeader("Content-Type", result.contentType);
+    return res.send(result.buffer);
+  } catch (error) {
+    activeImageFetches.delete(cacheKey);
+    console.error(`Error loading thumbnail ${v}/${t}:`, error.message);
+    
+    return res.status(404).send("Image not found");
+  }
+}); 
 
   app.get("/avatars/:v", async function (req, res) {
     var url = `https://image-proxy.poketube.fun/proxy?url=https://yt3.ggpht.com/${req.params.v}`;
