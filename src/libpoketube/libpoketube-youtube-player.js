@@ -30,10 +30,10 @@ const CACHE_TTL = Object.freeze({
   dislikesStale: 2 * 60 * 60 * 1000,
   colors: 24 * 60 * 60 * 1000,
   colorsStale: 7 * 24 * 60 * 60 * 1000,
-  transientError: 20 * 1000,
+  transientError: 15 * 1000,
   premiere: 15 * 1000,
-  partial: 2 * 60 * 1000,
-  partialStale: 5 * 60 * 1000
+  partial: 90 * 1000,
+  partialStale: 8 * 60 * 1000
 });
 
 const CACHE_LIMITS = Object.freeze({
@@ -45,13 +45,25 @@ const CACHE_LIMITS = Object.freeze({
 });
 
 const FETCH_TIMEOUTS = Object.freeze({
-  video: [1600, 2400, 3600],
-  comments: [900, 1400, 2200],
-  thumbnailHead: 700,
-  thumbnailGet: 2200,
-  colorExtraction: 2200,
-  softComments: 1200,
-  softDislikes: 900
+  video: [1200, 1900, 2900, 4200],
+  comments: [650, 1000, 1600],
+  thumbnailGet: [700, 1100, 1800],
+  colorExtraction: 1200,
+  softComments: 750,
+  softDislikes: 650,
+  softColors: 450
+});
+
+const RETRY_CONFIG = Object.freeze({
+  videoAttempts: 4,
+  commentsAttempts: 3,
+  thumbnailAttempts: 3,
+  videoBackgroundBaseDelay: 1200,
+  videoBackgroundMaxDelay: 60 * 1000,
+  colorBackgroundBaseDelay: 900,
+  colorBackgroundMaxDelay: 45 * 1000,
+  commentsBackgroundBaseDelay: 1500,
+  commentsBackgroundMaxDelay: 45 * 1000
 });
 
 let cachedFetch = null;
@@ -73,15 +85,18 @@ getFetch().catch(() => {});
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const unrefTimer = (timer) => {
+  if (timer && typeof timer.unref === "function") timer.unref();
+  return timer;
+};
+
 const createTimeoutSignal = (ms) => {
   if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
     return AbortSignal.timeout(ms);
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), ms);
-
-  if (timeoutId.unref) timeoutId.unref();
+  const timeoutId = unrefTimer(setTimeout(() => controller.abort(), ms));
 
   return controller.signal;
 };
@@ -90,8 +105,7 @@ const withSoftTimeout = async (promise, fallback, ms) => {
   let timeoutId = null;
 
   const timeoutPromise = new Promise((resolve) => {
-    timeoutId = setTimeout(() => resolve(fallback), ms);
-    if (timeoutId.unref) timeoutId.unref();
+    timeoutId = unrefTimer(setTimeout(() => resolve(fallback), ms));
   });
 
   try {
@@ -104,6 +118,49 @@ const withSoftTimeout = async (promise, fallback, ms) => {
 const normalizeCachePart = (value, fallback) => {
   const normalized = String(value || fallback || "").trim();
   return normalized || fallback;
+};
+
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+const getAttemptTimeout = (profile, attempt) => {
+  const timeouts = FETCH_TIMEOUTS[profile] || FETCH_TIMEOUTS.video;
+
+  if (Array.isArray(timeouts)) {
+    return timeouts[Math.min(attempt, timeouts.length - 1)];
+  }
+
+  return timeouts;
+};
+
+const createRetryDelay = (attempt, baseDelay, maxDelay) => {
+  const exponential = baseDelay * Math.pow(1.7, clamp(attempt, 0, 12));
+  const jitter = Math.floor(Math.random() * Math.min(750, baseDelay));
+  return Math.min(Math.floor(exponential + jitter), maxDelay);
+};
+
+const firstFulfilled = (promises) => {
+  return new Promise((resolve, reject) => {
+    let rejected = 0;
+    let lastError = null;
+
+    if (!promises.length) {
+      reject(new Error("No promises were provided"));
+      return;
+    }
+
+    for (const promise of promises) {
+      Promise.resolve(promise)
+        .then(resolve)
+        .catch((error) => {
+          rejected++;
+          lastError = error;
+
+          if (rejected === promises.length) {
+            reject(lastError || new Error("All promises rejected"));
+          }
+        });
+    }
+  });
 };
 
 class FastTTLCache {
@@ -344,7 +401,6 @@ class InnerTubePokeVidious {
     this.useragent = config.useragent;
     this.INNERTUBE_CONTEXT_CLIENT_VERSION = "1";
     this.region = "region=US";
-    this.sqp = "-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw";
     this.blockedFile = "blockedreasons.txt";
 
     this.KNOWN_ERRORS = {
@@ -360,6 +416,13 @@ class InnerTubePokeVidious {
     this.pendingDislikes = new Map();
     this.pendingColors = new Map();
     this.videoKeysById = new Map();
+
+    this.videoRetryTimers = new Map();
+    this.videoRetryAttempts = new Map();
+    this.colorRetryTimers = new Map();
+    this.colorRetryAttempts = new Map();
+    this.commentRetryTimers = new Map();
+    this.commentRetryAttempts = new Map();
 
     this.loadBlockedVideos();
   }
@@ -386,7 +449,7 @@ class InnerTubePokeVidious {
           }
         }
       } catch (error) {
-        console.error("[LIBPT ERROR] Could not load blockedreasons.txt", error);
+        console.error("[LIBPT ERROR] Could not load blockedreasons.txt", this.safeLogError(error));
       }
     })();
 
@@ -400,7 +463,7 @@ class InnerTubePokeVidious {
     this.blockedVideos.set(videoId, reason);
 
     fs.promises.appendFile(this.blockedFile, `${videoId}|${reason}\n`)
-      .catch((error) => console.error("[LIBPT ERROR] Could not write to blockedreasons.txt", error));
+      .catch((error) => console.error("[LIBPT ERROR] Could not write to blockedreasons.txt", this.safeLogError(error)));
   }
 
   getJson(str) {
@@ -437,6 +500,8 @@ class InnerTubePokeVidious {
   }
 
   isAbortLike(error) {
+    const message = String(error?.message || "").toLowerCase();
+
     return Boolean(
       error && (
         error.code === "UND_ERR_CONNECT_TIMEOUT" ||
@@ -445,14 +510,55 @@ class InnerTubePokeVidious {
         error.code === "ECONNRESET" ||
         error.code === "ETIMEDOUT" ||
         error.name === "AbortError" ||
-        error.name === "TimeoutError"
+        error.name === "TimeoutError" ||
+        message.includes("aborted") ||
+        message.includes("timeout") ||
+        message.includes("timed out")
       )
     );
   }
 
+  isRetryableStatus(status) {
+    return status === 408 || status === 425 || status === 429 || (status >= 500 && status < 600);
+  }
+
+  isRetryableError(error) {
+    if (!error) return false;
+    if (this.KNOWN_ERRORS[error.message]) return false;
+    if (this.isAbortLike(error)) return true;
+
+    const code = String(error.code || "");
+    return code === "ECONNRESET" ||
+      code === "ENOTFOUND" ||
+      code === "EAI_AGAIN" ||
+      code === "ECONNREFUSED" ||
+      code === "ENETUNREACH" ||
+      code === "EPIPE";
+  }
+
+  safeLogError(error) {
+    if (!error) return "";
+    if (this.isAbortLike(error)) return error.name || "Timeout";
+    return error?.stack || error?.message || error;
+  }
+
+  publicErrorMessage(error) {
+    if (this.isAbortLike(error)) {
+      return "The video service took too long to respond, but Poke is retrying in the background.";
+    }
+
+    const message = String(error?.message || "").trim();
+
+    if (!message || message.toLowerCase().includes("operation was aborted")) {
+      return "The video service did not respond in time, but Poke is retrying in the background.";
+    }
+
+    return message;
+  }
+
   initError(context, error) {
     if (this.isAbortLike(error)) return;
-    console.log("[LIBPT CORE ERROR]", context, error?.stack || error || "");
+    console.log("[LIBPT CORE ERROR]", context, this.safeLogError(error));
   }
 
   isvalidvideo(v) {
@@ -543,18 +649,18 @@ class InnerTubePokeVidious {
 
   async fetchTextWithRetry(url, options = {}, retries = 2, videoId, profile = "video") {
     const fetchFn = await getFetch();
-    const timeouts = FETCH_TIMEOUTS[profile] || FETCH_TIMEOUTS.video;
-    const isRetryableStatus = (status) => status === 408 || status === 425 || status === 429 || (status >= 500 && status < 600);
-
     let lastError = null;
+    let lastText = null;
 
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
-        const signal = createTimeoutSignal(timeouts[Math.min(attempt, timeouts.length - 1)]);
+        const signal = createTimeoutSignal(getAttemptTimeout(profile, attempt));
         const res = await fetchFn(url, { ...options, signal });
         const text = await res.text();
 
         if (res.ok) return text;
+
+        lastText = text;
 
         if (text.length < 10000) {
           const reason = this.detectKnownError(text);
@@ -565,19 +671,25 @@ class InnerTubePokeVidious {
           }
         }
 
-        if (!isRetryableStatus(res.status) || attempt === retries) return text;
+        if (!this.isRetryableStatus(res.status)) return text;
+
+        lastError = new Error(`HTTP ${res.status}`);
       } catch (error) {
         if (this.KNOWN_ERRORS[error.message]) throw error;
+
         lastError = error;
 
-        if (attempt === retries) throw error;
+        if (!this.isRetryableError(error) && attempt >= 1) {
+          throw error;
+        }
       }
 
       if (attempt < retries) {
-        await sleep(35 * (attempt + 1));
+        await sleep(createRetryDelay(attempt, 45, 350));
       }
     }
 
+    if (lastText) return lastText;
     throw lastError || new Error("Fetch failed after retries");
   }
 
@@ -585,17 +697,23 @@ class InnerTubePokeVidious {
     return `https://${host}/vi/${videoId}/${filename}`;
   }
 
-  getThumbnailCandidates(videoId, host) {
+  getThumbnailCandidateBatches(videoId, host) {
     return [
-      this.createThumbnailUrl(host, videoId, "maxresdefault.jpg"),
-      this.createThumbnailUrl(host, videoId, "sddefault.jpg"),
-      this.createThumbnailUrl(host, videoId, "hqdefault.jpg"),
-      this.createThumbnailUrl(host, videoId, "mqdefault.jpg"),
-      this.createThumbnailUrl(host, videoId, "default.jpg")
+      [
+        this.createThumbnailUrl(host, videoId, "hqdefault.jpg"),
+        this.createThumbnailUrl(host, videoId, "mqdefault.jpg")
+      ],
+      [
+        this.createThumbnailUrl(host, videoId, "sddefault.jpg"),
+        this.createThumbnailUrl(host, videoId, "default.jpg")
+      ],
+      [
+        this.createThumbnailUrl(host, videoId, "maxresdefault.jpg")
+      ]
     ];
   }
 
-  async fetchThumbnailBuffer(url) {
+  async fetchThumbnailBuffer(url, attempt = 0) {
     const fetchFn = await getFetch();
 
     const res = await fetchFn(url, {
@@ -604,7 +722,7 @@ class InnerTubePokeVidious {
         "User-Agent": this.useragent,
         "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
       },
-      signal: createTimeoutSignal(FETCH_TIMEOUTS.thumbnailGet)
+      signal: createTimeoutSignal(getAttemptTimeout("thumbnailGet", attempt))
     });
 
     if (!res.ok) {
@@ -632,20 +750,20 @@ class InnerTubePokeVidious {
   }
 
   async fetchBestThumbnailFromHost(videoId, host) {
-    const candidates = this.getThumbnailCandidates(videoId, host);
+    const batches = this.getThumbnailCandidateBatches(videoId, host);
+    let lastError = null;
 
-    const checks = await Promise.allSettled(
-      candidates.map((url) => this.fetchThumbnailBuffer(url))
-    );
-
-    for (let i = 0; i < checks.length; i++) {
-      if (checks[i].status === "fulfilled") {
-        return checks[i].value;
+    for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+      try {
+        return await firstFulfilled(
+          batches[batchIndex].map((url) => this.fetchThumbnailBuffer(url, batchIndex))
+        );
+      } catch (error) {
+        lastError = error;
       }
     }
 
-    const error = checks.find((check) => check.status === "rejected")?.reason;
-    throw error || new Error(`No thumbnail could be fetched from ${host}`);
+    throw lastError || new Error(`No thumbnail could be fetched from ${host}`);
   }
 
   async getPaletteFromThumbnail(thumbnail) {
@@ -673,18 +791,54 @@ class InnerTubePokeVidious {
   }
 
   async loadColorsFromNetwork(videoId) {
-    const primaryHost = "vid.puffyan.us";
-    const fallbackHost = "i.ytimg.com";
+    const hosts = ["vid.puffyan.us", "i.ytimg.com"];
+    let lastError = null;
 
-    try {
-      const thumbnail = await this.fetchBestThumbnailFromHost(videoId, primaryHost);
-      return await this.getPaletteFromThumbnail(thumbnail);
-    } catch (primaryError) {
-      this.initError(`Primary thumbnail color fetch failed for ${videoId}`, primaryError);
+    for (const host of hosts) {
+      try {
+        const thumbnail = await this.fetchBestThumbnailFromHost(videoId, host);
+        return await this.getPaletteFromThumbnail(thumbnail);
+      } catch (error) {
+        lastError = error;
+        this.initError(`Thumbnail color fetch failed for ${videoId} on ${host}`, error);
+      }
     }
 
-    const thumbnail = await this.fetchBestThumbnailFromHost(videoId, fallbackHost);
-    return await this.getPaletteFromThumbnail(thumbnail);
+    throw lastError || new Error("Could not extract thumbnail colors");
+  }
+
+  scheduleColorRetry(videoId) {
+    if (!this.isvalidvideo(videoId)) return;
+    if (this.colorRetryTimers.has(videoId)) return;
+    if (this.pendingColors.has(videoId)) return;
+
+    const attempt = this.colorRetryAttempts.get(videoId) || 0;
+    const delay = createRetryDelay(
+      attempt,
+      RETRY_CONFIG.colorBackgroundBaseDelay,
+      RETRY_CONFIG.colorBackgroundMaxDelay
+    );
+
+    const timer = unrefTimer(setTimeout(async () => {
+      this.colorRetryTimers.delete(videoId);
+
+      try {
+        const colors = await this.loadColorsFromNetwork(videoId);
+
+        this.colorCache.set(videoId, colors, {
+          ttl: CACHE_TTL.colors,
+          staleTtl: CACHE_TTL.colorsStale
+        });
+
+        this.patchCachedVideoColors(videoId, colors);
+        this.colorRetryAttempts.delete(videoId);
+      } catch {
+        this.colorRetryAttempts.set(videoId, attempt + 1);
+        this.scheduleColorRetry(videoId);
+      }
+    }, delay));
+
+    this.colorRetryTimers.set(videoId, timer);
   }
 
   async refreshColors(videoId) {
@@ -698,10 +852,12 @@ class InnerTubePokeVidious {
         });
 
         this.patchCachedVideoColors(videoId, colors);
+        this.colorRetryAttempts.delete(videoId);
 
         return colors;
       } catch (error) {
         this.initError(`Could not extract thumbnail colors for ${videoId}`, error);
+        this.scheduleColorRetry(videoId);
         return DEFAULT_COLORS;
       }
     });
@@ -715,11 +871,14 @@ class InnerTubePokeVidious {
       return entry.value;
     }
 
-    return this.refreshColors(videoId);
+    const colorPromise = this.refreshColors(videoId);
+    return withSoftTimeout(colorPromise, DEFAULT_COLORS, FETCH_TIMEOUTS.softColors);
   }
 
   extractColorsBackground(videoId) {
-    this.refreshColors(videoId).catch(() => {});
+    this.refreshColors(videoId).catch(() => {
+      this.scheduleColorRetry(videoId);
+    });
   }
 
   async getComments(videoId, contentlang, contentregion, headers) {
@@ -727,28 +886,76 @@ class InnerTubePokeVidious {
     const entry = this.commentCache.getEntry(cacheKey, { allowStale: true });
 
     if (entry) {
-      if (entry.state === "stale") this.refreshComments(videoId, contentlang, contentregion, headers).catch(() => {});
+      if (entry.state === "stale") {
+        this.refreshComments(videoId, contentlang, contentregion, headers).catch(() => {
+          this.scheduleCommentsRetry(videoId, contentlang, contentregion, headers);
+        });
+      }
+
       return entry.value;
     }
 
-    return this.refreshComments(videoId, contentlang, contentregion, headers).catch(() => null);
+    const promise = this.refreshComments(videoId, contentlang, contentregion, headers);
+    return withSoftTimeout(promise, null, FETCH_TIMEOUTS.softComments);
+  }
+
+  scheduleCommentsRetry(videoId, contentlang, contentregion, headers) {
+    const cacheKey = this.createCommentsCacheKey(videoId, contentlang, contentregion);
+
+    if (this.commentRetryTimers.has(cacheKey)) return;
+    if (this.pendingComments.has(cacheKey)) return;
+
+    const attempt = this.commentRetryAttempts.get(cacheKey) || 0;
+    const delay = createRetryDelay(
+      attempt,
+      RETRY_CONFIG.commentsBackgroundBaseDelay,
+      RETRY_CONFIG.commentsBackgroundMaxDelay
+    );
+
+    const timer = unrefTimer(setTimeout(async () => {
+      this.commentRetryTimers.delete(cacheKey);
+
+      try {
+        await this.refreshComments(videoId, contentlang, contentregion, headers);
+        this.commentRetryAttempts.delete(cacheKey);
+      } catch {
+        this.commentRetryAttempts.set(cacheKey, attempt + 1);
+        this.scheduleCommentsRetry(videoId, contentlang, contentregion, headers);
+      }
+    }, delay));
+
+    this.commentRetryTimers.set(cacheKey, timer);
   }
 
   async refreshComments(videoId, contentlang, contentregion, headers) {
     const cacheKey = this.createCommentsCacheKey(videoId, contentlang, contentregion);
 
     return this.dedupe(this.pendingComments, cacheKey, async () => {
-      const cacheBuster = this.toBase64(Date.now().toString(36));
-      const commentsUrl = `${this.config.invapi}/comments/${videoId}?hl=${encodeURIComponent(contentlang)}&region=${encodeURIComponent(contentregion)}&h=${encodeURIComponent(cacheBuster)}`;
-      const raw = await this.fetchTextWithRetry(commentsUrl, { headers }, 1, videoId, "comments");
-      const parsed = this.getJson(raw);
+      try {
+        const cacheBuster = this.toBase64(Date.now().toString(36));
+        const commentsUrl = `${this.config.invapi}/comments/${videoId}?hl=${encodeURIComponent(contentlang)}&region=${encodeURIComponent(contentregion)}&h=${encodeURIComponent(cacheBuster)}`;
+        const raw = await this.fetchTextWithRetry(
+          commentsUrl,
+          { headers },
+          RETRY_CONFIG.commentsAttempts - 1,
+          videoId,
+          "comments"
+        );
 
-      this.commentCache.set(cacheKey, parsed, {
-        ttl: CACHE_TTL.comments,
-        staleTtl: CACHE_TTL.commentsStale
-      });
+        const parsed = this.getJson(raw);
 
-      return parsed;
+        this.commentCache.set(cacheKey, parsed, {
+          ttl: CACHE_TTL.comments,
+          staleTtl: CACHE_TTL.commentsStale
+        });
+
+        this.commentRetryAttempts.delete(cacheKey);
+
+        return parsed;
+      } catch (error) {
+        this.scheduleCommentsRetry(videoId, contentlang, contentregion, headers);
+        throw error;
+      }
     });
   }
 
@@ -760,7 +967,8 @@ class InnerTubePokeVidious {
       return entry.value;
     }
 
-    return this.refreshDislikes(videoId).catch(() => ({ engagement: null }));
+    const promise = this.refreshDislikes(videoId);
+    return withSoftTimeout(promise, { engagement: null }, FETCH_TIMEOUTS.softDislikes);
   }
 
   async refreshDislikes(videoId) {
@@ -795,6 +1003,7 @@ class InnerTubePokeVidious {
 
     if (this.blockedVideos.has(v)) {
       const reasonKey = this.blockedVideos.get(v);
+
       return {
         error: true,
         message: this.KNOWN_ERRORS[reasonKey] || "This video is blocked, removed, or unavailable.",
@@ -813,7 +1022,11 @@ class InnerTubePokeVidious {
     }
 
     const cachedError = this.errorCache.get(cacheKey);
-    if (cachedError) return cachedError;
+
+    if (cachedError) {
+      this.scheduleVideoRetry(v, cleanLang, cleanRegion, cacheKey);
+      return cachedError;
+    }
 
     return this.dedupe(this.pendingRequests, cacheKey, async () => {
       const payload = await this._fetchVideoData(v, cleanLang, cleanRegion, cacheKey);
@@ -822,10 +1035,63 @@ class InnerTubePokeVidious {
       if (payload && payload.error) {
         const policy = this.getCachePolicy(payload);
         this.errorCache.set(cacheKey, payload, { ttl: policy.ttl, staleTtl: 0 });
+
+        if (payload.reason === "UNKNOWN_ERROR") {
+          this.scheduleVideoRetry(v, cleanLang, cleanRegion, cacheKey);
+        }
+      }
+
+      if (payload && payload.vid && payload.vid.error) {
+        this.scheduleVideoRetry(v, cleanLang, cleanRegion, cacheKey);
       }
 
       return payload;
     });
+  }
+
+  scheduleVideoRetry(videoId, contentlang, contentregion, cacheKey) {
+    if (!this.isvalidvideo(videoId)) return;
+    if (this.videoRetryTimers.has(cacheKey)) return;
+    if (this.pendingRequests.has(cacheKey)) return;
+    if (this.blockedVideos.has(videoId)) return;
+
+    const attempt = this.videoRetryAttempts.get(cacheKey) || 0;
+    const delay = createRetryDelay(
+      attempt,
+      RETRY_CONFIG.videoBackgroundBaseDelay,
+      RETRY_CONFIG.videoBackgroundMaxDelay
+    );
+
+    const timer = unrefTimer(setTimeout(async () => {
+      this.videoRetryTimers.delete(cacheKey);
+
+      try {
+        const payload = await this._fetchVideoData(videoId, contentlang, contentregion, cacheKey, {
+          backgroundRetry: true
+        });
+
+        this.setVideoCache(videoId, cacheKey, payload);
+
+        if (payload && payload.error && payload.reason === "UNKNOWN_ERROR") {
+          this.videoRetryAttempts.set(cacheKey, attempt + 1);
+          this.scheduleVideoRetry(videoId, contentlang, contentregion, cacheKey);
+          return;
+        }
+
+        if (payload && payload.vid && payload.vid.error) {
+          this.videoRetryAttempts.set(cacheKey, attempt + 1);
+          this.scheduleVideoRetry(videoId, contentlang, contentregion, cacheKey);
+          return;
+        }
+
+        this.videoRetryAttempts.delete(cacheKey);
+      } catch {
+        this.videoRetryAttempts.set(cacheKey, attempt + 1);
+        this.scheduleVideoRetry(videoId, contentlang, contentregion, cacheKey);
+      }
+    }, delay));
+
+    this.videoRetryTimers.set(cacheKey, timer);
   }
 
   refreshVideoDataInBackground(videoId, contentlang, contentregion, cacheKey) {
@@ -833,10 +1099,22 @@ class InnerTubePokeVidious {
 
     const promise = (async () => {
       try {
-        const payload = await this._fetchVideoData(videoId, contentlang, contentregion, cacheKey);
+        const payload = await this._fetchVideoData(videoId, contentlang, contentregion, cacheKey, {
+          backgroundRetry: true
+        });
+
         this.setVideoCache(videoId, cacheKey, payload);
+
+        if (payload && payload.error && payload.reason === "UNKNOWN_ERROR") {
+          this.scheduleVideoRetry(videoId, contentlang, contentregion, cacheKey);
+        }
+
+        if (payload && payload.vid && payload.vid.error) {
+          this.scheduleVideoRetry(videoId, contentlang, contentregion, cacheKey);
+        }
       } catch (error) {
         this.initError(`Background refresh failed for ${videoId}`, error);
+        this.scheduleVideoRetry(videoId, contentlang, contentregion, cacheKey);
       } finally {
         this.pendingRequests.delete(cacheKey);
       }
@@ -845,7 +1123,7 @@ class InnerTubePokeVidious {
     this.pendingRequests.set(cacheKey, promise);
   }
 
-  async _fetchVideoData(videoId, contentlang, contentregion, cacheKey) {
+  async _fetchVideoData(videoId, contentlang, contentregion, cacheKey, options = {}) {
     const headers = { "User-Agent": this.useragent };
     const cacheBuster = this.toBase64(Date.now().toString(36));
     const videoUrl = `${this.config.invapi}/videos/${videoId}?hl=${encodeURIComponent(contentlang)}&region=${encodeURIComponent(contentregion)}&h=${encodeURIComponent(cacheBuster)}`;
@@ -856,7 +1134,14 @@ class InnerTubePokeVidious {
       const colorsPromise = this.getColorsForVideo(videoId);
 
       const attemptVideoFetch = async () => {
-        const raw = await this.fetchTextWithRetry(videoUrl, { headers }, 2, videoId, "video");
+        const raw = await this.fetchTextWithRetry(
+          videoUrl,
+          { headers },
+          RETRY_CONFIG.videoAttempts - 1,
+          videoId,
+          "video"
+        );
+
         const parsed = this.getJson(raw);
         let errorMsg = null;
 
@@ -877,7 +1162,7 @@ class InnerTubePokeVidious {
       };
 
       if (isPremiereError(videoData.errorMsg)) {
-        await sleep(250);
+        await sleep(220);
         videoData = await attemptVideoFetch();
 
         if (isPremiereError(videoData.errorMsg)) {
@@ -892,7 +1177,7 @@ class InnerTubePokeVidious {
       const [comments, dislikesData, colors] = await Promise.all([
         withSoftTimeout(commentsPromise, null, FETCH_TIMEOUTS.softComments),
         withSoftTimeout(dislikesPromise, { engagement: null }, FETCH_TIMEOUTS.softDislikes),
-        colorsPromise.catch(() => DEFAULT_COLORS)
+        withSoftTimeout(colorsPromise, DEFAULT_COLORS, FETCH_TIMEOUTS.softColors)
       ]);
 
       const vid = videoData.parsed;
@@ -904,7 +1189,12 @@ class InnerTubePokeVidious {
 
         if (reason) {
           this.addBlockedVideo(videoId, reason);
-          return { error: true, message: this.KNOWN_ERRORS[reason], reason };
+
+          return {
+            error: true,
+            message: this.KNOWN_ERRORS[reason],
+            reason
+          };
         }
 
         this.initError("Video info fetch error", `${videoId} - ${videoData.errorMsg}`);
@@ -948,20 +1238,32 @@ class InnerTubePokeVidious {
       };
     } catch (error) {
       if (this.KNOWN_ERRORS[error.message]) {
-        return { error: true, message: this.KNOWN_ERRORS[error.message], reason: error.message };
+        return {
+          error: true,
+          message: this.KNOWN_ERRORS[error.message],
+          reason: error.message
+        };
       }
 
       const stale = this.videoCache.getStale(cacheKey);
 
       if (stale) {
+        if (!options.backgroundRetry) {
+          this.scheduleVideoRetry(videoId, contentlang, contentregion, cacheKey);
+        }
+
         return stale;
       }
 
       this.initError(`Error getting video ${videoId}`, error);
 
+      if (!options.backgroundRetry) {
+        this.scheduleVideoRetry(videoId, contentlang, contentregion, cacheKey);
+      }
+
       return {
         error: true,
-        message: error.message || "An unexpected error occurred qwq",
+        message: this.publicErrorMessage(error),
         reason: "UNKNOWN_ERROR"
       };
     }
@@ -980,8 +1282,26 @@ class InnerTubePokeVidious {
         dislikes: this.pendingDislikes.size,
         colors: this.pendingColors.size
       },
+      retries: {
+        videos: this.videoRetryTimers.size,
+        comments: this.commentRetryTimers.size,
+        colors: this.colorRetryTimers.size
+      },
       blockedVideos: this.blockedVideos.size
     };
+  }
+
+  clearRetryTimers() {
+    for (const timer of this.videoRetryTimers.values()) clearTimeout(timer);
+    for (const timer of this.colorRetryTimers.values()) clearTimeout(timer);
+    for (const timer of this.commentRetryTimers.values()) clearTimeout(timer);
+
+    this.videoRetryTimers.clear();
+    this.videoRetryAttempts.clear();
+    this.colorRetryTimers.clear();
+    this.colorRetryAttempts.clear();
+    this.commentRetryTimers.clear();
+    this.commentRetryAttempts.clear();
   }
 
   clearCaches() {
@@ -991,6 +1311,7 @@ class InnerTubePokeVidious {
     this.colorCache.clear();
     this.errorCache.clear();
     this.videoKeysById.clear();
+    this.clearRetryTimers();
   }
 }
 
