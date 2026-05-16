@@ -95,7 +95,7 @@ module.exports = function (app, config, renderTemplate) {
     res.json(ChannelTabs);
   });
   
- const searchCache = new Map();
+const searchCache = new Map();
 const activeSearchTasks = new Map();
 const searchRateLimitCache = new Map();
 
@@ -180,29 +180,28 @@ app.get("/search", async (req, res) => {
     return res.redirect("/home");
   }
 
-  // Debug UI testing string
-  if (query === "DEBUG_SEARCHERROR_YOUSHOULDNTUSETHIS_THISISONLYFORTESTING_DONT_TRY_TO_USE_THIS") {
+   if (query === "DEBUG_SEARCHERROR_YOUSHOULDNTUSETHIS_THISISONLYFORTESTING_DONT_TRY_TO_USE_THIS_SUPER_SECRET_LONG_STRING_1234567890_NO_ONE_WILL_EVER_TYPE_THIS_EXACT_COMBINATION") {
     const htmlErrorPage = `
       <!DOCTYPE html>
       <html lang="en">
       <head>
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Search Error</title>
+          <title>Search Failed</title>
           <style>
-              body { margin: 0; font-family: Roboto, Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; text-align: center; background-color: #ffffff; color: #0f0f0f; padding: 20px; box-sizing: border-box; }
-              .error-container { display: flex; flex-direction: column; align-items: center; max-width: 800px; width: 100%; }
-              h2 { font-weight: 500; margin-bottom: 8px; }
-              .error-details { background-color: #f9f9f9; padding: 16px; border-radius: 8px; border: 1px solid #e5e5e5; font-family: monospace; font-size: 13px; color: #cc0000; width: 100%; white-space: pre-wrap; word-wrap: break-word; text-align: left; margin: 20px 0; }
-              .btn { background-color: #0f0f0f; color: #ffffff; padding: 0 16px; height: 36px; line-height: 36px; border-radius: 18px; text-decoration: none; font-size: 14px; font-weight: 500; transition: background-color 0.2s; }
-              .btn:hover { background-color: #272727; }
+              body { margin: 0; font-family: Roboto, Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; text-align: center; background-color: #000000; color: #ffffff; padding: 20px; box-sizing: border-box; }
+              .error-container { display: flex; flex-direction: column; align-items: center; max-width: 600px; width: 100%; }
+              h2 { font-weight: 400; font-size: 28px; margin-bottom: 16px; margin-top: 0; }
+              .error-details { font-size: 14px; color: #aaaaaa; white-space: pre-wrap; word-wrap: break-word; margin-bottom: 24px; font-family: inherit; }
+              .btn { background-color: #ffffff; color: #000000; padding: 0 20px; height: 36px; line-height: 36px; border-radius: 18px; text-decoration: none; font-size: 14px; font-weight: 500; transition: background-color 0.2s; }
+              .btn:hover { background-color: #e5e5e5; }
           </style>
       </head>
       <body>
           <div class="error-container">
-              <h2>Something went wrong</h2>
-              <div class="error-details">Error: Simulated UI Test Error triggered by debug query.</div>
-              <a href="/" class="btn">Return to Home</a>
+              <h2>Search Failed</h2>
+              <div class="error-details">Error here</div>
+              <a href="/" class="btn">Go Home</a>
           </div>
       </body>
       </html>
@@ -343,21 +342,21 @@ app.get("/search", async (req, res) => {
       <head>
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Search Error</title>
+          <title>Search Failed</title>
           <style>
-              body { margin: 0; font-family: Roboto, Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; text-align: center; background-color: #ffffff; color: #0f0f0f; padding: 20px; box-sizing: border-box; }
-              .error-container { display: flex; flex-direction: column; align-items: center; max-width: 800px; width: 100%; }
-              h2 { font-weight: 500; margin-bottom: 8px; }
-              .error-details { background-color: #f9f9f9; padding: 16px; border-radius: 8px; border: 1px solid #e5e5e5; font-family: monospace; font-size: 13px; color: #cc0000; width: 100%; white-space: pre-wrap; word-wrap: break-word; text-align: left; margin: 20px 0; }
-              .btn { background-color: #0f0f0f; color: #ffffff; padding: 0 16px; height: 36px; line-height: 36px; border-radius: 18px; text-decoration: none; font-size: 14px; font-weight: 500; transition: background-color 0.2s; }
-              .btn:hover { background-color: #272727; }
+              body { margin: 0; font-family: Roboto, Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; text-align: center; background-color: #000000; color: #ffffff; padding: 20px; box-sizing: border-box; }
+              .error-container { display: flex; flex-direction: column; align-items: center; max-width: 600px; width: 100%; }
+              h2 { font-weight: 400; font-size: 28px; margin-bottom: 16px; margin-top: 0; }
+              .error-details { font-size: 14px; color: #aaaaaa; white-space: pre-wrap; word-wrap: break-word; margin-bottom: 24px; font-family: inherit; }
+              .btn { background-color: #ffffff; color: #000000; padding: 0 20px; height: 36px; line-height: 36px; border-radius: 18px; text-decoration: none; font-size: 14px; font-weight: 500; transition: background-color 0.2s; }
+              .btn:hover { background-color: #e5e5e5; }
           </style>
       </head>
       <body>
           <div class="error-container">
-              <h2>Something went wrong</h2>
+              <h2>Search Failed</h2>
               <div class="error-details">${errorStack}</div>
-              <a href="/" class="btn">Return to Home</a>
+              <a href="/" class="btn">Go Home</a>
           </div>
       </body>
       </html>
