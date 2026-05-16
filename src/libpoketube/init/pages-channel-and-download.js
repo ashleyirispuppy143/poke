@@ -180,6 +180,36 @@ app.get("/search", async (req, res) => {
     return res.redirect("/home");
   }
 
+  // Debug UI testing string
+  if (query === "DEBUG_SEARCHERROR_YOUSHOULDNTUSETHIS_THISISONLYFORTESTING_DONT_TRY_TO_USE_THIS") {
+    const htmlErrorPage = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Search Error</title>
+          <style>
+              body { margin: 0; font-family: Roboto, Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; text-align: center; background-color: #ffffff; color: #0f0f0f; padding: 20px; box-sizing: border-box; }
+              .error-container { display: flex; flex-direction: column; align-items: center; max-width: 800px; width: 100%; }
+              h2 { font-weight: 500; margin-bottom: 8px; }
+              .error-details { background-color: #f9f9f9; padding: 16px; border-radius: 8px; border: 1px solid #e5e5e5; font-family: monospace; font-size: 13px; color: #cc0000; width: 100%; white-space: pre-wrap; word-wrap: break-word; text-align: left; margin: 20px 0; }
+              .btn { background-color: #0f0f0f; color: #ffffff; padding: 0 16px; height: 36px; line-height: 36px; border-radius: 18px; text-decoration: none; font-size: 14px; font-weight: 500; transition: background-color 0.2s; }
+              .btn:hover { background-color: #272727; }
+          </style>
+      </head>
+      <body>
+          <div class="error-container">
+              <h2>Something went wrong</h2>
+              <div class="error-details">Error: Simulated UI Test Error triggered by debug query.</div>
+              <a href="/" class="btn">Return to Home</a>
+          </div>
+      </body>
+      </html>
+    `;
+    return res.status(500).send(htmlErrorPage);
+  }
+
   let continuation = req.query.continuation || "";
   let date = req.query.date || "";
   let type = "video";
@@ -335,7 +365,8 @@ app.get("/search", async (req, res) => {
     
     res.status(500).send(htmlErrorPage);
   }
-}); 
+});
+  
   app.get("/im-feeling-lucky", function (req, res) {
     res.send("WIP");
   });
