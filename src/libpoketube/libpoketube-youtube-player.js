@@ -145,7 +145,8 @@ class InnerTubePokeVidious {
       "COPYRIGHT_BLOCKED": "This video contains content from a copyright holder who has blocked it.",
       "UPLOADER_REMOVED": "This video has been removed by the uploader.",
       "VIDEO_UNAVAILABLE": "Video unavailable.",
-      "INAPPROPRIATE": "This video may be inappropriate for some users."
+      "INAPPROPRIATE": "This video may be inappropriate for some users.",
+      "GEO_BLOCKED": "The uploader has not made this video available in your country."
     };
 
     this.pendingRequests = new Map();
@@ -177,6 +178,8 @@ class InnerTubePokeVidious {
   }
 
   addBlockedVideo(videoId, reason) {
+    if (!videoId || !reason) return;
+
     if (!this.blockedVideos.has(videoId)) {
       this.blockedVideos.set(videoId, reason);
       fs.promises.appendFile(this.blockedFile, `${videoId}|${reason}\n`)
@@ -200,6 +203,38 @@ class InnerTubePokeVidious {
   toBase64(str) {
     if (typeof btoa !== "undefined") return btoa(str);
     return Buffer.from(String(str)).toString("base64");
+  }
+
+  detectKnownError(text) {
+    if (!text || typeof text !== "string") return null;
+
+    const lowerText = text.toLowerCase();
+
+    if (lowerText.includes("the uploader has not made this video available in your country")) {
+      return "GEO_BLOCKED";
+    }
+
+    if (lowerText.includes("not made this video available in your country")) {
+      return "GEO_BLOCKED";
+    }
+
+    if (lowerText.includes("copyright") || lowerText.includes("blocked")) {
+      return "COPYRIGHT_BLOCKED";
+    }
+
+    if (lowerText.includes("removed by the uploader")) {
+      return "UPLOADER_REMOVED";
+    }
+
+    if (lowerText.includes("inappropriate")) {
+      return "INAPPROPRIATE";
+    }
+
+    if (lowerText.includes("unavailable")) {
+      return "VIDEO_UNAVAILABLE";
+    }
+
+    return null;
   }
 
   fetchColorsWithFallback(v) {
@@ -265,24 +300,12 @@ class InnerTubePokeVidious {
 
         if (res.ok) return text;
 
-        if ((res.status === 500 || res.status === 404) && text.length < 10000) {
-          const lowerText = text.toLowerCase();
+        if (text.length < 10000) {
+          const reason = this.detectKnownError(text);
 
-          if (lowerText.includes("copyright") || lowerText.includes("blocked")) {
-            this.addBlockedVideo(videoId, "COPYRIGHT_BLOCKED");
-            throw new Error("COPYRIGHT_BLOCKED");
-          }
-          if (lowerText.includes("removed by the uploader")) {
-            this.addBlockedVideo(videoId, "UPLOADER_REMOVED");
-            throw new Error("UPLOADER_REMOVED");
-          }
-          if (lowerText.includes("inappropriate")) {
-            this.addBlockedVideo(videoId, "INAPPROPRIATE");
-            throw new Error("INAPPROPRIATE");
-          }
-          if (res.status === 404 && lowerText.includes("unavailable")) {
-            this.addBlockedVideo(videoId, "VIDEO_UNAVAILABLE");
-            throw new Error("VIDEO_UNAVAILABLE");
+          if (reason) {
+            this.addBlockedVideo(videoId, reason);
+            throw new Error(reason);
           }
         }
 
@@ -378,6 +401,18 @@ class InnerTubePokeVidious {
 
       if (!vid || vid.error || vid.isInternalError) {
         const errorMsg = vid?.error || vid?.reason || "This video is probably about to premiere.";
+        const reason = this.detectKnownError(errorMsg);
+
+        if (reason) {
+          this.addBlockedVideo(v, reason);
+
+          return {
+            error: true,
+            message: this.KNOWN_ERRORS[reason],
+            reason
+          };
+        }
+
         this.initError("Video info fetch error", `${v} - ${errorMsg}`);
 
         return {
