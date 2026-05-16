@@ -255,8 +255,7 @@ function channelurlfixer(text) {
   const updatedDescription = text.replace(regex, '<a href="/channel?id=$1"');
   return updatedDescription;
 }
-  
- const channelCache = new Map();
+  const channelCache = new Map();
 const fetchFailureCache = new Map();
 const FETCH_FAILURE_TTL = 3600000;
 let undiciFetch;
@@ -266,6 +265,7 @@ app.get("/channel/", async (req, res) => {
     const undici = await import("undici");
     undiciFetch = undici.fetch;
   }
+
   const fetch = undiciFetch;
 
   let media_proxy = config.media_proxy;
@@ -341,6 +341,7 @@ app.get("/channel/", async (req, res) => {
     if (fetchFailureCache.has(id) && (now - fetchFailureCache.get(id)) < FETCH_FAILURE_TTL) {
       return { ID: id, published: " " };
     }
+
     try {
       const url = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(id)}`;
       const response = await fetch(url, { headers: { accept: "application/atom+xml" } });
@@ -352,7 +353,7 @@ app.get("/channel/", async (req, res) => {
 
       const xml = await response.text();
       const match = xml.match(/<feed[\s\S]*?<published>([^<]+)<\/published>/i);
-      
+
       if (!match) {
         fetchFailureCache.set(id, now);
         return { ID: id, published: " " };
@@ -403,36 +404,57 @@ app.get("/channel/", async (req, res) => {
 
   let [
     createdAccountGetDate,
-    tj,
-    shorts,
-    playlist,
-    released,
-    stream,
-    c,
     cinv
   ] = await Promise.all([
     fetchChannelPublishedJSON(ID),
-    getChannelData(channelUrl),
-    getChannelData(shortsUrl),
-    getChannelData(PlaylistUrl),
-    getChannelData(releasesUrl),
-    getChannelData(streamUrl),
-    getChannelData(communityUrl),
     getChannelData(channelINVUrl)
   ]);
 
   const bannedchannels = [];
   const bypassQuery = "bypass";
-  
-  if (
+
+  const isBlockedChannel =
     bannedchannels.includes(ID) &&
     req.query.bypass !== bypassQuery &&
     !("tab" in req.query) &&
-    !("continuation" in req.query)
-  ) {
+    !("continuation" in req.query);
+
+  let tj = " ";
+  let shorts = " ";
+  let playlist = " ";
+  let released = " ";
+  let stream = " ";
+  let c = " ";
+
+  if (isBlockedChannel) {
     cinv = {
       error: `this channel may include disinformation. If you still wanna view content <a href="/channel?id=${ID}&bypass=${bypassQuery}">click here</a> to bypass this restriction.`
     };
+  } else {
+    const tabs = Array.isArray(cinv?.tabs)
+      ? new Set(cinv.tabs.map(tabName => String(tabName).toLowerCase()))
+      : null;
+
+    const hasTab = (...tabNames) => {
+      if (!tabs) return true;
+      return tabNames.some(tabName => tabs.has(String(tabName).toLowerCase()));
+    };
+
+    [
+      tj,
+      shorts,
+      playlist,
+      released,
+      stream,
+      c
+    ] = await Promise.all([
+      hasTab("videos") ? getChannelData(channelUrl) : " ",
+      hasTab("shorts") ? getChannelData(shortsUrl) : " ",
+      hasTab("playlists", "playlist") ? getChannelData(PlaylistUrl) : " ",
+      hasTab("releases", "release") ? getChannelData(releasesUrl) : " ",
+      hasTab("live", "streams", "stream") ? getChannelData(streamUrl) : " ",
+      hasTab("posts", "community") ? getChannelData(communityUrl) : " "
+    ]);
   }
 
   channelCache.set(cacheKey, {
