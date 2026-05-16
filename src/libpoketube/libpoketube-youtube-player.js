@@ -20,12 +20,20 @@ const fs = require("fs");
 const VIDEO_ID_REGEX = /^[a-zA-Z0-9_-]{11}$/;
 const INVALID_ROUTES = new Set(["assets", "cdn-cgi", "404"]);
 
-let fetchPromise = null;
-const getFetch = () => {
-  if (typeof globalThis.fetch === "function") return globalThis.fetch;
-  if (!fetchPromise) fetchPromise = import("undici").then((mod) => mod.fetch);
-  return fetchPromise;
+// Cache the fetch function globally for micro-optimization
+let cachedFetch = null;
+const getFetch = async () => {
+  if (cachedFetch) return cachedFetch;
+  if (typeof globalThis.fetch === "function") {
+    cachedFetch = globalThis.fetch;
+  } else {
+    cachedFetch = await import("undici").then((mod) => mod.fetch);
+  }
+  return cachedFetch;
 };
+
+// Start resolving fetch immediately
+getFetch().catch(() => {});
 
 const getTimeoutSignal = (ms) => {
   if (typeof AbortSignal.timeout === "function") {
@@ -142,7 +150,6 @@ class InnerTubePokeVidious {
     };
 
     this.pendingRequests = new Map();
-
     this.loadBlockedVideos();
   }
 
@@ -219,24 +226,33 @@ class InnerTubePokeVidious {
       `https://i.ytimg.com/vi/${v}/hqdefault.jpg?sqp=${this.sqp}`,
     ];
 
-    const fetchFn = typeof globalThis.fetch === "function" ? globalThis.fetch : await getFetch();
+    try {
+      const fetchFn = await getFetch();
+      
+      // OPTIMIZATION: Fire all HEAD requests concurrently instead of waiting for one to fail
+      const headChecks = await Promise.allSettled(
+        urls.map(url => fetchFn(url, { method: 'HEAD', signal: getTimeoutSignal(1000) }))
+      );
 
-    for (const url of urls) {
-      try {
-        // Fast-fail: Check if the image exists using a lightweight HEAD request
-        const headRes = await fetchFn(url, { method: 'HEAD', signal: getTimeoutSignal(1500) });
-        if (!headRes.ok) continue;
+      let validUrl = null;
+      // Iterate in order to preserve priority (maxres > sd > hq)
+      for (let i = 0; i < urls.length; i++) {
+        if (headChecks[i].status === 'fulfilled' && headChecks[i].value.ok) {
+          validUrl = urls[i];
+          break;
+        }
+      }
 
-        // If it exists, extract colors
-        const palette = await getColors(url);
+      if (validUrl) {
+        const palette = await getColors(validUrl);
         if (Array.isArray(palette) && palette.length >= 2) {
           const result = { color: palette[0].hex(), color2: palette[1].hex() };
           this.colorCache.set(v, result);
           return result;
         }
-      } catch (e) {
-        // Ignore and move to next URL
       }
+    } catch (e) {
+      // Ignore errors and fallback
     }
 
     return { color: "#0ea5e9", color2: "#111827" }; // Default fallback
@@ -258,12 +274,13 @@ class InnerTubePokeVidious {
 
   async fetchTextWithRetry(url, options = {}, maxRetries = 2, videoId) {
     const isTrigger = (s) => (s >= 500 && s < 600) || s === 429;
-    const fetchFn = typeof globalThis.fetch === "function" ? globalThis.fetch : await getFetch();
+    const fetchFn = await getFetch();
     let lastError = null;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        const signal = getTimeoutSignal(2500);
+        // OPTIMIZATION: Progressive timeout. Fast fail first attempt, give slightly more time on retries.
+        const signal = getTimeoutSignal(1500 + (attempt * 500));
         const res = await fetchFn(url, { ...options, signal });
         const text = await res.text();
 
@@ -284,7 +301,10 @@ class InnerTubePokeVidious {
         lastError = err;
       }
 
-      await new Promise((r) => setTimeout(r, 50 * (attempt + 1)));
+      // OPTIMIZATION: Minimal backoff delay to retry fast
+      if (attempt < maxRetries) {
+        await new Promise((r) => setTimeout(r, 25 * (attempt + 1)));
+      }
     }
 
     throw lastError || new Error("Fetch failed after retries");
@@ -336,12 +356,12 @@ class InnerTubePokeVidious {
     const commentsUrl = `${this.config.invapi}/comments/${v}?hl=${contentlang}&region=${contentregion}&h=${cacheBuster}`;
 
     try {
-      // Fire off background tasks concurrently to optimize speed
+      // Fire off background tasks immediately. They will run while we sort out the main video payload.
       const commentsPromise = this.fetchTextWithRetry(commentsUrl, { headers }, 2, v).catch(() => null);
       const dislikesPromise = getdislikes(v).catch(() => ({ engagement: null }));
       const colorsPromise = this.fetchColorsWithFallback(v).catch(() => ({ color: "#0ea5e9", color2: "#111827" }));
 
-      // Helper to fetch and parse the video
+      // Helper to execute the core video fetch
       const attemptVideoFetch = async () => {
         const raw = await this.fetchTextWithRetry(videoUrl, { headers }, 2, v);
         const parsed = this.getJson(raw);
@@ -354,12 +374,12 @@ class InnerTubePokeVidious {
 
       let vData = await attemptVideoFetch();
 
-      // Premiere Logic: Check and Retry exactly once
+      // Premiere Logic: Fast-check and Retry exactly once
       const isPremiereError = (msg) => msg && (msg === "This video is probably about to premiere." || msg.toLowerCase().includes("premiere"));
 
       if (isPremiereError(vData.errorMsg)) {
-        await new Promise(r => setTimeout(r, 300)); // Brief pause before retry to let backend update
-        vData = await attemptVideoFetch(); // Retry exactly once
+        await new Promise(r => setTimeout(r, 250)); // Short pause to let upstream backends breathe
+        vData = await attemptVideoFetch(); // Fire second attempt
         
         if (isPremiereError(vData.errorMsg)) {
            return {
@@ -370,13 +390,13 @@ class InnerTubePokeVidious {
         }
       }
 
-      // Await parallel background fetching promises now that the core video fetch check is done
+      // Now that the main blocking path is complete, await our concurrent tasks
       const [invCommentsText, dislikesData, colors] = await Promise.all([commentsPromise, dislikesPromise, colorsPromise]);
 
       const comments = this.getJson(invCommentsText);
       const vid = vData.parsed;
 
-      // Handle standard video errors
+      // Handle standard API errors mapped to our known error block list
       if (vData.errorMsg) {
         const reason = this.detectKnownError(vData.errorMsg);
         if (reason) {
