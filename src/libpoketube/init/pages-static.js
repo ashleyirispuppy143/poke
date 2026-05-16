@@ -289,17 +289,96 @@ app.get("/notepad", function (req, res) {
   const headers = { "User-Agent": config.useragent };
 
 app.get("/playlist", async function (req, res) {
-  if (!req.query.list) res.redirect("/");
-  if (req.useragent.isMobile) res.redirect("/");
-  const playlist = await fetch(`${config.invapi}/playlists/${req.query.list}?hl=en-us`, { headers });
-  const p = getJson(await playlist.text());
-  var mediaproxy = config.media_proxy;
-  if (req.useragent.source.includes("Pardus")) {
+  req.app.locals.playlistRateLimits = req.app.locals.playlistRateLimits || new Map();
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  const nowTime = Date.now();
+  const userRateInfo = req.app.locals.playlistRateLimits.get(ip) || { count: 0, firstRequest: nowTime };
+
+  if (nowTime - userRateInfo.firstRequest > 60000) {
+    userRateInfo.count = 1;
+    userRateInfo.firstRequest = nowTime;
+  } else {
+    userRateInfo.count++;
+    if (userRateInfo.count > 40) {
+      return res.status(429).send("Too Many Requests");
+    }
+  }
+  req.app.locals.playlistRateLimits.set(ip, userRateInfo);
+
+  if (req.app.locals.playlistRateLimits.size > 10000) {
+    req.app.locals.playlistRateLimits.clear();
+  }
+
+  if (!req.query.list) return res.redirect("/");
+  if (req.useragent && req.useragent.isMobile) return res.redirect("/");
+
+  let mediaproxy = config.media_proxy;
+  if (req.useragent && req.useragent.source && req.useragent.source.includes("Pardus")) {
     mediaproxy = "https://media-proxy.ashley0143.xyz";
   }
+
+  let p = null;
+  let lastError = null;
+  let attempts = 0;
+
+  while (attempts < 3) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+      const playlist = await fetch(`${config.invapi}/playlists/${req.query.list}?hl=en-us`, {
+        headers: typeof headers !== 'undefined' ? headers : {},
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!playlist.ok) {
+        throw new Error(`HTTP ${playlist.status}`);
+      }
+
+      const text = await playlist.text();
+      p = getJson(text);
+      
+      if (p) break;
+    } catch (error) {
+      lastError = error;
+      attempts++;
+    }
+  }
+
+  if (!p) {
+    const errorStack = lastError ? (lastError.stack || lastError.message || String(lastError)) : "Failed to load playlist after retries.";
+    const htmlErrorPage = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Playlist Error</title>
+          <style>
+              body { margin: 0; font-family: Roboto, Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; text-align: center; background-color: #000000; color: #ffffff; padding: 20px; box-sizing: border-box; }
+              .error-container { display: flex; flex-direction: column; align-items: center; max-width: 600px; width: 100%; }
+              h2 { font-weight: 400; font-size: 28px; margin-bottom: 16px; margin-top: 0; }
+              .error-details { font-size: 14px; color: #aaaaaa; white-space: pre-wrap; word-wrap: break-word; margin-bottom: 24px; font-family: inherit; }
+              .btn { background-color: #ffffff; color: #000000; padding: 0 20px; height: 36px; line-height: 36px; border-radius: 18px; text-decoration: none; font-size: 14px; font-weight: 500; transition: background-color 0.2s; }
+              .btn:hover { background-color: #e5e5e5; }
+          </style>
+      </head>
+      <body>
+          <div class="error-container">
+              <h2>Playlist Failed</h2>
+              <div class="error-details">${errorStack}</div>
+              <a href="/" class="btn">Go Home</a>
+          </div>
+      </body>
+      </html>
+    `;
+    return res.status(500).send(htmlErrorPage);
+  }
+
   renderTemplate(res, req, "playlist.ejs", { p, mediaproxy });
 });
-
 
 
   app.get("/license", function (req, res) {
