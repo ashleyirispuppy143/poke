@@ -324,8 +324,20 @@ function channelurlfixer(text) {
 }
   const channelCache = new Map();
 const fetchFailureCache = new Map();
+const activeRequests = new Map(); // NEW: Prevents Cache Stampede
 const FETCH_FAILURE_TTL = 3600000;
+const CACHE_TTL = 3600000; // 1 hour
 let undiciFetch;
+
+ setInterval(() => {
+  const now = Date.now();
+  for (const [key, value] of channelCache.entries()) {
+    if (now - value.timestamp >= CACHE_TTL) channelCache.delete(key);
+  }
+  for (const [key, timestamp] of fetchFailureCache.entries()) {
+    if (now - timestamp >= FETCH_FAILURE_TTL) fetchFailureCache.delete(key);
+  }
+}, 10 * 60 * 1000);  
 
 app.get("/channel/", async (req, res) => {
   if (!undiciFetch) {
@@ -367,199 +379,201 @@ app.get("/channel/", async (req, res) => {
     return `https://vid.puffyan.us/vi/${video.videoId}/hqdefault.jpg`;
   }
 
+   const sendRenderedResponse = (cachedData) => {
+    const subsCached = convert(cachedData.cinv?.subCount || 0);
+    return renderTemplate(res, req, "channel.ejs", {
+      ID,
+      tab,
+      shorts: cachedData.shorts,
+      firstVideo: { subCountText: "0", authorVerified: false },
+      j: "",
+      dnoreplace: "",
+      sort: sort_by,
+      channelurlfixer,
+      stream: cachedData.stream,
+      tj: cachedData.tj,
+      c: cachedData.c,
+      createdAccountGetDate: cachedData.createdAccountGetDate,
+      cinv: cachedData.cinv,
+      embedchannelsubsfeed: req.query.embedchannelsubsfeed,
+      convert,
+      turntomins,
+      pronoun: "no pronouns :c",
+      media_proxy_url: media_proxy,
+      getThumbnailUrl,
+      continuation,
+      released: cachedData.released,
+      wiki: "",
+      getFirstLine,
+      isMobile: req.useragent?.isMobile,
+      about: "",
+      playlist: cachedData.playlist,
+      subs: typeof subsCached === "string" ? subsCached.replace("subscribers", "").trim() : "None"
+    });
+  };
+
+  // 1. Check existing completed cache
   if (channelCache.has(cacheKey)) {
     const cached = channelCache.get(cacheKey);
-    if (now - cached.timestamp < 3600000) {
-      const subsCached = convert(cached.data.cinv?.subCount || 0);
-      return renderTemplate(res, req, "channel.ejs", {
-        ID,
-        tab,
-        shorts: cached.data.shorts,
-        firstVideo: { subCountText: "0", authorVerified: false },
-        j: "",
-        dnoreplace: "",
-        sort: sort_by,
-        channelurlfixer,
-        stream: cached.data.stream,
-        tj: cached.data.tj,
-        c: cached.data.c,
-        createdAccountGetDate: cached.data.createdAccountGetDate,
-        cinv: cached.data.cinv,
-        embedchannelsubsfeed: req.query.embedchannelsubsfeed,
-        convert,
-        turntomins,
-        pronoun: "no pronouns :c",
-        media_proxy_url: media_proxy,
-        getThumbnailUrl,
-        continuation,
-        released: cached.data.released,
-        wiki: "",
-        getFirstLine,
-        isMobile: req.useragent?.isMobile,
-        about: "",
-        playlist: cached.data.playlist,
-        subs: typeof subsCached === "string" ? subsCached.replace("subscribers", "").trim() : "None"
-      });
+    if (now - cached.timestamp < CACHE_TTL) {
+      return sendRenderedResponse(cached.data);
     }
+    // Delete if expired
     channelCache.delete(cacheKey);
   }
 
-  async function fetchChannelPublishedJSON(id) {
-    if (fetchFailureCache.has(id) && (now - fetchFailureCache.get(id)) < FETCH_FAILURE_TTL) {
-      return { ID: id, published: " " };
-    }
-
+  // 2. Prevent Cache Stampede
+  // If another request is actively fetching this EXACT data right now, wait for it
+  // to finish instead of launching 6 duplicate outbound API requests.
+  if (activeRequests.has(cacheKey)) {
     try {
-      const url = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(id)}`;
-      const response = await fetch(url, { headers: { accept: "application/atom+xml" } });
-
-      if (!response.ok) {
-        fetchFailureCache.set(id, now);
-        return { ID: id, published: " " };
-      }
-
-      const xml = await response.text();
-      const match = xml.match(/<feed[\s\S]*?<published>([^<]+)<\/published>/i);
-
-      if (!match) {
-        fetchFailureCache.set(id, now);
-        return { ID: id, published: " " };
-      }
-
-      const date = new Date(match[1].trim());
-      if (Number.isNaN(date.getTime())) {
-        fetchFailureCache.set(id, now);
-        return { ID: id, published: " " };
-      }
-
-      fetchFailureCache.delete(id);
-      return {
-        ID: id,
-        published: new Intl.DateTimeFormat("en-GB", {
-          day: "numeric",
-          month: "long",
-          year: "numeric",
-          timeZone: "UTC"
-        }).format(date)
-      };
-    } catch {
-      fetchFailureCache.set(id, now);
-      return { ID: id, published: " " };
+      const cachedData = await activeRequests.get(cacheKey);
+      return sendRenderedResponse(cachedData);
+    } catch (e) {
+      // If the pending request fails, we fall through and try fetching ourselves
     }
   }
 
-  const getChannelData = async (url) => {
-    try {
-      const response = await fetch(url, { headers: { "User-Agent": config.useragent } });
-      if (!response.ok) return null;
-      const txt = await response.text();
-      return getJson(txt);
-    } catch {
-      return null;
+  // 3. Wrap the fetching logic in a promise
+  const fetchChannelData = async () => {
+    async function fetchChannelPublishedJSON(id) {
+      if (fetchFailureCache.has(id) && (Date.now() - fetchFailureCache.get(id)) < FETCH_FAILURE_TTL) {
+        return { ID: id, published: " " };
+      }
+
+      try {
+        const url = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(id)}`;
+        const response = await fetch(url, { headers: { accept: "application/atom+xml" } });
+
+        if (!response.ok) {
+          fetchFailureCache.set(id, Date.now());
+          return { ID: id, published: " " };
+        }
+
+        const xml = await response.text();
+        const match = xml.match(/<feed[\s\S]*?<published>([^<]+)<\/published>/i);
+
+        if (!match) {
+          fetchFailureCache.set(id, Date.now());
+          return { ID: id, published: " " };
+        }
+
+        const date = new Date(match[1].trim());
+        if (Number.isNaN(date.getTime())) {
+          fetchFailureCache.set(id, Date.now());
+          return { ID: id, published: " " };
+        }
+
+        fetchFailureCache.delete(id);
+        return {
+          ID: id,
+          published: new Intl.DateTimeFormat("en-GB", {
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+            timeZone: "UTC"
+          }).format(date)
+        };
+      } catch {
+        fetchFailureCache.set(id, Date.now());
+        return { ID: id, published: " " };
+      }
     }
+
+    const getChannelData = async (url) => {
+      try {
+        const response = await fetch(url, { headers: { "User-Agent": config.useragent } });
+        if (!response.ok) return null;
+        const txt = await response.text();
+        return getJson(txt);
+      } catch {
+        return null;
+      }
+    };
+
+    const apiUrl = config.invapi + "/channels/";
+    const btoaCommunity = btoa(ChannelTabs.community);
+    const channelUrl = `${apiUrl}${ID}/${atob(ChannelTabs.videos)}?sort_by=${sort_by}${continuationParam}&h=${btoaCommunity}`;
+    const shortsUrl = `${apiUrl}${ID}/${atob(ChannelTabs.shorts)}?sort_by=${sort_by}${continuationParam}&h=${btoaCommunity}`;
+    const streamUrl = `${apiUrl}${ID}/${atob(ChannelTabs.streams)}?sort_by=${sort_by}${continuationParam}&h=${btoaCommunity}`;
+    const communityUrl = `${apiUrl}${ID}/${atob(ChannelTabs.community)}?hl=en-US&h=${ChannelTabs.community}`;
+    const PlaylistUrl = `${apiUrl}${ID}/${atob(ChannelTabs.playlist)}?hl=en-US&h=${btoaCommunity}`;
+    const releasesUrl = `${apiUrl}${ID}/releases?hl=en-US&h=${btoaCommunity}`;
+    const channelINVUrl = `${apiUrl}${ID}/?h=${btoaCommunity}`;
+
+    let [
+      createdAccountGetDate,
+      cinv
+    ] = await Promise.all([
+      fetchChannelPublishedJSON(ID),
+      getChannelData(channelINVUrl)
+    ]);
+
+    const bannedchannels = [];
+    const bypassQuery = "bypass";
+
+    const isBlockedChannel =
+      bannedchannels.includes(ID) &&
+      req.query.bypass !== bypassQuery &&
+      !("tab" in req.query) &&
+      !("continuation" in req.query);
+
+    let tj = " ";
+    let shorts = " ";
+    let playlist = " ";
+    let released = " ";
+    let stream = " ";
+    let c = " ";
+
+    if (isBlockedChannel) {
+      cinv = {
+        error: `this channel may include disinformation. If you still wanna view content <a href="/channel?id=${ID}&bypass=${bypassQuery}">click here</a> to bypass this restriction.`
+      };
+    } else {
+      const tabs = Array.isArray(cinv?.tabs)
+        ? new Set(cinv.tabs.map(tabName => String(tabName).toLowerCase()))
+        : null;
+
+      const hasTab = (...tabNames) => {
+        if (!tabs) return true;
+        return tabNames.some(tabName => tabs.has(String(tabName).toLowerCase()));
+      };
+
+      [
+        tj,
+        shorts,
+        playlist,
+        released,
+        stream,
+        c
+      ] = await Promise.all([
+        hasTab("videos") ? getChannelData(channelUrl) : " ",
+        hasTab("shorts") ? getChannelData(shortsUrl) : " ",
+        hasTab("playlists", "playlist") ? getChannelData(PlaylistUrl) : " ",
+        hasTab("releases", "release") ? getChannelData(releasesUrl) : " ",
+        hasTab("live", "streams", "stream") ? getChannelData(streamUrl) : " ",
+        hasTab("posts", "community") ? getChannelData(communityUrl) : " "
+      ]);
+    }
+
+    return { tj, shorts, stream, c, cinv, released, playlist, createdAccountGetDate };
   };
 
-  const apiUrl = config.invapi + "/channels/";
-  const btoaCommunity = btoa(ChannelTabs.community);
-  const channelUrl = `${apiUrl}${ID}/${atob(ChannelTabs.videos)}?sort_by=${sort_by}${continuationParam}&h=${btoaCommunity}`;
-  const shortsUrl = `${apiUrl}${ID}/${atob(ChannelTabs.shorts)}?sort_by=${sort_by}${continuationParam}&h=${btoaCommunity}`;
-  const streamUrl = `${apiUrl}${ID}/${atob(ChannelTabs.streams)}?sort_by=${sort_by}${continuationParam}&h=${btoaCommunity}`;
-  const communityUrl = `${apiUrl}${ID}/${atob(ChannelTabs.community)}?hl=en-US&h=${ChannelTabs.community}`;
-  const PlaylistUrl = `${apiUrl}${ID}/${atob(ChannelTabs.playlist)}?hl=en-US&h=${btoaCommunity}`;
-  const releasesUrl = `${apiUrl}${ID}/releases?hl=en-US&h=${btoaCommunity}`;
-  const channelINVUrl = `${apiUrl}${ID}/?h=${btoaCommunity}`;
+   const requestPromise = fetchChannelData();
+  activeRequests.set(cacheKey, requestPromise);
 
-  let [
-    createdAccountGetDate,
-    cinv
-  ] = await Promise.all([
-    fetchChannelPublishedJSON(ID),
-    getChannelData(channelINVUrl)
-  ]);
+  try {
+    const data = await requestPromise;
+     channelCache.set(cacheKey, { data, timestamp: Date.now() });
+    // Clean up the active request since it's done
+    activeRequests.delete(cacheKey);
 
-  const bannedchannels = [];
-  const bypassQuery = "bypass";
-
-  const isBlockedChannel =
-    bannedchannels.includes(ID) &&
-    req.query.bypass !== bypassQuery &&
-    !("tab" in req.query) &&
-    !("continuation" in req.query);
-
-  let tj = " ";
-  let shorts = " ";
-  let playlist = " ";
-  let released = " ";
-  let stream = " ";
-  let c = " ";
-
-  if (isBlockedChannel) {
-    cinv = {
-      error: `this channel may include disinformation. If you still wanna view content <a href="/channel?id=${ID}&bypass=${bypassQuery}">click here</a> to bypass this restriction.`
-    };
-  } else {
-    const tabs = Array.isArray(cinv?.tabs)
-      ? new Set(cinv.tabs.map(tabName => String(tabName).toLowerCase()))
-      : null;
-
-    const hasTab = (...tabNames) => {
-      if (!tabs) return true;
-      return tabNames.some(tabName => tabs.has(String(tabName).toLowerCase()));
-    };
-
-    [
-      tj,
-      shorts,
-      playlist,
-      released,
-      stream,
-      c
-    ] = await Promise.all([
-      hasTab("videos") ? getChannelData(channelUrl) : " ",
-      hasTab("shorts") ? getChannelData(shortsUrl) : " ",
-      hasTab("playlists", "playlist") ? getChannelData(PlaylistUrl) : " ",
-      hasTab("releases", "release") ? getChannelData(releasesUrl) : " ",
-      hasTab("live", "streams", "stream") ? getChannelData(streamUrl) : " ",
-      hasTab("posts", "community") ? getChannelData(communityUrl) : " "
-    ]);
+    return sendRenderedResponse(data);
+  } catch (error) {
+    // If the master fetch fails, remove it so the next user can try again
+    activeRequests.delete(cacheKey);
+    throw error; // Or send a fallback 500 template here if you prefer
   }
-
-  channelCache.set(cacheKey, {
-    data: { tj, shorts, stream, c, cinv, released, playlist, createdAccountGetDate },
-    timestamp: now
-  });
-
-  const subscribers = convert(cinv?.subCount || 0);
-
-  renderTemplate(res, req, "channel.ejs", {
-    ID,
-    tab,
-    shorts,
-    firstVideo: { subCountText: "0", authorVerified: false },
-    j: "",
-    dnoreplace: "",
-    sort: sort_by,
-    channelurlfixer,
-    stream,
-    tj,
-    c,
-    createdAccountGetDate,
-    cinv,
-    embedchannelsubsfeed: req.query.embedchannelsubsfeed,
-    convert,
-    turntomins,
-    pronoun: "no pronouns :c",
-    media_proxy_url: media_proxy,
-    getThumbnailUrl,
-    continuation,
-    released,
-    wiki: "",
-    getFirstLine,
-    isMobile: req.useragent?.isMobile,
-    about: "",
-    playlist,
-    subs: typeof subscribers === "string" ? subscribers.replace("subscribers", "").trim() : "None"
-  });
 });
 
   
