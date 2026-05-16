@@ -324,12 +324,17 @@ function channelurlfixer(text) {
 }
   const channelCache = new Map();
 const fetchFailureCache = new Map();
-const activeRequests = new Map(); // NEW: Prevents Cache Stampede
+const activeRequests = new Map();
+const rateLimitCache = new Map();
+
 const FETCH_FAILURE_TTL = 3600000;
-const CACHE_TTL = 3600000; // 1 hour
+const CACHE_TTL = 3600000;
+const RATE_LIMIT_WINDOW = 60000;
+const MAX_REQUESTS_PER_WINDOW = 40;
+
 let undiciFetch;
 
- setInterval(() => {
+setInterval(() => {
   const now = Date.now();
   for (const [key, value] of channelCache.entries()) {
     if (now - value.timestamp >= CACHE_TTL) channelCache.delete(key);
@@ -337,9 +342,27 @@ let undiciFetch;
   for (const [key, timestamp] of fetchFailureCache.entries()) {
     if (now - timestamp >= FETCH_FAILURE_TTL) fetchFailureCache.delete(key);
   }
-}, 10 * 60 * 1000);  
+  for (const [ip, data] of rateLimitCache.entries()) {
+    if (now - data.firstRequest > RATE_LIMIT_WINDOW) rateLimitCache.delete(ip);
+  }
+}, 10 * 60 * 1000);
 
 app.get("/channel/", async (req, res) => {
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  const nowTime = Date.now();
+  const userRateInfo = rateLimitCache.get(ip) || { count: 0, firstRequest: nowTime };
+
+  if (nowTime - userRateInfo.firstRequest > RATE_LIMIT_WINDOW) {
+    userRateInfo.count = 1;
+    userRateInfo.firstRequest = nowTime;
+  } else {
+    userRateInfo.count++;
+    if (userRateInfo.count > MAX_REQUESTS_PER_WINDOW) {
+      return res.status(429).send("Too Many Requests");
+    }
+  }
+  rateLimitCache.set(ip, userRateInfo);
+
   if (!undiciFetch) {
     const undici = await import("undici");
     undiciFetch = undici.fetch;
@@ -379,7 +402,7 @@ app.get("/channel/", async (req, res) => {
     return `https://vid.puffyan.us/vi/${video.videoId}/hqdefault.jpg`;
   }
 
-   const sendRenderedResponse = (cachedData) => {
+  const sendRenderedResponse = (cachedData) => {
     const subsCached = convert(cachedData.cinv?.subCount || 0);
     return renderTemplate(res, req, "channel.ejs", {
       ID,
@@ -412,29 +435,22 @@ app.get("/channel/", async (req, res) => {
     });
   };
 
-  // 1. Check existing completed cache
   if (channelCache.has(cacheKey)) {
     const cached = channelCache.get(cacheKey);
     if (now - cached.timestamp < CACHE_TTL) {
       return sendRenderedResponse(cached.data);
     }
-    // Delete if expired
     channelCache.delete(cacheKey);
   }
 
-  // 2. Prevent Cache Stampede
-  // If another request is actively fetching this EXACT data right now, wait for it
-  // to finish instead of launching 6 duplicate outbound API requests.
   if (activeRequests.has(cacheKey)) {
     try {
       const cachedData = await activeRequests.get(cacheKey);
       return sendRenderedResponse(cachedData);
     } catch (e) {
-      // If the pending request fails, we fall through and try fetching ourselves
     }
   }
 
-  // 3. Wrap the fetching logic in a promise
   const fetchChannelData = async () => {
     async function fetchChannelPublishedJSON(id) {
       if (fetchFailureCache.has(id) && (Date.now() - fetchFailureCache.get(id)) < FETCH_FAILURE_TTL) {
@@ -559,20 +575,18 @@ app.get("/channel/", async (req, res) => {
     return { tj, shorts, stream, c, cinv, released, playlist, createdAccountGetDate };
   };
 
-   const requestPromise = fetchChannelData();
+  const requestPromise = fetchChannelData();
   activeRequests.set(cacheKey, requestPromise);
 
   try {
     const data = await requestPromise;
-     channelCache.set(cacheKey, { data, timestamp: Date.now() });
-    // Clean up the active request since it's done
+    channelCache.set(cacheKey, { data, timestamp: Date.now() });
     activeRequests.delete(cacheKey);
 
     return sendRenderedResponse(data);
   } catch (error) {
-    // If the master fetch fails, remove it so the next user can try again
     activeRequests.delete(cacheKey);
-    throw error; // Or send a fallback 500 template here if you prefer
+    throw error;
   }
 });
 
