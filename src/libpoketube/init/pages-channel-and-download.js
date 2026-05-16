@@ -95,12 +95,43 @@ module.exports = function (app, config, renderTemplate) {
     res.json(ChannelTabs);
   });
   
-const ActiveSearchRequests = new Map();
+ const searchCache = new Map();
+const activeSearchTasks = new Map();
+const searchRateLimitCache = new Map();
+
+const SEARCH_CACHE_TTL = 1800000;
+const SEARCH_RATE_LIMIT_WINDOW = 60000;
+const SEARCH_MAX_REQUESTS = 40;
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, value] of searchCache.entries()) {
+    if (now - value.timestamp >= SEARCH_CACHE_TTL) searchCache.delete(key);
+  }
+  for (const [ip, data] of searchRateLimitCache.entries()) {
+    if (now - data.firstRequest > SEARCH_RATE_LIMIT_WINDOW) searchRateLimitCache.delete(ip);
+  }
+}, 10 * 60 * 1000);
 
 app.get("/search", async (req, res) => {
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  const nowTime = Date.now();
+  const userRateInfo = searchRateLimitCache.get(ip) || { count: 0, firstRequest: nowTime };
+
+  if (nowTime - userRateInfo.firstRequest > SEARCH_RATE_LIMIT_WINDOW) {
+    userRateInfo.count = 1;
+    userRateInfo.firstRequest = nowTime;
+  } else {
+    userRateInfo.count++;
+    if (userRateInfo.count > SEARCH_MAX_REQUESTS) {
+      return res.status(429).send("Too Many Requests");
+    }
+  }
+  searchRateLimitCache.set(ip, userRateInfo);
+
   const { fetch } = await import("undici");
   const query = req.query.query;
-  const tab = req.query.tab;
+  const tab = req.query.tab || "";
   var media_proxy = config.media_proxy;
   var uaos = req.useragent.os;
   var IsOldWindows = false;
@@ -154,96 +185,11 @@ app.get("/search", async (req, res) => {
   let type = "video";
   let duration = req.query.duration || "";
   let sort = req.query.sort || "";
+  let from = req.query.from || "";
 
-  let searchUrl;
-  if (req.query.from === "hashtag") {
-    searchUrl = `${config.invapi}/hashtag/${query}?hl=en-gb`;
-  } else {
-    searchUrl = `${config.invapi}/search?q=${encodeURIComponent(query)}&page=${encodeURIComponent(continuation)}&date=${date}&type=${type}&duration=${duration}&sort=${sort}&hl=en-US&region=US`;
-  }
+  const cacheKey = `${query}_${continuation}_${date}_${type}_${duration}_${sort}_${tab}_${from}`;
 
-  // Helper function to handle fetching, caching, and abort timeouts
-  const executeFetch = async (fetchUrl) => {
-    if (ActiveSearchRequests.has(fetchUrl)) {
-      return await ActiveSearchRequests.get(fetchUrl);
-    }
-
-    const fetchPromise = (async () => {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-      
-      try {
-        const response = await fetch(fetchUrl, {
-          headers: {
-            "User-Agent": config.useragent,
-          },
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-
-        const txt = await response.text();
-        const parsedData = getJson(txt); 
-
-        if (!parsedData) {
-          throw new Error("Parse failed");
-        }
-
-        return parsedData;
-      } finally {
-        clearTimeout(timeoutId);
-      }
-    })();
-
-    ActiveSearchRequests.set(fetchUrl, fetchPromise);
-
-    try {
-      return await fetchPromise;
-    } finally {
-      ActiveSearchRequests.delete(fetchUrl);
-    }
-  };
-
-  let xmlData = null;
-  let lastError = null;
-
-  try {
-    // Attempt 1: Standard fetch
-    xmlData = await executeFetch(searchUrl);
-  } catch (err1) {
-    lastError = err1;
-    if (err1.name !== 'AbortError' && err1.code !== 'UND_ERR_CONNECT_TIMEOUT') console.log(`Attempt 1 error searching '${query}':`, err1.message);
-    
-    try {
-      // Attempt 2: Retry with exact same parameters
-      xmlData = await executeFetch(searchUrl);
-    } catch (err2) {
-      lastError = err2;
-      if (err2.name !== 'AbortError' && err2.code !== 'UND_ERR_CONNECT_TIMEOUT') console.log(`Attempt 2 error searching '${query}':`, err2.message);
-      
-      try {
-        // Attempt 3: Retry with a "+" added to the query (backend only)
-        const modifiedQuery = query + "+";
-        let modifiedSearchUrl;
-        
-        if (req.query.from === "hashtag") {
-          modifiedSearchUrl = `${config.invapi}/hashtag/${modifiedQuery}?hl=en-gb`;
-        } else {
-          modifiedSearchUrl = `${config.invapi}/search?q=${encodeURIComponent(modifiedQuery)}&page=${encodeURIComponent(continuation)}&date=${date}&type=${type}&duration=${duration}&sort=${sort}&hl=en-US&region=US`;
-        }
-        
-        xmlData = await executeFetch(modifiedSearchUrl);
-      } catch (err3) {
-        lastError = err3;
-        if (err3.name !== 'AbortError' && err3.code !== 'UND_ERR_CONNECT_TIMEOUT') console.log(`Attempt 3 error searching '${query}':`, err3.message);
-      }
-    }
-  }
-
-  // If we successfully fetched data on any of the attempts
-  if (xmlData) {
+  const sendRenderedResponse = (xmlData) => {
     renderTemplate(res, req, "search.ejs", {
       invresults: xmlData,
       turntomins, 
@@ -256,12 +202,110 @@ app.get("/search", async (req, res) => {
       continuation,
       media_proxy_url: media_proxy,
       results: "",
-      q: query, // Frontend still receives the original unmodified query
+      q: query,
       summary: "",
     });
+  };
+
+  if (searchCache.has(cacheKey)) {
+    const cached = searchCache.get(cacheKey);
+    if (Date.now() - cached.timestamp < SEARCH_CACHE_TTL) {
+      return sendRenderedResponse(cached.data);
+    }
+    searchCache.delete(cacheKey);
+  }
+
+  if (activeSearchTasks.has(cacheKey)) {
+    try {
+      const cachedData = await activeSearchTasks.get(cacheKey);
+      return sendRenderedResponse(cachedData);
+    } catch (e) {
+    }
+  }
+
+  let searchUrl;
+  if (from === "hashtag") {
+    searchUrl = `${config.invapi}/hashtag/${query}?hl=en-gb`;
   } else {
-    // If all attempts failed, send plain HTML error page instead of redirecting
-    const errorStack = lastError ? (lastError.stack || lastError.message || String(lastError)) : "Unknown Error occurred during fetch operations.";
+    searchUrl = `${config.invapi}/search?q=${encodeURIComponent(query)}&page=${encodeURIComponent(continuation)}&date=${date}&type=${type}&duration=${duration}&sort=${sort}&hl=en-US&region=US`;
+  }
+
+  const executeFetch = async (fetchUrl) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    
+    try {
+      const response = await fetch(fetchUrl, {
+        headers: {
+          "User-Agent": config.useragent,
+        },
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const txt = await response.text();
+      const parsedData = getJson(txt); 
+
+      if (!parsedData) {
+        throw new Error("Parse failed");
+      }
+
+      return parsedData;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  };
+
+  const performSearchProcess = async () => {
+    let xmlData = null;
+    let lastError = null;
+
+    try {
+      xmlData = await executeFetch(searchUrl);
+    } catch (err1) {
+      lastError = err1;
+      
+      try {
+        xmlData = await executeFetch(searchUrl);
+      } catch (err2) {
+        lastError = err2;
+        
+        try {
+          const modifiedQuery = query + "+";
+          let modifiedSearchUrl;
+          
+          if (from === "hashtag") {
+            modifiedSearchUrl = `${config.invapi}/hashtag/${modifiedQuery}?hl=en-gb`;
+          } else {
+            modifiedSearchUrl = `${config.invapi}/search?q=${encodeURIComponent(modifiedQuery)}&page=${encodeURIComponent(continuation)}&date=${date}&type=${type}&duration=${duration}&sort=${sort}&hl=en-US&region=US`;
+          }
+          
+          xmlData = await executeFetch(modifiedSearchUrl);
+        } catch (err3) {
+          lastError = err3;
+          throw lastError;
+        }
+      }
+    }
+    return xmlData;
+  };
+
+  const requestPromise = performSearchProcess();
+  activeSearchTasks.set(cacheKey, requestPromise);
+
+  try {
+    const xmlData = await requestPromise;
+    searchCache.set(cacheKey, { data: xmlData, timestamp: Date.now() });
+    activeSearchTasks.delete(cacheKey);
+    
+    return sendRenderedResponse(xmlData);
+  } catch (error) {
+    activeSearchTasks.delete(cacheKey);
+    
+    const errorStack = error ? (error.stack || error.message || String(error)) : "Unknown Error occurred during fetch operations.";
     
     const htmlErrorPage = `
       <!DOCTYPE html>
@@ -271,22 +315,18 @@ app.get("/search", async (req, res) => {
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <title>Search Error</title>
           <style>
-              body { margin: 0; font-family: Roboto, Arial, sans-serif; background-color: #f9f9f9; color: #0f0f0f; }
-              header { display: flex; align-items: center; padding: 0 16px; height: 56px; background-color: #ffffff; border-bottom: 1px solid #e5e5e5; }
-              .logo-placeholder { font-size: 18px; font-weight: 600; letter-spacing: -0.5px; display: flex; align-items: center; gap: 8px;}
-              .logo-icon { width: 28px; height: 20px; background-color: #ff0000; border-radius: 4px; display: inline-block; }
-              .container { max-width: 800px; margin: 40px auto; padding: 20px; background-color: #ffffff; border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
-              h1 { font-size: 24px; font-weight: 400; margin-top: 0; }
-              p { font-size: 14px; color: #606060; line-height: 1.5; }
-              .error-details { background-color: #f1f1f1; padding: 16px; border-radius: 4px; overflow-x: auto; font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #d32f2f; margin-top: 20px; border-left: 4px solid #d32f2f; white-space: pre-wrap; word-wrap: break-word; }
-              .btn { display: inline-block; margin-top: 20px; padding: 10px 16px; background-color: #0f0f0f; color: #ffffff; text-decoration: none; border-radius: 18px; font-size: 14px; font-weight: 500; }
+              body { margin: 0; font-family: Roboto, Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; text-align: center; background-color: #ffffff; color: #0f0f0f; padding: 20px; box-sizing: border-box; }
+              .error-container { display: flex; flex-direction: column; align-items: center; max-width: 800px; width: 100%; }
+              h2 { font-weight: 500; margin-bottom: 8px; }
+              .error-details { background-color: #f9f9f9; padding: 16px; border-radius: 8px; border: 1px solid #e5e5e5; font-family: monospace; font-size: 13px; color: #cc0000; width: 100%; white-space: pre-wrap; word-wrap: break-word; text-align: left; margin: 20px 0; }
+              .btn { background-color: #0f0f0f; color: #ffffff; padding: 0 16px; height: 36px; line-height: 36px; border-radius: 18px; text-decoration: none; font-size: 14px; font-weight: 500; transition: background-color 0.2s; }
               .btn:hover { background-color: #272727; }
           </style>
       </head>
       <body>
-    
-          <div class="container">
-               <div class="error-details">${errorStack}</div>
+          <div class="error-container">
+              <h2>Something went wrong</h2>
+              <div class="error-details">${errorStack}</div>
               <a href="/" class="btn">Return to Home</a>
           </div>
       </body>
@@ -295,8 +335,7 @@ app.get("/search", async (req, res) => {
     
     res.status(500).send(htmlErrorPage);
   }
-});
-  
+}); 
   app.get("/im-feeling-lucky", function (req, res) {
     res.send("WIP");
   });
