@@ -18,34 +18,7 @@
    along with this program. If not, see https://www.gnu.org/licenses/.
  */
 (async function () {
-  process.on("unhandledRejection", (reason, promise) => {
-    // Silently drop common network disconnects to prevent console I/O blocking
-    if (reason && (
-      reason.code === "UND_ERR_CONNECT_TIMEOUT" || 
-      reason.code === "UND_ERR_HEADERS_TIMEOUT" || 
-      reason.code === "ECONNRESET" || 
-      reason.code === "ECONNABORTED" || 
-      reason.code === "EPIPE"
-    )) {
-      return;
-    }
-    console.error("[POKE-error] Unhandled Rejection at:", promise, "reason:", reason);
-  });
 
-  process.on("uncaughtException", (err) => {
-    // Silently drop common network disconnects to prevent console I/O blocking
-    if (err && (
-      err.code === "UND_ERR_CONNECT_TIMEOUT" || 
-      err.code === "UND_ERR_HEADERS_TIMEOUT" || 
-      err.code === "ECONNRESET" || 
-      err.code === "ECONNABORTED" || 
-      err.code === "EPIPE"
-    )) {
-      return;
-    }
-    console.error("[POKE-error] Uncaught Exception:", err);
-  });
- 
   const {
     fetcher,
     core,
