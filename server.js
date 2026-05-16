@@ -1287,31 +1287,10 @@
       }
 
       if (state === "stressed") {
-        if (kind === "page") {
-          if (!noisy || getMetric(client, "softPass", now) < resourceConfig.client.pageSoftPassesPerWindow) {
-            return { action: "allow-soft-page", reason: "stressed-page-pass" };
-          }
-          return {
-            action: "reject", reason: "stressed-noisy-page-client", status: 429,
-            retryAfter: getRetryAfterForState(state), message: "Too many page requests. Please retry shortly."
-          };
-        }
-
-        // Changed logic: DO NOT SHED heavy video chunk requests if the state is merely 'stressed'
-        if (kind === "heavy" || kind === "background") {
-          const expensiveButAcceptable = !noisy && getMetric(client, "heavy", now) <= getHeavyLimit(state);
-          if (expensiveButAcceptable) return { action: "allow", reason: "stressed-expensive-small-client-pass" };
-          return {
-            action: "reject", reason: "stressed-expensive-shed", status: 503,
-            retryAfter: getRetryAfterForState(state), message: "Server is busy. Please retry shortly."
-          };
-        }
-
-        if (!noisy) return { action: "allow", reason: "stressed-other-pass" };
-        return {
-          action: "reject", reason: "stressed-noisy-client", status: 429,
-          retryAfter: getRetryAfterForState(state), message: "Too many requests. Please retry shortly."
-        };
+        // The user explicitly requested that when 'stressed', the server
+        // does nothing to restrict traffic and just allows it as normal,
+        // relying only on the interval logs to indicate the stressed state.
+        return { action: "allow", reason: "stressed-pass-as-normal" };
       }
 
       if (state === "critical") {
