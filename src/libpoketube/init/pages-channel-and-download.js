@@ -370,13 +370,73 @@ app.get("/search", async (req, res) => {
     res.send("WIP");
   });
 
-  app.get("/home", async (req, res) => {
-const invtrend = await fetch(`${config.invapi}/trending?type=Gaming&hl=en-US&region=US`, {
-    headers: { "User-Agent": config.useragent },
-});
+let homeCache = { data: null, timestamp: 0 };
+let activeHomeFetch = null;
+const HOME_CACHE_TTL = 15 * 60 * 1000;
 
-  const inv = getJson(await invtrend.text());
-  renderTemplate(res, req, "home.ejs", { inv, turntomins, isMobile: req.useragent.isMobile,});
+app.get("/home", async (req, res) => {
+  const now = Date.now();
+  const isMobile = req.useragent?.isMobile || false;
+
+  if (homeCache.data && now - homeCache.timestamp < HOME_CACHE_TTL) {
+    return renderTemplate(res, req, "home.ejs", { 
+      inv: homeCache.data, 
+      turntomins, 
+      isMobile 
+    });
+  }
+
+  if (activeHomeFetch) {
+    try {
+      const inv = await activeHomeFetch;
+      return renderTemplate(res, req, "home.ejs", { inv, turntomins, isMobile });
+    } catch (e) {
+    }
+  }
+
+  const fetchHomeData = async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    try {
+      const response = await fetch(`${config.invapi}/trending?type=Gaming&hl=en-US&region=US`, {
+        headers: { "User-Agent": config.useragent },
+        signal: controller.signal
+      });
+
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const text = await response.text();
+      const inv = getJson(text);
+
+      if (!inv) throw new Error("Parse failed");
+
+      return inv;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  };
+
+  activeHomeFetch = fetchHomeData();
+
+  try {
+    const inv = await activeHomeFetch;
+    
+    homeCache.data = inv;
+    homeCache.timestamp = Date.now();
+    activeHomeFetch = null;
+
+    return renderTemplate(res, req, "home.ejs", { inv, turntomins, isMobile });
+  } catch (error) {
+    activeHomeFetch = null;
+    
+    const fallbackData = homeCache.data || [];
+    return renderTemplate(res, req, "home.ejs", { 
+      inv: fallbackData, 
+      turntomins, 
+      isMobile 
+    });
+  }
 });
 
   
