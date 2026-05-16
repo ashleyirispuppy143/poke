@@ -48,6 +48,8 @@ const FETCH_TIMEOUTS = Object.freeze({
   video: [1600, 2400, 3600],
   comments: [900, 1400, 2200],
   thumbnailHead: 700,
+  thumbnailGet: 2200,
+  colorExtraction: 2200,
   softComments: 1200,
   softDislikes: 900
 });
@@ -579,56 +581,133 @@ class InnerTubePokeVidious {
     throw lastError || new Error("Fetch failed after retries");
   }
 
-  async loadColorsFromNetwork(videoId) {
-    const urls = [
-      `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg?sqp=${this.sqp}`,
-      `https://i.ytimg.com/vi/${videoId}/sddefault.jpg?sqp=${this.sqp}`,
-      `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg?sqp=${this.sqp}`
-    ];
+  createThumbnailUrl(host, videoId, filename) {
+    return `https://${host}/vi/${videoId}/${filename}`;
+  }
 
+  getThumbnailCandidates(videoId, host) {
+    return [
+      this.createThumbnailUrl(host, videoId, "maxresdefault.jpg"),
+      this.createThumbnailUrl(host, videoId, "sddefault.jpg"),
+      this.createThumbnailUrl(host, videoId, "hqdefault.jpg"),
+      this.createThumbnailUrl(host, videoId, "mqdefault.jpg"),
+      this.createThumbnailUrl(host, videoId, "default.jpg")
+    ];
+  }
+
+  async fetchThumbnailBuffer(url) {
     const fetchFn = await getFetch();
-    let validUrl = null;
+
+    const res = await fetchFn(url, {
+      method: "GET",
+      headers: {
+        "User-Agent": this.useragent,
+        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
+      },
+      signal: createTimeoutSignal(FETCH_TIMEOUTS.thumbnailGet)
+    });
+
+    if (!res.ok) {
+      throw new Error(`Thumbnail request failed with status ${res.status}`);
+    }
+
+    const contentType = String(res.headers.get("content-type") || "image/jpeg").split(";")[0].trim().toLowerCase();
+
+    if (!contentType.startsWith("image/") && contentType !== "application/octet-stream") {
+      throw new Error(`Thumbnail response was not an image: ${contentType}`);
+    }
+
+    const arrayBuffer = await res.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    if (!buffer.length) {
+      throw new Error("Thumbnail response was empty");
+    }
+
+    return {
+      url,
+      buffer,
+      mimeType: contentType === "application/octet-stream" ? "image/jpeg" : contentType
+    };
+  }
+
+  async fetchBestThumbnailFromHost(videoId, host) {
+    const candidates = this.getThumbnailCandidates(videoId, host);
 
     const checks = await Promise.allSettled(
-      urls.map((url) => fetchFn(url, {
-        method: "HEAD",
-        signal: createTimeoutSignal(FETCH_TIMEOUTS.thumbnailHead)
-      }))
+      candidates.map((url) => this.fetchThumbnailBuffer(url))
     );
 
-    for (let i = 0; i < urls.length; i++) {
-      if (checks[i].status === "fulfilled" && checks[i].value.ok) {
-        validUrl = urls[i];
-        break;
+    for (let i = 0; i < checks.length; i++) {
+      if (checks[i].status === "fulfilled") {
+        return checks[i].value;
       }
     }
 
-    if (!validUrl) validUrl = urls[2];
+    const error = checks.find((check) => check.status === "rejected")?.reason;
+    throw error || new Error(`No thumbnail could be fetched from ${host}`);
+  }
 
-    const palette = await getColors(validUrl);
+  async getPaletteFromThumbnail(thumbnail) {
+    const palette = await withSoftTimeout(
+      getColors(thumbnail.buffer, thumbnail.mimeType),
+      null,
+      FETCH_TIMEOUTS.colorExtraction
+    );
 
     if (Array.isArray(palette) && palette.length >= 2) {
-      return { color: palette[0].hex(), color2: palette[1].hex() };
+      return {
+        color: palette[0].hex(),
+        color2: palette[1].hex()
+      };
     }
 
-    return DEFAULT_COLORS;
+    if (Array.isArray(palette) && palette.length === 1) {
+      return {
+        color: palette[0].hex(),
+        color2: palette[0].hex()
+      };
+    }
+
+    throw new Error("No usable colors found in thumbnail");
+  }
+
+  async loadColorsFromNetwork(videoId) {
+    const primaryHost = "vid.puffyan.us";
+    const fallbackHost = "i.ytimg.com";
+
+    try {
+      const thumbnail = await this.fetchBestThumbnailFromHost(videoId, primaryHost);
+      return await this.getPaletteFromThumbnail(thumbnail);
+    } catch (primaryError) {
+      this.initError(`Primary thumbnail color fetch failed for ${videoId}`, primaryError);
+    }
+
+    const thumbnail = await this.fetchBestThumbnailFromHost(videoId, fallbackHost);
+    return await this.getPaletteFromThumbnail(thumbnail);
   }
 
   async refreshColors(videoId) {
     return this.dedupe(this.pendingColors, videoId, async () => {
       try {
         const colors = await this.loadColorsFromNetwork(videoId);
-        this.colorCache.set(videoId, colors, { ttl: CACHE_TTL.colors, staleTtl: CACHE_TTL.colorsStale });
+
+        this.colorCache.set(videoId, colors, {
+          ttl: CACHE_TTL.colors,
+          staleTtl: CACHE_TTL.colorsStale
+        });
+
         this.patchCachedVideoColors(videoId, colors);
+
         return colors;
-      } catch {
-        this.colorCache.set(videoId, DEFAULT_COLORS, { ttl: 5 * 60 * 1000, staleTtl: 30 * 60 * 1000 });
+      } catch (error) {
+        this.initError(`Could not extract thumbnail colors for ${videoId}`, error);
         return DEFAULT_COLORS;
       }
     });
   }
 
-  getCachedColorsOrDefault(videoId) {
+  async getColorsForVideo(videoId) {
     const entry = this.colorCache.getEntry(videoId, { allowStale: true });
 
     if (entry) {
@@ -636,8 +715,11 @@ class InnerTubePokeVidious {
       return entry.value;
     }
 
+    return this.refreshColors(videoId);
+  }
+
+  extractColorsBackground(videoId) {
     this.refreshColors(videoId).catch(() => {});
-    return DEFAULT_COLORS;
   }
 
   async getComments(videoId, contentlang, contentregion, headers) {
@@ -693,10 +775,6 @@ class InnerTubePokeVidious {
 
       return payload;
     });
-  }
-
-  extractColorsBackground(videoId) {
-    this.refreshColors(videoId).catch(() => {});
   }
 
   async getYouTubePlayerInfo(f, v, contentlang, contentregion) {
@@ -775,7 +853,7 @@ class InnerTubePokeVidious {
     try {
       const commentsPromise = this.getComments(videoId, contentlang, contentregion, headers);
       const dislikesPromise = this.getDislikes(videoId);
-      const colors = this.getCachedColorsOrDefault(videoId);
+      const colorsPromise = this.getColorsForVideo(videoId);
 
       const attemptVideoFetch = async () => {
         const raw = await this.fetchTextWithRetry(videoUrl, { headers }, 2, videoId, "video");
@@ -811,13 +889,15 @@ class InnerTubePokeVidious {
         }
       }
 
-      const [comments, dislikesData] = await Promise.all([
+      const [comments, dislikesData, colors] = await Promise.all([
         withSoftTimeout(commentsPromise, null, FETCH_TIMEOUTS.softComments),
-        withSoftTimeout(dislikesPromise, { engagement: null }, FETCH_TIMEOUTS.softDislikes)
+        withSoftTimeout(dislikesPromise, { engagement: null }, FETCH_TIMEOUTS.softDislikes),
+        colorsPromise.catch(() => DEFAULT_COLORS)
       ]);
 
       const vid = videoData.parsed;
       const engagement = dislikesData?.engagement || null;
+      const safeColors = colors && typeof colors === "object" ? colors : DEFAULT_COLORS;
 
       if (videoData.errorMsg) {
         const reason = this.detectKnownError(videoData.errorMsg);
@@ -836,8 +916,8 @@ class InnerTubePokeVidious {
           engagement,
           wiki: "",
           desc: "",
-          color: colors.color,
-          color2: colors.color2
+          color: safeColors.color,
+          color2: safeColors.color2
         };
       }
 
@@ -849,8 +929,8 @@ class InnerTubePokeVidious {
           engagement,
           wiki: "",
           desc: "",
-          color: colors.color,
-          color2: colors.color2
+          color: safeColors.color,
+          color2: safeColors.color2
         };
       }
 
@@ -863,8 +943,8 @@ class InnerTubePokeVidious {
         engagement,
         wiki: "",
         desc: "",
-        color: colors.color,
-        color2: colors.color2
+        color: safeColors.color,
+        color2: safeColors.color2
       };
     } catch (error) {
       if (this.KNOWN_ERRORS[error.message]) {
