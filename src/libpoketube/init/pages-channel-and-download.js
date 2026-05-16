@@ -162,53 +162,91 @@ app.get("/search", async (req, res) => {
     searchUrl = `${config.invapi}/search?q=${encodeURIComponent(query)}&page=${encodeURIComponent(continuation)}&date=${date}&type=${type}&duration=${duration}&sort=${sort}&hl=en-US&region=US`;
   }
 
-  try {
-    let xmlData;
-
-    if (ActiveSearchRequests.has(searchUrl)) {
-      xmlData = await ActiveSearchRequests.get(searchUrl);
-    } else {
-      const fetchPromise = (async () => {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
-        
-        try {
-          const response = await fetch(searchUrl, {
-            headers: {
-              "User-Agent": config.useragent,
-            },
-            signal: controller.signal,
-          });
-
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-          }
-
-          const txt = await response.text();
-          const parsedData = getJson(txt);
-
-          if (!parsedData) {
-            throw new Error("Parse failed");
-          }
-
-          return parsedData;
-        } finally {
-          clearTimeout(timeoutId);
-        }
-      })();
-
-      ActiveSearchRequests.set(searchUrl, fetchPromise);
-
-      try {
-        xmlData = await fetchPromise;
-      } finally {
-        ActiveSearchRequests.delete(searchUrl);
-      }
+  // Helper function to handle fetching, caching, and abort timeouts
+  const executeFetch = async (fetchUrl) => {
+    if (ActiveSearchRequests.has(fetchUrl)) {
+      return await ActiveSearchRequests.get(fetchUrl);
     }
 
+    const fetchPromise = (async () => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      try {
+        const response = await fetch(fetchUrl, {
+          headers: {
+            "User-Agent": config.useragent,
+          },
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const txt = await response.text();
+        const parsedData = getJson(txt); 
+
+        if (!parsedData) {
+          throw new Error("Parse failed");
+        }
+
+        return parsedData;
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    })();
+
+    ActiveSearchRequests.set(fetchUrl, fetchPromise);
+
+    try {
+      return await fetchPromise;
+    } finally {
+      ActiveSearchRequests.delete(fetchUrl);
+    }
+  };
+
+  let xmlData = null;
+  let lastError = null;
+
+  try {
+    // Attempt 1: Standard fetch
+    xmlData = await executeFetch(searchUrl);
+  } catch (err1) {
+    lastError = err1;
+    if (err1.name !== 'AbortError' && err1.code !== 'UND_ERR_CONNECT_TIMEOUT') console.log(`Attempt 1 error searching '${query}':`, err1.message);
+    
+    try {
+      // Attempt 2: Retry with exact same parameters
+      xmlData = await executeFetch(searchUrl);
+    } catch (err2) {
+      lastError = err2;
+      if (err2.name !== 'AbortError' && err2.code !== 'UND_ERR_CONNECT_TIMEOUT') console.log(`Attempt 2 error searching '${query}':`, err2.message);
+      
+      try {
+        // Attempt 3: Retry with a "+" added to the query (backend only)
+        const modifiedQuery = query + "+";
+        let modifiedSearchUrl;
+        
+        if (req.query.from === "hashtag") {
+          modifiedSearchUrl = `${config.invapi}/hashtag/${modifiedQuery}?hl=en-gb`;
+        } else {
+          modifiedSearchUrl = `${config.invapi}/search?q=${encodeURIComponent(modifiedQuery)}&page=${encodeURIComponent(continuation)}&date=${date}&type=${type}&duration=${duration}&sort=${sort}&hl=en-US&region=US`;
+        }
+        
+        xmlData = await executeFetch(modifiedSearchUrl);
+      } catch (err3) {
+        lastError = err3;
+        if (err3.name !== 'AbortError' && err3.code !== 'UND_ERR_CONNECT_TIMEOUT') console.log(`Attempt 3 error searching '${query}':`, err3.message);
+      }
+    }
+  }
+
+  // If we successfully fetched data on any of the attempts
+  if (xmlData) {
     renderTemplate(res, req, "search.ejs", {
       invresults: xmlData,
-      turntomins,
+      turntomins, 
       date,
       type,
       duration,
@@ -218,15 +256,44 @@ app.get("/search", async (req, res) => {
       continuation,
       media_proxy_url: media_proxy,
       results: "",
-      q: query,
+      q: query, // Frontend still receives the original unmodified query
       summary: "",
     });
+  } else {
+    // If all attempts failed, send plain HTML error page instead of redirecting
+    const errorStack = lastError ? (lastError.stack || lastError.message || String(lastError)) : "Unknown Error occurred during fetch operations.";
     
-  } catch (error) {
-    if (error.name !== 'AbortError' && error.code !== 'UND_ERR_CONNECT_TIMEOUT') {
-      console.log(`Error searching '${query}':`, error.message);
-    }
-    res.redirect("/");
+    const htmlErrorPage = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Search Error</title>
+          <style>
+              body { margin: 0; font-family: Roboto, Arial, sans-serif; background-color: #f9f9f9; color: #0f0f0f; }
+              header { display: flex; align-items: center; padding: 0 16px; height: 56px; background-color: #ffffff; border-bottom: 1px solid #e5e5e5; }
+              .logo-placeholder { font-size: 18px; font-weight: 600; letter-spacing: -0.5px; display: flex; align-items: center; gap: 8px;}
+              .logo-icon { width: 28px; height: 20px; background-color: #ff0000; border-radius: 4px; display: inline-block; }
+              .container { max-width: 800px; margin: 40px auto; padding: 20px; background-color: #ffffff; border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+              h1 { font-size: 24px; font-weight: 400; margin-top: 0; }
+              p { font-size: 14px; color: #606060; line-height: 1.5; }
+              .error-details { background-color: #f1f1f1; padding: 16px; border-radius: 4px; overflow-x: auto; font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #d32f2f; margin-top: 20px; border-left: 4px solid #d32f2f; white-space: pre-wrap; word-wrap: break-word; }
+              .btn { display: inline-block; margin-top: 20px; padding: 10px 16px; background-color: #0f0f0f; color: #ffffff; text-decoration: none; border-radius: 18px; font-size: 14px; font-weight: 500; }
+              .btn:hover { background-color: #272727; }
+          </style>
+      </head>
+      <body>
+    
+          <div class="container">
+               <div class="error-details">${errorStack}</div>
+              <a href="/" class="btn">Return to Home</a>
+          </div>
+      </body>
+      </html>
+    `;
+    
+    res.status(500).send(htmlErrorPage);
   }
 });
   
