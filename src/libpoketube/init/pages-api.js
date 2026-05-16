@@ -113,18 +113,86 @@ app.get("/vi/:v/:t", async function (req, res) {
     return res.status(404).send("Image not found");
   }
 }); 
+const avatarCache = new Map();
+const activeAvatarFetches = new Map();
 
-  app.get("/avatars/:v", async function (req, res) {
-    var url = `https://image-proxy.poketube.fun/proxy?url=https://yt3.ggpht.com/${req.params.v}`;
+const AVATAR_CACHE_TTL = 1000 * 60 * 60 * 24;
+const MAX_CACHED_AVATARS = 50000;
 
-    let f = await modules.fetch(url + `?cachefixer=${btoa(Date.now())}`, {
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, value] of avatarCache.entries()) {
+    if (now - value.timestamp >= AVATAR_CACHE_TTL) {
+      avatarCache.delete(key);
+    }
+  }
+  
+  if (avatarCache.size > MAX_CACHED_AVATARS) {
+    const entriesToDelete = avatarCache.size - MAX_CACHED_AVATARS;
+    let deleted = 0;
+    for (const key of avatarCache.keys()) {
+      avatarCache.delete(key);
+      deleted++;
+      if (deleted >= entriesToDelete) break;
+    }
+  }
+}, 15 * 60 * 1000);
+
+app.get("/avatars/:v", async function (req, res) {
+  const v = req.params.v;
+
+  res.setHeader("Cache-Control", "public, max-age=2592000, immutable");
+
+  if (avatarCache.has(v)) {
+    const cachedImage = avatarCache.get(v);
+    res.setHeader("Content-Type", cachedImage.contentType);
+    return res.send(cachedImage.buffer);
+  }
+
+  if (activeAvatarFetches.has(v)) {
+    try {
+      const cachedImage = await activeAvatarFetches.get(v);
+      res.setHeader("Content-Type", cachedImage.contentType);
+      return res.send(cachedImage.buffer);
+    } catch (e) {
+    }
+  }
+
+  const fetchAndCacheAvatar = async () => {
+    const url = `https://image-proxy.poketube.fun/proxy?url=https://yt3.ggpht.com/${v}`;
+    
+    const response = await modules.fetch(url, {
       method: req.method,
       headers: headers,
     });
 
-    f.body.pipe(res);
-  });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
 
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const contentType = response.headers.get("content-type") || "image/jpeg";
+
+    return { buffer, contentType, timestamp: Date.now() };
+  };
+
+  const requestPromise = fetchAndCacheAvatar();
+  activeAvatarFetches.set(v, requestPromise);
+
+  try {
+    const result = await requestPromise;
+    
+    avatarCache.set(v, result);
+    activeAvatarFetches.delete(v);
+
+    res.setHeader("Content-Type", result.contentType);
+    return res.send(result.buffer);
+  } catch (error) {
+    activeAvatarFetches.delete(v);
+    return res.status(404).send("Image not found");
+  }
+});
  
   app.get("/api/geo", async (req, res) => {
     try {
