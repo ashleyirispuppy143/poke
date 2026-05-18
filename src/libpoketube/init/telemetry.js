@@ -2,26 +2,41 @@ const fs = require("fs")
 const fsp = fs.promises
 const path = require("path")
 
-const telemetryConfig = { telemetry: true }
-
-const telemetryFile = path.join(__dirname, "telemetry.json")
-const trendingFile = path.join(__dirname, "trending.json")
-const recentVideoLimit = 300
-const maxJsonLimit = 3000
-const telemetrySaveDebounceMs = 60000
-const telemetryMaxUnsavedMs = 300000
-const telemetryMinWriteIntervalMs = 30000
-const telemetryBackupMinIntervalMs = 30 * 60 * 1000
-const telemetrySnapshotCacheMs = 5000
-const telemetryGuiAutoRefreshMs = 15000
-const trendingMaxItems = 400
-const trendingDefaultLimit = 50
-const trendingWindowHours = 72
-const trendingHalfLifeHours = 18
-const trendingSaveDebounceMs = 120000
-const trendingMaxUnsavedMs = 300000
-const trendingMinWriteIntervalMs = 30000
-const trendingApiCacheMs = 5000
+const SETTINGS = Object.freeze({
+  telemetry: {
+    enabled: true,
+    storage: {
+      path: path.join(__dirname, "telemetry.json")
+    },
+    recentLimit: 300,
+    jsonLimit: 3000,
+    statsCacheMs: 5000,
+    gui: {
+      refreshMs: 15000
+    },
+    save: {
+      debounceMs: 60000,
+      maxUnsavedMs: 300000,
+      minIntervalMs: 30000,
+      backupMinIntervalMs: 30 * 60 * 1000
+    }
+  },
+  trending: {
+    storage: {
+      path: path.join(__dirname, "trending.json")
+    },
+    itemLimit: 400,
+    defaultLimit: 50,
+    windowHours: 72,
+    halfLifeHours: 18,
+    apiCacheMs: 5000,
+    save: {
+      debounceMs: 120000,
+      maxUnsavedMs: 300000,
+      minIntervalMs: 30000
+    }
+  }
+})
 
 const getNowIso = () => new Date().toISOString()
 
@@ -137,8 +152,8 @@ function normalizeStats(input) {
       stats.recentVideos.push(id)
     }
 
-    if (stats.recentVideos.length > recentVideoLimit) {
-      stats.recentVideos = stats.recentVideos.slice(-recentVideoLimit)
+    if (stats.recentVideos.length > SETTINGS.telemetry.recentLimit) {
+      stats.recentVideos = stats.recentVideos.slice(-SETTINGS.telemetry.recentLimit)
     }
   }
 
@@ -184,8 +199,8 @@ function mergeStats(target, source) {
       target.recentVideos.push(id)
     }
 
-    if (target.recentVideos.length > recentVideoLimit) {
-      target.recentVideos = target.recentVideos.slice(-recentVideoLimit)
+    if (target.recentVideos.length > SETTINGS.telemetry.recentLimit) {
+      target.recentVideos = target.recentVideos.slice(-SETTINGS.telemetry.recentLimit)
     }
   }
 
@@ -232,7 +247,7 @@ async function atomicWriteJson(filePath, data) {
 
       const now = Date.now()
       const lastBackupAt = lastBackupAtByFile.get(filePath) || 0
-      let shouldBackup = now - lastBackupAt >= telemetryBackupMinIntervalMs
+      let shouldBackup = now - lastBackupAt >= SETTINGS.telemetry.save.backupMinIntervalMs
 
       if (shouldBackup) {
         try {
@@ -276,7 +291,7 @@ function compactStatsForSave(input) {
     browsers: input.browsers && typeof input.browsers === "object" ? input.browsers : {},
     os: input.os && typeof input.os === "object" ? input.os : {},
     users: input.users && typeof input.users === "object" ? input.users : {},
-    recentVideos: Array.isArray(input.recentVideos) ? input.recentVideos.slice(-recentVideoLimit) : []
+    recentVideos: Array.isArray(input.recentVideos) ? input.recentVideos.slice(-SETTINGS.telemetry.recentLimit) : []
   }
 
   for (const id of Object.keys(stats.pageTitles)) {
@@ -293,121 +308,399 @@ function compactStatsForSave(input) {
 
 async function saveTelemetryStorage(stats) {
   const clean = compactStatsForSave(stats)
-  await atomicWriteJson(telemetryFile, clean)
+  await atomicWriteJson(SETTINGS.telemetry.storage.path, clean)
   return clean
 }
 
 function readTelemetryStorage() {
-  const result = safeRead(telemetryFile)
+  const result = safeRead(SETTINGS.telemetry.storage.path)
 
   if (!result.ok) {
-    console.error("Could not read telemetry file, starting with empty telemetry:", telemetryFile, result.error)
+    console.error("Could not read telemetry file, starting with empty telemetry:", SETTINGS.telemetry.storage.path, result.error)
     const empty = getEmptyStats()
-    lastJsonByFile.set(telemetryFile, JSON.stringify(empty, null, 2))
+    lastJsonByFile.set(SETTINGS.telemetry.storage.path, JSON.stringify(empty, null, 2))
     return empty
   }
 
   if (!result.data) {
     const empty = getEmptyStats()
-    lastJsonByFile.set(telemetryFile, JSON.stringify(empty, null, 2))
+    lastJsonByFile.set(SETTINGS.telemetry.storage.path, JSON.stringify(empty, null, 2))
     return empty
   }
 
   const clean = normalizeStats(result.data)
-  lastJsonByFile.set(telemetryFile, JSON.stringify(clean, null, 2))
+  lastJsonByFile.set(SETTINGS.telemetry.storage.path, JSON.stringify(clean, null, 2))
   return clean
 }
 
 
-const trendingCategoryRules = [
-  {
-    category: "music",
-    words: [
-      "official music video", "official video", "music video", "lyric video", "lyrics", "audio",
-      "song", "album", "single", "remix", "mv", "live performance", "concert", "cover"
-    ]
-  },
-  {
-    category: "gaming",
-    words: [
-      "gameplay", "gaming", "minecraft", "roblox", "fortnite", "valorant", "genshin",
-      "honkai", "pokemon", "nintendo", "playstation", "xbox", "speedrun", "walkthrough",
-      "trailer game", "boss fight", "lets play", "let's play"
-    ]
-  },
-  {
-    category: "news",
-    words: [
-      "breaking news", "news", "live news", "headline", "report", "interview", "press conference",
-      "election", "parliament", "senate", "congress", "minister", "president", "war", "court"
-    ]
-  },
-  {
-    category: "sports",
-    words: [
-      "highlights", "match", "football", "soccer", "basketball", "nba", "nfl", "mlb", "nhl",
-      "ufc", "boxing", "f1", "formula 1", "race", "goal", "tennis", "wwe", "olympics"
-    ]
-  },
-  {
-    category: "technology",
-    words: [
-      "tech", "review", "hands on", "hands-on", "iphone", "android", "samsung", "pixel",
-      "linux", "gnu/linux", "computer", "laptop", "pc", "gpu", "cpu", "ai", "programming",
-      "javascript", "python", "server", "software"
-    ]
-  },
-  {
-    category: "education",
-    words: [
-      "tutorial", "explained", "explain", "course", "lesson", "learn", "lecture", "documentary",
-      "history", "science", "math", "how to", "guide", "study"
-    ]
-  },
-  {
-    category: "comedy",
-    words: [
-      "comedy", "funny", "meme", "memes", "skit", "stand up", "stand-up", "parody", "prank",
-      "try not to laugh"
-    ]
-  },
-  {
-    category: "film",
-    words: [
-      "movie", "film", "trailer", "teaser", "netflix", "anime", "episode", "clip", "scene",
-      "short film", "behind the scenes"
-    ]
-  },
-  {
-    category: "beauty_fashion",
-    words: [
-      "makeup", "beauty", "skincare", "fashion", "outfit", "haul", "grwm", "hair", "nails",
-      "style"
-    ]
-  },
-  {
-    category: "food",
-    words: [
-      "food", "recipe", "cooking", "cook", "kitchen", "baking", "restaurant", "eat", "meal",
-      "chef", "taste test"
-    ]
-  },
-  {
-    category: "travel",
-    words: [
-      "travel", "vlog", "trip", "airport", "flight", "hotel", "city tour", "walking tour",
-      "beach", "island"
-    ]
+const YOUTUBE_CATEGORY_ID_TO_GENRE = Object.freeze({
+  "1": "film_animation",
+  "2": "autos_vehicles",
+  "10": "music",
+  "15": "pets_animals",
+  "17": "sports",
+  "19": "travel_events",
+  "20": "gaming",
+  "22": "people_blogs",
+  "23": "comedy",
+  "24": "entertainment",
+  "25": "news_politics",
+  "26": "howto_style",
+  "27": "education",
+  "28": "science_technology",
+  "29": "nonprofits_activism",
+  "30": "film_animation",
+  "31": "film_animation",
+  "32": "film_animation",
+  "33": "film_animation",
+  "34": "comedy",
+  "35": "education",
+  "36": "film_animation",
+  "37": "entertainment",
+  "38": "film_animation",
+  "39": "film_animation",
+  "40": "film_animation",
+  "41": "film_animation",
+  "42": "shorts",
+  "43": "shows",
+  "44": "trailers"
+})
+
+const GENRE_ALIASES = Object.freeze({
+  "autos": "autos_vehicles",
+  "autos & vehicles": "autos_vehicles",
+  "auto": "autos_vehicles",
+  "cars": "autos_vehicles",
+  "vehicles": "autos_vehicles",
+
+  "film": "film_animation",
+  "film & animation": "film_animation",
+  "animation": "film_animation",
+  "anime": "film_animation",
+  "movies": "film_animation",
+  "movie": "film_animation",
+
+  "music": "music",
+  "song": "music",
+
+  "pets": "pets_animals",
+  "animals": "pets_animals",
+  "pets & animals": "pets_animals",
+
+  "sports": "sports",
+  "sport": "sports",
+
+  "travel": "travel_events",
+  "travel & events": "travel_events",
+  "events": "travel_events",
+
+  "gaming": "gaming",
+  "games": "gaming",
+  "game": "gaming",
+
+  "people": "people_blogs",
+  "people & blogs": "people_blogs",
+  "blogs": "people_blogs",
+  "vlog": "people_blogs",
+  "vlogs": "people_blogs",
+
+  "comedy": "comedy",
+  "funny": "comedy",
+
+  "entertainment": "entertainment",
+
+  "news": "news_politics",
+  "news & politics": "news_politics",
+  "politics": "news_politics",
+
+  "howto": "howto_style",
+  "how-to": "howto_style",
+  "howto & style": "howto_style",
+  "how to & style": "howto_style",
+  "style": "howto_style",
+  "fashion": "howto_style",
+  "beauty": "howto_style",
+
+  "education": "education",
+  "educational": "education",
+  "documentary": "education",
+
+  "science": "science_technology",
+  "technology": "science_technology",
+  "science & technology": "science_technology",
+  "tech": "science_technology",
+
+  "nonprofits": "nonprofits_activism",
+  "activism": "nonprofits_activism",
+  "nonprofits & activism": "nonprofits_activism",
+
+  "shorts": "shorts",
+  "short": "shorts",
+
+  "shows": "shows",
+  "show": "shows",
+
+  "trailers": "trailers",
+  "trailer": "trailers"
+})
+
+const TRENDING_GENRE_MODEL = Object.freeze({
+  fallback: "entertainment",
+  lowConfidence: "uncategorized",
+  categories: {
+    music: {
+      phrases: [
+        ["official music video", 14], ["music video", 12], ["official audio", 11],
+        ["lyric video", 11], ["lyrics", 8], ["visualizer", 7], ["new song", 7],
+        ["full album", 9], ["album", 5], ["single", 5], ["remix", 6],
+        ["live performance", 6], ["cover song", 5], ["karaoke", 5],
+        ["sped up", 4], ["slowed reverb", 4]
+      ],
+      tokens: {
+        song: 5, songs: 5, music: 5, audio: 4, lyrics: 6, remix: 6, album: 5,
+        single: 4, instrumental: 5, karaoke: 5, concert: 4, performance: 3,
+        mv: 8, ep: 3, ost: 6, playlist: 3
+      },
+      regex: [
+        ["\\b(?:ft\\.|feat\\.|featuring)\\b", 4],
+        ["\\b\\d+d audio\\b", 4]
+      ]
+    },
+
+    gaming: {
+      phrases: [
+        ["gameplay", 10], ["walkthrough", 9], ["let's play", 8], ["lets play", 8],
+        ["speedrun", 9], ["boss fight", 8], ["full game", 7], ["gaming setup", 5],
+        ["patch notes", 6], ["new update", 4], ["battle royale", 7]
+      ],
+      tokens: {
+        gameplay: 10, gaming: 8, gamer: 5, game: 4, games: 4, minecraft: 10,
+        roblox: 10, fortnite: 10, valorant: 10, genshin: 10, honkai: 10,
+        pokemon: 10, nintendo: 9, playstation: 8, xbox: 8, steam: 6,
+        speedrun: 9, walkthrough: 9, mod: 5, mods: 5, dlc: 5, fps: 5,
+        rpg: 5, simulator: 4
+      },
+      regex: [
+        ["\\b(?:ps5|ps4|xbox|switch|pc)\\b", 3],
+        ["\\b(?:episode|part)\\s+\\d+\\b", 2]
+      ]
+    },
+
+    news_politics: {
+      phrases: [
+        ["breaking news", 14], ["live news", 12], ["press conference", 9],
+        ["election results", 10], ["news update", 8], ["world news", 9],
+        ["court hearing", 8], ["white house", 8], ["prime minister", 8]
+      ],
+      tokens: {
+        news: 8, politics: 8, election: 9, president: 7, minister: 7,
+        parliament: 8, congress: 8, senate: 8, government: 6, court: 6,
+        trial: 6, war: 7, ceasefire: 7, debate: 5, policy: 4, vote: 5,
+        campaign: 5, interview: 3, report: 4, live: 2
+      },
+      regex: [
+        ["\\b(?:cnn|bbc|reuters|ap|al jazeera|sky news|fox news|nbc news|abc news|cbs news)\\b", 7]
+      ]
+    },
+
+    sports: {
+      phrases: [
+        ["match highlights", 12], ["game highlights", 10], ["full match", 9],
+        ["premier league", 9], ["champions league", 9], ["world cup", 10],
+        ["super bowl", 10], ["grand prix", 8], ["post fight", 8]
+      ],
+      tokens: {
+        highlights: 6, football: 8, soccer: 8, basketball: 8, baseball: 8,
+        tennis: 8, boxing: 8, ufc: 9, mma: 9, wrestling: 7, wwe: 8,
+        nba: 10, nfl: 10, mlb: 10, nhl: 10, fifa: 8, f1: 9, formula: 5,
+        race: 5, goal: 5, goals: 5, match: 5, tournament: 5, olympics: 8
+      },
+      regex: [
+        ["\\b\\d+\\s*-\\s*\\d+\\b", 3]
+      ]
+    },
+
+    science_technology: {
+      phrases: [
+        ["science and technology", 10], ["science & technology", 10],
+        ["hands on", 7], ["hands-on", 7], ["tech review", 9], ["phone review", 8],
+        ["laptop review", 8], ["pc build", 8], ["artificial intelligence", 8],
+        ["machine learning", 8], ["gnu linux", 8], ["free software", 7]
+      ],
+      tokens: {
+        technology: 8, science: 8, tech: 7, review: 3, smartphone: 6,
+        iphone: 7, android: 7, samsung: 7, pixel: 7, laptop: 6, computer: 5,
+        pc: 5, gpu: 7, cpu: 7, ai: 7, programming: 7, javascript: 8,
+        python: 8, server: 5, software: 5, linux: 5, gnu: 5, robotics: 7,
+        space: 6, nasa: 8, physics: 7, chemistry: 7, biology: 7
+      },
+      regex: [
+        ["\\b(?:rtx|gtx|ryzen|intel|amd|nvidia|apple m\\d+)\\b", 6]
+      ]
+    },
+
+    education: {
+      phrases: [
+        ["how to", 7], ["explained", 7], ["complete guide", 8], ["beginner guide", 8],
+        ["full course", 10], ["crash course", 10], ["tutorial", 8],
+        ["documentary", 8], ["lecture", 8]
+      ],
+      tokens: {
+        tutorial: 8, explained: 7, explain: 6, course: 8, lesson: 7,
+        learn: 6, lecture: 8, documentary: 7, history: 6, math: 7,
+        mathematics: 7, guide: 5, study: 5, classroom: 6, facts: 4,
+        analysis: 4
+      },
+      regex: [
+        ["\\b(?:101|beginners?|advanced)\\b", 3]
+      ]
+    },
+
+    comedy: {
+      phrases: [
+        ["try not to laugh", 12], ["stand up", 10], ["stand-up", 10],
+        ["funny moments", 9], ["comedy special", 10], ["comedy skit", 10]
+      ],
+      tokens: {
+        comedy: 10, funny: 8, meme: 7, memes: 7, skit: 8, parody: 8,
+        prank: 6, jokes: 7, comedian: 9, laugh: 6, bloopers: 6
+      },
+      regex: []
+    },
+
+    film_animation: {
+      phrases: [
+        ["official trailer", 10], ["movie trailer", 10], ["teaser trailer", 10],
+        ["short film", 9], ["behind the scenes", 6], ["film analysis", 6],
+        ["anime opening", 7], ["anime ending", 7]
+      ],
+      tokens: {
+        movie: 7, film: 7, trailer: 8, teaser: 8, anime: 7, animation: 8,
+        animated: 7, cinema: 6, scene: 5, clip: 4, episode: 4
+      },
+      regex: []
+    },
+
+    howto_style: {
+      phrases: [
+        ["makeup tutorial", 12], ["skin care", 8], ["skincare routine", 10],
+        ["get ready with me", 9], ["how to style", 8], ["fashion haul", 9],
+        ["room makeover", 8], ["home makeover", 8]
+      ],
+      tokens: {
+        makeup: 8, beauty: 8, skincare: 8, fashion: 8, outfit: 7,
+        haul: 6, grwm: 9, hair: 6, nails: 6, style: 5, styling: 6,
+        diy: 6, recipe: 6, cooking: 6, cook: 5, baking: 6, makeover: 6
+      },
+      regex: []
+    },
+
+    travel_events: {
+      phrases: [
+        ["travel vlog", 10], ["walking tour", 9], ["city tour", 9],
+        ["travel guide", 9], ["airport vlog", 8], ["flight review", 8]
+      ],
+      tokens: {
+        travel: 8, vlog: 4, trip: 7, airport: 6, flight: 6, hotel: 6,
+        beach: 5, island: 5, city: 3, tour: 5, cruise: 6, vacation: 6
+      },
+      regex: []
+    },
+
+    autos_vehicles: {
+      phrases: [
+        ["car review", 10], ["test drive", 10], ["drag race", 9],
+        ["first drive", 8], ["motorcycle review", 9]
+      ],
+      tokens: {
+        car: 7, cars: 7, vehicle: 7, vehicles: 7, auto: 6, automotive: 8,
+        truck: 7, suv: 7, motorcycle: 8, bike: 4, tesla: 7, engine: 6,
+        horsepower: 7, drifting: 7
+      },
+      regex: [
+        ["\\b(?:bmw|mercedes|toyota|honda|ford|tesla|audi|porsche|ferrari|lamborghini)\\b", 5]
+      ]
+    },
+
+    pets_animals: {
+      phrases: [
+        ["funny cats", 9], ["funny dogs", 9], ["pet care", 8], ["animal rescue", 9]
+      ],
+      tokens: {
+        cat: 7, cats: 7, dog: 7, dogs: 7, pet: 7, pets: 7, animal: 7,
+        animals: 7, kitten: 8, puppy: 8, wildlife: 7, zoo: 6, rescue: 5
+      },
+      regex: []
+    },
+
+    nonprofits_activism: {
+      phrases: [
+        ["climate change", 8], ["human rights", 8], ["fundraiser", 8],
+        ["mutual aid", 8], ["nonprofit", 9], ["charity stream", 9]
+      ],
+      tokens: {
+        nonprofit: 9, charity: 8, activism: 8, activist: 8, protest: 7,
+        rights: 5, fundraiser: 8, donation: 7, climate: 6, environment: 6
+      },
+      regex: []
+    },
+
+    people_blogs: {
+      phrases: [
+        ["day in my life", 9], ["life update", 8], ["story time", 8],
+        ["storytime", 8], ["daily vlog", 9]
+      ],
+      tokens: {
+        vlog: 7, vlogs: 7, family: 5, life: 4, routine: 4, qna: 5,
+        qanda: 5, personal: 5
+      },
+      regex: [
+        ["\\bq\\s*&\\s*a\\b", 5]
+      ]
+    },
+
+    shorts: {
+      phrases: [["youtube shorts", 10]],
+      tokens: { shorts: 8, short: 4 },
+      regex: [["#shorts", 8]]
+    },
+
+    trailers: {
+      phrases: [["official trailer", 10], ["teaser trailer", 10], ["final trailer", 10]],
+      tokens: { trailer: 8, teaser: 7 },
+      regex: []
+    },
+
+    shows: {
+      phrases: [["full episode", 8], ["episode recap", 8], ["tv show", 8]],
+      tokens: { show: 6, shows: 6, episode: 5, season: 5, finale: 5 },
+      regex: []
+    },
+
+    entertainment: {
+      phrases: [
+        ["reaction video", 6], ["behind the scenes", 5], ["celebrity interview", 7]
+      ],
+      tokens: {
+        entertainment: 8, reaction: 5, celebrity: 6, drama: 4, challenge: 4,
+        viral: 4, tiktok: 4
+      },
+      regex: []
+    }
   }
-]
+})
+
+let compiledTrendingGenreModel = null
+
 
 function getEmptyTrending() {
   return {
     version: 1,
     startedAt: getNowIso(),
     updatedAt: null,
-    maxItems: trendingMaxItems,
-    windowHours: trendingWindowHours,
+    maxItems: SETTINGS.trending.itemLimit,
+    windowHours: SETTINGS.trending.windowHours,
     videos: {}
   }
 }
@@ -421,28 +714,178 @@ function getHourMsFromKey(key) {
   return Number.isFinite(ms) ? ms : 0
 }
 
-function categoriseTrendingTitle(value) {
-  const title = cleanPageTitle(value).toLowerCase()
-  if (!title || isMissingRecordedTitle(title)) return "uncategorized"
+function normaliseGenreName(value) {
+  const raw = String(value || "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase()
 
-  let bestCategory = "entertainment"
-  let bestScore = 0
+  if (!raw) return ""
 
-  for (const rule of trendingCategoryRules) {
-    let score = 0
+  return GENRE_ALIASES[raw] || raw.replace(/\s+/g, "_")
+}
 
-    for (const word of rule.words) {
-      if (title.includes(word)) score++
-    }
+function getGenreFromCategoryId(value) {
+  const id = String(value || "").trim()
+  return YOUTUBE_CATEGORY_ID_TO_GENRE[id] || ""
+}
 
-    if (score > bestScore) {
-      bestScore = score
-      bestCategory = rule.category
+function getCompiledTrendingGenreModel() {
+  if (compiledTrendingGenreModel) return compiledTrendingGenreModel
+
+  compiledTrendingGenreModel = Object.entries(TRENDING_GENRE_MODEL.categories).map(([category, rules]) => ({
+    category,
+    phrases: (rules.phrases || []).map(([phrase, weight]) => ({
+      phrase: String(phrase || "").toLowerCase(),
+      weight: Number(weight) || 0
+    })),
+    tokens: rules.tokens || {},
+    regex: (rules.regex || []).map((item) => {
+      if (Array.isArray(item)) {
+        return {
+          pattern: new RegExp(item[0], "i"),
+          weight: Number(item[1]) || 0
+        }
+      }
+
+      return {
+        pattern: new RegExp(String(item || ""), "i"),
+        weight: 5
+      }
+    })
+  }))
+
+  return compiledTrendingGenreModel
+}
+
+function getTitleTokens(value) {
+  const normalized = String(value || "")
+    .toLowerCase()
+    .replace(/[’']/g, "")
+    .replace(/q\s*&\s*a/g, "qanda")
+    .replace(/[^a-z0-9+#.&]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+
+  if (!normalized) return []
+
+  return normalized.split(" ").filter(Boolean)
+}
+
+function inferTrendingGenreFromTitle(value) {
+  const title = cleanPageTitle(value)
+  if (!title || isMissingRecordedTitle(title)) {
+    return {
+      category: TRENDING_GENRE_MODEL.lowConfidence,
+      confidence: 0,
+      source: "missing_title"
     }
   }
 
-  return bestCategory
+  const lowerTitle = title.toLowerCase()
+  const paddedTitle = ` ${lowerTitle} `
+  const tokens = getTitleTokens(lowerTitle)
+  const tokenSet = new Set(tokens)
+  const results = []
+
+  for (const model of getCompiledTrendingGenreModel()) {
+    let score = 0
+    const matches = []
+
+    for (const rule of model.phrases) {
+      if (!rule.phrase) continue
+
+      if (paddedTitle.includes(` ${rule.phrase} `) || lowerTitle.includes(rule.phrase)) {
+        score += rule.weight
+        matches.push(rule.phrase)
+      }
+    }
+
+    for (const [token, weight] of Object.entries(model.tokens || {})) {
+      if (tokenSet.has(String(token).toLowerCase())) {
+        score += Number(weight) || 0
+        matches.push(token)
+      }
+    }
+
+    for (const rule of model.regex) {
+      if (rule.pattern.test(lowerTitle)) {
+        score += rule.weight
+        matches.push(String(rule.pattern))
+      }
+    }
+
+    if (score > 0) {
+      results.push({
+        category: model.category,
+        score,
+        matches
+      })
+    }
+  }
+
+  results.sort((a, b) => b.score - a.score)
+
+  const best = results[0]
+  const runnerUp = results[1]
+  if (!best) {
+    return {
+      category: TRENDING_GENRE_MODEL.lowConfidence,
+      confidence: 0.15,
+      source: "title_heuristic"
+    }
+  }
+
+  const margin = runnerUp ? best.score - runnerUp.score : best.score
+  const confidence = Math.max(
+    0.25,
+    Math.min(0.92, (best.score / Math.max(best.score + (runnerUp ? runnerUp.score : 0), 1)) + Math.min(margin / 30, 0.25))
+  )
+
+  if (best.score < 5 || (runnerUp && margin < 2 && best.score < 12)) {
+    return {
+      category: TRENDING_GENRE_MODEL.lowConfidence,
+      confidence: Number(confidence.toFixed(3)),
+      source: "title_heuristic_low_confidence"
+    }
+  }
+
+  return {
+    category: best.category,
+    confidence: Number(confidence.toFixed(3)),
+    source: "title_heuristic"
+  }
 }
+
+function getTrendingGenreInfo(title, options = {}) {
+  const categoryIdGenre = getGenreFromCategoryId(options.categoryId)
+
+  if (categoryIdGenre) {
+    return {
+      category: categoryIdGenre,
+      confidence: 1,
+      source: "youtube_category_id"
+    }
+  }
+
+  const suppliedCategory = normaliseGenreName(options.category || options.genre)
+
+  if (suppliedCategory && TRENDING_GENRE_MODEL.categories[suppliedCategory]) {
+    return {
+      category: suppliedCategory,
+      confidence: 0.98,
+      source: "supplied_category"
+    }
+  }
+
+  return inferTrendingGenreFromTitle(title)
+}
+
+function categoriseTrendingTitle(value) {
+  return getTrendingGenreInfo(value).category
+}
+
 
 function normalizeTrending(input) {
   const trending = getEmptyTrending()
@@ -481,12 +924,17 @@ function normalizeTrending(input) {
       }
 
       const totalViews = Math.max(0, Number(rawEntry.totalViews || rawEntry.views) || 0)
-      const category = String(rawEntry.category || categoriseTrendingTitle(title)).trim() || "uncategorized"
+      const genreInfo = getTrendingGenreInfo(title, {
+        categoryId: rawEntry.categoryId,
+        category: rawEntry.category || rawEntry.genre
+      })
 
       trending.videos[id] = {
         id,
         title,
-        category,
+        category: genreInfo.category,
+        categorySource: rawEntry.categorySource || genreInfo.source,
+        categoryConfidence: Number(rawEntry.categoryConfidence || genreInfo.confidence) || genreInfo.confidence,
         totalViews,
         firstSeenAt,
         lastSeenAt,
@@ -500,7 +948,11 @@ function normalizeTrending(input) {
 
 function computeTrendingEntry(entry, nowMs) {
   const cleanTitle = cleanPageTitle(entry.title || "")
-  const category = categoriseTrendingTitle(cleanTitle)
+  const genreInfo = getTrendingGenreInfo(cleanTitle, {
+    categoryId: entry.categoryId,
+    category: entry.category
+  })
+  const category = genreInfo.category
   const buckets = entry.buckets && typeof entry.buckets === "object" ? entry.buckets : {}
   let recentViews = 0
   let weightedViews = 0
@@ -513,9 +965,9 @@ function computeTrendingEntry(entry, nowMs) {
     if (!bucketMs) continue
 
     const ageHours = Math.max(0, (nowMs - bucketMs) / 3600000)
-    if (ageHours > trendingWindowHours) continue
+    if (ageHours > SETTINGS.trending.windowHours) continue
 
-    const recencyWeight = Math.exp(-ageHours / trendingHalfLifeHours)
+    const recencyWeight = Math.exp(-ageHours / SETTINGS.trending.halfLifeHours)
     const firstDayBoost = ageHours <= 24 ? 1.35 : 1
     const firstSixHoursBoost = ageHours <= 6 ? 1.4 : 1
 
@@ -533,6 +985,8 @@ function computeTrendingEntry(entry, nowMs) {
     id: entry.id,
     title: cleanTitle,
     category,
+    categorySource: entry.categorySource || genreInfo.source,
+    categoryConfidence: Number(entry.categoryConfidence || genreInfo.confidence) || genreInfo.confidence,
     totalViews,
     recentViews,
     score,
@@ -548,8 +1002,8 @@ function compactTrendingForSave(input) {
     version: 1,
     startedAt: typeof input.startedAt === "string" && input.startedAt.trim() ? input.startedAt.trim() : getNowIso(),
     updatedAt: input.updatedAt || null,
-    maxItems: trendingMaxItems,
-    windowHours: trendingWindowHours,
+    maxItems: SETTINGS.trending.itemLimit,
+    windowHours: SETTINGS.trending.windowHours,
     videos: {}
   }
 
@@ -563,6 +1017,8 @@ function compactTrendingForSave(input) {
       id,
       title: cleanPageTitle(rawEntry.title || ""),
       category: rawEntry.category || categoriseTrendingTitle(rawEntry.title || ""),
+      categorySource: rawEntry.categorySource || "legacy",
+      categoryConfidence: Number(rawEntry.categoryConfidence) || 0,
       totalViews: Math.max(0, Number(rawEntry.totalViews || rawEntry.views) || 0),
       firstSeenAt: rawEntry.firstSeenAt || getNowIso(),
       lastSeenAt: rawEntry.lastSeenAt || rawEntry.firstSeenAt || getNowIso(),
@@ -574,7 +1030,7 @@ function compactTrendingForSave(input) {
       const bucketMs = getHourMsFromKey(key)
       const count = Math.max(0, Number(value) || 0)
 
-      if (bucketMs && count > 0 && nowMs - bucketMs <= trendingWindowHours * 3600000) {
+      if (bucketMs && count > 0 && nowMs - bucketMs <= SETTINGS.trending.windowHours * 3600000) {
         entry.buckets[key] = count
       }
     }
@@ -582,6 +1038,8 @@ function compactTrendingForSave(input) {
     const computed = computeTrendingEntry(entry, nowMs)
     if (computed.recentViews > 0) {
       entry.category = computed.category
+      entry.categorySource = computed.categorySource
+      entry.categoryConfidence = computed.categoryConfidence
       entries.push({ entry, computed })
     }
   }
@@ -592,7 +1050,7 @@ function compactTrendingForSave(input) {
       if (b.computed.recentViews !== a.computed.recentViews) return b.computed.recentViews - a.computed.recentViews
       return String(b.entry.lastSeenAt).localeCompare(String(a.entry.lastSeenAt))
     })
-    .slice(0, trendingMaxItems)
+    .slice(0, SETTINGS.trending.itemLimit)
     .forEach(({ entry }) => {
       trending.videos[entry.id] = entry
     })
@@ -602,32 +1060,47 @@ function compactTrendingForSave(input) {
 
 async function saveTrendingStorage(trending) {
   const clean = compactTrendingForSave(trending)
-  await atomicWriteJson(trendingFile, clean)
+  await atomicWriteJson(SETTINGS.trending.storage.path, clean)
   return clean
 }
 
 function readTrendingStorage() {
-  const result = safeRead(trendingFile)
+  const result = safeRead(SETTINGS.trending.storage.path)
 
   if (!result.ok) {
-    console.error("Could not read trending file, starting with empty trending:", trendingFile, result.error)
+    console.error("Could not read trending file, starting with empty trending:", SETTINGS.trending.storage.path, result.error)
     return getEmptyTrending()
   }
 
   if (!result.data) return getEmptyTrending()
 
   const clean = normalizeTrending(result.data)
-  lastJsonByFile.set(trendingFile, JSON.stringify(clean, null, 2))
+  lastJsonByFile.set(SETTINGS.trending.storage.path, JSON.stringify(clean, null, 2))
   return clean
 }
 
-function recordTrendingView(trending, videoId, title) {
+function shouldReplaceGenreInfo(oldEntry, newGenreInfo) {
+  if (!newGenreInfo || !newGenreInfo.category) return false
+
+  const oldConfidence = Number(oldEntry && oldEntry.categoryConfidence) || 0
+  const newConfidence = Number(newGenreInfo.confidence) || 0
+
+  if (!oldEntry || !oldEntry.category || oldEntry.category === TRENDING_GENRE_MODEL.lowConfidence) return true
+  if (newGenreInfo.source === "youtube_category_id" && oldEntry.categorySource !== "youtube_category_id") return true
+  if (newGenreInfo.source === "supplied_category" && oldEntry.categorySource === "title_heuristic_low_confidence") return true
+  if (newConfidence >= oldConfidence + 0.1) return true
+
+  return false
+}
+
+function recordTrendingView(trending, videoId, title, genreInfo) {
   if (!videoId) return trending
 
   const now = Date.now()
   const nowIso = new Date(now).toISOString()
   const hourKey = getHourKey(now)
   const cleanTitle = cleanPageTitle(title || "")
+  const resolvedGenreInfo = genreInfo || getTrendingGenreInfo(cleanTitle)
   const videos = trending.videos || (trending.videos = {})
   const existing = videos[videoId]
 
@@ -635,7 +1108,9 @@ function recordTrendingView(trending, videoId, title) {
     videos[videoId] = {
       id: videoId,
       title: cleanTitle,
-      category: categoriseTrendingTitle(cleanTitle),
+      category: resolvedGenreInfo.category,
+      categorySource: resolvedGenreInfo.source,
+      categoryConfidence: resolvedGenreInfo.confidence,
       totalViews: 1,
       firstSeenAt: nowIso,
       lastSeenAt: nowIso,
@@ -653,9 +1128,17 @@ function recordTrendingView(trending, videoId, title) {
 
     if (shouldReplaceRecordedTitle(existing.title, cleanTitle)) {
       existing.title = cleanTitle
-      existing.category = categoriseTrendingTitle(cleanTitle)
-    } else if (!existing.category || existing.category === "uncategorized") {
-      existing.category = categoriseTrendingTitle(existing.title || cleanTitle)
+    }
+
+    if (shouldReplaceGenreInfo(existing, resolvedGenreInfo)) {
+      existing.category = resolvedGenreInfo.category
+      existing.categorySource = resolvedGenreInfo.source
+      existing.categoryConfidence = resolvedGenreInfo.confidence
+    } else if (!existing.category || existing.category === TRENDING_GENRE_MODEL.lowConfidence) {
+      const fallbackGenreInfo = getTrendingGenreInfo(existing.title || cleanTitle)
+      existing.category = fallbackGenreInfo.category
+      existing.categorySource = fallbackGenreInfo.source
+      existing.categoryConfidence = fallbackGenreInfo.confidence
     }
   }
 
@@ -663,11 +1146,12 @@ function recordTrendingView(trending, videoId, title) {
   return trending
 }
 
+
 function getTrendingPayload(trending, rawLimit, rawCategory) {
-  const parsedLimit = parseInt(String(rawLimit || trendingDefaultLimit), 10)
+  const parsedLimit = parseInt(String(rawLimit || SETTINGS.trending.defaultLimit), 10)
   const limit = Number.isFinite(parsedLimit)
-    ? Math.max(1, Math.min(parsedLimit, trendingMaxItems))
-    : trendingDefaultLimit
+    ? Math.max(1, Math.min(parsedLimit, SETTINGS.trending.itemLimit))
+    : SETTINGS.trending.defaultLimit
   const requestedCategory = String(rawCategory || "").trim().toLowerCase()
   const clean = compactTrendingForSave(trending || getEmptyTrending())
   const nowMs = Date.now()
@@ -688,6 +1172,8 @@ function getTrendingPayload(trending, rawLimit, rawCategory) {
       videoId: entry.id,
       title: computed.title || "Couldnt record",
       category,
+      categorySource: computed.categorySource,
+      categoryConfidence: computed.categoryConfidence,
       totalViews: computed.totalViews,
       recentViews: computed.recentViews,
       score: computed.score,
@@ -709,9 +1195,9 @@ function getTrendingPayload(trending, rawLimit, rawCategory) {
     updatedAt: clean.updatedAt,
     generatedAt: getNowIso(),
     source: "trending.json",
-    maxItems: trendingMaxItems,
-    windowHours: trendingWindowHours,
-    halfLifeHours: trendingHalfLifeHours,
+    maxItems: SETTINGS.trending.itemLimit,
+    windowHours: SETTINGS.trending.windowHours,
+    halfLifeHours: SETTINGS.trending.halfLifeHours,
     limit,
     category: requestedCategory || "all",
     categories,
@@ -888,7 +1374,7 @@ function renderServerBreakdown(data, kind) {
 function getTelemetrySnapshot(stats, rawLimit) {
   const parsedLimit = parseInt(String(rawLimit || "100"), 10)
   const limit = Number.isFinite(parsedLimit)
-    ? Math.max(1, Math.min(parsedLimit, maxJsonLimit))
+    ? Math.max(1, Math.min(parsedLimit, SETTINGS.telemetry.jsonLimit))
     : 100
 
   const sortedVideos = Object.entries((stats && stats.videos) || {})
@@ -1041,7 +1527,7 @@ function renderTelemetryNoJsPage(query, stats, trending, telemetryOn) {
       <div class="compact-head">
         <div>
           <h2>Trending</h2>
-          <p class="note" style="margin:0;">A recency-weighted local trending list capped at ${trendingMaxItems} videos.</p>
+          <p class="note" style="margin:0;">A recency-weighted local trending list capped at ${SETTINGS.trending.itemLimit} videos.</p>
         </div>
       </div>
       <ul class="video-grid">${trendingCards}</ul>
@@ -1297,8 +1783,8 @@ module.exports = function (app, config, renderTemplate) {
     memoryStats.recentVideos = (memoryStats.recentVideos || []).filter((id) => id !== videoId)
     memoryStats.recentVideos.push(videoId)
 
-    if (memoryStats.recentVideos.length > recentVideoLimit) {
-      memoryStats.recentVideos = memoryStats.recentVideos.slice(-recentVideoLimit)
+    if (memoryStats.recentVideos.length > SETTINGS.telemetry.recentLimit) {
+      memoryStats.recentVideos = memoryStats.recentVideos.slice(-SETTINGS.telemetry.recentLimit)
     }
   }
 
@@ -1319,7 +1805,7 @@ module.exports = function (app, config, renderTemplate) {
     if (
       telemetrySnapshotCache &&
       telemetrySnapshotCacheLimit === limitKey &&
-      now - telemetrySnapshotCacheAt < telemetrySnapshotCacheMs
+      now - telemetrySnapshotCacheAt < SETTINGS.telemetry.statsCacheMs
     ) {
       return telemetrySnapshotCache
     }
@@ -1331,7 +1817,7 @@ module.exports = function (app, config, renderTemplate) {
   }
 
   function getCachedTrendingPayload(rawLimit, rawCategory) {
-    const limitKey = String(rawLimit || trendingDefaultLimit)
+    const limitKey = String(rawLimit || SETTINGS.trending.defaultLimit)
     const categoryKey = String(rawCategory || "all").trim().toLowerCase()
     const now = Date.now()
 
@@ -1339,7 +1825,7 @@ module.exports = function (app, config, renderTemplate) {
       trendingPayloadCache &&
       trendingPayloadCacheLimit === limitKey &&
       trendingPayloadCacheCategory === categoryKey &&
-      now - trendingPayloadCacheAt < trendingApiCacheMs
+      now - trendingPayloadCacheAt < SETTINGS.trending.apiCacheMs
     ) {
       return trendingPayloadCache
     }
@@ -1370,14 +1856,14 @@ module.exports = function (app, config, renderTemplate) {
     const sinceFirstUnsaved = now - firstUnsavedAt
     const sinceLastSave = now - lastSaveAt
 
-    if (sinceFirstUnsaved >= telemetryMaxUnsavedMs && sinceLastSave >= telemetryMinWriteIntervalMs) {
+    if (sinceFirstUnsaved >= SETTINGS.telemetry.save.maxUnsavedMs && sinceLastSave >= SETTINGS.telemetry.save.minIntervalMs) {
       saveTimer = setTimeout(saveNow, 0)
       return
     }
 
-    const minIntervalDelay = Math.max(0, telemetryMinWriteIntervalMs - sinceLastSave)
-    const maxUnsavedDelay = Math.max(0, telemetryMaxUnsavedMs - sinceFirstUnsaved)
-    const debounceDelay = telemetrySaveDebounceMs
+    const minIntervalDelay = Math.max(0, SETTINGS.telemetry.save.minIntervalMs - sinceLastSave)
+    const maxUnsavedDelay = Math.max(0, SETTINGS.telemetry.save.maxUnsavedMs - sinceFirstUnsaved)
+    const debounceDelay = SETTINGS.telemetry.save.debounceMs
     const delay = Math.min(Math.max(debounceDelay, minIntervalDelay), maxUnsavedDelay)
 
     saveTimer = setTimeout(saveNow, delay)
@@ -1434,14 +1920,14 @@ module.exports = function (app, config, renderTemplate) {
     const sinceFirstUnsaved = now - trendingFirstUnsavedAt
     const sinceLastSave = now - trendingLastSaveAt
 
-    if (sinceFirstUnsaved >= trendingMaxUnsavedMs && sinceLastSave >= trendingMinWriteIntervalMs) {
+    if (sinceFirstUnsaved >= SETTINGS.trending.save.maxUnsavedMs && sinceLastSave >= SETTINGS.trending.save.minIntervalMs) {
       trendingSaveTimer = setTimeout(saveTrendingNow, 0)
       return
     }
 
-    const minIntervalDelay = Math.max(0, trendingMinWriteIntervalMs - sinceLastSave)
-    const maxUnsavedDelay = Math.max(0, trendingMaxUnsavedMs - sinceFirstUnsaved)
-    const debounceDelay = trendingSaveDebounceMs
+    const minIntervalDelay = Math.max(0, SETTINGS.trending.save.minIntervalMs - sinceLastSave)
+    const maxUnsavedDelay = Math.max(0, SETTINGS.trending.save.maxUnsavedMs - sinceFirstUnsaved)
+    const debounceDelay = SETTINGS.trending.save.debounceMs
     const delay = Math.min(Math.max(debounceDelay, minIntervalDelay), maxUnsavedDelay)
 
     trendingSaveTimer = setTimeout(saveTrendingNow, delay)
@@ -1480,14 +1966,14 @@ module.exports = function (app, config, renderTemplate) {
   }
 
   setInterval(() => {
-    if (needsSave && firstUnsavedAt && Date.now() - firstUnsavedAt >= telemetryMaxUnsavedMs) {
+    if (needsSave && firstUnsavedAt && Date.now() - firstUnsavedAt >= SETTINGS.telemetry.save.maxUnsavedMs) {
       scheduleTelemetrySave(true)
     }
 
-    if (trendingNeedsSave && trendingFirstUnsavedAt && Date.now() - trendingFirstUnsavedAt >= trendingMaxUnsavedMs) {
+    if (trendingNeedsSave && trendingFirstUnsavedAt && Date.now() - trendingFirstUnsavedAt >= SETTINGS.trending.save.maxUnsavedMs) {
       scheduleTrendingSave(true)
     }
-  }, Math.max(Math.min(telemetryMinWriteIntervalMs, trendingMinWriteIntervalMs), 1000))
+  }, Math.max(Math.min(SETTINGS.telemetry.save.minIntervalMs, SETTINGS.trending.save.minIntervalMs), 1000))
 
   process.once("SIGINT", async () => {
     try {
@@ -1517,7 +2003,7 @@ module.exports = function (app, config, renderTemplate) {
   })
 
   app.post(["/api/stats", "/api/nexus"], (req, res) => {
-    if (!telemetryConfig.telemetry) return res.status(200).json({ ok: true })
+    if (!SETTINGS.telemetry.enabled) return res.status(200).json({ ok: true })
 
     const body = req.body || {}
     const videoId = typeof body.videoId === "string" ? body.videoId.trim() : ""
@@ -1528,6 +2014,16 @@ module.exports = function (app, config, renderTemplate) {
         ? body.title
         : ""
     const pageTitle = cleanPageTitle(rawPageTitle)
+    const categoryId = typeof body.categoryId === "string" ? body.categoryId.trim() : ""
+    const suppliedCategory = typeof body.category === "string"
+      ? body.category
+      : typeof body.genre === "string"
+        ? body.genre
+        : ""
+    const genreInfo = getTrendingGenreInfo(pageTitle, {
+      categoryId,
+      category: suppliedCategory
+    })
 
     if (!isSafeId(videoId, 128)) return res.status(400).json({ error: "missing or invalid videoId" })
     if (!isSafeId(userId, 256)) return res.status(400).json({ error: "missing or invalid userId" })
@@ -1543,7 +2039,7 @@ module.exports = function (app, config, renderTemplate) {
     memoryStats.os[parsed.os] = (memoryStats.os[parsed.os] || 0) + 1
     memoryStats.users[userId] = true
     touchRecentVideo(videoId)
-    memoryTrending = recordTrendingView(memoryTrending, videoId, pageTitle)
+    memoryTrending = recordTrendingView(memoryTrending, videoId, pageTitle, genreInfo)
     invalidateApiCaches()
 
     scheduleTelemetrySave(false)
@@ -1695,15 +2191,15 @@ module.exports = function (app, config, renderTemplate) {
     res.set("Pragma", "no-cache")
     res.set("Expires", "0")
 
-    if (!telemetryConfig.telemetry) {
+    if (!SETTINGS.telemetry.enabled) {
       return res.json({
         startedAt: null,
         updatedAt: null,
         generatedAt: getNowIso(),
         source: "trending.json",
-        maxItems: trendingMaxItems,
-        windowHours: trendingWindowHours,
-        halfLifeHours: trendingHalfLifeHours,
+        maxItems: SETTINGS.trending.itemLimit,
+        windowHours: SETTINGS.trending.windowHours,
+        halfLifeHours: SETTINGS.trending.halfLifeHours,
         limit: 0,
         category: "all",
         categories: {},
@@ -1743,7 +2239,7 @@ module.exports = function (app, config, renderTemplate) {
       res.set("Pragma", "no-cache")
       res.set("Expires", "0")
 
-      if (!telemetryConfig.telemetry) {
+      if (!SETTINGS.telemetry.enabled) {
         return res.json({
           startedAt: null,
           videos: {},
@@ -1779,7 +2275,7 @@ module.exports = function (app, config, renderTemplate) {
     }
 
     if (view === "gui") {
-      const telemetryOn = telemetryConfig.telemetry
+      const telemetryOn = SETTINGS.telemetry.enabled
 
       if ((req.query.nojs || "").toString() === "1") {
         return res.send(renderTelemetryNoJsPage(req.query || {}, memoryStats, memoryTrending, telemetryOn))
@@ -2748,7 +3244,7 @@ module.exports = function (app, config, renderTemplate) {
     const OPT_KEY = "poke_stats_optout"
     const AUTO_REFRESH_KEY = "poke_stats_auto_refresh"
     const CARDS_PER_PAGE = 40
-    const AUTO_REFRESH_MS = ${telemetryGuiAutoRefreshMs}
+    const AUTO_REFRESH_MS = ${SETTINGS.telemetry.gui.refreshMs}
 
     const topVideos = document.getElementById("top-videos")
     const trendingVideos = document.getElementById("trending-videos")
