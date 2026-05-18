@@ -726,6 +726,46 @@ function normaliseGenreName(value) {
   return GENRE_ALIASES[raw] || raw.replace(/\s+/g, "_")
 }
 
+function splitGenreText(value) {
+  return String(value || "")
+    .split(/[|,;#\n\r\t]+/g)
+    .map((item) => item.replace(/^#+/, "").trim())
+    .filter(Boolean)
+}
+
+function collectGenreValues(...values) {
+  const out = []
+
+  function add(value) {
+    if (Array.isArray(value)) {
+      for (const item of value) add(item)
+      return
+    }
+
+    if (value && typeof value === "object") {
+      for (const item of Object.values(value)) add(item)
+      return
+    }
+
+    for (const item of splitGenreText(value)) {
+      if (!out.includes(item)) out.push(item)
+    }
+  }
+
+  for (const value of values) add(value)
+
+  return out.slice(0, 20)
+}
+
+function getFirstSupportedGenreFromValues(values) {
+  for (const value of collectGenreValues(values)) {
+    const genre = normaliseGenreName(value)
+    if (genre && TRENDING_GENRE_MODEL.categories[genre]) return genre
+  }
+
+  return ""
+}
+
 function getGenreFromCategoryId(value) {
   const id = String(value || "").trim()
   return YOUTUBE_CATEGORY_ID_TO_GENRE[id] || ""
@@ -859,7 +899,7 @@ function inferTrendingGenreFromTitle(value) {
 }
 
 function getTrendingGenreInfo(title, options = {}) {
-  const categoryIdGenre = getGenreFromCategoryId(options.categoryId)
+  const categoryIdGenre = getGenreFromCategoryId(options.categoryId || options.videoCategoryId)
 
   if (categoryIdGenre) {
     return {
@@ -869,13 +909,51 @@ function getTrendingGenreInfo(title, options = {}) {
     }
   }
 
-  const suppliedCategory = normaliseGenreName(options.category || options.genre)
+  const suppliedGenre = getFirstSupportedGenreFromValues([
+    options.category,
+    options.genre,
+    options.videoGenre
+  ])
 
-  if (suppliedCategory && TRENDING_GENRE_MODEL.categories[suppliedCategory]) {
+  if (suppliedGenre) {
     return {
-      category: suppliedCategory,
+      category: suppliedGenre,
       confidence: 0.98,
       source: "supplied_category"
+    }
+  }
+
+  const suppliedTagGenre = getFirstSupportedGenreFromValues([
+    options.tags,
+    options.genreTags,
+    options.videoGenreTags,
+    options.videoTags
+  ])
+
+  if (suppliedTagGenre) {
+    return {
+      category: suppliedTagGenre,
+      confidence: 0.93,
+      source: "supplied_genre_tags"
+    }
+  }
+
+  const tagText = collectGenreValues(
+    options.tags,
+    options.genreTags,
+    options.videoGenreTags,
+    options.videoTags
+  ).join(" ")
+
+  if (tagText) {
+    const inferred = inferTrendingGenreFromTitle(`${title || ""} ${tagText}`)
+
+    if (inferred.category !== TRENDING_GENRE_MODEL.lowConfidence) {
+      return {
+        category: inferred.category,
+        confidence: Math.min(0.88, Number(inferred.confidence || 0) + 0.08),
+        source: "genre_tags_heuristic"
+      }
     }
   }
 
@@ -925,8 +1003,14 @@ function normalizeTrending(input) {
 
       const totalViews = Math.max(0, Number(rawEntry.totalViews || rawEntry.views) || 0)
       const genreInfo = getTrendingGenreInfo(title, {
-        categoryId: rawEntry.categoryId,
-        category: rawEntry.category || rawEntry.genre
+        categoryId: rawEntry.categoryId || rawEntry.videoCategoryId,
+        category: rawEntry.category,
+        genre: rawEntry.genre,
+        videoGenre: rawEntry.videoGenre,
+        tags: rawEntry.tags,
+        genreTags: rawEntry.genreTags,
+        videoGenreTags: rawEntry.videoGenreTags,
+        videoTags: rawEntry.videoTags
       })
 
       trending.videos[id] = {
@@ -949,8 +1033,14 @@ function normalizeTrending(input) {
 function computeTrendingEntry(entry, nowMs) {
   const cleanTitle = cleanPageTitle(entry.title || "")
   const genreInfo = getTrendingGenreInfo(cleanTitle, {
-    categoryId: entry.categoryId,
-    category: entry.category
+    categoryId: entry.categoryId || entry.videoCategoryId,
+    category: entry.category,
+    genre: entry.genre,
+    videoGenre: entry.videoGenre,
+    tags: entry.tags,
+    genreTags: entry.genreTags,
+    videoGenreTags: entry.videoGenreTags,
+    videoTags: entry.videoTags
   })
   const category = genreInfo.category
   const buckets = entry.buckets && typeof entry.buckets === "object" ? entry.buckets : {}
@@ -1019,6 +1109,9 @@ function compactTrendingForSave(input) {
       category: rawEntry.category || categoriseTrendingTitle(rawEntry.title || ""),
       categorySource: rawEntry.categorySource || "legacy",
       categoryConfidence: Number(rawEntry.categoryConfidence) || 0,
+      categoryId: rawEntry.categoryId || rawEntry.videoCategoryId || "",
+      genre: rawEntry.genre || rawEntry.videoGenre || "",
+      genreTags: collectGenreValues(rawEntry.genreTags, rawEntry.videoGenreTags, rawEntry.tags, rawEntry.videoTags),
       totalViews: Math.max(0, Number(rawEntry.totalViews || rawEntry.views) || 0),
       firstSeenAt: rawEntry.firstSeenAt || getNowIso(),
       lastSeenAt: rawEntry.lastSeenAt || rawEntry.firstSeenAt || getNowIso(),
@@ -1087,20 +1180,31 @@ function shouldReplaceGenreInfo(oldEntry, newGenreInfo) {
 
   if (!oldEntry || !oldEntry.category || oldEntry.category === TRENDING_GENRE_MODEL.lowConfidence) return true
   if (newGenreInfo.source === "youtube_category_id" && oldEntry.categorySource !== "youtube_category_id") return true
-  if (newGenreInfo.source === "supplied_category" && oldEntry.categorySource === "title_heuristic_low_confidence") return true
+  if ((newGenreInfo.source === "supplied_category" || newGenreInfo.source === "supplied_genre_tags") && oldEntry.categorySource === "title_heuristic_low_confidence") return true
+  if (newGenreInfo.source === "supplied_category" && oldEntry.categorySource === "supplied_genre_tags") return true
   if (newConfidence >= oldConfidence + 0.1) return true
 
   return false
 }
 
-function recordTrendingView(trending, videoId, title, genreInfo) {
+function recordTrendingView(trending, videoId, title, genreInfo, metadata = {}) {
   if (!videoId) return trending
 
   const now = Date.now()
   const nowIso = new Date(now).toISOString()
   const hourKey = getHourKey(now)
   const cleanTitle = cleanPageTitle(title || "")
-  const resolvedGenreInfo = genreInfo || getTrendingGenreInfo(cleanTitle)
+  const genreTags = collectGenreValues(metadata.genreTags, metadata.videoGenreTags, metadata.tags, metadata.videoTags)
+  const resolvedGenreInfo = genreInfo || getTrendingGenreInfo(cleanTitle, {
+    categoryId: metadata.categoryId || metadata.videoCategoryId,
+    category: metadata.category,
+    genre: metadata.genre,
+    videoGenre: metadata.videoGenre,
+    tags: metadata.tags,
+    genreTags,
+    videoGenreTags: metadata.videoGenreTags,
+    videoTags: metadata.videoTags
+  })
   const videos = trending.videos || (trending.videos = {})
   const existing = videos[videoId]
 
@@ -1111,6 +1215,9 @@ function recordTrendingView(trending, videoId, title, genreInfo) {
       category: resolvedGenreInfo.category,
       categorySource: resolvedGenreInfo.source,
       categoryConfidence: resolvedGenreInfo.confidence,
+      categoryId: metadata.categoryId || metadata.videoCategoryId || "",
+      genre: metadata.genre || metadata.videoGenre || metadata.category || "",
+      genreTags,
       totalViews: 1,
       firstSeenAt: nowIso,
       lastSeenAt: nowIso,
@@ -1128,6 +1235,18 @@ function recordTrendingView(trending, videoId, title, genreInfo) {
 
     if (shouldReplaceRecordedTitle(existing.title, cleanTitle)) {
       existing.title = cleanTitle
+    }
+
+    if (metadata.categoryId || metadata.videoCategoryId) {
+      existing.categoryId = metadata.categoryId || metadata.videoCategoryId
+    }
+
+    if (metadata.genre || metadata.videoGenre || metadata.category) {
+      existing.genre = metadata.genre || metadata.videoGenre || metadata.category
+    }
+
+    if (genreTags.length) {
+      existing.genreTags = Array.from(new Set([...(existing.genreTags || []), ...genreTags])).slice(0, 20)
     }
 
     if (shouldReplaceGenreInfo(existing, resolvedGenreInfo)) {
@@ -2014,15 +2133,34 @@ module.exports = function (app, config, renderTemplate) {
         ? body.title
         : ""
     const pageTitle = cleanPageTitle(rawPageTitle)
-    const categoryId = typeof body.categoryId === "string" ? body.categoryId.trim() : ""
+    const categoryId = typeof body.categoryId === "string"
+      ? body.categoryId.trim()
+      : typeof body.videoCategoryId === "string"
+        ? body.videoCategoryId.trim()
+        : ""
     const suppliedCategory = typeof body.category === "string"
       ? body.category
       : typeof body.genre === "string"
         ? body.genre
-        : ""
+        : typeof body.videoGenre === "string"
+          ? body.videoGenre
+          : ""
+    const genreTags = collectGenreValues(
+      body.genreTags,
+      body.videoGenreTags,
+      body.tags,
+      body.videoTags,
+      body.tag
+    )
     const genreInfo = getTrendingGenreInfo(pageTitle, {
       categoryId,
-      category: suppliedCategory
+      category: suppliedCategory,
+      genre: body.genre,
+      videoGenre: body.videoGenre,
+      tags: body.tags,
+      genreTags,
+      videoGenreTags: body.videoGenreTags,
+      videoTags: body.videoTags
     })
 
     if (!isSafeId(videoId, 128)) return res.status(400).json({ error: "missing or invalid videoId" })
@@ -2039,7 +2177,16 @@ module.exports = function (app, config, renderTemplate) {
     memoryStats.os[parsed.os] = (memoryStats.os[parsed.os] || 0) + 1
     memoryStats.users[userId] = true
     touchRecentVideo(videoId)
-    memoryTrending = recordTrendingView(memoryTrending, videoId, pageTitle, genreInfo)
+    memoryTrending = recordTrendingView(memoryTrending, videoId, pageTitle, genreInfo, {
+      categoryId,
+      category: suppliedCategory,
+      genre: body.genre,
+      videoGenre: body.videoGenre,
+      tags: body.tags,
+      genreTags,
+      videoGenreTags: body.videoGenreTags,
+      videoTags: body.videoTags
+    })
     invalidateApiCaches()
 
     scheduleTelemetrySave(false)
@@ -2184,6 +2331,10 @@ module.exports = function (app, config, renderTemplate) {
   </script>
 </body>
 </html>`)
+  })
+
+  app.get(["/telemetry", "/stats", "/t"], (req, res) => {
+    return res.redirect(302, "/api/stats")
   })
 
   app.get("/api/trending", (req, res) => {
@@ -4228,6 +4379,7 @@ module.exports = function (app, config, renderTemplate) {
     body{
       background:#1c1b22;
       margin:0;
+      font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
     }
     img{
       float:right;
@@ -4269,14 +4421,73 @@ module.exports = function (app, config, renderTemplate) {
       border-top:1px solid #222;
       margin:28px 0;
     }
+    .logo{
+      float:right;
+      margin:.3em 0 1em 2em;
+      max-width:130px;
+    }
+    .header-container{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-end;
+      flex-wrap:wrap;
+      margin-bottom:24px;
+      gap:16px;
+    }
+    .tabs{
+      display:inline-flex;
+      background:#15141a;
+      border-radius:24px;
+      padding:4px;
+      border:1px solid rgba(255,255,255,0.05);
+      flex-wrap:wrap;
+      gap:2px;
+    }
+    .tab-btn{
+      font-family:"PokeTube Flex",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+      background:transparent;
+      color:#aaa;
+      border:none;
+      padding:8px 20px;
+      border-radius:20px;
+      cursor:pointer;
+      font-weight:700;
+      font-size:.95rem;
+      transition:all .3s ease;
+      outline:none;
+      display:inline-block;
+      line-height:1.2;
+      text-decoration:none;
+    }
+    .tab-btn:hover:not(.active){
+      color:#fff;
+      text-decoration:none;
+    }
+    .tab-btn.active{
+      background:#0ab7f0;
+      color:#1c1b22;
+      box-shadow:0 2px 8px rgba(10,183,240,.3);
+    }
     .note{color:#bbb;font-size:.95rem;}
     .muted{opacity:.8;font-size:.95rem;}
   </style>
 </head>
 <body>
   <div class="app">
-    <img src="/css/logo-poke.svg" alt="Poke logo">
-    <h1>Improving Poke</h1>
+    <img class="logo" src="/css/logo-poke.svg" alt="Poke logo">
+
+    <div class="header-container">
+      <div>
+        <h1>Improving Poke</h1>
+        <p class="muted" style="margin-top:0;">Private local telemetry for Poke.</p>
+      </div>
+      <div class="tabs">
+        <a class="tab-btn" href="/health">Server Vitals</a>
+        <a class="tab-btn" href="/traffic">Requests</a>
+        <a class="tab-btn active" href="/api/stats">Anonymous Stats</a>
+      </div>
+    </div>
+
     <h2>Private by design</h2>
 
     <p>
@@ -4296,10 +4507,15 @@ module.exports = function (app, config, renderTemplate) {
     <h2>API usage</h2>
     <p class="note">
       These API views are for anonymous local Poke stats only.<br><br>
+      • Main info page: <code><a href="/api/stats">/api/stats</a></code><br>
+      • Short aliases: <code><a href="/stats">/stats</a></code>, <code><a href="/telemetry">/telemetry</a></code>, <code><a href="/t">/t</a></code><br>
       • GUI view: <code><a href="/api/stats?view=gui">/api/stats?view=gui</a></code><br>
+      • Trending tab: <code><a href="/api/stats?view=gui&amp;tab=trending">/api/stats?view=gui&amp;tab=trending</a></code><br>
       • JSON view: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code><br>
+      • Trending API: <code><a href="/api/trending">/api/trending</a></code><br>
+      • Trending by genre: <code><a href="/api/trending?category=music">/api/trending?category=music</a></code><br>
       • JSON default limit: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code> (8 videos)<br>
-      • JSON with custom limit: <code><a href="/api/stats?view=json&limit=3000">/api/stats?view=json&limit=3000</a></code><br>
+      • JSON with custom limit: <code><a href="/api/stats?view=json&amp;limit=3000">/api/stats?view=json&amp;limit=3000</a></code><br>
       • Opt out for this browser: <code><a href="/api/stats/optout">/api/stats/optout</a></code>
     </p>
   </div>
