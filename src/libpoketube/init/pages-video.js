@@ -202,7 +202,34 @@ module.exports = function (app, config, renderTemplate) {
       v,
     });
   });
+
+  const watchRateLimitCache = new Map();
+  const WATCH_LIMIT_WINDOW = 60000;
+  const WATCH_MAX_REQUESTS = 60;
+
+  setInterval(() => {
+    const now = Date.now();
+    for (const [ip, data] of watchRateLimitCache.entries()) {
+      if (now - data.firstRequest > WATCH_LIMIT_WINDOW) watchRateLimitCache.delete(ip);
+    }
+  }, 5 * 60 * 1000);
+
  app.get("/watch", async (req, res) => {
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  const nowTime = Date.now();
+  const userRateInfo = watchRateLimitCache.get(ip) || { count: 0, firstRequest: nowTime };
+
+  if (nowTime - userRateInfo.firstRequest > WATCH_LIMIT_WINDOW) {
+    userRateInfo.count = 1;
+    userRateInfo.firstRequest = nowTime;
+  } else {
+    userRateInfo.count++;
+    if (userRateInfo.count > WATCH_MAX_REQUESTS) {
+      return res.status(429).send("Too Many Requests");
+    }
+  }
+  watchRateLimitCache.set(ip, userRateInfo);
+
   const { dm, region, hl, v, e, r, f, m, quality: q, a, universe, dyx} = req.query; 
 
   if (!v) {
