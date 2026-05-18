@@ -6,6 +6,9 @@ const telemetryConfig = { telemetry: true }
 const telemetryFile = path.join(__dirname, "telemetry.json")
 const recentVideoLimit = 300
 const maxJsonLimit = 3000
+const telemetrySaveDebounceMs = 15000
+const telemetryMaxUnsavedMs = 60000
+const telemetryMinWriteIntervalMs = 5000
 
 const getNowIso = () => new Date().toISOString()
 
@@ -189,6 +192,15 @@ function atomicWriteJson(filePath, data) {
   const backupPath = `${filePath}.bak`
   const json = JSON.stringify(data, null, 2)
 
+  try {
+    if (fs.existsSync(filePath)) {
+      const current = fs.readFileSync(filePath, "utf8")
+      if (current === json) return false
+    }
+  } catch (error) {
+    console.error("Could not compare existing telemetry file before write:", filePath, error)
+  }
+
   fs.writeFileSync(tmpPath, json)
 
   if (fs.existsSync(filePath)) {
@@ -200,6 +212,7 @@ function atomicWriteJson(filePath, data) {
   }
 
   fs.renameSync(tmpPath, filePath)
+  return true
 }
 
 function saveTelemetryStorage(stats) {
@@ -292,6 +305,9 @@ module.exports = function (app, config, renderTemplate) {
   let needsSave = false
   let saveInProgress = false
   let pendingSave = false
+  let saveTimer = null
+  let firstUnsavedAt = 0
+  let lastSaveAt = 0
 
   function touchRecentVideo(videoId) {
     if (!videoId) return
@@ -304,6 +320,38 @@ module.exports = function (app, config, renderTemplate) {
     }
   }
 
+  function scheduleTelemetrySave(force) {
+    needsSave = true
+
+    const now = Date.now()
+    if (!firstUnsavedAt) firstUnsavedAt = now
+
+    if (saveTimer) {
+      clearTimeout(saveTimer)
+      saveTimer = null
+    }
+
+    if (force) {
+      saveTimer = setTimeout(saveNow, 0)
+      return
+    }
+
+    const sinceFirstUnsaved = now - firstUnsavedAt
+    const sinceLastSave = now - lastSaveAt
+
+    if (sinceFirstUnsaved >= telemetryMaxUnsavedMs && sinceLastSave >= telemetryMinWriteIntervalMs) {
+      saveTimer = setTimeout(saveNow, 0)
+      return
+    }
+
+    const minIntervalDelay = Math.max(0, telemetryMinWriteIntervalMs - sinceLastSave)
+    const maxUnsavedDelay = Math.max(0, telemetryMaxUnsavedMs - sinceFirstUnsaved)
+    const debounceDelay = telemetrySaveDebounceMs
+    const delay = Math.min(Math.max(debounceDelay, minIntervalDelay), maxUnsavedDelay)
+
+    saveTimer = setTimeout(saveNow, delay)
+  }
+
   function saveNow() {
     if (!needsSave) return
     if (saveInProgress) {
@@ -311,28 +359,40 @@ module.exports = function (app, config, renderTemplate) {
       return
     }
 
+    if (saveTimer) {
+      clearTimeout(saveTimer)
+      saveTimer = null
+    }
+
     saveInProgress = true
 
     try {
       memoryStats = saveTelemetryStorage(memoryStats)
       needsSave = false
+      firstUnsavedAt = 0
+      lastSaveAt = Date.now()
     } catch (error) {
-      console.error("Failed to save stats", error)
+      console.error("Failed to save telemetry", error)
+      scheduleTelemetrySave(false)
     } finally {
       saveInProgress = false
 
       if (pendingSave) {
         pendingSave = false
-        needsSave = true
-        setTimeout(saveNow, 100)
+        scheduleTelemetrySave(false)
       }
     }
   }
 
-  setInterval(saveNow, 5000)
+  setInterval(() => {
+    if (needsSave && firstUnsavedAt && Date.now() - firstUnsavedAt >= telemetryMaxUnsavedMs) {
+      scheduleTelemetrySave(true)
+    }
+  }, Math.max(telemetryMinWriteIntervalMs, 1000))
 
   process.once("SIGINT", () => {
     try {
+      scheduleTelemetrySave(true)
       saveNow()
     } finally {
       process.exit(0)
@@ -341,10 +401,15 @@ module.exports = function (app, config, renderTemplate) {
 
   process.once("SIGTERM", () => {
     try {
+      scheduleTelemetrySave(true)
       saveNow()
     } finally {
       process.exit(0)
     }
+  })
+
+  process.once("beforeExit", () => {
+    saveNow()
   })
 
   app.post(["/api/stats", "/api/nexus"], (req, res) => {
@@ -375,7 +440,7 @@ module.exports = function (app, config, renderTemplate) {
     memoryStats.users[userId] = true
     touchRecentVideo(videoId)
 
-    needsSave = true
+    scheduleTelemetrySave(false)
 
     res.json({ ok: true })
   })
