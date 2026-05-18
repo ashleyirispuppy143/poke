@@ -460,10 +460,6 @@ module.exports = function (app, config, renderTemplate) {
     }
   });
 
-  app.get("/web", async (req, res) => {
-    res.redirect("/");
-  });
-
   function channelurlfixer(text) {
     const regex = /<a\s+href="\/channel\/([^"]+)"/g;
     const updatedDescription = text.replace(regex, '<a href="/channel?id=$1"');
