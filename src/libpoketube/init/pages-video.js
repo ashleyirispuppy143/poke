@@ -23,6 +23,9 @@ const media_proxy = require("../libpoketube-video.js");
 const atmos = require("../../../pokeatmosurls.json");
 const config = require("../../../config.json");
 
+const serverGeneration = Date.now().toString(36);
+let currentEpoch = Date.now();
+
 function linkify(text) {
   // regular expression to match URLs
   const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -215,6 +218,7 @@ module.exports = function (app, config, renderTemplate) {
   }, 5 * 60 * 1000);
 
  app.get("/watch", async (req, res) => {
+  const requestEpoch = currentEpoch; // Lock request to current epoch
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   const nowTime = Date.now();
   const userRateInfo = watchRateLimitCache.get(ip) || { count: 0, firstRequest: nowTime };
@@ -263,6 +267,11 @@ module.exports = function (app, config, renderTemplate) {
 
   const u = await media_proxy(v);
   
+  // Immediately drop the request if epoch changed during async fetch
+  if (currentEpoch !== requestEpoch) {
+    return res.status(499).send("Request dropped by server.");
+  }
+
   const secure = ["poketube.fun"].includes(req.hostname);
   const verify = req.hostname === "poketube.sudovanilla.com";
 
@@ -410,6 +419,11 @@ module.exports = function (app, config, renderTemplate) {
     
   INNERTUBE.getYouTubePlayerInfo(f, v, contentlang, contentregion).then(
     (data) => {
+      // Drop immediately if request was issued from a past epoch
+      if (currentEpoch !== requestEpoch) {
+        return res.status(499).send("Request dropped by server.");
+      }
+
       try {
         const knownErrors = {
           "COPYRIGHT_BLOCKED": "This video contains content from a copyright holder who has blocked it.",
@@ -606,7 +620,13 @@ module.exports = function (app, config, renderTemplate) {
         return res.redirect(`/watch?v=${req.query.v}&fx=1&err=${error}`);
       }
     }
-  );
+  ).catch(error => {
+     if (currentEpoch !== requestEpoch) {
+       return res.status(499).send("Request dropped by server.");
+     }
+     console.error(error);
+     return res.redirect(`/watch?v=${req.query.v}&fx=1&err=${error}`);
+  });
 });
   
   app.get("/lite", async (req, res) => {
