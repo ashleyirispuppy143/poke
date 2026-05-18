@@ -45,7 +45,7 @@
 <meta content="<%=VideoData?.title%>" name=title>
 
 <meta content="<%=color%>" name="theme-color">
-<meta content="<%=%VideoData?.genre>" name="video-genre">
+<meta content="<%=VideoData?.genre%>" name="video-genre">
 <meta content="{canplayhd: true, redesign_feburary_2023:true, poke-rebrand:true, universe:2, ImmersiveAmbientMode:true, november2023_poke_rebrand:true, rebrand_2024:true, faster_load:true, AudioSyncV2:false, AudioSyncV3:true }" name="flags">
 <%
   const desc = `Watch this ${turntomins(VideoData?.lengthSeconds) || "LIVE"} long video from ${VideoData?.author.replace("- Topic", "")} On Poke! 
