@@ -21,13 +21,6 @@ const {
 const sha384 = modules.hash;
 
 module.exports = function (app, config, renderTemplate) {
-  app.get("/hashtag/:id", (req, res) => {
-    if (!req.params.id) {
-      return res.redirect("/");
-    }
-
-    return res.redirect(`/search?query=${req.params.id}&from=hashtag`);
-  });
 
   app.get("/shorts/:id", (req, res) => {
     if (!req.params.id) {
