@@ -1,21 +1,19 @@
 const fs = require("fs")
 const path = require("path")
 
-const telemetryConfig = { telemetry: false }
+const telemetryConfig = { telemetry: true }
 
-const statsFile = path.join(__dirname, "stats.json")
-const statsFileV2 = path.join(__dirname, "stats-v2.json")
-const statsDir = path.join(__dirname, "stats")
-const chunkPrefix = "stats-chunk-"
-const chunkExt = ".json"
-const baseChunkCount = 12
-const extendedChunkCount = 16
-const maxLinesPerChunk = 6000
+const telemetryFile = path.join(__dirname, "telemetry.json")
 const recentVideoLimit = 300
 const maxJsonLimit = 3000
 
+const getNowIso = () => new Date().toISOString()
+
 const getEmptyStats = () => ({
+  version: 4,
+  startedAt: getNowIso(),
   videos: {},
+  pageTitles: {},
   browsers: {},
   os: {},
   users: {},
@@ -27,11 +25,31 @@ function normalizeStats(input) {
 
   if (!input || typeof input !== "object") return stats
 
+  if (typeof input.startedAt === "string" && input.startedAt.trim()) {
+    stats.startedAt = input.startedAt.trim()
+  }
+
   if (input.videos && typeof input.videos === "object") {
     for (const [key, value] of Object.entries(input.videos)) {
       const id = String(key || "").trim()
       const count = Math.max(0, Number(value) || 0)
       if (id && count > 0) stats.videos[id] = (stats.videos[id] || 0) + count
+    }
+  }
+
+  if (input.pageTitles && typeof input.pageTitles === "object") {
+    for (const [key, value] of Object.entries(input.pageTitles)) {
+      const id = String(key || "").trim()
+      const title = String(value || "").trim().slice(0, 300)
+      if (id && title) stats.pageTitles[id] = title
+    }
+  }
+
+  if (input.videoTitles && typeof input.videoTitles === "object") {
+    for (const [key, value] of Object.entries(input.videoTitles)) {
+      const id = String(key || "").trim()
+      const title = String(value || "").trim().slice(0, 300)
+      if (id && title && !stats.pageTitles[id]) stats.pageTitles[id] = title
     }
   }
 
@@ -71,14 +89,28 @@ function normalizeStats(input) {
     }
   }
 
+  for (const id of Object.keys(stats.pageTitles)) {
+    if (!stats.videos[id] && !(stats.recentVideos || []).includes(id)) {
+      delete stats.pageTitles[id]
+    }
+  }
+
   return stats
 }
 
 function mergeStats(target, source) {
   const clean = normalizeStats(source)
 
+  if (!target.startedAt || new Date(clean.startedAt).getTime() < new Date(target.startedAt).getTime()) {
+    target.startedAt = clean.startedAt
+  }
+
   for (const [id, count] of Object.entries(clean.videos)) {
     target.videos[id] = (target.videos[id] || 0) + count
+  }
+
+  for (const [id, title] of Object.entries(clean.pageTitles)) {
+    if (title) target.pageTitles[id] = title
   }
 
   for (const [name, count] of Object.entries(clean.browsers)) {
@@ -104,7 +136,7 @@ function mergeStats(target, source) {
     }
   }
 
-  return target
+  return normalizeStats(target)
 }
 
 function safeRead(filePath) {
@@ -115,12 +147,6 @@ function safeRead(filePath) {
     return { ok: true, data: JSON.parse(raw) }
   } catch (error) {
     return { ok: false, data: null, error }
-  }
-}
-
-function ensureStatsDir() {
-  if (!fs.existsSync(statsDir)) {
-    fs.mkdirSync(statsDir, { recursive: true })
   }
 }
 
@@ -136,267 +162,36 @@ function atomicWriteJson(filePath, data) {
     try {
       fs.copyFileSync(filePath, backupPath)
     } catch (error) {
-      console.error("Could not create backup for", filePath, error)
+      console.error("Could not create telemetry backup for", filePath, error)
     }
   }
 
   fs.renameSync(tmpPath, filePath)
 }
 
-function countJsonLines(data) {
-  return JSON.stringify(data, null, 2).split("\n").length
-}
-
-function getChunkPath(index) {
-  return path.join(statsDir, `${chunkPrefix}${String(index).padStart(2, "0")}${chunkExt}`)
-}
-
-function getEmptyChunk(index) {
-  return {
-    version: 3,
-    chunk: index,
-    videos: {},
-    browsers: {},
-    os: {},
-    users: {},
-    recentVideos: []
-  }
-}
-
-function getStatsSize(stats) {
-  return (
-    Object.keys(stats.videos || {}).length +
-    Object.keys(stats.browsers || {}).length +
-    Object.keys(stats.os || {}).length +
-    Object.keys(stats.users || {}).length +
-    (Array.isArray(stats.recentVideos) ? stats.recentVideos.length : 0)
-  )
-}
-
-function resetStatsStorage() {
-  ensureStatsDir()
-
-  for (let i = 1; i <= extendedChunkCount; i++) {
-    const filePath = getChunkPath(i)
-    if (fs.existsSync(filePath)) {
-      try {
-        fs.unlinkSync(filePath)
-      } catch (error) {
-        console.error("Could not delete stats chunk", filePath, error)
-      }
-    }
-  }
-
-  const emptyChunk = getEmptyChunk(1)
-  atomicWriteJson(getChunkPath(1), emptyChunk)
-
-  return getEmptyStats()
-}
-
-function addObjectEntriesToChunks(chunks, obj, objectKey, startChunkIndex, maxChunkCount) {
-  let chunkIndex = startChunkIndex
-
-  for (const [key, value] of Object.entries(obj || {})) {
-    let placed = false
-
-    while (chunkIndex < maxChunkCount) {
-      const chunk = chunks[chunkIndex]
-      chunk[objectKey][key] = value
-
-      if (countJsonLines(chunk) <= maxLinesPerChunk) {
-        placed = true
-        break
-      }
-
-      delete chunk[objectKey][key]
-      chunkIndex++
-    }
-
-    if (!placed) return false
-  }
-
-  return true
-}
-
-function addArrayEntriesToChunks(chunks, arr, arrayKey, startChunkIndex, maxChunkCount) {
-  let chunkIndex = startChunkIndex
-
-  for (const value of arr || []) {
-    let placed = false
-
-    while (chunkIndex < maxChunkCount) {
-      const chunk = chunks[chunkIndex]
-      chunk[arrayKey].push(value)
-
-      if (countJsonLines(chunk) <= maxLinesPerChunk) {
-        placed = true
-        break
-      }
-
-      chunk[arrayKey].pop()
-      chunkIndex++
-    }
-
-    if (!placed) return false
-  }
-
-  return true
-}
-
-function buildChunks(stats, maxChunkCount) {
+function saveTelemetryStorage(stats) {
   const clean = normalizeStats(stats)
-  const chunks = Array.from({ length: maxChunkCount }, (_, index) => getEmptyChunk(index + 1))
-
-  const sortedVideos = Object.fromEntries(
-    Object.entries(clean.videos).sort((a, b) => b[1] - a[1])
-  )
-
-  const sortedBrowsers = Object.fromEntries(
-    Object.entries(clean.browsers).sort((a, b) => b[1] - a[1])
-  )
-
-  const sortedOs = Object.fromEntries(
-    Object.entries(clean.os).sort((a, b) => b[1] - a[1])
-  )
-
-  const sortedUsers = Object.fromEntries(
-    Object.keys(clean.users)
-      .sort()
-      .map((userId) => [userId, true])
-  )
-
-  const newestFirstRecent = Array.isArray(clean.recentVideos)
-    ? clean.recentVideos.slice(-recentVideoLimit)
-    : []
-
-  if (!addObjectEntriesToChunks(chunks, sortedBrowsers, "browsers", 0, maxChunkCount)) return null
-  if (!addObjectEntriesToChunks(chunks, sortedOs, "os", 0, maxChunkCount)) return null
-  if (!addArrayEntriesToChunks(chunks, newestFirstRecent, "recentVideos", 0, maxChunkCount)) return null
-  if (!addObjectEntriesToChunks(chunks, sortedUsers, "users", 0, maxChunkCount)) return null
-  if (!addObjectEntriesToChunks(chunks, sortedVideos, "videos", 0, maxChunkCount)) return null
-
-  return chunks.filter((chunk, index) => {
-    if (index === 0) return true
-    return getStatsSize(chunk) > 0
-  })
+  atomicWriteJson(telemetryFile, clean)
+  return clean
 }
 
-function saveStatsToChunks(stats) {
-  ensureStatsDir()
+function readTelemetryStorage() {
+  const result = safeRead(telemetryFile)
 
-  let chunks = buildChunks(stats, baseChunkCount)
-
-  if (!chunks) {
-    chunks = buildChunks(stats, extendedChunkCount)
+  if (!result.ok) {
+    console.error("Could not read telemetry file, starting with empty telemetry:", telemetryFile, result.error)
+    const empty = getEmptyStats()
+    saveTelemetryStorage(empty)
+    return empty
   }
 
-  if (!chunks) {
-    console.error("Stats chunks reached 16 files with the configured line limit. Clearing stats........")
-    resetStatsStorage()
-    return getEmptyStats()
+  if (!result.data) {
+    const empty = getEmptyStats()
+    saveTelemetryStorage(empty)
+    return empty
   }
 
-  for (let i = 1; i <= extendedChunkCount; i++) {
-    const filePath = getChunkPath(i)
-
-    if (i <= chunks.length) {
-      atomicWriteJson(filePath, chunks[i - 1])
-    } else if (fs.existsSync(filePath)) {
-      try {
-        fs.unlinkSync(filePath)
-      } catch (error) {
-        console.error("Could not delete unused stats chunk", filePath, error)
-      }
-    }
-  }
-
-  return normalizeStats(stats)
-}
-
-function readChunkedStats() {
-  ensureStatsDir()
-
-  const stats = getEmptyStats()
-  let foundAnyChunk = false
-  let hadBrokenChunk = false
-
-  for (let i = 1; i <= extendedChunkCount; i++) {
-    const filePath = getChunkPath(i)
-    if (!fs.existsSync(filePath)) continue
-
-    foundAnyChunk = true
-    const result = safeRead(filePath)
-
-    if (!result.ok) {
-      hadBrokenChunk = true
-      console.error("Could not read stats chunk", filePath, result.error)
-      continue
-    }
-
-    mergeStats(stats, result.data)
-  }
-
-  return {
-    foundAnyChunk,
-    hadBrokenChunk,
-    stats: normalizeStats(stats)
-  }
-}
-
-function migrateOldStatsIfNeeded() {
-  ensureStatsDir()
-
-  const chunked = readChunkedStats()
-  const oldStats = getEmptyStats()
-  let foundOldFile = false
-  let oldFileHadReadError = false
-
-  const oldFiles = [statsFile, statsFileV2]
-
-  for (const filePath of oldFiles) {
-    if (!fs.existsSync(filePath)) continue
-
-    foundOldFile = true
-    const result = safeRead(filePath)
-
-    if (!result.ok) {
-      oldFileHadReadError = true
-      console.error("Could not read old stats file, not deleting it:", filePath, result.error)
-      continue
-    }
-
-    mergeStats(oldStats, result.data)
-  }
-
-  let finalStats = getEmptyStats()
-  mergeStats(finalStats, chunked.stats)
-  mergeStats(finalStats, oldStats)
-
-  if (foundOldFile && !oldFileHadReadError) {
-    finalStats = saveStatsToChunks(finalStats)
-
-    for (const filePath of oldFiles) {
-      if (!fs.existsSync(filePath)) continue
-
-      const migratedPath = `${filePath}.migrated-${Date.now()}`
-
-      try {
-        fs.renameSync(filePath, migratedPath)
-      } catch (error) {
-        console.error("Could not rename migrated old stats file", filePath, error)
-      }
-    }
-  }
-
-  if (!chunked.foundAnyChunk && !foundOldFile) {
-    finalStats = saveStatsToChunks(finalStats)
-  }
-
-  if (chunked.hadBrokenChunk) {
-    console.error("One or more stats chunks could not be read. Broken chunks were skipped, and readable data was kept in memory.")
-  }
-
-  return normalizeStats(finalStats)
+  return normalizeStats(result.data)
 }
 
 function sumObjectValues(obj) {
@@ -460,7 +255,7 @@ function isSafeId(value, maxLength) {
 }
 
 module.exports = function (app, config, renderTemplate) {
-  let memoryStats = migrateOldStatsIfNeeded()
+  let memoryStats = readTelemetryStorage()
   let needsSave = false
   let saveInProgress = false
   let pendingSave = false
@@ -486,7 +281,7 @@ module.exports = function (app, config, renderTemplate) {
     saveInProgress = true
 
     try {
-      memoryStats = saveStatsToChunks(memoryStats)
+      memoryStats = saveTelemetryStorage(memoryStats)
       needsSave = false
     } catch (error) {
       console.error("Failed to save stats", error)
@@ -525,6 +320,11 @@ module.exports = function (app, config, renderTemplate) {
     const body = req.body || {}
     const videoId = typeof body.videoId === "string" ? body.videoId.trim() : ""
     const userId = typeof body.userId === "string" ? body.userId.trim() : ""
+    const pageTitle = typeof body.pageTitle === "string"
+      ? body.pageTitle.trim().slice(0, 300)
+      : typeof body.title === "string"
+        ? body.title.trim().slice(0, 300)
+        : ""
 
     if (!isSafeId(videoId, 128)) return res.status(400).json({ error: "missing or invalid videoId" })
     if (!isSafeId(userId, 256)) return res.status(400).json({ error: "missing or invalid userId" })
@@ -533,6 +333,7 @@ module.exports = function (app, config, renderTemplate) {
     const parsed = parseUA(ua)
 
     memoryStats.videos[videoId] = (memoryStats.videos[videoId] || 0) + 1
+    if (pageTitle) memoryStats.pageTitles[videoId] = pageTitle
     memoryStats.browsers[parsed.browser] = (memoryStats.browsers[parsed.browser] || 0) + 1
     memoryStats.os[parsed.os] = (memoryStats.os[parsed.os] || 0) + 1
     memoryStats.users[userId] = true
@@ -706,7 +507,9 @@ module.exports = function (app, config, renderTemplate) {
     if (view === "json") {
       if (!telemetryConfig.telemetry) {
         return res.json({
+          startedAt: null,
           videos: {},
+          pageTitles: {},
           recentVideos: [],
           browsers: {},
           os: {},
@@ -729,13 +532,24 @@ module.exports = function (app, config, renderTemplate) {
         .slice(0, limit)
 
       const topVideos = Object.fromEntries(sortedVideos)
+      const recentVideos = (memoryStats.recentVideos || []).slice(-32).reverse()
+      const visibleVideoIds = new Set([...Object.keys(topVideos), ...recentVideos])
+      const pageTitles = {}
+
+      for (const id of visibleVideoIds) {
+        const title = (memoryStats.pageTitles || {})[id]
+        if (title) pageTitles[id] = title
+      }
+
       const totalUsers = Object.keys(memoryStats.users || {}).length
       const estimatedTotalUsers = computeEstimatedTotalUsers(memoryStats)
       const totalDetections = Math.max(sumObjectValues(memoryStats.os), sumObjectValues(memoryStats.browsers))
 
       return res.json({
+        startedAt: memoryStats.startedAt || null,
         videos: topVideos,
-        recentVideos: (memoryStats.recentVideos || []).slice(-32).reverse(),
+        pageTitles,
+        recentVideos,
         browsers: memoryStats.browsers || {},
         os: memoryStats.os || {},
         totalUsers,
@@ -1203,6 +1017,16 @@ module.exports = function (app, config, renderTemplate) {
       text-decoration:none;
       word-break:break-word;
     }
+    .video-page-title{
+      margin-top:.45rem;
+      color:#fff;
+      font-size:.95rem;
+      line-height:1.35;
+      word-break:break-word;
+    }
+    .video-page-title-label{
+      color:#bbb;
+    }
     .video-id{
       color:#bbb;
       font-size:.9rem;
@@ -1445,7 +1269,15 @@ module.exports = function (app, config, renderTemplate) {
           <div class="mini-stat-label">total video ids seen</div>
           <div id="total-video-id-count" class="mini-stat-value">Loading…</div>
           <div class="mini-stat-sub">
-            Unique video IDs this Poke instance has seen from its local stats data.
+            Unique video IDs this Poke instance has seen from its local telemetry data.
+          </div>
+        </div>
+
+        <div class="mini-stat">
+          <div class="mini-stat-label">telemetry started</div>
+          <div id="telemetry-started-at" class="mini-stat-value">Loading…</div>
+          <div class="mini-stat-sub">
+            Date this local <code>telemetry.json</code> data file was started.
           </div>
         </div>
       </div>
@@ -1559,7 +1391,7 @@ module.exports = function (app, config, renderTemplate) {
       <div class="section-card api-lines">
         <h2>API usage</h2>
         <p class="note">
-          These API views expose anonymous local stats collected by Poke.<br><br>
+          These API views expose anonymous local telemetry collected by Poke from <code>telemetry.json</code>.<br><br>
           • GUI view: <code><a href="/api/stats?view=gui">/api/stats?view=gui</a></code><br>
           • JSON view: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code><br>
           • JSON default limit: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code> (8 videos)<br>
@@ -1604,6 +1436,7 @@ module.exports = function (app, config, renderTemplate) {
     const userIdCount = document.getElementById("user-id-count")
     const estimatedTotalUsers = document.getElementById("estimated-total-users")
     const totalVideoIdCount = document.getElementById("total-video-id-count")
+    const telemetryStartedAt = document.getElementById("telemetry-started-at")
     const limitWarning = document.getElementById("limit-warning")
     const segButtons = document.querySelectorAll(".seg-btn")
     const panels = document.querySelectorAll(".panel")
@@ -1612,6 +1445,7 @@ module.exports = function (app, config, renderTemplate) {
     const privacyModalClose = document.getElementById("privacy-modal-close")
 
     var allVideos = {}
+    var pageTitles = {}
     var recentVideoIds = []
     var currentPage = 1
 
@@ -1780,6 +1614,19 @@ module.exports = function (app, config, renderTemplate) {
       }, 0)
     }
 
+    function formatStartedAt(value) {
+      if (!value) return "Not started"
+      var date = new Date(value)
+      if (Number.isNaN(date.getTime())) return value
+      return date.toLocaleString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      })
+    }
+
     function getFriendlyOsName(name) {
       if (name === "windows") return "Windows"
       if (name === "android") return "Android"
@@ -1871,7 +1718,16 @@ module.exports = function (app, config, renderTemplate) {
       })
     }
 
-    function createVideoCard(videoId, extraText, thumbAlt, href, badgeText) {
+    function escapeHtml(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;")
+    }
+
+    function createVideoCard(videoId, extraText, thumbAlt, href, badgeText, pageTitle) {
       var li = document.createElement("li")
       li.className = "video-card"
 
@@ -1907,6 +1763,10 @@ module.exports = function (app, config, renderTemplate) {
       titleLink.href = href
       titleLink.textContent = videoId
 
+      var pageTitleEl = document.createElement("div")
+      pageTitleEl.className = "video-page-title"
+      pageTitleEl.innerHTML = '<span class="video-page-title-label">Page title:</span> ' + escapeHtml(pageTitle || "Unknown")
+
       var idEl = document.createElement("div")
       idEl.className = "video-id"
       idEl.textContent = "Video ID: " + videoId
@@ -1916,6 +1776,7 @@ module.exports = function (app, config, renderTemplate) {
       infoEl.textContent = extraText
 
       meta.appendChild(titleLink)
+      meta.appendChild(pageTitleEl)
       meta.appendChild(idEl)
       meta.appendChild(infoEl)
 
@@ -1940,7 +1801,11 @@ module.exports = function (app, config, renderTemplate) {
         source: "/api/stats?view=gui",
         note: "These recent video IDs are from anonymous local Poke stats only.",
         totalRecentVideoIds: recentVideoIds.length,
-        recentVideoIds: recentVideoIds.slice()
+        recentVideoIds: recentVideoIds.slice(),
+        pageTitles: recentVideoIds.reduce(function (titles, videoId) {
+          if (pageTitles[videoId]) titles[videoId] = pageTitles[videoId]
+          return titles
+        }, {})
       }
 
       var blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
@@ -1971,7 +1836,8 @@ module.exports = function (app, config, renderTemplate) {
           "Recently recorded on this Poke instance. Position #" + (index + 1) + " in the live recent queue.",
           "Thumbnail for recent video " + videoId,
           "/watch?v=" + encodeURIComponent(videoId),
-          index === 0 ? "Newest ID" : "Position #" + (index + 1)
+          index === 0 ? "Newest ID" : "Position #" + (index + 1),
+          pageTitles[videoId] || "Unknown"
         )
 
         card.className = "recent-card"
@@ -2042,6 +1908,10 @@ module.exports = function (app, config, renderTemplate) {
         rank.className = "video-rank"
         rank.textContent = "Rank #" + (absoluteIndex + 1)
 
+        var pageTitleEl = document.createElement("div")
+        pageTitleEl.className = "video-page-title"
+        pageTitleEl.innerHTML = '<span class="video-page-title-label">Page title:</span> ' + escapeHtml(pageTitles[id] || "Unknown")
+
         var idEl = document.createElement("div")
         idEl.className = "video-id"
         idEl.textContent = "Video ID: " + id
@@ -2057,6 +1927,7 @@ module.exports = function (app, config, renderTemplate) {
 
         meta.appendChild(titleLink)
         meta.appendChild(rank)
+        meta.appendChild(pageTitleEl)
         meta.appendChild(idEl)
         meta.appendChild(viewsEl)
         meta.appendChild(noteEl)
@@ -2080,6 +1951,7 @@ module.exports = function (app, config, renderTemplate) {
       browserBreakdown.innerHTML = '<div class="breakdown-empty">' + message + "</div>"
       recentCount.textContent = "0"
       recentLatest.textContent = "None"
+      telemetryStartedAt.textContent = "Not started"
     }
 
     if (!TELEMETRY_ON) {
@@ -2087,6 +1959,7 @@ module.exports = function (app, config, renderTemplate) {
       userIdCount.textContent = "0"
       estimatedTotalUsers.textContent = "0"
       totalVideoIdCount.textContent = "0"
+      telemetryStartedAt.textContent = "Not started"
     } else {
       var optedOut = false
       try {
@@ -2098,23 +1971,28 @@ module.exports = function (app, config, renderTemplate) {
         userIdCount.textContent = "Opt-out active"
         estimatedTotalUsers.textContent = "Opt-out active"
         totalVideoIdCount.textContent = "Opt-out active"
+        telemetryStartedAt.textContent = "Opt-out active"
       } else {
         fetch("/api/stats?view=json&limit=3000")
           .then(function (res) { return res.json() })
           .then(function (data) {
             var videos = data.videos || {}
+            var titles = data.pageTitles || {}
             var recent = data.recentVideos || []
             var browsers = data.browsers || {}
             var os = data.os || {}
             var totalUsers = data.totalUsers || 0
             var estimatedUsers = data.estimatedTotalUsers || 0
             var totalVideoIds = data.totalVideoIds || 0
+            var startedAt = data.startedAt || null
 
             allVideos = videos
+            pageTitles = titles
             recentVideoIds = recent
             userIdCount.textContent = String(totalUsers)
             estimatedTotalUsers.textContent = String(estimatedUsers)
             totalVideoIdCount.textContent = String(totalVideoIds)
+            telemetryStartedAt.textContent = formatStartedAt(startedAt)
 
             renderBreakdown(osBreakdown, os, "os")
             renderBreakdown(browserBreakdown, browsers, "browser")
@@ -2135,6 +2013,7 @@ module.exports = function (app, config, renderTemplate) {
             userIdCount.textContent = "Error"
             estimatedTotalUsers.textContent = "Error"
             totalVideoIdCount.textContent = "Error"
+            telemetryStartedAt.textContent = "Error"
           })
       }
     }
