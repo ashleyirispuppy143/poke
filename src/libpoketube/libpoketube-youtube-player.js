@@ -16,14 +16,13 @@ const getColors = require("get-image-colors");
 const config = require("../../config.json");
 const fs = require("fs");
 
-// FIX 3: Cache the undici import so it doesn't re-import on every single watch page load
 const fetchPromise = import("undici").then(m => m.fetch).catch(() => globalThis.fetch);
 
 class InnerTubePokeVidious {
   constructor(config) {
     this.config = config;
     this.cache = {};
-    this.activeRequests = new Map(); // FIX 2: Request Deduplicator
+    this.activeRequests = new Map();
     this.language = "hl=en-US";
     this.param = "2AMB";
     this.param_legacy = "CgIIAdgDAQ%3D%3D";
@@ -38,7 +37,17 @@ class InnerTubePokeVidious {
       "-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw";
     this.blockedFile = "blockedreasons.txt";
     this.blockedVideos = new Map();
+    
+    this.serverGeneration = Date.now().toString(36);
+    this.currentEpoch = Date.now();
+    
     this.loadBlockedVideos();
+  }
+
+  dropAllPreviousRequests() {
+    this.currentEpoch = Date.now();
+    this.activeRequests.clear();
+    this.cache = {};
   }
 
   loadBlockedVideos() {
@@ -86,12 +95,13 @@ class InnerTubePokeVidious {
     return Buffer.from(String(str)).toString("base64");
   }
 
-  // Wrapper function to deduplicate requests and prevent server crashing on traffic spikes
   async getYouTubePlayerInfo(f, v, contentlang, contentregion) {
     if (!v) {
       this.initError("Missing video ID", null);
       return { error: true, message: "No video ID provided" };
     }
+
+    const requestEpoch = this.currentEpoch;
 
     const knownErrors = {
       "COPYRIGHT_BLOCKED": "This video contains content from a copyright holder who has blocked it.",
@@ -113,16 +123,18 @@ class InnerTubePokeVidious {
       return this.cache[v].result;
     }
 
-    // If another user is ALREADY fetching this exact video, wait for their result instead of running everything twice
     if (this.activeRequests.has(v)) {
       return this.activeRequests.get(v);
     }
 
-    const fetchPromiseTask = this._processYouTubePlayerInfo(f, v, contentlang, contentregion, knownErrors);
+    const fetchPromiseTask = this._processYouTubePlayerInfo(f, v, contentlang, contentregion, knownErrors, requestEpoch);
     this.activeRequests.set(v, fetchPromiseTask);
 
     try {
       const result = await fetchPromiseTask;
+      if (this.currentEpoch !== requestEpoch) {
+        throw new Error("REQUEST_DROPPED");
+      }
       this.activeRequests.delete(v);
       return result;
     } catch (err) {
@@ -131,8 +143,7 @@ class InnerTubePokeVidious {
     }
   }
 
-  // The core logic (now protected by the wrapper above)
-  async _processYouTubePlayerInfo(f, v, contentlang, contentregion, knownErrors) {
+  async _processYouTubePlayerInfo(f, v, contentlang, contentregion, knownErrors, requestEpoch) {
     const fetch = await fetchPromise;
     const headers = {
       "User-Agent": this.useragent,
@@ -191,6 +202,7 @@ class InnerTubePokeVidious {
 
       let res;
       try {
+        if (this.currentEpoch !== requestEpoch) throw new Error("REQUEST_DROPPED");
         res = await fetch(url, { ...options, headers: { ...options?.headers, ...headers }});
       } catch (err) {
         this?.initError?.(`Fetch error for ${url}`, err);
@@ -222,6 +234,7 @@ class InnerTubePokeVidious {
           }
         }
         try {
+          if (this.currentEpoch !== requestEpoch) throw new Error("REQUEST_DROPPED");
           return await fetch(url, { ...options, headers: { ...options?.headers, ...headers }, signal: controller.signal });
         } finally {
           clearTimeout(timer);
@@ -230,6 +243,7 @@ class InnerTubePokeVidious {
       };
 
       while (true) {
+        if (this.currentEpoch !== requestEpoch) throw new Error("REQUEST_DROPPED");
         const elapsed = Date.now() - retryStart;
         const remaining = maxRetryTime - elapsed;
         if (remaining <= 0) throw new Error(`Fetch failed for ${url} after ${maxRetryTime}ms`);
@@ -257,6 +271,7 @@ class InnerTubePokeVidious {
           await sleep(waitMs);
           continue;
         } catch (err) {
+          if (err.message === "REQUEST_DROPPED") throw err;
           if (callerSignal && callerSignal.aborted) throw err;
           if (["COPYRIGHT_BLOCKED", "UPLOADER_REMOVED", "VIDEO_UNAVAILABLE", "INAPPROPRIATE"].includes(err.message)) throw err;
           
@@ -277,12 +292,13 @@ class InnerTubePokeVidious {
       }
     };
 
-    const videoUrl = `${this.config.invapi}/videos/${v}?hl=${contentlang}&region=${contentregion}&h=${this.toBase64(Date.now())}`;
+    const urlParams = `hl=${contentlang}&region=${contentregion}&h=${this.toBase64(Date.now())}&g=${this.serverGeneration}`;
+    const videoUrl = `${this.config.invapi}/videos/${v}?${urlParams}`;
     
     try {
       const [invComments, vidObj, dislikesData, colorData] = await Promise.all([
         fetchWithRetry(
-          `${config.invapi}/comments/${v}?hl=${contentlang}&region=${contentregion}&h=${this.toBase64(Date.now())}`
+          `${config.invapi}/comments/${v}?${urlParams}`
         ).then((res) => res?.text()),
         
         (async () => {
@@ -290,6 +306,7 @@ class InnerTubePokeVidious {
           const MAX_ATTEMPTS = 3;
           for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
             try {
+              if (this.currentEpoch !== requestEpoch) throw new Error("REQUEST_DROPPED");
               const r = await fetchWithRetry(videoUrl, {}, 2000);
               if (!r.ok) throw new Error(`HTTP Error ${r.status}`);
               const text = await r.text();
@@ -301,6 +318,7 @@ class InnerTubePokeVidious {
                 return null;
               } catch (parseErr) { }
             } catch (err) {
+              if (err.message === "REQUEST_DROPPED") throw err;
               if (["COPYRIGHT_BLOCKED", "UPLOADER_REMOVED", "VIDEO_UNAVAILABLE", "INAPPROPRIATE"].includes(err.message)) throw err;
               fetchError = err;
             }
@@ -314,8 +332,10 @@ class InnerTubePokeVidious {
         
         (async () => {
           try {
+            if (this.currentEpoch !== requestEpoch) throw new Error("REQUEST_DROPPED");
             return await getdislikes(v);
           } catch (err) {
+            if (err.message === "REQUEST_DROPPED") throw err;
             this.initError("Dislike API error", err);
             return { engagement: null };
           }
@@ -323,8 +343,7 @@ class InnerTubePokeVidious {
         
         (async () => {
           try {
-            // FIX 1: Use `default.jpg` instead of `hqdefault.jpg`. 
-            // It completely removes the massive CPU load that causes server-wide timeouts!
+            if (this.currentEpoch !== requestEpoch) throw new Error("REQUEST_DROPPED");
             const palette = await getColors(
               `https://i.ytimg.com/vi/${v}/default.jpg`
             );
@@ -332,11 +351,14 @@ class InnerTubePokeVidious {
               return { color: palette[0].hex(), color2: palette[1].hex() };
             }
           } catch (err) {
+            if (err.message === "REQUEST_DROPPED") throw err;
             this.initError("Thumbnail color extraction error", err);
           }
           return { color: "#0ea5e9", color2: "#111827" };
         })()
       ]);
+
+      if (this.currentEpoch !== requestEpoch) throw new Error("REQUEST_DROPPED");
 
       const comments = this.getJson(invComments);
       const vid = vidObj;
@@ -377,6 +399,9 @@ class InnerTubePokeVidious {
       return finalResult;
 
     } catch (error) {
+      if (error.message === "REQUEST_DROPPED") {
+        return { error: true, message: "Request cancelled by server.", reason: "REQUEST_DROPPED" };
+      }
       if (knownErrors[error.message]) {
         return { error: true, message: knownErrors[error.message], reason: error.message };
       }
