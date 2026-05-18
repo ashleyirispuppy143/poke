@@ -704,43 +704,57 @@ module.exports = function (app, config, renderTemplate) {
       font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
     }
 
-    .live-status{
+    .telemetry-notice{
       display:flex;
-      align-items:center;
-      gap:.6rem;
+      justify-content:space-between;
+      gap:16px;
+      align-items:flex-start;
       flex-wrap:wrap;
       margin:-8px 0 18px 0;
-      padding:12px 14px;
-      border:1px solid #2a2a35;
-      border-radius:16px;
-      background:#1f1e29;
-      color:#bbb;
-      font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
-      font-size:.95rem;
-      line-height:1.4;
+      padding:16px;
+      border:1px solid #2e2d3b;
+      border-radius:18px;
+      background:linear-gradient(180deg,#252432 0%,#1f1e29 100%);
+      box-shadow:0 10px 30px rgba(0,0,0,.16);
     }
-    .live-dot{
-      width:.65rem;
-      height:.65rem;
-      border-radius:999px;
-      background:#0ab7f0;
-      box-shadow:0 0 0 4px rgba(10,183,240,.12);
-      flex:0 0 auto;
+    .telemetry-notice h2{
+      margin:0 0 .4rem 0;
+      font-size:1.05rem;
     }
-    .live-status.loading .live-dot{
-      animation:livePulse 1.2s ease-in-out infinite;
+    .telemetry-notice p{
+      margin:0;
     }
-    .live-status.error .live-dot{
-      background:#ff6b8a;
-      box-shadow:0 0 0 4px rgba(255,107,138,.12);
-    }
-    .live-status.off .live-dot{
-      background:#777;
-      box-shadow:0 0 0 4px rgba(119,119,119,.12);
-    }
-    .refresh-btn{
+    .telemetry-settings{
+      display:flex;
+      align-items:center;
+      justify-content:flex-end;
+      gap:.75rem;
+      flex-wrap:wrap;
       margin-left:auto;
-      padding:.42rem .72rem;
+    }
+    .telemetry-checkbox{
+      display:inline-flex;
+      align-items:center;
+      gap:.45rem;
+      padding:.48rem .76rem;
+      border-radius:999px;
+      border:1px solid #3a3947;
+      background:#1f1e29;
+      color:#fff;
+      cursor:pointer;
+      font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+      font-size:.9rem;
+      user-select:none;
+    }
+    .telemetry-checkbox input{
+      accent-color:#0ab7f0;
+    }
+    .telemetry-checkbox:has(input:disabled){
+      opacity:.55;
+      cursor:not-allowed;
+    }
+    .telemetry-refresh-btn{
+      padding:.48rem .76rem;
       border-radius:999px;
       border:1px solid #3a3947;
       background:#252432;
@@ -749,17 +763,12 @@ module.exports = function (app, config, renderTemplate) {
       font:inherit;
       font-size:.9rem;
     }
-    .refresh-btn:hover{
+    .telemetry-refresh-btn:hover{
       background:#2f2e3d;
     }
-    .refresh-btn[disabled]{
+    .telemetry-refresh-btn[disabled]{
       opacity:.55;
       cursor:not-allowed;
-    }
-    @keyframes livePulse{
-      0%{transform:scale(1);opacity:1}
-      50%{transform:scale(.75);opacity:.55}
-      100%{transform:scale(1);opacity:1}
     }
 
     .nojs-warning{
@@ -1104,9 +1113,6 @@ module.exports = function (app, config, renderTemplate) {
       line-height:1.35;
       word-break:break-word;
     }
-    .video-page-title-label{
-      color:#bbb;
-    }
     .video-id{
       color:#bbb;
       font-size:.9rem;
@@ -1313,10 +1319,22 @@ module.exports = function (app, config, renderTemplate) {
       </div>
     </div>
 
-    <div id="live-status" class="live-status loading" aria-live="polite">
-      <span class="live-dot" aria-hidden="true"></span>
-      <span id="live-status-text">Loading live telemetry…</span>
-      <button type="button" id="refresh-now-btn" class="refresh-btn">Refresh now</button>
+    <div class="telemetry-notice">
+      <div>
+        <h2>Telemetry system changed</h2>
+        <p class="note">
+          Poke now stores anonymous local telemetry in one <code>telemetry.json</code> file.
+          This GUI reads the JSON API and can refresh itself while you keep this page open.
+        </p>
+      </div>
+
+      <div class="telemetry-settings">
+        <label class="telemetry-checkbox" for="auto-refresh-toggle">
+          <input type="checkbox" id="auto-refresh-toggle" checked>
+          Auto refresh this view
+        </label>
+        <button type="button" id="refresh-now-btn" class="telemetry-refresh-btn">Refresh now</button>
+      </div>
     </div>
 
     <div class="hero">
@@ -1506,6 +1524,7 @@ module.exports = function (app, config, renderTemplate) {
   <script>
     const TELEMETRY_ON = ${telemetryOn ? "true" : "false"}
     const OPT_KEY = "poke_stats_optout"
+    const AUTO_REFRESH_KEY = "poke_stats_auto_refresh"
     const CARDS_PER_PAGE = 40
 
     const topVideos = document.getElementById("top-videos")
@@ -1529,8 +1548,7 @@ module.exports = function (app, config, renderTemplate) {
     const estimatedUsersInfoBtn = document.getElementById("estimated-users-info-btn")
     const privacyModalBackdrop = document.getElementById("privacy-modal-backdrop")
     const privacyModalClose = document.getElementById("privacy-modal-close")
-    const liveStatus = document.getElementById("live-status")
-    const liveStatusText = document.getElementById("live-status-text")
+    const autoRefreshToggle = document.getElementById("auto-refresh-toggle")
     const refreshNowBtn = document.getElementById("refresh-now-btn")
 
     var allVideos = {}
@@ -1540,7 +1558,6 @@ module.exports = function (app, config, renderTemplate) {
     var hasLoadedTelemetryOnce = false
     var telemetryRefreshTimer = null
     var telemetryFetchInProgress = false
-    var lastTelemetryUpdatedAt = null
     var lastTelemetrySignature = ""
 
     function setActivePanel(panelId) {
@@ -1829,6 +1846,11 @@ module.exports = function (app, config, renderTemplate) {
       return title.slice(0, 300)
     }
 
+    function getDisplayPageTitle(value) {
+      var title = cleanGuiPageTitle(value)
+      return title || "Couldnt record"
+    }
+
     function cleanGuiPageTitles(input) {
       var output = {}
 
@@ -1891,7 +1913,7 @@ module.exports = function (app, config, renderTemplate) {
 
       var pageTitleEl = document.createElement("div")
       pageTitleEl.className = "video-page-title"
-      pageTitleEl.innerHTML = '<span class="video-page-title-label">Page title:</span> ' + escapeHtml(cleanGuiPageTitle(pageTitle) || "Unknown")
+      pageTitleEl.textContent = getDisplayPageTitle(pageTitle)
 
       var idEl = document.createElement("div")
       idEl.className = "video-id"
@@ -1963,7 +1985,7 @@ module.exports = function (app, config, renderTemplate) {
           "Thumbnail for recent video " + videoId,
           "/watch?v=" + encodeURIComponent(videoId),
           index === 0 ? "Newest ID" : "Position #" + (index + 1),
-          pageTitles[videoId] || "Unknown"
+          pageTitles[videoId]
         )
 
         card.className = "recent-card"
@@ -2036,7 +2058,7 @@ module.exports = function (app, config, renderTemplate) {
 
         var pageTitleEl = document.createElement("div")
         pageTitleEl.className = "video-page-title"
-        pageTitleEl.innerHTML = '<span class="video-page-title-label">Page title:</span> ' + escapeHtml(cleanGuiPageTitle(pageTitles[id]) || "Unknown")
+        pageTitleEl.textContent = getDisplayPageTitle(pageTitles[id])
 
         var idEl = document.createElement("div")
         idEl.className = "video-id"
@@ -2073,31 +2095,13 @@ module.exports = function (app, config, renderTemplate) {
       videoLimitSelect.disabled = true
       downloadRecentJsonBtn.disabled = true
       refreshNowBtn.disabled = true
+      autoRefreshToggle.disabled = true
       paginationWrap.style.display = "none"
       osBreakdown.innerHTML = '<div class="breakdown-empty">' + message + "</div>"
       browserBreakdown.innerHTML = '<div class="breakdown-empty">' + message + "</div>"
       recentCount.textContent = "0"
       recentLatest.textContent = "None"
       telemetryStartedAt.textContent = "Not started"
-    }
-
-    function setLiveStatus(state, message) {
-      liveStatus.classList.remove("loading", "error", "off")
-
-      if (state) {
-        liveStatus.classList.add(state)
-      }
-
-      liveStatusText.textContent = message
-    }
-
-    function formatUpdatedAt(date) {
-      if (!date) return "never"
-      return date.toLocaleTimeString(undefined, {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit"
-      })
     }
 
     function getTelemetrySignature(data) {
@@ -2138,7 +2142,6 @@ module.exports = function (app, config, renderTemplate) {
       pageTitles = titles
       recentVideoIds = recent
       lastTelemetrySignature = signature
-      lastTelemetryUpdatedAt = new Date()
 
       userIdCount.textContent = String(totalUsers)
       estimatedTotalUsers.textContent = String(estimatedUsers)
@@ -2155,10 +2158,6 @@ module.exports = function (app, config, renderTemplate) {
 
       hasLoadedTelemetryOnce = true
 
-      setLiveStatus(
-        "",
-        (changed ? "Live telemetry updated " : "Live telemetry checked ") + formatUpdatedAt(lastTelemetryUpdatedAt)
-      )
     }
 
     function getTelemetryJsonUrl() {
@@ -2170,12 +2169,6 @@ module.exports = function (app, config, renderTemplate) {
 
       telemetryFetchInProgress = true
       refreshNowBtn.disabled = true
-
-      if (!hasLoadedTelemetryOnce) {
-        setLiveStatus("loading", "Loading live telemetry…")
-      } else {
-        setLiveStatus("loading", "Checking for fresh telemetry…")
-      }
 
       fetch(getTelemetryJsonUrl(), {
         cache: "no-store",
@@ -2202,7 +2195,6 @@ module.exports = function (app, config, renderTemplate) {
             telemetryStartedAt.textContent = "Error"
           }
 
-          setLiveStatus("error", "Live telemetry update failed. Retrying automatically…")
         })
         .finally(function () {
           telemetryFetchInProgress = false
@@ -2210,23 +2202,40 @@ module.exports = function (app, config, renderTemplate) {
         })
     }
 
-    function startTelemetryAutoRefresh() {
-      loadTelemetryData(true)
+    function getAutoRefreshEnabled() {
+      try {
+        return localStorage.getItem(AUTO_REFRESH_KEY) !== "0"
+      } catch (e) {
+        return true
+      }
+    }
 
+    function saveAutoRefreshEnabled(enabled) {
+      try {
+        localStorage.setItem(AUTO_REFRESH_KEY, enabled ? "1" : "0")
+      } catch (e) {}
+    }
+
+    function stopTelemetryAutoRefresh() {
       if (telemetryRefreshTimer) {
         clearInterval(telemetryRefreshTimer)
+        telemetryRefreshTimer = null
       }
+    }
+
+    function startTelemetryAutoRefresh() {
+      stopTelemetryAutoRefresh()
 
       telemetryRefreshTimer = setInterval(function () {
         loadTelemetryData(false)
       }, 5000)
-
-      document.addEventListener("visibilitychange", function () {
-        if (!document.hidden) {
-          loadTelemetryData(true)
-        }
-      })
     }
+
+    document.addEventListener("visibilitychange", function () {
+      if (!document.hidden && autoRefreshToggle.checked) {
+        loadTelemetryData(true)
+      }
+    })
 
     videoLimitSelect.addEventListener("change", function () {
       updateLimitWarning()
@@ -2237,13 +2246,24 @@ module.exports = function (app, config, renderTemplate) {
       loadTelemetryData(true)
     })
 
+    autoRefreshToggle.addEventListener("change", function () {
+      var enabled = autoRefreshToggle.checked
+      saveAutoRefreshEnabled(enabled)
+
+      if (enabled) {
+        startTelemetryAutoRefresh()
+        loadTelemetryData(true)
+      } else {
+        stopTelemetryAutoRefresh()
+      }
+    })
+
     if (!TELEMETRY_ON) {
       setDisabledState("No data because telemetry is disabled.")
       userIdCount.textContent = "0"
       estimatedTotalUsers.textContent = "0"
       totalVideoIdCount.textContent = "0"
       telemetryStartedAt.textContent = "Not started"
-      setLiveStatus("off", "Live telemetry is off because telemetry is disabled.")
     } else {
       var optedOut = false
       try {
@@ -2256,9 +2276,16 @@ module.exports = function (app, config, renderTemplate) {
         estimatedTotalUsers.textContent = "Opt-out active"
         totalVideoIdCount.textContent = "Opt-out active"
         telemetryStartedAt.textContent = "Opt-out active"
-        setLiveStatus("off", "Opt-out active, so live telemetry is not loaded in this browser.")
       } else {
-        startTelemetryAutoRefresh()
+        var autoRefreshEnabled = getAutoRefreshEnabled()
+        autoRefreshToggle.checked = autoRefreshEnabled
+        autoRefreshToggle.disabled = false
+        refreshNowBtn.disabled = false
+        loadTelemetryData(true)
+
+        if (autoRefreshEnabled) {
+          startTelemetryAutoRefresh()
+        }
       }
     }
   </script>
