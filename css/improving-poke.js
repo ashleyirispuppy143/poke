@@ -157,10 +157,38 @@ const generateUUIDv7 = (function() {
   return () => (defaultGenerator || (defaultGenerator = new V7Generator())).generate().toString();
 })();
 
+function cleanTextValue(value, maxLength) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+}
+
+function readMetaContent(selectors) {
+  for (const selector of selectors) {
+    const element = document.querySelector(selector);
+
+    if (!element) continue;
+
+    const content = element.getAttribute("content");
+    const text = content || element.textContent || "";
+    const cleaned = cleanTextValue(text, 300);
+
+    if (cleaned) {
+      return cleaned;
+    }
+  }
+
+  return "";
+}
+
 function getCleanPageTitle() {
   const candidates = [
-    document.querySelector("meta[property='og:title']")?.getAttribute("content"),
-    document.querySelector("meta[name='twitter:title']")?.getAttribute("content"),
+    readMetaContent([
+      "meta[property='og:title']",
+      "meta[name='og:title']",
+      "meta[name='twitter:title']"
+    ]),
     document.querySelector("h1")?.textContent,
     document.title
   ];
@@ -168,8 +196,7 @@ function getCleanPageTitle() {
   for (const candidate of candidates) {
     const title = String(candidate || "")
       .replace(/\s+/g, " ")
-      .replace(/\s+-\s+PokeTube\s*$/i, "")
-      .replace(/\s+-\s+Poke\s*$/i, "")
+      .replace(/\s*(?:\||-|–|—)\s*Poke(?:Tube)?\s*$/i, "")
       .trim();
 
     if (title && title.length >= 2) {
@@ -180,7 +207,31 @@ function getCleanPageTitle() {
   return "";
 }
 
-function sendStats(videoId, pageTitle) {
+function getVideoGenre() {
+  const genre = readMetaContent([
+    "meta[name='video-genre']",
+    "meta[property='video:genre']",
+    "meta[itemprop='genre']",
+    "meta#video-genre",
+    "meta[name='genre']",
+    "meta[property='genre']"
+  ]);
+
+  return cleanTextValue(genre, 80);
+}
+
+function getVideoCategoryId() {
+  const categoryId = readMetaContent([
+    "meta[name='video-category-id']",
+    "meta[property='video:category_id']",
+    "meta[itemprop='categoryId']",
+    "meta#video-category-id"
+  ]);
+
+  return cleanTextValue(categoryId, 24);
+}
+
+function sendStats(videoId, pageTitle, videoGenre, videoCategoryId) {
   if (!videoId) return;
 
   try {
@@ -205,13 +256,26 @@ function sendStats(videoId, pageTitle) {
     return;
   }
 
-  const cleanTitle = String(pageTitle || getCleanPageTitle() || "").trim().slice(0, 300);
+  const cleanTitle = cleanTextValue(pageTitle || getCleanPageTitle(), 300);
+  const cleanGenre = cleanTextValue(videoGenre || getVideoGenre(), 80);
+  const cleanCategoryId = cleanTextValue(videoCategoryId || getVideoCategoryId(), 24);
 
-  const payload = JSON.stringify({
+  const payloadObject = {
     videoId,
     userId,
     pageTitle: cleanTitle
-  });
+  };
+
+  if (cleanGenre) {
+    payloadObject.genre = cleanGenre;
+    payloadObject.category = cleanGenre;
+  }
+
+  if (cleanCategoryId) {
+    payloadObject.categoryId = cleanCategoryId;
+  }
+
+  const payload = JSON.stringify(payloadObject);
 
   const sendToEndpoint = (endpoint) => {
     if (navigator.sendBeacon) {
@@ -251,7 +315,7 @@ function sendStats(videoId, pageTitle) {
   });
 }
 
-function sendStatsWhenTitleIsReady(videoId) {
+function sendStatsWhenMetadataIsReady(videoId) {
   if (!videoId) return;
 
   let sent = false;
@@ -260,11 +324,13 @@ function sendStatsWhenTitleIsReady(videoId) {
     if (sent) return;
 
     const title = getCleanPageTitle();
+    const genre = getVideoGenre();
+    const categoryId = getVideoCategoryId();
 
     if (!title) return;
 
     sent = true;
-    sendStats(videoId, title);
+    sendStats(videoId, title, genre, categoryId);
   };
 
   sendOnce();
@@ -299,9 +365,9 @@ function sendStatsWhenTitleIsReady(videoId) {
     if (!sent) {
       sent = true;
       observer.disconnect();
-      sendStats(videoId, getCleanPageTitle());
+      sendStats(videoId, getCleanPageTitle(), getVideoGenre(), getVideoCategoryId());
     }
   }, 2500);
 }
 
-sendStatsWhenTitleIsReady(new URLSearchParams(location.search).get("v"));
+sendStatsWhenMetadataIsReady(new URLSearchParams(location.search).get("v"));
