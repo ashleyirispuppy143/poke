@@ -1618,7 +1618,6 @@ hr{
 .privacy-badge{
   display:inline-flex;
   align-items:center;
-  background:rgba(76,175,80,0.15);
   color:#4caf50;
   padding:6px 12px;
   border-radius:10px;
