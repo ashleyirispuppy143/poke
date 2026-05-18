@@ -1,7 +1,7 @@
 const fs = require("fs")
 const path = require("path")
 
-const telemetryConfig = { telemetry: true }
+const telemetryConfig = { telemetry: false }
 
 const statsFile = path.join(__dirname, "stats.json")
 const statsFileV2 = path.join(__dirname, "stats-v2.json")
