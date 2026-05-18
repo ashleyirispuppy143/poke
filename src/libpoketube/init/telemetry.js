@@ -9,8 +9,12 @@ const maxJsonLimit = 3000
 const telemetrySaveDebounceMs = 15000
 const telemetryMaxUnsavedMs = 60000
 const telemetryMinWriteIntervalMs = 5000
+const telemetryBackupMinIntervalMs = 10 * 60 * 1000
 
 const getNowIso = () => new Date().toISOString()
+
+let lastTelemetryJson = null
+let lastTelemetryBackupAt = 0
 
 function isMissingRecordedTitle(value) {
   const title = String(value || "").trim().toLowerCase()
@@ -192,26 +196,39 @@ function atomicWriteJson(filePath, data) {
   const backupPath = `${filePath}.bak`
   const json = JSON.stringify(data, null, 2)
 
-  try {
-    if (fs.existsSync(filePath)) {
-      const current = fs.readFileSync(filePath, "utf8")
-      if (current === json) return false
+  if (lastTelemetryJson === json) return false
+
+  if (lastTelemetryJson === null) {
+    try {
+      if (fs.existsSync(filePath)) {
+        const current = fs.readFileSync(filePath, "utf8")
+        if (current === json) {
+          lastTelemetryJson = json
+          return false
+        }
+      }
+    } catch (error) {
+      console.error("Could not compare existing telemetry file before write:", filePath, error)
     }
-  } catch (error) {
-    console.error("Could not compare existing telemetry file before write:", filePath, error)
   }
+
+  const fileExists = fs.existsSync(filePath)
+  const now = Date.now()
+  const shouldBackup = fileExists && now - lastTelemetryBackupAt >= telemetryBackupMinIntervalMs
 
   fs.writeFileSync(tmpPath, json)
 
-  if (fs.existsSync(filePath)) {
+  if (shouldBackup) {
     try {
       fs.copyFileSync(filePath, backupPath)
+      lastTelemetryBackupAt = now
     } catch (error) {
       console.error("Could not create telemetry backup for", filePath, error)
     }
   }
 
   fs.renameSync(tmpPath, filePath)
+  lastTelemetryJson = json
   return true
 }
 
@@ -237,7 +254,9 @@ function readTelemetryStorage() {
     return empty
   }
 
-  return normalizeStats(result.data)
+  const clean = normalizeStats(result.data)
+  lastTelemetryJson = JSON.stringify(clean, null, 2)
+  return clean
 }
 
 function sumObjectValues(obj) {
@@ -298,6 +317,456 @@ function isSafeId(value, maxLength) {
   if (!value.trim()) return false
   if (value.length > maxLength) return false
   return true
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}
+
+function normalizeTelemetryTab(value) {
+  const raw = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, "")
+
+  if (raw === "recent" || raw === "recents") return "recent"
+  if (raw === "top" || raw === "topvideo" || raw === "topvideos" || raw === "videos") return "topvideos"
+  if (raw === "api" || raw === "json" || raw === "endpoints") return "api"
+  return "overview"
+}
+
+function getTelemetryTabHref(tab, nojs) {
+  const cleanTab = normalizeTelemetryTab(tab)
+  const params = new URLSearchParams()
+  params.set("view", "gui")
+  if (nojs) params.set("nojs", "1")
+  params.set("tab", cleanTab)
+  return `/api/stats?${params.toString()}`
+}
+
+function getServerDisplayPageTitle(value) {
+  const title = cleanPageTitle(value)
+  return title || "Couldnt record"
+}
+
+function formatServerStartedAt(value) {
+  if (!value) return "Not started"
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return date.toLocaleString("en", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  })
+}
+
+function formatServerLocalViewCount(value) {
+  const count = Number(value) || 0
+  return count === 1 ? "1 local view" : `${count} local views`
+}
+
+function getFriendlyOsName(name) {
+  if (name === "windows") return "Windows"
+  if (name === "android") return "Android"
+  if (name === "unknown") return "Unknown"
+  if (name === "macos") return "macOS"
+  if (name === "gnu-linux") return "GNU/Linux"
+  if (name === "ios") return "iOS"
+  return String(name || "unknown")
+}
+
+function getFriendlyBrowserName(name) {
+  if (name === "firefox") return "Firefox"
+  if (name === "chrome") return "Chromium browser"
+  if (name === "safari") return "Safari"
+  if (name === "edge") return "Edge"
+  if (name === "opera") return "Opera"
+  if (name === "unknown") return "Unknown"
+  return String(name || "unknown")
+}
+
+function renderServerBreakdown(data, kind) {
+  const entries = Object.entries(data || {})
+    .map(([key, value]) => [key, Number(value) || 0])
+    .filter((entry) => entry[1] > 0)
+    .sort((a, b) => b[1] - a[1])
+
+  if (!entries.length) {
+    return '<div class="breakdown-empty">No data recorded yet.</div>'
+  }
+
+  const total = entries.reduce((sum, entry) => sum + entry[1], 0)
+
+  return entries.map(([key, count]) => {
+    const percent = total ? ((count / total) * 100).toFixed(2) : "0.00"
+    const label = kind === "os" ? getFriendlyOsName(key) : getFriendlyBrowserName(key)
+    const typeLabel = kind === "os" ? "OS detections" : "browser detections"
+
+    return `<div class="breakdown-item">
+      <div class="breakdown-topline">
+        <div class="breakdown-label">${escapeHtml(label)} · ${percent}%</div>
+        <div class="breakdown-count">${count} detections</div>
+      </div>
+      <div class="breakdown-bar-wrap">
+        <div class="breakdown-bar" style="width:${percent}%"></div>
+      </div>
+      <div class="breakdown-sub">${escapeHtml(label)} was detected ${count} times out of ${total} total ${typeLabel} on this Poke instance.</div>
+    </div>`
+  }).join("")
+}
+
+function getTelemetrySnapshot(stats, rawLimit) {
+  const parsedLimit = parseInt(String(rawLimit || "100"), 10)
+  const limit = Number.isFinite(parsedLimit)
+    ? Math.max(1, Math.min(parsedLimit, maxJsonLimit))
+    : 100
+
+  const sortedVideos = Object.entries((stats && stats.videos) || {})
+    .sort((a, b) => b[1] - a[1])
+
+  const topEntries = sortedVideos.slice(0, limit)
+  const topVideos = Object.fromEntries(topEntries)
+  const recentVideos = ((stats && stats.recentVideos) || []).slice(-32).reverse()
+  const visibleVideoIds = new Set([...Object.keys(topVideos), ...recentVideos])
+  const pageTitles = {}
+
+  for (const id of visibleVideoIds) {
+    const title = cleanPageTitle(((stats && stats.pageTitles) || {})[id])
+    if (title) pageTitles[id] = title
+  }
+
+  const totalUsers = Object.keys((stats && stats.users) || {}).length
+  const estimatedTotalUsers = computeEstimatedTotalUsers(stats || getEmptyStats())
+  const totalDetections = Math.max(
+    sumObjectValues((stats && stats.os) || {}),
+    sumObjectValues((stats && stats.browsers) || {})
+  )
+
+  return {
+    startedAt: (stats && stats.startedAt) || null,
+    videos: topVideos,
+    topEntries,
+    recentVideos,
+    pageTitles,
+    browsers: (stats && stats.browsers) || {},
+    os: (stats && stats.os) || {},
+    totalUsers,
+    estimatedTotalUsers,
+    totalVideoIds: Object.keys((stats && stats.videos) || {}).length,
+    totalDetections,
+    limit
+  }
+}
+
+function renderServerVideoCard(videoId, options = {}) {
+  const title = getServerDisplayPageTitle(options.pageTitle)
+  const href = `/watch?v=${encodeURIComponent(videoId)}`
+  const badge = options.badge ? `<div class="recent-badge">${escapeHtml(options.badge)}</div>` : ""
+  const rank = options.rank ? `<div class="video-rank">Rank #${options.rank}</div>` : ""
+  const views = typeof options.views === "undefined"
+    ? ""
+    : `<div class="video-views">${escapeHtml(formatServerLocalViewCount(options.views))}</div>`
+
+  return `<li class="${escapeHtml(options.className || "video-card")}">
+    <a class="video-thumb-link" href="${href}" aria-label="Open video ${escapeHtml(videoId)}">
+      <img class="video-thumb" src="https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg" alt="Thumbnail for video ${escapeHtml(videoId)}" loading="lazy" referrerpolicy="no-referrer">
+    </a>
+    <div class="video-meta">
+      ${badge}
+      <a class="video-title" href="${href}">${escapeHtml(videoId)}</a>
+      ${rank}
+      <div class="video-page-title">${escapeHtml(title)}</div>
+      <div class="video-id">Video ID: ${escapeHtml(videoId)}</div>
+      ${views}
+    </div>
+  </li>`
+}
+
+function renderTelemetryNoJsPage(query, stats, telemetryOn) {
+  const tab = normalizeTelemetryTab(query && query.tab)
+  const snapshot = telemetryOn
+    ? getTelemetrySnapshot(stats, query && query.limit)
+    : getTelemetrySnapshot(getEmptyStats(), query && query.limit)
+
+  const tabs = [
+    ["overview", "Overview"],
+    ["recent", "Recent"],
+    ["topvideos", "Top videos"],
+    ["api", "API"]
+  ]
+
+  const tabLinks = tabs.map(([value, label]) => {
+    const active = tab === value ? " active" : ""
+    return `<a class="seg-btn${active}" href="${escapeHtml(getTelemetryTabHref(value, true))}">${escapeHtml(label)}</a>`
+  }).join("")
+
+  const overviewPanel = `<section class="panel active">
+    <div class="overview-grid">
+      <div class="section-card">
+        <h3>Operating systems</h3>
+        <div class="breakdown-list">${renderServerBreakdown(snapshot.os, "os")}</div>
+      </div>
+      <div class="section-card">
+        <h3>Browsers</h3>
+        <div class="breakdown-list">${renderServerBreakdown(snapshot.browsers, "browser")}</div>
+      </div>
+    </div>
+  </section>`
+
+  const recentCards = snapshot.recentVideos.length
+    ? snapshot.recentVideos.slice(0, 12).map((videoId, index) => renderServerVideoCard(videoId, {
+        className: "recent-card",
+        badge: index === 0 ? "Newest ID" : `Position #${index + 1}`,
+        pageTitle: snapshot.pageTitles[videoId]
+      })).join("")
+    : '<li class="recent-empty">No recent video IDs recorded yet.</li>'
+
+  const recentPanel = `<section class="panel active">
+    <div class="section-help">
+      <h2>How to read recent videos</h2>
+      <p class="note">This server-rendered view shows the most recently recorded video IDs from this Poke instance. It does not auto-refresh.</p>
+    </div>
+    <div class="section-card">
+      <div class="compact-head">
+        <div>
+          <h2>Recently viewed video IDs</h2>
+          <p class="note" style="margin:0;">A rolling local list of recent video IDs recorded by this Poke instance.</p>
+        </div>
+      </div>
+      <div class="recent-summary">
+        <div class="summary-card">
+          <div class="summary-label">recent IDs loaded</div>
+          <div class="summary-value">${snapshot.recentVideos.length}</div>
+          <div class="summary-sub">How many recent IDs are visible in this snapshot.</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">latest recorded ID</div>
+          <div class="summary-value">${escapeHtml(snapshot.recentVideos[0] || "None")}</div>
+          <div class="summary-sub">The first item in the recency queue, if any recent ID exists.</div>
+        </div>
+      </div>
+      <ul class="recent-grid">${recentCards}</ul>
+    </div>
+  </section>`
+
+  const topCards = snapshot.topEntries.length
+    ? snapshot.topEntries.map(([videoId, views], index) => renderServerVideoCard(videoId, {
+        rank: index + 1,
+        views,
+        pageTitle: snapshot.pageTitles[videoId]
+      })).join("")
+    : '<li class="error-box">No stats recorded yet.</li>'
+
+  const topPanel = `<section class="panel active">
+    <div class="section-help">
+      <h2>How to read top videos</h2>
+      <p class="note">Rankings here are based only on anonymous local detections on this Poke instance.</p>
+    </div>
+    <div class="section-card">
+      <div class="compact-head">
+        <div>
+          <h2>Top videos</h2>
+          <p class="note" style="margin:0;">Ranked by <strong>local views</strong> only, not public YouTube totals.</p>
+        </div>
+      </div>
+      <form class="controls" method="get" action="/api/stats">
+        <input type="hidden" name="view" value="gui">
+        <input type="hidden" name="nojs" value="1">
+        <input type="hidden" name="tab" value="topvideos">
+        <label for="video-limit">Show top videos:</label>
+        <select id="video-limit" name="limit">
+          ${[8, 20, 100, 200, 500, 1000, 3000].map((value) => `<option value="${value}"${snapshot.limit === value ? " selected" : ""}>${value}</option>`).join("")}
+        </select>
+        <button class="telemetry-refresh-btn" type="submit">Apply</button>
+      </form>
+      <ul class="video-grid">${topCards}</ul>
+    </div>
+  </section>`
+
+  const apiPanel = `<section class="panel active">
+    <div class="section-card api-lines">
+      <h2>API usage</h2>
+      <p class="note">
+        These API views expose anonymous local telemetry collected by Poke from <code>telemetry.json</code>.<br><br>
+        • Live GUI view: <code><a href="/api/stats?view=gui">/api/stats?view=gui</a></code><br>
+        • No-JavaScript GUI view: <code><a href="/api/stats?view=gui&amp;nojs=1">/api/stats?view=gui&amp;nojs=1</a></code><br>
+        • JSON view: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code><br>
+        • JSON with custom limit: <code><a href="/api/stats?view=json&amp;limit=3000">/api/stats?view=json&amp;limit=3000</a></code><br>
+        • Opt out for this browser: <code><a href="/api/stats/optout">/api/stats/optout</a></code>
+      </p>
+    </div>
+  </section>`
+
+  const selectedPanel = tab === "recent"
+    ? recentPanel
+    : tab === "topvideos"
+      ? topPanel
+      : tab === "api"
+        ? apiPanel
+        : overviewPanel
+
+  const disabledMessage = telemetryOn ? "" : '<div class="section-card"><p class="note">No data because telemetry is disabled.</p></div>'
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Improving Poke - Stats</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="/favicon.ico">
+  <style>
+    @font-face {
+      font-family: "PokeTube Flex";
+      src: url("/static/robotoflex.ttf");
+      font-style: normal;
+      font-stretch: 1% 800%;
+      font-display: swap;
+    }
+    :root{color-scheme:dark}
+    body{color:#fff}
+    body{
+      background:#1c1b22;
+      margin:0;
+      font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+    }
+    :visited{color:#00c0ff}
+    a{color:#0ab7f0}
+    button{font:inherit}
+    .app{max-width:1100px;margin:0 auto;padding:24px}
+    p{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;line-height:1.6}
+    h1,h2,h3,.tab-btn{font-family:"PokeTube Flex",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif}
+    h1{font-weight:1000;font-stretch:ultra-expanded;margin-top:0;margin-bottom:.35rem}
+    h2{font-weight:700;font-stretch:extra-expanded;margin-top:0;margin-bottom:.4rem}
+    h3{font-weight:700;font-stretch:extra-expanded;margin:0 0 .75rem 0;font-size:1.02rem}
+    .note{color:#bbb;font-size:.95rem}
+    .small{color:#bbb;font-size:.95rem}
+    .logo{float:right;margin:.3em 0 1em 2em;max-width:130px}
+    .header-container{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;margin-bottom:24px;gap:16px}
+    .tabs{display:inline-flex;background:#15141a;border-radius:24px;padding:4px;border:1px solid rgba(255,255,255,0.05);flex-wrap:wrap;gap:2px}
+    .tab-btn{background:transparent;color:#aaa;border:none;padding:8px 20px;border-radius:20px;cursor:pointer;font-weight:700;font-size:.95rem;outline:none;display:inline-block;line-height:1.2;text-decoration:none}
+    .tab-btn:hover:not(.active){color:#fff;text-decoration:none}
+    .tab-btn.active{background:#0ab7f0;color:#1c1b22;box-shadow:0 2px 8px rgba(10,183,240,.3)}
+    .telemetry-notice,.hero-main,.hero-side,.section-card{background:#252432;border:1px solid #2a2a35;border-radius:18px;padding:18px}
+    .telemetry-notice{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;margin:0 0 18px 0}
+    .telemetry-notice h2{margin:0 0 .4rem 0;font-size:1.05rem}
+    .telemetry-notice p{margin:.4rem 0 0 0}
+    .hero{display:grid;grid-template-columns:1.45fr .95fr;gap:16px;align-items:start;margin-bottom:18px}
+    .hero-main p,.hero-side p{margin:.4rem 0 0 0}
+    .hero-side{display:flex;flex-direction:column;gap:14px}
+    .mini-stat{display:flex;flex-direction:column;gap:.15rem}
+    .mini-stat-label{color:#bbb;font-size:.92rem}
+    .mini-stat-value{font-size:1.55rem;font-weight:700;display:flex;align-items:center;gap:.45rem;flex-wrap:wrap}
+    .mini-stat-sub{color:#bbb;font-size:.9rem;line-height:1.45}
+    .segmented{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 18px 0}
+    .seg-btn{display:inline-block;background:#252432;color:#fff;border:1px solid #2a2a35;border-radius:999px;padding:.58rem .9rem;cursor:pointer;text-decoration:none}
+    .seg-btn.active{border-color:#0ab7f0;box-shadow:inset 0 0 0 1px #0ab7f0;background:#1f1e29}
+    .section-card{margin-bottom:16px}
+    .section-help{margin-bottom:16px;background:#22212d;border:1px solid #2e2d3b;border-radius:16px;padding:16px}
+    .section-help p{margin:.35rem 0 0 0}
+    .overview-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+    .breakdown-empty{color:#bbb}
+    .breakdown-list{display:flex;flex-direction:column;gap:12px}
+    .breakdown-topline{display:flex;justify-content:space-between;gap:12px;align-items:baseline;margin-bottom:.4rem}
+    .breakdown-label{font-weight:600;min-width:0;word-break:break-word}
+    .breakdown-count{color:#bbb;white-space:nowrap;font-size:.92rem}
+    .breakdown-bar-wrap{width:100%;height:12px;background:#17161d;border:1px solid #2a2a35;border-radius:999px;overflow:hidden}
+    .breakdown-bar{height:100%;width:0%;background:linear-gradient(90deg,#0ab7f0 0%,#52d3ff 100%);border-radius:999px}
+    .breakdown-sub{margin-top:.35rem;color:#bbb;font-size:.9rem;line-height:1.45}
+    .controls{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;margin:.25rem 0 1rem 0}
+    .controls select{background:#252432;color:#fff;border:1px solid #2a2a35;border-radius:10px;padding:.45rem .7rem;font:inherit}
+    .telemetry-refresh-btn{padding:.48rem .76rem;border-radius:999px;border:1px solid #3a3947;background:#252432;color:#fff;cursor:pointer;font:inherit;font-size:.9rem}
+    .compact-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:12px}
+    .recent-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:16px}
+    .summary-card{background:#1f1e29;border:1px solid #2e2d3b;border-radius:16px;padding:14px}
+    .summary-label{color:#bbb;font-size:.88rem;margin-bottom:.25rem}
+    .summary-value{font-size:1.2rem;font-weight:700;word-break:break-word}
+    .summary-sub{margin-top:.35rem;color:#bbb;font-size:.9rem;line-height:1.4}
+    .recent-grid,.video-grid{list-style:none;padding-left:0;margin:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+    .recent-card,.video-card{display:flex;flex-direction:column;gap:10px;background:#252432;border:1px solid #2a2a35;border-radius:16px;padding:12px;min-width:0}
+    .video-thumb-link{display:block;width:100%}
+    .video-thumb{display:block;width:100%;aspect-ratio:16 / 9;object-fit:cover;border-radius:12px;background:#111}
+    .video-title{display:inline-block;font-weight:700;line-height:1.35;text-decoration:none;word-break:break-word}
+    .video-page-title{margin-top:.45rem;color:#fff;font-size:.95rem;line-height:1.35;word-break:break-word}
+    .video-id{color:#bbb;font-size:.9rem;margin-top:.4rem;word-break:break-all}
+    .video-views{margin-top:.5rem;font-size:.95rem;color:#fff}
+    .video-rank{margin-top:.45rem;color:#bbb;font-size:.9rem}
+    .recent-badge{display:inline-flex;align-items:center;gap:.35rem;width:max-content;background:#1f1e29;border:1px solid #2e2d3b;color:#fff;border-radius:999px;padding:.35rem .65rem;font-size:.85rem}
+    .recent-empty,.error-box{background:#1f1e29;border:1px solid #2e2d3b;border-radius:16px;padding:16px;color:#bbb;line-height:1.5}
+    .api-lines code{white-space:nowrap}
+    @media (max-width:1000px){.recent-grid,.video-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+    @media (max-width:900px){.hero{grid-template-columns:1fr}.overview-grid{grid-template-columns:1fr}.recent-summary{grid-template-columns:1fr}}
+    @media (max-width:860px){.recent-grid,.video-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media (max-width:640px){.recent-grid,.video-grid{grid-template-columns:1fr}.breakdown-topline{flex-direction:column;align-items:flex-start;gap:.2rem}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <img class="logo" src="/css/logo-poke.svg" alt="Poke logo">
+    <div class="header-container">
+      <div>
+        <h1>Anonymous Stats</h1>
+        <p class="small" style="margin-top:0;">Privacy stats for Poke!</p>
+      </div>
+      <div class="tabs">
+        <a class="tab-btn" href="/health">Server Vitals</a>
+        <a class="tab-btn" href="/traffic">Requests</a>
+        <a class="tab-btn active" href="/api/stats?view=gui">Anonymous Stats</a>
+      </div>
+    </div>
+
+    <div class="telemetry-notice">
+      <div>
+        <h2>Telemetry system changed</h2>
+        <p class="note">This instance now uses a single <code>telemetry.json</code> file. This no-JavaScript page is a server-rendered snapshot and does not auto-refresh.</p>
+      </div>
+      <div>
+        <a class="seg-btn" href="/api/stats?view=gui&amp;tab=${escapeHtml(tab)}">Open live view</a>
+      </div>
+    </div>
+
+    <div class="hero">
+      <div class="hero-main">
+        <h2>Private by design</h2>
+        <p class="note">These stats are aggregated locally on this Poke instance. Video popularity is based on views recorded from Poke's video watch page.</p>
+        <p class="note" style="margin-top:.7rem;"><strong>Important:</strong> these are local Poke numbers, not public YouTube view counts.</p>
+      </div>
+      <div class="hero-side">
+        <div class="mini-stat">
+          <div class="mini-stat-label">anonymous user id count</div>
+          <div class="mini-stat-value">${telemetryOn ? snapshot.totalUsers : 0}</div>
+          <div class="mini-stat-sub">Conservative count from unique anonymous user IDs recorded by this Poke instance.</div>
+        </div>
+        <div class="mini-stat">
+          <div class="mini-stat-label">estimated total users</div>
+          <div class="mini-stat-value">${telemetryOn ? snapshot.estimatedTotalUsers : 0}</div>
+          <div class="mini-stat-sub">Private estimate based on anonymous user IDs plus aggregate OS/browser detection patterns.</div>
+        </div>
+        <div class="mini-stat">
+          <div class="mini-stat-label">total video ids seen</div>
+          <div class="mini-stat-value">${telemetryOn ? snapshot.totalVideoIds : 0}</div>
+          <div class="mini-stat-sub">Unique video IDs this Poke instance has seen from its local telemetry data.</div>
+        </div>
+        <div class="mini-stat">
+          <div class="mini-stat-label">telemetry started</div>
+          <div class="mini-stat-value">${escapeHtml(telemetryOn ? formatServerStartedAt(snapshot.startedAt) : "Not started")}</div>
+          <div class="mini-stat-sub">Date this local <code>telemetry.json</code> data file was started.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="segmented">${tabLinks}</div>
+    ${disabledMessage}
+    ${selectedPanel}
+  </div>
+</body>
+</html>`
 }
 
 module.exports = function (app, config, renderTemplate) {
@@ -626,47 +1095,32 @@ module.exports = function (app, config, renderTemplate) {
         })
       }
 
-      const hasLimit = typeof req.query.limit !== "undefined"
-      const rawLimit = parseInt((hasLimit ? req.query.limit : "8").toString(), 10)
-      const limit = Number.isFinite(rawLimit)
-        ? Math.max(1, Math.min(rawLimit, maxJsonLimit))
-        : 8
-
-      const sortedVideos = Object.entries(memoryStats.videos || {})
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, limit)
-
-      const topVideos = Object.fromEntries(sortedVideos)
-      const recentVideos = (memoryStats.recentVideos || []).slice(-32).reverse()
-      const visibleVideoIds = new Set([...Object.keys(topVideos), ...recentVideos])
-      const pageTitles = {}
-
-      for (const id of visibleVideoIds) {
-        const title = cleanPageTitle((memoryStats.pageTitles || {})[id])
-        if (title) pageTitles[id] = title
-      }
-
-      const totalUsers = Object.keys(memoryStats.users || {}).length
-      const estimatedTotalUsers = computeEstimatedTotalUsers(memoryStats)
-      const totalDetections = Math.max(sumObjectValues(memoryStats.os), sumObjectValues(memoryStats.browsers))
+      const snapshot = getTelemetrySnapshot(
+        memoryStats,
+        typeof req.query.limit !== "undefined" ? req.query.limit : "8"
+      )
 
       return res.json({
-        startedAt: memoryStats.startedAt || null,
-        videos: topVideos,
-        pageTitles,
-        recentVideos,
-        browsers: memoryStats.browsers || {},
-        os: memoryStats.os || {},
-        totalUsers,
-        estimatedTotalUsers,
-        totalVideoIds: Object.keys(memoryStats.videos || {}).length,
-        totalDetections,
-        limit
+        startedAt: snapshot.startedAt,
+        videos: snapshot.videos,
+        pageTitles: snapshot.pageTitles,
+        recentVideos: snapshot.recentVideos,
+        browsers: snapshot.browsers,
+        os: snapshot.os,
+        totalUsers: snapshot.totalUsers,
+        estimatedTotalUsers: snapshot.estimatedTotalUsers,
+        totalVideoIds: snapshot.totalVideoIds,
+        totalDetections: snapshot.totalDetections,
+        limit: snapshot.limit
       })
     }
 
     if (view === "gui") {
       const telemetryOn = telemetryConfig.telemetry
+
+      if ((req.query.nojs || "").toString() === "1") {
+        return res.send(renderTelemetryNoJsPage(req.query || {}, memoryStats, telemetryOn))
+      }
 
       return res.send(`<!DOCTYPE html>
 <html lang="en">
@@ -1371,11 +1825,12 @@ module.exports = function (app, config, renderTemplate) {
       <div class="nojs-warning">
         <h2>JavaScript is disabled</h2>
         <p>
-          This GUI stats page is designed as an interactive view, so without JavaScript it cannot load live instance numbers, switch between sections, paginate top videos, or generate the downloadable recent-video JSON file.
+          This live GUI needs JavaScript for auto-refresh, client-side tabs, pagination, and downloads.
+          A server-rendered snapshot is available and does not auto-refresh.
         </p>
         <ul>
-          <li>You can still read the raw local stats at <code>/api/stats?view=json</code>.</li>
-          <li>You can still read the stats privacy details at <code>/policies/privacy#stats</code>.</li>
+          <li>Open the no-JavaScript stats view at <code><a href="/api/stats?view=gui&amp;nojs=1">/api/stats?view=gui&amp;nojs=1</a></code>.</li>
+          <li>You can still read the raw local stats at <code><a href="/api/stats?view=json">/api/stats?view=json</a></code>.</li>
           <li>This warning itself does not enable any tracking, cookies, or extra data collection.</li>
         </ul>
       </div>
@@ -1464,10 +1919,10 @@ module.exports = function (app, config, renderTemplate) {
     </div>
 
     <div class="segmented">
-      <button type="button" class="seg-btn active" data-panel="overview-panel">Overview</button>
-      <button type="button" class="seg-btn" data-panel="recent-panel">Recent</button>
-      <button type="button" class="seg-btn" data-panel="top-panel">Top videos</button>
-      <button type="button" class="seg-btn" data-panel="api-panel">API</button>
+      <button type="button" class="seg-btn active" data-panel="overview-panel" data-tab="overview">Overview</button>
+      <button type="button" class="seg-btn" data-panel="recent-panel" data-tab="recent">Recent</button>
+      <button type="button" class="seg-btn" data-panel="top-panel" data-tab="topvideos">Top videos</button>
+      <button type="button" class="seg-btn" data-panel="api-panel" data-tab="api">API</button>
     </div>
 
     <section id="overview-panel" class="panel active">
@@ -1573,6 +2028,8 @@ module.exports = function (app, config, renderTemplate) {
         <p class="note">
           These API views expose anonymous local telemetry collected by Poke from <code>telemetry.json</code>.<br><br>
           • GUI view: <code><a href="/api/stats?view=gui">/api/stats?view=gui</a></code><br>
+          • GUI top videos tab: <code><a href="/api/stats?view=gui&amp;tab=topvideos">/api/stats?view=gui&amp;tab=topvideos</a></code><br>
+          • No-JavaScript GUI: <code><a href="/api/stats?view=gui&amp;nojs=1">/api/stats?view=gui&amp;nojs=1</a></code><br>
           • JSON view: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code><br>
           • JSON default limit: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code> (8 videos)<br>
           • JSON with custom limit: <code><a href="/api/stats?view=json&limit=3000">/api/stats?view=json&limit=3000</a></code><br>
@@ -1636,21 +2093,81 @@ module.exports = function (app, config, renderTemplate) {
     var telemetryFetchInProgress = false
     var lastTelemetrySignature = ""
 
-    function setActivePanel(panelId) {
+    const TAB_TO_PANEL = {
+      overview: "overview-panel",
+      recent: "recent-panel",
+      topvideos: "top-panel",
+      api: "api-panel"
+    }
+
+    const PANEL_TO_TAB = {
+      "overview-panel": "overview",
+      "recent-panel": "recent",
+      "top-panel": "topvideos",
+      "api-panel": "api"
+    }
+
+    function normalizeTabName(value) {
+      var raw = String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[\s_-]+/g, "")
+
+      if (raw === "recent" || raw === "recents") return "recent"
+      if (raw === "top" || raw === "topvideo" || raw === "topvideos" || raw === "videos") return "topvideos"
+      if (raw === "api" || raw === "json" || raw === "endpoints") return "api"
+      return "overview"
+    }
+
+    function getTabFromUrl() {
+      try {
+        var params = new URLSearchParams(window.location.search)
+        return normalizeTabName(params.get("tab"))
+      } catch (e) {
+        return "overview"
+      }
+    }
+
+    function getPanelForTab(tab) {
+      return TAB_TO_PANEL[normalizeTabName(tab)] || TAB_TO_PANEL.overview
+    }
+
+    function updateTabQuery(tab) {
+      try {
+        var url = new URL(window.location.href)
+        url.searchParams.set("tab", normalizeTabName(tab))
+        history.pushState({ tab: normalizeTabName(tab) }, "", url.toString())
+      } catch (e) {}
+    }
+
+    function setActivePanel(panelId, updateUrl) {
+      var cleanPanelId = PANEL_TO_TAB[panelId] ? panelId : "overview-panel"
+      var tab = PANEL_TO_TAB[cleanPanelId] || "overview"
+
       panels.forEach(function (panel) {
-        panel.classList.toggle("active", panel.id === panelId)
+        panel.classList.toggle("active", panel.id === cleanPanelId)
       })
 
       segButtons.forEach(function (btn) {
-        btn.classList.toggle("active", btn.getAttribute("data-panel") === panelId)
+        btn.classList.toggle("active", btn.getAttribute("data-panel") === cleanPanelId)
       })
+
+      if (updateUrl) {
+        updateTabQuery(tab)
+      }
     }
 
     segButtons.forEach(function (btn) {
       btn.addEventListener("click", function () {
-        setActivePanel(btn.getAttribute("data-panel"))
+        setActivePanel(btn.getAttribute("data-panel"), true)
       })
     })
+
+    window.addEventListener("popstate", function () {
+      setActivePanel(getPanelForTab(getTabFromUrl()), false)
+    })
+
+    setActivePanel(getPanelForTab(getTabFromUrl()), false)
 
     function openPrivacyModal() {
       privacyModalBackdrop.classList.add("open")
