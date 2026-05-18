@@ -2333,8 +2333,172 @@ module.exports = function (app, config, renderTemplate) {
 </html>`)
   })
 
+  function renderTelemetryHomePage(res) {
+    return res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Improving Poke</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="/favicon.ico">
+  <style>
+    @font-face {
+      font-family: "PokeTube Flex";
+      src: url("/static/robotoflex.ttf");
+      font-style: normal;
+      font-stretch: 1% 800%;
+      font-display: swap;
+    }
+    :root{color-scheme:dark}
+    body{color:#fff}
+    body{
+      background:#1c1b22;
+      margin:0;
+      font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+    }
+    img{
+      float:right;
+      margin:.3em 0 1em 2em;
+    }
+    :visited{color:#00c0ff}
+    a{color:#0ab7f0}
+    .app{
+      max-width:1000px;
+      margin:0 auto;
+      padding:24px;
+    }
+    p{
+      font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+      line-height:1.6;
+    }
+    ul{
+      font-family:"PokeTube Flex",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+      font-weight:500;
+      font-stretch:extra-expanded;
+      padding-left:1.2rem;
+    }
+    h2{
+      font-family:"PokeTube Flex",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+      font-weight:700;
+      font-stretch:extra-expanded;
+      margin-top:1.5rem;
+      margin-bottom:.3rem;
+    }
+    h1{
+      font-family:"PokeTube Flex",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+      font-weight:1000;
+      font-stretch:ultra-expanded;
+      margin-top:0;
+      margin-bottom:.3rem;
+    }
+    hr{
+      border:0;
+      border-top:1px solid #222;
+      margin:28px 0;
+    }
+    .logo{
+      float:right;
+      margin:.3em 0 1em 2em;
+      max-width:130px;
+    }
+    .header-container{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-end;
+      flex-wrap:wrap;
+      margin-bottom:24px;
+      gap:16px;
+    }
+    .tabs{
+      display:inline-flex;
+      background:#15141a;
+      border-radius:24px;
+      padding:4px;
+      border:1px solid rgba(255,255,255,0.05);
+      flex-wrap:wrap;
+      gap:2px;
+    }
+    .tab-btn{
+      font-family:"PokeTube Flex",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+      background:transparent;
+      color:#aaa;
+      border:none;
+      padding:8px 20px;
+      border-radius:20px;
+      cursor:pointer;
+      font-weight:700;
+      font-size:.95rem;
+      transition:all .3s ease;
+      outline:none;
+      display:inline-block;
+      line-height:1.2;
+      text-decoration:none;
+    }
+    .tab-btn:hover:not(.active){
+      color:#fff;
+      text-decoration:none;
+    }
+    .tab-btn.active{
+      background:#0ab7f0;
+      color:#1c1b22;
+      box-shadow:0 2px 8px rgba(10,183,240,.3);
+    }
+    .note{color:#bbb;font-size:.95rem;}
+    .muted{opacity:.8;font-size:.95rem;}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <img class="logo" src="/css/logo-poke.svg" alt="Poke logo">
+
+    <div class="header-container">
+      <div>
+        <h1>Improving Poke</h1>
+        <p class="muted" style="margin-top:0;">wonder how we improve poke?</p>
+      </div>
+      <div class="tabs">
+        <a class="tab-btn" href="/health">Server Vitals</a>
+        <a class="tab-btn" href="/traffic">Requests</a>
+        <a class="tab-btn active" href="/api/stats">Anonymous Stats</a>
+      </div>
+    </div>
+
+    <h2>Private by design</h2>
+
+    <p>
+      At <a href="/">Poke</a>, we do not collect or share any personal information.
+      That's our privacy promise in a nutshell.
+      To improve Poke we use a completely anonymous, local-only way to understand how videos are being watched through Poke.
+    </p>
+
+    <p>
+      Any anonymous stats recorded by this instance come through the <code>/api/stats</code> system.
+      You can read exactly what is measured and what is <em>not</em> in our privacy policy:
+      <a href="/policies/privacy#stats">here</a>.
+    </p>
+
+    <hr>
+
+    <h2>API usage</h2>
+    <p class="note">
+      These API views are for anonymous local Poke stats only.<br><br>
+      • Main info page: <code><a href="/api/stats">/api/stats</a></code><br>
+      • GUI view: <code><a href="/api/stats?view=gui">/api/stats?view=gui</a></code><br>
+      • Trending tab: <code><a href="/api/stats?view=gui&amp;tab=trending">/api/stats?view=gui&amp;tab=trending</a></code><br>
+      • JSON view: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code><br>
+      • Trending API: <code><a href="/api/trending">/api/trending</a></code><br>
+      • Trending by genre: <code><a href="/api/trending?category=music">/api/trending?category=music</a></code><br>
+      • JSON default limit: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code> (8 videos)<br>
+      • JSON with custom limit: <code><a href="/api/stats?view=json&amp;limit=3000">/api/stats?view=json&amp;limit=3000</a></code><br>
+      • Opt out for this browser: <code><a href="/api/stats/optout">/api/stats/optout</a></code>
+    </p>
+  </div>
+</body>
+</html>`)
+  }
+
   app.get(["/telemetry", "/stats", "/t"], (req, res) => {
-    return res.redirect(302, "/api/stats")
+    return renderTelemetryHomePage(res)
   })
 
   app.get("/api/trending", (req, res) => {
@@ -4359,167 +4523,6 @@ module.exports = function (app, config, renderTemplate) {
 </html>`)
     }
 
-    return res.send(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>Improving Poke</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link rel="icon" href="/favicon.ico">
-  <style>
-    @font-face {
-      font-family: "PokeTube Flex";
-      src: url("/static/robotoflex.ttf");
-      font-style: normal;
-      font-stretch: 1% 800%;
-      font-display: swap;
-    }
-    :root{color-scheme:dark}
-    body{color:#fff}
-    body{
-      background:#1c1b22;
-      margin:0;
-      font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
-    }
-    img{
-      float:right;
-      margin:.3em 0 1em 2em;
-    }
-    :visited{color:#00c0ff}
-    a{color:#0ab7f0}
-    .app{
-      max-width:1000px;
-      margin:0 auto;
-      padding:24px;
-    }
-    p{
-      font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
-      line-height:1.6;
-    }
-    ul{
-      font-family:"PokeTube Flex",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
-      font-weight:500;
-      font-stretch:extra-expanded;
-      padding-left:1.2rem;
-    }
-    h2{
-      font-family:"PokeTube Flex",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
-      font-weight:700;
-      font-stretch:extra-expanded;
-      margin-top:1.5rem;
-      margin-bottom:.3rem;
-    }
-    h1{
-      font-family:"PokeTube Flex",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
-      font-weight:1000;
-      font-stretch:ultra-expanded;
-      margin-top:0;
-      margin-bottom:.3rem;
-    }
-    hr{
-      border:0;
-      border-top:1px solid #222;
-      margin:28px 0;
-    }
-    .logo{
-      float:right;
-      margin:.3em 0 1em 2em;
-      max-width:130px;
-    }
-    .header-container{
-      display:flex;
-      justify-content:space-between;
-      align-items:flex-end;
-      flex-wrap:wrap;
-      margin-bottom:24px;
-      gap:16px;
-    }
-    .tabs{
-      display:inline-flex;
-      background:#15141a;
-      border-radius:24px;
-      padding:4px;
-      border:1px solid rgba(255,255,255,0.05);
-      flex-wrap:wrap;
-      gap:2px;
-    }
-    .tab-btn{
-      font-family:"PokeTube Flex",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
-      background:transparent;
-      color:#aaa;
-      border:none;
-      padding:8px 20px;
-      border-radius:20px;
-      cursor:pointer;
-      font-weight:700;
-      font-size:.95rem;
-      transition:all .3s ease;
-      outline:none;
-      display:inline-block;
-      line-height:1.2;
-      text-decoration:none;
-    }
-    .tab-btn:hover:not(.active){
-      color:#fff;
-      text-decoration:none;
-    }
-    .tab-btn.active{
-      background:#0ab7f0;
-      color:#1c1b22;
-      box-shadow:0 2px 8px rgba(10,183,240,.3);
-    }
-    .note{color:#bbb;font-size:.95rem;}
-    .muted{opacity:.8;font-size:.95rem;}
-  </style>
-</head>
-<body>
-  <div class="app">
-    <img class="logo" src="/css/logo-poke.svg" alt="Poke logo">
-
-    <div class="header-container">
-      <div>
-        <h1>Improving Poke</h1>
-        <p class="muted" style="margin-top:0;">Private local telemetry for Poke.</p>
-      </div>
-      <div class="tabs">
-        <a class="tab-btn" href="/health">Server Vitals</a>
-        <a class="tab-btn" href="/traffic">Requests</a>
-        <a class="tab-btn active" href="/api/stats">Anonymous Stats</a>
-      </div>
-    </div>
-
-    <h2>Private by design</h2>
-
-    <p>
-      At <a href="/">Poke</a>, we do not collect or share any personal information.
-      That's our privacy promise in a nutshell.
-      To improve Poke we use a completely anonymous, local-only way to understand how videos are being watched through Poke.
-    </p>
-
-    <p>
-      Any anonymous stats recorded by this instance come through the <code>/api/stats</code> system.
-      You can read exactly what is measured and what is <em>not</em> in our privacy policy:
-      <a href="/policies/privacy#stats">here</a>.
-    </p>
-
-    <hr>
-
-    <h2>API usage</h2>
-    <p class="note">
-      These API views are for anonymous local Poke stats only.<br><br>
-      • Main info page: <code><a href="/api/stats">/api/stats</a></code><br>
-      • Short aliases: <code><a href="/stats">/stats</a></code>, <code><a href="/telemetry">/telemetry</a></code>, <code><a href="/t">/t</a></code><br>
-      • GUI view: <code><a href="/api/stats?view=gui">/api/stats?view=gui</a></code><br>
-      • Trending tab: <code><a href="/api/stats?view=gui&amp;tab=trending">/api/stats?view=gui&amp;tab=trending</a></code><br>
-      • JSON view: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code><br>
-      • Trending API: <code><a href="/api/trending">/api/trending</a></code><br>
-      • Trending by genre: <code><a href="/api/trending?category=music">/api/trending?category=music</a></code><br>
-      • JSON default limit: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code> (8 videos)<br>
-      • JSON with custom limit: <code><a href="/api/stats?view=json&amp;limit=3000">/api/stats?view=json&amp;limit=3000</a></code><br>
-      • Opt out for this browser: <code><a href="/api/stats/optout">/api/stats/optout</a></code>
-    </p>
-  </div>
-</body>
-</html>`)
+    return renderTelemetryHomePage(res)
   })
 }
