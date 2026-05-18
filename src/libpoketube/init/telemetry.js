@@ -1,4 +1,5 @@
 const fs = require("fs")
+const fsp = fs.promises
 const path = require("path")
 
 const telemetryConfig = { telemetry: true }
@@ -7,24 +8,26 @@ const telemetryFile = path.join(__dirname, "telemetry.json")
 const trendingFile = path.join(__dirname, "trending.json")
 const recentVideoLimit = 300
 const maxJsonLimit = 3000
-const telemetrySaveDebounceMs = 15000
-const telemetryMaxUnsavedMs = 60000
-const telemetryMinWriteIntervalMs = 5000
-const telemetryBackupMinIntervalMs = 10 * 60 * 1000
-const telemetrySnapshotCacheMs = 1500
+const telemetrySaveDebounceMs = 60000
+const telemetryMaxUnsavedMs = 300000
+const telemetryMinWriteIntervalMs = 30000
+const telemetryBackupMinIntervalMs = 30 * 60 * 1000
+const telemetrySnapshotCacheMs = 5000
+const telemetryGuiAutoRefreshMs = 15000
 const trendingMaxItems = 400
 const trendingDefaultLimit = 50
 const trendingWindowHours = 72
 const trendingHalfLifeHours = 18
-const trendingSaveDebounceMs = 30000
-const trendingMaxUnsavedMs = 120000
-const trendingMinWriteIntervalMs = 15000
-const trendingApiCacheMs = 3000
+const trendingSaveDebounceMs = 120000
+const trendingMaxUnsavedMs = 300000
+const trendingMinWriteIntervalMs = 30000
+const trendingApiCacheMs = 5000
 
 const getNowIso = () => new Date().toISOString()
 
 const lastJsonByFile = new Map()
 const lastBackupAtByFile = new Map()
+const writePromiseByFile = new Map()
 
 function isMissingRecordedTitle(value) {
   const title = String(value || "").trim().toLowerCase()
@@ -200,47 +203,68 @@ function safeRead(filePath) {
   }
 }
 
-function atomicWriteJson(filePath, data) {
-  const dir = path.dirname(filePath)
-  const tmpPath = path.join(dir, `${path.basename(filePath)}.${process.pid}.${Date.now()}.tmp`)
-  const backupPath = `${filePath}.bak`
-  const json = JSON.stringify(data, null, 2)
+async function atomicWriteJson(filePath, data) {
+  const previousWrite = writePromiseByFile.get(filePath) || Promise.resolve()
 
-  if (lastJsonByFile.get(filePath) === json) return false
+  const writeJob = previousWrite
+    .catch(() => {})
+    .then(async () => {
+      const dir = path.dirname(filePath)
+      const tmpPath = path.join(dir, `${path.basename(filePath)}.${process.pid}.${Date.now()}.tmp`)
+      const backupPath = `${filePath}.bak`
+      const json = JSON.stringify(data, null, 2)
 
-  if (!lastJsonByFile.has(filePath)) {
-    try {
-      if (fs.existsSync(filePath)) {
-        const current = fs.readFileSync(filePath, "utf8")
-        if (current === json) {
-          lastJsonByFile.set(filePath, json)
-          return false
+      if (lastJsonByFile.get(filePath) === json) return false
+
+      if (!lastJsonByFile.has(filePath)) {
+        try {
+          const current = await fsp.readFile(filePath, "utf8")
+          if (current === json) {
+            lastJsonByFile.set(filePath, json)
+            return false
+          }
+        } catch (error) {
+          if (!error || error.code !== "ENOENT") {
+            console.error("Could not compare existing JSON file before write:", filePath, error)
+          }
         }
       }
-    } catch (error) {
-      console.error("Could not compare existing JSON file before write:", filePath, error)
-    }
-  }
 
-  const fileExists = fs.existsSync(filePath)
-  const now = Date.now()
-  const lastBackupAt = lastBackupAtByFile.get(filePath) || 0
-  const shouldBackup = fileExists && now - lastBackupAt >= telemetryBackupMinIntervalMs
+      const now = Date.now()
+      const lastBackupAt = lastBackupAtByFile.get(filePath) || 0
+      let shouldBackup = now - lastBackupAt >= telemetryBackupMinIntervalMs
 
-  fs.writeFileSync(tmpPath, json)
+      if (shouldBackup) {
+        try {
+          await fsp.access(filePath, fs.constants.F_OK)
+        } catch (error) {
+          shouldBackup = false
+        }
+      }
 
-  if (shouldBackup) {
-    try {
-      fs.copyFileSync(filePath, backupPath)
-      lastBackupAtByFile.set(filePath, now)
-    } catch (error) {
-      console.error("Could not create JSON backup for", filePath, error)
-    }
-  }
+      await fsp.writeFile(tmpPath, json, "utf8")
 
-  fs.renameSync(tmpPath, filePath)
-  lastJsonByFile.set(filePath, json)
-  return true
+      if (shouldBackup) {
+        try {
+          await fsp.copyFile(filePath, backupPath)
+          lastBackupAtByFile.set(filePath, now)
+        } catch (error) {
+          console.error("Could not create JSON backup for", filePath, error)
+        }
+      }
+
+      await fsp.rename(tmpPath, filePath)
+      lastJsonByFile.set(filePath, json)
+      return true
+    })
+    .finally(() => {
+      if (writePromiseByFile.get(filePath) === writeJob) {
+        writePromiseByFile.delete(filePath)
+      }
+    })
+
+  writePromiseByFile.set(filePath, writeJob)
+  return writeJob
 }
 
 function compactStatsForSave(input) {
@@ -267,9 +291,9 @@ function compactStatsForSave(input) {
   return stats
 }
 
-function saveTelemetryStorage(stats) {
+async function saveTelemetryStorage(stats) {
   const clean = compactStatsForSave(stats)
-  atomicWriteJson(telemetryFile, clean)
+  await atomicWriteJson(telemetryFile, clean)
   return clean
 }
 
@@ -279,13 +303,13 @@ function readTelemetryStorage() {
   if (!result.ok) {
     console.error("Could not read telemetry file, starting with empty telemetry:", telemetryFile, result.error)
     const empty = getEmptyStats()
-    saveTelemetryStorage(empty)
+    lastJsonByFile.set(telemetryFile, JSON.stringify(empty, null, 2))
     return empty
   }
 
   if (!result.data) {
     const empty = getEmptyStats()
-    saveTelemetryStorage(empty)
+    lastJsonByFile.set(telemetryFile, JSON.stringify(empty, null, 2))
     return empty
   }
 
@@ -576,9 +600,9 @@ function compactTrendingForSave(input) {
   return trending
 }
 
-function saveTrendingStorage(trending) {
+async function saveTrendingStorage(trending) {
   const clean = compactTrendingForSave(trending)
-  atomicWriteJson(trendingFile, clean)
+  await atomicWriteJson(trendingFile, clean)
   return clean
 }
 
@@ -1359,7 +1383,7 @@ module.exports = function (app, config, renderTemplate) {
     saveTimer = setTimeout(saveNow, delay)
   }
 
-  function saveNow() {
+  async function saveNow() {
     if (!needsSave) return
     if (saveInProgress) {
       pendingSave = true
@@ -1374,7 +1398,7 @@ module.exports = function (app, config, renderTemplate) {
     saveInProgress = true
 
     try {
-      memoryStats = saveTelemetryStorage(memoryStats)
+      memoryStats = await saveTelemetryStorage(memoryStats)
       needsSave = false
       firstUnsavedAt = 0
       lastSaveAt = Date.now()
@@ -1423,7 +1447,7 @@ module.exports = function (app, config, renderTemplate) {
     trendingSaveTimer = setTimeout(saveTrendingNow, delay)
   }
 
-  function saveTrendingNow() {
+  async function saveTrendingNow() {
     if (!trendingNeedsSave) return
     if (trendingSaveInProgress) {
       trendingPendingSave = true
@@ -1438,7 +1462,7 @@ module.exports = function (app, config, renderTemplate) {
     trendingSaveInProgress = true
 
     try {
-      memoryTrending = saveTrendingStorage(memoryTrending)
+      memoryTrending = await saveTrendingStorage(memoryTrending)
       trendingNeedsSave = false
       trendingFirstUnsavedAt = 0
       trendingLastSaveAt = Date.now()
@@ -1465,31 +1489,31 @@ module.exports = function (app, config, renderTemplate) {
     }
   }, Math.max(Math.min(telemetryMinWriteIntervalMs, trendingMinWriteIntervalMs), 1000))
 
-  process.once("SIGINT", () => {
+  process.once("SIGINT", async () => {
     try {
       scheduleTelemetrySave(true)
       scheduleTrendingSave(true)
-      saveNow()
-      saveTrendingNow()
+      await saveNow()
+      await saveTrendingNow()
     } finally {
       process.exit(0)
     }
   })
 
-  process.once("SIGTERM", () => {
+  process.once("SIGTERM", async () => {
     try {
       scheduleTelemetrySave(true)
       scheduleTrendingSave(true)
-      saveNow()
-      saveTrendingNow()
+      await saveNow()
+      await saveTrendingNow()
     } finally {
       process.exit(0)
     }
   })
 
-  process.once("beforeExit", () => {
-    saveNow()
-    saveTrendingNow()
+  process.once("beforeExit", async () => {
+    await saveNow()
+    await saveTrendingNow()
   })
 
   app.post(["/api/stats", "/api/nexus"], (req, res) => {
@@ -2724,6 +2748,7 @@ module.exports = function (app, config, renderTemplate) {
     const OPT_KEY = "poke_stats_optout"
     const AUTO_REFRESH_KEY = "poke_stats_auto_refresh"
     const CARDS_PER_PAGE = 40
+    const AUTO_REFRESH_MS = ${telemetryGuiAutoRefreshMs}
 
     const topVideos = document.getElementById("top-videos")
     const trendingVideos = document.getElementById("trending-videos")
@@ -3622,7 +3647,7 @@ module.exports = function (app, config, renderTemplate) {
 
       telemetryRefreshTimer = setInterval(function () {
         loadAllData(false)
-      }, 5000)
+      }, AUTO_REFRESH_MS)
     }
 
     document.addEventListener("visibilitychange", function () {
