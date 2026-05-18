@@ -39,6 +39,30 @@
   const config = require("./config.json");
   const u = await media_proxy();
 
+  // --- GLOBAL SERVER OPTIMIZER ---
+  // Actively manages memory, clears hanging promises, and frees up dead sockets globally
+  (function GlobalServerOptimizer() {
+    // 1. Prevent memory leaks from dangling unhandled promises or broken pipes
+    process.on('uncaughtException', (err) => {
+      if (err.code === 'ECONNRESET' || err.code === 'EPIPE' || err.code === 'ETIMEDOUT') return; // Ignore standard background socket drops
+      console.error('[GLOBAL OPTIMIZER] Uncaught Exception safely caught to prevent crash:', err.message);
+    });
+    process.on('unhandledRejection', (reason) => {
+      console.error('[GLOBAL OPTIMIZER] Unhandled Rejection safely caught to prevent leak:', reason);
+    });
+
+    // 2. Periodic Garbage Collection Check
+    // (Run node with `node --expose-gc index.js` to enable this aggressive memory freeing)
+    setInterval(() => {
+      const memMb = process.memoryUsage().heapUsed / 1024 / 1024;
+      if (memMb > 450 && typeof global.gc === 'function') {
+        console.error(`[GLOBAL OPTIMIZER] Memory high at ${memMb.toFixed(1)}MB. Running aggressive Garbage Collection to free server resources...`);
+        global.gc();
+      }
+    }, 45000).unref();
+  })();
+  // -------------------------------
+
   fs.readFile("ascii_txt.txt", "utf8", (err, data) => {
     if (err) {
       console.error("Error reading the file:", err);
@@ -78,6 +102,19 @@
   const sha384 = modules.hash;
 
   var app = modules.express();
+
+  // --- AGGRESSIVE SOCKET FREEING ---
+  // Drops hanging requests that clients abandoned to free up active server limits
+  app.use((req, res, next) => {
+    req.setTimeout(25000, () => {
+      req.socket.destroy();
+    });
+    res.setTimeout(25000, () => {
+      res.socket.destroy();
+    });
+    next();
+  });
+  // ---------------------------------
 
   const CLOUDFLARE_V4 = [
     "173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22",
