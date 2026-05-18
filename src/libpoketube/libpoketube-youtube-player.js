@@ -55,31 +55,41 @@ class InnerTubePokeVidious {
       INAPPROPRIATE: "This video may be inappropriate for some users.",
     };
 
+    this.defaultColors = {
+      color: "#0ea5e9",
+      color2: "#111827",
+    };
+
     this.ttl = {
-      final: 60 * 60 * 1000,
+      final: 45 * 60 * 1000,
       video: 60 * 60 * 1000,
-      comments: 2 * 60 * 1000,
-      dislikes: 3 * 60 * 1000,
+      comments: 3 * 60 * 1000,
+      dislikes: 4 * 60 * 1000,
       colors: 24 * 60 * 60 * 1000,
-      negative: 8 * 1000,
+      negative: 10 * 1000,
     };
 
     this.staleTtl = {
-      final: 8 * 60 * 60 * 1000,
+      final: 6 * 60 * 60 * 1000,
       video: 8 * 60 * 60 * 1000,
-      comments: 30 * 60 * 1000,
-      dislikes: 45 * 60 * 1000,
+      comments: 45 * 60 * 1000,
+      dislikes: 60 * 60 * 1000,
       colors: 7 * 24 * 60 * 60 * 1000,
     };
 
     this.maxCacheItems = 3000;
-    this.maxInflightItems = 600;
+    this.maxInflightItems = 500;
 
     this.breakers = {
-      invapi: this.createCircuitBreaker("invapi", {
-        failuresToOpen: 10,
-        cooldownMs: 9000,
-        halfOpenMax: 2,
+      video: this.createCircuitBreaker("video", {
+        failuresToOpen: 12,
+        cooldownMs: 5000,
+        halfOpenMax: 3,
+      }),
+      comments: this.createCircuitBreaker("comments", {
+        failuresToOpen: 8,
+        cooldownMs: 10000,
+        halfOpenMax: 1,
       }),
       dislikes: this.createCircuitBreaker("dislikes", {
         failuresToOpen: 8,
@@ -88,36 +98,36 @@ class InnerTubePokeVidious {
       }),
       thumbnails: this.createCircuitBreaker("thumbnails", {
         failuresToOpen: 8,
-        cooldownMs: 15000,
+        cooldownMs: 12000,
         halfOpenMax: 1,
       }),
     };
 
     this.limits = {
       full: this.createLimit("full", {
-        concurrency: 24,
-        maxQueue: 64,
-        maxQueueWaitMs: 1200,
+        concurrency: 28,
+        maxQueue: 96,
+        maxQueueWaitMs: 1800,
       }),
       video: this.createLimit("video", {
-        concurrency: 8,
-        maxQueue: 32,
-        maxQueueWaitMs: 900,
+        concurrency: 10,
+        maxQueue: 48,
+        maxQueueWaitMs: 1600,
       }),
       comments: this.createLimit("comments", {
-        concurrency: 3,
-        maxQueue: 16,
-        maxQueueWaitMs: 700,
+        concurrency: 4,
+        maxQueue: 24,
+        maxQueueWaitMs: 1200,
       }),
       dislikes: this.createLimit("dislikes", {
-        concurrency: 2,
-        maxQueue: 12,
-        maxQueueWaitMs: 700,
+        concurrency: 3,
+        maxQueue: 20,
+        maxQueueWaitMs: 1200,
       }),
       colors: this.createLimit("colors", {
-        concurrency: 1,
-        maxQueue: 8,
-        maxQueueWaitMs: 600,
+        concurrency: 2,
+        maxQueue: 16,
+        maxQueueWaitMs: 1200,
       }),
     };
 
@@ -447,7 +457,7 @@ class InnerTubePokeVidious {
     };
   }
 
-  async fetchOnceWithTimeout(fetch, url, options = {}, timeoutMs = 1600) {
+  async fetchOnceWithTimeout(fetch, url, options = {}, timeoutMs = 2400) {
     const controller = new AbortController();
     const callerSignal = options.signal || null;
 
@@ -560,9 +570,9 @@ class InnerTubePokeVidious {
   async fetchWithRetry(fetch, url, options = {}, settings = {}) {
     const retryable = new Set([408, 425, 429, 500, 502, 503, 504]);
     const maxRetryTime =
-      typeof settings.maxRetryTime === "number" ? settings.maxRetryTime : 1800;
+      typeof settings.maxRetryTime === "number" ? settings.maxRetryTime : 3600;
     const perTryTimeoutMs =
-      typeof settings.perTryTimeoutMs === "number" ? settings.perTryTimeoutMs : 1200;
+      typeof settings.perTryTimeoutMs === "number" ? settings.perTryTimeoutMs : 2200;
     const maxAttempts =
       typeof settings.maxAttempts === "number" ? settings.maxAttempts : 2;
 
@@ -576,7 +586,7 @@ class InnerTubePokeVidious {
         break;
       }
 
-      const timeoutMs = Math.min(perTryTimeoutMs, Math.max(100, remaining - 25));
+      const timeoutMs = Math.min(perTryTimeoutMs, Math.max(250, remaining - 50));
 
       try {
         const res = await this.fetchOnceWithTimeout(fetch, url, options, timeoutMs);
@@ -602,8 +612,8 @@ class InnerTubePokeVidious {
 
         const waitMs =
           retryAfterMs != null
-            ? Math.min(retryAfterMs, Math.max(0, remainingAfterResponse - 25))
-            : Math.min(120 + Math.floor(Math.random() * 180), Math.max(0, remainingAfterResponse - 25));
+            ? Math.min(retryAfterMs, Math.max(0, remainingAfterResponse - 50))
+            : Math.min(160 + Math.floor(Math.random() * 240), Math.max(0, remainingAfterResponse - 50));
 
         if (waitMs > 0) {
           await new Promise((resolve) => setTimeout(resolve, waitMs));
@@ -626,8 +636,8 @@ class InnerTubePokeVidious {
         }
 
         const waitMs = Math.min(
-          100 + Math.floor(Math.random() * 160),
-          Math.max(0, remainingAfterError - 25)
+          140 + Math.floor(Math.random() * 220),
+          Math.max(0, remainingAfterError - 50)
         );
 
         if (waitMs > 0) {
@@ -651,11 +661,11 @@ class InnerTubePokeVidious {
       `comments:${key}`,
       async () =>
         this.limits.comments(() =>
-          this.withBreaker(this.breakers.invapi, async () => {
+          this.withBreaker(this.breakers.comments, async () => {
             const res = await this.fetchWithRetry(fetch, url, {}, {
               videoId: v,
-              maxRetryTime: 1300,
-              perTryTimeoutMs: 850,
+              maxRetryTime: 2800,
+              perTryTimeoutMs: 1800,
               maxAttempts: 2,
             });
 
@@ -666,7 +676,7 @@ class InnerTubePokeVidious {
             const text = await res.text();
             const parsed = this.getJson(text);
 
-            if (!parsed) {
+            if (parsed === null || parsed === undefined) {
               throw new Error("Comments JSON parse failed");
             }
 
@@ -675,7 +685,7 @@ class InnerTubePokeVidious {
         ),
       {
         label: `Comments fetch failed for ${v}`,
-        shouldCache: (value) => Boolean(value),
+        shouldCache: (value) => value !== null && value !== undefined,
       }
     );
   }
@@ -692,11 +702,11 @@ class InnerTubePokeVidious {
       `video:${key}`,
       async () =>
         this.limits.video(() =>
-          this.withBreaker(this.breakers.invapi, async () => {
+          this.withBreaker(this.breakers.video, async () => {
             const res = await this.fetchWithRetry(fetch, url, {}, {
               videoId: v,
-              maxRetryTime: 1800,
-              perTryTimeoutMs: 1100,
+              maxRetryTime: 4300,
+              perTryTimeoutMs: 2600,
               maxAttempts: 2,
             });
 
@@ -746,7 +756,7 @@ class InnerTubePokeVidious {
           this.withBreaker(this.breakers.dislikes, async () => {
             const data = await this.withDeadline(
               getdislikes(v),
-              1200,
+              2500,
               "Dislike API timed out"
             );
 
@@ -779,16 +789,21 @@ class InnerTubePokeVidious {
           this.withBreaker(this.breakers.thumbnails, async () => {
             const thumbnailUrl = `https://i.ytimg.com/vi/${v}/hqdefault.jpg?sqp=${this.sqp}`;
 
-            const res = await this.fetchWithRetry(fetch, thumbnailUrl, {
-              headers: {
-                Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+            const res = await this.fetchWithRetry(
+              fetch,
+              thumbnailUrl,
+              {
+                headers: {
+                  Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+                },
               },
-            }, {
-              videoId: v,
-              maxRetryTime: 1300,
-              perTryTimeoutMs: 850,
-              maxAttempts: 2,
-            });
+              {
+                videoId: v,
+                maxRetryTime: 2600,
+                perTryTimeoutMs: 1700,
+                maxAttempts: 2,
+              }
+            );
 
             if (!res.ok) {
               throw new Error(`Thumbnail HTTP Error ${res.status}`);
@@ -802,7 +817,7 @@ class InnerTubePokeVidious {
 
             const palette = await this.withDeadline(
               getColors(buffer, "image/jpeg"),
-              900,
+              1800,
               "Thumbnail color extraction timed out"
             );
 
@@ -823,6 +838,27 @@ class InnerTubePokeVidious {
     );
   }
 
+  async settleSideTask(name, promise, fallback) {
+    try {
+      const value = await promise;
+
+      return {
+        ok: true,
+        name,
+        value,
+      };
+    } catch (error) {
+      this.initError(`${name} side task failed`, error);
+
+      return {
+        ok: false,
+        name,
+        value: fallback,
+        error,
+      };
+    }
+  }
+
   withDeadline(promise, ms, message) {
     let timer = null;
 
@@ -841,15 +877,25 @@ class InnerTubePokeVidious {
   }
 
   buildWatchResult(vid, comments, dislikesData, colorData) {
+    const safeDislikes =
+      dislikesData && Object.prototype.hasOwnProperty.call(dislikesData, "engagement")
+        ? dislikesData
+        : { engagement: null };
+
+    const safeColors =
+      colorData && colorData.color && colorData.color2
+        ? colorData
+        : this.defaultColors;
+
     return {
       vid,
       comments,
       channel_uploads: " ",
-      engagement: dislikesData.engagement,
+      engagement: safeDislikes.engagement,
       wiki: "",
       desc: "",
-      color: colorData.color,
-      color2: colorData.color2,
+      color: safeColors.color,
+      color2: safeColors.color2,
     };
   }
 
@@ -895,11 +941,11 @@ class InnerTubePokeVidious {
         try {
           const result = await this.withDeadline(
             this.getFullWatchResult(fetch, v, contentlang, contentregion),
-            2600,
+            7000,
             "Watch fetch timed out"
           );
 
-          if (result && !result.error && this.isCompleteWatchResult(result)) {
+          if (result && !result.error && this.isPlayableWatchResult(result)) {
             this.setCache(
               this.finalCache,
               key,
@@ -948,17 +994,7 @@ class InnerTubePokeVidious {
   }
 
   async getFullWatchResult(fetch, v, contentlang, contentregion) {
-    const videoPromise = this.getRequiredVideoInfo(fetch, v, contentlang, contentregion);
-    const commentsPromise = this.getRequiredComments(fetch, v, contentlang, contentregion);
-    const dislikesPromise = this.getRequiredDislikes(v);
-    const colorsPromise = this.getRequiredThumbnailColors(fetch, v);
-
-    const [vid, comments, dislikesData, colorData] = await Promise.all([
-      videoPromise,
-      commentsPromise,
-      dislikesPromise,
-      colorsPromise,
-    ]);
+    const vid = await this.getRequiredVideoInfo(fetch, v, contentlang, contentregion);
 
     if (vid && vid.error) {
       return this.buildErrorResult(vid.error, "VIDEO_API_ERROR");
@@ -968,27 +1004,44 @@ class InnerTubePokeVidious {
       throw new Error("Video data incomplete");
     }
 
-    if (!comments) {
-      throw new Error("Comments data missing");
-    }
+    const commentsPromise = this.settleSideTask(
+      "comments",
+      this.getRequiredComments(fetch, v, contentlang, contentregion),
+      null
+    );
 
-    if (!dislikesData || !Object.prototype.hasOwnProperty.call(dislikesData, "engagement")) {
-      throw new Error("Dislikes data missing");
-    }
+    const dislikesPromise = this.settleSideTask(
+      "dislikes",
+      this.getRequiredDislikes(v),
+      { engagement: null }
+    );
 
-    if (!colorData || !colorData.color || !colorData.color2) {
-      throw new Error("Thumbnail colors missing");
-    }
+    const colorsPromise = this.settleSideTask(
+      "colors",
+      this.getRequiredThumbnailColors(fetch, v),
+      this.defaultColors
+    );
 
-    return this.buildWatchResult(vid, comments, dislikesData, colorData);
+    const [commentsResult, dislikesResult, colorsResult] = await Promise.all([
+      commentsPromise,
+      dislikesPromise,
+      colorsPromise,
+    ]);
+
+    return this.buildWatchResult(
+      vid,
+      commentsResult.value,
+      dislikesResult.value,
+      colorsResult.value
+    );
   }
 
-  isCompleteWatchResult(result) {
+  isPlayableWatchResult(result) {
     return Boolean(
       result &&
         !result.error &&
         this.checkUnexistingObject(result.vid) &&
-        result.comments &&
+        Object.prototype.hasOwnProperty.call(result, "comments") &&
         Object.prototype.hasOwnProperty.call(result, "engagement") &&
         result.color &&
         result.color2
