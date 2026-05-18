@@ -9,6 +9,23 @@ const maxJsonLimit = 3000
 
 const getNowIso = () => new Date().toISOString()
 
+function cleanPageTitle(value) {
+  let title = String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+
+  if (!title) return ""
+
+  title = title
+    .replace(/\s*(?:\||-|–|—)\s*Poke(?:Tube)?\s*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim()
+
+  if (/^Poke(?:Tube)?$/i.test(title)) return ""
+
+  return title.slice(0, 300)
+}
+
 const getEmptyStats = () => ({
   version: 4,
   startedAt: getNowIso(),
@@ -40,7 +57,7 @@ function normalizeStats(input) {
   if (input.pageTitles && typeof input.pageTitles === "object") {
     for (const [key, value] of Object.entries(input.pageTitles)) {
       const id = String(key || "").trim()
-      const title = String(value || "").trim().slice(0, 300)
+      const title = cleanPageTitle(value)
       if (id && title) stats.pageTitles[id] = title
     }
   }
@@ -48,7 +65,7 @@ function normalizeStats(input) {
   if (input.videoTitles && typeof input.videoTitles === "object") {
     for (const [key, value] of Object.entries(input.videoTitles)) {
       const id = String(key || "").trim()
-      const title = String(value || "").trim().slice(0, 300)
+      const title = cleanPageTitle(value)
       if (id && title && !stats.pageTitles[id]) stats.pageTitles[id] = title
     }
   }
@@ -320,11 +337,12 @@ module.exports = function (app, config, renderTemplate) {
     const body = req.body || {}
     const videoId = typeof body.videoId === "string" ? body.videoId.trim() : ""
     const userId = typeof body.userId === "string" ? body.userId.trim() : ""
-    const pageTitle = typeof body.pageTitle === "string"
-      ? body.pageTitle.trim().slice(0, 300)
+    const rawPageTitle = typeof body.pageTitle === "string"
+      ? body.pageTitle
       : typeof body.title === "string"
-        ? body.title.trim().slice(0, 300)
+        ? body.title
         : ""
+    const pageTitle = cleanPageTitle(rawPageTitle)
 
     if (!isSafeId(videoId, 128)) return res.status(400).json({ error: "missing or invalid videoId" })
     if (!isSafeId(userId, 256)) return res.status(400).json({ error: "missing or invalid userId" })
@@ -505,6 +523,10 @@ module.exports = function (app, config, renderTemplate) {
     }
 
     if (view === "json") {
+      res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate")
+      res.set("Pragma", "no-cache")
+      res.set("Expires", "0")
+
       if (!telemetryConfig.telemetry) {
         return res.json({
           startedAt: null,
@@ -537,7 +559,7 @@ module.exports = function (app, config, renderTemplate) {
       const pageTitles = {}
 
       for (const id of visibleVideoIds) {
-        const title = (memoryStats.pageTitles || {})[id]
+        const title = cleanPageTitle((memoryStats.pageTitles || {})[id])
         if (title) pageTitles[id] = title
       }
 
@@ -680,6 +702,64 @@ module.exports = function (app, config, renderTemplate) {
       color:#bbb;
       font-size:.95rem;
       font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+    }
+
+    .live-status{
+      display:flex;
+      align-items:center;
+      gap:.6rem;
+      flex-wrap:wrap;
+      margin:-8px 0 18px 0;
+      padding:12px 14px;
+      border:1px solid #2a2a35;
+      border-radius:16px;
+      background:#1f1e29;
+      color:#bbb;
+      font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+      font-size:.95rem;
+      line-height:1.4;
+    }
+    .live-dot{
+      width:.65rem;
+      height:.65rem;
+      border-radius:999px;
+      background:#0ab7f0;
+      box-shadow:0 0 0 4px rgba(10,183,240,.12);
+      flex:0 0 auto;
+    }
+    .live-status.loading .live-dot{
+      animation:livePulse 1.2s ease-in-out infinite;
+    }
+    .live-status.error .live-dot{
+      background:#ff6b8a;
+      box-shadow:0 0 0 4px rgba(255,107,138,.12);
+    }
+    .live-status.off .live-dot{
+      background:#777;
+      box-shadow:0 0 0 4px rgba(119,119,119,.12);
+    }
+    .refresh-btn{
+      margin-left:auto;
+      padding:.42rem .72rem;
+      border-radius:999px;
+      border:1px solid #3a3947;
+      background:#252432;
+      color:#fff;
+      cursor:pointer;
+      font:inherit;
+      font-size:.9rem;
+    }
+    .refresh-btn:hover{
+      background:#2f2e3d;
+    }
+    .refresh-btn[disabled]{
+      opacity:.55;
+      cursor:not-allowed;
+    }
+    @keyframes livePulse{
+      0%{transform:scale(1);opacity:1}
+      50%{transform:scale(.75);opacity:.55}
+      100%{transform:scale(1);opacity:1}
     }
 
     .nojs-warning{
@@ -1233,6 +1313,12 @@ module.exports = function (app, config, renderTemplate) {
       </div>
     </div>
 
+    <div id="live-status" class="live-status loading" aria-live="polite">
+      <span class="live-dot" aria-hidden="true"></span>
+      <span id="live-status-text">Loading live telemetry…</span>
+      <button type="button" id="refresh-now-btn" class="refresh-btn">Refresh now</button>
+    </div>
+
     <div class="hero">
       <div class="hero-main">
         <h2>Private by design</h2>
@@ -1443,11 +1529,19 @@ module.exports = function (app, config, renderTemplate) {
     const estimatedUsersInfoBtn = document.getElementById("estimated-users-info-btn")
     const privacyModalBackdrop = document.getElementById("privacy-modal-backdrop")
     const privacyModalClose = document.getElementById("privacy-modal-close")
+    const liveStatus = document.getElementById("live-status")
+    const liveStatusText = document.getElementById("live-status-text")
+    const refreshNowBtn = document.getElementById("refresh-now-btn")
 
     var allVideos = {}
     var pageTitles = {}
     var recentVideoIds = []
     var currentPage = 1
+    var hasLoadedTelemetryOnce = false
+    var telemetryRefreshTimer = null
+    var telemetryFetchInProgress = false
+    var lastTelemetryUpdatedAt = null
+    var lastTelemetrySignature = ""
 
     function setActivePanel(panelId) {
       panels.forEach(function (panel) {
@@ -1718,6 +1812,38 @@ module.exports = function (app, config, renderTemplate) {
       })
     }
 
+    function cleanGuiPageTitle(value) {
+      var title = String(value || "")
+        .replace(/\\s+/g, " ")
+        .trim()
+
+      if (!title) return ""
+
+      title = title
+        .replace(/\\s*(?:\\||-|–|—)\\s*Poke(?:Tube)?\\s*$/i, "")
+        .replace(/\\s+/g, " ")
+        .trim()
+
+      if (/^Poke(?:Tube)?$/i.test(title)) return ""
+
+      return title.slice(0, 300)
+    }
+
+    function cleanGuiPageTitles(input) {
+      var output = {}
+
+      Object.entries(input || {}).forEach(function (entry) {
+        var id = String(entry[0] || "").trim()
+        var title = cleanGuiPageTitle(entry[1])
+
+        if (id && title) {
+          output[id] = title
+        }
+      })
+
+      return output
+    }
+
     function escapeHtml(value) {
       return String(value || "")
         .replace(/&/g, "&amp;")
@@ -1765,7 +1891,7 @@ module.exports = function (app, config, renderTemplate) {
 
       var pageTitleEl = document.createElement("div")
       pageTitleEl.className = "video-page-title"
-      pageTitleEl.innerHTML = '<span class="video-page-title-label">Page title:</span> ' + escapeHtml(pageTitle || "Unknown")
+      pageTitleEl.innerHTML = '<span class="video-page-title-label">Page title:</span> ' + escapeHtml(cleanGuiPageTitle(pageTitle) || "Unknown")
 
       var idEl = document.createElement("div")
       idEl.className = "video-id"
@@ -1803,7 +1929,7 @@ module.exports = function (app, config, renderTemplate) {
         totalRecentVideoIds: recentVideoIds.length,
         recentVideoIds: recentVideoIds.slice(),
         pageTitles: recentVideoIds.reduce(function (titles, videoId) {
-          if (pageTitles[videoId]) titles[videoId] = pageTitles[videoId]
+          if (pageTitles[videoId]) titles[videoId] = cleanGuiPageTitle(pageTitles[videoId])
           return titles
         }, {})
       }
@@ -1910,7 +2036,7 @@ module.exports = function (app, config, renderTemplate) {
 
         var pageTitleEl = document.createElement("div")
         pageTitleEl.className = "video-page-title"
-        pageTitleEl.innerHTML = '<span class="video-page-title-label">Page title:</span> ' + escapeHtml(pageTitles[id] || "Unknown")
+        pageTitleEl.innerHTML = '<span class="video-page-title-label">Page title:</span> ' + escapeHtml(cleanGuiPageTitle(pageTitles[id]) || "Unknown")
 
         var idEl = document.createElement("div")
         idEl.className = "video-id"
@@ -1946,6 +2072,7 @@ module.exports = function (app, config, renderTemplate) {
       recentVideos.innerHTML = '<li class="error-box">' + message + "</li>"
       videoLimitSelect.disabled = true
       downloadRecentJsonBtn.disabled = true
+      refreshNowBtn.disabled = true
       paginationWrap.style.display = "none"
       osBreakdown.innerHTML = '<div class="breakdown-empty">' + message + "</div>"
       browserBreakdown.innerHTML = '<div class="breakdown-empty">' + message + "</div>"
@@ -1954,12 +2081,169 @@ module.exports = function (app, config, renderTemplate) {
       telemetryStartedAt.textContent = "Not started"
     }
 
+    function setLiveStatus(state, message) {
+      liveStatus.classList.remove("loading", "error", "off")
+
+      if (state) {
+        liveStatus.classList.add(state)
+      }
+
+      liveStatusText.textContent = message
+    }
+
+    function formatUpdatedAt(date) {
+      if (!date) return "never"
+      return date.toLocaleTimeString(undefined, {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      })
+    }
+
+    function getTelemetrySignature(data) {
+      var videos = data && data.videos ? data.videos : {}
+      var recent = data && Array.isArray(data.recentVideos) ? data.recentVideos : []
+      var browsers = data && data.browsers ? data.browsers : {}
+      var os = data && data.os ? data.os : {}
+      var titles = cleanGuiPageTitles(data && data.pageTitles ? data.pageTitles : {})
+
+      return JSON.stringify({
+        startedAt: data ? data.startedAt || null : null,
+        videos: videos,
+        recentVideos: recent,
+        browsers: browsers,
+        os: os,
+        pageTitles: titles,
+        totalUsers: data ? data.totalUsers || 0 : 0,
+        estimatedTotalUsers: data ? data.estimatedTotalUsers || 0 : 0,
+        totalVideoIds: data ? data.totalVideoIds || 0 : 0,
+        totalDetections: data ? data.totalDetections || 0 : 0
+      })
+    }
+
+    function applyTelemetryData(data) {
+      var videos = data.videos || {}
+      var titles = cleanGuiPageTitles(data.pageTitles || {})
+      var recent = data.recentVideos || []
+      var browsers = data.browsers || {}
+      var os = data.os || {}
+      var totalUsers = data.totalUsers || 0
+      var estimatedUsers = data.estimatedTotalUsers || 0
+      var totalVideoIds = data.totalVideoIds || 0
+      var startedAt = data.startedAt || null
+      var signature = getTelemetrySignature(data)
+      var changed = signature !== lastTelemetrySignature
+
+      allVideos = videos
+      pageTitles = titles
+      recentVideoIds = recent
+      lastTelemetrySignature = signature
+      lastTelemetryUpdatedAt = new Date()
+
+      userIdCount.textContent = String(totalUsers)
+      estimatedTotalUsers.textContent = String(estimatedUsers)
+      totalVideoIdCount.textContent = String(totalVideoIds)
+      telemetryStartedAt.textContent = formatStartedAt(startedAt)
+
+      if (changed || !hasLoadedTelemetryOnce) {
+        renderBreakdown(osBreakdown, os, "os")
+        renderBreakdown(browserBreakdown, browsers, "browser")
+        renderRecentVideos()
+        updateLimitWarning()
+        renderTopVideos()
+      }
+
+      hasLoadedTelemetryOnce = true
+
+      setLiveStatus(
+        "",
+        (changed ? "Live telemetry updated " : "Live telemetry checked ") + formatUpdatedAt(lastTelemetryUpdatedAt)
+      )
+    }
+
+    function getTelemetryJsonUrl() {
+      return "/api/stats?view=json&limit=3000&_=" + encodeURIComponent(String(Date.now()))
+    }
+
+    function loadTelemetryData(force) {
+      if (telemetryFetchInProgress && !force) return
+
+      telemetryFetchInProgress = true
+      refreshNowBtn.disabled = true
+
+      if (!hasLoadedTelemetryOnce) {
+        setLiveStatus("loading", "Loading live telemetry…")
+      } else {
+        setLiveStatus("loading", "Checking for fresh telemetry…")
+      }
+
+      fetch(getTelemetryJsonUrl(), {
+        cache: "no-store",
+        headers: {
+          "Accept": "application/json"
+        }
+      })
+        .then(function (res) {
+          if (!res.ok) {
+            throw new Error("Telemetry request failed with status " + res.status)
+          }
+
+          return res.json()
+        })
+        .then(function (data) {
+          applyTelemetryData(data)
+        })
+        .catch(function () {
+          if (!hasLoadedTelemetryOnce) {
+            setDisabledState("Error loading data.")
+            userIdCount.textContent = "Error"
+            estimatedTotalUsers.textContent = "Error"
+            totalVideoIdCount.textContent = "Error"
+            telemetryStartedAt.textContent = "Error"
+          }
+
+          setLiveStatus("error", "Live telemetry update failed. Retrying automatically…")
+        })
+        .finally(function () {
+          telemetryFetchInProgress = false
+          refreshNowBtn.disabled = false
+        })
+    }
+
+    function startTelemetryAutoRefresh() {
+      loadTelemetryData(true)
+
+      if (telemetryRefreshTimer) {
+        clearInterval(telemetryRefreshTimer)
+      }
+
+      telemetryRefreshTimer = setInterval(function () {
+        loadTelemetryData(false)
+      }, 5000)
+
+      document.addEventListener("visibilitychange", function () {
+        if (!document.hidden) {
+          loadTelemetryData(true)
+        }
+      })
+    }
+
+    videoLimitSelect.addEventListener("change", function () {
+      updateLimitWarning()
+      renderTopVideos()
+    })
+
+    refreshNowBtn.addEventListener("click", function () {
+      loadTelemetryData(true)
+    })
+
     if (!TELEMETRY_ON) {
       setDisabledState("No data because telemetry is disabled.")
       userIdCount.textContent = "0"
       estimatedTotalUsers.textContent = "0"
       totalVideoIdCount.textContent = "0"
       telemetryStartedAt.textContent = "Not started"
+      setLiveStatus("off", "Live telemetry is off because telemetry is disabled.")
     } else {
       var optedOut = false
       try {
@@ -1972,49 +2256,9 @@ module.exports = function (app, config, renderTemplate) {
         estimatedTotalUsers.textContent = "Opt-out active"
         totalVideoIdCount.textContent = "Opt-out active"
         telemetryStartedAt.textContent = "Opt-out active"
+        setLiveStatus("off", "Opt-out active, so live telemetry is not loaded in this browser.")
       } else {
-        fetch("/api/stats?view=json&limit=3000")
-          .then(function (res) { return res.json() })
-          .then(function (data) {
-            var videos = data.videos || {}
-            var titles = data.pageTitles || {}
-            var recent = data.recentVideos || []
-            var browsers = data.browsers || {}
-            var os = data.os || {}
-            var totalUsers = data.totalUsers || 0
-            var estimatedUsers = data.estimatedTotalUsers || 0
-            var totalVideoIds = data.totalVideoIds || 0
-            var startedAt = data.startedAt || null
-
-            allVideos = videos
-            pageTitles = titles
-            recentVideoIds = recent
-            userIdCount.textContent = String(totalUsers)
-            estimatedTotalUsers.textContent = String(estimatedUsers)
-            totalVideoIdCount.textContent = String(totalVideoIds)
-            telemetryStartedAt.textContent = formatStartedAt(startedAt)
-
-            renderBreakdown(osBreakdown, os, "os")
-            renderBreakdown(browserBreakdown, browsers, "browser")
-            renderRecentVideos()
-
-            updateLimitWarning()
-            currentPage = 1
-            renderTopVideos()
-
-            videoLimitSelect.addEventListener("change", function () {
-              currentPage = 1
-              updateLimitWarning()
-              renderTopVideos()
-            })
-          })
-          .catch(function () {
-            setDisabledState("Error loading data.")
-            userIdCount.textContent = "Error"
-            estimatedTotalUsers.textContent = "Error"
-            totalVideoIdCount.textContent = "Error"
-            telemetryStartedAt.textContent = "Error"
-          })
+        startTelemetryAutoRefresh()
       }
     }
   </script>
