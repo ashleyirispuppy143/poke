@@ -295,7 +295,35 @@ app.get("/avatars/:v", async function (req, res) {
     f.body.pipe(res);
   });
 
+const downloadRateLimitCache = new Map();
+  const DOWNLOAD_LIMIT_WINDOW = 60000;  
+  const DOWNLOAD_MAX_REQUESTS = 4;
+
+   setInterval(() => {
+    const now = Date.now();
+    for (const [ip, data] of downloadRateLimitCache.entries()) {
+      if (now - data.firstRequest > DOWNLOAD_LIMIT_WINDOW) {
+        downloadRateLimitCache.delete(ip);
+      }
+    }
+  }, 5 * 60 * 1000);
+
   app.get("/api/video/download", async function (req, res) {
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    const nowTime = Date.now();
+    const userRateInfo = downloadRateLimitCache.get(ip) || { count: 0, firstRequest: nowTime };
+
+     if (nowTime - userRateInfo.firstRequest > DOWNLOAD_LIMIT_WINDOW) {
+      userRateInfo.count = 1;
+      userRateInfo.firstRequest = nowTime;
+    } else {
+      userRateInfo.count++;
+       if (userRateInfo.count > DOWNLOAD_MAX_REQUESTS) {
+        return res.status(429).send("Too Many Requests: You can only download 4 videos per minute.");
+      }
+    }
+    downloadRateLimitCache.set(ip, userRateInfo);
+
     var v = req.query.v;
 
     var q = "18";
