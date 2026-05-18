@@ -4,17 +4,27 @@ const path = require("path")
 const telemetryConfig = { telemetry: true }
 
 const telemetryFile = path.join(__dirname, "telemetry.json")
+const trendingFile = path.join(__dirname, "trending.json")
 const recentVideoLimit = 300
 const maxJsonLimit = 3000
 const telemetrySaveDebounceMs = 15000
 const telemetryMaxUnsavedMs = 60000
 const telemetryMinWriteIntervalMs = 5000
 const telemetryBackupMinIntervalMs = 10 * 60 * 1000
+const telemetrySnapshotCacheMs = 1500
+const trendingMaxItems = 400
+const trendingDefaultLimit = 50
+const trendingWindowHours = 72
+const trendingHalfLifeHours = 18
+const trendingSaveDebounceMs = 30000
+const trendingMaxUnsavedMs = 120000
+const trendingMinWriteIntervalMs = 15000
+const trendingApiCacheMs = 3000
 
 const getNowIso = () => new Date().toISOString()
 
-let lastTelemetryJson = null
-let lastTelemetryBackupAt = 0
+const lastJsonByFile = new Map()
+const lastBackupAtByFile = new Map()
 
 function isMissingRecordedTitle(value) {
   const title = String(value || "").trim().toLowerCase()
@@ -196,44 +206,69 @@ function atomicWriteJson(filePath, data) {
   const backupPath = `${filePath}.bak`
   const json = JSON.stringify(data, null, 2)
 
-  if (lastTelemetryJson === json) return false
+  if (lastJsonByFile.get(filePath) === json) return false
 
-  if (lastTelemetryJson === null) {
+  if (!lastJsonByFile.has(filePath)) {
     try {
       if (fs.existsSync(filePath)) {
         const current = fs.readFileSync(filePath, "utf8")
         if (current === json) {
-          lastTelemetryJson = json
+          lastJsonByFile.set(filePath, json)
           return false
         }
       }
     } catch (error) {
-      console.error("Could not compare existing telemetry file before write:", filePath, error)
+      console.error("Could not compare existing JSON file before write:", filePath, error)
     }
   }
 
   const fileExists = fs.existsSync(filePath)
   const now = Date.now()
-  const shouldBackup = fileExists && now - lastTelemetryBackupAt >= telemetryBackupMinIntervalMs
+  const lastBackupAt = lastBackupAtByFile.get(filePath) || 0
+  const shouldBackup = fileExists && now - lastBackupAt >= telemetryBackupMinIntervalMs
 
   fs.writeFileSync(tmpPath, json)
 
   if (shouldBackup) {
     try {
       fs.copyFileSync(filePath, backupPath)
-      lastTelemetryBackupAt = now
+      lastBackupAtByFile.set(filePath, now)
     } catch (error) {
-      console.error("Could not create telemetry backup for", filePath, error)
+      console.error("Could not create JSON backup for", filePath, error)
     }
   }
 
   fs.renameSync(tmpPath, filePath)
-  lastTelemetryJson = json
+  lastJsonByFile.set(filePath, json)
   return true
 }
 
+function compactStatsForSave(input) {
+  const stats = {
+    version: 4,
+    startedAt: typeof input.startedAt === "string" && input.startedAt.trim() ? input.startedAt.trim() : getNowIso(),
+    videos: input.videos && typeof input.videos === "object" ? input.videos : {},
+    pageTitles: input.pageTitles && typeof input.pageTitles === "object" ? input.pageTitles : {},
+    browsers: input.browsers && typeof input.browsers === "object" ? input.browsers : {},
+    os: input.os && typeof input.os === "object" ? input.os : {},
+    users: input.users && typeof input.users === "object" ? input.users : {},
+    recentVideos: Array.isArray(input.recentVideos) ? input.recentVideos.slice(-recentVideoLimit) : []
+  }
+
+  for (const id of Object.keys(stats.pageTitles)) {
+    const title = cleanPageTitle(stats.pageTitles[id])
+    if (!title || (!stats.videos[id] && !stats.recentVideos.includes(id))) {
+      delete stats.pageTitles[id]
+    } else {
+      stats.pageTitles[id] = title
+    }
+  }
+
+  return stats
+}
+
 function saveTelemetryStorage(stats) {
-  const clean = normalizeStats(stats)
+  const clean = compactStatsForSave(stats)
   atomicWriteJson(telemetryFile, clean)
   return clean
 }
@@ -255,9 +290,412 @@ function readTelemetryStorage() {
   }
 
   const clean = normalizeStats(result.data)
-  lastTelemetryJson = JSON.stringify(clean, null, 2)
+  lastJsonByFile.set(telemetryFile, JSON.stringify(clean, null, 2))
   return clean
 }
+
+
+const trendingCategoryRules = [
+  {
+    category: "music",
+    words: [
+      "official music video", "official video", "music video", "lyric video", "lyrics", "audio",
+      "song", "album", "single", "remix", "mv", "live performance", "concert", "cover"
+    ]
+  },
+  {
+    category: "gaming",
+    words: [
+      "gameplay", "gaming", "minecraft", "roblox", "fortnite", "valorant", "genshin",
+      "honkai", "pokemon", "nintendo", "playstation", "xbox", "speedrun", "walkthrough",
+      "trailer game", "boss fight", "lets play", "let's play"
+    ]
+  },
+  {
+    category: "news",
+    words: [
+      "breaking news", "news", "live news", "headline", "report", "interview", "press conference",
+      "election", "parliament", "senate", "congress", "minister", "president", "war", "court"
+    ]
+  },
+  {
+    category: "sports",
+    words: [
+      "highlights", "match", "football", "soccer", "basketball", "nba", "nfl", "mlb", "nhl",
+      "ufc", "boxing", "f1", "formula 1", "race", "goal", "tennis", "wwe", "olympics"
+    ]
+  },
+  {
+    category: "technology",
+    words: [
+      "tech", "review", "hands on", "hands-on", "iphone", "android", "samsung", "pixel",
+      "linux", "gnu/linux", "computer", "laptop", "pc", "gpu", "cpu", "ai", "programming",
+      "javascript", "python", "server", "software"
+    ]
+  },
+  {
+    category: "education",
+    words: [
+      "tutorial", "explained", "explain", "course", "lesson", "learn", "lecture", "documentary",
+      "history", "science", "math", "how to", "guide", "study"
+    ]
+  },
+  {
+    category: "comedy",
+    words: [
+      "comedy", "funny", "meme", "memes", "skit", "stand up", "stand-up", "parody", "prank",
+      "try not to laugh"
+    ]
+  },
+  {
+    category: "film",
+    words: [
+      "movie", "film", "trailer", "teaser", "netflix", "anime", "episode", "clip", "scene",
+      "short film", "behind the scenes"
+    ]
+  },
+  {
+    category: "beauty_fashion",
+    words: [
+      "makeup", "beauty", "skincare", "fashion", "outfit", "haul", "grwm", "hair", "nails",
+      "style"
+    ]
+  },
+  {
+    category: "food",
+    words: [
+      "food", "recipe", "cooking", "cook", "kitchen", "baking", "restaurant", "eat", "meal",
+      "chef", "taste test"
+    ]
+  },
+  {
+    category: "travel",
+    words: [
+      "travel", "vlog", "trip", "airport", "flight", "hotel", "city tour", "walking tour",
+      "beach", "island"
+    ]
+  }
+]
+
+function getEmptyTrending() {
+  return {
+    version: 1,
+    startedAt: getNowIso(),
+    updatedAt: null,
+    maxItems: trendingMaxItems,
+    windowHours: trendingWindowHours,
+    videos: {}
+  }
+}
+
+function getHourKey(ms) {
+  return new Date(ms).toISOString().slice(0, 13)
+}
+
+function getHourMsFromKey(key) {
+  const ms = Date.parse(`${key}:00:00.000Z`)
+  return Number.isFinite(ms) ? ms : 0
+}
+
+function categoriseTrendingTitle(value) {
+  const title = cleanPageTitle(value).toLowerCase()
+  if (!title || isMissingRecordedTitle(title)) return "uncategorized"
+
+  let bestCategory = "entertainment"
+  let bestScore = 0
+
+  for (const rule of trendingCategoryRules) {
+    let score = 0
+
+    for (const word of rule.words) {
+      if (title.includes(word)) score++
+    }
+
+    if (score > bestScore) {
+      bestScore = score
+      bestCategory = rule.category
+    }
+  }
+
+  return bestCategory
+}
+
+function normalizeTrending(input) {
+  const trending = getEmptyTrending()
+
+  if (!input || typeof input !== "object") return trending
+
+  if (typeof input.startedAt === "string" && input.startedAt.trim()) {
+    trending.startedAt = input.startedAt.trim()
+  }
+
+  if (typeof input.updatedAt === "string" && input.updatedAt.trim()) {
+    trending.updatedAt = input.updatedAt.trim()
+  }
+
+  if (input.videos && typeof input.videos === "object") {
+    for (const [rawId, rawEntry] of Object.entries(input.videos)) {
+      const id = String(rawId || "").trim()
+      if (!id || !rawEntry || typeof rawEntry !== "object") continue
+
+      const title = cleanPageTitle(rawEntry.title || rawEntry.pageTitle || "")
+      const firstSeenAt = typeof rawEntry.firstSeenAt === "string" && rawEntry.firstSeenAt.trim()
+        ? rawEntry.firstSeenAt.trim()
+        : getNowIso()
+      const lastSeenAt = typeof rawEntry.lastSeenAt === "string" && rawEntry.lastSeenAt.trim()
+        ? rawEntry.lastSeenAt.trim()
+        : firstSeenAt
+      const buckets = {}
+      const rawBuckets = rawEntry.buckets && typeof rawEntry.buckets === "object" ? rawEntry.buckets : {}
+
+      for (const [bucket, value] of Object.entries(rawBuckets)) {
+        const key = String(bucket || "").slice(0, 13)
+        const count = Math.max(0, Number(value) || 0)
+        if (/^\d{4}-\d{2}-\d{2}T\d{2}$/.test(key) && count > 0) {
+          buckets[key] = (buckets[key] || 0) + count
+        }
+      }
+
+      const totalViews = Math.max(0, Number(rawEntry.totalViews || rawEntry.views) || 0)
+      const category = String(rawEntry.category || categoriseTrendingTitle(title)).trim() || "uncategorized"
+
+      trending.videos[id] = {
+        id,
+        title,
+        category,
+        totalViews,
+        firstSeenAt,
+        lastSeenAt,
+        buckets
+      }
+    }
+  }
+
+  return compactTrendingForSave(trending)
+}
+
+function computeTrendingEntry(entry, nowMs) {
+  const cleanTitle = cleanPageTitle(entry.title || "")
+  const category = categoriseTrendingTitle(cleanTitle)
+  const buckets = entry.buckets && typeof entry.buckets === "object" ? entry.buckets : {}
+  let recentViews = 0
+  let weightedViews = 0
+
+  for (const [bucket, value] of Object.entries(buckets)) {
+    const count = Math.max(0, Number(value) || 0)
+    if (!count) continue
+
+    const bucketMs = getHourMsFromKey(bucket)
+    if (!bucketMs) continue
+
+    const ageHours = Math.max(0, (nowMs - bucketMs) / 3600000)
+    if (ageHours > trendingWindowHours) continue
+
+    const recencyWeight = Math.exp(-ageHours / trendingHalfLifeHours)
+    const firstDayBoost = ageHours <= 24 ? 1.35 : 1
+    const firstSixHoursBoost = ageHours <= 6 ? 1.4 : 1
+
+    recentViews += count
+    weightedViews += count * recencyWeight * firstDayBoost * firstSixHoursBoost
+  }
+
+  const lastSeenMs = Date.parse(entry.lastSeenAt || "") || nowMs
+  const lastSeenAgeHours = Math.max(0, (nowMs - lastSeenMs) / 3600000)
+  const veryRecentBoost = lastSeenAgeHours <= 1 ? 1.2 : lastSeenAgeHours <= 6 ? 1.1 : 1
+  const totalViews = Math.max(Number(entry.totalViews) || 0, recentViews)
+  const score = Number((weightedViews * veryRecentBoost + Math.log10(totalViews + 1) * 0.2).toFixed(6))
+
+  return {
+    id: entry.id,
+    title: cleanTitle,
+    category,
+    totalViews,
+    recentViews,
+    score,
+    firstSeenAt: entry.firstSeenAt,
+    lastSeenAt: entry.lastSeenAt,
+    buckets
+  }
+}
+
+function compactTrendingForSave(input) {
+  const nowMs = Date.now()
+  const trending = {
+    version: 1,
+    startedAt: typeof input.startedAt === "string" && input.startedAt.trim() ? input.startedAt.trim() : getNowIso(),
+    updatedAt: input.updatedAt || null,
+    maxItems: trendingMaxItems,
+    windowHours: trendingWindowHours,
+    videos: {}
+  }
+
+  const entries = []
+
+  for (const [rawId, rawEntry] of Object.entries((input && input.videos) || {})) {
+    const id = String(rawId || rawEntry.id || "").trim()
+    if (!id || !rawEntry || typeof rawEntry !== "object") continue
+
+    const entry = {
+      id,
+      title: cleanPageTitle(rawEntry.title || ""),
+      category: rawEntry.category || categoriseTrendingTitle(rawEntry.title || ""),
+      totalViews: Math.max(0, Number(rawEntry.totalViews || rawEntry.views) || 0),
+      firstSeenAt: rawEntry.firstSeenAt || getNowIso(),
+      lastSeenAt: rawEntry.lastSeenAt || rawEntry.firstSeenAt || getNowIso(),
+      buckets: {}
+    }
+
+    for (const [bucket, value] of Object.entries(rawEntry.buckets || {})) {
+      const key = String(bucket || "").slice(0, 13)
+      const bucketMs = getHourMsFromKey(key)
+      const count = Math.max(0, Number(value) || 0)
+
+      if (bucketMs && count > 0 && nowMs - bucketMs <= trendingWindowHours * 3600000) {
+        entry.buckets[key] = count
+      }
+    }
+
+    const computed = computeTrendingEntry(entry, nowMs)
+    if (computed.recentViews > 0) {
+      entry.category = computed.category
+      entries.push({ entry, computed })
+    }
+  }
+
+  entries
+    .sort((a, b) => {
+      if (b.computed.score !== a.computed.score) return b.computed.score - a.computed.score
+      if (b.computed.recentViews !== a.computed.recentViews) return b.computed.recentViews - a.computed.recentViews
+      return String(b.entry.lastSeenAt).localeCompare(String(a.entry.lastSeenAt))
+    })
+    .slice(0, trendingMaxItems)
+    .forEach(({ entry }) => {
+      trending.videos[entry.id] = entry
+    })
+
+  return trending
+}
+
+function saveTrendingStorage(trending) {
+  const clean = compactTrendingForSave(trending)
+  atomicWriteJson(trendingFile, clean)
+  return clean
+}
+
+function readTrendingStorage() {
+  const result = safeRead(trendingFile)
+
+  if (!result.ok) {
+    console.error("Could not read trending file, starting with empty trending:", trendingFile, result.error)
+    return getEmptyTrending()
+  }
+
+  if (!result.data) return getEmptyTrending()
+
+  const clean = normalizeTrending(result.data)
+  lastJsonByFile.set(trendingFile, JSON.stringify(clean, null, 2))
+  return clean
+}
+
+function recordTrendingView(trending, videoId, title) {
+  if (!videoId) return trending
+
+  const now = Date.now()
+  const nowIso = new Date(now).toISOString()
+  const hourKey = getHourKey(now)
+  const cleanTitle = cleanPageTitle(title || "")
+  const videos = trending.videos || (trending.videos = {})
+  const existing = videos[videoId]
+
+  if (!existing) {
+    videos[videoId] = {
+      id: videoId,
+      title: cleanTitle,
+      category: categoriseTrendingTitle(cleanTitle),
+      totalViews: 1,
+      firstSeenAt: nowIso,
+      lastSeenAt: nowIso,
+      buckets: {
+        [hourKey]: 1
+      }
+    }
+  } else {
+    existing.id = videoId
+    existing.totalViews = (Number(existing.totalViews) || 0) + 1
+    existing.firstSeenAt = existing.firstSeenAt || nowIso
+    existing.lastSeenAt = nowIso
+    existing.buckets = existing.buckets && typeof existing.buckets === "object" ? existing.buckets : {}
+    existing.buckets[hourKey] = (Number(existing.buckets[hourKey]) || 0) + 1
+
+    if (shouldReplaceRecordedTitle(existing.title, cleanTitle)) {
+      existing.title = cleanTitle
+      existing.category = categoriseTrendingTitle(cleanTitle)
+    } else if (!existing.category || existing.category === "uncategorized") {
+      existing.category = categoriseTrendingTitle(existing.title || cleanTitle)
+    }
+  }
+
+  trending.updatedAt = nowIso
+  return trending
+}
+
+function getTrendingPayload(trending, rawLimit, rawCategory) {
+  const parsedLimit = parseInt(String(rawLimit || trendingDefaultLimit), 10)
+  const limit = Number.isFinite(parsedLimit)
+    ? Math.max(1, Math.min(parsedLimit, trendingMaxItems))
+    : trendingDefaultLimit
+  const requestedCategory = String(rawCategory || "").trim().toLowerCase()
+  const clean = compactTrendingForSave(trending || getEmptyTrending())
+  const nowMs = Date.now()
+  const categories = {}
+  const items = []
+
+  for (const entry of Object.values(clean.videos || {})) {
+    const computed = computeTrendingEntry(entry, nowMs)
+    const category = computed.category || "uncategorized"
+
+    if (requestedCategory && requestedCategory !== "all" && requestedCategory !== category) {
+      continue
+    }
+
+    categories[category] = (categories[category] || 0) + 1
+
+    items.push({
+      videoId: entry.id,
+      title: computed.title || "Couldnt record",
+      category,
+      totalViews: computed.totalViews,
+      recentViews: computed.recentViews,
+      score: computed.score,
+      firstSeenAt: entry.firstSeenAt,
+      lastSeenAt: entry.lastSeenAt,
+      url: `/watch?v=${encodeURIComponent(entry.id)}`,
+      thumbnail: `https://i.ytimg.com/vi/${encodeURIComponent(entry.id)}/hqdefault.jpg`
+    })
+  }
+
+  items.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score
+    if (b.recentViews !== a.recentViews) return b.recentViews - a.recentViews
+    return String(b.lastSeenAt).localeCompare(String(a.lastSeenAt))
+  })
+
+  return {
+    startedAt: clean.startedAt,
+    updatedAt: clean.updatedAt,
+    generatedAt: getNowIso(),
+    source: "trending.json",
+    maxItems: trendingMaxItems,
+    windowHours: trendingWindowHours,
+    halfLifeHours: trendingHalfLifeHours,
+    limit,
+    category: requestedCategory || "all",
+    categories,
+    totalTrendingVideos: items.length,
+    videos: items.slice(0, limit)
+  }
+}
+
 
 function sumObjectValues(obj) {
   return Object.values(obj || {}).reduce((sum, value) => {
@@ -335,6 +773,7 @@ function normalizeTelemetryTab(value) {
     .replace(/[\s_-]+/g, "")
 
   if (raw === "recent" || raw === "recents") return "recent"
+  if (raw === "trend" || raw === "trending" || raw === "trendingvideos") return "trending"
   if (raw === "top" || raw === "topvideo" || raw === "topvideos" || raw === "videos") return "topvideos"
   if (raw === "api" || raw === "json" || raw === "endpoints") return "api"
   return "overview"
@@ -489,15 +928,19 @@ function renderServerVideoCard(videoId, options = {}) {
   </li>`
 }
 
-function renderTelemetryNoJsPage(query, stats, telemetryOn) {
+function renderTelemetryNoJsPage(query, stats, trending, telemetryOn) {
   const tab = normalizeTelemetryTab(query && query.tab)
   const snapshot = telemetryOn
     ? getTelemetrySnapshot(stats, query && query.limit)
     : getTelemetrySnapshot(getEmptyStats(), query && query.limit)
+  const trendingSnapshot = telemetryOn
+    ? getTrendingPayload(trending, query && query.limit, query && query.category)
+    : getTrendingPayload(getEmptyTrending(), query && query.limit, query && query.category)
 
   const tabs = [
     ["overview", "Overview"],
     ["recent", "Recent"],
+    ["trending", "Trending"],
     ["topvideos", "Top videos"],
     ["api", "API"]
   ]
@@ -556,6 +999,31 @@ function renderTelemetryNoJsPage(query, stats, telemetryOn) {
     </div>
   </section>`
 
+  const trendingCards = trendingSnapshot.videos.length
+    ? trendingSnapshot.videos.map((item, index) => renderServerVideoCard(item.videoId, {
+        rank: index + 1,
+        views: item.recentViews,
+        badge: item.category,
+        pageTitle: item.title
+      })).join("")
+    : '<li class="error-box">No trending videos recorded yet.</li>'
+
+  const trendingPanel = `<section class="panel active">
+    <div class="section-help">
+      <h2>Trending videos</h2>
+      <p class="note">This server-rendered trending view is ranked from recent local views in <code>trending.json</code>. It does not auto-refresh.</p>
+    </div>
+    <div class="section-card">
+      <div class="compact-head">
+        <div>
+          <h2>Trending</h2>
+          <p class="note" style="margin:0;">A recency-weighted local trending list capped at ${trendingMaxItems} videos.</p>
+        </div>
+      </div>
+      <ul class="video-grid">${trendingCards}</ul>
+    </div>
+  </section>`
+
   const topCards = snapshot.topEntries.length
     ? snapshot.topEntries.map(([videoId, views], index) => renderServerVideoCard(videoId, {
         rank: index + 1,
@@ -598,6 +1066,8 @@ function renderTelemetryNoJsPage(query, stats, telemetryOn) {
         • Live GUI view: <code><a href="/api/stats?view=gui">/api/stats?view=gui</a></code><br>
         • No-JavaScript GUI view: <code><a href="/api/stats?view=gui&amp;nojs=1">/api/stats?view=gui&amp;nojs=1</a></code><br>
         • JSON view: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code><br>
+        • Trending API: <code><a href="/api/trending">/api/trending</a></code><br>
+        • Trending API with genre: <code><a href="/api/trending?category=music">/api/trending?category=music</a></code><br>
         • JSON with custom limit: <code><a href="/api/stats?view=json&amp;limit=3000">/api/stats?view=json&amp;limit=3000</a></code><br>
         • Opt out for this browser: <code><a href="/api/stats/optout">/api/stats/optout</a></code>
       </p>
@@ -606,11 +1076,13 @@ function renderTelemetryNoJsPage(query, stats, telemetryOn) {
 
   const selectedPanel = tab === "recent"
     ? recentPanel
-    : tab === "topvideos"
-      ? topPanel
-      : tab === "api"
-        ? apiPanel
-        : overviewPanel
+    : tab === "trending"
+      ? trendingPanel
+      : tab === "topvideos"
+        ? topPanel
+        : tab === "api"
+          ? apiPanel
+          : overviewPanel
 
   const disabledMessage = telemetryOn ? "" : '<div class="section-card"><p class="note">No data because telemetry is disabled.</p></div>'
 
@@ -771,12 +1243,29 @@ function renderTelemetryNoJsPage(query, stats, telemetryOn) {
 
 module.exports = function (app, config, renderTemplate) {
   let memoryStats = readTelemetryStorage()
+  let memoryTrending = readTrendingStorage()
+
   let needsSave = false
   let saveInProgress = false
   let pendingSave = false
   let saveTimer = null
   let firstUnsavedAt = 0
   let lastSaveAt = 0
+
+  let trendingNeedsSave = false
+  let trendingSaveInProgress = false
+  let trendingPendingSave = false
+  let trendingSaveTimer = null
+  let trendingFirstUnsavedAt = 0
+  let trendingLastSaveAt = 0
+
+  let telemetrySnapshotCache = null
+  let telemetrySnapshotCacheAt = 0
+  let telemetrySnapshotCacheLimit = ""
+  let trendingPayloadCache = null
+  let trendingPayloadCacheAt = 0
+  let trendingPayloadCacheLimit = ""
+  let trendingPayloadCacheCategory = ""
 
   function touchRecentVideo(videoId) {
     if (!videoId) return
@@ -787,6 +1276,55 @@ module.exports = function (app, config, renderTemplate) {
     if (memoryStats.recentVideos.length > recentVideoLimit) {
       memoryStats.recentVideos = memoryStats.recentVideos.slice(-recentVideoLimit)
     }
+  }
+
+  function invalidateApiCaches() {
+    telemetrySnapshotCache = null
+    telemetrySnapshotCacheAt = 0
+    telemetrySnapshotCacheLimit = ""
+    trendingPayloadCache = null
+    trendingPayloadCacheAt = 0
+    trendingPayloadCacheLimit = ""
+    trendingPayloadCacheCategory = ""
+  }
+
+  function getCachedTelemetrySnapshot(rawLimit) {
+    const limitKey = String(rawLimit || "8")
+    const now = Date.now()
+
+    if (
+      telemetrySnapshotCache &&
+      telemetrySnapshotCacheLimit === limitKey &&
+      now - telemetrySnapshotCacheAt < telemetrySnapshotCacheMs
+    ) {
+      return telemetrySnapshotCache
+    }
+
+    telemetrySnapshotCache = getTelemetrySnapshot(memoryStats, rawLimit)
+    telemetrySnapshotCacheAt = now
+    telemetrySnapshotCacheLimit = limitKey
+    return telemetrySnapshotCache
+  }
+
+  function getCachedTrendingPayload(rawLimit, rawCategory) {
+    const limitKey = String(rawLimit || trendingDefaultLimit)
+    const categoryKey = String(rawCategory || "all").trim().toLowerCase()
+    const now = Date.now()
+
+    if (
+      trendingPayloadCache &&
+      trendingPayloadCacheLimit === limitKey &&
+      trendingPayloadCacheCategory === categoryKey &&
+      now - trendingPayloadCacheAt < trendingApiCacheMs
+    ) {
+      return trendingPayloadCache
+    }
+
+    trendingPayloadCache = getTrendingPayload(memoryTrending, rawLimit, rawCategory)
+    trendingPayloadCacheAt = now
+    trendingPayloadCacheLimit = limitKey
+    trendingPayloadCacheCategory = categoryKey
+    return trendingPayloadCache
   }
 
   function scheduleTelemetrySave(force) {
@@ -853,16 +1391,86 @@ module.exports = function (app, config, renderTemplate) {
     }
   }
 
+  function scheduleTrendingSave(force) {
+    trendingNeedsSave = true
+
+    const now = Date.now()
+    if (!trendingFirstUnsavedAt) trendingFirstUnsavedAt = now
+
+    if (trendingSaveTimer) {
+      clearTimeout(trendingSaveTimer)
+      trendingSaveTimer = null
+    }
+
+    if (force) {
+      trendingSaveTimer = setTimeout(saveTrendingNow, 0)
+      return
+    }
+
+    const sinceFirstUnsaved = now - trendingFirstUnsavedAt
+    const sinceLastSave = now - trendingLastSaveAt
+
+    if (sinceFirstUnsaved >= trendingMaxUnsavedMs && sinceLastSave >= trendingMinWriteIntervalMs) {
+      trendingSaveTimer = setTimeout(saveTrendingNow, 0)
+      return
+    }
+
+    const minIntervalDelay = Math.max(0, trendingMinWriteIntervalMs - sinceLastSave)
+    const maxUnsavedDelay = Math.max(0, trendingMaxUnsavedMs - sinceFirstUnsaved)
+    const debounceDelay = trendingSaveDebounceMs
+    const delay = Math.min(Math.max(debounceDelay, minIntervalDelay), maxUnsavedDelay)
+
+    trendingSaveTimer = setTimeout(saveTrendingNow, delay)
+  }
+
+  function saveTrendingNow() {
+    if (!trendingNeedsSave) return
+    if (trendingSaveInProgress) {
+      trendingPendingSave = true
+      return
+    }
+
+    if (trendingSaveTimer) {
+      clearTimeout(trendingSaveTimer)
+      trendingSaveTimer = null
+    }
+
+    trendingSaveInProgress = true
+
+    try {
+      memoryTrending = saveTrendingStorage(memoryTrending)
+      trendingNeedsSave = false
+      trendingFirstUnsavedAt = 0
+      trendingLastSaveAt = Date.now()
+    } catch (error) {
+      console.error("Failed to save trending", error)
+      scheduleTrendingSave(false)
+    } finally {
+      trendingSaveInProgress = false
+
+      if (trendingPendingSave) {
+        trendingPendingSave = false
+        scheduleTrendingSave(false)
+      }
+    }
+  }
+
   setInterval(() => {
     if (needsSave && firstUnsavedAt && Date.now() - firstUnsavedAt >= telemetryMaxUnsavedMs) {
       scheduleTelemetrySave(true)
     }
-  }, Math.max(telemetryMinWriteIntervalMs, 1000))
+
+    if (trendingNeedsSave && trendingFirstUnsavedAt && Date.now() - trendingFirstUnsavedAt >= trendingMaxUnsavedMs) {
+      scheduleTrendingSave(true)
+    }
+  }, Math.max(Math.min(telemetryMinWriteIntervalMs, trendingMinWriteIntervalMs), 1000))
 
   process.once("SIGINT", () => {
     try {
       scheduleTelemetrySave(true)
+      scheduleTrendingSave(true)
       saveNow()
+      saveTrendingNow()
     } finally {
       process.exit(0)
     }
@@ -871,7 +1479,9 @@ module.exports = function (app, config, renderTemplate) {
   process.once("SIGTERM", () => {
     try {
       scheduleTelemetrySave(true)
+      scheduleTrendingSave(true)
       saveNow()
+      saveTrendingNow()
     } finally {
       process.exit(0)
     }
@@ -879,6 +1489,7 @@ module.exports = function (app, config, renderTemplate) {
 
   process.once("beforeExit", () => {
     saveNow()
+    saveTrendingNow()
   })
 
   app.post(["/api/stats", "/api/nexus"], (req, res) => {
@@ -908,8 +1519,11 @@ module.exports = function (app, config, renderTemplate) {
     memoryStats.os[parsed.os] = (memoryStats.os[parsed.os] || 0) + 1
     memoryStats.users[userId] = true
     touchRecentVideo(videoId)
+    memoryTrending = recordTrendingView(memoryTrending, videoId, pageTitle)
+    invalidateApiCaches()
 
     scheduleTelemetrySave(false)
+    scheduleTrendingSave(false)
 
     res.json({ ok: true })
   })
@@ -1052,6 +1666,32 @@ module.exports = function (app, config, renderTemplate) {
 </html>`)
   })
 
+  app.get("/api/trending", (req, res) => {
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate")
+    res.set("Pragma", "no-cache")
+    res.set("Expires", "0")
+
+    if (!telemetryConfig.telemetry) {
+      return res.json({
+        startedAt: null,
+        updatedAt: null,
+        generatedAt: getNowIso(),
+        source: "trending.json",
+        maxItems: trendingMaxItems,
+        windowHours: trendingWindowHours,
+        halfLifeHours: trendingHalfLifeHours,
+        limit: 0,
+        category: "all",
+        categories: {},
+        totalTrendingVideos: 0,
+        videos: []
+      })
+    }
+
+    const payload = getCachedTrendingPayload(req.query.limit, req.query.category || req.query.genre)
+    return res.json(payload)
+  })
+
   app.get("/api/stats", (req, res) => {
     const view = (req.query.view || "").toString()
 
@@ -1095,8 +1735,7 @@ module.exports = function (app, config, renderTemplate) {
         })
       }
 
-      const snapshot = getTelemetrySnapshot(
-        memoryStats,
+      const snapshot = getCachedTelemetrySnapshot(
         typeof req.query.limit !== "undefined" ? req.query.limit : "8"
       )
 
@@ -1119,7 +1758,7 @@ module.exports = function (app, config, renderTemplate) {
       const telemetryOn = telemetryConfig.telemetry
 
       if ((req.query.nojs || "").toString() === "1") {
-        return res.send(renderTelemetryNoJsPage(req.query || {}, memoryStats, telemetryOn))
+        return res.send(renderTelemetryNoJsPage(req.query || {}, memoryStats, memoryTrending, telemetryOn))
       }
 
       return res.send(`<!DOCTYPE html>
@@ -1921,6 +2560,7 @@ module.exports = function (app, config, renderTemplate) {
     <div class="segmented">
       <button type="button" class="seg-btn active" data-panel="overview-panel" data-tab="overview">Overview</button>
       <button type="button" class="seg-btn" data-panel="recent-panel" data-tab="recent">Recent</button>
+      <button type="button" class="seg-btn" data-panel="trending-panel" data-tab="trending">Trending</button>
       <button type="button" class="seg-btn" data-panel="top-panel" data-tab="topvideos">Top videos</button>
       <button type="button" class="seg-btn" data-panel="api-panel" data-tab="api">API</button>
     </div>
@@ -1979,6 +2619,28 @@ module.exports = function (app, config, renderTemplate) {
       </div>
     </section>
 
+    <section id="trending-panel" class="panel">
+      <div class="section-help">
+        <h2>Trending videos</h2>
+        <p class="note">
+          Trending is calculated from recent local views in <code>trending.json</code>. It uses recency-weighted hourly buckets, keeps at most 400 videos, and auto-categorises genre from the recorded page title.
+        </p>
+      </div>
+
+      <div class="section-card">
+        <div class="compact-head">
+          <div>
+            <h2>Trending</h2>
+            <p class="note" style="margin:0;">
+              A local, recency-weighted list inspired by trending pages, not public YouTube Trending.
+            </p>
+          </div>
+        </div>
+
+        <ul id="trending-videos" class="video-grid"></ul>
+      </div>
+    </section>
+
     <section id="top-panel" class="panel">
       <div class="section-help">
         <h2>How to read top videos</h2>
@@ -2029,8 +2691,11 @@ module.exports = function (app, config, renderTemplate) {
           These API views expose anonymous local telemetry collected by Poke from <code>telemetry.json</code>.<br><br>
           • GUI view: <code><a href="/api/stats?view=gui">/api/stats?view=gui</a></code><br>
           • GUI top videos tab: <code><a href="/api/stats?view=gui&amp;tab=topvideos">/api/stats?view=gui&amp;tab=topvideos</a></code><br>
+          • GUI trending tab: <code><a href="/api/stats?view=gui&amp;tab=trending">/api/stats?view=gui&amp;tab=trending</a></code><br>
           • No-JavaScript GUI: <code><a href="/api/stats?view=gui&amp;nojs=1">/api/stats?view=gui&amp;nojs=1</a></code><br>
           • JSON view: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code><br>
+          • Trending API: <code><a href="/api/trending">/api/trending</a></code><br>
+          • Trending by genre: <code><a href="/api/trending?category=music">/api/trending?category=music</a></code><br>
           • JSON default limit: <code><a href="/api/stats?view=json">/api/stats?view=json</a></code> (8 videos)<br>
           • JSON with custom limit: <code><a href="/api/stats?view=json&limit=3000">/api/stats?view=json&limit=3000</a></code><br>
           • Opt out for this browser: <code><a href="/api/stats/optout">/api/stats/optout</a></code>
@@ -2061,6 +2726,7 @@ module.exports = function (app, config, renderTemplate) {
     const CARDS_PER_PAGE = 40
 
     const topVideos = document.getElementById("top-videos")
+    const trendingVideos = document.getElementById("trending-videos")
     const recentVideos = document.getElementById("recent-videos")
     const recentCount = document.getElementById("recent-count")
     const recentLatest = document.getElementById("recent-latest")
@@ -2085,6 +2751,7 @@ module.exports = function (app, config, renderTemplate) {
     const refreshNowBtn = document.getElementById("refresh-now-btn")
 
     var allVideos = {}
+    var trendingVideoItems = []
     var pageTitles = {}
     var recentVideoIds = []
     var currentPage = 1
@@ -2092,10 +2759,13 @@ module.exports = function (app, config, renderTemplate) {
     var telemetryRefreshTimer = null
     var telemetryFetchInProgress = false
     var lastTelemetrySignature = ""
+    var lastTrendingSignature = ""
+    var trendingFetchInProgress = false
 
     const TAB_TO_PANEL = {
       overview: "overview-panel",
       recent: "recent-panel",
+      trending: "trending-panel",
       topvideos: "top-panel",
       api: "api-panel"
     }
@@ -2103,6 +2773,7 @@ module.exports = function (app, config, renderTemplate) {
     const PANEL_TO_TAB = {
       "overview-panel": "overview",
       "recent-panel": "recent",
+      "trending-panel": "trending",
       "top-panel": "topvideos",
       "api-panel": "api"
     }
@@ -2114,6 +2785,7 @@ module.exports = function (app, config, renderTemplate) {
         .replace(/[\s_-]+/g, "")
 
       if (raw === "recent" || raw === "recents") return "recent"
+      if (raw === "trend" || raw === "trending" || raw === "trendingvideos") return "trending"
       if (raw === "top" || raw === "topvideo" || raw === "topvideos" || raw === "videos") return "topvideos"
       if (raw === "api" || raw === "json" || raw === "endpoints") return "api"
       return "overview"
@@ -2586,6 +3258,80 @@ module.exports = function (app, config, renderTemplate) {
       })
     }
 
+    function renderTrendingVideos() {
+      trendingVideos.innerHTML = ""
+
+      if (!Array.isArray(trendingVideoItems) || trendingVideoItems.length === 0) {
+        trendingVideos.innerHTML = '<li class="error-box">No trending videos recorded yet.</li>'
+        return
+      }
+
+      trendingVideoItems.slice(0, 100).forEach(function (item, index) {
+        var videoId = item.videoId || item.id || ""
+        if (!videoId) return
+
+        var li = document.createElement("li")
+        li.className = "video-card"
+
+        var thumbLink = document.createElement("a")
+        thumbLink.className = "video-thumb-link"
+        thumbLink.href = "/watch?v=" + encodeURIComponent(videoId)
+        thumbLink.setAttribute("aria-label", "Open video " + videoId)
+
+        var img = document.createElement("img")
+        img.className = "video-thumb"
+        img.src = item.thumbnail || getThumbnailUrl(videoId)
+        img.alt = "Thumbnail for trending video " + videoId
+        img.loading = "lazy"
+        img.referrerPolicy = "no-referrer"
+        img.onerror = function () {
+          this.style.display = "none"
+        }
+
+        thumbLink.appendChild(img)
+
+        var meta = document.createElement("div")
+        meta.className = "video-meta"
+
+        var badge = document.createElement("div")
+        badge.className = "recent-badge"
+        badge.textContent = item.category || "uncategorized"
+
+        var titleLink = document.createElement("a")
+        titleLink.className = "video-title"
+        titleLink.href = "/watch?v=" + encodeURIComponent(videoId)
+        titleLink.textContent = videoId
+
+        var rank = document.createElement("div")
+        rank.className = "video-rank"
+        rank.textContent = "Trending #" + (index + 1)
+
+        var pageTitleEl = document.createElement("div")
+        pageTitleEl.className = "video-page-title"
+        pageTitleEl.textContent = getDisplayPageTitle(item.title)
+
+        var idEl = document.createElement("div")
+        idEl.className = "video-id"
+        idEl.textContent = "Video ID: " + videoId
+
+        var viewsEl = document.createElement("div")
+        viewsEl.className = "video-views"
+        viewsEl.textContent = formatLocalViewCount(item.recentViews || 0) + " recently"
+
+        meta.appendChild(badge)
+        meta.appendChild(titleLink)
+        meta.appendChild(rank)
+        meta.appendChild(pageTitleEl)
+        meta.appendChild(idEl)
+        meta.appendChild(viewsEl)
+
+        li.appendChild(thumbLink)
+        li.appendChild(meta)
+
+        trendingVideos.appendChild(li)
+      })
+    }
+
     function renderTopVideos() {
       var entries = getLimitedEntries()
 
@@ -2678,6 +3424,7 @@ module.exports = function (app, config, renderTemplate) {
 
     function setDisabledState(message) {
       topVideos.innerHTML = '<li class="error-box">' + message + "</li>"
+      trendingVideos.innerHTML = '<li class="error-box">' + message + "</li>"
       recentVideos.innerHTML = '<li class="error-box">' + message + "</li>"
       videoLimitSelect.disabled = true
       downloadRecentJsonBtn.disabled = true
@@ -2747,6 +3494,66 @@ module.exports = function (app, config, renderTemplate) {
 
     }
 
+    function getTrendingSignature(data) {
+      return JSON.stringify({
+        updatedAt: data ? data.updatedAt || null : null,
+        category: data ? data.category || "all" : "all",
+        videos: data && Array.isArray(data.videos) ? data.videos : []
+      })
+    }
+
+    function applyTrendingData(data) {
+      var signature = getTrendingSignature(data)
+      var changed = signature !== lastTrendingSignature
+
+      trendingVideoItems = Array.isArray(data.videos) ? data.videos : []
+      lastTrendingSignature = signature
+
+      if (changed || !hasLoadedTelemetryOnce) {
+        renderTrendingVideos()
+      }
+    }
+
+    function getTrendingJsonUrl() {
+      return "/api/trending?limit=100&_=" + encodeURIComponent(String(Date.now()))
+    }
+
+    function loadTrendingData(force) {
+      if (trendingFetchInProgress && !force) return
+
+      trendingFetchInProgress = true
+
+      fetch(getTrendingJsonUrl(), {
+        cache: "no-store",
+        headers: {
+          "Accept": "application/json"
+        }
+      })
+        .then(function (res) {
+          if (!res.ok) {
+            throw new Error("Trending request failed with status " + res.status)
+          }
+
+          return res.json()
+        })
+        .then(function (data) {
+          applyTrendingData(data)
+        })
+        .catch(function () {
+          if (!lastTrendingSignature) {
+            trendingVideos.innerHTML = '<li class="error-box">Error loading trending data.</li>'
+          }
+        })
+        .finally(function () {
+          trendingFetchInProgress = false
+        })
+    }
+
+    function loadAllData(force) {
+      loadTelemetryData(force)
+      loadTrendingData(force)
+    }
+
     function getTelemetryJsonUrl() {
       return "/api/stats?view=json&limit=3000&_=" + encodeURIComponent(String(Date.now()))
     }
@@ -2814,13 +3621,13 @@ module.exports = function (app, config, renderTemplate) {
       stopTelemetryAutoRefresh()
 
       telemetryRefreshTimer = setInterval(function () {
-        loadTelemetryData(false)
+        loadAllData(false)
       }, 5000)
     }
 
     document.addEventListener("visibilitychange", function () {
       if (!document.hidden && autoRefreshToggle.checked) {
-        loadTelemetryData(true)
+        loadAllData(true)
       }
     })
 
@@ -2830,7 +3637,7 @@ module.exports = function (app, config, renderTemplate) {
     })
 
     refreshNowBtn.addEventListener("click", function () {
-      loadTelemetryData(true)
+      loadAllData(true)
     })
 
     autoRefreshToggle.addEventListener("change", function () {
@@ -2839,7 +3646,7 @@ module.exports = function (app, config, renderTemplate) {
 
       if (enabled) {
         startTelemetryAutoRefresh()
-        loadTelemetryData(true)
+        loadAllData(true)
       } else {
         stopTelemetryAutoRefresh()
       }
@@ -2868,7 +3675,7 @@ module.exports = function (app, config, renderTemplate) {
         autoRefreshToggle.checked = autoRefreshEnabled
         autoRefreshToggle.disabled = false
         refreshNowBtn.disabled = false
-        loadTelemetryData(true)
+        loadAllData(true)
 
         if (autoRefreshEnabled) {
           startTelemetryAutoRefresh()
