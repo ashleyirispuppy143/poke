@@ -55,65 +55,214 @@ class InnerTubePokeVidious {
       INAPPROPRIATE: "This video may be inappropriate for some users.",
     };
 
-    this.defaultColors = {
-      color: "#0ea5e9",
-      color2: "#111827",
-    };
-
     this.ttl = {
       final: 60 * 60 * 1000,
       video: 60 * 60 * 1000,
-      comments: 5 * 60 * 1000,
-      dislikes: 5 * 60 * 1000,
+      comments: 2 * 60 * 1000,
+      dislikes: 3 * 60 * 1000,
       colors: 24 * 60 * 60 * 1000,
+      negative: 8 * 1000,
     };
 
     this.staleTtl = {
-      final: 3 * 60 * 60 * 1000,
-      video: 3 * 60 * 60 * 1000,
+      final: 8 * 60 * 60 * 1000,
+      video: 8 * 60 * 60 * 1000,
       comments: 30 * 60 * 1000,
-      dislikes: 30 * 60 * 1000,
+      dislikes: 45 * 60 * 1000,
       colors: 7 * 24 * 60 * 60 * 1000,
     };
 
-    this.maxCacheItems = 2500;
+    this.maxCacheItems = 3000;
+    this.maxInflightItems = 600;
+
+    this.breakers = {
+      invapi: this.createCircuitBreaker("invapi", {
+        failuresToOpen: 10,
+        cooldownMs: 9000,
+        halfOpenMax: 2,
+      }),
+      dislikes: this.createCircuitBreaker("dislikes", {
+        failuresToOpen: 8,
+        cooldownMs: 12000,
+        halfOpenMax: 1,
+      }),
+      thumbnails: this.createCircuitBreaker("thumbnails", {
+        failuresToOpen: 8,
+        cooldownMs: 15000,
+        halfOpenMax: 1,
+      }),
+    };
 
     this.limits = {
-      video: this.createLimit(6),
-      comments: this.createLimit(4),
-      dislikes: this.createLimit(3),
-      colors: this.createLimit(2),
+      full: this.createLimit("full", {
+        concurrency: 24,
+        maxQueue: 64,
+        maxQueueWaitMs: 1200,
+      }),
+      video: this.createLimit("video", {
+        concurrency: 8,
+        maxQueue: 32,
+        maxQueueWaitMs: 900,
+      }),
+      comments: this.createLimit("comments", {
+        concurrency: 3,
+        maxQueue: 16,
+        maxQueueWaitMs: 700,
+      }),
+      dislikes: this.createLimit("dislikes", {
+        concurrency: 2,
+        maxQueue: 12,
+        maxQueueWaitMs: 700,
+      }),
+      colors: this.createLimit("colors", {
+        concurrency: 1,
+        maxQueue: 8,
+        maxQueueWaitMs: 600,
+      }),
     };
 
     this.loadBlockedVideos();
   }
 
-  createLimit(max) {
+  createLimit(name, options) {
+    const concurrency = Math.max(1, options.concurrency || 1);
+    const maxQueue = Math.max(0, options.maxQueue || 0);
+    const maxQueueWaitMs = Math.max(1, options.maxQueueWaitMs || 1000);
+
     let active = 0;
     const queue = [];
 
     const runNext = () => {
-      if (active >= max) return;
+      while (active < concurrency && queue.length > 0) {
+        const item = queue.shift();
 
-      const item = queue.shift();
-      if (!item) return;
+        if (!item) return;
 
-      active++;
+        if (item.timer) {
+          clearTimeout(item.timer);
+          item.timer = null;
+        }
 
-      Promise.resolve()
-        .then(item.fn)
-        .then(item.resolve, item.reject)
-        .finally(() => {
-          active--;
-          runNext();
-        });
+        if (item.settled) {
+          continue;
+        }
+
+        item.settled = true;
+        active++;
+
+        Promise.resolve()
+          .then(item.fn)
+          .then(item.resolve, item.reject)
+          .finally(() => {
+            active--;
+            runNext();
+          });
+      }
     };
 
     return (fn) =>
       new Promise((resolve, reject) => {
-        queue.push({ fn, resolve, reject });
-        runNext();
+        if (active < concurrency) {
+          active++;
+
+          Promise.resolve()
+            .then(fn)
+            .then(resolve, reject)
+            .finally(() => {
+              active--;
+              runNext();
+            });
+
+          return;
+        }
+
+        if (queue.length >= maxQueue) {
+          reject(new Error(`${name} queue is full`));
+          return;
+        }
+
+        const item = {
+          fn,
+          resolve,
+          reject,
+          settled: false,
+          timer: null,
+        };
+
+        item.timer = setTimeout(() => {
+          if (item.settled) return;
+
+          item.settled = true;
+
+          const index = queue.indexOf(item);
+          if (index !== -1) {
+            queue.splice(index, 1);
+          }
+
+          reject(new Error(`${name} queue wait timed out`));
+        }, maxQueueWaitMs);
+
+        queue.push(item);
       });
+  }
+
+  createCircuitBreaker(name, options) {
+    return {
+      name,
+      failures: 0,
+      openedUntil: 0,
+      halfOpenActive: 0,
+      failuresToOpen: Math.max(1, options.failuresToOpen || 8),
+      cooldownMs: Math.max(1000, options.cooldownMs || 10000),
+      halfOpenMax: Math.max(1, options.halfOpenMax || 1),
+    };
+  }
+
+  canUseBreaker(breaker) {
+    const now = Date.now();
+
+    if (breaker.openedUntil <= now) {
+      if (breaker.openedUntil !== 0 && breaker.halfOpenActive >= breaker.halfOpenMax) {
+        return false;
+      }
+
+      return true;
+    }
+
+    return false;
+  }
+
+  async withBreaker(breaker, fn) {
+    if (!this.canUseBreaker(breaker)) {
+      throw new Error(`${breaker.name} circuit open`);
+    }
+
+    const halfOpen = breaker.openedUntil !== 0 && breaker.openedUntil <= Date.now();
+
+    if (halfOpen) {
+      breaker.halfOpenActive++;
+    }
+
+    try {
+      const result = await fn();
+      breaker.failures = 0;
+      breaker.openedUntil = 0;
+      return result;
+    } catch (err) {
+      if (!this.isKnownError(err)) {
+        breaker.failures++;
+
+        if (breaker.failures >= breaker.failuresToOpen) {
+          breaker.openedUntil = Date.now() + breaker.cooldownMs;
+        }
+      }
+
+      throw err;
+    } finally {
+      if (halfOpen) {
+        breaker.halfOpenActive = Math.max(0, breaker.halfOpenActive - 1);
+      }
+    }
   }
 
   loadBlockedVideos() {
@@ -171,7 +320,7 @@ class InnerTubePokeVidious {
     return Buffer.from(String(str)).toString("base64");
   }
 
-  getCacheBustToken(bucketMs = 5 * 60 * 1000) {
+  getCacheBustToken(bucketMs = 15 * 60 * 1000) {
     return this.toBase64(Math.floor(Date.now() / bucketMs));
   }
 
@@ -192,6 +341,7 @@ class InnerTubePokeVidious {
     if (!entry) return { hit: false, value: null };
 
     const ttl = opts.stale ? entry.staleTtl : entry.ttl;
+
     if (Date.now() - entry.timestamp > ttl) {
       return { hit: false, value: null };
     }
@@ -202,6 +352,7 @@ class InnerTubePokeVidious {
   setCache(cache, key, value, ttl, staleTtl) {
     if (cache.size >= this.maxCacheItems) {
       const oldestKey = cache.keys().next().value;
+
       if (oldestKey !== undefined) {
         cache.delete(oldestKey);
       }
@@ -220,6 +371,10 @@ class InnerTubePokeVidious {
       return this.inflight.get(key);
     }
 
+    if (this.inflight.size >= this.maxInflightItems) {
+      throw new Error("Too many active watch fetches");
+    }
+
     const promise = Promise.resolve()
       .then(fn)
       .finally(() => {
@@ -232,14 +387,21 @@ class InnerTubePokeVidious {
 
   async cachedTask(cache, key, ttl, staleTtl, inflightKey, task, options = {}) {
     const fresh = this.getCache(cache, key);
-    if (fresh.hit) return fresh.value;
+
+    if (fresh.hit) {
+      return fresh.value;
+    }
 
     return this.getOrCreateInFlight(inflightKey, async () => {
       const freshAgain = this.getCache(cache, key);
-      if (freshAgain.hit) return freshAgain.value;
+
+      if (freshAgain.hit) {
+        return freshAgain.value;
+      }
 
       try {
         const value = await task();
+
         const shouldCache =
           typeof options.shouldCache === "function"
             ? options.shouldCache(value)
@@ -255,30 +417,14 @@ class InnerTubePokeVidious {
           throw err;
         }
 
-        this.initError(options.label || `Cached task failed: ${key}`, err);
-
         const stale = this.getCache(cache, key, { stale: true });
-        if (stale.hit) return stale.value;
 
-        if (Object.prototype.hasOwnProperty.call(options, "fallback")) {
-          const fallbackValue =
-            typeof options.fallback === "function"
-              ? options.fallback(err)
-              : options.fallback;
-
-          if (options.cacheFallbackTtl && options.cacheFallbackTtl > 0) {
-            this.setCache(
-              cache,
-              key,
-              fallbackValue,
-              options.cacheFallbackTtl,
-              options.cacheFallbackTtl
-            );
-          }
-
-          return fallbackValue;
+        if (stale.hit) {
+          this.initError(options.label || `Serving stale cache for ${key}`, err);
+          return stale.value;
         }
 
+        this.initError(options.label || `Cached task failed: ${key}`, err);
         throw err;
       }
     });
@@ -296,10 +442,12 @@ class InnerTubePokeVidious {
     return {
       ...extraHeaders,
       "User-Agent": this.useragent,
+      Accept: extraHeaders.Accept || "application/json,text/plain,*/*",
+      Connection: "keep-alive",
     };
   }
 
-  async fetchOnceWithTimeout(fetch, url, options = {}, timeoutMs = 2000) {
+  async fetchOnceWithTimeout(fetch, url, options = {}, timeoutMs = 1600) {
     const controller = new AbortController();
     const callerSignal = options.signal || null;
 
@@ -345,6 +493,7 @@ class InnerTubePokeVidious {
     }
 
     const when = Date.parse(s);
+
     if (!Number.isNaN(when)) {
       return Math.max(0, when - Date.now());
     }
@@ -354,7 +503,7 @@ class InnerTubePokeVidious {
 
   async checkUnrecoverableErrors(resp, videoId) {
     if (!videoId) return;
-    if (resp.status !== 500 && resp.status !== 404) return;
+    if (resp.status !== 500 && resp.status !== 404 && resp.status !== 410) return;
 
     let text = "";
 
@@ -385,6 +534,11 @@ class InnerTubePokeVidious {
         needle: "Video unavailable",
         reason: "VIDEO_UNAVAILABLE",
       },
+      {
+        status: 410,
+        needle: "Video unavailable",
+        reason: "VIDEO_UNAVAILABLE",
+      },
     ];
 
     for (const check of checks) {
@@ -404,53 +558,28 @@ class InnerTubePokeVidious {
   }
 
   async fetchWithRetry(fetch, url, options = {}, settings = {}) {
-    const RETRYABLE = new Set([429, 500, 502, 503, 504]);
-    const MIN_DELAY_MS = 150;
-    const BASE_DELAY_MS = 250;
-    const MAX_DELAY_MS = 1500;
-    const JITTER_FACTOR = 3;
-
+    const retryable = new Set([408, 425, 429, 500, 502, 503, 504]);
     const maxRetryTime =
-      typeof settings.maxRetryTime === "number" ? settings.maxRetryTime : 2500;
+      typeof settings.maxRetryTime === "number" ? settings.maxRetryTime : 1800;
     const perTryTimeoutMs =
-      typeof settings.perTryTimeoutMs === "number"
-        ? settings.perTryTimeoutMs
-        : 1800;
+      typeof settings.perTryTimeoutMs === "number" ? settings.perTryTimeoutMs : 1200;
+    const maxAttempts =
+      typeof settings.maxAttempts === "number" ? settings.maxAttempts : 2;
 
     const startedAt = Date.now();
-    let delayMs = BASE_DELAY_MS;
     let lastError = null;
-    let attempt = 0;
 
-    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-    while (true) {
-      attempt++;
-
-      const elapsed = Date.now() - startedAt;
-      const remaining = maxRetryTime - elapsed;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const remaining = maxRetryTime - (Date.now() - startedAt);
 
       if (remaining <= 0) {
-        throw (
-          lastError ||
-          new Error(`Fetch failed for ${url} after ${maxRetryTime}ms`)
-        );
+        break;
       }
 
-      const timeoutMs = Math.min(
-        perTryTimeoutMs,
-        Math.max(100, remaining - 50)
-      );
-
-      let retryAfterMs = null;
+      const timeoutMs = Math.min(perTryTimeoutMs, Math.max(100, remaining - 25));
 
       try {
-        const res = await this.fetchOnceWithTimeout(
-          fetch,
-          url,
-          options,
-          timeoutMs
-        );
+        const res = await this.fetchOnceWithTimeout(fetch, url, options, timeoutMs);
 
         if (res.ok) {
           return res;
@@ -458,12 +587,27 @@ class InnerTubePokeVidious {
 
         await this.checkUnrecoverableErrors(res, settings.videoId);
 
-        if (!RETRYABLE.has(res.status)) {
+        if (!retryable.has(res.status)) {
           return res;
         }
 
-        retryAfterMs = this.parseRetryAfter(res.headers.get("Retry-After"));
         lastError = new Error(`HTTP Error ${res.status}`);
+
+        const retryAfterMs = this.parseRetryAfter(res.headers.get("Retry-After"));
+        const remainingAfterResponse = maxRetryTime - (Date.now() - startedAt);
+
+        if (attempt >= maxAttempts || remainingAfterResponse <= 0) {
+          break;
+        }
+
+        const waitMs =
+          retryAfterMs != null
+            ? Math.min(retryAfterMs, Math.max(0, remainingAfterResponse - 25))
+            : Math.min(120 + Math.floor(Math.random() * 180), Math.max(0, remainingAfterResponse - 25));
+
+        if (waitMs > 0) {
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+        }
       } catch (err) {
         if (this.isKnownError(err)) {
           throw err;
@@ -474,49 +618,25 @@ class InnerTubePokeVidious {
         }
 
         lastError = err;
-      }
 
-      const remainingAfterAttempt = maxRetryTime - (Date.now() - startedAt);
+        const remainingAfterError = maxRetryTime - (Date.now() - startedAt);
 
-      if (remainingAfterAttempt <= 0) {
-        throw (
-          lastError ||
-          new Error(`Fetch failed for ${url} after ${maxRetryTime}ms`)
-        );
-      }
+        if (attempt >= maxAttempts || remainingAfterError <= 0) {
+          break;
+        }
 
-      let waitMs;
-
-      if (retryAfterMs != null) {
-        waitMs = Math.max(
-          MIN_DELAY_MS,
-          Math.min(retryAfterMs, Math.max(0, remainingAfterAttempt - 10))
-        );
-      } else {
-        const nextDelay = Math.min(
-          MAX_DELAY_MS,
-          Math.max(MIN_DELAY_MS, Math.random() * delayMs * JITTER_FACTOR)
+        const waitMs = Math.min(
+          100 + Math.floor(Math.random() * 160),
+          Math.max(0, remainingAfterError - 25)
         );
 
-        delayMs = nextDelay;
-        waitMs = Math.min(nextDelay, Math.max(0, remainingAfterAttempt - 10));
+        if (waitMs > 0) {
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+        }
       }
-
-      if (waitMs <= 0) {
-        throw (
-          lastError ||
-          new Error(
-            `Fetch failed for ${url} after ${maxRetryTime}ms (window depleted)`
-          )
-        );
-      }
-
-      if (attempt > 1) {
-        this.initError(`Retrying fetch for ${url}`, lastError);
-      }
-
-      await sleep(waitMs);
     }
+
+    throw lastError || new Error(`Fetch failed for ${url}`);
   }
 
   async getRequiredComments(fetch, v, contentlang, contentregion) {
@@ -530,20 +650,32 @@ class InnerTubePokeVidious {
       this.staleTtl.comments,
       `comments:${key}`,
       async () =>
-        this.limits.comments(async () => {
-          const res = await this.fetchWithRetry(fetch, url, {}, {
-            videoId: v,
-            maxRetryTime: 2200,
-            perTryTimeoutMs: 1400,
-          });
+        this.limits.comments(() =>
+          this.withBreaker(this.breakers.invapi, async () => {
+            const res = await this.fetchWithRetry(fetch, url, {}, {
+              videoId: v,
+              maxRetryTime: 1300,
+              perTryTimeoutMs: 850,
+              maxAttempts: 2,
+            });
 
-          const text = await res.text();
-          return this.getJson(text);
-        }),
+            if (!res.ok) {
+              throw new Error(`Comments HTTP Error ${res.status}`);
+            }
+
+            const text = await res.text();
+            const parsed = this.getJson(text);
+
+            if (!parsed) {
+              throw new Error("Comments JSON parse failed");
+            }
+
+            return parsed;
+          })
+        ),
       {
         label: `Comments fetch failed for ${v}`,
-        fallback: null,
-        cacheFallbackTtl: 15 * 1000,
+        shouldCache: (value) => Boolean(value),
       }
     );
   }
@@ -559,58 +691,40 @@ class InnerTubePokeVidious {
       this.staleTtl.video,
       `video:${key}`,
       async () =>
-        this.limits.video(async () => {
-          let fetchError = null;
-          const maxAttempts = 2;
+        this.limits.video(() =>
+          this.withBreaker(this.breakers.invapi, async () => {
+            const res = await this.fetchWithRetry(fetch, url, {}, {
+              videoId: v,
+              maxRetryTime: 1800,
+              perTryTimeoutMs: 1100,
+              maxAttempts: 2,
+            });
 
-          for (let attempt = 0; attempt < maxAttempts; attempt++) {
-            try {
-              const res = await this.fetchWithRetry(fetch, url, {}, {
-                videoId: v,
-                maxRetryTime: 2500,
-                perTryTimeoutMs: 1700,
-              });
-
-              if (!res.ok) {
-                throw new Error(`HTTP Error ${res.status}`);
-              }
-
-              const text = await res.text();
-              const parsed = JSON.parse(text);
-
-              if (parsed === null) {
-                return null;
-              }
-
-              if (this.checkUnexistingObject(parsed)) {
-                return parsed;
-              }
-
-              if (parsed && parsed.error) {
-                return parsed;
-              }
-
-              return null;
-            } catch (err) {
-              if (this.isKnownError(err)) {
-                throw err;
-              }
-
-              fetchError = err;
+            if (!res.ok) {
+              throw new Error(`Video HTTP Error ${res.status}`);
             }
-          }
 
-          if (fetchError) {
-            this.initError("All video info fetch attempts failed", fetchError);
+            const text = await res.text();
 
-            return {
-              isInternalError: true,
-              reason: fetchError.message || fetchError.toString(),
-            };
-          }
+            let parsed;
 
-          return null;
-        }),
+            try {
+              parsed = JSON.parse(text);
+            } catch {
+              throw new Error("Video JSON parse failed");
+            }
+
+            if (parsed && parsed.error) {
+              return parsed;
+            }
+
+            if (!this.checkUnexistingObject(parsed)) {
+              throw new Error("Video data incomplete");
+            }
+
+            return parsed;
+          })
+        ),
       {
         label: `Video info fetch failed for ${v}`,
         shouldCache: (value) => this.checkUnexistingObject(value),
@@ -628,26 +742,25 @@ class InnerTubePokeVidious {
       this.staleTtl.dislikes,
       `dislikes:${key}`,
       async () =>
-        this.limits.dislikes(async () => {
-          const data = await getdislikes(v);
+        this.limits.dislikes(() =>
+          this.withBreaker(this.breakers.dislikes, async () => {
+            const data = await this.withDeadline(
+              getdislikes(v),
+              1200,
+              "Dislike API timed out"
+            );
 
-          if (
-            data &&
-            Object.prototype.hasOwnProperty.call(data, "engagement")
-          ) {
+            if (!data || !Object.prototype.hasOwnProperty.call(data, "engagement")) {
+              throw new Error("Dislike API returned incomplete data");
+            }
+
             return data;
-          }
-
-          return {
-            engagement: null,
-          };
-        }),
+          })
+        ),
       {
         label: `Dislike API error for ${v}`,
-        fallback: {
-          engagement: null,
-        },
-        cacheFallbackTtl: 15 * 1000,
+        shouldCache: (value) =>
+          Boolean(value && Object.prototype.hasOwnProperty.call(value, "engagement")),
       }
     );
   }
@@ -662,52 +775,89 @@ class InnerTubePokeVidious {
       this.staleTtl.colors,
       `colors:${key}`,
       async () =>
-        this.limits.colors(async () => {
-          const thumbnailUrl = `https://i.ytimg.com/vi/${v}/hqdefault.jpg?sqp=${this.sqp}`;
+        this.limits.colors(() =>
+          this.withBreaker(this.breakers.thumbnails, async () => {
+            const thumbnailUrl = `https://i.ytimg.com/vi/${v}/hqdefault.jpg?sqp=${this.sqp}`;
 
-          const res = await this.fetchWithRetry(fetch, thumbnailUrl, {}, {
-            videoId: v,
-            maxRetryTime: 2200,
-            perTryTimeoutMs: 1400,
-          });
+            const res = await this.fetchWithRetry(fetch, thumbnailUrl, {
+              headers: {
+                Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+              },
+            }, {
+              videoId: v,
+              maxRetryTime: 1300,
+              perTryTimeoutMs: 850,
+              maxAttempts: 2,
+            });
 
-          if (!res.ok) {
-            throw new Error(`Thumbnail HTTP Error ${res.status}`);
-          }
+            if (!res.ok) {
+              throw new Error(`Thumbnail HTTP Error ${res.status}`);
+            }
 
-          const buffer = Buffer.from(await res.arrayBuffer());
-          const palette = await getColors(buffer, "image/jpeg");
+            const buffer = Buffer.from(await res.arrayBuffer());
 
-          if (Array.isArray(palette) && palette[0] && palette[1]) {
+            if (!buffer.length) {
+              throw new Error("Thumbnail response was empty");
+            }
+
+            const palette = await this.withDeadline(
+              getColors(buffer, "image/jpeg"),
+              900,
+              "Thumbnail color extraction timed out"
+            );
+
+            if (!Array.isArray(palette) || !palette[0] || !palette[1]) {
+              throw new Error("Thumbnail color palette incomplete");
+            }
+
             return {
               color: palette[0].hex(),
               color2: palette[1].hex(),
             };
-          }
-
-          return this.defaultColors;
-        }),
+          })
+        ),
       {
         label: `Thumbnail color extraction error for ${v}`,
-        fallback: this.defaultColors,
-        cacheFallbackTtl: 30 * 1000,
-        shouldCache: (value) => value && value.color && value.color2,
+        shouldCache: (value) => Boolean(value && value.color && value.color2),
       }
     );
   }
 
-  buildWatchResult(vid, comments, dislikesData, colorData) {
-    const colors = colorData || this.defaultColors;
+  withDeadline(promise, ms, message) {
+    let timer = null;
 
+    return Promise.race([
+      Promise.resolve(promise),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(message || `Operation timed out after ${ms}ms`));
+        }, Math.max(1, ms));
+      }),
+    ]).finally(() => {
+      if (timer) {
+        clearTimeout(timer);
+      }
+    });
+  }
+
+  buildWatchResult(vid, comments, dislikesData, colorData) {
     return {
       vid,
       comments,
       channel_uploads: " ",
-      engagement: dislikesData ? dislikesData.engagement : null,
+      engagement: dislikesData.engagement,
       wiki: "",
       desc: "",
-      color: colors.color,
-      color2: colors.color2,
+      color: colorData.color,
+      color2: colorData.color2,
+    };
+  }
+
+  buildErrorResult(message, reason) {
+    return {
+      error: true,
+      message,
+      reason,
     };
   }
 
@@ -715,22 +865,20 @@ class InnerTubePokeVidious {
     if (!v) {
       this.initError("Missing video ID", null);
 
-      return {
-        error: true,
-        message: "No video ID provided",
-      };
+      return this.buildErrorResult("No video ID provided", "MISSING_VIDEO_ID");
+    }
+
+    if (!this.isvalidvideo(v)) {
+      return this.buildErrorResult("Invalid video ID provided", "INVALID_VIDEO_ID");
     }
 
     if (this.blockedVideos.has(v)) {
       const reasonKey = this.blockedVideos.get(v);
 
-      return {
-        error: true,
-        message:
-          this.knownErrors[reasonKey] ||
-          "This video is blocked, removed, or unavailable.",
-        reason: reasonKey,
-      };
+      return this.buildErrorResult(
+        this.knownErrors[reasonKey] || "This video is blocked, removed, or unavailable.",
+        reasonKey
+      );
     }
 
     const key = this.makeWatchKey(v, contentlang, contentregion);
@@ -740,89 +888,111 @@ class InnerTubePokeVidious {
       return cached.value;
     }
 
-    return this.getOrCreateInFlight(`full:${key}`, async () => {
-      const fetch = await this.getFetch();
+    return this.limits.full(() =>
+      this.getOrCreateInFlight(`full:${key}`, async () => {
+        const fetch = await this.getFetch();
 
-      try {
-        const [comments, vidObj, dislikesData, colorData] = await Promise.all([
-          this.getRequiredComments(fetch, v, contentlang, contentregion),
-          this.getRequiredVideoInfo(fetch, v, contentlang, contentregion),
-          this.getRequiredDislikes(v),
-          this.getRequiredThumbnailColors(fetch, v),
-        ]);
-
-        const vid = vidObj;
-
-        if (!vid || vid.error || vid.isInternalError) {
-          const errorMsg =
-            (vid && (vid.error || vid.reason)) ||
-            "This video is probably about to premiere.";
-
-          this.initError("Video info fetch error", `${v} - ${errorMsg}`);
-
-          return this.buildWatchResult(
-            {
-              error: errorMsg,
-            },
-            comments,
-            dislikesData,
-            colorData
-          );
-        }
-
-        if (this.checkUnexistingObject(vid)) {
-          const result = this.buildWatchResult(
-            vid,
-            comments,
-            dislikesData,
-            colorData
+        try {
+          const result = await this.withDeadline(
+            this.getFullWatchResult(fetch, v, contentlang, contentregion),
+            2600,
+            "Watch fetch timed out"
           );
 
-          this.setCache(
-            this.finalCache,
-            key,
-            result,
-            this.ttl.final,
-            this.staleTtl.final
-          );
+          if (result && !result.error && this.isCompleteWatchResult(result)) {
+            this.setCache(
+              this.finalCache,
+              key,
+              result,
+              this.ttl.final,
+              this.staleTtl.final
+            );
+          }
 
           return result;
+        } catch (error) {
+          if (this.knownErrors[error.message]) {
+            return this.buildErrorResult(this.knownErrors[error.message], error.message);
+          }
+
+          const stale = this.getCache(this.finalCache, key, { stale: true });
+
+          if (stale.hit) {
+            this.initError(`Serving stale full watch result for ${v}`, error);
+            return stale.value;
+          }
+
+          this.initError(`Error getting video ${v}`, error);
+
+          return this.buildErrorResult(
+            "The video could not load right now. Please try again.",
+            "WATCH_FETCH_FAILED"
+          );
         }
+      })
+    ).catch((error) => {
+      const stale = this.getCache(this.finalCache, key, { stale: true });
 
-        this.initError(vid, `ID: ${v}`);
-
-        return this.buildWatchResult(
-          vid || {
-            error: "Incomplete data returned.",
-          },
-          comments,
-          dislikesData,
-          colorData
-        );
-      } catch (error) {
-        if (this.knownErrors[error.message]) {
-          return {
-            error: true,
-            message: this.knownErrors[error.message],
-            reason: error.message,
-          };
-        }
-
-        const stale = this.getCache(this.finalCache, key, { stale: true });
-        if (stale.hit) {
-          this.initError(`Serving stale video result for ${v}`, error);
-          return stale.value;
-        }
-
-        this.initError(`Error getting video ${v}`, error);
-
-        return {
-          error: true,
-          message: error.message || "An unexpected error occurred qwq",
-          reason: "UNKNOWN_ERROR",
-        };
+      if (stale.hit) {
+        this.initError(`Serving stale full watch result for ${v}`, error);
+        return stale.value;
       }
+
+      this.initError(`Watch request rejected for ${v}`, error);
+
+      return this.buildErrorResult(
+        "The video could not load right now. Please try again.",
+        "WATCH_OVERLOADED"
+      );
     });
+  }
+
+  async getFullWatchResult(fetch, v, contentlang, contentregion) {
+    const videoPromise = this.getRequiredVideoInfo(fetch, v, contentlang, contentregion);
+    const commentsPromise = this.getRequiredComments(fetch, v, contentlang, contentregion);
+    const dislikesPromise = this.getRequiredDislikes(v);
+    const colorsPromise = this.getRequiredThumbnailColors(fetch, v);
+
+    const [vid, comments, dislikesData, colorData] = await Promise.all([
+      videoPromise,
+      commentsPromise,
+      dislikesPromise,
+      colorsPromise,
+    ]);
+
+    if (vid && vid.error) {
+      return this.buildErrorResult(vid.error, "VIDEO_API_ERROR");
+    }
+
+    if (!this.checkUnexistingObject(vid)) {
+      throw new Error("Video data incomplete");
+    }
+
+    if (!comments) {
+      throw new Error("Comments data missing");
+    }
+
+    if (!dislikesData || !Object.prototype.hasOwnProperty.call(dislikesData, "engagement")) {
+      throw new Error("Dislikes data missing");
+    }
+
+    if (!colorData || !colorData.color || !colorData.color2) {
+      throw new Error("Thumbnail colors missing");
+    }
+
+    return this.buildWatchResult(vid, comments, dislikesData, colorData);
+  }
+
+  isCompleteWatchResult(result) {
+    return Boolean(
+      result &&
+        !result.error &&
+        this.checkUnexistingObject(result.vid) &&
+        result.comments &&
+        Object.prototype.hasOwnProperty.call(result, "engagement") &&
+        result.color &&
+        result.color2
+    );
   }
 
   isvalidvideo(v) {
