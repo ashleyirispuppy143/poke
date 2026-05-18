@@ -1206,12 +1206,6 @@ module.exports = function (app, config, renderTemplate) {
       font-size:.95rem;
       color:#fff;
     }
-    .video-note{
-      margin-top:.45rem;
-      color:#bbb;
-      font-size:.9rem;
-      line-height:1.45;
-    }
     .video-rank{
       margin-top:.45rem;
       color:#bbb;
@@ -1543,7 +1537,7 @@ module.exports = function (app, config, renderTemplate) {
           <div>
             <h2>Top videos</h2>
             <p class="note" style="margin:0;">
-              Ranked by <strong>local Poke views</strong> only, not public YouTube totals.
+              Ranked by <strong>local views</strong> only, not public YouTube totals.
             </p>
           </div>
         </div>
@@ -1820,6 +1814,11 @@ module.exports = function (app, config, renderTemplate) {
       })
     }
 
+    function formatLocalViewCount(value) {
+      var count = Number(value) || 0
+      return count === 1 ? "1 local view" : count + " local views"
+    }
+
     function getFriendlyOsName(name) {
       if (name === "windows") return "Windows"
       if (name === "android") return "Android"
@@ -2001,14 +2000,9 @@ module.exports = function (app, config, renderTemplate) {
       idEl.className = "video-id"
       idEl.textContent = "Video ID: " + videoId
 
-      var infoEl = document.createElement("div")
-      infoEl.className = "video-note"
-      infoEl.textContent = extraText
-
       meta.appendChild(titleLink)
       meta.appendChild(pageTitleEl)
       meta.appendChild(idEl)
-      meta.appendChild(infoEl)
 
       li.appendChild(thumbLink)
       li.appendChild(meta)
@@ -2148,19 +2142,13 @@ module.exports = function (app, config, renderTemplate) {
 
         var viewsEl = document.createElement("div")
         viewsEl.className = "video-views"
-        viewsEl.textContent = views + " local Poke views"
-
-        var noteEl = document.createElement("div")
-        noteEl.className = "video-note"
-        noteEl.textContent =
-          "This number is counted only from anonymous requests on this Poke instance. It is not the video's public YouTube view count."
+        viewsEl.textContent = formatLocalViewCount(views)
 
         meta.appendChild(titleLink)
         meta.appendChild(rank)
         meta.appendChild(pageTitleEl)
         meta.appendChild(idEl)
         meta.appendChild(viewsEl)
-        meta.appendChild(noteEl)
 
         li.appendChild(thumbLink)
         li.appendChild(meta)
