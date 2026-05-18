@@ -9,6 +9,22 @@ const maxJsonLimit = 3000
 
 const getNowIso = () => new Date().toISOString()
 
+function isMissingRecordedTitle(value) {
+  const title = String(value || "").trim().toLowerCase()
+  return !title || title === "unknown" || title === "couldnt record" || title === "couldn't record"
+}
+
+function shouldReplaceRecordedTitle(oldTitle, newTitle) {
+  const cleanOld = cleanPageTitle(oldTitle)
+  const cleanNew = cleanPageTitle(newTitle)
+
+  if (isMissingRecordedTitle(cleanNew)) return false
+  if (isMissingRecordedTitle(cleanOld)) return true
+  if (cleanNew.length > cleanOld.length && cleanNew.toLowerCase() !== cleanOld.toLowerCase()) return true
+
+  return false
+}
+
 function cleanPageTitle(value) {
   let title = String(value || "")
     .replace(/\s+/g, " ")
@@ -58,7 +74,7 @@ function normalizeStats(input) {
     for (const [key, value] of Object.entries(input.pageTitles)) {
       const id = String(key || "").trim()
       const title = cleanPageTitle(value)
-      if (id && title) stats.pageTitles[id] = title
+      if (id && shouldReplaceRecordedTitle(stats.pageTitles[id], title)) stats.pageTitles[id] = title
     }
   }
 
@@ -66,7 +82,7 @@ function normalizeStats(input) {
     for (const [key, value] of Object.entries(input.videoTitles)) {
       const id = String(key || "").trim()
       const title = cleanPageTitle(value)
-      if (id && title && !stats.pageTitles[id]) stats.pageTitles[id] = title
+      if (id && shouldReplaceRecordedTitle(stats.pageTitles[id], title)) stats.pageTitles[id] = title
     }
   }
 
@@ -127,7 +143,7 @@ function mergeStats(target, source) {
   }
 
   for (const [id, title] of Object.entries(clean.pageTitles)) {
-    if (title) target.pageTitles[id] = title
+    if (shouldReplaceRecordedTitle(target.pageTitles[id], title)) target.pageTitles[id] = title
   }
 
   for (const [name, count] of Object.entries(clean.browsers)) {
@@ -351,7 +367,9 @@ module.exports = function (app, config, renderTemplate) {
     const parsed = parseUA(ua)
 
     memoryStats.videos[videoId] = (memoryStats.videos[videoId] || 0) + 1
-    if (pageTitle) memoryStats.pageTitles[videoId] = pageTitle
+    if (shouldReplaceRecordedTitle(memoryStats.pageTitles[videoId], pageTitle)) {
+      memoryStats.pageTitles[videoId] = cleanPageTitle(pageTitle)
+    }
     memoryStats.browsers[parsed.browser] = (memoryStats.browsers[parsed.browser] || 0) + 1
     memoryStats.os[parsed.os] = (memoryStats.os[parsed.os] || 0) + 1
     memoryStats.users[userId] = true
