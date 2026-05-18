@@ -710,19 +710,18 @@ module.exports = function (app, config, renderTemplate) {
       gap:16px;
       align-items:flex-start;
       flex-wrap:wrap;
-      margin:-8px 0 18px 0;
-      padding:16px;
-      border:1px solid #2e2d3b;
+      margin:0 0 18px 0;
+      padding:18px;
+      border:1px solid #2a2a35;
       border-radius:18px;
-      background:linear-gradient(180deg,#252432 0%,#1f1e29 100%);
-      box-shadow:0 10px 30px rgba(0,0,0,.16);
+      background:#252432;
     }
     .telemetry-notice h2{
       margin:0 0 .4rem 0;
       font-size:1.05rem;
     }
     .telemetry-notice p{
-      margin:0;
+      margin:.4rem 0 0 0;
     }
     .telemetry-settings{
       display:flex;
