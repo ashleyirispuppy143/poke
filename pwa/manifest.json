@@ -1,30 +1,30 @@
 {
-    "name": "Poke",
-    "short_name": "Poke",
-    "description": "The Ultimate Privacy App!",
-    "start_url": "/",
-    "display": "standalone",
-    "background_color": "#080808",
-    "theme_color": "#612153",
-    "icons": [
-      {
-        "src": "/css/pt.png",
-        "sizes": "512x512",
-        "type": "image/png"
-      }
-    ],
-     "screenshots": [
-      {
-        "src": "/css/pwa-desktop.png",
-        "type": "image/png",
-        "sizes": "1695x1445",
-        "form_factor": "wide"
-      },
-      {
-        "src": "/css/pwa-mobile.jpg",
-        "type": "image/jpg",
-        "sizes": "1080x2412",
-        "form_factor": "narrow"
-      }
-    ]
-  }
+  "name": "Poke",
+  "short_name": "Poke",
+  "description": "Liberate the Web!",
+  "start_url": "/home",
+  "display": "standalone",
+  "background_color": "#080808",
+  "theme_color": "#612153",
+  "icons": [
+    {
+      "src": "/css/pt.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/css/poke-landing-v3.webp",
+      "type": "image/webp",
+      "sizes": "1920x1080",
+      "form_factor": "wide"
+    },
+    {
+      "src": "/css/poke-mobile-new.webp",
+      "type": "image/webp",
+      "sizes": "1080x1987",
+      "form_factor": "narrow"
+    }
+  ]
+}
