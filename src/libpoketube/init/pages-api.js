@@ -30,169 +30,139 @@ module.exports = function (app, config, renderTemplate) {
     'User-Agent': config.useragent,  
   };
 
-const imageCache = new Map();
-const activeImageFetches = new Map();
+  // --- Unified Caching System ---
+  class MediaCache {
+    constructor(ttl, maxItems) {
+      this.cache = new Map();
+      this.activeFetches = new Map();
+      this.ttl = ttl;
+      this.maxItems = maxItems;
 
-const IMAGE_CACHE_TTL = 1000 * 60 * 60 * 24;
-const MAX_CACHED_IMAGES = 50000;
+      // Run cleanup every 15 minutes
+      setInterval(() => this.cleanup(), 15 * 60 * 1000);
+    }
 
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, value] of imageCache.entries()) {
-    if (now - value.timestamp >= IMAGE_CACHE_TTL) {
-      imageCache.delete(key);
+    cleanup() {
+      const now = Date.now();
+      for (const [key, value] of this.cache.entries()) {
+        if (now - value.timestamp >= this.ttl) {
+          this.cache.delete(key);
+        }
+      }
+      
+      if (this.cache.size > this.maxItems) {
+        const entriesToDelete = this.cache.size - this.maxItems;
+        let deleted = 0;
+        for (const key of this.cache.keys()) {
+          this.cache.delete(key);
+          deleted++;
+          if (deleted >= entriesToDelete) break;
+        }
+      }
+    }
+
+    async getOrFetch(key, fetchFn) {
+      if (this.cache.has(key)) {
+        return this.cache.get(key);
+      }
+
+      if (this.activeFetches.has(key)) {
+        try {
+          return await this.activeFetches.get(key);
+        } catch (e) {
+          // If the pending fetch fails, it will fall through and retry
+        }
+      }
+
+      const requestPromise = fetchFn();
+      this.activeFetches.set(key, requestPromise);
+
+      try {
+        const result = await requestPromise;
+        this.cache.set(key, result);
+        this.activeFetches.delete(key);
+        return result;
+      } catch (error) {
+        this.activeFetches.delete(key);
+        throw error;
+      }
     }
   }
-  
-  if (imageCache.size > MAX_CACHED_IMAGES) {
-    const entriesToDelete = imageCache.size - MAX_CACHED_IMAGES;
-    let deleted = 0;
-    for (const key of imageCache.keys()) {
-      imageCache.delete(key);
-      deleted++;
-      if (deleted >= entriesToDelete) break;
-    }
-  }
-}, 15 * 60 * 1000);
 
-app.get("/vi/:v/:t", async function (req, res) {
-  const { v, t } = req.params;
-  const cacheKey = `${v}_${t}`;
+  // Renamed constants to camelCase to match the rest of the file
+  const imageCacheTtl = 1000 * 60 * 60 * 24;
+  const maxCachedImages = 50000;
+  const avatarCacheTtl = 1000 * 60 * 60 * 24;
+  const maxCachedAvatars = 50000;
 
-  res.setHeader("Cache-Control", "public, max-age=2592000, immutable");
+  const thumbnailCache = new MediaCache(imageCacheTtl, maxCachedImages);
+  const avatarManagerCache = new MediaCache(avatarCacheTtl, maxCachedAvatars);
 
-  if (imageCache.has(cacheKey)) {
-    const cachedImage = imageCache.get(cacheKey);
-    res.setHeader("Content-Type", cachedImage.contentType);
-    return res.send(cachedImage.buffer);
-  }
+  app.get("/vi/:v/:t", async function (req, res) {
+    const { v, t } = req.params;
+    const cacheKey = `${v}_${t}`;
 
-  if (activeImageFetches.has(cacheKey)) {
+    res.setHeader("Cache-Control", "public, max-age=2592000, immutable");
+
     try {
-      const cachedImage = await activeImageFetches.get(cacheKey);
-      res.setHeader("Content-Type", cachedImage.contentType);
-      return res.send(cachedImage.buffer);
-    } catch (e) {
+      const result = await thumbnailCache.getOrFetch(cacheKey, async () => {
+        const url = `https://image-proxy.poketube.fun/proxy?url=https://i.ytimg.com/vi/${v}/${t}`;
+        
+        const response = await modules.fetch(url, {
+          method: req.method,
+          headers: headers,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch image: ${response.status}`);
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const contentType = response.headers.get("content-type") || "image/jpeg";
+
+        return { buffer, contentType, timestamp: Date.now() };
+      });
+
+      res.setHeader("Content-Type", result.contentType);
+      return res.send(result.buffer);
+    } catch (error) {
+      console.error(`Error loading thumbnail ${v}/${t}:`, error.message);
+      return res.status(404).send("Image not found");
     }
-  }
+  }); 
 
-  const fetchAndCacheImage = async () => {
-    const url = `https://image-proxy.poketube.fun/proxy?url=https://i.ytimg.com/vi/${v}/${t}`;
-    
-    const response = await modules.fetch(url, {
-      method: req.method,
-      headers: headers,
-    });
+  app.get("/avatars/:v", async function (req, res) {
+    const v = req.params.v;
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch image: ${response.status}`);
-    }
+    res.setHeader("Cache-Control", "public, max-age=2592000, immutable");
 
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const contentType = response.headers.get("content-type") || "image/jpeg";
-
-    return { buffer, contentType, timestamp: Date.now() };
-  };
-
-  const requestPromise = fetchAndCacheImage();
-  activeImageFetches.set(cacheKey, requestPromise);
-
-  try {
-    const result = await requestPromise;
-    
-    imageCache.set(cacheKey, result);
-    activeImageFetches.delete(cacheKey);
-
-    res.setHeader("Content-Type", result.contentType);
-    return res.send(result.buffer);
-  } catch (error) {
-    activeImageFetches.delete(cacheKey);
-    console.error(`Error loading thumbnail ${v}/${t}:`, error.message);
-    
-    return res.status(404).send("Image not found");
-  }
-}); 
-const avatarCache = new Map();
-const activeAvatarFetches = new Map();
-
-const AVATAR_CACHE_TTL = 1000 * 60 * 60 * 24;
-const MAX_CACHED_AVATARS = 50000;
-
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, value] of avatarCache.entries()) {
-    if (now - value.timestamp >= AVATAR_CACHE_TTL) {
-      avatarCache.delete(key);
-    }
-  }
-  
-  if (avatarCache.size > MAX_CACHED_AVATARS) {
-    const entriesToDelete = avatarCache.size - MAX_CACHED_AVATARS;
-    let deleted = 0;
-    for (const key of avatarCache.keys()) {
-      avatarCache.delete(key);
-      deleted++;
-      if (deleted >= entriesToDelete) break;
-    }
-  }
-}, 15 * 60 * 1000);
-
-app.get("/avatars/:v", async function (req, res) {
-  const v = req.params.v;
-
-  res.setHeader("Cache-Control", "public, max-age=2592000, immutable");
-
-  if (avatarCache.has(v)) {
-    const cachedImage = avatarCache.get(v);
-    res.setHeader("Content-Type", cachedImage.contentType);
-    return res.send(cachedImage.buffer);
-  }
-
-  if (activeAvatarFetches.has(v)) {
     try {
-      const cachedImage = await activeAvatarFetches.get(v);
-      res.setHeader("Content-Type", cachedImage.contentType);
-      return res.send(cachedImage.buffer);
-    } catch (e) {
+      const result = await avatarManagerCache.getOrFetch(v, async () => {
+        const url = `https://image-proxy.poketube.fun/proxy?url=https://yt3.ggpht.com/${v}`;
+        
+        const response = await modules.fetch(url, {
+          method: req.method,
+          headers: headers,
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const contentType = response.headers.get("content-type") || "image/jpeg";
+
+        return { buffer, contentType, timestamp: Date.now() };
+      });
+
+      res.setHeader("Content-Type", result.contentType);
+      return res.send(result.buffer);
+    } catch (error) {
+      return res.status(404).send("Image not found");
     }
-  }
-
-  const fetchAndCacheAvatar = async () => {
-    const url = `https://image-proxy.poketube.fun/proxy?url=https://yt3.ggpht.com/${v}`;
-    
-    const response = await modules.fetch(url, {
-      method: req.method,
-      headers: headers,
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const contentType = response.headers.get("content-type") || "image/jpeg";
-
-    return { buffer, contentType, timestamp: Date.now() };
-  };
-
-  const requestPromise = fetchAndCacheAvatar();
-  activeAvatarFetches.set(v, requestPromise);
-
-  try {
-    const result = await requestPromise;
-    
-    avatarCache.set(v, result);
-    activeAvatarFetches.delete(v);
-
-    res.setHeader("Content-Type", result.contentType);
-    return res.send(result.buffer);
-  } catch (error) {
-    activeAvatarFetches.delete(v);
-    return res.status(404).send("Image not found");
-  }
-});
+  });
  
   app.get("/api/geo", async (req, res) => {
     try {
