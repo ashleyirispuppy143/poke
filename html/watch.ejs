@@ -3676,9 +3676,9 @@ font-size: 13px;margin:0;padding:0;white-space: nowrap;
   padding: 4px;
   margin-right: 0.99em;
                                                      ">
+<!--
 
                   <div class="new-button" style="height: 2.3em">
-
 <div class="pill-button" style="margin-right: 7.5px;">
     <i class="fa-light fa-thumbs-up"></i>
     <!-- <%=convertLegacy(engagement?.likes)%> -->
@@ -3693,7 +3693,18 @@ font-size: 13px;margin:0;padding:0;white-space: nowrap;
 
 
       </div>
+-->
+<div class="pill-button" style="margin-right: 7.5px;">
+    <i class="fa-light fa-thumbs-up"></i>
+    <!-- <%=convertLegacy(engagement?.likes)%> -->
+       </div>
 
+					<div style="margin-left: -7.5px;" title="<%=engagement?.dislikes.toLocaleString()%> Dislikes">
+                <div class="pill-button">
+<i class="fa-light fa-thumbs-down"></i>  <!--  <%=convertLegacy(engagement?.dislikes)%>  -->
+					</div>					 
+
+       
  		<a class="new-button" title="Discover" style="color:#fff;text-decoration: none;margin-right: 0; " href="/app?tab=search">
                             <div class="pill-button">
 
