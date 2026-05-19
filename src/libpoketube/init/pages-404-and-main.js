@@ -24,7 +24,9 @@ var ping = require("ping");
 const sha384 = modules.hash;
 
 /* THE splash texts! */
-  const splash =["Woke!", "Wruff 𐂯!","Gay gay homosexaul gay!","7x7=49!","free Palestine!", "follow the bees!", "savior!","mmm...bucket!", "nudge is cute!", "squish the nudge!", "single moms in your area!", "macig!", "fire!", "earth!", "5 billion years left!", "puppy-made!", "west asia not middle east!", "aaaaaaaaaaa", "welcome nudge!", "free software!","No Glacier Agency!","queer!", "doesnt track u!", "bad bunny baby!", "who is this?","PORTO RICO!", "if young metro..", "doug!","dougdougdoug","BALD!","has hair!", "sexy!", "has privacy!", "HOSTED IN EU!","mamacita!","a drag path..", "trans-aids-Libtard-Ukraine software!", "im... stuff!","frick capitalism!","still calling it twitter btw!","boop!","no way!","traaaa rightssss!","XD!","nya!","say gex!","ur valid :3","gay space communism!","has nothing to with pokemon!","A house of gold :3","doesnt have slop!","no web3!","keemstar is a bald ___!","No One calls it 'X'! ","Eat the rich!","Does Not include Nazis!","also try piped!","not alt-right!","coke zero > coke classic!","poke & chill!","can play HD!","also try invidious!","rms <3!","du hast","can u belive no one bought this?","reee","1.000.000€!","pika!","fsf.org","ssfffssfssfffaassssfsdf!","𝓯𝓻𝓮𝓪𝓴𝔂poke","they not like us!","to pimp a butterfly!","king kunta!","HUMBLE.","can you save my hds?","sahlo folina!","we come for you!","no chances!","dema dont control us!","i see your problem is, your proctologist","got both hands on your shoulder","while ur bottomless!","you should bounce bounce bounce man!","its lavish!","im vibin, vibin!","i would swim the paladin strait","hello clancy!","NO NOT ME,ITS FOR A FRIEND","im fairly local!","i dont wanna go like this!","east is up!","not done, josh dun!","your the judge, oh no!","I dont wanna backslide","welcome back to trench!","sai is propaganda!"," •|i|• Ø i+! ].[","stay alive! |-/","the few, the proud, the Emotional!","ill morph into someone else","still alive","follow the torches","i created this world!","to feel some control!","destory it if i want!","o7 keons","at least let me clean my room","100+ stars on gh!","let the vibe slide over me!","sip a capri sun like its don peregon","i love you alot!","BREACH OUT SEPT 12!","now even gayer!","its joever..","lesbiam,,,","poke!!!","discord!","women are pretty!","men are handsome!","enbys are cute!","you are cute :3","read if cute!","this shit awesome!","ur pawsome!","i check the doors!","chcek the windows and","pull the blinds..","RAWFEAR","putting on a drum show!","welcome to breach!","i been this way...","i want to change...","FEDHKDHDGBK!","100% meow!","meows at u","hai i am gay","yay, GEX!","say gex..,,","wha if we um erm","awesome screen!","awesome camera!","long lasting battery life","stallmansupport.org!!!","does include nya~!!!","actually stable-ish! :3", "hello claude!", "its closedAI!", "family-friendly!", "sexy!", "mmmm...lave!","slopy style!", "soft paws :3c", "minecraft is good!", "woo, MCWIKI!", "coded with paws!", "0 vibecoding slop!", "its time for some!", "action!", "hamburger!", "mm...get fatter!", "No Age Verification!", "19 is a number!", "since 2021!", "deja vu!", "deja vu!", "give me action!", "eeO!", "coca cola", "stop asian hate!", "black lives matter!", "made in asia!", "juetıfdgt4uedfuhjtrjdguj!", "poly!", "has vpn!", "mmmm,,, monke!", "FUCK NAZIS!", "political!", "attractive!", "does not include personal info!", "antigravity!", "i dont like vector!", "minecraft, the game.", "awa", "stoat means bad!", "dont use the stoat!", "no ai slop!", "we left all the pain behind!", "all the love <3", "stoat? no!", "bye deltacord!", "we dont have to worry!", "why even use stoat?", "do NOT try stoat!", "wounds get healed with time", "stoat devs are weak!", "actually looks good!", "dont sue us!", "legal!", "fast!", "i dont know.", "#freemerl!", "woo, Dougcord!", "For nerds, By Nerds!", "pedophilia is bad!", "not pro-elon!", "is it slop?", "you find lost media!", "its problematic medias...", "get loose now!", "six seven!", "proudly anti-racist!", "pro-immigrant!", "boom baam!", "who was in paris?", "educate your friends!", "its the new stuff!", "has DDOS protection!", "new flavour!", "the midas touch!", "been so much!", "boo!", "7.8/10 too much water!", "not disliked!", "geeet dunked on!", "NO NSFW!", "NOT on beta!", "the blub is real!", "blub.", "javascript!"];
+const splash = [
+  "Woke!", "Wruff 𐂯!", "Gay gay homosexaul gay!", "7x7=49!", "free Palestine!", "follow the bees!", "savior!", "mmm...bucket!", "nudge is cute!", "squish the nudge!", "single moms in your area!", "macig!", "fire!", "earth!", "5 billion years left!", "puppy-made!", "west asia not middle east!", "aaaaaaaaaaa", "welcome nudge!", "free software!", "No Glacier Agency!", "queer!", "doesnt track u!", "bad bunny baby!", "who is this?", "PORTO RICO!", "if young metro..", "doug!", "dougdougdoug", "BALD!", "has hair!", "sexy!", "has privacy!", "HOSTED IN EU!", "mamacita!", "a drag path..", "trans-aids-Libtard-Ukraine software!", "im... stuff!", "frick capitalism!", "still calling it twitter btw!", "boop!", "no way!", "traaaa rightssss!", "XD!", "nya!", "say gex!", "ur valid :3", "gay space communism!", "has nothing to with pokemon!", "A house of gold :3", "doesnt have slop!", "no web3!", "keemstar is a bald ___!", "No One calls it 'X'! ", "Eat the rich!", "Does Not include Nazis!", "also try piped!", "not alt-right!", "coke zero > coke classic!", "poke & chill!", "can play HD!", "also try invidious!", "rms <3!", "du hast", "can u belive no one bought this?", "reee", "1.000.000€!", "pika!", "fsf.org", "ssfffssfssfffaassssfsdf!", "𝓯𝓻𝓮𝓪𝓴𝔂poke", "they not like us!", "to pimp a butterfly!", "king kunta!", "HUMBLE.", "can you save my hds?", "sahlo folina!", "we come for you!", "no chances!", "dema dont control us!", "i see your problem is, your proctologist", "got both hands on your shoulder", "while ur bottomless!", "you should bounce bounce bounce man!", "its lavish!", "im vibin, vibin!", "i would swim the paladin strait", "hello clancy!", "NO NOT ME,ITS FOR A FRIEND", "im fairly local!", "i dont wanna go like this!", "east is up!", "not done, josh dun!", "your the judge, oh no!", "I dont wanna backslide", "welcome back to trench!", "sai is propaganda!", " •|i|• Ø i+! ].[", "stay alive! |-/", "the few, the proud, the Emotional!", "ill morph into someone else", "still alive", "follow the torches", "i created this world!", "to feel some control!", "destory it if i want!", "o7 keons", "at least let me clean my room", "100+ stars on gh!", "let the vibe slide over me!", "sip a capri sun like its don peregon", "i love you alot!", "BREACH OUT SEPT 12!", "now even gayer!", "its joever..", "lesbiam,,,", "poke!!!", "discord!", "women are pretty!", "men are handsome!", "enbys are cute!", "you are cute :3", "read if cute!", "this shit awesome!", "ur pawsome!", "i check the doors!", "chcek the windows and", "pull the blinds..", "RAWFEAR", "putting on a drum show!", "welcome to breach!", "i been this way...", "i want to change...", "FEDHKDHDGBK!", "100% meow!", "meows at u", "hai i am gay", "yay, GEX!", "say gex..,,", "wha if we um erm", "awesome screen!", "awesome camera!", "long lasting battery life", "stallmansupport.org!!!", "does include nya~!!!", "actually stable-ish! :3", "hello claude!", "its closedAI!", "family-friendly!", "sexy!", "mmmm...lave!", "slopy style!", "soft paws :3c", "minecraft is good!", "woo, MCWIKI!", "coded with paws!", "0 vibecoding slop!", "its time for some!", "action!", "hamburger!", "mm...get fatter!", "No Age Verification!", "19 is a number!", "since 2021!", "deja vu!", "deja vu!", "give me action!", "eeO!", "coca cola", "stop asian hate!", "black lives matter!", "made in asia!", "juetıfdgt4uedfuhjtrjdguj!", "poly!", "has vpn!", "mmmm,,, monke!", "FUCK NAZIS!", "political!", "attractive!", "does not include personal info!", "antigravity!", "i dont like vector!", "minecraft, the game.", "awa", "stoat means bad!", "dont use the stoat!", "no ai slop!", "we left all the pain behind!", "all the love <3", "stoat? no!", "bye deltacord!", "we dont have to worry!", "why even use stoat?", "do NOT try stoat!", "wounds get healed with time", "stoat devs are weak!", "actually looks good!", "dont sue us!", "legal!", "fast!", "i dont know.", "#freemerl!", "woo, Dougcord!", "For nerds, By Nerds!", "pedophilia is bad!", "not pro-elon!", "is it slop?", "you find lost media!", "its problematic medias...", "get loose now!", "six seven!", "proudly anti-racist!", "pro-immigrant!", "boom baam!", "who was in paris?", "educate your friends!", "its the new stuff!", "has DDOS protection!", "new flavour!", "the midas touch!", "been so much!", "boo!", "7.8/10 too much water!", "not disliked!", "geeet dunked on!", "NO NSFW!", "NOT on beta!", "the blub is real!", "blub.", "javascript!", "This message will never appear on the splash screen, isn't that weird?", "get get get down!", "on-topic", "chatting!", "mmm..buckets!", "follow the train!", "ah shit...", "beep boop", "boop beep", "wee snaw", "snaw wee", "snaw wee??? you fool..", "POC rights!", "Queer rights!"
+];
 
 function getJson(str) {
   try {
@@ -32,6 +34,14 @@ function getJson(str) {
   } catch {
     return null;
   }
+}
+
+function getRandomSplash() {
+  let selectedSplash;
+  do {
+    selectedSplash = splash[Math.floor(Math.random() * splash.length)];
+  } while (selectedSplash === "This message will never appear on the splash screen, isn't that weird?");
+  return selectedSplash;
 }
 
 module.exports = function (app, config, renderTemplate) {
@@ -150,33 +160,30 @@ module.exports = function (app, config, renderTemplate) {
   });
 });
 
-  
-           
-
   app.get("/:v*?", async function (req, res) {
     const uaos = req.useragent.os;
-    const random = splash[Math.floor(Math.random() * splash.length)];
+    const random = getRandomSplash();
     const browser = req.useragent.browser;
-    const isOldWindows = (uaos === "Windows 7" || uaos === "Windows 8") &&browser === "Firefox";
+    const isOldWindows = (uaos === "Windows 7" || uaos === "Windows 8") && browser === "Firefox";
     var proxyurl = config.p_url;
    
     const secure = ["poketube.fun", "localhost"].includes(req.hostname);
-    const verify =["poketube.fun", "poke.ashley0143.xyz", "localhost"].includes(
+    const verify = ["poketube.fun", "poke.ashley0143.xyz", "localhost"].includes(
       req.hostname
     );
 
- const officialHost = "poketube.fun";
-const officialApiHost = "invid-api.poketube.fun";
+  const officialHost = "poketube.fun";
+  const officialApiHost = "invid-api.poketube.fun";
 
-let apiHostname = "";
+  let apiHostname = "";
 
-try {
+  try {
     apiHostname = new URL(config.invapi).hostname;
-} catch {
+  } catch {
     apiHostname = config.invapi;
-}
+  }
 
-if (req.hostname !== officialHost && apiHostname === officialApiHost) {
+  if (req.hostname !== officialHost && apiHostname === officialApiHost) {
     const message = `
       <!DOCTYPE html>
       <html lang="en">
