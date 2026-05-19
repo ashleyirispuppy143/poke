@@ -1237,17 +1237,16 @@ function authorVerifiedChecker4000() {
    <div style="text-align: center;padding: 3px;margin-top: 0px;">
      
      <div class="tabs tabs-center" style="overflow: scroll;width: 7em;font-size: 10px;margin-left: -1px;font-family: poketube flex !important;font-weight: 800 !important;font-stretch: ultra-expanded;">
-
-       <% if (!tab) { %>
+<% if (!tab) { %>
 
                 <a href="/channel?id=<%=ID%>" class="tab active">Videos</a>
            
-<%  if (turntomins(shorts?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
+<%  if (turntomins(shorts?.videos?.[0]?.lengthSeconds)  != "aN:aN" ) { %> 
 
                    <a href="/channel?id=<%=ID%>&tab=shorts" class="tab">Shorts</a>
   <% } %>
 
-  <%  if (turntomins(stream?.videos[0]?.lengthSeconds)  != "aN:aN" ) { %> 
+  <%  if (turntomins(stream?.videos?.[0]?.lengthSeconds)  != "aN:aN" ) { %> 
                      <a href="/channel?id=<%=ID%>&tab=live" class="tab">Live</a>
 
   <% } %>
@@ -1264,7 +1263,7 @@ function authorVerifiedChecker4000() {
 
       <% } %>                             
                                                                 <% } %>
-                                                                             <% if (tab ==="about") { %>
+                                                                <% if (tab ==="about") { %>
                                                                           
                 <a href="/channel?id=<%=ID%>" class="tab">Videos</a>
 
