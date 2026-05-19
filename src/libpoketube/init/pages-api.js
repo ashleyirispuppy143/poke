@@ -30,16 +30,14 @@ module.exports = function (app, config, renderTemplate) {
     'User-Agent': config.useragent,  
   };
 
-  // --- Unified Caching System ---
-  class MediaCache {
+   class MediaCache {
     constructor(ttl, maxItems) {
       this.cache = new Map();
       this.activeFetches = new Map();
       this.ttl = ttl;
       this.maxItems = maxItems;
 
-      // Run cleanup every 15 minutes
-      setInterval(() => this.cleanup(), 15 * 60 * 1000);
+       setInterval(() => this.cleanup(), 15 * 60 * 1000);
     }
 
     cleanup() {
@@ -89,7 +87,6 @@ module.exports = function (app, config, renderTemplate) {
     }
   }
 
-  // Renamed constants to camelCase to match the rest of the file
   const imageCacheTtl = 1000 * 60 * 60 * 24;
   const maxCachedImages = 50000;
   const avatarCacheTtl = 1000 * 60 * 60 * 24;
