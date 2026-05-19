@@ -2713,11 +2713,12 @@ VideoData?.recommendedVideos.forEach(video => {
                                     <a class="max-lines-2" href="/channel?id=<%= x.authorId %>@youtube.com" style="-webkit-line-clamp:1;width:12em;word-wrap:break-word">
                                         <%=x.author %>
                                     </a>
-                                    <div class="video-views">
-                                          
-                                                <%= convertLegacy(x.viewCount) %> views
- 
-                                    </div>
+<div class="video-views">
+  <viewcounttext style="margin-right: 6px;margin-left: 1px;">
+    <i class="fa-light fa-play"></i> <%= x.viewCountText %>
+  </viewcounttext>  
+  <%= x.publishedText %>  
+</div>
                                 </div>
             </div>
     </div>
