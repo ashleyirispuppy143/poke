@@ -140,6 +140,7 @@
             --chip: #272727;
             --chip-hover: #343434;
             --danger: #cc0000;
+            --bar: #ffffff;
         }
 
         * {
@@ -163,10 +164,6 @@
             overscroll-behavior-y: contain;
         }
 
-        body.no-scroll {
-            overflow: hidden;
-        }
-
         a {
             color: inherit;
             text-decoration: none;
@@ -175,6 +172,44 @@
         button,
         input {
             font: inherit;
+        }
+
+        .loading-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 10000;
+            width: 100%;
+            height: 3px;
+            overflow: hidden;
+            background: rgba(255, 255, 255, 0.08);
+            pointer-events: none;
+        }
+
+        .loading-bar::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: -45%;
+            width: 45%;
+            height: 100%;
+            border-radius: 999px;
+            background: var(--bar);
+            animation: loadingBarMove 950ms ease-in-out infinite;
+        }
+
+        @keyframes loadingBarMove {
+            0% {
+                transform: translateX(0);
+            }
+
+            55% {
+                transform: translateX(185vw);
+            }
+
+            100% {
+                transform: translateX(185vw);
+            }
         }
 
         .app-header {
@@ -187,24 +222,25 @@
         }
 
         .nav-wrap {
+            width: 100%;
             display: flex;
             align-items: center;
-            gap: 12px;
-            min-height: 88px;
-            padding: 14px 14px;
-            padding-top: max(14px, env(safe-area-inset-top));
+            gap: clamp(18px, 2.8vw, 34px);
+            min-height: clamp(84px, 11.8vw, 118px);
+            padding: clamp(15px, 3vw, 28px) clamp(18px, 4.7vw, 48px);
+            padding-top: max(clamp(15px, 3vw, 28px), env(safe-area-inset-top));
         }
 
         .back-button {
-            width: 58px;
-            height: 58px;
-            flex: 0 0 58px;
+            width: clamp(50px, 7.4vw, 78px);
+            height: clamp(50px, 7.4vw, 78px);
+            flex: 0 0 clamp(50px, 7.4vw, 78px);
             display: inline-flex;
             align-items: center;
             justify-content: center;
             border-radius: 999px;
             color: var(--text);
-            font-size: 42px;
+            font-size: clamp(34px, 5.4vw, 58px);
             line-height: 1;
         }
 
@@ -216,14 +252,14 @@
         .search-container {
             flex: 1 1 auto;
             min-width: 0;
-            height: 64px;
+            height: clamp(56px, 9.2vw, 94px);
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: clamp(8px, 1.4vw, 14px);
             background: var(--search-bg);
             border: 0;
             border-radius: 999px;
-            padding: 0 12px 0 36px;
+            padding: 0 clamp(8px, 2.8vw, 30px) 0 clamp(24px, 3.7vw, 40px);
             transition: background 140ms ease, box-shadow 140ms ease;
         }
 
@@ -240,7 +276,7 @@
             outline: 0;
             background: transparent;
             color: var(--text);
-            font-size: clamp(24px, 7vw, 34px);
+            font-size: clamp(24px, 4.8vw, 48px);
             line-height: 1;
             padding: 0;
             font-weight: 430;
@@ -254,9 +290,9 @@
         }
 
         .clear-search-button {
-            width: 54px;
-            height: 54px;
-            flex: 0 0 54px;
+            width: clamp(46px, 6.8vw, 74px);
+            height: clamp(46px, 6.8vw, 74px);
+            flex: 0 0 clamp(46px, 6.8vw, 74px);
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -266,7 +302,7 @@
             background: transparent;
             color: #ffffff;
             cursor: pointer;
-            font-size: 42px;
+            font-size: clamp(34px, 5.4vw, 58px);
             line-height: 1;
         }
 
@@ -668,37 +704,6 @@
             font-size: 13.5px;
         }
 
-        .loading {
-            position: fixed;
-            inset: 0;
-            z-index: 9999;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: rgba(0, 0, 0, 0.78);
-            backdrop-filter: blur(4px);
-            -webkit-backdrop-filter: blur(4px);
-        }
-
-        .spinner {
-            width: 42px;
-            height: 42px;
-            border: 4px solid #333;
-            border-top-color: #fff;
-            border-radius: 999px;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-
         @media (min-width: 521px) {
             .feed {
                 border-left: 1px solid rgba(255, 255, 255, 0.06);
@@ -711,29 +716,29 @@
             }
         }
 
-        @media (max-width: 390px) {
+        @media (max-width: 520px) {
             .nav-wrap {
-                min-height: 78px;
-                gap: 8px;
-                padding: 10px;
-                padding-top: max(10px, env(safe-area-inset-top));
+                gap: 12px;
+                min-height: 88px;
+                padding: 14px 14px;
+                padding-top: max(14px, env(safe-area-inset-top));
             }
 
             .back-button {
-                width: 48px;
-                height: 48px;
-                flex-basis: 48px;
-                font-size: 34px;
+                width: 46px;
+                height: 46px;
+                flex-basis: 46px;
+                font-size: 32px;
             }
 
             .search-container {
-                height: 54px;
+                height: 56px;
                 padding-left: 24px;
                 padding-right: 8px;
             }
 
             input[name="mobilesearch"] {
-                font-size: 24px;
+                font-size: 25px;
             }
 
             .clear-search-button {
@@ -743,12 +748,44 @@
                 font-size: 34px;
             }
         }
+
+        @media (max-width: 380px) {
+            .nav-wrap {
+                gap: 10px;
+                padding-left: 10px;
+                padding-right: 10px;
+            }
+
+            .back-button {
+                width: 42px;
+                height: 42px;
+                flex-basis: 42px;
+                font-size: 29px;
+            }
+
+            .search-container {
+                height: 54px;
+                padding-left: 22px;
+                padding-right: 7px;
+            }
+
+            input[name="mobilesearch"] {
+                font-size: 24px;
+            }
+
+            .clear-search-button {
+                width: 44px;
+                height: 44px;
+                flex-basis: 44px;
+                font-size: 32px;
+            }
+        }
     </style>
 </head>
 <body>
     <header class="app-header">
         <div class="nav-wrap">
-            <a href="/search" class="back-button" aria-label="Back to search">
+            <a href="/home" class="back-button" aria-label="Back to home">
                 <i class="fa-light fa-chevron-left"></i>
             </a>
 
@@ -1005,23 +1042,20 @@
         const searchInput = document.querySelector('input[name="mobilesearch"]');
         const clearSearchButton = document.querySelector(".clear-search-button");
 
-        function removeLoadingOverlay() {
-            document.body.classList.remove("no-scroll");
-
-            document.querySelectorAll(".loading").forEach(loadingOverlay => {
-                loadingOverlay.remove();
+        function removeLoadingBar() {
+            document.querySelectorAll(".loading-bar").forEach(loadingBar => {
+                loadingBar.remove();
             });
         }
 
-        function showLoadingOverlay() {
-            removeLoadingOverlay();
+        function showLoadingBar() {
+            removeLoadingBar();
 
-            const loading = document.createElement("div");
-            loading.className = "loading";
-            loading.innerHTML = '<div class="spinner"></div>';
+            const loadingBar = document.createElement("div");
+            loadingBar.className = "loading-bar";
+            loadingBar.setAttribute("aria-hidden", "true");
 
-            document.body.classList.add("no-scroll");
-            document.body.appendChild(loading);
+            document.body.appendChild(loadingBar);
         }
 
         if (clearSearchButton && searchInput) {
@@ -1042,21 +1076,21 @@
             if (event.defaultPrevented) return;
             if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
 
-            showLoadingOverlay();
+            showLoadingBar();
         });
 
         document.querySelectorAll("form").forEach(form => {
             form.addEventListener("submit", () => {
-                showLoadingOverlay();
+                showLoadingBar();
             });
         });
 
-        window.addEventListener("pageshow", removeLoadingOverlay);
-        window.addEventListener("pagehide", removeLoadingOverlay);
-        window.addEventListener("popstate", removeLoadingOverlay);
+        window.addEventListener("pageshow", removeLoadingBar);
+        window.addEventListener("pagehide", removeLoadingBar);
+        window.addEventListener("popstate", removeLoadingBar);
 
         document.addEventListener("visibilitychange", () => {
-            if (!document.hidden) removeLoadingOverlay();
+            if (!document.hidden) removeLoadingBar();
         });
 
         if ("scrollRestoration" in history) {
