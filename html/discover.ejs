@@ -34,32 +34,14 @@
             return "#";
         }
 
-        function rawVideoThumbnailUrl(item) {
-            if (!item) return "";
+        function rawVideoThumbnailUrl(videoId) {
+            if (!videoId) return "";
+            return "https://i.ytimg.com/vi/" + encodeURIComponent(videoId) + "/hq720.jpg";
+        }
 
-            if (Array.isArray(item.videoThumbnails) && item.videoThumbnails.length) {
-                const preferredQualities = [
-                    "maxresdefault",
-                    "sddefault",
-                    "high",
-                    "medium",
-                    "default",
-                    "start",
-                    "middle",
-                    "end"
-                ];
-
-                for (const quality of preferredQualities) {
-                    const match = item.videoThumbnails.find(thumbnail => thumbnail && thumbnail.quality === quality && thumbnail.url);
-                    if (match) return match.url;
-                }
-
-                const firstUsableThumbnail = item.videoThumbnails.find(thumbnail => thumbnail && thumbnail.url);
-                if (firstUsableThumbnail) return firstUsableThumbnail.url;
-            }
-
-            if (!item.videoId) return "";
-            return "https://i.ytimg.com/vi/" + encodeURIComponent(item.videoId) + "/hq720.jpg";
+        function rawFallbackVideoThumbnailUrl(videoId) {
+            if (!videoId) return "";
+            return "https://i.ytimg.com/vi/" + encodeURIComponent(videoId) + "/hqdefault.jpg";
         }
 
         function rawAvatarUrl(item) {
@@ -721,7 +703,8 @@
                 <%
                     const href = videoHref(item);
                     const authorHref = channelHref(item);
-                    const thumb = proxyMediaUrl(rawVideoThumbnailUrl(item));
+                    const thumb = proxyMediaUrl(rawVideoThumbnailUrl(item.videoId));
+                    const fallbackThumb = proxyMediaUrl(rawFallbackVideoThumbnailUrl(item.videoId));
                     const avatar = proxyMediaUrl(rawAvatarUrl(item));
                     const duration = formatDuration(item.lengthSeconds);
                     const bareViews = formatCompactNumber(item.viewCount);
@@ -732,7 +715,7 @@
                     <div class="thumbnail-shell">
                         <a href="<%= href %>" class="thumbnail-link" aria-label="<%= item.title || 'Video' %>">
                             <% if (thumb) { %>
-                                <img class="thumbnail-img" src="<%= thumb %>" alt="" loading="lazy">
+                                <img class="thumbnail-img" src="<%= thumb %>" data-fallback-src="<%= fallbackThumb %>" alt="" loading="lazy">
                             <% } else { %>
                                 <div class="thumbnail-placeholder">
                                     <i class="fa-light fa-video"></i>
@@ -842,6 +825,17 @@
 
             document.body.appendChild(loadingBar);
         }
+
+        document.querySelectorAll(".thumbnail-img[data-fallback-src]").forEach(image => {
+            image.addEventListener("error", () => {
+                const fallbackSrc = image.getAttribute("data-fallback-src");
+
+                if (!fallbackSrc || image.dataset.fallbackUsed === "true") return;
+
+                image.dataset.fallbackUsed = "true";
+                image.src = fallbackSrc;
+            });
+        });
 
         if (clearSearchButton && searchInput) {
             clearSearchButton.addEventListener("click", () => {
