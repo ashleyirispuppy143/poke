@@ -20,6 +20,7 @@ const {
 
 var http = require("https");
 var ping = require("ping");
+const config = require("../../../config.json");
 
 const sha384 = modules.hash;
 
@@ -150,6 +151,7 @@ module.exports = function (app, config, renderTemplate) {
   renderTemplate(res, req, "discover.ejs", {
     tab: req.query.tab,
     isMobile: req.useragent.isMobile,
+    media_proxy_url: media_proxy,
     p,
     mobilesearch: req.query.mobilesearch,
     q: req.query.q,
