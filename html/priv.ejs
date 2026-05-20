@@ -240,7 +240,7 @@
       </p>
       <div class="meta-row" aria-label="Document metadata">
         <span class="badge">Instance: <span class="mono">poketube.fun</span></span>
-        <span class="badge">Version date: <time datetime="2026-05-15">May 15, 2026</time></span>
+        <span class="badge">Version date: <time datetime="2026-05-15">May 15, 2026 version 2</time></span>
       </div>
     </div>
   </section>
@@ -271,6 +271,7 @@
           <li><a href="#self-host">Self-Hosting</a></li>
           <li><a href="#changes">Changes to this Policy</a></li>
           <li><a href="#history">Document History</a></li>
+          <li><a href="#warranty">Warranty Disclaimer</a></li>
           <li><a href="#contact">Contact</a></li>
           <li><a href="#license">Policy License</a></li>
         </ul>
@@ -282,7 +283,7 @@
       <section id="whats-new" class="update-box" aria-labelledby="whats-new-heading" role="region">
         <h3 id="whats-new-heading">
           What's New - Policy Update
-          <span class="when">May 15, 2026</span>
+          <span class="when">May 15, 2026 version 2</span>
         </h3>
         <p style="margin-top:6px; color: #eaeaea;">Highlights:</p>
         <ul>
@@ -378,85 +379,134 @@
 
   <p>
     Poke has a small anonymous statistics system built into the server.
-    It's there so we can get a rough sense of how the software is being used
-    without relying on third-party analytics, ad networks, or anything that
-    would require us to know who you are.
+    It helps us understand broad software usage without third-party analytics,
+    ad networks, or anything that needs to know who you are.
   </p>
 
   <p>
-    When someone watches a video through Poke, we may record a single anonymous event.
-    That event stays on this server and never leaves. It helps us answer basic questions
-    like: which browsers should we test more, which operating systems are most common,
-    and which parts of the software are actually getting used in practice.
+    When someone watches a video through Poke, we may record one anonymous event.
+    The event stays on this server. It is used for aggregate maintenance questions,
+    not personal tracking.
   </p>
 
-  <p>
-    We keep this intentionally minimal. We're not building profiles. We're not
-    reconstructing anyone's viewing history. We just want enough high-level technical
-    information to maintain the software responsibly and fix the right bugs first.
-  </p>
+  <div class="callout">
+    <strong>Simple version:</strong> Poke records anonymous video stats so we can improve
+    the software. It does not store IP addresses, account data, cookies, full user-agent
+    strings, or personal information for this system.
+  </div>
 
-  <p>
-    Here's the short version of what the stats system does:
-  </p>
+  <h3>At a glance</h3>
 
   <ul>
     <li><strong>Enabled by default.</strong> Instance operators can disable it entirely in the server config.</li>
-
-    <li><strong>What we record per anonymous view:</strong>
-      <ul>
-        <li>The video ID that was watched (e.g. <code>?v=...</code>)</li>
-        <li>An anonymous random viewer ID stored locally in your browser via <strong>localStorage</strong> (not a cookie)</li>
-        <li>The browser family (e.g. Firefox, Chromium, Safari)</li>
-        <li>The operating system family (e.g. GNU/Linux, Android, Windows)</li>
-      </ul>
-    </li>
-
-    <li><strong>What we figure out from those counts:</strong>
-      <ul>
-        <li>Total number of anonymous viewer IDs seen by this instance</li>
-        <li>Aggregate browser and operating system usage</li>
-        <li>Top video IDs viewed on this instance</li>
-        <li>A short rolling list of recently viewed video IDs</li>
-        <li>An approximate estimated total user count based on anonymous usage patterns</li>
-      </ul>
-    </li>
-
-    <li><strong>What we do <em>not</em> collect:</strong>
-      <ul>
-        <li>No IP addresses</li>
-        <li>No cookies for analytics</li>
-        <li>No login or account data</li>
-        <li>No personal information of any kind</li>
-        <li>No full user-agent strings</li>
-        <li>No cross-site tracking</li>
-        <li>No advertising identifiers</li>
-        <li>No third-party analytics services</li>
-      </ul>
-    </li>
-
-    <li><strong>Where the data lives:</strong>
-      <ul>
-        <li>All counts are stored locally on the Poke server in a small statistics file</li>
-        <li>The data never leaves the server</li>
-        <li>Only aggregated totals are exposed through the public API</li>
-      </ul>
-    </li>
-
-    <li><strong>Public API:</strong>
-      <ul>
-        <li><code>/api/stats</code> returns aggregate numbers only (browser totals, OS totals, popular video IDs)</li>
-        <li><code>/api/stats?view=gui</code> displays those anonymous aggregate numbers in a friendlier visual page</li>
-        <li>Individual anonymous viewer IDs are never exposed</li>
-      </ul>
-    </li>
+    <li><strong>Local-only.</strong> The counts are stored on the Poke server and are not sent to a third-party analytics service.</li>
+    <li><strong>Aggregate-focused.</strong> The public API shows totals, not individual viewer IDs.</li>
+    <li><strong>Optional for visitors.</strong> You can opt out from this browser at <a href="/api/stats/optout">/api/stats/optout</a>.</li>
   </ul>
 
-  <p>
-    Because this system only works with anonymous counts, it can't reconstruct an
-    individual person's viewing history. The random viewer ID in your browser is only
-    used to avoid counting the same browser multiple times, and it's never shared publicly.
-  </p>
+  <h3>What one anonymous video stats event may include</h3>
+
+  <ul>
+    <li>The video ID that was watched, for example <code>?v=...</code></li>
+    <li>A random anonymous viewer ID stored in your browser's <strong>localStorage</strong>, not a cookie</li>
+    <li>The browser family, for example Firefox, Chromium, or Safari</li>
+    <li>The operating system family, for example GNU/Linux, Android, Windows, macOS, or iOS</li>
+  </ul>
+
+  <h3>What we use those counts for</h3>
+
+  <ul>
+    <li>Finding which browsers need more testing</li>
+    <li>Finding which operating systems need more testing</li>
+    <li>Seeing which video IDs are popular on this instance</li>
+    <li>Keeping a short rolling list of recently viewed video IDs</li>
+    <li>Estimating broad usage so we can prioritize bugs and maintenance work</li>
+  </ul>
+
+  <h3>What we do <em>not</em> collect for <code>/api/stats</code></h3>
+
+  <ul>
+    <li>No IP addresses</li>
+    <li>No cookies for analytics</li>
+    <li>No login or account data</li>
+    <li>No personal information of any kind</li>
+    <li>No full user-agent strings</li>
+    <li>No cross-site tracking</li>
+    <li>No advertising identifiers</li>
+    <li>No third-party analytics services</li>
+  </ul>
+
+  <h3>What the public stats API shows</h3>
+
+  <ul>
+    <li><code>/api/stats</code> returns aggregate numbers only, such as browser totals, OS totals, and popular video IDs.</li>
+    <li><code>/api/stats?view=gui</code> displays those anonymous aggregate numbers in a friendlier visual page.</li>
+    <li>Individual anonymous viewer IDs are never exposed.</li>
+  </ul>
+
+  <details class="block">
+    <summary><strong>Why this is not user tracking</strong></summary>
+
+    <p>
+      Tracking systems are designed to follow people around, build profiles,
+      correlate behavior across sites, and remember individual activity over time.
+      This system is not designed for that.
+    </p>
+
+    <p>
+      Poke's stats system asks broad maintenance questions like "what browser families
+      are common here?" and "which operating systems should we test more?" It does not
+      ask "who is this person?" or "what is this individual's full viewing history?"
+    </p>
+
+    <p>
+      The anonymous viewer ID is used to avoid badly overcounting the same browser.
+      It is not a login, not an email, not an account, not an advertising ID, and not
+      exposed through the public API.
+    </p>
+  </details>
+
+  <details class="block">
+    <summary><strong>Why we record the video ID</strong></summary>
+
+    <p>
+      We record the video ID so we can understand aggregate demand on this instance.
+      This helps us know which parts of the code need to be the most reliable.
+    </p>
+
+    <p>
+      The goal is not to create a personal watch history. The goal is to answer
+      "what content does this instance serve most often overall?"
+    </p>
+  </details>
+
+  <details class="block">
+    <summary><strong>Why we store an anonymous random viewer ID in localStorage</strong></summary>
+
+    <p>
+      We store a random anonymous viewer ID so the same browser does not look like
+      a brand new person every time it sends a stats event.
+    </p>
+
+    <p>
+      We use <code>localStorage</code> instead of cookies. It is a local browser value
+      used by Poke itself, not part of any third-party tracking network.
+    </p>
+  </details>
+
+  <details class="block">
+    <summary><strong>Why we record the browser and operating system family</strong></summary>
+
+    <p>
+      Browser and operating system compatibility matters for a video frontend.
+      Broad labels help us decide what to test and fix first.
+    </p>
+
+    <p>
+      We keep this broad on purpose. We do not record the full user-agent string,
+      and we do not use this to fingerprint your device.
+    </p>
+  </details>
 
   <p>
     If you'd rather not contribute even these anonymous counts, you can opt out any time at
@@ -486,28 +536,20 @@
 
   <p>
     Poke includes public status pages so people can see how the instance is doing.
-    These pages are meant to be transparent and useful, not invasive.
-    They show aggregate server health and route popularity, not personal activity.
+    These pages show aggregate server health and route popularity, not personal activity.
   </p>
 
   <h3><code>/health</code></h3>
 
   <p>
-    The <code>/health</code> page shows the current state of PokeResourceGuard.
-    It displays live server vitals such as the current health state, process delay,
-    CPU usage, memory usage, request rate, pressure score, active visitor counters,
-    and noisy-client cooldown counts.
+    The <code>/health</code> page shows the current state of PokeResourceGuard and
+    aggregate server health information, such as current server pressure, request rate,
+    active visitor counters, and cooldown counts.
   </p>
 
   <p>
-    With JavaScript enabled, the page fetches <code>/_pokeresource/stats</code>
-    once per second so the numbers update live. With JavaScript disabled, the page
-    still works as a server-rendered snapshot. You can refresh the page to update it.
-  </p>
-
-  <p>
-    The <code>/health</code> page itself is ignored by the route popularity tracker,
-    so loading the health page does not inflate the all-time traffic route list.
+    This page is for operational transparency. It does not show personal profiles,
+    raw IP addresses, cookies, account identifiers, or browser fingerprints.
   </p>
 
   <h3><code>/traffic</code></h3>
@@ -519,22 +561,8 @@
   </p>
 
   <p>
-    These route counts are intentionally broad. Dynamic paths are normalized where
-    possible, so long IDs, object IDs, UUIDs, and similar path fragments are folded
-    into generic labels. This keeps the route list readable and avoids turning it
-    into a list of overly specific URLs.
-  </p>
-
-  <p>
-    With JavaScript enabled, <code>/traffic</code> also fetches
-    <code>/_pokeresource/stats</code> once per second so totals update live. With
-    JavaScript disabled, it shows a static server-rendered snapshot.
-  </p>
-
-  <p>
-    The <code>/traffic</code> page itself is ignored by the route popularity tracker,
-    so visiting the traffic page does not make <code>/traffic</code> more popular
-    in its own chart.
+    These route counts are aggregate counts, not per-person browsing histories.
+    Dynamic paths are normalized where possible so route totals stay broad and readable.
   </p>
 
   <h3>What gets saved for traffic stats</h3>
@@ -656,6 +684,21 @@
     heavy request totals, reject counts, cost score, pressure score, current guard
     state, CPU state, memory state, and event loop state. They are not meant to
     identify a person.
+  </p>
+
+  <h3>Known bots and infrastructure</h3>
+
+  <p>
+    PokeResourceGuard recognizes some well-known bot and infrastructure user agents.
+    This can reduce request cost or avoid punishing useful automated traffic such as
+    search engines, feed readers, fediverse previews, link preview bots, uptime monitors,
+    and CDN infrastructure.
+  </p>
+
+  <p>
+    This is not used to build a personal fingerprint. It is a broad operational rule
+    so that a search crawler and a normal browser do not always get treated exactly
+    the same during server pressure.
   </p>
 
   <h3>Cloudflare and proxy awareness</h3>
@@ -796,6 +839,8 @@
         </p>
       </section>
 
+      <section id="third-parties" aria-label="Third-Party Requests Proxy"></section>
+
       <section id="api-logs" aria-labelledby="api-logs-heading">
         <h2 id="api-logs-heading" class="section">API Logs Policy</h2>
         <p>
@@ -857,6 +902,21 @@
         <p>
           Poke accounts don't require your name, email, or any identifying detail. You literally can't add them even if you tried.
         </p>
+        <p>
+          But outside Poke, you <em>do</em> have rights and tools to protect your privacy. Here are a few ideas:
+        </p>
+        <ul>
+          <li>Use a privacy-respecting search engine, e.g. <a href="https://duckduckgo.com/" target="_blank" rel="noopener">DuckDuckGo</a>.</li>
+          <li>Run browser extensions that block trackers, fingerprinting, and sketchy scripts.</li>
+          <li>Use HTTPS whenever possible, avoid sketchy public Wi-Fi, and keep your OS/browser updated.</li>
+          <li>Check device permissions camera, mic, location and revoke ones you don't use.</li>
+          <li>Use a VPN on public or untrusted networks. Try <a href="https://mullvad.net/" target="_blank" rel="noopener"><strong>Mullvad VPN</strong></a>.</li>
+          <li>Use a content blocker like <a href="https://ublockorigin.com/" target="_blank" rel="noopener"><strong>uBlock Origin</strong></a>.</li>
+          <li>Try <a href="https://privacybadger.org/" target="_blank" rel="noopener"><strong>Privacy Badger</strong></a> EFF.</li>
+          <li>Use browsers built around privacy, such as <a href="https://www.mozilla.org/firefox/new/" target="_blank" rel="noopener"><strong>Firefox</strong></a> and forks,
+            or <a href="https://www.mozilla.org/firefox/focus/" target="_blank" rel="noopener"><strong>Firefox Focus</strong></a> for mobile.</li>
+          <li>Explore privacy tool directories like <a href="https://www.privacytools.io/" target="_blank" rel="noopener"><strong>PrivacyTools.io</strong></a>.</li>
+        </ul>
       </section>
 
       <section id="retention" aria-labelledby="retention-heading">
@@ -907,6 +967,11 @@
           You can view the full edit history for this policy at:
           <a href="https://codeberg.org/ashleyirispuppy/poke/commits/branch/main/html/priv.ejs" target="_blank" rel="noopener">codeberg.org</a>.
         </p>
+      </section>
+
+      <section id="warranty" aria-labelledby="warranty-heading">
+        <h2 id="warranty-heading" class="section">Warranty Disclaimer</h2>
+        <pre class="small" style="white-space:pre-wrap;margin:8px 0;">IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING WILL ANY COPYRIGHT HOLDER,OR ANY OTHER PARTY WHO MODIFIES AND/OR CONVEYS THE PROGRAM AS PERMITTED ABOVE, BE LIABLE TO YOU FOR DAMAGES,INCLUDING ANY GENERAL, SPECIAL, INCIDENTAL OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE USE OR INABILITY TO USE THE PROGRAM E.G., LOSS OF DATA, DATA BEING RENDERED INACCURATE, OR FAILURES OF THE PROGRAM TO OPERATE WITH ANY OTHER PROGRAMS,EVEN IF SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.</pre>
       </section>
 
       <section id="contact" aria-labelledby="contact-heading">
