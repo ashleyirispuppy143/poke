@@ -25549,9 +25549,6 @@ try {
 
 
 
-// custom video.js ui for POKE PLAYER 
-// if u dont want it, u can use DisableCustomPlayerUI localstroage variable :3
-// No LLMs, AIs or anything like that was used in the making of the custom ui, it was done by all hard work :D
 let shouldUseCustomVideoJsUI = true;
 
 try {
@@ -25561,11 +25558,1422 @@ try {
 }
 
 if (shouldUseCustomVideoJsUI) {
-  const customVideoJsUI = document.createElement("style");
+  const customVideoJsUI = document.getElementById("poke-custom-videojs-ui") || document.createElement("style");
 
-  customVideoJsUI.innerHTML = `:root{--poke-custom-player-accent-1:#ff0033;--poke-custom-player-accent-2:#ff0a45;--poke-custom-player-accent-3:#ff1d79;--poke-custom-player-radius:16px;--poke-custom-player-text:rgba(255,255,255,.98);--poke-custom-player-text-soft:rgba(255,255,255,.86);--poke-custom-player-track:rgba(255,255,255,.34);--poke-custom-player-loaded:rgba(255,255,255,.48);--poke-custom-player-volume-track:rgba(255,255,255,.18);--poke-custom-player-volume-level:rgba(255,255,255,.98);--poke-custom-player-button-bg:rgba(0,0,0,.48);--poke-custom-player-button-bg-hover:rgba(0,0,0,.64);--poke-custom-player-button-border:rgba(255,255,255,.08);--poke-custom-player-button-border-hover:rgba(255,255,255,.14);--poke-custom-player-button-shadow:0 8px 22px rgba(0,0,0,.34);--poke-custom-player-title-bg:rgba(0,0,0,.58);--poke-custom-player-title-bg-hover:rgba(0,0,0,.7);--poke-custom-player-title-border:rgba(255,255,255,.1);--poke-custom-player-title-border-hover:rgba(255,255,255,.16);--poke-custom-player-title-shadow:0 8px 22px rgba(0,0,0,.34);--poke-custom-player-title-wash:rgba(0,0,0,.1);--poke-custom-player-control-height:92px;--poke-custom-player-control-height-mobile:78px;--poke-custom-player-button-size:42px;--poke-custom-player-button-size-mobile:36px;--poke-custom-player-progress-left:38px;--poke-custom-player-progress-right:38px;--poke-custom-player-progress-top:16px;--poke-custom-player-description-bottom:calc(var(--poke-custom-player-control-height) - var(--poke-custom-player-progress-top) + 10px);--poke-custom-player-description-bottom-mobile:calc(var(--poke-custom-player-control-height-mobile) - var(--poke-custom-player-progress-top) + 8px)}.video-js,.video-js *{font-family:"poketube flex","PokeTube Flex",sans-serif!important}.video-js .vjs-icon-placeholder,.video-js .vjs-icon-placeholder:before,.video-js .vjs-button>.vjs-icon-placeholder,.video-js .vjs-button>.vjs-icon-placeholder:before,.video-js .vjs-big-play-button .vjs-icon-placeholder,.video-js .vjs-big-play-button .vjs-icon-placeholder:before,.video-js [class^="vjs-icon-"],.video-js [class^="vjs-icon-"]:before,.video-js [class*=" vjs-icon-"],.video-js [class*=" vjs-icon-"]:before{font-family:VideoJS!important;font-weight:400!important;font-style:normal!important}.video-js,.video-js .vjs-poster,.video-js .vjs-poster img,.video-js .vjs-tech{border-radius:var(--poke-custom-player-radius)!important}.video-js.vjs-fullscreen,.video-js.vjs-fullscreen .vjs-poster,.video-js.vjs-fullscreen .vjs-poster img,.video-js.vjs-fullscreen .vjs-tech,.video-js.vjs-fullscreen .vjs-control-bar,.video-js:fullscreen,.video-js:fullscreen .vjs-poster,.video-js:fullscreen .vjs-poster img,.video-js:fullscreen .vjs-tech,.video-js:fullscreen .vjs-control-bar,.video-js:-webkit-full-screen,.video-js:-webkit-full-screen .vjs-poster,.video-js:-webkit-full-screen .vjs-poster img,.video-js:-webkit-full-screen .vjs-tech,.video-js:-webkit-full-screen .vjs-control-bar{border-radius:0!important}.video-js{overflow:hidden!important;background:#000!important}.video-js .vjs-title-bar,.video-js .vjs-title-bar.vjs-hidden{position:absolute!important;inset:0!important;z-index:8!important;display:block!important;visibility:visible!important;width:auto!important;height:auto!important;padding:0!important;margin:0!important;background:0 0!important;background-color:transparent!important;background-image:none!important;border:0!important;border-radius:var(--poke-custom-player-radius)!important;box-shadow:none!important;pointer-events:none!important;opacity:1!important;transform:none!important;transition:opacity .24s ease,transform .24s ease,visibility 0s linear 0s!important}.video-js.vjs-fullscreen .vjs-title-bar,.video-js:fullscreen .vjs-title-bar,.video-js:-webkit-full-screen .vjs-title-bar{border-radius:0!important}.video-js.vjs-user-inactive.vjs-playing .vjs-title-bar,.video-js.vjs-user-inactive.vjs-playing .vjs-title-bar.vjs-hidden{opacity:0!important;visibility:hidden!important;transform:translateY(-8px)!important;transition:opacity .24s ease,transform .24s ease,visibility 0s linear .24s!important}.video-js.vjs-user-active .vjs-title-bar,.video-js.vjs-user-active .vjs-title-bar.vjs-hidden,.video-js.vjs-paused .vjs-title-bar,.video-js.vjs-paused .vjs-title-bar.vjs-hidden,.video-js.vjs-ended .vjs-title-bar,.video-js.vjs-ended .vjs-title-bar.vjs-hidden{opacity:1!important;visibility:visible!important;transform:translateY(0)!important;transition:opacity .18s ease,transform .18s ease,visibility 0s linear 0s!important}.video-js .vjs-title-bar-title,.video-js .vjs-title-bar-title.vjs-hidden{position:absolute!important;top:18px!important;left:22px!important;display:block!important;visibility:visible!important;width:fit-content!important;max-width:min(82%,920px)!important;margin:0!important;padding:0!important;background:0 0!important;background-color:transparent!important;background-image:none!important;border:0!important;box-shadow:none!important;color:var(--poke-custom-player-text)!important;font-size:1.5em!important;font-weight:1000!important;font-stretch:ultra-expanded!important;line-height:1.08!important;text-shadow:0 1px 2px rgba(0,0,0,.72)!important;-webkit-text-stroke:.35px rgba(0,0,0,.35)!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;opacity:1!important}.video-js .vjs-title-bar-description,.video-js .vjs-title-bar-description.vjs-hidden{position:absolute!important;right:var(--poke-custom-player-progress-right)!important;bottom:var(--poke-custom-player-description-bottom)!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;visibility:visible!important;width:fit-content!important;max-width:min(56%,680px)!important;min-height:42px!important;margin:0!important;padding:.78em 1.08em!important;border-radius:999px!important;color:var(--poke-custom-player-text)!important;font-size:.95em!important;font-weight:790!important;font-stretch:semi-expanded!important;line-height:1.24!important;text-shadow:0 1px 2px rgba(0,0,0,.86)!important;background:var(--poke-custom-player-title-bg)!important;background-color:var(--poke-custom-player-title-bg)!important;background-image:none!important;border:1px solid var(--poke-custom-player-title-border)!important;box-shadow:var(--poke-custom-player-title-shadow)!important;-webkit-backdrop-filter:blur(12px) saturate(160%)!important;backdrop-filter:blur(12px) saturate(160%)!important;filter:none!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;opacity:1!important;pointer-events:none!important}.video-js .vjs-title-bar-description:hover{background:var(--poke-custom-player-title-bg-hover)!important;background-color:var(--poke-custom-player-title-bg-hover)!important;border-color:var(--poke-custom-player-title-border-hover)!important}.video-js .vjs-control-bar{position:absolute!important;left:0!important;right:0!important;bottom:0!important;width:100%!important;height:var(--poke-custom-player-control-height)!important;display:flex!important;align-items:flex-end!important;gap:8px!important;padding:38px 28px 14px!important;box-sizing:border-box!important;background:0 0!important;background-color:transparent!important;background-image:none!important;border:0!important;border-radius:0 0 var(--poke-custom-player-radius) var(--poke-custom-player-radius)!important;box-shadow:none!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;opacity:1!important;transform:none!important;pointer-events:auto!important}.video-js.vjs-fullscreen .vjs-control-bar,.video-js:fullscreen .vjs-control-bar,.video-js:-webkit-full-screen .vjs-control-bar{border-radius:0!important}.video-js.vjs-user-inactive.vjs-playing .vjs-control-bar{opacity:0!important;transform:translateY(10px)!important;transition:opacity .24s ease,transform .24s ease!important}.video-js.vjs-user-active .vjs-control-bar,.video-js.vjs-paused .vjs-control-bar,.video-js.vjs-ended .vjs-control-bar{opacity:1!important;transform:translateY(0)!important;transition:opacity .18s ease,transform .18s ease!important}.video-js .vjs-control{width:var(--poke-custom-player-button-size)!important;height:var(--poke-custom-player-button-size)!important;min-width:var(--poke-custom-player-button-size)!important;margin:0!important;padding:0!important;border:0!important;border-radius:50%!important;background:0 0!important;background-color:transparent!important;background-image:none!important;box-shadow:none!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;color:var(--poke-custom-player-text)!important;text-shadow:0 1px 2px rgba(0,0,0,.86)!important;transition:background-color .14s ease,transform .12s ease,opacity .14s ease,border-color .14s ease!important}.video-js .vjs-button,.video-js .vjs-picture-in-picture-control,.video-js .vjs-subs-caps-button,.video-js .vjs-audio-button,.video-js .vjs-playback-rate,.video-js .vjs-chapters-button,.video-js .vjs-descriptions-button,.video-js .vjs-captions-button,.video-js .vjs-quality-selector,.video-js .vjs-quality-menu-wrapper,.video-js .vjs-menu-button,.video-js .vjs-fullscreen-control{width:var(--poke-custom-player-button-size)!important;height:var(--poke-custom-player-button-size)!important;min-width:var(--poke-custom-player-button-size)!important;cursor:pointer!important;border-radius:50%!important;background:var(--poke-custom-player-button-bg)!important;background-color:var(--poke-custom-player-button-bg)!important;background-image:none!important;border:1px solid var(--poke-custom-player-button-border)!important;box-shadow:var(--poke-custom-player-button-shadow)!important}.video-js .vjs-button:hover,.video-js .vjs-picture-in-picture-control:hover,.video-js .vjs-subs-caps-button:hover,.video-js .vjs-audio-button:hover,.video-js .vjs-playback-rate:hover,.video-js .vjs-chapters-button:hover,.video-js .vjs-descriptions-button:hover,.video-js .vjs-captions-button:hover,.video-js .vjs-quality-selector:hover,.video-js .vjs-quality-menu-wrapper:hover,.video-js .vjs-menu-button:hover,.video-js .vjs-fullscreen-control:hover{background:var(--poke-custom-player-button-bg-hover)!important;background-color:var(--poke-custom-player-button-bg-hover)!important;background-image:none!important;border-color:var(--poke-custom-player-button-border-hover)!important}.video-js .vjs-button:active{transform:scale(.94)!important}.video-js .vjs-button:focus,.video-js .vjs-button:focus-visible{outline:0!important}.video-js .vjs-button:focus-visible{background:var(--poke-custom-player-button-bg-hover)!important;background-color:var(--poke-custom-player-button-bg-hover)!important;box-shadow:0 0 0 3px rgba(255,0,70,.24),var(--poke-custom-player-button-shadow)!important}.video-js .vjs-control .vjs-icon-placeholder:before,.video-js .vjs-button>.vjs-icon-placeholder:before{position:static!important;display:block!important;width:100%!important;height:100%!important;font-family:VideoJS!important;font-weight:400!important;font-style:normal!important;font-size:24px!important;line-height:var(--poke-custom-player-button-size)!important;color:var(--poke-custom-player-text)!important;text-align:center!important;text-shadow:0 1px 2px rgba(0,0,0,.9)!important}.video-js .vjs-play-control{order:10!important;margin-right:6px!important}.video-js .vjs-play-control .vjs-icon-placeholder:before{font-family:VideoJS!important;font-size:28px!important}.video-js .vjs-volume-panel{order:20!important;width:auto!important;min-width:var(--poke-custom-player-button-size)!important;height:var(--poke-custom-player-button-size)!important;display:flex!important;align-items:center!important;gap:0!important;margin:0!important;padding:0!important;border-radius:999px!important;background:0 0!important;background-color:transparent!important;background-image:none!important;border:0!important;box-shadow:none!important;overflow:visible!important}.video-js .vjs-volume-panel:hover,.video-js .vjs-volume-panel:focus-within{background:var(--poke-custom-player-button-bg)!important;background-color:var(--poke-custom-player-button-bg)!important;border:1px solid var(--poke-custom-player-button-border)!important;box-shadow:var(--poke-custom-player-button-shadow)!important}.video-js .vjs-volume-panel .vjs-mute-control{width:var(--poke-custom-player-button-size)!important;height:var(--poke-custom-player-button-size)!important;min-width:var(--poke-custom-player-button-size)!important;margin:0!important;border-radius:50%!important;background:var(--poke-custom-player-button-bg)!important;background-color:var(--poke-custom-player-button-bg)!important;background-image:none!important;border:1px solid var(--poke-custom-player-button-border)!important;box-shadow:var(--poke-custom-player-button-shadow)!important}.video-js .vjs-volume-panel:hover .vjs-mute-control,.video-js .vjs-volume-panel:focus-within .vjs-mute-control{background:0 0!important;background-color:transparent!important;border-color:transparent!important;box-shadow:none!important}.video-js .vjs-volume-control,.video-js .vjs-volume-control.vjs-control,.video-js .vjs-volume-horizontal{width:0!important;min-width:0!important;height:var(--poke-custom-player-button-size)!important;opacity:0!important;overflow:hidden!important;display:flex!important;align-items:center!important;margin:0!important;padding:0!important;border-radius:999px!important;background:0 0!important;background-color:transparent!important;background-image:none!important;border:0!important;box-shadow:none!important;transition:width .18s ease,min-width .18s ease,opacity .18s ease!important}.video-js .vjs-volume-panel:hover .vjs-volume-control,.video-js .vjs-volume-panel:focus-within .vjs-volume-control,.video-js .vjs-volume-panel:hover .vjs-volume-control.vjs-control,.video-js .vjs-volume-panel:focus-within .vjs-volume-control.vjs-control,.video-js .vjs-volume-panel:hover .vjs-volume-horizontal,.video-js .vjs-volume-panel:focus-within .vjs-volume-horizontal{width:82px!important;min-width:82px!important;opacity:1!important}.video-js .vjs-volume-control .vjs-mouse-display,.video-js .vjs-volume-control .vjs-time-tooltip,.video-js .vjs-volume-control .vjs-volume-tooltip,.video-js .vjs-volume-control.vjs-control .vjs-mouse-display,.video-js .vjs-volume-control.vjs-control .vjs-time-tooltip,.video-js .vjs-volume-control.vjs-control .vjs-volume-tooltip,.video-js .vjs-volume-horizontal .vjs-mouse-display,.video-js .vjs-volume-horizontal .vjs-time-tooltip,.video-js .vjs-volume-horizontal .vjs-volume-tooltip,.video-js .vjs-volume-bar .vjs-mouse-display,.video-js .vjs-volume-bar .vjs-time-tooltip,.video-js .vjs-volume-bar .vjs-volume-tooltip,.video-js .vjs-volume-bar.vjs-slider .vjs-mouse-display,.video-js .vjs-volume-bar.vjs-slider .vjs-time-tooltip,.video-js .vjs-volume-bar.vjs-slider .vjs-volume-tooltip,.video-js .vjs-volume-bar.vjs-slider-horizontal .vjs-mouse-display,.video-js .vjs-volume-bar.vjs-slider-horizontal .vjs-time-tooltip,.video-js .vjs-volume-bar.vjs-slider-horizontal .vjs-volume-tooltip,.video-js .vjs-volume-control .vjs-slider-bar .vjs-mouse-display,.video-js .vjs-volume-control .vjs-slider-bar .vjs-time-tooltip,.video-js .vjs-volume-control .vjs-slider-bar .vjs-volume-tooltip,.video-js .vjs-volume-panel .vjs-mouse-display,.video-js .vjs-volume-panel .vjs-time-tooltip,.video-js .vjs-volume-panel .vjs-volume-tooltip{display:none!important;visibility:hidden!important;opacity:0!important;width:0!important;height:0!important;pointer-events:none!important}.video-js .vjs-volume-bar,.video-js .vjs-volume-bar.vjs-slider,.video-js .vjs-volume-bar.vjs-slider-horizontal{position:relative!important;width:66px!important;height:5px!important;margin:0 12px 0 2px!important;border-radius:999px!important;background:var(--poke-custom-player-volume-track)!important;background-color:var(--poke-custom-player-volume-track)!important;background-image:none!important;border:0!important;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06),0 1px 5px rgba(0,0,0,.42)!important;overflow:visible!important}.video-js .vjs-volume-bar:before,.video-js .vjs-volume-bar:after,.video-js .vjs-volume-bar.vjs-slider:before,.video-js .vjs-volume-bar.vjs-slider:after{display:none!important;content:none!important}.video-js .vjs-volume-level,.video-js .vjs-volume-bar .vjs-volume-level,.video-js .vjs-volume-bar.vjs-slider-horizontal .vjs-volume-level{position:absolute!important;display:block!important;visibility:visible!important;opacity:1!important;left:0!important;top:0!important;bottom:auto!important;height:5px!important;min-width:3px!important;border-radius:999px!important;background:var(--poke-custom-player-volume-level)!important;background-color:var(--poke-custom-player-volume-level)!important;background-image:none!important;box-shadow:0 0 0 1px rgba(255,255,255,.1),0 1px 5px rgba(0,0,0,.42)!important;z-index:2!important;overflow:visible!important}.video-js .vjs-volume-level:before,.video-js .vjs-volume-bar .vjs-volume-level:before,.video-js .vjs-volume-bar.vjs-slider-horizontal .vjs-volume-level:before{content:""!important;position:absolute!important;display:block!important;visibility:visible!important;opacity:1!important;right:-7px!important;top:50%!important;width:14px!important;height:14px!important;margin-top:-7px!important;border-radius:50%!important;background:var(--poke-custom-player-volume-level)!important;background-color:var(--poke-custom-player-volume-level)!important;background-image:none!important;box-shadow:0 0 0 1px rgba(255,255,255,.2),0 2px 6px rgba(0,0,0,.55)!important;z-index:3!important}.video-js .vjs-volume-level .vjs-control-text,.video-js .vjs-volume-bar .vjs-volume-level .vjs-control-text{display:none!important}.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle,.video-js .vjs-control-bar .vjs-player-time-toggle{order:30!important;width:auto!important;min-width:0!important;height:var(--poke-custom-player-button-size)!important;padding:0 13px!important;margin:0 7px 0 -1px!important;border:1px solid var(--poke-custom-player-button-border)!important;border-radius:999px!important;background:var(--poke-custom-player-button-bg)!important;background-color:var(--poke-custom-player-button-bg)!important;background-image:none!important;box-shadow:var(--poke-custom-player-button-shadow)!important;color:var(--poke-custom-player-text)!important;font-family:"poketube flex","PokeTube Flex",sans-serif!important;font-size:14px!important;font-weight:700!important;line-height:1!important;text-shadow:0 1px 2px rgba(0,0,0,.9)!important;transform:none!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;white-space:nowrap!important}.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle:hover,.video-js .vjs-control-bar .vjs-player-time-toggle:hover{background:var(--poke-custom-player-button-bg-hover)!important;background-color:var(--poke-custom-player-button-bg-hover)!important;border-color:var(--poke-custom-player-button-border-hover)!important;color:var(--poke-custom-player-text)!important;transform:none!important}.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle:active,.video-js .vjs-control-bar .vjs-player-time-toggle:active{transform:scale(.98)!important}.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle .vjs-icon-placeholder,.video-js .vjs-control-bar .vjs-player-time-toggle .vjs-icon-placeholder{display:none!important}.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle:before,.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle:after,.video-js .vjs-control-bar .vjs-player-time-toggle:before,.video-js .vjs-control-bar .vjs-player-time-toggle:after{display:none!important;content:none!important}.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle .vjs-control-text,.video-js .vjs-control-bar .vjs-player-time-toggle .vjs-control-text{position:static!important;width:auto!important;height:auto!important;clip:auto!important;clip-path:none!important;overflow:visible!important;white-space:nowrap!important;margin:0!important;padding:0!important;border:0!important;color:inherit!important;font:inherit!important}.video-js .vjs-progress-control{position:absolute!important;left:var(--poke-custom-player-progress-left)!important;right:var(--poke-custom-player-progress-right)!important;top:var(--poke-custom-player-progress-top)!important;width:auto!important;height:18px!important;min-width:0!important;display:flex!important;align-items:center!important;margin:0!important;padding:0!important;cursor:pointer!important;touch-action:none!important;z-index:5!important;background:0 0!important;background-color:transparent!important;background-image:none!important;border:0!important;box-shadow:none!important}.video-js .vjs-progress-control:hover{height:22px!important;top:calc(var(--poke-custom-player-progress-top) - 2px)!important}.video-js .vjs-progress-control .vjs-progress-holder{width:100%!important;height:4px!important;margin:0!important;border-radius:999px!important;background:var(--poke-custom-player-track)!important;background-color:var(--poke-custom-player-track)!important;background-image:none!important;border:0!important;box-shadow:0 1px 4px rgba(0,0,0,.34)!important;overflow:visible!important;transition:height .12s ease!important}.video-js .vjs-progress-control:hover .vjs-progress-holder{height:6px!important}.video-js .vjs-progress-control .vjs-progress-holder:before,.video-js .vjs-progress-control .vjs-progress-holder:after{display:none!important;content:none!important}.video-js .vjs-load-progress{height:100%!important;border-radius:999px!important;background:var(--poke-custom-player-loaded)!important;background-color:var(--poke-custom-player-loaded)!important;background-image:none!important}.video-js .vjs-load-progress div{height:100%!important;border-radius:999px!important;background:var(--poke-custom-player-loaded)!important;background-color:var(--poke-custom-player-loaded)!important;background-image:none!important}.video-js .vjs-play-progress{height:100%!important;border-radius:999px!important;background:linear-gradient(to right,var(--poke-custom-player-accent-1),var(--poke-custom-player-accent-2),var(--poke-custom-player-accent-3))!important}.video-js .vjs-play-progress:before{content:""!important;position:absolute!important;right:-6px!important;top:50%!important;width:13px!important;height:13px!important;margin-top:-6.5px!important;border-radius:50%!important;background:var(--poke-custom-player-accent-2)!important;box-shadow:0 0 0 1px rgba(255,0,51,.2),0 1px 6px rgba(0,0,0,.45)!important;opacity:0!important;transform:scale(.72)!important;transition:opacity .12s ease,transform .12s ease!important}.video-js .vjs-progress-control:hover .vjs-play-progress:before,.video-js.vjs-seeking .vjs-play-progress:before{opacity:1!important;transform:scale(1)!important}.video-js .vjs-progress-control .vjs-slider-handle{display:none!important}.video-js .vjs-progress-control .vjs-mouse-display,.video-js .vjs-progress-control .vjs-time-tooltip,.video-js .vjs-play-progress .vjs-time-tooltip{font-family:"poketube flex","PokeTube Flex",sans-serif!important}.video-js .vjs-progress-control .vjs-mouse-display .vjs-time-tooltip,.video-js .vjs-play-progress .vjs-time-tooltip{bottom:22px!important;padding:5px 8px!important;border-radius:4px!important;background:rgba(20,20,20,.96)!important;color:var(--poke-custom-player-text)!important;font-family:"poketube flex","PokeTube Flex",sans-serif!important;font-size:12px!important;font-weight:700!important;line-height:1!important;text-shadow:none!important}.video-js .vjs-control-text,.video-js .vjs-current-time,.video-js .vjs-duration,.video-js .vjs-time-divider,.video-js .vjs-current-time-display,.video-js .vjs-duration-display,.video-js .vjs-remaining-time-display{font-family:"poketube flex","PokeTube Flex",sans-serif!important}.video-js .vjs-current-time,.video-js .vjs-duration,.video-js .vjs-time-divider,.video-js .vjs-current-time-display,.video-js .vjs-duration-display{display:none!important}.video-js .vjs-remaining-time{display:none!important}.video-js .vjs-time-control{width:auto!important;min-width:0!important;height:var(--poke-custom-player-button-size)!important;align-items:center!important;justify-content:center!important;padding:0!important;margin:0!important;background:0 0!important;background-color:transparent!important;background-image:none!important;border:0!important;border-radius:0!important;box-shadow:none!important;color:var(--poke-custom-player-text)!important;font-family:"poketube flex","PokeTube Flex",sans-serif!important;font-size:14px!important;font-weight:700!important;line-height:1!important;text-shadow:0 1px 2px rgba(0,0,0,.9)!important}.video-js .vjs-spacer{order:800!important;display:block!important;flex:1 1 auto!important}.video-js .vjs-picture-in-picture-control,.video-js .vjs-subs-caps-button,.video-js .vjs-audio-button,.video-js .vjs-playback-rate,.video-js .vjs-chapters-button,.video-js .vjs-descriptions-button,.video-js .vjs-captions-button,.video-js .vjs-quality-selector,.video-js .vjs-quality-menu-wrapper,.video-js .vjs-menu-button{order:900!important}.video-js .vjs-menu-button-popup .vjs-menu{bottom:48px!important}.video-js .vjs-menu-content{border-radius:10px!important;background:rgba(28,28,28,.96)!important;color:var(--poke-custom-player-text)!important;font-family:"poketube flex","PokeTube Flex",sans-serif!important;box-shadow:0 8px 28px rgba(0,0,0,.55)!important;overflow:hidden!important}.video-js .vjs-menu li{color:var(--poke-custom-player-text)!important;font-family:"poketube flex","PokeTube Flex",sans-serif!important;font-size:13px!important;font-weight:650!important;text-transform:none!important}.video-js .vjs-menu li.vjs-selected,.video-js .vjs-menu li:hover{background:rgba(255,255,255,.16)!important}.video-js .vjs-big-play-button{width:72px!important;height:52px!important;margin-left:-36px!important;margin-top:-26px!important;border:0!important;border-radius:14px!important;background:rgba(0,0,0,.72)!important;box-shadow:none!important;color:var(--poke-custom-player-text)!important;transition:background-color .15s ease,transform .12s ease!important}.video-js:hover .vjs-big-play-button,.video-js .vjs-big-play-button:focus{background:rgba(0,0,0,.86)!important;border:0!important;box-shadow:none!important}.video-js .vjs-big-play-button:active{transform:scale(.96)!important}.video-js .vjs-big-play-button .vjs-icon-placeholder:before{font-family:VideoJS!important;font-size:42px!important;line-height:52px!important;color:var(--poke-custom-player-text)!important}.video-js .vjs-fullscreen-control{order:950!important}@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.video-js .vjs-title-bar-description{-webkit-backdrop-filter:none!important;backdrop-filter:none!important;background:rgba(18,18,18,.72)!important;border-color:rgba(255,255,255,.18)!important}}@media (max-width:640px){:root{--poke-custom-player-progress-left:14px;--poke-custom-player-progress-right:14px;--poke-custom-player-progress-top:14px}.video-js .vjs-title-bar-title{top:14px!important;left:14px!important;max-width:92%!important;font-size:1.12em!important}.video-js .vjs-title-bar-description{right:var(--poke-custom-player-progress-right)!important;bottom:var(--poke-custom-player-description-bottom-mobile)!important;max-width:min(76%,460px)!important;min-height:36px!important;padding:.62em .9em!important;font-size:.8em!important}.video-js .vjs-control-bar{height:var(--poke-custom-player-control-height-mobile)!important;gap:6px!important;padding:34px 12px 9px!important}.video-js .vjs-control,.video-js .vjs-button,.video-js .vjs-volume-panel .vjs-mute-control,.video-js .vjs-picture-in-picture-control,.video-js .vjs-subs-caps-button,.video-js .vjs-audio-button,.video-js .vjs-playback-rate,.video-js .vjs-chapters-button,.video-js .vjs-descriptions-button,.video-js .vjs-captions-button,.video-js .vjs-quality-selector,.video-js .vjs-quality-menu-wrapper,.video-js .vjs-menu-button,.video-js .vjs-fullscreen-control{width:var(--poke-custom-player-button-size-mobile)!important;height:var(--poke-custom-player-button-size-mobile)!important;min-width:var(--poke-custom-player-button-size-mobile)!important}.video-js .vjs-control .vjs-icon-placeholder:before,.video-js .vjs-button>.vjs-icon-placeholder:before{font-family:VideoJS!important;font-size:20px!important;line-height:var(--poke-custom-player-button-size-mobile)!important}.video-js .vjs-play-control{order:10!important;margin-right:4px!important}.video-js .vjs-play-control .vjs-icon-placeholder:before{font-family:VideoJS!important;font-size:24px!important}.video-js .vjs-volume-panel{order:20!important;min-width:var(--poke-custom-player-button-size-mobile)!important;height:var(--poke-custom-player-button-size-mobile)!important;margin-right:0!important}.video-js .vjs-volume-panel .vjs-mute-control{width:var(--poke-custom-player-button-size-mobile)!important;height:var(--poke-custom-player-button-size-mobile)!important;min-width:var(--poke-custom-player-button-size-mobile)!important}.video-js .vjs-volume-control,.video-js .vjs-volume-control.vjs-control,.video-js .vjs-volume-horizontal{display:none!important}.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle,.video-js .vjs-control-bar .vjs-player-time-toggle{order:30!important;height:var(--poke-custom-player-button-size-mobile)!important;padding:0 10px!important;margin:0 6px 0 -1px!important;font-size:12px!important}.video-js .vjs-progress-control{left:var(--poke-custom-player-progress-left)!important;right:var(--poke-custom-player-progress-right)!important;top:var(--poke-custom-player-progress-top)!important}.video-js .vjs-progress-control:hover{top:calc(var(--poke-custom-player-progress-top) - 2px)!important}.video-js .vjs-time-control{height:var(--poke-custom-player-button-size-mobile)!important;font-size:12px!important}.video-js .vjs-picture-in-picture-control,.video-js .vjs-subs-caps-button,.video-js .vjs-audio-button,.video-js .vjs-playback-rate,.video-js .vjs-chapters-button,.video-js .vjs-descriptions-button,.video-js .vjs-captions-button{display:none!important}}`;
+  customVideoJsUI.id = "poke-custom-videojs-ui";
+  customVideoJsUI.textContent = `
+:root {
+  --poke-custom-player-accent-1: #ff0033;
+  --poke-custom-player-accent-2: #ff0a45;
+  --poke-custom-player-accent-3: #ff1d79;
+  --poke-custom-player-radius: 16px;
+  --poke-custom-player-text: rgba(255, 255, 255, 0.98);
+  --poke-custom-player-text-soft: rgba(255, 255, 255, 0.86);
+  --poke-custom-player-track: rgba(255, 255, 255, 0.34);
+  --poke-custom-player-loaded: rgba(255, 255, 255, 0.48);
+  --poke-custom-player-volume-track: rgba(255, 255, 255, 0.18);
+  --poke-custom-player-volume-level: rgba(255, 255, 255, 0.98);
+  --poke-custom-player-button-bg: rgba(0, 0, 0, 0.48);
+  --poke-custom-player-button-bg-hover: rgba(0, 0, 0, 0.64);
+  --poke-custom-player-button-border: rgba(255, 255, 255, 0.08);
+  --poke-custom-player-button-border-hover: rgba(255, 255, 255, 0.14);
+  --poke-custom-player-button-shadow: 0 8px 22px rgba(0, 0, 0, 0.34);
+  --poke-custom-player-title-bg: rgba(0, 0, 0, 0.58);
+  --poke-custom-player-title-bg-hover: rgba(0, 0, 0, 0.7);
+  --poke-custom-player-title-border: rgba(255, 255, 255, 0.1);
+  --poke-custom-player-title-border-hover: rgba(255, 255, 255, 0.16);
+  --poke-custom-player-title-shadow: 0 8px 22px rgba(0, 0, 0, 0.34);
+  --poke-custom-player-control-height: 92px;
+  --poke-custom-player-control-height-mobile: 78px;
+  --poke-custom-player-button-size: 42px;
+  --poke-custom-player-button-size-mobile: 36px;
+  --poke-custom-player-progress-left: 38px;
+  --poke-custom-player-progress-right: 38px;
+  --poke-custom-player-progress-top: 16px;
+  --poke-custom-player-description-bottom: calc(var(--poke-custom-player-control-height) - var(--poke-custom-player-progress-top) + 10px);
+  --poke-custom-player-description-bottom-mobile: calc(var(--poke-custom-player-control-height-mobile) - var(--poke-custom-player-progress-top) + 8px);
+}
 
-  document.head.appendChild(customVideoJsUI);
+.video-js,
+.video-js * {
+  font-family: "poketube flex", "PokeTube Flex", sans-serif !important;
+}
+
+.video-js .vjs-icon-placeholder,
+.video-js .vjs-icon-placeholder::before,
+.video-js .vjs-button > .vjs-icon-placeholder,
+.video-js .vjs-button > .vjs-icon-placeholder::before,
+.video-js .vjs-big-play-button .vjs-icon-placeholder,
+.video-js .vjs-big-play-button .vjs-icon-placeholder::before,
+.video-js [class^="vjs-icon-"],
+.video-js [class^="vjs-icon-"]::before,
+.video-js [class*=" vjs-icon-"],
+.video-js [class*=" vjs-icon-"]::before {
+  font-family: VideoJS !important;
+  font-weight: 400 !important;
+  font-style: normal !important;
+}
+
+.video-js,
+.video-js .vjs-poster,
+.video-js .vjs-poster img,
+.video-js .vjs-tech {
+  border-radius: var(--poke-custom-player-radius) !important;
+}
+
+.video-js.vjs-fullscreen,
+.video-js.vjs-fullscreen .vjs-poster,
+.video-js.vjs-fullscreen .vjs-poster img,
+.video-js.vjs-fullscreen .vjs-tech,
+.video-js.vjs-fullscreen .vjs-control-bar,
+.video-js:fullscreen,
+.video-js:fullscreen .vjs-poster,
+.video-js:fullscreen .vjs-poster img,
+.video-js:fullscreen .vjs-tech,
+.video-js:fullscreen .vjs-control-bar,
+.video-js:-webkit-full-screen,
+.video-js:-webkit-full-screen .vjs-poster,
+.video-js:-webkit-full-screen .vjs-poster img,
+.video-js:-webkit-full-screen .vjs-tech,
+.video-js:-webkit-full-screen .vjs-control-bar {
+  border-radius: 0 !important;
+}
+
+.video-js {
+  overflow: hidden !important;
+  background: #000 !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+.video-js.vjs-using-native-controls .vjs-control-bar,
+.video-js.vjs-using-native-controls .vjs-big-play-button,
+.video-js.vjs-using-native-controls .vjs-title-bar,
+.video-js.vjs-using-native-controls .vjs-loading-spinner {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.video-js .vjs-title-bar,
+.video-js .vjs-title-bar.vjs-hidden {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 8 !important;
+  display: block !important;
+  visibility: visible !important;
+  width: auto !important;
+  height: auto !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: var(--poke-custom-player-radius) !important;
+  box-shadow: none !important;
+  pointer-events: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+  transition: opacity 0.24s ease, transform 0.24s ease, visibility 0s linear 0s !important;
+}
+
+.video-js.vjs-fullscreen .vjs-title-bar,
+.video-js:fullscreen .vjs-title-bar,
+.video-js:-webkit-full-screen .vjs-title-bar {
+  border-radius: 0 !important;
+}
+
+.video-js.vjs-user-inactive.vjs-playing .vjs-title-bar,
+.video-js.vjs-user-inactive.vjs-playing .vjs-title-bar.vjs-hidden {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  transform: translateY(-8px) !important;
+  transition: opacity 0.24s ease, transform 0.24s ease, visibility 0s linear 0.24s !important;
+}
+
+.video-js.vjs-user-active .vjs-title-bar,
+.video-js.vjs-user-active .vjs-title-bar.vjs-hidden,
+.video-js.vjs-paused .vjs-title-bar,
+.video-js.vjs-paused .vjs-title-bar.vjs-hidden,
+.video-js.vjs-ended .vjs-title-bar,
+.video-js.vjs-ended .vjs-title-bar.vjs-hidden {
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: translateY(0) !important;
+}
+
+.video-js .vjs-title-bar-title,
+.video-js .vjs-title-bar-title.vjs-hidden {
+  position: absolute !important;
+  top: 18px !important;
+  left: 22px !important;
+  display: block !important;
+  visibility: visible !important;
+  width: fit-content !important;
+  max-width: min(82%, 920px) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  color: var(--poke-custom-player-text) !important;
+  font-size: 1.5em !important;
+  font-weight: 1000 !important;
+  font-stretch: ultra-expanded !important;
+  line-height: 1.08 !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.72) !important;
+  -webkit-text-stroke: 0.35px rgba(0, 0, 0, 0.35) !important;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  opacity: 1 !important;
+}
+
+.video-js .vjs-title-bar-description,
+.video-js .vjs-title-bar-description.vjs-hidden {
+  position: absolute !important;
+  right: var(--poke-custom-player-progress-right) !important;
+  bottom: var(--poke-custom-player-description-bottom) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  visibility: visible !important;
+  width: fit-content !important;
+  max-width: min(56%, 680px) !important;
+  min-height: 42px !important;
+  margin: 0 !important;
+  padding: 0.78em 1.08em !important;
+  border-radius: 999px !important;
+  color: var(--poke-custom-player-text) !important;
+  font-size: 0.95em !important;
+  font-weight: 790 !important;
+  font-stretch: semi-expanded !important;
+  line-height: 1.24 !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.86) !important;
+  background: var(--poke-custom-player-title-bg) !important;
+  border: 1px solid var(--poke-custom-player-title-border) !important;
+  box-shadow: var(--poke-custom-player-title-shadow) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(160%) !important;
+  backdrop-filter: blur(12px) saturate(160%) !important;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  opacity: 1 !important;
+  pointer-events: none !important;
+}
+
+.video-js .vjs-control-bar {
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  z-index: 9 !important;
+  width: 100% !important;
+  height: var(--poke-custom-player-control-height) !important;
+  display: flex !important;
+  align-items: flex-end !important;
+  gap: 8px !important;
+  padding: 38px 28px 14px !important;
+  box-sizing: border-box !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 0 var(--poke-custom-player-radius) var(--poke-custom-player-radius) !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+  pointer-events: auto !important;
+  transition: opacity 0.18s ease, transform 0.18s ease !important;
+}
+
+.video-js.vjs-controls-enabled .vjs-control-bar {
+  display: flex !important;
+}
+
+.video-js.vjs-controls-disabled .vjs-control-bar {
+  display: none !important;
+}
+
+.video-js.vjs-fullscreen .vjs-control-bar,
+.video-js:fullscreen .vjs-control-bar,
+.video-js:-webkit-full-screen .vjs-control-bar {
+  border-radius: 0 !important;
+}
+
+.video-js.vjs-user-inactive.vjs-playing .vjs-control-bar {
+  opacity: 0 !important;
+  transform: translateY(10px) !important;
+  transition: opacity 0.24s ease, transform 0.24s ease !important;
+}
+
+.video-js.vjs-user-active .vjs-control-bar,
+.video-js.vjs-paused .vjs-control-bar,
+.video-js.vjs-ended .vjs-control-bar {
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+}
+
+.video-js .vjs-control {
+  width: var(--poke-custom-player-button-size) !important;
+  height: var(--poke-custom-player-button-size) !important;
+  min-width: var(--poke-custom-player-button-size) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  color: var(--poke-custom-player-text) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.86) !important;
+  transition: background-color 0.14s ease, transform 0.12s ease, opacity 0.14s ease, border-color 0.14s ease !important;
+}
+
+.video-js .vjs-button,
+.video-js .vjs-picture-in-picture-control,
+.video-js .vjs-subs-caps-button,
+.video-js .vjs-audio-button,
+.video-js .vjs-playback-rate,
+.video-js .vjs-chapters-button,
+.video-js .vjs-descriptions-button,
+.video-js .vjs-captions-button,
+.video-js .vjs-subtitles-button,
+.video-js .vjs-quality-selector,
+.video-js .vjs-quality-menu-wrapper,
+.video-js .vjs-quality-menu-button,
+.video-js .vjs-quality-button,
+.video-js .vjs-resolution-button,
+.video-js .vjs-http-source-selector,
+.video-js .vjs-menu-button,
+.video-js .vjs-fullscreen-control,
+.video-js .vjs-skip-backward-5,
+.video-js .vjs-skip-backward-10,
+.video-js .vjs-skip-backward-30,
+.video-js .vjs-skip-forward-5,
+.video-js .vjs-skip-forward-10,
+.video-js .vjs-skip-forward-30 {
+  width: var(--poke-custom-player-button-size) !important;
+  height: var(--poke-custom-player-button-size) !important;
+  min-width: var(--poke-custom-player-button-size) !important;
+  cursor: pointer !important;
+  border-radius: 50% !important;
+  background: var(--poke-custom-player-button-bg) !important;
+  border: 1px solid var(--poke-custom-player-button-border) !important;
+  box-shadow: var(--poke-custom-player-button-shadow) !important;
+  color: var(--poke-custom-player-text) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.86) !important;
+}
+
+.video-js.vjs-workinghover .vjs-button:hover,
+.video-js.vjs-workinghover .vjs-picture-in-picture-control:hover,
+.video-js.vjs-workinghover .vjs-subs-caps-button:hover,
+.video-js.vjs-workinghover .vjs-audio-button:hover,
+.video-js.vjs-workinghover .vjs-playback-rate:hover,
+.video-js.vjs-workinghover .vjs-chapters-button:hover,
+.video-js.vjs-workinghover .vjs-descriptions-button:hover,
+.video-js.vjs-workinghover .vjs-captions-button:hover,
+.video-js.vjs-workinghover .vjs-subtitles-button:hover,
+.video-js.vjs-workinghover .vjs-quality-selector:hover,
+.video-js.vjs-workinghover .vjs-quality-menu-wrapper:hover,
+.video-js.vjs-workinghover .vjs-quality-menu-button:hover,
+.video-js.vjs-workinghover .vjs-quality-button:hover,
+.video-js.vjs-workinghover .vjs-resolution-button:hover,
+.video-js.vjs-workinghover .vjs-http-source-selector:hover,
+.video-js.vjs-workinghover .vjs-menu-button:hover,
+.video-js.vjs-workinghover .vjs-fullscreen-control:hover,
+.video-js.vjs-workinghover .vjs-skip-backward-5:hover,
+.video-js.vjs-workinghover .vjs-skip-backward-10:hover,
+.video-js.vjs-workinghover .vjs-skip-backward-30:hover,
+.video-js.vjs-workinghover .vjs-skip-forward-5:hover,
+.video-js.vjs-workinghover .vjs-skip-forward-10:hover,
+.video-js.vjs-workinghover .vjs-skip-forward-30:hover {
+  background: var(--poke-custom-player-button-bg-hover) !important;
+  border-color: var(--poke-custom-player-button-border-hover) !important;
+}
+
+.video-js:not(.vjs-workinghover) .vjs-button:hover,
+.video-js:not(.vjs-workinghover) .vjs-menu-button:hover,
+.video-js:not(.vjs-workinghover) .vjs-fullscreen-control:hover {
+  background: var(--poke-custom-player-button-bg) !important;
+  border-color: var(--poke-custom-player-button-border) !important;
+}
+
+.video-js .vjs-button:active,
+.video-js .vjs-menu-button.vjs-hover,
+.video-js .vjs-menu-button:focus-within,
+.video-js .vjs-button:focus-visible {
+  background: var(--poke-custom-player-button-bg-hover) !important;
+  border-color: var(--poke-custom-player-button-border-hover) !important;
+}
+
+.video-js .vjs-button:active {
+  transform: scale(0.94) !important;
+}
+
+.video-js .vjs-button:focus,
+.video-js .vjs-button:focus-visible {
+  outline: 0 !important;
+}
+
+.video-js .vjs-button:focus-visible {
+  box-shadow: 0 0 0 3px rgba(255, 0, 70, 0.24), var(--poke-custom-player-button-shadow) !important;
+}
+
+.video-js .vjs-control .vjs-icon-placeholder::before,
+.video-js .vjs-button > .vjs-icon-placeholder::before,
+.video-js .vjs-resolution-button .vjs-icon-placeholder::before,
+.video-js .vjs-quality-button .vjs-icon-placeholder::before,
+.video-js .vjs-quality-menu-button .vjs-icon-placeholder::before,
+.video-js .vjs-http-source-selector .vjs-icon-placeholder::before,
+.video-js .vjs-skip-backward-5 .vjs-icon-placeholder::before,
+.video-js .vjs-skip-backward-10 .vjs-icon-placeholder::before,
+.video-js .vjs-skip-backward-30 .vjs-icon-placeholder::before,
+.video-js .vjs-skip-forward-5 .vjs-icon-placeholder::before,
+.video-js .vjs-skip-forward-10 .vjs-icon-placeholder::before,
+.video-js .vjs-skip-forward-30 .vjs-icon-placeholder::before {
+  position: static !important;
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  font-family: VideoJS !important;
+  font-weight: 400 !important;
+  font-style: normal !important;
+  font-size: 24px !important;
+  line-height: var(--poke-custom-player-button-size) !important;
+  color: var(--poke-custom-player-text) !important;
+  text-align: center !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9) !important;
+}
+
+.video-js .vjs-play-control {
+  order: 10 !important;
+  margin-right: 6px !important;
+}
+
+.video-js .vjs-play-control .vjs-icon-placeholder::before {
+  font-size: 28px !important;
+}
+
+.video-js .vjs-volume-panel {
+  order: 20 !important;
+  width: auto !important;
+  min-width: var(--poke-custom-player-button-size) !important;
+  height: var(--poke-custom-player-button-size) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+.video-js.vjs-workinghover .vjs-volume-panel:hover,
+.video-js .vjs-volume-panel:focus-within,
+.video-js .vjs-volume-panel.vjs-slider-active {
+  background: var(--poke-custom-player-button-bg) !important;
+  border: 1px solid var(--poke-custom-player-button-border) !important;
+  box-shadow: var(--poke-custom-player-button-shadow) !important;
+}
+
+.video-js .vjs-volume-panel .vjs-mute-control {
+  width: var(--poke-custom-player-button-size) !important;
+  height: var(--poke-custom-player-button-size) !important;
+  min-width: var(--poke-custom-player-button-size) !important;
+  margin: 0 !important;
+  border-radius: 50% !important;
+  background: var(--poke-custom-player-button-bg) !important;
+  border: 1px solid var(--poke-custom-player-button-border) !important;
+  box-shadow: var(--poke-custom-player-button-shadow) !important;
+}
+
+.video-js.vjs-workinghover .vjs-volume-panel:hover .vjs-mute-control,
+.video-js .vjs-volume-panel:focus-within .vjs-mute-control,
+.video-js .vjs-volume-panel.vjs-slider-active .vjs-mute-control {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.video-js .vjs-volume-control,
+.video-js .vjs-volume-control.vjs-control,
+.video-js .vjs-volume-horizontal {
+  width: 0 !important;
+  min-width: 0 !important;
+  height: var(--poke-custom-player-button-size) !important;
+  opacity: 0 !important;
+  overflow: hidden !important;
+  display: flex !important;
+  align-items: center !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  transition: width 0.18s ease, min-width 0.18s ease, opacity 0.18s ease !important;
+}
+
+.video-js.vjs-workinghover .vjs-volume-panel:hover .vjs-volume-control,
+.video-js.vjs-workinghover .vjs-volume-panel:hover .vjs-volume-horizontal,
+.video-js .vjs-volume-panel:focus-within .vjs-volume-control,
+.video-js .vjs-volume-panel:focus-within .vjs-volume-horizontal,
+.video-js .vjs-volume-panel.vjs-slider-active .vjs-volume-control,
+.video-js .vjs-volume-panel.vjs-slider-active .vjs-volume-horizontal {
+  width: 82px !important;
+  min-width: 82px !important;
+  opacity: 1 !important;
+}
+
+.video-js .vjs-volume-control .vjs-mouse-display,
+.video-js .vjs-volume-control .vjs-time-tooltip,
+.video-js .vjs-volume-control .vjs-volume-tooltip,
+.video-js .vjs-volume-bar .vjs-mouse-display,
+.video-js .vjs-volume-bar .vjs-time-tooltip,
+.video-js .vjs-volume-bar .vjs-volume-tooltip,
+.video-js .vjs-volume-panel .vjs-mouse-display,
+.video-js .vjs-volume-panel .vjs-time-tooltip,
+.video-js .vjs-volume-panel .vjs-volume-tooltip {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  pointer-events: none !important;
+}
+
+.video-js .vjs-volume-bar,
+.video-js .vjs-volume-bar.vjs-slider,
+.video-js .vjs-volume-bar.vjs-slider-horizontal {
+  position: relative !important;
+  width: 66px !important;
+  height: 5px !important;
+  margin: 0 12px 0 2px !important;
+  border-radius: 999px !important;
+  background: var(--poke-custom-player-volume-track) !important;
+  border: 0 !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), 0 1px 5px rgba(0, 0, 0, 0.42) !important;
+  overflow: visible !important;
+}
+
+.video-js .vjs-volume-level,
+.video-js .vjs-volume-bar .vjs-volume-level,
+.video-js .vjs-volume-bar.vjs-slider-horizontal .vjs-volume-level {
+  position: absolute !important;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  left: 0 !important;
+  top: 0 !important;
+  bottom: auto !important;
+  height: 5px !important;
+  min-width: 3px !important;
+  border-radius: 999px !important;
+  background: var(--poke-custom-player-volume-level) !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 1px 5px rgba(0, 0, 0, 0.42) !important;
+  z-index: 2 !important;
+  overflow: visible !important;
+}
+
+.video-js .vjs-volume-level::before,
+.video-js .vjs-volume-bar .vjs-volume-level::before,
+.video-js .vjs-volume-bar.vjs-slider-horizontal .vjs-volume-level::before {
+  content: "" !important;
+  position: absolute !important;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  right: -7px !important;
+  top: 50% !important;
+  width: 14px !important;
+  height: 14px !important;
+  margin-top: -7px !important;
+  border-radius: 50% !important;
+  background: var(--poke-custom-player-volume-level) !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2), 0 2px 6px rgba(0, 0, 0, 0.55) !important;
+  z-index: 3 !important;
+}
+
+.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle,
+.video-js .vjs-control-bar .vjs-player-time-toggle {
+  order: 30 !important;
+  width: auto !important;
+  min-width: 0 !important;
+  height: var(--poke-custom-player-button-size) !important;
+  padding: 0 13px !important;
+  margin: 0 7px 0 -1px !important;
+  border: 1px solid var(--poke-custom-player-button-border) !important;
+  border-radius: 999px !important;
+  background: var(--poke-custom-player-button-bg) !important;
+  box-shadow: var(--poke-custom-player-button-shadow) !important;
+  color: var(--poke-custom-player-text) !important;
+  font-family: "poketube flex", "PokeTube Flex", sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9) !important;
+  transform: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  white-space: nowrap !important;
+}
+
+.video-js.vjs-has-player-time-toggle .vjs-control-bar .vjs-player-time-toggle {
+  display: inline-flex !important;
+}
+
+.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle .vjs-icon-placeholder,
+.video-js .vjs-control-bar .vjs-player-time-toggle .vjs-icon-placeholder,
+.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle::before,
+.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle::after,
+.video-js .vjs-control-bar .vjs-player-time-toggle::before,
+.video-js .vjs-control-bar .vjs-player-time-toggle::after {
+  display: none !important;
+  content: none !important;
+}
+
+.video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle .vjs-control-text,
+.video-js .vjs-control-bar .vjs-player-time-toggle .vjs-control-text {
+  position: static !important;
+  width: auto !important;
+  height: auto !important;
+  clip: auto !important;
+  clip-path: none !important;
+  overflow: visible !important;
+  white-space: nowrap !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  color: inherit !important;
+  font: inherit !important;
+}
+
+.video-js .vjs-progress-control {
+  position: absolute !important;
+  left: var(--poke-custom-player-progress-left) !important;
+  right: var(--poke-custom-player-progress-right) !important;
+  top: var(--poke-custom-player-progress-top) !important;
+  width: auto !important;
+  height: 18px !important;
+  min-width: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  cursor: pointer !important;
+  touch-action: none !important;
+  z-index: 5 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.video-js .vjs-progress-control:hover {
+  height: 22px !important;
+  top: calc(var(--poke-custom-player-progress-top) - 2px) !important;
+}
+
+.video-js .vjs-progress-control .vjs-progress-holder {
+  width: 100% !important;
+  height: 4px !important;
+  margin: 0 !important;
+  border-radius: 999px !important;
+  background: var(--poke-custom-player-track) !important;
+  border: 0 !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.34) !important;
+  overflow: visible !important;
+  transition: height 0.12s ease !important;
+}
+
+.video-js .vjs-progress-control:hover .vjs-progress-holder {
+  height: 6px !important;
+}
+
+.video-js .vjs-load-progress,
+.video-js .vjs-load-progress div {
+  height: 100% !important;
+  border-radius: 999px !important;
+  background: var(--poke-custom-player-loaded) !important;
+}
+
+.video-js .vjs-play-progress {
+  height: 100% !important;
+  border-radius: 999px !important;
+  background: linear-gradient(to right, var(--poke-custom-player-accent-1), var(--poke-custom-player-accent-2), var(--poke-custom-player-accent-3)) !important;
+}
+
+.video-js .vjs-play-progress::before {
+  content: "" !important;
+  position: absolute !important;
+  right: -6px !important;
+  top: 50% !important;
+  width: 13px !important;
+  height: 13px !important;
+  margin-top: -6.5px !important;
+  border-radius: 50% !important;
+  background: var(--poke-custom-player-accent-2) !important;
+  box-shadow: 0 0 0 1px rgba(255, 0, 51, 0.2), 0 1px 6px rgba(0, 0, 0, 0.45) !important;
+  opacity: 0 !important;
+  transform: scale(0.72) !important;
+  transition: opacity 0.12s ease, transform 0.12s ease !important;
+}
+
+.video-js .vjs-progress-control:hover .vjs-play-progress::before,
+.video-js.vjs-seeking .vjs-play-progress::before,
+.video-js.vjs-scrubbing .vjs-play-progress::before {
+  opacity: 1 !important;
+  transform: scale(1) !important;
+}
+
+.video-js .vjs-progress-control .vjs-slider-handle {
+  display: none !important;
+}
+
+.video-js .vjs-progress-control .vjs-mouse-display,
+.video-js .vjs-progress-control .vjs-time-tooltip,
+.video-js .vjs-play-progress .vjs-time-tooltip {
+  font-family: "poketube flex", "PokeTube Flex", sans-serif !important;
+}
+
+.video-js .vjs-progress-control .vjs-mouse-display .vjs-time-tooltip,
+.video-js .vjs-play-progress .vjs-time-tooltip {
+  bottom: 22px !important;
+  padding: 5px 8px !important;
+  border-radius: 4px !important;
+  background: rgba(20, 20, 20, 0.96) !important;
+  color: var(--poke-custom-player-text) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  text-shadow: none !important;
+}
+
+.video-js .vjs-current-time,
+.video-js .vjs-duration,
+.video-js .vjs-time-divider,
+.video-js .vjs-current-time-display,
+.video-js .vjs-duration-display,
+.video-js .vjs-remaining-time {
+  display: none !important;
+}
+
+.video-js .vjs-time-control {
+  width: auto !important;
+  min-width: 0 !important;
+  height: var(--poke-custom-player-button-size) !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: var(--poke-custom-player-text) !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9) !important;
+}
+
+.video-js .vjs-spacer,
+.video-js .vjs-custom-control-spacer {
+  order: 800 !important;
+  display: block !important;
+  flex: 1 1 auto !important;
+}
+
+.video-js .vjs-picture-in-picture-control,
+.video-js .vjs-subs-caps-button,
+.video-js .vjs-audio-button,
+.video-js .vjs-playback-rate,
+.video-js .vjs-chapters-button,
+.video-js .vjs-descriptions-button,
+.video-js .vjs-captions-button,
+.video-js .vjs-subtitles-button,
+.video-js .vjs-quality-selector,
+.video-js .vjs-quality-menu-wrapper,
+.video-js .vjs-quality-menu-button,
+.video-js .vjs-quality-button,
+.video-js .vjs-resolution-button,
+.video-js .vjs-http-source-selector,
+.video-js .vjs-menu-button {
+  order: 900 !important;
+}
+
+.video-js .vjs-fullscreen-control {
+  order: 950 !important;
+}
+
+.video-js .vjs-menu-button-popup .vjs-menu {
+  bottom: calc(var(--poke-custom-player-button-size) + 10px + env(safe-area-inset-bottom)) !important;
+}
+
+.video-js .vjs-menu,
+.video-js .vjs-menu-content {
+  pointer-events: auto !important;
+}
+
+.video-js .vjs-menu-button.vjs-hover .vjs-menu,
+.video-js .vjs-menu-button:focus-within .vjs-menu,
+.video-js .vjs-menu-button.vjs-lock-showing .vjs-menu {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.video-js .vjs-menu-content {
+  max-height: min(52vh, 360px) !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  -webkit-overflow-scrolling: touch !important;
+  border-radius: 10px !important;
+  background: rgba(28, 28, 28, 0.96) !important;
+  color: var(--poke-custom-player-text) !important;
+  font-family: "poketube flex", "PokeTube Flex", sans-serif !important;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55) !important;
+}
+
+.video-js .vjs-menu li,
+.video-js .vjs-menu-item {
+  color: var(--poke-custom-player-text) !important;
+  font-family: "poketube flex", "PokeTube Flex", sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 650 !important;
+  text-transform: none !important;
+}
+
+.video-js .vjs-menu li.vjs-selected,
+.video-js .vjs-menu li:hover,
+.video-js .vjs-menu-item.vjs-selected,
+.video-js .vjs-menu-item:hover {
+  background: rgba(255, 255, 255, 0.16) !important;
+}
+
+.video-js .vjs-big-play-button {
+  width: 72px !important;
+  height: 52px !important;
+  margin-left: -36px !important;
+  margin-top: -26px !important;
+  border: 0 !important;
+  border-radius: 14px !important;
+  background: rgba(0, 0, 0, 0.72) !important;
+  box-shadow: none !important;
+  color: var(--poke-custom-player-text) !important;
+  transition: background-color 0.15s ease, transform 0.12s ease !important;
+}
+
+.video-js.vjs-workinghover:hover .vjs-big-play-button,
+.video-js .vjs-big-play-button:focus {
+  background: rgba(0, 0, 0, 0.86) !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.video-js .vjs-big-play-button:active {
+  transform: scale(0.96) !important;
+}
+
+.video-js .vjs-big-play-button .vjs-icon-placeholder::before {
+  font-family: VideoJS !important;
+  font-size: 42px !important;
+  line-height: 52px !important;
+  color: var(--poke-custom-player-text) !important;
+}
+
+.video-js .vjs-loading-spinner {
+  border-color: rgba(255, 255, 255, 0.28) !important;
+}
+
+.video-js .vjs-error-display,
+.video-js .vjs-modal-dialog {
+  background: rgba(0, 0, 0, 0.78) !important;
+  color: var(--poke-custom-player-text) !important;
+  font-family: "poketube flex", "PokeTube Flex", sans-serif !important;
+}
+
+.video-js .vjs-modal-dialog-content {
+  color: var(--poke-custom-player-text) !important;
+  font-family: "poketube flex", "PokeTube Flex", sans-serif !important;
+}
+
+.video-js .vjs-text-track-display,
+.video-js .vjs-text-track-cue,
+.video-js .vjs-text-track-cue * {
+  font-family: "poketube flex", "PokeTube Flex", sans-serif !important;
+}
+
+.video-js.vjs-touch-enabled,
+.video-js.vjs-mobile-touch-tuned,
+.video-js.vjs-device-android,
+.video-js.vjs-device-iphone,
+.video-js.vjs-device-ipad,
+.video-js.vjs-device-ios,
+.video-js.vjs-device-smart-tv,
+.video-js.vjs-device-tizen,
+.video-js.vjs-device-webos,
+.video-js.vjs-device-chromecast-receiver {
+  touch-action: manipulation !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+
+.video-js.vjs-touch-enabled .vjs-tech,
+.video-js.vjs-mobile-touch-tuned .vjs-tech,
+.video-js.vjs-device-android .vjs-tech,
+.video-js.vjs-device-iphone .vjs-tech,
+.video-js.vjs-device-ipad .vjs-tech,
+.video-js.vjs-device-ios .vjs-tech {
+  touch-action: manipulation !important;
+}
+
+.video-js.vjs-touch-enabled .vjs-control-bar,
+.video-js.vjs-mobile-touch-tuned .vjs-control-bar,
+.video-js.vjs-device-android .vjs-control-bar,
+.video-js.vjs-device-iphone .vjs-control-bar,
+.video-js.vjs-device-ipad .vjs-control-bar,
+.video-js.vjs-device-ios .vjs-control-bar {
+  padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
+}
+
+.video-js.vjs-touch-enabled .vjs-control,
+.video-js.vjs-touch-enabled .vjs-button,
+.video-js.vjs-mobile-touch-tuned .vjs-control,
+.video-js.vjs-mobile-touch-tuned .vjs-button,
+.video-js.vjs-device-android .vjs-control,
+.video-js.vjs-device-android .vjs-button,
+.video-js.vjs-device-iphone .vjs-control,
+.video-js.vjs-device-iphone .vjs-button,
+.video-js.vjs-device-ipad .vjs-control,
+.video-js.vjs-device-ipad .vjs-button,
+.video-js.vjs-device-ios .vjs-control,
+.video-js.vjs-device-ios .vjs-button {
+  touch-action: manipulation !important;
+  -webkit-touch-callout: none !important;
+}
+
+.video-js.vjs-touch-enabled .vjs-progress-control,
+.video-js.vjs-mobile-touch-tuned .vjs-progress-control,
+.video-js.vjs-device-android .vjs-progress-control,
+.video-js.vjs-device-iphone .vjs-progress-control,
+.video-js.vjs-device-ipad .vjs-progress-control,
+.video-js.vjs-device-ios .vjs-progress-control {
+  height: 30px !important;
+  top: calc(var(--poke-custom-player-progress-top) - 6px) !important;
+  align-items: center !important;
+}
+
+.video-js.vjs-touch-enabled .vjs-progress-control .vjs-progress-holder,
+.video-js.vjs-mobile-touch-tuned .vjs-progress-control .vjs-progress-holder,
+.video-js.vjs-device-android .vjs-progress-control .vjs-progress-holder,
+.video-js.vjs-device-iphone .vjs-progress-control .vjs-progress-holder,
+.video-js.vjs-device-ipad .vjs-progress-control .vjs-progress-holder,
+.video-js.vjs-device-ios .vjs-progress-control .vjs-progress-holder {
+  height: 6px !important;
+}
+
+.video-js.vjs-touch-enabled .vjs-play-progress::before,
+.video-js.vjs-mobile-touch-tuned .vjs-play-progress::before,
+.video-js.vjs-device-android .vjs-play-progress::before,
+.video-js.vjs-device-iphone .vjs-play-progress::before,
+.video-js.vjs-device-ipad .vjs-play-progress::before,
+.video-js.vjs-device-ios .vjs-play-progress::before {
+  opacity: 1 !important;
+  transform: scale(1) !important;
+}
+
+.video-js.vjs-device-iphone .vjs-picture-in-picture-control,
+.video-js.vjs-device-ios .vjs-picture-in-picture-control {
+  display: none !important;
+}
+
+.video-js.vjs-device-smart-tv .vjs-control,
+.video-js.vjs-device-smart-tv .vjs-button,
+.video-js.vjs-device-tizen .vjs-control,
+.video-js.vjs-device-tizen .vjs-button,
+.video-js.vjs-device-webos .vjs-control,
+.video-js.vjs-device-webos .vjs-button,
+.video-js.vjs-device-chromecast-receiver .vjs-control,
+.video-js.vjs-device-chromecast-receiver .vjs-button {
+  width: 48px !important;
+  height: 48px !important;
+  min-width: 48px !important;
+}
+
+.video-js.vjs-device-smart-tv .vjs-control .vjs-icon-placeholder::before,
+.video-js.vjs-device-smart-tv .vjs-button > .vjs-icon-placeholder::before,
+.video-js.vjs-device-tizen .vjs-control .vjs-icon-placeholder::before,
+.video-js.vjs-device-tizen .vjs-button > .vjs-icon-placeholder::before,
+.video-js.vjs-device-webos .vjs-control .vjs-icon-placeholder::before,
+.video-js.vjs-device-webos .vjs-button > .vjs-icon-placeholder::before,
+.video-js.vjs-device-chromecast-receiver .vjs-control .vjs-icon-placeholder::before,
+.video-js.vjs-device-chromecast-receiver .vjs-button > .vjs-icon-placeholder::before {
+  line-height: 48px !important;
+}
+
+.video-js.vjs-layout-tiny,
+.video-js.vjs-layout-x-small {
+  --poke-custom-player-control-height-mobile: 72px;
+  --poke-custom-player-button-size-mobile: 34px;
+  --poke-custom-player-progress-left: 10px;
+  --poke-custom-player-progress-right: 10px;
+}
+
+.video-js.vjs-layout-tiny .vjs-title-bar-description,
+.video-js.vjs-layout-x-small .vjs-title-bar-description {
+  display: none !important;
+}
+
+.video-js.vjs-layout-tiny .vjs-control-bar,
+.video-js.vjs-layout-x-small .vjs-control-bar {
+  gap: 5px !important;
+  padding-left: 8px !important;
+  padding-right: 8px !important;
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+  scrollbar-width: none !important;
+}
+
+.video-js.vjs-layout-tiny .vjs-control-bar::-webkit-scrollbar,
+.video-js.vjs-layout-x-small .vjs-control-bar::-webkit-scrollbar {
+  display: none !important;
+}
+
+@supports (-webkit-touch-callout: none) {
+  .video-js.vjs-device-iphone,
+  .video-js.vjs-device-ipad,
+  .video-js.vjs-device-ios {
+    --poke-custom-player-button-bg: rgba(0, 0, 0, 0.56);
+    --poke-custom-player-button-bg-hover: rgba(0, 0, 0, 0.7);
+  }
+
+  .video-js.vjs-device-iphone .vjs-control-bar,
+  .video-js.vjs-device-ipad .vjs-control-bar,
+  .video-js.vjs-device-ios .vjs-control-bar {
+    transform: translateZ(0) !important;
+    -webkit-transform: translateZ(0) !important;
+  }
+
+  .video-js.vjs-device-iphone .vjs-progress-control,
+  .video-js.vjs-device-ipad .vjs-progress-control,
+  .video-js.vjs-device-ios .vjs-progress-control {
+    touch-action: pan-y !important;
+  }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .video-js .vjs-title-bar-description {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background: rgba(18, 18, 18, 0.72) !important;
+    border-color: rgba(255, 255, 255, 0.18) !important;
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .video-js .vjs-control-bar {
+    gap: 7px !important;
+  }
+
+  .video-js .vjs-control,
+  .video-js .vjs-button {
+    touch-action: manipulation !important;
+  }
+
+  .video-js .vjs-progress-control {
+    height: 30px !important;
+    top: calc(var(--poke-custom-player-progress-top) - 6px) !important;
+  }
+
+  .video-js .vjs-progress-control .vjs-progress-holder {
+    height: 6px !important;
+  }
+
+  .video-js .vjs-play-progress::before {
+    opacity: 1 !important;
+    transform: scale(1) !important;
+  }
+
+  .video-js .vjs-menu-content {
+    max-height: 52vh !important;
+  }
+
+  .video-js .vjs-button:hover,
+  .video-js .vjs-menu-button:hover,
+  .video-js .vjs-fullscreen-control:hover {
+    background: var(--poke-custom-player-button-bg) !important;
+    border-color: var(--poke-custom-player-button-border) !important;
+  }
+
+  .video-js .vjs-button:active,
+  .video-js .vjs-menu-button.vjs-hover,
+  .video-js .vjs-menu-button:focus-within {
+    background: var(--poke-custom-player-button-bg-hover) !important;
+    border-color: var(--poke-custom-player-button-border-hover) !important;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --poke-custom-player-progress-left: 14px;
+    --poke-custom-player-progress-right: 14px;
+    --poke-custom-player-progress-top: 14px;
+  }
+
+  .video-js .vjs-title-bar-title {
+    top: 14px !important;
+    left: 14px !important;
+    max-width: 92% !important;
+    font-size: 1.12em !important;
+  }
+
+  .video-js .vjs-title-bar-description {
+    right: var(--poke-custom-player-progress-right) !important;
+    bottom: var(--poke-custom-player-description-bottom-mobile) !important;
+    max-width: min(76%, 460px) !important;
+    min-height: 36px !important;
+    padding: 0.62em 0.9em !important;
+    font-size: 0.8em !important;
+  }
+
+  .video-js .vjs-control-bar {
+    height: var(--poke-custom-player-control-height-mobile) !important;
+    gap: 6px !important;
+    padding: 34px 12px 9px !important;
+  }
+
+  .video-js .vjs-control,
+  .video-js .vjs-button,
+  .video-js .vjs-volume-panel .vjs-mute-control,
+  .video-js .vjs-picture-in-picture-control,
+  .video-js .vjs-subs-caps-button,
+  .video-js .vjs-audio-button,
+  .video-js .vjs-playback-rate,
+  .video-js .vjs-chapters-button,
+  .video-js .vjs-descriptions-button,
+  .video-js .vjs-captions-button,
+  .video-js .vjs-subtitles-button,
+  .video-js .vjs-quality-selector,
+  .video-js .vjs-quality-menu-wrapper,
+  .video-js .vjs-quality-menu-button,
+  .video-js .vjs-quality-button,
+  .video-js .vjs-resolution-button,
+  .video-js .vjs-http-source-selector,
+  .video-js .vjs-menu-button,
+  .video-js .vjs-fullscreen-control,
+  .video-js .vjs-skip-backward-5,
+  .video-js .vjs-skip-backward-10,
+  .video-js .vjs-skip-backward-30,
+  .video-js .vjs-skip-forward-5,
+  .video-js .vjs-skip-forward-10,
+  .video-js .vjs-skip-forward-30 {
+    width: var(--poke-custom-player-button-size-mobile) !important;
+    height: var(--poke-custom-player-button-size-mobile) !important;
+    min-width: var(--poke-custom-player-button-size-mobile) !important;
+  }
+
+  .video-js .vjs-control .vjs-icon-placeholder::before,
+  .video-js .vjs-button > .vjs-icon-placeholder::before,
+  .video-js .vjs-resolution-button .vjs-icon-placeholder::before,
+  .video-js .vjs-quality-button .vjs-icon-placeholder::before,
+  .video-js .vjs-quality-menu-button .vjs-icon-placeholder::before,
+  .video-js .vjs-http-source-selector .vjs-icon-placeholder::before,
+  .video-js .vjs-skip-backward-5 .vjs-icon-placeholder::before,
+  .video-js .vjs-skip-backward-10 .vjs-icon-placeholder::before,
+  .video-js .vjs-skip-backward-30 .vjs-icon-placeholder::before,
+  .video-js .vjs-skip-forward-5 .vjs-icon-placeholder::before,
+  .video-js .vjs-skip-forward-10 .vjs-icon-placeholder::before,
+  .video-js .vjs-skip-forward-30 .vjs-icon-placeholder::before {
+    font-size: 20px !important;
+    line-height: var(--poke-custom-player-button-size-mobile) !important;
+  }
+
+  .video-js .vjs-play-control {
+    margin-right: 4px !important;
+  }
+
+  .video-js .vjs-play-control .vjs-icon-placeholder::before {
+    font-size: 24px !important;
+  }
+
+  .video-js .vjs-volume-panel {
+    min-width: var(--poke-custom-player-button-size-mobile) !important;
+    height: var(--poke-custom-player-button-size-mobile) !important;
+    margin-right: 0 !important;
+  }
+
+  .video-js .vjs-volume-control,
+  .video-js .vjs-volume-control.vjs-control,
+  .video-js .vjs-volume-horizontal {
+    display: none !important;
+  }
+
+  .video-js .vjs-control-bar .vjs-button.vjs-player-time-toggle,
+  .video-js .vjs-control-bar .vjs-player-time-toggle {
+    height: var(--poke-custom-player-button-size-mobile) !important;
+    padding: 0 10px !important;
+    margin: 0 6px 0 -1px !important;
+    font-size: 12px !important;
+  }
+
+  .video-js .vjs-time-control {
+    height: var(--poke-custom-player-button-size-mobile) !important;
+    font-size: 12px !important;
+  }
+
+  .video-js.vjs-touch-enabled .vjs-control-bar,
+  .video-js.vjs-mobile-touch-tuned .vjs-control-bar,
+  .video-js.vjs-device-android .vjs-control-bar,
+  .video-js.vjs-device-iphone .vjs-control-bar,
+  .video-js.vjs-device-ipad .vjs-control-bar,
+  .video-js.vjs-device-ios .vjs-control-bar {
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    scrollbar-width: none !important;
+    white-space: nowrap !important;
+  }
+
+  .video-js.vjs-touch-enabled .vjs-control-bar::-webkit-scrollbar,
+  .video-js.vjs-mobile-touch-tuned .vjs-control-bar::-webkit-scrollbar,
+  .video-js.vjs-device-android .vjs-control-bar::-webkit-scrollbar,
+  .video-js.vjs-device-iphone .vjs-control-bar::-webkit-scrollbar,
+  .video-js.vjs-device-ipad .vjs-control-bar::-webkit-scrollbar,
+  .video-js.vjs-device-ios .vjs-control-bar::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  .video-js.vjs-touch-enabled .vjs-picture-in-picture-control,
+  .video-js.vjs-touch-enabled .vjs-subs-caps-button,
+  .video-js.vjs-touch-enabled .vjs-audio-button,
+  .video-js.vjs-touch-enabled .vjs-playback-rate,
+  .video-js.vjs-touch-enabled .vjs-chapters-button,
+  .video-js.vjs-touch-enabled .vjs-descriptions-button,
+  .video-js.vjs-touch-enabled .vjs-captions-button,
+  .video-js.vjs-touch-enabled .vjs-subtitles-button,
+  .video-js.vjs-touch-enabled .vjs-resolution-button,
+  .video-js.vjs-touch-enabled .vjs-quality-button,
+  .video-js.vjs-touch-enabled .vjs-quality-menu-button,
+  .video-js.vjs-touch-enabled .vjs-http-source-selector,
+  .video-js.vjs-mobile-touch-tuned .vjs-picture-in-picture-control,
+  .video-js.vjs-mobile-touch-tuned .vjs-subs-caps-button,
+  .video-js.vjs-mobile-touch-tuned .vjs-audio-button,
+  .video-js.vjs-mobile-touch-tuned .vjs-playback-rate,
+  .video-js.vjs-mobile-touch-tuned .vjs-chapters-button,
+  .video-js.vjs-mobile-touch-tuned .vjs-descriptions-button,
+  .video-js.vjs-mobile-touch-tuned .vjs-captions-button,
+  .video-js.vjs-mobile-touch-tuned .vjs-subtitles-button,
+  .video-js.vjs-mobile-touch-tuned .vjs-resolution-button,
+  .video-js.vjs-mobile-touch-tuned .vjs-quality-button,
+  .video-js.vjs-mobile-touch-tuned .vjs-quality-menu-button,
+  .video-js.vjs-mobile-touch-tuned .vjs-http-source-selector,
+  .video-js.vjs-device-android .vjs-picture-in-picture-control,
+  .video-js.vjs-device-android .vjs-subs-caps-button,
+  .video-js.vjs-device-android .vjs-audio-button,
+  .video-js.vjs-device-android .vjs-playback-rate,
+  .video-js.vjs-device-android .vjs-chapters-button,
+  .video-js.vjs-device-android .vjs-descriptions-button,
+  .video-js.vjs-device-android .vjs-captions-button,
+  .video-js.vjs-device-android .vjs-subtitles-button,
+  .video-js.vjs-device-android .vjs-resolution-button,
+  .video-js.vjs-device-android .vjs-quality-button,
+  .video-js.vjs-device-android .vjs-quality-menu-button,
+  .video-js.vjs-device-android .vjs-http-source-selector,
+  .video-js.vjs-device-ipad .vjs-picture-in-picture-control,
+  .video-js.vjs-device-ipad .vjs-subs-caps-button,
+  .video-js.vjs-device-ipad .vjs-audio-button,
+  .video-js.vjs-device-ipad .vjs-playback-rate,
+  .video-js.vjs-device-ipad .vjs-chapters-button,
+  .video-js.vjs-device-ipad .vjs-descriptions-button,
+  .video-js.vjs-device-ipad .vjs-captions-button,
+  .video-js.vjs-device-ipad .vjs-subtitles-button,
+  .video-js.vjs-device-ipad .vjs-resolution-button,
+  .video-js.vjs-device-ipad .vjs-quality-button,
+  .video-js.vjs-device-ipad .vjs-quality-menu-button,
+  .video-js.vjs-device-ipad .vjs-http-source-selector,
+  .video-js.vjs-device-ios .vjs-subs-caps-button,
+  .video-js.vjs-device-ios .vjs-audio-button,
+  .video-js.vjs-device-ios .vjs-playback-rate,
+  .video-js.vjs-device-ios .vjs-chapters-button,
+  .video-js.vjs-device-ios .vjs-descriptions-button,
+  .video-js.vjs-device-ios .vjs-captions-button,
+  .video-js.vjs-device-ios .vjs-subtitles-button,
+  .video-js.vjs-device-ios .vjs-resolution-button,
+  .video-js.vjs-device-ios .vjs-quality-button,
+  .video-js.vjs-device-ios .vjs-quality-menu-button,
+  .video-js.vjs-device-ios .vjs-http-source-selector {
+    display: flex !important;
+  }
+
+  .video-js.vjs-device-iphone .vjs-picture-in-picture-control,
+  .video-js.vjs-device-ios .vjs-picture-in-picture-control {
+    display: none !important;
+  }
+
+  .video-js.vjs-touch-enabled .vjs-spacer,
+  .video-js.vjs-mobile-touch-tuned .vjs-spacer,
+  .video-js.vjs-device-android .vjs-spacer,
+  .video-js.vjs-device-iphone .vjs-spacer,
+  .video-js.vjs-device-ipad .vjs-spacer,
+  .video-js.vjs-device-ios .vjs-spacer {
+    flex: 1 0 10px !important;
+    min-width: 10px !important;
+  }
+
+  .video-js.vjs-touch-enabled .vjs-menu-button-popup .vjs-menu,
+  .video-js.vjs-mobile-touch-tuned .vjs-menu-button-popup .vjs-menu,
+  .video-js.vjs-device-android .vjs-menu-button-popup .vjs-menu,
+  .video-js.vjs-device-iphone .vjs-menu-button-popup .vjs-menu,
+  .video-js.vjs-device-ipad .vjs-menu-button-popup .vjs-menu,
+  .video-js.vjs-device-ios .vjs-menu-button-popup .vjs-menu {
+    bottom: calc(var(--poke-custom-player-button-size-mobile) + 10px + env(safe-area-inset-bottom)) !important;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 480px) {
+  .video-js.vjs-touch-enabled,
+  .video-js.vjs-mobile-touch-tuned,
+  .video-js.vjs-device-android,
+  .video-js.vjs-device-iphone,
+  .video-js.vjs-device-ipad,
+  .video-js.vjs-device-ios {
+    --poke-custom-player-control-height-mobile: 66px;
+    --poke-custom-player-progress-top: 10px;
+  }
+
+  .video-js.vjs-touch-enabled .vjs-title-bar-title,
+  .video-js.vjs-mobile-touch-tuned .vjs-title-bar-title,
+  .video-js.vjs-device-android .vjs-title-bar-title,
+  .video-js.vjs-device-iphone .vjs-title-bar-title,
+  .video-js.vjs-device-ipad .vjs-title-bar-title,
+  .video-js.vjs-device-ios .vjs-title-bar-title {
+    top: 10px !important;
+    font-size: 1em !important;
+  }
+
+  .video-js.vjs-touch-enabled .vjs-title-bar-description,
+  .video-js.vjs-mobile-touch-tuned .vjs-title-bar-description,
+  .video-js.vjs-device-android .vjs-title-bar-description,
+  .video-js.vjs-device-iphone .vjs-title-bar-description,
+  .video-js.vjs-device-ipad .vjs-title-bar-description,
+  .video-js.vjs-device-ios .vjs-title-bar-description {
+    display: none !important;
+  }
+
+  .video-js.vjs-touch-enabled .vjs-control-bar,
+  .video-js.vjs-mobile-touch-tuned .vjs-control-bar,
+  .video-js.vjs-device-android .vjs-control-bar,
+  .video-js.vjs-device-iphone .vjs-control-bar,
+  .video-js.vjs-device-ipad .vjs-control-bar,
+  .video-js.vjs-device-ios .vjs-control-bar {
+    height: var(--poke-custom-player-control-height-mobile) !important;
+    padding-top: 28px !important;
+    padding-bottom: max(7px, env(safe-area-inset-bottom)) !important;
+  }
+}
+`;
+
+  if (!customVideoJsUI.parentNode) {
+    document.head.appendChild(customVideoJsUI);
+  }
+
+  const tunePokeVideoJsPlayer = (player) => {
+    if (!player || !player.classList) {
+      return;
+    }
+
+    const navigatorValue = window.navigator || {};
+    const userAgent = navigatorValue.userAgent || "";
+    const platform = navigatorValue.platform || "";
+    const maxTouchPoints = navigatorValue.maxTouchPoints || 0;
+    const hasCoarsePointer = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+    const hasTouch = maxTouchPoints > 0 || "ontouchstart" in window || hasCoarsePointer;
+    const isAndroid = /Android/i.test(userAgent);
+    const isIPhone = /iPhone|iPod/i.test(userAgent);
+    const isIPad = /iPad/i.test(userAgent) || (platform === "MacIntel" && maxTouchPoints > 1);
+    const isIOS = isIPhone || isIPad;
+
+    if (hasTouch) {
+      player.classList.add("vjs-touch-enabled", "vjs-mobile-touch-tuned");
+    }
+
+    if (isAndroid) {
+      player.classList.add("vjs-device-android");
+    }
+
+    if (isIPhone) {
+      player.classList.add("vjs-device-iphone", "vjs-device-ios");
+    }
+
+    if (isIPad) {
+      player.classList.add("vjs-device-ipad", "vjs-device-ios");
+    }
+
+    if (isIOS) {
+      player.classList.remove("vjs-workinghover");
+    }
+
+    if (player.querySelector(".vjs-player-time-toggle")) {
+      player.classList.add("vjs-has-player-time-toggle");
+    } else {
+      player.classList.remove("vjs-has-player-time-toggle");
+    }
+
+    player.classList.add("vjs-poke-custom-ui-ready");
+  };
+
+  const tuneAllPokeVideoJsPlayers = () => {
+    document.querySelectorAll(".video-js").forEach(tunePokeVideoJsPlayer);
+  };
+
+  tuneAllPokeVideoJsPlayers();
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", tuneAllPokeVideoJsPlayers, { once: true });
+  }
+
+  const customVideoJsUIObserver = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      if (mutation.type === "childList") {
+        mutation.addedNodes.forEach((node) => {
+          if (!(node instanceof Element)) {
+            return;
+          }
+
+          if (node.matches(".video-js")) {
+            tunePokeVideoJsPlayer(node);
+          }
+
+          const player = node.closest(".video-js");
+
+          if (player) {
+            tunePokeVideoJsPlayer(player);
+          }
+
+          node.querySelectorAll(".video-js").forEach(tunePokeVideoJsPlayer);
+        });
+      }
+
+      if (mutation.type === "attributes" && mutation.target instanceof Element) {
+        const player = mutation.target.matches(".video-js") ? mutation.target : mutation.target.closest(".video-js");
+
+        if (player) {
+          tunePokeVideoJsPlayer(player);
+        }
+      }
+    });
+  });
+
+  customVideoJsUIObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["class"],
+    childList: true,
+    subtree: true
+  });
 }
 
 window.pokePlayer = {
