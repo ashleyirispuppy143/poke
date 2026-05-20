@@ -3,6 +3,7 @@
 <head>
     <%
         const results = typeof j !== "undefined" && j && Array.isArray(j.results) ? j.results : [];
+        const videoResults = results.filter(item => item && (item.type === "video" || item.videoId));
         const searchValue = typeof mobilesearch !== "undefined" ? mobilesearch : "";
         const mediaProxyBase = typeof media_proxy_url !== "undefined" && media_proxy_url ? String(media_proxy_url).replace(/\/$/, "") : "";
 
@@ -26,10 +27,6 @@
             return item && item.videoId ? "/watch?v=" + encodeURIComponent(item.videoId) : "#";
         }
 
-        function playlistHref(item) {
-            return item && item.playlistId ? "/playlist?list=" + encodeURIComponent(item.playlistId) : "#";
-        }
-
         function channelHref(item) {
             if (!item) return "#";
             if (item.authorUrl) return item.authorUrl;
@@ -37,22 +34,9 @@
             return "#";
         }
 
-        function hashtagHref(item) {
-            return item && item.url ? item.url : "#";
-        }
-
         function rawVideoThumbnailUrl(videoId) {
             if (!videoId) return "";
             return "https://i.ytimg.com/vi/" + encodeURIComponent(videoId) + "/hqdefault.jpg";
-        }
-
-        function rawPlaylistThumbnailUrl(item) {
-            if (item && Array.isArray(item.videos) && item.videos[0] && item.videos[0].videoId) {
-                return rawVideoThumbnailUrl(item.videos[0].videoId);
-            }
-
-            if (item && item.playlistThumbnail) return item.playlistThumbnail;
-            return "";
         }
 
         function rawAvatarUrl(item) {
@@ -94,15 +78,6 @@
                 maximumFractionDigits: number >= 1000000 ? 1 : 0
             }).format(number).replace("K", "k");
         }
-
-        function formatCount(value, label) {
-            const formatted = formatCompactNumber(value);
-            return formatted ? formatted + " " + label : "";
-        }
-
-        function joinMeta(parts) {
-            return parts.filter(Boolean).join(" • ");
-        }
     %>
 
     <meta charset="UTF-8">
@@ -140,7 +115,6 @@
             --chip: #272727;
             --chip-hover: #343434;
             --danger: #cc0000;
-            --bar: #ffffff;
         }
 
         * {
@@ -174,44 +148,6 @@
             font: inherit;
         }
 
-        .loading-bar {
-            position: fixed;
-            top: 0;
-            left: 0;
-            z-index: 10000;
-            width: 100%;
-            height: 3px;
-            overflow: hidden;
-            background: rgba(255, 255, 255, 0.08);
-            pointer-events: none;
-        }
-
-        .loading-bar::before {
-            content: "";
-            position: absolute;
-            top: 0;
-            left: -45%;
-            width: 45%;
-            height: 100%;
-            border-radius: 999px;
-            background: var(--bar);
-            animation: loadingBarMove 950ms ease-in-out infinite;
-        }
-
-        @keyframes loadingBarMove {
-            0% {
-                transform: translateX(0);
-            }
-
-            55% {
-                transform: translateX(185vw);
-            }
-
-            100% {
-                transform: translateX(185vw);
-            }
-        }
-
         .app-header {
             position: sticky;
             top: 0;
@@ -222,25 +158,23 @@
         }
 
         .nav-wrap {
-            width: 100%;
             display: flex;
             align-items: center;
-            gap: clamp(18px, 2.8vw, 34px);
-            min-height: clamp(84px, 11.8vw, 118px);
-            padding: clamp(15px, 3vw, 28px) clamp(18px, 4.7vw, 48px);
-            padding-top: max(clamp(15px, 3vw, 28px), env(safe-area-inset-top));
+            gap: 12px;
+            min-height: calc(66px + env(safe-area-inset-top));
+            padding: calc(9px + env(safe-area-inset-top)) 15px 9px 12px;
         }
 
         .back-button {
-            width: clamp(50px, 7.4vw, 78px);
-            height: clamp(50px, 7.4vw, 78px);
-            flex: 0 0 clamp(50px, 7.4vw, 78px);
+            width: 48px;
+            height: 48px;
+            flex: 0 0 48px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             border-radius: 999px;
             color: var(--text);
-            font-size: clamp(34px, 5.4vw, 58px);
+            font-size: 34px;
             line-height: 1;
         }
 
@@ -252,14 +186,14 @@
         .search-container {
             flex: 1 1 auto;
             min-width: 0;
-            height: clamp(56px, 9.2vw, 94px);
+            height: 48px;
             display: flex;
             align-items: center;
-            gap: clamp(8px, 1.4vw, 14px);
+            gap: 10px;
             background: var(--search-bg);
             border: 0;
             border-radius: 999px;
-            padding: 0 clamp(8px, 2.8vw, 30px) 0 clamp(24px, 3.7vw, 40px);
+            padding: 0 7px 0 18px;
             transition: background 140ms ease, box-shadow 140ms ease;
         }
 
@@ -276,7 +210,7 @@
             outline: 0;
             background: transparent;
             color: var(--text);
-            font-size: clamp(24px, 4.8vw, 48px);
+            font-size: 24px;
             line-height: 1;
             padding: 0;
             font-weight: 430;
@@ -290,9 +224,9 @@
         }
 
         .clear-search-button {
-            width: clamp(46px, 6.8vw, 74px);
-            height: clamp(46px, 6.8vw, 74px);
-            flex: 0 0 clamp(46px, 6.8vw, 74px);
+            width: 48px;
+            height: 48px;
+            flex: 0 0 48px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -302,7 +236,7 @@
             background: transparent;
             color: #ffffff;
             cursor: pointer;
-            font-size: clamp(34px, 5.4vw, 58px);
+            font-size: 34px;
             line-height: 1;
         }
 
@@ -342,8 +276,7 @@
             margin-top: 16px;
         }
 
-        .video-card,
-        .playlist-card {
+        .video-card {
             padding: 0 0 11px;
         }
 
@@ -385,8 +318,7 @@
         }
 
         .duration-badge,
-        .live-badge,
-        .playlist-badge {
+        .live-badge {
             position: absolute;
             right: 7px;
             bottom: 7px;
@@ -413,12 +345,6 @@
             padding: 0 7px;
             background: var(--danger);
             letter-spacing: 0.01em;
-        }
-
-        .playlist-badge {
-            gap: 5px;
-            padding: 0 7px;
-            background: rgba(0, 0, 0, 0.86);
         }
 
         .details-row {
@@ -469,9 +395,7 @@
             padding-right: 4px;
         }
 
-        .title,
-        .channel-title,
-        .hashtag-title {
+        .title {
             color: var(--text);
             font-weight: 650;
             font-stretch: 200%;
@@ -536,86 +460,6 @@
             font-size: 11px;
             line-height: 1;
             transform: translateY(-0.5px);
-        }
-
-        .channel-card {
-            padding: 14px 10px;
-        }
-
-        .channel-inner {
-            display: grid;
-            grid-template-columns: 72px minmax(0, 1fr);
-            column-gap: 9px;
-            align-items: center;
-        }
-
-        .channel-avatar-link,
-        .channel-avatar-fallback {
-            width: 72px;
-            height: 72px;
-            display: block;
-            overflow: hidden;
-            border-radius: 999px;
-            background: #272727;
-        }
-
-        .channel-title {
-            display: block;
-            overflow: hidden;
-            font-size: 16.5px;
-            line-height: 1.25;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .channel-description {
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-            margin-top: 6px;
-            color: var(--text-soft);
-            font-size: 12.5px;
-            line-height: 1.35;
-            font-weight: 430;
-            font-stretch: 112.5%;
-            font-variation-settings: "wdth" 112.5, "opsz" 12;
-        }
-
-        .hashtag-card {
-            padding: 12px 10px;
-        }
-
-        .hashtag-result {
-            display: grid;
-            grid-template-columns: 38px minmax(0, 1fr);
-            column-gap: 8px;
-            align-items: center;
-            min-height: 58px;
-        }
-
-        .hashtag-icon {
-            width: 38px;
-            height: 38px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 999px;
-            background: #272727;
-            color: var(--text);
-            font-size: 18px;
-            font-weight: 750;
-            font-stretch: 130%;
-            font-variation-settings: "wdth" 130, "opsz" 14;
-        }
-
-        .hashtag-title {
-            display: block;
-            overflow: hidden;
-            font-size: 15.5px;
-            line-height: 1.25;
-            text-overflow: ellipsis;
-            white-space: nowrap;
         }
 
         .empty-state {
@@ -704,6 +548,48 @@
             font-size: 13.5px;
         }
 
+        .loading-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 9999;
+            height: 3px;
+            overflow: hidden;
+            pointer-events: none;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .loading-bar::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            width: 42%;
+            border-radius: 999px;
+            background: #ffffff;
+            transform: translateX(-110%);
+            animation: loadingBarMove 900ms ease-in-out infinite;
+        }
+
+        @keyframes loadingBarMove {
+            0% {
+                width: 34%;
+                transform: translateX(-110%);
+            }
+
+            55% {
+                width: 58%;
+                transform: translateX(95%);
+            }
+
+            100% {
+                width: 30%;
+                transform: translateX(340%);
+            }
+        }
+
         @media (min-width: 521px) {
             .feed {
                 border-left: 1px solid rgba(255, 255, 255, 0.06);
@@ -716,57 +602,23 @@
             }
         }
 
-        @media (max-width: 520px) {
+        @media (max-width: 390px) {
             .nav-wrap {
                 gap: 12px;
-                min-height: 88px;
-                padding: 14px 14px;
-                padding-top: max(14px, env(safe-area-inset-top));
+                min-height: calc(66px + env(safe-area-inset-top));
+                padding: calc(9px + env(safe-area-inset-top)) 15px 9px 12px;
             }
 
             .back-button {
-                width: 46px;
-                height: 46px;
-                flex-basis: 46px;
-                font-size: 32px;
-            }
-
-            .search-container {
-                height: 56px;
-                padding-left: 24px;
-                padding-right: 8px;
-            }
-
-            input[name="mobilesearch"] {
-                font-size: 25px;
-            }
-
-            .clear-search-button {
-                width: 46px;
-                height: 46px;
-                flex-basis: 46px;
+                width: 48px;
+                height: 48px;
+                flex-basis: 48px;
                 font-size: 34px;
             }
-        }
-
-        @media (max-width: 380px) {
-            .nav-wrap {
-                gap: 10px;
-                padding-left: 10px;
-                padding-right: 10px;
-            }
-
-            .back-button {
-                width: 42px;
-                height: 42px;
-                flex-basis: 42px;
-                font-size: 29px;
-            }
 
             .search-container {
-                height: 54px;
-                padding-left: 22px;
-                padding-right: 7px;
+                height: 48px;
+                padding: 0 7px 0 18px;
             }
 
             input[name="mobilesearch"] {
@@ -774,10 +626,10 @@
             }
 
             .clear-search-button {
-                width: 44px;
-                height: 44px;
-                flex-basis: 44px;
-                font-size: 32px;
+                width: 48px;
+                height: 48px;
+                flex-basis: 48px;
+                font-size: 34px;
             }
         }
     </style>
@@ -800,211 +652,79 @@
     </header>
 
     <main class="feed">
-        <% if (results.length) { %>
-            <% results.forEach(item => { %>
-                <% if (item && item.type === "video") { %>
-                    <%
-                        const href = videoHref(item);
-                        const authorHref = channelHref(item);
-                        const thumb = proxyMediaUrl(rawVideoThumbnailUrl(item.videoId));
-                        const avatar = proxyMediaUrl(rawAvatarUrl(item));
-                        const duration = formatDuration(item.lengthSeconds);
-                        const bareViews = formatCompactNumber(item.viewCount);
-                    %>
+        <% if (videoResults.length) { %>
+            <% videoResults.forEach(item => { %>
+                <%
+                    const href = videoHref(item);
+                    const authorHref = channelHref(item);
+                    const thumb = proxyMediaUrl(rawVideoThumbnailUrl(item.videoId));
+                    const avatar = proxyMediaUrl(rawAvatarUrl(item));
+                    const duration = formatDuration(item.lengthSeconds);
+                    const bareViews = formatCompactNumber(item.viewCount);
+                %>
 
-                    <article class="result-card video-card">
-                        <div class="thumbnail-shell">
-                            <a href="<%= href %>" class="thumbnail-link" aria-label="<%= item.title || 'Video' %>">
-                                <% if (thumb) { %>
-                                    <img class="thumbnail-img" src="<%= thumb %>" alt="" loading="lazy">
-                                <% } else { %>
-                                    <div class="thumbnail-placeholder">
-                                        <i class="fa-light fa-video"></i>
-                                    </div>
-                                <% } %>
-
-                                <% if (item.liveNow) { %>
-                                    <span class="live-badge">LIVE</span>
-                                <% } else if (duration) { %>
-                                    <span class="duration-badge"><%= duration %></span>
-                                <% } %>
-                            </a>
-                        </div>
-
-                        <div class="details-row">
-                            <% if (authorHref && authorHref !== "#") { %>
-                                <a class="avatar-link" href="<%= authorHref %>" aria-label="<%= item.author || 'Channel' %>">
-                                    <% if (avatar) { %>
-                                        <img class="avatar-img" src="<%= avatar %>" alt="" loading="lazy">
-                                    <% } else { %>
-                                        <span class="avatar-letter"><%= authorInitial(item.author) %></span>
-                                    <% } %>
-                                </a>
+                <article class="result-card video-card">
+                    <div class="thumbnail-shell">
+                        <a href="<%= href %>" class="thumbnail-link" aria-label="<%= item.title || 'Video' %>">
+                            <% if (thumb) { %>
+                                <img class="thumbnail-img" src="<%= thumb %>" alt="" loading="lazy">
                             <% } else { %>
-                                <div class="avatar-fallback" aria-hidden="true">
-                                    <% if (avatar) { %>
-                                        <img class="avatar-img" src="<%= avatar %>" alt="" loading="lazy">
-                                    <% } else { %>
-                                        <span class="avatar-letter"><%= authorInitial(item.author) %></span>
-                                    <% } %>
+                                <div class="thumbnail-placeholder">
+                                    <i class="fa-light fa-video"></i>
                                 </div>
                             <% } %>
 
-                            <div class="text-block">
-                                <a href="<%= href %>" class="title"><%= item.title || "Untitled video" %></a>
-                                <%# Upload date hidden for now: item.publishedText %>
-
-                                <% if (item.author) { %>
-                                    <div class="meta">
-                                        <% if (authorHref && authorHref !== "#") { %>
-                                            <a href="<%= authorHref %>"><%= item.author %></a>
-                                        <% } else { %>
-                                            <%= item.author %>
-                                        <% } %>
-                                    </div>
-                                <% } %>
-
-                                <% if (bareViews) { %>
-                                    <div class="stats-line" aria-label="<%= bareViews %> views">
-                                        <span class="view-count-pill">
-                                            <span class="view-play-icon" aria-hidden="true">▷</span>
-                                            <span><%= bareViews %></span>
-                                        </span>
-                                    </div>
-                                <% } %>
-                            </div>
-                        </div>
-                    </article>
-                <% } else if (item && item.type === "playlist") { %>
-                    <%
-                        const href = playlistHref(item);
-                        const authorHref = channelHref(item);
-                        const thumb = proxyMediaUrl(rawPlaylistThumbnailUrl(item));
-                        const avatar = proxyMediaUrl(rawAvatarUrl(item));
-                        const playlistMeta = joinMeta([
-                            item.author || "",
-                            Number.isFinite(Number(item.videoCount)) ? item.videoCount + " videos" : ""
-                        ]);
-                    %>
-
-                    <article class="result-card playlist-card">
-                        <div class="thumbnail-shell">
-                            <a href="<%= href %>" class="thumbnail-link" aria-label="<%= item.title || 'Playlist' %>">
-                                <% if (thumb) { %>
-                                    <img class="thumbnail-img" src="<%= thumb %>" alt="" loading="lazy">
-                                <% } else { %>
-                                    <div class="thumbnail-placeholder">
-                                        <i class="fa-light fa-list"></i>
-                                    </div>
-                                <% } %>
-
-                                <span class="playlist-badge">
-                                    <i class="fa-light fa-list"></i>
-                                    <%= Number.isFinite(Number(item.videoCount)) ? item.videoCount : "Playlist" %>
-                                </span>
-                            </a>
-                        </div>
-
-                        <div class="details-row">
-                            <% if (authorHref && authorHref !== "#") { %>
-                                <a class="avatar-link" href="<%= authorHref %>" aria-label="<%= item.author || 'Channel' %>">
-                                    <% if (avatar) { %>
-                                        <img class="avatar-img" src="<%= avatar %>" alt="" loading="lazy">
-                                    <% } else { %>
-                                        <span class="avatar-letter"><%= authorInitial(item.author) %></span>
-                                    <% } %>
-                                </a>
-                            <% } else { %>
-                                <div class="avatar-fallback" aria-hidden="true">
-                                    <% if (avatar) { %>
-                                        <img class="avatar-img" src="<%= avatar %>" alt="" loading="lazy">
-                                    <% } else { %>
-                                        <span class="avatar-letter"><%= authorInitial(item.author) %></span>
-                                    <% } %>
-                                </div>
+                            <% if (item.liveNow) { %>
+                                <span class="live-badge">LIVE</span>
+                            <% } else if (duration) { %>
+                                <span class="duration-badge"><%= duration %></span>
                             <% } %>
-
-                            <div class="text-block">
-                                <a href="<%= href %>" class="title"><%= item.title || "Untitled playlist" %></a>
-
-                                <% if (playlistMeta) { %>
-                                    <div class="meta">
-                                        <% if (authorHref && authorHref !== "#" && item.author) { %>
-                                            <a href="<%= authorHref %>"><%= item.author %></a><%= Number.isFinite(Number(item.videoCount)) ? " • " + item.videoCount + " videos" : "" %>
-                                        <% } else { %>
-                                            <%= playlistMeta %>
-                                        <% } %>
-                                    </div>
-                                <% } %>
-                            </div>
-                        </div>
-                    </article>
-                <% } else if (item && item.type === "channel") { %>
-                    <%
-                        const href = channelHref(item);
-                        const avatar = proxyMediaUrl(rawAvatarUrl(item));
-                        const channelMeta = joinMeta([
-                            formatCount(item.subCount, "subscribers"),
-                            formatCount(item.videoCount, "videos")
-                        ]);
-                    %>
-
-                    <article class="result-card channel-card">
-                        <div class="channel-inner">
-                            <% if (href && href !== "#") { %>
-                                <a class="channel-avatar-link" href="<%= href %>" aria-label="<%= item.author || 'Channel' %>">
-                                    <% if (avatar) { %>
-                                        <img class="avatar-img" src="<%= avatar %>" alt="" loading="lazy">
-                                    <% } else { %>
-                                        <span class="avatar-letter"><%= authorInitial(item.author) %></span>
-                                    <% } %>
-                                </a>
-                            <% } else { %>
-                                <div class="channel-avatar-fallback" aria-hidden="true">
-                                    <% if (avatar) { %>
-                                        <img class="avatar-img" src="<%= avatar %>" alt="" loading="lazy">
-                                    <% } else { %>
-                                        <span class="avatar-letter"><%= authorInitial(item.author) %></span>
-                                    <% } %>
-                                </div>
-                            <% } %>
-
-                            <div class="text-block">
-                                <a href="<%= href %>" class="channel-title"><%= item.author || "Channel" %></a>
-
-                                <% if (channelMeta) { %>
-                                    <div class="meta"><%= channelMeta %></div>
-                                <% } %>
-
-                                <% if (item.description) { %>
-                                    <div class="channel-description"><%= item.description %></div>
-                                <% } %>
-                            </div>
-                        </div>
-                    </article>
-                <% } else if (item && item.type === "hashtag") { %>
-                    <%
-                        const href = hashtagHref(item);
-                        const hashtagMeta = joinMeta([
-                            formatCount(item.videoCount, "videos"),
-                            formatCount(item.channelCount, "channels")
-                        ]);
-                    %>
-
-                    <article class="result-card hashtag-card">
-                        <a class="hashtag-result" href="<%= href %>">
-                            <span class="hashtag-icon">#</span>
-
-                            <span class="text-block">
-                                <span class="hashtag-title"><%= item.title || "Hashtag" %></span>
-
-                                <% if (hashtagMeta) { %>
-                                    <span class="meta"><%= hashtagMeta %></span>
-                                <% } %>
-                            </span>
                         </a>
-                    </article>
-                <% } %>
+                    </div>
+
+                    <div class="details-row">
+                        <% if (authorHref && authorHref !== "#") { %>
+                            <a class="avatar-link" href="<%= authorHref %>" aria-label="<%= item.author || 'Channel' %>">
+                                <% if (avatar) { %>
+                                    <img class="avatar-img" src="<%= avatar %>" alt="" loading="lazy">
+                                <% } else { %>
+                                    <span class="avatar-letter"><%= authorInitial(item.author) %></span>
+                                <% } %>
+                            </a>
+                        <% } else { %>
+                            <div class="avatar-fallback" aria-hidden="true">
+                                <% if (avatar) { %>
+                                    <img class="avatar-img" src="<%= avatar %>" alt="" loading="lazy">
+                                <% } else { %>
+                                    <span class="avatar-letter"><%= authorInitial(item.author) %></span>
+                                <% } %>
+                            </div>
+                        <% } %>
+
+                        <div class="text-block">
+                            <a href="<%= href %>" class="title"><%= item.title || "Untitled video" %></a>
+
+                            <% if (item.author) { %>
+                                <div class="meta">
+                                    <% if (authorHref && authorHref !== "#") { %>
+                                        <a href="<%= authorHref %>"><%= item.author %></a>
+                                    <% } else { %>
+                                        <%= item.author %>
+                                    <% } %>
+                                </div>
+                            <% } %>
+
+                            <% if (bareViews) { %>
+                                <div class="stats-line" aria-label="<%= bareViews %> views">
+                                    <span class="view-count-pill">
+                                        <span class="view-play-icon" aria-hidden="true">▷</span>
+                                        <span><%= bareViews %></span>
+                                    </span>
+                                </div>
+                            <% } %>
+                        </div>
+                    </div>
+                </article>
             <% }) %>
         <% } else { %>
             <div class="empty-state">
@@ -1049,7 +769,7 @@
         }
 
         function showLoadingBar() {
-            removeLoadingBar();
+            if (document.querySelector(".loading-bar")) return;
 
             const loadingBar = document.createElement("div");
             loadingBar.className = "loading-bar";
