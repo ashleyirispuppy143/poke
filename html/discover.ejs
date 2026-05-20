@@ -46,7 +46,6 @@
                 return videoThumbnailUrl(item.videos[0].videoId);
             }
 
-            if (item && item.playlistThumbnail) return item.playlistThumbnail;
             return "";
         }
 
@@ -90,9 +89,8 @@
             }).format(number).replace("K", "k");
         }
 
-        function formatViews(value) {
-            const formatted = formatCompactNumber(value);
-            return formatted ? formatted + " views" : "";
+        function formatViewCountBare(value) {
+            return formatCompactNumber(value);
         }
 
         function formatCount(value, label) {
@@ -119,28 +117,42 @@
     <style>
         @import url("https://p.poketube.fun/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css");
 
+        @font-face {
+            font-family: "PokeTube Flex";
+            src: url("/static/robotoflex.ttf");
+            font-style: normal;
+            font-weight: 100 1000;
+            font-stretch: 1% 800%;
+            font-display: swap;
+        }
+
         :root {
             --bg: #0f0f0f;
             --panel: #0f0f0f;
+            --panel-soft: #151515;
             --search-bg: #212121;
             --search-border: #303030;
-            --search-focus: #3f3f3f;
+            --search-focus: #444444;
             --text: #f1f1f1;
-            --text-soft: #aaa;
-            --text-muted: #717171;
+            --text-soft: #aaaaaa;
+            --text-muted: #777777;
             --line: #272727;
             --chip: #272727;
             --chip-hover: #343434;
+            --stat-bg: #241617;
+            --stat-text: #e0aaa6;
             --danger: #ff0033;
             --shadow: rgba(0, 0, 0, 0.45);
         }
 
         * {
             box-sizing: border-box;
+            font-family: inherit;
         }
 
         html {
             background: var(--bg);
+            font-family: "PokeTube Flex", Roboto, Arial, Helvetica, sans-serif;
         }
 
         body {
@@ -149,7 +161,7 @@
             min-height: 100vh;
             background: var(--bg);
             color: var(--text);
-            font-family: -apple-system, BlinkMacSystemFont, "Roboto", "Segoe UI", Helvetica, Arial, sans-serif;
+            font-family: "PokeTube Flex", Roboto, Arial, Helvetica, sans-serif;
             -webkit-tap-highlight-color: transparent;
             overscroll-behavior-y: contain;
         }
@@ -182,22 +194,41 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            min-height: 58px;
-            padding: 9px 10px;
-            padding-top: max(9px, env(safe-area-inset-top));
+            min-height: 62px;
+            padding: 10px 10px;
+            padding-top: max(10px, env(safe-area-inset-top));
+        }
+
+        .home-button {
+            width: 44px;
+            height: 44px;
+            flex: 0 0 44px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            background: var(--chip);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: var(--text);
+            font-size: 18px;
+        }
+
+        .home-button:active {
+            transform: scale(0.96);
+            background: var(--chip-hover);
         }
 
         .search-container {
             flex: 1 1 auto;
             min-width: 0;
-            height: 40px;
+            height: 44px;
             display: flex;
             align-items: center;
             gap: 10px;
             background: var(--search-bg);
             border: 1px solid var(--search-border);
             border-radius: 999px;
-            padding: 0 8px 0 14px;
+            padding: 0 8px 0 15px;
             transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
         }
 
@@ -224,6 +255,9 @@
             font-size: 16px;
             line-height: 1;
             padding: 0;
+            font-weight: 500;
+            font-stretch: 115%;
+            font-variation-settings: "wdth" 115, "opsz" 14;
         }
 
         input[name="mobilesearch"]::placeholder {
@@ -232,9 +266,9 @@
         }
 
         .search-btn {
-            width: 32px;
-            height: 32px;
-            flex: 0 0 auto;
+            width: 36px;
+            height: 36px;
+            flex: 0 0 36px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -244,19 +278,20 @@
             background: transparent;
             color: var(--text-soft);
             cursor: pointer;
-            font-size: 17px;
+            font-size: 18px;
         }
 
         .search-btn:active {
             transform: scale(0.94);
             color: var(--text);
+            background: rgba(255, 255, 255, 0.06);
         }
 
         .feed {
             width: 100%;
             max-width: 520px;
             margin: 0 auto;
-            padding: 8px 0 calc(82px + env(safe-area-inset-bottom));
+            padding: 12px 0 calc(96px + env(safe-area-inset-bottom));
             background: var(--bg);
         }
 
@@ -268,12 +303,12 @@
         }
 
         .result-card + .result-card {
-            margin-top: 5px;
+            margin-top: 14px;
         }
 
         .video-card,
         .playlist-card {
-            padding: 0 0 7px;
+            padding: 0 0 10px;
         }
 
         .thumbnail-shell {
@@ -287,15 +322,16 @@
             width: 100%;
             aspect-ratio: 16 / 9;
             overflow: hidden;
-            border-radius: 12px;
+            border-radius: 13px;
             background: #181818;
+            box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05);
         }
 
         .thumbnail-img {
             display: block;
             width: 100%;
             height: 100%;
-            border-radius: 12px;
+            border-radius: 13px;
             object-fit: cover;
             background: #181818;
         }
@@ -306,7 +342,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            border-radius: 12px;
+            border-radius: 13px;
             background: #181818;
             color: var(--text-muted);
             font-size: 26px;
@@ -316,8 +352,8 @@
         .live-badge,
         .playlist-badge {
             position: absolute;
-            right: 6px;
-            bottom: 6px;
+            right: 7px;
+            bottom: 7px;
             min-height: 20px;
             display: inline-flex;
             align-items: center;
@@ -326,7 +362,9 @@
             color: #fff;
             font-size: 12px;
             line-height: 1;
-            font-weight: 600;
+            font-weight: 650;
+            font-stretch: 115%;
+            font-variation-settings: "wdth" 115, "opsz" 12;
         }
 
         .duration-badge {
@@ -349,16 +387,16 @@
 
         .details-row {
             display: grid;
-            grid-template-columns: 40px minmax(0, 1fr) 32px;
-            column-gap: 10px;
+            grid-template-columns: 40px minmax(0, 1fr);
+            column-gap: 11px;
             align-items: start;
-            padding: 9px 10px 0;
+            padding: 11px 11px 0;
         }
 
         .avatar-link,
         .avatar-fallback {
-            width: 36px;
-            height: 36px;
+            width: 38px;
+            height: 38px;
             display: block;
             overflow: hidden;
             border-radius: 999px;
@@ -385,11 +423,24 @@
             color: #fff;
             font-size: 16px;
             line-height: 1;
-            font-weight: 700;
+            font-weight: 750;
+            font-stretch: 130%;
+            font-variation-settings: "wdth" 130, "opsz" 14;
         }
 
         .text-block {
             min-width: 0;
+            padding-right: 6px;
+        }
+
+        .title,
+        .channel-title,
+        .hashtag-title {
+            color: var(--text);
+            font-weight: 650;
+            font-stretch: 200%;
+            font-variation-settings: "wdth" 151, "opsz" 14;
+            letter-spacing: 0.01em;
         }
 
         .title {
@@ -397,63 +448,76 @@
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
-            color: var(--text);
-            font-size: 15px;
-            font-weight: 500;
-            line-height: 1.26;
-            letter-spacing: -0.01em;
+            font-size: 15.5px;
+            line-height: 1.24;
         }
 
         .meta {
-            margin-top: 4px;
+            margin-top: 5px;
             color: var(--text-soft);
-            font-size: 12px;
-            font-weight: 400;
+            font-size: 12.5px;
+            font-weight: 450;
             line-height: 1.35;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+            font-stretch: 112.5%;
+            font-variation-settings: "wdth" 112.5, "opsz" 12;
         }
 
         .meta a {
             color: var(--text-soft);
         }
 
-        .menu-button {
-            width: 32px;
-            height: 32px;
-            display: inline-flex;
-            align-items: flex-start;
-            justify-content: center;
-            border: 0;
-            border-radius: 999px;
-            padding: 2px 0 0;
-            background: transparent;
-            color: #e6e6e6;
-            cursor: pointer;
-            font-size: 18px;
-            line-height: 1;
+        .stats-line {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            min-height: 20px;
+            margin-top: 5px;
+            overflow: hidden;
         }
 
-        .menu-button:active {
-            background: rgba(255, 255, 255, 0.08);
+        .view-count-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            max-width: 100%;
+            min-height: 18px;
+            padding: 1px 6px 1px 5px;
+            border-radius: 4px;
+            background: var(--stat-bg);
+            color: var(--stat-text);
+            font-size: 12px;
+            font-weight: 650;
+            line-height: 1;
+            font-stretch: 125%;
+            font-variation-settings: "wdth" 125, "opsz" 12;
+        }
+
+        .view-play-icon {
+            display: inline-block;
+            color: var(--stat-text);
+            font-size: 10px;
+            line-height: 1;
+            transform: translateY(-0.5px);
         }
 
         .channel-card {
-            padding: 11px 10px;
+            padding: 13px 10px;
         }
 
         .channel-inner {
             display: grid;
-            grid-template-columns: 72px minmax(0, 1fr) 32px;
-            column-gap: 13px;
+            grid-template-columns: 74px minmax(0, 1fr);
+            column-gap: 14px;
             align-items: center;
         }
 
         .channel-avatar-link,
         .channel-avatar-fallback {
-            width: 72px;
-            height: 72px;
+            width: 74px;
+            height: 74px;
             display: block;
             overflow: hidden;
             border-radius: 999px;
@@ -463,9 +527,7 @@
         .channel-title {
             display: block;
             overflow: hidden;
-            color: var(--text);
-            font-size: 16px;
-            font-weight: 500;
+            font-size: 16.5px;
             line-height: 1.25;
             text-overflow: ellipsis;
             white-space: nowrap;
@@ -476,27 +538,30 @@
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
-            margin-top: 5px;
+            margin-top: 6px;
             color: var(--text-soft);
-            font-size: 12px;
+            font-size: 12.5px;
             line-height: 1.35;
+            font-weight: 430;
+            font-stretch: 112.5%;
+            font-variation-settings: "wdth" 112.5, "opsz" 12;
         }
 
         .hashtag-card {
-            padding: 8px 10px;
+            padding: 11px 10px;
         }
 
         .hashtag-result {
             display: grid;
-            grid-template-columns: 40px minmax(0, 1fr) 32px;
-            column-gap: 10px;
+            grid-template-columns: 40px minmax(0, 1fr);
+            column-gap: 11px;
             align-items: center;
-            min-height: 54px;
+            min-height: 58px;
         }
 
         .hashtag-icon {
-            width: 36px;
-            height: 36px;
+            width: 38px;
+            height: 38px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -504,15 +569,15 @@
             background: #272727;
             color: var(--text);
             font-size: 18px;
-            font-weight: 700;
+            font-weight: 750;
+            font-stretch: 130%;
+            font-variation-settings: "wdth" 130, "opsz" 14;
         }
 
         .hashtag-title {
             display: block;
             overflow: hidden;
-            color: var(--text);
-            font-size: 15px;
-            font-weight: 500;
+            font-size: 15.5px;
             line-height: 1.25;
             text-overflow: ellipsis;
             white-space: nowrap;
@@ -524,6 +589,9 @@
             text-align: center;
             font-size: 14px;
             line-height: 1.45;
+            font-weight: 450;
+            font-stretch: 112.5%;
+            font-variation-settings: "wdth" 112.5, "opsz" 14;
         }
 
         .pagination {
@@ -544,8 +612,8 @@
             display: grid;
             grid-template-columns: 1fr auto 1fr;
             align-items: center;
-            gap: 9px;
-            padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+            gap: 10px;
+            padding: 12px 10px calc(12px + env(safe-area-inset-bottom));
             background: rgba(15, 15, 15, 0.96);
             border-top: 1px solid rgba(255, 255, 255, 0.07);
             backdrop-filter: blur(18px);
@@ -556,24 +624,27 @@
         .page-button,
         .disabled-page-button,
         .page-count {
-            min-height: 39px;
+            min-height: 46px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             border-radius: 999px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.09);
             user-select: none;
             white-space: nowrap;
+            font-weight: 650;
+            font-stretch: 125%;
+            font-variation-settings: "wdth" 125, "opsz" 14;
         }
 
         .page-button,
         .disabled-page-button {
-            gap: 7px;
-            padding: 0 15px;
+            min-width: 98px;
+            gap: 8px;
+            padding: 0 18px;
             background: var(--chip);
             color: var(--text);
-            font-size: 14px;
-            font-weight: 500;
+            font-size: 14.5px;
         }
 
         .page-button:active {
@@ -587,12 +658,11 @@
         }
 
         .page-count {
-            min-width: 74px;
-            padding: 0 12px;
+            min-width: 90px;
+            padding: 0 14px;
             background: #181818;
             color: var(--text-soft);
-            font-size: 13px;
-            font-weight: 600;
+            font-size: 13.5px;
         }
 
         .loading {
@@ -642,6 +712,10 @@
 <body>
     <header class="app-header">
         <div class="nav-wrap">
+            <a href="/" class="home-button" aria-label="Home">
+                <i class="fa-light fa-house"></i>
+            </a>
+
             <form action="/app" class="search-container" role="search">
                 <i class="fa-light fa-search search-icon-inline" aria-hidden="true"></i>
                 <input type="text" name="mobilesearch" value="<%= searchValue %>" placeholder="Search" autocomplete="off">
@@ -662,10 +736,7 @@
                         const thumb = videoThumbnailUrl(item.videoId);
                         const avatar = avatarUrl(item);
                         const duration = formatDuration(item.lengthSeconds);
-                        const meta = joinMeta([
-                            item.author || "",
-                            formatViews(item.viewCount)
-                        ]);
+                        const bareViews = formatViewCountBare(item.viewCount);
                     %>
 
                     <article class="result-card video-card">
@@ -710,20 +781,25 @@
                                 <a href="<%= href %>" class="title"><%= item.title || "Untitled video" %></a>
                                 <%# Upload date hidden for now: item.publishedText %>
 
-                                <% if (meta) { %>
+                                <% if (item.author) { %>
                                     <div class="meta">
-                                        <% if (authorHref && authorHref !== "#" && item.author) { %>
-                                            <a href="<%= authorHref %>"><%= item.author %></a><%= formatViews(item.viewCount) ? " • " + formatViews(item.viewCount) : "" %>
+                                        <% if (authorHref && authorHref !== "#") { %>
+                                            <a href="<%= authorHref %>"><%= item.author %></a>
                                         <% } else { %>
-                                            <%= meta %>
+                                            <%= item.author %>
                                         <% } %>
                                     </div>
                                 <% } %>
-                            </div>
 
-                            <button class="menu-button" type="button" aria-label="More options">
-                                <i class="fa-regular fa-ellipsis-vertical"></i>
-                            </button>
+                                <% if (bareViews) { %>
+                                    <div class="stats-line" aria-label="<%= bareViews %> views">
+                                        <span class="view-count-pill">
+                                            <span class="view-play-icon" aria-hidden="true">▷</span>
+                                            <span><%= bareViews %></span>
+                                        </span>
+                                    </div>
+                                <% } %>
+                            </div>
                         </div>
                     </article>
                 <% } else if (item && item.type === "playlist") { %>
@@ -732,7 +808,7 @@
                         const authorHref = channelHref(item);
                         const thumb = playlistThumbnailUrl(item);
                         const avatar = avatarUrl(item);
-                        const meta = joinMeta([
+                        const playlistMeta = joinMeta([
                             item.author || "",
                             Number.isFinite(Number(item.videoCount)) ? item.videoCount + " videos" : ""
                         ]);
@@ -778,27 +854,23 @@
                             <div class="text-block">
                                 <a href="<%= href %>" class="title"><%= item.title || "Untitled playlist" %></a>
 
-                                <% if (meta) { %>
+                                <% if (playlistMeta) { %>
                                     <div class="meta">
                                         <% if (authorHref && authorHref !== "#" && item.author) { %>
                                             <a href="<%= authorHref %>"><%= item.author %></a><%= Number.isFinite(Number(item.videoCount)) ? " • " + item.videoCount + " videos" : "" %>
                                         <% } else { %>
-                                            <%= meta %>
+                                            <%= playlistMeta %>
                                         <% } %>
                                     </div>
                                 <% } %>
                             </div>
-
-                            <button class="menu-button" type="button" aria-label="More options">
-                                <i class="fa-regular fa-ellipsis-vertical"></i>
-                            </button>
                         </div>
                     </article>
                 <% } else if (item && item.type === "channel") { %>
                     <%
                         const href = channelHref(item);
                         const avatar = avatarUrl(item);
-                        const meta = joinMeta([
+                        const channelMeta = joinMeta([
                             formatCount(item.subCount, "subscribers"),
                             formatCount(item.videoCount, "videos")
                         ]);
@@ -827,24 +899,20 @@
                             <div class="text-block">
                                 <a href="<%= href %>" class="channel-title"><%= item.author || "Channel" %></a>
 
-                                <% if (meta) { %>
-                                    <div class="meta"><%= meta %></div>
+                                <% if (channelMeta) { %>
+                                    <div class="meta"><%= channelMeta %></div>
                                 <% } %>
 
                                 <% if (item.description) { %>
                                     <div class="channel-description"><%= item.description %></div>
                                 <% } %>
                             </div>
-
-                            <button class="menu-button" type="button" aria-label="More options">
-                                <i class="fa-regular fa-ellipsis-vertical"></i>
-                            </button>
                         </div>
                     </article>
                 <% } else if (item && item.type === "hashtag") { %>
                     <%
                         const href = hashtagHref(item);
-                        const meta = joinMeta([
+                        const hashtagMeta = joinMeta([
                             formatCount(item.videoCount, "videos"),
                             formatCount(item.channelCount, "channels")
                         ]);
@@ -857,13 +925,9 @@
                             <span class="text-block">
                                 <span class="hashtag-title"><%= item.title || "Hashtag" %></span>
 
-                                <% if (meta) { %>
-                                    <span class="meta"><%= meta %></span>
+                                <% if (hashtagMeta) { %>
+                                    <span class="meta"><%= hashtagMeta %></span>
                                 <% } %>
-                            </span>
-
-                            <span class="menu-button" aria-hidden="true">
-                                <i class="fa-regular fa-ellipsis-vertical"></i>
                             </span>
                         </a>
                     </article>
