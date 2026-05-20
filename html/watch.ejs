@@ -3453,7 +3453,21 @@ document.addEventListener("fullscreenchange", handleFullscreen);
 
     <link href=<%- proxyurl %>/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css rel=stylesheet>
 <style>
-  
+    <!-- player -->
+  <script id="baseScript" src="/static/base-player.js?ver=2026042h25&videoID=<%=VideoData.videoId%>&version=14kh0459gs6"></script><link href="/css/videojs-v8.23.4.css?v=0004dfe42" rel="stylesheet" />
+  <script src="/static/vjs.min.js?v=0004dfe42"></script><!-- custom video player for poke --><!-- uses player_ias.vflset/en_US/base.js --><!-- helps with fetching video information too! --><script>
+window.authorchannelname = "<%- VideoData?.author
+  .replace(/\s*-\s*Topic$/,'')
+  .replace(/VEVO$/,'')
+  .replace(/([a-z])([A-Z])/g,'$1 $2')
+  .replace(/([A-Za-z])([0-9])/g,'$1 $2')
+  .replace(/\s+/g,' ')
+  .trim()
+%>";
+
+window.proxyurl = "<%- media_proxy_url %>/proxy?url="
+</script>
+
     @font-face {
   font-family: "PokeTube Flex";
   src: url("/static/robotoflex.ttf");
@@ -3519,20 +3533,6 @@ a {
 
 </style>
   
-  <!-- player -->
-  <link href="/css/videojs-v8.23.4.css?v=0004dfe42" rel="stylesheet" />
-  <script src="/static/vjs.min.js?v=0004dfe42"></script><!-- custom video player for poke --><!-- uses player_ias.vflset/en_US/base.js --><!-- helps with fetching video information too! --><script>
-window.authorchannelname = "<%- VideoData?.author
-  .replace(/\s*-\s*Topic$/,'')
-  .replace(/VEVO$/,'')
-  .replace(/([a-z])([A-Z])/g,'$1 $2')
-  .replace(/([A-Za-z])([0-9])/g,'$1 $2')
-  .replace(/\s+/g,' ')
-  .trim()
-%>";
-
-window.proxyurl = "<%- media_proxy_url %>/proxy?url="
-</script><script id="baseScript" src="/static/base-player.js?ver=2026042h25&videoID=<%=VideoData.videoId%>&version=14kh0459gs6"></script>
 
              <%  if (Array.isArray( !inv.comments)) { %> 
 
