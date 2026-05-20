@@ -3404,13 +3404,44 @@ document.addEventListener("fullscreenchange", handleFullscreen);
   <% if (!e) { %>
 <meta content="<%=VideoData.title%>" name=title>
 <meta content="<%=color%>" name="theme-color">
-<meta content="<%= video?.Channel?.Name || VideoData.author%>" name=twitter:author>
-<meta content=@youtube name=twitter:site>
-<meta content="https://poketube.fun/watch?v=<%=VideoData.videoId%>" name=twitter:url>
-<meta content="<%=VideoData.title%> - PokeTube" name=twitter:title>
-<meta content="mobile this video by <%= video?.Channel?.Name || VideoData.author%> On PokeTube. The YouTube front-end that doesnt track you!" property=twitter:description>
-<meta content="https://i.ytimg.com/vi/<%=VideoData.videoId%>/maxresdefault.jpg" property=og:image>
-<meta content=summary_large_image name=twitter:card>
+<%
+  const desc = `Watch this ${turntomins(VideoData?.lengthSeconds) || "LIVE"} long video from ${VideoData?.author.replace("- Topic", "")} On Poke! 
+👍 ${convertLegacy(engagement?.likes)} | 👎 ${convertLegacy(engagement?.dislikes)} | 📈 ${convertLegacy(engagement?.viewCount)} Views 🗓️ ${date.replace("Premiered", " ")} 💬 ${!isNaN(inv.commentCount) ? inv.commentCount.toLocaleString() : 0}`;
+
+  const image = `https://i.ytimg.com/vi/${VideoData.videoId}/maxresdefault.jpg`;
+  const url   = `https://${hostname}/watch?v=${VideoData?.videoId}`;
+  const title = `${VideoData?.title} | Poke`;
+
+  const twitterTags = [
+    { name: "twitter:author", content: VideoData?.author },
+    { name: "twitter:url", content: url },
+    { name: "twitter:title", content: title },
+    { name: "twitter:description", content: desc },
+    { name: "twitter:card", content: "summary_large_image" },
+  ];
+
+  const facebookTags = [
+    { property: "facebook:title", content: title },
+    { property: "facebook:description", content: desc },
+    { property: "facebook:image", content: image },
+  ];
+
+  const ogTags = [
+    { property: "og:title", content: title },
+    { property: "og:url", content: url },
+    { property: "og:description", content: desc },
+    { property: "og:image", content: image },
+  ];
+%>
+<% twitterTags.forEach(tag => { -%>
+<meta name="<%= tag.name %>" content="<%- tag.content %>">
+<% }) -%>
+<% facebookTags.forEach(tag => { -%>
+<meta property="<%= tag.property %>" content="<%- tag.content %>">
+<% }) -%>
+<% ogTags.forEach(tag => { -%>
+<meta property="<%= tag.property %>" content="<%- tag.content %>">
+<% }) -%>
 <link href="https://poketube.fun/watch?v=<%=VideoData.videoId%>" itemprop=url>
  <% } %> <!-- close the } -->
 <meta name="viewport" content="width=device-width,initial-scale=1">
