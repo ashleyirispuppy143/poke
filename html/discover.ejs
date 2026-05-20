@@ -3,170 +3,82 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mobile Search</title>
-
-    <% if (!mobilesearch && !tab) { %>
-        <meta http-equiv="refresh" content="0; url=/search">
-    <% } %>
-
-    <link href="/css/yt-ukraine.svg?v=6" rel="icon">
-    <link href="/css/app-cdn.min.css" rel="stylesheet">
+    <title>Search Results</title>
     
     <style>
         @import url("https://p.poketube.fun/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css");
 
         :root {
             --bg-color: #0f0f0f;
-            --header-bg: rgba(15, 15, 15, 0.92);
             --text-color: #ffffff;
             --secondary-text: #aaaaaa;
-            --muted-text: #7d7d7d;
             --input-bg: #1f1f1f;
-            --input-border: #333333;
-            --input-border-focus: #575757;
-            --card-bg: #151515;
-            --chip-bg: #222222;
-            --divider: #262626;
-            --shadow: rgba(0, 0, 0, 0.35);
-        }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        html {
-            background: var(--bg-color);
         }
 
         body {
             background-color: var(--bg-color);
             color: var(--text-color);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: Roboto, Arial, sans-serif;
             margin: 0;
             padding: 0;
-            -webkit-tap-highlight-color: transparent;
-            min-height: 100vh;
         }
 
-        body.no-scroll {
-            overflow: hidden;
-        }
-
+        /* Header / Search Bar */
         .app-header {
+            padding: 10px;
+            background: var(--bg-color);
             position: sticky;
             top: 0;
             z-index: 100;
-            background: var(--header-bg);
-            backdrop-filter: blur(18px);
-            -webkit-backdrop-filter: blur(18px);
-            border-bottom: 1px solid var(--divider);
-            box-shadow: 0 8px 24px var(--shadow);
-        }
-
-        .nav-wrap {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            min-height: 64px;
-            padding: 10px 14px;
-            padding-top: max(10px, env(safe-area-inset-top));
         }
 
         .search-container {
-            flex: 1 1 auto;
-            min-width: 0;
-            height: 44px;
             display: flex;
             align-items: center;
-            gap: 10px;
             background: var(--input-bg);
-            border: 1px solid var(--input-border);
             border-radius: 999px;
-            padding: 0 8px 0 16px;
-            transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
-        }
-
-        .search-container:focus-within {
-            border-color: var(--input-border-focus);
-            background: #242424;
-            box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.05);
-        }
-
-        .search-icon-inline {
-            color: var(--secondary-text);
-            font-size: 15px;
-            flex: 0 0 auto;
+            padding: 8px 16px;
+            gap: 12px;
         }
 
         input[name="mobilesearch"] {
-            appearance: none;
             background: transparent;
             border: none;
-            color: var(--text-color);
-            width: 100%;
-            min-width: 0;
-            outline: none;
-            font-size: 16px;
-            line-height: 1;
-            padding: 0;
-        }
-
-        input[name="mobilesearch"]::placeholder {
-            color: var(--muted-text);
-            opacity: 1;
-        }
-
-        button.search-btn {
-            width: 34px;
-            height: 34px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.08);
             color: white;
+            flex: 1;
+            font-size: 16px;
+            outline: none;
+        }
+
+        .search-icon-inline, .search-btn {
+            color: var(--secondary-text);
+            font-size: 18px;
             cursor: pointer;
-            border-radius: 999px;
-            padding: 0;
-            font-size: 15px;
-            flex: 0 0 auto;
-            transition: background 160ms ease, transform 160ms ease;
+            border: none;
+            background: none;
         }
 
-        button.search-btn:active {
-            transform: scale(0.94);
-            background: rgba(255, 255, 255, 0.14);
-        }
-
+        /* Results List */
         .video-grid {
             display: flex;
             flex-direction: column;
+            padding: 10px;
             gap: 12px;
-            padding: 14px;
-            padding-bottom: calc(24px + env(safe-area-inset-bottom));
-            max-width: 760px;
-            margin: 0 auto;
         }
 
-        /* List View Styles */
         .video-card {
             display: flex;
-            flex-direction: row;
             gap: 12px;
-            color: white;
-            overflow: hidden;
             align-items: flex-start;
         }
 
         .thumbnail-link {
-            flex: 0 0 120px;
-            display: block;
-            text-decoration: none;
-            color: inherit;
+            flex-shrink: 0;
+            width: 120px;
+            height: 68px; /* Standard 16:9 ratio for the 120px width */
             border-radius: 8px;
             overflow: hidden;
-            background: var(--card-bg);
-            aspect-ratio: 16 / 9;
+            background: #222;
         }
 
         .thumbnail {
@@ -175,187 +87,65 @@
             background-size: cover;
             background-position: center;
             display: block;
-            transition: transform 180ms ease, filter 180ms ease;
         }
 
         .video-info {
-            flex: 1;
-            min-width: 0;
-            padding-top: 2px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            overflow: hidden;
         }
 
         .title {
             color: var(--text-color);
+            font-size: 14px;
             text-decoration: none;
-            font-size: 15px;
-            font-weight: normal; 
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
-            line-height: 1.35;
-            letter-spacing: -0.01em;
+            line-height: 1.4;
+            font-weight: 400; /* Removed bold */
         }
 
-        .meta-row {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            margin-top: 4px;
-            min-width: 0;
-        }
-
-        .author, .author-fallback {
-            display: inline-flex;
-            align-items: center;
-            max-width: 100%;
-            font-size: 13px;
+        .author {
             color: var(--secondary-text);
+            font-size: 12px;
+            margin-top: 4px;
             text-decoration: none;
-            line-height: 1.3;
-            min-width: 0;
-        }
-
-        .author span, .author-fallback span {
-            display: block;
+            white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .pagination {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 8px 0 4px;
-            gap: 12px;
-        }
-
-        .pagination a {
-            color: white;
-            text-decoration: none;
-            background: var(--chip-bg);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            padding: 10px 18px;
-            border-radius: 999px;
-            font-size: 14px;
-            font-weight: normal;
-            min-width: 92px;
-            text-align: center;
-        }
-
-        .loading {
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.78);
-            z-index: 9999;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            backdrop-filter: blur(4px);
-        }
-
-        .spinner {
-            border: 4px solid #333333;
-            border-top: 4px solid #ffffff;
-            border-radius: 50%;
-            width: 42px;
-            height: 42px;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
 
     <header class="app-header">
-        <div class="nav-wrap">
-            <form action="/app" class="search-container" role="search">
-                <i class="fa-light fa-search search-icon-inline" aria-hidden="true"></i>
-                <input type="text" name="mobilesearch" value="<%= typeof mobilesearch !== 'undefined' ? mobilesearch : '' %>" placeholder="Search" autocomplete="off">
-                <button type="submit" class="search-btn" aria-label="Search">
-                    <i class="fa-light fa-arrow-right"></i>
-                </button>
-            </form>
-        </div>
+        <form action="/app" class="search-container">
+            <i class="fa-light fa-search search-icon-inline"></i>
+            <input type="text" name="mobilesearch" value="<%= typeof mobilesearch !== 'undefined' ? mobilesearch : '' %>" placeholder="Search">
+            <button type="submit" class="search-btn">
+                <i class="fa-light fa-arrow-right"></i>
+            </button>
+        </form>
     </header>
 
     <main class="video-grid">
-        <% if (typeof j !== 'undefined' && j && Array.isArray(j.results) && j.results.length) { %>
+        <% if (typeof j !== 'undefined' && j && Array.isArray(j.results)) { %>
             <% j.results.forEach(x => { %>
-                <%
-                    const videoId = x && x.videoId ? x.videoId : '';
-                    const authorId = x && (x.authorId || x.channelId || x.ucid || x.authorUrl || x.channelUrl) ? (x.authorId || x.channelId || x.ucid || x.authorUrl || x.channelUrl) : '';
-                    let cleanAuthorId = authorId;
-
-                    if (cleanAuthorId && typeof cleanAuthorId === 'string') {
-                        cleanAuthorId = cleanAuthorId.replace('/channel/', '').replace('/c/', '').replace('/user/', '').replace('@', '');
-                    }
-                %>
-
                 <article class="video-card">
-                    <a href="/watch?v=<%- videoId %>" class="thumbnail-link" aria-label="<%- x.title %>">
-                        <span class="thumbnail" style="background-image: url('https://i.ytimg.com/vi/<%= videoId %>/hqdefault.jpg');"></span>
+                    <a href="/watch?v=<%- x.videoId %>" class="thumbnail-link">
+                        <span class="thumbnail" style="background-image: url('https://i.ytimg.com/vi/<%- x.videoId %>/mqdefault.jpg');"></span>
                     </a>
-
                     <div class="video-info">
-                        <a href="/watch?v=<%- videoId %>" class="title"><%- x.title %></a>
-
-                        <div class="meta-row">
-                            <% if (cleanAuthorId) { %>
-                                <a class="author" href="/channel?id=<%= encodeURIComponent(cleanAuthorId) %>">
-                                    <span><%- x.author %></span>
-                                </a>
-                            <% } else { %>
-                                <div class="author-fallback">
-                                    <span><%- x.author %></span>
-                                </div>
-                            <% } %>
-                        </div>
+                        <a href="/watch?v=<%- x.videoId %>" class="title"><%- x.title %></a>
+                        <div class="author"><%- x.author %></div>
                     </div>
                 </article>
             <% }) %>
-
-            <div class="pagination">
-                <%
-                    let currentPage = (typeof continuation !== 'undefined' && continuation) ? Number(continuation) : 1;
-                    if (!Number.isFinite(currentPage) || currentPage < 1) currentPage = 1;
-                %>
-
-                <% if (currentPage > 1) { %>
-                    <a href="/app?mobilesearch=<%= encodeURIComponent(typeof mobilesearch !== 'undefined' ? mobilesearch : '') %>&continuation=<%= currentPage - 1 %>">Prev</a>
-                <% } %>
-
-                <a href="/app?mobilesearch=<%= encodeURIComponent(typeof mobilesearch !== 'undefined' ? mobilesearch : '') %>&continuation=<%= currentPage + 1 %>">Next</a>
-            </div>
         <% } %>
     </main>
 
-    <script>
-        const links = document.querySelectorAll('a');
-        links.forEach(link => {
-            link.addEventListener('click', e => {
-                const href = link.getAttribute('href');
-                if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
-                if (link.target && link.target !== '_self') return;
-                
-                const loading = document.createElement('div');
-                loading.className = 'loading';
-                loading.innerHTML = '<div class="spinner"></div>';
-                document.body.classList.add('no-scroll');
-                document.body.appendChild(loading);
-            });
-        });
-
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(regs => {
-                for (let reg of regs) reg.unregister();
-            });
-        }
-    </script>
 </body>
 </html>
