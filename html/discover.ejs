@@ -2,53 +2,68 @@
 <html lang="en">
 <head>
     <%
-        function pickBestThumbnail(thumbnails, fallbackVideoId) {
-            if (Array.isArray(thumbnails) && thumbnails.length) {
-                const preferred = [
-                    "maxresdefault",
-                    "sddefault",
-                    "high",
-                    "medium",
-                    "default",
-                    "start",
-                    "middle",
-                    "end"
-                ];
+        const results = typeof j !== "undefined" && j && Array.isArray(j.results) ? j.results : [];
+        const searchValue = typeof mobilesearch !== "undefined" ? mobilesearch : "";
+        const hasMobileSearch = typeof mobilesearch !== "undefined" && Boolean(mobilesearch);
+        const hasTab = typeof tab !== "undefined" && Boolean(tab);
 
-                for (const quality of preferred) {
-                    const found = thumbnails.find(thumbnail => thumbnail && thumbnail.quality === quality && thumbnail.url);
-                    if (found) return found.url;
-                }
+        let currentPage = typeof continuation !== "undefined" && continuation ? Number(continuation) : 1;
+        if (!Number.isFinite(currentPage) || currentPage < 1) currentPage = 1;
 
-                const sorted = thumbnails
-                    .filter(thumbnail => thumbnail && thumbnail.url)
-                    .sort((a, b) => ((b.width || 0) * (b.height || 0)) - ((a.width || 0) * (a.height || 0)));
+        const previousPage = currentPage > 1 ? currentPage - 1 : 1;
+        const nextPage = currentPage + 1;
 
-                if (sorted[0]) return sorted[0].url;
+        function pageUrl(page) {
+            return "/app?mobilesearch=" + encodeURIComponent(searchValue) + "&continuation=" + encodeURIComponent(page);
+        }
+
+        function videoHref(item) {
+            return item && item.videoId ? "/watch?v=" + encodeURIComponent(item.videoId) : "#";
+        }
+
+        function playlistHref(item) {
+            return item && item.playlistId ? "/playlist?list=" + encodeURIComponent(item.playlistId) : "#";
+        }
+
+        function channelHref(item) {
+            if (!item) return "#";
+            if (item.authorUrl) return item.authorUrl;
+            if (item.authorId) return "/channel?id=" + encodeURIComponent(item.authorId);
+            return "#";
+        }
+
+        function hashtagHref(item) {
+            return item && item.url ? item.url : "#";
+        }
+
+        function videoThumbnailUrl(videoId) {
+            if (!videoId) return "";
+            return "https://i.ytimg.com/vi/" + encodeURIComponent(videoId) + "/hqdefault.jpg";
+        }
+
+        function playlistThumbnailUrl(item) {
+            if (item && Array.isArray(item.videos) && item.videos[0] && item.videos[0].videoId) {
+                return videoThumbnailUrl(item.videos[0].videoId);
             }
 
-            if (fallbackVideoId) return "https://i.ytimg.com/vi/" + encodeURIComponent(fallbackVideoId) + "/hqdefault.jpg";
+            if (item && item.playlistThumbnail) return item.playlistThumbnail;
             return "";
         }
 
-        function pickBestAvatar(thumbnails) {
-            if (Array.isArray(thumbnails) && thumbnails.length) {
-                if (thumbnails[1] && thumbnails[1].url) return thumbnails[1].url;
-                if (thumbnails[0] && thumbnails[0].url) return thumbnails[0].url;
-
-                const sorted = thumbnails
-                    .filter(thumbnail => thumbnail && thumbnail.url)
-                    .sort((a, b) => ((b.width || 0) * (b.height || 0)) - ((a.width || 0) * (a.height || 0)));
-
-                if (sorted[0]) return sorted[0].url;
-            }
-
+        function avatarUrl(item) {
+            if (!item || !Array.isArray(item.authorThumbnails)) return "";
+            if (item.authorThumbnails[1] && item.authorThumbnails[1].url) return item.authorThumbnails[1].url;
+            if (item.authorThumbnails[0] && item.authorThumbnails[0].url) return item.authorThumbnails[0].url;
             return "";
+        }
+
+        function authorInitial(author) {
+            if (!author || typeof author !== "string") return "?";
+            return author.trim().charAt(0).toUpperCase() || "?";
         }
 
         function formatDuration(seconds) {
             const value = Number(seconds);
-
             if (!Number.isFinite(value) || value <= 0) return "";
 
             const total = Math.floor(value);
@@ -65,7 +80,6 @@
 
         function formatCompactNumber(value) {
             const number = Number(value);
-
             if (!Number.isFinite(number) || number < 0) return "";
 
             if (number < 1000) return String(number);
@@ -77,72 +91,25 @@
         }
 
         function formatViews(value) {
-            const text = formatCompactNumber(value);
-            return text ? text + " views" : "";
+            const formatted = formatCompactNumber(value);
+            return formatted ? formatted + " views" : "";
         }
 
-        function cleanChannelId(item) {
-            const raw = item && (item.authorId || item.channelId || item.ucid || item.authorUrl || item.channelUrl)
-                ? (item.authorId || item.channelId || item.ucid || item.authorUrl || item.channelUrl)
-                : "";
-
-            if (!raw || typeof raw !== "string") return "";
-
-            return raw
-                .replace("/channel/", "")
-                .replace("/c/", "")
-                .replace("/user/", "")
-                .replace(/^@/, "")
-                .trim();
+        function formatCount(value, label) {
+            const formatted = formatCompactNumber(value);
+            return formatted ? formatted + " " + label : "";
         }
 
-        function authorInitial(author) {
-            if (!author || typeof author !== "string") return "?";
-            return author.trim().charAt(0).toUpperCase() || "?";
-        }
-
-        function resultUrl(item) {
-            if (!item || !item.type) return "#";
-
-            if (item.type === "video" && item.videoId) return "/watch?v=" + encodeURIComponent(item.videoId);
-            if (item.type === "playlist" && item.playlistId) return "/playlist?list=" + encodeURIComponent(item.playlistId);
-
-            if (item.type === "channel") {
-                const id = cleanChannelId(item);
-                return id ? "/channel?id=" + encodeURIComponent(id) : "#";
-            }
-
-            if (item.type === "hashtag" && item.url) return item.url;
-
-            return "#";
-        }
-
-        function channelUrl(item) {
-            const id = cleanChannelId(item);
-            return id ? "/channel?id=" + encodeURIComponent(id) : "";
-        }
-
-        function metaParts(parts) {
+        function joinMeta(parts) {
             return parts.filter(Boolean).join(" • ");
         }
-
-        const results = typeof j !== "undefined" && j && Array.isArray(j.results) ? j.results : [];
-        let currentPage = (typeof continuation !== "undefined" && continuation) ? Number(continuation) : 1;
-
-        if (!Number.isFinite(currentPage) || currentPage < 1) currentPage = 1;
-
-        const searchValue = typeof mobilesearch !== "undefined" ? mobilesearch : "";
-        const previousPage = currentPage > 1 ? currentPage - 1 : 1;
-        const nextPage = currentPage + 1;
-        const previousPageUrl = "/app?mobilesearch=" + encodeURIComponent(searchValue) + "&continuation=" + previousPage;
-        const nextPageUrl = "/app?mobilesearch=" + encodeURIComponent(searchValue) + "&continuation=" + nextPage;
     %>
 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mobile Search</title>
 
-    <% if (!mobilesearch && !tab) { %>
+    <% if (!hasMobileSearch && !hasTab) { %>
         <meta http-equiv="refresh" content="0; url=/search">
     <% } %>
 
@@ -153,17 +120,19 @@
         @import url("https://p.poketube.fun/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css");
 
         :root {
-            --bg-color: #0f0f0f;
-            --header-bg: rgba(15, 15, 15, 0.94);
-            --text-color: #ffffff;
-            --secondary-text: #aaaaaa;
-            --muted-text: #777777;
-            --input-bg: #1f1f1f;
-            --input-border: #333333;
-            --input-border-focus: #575757;
-            --divider: #262626;
-            --red: #ff0000;
-            --shadow: rgba(0, 0, 0, 0.35);
+            --bg: #0f0f0f;
+            --panel: #0f0f0f;
+            --search-bg: #212121;
+            --search-border: #303030;
+            --search-focus: #3f3f3f;
+            --text: #f1f1f1;
+            --text-soft: #aaa;
+            --text-muted: #717171;
+            --line: #272727;
+            --chip: #272727;
+            --chip-hover: #343434;
+            --danger: #ff0033;
+            --shadow: rgba(0, 0, 0, 0.45);
         }
 
         * {
@@ -171,42 +140,51 @@
         }
 
         html {
-            background: var(--bg-color);
+            background: var(--bg);
         }
 
         body {
             margin: 0;
             padding: 0;
             min-height: 100vh;
-            background: var(--bg-color);
-            color: var(--text-color);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Roboto", "Segoe UI", Helvetica, Arial, sans-serif;
             -webkit-tap-highlight-color: transparent;
-            overscroll-behavior-y: none;
+            overscroll-behavior-y: contain;
         }
 
         body.no-scroll {
             overflow: hidden;
         }
 
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        button,
+        input {
+            font: inherit;
+        }
+
         .app-header {
             position: sticky;
             top: 0;
             z-index: 100;
-            background: var(--header-bg);
+            background: rgba(15, 15, 15, 0.96);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
             backdrop-filter: blur(18px);
             -webkit-backdrop-filter: blur(18px);
-            border-bottom: 1px solid var(--divider);
-            box-shadow: 0 8px 24px var(--shadow);
         }
 
         .nav-wrap {
             display: flex;
             align-items: center;
             gap: 10px;
-            min-height: 60px;
-            padding: 10px 10px;
-            padding-top: max(10px, env(safe-area-inset-top));
+            min-height: 58px;
+            padding: 9px 10px;
+            padding-top: max(9px, env(safe-area-inset-top));
         }
 
         .search-container {
@@ -216,23 +194,23 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            background: var(--input-bg);
-            border: 1px solid var(--input-border);
+            background: var(--search-bg);
+            border: 1px solid var(--search-border);
             border-radius: 999px;
-            padding: 0 8px 0 15px;
-            transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+            padding: 0 8px 0 14px;
+            transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
         }
 
         .search-container:focus-within {
-            border-color: var(--input-border-focus);
-            background: #242424;
-            box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.05);
+            background: #262626;
+            border-color: var(--search-focus);
+            box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.045);
         }
 
         .search-icon-inline {
-            color: var(--secondary-text);
-            font-size: 15px;
             flex: 0 0 auto;
+            color: var(--text-soft);
+            font-size: 15px;
         }
 
         input[name="mobilesearch"] {
@@ -241,20 +219,19 @@
             min-width: 0;
             border: 0;
             outline: 0;
-            padding: 0;
             background: transparent;
-            color: var(--text-color);
+            color: var(--text);
             font-size: 16px;
             line-height: 1;
-            font-weight: 500;
+            padding: 0;
         }
 
         input[name="mobilesearch"]::placeholder {
-            color: var(--muted-text);
+            color: var(--text-muted);
             opacity: 1;
         }
 
-        button.search-btn {
+        .search-btn {
             width: 32px;
             height: 32px;
             flex: 0 0 auto;
@@ -265,54 +242,43 @@
             border-radius: 999px;
             padding: 0;
             background: transparent;
-            color: var(--secondary-text);
+            color: var(--text-soft);
             cursor: pointer;
             font-size: 17px;
-            transition: transform 160ms ease, color 160ms ease;
         }
 
-        button.search-btn:active {
+        .search-btn:active {
             transform: scale(0.94);
-            color: white;
+            color: var(--text);
         }
 
         .feed {
             width: 100%;
             max-width: 520px;
             margin: 0 auto;
-            padding: 0 0 calc(22px + env(safe-area-inset-bottom));
-            background: var(--bg-color);
-        }
-
-        .top-page-counter {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 36px;
-            padding: 0 12px;
-            border-bottom: 1px solid var(--divider);
-            color: var(--secondary-text);
-            font-size: 12px;
-            font-weight: 500;
-            letter-spacing: 0.01em;
-            background: #0f0f0f;
+            padding: 8px 0 calc(82px + env(safe-area-inset-bottom));
+            background: var(--bg);
         }
 
         .result-card {
-            position: relative;
-            display: block;
             width: 100%;
-            background: #0f0f0f;
-            color: white;
+            background: var(--panel);
+            color: var(--text);
             overflow: hidden;
         }
 
         .result-card + .result-card {
-            margin-top: 14px;
+            margin-top: 5px;
         }
 
-        .result-card.video-result {
-            border-bottom: 3px solid #cc0000;
+        .video-card,
+        .playlist-card {
+            padding: 0 0 7px;
+        }
+
+        .thumbnail-shell {
+            width: 100%;
+            padding: 0 10px;
         }
 
         .thumbnail-link {
@@ -320,104 +286,91 @@
             display: block;
             width: 100%;
             aspect-ratio: 16 / 9;
-            background: #111111;
-            color: inherit;
-            text-decoration: none;
             overflow: hidden;
+            border-radius: 12px;
+            background: #181818;
         }
 
         .thumbnail-img {
             display: block;
             width: 100%;
             height: 100%;
+            border-radius: 12px;
             object-fit: cover;
-            background: #111111;
+            background: #181818;
         }
 
-        .duration-badge {
-            position: absolute;
-            right: 7px;
-            bottom: 7px;
-            min-width: 34px;
-            height: 20px;
-            display: inline-flex;
+        .thumbnail-placeholder {
+            width: 100%;
+            height: 100%;
+            display: flex;
             align-items: center;
             justify-content: center;
-            padding: 0 5px;
-            border-radius: 3px;
-            background: rgba(0, 0, 0, 0.86);
-            color: white;
-            font-size: 12px;
-            line-height: 1;
-            font-weight: 500;
-            letter-spacing: -0.01em;
+            border-radius: 12px;
+            background: #181818;
+            color: var(--text-muted);
+            font-size: 26px;
         }
 
-        .live-badge {
-            position: absolute;
-            right: 7px;
-            bottom: 7px;
-            min-width: 34px;
-            height: 20px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 0 6px;
-            border-radius: 3px;
-            background: #cc0000;
-            color: white;
-            font-size: 12px;
-            line-height: 1;
-            font-weight: 700;
-            letter-spacing: 0.01em;
-        }
-
+        .duration-badge,
+        .live-badge,
         .playlist-badge {
             position: absolute;
-            right: 7px;
-            bottom: 7px;
-            min-height: 22px;
+            right: 6px;
+            bottom: 6px;
+            min-height: 20px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 5px;
-            padding: 0 7px;
-            border-radius: 3px;
-            background: rgba(0, 0, 0, 0.86);
-            color: white;
+            border-radius: 4px;
+            color: #fff;
             font-size: 12px;
             line-height: 1;
             font-weight: 600;
         }
 
+        .duration-badge {
+            min-width: 34px;
+            padding: 0 5px;
+            background: rgba(0, 0, 0, 0.86);
+        }
+
+        .live-badge {
+            padding: 0 7px;
+            background: #cc0000;
+            letter-spacing: 0.01em;
+        }
+
+        .playlist-badge {
+            gap: 5px;
+            padding: 0 7px;
+            background: rgba(0, 0, 0, 0.86);
+        }
+
         .details-row {
             display: grid;
-            grid-template-columns: 48px minmax(0, 1fr) 32px;
-            column-gap: 12px;
+            grid-template-columns: 40px minmax(0, 1fr) 32px;
+            column-gap: 10px;
             align-items: start;
-            min-height: 88px;
-            padding: 12px 10px 12px 12px;
+            padding: 9px 10px 0;
         }
 
         .avatar-link,
         .avatar-fallback {
-            width: 40px;
-            height: 40px;
+            width: 36px;
+            height: 36px;
             display: block;
-            border-radius: 999px;
             overflow: hidden;
+            border-radius: 999px;
             background: #272727;
-            text-decoration: none;
-            color: white;
-            flex: 0 0 auto;
         }
 
         .avatar-img {
+            display: block;
             width: 100%;
             height: 100%;
-            display: block;
-            object-fit: cover;
             border-radius: 999px;
+            object-fit: cover;
             background: #272727;
         }
 
@@ -429,15 +382,14 @@
             justify-content: center;
             border-radius: 999px;
             background: linear-gradient(135deg, #7b1fa2, #e91e63);
-            color: white;
-            font-size: 18px;
-            font-weight: 700;
+            color: #fff;
+            font-size: 16px;
             line-height: 1;
+            font-weight: 700;
         }
 
         .text-block {
             min-width: 0;
-            padding-top: 0;
         }
 
         .title {
@@ -445,17 +397,16 @@
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
-            color: var(--text-color);
-            text-decoration: none;
+            color: var(--text);
             font-size: 15px;
             font-weight: 500;
-            line-height: 1.25;
+            line-height: 1.26;
             letter-spacing: -0.01em;
         }
 
         .meta {
-            margin-top: 5px;
-            color: var(--secondary-text);
+            margin-top: 4px;
+            color: var(--text-soft);
             font-size: 12px;
             font-weight: 400;
             line-height: 1.35;
@@ -465,8 +416,7 @@
         }
 
         .meta a {
-            color: var(--secondary-text);
-            text-decoration: none;
+            color: var(--text-soft);
         }
 
         .menu-button {
@@ -479,48 +429,44 @@
             border-radius: 999px;
             padding: 2px 0 0;
             background: transparent;
-            color: #eeeeee;
-            font-size: 19px;
-            line-height: 1;
+            color: #e6e6e6;
             cursor: pointer;
+            font-size: 18px;
+            line-height: 1;
         }
 
         .menu-button:active {
             background: rgba(255, 255, 255, 0.08);
         }
 
-        .channel-result {
-            padding: 18px 14px;
-            border-bottom: 1px solid var(--divider);
+        .channel-card {
+            padding: 11px 10px;
         }
 
         .channel-inner {
             display: grid;
-            grid-template-columns: 76px minmax(0, 1fr) 32px;
-            column-gap: 14px;
+            grid-template-columns: 72px minmax(0, 1fr) 32px;
+            column-gap: 13px;
             align-items: center;
         }
 
         .channel-avatar-link,
         .channel-avatar-fallback {
-            width: 76px;
-            height: 76px;
+            width: 72px;
+            height: 72px;
             display: block;
-            border-radius: 999px;
             overflow: hidden;
+            border-radius: 999px;
             background: #272727;
-            color: white;
-            text-decoration: none;
         }
 
         .channel-title {
             display: block;
-            color: white;
-            text-decoration: none;
+            overflow: hidden;
+            color: var(--text);
             font-size: 16px;
             font-weight: 500;
             line-height: 1.25;
-            overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
@@ -531,114 +477,122 @@
             -webkit-box-orient: vertical;
             overflow: hidden;
             margin-top: 5px;
-            color: var(--secondary-text);
+            color: var(--text-soft);
             font-size: 12px;
             line-height: 1.35;
         }
 
+        .hashtag-card {
+            padding: 8px 10px;
+        }
+
         .hashtag-result {
             display: grid;
-            grid-template-columns: 48px minmax(0, 1fr) 32px;
-            column-gap: 12px;
+            grid-template-columns: 40px minmax(0, 1fr) 32px;
+            column-gap: 10px;
             align-items: center;
-            padding: 14px 10px 14px 12px;
-            border-bottom: 1px solid var(--divider);
-            text-decoration: none;
-            color: white;
+            min-height: 54px;
         }
 
         .hashtag-icon {
-            width: 40px;
-            height: 40px;
+            width: 36px;
+            height: 36px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             border-radius: 999px;
             background: #272727;
-            color: white;
+            color: var(--text);
             font-size: 18px;
             font-weight: 700;
         }
 
         .hashtag-title {
             display: block;
-            color: white;
-            text-decoration: none;
+            overflow: hidden;
+            color: var(--text);
             font-size: 15px;
             font-weight: 500;
             line-height: 1.25;
-            overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
 
         .empty-state {
-            padding: 36px 18px;
-            color: var(--secondary-text);
+            padding: 42px 18px;
+            color: var(--text-soft);
             text-align: center;
             font-size: 14px;
             line-height: 1.45;
         }
 
         .pagination {
-            position: sticky;
+            position: fixed;
+            left: 0;
+            right: 0;
             bottom: 0;
-            z-index: 80;
+            z-index: 90;
+            display: flex;
+            justify-content: center;
+            padding: 0 10px;
+            pointer-events: none;
+        }
+
+        .pagination-inner {
+            width: 100%;
+            max-width: 520px;
             display: grid;
             grid-template-columns: 1fr auto 1fr;
             align-items: center;
-            gap: 10px;
-            padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
-            margin-top: 8px;
-            background: rgba(15, 15, 15, 0.94);
-            border-top: 1px solid var(--divider);
+            gap: 9px;
+            padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+            background: rgba(15, 15, 15, 0.96);
+            border-top: 1px solid rgba(255, 255, 255, 0.07);
             backdrop-filter: blur(18px);
             -webkit-backdrop-filter: blur(18px);
+            pointer-events: auto;
         }
 
-        .pagination a,
-        .pagination .disabled-page-button {
-            min-width: 88px;
-            min-height: 40px;
+        .page-button,
+        .disabled-page-button,
+        .page-count {
+            min-height: 39px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 7px;
-            padding: 0 16px;
             border-radius: 999px;
-            background: #222222;
             border: 1px solid rgba(255, 255, 255, 0.08);
-            color: white;
-            text-decoration: none;
+            user-select: none;
+            white-space: nowrap;
+        }
+
+        .page-button,
+        .disabled-page-button {
+            gap: 7px;
+            padding: 0 15px;
+            background: var(--chip);
+            color: var(--text);
             font-size: 14px;
             font-weight: 500;
-            user-select: none;
         }
 
-        .pagination a:active {
+        .page-button:active {
             transform: scale(0.97);
-            background: #2a2a2a;
+            background: var(--chip-hover);
         }
 
-        .pagination .disabled-page-button {
+        .disabled-page-button {
             opacity: 0.35;
             pointer-events: none;
         }
 
         .page-count {
             min-width: 74px;
-            min-height: 40px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
             padding: 0 12px;
-            border-radius: 999px;
             background: #181818;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            color: var(--secondary-text);
+            color: var(--text-soft);
             font-size: 13px;
             font-weight: 600;
-            white-space: nowrap;
         }
 
         .loading {
@@ -656,9 +610,9 @@
         .spinner {
             width: 42px;
             height: 42px;
-            border: 4px solid #333333;
-            border-top: 4px solid #ffffff;
-            border-radius: 50%;
+            border: 4px solid #333;
+            border-top-color: #fff;
+            border-radius: 999px;
             animation: spin 1s linear infinite;
         }
 
@@ -674,8 +628,13 @@
 
         @media (min-width: 521px) {
             .feed {
-                border-left: 1px solid #202020;
-                border-right: 1px solid #202020;
+                border-left: 1px solid rgba(255, 255, 255, 0.06);
+                border-right: 1px solid rgba(255, 255, 255, 0.06);
+            }
+
+            .pagination-inner {
+                border-left: 1px solid rgba(255, 255, 255, 0.06);
+                border-right: 1px solid rgba(255, 255, 255, 0.06);
             }
         }
     </style>
@@ -695,39 +654,41 @@
 
     <main class="feed">
         <% if (results.length) { %>
-            <div class="top-page-counter">Page <%= currentPage %></div>
-
             <% results.forEach(item => { %>
                 <% if (item && item.type === "video") { %>
                     <%
-                        const videoId = item.videoId || "";
-                        const href = resultUrl(item);
-                        const thumbnail = pickBestThumbnail(item.videoThumbnails, videoId);
-                        const avatar = pickBestAvatar(item.authorThumbnails);
+                        const href = videoHref(item);
+                        const authorHref = channelHref(item);
+                        const thumb = videoThumbnailUrl(item.videoId);
+                        const avatar = avatarUrl(item);
                         const duration = formatDuration(item.lengthSeconds);
-                        const authorHref = channelUrl(item);
-                        const metaText = metaParts([
+                        const meta = joinMeta([
                             item.author || "",
-                            formatViews(item.viewCount),
-                            item.publishedText || ""
+                            formatViews(item.viewCount)
                         ]);
                     %>
 
-                    <article class="result-card video-result">
-                        <a href="<%= href %>" class="thumbnail-link" aria-label="<%= item.title || 'Video' %>">
-                            <% if (thumbnail) { %>
-                                <img class="thumbnail-img" src="<%= thumbnail %>" alt="" loading="lazy">
-                            <% } %>
+                    <article class="result-card video-card">
+                        <div class="thumbnail-shell">
+                            <a href="<%= href %>" class="thumbnail-link" aria-label="<%= item.title || 'Video' %>">
+                                <% if (thumb) { %>
+                                    <img class="thumbnail-img" src="<%= thumb %>" alt="" loading="lazy">
+                                <% } else { %>
+                                    <div class="thumbnail-placeholder">
+                                        <i class="fa-light fa-video"></i>
+                                    </div>
+                                <% } %>
 
-                            <% if (item.liveNow) { %>
-                                <span class="live-badge">LIVE</span>
-                            <% } else if (duration) { %>
-                                <span class="duration-badge"><%= duration %></span>
-                            <% } %>
-                        </a>
+                                <% if (item.liveNow) { %>
+                                    <span class="live-badge">LIVE</span>
+                                <% } else if (duration) { %>
+                                    <span class="duration-badge"><%= duration %></span>
+                                <% } %>
+                            </a>
+                        </div>
 
                         <div class="details-row">
-                            <% if (authorHref) { %>
+                            <% if (authorHref && authorHref !== "#") { %>
                                 <a class="avatar-link" href="<%= authorHref %>" aria-label="<%= item.author || 'Channel' %>">
                                     <% if (avatar) { %>
                                         <img class="avatar-img" src="<%= avatar %>" alt="" loading="lazy">
@@ -747,13 +708,17 @@
 
                             <div class="text-block">
                                 <a href="<%= href %>" class="title"><%= item.title || "Untitled video" %></a>
-                                <div class="meta">
-                                    <% if (authorHref && item.author) { %>
-                                        <a href="<%= authorHref %>"><%= item.author %></a><%= metaParts([formatViews(item.viewCount), item.publishedText || ""]) ? " • " + metaParts([formatViews(item.viewCount), item.publishedText || ""]) : "" %>
-                                    <% } else { %>
-                                        <%= metaText %>
-                                    <% } %>
-                                </div>
+                                <%# Upload date hidden for now: item.publishedText %>
+
+                                <% if (meta) { %>
+                                    <div class="meta">
+                                        <% if (authorHref && authorHref !== "#" && item.author) { %>
+                                            <a href="<%= authorHref %>"><%= item.author %></a><%= formatViews(item.viewCount) ? " • " + formatViews(item.viewCount) : "" %>
+                                        <% } else { %>
+                                            <%= meta %>
+                                        <% } %>
+                                    </div>
+                                <% } %>
                             </div>
 
                             <button class="menu-button" type="button" aria-label="More options">
@@ -763,31 +728,36 @@
                     </article>
                 <% } else if (item && item.type === "playlist") { %>
                     <%
-                        const href = resultUrl(item);
-                        const firstVideo = Array.isArray(item.videos) && item.videos[0] ? item.videos[0] : null;
-                        const thumbnail = item.playlistThumbnail || (firstVideo ? pickBestThumbnail(firstVideo.videoThumbnails, firstVideo.videoId) : "");
-                        const avatar = pickBestAvatar(item.authorThumbnails);
-                        const authorHref = channelUrl(item);
-                        const metaText = metaParts([
+                        const href = playlistHref(item);
+                        const authorHref = channelHref(item);
+                        const thumb = playlistThumbnailUrl(item);
+                        const avatar = avatarUrl(item);
+                        const meta = joinMeta([
                             item.author || "",
-                            Number.isFinite(Number(item.videoCount)) ? String(item.videoCount) + " videos" : ""
+                            Number.isFinite(Number(item.videoCount)) ? item.videoCount + " videos" : ""
                         ]);
                     %>
 
-                    <article class="result-card video-result">
-                        <a href="<%= href %>" class="thumbnail-link" aria-label="<%= item.title || 'Playlist' %>">
-                            <% if (thumbnail) { %>
-                                <img class="thumbnail-img" src="<%= thumbnail %>" alt="" loading="lazy">
-                            <% } %>
+                    <article class="result-card playlist-card">
+                        <div class="thumbnail-shell">
+                            <a href="<%= href %>" class="thumbnail-link" aria-label="<%= item.title || 'Playlist' %>">
+                                <% if (thumb) { %>
+                                    <img class="thumbnail-img" src="<%= thumb %>" alt="" loading="lazy">
+                                <% } else { %>
+                                    <div class="thumbnail-placeholder">
+                                        <i class="fa-light fa-list"></i>
+                                    </div>
+                                <% } %>
 
-                            <span class="playlist-badge">
-                                <i class="fa-light fa-list"></i>
-                                <%= Number.isFinite(Number(item.videoCount)) ? item.videoCount : "Playlist" %>
-                            </span>
-                        </a>
+                                <span class="playlist-badge">
+                                    <i class="fa-light fa-list"></i>
+                                    <%= Number.isFinite(Number(item.videoCount)) ? item.videoCount : "Playlist" %>
+                                </span>
+                            </a>
+                        </div>
 
                         <div class="details-row">
-                            <% if (authorHref) { %>
+                            <% if (authorHref && authorHref !== "#") { %>
                                 <a class="avatar-link" href="<%= authorHref %>" aria-label="<%= item.author || 'Channel' %>">
                                     <% if (avatar) { %>
                                         <img class="avatar-img" src="<%= avatar %>" alt="" loading="lazy">
@@ -807,13 +777,16 @@
 
                             <div class="text-block">
                                 <a href="<%= href %>" class="title"><%= item.title || "Untitled playlist" %></a>
-                                <div class="meta">
-                                    <% if (authorHref && item.author) { %>
-                                        <a href="<%= authorHref %>"><%= item.author %></a><%= Number.isFinite(Number(item.videoCount)) ? " • " + item.videoCount + " videos" : "" %>
-                                    <% } else { %>
-                                        <%= metaText %>
-                                    <% } %>
-                                </div>
+
+                                <% if (meta) { %>
+                                    <div class="meta">
+                                        <% if (authorHref && authorHref !== "#" && item.author) { %>
+                                            <a href="<%= authorHref %>"><%= item.author %></a><%= Number.isFinite(Number(item.videoCount)) ? " • " + item.videoCount + " videos" : "" %>
+                                        <% } else { %>
+                                            <%= meta %>
+                                        <% } %>
+                                    </div>
+                                <% } %>
                             </div>
 
                             <button class="menu-button" type="button" aria-label="More options">
@@ -823,27 +796,41 @@
                     </article>
                 <% } else if (item && item.type === "channel") { %>
                     <%
-                        const href = resultUrl(item);
-                        const avatar = pickBestAvatar(item.authorThumbnails);
-                        const metaText = metaParts([
-                            Number.isFinite(Number(item.subCount)) ? formatCompactNumber(item.subCount) + " subscribers" : "",
-                            Number.isFinite(Number(item.videoCount)) ? formatCompactNumber(item.videoCount) + " videos" : ""
+                        const href = channelHref(item);
+                        const avatar = avatarUrl(item);
+                        const meta = joinMeta([
+                            formatCount(item.subCount, "subscribers"),
+                            formatCount(item.videoCount, "videos")
                         ]);
                     %>
 
-                    <article class="result-card channel-result">
+                    <article class="result-card channel-card">
                         <div class="channel-inner">
-                            <a class="channel-avatar-link" href="<%= href %>" aria-label="<%= item.author || 'Channel' %>">
-                                <% if (avatar) { %>
-                                    <img class="avatar-img" src="<%= avatar %>" alt="" loading="lazy">
-                                <% } else { %>
-                                    <span class="avatar-letter"><%= authorInitial(item.author) %></span>
-                                <% } %>
-                            </a>
+                            <% if (href && href !== "#") { %>
+                                <a class="channel-avatar-link" href="<%= href %>" aria-label="<%= item.author || 'Channel' %>">
+                                    <% if (avatar) { %>
+                                        <img class="avatar-img" src="<%= avatar %>" alt="" loading="lazy">
+                                    <% } else { %>
+                                        <span class="avatar-letter"><%= authorInitial(item.author) %></span>
+                                    <% } %>
+                                </a>
+                            <% } else { %>
+                                <div class="channel-avatar-fallback" aria-hidden="true">
+                                    <% if (avatar) { %>
+                                        <img class="avatar-img" src="<%= avatar %>" alt="" loading="lazy">
+                                    <% } else { %>
+                                        <span class="avatar-letter"><%= authorInitial(item.author) %></span>
+                                    <% } %>
+                                </div>
+                            <% } %>
 
                             <div class="text-block">
                                 <a href="<%= href %>" class="channel-title"><%= item.author || "Channel" %></a>
-                                <div class="meta"><%= metaText %></div>
+
+                                <% if (meta) { %>
+                                    <div class="meta"><%= meta %></div>
+                                <% } %>
+
                                 <% if (item.description) { %>
                                     <div class="channel-description"><%= item.description %></div>
                                 <% } %>
@@ -856,20 +843,23 @@
                     </article>
                 <% } else if (item && item.type === "hashtag") { %>
                     <%
-                        const href = resultUrl(item);
-                        const metaText = metaParts([
-                            Number.isFinite(Number(item.videoCount)) ? formatCompactNumber(item.videoCount) + " videos" : "",
-                            Number.isFinite(Number(item.channelCount)) ? formatCompactNumber(item.channelCount) + " channels" : ""
+                        const href = hashtagHref(item);
+                        const meta = joinMeta([
+                            formatCount(item.videoCount, "videos"),
+                            formatCount(item.channelCount, "channels")
                         ]);
                     %>
 
-                    <article class="result-card">
+                    <article class="result-card hashtag-card">
                         <a class="hashtag-result" href="<%= href %>">
                             <span class="hashtag-icon">#</span>
 
                             <span class="text-block">
                                 <span class="hashtag-title"><%= item.title || "Hashtag" %></span>
-                                <span class="meta"><%= metaText %></span>
+
+                                <% if (meta) { %>
+                                    <span class="meta"><%= meta %></span>
+                                <% } %>
                             </span>
 
                             <span class="menu-button" aria-hidden="true">
@@ -879,10 +869,18 @@
                     </article>
                 <% } %>
             <% }) %>
+        <% } else { %>
+            <div class="empty-state">
+                No results found.
+            </div>
+        <% } %>
+    </main>
 
-            <nav class="pagination" aria-label="Search pages">
+    <% if (results.length) { %>
+        <nav class="pagination" aria-label="Search pages">
+            <div class="pagination-inner">
                 <% if (currentPage > 1) { %>
-                    <a href="<%= previousPageUrl %>" rel="prev" aria-label="Previous page">
+                    <a class="page-button" href="<%= pageUrl(previousPage) %>" rel="prev" aria-label="Previous page">
                         <i class="fa-light fa-arrow-left"></i>
                         Prev
                     </a>
@@ -895,24 +893,21 @@
 
                 <span class="page-count" aria-current="page">Page <%= currentPage %></span>
 
-                <a href="<%= nextPageUrl %>" rel="next" aria-label="Next page">
+                <a class="page-button" href="<%= pageUrl(nextPage) %>" rel="next" aria-label="Next page">
                     Next
                     <i class="fa-light fa-arrow-right"></i>
                 </a>
-            </nav>
-        <% } else { %>
-            <div class="empty-state">
-                No results found.
             </div>
-        <% } %>
-    </main>
+        </nav>
+    <% } %>
 
     <script>
         function removeLoadingOverlay() {
             document.body.classList.remove("no-scroll");
 
-            const loadingOverlays = document.querySelectorAll(".loading");
-            loadingOverlays.forEach(loadingOverlay => loadingOverlay.remove());
+            document.querySelectorAll(".loading").forEach(loadingOverlay => {
+                loadingOverlay.remove();
+            });
         }
 
         function showLoadingOverlay() {
@@ -926,16 +921,22 @@
             document.body.appendChild(loading);
         }
 
-        const links = document.querySelectorAll("a");
+        document.addEventListener("click", event => {
+            const link = event.target.closest("a");
+            if (!link) return;
 
-        links.forEach(link => {
-            link.addEventListener("click", () => {
-                const href = link.getAttribute("href");
+            const href = link.getAttribute("href");
+            if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
+            if (link.target && link.target !== "_self") return;
+            if (link.hasAttribute("download")) return;
+            if (event.defaultPrevented) return;
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
 
-                if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
-                if (link.target && link.target !== "_self") return;
-                if (link.hasAttribute("download")) return;
+            showLoadingOverlay();
+        });
 
+        document.querySelectorAll("form").forEach(form => {
+            form.addEventListener("submit", () => {
                 showLoadingOverlay();
             });
         });
@@ -953,8 +954,10 @@
         }
 
         if ("serviceWorker" in navigator) {
-            navigator.serviceWorker.getRegistrations().then(regs => {
-                for (const reg of regs) reg.unregister();
+            navigator.serviceWorker.getRegistrations().then(registrations => {
+                registrations.forEach(registration => {
+                    registration.unregister();
+                });
             });
         }
     </script>
