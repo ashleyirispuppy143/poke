@@ -271,7 +271,6 @@
           <li><a href="#self-host">Self-Hosting</a></li>
           <li><a href="#changes">Changes to this Policy</a></li>
           <li><a href="#history">Document History</a></li>
-          <li><a href="#warranty">Warranty Disclaimer</a></li>
           <li><a href="#contact">Contact</a></li>
           <li><a href="#license">Policy License</a></li>
         </ul>
@@ -397,63 +396,6 @@
     information to maintain the software responsibly and fix the right bugs first.
   </p>
 
-  <h3>Why we bother doing this at all</h3>
-
-  <p>
-    Running a video frontend means making real technical decisions constantly.
-    What bugs should we fix first? What platforms need more testing? What features
-    actually matter to the people using this? Without any feedback at all, those
-    decisions are just guesses. Anonymous usage counts turn guesses into
-    informed decisions.
-  </p>
-
-  <p>
-    For example: if we can see that Firefox is the most common browser family on this
-    instance, we know Firefox bugs are higher priority. If a lot of usage is coming
-    from Android, mobile issues get bumped up. If a specific video path is getting
-    hit way more than others, we know which parts of the code need to be the most
-    reliable. This is practical maintenance information, not surveillance.
-  </p>
-
-  <p>
-    We think this is way better than using something like Google Analytics, Plausible,
-    or any third-party service. Those tools collect more than we'd ever want,
-    they send data off to someone else's servers, and they cost money or attention
-    that could go toward making Poke better. Our system stays local, stays anonymous,
-    and stays tiny.
-  </p>
-
-  <details class="block">
-    <summary><strong>Why this is not user tracking</strong></summary>
-
-    <p>
-      Tracking systems are designed to follow people around. They build profiles,
-      correlate behavior across sites, remember what you clicked last week, and
-      sometimes sell that information. That's not what this is.
-    </p>
-
-    <p>
-      Our system asks: "what browser families are common here?" and "what operating
-      systems should we test more?" It does not ask: "who is this person?" or
-      "what is this individual's full viewing history?" Those are fundamentally
-      different questions.
-    </p>
-
-    <p>
-      We also don't send this data anywhere. The counts live on this server and
-      that's it. One of the worst things about modern tracking is that data gets
-      exported, combined, and resold across dozens of services. We avoid all of
-      that by keeping everything local and limited in scope.
-    </p>
-
-    <p>
-      The anonymous viewer ID used by this system is not a personal profile.
-      It exists to avoid obviously overcounting the same browser as if it
-      were a brand new person every time. It's an anti-overcounting tool,
-      not a surveillance tool.
-    </p>
-  </details>
-
   <p>
     Here's the short version of what the stats system does:
   </p>
@@ -509,116 +451,6 @@
       </ul>
     </li>
   </ul>
-
-  <p>
-    If you want the reasoning behind each recorded field, the sections below go into more detail.
-  </p>
-
-  <details class="block">
-    <summary><strong>Why we record the video ID</strong></summary>
-
-    <p>
-      We record the video ID because without it, we'd have no way to understand
-      what content is actually being used on the instance. It's one of the most
-      basic signals we can collect if we want to know whether the software is
-      serving people well.
-    </p>
-
-    <p>
-      The value for us isn't in creating a personal watch history. It's in
-      understanding aggregate demand: what does this instance serve most often?
-      That helps with prioritization, testing, and figuring out which parts of
-      the codebase need to be the most reliable.
-    </p>
-
-    <p>
-      So when we record the video ID, we're not trying to answer "what did this
-      particular person watch over time?" We're trying to answer "what content
-      does this instance serve most often overall?" Those are very different questions.
-    </p>
-  </details>
-
-  <details class="block">
-    <summary><strong>Why we store an anonymous random viewer ID in localStorage</strong></summary>
-
-    <p>
-      We store a random anonymous viewer ID so we can avoid badly overcounting users.
-      Without it, the same browser could look like a brand new person every time
-      it sends a stats event. That would make the aggregate numbers way less accurate.
-    </p>
-
-    <p>
-      This ID is random and anonymous. It's not a login, not an email, not an account,
-      not an advertising ID, and not something designed to identify you personally.
-      It just helps us treat repeated activity from the same browser as one anonymous
-      viewer instead of fifty separate ones.
-    </p>
-
-    <p>
-      We use <code>localStorage</code> for this instead of cookies. It's simpler and
-      more transparent. It's just a local browser value used by Poke itself, not part
-      of any third-party tracking network.
-    </p>
-  </details>
-
-  <details class="block">
-    <summary><strong>Why we record the browser family</strong></summary>
-
-    <p>
-      Browser compatibility matters a lot for a video frontend. Bugs, playback issues,
-      layout problems, or performance regressions can hit one browser family harder than
-      another. If we don't know what browsers are most common, it's hard to know where
-      to focus testing and debugging effort.
-    </p>
-
-    <p>
-      We only record the broad browser family (Firefox, Chromium, Safari, etc).
-      We don't record the full user-agent string. A broad label gives us enough
-      to improve compatibility without collecting the kind of detailed data that
-      can become invasive.
-    </p>
-  </details>
-
-  <details class="block">
-    <summary><strong>Why we record the operating system family</strong></summary>
-
-    <p>
-      Different platforms behave differently. Android, GNU/Linux, Windows, macOS,
-      and iOS all have their own quirks with media handling, browser behavior, and
-      performance. Knowing the broad OS family helps us understand where support
-      matters most and where to focus testing.
-    </p>
-
-    <p>
-      Again, we keep this broad on purpose. We're not fingerprinting your machine.
-      We just want a high-level picture of what platforms the software should work well on.
-    </p>
-  </details>
-
-  <details class="block">
-    <summary><strong>Why we think this is a good thing</strong></summary>
-
-    <p>
-      We don't think privacy always means software has to learn absolutely nothing.
-      Healthy software projects often need a very small amount of anonymous operational
-      feedback to stay reliable and useful. The real privacy question isn't just
-      "is anything collected?" It's also "what is collected, why, how much, where
-      does it go, and can it be abused?"
-    </p>
-
-    <p>
-      In our case, we designed this to be local-only, aggregate-focused, transparent,
-      and limited in scope. It's meant to support maintenance, not surveillance.
-      It helps us improve Poke without depending on opaque third-party analytics
-      systems that collect way more than necessary.
-    </p>
-
-    <p>
-      A small amount of well-scoped anonymous telemetry is a privacy-respecting tool
-      for improving free software. It's far better than invasive tracking, and far
-      more practical than maintaining a complex platform with zero feedback.
-    </p>
-  </details>
 
   <p>
     Because this system only works with anonymous counts, it can't reconstruct an
@@ -724,31 +556,6 @@
     It is just aggregate route popularity.
   </p>
 
-  <h3>What is ignored by the traffic counter</h3>
-
-  <p>
-    Some routes are deliberately excluded so the traffic stats stay useful and less noisy.
-    The guard ignores routes such as:
-  </p>
-
-  <ul>
-    <li><code>/health</code></li>
-    <li><code>/traffic</code></li>
-    <li><code>/avatars</code> and <code>/avatars/...</code></li>
-    <li><code>/static/...</code></li>
-    <li><code>/css/...</code></li>
-    <li><code>/api/nexus</code></li>
-    <li><code>/api/stats</code></li>
-  </ul>
-
-  <p>
-    Status endpoints such as <code>/_pokeresource/stats</code>,
-    <code>/_poketraffic/stats</code>, <code>/_pokestopskids/stats</code>,
-    <code>/_pokeoverload/stats</code>, <code>/robots.txt</code>, and
-    <code>/favicon.ico</code> are treated as status-style requests and are not
-    added to persistent route popularity totals.
-  </p>
-
   <h3>How this differs from <code>/api/stats</code></h3>
 
   <p>
@@ -849,21 +656,6 @@
     heavy request totals, reject counts, cost score, pressure score, current guard
     state, CPU state, memory state, and event loop state. They are not meant to
     identify a person.
-  </p>
-
-  <h3>Known bots and infrastructure</h3>
-
-  <p>
-    PokeResourceGuard recognizes some well-known bot and infrastructure user agents.
-    This can reduce request cost or avoid punishing useful automated traffic such as
-    search engines, feed readers, fediverse previews, link preview bots, uptime monitors,
-    and CDN infrastructure.
-  </p>
-
-  <p>
-    This is not used to build a personal fingerprint. It is a broad operational rule
-    so that a search crawler and a normal browser do not always get treated exactly
-    the same during server pressure.
   </p>
 
   <h3>Cloudflare and proxy awareness</h3>
@@ -1004,8 +796,6 @@
         </p>
       </section>
 
-      <section id="third-parties" aria-label="Third-Party Requests Proxy"></section>
-
       <section id="api-logs" aria-labelledby="api-logs-heading">
         <h2 id="api-logs-heading" class="section">API Logs Policy</h2>
         <p>
@@ -1067,21 +857,6 @@
         <p>
           Poke accounts don't require your name, email, or any identifying detail. You literally can't add them even if you tried.
         </p>
-        <p>
-          But outside Poke, you <em>do</em> have rights and tools to protect your privacy. Here are a few ideas:
-        </p>
-        <ul>
-          <li>Use a privacy-respecting search engine, e.g. <a href="https://duckduckgo.com/" target="_blank" rel="noopener">DuckDuckGo</a>.</li>
-          <li>Run browser extensions that block trackers, fingerprinting, and sketchy scripts.</li>
-          <li>Use HTTPS whenever possible, avoid sketchy public Wi-Fi, and keep your OS/browser updated.</li>
-          <li>Check device permissions camera, mic, location and revoke ones you don't use.</li>
-          <li>Use a VPN on public or untrusted networks. Try <a href="https://mullvad.net/" target="_blank" rel="noopener"><strong>Mullvad VPN</strong></a>.</li>
-          <li>Use a content blocker like <a href="https://ublockorigin.com/" target="_blank" rel="noopener"><strong>uBlock Origin</strong></a>.</li>
-          <li>Try <a href="https://privacybadger.org/" target="_blank" rel="noopener"><strong>Privacy Badger</strong></a> EFF.</li>
-          <li>Use browsers built around privacy, such as <a href="https://www.mozilla.org/firefox/new/" target="_blank" rel="noopener"><strong>Firefox</strong></a> and forks,
-            or <a href="https://www.mozilla.org/firefox/focus/" target="_blank" rel="noopener"><strong>Firefox Focus</strong></a> for mobile.</li>
-          <li>Explore privacy tool directories like <a href="https://www.privacytools.io/" target="_blank" rel="noopener"><strong>PrivacyTools.io</strong></a>.</li>
-        </ul>
       </section>
 
       <section id="retention" aria-labelledby="retention-heading">
@@ -1132,11 +907,6 @@
           You can view the full edit history for this policy at:
           <a href="https://codeberg.org/ashleyirispuppy/poke/commits/branch/main/html/priv.ejs" target="_blank" rel="noopener">codeberg.org</a>.
         </p>
-      </section>
-
-      <section id="warranty" aria-labelledby="warranty-heading">
-        <h2 id="warranty-heading" class="section">Warranty Disclaimer</h2>
-        <pre class="small" style="white-space:pre-wrap;margin:8px 0;">IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING WILL ANY COPYRIGHT HOLDER,OR ANY OTHER PARTY WHO MODIFIES AND/OR CONVEYS THE PROGRAM AS PERMITTED ABOVE, BE LIABLE TO YOU FOR DAMAGES,INCLUDING ANY GENERAL, SPECIAL, INCIDENTAL OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE USE OR INABILITY TO USE THE PROGRAM E.G., LOSS OF DATA, DATA BEING RENDERED INACCURATE, OR FAILURES OF THE PROGRAM TO OPERATE WITH ANY OTHER PROGRAMS,EVEN IF SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.</pre>
       </section>
 
       <section id="contact" aria-labelledby="contact-heading">
