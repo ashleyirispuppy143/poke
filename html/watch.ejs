@@ -3309,7 +3309,7 @@ document.addEventListener("fullscreenchange", handleFullscreen);
 
 </style>
                  <% } %>
-  <!-- BUNDLE --><script src="/static/app.bundle.js?version=2026&bundledate=10052026v2" > </script><!-- BUNDLE --><script src="/static/stats.js?e=341082025_0143ab5845544493_videojs815456gw3605"></script><!-- BASE_ES6 --><script id="baseScript" src="/static/base-player.js?ver=2026042h25&videoID=<%=VideoData.videoId%>&version=14kvh04596"> </script>
+  <!-- BUNDLE --><script src="/static/app.bundle.js?version=2026&bundledate=10052026v2" > </script><!-- BUNDLE --><script src="/static/stats.js?e=341082025_0143ab5845544493_videojs815456gw3605"></script><!-- BASE_ES6 --><script id="baseScript" src="/static/base-player.js?ver=2026042h25&videoID=<%=VideoData.videoId%>&version=14kh04596"> </script>
   <script>
 (function(){
   var script = document.getElementById("baseScript");
@@ -3404,44 +3404,13 @@ document.addEventListener("fullscreenchange", handleFullscreen);
   <% if (!e) { %>
 <meta content="<%=VideoData.title%>" name=title>
 <meta content="<%=color%>" name="theme-color">
-<%
-  const desc = `Watch this ${turntomins(VideoData?.lengthSeconds) || "LIVE"} long video from ${VideoData?.author.replace("- Topic", "")} On Poke! 
-👍 ${convertLegacy(engagement?.likes)} | 👎 ${convertLegacy(engagement?.dislikes)} | 📈 ${convertLegacy(engagement?.viewCount)} Views 🗓️ ${date.replace("Premiered", " ")} 💬 ${!isNaN(inv.commentCount) ? inv.commentCount.toLocaleString() : 0}`;
-
-  const image = `https://i.ytimg.com/vi/${VideoData.videoId}/maxresdefault.jpg`;
-  const url   = `https://${hostname}/watch?v=${VideoData?.videoId}`;
-  const title = `${VideoData?.title} | Poke`;
-
-  const twitterTags = [
-    { name: "twitter:author", content: VideoData?.author },
-    { name: "twitter:url", content: url },
-    { name: "twitter:title", content: title },
-    { name: "twitter:description", content: desc },
-    { name: "twitter:card", content: "summary_large_image" },
-  ];
-
-  const facebookTags = [
-    { property: "facebook:title", content: title },
-    { property: "facebook:description", content: desc },
-    { property: "facebook:image", content: image },
-  ];
-
-  const ogTags = [
-    { property: "og:title", content: title },
-    { property: "og:url", content: url },
-    { property: "og:description", content: desc },
-    { property: "og:image", content: image },
-  ];
-%>
-<% twitterTags.forEach(tag => { -%>
-<meta name="<%= tag.name %>" content="<%- tag.content %>">
-<% }) -%>
-<% facebookTags.forEach(tag => { -%>
-<meta property="<%= tag.property %>" content="<%- tag.content %>">
-<% }) -%>
-<% ogTags.forEach(tag => { -%>
-<meta property="<%= tag.property %>" content="<%- tag.content %>">
-<% }) -%>
+<meta content="<%= video?.Channel?.Name || VideoData.author%>" name=twitter:author>
+<meta content=@youtube name=twitter:site>
+<meta content="https://poketube.fun/watch?v=<%=VideoData.videoId%>" name=twitter:url>
+<meta content="<%=VideoData.title%> - PokeTube" name=twitter:title>
+<meta content="mobile this video by <%= video?.Channel?.Name || VideoData.author%> On PokeTube. The YouTube front-end that doesnt track you!" property=twitter:description>
+<meta content="https://i.ytimg.com/vi/<%=VideoData.videoId%>/maxresdefault.jpg" property=og:image>
+<meta content=summary_large_image name=twitter:card>
 <link href="https://poketube.fun/watch?v=<%=VideoData.videoId%>" itemprop=url>
  <% } %> <!-- close the } -->
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -3453,21 +3422,7 @@ document.addEventListener("fullscreenchange", handleFullscreen);
 
     <link href=<%- proxyurl %>/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css rel=stylesheet>
 <style>
-    <!-- player -->
-  <script id="baseScript" src="/static/base-player.js?ver=2026042h25&videoID=<%=VideoData.videoId%>&version=14kh0459gs6"></script><link href="/css/videojs-v8.23.4.css?v=0004dfe42" rel="stylesheet" />
-  <script src="/static/vjs.min.js?v=0004dfe42"></script><!-- custom video player for poke --><!-- uses player_ias.vflset/en_US/base.js --><!-- helps with fetching video information too! --><script>
-window.authorchannelname = "<%- VideoData?.author
-  .replace(/\s*-\s*Topic$/,'')
-  .replace(/VEVO$/,'')
-  .replace(/([a-z])([A-Z])/g,'$1 $2')
-  .replace(/([A-Za-z])([0-9])/g,'$1 $2')
-  .replace(/\s+/g,' ')
-  .trim()
-%>";
-
-window.proxyurl = "<%- media_proxy_url %>/proxy?url="
-</script>
-
+  
     @font-face {
   font-family: "PokeTube Flex";
   src: url("/static/robotoflex.ttf");
@@ -3533,7 +3488,6 @@ a {
 
 </style>
   
-
              <%  if (Array.isArray( !inv.comments)) { %> 
 
   <style>
@@ -3629,75 +3583,26 @@ a {
 	   <div class="mobile-page">
 	<div class="primary" >
 		<div class="video-player-container" style="background-color:#000">
-<%
-  let itag = null;
-  let hasHD = false;
-  let hasUHD = false;
-  let has4K = false;
-  let hdItag = "247";
 
-  VideoData.adaptiveFormats.forEach(format => {
-    if (format.itag == "247" || format.itag == "302") {
-      itag = "140";
-      hasHD = true;
+<video style="border-radius: 16px;" class="player" id="video" autoplay controls poster="<%- proxyurl %>/https://i.ytimg.com/vi/<%=VideoData.videoId%>/maxresdefault.jpg?v=607ddcd4" onerror="">
+          
 
-      if (format.itag == "302") {
-        hdItag = "302";
-      }
-    }
+  
+        
+                
+           <% if (!qua) { %>  
 
-    if (format.itag == "400" || format.itag == "271") {
-      hasUHD = true;
-    }
 
-    if (format.itag == "313" || format.itag == "401") {
-      has4K = true;
-    }
-  });
-%>
+                     
+<source
+  src="<%=u%>/companion/latest_version?id=<%=VideoData.videoId%>&itag=18&local=true"
+  type='video/mp4; codecs="avc1.64001F, mp4a.40.2"'
+  label="hd720"
+  selected="true"
+  onerror="setTimeout(() => location.reload(), 1000)"
+/>
 
-<% if (itag && qua !== "medium" && itag !== "18") { %>
-  <audio crossorigin="anonymous" id="aud" preload>
-    <source
-      src="<%= u %>/companion/latest_version?id=<%= VideoData.videoId %>&itag=<%= itag %>&local=true"
-      type="video/mp4"
-    />
-  </audio>
-<% } else { %>
-  <audio id="aud"></audio>
-<% } %>
-
-<video
-  style="border-radius: 16px;"
-  class="player"
-  id="video"
-  autoplay
-  controls
-  poster="<%- proxyurl %>/https://i.ytimg.com/vi/<%= VideoData.videoId %>/maxresdefault.jpg?v=607ddcd4"
-  onerror=""
->
-
-<% if (!qua) { %>
-  <% if (hasHD) { %>
-    <source
-      src="<%= u %>/companion/latest_version?id=<%= VideoData.videoId %>&itag=<%= hdItag %>&local=true"
-      type="video/mp4"
-      label="hd720"
-      selected="true"
-    >
-  <% } %>
-<% } %>
-
-<% if (qua) { %>
-  <source
-    src="<%= u %>/companion/latest_version?id=<%= VideoData.videoId %>&itag=18&local=true"
-    type='video/mp4; codecs="avc1.64001F, mp4a.40.2"'
-    label="hd720"
-    selected="true"
-    onerror="setTimeout(() => location.reload(), 1000)"
-  />
-<% } %>
-
+                                                                             <% } %>                
 
      
 
@@ -4662,7 +4567,62 @@ More Epic options owo~
      // @license-end
                                           </script>
          
-   <script src="/css/custom-css.js"></script>
+             <script>
+document.addEventListener('DOMContentLoaded', () => {
+  const video = document.querySelector('video');
+
+  if (!video) return;
+
+  if ('mediaSession' in navigator) {
+    // Set metadata
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: "<%- VideoData.title %>",
+      artist: "<%= VideoData?.author?.replace("- Topic", "") %>",
+      album: "Poke",
+      artwork: [
+        {
+          src: "https://i.ytimg.com/vi/<%=VideoData.videoId%>/maxresdefault.jpg",
+          sizes: "1280x720",
+          type: "image/jpeg"
+        }
+      ]
+    });
+
+    // Update playback state
+    const updatePositionState = () => {
+      if ('setPositionState' in navigator.mediaSession) {
+        navigator.mediaSession.setPositionState({
+          duration: video.duration || 0,
+          playbackRate: video.playbackRate || 1,
+          position: video.currentTime || 0
+        });
+      }
+    };
+
+    video.addEventListener('timeupdate', updatePositionState);
+    video.addEventListener('ratechange', updatePositionState);
+    video.addEventListener('loadedmetadata', updatePositionState);
+
+    // Media control handlers
+    navigator.mediaSession.setActionHandler('play', () => {
+      video.play();
+    });
+
+    navigator.mediaSession.setActionHandler('pause', () => {
+      video.pause();
+    });
+
+    navigator.mediaSession.setActionHandler('seekto', (details) => {
+      if (details.fastSeek && 'fastSeek' in video) {
+        video.fastSeek(details.seekTime);
+      } else {
+        video.currentTime = details.seekTime;
+      }
+      updatePositionState();
+    });
+  }
+});
+</script>  <script src="/css/custom-css.js"></script>
 <script>
 // @license magnet:?xt=urn:btih:1f739d935676111cfff4b4693e3816e664797050&dn=gpl-3.0.txt GPL-3.0-or-later  
   
