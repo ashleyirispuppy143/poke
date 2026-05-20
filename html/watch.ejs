@@ -1648,8 +1648,9 @@ for (const format of (VideoData.adaptiveFormats || [])) {
   <% if (linkto != undefined) { %>
     <% const streamDomain = linkto.domain === "ffm.to" ? "ffm.to" : "lnk.to"; %>
     <div class="new-button button-encryption">
-      <a title="Stream The Song :3" style="color:var(--text-color);text-decoration: none;" href="https://<%= linkto.subdomain %>.<%= streamDomain %>/<%= linkto.path %>">
-        <div class="pill-button">
+<a title="Stream The Song :3" style="color:var(--text-color);text-decoration: none;"
+  href="https://<%= linkto.subdomain ? `${linkto.subdomain}.` : '' %><%= streamDomain %>/<%= linkto.path %>">     
+  <div class="pill-button">
           <i class="fa-light fa-music-note"></i>
           Stream!
         </div>
