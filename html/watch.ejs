@@ -3646,6 +3646,7 @@ window.proxyurl = "<%- media_proxy_url %>/proxy?url="
     }
   });
 %>  
+
 <% if (itag && qua !== "medium" && itag !== '18') { %>
   <audio crossorigin="anonymous" id="aud" preload>
     <source src="<%=u%>/companion/latest_version?id=<%=VideoData.videoId%>&itag=<%=itag%>&local=true" type="video/mp4" />
@@ -3663,21 +3664,15 @@ window.proxyurl = "<%- media_proxy_url %>/proxy?url="
  
 
                      
-<% if (isvidious) { %>
-    <% if (!qua) { %>
-      <% if (hasHD) { 
-        let hdItag = '247';
+     <% if (!qua) { %>
+         let hdItag = '247';
         VideoData.adaptiveFormats.forEach(format => {
           if (format.itag == '302') hdItag = '302';
         });
       %>
         <source src="<%=u%>/companion/latest_version?id=<%=VideoData.videoId%>&itag=<%=hdItag%>&local=true"  type="video/mp4" label="hd720" selected="true">
-      <% } else { %>
-        <source src="<%=u%>/companion/latest_version?id=<%=VideoData.videoId%>&itag=18&local=true" type="video/mp4" label="sd360" selected="true">
-      <% } %>
     <% } %>
-    <% } %>
-
+ 
  
            <% if (qua) { %>  
 
