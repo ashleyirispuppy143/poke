@@ -190,7 +190,7 @@ const FACEBOOK_REGEX = /https:\/\/(?:www\.)?facebook\.com\/(?<name>[\w\d_.-]+)/;
 const FLOATPLANE_REGEX = /https:\/\/(?:www\.)?floatplane\.com\/channel\/(?<name>[\w\d_-]+)/;
 
 /* music */
-const LNKTO_REGEX = /(?:https?:\/\/)?(?<subdomain>[\w-]+)\.(?<domain>lnk\.to|ffm\.to)\/(?<path>\S*)/i;
+const LNKTO_REGEX = /(?:https?:\/\/)?(?:(?<subdomain>[\w-]+)\.)?(?<domain>lnk\.to|ffm\.to)\/(?<path>\S*)/i;
 const SOUNDCLOUD_REGEX = /https:\/\/(?:www\.)?soundcloud\.com\/(?<name>[\w\d_-]+)/;
 
 module.exports = function (app, config, renderTemplate) {
