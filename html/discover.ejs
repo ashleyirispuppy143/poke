@@ -1,18 +1,15 @@
 <!--
     This Source Code Form is subject to the terms of the GNU General Public License:
-   
-    Copyright (C) 2021-2025 PokeTube Of Poke Project, a part of The Poke Project Initiative (initiative.poketube.fun) 
-    source code :https://codeberg.org/ashleyirispuppy/poke
+    Copyright (C) 2021-2025 PokeTube Of Poke Project
+    Source code: https://codeberg.org/ashleyirispuppy/poke
 -->
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Poke | Discover</title>
     
-    <!-- Redirect for homepage -->
     <% if (!mobilesearch && !tab) { %>
         <meta http-equiv="refresh" content="0; url=/search">
     <% } %>
@@ -24,41 +21,42 @@
     <style>
         :root {
             --bg-color: #0f0f0f;
+            --surface-color: #1e1e1e;
             --text-color: #ffffff;
-            --secondary-text: #aaaaaa;
-            --input-bg: #222222;
+            --text-secondary: #aaaaaa;
             --accent-color: #ff0000;
         }
 
         body {
             background-color: var(--bg-color);
             color: var(--text-color);
-            font-family: Roboto, Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             margin: 0;
             padding: 0;
+            -webkit-tap-highlight-color: transparent;
         }
 
-        /* Header / Masthead */
+        /* Fixed Header */
         header {
             display: flex;
             align-items: center;
-            padding: 10px 15px;
-            background: var(--bg-color);
+            padding: 10px;
+            background: #0f0f0f;
             position: sticky;
             top: 0;
             z-index: 100;
+            border-bottom: 1px solid #333;
         }
 
-        .logo { width: 30px; margin-right: 15px; }
+        .logo { width: 32px; margin-right: 12px; }
 
-        /* Modern Search Input */
         .search-container {
             flex-grow: 1;
             display: flex;
-            background: var(--input-bg);
-            border-radius: 20px;
-            padding: 5px 15px;
-            border: 1px solid #333;
+            background: var(--surface-color);
+            border-radius: 25px;
+            padding: 8px 16px;
+            border: 1px solid #444;
         }
 
         input[name="mobilesearch"] {
@@ -70,24 +68,24 @@
             font-size: 16px;
         }
 
-        button.search-btn {
+        .search-btn {
             background: transparent;
             border: none;
-            color: white;
-            cursor: pointer;
+            color: var(--text-secondary);
+            padding: 0 5px;
         }
 
-        /* Video Grid */
+        /* Video Grid - Optimized for Phone screens */
         .video-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
             padding: 15px;
+            margin-bottom: 80px; /* Space for footer/pagination */
         }
 
         .video-card {
-            display: flex;
-            flex-direction: column;
+            display: block;
             text-decoration: none;
             color: white;
         }
@@ -97,33 +95,52 @@
             aspect-ratio: 16 / 9;
             background-size: cover;
             background-position: center;
-            border-radius: 12px;
-            margin-bottom: 8px;
+            border-radius: 8px;
+            background-color: #222;
         }
 
-        .video-info .title {
-            font-size: 14px;
+        .video-info { padding-top: 10px; }
+        .title {
+            font-size: 16px;
             font-weight: 500;
+            line-height: 1.4;
+            margin-bottom: 4px;
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
         }
+        .author { font-size: 14px; color: var(--text-secondary); }
 
-        .video-info .author {
-            font-size: 12px;
-            color: var(--secondary-text);
-            margin-top: 4px;
+        /* Mobile Pagination Buttons */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            padding: 20px 10px;
         }
 
-        /* Utilities */
+        .nav-btn {
+            background: var(--surface-color);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 25px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 14px;
+            border: 1px solid #444;
+        }
+
+        .nav-btn:active { background: #333; }
+
+        /* Loading Spinner */
         .loading {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8); z-index: 9999;
+            background: rgba(0,0,0,0.85); z-index: 9999;
             display: flex; justify-content: center; align-items: center;
         }
         .spinner {
-            border: 4px solid #333; border-top: 4px solid #fff;
+            border: 3px solid #333; border-top: 3px solid var(--accent-color);
             border-radius: 50%; width: 40px; height: 40px;
             animation: spin 1s linear infinite;
         }
@@ -135,7 +152,7 @@
     <header>
         <a href="/"><img src="/css/logo-poke.svg" class="logo" alt="Logo"></a>
         <form action="/app" class="search-container">
-            <input type="text" name="mobilesearch" value="<%= typeof mobilesearch !== 'undefined' ? mobilesearch : '' %>" placeholder="Search videos...">
+            <input type="text" name="mobilesearch" value="<%= typeof mobilesearch !== 'undefined' ? mobilesearch : '' %>" placeholder="Search...">
             <button type="submit" class="search-btn"><i class="fa-light fa-search"></i></button>
         </form>
     </header>
@@ -152,33 +169,33 @@
                 </a>
             <% }) %>
 
-            <!-- Pagination -->
-            <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+            <!-- Large Mobile Pagination Buttons -->
+            <div class="pagination">
                 <% if (typeof continuation !== 'undefined' && Number(continuation) > 1) { %>
-                    <a href="/app?mobilesearch=<%=mobilesearch%>&continuation=<%- Number(continuation) - 1 %>">Previous</a>
+                    <a href="/app?mobilesearch=<%=mobilesearch%>&continuation=<%- Number(continuation) - 1 %>" class="nav-btn">Previous</a>
                 <% } %>
                 
                 <% if (typeof continuation !== 'undefined') { %>
-                    <a href="/app?mobilesearch=<%=mobilesearch%>&continuation=<%- Number(continuation) + 1 %>">Next Page</a>
+                    <a href="/app?mobilesearch=<%=mobilesearch%>&continuation=<%- Number(continuation) + 1 %>" class="nav-btn">Next Page</a>
                 <% } %>
             </div>
         <% } else { %>
-            <div style="text-align: center; margin-top: 50px;">
-                <h1>PokeTube</h1>
-                <p>A private, ad-free YouTube front-end.</p>
-                <p>Search to get started!</p>
+            <div style="text-align: center; margin-top: 60px; color: var(--text-secondary);">
+                <p>Use the search bar above to find videos.</p>
             </div>
         <% } %>
     </main>
 
     <script>
-        const links = document.querySelectorAll('a');
-        links.forEach(link => {
+        document.querySelectorAll('a').forEach(link => {
             link.addEventListener('click', e => {
-                const loading = document.createElement('div');
-                loading.className = 'loading';
-                loading.innerHTML = '<div class="spinner"></div>';
-                document.body.appendChild(loading);
+                // Ensure it's not a hash link
+                if(link.getAttribute('href') && !link.getAttribute('href').startsWith('#')) {
+                    const loading = document.createElement('div');
+                    loading.className = 'loading';
+                    loading.innerHTML = '<div class="spinner"></div>';
+                    document.body.appendChild(loading);
+                }
             });
         });
 
