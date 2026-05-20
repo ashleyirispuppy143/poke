@@ -4,14 +4,16 @@
     <%
         const results = typeof j !== "undefined" && j && Array.isArray(j.results) ? j.results : [];
         const searchValue = typeof mobilesearch !== "undefined" ? mobilesearch : "";
-        const hasMobileSearch = typeof mobilesearch !== "undefined" && Boolean(mobilesearch);
-        const hasTab = typeof tab !== "undefined" && Boolean(tab);
+        const mediaProxyBase = typeof media_proxy_url !== "undefined" && media_proxy_url ? String(media_proxy_url).replace(/\/$/, "") : "";
 
         let currentPage = typeof continuation !== "undefined" && continuation ? Number(continuation) : 1;
         if (!Number.isFinite(currentPage) || currentPage < 1) currentPage = 1;
 
-        const previousPage = currentPage > 1 ? currentPage - 1 : 1;
-        const nextPage = currentPage + 1;
+        function proxyMediaUrl(url) {
+            if (!url) return "";
+            if (!mediaProxyBase) return url;
+            return mediaProxyBase + "/proxy?url=" + encodeURIComponent(url);
+        }
 
         function pageUrl(page) {
             return "/app?mobilesearch=" + encodeURIComponent(searchValue) + "&continuation=" + encodeURIComponent(page);
@@ -36,20 +38,21 @@
             return item && item.url ? item.url : "#";
         }
 
-        function videoThumbnailUrl(videoId) {
+        function rawVideoThumbnailUrl(videoId) {
             if (!videoId) return "";
             return "https://i.ytimg.com/vi/" + encodeURIComponent(videoId) + "/hqdefault.jpg";
         }
 
-        function playlistThumbnailUrl(item) {
+        function rawPlaylistThumbnailUrl(item) {
             if (item && Array.isArray(item.videos) && item.videos[0] && item.videos[0].videoId) {
-                return videoThumbnailUrl(item.videos[0].videoId);
+                return rawVideoThumbnailUrl(item.videos[0].videoId);
             }
 
+            if (item && item.playlistThumbnail) return item.playlistThumbnail;
             return "";
         }
 
-        function avatarUrl(item) {
+        function rawAvatarUrl(item) {
             if (!item || !Array.isArray(item.authorThumbnails)) return "";
             if (item.authorThumbnails[1] && item.authorThumbnails[1].url) return item.authorThumbnails[1].url;
             if (item.authorThumbnails[0] && item.authorThumbnails[0].url) return item.authorThumbnails[0].url;
@@ -89,10 +92,6 @@
             }).format(number).replace("K", "k");
         }
 
-        function formatViewCountBare(value) {
-            return formatCompactNumber(value);
-        }
-
         function formatCount(value, label) {
             const formatted = formatCompactNumber(value);
             return formatted ? formatted + " " + label : "";
@@ -101,13 +100,16 @@
         function joinMeta(parts) {
             return parts.filter(Boolean).join(" • ");
         }
+
+        const previousPage = currentPage > 1 ? currentPage - 1 : 1;
+        const nextPage = currentPage + 1;
     %>
 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mobile Search</title>
 
-    <% if (!hasMobileSearch && !hasTab) { %>
+    <% if (!searchValue && !(typeof tab !== "undefined" && tab)) { %>
         <meta http-equiv="refresh" content="0; url=/search">
     <% } %>
 
@@ -129,7 +131,6 @@
         :root {
             --bg: #0f0f0f;
             --panel: #0f0f0f;
-            --panel-soft: #151515;
             --search-bg: #212121;
             --search-border: #303030;
             --search-focus: #444444;
@@ -139,10 +140,7 @@
             --line: #272727;
             --chip: #272727;
             --chip-hover: #343434;
-            --stat-bg: #241617;
-            --stat-text: #e0aaa6;
-            --danger: #ff0033;
-            --shadow: rgba(0, 0, 0, 0.45);
+            --danger: #cc0000;
         }
 
         * {
@@ -193,29 +191,9 @@
         .nav-wrap {
             display: flex;
             align-items: center;
-            gap: 10px;
             min-height: 62px;
-            padding: 10px 10px;
+            padding: 10px;
             padding-top: max(10px, env(safe-area-inset-top));
-        }
-
-        .home-button {
-            width: 44px;
-            height: 44px;
-            flex: 0 0 44px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 999px;
-            background: var(--chip);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            color: var(--text);
-            font-size: 18px;
-        }
-
-        .home-button:active {
-            transform: scale(0.96);
-            background: var(--chip-hover);
         }
 
         .search-container {
@@ -291,7 +269,7 @@
             width: 100%;
             max-width: 520px;
             margin: 0 auto;
-            padding: 12px 0 calc(96px + env(safe-area-inset-bottom));
+            padding: 13px 0 calc(96px + env(safe-area-inset-bottom));
             background: var(--bg);
         }
 
@@ -303,12 +281,12 @@
         }
 
         .result-card + .result-card {
-            margin-top: 14px;
+            margin-top: 16px;
         }
 
         .video-card,
         .playlist-card {
-            padding: 0 0 10px;
+            padding: 0 0 11px;
         }
 
         .thumbnail-shell {
@@ -375,7 +353,7 @@
 
         .live-badge {
             padding: 0 7px;
-            background: #cc0000;
+            background: var(--danger);
             letter-spacing: 0.01em;
         }
 
@@ -472,8 +450,7 @@
         .stats-line {
             display: flex;
             align-items: center;
-            gap: 7px;
-            min-height: 20px;
+            min-height: 21px;
             margin-top: 5px;
             overflow: hidden;
         }
@@ -481,30 +458,30 @@
         .view-count-pill {
             display: inline-flex;
             align-items: center;
-            gap: 4px;
+            gap: 5px;
             max-width: 100%;
-            min-height: 18px;
-            padding: 1px 6px 1px 5px;
-            border-radius: 4px;
-            background: var(--stat-bg);
-            color: var(--stat-text);
-            font-size: 12px;
-            font-weight: 650;
+            min-height: 19px;
+            padding: 0;
+            border-radius: 0;
+            background: transparent;
+            color: #ffffff;
+            font-size: 13px;
+            font-weight: 700;
             line-height: 1;
-            font-stretch: 125%;
-            font-variation-settings: "wdth" 125, "opsz" 12;
+            font-stretch: 130%;
+            font-variation-settings: "wdth" 130, "opsz" 12;
         }
 
         .view-play-icon {
             display: inline-block;
-            color: var(--stat-text);
-            font-size: 10px;
+            color: #ffffff;
+            font-size: 11px;
             line-height: 1;
             transform: translateY(-0.5px);
         }
 
         .channel-card {
-            padding: 13px 10px;
+            padding: 14px 10px;
         }
 
         .channel-inner {
@@ -548,7 +525,7 @@
         }
 
         .hashtag-card {
-            padding: 11px 10px;
+            padding: 12px 10px;
         }
 
         .hashtag-result {
@@ -584,14 +561,18 @@
         }
 
         .empty-state {
-            padding: 42px 18px;
+            min-height: calc(100vh - 160px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 42px 24px;
             color: var(--text-soft);
             text-align: center;
-            font-size: 14px;
+            font-size: 16px;
             line-height: 1.45;
-            font-weight: 450;
-            font-stretch: 112.5%;
-            font-variation-settings: "wdth" 112.5, "opsz" 14;
+            font-weight: 550;
+            font-stretch: 140%;
+            font-variation-settings: "wdth" 140, "opsz" 16;
         }
 
         .pagination {
@@ -712,10 +693,6 @@
 <body>
     <header class="app-header">
         <div class="nav-wrap">
-            <a href="/" class="home-button" aria-label="Home">
-                <i class="fa-light fa-house"></i>
-            </a>
-
             <form action="/app" class="search-container" role="search">
                 <i class="fa-light fa-search search-icon-inline" aria-hidden="true"></i>
                 <input type="text" name="mobilesearch" value="<%= searchValue %>" placeholder="Search" autocomplete="off">
@@ -733,10 +710,10 @@
                     <%
                         const href = videoHref(item);
                         const authorHref = channelHref(item);
-                        const thumb = videoThumbnailUrl(item.videoId);
-                        const avatar = avatarUrl(item);
+                        const thumb = proxyMediaUrl(rawVideoThumbnailUrl(item.videoId));
+                        const avatar = proxyMediaUrl(rawAvatarUrl(item));
                         const duration = formatDuration(item.lengthSeconds);
-                        const bareViews = formatViewCountBare(item.viewCount);
+                        const bareViews = formatCompactNumber(item.viewCount);
                     %>
 
                     <article class="result-card video-card">
@@ -806,8 +783,8 @@
                     <%
                         const href = playlistHref(item);
                         const authorHref = channelHref(item);
-                        const thumb = playlistThumbnailUrl(item);
-                        const avatar = avatarUrl(item);
+                        const thumb = proxyMediaUrl(rawPlaylistThumbnailUrl(item));
+                        const avatar = proxyMediaUrl(rawAvatarUrl(item));
                         const playlistMeta = joinMeta([
                             item.author || "",
                             Number.isFinite(Number(item.videoCount)) ? item.videoCount + " videos" : ""
@@ -869,7 +846,7 @@
                 <% } else if (item && item.type === "channel") { %>
                     <%
                         const href = channelHref(item);
-                        const avatar = avatarUrl(item);
+                        const avatar = proxyMediaUrl(rawAvatarUrl(item));
                         const channelMeta = joinMeta([
                             formatCount(item.subCount, "subscribers"),
                             formatCount(item.videoCount, "videos")
@@ -935,7 +912,7 @@
             <% }) %>
         <% } else { %>
             <div class="empty-state">
-                No results found.
+                you...somehow found something that doesnt exist on youtube...woaw...
             </div>
         <% } %>
     </main>
