@@ -161,20 +161,20 @@
             display: flex;
             align-items: center;
             gap: 12px;
-            min-height: calc(60px + env(safe-area-inset-top));
+            min-height: calc(54px + env(safe-area-inset-top));
             padding: calc(6px + env(safe-area-inset-top)) 15px 6px 12px;
         }
 
         .back-button {
-            width: 48px;
-            height: 48px;
-            flex: 0 0 48px;
+            width: 42px;
+            height: 42px;
+            flex: 0 0 42px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             border-radius: 999px;
             color: var(--text);
-            font-size: 34px;
+            font-size: 28px;
             line-height: 1;
         }
 
@@ -186,14 +186,14 @@
         .search-container {
             flex: 1 1 auto;
             min-width: 0;
-            height: 42px;
+            height: 36px; /* Reduced from 42px */
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 6px;
             background: var(--search-bg);
             border: 0;
             border-radius: 999px;
-            padding: 0 6px 0 18px;
+            padding: 0 4px 0 14px;
             transition: background 140ms ease, box-shadow 140ms ease;
         }
 
@@ -210,12 +210,10 @@
             outline: 0;
             background: transparent;
             color: var(--text);
-            font-size: 23px;
+            font-size: 18px; /* Slightly reduced for thinner look */
             line-height: 1;
             padding: 0;
             font-weight: 430;
-            font-stretch: 112%;
-            font-variation-settings: "wdth" 112, "opsz" 20;
         }
 
         input[name="mobilesearch"]::placeholder {
@@ -224,9 +222,9 @@
         }
 
         .clear-search-button {
-            width: 42px;
-            height: 42px;
-            flex: 0 0 42px;
+            width: 36px;
+            height: 36px;
+            flex: 0 0 36px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -236,7 +234,7 @@
             background: transparent;
             color: #ffffff;
             cursor: pointer;
-            font-size: 31px;
+            font-size: 24px;
             line-height: 1;
         }
 
@@ -331,8 +329,6 @@
             font-size: 12px;
             line-height: 1;
             font-weight: 650;
-            font-stretch: 115%;
-            font-variation-settings: "wdth" 115, "opsz" 12;
         }
 
         .duration-badge {
@@ -386,8 +382,6 @@
             font-size: 16px;
             line-height: 1;
             font-weight: 750;
-            font-stretch: 130%;
-            font-variation-settings: "wdth" 130, "opsz" 14;
         }
 
         .text-block {
@@ -396,20 +390,15 @@
         }
 
         .title {
-            color: var(--text);
-            font-weight: 650;
-            font-stretch: 200%;
-            font-variation-settings: "wdth" 151, "opsz" 14;
-            letter-spacing: 0.01em;
-        }
-
-        .title {
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
+            color: var(--text);
+            font-weight: 650;
             font-size: 15.5px;
             line-height: 1.24;
+            letter-spacing: 0.01em;
         }
 
         .meta {
@@ -421,8 +410,6 @@
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
-            font-stretch: 112.5%;
-            font-variation-settings: "wdth" 112.5, "opsz" 12;
         }
 
         .meta a {
@@ -444,14 +431,11 @@
             max-width: 100%;
             min-height: 19px;
             padding: 0;
-            border-radius: 0;
             background: transparent;
             color: #ffffff;
             font-size: 13px;
             font-weight: 700;
             line-height: 1;
-            font-stretch: 130%;
-            font-variation-settings: "wdth" 130, "opsz" 12;
         }
 
         .view-play-icon {
@@ -473,8 +457,6 @@
             font-size: 16px;
             line-height: 1.45;
             font-weight: 550;
-            font-stretch: 140%;
-            font-variation-settings: "wdth" 140, "opsz" 16;
         }
 
         .pagination {
@@ -500,7 +482,6 @@
             background: rgba(15, 15, 15, 0.96);
             border-top: 1px solid rgba(255, 255, 255, 0.07);
             backdrop-filter: blur(18px);
-            -webkit-backdrop-filter: blur(18px);
             pointer-events: auto;
         }
 
@@ -516,8 +497,6 @@
             user-select: none;
             white-space: nowrap;
             font-weight: 650;
-            font-stretch: 125%;
-            font-variation-settings: "wdth" 125, "opsz" 14;
         }
 
         .page-button,
@@ -574,63 +553,13 @@
         }
 
         @keyframes loadingBarMove {
-            0% {
-                width: 34%;
-                transform: translateX(-110%);
-            }
-
-            55% {
-                width: 58%;
-                transform: translateX(95%);
-            }
-
-            100% {
-                width: 30%;
-                transform: translateX(340%);
-            }
+            0% { width: 34%; transform: translateX(-110%); }
+            55% { width: 58%; transform: translateX(95%); }
+            100% { width: 30%; transform: translateX(340%); }
         }
 
         @media (min-width: 521px) {
-            .feed {
-                border-left: 1px solid rgba(255, 255, 255, 0.06);
-                border-right: 1px solid rgba(255, 255, 255, 0.06);
-            }
-
-            .pagination-inner {
-                border-left: 1px solid rgba(255, 255, 255, 0.06);
-                border-right: 1px solid rgba(255, 255, 255, 0.06);
-            }
-        }
-
-        @media (max-width: 390px) {
-            .nav-wrap {
-                gap: 12px;
-                min-height: calc(60px + env(safe-area-inset-top));
-                padding: calc(6px + env(safe-area-inset-top)) 15px 6px 12px;
-            }
-
-            .back-button {
-                width: 48px;
-                height: 48px;
-                flex-basis: 48px;
-                font-size: 34px;
-            }
-
-            .search-container {
-                height: 42px;
-                padding: 0 6px 0 18px;
-            }
-
-            input[name="mobilesearch"] {
-                font-size: 23px;
-            }
-
-            .clear-search-button {
-                width: 42px;
-                height: 42px;
-                flex-basis: 42px;
-                font-size: 31px;
-            }
+            .feed, .pagination-inner { border-left: 1px solid rgba(255, 255, 255, 0.06); border-right: 1px solid rgba(255, 255, 255, 0.06); }
         }
     </style>
 </head>
