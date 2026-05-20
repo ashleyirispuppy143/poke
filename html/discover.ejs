@@ -9,6 +9,9 @@
         let currentPage = typeof continuation !== "undefined" && continuation ? Number(continuation) : 1;
         if (!Number.isFinite(currentPage) || currentPage < 1) currentPage = 1;
 
+        const previousPage = currentPage > 1 ? currentPage - 1 : 1;
+        const nextPage = currentPage + 1;
+
         function proxyMediaUrl(url) {
             if (!url) return "";
             if (!mediaProxyBase) return url;
@@ -100,9 +103,6 @@
         function joinMeta(parts) {
             return parts.filter(Boolean).join(" • ");
         }
-
-        const previousPage = currentPage > 1 ? currentPage - 1 : 1;
-        const nextPage = currentPage + 1;
     %>
 
     <meta charset="UTF-8">
@@ -131,12 +131,11 @@
         :root {
             --bg: #0f0f0f;
             --panel: #0f0f0f;
-            --search-bg: #212121;
-            --search-border: #303030;
-            --search-focus: #444444;
+            --search-bg: #282828;
+            --search-focus: #303030;
             --text: #f1f1f1;
             --text-soft: #aaaaaa;
-            --text-muted: #777777;
+            --text-muted: #8a8a8a;
             --line: #272727;
             --chip: #272727;
             --chip-hover: #343434;
@@ -182,8 +181,7 @@
             position: sticky;
             top: 0;
             z-index: 100;
-            background: rgba(15, 15, 15, 0.96);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            background: rgba(15, 15, 15, 0.98);
             backdrop-filter: blur(18px);
             -webkit-backdrop-filter: blur(18px);
         }
@@ -191,35 +189,47 @@
         .nav-wrap {
             display: flex;
             align-items: center;
-            min-height: 62px;
-            padding: 10px;
-            padding-top: max(10px, env(safe-area-inset-top));
+            gap: 12px;
+            min-height: 88px;
+            padding: 14px 14px;
+            padding-top: max(14px, env(safe-area-inset-top));
+        }
+
+        .back-button {
+            width: 58px;
+            height: 58px;
+            flex: 0 0 58px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            color: var(--text);
+            font-size: 42px;
+            line-height: 1;
+        }
+
+        .back-button:active {
+            transform: scale(0.94);
+            background: rgba(255, 255, 255, 0.06);
         }
 
         .search-container {
             flex: 1 1 auto;
             min-width: 0;
-            height: 44px;
+            height: 64px;
             display: flex;
             align-items: center;
             gap: 10px;
             background: var(--search-bg);
-            border: 1px solid var(--search-border);
+            border: 0;
             border-radius: 999px;
-            padding: 0 8px 0 15px;
-            transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+            padding: 0 12px 0 36px;
+            transition: background 140ms ease, box-shadow 140ms ease;
         }
 
         .search-container:focus-within {
-            background: #262626;
-            border-color: var(--search-focus);
-            box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.045);
-        }
-
-        .search-icon-inline {
-            flex: 0 0 auto;
-            color: var(--text-soft);
-            font-size: 15px;
+            background: var(--search-focus);
+            box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04);
         }
 
         input[name="mobilesearch"] {
@@ -230,12 +240,12 @@
             outline: 0;
             background: transparent;
             color: var(--text);
-            font-size: 16px;
+            font-size: clamp(24px, 7vw, 34px);
             line-height: 1;
             padding: 0;
-            font-weight: 500;
-            font-stretch: 115%;
-            font-variation-settings: "wdth" 115, "opsz" 14;
+            font-weight: 430;
+            font-stretch: 112%;
+            font-variation-settings: "wdth" 112, "opsz" 20;
         }
 
         input[name="mobilesearch"]::placeholder {
@@ -243,10 +253,10 @@
             opacity: 1;
         }
 
-        .search-btn {
-            width: 36px;
-            height: 36px;
-            flex: 0 0 36px;
+        .clear-search-button {
+            width: 54px;
+            height: 54px;
+            flex: 0 0 54px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -254,15 +264,27 @@
             border-radius: 999px;
             padding: 0;
             background: transparent;
-            color: var(--text-soft);
+            color: #ffffff;
             cursor: pointer;
-            font-size: 18px;
+            font-size: 42px;
+            line-height: 1;
         }
 
-        .search-btn:active {
+        .clear-search-button:active {
             transform: scale(0.94);
-            color: var(--text);
             background: rgba(255, 255, 255, 0.06);
+        }
+
+        .hidden-submit {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
         }
 
         .feed {
@@ -365,8 +387,8 @@
 
         .details-row {
             display: grid;
-            grid-template-columns: 40px minmax(0, 1fr);
-            column-gap: 11px;
+            grid-template-columns: 38px minmax(0, 1fr);
+            column-gap: 8px;
             align-items: start;
             padding: 11px 11px 0;
         }
@@ -408,7 +430,7 @@
 
         .text-block {
             min-width: 0;
-            padding-right: 6px;
+            padding-right: 4px;
         }
 
         .title,
@@ -486,15 +508,15 @@
 
         .channel-inner {
             display: grid;
-            grid-template-columns: 74px minmax(0, 1fr);
-            column-gap: 14px;
+            grid-template-columns: 72px minmax(0, 1fr);
+            column-gap: 9px;
             align-items: center;
         }
 
         .channel-avatar-link,
         .channel-avatar-fallback {
-            width: 74px;
-            height: 74px;
+            width: 72px;
+            height: 72px;
             display: block;
             overflow: hidden;
             border-radius: 999px;
@@ -530,8 +552,8 @@
 
         .hashtag-result {
             display: grid;
-            grid-template-columns: 40px minmax(0, 1fr);
-            column-gap: 11px;
+            grid-template-columns: 38px minmax(0, 1fr);
+            column-gap: 8px;
             align-items: center;
             min-height: 58px;
         }
@@ -561,7 +583,7 @@
         }
 
         .empty-state {
-            min-height: calc(100vh - 160px);
+            min-height: calc(100vh - 190px);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -688,17 +710,54 @@
                 border-right: 1px solid rgba(255, 255, 255, 0.06);
             }
         }
+
+        @media (max-width: 390px) {
+            .nav-wrap {
+                min-height: 78px;
+                gap: 8px;
+                padding: 10px;
+                padding-top: max(10px, env(safe-area-inset-top));
+            }
+
+            .back-button {
+                width: 48px;
+                height: 48px;
+                flex-basis: 48px;
+                font-size: 34px;
+            }
+
+            .search-container {
+                height: 54px;
+                padding-left: 24px;
+                padding-right: 8px;
+            }
+
+            input[name="mobilesearch"] {
+                font-size: 24px;
+            }
+
+            .clear-search-button {
+                width: 46px;
+                height: 46px;
+                flex-basis: 46px;
+                font-size: 34px;
+            }
+        }
     </style>
 </head>
 <body>
     <header class="app-header">
         <div class="nav-wrap">
+            <a href="/search" class="back-button" aria-label="Back to search">
+                <i class="fa-light fa-chevron-left"></i>
+            </a>
+
             <form action="/app" class="search-container" role="search">
-                <i class="fa-light fa-search search-icon-inline" aria-hidden="true"></i>
                 <input type="text" name="mobilesearch" value="<%= searchValue %>" placeholder="Search" autocomplete="off">
-                <button type="submit" class="search-btn" aria-label="Search">
-                    <i class="fa-light fa-arrow-right"></i>
+                <button type="button" class="clear-search-button" aria-label="Clear search">
+                    <i class="fa-light fa-xmark"></i>
                 </button>
+                <button type="submit" class="hidden-submit" aria-label="Search">Search</button>
             </form>
         </div>
     </header>
@@ -943,6 +1002,9 @@
     <% } %>
 
     <script>
+        const searchInput = document.querySelector('input[name="mobilesearch"]');
+        const clearSearchButton = document.querySelector(".clear-search-button");
+
         function removeLoadingOverlay() {
             document.body.classList.remove("no-scroll");
 
@@ -960,6 +1022,13 @@
 
             document.body.classList.add("no-scroll");
             document.body.appendChild(loading);
+        }
+
+        if (clearSearchButton && searchInput) {
+            clearSearchButton.addEventListener("click", () => {
+                searchInput.value = "";
+                searchInput.focus();
+            });
         }
 
         document.addEventListener("click", event => {
