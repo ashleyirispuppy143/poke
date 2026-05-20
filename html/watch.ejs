@@ -3665,7 +3665,8 @@ window.proxyurl = "<%- media_proxy_url %>/proxy?url="
 
                      
      <% if (!qua) { %>
-         let hdItag = '247';
+        <% if (hasHD) { 
+        let hdItag = '247';
         VideoData.adaptiveFormats.forEach(format => {
           if (format.itag == '302') hdItag = '302';
         });
