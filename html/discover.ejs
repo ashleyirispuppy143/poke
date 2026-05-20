@@ -1,843 +1,887 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <%
-        const results = typeof j !== "undefined" && j && Array.isArray(j.results) ? j.results : [];
-        const videoResults = results.filter(item => item && (item.type === "video" || item.videoId));
-        const searchValue = typeof mobilesearch !== "undefined" ? mobilesearch : "";
-        const mediaProxyBase = typeof media_proxy_url !== "undefined" && media_proxy_url ? String(media_proxy_url).replace(/\/$/, "") : "";
-
-        let currentPage = typeof continuation !== "undefined" && continuation ? Number(continuation) : 1;
-        if (!Number.isFinite(currentPage) || currentPage < 1) currentPage = 1;
-
-        const previousPage = currentPage > 1 ? currentPage - 1 : 1;
-        const nextPage = currentPage + 1;
-
-        function formatDuration(seconds) {
-            const value = Number(seconds);
-            if (!Number.isFinite(value) || value <= 0) return "";
-
-            const total = Math.floor(value);
-            const hours = Math.floor(total / 3600);
-            const minutes = Math.floor((total % 3600) / 60);
-            const secs = total % 60;
-
-            if (hours > 0) {
-                return String(hours) + ":" + String(minutes).padStart(2, "0") + ":" + String(secs).padStart(2, "0");
-            }
-
-            return String(minutes) + ":" + String(secs).padStart(2, "0");
-        }
-
-        function formatCompactNumber(value) {
-            const number = Number(value);
-            if (!Number.isFinite(number) || number < 0) return "";
-
-            if (number < 1000) return String(number);
-
-            return new Intl.NumberFormat("en", {
-                notation: "compact",
-                maximumFractionDigits: 1
-            }).format(number).replace(".0", "");
-        }
-
-        function relativeTimeFromMilliseconds(milliseconds) {
-            const differenceInSeconds = Math.round((milliseconds - Date.now()) / 1000);
-            const absoluteDifference = Math.abs(differenceInSeconds);
-
-            const units = [
-                { name: "year", seconds: 31536000 },
-                { name: "month", seconds: 2592000 },
-                { name: "week", seconds: 604800 },
-                { name: "day", seconds: 86400 },
-                { name: "hour", seconds: 3600 },
-                { name: "minute", seconds: 60 },
-                { name: "second", seconds: 1 }
-            ];
-
-            const unit = units.find(candidate => absoluteDifference >= candidate.seconds) || units[units.length - 1];
-            const value = Math.round(differenceInSeconds / unit.seconds);
-
-            return new Intl.RelativeTimeFormat("en", {
-                numeric: "auto"
-            }).format(value, unit.name);
-        }
-
-        function formatPublishedText(item) {
-            if (!item) return "";
-
-            const textFields = [
-                item.publishedText,
-                item.publishedTimeText,
-                item.publishedAtText,
-                item.uploadedText
-            ];
-
-            for (const field of textFields) {
-                if (typeof field === "string" && field.trim()) return field.trim();
-            }
-
-            const numericPublished = Number(item.published);
-            if (Number.isFinite(numericPublished) && numericPublished > 0) {
-                const milliseconds = numericPublished > 1000000000000 ? numericPublished : numericPublished * 1000;
-                return relativeTimeFromMilliseconds(milliseconds);
-            }
-
-            const dateFields = [
-                item.publishedAt,
-                item.uploadedAt,
-                item.date
-            ];
-
-            for (const field of dateFields) {
-                if (typeof field !== "string" || !field.trim()) continue;
-
-                const milliseconds = Date.parse(field);
-                if (Number.isFinite(milliseconds)) return relativeTimeFromMilliseconds(milliseconds);
-            }
-
-            return "";
-        }
-    %>
-
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mobile Search</title>
-
-    <% if (!searchValue && !(typeof tab !== "undefined" && tab)) { %>
-        <meta http-equiv="refresh" content="0; url=/search">
-    <% } %>
-
-    <link href="/css/yt-ukraine.svg?v=6" rel="icon">
-    <link href="/css/app-cdn.min.css" rel="stylesheet">
-
-    <style>
-        @import url("https://p.poketube.fun/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css");
-
-        @font-face {
-            font-family: "PokeTube Flex";
-            src: url("/static/robotoflex.ttf");
-            font-style: normal;
-            font-weight: 100 1000;
-            font-stretch: 1% 800%;
-            font-display: swap;
-        }
-
-        :root {
-            --bg: #0f0f0f;
-            --panel: #0f0f0f;
-            --search-bg: #282828;
-            --search-focus: #303030;
-            --text: #f1f1f1;
-            --text-soft: #aaaaaa;
-            --text-muted: #8a8a8a;
-            --line: #272727;
-            --chip: #272727;
-            --chip-hover: #343434;
-            --danger: #cc0000;
-        }
-
-        * {
-            box-sizing: border-box;
-            font-family: inherit;
-        }
-
-        html {
-            background: var(--bg);
-            font-family: "PokeTube Flex", Roboto, Arial, Helvetica, sans-serif;
-        }
-
-        body {
-            margin: 0;
-            padding: 0;
-            min-height: 100vh;
-            background: var(--bg);
-            color: var(--text);
-            font-family: "PokeTube Flex", Roboto, Arial, Helvetica, sans-serif;
-            -webkit-tap-highlight-color: transparent;
-            overscroll-behavior-y: contain;
-        }
-
-        a {
-            color: inherit;
-            text-decoration: none;
-        }
-
-        button,
-        input {
-            font: inherit;
-        }
-
-        .app-header {
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            background: rgba(15, 15, 15, 0.98);
-            backdrop-filter: blur(18px);
-            -webkit-backdrop-filter: blur(18px);
-        }
-
-        .nav-wrap {
-            width: 100%;
-            max-width: 390px;
-            min-height: calc(48px + env(safe-area-inset-top));
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin: 0 auto;
-            padding: calc(6px + env(safe-area-inset-top)) 12px 6px 10px;
-        }
-
-        .back-button {
-            width: 36px;
-            height: 36px;
-            flex: 0 0 36px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 999px;
-            color: var(--text);
-            font-size: 22px;
-            line-height: 1;
-        }
-
-        .back-button:active {
-            transform: scale(0.94);
-            background: rgba(255, 255, 255, 0.06);
-        }
-
-        .search-container {
-            flex: 1 1 auto;
-            min-width: 0;
-            height: 36px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            background: var(--search-bg);
-            border: 0;
-            border-radius: 999px;
-            padding: 0 3px 0 14px;
-            transition: background 140ms ease, box-shadow 140ms ease;
-        }
-
-        .search-container:focus-within {
-            background: var(--search-focus);
-            box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04);
-        }
-
-        input[name="mobilesearch"] {
-            appearance: none;
-            width: 100%;
-            min-width: 0;
-            border: 0;
-            outline: 0;
-            background: transparent;
-            color: var(--text);
-            font-size: 17px;
-            line-height: 1;
-            padding: 0;
-            font-weight: 430;
-        }
-
-        input[name="mobilesearch"]::placeholder {
-            color: var(--text-muted);
-            opacity: 1;
-        }
-
-        .clear-search-button {
-            width: 34px;
-            height: 34px;
-            flex: 0 0 34px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border: 0;
-            border-radius: 999px;
-            padding: 0;
-            background: transparent;
-            color: #ffffff;
-            cursor: pointer;
-            font-size: 22px;
-            line-height: 1;
-        }
-
-        .clear-search-button:active {
-            transform: scale(0.94);
-            background: rgba(255, 255, 255, 0.06);
-        }
-
-        .hidden-submit {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            padding: 0;
-            margin: -1px;
-            overflow: hidden;
-            clip: rect(0, 0, 0, 0);
-            white-space: nowrap;
-            border: 0;
-        }
-
-        .feed {
-            width: 100%;
-            max-width: 390px;
-            margin: 0 auto;
-            padding: 10px 0 calc(96px + env(safe-area-inset-bottom));
-            background: var(--bg);
-        }
-
-        .result-card {
-            width: 100%;
-            background: var(--panel);
-            color: var(--text);
-            overflow: hidden;
-        }
-
-        .result-card + .result-card {
-            margin-top: 18px;
-        }
-
-        .video-card {
-            padding: 0 0 12px;
-        }
-
-        .thumbnail-shell {
-            width: 100%;
-            padding: 0 14px;
-        }
-
-        .thumbnail-link {
-            position: relative;
-            display: block;
-            width: 100%;
-            aspect-ratio: 16 / 9;
-            overflow: hidden;
-            border-radius: 14px;
-            background: #181818;
-            box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04);
-        }
-
-        .thumbnail-img {
-            display: block;
-            width: 100%;
-            height: 100%;
-            border-radius: 14px;
-            object-fit: cover;
-            background: #181818;
-        }
-
-        .thumbnail-placeholder {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 14px;
-            background: #181818;
-            color: var(--text-muted);
-            font-size: 26px;
-        }
-
-        .duration-badge,
-        .live-badge {
-            position: absolute;
-            right: 6px;
-            bottom: 6px;
-            min-height: 21px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 5px;
-            color: #ffffff;
-            font-size: 12px;
-            line-height: 1;
-            font-weight: 760;
-        }
-
-        .duration-badge {
-            min-width: 36px;
-            padding: 0 5px;
-            background: rgba(0, 0, 0, 0.88);
-        }
-
-        .live-badge {
-            padding: 0 7px;
-            background: var(--danger);
-            letter-spacing: 0.01em;
-        }
-
-        .video-info {
-            min-width: 0;
-            padding: 8px 16px 0;
-        }
-
-        .title {
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-            color: var(--text);
-            font-weight: 560;
-            font-size: 16px;
-            line-height: 1.28;
-            letter-spacing: 0;
-        }
-
-        .meta-line {
-            min-width: 0;
-            min-height: 18px;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            margin-top: 4px;
-            color: var(--text-soft);
-            font-size: 12.5px;
-            font-weight: 440;
-            line-height: 1.2;
-            overflow: hidden;
-            white-space: nowrap;
-        }
-
-        .meta-line:empty {
-            display: none;
-        }
-
-        .avatar-link,
-        .avatar-fallback {
-            width: 18px;
-            height: 18px;
-            flex: 0 0 18px;
-            display: block;
-            overflow: hidden;
-            border-radius: 999px;
-            background: #272727;
-        }
-
-        .avatar-img {
-            display: block;
-            width: 100%;
-            height: 100%;
-            border-radius: 999px;
-            object-fit: cover;
-            background: #272727;
-        }
-
-        .avatar-letter {
-            width: 100%;
-            height: 100%;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 999px;
-            background: linear-gradient(135deg, #7b1fa2, #e91e63);
-            color: #ffffff;
-            font-size: 9px;
-            line-height: 1;
-            font-weight: 760;
-        }
-
-        .meta-author {
-            min-width: 0;
-            max-width: 44%;
-            display: inline-block;
-            overflow: hidden;
-            color: var(--text-soft);
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            vertical-align: top;
-        }
-
-        .meta-play-icon {
-            flex: 0 0 auto;
-            color: var(--text-soft);
-            font-size: 10px;
-            line-height: 1;
-            transform: translateY(-0.25px);
-        }
-
-        .meta-views,
-        .meta-age {
-            flex: 0 0 auto;
-            color: var(--text-soft);
-        }
-
-        .empty-state {
-            min-height: calc(100vh - 190px);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 42px 24px;
-            color: var(--text-soft);
-            text-align: center;
-            font-size: 16px;
-            line-height: 1.45;
-            font-weight: 550;
-        }
-
-        .pagination {
-            position: fixed;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            z-index: 90;
-            display: flex;
-            justify-content: center;
-            padding: 0 10px;
-            pointer-events: none;
-        }
-
-        .pagination-inner {
-            width: 100%;
-            max-width: 390px;
-            display: grid;
-            grid-template-columns: 1fr auto 1fr;
-            align-items: center;
-            gap: 10px;
-            padding: 12px 10px calc(12px + env(safe-area-inset-bottom));
-            background: rgba(15, 15, 15, 0.96);
-            border-top: 1px solid rgba(255, 255, 255, 0.07);
-            backdrop-filter: blur(18px);
-            -webkit-backdrop-filter: blur(18px);
-            pointer-events: auto;
-        }
-
-        .page-button,
-        .disabled-page-button,
-        .page-count {
-            min-height: 46px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 999px;
-            border: 1px solid rgba(255, 255, 255, 0.09);
-            user-select: none;
-            white-space: nowrap;
-            font-weight: 650;
-        }
-
-        .page-button,
-        .disabled-page-button {
-            min-width: 92px;
-            gap: 8px;
-            padding: 0 16px;
-            background: var(--chip);
-            color: var(--text);
-            font-size: 14.5px;
-        }
-
-        .page-button:active {
-            transform: scale(0.97);
-            background: var(--chip-hover);
-        }
-
-        .disabled-page-button {
-            opacity: 0.35;
-            pointer-events: none;
-        }
-
-        .page-count {
-            min-width: 86px;
-            padding: 0 12px;
-            background: #181818;
-            color: var(--text-soft);
-            font-size: 13.5px;
-        }
-
-        .loading-bar {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 9999;
-            height: 3px;
-            overflow: hidden;
-            pointer-events: none;
-            background: rgba(255, 255, 255, 0.08);
-        }
-
-        .loading-bar::before {
-            content: "";
-            position: absolute;
-            top: 0;
-            bottom: 0;
-            left: 0;
-            width: 42%;
-            border-radius: 999px;
-            background: #ffffff;
-            transform: translateX(-110%);
-            animation: loadingBarMove 900ms ease-in-out infinite;
-        }
-
-        @keyframes loadingBarMove {
-            0% {
-                width: 34%;
-                transform: translateX(-110%);
-            }
-
-            55% {
-                width: 58%;
-                transform: translateX(95%);
-            }
-
-            100% {
-                width: 30%;
-                transform: translateX(340%);
-            }
-        }
-
-        @media (min-width: 391px) {
-            .feed,
-            .pagination-inner,
-            .nav-wrap {
-                border-left: 1px solid rgba(255, 255, 255, 0.06);
-                border-right: 1px solid rgba(255, 255, 255, 0.06);
-            }
-
-            .nav-wrap {
-                border-left-color: transparent;
-                border-right-color: transparent;
-            }
-        }
-
-        @media (max-width: 340px) {
-            .thumbnail-shell {
-                padding: 0 10px;
-            }
-
-            .video-info {
-                padding-left: 12px;
-                padding-right: 12px;
-            }
-
-            .meta-author {
-                max-width: 38%;
-            }
-
-            .page-button,
-            .disabled-page-button {
-                min-width: 78px;
-                padding: 0 12px;
-            }
-
-            .page-count {
-                min-width: 76px;
-            }
-        }
-    </style>
+    <%
+        const results = typeof j !== "undefined" && j && Array.isArray(j.results) ? j.results : [];
+        const videoResults = results.filter(item => item && (item.type === "video" || item.videoId));
+        const searchValue = typeof mobilesearch !== "undefined" ? mobilesearch : "";
+        const mediaProxyBase = typeof media_proxy_url !== "undefined" && media_proxy_url ? String(media_proxy_url).replace(/\/$/, "") : "";
+
+        let currentPage = typeof continuation !== "undefined" && continuation ? Number(continuation) : 1;
+        if (!Number.isFinite(currentPage) || currentPage < 1) currentPage = 1;
+
+        const previousPage = currentPage > 1 ? currentPage - 1 : 1;
+        const nextPage = currentPage + 1;
+
+        function proxyMediaUrl(url) {
+            if (!url) return "";
+            if (!mediaProxyBase) return url;
+            return mediaProxyBase + "/proxy?url=" + encodeURIComponent(url);
+        }
+
+        function pageUrl(page) {
+            return "/app?mobilesearch=" + encodeURIComponent(searchValue) + "&continuation=" + encodeURIComponent(page);
+        }
+
+        function videoHref(item) {
+            return item && item.videoId ? "/watch?v=" + encodeURIComponent(item.videoId) : "#";
+        }
+
+        function channelHref(item) {
+            if (!item) return "#";
+            if (item.authorId) return "/channel?id=" + encodeURIComponent(item.authorId);
+            return "#";
+        }
+
+        function rawVideoThumbnailUrl(videoId) {
+            if (!videoId) return "";
+            return "https://i.ytimg.com/vi/" + encodeURIComponent(videoId) + "/hq720.jpg";
+        }
+
+        function rawFallbackVideoThumbnailUrl(videoId) {
+            if (!videoId) return "";
+            return "https://i.ytimg.com/vi/" + encodeURIComponent(videoId) + "/hqdefault.jpg";
+        }
+
+        function rawAvatarUrl(item) {
+            if (!item || !Array.isArray(item.authorThumbnails) || !item.authorThumbnails.length) return "";
+
+            const preferredAvatar = item.authorThumbnails.find(thumbnail => {
+                const width = Number(thumbnail && thumbnail.width);
+                return thumbnail && thumbnail.url && Number.isFinite(width) && width >= 48;
+            });
+
+            if (preferredAvatar && preferredAvatar.url) return preferredAvatar.url;
+
+            const lastAvatar = item.authorThumbnails[item.authorThumbnails.length - 1];
+            if (lastAvatar && lastAvatar.url) return lastAvatar.url;
+
+            const firstAvatar = item.authorThumbnails[0];
+            if (firstAvatar && firstAvatar.url) return firstAvatar.url;
+
+            return "";
+        }
+
+        function authorInitial(author) {
+            if (!author || typeof author !== "string") return "?";
+            return author.trim().charAt(0).toUpperCase() || "?";
+        }
+
+        function formatDuration(seconds) {
+            const value = Number(seconds);
+            if (!Number.isFinite(value) || value <= 0) return "";
+
+            const total = Math.floor(value);
+            const hours = Math.floor(total / 3600);
+            const minutes = Math.floor((total % 3600) / 60);
+            const secs = total % 60;
+
+            if (hours > 0) {
+                return String(hours) + ":" + String(minutes).padStart(2, "0") + ":" + String(secs).padStart(2, "0");
+            }
+
+            return String(minutes) + ":" + String(secs).padStart(2, "0");
+        }
+
+        function formatCompactNumber(value) {
+            const number = Number(value);
+            if (!Number.isFinite(number) || number < 0) return "";
+
+            if (number < 1000) return String(number);
+
+            return new Intl.NumberFormat("en", {
+                notation: "compact",
+                maximumFractionDigits: 1
+            }).format(number).replace(".0", "");
+        }
+
+        function relativeTimeFromMilliseconds(milliseconds) {
+            const differenceInSeconds = Math.round((milliseconds - Date.now()) / 1000);
+            const absoluteDifference = Math.abs(differenceInSeconds);
+
+            const units = [
+                { name: "year", seconds: 31536000 },
+                { name: "month", seconds: 2592000 },
+                { name: "week", seconds: 604800 },
+                { name: "day", seconds: 86400 },
+                { name: "hour", seconds: 3600 },
+                { name: "minute", seconds: 60 },
+                { name: "second", seconds: 1 }
+            ];
+
+            const unit = units.find(candidate => absoluteDifference >= candidate.seconds) || units[units.length - 1];
+            const value = Math.round(differenceInSeconds / unit.seconds);
+
+            return new Intl.RelativeTimeFormat("en", {
+                numeric: "auto"
+            }).format(value, unit.name);
+        }
+
+        function formatPublishedText(item) {
+            if (!item) return "";
+
+            const textFields = [
+                item.publishedText,
+                item.publishedTimeText,
+                item.publishedAtText,
+                item.uploadedText
+            ];
+
+            for (const field of textFields) {
+                if (typeof field === "string" && field.trim()) return field.trim();
+            }
+
+            const numericPublished = Number(item.published);
+            if (Number.isFinite(numericPublished) && numericPublished > 0) {
+                const milliseconds = numericPublished > 1000000000000 ? numericPublished : numericPublished * 1000;
+                return relativeTimeFromMilliseconds(milliseconds);
+            }
+
+            const dateFields = [
+                item.publishedAt,
+                item.uploadedAt,
+                item.date
+            ];
+
+            for (const field of dateFields) {
+                if (typeof field !== "string" || !field.trim()) continue;
+
+                const milliseconds = Date.parse(field);
+                if (Number.isFinite(milliseconds)) return relativeTimeFromMilliseconds(milliseconds);
+            }
+
+            return "";
+        }
+    %>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile Search</title>
+
+    <% if (!searchValue && !(typeof tab !== "undefined" && tab)) { %>
+        <meta http-equiv="refresh" content="0; url=/search">
+    <% } %>
+
+    <link href="/css/yt-ukraine.svg?v=6" rel="icon">
+    <link href="/css/app-cdn.min.css" rel="stylesheet">
+
+    <style>
+        @import url("https://p.poketube.fun/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css");
+
+        @font-face {
+            font-family: "PokeTube Flex";
+            src: url("/static/robotoflex.ttf");
+            font-style: normal;
+            font-weight: 100 1000;
+            font-stretch: 1% 800%;
+            font-display: swap;
+        }
+
+        :root {
+            --bg: #0f0f0f;
+            --panel: #0f0f0f;
+            --search-bg: #282828;
+            --search-focus: #303030;
+            --text: #f1f1f1;
+            --text-soft: #aaaaaa;
+            --text-muted: #8a8a8a;
+            --line: #272727;
+            --chip: #272727;
+            --chip-hover: #343434;
+            --danger: #cc0000;
+        }
+
+        * {
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+
+        html {
+            background: var(--bg);
+            font-family: "PokeTube Flex", Roboto, Arial, Helvetica, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            background: var(--bg);
+            color: var(--text);
+            font-family: "PokeTube Flex", Roboto, Arial, Helvetica, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior-y: contain;
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        button,
+        input {
+            font: inherit;
+        }
+
+        .app-header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(15, 15, 15, 0.98);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+        }
+
+        .nav-wrap {
+            width: 100%;
+            max-width: 390px;
+            min-height: calc(48px + env(safe-area-inset-top));
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0 auto;
+            padding: calc(6px + env(safe-area-inset-top)) 12px 6px 10px;
+        }
+
+        .back-button {
+            width: 36px;
+            height: 36px;
+            flex: 0 0 36px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            color: var(--text);
+            font-size: 22px;
+            line-height: 1;
+        }
+
+        .back-button:active {
+            transform: scale(0.94);
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .search-container {
+            flex: 1 1 auto;
+            min-width: 0;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--search-bg);
+            border: 0;
+            border-radius: 999px;
+            padding: 0 3px 0 14px;
+            transition: background 140ms ease, box-shadow 140ms ease;
+        }
+
+        .search-container:focus-within {
+            background: var(--search-focus);
+            box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04);
+        }
+
+        input[name="mobilesearch"] {
+            appearance: none;
+            width: 100%;
+            min-width: 0;
+            border: 0;
+            outline: 0;
+            background: transparent;
+            color: var(--text);
+            font-size: 17px;
+            line-height: 1;
+            padding: 0;
+            font-weight: 430;
+        }
+
+        input[name="mobilesearch"]::placeholder {
+            color: var(--text-muted);
+            opacity: 1;
+        }
+
+        .clear-search-button {
+            width: 34px;
+            height: 34px;
+            flex: 0 0 34px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 0;
+            border-radius: 999px;
+            padding: 0;
+            background: transparent;
+            color: #ffffff;
+            cursor: pointer;
+            font-size: 22px;
+            line-height: 1;
+        }
+
+        .clear-search-button:active {
+            transform: scale(0.94);
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .hidden-submit {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        .feed {
+            width: 100%;
+            max-width: 390px;
+            margin: 0 auto;
+            padding: 10px 0 calc(96px + env(safe-area-inset-bottom));
+            background: var(--bg);
+        }
+
+        .result-card {
+            width: 100%;
+            background: var(--panel);
+            color: var(--text);
+            overflow: hidden;
+        }
+
+        .result-card + .result-card {
+            margin-top: 18px;
+        }
+
+        .video-card {
+            padding: 0 0 12px;
+        }
+
+        .thumbnail-shell {
+            width: 100%;
+            padding: 0 14px;
+        }
+
+        .thumbnail-link {
+            position: relative;
+            display: block;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            overflow: hidden;
+            border-radius: 14px;
+            background: #181818;
+            box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04);
+        }
+
+        .thumbnail-img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            border-radius: 14px;
+            object-fit: cover;
+            background: #181818;
+        }
+
+        .thumbnail-placeholder {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 14px;
+            background: #181818;
+            color: var(--text-muted);
+            font-size: 26px;
+        }
+
+        .duration-badge,
+        .live-badge {
+            position: absolute;
+            right: 6px;
+            bottom: 6px;
+            min-height: 21px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 5px;
+            color: #ffffff;
+            font-size: 12px;
+            line-height: 1;
+            font-weight: 760;
+        }
+
+        .duration-badge {
+            min-width: 36px;
+            padding: 0 5px;
+            background: rgba(0, 0, 0, 0.88);
+        }
+
+        .live-badge {
+            padding: 0 7px;
+            background: var(--danger);
+            letter-spacing: 0.01em;
+        }
+
+        .video-info {
+            min-width: 0;
+            padding: 8px 16px 0;
+        }
+
+        .title {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            color: var(--text);
+            font-weight: 560;
+            font-size: 16px;
+            line-height: 1.28;
+            letter-spacing: 0;
+        }
+
+        .meta-line {
+            min-width: 0;
+            min-height: 18px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-top: 4px;
+            color: var(--text-soft);
+            font-size: 12.5px;
+            font-weight: 440;
+            line-height: 1.2;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+
+        .meta-line:empty {
+            display: none;
+        }
+
+        .avatar-link,
+        .avatar-fallback {
+            width: 18px;
+            height: 18px;
+            flex: 0 0 18px;
+            display: block;
+            overflow: hidden;
+            border-radius: 999px;
+            background: #272727;
+        }
+
+        .avatar-img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            border-radius: 999px;
+            object-fit: cover;
+            background: #272727;
+        }
+
+        .avatar-letter {
+            width: 100%;
+            height: 100%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            background: linear-gradient(135deg, #7b1fa2, #e91e63);
+            color: #ffffff;
+            font-size: 9px;
+            line-height: 1;
+            font-weight: 760;
+        }
+
+        .meta-author {
+            min-width: 0;
+            max-width: 44%;
+            display: inline-block;
+            overflow: hidden;
+            color: var(--text-soft);
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            vertical-align: top;
+        }
+
+        .meta-play-icon {
+            flex: 0 0 auto;
+            color: var(--text-soft);
+            font-size: 10px;
+            line-height: 1;
+            transform: translateY(-0.25px);
+        }
+
+        .meta-views,
+        .meta-age {
+            flex: 0 0 auto;
+            color: var(--text-soft);
+        }
+
+        .empty-state {
+            min-height: calc(100vh - 190px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 42px 24px;
+            color: var(--text-soft);
+            text-align: center;
+            font-size: 16px;
+            line-height: 1.45;
+            font-weight: 550;
+        }
+
+        .pagination {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 90;
+            display: flex;
+            justify-content: center;
+            padding: 0 10px;
+            pointer-events: none;
+        }
+
+        .pagination-inner {
+            width: 100%;
+            max-width: 390px;
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 10px calc(12px + env(safe-area-inset-bottom));
+            background: rgba(15, 15, 15, 0.96);
+            border-top: 1px solid rgba(255, 255, 255, 0.07);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            pointer-events: auto;
+        }
+
+        .page-button,
+        .disabled-page-button,
+        .page-count {
+            min-height: 46px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.09);
+            user-select: none;
+            white-space: nowrap;
+            font-weight: 650;
+        }
+
+        .page-button,
+        .disabled-page-button {
+            min-width: 92px;
+            gap: 8px;
+            padding: 0 16px;
+            background: var(--chip);
+            color: var(--text);
+            font-size: 14.5px;
+        }
+
+        .page-button:active {
+            transform: scale(0.97);
+            background: var(--chip-hover);
+        }
+
+        .disabled-page-button {
+            opacity: 0.35;
+            pointer-events: none;
+        }
+
+        .page-count {
+            min-width: 86px;
+            padding: 0 12px;
+            background: #181818;
+            color: var(--text-soft);
+            font-size: 13.5px;
+        }
+
+        .loading-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 9999;
+            height: 3px;
+            overflow: hidden;
+            pointer-events: none;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .loading-bar::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            width: 42%;
+            border-radius: 999px;
+            background: #ffffff;
+            transform: translateX(-110%);
+            animation: loadingBarMove 900ms ease-in-out infinite;
+        }
+
+        @keyframes loadingBarMove {
+            0% {
+                width: 34%;
+                transform: translateX(-110%);
+            }
+
+            55% {
+                width: 58%;
+                transform: translateX(95%);
+            }
+
+            100% {
+                width: 30%;
+                transform: translateX(340%);
+            }
+        }
+
+        @media (min-width: 391px) {
+            .feed,
+            .pagination-inner,
+            .nav-wrap {
+                border-left: 1px solid rgba(255, 255, 255, 0.06);
+                border-right: 1px solid rgba(255, 255, 255, 0.06);
+            }
+
+            .nav-wrap {
+                border-left-color: transparent;
+                border-right-color: transparent;
+            }
+        }
+
+        @media (max-width: 340px) {
+            .thumbnail-shell {
+                padding: 0 10px;
+            }
+
+            .video-info {
+                padding-left: 12px;
+                padding-right: 12px;
+            }
+
+            .meta-author {
+                max-width: 38%;
+            }
+
+            .page-button,
+            .disabled-page-button {
+                min-width: 78px;
+                padding: 0 12px;
+            }
+
+            .page-count {
+                min-width: 76px;
+            }
+        }
+    </style>
 </head>
 <body>
-    <header class="app-header">
-        <div class="nav-wrap">
-            <a href="/home" class="back-button" aria-label="Back to home">
-                <i class="fa-light fa-chevron-left"></i>
-            </a>
+    <header class="app-header">
+        <div class="nav-wrap">
+            <a href="/home" class="back-button" aria-label="Back to home">
+                <i class="fa-light fa-chevron-left"></i>
+            </a>
 
-            <form action="/app" class="search-container" role="search">
-                <input type="text" name="mobilesearch" value="<%= searchValue %>" placeholder="Search" autocomplete="off">
-                <button type="button" class="clear-search-button" aria-label="Clear search">
-                    <i class="fa-light fa-xmark"></i>
-                </button>
-                <button type="submit" class="hidden-submit" aria-label="Search">Search</button>
-            </form>
-        </div>
-    </header>
+            <form action="/app" class="search-container" role="search">
+                <input type="text" name="mobilesearch" value="<%= searchValue %>" placeholder="Search" autocomplete="off">
+                <button type="button" class="clear-search-button" aria-label="Clear search">
+                    <i class="fa-light fa-xmark"></i>
+                </button>
+                <button type="submit" class="hidden-submit" aria-label="Search">Search</button>
+            </form>
+        </div>
+    </header>
 
-    <main class="feed">
-        <% if (videoResults.length) { %>
-            <% videoResults.forEach(item => { %>
-                <%
-                    const videoIdEncoded = encodeURIComponent(item.videoId || "");
-                    const rawThumb = item.videoId ? "https://i.ytimg.com/vi/" + videoIdEncoded + "/hq720.jpg" : "";
-                    const rawFallback = item.videoId ? "https://i.ytimg.com/vi/" + videoIdEncoded + "/hqdefault.jpg" : "";
-                    const thumb = rawThumb ? (mediaProxyBase ? mediaProxyBase + "/proxy?url=" + encodeURIComponent(rawThumb) : rawThumb) : "";
-                    const fallbackThumb = rawFallback ? (mediaProxyBase ? mediaProxyBase + "/proxy?url=" + encodeURIComponent(rawFallback) : rawFallback) : "";
+    <main class="feed">
+        <% if (videoResults.length) { %>
+            <% videoResults.forEach(item => { %>
+                <%
+                    const href = videoHref(item);
+                    const authorHref = channelHref(item);
+                    const thumb = proxyMediaUrl(rawVideoThumbnailUrl(item.videoId));
+                    const fallbackThumb = proxyMediaUrl(rawFallbackVideoThumbnailUrl(item.videoId));
+                    const avatar = proxyMediaUrl(rawAvatarUrl(item));
+                    const duration = formatDuration(item.lengthSeconds);
+                    const bareViews = formatCompactNumber(item.viewCount);
+                    const published = formatPublishedText(item);
+                %>
 
-                    let rawAvatar = "";
-                    if (item && Array.isArray(item.authorThumbnails) && item.authorThumbnails.length) {
-                        const preferred = item.authorThumbnails.find(t => t && t.url && Number(t.width) >= 48);
-                        if (preferred && preferred.url) rawAvatar = preferred.url;
-                        else if (item.authorThumbnails[item.authorThumbnails.length - 1]?.url) rawAvatar = item.authorThumbnails[item.authorThumbnails.length - 1].url;
-                        else if (item.authorThumbnails[0]?.url) rawAvatar = item.authorThumbnails[0].url;
-                    }
-                    const avatar = rawAvatar ? (mediaProxyBase ? mediaProxyBase + "/proxy?url=" + encodeURIComponent(rawAvatar) : rawAvatar) : "";
+                <article class="result-card video-card">
+                    <div class="thumbnail-shell">
+                        <a href="<%= href %>" class="thumbnail-link" aria-label="<%= item.title || 'Video' %>">
+                            <% if (thumb) { %>
+                                <img class="thumbnail-img" src="<%= thumb %>" data-fallback-src="<%= fallbackThumb %>" alt="" loading="lazy">
+                            <% } else { %>
+                                <div class="thumbnail-placeholder">
+                                    <i class="fa-light fa-video"></i>
+                                </div>
+                            <% } %>
 
-                    const duration = formatDuration(item.lengthSeconds);
-                    const bareViews = formatCompactNumber(item.viewCount);
-                    const published = formatPublishedText(item);
-                %>
+                            <% if (item.liveNow) { %>
+                                <span class="live-badge">LIVE</span>
+                            <% } else if (duration) { %>
+                                <span class="duration-badge"><%= duration %></span>
+                            <% } %>
+                        </a>
+                    </div>
 
-                <article class="result-card video-card">
-                    <div class="thumbnail-shell">
-                        <a href="<%= item.videoId ? '/watch?v=' + encodeURIComponent(item.videoId) : '#' %>" class="thumbnail-link" aria-label="<%= item.title || 'Video' %>">
-                            <% if (thumb) { %>
-                                <img class="thumbnail-img" src="<%= thumb %>" data-fallback-src="<%= fallbackThumb %>" alt="" loading="lazy">
-                            <% } else { %>
-                                <div class="thumbnail-placeholder">
-                                    <i class="fa-light fa-video"></i>
-                                </div>
-                            <% } %>
+                    <div class="video-info">
+                        <a href="<%= href %>" class="title"><%= item.title || "Untitled video" %></a>
 
-                            <% if (item.liveNow) { %>
-                                <span class="live-badge">LIVE</span>
-                            <% } else if (duration) { %>
-                                <span class="duration-badge"><%= duration %></span>
-                            <% } %>
-                        </a>
-                    </div>
+                        <div class="meta-line">
+                            <% if (item.author || avatar) { %>
+                                <% if (authorHref && authorHref !== "#") { %>
+                                    <a class="avatar-link" href="<%= authorHref %>" aria-label="<%= item.author || 'Channel' %>">
+                                        <% if (avatar) { %>
+                                            <img class="avatar-img" src="<%= avatar %>" alt="" loading="lazy">
+                                        <% } else { %>
+                                            <span class="avatar-letter"><%= authorInitial(item.author) %></span>
+                                        <% } %>
+                                    </a>
+                                <% } else { %>
+                                    <span class="avatar-fallback" aria-hidden="true">
+                                        <% if (avatar) { %>
+                                            <img class="avatar-img" src="<%= avatar %>" alt="" loading="lazy">
+                                        <% } else { %>
+                                            <span class="avatar-letter"><%= authorInitial(item.author) %></span>
+                                        <% } %>
+                                    </span>
+                                <% } %>
+                            <% } %>
 
-                    <div class="video-info">
-                        <a href="<%= item.videoId ? '/watch?v=' + encodeURIComponent(item.videoId) : '#' %>" class="title"><%= item.title || "Untitled video" %></a>
+                            <% if (item.author) { %>
+                                <% if (authorHref && authorHref !== "#") { %>
+                                    <a class="meta-author" href="<%= authorHref %>"><%= item.author %></a>
+                                <% } else { %>
+                                    <span class="meta-author"><%= item.author %></span>
+                                <% } %>
+                            <% } %>
 
-                        <div class="meta-line">
-                            <% if (item.author || avatar) { %>
-                                <% if ((item.authorUrl) || (item.authorId)) { %>
-                                    <a class="avatar-link" href="<%= item.authorUrl ? item.authorUrl : (item.authorId ? '/channel?id=' + encodeURIComponent(item.authorId) : '#') %>" aria-label="<%= item.author || 'Channel' %>">
-                                        <% if (avatar) { %>
-                                            <img class="avatar-img" src="<%= avatar %>" alt="" loading="lazy">
-                                        <% } else { %>
-                                            <span class="avatar-letter"><%= item.author && typeof item.author === 'string' ? item.author.trim().charAt(0).toUpperCase() || '?' : '?' %></span>
-                                        <% } %>
-                                    </a>
-                                <% } else { %>
-                                    <span class="avatar-fallback" aria-hidden="true">
-                                        <% if (avatar) { %>
-                                            <img class="avatar-img" src="<%= avatar %>" alt="" loading="lazy">
-                                        <% } else { %>
-                                            <span class="avatar-letter"><%= item.author && typeof item.author === 'string' ? item.author.trim().charAt(0).toUpperCase() || '?' : '?' %></span>
-                                        <% } %>
-                                    </span>
-                                <% } %>
-                            <% } %>
+                            <% if (bareViews) { %>
+                                <span class="meta-play-icon" aria-hidden="true">▷</span>
+                                <span class="meta-views"><%= bareViews %></span>
+                            <% } %>
 
-                            <% if (item.author) { %>
-                                <% if ((item.authorUrl) || (item.authorId)) { %>
-                                    <a class="meta-author" href="<%= item.authorUrl ? item.authorUrl : (item.authorId ? '/channel?id=' + encodeURIComponent(item.authorId) : '#') %>"><%= item.author %></a>
-                                <% } else { %>
-                                    <span class="meta-author"><%= item.author %></span>
-                                <% } %>
-                            <% } %>
+                            <% if (published) { %>
+                                <span class="meta-age"><%= published %></span>
+                            <% } %>
+                        </div>
+                    </div>
+                </article>
+            <% }) %>
+        <% } else { %>
+            <div class="empty-state">
+                you...somehow found something that doesnt exist on youtube...woaw...
+            </div>
+        <% } %>
+    </main>
 
-                            <% if (bareViews) { %>
-                                <span class="meta-play-icon" aria-hidden="true">▷</span>
-                                <span class="meta-views"><%= bareViews %></span>
-                            <% } %>
+    <% if (results.length) { %>
+        <nav class="pagination" aria-label="Search pages">
+            <div class="pagination-inner">
+                <% if (currentPage > 1) { %>
+                    <a class="page-button" href="<%= pageUrl(previousPage) %>" rel="prev" aria-label="Previous page">
+                        <i class="fa-light fa-arrow-left"></i>
+                        Prev
+                    </a>
+                <% } else { %>
+                    <span class="disabled-page-button" aria-disabled="true">
+                        <i class="fa-light fa-arrow-left"></i>
+                        Prev
+                    </span>
+                <% } %>
 
-                            <% if (published) { %>
-                                <span class="meta-age"><%= published %></span>
-                            <% } %>
-                        </div>
-                    </div>
-                </article>
-            <% }) %>
-        <% } else { %>
-            <div class="empty-state">
-                you...somehow found something that doesnt exist on youtube...woaw...
-            </div>
-        <% } %>
-    </main>
+                <span class="page-count" aria-current="page">Page <%= currentPage %></span>
 
-    <% if (results.length) { %>
-        <nav class="pagination" aria-label="Search pages">
-            <div class="pagination-inner">
-                <% if (currentPage > 1) { %>
-                    <a class="page-button" href="/app?mobilesearch=<%= encodeURIComponent(searchValue) %>&continuation=<%= previousPage %>" rel="prev" aria-label="Previous page">
-                        <i class="fa-light fa-arrow-left"></i>
-                        Prev
-                    </a>
-                <% } else { %>
-                    <span class="disabled-page-button" aria-disabled="true">
-                        <i class="fa-light fa-arrow-left"></i>
-                        Prev
-                    </span>
-                <% } %>
+                <a class="page-button" href="<%= pageUrl(nextPage) %>" rel="next" aria-label="Next page">
+                    Next
+                    <i class="fa-light fa-arrow-right"></i>
+                </a>
+            </div>
+        </nav>
+    <% } %>
 
-                <span class="page-count" aria-current="page">Page <%= currentPage %></span>
+    <script>
+        const searchInput = document.querySelector('input[name="mobilesearch"]');
+        const clearSearchButton = document.querySelector(".clear-search-button");
 
-                <a class="page-button" href="/app?mobilesearch=<%= encodeURIComponent(searchValue) %>&continuation=<%= nextPage %>" rel="next" aria-label="Next page">
-                    Next
-                    <i class="fa-light fa-arrow-right"></i>
-                </a>
-            </div>
-        </nav>
-    <% } %>
+        function removeLoadingBar() {
+            document.querySelectorAll(".loading-bar").forEach(loadingBar => {
+                loadingBar.remove();
+            });
+        }
 
-    <script>
-        const searchInput = document.querySelector('input[name="mobilesearch"]');
-        const clearSearchButton = document.querySelector(".clear-search-button");
+        function showLoadingBar() {
+            if (document.querySelector(".loading-bar")) return;
 
-        function removeLoadingBar() {
-            document.querySelectorAll(".loading-bar").forEach(loadingBar => {
-                loadingBar.remove();
-            });
-        }
+            const loadingBar = document.createElement("div");
+            loadingBar.className = "loading-bar";
+            loadingBar.setAttribute("aria-hidden", "true");
 
-        function showLoadingBar() {
-            if (document.querySelector(".loading-bar")) return;
+            document.body.appendChild(loadingBar);
+        }
 
-            const loadingBar = document.createElement("div");
-            loadingBar.className = "loading-bar";
-            loadingBar.setAttribute("aria-hidden", "true");
+        document.querySelectorAll(".thumbnail-img[data-fallback-src]").forEach(image => {
+            image.addEventListener("error", () => {
+                const fallbackSrc = image.getAttribute("data-fallback-src");
 
-            document.body.appendChild(loadingBar);
-        }
+                if (!fallbackSrc || image.dataset.fallbackUsed === "true") return;
 
-        document.querySelectorAll(".thumbnail-img[data-fallback-src]").forEach(image => {
-            image.addEventListener("error", () => {
-                const fallbackSrc = image.getAttribute("data-fallback-src");
+                image.dataset.fallbackUsed = "true";
+                image.src = fallbackSrc;
+            });
+        });
 
-                if (!fallbackSrc || image.dataset.fallbackUsed === "true") return;
+        if (clearSearchButton && searchInput) {
+            clearSearchButton.addEventListener("click", () => {
+                searchInput.value = "";
+                searchInput.focus();
+            });
+        }
 
-                image.dataset.fallbackUsed = "true";
-                image.src = fallbackSrc;
-            });
-        });
+        document.addEventListener("click", event => {
+            const link = event.target.closest("a");
+            if (!link) return;
 
-        if (clearSearchButton && searchInput) {
-            clearSearchButton.addEventListener("click", () => {
-                searchInput.value = "";
-                searchInput.focus();
-            });
-        }
+            const href = link.getAttribute("href");
+            if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
+            if (link.target && link.target !== "_self") return;
+            if (link.hasAttribute("download")) return;
+            if (event.defaultPrevented) return;
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
 
-        document.addEventListener("click", event => {
-            const link = event.target.closest("a");
-            if (!link) return;
+            showLoadingBar();
+        });
 
-            const href = link.getAttribute("href");
-            if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
-            if (link.target && link.target !== "_self") return;
-            if (link.hasAttribute("download")) return;
-            if (event.defaultPrevented) return;
-            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        document.querySelectorAll("form").forEach(form => {
+            form.addEventListener("submit", () => {
+                showLoadingBar();
+            });
+        });
 
-            showLoadingBar();
-        });
+        window.addEventListener("pageshow", removeLoadingBar);
+        window.addEventListener("pagehide", removeLoadingBar);
+        window.addEventListener("popstate", removeLoadingBar);
 
-        document.querySelectorAll("form").forEach(form => {
-            form.addEventListener("submit", () => {
-                showLoadingBar();
-            });
-        });
+        document.addEventListener("visibilitychange", () => {
+            if (!document.hidden) removeLoadingBar();
+        });
 
-        window.addEventListener("pageshow", removeLoadingBar);
-        window.addEventListener("pagehide", removeLoadingBar);
-        window.addEventListener("popstate", removeLoadingBar);
+        if ("scrollRestoration" in history) {
+            history.scrollRestoration = "auto";
+        }
 
-        document.addEventListener("visibilitychange", () => {
-            if (!document.hidden) removeLoadingBar();
-        });
-
-        if ("scrollRestoration" in history) {
-            history.scrollRestoration = "auto";
-        }
-
-        if ("serviceWorker" in navigator) {
-            navigator.serviceWorker.getRegistrations().then(registrations => {
-                registrations.forEach(registration => {
-                    registration.unregister();
-                });
-            });
-        }
-    </script>
+        if ("serviceWorker" in navigator) {
+            navigator.serviceWorker.getRegistrations().then(registrations => {
+                registrations.forEach(registration => {
+                    registration.unregister();
+                });
+            });
+        }
+    </script>
 </body>
 </html>
