@@ -3629,24 +3629,7 @@ window.proxyurl = "<%- media_proxy_url %>/proxy?url="
 	   <div class="mobile-page">
 	<div class="primary" >
 		<div class="video-player-container" style="background-color:#000">
-        <% 
-  let itag = null;
-  let hasHD = false, hasUHD = false, has4K = false;
-
-  VideoData.adaptiveFormats.forEach(format => {
-    if (format.itag == '247' || format.itag == '302') {
-      itag = '140';
-      hasHD = true;
-    }
-    if (format.itag == '400' || format.itag == '271') {
-      hasUHD = true;
-    }
-    if (format.itag == '313' || format.itag == '401') {
-      has4K = true;
-    }
-  });
-%>  
-
+ 
 <% if (itag && qua !== "medium" && itag !== '18') { %>
   <audio crossorigin="anonymous" id="aud" preload>
     <source src="<%=u%>/companion/latest_version?id=<%=VideoData.videoId%>&itag=<%=itag%>&local=true" type="video/mp4" />
@@ -3663,16 +3646,43 @@ window.proxyurl = "<%- media_proxy_url %>/proxy?url="
                 
  
 
-                     
-     <% if (!qua) { %>
-        <% if (hasHD) { 
-        let hdItag = '247';
-        VideoData.adaptiveFormats.forEach(format => {
-          if (format.itag == '302') hdItag = '302';
-        });
-      %>
-        <source src="<%=u%>/companion/latest_version?id=<%=VideoData.videoId%>&itag=<%=hdItag%>&local=true"  type="video/mp4" label="hd720" selected="true">
-    <% } %>
+<%
+  let itag = null;
+  let hasHD = false;
+  let hasUHD = false;
+  let has4K = false;
+  let hdItag = "247";
+
+  VideoData.adaptiveFormats.forEach(format => {
+    if (format.itag == "247" || format.itag == "302") {
+      itag = "140";
+      hasHD = true;
+
+      if (format.itag == "302") {
+        hdItag = "302";
+      }
+    }
+
+    if (format.itag == "400" || format.itag == "271") {
+      hasUHD = true;
+    }
+
+    if (format.itag == "313" || format.itag == "401") {
+      has4K = true;
+    }
+  });
+%>
+
+<% if (!qua) { %>
+  <% if (hasHD) { %>
+    <source
+      src="<%= u %>/companion/latest_version?id=<%= VideoData.videoId %>&itag=<%= hdItag %>&local=true"
+      type="video/mp4"
+      label="hd720"
+      selected="true"
+    >
+  <% } %>
+<% } %>
  
  
            <% if (qua) { %>  
