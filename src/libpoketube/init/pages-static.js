@@ -78,6 +78,12 @@ app.get("/policies/code-of-conduct", (req, res) => {
 app.get("/policies", (req, res) => {
   renderTemplate(res, req, "terms.ejs");
 });
+app.get("/legal-yada-yada", (req, res) => {
+res.redirect("/policies")
+});
+  app.get("/legal-jibber-jabber", (req, res) => {
+res.redirect("/policies")
+  });
 app.get("/request", (req, res) => {
   renderTemplate(res, req, "legal.ejs");
 });
