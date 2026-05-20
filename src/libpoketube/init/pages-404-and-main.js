@@ -102,7 +102,7 @@ module.exports = function (app, config, renderTemplate) {
     if (query) {
       const searchUrl = `${config.invapi}/search?q=${encodeURIComponent(
         query
-      )}&type=video&page=${encodeURIComponent(continuation)}`;
+      )}&type=video&page=${encodeURIComponent(continuation)}&hl=EN-GB`;
 
       const r = await fetch(searchUrl, {
         headers: { "User-Agent": config.useragent },
