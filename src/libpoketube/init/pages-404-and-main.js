@@ -151,7 +151,7 @@ module.exports = function (app, config, renderTemplate) {
   renderTemplate(res, req, "discover.ejs", {
     tab: req.query.tab,
     isMobile: req.useragent.isMobile,
-    media_proxy_url: media_proxy,
+    media_proxy_url: config.media_proxy,
     p,
     mobilesearch: req.query.mobilesearch,
     q: req.query.q,
