@@ -4662,62 +4662,7 @@ More Epic options owo~
      // @license-end
                                           </script>
          
-             <script>
-document.addEventListener('DOMContentLoaded', () => {
-  const video = document.querySelector('video');
-
-  if (!video) return;
-
-  if ('mediaSession' in navigator) {
-    // Set metadata
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: "<%- VideoData.title %>",
-      artist: "<%= VideoData?.author?.replace("- Topic", "") %>",
-      album: "Poke",
-      artwork: [
-        {
-          src: "https://i.ytimg.com/vi/<%=VideoData.videoId%>/maxresdefault.jpg",
-          sizes: "1280x720",
-          type: "image/jpeg"
-        }
-      ]
-    });
-
-    // Update playback state
-    const updatePositionState = () => {
-      if ('setPositionState' in navigator.mediaSession) {
-        navigator.mediaSession.setPositionState({
-          duration: video.duration || 0,
-          playbackRate: video.playbackRate || 1,
-          position: video.currentTime || 0
-        });
-      }
-    };
-
-    video.addEventListener('timeupdate', updatePositionState);
-    video.addEventListener('ratechange', updatePositionState);
-    video.addEventListener('loadedmetadata', updatePositionState);
-
-    // Media control handlers
-    navigator.mediaSession.setActionHandler('play', () => {
-      video.play();
-    });
-
-    navigator.mediaSession.setActionHandler('pause', () => {
-      video.pause();
-    });
-
-    navigator.mediaSession.setActionHandler('seekto', (details) => {
-      if (details.fastSeek && 'fastSeek' in video) {
-        video.fastSeek(details.seekTime);
-      } else {
-        video.currentTime = details.seekTime;
-      }
-      updatePositionState();
-    });
-  }
-});
-</script>  <script src="/css/custom-css.js"></script>
+   <script src="/css/custom-css.js"></script>
 <script>
 // @license magnet:?xt=urn:btih:1f739d935676111cfff4b4693e3816e664797050&dn=gpl-3.0.txt GPL-3.0-or-later  
   
