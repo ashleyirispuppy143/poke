@@ -1,4 +1,3 @@
-
 <% 
     const isShowHow = typeof showHow !== 'undefined' && (showHow === true || showHow === 'true');
 
@@ -329,9 +328,10 @@
             right: 0;
             width: 40px;
             height: 130px;
-            padding: 12px 0;
+            padding: 15px 0;
             box-sizing: border-box;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             background: rgba(15, 15, 15, 0.84);
@@ -354,46 +354,38 @@
             pointer-events: auto;
         }
 
-        .volume-slider-inner-<%- v %> {
-            width: 100px;
-            height: 4px;
-            transform: rotate(-90deg);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .volume-slider-<%- v %> {
-            width: 100%;
-            height: 4px;
-            -webkit-appearance: none;
-            appearance: none;
-            background: linear-gradient(to right, #fff 100%, rgba(255, 255, 255, 0.32) 100%);
+        .volume-slider-bg-<%- v %> {
+            position: relative;
+            width: 4px;
+            height: 100px;
+            background: rgba(255, 255, 255, 0.32);
             border-radius: 999px;
-            outline: none;
             cursor: pointer;
             touch-action: none;
         }
 
-        .volume-slider-<%- v %>::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: #fff;
-            cursor: pointer;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.45);
+        .volume-slider-fill-<%- v %> {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #fff;
+            border-radius: 999px;
+            pointer-events: none;
         }
 
-        .volume-slider-<%- v %>::-moz-range-thumb {
+        .volume-slider-thumb-<%- v %> {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translate(-50%, 50%);
             width: 12px;
             height: 12px;
-            border: 0;
+            background-color: #fff;
             border-radius: 50%;
-            background: #fff;
-            cursor: pointer;
             box-shadow: 0 1px 4px rgba(0,0,0,0.45);
+            pointer-events: none;
         }
 
         .settings-btn-<%- v %> {
@@ -645,7 +637,7 @@
 
         .settings-panel-<%- v %> {
             position: absolute;
-            left: 16px;
+            left: 50%;
             bottom: 58px;
             width: min(320px, calc(100% - 32px));
             background: rgba(24, 24, 24, 0.96);
@@ -656,7 +648,7 @@
             overflow: hidden;
             z-index: 45;
             opacity: 0;
-            transform: translateY(10px);
+            transform: translate(-50%, 10px);
             pointer-events: none;
             transition: opacity 0.16s ease, transform 0.16s ease;
             font-family: "PokeTube Flex", Arial, sans-serif;
@@ -666,7 +658,7 @@
 
         .settings-panel-<%- v %>.is-open-<%- v %> {
             opacity: 1;
-            transform: translateY(0);
+            transform: translate(-50%, 0);
             pointer-events: auto;
         }
 
@@ -908,41 +900,6 @@
             transform: scale(1.01);
         }
 
-        .retry-overlay-shade-<%- v %> {
-            position: absolute;
-            inset: 0;
-            background: rgba(0,0,0,0.36);
-        }
-
-        .retry-overlay-card-<%- v %> {
-            position: relative;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            color: #fff;
-            background: rgba(0,0,0,0.48);
-            border-radius: 999px;
-            padding: 10px 16px;
-            font-size: 14px;
-            font-weight: 600;
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            box-shadow: 0 4px 18px rgba(0,0,0,0.35);
-        }
-
-        .retry-spinner-<%- v %> {
-            width: 22px;
-            height: 22px;
-            border: 3px solid rgba(255,255,255,0.35);
-            border-top-color: #fff;
-            border-radius: 50%;
-            animation: retry-spin-<%- v %> 0.85s linear infinite;
-        }
-
-        @keyframes retry-spin-<%- v %> {
-            to { transform: rotate(360deg); }
-        }
-
         @media (max-width: 560px) {
             .top-right-group-<%- v %> {
                 top: 10px;
@@ -951,7 +908,7 @@
             }
 
             .settings-panel-<%- v %> {
-                left: 8px;
+                left: 50%;
                 bottom: 56px;
                 width: calc(100% - 16px);
                 border-radius: 14px;
@@ -1283,7 +1240,7 @@
             </div>
 
             <script>
-                document.addEventListener('DOMContentLoaded', () => {
+                (function() {
                     let _failsBotCheck = false;
                     try {
                         if (navigator.webdriver) _failsBotCheck = true;
@@ -1404,11 +1361,6 @@
                             retryOverlay.className = 'retry-overlay-<%- v %>';
                             retryOverlay.innerHTML = `
                                 ${posterSrc ? `<img class="retry-overlay-img-<%- v %>" src="${posterSrc.replace(/"/g, '&quot;')}" alt="">` : ''}
-                                <div class="retry-overlay-shade-<%- v %>"></div>
-                                <div class="retry-overlay-card-<%- v %>">
-                                    <span class="retry-spinner-<%- v %>" aria-hidden="true"></span>
-                                    <span>Retrying playback</span>
-                                </div>
                             `;
 
                             const controls = document.createElement('div');
@@ -1422,8 +1374,9 @@
                                             </svg>
                                         </button>
                                         <div class="vol-slider-wrap-<%- v %>">
-                                            <div class="volume-slider-inner-<%- v %>">
-                                                <input type="range" class="volume-slider-<%- v %>" min="0" max="1" step="0.01" value="1" aria-label="Volume">
+                                            <div class="volume-slider-bg-<%- v %>">
+                                                <div class="volume-slider-fill-<%- v %>"></div>
+                                                <div class="volume-slider-thumb-<%- v %>"></div>
                                             </div>
                                         </div>
                                     </div>
@@ -1541,7 +1494,9 @@
                             const muteBtn = controls.querySelector('.mute-btn-<%- v %>');
                             const mutePathEl = controls.querySelector('.mute-path');
                             const volGroup = controls.querySelector('.vol-group-<%- v %>');
-                            const volumeSlider = controls.querySelector('.volume-slider-<%- v %>');
+                            const volSliderBg = controls.querySelector('.volume-slider-bg-<%- v %>');
+                            const volFill = controls.querySelector('.volume-slider-fill-<%- v %>');
+                            const volThumb = controls.querySelector('.volume-slider-thumb-<%- v %>');
                             const fsBtn = controls.querySelector('.fs-btn-<%- v %>');
                             const progressContainer = controls.querySelector('.progress-container-<%- v %>');
                             const progressFill = controls.querySelector('.progress-fill-<%- v %>');
@@ -1586,7 +1541,7 @@
                                 });
                             }
 
-                            if (!playPauseBtn || !playPausePathEl || !muteBtn || !mutePathEl || !volGroup || !volumeSlider || !fsBtn || !progressContainer || !progressFill || !progressThumb || !timeDisplay || !settingsBtn || !settingsPanel || !speedRow || !speedValue || !loopRow || !loopValue || !speedPanel) {
+                            if (!playPauseBtn || !playPausePathEl || !muteBtn || !mutePathEl || !volGroup || !fsBtn || !progressContainer || !progressFill || !progressThumb || !timeDisplay || !settingsBtn || !settingsPanel || !speedRow || !speedValue || !loopRow || !loopValue || !speedPanel) {
                                 return;
                             }
 
@@ -1613,19 +1568,28 @@
                                 return m + ':' + String(sec).padStart(2, '0');
                             }
 
-                            function setSliderBackground(value) {
-                                const pct = Math.max(0, Math.min(1, value)) * 100;
-                                volumeSlider.style.background = `linear-gradient(to right, #fff ${pct}%, rgba(255, 255, 255, 0.32) ${pct}%)`;
-                            }
-
                             function updateVolumeUI() {
                                 const effectiveVolume = video.muted ? 0 : video.volume;
-                                volumeSlider.value = String(effectiveVolume);
-                                setSliderBackground(effectiveVolume);
-                                mutePathEl.setAttribute('d', effectiveVolume <= 0 ? muteIcon : volIcon);
+                                const pct = effectiveVolume * 100;
+                                if(volFill) volFill.style.height = pct + '%';
+                                if(volThumb) volThumb.style.bottom = pct + '%';
+                                if(mutePathEl) mutePathEl.setAttribute('d', effectiveVolume <= 0 ? muteIcon : volIcon);
                                 if (!video.muted && video.volume > 0) {
                                     lastVolume = video.volume;
                                 }
+                            }
+
+                            let isVolScrubbing = false;
+                            function setVolumeFromEvent(e) {
+                                if(!volSliderBg) return;
+                                const rect = volSliderBg.getBoundingClientRect();
+                                let y = e.clientY - rect.top;
+                                let p = 1 - (y / rect.height);
+                                p = Math.max(0, Math.min(1, p));
+                                video.volume = p;
+                                video.muted = p === 0;
+                                if (p > 0) lastVolume = p;
+                                updateVolumeUI();
                             }
 
                             function setVolumeOpen(open) {
@@ -1839,20 +1803,25 @@
                                 }
                             });
 
-                            volumeSlider.addEventListener('input', (event) => {
-                                event.stopPropagation();
-                                setVolumeOpen(true);
-                                const val = Math.max(0, Math.min(1, parseFloat(event.target.value) || 0));
-                                video.volume = val;
-                                video.muted = val === 0;
-                                if (val > 0) lastVolume = val;
-                                updateVolumeUI();
-                            });
-                            volumeSlider.addEventListener('click', (event) => event.stopPropagation());
-                            volumeSlider.addEventListener('pointerdown', (event) => {
-                                event.stopPropagation();
-                                setVolumeOpen(true);
-                            });
+                            if(volSliderBg) {
+                                volSliderBg.addEventListener('pointerdown', (e) => {
+                                    e.stopPropagation();
+                                    setVolumeOpen(true);
+                                    isVolScrubbing = true;
+                                    volSliderBg.setPointerCapture(e.pointerId);
+                                    setVolumeFromEvent(e);
+                                });
+                                volSliderBg.addEventListener('pointermove', (e) => {
+                                    if (!isVolScrubbing) return;
+                                    e.preventDefault();
+                                    setVolumeFromEvent(e);
+                                });
+                                volSliderBg.addEventListener('pointerup', (e) => {
+                                    if (!isVolScrubbing) return;
+                                    isVolScrubbing = false;
+                                    try { volSliderBg.releasePointerCapture(e.pointerId); } catch(err) {}
+                                });
+                            }
 
                             muteBtn.addEventListener('click', (event) => {
                                 event.stopPropagation();
@@ -1920,7 +1889,6 @@
                                 }
                             });
 
-                            // Speed logic mapping
                             speedRow.addEventListener('click', (event) => {
                                 event.stopPropagation();
                                 setSettingsOpen(false);
@@ -2016,7 +1984,7 @@
                             video.play().catch(() => {});
                         });
                     }
-                });
+                })();
             </script>
         <% } %>
 
