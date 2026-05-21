@@ -993,6 +993,74 @@
             height: 20px;
         }
 
+        /* --- Stats Overlay UI --- */
+        .stats-overlay-<%- v %> {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            background: rgba(0, 0, 0, 0.6);
+            color: #fff;
+            padding: 16px 28px 16px 16px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 11.5px;
+            z-index: 60;
+            pointer-events: auto;
+            display: none;
+            min-width: 280px;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            box-sizing: border-box;
+        }
+
+        .stats-overlay-<%- v %>.is-visible-<%- v %> {
+            display: block;
+        }
+
+        .stats-close-<%- v %> {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            background: transparent;
+            border: none;
+            color: #fff;
+            cursor: pointer;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+        }
+
+        .stats-close-<%- v %>:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .stats-close-<%- v %> svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .stats-line-<%- v %> {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            gap: 16px;
+        }
+
+        .stats-line-<%- v %>:last-child {
+            margin-bottom: 0;
+        }
+
+        .stats-label-<%- v %> {
+            color: #ccc;
+        }
+
+        .stats-value-<%- v %> {
+            color: #fff;
+            text-align: right;
+        }
+
         /* --- Retry Overlay UI --- */
         .retry-overlay-<%- v %> {
             position: absolute;
@@ -1056,6 +1124,11 @@
 
             .embed-input-group-<%- v %> {
                 flex: 1;
+            }
+            
+            .stats-overlay-<%- v %> {
+                width: calc(100% - 24px);
+                min-width: 0;
             }
         }
 
@@ -1439,6 +1512,7 @@
                     const chevronIcon = 'M8.59 16.59 13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z';
                     const qualityIcon = 'M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z';
                     const codeIcon = 'M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z';
+                    const statsIcon = 'M19 8h-1.81c-.45-.78-1.07-1.45-1.82-1.96l1.06-1.06-1.42-1.42-1.43 1.43C12.85 4.8 12.44 4.75 12 4.75s-.85.05-1.58.24L8.99 3.56 7.57 4.98 8.63 6.04C7.88 6.55 7.26 7.22 6.81 8H5v2h1.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H5v2h1.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H19v-2h-1.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H19V8zm-6 8h-2v-2h2v2zm0-4h-2V8h2v4z';
 
                     function getVideoUrl(retryNonce) {
                         const _enc = '<%= encodedVidUrl %>';
@@ -1499,6 +1573,15 @@
                             retryOverlay.innerHTML = `
                                 ${posterSrc ? `<img class="retry-overlay-img-<%- v %>" src="${posterSrc.replace(/"/g, '&quot;')}" alt="">` : ''}
                             `;
+                            
+                            const statsOverlayWrapper = document.createElement('div');
+                            statsOverlayWrapper.className = 'stats-overlay-<%- v %>';
+                            statsOverlayWrapper.innerHTML = `
+                                <button class="stats-close-<%- v %>" type="button" aria-label="Close stats">
+                                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                                </button>
+                                <div class="stats-content-<%- v %>"></div>
+                            `;
 
                             const controls = document.createElement('div');
                             controls.className = 'custom-controls-<%- v %>';
@@ -1548,6 +1631,11 @@
                                         <span class="settings-icon-<%- v %>"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${codeIcon}"/></svg></span>
                                         <span class="settings-label-<%- v %>">Wanna embed this yourself?</span>
                                         <span class="settings-chevron-<%- v %>"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${chevronIcon}"/></svg></span>
+                                    </button>
+                                    <button class="settings-row-<%- v %> stats-row-<%- v %>" type="button">
+                                        <span class="settings-icon-<%- v %>"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${statsIcon}"/></svg></span>
+                                        <span class="settings-label-<%- v %>">Stats for nerds</span>
+                                        <span class="settings-chevron-<%- v %>" style="opacity: 0;"></span>
                                     </button>
                                     <a class="settings-row-<%- v %> watch-row-<%- v %>" href="/watch?v=<%- v %>" target="_blank" rel="noopener noreferrer">
                                         <span class="settings-icon-<%- v %>"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${moreIcon}"/></svg></span>
@@ -1651,6 +1739,7 @@
 
                             wrapper.insertBefore(video, wrapper.firstChild);
                             wrapper.appendChild(retryOverlay);
+                            wrapper.appendChild(statsOverlayWrapper);
                             wrapper.appendChild(controls);
 
                             const playPauseBtn = controls.querySelector('.play-pause-btn-<%- v %>');
@@ -1689,6 +1778,11 @@
                             const embedText = controls.querySelector('.embed-textarea-popup-<%- v %>');
                             const embedClose = controls.querySelector('.embed-popup-close-<%- v %>');
                             
+                            const statsRow = controls.querySelector('.stats-row-<%- v %>');
+                            const statsOverlay = wrapper.querySelector('.stats-overlay-<%- v %>');
+                            const statsContent = wrapper.querySelector('.stats-content-<%- v %>');
+                            const statsClose = wrapper.querySelector('.stats-close-<%- v %>');
+                            
                             const linkBtn = controls.querySelector('.link-btn-<%- v %>');
                             if (linkBtn) {
                                 linkBtn.addEventListener('click', (event) => {
@@ -1726,6 +1820,7 @@
                             let isRafPending = false;
                             let hideTimeout = null;
                             let isScrubbing = false;
+                            let statsUpdateInterval = null;
 
                             function formatTime(s) {
                                 if (!Number.isFinite(s)) return '0:00';
@@ -1961,6 +2056,29 @@
                                 embedText.value = `<iframe src="https://<%= typeof hostname !== 'undefined' ? hostname : '' %>/embed/<%- v %>" width="${w}" height="${h}" frameborder="0" style="border-radius: 16px;" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`;
                             }
 
+                            function updateStats() {
+                                if(!statsOverlay.classList.contains('is-visible-<%- v %>')) return;
+                                const vW = video.videoWidth || 0;
+                                const vH = video.videoHeight || 0;
+                                const cW = wrapper.clientWidth || 0;
+                                const cH = wrapper.clientHeight || 0;
+                                const vd = '<%- v %>';
+                                const vol = Math.round(video.volume * 100);
+                                const pbRate = video.playbackRate;
+                                const ct = video.currentTime.toFixed(3);
+                                const dur = (video.duration || 0).toFixed(3);
+                                const resStr = vW && vH ? `${vW}x${vH}` : 'Unknown';
+                                statsContent.innerHTML = `
+                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Video ID</span><span class="stats-value-<%- v %>">${vd}</span></div>
+                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Viewport / Frames</span><span class="stats-value-<%- v %>">${cW}x${cH}</span></div>
+                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Current / Optimal Res</span><span class="stats-value-<%- v %>">${resStr} / ${resStr}</span></div>
+                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Volume / Normalized</span><span class="stats-value-<%- v %>">${vol}% / ${vol}%</span></div>
+                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Playback Rate</span><span class="stats-value-<%- v %>">${pbRate}x</span></div>
+                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Position</span><span class="stats-value-<%- v %>">${ct} s</span></div>
+                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Duration</span><span class="stats-value-<%- v %>">${dur} s</span></div>
+                                `;
+                            }
+
                             // --- Event Listeners ---
 
                             volGroup.addEventListener('click', (event) => event.stopPropagation());
@@ -1973,6 +2091,7 @@
                             settingsPanel.addEventListener('click', (event) => event.stopPropagation());
                             speedPanel.addEventListener('click', (event) => event.stopPropagation());
                             embedPanel.addEventListener('click', (event) => event.stopPropagation());
+                            statsOverlay.addEventListener('click', (event) => event.stopPropagation());
                             controls.querySelector('.bottom-area-<%- v %>').addEventListener('click', (event) => event.stopPropagation());
 
                             playPauseBtn.addEventListener('click', (event) => {
@@ -2126,6 +2245,24 @@
                                 event.stopPropagation();
                                 embedPanel.classList.remove('is-open-<%- v %>');
                                 embedPanel.setAttribute('aria-hidden', 'true');
+                            });
+                            
+                            statsRow.addEventListener('click', (event) => {
+                                event.stopPropagation();
+                                setSettingsOpen(false);
+                                statsOverlay.classList.toggle('is-visible-<%- v %>');
+                                if(statsOverlay.classList.contains('is-visible-<%- v %>')) {
+                                    updateStats();
+                                    statsUpdateInterval = setInterval(updateStats, 500);
+                                } else {
+                                    clearInterval(statsUpdateInterval);
+                                }
+                            });
+                            
+                            statsClose.addEventListener('click', (event) => {
+                                event.stopPropagation();
+                                statsOverlay.classList.remove('is-visible-<%- v %>');
+                                clearInterval(statsUpdateInterval);
                             });
 
                             video.addEventListener('click', () => {
