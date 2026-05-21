@@ -325,10 +325,10 @@
         .vol-slider-wrap-<%- v %> {
             position: absolute;
             top: 46px;
-            right: 0;
-            width: 40px;
-            height: 130px;
-            padding: 15px 0;
+            left: 50%;
+            width: 50px;
+            height: 140px;
+            padding: 20px 0;
             box-sizing: border-box;
             display: flex;
             flex-direction: column;
@@ -341,22 +341,29 @@
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
             opacity: 0;
-            transform: translateY(-5px) scale(0.96);
+            transform: translateX(-50%) translateY(-5px) scale(0.96);
             pointer-events: none;
             transition: opacity 0.14s ease, transform 0.14s ease;
+        }
+
+        .vol-slider-wrap-<%- v %>::after {
+            content: '';
+            position: absolute;
+            top: -10px; left: 0; right: 0; bottom: -10px;
+            z-index: -1;
         }
 
         .vol-group-<%- v %>:hover .vol-slider-wrap-<%- v %>,
         .vol-group-<%- v %>:focus-within .vol-slider-wrap-<%- v %>,
         .vol-group-<%- v %>.is-volume-open-<%- v %> .vol-slider-wrap-<%- v %> {
             opacity: 1;
-            transform: translateY(0) scale(1);
+            transform: translateX(-50%) translateY(0) scale(1);
             pointer-events: auto;
         }
 
         .volume-slider-bg-<%- v %> {
             position: relative;
-            width: 4px;
+            width: 6px;
             height: 100px;
             background: rgba(255, 255, 255, 0.32);
             border-radius: 999px;
@@ -380,8 +387,8 @@
             bottom: 100%;
             left: 50%;
             transform: translate(-50%, 50%);
-            width: 12px;
-            height: 12px;
+            width: 14px;
+            height: 14px;
             background-color: #fff;
             border-radius: 50%;
             box-shadow: 0 1px 4px rgba(0,0,0,0.45);
@@ -639,7 +646,7 @@
             position: absolute;
             left: 50%;
             bottom: 58px;
-            width: min(380px, calc(100% - 32px));
+            width: min(400px, calc(100% - 32px));
             background: rgba(24, 24, 24, 0.96);
             color: #f1f1f1;
             border: 1px solid rgba(255, 255, 255, 0.12);
@@ -1007,7 +1014,7 @@
             z-index: 60;
             pointer-events: auto;
             display: none;
-            min-width: 280px;
+            min-width: 360px;
             backdrop-filter: blur(4px);
             -webkit-backdrop-filter: blur(4px);
             box-sizing: border-box;
@@ -1061,32 +1068,74 @@
             text-align: right;
         }
 
-        /* --- Retry Overlay UI --- */
-        .retry-overlay-<%- v %> {
+        /* --- End Overlay UI --- */
+        .end-overlay-<%- v %> {
             position: absolute;
             inset: 0;
-            z-index: 35;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 40;
             display: none;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
-            overflow: hidden;
-            background: #000;
-            pointer-events: none;
+            color: #f1f1f1;
+            font-family: "PokeTube Flex", Arial, sans-serif;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
         }
 
-        .retry-overlay-<%- v %>.is-visible-<%- v %> {
+        .end-overlay-<%- v %>.is-visible-<%- v %> {
             display: flex;
         }
 
-        .retry-overlay-img-<%- v %> {
-            position: absolute;
-            inset: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            opacity: 0.58;
-            filter: blur(1px);
-            transform: scale(1.01);
+        .end-overlay-title-<%- v %> {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+
+        .end-overlay-buttons-<%- v %> {
+            display: flex;
+            gap: 16px;
+        }
+
+        .end-btn-primary-<%- v %> {
+            background-color: #ffabcc;
+            color: #0f0f0f;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 20px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: transform 0.1s, background-color 0.2s;
+            font-family: "PokeTube Flex", Arial, sans-serif;
+        }
+
+        .end-btn-primary-<%- v %>:hover {
+            background-color: #e599b7;
+            transform: scale(1.05);
+        }
+
+        .end-btn-secondary-<%- v %> {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 20px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: transform 0.1s, background-color 0.2s;
+            font-family: "PokeTube Flex", Arial, sans-serif;
+        }
+
+        .end-btn-secondary-<%- v %>:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+            transform: scale(1.05);
         }
 
         @media (max-width: 560px) {
@@ -1129,6 +1178,24 @@
             .stats-overlay-<%- v %> {
                 width: calc(100% - 24px);
                 min-width: 0;
+            }
+
+            .end-overlay-title-<%- v %> {
+                font-size: 18px;
+                padding: 0 20px;
+            }
+
+            .end-overlay-buttons-<%- v %> {
+                flex-direction: column;
+                gap: 12px;
+                width: 100%;
+                padding: 0 40px;
+                box-sizing: border-box;
+            }
+
+            .end-btn-primary-<%- v %>, .end-btn-secondary-<%- v %> {
+                text-align: center;
+                width: 100%;
             }
         }
 
@@ -1567,12 +1634,17 @@
                             }
 
                             video.src = getVideoUrl();
-
-                            const retryOverlay = document.createElement('div');
-                            retryOverlay.className = 'retry-overlay-<%- v %>';
-                            retryOverlay.innerHTML = `
-                                ${posterSrc ? `<img class="retry-overlay-img-<%- v %>" src="${posterSrc.replace(/"/g, '&quot;')}" alt="">` : ''}
+                            
+                            const endOverlay = document.createElement('div');
+                            endOverlay.className = 'end-overlay-<%- v %>';
+                            endOverlay.innerHTML = `
+                                <div class="end-overlay-title-<%- v %>">wanna watch more videos privetly? discover poke!!</div>
+                                <div class="end-overlay-buttons-<%- v %>">
+                                    <a href="/" target="_blank" rel="noopener noreferrer" class="end-btn-primary-<%- v %>">Discover Poke</a>
+                                    <button type="button" class="end-btn-secondary-<%- v %> restart-btn-<%- v %>">Restart Video</button>
+                                </div>
                             `;
+                            wrapper.appendChild(endOverlay);
                             
                             const statsOverlayWrapper = document.createElement('div');
                             statsOverlayWrapper.className = 'stats-overlay-<%- v %>';
@@ -1738,7 +1810,6 @@
                             }
 
                             wrapper.insertBefore(video, wrapper.firstChild);
-                            wrapper.appendChild(retryOverlay);
                             wrapper.appendChild(statsOverlayWrapper);
                             wrapper.appendChild(controls);
 
@@ -1783,6 +1854,8 @@
                             const statsContent = wrapper.querySelector('.stats-content-<%- v %>');
                             const statsClose = wrapper.querySelector('.stats-close-<%- v %>');
                             
+                            const restartBtn = endOverlay.querySelector('.restart-btn-<%- v %>');
+                            
                             const linkBtn = controls.querySelector('.link-btn-<%- v %>');
                             if (linkBtn) {
                                 linkBtn.addEventListener('click', (event) => {
@@ -1821,6 +1894,8 @@
                             let hideTimeout = null;
                             let isScrubbing = false;
                             let statsUpdateInterval = null;
+                            let isNaturalEnd = true;
+                            const mysteryVal = '4x8f-' + Math.random().toString(36).substring(2, 6);
 
                             function formatTime(s) {
                                 if (!Number.isFinite(s)) return '0:00';
@@ -1886,20 +1961,8 @@
                                 }
                             }
 
-                            function showRetryOverlay() {
-                                retryOverlay.classList.add('is-visible-<%- v %>');
-                                controls.style.opacity = '0';
-                                closeAllPanels();
-                            }
-
-                            function hideRetryOverlay() {
-                                retryOverlay.classList.remove('is-visible-<%- v %>');
-                                controls.style.opacity = '1';
-                            }
-
                             function showRuntimeError() {
                                 clearTimeout(retryTimer);
-                                hideRetryOverlay();
                                 closeAllPanels();
                                 video.pause();
                                 video.removeAttribute('poster');
@@ -1948,7 +2011,6 @@
                                         if (posterSrc) {
                                             video.poster = posterSrc;
                                         }
-                                        showRetryOverlay();
                                         video.src = getVideoUrl(Date.now());
                                         video.load();
                                         video.play().catch(() => {});
@@ -1964,7 +2026,6 @@
                                     return;
                                 }
                                 retryCount++;
-                                showRetryOverlay();
                                 retryTimer = setTimeout(() => {
                                     video.src = getVideoUrl(Date.now() + '-' + retryCount);
                                     video.load();
@@ -2018,7 +2079,6 @@
                             }
 
                             function showControls() {
-                                if (retryOverlay.classList.contains('is-visible-<%- v %>')) return;
                                 controls.style.opacity = '1';
                                 wrapper.style.cursor = 'default';
                                 clearTimeout(hideTimeout);
@@ -2126,6 +2186,7 @@
                                     <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Ready State</span><span class="stats-value-<%- v %>">${rs}</span></div>
                                     <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Dropped/Total Frames</span><span class="stats-value-<%- v %>">${frames}</span></div>
                                     <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Connection Type</span><span class="stats-value-<%- v %>">${conn}</span></div>
+                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Mystery Text</span><span class="stats-value-<%- v %>">${mysteryVal}</span></div>
                                 `;
                             }
 
@@ -2143,6 +2204,16 @@
                             embedPanel.addEventListener('click', (event) => event.stopPropagation());
                             statsOverlay.addEventListener('click', (event) => event.stopPropagation());
                             controls.querySelector('.bottom-area-<%- v %>').addEventListener('click', (event) => event.stopPropagation());
+                            endOverlay.addEventListener('click', (event) => event.stopPropagation());
+
+                            restartBtn.addEventListener('click', (e) => {
+                                e.stopPropagation();
+                                endOverlay.classList.remove('is-visible-<%- v %>');
+                                controls.style.display = '';
+                                isNaturalEnd = true;
+                                video.currentTime = 0;
+                                video.play().catch(() => {});
+                            });
 
                             playPauseBtn.addEventListener('click', (event) => {
                                 event.stopPropagation();
@@ -2323,8 +2394,8 @@
                             wrapper.addEventListener('contextmenu', (event) => event.preventDefault());
 
                             document.addEventListener('click', (event) => {
-                                if (!controls.contains(event.target)) {
-                                closeAllPanels();
+                                if (!controls.contains(event.target) && !endOverlay.contains(event.target)) {
+                                    closeAllPanels();
                                 }
                             });
 
@@ -2332,23 +2403,35 @@
                             video.addEventListener('loadedmetadata', updateTime);
                             video.addEventListener('durationchange', updateTime);
                             video.addEventListener('volumechange', updateVolumeUI);
-                            video.addEventListener('canplay', () => {
-                                hideRetryOverlay();
-                            });
-                            video.addEventListener('playing', () => {
-                                hideRetryOverlay();
-                            });
                             video.addEventListener('error', () => {
                                 queueRetry();
                             });
 
                             video.addEventListener('play', () => {
+                                if (video.duration && video.currentTime < video.duration - 2) {
+                                    isNaturalEnd = true;
+                                }
+                                endOverlay.classList.remove('is-visible-<%- v %>');
+                                controls.style.display = '';
                                 retryCount = 0;
                                 clearTimeout(retryTimer);
                                 playPausePathEl.setAttribute('d', pauseIcon);
-                                hideRetryOverlay();
                                 showControls();
                             });
+
+                            video.addEventListener('seeking', () => {
+                                if (video.duration && (video.duration - video.currentTime < 2)) {
+                                    isNaturalEnd = false;
+                                }
+                            });
+
+                            video.addEventListener('ended', () => {
+                                if (isNaturalEnd && !video.loop) {
+                                    endOverlay.classList.add('is-visible-<%- v %>');
+                                    controls.style.display = 'none';
+                                }
+                            });
+
                             video.addEventListener('pause', () => {
                                 playPausePathEl.setAttribute('d', playIcon);
                                 controls.style.opacity = '1';
