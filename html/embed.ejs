@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Embed</title>
+    <style>
+        /* Reset and full page setup */
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000; /* Black background for the border */
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-sizing: border-box;
+            /* Creates the 2px black border by padding the container inwards */
+            padding: 2px; 
+        }
+
+        /* Main clickable thumbnail area */
+        .thumbnail-link {
+            position: relative;
+            display: block;
+            width: 100%;
+            height: 100%;
+            text-decoration: none;
+            overflow: hidden;
+        }
+
+        .thumbnail-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover; /* Keeps aspect ratio clean without stretching */
+            display: block;
+        }
+
+        /* YouTube-style Play Button Overlay */
+        .play-button {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 68px;
+            height: 48px;
+            background-color: rgba(33, 33, 33, 0.8);
+            border-radius: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: background-color 0.2s ease-in-out;
+            cursor: pointer;
+        }
+
+        /* Hover effect to turn the play button red, just like YouTube */
+        .thumbnail-link:hover .play-button {
+            background-color: #ff0000;
+        }
+
+        /* The white triangle inside the play button */
+        .play-triangle {
+            width: 0;
+            height: 0;
+            border-style: solid;
+            border-width: 10px 0 10px 18px;
+            border-color: transparent transparent transparent #ffffff;
+            margin-left: 4px; /* Optically centers the triangle */
+        }
+
+        /* Bottom Right Logo Link */
+        .logo-link {
+            position: absolute;
+            bottom: 15px;
+            right: 15px;
+            z-index: 10;
+            display: block;
+            transition: transform 0.2s ease-in-out;
+        }
+
+        .logo-link:hover {
+            transform: scale(1.05); /* Slight zoom on hover */
+        }
+
+        .logo-img {
+            height: 35px; /* Adjust this value if your SVG needs to be bigger/smaller */
+            width: auto;
+            display: block;
+            filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5)); /* Adds shadow so it pops on light thumbnails */
+        }
+    </style>
+</head>
+<body>
+
+    <div class="video-wrapper">
+        <!-- Video Link (Opens in new tab) -->
+        <a href="<%= hostname %>/watch?v=<%- v %>" target="_blank" rel="noopener noreferrer" class="thumbnail-link">
+            
+            <!-- YouTube Thumbnail Image -->
+            <img src="https://i.ytimg.com/vi/<%- v %>/maxresdefault.jpg" alt="Play Video" class="thumbnail-img" onerror="this.src='https://i.ytimg.com/vi/<%- v %>/hqdefault.jpg';">
+            
+            <!-- Centered Play Button -->
+            <div class="play-button">
+                <div class="play-triangle"></div>
+            </div>
+        </a>
+
+        <!-- Bottom Right Custom Logo Link (Opens in new tab) -->
+        <a href="<%= hostname %>/" target="_blank" rel="noopener noreferrer" class="logo-link">
+            <img src="/css/logo-poke.svg" alt="Poke Logo" class="logo-img">
+        </a>
+    </div>
+
+</body>
+</html>
