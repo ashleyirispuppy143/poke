@@ -266,6 +266,8 @@ app.get("/embed/:v", async function (req, res) {
     engagement,
     showHow,
     VideoError,
+    media_proxy,
+    vidurl,
   });
 });
 
