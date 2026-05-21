@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><%- v %> - Embed</title>
+    <title><%- v %></title>
     <style>
         @font-face {
             font-family: "PokeTube Flex";
@@ -208,7 +208,7 @@
             width: 100%;
             aspect-ratio: 16 / 9;
             background-color: #000;
-            border-radius: 12px;
+            border-radius: 16px; /* Added 16px border radius */
             overflow: hidden;
             border: 1px solid #272727;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
@@ -219,6 +219,7 @@
             height: 100%;
             border: none;
             display: block;
+            border-radius: 16px; /* Added 16px border radius */
         }
 
         .embed-card-<%- v %> {
@@ -249,7 +250,7 @@
         }
 
         .embed-textarea-<%- v %>:focus {
-            border-color: #3ea6ff;
+            border-color: #ffabcc; /* Updated accent color */
             color: #f1f1f1;
         }
 
@@ -259,7 +260,7 @@
         }
 
         .embed-btn-<%- v %> {
-            background-color: #f1f1f1;
+            background-color: #ffabcc; /* Updated accent color */
             color: #0f0f0f;
             border: none;
             height: 36px;
@@ -269,14 +270,18 @@
             border-radius: 18px;
             cursor: pointer;
             font-family: "PokeTube Flex", Arial, sans-serif;
-            transition: background-color 0.2s ease;
+            transition: background-color 0.2s ease, transform 0.1s ease;
             display: flex;
             align-items: center;
             justify-content: center;
         }
 
         .embed-btn-<%- v %>:hover {
-            background-color: #d9d9d9;
+            background-color: #e599b7; /* Slightly darker pink on hover */
+        }
+
+        .embed-btn-<%- v %>:active {
+            transform: scale(0.95);
         }
 
         .embed-help-<%- v %> {
@@ -316,7 +321,7 @@
             top: 9px;
             width: 4px;
             height: 4px;
-            background-color: #717171;
+            background-color: #ffabcc; /* Accented bullet point */
             border-radius: 50%;
         }
 
@@ -346,7 +351,7 @@
 
     <% if (isShowHow) { %>
         <header class="showhow-topbar-<%- v %>">
-            <a href="/embed/<%- v %>" class="showhow-back-<%- v %>" title="Back to video">
+            <a href="/watch?v=<%- v %>" class="showhow-back-<%- v %>" title="Back to video">
                 <svg viewBox="0 0 24 24">
                     <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"></path>
                 </svg>
@@ -366,7 +371,7 @@
             <section class="code-section-<%- v %>">
                 <h2 class="section-header-<%- v %>">HTML Code</h2>
                 <div class="embed-card-<%- v %>">
-                    <textarea class="embed-textarea-<%- v %>" readonly>&lt;iframe src="https://<%= typeof hostname !== 'undefined' ? hostname : '' %>/embed/<%- v %>" width="560" height="315" frameborder="0" allowfullscreen&gt;&lt;/iframe&gt;</textarea>
+                    <textarea class="embed-textarea-<%- v %>" readonly>&lt;iframe src="https://<%= typeof hostname !== 'undefined' ? hostname : '' %>/embed/<%- v %>" width="560" height="315" frameborder="0" style="border-radius: 16px;" allowfullscreen&gt;&lt;/iframe&gt;</textarea>
                     
                     <div class="embed-actions-<%- v %>">
                         <button class="embed-btn-<%- v %>" onclick="navigator.clipboard.writeText(this.parentElement.previousElementSibling.value); this.innerText='Copied'; setTimeout(() => this.innerText='Copy', 2000);">Copy</button>
@@ -382,6 +387,7 @@
                     <strong>Customizing the code</strong>
                     <ul>
                         <li><code>width</code> & <code>height</code>: Controls player size. Accepts numbers for pixels (e.g., <code>560</code>) or percentages (e.g., <code>100%</code>).</li>
+                        <li><code>border-radius</code>: Modify the <code>style="border-radius: 16px;"</code> snippet to change how rounded the corners are.</li>
                         <li><code>frameborder</code>: Set to <code>0</code> (no border) or <code>1</code> (shows a solid border).</li>
                     </ul>
                 </div>
