@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><%- v %> - Embed Guide</title>
+    <title><%- v %> - Embed</title>
     <style>
         @font-face {
             font-family: "PokeTube Flex";
@@ -29,7 +29,9 @@
 
         body.mode-showhow {
             background-color: #0f0f0f;
+            overflow-x: hidden;
             overflow-y: auto;
+            color: #f1f1f1;
         }
 
         /* =========================================
@@ -141,85 +143,75 @@
         }
 
         /* =========================================
-           ShowHow Embed Guide Page Styles
+           ShowHow Embed Guide FULL PAGE Styles
            ========================================= */
-        .showhow-page-<%- v %> {
+        .showhow-topbar-<%- v %> {
             display: flex;
-            justify-content: center;
-            padding: 40px 24px;
-            min-height: 100vh;
-            box-sizing: border-box;
-        }
-
-        .showhow-container-<%- v %> {
-            width: 100%;
-            max-width: 680px;
-            background-color: #212121;
-            border-radius: 12px;
-            padding: 24px;
-            box-shadow: 0 4px 32px rgba(0, 0, 0, 0.4);
-            display: flex;
-            flex-direction: column;
-            gap: 24px;
-            border: 1px solid #333;
-        }
-
-        .embed-header-<%- v %> {
-            display: flex;
-            justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid #3f3f3f;
-            padding-bottom: 16px;
+            width: 100%;
+            height: 64px;
+            padding: 0 24px;
+            box-sizing: border-box;
+            background-color: #0f0f0f;
+            border-bottom: 1px solid #272727;
+            position: sticky;
+            top: 0;
+            z-index: 100;
         }
 
-        .embed-header-<%- v %> h2 {
-            color: #f1f1f1;
-            margin: 0;
-            font-size: 20px;
-            font-weight: 500;
-        }
-
-        .embed-close-<%- v %> {
-            background: transparent;
-            border: none;
-            color: #f1f1f1;
+        .showhow-back-<%- v %> {
+            display: flex;
+            align-items: center;
+            justify-content: center;
             width: 40px;
             height: 40px;
             border-radius: 50%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            cursor: pointer;
+            color: #f1f1f1;
             text-decoration: none;
+            margin-right: 16px;
             transition: background-color 0.2s;
-            margin-right: -8px;
         }
 
-        .embed-close-<%- v %>:hover {
+        .showhow-back-<%- v %>:hover {
             background-color: rgba(255, 255, 255, 0.1);
         }
 
-        .embed-close-<%- v %> svg {
+        .showhow-back-<%- v %> svg {
             fill: currentColor;
             width: 24px;
             height: 24px;
         }
 
-        .section-title-<%- v %> {
-            color: #f1f1f1;
-            font-size: 16px;
+        .showhow-title-<%- v %> {
+            font-size: 20px;
             font-weight: 500;
-            margin: 0 0 12px 0;
+            margin: 0;
+        }
+
+        .showhow-content-<%- v %> {
+            max-width: 850px;
+            margin: 0 auto;
+            padding: 40px 24px 80px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 48px;
+        }
+
+        .section-header-<%- v %> {
+            font-size: 18px;
+            font-weight: 500;
+            margin: 0 0 16px 0;
+            color: #f1f1f1;
         }
 
         .preview-box-<%- v %> {
             width: 100%;
             aspect-ratio: 16 / 9;
             background-color: #000;
-            border-radius: 8px;
+            border-radius: 12px;
             overflow: hidden;
-            border: 1px solid #333;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            border: 1px solid #272727;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
 
         .preview-box-<%- v %> iframe {
@@ -229,9 +221,19 @@
             display: block;
         }
 
+        .embed-card-<%- v %> {
+            background-color: #212121;
+            border-radius: 12px;
+            padding: 24px;
+            border: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
         .embed-textarea-<%- v %> {
             width: 100%;
-            height: 96px;
+            height: 100px;
             background-color: #121212;
             color: #aaaaaa;
             border: 1px solid #333333;
@@ -239,8 +241,8 @@
             padding: 16px;
             font-family: monospace;
             font-size: 14px;
-            line-height: 1.4;
-            resize: none;
+            line-height: 1.5;
+            resize: vertical;
             box-sizing: border-box;
             outline: none;
             transition: border-color 0.2s;
@@ -251,57 +253,9 @@
             color: #f1f1f1;
         }
 
-        .embed-help-<%- v %> {
-            font-size: 14px;
-            color: #aaaaaa;
-            line-height: 1.5;
-        }
-
-        .embed-help-<%- v %> p {
-            margin: 4px 0 16px 0;
-        }
-
-        .embed-help-<%- v %> strong {
-            color: #f1f1f1;
-            font-weight: 500;
-            font-size: 15px;
-            display: block;
-            margin-bottom: 8px;
-        }
-
-        .embed-help-<%- v %> ul {
-            margin: 0;
-            padding-left: 0;
-            list-style: none;
-        }
-
-        .embed-help-<%- v %> li {
-            margin-bottom: 8px;
-            position: relative;
-            padding-left: 14px;
-        }
-
-        .embed-help-<%- v %> li::before {
-            content: "";
-            position: absolute;
-            left: 0;
-            top: 8px;
-            width: 4px;
-            height: 4px;
-            background-color: #717171;
-            border-radius: 50%;
-        }
-
-        .embed-help-<%- v %> code {
-            color: #f1f1f1;
-            font-family: monospace;
-            font-size: 13px;
-        }
-
         .embed-actions-<%- v %> {
             display: flex;
             justify-content: flex-end;
-            margin-top: 4px;
         }
 
         .embed-btn-<%- v %> {
@@ -324,6 +278,56 @@
         .embed-btn-<%- v %>:hover {
             background-color: #d9d9d9;
         }
+
+        .embed-help-<%- v %> {
+            font-size: 15px;
+            color: #aaaaaa;
+            line-height: 1.6;
+        }
+
+        .embed-help-<%- v %> p {
+            margin: 0 0 20px 0;
+        }
+
+        .embed-help-<%- v %> strong {
+            color: #f1f1f1;
+            font-weight: 500;
+            font-size: 16px;
+            display: block;
+            margin-bottom: 12px;
+        }
+
+        .embed-help-<%- v %> ul {
+            margin: 0;
+            padding-left: 0;
+            list-style: none;
+        }
+
+        .embed-help-<%- v %> li {
+            margin-bottom: 12px;
+            position: relative;
+            padding-left: 16px;
+        }
+
+        .embed-help-<%- v %> li::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 9px;
+            width: 4px;
+            height: 4px;
+            background-color: #717171;
+            border-radius: 50%;
+        }
+
+        .embed-help-<%- v %> code {
+            color: #f1f1f1;
+            font-family: monospace;
+            font-size: 14px;
+            background-color: #272727;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
     </style>
 </head>
 
@@ -341,50 +345,49 @@
 <body class="<%= isShowHow ? 'mode-showhow' : 'mode-video' %>">
 
     <% if (isShowHow) { %>
-        <div class="showhow-page-<%- v %>">
-            <div class="showhow-container-<%- v %>">
-                
-                <div class="embed-header-<%- v %>">
-                    <h2>Embed Video</h2>
-                    <a href="/embed/<%- v %>" class="embed-close-<%- v %>" title="Close Guide">
-                        <svg viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet" focusable="false">
-                            <g>
-                                <path d="M12.7,12l6.6,6.6l-0.7,0.7L12,12.7l-6.6,6.6l-0.7-0.7l6.6-6.6L4.6,5.4l0.7-0.7l6.6,6.6l6.6-6.6l0.7,0.7L12.7,12z"></path>
-                            </g>
-                        </svg>
-                    </a>
-                </div>
+        <header class="showhow-topbar-<%- v %>">
+            <a href="/embed/<%- v %>" class="showhow-back-<%- v %>" title="Back to video">
+                <svg viewBox="0 0 24 24">
+                    <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"></path>
+                </svg>
+            </a>
+            <h1 class="showhow-title-<%- v %>">Embed Video</h1>
+        </header>
 
-                <div class="preview-section-<%- v %>">
-                    <h3 class="section-title-<%- v %>">Live Preview</h3>
-                    <div class="preview-box-<%- v %>">
-                        <iframe src="/embed/<%- v %>" allowfullscreen></iframe>
-                    </div>
+        <main class="showhow-content-<%- v %>">
+            
+            <section class="preview-section-<%- v %>">
+                <h2 class="section-header-<%- v %>">Live Preview</h2>
+                <div class="preview-box-<%- v %>">
+                    <iframe src="/embed/<%- v %>" allowfullscreen></iframe>
                 </div>
+            </section>
 
-                <div class="code-section-<%- v %>">
-                    <h3 class="section-title-<%- v %>">HTML Code</h3>
+            <section class="code-section-<%- v %>">
+                <h2 class="section-header-<%- v %>">HTML Code</h2>
+                <div class="embed-card-<%- v %>">
                     <textarea class="embed-textarea-<%- v %>" readonly>&lt;iframe src="https://<%= typeof hostname !== 'undefined' ? hostname : '' %>/embed/<%- v %>" width="560" height="315" frameborder="0" allowfullscreen&gt;&lt;/iframe&gt;</textarea>
                     
-                    <div class="embed-help-<%- v %>">
-                        <br>
-                        <strong>Where to paste</strong>
-                        <p>Add this code directly into your website's HTML body, a markdown file, or a blog post editor (using the HTML/Source view).</p>
-                        
-                        <strong>Customizing the code</strong>
-                        <ul>
-                            <li><code>width</code> & <code>height</code>: Controls player size. Accepts numbers for pixels (e.g., <code>560</code>) or percentages (e.g., <code>100%</code>).</li>
-                            <li><code>frameborder</code>: Set to <code>0</code> (no border) or <code>1</code> (shows a solid border).</li>
-                        </ul>
-                    </div>
-
                     <div class="embed-actions-<%- v %>">
-                        <button class="embed-btn-<%- v %>" onclick="navigator.clipboard.writeText(this.parentElement.previousElementSibling.previousElementSibling.value); this.innerText='Copied'; setTimeout(() => this.innerText='Copy', 2000);">Copy</button>
+                        <button class="embed-btn-<%- v %>" onclick="navigator.clipboard.writeText(this.parentElement.previousElementSibling.value); this.innerText='Copied'; setTimeout(() => this.innerText='Copy', 2000);">Copy</button>
                     </div>
                 </div>
+            </section>
 
-            </div>
-        </div>
+            <section class="help-section-<%- v %>">
+                <div class="embed-help-<%- v %>">
+                    <strong>Where to paste</strong>
+                    <p>Add this code directly into your website's HTML body, a markdown file, or a blog post editor (using the HTML/Source view).</p>
+                    
+                    <strong>Customizing the code</strong>
+                    <ul>
+                        <li><code>width</code> & <code>height</code>: Controls player size. Accepts numbers for pixels (e.g., <code>560</code>) or percentages (e.g., <code>100%</code>).</li>
+                        <li><code>frameborder</code>: Set to <code>0</code> (no border) or <code>1</code> (shows a solid border).</li>
+                    </ul>
+                </div>
+            </section>
+
+        </main>
 
     <% } else { %>
         <div class="video-wrapper-<%- v %>">
