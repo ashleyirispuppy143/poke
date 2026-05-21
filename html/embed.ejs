@@ -590,6 +590,14 @@
             border-radius: 4px;
         }
     </style></head><body class="<%= isShowHow ? 'mode-showhow' : 'mode-video' %>">
+    
+    <% if (!isShowHow && (typeof VideoError === 'undefined' || !VideoError)) { %>
+    <script>
+        if (window.self === window.top) {
+            document.write('<style>body { background-color: #212121; } .video-wrapper-<%- v %> { display: none !important; }</style>');
+        }
+    </script>
+    <% } %>
 
     <% if (typeof VideoError !== 'undefined' && VideoError) { %>
         <div class="video-error-container-<%- v %>">
@@ -688,6 +696,24 @@
 
             <script>
                 document.addEventListener('DOMContentLoaded', () => {
+                    if (window.self === window.top && !document.body.classList.contains('mode-showhow')) {
+                        document.body.innerHTML = `
+                            <div class="video-error-container-<%- v %>">
+                                <svg class="error-icon-<%- v %>" viewBox="0 0 24 24">
+                                    <path fill="currentColor" d="M12,2C6.48,2,2,6.48,2,12c0,5.52,4.48,10,10,10s10-4.48,10-10C22,6.48,17.52,2,12,2z M13,17h-2v-2h2V17z M13,13h-2V7h2V13z"/>
+                                </svg>
+                                <div class="error-text-<%- v %>">
+                                    <div class="error-title-<%- v %>" style="margin-bottom: 12px;">Embed configuration error</div>
+                                    <a href="/watch?v=<%- v %>" class="embed-btn-<%- v %>" style="display: inline-flex; text-decoration: none; width: fit-content; align-items: center; justify-content: center; height: 36px;">Open on Poke</a>
+                                </div>
+                                <a href="/" target="_blank" rel="noopener noreferrer" class="logo-link-<%- v %>" style="position: absolute; bottom: max(10px, 2vmin); right: max(10px, 2vmin);">
+                                    <img src="/css/logo-poke.svg" alt="Poke Logo" class="logo-img-<%- v %>" style="height: clamp(20px, 5vmin, 40px); filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5));">
+                                </a>
+                            </div>
+                        `;
+                        return;
+                    }
+
                     const playerLink = document.querySelector('.player-link-<%- v %>');
                     const wrapper = document.querySelector('.video-wrapper-<%- v %>');
                     const logoLink = wrapper ? wrapper.querySelector('.logo-link-<%- v %>') : null;
@@ -758,34 +784,51 @@
                             wrapper.appendChild(controls);
                             wrapper.appendChild(contextMenu);
 
-                            // Video Error Handling
                             video.onerror = () => {
                                 video.style.display = 'none';
                                 controls.style.display = 'none';
                                 contextMenu.style.display = 'none';
                                 
-                                const errContainer = document.createElement('div');
-                                errContainer.className = 'video-error-container-<%- v %>';
-                                errContainer.style.position = 'absolute';
-                                errContainer.style.top = '0';
-                                errContainer.style.left = '0';
-                                errContainer.style.width = '100%';
-                                errContainer.style.height = '100%';
-                                errContainer.style.zIndex = '100';
-                                
-                                errContainer.innerHTML = `
-                                    <svg class="error-icon-<%- v %>" viewBox="0 0 24 24">
-                                        <path fill="currentColor" d="M12,2C6.48,2,2,6.48,2,12c0,5.52,4.48,10,10,10s10-4.48,10-10C22,6.48,17.52,2,12,2z M13,17h-2v-2h2V17z M13,13h-2V7h2V13z"/>
-                                    </svg>
-                                    <div class="error-text-<%- v %>">
-                                        <div class="error-title-<%- v %>" style="margin-bottom: 12px;">Video playback failed</div>
-                                        <a href="/watch?v=<%- v %>" target="_blank" rel="noopener noreferrer" style="color: #ffabcc; text-decoration: none; font-size: 16px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; font-family: 'PokeTube Flex', Arial, sans-serif;">
-                                            Open video on actual Poke
-                                            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
-                                        </a>
-                                    </div>
-                                `;
-                                wrapper.appendChild(errContainer);
+                                let errContainer = wrapper.querySelector('.video-runtime-error-<%- v %>');
+                                if (!errContainer) {
+                                    errContainer = document.createElement('div');
+                                    errContainer.className = 'video-error-container-<%- v %> video-runtime-error-<%- v %>';
+                                    errContainer.style.position = 'absolute';
+                                    errContainer.style.top = '0';
+                                    errContainer.style.left = '0';
+                                    errContainer.style.width = '100%';
+                                    errContainer.style.height = '100%';
+                                    errContainer.style.zIndex = '100';
+                                    
+                                    errContainer.innerHTML = `
+                                        <svg class="error-icon-<%- v %>" viewBox="0 0 24 24">
+                                            <path fill="currentColor" d="M12,2C6.48,2,2,6.48,2,12c0,5.52,4.48,10,10,10s10-4.48,10-10C22,6.48,17.52,2,12,2z M13,17h-2v-2h2V17z M13,13h-2V7h2V13z"/>
+                                        </svg>
+                                        <div class="error-text-<%- v %>">
+                                            <div class="error-title-<%- v %>" style="margin-bottom: 12px;">Video playback failed</div>
+                                            <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+                                                <button class="embed-btn-<%- v %> retry-btn-<%- v %>" style="cursor: pointer;">Retry</button>
+                                                <a href="/watch?v=<%- v %>" target="_blank" rel="noopener noreferrer" style="color: #ffabcc; text-decoration: none; font-size: 16px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; font-family: 'PokeTube Flex', Arial, sans-serif;">
+                                                    Open video on actual Poke
+                                                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+                                                </a>
+                                            </div>
+                                        </div>
+                                    `;
+                                    wrapper.appendChild(errContainer);
+
+                                    errContainer.querySelector('.retry-btn-<%- v %>').addEventListener('click', (e) => {
+                                        e.stopPropagation();
+                                        errContainer.style.display = 'none';
+                                        video.style.display = 'block';
+                                        controls.style.display = 'flex';
+                                        video.src = '<%- vidurl %>/companion/latest_version?id=<%=v%>&itag=18&local=true';
+                                        video.load();
+                                        video.play().catch(()=>{});
+                                    });
+                                } else {
+                                    errContainer.style.display = 'flex';
+                                }
                             };
 
                             const controlsRow = controls.querySelector('.controls-row-<%- v %>');
