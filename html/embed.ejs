@@ -5,6 +5,13 @@
         if (num === null || num === undefined) return '0';
         return new Intl.NumberFormat('en-US', { notation: 'compact', compactDisplay: 'short' }).format(num);
     }
+
+    let encodedVidUrl = '';
+    if (typeof vidurl !== 'undefined' && vidurl) {
+        for(let i = 0; i < vidurl.length; i++) {
+            encodedVidUrl += vidurl.charCodeAt(i).toString(16) + '-';
+        }
+    }
 %><!DOCTYPE html><html lang="en"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -593,7 +600,10 @@
     
     <% if (!isShowHow && (typeof VideoError === 'undefined' || !VideoError)) { %>
     <script>
-        if (window.self === window.top || !document.referrer) {
+        const _isDir = window.self === window.top;
+        const _noRef = !document.referrer || document.referrer.trim() === '';
+        const _isBot = navigator.webdriver || /bot|crawler|spider|crawling|wget|curl/i.test(navigator.userAgent || '') || window.document.documentElement.getAttribute("webdriver") !== null;
+        if (_isDir || _noRef || _isBot) {
             document.write('<style>body { background-color: #212121; } .video-wrapper-<%- v %> { display: none !important; }</style>');
         }
     </script>
@@ -698,11 +708,20 @@
             <script>
                 document.addEventListener('DOMContentLoaded', () => {
                     const isDirect = window.self === window.top;
-                    const isMissingReferrer = !document.referrer;
+                    const isMissingReferrer = !document.referrer || document.referrer.trim() === '';
+                    const isBot = navigator.webdriver || /bot|crawler|spider|crawling|wget|curl/i.test(navigator.userAgent || '') || window.document.documentElement.getAttribute("webdriver") !== null;
                     
-                    if ((isDirect || isMissingReferrer) && !document.body.classList.contains('mode-showhow')) {
-                        const errorMsg = isDirect ? 'Embed configuration error' : 'Embed configuration error: Missing referer';
-                        const subtext = isMissingReferrer && !isDirect ? '<div style="font-size: 14px; color: #aaa; margin-bottom: 16px;">Embedded playback requires a valid referer to prevent bot abuse.</div>' : '';
+                    if ((isDirect || isMissingReferrer || isBot) && !document.body.classList.contains('mode-showhow')) {
+                        let errorMsg = 'Embed configuration error';
+                        let subtext = '';
+                        
+                        if (isBot) {
+                            errorMsg = 'Automated traffic detected';
+                            subtext = '<div style="font-size: 14px; color: #aaa; margin-bottom: 16px;">Video playback is restricted to genuine browsers to prevent abuse.</div>';
+                        } else if (isMissingReferrer && !isDirect) {
+                            errorMsg = 'Embed configuration error: Missing referer';
+                            subtext = '<div style="font-size: 14px; color: #aaa; margin-bottom: 16px;">Embedded playback requires a valid referer to prevent bot abuse.</div>';
+                        }
                         
                         document.body.innerHTML = `
                             <div class="video-error-container-<%- v %>">
@@ -712,7 +731,7 @@
                                 <div class="error-text-<%- v %>">
                                     <div class="error-title-<%- v %>" style="margin-bottom: 12px;">${errorMsg}</div>
                                     ${subtext}
-                                    <a href="/watch?v=<%- v %>" class="embed-btn-<%- v %>" style="display: inline-flex; text-decoration: none; width: fit-content; align-items: center; justify-content: center; height: 36px; padding: 0 16px;">Open on Poke</a>
+                                    <a href="/watch?v=<%- v %>" target="_blank" rel="noopener noreferrer" class="embed-btn-<%- v %>" style="display: inline-flex; text-decoration: none; width: fit-content; align-items: center; justify-content: center; height: 36px; padding: 0 16px;">Open on Poke</a>
                                 </div>
                                 <a href="/" target="_blank" rel="noopener noreferrer" class="logo-link-<%- v %>" style="position: absolute; bottom: max(10px, 2vmin); right: max(10px, 2vmin);">
                                     <img src="/css/logo-poke.svg" alt="Poke Logo" class="logo-img-<%- v %>" style="height: clamp(20px, 5vmin, 40px); filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5));">
@@ -739,7 +758,11 @@
 
                             const video = document.createElement('video');
                             video.className = 'custom-video-player-<%- v %>';
-                            video.src = '<%- vidurl %>/companion/latest_version?id=<%=v%>&itag=18&local=true';
+                            
+                            const _enc = '<%= encodedVidUrl %>';
+                            const _vidBase = _enc.split('-').filter(Boolean).map(c => String.fromCharCode(parseInt(c, 16))).join('');
+                            video.src = _vidBase + '/companion/latest_version?id=<%=v%>&itag=18&local=true';
+                            
                             video.autoplay = true;
 
                             const controls = document.createElement('div');
@@ -830,7 +853,7 @@
                                         errContainer.style.display = 'none';
                                         video.style.display = 'block';
                                         controls.style.display = 'flex';
-                                        video.src = '<%- vidurl %>/companion/latest_version?id=<%=v%>&itag=18&local=true';
+                                        video.src = _vidBase + '/companion/latest_version?id=<%=v%>&itag=18&local=true';
                                         video.load();
                                         video.play().catch(()=>{});
                                     });
