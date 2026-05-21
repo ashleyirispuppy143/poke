@@ -218,7 +218,7 @@
         <a href="/watch?v=<%- v %>" target="_blank" rel="noopener noreferrer" class="player-link-<%- v %>">
             <img src="https://i.ytimg.com/vi/<%- v %>/maxresdefault.jpg" alt="Play Video" class="player-image-<%- v %>" onerror="this.src='https://i.ytimg.com/vi/<%- v %>/hqdefault.jpg';">
             
-            <% if (typeof engagement !== 'undefined') { %>
+            <% if (typeof engagement !== 'undefined' && engagement !== null) { %>
             <div class="engagement-stats-<%- v %>">
                 <span class="stat-item-<%- v %>">
                     👍 <%= formatCount(engagement.likes) %>
@@ -240,11 +240,12 @@
             <img src="/css/logo-poke.svg" alt="Poke Logo" class="logo-img-<%- v %>">
         </a>
 
-        <% if (typeof showHow !== 'undefined' && showHow === true) { %>
+        <% /* Fixed the condition to handle strings from URL queries */ %>
+        <% if (typeof showHow !== 'undefined' && (showHow === true || showHow === 'true')) { %>
         <div class="embed-modal-<%- v %>">
             <div class="embed-content-<%- v %>">
                 <h2>Embed this video</h2>
-                <textarea class="embed-textarea-<%- v %>" readonly>&lt;iframe src="<%= typeof hostname !== 'undefined' ? hostname : '' %>/embed/<%- v %>" width="560" height="315" frameborder="0" allowfullscreen&gt;&lt;/iframe&gt;</textarea>
+                <textarea class="embed-textarea-<%- v %>" readonly>&lt;iframe src="https://<%= typeof hostname !== 'undefined' ? hostname : '' %>/embed/<%- v %>" width="560" height="315" frameborder="0" allowfullscreen&gt;&lt;/iframe&gt;</textarea>
                 <button class="embed-btn-<%- v %>" onclick="navigator.clipboard.writeText(this.previousElementSibling.value); this.innerText='Copied!'; setTimeout(() => this.innerText='Copy Code', 2000);">Copy Code</button>
             </div>
         </div>
