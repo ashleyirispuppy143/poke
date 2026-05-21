@@ -1,9 +1,17 @@
+<% 
+    const isShowHow = typeof showHow !== 'undefined' && (showHow === true || showHow === 'true');
+
+    function formatCount(num) {
+        if (num === null || num === undefined) return '0';
+        return new Intl.NumberFormat('en-US', { notation: 'compact', compactDisplay: 'short' }).format(num);
+    }
+%>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><%- v %> - Embed Guide</title>
+    <title><%- v %><%= isShowHow ? ' - Embed Guide' : '' %></title>
     <style>
         @font-face {
             font-family: "PokeTube Flex";
@@ -21,7 +29,6 @@
             font-family: "PokeTube Flex", Arial, sans-serif;
         }
 
-        /* Toggles body behavior based on whether we are showing the video or the guide */
         body.mode-video {
             background-color: #000;
             overflow: hidden;
@@ -32,6 +39,43 @@
             overflow-x: hidden;
             overflow-y: auto;
             color: #f1f1f1;
+        }
+
+        /* =========================================
+           Error Page Styles
+           ========================================= */
+        .video-error-container-<%- v %> {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #212121;
+            padding: 24px;
+            box-sizing: border-box;
+            gap: 20px;
+        }
+
+        .error-icon-<%- v %> {
+            fill: #aaaaaa;
+            width: 48px;
+            height: 48px;
+            flex-shrink: 0;
+        }
+
+        .error-text-<%- v %> {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            max-width: 600px;
+        }
+
+        .error-title-<%- v %> {
+            color: #f1f1f1;
+            font-size: 22px;
+            font-weight: 500;
+            line-height: 1.4;
         }
 
         /* =========================================
@@ -344,96 +388,107 @@
     </style>
 </head>
 
-<% 
-    // Logic to determine if we are showing the embed guide or the actual video
-    const isShowHow = typeof showHow !== 'undefined' && (showHow === true || showHow === 'true');
-
-    // Helper function to format engagement numbers
-    function formatCount(num) {
-        if (num === null || num === undefined) return '0';
-        return new Intl.NumberFormat('en-US', { notation: 'compact', compactDisplay: 'short' }).format(num);
-    }
-%>
-
 <body class="<%= isShowHow ? 'mode-showhow' : 'mode-video' %>">
 
-    <% if (isShowHow) { %>
-        <header class="showhow-topbar-<%- v %>">
-            <a href="/watch?v=<%- v %>" class="showhow-back-<%- v %>" title="Back to video">
-                <svg viewBox="0 0 24 24">
-                    <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"></path>
-                </svg>
-            </a>
-            <h1 class="showhow-title-<%- v %>">Embed Video</h1>
-        </header>
-
-        <main class="showhow-content-<%- v %>">
+    <% if (typeof VideoError !== 'undefined' && VideoError) { %>
+        <div class="video-error-container-<%- v %>">
+            <svg class="error-icon-<%- v %>" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M13,13h-2V7h2V13z M13,17h-2v-2h2V17z M12,2C6.48,2,2,6.48,2,12c0,5.52,4.48,10,10,10s10-4.48,10-10C22,6.48,17.52,2,12,2z M12,21c-4.96,0-9-4.04-9-9c0-4.96,4.04-9,9-9c4.96,0,9,4.04,9,9C21,16.96,16.96,21,12,21z"/>
+            </svg>
+            <div class="error-text-<%- v %>">
+                <div class="error-title-<%- v %>"><%= VideoError.message %></div>
+            </div>
             
-            <p class="plaintext-notice-<%- v %>">
-                The embed feature is currently in beta. In the future, this embed will host an actual video player instead of just redirecting to /watch?v= when clicked. The current behavior is only a placeholder.
-            </p>
-
-            <section class="preview-section-<%- v %>">
-                <h2 class="section-header-<%- v %>">Live Preview</h2>
-                <div class="preview-box-<%- v %>">
-                    <iframe src="/embed/<%- v %>" allowfullscreen></iframe>
-                </div>
-            </section>
-
-            <section class="code-section-<%- v %>">
-                <h2 class="section-header-<%- v %>">HTML Code</h2>
-                <div class="embed-card-<%- v %>">
-                    <textarea class="embed-textarea-<%- v %>" readonly>&lt;iframe src="https://<%= typeof hostname !== 'undefined' ? hostname : '' %>/embed/<%- v %>" width="560" height="315" frameborder="0" style="border-radius: 16px;" allowfullscreen&gt;&lt;/iframe&gt;</textarea>
-                    
-                    <div class="embed-actions-<%- v %>">
-                        <button class="embed-btn-<%- v %>" onclick="navigator.clipboard.writeText(this.parentElement.previousElementSibling.value); this.innerText='Copied'; setTimeout(() => this.innerText='Copy', 2000);">Copy</button>
-                    </div>
-                </div>
-            </section>
-
-            <section class="help-section-<%- v %>">
-                <div class="embed-help-<%- v %>">
-                    <strong>Where to paste</strong>
-                    <p>Add this code directly into your website's HTML body, a markdown file, or a blog post editor (using the HTML/Source view).</p>
-                    
-                    <strong>Customizing the code</strong>
-                    <ul>
-                        <li><code>width</code> & <code>height</code>: Controls player size. Accepts numbers for pixels (e.g., <code>560</code>) or percentages (e.g., <code>100%</code>).</li>
-                        <li><code>border-radius</code>: Modify the <code>style="border-radius: 16px;"</code> snippet to change how rounded the corners are.</li>
-                        <li><code>frameborder</code>: Set to <code>0</code> (no border) or <code>1</code> (shows a solid border).</li>
-                    </ul>
-                </div>
-            </section>
-
-        </main>
-
-    <% } else { %>
-        <div class="video-wrapper-<%- v %>">
-            <a href="/watch?v=<%- v %>" target="_blank" rel="noopener noreferrer" class="player-link-<%- v %>">
-                <img src="https://i.ytimg.com/vi/<%- v %>/maxresdefault.jpg" alt="Play Video" class="player-image-<%- v %>" onerror="this.src='https://i.ytimg.com/vi/<%- v %>/hqdefault.jpg';">
-                
-                <% if (typeof engagement !== 'undefined' && engagement !== null) { %>
-                <div class="engagement-stats-<%- v %>">
-                    <span class="stat-item-<%- v %>">
-                        👍 <%= formatCount(engagement.likes) %>
-                    </span>
-                    <span class="stat-item-<%- v %>">
-                        👎 <%= formatCount(engagement.dislikes) %>
-                    </span>
-                </div>
-                <% } %>
-
-                <div class="play-button-<%- v %>">
-                    <svg class="play-triangle-<%- v %>" viewBox="0 0 24 24">
-                        <polygon points="8,5 8,19 19,12" />
-                    </svg>
-                </div>
-            </a>
-
             <a href="/" target="_blank" rel="noopener noreferrer" class="logo-link-<%- v %>">
                 <img src="/css/logo-poke.svg" alt="Poke Logo" class="logo-img-<%- v %>">
             </a>
         </div>
+    <% } else { %>
+
+        <% if (isShowHow) { %>
+            <header class="showhow-topbar-<%- v %>">
+                <a href="/watch?v=<%- v %>" class="showhow-back-<%- v %>" title="Back to video">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"></path>
+                    </svg>
+                </a>
+                <h1 class="showhow-title-<%- v %>">Embed Video</h1>
+            </header>
+
+            <main class="showhow-content-<%- v %>">
+                
+                <p class="plaintext-notice-<%- v %>">
+                    The embed feature is currently in beta. In the future, this embed will host an actual video player instead of just redirecting to /watch?v= when clicked. The current behavior is only a placeholder.
+                </p>
+
+                <section class="preview-section-<%- v %>">
+                    <h2 class="section-header-<%- v %>">Live Preview</h2>
+                    <div class="preview-box-<%- v %>">
+                        <iframe src="/embed/<%- v %>" allowfullscreen></iframe>
+                    </div>
+                </section>
+
+                <section class="code-section-<%- v %>">
+                    <h2 class="section-header-<%- v %>">HTML Code</h2>
+                    <div class="embed-card-<%- v %>">
+                        <textarea class="embed-textarea-<%- v %>" readonly>&lt;iframe src="https://<%= typeof hostname !== 'undefined' ? hostname : '' %>/embed/<%- v %>" width="560" height="315" frameborder="0" style="border-radius: 16px;" allowfullscreen&gt;&lt;/iframe&gt;</textarea>
+                        
+                        <div class="embed-actions-<%- v %>">
+                            <button class="embed-btn-<%- v %>" onclick="navigator.clipboard.writeText(this.parentElement.previousElementSibling.value); this.innerText='Copied'; setTimeout(() => this.innerText='Copy', 2000);">Copy</button>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="help-section-<%- v %>">
+                    <div class="embed-help-<%- v %>">
+                        <strong>Where to paste</strong>
+                        <p>Add this code directly into your website's HTML body, a markdown file, or a blog post editor (using the HTML/Source view).</p>
+                        
+                        <strong>Customizing the code</strong>
+                        <ul>
+                            <li><code>width</code> & <code>height</code>: Controls player size. Accepts numbers for pixels (e.g., <code>560</code>) or percentages (e.g., <code>100%</code>).</li>
+                            <li><code>border-radius</code>: Modify the <code>style="border-radius: 16px;"</code> snippet to change how rounded the corners are.</li>
+                            <li><code>frameborder</code>: Set to <code>0</code> (no border) or <code>1</code> (shows a solid border).</li>
+                        </ul>
+                    </div>
+                </section>
+
+            </main>
+
+        <% } else { %>
+            <div class="video-wrapper-<%- v %>">
+                <a href="/watch?v=<%- v %>" target="_blank" rel="noopener noreferrer" class="player-link-<%- v %>">
+                    <img src="https://i.ytimg.com/vi/<%- v %>/maxresdefault.jpg" alt="Play Video" class="player-image-<%- v %>" onerror="this.src='https://i.ytimg.com/vi/<%- v %>/hqdefault.jpg';">
+                    
+                    <% if (typeof engagement !== 'undefined' && engagement !== null) { %>
+                    <div class="engagement-stats-<%- v %>">
+                        <% if (engagement.viewCount !== undefined && engagement.viewCount !== null) { %>
+                        <span class="stat-item-<%- v %>">
+                            👁️ <%= formatCount(engagement.viewCount) %>
+                        </span>
+                        <% } %>
+                        <span class="stat-item-<%- v %>">
+                            👍 <%= formatCount(engagement.likes) %>
+                        </span>
+                        <span class="stat-item-<%- v %>">
+                            👎 <%= formatCount(engagement.dislikes) %>
+                        </span>
+                    </div>
+                    <% } %>
+
+                    <div class="play-button-<%- v %>">
+                        <svg class="play-triangle-<%- v %>" viewBox="0 0 24 24">
+                            <polygon points="8,5 8,19 19,12" />
+                        </svg>
+                    </div>
+                </a>
+
+                <a href="/" target="_blank" rel="noopener noreferrer" class="logo-link-<%- v %>">
+                    <img src="/css/logo-poke.svg" alt="Poke Logo" class="logo-img-<%- v %>">
+                </a>
+            </div>
+        <% } %>
+
     <% } %>
 
 </body>
