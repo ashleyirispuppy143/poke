@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video Embed</title>
+    <title><%- v %></title>
     <style>
         html, body {
             margin: 0;
@@ -49,30 +49,37 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: clamp(60px, 12vw, 150px);
-            height: clamp(60px, 12vw, 150px);
-            background-color: rgba(0, 0, 0, 0.4);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
+            width: clamp(64px, 12vw, 120px);
+            height: clamp(64px, 12vw, 120px);
+            background: rgba(20, 20, 20, 0.65);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             border-radius: 50%;
             display: flex;
             justify-content: center;
             align-items: center;
-            transition: all 0.2s ease-in-out;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
             cursor: pointer;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.15);
         }
 
         .thumbnail-link:hover .play-button {
-            background-color: rgba(0, 0, 0, 0.6);
-            transform: translate(-50%, -50%) scale(1.1);
+            background: rgba(35, 35, 35, 0.85);
+            transform: translate(-50%, -50%) scale(1.15);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7), inset 0 0 0 1.5px rgba(255, 255, 255, 0.4);
         }
 
         .play-triangle {
-            width: 45%;
-            height: 45%;
+            width: 38%;
+            height: 38%;
             margin-left: 8%;
             fill: #ffffff;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+            transition: transform 0.3s ease;
+        }
+
+        .thumbnail-link:hover .play-triangle {
+            transform: scale(1.05);
         }
 
         .logo-link {
