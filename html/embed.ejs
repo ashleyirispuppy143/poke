@@ -639,7 +639,7 @@
             position: absolute;
             left: 50%;
             bottom: 58px;
-            width: min(340px, calc(100% - 32px));
+            width: min(380px, calc(100% - 32px));
             background: rgba(24, 24, 24, 0.96);
             color: #f1f1f1;
             border: 1px solid rgba(255, 255, 255, 0.12);
@@ -1629,7 +1629,7 @@
                                     </button>
                                     <button class="settings-row-<%- v %> embed-row-<%- v %>" type="button">
                                         <span class="settings-icon-<%- v %>"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${codeIcon}"/></svg></span>
-                                        <span class="settings-label-<%- v %>">Do u wanna embed as well?</span>
+                                        <span class="settings-label-<%- v %>">do u wanna embed as well?</span>
                                         <span class="settings-chevron-<%- v %>"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${chevronIcon}"/></svg></span>
                                     </button>
                                     <button class="settings-row-<%- v %> stats-row-<%- v %>" type="button">
@@ -2068,6 +2068,49 @@
                                 const ct = video.currentTime.toFixed(3);
                                 const dur = (video.duration || 0).toFixed(3);
                                 const resStr = vW && vH ? `${vW}x${vH}` : 'Unknown';
+
+                                let bufferHealth = 0;
+                                try {
+                                    for (let i = 0; i < video.buffered.length; i++) {
+                                        if (video.buffered.start(i) <= video.currentTime && video.buffered.end(i) >= video.currentTime) {
+                                            bufferHealth = video.buffered.end(i) - video.currentTime;
+                                            break;
+                                        }
+                                    }
+                                } catch(e) {}
+                                
+                                let iframeType = 'Top-level';
+                                if (window.self !== window.top) {
+                                    try {
+                                        if (window.parent.location.hostname === window.location.hostname) {
+                                            iframeType = 'Same-origin iframe';
+                                        } else {
+                                            iframeType = 'Cross-origin iframe';
+                                        }
+                                    } catch (e) {
+                                        iframeType = 'Cross-origin iframe';
+                                    }
+                                }
+
+                                const retries = retryCount;
+
+                                const nsArr = ['EMPTY', 'IDLE', 'LOADING', 'NO_SOURCE'];
+                                const ns = nsArr[video.networkState] || video.networkState;
+
+                                const rsArr = ['NOTHING', 'METADATA', 'CURRENT_DATA', 'FUTURE_DATA', 'ENOUGH_DATA'];
+                                const rs = rsArr[video.readyState] || video.readyState;
+
+                                let frames = 'N/A';
+                                if (typeof video.getVideoPlaybackQuality === 'function') {
+                                    const pq = video.getVideoPlaybackQuality();
+                                    frames = pq.droppedVideoFrames + ' / ' + pq.totalVideoFrames;
+                                }
+
+                                let conn = 'Unknown';
+                                if (navigator.connection && navigator.connection.effectiveType) {
+                                    conn = navigator.connection.effectiveType;
+                                }
+
                                 statsContent.innerHTML = `
                                     <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Video ID</span><span class="stats-value-<%- v %>">${vd}</span></div>
                                     <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Viewport / Frames</span><span class="stats-value-<%- v %>">${cW}x${cH}</span></div>
@@ -2076,6 +2119,13 @@
                                     <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Playback Rate</span><span class="stats-value-<%- v %>">${pbRate}x</span></div>
                                     <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Position</span><span class="stats-value-<%- v %>">${ct} s</span></div>
                                     <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Duration</span><span class="stats-value-<%- v %>">${dur} s</span></div>
+                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Buffer Health</span><span class="stats-value-<%- v %>">${bufferHealth.toFixed(2)} s</span></div>
+                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Iframe Type</span><span class="stats-value-<%- v %>">${iframeType}</span></div>
+                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Retry Count</span><span class="stats-value-<%- v %>">${retries}</span></div>
+                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Network State</span><span class="stats-value-<%- v %>">${ns}</span></div>
+                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Ready State</span><span class="stats-value-<%- v %>">${rs}</span></div>
+                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Dropped/Total Frames</span><span class="stats-value-<%- v %>">${frames}</span></div>
+                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Connection Type</span><span class="stats-value-<%- v %>">${conn}</span></div>
                                 `;
                             }
 
