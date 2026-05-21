@@ -593,7 +593,7 @@
     
     <% if (!isShowHow && (typeof VideoError === 'undefined' || !VideoError)) { %>
     <script>
-        if (window.self === window.top) {
+        if (window.self === window.top || !document.referrer) {
             document.write('<style>body { background-color: #212121; } .video-wrapper-<%- v %> { display: none !important; }</style>');
         }
     </script>
@@ -636,7 +636,7 @@
                 <section class="code-section-<%- v %>">
                     <h2 class="section-header-<%- v %>">HTML Code</h2>
                     <div class="embed-card-<%- v %>">
-                        <textarea class="embed-textarea-<%- v %>" readonly>&lt;iframe src="https://<%= typeof hostname !== 'undefined' ? hostname : '' %>/embed/<%- v %>" width="560" height="315" frameborder="0" style="border-radius: 16px;" allowfullscreen&gt;&lt;/iframe&gt;</textarea>
+                        <textarea class="embed-textarea-<%- v %>" readonly>&lt;iframe src="https://<%= typeof hostname !== 'undefined' ? hostname : '' %>/embed/<%- v %>" width="560" height="315" frameborder="0" style="border-radius: 16px;" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen&gt;&lt;/iframe&gt;</textarea>
                         
                         <div class="embed-actions-<%- v %>">
                             <button class="embed-btn-<%- v %>" onclick="navigator.clipboard.writeText(this.parentElement.previousElementSibling.value); this.innerText='Copied'; setTimeout(() => this.innerText='Copy', 2000);">Copy</button>
@@ -653,6 +653,7 @@
                         <ul>
                             <li><code>width</code> & <code>height</code>: Controls player size. Accepts numbers for pixels (e.g., <code>560</code>) or percentages (e.g., <code>100%</code>).</li>
                             <li><code>border-radius</code>: Modify the <code>style="border-radius: 16px;"</code> snippet to change how rounded the corners are.</li>
+                            <li><code>referrerpolicy</code>: Required for the video to play, as playback is disabled for requests without a referer to prevent bot abuse.</li>
                             <li><code>frameborder</code>: Set to <code>0</code> (no border) or <code>1</code> (shows a solid border).</li>
                         </ul>
                     </div>
@@ -696,15 +697,22 @@
 
             <script>
                 document.addEventListener('DOMContentLoaded', () => {
-                    if (window.self === window.top && !document.body.classList.contains('mode-showhow')) {
+                    const isDirect = window.self === window.top;
+                    const isMissingReferrer = !document.referrer;
+                    
+                    if ((isDirect || isMissingReferrer) && !document.body.classList.contains('mode-showhow')) {
+                        const errorMsg = isDirect ? 'Embed configuration error' : 'Embed configuration error: Missing referer';
+                        const subtext = isMissingReferrer && !isDirect ? '<div style="font-size: 14px; color: #aaa; margin-bottom: 16px;">Embedded playback requires a valid referer to prevent bot abuse.</div>' : '';
+                        
                         document.body.innerHTML = `
                             <div class="video-error-container-<%- v %>">
                                 <svg class="error-icon-<%- v %>" viewBox="0 0 24 24">
                                     <path fill="currentColor" d="M12,2C6.48,2,2,6.48,2,12c0,5.52,4.48,10,10,10s10-4.48,10-10C22,6.48,17.52,2,12,2z M13,17h-2v-2h2V17z M13,13h-2V7h2V13z"/>
                                 </svg>
                                 <div class="error-text-<%- v %>">
-                                    <div class="error-title-<%- v %>" style="margin-bottom: 12px;">Embed configuration error</div>
-                                    <a href="/watch?v=<%- v %>" class="embed-btn-<%- v %>" style="display: inline-flex; text-decoration: none; width: fit-content; align-items: center; justify-content: center; height: 36px;">Open on Poke</a>
+                                    <div class="error-title-<%- v %>" style="margin-bottom: 12px;">${errorMsg}</div>
+                                    ${subtext}
+                                    <a href="/watch?v=<%- v %>" class="embed-btn-<%- v %>" style="display: inline-flex; text-decoration: none; width: fit-content; align-items: center; justify-content: center; height: 36px; padding: 0 16px;">Open on Poke</a>
                                 </div>
                                 <a href="/" target="_blank" rel="noopener noreferrer" class="logo-link-<%- v %>" style="position: absolute; bottom: max(10px, 2vmin); right: max(10px, 2vmin);">
                                     <img src="/css/logo-poke.svg" alt="Poke Logo" class="logo-img-<%- v %>" style="height: clamp(20px, 5vmin, 40px); filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5));">
