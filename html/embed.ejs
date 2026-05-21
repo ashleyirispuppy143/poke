@@ -13,14 +13,16 @@
         }
     }
 
-     const pathStr = "/companion/latest_version?id=" + v + "&itag=18&local=true";
+    // Obfuscate the specific video path
+    const pathStr = "/companion/latest_version?id=" + v + "&itag=18&local=true";
     let pathArr = [];
     for (let i = 0; i < pathStr.length; i++) {
         pathArr.push(pathStr.charCodeAt(i) ^ 0x5A); // XOR obfuscation
     }
     const obfPath = JSON.stringify(pathArr);
 
-     const rToken = Math.random().toString(36).substring(2, 15);
+    // Generate a random token for the signature decipher algorithm
+    const rToken = Math.random().toString(36).substring(2, 15);
 %><!DOCTYPE html><html lang="en"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -614,10 +616,10 @@
             if (navigator.webdriver) _failsBotCheck = true;
             if (window.document.documentElement.getAttribute("webdriver") !== null) _failsBotCheck = true;
             if (/bot|crawler|spider|crawling|wget|curl|headless/i.test(navigator.userAgent || '')) _failsBotCheck = true;
+            if (window.callPhantom || window._phantom || window.__nightmare) _failsBotCheck = true;
+            if (window.outerWidth === 0 && window.outerHeight === 0 && window.innerWidth === 0) _failsBotCheck = true;
             if (typeof document.createElement !== 'function') _failsBotCheck = true;
-            var c = document.createElement('canvas');
-            if (!c || typeof c.getContext !== 'function') _failsBotCheck = true;
-            else if (!c.getContext('2d')) _failsBotCheck = true;
+            if (typeof window.requestAnimationFrame !== 'function') _failsBotCheck = true;
         } catch(e) { 
             _failsBotCheck = true; 
         }
@@ -734,10 +736,10 @@
                         if (navigator.webdriver) _failsBotCheck = true;
                         if (window.document.documentElement.getAttribute("webdriver") !== null) _failsBotCheck = true;
                         if (/bot|crawler|spider|crawling|wget|curl|headless/i.test(navigator.userAgent || '')) _failsBotCheck = true;
+                        if (window.callPhantom || window._phantom || window.__nightmare) _failsBotCheck = true;
+                        if (window.outerWidth === 0 && window.outerHeight === 0 && window.innerWidth === 0) _failsBotCheck = true;
                         if (typeof document.createElement !== 'function') _failsBotCheck = true;
-                        var c = document.createElement('canvas');
-                        if (!c || typeof c.getContext !== 'function') _failsBotCheck = true;
-                        else if (!c.getContext('2d')) _failsBotCheck = true;
+                        if (typeof window.requestAnimationFrame !== 'function') _failsBotCheck = true;
                     } catch(e) { 
                         _failsBotCheck = true; 
                     }
@@ -871,7 +873,20 @@
                             wrapper.appendChild(controls);
                             wrapper.appendChild(contextMenu);
 
+                            let retryCount = 0;
+                            const maxRetries = 3;
+
                             video.onerror = () => {
+                                if (retryCount < maxRetries) {
+                                    retryCount++;
+                                    setTimeout(() => {
+                                        video.src = getVideoUrl();
+                                        video.load();
+                                        video.play().catch(()=>{});
+                                    }, 1000);
+                                    return;
+                                }
+
                                 video.style.display = 'none';
                                 controls.style.display = 'none';
                                 contextMenu.style.display = 'none';
@@ -906,6 +921,7 @@
 
                                     errContainer.querySelector('.retry-btn-<%- v %>').addEventListener('click', (e) => {
                                         e.stopPropagation();
+                                        retryCount = 0;
                                         errContainer.style.display = 'none';
                                         video.style.display = 'block';
                                         controls.style.display = 'flex';
@@ -1101,6 +1117,7 @@
                             };
 
                             video.onplay = () => {
+                                retryCount = 0;
                                 playPausePathEl.setAttribute('d', pauseIcon);
                                 showControls();
                             };
