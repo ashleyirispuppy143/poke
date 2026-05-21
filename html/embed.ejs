@@ -326,20 +326,22 @@
             position: absolute;
             top: 46px;
             right: 0;
-            width: 132px;
-            height: 36px;
-            padding: 0 12px;
+            width: 40px;
+            height: 110px;
+            padding: 0;
             box-sizing: border-box;
             display: flex;
             align-items: center;
+            justify-content: center;
             background: rgba(15, 15, 15, 0.84);
             border: 1px solid rgba(255, 255, 255, 0.12);
-            border-radius: 999px;
+            border-radius: 20px;
             box-shadow: 0 8px 24px rgba(0,0,0,0.42);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
             opacity: 0;
             transform: translateY(-5px) scale(0.96);
+            transform-origin: top center;
             pointer-events: none;
             transition: opacity 0.14s ease, transform 0.14s ease;
         }
@@ -353,7 +355,7 @@
         }
 
         .volume-slider-<%- v %> {
-            width: 100%;
+            width: 80px;
             height: 4px;
             -webkit-appearance: none;
             appearance: none;
@@ -362,6 +364,8 @@
             outline: none;
             cursor: pointer;
             touch-action: none;
+            transform: rotate(-90deg);
+            margin: 0;
         }
 
         .volume-slider-<%- v %>::-webkit-slider-thumb {
@@ -731,6 +735,152 @@
             grid-template-columns: 32px minmax(0, 1fr) 18px;
         }
 
+        /* Modal Overlay specifically for Speed UI */
+        .speed-modal-overlay-<%- v %> {
+            position: absolute;
+            inset: 0;
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.4);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+        
+        .speed-modal-overlay-<%- v %>.is-open-<%- v %> {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        
+        .speed-modal-<%- v %> {
+            background: #ffffff;
+            border-radius: 24px;
+            padding: 32px 24px;
+            width: min(340px, calc(100% - 32px));
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 24px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            transform: scale(0.95) translateY(10px);
+            transition: transform 0.2s ease;
+            font-family: "PokeTube Flex", Arial, sans-serif;
+            pointer-events: auto;
+        }
+        
+        .speed-modal-overlay-<%- v %>.is-open-<%- v %> .speed-modal-<%- v %> {
+            transform: scale(1) translateY(0);
+        }
+        
+        .speed-title-<%- v %> {
+            font-size: 28px;
+            font-weight: 700;
+            color: #000;
+            margin-bottom: 8px;
+        }
+        
+        .speed-slider-row-<%- v %> {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            width: 100%;
+        }
+        
+        .speed-btn-<%- v %> {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #f0f0f0;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: #000;
+            flex-shrink: 0;
+            transition: background-color 0.1s;
+        }
+        
+        .speed-btn-<%- v %>:hover {
+            background: #e0e0e0;
+        }
+        
+        .speed-btn-<%- v %> svg {
+            width: 16px;
+            height: 16px;
+        }
+        
+        .speed-slider-<%- v %> {
+            flex-grow: 1;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 4px;
+            background: linear-gradient(to right, #000 50%, #d3d3d3 50%);
+            border-radius: 2px;
+            outline: none;
+            cursor: pointer;
+        }
+        
+        .speed-slider-<%- v %>::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #000;
+            cursor: pointer;
+        }
+        
+        .speed-slider-<%- v %>::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border: 0;
+            border-radius: 50%;
+            background: #000;
+            cursor: pointer;
+        }
+        
+        .speed-pills-<%- v %> {
+            display: flex;
+            gap: 6px;
+            justify-content: center;
+            width: 100%;
+            margin-top: 12px;
+        }
+        
+        .speed-pill-group-<%- v %> {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .speed-pill-<%- v %> {
+            background: #f0f0f0;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 16px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #000;
+            cursor: pointer;
+            font-family: "PokeTube Flex", Arial, sans-serif;
+            transition: background-color 0.1s;
+        }
+        
+        .speed-pill-<%- v %>:hover {
+            background: #e0e0e0;
+        }
+        
+        .speed-pill-label-<%- v %> {
+            font-size: 12px;
+            font-weight: 600;
+            color: #000;
+            font-family: "PokeTube Flex", Arial, sans-serif;
+        }
+
         .retry-overlay-<%- v %> {
             position: absolute;
             inset: 0;
@@ -813,6 +963,10 @@
 
             .bottom-area-<%- v %> {
                 padding: 0 12px 12px 12px;
+            }
+            
+            .speed-pills-<%- v %> {
+                flex-wrap: wrap;
             }
         }
 
@@ -1192,8 +1346,10 @@
                     const fullscreenIcon = 'M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z';
                     const speedIcon = 'M10 8v8l6-4-6-4zm2-6C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z';
                     const loopIcon = 'M7 7h11v3l4-4-4-4v3H5v6h2V7zm10 10H6v-3l-4 4 4 4v-3h13v-6h-2v4z';
+                    const qualityIcon = 'M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z';
                     const moreIcon = 'M14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7zM5 5h7V3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7H5V5z';
                     const chevronIcon = 'M8.59 16.59 13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z';
+                    const lockIcon = 'M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6zm9 14H6V10h12v10zm-6-3c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z';
 
                     function getVideoUrl(retryNonce) {
                         const _enc = '<%= encodedVidUrl %>';
@@ -1280,8 +1436,15 @@
                                         </svg>
                                     </button>
                                 </div>
+                                
                                 <div class="settings-panel-<%- v %>" aria-hidden="true">
                                     <div class="settings-grabber-<%- v %>"></div>
+                                    <div class="settings-row-<%- v %> quality-row-<%- v %>" style="cursor: default;">
+                                        <span class="settings-icon-<%- v %>"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${qualityIcon}"/></svg></span>
+                                        <span class="settings-label-<%- v %>">Quality</span>
+                                        <span class="settings-value-<%- v %>">360p</span>
+                                        <span class="settings-chevron-<%- v %>" title="Locked to 360p"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="width: 16px; height: 16px;"><path d="${lockIcon}"/></svg></span>
+                                    </div>
                                     <button class="settings-row-<%- v %> speed-row-<%- v %>" type="button">
                                         <span class="settings-icon-<%- v %>"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${speedIcon}"/></svg></span>
                                         <span class="settings-label-<%- v %>">Speed</span>
@@ -1299,6 +1462,29 @@
                                         <span class="settings-label-<%- v %>">Watch on Poke</span>
                                         <span class="settings-chevron-<%- v %>"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${chevronIcon}"/></svg></span>
                                     </a>
+                                </div>
+                                
+                                <div class="speed-modal-overlay-<%- v %>">
+                                    <div class="speed-modal-<%- v %>">
+                                        <div class="speed-title-<%- v %>">1.00x</div>
+                                        <div class="speed-slider-row-<%- v %>">
+                                            <button class="speed-btn-<%- v %> speed-minus-<%- v %>">
+                                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13H5v-2h14v2z"/></svg>
+                                            </button>
+                                            <input type="range" class="speed-slider-<%- v %>" min="0.25" max="2" step="0.05" value="1">
+                                            <button class="speed-btn-<%- v %> speed-plus-<%- v %>">
+                                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                                            </button>
+                                        </div>
+                                        <div class="speed-pills-<%- v %>">
+                                            <div class="speed-pill-group-<%- v %>"><button class="speed-pill-<%- v %>" data-val="0.5">0.5x</button></div>
+                                            <div class="speed-pill-group-<%- v %>"><button class="speed-pill-<%- v %>" data-val="1">1x</button><span class="speed-pill-label-<%- v %>">Normal</span></div>
+                                            <div class="speed-pill-group-<%- v %>"><button class="speed-pill-<%- v %>" data-val="1.25">1.25x</button></div>
+                                            <div class="speed-pill-group-<%- v %>"><button class="speed-pill-<%- v %>" data-val="1.5">1.5x</button></div>
+                                            <div class="speed-pill-group-<%- v %>"><button class="speed-pill-<%- v %>" data-val="1.75">1.75x</button></div>
+                                            <div class="speed-pill-group-<%- v %>"><button class="speed-pill-<%- v %>" data-val="2">2x</button></div>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <div class="center-play-overlay-<%- v %> play-pause-btn-<%- v %>" title="Play/Pause" role="button" aria-label="Play or pause" tabindex="0">
@@ -1374,6 +1560,14 @@
                             const loopRow = controls.querySelector('.loop-row-<%- v %>');
                             const loopValue = controls.querySelector('.loop-value-<%- v %>');
                             
+                            const speedModalOverlay = controls.querySelector('.speed-modal-overlay-<%- v %>');
+                            const speedModal = controls.querySelector('.speed-modal-<%- v %>');
+                            const speedTitle = controls.querySelector('.speed-title-<%- v %>');
+                            const speedSliderModal = controls.querySelector('.speed-slider-<%- v %>');
+                            const speedMinus = controls.querySelector('.speed-minus-<%- v %>');
+                            const speedPlus = controls.querySelector('.speed-plus-<%- v %>');
+                            const speedPills = controls.querySelectorAll('.speed-pill-<%- v %>');
+                            
                             const linkBtn = controls.querySelector('.link-btn-<%- v %>');
                             if (linkBtn) {
                                 linkBtn.addEventListener('click', (event) => {
@@ -1393,7 +1587,7 @@
                             if (moreVideosBtn) {
                                 moreVideosBtn.addEventListener('click', (event) => {
                                     event.stopPropagation();
-                                    window.open('/', '_blank');
+                                    window.open('/home', '_blank');
                                 });
                             }
 
@@ -1406,8 +1600,6 @@
                             let retryCount = 0;
                             let retryTimer = null;
                             const maxRetries = 3;
-                            const speeds = [0.25, 0.5, 1, 1.25, 1.5, 2];
-                            let speedIdx = 2;
                             let lastWidth = '';
                             let lastText = '';
                             let isRafPending = false;
@@ -1428,7 +1620,8 @@
 
                             function setSliderBackground(value) {
                                 const pct = Math.max(0, Math.min(1, value)) * 100;
-                                volumeSlider.style.background = `linear-gradient(to right, #fff ${pct}%, rgba(255, 255, 255, 0.3) ${pct}%)`;
+                                // Slider is rotated -90deg, so "to right" fills from bottom to top
+                                volumeSlider.style.background = `linear-gradient(to right, #fff ${pct}%, rgba(255, 255, 255, 0.32) ${pct}%)`;
                             }
 
                             function updateVolumeUI() {
@@ -1456,6 +1649,26 @@
 
                             function closeSettings() {
                                 setSettingsOpen(false);
+                            }
+
+                            function openSpeedModal() {
+                                speedModalOverlay.classList.add('is-open-<%- v %>');
+                            }
+
+                            function closeSpeedModal() {
+                                speedModalOverlay.classList.remove('is-open-<%- v %>');
+                            }
+
+                            function updateSpeedUI(val) {
+                                val = Math.max(0.25, Math.min(2.0, val));
+                                video.playbackRate = val;
+                                speedTitle.innerText = val.toFixed(2) + 'x';
+                                speedSliderModal.value = val;
+                                
+                                const pct = ((val - 0.25) / (2.0 - 0.25)) * 100;
+                                speedSliderModal.style.background = `linear-gradient(to right, #000 ${pct}%, #d3d3d3 ${pct}%)`;
+                                
+                                speedValue.innerText = val === 1 ? 'Normal' : val + 'x';
                             }
 
                             function showRetryOverlay() {
@@ -1595,7 +1808,7 @@
                                 wrapper.style.cursor = 'default';
                                 clearTimeout(hideTimeout);
                                 hideTimeout = setTimeout(() => {
-                                    if (!video.paused && !settingsPanel.classList.contains('is-open-<%- v %>') && !volGroup.classList.contains('is-volume-open-<%- v %>')) {
+                                    if (!video.paused && !settingsPanel.classList.contains('is-open-<%- v %>') && !volGroup.classList.contains('is-volume-open-<%- v %>') && !speedModalOverlay.classList.contains('is-open-<%- v %>')) {
                                         controls.style.opacity = '0';
                                         wrapper.style.cursor = 'none';
                                     }
@@ -1711,10 +1924,22 @@
 
                             speedRow.addEventListener('click', (event) => {
                                 event.stopPropagation();
-                                speedIdx = (speedIdx + 1) % speeds.length;
-                                video.playbackRate = speeds[speedIdx];
-                                speedValue.innerText = speeds[speedIdx] === 1 ? 'Normal' : speeds[speedIdx] + 'x';
-                                showControls();
+                                closeSettings();
+                                openSpeedModal();
+                            });
+
+                            speedModalOverlay.addEventListener('click', (event) => {
+                                event.stopPropagation();
+                                closeSpeedModal();
+                            });
+                            speedModal.addEventListener('click', (event) => event.stopPropagation());
+
+                            speedMinus.addEventListener('click', () => updateSpeedUI(video.playbackRate - 0.05));
+                            speedPlus.addEventListener('click', () => updateSpeedUI(video.playbackRate + 0.05));
+                            speedSliderModal.addEventListener('input', e => updateSpeedUI(parseFloat(e.target.value)));
+                            
+                            speedPills.forEach(pill => {
+                                pill.addEventListener('click', () => updateSpeedUI(parseFloat(pill.dataset.val)));
                             });
 
                             loopRow.addEventListener('click', (event) => {
@@ -1726,6 +1951,7 @@
 
                             video.addEventListener('click', () => {
                                 closeSettings();
+                                closeSpeedModal();
                                 setVolumeOpen(false);
                                 togglePlay();
                             });
@@ -1735,6 +1961,7 @@
                             document.addEventListener('click', (event) => {
                                 if (!controls.contains(event.target)) {
                                     closeSettings();
+                                    closeSpeedModal();
                                     setVolumeOpen(false);
                                 }
                             });
@@ -1776,12 +2003,13 @@
                                 }
                             });
                             wrapper.addEventListener('mouseleave', () => {
-                                if (!video.paused && !settingsPanel.classList.contains('is-open-<%- v %>') && !volGroup.classList.contains('is-volume-open-<%- v %>')) {
+                                if (!video.paused && !settingsPanel.classList.contains('is-open-<%- v %>') && !volGroup.classList.contains('is-volume-open-<%- v %>') && !speedModalOverlay.classList.contains('is-open-<%- v %>')) {
                                     controls.style.opacity = '0';
                                 }
                             });
 
                             updateVolumeUI();
+                            updateSpeedUI(1);
                             video.play().catch(() => {});
                         });
                     }
