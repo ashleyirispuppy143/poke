@@ -204,17 +204,32 @@ module.exports = function (app, config, renderTemplate) {
     });
   });
   
-app.get("/embed/:v", function (req, res) {
+app.get("/embed/:v", async function (req, res) {
   const v = req.params.v;
   const hostname = req.hostname;
+  const showHow = req.query["show-how"];
 
   if (!/^[a-zA-Z0-9_-]{11}$/.test(v)) {
     return res.status(400).send("Invalid video ID");
   }
 
+  let engagement = null;
+
+  try {
+    const engagementResponse = await fetch(`https://ryd-proxy.kavin.rocks/votes/${v}`);
+
+    if (engagementResponse.ok) {
+      engagement = await engagementResponse.json();
+    }
+  } catch (error) {
+    engagement = null;
+  }
+
   renderTemplate(res, req, "embed.ejs", {
     v,
     hostname,
+    engagement,
+    showHow,
   });
 });
 
