@@ -25,7 +25,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 //////////////// THE PLAYER, START ////////////////////////
-try {
+ try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -242,6 +242,23 @@ document.addEventListener("DOMContentLoaded", () => {
       return p;
     } catch { }
     return null;
+  }
+  function safePauseElement(el) {
+    if (!el || typeof el.pause !== "function") return false;
+    try {
+      el.pause();
+      return true;
+    } catch { }
+    return false;
+  }
+  function safePauseVideoPlayer() {
+    try {
+      if (video && typeof video.pause === "function") {
+        video.pause();
+        return true;
+      }
+    } catch { }
+    return false;
   }
   let _frameCountCache = { v: NaN, node: null, at: 0 };
   function getVideoPresentedFrameCount(vNode = null) {
@@ -2783,7 +2800,10 @@ startupPrimeStartedAt: performance.now(),
       _installed = true;
       _origPause = audio.pause.bind(audio);
       audio.pause = function () {
-        if (!_shouldDrop()) return _origPause();
+        if (!_shouldDrop()) {
+          if (typeof _origPause === "function") return _origPause();
+          return undefined;
+        }
         _droppedCount++;
         _lastDropAt = now();
         const _immediateResume = () => {
@@ -7079,8 +7099,9 @@ function engagePauseIntercept() {
   if (_pauseInterceptActive) return;
   _pauseInterceptActive = true;
   const vn = getVideoNode();
-  if (vn) {
-    _origVideoPause = vn.pause.bind(vn);
+  if (vn && typeof vn.pause === "function") {
+    const origVideoPause = vn.pause.bind(vn);
+    _origVideoPause = origVideoPause;
     vn.pause = function () {
       if (_isUserDrivenPause() ||
         state.isProgrammaticVideoPause ||
@@ -7089,12 +7110,13 @@ function engagePauseIntercept() {
         mediaSessionForcedPauseActive() ||
         mediaActionRecently("pause", 3000)) {
         try { disengagePauseIntercept(); } catch { }
-        return _origVideoPause();
+        return origVideoPause();
         }
     };
   }
   if (video && typeof video.pause === 'function' && !_origVjsPause) {
-    _origVjsPause = video.pause.bind(video);
+    const origVjsPause = video.pause.bind(video);
+    _origVjsPause = origVjsPause;
     video.pause = function () {
       if (_isUserDrivenPause() ||
         state.isProgrammaticVideoPause ||
@@ -7103,12 +7125,13 @@ function engagePauseIntercept() {
         mediaSessionForcedPauseActive() ||
         mediaActionRecently("pause", 3000)) {
         try { disengagePauseIntercept(); } catch { }
-        return _origVjsPause();
+        return origVjsPause();
         }
     };
   }
-  if (coupledMode && audio) {
-    _origAudioPause = audio.pause.bind(audio);
+  if (coupledMode && audio && typeof audio.pause === "function") {
+    const origAudioPause = audio.pause.bind(audio);
+    _origAudioPause = origAudioPause;
     audio.pause = function () {
       if (_isUserDrivenPause() ||
         (state.isProgrammaticAudioPause && !shouldKeepHiddenAudioAlive()) ||
@@ -7117,7 +7140,7 @@ function engagePauseIntercept() {
         mediaSessionForcedPauseActive() ||
         mediaActionRecently("pause", 3000) ||
         state.seeking || state.seekBuffering) {
-        return _origAudioPause();
+        return origAudioPause();
         }
         if (document.visibilityState === "hidden" && hiddenAudioPauseShieldActive()) {
           try { markHiddenAudioPauseDetected("audio-pause-intercept"); } catch { }
@@ -11924,15 +11947,15 @@ function execProgrammaticVideoPause() {
   if ((isTabReturnImmune() || NotMakePlayBackFixingNoticable.shouldBlockPause()) && state.intendedPlaying &&
     !(state.userPauseIntentPresetAt > 0 && (now() - state.userPauseIntentPresetAt) < 2000)) return;
   state.isProgrammaticVideoPause = true;
-  try { video.pause(); } catch { }
-  try { videoEl.pause(); } catch { }
+  safePauseVideoPlayer();
+  safePauseElement(videoEl);
   try {
     const v = getVideoNode();
-    if (v && v !== videoEl && !v.paused) v.pause();
+    if (v && v !== videoEl && !v.paused) safePauseElement(v);
   } catch { }
   try {
     const inner = video?.el?.()?.querySelector?.("video");
-    if (inner && !inner.paused) inner.pause();
+    if (inner && !inner.paused) safePauseElement(inner);
   } catch { }
   const releaseMs = directUserToggleActive() ? USER_PROGRAMMATIC_FLAG_CLEAR_MS : 250;
   setTimeout(() => { state.isProgrammaticVideoPause = false; }, releaseMs);
@@ -12065,14 +12088,14 @@ async function execProgrammaticAudioPause(ms = 500) {
   if (userImmediate) {
     cancelActiveFade();
     try { audio.volume = 0; } catch { }
-    try { audio.pause(); } catch { }
+    safePauseElement(audio);
   } else if (!audio.paused && audio.volume > 0.015) {
     await doVolumeFade(0, AUDIO_FADE_DURATION_MS);
     cancelActiveFade();
-    try { audio.pause(); } catch { }
+    safePauseElement(audio);
   } else {
     cancelActiveFade();
-    try { audio.pause(); } catch { }
+    safePauseElement(audio);
   }
   setTimeout(() => { state.isProgrammaticAudioPause = false; }, userImmediate ? USER_PROGRAMMATIC_FLAG_CLEAR_MS : 200);
 }
@@ -14548,15 +14571,15 @@ function pauseHard() {
   try { MakeSureAudioOrVideoDoesntPauseUnlessUserReallyWantsTo.stop(); } catch { }
   try { NuclearFreezeWatchdog.stop(); } catch { }
   state.isProgrammaticVideoPause = true;
-  try { video.pause(); } catch { }
-  try { videoEl.pause(); } catch { }
+  safePauseVideoPlayer();
+  safePauseElement(videoEl);
   try {
     const v = getVideoNode();
-    if (v && v !== videoEl && !v.paused) v.pause();
+    if (v && v !== videoEl && !v.paused) safePauseElement(v);
   } catch { }
   try {
     const inner = video?.el?.()?.querySelector?.("video");
-    if (inner && !inner.paused) inner.pause();
+    if (inner && !inner.paused) safePauseElement(inner);
   } catch { }
   setTimeout(() => { state.isProgrammaticVideoPause = false; }, flagReleaseMs);
   if (coupledMode && audio) {
@@ -14567,7 +14590,7 @@ function pauseHard() {
     if (immediateUserPause) {
       cancelActiveFade();
       try { audio.volume = 0; } catch { }
-      try { audio.pause(); } catch { }
+      safePauseElement(audio);
       setTimeout(() => {
         state.isProgrammaticAudioPause = false;
       }, USER_PROGRAMMATIC_FLAG_CLEAR_MS);
@@ -14582,11 +14605,11 @@ function pauseHard() {
       });
     } else {
       cancelActiveFade();
-      try { audio.pause(); } catch { }
+      safePauseElement(audio);
       setTimeout(() => { state.isProgrammaticAudioPause = false; }, 150);
     }
   } else if (!coupledMode && audio && !audio.paused) {
-    try { audio.muted = true; audio.volume = 0; audio.pause(); } catch { }
+    try { audio.muted = true; audio.volume = 0; safePauseElement(audio); } catch { }
   }
   clearSyncLoop();
   if (!state.intendedPlaying) queueHardPauseVerification();
@@ -18553,7 +18576,7 @@ const PlayerErrorOverlay = (() => {
     <div class="pe-overlay-title"></div>
     <div class="pe-overlay-msg"></div>
     <div class="pe-overlay-code"></div>
-    <button type="button" class="pe-overlay-stack-link">Show stack trace</button>
+    <button type="button" class="pe-overlay-stack-link">Show crash details</button>
     <div class="pe-overlay-actions">
     <button type="button" class="pe-overlay-btn" style="display:none">Reload</button>
     <a class="pe-overlay-btn-outline" style="display:none" target="_blank" rel="noopener noreferrer">Report Issue</a>
@@ -18594,7 +18617,7 @@ const PlayerErrorOverlay = (() => {
     _stackPopup.innerHTML = `
     <div class="pe-stack-popup">
     <div class="pe-stack-popup-title">
-    <span>Stack Trace</span>
+    <span>Crash Details</span>
     <span style="display:flex;align-items:center;gap:4px">
     <button type="button" class="pe-stack-popup-copy">Copy</button>
     <button type="button" class="pe-stack-popup-close">&times;</button>
@@ -18658,7 +18681,7 @@ const PlayerErrorOverlay = (() => {
     if (stackTrace && _stackPopup) {
       _stackPopup.querySelector(".pe-overlay-stack").textContent = stackTrace;
       stackLink.style.display = "";
-      stackLink.textContent = "Show stack trace";
+      stackLink.textContent = "Show crash details";
       _stackPopup.classList.remove("pe-stack-popup-open");
     } else {
       stackLink.style.display = "none";
@@ -18727,15 +18750,15 @@ function forcePausePlaybackForErrorOverlay(reason = "error-overlay") {
   state.isProgrammaticAudioPause = true;
   state._allowVideoPause = true;
   state._allowAudioPause = true;
-  try { if (video && typeof video.pause === "function") video.pause(); } catch { }
+  safePauseVideoPlayer();
   try {
     const vn = getVideoNode();
-    if (vn && typeof vn.pause === "function" && !vn.paused) vn.pause();
+    if (vn && !vn.paused) safePauseElement(vn);
   } catch { }
-  try { if (videoEl && typeof videoEl.pause === "function" && !videoEl.paused) videoEl.pause(); } catch { }
+  try { if (videoEl && !videoEl.paused) safePauseElement(videoEl); } catch { }
   try {
     const inner = video?.el?.()?.querySelector?.("video");
-    if (inner && inner !== videoEl && typeof inner.pause === "function" && !inner.paused) inner.pause();
+    if (inner && inner !== videoEl && !inner.paused) safePauseElement(inner);
   } catch { }
   if (audio) {
     try { squelchAudioEvents(1200); } catch { }
@@ -18746,9 +18769,9 @@ function forcePausePlaybackForErrorOverlay(reason = "error-overlay") {
       ? DONTLETBROWSERPAUSEUS.getOriginalPause()
       : null;
       if (typeof origPause === "function") origPause();
-      else if (typeof audio.pause === "function") audio.pause();
+      else safePauseElement(audio);
     } catch {
-      try { if (typeof audio.pause === "function") audio.pause(); } catch { }
+      safePauseElement(audio);
     }
   }
   setTimeout(() => {
@@ -18860,6 +18883,164 @@ const ERROR_IDS = {
   "player-9": "PLR_CODEC_MISSING",
   "player-10": "PLR_OOPS"
 };
+const WITTY_COMMENTS = [
+  "Have you tried reinstalling the universe?",
+  "This is fine. Everything is fine.",
+  "The codec took the day off.",
+  "The audio was simply too powerful.",
+  "Error 404: Good vibes not found.",
+  "It's not a bug, it's a surprise feature.",
+  "The bits are revolting!",
+  "Something went wrong. Probably.",
+  "Works on my machine ¯\\_(ツ)_/¯",
+  "Oh - I know what I did wrong! Everything's going to plan.",
+  "No, really, that was supposed to happen.",
+  "I just don't know what went wrong :(",
+  "Don't be sad. I'll do better next time, I promise!",
+  "But it works on my machine.",
+  "On the bright side, I bought you a teddy bear!",
+                          "The playback timeline briefly lost the plot.",
+                          "Have you tried turning it off and on again?",
+                          "The video element chose violence today.",
+                          "Skill issue (from the browser).",
+                          "The codec said 'no thank you' and left.",
+                          "I'm in your walls (and your error logs).",
+                          "Bazinga! Just kidding, this is real.",
+                          "Rare crash card pulled. Please sleeve it carefully.",
+                          "Edge case discovered. Edge case was not polite.",
+                          "The video was not the imposter. It was ejected anyway.",
+                          "Don't worry, the error is more scared of you than you are of it.",
+                          "The player tripped over its own feet.",
+                          "The media pipeline left the chat.",
+                          "L + ratio + no playback.",
+                          "Bro really said 'MEDIA_ERR' unironically.",
+                          "Certified bruh moment.",
+                          "The timeline got folded into a paper airplane.",
+                          "The decoder blinked at exactly the wrong frame.",
+                          "This is why we can't have nice things.",
+                          "Someone call an ambulance... but not for me!",
+                          "Playback took an unscheduled scenic route.",
+                          "The browser handed us a mystery box and walked away.",
+                          "Plot twist: the real error was the friends we made along the way.",
+                          "No thoughts, just errors.",
+                          "We do a little crashing.",
+                          "The media pipeline went on a coffee break.",
+                          "The video said: 'I'm tired, boss.'",
+                          "Looks like the decoder had a bad day at work.",
+                          "Unexpected token: disappointment.",
+                          "Error: confidence exceeded evidence.",
+                          "It passed code review, then failed the vibe check.",
+                          "Null checked the null check. It was null.",
+                          "The async function forgot to await its character development.",
+                          "Undefined walked in like it owned the scope.",
+                          "The player tried to stay HUMBLE. and tripped over a buffer.",
+                          "The decoder went full Yeezus and redesigned reality mid-frame.",
+                          "Dema found the playback loop and the Banditos opened a bug report.",
+                          "The off-by-one error arrived exactly one crash early.",
+                          "A semicolon went missing and took playback with it.",
+                          "The promise resolved to 'please reload'.",
+                          "Somewhere, a boolean chose chaos over true or false.",
+                          "good kid, bad codec, mad browser.",
+                          "DAMN., the decoder really picked today.",
+                          "Mr. Morale asked the media engine to heal itself.",
+                          "Kung Fu Kenny kicked the stack trace, but it kicked back.",
+                          "My Beautiful Dark Twisted Stack Trace just dropped.",
+                          "808s and Heartbreak, but the 808 is a media error.",
+                          "The Life of Playback changed its tracklist mid-frame.",
+                          "Yeezus took the render path into production without tests.",
+                          "A bishop marked this frame as forbidden.",
+                          "The Banditos escaped, but the buffer stayed in Dema.",
+                          "Clancy wrote 'retry later' in the error log.",
+                          "Vialism lost the playback thread again.",
+                          "The timeline opened a side quest and forgot the main thread.",
+                          "The browser saw one frame too many and filed a complaint.",
+                          "Playback made eye contact with the edge case and blinked first.",
+                          "The stack trace brought receipts and none of them were comforting.",
+                          "Un Verano Sin Ti, but the summer left with the buffer.",
+                          "YHLQMDLG, and apparently the media element did too.",
+                          "El Ultimo Tour Del Mundo ended at a stack trace.",
+                          "Nadie Sabe Lo Que Va A Pasar Manana, especially this renderer.",
+                          "Debi Tirar Mas Fotos, but the GPU threw away the frame.",
+                          "DAKITI found the beat; playback lost the timestamp.",
+                          "Safaera had five beat switches; this crash only needed one.",
+                          "Titi Me Pregunto why the player paused; I had no answer.",
+                          "Gangnam Style loaded faster than this frame did.",
+                          "Gentleman behavior would have been handling the exception.",
+                          "That That was supposed to play; this this was not.",
+                          "DADDY came back with a stack trace and no answers.",
+                          "I LUV IT when errors include line numbers.",
+                          "New Face, same old media pipeline.",
+                          "Hangover from the last retry finally hit the decoder.",
+                          "NAPAL BAJI entered; the buffer left through the wrong exit.",
+                          "I heard pigeons are more reliable.",
+                          "It's the tubes, they're clogged!",
+                          "The electrons got confused."
+];
+function pickWittyComment() {
+  return WITTY_COMMENTS[Math.floor(Math.random() * WITTY_COMMENTS.length)] || WITTY_COMMENTS[0];
+}
+function getTopStackFrame(stack) {
+  try {
+    const lines = String(stack || "").split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    return lines.find(line => /^at\s+/.test(line) || /\.js(?::\d+){1,2}/i.test(line)) || lines[1] || lines[0] || "";
+  } catch { }
+  return "";
+}
+function collectCrashRuntimeState(parts) {
+  parts.push("\n--- Player State ---");
+  parts.push("firstPlayCommitted: " + state.firstPlayCommitted);
+  parts.push("intendedPlaying: " + state.intendedPlaying);
+  parts.push("startupPhase: " + state.startupPhase);
+  parts.push("coupledMode: " + coupledMode);
+  parts.push("seeking: " + state.seeking);
+  parts.push("seekBuffering: " + state.seekBuffering);
+  parts.push("restarting: " + state.restarting);
+  parts.push("endedNaturally: " + state.endedNaturally);
+  parts.push("visibilityState: " + document.visibilityState);
+  parts.push("document.hidden: " + document.hidden);
+  try { parts.push("online: " + navigator.onLine); } catch { }
+  try { parts.push("video.readyState: " + getVideoReadyState()); } catch { }
+  try { parts.push("video.networkState: " + (getVideoNode()?.networkState ?? "N/A")); } catch { }
+  try { parts.push("video.currentTime: " + getVideoCurrentTimeSafe("N/A")); } catch { }
+  try { parts.push("audio.readyState: " + (audio ? audio.readyState : "N/A")); } catch { }
+  try { parts.push("audio.networkState: " + (audio ? audio.networkState : "N/A")); } catch { }
+  try { parts.push("audio.currentTime: " + (audio ? audio.currentTime : "N/A")); } catch { }
+}
+function describeCrashHowItHappened(errorMsg, source, stack, info = {}) {
+  const eventType = info.eventType || (source === "promise" ? "unhandled promise rejection" : "uncaught script error");
+  const name = info.name ? String(info.name) : "";
+  const message = String(errorMsg || "(no message)");
+  const filename = info.filename || (source && source !== "promise" ? source : "");
+  const line = Number(info.line || info.lineno || 0);
+  const column = Number(info.column || info.colno || 0);
+  const where = filename
+  ? filename + (line ? ":" + line + (column ? ":" + column : "") : "")
+  : "(browser did not provide a file location)";
+  const topFrame = getTopStackFrame(stack);
+  const lines = [];
+  lines.push("Crash path: " + eventType);
+  if (name) lines.push("Exception type: " + name);
+  lines.push("Exception message: " + message);
+  lines.push("Reported location: " + where);
+  if (topFrame) lines.push("First stack frame: " + topFrame);
+  if (source === "promise") {
+    lines.push("What happened: async code rejected a promise and nothing handled it before the browser reported it.");
+  } else {
+    lines.push("What happened: player code threw while running a script/event handler, so the browser raised window.error.");
+  }
+  return lines.join("\n");
+}
+function describeMediaErrorHowItHappened(scope, worstCode, errorId, msg) {
+  const lines = [];
+  lines.push("Crash path: media element error event");
+  lines.push("Media scope: " + scope);
+  lines.push("Browser media code: " + worstCode + " (" + errorId + ")");
+  if (msg) lines.push("Browser media message: " + msg);
+  if (scope === "video") lines.push("What happened: the video element reported a fatal playback/render/load failure.");
+  else if (scope === "audio") lines.push("What happened: the audio element reported a fatal playback/load/decode failure.");
+  else lines.push("What happened: both sides of the coupled player or the shared player state reached a fatal media failure.");
+  return lines.join("\n");
+}
 function handleFatalMediaError(source, errorObj) {
   const code = errorObj ? (errorObj.code || 0) : 0;
   const msg = errorObj ? (errorObj.message || "") : "";
@@ -18958,54 +19139,14 @@ function handleFatalMediaError(source, errorObj) {
   try { forcePausePlaybackForErrorOverlay("fatal-" + scope + "-after-pause"); } catch { }
   _errorIsRecoverable = (worstCode === 1 || worstCode === 2) && !_globalErrorCaught;
   const _reportBase = "https://codeberg.org/ashleyirispuppy/poke/issues/new?template=issue_template%2fplayer-bug.yml";
-  const _splashMessages = [
-    "Have you tried reinstalling the universe?",
-    "This is fine. Everything is fine.",
-    "The codec took the day off.",
-    "The audio was simply too powerful.",
-    "Error 404: Good vibes not found.",
-    "It's not a bug, it's a surprise feature.",
-    "The bits are revolting!",
-    "Something went wrong. Probably.",
-    "Works on my machine ¯\\_(ツ)_/¯",
-                          "This wouldn't happen in Minecraft.",
-                          "Have you tried turning it off and on again?",
-                          "The video element chose violence today.",
-                          "Skill issue (from the browser).",
-                          "The codec said 'no thank you' and left.",
-                          "I'm in your walls (and your error logs).",
-                          "Bazinga! Just kidding, this is real.",
-                          "Achievement unlocked: Break the player!",
-                          "POV: you found a rare error.",
-                          "The video was not the imposter. It was ejected anyway.",
-                          "Don't worry, the error is more scared of you than you are of it.",
-                          "The player tripped over its own feet.",
-                          "The media pipeline left the chat.",
-                          "L + ratio + no playback.",
-                          "Bro really said 'MEDIA_ERR' unironically.",
-                          "Certified bruh moment.",
-                          "The sync loop did a little too much looping.",
-                          "Told the audio to play. It chose emotional damage instead.",
-                          "This is why we can't have nice things.",
-                          "Someone call an ambulance... but not for me!",
-                          "It's giving... error.",
-                          "The browser ran out of vibes.",
-                          "Plot twist: the real error was the friends we made along the way.",
-                          "No thoughts, just errors.",
-                          "We do a little crashing.",
-                          "The media pipeline went on a coffee break.",
-                          "The video said: 'I'm tired, boss.'",
-                          "Looks like the decoder had a bad day at work.",
-                          "Unexpected token: disappointment.",
-                          "The electrons got confused.",
-                          "Error: success was not an option."
-  ];
-  const _splashMsg = _splashMessages[Math.floor(Math.random() * _splashMessages.length)];
+  const _splashMsg = pickWittyComment();
   let _stack = "";
   try {
     const parts = [];
     parts.push("// " + _splashMsg);
     parts.push("");
+    parts.push("\n--- How It Happened ---");
+    parts.push(describeMediaErrorHowItHappened(scope, worstCode, errorId, msg));
     parts.push("Error scope: " + scope);
     parts.push("Error code: " + worstCode + " (" + errorId + ")");
     parts.push("User agent: " + navigator.userAgent);
@@ -19026,11 +19167,7 @@ function handleFatalMediaError(source, errorObj) {
       try { parts.push("audio.readyState: " + audio.readyState); } catch { }
       try { parts.push("audio.networkState: " + audio.networkState); } catch { }
     }
-    parts.push("\n--- Player State ---");
-    parts.push("firstPlayCommitted: " + state.firstPlayCommitted);
-    parts.push("intendedPlaying: " + state.intendedPlaying);
-    parts.push("startupPhase: " + state.startupPhase);
-    parts.push("coupledMode: " + coupledMode);
+    collectCrashRuntimeState(parts);
     _stack = parts.join("\n");
   } catch { _stack = "Failed to collect error details"; }
   const _bugKaomoji = ["(ಥ﹏ಥ)", "(╥﹏╥)", "(´；ω；`)", "(⊙_⊙;)", "(；′⌒`)"];
@@ -24938,7 +25075,7 @@ window.__test_audio_loop_indictaor = (forceShow) => {
 };
 window.__test_audio_not_playing = window.__test_audio_loop_indictaor;
 const _crashReportBase = "https://codeberg.org/ashleyirispuppy/poke/issues/new?template=issue_template%2fplayer-bug.yml";
-function _handlePlayerCrash(errorMsg, source, stack) {
+function _handlePlayerCrash(errorMsg, source, stack, crashInfo = {}) {
   if (_globalErrorCaught || _errorOverlayShown) return;
   _globalErrorCaught = true;
   _errorOverlayShown = true;
@@ -24946,47 +25083,27 @@ function _handlePlayerCrash(errorMsg, source, stack) {
   state.bufferHoldIntendedPlaying = false;
   state.resumeOnVisible = false;
   try { pauseHard(); } catch { }
-  const _crashSplashMessages = [
-    "The bits conspired against you.",
-    "This is fine. Everything is fine.",
-    "The audio was simply too powerful.",
-    "Works on my machine ¯\\_(ツ)_/¯",
-                          "Achievement unlocked: Break the player!",
-                          "The video element chose violence today.",
-                          "Skill issue (from the browser).",
-                          "Certified bruh moment.",
-                          "The sync loop did a little too much looping.",
-                          "This is why we can't have nice things.",
-                          "No thoughts, just errors.",
-                          "We do a little crashing.",
-                          "The electrons got confused.",
-                          "Error: success was not an option."
-  ];
-  const _crashSplash = _crashSplashMessages[Math.floor(Math.random() * _crashSplashMessages.length)];
+  const _crashSplash = pickWittyComment();
   let _trace = "";
   try {
     const parts = [];
     parts.push("// " + _crashSplash);
     parts.push("");
-    parts.push("Error: " + String(errorMsg || "Unknown error"));
-    parts.push("Source: " + String(source || "unknown"));
+    parts.push("\n--- How It Happened ---");
+    parts.push(describeCrashHowItHappened(errorMsg, source, stack, crashInfo));
+    parts.push("\n--- Error ---");
+    parts.push("name: " + String(crashInfo.name || "Error"));
+    parts.push("message: " + String(errorMsg || "Unknown error"));
+    parts.push("source: " + String(source || "unknown"));
+    if (crashInfo.filename) parts.push("filename: " + String(crashInfo.filename));
+    if (crashInfo.line || crashInfo.lineno) parts.push("line: " + String(crashInfo.line || crashInfo.lineno));
+    if (crashInfo.column || crashInfo.colno) parts.push("column: " + String(crashInfo.column || crashInfo.colno));
+    try { parts.push("page: " + window.location.href); } catch { }
     parts.push("Time: " + new Date().toISOString());
     parts.push("User agent: " + navigator.userAgent);
-    if (stack) {
-      parts.push("\n--- Stack Trace ---");
-      parts.push(String(stack));
-    }
-    parts.push("\n--- Player State ---");
-    parts.push("firstPlayCommitted: " + state.firstPlayCommitted);
-    parts.push("intendedPlaying: " + state.intendedPlaying);
-    parts.push("startupPhase: " + state.startupPhase);
-    parts.push("coupledMode: " + coupledMode);
-    parts.push("seeking: " + state.seeking);
-    parts.push("videoWaiting: " + state.videoWaiting);
-    try { parts.push("video.readyState: " + getVideoNode().readyState); } catch { }
-    try { parts.push("audio.readyState: " + (audio ? audio.readyState : "N/A")); } catch { }
-    try { parts.push("video.currentTime: " + video.currentTime()); } catch { }
-    try { parts.push("audio.currentTime: " + (audio ? audio.currentTime : "N/A")); } catch { }
+    parts.push("\n--- Stack Trace ---");
+    parts.push(stack ? String(stack) : "(browser did not provide a stack trace)");
+    collectCrashRuntimeState(parts);
     _trace = parts.join("\n");
   } catch { _trace = String(errorMsg || "Unknown error") + "\n" + String(stack || ""); }
   const _crashKaomoji = ["(ಥ﹏ಥ)", "(╥﹏╥)", "(´；ω；`)", "(⊙_⊙;)", "(；′⌒`)"];
@@ -25008,7 +25125,13 @@ _on(window, "error", (e) => {
   src.includes("app.") || src.includes("index.");
   if (!isPlayerScript) return;
   if (msg.includes("ResizeObserver") || msg.includes("Script error")) return;
-  _handlePlayerCrash(msg, src, e.error ? (e.error.stack || "") : "");
+  _handlePlayerCrash(msg, src, e.error ? (e.error.stack || "") : "", {
+    eventType: "window.error",
+    name: e.error ? (e.error.name || "") : "",
+    filename: src,
+    line: e && e.lineno,
+    column: e && e.colno
+  });
 }, { passive: true });
 _on(window, "unhandledrejection", (e) => {
   if (_globalErrorCaught) return;
@@ -25023,7 +25146,11 @@ _on(window, "unhandledrejection", (e) => {
     msg.includes("fetching process") ||
     msg.includes("aborted by the user agent") ||
     msg.includes("The play() request was"))) return;
-  _handlePlayerCrash(msg, "promise", reason ? (reason.stack || "") : "");
+  _handlePlayerCrash(msg, "promise", reason ? (reason.stack || "") : "", {
+    eventType: "unhandledrejection",
+    name,
+    filename: "promise"
+  });
 }, { passive: true });
 }, { once: true });
 
