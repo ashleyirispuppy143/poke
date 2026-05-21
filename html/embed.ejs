@@ -55,10 +55,11 @@
             padding: 24px;
             box-sizing: border-box;
             gap: 20px;
+            color: #aaaaaa; /* Ensures plain text defaults to gray */
         }
 
         .error-icon-<%- v %> {
-            fill: #aaaaaa;
+            color: #aaaaaa; /* SVG path uses currentColor, so we must set color, not fill */
             width: 48px;
             height: 48px;
             flex-shrink: 0;
