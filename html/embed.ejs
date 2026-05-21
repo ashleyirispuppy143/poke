@@ -30,10 +30,10 @@
             height: 100%;
             background-color: #000;
             overflow: hidden;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
 
-        .video-wrapper {
+        .video-wrapper-<%- v %> {
             position: relative;
             width: 100%;
             height: 100%;
@@ -42,119 +42,127 @@
             align-items: center;
             box-sizing: border-box;
             padding: 2px; 
+            background-color: #000;
         }
 
-        .player-link {
+        .player-link-<%- v %> {
             position: relative;
-            display: block;
+            display: flex;
+            justify-content: center;
+            align-items: center;
             width: 100%;
             height: 100%;
             text-decoration: none;
             overflow: hidden;
-            background-color: #000;
         }
 
-        .player-image {
+        .player-image-<%- v %> {
             width: 100%;
             height: 100%;
             object-fit: cover;
             display: block;
-            transition: opacity 0.2s ease-in-out;
+            transition: opacity 0.3s ease;
         }
 
-        .player-link:hover .player-image {
-            opacity: 0.9;
-        }
-
-        .play-button {
+        .play-button-<%- v %> {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: clamp(48px, 10vw, 84px);
-            height: clamp(48px, 10vw, 84px);
-            background-color: rgba(0, 0, 0, 0.5);
+            width: clamp(50px, 12vw, 100px);
+            aspect-ratio: 1 / 1;
+            background-color: rgba(0, 0, 0, 0.45);
             backdrop-filter: blur(8px);
             -webkit-backdrop-filter: blur(8px);
             border-radius: 50%;
             display: flex;
             justify-content: center;
             align-items: center;
-            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-            cursor: pointer;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+            transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+            z-index: 2;
         }
 
-        .player-link:hover .play-button {
-            background-color: rgba(255, 0, 0, 0.85);
+        .player-link-<%- v %>:hover .play-button-<%- v %> {
+            background-color: rgba(0, 0, 0, 0.7);
             transform: translate(-50%, -50%) scale(1.15);
-            box-shadow: 0 6px 24px rgba(255, 0, 0, 0.4);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
         }
 
-        .play-triangle {
+        .player-link-<%- v %>:hover .player-image-<%- v %> {
+            opacity: 0.9;
+        }
+
+        .play-triangle-<%- v %> {
             width: 40%;
             height: 40%;
-            margin-left: 10%;
+            margin-left: 8%;
             fill: #ffffff;
-            transition: fill 0.2s ease;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
         }
 
-        .beta-badge {
+        .privacy-link-<%- v %> {
             position: absolute;
-            bottom: 15px;
-            left: 15px;
+            bottom: 12px;
+            left: 12px;
             z-index: 10;
-            background-color: rgba(0, 0, 0, 0.65);
-            color: #eeeeee;
-            padding: 6px 10px;
-            border-radius: 4px;
-            font-size: clamp(10px, 2.5vw, 12px);
-            font-weight: 600;
-            pointer-events: none;
+            background-color: rgba(0, 0, 0, 0.6);
             backdrop-filter: blur(4px);
             -webkit-backdrop-filter: blur(4px);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+            color: rgba(255, 255, 255, 0.85);
+            font-size: clamp(11px, 2vw, 13px);
+            font-weight: 500;
+            text-decoration: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.2s ease;
         }
 
-        .logo-link {
+        .privacy-link-<%- v %>:hover {
+            background-color: rgba(0, 0, 0, 0.85);
+            color: #ffffff;
+            transform: translateY(-2px);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .logo-link-<%- v %> {
             position: absolute;
-            bottom: 15px;
-            right: 15px;
+            bottom: 12px;
+            right: 12px;
             z-index: 10;
             display: block;
-            transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: transform 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
         }
 
-        .logo-link:hover {
-            transform: scale(1.1);
+        .logo-link-<%- v %>:hover {
+            transform: scale(1.1) rotate(2deg);
         }
 
-        .logo-img {
-            height: clamp(24px, 6vw, 36px);
+        .logo-img-<%- v %> {
+            height: clamp(28px, 6vw, 40px);
             width: auto;
             display: block;
-            filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.6));
+            filter: drop-shadow(0px 3px 6px rgba(0,0,0,0.6));
         }
     </style>
 </head>
 <body>
 
-    <div class="video-wrapper">
-        <a href="/watch?v=<%- v %>" target="_blank" rel="noopener noreferrer" class="player-link">
-            <img src="https://i.ytimg.com/vi/<%- v %>/maxresdefault.jpg" alt="<%- v %>" class="player-image" onerror="this.src='https://i.ytimg.com/vi/<%- v %>/hqdefault.jpg';">
-            <div class="play-button">
-                <svg class="play-triangle" viewBox="0 0 24 24">
+    <div class="video-wrapper-<%- v %>">
+        <a href="/watch?v=<%- v %>" target="_blank" rel="noopener noreferrer" class="player-link-<%- v %>">
+            <img src="https://i.ytimg.com/vi/<%- v %>/maxresdefault.jpg" alt="Video <%- v %>" class="player-image-<%- v %>" onerror="this.src='https://i.ytimg.com/vi/<%- v %>/hqdefault.jpg';">
+            <div class="play-button-<%- v %>">
+                <svg class="play-triangle-<%- v %>" viewBox="0 0 24 24">
                     <polygon points="8,5 8,19 19,12" />
                 </svg>
             </div>
         </a>
 
-        <div class="beta-badge">Embeds are Beta</div>
+        <a href="/privacy" target="_blank" rel="noopener noreferrer" class="privacy-link-<%- v %>">Privacy</a>
 
-        <a href="/home" target="_blank" rel="noopener noreferrer" class="logo-link">
-            <img src="/css/logo-poke.svg" alt="Poke Logo" class="logo-img">
+        <a href="/home" target="_blank" rel="noopener noreferrer" class="logo-link-<%- v %>">
+            <img src="/css/logo-poke.svg" alt="Poke Logo" class="logo-img-<%- v %>">
         </a>
     </div>
 
