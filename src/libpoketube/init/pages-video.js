@@ -209,11 +209,23 @@ app.get("/embed/:v", async function (req, res) {
   const hostname = req.hostname;
   const showHow = req.query.showHow;
 
-  if (!/^[a-zA-Z0-9_-]{11}$/.test(v)) {
-    return res.status(400).send("Invalid video ID");
-  }
-
   let engagement = null;
+  let VideoError = null;
+
+  if (!/^[a-zA-Z0-9_-]{11}$/.test(v)) {
+    VideoError = {
+      status: 400,
+      message: "Invalid video ID",
+    };
+
+    return renderTemplate(res.status(400), req, "embed.ejs", {
+      v,
+      hostname,
+      engagement,
+      showHow,
+      VideoError,
+    });
+  }
 
   try {
     const engagementResponse = await fetch(
@@ -221,7 +233,18 @@ app.get("/embed/:v", async function (req, res) {
     );
 
     if (engagementResponse.status === 404) {
-      return res.status(400).send("Invalid video ID");
+      VideoError = {
+        status: 404,
+        message: "Video not found",
+      };
+
+      return renderTemplate(res.status(404), req, "embed.ejs", {
+        v,
+        hostname,
+        engagement,
+        showHow,
+        VideoError,
+      });
     }
 
     if (engagementResponse.ok) {
@@ -236,6 +259,7 @@ app.get("/embed/:v", async function (req, res) {
     hostname,
     engagement,
     showHow,
+    VideoError,
   });
 });
 
