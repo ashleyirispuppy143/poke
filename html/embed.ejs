@@ -143,7 +143,6 @@
             fill: #ffffff;
         }
 
-        /* Default unplayed/paused logo position */
         .logo-link-<%- v %> {
             position: absolute;
             bottom: max(10px, 2vmin);
@@ -164,7 +163,6 @@
             filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5));
         }
 
-        /* Classes applied when logo is moved into the control bar */
         .logo-link-<%- v %>.in-player-<%- v %> {
             position: static;
             display: flex;
@@ -277,7 +275,6 @@
             align-items: center;
             color: #fff;
             border: none;
-            cursor: pointer;
             transition: background-color 0.2s;
         }
 
@@ -285,6 +282,7 @@
             width: 40px;
             height: 40px;
             border-radius: 50%;
+            cursor: pointer;
         }
 
         .ctrl-circle-<%- v %>:hover {
@@ -298,7 +296,110 @@
             font-size: 14px;
             font-weight: 500;
             font-variant-numeric: tabular-nums;
-            cursor: default;
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .ctrl-time-<%- v %>:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Volume Slider specific styles */
+        .volume-container-<%- v %> {
+            background-color: rgba(0, 0, 0, 0.65);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            border-radius: 20px;
+            transition: all 0.2s ease;
+            height: 40px;
+            overflow: hidden;
+        }
+
+        .mute-btn-<%- v %> {
+            background: transparent;
+            border: none;
+            color: #fff;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: background-color 0.2s;
+        }
+
+        .mute-btn-<%- v %>:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .volume-slider-wrapper-<%- v %> {
+            width: 0;
+            overflow: hidden;
+            transition: width 0.2s ease, padding 0.2s ease;
+            display: flex;
+            align-items: center;
+        }
+
+        .volume-container-<%- v %>:hover .volume-slider-wrapper-<%- v %> {
+            width: 60px;
+            padding-right: 12px;
+        }
+
+        .volume-slider-<%- v %> {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 4px;
+            border-radius: 2px;
+            outline: none;
+            cursor: pointer;
+            background: linear-gradient(to right, #fff 100%, rgba(255, 255, 255, 0.3) 100%);
+        }
+
+        .volume-slider-<%- v %>::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+        }
+
+        /* Custom Context Menu */
+        .custom-context-menu-<%- v %> {
+            position: absolute;
+            background: rgba(28, 28, 28, 0.9);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 8px 0;
+            min-width: 220px;
+            z-index: 1000;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            user-select: none;
+        }
+
+        .context-item-<%- v %> {
+            padding: 10px 16px;
+            color: #f1f1f1;
+            font-size: 14px;
+            cursor: pointer;
+            text-decoration: none;
+            font-family: "PokeTube Flex", sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .context-item-<%- v %>:hover {
+            background: rgba(255, 255, 255, 0.1);
         }
 
         /* =========================================
@@ -354,13 +455,6 @@
             display: flex;
             flex-direction: column;
             gap: 40px;
-        }
-
-        .plaintext-notice-<%- v %> {
-            font-size: 15px;
-            color: #aaaaaa;
-            line-height: 1.6;
-            margin: 0;
         }
 
         .section-header-<%- v %> {
@@ -530,10 +624,6 @@
             </header>
 
             <main class="showhow-content-<%- v %>">
-                
-                <p class="plaintext-notice-<%- v %>">
-                    The embed feature is currently in beta. In the future, this embed will host an actual video player instead of just redirecting to /watch?v= when clicked. The current behavior is only a placeholder.
-                </p>
 
                 <section class="preview-section-<%- v %>">
                     <h2 class="section-header-<%- v %>">Live Preview</h2>
@@ -632,13 +722,22 @@
                                             <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
                                         </svg>
                                     </button>
-                                    <button class="ctrl-pill-<%- v %> ctrl-circle-<%- v %> mute-btn-<%- v %>" title="Mute/Unmute">
-                                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-                                            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
-                                        </svg>
-                                    </button>
-                                    <div class="ctrl-pill-<%- v %> ctrl-time-<%- v %> time-display-<%- v %>">0:00 / 0:00</div>
+                                    
+                                    <div class="volume-container-<%- v %>">
+                                        <button class="mute-btn-<%- v %>" title="Mute/Unmute">
+                                            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                                                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                                            </svg>
+                                        </button>
+                                        <div class="volume-slider-wrapper-<%- v %>">
+                                            <input type="range" class="volume-slider-<%- v %>" min="0" max="1" step="0.05" value="1">
+                                        </div>
+                                    </div>
+
+                                    <div class="ctrl-pill-<%- v %> ctrl-time-<%- v %> time-display-<%- v %>" title="Toggle time remaining">0:00 / 0:00</div>
+                                    
                                     <div style="flex-grow: 1;"></div>
+                                    
                                     <button class="ctrl-pill-<%- v %> ctrl-circle-<%- v %> fs-btn-<%- v %>" title="Fullscreen">
                                         <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
                                             <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
@@ -647,8 +746,19 @@
                                 </div>
                             `;
 
+                            const contextMenu = document.createElement('div');
+                            contextMenu.className = 'custom-context-menu-<%- v %>';
+                            contextMenu.style.display = 'none';
+                            contextMenu.innerHTML = `
+                                <a href="/watch?v=<%- v %>" target="_blank" class="context-item-<%- v %>">Open video on actual Poke</a>
+                                <div class="context-item-<%- v %> loop-toggle-<%- v %>">Loop<span>Off</span></div>
+                                <div class="context-item-<%- v %> speed-toggle-<%- v %>">Speed<span>Normal</span></div>
+                                <a href="https://codeberg.org/ashleyirispuppy/poke/issues/new?template=issue_template%2fplayer-bug.yml" target="_blank" class="context-item-<%- v %>">Having problems? Report em here</a>
+                            `;
+
                             wrapper.insertBefore(video, wrapper.firstChild);
                             wrapper.appendChild(controls);
+                            wrapper.appendChild(contextMenu);
 
                             const controlsRow = controls.querySelector('.controls-row-<%- v %>');
                             if (logoLink && controlsRow) {
@@ -658,18 +768,26 @@
 
                             const playPauseBtn = controls.querySelector('.play-pause-btn-<%- v %>');
                             const muteBtn = controls.querySelector('.mute-btn-<%- v %>');
+                            const volumeSlider = controls.querySelector('.volume-slider-<%- v %>');
                             const fsBtn = controls.querySelector('.fs-btn-<%- v %>');
                             const progressContainer = controls.querySelector('.progress-bar-<%- v %>');
                             const progressFill = controls.querySelector('.progress-fill-<%- v %>');
                             const timeDisplay = controls.querySelector('.time-display-<%- v %>');
+                            
+                            const loopToggle = contextMenu.querySelector('.loop-toggle-<%- v %>');
+                            const speedToggle = contextMenu.querySelector('.speed-toggle-<%- v %>');
 
                             const playIcon = '<path d="M8 5v14l11-7z"/>';
                             const pauseIcon = '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
                             const volIcon = '<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>';
                             const muteIcon = '<path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>';
 
+                            let showRemainingTime = false;
+                            let lastVolume = 1;
+                            
                             function formatTime(s) {
                                 if (isNaN(s)) return "0:00";
+                                s = Math.abs(s);
                                 const m = Math.floor(s / 60);
                                 const sec = Math.floor(s % 60);
                                 return m + ':' + (sec < 10 ? '0' : '') + sec;
@@ -680,16 +798,47 @@
                                 video.paused ? video.play() : video.pause();
                             };
 
+                            volumeSlider.addEventListener('input', (e) => {
+                                const val = parseFloat(e.target.value);
+                                video.volume = val;
+                                video.muted = (val === 0);
+                                muteBtn.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">${video.muted ? muteIcon : volIcon}</svg>`;
+                                e.target.style.background = `linear-gradient(to right, #fff ${val * 100}%, rgba(255, 255, 255, 0.3) ${val * 100}%)`;
+                                if (val > 0) lastVolume = val;
+                            });
+
                             muteBtn.onclick = (e) => {
                                 e.stopPropagation();
                                 video.muted = !video.muted;
+                                if (video.muted) {
+                                    volumeSlider.value = 0;
+                                    volumeSlider.style.background = `linear-gradient(to right, #fff 0%, rgba(255, 255, 255, 0.3) 0%)`;
+                                } else {
+                                    video.volume = lastVolume;
+                                    volumeSlider.value = lastVolume;
+                                    volumeSlider.style.background = `linear-gradient(to right, #fff ${lastVolume * 100}%, rgba(255, 255, 255, 0.3) ${lastVolume * 100}%)`;
+                                }
                                 muteBtn.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">${video.muted ? muteIcon : volIcon}</svg>`;
+                            };
+
+                            timeDisplay.onclick = (e) => {
+                                e.stopPropagation();
+                                showRemainingTime = !showRemainingTime;
+                                updateTime();
                             };
 
                             const updateTime = () => {
                                 const p = (video.currentTime / video.duration) * 100;
                                 progressFill.style.width = (p || 0) + '%';
-                                timeDisplay.innerText = `${formatTime(video.currentTime)} / ${formatTime(video.duration)}`;
+                                
+                                const duration = video.duration || 0;
+                                const current = video.currentTime || 0;
+                                
+                                if (showRemainingTime) {
+                                    timeDisplay.innerText = `-${formatTime(duration - current)} / ${formatTime(duration)}`;
+                                } else {
+                                    timeDisplay.innerText = `${formatTime(current)} / ${formatTime(duration)}`;
+                                }
                             };
 
                             video.ontimeupdate = updateTime;
@@ -711,7 +860,44 @@
                             };
 
                             video.onclick = () => {
+                                contextMenu.style.display = 'none';
                                 video.paused ? video.play() : video.pause();
+                            };
+
+                            wrapper.addEventListener('contextmenu', (e) => {
+                                e.preventDefault();
+                                contextMenu.style.display = 'flex';
+                                
+                                const rect = wrapper.getBoundingClientRect();
+                                let x = e.clientX - rect.left;
+                                let y = e.clientY - rect.top;
+                                
+                                if (x + 220 > rect.width) x -= 220;
+                                if (y + 160 > rect.height) y -= 160;
+                                
+                                contextMenu.style.left = x + 'px';
+                                contextMenu.style.top = y + 'px';
+                            });
+
+                            document.addEventListener('click', (e) => {
+                                if (!contextMenu.contains(e.target)) {
+                                    contextMenu.style.display = 'none';
+                                }
+                            });
+
+                            loopToggle.onclick = () => {
+                                video.loop = !video.loop;
+                                loopToggle.querySelector('span').innerText = video.loop ? 'On' : 'Off';
+                                contextMenu.style.display = 'none';
+                            };
+
+                            const speeds = [0.25, 0.5, 1, 1.25, 1.5, 2];
+                            let speedIdx = 2;
+                            speedToggle.onclick = (e) => {
+                                e.stopPropagation();
+                                speedIdx = (speedIdx + 1) % speeds.length;
+                                video.playbackRate = speeds[speedIdx];
+                                speedToggle.querySelector('span').innerText = speeds[speedIdx] === 1 ? 'Normal' : speeds[speedIdx] + 'x';
                             };
 
                             let hideTimeout;
@@ -723,6 +909,7 @@
                                     if (!video.paused) {
                                         controls.style.opacity = '0';
                                         wrapper.style.cursor = 'none';
+                                        contextMenu.style.display = 'none';
                                     }
                                 }, 2500);
                             };
