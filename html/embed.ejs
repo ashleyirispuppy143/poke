@@ -47,12 +47,11 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 72px;
-            height: 72px;
+            width: clamp(60px, 12vw, 150px);
+            height: clamp(60px, 12vw, 150px);
             background-color: rgba(0, 0, 0, 0.4);
             backdrop-filter: blur(8px);
             -webkit-backdrop-filter: blur(8px);
-            border: 2px solid rgba(255, 255, 255, 0.3);
             border-radius: 50%;
             display: flex;
             justify-content: center;
@@ -65,16 +64,13 @@
         .thumbnail-link:hover .play-button {
             background-color: rgba(0, 0, 0, 0.6);
             transform: translate(-50%, -50%) scale(1.1);
-            border-color: rgba(255, 255, 255, 0.5);
         }
 
         .play-triangle {
-            width: 0;
-            height: 0;
-            border-style: solid;
-            border-width: 12px 0 12px 20px;
-            border-color: transparent transparent transparent #ffffff;
-            margin-left: 6px;
+            width: 45%;
+            height: 45%;
+            margin-left: 8%;
+            fill: #ffffff;
         }
 
         .logo-link {
@@ -91,7 +87,7 @@
         }
 
         .logo-img {
-            height: 35px;
+            height: clamp(25px, 5vw, 40px);
             width: auto;
             display: block;
             filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5));
@@ -104,7 +100,9 @@
         <a href="/watch?v=<%- v %>" target="_blank" rel="noopener noreferrer" class="thumbnail-link">
             <img src="https://i.ytimg.com/vi/<%- v %>/maxresdefault.jpg" alt="Play Video" class="thumbnail-img" onerror="this.src='https://i.ytimg.com/vi/<%- v %>/hqdefault.jpg';">
             <div class="play-button">
-                <div class="play-triangle"></div>
+                <svg class="play-triangle" viewBox="0 0 24 24">
+                    <polygon points="8,5 8,19 19,12" />
+                </svg>
             </div>
         </a>
 
