@@ -23,7 +23,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><%- v %></title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono&display=swap');
 
         html, body {
             margin: 0;
@@ -242,9 +242,52 @@
             color: #f1f1f1;
         }
 
+        /* Embed Help Instructions */
+        .embed-help-<%- v %> {
+            font-size: 13px;
+            color: #aaaaaa;
+            line-height: 1.6;
+            background-color: rgba(255, 255, 255, 0.05);
+            padding: 12px 16px;
+            border-radius: 8px;
+            border-left: 3px solid #3ea6ff;
+        }
+
+        .embed-help-<%- v %> p {
+            margin: 0 0 8px 0;
+        }
+
+        .embed-help-<%- v %> p:last-child {
+            margin: 0;
+        }
+
+        .embed-help-<%- v %> strong {
+            color: #f1f1f1;
+            font-weight: 500;
+        }
+
+        .embed-help-<%- v %> ul {
+            margin: 0 0 8px 0;
+            padding-left: 20px;
+        }
+
+        .embed-help-<%- v %> li {
+            margin-bottom: 4px;
+        }
+
+        .embed-help-<%- v %> code {
+            background-color: #333;
+            color: #fff;
+            padding: 2px 5px;
+            border-radius: 4px;
+            font-family: "Roboto Mono", monospace;
+            font-size: 12px;
+        }
+
         .embed-actions-<%- v %> {
             display: flex;
             justify-content: flex-end;
+            margin-top: 8px;
         }
 
         .embed-btn-<%- v %> {
@@ -324,8 +367,17 @@
                 <div class="embed-body-<%- v %>">
                     <textarea class="embed-textarea-<%- v %>" readonly>&lt;iframe src="https://<%= typeof hostname !== 'undefined' ? hostname : '' %>/embed/<%- v %>" width="560" height="315" frameborder="0" allowfullscreen&gt;&lt;/iframe&gt;</textarea>
                     
+                    <div class="embed-help-<%- v %>">
+                        <p><strong>Where to use this:</strong> Paste this code directly into your website's HTML body, a markdown file, or a blog post editor (using the HTML/Source view) to display the video.</p>
+                        <p><strong>Customizing the code:</strong></p>
+                        <ul>
+                            <li><code>width</code> & <code>height</code>: Controls the player size. Accepts numbers for pixels (e.g., <code>560</code>) or percentages for responsive width (e.g., <code>100%</code>).</li>
+                            <li><code>frameborder</code>: Set to <code>0</code> (no border) or <code>1</code> (shows a solid border).</li>
+                        </ul>
+                    </div>
+
                     <div class="embed-actions-<%- v %>">
-                        <button class="embed-btn-<%- v %>" onclick="navigator.clipboard.writeText(this.parentElement.previousElementSibling.value); this.innerText='Copied'; setTimeout(() => this.innerText='Copy', 2000);">Copy</button>
+                        <button class="embed-btn-<%- v %>" onclick="navigator.clipboard.writeText(this.parentElement.previousElementSibling.previousElementSibling.value); this.innerText='Copied'; setTimeout(() => this.innerText='Copy', 2000);">Copy</button>
                     </div>
                 </div>
 
