@@ -23,6 +23,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><%- v %></title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+
         html, body {
             margin: 0;
             padding: 0;
@@ -30,7 +32,7 @@
             height: 100%;
             background-color: #000;
             overflow: hidden;
-            font-family: Arial, sans-serif;
+            font-family: "Roboto", Arial, sans-serif;
         }
 
         .video-wrapper-<%- v %> {
@@ -128,7 +130,7 @@
             color: #fff;
             font-size: clamp(12px, 3vmin, 16px);
             font-weight: 600;
-            pointer-events: none; /* Allows clicks to pass through to the video link */
+            pointer-events: none;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
 
@@ -138,69 +140,132 @@
             gap: 6px;
         }
 
+        /* YouTube-like Embed Modal Styles */
         .embed-modal-<%- v %> {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0, 0, 0, 0.85);
-            backdrop-filter: blur(4px);
-            -webkit-backdrop-filter: blur(4px);
+            background-color: rgba(0, 0, 0, 0.6);
             z-index: 20;
             display: flex;
             justify-content: center;
             align-items: center;
-            padding: 20px;
+            padding: 24px;
             box-sizing: border-box;
         }
 
         .embed-content-<%- v %> {
-            background-color: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 8px;
-            padding: 20px;
+            background-color: #212121;
+            border-radius: 12px;
             width: 100%;
-            max-width: 500px;
-            text-align: center;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.8);
+            max-width: 512px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 32px 0 rgba(0, 0, 0, 0.3);
+            animation: modalFadeIn-<%- v %> 0.2s cubic-bezier(0.05, 0, 0, 1);
         }
 
-        .embed-content-<%- v %> h2 {
-            color: #fff;
-            margin: 0 0 15px 0;
-            font-size: 20px;
+        @keyframes modalFadeIn-<%- v %> {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .embed-header-<%- v %> {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            border-bottom: 1px solid #3f3f3f;
+        }
+
+        .embed-header-<%- v %> h2 {
+            color: #f1f1f1;
+            margin: 0;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .embed-close-<%- v %> {
+            background: transparent;
+            border: none;
+            color: #f1f1f1;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background-color 0.2s;
+            margin-right: -8px;
+        }
+
+        .embed-close-<%- v %>:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .embed-close-<%- v %> svg {
+            fill: currentColor;
+            width: 24px;
+            height: 24px;
+        }
+
+        .embed-body-<%- v %> {
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
         }
 
         .embed-textarea-<%- v %> {
             width: 100%;
-            height: 80px;
-            background-color: #000;
-            color: #00ff00;
-            border: 1px solid #444;
+            height: 96px;
+            background-color: #121212;
+            color: #aaaaaa;
+            border: 1px solid #333333;
             border-radius: 4px;
-            padding: 10px;
-            font-family: monospace;
+            padding: 12px;
+            font-family: "Roboto Mono", monospace;
             font-size: 14px;
+            line-height: 1.4;
             resize: none;
             box-sizing: border-box;
-            margin-bottom: 15px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .embed-textarea-<%- v %>:focus {
+            border-color: #3ea6ff;
+            color: #f1f1f1;
+        }
+
+        .embed-actions-<%- v %> {
+            display: flex;
+            justify-content: flex-end;
         }
 
         .embed-btn-<%- v %> {
-            background-color: #fff;
-            color: #000;
+            background-color: #f1f1f1;
+            color: #0f0f0f;
             border: none;
-            padding: 10px 24px;
+            height: 36px;
+            padding: 0 16px;
             font-size: 14px;
-            font-weight: bold;
-            border-radius: 4px;
+            font-weight: 500;
+            border-radius: 18px;
             cursor: pointer;
+            font-family: "Roboto", Arial, sans-serif;
             transition: background-color 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .embed-btn-<%- v %>:hover {
-            background-color: #ddd;
+            background-color: #d9d9d9;
         }
     </style>
 </head>
@@ -240,13 +305,30 @@
             <img src="/css/logo-poke.svg" alt="Poke Logo" class="logo-img-<%- v %>">
         </a>
 
-        <% /* Fixed the condition to handle strings from URL queries */ %>
         <% if (typeof showHow !== 'undefined' && (showHow === true || showHow === 'true')) { %>
         <div class="embed-modal-<%- v %>">
             <div class="embed-content-<%- v %>">
-                <h2>Embed this video</h2>
-                <textarea class="embed-textarea-<%- v %>" readonly>&lt;iframe src="https://<%= typeof hostname !== 'undefined' ? hostname : '' %>/embed/<%- v %>" width="560" height="315" frameborder="0" allowfullscreen&gt;&lt;/iframe&gt;</textarea>
-                <button class="embed-btn-<%- v %>" onclick="navigator.clipboard.writeText(this.previousElementSibling.value); this.innerText='Copied!'; setTimeout(() => this.innerText='Copy Code', 2000);">Copy Code</button>
+                
+                <div class="embed-header-<%- v %>">
+                    <h2>Embed Video</h2>
+                    <!-- Redirects to base embed URL to "close" the modal -->
+                    <a href="/embed/<%- v %>" class="embed-close-<%- v %>" title="Close">
+                        <svg viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet" focusable="false">
+                            <g>
+                                <path d="M12.7,12l6.6,6.6l-0.7,0.7L12,12.7l-6.6,6.6l-0.7-0.7l6.6-6.6L4.6,5.4l0.7-0.7l6.6,6.6l6.6-6.6l0.7,0.7L12.7,12z"></path>
+                            </g>
+                        </svg>
+                    </a>
+                </div>
+
+                <div class="embed-body-<%- v %>">
+                    <textarea class="embed-textarea-<%- v %>" readonly>&lt;iframe src="https://<%= typeof hostname !== 'undefined' ? hostname : '' %>/embed/<%- v %>" width="560" height="315" frameborder="0" allowfullscreen&gt;&lt;/iframe&gt;</textarea>
+                    
+                    <div class="embed-actions-<%- v %>">
+                        <button class="embed-btn-<%- v %>" onclick="navigator.clipboard.writeText(this.parentElement.previousElementSibling.value); this.innerText='Copied'; setTimeout(() => this.innerText='Copy', 2000);">Copy</button>
+                    </div>
+                </div>
+
             </div>
         </div>
         <% } %>
