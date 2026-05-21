@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><%- v %></title>
+    <title><%- v %> - Embed Guide</title>
     <style>
         @font-face {
             font-family: "PokeTube Flex";
@@ -124,16 +124,18 @@
             z-index: 10;
             display: flex;
             gap: 12px;
-            background-color: rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(6px);
-            -webkit-backdrop-filter: blur(6px);
+            /* Enhanced glassy effect to pop on dark backgrounds */
+            background-color: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
             padding: 8px 14px;
             border-radius: 20px;
             color: #fff;
             font-size: clamp(12px, 3vmin, 16px);
             font-weight: 600;
             pointer-events: none;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
         }
 
         .stat-item-<%- v %> {
@@ -194,7 +196,30 @@
             padding: 40px 24px 80px 24px;
             display: flex;
             flex-direction: column;
-            gap: 48px;
+            gap: 40px;
+        }
+
+        .beta-notice-<%- v %> {
+            background-color: rgba(255, 171, 204, 0.08);
+            border: 1px solid rgba(255, 171, 204, 0.25);
+            border-left: 4px solid #ffabcc;
+            padding: 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .beta-notice-<%- v %> strong {
+            color: #ffabcc;
+            font-weight: 500;
+            font-size: 15px;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .beta-notice-<%- v %> p {
+            margin: 0;
+            color: #aaaaaa;
         }
 
         .section-header-<%- v %> {
@@ -208,7 +233,7 @@
             width: 100%;
             aspect-ratio: 16 / 9;
             background-color: #000;
-            border-radius: 16px; /* Added 16px border radius */
+            border-radius: 16px;
             overflow: hidden;
             border: 1px solid #272727;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
@@ -219,7 +244,7 @@
             height: 100%;
             border: none;
             display: block;
-            border-radius: 16px; /* Added 16px border radius */
+            border-radius: 16px;
         }
 
         .embed-card-<%- v %> {
@@ -250,7 +275,7 @@
         }
 
         .embed-textarea-<%- v %>:focus {
-            border-color: #ffabcc; /* Updated accent color */
+            border-color: #ffabcc;
             color: #f1f1f1;
         }
 
@@ -260,7 +285,7 @@
         }
 
         .embed-btn-<%- v %> {
-            background-color: #ffabcc; /* Updated accent color */
+            background-color: #ffabcc;
             color: #0f0f0f;
             border: none;
             height: 36px;
@@ -277,7 +302,7 @@
         }
 
         .embed-btn-<%- v %>:hover {
-            background-color: #e599b7; /* Slightly darker pink on hover */
+            background-color: #e599b7;
         }
 
         .embed-btn-<%- v %>:active {
@@ -321,7 +346,7 @@
             top: 9px;
             width: 4px;
             height: 4px;
-            background-color: #ffabcc; /* Accented bullet point */
+            background-color: #ffabcc;
             border-radius: 50%;
         }
 
@@ -361,6 +386,11 @@
 
         <main class="showhow-content-<%- v %>">
             
+            <div class="beta-notice-<%- v %>">
+                <strong>Beta Feature</strong>
+                <p>The embed feature is currently in beta. Functionality, layouts, and the generated code might change in future updates.</p>
+            </div>
+
             <section class="preview-section-<%- v %>">
                 <h2 class="section-header-<%- v %>">Live Preview</h2>
                 <div class="preview-box-<%- v %>">
