@@ -159,9 +159,9 @@
         }
 
         .play-triangle-<%- v %> {
-            width: 40%;
-            height: 40%;
-            transform: translateX(10%);
+            width: 36%;
+            height: 36%;
+            transform: translateX(6%);
             fill: #ffffff;
         }
 
@@ -327,8 +327,8 @@
             top: 46px;
             left: 50%;
             width: 50px;
-            height: 140px;
-            padding: 20px 0;
+            height: 150px;
+            padding: 25px 0;
             box-sizing: border-box;
             display: flex;
             flex-direction: column;
@@ -363,7 +363,7 @@
 
         .volume-slider-bg-<%- v %> {
             position: relative;
-            width: 6px;
+            width: 8px;
             height: 100px;
             background: rgba(255, 255, 255, 0.32);
             border-radius: 999px;
@@ -521,6 +521,7 @@
             border-radius: 999px;
             width: 0%;
             pointer-events: none;
+            will-change: width;
         }
 
         .progress-thumb-<%- v %> {
@@ -536,6 +537,7 @@
             pointer-events: none;
             transition: opacity 0.1s ease;
             box-shadow: 0 1px 5px rgba(0,0,0,0.5);
+            will-change: left, opacity;
         }
 
         .progress-container-<%- v %>:hover .progress-thumb-<%- v %>,
@@ -669,12 +671,24 @@
             pointer-events: auto;
         }
 
+        .settings-grabber-area-<%- v %> {
+            padding: 12px;
+            cursor: grab;
+            margin-top: -8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .settings-grabber-area-<%- v %>:active {
+            cursor: grabbing;
+        }
+
         .settings-grabber-<%- v %> {
             width: 40px;
             height: 4px;
             background: rgba(255, 255, 255, 0.26);
             border-radius: 999px;
-            margin: 8px auto 6px auto;
         }
 
         .settings-row-<%- v %> {
@@ -1014,7 +1028,7 @@
             z-index: 60;
             pointer-events: auto;
             display: none;
-            min-width: 360px;
+            min-width: 420px;
             backdrop-filter: blur(4px);
             -webkit-backdrop-filter: blur(4px);
             box-sizing: border-box;
@@ -1066,6 +1080,34 @@
         .stats-value-<%- v %> {
             color: #fff;
             text-align: right;
+        }
+
+        /* --- Retry Overlay UI --- */
+        .retry-overlay-<%- v %> {
+            position: absolute;
+            inset: 0;
+            z-index: 35;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            background: #000;
+            pointer-events: none;
+        }
+
+        .retry-overlay-<%- v %>.is-visible-<%- v %> {
+            display: flex;
+        }
+
+        .retry-overlay-img-<%- v %> {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0.58;
+            filter: blur(1px);
+            transform: scale(1.01);
         }
 
         /* --- End Overlay UI --- */
@@ -1623,6 +1665,7 @@
                             video.setAttribute('playsinline', '');
                             video.setAttribute('webkit-playsinline', '');
                             video.setAttribute('controlsList', 'nodownload noremoteplayback');
+                            video.setAttribute('decoding', 'async');
                             if ('disablePictureInPicture' in video) {
                                 video.disablePictureInPicture = true;
                             }
@@ -1640,7 +1683,7 @@
                             endOverlay.innerHTML = `
                                 <div class="end-overlay-title-<%- v %>">wanna watch more videos privetly? try out poke!!</div>
                                 <div class="end-overlay-buttons-<%- v %>">
-                                    <a href="/" target="_blank" rel="noopener noreferrer" class="end-btn-primary-<%- v %>">Try Out Poke</a>
+                                    <a href="/" target="_blank" rel="noopener noreferrer" class="end-btn-primary-<%- v %>">Try out Poke</a>
                                     <button type="button" class="end-btn-secondary-<%- v %> restart-btn-<%- v %>">Restart Video</button>
                                 </div>
                             `;
@@ -1680,7 +1723,9 @@
                                 </div>
 
                                 <div class="settings-panel-<%- v %>" aria-hidden="true">
-                                    <div class="settings-grabber-<%- v %>"></div>
+                                    <div class="settings-grabber-area-<%- v %>">
+                                        <div class="settings-grabber-<%- v %>"></div>
+                                    </div>
                                     <div class="settings-row-<%- v %> quality-row-<%- v %>" style="cursor: default;">
                                         <span class="settings-icon-<%- v %>"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${qualityIcon}"/></svg></span>
                                         <span class="settings-label-<%- v %>">Quality</span>
@@ -1702,11 +1747,13 @@
                                     <button class="settings-row-<%- v %> embed-row-<%- v %>" type="button">
                                         <span class="settings-icon-<%- v %>"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${codeIcon}"/></svg></span>
                                         <span class="settings-label-<%- v %>">do u wanna embed as well?</span>
+                                        <span class="settings-value-<%- v %>"></span>
                                         <span class="settings-chevron-<%- v %>"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${chevronIcon}"/></svg></span>
                                     </button>
                                     <button class="settings-row-<%- v %> stats-row-<%- v %>" type="button">
                                         <span class="settings-icon-<%- v %>"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${statsIcon}"/></svg></span>
                                         <span class="settings-label-<%- v %>">Stats for nerds</span>
+                                        <span class="settings-value-<%- v %>"></span>
                                         <span class="settings-chevron-<%- v %>" style="opacity: 0;"></span>
                                     </button>
                                     <a class="settings-row-<%- v %> watch-row-<%- v %>" href="/watch?v=<%- v %>" target="_blank" rel="noopener noreferrer">
@@ -1829,6 +1876,7 @@
                             
                             const settingsBtn = controls.querySelector('.settings-btn-<%- v %>');
                             const settingsPanel = controls.querySelector('.settings-panel-<%- v %>');
+                            const settingsGrabberArea = controls.querySelector('.settings-grabber-area-<%- v %>');
                             
                             const speedRow = controls.querySelector('.speed-row-<%- v %>');
                             const speedValue = controls.querySelector('.speed-value-<%- v %>');
@@ -1895,7 +1943,12 @@
                             let isScrubbing = false;
                             let statsUpdateInterval = null;
                             let isNaturalEnd = true;
+                            let hasSeekedNearEnd = false;
                             const mysteryVal = '4x8f-' + Math.random().toString(36).substring(2, 6);
+
+                            let isDraggingSettings = false;
+                            let settingsStartY = 0;
+                            let settingsCurrentY = 0;
 
                             function formatTime(s) {
                                 if (!Number.isFinite(s)) return '0:00';
@@ -1943,6 +1996,7 @@
                                     if (speedPanel) speedPanel.classList.remove('is-open-<%- v %>');
                                     if (embedPanel) embedPanel.classList.remove('is-open-<%- v %>');
                                 }
+                                settingsPanel.style.transform = '';
                                 settingsPanel.classList.toggle('is-open-<%- v %>', open);
                                 settingsPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
                                 settingsBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -2200,6 +2254,35 @@
                                 setSettingsOpen(!settingsPanel.classList.contains('is-open-<%- v %>'));
                             });
                             settingsPanel.addEventListener('click', (event) => event.stopPropagation());
+                            
+                            settingsGrabberArea.addEventListener('pointerdown', (e) => {
+                                e.stopPropagation();
+                                isDraggingSettings = true;
+                                settingsStartY = e.clientY;
+                                settingsPanel.style.transition = 'none';
+                                try { settingsGrabberArea.setPointerCapture(e.pointerId); } catch(err) {}
+                            });
+                            settingsGrabberArea.addEventListener('pointermove', (e) => {
+                                if (!isDraggingSettings) return;
+                                e.stopPropagation();
+                                settingsCurrentY = Math.max(0, e.clientY - settingsStartY);
+                                settingsPanel.style.transform = `translate(-50%, ${settingsCurrentY}px)`;
+                            });
+                            settingsGrabberArea.addEventListener('pointerup', (e) => {
+                                if (!isDraggingSettings) return;
+                                e.stopPropagation();
+                                isDraggingSettings = false;
+                                settingsPanel.style.transition = 'opacity 0.16s ease, transform 0.16s ease';
+                                try { settingsGrabberArea.releasePointerCapture(e.pointerId); } catch(err) {}
+                                
+                                if (settingsCurrentY > 40) {
+                                    setSettingsOpen(false);
+                                } else {
+                                    settingsPanel.style.transform = '';
+                                }
+                                settingsCurrentY = 0;
+                            });
+
                             speedPanel.addEventListener('click', (event) => event.stopPropagation());
                             embedPanel.addEventListener('click', (event) => event.stopPropagation());
                             statsOverlay.addEventListener('click', (event) => event.stopPropagation());
@@ -2211,6 +2294,7 @@
                                 endOverlay.classList.remove('is-visible-<%- v %>');
                                 controls.style.display = '';
                                 isNaturalEnd = true;
+                                hasSeekedNearEnd = false;
                                 video.currentTime = 0;
                                 video.play().catch(() => {});
                             });
@@ -2387,9 +2471,17 @@
                             });
 
                             video.addEventListener('click', () => {
+                                const anyPanelOpen = settingsPanel.classList.contains('is-open-<%- v %>') || 
+                                                     speedPanel.classList.contains('is-open-<%- v %>') || 
+                                                     embedPanel.classList.contains('is-open-<%- v %>') ||
+                                                     volGroup.classList.contains('is-volume-open-<%- v %>');
                                 closeAllPanels();
+                                if (anyPanelOpen) {
+                                    return;
+                                }
                                 togglePlay();
                             });
+                            
                             video.addEventListener('contextmenu', (event) => event.preventDefault());
                             wrapper.addEventListener('contextmenu', (event) => event.preventDefault());
 
@@ -2408,8 +2500,9 @@
                             });
 
                             video.addEventListener('play', () => {
-                                if (video.duration && video.currentTime < video.duration - 2) {
+                                if (video.duration && video.currentTime < video.duration - 20) {
                                     isNaturalEnd = true;
+                                    hasSeekedNearEnd = false;
                                 }
                                 endOverlay.classList.remove('is-visible-<%- v %>');
                                 controls.style.display = '';
@@ -2420,13 +2513,14 @@
                             });
 
                             video.addEventListener('seeking', () => {
-                                if (video.duration && (video.duration - video.currentTime < 2)) {
+                                if (video.duration && (video.duration - video.currentTime <= 20)) {
+                                    hasSeekedNearEnd = true;
                                     isNaturalEnd = false;
                                 }
                             });
 
                             video.addEventListener('ended', () => {
-                                if (isNaturalEnd && !video.loop) {
+                                if (isNaturalEnd && !hasSeekedNearEnd && (video.duration >= 120) && !video.loop) {
                                     endOverlay.classList.add('is-visible-<%- v %>');
                                     controls.style.display = 'none';
                                 }
