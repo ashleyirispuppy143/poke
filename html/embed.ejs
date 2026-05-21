@@ -112,6 +112,32 @@
             filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5));
         }
 
+        /* Engagement Stats Styles */
+        .engagement-stats-<%- v %> {
+            position: absolute;
+            top: max(10px, 2vmin);
+            left: max(10px, 2vmin);
+            z-index: 10;
+            display: flex;
+            gap: 12px;
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            padding: 8px 14px;
+            border-radius: 20px;
+            color: #fff;
+            font-size: clamp(12px, 3vmin, 16px);
+            font-weight: 600;
+            pointer-events: none; /* Allows clicks to pass through to the video link */
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .stat-item-<%- v %> {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
         .embed-modal-<%- v %> {
             position: absolute;
             top: 0;
@@ -180,9 +206,29 @@
 </head>
 <body>
 
+    <% 
+        // Helper function to format numbers (e.g., 1500 -> 1.5K)
+        function formatCount(num) {
+            if (num === null || num === undefined) return '0';
+            return new Intl.NumberFormat('en-US', { notation: 'compact', compactDisplay: 'short' }).format(num);
+        }
+    %>
+
     <div class="video-wrapper-<%- v %>">
         <a href="/watch?v=<%- v %>" target="_blank" rel="noopener noreferrer" class="player-link-<%- v %>">
             <img src="https://i.ytimg.com/vi/<%- v %>/maxresdefault.jpg" alt="Play Video" class="player-image-<%- v %>" onerror="this.src='https://i.ytimg.com/vi/<%- v %>/hqdefault.jpg';">
+            
+            <% if (typeof engagement !== 'undefined') { %>
+            <div class="engagement-stats-<%- v %>">
+                <span class="stat-item-<%- v %>">
+                    👍 <%= formatCount(engagement.likes) %>
+                </span>
+                <span class="stat-item-<%- v %>">
+                    👎 <%= formatCount(engagement.dislikes) %>
+                </span>
+            </div>
+            <% } %>
+
             <div class="play-button-<%- v %>">
                 <svg class="play-triangle-<%- v %>" viewBox="0 0 24 24">
                     <polygon points="8,5 8,19 19,12" />
@@ -194,7 +240,7 @@
             <img src="/css/logo-poke.svg" alt="Poke Logo" class="logo-img-<%- v %>">
         </a>
 
-        <% if ((typeof locals['showHow'] !== 'undefined' && locals['showHow'] === true) || (typeof showHow !== 'undefined' && showHow === true)) { %>
+        <% if (typeof showHow !== 'undefined' && showHow === true) { %>
         <div class="embed-modal-<%- v %>">
             <div class="embed-content-<%- v %>">
                 <h2>Embed this video</h2>
