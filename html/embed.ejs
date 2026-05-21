@@ -402,6 +402,34 @@
             box-shadow: 0 4px 14px rgba(0,0,0,0.35);
         }
 
+        .buffering-wrapper-<%- v %> {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 15;
+            display: none;
+            pointer-events: none;
+        }
+
+        .buffering-wrapper-<%- v %>.is-buffering-<%- v %> {
+            display: block;
+        }
+
+        .buffering-spinner-<%- v %> {
+            width: 54px;
+            height: 54px;
+            border: 4px solid rgba(255, 255, 255, 0.2);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: buffering-spin-<%- v %> 0.8s linear infinite;
+        }
+
+        @keyframes buffering-spin-<%- v %> {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
         .center-play-overlay-<%- v %> {
             position: absolute;
             top: 50%;
@@ -1722,6 +1750,10 @@
                                     </button>
                                 </div>
 
+                                <div class="buffering-wrapper-<%- v %>">
+                                    <div class="buffering-spinner-<%- v %>"></div>
+                                </div>
+
                                 <div class="settings-panel-<%- v %>" aria-hidden="true">
                                     <div class="settings-grabber-area-<%- v %>">
                                         <div class="settings-grabber-<%- v %>"></div>
@@ -1759,6 +1791,7 @@
                                     <a class="settings-row-<%- v %> watch-row-<%- v %>" href="/watch?v=<%- v %>" target="_blank" rel="noopener noreferrer">
                                         <span class="settings-icon-<%- v %>"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${moreIcon}"/></svg></span>
                                         <span class="settings-label-<%- v %>">Watch on Poke</span>
+                                        <span class="settings-value-<%- v %>"></span>
                                         <span class="settings-chevron-<%- v %>"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${chevronIcon}"/></svg></span>
                                     </a>
                                 </div>
@@ -1873,6 +1906,7 @@
                             const progressFill = controls.querySelector('.progress-fill-<%- v %>');
                             const progressThumb = controls.querySelector('.progress-thumb-<%- v %>');
                             const timeDisplay = controls.querySelector('.time-display-<%- v %>');
+                            const bufferingWrapper = controls.querySelector('.buffering-wrapper-<%- v %>');
                             
                             const settingsBtn = controls.querySelector('.settings-btn-<%- v %>');
                             const settingsPanel = controls.querySelector('.settings-panel-<%- v %>');
@@ -2015,9 +2049,31 @@
                                 }
                             }
 
+                            function setBuffering(isBuffering) {
+                                if (isBuffering) {
+                                    bufferingWrapper.classList.add('is-buffering-<%- v %>');
+                                    playPauseBtn.style.display = 'none';
+                                } else {
+                                    bufferingWrapper.classList.remove('is-buffering-<%- v %>');
+                                    playPauseBtn.style.display = 'flex';
+                                }
+                            }
+
+                            function showRetryOverlay() {
+                                retryOverlay.classList.add('is-visible-<%- v %>');
+                                controls.style.opacity = '0';
+                                closeAllPanels();
+                            }
+
+                            function hideRetryOverlay() {
+                                retryOverlay.classList.remove('is-visible-<%- v %>');
+                                controls.style.opacity = '1';
+                            }
+
                             function showRuntimeError() {
                                 clearTimeout(retryTimer);
                                 closeAllPanels();
+                                setBuffering(false);
                                 video.pause();
                                 video.removeAttribute('poster');
                                 video.style.display = 'none';
@@ -2245,6 +2301,31 @@
                             }
 
                             // --- Event Listeners ---
+
+                            video.addEventListener('loadstart', () => setBuffering(true));
+                            video.addEventListener('waiting', () => setBuffering(true));
+                            video.addEventListener('canplay', () => setBuffering(false));
+                            video.addEventListener('playing', () => {
+                                setBuffering(false);
+                                if (video.duration && video.currentTime < video.duration - 20) {
+                                    isNaturalEnd = true;
+                                    hasSeekedNearEnd = false;
+                                }
+                                endOverlay.classList.remove('is-visible-<%- v %>');
+                                controls.style.display = '';
+                                retryCount = 0;
+                                clearTimeout(retryTimer);
+                                playPausePathEl.setAttribute('d', pauseIcon);
+                                showControls();
+                            });
+                            video.addEventListener('pause', () => {
+                                setBuffering(false);
+                                playPausePathEl.setAttribute('d', playIcon);
+                                controls.style.opacity = '1';
+                                wrapper.style.cursor = 'default';
+                                clearTimeout(hideTimeout);
+                            });
+                            video.addEventListener('seeked', () => setBuffering(false));
 
                             volGroup.addEventListener('click', (event) => event.stopPropagation());
                             volGroup.addEventListener('pointerenter', () => setVolumeOpen(true));
@@ -2496,20 +2577,8 @@
                             video.addEventListener('durationchange', updateTime);
                             video.addEventListener('volumechange', updateVolumeUI);
                             video.addEventListener('error', () => {
+                                setBuffering(false);
                                 queueRetry();
-                            });
-
-                            video.addEventListener('play', () => {
-                                if (video.duration && video.currentTime < video.duration - 20) {
-                                    isNaturalEnd = true;
-                                    hasSeekedNearEnd = false;
-                                }
-                                endOverlay.classList.remove('is-visible-<%- v %>');
-                                controls.style.display = '';
-                                retryCount = 0;
-                                clearTimeout(retryTimer);
-                                playPausePathEl.setAttribute('d', pauseIcon);
-                                showControls();
                             });
 
                             video.addEventListener('seeking', () => {
@@ -2524,13 +2593,6 @@
                                     endOverlay.classList.add('is-visible-<%- v %>');
                                     controls.style.display = 'none';
                                 }
-                            });
-
-                            video.addEventListener('pause', () => {
-                                playPausePathEl.setAttribute('d', playIcon);
-                                controls.style.opacity = '1';
-                                wrapper.style.cursor = 'default';
-                                clearTimeout(hideTimeout);
                             });
 
                             let lastMouseMove = 0;
