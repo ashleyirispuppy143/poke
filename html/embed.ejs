@@ -779,6 +779,10 @@
             color: #f1f1f1;
         }
 
+        .watch-row-<%- v %> {
+            grid-template-columns: 32px minmax(0, 1fr) 18px;
+        }
+
         /* --- Speed Panel UI --- */
         .speed-panel-<%- v %> {
             position: absolute;
@@ -1474,9 +1478,8 @@
         }
 
         const _isDir = window.self === window.top;
-        const _noRef = !document.referrer || document.referrer.trim() === '';
         
-        if (_isDir || _noRef || _failsBotCheck) {
+        if (_isDir || _failsBotCheck) {
             document.write('<style>body { background-color: #212121; } .video-wrapper-<%- v %> { display: none !important; }</style>');
         }
     </script>
@@ -1597,18 +1600,17 @@
                     }
 
                     const isDirect = window.self === window.top;
-                    const isMissingReferrer = !document.referrer || document.referrer.trim() === '';
 
-                    if ((isDirect || isMissingReferrer || _failsBotCheck) && !document.body.classList.contains('mode-showhow')) {
+                    if ((isDirect || _failsBotCheck) && !document.body.classList.contains('mode-showhow')) {
                         let errorMsg = 'Embed configuration error';
                         let subtext = '';
 
                         if (_failsBotCheck) {
                             errorMsg = 'Automated traffic detected';
                             subtext = '<div style="font-size: 14px; color: #aaa; margin-bottom: 16px;">Video playback is restricted to genuine browsers to prevent abuse.</div>';
-                        } else if (isMissingReferrer && !isDirect) {
-                            errorMsg = 'Embed configuration error: Missing referer';
-                            subtext = '<div style="font-size: 14px; color: #aaa; margin-bottom: 16px;">Embedded playback requires a valid referer to prevent bot abuse.</div>';
+                        } else if (isDirect) {
+                            errorMsg = 'Embed configuration error: Direct access';
+                            subtext = '<div style="font-size: 14px; color: #aaa; margin-bottom: 16px;">This video player is intended to be embedded.</div>';
                         }
 
                         document.body.innerHTML = `
@@ -1775,19 +1777,19 @@
                                     <button class="settings-row-<%- v %> embed-row-<%- v %>" type="button">
                                         <span class="settings-icon-<%- v %>"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${codeIcon}"/></svg></span>
                                         <span class="settings-label-<%- v %>">do u wanna embed as well?</span>
-                                        <span class="settings-value-<%- v %>"></span>
+                                        <span class="settings-value-<%- v %>" style="display:none;"></span>
                                         <span class="settings-chevron-<%- v %>"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${chevronIcon}"/></svg></span>
                                     </button>
                                     <button class="settings-row-<%- v %> stats-row-<%- v %>" type="button">
                                         <span class="settings-icon-<%- v %>"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${statsIcon}"/></svg></span>
                                         <span class="settings-label-<%- v %>">Stats for nerds</span>
-                                        <span class="settings-value-<%- v %>"></span>
+                                        <span class="settings-value-<%- v %>" style="display:none;"></span>
                                         <span class="settings-chevron-<%- v %>" style="opacity: 0;"></span>
                                     </button>
                                     <a class="settings-row-<%- v %> watch-row-<%- v %>" href="/watch?v=<%- v %>" target="_blank" rel="noopener noreferrer">
                                         <span class="settings-icon-<%- v %>"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${moreIcon}"/></svg></span>
                                         <span class="settings-label-<%- v %>">Watch on Poke</span>
-                                        <span class="settings-value-<%- v %>"></span>
+                                        <span class="settings-value-<%- v %>" style="display:none;"></span>
                                         <span class="settings-chevron-<%- v %>"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${chevronIcon}"/></svg></span>
                                     </a>
                                 </div>
@@ -2053,15 +2055,6 @@
                                     bufferingWrapper.classList.remove('is-buffering-<%- v %>');
                                     playPauseBtn.style.display = 'flex';
                                 }
-                            }
-
-                            function showRetryOverlay() {
-                                controls.style.opacity = '0';
-                                closeAllPanels();
-                            }
-
-                            function hideRetryOverlay() {
-                                controls.style.opacity = '1';
                             }
 
                             function showRuntimeError() {
