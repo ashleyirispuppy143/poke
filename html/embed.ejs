@@ -124,7 +124,6 @@
             z-index: 10;
             display: flex;
             gap: 12px;
-            /* Enhanced glassy effect to pop on dark backgrounds */
             background-color: rgba(0, 0, 0, 0.4);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
@@ -199,27 +198,11 @@
             gap: 40px;
         }
 
-        .beta-notice-<%- v %> {
-            background-color: rgba(255, 171, 204, 0.08);
-            border: 1px solid rgba(255, 171, 204, 0.25);
-            border-left: 4px solid #ffabcc;
-            padding: 16px;
-            border-radius: 8px;
-            font-size: 14px;
-            line-height: 1.5;
-        }
-
-        .beta-notice-<%- v %> strong {
-            color: #ffabcc;
-            font-weight: 500;
+        .plaintext-notice-<%- v %> {
             font-size: 15px;
-            display: block;
-            margin-bottom: 4px;
-        }
-
-        .beta-notice-<%- v %> p {
-            margin: 0;
             color: #aaaaaa;
+            line-height: 1.6;
+            margin: 0;
         }
 
         .section-header-<%- v %> {
@@ -386,10 +369,9 @@
 
         <main class="showhow-content-<%- v %>">
             
-            <div class="beta-notice-<%- v %>">
-                <strong>Beta Feature</strong>
-                <p>The embed feature is currently in beta. Functionality, layouts, and the generated code might change in future updates.</p>
-            </div>
+            <p class="plaintext-notice-<%- v %>">
+                The embed feature is currently in beta. In the future, this embed will host an actual video player instead of just redirecting to /watch?v= when clicked. The current behavior is only a placeholder.
+            </p>
 
             <section class="preview-section-<%- v %>">
                 <h2 class="section-header-<%- v %>">Live Preview</h2>
