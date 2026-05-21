@@ -38,9 +38,6 @@
             color: #f1f1f1;
         }
 
-        /* =========================================
-           Fullscreen Border-Radius Fix
-           ========================================= */
         :fullscreen, ::backdrop, :fullscreen * {
             border-radius: 0 !important;
         }
@@ -54,9 +51,6 @@
             border-radius: 0 !important;
         }
 
-        /* =========================================
-           Error Page Styles
-           ========================================= */
         .video-error-container-<%- v %> {
             position: relative;
             width: 100vw;
@@ -92,9 +86,6 @@
             line-height: 1.4;
         }
 
-        /* =========================================
-           Standard Video Player Styles
-           ========================================= */
         .video-wrapper-<%- v %> {
             position: relative;
             width: 100vw;
@@ -214,9 +205,6 @@
             gap: 6px;
         }
 
-        /* =========================================
-           Custom Video Player UI Styles
-           ========================================= */
         .custom-video-player-<%- v %> {
             position: absolute;
             top: 0;
@@ -317,7 +305,6 @@
             background-color: rgba(255, 255, 255, 0.2);
         }
 
-        /* Volume Slider specific styles */
         .volume-container-<%- v %> {
             background-color: rgba(0, 0, 0, 0.65);
             backdrop-filter: blur(8px);
@@ -382,7 +369,6 @@
             cursor: pointer;
         }
 
-        /* Custom Context Menu */
         .custom-context-menu-<%- v %> {
             position: absolute;
             background: rgba(28, 28, 28, 0.9);
@@ -415,9 +401,6 @@
             background: rgba(255, 255, 255, 0.1);
         }
 
-        /* =========================================
-           ShowHow Embed Guide FULL PAGE Styles
-           ========================================= */
         .showhow-topbar-<%- v %> {
             display: flex;
             align-items: center;
@@ -673,7 +656,7 @@
             <div class="video-wrapper-<%- v %>">
                 
                 <a href="/watch?v=<%- v %>" target="_blank" rel="noopener noreferrer" class="player-link-<%- v %>">
-                    <img src="https://i.ytimg.com/vi/<%- v %>/maxresdefault.jpg" alt="Play Video" class="player-image-<%- v %>" onerror="this.src='https://i.ytimg.com/vi/<%- v %>/hqdefault.jpg';">
+                    <img src="<%- media_proxy %>/proxy?url=https://i.ytimg.com/vi/<%- v %>/maxresdefault.jpg" alt="Play Video" class="player-image-<%- v %>" onerror="this.src='<%- media_proxy %>/proxy?url=https://i.ytimg.com/vi/<%- v %>/hqdefault.jpg';">
                     
                     <% if (typeof engagement !== 'undefined' && engagement !== null) { %>
                     <div class="engagement-stats-<%- v %>">
@@ -722,7 +705,7 @@
 
                             const video = document.createElement('video');
                             video.className = 'custom-video-player-<%- v %>';
-                            video.src = 'https://companion-proxy.poketube.fun/companion/latest_version?id=<%- v %>&itag=18&local=true';
+                            video.src = '<%- vidurl %>';
                             video.autoplay = true;
 
                             const controls = document.createElement('div');
