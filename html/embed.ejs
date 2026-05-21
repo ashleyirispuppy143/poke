@@ -55,11 +55,11 @@
             padding: 24px;
             box-sizing: border-box;
             gap: 20px;
-            color: #aaaaaa; /* Ensures plain text defaults to gray */
+            color: #aaaaaa;
         }
 
         .error-icon-<%- v %> {
-            color: #aaaaaa; /* SVG path uses currentColor, so we must set color, not fill */
+            color: #aaaaaa;
             width: 48px;
             height: 48px;
             flex-shrink: 0;
@@ -102,6 +102,7 @@
             text-decoration: none;
             overflow: hidden;
             background-color: #000;
+            z-index: 10;
         }
 
         .player-image-<%- v %> {
@@ -144,9 +145,9 @@
 
         .logo-link-<%- v %> {
             position: absolute;
-            bottom: max(10px, 2vmin);
+            bottom: max(75px, 8vmin); /* Shifted up to not overlap custom controls */
             right: max(10px, 2vmin);
-            z-index: 10;
+            z-index: 30;
             display: block;
             transition: transform 0.2s ease-in-out;
         }
@@ -186,6 +187,105 @@
             display: flex;
             align-items: center;
             gap: 6px;
+        }
+
+        /* =========================================
+           Custom Video Player UI Styles
+           ========================================= */
+        .custom-video-player-<%- v %> {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background-color: #000;
+            z-index: 5;
+        }
+        
+        /* Hide native webkit controls */
+        .custom-video-player-<%- v %>::-webkit-media-controls {
+            display: none !important;
+        }
+
+        .custom-controls-<%- v %> {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            padding: 0 16px 16px 16px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 20;
+            background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0) 100%);
+            opacity: 1;
+            transition: opacity 0.3s ease;
+        }
+
+        .progress-bar-<%- v %> {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 2px;
+            cursor: pointer;
+            position: relative;
+            transition: height 0.1s ease;
+        }
+
+        .progress-bar-<%- v %>:hover {
+            height: 6px;
+        }
+
+        .progress-fill-<%- v %> {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background-color: #ff0000;
+            border-radius: 2px;
+            width: 0%;
+            pointer-events: none;
+        }
+
+        .controls-row-<%- v %> {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .ctrl-pill-<%- v %> {
+            background-color: rgba(0, 0, 0, 0.65);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .ctrl-circle-<%- v %> {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+        }
+
+        .ctrl-circle-<%- v %>:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .ctrl-time-<%- v %> {
+            height: 40px;
+            border-radius: 20px;
+            padding: 0 16px;
+            font-size: 14px;
+            font-weight: 500;
+            font-variant-numeric: tabular-nums;
+            cursor: default;
         }
 
         /* =========================================
@@ -241,13 +341,6 @@
             display: flex;
             flex-direction: column;
             gap: 40px;
-        }
-
-        .plaintext-notice-<%- v %> {
-            font-size: 15px;
-            color: #aaaaaa;
-            line-height: 1.6;
-            margin: 0;
         }
 
         .section-header-<%- v %> {
@@ -417,10 +510,6 @@
             </header>
 
             <main class="showhow-content-<%- v %>">
-                
-                <p class="plaintext-notice-<%- v %>">
-                    The embed feature is currently in beta. In the future, this embed will host an actual video player instead of just redirecting to /watch?v= when clicked. The current behavior is only a placeholder.
-                </p>
 
                 <section class="preview-section-<%- v %>">
                     <h2 class="section-header-<%- v %>">Live Preview</h2>
@@ -458,6 +547,7 @@
 
         <% } else { %>
             <div class="video-wrapper-<%- v %>">
+                
                 <a href="/watch?v=<%- v %>" target="_blank" rel="noopener noreferrer" class="player-link-<%- v %>">
                     <img src="https://i.ytimg.com/vi/<%- v %>/maxresdefault.jpg" alt="Play Video" class="player-image-<%- v %>" onerror="this.src='https://i.ytimg.com/vi/<%- v %>/hqdefault.jpg';">
                     
@@ -488,6 +578,150 @@
                     <img src="/css/logo-poke.svg" alt="Poke Logo" class="logo-img-<%- v %>">
                 </a>
             </div>
+
+            <script>
+                document.addEventListener('DOMContentLoaded', () => {
+                    const playerLink = document.querySelector('.player-link-<%- v %>');
+                    const wrapper = document.querySelector('.video-wrapper-<%- v %>');
+                    
+                    if (playerLink && !document.body.classList.contains('mode-showhow')) {
+                        playerLink.addEventListener('click', (e) => {
+                            e.preventDefault(); // Stop the default redirect
+                            
+                            // Hide the thumbnail overlay
+                            playerLink.style.display = 'none';
+
+                            // Create the video element dynamically
+                            const video = document.createElement('video');
+                            video.className = 'custom-video-player-<%- v %>';
+                            video.src = 'https://companion-proxy.poketube.fun/companion/latest_version?id=<%- v %>&itag=18&local=true';
+                            video.autoplay = true;
+
+                            // Create the custom controls interface matching the requested UI
+                            const controls = document.createElement('div');
+                            controls.className = 'custom-controls-<%- v %>';
+                            controls.innerHTML = `
+                                <div class="progress-bar-<%- v %>">
+                                    <div class="progress-fill-<%- v %>"></div>
+                                </div>
+                                <div class="controls-row-<%- v %>">
+                                    <button class="ctrl-pill-<%- v %> ctrl-circle-<%- v %> play-pause-btn-<%- v %>" title="Play/Pause">
+                                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                                            <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                                        </svg>
+                                    </button>
+                                    <button class="ctrl-pill-<%- v %> ctrl-circle-<%- v %> mute-btn-<%- v %>" title="Mute/Unmute">
+                                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                                            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                                        </svg>
+                                    </button>
+                                    <div class="ctrl-pill-<%- v %> ctrl-time-<%- v %> time-display-<%- v %>">0:00 / 0:00</div>
+                                    <div style="flex-grow: 1;"></div>
+                                    <button class="ctrl-pill-<%- v %> ctrl-circle-<%- v %> fs-btn-<%- v %>" title="Fullscreen">
+                                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                                            <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            `;
+
+                            wrapper.insertBefore(video, wrapper.firstChild);
+                            wrapper.appendChild(controls);
+
+                            const playPauseBtn = controls.querySelector('.play-pause-btn-<%- v %>');
+                            const muteBtn = controls.querySelector('.mute-btn-<%- v %>');
+                            const fsBtn = controls.querySelector('.fs-btn-<%- v %>');
+                            const progressContainer = controls.querySelector('.progress-bar-<%- v %>');
+                            const progressFill = controls.querySelector('.progress-fill-<%- v %>');
+                            const timeDisplay = controls.querySelector('.time-display-<%- v %>');
+
+                            const playIcon = '<path d="M8 5v14l11-7z"/>';
+                            const pauseIcon = '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
+                            const volIcon = '<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>';
+                            const muteIcon = '<path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>';
+
+                            function formatTime(s) {
+                                if (isNaN(s)) return "0:00";
+                                const m = Math.floor(s / 60);
+                                const sec = Math.floor(s % 60);
+                                return m + ':' + (sec < 10 ? '0' : '') + sec;
+                            }
+
+                            playPauseBtn.onclick = (e) => {
+                                e.stopPropagation();
+                                video.paused ? video.play() : video.pause();
+                            };
+
+                            muteBtn.onclick = (e) => {
+                                e.stopPropagation();
+                                video.muted = !video.muted;
+                                muteBtn.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">${video.muted ? muteIcon : volIcon}</svg>`;
+                            };
+
+                            const updateTime = () => {
+                                const p = (video.currentTime / video.duration) * 100;
+                                progressFill.style.width = (p || 0) + '%';
+                                timeDisplay.innerText = `${formatTime(video.currentTime)} / ${formatTime(video.duration)}`;
+                            };
+
+                            video.ontimeupdate = updateTime;
+                            video.onloadedmetadata = updateTime;
+
+                            progressContainer.onclick = (e) => {
+                                e.stopPropagation();
+                                const r = progressContainer.getBoundingClientRect();
+                                video.currentTime = ((e.clientX - r.left) / r.width) * video.duration;
+                            };
+
+                            fsBtn.onclick = (e) => {
+                                e.stopPropagation();
+                                if (!document.fullscreenElement) {
+                                    wrapper.requestFullscreen().catch(()=>{});
+                                } else {
+                                    document.exitFullscreen();
+                                }
+                            };
+
+                            // Toggle play/pause by clicking video itself
+                            video.onclick = () => {
+                                video.paused ? video.play() : video.pause();
+                            };
+
+                            let hideTimeout;
+                            const showControls = () => {
+                                controls.style.opacity = '1';
+                                wrapper.style.cursor = 'default';
+                                clearTimeout(hideTimeout);
+                                hideTimeout = setTimeout(() => {
+                                    if (!video.paused) {
+                                        controls.style.opacity = '0';
+                                        wrapper.style.cursor = 'none';
+                                    }
+                                }, 2500);
+                            };
+
+                            wrapper.onmousemove = showControls;
+                            wrapper.onmouseleave = () => {
+                                if (!video.paused) {
+                                    controls.style.opacity = '0';
+                                }
+                            };
+
+                            video.onplay = () => {
+                                playPauseBtn.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">${pauseIcon}</svg>`;
+                                showControls();
+                            };
+
+                            video.onpause = () => {
+                                playPauseBtn.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">${playIcon}</svg>`;
+                                controls.style.opacity = '1';
+                                wrapper.style.cursor = 'default';
+                                clearTimeout(hideTimeout);
+                            };
+                        });
+                    }
+                });
+            </script>
         <% } %>
 
     <% } %>
