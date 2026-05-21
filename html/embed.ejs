@@ -143,9 +143,10 @@
             fill: #ffffff;
         }
 
+        /* Default unplayed/paused logo position */
         .logo-link-<%- v %> {
             position: absolute;
-            bottom: max(75px, 8vmin); /* Shifted up to not overlap custom controls */
+            bottom: max(10px, 2vmin);
             right: max(10px, 2vmin);
             z-index: 30;
             display: block;
@@ -161,6 +162,19 @@
             width: auto;
             display: block;
             filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5));
+        }
+
+        /* Classes applied when logo is moved into the control bar */
+        .logo-link-<%- v %>.in-player-<%- v %> {
+            position: static;
+            display: flex;
+            align-items: center;
+            height: 40px;
+            margin-left: 6px;
+        }
+
+        .logo-link-<%- v %>.in-player-<%- v %> .logo-img-<%- v %> {
+            height: 28px;
         }
 
         .engagement-stats-<%- v %> {
@@ -203,7 +217,6 @@
             z-index: 5;
         }
         
-        /* Hide native webkit controls */
         .custom-video-player-<%- v %>::-webkit-media-controls {
             display: none !important;
         }
@@ -341,6 +354,13 @@
             display: flex;
             flex-direction: column;
             gap: 40px;
+        }
+
+        .plaintext-notice-<%- v %> {
+            font-size: 15px;
+            color: #aaaaaa;
+            line-height: 1.6;
+            margin: 0;
         }
 
         .section-header-<%- v %> {
@@ -510,6 +530,10 @@
             </header>
 
             <main class="showhow-content-<%- v %>">
+                
+                <p class="plaintext-notice-<%- v %>">
+                    The embed feature is currently in beta. In the future, this embed will host an actual video player instead of just redirecting to /watch?v= when clicked. The current behavior is only a placeholder.
+                </p>
 
                 <section class="preview-section-<%- v %>">
                     <h2 class="section-header-<%- v %>">Live Preview</h2>
@@ -583,21 +607,19 @@
                 document.addEventListener('DOMContentLoaded', () => {
                     const playerLink = document.querySelector('.player-link-<%- v %>');
                     const wrapper = document.querySelector('.video-wrapper-<%- v %>');
+                    const logoLink = wrapper ? wrapper.querySelector('.logo-link-<%- v %>') : null;
                     
                     if (playerLink && !document.body.classList.contains('mode-showhow')) {
                         playerLink.addEventListener('click', (e) => {
-                            e.preventDefault(); // Stop the default redirect
+                            e.preventDefault();
                             
-                            // Hide the thumbnail overlay
                             playerLink.style.display = 'none';
 
-                            // Create the video element dynamically
                             const video = document.createElement('video');
                             video.className = 'custom-video-player-<%- v %>';
                             video.src = 'https://companion-proxy.poketube.fun/companion/latest_version?id=<%- v %>&itag=18&local=true';
                             video.autoplay = true;
 
-                            // Create the custom controls interface matching the requested UI
                             const controls = document.createElement('div');
                             controls.className = 'custom-controls-<%- v %>';
                             controls.innerHTML = `
@@ -627,6 +649,12 @@
 
                             wrapper.insertBefore(video, wrapper.firstChild);
                             wrapper.appendChild(controls);
+
+                            const controlsRow = controls.querySelector('.controls-row-<%- v %>');
+                            if (logoLink && controlsRow) {
+                                logoLink.classList.add('in-player-<%- v %>');
+                                controlsRow.appendChild(logoLink);
+                            }
 
                             const playPauseBtn = controls.querySelector('.play-pause-btn-<%- v %>');
                             const muteBtn = controls.querySelector('.mute-btn-<%- v %>');
@@ -682,7 +710,6 @@
                                 }
                             };
 
-                            // Toggle play/pause by clicking video itself
                             video.onclick = () => {
                                 video.paused ? video.play() : video.pause();
                             };
