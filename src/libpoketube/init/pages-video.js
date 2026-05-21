@@ -206,6 +206,7 @@ module.exports = function (app, config, renderTemplate) {
   
 app.get("/embed/:v", function (req, res) {
   const v = req.params.v;
+  const hostname = req.hostname;
 
   if (!/^[a-zA-Z0-9_-]{11}$/.test(v)) {
     return res.status(400).send("Invalid video ID");
@@ -213,6 +214,7 @@ app.get("/embed/:v", function (req, res) {
 
   renderTemplate(res, req, "embed.ejs", {
     v,
+    hostname,
   });
 });
 
