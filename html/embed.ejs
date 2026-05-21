@@ -242,19 +242,16 @@
             color: #f1f1f1;
         }
 
-        /* Embed Help Instructions */
+        /* YouTube-Style Embed Help Instructions */
         .embed-help-<%- v %> {
             font-size: 13px;
             color: #aaaaaa;
-            line-height: 1.6;
-            background-color: rgba(255, 255, 255, 0.05);
-            padding: 12px 16px;
-            border-radius: 8px;
-            border-left: 3px solid #3ea6ff;
+            line-height: 1.5;
+            padding: 4px 0;
         }
 
         .embed-help-<%- v %> p {
-            margin: 0 0 8px 0;
+            margin: 0 0 12px 0;
         }
 
         .embed-help-<%- v %> p:last-child {
@@ -264,30 +261,45 @@
         .embed-help-<%- v %> strong {
             color: #f1f1f1;
             font-weight: 500;
+            display: block;
+            margin-bottom: 6px;
         }
 
         .embed-help-<%- v %> ul {
-            margin: 0 0 8px 0;
-            padding-left: 20px;
+            margin: 0;
+            padding-left: 0;
+            list-style: none;
         }
 
         .embed-help-<%- v %> li {
-            margin-bottom: 4px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: flex-start;
+        }
+
+        /* Custom minimal YouTube bullet point */
+        .embed-help-<%- v %> li::before {
+            content: "";
+            display: inline-block;
+            width: 4px;
+            height: 4px;
+            background-color: #717171;
+            border-radius: 50%;
+            margin-top: 7px;
+            margin-right: 12px;
+            flex-shrink: 0;
         }
 
         .embed-help-<%- v %> code {
-            background-color: #333;
-            color: #fff;
-            padding: 2px 5px;
-            border-radius: 4px;
+            color: #f1f1f1;
             font-family: "Roboto Mono", monospace;
-            font-size: 12px;
+            font-size: 13px;
         }
 
         .embed-actions-<%- v %> {
             display: flex;
             justify-content: flex-end;
-            margin-top: 8px;
+            margin-top: 4px;
         }
 
         .embed-btn-<%- v %> {
@@ -368,10 +380,12 @@
                     <textarea class="embed-textarea-<%- v %>" readonly>&lt;iframe src="https://<%= typeof hostname !== 'undefined' ? hostname : '' %>/embed/<%- v %>" width="560" height="315" frameborder="0" allowfullscreen&gt;&lt;/iframe&gt;</textarea>
                     
                     <div class="embed-help-<%- v %>">
-                        <p><strong>Where to use this:</strong> Paste this code directly into your website's HTML body, a markdown file, or a blog post editor (using the HTML/Source view) to display the video.</p>
-                        <p><strong>Customizing the code:</strong></p>
+                        <p><strong>Where to paste</strong><br>
+                        Add this code directly into your website's HTML body, a markdown file, or a blog post editor (using the HTML/Source view).</p>
+                        
+                        <strong>Customizing the code</strong>
                         <ul>
-                            <li><code>width</code> & <code>height</code>: Controls the player size. Accepts numbers for pixels (e.g., <code>560</code>) or percentages for responsive width (e.g., <code>100%</code>).</li>
+                            <li><code>width</code> & <code>height</code>: Controls player size. Accepts numbers for pixels (e.g., <code>560</code>) or percentages (e.g., <code>100%</code>).</li>
                             <li><code>frameborder</code>: Set to <code>0</code> (no border) or <code>1</code> (shows a solid border).</li>
                         </ul>
                     </div>
