@@ -70,7 +70,8 @@
         }
 
         .video-error-container-<%- v %> {
-            position: relative;
+            position: absolute;
+            top: 0; left: 0;
             width: 100vw;
             height: 100vh;
             display: flex;
@@ -81,6 +82,7 @@
             box-sizing: border-box;
             gap: 20px;
             color: #aaaaaa;
+            z-index: 100;
         }
 
         .error-icon-<%- v %> {
@@ -117,7 +119,8 @@
         }
 
         .player-link-<%- v %> {
-            position: relative;
+            position: absolute;
+            top: 0; left: 0;
             display: block;
             width: 100%;
             height: 100%;
@@ -165,64 +168,6 @@
             fill: #ffffff;
         }
 
-        .logo-link-<%- v %> {
-            position: absolute;
-            bottom: max(10px, 2vmin);
-            right: max(10px, 2vmin);
-            z-index: 30;
-            display: block;
-            transition: transform 0.2s ease-in-out;
-        }
-
-        .logo-link-<%- v %>:hover {
-            transform: scale(1.05);
-        }
-
-        .logo-img-<%- v %> {
-            height: clamp(20px, 5vmin, 40px);
-            width: auto;
-            display: block;
-            filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5));
-        }
-
-        .logo-link-<%- v %>.in-player-<%- v %> {
-            position: static;
-            display: flex;
-            align-items: center;
-            height: 40px;
-            margin-left: 6px;
-        }
-
-        .logo-link-<%- v %>.in-player-<%- v %> .logo-img-<%- v %> {
-            height: 28px;
-        }
-
-        .engagement-stats-<%- v %> {
-            position: absolute;
-            top: max(10px, 2vmin);
-            left: max(10px, 2vmin);
-            z-index: 10;
-            display: flex;
-            gap: 12px;
-            background-color: rgba(0, 0, 0, 0.4);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            padding: 8px 14px;
-            border-radius: 20px;
-            color: #fff;
-            font-size: clamp(12px, 3vmin, 16px);
-            font-weight: 600;
-            pointer-events: none;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-        }
-
-        .stat-item-<%- v %> {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
         /* =========================================
            Custom Video Player UI Styles
            ========================================= */
@@ -235,6 +180,7 @@
             object-fit: contain;
             background-color: #000;
             z-index: 5;
+            display: none;
         }
         
         .custom-video-player-<%- v %>::-webkit-media-controls {
@@ -248,6 +194,7 @@
             opacity: 1;
             transition: opacity 0.3s ease;
             pointer-events: none;
+            display: none;
         }
 
         .custom-controls-<%- v %> > * {
@@ -285,47 +232,47 @@
         }
 
         .icon-btn-<%- v %> svg {
-            width: 28px;
-            height: 28px;
+            width: 24px;
+            height: 24px;
         }
 
         .vol-group-<%- v %> {
             position: relative;
-            background: rgba(28, 28, 28, 0.7);
+            background: rgba(28, 28, 28, 0.4);
             backdrop-filter: blur(8px);
             -webkit-backdrop-filter: blur(8px);
             border-radius: 20px;
             display: flex;
-            flex-direction: column;
+            flex-direction: column-reverse;
             align-items: center;
             width: 40px;
             height: 40px;
             overflow: hidden;
             transition: height 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
         }
 
         .vol-group-<%- v %>:hover {
             height: 140px;
+            background: rgba(28, 28, 28, 0.7);
         }
 
         .vol-group-<%- v %> .icon-btn-<%- v %> {
-            filter: none;
             flex-shrink: 0;
         }
 
         .vol-slider-wrap-<%- v %> {
-            height: 90px;
             width: 40px;
+            height: 100px;
             position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
 
         .volume-slider-<%- v %> {
-            position: absolute;
-            top: 50%; left: 50%;
-            transform: translate(-50%, -50%) rotate(-90deg);
-            width: 70px;
-            height: 4px;
+            transform: rotate(-90deg);
+            width: 80px; 
+            height: 4px; 
             -webkit-appearance: none;
             appearance: none;
             background: linear-gradient(to right, #fff 100%, rgba(255, 255, 255, 0.3) 100%);
@@ -361,7 +308,7 @@
             z-index: 20;
             backdrop-filter: blur(4px);
             -webkit-backdrop-filter: blur(4px);
-            transition: transform 0.2s, background 0.2s;
+            transition: transform 0.2s, background 0.2s, opacity 0.2s;
         }
         
         .center-play-overlay-<%- v %>:hover {
@@ -386,7 +333,7 @@
             background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%);
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 10px;
             z-index: 20;
         }
 
@@ -430,7 +377,7 @@
             display: block;
         }
 
-        .controls-row-1-<%- v %> {
+        .controls-row-bottom-<%- v %> {
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -446,43 +393,86 @@
             font-variant-numeric: tabular-nums;
         }
 
-        .controls-row-2-<%- v %> {
+        .bottom-right-group-<%- v %> {
             display: flex;
-            justify-content: flex-end;
             align-items: center;
+            gap: 16px;
         }
 
-        /* Context Menu */
-        .custom-context-menu-<%- v %> {
-            position: absolute;
-            background: rgba(28, 28, 28, 0.9);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
-            padding: 8px 0;
-            min-width: 220px;
-            z-index: 1000;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+        .logo-link-in-player-<%- v %> {
             display: flex;
-            flex-direction: column;
-            user-select: none;
-        }
-
-        .context-item-<%- v %> {
-            padding: 10px 16px;
-            color: #f1f1f1;
-            font-size: 14px;
-            cursor: pointer;
+            align-items: center;
             text-decoration: none;
-            font-family: "PokeTube Flex", sans-serif;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
+        }
+        
+        .logo-link-in-player-<%- v %> img {
+            height: 22px;
+            filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+            display: block;
         }
 
-        .context-item-<%- v %>:hover {
-            background: rgba(255, 255, 255, 0.1);
+        /* Settings Menu */
+        .settings-menu-<%- v %> {
+            position: absolute;
+            top: 64px;
+            right: 16px;
+            background: #fff;
+            border-radius: 12px;
+            padding: 8px 0;
+            width: 250px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            display: none;
+            flex-direction: column;
+            z-index: 1000;
+            user-select: none;
+            pointer-events: auto;
+        }
+
+        .sm-handle-<%- v %> {
+            width: 32px;
+            height: 4px;
+            background: #e0e0e0;
+            border-radius: 2px;
+            margin: 4px auto 8px auto;
+        }
+
+        .sm-item-<%- v %> {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            cursor: pointer;
+            color: #0f0f0f;
+            transition: background 0.2s;
+        }
+
+        .sm-item-<%- v %>:hover {
+            background: #f2f2f2;
+        }
+
+        .sm-item-<%- v %> svg {
+            width: 24px;
+            height: 24px;
+            margin-right: 16px;
+            fill: #0f0f0f;
+        }
+
+        .sm-label-<%- v %> {
+            flex-grow: 1;
+            font-size: 14px;
+            font-weight: 400;
+        }
+
+        .sm-val-<%- v %> {
+            font-size: 13px;
+            color: #606060;
+            margin-right: 8px;
+        }
+
+        .sm-chevron-<%- v %> {
+            width: 16px !important;
+            height: 16px !important;
+            margin-right: 0 !important;
+            fill: #606060 !important;
         }
 
         /* =========================================
@@ -711,7 +701,7 @@
                 <div class="error-title-<%- v %>"><%= VideoError.message %></div>
             </div>
             
-            <a href="/" target="_blank" rel="noopener noreferrer" class="logo-link-<%- v %>">
+            <a href="/" target="_blank" rel="noopener noreferrer" class="logo-link-<%- v %>" style="position: absolute; bottom: max(10px, 2vmin); right: max(10px, 2vmin);">
                 <img src="/css/logo-poke.svg" alt="Poke Logo" class="logo-img-<%- v %>">
             </a>
         </div>
@@ -770,31 +760,11 @@
                 <a href="/watch?v=<%- v %>" target="_blank" rel="noopener noreferrer" class="player-link-<%- v %>">
                     <img src="<%- media_proxy %>/proxy?url=https://i.ytimg.com/vi/<%- v %>/maxresdefault.jpg" alt="Play Video" class="player-image-<%- v %>" onerror="this.src='<%- media_proxy %>/proxy?url=https://i.ytimg.com/vi/<%- v %>/hqdefault.jpg';">
                     
-                    <% if (typeof engagement !== 'undefined' && engagement !== null) { %>
-                    <div class="engagement-stats-<%- v %>">
-                        <% if (engagement.viewCount !== undefined && engagement.viewCount !== null) { %>
-                        <span class="stat-item-<%- v %>">
-                            👁️ <%= formatCount(engagement.viewCount) %>
-                        </span>
-                        <% } %>
-                        <span class="stat-item-<%- v %>">
-                            👍 <%= formatCount(engagement.likes) %>
-                        </span>
-                        <span class="stat-item-<%- v %>">
-                            👎 <%= formatCount(engagement.dislikes) %>
-                        </span>
-                    </div>
-                    <% } %>
-
                     <div class="play-button-<%- v %>">
                         <svg class="play-triangle-<%- v %>" viewBox="0 0 24 24">
                             <polygon points="8,5 8,19 19,12" />
                         </svg>
                     </div>
-                </a>
-
-                <a href="/" target="_blank" rel="noopener noreferrer" class="logo-link-<%- v %>">
-                    <img src="/css/logo-poke.svg" alt="Poke Logo" class="logo-img-<%- v %>">
                 </a>
             </div>
 
@@ -829,7 +799,7 @@
                         }
                         
                         document.body.innerHTML = `
-                            <div class="video-error-container-<%- v %>">
+                            <div class="video-error-container-<%- v %>" style="z-index: 999;">
                                 <svg class="error-icon-<%- v %>" viewBox="0 0 24 24">
                                     <path fill="currentColor" d="M12,2C6.48,2,2,6.48,2,12c0,5.52,4.48,10,10,10s10-4.48,10-10C22,6.48,17.52,2,12,2z M13,17h-2v-2h2V17z M13,13h-2V7h2V13z"/>
                                 </svg>
@@ -848,12 +818,16 @@
 
                     const playerLink = document.querySelector('.player-link-<%- v %>');
                     const wrapper = document.querySelector('.video-wrapper-<%- v %>');
-                    const logoLink = wrapper ? wrapper.querySelector('.logo-link-<%- v %>') : null;
                     
                     const playIcon = 'M8 5v14l11-7z';
                     const pauseIcon = 'M6 19h4V5H6v14zm8-14v14h4V5h-4z';
                     const volIcon = 'M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z';
                     const muteIcon = 'M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z';
+                    
+                    const iconQuality = 'M15 4c0-1.11-.89-2-2-2s-2 .89-2 2H3v2h8c0 1.11.89 2 2 2s2-.89 2-2h6V4h-6zm-4 14c0 1.11.89 2 2 2s2-.89 2-2h6v-2h-6c0-1.11-.89-2-2-2s-2 .89-2 2H3v2h8zm-6-7c0-1.11-.89-2-2-2s-2 .89-2 2H3v2h0c0 1.11.89 2 2 2s2-.89 2-2h14v-2H5z';
+                    const iconSpeed = 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-2-3.5l6-4.5-6-4.5v9z';
+                    const iconLoop = 'M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z';
+                    const iconChevron = 'M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z';
 
                     function getVideoUrl() {
                         const _enc = '<%= encodedVidUrl %>';
@@ -885,7 +859,9 @@
                         playerLink.addEventListener('click', (e) => {
                             e.preventDefault();
                             
-                            playerLink.style.display = 'none';
+                            // Start Loading
+                            const playBtnEl = playerLink.querySelector('.play-button-<%- v %>');
+                            if (playBtnEl) playBtnEl.style.display = 'none';
 
                             const video = document.createElement('video');
                             video.className = 'custom-video-player-<%- v %>';
@@ -913,11 +889,6 @@
                                             <input type="range" class="volume-slider-<%- v %>" min="0" max="1" step="0.05" value="1">
                                         </div>
                                     </div>
-                                    <button class="icon-btn-<%- v %> cc-btn-<%- v %>" title="Subtitles/CC">
-                                        <svg viewBox="0 0 24 24" fill="currentColor">
-                                            <path d="M11 11H8v2h3v2H7V9h4v2zm7 0h-3v2h3v2h-4V9h4v2zM19 4H5c-1.11 0-2 .9-2 2v12c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.89-2-2-2zm0 14H5V6h14v12z"/>
-                                        </svg>
-                                    </button>
                                     <button class="icon-btn-<%- v %> settings-btn-<%- v %>" title="Settings">
                                         <svg viewBox="0 0 24 24" fill="currentColor">
                                             <path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49-.12-.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
@@ -936,42 +907,57 @@
                                         <div class="progress-fill-<%- v %>"></div>
                                         <div class="progress-thumb-<%- v %>"></div>
                                     </div>
-                                    <div class="controls-row-1-<%- v %>">
+                                    <div class="controls-row-bottom-<%- v %>">
                                         <div class="time-display-<%- v %>" title="Toggle time remaining">0:00 / 0:00</div>
-                                        <button class="icon-btn-<%- v %> fs-btn-<%- v %>" title="Fullscreen">
-                                            <svg viewBox="0 0 24 24" fill="currentColor">
-                                                <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
-                                            </svg>
-                                        </button>
+                                        <div class="bottom-right-group-<%- v %>">
+                                            <button class="icon-btn-<%- v %> fs-btn-<%- v %>" title="Fullscreen" style="width: 24px; height: 24px;">
+                                                <svg viewBox="0 0 24 24" fill="currentColor" style="width: 100%; height: 100%;">
+                                                    <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+                                                </svg>
+                                            </button>
+                                            <a href="/" target="_blank" rel="noopener noreferrer" class="logo-link-in-player-<%- v %>">
+                                                <img src="/css/logo-poke.svg" alt="Poke Logo" class="logo-img-<%- v %>">
+                                            </a>
+                                        </div>
                                     </div>
-                                    <div class="controls-row-2-<%- v %>">
-                                        <a href="/" target="_blank" rel="noopener noreferrer" class="logo-link-<%- v %>" style="position: static; margin-top: 4px;">
-                                            <img src="/css/logo-poke.svg" alt="Poke Logo" class="logo-img-<%- v %>" style="height: 24px;">
-                                        </a>
+                                </div>
+
+                                <div class="settings-menu-<%- v %>">
+                                    <div class="sm-handle-<%- v %>"></div>
+                                    <div class="sm-item-<%- v %>">
+                                        <svg viewBox="0 0 24 24"><path d="${iconQuality}"/></svg>
+                                        <span class="sm-label-<%- v %>">Quality</span>
+                                        <span class="sm-val-<%- v %>">1080p</span>
+                                        <svg class="sm-chevron-<%- v %>" viewBox="0 0 24 24"><path d="${iconChevron}"/></svg>
+                                    </div>
+                                    <div class="sm-item-<%- v %> speed-item-<%- v %>">
+                                        <svg viewBox="0 0 24 24"><path d="${iconSpeed}"/></svg>
+                                        <span class="sm-label-<%- v %>">Speed</span>
+                                        <span class="sm-val-<%- v %> speed-val-<%- v %>">Normal</span>
+                                        <svg class="sm-chevron-<%- v %>" viewBox="0 0 24 24"><path d="${iconChevron}"/></svg>
+                                    </div>
+                                    <div class="sm-item-<%- v %> loop-item-<%- v %>">
+                                        <svg viewBox="0 0 24 24"><path d="${iconLoop}"/></svg>
+                                        <span class="sm-label-<%- v %>">Loop</span>
+                                        <span class="sm-val-<%- v %> loop-val-<%- v %>">Off</span>
+                                        <svg class="sm-chevron-<%- v %>" viewBox="0 0 24 24"><path d="${iconChevron}"/></svg>
                                     </div>
                                 </div>
                             `;
 
-                            const contextMenu = document.createElement('div');
-                            contextMenu.className = 'custom-context-menu-<%- v %>';
-                            contextMenu.style.display = 'none';
-                            contextMenu.innerHTML = `
-                                <a href="/watch?v=<%- v %>" target="_blank" class="context-item-<%- v %>">Open video on actual Poke</a>
-                                <div class="context-item-<%- v %> loop-toggle-<%- v %>">Loop<span>Off</span></div>
-                                <div class="context-item-<%- v %> speed-toggle-<%- v %>">Speed<span>Normal</span></div>
-                                <a href="https://codeberg.org/ashleyirispuppy/poke/issues/new?template=issue_template%2fplayer-bug.yml" target="_blank" class="context-item-<%- v %>">Having problems? Report em here</a>
-                            `;
-
-                            if (logoLink) {
-                                logoLink.style.display = 'none';
-                            }
-
-                            wrapper.insertBefore(video, wrapper.firstChild);
+                            wrapper.appendChild(video);
                             wrapper.appendChild(controls);
-                            wrapper.appendChild(contextMenu);
+                            wrapper.addEventListener('contextmenu', (e) => e.preventDefault());
 
                             let retryCount = 0;
                             const maxRetries = 3;
+
+                            video.addEventListener('playing', () => {
+                                playerLink.style.display = 'none';
+                                video.style.display = 'block';
+                                controls.style.display = 'block';
+                                retryCount = 0; 
+                            });
 
                             video.onerror = () => {
                                 if (retryCount < maxRetries) {
@@ -986,62 +972,31 @@
 
                                 video.style.display = 'none';
                                 controls.style.display = 'none';
-                                contextMenu.style.display = 'none';
+                                playerLink.style.display = 'none'; // Only hide thumbnail on complete failure
                                 
                                 let errContainer = wrapper.querySelector('.video-runtime-error-<%- v %>');
                                 if (!errContainer) {
                                     errContainer = document.createElement('div');
                                     errContainer.className = 'video-error-container-<%- v %> video-runtime-error-<%- v %>';
-                                    errContainer.style.position = 'absolute';
-                                    errContainer.style.top = '0';
-                                    errContainer.style.left = '0';
-                                    errContainer.style.width = '100%';
-                                    errContainer.style.height = '100%';
                                     errContainer.style.zIndex = '100';
-                                    errContainer.style.backgroundColor = 'transparent'; // Let poster show behind error
                                     
-                                    // Make error text readable over poster
                                     errContainer.innerHTML = `
-                                        <div style="background: rgba(33, 33, 33, 0.9); padding: 24px; border-radius: 12px; display: flex; align-items: center; gap: 20px; backdrop-filter: blur(8px);">
-                                            <svg class="error-icon-<%- v %>" viewBox="0 0 24 24" style="color: #ffabcc;">
-                                                <path fill="currentColor" d="M12,2C6.48,2,2,6.48,2,12c0,5.52,4.48,10,10,10s10-4.48,10-10C22,6.48,17.52,2,12,2z M13,17h-2v-2h2V17z M13,13h-2V7h2V13z"/>
-                                            </svg>
-                                            <div class="error-text-<%- v %>">
-                                                <div class="error-title-<%- v %>" style="margin-bottom: 12px;">Video playback failed</div>
-                                                <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
-                                                    <button class="embed-btn-<%- v %> retry-btn-<%- v %>" style="cursor: pointer;">Retry</button>
-                                                    <a href="/watch?v=<%- v %>" target="_blank" rel="noopener noreferrer" style="color: #ffabcc; text-decoration: none; font-size: 16px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; font-family: 'PokeTube Flex', Arial, sans-serif;">
-                                                        Open video on actual Poke
-                                                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
-                                                    </a>
-                                                </div>
+                                        <svg class="error-icon-<%- v %>" viewBox="0 0 24 24">
+                                            <path fill="currentColor" d="M12,2C6.48,2,2,6.48,2,12c0,5.52,4.48,10,10,10s10-4.48,10-10C22,6.48,17.52,2,12,2z M13,17h-2v-2h2V17z M13,13h-2V7h2V13z"/>
+                                        </svg>
+                                        <div class="error-text-<%- v %>">
+                                            <div class="error-title-<%- v %>" style="margin-bottom: 12px;">Video playback failed</div>
+                                            <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+                                                <a href="/watch?v=<%- v %>" target="_blank" rel="noopener noreferrer" class="embed-btn-<%- v %>" style="display: inline-flex; text-decoration: none; width: fit-content; align-items: center; justify-content: center; height: 36px; padding: 0 16px;">Open on Poke</a>
                                             </div>
                                         </div>
+                                        <a href="/" target="_blank" rel="noopener noreferrer" class="logo-link-<%- v %>" style="position: absolute; bottom: max(10px, 2vmin); right: max(10px, 2vmin);">
+                                            <img src="/css/logo-poke.svg" alt="Poke Logo" class="logo-img-<%- v %>" style="height: clamp(20px, 5vmin, 40px); filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5));">
+                                        </a>
                                     `;
-                                    
-                                    // Bring original poster back as background
-                                    if (posterImg) {
-                                        playerLink.style.display = 'block';
-                                        playerLink.querySelector('.play-button-<%- v %>').style.display = 'none';
-                                        playerLink.style.pointerEvents = 'none'; // Don't block interactions
-                                        wrapper.appendChild(playerLink); 
-                                    }
                                     wrapper.appendChild(errContainer);
-
-                                    errContainer.querySelector('.retry-btn-<%- v %>').addEventListener('click', (e) => {
-                                        e.stopPropagation();
-                                        retryCount = 0;
-                                        errContainer.style.display = 'none';
-                                        playerLink.style.display = 'none';
-                                        video.style.display = 'block';
-                                        controls.style.display = 'block';
-                                        video.src = getVideoUrl();
-                                        video.load();
-                                        video.play().catch(()=>{});
-                                    });
                                 } else {
                                     errContainer.style.display = 'flex';
-                                    if (posterImg) playerLink.style.display = 'block';
                                 }
                             };
 
@@ -1051,19 +1006,31 @@
                             const mutePathEl = muteBtn.querySelector('.mute-path');
                             const volumeSlider = controls.querySelector('.volume-slider-<%- v %>');
                             const fsBtn = controls.querySelector('.fs-btn-<%- v %>');
-                            const progressContainer = controls.querySelector('.progress-bar-<%- v %>');
+                            const progressContainer = controls.querySelector('.progress-container-<%- v %>');
                             const progressFill = controls.querySelector('.progress-fill-<%- v %>');
                             const progressThumb = controls.querySelector('.progress-thumb-<%- v %>');
                             const timeDisplay = controls.querySelector('.time-display-<%- v %>');
                             
-                            const loopToggle = contextMenu.querySelector('.loop-toggle-<%- v %>');
-                            const speedToggle = contextMenu.querySelector('.speed-toggle-<%- v %>');
+                            const settingsBtn = controls.querySelector('.settings-btn-<%- v %>');
+                            const settingsMenu = controls.querySelector('.settings-menu-<%- v %>');
+                            const speedItem = controls.querySelector('.speed-item-<%- v %>');
+                            const speedVal = controls.querySelector('.speed-val-<%- v %>');
+                            const loopItem = controls.querySelector('.loop-item-<%- v %>');
+                            const loopVal = controls.querySelector('.loop-val-<%- v %>');
 
-                            // Prevent top right buttons from propagating clicks to play/pause
+                            // Prevent top right buttons from propagating clicks to play/pause wrapper
                             controls.querySelector('.vol-group-<%- v %>').onclick = (e) => e.stopPropagation();
-                            controls.querySelector('.cc-btn-<%- v %>').onclick = (e) => e.stopPropagation();
-                            controls.querySelector('.settings-btn-<%- v %>').onclick = (e) => e.stopPropagation();
+                            settingsBtn.onclick = (e) => {
+                                e.stopPropagation();
+                                settingsMenu.style.display = settingsMenu.style.display === 'none' || settingsMenu.style.display === '' ? 'flex' : 'none';
+                            };
                             controls.querySelector('.bottom-area-<%- v %>').onclick = (e) => e.stopPropagation();
+
+                            document.addEventListener('click', (e) => {
+                                if (!settingsMenu.contains(e.target) && !settingsBtn.contains(e.target)) {
+                                    settingsMenu.style.display = 'none';
+                                }
+                            });
 
                             let showRemainingTime = false;
                             let lastVolume = 1;
@@ -1076,10 +1043,13 @@
                                 return m + ':' + (sec < 10 ? '0' : '') + sec;
                             }
 
-                            playPauseBtn.onclick = (e) => {
-                                e.stopPropagation();
+                            const togglePlay = (e) => {
+                                if(e) e.stopPropagation();
+                                settingsMenu.style.display = 'none';
                                 video.paused ? video.play() : video.pause();
                             };
+                            playPauseBtn.onclick = togglePlay;
+                            video.onclick = togglePlay;
 
                             volumeSlider.addEventListener('input', (e) => {
                                 const val = parseFloat(e.target.value);
@@ -1159,45 +1129,19 @@
                                 }
                             };
 
-                            video.onclick = () => {
-                                contextMenu.style.display = 'none';
-                                video.paused ? video.play() : video.pause();
-                            };
-
-                            wrapper.addEventListener('contextmenu', (e) => {
-                                e.preventDefault();
-                                contextMenu.style.display = 'flex';
-                                
-                                const rect = wrapper.getBoundingClientRect();
-                                let x = e.clientX - rect.left;
-                                let y = e.clientY - rect.top;
-                                
-                                if (x + 220 > rect.width) x -= 220;
-                                if (y + 160 > rect.height) y -= 160;
-                                
-                                contextMenu.style.left = x + 'px';
-                                contextMenu.style.top = y + 'px';
-                            });
-
-                            document.addEventListener('click', (e) => {
-                                if (!contextMenu.contains(e.target)) {
-                                    contextMenu.style.display = 'none';
-                                }
-                            });
-
-                            loopToggle.onclick = () => {
+                            loopItem.onclick = (e) => {
+                                e.stopPropagation();
                                 video.loop = !video.loop;
-                                loopToggle.querySelector('span').innerText = video.loop ? 'On' : 'Off';
-                                contextMenu.style.display = 'none';
+                                loopVal.innerText = video.loop ? 'On' : 'Off';
                             };
 
                             const speeds = [0.25, 0.5, 1, 1.25, 1.5, 2];
                             let speedIdx = 2;
-                            speedToggle.onclick = (e) => {
+                            speedItem.onclick = (e) => {
                                 e.stopPropagation();
                                 speedIdx = (speedIdx + 1) % speeds.length;
                                 video.playbackRate = speeds[speedIdx];
-                                speedToggle.querySelector('span').innerText = speeds[speedIdx] === 1 ? 'Normal' : speeds[speedIdx] + 'x';
+                                speedVal.innerText = speeds[speedIdx] === 1 ? 'Normal' : speeds[speedIdx] + 'x';
                             };
 
                             let hideTimeout;
@@ -1209,7 +1153,7 @@
                                     if (!video.paused) {
                                         controls.style.opacity = '0';
                                         wrapper.style.cursor = 'none';
-                                        contextMenu.style.display = 'none';
+                                        settingsMenu.style.display = 'none';
                                     }
                                 }, 2500);
                             };
@@ -1230,7 +1174,6 @@
                             };
 
                             video.onplay = () => {
-                                retryCount = 0;
                                 playPausePathEl.setAttribute('d', pauseIcon);
                                 showControls();
                             };
