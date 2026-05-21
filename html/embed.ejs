@@ -38,16 +38,16 @@
             color: #f1f1f1;
         }
 
-        :fullscreen, ::backdrop, :fullscreen * {
+        :fullscreen, ::backdrop {
             border-radius: 0 !important;
         }
-        :-webkit-full-screen, :-webkit-full-screen * {
+        :-webkit-full-screen {
             border-radius: 0 !important;
         }
-        :-moz-full-screen, :-moz-full-screen * {
+        :-moz-full-screen {
             border-radius: 0 !important;
         }
-        :-ms-fullscreen, :-ms-fullscreen * {
+        :-ms-fullscreen {
             border-radius: 0 !important;
         }
 
@@ -705,7 +705,7 @@
 
                             const video = document.createElement('video');
                             video.className = 'custom-video-player-<%- v %>';
-                            video.src = '<%- vidurl %>';
+                            video.src = '<%- vidurl %>/companion/latest_version?id=<%=v%>&itag=18&local=true';
                             video.autoplay = true;
 
                             const controls = document.createElement('div');
