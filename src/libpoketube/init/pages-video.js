@@ -216,7 +216,13 @@ app.get("/embed/:v", async function (req, res) {
   let engagement = null;
 
   try {
-    const engagementResponse = await fetch(`https://ryd-proxy.kavin.rocks/votes/${v}`);
+    const engagementResponse = await fetch(
+      `https://ryd-proxy.kavin.rocks/votes/${v}`
+    );
+
+    if (engagementResponse.status === 404) {
+      return res.status(400).send("Invalid video ID");
+    }
 
     if (engagementResponse.ok) {
       engagement = await engagementResponse.json();
