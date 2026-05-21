@@ -211,6 +211,8 @@ app.get("/embed/:v", async function (req, res) {
 
   let engagement = null;
   let VideoError = null;
+  var vidurl = config.videourl;
+  var media_proxy = config.media_proxy;
 
   if (!/^[a-zA-Z0-9_-]{11}$/.test(v)) {
     VideoError = {
@@ -224,7 +226,9 @@ app.get("/embed/:v", async function (req, res) {
       engagement,
       showHow,
       VideoError,
-    });
+      media_proxy,
+      vidurl,
+     });
   }
 
   try {
@@ -244,6 +248,8 @@ app.get("/embed/:v", async function (req, res) {
         engagement,
         showHow,
         VideoError,
+        media_proxy,
+        vidurl,
       });
     }
 
