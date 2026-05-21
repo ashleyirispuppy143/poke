@@ -194,9 +194,7 @@ const LNKTO_REGEX = /(?:https?:\/\/)?(?:(?<subdomain>[\w-]+)\.)?(?<domain>lnk\.t
 const SOUNDCLOUD_REGEX = /https:\/\/(?:www\.)?soundcloud\.com\/(?<name>[\w\d_-]+)/;
 
 module.exports = function (app, config, renderTemplate) {
-  app.get("/encryption", async function (req, res) {
-    res.json("error in parsing");
-  });
+ 
 
   app.get("/old", function (req, res) {
     const v = req.query.v;
@@ -205,6 +203,18 @@ module.exports = function (app, config, renderTemplate) {
       v,
     });
   });
+  
+app.get("/embed/:v", function (req, res) {
+  const v = req.params.v;
+
+  if (!/^[a-zA-Z0-9_-]{11}$/.test(v)) {
+    return res.status(400).send("Invalid video ID");
+  }
+
+  renderTemplate(res, req, "embed.ejs", {
+    v,
+  });
+});
 
   const watchRateLimitCache = new Map();
   const WATCH_LIMIT_WINDOW = 60000;
