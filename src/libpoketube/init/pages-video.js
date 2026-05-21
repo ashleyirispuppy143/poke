@@ -207,7 +207,7 @@ module.exports = function (app, config, renderTemplate) {
 app.get("/embed/:v", async function (req, res) {
   const v = req.params.v;
   const hostname = req.hostname;
-  const showHow = req.query["show-how"];
+  const showHow = req.query.showHow;
 
   if (!/^[a-zA-Z0-9_-]{11}$/.test(v)) {
     return res.status(400).send("Invalid video ID");
