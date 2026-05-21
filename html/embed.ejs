@@ -3,29 +3,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><%- v %></title>
+    <title><%- v %> - Embed Guide</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono&display=swap');
+        @font-face {
+            font-family: "PokeTube Flex";
+            src: url("/static/robotoflex.ttf");
+            font-style: normal;
+            font-stretch: 1% 800%;
+            font-display: swap;
+        }
 
         html, body {
             margin: 0;
             padding: 0;
             width: 100%;
             height: 100%;
-            background-color: #000;
-            overflow: hidden;
-            font-family: "Roboto", Arial, sans-serif;
+            font-family: "PokeTube Flex", Arial, sans-serif;
         }
 
+        /* Toggles body behavior based on whether we are showing the video or the guide */
+        body.mode-video {
+            background-color: #000;
+            overflow: hidden;
+        }
+
+        body.mode-showhow {
+            background-color: #0f0f0f;
+            overflow-y: auto;
+        }
+
+        /* =========================================
+           Standard Video Player Styles
+           ========================================= */
         .video-wrapper-<%- v %> {
             position: relative;
-            width: 100%;
-            height: 100%;
+            width: 100vw;
+            height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
             box-sizing: border-box;
             padding: 2px; 
+            background-color: #000;
         }
 
         .player-link-<%- v %> {
@@ -121,49 +140,42 @@
             gap: 6px;
         }
 
-        .embed-modal-<%- v %> {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.6);
-            z-index: 20;
+        /* =========================================
+           ShowHow Embed Guide Page Styles
+           ========================================= */
+        .showhow-page-<%- v %> {
             display: flex;
             justify-content: center;
-            align-items: center;
-            padding: 24px;
+            padding: 40px 24px;
+            min-height: 100vh;
             box-sizing: border-box;
         }
 
-        .embed-content-<%- v %> {
+        .showhow-container-<%- v %> {
+            width: 100%;
+            max-width: 680px;
             background-color: #212121;
             border-radius: 12px;
-            width: 100%;
-            max-width: 512px;
+            padding: 24px;
+            box-shadow: 0 4px 32px rgba(0, 0, 0, 0.4);
             display: flex;
             flex-direction: column;
-            box-shadow: 0 4px 32px 0 rgba(0, 0, 0, 0.3);
-            animation: modalFadeIn-<%- v %> 0.2s cubic-bezier(0.05, 0, 0, 1);
-        }
-
-        @keyframes modalFadeIn-<%- v %> {
-            from { opacity: 0; transform: scale(0.95); }
-            to { opacity: 1; transform: scale(1); }
+            gap: 24px;
+            border: 1px solid #333;
         }
 
         .embed-header-<%- v %> {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 16px 24px;
             border-bottom: 1px solid #3f3f3f;
+            padding-bottom: 16px;
         }
 
         .embed-header-<%- v %> h2 {
             color: #f1f1f1;
             margin: 0;
-            font-size: 16px;
+            font-size: 20px;
             font-weight: 500;
         }
 
@@ -193,11 +205,28 @@
             height: 24px;
         }
 
-        .embed-body-<%- v %> {
-            padding: 24px;
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
+        .section-title-<%- v %> {
+            color: #f1f1f1;
+            font-size: 16px;
+            font-weight: 500;
+            margin: 0 0 12px 0;
+        }
+
+        .preview-box-<%- v %> {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background-color: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #333;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .preview-box-<%- v %> iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: block;
         }
 
         .embed-textarea-<%- v %> {
@@ -206,9 +235,9 @@
             background-color: #121212;
             color: #aaaaaa;
             border: 1px solid #333333;
-            border-radius: 4px;
+            border-radius: 8px;
             padding: 16px;
-            font-family: "Roboto Mono", monospace;
+            font-family: monospace;
             font-size: 14px;
             line-height: 1.4;
             resize: none;
@@ -249,7 +278,7 @@
         .embed-help-<%- v %> li {
             margin-bottom: 8px;
             position: relative;
-            padding-left: 14px; /* Space for the bullet */
+            padding-left: 14px;
         }
 
         .embed-help-<%- v %> li::before {
@@ -265,7 +294,7 @@
 
         .embed-help-<%- v %> code {
             color: #f1f1f1;
-            font-family: "Roboto Mono", monospace;
+            font-family: monospace;
             font-size: 13px;
         }
 
@@ -285,7 +314,7 @@
             font-weight: 500;
             border-radius: 18px;
             cursor: pointer;
-            font-family: "Roboto", Arial, sans-serif;
+            font-family: "PokeTube Flex", Arial, sans-serif;
             transition: background-color 0.2s ease;
             display: flex;
             align-items: center;
@@ -297,48 +326,27 @@
         }
     </style>
 </head>
-<body>
 
-    <% 
-        function formatCount(num) {
-            if (num === null || num === undefined) return '0';
-            return new Intl.NumberFormat('en-US', { notation: 'compact', compactDisplay: 'short' }).format(num);
-        }
-    %>
+<% 
+    // Logic to determine if we are showing the embed guide or the actual video
+    const isShowHow = typeof showHow !== 'undefined' && (showHow === true || showHow === 'true');
 
-    <div class="video-wrapper-<%- v %>">
-        <a href="/watch?v=<%- v %>" target="_blank" rel="noopener noreferrer" class="player-link-<%- v %>">
-            <img src="https://i.ytimg.com/vi/<%- v %>/maxresdefault.jpg" alt="Play Video" class="player-image-<%- v %>" onerror="this.src='https://i.ytimg.com/vi/<%- v %>/hqdefault.jpg';">
-            
-            <% if (typeof engagement !== 'undefined' && engagement !== null) { %>
-            <div class="engagement-stats-<%- v %>">
-                <span class="stat-item-<%- v %>">
-                    👍 <%= formatCount(engagement.likes) %>
-                </span>
-                <span class="stat-item-<%- v %>">
-                    👎 <%= formatCount(engagement.dislikes) %>
-                </span>
-            </div>
-            <% } %>
+    // Helper function to format engagement numbers
+    function formatCount(num) {
+        if (num === null || num === undefined) return '0';
+        return new Intl.NumberFormat('en-US', { notation: 'compact', compactDisplay: 'short' }).format(num);
+    }
+%>
 
-            <div class="play-button-<%- v %>">
-                <svg class="play-triangle-<%- v %>" viewBox="0 0 24 24">
-                    <polygon points="8,5 8,19 19,12" />
-                </svg>
-            </div>
-        </a>
+<body class="<%= isShowHow ? 'mode-showhow' : 'mode-video' %>">
 
-        <a href="/" target="_blank" rel="noopener noreferrer" class="logo-link-<%- v %>">
-            <img src="/css/logo-poke.svg" alt="Poke Logo" class="logo-img-<%- v %>">
-        </a>
-
-        <% if (typeof showHow !== 'undefined' && (showHow === true || showHow === 'true')) { %>
-        <div class="embed-modal-<%- v %>">
-            <div class="embed-content-<%- v %>">
+    <% if (isShowHow) { %>
+        <div class="showhow-page-<%- v %>">
+            <div class="showhow-container-<%- v %>">
                 
                 <div class="embed-header-<%- v %>">
                     <h2>Embed Video</h2>
-                    <a href="/embed/<%- v %>" class="embed-close-<%- v %>" title="Close">
+                    <a href="/embed/<%- v %>" class="embed-close-<%- v %>" title="Close Guide">
                         <svg viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet" focusable="false">
                             <g>
                                 <path d="M12.7,12l6.6,6.6l-0.7,0.7L12,12.7l-6.6,6.6l-0.7-0.7l6.6-6.6L4.6,5.4l0.7-0.7l6.6,6.6l6.6-6.6l0.7,0.7L12.7,12z"></path>
@@ -347,10 +355,19 @@
                     </a>
                 </div>
 
-                <div class="embed-body-<%- v %>">
+                <div class="preview-section-<%- v %>">
+                    <h3 class="section-title-<%- v %>">Live Preview</h3>
+                    <div class="preview-box-<%- v %>">
+                        <iframe src="/embed/<%- v %>" allowfullscreen></iframe>
+                    </div>
+                </div>
+
+                <div class="code-section-<%- v %>">
+                    <h3 class="section-title-<%- v %>">HTML Code</h3>
                     <textarea class="embed-textarea-<%- v %>" readonly>&lt;iframe src="https://<%= typeof hostname !== 'undefined' ? hostname : '' %>/embed/<%- v %>" width="560" height="315" frameborder="0" allowfullscreen&gt;&lt;/iframe&gt;</textarea>
                     
                     <div class="embed-help-<%- v %>">
+                        <br>
                         <strong>Where to paste</strong>
                         <p>Add this code directly into your website's HTML body, a markdown file, or a blog post editor (using the HTML/Source view).</p>
                         
@@ -368,8 +385,35 @@
 
             </div>
         </div>
-        <% } %>
-    </div>
+
+    <% } else { %>
+        <div class="video-wrapper-<%- v %>">
+            <a href="/watch?v=<%- v %>" target="_blank" rel="noopener noreferrer" class="player-link-<%- v %>">
+                <img src="https://i.ytimg.com/vi/<%- v %>/maxresdefault.jpg" alt="Play Video" class="player-image-<%- v %>" onerror="this.src='https://i.ytimg.com/vi/<%- v %>/hqdefault.jpg';">
+                
+                <% if (typeof engagement !== 'undefined' && engagement !== null) { %>
+                <div class="engagement-stats-<%- v %>">
+                    <span class="stat-item-<%- v %>">
+                        👍 <%= formatCount(engagement.likes) %>
+                    </span>
+                    <span class="stat-item-<%- v %>">
+                        👎 <%= formatCount(engagement.dislikes) %>
+                    </span>
+                </div>
+                <% } %>
+
+                <div class="play-button-<%- v %>">
+                    <svg class="play-triangle-<%- v %>" viewBox="0 0 24 24">
+                        <polygon points="8,5 8,19 19,12" />
+                    </svg>
+                </div>
+            </a>
+
+            <a href="/" target="_blank" rel="noopener noreferrer" class="logo-link-<%- v %>">
+                <img src="/css/logo-poke.svg" alt="Poke Logo" class="logo-img-<%- v %>">
+            </a>
+        </div>
+    <% } %>
 
 </body>
 </html>
