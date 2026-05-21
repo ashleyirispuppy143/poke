@@ -779,10 +779,6 @@
             color: #f1f1f1;
         }
 
-        .watch-row-<%- v %> {
-            grid-template-columns: 32px minmax(0, 1fr) 18px;
-        }
-
         /* --- Speed Panel UI --- */
         .speed-panel-<%- v %> {
             position: absolute;
@@ -2060,13 +2056,11 @@
                             }
 
                             function showRetryOverlay() {
-                                retryOverlay.classList.add('is-visible-<%- v %>');
                                 controls.style.opacity = '0';
                                 closeAllPanels();
                             }
 
                             function hideRetryOverlay() {
-                                retryOverlay.classList.remove('is-visible-<%- v %>');
                                 controls.style.opacity = '1';
                             }
 
