@@ -223,6 +223,9 @@
             gap: 6px;
         }
 
+        /* =========================================
+           Custom Video Player UI Styles
+           ========================================= */
         .custom-video-player-<%- v %> {
             position: absolute;
             top: 0;
@@ -240,141 +243,95 @@
 
         .custom-controls-<%- v %> {
             position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            padding: 0 16px 16px 16px;
-            box-sizing: border-box;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
+            top: 0; left: 0; right: 0; bottom: 0;
             z-index: 20;
-            background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0) 100%);
             opacity: 1;
             transition: opacity 0.3s ease;
-        }
-
-        .progress-bar-<%- v %> {
-            width: 100%;
-            height: 4px;
-            background: rgba(255, 255, 255, 0.3);
-            border-radius: 2px;
-            cursor: pointer;
-            position: relative;
-            transition: height 0.1s ease;
-        }
-
-        .progress-bar-<%- v %>:hover {
-            height: 6px;
-        }
-
-        .progress-fill-<%- v %> {
-            position: absolute;
-            top: 0;
-            left: 0;
-            height: 100%;
-            background-color: #ff0000;
-            border-radius: 2px;
-            width: 0%;
             pointer-events: none;
         }
 
-        .controls-row-<%- v %> {
+        .custom-controls-<%- v %> > * {
+            pointer-events: auto;
+        }
+
+        /* Top Right Icons & Vertical Volume Slider */
+        .top-right-group-<%- v %> {
+            position: absolute;
+            top: 16px;
+            right: 16px;
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             gap: 12px;
+            z-index: 25;
         }
 
-        .ctrl-pill-<%- v %> {
-            background-color: rgba(0, 0, 0, 0.65);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            color: #fff;
-            border: none;
-            transition: background-color 0.2s;
-        }
-
-        .ctrl-circle-<%- v %> {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            cursor: pointer;
-        }
-
-        .ctrl-circle-<%- v %>:hover {
-            background-color: rgba(255, 255, 255, 0.2);
-        }
-
-        .ctrl-time-<%- v %> {
-            height: 40px;
-            border-radius: 20px;
-            padding: 0 16px;
-            font-size: 14px;
-            font-weight: 500;
-            font-variant-numeric: tabular-nums;
-            cursor: pointer;
-            user-select: none;
-        }
-        
-        .ctrl-time-<%- v %>:hover {
-            background-color: rgba(255, 255, 255, 0.2);
-        }
-
-        .volume-container-<%- v %> {
-            background-color: rgba(0, 0, 0, 0.65);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            display: flex;
-            align-items: center;
-            border-radius: 20px;
-            transition: all 0.2s ease;
-            height: 40px;
-            overflow: hidden;
-        }
-
-        .mute-btn-<%- v %> {
+        .icon-btn-<%- v %> {
             background: transparent;
             border: none;
             color: #fff;
             width: 40px;
             height: 40px;
-            border-radius: 50%;
             display: flex;
             justify-content: center;
             align-items: center;
             cursor: pointer;
-            flex-shrink: 0;
-            transition: background-color 0.2s;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+            padding: 0;
+            transition: opacity 0.2s;
         }
 
-        .mute-btn-<%- v %>:hover {
-            background-color: rgba(255, 255, 255, 0.2);
+        .icon-btn-<%- v %>:hover {
+            opacity: 0.8;
         }
 
-        .volume-slider-wrapper-<%- v %> {
-            width: 0;
-            overflow: hidden;
-            transition: width 0.2s ease, padding 0.2s ease;
+        .icon-btn-<%- v %> svg {
+            width: 28px;
+            height: 28px;
+        }
+
+        .vol-group-<%- v %> {
+            position: relative;
+            background: rgba(28, 28, 28, 0.7);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border-radius: 20px;
             display: flex;
+            flex-direction: column;
             align-items: center;
+            width: 40px;
+            height: 40px;
+            overflow: hidden;
+            transition: height 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
         }
 
-        .volume-container-<%- v %>:hover .volume-slider-wrapper-<%- v %> {
-            width: 60px;
-            padding-right: 12px;
+        .vol-group-<%- v %>:hover {
+            height: 140px;
+        }
+
+        .vol-group-<%- v %> .icon-btn-<%- v %> {
+            filter: none;
+            flex-shrink: 0;
+        }
+
+        .vol-slider-wrap-<%- v %> {
+            height: 90px;
+            width: 40px;
+            position: relative;
         }
 
         .volume-slider-<%- v %> {
-            -webkit-appearance: none;
-            width: 100%;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%) rotate(-90deg);
+            width: 70px;
             height: 4px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: linear-gradient(to right, #fff 100%, rgba(255, 255, 255, 0.3) 100%);
             border-radius: 2px;
             outline: none;
             cursor: pointer;
-            background: linear-gradient(to right, #fff 100%, rgba(255, 255, 255, 0.3) 100%);
         }
 
         .volume-slider-<%- v %>::-webkit-slider-thumb {
@@ -387,6 +344,115 @@
             cursor: pointer;
         }
 
+        /* Center Play Button */
+        .center-play-overlay-<%- v %> {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 72px;
+            height: 72px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            z-index: 20;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            transition: transform 0.2s, background 0.2s;
+        }
+        
+        .center-play-overlay-<%- v %>:hover {
+            transform: translate(-50%, -50%) scale(1.1);
+            background: rgba(0, 0, 0, 0.6);
+        }
+
+        .center-play-overlay-<%- v %> svg {
+            color: #fff;
+            width: 40px;
+            height: 40px;
+        }
+
+        /* Bottom Controls */
+        .bottom-area-<%- v %> {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            padding: 0 16px 12px 16px;
+            box-sizing: border-box;
+            background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 20;
+        }
+
+        .progress-container-<%- v %> {
+            width: 100%;
+            height: 3px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 1.5px;
+            cursor: pointer;
+            position: relative;
+            transition: height 0.1s ease;
+        }
+
+        .progress-container-<%- v %>:hover {
+            height: 5px;
+        }
+
+        .progress-fill-<%- v %> {
+            position: absolute;
+            top: 0; left: 0;
+            height: 100%;
+            background-color: #ff0000;
+            border-radius: 1.5px;
+            width: 0%;
+            pointer-events: none;
+        }
+
+        .progress-thumb-<%- v %> {
+            width: 12px;
+            height: 12px;
+            background-color: #ff0000;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            display: none;
+            pointer-events: none;
+        }
+
+        .progress-container-<%- v %>:hover .progress-thumb-<%- v %> {
+            display: block;
+        }
+
+        .controls-row-1-<%- v %> {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .time-display-<%- v %> {
+            color: #fff;
+            font-size: 13px;
+            font-weight: 500;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+            cursor: pointer;
+            user-select: none;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .controls-row-2-<%- v %> {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+        }
+
+        /* Context Menu */
         .custom-context-menu-<%- v %> {
             position: absolute;
             background: rgba(28, 28, 28, 0.9);
@@ -419,6 +485,9 @@
             background: rgba(255, 255, 255, 0.1);
         }
 
+        /* =========================================
+           ShowHow Embed Guide FULL PAGE Styles
+           ========================================= */
         .showhow-topbar-<%- v %> {
             display: flex;
             align-items: center;
@@ -820,42 +889,66 @@
 
                             const video = document.createElement('video');
                             video.className = 'custom-video-player-<%- v %>';
+                            
+                            const posterImg = playerLink.querySelector('.player-image-<%- v %>');
+                            if (posterImg) {
+                                video.poster = posterImg.src;
+                            }
+                            
                             video.src = getVideoUrl();
                             video.autoplay = true;
+                            video.playsInline = true;
 
                             const controls = document.createElement('div');
                             controls.className = 'custom-controls-<%- v %>';
                             controls.innerHTML = `
-                                <div class="progress-bar-<%- v %>">
-                                    <div class="progress-fill-<%- v %>"></div>
-                                </div>
-                                <div class="controls-row-<%- v %>">
-                                    <button class="ctrl-pill-<%- v %> ctrl-circle-<%- v %> play-pause-btn-<%- v %>" title="Play/Pause">
-                                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-                                            <path class="play-pause-path" d="${pauseIcon}"/>
-                                        </svg>
-                                    </button>
-                                    
-                                    <div class="volume-container-<%- v %>">
-                                        <button class="mute-btn-<%- v %>" title="Mute/Unmute">
-                                            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                                <div class="top-right-group-<%- v %>">
+                                    <div class="vol-group-<%- v %>">
+                                        <button class="icon-btn-<%- v %> mute-btn-<%- v %>" title="Mute/Unmute">
+                                            <svg viewBox="0 0 24 24" fill="currentColor">
                                                 <path class="mute-path" d="${volIcon}"/>
                                             </svg>
                                         </button>
-                                        <div class="volume-slider-wrapper-<%- v %>">
+                                        <div class="vol-slider-wrap-<%- v %>">
                                             <input type="range" class="volume-slider-<%- v %>" min="0" max="1" step="0.05" value="1">
                                         </div>
                                     </div>
-
-                                    <div class="ctrl-pill-<%- v %> ctrl-time-<%- v %> time-display-<%- v %>" title="Toggle time remaining">0:00 / 0:00</div>
-                                    
-                                    <div style="flex-grow: 1;"></div>
-                                    
-                                    <button class="ctrl-pill-<%- v %> ctrl-circle-<%- v %> fs-btn-<%- v %>" title="Fullscreen">
-                                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-                                            <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+                                    <button class="icon-btn-<%- v %> cc-btn-<%- v %>" title="Subtitles/CC">
+                                        <svg viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M11 11H8v2h3v2H7V9h4v2zm7 0h-3v2h3v2h-4V9h4v2zM19 4H5c-1.11 0-2 .9-2 2v12c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.89-2-2-2zm0 14H5V6h14v12z"/>
                                         </svg>
                                     </button>
+                                    <button class="icon-btn-<%- v %> settings-btn-<%- v %>" title="Settings">
+                                        <svg viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49-.12-.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
+                                        </svg>
+                                    </button>
+                                </div>
+
+                                <div class="center-play-overlay-<%- v %> play-pause-btn-<%- v %>" title="Play/Pause">
+                                    <svg viewBox="0 0 24 24" fill="currentColor">
+                                        <path class="play-pause-path" d="${pauseIcon}"/>
+                                    </svg>
+                                </div>
+
+                                <div class="bottom-area-<%- v %>">
+                                    <div class="progress-container-<%- v %>">
+                                        <div class="progress-fill-<%- v %>"></div>
+                                        <div class="progress-thumb-<%- v %>"></div>
+                                    </div>
+                                    <div class="controls-row-1-<%- v %>">
+                                        <div class="time-display-<%- v %>" title="Toggle time remaining">0:00 / 0:00</div>
+                                        <button class="icon-btn-<%- v %> fs-btn-<%- v %>" title="Fullscreen">
+                                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                                <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                    <div class="controls-row-2-<%- v %>">
+                                        <a href="/" target="_blank" rel="noopener noreferrer" class="logo-link-<%- v %>" style="position: static; margin-top: 4px;">
+                                            <img src="/css/logo-poke.svg" alt="Poke Logo" class="logo-img-<%- v %>" style="height: 24px;">
+                                        </a>
+                                    </div>
                                 </div>
                             `;
 
@@ -868,6 +961,10 @@
                                 <div class="context-item-<%- v %> speed-toggle-<%- v %>">Speed<span>Normal</span></div>
                                 <a href="https://codeberg.org/ashleyirispuppy/poke/issues/new?template=issue_template%2fplayer-bug.yml" target="_blank" class="context-item-<%- v %>">Having problems? Report em here</a>
                             `;
+
+                            if (logoLink) {
+                                logoLink.style.display = 'none';
+                            }
 
                             wrapper.insertBefore(video, wrapper.firstChild);
                             wrapper.appendChild(controls);
@@ -901,44 +998,52 @@
                                     errContainer.style.width = '100%';
                                     errContainer.style.height = '100%';
                                     errContainer.style.zIndex = '100';
+                                    errContainer.style.backgroundColor = 'transparent'; // Let poster show behind error
                                     
+                                    // Make error text readable over poster
                                     errContainer.innerHTML = `
-                                        <svg class="error-icon-<%- v %>" viewBox="0 0 24 24">
-                                            <path fill="currentColor" d="M12,2C6.48,2,2,6.48,2,12c0,5.52,4.48,10,10,10s10-4.48,10-10C22,6.48,17.52,2,12,2z M13,17h-2v-2h2V17z M13,13h-2V7h2V13z"/>
-                                        </svg>
-                                        <div class="error-text-<%- v %>">
-                                            <div class="error-title-<%- v %>" style="margin-bottom: 12px;">Video playback failed</div>
-                                            <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
-                                                <button class="embed-btn-<%- v %> retry-btn-<%- v %>" style="cursor: pointer;">Retry</button>
-                                                <a href="/watch?v=<%- v %>" target="_blank" rel="noopener noreferrer" style="color: #ffabcc; text-decoration: none; font-size: 16px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; font-family: 'PokeTube Flex', Arial, sans-serif;">
-                                                    Open video on actual Poke
-                                                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
-                                                </a>
+                                        <div style="background: rgba(33, 33, 33, 0.9); padding: 24px; border-radius: 12px; display: flex; align-items: center; gap: 20px; backdrop-filter: blur(8px);">
+                                            <svg class="error-icon-<%- v %>" viewBox="0 0 24 24" style="color: #ffabcc;">
+                                                <path fill="currentColor" d="M12,2C6.48,2,2,6.48,2,12c0,5.52,4.48,10,10,10s10-4.48,10-10C22,6.48,17.52,2,12,2z M13,17h-2v-2h2V17z M13,13h-2V7h2V13z"/>
+                                            </svg>
+                                            <div class="error-text-<%- v %>">
+                                                <div class="error-title-<%- v %>" style="margin-bottom: 12px;">Video playback failed</div>
+                                                <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+                                                    <button class="embed-btn-<%- v %> retry-btn-<%- v %>" style="cursor: pointer;">Retry</button>
+                                                    <a href="/watch?v=<%- v %>" target="_blank" rel="noopener noreferrer" style="color: #ffabcc; text-decoration: none; font-size: 16px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; font-family: 'PokeTube Flex', Arial, sans-serif;">
+                                                        Open video on actual Poke
+                                                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+                                                    </a>
+                                                </div>
                                             </div>
                                         </div>
                                     `;
+                                    
+                                    // Bring original poster back as background
+                                    if (posterImg) {
+                                        playerLink.style.display = 'block';
+                                        playerLink.querySelector('.play-button-<%- v %>').style.display = 'none';
+                                        playerLink.style.pointerEvents = 'none'; // Don't block interactions
+                                        wrapper.appendChild(playerLink); 
+                                    }
                                     wrapper.appendChild(errContainer);
 
                                     errContainer.querySelector('.retry-btn-<%- v %>').addEventListener('click', (e) => {
                                         e.stopPropagation();
                                         retryCount = 0;
                                         errContainer.style.display = 'none';
+                                        playerLink.style.display = 'none';
                                         video.style.display = 'block';
-                                        controls.style.display = 'flex';
+                                        controls.style.display = 'block';
                                         video.src = getVideoUrl();
                                         video.load();
                                         video.play().catch(()=>{});
                                     });
                                 } else {
                                     errContainer.style.display = 'flex';
+                                    if (posterImg) playerLink.style.display = 'block';
                                 }
                             };
-
-                            const controlsRow = controls.querySelector('.controls-row-<%- v %>');
-                            if (logoLink && controlsRow) {
-                                logoLink.classList.add('in-player-<%- v %>');
-                                controlsRow.appendChild(logoLink);
-                            }
 
                             const playPauseBtn = controls.querySelector('.play-pause-btn-<%- v %>');
                             const playPausePathEl = playPauseBtn.querySelector('.play-pause-path');
@@ -948,10 +1053,17 @@
                             const fsBtn = controls.querySelector('.fs-btn-<%- v %>');
                             const progressContainer = controls.querySelector('.progress-bar-<%- v %>');
                             const progressFill = controls.querySelector('.progress-fill-<%- v %>');
+                            const progressThumb = controls.querySelector('.progress-thumb-<%- v %>');
                             const timeDisplay = controls.querySelector('.time-display-<%- v %>');
                             
                             const loopToggle = contextMenu.querySelector('.loop-toggle-<%- v %>');
                             const speedToggle = contextMenu.querySelector('.speed-toggle-<%- v %>');
+
+                            // Prevent top right buttons from propagating clicks to play/pause
+                            controls.querySelector('.vol-group-<%- v %>').onclick = (e) => e.stopPropagation();
+                            controls.querySelector('.cc-btn-<%- v %>').onclick = (e) => e.stopPropagation();
+                            controls.querySelector('.settings-btn-<%- v %>').onclick = (e) => e.stopPropagation();
+                            controls.querySelector('.bottom-area-<%- v %>').onclick = (e) => e.stopPropagation();
 
                             let showRemainingTime = false;
                             let lastVolume = 1;
@@ -1013,6 +1125,7 @@
                                     
                                     if (lastWidth !== newWidth) {
                                         progressFill.style.width = newWidth;
+                                        progressThumb.style.left = newWidth;
                                         lastWidth = newWidth;
                                     }
                                     
