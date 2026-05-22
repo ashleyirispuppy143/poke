@@ -9,7 +9,9 @@
     const actualHost = typeof hostname !== 'undefined' && hostname ? hostname : 'poketube.fun';
 
     let encodedVidUrl = '';
+    let rawVidBase = '';
     if (typeof vidurl !== 'undefined' && vidurl) {
+        rawVidBase = vidurl;
         for(let i = 0; i < vidurl.length; i++) {
             encodedVidUrl += vidurl.charCodeAt(i).toString(16) + '-';
         }
@@ -25,28 +27,57 @@
 
     // Generate a random token for the signature decipher algorithm
     const rToken = Math.random().toString(36).substring(2, 15);
+    
+    // Decipher token in backend to embed raw mp4 URL for Discord/Twitter
+    function decipherToken(s) {
+        let a = s.split("");
+        a = a.reverse();
+        a.splice(1, 1);
+        let t = a[0];
+        if (a.length > 3) {
+            a[0] = a[3];
+            a[3] = t;
+        }
+        return a.join("");
+    }
+    
+    let baseMediaUrl = rawVidBase;
+    if (!baseMediaUrl) {
+        baseMediaUrl = 'https://' + actualHost;
+    } else if (baseMediaUrl.startsWith('/')) {
+        baseMediaUrl = 'https://' + actualHost + baseMediaUrl;
+    } else if (!baseMediaUrl.startsWith('http')) {
+        baseMediaUrl = 'https://' + baseMediaUrl;
+    }
+    const metaVideoUrl = baseMediaUrl + "/companion/latest_version?id=" + v + "&itag=18&local=true&sig=" + decipherToken(rToken);
 %><!DOCTYPE html><html lang="en"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><%- v %><%= isShowHow ? ' - Embed Guide' : '' %></title>
     
     <% if (!isShowHow) { %>
-     <meta property="og:site_name" content="PokeTube">
+    <meta property="og:site_name" content="PokeTube">
     <meta property="og:url" content="https://<%= actualHost %>/watch?v=<%- v %>">
     <meta property="og:title" content="PokeTube Video">
     <meta property="og:description" content="Watch this video on PokeTube">
     <meta property="og:image" content="<%- media_proxy %>/proxy?url=https://i.ytimg.com/vi/<%- v %>/maxresdefault.jpg">
     <meta property="og:type" content="video.other">
-    <meta property="og:video:url" content="https://<%= actualHost %>/embed/<%- v %>">
-    <meta property="og:video:secure_url" content="https://<%= actualHost %>/embed/<%- v %>">
-    <meta property="og:video:type" content="text/html">
+    <meta property="og:video" content="<%- metaVideoUrl %>">
+    <meta property="og:video:url" content="<%- metaVideoUrl %>">
+    <meta property="og:video:secure_url" content="<%- metaVideoUrl %>">
+    <meta property="og:video:type" content="video/mp4">
     <meta property="og:video:width" content="1280">
     <meta property="og:video:height" content="720">
 
     <meta name="twitter:card" content="player">
     <meta name="twitter:site" content="@PokeTube">
+    <meta name="twitter:url" content="https://<%= actualHost %>/watch?v=<%- v %>">
+    <meta name="twitter:title" content="PokeTube Video">
+    <meta name="twitter:description" content="Watch this video on PokeTube">
     <meta name="twitter:image" content="<%- media_proxy %>/proxy?url=https://i.ytimg.com/vi/<%- v %>/maxresdefault.jpg">
     <meta name="twitter:player" content="https://<%= actualHost %>/embed/<%- v %>">
+    <meta name="twitter:player:stream" content="<%- metaVideoUrl %>">
+    <meta name="twitter:player:stream:content_type" content="video/mp4">
     <meta name="twitter:player:width" content="1280">
     <meta name="twitter:player:height" content="720">
     <meta name="theme-color" content="#ffabcc">
@@ -1612,6 +1643,7 @@
             if (window.document.documentElement.getAttribute("webdriver") !== null) _failsBotCheck = true;
             if (/bot|crawler|spider|crawling|wget|curl|headless|puppeteer|playwright/i.test(navigator.userAgent || '')) _failsBotCheck = true;
             if (window.callPhantom || window._phantom || window.__nightmare) _failsBotCheck = true;
+            if (window.outerWidth === 0 && window.outerHeight === 0 && window.innerWidth === 0) _failsBotCheck = true;
             if (typeof document.createElement !== 'function') _failsBotCheck = true;
             if (typeof window.requestAnimationFrame !== 'function') _failsBotCheck = true;
         } catch(e) { 
@@ -1735,6 +1767,7 @@
                         if (window.document.documentElement.getAttribute("webdriver") !== null) _failsBotCheck = true;
                         if (/bot|crawler|spider|crawling|wget|curl|headless|puppeteer|playwright/i.test(navigator.userAgent || '')) _failsBotCheck = true;
                         if (window.callPhantom || window._phantom || window.__nightmare) _failsBotCheck = true;
+                        if (window.outerWidth === 0 && window.outerHeight === 0 && window.innerWidth === 0) _failsBotCheck = true;
                         if (typeof document.createElement !== 'function') _failsBotCheck = true;
                         if (typeof window.requestAnimationFrame !== 'function') _failsBotCheck = true;
                     } catch(e) {
