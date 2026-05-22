@@ -430,6 +430,32 @@
             to { transform: rotate(360deg); }
         }
 
+        .toast-indicator-<%- v %> {
+            position: absolute;
+            top: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-10px);
+            background: rgba(0, 0, 0, 0.75);
+            color: #fff;
+            padding: 8px 18px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+            z-index: 100;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            font-family: "PokeTube Flex", Arial, sans-serif;
+        }
+        .toast-indicator-<%- v %>.is-visible {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
         .center-play-overlay-<%- v %> {
             position: absolute;
             top: 50%;
@@ -1734,6 +1760,7 @@
                             const controls = document.createElement('div');
                             controls.className = 'custom-controls-<%- v %>';
                             controls.innerHTML = `
+                                <div class="toast-indicator-<%- v %>"></div>
                                 <div class="top-right-group-<%- v %>">
                                     <div class="vol-group-<%- v %>">
                                         <button class="icon-btn-<%- v %> mute-btn-<%- v %>" type="button" title="Mute/Unmute" aria-label="Mute or unmute">
@@ -1912,6 +1939,7 @@
                             let isDualPlaying = false;
                             let isIntendedToPlay = true; 
                             let lastVolume = 1;
+                            let isSwitchingQuality = false;
 
                             function getPrimaryMedia() {
                                 return isDualPlaying ? audio : video;
@@ -1926,8 +1954,21 @@
                                 video.currentTime = t;
                                 if (isDualPlaying) audio.currentTime = t;
                             }
+                            
+                            function updatePlayPauseUI() {
+                                if (isIntendedToPlay) {
+                                    playPausePathEl.setAttribute('d', pauseIcon);
+                                } else {
+                                    playPausePathEl.setAttribute('d', playIcon);
+                                    controls.style.opacity = '1';
+                                    wrapper.style.cursor = 'default';
+                                    clearTimeout(hideTimeout);
+                                }
+                            }
+
                             function playMedia() {
                                 isIntendedToPlay = true;
+                                updatePlayPauseUI();
                                 if (isDualPlaying) {
                                     audio.play().catch(()=>{});
                                     video.play().catch(()=>{});
@@ -1935,11 +1976,14 @@
                                     video.play().catch(()=>{});
                                 }
                             }
+                            
                             function pauseMedia() {
                                 isIntendedToPlay = false;
+                                updatePlayPauseUI();
                                 video.pause();
                                 if (isDualPlaying) audio.pause();
                             }
+
                             function setMediaVolume(v) {
                                 lastVolume = v;
                                 if (isDualPlaying) {
@@ -1952,15 +1996,40 @@
                                 }
                                 updateVolumeUI();
                             }
+                            
                             function setPlaybackRate(r) {
                                 video.playbackRate = r;
                                 audio.playbackRate = r;
                             }
 
-                            function loadQuality(quality, timeToSeek = 0, nonce = null) {
+                            const toastEl = controls.querySelector('.toast-indicator-<%- v %>');
+                            let toastTimeout = null;
+                            function showToast(msg, duration = 3000) {
+                                if (!toastEl) return;
+                                toastEl.innerText = msg;
+                                toastEl.classList.add('is-visible');
+                                clearTimeout(toastTimeout);
+                                if (duration > 0) {
+                                    toastTimeout = setTimeout(() => {
+                                        toastEl.classList.remove('is-visible');
+                                    }, duration);
+                                }
+                            }
+
+                            let lastSwitchTime = 0;
+
+                            function loadQuality(quality, timeToSeek = 0, nonce = null, silent = false) {
+                                if (quality === activeQuality && !nonce) return;
+
                                 activeQuality = quality;
                                 isDualPlaying = (quality === '720p');
                                 
+                                if (!silent) {
+                                    isSwitchingQuality = true;
+                                    showToast(`Switching to ${quality}...`, 0); 
+                                    setBuffering(true);
+                                }
+
                                 const qualityValue = controls.querySelector('.quality-value-<%- v %>');
                                 if(qualityValue) qualityValue.innerText = quality;
                                 
@@ -1996,16 +2065,14 @@
                                 const dummy = document.createElement('video');
                                 dummy.src = getVideoUrl(247);
                                 dummy.onloadedmetadata = () => {
-                                    // 720p is playable! Switch transparently if we are still on 360p
                                     if (activeQuality === '360p') {
                                         const ct = getCurrentTime();
-                                        loadQuality('720p', ct);
+                                        loadQuality('720p', ct, null, true); // Silent auto-upgrade
                                     }
                                     dummy.removeAttribute('src');
                                     dummy.load();
                                 };
                                 dummy.onerror = () => {
-                                    // Lock to 360p if 720p fails
                                     const qBtn = controls.querySelector('.quality-preset-btn-<%- v %>[data-quality="720p"]');
                                     if(qBtn) {
                                         qBtn.disabled = true;
@@ -2379,84 +2446,95 @@
                             }
 
                             // --- Event Listeners Mapping ---
-                            const bindMediaEvent = (evt, handler) => {
-                                video.addEventListener(evt, (e) => { if(!isDualPlaying || e.target === video) handler(e, video); });
-                                audio.addEventListener(evt, (e) => { if(isDualPlaying && e.target === audio) handler(e, audio); });
-                            };
+                            [video, audio].forEach(media => {
+                                media.addEventListener('timeupdate', updateTime);
+                                media.addEventListener('loadedmetadata', updateTime);
+                                media.addEventListener('durationchange', updateTime);
+                            });
 
-                            bindMediaEvent('loadstart', () => setBuffering(true));
-                            bindMediaEvent('waiting', () => {
-                                if(isDualPlaying) { audio.pause(); video.pause(); }
-                                setBuffering(true);
-                            });
-                            bindMediaEvent('canplay', () => {
-                                if(isDualPlaying) {
-                                    if(audio.readyState >= 3 && video.readyState >= 3) {
-                                        setBuffering(false);
-                                        if(isIntendedToPlay) { audio.play().catch(()=>{}); video.play().catch(()=>{}); }
-                                    }
-                                } else setBuffering(false);
-                            });
-                            bindMediaEvent('playing', () => {
-                                setBuffering(false);
-                                if (getDuration() && getCurrentTime() < getDuration() - 20) {
-                                    isNaturalEnd = true;
-                                    hasSeekedNearEnd = false;
+                            video.addEventListener('error', () => { setBuffering(false); queueRetry(); });
+                            audio.addEventListener('error', () => { if(isDualPlaying){ setBuffering(false); queueRetry(); } });
+
+                            function onEndedHandler() {
+                                if (isNaturalEnd && !hasSeekedNearEnd && (getDuration() >= 120) && !video.loop) {
+                                    endOverlay.classList.add('is-visible-<%- v %>');
+                                    controls.style.display = 'none';
+                                } else if (video.loop) {
+                                    setCurrentTime(0);
+                                    playMedia();
                                 }
-                                endOverlay.classList.remove('is-visible-<%- v %>');
-                                controls.style.display = '';
-                                retryCount = 0;
-                                clearTimeout(retryTimer);
-                                playPausePathEl.setAttribute('d', pauseIcon);
-                                showControls();
-                            });
-                            bindMediaEvent('pause', () => {
-                                setBuffering(false);
-                                playPausePathEl.setAttribute('d', playIcon);
-                                controls.style.opacity = '1';
-                                wrapper.style.cursor = 'default';
-                                clearTimeout(hideTimeout);
-                            });
-                            bindMediaEvent('seeked', () => setBuffering(false));
-                            bindMediaEvent('timeupdate', updateTime);
-                            bindMediaEvent('loadedmetadata', updateTime);
-                            bindMediaEvent('durationchange', updateTime);
-                            bindMediaEvent('error', () => { setBuffering(false); queueRetry(); });
-                            
-                            bindMediaEvent('seeking', () => {
+                            }
+                            video.addEventListener('ended', onEndedHandler);
+                            audio.addEventListener('ended', onEndedHandler);
+
+                            // The Central Synchronization Loop
+                            setInterval(() => {
+                                if (!isIntendedToPlay) return; 
+
+                                const pm = getPrimaryMedia();
+                                if (!pm.src) return; 
+
+                                if (isDualPlaying) {
+                                    if (pm.ended && !video.loop) return;
+
+                                    const vReady = video.readyState >= 3;
+                                    const aReady = audio.readyState >= 3;
+                                    
+                                    let isBuffering = false;
+                                    if (document.hidden) {
+                                        // In background, only pause if audio stalls to prevent chromium dropping playstate
+                                        isBuffering = !aReady;
+                                    } else {
+                                        isBuffering = !vReady || !aReady;
+                                    }
+
+                                    if (isBuffering) {
+                                        setBuffering(true);
+                                        if (!audio.paused) audio.pause();
+                                        if (!video.paused) video.pause();
+                                    } else {
+                                        setBuffering(false);
+                                        if (isSwitchingQuality) {
+                                            isSwitchingQuality = false;
+                                            showToast(`Switched to ${activeQuality}`, 2000);
+                                        }
+                                        
+                                        // Drift correction. Audio leads.
+                                        if (Math.abs(audio.currentTime - video.currentTime) > 0.3) {
+                                            video.currentTime = audio.currentTime;
+                                        }
+                                        
+                                        if (audio.paused) audio.play().catch(()=>{});
+                                        if (video.paused && !document.hidden) video.play().catch(()=>{});
+                                    }
+                                } else {
+                                    if (video.ended && !video.loop) return;
+
+                                    if (video.readyState < 3) {
+                                        setBuffering(true);
+                                        if (!video.paused) video.pause();
+                                    } else {
+                                        setBuffering(false);
+                                        if (isSwitchingQuality) {
+                                            isSwitchingQuality = false;
+                                            showToast(`Switched to ${activeQuality}`, 2000);
+                                        }
+                                        if (video.paused) video.play().catch(()=>{});
+                                    }
+                                }
+                            }, 250);
+
+                            // Seeking logic (to detect manual seeks near the end to prevent early end screens)
+                            video.addEventListener('seeking', () => {
                                 if (getDuration() && (getDuration() - getCurrentTime() <= 20)) {
                                     hasSeekedNearEnd = true;
                                     isNaturalEnd = false;
                                 }
                             });
-
-                            bindMediaEvent('ended', () => {
-                                if (isNaturalEnd && !hasSeekedNearEnd && (getDuration() >= 120) && !video.loop) {
-                                    endOverlay.classList.add('is-visible-<%- v %>');
-                                    controls.style.display = 'none';
-                                } else if (video.loop) {
-                                    playMedia();
-                                }
-                            });
-
-                            // Dual Player Synchronization Loop
-                            setInterval(() => {
-                                if (!isDualPlaying || !isIntendedToPlay) return;
-                                // Force play if video stalled while audio playing
-                                if (!audio.paused && video.paused && video.readyState >= 3 && !document.hidden) {
-                                    video.play().catch(()=>{});
-                                }
-                                // Drift correction
-                                if (Math.abs(audio.currentTime - video.currentTime) > 0.3) {
-                                    video.currentTime = audio.currentTime;
-                                }
-                            }, 500);
-
-                            document.addEventListener('visibilitychange', () => {
-                                if (!document.hidden && isDualPlaying && isIntendedToPlay) {
-                                    if (Math.abs(video.currentTime - audio.currentTime) > 0.1) {
-                                        video.currentTime = audio.currentTime;
-                                    }
+                            audio.addEventListener('seeking', () => {
+                                if (isDualPlaying && getDuration() && (getDuration() - getCurrentTime() <= 20)) {
+                                    hasSeekedNearEnd = true;
+                                    isNaturalEnd = false;
                                 }
                             });
 
@@ -2621,6 +2699,12 @@
                                     if(btn.disabled) return;
                                     const requestedQuality = btn.getAttribute('data-quality');
                                     if(requestedQuality !== activeQuality) {
+                                        const now = Date.now();
+                                        if (now - lastSwitchTime < 3000) {
+                                            showToast("Please wait before switching quality again.", 2000);
+                                            return;
+                                        }
+                                        lastSwitchTime = now;
                                         loadQuality(requestedQuality, getCurrentTime());
                                     }
                                     closeAllPanels();
@@ -2750,8 +2834,8 @@
                             });
 
                             // --- Init Flow ---
-                            loadQuality('360p', 0); // "auto tries with 360p first"
-                            testAndUpgradeTo720p(); // "if it can play itag 247 fine let it use it"
+                            loadQuality('360p', 0, null, true); // Silent auto try with 360p first
+                            testAndUpgradeTo720p(); // Auto upgrades silently to 720p if available
                             playMedia();
 
                         });
