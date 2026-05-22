@@ -6,6 +6,8 @@
         return new Intl.NumberFormat('en-US', { notation: 'compact', compactDisplay: 'short' }).format(num);
     }
 
+    const actualHost = typeof hostname !== 'undefined' && hostname ? hostname : 'poketube.fun';
+
     let encodedVidUrl = '';
     if (typeof vidurl !== 'undefined' && vidurl) {
         for(let i = 0; i < vidurl.length; i++) {
@@ -27,6 +29,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><%- v %><%= isShowHow ? ' - Embed Guide' : '' %></title>
+    
+    <% if (!isShowHow) { %>
+     <meta property="og:site_name" content="PokeTube">
+    <meta property="og:title" content="PokeTube Video">
+    <meta property="og:description" content="Watch this video on PokeTube">
+    <meta property="og:image" content="<%- media_proxy %>/proxy?url=https://i.ytimg.com/vi/<%- v %>/maxresdefault.jpg">
+    <meta property="og:type" content="video.other">
+    <meta property="og:video:url" content="https://<%= actualHost %>/embed/<%- v %>">
+    <meta property="og:video:secure_url" content="https://<%= actualHost %>/embed/<%- v %>">
+    <meta property="og:video:type" content="text/html">
+    <meta property="og:video:width" content="1280">
+    <meta property="og:video:height" content="720">
+
+    <meta name="twitter:card" content="player">
+    <meta name="twitter:site" content="@PokeTube">
+    <meta name="twitter:title" content="PokeTube Video">
+    <meta name="twitter:description" content="Watch this video on PokeTube">
+    <meta name="twitter:image" content="<%- media_proxy %>/proxy?url=https://i.ytimg.com/vi/<%- v %>/maxresdefault.jpg">
+    <meta name="twitter:player" content="https://<%= actualHost %>/embed/<%- v %>">
+    <meta name="twitter:player:width" content="1280">
+    <meta name="twitter:player:height" content="720">
+    <meta name="theme-color" content="#ffabcc">
+    <% } %>
+
     <style>
         @font-face {
             font-family: "PokeTube Flex";
@@ -1643,7 +1669,7 @@
                 <section class="code-section-<%- v %>">
                     <h2 class="section-header-<%- v %>">HTML Code</h2>
                     <div class="embed-card-<%- v %>">
-                        <textarea class="embed-textarea-<%- v %>" readonly>&lt;iframe src="https://<%= typeof hostname !== 'undefined' ? hostname : '' %>/embed/<%- v %>" width="560" height="315" frameborder="0" style="border-radius: 16px;" forcequality="" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen&gt;&lt;/iframe&gt;</textarea>
+                        <textarea class="embed-textarea-<%- v %>" readonly>&lt;iframe src="https://<%= actualHost %>/embed/<%- v %>" width="560" height="315" frameborder="0" style="border-radius: 16px;" forcequality="" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen&gt;&lt;/iframe&gt;</textarea>
                         
                         <div class="embed-actions-<%- v %>">
                             <button class="embed-btn-<%- v %>" onclick="navigator.clipboard.writeText(this.parentElement.previousElementSibling.value); this.innerText='Copied'; setTimeout(() => this.innerText='Copy', 2000);">Copy</button>
@@ -2568,7 +2594,7 @@
                                 const h = embedHeight.value || '315';
                                 const fqEl = controls.querySelector('.embed-forcequality-<%- v %>');
                                 const fq = fqEl ? fqEl.value : '';
-                                const srcUrl = `https://<%= typeof hostname !== 'undefined' ? hostname : '' %>/embed/<%- v %>${fq ? '?forcequality=' + fq : ''}`;
+                                const srcUrl = `https://<%= actualHost %>/embed/<%- v %>${fq ? '?forcequality=' + fq : ''}`;
                                 const fqAttr = fq ? ` forcequality="${fq}"` : ' forcequality=""';
                                 embedText.value = `<iframe src="${srcUrl}" width="${w}" height="${h}" frameborder="0" style="border-radius: 16px;"${fqAttr} referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`;
                             }
