@@ -4,7 +4,7 @@ const path = require("path")
 
 const SETTINGS = Object.freeze({
   telemetry: {
-    enabled: true,
+    enabled: false,
     storage: {
       path: path.join(__dirname, "telemetry.json")
     },
