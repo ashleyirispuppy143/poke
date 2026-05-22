@@ -448,27 +448,22 @@
         .toast-indicator-<%- v %> {
             position: absolute;
             top: 24px;
-            left: 50%;
-            transform: translateX(-50%) translateY(-10px);
-            background: rgba(0, 0, 0, 0.75);
+            left: 24px;
+            background: rgba(28, 28, 28, 0.9);
             color: #fff;
-            padding: 8px 18px;
-            border-radius: 20px;
+            padding: 10px 16px;
+            border-radius: 4px;
             font-size: 13px;
-            font-weight: 500;
+            font-weight: 400;
             z-index: 100;
             pointer-events: none;
             opacity: 0;
-            transition: opacity 0.3s ease, transform 0.3s ease;
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            transition: opacity 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
             font-family: "PokeTube Flex", Arial, sans-serif;
         }
         .toast-indicator-<%- v %>.is-visible {
             opacity: 1;
-            transform: translateX(-50%) translateY(0);
         }
 
         .center-play-overlay-<%- v %> {
@@ -740,23 +735,35 @@
             pointer-events: auto;
         }
 
-        .settings-grabber-area-<%- v %> {
+        .settings-grabber-area-<%- v %>, .quality-grabber-area-<%- v %>, .speed-grabber-area-<%- v %> {
             padding: 12px;
             cursor: grab;
-            margin-top: -8px;
             display: flex;
             justify-content: center;
             align-items: center;
+            width: 100%;
+            box-sizing: border-box;
         }
 
-        .settings-grabber-area-<%- v %>:active {
+        .settings-grabber-area-<%- v %> {
+            margin-top: -8px;
+        }
+
+        .settings-grabber-area-<%- v %>:active, .quality-grabber-area-<%- v %>:active, .speed-grabber-area-<%- v %>:active {
             cursor: grabbing;
         }
 
-        .settings-grabber-<%- v %> {
+        .settings-grabber-<%- v %>, .speed-panel-grabber-<%- v %> {
             width: 40px;
             height: 4px;
             background: rgba(255, 255, 255, 0.26);
+            border-radius: 999px;
+        }
+
+        .quality-panel-grabber-<%- v %> {
+            width: 40px;
+            height: 4px;
+            background: #E5E5E5;
             border-radius: 999px;
         }
 
@@ -836,7 +843,7 @@
             backdrop-filter: blur(18px);
             -webkit-backdrop-filter: blur(18px);
             border-radius: 12px;
-            padding: 24px;
+            padding: 0 24px 24px 24px;
             box-shadow: 0 12px 34px rgba(0,0,0,0.52);
             z-index: 50;
             opacity: 0;
@@ -853,8 +860,7 @@
             pointer-events: auto;
         }
 
-        /* Quality Panel YouTube Match */
-        .quality-panel-<%- v %> {
+         .quality-panel-<%- v %> {
             position: absolute;
             left: 50%;
             bottom: 58px;
@@ -862,7 +868,7 @@
             background: #ffffff;
             color: #0f0f0f;
             border-radius: 12px;
-            padding: 8px 0 12px 0;
+            padding: 0 0 12px 0;
             box-shadow: 0 12px 34px rgba(0,0,0,0.52);
             z-index: 50;
             opacity: 0;
@@ -877,14 +883,6 @@
             opacity: 1;
             transform: translate(-50%, 0);
             pointer-events: auto;
-        }
-        
-        .quality-panel-grabber-<%- v %> {
-            width: 36px;
-            height: 4px;
-            background: #E5E5E5;
-            border-radius: 2px;
-            margin: 4px auto 12px auto;
         }
         
         .quality-list-item-<%- v %> {
@@ -1723,7 +1721,6 @@
                         if (window.document.documentElement.getAttribute("webdriver") !== null) _failsBotCheck = true;
                         if (/bot|crawler|spider|crawling|wget|curl|headless|puppeteer|playwright/i.test(navigator.userAgent || '')) _failsBotCheck = true;
                         if (window.callPhantom || window._phantom || window.__nightmare) _failsBotCheck = true;
-                        if (window.outerWidth === 0 && window.outerHeight === 0 && window.innerWidth === 0) _failsBotCheck = true;
                         if (typeof document.createElement !== 'function') _failsBotCheck = true;
                         if (typeof window.requestAnimationFrame !== 'function') _failsBotCheck = true;
                         if (navigator.languages === "") _failsBotCheck = true;
@@ -1943,7 +1940,9 @@
                                 </div>
                                 
                                 <div class="quality-panel-<%- v %>" aria-hidden="true">
-                                    <div class="quality-panel-grabber-<%- v %>"></div>
+                                    <div class="quality-grabber-area-<%- v %>">
+                                        <div class="quality-panel-grabber-<%- v %>"></div>
+                                    </div>
                                     <div class="quality-list-<%- v %>">
                                         <div class="quality-list-item-<%- v %>" data-quality="720p">
                                             <div class="quality-checkmark-<%- v %>"><svg viewBox="0 0 24 24"><path d="${checkIcon}"/></svg></div>
@@ -1961,6 +1960,9 @@
                                 </div>
 
                                 <div class="speed-panel-<%- v %>" aria-hidden="true">
+                                    <div class="speed-grabber-area-<%- v %>">
+                                        <div class="speed-panel-grabber-<%- v %>"></div>
+                                    </div>
                                     <div class="speed-panel-header-<%- v %>">1.00x</div>
                                     <div class="speed-slider-container-<%- v %>">
                                         <button class="speed-btn-<%- v %> speed-minus-<%- v %>" type="button"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13H5v-2h14v2z"/></svg></button>
@@ -2088,6 +2090,8 @@
                             let lastPlayToggle = 0;
                             let qualityChangeTimestamps = [];
                             let hasTriggeredEnd = false;
+                            
+                            let lastDragEndTime = 0;
 
                             function getPrimaryMedia() {
                                 return isDualPlaying ? audio : video;
@@ -2324,11 +2328,13 @@
                             
                             const qualityRow = controls.querySelector('.quality-row-<%- v %>');
                             const qualityPanel = controls.querySelector('.quality-panel-<%- v %>');
+                            const qualityGrabberArea = controls.querySelector('.quality-grabber-area-<%- v %>');
                             const qualityListItems = controls.querySelectorAll('.quality-list-item-<%- v %>');
 
                             const speedRow = controls.querySelector('.speed-row-<%- v %>');
                             const speedValue = controls.querySelector('.speed-value-<%- v %>');
                             const speedPanel = controls.querySelector('.speed-panel-<%- v %>');
+                            const speedGrabberArea = controls.querySelector('.speed-grabber-area-<%- v %>');
                             const speedHeader = controls.querySelector('.speed-panel-header-<%- v %>');
                             const speedSlider = controls.querySelector('.speed-slider-input-<%- v %>');
                             const speedMinus = controls.querySelector('.speed-minus-<%- v %>');
@@ -2368,10 +2374,6 @@
                             let isNaturalEnd = true;
                             let hasSeekedNearEnd = false;
                             const sCPN = Math.random().toString(36).substring(2, 14).toUpperCase();
-
-                            let isDraggingSettings = false;
-                            let settingsStartY = 0;
-                            let settingsCurrentY = 0;
 
                             function formatTime(s) {
                                 if (!Number.isFinite(s)) return '0:00';
@@ -2819,36 +2821,48 @@
                                 event.stopPropagation();
                                 setSettingsOpen(!settingsPanel.classList.contains('is-open-<%- v %>'));
                             });
-                            settingsPanel.addEventListener('click', (event) => event.stopPropagation());
                             
-                            settingsGrabberArea.addEventListener('pointerdown', (e) => {
-                                e.stopPropagation();
-                                isDraggingSettings = true;
-                                settingsStartY = e.clientY;
-                                settingsPanel.style.transition = 'none';
-                                try { settingsGrabberArea.setPointerCapture(e.pointerId); } catch(err) {}
-                            });
-                            settingsGrabberArea.addEventListener('pointermove', (e) => {
-                                if (!isDraggingSettings) return;
-                                e.stopPropagation();
-                                settingsCurrentY = Math.max(0, e.clientY - settingsStartY);
-                                settingsPanel.style.transform = `translate(-50%, ${settingsCurrentY}px)`;
-                            });
-                            settingsGrabberArea.addEventListener('pointerup', (e) => {
-                                if (!isDraggingSettings) return;
-                                e.stopPropagation();
-                                isDraggingSettings = false;
-                                settingsPanel.style.transition = 'opacity 0.16s ease, transform 0.16s ease';
-                                try { settingsGrabberArea.releasePointerCapture(e.pointerId); } catch(err) {}
-                                
-                                if (settingsCurrentY > 40) {
-                                    setSettingsOpen(false);
-                                } else {
-                                    settingsPanel.style.transform = '';
-                                }
-                                settingsCurrentY = 0;
-                            });
+                            function makeDraggable(panel, grabberArea) {
+                                if (!panel || !grabberArea) return;
+                                let isDragging = false;
+                                let startY = 0;
+                                let currentY = 0;
 
+                                grabberArea.addEventListener('pointerdown', (e) => {
+                                    e.stopPropagation();
+                                    isDragging = true;
+                                    startY = e.clientY;
+                                    panel.style.transition = 'none';
+                                    try { grabberArea.setPointerCapture(e.pointerId); } catch(err) {}
+                                });
+                                grabberArea.addEventListener('pointermove', (e) => {
+                                    if (!isDragging) return;
+                                    e.stopPropagation();
+                                    currentY = Math.max(0, e.clientY - startY);
+                                    panel.style.transform = `translate(-50%, ${currentY}px)`;
+                                });
+                                grabberArea.addEventListener('pointerup', (e) => {
+                                    if (!isDragging) return;
+                                    e.stopPropagation();
+                                    isDragging = false;
+                                    panel.style.transition = 'opacity 0.16s ease, transform 0.16s ease';
+                                    try { grabberArea.releasePointerCapture(e.pointerId); } catch(err) {}
+                                    
+                                    if (currentY > 40) {
+                                        closeAllPanels();
+                                    } else {
+                                        panel.style.transform = '';
+                                    }
+                                    currentY = 0;
+                                    lastDragEndTime = Date.now();
+                                });
+                            }
+
+                            makeDraggable(settingsPanel, settingsGrabberArea);
+                            makeDraggable(qualityPanel, qualityGrabberArea);
+                            makeDraggable(speedPanel, speedGrabberArea);
+
+                            settingsPanel.addEventListener('click', (e) => e.stopPropagation());
                             qualityPanel.addEventListener('click', (e) => e.stopPropagation());
                             speedPanel.addEventListener('click', (e) => e.stopPropagation());
                             embedPanel.addEventListener('click', (e) => e.stopPropagation());
@@ -3078,6 +3092,8 @@
                             }
 
                             video.addEventListener('click', () => {
+                                if (Date.now() - lastDragEndTime < 200) return; // Prevent pause right after drag-to-close
+                                
                                 const anyPanelOpen = settingsPanel.classList.contains('is-open-<%- v %>') || 
                                                      speedPanel.classList.contains('is-open-<%- v %>') || 
                                                      qualityPanel.classList.contains('is-open-<%- v %>') ||
