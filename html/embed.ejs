@@ -739,8 +739,8 @@
             cursor: pointer;
         }
 
-        .settings-row-<%- v %>:not(.quality-row-<%- v %>):hover,
-        .settings-row-<%- v %>:not(.quality-row-<%- v %>):focus-visible {
+        .settings-row-<%- v %>:hover,
+        .settings-row-<%- v %>:focus-visible {
             background: rgba(255, 255, 255, 0.1);
             outline: none;
         }
@@ -783,8 +783,8 @@
             grid-template-columns: 32px minmax(0, 1fr) 18px;
         }
 
-        /* --- Speed Panel UI --- */
-        .speed-panel-<%- v %> {
+        /* --- Speed & Quality Panels UI --- */
+        .speed-panel-<%- v %>, .quality-panel-<%- v %> {
             position: absolute;
             top: 50%;
             left: 50%;
@@ -806,7 +806,7 @@
             box-sizing: border-box;
         }
 
-        .speed-panel-<%- v %>.is-open-<%- v %> {
+        .speed-panel-<%- v %>.is-open-<%- v %>, .quality-panel-<%- v %>.is-open-<%- v %> {
             opacity: 1;
             transform: translate(-50%, -50%) scale(1);
             pointer-events: auto;
@@ -890,7 +890,7 @@
             flex-wrap: wrap;
         }
 
-        .speed-preset-btn-<%- v %> {
+        .speed-preset-btn-<%- v %>, .quality-preset-btn-<%- v %> {
             background: rgba(255, 255, 255, 0.1);
             border: none;
             border-radius: 18px;
@@ -905,15 +905,15 @@
             justify-content: center;
             line-height: 1.2;
             min-width: 52px;
-            transition: background 0.2s, color 0.2s;
+            transition: background 0.2s, color 0.2s, opacity 0.2s;
             font-family: "PokeTube Flex", Arial, sans-serif;
         }
 
-        .speed-preset-btn-<%- v %>:hover {
+        .speed-preset-btn-<%- v %>:hover:not(:disabled), .quality-preset-btn-<%- v %>:hover:not(:disabled) {
             background: rgba(255, 255, 255, 0.2);
         }
 
-        .speed-preset-btn-<%- v %>.is-active {
+        .speed-preset-btn-<%- v %>.is-active, .quality-preset-btn-<%- v %>.is-active {
             background: #fff;
             color: #0f0f0f;
         }
@@ -1649,7 +1649,7 @@
                     const codeIcon = 'M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z';
                     const statsIcon = 'M19 8h-1.81c-.45-.78-1.07-1.45-1.82-1.96l1.06-1.06-1.42-1.42-1.43 1.43C12.85 4.8 12.44 4.75 12 4.75s-.85.05-1.58.24L8.99 3.56 7.57 4.98 8.63 6.04C7.88 6.55 7.26 7.22 6.81 8H5v2h1.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H5v2h1.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H19v-2h-1.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H19V8zm-6 8h-2v-2h2v2zm0-4h-2V8h2v4z';
 
-                    function getVideoUrl(retryNonce) {
+                    function getVideoUrl(itag, retryNonce) {
                         const _enc = '<%= encodedVidUrl %>';
                         const _vidBase = _enc.split('-').filter(Boolean).map(c => String.fromCharCode(parseInt(c, 16))).join('');
 
@@ -1658,6 +1658,9 @@
                         for(let i = 0; i < _pArr.length; i++) {
                             _vPath += String.fromCharCode(_pArr[i] ^ 0x5A);
                         }
+                        
+                        // Dynamically override itag for resolution/audio switching
+                        _vPath = _vPath.replace('&itag=18', '&itag=' + (itag || 18));
 
                         const _token = '<%- rToken %>';
                         const _decipher = function(s) {
@@ -1682,9 +1685,10 @@
 
                             playerLink.style.display = 'none';
 
+                            // --- Element Creation ---
                             const video = document.createElement('video');
                             video.className = 'custom-video-player-<%- v %>';
-                            video.autoplay = true;
+                            video.autoplay = false; // Managed manually
                             video.playsInline = true;
                             video.preload = 'auto';
                             video.controls = false;
@@ -1693,16 +1697,19 @@
                             video.setAttribute('controlsList', 'nodownload noremoteplayback');
                             video.setAttribute('decoding', 'async');
                             if ('disablePictureInPicture' in video) {
-                                video.disablePictureInPicture = true;
+                                video.disablePictureInPicture = true; // helps Chromium not to pause muted video easily
                             }
+
+                            const audio = document.createElement('audio');
+                            audio.className = 'custom-audio-player-<%- v %>';
+                            audio.preload = 'auto';
+                            audio.style.display = 'none';
 
                             const posterImg = playerLink.querySelector('.player-image-<%- v %>');
                             const posterSrc = posterImg ? posterImg.currentSrc || posterImg.src : '';
                             if (posterSrc) {
                                 video.poster = posterSrc;
                             }
-
-                            video.src = getVideoUrl();
                             
                             const endOverlay = document.createElement('div');
                             endOverlay.className = 'end-overlay-<%- v %>';
@@ -1756,12 +1763,12 @@
                                     <div class="settings-grabber-area-<%- v %>">
                                         <div class="settings-grabber-<%- v %>"></div>
                                     </div>
-                                    <div class="settings-row-<%- v %> quality-row-<%- v %>" style="cursor: default;">
+                                    <button class="settings-row-<%- v %> quality-row-<%- v %>" type="button">
                                         <span class="settings-icon-<%- v %>"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${qualityIcon}"/></svg></span>
                                         <span class="settings-label-<%- v %>">Quality</span>
-                                        <span class="settings-value-<%- v %>">Locked to 360p</span>
-                                        <span class="settings-chevron-<%- v %>" style="opacity: 0;"></span>
-                                    </div>
+                                        <span class="settings-value-<%- v %> quality-value-<%- v %>">Auto</span>
+                                        <span class="settings-chevron-<%- v %>"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${chevronIcon}"/></svg></span>
+                                    </button>
                                     <button class="settings-row-<%- v %> speed-row-<%- v %>" type="button">
                                         <span class="settings-icon-<%- v %>"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${speedIcon}"/></svg></span>
                                         <span class="settings-label-<%- v %>">Speed</span>
@@ -1792,6 +1799,14 @@
                                         <span class="settings-value-<%- v %>" style="display:none;"></span>
                                         <span class="settings-chevron-<%- v %>"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${chevronIcon}"/></svg></span>
                                     </a>
+                                </div>
+                                
+                                <div class="quality-panel-<%- v %>" aria-hidden="true">
+                                    <div class="speed-panel-header-<%- v %>" style="margin-bottom: 16px;">Quality</div>
+                                    <div class="speed-presets-container-<%- v %>">
+                                        <button class="quality-preset-btn-<%- v %>" data-quality="720p" type="button">720p</button>
+                                        <button class="quality-preset-btn-<%- v %>" data-quality="360p" type="button">360p</button>
+                                    </div>
                                 </div>
 
                                 <div class="speed-panel-<%- v %>" aria-hidden="true">
@@ -1887,10 +1902,120 @@
                                 logoLink.style.display = 'none';
                             }
 
-                            wrapper.insertBefore(video, wrapper.firstChild);
+                            wrapper.insertBefore(audio, wrapper.firstChild);
+                            wrapper.insertBefore(video, audio.nextSibling);
                             wrapper.appendChild(statsOverlayWrapper);
                             wrapper.appendChild(controls);
 
+                            // --- Core Audio/Video Sync Controller ---
+                            let activeQuality = '360p'; 
+                            let isDualPlaying = false;
+                            let isIntendedToPlay = true; 
+                            let lastVolume = 1;
+
+                            function getPrimaryMedia() {
+                                return isDualPlaying ? audio : video;
+                            }
+                            function getDuration() {
+                                return getPrimaryMedia().duration || 0;
+                            }
+                            function getCurrentTime() {
+                                return getPrimaryMedia().currentTime || 0;
+                            }
+                            function setCurrentTime(t) {
+                                video.currentTime = t;
+                                if (isDualPlaying) audio.currentTime = t;
+                            }
+                            function playMedia() {
+                                isIntendedToPlay = true;
+                                if (isDualPlaying) {
+                                    audio.play().catch(()=>{});
+                                    video.play().catch(()=>{});
+                                } else {
+                                    video.play().catch(()=>{});
+                                }
+                            }
+                            function pauseMedia() {
+                                isIntendedToPlay = false;
+                                video.pause();
+                                if (isDualPlaying) audio.pause();
+                            }
+                            function setMediaVolume(v) {
+                                lastVolume = v;
+                                if (isDualPlaying) {
+                                    audio.volume = v;
+                                    audio.muted = (v === 0);
+                                    video.muted = true; // Video ALWAYS muted in dual mode
+                                } else {
+                                    video.volume = v;
+                                    video.muted = (v === 0);
+                                }
+                                updateVolumeUI();
+                            }
+                            function setPlaybackRate(r) {
+                                video.playbackRate = r;
+                                audio.playbackRate = r;
+                            }
+
+                            function loadQuality(quality, timeToSeek = 0, nonce = null) {
+                                activeQuality = quality;
+                                isDualPlaying = (quality === '720p');
+                                
+                                const qualityValue = controls.querySelector('.quality-value-<%- v %>');
+                                if(qualityValue) qualityValue.innerText = quality;
+                                
+                                document.querySelectorAll('.quality-preset-btn-<%- v %>').forEach(btn => {
+                                    btn.classList.toggle('is-active', btn.getAttribute('data-quality') === quality);
+                                });
+
+                                if (isDualPlaying) {
+                                    video.src = getVideoUrl(247, nonce);
+                                    audio.src = getVideoUrl(140, nonce);
+                                    video.muted = true;
+                                    audio.currentTime = timeToSeek;
+                                    video.currentTime = timeToSeek;
+                                    audio.playbackRate = video.playbackRate;
+                                    if(isIntendedToPlay) {
+                                        audio.play().catch(()=>{});
+                                        video.play().catch(()=>{});
+                                    }
+                                } else {
+                                    audio.removeAttribute('src'); 
+                                    audio.load();
+                                    video.src = getVideoUrl(18, nonce);
+                                    video.muted = (lastVolume === 0);
+                                    video.currentTime = timeToSeek;
+                                    if(isIntendedToPlay) {
+                                        video.play().catch(()=>{});
+                                    }
+                                }
+                                setMediaVolume(lastVolume);
+                            }
+
+                            function testAndUpgradeTo720p() {
+                                const dummy = document.createElement('video');
+                                dummy.src = getVideoUrl(247);
+                                dummy.onloadedmetadata = () => {
+                                    // 720p is playable! Switch transparently if we are still on 360p
+                                    if (activeQuality === '360p') {
+                                        const ct = getCurrentTime();
+                                        loadQuality('720p', ct);
+                                    }
+                                    dummy.removeAttribute('src');
+                                    dummy.load();
+                                };
+                                dummy.onerror = () => {
+                                    // Lock to 360p if 720p fails
+                                    const qBtn = controls.querySelector('.quality-preset-btn-<%- v %>[data-quality="720p"]');
+                                    if(qBtn) {
+                                        qBtn.disabled = true;
+                                        qBtn.style.opacity = '0.5';
+                                        qBtn.title = '720p not available';
+                                    }
+                                };
+                            }
+
+                            // --- UI References ---
                             const playPauseBtn = controls.querySelector('.play-pause-btn-<%- v %>');
                             const playPausePathEl = controls.querySelector('.play-pause-path');
                             const muteBtn = controls.querySelector('.mute-btn-<%- v %>');
@@ -1910,6 +2035,10 @@
                             const settingsPanel = controls.querySelector('.settings-panel-<%- v %>');
                             const settingsGrabberArea = controls.querySelector('.settings-grabber-area-<%- v %>');
                             
+                            const qualityRow = controls.querySelector('.quality-row-<%- v %>');
+                            const qualityPanel = controls.querySelector('.quality-panel-<%- v %>');
+                            const qualityPresets = controls.querySelectorAll('.quality-preset-btn-<%- v %>');
+
                             const speedRow = controls.querySelector('.speed-row-<%- v %>');
                             const speedValue = controls.querySelector('.speed-value-<%- v %>');
                             const speedPanel = controls.querySelector('.speed-panel-<%- v %>');
@@ -1937,34 +2066,8 @@
                             const restartBtn = endOverlay.querySelector('.restart-btn-<%- v %>');
                             
                             const linkBtn = controls.querySelector('.link-btn-<%- v %>');
-                            if (linkBtn) {
-                                linkBtn.addEventListener('click', (event) => {
-                                    event.stopPropagation();
-                                    const url = window.location.origin + '/watch?v=<%- v %>';
-                                    navigator.clipboard.writeText(url).then(() => {
-                                        const originalSvg = linkBtn.innerHTML;
-                                        linkBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" style="width: 20px; height: 20px;"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>';
-                                        setTimeout(() => {
-                                            if (linkBtn) linkBtn.innerHTML = originalSvg;
-                                        }, 1500);
-                                    }).catch(() => {});
-                                });
-                            }
-
-                            const moreVideosBtn = controls.querySelector('.more-videos-pill-<%- v %>');
-                            if (moreVideosBtn) {
-                                moreVideosBtn.addEventListener('click', (event) => {
-                                    event.stopPropagation();
-                                    window.open('/home', '_blank');
-                                });
-                            }
-
-                            if (!playPauseBtn || !playPausePathEl || !muteBtn || !mutePathEl || !volGroup || !fsBtn || !progressContainer || !progressFill || !progressThumb || !timeDisplay || !settingsBtn || !settingsPanel || !speedRow || !speedValue || !loopRow || !loopValue || !speedPanel || !embedPanel) {
-                                return;
-                            }
 
                             let showRemainingTime = false;
-                            let lastVolume = 1;
                             let retryCount = 0;
                             let retryTimer = null;
                             const maxRetries = 3;
@@ -1995,27 +2098,21 @@
                             }
 
                             function updateVolumeUI() {
-                                const effectiveVolume = video.muted ? 0 : video.volume;
+                                const effectiveVolume = isDualPlaying ? (audio.muted ? 0 : audio.volume) : (video.muted ? 0 : video.volume);
                                 const pct = effectiveVolume * 100;
                                 if(volFill) volFill.style.height = pct + '%';
                                 if(volThumb) volThumb.style.bottom = pct + '%';
                                 if(mutePathEl) mutePathEl.setAttribute('d', effectiveVolume <= 0 ? muteIcon : volIcon);
-                                if (!video.muted && video.volume > 0) {
-                                    lastVolume = video.volume;
-                                }
                             }
 
                             let isVolScrubbing = false;
-                            function setVolumeFromEvent(e) {
+                            function handleVolumeEvent(e) {
                                 if(!volSliderBg) return;
                                 const rect = volSliderBg.getBoundingClientRect();
                                 let y = e.clientY - rect.top;
                                 let p = 1 - (y / rect.height);
                                 p = Math.max(0, Math.min(1, p));
-                                video.volume = p;
-                                video.muted = p === 0;
-                                if (p > 0) lastVolume = p;
-                                updateVolumeUI();
+                                setMediaVolume(p);
                             }
 
                             function setVolumeOpen(open) {
@@ -2026,6 +2123,7 @@
                                 if (open) {
                                     setVolumeOpen(false);
                                     if (speedPanel) speedPanel.classList.remove('is-open-<%- v %>');
+                                    if (qualityPanel) qualityPanel.classList.remove('is-open-<%- v %>');
                                     if (embedPanel) embedPanel.classList.remove('is-open-<%- v %>');
                                 }
                                 settingsPanel.style.transform = '';
@@ -2037,14 +2135,12 @@
                             function closeAllPanels() {
                                 setSettingsOpen(false);
                                 setVolumeOpen(false);
-                                if (speedPanel) {
-                                    speedPanel.classList.remove('is-open-<%- v %>');
-                                    speedPanel.setAttribute('aria-hidden', 'true');
-                                }
-                                if (embedPanel) {
-                                    embedPanel.classList.remove('is-open-<%- v %>');
-                                    embedPanel.setAttribute('aria-hidden', 'true');
-                                }
+                                [speedPanel, qualityPanel, embedPanel].forEach(p => {
+                                    if(p) {
+                                        p.classList.remove('is-open-<%- v %>');
+                                        p.setAttribute('aria-hidden', 'true');
+                                    }
+                                });
                             }
 
                             function setBuffering(isBuffering) {
@@ -2061,9 +2157,10 @@
                                 clearTimeout(retryTimer);
                                 closeAllPanels();
                                 setBuffering(false);
-                                video.pause();
+                                pauseMedia();
                                 video.removeAttribute('poster');
                                 video.style.display = 'none';
+                                audio.style.display = 'none';
                                 controls.style.display = 'none';
                                 playerLink.style.display = 'none';
                                 wrapper.style.backgroundColor = '#212121';
@@ -2105,12 +2202,10 @@
                                         video.style.display = 'block';
                                         controls.style.display = '';
                                         playerLink.style.display = 'none';
-                                        if (posterSrc) {
-                                            video.poster = posterSrc;
-                                        }
-                                        video.src = getVideoUrl(Date.now());
-                                        video.load();
-                                        video.play().catch(() => {});
+                                        if (posterSrc) video.poster = posterSrc;
+                                        
+                                        const ct = getCurrentTime();
+                                        loadQuality(activeQuality, ct, Date.now());
                                     });
                                 } else {
                                     errContainer.style.display = 'flex';
@@ -2124,9 +2219,8 @@
                                 }
                                 retryCount++;
                                 retryTimer = setTimeout(() => {
-                                    video.src = getVideoUrl(Date.now() + '-' + retryCount);
-                                    video.load();
-                                    video.play().catch(() => {});
+                                    const ct = getCurrentTime();
+                                    loadQuality(activeQuality, ct, Date.now() + '-' + retryCount);
                                 }, 900);
                             }
 
@@ -2134,8 +2228,9 @@
                                 if (isRafPending) return;
                                 isRafPending = true;
                                 requestAnimationFrame(() => {
-                                    const duration = Number.isFinite(video.duration) ? video.duration : 0;
-                                    const current = Number.isFinite(video.currentTime) ? video.currentTime : 0;
+                                    const pm = getPrimaryMedia();
+                                    const duration = Number.isFinite(pm.duration) ? pm.duration : 0;
+                                    const current = Number.isFinite(pm.currentTime) ? pm.currentTime : 0;
                                     const p = duration ? Math.max(0, Math.min(100, (current / duration) * 100)) : 0;
                                     const newWidth = p + '%';
 
@@ -2159,19 +2254,19 @@
                             }
 
                             function seekFromEvent(event) {
-                                const duration = Number.isFinite(video.duration) ? video.duration : 0;
+                                const duration = getDuration();
                                 if (!duration) return;
                                 const r = progressContainer.getBoundingClientRect();
                                 const x = Math.max(0, Math.min(r.width, event.clientX - r.left));
-                                video.currentTime = (x / r.width) * duration;
+                                setCurrentTime((x / r.width) * duration);
                                 updateTime();
                             }
 
                             function togglePlay() {
-                                if (video.paused) {
-                                    video.play().catch(() => {});
+                                if (getPrimaryMedia().paused) {
+                                    playMedia();
                                 } else {
-                                    video.pause();
+                                    pauseMedia();
                                 }
                             }
 
@@ -2180,7 +2275,7 @@
                                 wrapper.style.cursor = 'default';
                                 clearTimeout(hideTimeout);
                                 hideTimeout = setTimeout(() => {
-                                    if (!video.paused && !settingsPanel.classList.contains('is-open-<%- v %>') && !speedPanel.classList.contains('is-open-<%- v %>') && !embedPanel.classList.contains('is-open-<%- v %>') && !volGroup.classList.contains('is-volume-open-<%- v %>')) {
+                                    if (!getPrimaryMedia().paused && !settingsPanel.classList.contains('is-open-<%- v %>') && !speedPanel.classList.contains('is-open-<%- v %>') && !qualityPanel.classList.contains('is-open-<%- v %>') && !embedPanel.classList.contains('is-open-<%- v %>') && !volGroup.classList.contains('is-volume-open-<%- v %>')) {
                                         controls.style.opacity = '0';
                                         wrapper.style.cursor = 'none';
                                     }
@@ -2189,7 +2284,7 @@
 
                             function updateSpeedState(newSpeed) {
                                 newSpeed = Math.max(0.25, Math.min(2, newSpeed));
-                                video.playbackRate = newSpeed;
+                                setPlaybackRate(newSpeed);
                                 speedSlider.value = newSpeed;
                                 speedHeader.innerText = newSpeed.toFixed(2) + 'x';
                                 speedValue.innerText = newSpeed === 1 ? 'Normal' : newSpeed + 'x';
@@ -2199,11 +2294,7 @@
 
                                 speedPresets.forEach(btn => {
                                     const spd = parseFloat(btn.getAttribute('data-speed'));
-                                    if (Math.abs(spd - newSpeed) < 0.01) {
-                                        btn.classList.add('is-active');
-                                    } else {
-                                        btn.classList.remove('is-active');
-                                    }
+                                    btn.classList.toggle('is-active', Math.abs(spd - newSpeed) < 0.01);
                                 });
                             }
 
@@ -2220,17 +2311,18 @@
                                 const cW = wrapper.clientWidth || 0;
                                 const cH = wrapper.clientHeight || 0;
                                 const vd = '<%- v %>';
-                                const vol = Math.round(video.volume * 100);
+                                const vol = Math.round(lastVolume * 100);
                                 const pbRate = video.playbackRate;
-                                const ct = video.currentTime.toFixed(3);
-                                const dur = (video.duration || 0).toFixed(3);
+                                const pm = getPrimaryMedia();
+                                const ct = pm.currentTime.toFixed(3);
+                                const dur = (pm.duration || 0).toFixed(3);
                                 const resStr = vW && vH ? `${vW}x${vH}` : 'Unknown';
 
                                 let bufferHealth = 0;
                                 try {
-                                    for (let i = 0; i < video.buffered.length; i++) {
-                                        if (video.buffered.start(i) <= video.currentTime && video.buffered.end(i) >= video.currentTime) {
-                                            bufferHealth = video.buffered.end(i) - video.currentTime;
+                                    for (let i = 0; i < pm.buffered.length; i++) {
+                                        if (pm.buffered.start(i) <= pm.currentTime && pm.buffered.end(i) >= pm.currentTime) {
+                                            bufferHealth = pm.buffered.end(i) - pm.currentTime;
                                             break;
                                         }
                                     }
@@ -2250,12 +2342,10 @@
                                 }
 
                                 const retries = retryCount;
-
                                 const nsArr = ['EMPTY', 'IDLE', 'LOADING', 'NO_SOURCE'];
-                                const ns = nsArr[video.networkState] || video.networkState;
-
                                 const rsArr = ['NOTHING', 'METADATA', 'CURRENT_DATA', 'FUTURE_DATA', 'ENOUGH_DATA'];
-                                const rs = rsArr[video.readyState] || video.readyState;
+                                const ns = nsArr[pm.networkState] || pm.networkState;
+                                const rs = rsArr[pm.readyState] || pm.readyState;
 
                                 let frames = 'N/A';
                                 if (typeof video.getVideoPlaybackQuality === 'function') {
@@ -2278,6 +2368,7 @@
                                     <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Duration</span><span class="stats-value-<%- v %>">${dur} s</span></div>
                                     <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Buffer Health</span><span class="stats-value-<%- v %>">${bufferHealth.toFixed(2)} s</span></div>
                                     <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Iframe Type</span><span class="stats-value-<%- v %>">${iframeType}</span></div>
+                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Format</span><span class="stats-value-<%- v %>">${activeQuality} ${isDualPlaying?'(Dual)':'(Single)'}</span></div>
                                     <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Retry Count</span><span class="stats-value-<%- v %>">${retries}</span></div>
                                     <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Network State</span><span class="stats-value-<%- v %>">${ns}</span></div>
                                     <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Ready State</span><span class="stats-value-<%- v %>">${rs}</span></div>
@@ -2287,14 +2378,28 @@
                                 `;
                             }
 
-                            // --- Event Listeners ---
+                            // --- Event Listeners Mapping ---
+                            const bindMediaEvent = (evt, handler) => {
+                                video.addEventListener(evt, (e) => { if(!isDualPlaying || e.target === video) handler(e, video); });
+                                audio.addEventListener(evt, (e) => { if(isDualPlaying && e.target === audio) handler(e, audio); });
+                            };
 
-                            video.addEventListener('loadstart', () => setBuffering(true));
-                            video.addEventListener('waiting', () => setBuffering(true));
-                            video.addEventListener('canplay', () => setBuffering(false));
-                            video.addEventListener('playing', () => {
+                            bindMediaEvent('loadstart', () => setBuffering(true));
+                            bindMediaEvent('waiting', () => {
+                                if(isDualPlaying) { audio.pause(); video.pause(); }
+                                setBuffering(true);
+                            });
+                            bindMediaEvent('canplay', () => {
+                                if(isDualPlaying) {
+                                    if(audio.readyState >= 3 && video.readyState >= 3) {
+                                        setBuffering(false);
+                                        if(isIntendedToPlay) { audio.play().catch(()=>{}); video.play().catch(()=>{}); }
+                                    }
+                                } else setBuffering(false);
+                            });
+                            bindMediaEvent('playing', () => {
                                 setBuffering(false);
-                                if (video.duration && video.currentTime < video.duration - 20) {
+                                if (getDuration() && getCurrentTime() < getDuration() - 20) {
                                     isNaturalEnd = true;
                                     hasSeekedNearEnd = false;
                                 }
@@ -2305,18 +2410,61 @@
                                 playPausePathEl.setAttribute('d', pauseIcon);
                                 showControls();
                             });
-                            video.addEventListener('pause', () => {
+                            bindMediaEvent('pause', () => {
                                 setBuffering(false);
                                 playPausePathEl.setAttribute('d', playIcon);
                                 controls.style.opacity = '1';
                                 wrapper.style.cursor = 'default';
                                 clearTimeout(hideTimeout);
                             });
-                            video.addEventListener('seeked', () => setBuffering(false));
+                            bindMediaEvent('seeked', () => setBuffering(false));
+                            bindMediaEvent('timeupdate', updateTime);
+                            bindMediaEvent('loadedmetadata', updateTime);
+                            bindMediaEvent('durationchange', updateTime);
+                            bindMediaEvent('error', () => { setBuffering(false); queueRetry(); });
+                            
+                            bindMediaEvent('seeking', () => {
+                                if (getDuration() && (getDuration() - getCurrentTime() <= 20)) {
+                                    hasSeekedNearEnd = true;
+                                    isNaturalEnd = false;
+                                }
+                            });
 
+                            bindMediaEvent('ended', () => {
+                                if (isNaturalEnd && !hasSeekedNearEnd && (getDuration() >= 120) && !video.loop) {
+                                    endOverlay.classList.add('is-visible-<%- v %>');
+                                    controls.style.display = 'none';
+                                } else if (video.loop) {
+                                    playMedia();
+                                }
+                            });
+
+                            // Dual Player Synchronization Loop
+                            setInterval(() => {
+                                if (!isDualPlaying || !isIntendedToPlay) return;
+                                // Force play if video stalled while audio playing
+                                if (!audio.paused && video.paused && video.readyState >= 3 && !document.hidden) {
+                                    video.play().catch(()=>{});
+                                }
+                                // Drift correction
+                                if (Math.abs(audio.currentTime - video.currentTime) > 0.3) {
+                                    video.currentTime = audio.currentTime;
+                                }
+                            }, 500);
+
+                            document.addEventListener('visibilitychange', () => {
+                                if (!document.hidden && isDualPlaying && isIntendedToPlay) {
+                                    if (Math.abs(video.currentTime - audio.currentTime) > 0.1) {
+                                        video.currentTime = audio.currentTime;
+                                    }
+                                }
+                            });
+
+                            // Interaction setup
                             volGroup.addEventListener('click', (event) => event.stopPropagation());
                             volGroup.addEventListener('pointerenter', () => setVolumeOpen(true));
                             volGroup.addEventListener('pointerleave', () => setVolumeOpen(false));
+                            
                             settingsBtn.addEventListener('click', (event) => {
                                 event.stopPropagation();
                                 setSettingsOpen(!settingsPanel.classList.contains('is-open-<%- v %>'));
@@ -2351,11 +2499,12 @@
                                 settingsCurrentY = 0;
                             });
 
-                            speedPanel.addEventListener('click', (event) => event.stopPropagation());
-                            embedPanel.addEventListener('click', (event) => event.stopPropagation());
-                            statsOverlay.addEventListener('click', (event) => event.stopPropagation());
-                            controls.querySelector('.bottom-area-<%- v %>').addEventListener('click', (event) => event.stopPropagation());
-                            endOverlay.addEventListener('click', (event) => event.stopPropagation());
+                            qualityPanel.addEventListener('click', (e) => e.stopPropagation());
+                            speedPanel.addEventListener('click', (e) => e.stopPropagation());
+                            embedPanel.addEventListener('click', (e) => e.stopPropagation());
+                            statsOverlay.addEventListener('click', (e) => e.stopPropagation());
+                            controls.querySelector('.bottom-area-<%- v %>').addEventListener('click', (e) => e.stopPropagation());
+                            endOverlay.addEventListener('click', (e) => e.stopPropagation());
 
                             restartBtn.addEventListener('click', (e) => {
                                 e.stopPropagation();
@@ -2363,8 +2512,8 @@
                                 controls.style.display = '';
                                 isNaturalEnd = true;
                                 hasSeekedNearEnd = false;
-                                video.currentTime = 0;
-                                video.play().catch(() => {});
+                                setCurrentTime(0);
+                                playMedia();
                             });
 
                             playPauseBtn.addEventListener('click', (event) => {
@@ -2386,12 +2535,12 @@
                                     setVolumeOpen(true);
                                     isVolScrubbing = true;
                                     volSliderBg.setPointerCapture(e.pointerId);
-                                    setVolumeFromEvent(e);
+                                    handleVolumeEvent(e);
                                 });
                                 volSliderBg.addEventListener('pointermove', (e) => {
                                     if (!isVolScrubbing) return;
                                     e.preventDefault();
-                                    setVolumeFromEvent(e);
+                                    handleVolumeEvent(e);
                                 });
                                 volSliderBg.addEventListener('pointerup', (e) => {
                                     if (!isVolScrubbing) return;
@@ -2404,15 +2553,11 @@
                                 event.stopPropagation();
                                 closeAllPanels();
                                 setVolumeOpen(true);
-                                if (video.muted || video.volume === 0) {
-                                    const restoreVolume = lastVolume > 0 ? lastVolume : 1;
-                                    video.volume = restoreVolume;
-                                    video.muted = false;
+                                if (getPrimaryMedia().muted || lastVolume === 0) {
+                                    setMediaVolume(lastVolume > 0 ? lastVolume : 1);
                                 } else {
-                                    lastVolume = video.volume;
-                                    video.muted = true;
+                                    setMediaVolume(0);
                                 }
-                                updateVolumeUI();
                             });
 
                             timeDisplay.addEventListener('click', (event) => {
@@ -2440,19 +2585,17 @@
                                 event.preventDefault();
                                 isScrubbing = false;
                                 progressContainer.classList.remove('is-scrubbing-<%- v %>');
-                                try {
-                                    progressContainer.releasePointerCapture(event.pointerId);
-                                } catch(e) {}
+                                try { progressContainer.releasePointerCapture(event.pointerId); } catch(e) {}
                             });
                             progressContainer.addEventListener('keydown', (event) => {
-                                const duration = Number.isFinite(video.duration) ? video.duration : 0;
+                                const duration = getDuration();
                                 if (!duration) return;
                                 if (event.key === 'ArrowLeft') {
                                     event.preventDefault();
-                                    video.currentTime = Math.max(0, video.currentTime - 5);
+                                    setCurrentTime(Math.max(0, getCurrentTime() - 5));
                                 } else if (event.key === 'ArrowRight') {
                                     event.preventDefault();
-                                    video.currentTime = Math.min(duration, video.currentTime + 5);
+                                    setCurrentTime(Math.min(duration, getCurrentTime() + 5));
                                 }
                             });
 
@@ -2466,7 +2609,24 @@
                                 }
                             });
 
-                            // Speed settings setup
+                            qualityRow.addEventListener('click', (event) => {
+                                event.stopPropagation();
+                                setSettingsOpen(false);
+                                qualityPanel.classList.add('is-open-<%- v %>');
+                                qualityPanel.setAttribute('aria-hidden', 'false');
+                            });
+
+                            qualityPresets.forEach(btn => {
+                                btn.addEventListener('click', () => {
+                                    if(btn.disabled) return;
+                                    const requestedQuality = btn.getAttribute('data-quality');
+                                    if(requestedQuality !== activeQuality) {
+                                        loadQuality(requestedQuality, getCurrentTime());
+                                    }
+                                    closeAllPanels();
+                                });
+                            });
+
                             speedRow.addEventListener('click', (event) => {
                                 event.stopPropagation();
                                 setSettingsOpen(false);
@@ -2478,17 +2638,14 @@
                                 updateSpeedState(parseFloat(e.target.value));
                                 showControls();
                             });
-
                             speedMinus.addEventListener('click', () => {
                                 updateSpeedState(parseFloat(speedSlider.value) - 0.05);
                                 showControls();
                             });
-
                             speedPlus.addEventListener('click', () => {
                                 updateSpeedState(parseFloat(speedSlider.value) + 0.05);
                                 showControls();
                             });
-
                             speedPresets.forEach(btn => {
                                 btn.addEventListener('click', () => {
                                     updateSpeedState(parseFloat(btn.getAttribute('data-speed')));
@@ -2513,7 +2670,6 @@
                                 embedPanel.setAttribute('aria-hidden', 'false');
                                 updateEmbedCode();
                             });
-
                             embedClose.addEventListener('click', (event) => {
                                 event.stopPropagation();
                                 embedPanel.classList.remove('is-open-<%- v %>');
@@ -2531,22 +2687,42 @@
                                     clearInterval(statsUpdateInterval);
                                 }
                             });
-                            
                             statsClose.addEventListener('click', (event) => {
                                 event.stopPropagation();
                                 statsOverlay.classList.remove('is-visible-<%- v %>');
                                 clearInterval(statsUpdateInterval);
                             });
 
+                            if (linkBtn) {
+                                linkBtn.addEventListener('click', (event) => {
+                                    event.stopPropagation();
+                                    const url = window.location.origin + '/watch?v=<%- v %>';
+                                    navigator.clipboard.writeText(url).then(() => {
+                                        const originalSvg = linkBtn.innerHTML;
+                                        linkBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" style="width: 20px; height: 20px;"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>';
+                                        setTimeout(() => {
+                                            if (linkBtn) linkBtn.innerHTML = originalSvg;
+                                        }, 1500);
+                                    }).catch(() => {});
+                                });
+                            }
+
+                            const moreVideosBtn = controls.querySelector('.more-videos-pill-<%- v %>');
+                            if (moreVideosBtn) {
+                                moreVideosBtn.addEventListener('click', (event) => {
+                                    event.stopPropagation();
+                                    window.open('/home', '_blank');
+                                });
+                            }
+
                             video.addEventListener('click', () => {
                                 const anyPanelOpen = settingsPanel.classList.contains('is-open-<%- v %>') || 
                                                      speedPanel.classList.contains('is-open-<%- v %>') || 
+                                                     qualityPanel.classList.contains('is-open-<%- v %>') ||
                                                      embedPanel.classList.contains('is-open-<%- v %>') ||
                                                      volGroup.classList.contains('is-volume-open-<%- v %>');
                                 closeAllPanels();
-                                if (anyPanelOpen) {
-                                    return;
-                                }
+                                if (anyPanelOpen) return;
                                 togglePlay();
                             });
                             
@@ -2559,29 +2735,6 @@
                                 }
                             });
 
-                            video.addEventListener('timeupdate', updateTime);
-                            video.addEventListener('loadedmetadata', updateTime);
-                            video.addEventListener('durationchange', updateTime);
-                            video.addEventListener('volumechange', updateVolumeUI);
-                            video.addEventListener('error', () => {
-                                setBuffering(false);
-                                queueRetry();
-                            });
-
-                            video.addEventListener('seeking', () => {
-                                if (video.duration && (video.duration - video.currentTime <= 20)) {
-                                    hasSeekedNearEnd = true;
-                                    isNaturalEnd = false;
-                                }
-                            });
-
-                            video.addEventListener('ended', () => {
-                                if (isNaturalEnd && !hasSeekedNearEnd && (video.duration >= 120) && !video.loop) {
-                                    endOverlay.classList.add('is-visible-<%- v %>');
-                                    controls.style.display = 'none';
-                                }
-                            });
-
                             let lastMouseMove = 0;
                             wrapper.addEventListener('mousemove', () => {
                                 const now = Date.now();
@@ -2591,13 +2744,16 @@
                                 }
                             });
                             wrapper.addEventListener('mouseleave', () => {
-                                if (!video.paused && !settingsPanel.classList.contains('is-open-<%- v %>') && !speedPanel.classList.contains('is-open-<%- v %>') && !embedPanel.classList.contains('is-open-<%- v %>') && !volGroup.classList.contains('is-volume-open-<%- v %>')) {
+                                if (!getPrimaryMedia().paused && !settingsPanel.classList.contains('is-open-<%- v %>') && !speedPanel.classList.contains('is-open-<%- v %>') && !qualityPanel.classList.contains('is-open-<%- v %>') && !embedPanel.classList.contains('is-open-<%- v %>') && !volGroup.classList.contains('is-volume-open-<%- v %>')) {
                                     controls.style.opacity = '0';
                                 }
                             });
 
-                            updateVolumeUI();
-                            video.play().catch(() => {});
+                            // --- Init Flow ---
+                            loadQuality('360p', 0); // "auto tries with 360p first"
+                            testAndUpgradeTo720p(); // "if it can play itag 247 fine let it use it"
+                            playMedia();
+
                         });
                     }
                 })();
