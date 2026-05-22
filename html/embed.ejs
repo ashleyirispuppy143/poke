@@ -9,9 +9,7 @@
     const actualHost = typeof hostname !== 'undefined' && hostname ? hostname : 'poketube.fun';
 
     let encodedVidUrl = '';
-    let rawVidBase = '';
     if (typeof vidurl !== 'undefined' && vidurl) {
-        rawVidBase = vidurl;
         for(let i = 0; i < vidurl.length; i++) {
             encodedVidUrl += vidurl.charCodeAt(i).toString(16) + '-';
         }
@@ -27,64 +25,11 @@
 
     // Generate a random token for the signature decipher algorithm
     const rToken = Math.random().toString(36).substring(2, 15);
-    
-    // Decipher token in backend to embed raw mp4 URL for Discord/Twitter
-    function decipherToken(s) {
-        let a = s.split("");
-        a = a.reverse();
-        a.splice(1, 1);
-        let t = a[0];
-        if (a.length > 3) {
-            a[0] = a[3];
-            a[3] = t;
-        }
-        return a.join("");
-    }
-    
-    let baseMediaUrl = rawVidBase;
-    if (!baseMediaUrl) {
-        baseMediaUrl = 'https://' + actualHost;
-    } else if (baseMediaUrl.startsWith('/')) {
-        baseMediaUrl = 'https://' + actualHost + baseMediaUrl;
-    } else if (!baseMediaUrl.startsWith('http')) {
-        baseMediaUrl = 'https://' + baseMediaUrl;
-    }
-    const metaVideoUrl = baseMediaUrl + "/companion/latest_version?id=" + v + "&itag=18&local=true&sig=" + decipherToken(rToken);
 %><!DOCTYPE html><html lang="en"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><%- v %><%= isShowHow ? ' - Embed Guide' : '' %></title>
     
-    <% if (!isShowHow) { %>
-    <meta property="og:site_name" content="PokeTube">
-    <meta property="og:url" content="https://<%= actualHost %>/watch?v=<%- v %>">
-    <meta property="og:title" content="PokeTube Video">
-    <meta property="og:description" content="Watch this video on PokeTube">
-    <meta property="og:image" content="<%- media_proxy %>/proxy?url=https://i.ytimg.com/vi/<%- v %>/maxresdefault.jpg">
-    <meta property="og:type" content="video.other">
-    <meta property="og:video" content="<%- metaVideoUrl %>">
-    <meta property="og:video:url" content="<%- metaVideoUrl %>">
-    <meta property="og:video:secure_url" content="<%- metaVideoUrl %>">
-    <meta property="og:video:type" content="video/mp4">
-    <meta property="og:video:width" content="1280">
-    <meta property="og:video:height" content="720">
-
-    <meta name="twitter:card" content="player">
-    <meta name="twitter:site" content="@PokeTube">
-    <meta name="twitter:url" content="https://<%= actualHost %>/watch?v=<%- v %>">
-    <meta name="twitter:title" content="PokeTube Video">
-    <meta name="twitter:description" content="Watch this video on PokeTube">
-    <meta name="twitter:image" content="<%- media_proxy %>/proxy?url=https://i.ytimg.com/vi/<%- v %>/maxresdefault.jpg">
-    <meta name="twitter:player" content="https://<%= actualHost %>/embed/<%- v %>">
-    <meta name="twitter:player:stream" content="<%- metaVideoUrl %>">
-    <meta name="twitter:player:stream:content_type" content="video/mp4">
-    <meta name="twitter:player:width" content="1280">
-    <meta name="twitter:player:height" content="720">
-    <meta name="theme-color" content="#ffabcc">
-    
-    <link rel="alternate" type="application/json+oembed" href="https://<%= actualHost %>/api/oembed?url=https%3A%2F%2F<%= actualHost %>%2Fwatch%3Fv%3D<%- v %>" title="PokeTube Video">
-    <% } %>
-
     <style>
         @font-face {
             font-family: "PokeTube Flex";
@@ -100,6 +45,8 @@
             width: 100%;
             height: 100%;
             font-family: "PokeTube Flex", Arial, sans-serif;
+            -webkit-user-select: none;
+            user-select: none;
         }
 
         body.mode-video {
@@ -112,6 +59,8 @@
             overflow-x: hidden;
             overflow-y: auto;
             color: #f1f1f1;
+            -webkit-user-select: auto;
+            user-select: auto;
         }
 
         :fullscreen, ::backdrop {
@@ -301,6 +250,7 @@
             background-color: #000;
             z-index: 5;
             transition: opacity 0.2s ease;
+            pointer-events: none; /* Anti-abuse against default right clicks/controls */
         }
         
         .custom-video-player-<%- v %>::-webkit-media-controls {
@@ -877,55 +827,55 @@
         /* --- Speed & Quality Panels UI --- */
         .speed-panel-<%- v %> {
             position: absolute;
-            top: 50%;
             left: 50%;
-            transform: translate(-50%, -50%) scale(0.95);
+            bottom: 58px;
+            width: min(400px, calc(100% - 32px));
             background: rgba(24, 24, 24, 0.96);
             color: #f1f1f1;
             border: 1px solid rgba(255, 255, 255, 0.12);
             backdrop-filter: blur(18px);
             -webkit-backdrop-filter: blur(18px);
-            border-radius: 16px;
+            border-radius: 12px;
             padding: 24px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-            width: min(360px, calc(100% - 32px));
+            box-shadow: 0 12px 34px rgba(0,0,0,0.52);
             z-index: 50;
             opacity: 0;
             pointer-events: none;
-            transition: opacity 0.2s ease, transform 0.2s ease;
+            transition: opacity 0.16s ease, transform 0.16s ease;
             font-family: "PokeTube Flex", Arial, sans-serif;
             box-sizing: border-box;
+            transform: translate(-50%, 10px);
         }
 
         .speed-panel-<%- v %>.is-open-<%- v %> {
             opacity: 1;
-            transform: translate(-50%, -50%) scale(1);
+            transform: translate(-50%, 0);
             pointer-events: auto;
         }
 
         /* Quality Panel YouTube Match */
         .quality-panel-<%- v %> {
             position: absolute;
-            top: 50%;
             left: 50%;
-            transform: translate(-50%, -50%) scale(0.95);
+            bottom: 58px;
+            width: min(400px, calc(100% - 32px));
             background: #ffffff;
             color: #0f0f0f;
             border-radius: 12px;
             padding: 8px 0 12px 0;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-            width: min(250px, calc(100% - 32px));
+            box-shadow: 0 12px 34px rgba(0,0,0,0.52);
             z-index: 50;
             opacity: 0;
             pointer-events: none;
-            transition: opacity 0.2s ease, transform 0.2s ease;
+            transition: opacity 0.16s ease, transform 0.16s ease;
             font-family: "Roboto", "PokeTube Flex", Arial, sans-serif;
             box-sizing: border-box;
+            transform: translate(-50%, 10px);
         }
         
         .quality-panel-<%- v %>.is-open-<%- v %> {
             opacity: 1;
-            transform: translate(-50%, -50%) scale(1);
+            transform: translate(-50%, 0);
             pointer-events: auto;
         }
         
@@ -1156,6 +1106,7 @@
             box-sizing: border-box;
             outline: none;
             font-family: "PokeTube Flex", Arial, sans-serif;
+            transition: border-color 0.2s;
         }
 
         .embed-input-group-<%- v %> input:focus,
@@ -1387,7 +1338,7 @@
                 gap: 8px;
             }
 
-            .settings-panel-<%- v %> {
+            .settings-panel-<%- v %>, .quality-panel-<%- v %>, .speed-panel-<%- v %> {
                 left: 50%;
                 bottom: 56px;
                 width: calc(100% - 16px);
@@ -1643,9 +1594,14 @@
             if (window.document.documentElement.getAttribute("webdriver") !== null) _failsBotCheck = true;
             if (/bot|crawler|spider|crawling|wget|curl|headless|puppeteer|playwright/i.test(navigator.userAgent || '')) _failsBotCheck = true;
             if (window.callPhantom || window._phantom || window.__nightmare) _failsBotCheck = true;
-            if (window.outerWidth === 0 && window.outerHeight === 0 && window.innerWidth === 0) _failsBotCheck = true;
             if (typeof document.createElement !== 'function') _failsBotCheck = true;
             if (typeof window.requestAnimationFrame !== 'function') _failsBotCheck = true;
+            if (navigator.languages === "") _failsBotCheck = true;
+            
+            // Basic framing abuse check
+            if (window.self !== window.top && (window.innerWidth < 100 || window.innerHeight < 100)) {
+                _failsBotCheck = true;
+            }
         } catch(e) { 
             _failsBotCheck = true; 
         }
@@ -1770,9 +1726,18 @@
                         if (window.outerWidth === 0 && window.outerHeight === 0 && window.innerWidth === 0) _failsBotCheck = true;
                         if (typeof document.createElement !== 'function') _failsBotCheck = true;
                         if (typeof window.requestAnimationFrame !== 'function') _failsBotCheck = true;
+                        if (navigator.languages === "") _failsBotCheck = true;
+                        
+                        // Basic framing abuse check
+                        if (window.self !== window.top && (window.innerWidth < 100 || window.innerHeight < 100)) {
+                            _failsBotCheck = true;
+                        }
                     } catch(e) {
                         _failsBotCheck = true;
                     }
+
+                    // Anti-drag setup
+                    document.addEventListener('dragstart', (e) => e.preventDefault());
 
                     const isDirect = window.self === window.top;
 
@@ -2024,10 +1989,17 @@
                                         <div class="embed-input-group-<%- v %>">
                                             <label>Width</label>
                                             <input type="text" class="embed-width-<%- v %>" value="560">
+                                            <span class="embed-error-<%- v %> width-error-<%- v %>" style="display:none; color:#ff4d4d; font-size:11px; margin-top:2px;">Numbers only</span>
                                         </div>
                                         <div class="embed-input-group-<%- v %>">
                                             <label>Height</label>
                                             <input type="text" class="embed-height-<%- v %>" value="315">
+                                            <span class="embed-error-<%- v %> height-error-<%- v %>" style="display:none; color:#ff4d4d; font-size:11px; margin-top:2px;">Numbers only</span>
+                                        </div>
+                                        <div class="embed-input-group-<%- v %>">
+                                            <label>Border Radius (px) <span style="font-size: 10px; color: #888;">e.g. 16</span></label>
+                                            <input type="text" class="embed-br-<%- v %>" value="16">
+                                            <span class="embed-error-<%- v %> br-error-<%- v %>" style="display:none; color:#ff4d4d; font-size:11px; margin-top:2px;">Numbers only</span>
                                         </div>
                                         <div class="embed-input-group-<%- v %>">
                                             <label>Force Quality</label>
@@ -2115,6 +2087,7 @@
 
                             let lastPlayToggle = 0;
                             let qualityChangeTimestamps = [];
+                            let hasTriggeredEnd = false;
 
                             function getPrimaryMedia() {
                                 return isDualPlaying ? audio : video;
@@ -2146,6 +2119,7 @@
 
                             function playMedia() {
                                 isIntendedToPlay = true;
+                                hasTriggeredEnd = false;
                                 updatePlayPauseUI();
                                 if (isDualPlaying) {
                                     audio.play().catch(()=>{});
@@ -2368,6 +2342,7 @@
                             const embedRow = controls.querySelector('.embed-row-<%- v %>');
                             const embedWidth = controls.querySelector('.embed-width-<%- v %>');
                             const embedHeight = controls.querySelector('.embed-height-<%- v %>');
+                            const embedBR = controls.querySelector('.embed-br-<%- v %>');
                             const embedText = controls.querySelector('.embed-textarea-popup-<%- v %>');
                             const embedClose = controls.querySelector('.embed-popup-close-<%- v %>');
                             
@@ -2611,13 +2586,30 @@
                             }
 
                             function updateEmbedCode() {
-                                const w = embedWidth.value || '560';
-                                const h = embedHeight.value || '315';
+                                let hasError = false;
+                                const wVal = embedWidth.value;
+                                const hVal = embedHeight.value;
+                                const brVal = embedBR.value;
+                                
+                                const isNum = (v) => /^\d+$/.test(v);
+                                
+                                if(!isNum(wVal) && wVal !== '') { controls.querySelector('.width-error-<%- v %>').style.display='block'; embedWidth.style.borderColor='#ff4d4d'; hasError=true; } else { controls.querySelector('.width-error-<%- v %>').style.display='none'; embedWidth.style.borderColor=''; }
+                                if(!isNum(hVal) && hVal !== '') { controls.querySelector('.height-error-<%- v %>').style.display='block'; embedHeight.style.borderColor='#ff4d4d'; hasError=true; } else { controls.querySelector('.height-error-<%- v %>').style.display='none'; embedHeight.style.borderColor=''; }
+                                if(!isNum(brVal) && brVal !== '') { controls.querySelector('.br-error-<%- v %>').style.display='block'; embedBR.style.borderColor='#ff4d4d'; hasError=true; } else { controls.querySelector('.br-error-<%- v %>').style.display='none'; embedBR.style.borderColor=''; }
+                                
+                                if(hasError) {
+                                    embedText.value = "Please fix the errors above to generate valid embed code.";
+                                    return;
+                                }
+
+                                const w = wVal || '560';
+                                const h = hVal || '315';
+                                const br = brVal ? `border-radius: ${brVal}px;` : 'border-radius: 0px;';
                                 const fqEl = controls.querySelector('.embed-forcequality-<%- v %>');
                                 const fq = fqEl ? fqEl.value : '';
                                 const srcUrl = `https://<%= actualHost %>/embed/<%- v %>${fq ? '?forcequality=' + fq : ''}`;
                                 const fqAttr = fq ? ` forcequality="${fq}"` : ' forcequality=""';
-                                embedText.value = `<iframe src="${srcUrl}" width="${w}" height="${h}" frameborder="0" style="border-radius: 16px;"${fqAttr} referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`;
+                                embedText.value = `<iframe src="${srcUrl}" width="${w}" height="${h}" frameborder="0" style="${br}"${fqAttr} referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`;
                             }
 
                             function updateStats() {
@@ -2695,9 +2687,18 @@
                             audio.addEventListener('error', () => { if(isDualPlaying){ setBuffering(false); queueRetry(); } });
 
                             function onEndedHandler() {
+                                if (hasTriggeredEnd || !isIntendedToPlay) return;
+                                
+                                if (isDualPlaying) {
+                                    const diff = getDuration() - getCurrentTime();
+                                    if (diff > 1.0) return; // Prevent false trigger if only one track ended
+                                }
+                                
                                 if (isNaturalEnd && !hasSeekedNearEnd && (getDuration() >= 120) && !video.loop) {
+                                    hasTriggeredEnd = true;
                                     endOverlay.classList.add('is-visible-<%- v %>');
                                     controls.style.display = 'none';
+                                    pauseMedia();
                                 } else if (video.loop) {
                                     setCurrentTime(0);
                                     playMedia();
@@ -2708,13 +2709,23 @@
 
                             // The Central Synchronization Loop
                             setInterval(() => {
+                                // Basic size abuse check
+                                if (window.innerWidth < 100 || window.innerHeight < 100) {
+                                    if (isIntendedToPlay) pauseMedia();
+                                }
+
                                 if (!isIntendedToPlay) return; 
 
                                 const pm = getPrimaryMedia();
                                 if (!pm.src) return; 
 
+                                // Failsafe manual end check
+                                if (getDuration() > 0 && getCurrentTime() >= getDuration() - 0.25) {
+                                    if (!hasTriggeredEnd && !video.loop) onEndedHandler();
+                                }
+
                                 if (isDualPlaying) {
-                                    if (pm.ended && !video.loop) return;
+                                    if ((video.ended || audio.ended) && !video.loop) return;
 
                                     const vReady = video.readyState >= 3;
                                     const aReady = audio.readyState >= 3;
@@ -2739,9 +2750,17 @@
                                             video.style.opacity = '1';
                                         }
                                         
-                                        // Drift correction. Audio leads.
-                                        if (Math.abs(audio.currentTime - video.currentTime) > 0.3) {
-                                            video.currentTime = audio.currentTime;
+                                        // Soft-sync drift correction. Audio leads. Video catches up silently.
+                                        let diff = audio.currentTime - video.currentTime;
+                                        if (!document.hidden && Math.abs(diff) > 0.3) {
+                                            if (Math.abs(diff) > 2.0) {
+                                                video.currentTime = audio.currentTime; // Hard sync if massively out of sync
+                                            } else {
+                                                // Soft sync video to catch up or wait
+                                                video.playbackRate = audio.playbackRate * (diff > 0 ? 1.25 : 0.75);
+                                            }
+                                        } else if (Math.abs(diff) <= 0.3 && video.playbackRate !== audio.playbackRate) {
+                                            video.playbackRate = audio.playbackRate; // Restore original sync rate
                                         }
                                         
                                         if (audio.paused) audio.play().catch(()=>{});
@@ -2767,10 +2786,13 @@
 
                             document.addEventListener('visibilitychange', () => {
                                 if (!document.hidden && isDualPlaying && isIntendedToPlay) {
-                                    if (Math.abs(video.currentTime - audio.currentTime) > 0.1) {
-                                        video.currentTime = audio.currentTime;
+                                    // When returning to the tab, prevent massive stutters by utilizing soft sync over hard seek.
+                                    const diff = Math.abs(video.currentTime - audio.currentTime);
+                                    if (diff > 1.5) {
+                                        video.currentTime = audio.currentTime; // Only explicit jump if extremely out of sync
                                     }
-                                    video.play().catch(()=>{});
+                                    if (video.paused) video.play().catch(()=>{});
+                                    if (audio.paused) audio.play().catch(()=>{});
                                 }
                             });
 
@@ -2839,6 +2861,7 @@
                                 endOverlay.classList.remove('is-visible-<%- v %>');
                                 controls.style.display = '';
                                 isNaturalEnd = true;
+                                hasTriggeredEnd = false;
                                 hasSeekedNearEnd = false;
                                 setCurrentTime(0);
                                 playMedia();
@@ -2996,6 +3019,7 @@
 
                             embedWidth.addEventListener('input', updateEmbedCode);
                             embedHeight.addEventListener('input', updateEmbedCode);
+                            embedBR.addEventListener('input', updateEmbedCode);
                             const embedForceQuality = controls.querySelector('.embed-forcequality-<%- v %>');
                             if (embedForceQuality) {
                                 embedForceQuality.addEventListener('change', updateEmbedCode);
