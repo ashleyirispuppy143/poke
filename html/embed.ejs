@@ -2425,10 +2425,11 @@
                             function closeAllPanels() {
                                 setSettingsOpen(false);
                                 setVolumeOpen(false);
-                                [speedPanel, qualityPanel, embedPanel].forEach(p => {
+                                [speedPanel, qualityPanel, embedPanel, settingsPanel].forEach(p => {
                                     if(p) {
                                         p.classList.remove('is-open-<%- v %>');
                                         p.setAttribute('aria-hidden', 'true');
+                                        p.style.transform = '';
                                     }
                                 });
                             }
@@ -2765,8 +2766,11 @@
                                             video.playbackRate = audio.playbackRate; // Restore original sync rate
                                         }
                                         
-                                        if (audio.paused) audio.play().catch(()=>{});
-                                        if (video.paused && !document.hidden) video.play().catch(()=>{});
+                                        const atAudioEnd = audio.duration > 0 && audio.currentTime >= audio.duration - 0.05;
+                                        if (audio.paused && !atAudioEnd) audio.play().catch(()=>{});
+
+                                        const atVideoEnd = video.duration > 0 && video.currentTime >= video.duration - 0.05;
+                                        if (video.paused && !document.hidden && !atVideoEnd) video.play().catch(()=>{});
                                     }
                                 } else {
                                     if (video.ended && !video.loop) return;
@@ -2781,7 +2785,8 @@
                                             showToast(`Switched to ${activeQuality}`, 2000);
                                             video.style.opacity = '1';
                                         }
-                                        if (video.paused) video.play().catch(()=>{});
+                                        const atVideoEnd = video.duration > 0 && video.currentTime >= video.duration - 0.05;
+                                        if (video.paused && !atVideoEnd) video.play().catch(()=>{});
                                     }
                                 }
                             }, 250);
@@ -2850,9 +2855,8 @@
                                     
                                     if (currentY > 40) {
                                         closeAllPanels();
-                                    } else {
-                                        panel.style.transform = '';
                                     }
+                                    panel.style.transform = '';
                                     currentY = 0;
                                     lastDragEndTime = Date.now();
                                 });
@@ -2977,6 +2981,7 @@
                             qualityRow.addEventListener('click', (event) => {
                                 event.stopPropagation();
                                 setSettingsOpen(false);
+                                qualityPanel.style.transform = '';
                                 qualityPanel.classList.add('is-open-<%- v %>');
                                 qualityPanel.setAttribute('aria-hidden', 'false');
                             });
@@ -3001,6 +3006,7 @@
                             speedRow.addEventListener('click', (event) => {
                                 event.stopPropagation();
                                 setSettingsOpen(false);
+                                speedPanel.style.transform = '';
                                 speedPanel.classList.add('is-open-<%- v %>');
                                 speedPanel.setAttribute('aria-hidden', 'false');
                             });
@@ -3042,6 +3048,7 @@
                             embedRow.addEventListener('click', (event) => {
                                 event.stopPropagation();
                                 setSettingsOpen(false);
+                                embedPanel.style.transform = '';
                                 embedPanel.classList.add('is-open-<%- v %>');
                                 embedPanel.setAttribute('aria-hidden', 'false');
                                 updateEmbedCode();
