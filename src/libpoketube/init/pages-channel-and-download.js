@@ -62,7 +62,7 @@ module.exports = function (app, config, renderTemplate) {
   app.get("/download", async (req, res) => {
     try {
       const v = req.query.v;
-
+      if (!v) res.redirect("/");
       const thumbnailUrl = `https://i.ytimg.com/vi/${v}/maxresdefault.jpg`;
       const colors = await modules.getColors(thumbnailUrl);
       const color = colors[0].hex();
