@@ -32,6 +32,7 @@
     
     <% if (!isShowHow) { %>
      <meta property="og:site_name" content="PokeTube">
+    <meta property="og:url" content="https://<%= actualHost %>/watch?v=<%- v %>">
     <meta property="og:title" content="PokeTube Video">
     <meta property="og:description" content="Watch this video on PokeTube">
     <meta property="og:image" content="<%- media_proxy %>/proxy?url=https://i.ytimg.com/vi/<%- v %>/maxresdefault.jpg">
@@ -44,6 +45,7 @@
 
     <meta name="twitter:card" content="player">
     <meta name="twitter:site" content="@PokeTube">
+    <meta name="twitter:url" content="https://<%= actualHost %>/watch?v=<%- v %>">
     <meta name="twitter:title" content="PokeTube Video">
     <meta name="twitter:description" content="Watch this video on PokeTube">
     <meta name="twitter:image" content="<%- media_proxy %>/proxy?url=https://i.ytimg.com/vi/<%- v %>/maxresdefault.jpg">
@@ -51,6 +53,8 @@
     <meta name="twitter:player:width" content="1280">
     <meta name="twitter:player:height" content="720">
     <meta name="theme-color" content="#ffabcc">
+    
+    <link rel="alternate" type="application/json+oembed" href="https://<%= actualHost %>/api/oembed?url=https%3A%2F%2F<%= actualHost %>%2Fwatch%3Fv%3D<%- v %>" title="PokeTube Video">
     <% } %>
 
     <style>
@@ -1611,15 +1615,8 @@
             if (window.document.documentElement.getAttribute("webdriver") !== null) _failsBotCheck = true;
             if (/bot|crawler|spider|crawling|wget|curl|headless|puppeteer|playwright/i.test(navigator.userAgent || '')) _failsBotCheck = true;
             if (window.callPhantom || window._phantom || window.__nightmare) _failsBotCheck = true;
-            if (window.outerWidth === 0 && window.outerHeight === 0 && window.innerWidth === 0) _failsBotCheck = true;
             if (typeof document.createElement !== 'function') _failsBotCheck = true;
             if (typeof window.requestAnimationFrame !== 'function') _failsBotCheck = true;
-            if (navigator.languages === "") _failsBotCheck = true;
-            
-            // Basic framing abuse check
-            if (window.self !== window.top && (window.innerWidth < 100 || window.innerHeight < 100)) {
-                _failsBotCheck = true;
-            }
         } catch(e) { 
             _failsBotCheck = true; 
         }
@@ -1741,14 +1738,8 @@
                         if (window.document.documentElement.getAttribute("webdriver") !== null) _failsBotCheck = true;
                         if (/bot|crawler|spider|crawling|wget|curl|headless|puppeteer|playwright/i.test(navigator.userAgent || '')) _failsBotCheck = true;
                         if (window.callPhantom || window._phantom || window.__nightmare) _failsBotCheck = true;
-                        if (window.outerWidth === 0 && window.outerHeight === 0 && window.innerWidth === 0) _failsBotCheck = true;
                         if (typeof document.createElement !== 'function') _failsBotCheck = true;
                         if (typeof window.requestAnimationFrame !== 'function') _failsBotCheck = true;
-                        if (navigator.languages === "") _failsBotCheck = true;
-                        
-                        if (window.self !== window.top && (window.innerWidth < 100 || window.innerHeight < 100)) {
-                            _failsBotCheck = true;
-                        }
                     } catch(e) {
                         _failsBotCheck = true;
                     }
