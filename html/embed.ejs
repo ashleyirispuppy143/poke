@@ -242,6 +242,7 @@
             object-fit: contain;
             background-color: #000;
             z-index: 5;
+            transition: opacity 0.2s ease;
         }
         
         .custom-video-player-<%- v %>::-webkit-media-controls {
@@ -404,16 +405,22 @@
 
         .buffering-wrapper-<%- v %> {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.4);
             z-index: 15;
             display: none;
+            justify-content: center;
+            align-items: center;
             pointer-events: none;
+            backdrop-filter: blur(2px);
+            -webkit-backdrop-filter: blur(2px);
         }
 
         .buffering-wrapper-<%- v %>.is-buffering-<%- v %> {
-            display: block;
+            display: flex;
         }
 
         .buffering-spinner-<%- v %> {
@@ -1941,6 +1948,12 @@
                             let lastVolume = 1;
                             let isSwitchingQuality = false;
 
+                            let pendingSeekTime = 0;
+                            let isSeekingPending = false;
+
+                            let lastPlayToggle = 0;
+                            let lastSwitchTime = 0;
+
                             function getPrimaryMedia() {
                                 return isDualPlaying ? audio : video;
                             }
@@ -1964,6 +1977,9 @@
                                     wrapper.style.cursor = 'default';
                                     clearTimeout(hideTimeout);
                                 }
+                                if ('mediaSession' in navigator) {
+                                    navigator.mediaSession.playbackState = isIntendedToPlay ? 'playing' : 'paused';
+                                }
                             }
 
                             function playMedia() {
@@ -1982,6 +1998,36 @@
                                 updatePlayPauseUI();
                                 video.pause();
                                 if (isDualPlaying) audio.pause();
+                            }
+
+                            function togglePlay() {
+                                const now = Date.now();
+                                if (now - lastPlayToggle < 300) return;
+                                lastPlayToggle = now;
+
+                                if (getPrimaryMedia().paused || !isIntendedToPlay) {
+                                    playMedia();
+                                } else {
+                                    pauseMedia();
+                                }
+                            }
+
+                            if ('mediaSession' in navigator) {
+                                navigator.mediaSession.setActionHandler('play', playMedia);
+                                navigator.mediaSession.setActionHandler('pause', pauseMedia);
+                                navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+                                    setCurrentTime(Math.max(getCurrentTime() - (details.seekOffset || 10), 0));
+                                    updateTime();
+                                });
+                                navigator.mediaSession.setActionHandler('seekforward', (details) => {
+                                    const dur = getDuration();
+                                    setCurrentTime(Math.min(getCurrentTime() + (details.seekOffset || 10), dur ? dur : 0));
+                                    updateTime();
+                                });
+                                navigator.mediaSession.setActionHandler('seekto', (details) => {
+                                    setCurrentTime(details.seekTime);
+                                    updateTime();
+                                });
                             }
 
                             function setMediaVolume(v) {
@@ -2016,18 +2062,20 @@
                                 }
                             }
 
-                            let lastSwitchTime = 0;
-
                             function loadQuality(quality, timeToSeek = 0, nonce = null, silent = false) {
                                 if (quality === activeQuality && !nonce) return;
 
                                 activeQuality = quality;
                                 isDualPlaying = (quality === '720p');
                                 
+                                pendingSeekTime = timeToSeek;
+                                isSeekingPending = true;
+
                                 if (!silent) {
                                     isSwitchingQuality = true;
                                     showToast(`Switching to ${quality}...`, 0); 
                                     setBuffering(true);
+                                    video.style.opacity = '0.01'; // Hide to prevent showing frame 0
                                 }
 
                                 const qualityValue = controls.querySelector('.quality-value-<%- v %>');
@@ -2041,16 +2089,18 @@
                                     video.src = getVideoUrl(247, nonce);
                                     audio.src = getVideoUrl(140, nonce);
                                     video.muted = true;
-                                    audio.currentTime = timeToSeek;
                                     video.currentTime = timeToSeek;
+                                    audio.currentTime = timeToSeek;
                                     audio.playbackRate = video.playbackRate;
                                     if(isIntendedToPlay) {
                                         audio.play().catch(()=>{});
                                         video.play().catch(()=>{});
                                     }
                                 } else {
+                                    audio.pause();
+                                    audio.src = '';
                                     audio.removeAttribute('src'); 
-                                    audio.load();
+
                                     video.src = getVideoUrl(18, nonce);
                                     video.muted = (lastVolume === 0);
                                     video.currentTime = timeToSeek;
@@ -2329,14 +2379,6 @@
                                 updateTime();
                             }
 
-                            function togglePlay() {
-                                if (getPrimaryMedia().paused) {
-                                    playMedia();
-                                } else {
-                                    pauseMedia();
-                                }
-                            }
-
                             function showControls() {
                                 controls.style.opacity = '1';
                                 wrapper.style.cursor = 'default';
@@ -2446,10 +2488,26 @@
                             }
 
                             // --- Event Listeners Mapping ---
-                            [video, audio].forEach(media => {
-                                media.addEventListener('timeupdate', updateTime);
-                                media.addEventListener('loadedmetadata', updateTime);
-                                media.addEventListener('durationchange', updateTime);
+                            const bindMediaEvent = (evt, handler) => {
+                                video.addEventListener(evt, (e) => { if(!isDualPlaying || e.target === video) handler(e, video); });
+                                audio.addEventListener(evt, (e) => { if(isDualPlaying && e.target === audio) handler(e, audio); });
+                            };
+
+                            bindMediaEvent('loadedmetadata', () => {
+                                if (isSeekingPending) {
+                                    video.currentTime = pendingSeekTime;
+                                    if (isDualPlaying) audio.currentTime = pendingSeekTime;
+                                    isSeekingPending = false;
+                                }
+                                updateTime();
+                            });
+                            
+                            bindMediaEvent('timeupdate', updateTime);
+                            bindMediaEvent('durationchange', updateTime);
+
+                            video.addEventListener('seeked', () => {
+                                video.style.opacity = '1';
+                                setBuffering(false);
                             });
 
                             video.addEventListener('error', () => { setBuffering(false); queueRetry(); });
@@ -2497,6 +2555,7 @@
                                         if (isSwitchingQuality) {
                                             isSwitchingQuality = false;
                                             showToast(`Switched to ${activeQuality}`, 2000);
+                                            video.style.opacity = '1';
                                         }
                                         
                                         // Drift correction. Audio leads.
@@ -2518,11 +2577,21 @@
                                         if (isSwitchingQuality) {
                                             isSwitchingQuality = false;
                                             showToast(`Switched to ${activeQuality}`, 2000);
+                                            video.style.opacity = '1';
                                         }
                                         if (video.paused) video.play().catch(()=>{});
                                     }
                                 }
                             }, 250);
+
+                            document.addEventListener('visibilitychange', () => {
+                                if (!document.hidden && isDualPlaying && isIntendedToPlay) {
+                                    if (Math.abs(video.currentTime - audio.currentTime) > 0.1) {
+                                        video.currentTime = audio.currentTime;
+                                    }
+                                    video.play().catch(()=>{});
+                                }
+                            });
 
                             // Seeking logic (to detect manual seeks near the end to prevent early end screens)
                             video.addEventListener('seeking', () => {
@@ -2834,6 +2903,7 @@
                             });
 
                             // --- Init Flow ---
+                            setBuffering(true); // Instant throbbler
                             loadQuality('360p', 0, null, true); // Silent auto try with 360p first
                             testAndUpgradeTo720p(); // Auto upgrades silently to 720p if available
                             playMedia();
