@@ -1019,7 +1019,8 @@
             color: #aaa;
         }
 
-        .embed-input-group-<%- v %> input {
+        .embed-input-group-<%- v %> input,
+        .embed-input-group-<%- v %> select {
             background: rgba(0,0,0,0.5);
             border: 1px solid rgba(255,255,255,0.2);
             color: #fff;
@@ -1029,10 +1030,17 @@
             width: 100%;
             box-sizing: border-box;
             outline: none;
+            font-family: "PokeTube Flex", Arial, sans-serif;
         }
 
-        .embed-input-group-<%- v %> input:focus {
+        .embed-input-group-<%- v %> input:focus,
+        .embed-input-group-<%- v %> select:focus {
             border-color: #ffabcc;
+        }
+        
+        .embed-input-group-<%- v %> select option {
+            background: #181818;
+            color: #fff;
         }
 
         .embed-textarea-popup-<%- v %> {
@@ -1493,7 +1501,7 @@
             padding: 2px 6px;
             border-radius: 4px;
         }
-    </style></head><body class="<%= isShowHow ? 'mode-showhow' : 'mode-video' %>">
+    </style></head><body class="<%= isShowHow ? 'mode-showhow' : 'mode-video' %>" data-forcequality="<%= typeof forcequality !== 'undefined' ? forcequality : '' %>">
     
     <% if (!isShowHow && (typeof VideoError === 'undefined' || !VideoError)) { %>
     <script>
@@ -1555,7 +1563,7 @@
                 <section class="code-section-<%- v %>">
                     <h2 class="section-header-<%- v %>">HTML Code</h2>
                     <div class="embed-card-<%- v %>">
-                        <textarea class="embed-textarea-<%- v %>" readonly>&lt;iframe src="https://<%= typeof hostname !== 'undefined' ? hostname : '' %>/embed/<%- v %>" width="560" height="315" frameborder="0" style="border-radius: 16px;" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen&gt;&lt;/iframe&gt;</textarea>
+                        <textarea class="embed-textarea-<%- v %>" readonly>&lt;iframe src="https://<%= typeof hostname !== 'undefined' ? hostname : '' %>/embed/<%- v %>" width="560" height="315" frameborder="0" style="border-radius: 16px;" forcequality="" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen&gt;&lt;/iframe&gt;</textarea>
                         
                         <div class="embed-actions-<%- v %>">
                             <button class="embed-btn-<%- v %>" onclick="navigator.clipboard.writeText(this.parentElement.previousElementSibling.value); this.innerText='Copied'; setTimeout(() => this.innerText='Copy', 2000);">Copy</button>
@@ -1572,6 +1580,7 @@
                         <ul>
                             <li><code>width</code> & <code>height</code>: Controls player size. Accepts numbers for pixels (e.g., <code>560</code>) or percentages (e.g., <code>100%</code>).</li>
                             <li><code>border-radius</code>: Modify the <code>style="border-radius: 16px;"</code> snippet to change how rounded the corners are.</li>
+                            <li><code>forcequality</code>: Optionally force the playback quality by setting this to <code>360p</code> or <code>720p</code>.</li>
                             <li><code>referrerpolicy</code>: Required for the video to play, as playback is disabled for requests without a referer to prevent bot abuse.</li>
                             <li><code>frameborder</code>: Set to <code>0</code> (no border) or <code>1</code> (shows a solid border).</li>
                         </ul>
@@ -1877,6 +1886,14 @@
                                             <label>Height</label>
                                             <input type="text" class="embed-height-<%- v %>" value="315">
                                         </div>
+                                        <div class="embed-input-group-<%- v %>">
+                                            <label>Force Quality</label>
+                                            <select class="embed-forcequality-<%- v %>">
+                                                <option value="">None (Auto)</option>
+                                                <option value="360p">360p</option>
+                                                <option value="720p">720p</option>
+                                            </select>
+                                        </div>
                                     </div>
                                     <div class="embed-right-<%- v %>">
                                         <div class="embed-popup-header-<%- v %>">Embed Code</div>
@@ -2115,7 +2132,7 @@
                                 const dummy = document.createElement('video');
                                 dummy.src = getVideoUrl(247);
                                 dummy.onloadedmetadata = () => {
-                                    if (activeQuality === '360p') {
+                                    if (activeQuality === '360p' && forcedQuality !== '360p') {
                                         const ct = getCurrentTime();
                                         loadQuality('720p', ct, null, true); // Silent auto-upgrade
                                     }
@@ -2128,6 +2145,11 @@
                                         qBtn.disabled = true;
                                         qBtn.style.opacity = '0.5';
                                         qBtn.title = '720p not available';
+                                    }
+                                    if (activeQuality === '720p') {
+                                        showToast("720p not available, falling back to 360p", 3000);
+                                        const ct = getCurrentTime();
+                                        loadQuality('360p', ct, null, true);
                                     }
                                 };
                             }
@@ -2410,7 +2432,11 @@
                             function updateEmbedCode() {
                                 const w = embedWidth.value || '560';
                                 const h = embedHeight.value || '315';
-                                embedText.value = `<iframe src="https://<%= typeof hostname !== 'undefined' ? hostname : '' %>/embed/<%- v %>" width="${w}" height="${h}" frameborder="0" style="border-radius: 16px;" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`;
+                                const fqEl = controls.querySelector('.embed-forcequality-<%- v %>');
+                                const fq = fqEl ? fqEl.value : '';
+                                const srcUrl = `https://<%= typeof hostname !== 'undefined' ? hostname : '' %>/embed/<%- v %>${fq ? '?forcequality=' + fq : ''}`;
+                                const fqAttr = fq ? ` forcequality="${fq}"` : ' forcequality=""';
+                                embedText.value = `<iframe src="${srcUrl}" width="${w}" height="${h}" frameborder="0" style="border-radius: 16px;"${fqAttr} referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`;
                             }
 
                             function updateStats() {
@@ -2815,6 +2841,10 @@
 
                             embedWidth.addEventListener('input', updateEmbedCode);
                             embedHeight.addEventListener('input', updateEmbedCode);
+                            const embedForceQuality = controls.querySelector('.embed-forcequality-<%- v %>');
+                            if (embedForceQuality) {
+                                embedForceQuality.addEventListener('change', updateEmbedCode);
+                            }
 
                             embedRow.addEventListener('click', (event) => {
                                 event.stopPropagation();
@@ -2902,10 +2932,30 @@
                                 }
                             });
 
+                            // --- Init Parsing ---
+                            const urlParams = new URLSearchParams(window.location.search);
+                            let forcedQuality = urlParams.get('forcequality') || document.body.getAttribute('data-forcequality');
+                            
+                            try {
+                                if (window.frameElement && window.frameElement.hasAttribute('forcequality')) {
+                                    forcedQuality = window.frameElement.getAttribute('forcequality') || forcedQuality;
+                                }
+                            } catch(e) {}
+
                             // --- Init Flow ---
                             setBuffering(true); // Instant throbbler
-                            loadQuality('360p', 0, null, true); // Silent auto try with 360p first
-                            testAndUpgradeTo720p(); // Auto upgrades silently to 720p if available
+                            
+                            if (forcedQuality === '720p') {
+                                loadQuality('720p', 0, null, true);
+                                testAndUpgradeTo720p();
+                            } else if (forcedQuality === '360p') {
+                                loadQuality('360p', 0, null, true);
+                                testAndUpgradeTo720p(); 
+                            } else {
+                                loadQuality('360p', 0, null, true); // Silent auto try with 360p first
+                                testAndUpgradeTo720p(); // Auto upgrades silently to 720p if available
+                            }
+                            
                             playMedia();
 
                         });
