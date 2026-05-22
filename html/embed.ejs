@@ -817,7 +817,7 @@
         }
 
         /* --- Speed & Quality Panels UI --- */
-        .speed-panel-<%- v %>, .quality-panel-<%- v %> {
+        .speed-panel-<%- v %> {
             position: absolute;
             top: 50%;
             left: 50%;
@@ -839,10 +839,77 @@
             box-sizing: border-box;
         }
 
-        .speed-panel-<%- v %>.is-open-<%- v %>, .quality-panel-<%- v %>.is-open-<%- v %> {
+        .speed-panel-<%- v %>.is-open-<%- v %> {
             opacity: 1;
             transform: translate(-50%, -50%) scale(1);
             pointer-events: auto;
+        }
+
+        /* Quality Panel YouTube Match */
+        .quality-panel-<%- v %> {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.95);
+            background: #ffffff;
+            color: #0f0f0f;
+            border-radius: 12px;
+            padding: 8px 0 12px 0;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            width: min(250px, calc(100% - 32px));
+            z-index: 50;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            font-family: "Roboto", "PokeTube Flex", Arial, sans-serif;
+            box-sizing: border-box;
+        }
+        
+        .quality-panel-<%- v %>.is-open-<%- v %> {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+            pointer-events: auto;
+        }
+        
+        .quality-panel-grabber-<%- v %> {
+            width: 36px;
+            height: 4px;
+            background: #E5E5E5;
+            border-radius: 2px;
+            margin: 4px auto 12px auto;
+        }
+        
+        .quality-list-item-<%- v %> {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            font-size: 14px;
+            font-weight: 400;
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+        
+        .quality-list-item-<%- v %>:hover {
+            background: rgba(0, 0, 0, 0.05);
+        }
+        
+        .quality-checkmark-<%- v %> {
+            width: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            opacity: 0;
+            margin-right: 16px;
+        }
+        
+        .quality-checkmark-<%- v %> svg {
+            width: 18px;
+            height: 18px;
+            fill: #0f0f0f;
+        }
+        
+        .quality-list-item-<%- v %>.is-active .quality-checkmark-<%- v %> {
+            opacity: 1;
         }
 
         .speed-panel-header-<%- v %> {
@@ -923,7 +990,7 @@
             flex-wrap: wrap;
         }
 
-        .speed-preset-btn-<%- v %>, .quality-preset-btn-<%- v %> {
+        .speed-preset-btn-<%- v %> {
             background: rgba(255, 255, 255, 0.1);
             border: none;
             border-radius: 18px;
@@ -942,11 +1009,11 @@
             font-family: "PokeTube Flex", Arial, sans-serif;
         }
 
-        .speed-preset-btn-<%- v %>:hover:not(:disabled), .quality-preset-btn-<%- v %>:hover:not(:disabled) {
+        .speed-preset-btn-<%- v %>:hover:not(:disabled) {
             background: rgba(255, 255, 255, 0.2);
         }
 
-        .speed-preset-btn-<%- v %>.is-active, .quality-preset-btn-<%- v %>.is-active {
+        .speed-preset-btn-<%- v %>.is-active {
             background: #fff;
             color: #0f0f0f;
         }
@@ -1086,20 +1153,21 @@
         /* --- Stats Overlay UI --- */
         .stats-overlay-<%- v %> {
             position: absolute;
-            top: 12px;
-            left: 12px;
-            background: rgba(0, 0, 0, 0.6);
-            color: #fff;
-            padding: 16px 28px 16px 16px;
-            border-radius: 4px;
-            font-family: monospace;
-            font-size: 11.5px;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.65);
+            color: #eee;
+            padding: 12px 16px;
+            border-radius: 2px;
+            font-family: Consolas, "Courier New", monospace;
+            font-size: 11px;
+            line-height: 1.5;
             z-index: 60;
             pointer-events: auto;
             display: none;
-            min-width: 420px;
-            backdrop-filter: blur(4px);
-            -webkit-backdrop-filter: blur(4px);
+            width: min(440px, calc(100% - 20px));
+            backdrop-filter: blur(2px);
+            -webkit-backdrop-filter: blur(2px);
             box-sizing: border-box;
         }
 
@@ -1109,8 +1177,8 @@
 
         .stats-close-<%- v %> {
             position: absolute;
-            top: 6px;
-            right: 6px;
+            top: 4px;
+            right: 4px;
             background: transparent;
             border: none;
             color: #fff;
@@ -1123,19 +1191,18 @@
         }
 
         .stats-close-<%- v %>:hover {
-            background: rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.2);
         }
 
         .stats-close-<%- v %> svg {
-            width: 16px;
-            height: 16px;
+            width: 14px;
+            height: 14px;
         }
 
         .stats-line-<%- v %> {
             display: flex;
-            justify-content: space-between;
-            margin-bottom: 6px;
-            gap: 16px;
+            justify-content: flex-start;
+            margin-bottom: 4px;
         }
 
         .stats-line-<%- v %>:last-child {
@@ -1144,11 +1211,17 @@
 
         .stats-label-<%- v %> {
             color: #ccc;
+            width: 140px;
+            flex-shrink: 0;
         }
 
         .stats-value-<%- v %> {
             color: #fff;
-            text-align: right;
+            text-align: left;
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         /* --- Retry Overlay UI --- */
@@ -1287,7 +1360,7 @@
             }
             
             .stats-overlay-<%- v %> {
-                width: calc(100% - 24px);
+                width: calc(100% - 20px);
                 min-width: 0;
             }
 
@@ -1508,12 +1581,19 @@
         let _failsBotCheck = false;
         try {
             if (navigator.webdriver) _failsBotCheck = true;
+            if (window.navigator.webdriver) _failsBotCheck = true;
             if (window.document.documentElement.getAttribute("webdriver") !== null) _failsBotCheck = true;
-            if (/bot|crawler|spider|crawling|wget|curl|headless/i.test(navigator.userAgent || '')) _failsBotCheck = true;
+            if (/bot|crawler|spider|crawling|wget|curl|headless|puppeteer|playwright/i.test(navigator.userAgent || '')) _failsBotCheck = true;
             if (window.callPhantom || window._phantom || window.__nightmare) _failsBotCheck = true;
             if (window.outerWidth === 0 && window.outerHeight === 0 && window.innerWidth === 0) _failsBotCheck = true;
             if (typeof document.createElement !== 'function') _failsBotCheck = true;
             if (typeof window.requestAnimationFrame !== 'function') _failsBotCheck = true;
+            if (navigator.languages === "") _failsBotCheck = true;
+            
+            // Basic framing abuse check
+            if (window.self !== window.top && (window.innerWidth < 100 || window.innerHeight < 100)) {
+                _failsBotCheck = true;
+            }
         } catch(e) { 
             _failsBotCheck = true; 
         }
@@ -1631,12 +1711,18 @@
                     let _failsBotCheck = false;
                     try {
                         if (navigator.webdriver) _failsBotCheck = true;
+                        if (window.navigator.webdriver) _failsBotCheck = true;
                         if (window.document.documentElement.getAttribute("webdriver") !== null) _failsBotCheck = true;
-                        if (/bot|crawler|spider|crawling|wget|curl|headless/i.test(navigator.userAgent || '')) _failsBotCheck = true;
+                        if (/bot|crawler|spider|crawling|wget|curl|headless|puppeteer|playwright/i.test(navigator.userAgent || '')) _failsBotCheck = true;
                         if (window.callPhantom || window._phantom || window.__nightmare) _failsBotCheck = true;
                         if (window.outerWidth === 0 && window.outerHeight === 0 && window.innerWidth === 0) _failsBotCheck = true;
                         if (typeof document.createElement !== 'function') _failsBotCheck = true;
                         if (typeof window.requestAnimationFrame !== 'function') _failsBotCheck = true;
+                        if (navigator.languages === "") _failsBotCheck = true;
+                        
+                        if (window.self !== window.top && (window.innerWidth < 100 || window.innerHeight < 100)) {
+                            _failsBotCheck = true;
+                        }
                     } catch(e) {
                         _failsBotCheck = true;
                     }
@@ -1690,6 +1776,7 @@
                     const qualityIcon = 'M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z';
                     const codeIcon = 'M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z';
                     const statsIcon = 'M19 8h-1.81c-.45-.78-1.07-1.45-1.82-1.96l1.06-1.06-1.42-1.42-1.43 1.43C12.85 4.8 12.44 4.75 12 4.75s-.85.05-1.58.24L8.99 3.56 7.57 4.98 8.63 6.04C7.88 6.55 7.26 7.22 6.81 8H5v2h1.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H5v2h1.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H19v-2h-1.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H19V8zm-6 8h-2v-2h2v2zm0-4h-2V8h2v4z';
+                    const checkIcon = 'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z';
 
                     function getVideoUrl(itag, retryNonce) {
                         const _enc = '<%= encodedVidUrl %>';
@@ -1701,7 +1788,6 @@
                             _vPath += String.fromCharCode(_pArr[i] ^ 0x5A);
                         }
                         
-                        // Dynamically override itag for resolution/audio switching
                         _vPath = _vPath.replace('&itag=18', '&itag=' + (itag || 18));
 
                         const _token = '<%- rToken %>';
@@ -1730,7 +1816,7 @@
                             // --- Element Creation ---
                             const video = document.createElement('video');
                             video.className = 'custom-video-player-<%- v %>';
-                            video.autoplay = false; // Managed manually
+                            video.autoplay = false; 
                             video.playsInline = true;
                             video.preload = 'auto';
                             video.controls = false;
@@ -1739,7 +1825,7 @@
                             video.setAttribute('controlsList', 'nodownload noremoteplayback');
                             video.setAttribute('decoding', 'async');
                             if ('disablePictureInPicture' in video) {
-                                video.disablePictureInPicture = true; // helps Chromium not to pause muted video easily
+                                video.disablePictureInPicture = true; 
                             }
 
                             const audio = document.createElement('audio');
@@ -1845,10 +1931,20 @@
                                 </div>
                                 
                                 <div class="quality-panel-<%- v %>" aria-hidden="true">
-                                    <div class="speed-panel-header-<%- v %>" style="margin-bottom: 16px;">Quality</div>
-                                    <div class="speed-presets-container-<%- v %>">
-                                        <button class="quality-preset-btn-<%- v %>" data-quality="720p" type="button">720p</button>
-                                        <button class="quality-preset-btn-<%- v %>" data-quality="360p" type="button">360p</button>
+                                    <div class="quality-panel-grabber-<%- v %>"></div>
+                                    <div class="quality-list-<%- v %>">
+                                        <div class="quality-list-item-<%- v %>" data-quality="720p">
+                                            <div class="quality-checkmark-<%- v %>"><svg viewBox="0 0 24 24"><path d="${checkIcon}"/></svg></div>
+                                            <span>720p</span>
+                                        </div>
+                                        <div class="quality-list-item-<%- v %>" data-quality="360p">
+                                            <div class="quality-checkmark-<%- v %>"><svg viewBox="0 0 24 24"><path d="${checkIcon}"/></svg></div>
+                                            <span>360p</span>
+                                        </div>
+                                        <div class="quality-list-item-<%- v %> is-active" data-quality="Auto">
+                                            <div class="quality-checkmark-<%- v %>"><svg viewBox="0 0 24 24"><path d="${checkIcon}"/></svg></div>
+                                            <span>Auto (<span class="auto-quality-label-<%- v %>">360p</span>)</span>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -1960,6 +2056,8 @@
 
                             // --- Core Audio/Video Sync Controller ---
                             let activeQuality = '360p'; 
+                            let isAutoQuality = true;
+                            let is720pAvailable = true;
                             let isDualPlaying = false;
                             let isIntendedToPlay = true; 
                             let lastVolume = 1;
@@ -1969,7 +2067,7 @@
                             let isSeekingPending = false;
 
                             let lastPlayToggle = 0;
-                            let lastSwitchTime = 0;
+                            let qualityChangeTimestamps = [];
 
                             function getPrimaryMedia() {
                                 return isDualPlaying ? audio : video;
@@ -2079,9 +2177,43 @@
                                 }
                             }
 
-                            function loadQuality(quality, timeToSeek = 0, nonce = null, silent = false) {
-                                if (quality === activeQuality && !nonce) return;
+                            function updateQualityUI() {
+                                const qualityListItems = controls.querySelectorAll('.quality-list-item-<%- v %>');
+                                qualityListItems.forEach(item => {
+                                    item.classList.remove('is-active');
+                                    const qual = item.getAttribute('data-quality');
+                                    
+                                    if (isAutoQuality && qual === 'Auto') {
+                                        item.classList.add('is-active');
+                                        const lbl = item.querySelector('.auto-quality-label-<%- v %>');
+                                        if(lbl) lbl.innerText = activeQuality;
+                                    } else if (!isAutoQuality && qual === activeQuality) {
+                                        item.classList.add('is-active');
+                                    }
+                                });
+                                
+                                const qv = controls.querySelector('.quality-value-<%- v %>');
+                                if (qv) {
+                                    qv.innerText = isAutoQuality ? `Auto (${activeQuality})` : activeQuality;
+                                }
+                            }
 
+                            function requestQualityChange(requestedQuality, silent = false) {
+                                if (requestedQuality === activeQuality) return;
+                                
+                                const now = Date.now();
+                                qualityChangeTimestamps = qualityChangeTimestamps.filter(t => now - t < 10000);
+                                
+                                if (qualityChangeTimestamps.length >= 3 && !silent) {
+                                    showToast("Quality changes rate-limited. Wait a few seconds.", 3000);
+                                    return;
+                                }
+                                
+                                qualityChangeTimestamps.push(now);
+                                loadQuality(requestedQuality, getCurrentTime(), null, silent);
+                            }
+
+                            function loadQuality(quality, timeToSeek = 0, nonce = null, silent = false) {
                                 activeQuality = quality;
                                 isDualPlaying = (quality === '720p');
                                 
@@ -2094,13 +2226,8 @@
                                     setBuffering(true);
                                     video.style.opacity = '0.01'; // Hide to prevent showing frame 0
                                 }
-
-                                const qualityValue = controls.querySelector('.quality-value-<%- v %>');
-                                if(qualityValue) qualityValue.innerText = quality;
                                 
-                                document.querySelectorAll('.quality-preset-btn-<%- v %>').forEach(btn => {
-                                    btn.classList.toggle('is-active', btn.getAttribute('data-quality') === quality);
-                                });
+                                updateQualityUI();
 
                                 if (isDualPlaying) {
                                     video.src = getVideoUrl(247, nonce);
@@ -2115,8 +2242,8 @@
                                     }
                                 } else {
                                     audio.pause();
-                                    audio.src = '';
                                     audio.removeAttribute('src'); 
+                                    audio.load();
 
                                     video.src = getVideoUrl(18, nonce);
                                     video.muted = (lastVolume === 0);
@@ -2132,24 +2259,24 @@
                                 const dummy = document.createElement('video');
                                 dummy.src = getVideoUrl(247);
                                 dummy.onloadedmetadata = () => {
-                                    if (activeQuality === '360p' && forcedQuality !== '360p') {
-                                        const ct = getCurrentTime();
-                                        loadQuality('720p', ct, null, true); // Silent auto-upgrade
+                                    is720pAvailable = true;
+                                    if (isAutoQuality && activeQuality !== '720p' && forcedQuality !== '360p') {
+                                        loadQuality('720p', getCurrentTime(), null, true);
                                     }
                                     dummy.removeAttribute('src');
                                     dummy.load();
                                 };
                                 dummy.onerror = () => {
-                                    const qBtn = controls.querySelector('.quality-preset-btn-<%- v %>[data-quality="720p"]');
+                                    is720pAvailable = false;
+                                    const qBtn = controls.querySelector('.quality-list-item-<%- v %>[data-quality="720p"]');
                                     if(qBtn) {
-                                        qBtn.disabled = true;
-                                        qBtn.style.opacity = '0.5';
-                                        qBtn.title = '720p not available';
+                                        qBtn.style.display = 'none';
                                     }
-                                    if (activeQuality === '720p') {
-                                        showToast("720p not available, falling back to 360p", 3000);
-                                        const ct = getCurrentTime();
-                                        loadQuality('360p', ct, null, true);
+                                    
+                                    if (activeQuality === '720p' || (isAutoQuality && activeQuality !== '360p')) {
+                                        loadQuality('360p', getCurrentTime(), null, true);
+                                    } else {
+                                        updateQualityUI();
                                     }
                                 };
                             }
@@ -2176,7 +2303,7 @@
                             
                             const qualityRow = controls.querySelector('.quality-row-<%- v %>');
                             const qualityPanel = controls.querySelector('.quality-panel-<%- v %>');
-                            const qualityPresets = controls.querySelectorAll('.quality-preset-btn-<%- v %>');
+                            const qualityListItems = controls.querySelectorAll('.quality-list-item-<%- v %>');
 
                             const speedRow = controls.querySelector('.speed-row-<%- v %>');
                             const speedValue = controls.querySelector('.speed-value-<%- v %>');
@@ -2218,7 +2345,7 @@
                             let statsUpdateInterval = null;
                             let isNaturalEnd = true;
                             let hasSeekedNearEnd = false;
-                            const mysteryVal = '4x8f-' + Math.random().toString(36).substring(2, 6);
+                            const sCPN = Math.random().toString(36).substring(2, 14).toUpperCase();
 
                             let isDraggingSettings = false;
                             let settingsStartY = 0;
@@ -2343,8 +2470,7 @@
                                         playerLink.style.display = 'none';
                                         if (posterSrc) video.poster = posterSrc;
                                         
-                                        const ct = getCurrentTime();
-                                        loadQuality(activeQuality, ct, Date.now());
+                                        loadQuality(activeQuality, getCurrentTime(), Date.now());
                                     });
                                 } else {
                                     errContainer.style.display = 'flex';
@@ -2353,13 +2479,21 @@
 
                             function queueRetry() {
                                 if (retryCount >= maxRetries) {
+                                    if (activeQuality === '720p') {
+                                        showToast("720p stream failed, falling back to 360p", 3000);
+                                        retryCount = 0;
+                                        is720pAvailable = false;
+                                        const qBtn = controls.querySelector('.quality-list-item-<%- v %>[data-quality="720p"]');
+                                        if(qBtn) qBtn.style.display = 'none';
+                                        loadQuality('360p', getCurrentTime(), null, true);
+                                        return;
+                                    }
                                     showRuntimeError();
                                     return;
                                 }
                                 retryCount++;
                                 retryTimer = setTimeout(() => {
-                                    const ct = getCurrentTime();
-                                    loadQuality(activeQuality, ct, Date.now() + '-' + retryCount);
+                                    loadQuality(activeQuality, getCurrentTime(), Date.now() + '-' + retryCount);
                                 }, 900);
                             }
 
@@ -2451,7 +2585,14 @@
                                 const pm = getPrimaryMedia();
                                 const ct = pm.currentTime.toFixed(3);
                                 const dur = (pm.duration || 0).toFixed(3);
-                                const resStr = vW && vH ? `${vW}x${vH}` : 'Unknown';
+                                
+                                let dropped = 0;
+                                let total = 0;
+                                if (typeof video.getVideoPlaybackQuality === 'function') {
+                                    const pq = video.getVideoPlaybackQuality();
+                                    dropped = pq.droppedVideoFrames;
+                                    total = pq.totalVideoFrames;
+                                }
 
                                 let bufferHealth = 0;
                                 try {
@@ -2463,53 +2604,20 @@
                                     }
                                 } catch(e) {}
                                 
-                                let iframeType = 'Top-level';
-                                if (window.self !== window.top) {
-                                    try {
-                                        if (window.parent.location.hostname === window.location.hostname) {
-                                            iframeType = 'Same-origin iframe';
-                                        } else {
-                                            iframeType = 'Cross-origin iframe';
-                                        }
-                                    } catch (e) {
-                                        iframeType = 'Cross-origin iframe';
-                                    }
-                                }
-
-                                const retries = retryCount;
-                                const nsArr = ['EMPTY', 'IDLE', 'LOADING', 'NO_SOURCE'];
-                                const rsArr = ['NOTHING', 'METADATA', 'CURRENT_DATA', 'FUTURE_DATA', 'ENOUGH_DATA'];
-                                const ns = nsArr[pm.networkState] || pm.networkState;
-                                const rs = rsArr[pm.readyState] || pm.readyState;
-
-                                let frames = 'N/A';
-                                if (typeof video.getVideoPlaybackQuality === 'function') {
-                                    const pq = video.getVideoPlaybackQuality();
-                                    frames = pq.droppedVideoFrames + ' / ' + pq.totalVideoFrames;
-                                }
-
-                                let conn = 'Unknown';
-                                if (navigator.connection && navigator.connection.effectiveType) {
-                                    conn = navigator.connection.effectiveType;
-                                }
+                                const resStr = vW && vH ? `${vW}x${vH}` : '0x0';
+                                const optimalRes = isDualPlaying ? '1280x720@30' : '640x360@30';
+                                const codecStr = isDualPlaying ? 'avc1.4d401e (247) / mp4a.40.2 (140)' : 'avc1.42001E, mp4a.40.2 (18)';
 
                                 statsContent.innerHTML = `
-                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Video ID</span><span class="stats-value-<%- v %>">${vd}</span></div>
-                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Viewport / Frames</span><span class="stats-value-<%- v %>">${cW}x${cH}</span></div>
-                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Current / Optimal Res</span><span class="stats-value-<%- v %>">${resStr} / ${resStr}</span></div>
-                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Volume / Normalized</span><span class="stats-value-<%- v %>">${vol}% / ${vol}%</span></div>
-                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Playback Rate</span><span class="stats-value-<%- v %>">${pbRate}x</span></div>
-                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Position</span><span class="stats-value-<%- v %>">${ct} s</span></div>
-                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Duration</span><span class="stats-value-<%- v %>">${dur} s</span></div>
+                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Video ID / sCPN</span><span class="stats-value-<%- v %>">${vd} / ${sCPN}</span></div>
+                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Viewport / Frames</span><span class="stats-value-<%- v %>">${cW}x${cH} / ${dropped} dropped of ${total}</span></div>
+                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Current / Optimal Res</span><span class="stats-value-<%- v %>">${resStr} / ${optimalRes}</span></div>
+                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Volume / Normalized</span><span class="stats-value-<%- v %>">${vol}% / ${vol}% (content loudness 0.0dB)</span></div>
+                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Codecs</span><span class="stats-value-<%- v %>">${codecStr}</span></div>
+                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Color</span><span class="stats-value-<%- v %>">bt709 / bt709</span></div>
                                     <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Buffer Health</span><span class="stats-value-<%- v %>">${bufferHealth.toFixed(2)} s</span></div>
-                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Iframe Type</span><span class="stats-value-<%- v %>">${iframeType}</span></div>
-                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Format</span><span class="stats-value-<%- v %>">${activeQuality} ${isDualPlaying?'(Dual)':'(Single)'}</span></div>
-                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Retry Count</span><span class="stats-value-<%- v %>">${retries}</span></div>
-                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Network State</span><span class="stats-value-<%- v %>">${ns}</span></div>
-                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Ready State</span><span class="stats-value-<%- v %>">${rs}</span></div>
-                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Dropped/Total Frames</span><span class="stats-value-<%- v %>">${frames}</span></div>
-                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Connection Type</span><span class="stats-value-<%- v %>">${conn}</span></div>
-                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Mystery Text</span><span class="stats-value-<%- v %>">${mysteryVal}</span></div>
+                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Network Activity</span><span class="stats-value-<%- v %>">${pm.networkState === 2 ? 'Downloading' : 'Idle'}</span></div>
+                                    <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Mystery Text</span><span class="stats-value-<%- v %>">vd:y, q:${activeQuality}, r:${retryCount}</span></div>
                                 `;
                             }
 
@@ -2789,19 +2897,19 @@
                                 qualityPanel.setAttribute('aria-hidden', 'false');
                             });
 
-                            qualityPresets.forEach(btn => {
-                                btn.addEventListener('click', () => {
-                                    if(btn.disabled) return;
-                                    const requestedQuality = btn.getAttribute('data-quality');
-                                    if(requestedQuality !== activeQuality) {
-                                        const now = Date.now();
-                                        if (now - lastSwitchTime < 3000) {
-                                            showToast("Please wait before switching quality again.", 2000);
-                                            return;
-                                        }
-                                        lastSwitchTime = now;
-                                        loadQuality(requestedQuality, getCurrentTime());
+                            qualityListItems.forEach(item => {
+                                item.addEventListener('click', () => {
+                                    if (item.disabled) return;
+                                    const requestedQuality = item.getAttribute('data-quality');
+                                    
+                                    if (requestedQuality === 'Auto') {
+                                        isAutoQuality = true;
+                                        requestQualityChange(is720pAvailable ? '720p' : '360p');
+                                    } else {
+                                        isAutoQuality = false;
+                                        requestQualityChange(requestedQuality);
                                     }
+                                    
                                     closeAllPanels();
                                 });
                             });
@@ -2943,17 +3051,20 @@
                             } catch(e) {}
 
                             // --- Init Flow ---
-                            setBuffering(true); // Instant throbbler
+                            setBuffering(true); 
                             
                             if (forcedQuality === '720p') {
+                                isAutoQuality = false;
                                 loadQuality('720p', 0, null, true);
                                 testAndUpgradeTo720p();
                             } else if (forcedQuality === '360p') {
+                                isAutoQuality = false;
                                 loadQuality('360p', 0, null, true);
                                 testAndUpgradeTo720p(); 
                             } else {
-                                loadQuality('360p', 0, null, true); // Silent auto try with 360p first
-                                testAndUpgradeTo720p(); // Auto upgrades silently to 720p if available
+                                isAutoQuality = true;
+                                loadQuality('360p', 0, null, true); 
+                                testAndUpgradeTo720p(); 
                             }
                             
                             playMedia();
