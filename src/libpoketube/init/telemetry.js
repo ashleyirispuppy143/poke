@@ -4,7 +4,7 @@ const path = require("path")
 
 const SETTINGS = Object.freeze({
   telemetry: {
-    enabled: false,
+    enabled: true,
     storage: {
       path: path.join(__dirname, "telemetry.json")
     },
@@ -204,7 +204,7 @@ function mergeStats(target, source) {
     }
   }
 
-  return normalizeStats(target)
+  return compactStatsForSave(target)
 }
 
 function safeRead(filePath) {
@@ -283,23 +283,44 @@ async function atomicWriteJson(filePath, data) {
 }
 
 function compactStatsForSave(input) {
+  // Fix: Strictly bound videos count otherwise memory leaks forever and takes down the server
+  const sortedVideos = Object.entries(input.videos && typeof input.videos === "object" ? input.videos : {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, SETTINGS.telemetry.jsonLimit)
+    
+  const videos = {}
+  for (const [id, count] of sortedVideos) {
+    videos[id] = count
+  }
+
+  // Fix: Strictly bound users object or else millions accumulate locking the CPU during sync loops
+  const userKeys = Object.keys(input.users && typeof input.users === "object" ? input.users : {})
+  const users = {}
+  for (const key of userKeys.slice(-100000)) {
+    users[key] = true
+  }
+
+  const browsers = input.browsers && typeof input.browsers === "object" ? input.browsers : {}
+  const os = input.os && typeof input.os === "object" ? input.os : {}
+  const recentVideos = Array.isArray(input.recentVideos) ? input.recentVideos.slice(-SETTINGS.telemetry.recentLimit) : []
+
   const stats = {
     version: 4,
     startedAt: typeof input.startedAt === "string" && input.startedAt.trim() ? input.startedAt.trim() : getNowIso(),
-    videos: input.videos && typeof input.videos === "object" ? input.videos : {},
-    pageTitles: input.pageTitles && typeof input.pageTitles === "object" ? input.pageTitles : {},
-    browsers: input.browsers && typeof input.browsers === "object" ? input.browsers : {},
-    os: input.os && typeof input.os === "object" ? input.os : {},
-    users: input.users && typeof input.users === "object" ? input.users : {},
-    recentVideos: Array.isArray(input.recentVideos) ? input.recentVideos.slice(-SETTINGS.telemetry.recentLimit) : []
+    videos,
+    pageTitles: {},
+    browsers,
+    os,
+    users,
+    recentVideos
   }
 
-  for (const id of Object.keys(stats.pageTitles)) {
-    const title = cleanPageTitle(stats.pageTitles[id])
-    if (!title || (!stats.videos[id] && !stats.recentVideos.includes(id))) {
-      delete stats.pageTitles[id]
-    } else {
-      stats.pageTitles[id] = title
+  const sourceTitles = input.pageTitles && typeof input.pageTitles === "object" ? input.pageTitles : {}
+  for (const [id, title] of Object.entries(sourceTitles)) {
+    const clean = cleanPageTitle(title)
+    // Only persist titles for videos actually retained
+    if (clean && (stats.videos[id] || stats.recentVideos.includes(id))) {
+      stats.pageTitles[id] = clean
     }
   }
 
@@ -737,6 +758,8 @@ function collectGenreValues(...values) {
   const out = []
 
   function add(value) {
+    if (out.length >= 20) return // Fix: Prevent CPU DOS loops from heavily nested arrays and big objects
+
     if (Array.isArray(value)) {
       for (const item of value) add(item)
       return
@@ -748,13 +771,14 @@ function collectGenreValues(...values) {
     }
 
     for (const item of splitGenreText(value)) {
+      if (out.length >= 20) return
       if (!out.includes(item)) out.push(item)
     }
   }
 
   for (const value of values) add(value)
 
-  return out.slice(0, 20)
+  return out
 }
 
 function getFirstSupportedGenreFromValues(values) {
