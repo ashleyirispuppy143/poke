@@ -1575,7 +1575,7 @@ function authorVerifiedChecker4000() {
   <%  if (Array?.isArray( shorts.videos)) { %> 
     <% shorts.videos.forEach (x =>  { %>
       <a href="/shorts/<%- x.videoId %>" class="shorts-video" >
-        <img load="lazy" onerror="this.src=`<%- media_proxy_url %>/proxy?url=https://i.ytimg.com/vi/<%= x.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw`" src='<%- media_proxy_url %>/proxy?url=https://i.ytimg.com/vi/<%= x.videoId %>/maxresdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw'>
+        <img load="lazy" onerror="this.src=`<%- media_proxy_url %>/proxy?url=https://i.ytimg.com/vi/<%= x.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw`" src='<%- media_proxy_url %>/proxy?url=https://i.ytimg.com/vi/<%= x.videoId %>/oardefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw'>
         <span class="shorts-title"><%- x.title %></span>
       </a>
     <% }) %>   
