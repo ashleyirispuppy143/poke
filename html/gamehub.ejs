@@ -64,7 +64,6 @@
       color:var(--text);
       -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
     }
-    /* Subtle, cheap background flair (perf-friendly) */
     .emoji-bg{
       position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.08;
       display:grid; grid-template-columns:repeat(auto-fill,minmax(3rem,1fr)); grid-auto-rows:3rem;
@@ -350,8 +349,6 @@
 
 
 
-
-
 <% if (game === "snake") { %>
 <!DOCTYPE html>
 <html lang="en">
@@ -523,39 +520,62 @@
       headColor:'#ffff00', bodyColor:'#00ffff'
     };
 
-    let snake, dir, food, score, highScore=0, level, gameInterval;
+    let snake, dir, food, score, highScore=0, level;
     let state='start', startTime=0;
     const endMessages=["Skill issue!","Snake bit ya!","Sssorry, try again!"];
     let fps=0, frameCount=0, lastFpsTime=Date.now();
     let movesCount=0, framesSinceFood=0;
 
+     let reqAnimFrameId;
+    let lastTime = 0;
+    let accumulator = 0;
+    let currentTickRate = params.speed;
+    let inputQueue = [];
+
     function resizeCanvas() {
       canvas.width = Math.floor(window.innerWidth/20)*20;
       canvas.height= Math.floor(window.innerHeight/20)*20;
+       if (food) {
+        const cols = canvas.width/20, rows = canvas.height/20;
+        if (food.x >= cols || food.y >= rows) pickFood();
+      }
     }
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
     function pickFood() {
       const cols=canvas.width/20, rows=canvas.height/20;
-      food={ x:Math.floor(Math.random()*cols), y:Math.floor(Math.random()*rows) };
+      let validFood = false;
+      
+       while (!validFood) {
+        food = { x:Math.floor(Math.random()*cols), y:Math.floor(Math.random()*rows) };
+        validFood = !snake.some(seg => seg.x === food.x && seg.y === food.y);
+      }
       framesSinceFood=0;
     }
 
     function initGame() {
-      snake=[]; for(let i=0;i<params.startLength;i++){
-        snake.push({x:10,y:10+i});
+      snake=[]; 
+      for(let i=0; i<params.startLength; i++){
+        snake.push({x:10, y:10+i});
       }
-      dir={x:0,y:-1}; pickFood();
+      dir={x:0,y:-1}; 
+      inputQueue = [];
+      pickFood();
       score=0; level=1; movesCount=0; startTime=Date.now();
+      currentTickRate = params.speed;
       updateScoreboard();
-      clearInterval(gameInterval);
-      gameInterval=setInterval(gameLoop, params.speed);
+      
+      if (reqAnimFrameId) cancelAnimationFrame(reqAnimFrameId);
+      lastTime = performance.now();
+      accumulator = 0;
+      reqAnimFrameId = requestAnimationFrame(gameLoop);
     }
 
     function drawGrid() {
       if(!params.grid) return;
       ctx.strokeStyle='rgba(0,255,0,0.2)';
+      ctx.lineWidth = 1;
       for(let x=0;x<canvas.width;x+=20){
         ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); ctx.stroke();
       }
@@ -602,11 +622,10 @@
               : 'N/A',
             diff = params.speed>=150?'Easy':params.speed>=100?'Normal':'Hard';
 
-      // color-coded FPS
-      let fpsColor = fps>=8?'#0f0': fps>=4?'#ffa500':'#f00';
+      let fpsColor = fps>=50?'#0f0': fps>=30?'#ffa500':'#f00';
 
       debugMenu.innerHTML =
-        `Poke Snake 1.1.2 on ${diff} \n\n` +
+        `Poke Snake 2.0.0 on ${diff} \n\n` +
         `<span style="color:${fpsColor}">FPS: ${fps}</span>\n` +
         `FrameTime: ${frameTime}ms\n` +
         `Head: ${head.x},${head.y}\n` +
@@ -626,7 +645,7 @@
         `Level: ${level}\n` +
         `HighScore: ${highScore}\n` +
         `Difficulty: ${diff}\n` +
-        `Speed(ms): ${params.speed}\n` +
+        `TickRate(ms): ${Math.round(currentTickRate)}\n` +
         `StartLen: ${params.startLength}\n` +
         `Wall: ${params.wallMode}\n` +
         `Grid: ${params.grid}\n` +
@@ -639,32 +658,71 @@
         `UA: ${ua}`;
     }
 
+    function processInput() {
+      if (inputQueue.length > 0) {
+        const nextDir = inputQueue.shift();
+         if (nextDir.x !== -dir.x || nextDir.y !== -dir.y) {
+          dir = nextDir;
+        }
+      }
+    }
+
     function update(){
-      const head={x:snake[0].x+dir.x,y:snake[0].y+dir.y},
+      processInput();
+
+      const head={x:snake[0].x+dir.x, y:snake[0].y+dir.y},
             cols=canvas.width/20, rows=canvas.height/20;
+            
       if(params.wallMode==='wrap'){
         head.x=(head.x+cols)%cols; head.y=(head.y+rows)%rows;
       } else if(head.x<0||head.x>=cols||head.y<0||head.y>=rows){
         return endGame();
       }
+      
       if(snake.some((s,i)=>i>0&&s.x===head.x&&s.y===head.y)){
         return endGame();
       }
+      
       snake.unshift(head);
       movesCount++;
+      
       if(head.x===food.x&&head.y===food.y){
-        score++; if(score%5===0) level++;
+        score++; 
+        if(score%5===0) {
+          level++;
+          // Increase speed slightly per level, capping at 30ms per tick
+          currentTickRate = Math.max(30, currentTickRate * 0.98); 
+        }
         updateScoreboard(); pickFood();
         if(params.sfx) playBeep(440,0.1);
-      } else snake.pop();
+      } else {
+        snake.pop();
+      }
     }
 
-    function gameLoop(){
-      update(); draw(); recordFrame(); updateDebugMenu();
+    function gameLoop(time){
+      if (!lastTime) lastTime = time;
+      const deltaTime = time - lastTime;
+      lastTime = time;
+
+      if (state === 'playing') {
+        accumulator += deltaTime;
+        
+         while (accumulator >= currentTickRate) {
+          update();
+          accumulator -= currentTickRate;
+        }
+        
+        draw(); 
+        recordFrame(); 
+        updateDebugMenu();
+        reqAnimFrameId = requestAnimationFrame(gameLoop);
+      }
     }
 
     function endGame(){
-      clearInterval(gameInterval); state='gameover';
+      cancelAnimationFrame(reqAnimFrameId);
+      state='gameover';
       gameOverText.textContent=endMessages[Math.floor(Math.random()*endMessages.length)];
       gameOverScreen.classList.remove('hidden');
     }
@@ -675,12 +733,17 @@
     }
 
     function playBeep(freq,dur){
-      const ac=new (window.AudioContext||window.webkitAudioContext)(),
-            gain=ac.createGain(), osc=ac.createOscillator();
-      gain.gain.value=params.sfxVolume;
-      osc.frequency.value=freq;
-      osc.connect(gain).connect(ac.destination);
-      osc.start(); osc.stop(ac.currentTime+dur);
+      try {
+        const ac=new (window.AudioContext||window.webkitAudioContext)(),
+              gain=ac.createGain(), osc=ac.createOscillator();
+        gain.gain.value=params.sfxVolume;
+        osc.frequency.value=freq;
+        osc.connect(gain).connect(ac.destination);
+        osc.start(); osc.stop(ac.currentTime+dur);
+      } catch (e) {
+        // Fallback for browsers that block audio context without interaction
+        console.warn("Audio play failed:", e);
+      }
     }
 
     document.addEventListener('keydown', e=>{
@@ -692,8 +755,19 @@
         titleScreen.classList.add('hidden'); initGame(); state='playing';
       } else if(state==='playing'){
         const M={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0]};
-        if(M[e.key]&&(M[e.key][0]!==-dir.x||M[e.key][1]!==-dir.y)){
-          dir={x:M[e.key][0],y:M[e.key][1]};
+        if(M[e.key]){
+           e.preventDefault(); 
+          
+          const newDir = {x:M[e.key][0],y:M[e.key][1]};
+          // Allow max 2 inputs queued to prevent massive buffers
+          if (inputQueue.length < 2) { 
+            // Compare against last queued move, or current direction if queue is empty
+            const lastQueuedDir = inputQueue.length > 0 ? inputQueue[inputQueue.length - 1] : dir;
+            // Only add to queue if it's not a 180 degree turn from the most recent intent
+            if (newDir.x !== -lastQueuedDir.x || newDir.y !== -lastQueuedDir.y) {
+              inputQueue.push(newDir);
+            }
+          }
         }
       } else if(state==='gameover'&&e.key.toLowerCase()==='r'){
         gameOverScreen.classList.add('hidden');
@@ -703,7 +777,7 @@
     });
 
     settingsBtn.addEventListener('click', ()=>{
-      if(state==='playing') clearInterval(gameInterval);
+      if(state==='playing') cancelAnimationFrame(reqAnimFrameId);
       document.getElementById('paramSpeed').value       = params.speed;
       document.getElementById('paramSfx').value         = params.sfx?'on':'off';
       document.getElementById('paramStartLength').value = params.startLength;
@@ -717,7 +791,10 @@
 
     closeBtn.addEventListener('click', ()=>{
       settingsModal.style.display='none';
-      if(state==='playing') gameInterval=setInterval(gameLoop,params.speed);
+      if(state==='playing') {
+        lastTime = performance.now();
+        reqAnimFrameId=requestAnimationFrame(gameLoop);
+      }
     });
 
     saveBtn.addEventListener('click', ()=>{
@@ -741,7 +818,7 @@
   </script>
 </body>
 </html>
-
+<% } %>
 <% } %>
 
 
