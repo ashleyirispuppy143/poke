@@ -206,7 +206,7 @@ const searchCache = new Map();
 
     let continuation = req.query.continuation || "";
     let date = req.query.date || "";
-    let type = req.query.type || "video";
+    let type = req.query.type || "all";
     let duration = req.query.duration || "";
     let sort = req.query.sort || "";
     let from = req.query.from || "";
