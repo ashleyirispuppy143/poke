@@ -560,7 +560,7 @@ video[counter].classList.add("shake");
     
        </div>
   <div class="channel-page"   style="background-color: var(--channel-contents-background);">   
-    <div class="search-options">
+ <div class="search-options">
     <div id="filters" style="
   --bg-primary: #181818; 
   --bg-secondary: #212121; 
@@ -592,7 +592,7 @@ video[counter].classList.add("shake");
                 <div class="filter-name" style="font-weight: 600; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">Upload date</div>
               </legend>
               <div class="filter-options" style="display: flex; flex-direction: column; gap: 12px;">
-                <% const selectedDate = date || "none"; %>
+                <% const selectedDate = (typeof date !== 'undefined' && date) ? date : "none"; %>
                 <% ['none', 'hour', 'today', 'week', 'month', 'year'].forEach(option => { %>
                   <div style="display: flex; align-items: center; gap: 10px;">
                     <input type="radio" name="date" id="filter-date-<%= option %>" value="<%= option %>" <%= selectedDate === option ? 'checked' : '' %> style="margin: 0; width: 16px; height: 16px; accent-color: var(--accent-color); cursor: pointer;">
@@ -611,7 +611,7 @@ video[counter].classList.add("shake");
                 <div class="filter-name" style="font-weight: 600; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">Duration</div>
               </legend>
               <div class="filter-options" style="display: flex; flex-direction: column; gap: 12px;">
-                <% const selectedDuration = duration || "none"; %>
+                <% const selectedDuration = (typeof duration !== 'undefined' && duration) ? duration : "none"; %>
                 <% ['none', 'short', 'long', 'medium'].forEach(option => { %>
                   <div style="display: flex; align-items: center; gap: 10px;">
                     <input type="radio" name="duration" id="filter-duration-<%= option %>" value="<%= option %>" <%= selectedDuration === option ? 'checked' : '' %> style="margin: 0; width: 16px; height: 16px; accent-color: var(--accent-color); cursor: pointer;">
@@ -627,10 +627,29 @@ video[counter].classList.add("shake");
           <div class="filter-column" style="flex: 1; min-width: 180px;">
             <fieldset style="border: none; padding: 0; margin: 0;">
               <legend style="padding: 0; margin-bottom: 16px; width: 100%;">
+                <div class="filter-name" style="font-weight: 600; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">Type</div>
+              </legend>
+              <div class="filter-options" style="display: flex; flex-direction: column; gap: 12px;">
+                <% const selectedType = (typeof type !== 'undefined' && type) ? type : "video"; %>
+                <% ['video', 'channel'].forEach(option => { %>
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <input type="radio" name="type" id="filter-type-<%= option %>" value="<%= option %>" <%= selectedType === option ? 'checked' : '' %> style="margin: 0; width: 16px; height: 16px; accent-color: var(--accent-color); cursor: pointer;">
+                    <label for="filter-type-<%= option %>" style="cursor: pointer; font-size: 0.95em; color: <%= selectedType === option ? 'var(--text-primary)' : 'var(--text-secondary)' %>;">
+                      <%= option === 'video' ? 'Video' : 'Channel' %>
+                    </label>
+                  </div>
+                <% }) %>
+              </div>
+            </fieldset>
+          </div>
+
+          <div class="filter-column" style="flex: 1; min-width: 180px;">
+            <fieldset style="border: none; padding: 0; margin: 0;">
+              <legend style="padding: 0; margin-bottom: 16px; width: 100%;">
                 <div class="filter-name" style="font-weight: 600; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">Sort By</div>
               </legend>
               <div class="filter-options" style="display: flex; flex-direction: column; gap: 12px;">
-                <% const selectedSort = sort || "relevance"; %>
+                <% const selectedSort = (typeof sort !== 'undefined' && sort) ? sort : "relevance"; %>
                 <% ['relevance', 'rating', 'views'].forEach(option => { %>
                   <div style="display: flex; align-items: center; gap: 10px;">
                     <input type="radio" name="sort" id="filter-sort-<%= option %>" value="<%= option %>" <%= selectedSort === option ? 'checked' : '' %> style="margin: 0; width: 16px; height: 16px; accent-color: var(--accent-color); cursor: pointer;">
