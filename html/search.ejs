@@ -630,12 +630,12 @@ video[counter].classList.add("shake");
                 <div class="filter-name" style="font-weight: 600; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">Type</div>
               </legend>
               <div class="filter-options" style="display: flex; flex-direction: column; gap: 12px;">
-                <% const selectedType = (typeof type !== 'undefined' && type) ? type : "video"; %>
-                <% ['video', 'channel'].forEach(option => { %>
+                <% const selectedType = (typeof type !== 'undefined' && type) ? type : "all"; %>
+                <% ['all', 'video', 'channel', 'playlist'].forEach(option => { %>
                   <div style="display: flex; align-items: center; gap: 10px;">
                     <input type="radio" name="type" id="filter-type-<%= option %>" value="<%= option %>" <%= selectedType === option ? 'checked' : '' %> style="margin: 0; width: 16px; height: 16px; accent-color: var(--accent-color); cursor: pointer;">
                     <label for="filter-type-<%= option %>" style="cursor: pointer; font-size: 0.95em; color: <%= selectedType === option ? 'var(--text-primary)' : 'var(--text-secondary)' %>;">
-                      <%= option === 'video' ? 'Video' : 'Channel' %>
+                      <%= option === 'all' ? 'All' : option === 'video' ? 'Video' : option === 'channel' ? 'Channel' : 'Playlist' %>
                     </label>
                   </div>
                 <% }) %>
@@ -1963,6 +1963,49 @@ function _applyRenderMetrics(arr) {
           </div>
         </div>
       </div>
+    <% } else if (x?.type === 'playlist') { %>
+      <% 
+        let pThumb = '';
+        if (x.playlistThumbnail) {
+          pThumb = x.playlistThumbnail.startsWith('//') ? 'https:' + x.playlistThumbnail : x.playlistThumbnail;
+        } else if (x.videos && x.videos.length > 0 && x.videos[0].videoThumbnails && x.videos[0].videoThumbnails.length > 0) {
+          pThumb = x.videos[0].videoThumbnails[x.videos[0].videoThumbnails.length > 1 ? 1 : 0].url;
+          if (pThumb && pThumb.startsWith('//')) pThumb = 'https:' + pThumb;
+        }
+      %>
+      <div class="video-list">
+        <div class="video">
+          <a href="/playlist?list=<%= x.playlistId %>"
+            class="thumbnail"
+            style="background-image: url('<%- media_proxy_url %>/proxy?url=<%= pThumb %>');border-radius: 9.5px;">
+            <span class="hover-text">View Playlist</span>
+            <span class="video-length"><%= x.videoCount %> videos</span>
+          </a>
+          <div class="info" style="color:#fff;text-align: left;font-weight: 1000;">
+            <a style="font-family: 'PokeTube Flex';font-size: large;text-align: left;font-stretch: extra-expanded;font-weight: 1000;" href="/playlist?list=<%= x.playlistId %>" class="title max-lines-2"><%= x.title %></a>
+            <div style="display: flex; flex-direction: column; row-gap: 8px;font-weight:bold">
+              <a href="/playlist?list=<%= x.playlistId %>"><span><%= x.videoCount %> videos</span></a>
+              <div style="display: flex;margin-bottom: 0px;">
+                <a href="/channel?id=<%= x.authorId %>" style="margin:4px"><%= x.author %><% if (x?.authorVerified) { %> 
+                  <i class="icon ion ion-md-checkmark-circle" title="verified channel"></i><% } %></a>
+              </div>
+              <div class="badges">
+                <span class="badge">Playlist</span>
+              </div>
+              <div style="display: inline-flex;flex-direction: row;min-width: 6em;gap: 4px;">
+                <a href="/playlist?list=<%= x.playlistId %>" class="new-button">
+                  <span class="icon"><i class="fa-solid fa-list"></i></span>
+                  <span class="label">View Playlist</span>
+                </a>
+                <a href="https://youtube.com/playlist?list=<%= x.playlistId %>" class="new-button">
+                  <span class="icon"><i class="fa-brands fa-youtube"></i></span>
+                  <span class="label">Open on YouTube :/</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     <% } else { %>
       <div class="video-list">
         <div class="video">
@@ -1976,7 +2019,7 @@ function _applyRenderMetrics(arr) {
             <a style="font-family: 'PokeTube Flex';font-size: large;text-align: left;font-stretch: extra-expanded;font-weight: 1000;" href="/watch?v=<%= x.videoId %>" class="title max-lines-2"><%= x.title %></a>
             <div style="display: flex; flex-direction: column; row-gap: 8px;font-weight:bold">
               <a href="/watch?v=<%= x.videoId %>"><span><%= x.viewCountText?.replace("Views", "") %></span> <span></span> <span><%= x.publishedText %></span></a>
-                 <img src="<%- media_proxy_url %>/proxy?url=<%= x.authorThumbnails[1].url.startsWith('//') ? 'https:' + x.authorThumbnails[1].url : x.authorThumbnails[1].url %>" style="width: fit-content;height: 23px;border-radius: 1em;">
+                 <img src="<%- media_proxy_url %>/proxy?url=<%= x.authorThumbnails && x.authorThumbnails.length > 1 && x.authorThumbnails[1].url.startsWith('//') ? 'https:' + x.authorThumbnails[1].url : (x.authorThumbnails && x.authorThumbnails.length > 1 ? x.authorThumbnails[1].url : '') %>" style="width: fit-content;height: 23px;border-radius: 1em;">
           <a href="/channel?id=<%= x.authorId %>"><%= x.author %><% if (x?.authorVerified) { %> 
                  <i class="icon ion ion-md-checkmark-circle" title="verified channel"></i><% } %></a>
     <div class="badges">
@@ -2050,6 +2093,49 @@ function _applyRenderMetrics(arr) {
           </div>
         </div>
       </div>
+    <% } else if (x?.type === 'playlist') { %>
+      <% 
+        let pThumb = '';
+        if (x.playlistThumbnail) {
+          pThumb = x.playlistThumbnail.startsWith('//') ? 'https:' + x.playlistThumbnail : x.playlistThumbnail;
+        } else if (x.videos && x.videos.length > 0 && x.videos[0].videoThumbnails && x.videos[0].videoThumbnails.length > 0) {
+          pThumb = x.videos[0].videoThumbnails[x.videos[0].videoThumbnails.length > 1 ? 1 : 0].url;
+          if (pThumb && pThumb.startsWith('//')) pThumb = 'https:' + pThumb;
+        }
+      %>
+      <div class="video-list">
+        <div class="video">
+          <a href="/playlist?list=<%= x.playlistId %>"
+            class="thumbnail"
+            style="background-image: url('<%- media_proxy_url %>/proxy?url=<%= pThumb %>');border-radius: 9.5px;">
+            <span class="hover-text">View Playlist</span>
+            <span class="video-length"><%= x.videoCount %> videos</span>
+          </a>
+          <div class="info" style="color:#fff;text-align: left;font-weight: 1000;">
+            <a style="font-family: 'PokeTube Flex';font-size: large;text-align: left;font-stretch: extra-expanded;font-weight: 1000;" href="/playlist?list=<%= x.playlistId %>" class="title max-lines-2"><%= x.title %></a>
+            <div style="display: flex; flex-direction: column; row-gap: 8px;font-weight:bold">
+              <a href="/playlist?list=<%= x.playlistId %>"><span><%= x.videoCount %> videos</span></a>
+              <div style="display: flex;margin-bottom: 0px;">
+                <a href="/channel?id=<%= x.authorId %>" style="margin:4px"><%= x.author %><% if (x?.authorVerified) { %> 
+                  <i class="icon ion ion-md-checkmark-circle" title="verified channel"></i><% } %></a>
+              </div>
+              <div class="badges">
+                <span class="badge">Playlist</span>
+              </div>
+              <div style="display: inline-flex;flex-direction: row;min-width: 6em;gap: 4px;">
+                <a href="/playlist?list=<%= x.playlistId %>" class="new-button">
+                  <span class="icon"><i class="fa-solid fa-list"></i></span>
+                  <span class="label">View Playlist</span>
+                </a>
+                <a href="https://youtube.com/playlist?list=<%= x.playlistId %>" class="new-button">
+                  <span class="icon"><i class="fa-brands fa-youtube"></i></span>
+                  <span class="label">Open on YouTube :/</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     <% } else { %>
       <div class="video-list">
         <div class="video">
@@ -2064,7 +2150,7 @@ function _applyRenderMetrics(arr) {
             <div style="display: flex; flex-direction: column; row-gap: 8px;font-weight:bold">
               <a href="/watch?v=<%= x.videoId %>"><span><%= x.viewCountText?.replace("views", "") %></span> <span>•</span> <span><%= x.publishedText %></span></a>
               <div style="display: flex;margin-bottom: 0px;">
-                 <img src="<%- media_proxy_url %>/proxy?url=<%= x.authorThumbnails[1].url.startsWith('//') ? 'https:' + x.authorThumbnails[1].url : x.authorThumbnails[1].url %>" style="width: fit-content;height: 23px;border-radius: 1em;">
+                 <img src="<%- media_proxy_url %>/proxy?url=<%= x.authorThumbnails && x.authorThumbnails.length > 1 && x.authorThumbnails[1].url.startsWith('//') ? 'https:' + x.authorThumbnails[1].url : (x.authorThumbnails && x.authorThumbnails.length > 1 ? x.authorThumbnails[1].url : '') %>" style="width: fit-content;height: 23px;border-radius: 1em;">
           <a href="/channel?id=<%= x.authorId %>" style="margin:4px"><%= x.author %><% if (x?.authorVerified) { %> 
                  <i class="icon ion ion-md-checkmark-circle" title="verified channel"></i><% } %></a>
                 </div>
