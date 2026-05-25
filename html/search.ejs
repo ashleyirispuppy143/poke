@@ -1924,7 +1924,7 @@ function _applyRenderMetrics(arr) {
   });
 }
 %>
- <% if (invresults?.results) { %>
+<% if (invresults?.results) { %>
   <% _applyRenderMetrics(invresults.results).forEach(x => { %>
     <% if (x?.type === 'channel') { %>
       <% 
@@ -1977,30 +1977,23 @@ function _applyRenderMetrics(arr) {
           }
         %>
         <div class="video-list">
-          <div class="video" style="display: flex; align-items: flex-start; gap: 20px; padding: 12px; border-radius: 12px; margin-bottom: 8px;">
+          <div class="video">
             <a href="/playlist?list=<%= x.playlistId %>"
               class="thumbnail"
-              style="background-image: url('<%- media_proxy_url %>/proxy?url=<%= pThumb %>'); border-radius: 8px; width: 240px; min-width: 240px; aspect-ratio: 16/9; background-size: cover; background-position: center; position: relative; display: block; overflow: hidden;">
+              style="background-image: url('<%- media_proxy_url %>/proxy?url=<%= pThumb %>');border-radius: 9.5px;">
               <span class="hover-text">View Playlist</span>
-              <div style="position: absolute; bottom: 6px; right: 6px; background: rgba(0,0,0,0.85); color: #fff; padding: 3px 8px; border-radius: 6px; font-size: 0.85em; font-weight: 600; display: flex; align-items: center; gap: 5px;">
-                <i class="fa-solid fa-list"></i> <%= x.videoCount %>
-              </div>
+              <span class="video-length"><i class="fa-solid fa-list" style="margin-right: 4px;"></i><%= x.videoCount %></span>
             </a>
-            <div class="info" style="color:#fff; text-align: left; flex: 1; padding-top: 4px;">
-              <a style="font-family: 'PokeTube Flex'; font-size: 1.15em; text-align: left; font-stretch: extra-expanded; font-weight: 800; display: block; margin-bottom: 6px; text-decoration: none;" href="/playlist?list=<%= x.playlistId %>" class="title max-lines-2"><%= x.title %></a>
-              <div style="display: flex; flex-direction: column; gap: 6px; font-size: 0.95em;">
-                <a href="/channel?id=<%= x.authorId %>" style="color: #aaa; text-decoration: none; font-weight: 500; display: flex; align-items: center; gap: 4px;">
-                  <%= x.author %><% if (x?.authorVerified) { %> <i class="icon ion ion-md-checkmark-circle" title="verified channel" style="font-size: 0.9em;"></i><% } %>
-                </a>
-                <div class="badges" style="margin-top: 4px;">
-                  <span class="badge" style="background: rgba(255,255,255,0.1); padding: 4px 8px; border-radius: 4px; font-weight: 600;">Playlist</span>
+            <div class="info" style="color:#fff;text-align: left;font-weight: 1000;">
+              <a style="font-family: 'PokeTube Flex';font-size: large;text-align: left;font-stretch: extra-expanded;font-weight: 1000;" href="/playlist?list=<%= x.playlistId %>" class="title max-lines-2"><%= x.title %></a>
+              <div style="display: flex; flex-direction: column; row-gap: 8px;font-weight:bold">
+                <a href="/playlist?list=<%= x.playlistId %>"><span><%= x.videoCount %> videos</span></a>
+                <div style="display: flex;margin-bottom: 0px;">
+                  <a href="/channel?id=<%= x.authorId %>" style="margin:4px"><%= x.author %><% if (x?.authorVerified) { %> 
+                    <i class="icon ion ion-md-checkmark-circle" title="verified channel"></i><% } %></a>
                 </div>
-                <div style="display: inline-flex; flex-direction: row; gap: 8px; margin-top: 10px;">
-                  <a href="/playlist?list=<%= x.playlistId %>" class="new-button" style="background: rgba(255,255,255,0.1); padding: 6px 14px; border-radius: 20px; font-weight: 600; font-size: 0.9em; text-decoration: none; display: flex; align-items: center; gap: 6px;">
-                    <span class="icon"><i class="fa-solid fa-list"></i></span>
-                    <span class="label">View Playlist</span>
-                  </a>
-                  <a href="https://youtube.com/playlist?list=<%= x.playlistId %>" class="new-button" style="background: rgba(255,255,255,0.1); padding: 6px 14px; border-radius: 20px; font-weight: 600; font-size: 0.9em; text-decoration: none; display: flex; align-items: center; gap: 6px;">
+                <div style="display: inline-flex;flex-direction: row;min-width: 6em;gap: 4px;">
+                  <a href="https://youtube.com/playlist?list=<%= x.playlistId %>" class="new-button">
                     <span class="icon"><i class="fa-brands fa-youtube"></i></span>
                     <span class="label">Open on YouTube :/</span>
                   </a>
@@ -2111,30 +2104,23 @@ function _applyRenderMetrics(arr) {
           }
         %>
         <div class="video-list">
-          <div class="video" style="display: flex; align-items: flex-start; gap: 20px; padding: 12px; border-radius: 12px; margin-bottom: 8px;">
+          <div class="video">
             <a href="/playlist?list=<%= x.playlistId %>"
               class="thumbnail"
-              style="background-image: url('<%- media_proxy_url %>/proxy?url=<%= pThumb %>'); border-radius: 8px; width: 240px; min-width: 240px; aspect-ratio: 16/9; background-size: cover; background-position: center; position: relative; display: block; overflow: hidden;">
+              style="background-image: url('<%- media_proxy_url %>/proxy?url=<%= pThumb %>');border-radius: 9.5px;">
               <span class="hover-text">View Playlist</span>
-              <div style="position: absolute; bottom: 6px; right: 6px; background: rgba(0,0,0,0.85); color: #fff; padding: 3px 8px; border-radius: 6px; font-size: 0.85em; font-weight: 600; display: flex; align-items: center; gap: 5px;">
-                <i class="fa-solid fa-list"></i> <%= x.videoCount %>
-              </div>
+              <span class="video-length"><i class="fa-solid fa-list" style="margin-right: 4px;"></i><%= x.videoCount %></span>
             </a>
-            <div class="info" style="color:#fff; text-align: left; flex: 1; padding-top: 4px;">
-              <a style="font-family: 'PokeTube Flex'; font-size: 1.15em; text-align: left; font-stretch: extra-expanded; font-weight: 800; display: block; margin-bottom: 6px; text-decoration: none;" href="/playlist?list=<%= x.playlistId %>" class="title max-lines-2"><%= x.title %></a>
-              <div style="display: flex; flex-direction: column; gap: 6px; font-size: 0.95em;">
-                <a href="/channel?id=<%= x.authorId %>" style="color: #aaa; text-decoration: none; font-weight: 500; display: flex; align-items: center; gap: 4px;">
-                  <%= x.author %><% if (x?.authorVerified) { %> <i class="icon ion ion-md-checkmark-circle" title="verified channel" style="font-size: 0.9em;"></i><% } %>
-                </a>
-                <div class="badges" style="margin-top: 4px;">
-                  <span class="badge" style="background: rgba(255,255,255,0.1); padding: 4px 8px; border-radius: 4px; font-weight: 600;">Playlist</span>
+            <div class="info" style="color:#fff;text-align: left;font-weight: 1000;">
+              <a style="font-family: 'PokeTube Flex';font-size: large;text-align: left;font-stretch: extra-expanded;font-weight: 1000;" href="/playlist?list=<%= x.playlistId %>" class="title max-lines-2"><%= x.title %></a>
+              <div style="display: flex; flex-direction: column; row-gap: 8px;font-weight:bold">
+                <a href="/playlist?list=<%= x.playlistId %>"><span><%= x.videoCount %> videos</span></a>
+                <div style="display: flex;margin-bottom: 0px;">
+                  <a href="/channel?id=<%= x.authorId %>" style="margin:4px"><%= x.author %><% if (x?.authorVerified) { %> 
+                    <i class="icon ion ion-md-checkmark-circle" title="verified channel"></i><% } %></a>
                 </div>
-                <div style="display: inline-flex; flex-direction: row; gap: 8px; margin-top: 10px;">
-                  <a href="/playlist?list=<%= x.playlistId %>" class="new-button" style="background: rgba(255,255,255,0.1); padding: 6px 14px; border-radius: 20px; font-weight: 600; font-size: 0.9em; text-decoration: none; display: flex; align-items: center; gap: 6px;">
-                    <span class="icon"><i class="fa-solid fa-list"></i></span>
-                    <span class="label">View Playlist</span>
-                  </a>
-                  <a href="https://youtube.com/playlist?list=<%= x.playlistId %>" class="new-button" style="background: rgba(255,255,255,0.1); padding: 6px 14px; border-radius: 20px; font-weight: 600; font-size: 0.9em; text-decoration: none; display: flex; align-items: center; gap: 6px;">
+                <div style="display: inline-flex;flex-direction: row;min-width: 6em;gap: 4px;">
+                  <a href="https://youtube.com/playlist?list=<%= x.playlistId %>" class="new-button">
                     <span class="icon"><i class="fa-brands fa-youtube"></i></span>
                     <span class="label">Open on YouTube :/</span>
                   </a>
