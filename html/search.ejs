@@ -1989,7 +1989,7 @@ function _applyRenderMetrics(arr) {
               <div style="display: flex; flex-direction: column; row-gap: 8px;font-weight:bold">
                 <a href="/playlist?list=<%= x.playlistId %>"><span><%= x.videoCount %> videos</span></a>
                 <div style="display: flex;margin-bottom: 0px;">
-                  <a href="/channel?id=<%= x.authorId %>" style="margin:4px"><%= x.author %><% if (x?.authorVerified) { %> 
+                  <a href="/channel?id=<%= x.authorId %>"><%= x.author %><% if (x?.authorVerified) { %> 
                     <i class="icon ion ion-md-checkmark-circle" title="verified channel"></i><% } %></a>
                 </div>
                 <div style="display: inline-flex;flex-direction: row;min-width: 6em;gap: 4px;">
