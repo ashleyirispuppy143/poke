@@ -89,7 +89,7 @@ module.exports = function (app, config, renderTemplate) {
     res.json(ChannelTabs);
   });
   
-  const searchCache = new Map();
+const searchCache = new Map();
   const activeSearchTasks = new Map();
   const searchRateLimitCache = new Map();
 
@@ -206,7 +206,7 @@ module.exports = function (app, config, renderTemplate) {
 
     let continuation = req.query.continuation || "";
     let date = req.query.date || "";
-    let type = "video";
+    let type = req.query.type || "video";
     let duration = req.query.duration || "";
     let sort = req.query.sort || "";
     let from = req.query.from || "";
