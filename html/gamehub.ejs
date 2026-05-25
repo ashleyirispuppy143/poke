@@ -349,11 +349,12 @@
 
 
  <% if (game === "snake") { %>
+<% if (game === "snake") { %>
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>POKE SNAKE v2.1.0</title>
+  <title>POKE SNAKE v2.1.1</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
   <link href="https://fonts.bunny.net/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
   <style>
@@ -362,7 +363,7 @@
       --dark-green: #050;
       --mid-green: #0a0;
       --bg-color: #000;
-      --panel-bg: rgba(10, 10, 10, 0.95);
+      --panel-bg: rgba(15, 15, 15, 0.85);
     }
     
     html, body {
@@ -370,161 +371,222 @@
       font-family: 'Press Start 2P', monospace; color: var(--neon-green);
       overflow: hidden; user-select: none;
     }
+    
     #game-container { position: relative; width: 100vw; height: 100vh; }
     
     #snakeCanvas {
       background: var(--bg-color); display: block; margin: auto;
       image-rendering: pixelated; 
-      border: 4px solid var(--neon-green);
-      box-shadow: 0 0 20px rgba(0, 255, 0, 0.2);
-      border-radius: 8px;
+      border: 2px solid var(--dark-green);
+      box-shadow: 0 0 30px rgba(0, 255, 0, 0.15);
+      border-radius: 12px;
+      transition: box-shadow 0.3s ease;
     }
 
     .screen {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0, 0, 0, 0.85);
+      background: rgba(0, 0, 0, 0.8);
       display: flex; flex-direction: column; align-items: center;
       justify-content: center; z-index: 100; text-align: center;
-      backdrop-filter: blur(4px);
+      backdrop-filter: blur(8px);
     }
+    
     .hidden { display: none !important; }
 
-    .logo-container { margin-bottom: 40px; }
+    .logo-container { position: relative; margin-bottom: 40px; }
     .logo-text {
       font-size: 64px; line-height: 1.2; letter-spacing: 2px; margin: 0;
-      text-shadow: 4px 4px 0 var(--dark-green), 8px 8px 0 rgba(0,255,0,0.2);
+      text-shadow: 4px 4px 0 var(--dark-green), 8px 8px 15px rgba(0,255,0,0.4);
       animation: float 3s ease-in-out infinite;
     }
+    
     @keyframes float {
       0%, 100% { transform: translateY(0); }
       50% { transform: translateY(-10px); }
     }
-    .version-tag { font-size: 12px; color: var(--mid-green); margin-top: 10px; letter-spacing: 1px; }
+
+    .splash-text {
+      position: absolute;
+      bottom: -15px;
+      right: -60px;
+      color: #ffaa00;
+      font-size: 14px;
+      text-shadow: 2px 2px 0 #553300;
+      transform: rotate(-20deg);
+      animation: splashBounce 0.4s alternate infinite ease-in-out;
+      white-space: nowrap;
+      pointer-events: none;
+      z-index: 10;
+    }
+    
+    @keyframes splashBounce {
+      from { transform: scale(1) rotate(-20deg); }
+      to { transform: scale(1.1) rotate(-20deg); }
+    }
+    
+    .version-tag { 
+      font-size: 12px; color: var(--mid-green); 
+      margin-top: 10px; letter-spacing: 1px; 
+      opacity: 0.8;
+    }
 
     .title-menu { display: flex; flex-direction: column; gap: 15px; width: 280px; }
-    #titlePrompt { font-size: 14px; animation: blink 1.5s step-end infinite; margin-top: 20px; }
+    
+    #titlePrompt { 
+      font-size: 14px; animation: blink 1.5s step-end infinite; margin-top: 20px; 
+    }
+    
     @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
 
     #startPrompt {
       position: absolute; top: 65%; left: 50%; transform: translate(-50%, -50%);
-      font-size: 12px; text-shadow: 0 0 5px var(--neon-green);
+      font-size: 12px; text-shadow: 0 0 8px var(--neon-green);
       animation: blink 1.5s step-end infinite; pointer-events: none; z-index: 60;
+      background: rgba(0,0,0,0.6); padding: 10px 15px; border-radius: 6px;
     }
 
     button {
-      background: var(--bg-color); color: var(--neon-green);
-      border: 2px solid var(--neon-green); padding: 14px 20px; cursor: pointer;
+      background: rgba(0, 15, 0, 0.7); color: var(--neon-green);
+      border: 1px solid var(--mid-green); padding: 14px 20px; cursor: pointer;
       font-family: inherit; font-size: 12px; text-transform: uppercase;
-      box-shadow: 0 0 10px rgba(0,255,0,0.1);
+      box-shadow: 0 4px 15px rgba(0,255,0,0.1); border-radius: 8px;
       transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      backdrop-filter: blur(4px);
     }
+    
     button:hover {
       background: var(--neon-green); color: var(--bg-color);
-      box-shadow: 0 0 20px var(--neon-green); transform: scale(1.05);
+      box-shadow: 0 0 25px rgba(0,255,0,0.4); transform: translateY(-2px);
     }
-    button:active { transform: scale(0.95); }
+    
+    button:active { transform: translateY(1px); }
 
     #scoreboard {
-      position: absolute; top: 16px; left: 16px; z-index: 50;
+      position: absolute; top: 20px; left: 20px; z-index: 50;
       white-space: nowrap; text-shadow: 0 0 5px var(--neon-green);
-      background: rgba(0, 20, 0, 0.8); padding: 12px;
-      border: 2px solid var(--neon-green); border-radius: 4px;
-      box-shadow: 0 0 10px rgba(0,255,0,0.2); font-size: 12px;
+      background: rgba(0, 10, 0, 0.65); padding: 14px 18px;
+      border: 1px solid var(--dark-green); border-radius: 8px;
+      box-shadow: 0 4px 15px rgba(0,255,0,0.1); font-size: 12px;
+      backdrop-filter: blur(4px);
     }
+    
     #topRightControls {
-      position: absolute; top: 16px; right: 16px; z-index: 50;
+      position: absolute; top: 20px; right: 20px; z-index: 50;
       display: flex; align-items: center; gap: 12px;
     }
+    
     .icon-btn {
       font-size: 20px; cursor: pointer;
-      background: rgba(0, 20, 0, 0.8); padding: 8px 12px;
-      border: 2px solid var(--dark-green); border-radius: 4px;
+      background: rgba(0, 10, 0, 0.65); padding: 10px 14px;
+      border: 1px solid var(--dark-green); border-radius: 8px;
       transition: all 0.3s ease; display: flex; align-items: center; justify-content: center;
+      backdrop-filter: blur(4px);
     }
+    
     .icon-btn:hover {
-      border-color: var(--neon-green); box-shadow: 0 0 15px rgba(0,255,0,0.5);
-      transform: scale(1.1);
+      border-color: var(--neon-green); box-shadow: 0 0 20px rgba(0,255,0,0.3);
+      transform: translateY(-2px);
     }
 
     .modal {
       position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      background: var(--panel-bg); border: 2px solid var(--neon-green);
-      padding: 30px; display: none; z-index: 200; width: auto; height: auto;
-      box-shadow: 0 0 40px rgba(0, 255, 0, 0.3); border-radius: 8px;
+      background: var(--panel-bg); border: 1px solid var(--mid-green);
+      padding: 35px; display: none; z-index: 200; width: auto; height: auto;
+      box-shadow: 0 15px 50px rgba(0, 255, 0, 0.2); border-radius: 16px;
+      backdrop-filter: blur(12px);
     }
-    .modal h2 { margin: 0 0 20px 0; text-align: center; font-size: 20px; text-shadow: 0 0 8px var(--neon-green); }
+    
+    .modal h2 { 
+      margin: 0 0 25px 0; text-align: center; font-size: 22px; 
+      text-shadow: 0 0 10px rgba(0,255,0,0.5); letter-spacing: 1px;
+    }
 
     #levelGrid {
-      display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin: 20px 0 30px 0;
+      display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin: 20px 0 35px 0;
     }
+    
     .lvl-btn {
-      margin: 0; padding: 0; width: 50px; height: 50px; font-size: 14px;
-      background: #000; border: 2px solid #222; color: #444;
+      margin: 0; padding: 0; width: 55px; height: 55px; font-size: 16px;
+      background: rgba(0,0,0,0.5); border: 1px solid #222; color: #444;
       display: flex; align-items: center; justify-content: center;
-      cursor: not-allowed; transition: all 0.2s; box-shadow: none; border-radius: 4px;
+      cursor: not-allowed; transition: all 0.2s; box-shadow: none; border-radius: 8px;
     }
+    
     .lvl-btn.unlocked { border-color: var(--dark-green); color: var(--mid-green); cursor: pointer; }
+    
     .lvl-btn.unlocked:hover {
-      background: var(--dark-green); color: var(--neon-green);
-      border-color: var(--neon-green); transform: scale(1.1); box-shadow: 0 0 10px var(--neon-green);
+      background: rgba(0,50,0,0.8); color: var(--neon-green);
+      border-color: var(--neon-green); transform: translateY(-3px); 
+      box-shadow: 0 5px 15px rgba(0,255,0,0.2);
     }
+    
     .lvl-btn.selected {
       background: var(--neon-green); color: var(--bg-color);
-      border-color: var(--neon-green); box-shadow: 0 0 15px var(--neon-green); transform: scale(1.1);
+      border-color: var(--neon-green); box-shadow: 0 0 20px rgba(0,255,0,0.4); 
+      transform: scale(1.05);
     }
 
     .settings-grid {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 25px;
     }
+    
     .settings-card {
-      background: rgba(0, 0, 0, 0.5); border: 1px solid var(--dark-green);
-      padding: 16px; border-radius: 6px; text-align: left;
+      background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(0,255,0,0.2);
+      padding: 20px; border-radius: 12px; text-align: left;
     }
+    
     .settings-card h3 {
-      margin: 0 0 12px 0; font-size: 10px; color: var(--neon-green);
-      border-bottom: 1px dashed var(--dark-green); padding-bottom: 8px; letter-spacing: 1px;
+      margin: 0 0 16px 0; font-size: 11px; color: var(--neon-green);
+      border-bottom: 1px solid rgba(0,255,0,0.2); padding-bottom: 10px; letter-spacing: 2px;
     }
+    
     .setting-row {
       display: flex; justify-content: space-between; align-items: center;
-      font-size: 10px; margin-bottom: 12px; gap: 20px;
+      font-size: 11px; margin-bottom: 16px; gap: 25px;
     }
+    
     .setting-row:last-child { margin-bottom: 0; }
     
-    .setting-info { display: flex; flex-direction: column; gap: 4px; }
-    .setting-desc { font-size: 8px; color: var(--mid-green); max-width: 130px; line-height: 1.3; }
+    .setting-info { display: flex; flex-direction: column; gap: 6px; }
+    .setting-desc { font-size: 8px; color: var(--mid-green); max-width: 140px; line-height: 1.4; opacity: 0.8; }
 
     select, input[type="number"], input[type="color"] {
-      background: #000; color: var(--neon-green); border: 1px solid var(--mid-green);
-      font-family: inherit; font-size: 10px; padding: 6px; outline: none; width: 100px;
-      border-radius: 2px; cursor: pointer;
+      background: rgba(0,0,0,0.6); color: var(--neon-green); border: 1px solid var(--mid-green);
+      font-family: inherit; font-size: 10px; padding: 8px 10px; outline: none; width: 110px;
+      border-radius: 6px; cursor: pointer; transition: all 0.2s;
     }
-    select:focus, input:focus { border-color: var(--neon-green); box-shadow: 0 0 8px rgba(0,255,0,0.4); }
-    input[type="color"] { padding: 2px; height: 26px; }
     
-    input[type="range"] { -webkit-appearance: none; background: transparent; width: 100px; margin: 0; }
+    select:focus, input:focus { 
+      border-color: var(--neon-green); box-shadow: 0 0 12px rgba(0,255,0,0.3); background: #000;
+    }
+    
+    input[type="color"] { padding: 2px; height: 30px; }
+    
+    input[type="range"] { -webkit-appearance: none; background: transparent; width: 110px; margin: 0; }
     input[type="range"]:focus { outline: none; }
     input[type="range"]::-webkit-slider-runnable-track {
-      width: 100%; height: 6px; cursor: pointer; background: var(--dark-green); border-radius: 3px;
+      width: 100%; height: 8px; cursor: pointer; background: rgba(0,80,0,0.6); border-radius: 4px;
     }
     input[type="range"]::-webkit-slider-thumb {
-      height: 16px; width: 16px; border-radius: 50%; background: var(--neon-green);
-      cursor: pointer; -webkit-appearance: none; margin-top: -5px; box-shadow: 0 0 5px var(--neon-green);
+      height: 18px; width: 18px; border-radius: 50%; background: var(--neon-green);
+      cursor: pointer; -webkit-appearance: none; margin-top: -5px; box-shadow: 0 0 8px rgba(0,255,0,0.5);
     }
 
-    .modal-footer { display: flex; justify-content: space-between; gap: 15px; margin-top: 25px; }
-    .modal-footer button { flex: 1; margin: 0; }
-    .btn-cancel { background: transparent; color: var(--mid-green); border-color: var(--dark-green); }
-    .btn-cancel:hover { background: var(--dark-green); color: var(--neon-green); border-color: var(--neon-green); }
+    .modal-footer { display: flex; justify-content: space-between; gap: 20px; margin-top: 30px; }
+    .modal-footer button { flex: 1; margin: 0; padding: 16px; }
+    
+    .btn-cancel { background: rgba(0,0,0,0.5); color: var(--mid-green); border-color: var(--dark-green); }
+    .btn-cancel:hover { background: rgba(255,0,0,0.1); color: #ff5555; border-color: #ff5555; box-shadow: 0 0 15px rgba(255,0,0,0.2); }
 
-    #gameOverText { font-size: 56px; color: #f00; text-shadow: 0 0 20px #f00; }
+    #gameOverText { font-size: 64px; color: #ff3333; text-shadow: 0 0 25px rgba(255,0,0,0.6); margin-bottom: 10px; }
 
     #debugMenu {
-      position: absolute; top: 80px; left: 16px;
-      color: #fff; background: rgba(0,0,0,0.7);
-      padding: 10px; border: 1px solid #444;
-      font-size: 10px; line-height: 1.4;
+      position: absolute; top: 80px; left: 20px;
+      color: #fff; background: rgba(0,0,0,0.8);
+      padding: 15px; border: 1px solid #444; border-radius: 8px;
+      font-size: 10px; line-height: 1.5;
       white-space: pre; z-index: 300; display: none;
-      pointer-events: none;
+      pointer-events: none; backdrop-filter: blur(4px);
     }
   </style>
 </head>
@@ -534,7 +596,8 @@
     <div id="titleScreen" class="screen">
       <div class="logo-container">
         <h1 class="logo-text">POKE<br>SNAKE</h1>
-        <div class="version-tag">v2.1.0</div>
+        <div id="splashText" class="splash-text"></div>
+        <div class="version-tag">v2.1.1</div>
       </div>
       
       <div class="title-menu" id="titleMenu">
@@ -559,7 +622,7 @@
     
     <div id="gameOverScreen" class="screen hidden">
       <h1 id="gameOverText">GAME OVER!</h1>
-      <p style="margin-bottom: 20px; font-size: 16px;">Press [R] to Retry</p>
+      <p style="margin-bottom: 25px; font-size: 14px; color: #ddd;">Press [R] to Retry</p>
       <button id="backToTitle">Main Menu</button>
     </div>
 
@@ -586,12 +649,14 @@
               <option value="150">Slow</option>
               <option value="100" selected>Normal</option>
               <option value="50">Fast</option>
+              <option value="30">Extra Hard</option>
             </select>
           </div>
           
           <div class="setting-row">
             <div class="setting-info">
               <span>Assist Mode</span>
+              <span class="setting-desc">Auto-dodges to prevent death.</span>
             </div>
             <select id="paramAssist">
               <option value="off" selected>Off</option>
@@ -618,19 +683,22 @@
         </div>
         
         <div class="settings-card">
-          <h3>AUDIO & VISUALS</h3>
+          <h3>SYSTEM & UI</h3>
           
           <div class="setting-row">
-            <div class="setting-info"><span>Sound FX</span></div>
-            <select id="paramSfx">
+            <div class="setting-info"><span>Auto-Start</span></div>
+            <select id="paramAutoStart">
+              <option value="off" selected>Off</option>
+              <option value="on">On</option>
+            </select>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info"><span>Start Prompt</span></div>
+            <select id="paramShowPrompt">
               <option value="on" selected>On</option>
               <option value="off">Off</option>
             </select>
-          </div>
-          
-          <div class="setting-row">
-            <div class="setting-info"><span>SFX Volume</span></div>
-            <input type="range" id="paramSfxVolume" min="0" max="1" step="0.1" value="1">
           </div>
 
           <div class="setting-row">
@@ -642,13 +710,22 @@
             <div class="setting-info"><span>Body Color</span></div>
             <input type="color" id="paramBodyColor" value="#00ffff">
           </div>
+        </div>
 
-          <div class="setting-row">
-            <div class="setting-info"><span>Start Prompt Text</span></div>
-            <select id="paramShowPrompt">
-              <option value="on" selected>On</option>
-              <option value="off">Off</option>
-            </select>
+        <div class="settings-card" style="grid-column: 1 / -1;">
+          <h3>AUDIO</h3>
+          <div class="setting-row" style="justify-content: flex-start; gap: 40px;">
+            <div class="setting-info" style="flex-direction: row; align-items: center; gap: 15px;">
+              <span>Sound FX</span>
+              <select id="paramSfx" style="width: 80px;">
+                <option value="on" selected>On</option>
+                <option value="off">Off</option>
+              </select>
+            </div>
+            <div class="setting-info" style="flex-direction: row; align-items: center; gap: 15px;">
+              <span>Volume</span>
+              <input type="range" id="paramSfxVolume" min="0" max="1" step="0.1" value="1" style="width: 150px;">
+            </div>
           </div>
         </div>
       </div>
@@ -669,6 +746,7 @@
           titleMenu      = document.getElementById('titleMenu'),
           titlePrompt    = document.getElementById('titlePrompt'),
           startPrompt    = document.getElementById('startPrompt'),
+          splashText     = document.getElementById('splashText'),
           topRightControls = document.getElementById('topRightControls'),
           gameOverScreen = document.getElementById('gameOverScreen'),
           gameOverText   = document.getElementById('gameOverText'),
@@ -687,11 +765,20 @@
           backToTitle    = document.getElementById('backToTitle'),
           debugMenu      = document.getElementById('debugMenu');
 
+     const splashes = [
+       "100% bug free!",
+      "Sss-ss-sss!",
+      "Don't bite your tail!",
+        "Pixel perfect!",
+      "Try Extra Hard!",
+     ];
+    splashText.textContent = splashes[Math.floor(Math.random() * splashes.length)];
+
     let params = {
-      speed:100, sfx:true, startLength:3,
-      wallMode:'kill', assistMode:false,
-      sfxVolume:1, showPrompt:true,
-      headColor:'#ffff00', bodyColor:'#00ffff'
+      speed: 100, sfx: true, startLength: 3,
+      wallMode: 'kill', assistMode: false,
+      sfxVolume: 1, showPrompt: true, autoStart: false,
+      headColor: '#ffff00', bodyColor: '#00ffff'
     };
 
     let snake, dir, food, score, highScore=0, level;
@@ -760,10 +847,19 @@
     resizeCanvas();
 
     function pickFood() {
-      const cols=canvas.width/20, rows=canvas.height/20;
+      const cols = Math.floor(canvas.width / 20);
+      const rows = Math.floor(canvas.height / 20);
       let validFood = false;
+      let padding = (params.speed <= 30) ? 0 : 2; 
+
+      if (cols <= padding * 2 || rows <= padding * 2) {
+        padding = 0;
+      }
+
       while (!validFood) {
-        food = { x:Math.floor(Math.random()*cols), y:Math.floor(Math.random()*rows) };
+        let fx = padding + Math.floor(Math.random() * (cols - 2 * padding));
+        let fy = padding + Math.floor(Math.random() * (rows - 2 * padding));
+        food = { x: fx, y: fy };
         validFood = !snake.some(seg => seg.x === food.x && seg.y === food.y);
       }
       framesSinceFood = 0;
@@ -779,6 +875,7 @@
       if (hasPlayedOnce) {
         titleMenu.classList.add('hidden');
         titlePrompt.classList.remove('hidden');
+        splashText.style.display = 'none'; // Only show on initial load
       } else {
         titleMenu.classList.remove('hidden');
         titlePrompt.classList.add('hidden');
@@ -803,6 +900,7 @@
       for(let i=0; i<params.startLength; i++){
         snake.push({x:startX, y:startY+i});
       }
+      
       dir = {x:0, y:-1}; 
       lastProcessedDir = {x:0, y:-1};
       inputQueue = [];
@@ -814,12 +912,18 @@
       frameCount = 0;
       fps = 0;
       lastFpsTime = Date.now();
-      hasStartedMoving = false;
       
-      if(params.showPrompt) {
-        startPrompt.classList.remove('hidden');
-      } else {
+      if (params.autoStart) {
+        hasStartedMoving = true;
         startPrompt.classList.add('hidden');
+        startTime = Date.now();
+      } else {
+        hasStartedMoving = false;
+        if(params.showPrompt) {
+          startPrompt.classList.remove('hidden');
+        } else {
+          startPrompt.classList.add('hidden');
+        }
       }
 
       currentTickRate = params.speed * Math.pow(0.98, (level - 1) * 5);
@@ -956,12 +1060,12 @@
               ? (performance.memory.usedJSHeapSize/1024/1024).toFixed(2)+'/'+
                 (performance.memory.jsHeapSizeLimit/1024/1024).toFixed(2)+'MB'
               : 'N/A',
-            diff = params.speed>=150?'Easy':params.speed>=100?'Normal':'Hard';
+            diff = params.speed>=150?'Easy':params.speed>=100?'Normal':params.speed<=30?'Extra Hard':'Hard';
 
       let fpsColor = fps>=50?'#0f0': fps>=30?'#ffa500':'#f00';
 
       debugMenu.innerHTML =
-        `Poke Snake 2.1.0 on ${diff} \n\n` +
+        `Poke Snake v2.1.1 on ${diff} \n\n` +
         `<span style="color:${fpsColor}">FPS: ${fps}</span>\n` +
         `FrameTime: ${frameTime}ms\n` +
         `Head: ${head.x},${head.y}\n` +
@@ -1068,6 +1172,7 @@
       document.getElementById('paramHeadColor').value   = params.headColor;
       document.getElementById('paramBodyColor').value   = params.bodyColor;
       document.getElementById('paramShowPrompt').value  = params.showPrompt?'on':'off';
+      document.getElementById('paramAutoStart').value   = params.autoStart?'on':'off';
       settingsModal.style.display = 'block';
     }
 
@@ -1098,6 +1203,7 @@
       params.headColor   = document.getElementById('paramHeadColor').value;
       params.bodyColor   = document.getElementById('paramBodyColor').value;
       params.showPrompt  = document.getElementById('paramShowPrompt').value==='on';
+      params.autoStart   = document.getElementById('paramAutoStart').value==='on';
       settingsModal.style.display='none';
       
       if(state==='playing') initGame(); 
