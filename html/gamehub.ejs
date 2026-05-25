@@ -348,154 +348,317 @@
 <% } %>
 
 
-
-<% if (game === "snake") { %>
+ <% if (game === "snake") { %>
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>POKE SNAKE</title>
+  <title>POKE SNAKE v2.1.0</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
   <link href="https://fonts.bunny.net/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
   <style>
+    :root {
+      --neon-green: #0f0;
+      --dark-green: #050;
+      --mid-green: #0a0;
+      --bg-color: #000;
+      --panel-bg: rgba(10, 10, 10, 0.95);
+    }
+    
     html, body {
-      margin: 0; padding: 0; background: #000;
-      font-family: 'Press Start 2P', monospace; color: #0f0;
-      overflow: hidden;
+      margin: 0; padding: 0; background: var(--bg-color);
+      font-family: 'Press Start 2P', monospace; color: var(--neon-green);
+      overflow: hidden; user-select: none;
     }
-    #game-container { position: relative; width:100vw; height:100vh; }
+    #game-container { position: relative; width: 100vw; height: 100vh; }
+    
     #snakeCanvas {
-      background: #111; display: block; margin: auto;
-      image-rendering: pixelated; border:4px solid #0f0;
-      box-shadow:0 0 20px #0f0;
+      background: var(--bg-color); display: block; margin: auto;
+      image-rendering: pixelated; 
+      border: 4px solid var(--neon-green);
+      box-shadow: 0 0 20px rgba(0, 255, 0, 0.2);
+      border-radius: 8px;
     }
-    #overlay {
-      position:absolute; top:0; left:0; width:100%; height:100%;
-      pointer-events:none;
-      background:
-        repeating-linear-gradient(transparent 0 2px, rgba(0,255,0,0.1) 2px 3px),
-        repeating-linear-gradient(90deg, transparent 0 2px, rgba(0,255,0,0.1) 2px 3px);
-    }
+
     .screen {
-      position:absolute; top:0; left:0; width:100%; height:100%;
-      background:rgba(0,0,0,0.8);
-      display:flex; flex-direction:column; align-items:center;
-      justify-content:center; z-index:100; text-align:center; color:#0f0;
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; z-index: 100; text-align: center;
+      backdrop-filter: blur(4px);
     }
-    .hidden { display:none; }
-    .screen h1 { font-size:48px; margin:0 0 16px;
-      white-space:nowrap; text-shadow:0 0 10px #0f0; }
-    .screen p { font-size:14px; margin:4px 0; }
-    .screen button {
-      margin-top:12px; background:#0f0; color:#000;
-      border:none; padding:8px 16px; cursor:pointer;
+    .hidden { display: none !important; }
+
+    .logo-container { margin-bottom: 40px; }
+    .logo-text {
+      font-size: 64px; line-height: 1.2; letter-spacing: 2px; margin: 0;
+      text-shadow: 4px 4px 0 var(--dark-green), 8px 8px 0 rgba(0,255,0,0.2);
+      animation: float 3s ease-in-out infinite;
     }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+    .version-tag { font-size: 12px; color: var(--mid-green); margin-top: 10px; letter-spacing: 1px; }
+
+    .title-menu { display: flex; flex-direction: column; gap: 15px; width: 280px; }
+    #titlePrompt { font-size: 14px; animation: blink 1.5s step-end infinite; margin-top: 20px; }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+    #startPrompt {
+      position: absolute; top: 65%; left: 50%; transform: translate(-50%, -50%);
+      font-size: 12px; text-shadow: 0 0 5px var(--neon-green);
+      animation: blink 1.5s step-end infinite; pointer-events: none; z-index: 60;
+    }
+
+    button {
+      background: var(--bg-color); color: var(--neon-green);
+      border: 2px solid var(--neon-green); padding: 14px 20px; cursor: pointer;
+      font-family: inherit; font-size: 12px; text-transform: uppercase;
+      box-shadow: 0 0 10px rgba(0,255,0,0.1);
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    button:hover {
+      background: var(--neon-green); color: var(--bg-color);
+      box-shadow: 0 0 20px var(--neon-green); transform: scale(1.05);
+    }
+    button:active { transform: scale(0.95); }
+
     #scoreboard {
-      position:absolute; top:16px; left:16px; z-index:50;
-      white-space:nowrap; text-shadow:0 0 5px #0f0;
+      position: absolute; top: 16px; left: 16px; z-index: 50;
+      white-space: nowrap; text-shadow: 0 0 5px var(--neon-green);
+      background: rgba(0, 20, 0, 0.8); padding: 12px;
+      border: 2px solid var(--neon-green); border-radius: 4px;
+      box-shadow: 0 0 10px rgba(0,255,0,0.2); font-size: 12px;
     }
-    #settingsBtn {
-      position:absolute; top:16px; right:16px; font-size:24px;
-      cursor:pointer; z-index:50; user-select:none;
+    #topRightControls {
+      position: absolute; top: 16px; right: 16px; z-index: 50;
+      display: flex; align-items: center; gap: 12px;
     }
-    #settingsModal {
-      position:absolute; top:50%; left:50%;
-      transform:translate(-50%,-50%);
-      background:#222; border:2px solid #0f0;
-      padding:16px; display:none; z-index:200; width:auto;height:auto;
+    .icon-btn {
+      font-size: 20px; cursor: pointer;
+      background: rgba(0, 20, 0, 0.8); padding: 8px 12px;
+      border: 2px solid var(--dark-green); border-radius: 4px;
+      transition: all 0.3s ease; display: flex; align-items: center; justify-content: center;
     }
-    #settingsModal h2 { margin-top:0; text-align:center; }
-    #settingsModal .section { margin-bottom:12px; }
-    #settingsModal label {
-      display:block; font-size:12px; margin:6px 0; color:#0f0;
+    .icon-btn:hover {
+      border-color: var(--neon-green); box-shadow: 0 0 15px rgba(0,255,0,0.5);
+      transform: scale(1.1);
     }
-    #settingsModal input, #settingsModal select {
-      width:100%; margin-top:4px;
-      background:#000; color:#0f0; border:1px solid #0f0;
-      font-family:inherit; font-size:12px; padding:4px;
+
+    .modal {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      background: var(--panel-bg); border: 2px solid var(--neon-green);
+      padding: 30px; display: none; z-index: 200; width: auto; height: auto;
+      box-shadow: 0 0 40px rgba(0, 255, 0, 0.3); border-radius: 8px;
     }
-    #settingsModal button {
-      margin:8px 4px 0 0; background:#0f0; color:#000;
-      border:none; padding:6px 12px; cursor:pointer;
+    .modal h2 { margin: 0 0 20px 0; text-align: center; font-size: 20px; text-shadow: 0 0 8px var(--neon-green); }
+
+    #levelGrid {
+      display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin: 20px 0 30px 0;
     }
-    /* DEBUG MENU */
+    .lvl-btn {
+      margin: 0; padding: 0; width: 50px; height: 50px; font-size: 14px;
+      background: #000; border: 2px solid #222; color: #444;
+      display: flex; align-items: center; justify-content: center;
+      cursor: not-allowed; transition: all 0.2s; box-shadow: none; border-radius: 4px;
+    }
+    .lvl-btn.unlocked { border-color: var(--dark-green); color: var(--mid-green); cursor: pointer; }
+    .lvl-btn.unlocked:hover {
+      background: var(--dark-green); color: var(--neon-green);
+      border-color: var(--neon-green); transform: scale(1.1); box-shadow: 0 0 10px var(--neon-green);
+    }
+    .lvl-btn.selected {
+      background: var(--neon-green); color: var(--bg-color);
+      border-color: var(--neon-green); box-shadow: 0 0 15px var(--neon-green); transform: scale(1.1);
+    }
+
+    .settings-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+    }
+    .settings-card {
+      background: rgba(0, 0, 0, 0.5); border: 1px solid var(--dark-green);
+      padding: 16px; border-radius: 6px; text-align: left;
+    }
+    .settings-card h3 {
+      margin: 0 0 12px 0; font-size: 10px; color: var(--neon-green);
+      border-bottom: 1px dashed var(--dark-green); padding-bottom: 8px; letter-spacing: 1px;
+    }
+    .setting-row {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 10px; margin-bottom: 12px; gap: 20px;
+    }
+    .setting-row:last-child { margin-bottom: 0; }
+    
+    .setting-info { display: flex; flex-direction: column; gap: 4px; }
+    .setting-desc { font-size: 8px; color: var(--mid-green); max-width: 130px; line-height: 1.3; }
+
+    select, input[type="number"], input[type="color"] {
+      background: #000; color: var(--neon-green); border: 1px solid var(--mid-green);
+      font-family: inherit; font-size: 10px; padding: 6px; outline: none; width: 100px;
+      border-radius: 2px; cursor: pointer;
+    }
+    select:focus, input:focus { border-color: var(--neon-green); box-shadow: 0 0 8px rgba(0,255,0,0.4); }
+    input[type="color"] { padding: 2px; height: 26px; }
+    
+    input[type="range"] { -webkit-appearance: none; background: transparent; width: 100px; margin: 0; }
+    input[type="range"]:focus { outline: none; }
+    input[type="range"]::-webkit-slider-runnable-track {
+      width: 100%; height: 6px; cursor: pointer; background: var(--dark-green); border-radius: 3px;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      height: 16px; width: 16px; border-radius: 50%; background: var(--neon-green);
+      cursor: pointer; -webkit-appearance: none; margin-top: -5px; box-shadow: 0 0 5px var(--neon-green);
+    }
+
+    .modal-footer { display: flex; justify-content: space-between; gap: 15px; margin-top: 25px; }
+    .modal-footer button { flex: 1; margin: 0; }
+    .btn-cancel { background: transparent; color: var(--mid-green); border-color: var(--dark-green); }
+    .btn-cancel:hover { background: var(--dark-green); color: var(--neon-green); border-color: var(--neon-green); }
+
+    #gameOverText { font-size: 56px; color: #f00; text-shadow: 0 0 20px #f00; }
+
     #debugMenu {
-      position:absolute; top:48px; left:16px;
-      color:#fff;
-      font-size:12px; line-height:1.2;
-      white-space:pre; z-index:300; display:none;
+      position: absolute; top: 80px; left: 16px;
+      color: #fff; background: rgba(0,0,0,0.7);
+      padding: 10px; border: 1px solid #444;
+      font-size: 10px; line-height: 1.4;
+      white-space: pre; z-index: 300; display: none;
+      pointer-events: none;
     }
   </style>
 </head>
 <body>
   <div id="game-container">
+    
     <div id="titleScreen" class="screen">
-      <h1>POKE SNAKE</h1>
-      <p>Press Any Key to Start</p>
+      <div class="logo-container">
+        <h1 class="logo-text">POKE<br>SNAKE</h1>
+        <div class="version-tag">v2.1.0</div>
+      </div>
+      
+      <div class="title-menu" id="titleMenu">
+        <button id="btnPlayTitle">Play Game</button>
+        <button id="btnLevelTitle">Sandbox Levels</button>
+        <button id="btnSettingsTitle">Settings</button>
+      </div>
+      
+      <p id="titlePrompt" class="hidden">Press Any Key to Start</p>
     </div>
+    
     <div id="scoreboard">Score: 0  High: 0  Level: 1</div>
-    <div id="settingsBtn">⚙️</div>
+    
+    <div id="topRightControls" class="hidden">
+      <div id="openLevelBtn" class="icon-btn" title="Select Level">🎚️</div>
+      <div id="settingsBtn" class="icon-btn" title="Settings">⚙️</div>
+    </div>
+    
     <canvas id="snakeCanvas"></canvas>
-    <div id="overlay"></div>
+    
+    <div id="startPrompt" class="hidden">PRESS ARROW KEY TO START</div>
+    
     <div id="gameOverScreen" class="screen hidden">
       <h1 id="gameOverText">GAME OVER!</h1>
-      <p>Press R to Retry</p>
-      <button id="backToTitle">Back to Title</button>
+      <p style="margin-bottom: 20px; font-size: 16px;">Press [R] to Retry</p>
+      <button id="backToTitle">Main Menu</button>
     </div>
-    <div id="settingsModal">
-      <h2>Settings</h2>
-      <div class="section">
-        <label>Speed
-          <select id="paramSpeed">
-            <option value="150">Slow</option>
-            <option value="100" selected>Normal</option>
-            <option value="50">Fast</option>
-          </select>
-        </label>
-        <label>Sound FX
-          <select id="paramSfx">
-            <option value="on" selected>On</option>
-            <option value="off">Off</option>
-          </select>
-        </label>
+
+    <div id="levelModal" class="modal">
+      <h2 id="levelModalTitle">Select Level</h2>
+      <div id="levelGrid"></div>
+      <div class="modal-footer">
+        <button id="closeLevelModal" class="btn-cancel">Close</button>
       </div>
-      <div class="section">
-        <label>Start Length
-          <input type="number" id="paramStartLength" min="1" max="20" value="1">
-        </label>
-        <label>Wall Mode
-          <select id="paramWallMode">
-            <option value="kill" selected>Die on Hit</option>
-            <option value="wrap">Wrap Around</option>
-          </select>
-        </label>
-        <label>Grid Lines
-          <select id="paramGrid">
-            <option value="false" selected>Off</option>
-            <option value="true">On</option>
-          </select>
-        </label>
-      </div>
-      <div class="section">
-        <h3>Advanced Knobs</h3>
-        <label>SFX Volume
-          <input type="range" id="paramSfxVolume" min="0" max="1" step="0.1" value="1">
-        </label>
-        <label>Snake Head Color
-          <input type="color" id="paramHeadColor" value="#ffff00">
-        </label>
-        <label>Snake Body Color
-          <input type="color" id="paramBodyColor" value="#00ffff">
-        </label>
-      </div>
-      <div class="section">
-        <p style="font-size:10px; text-align:center; color:#0f0;">
-          Press D to toggle Debug
-        </p>
-      </div>
-      <button id="saveSettings">Save</button>
-      <button id="closeSettings">Close</button>
     </div>
+    
+    <div id="settingsModal" class="modal">
+      <h2>System Config</h2>
+      
+      <div class="settings-grid">
+        <div class="settings-card">
+          <h3>GAMEPLAY</h3>
+          
+          <div class="setting-row">
+            <div class="setting-info">
+              <span>Speed</span>
+            </div>
+            <select id="paramSpeed">
+              <option value="150">Slow</option>
+              <option value="100" selected>Normal</option>
+              <option value="50">Fast</option>
+            </select>
+          </div>
+          
+          <div class="setting-row">
+            <div class="setting-info">
+              <span>Assist Mode</span>
+            </div>
+            <select id="paramAssist">
+              <option value="off" selected>Off</option>
+              <option value="on">On</option>
+            </select>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <span>Wall Mode</span>
+            </div>
+            <select id="paramWallMode">
+              <option value="kill" selected>Die on Hit</option>
+              <option value="wrap">Wrap Around</option>
+            </select>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <span>Start Length</span>
+            </div>
+            <input type="number" id="paramStartLength" min="1" max="20" value="3">
+          </div>
+        </div>
+        
+        <div class="settings-card">
+          <h3>AUDIO & VISUALS</h3>
+          
+          <div class="setting-row">
+            <div class="setting-info"><span>Sound FX</span></div>
+            <select id="paramSfx">
+              <option value="on" selected>On</option>
+              <option value="off">Off</option>
+            </select>
+          </div>
+          
+          <div class="setting-row">
+            <div class="setting-info"><span>SFX Volume</span></div>
+            <input type="range" id="paramSfxVolume" min="0" max="1" step="0.1" value="1">
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info"><span>Head Color</span></div>
+            <input type="color" id="paramHeadColor" value="#ffff00">
+          </div>
+          
+          <div class="setting-row">
+            <div class="setting-info"><span>Body Color</span></div>
+            <input type="color" id="paramBodyColor" value="#00ffff">
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info"><span>Start Prompt Text</span></div>
+            <select id="paramShowPrompt">
+              <option value="on" selected>On</option>
+              <option value="off">Off</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      
+      <div class="modal-footer">
+        <button id="saveSettings">Apply Changes</button>
+        <button id="closeSettings" class="btn-cancel">Discard</button>
+      </div>
+    </div>
+    
     <div id="debugMenu"></div>
   </div>
 
@@ -503,10 +666,21 @@
     const canvas         = document.getElementById('snakeCanvas'),
           ctx            = canvas.getContext('2d'),
           titleScreen    = document.getElementById('titleScreen'),
+          titleMenu      = document.getElementById('titleMenu'),
+          titlePrompt    = document.getElementById('titlePrompt'),
+          startPrompt    = document.getElementById('startPrompt'),
+          topRightControls = document.getElementById('topRightControls'),
           gameOverScreen = document.getElementById('gameOverScreen'),
           gameOverText   = document.getElementById('gameOverText'),
           scoreboard     = document.getElementById('scoreboard'),
           settingsBtn    = document.getElementById('settingsBtn'),
+          btnSettingsTitle = document.getElementById('btnSettingsTitle'),
+          openLevelBtn   = document.getElementById('openLevelBtn'),
+          btnLevelTitle  = document.getElementById('btnLevelTitle'),
+          btnPlayTitle   = document.getElementById('btnPlayTitle'),
+          levelModal     = document.getElementById('levelModal'),
+          levelModalTitle= document.getElementById('levelModalTitle'),
+          closeLevelBtn  = document.getElementById('closeLevelModal'),
           settingsModal  = document.getElementById('settingsModal'),
           saveBtn        = document.getElementById('saveSettings'),
           closeBtn       = document.getElementById('closeSettings'),
@@ -514,28 +688,70 @@
           debugMenu      = document.getElementById('debugMenu');
 
     let params = {
-      speed:100, sfx:true, startLength:1,
-      wallMode:'kill', grid:false,
-      sfxVolume:1,
+      speed:100, sfx:true, startLength:3,
+      wallMode:'kill', assistMode:false,
+      sfxVolume:1, showPrompt:true,
       headColor:'#ffff00', bodyColor:'#00ffff'
     };
 
     let snake, dir, food, score, highScore=0, level;
     let state='start', startTime=0;
-    const endMessages=["Skill issue!","Snake bit ya!","Sssorry, try again!"];
+    const endMessages=["SKILL ISSUE!","SNAKE BIT YA!","SSSORRY, TRY AGAIN!","FATAL COLLISION!"];
     let fps=0, frameCount=0, lastFpsTime=Date.now();
     let movesCount=0, framesSinceFood=0;
+    
+    let hasPlayedOnce = false;
+    let hasStartedMoving = false;
+    let maxUnlockedLevel = parseInt(localStorage.getItem('pokeSnakeMaxLevel')) || 1;
+    let selectedStartingLevel = 1;
 
-     let reqAnimFrameId;
+    let reqAnimFrameId;
     let lastTime = 0;
     let accumulator = 0;
     let currentTickRate = params.speed;
     let inputQueue = [];
+    let lastProcessedDir = {x: 0, y: -1};
+
+    function buildLevelGrid(isSandboxContext) {
+      const grid = document.getElementById('levelGrid');
+      grid.innerHTML = '';
+      const totalDisplayLevels = 20; 
+      
+      levelModalTitle.textContent = isSandboxContext ? "Sandbox (All Unlocked)" : "Select Level";
+
+      for (let i = 1; i <= totalDisplayLevels; i++) {
+        const btn = document.createElement('button');
+        btn.className = 'lvl-btn';
+        btn.textContent = i;
+        
+        if (isSandboxContext || i <= maxUnlockedLevel) {
+          btn.classList.add('unlocked');
+          if (i === selectedStartingLevel) btn.classList.add('selected');
+          
+          btn.addEventListener('click', () => {
+            selectedStartingLevel = i;
+            document.querySelectorAll('.lvl-btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            
+            levelModal.style.display = 'none';
+            
+            if(state === 'start') {
+              startGame();
+            } else if (state === 'playing') {
+              initGame();
+            }
+          });
+        } else {
+          btn.title = "Locked - Reach higher scores to unlock!";
+        }
+        grid.appendChild(btn);
+      }
+    }
 
     function resizeCanvas() {
       canvas.width = Math.floor(window.innerWidth/20)*20;
       canvas.height= Math.floor(window.innerHeight/20)*20;
-       if (food) {
+      if (food) {
         const cols = canvas.width/20, rows = canvas.height/20;
         if (food.x >= cols || food.y >= rows) pickFood();
       }
@@ -546,24 +762,67 @@
     function pickFood() {
       const cols=canvas.width/20, rows=canvas.height/20;
       let validFood = false;
-      
-       while (!validFood) {
+      while (!validFood) {
         food = { x:Math.floor(Math.random()*cols), y:Math.floor(Math.random()*rows) };
         validFood = !snake.some(seg => seg.x === food.x && seg.y === food.y);
       }
-      framesSinceFood=0;
+      framesSinceFood = 0;
+    }
+
+    function showMainMenu() {
+      gameOverScreen.classList.add('hidden');
+      titleScreen.classList.remove('hidden');
+      topRightControls.classList.add('hidden');
+      startPrompt.classList.add('hidden');
+      state = 'start';
+      
+      if (hasPlayedOnce) {
+        titleMenu.classList.add('hidden');
+        titlePrompt.classList.remove('hidden');
+      } else {
+        titleMenu.classList.remove('hidden');
+        titlePrompt.classList.add('hidden');
+      }
+    }
+
+    function startGame() {
+      hasPlayedOnce = true;
+      titleScreen.classList.add('hidden');
+      topRightControls.classList.remove('hidden');
+      state = 'playing';
+      initGame();
     }
 
     function initGame() {
+      const cols = canvas.width / 20;
+      const rows = canvas.height / 20;
+      const startX = Math.floor(cols / 2);
+      const startY = Math.floor(rows / 2);
+
       snake=[]; 
       for(let i=0; i<params.startLength; i++){
-        snake.push({x:10, y:10+i});
+        snake.push({x:startX, y:startY+i});
       }
-      dir={x:0,y:-1}; 
+      dir = {x:0, y:-1}; 
+      lastProcessedDir = {x:0, y:-1};
       inputQueue = [];
       pickFood();
-      score=0; level=1; movesCount=0; startTime=Date.now();
-      currentTickRate = params.speed;
+      score = 0; 
+      level = selectedStartingLevel;
+      movesCount = 0;
+      framesSinceFood = 0;
+      frameCount = 0;
+      fps = 0;
+      lastFpsTime = Date.now();
+      hasStartedMoving = false;
+      
+      if(params.showPrompt) {
+        startPrompt.classList.remove('hidden');
+      } else {
+        startPrompt.classList.add('hidden');
+      }
+
+      currentTickRate = params.speed * Math.pow(0.98, (level - 1) * 5);
       updateScoreboard();
       
       if (reqAnimFrameId) cancelAnimationFrame(reqAnimFrameId);
@@ -572,32 +831,109 @@
       reqAnimFrameId = requestAnimationFrame(gameLoop);
     }
 
-    function drawGrid() {
-      if(!params.grid) return;
-      ctx.strokeStyle='rgba(0,255,0,0.2)';
-      ctx.lineWidth = 1;
-      for(let x=0;x<canvas.width;x+=20){
-        ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); ctx.stroke();
-      }
-      for(let y=0;y<canvas.height;y+=20){
-        ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); ctx.stroke();
+    function draw(){
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      const pulse = Math.abs(Math.sin(Date.now() / 200)) * 50;
+      ctx.fillStyle = `rgb(255, ${pulse}, ${pulse})`; 
+      ctx.fillRect(food.x*20 + 2, food.y*20 + 2, 16, 16);
+      
+      snake.forEach((seg,i)=>{
+        ctx.fillStyle = i===0 ? params.headColor : params.bodyColor;
+        ctx.fillRect(seg.x*20 + 1, seg.y*20 + 1, 18, 18);
+      });
+    }
+
+    function processInput() {
+      if (inputQueue.length > 0) {
+        dir = inputQueue.shift();
+        lastProcessedDir = dir;
       }
     }
 
-    function draw(){
-      ctx.fillStyle='#111'; ctx.fillRect(0,0,canvas.width,canvas.height);
-      drawGrid();
-      ctx.fillStyle='#f00'; ctx.fillRect(food.x*20,food.y*20,20,20);
-      snake.forEach((seg,i)=>{
-        ctx.fillStyle = i===0 ? params.headColor : params.bodyColor;
-        ctx.fillRect(seg.x*20,seg.y*20,20,20);
-      });
+    function update(){
+      if(!hasStartedMoving) return;
+
+      processInput();
+      
+      const cols=canvas.width/20, rows=canvas.height/20;
+      
+      if (params.assistMode) {
+        let danger = false;
+        let testNextX = snake[0].x + dir.x;
+        let testNextY = snake[0].y + dir.y;
+
+        if (params.wallMode === 'kill') {
+          if (testNextX < 0 || testNextX >= cols || testNextY < 0 || testNextY >= rows) danger = true;
+        } else {
+          testNextX = (testNextX + cols) % cols;
+          testNextY = (testNextY + rows) % rows;
+        }
+        
+        if (snake.some((s,i) => i > 0 && s.x === testNextX && s.y === testNextY)) danger = true;
+
+        if (danger) {
+          const alternativeTurns = dir.x === 0 ? [{x:-1, y:0}, {x:1, y:0}] : [{x:0, y:-1}, {x:0, y:1}];
+          for (let t of alternativeTurns) {
+            let altX = snake[0].x + t.x;
+            let altY = snake[0].y + t.y;
+            let safe = true;
+            
+            if (params.wallMode === 'kill') {
+              if (altX < 0 || altX >= cols || altY < 0 || altY >= rows) safe = false;
+            } else {
+              altX = (altX + cols) % cols;
+              altY = (altY + rows) % rows;
+            }
+            
+            if (snake.some((s,i) => i > 0 && s.x === altX && s.y === altY)) safe = false;
+            
+            if (safe) {
+              dir = t;
+              lastProcessedDir = dir;
+              break;
+            }
+          }
+        }
+      }
+
+      const head={x:snake[0].x+dir.x, y:snake[0].y+dir.y};
+            
+      if(params.wallMode==='wrap'){
+        head.x=(head.x+cols)%cols; head.y=(head.y+rows)%rows;
+      } else if(head.x<0||head.x>=cols||head.y<0||head.y>=rows){
+        return endGame();
+      }
+      
+      if(snake.some((s,i)=>i>0&&s.x===head.x&&s.y===head.y)){
+        return endGame();
+      }
+      
+      snake.unshift(head);
+      movesCount++;
+      
+      if(head.x===food.x&&head.y===food.y){
+        score++; 
+        if(score > 0 && score % 5 === 0) {
+          level++;
+          if (level > maxUnlockedLevel) {
+            maxUnlockedLevel = level;
+            localStorage.setItem('pokeSnakeMaxLevel', maxUnlockedLevel);
+          }
+          currentTickRate = Math.max(30, currentTickRate * 0.98); 
+        }
+        updateScoreboard(); pickFood();
+        if(params.sfx) playBeep(440,0.1);
+      } else {
+        snake.pop();
+      }
     }
 
     function recordFrame(){
       const now=Date.now();
       frameCount++;
-      framesSinceFood++;
+      if(hasStartedMoving) framesSinceFood++;
       if(now-lastFpsTime>=1000){
         fps=frameCount; frameCount=0; lastFpsTime=now;
       }
@@ -625,7 +961,7 @@
       let fpsColor = fps>=50?'#0f0': fps>=30?'#ffa500':'#f00';
 
       debugMenu.innerHTML =
-        `Poke Snake 2.0.0 on ${diff} \n\n` +
+        `Poke Snake 2.1.0 on ${diff} \n\n` +
         `<span style="color:${fpsColor}">FPS: ${fps}</span>\n` +
         `FrameTime: ${frameTime}ms\n` +
         `Head: ${head.x},${head.y}\n` +
@@ -642,13 +978,12 @@
         `Time: ${elapsedS}s\n` +
         `AvgRate: ${avgRate} pts/s\n` +
         `Score: ${score}\n` +
-        `Level: ${level}\n` +
+        `Level: ${level} (Max: ${maxUnlockedLevel})\n` +
         `HighScore: ${highScore}\n` +
-        `Difficulty: ${diff}\n` +
         `TickRate(ms): ${Math.round(currentTickRate)}\n` +
         `StartLen: ${params.startLength}\n` +
         `Wall: ${params.wallMode}\n` +
-        `Grid: ${params.grid}\n` +
+        `Assist: ${params.assistMode}\n` +
         `SFXVol: ${params.sfxVolume}\n` +
         `Heap: ${heap}\n` +
         `Cores: ${cores}\n` +
@@ -658,48 +993,6 @@
         `UA: ${ua}`;
     }
 
-    function processInput() {
-      if (inputQueue.length > 0) {
-        const nextDir = inputQueue.shift();
-         if (nextDir.x !== -dir.x || nextDir.y !== -dir.y) {
-          dir = nextDir;
-        }
-      }
-    }
-
-    function update(){
-      processInput();
-
-      const head={x:snake[0].x+dir.x, y:snake[0].y+dir.y},
-            cols=canvas.width/20, rows=canvas.height/20;
-            
-      if(params.wallMode==='wrap'){
-        head.x=(head.x+cols)%cols; head.y=(head.y+rows)%rows;
-      } else if(head.x<0||head.x>=cols||head.y<0||head.y>=rows){
-        return endGame();
-      }
-      
-      if(snake.some((s,i)=>i>0&&s.x===head.x&&s.y===head.y)){
-        return endGame();
-      }
-      
-      snake.unshift(head);
-      movesCount++;
-      
-      if(head.x===food.x&&head.y===food.y){
-        score++; 
-        if(score%5===0) {
-          level++;
-          // Increase speed slightly per level, capping at 30ms per tick
-          currentTickRate = Math.max(30, currentTickRate * 0.98); 
-        }
-        updateScoreboard(); pickFood();
-        if(params.sfx) playBeep(440,0.1);
-      } else {
-        snake.pop();
-      }
-    }
-
     function gameLoop(time){
       if (!lastTime) lastTime = time;
       const deltaTime = time - lastTime;
@@ -707,14 +1000,12 @@
 
       if (state === 'playing') {
         accumulator += deltaTime;
-        
-         while (accumulator >= currentTickRate) {
-          update();
+        while (accumulator >= currentTickRate) {
+          if(hasStartedMoving) update();
           accumulator -= currentTickRate;
         }
-        
         draw(); 
-        recordFrame(); 
+        recordFrame();
         updateDebugMenu();
         reqAnimFrameId = requestAnimationFrame(gameLoop);
       }
@@ -725,6 +1016,8 @@
       state='gameover';
       gameOverText.textContent=endMessages[Math.floor(Math.random()*endMessages.length)];
       gameOverScreen.classList.remove('hidden');
+      topRightControls.classList.add('hidden');
+      startPrompt.classList.add('hidden');
     }
 
     function updateScoreboard(){
@@ -740,81 +1033,134 @@
         osc.frequency.value=freq;
         osc.connect(gain).connect(ac.destination);
         osc.start(); osc.stop(ac.currentTime+dur);
-      } catch (e) {
-        // Fallback for browsers that block audio context without interaction
-        console.warn("Audio play failed:", e);
-      }
+      } catch (e) {}
     }
 
-    document.addEventListener('keydown', e=>{
-      if(e.key.toLowerCase()==='d'){
-        debugMenu.style.display=debugMenu.style.display==='block'?'none':'block';
-        return;
-      }
-      if(state==='start'){
-        titleScreen.classList.add('hidden'); initGame(); state='playing';
-      } else if(state==='playing'){
-        const M={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0]};
-        if(M[e.key]){
-           e.preventDefault(); 
-          
-          const newDir = {x:M[e.key][0],y:M[e.key][1]};
-          // Allow max 2 inputs queued to prevent massive buffers
-          if (inputQueue.length < 2) { 
-            // Compare against last queued move, or current direction if queue is empty
-            const lastQueuedDir = inputQueue.length > 0 ? inputQueue[inputQueue.length - 1] : dir;
-            // Only add to queue if it's not a 180 degree turn from the most recent intent
-            if (newDir.x !== -lastQueuedDir.x || newDir.y !== -lastQueuedDir.y) {
-              inputQueue.push(newDir);
-            }
-          }
-        }
-      } else if(state==='gameover'&&e.key.toLowerCase()==='r'){
-        gameOverScreen.classList.add('hidden');
-        titleScreen.classList.remove('hidden');
-        state='start';
-      }
+    btnPlayTitle.addEventListener('click', startGame);
+    
+    btnLevelTitle.addEventListener('click', () => {
+      buildLevelGrid(true); 
+      levelModal.style.display = 'block';
+    });
+    
+    btnSettingsTitle.addEventListener('click', () => {
+      openSettings();
     });
 
-    settingsBtn.addEventListener('click', ()=>{
+    openLevelBtn.addEventListener('click', () => {
       if(state==='playing') cancelAnimationFrame(reqAnimFrameId);
+      buildLevelGrid(false); 
+      levelModal.style.display = 'block';
+    });
+    
+    settingsBtn.addEventListener('click', () => {
+      if(state==='playing') cancelAnimationFrame(reqAnimFrameId);
+      openSettings();
+    });
+
+    function openSettings() {
       document.getElementById('paramSpeed').value       = params.speed;
       document.getElementById('paramSfx').value         = params.sfx?'on':'off';
-      document.getElementById('paramStartLength').value = params.startLength;
+      document.getElementById('paramAssist').value      = params.assistMode?'on':'off';
       document.getElementById('paramWallMode').value    = params.wallMode;
-      document.getElementById('paramGrid').value        = params.grid;
+      document.getElementById('paramStartLength').value = params.startLength;
       document.getElementById('paramSfxVolume').value   = params.sfxVolume;
       document.getElementById('paramHeadColor').value   = params.headColor;
       document.getElementById('paramBodyColor').value   = params.bodyColor;
-      settingsModal.style.display='block';
+      document.getElementById('paramShowPrompt').value  = params.showPrompt?'on':'off';
+      settingsModal.style.display = 'block';
+    }
+
+    closeLevelBtn.addEventListener('click', () => {
+      levelModal.style.display = 'none';
+      resumeGameIfPlaying();
     });
 
     closeBtn.addEventListener('click', ()=>{
-      settingsModal.style.display='none';
+      settingsModal.style.display = 'none';
+      resumeGameIfPlaying();
+    });
+    
+    function resumeGameIfPlaying() {
       if(state==='playing') {
         lastTime = performance.now();
         reqAnimFrameId=requestAnimationFrame(gameLoop);
       }
-    });
+    }
 
     saveBtn.addEventListener('click', ()=>{
       params.speed       = parseInt(document.getElementById('paramSpeed').value,10);
       params.sfx         = document.getElementById('paramSfx').value==='on';
-      params.startLength = parseInt(document.getElementById('paramStartLength').value,10);
+      params.assistMode  = document.getElementById('paramAssist').value==='on';
       params.wallMode    = document.getElementById('paramWallMode').value;
-      params.grid        = document.getElementById('paramGrid').value==='true';
+      params.startLength = parseInt(document.getElementById('paramStartLength').value,10);
       params.sfxVolume   = parseFloat(document.getElementById('paramSfxVolume').value);
       params.headColor   = document.getElementById('paramHeadColor').value;
       params.bodyColor   = document.getElementById('paramBodyColor').value;
+      params.showPrompt  = document.getElementById('paramShowPrompt').value==='on';
       settingsModal.style.display='none';
-      if(state==='playing') initGame();
+      
+      if(state==='playing') initGame(); 
     });
 
-    backToTitle.addEventListener('click', ()=>{
-      gameOverScreen.classList.add('hidden');
-      titleScreen.classList.remove('hidden');
-      state='start';
+    backToTitle.addEventListener('click', showMainMenu);
+
+    document.addEventListener('keydown', e => {
+      if(e.key.toLowerCase()==='d'){
+        debugMenu.style.display=debugMenu.style.display==='block'?'none':'block';
+        return;
+      }
+
+      if(settingsModal.style.display === 'block' || levelModal.style.display === 'block') return;
+
+      if(state === 'start') {
+        if(hasPlayedOnce) {
+          startGame();
+        }
+      } 
+      else if (state === 'playing') {
+        const M = {
+          ArrowUp:[0,-1], ArrowDown:[0,1], ArrowLeft:[-1,0], ArrowRight:[1,0],
+          w:[0,-1], s:[0,1], a:[-1,0], d:[1,0],
+          W:[0,-1], S:[0,1], A:[-1,0], D:[1,0]
+        };
+        
+        if (M[e.key]) {
+          e.preventDefault(); 
+          
+          const newDir = {x: M[e.key][0], y: M[e.key][1]};
+          
+          if(!hasStartedMoving) {
+            if(params.startLength > 1 && newDir.x === 0 && newDir.y === 1) return; 
+            
+            hasStartedMoving = true;
+            startPrompt.classList.add('hidden');
+            dir = newDir;
+            lastProcessedDir = dir;
+            startTime = Date.now();
+            return;
+          }
+
+          const lastQueuedDir = inputQueue.length > 0 ? inputQueue[inputQueue.length - 1] : lastProcessedDir;
+          
+          if ((newDir.x !== -lastQueuedDir.x || newDir.y !== -lastQueuedDir.y) &&
+              (newDir.x !== lastQueuedDir.x || newDir.y !== lastQueuedDir.y)) {
+            
+            if (inputQueue.length < 3) { 
+              inputQueue.push(newDir);
+            } else {
+              inputQueue[inputQueue.length - 1] = newDir;
+            }
+          }
+        }
+      } 
+      else if (state === 'gameover' && e.key.toLowerCase() === 'r') {
+        gameOverScreen.classList.add('hidden');
+        startGame();
+      }
     });
+
+    showMainMenu();
   </script>
 </body>
 </html>
