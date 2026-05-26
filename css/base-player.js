@@ -25,7 +25,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 //////////////// THE PLAYER, START ////////////////////////
- try {
+try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -941,6 +941,10 @@ startupPrimeStartedAt: performance.now(),
                               pairSyncTimer: null,
                               pairSyncAllowAudibleCorrection: false,
                               pairSyncCorrectionInFlight: false,
+                              pairSyncObserveUntil: 0,
+                              pairSyncAudibleCorrectionAfter: 0,
+                              pairSyncWritePendingUntil: 0,
+                              pairSyncPendingTarget: NaN,
                               measuredPairDriftCount: 0,
                               measuredPairDriftSign: 0,
                               measuredPairDriftLast: 0,
@@ -1231,6 +1235,7 @@ startupPrimeStartedAt: performance.now(),
   function canKillAudio(opts) {
     opts = opts || {};
     if (!coupledMode || !audio) return false;
+    if (pairSyncTransportQuietActive(perfProfile.lowEnd ? 900 : 650)) return false;
     if (!opts.force && now() - _lastGlobalAudioKillAt < GLOBAL_AUDIO_KILL_COOLDOWN_MS) return false;
     if (document.visibilityState === "hidden") return false;
     if (state.seeking || state.seekBuffering) return false;
@@ -1372,10 +1377,12 @@ startupPrimeStartedAt: performance.now(),
           const _alignFirstPlay = initialCoupledPairPending();
           const _alignTarget = rewindStartupAutoplayLeakToZero("simul-start", _alignVt, _alignAt) ? 0 : _alignVt;
           const _alignDrift = Math.abs(_alignVt - _alignAt);
-          if (_alignFirstPlay || _alignDrift > 0.15) {
+          const _alignThreshold = _alignFirstPlay ? 0.025 : 0.15;
+          if (_alignDrift > _alignThreshold) {
             state._allowAudioTimeWrite = true;
             try { audio.currentTime = _alignTarget; } catch { }
             state._allowAudioTimeWrite = false;
+            if (_alignFirstPlay) return false;
           }
         } catch { }
       }
@@ -1394,15 +1401,6 @@ startupPrimeStartedAt: performance.now(),
       if (needAudio) {
         const playAudio = () => {
           try {
-            const _syncVN = getVideoNode();
-            if (_syncVN && strictStartupLockstep) {
-              const _syncVT = Number(_syncVN.currentTime) || 0;
-              const _syncAT = Number(audio.currentTime) || 0;
-              const _syncTarget = rewindStartupAutoplayLeakToZero("simul-start-audio", _syncVT, _syncAT) ? 0 : _syncVT;
-              state._allowAudioTimeWrite = true;
-              try { audio.currentTime = _syncTarget; } catch { }
-              state._allowAudioTimeWrite = false;
-            }
             execProgrammaticAudioPlay({
               squelchMs: opts.squelchMs != null ? opts.squelchMs : 60,
               force: !!opts.force,
@@ -1604,6 +1602,13 @@ startupPrimeStartedAt: performance.now(),
     }
     function _shouldRun() {
       if (!platform.chromiumOnlyBrowser || !coupledMode || !audio) return false;
+      const backgroundGuardNeeded =
+        document.visibilityState === "hidden" ||
+        !isWindowFocused() ||
+        isVisibilityTransitionActive() ||
+        isAltTabTransitionActive() ||
+        inBgReturnGrace();
+      if (!backgroundGuardNeeded) return false;
       if (initialCoupledPairPending() && !startupCoordinatedPlayActive()) return false;
       if (!state.intendedPlaying || state.endedNaturally || state.restarting) return false;
       if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
@@ -1652,7 +1657,10 @@ startupPrimeStartedAt: performance.now(),
       } catch { }
     }
     function start(reason = "") {
-      if (!_shouldRun()) return false;
+      if (!_shouldRun()) {
+        if (_active && document.visibilityState !== "hidden" && isWindowFocused()) stop(0);
+        return false;
+      }
       if (_stopTimer) { clearTimeout(_stopTimer); _stopTimer = null; }
       const ctx = _ensureNodes();
       if (!ctx) return false;
@@ -1663,7 +1671,7 @@ startupPrimeStartedAt: performance.now(),
       return true;
     }
     function pulse(reason = "") {
-      if (!_shouldRun()) { stop(1200); return false; }
+      if (!_shouldRun()) { stop(document.visibilityState === "hidden" ? 1200 : 0); return false; }
       const t = now();
       if (!_active || !_ctx || !_source || !_gain) start(reason);
       else if ((t - _lastPulseAt) > 30) {
@@ -1727,10 +1735,20 @@ startupPrimeStartedAt: performance.now(),
       return true;
     }
     function onUserGesture() {
-      const ctx = _ensureNodes();
+      const ctx = _makeContext();
       if (ctx) {
-        _resumeContext(ctx);
         state.audioContextUnlocked = true;
+        try {
+          const p = typeof ctx.resume === "function" ? ctx.resume() : null;
+          if (p && typeof p.then === "function") {
+            p.then(() => {
+              if (!_active && !_shouldRun() && ctx.state === "running" &&
+                typeof ctx.suspend === "function") {
+                ctx.suspend().catch(() => { });
+              }
+            }).catch(() => { });
+          }
+        } catch { }
       }
       if (_shouldRun()) start("user-gesture");
     }
@@ -2602,6 +2620,9 @@ startupPrimeStartedAt: performance.now(),
     if (_bgFallbackId) {
       clearInterval(_bgFallbackId);
       _bgFallbackId = null;
+    }
+    if (document.visibilityState !== "hidden") {
+      try { BackgroundAudioSentinel.stop(0); } catch { }
     }
     clearHiddenBackgroundResumeTimers();
     clearHiddenAudioNoSeekRetryTimers();
@@ -4616,7 +4637,15 @@ startupPrimeStartedAt: performance.now(),
       }
       _timer = setTimeout(_tick, delay);
     }
-    function start() { _schedule(); }
+    function start() {
+      if (!videoFreezeRepairAllowed("nuclear-freeze-watch", { confirmed: true, probe: true })) {
+        if (_timer) { clearTimeout(_timer); _timer = null; }
+        _clearDeferredWork(false);
+        reset();
+        return;
+      }
+      _schedule();
+    }
     function stop() {
       if (_timer) { clearTimeout(_timer); _timer = null; }
       _clearDeferredWork(true);
@@ -4856,6 +4885,16 @@ startupPrimeStartedAt: performance.now(),
       _timer = setTimeout(_tick, Math.max(250, Number(delay) || SAMPLE_MS));
     }
     function start() {
+      if (!videoFreezeRepairAllowed("foreground-freeze-watch", { confirmed: true, probe: true })) {
+        _stopped = true;
+        if (_timer) {
+          clearTimeout(_timer);
+          _timer = null;
+        }
+        _clearWakeTimers(false);
+        _resetSamples();
+        return;
+      }
       if (!_stopped && _timer) return;
       _stopped = false;
       _schedule(_idleDelay());
@@ -5765,7 +5804,11 @@ startupPrimeStartedAt: performance.now(),
         if (coupledMode && audio) {
           try {
             const ars = Number(audio.readyState || 0);
-            if (_lastARS >= 3 && ars < 2 && !audio.paused) {
+            if (pairSyncTransportQuietActive(perfProfile.lowEnd ? 1100 : 900)) {
+              _arsPendingDrop = false;
+              _arsDrop = false;
+              _lastARS = ars;
+            } else if (_lastARS >= 3 && ars < 2 && !audio.paused) {
               let _videoStillAdvancing = false;
               try {
                 const _rsVT = Number(getVideoNode().currentTime || 0);
@@ -6155,6 +6198,11 @@ const clamp01 = v => Math.max(0, Math.min(1, Number(v)));
 const STARTUP_INITIAL_MAX_DRIFT_SEC = perfProfile.lowEnd ? 0.14 : (perfProfile.mobile ? 0.11 : 0.09);
 const PAIR_SYNC_GOOD_DRIFT_SEC = perfProfile.lowEnd ? 0.055 : (perfProfile.mobile ? 0.045 : 0.035);
 const PAIR_SYNC_FIX_DRIFT_SEC = perfProfile.lowEnd ? 0.095 : (perfProfile.mobile ? 0.070 : 0.055);
+const PAIR_SYNC_VISIBLE_TRIGGER_SEC = perfProfile.lowEnd ? 0.14 : (perfProfile.mobile ? 0.10 : 0.065);
+const PAIR_SYNC_STARTUP_OBSERVE_MS = perfProfile.lowEnd ? 5200 : (perfProfile.mobile ? 4600 : 4200);
+const PAIR_SYNC_WRITE_SETTLE_MS = perfProfile.lowEnd ? 360 : (perfProfile.mobile ? 300 : 220);
+const PAIR_SYNC_OPENING_QUIET_MS = perfProfile.lowEnd ? 1100 : (perfProfile.mobile ? 900 : 700);
+const PAIR_SYNC_OPENING_HARD_LIMIT_SEC = 0.24;
 const PAIR_SYNC_MAX_WRITES = 3;
 function initialCoupledPairPending() {
   return !!(coupledMode && audio && !state.initialCoupledPairCommitted);
@@ -6163,6 +6211,32 @@ function clearPairSyncTimer() {
   if (!state.pairSyncTimer) return;
   clearTimeout(state.pairSyncTimer);
   state.pairSyncTimer = null;
+}
+function pairSyncCorrectionPending() {
+  if (!audio) return false;
+  if (state.pairSyncCorrectionInFlight) return true;
+  try { if (audio.seeking) return true; } catch { }
+  if (now() < Number(state.pairSyncWritePendingUntil || 0)) return true;
+  state.pairSyncWritePendingUntil = 0;
+  state.pairSyncPendingTarget = NaN;
+  return false;
+}
+function notePairSyncTimeWrite(target) {
+  state.pairSyncPendingTarget = Number(target);
+  state.pairSyncWritePendingUntil = Math.max(
+    Number(state.pairSyncWritePendingUntil || 0),
+    now() + PAIR_SYNC_WRITE_SETTLE_MS
+  );
+}
+function pairSyncTransportQuietActive(tailMs = 0) {
+  if (!coupledMode || !audio || !state.intendedPlaying) return false;
+  if (state.pairSyncCorrectionInFlight) return true;
+  const tail = Math.max(0, Number(tailMs) || 0);
+  const pendingUntil = Math.max(
+    Number(state.pairSyncWritePendingUntil || 0),
+    Number(state.pairSyncLastWriteAt || 0) + PAIR_SYNC_WRITE_SETTLE_MS
+  );
+  return pendingUntil > 0 && now() < pendingUntil + tail;
 }
 function pairSyncWindowActive() {
   return !!(coupledMode && audio && state.intendedPlaying && now() < Number(state.pairSyncUntil || 0));
@@ -6186,11 +6260,21 @@ function armPairSyncConvergence(reason = "transition", ms = 1800, opts = {}) {
   state.pairSyncReason = String(reason || "transition").slice(0, 48);
   state.pairSyncAudioMaster = opts.audioMaster === true;
   state.pairSyncAllowAudibleCorrection = opts.allowAudibleCorrection === true;
+  if (Number(opts.observeMs) > 0) {
+    state.pairSyncObserveUntil = Math.max(
+      Number(state.pairSyncObserveUntil || 0),
+      now() + Number(opts.observeMs)
+    );
+  }
   if (!wasActive || opts.reset === true) {
     state.pairSyncCorrectionCount = 0;
     state.pairSyncLastWriteAt = 0;
     state.pairSyncStartedAt = now();
     state.pairSyncStableSamples = 0;
+    if (!state.pairSyncCorrectionInFlight) {
+      state.pairSyncWritePendingUntil = 0;
+      state.pairSyncPendingTarget = NaN;
+    }
   }
   if (opts.preAlign === true && state.pairSyncAudioMaster) {
     preAlignReturnVideoFromAudio(opts.preAlignActive === true);
@@ -6204,7 +6288,7 @@ function setAudioTimeForPairSync(target, opts = {}) {
   !playerMutedFromVideo() &&
   (Number(audio.volume) || 0) > 0.02;
   if (masked) {
-    if (state.pairSyncCorrectionInFlight) return true;
+    if (state.pairSyncCorrectionInFlight) return false;
     state.pairSyncCorrectionInFlight = true;
     const correctionSession = state.playSessionId;
     try { armAudioPopGuard("pair-sync-correction", 360); } catch { }
@@ -6222,6 +6306,7 @@ function setAudioTimeForPairSync(target, opts = {}) {
         state._allowPairSyncAudioWrite = true;
         try { audio.currentTime = liveTarget; } catch { }
         state._allowPairSyncAudioWrite = false;
+        notePairSyncTimeWrite(liveTarget);
         if (!audio.paused && state.intendedPlaying && !playerMutedFromVideo()) {
           await doVolumeFade(targetVolFromVideo(), 42);
         }
@@ -6242,6 +6327,7 @@ function setAudioTimeForPairSync(target, opts = {}) {
   try {
     state._allowPairSyncAudioWrite = true;
     audio.currentTime = target;
+    notePairSyncTimeWrite(target);
     return true;
   } catch {
     return false;
@@ -6262,12 +6348,12 @@ function preAlignPausedPairForResume() {
 function preAlignReturnVideoFromAudio(allowActive = false) {
   if (!coupledMode || !audio || audio.paused || initialCoupledPairPending()) return false;
   const vn = getVideoNode();
-  if (!vn || (!vn.paused && !allowActive)) return false;
+  // Never move an already-presenting video just because the tab returned.
+  // Aligning while paused is invisible; aligning active frames is a visible skip.
+  if (!vn || !vn.paused) return false;
   const vt = Number(vn.currentTime);
   const at = Number(audio.currentTime);
-  const correctionThreshold = (!vn.paused && allowActive)
-    ? Math.max(PAIR_SYNC_FIX_DRIFT_SEC, 0.12)
-    : PAIR_SYNC_FIX_DRIFT_SEC;
+  const correctionThreshold = PAIR_SYNC_FIX_DRIFT_SEC;
   if (!isFinite(vt) || !isFinite(at) || Math.abs(vt - at) < correctionThreshold) return true;
   state._isMicroSeek = true;
   try { vn.currentTime = at; } catch { return false; }
@@ -6284,6 +6370,10 @@ function convergePairedTransitionSync() {
     return false;
   }
   if (userPauseLockActive() || mediaSessionForcedPauseActive() || _errorOverlayShown) return false;
+  if (pairSyncCorrectionPending()) {
+    schedulePairSyncConvergence(perfProfile.lowEnd ? 180 : 110);
+    return false;
+  }
   const vn = getVideoNode();
   if (!vn || vn.paused || audio.paused) {
     schedulePairSyncConvergence(perfProfile.lowEnd ? 260 : 170);
@@ -6297,13 +6387,15 @@ function convergePairedTransitionSync() {
   if (abs <= PAIR_SYNC_GOOD_DRIFT_SEC) {
     state.pairSyncStableSamples = Number(state.pairSyncStableSamples || 0) + 1;
     const observedLongEnough = (now() - Number(state.pairSyncStartedAt || 0)) >= 500;
-    if (observedLongEnough && state.pairSyncStableSamples >= 3) {
+    const observationComplete = now() >= Number(state.pairSyncObserveUntil || 0);
+    if (observedLongEnough && observationComplete && state.pairSyncStableSamples >= 3) {
       state.pairSyncUntil = 0;
       state.pairSyncCorrectionCount = 0;
       clearPairSyncTimer();
       return true;
     }
-    schedulePairSyncConvergence(perfProfile.lowEnd ? 140 : 90);
+    schedulePairSyncConvergence(observationComplete ? (perfProfile.lowEnd ? 140 : 90) :
+      (perfProfile.lowEnd ? 320 : 220));
     return false;
   }
   state.pairSyncStableSamples = 0;
@@ -6334,8 +6426,23 @@ function convergePairedTransitionSync() {
       clearPairSyncTimer();
       return false;
     }
+    const audibleCorrectionAfter = Number(state.pairSyncAudibleCorrectionAfter || 0);
+    if (!audio.paused && abs <= PAIR_SYNC_OPENING_HARD_LIMIT_SEC && now() < audibleCorrectionAfter) {
+      schedulePairSyncConvergence(Math.max(perfProfile.lowEnd ? 180 : 90, audibleCorrectionAfter - now()));
+      return false;
+    }
+    if (!audio.paused && abs <= PAIR_SYNC_OPENING_HARD_LIMIT_SEC) {
+      // Once both tracks are audible, a small timeline write is more noticeable than
+      // this bounded residual drift. Leave stable playback alone rather than causing
+      // a click, dropped frame, or a brief play/pause-shaped correction.
+      state.pairSyncUntil = 0;
+      state.pairSyncCorrectionCount = 0;
+      clearPairSyncTimer();
+      return true;
+    }
     try {
-      if (!canPlaySmoothAt(audio, vt, 0.03) && Number(audio.readyState || 0) < HAVE_CURRENT_DATA) {
+      const targetBuffered = canPlaySmoothAt(audio, vt, audio.paused ? 0.03 : 0.08);
+      if (!targetBuffered && (!audio.paused || Number(audio.readyState || 0) < HAVE_CURRENT_DATA)) {
         schedulePairSyncConvergence(perfProfile.lowEnd ? 260 : 170);
         return false;
       }
@@ -6350,7 +6457,7 @@ function convergePairedTransitionSync() {
 }
 function correctConfirmedVisiblePairDrift(vt, at) {
   if (!coupledMode || !audio || !state.firstPlayCommitted || !state.initialCoupledPairCommitted) return false;
-  if (pairSyncWindowActive() || startupSettleActive()) return false;
+  if (pairSyncWindowActive()) return false;
   if (!state.intendedPlaying || state.endedNaturally || state.restarting ||
     state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
   if (document.visibilityState !== "visible" || !isWindowFocused() ||
@@ -6359,8 +6466,11 @@ function correctConfirmedVisiblePairDrift(vt, at) {
     state.strictBufferHold || userPauseLockActive() || mediaSessionForcedPauseActive()) return false;
   const drift = Number(vt) - Number(at);
   const abs = Math.abs(drift);
-  const trigger = perfProfile.lowEnd ? 0.16 : (perfProfile.mobile ? 0.13 : 0.10);
-  if (!isFinite(drift) || abs < trigger) {
+  // Healthy visible playback must not keep chasing tiny drift by seeking audible
+  // audio. Only a sustained drift beyond the user-visible stability bound gets a
+  // corrective window; startup and explicit seek flows already align earlier.
+  const trigger = Math.max(PAIR_SYNC_VISIBLE_TRIGGER_SEC, PAIR_SYNC_OPENING_HARD_LIMIT_SEC);
+  if (!isFinite(drift) || abs <= trigger) {
     state.measuredPairDriftCount = 0;
     state.measuredPairDriftSign = 0;
     state.measuredPairDriftLast = 0;
@@ -6391,7 +6501,7 @@ function clearStartupAutoplayRetryTimer() {
     state.startupAutoplayRetryTimer = null;
   }
 }
-function commitStartupFromActivePlayback() {
+function commitStartupFromActivePlayback(opts = {}) {
   const vn = getVideoNode();
   const videoPlaying = !!(vn && !vn.paused);
   const audioPlaying = coupledMode ? !!(audio && !audio.paused) : true;
@@ -6402,7 +6512,9 @@ function commitStartupFromActivePlayback() {
     if (rewindStartupAutoplayLeakToZero("commit-active", vt, at)) return false;
     if (initialCoupledPairPending()) {
       if (!startupCoordinatedPlayActive()) return false;
-      if (Math.abs(vt - at) > STARTUP_INITIAL_MAX_DRIFT_SEC) return false;
+      const openingDrift = Math.abs(vt - at);
+      const allowSettlingDrift = opts.allowSettlingDrift === true;
+      if (openingDrift > STARTUP_INITIAL_MAX_DRIFT_SEC && !allowSettlingDrift) return false;
       const target = Number(state._startupLockstepTarget);
       const issuedAt = Number(state._startupLockstepIssuedAt || 0);
       if (isFinite(target) && issuedAt > 0) {
@@ -6426,7 +6538,15 @@ function commitStartupFromActivePlayback() {
   if (coupledMode) {
     state.audioEverStarted = true;
     state.initialCoupledPairCommitted = true;
-    armPairSyncConvergence("startup-commit", 2400, { reset: true, allowAudibleCorrection: true });
+    state.pairSyncAudibleCorrectionAfter = Math.max(
+      Number(state.pairSyncAudibleCorrectionAfter || 0),
+      now() + Math.round(PAIR_SYNC_OPENING_QUIET_MS * 0.55)
+    );
+    armPairSyncConvergence("startup-commit", PAIR_SYNC_STARTUP_OBSERVE_MS + 900, {
+      reset: true,
+      allowAudibleCorrection: true,
+      observeMs: PAIR_SYNC_STARTUP_OBSERVE_MS
+    });
   }
   state._startupCoordinatedPlayUntil = 0;
   state._startupLockstepTarget = NaN;
@@ -6928,6 +7048,19 @@ function refreshPlayerSeekbarElementCache(rootHint = null, force = false) {
   try { playerSeekbarHolder = root.querySelector(".vjs-progress-holder[role='slider'], .vjs-progress-holder"); } catch { playerSeekbarHolder = null; }
   return true;
 }
+function playerSeekbarRequiresManualTimeline() {
+  if (state.seeking || state.seekBuffering || state.seekResumeInFlight || state.restarting || userSeekIntentActive()) return true;
+  if (state.endedNaturally || terminalEndPlaybackLocked(200)) return true;
+  if (!coupledMode || !audio) return false;
+  return !(document.visibilityState === "visible" &&
+    isWindowFocused() &&
+    !state.hiddenAudioExclusiveMode &&
+    !state.bgHiddenWasPlaying &&
+    !state.resumeOnVisible &&
+    !state.bgSilentTimeSyncing &&
+    !inBgReturnGrace() &&
+    !isTabReturnImmune());
+}
 function syncPlayerSeekbarToDisplayTime(durHint = NaN, curHint = NaN) {
   playerSeekbarSyncQueued = false;
   playerSeekbarRafId = 0;
@@ -6943,6 +7076,15 @@ function syncPlayerSeekbarToDisplayTime(durHint = NaN, curHint = NaN) {
   formatPlayerClock(playerClockWholeSeconds(dur));
   refreshPlayerSeekbarElementCache();
   const playProgress = playerSeekbarPlayProgress;
+  if (!playerSeekbarRequiresManualTimeline()) {
+    playerSeekbarLastPercent = -1;
+    playerSeekbarLastText = "";
+    try {
+      if (playProgress && playProgress.style.transition) playProgress.style.transition = "";
+      if (playProgress && playProgress.style.willChange) playProgress.style.willChange = "";
+    } catch { }
+    return;
+  }
   const domPercent = (() => {
     try { return parseFloat(playProgress?.style?.width || ""); } catch { return NaN; }
   })();
@@ -7030,7 +7172,7 @@ function injectPlayerTimeDisplayStyles() {
   if (document.getElementById("player-time-display-css")) return;
   const style = document.createElement("style");
   style.id = "player-time-display-css";
-  style.textContent = `.vjs-has-player-time-toggle .vjs-remaining-time,.vjs-has-player-time-toggle .vjs-current-time,.vjs-has-player-time-toggle .vjs-time-divider,.vjs-has-player-time-toggle .vjs-duration{display:none!important}.vjs-player-time-toggle{--vjs-player-time-width:12ch;inline-size:var(--vjs-player-time-width);min-inline-size:var(--vjs-player-time-width);max-inline-size:var(--vjs-player-time-width);flex:0 0 var(--vjs-player-time-width);padding:0 .45em!important;cursor:pointer;contain:layout paint style}.vjs-player-time-toggle .vjs-player-time-text{display:inline-block;inline-size:100%;white-space:nowrap;text-align:center;font-variant-numeric:tabular-nums;line-height:3em}.vjs-play-progress{transition:width 220ms linear}`;
+  style.textContent = `.vjs-has-player-time-toggle .vjs-remaining-time,.vjs-has-player-time-toggle .vjs-current-time,.vjs-has-player-time-toggle .vjs-time-divider,.vjs-has-player-time-toggle .vjs-duration{display:none!important}.vjs-player-time-toggle{--vjs-player-time-width:12ch;inline-size:var(--vjs-player-time-width);min-inline-size:var(--vjs-player-time-width);max-inline-size:var(--vjs-player-time-width);flex:0 0 var(--vjs-player-time-width);padding:0 .45em!important;cursor:pointer;contain:layout paint style}.vjs-player-time-toggle .vjs-player-time-text{display:inline-block;inline-size:100%;white-space:nowrap;text-align:center;font-variant-numeric:tabular-nums;line-height:3em}`;
   try { document.head.appendChild(style); } catch { }
 }
 function placePlayerTimeDisplayButton(bar) {
@@ -9374,6 +9516,10 @@ function seekRecoveryActive(windowMs = 0) {
 function markUserPauseIntent(ms = USER_PAUSE_INTENT_FAST_MS) {
   const intentMs = Math.max(350, Number(ms) || USER_PAUSE_INTENT_FAST_MS);
   state.pairSyncUntil = 0;
+  state.pairSyncObserveUntil = 0;
+  state.pairSyncAudibleCorrectionAfter = 0;
+  state.pairSyncWritePendingUntil = 0;
+  state.pairSyncPendingTarget = NaN;
   try { clearPairSyncTimer(); } catch { }
   try { BackgroundAudioSentinel.stop(0); } catch { }
   const txnMs = Math.max(USER_TOGGLE_TXN_FAST_MS, Math.min(intentMs, 1200));
@@ -15149,6 +15295,7 @@ function rewindStartupAutoplayLeakToZero(reason = "", vt = NaN, at = NaN) {
 }
 function forceZeroBeforeFirstPlay(reason = "") {
   if (state.firstPlayCommitted || startupZeroSuppressed()) return false;
+  if (state.startupKickInFlight || startupCoordinatedPlayActive()) return false;
   if (state.pendingSeekTarget != null || userSeekIntentActive() ||
     state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
   state.startupZeroed = true;
@@ -17732,6 +17879,7 @@ function verifyCoordinatedStartupPair() {
         verifyCoordinatedStartupPair();
         return;
       }
+      if (commitStartupFromActivePlayback({ allowSettlingDrift: true })) return;
     }
     if (!videoRunning && !audioRunning) return;
     state.isProgrammaticVideoPause = true;
@@ -17820,6 +17968,10 @@ function kickStartupLockstepPlayback() {
     setAudioVolumeSynced(muted ? 0 : targetVolFromVideo());
   } catch { }
   state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 900);
+  state.pairSyncAudibleCorrectionAfter = Math.max(
+    Number(state.pairSyncAudibleCorrectionAfter || 0),
+    now() + PAIR_SYNC_OPENING_QUIET_MS
+  );
   state._startupCoordinatedPlayUntil = now() + 1200;
   state._startupLockstepIssuedAt = now();
   const issued = MakeAudioVideoSimultaneousStartAPI({ force: true, squelchMs: 140 });
@@ -17881,7 +18033,7 @@ function scheduleStartupAutoplayKick() {
       setFastSync(1800);
       state.startupPlaySettleUntil = now() + STARTUP_SETTLE_MS;
       state.startupPlaySettled = false;
-      forceZeroBeforeFirstPlay();
+      // bothReadyForStartupKick() already prepared this exact timeline position.
       await runStartupLockstepOrPlayTogether();
       const isEffectivelyPaused = startupTracksStillPaused();
       if (isEffectivelyPaused) {
@@ -17969,7 +18121,7 @@ function scheduleStartupAutoplayRetry() {
       setFastSync(1800);
       state.startupPlaySettleUntil = now() + STARTUP_SETTLE_MS;
       state.startupPlaySettled = false;
-      forceZeroBeforeFirstPlay();
+      // bothReadyForStartupKick() already prepared this exact timeline position.
       await runStartupLockstepOrPlayTogether();
       const isEffectivelyPaused = startupTracksStillPaused();
       if (isEffectivelyPaused) {
@@ -18248,12 +18400,9 @@ async function runSync() {
           Math.abs(vtRaw - atRaw) < 0.8) {
           if (vtRaw > 0.1) updateLastKnownGoodVT();
           const _normalDrift = vtRaw - atRaw;
-          const _driftFixing = applyNormalPlaybackAudioDriftCorrection(_normalDrift, vtRaw, atRaw, {
-            allowHard: true,
-            hardThreshold: 0.70,  // was 0.42 — raised to reduce hard audio seeks that cause seekbar jumps
-            trackDrift: true
-          });
-          scheduleSync(_driftFixing || Math.abs(_normalDrift) > MICRO_DRIFT ? (perfProfile.lowEnd ? 550 : 380) : null);  // was 420/260 — longer intervals to reduce correction frequency
+          const _watchMeasuredDrift = Math.abs(_normalDrift) >
+            Math.max(PAIR_SYNC_VISIBLE_TRIGGER_SEC, PAIR_SYNC_OPENING_HARD_LIMIT_SEC);
+          scheduleSync(_watchMeasuredDrift ? (perfProfile.lowEnd ? 650 : 420) : null);
           return;
           }
       }
@@ -18423,7 +18572,8 @@ async function runSync() {
             document.visibilityState === "visible") {
             updateLastKnownGoodVT();
             }
-            if (state.intendedPlaying && !audio.paused && !playerMutedFromVideo()) {
+            const pairCorrectionSettling = pairSyncTransportQuietActive(perfProfile.lowEnd ? 420 : 260);
+            if (!pairCorrectionSettling && state.intendedPlaying && !audio.paused && !playerMutedFromVideo()) {
               try { updateAudioGainImmediate(true); } catch { }
               if (!state.audioFading && !NotMakePlayBackFixingNoticable.isActive()) {
                 const target = clamp01(targetVolFromVideo());
@@ -18434,7 +18584,7 @@ async function runSync() {
                 }
               }
             }
-            const needsHold = evaluateBufferHoldNeed(vt, at);
+            const needsHold = !pairCorrectionSettling && evaluateBufferHoldNeed(vt, at);
             if (needsHold && !state.strictBufferHold) {
               state.strictBufferHold = true;
               if (!state.bufferHoldSince) state.bufferHoldSince = now();
@@ -18454,6 +18604,10 @@ async function runSync() {
               clearBufferHold();
               resetAudioPlaybackRate();
               setFastSync(1200);
+            }
+            if (pairCorrectionSettling && !state.strictBufferHold) {
+              scheduleSync(perfProfile.lowEnd ? 360 : 220);
+              return;
             }
             const isTransientState = document.visibilityState === "hidden" ||
             !isWindowFocused() ||
@@ -18608,18 +18762,24 @@ async function runSync() {
                     const drift = vt - at;
                     const absDrift = Math.abs(drift);
                     const activeBigDrift = inBgDrift ? BIG_DRIFT_BACKGROUND : BIG_DRIFT;
+                    const legacyTimelineRepairAllowed = !automaticTimelineMutationBlocked();
                     if (absDrift > activeBigDrift) {
-                      resetAudioPlaybackRate();
-                      await quietSeekAudio(vt);
-                      resetAudioPlaybackRate();
-                      state.driftStableFrames = 0;
-                      setFastSync(1600);
+                      if (legacyTimelineRepairAllowed) {
+                        resetAudioPlaybackRate();
+                        await quietSeekAudio(vt);
+                        resetAudioPlaybackRate();
+                        state.driftStableFrames = 0;
+                        setFastSync(1600);
+                      } else if (document.visibilityState === "visible" && isWindowFocused() &&
+                        !isVisibilityTransitionActive() && !isAltTabTransitionActive()) {
+                        scheduleSync(perfProfile.lowEnd ? 650 : 420);
+                      }
                     } else if (absDrift > MICRO_DRIFT) {
                       const sameDirection = (drift > 0) === (state.lastDrift > 0);
                       if (sameDirection) state.driftStableFrames = (state.driftStableFrames || 0) + 1;
                       else state.driftStableFrames = 0;
                       state.lastDrift = drift;
-                      if (state.driftStableFrames >= DRIFT_PERSIST_CYCLES) {
+                      if (legacyTimelineRepairAllowed && state.driftStableFrames >= DRIFT_PERSIST_CYCLES) {
                         applyNormalPlaybackAudioDriftCorrection(drift, vt, at, {
                           allowHard: true
                         });
@@ -20005,6 +20165,7 @@ function setupMediaErrorHandlers() {
   const onAudioWaiting = () => {
     if (!coupledMode || !state.intendedPlaying || state.restarting) return;
     if (state.seeking || state.seekResumeInFlight || state.seekBuffering) return;
+    if (pairSyncTransportQuietActive(perfProfile.lowEnd ? 420 : 260)) return;
     if (now() < state.seekCooldownUntil) return; // Don't stall-pause right after a seek
     if (state.tabReturnImmuneUntil > now() || NotMakePlayBackFixingNoticable.isActive()) return;
     if (!state.startupPrimed || (state.startupPhase && !state.firstPlayCommitted)) return;
@@ -20015,6 +20176,7 @@ function setupMediaErrorHandlers() {
       state._stallVideoPauseTimer = null;
       if (!state.audioWaiting || !state.intendedPlaying || state.restarting) return;
       if (state.seeking || state.seekResumeInFlight || state.seekBuffering) return;
+      if (pairSyncTransportQuietActive(perfProfile.lowEnd ? 420 : 260)) return;
       if (now() < state.seekCooldownUntil) return;
       if (state.tabReturnImmuneUntil > now() || NotMakePlayBackFixingNoticable.isActive()) return;
       if (getVideoPaused()) return;
@@ -24917,7 +25079,14 @@ function cleanupPlaybackRuntimeResources(reason = "") {
   try { clearStartupAutoplayRetryTimer(); } catch { }
   try { clearAudioForcePlayTimer(); } catch { }
   try { clearStartupPairVerifyTimer(); state._startupCoordinatedPlayUntil = 0; } catch { }
-  try { state.pairSyncUntil = 0; clearPairSyncTimer(); } catch { }
+  try {
+    state.pairSyncUntil = 0;
+    state.pairSyncObserveUntil = 0;
+    state.pairSyncAudibleCorrectionAfter = 0;
+    state.pairSyncWritePendingUntil = 0;
+    state.pairSyncPendingTarget = NaN;
+    clearPairSyncTimer();
+  } catch { }
   try { clearAudioPlaybackRescueTimer(); } catch { }
   try { clearForegroundUserPlayRetryTimers(); } catch { }
   try { clearTransitionDriftTimers(); } catch { }
