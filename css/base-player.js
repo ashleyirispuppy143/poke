@@ -900,6 +900,8 @@ startupPrimeStartedAt: performance.now(),
                             foregroundBufferAudioHoldUntil: 0,
                               audioWaiting: false,
                               audioStallVideoPaused: false,
+                              audioBufferConfirmTimer: null,
+                              audioBufferConfirmSerial: 0,
                               _stallVideoPauseTimer: null,
                               audioPausedSince: 0,
                               audioStartGraceUntil: 0,
@@ -5343,6 +5345,7 @@ const WAKE_DETECT_THRESHOLD_MS = 8000;
 const CONSISTENCY_CHECK_MIN_INTERVAL_MS = perfProfile.lowEnd ? 7000 : (perfProfile.mobile ? 5200 : 4000);
 const STALL_RECOVERY_COOLDOWN_MS = 5000;
 const MIN_STALL_AUDIO_RESUME_MS = 200;
+const AUDIO_BUFFER_EVENT_CONFIRM_MS = perfProfile.lowEnd ? 140 : (perfProfile.mobile ? 110 : 72);
 const MIN_STALL_VIDEO_RS = 3; // HAVE_FUTURE_DATA
 const STALL_WATCHDOG_MS = 5000;
 const AUDIO_STUCK_RESTART_MS = 2500;
@@ -8141,6 +8144,7 @@ function clearTerminalBufferingUiState() {
   try { clearPostSeekAudioWatchdog(); } catch { }
   try { if (state._stallAudioPauseTimer) { clearTimeout(state._stallAudioPauseTimer); state._stallAudioPauseTimer = null; } } catch { }
   try { if (state._stallVideoPauseTimer) { clearTimeout(state._stallVideoPauseTimer); state._stallVideoPauseTimer = null; } } catch { }
+  try { clearAudioBufferConfirmation(); } catch { }
   try {
     if (typeof video?.removeClass === "function") {
       video.removeClass("vjs-waiting");
@@ -11696,11 +11700,45 @@ function audioReadyToReleasePairHold(target = NaN) {
 function audioBufferHoldBlocksVideoStart() {
   return audioBufferPairHoldActive() && !audioReadyToReleasePairHold(getVideoCurrentTimeSafe(0));
 }
+function clearAudioBufferConfirmation() {
+  if (state.audioBufferConfirmTimer) {
+    clearTimeout(state.audioBufferConfirmTimer);
+    state.audioBufferConfirmTimer = null;
+  }
+  state.audioBufferConfirmSerial = Number(state.audioBufferConfirmSerial || 0) + 1;
+}
+function confirmAudioBufferBeforeHoldingPair(reason = "audio-buffer", delay = AUDIO_BUFFER_EVENT_CONFIRM_MS) {
+  if (!coupledMode || !audio || !state.intendedPlaying || state.endedNaturally || state.restarting) return false;
+  if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
+  if (audioBufferPairHoldActive()) return true;
+  if (audioReadyToReleasePairHold(getVideoCurrentTimeSafe(0))) {
+    clearAudioBufferConfirmation();
+    return false;
+  }
+  if (state.audioBufferConfirmTimer) return true;
+  const sampledAudioTime = (() => { try { return Number(audio.currentTime) || 0; } catch { return 0; } })();
+  const serial = Number(state.audioBufferConfirmSerial || 0) + 1;
+  state.audioBufferConfirmSerial = serial;
+  state.audioBufferConfirmTimer = setTimeout(() => {
+    state.audioBufferConfirmTimer = null;
+    if (serial !== Number(state.audioBufferConfirmSerial || 0)) return;
+    if (!coupledMode || !audio || !state.intendedPlaying || state.endedNaturally || state.restarting) return;
+    if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return;
+    const progressed = (() => {
+      try { return !audio.paused && (Number(audio.currentTime) || 0) > sampledAudioTime + 0.012; } catch { return false; }
+    })();
+    if (progressed) return;
+    if (audioReadyToReleasePairHold(getVideoCurrentTimeSafe(0))) return;
+    pauseCoupledPairForAudioBuffer(reason, true);
+  }, Math.max(24, Number(delay) || 0));
+  return true;
+}
 function pauseCoupledPairForAudioBuffer(reason = "audio-buffer", confirmedAfterSettle = false) {
   if (!coupledMode || !audio || !state.intendedPlaying || state.endedNaturally || state.restarting) return false;
   const alreadyHeld = !!state.audioStallVideoPaused;
   if (!alreadyHeld && !confirmedAfterSettle &&
     (state.seeking || state.seekBuffering || state.seekResumeInFlight || pairSyncCorrectionPending())) return false;
+  clearAudioBufferConfirmation();
   state.audioWaiting = true;
   state.audioStallSince = state.audioStallSince || now();
   state.audioStallVideoPaused = true;
@@ -11748,6 +11786,7 @@ function pauseCoupledPairForAudioBuffer(reason = "audio-buffer", confirmedAfterS
   return true;
 }
 function releaseCoupledPairFromAudioBuffer(reason = "audio-ready") {
+  clearAudioBufferConfirmation();
   if (!audioBufferPairHoldActive()) return false;
   const heldAt = getVideoCurrentTimeSafe(0);
   if (!audioReadyToReleasePairHold(heldAt)) return false;
@@ -19697,29 +19736,18 @@ function setupMediaErrorHandlers() {
   const onAudioStalled = () => {
     try { UltraStabilizer.onAudioStall(); } catch { }
     if (!coupledMode || !state.intendedPlaying) return;
-    const heldAt = getVideoCurrentTimeSafe(0);
-    if (!audioReadyToReleasePairHold(heldAt) &&
-      pauseCoupledPairForAudioBuffer("audio-stalled", true)) return;
+    if (confirmAudioBufferBeforeHoldingPair("audio-stalled")) return;
     scheduleSync(200);
   };
   const onAudioWaiting = () => {
     if (!coupledMode || !state.intendedPlaying || state.restarting) return;
     if (state.seeking || state.seekResumeInFlight || state.seekBuffering) return;
     if (pairSyncTransportQuietActive(perfProfile.lowEnd ? 420 : 260) || pairSyncCorrectionPending()) {
-      if (state._stallVideoPauseTimer) return;
-      const waitSession = state.playSessionId;
-      state._stallVideoPauseTimer = setTimeout(() => {
-        state._stallVideoPauseTimer = null;
-        if (waitSession !== state.playSessionId || !state.intendedPlaying || state.restarting) return;
-        if (state.seeking || state.seekResumeInFlight || state.seekBuffering) return;
-        if (!audioReadyToReleasePairHold(getVideoCurrentTimeSafe(0))) {
-          pauseCoupledPairForAudioBuffer("audio-waiting-after-sync", true);
-        }
-      }, PAIR_SYNC_WRITE_SETTLE_MS + 30);
+      confirmAudioBufferBeforeHoldingPair("audio-waiting-after-sync", PAIR_SYNC_WRITE_SETTLE_MS + 30);
       return;
     }
     if (!state.startupPrimed) return;
-    pauseCoupledPairForAudioBuffer("audio-waiting");
+    confirmAudioBufferBeforeHoldingPair("audio-waiting");
   };
   try { _on(videoEl, "stalled", onVideoStalled, { passive: true }); } catch { }
   if (audio) {
@@ -22216,6 +22244,9 @@ function bindCommonMediaEvents() {
             });
     };
     const onReadyish = () => {
+      if (state.audioBufferConfirmTimer && audioReadyToReleasePairHold(getVideoCurrentTimeSafe(0))) {
+        clearAudioBufferConfirmation();
+      }
       if (audioBufferPairHoldActive()) {
         releaseCoupledPairFromAudioBuffer("audio-readyish");
         return;
@@ -22255,6 +22286,7 @@ function bindCommonMediaEvents() {
         forceNonLoopTerminalEnd("audio-playing");
         return;
       }
+      if (state.audioBufferConfirmTimer) clearAudioBufferConfirmation();
       if (rejectUnpairedVisibleStartupPlayback("audio")) return;
       if (audioBufferPairHoldActive() &&
         !releaseCoupledPairFromAudioBuffer("audio-playing-buffer-release")) {
