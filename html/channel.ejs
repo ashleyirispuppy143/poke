@@ -788,8 +788,11 @@ function authorVerifiedChecker3000() {
 
   <span style="padding:1px;padding-top:2.5px !important;display:inline-flex;border-radius:3px;">
 <a href="https://support.google.com/youtube/answer/3046484?hl=en">
-
-    <i class="icon ion ion-md-checkmark-circle" style="width:18px;margin-right:1px" title="Verified Channel"></i>
+<% if (!Array.isArray(released?.playlists) || released.playlists.length === 0) { %>
+  <i class="icon ion ion-md-checkmark-circle" style="width:18px;margin-right:1px" title="Verified Channel"></i>
+<% } else { %>
+  <i class="fa-light fa-note" style="width:18px;margin-right:1px" title="Playlist"></i>
+<% } %>
     </a>
   </span>
 <% } %>
