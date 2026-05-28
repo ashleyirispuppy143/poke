@@ -6209,6 +6209,41 @@ function getSeekDisplayAuthorityTarget(durHint = NaN) {
   const dur = Number(durHint);
   return isFinite(dur) && dur > 0 ? Math.min(target, dur) : target;
 }
+function seekBufferDownloadHoldActive() {
+  try {
+    return !!(state.seekBuffering ||
+      (state.strictBufferHold && String(state.strictBufferReason || "").indexOf("seek-buffer") === 0));
+  } catch { return false; }
+}
+function getAuthoritativeSeekTarget(fallback = NaN, durHint = NaN) {
+  const dur = Number(durHint);
+  const clamp = value => {
+    const t = Number(value);
+    if (!isFinite(t) || t < 0) return NaN;
+    return isFinite(dur) && dur > 0 ? Math.min(t, dur) : t;
+  };
+  const candidates = [];
+  try {
+    if (typeof getActiveExplicitSeekTarget === "function") candidates.push(getActiveExplicitSeekTarget());
+  } catch { }
+  try { candidates.push(getSeekDisplayAuthorityTarget(dur)); } catch { }
+  try {
+    if (typeof transportPositionAuthorityActive === "function" && transportPositionAuthorityActive()) {
+      candidates.push(Number(state.transportPositionTarget));
+    }
+  } catch { }
+  try {
+    if (state.seeking || state.seekBuffering || state.seekResumeInFlight || state.pendingSeekTarget != null || seekBufferDownloadHoldActive()) {
+      candidates.push(Number(state.seekTargetTime));
+    }
+  } catch { }
+  candidates.push(fallback);
+  for (const value of candidates) {
+    const target = clamp(value);
+    if (isFinite(target) && target >= 0) return target;
+  }
+  return 0;
+}
 function playerDisplayTimelineRegressionAllowed(raw, dur) {
   if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return true;
   if (state.restarting) return true;
@@ -6301,31 +6336,41 @@ function getPlayerDisplayTime(durHint = NaN) {
   };
   try {
     const displayTarget = getSeekDisplayAuthorityTarget(dur);
+    const seekBufferHold = seekBufferDownloadHoldActive();
     const displaySeekActive =
     state.seeking ||
     state.seekBuffering ||
     state.seekResumeInFlight ||
     state.pendingSeekTarget != null ||
+    seekBufferHold ||
     (userSeekIntentActive() && !state.seekCompleted);
-    if (isFinite(displayTarget) && displayTarget >= 0 &&
+    const target = isFinite(displayTarget) && displayTarget >= 0
+      ? displayTarget
+      : (seekBufferHold ? getAuthoritativeSeekTarget(NaN, dur) : NaN);
+    if (isFinite(target) && target >= 0 &&
       displaySeekActive) {
-      resetPlayerDisplayTimelineClamp(displayTarget);
-      return displayTarget;
+      resetPlayerDisplayTimelineClamp(target);
+      return target;
     }
   } catch { }
   try {
     const pending = typeof getActiveExplicitSeekTarget === "function" ? getActiveExplicitSeekTarget() : NaN;
+    const seekBufferHold = seekBufferDownloadHoldActive();
     const pendingSeekDisplayActive =
     state.seeking ||
     state.seekBuffering ||
     state.seekResumeInFlight ||
     state.pendingSeekTarget != null ||
+    seekBufferHold ||
     (userSeekIntentActive() && !state.seekCompleted);
-    if (isFinite(pending) && pending >= 0 &&
+    const target = isFinite(pending) && pending >= 0
+      ? pending
+      : (seekBufferHold ? getAuthoritativeSeekTarget(NaN, dur) : NaN);
+    if (isFinite(target) && target >= 0 &&
       pendingSeekDisplayActive) {
-      const target = clamp(pending);
-    resetPlayerDisplayTimelineClamp(target);
-    return target;
+      const clampedTarget = clamp(target);
+    resetPlayerDisplayTimelineClamp(clampedTarget);
+    return clampedTarget;
       }
   } catch { }
   const vt = getRawVideoTimelineTime();
@@ -15974,6 +16019,29 @@ function isTrackBufferedAt(el, pos, lead = 0.2) {
   } catch { }
   return false;
 }
+function mediaHasCurrentDataAtTarget(el, pos, lead = 0.2) {
+  if (!el) return false;
+  const target = Number(pos);
+  if (!isFinite(target) || target < 0) return false;
+  try { if (isTrackBufferedAt(el, target, lead)) return true; } catch { }
+  try {
+    const current = Number(el.currentTime);
+    const rs = Number(el.readyState || 0);
+    if (rs >= HAVE_CURRENT_DATA && isFinite(current) &&
+      Math.abs(current - target) <= Math.max(0.08, Number(lead) || 0.08)) return true;
+    const dur = Number(el.duration || 0);
+    if (rs >= HAVE_CURRENT_DATA && isFinite(dur) && dur > 0 &&
+      target >= dur - 0.25 && isFinite(current) && current >= dur - 0.35) return true;
+  } catch { }
+  return false;
+}
+function seekTargetMediaReady(target, forCoupled, lead = 0.2) {
+  const seekPos = Number(target);
+  const vNode = getVideoNode();
+  const videoReady = mediaHasCurrentDataAtTarget(vNode, seekPos, lead);
+  const audioReady = !forCoupled || !audio || mediaHasCurrentDataAtTarget(audio, seekPos, lead);
+  return { ready: videoReady && audioReady, videoReady, audioReady, vNode, seekPos };
+}
 const BUFFER_AHEAD_RESUME_SEC = 2.0;   // hysteresis: resume needs more
 const BUFFER_AHEAD_PAUSE_SEC = 1.0;   // re-pause if either drops below
 const BUFFER_GUARD_TICK_MS = 250;
@@ -16074,16 +16142,25 @@ function setSeekBufferingUIVisible(on) {
     forceEndedUiState();
     return;
   }
+  const forceSeekSpinner = want && seekBufferDownloadHoldActive();
   if (want === _spinnerLogicalState && want === _bufferGuardSpinnerOn) return;
   _spinnerNoteFlap();
   _spinnerLogicalState = want;
   if (want) {
-    if (state.userPlayLockUntil > now() && !_bufferGuardSpinnerOn) return;
-    if (_spinnerInFlapCooldown() && !_bufferGuardSpinnerOn) return;
     if (_spinnerPendingClearTimer) {
       clearTimeout(_spinnerPendingClearTimer);
       _spinnerPendingClearTimer = null;
     }
+    if (forceSeekSpinner) {
+      if (_spinnerPendingRaiseTimer) {
+        clearTimeout(_spinnerPendingRaiseTimer);
+        _spinnerPendingRaiseTimer = null;
+      }
+      _spinnerActuallyRaise();
+      return;
+    }
+    if (state.userPlayLockUntil > now() && !_bufferGuardSpinnerOn) return;
+    if (_spinnerInFlapCooldown() && !_bufferGuardSpinnerOn) return;
     if (_bufferGuardSpinnerOn) return; // already visible
     if (_spinnerPendingRaiseTimer) return; // already scheduled
     _spinnerPendingRaiseTimer = setTimeout(() => {
@@ -16902,17 +16979,27 @@ function startSeekBufferWait(forCoupled) {
   state.bufferHoldIntendedPlaying = true;
   const fastUserSeek = userSeekIntentActive() || (state.seekAudioMustStartUntil > now());
   const vNode = getVideoNode();
-  const vRS = Number(vNode?.readyState || 0);
-  const seekPos = Number(video.currentTime()) || 0;
-  const videoBuffered = isTrackBufferedAt(vNode, seekPos, 0.2);
-  const audioBuffered = !forCoupled || !audio ||
-  (isTrackBufferedAt(audio, seekPos, 0.2) && Number(audio.readyState || 0) >= HAVE_CURRENT_DATA);
-  if (videoBuffered && audioBuffered && vRS >= HAVE_CURRENT_DATA) return false;
+  const fallbackSeekPos = (() => {
+    try { return Number(video.currentTime()) || 0; } catch { }
+    try { return Number(vNode?.currentTime) || 0; } catch { }
+    return 0;
+  })();
+  const seekPos = getAuthoritativeSeekTarget(fallbackSeekPos);
+  const readyInfo = seekTargetMediaReady(seekPos, forCoupled, 0.2);
+  const videoBuffered = readyInfo.videoReady;
+  const audioBuffered = readyInfo.audioReady;
+  if (videoBuffered && audioBuffered) return false;
   const _isLong = (typeof isLongVideo === "function") ? !!isLongVideo() : false;
   const _audioIsTheHoldout = forCoupled && audio && !audioBuffered;
   const _longAudioWait = _isLong && _audioIsTheHoldout;
   state.seekBuffering = true;
   state.strictBufferHold = true;
+  state.seekCompleted = false;
+  if (isFinite(seekPos) && seekPos >= 0) {
+    state.seekTargetTime = seekPos;
+    state.seekResolvedTime = NaN;
+    beginSeekDisplayAuthority(seekPos, 30000);
+  }
   if (!state.bufferHoldSince) state.bufferHoldSince = now();
   state.strictBufferReason = forCoupled ? "seek-buffer" : "seek-buffer-nc";
   state.bufferHoldIntendedPlaying = true;
@@ -16944,7 +17031,7 @@ function startSeekBufferWait(forCoupled) {
       if ((now() - _audioBufferLastGrowAt) > 2000 && _audioLoadCalls < 2) {
         _audioLoadCalls++;
         _audioBufferLastGrowAt = now();   // reset, give load() a chance
-        const _curVt = Number(video.currentTime()) || 0;
+        const _curVt = getAuthoritativeSeekTarget(seekPos);
         if (isFinite(_curVt) && _curVt > 0.05) {
           state._allowAudioTimeWrite = true;
           try { audio.currentTime = _curVt; } catch { }
@@ -16987,14 +17074,15 @@ function startSeekBufferWait(forCoupled) {
       state.intendedPlaying = true;
       state.bufferHoldIntendedPlaying = true;
       state.seekStabilizeUntil = Math.max(state.seekStabilizeUntil, now() + 1500);
-      const _resumePos = Number(video.currentTime()) || 0;
-      const _resumeRs = Number(vNode?.readyState || 0);
-      const _resumePlayable = _resumeRs >= HAVE_CURRENT_DATA || canPlayAt(vNode, _resumePos);
+      const _resumePos = getAuthoritativeSeekTarget(seekPos);
+      beginSeekDisplayAuthority(_resumePos, 4200);
+      const _resumeInfo = seekTargetMediaReady(_resumePos, forCoupled, 0.08);
+      const _resumePlayable = _resumeInfo.videoReady && _resumeInfo.audioReady;
       if (!_resumePlayable) {
         armResumeAfterBuffer(12000);
       }
       if (!forCoupled && coupledMode && audio && !isTabReturnImmune() && !NotMakePlayBackFixingNoticable.shouldBlockSeek()) {
-        const _vt = Number(video.currentTime()) || 0;
+        const _vt = getAuthoritativeSeekTarget(_resumePos);
         const _at = Number(audio.currentTime) || 0;
         const _wouldRestart = _vt < 0.5 && _at > 0.5 && state.firstPlayCommitted && !state.restarting && !isLoopDesired() && !shouldHonorNearZeroAudioSync(_vt);
         if (isFinite(_vt) && !_wouldRestart) {
@@ -17006,7 +17094,7 @@ function startSeekBufferWait(forCoupled) {
         state.startupPrimed = true;
         state.startupPhase = true;
         state.startupKickDone = false;
-        state._startupLockstepTarget = Number(video.currentTime()) || 0;
+        state._startupLockstepTarget = getAuthoritativeSeekTarget(_resumePos);
         state._startupLockstepTargetAt = now();
         setSeekBufferingUIVisible(false);
         if (!kickStartupLockstepPlayback()) scheduleStartupAutoplayRetry();
@@ -17038,7 +17126,7 @@ function startSeekBufferWait(forCoupled) {
         state.audioEventsSquelchedUntil = 0;
         state.isProgrammaticAudioPause = false;
         if (audio) {
-          const _sVt = Number(video.currentTime()) || 0;
+          const _sVt = getAuthoritativeSeekTarget(_resumePos);
           if (isFinite(_sVt)) {
             if (audio.paused) alignPausedAudioBeforeResume(_sVt, "seek-spinner-audio-resume");
             else safeSetAudioTime(_sVt);
@@ -17109,7 +17197,7 @@ function startSeekBufferWait(forCoupled) {
           if (!_spinnerEscalated && _ageSpinner > 1500 && audio && audio.paused) {
             _spinnerEscalated = true;
             try {
-              const _vtNow = Number(video.currentTime()) || 0;
+              const _vtNow = getAuthoritativeSeekTarget(_resumePos);
               if (isFinite(_vtNow) && _vtNow > 0.05) {
                 state._allowAudioTimeWrite = true;
                 try { audio.currentTime = _vtNow; } catch { }
@@ -17135,14 +17223,12 @@ function startSeekBufferWait(forCoupled) {
       }, 2600);
     };
     const bothTracksReady = () => {
-      const rs = Number(vNode?.readyState || 0);
-      if (rs < HAVE_CURRENT_DATA) {
-        const pos = Number(video.currentTime()) || 0;
-        if (!isTrackBufferedAt(vNode, pos, 0.1)) return false;
-      }
+      beginSeekDisplayAuthority(seekPos, 2400);
+      const currentVNode = getVideoNode();
+      if (!mediaHasCurrentDataAtTarget(currentVNode, seekPos, 0.1)) return false;
       if (forCoupled && audio) {
         const aRS = Number(audio.readyState || 0);
-        const pos = Number(video.currentTime()) || 0;
+        const pos = seekPos;
         if (_longAudioWait) {
           if (aRS < HAVE_CURRENT_DATA) return false;
           if (!isTrackBufferedAt(audio, pos, 0.05)) return false;
@@ -17156,7 +17242,7 @@ function startSeekBufferWait(forCoupled) {
           if (_maxEnd < pos + 0.5) return false;
           return true;
         }
-        if (aRS < HAVE_CURRENT_DATA && !isTrackBufferedAt(audio, pos, 0.1)) {
+        if (!mediaHasCurrentDataAtTarget(audio, pos, 0.1)) {
           return false;
         }
       }
@@ -17250,6 +17336,10 @@ async function finalizeSeekSync(currentSeekId) {
   const vtAtFinalize = isFinite(Number(state.seekResolvedTime))
   ? Number(state.seekResolvedTime)
   : Number(video.currentTime());
+  const finalizeSeekTarget = getAuthoritativeSeekTarget(vtAtFinalize);
+  if (isFinite(finalizeSeekTarget) && finalizeSeekTarget >= 0) {
+    beginSeekDisplayAuthority(finalizeSeekTarget, 30000);
+  }
   if (reassertExplicitSeekTargetIfNeeded(vtAtFinalize, "finalize")) {
     scheduleSeekFinalize(SEEK_FINALIZE_DELAY_MS, currentSeekId);
     return;
@@ -17301,11 +17391,9 @@ async function finalizeSeekSync(currentSeekId) {
     clearSeekTransportLock();
     return;
   }
-  const vtCheck0 = Number(video.currentTime());
-  const fastBuffered = isFinite(vtCheck0) && (
-    bothPlayableAt(vtCheck0) ||
-    (timeInBuffered(v, vtCheck0) && (!audio || timeInBuffered(audio, vtCheck0)))
-  );
+  const vtCheck0 = getAuthoritativeSeekTarget(finalizeSeekTarget);
+  const fastBuffered = isFinite(vtCheck0) &&
+    seekTargetMediaReady(vtCheck0, !!(coupledMode && audio), 0.1).ready;
   let vReady = fastBuffered, aReady = fastBuffered;
   if (!fastBuffered) {
     vReady = await waitForReadyStateOrCanPlay(v, HAVE_CURRENT_DATA, SEEK_READY_TIMEOUT_MS);
@@ -17335,12 +17423,13 @@ async function finalizeSeekSync(currentSeekId) {
     return;
   }
   if (!vReady) {
-    const vtCheck = Number(video.currentTime());
-    const videoReadyNow = isFinite(vtCheck) && canPlayAt(getVideoNode(), vtCheck);
+    const vtCheck = getAuthoritativeSeekTarget(finalizeSeekTarget);
+    const videoReadyNow = isFinite(vtCheck) && mediaHasCurrentDataAtTarget(getVideoNode(), vtCheck, 0.1);
     if (!videoReadyNow) {
       state.seekBuffering = true;
       state.strictBufferHold = true;
       state.bufferHoldIntendedPlaying = true;
+      beginSeekDisplayAuthority(vtCheck, 30000);
       if (state.seekId === currentSeekId) {
         state.seeking = false;
         state.firstSeekDone = true;
@@ -17353,7 +17442,7 @@ async function finalizeSeekSync(currentSeekId) {
     }
   }
   clearBufferHold();
-  const vt2 = Number(video.currentTime());
+  const vt2 = getAuthoritativeSeekTarget(finalizeSeekTarget);
   if (isFinite(vt2) && coupledMode && audio) {
     const at2 = Number(audio.currentTime) || 0;
     if (Math.abs(at2 - vt2) > 0.15) {
@@ -23132,6 +23221,11 @@ function bindCommonMediaEvents() {
             } else {
               state.intendedPlaying = true;
               state.bufferHoldIntendedPlaying = true;
+              if (isFinite(seekTime) && seekTime >= 0) {
+                beginSeekDisplayAuthority(seekTime, 30000);
+                const _seekNeedsDownload = !seekTargetMediaReady(seekTime, !!(coupledMode && audio), 0.16).ready;
+                if (_seekNeedsDownload) startSeekBufferWait(!!(coupledMode && audio));
+              }
             }
             state.driftStableFrames = 0;
             state.lastDrift = 0;
@@ -23245,7 +23339,7 @@ function bindCommonMediaEvents() {
                 state.stallAudioPausedSince = 0;
                 clearForegroundBufferAudioHold();
                 state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, _kickArmedAt + 1200);
-                const _seekedSeekVt = getVideoCurrentTimeSafe(0);
+                const _seekedSeekVt = getAuthoritativeSeekTarget(getVideoCurrentTimeSafe(0));
                 const _seekedARS = audio ? Number(audio.readyState || 0) : 0;
                 const _seekedAudioReady =
                 !coupledMode || !audio ||
@@ -24309,7 +24403,14 @@ function executeSeamlessWakeup() {
 }
 function mediaReadyForBufferResume(minAhead = 0.12) {
   const vn = getVideoNode();
+  const seekHold = seekBufferDownloadHoldActive();
   const vt = (() => {
+    try {
+      if (seekHold) {
+        const target = getAuthoritativeSeekTarget(NaN);
+        if (isFinite(target) && target >= 0) return target;
+      }
+    } catch { }
     try {
       const viaPlayer = Number(video.currentTime());
       if (isFinite(viaPlayer)) return viaPlayer;
@@ -24322,14 +24423,18 @@ function mediaReadyForBufferResume(minAhead = 0.12) {
   })();
   const vRS = vn ? Number(vn.readyState || 0) : 0;
   const vAhead = vn ? bufferAheadAt(vn, vt) : 0;
-  const videoReady = !!vn && (vRS >= HAVE_CURRENT_DATA || vAhead >= minAhead);
+  const videoReady = !!vn && (seekHold
+    ? mediaHasCurrentDataAtTarget(vn, vt, minAhead)
+    : (vRS >= HAVE_CURRENT_DATA || vAhead >= minAhead));
   let audioReady = true;
   if (coupledMode && audio) {
     const audioOwnsBufferHold = audioBufferPairHoldActive() || state.strictBufferReason === "audio-buffer";
     const requiredAudioAhead = audioOwnsBufferHold
     ? Math.max(0.08, Number(minAhead) || 0)
     : Math.max(0.04, Math.min(0.12, Number(minAhead) || 0.04));
-    audioReady = canPlaySmoothAt(audio, vt, requiredAudioAhead);
+    audioReady = seekHold
+      ? mediaHasCurrentDataAtTarget(audio, vt, requiredAudioAhead)
+      : canPlaySmoothAt(audio, vt, requiredAudioAhead);
   }
   return { ready: videoReady && audioReady, videoReady, audioReady, vn, vt, vRS, vAhead };
 }
