@@ -724,6 +724,8 @@ seekResumeCommitUntil: 0,
 seekResumeCommitDueAt: 0,
 seekResumeCommitTimer: null,
 seekResumeCommitLastAt: 0,
+seekDisplayTarget: NaN,
+seekDisplayTargetUntil: 0,
 seekFinalizeTimer: null,
 seekWatchdogTimer: null,
 lastAT: 0,
@@ -5322,8 +5324,8 @@ startupPrimeStartedAt: performance.now(),
   const BIG_DRIFT = 2.5;     // was 1.5 — too low, triggered constant video currentTime writes that destabilized seekbar
   const BIG_DRIFT_BACKGROUND = 6.0;
   const DRIFT_PERSIST_CYCLES = 5;  // was 3 — required more sustained drift before correction to avoid seekbar jumping
-  const AUDIO_FADE_DURATION_MS = 60;
-  const AUDIO_SAFE_FADE_DURATION_MS = 80;
+  const AUDIO_FADE_DURATION_MS = 42;
+  const AUDIO_SAFE_FADE_DURATION_MS = 38;
   const MIN_PLAY_PAUSE_GAP_MS = 90;
   const SEEK_READY_TIMEOUT_MS = 700;
   const SEEK_WATCHDOG_MS = 8000; // max time to wait for seeked event before force-finalizing (was 4500 — too short for slow connections/large seeks)
@@ -5381,8 +5383,8 @@ const PAIR_SYNC_WRITE_SETTLE_MS = perfProfile.lowEnd ? 360 : (perfProfile.mobile
 const PAIR_SYNC_OPENING_QUIET_MS = perfProfile.lowEnd ? 1100 : (perfProfile.mobile ? 900 : 700);
 const PAIR_SYNC_OPENING_HARD_LIMIT_SEC = 0.24;
 const PAIR_SYNC_MAX_WRITES = 3;
-const INITIAL_PAIR_AUDIO_GATE_MS = perfProfile.lowEnd ? 145 : (perfProfile.mobile ? 120 : 95);
-const INITIAL_PAIR_RELEASE_FADE_MS = perfProfile.lowEnd ? 65 : (perfProfile.mobile ? 55 : 42);
+const INITIAL_PAIR_AUDIO_GATE_MS = perfProfile.lowEnd ? 72 : (perfProfile.mobile ? 58 : 46);
+const INITIAL_PAIR_RELEASE_FADE_MS = perfProfile.lowEnd ? 34 : (perfProfile.mobile ? 28 : 22);
 function initialCoupledPairPending() {
   return !!(coupledMode && audio && !state.initialCoupledPairCommitted);
 }
@@ -5449,7 +5451,7 @@ function settleInitialPairBeforeAudible(forceRelease = false) {
   };
   const retryGate = (delay = 28) => {
     keepSilent();
-    state.initialPairAudioGateUntil = Math.max(Number(state.initialPairAudioGateUntil || 0), now() + 100);
+    state.initialPairAudioGateUntil = Math.max(Number(state.initialPairAudioGateUntil || 0), now() + 55);
     if (state.initialPairAudioGateTimer) clearTimeout(state.initialPairAudioGateTimer);
     const session = state.initialPairAudioGateSession;
     state.initialPairAudioGateTimer = setTimeout(() => {
@@ -5539,7 +5541,7 @@ function armInitialPairAudioGate() {
   clearInitialPairAudioGate();
   state.initialPairAudioGateSession = state.playSessionId;
   state.initialPairAudioAlignAt = 0;
-  state.initialPairAudioGateUntil = now() + INITIAL_PAIR_AUDIO_GATE_MS + 80;
+  state.initialPairAudioGateUntil = now() + INITIAL_PAIR_AUDIO_GATE_MS + 30;
   try {
     cancelActiveFade();
     setAudioMutedSynced(false);
@@ -6189,6 +6191,24 @@ function resetPlayerDisplayTimelineClamp(t = NaN) {
   playerDisplayLastTime = isFinite(value) && value >= 0 ? value : 0;
   playerDisplayLastTimeAt = now();
 }
+function beginSeekDisplayAuthority(t = NaN, ms = 5200) {
+  const value = Number(t);
+  if (!isFinite(value) || value < 0) return false;
+  state.seekDisplayTarget = value;
+  state.seekDisplayTargetUntil = Math.max(
+    Number(state.seekDisplayTargetUntil || 0),
+    now() + Math.max(600, Number(ms) || 0)
+  );
+  resetPlayerDisplayTimelineClamp(value);
+  return true;
+}
+function getSeekDisplayAuthorityTarget(durHint = NaN) {
+  const target = Number(state.seekDisplayTarget);
+  if (!isFinite(target) || target < 0) return NaN;
+  if (now() >= Number(state.seekDisplayTargetUntil || 0)) return NaN;
+  const dur = Number(durHint);
+  return isFinite(dur) && dur > 0 ? Math.min(target, dur) : target;
+}
 function playerDisplayTimelineRegressionAllowed(raw, dur) {
   if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return true;
   if (state.restarting) return true;
@@ -6280,9 +6300,29 @@ function getPlayerDisplayTime(durHint = NaN) {
     return dur > 0 ? Math.min(t, dur) : t;
   };
   try {
+    const displayTarget = getSeekDisplayAuthorityTarget(dur);
+    const displaySeekActive =
+    state.seeking ||
+    state.seekBuffering ||
+    state.seekResumeInFlight ||
+    state.pendingSeekTarget != null ||
+    (userSeekIntentActive() && !state.seekCompleted);
+    if (isFinite(displayTarget) && displayTarget >= 0 &&
+      displaySeekActive) {
+      resetPlayerDisplayTimelineClamp(displayTarget);
+      return displayTarget;
+    }
+  } catch { }
+  try {
     const pending = typeof getActiveExplicitSeekTarget === "function" ? getActiveExplicitSeekTarget() : NaN;
+    const pendingSeekDisplayActive =
+    state.seeking ||
+    state.seekBuffering ||
+    state.seekResumeInFlight ||
+    state.pendingSeekTarget != null ||
+    (userSeekIntentActive() && !state.seekCompleted);
     if (isFinite(pending) && pending >= 0 &&
-      (state.seeking || state.seekBuffering || state.seekResumeInFlight || userSeekIntentActive())) {
+      pendingSeekDisplayActive) {
       const target = clamp(pending);
     resetPlayerDisplayTimelineClamp(target);
     return target;
@@ -7464,6 +7504,10 @@ function shouldBlockLeadingAudioForForegroundPlay() {
   if (state.seekKickAudioAllowedUntil > 0 && now() < state.seekKickAudioAllowedUntil) return false;
   const requireVisibleVideoHealth = shouldKeepForegroundReturnVideoFirst();
   if (!requireVisibleVideoHealth) return false;
+  if (directUserToggleActive(1500) || userWantsPlayNow(1500) || userToggleExpectingPlay()) {
+    const rs = getVideoReadyState();
+    if (rs >= HAVE_CURRENT_DATA && !state.videoWaiting && !state.strictBufferHold) return false;
+  }
   const healthBaseVt =
   isFinite(Number(state.freshForegroundVideoFirstBaseVT))
   ? Number(state.freshForegroundVideoFirstBaseVT)
@@ -8433,6 +8477,7 @@ function rememberExplicitSeekTarget(t, ms = 5200) {
   state.lastKnownGoodVTts = now();
   state._pauseSavedPosition = target;
   state._pauseSavedAt = now();
+  try { beginSeekDisplayAuthority(target, Math.max(ms, 5200)); } catch { }
   return true;
 }
 function clearExplicitSeekTarget() {
@@ -8440,6 +8485,31 @@ function clearExplicitSeekTarget() {
   state.explicitSeekUntil = 0;
   state.explicitSeekCorrectionCount = 0;
   state.explicitSeekLastWriteTarget = NaN;
+}
+function refreshExplicitSeekTargetAuthority(t, ms = 5200, opts = {}) {
+  const target = Number(t);
+  if (!isFinite(target) || target < 0) return false;
+  markUserSeekIntent(ms);
+  state.suppressEndedUntil = Math.max(state.suppressEndedUntil, now() + Math.max(6500, Number(ms) + 1600));
+  if (target < 0.8) authorizeNearZeroSeek(Math.max(ms, 3200));
+  state.pendingSeekTarget = target;
+  state.seekWantedPlaying = state.seekWantedPlaying || state.intendedPlaying;
+  beginTransportPositionAuthority(target, opts.reason || "explicit-user-seek", Math.max(ms, 5200));
+  rememberExplicitSeekTarget(target, Math.max(ms, 6500));
+  beginSeekDisplayAuthority(target, Math.max(ms, 5200));
+  if (state.seekWantedPlaying) armSeekResumeIntent(Math.max(ms, 7000));
+  state.seekStabilizeUntil = Math.max(state.seekStabilizeUntil, now() + Math.max(1200, ms));
+  state.loopPreventionCooldownUntil = 0;
+  try { queuePlayerTimeDisplayUpdate(); } catch { }
+  if (opts.write === true) {
+    writeExplicitSeekTargetToMedia(target, {
+      force: true,
+      audio: opts.audio !== false,
+      ms,
+      audioSquelchMs: opts.audioSquelchMs
+    });
+  }
+  return true;
 }
 function beginTransportPositionAuthority(target, reason = "", ms = 4200) {
   const position = Number(target);
@@ -8503,7 +8573,7 @@ function writeExplicitSeekTargetToMedia(t, opts = {}) {
     authorizeNearZeroSeek(Math.max(3200, Number(opts.ms) || 0));
     state._allowZeroSeek = true;
   }
-  try { resetPlayerDisplayTimelineClamp(target); } catch { }
+  try { beginSeekDisplayAuthority(target, Math.max(Number(opts.ms) || 0, 5200)); } catch { }
   try { video.currentTime(target); } catch { }
   try { safeSetCT(videoEl, target); } catch { }
   try {
@@ -8545,13 +8615,8 @@ function reassertExplicitSeekTargetIfNeeded(observedTime, reason = "") {
 function prepareExplicitUserSeekTarget(t, ms = 5200) {
   const target = Number(t);
   if (!isFinite(target) || target < 0) return false;
-  markUserSeekIntent(ms);
-  state.suppressEndedUntil = Math.max(state.suppressEndedUntil, now() + Math.max(6500, Number(ms) + 1600));
-  if (target < 0.8) authorizeNearZeroSeek(Math.max(ms, 3200));
-  state.pendingSeekTarget = target;
+  refreshExplicitSeekTargetAuthority(target, ms, { write: false, audio: false });
   state.seekWantedPlaying = state.intendedPlaying;
-  beginTransportPositionAuthority(target, "explicit-user-seek", Math.max(ms, 5200));
-  rememberExplicitSeekTarget(target, Math.max(ms, 6500));
   writeExplicitSeekTargetToMedia(target, { force: true, audio: false, ms });
   if (state.seekWantedPlaying) armSeekResumeIntent(Math.max(ms, 7000));
   state.seekStabilizeUntil = Math.max(state.seekStabilizeUntil, now() + Math.max(1200, ms));
@@ -12818,6 +12883,14 @@ async function execProgrammaticAudioPlay(opts = {}) {
       let p;
       const allowSeekReleasePlay = state.seekAudioReleaseInFlight && noVideoStart;
       if (allowSeekReleasePlay) state.seekAudioReleaseNativePlayAllowed = true;
+      if (audioActuallyPaused && !holdAudioSilent && (isUserPlay || force)) {
+        try {
+          const muted = playerMutedFromVideo();
+          setAudioMutedSynced(muted);
+          setAudioVolumeSynced(muted ? 0 : targetVolFromVideo());
+          armAudioPopGuard("audio-preplay-volume", 360);
+        } catch { }
+      }
       try {
         p = audio.play();
       } finally {
@@ -20023,6 +20096,9 @@ function setupUserPauseIntentDetection() {
   let mobileTapSuppressClickUntil = 0;
   let mobileControlsTimer = null;
   let mobileLastSurfaceToggleAt = 0;
+  let seekDragPointerId = null;
+  let seekDragLastTarget = NaN;
+  let seekDragLastAt = 0;
   const getTargetEl = target => {
     try { return target && target.nodeType === 1 ? target : null; } catch { }
     return null;
@@ -20092,6 +20168,23 @@ function setupUserPauseIntentDetection() {
       const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
       return ratio * dur;
     } catch { return NaN; }
+  };
+  const updateSeekDragAuthority = (event, write = false) => {
+    const target = getPointerSeekTarget(event);
+    if (!isFinite(target)) return false;
+    const t = now();
+    const minDelta = Math.max(0.08, (Number(video.duration()) || 0) * 0.0015);
+    if (!write && isFinite(seekDragLastTarget) &&
+      Math.abs(target - seekDragLastTarget) < minDelta &&
+      (t - seekDragLastAt) < 45) {
+      return true;
+    }
+    seekDragLastTarget = target;
+    seekDragLastAt = t;
+    beginSeekTransportLock(5200);
+    refreshExplicitSeekTargetAuthority(target, 5600, { write: false, audio: false, reason: "pointer-seek" });
+    if (write) writeExplicitSeekTargetToMedia(target, { force: true, audio: false, ms: 5600 });
+    return true;
   };
   const getEventPoint = event => {
     try {
@@ -20214,8 +20307,12 @@ function setupUserPauseIntentDetection() {
       const isTechSurface = isTechSurfaceTarget(event.target);
       const isSeekControl = isSeekControlTarget(event.target);
       if (isSeekControl) {
+        seekDragPointerId = event.pointerId != null ? event.pointerId : "mouse";
+        seekDragLastTarget = NaN;
+        seekDragLastAt = 0;
+        try { if (event.pointerId != null && event.target?.setPointerCapture) event.target.setPointerCapture(event.pointerId); } catch { }
         const pointerSeekTarget = getPointerSeekTarget(event);
-        if (isFinite(pointerSeekTarget)) prepareExplicitUserSeekTarget(pointerSeekTarget, 5200);
+        if (isFinite(pointerSeekTarget)) updateSeekDragAuthority(event, false);
         else markUserSeekIntent(3200);
         state._pauseSavedPosition = -1;
         state._pauseSavedAt = 0;
@@ -20280,6 +20377,19 @@ function setupUserPauseIntentDetection() {
         return;
       }
       pendingTechTogglePausedState = null;
+    };
+    const onSeekDragMove = event => {
+      if (seekDragPointerId == null) return;
+      if (event.pointerId != null && seekDragPointerId !== "mouse" && event.pointerId !== seekDragPointerId) return;
+      updateSeekDragAuthority(event, false);
+    };
+    const onSeekDragEnd = event => {
+      if (seekDragPointerId == null) return;
+      if (event.pointerId != null && seekDragPointerId !== "mouse" && event.pointerId !== seekDragPointerId) return;
+      updateSeekDragAuthority(event, true);
+      seekDragPointerId = null;
+      seekDragLastTarget = NaN;
+      seekDragLastAt = 0;
     };
     const onClick = event => {
       if (platform.mobile && now() < mobileTapSuppressClickUntil) {
@@ -20595,9 +20705,17 @@ function setupUserPauseIntentDetection() {
       }
       if ("PointerEvent" in window) {
         _on(root, "pointerdown", onPressStart, { capture: true, passive: true });
+        _on(root, "pointermove", onSeekDragMove, { capture: true, passive: true });
+        _on(root, "pointerup", onSeekDragEnd, { capture: true, passive: true });
+        _on(root, "pointercancel", onSeekDragEnd, { capture: true, passive: true });
       } else {
         _on(root, "mousedown", onPressStart, { capture: true, passive: true });
+        _on(root, "mousemove", onSeekDragMove, { capture: true, passive: true });
+        _on(root, "mouseup", onSeekDragEnd, { capture: true, passive: true });
         _on(root, "touchstart", onPressStart, { capture: true, passive: true });
+        _on(root, "touchmove", onSeekDragMove, { capture: true, passive: true });
+        _on(root, "touchend", onSeekDragEnd, { capture: true, passive: true });
+        _on(root, "touchcancel", onSeekDragEnd, { capture: true, passive: true });
       }
     } catch { }
     try { _on(root, "click", onClick, { capture: true, passive: false }); } catch { }
@@ -22942,6 +23060,7 @@ function bindCommonMediaEvents() {
             state._pauseSavedAt = 0;
             state.seekTargetTime = seekTime;
             state.seekResolvedTime = NaN;
+            beginSeekDisplayAuthority(seekTime, 5600);
             if ((_stPendingValid || _stUserSeekIntent) && isFinite(seekTime) && seekTime >= 0) {
               const sampled = [nativeTime, vjsTime, innerTime].filter(v => isFinite(v) && v >= 0);
               if (sampled.some(v => Math.abs(v - seekTime) > 0.16)) {
@@ -26041,7 +26160,7 @@ _on(window, "unhandledrejection", (e) => {
   });
 }, { passive: true });
 }, { once: true });
- 
+
 //////////////// THE PLAYER, END ////////////////////////
  
  (function () {
