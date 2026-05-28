@@ -718,6 +718,12 @@ seekTransportPauseIssued: false,
 seekTransportPlayIssued: false,
 seekTransportLastPauseAt: 0,
 seekTransportLastPlayAt: 0,
+seekResumeCommitInFlight: false,
+seekResumeCommitSeekId: -1,
+seekResumeCommitUntil: 0,
+seekResumeCommitDueAt: 0,
+seekResumeCommitTimer: null,
+seekResumeCommitLastAt: 0,
 seekFinalizeTimer: null,
 seekWatchdogTimer: null,
 lastAT: 0,
@@ -8520,10 +8526,6 @@ function reassertExplicitSeekTargetIfNeeded(observedTime, reason = "") {
   const observed = Number(observedTime);
   const tolerance = explicitSeekTolerance(target);
   if (isFinite(observed) && Math.abs(observed - target) <= tolerance) return false;
-  if (state.seekWantedPlaying && isFinite(observed) &&
-    observed >= target && observed - target <= 1.25) {
-    return false;
-  }
   const prevTarget = Number(state.explicitSeekTarget);
   const targetChanged = !isFinite(prevTarget) ||
   Math.abs(prevTarget - target) > 0.08 ||
@@ -8774,11 +8776,23 @@ function clearSeekAudioHoldUntilVideoReady() {
 }
 function armSeekAudioHoldUntilVideoReady(seekId = state.seekId, ms = 7000) {
   if (!coupledMode || !audio) return;
+  const numericSeekId = Number(seekId);
+  const holdUntil = now() + Math.max(0, Number(ms) || 0);
+  const sameSeekHoldActive =
+  state.seekAudioHoldSeekId === numericSeekId &&
+  Number(state.seekAudioHoldUntilVideoReadyUntil || 0) > now();
+  if (sameSeekHoldActive && (state.seekAudioReleaseInFlight || state.seekAudioHoldPollTimer)) {
+    state.seekAudioHoldUntilVideoReadyUntil = Math.max(
+      Number(state.seekAudioHoldUntilVideoReadyUntil) || 0,
+      holdUntil
+    );
+    return;
+  }
   clearSeekAudioRelease();
-  state.seekAudioHoldSeekId = Number(seekId);
+  state.seekAudioHoldSeekId = numericSeekId;
   state.seekAudioHoldUntilVideoReadyUntil = Math.max(
     state.seekAudioHoldUntilVideoReadyUntil || 0,
-    now() + Math.max(0, Number(ms) || 0)
+    holdUntil
   );
   state.seekKickAudioAllowedUntil = 0;
   state.seekAudioMustStartUntil = 0;
@@ -8787,11 +8801,15 @@ function armSeekAudioHoldUntilVideoReady(seekId = state.seekId, ms = 7000) {
   try {
     cancelActiveFade();
     audio.volume = 0;
-    if (!audio.paused) audio.pause();
+    if (!audio.paused) {
+      noteSeekTransportPause();
+      audio.pause();
+    }
   } catch { }
   try {
     const holdVideo = getVideoNode();
     if (holdVideo && !holdVideo.paused) {
+      noteSeekTransportPause();
       state.isProgrammaticVideoPause = true;
       holdVideo.pause();
       if (videoEl && videoEl !== holdVideo && !videoEl.paused) videoEl.pause();
@@ -8840,6 +8858,7 @@ function releaseSeekAudioAfterVideoReady(reason = "") {
   let audioPlayRequested = false;
   let audioStartedAt = 0;
   let videoPlayRequested = false;
+  let videoPausedForRelease = false;
   let joinCorrectionCount = 0;
   let done = false;
   let timer = null;
@@ -8935,8 +8954,10 @@ function releaseSeekAudioAfterVideoReady(reason = "") {
       setAudioMutedSynced(false);
       setAudioVolumeSynced(0);
     } catch { }
-    if (!videoPlayRequested && !vn.paused) {
+    if (!videoPlayRequested && !vn.paused && !videoPausedForRelease) {
       try {
+        videoPausedForRelease = true;
+        noteSeekTransportPause();
         state.isProgrammaticVideoPause = true;
         vn.pause();
         setTimeout(() => { state.isProgrammaticVideoPause = false; }, 120);
@@ -9142,6 +9163,87 @@ function noteSeekTransportPause() {
 function noteSeekTransportPlay() {
   state.seekTransportPlayIssued = true;
   state.seekTransportLastPlayAt = now();
+}
+function clearSeekResumeCommitTimer() {
+  if (state.seekResumeCommitTimer) {
+    clearTimeout(state.seekResumeCommitTimer);
+    state.seekResumeCommitTimer = null;
+  }
+  state.seekResumeCommitDueAt = 0;
+}
+function seekResumeCommitActive(tailMs = 0) {
+  return !!state.seekResumeCommitInFlight &&
+  now() < (Number(state.seekResumeCommitUntil) || 0) + Math.max(0, Number(tailMs) || 0);
+}
+function finishSeekResumeCommit(seekId, holdMs = 420) {
+  state.seekResumeCommitLastAt = now();
+  state.seekResumeCommitUntil = now() + Math.max(80, Number(holdMs) || 0);
+  setTimeout(() => {
+    if (state.seekResumeCommitSeekId !== seekId) return;
+    if (now() < Number(state.seekResumeCommitUntil || 0)) return;
+    state.seekResumeCommitInFlight = false;
+    state.seekResumeCommitSeekId = -1;
+  }, Math.max(120, Number(holdMs) || 0) + 40);
+}
+function scheduleSeekResumeCommit(reason = "seek-resume", delayMs = 0, opts = {}) {
+  if (!state.intendedPlaying || state.endedNaturally || state.restarting) return false;
+  if (userPauseLockActive() || mediaSessionForcedPauseActive() || userPauseIntentActive()) return false;
+  const seekId = state.seekId;
+  const dueAt = now() + Math.max(0, Number(delayMs) || 0);
+  if (state.seekResumeCommitTimer && state.seekResumeCommitSeekId === seekId &&
+    Number(state.seekResumeCommitDueAt || 0) <= dueAt + 20) return true;
+  if (seekResumeCommitActive(160) && state.seekResumeCommitSeekId === seekId &&
+    !state.seekResumeCommitTimer) return true;
+  clearSeekResumeCommitTimer();
+  state.seekResumeCommitInFlight = true;
+  state.seekResumeCommitSeekId = seekId;
+  state.seekResumeCommitUntil = Math.max(Number(state.seekResumeCommitUntil) || 0, now() + 900);
+  state.seekResumeCommitDueAt = dueAt;
+  state.seekResumeCommitTimer = setTimeout(() => {
+    state.seekResumeCommitTimer = null;
+    state.seekResumeCommitDueAt = 0;
+    if (seekId !== state.seekId || !state.intendedPlaying || state.endedNaturally || state.restarting) {
+      if (state.seekResumeCommitSeekId === seekId) state.seekResumeCommitInFlight = false;
+      return;
+    }
+    if (userPauseLockActive() || mediaSessionForcedPauseActive() || userPauseIntentActive()) {
+      if (state.seekResumeCommitSeekId === seekId) state.seekResumeCommitInFlight = false;
+      return;
+    }
+    if ((state.seeking || state.seekBuffering) && !opts.allowDuringSeek) {
+      if (state.seeking) scheduleSeekFinalize(SEEK_FINALIZE_DELAY_MS, seekId);
+      state.seekResumeCommitUntil = Math.max(Number(state.seekResumeCommitUntil) || 0, now() + 360);
+      finishSeekResumeCommit(seekId, 260);
+      return;
+    }
+    if (coupledMode && audio && seekAudioHoldUntilVideoReadyActive()) {
+      releaseSeekAudioAfterVideoReady(reason || "seek-resume-commit");
+      finishSeekResumeCommit(seekId, 520);
+      return;
+    }
+    let kicked = false;
+    if (getVideoPaused()) {
+      try {
+        const p = execProgrammaticVideoPlay({ force: true, minGapMs: 0 });
+        if (p && typeof p.catch === "function") p.catch(() => { });
+        kicked = true;
+      } catch { }
+    }
+    if (coupledMode && audio && audio.paused && !shouldBlockNewAudioStart()) {
+      try {
+        const vt = getVideoCurrentTimeSafe(0);
+        alignPausedAudioBeforeResume(vt, reason || "seek-resume-audio");
+        execProgrammaticAudioPlay({ squelchMs: 100, force: true, minGapMs: 0 }).catch(() => { });
+        kicked = true;
+      } catch { }
+    }
+    if (kicked) {
+      setFastSync(perfProfile.lowEnd ? 1000 : 700);
+      scheduleSync(60);
+    }
+    finishSeekResumeCommit(seekId, kicked ? 700 : 260);
+  }, Math.max(0, dueAt - now()));
+  return true;
 }
 function playPauseRecoveryCpuActive(tailMs = 0) {
   const tail = Math.max(0, Number(tailMs) || 0);
@@ -13058,7 +13160,8 @@ return {
 })();
 function coalesceSeekStartDuringBurst(targetTime, userControlled) {
   const t = now();
-  const target = Number(targetTime);
+  const ownedTarget = state.pendingSeekTarget != null ? Number(state.pendingSeekTarget) : NaN;
+  const target = isFinite(ownedTarget) && ownedTarget >= 0 ? ownedTarget : Number(targetTime);
   if (!state.seeking || state.seekBuffering || state.restarting) {
     state.lastSeekStartHandledAt = t;
     state.lastSeekStartHandledTarget = isFinite(target) ? target : NaN;
@@ -13107,8 +13210,13 @@ function coalesceSeekStartDuringBurst(targetTime, userControlled) {
     }
   }, SEEK_WATCHDOG_MS);
   if (coupledMode && audio && !audio.paused) {
-    try { audio.volume = 0; } catch { }
-    try { audio.pause(); } catch { }
+    beginSeekTransportLock(userControlled ? 3600 : 1800);
+    if (!state.seekTransportPauseIssued ||
+      (t - (Number(state.seekTransportLastPauseAt) || 0)) > 260) {
+      noteSeekTransportPause();
+      try { audio.volume = 0; } catch { }
+      try { audio.pause(); } catch { }
+    }
   }
   if ((state.seekStartCoalesceCount % 4) === 0) scheduleSync(300);
   return true;
@@ -16866,7 +16974,10 @@ function startSeekBufferWait(forCoupled) {
           state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 500);
           releaseSeekAudioAfterVideoReady("seek-buffer-pair-release");
         }
-        setTimeout(() => { state.seekResumeInFlight = false; }, 600);
+        setTimeout(() => {
+          state.seekResumeInFlight = false;
+          clearSeekTransportLock();
+        }, 600);
         const _spinnerSeekId = state.seekId;
         const _spinnerStart = now();
         let _spinnerEscalated = false;
@@ -16940,14 +17051,7 @@ function startSeekBufferWait(forCoupled) {
         };
         trackSeekPostTimer(_spinnerVerify, 60);
       } else {
-        state.isProgrammaticVideoPlay = true;
-        try { const _vp = video.play(); if (_vp && _vp.catch) _vp.catch(() => { }); } catch { }
-        try { const _vep = videoEl.play(); if (_vep && _vep.catch) _vep.catch(() => { }); } catch { }
-        try {
-          const inner = getVideoNode();
-          if (inner && inner !== videoEl) { const _ip = inner.play(); if (_ip && _ip.catch) _ip.catch(() => { }); }
-        } catch { }
-        setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 250);
+        scheduleSeekResumeCommit("seek-buffer-resume", 0, { allowDuringSeek: true });
         updateMediaSessionPlaybackState();
         setSeekBufferingUIVisible(false);
       }
@@ -17062,10 +17166,7 @@ async function finalizeSeekSync(currentSeekId) {
       if (startSeekBufferWait(false)) return;
       state.seekBuffering = false;
       clearBufferHold();
-      try {
-        const p = execProgrammaticVideoPlay({ force: true, minGapMs: 0 });
-        if (p && typeof p.catch === "function") p.catch(() => { });
-      } catch { }
+      scheduleSeekResumeCommit("seek-finalize-noncoupled", 0, { allowDuringSeek: true });
     }
     scheduleSync(0);
     setTimeout(() => { clearSeekTransportLock(); }, wantedPlaying ? 420 : 0);
@@ -22702,13 +22803,17 @@ function bindCommonMediaEvents() {
               return;
             }
           }
-          if (coalesceSeekStartDuringBurst(_phVt, _phSeekIsUserControlled)) return;
+          const _coalesceSeekTarget = state.pendingSeekTarget != null ? Number(state.pendingSeekTarget) : _phVt;
+          if (coalesceSeekStartDuringBurst(_coalesceSeekTarget, _phSeekIsUserControlled)) return;
           clearSeekBuffering();
           clearSeekAudioReadyKick();
           clearPostSeekAudioWatchdog();
           clearPostSeekPlaybackRecoveryTimers();
           clearTransitionDriftTimers();
           clearSeekPostTimers();
+          clearSeekResumeCommitTimer();
+          state.seekResumeCommitInFlight = false;
+          state.seekResumeCommitSeekId = -1;
           state.seekId++;
           state._seekAudioPlayedSeekId = -1; // reset per-seek dedup
           const currentSeekId = state.seekId;
@@ -23029,6 +23134,7 @@ function bindCommonMediaEvents() {
                 (_seekedARS >= HAVE_CURRENT_DATA &&
                 isTrackBufferedAt(audio, _seekedSeekVt, 0.5));
                 const _seekedIsLong = (typeof isLongVideo === "function") && isLongVideo();
+                let _seekedWaitingForBuffer = false;
                 if (_seekedIsLong && coupledMode && audio && !_seekedAudioReady) {
                   state.seekBuffering = true;
                   state.strictBufferHold = true;
@@ -23049,9 +23155,11 @@ function bindCommonMediaEvents() {
                     state.seekBuffering = false;
                     clearBufferHold();
                     state.seekCompleted = true;
+                  } else {
+                    _seekedWaitingForBuffer = true;
                   }
                 }
-                releaseSeekAudioAfterVideoReady("seeked-pair-release");
+                if (!_seekedWaitingForBuffer) releaseSeekAudioAfterVideoReady("seeked-pair-release");
                 const _postSeekFinalize = () => {
                   if (state.seekId !== _kickSeekId) return;
                   if (!state.intendedPlaying || state.endedNaturally) return;
@@ -23103,8 +23211,8 @@ function bindCommonMediaEvents() {
               state.bufferHoldIntendedPlaying = true;
               if (coupledMode && audio && seekAudioHoldUntilVideoReadyActive()) {
                 releaseSeekAudioAfterVideoReady("seeked-final-pair-release");
-              } else if (tryAcquireVideoPlayLock()) {
-                execProgrammaticVideoPlay({ force: true, minGapMs: 0 });
+              } else {
+                scheduleSeekResumeCommit("seeked-video", SEEK_FINALIZE_DELAY_MS + 30);
               }
             }
             if (!coupledMode && userSeekIntentActive()) {
@@ -23115,9 +23223,7 @@ function bindCommonMediaEvents() {
             setFastSync(1300);
             scheduleSync(60);
             if (shouldResumeAfterSeek() && !state.endedNaturally) {
-              if (!(coupledMode && audio && seekAudioHoldUntilVideoReadyActive())) {
-                schedulePostSeekPlaybackRecovery("seeked");
-              }
+              scheduleSeekResumeCommit("seeked", SEEK_FINALIZE_DELAY_MS + 40);
             }
             scheduleSeekFinalize(SEEK_FINALIZE_DELAY_MS, state.seekId);
         });
@@ -24423,6 +24529,8 @@ function schedulePostSeekPlaybackRecovery(reason = "post-seek") {
     if (!state.intendedPlaying || state.endedNaturally || state.restarting) return;
     if (userPauseLockActive() || mediaSessionForcedPauseActive()) return;
     armAudioWindow();
+    if (seekResumeCommitActive(700)) return;
+    if (scheduleSeekResumeCommit(label, 0)) return;
     runBufferReadyPlaybackKick(label, true);
     scheduleNoHoverPlaybackKick(label);
     const frameInfo = mediaReadyForBufferResume();
@@ -24669,6 +24777,7 @@ function cleanupPlaybackRuntimeResources(reason = "") {
   try { clearResumeAfterBufferTimer(); } catch { }
   try { clearSeekSyncFinalizeTimer(); } catch { }
   try { clearSeekWatchdog(); } catch { }
+  try { clearSeekResumeCommitTimer(); } catch { }
   try { clearSeekBuffering(); } catch { }
   try { forceClearSeekBufferingUI(); } catch { }
   try { clearStartupAutoplayRetryTimer(); } catch { }
