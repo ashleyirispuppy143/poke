@@ -484,32 +484,36 @@ app.get('/calendar', (req, res) => {
     res.sendFile("bg-480.webm", { root: cssDir });
   });
 
-  app.get("/css/:id", (req, res) => {
-    const filePath = path.join(cssDir, req.params.id);
-    if (!fs.existsSync(filePath)) {
-      res.status(404)
-      renderTemplate(res, req, "404.ejs", { });
-      return;
-    }
-    if (req.params.id.endsWith(".css") && !req.query.nomin) {
-      // Minimize the CSS file
-      const css = fs.readFileSync(filePath, "utf8");
-      const minimizedCss = new CleanCSS().minify(css).styles;
-      // Serve the minimized CSS file
-      res.header("Content-Type", "text/css");
-     res.send(
-  notice + " " + minimizedCss.replace(/https:\/\/p\.poketube\.fun\//g, config.p_url + "/")
-);
-    } else {
-      // Serve the original file
-      res.sendFile(req.params.id, { root: html_location });
-    }
+app.get("/css/:id", (req, res) => {
+  const requestedId = req.params.id;
+  const fileId = requestedId === "yt-ukraine.svg" ? "poke-icon-logo.svg" : requestedId;
+  const filePath = path.join(cssDir, fileId);
 
-    if (req.params.id.endsWith(".js")) {
-      res.redirect("/static/" + req.params.id);
-    }
-  });
+  if (!fs.existsSync(filePath)) {
+    res.status(404);
+    renderTemplate(res, req, "404.ejs", {});
+    return;
+  }
 
+  if (fileId.endsWith(".js")) {
+    res.redirect("/static/" + fileId);
+    return;
+  }
+
+  if (fileId.endsWith(".css") && !req.query.nomin) {
+    const css = fs.readFileSync(filePath, "utf8");
+    const minimizedCss = new CleanCSS().minify(css).styles;
+
+    res.header("Content-Type", "text/css");
+    res.send(
+      notice + " " + minimizedCss.replace(/https:\/\/p\.poketube\.fun\//g, config.p_url + "/")
+    );
+    return;
+  }
+
+  res.sendFile(fileId, { root: cssDir });
+});
+  
 app.get("/game-hub", function (req, res) {
   var gameslist = ["pong", "tic-tac-toe", "sudoku", "snake", "breakout", "minesweeper"];
   var requestedGame = req.query.game;
