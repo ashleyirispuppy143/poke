@@ -8958,7 +8958,11 @@ function releaseSeekAudioAfterVideoReady(reason = "") {
   const vn = getVideoNode();
   if (!vn) return false;
   const ownedTarget = transportPositionAuthorityActive() ? Number(state.transportPositionTarget) : NaN;
-  const target = isFinite(ownedTarget) && ownedTarget >= 0 ? ownedTarget : getVideoCurrentTimeSafe(0);
+  const target = getAuthoritativeSeekTarget(
+    isFinite(ownedTarget) && ownedTarget >= 0 ? ownedTarget : getVideoCurrentTimeSafe(0)
+  );
+  if (!mediaHasCurrentDataAtTarget(vn, target, 0.05)) return false;
+  if (coupledMode && audio && !mediaHasCurrentDataAtTarget(audio, target, 0.025)) return false;
   if (!videoReadyForAudioResume(target)) return false;
   const seekId = state.seekId;
   const releaseDeadline = now() + (perfProfile.lowEnd ? 2200 : 1500);
@@ -9090,7 +9094,7 @@ function releaseSeekAudioAfterVideoReady(reason = "") {
       try {
         const duration = Number(audio.duration);
         const nearEnd = isFinite(duration) && duration > 0 && target >= duration - 0.12;
-        return nearEnd || canPlaySmoothAt(audio, target, 0.025) || canPlayAt(audio, target);
+        return nearEnd || mediaHasCurrentDataAtTarget(audio, target, 0.025);
       } catch { return Number(audio.readyState || 0) >= HAVE_FUTURE_DATA; }
     })();
     const waitingForAudioLanding = !audioPlayRequested && audio.paused;
@@ -9331,17 +9335,63 @@ function scheduleSeekResumeCommit(reason = "seek-resume", delayMs = 0, opts = {}
       finishSeekResumeCommit(seekId, 520);
       return;
     }
+    const seekOwnedResume =
+      seekRecoveryActive(1400) ||
+      transportPositionAuthorityActive() ||
+      userSeekIntentActive() ||
+      state.pendingSeekTarget != null;
+    const resumeTarget = seekOwnedResume ? getAuthoritativeSeekTarget(getVideoCurrentTimeSafe(0)) : NaN;
+    if (seekOwnedResume && isFinite(resumeTarget) && resumeTarget >= 0) {
+      const vn = getVideoNode();
+      const vtNow = Number(vn?.currentTime);
+      if (!mediaHasCurrentDataAtTarget(vn, resumeTarget, 0.05)) {
+        beginSeekDisplayAuthority(resumeTarget, 12000);
+        if (shouldResumeAfterSeek()) startSeekBufferWait(!!(coupledMode && audio));
+        finishSeekResumeCommit(seekId, 360);
+        return;
+      }
+      if (isFinite(vtNow) && Math.abs(vtNow - resumeTarget) > 0.16) {
+        beginSeekDisplayAuthority(resumeTarget, 4200);
+        state._isMicroSeek = true;
+        try { vn.currentTime = resumeTarget; } catch { }
+        try { if (videoEl && videoEl !== vn) videoEl.currentTime = resumeTarget; } catch { }
+        scheduleMicroSeekClear(220);
+        setTimeout(() => {
+          if (seekId !== state.seekId || !state.intendedPlaying) return;
+          state.seekResumeCommitInFlight = false;
+          state.seekResumeCommitSeekId = -1;
+          scheduleSeekResumeCommit(reason || "seek-resume-target-align", 0, { allowDuringSeek: true });
+        }, 55);
+        finishSeekResumeCommit(seekId, 260);
+        return;
+      }
+      if (coupledMode && audio && !mediaHasCurrentDataAtTarget(audio, resumeTarget, 0.025)) {
+        beginSeekDisplayAuthority(resumeTarget, 12000);
+        if (shouldResumeAfterSeek()) startSeekBufferWait(true);
+        finishSeekResumeCommit(seekId, 360);
+        return;
+      }
+    }
     let kicked = false;
-    if (getVideoPaused()) {
+    if (seekOwnedResume && coupledMode && audio && getVideoPaused() && audio.paused &&
+      isFinite(resumeTarget) && resumeTarget >= 0 && !shouldBlockNewAudioStart()) {
+      try {
+        alignPausedAudioBeforeResume(resumeTarget, reason || "seek-resume-pair-start");
+        kicked = MakeAudioVideoSimultaneousStartAPI({ force: true, squelchMs: 80, throughSeek: true });
+      } catch { kicked = false; }
+    }
+    if (!kicked && getVideoPaused()) {
       try {
         const p = execProgrammaticVideoPlay({ force: true, minGapMs: 0 });
         if (p && typeof p.catch === "function") p.catch(() => { });
         kicked = true;
       } catch { }
     }
-    if (coupledMode && audio && audio.paused && !shouldBlockNewAudioStart()) {
+    if (!kicked && coupledMode && audio && audio.paused && !shouldBlockNewAudioStart()) {
       try {
-        const vt = getVideoCurrentTimeSafe(0);
+        const vt = seekOwnedResume && isFinite(resumeTarget) && resumeTarget >= 0
+          ? resumeTarget
+          : getVideoCurrentTimeSafe(0);
         alignPausedAudioBeforeResume(vt, reason || "seek-resume-audio");
         execProgrammaticAudioPlay({ squelchMs: 100, force: true, minGapMs: 0 }).catch(() => { });
         kicked = true;
@@ -17261,6 +17311,10 @@ function startSeekBufferWait(forCoupled) {
         try { audio.addEventListener("progress", onReady, { passive: true }); } catch { }
         try { audio.addEventListener("loadeddata", onReady, { passive: true }); } catch { }
       }
+      if (bothTracksReady()) {
+        resume();
+        return true;
+      }
       const pollReady = () => {
         if (done) return;
         _checkAudioBufferGrowth();
@@ -23253,6 +23307,44 @@ function bindCommonMediaEvents() {
             }, SEEK_WATCHDOG_MS);
             return;
           }
+          const seekedAuthorityTarget = getAuthoritativeSeekTarget(
+            isFinite(expectedSeekTime) && expectedSeekTime >= 0 ? expectedSeekTime : newTime
+          );
+          const seekedAuthorityTolerance = isFinite(seekedAuthorityTarget) && seekedAuthorityTarget >= 0
+            ? Math.max(0.42, explicitSeekTolerance(seekedAuthorityTarget))
+            : 0.42;
+          if (shouldResumeAfterSeek() && isFinite(newTime) && isFinite(seekedAuthorityTarget) &&
+            seekedAuthorityTarget >= 0 && Math.abs(newTime - seekedAuthorityTarget) > seekedAuthorityTolerance) {
+            beginTransportPositionAuthority(seekedAuthorityTarget, "seeked-stale-target", 7000);
+            rememberExplicitSeekTarget(seekedAuthorityTarget, 7000);
+            beginSeekDisplayAuthority(seekedAuthorityTarget, 30000);
+            state.pendingSeekTarget = seekedAuthorityTarget;
+            state.seekTargetTime = seekedAuthorityTarget;
+            state.seekResolvedTime = NaN;
+            state.seekCompleted = false;
+            state.seekStabilizeUntil = Math.max(state.seekStabilizeUntil, now() + 2200);
+            state.suppressEndedUntil = Math.max(state.suppressEndedUntil, now() + 6500);
+            if (coupledMode && audio) {
+              try { cancelActiveFade(); } catch { }
+              try { audio.volume = 0; } catch { }
+              try { if (!audio.paused) audio.pause(); } catch { }
+              state._allowAudioTimeWrite = true;
+              try { audio.currentTime = seekedAuthorityTarget; } catch { }
+              state._allowAudioTimeWrite = false;
+            }
+            writeExplicitSeekTargetToMedia(seekedAuthorityTarget, { force: false, audio: false, ms: 7000 });
+            if (!startSeekBufferWait(!!(coupledMode && audio))) {
+              const correctedSeekId = state.seekId;
+              setTimeout(() => {
+                if (correctedSeekId !== state.seekId || !state.intendedPlaying) return;
+                state.seekResumeCommitInFlight = false;
+                state.seekResumeCommitSeekId = -1;
+                scheduleSeekResumeCommit("seeked-target-correction", 0, { allowDuringSeek: true });
+              }, 55);
+            }
+            scheduleSeekFinalize(SEEK_FINALIZE_DELAY_MS, state.seekId);
+            return;
+          }
           if (newTime > 0.35) {
             commitStartupFromResolvedPlaybackPosition(newTime, { fromSeek: true, suppressMs: 20000 });
           }
@@ -23340,12 +23432,9 @@ function bindCommonMediaEvents() {
                 clearForegroundBufferAudioHold();
                 state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, _kickArmedAt + 1200);
                 const _seekedSeekVt = getAuthoritativeSeekTarget(getVideoCurrentTimeSafe(0));
-                const _seekedARS = audio ? Number(audio.readyState || 0) : 0;
                 const _seekedAudioReady =
                 !coupledMode || !audio ||
-                (_seekedARS >= HAVE_FUTURE_DATA) ||
-                (_seekedARS >= HAVE_CURRENT_DATA &&
-                isTrackBufferedAt(audio, _seekedSeekVt, 0.5));
+                mediaHasCurrentDataAtTarget(audio, _seekedSeekVt, 0.5);
                 const _seekedIsLong = (typeof isLongVideo === "function") && isLongVideo();
                 let _seekedWaitingForBuffer = false;
                 if (_seekedIsLong && coupledMode && audio && !_seekedAudioReady) {
@@ -24404,9 +24493,15 @@ function executeSeamlessWakeup() {
 function mediaReadyForBufferResume(minAhead = 0.12) {
   const vn = getVideoNode();
   const seekHold = seekBufferDownloadHoldActive();
+  const seekOwned =
+    seekHold ||
+    transportPositionAuthorityActive() ||
+    seekRecoveryActive(1200) ||
+    userSeekIntentActive() ||
+    state.pendingSeekTarget != null;
   const vt = (() => {
     try {
-      if (seekHold) {
+      if (seekOwned) {
         const target = getAuthoritativeSeekTarget(NaN);
         if (isFinite(target) && target >= 0) return target;
       }
@@ -24423,7 +24518,7 @@ function mediaReadyForBufferResume(minAhead = 0.12) {
   })();
   const vRS = vn ? Number(vn.readyState || 0) : 0;
   const vAhead = vn ? bufferAheadAt(vn, vt) : 0;
-  const videoReady = !!vn && (seekHold
+  const videoReady = !!vn && (seekOwned
     ? mediaHasCurrentDataAtTarget(vn, vt, minAhead)
     : (vRS >= HAVE_CURRENT_DATA || vAhead >= minAhead));
   let audioReady = true;
@@ -24432,7 +24527,7 @@ function mediaReadyForBufferResume(minAhead = 0.12) {
     const requiredAudioAhead = audioOwnsBufferHold
     ? Math.max(0.08, Number(minAhead) || 0)
     : Math.max(0.04, Math.min(0.12, Number(minAhead) || 0.04));
-    audioReady = seekHold
+    audioReady = seekOwned
       ? mediaHasCurrentDataAtTarget(audio, vt, requiredAudioAhead)
       : canPlaySmoothAt(audio, vt, requiredAudioAhead);
   }
