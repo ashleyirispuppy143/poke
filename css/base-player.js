@@ -25,7 +25,7 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
 
 //////////////// THE PLAYER, START ////////////////////////
-try {
+ try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -6219,15 +6219,25 @@ function resetPlayerDisplayTimelineClamp(t = NaN) {
   playerDisplayLastTime = isFinite(value) && value >= 0 ? value : 0;
   playerDisplayLastTimeAt = now();
 }
+function seekDisplayAuthorityActive() {
+  const target = Number(state.seekDisplayTarget);
+  return isFinite(target) && target >= 0 && now() < Number(state.seekDisplayTargetUntil || 0);
+}
 function beginSeekDisplayAuthority(t = NaN, ms = 5200) {
   const value = Number(t);
   if (!isFinite(value) || value < 0) return false;
+  const previous = Number(state.seekDisplayTarget);
+  const changed = !isFinite(previous) || Math.abs(previous - value) > 0.025;
   state.seekDisplayTarget = value;
   state.seekDisplayTargetUntil = Math.max(
     Number(state.seekDisplayTargetUntil || 0),
     now() + Math.max(600, Number(ms) || 0)
   );
   resetPlayerDisplayTimelineClamp(value);
+  if (changed) {
+    playerSeekbarLastPercent = -1;
+    playerSeekbarLastText = "";
+  }
   return true;
 }
 function seekTargetPlaybackProgressed(target, margin = 0.09, maxAdvance = 1.35) {
@@ -6351,10 +6361,21 @@ function clearSeekDisplayAuthorityIfProgressed(target = NaN, margin = 0.09) {
     minUserIdleMs: 700
   });
   if (state.seeking || state.seekBuffering || state.pendingSeekTarget != null ||
+    state.seekResumeInFlight ||
+    seekResumeCommitActive(650) ||
+    seekAudioHoldUntilVideoReadyActive() ||
+    state.seekAudioReleaseInFlight ||
+    now() < Number(state.seekAudioMustStartUntil || 0) ||
+    now() < Number(state.seekKickAudioAllowedUntil || 0) ||
+    state.audioBufferConfirmTimer ||
+    postSeekAudioWatchdogActive() ||
+    pairSyncCorrectionPending() ||
     (userSeekIntentActive() && !staleLiveAudio)) return false;
-  if (!seekTargetPlaybackProgressed(value, margin) && !staleLiveAudio) return false;
+  if (!seekDisplayAuthorityReleaseReady(value, margin) && !staleLiveAudio) return false;
   state.seekDisplayTarget = NaN;
   state.seekDisplayTargetUntil = 0;
+  playerSeekbarLastPercent = -1;
+  playerSeekbarLastText = "";
   try { if (typeof clearExplicitSeekTarget === "function") clearExplicitSeekTarget(); } catch { }
   try {
     const transportTarget = Number(state.transportPositionTarget);
@@ -6362,6 +6383,31 @@ function clearSeekDisplayAuthorityIfProgressed(target = NaN, margin = 0.09) {
       state.transportPositionUntil = Math.min(Number(state.transportPositionUntil || 0), now() + 180);
     }
   } catch { }
+  return true;
+}
+function seekDisplayAuthorityReleaseReady(target = NaN, margin = 0.09) {
+  const value = Number(target);
+  if (!isFinite(value) || value < 0) return false;
+  const releaseMargin = Math.max(0.035, Number(margin) || 0.09);
+  if (!seekTargetPlaybackProgressed(value, releaseMargin, 0.95)) return false;
+  const forCoupled = !!(coupledMode && audio);
+  const readyInfo = seekTargetMediaReady(value, forCoupled, Math.max(0.04, Math.min(0.1, releaseMargin)));
+  if (!readyInfo.ready) return false;
+  const vn = readyInfo.vNode || getVideoNode();
+  const vPaused = !vn || !!vn.paused;
+  if (state.intendedPlaying && vPaused) return false;
+  const vt = (() => {
+    try { return Number(vn?.currentTime); } catch { return NaN; }
+  })();
+  if (!forCoupled) return true;
+  if (!audio || (state.intendedPlaying && audio.paused)) return false;
+  const at = (() => { try { return Number(audio.currentTime); } catch { return NaN; } })();
+  if (!isFinite(vt) || !isFinite(at)) return false;
+  if (Math.abs(vt - at) > (perfProfile.lowEnd ? 0.26 : 0.2)) return false;
+  if (state.intendedPlaying) {
+    const pairProgress = Math.min(vt, at) - value;
+    if (pairProgress < Math.max(0.018, releaseMargin * 0.45)) return false;
+  }
   return true;
 }
 function getSeekDisplayAuthorityTarget(durHint = NaN) {
@@ -6696,6 +6742,7 @@ function refreshPlayerSeekbarElementCache(rootHint = null, force = false) {
 }
 function playerSeekbarRequiresManualTimeline() {
   if (state.seeking || state.seekBuffering || state.seekResumeInFlight || state.restarting || userSeekIntentActive()) return true;
+  if (seekDisplayAuthorityActive()) return true;
   if (state.endedNaturally || terminalEndPlaybackLocked(200)) return true;
   if (!coupledMode || !audio) return false;
   return !(document.visibilityState === "visible" &&
