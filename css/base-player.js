@@ -5768,6 +5768,43 @@ function startResumeAudioMasterPair(reason = "resume-audio-master") {
   })();
   if (!isFinite(target) || target < 0) return false;
   if (!canStartAudioAt(target)) return false;
+  if (!vn.paused) {
+    // Native/video.js may already have started video from the user's click. Do not
+    // pause it just to run the audio-master path; that creates the visible
+    // play-pause-play flash. Instead join muted audio to the live video clock and
+    // let the strict resume window converge by moving video if needed.
+    const liveTarget = getVideoCurrentTimeSafe(target);
+    armResumeStrictPairSync(12000);
+    armResumePairAudioGate(reason + "-video-already-running");
+    keepResumePairAudioSilent();
+    try {
+      const at = Number(audio.currentTime);
+      if (!isFinite(at) || Math.abs(at - liveTarget) > RESUME_STRICT_GOOD_DRIFT_SEC) {
+        state._allowAudioTimeWrite = true;
+        state._allowPairSyncAudioWrite = true;
+        audio.currentTime = liveTarget;
+        state._allowPairSyncAudioWrite = false;
+        state._allowAudioTimeWrite = false;
+        noteResumePairSyncTimeWrite(liveTarget);
+        state.resumePairAudioAlignAt = now();
+      }
+    } catch {
+      state._allowPairSyncAudioWrite = false;
+      state._allowAudioTimeWrite = false;
+    }
+    state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 500);
+    execProgrammaticAudioPlay({
+      squelchMs: 120,
+      force: true,
+      minGapMs: 0,
+      keepSilentUntilPlaying: true,
+      noVideoStart: true
+    }).then(() => {
+      trackResumeAudioMasterTimer(() => settleResumePairBeforeAudible(true), 24);
+      trackResumeAudioMasterTimer(() => convergePairedTransitionSync(), 42);
+    }).catch(() => { clearResumePairAudioGate(); });
+    return true;
+  }
   state.resumeAudioMasterInFlight = true;
   state.resumeAudioMasterLastAt = t;
   clearResumeAudioMasterTimers();
@@ -5789,12 +5826,6 @@ function startResumeAudioMasterPair(reason = "resume-audio-master") {
   } catch {
     state._allowPairSyncAudioWrite = false;
     state._allowAudioTimeWrite = false;
-  }
-  if (!vn.paused) {
-    state.isProgrammaticVideoPause = true;
-    try { safePauseElement(vn); } catch { }
-    try { if (videoEl && videoEl !== vn) safePauseElement(videoEl); } catch { }
-    setTimeout(() => { state.isProgrammaticVideoPause = false; }, 140);
   }
   state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 700);
   execProgrammaticAudioPlay({
@@ -6196,9 +6227,14 @@ function convergePairedTransitionSync() {
     schedulePairSyncConvergence(perfProfile.lowEnd ? 120 : 75);
     return false;
   }
-  if (state.pairSyncCorrectionCount >= PAIR_SYNC_MAX_WRITES ||
-    (now() - Number(state.pairSyncLastWriteAt || 0)) < (perfProfile.lowEnd ? 110 : 70)) {
+  if (!strictResumeSync && (state.pairSyncCorrectionCount >= PAIR_SYNC_MAX_WRITES ||
+    (now() - Number(state.pairSyncLastWriteAt || 0)) < (perfProfile.lowEnd ? 110 : 70))) {
     schedulePairSyncConvergence(perfProfile.lowEnd ? 130 : 85);
+    return false;
+  }
+  if (strictResumeSync &&
+    (now() - Number(state.pairSyncLastWriteAt || 0)) < (perfProfile.lowEnd ? 54 : 34)) {
+    schedulePairSyncConvergence(perfProfile.lowEnd ? 70 : 42);
     return false;
   }
   let wrote = false;
@@ -19407,6 +19443,35 @@ async function runSync() {
         scheduleSync(); return;
       }
       settleSeekRecoveryIfStable();
+      if (resumeStrictPairSyncActive() && state.intendedPlaying &&
+        !state.seeking && !state.seekBuffering && !state.seekResumeInFlight &&
+        !userPauseLockActive() && !mediaSessionForcedPauseActive()) {
+        const resumeDrift = vtRaw - atRaw;
+        const resumeAbs = Math.abs(resumeDrift);
+        if (resumeAbs > RESUME_STRICT_FIX_DRIFT_SEC) {
+          try {
+            writeResumeVideoToAudioTime(atRaw, "strict-resume-runaway-sync");
+            const _rsVN = getVideoNode();
+            if (_rsVN && _rsVN.paused && !audio.paused) {
+              const _vp = execProgrammaticVideoPlay({
+                force: true,
+                minGapMs: 0,
+                noAudioStart: true
+              });
+              if (_vp && typeof _vp.catch === "function") _vp.catch(() => { });
+            }
+          } catch { }
+          armPairSyncConvergence("strict-resume-runaway", 12000, {
+            reset: false,
+            audioMaster: false,
+            allowAudibleCorrection: true,
+            delay: 24,
+            observeMs: 2200
+          });
+          scheduleSync(resumeAbs > 0.5 ? 24 : 60);
+          return;
+        }
+      }
       if (correctConfirmedVisiblePairDrift(vtRaw, atRaw)) {
         scheduleSync(120);
         return;
