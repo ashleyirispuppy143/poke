@@ -5411,8 +5411,8 @@ const PAIR_SYNC_OPENING_HARD_LIMIT_SEC = 0.24;
 const PAIR_SYNC_MAX_WRITES = 3;
 const INITIAL_PAIR_AUDIO_GATE_MS = perfProfile.lowEnd ? 72 : (perfProfile.mobile ? 58 : 46);
 const INITIAL_PAIR_RELEASE_FADE_MS = perfProfile.lowEnd ? 34 : (perfProfile.mobile ? 28 : 22);
-const RESUME_PAIR_AUDIO_GATE_MS = perfProfile.lowEnd ? 240 : (perfProfile.mobile ? 200 : 170);
-const RESUME_PAIR_RELEASE_FADE_MS = perfProfile.lowEnd ? 44 : (perfProfile.mobile ? 36 : 30);
+const RESUME_PAIR_AUDIO_GATE_MS = perfProfile.lowEnd ? 92 : (perfProfile.mobile ? 74 : 58);
+const RESUME_PAIR_RELEASE_FADE_MS = perfProfile.lowEnd ? 28 : (perfProfile.mobile ? 22 : 16);
 const RESUME_STRICT_GOOD_DRIFT_SEC = perfProfile.lowEnd ? 0.045 : (perfProfile.mobile ? 0.034 : 0.028);
 const RESUME_STRICT_FIX_DRIFT_SEC = perfProfile.lowEnd ? 0.070 : (perfProfile.mobile ? 0.048 : 0.034);
 function initialCoupledPairPending() {
@@ -5681,7 +5681,9 @@ function finishResumeAudioMasterPair(session, reason = "resume-audio-master", at
     clearResumePairAudioGate();
     return false;
   }
+  state.resumeAudioMasterInFlight = false;
   try { writeResumeVideoToAudioTime(at, reason); } catch { }
+  let videoPlayIssuedAt = now();
   if (vn.paused && !state.isProgrammaticVideoPlay && tryAcquireVideoPlayLock()) {
     try {
       const vp = execProgrammaticVideoPlay({
@@ -5692,6 +5694,34 @@ function finishResumeAudioMasterPair(session, reason = "resume-audio-master", at
       if (vp && typeof vp.catch === "function") vp.catch(() => { });
     } catch { }
   }
+  const keepVideoJoinedUntilRunning = () => {
+    if (session !== state.playSessionId || !state.intendedPlaying ||
+      userPauseLockActive() || mediaSessionForcedPauseActive()) return;
+    const joinVN = getVideoNode();
+    if (!joinVN || !audio || audio.paused) return;
+    const liveAt = Number(audio.currentTime);
+    if (isFinite(liveAt) && liveAt >= 0) {
+      try { writeResumeVideoToAudioTime(liveAt, reason + "-join-while-starting"); } catch { }
+    }
+    if (!joinVN.paused) return;
+    if ((now() - videoPlayIssuedAt) > 260) {
+      // Do not let audio silently run hundreds of ms ahead if video play is delayed.
+      state.isProgrammaticAudioPause = true;
+      try { squelchAudioEvents(180); } catch { }
+      try { safePauseElement(audio); } catch { }
+      setTimeout(() => { state.isProgrammaticAudioPause = false; }, 180);
+      state.resumeAudioMasterInFlight = false;
+      clearResumePairAudioGate();
+      try { startForegroundUserPlayRetry(); } catch { }
+      return;
+    }
+    try {
+      const retry = execProgrammaticVideoPlay({ force: true, minGapMs: 0, noAudioStart: true });
+      if (retry && typeof retry.catch === "function") retry.catch(() => { });
+    } catch { }
+    trackResumeAudioMasterTimer(keepVideoJoinedUntilRunning, 24);
+  };
+  trackResumeAudioMasterTimer(keepVideoJoinedUntilRunning, 0);
   const settle = () => {
     if (session !== state.playSessionId || !state.intendedPlaying ||
       userPauseLockActive() || mediaSessionForcedPauseActive()) {
@@ -5784,6 +5814,13 @@ function startResumeAudioMasterPair(reason = "resume-audio-master") {
     state.resumeAudioMasterInFlight = false;
     clearResumePairAudioGate();
   });
+  const earlyFinish = () => {
+    if (resumeSession !== state.playSessionId) return;
+    if (!state.resumeAudioMasterInFlight) return;
+    if (!audio || audio.paused) return;
+    finishResumeAudioMasterPair(resumeSession, reason, 0);
+  };
+  [0, 16, 32, 52, 78].forEach(delay => trackResumeAudioMasterTimer(earlyFinish, delay));
   trackResumeAudioMasterTimer(() => {
     if (resumeSession !== state.playSessionId) return;
     if (!state.resumeAudioMasterInFlight) return;
@@ -6108,7 +6145,8 @@ function convergePairedTransitionSync() {
     return false;
   }
   if (userPauseLockActive() || mediaSessionForcedPauseActive() || _errorOverlayShown) return false;
-  if (userToggleTxnActive() || directUserToggleActive(perfProfile.lowEnd ? 1050 : 760)) {
+  if (!resumeStrictPairSyncActive() &&
+    (userToggleTxnActive() || directUserToggleActive(perfProfile.lowEnd ? 1050 : 760))) {
     schedulePairSyncConvergence(perfProfile.lowEnd ? 260 : 170);
     return false;
   }
@@ -6221,6 +6259,7 @@ function convergePairedTransitionSync() {
 }
 function correctConfirmedVisiblePairDrift(vt, at) {
   if (!coupledMode || !audio || !state.firstPlayCommitted || !state.initialCoupledPairCommitted) return false;
+  const strictResumeSync = resumeStrictPairSyncActive();
   const positionOwned = automaticRepairBlockedByTransportAuthority();
   if (pairSyncWindowActive() && !positionOwned) return false;
   if (!state.intendedPlaying || state.endedNaturally || state.restarting ||
@@ -6230,7 +6269,7 @@ function correctConfirmedVisiblePairDrift(vt, at) {
     isVisibilityTransitionActive() || isAltTabTransitionActive()) return false;
   if (getVideoPaused() || audio.paused || state.videoWaiting || state.videoStallAudioPaused ||
     state.strictBufferHold || userPauseLockActive() || mediaSessionForcedPauseActive()) return false;
-  if (playPauseRecoveryCpuActive(perfProfile.lowEnd ? 900 : 650)) {
+  if (!strictResumeSync && playPauseRecoveryCpuActive(perfProfile.lowEnd ? 900 : 650)) {
     state.measuredPairDriftCount = 0;
     state.measuredPairDriftSign = 0;
     state.measuredPairDriftLast = 0;
@@ -6241,7 +6280,6 @@ function correctConfirmedVisiblePairDrift(vt, at) {
   // Healthy visible playback must not keep chasing tiny drift by seeking audible
   // audio. Only a sustained drift beyond the user-visible stability bound gets a
   // corrective window; startup and explicit seek flows already align earlier.
-  const strictResumeSync = resumeStrictPairSyncActive();
   const trigger = strictResumeSync
     ? RESUME_STRICT_FIX_DRIFT_SEC
     : Math.max(PAIR_SYNC_VISIBLE_TRIGGER_SEC, PAIR_SYNC_OPENING_HARD_LIMIT_SEC);
