@@ -96,8 +96,7 @@
       z-index: 10;
     }
 
-    /* Highly optimized fluid background without filter: blur() to prevent lag */
-    .fluid-bg {
+     .fluid-bg {
       position: absolute;
       top: 0;
       left: 0;
@@ -116,8 +115,7 @@
       transform: translate3d(0, 0, 0);
     }
 
-    /* Soft radial gradients emulate blur with practically zero performance cost */
-    .blob-trans {
+     .blob-trans {
       background: radial-gradient(circle, rgba(91, 206, 250, 0.7) 0%, rgba(245, 169, 184, 0.4) 40%, transparent 70%);
       width: 120vw;
       height: 120vw;
@@ -771,19 +769,7 @@
       <% }) %>
     </div>
 
-    <h2 class="section-title">Clearing the Air</h2>
-    <div class="misconceptions-grid">
-      <% myths.forEach(myth => { %>
-        <div class="myth-card">
-          <div class="myth-title"><%= myth.myth %></div>
-          <div class="myth-fact">
-            <strong>Fact</strong>
-            <%= myth.fact %>
-          </div>
-        </div>
-      <% }) %>
-    </div>
-
+ 
     <h2 class="section-title">The Journey of Pride</h2>
     <div class="history-timeline">
       <% historyEvents.forEach(event => { %>
@@ -794,6 +780,18 @@
               <span class="history-title"><%= event.title %></span>
             </div>
             <p><%= event.desc %></p>
+          </div>
+        </div>
+      <% }) %>
+    </div>
+   <h2 class="section-title">Clearing the Air</h2>
+    <div class="misconceptions-grid">
+      <% myths.forEach(myth => { %>
+        <div class="myth-card">
+          <div class="myth-title"><%= myth.myth %></div>
+          <div class="myth-fact">
+            <strong>Fact</strong>
+            <%= myth.fact %>
           </div>
         </div>
       <% }) %>
