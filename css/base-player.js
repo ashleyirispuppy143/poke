@@ -975,6 +975,11 @@ startupPrimeStartedAt: performance.now(),
                               initialPairAudioGateTimer: null,
                               initialPairAudioGateSession: 0,
                               initialPairAudioAlignAt: 0,
+                              resumePairAudioGateUntil: 0,
+                              resumePairAudioGateTimer: null,
+                              resumePairAudioGateSession: 0,
+                              resumePairAudioGateIssuedAt: 0,
+                              resumePairAudioAlignAt: 0,
                               measuredPairDriftCount: 0,
                               measuredPairDriftSign: 0,
                               measuredPairDriftLast: 0,
@@ -1389,11 +1394,16 @@ startupPrimeStartedAt: performance.now(),
           const _alignTarget = rewindStartupAutoplayLeakToZero("simul-start", _alignVt, _alignAt) ? 0 : _alignVt;
           const _alignDrift = Math.abs(_alignVt - _alignAt);
           const _alignThreshold = _alignFirstPlay ? 0.025 : 0.15;
-          if (_alignDrift > _alignThreshold) {
+          const _resumeGateStart = !_alignFirstPlay && resumePairAudioGateActive();
+          if (_alignDrift > (_resumeGateStart ? PAIR_SYNC_GOOD_DRIFT_SEC : _alignThreshold)) {
             state._allowAudioTimeWrite = true;
             try { audio.currentTime = _alignTarget; } catch { }
             state._allowAudioTimeWrite = false;
             if (_alignFirstPlay) return false;
+            if (_resumeGateStart) {
+              noteResumePairSyncTimeWrite(_alignTarget);
+              state.resumePairAudioAlignAt = now();
+            }
           }
         } catch { }
       }
@@ -1417,7 +1427,8 @@ startupPrimeStartedAt: performance.now(),
               force: !!opts.force,
                 minGapMs: 0,
                 keepSilentUntilPlaying: strictStartupLockstep &&
-                  Number(state.initialPairAudioGateUntil || 0) > 0
+                  Number(state.initialPairAudioGateUntil || 0) > 0 ||
+                  resumePairAudioGateActive()
             }).catch(() => { });
           } catch { }
         };
@@ -5396,6 +5407,8 @@ const PAIR_SYNC_OPENING_HARD_LIMIT_SEC = 0.24;
 const PAIR_SYNC_MAX_WRITES = 3;
 const INITIAL_PAIR_AUDIO_GATE_MS = perfProfile.lowEnd ? 72 : (perfProfile.mobile ? 58 : 46);
 const INITIAL_PAIR_RELEASE_FADE_MS = perfProfile.lowEnd ? 34 : (perfProfile.mobile ? 28 : 22);
+const RESUME_PAIR_AUDIO_GATE_MS = perfProfile.lowEnd ? 240 : (perfProfile.mobile ? 200 : 170);
+const RESUME_PAIR_RELEASE_FADE_MS = perfProfile.lowEnd ? 44 : (perfProfile.mobile ? 36 : 30);
 function initialCoupledPairPending() {
   return !!(coupledMode && audio && !state.initialCoupledPairCommitted);
 }
@@ -5420,6 +5433,13 @@ function notePairSyncTimeWrite(target) {
     now() + PAIR_SYNC_WRITE_SETTLE_MS
   );
 }
+function noteResumePairSyncTimeWrite(target) {
+  state.pairSyncPendingTarget = Number(target);
+  state.pairSyncWritePendingUntil = Math.max(
+    Number(state.pairSyncWritePendingUntil || 0),
+    now() + (perfProfile.lowEnd ? 110 : (perfProfile.mobile ? 92 : 76))
+  );
+}
 function pairSyncTransportQuietActive(tailMs = 0) {
   if (!coupledMode || !audio || !state.intendedPlaying) return false;
   if (state.pairSyncCorrectionInFlight) return true;
@@ -5441,6 +5461,133 @@ function clearInitialPairAudioGate() {
   state.initialPairAudioGateUntil = 0;
   state.initialPairAudioGateSession = 0;
   state.initialPairAudioAlignAt = 0;
+}
+function resumePairAudioGateActive() {
+  return !!(coupledMode && audio && Number(state.resumePairAudioGateUntil || 0) > 0);
+}
+function clearResumePairAudioGate() {
+  if (state.resumePairAudioGateTimer) {
+    clearTimeout(state.resumePairAudioGateTimer);
+    state.resumePairAudioGateTimer = null;
+  }
+  state.resumePairAudioGateUntil = 0;
+  state.resumePairAudioGateSession = 0;
+  state.resumePairAudioGateIssuedAt = 0;
+  state.resumePairAudioAlignAt = 0;
+}
+function keepResumePairAudioSilent() {
+  if (!coupledMode || !audio) return;
+  try {
+    cancelActiveFade();
+    setAudioMutedSynced(false);
+    setAudioVolumeSynced(0);
+  } catch { }
+}
+function settleResumePairBeforeAudible(forceRelease = false) {
+  if (!coupledMode || !audio || !resumePairAudioGateActive()) return false;
+  if (!state.intendedPlaying || state.endedNaturally || state.restarting ||
+    userPauseLockActive() || mediaSessionForcedPauseActive()) {
+    clearResumePairAudioGate();
+    return false;
+  }
+  const vn = getVideoNode();
+  const pairRunning = !!(vn && !vn.paused && !audio.paused);
+  const issuedAt = Number(state.resumePairAudioGateIssuedAt || 0);
+  const joinAge = issuedAt > 0 ? now() - issuedAt : 0;
+  const retryGate = (delay = 28) => {
+    keepResumePairAudioSilent();
+    state.resumePairAudioGateUntil = Math.max(
+      Number(state.resumePairAudioGateUntil || 0),
+      now() + 55
+    );
+    if (state.resumePairAudioGateTimer) clearTimeout(state.resumePairAudioGateTimer);
+    const session = state.resumePairAudioGateSession;
+    state.resumePairAudioGateTimer = setTimeout(() => {
+      state.resumePairAudioGateTimer = null;
+      if (session !== state.playSessionId) {
+        clearResumePairAudioGate();
+        return;
+      }
+      settleResumePairBeforeAudible(true);
+    }, Math.max(16, Number(delay) || 0));
+    return pairRunning;
+  };
+  keepResumePairAudioSilent();
+  if (!vn) return retryGate(32);
+  if (!pairRunning) {
+    if (!forceRelease || joinAge < RESUME_PAIR_AUDIO_GATE_MS + 180) return retryGate(28);
+    clearResumePairAudioGate();
+    return false;
+  }
+  let vt = Number(vn.currentTime);
+  let at = Number(audio.currentTime);
+  if (!isFinite(vt) || vt < 0 || !isFinite(at)) return retryGate(28);
+  let drift = Math.abs(vt - at);
+  const recentAlignment = state.resumePairAudioAlignAt > 0 &&
+    (now() - Number(state.resumePairAudioAlignAt)) < PAIR_SYNC_WRITE_SETTLE_MS;
+  if (drift > PAIR_SYNC_GOOD_DRIFT_SEC &&
+    Number(audio.readyState || 0) >= HAVE_CURRENT_DATA && !recentAlignment) {
+    const previousAllowAudioWrite = !!state._allowAudioTimeWrite;
+    state._allowAudioTimeWrite = true;
+    state._allowPairSyncAudioWrite = true;
+    try { audio.currentTime = vt; } catch { }
+    state._allowPairSyncAudioWrite = false;
+    state._allowAudioTimeWrite = previousAllowAudioWrite;
+    noteResumePairSyncTimeWrite(vt);
+    state.pairSyncLastWriteAt = now();
+    state.resumePairAudioAlignAt = now();
+    return retryGate(26);
+  }
+  let waitingForAlignment = false;
+  try { waitingForAlignment = !!audio.seeking || pairSyncCorrectionPending(); } catch { }
+  vt = Number(vn.currentTime);
+  at = Number(audio.currentTime);
+  drift = isFinite(vt) && isFinite(at) ? Math.abs(vt - at) : Infinity;
+  const releaseTolerance = Math.max(PAIR_SYNC_FIX_DRIFT_SEC, STARTUP_INITIAL_MAX_DRIFT_SEC * 0.65);
+  if (waitingForAlignment || drift > releaseTolerance) {
+    if (!forceRelease || joinAge < RESUME_PAIR_AUDIO_GATE_MS + PAIR_SYNC_WRITE_SETTLE_MS) {
+      return retryGate(26);
+    }
+    if (isFinite(vt) && Number(audio.readyState || 0) >= HAVE_CURRENT_DATA) {
+      const previousAllowAudioWrite = !!state._allowAudioTimeWrite;
+      state._allowAudioTimeWrite = true;
+      try { audio.currentTime = vt; } catch { }
+      state._allowAudioTimeWrite = previousAllowAudioWrite;
+      noteResumePairSyncTimeWrite(vt);
+      state.resumePairAudioAlignAt = now();
+      return retryGate(26);
+    }
+  }
+  clearResumePairAudioGate();
+  if (!audio.paused && state.intendedPlaying && !playerMutedFromVideo()) {
+    setAudioPlaybackVolume(targetVolFromVideo(), "resume-pair-release", {
+      smooth: true,
+      ms: RESUME_PAIR_RELEASE_FADE_MS,
+      cancelFade: false
+    });
+  }
+  return pairRunning;
+}
+function armResumePairAudioGate(reason = "resume") {
+  if (!coupledMode || !audio || initialCoupledPairPending() || playerMutedFromVideo()) return false;
+  const vn = getVideoNode();
+  if (!vn) return false;
+  if (!audio.paused) return false;
+  clearResumePairAudioGate();
+  state.resumePairAudioGateSession = state.playSessionId;
+  state.resumePairAudioGateIssuedAt = now();
+  state.resumePairAudioAlignAt = 0;
+  state.resumePairAudioGateUntil = now() + RESUME_PAIR_AUDIO_GATE_MS + 40;
+  keepResumePairAudioSilent();
+  state.resumePairAudioGateTimer = setTimeout(() => {
+    state.resumePairAudioGateTimer = null;
+    if (state.resumePairAudioGateSession !== state.playSessionId) {
+      clearResumePairAudioGate();
+      return;
+    }
+    settleResumePairBeforeAudible(true);
+  }, RESUME_PAIR_AUDIO_GATE_MS);
+  return true;
 }
 function settleInitialPairBeforeAudible(forceRelease = false) {
   if (!coupledMode || !audio || !(Number(state.initialPairAudioGateUntil || 0) > 0)) return false;
@@ -8083,6 +8230,26 @@ function startForegroundUserPlayRetry() {
       clearForegroundUserPlayRetryTimers();
       return;
     }
+    const _sfuprVNode = getVideoNode();
+    const _sfuprRS = _sfuprVNode ? Number(_sfuprVNode.readyState || 0) : 0;
+    if (coupledMode && audio && audio.paused && _sfuprRS >= HAVE_CURRENT_DATA &&
+      !state.strictBufferHold && !state.videoWaiting &&
+      !shouldHoldAudioForForegroundStall({ allowRecovery: false }) &&
+      !shouldBlockNewAudioStart()) {
+      try {
+        armResumePairAudioGate("user-play-pair-prestart");
+        const startAt = getVideoCurrentTimeSafe(0);
+        if (canStartAudioAt(startAt)) {
+          alignPausedAudioBeforeResume(startAt, "user-play-pair-prestart");
+          if (MakeAudioVideoSimultaneousStartAPI({ force: true, squelchMs: 120 })) {
+            setFastSync(1400);
+            schedulePairSyncConvergence(perfProfile.lowEnd ? 90 : 45);
+            scheduleSync(0);
+            return;
+          }
+        }
+      } catch { }
+    }
     if (directUserVideoPlaybackHealthy(baseVt, armedAt, requireVisibleLeadAtStart)) {
       clearFreshForegroundVideoFirst();
       clearForegroundUserPlayRetryTimers();
@@ -8091,14 +8258,26 @@ function startForegroundUserPlayRetry() {
         !shouldHoldAudioForForegroundStall({ allowRecovery: false }) &&
         !shouldBlockNewAudioStart()) {
         const settledVt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
+      if (!canStartAudioAt(settledVt)) {
+        if (!pauseCoupledPairForAudioBuffer("user-play-audio-not-ready")) {
+          armResumeAfterBuffer(8000);
+        }
+        return;
+      }
       alignPausedAudioBeforeResume(settledVt, "user-play-audio-resume");
+      try { armResumePairAudioGate("user-play-audio-resume"); } catch { }
       state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 600);
-      execProgrammaticAudioPlay({ squelchMs: 120, force: true, minGapMs: 0 }).catch(() => { });
+      execProgrammaticAudioPlay({
+        squelchMs: 140,
+        force: true,
+        minGapMs: 0,
+        keepSilentUntilPlaying: true
+      }).then(() => {
+        try { settleResumePairBeforeAudible(false); } catch { }
+      }).catch(() => { });
         }
         return;
     }
-    const _sfuprVNode = getVideoNode();
-    const _sfuprRS = _sfuprVNode ? Number(_sfuprVNode.readyState || 0) : 0;
     if (_sfuprRS >= HAVE_FUTURE_DATA) {
       clearBufferHold();
       state.videoWaiting = false;
@@ -9347,8 +9526,10 @@ function releaseSeekAudioAfterVideoReady(reason = "") {
     let videoAt = 0;
     try {
       audioSeeking = !!audio.seeking;
-      audioAt = Number(audio.currentTime) || 0;
-      videoAt = Number(vn.currentTime) || target;
+      const rawAudioAt = Number(audio.currentTime);
+      const rawVideoAt = Number(vn.currentTime);
+      audioAt = isFinite(rawAudioAt) ? rawAudioAt : 0;
+      videoAt = isFinite(rawVideoAt) ? rawVideoAt : target;
     } catch { }
     try {
       cancelActiveFade();
@@ -9464,6 +9645,13 @@ function releaseSeekAudioAfterVideoReady(reason = "") {
         scheduleTry(perfProfile.lowEnd ? 40 : 18);
         return;
       }
+      const freshVideoAt = (() => {
+        try {
+          const t = Number(vn.currentTime);
+          return isFinite(t) ? t : videoAt;
+        } catch { return videoAt; }
+      })();
+      videoAt = freshVideoAt;
       if (Math.abs(videoAt - joinTarget) > joinStartTolerance) {
         state._isMicroSeek = true;
         try { vn.currentTime = joinTarget; } catch { }
@@ -9501,15 +9689,50 @@ function releaseSeekAudioAfterVideoReady(reason = "") {
       else abort();
       return;
     }
-    videoAt = Number(vn.currentTime) || target;
-    audioAt = Number(audio.currentTime) || target;
+    {
+      const rawVideoAt = Number(vn.currentTime);
+      const rawAudioAt = Number(audio.currentTime);
+      videoAt = isFinite(rawVideoAt) ? rawVideoAt : target;
+      audioAt = isFinite(rawAudioAt) ? rawAudioAt : target;
+    }
     const joinedDrift = Math.abs(videoAt - audioAt);
-    if (!audio.seeking && joinedDrift > joinedTolerance && joinCorrectionCount < 2) {
+    if (!audio.seeking && videoAt < target - joinStartTolerance && joinCorrectionCount < 3) {
+      joinCorrectionCount++;
+      state._isMicroSeek = true;
+      try { vn.currentTime = target; } catch { }
+      try { if (videoEl && videoEl !== vn) videoEl.currentTime = target; } catch { }
+      scheduleMicroSeekClear(180);
+      scheduleTry(perfProfile.lowEnd ? 42 : 20);
+      return;
+    }
+    if (!audio.seeking && audioAt < target - joinStartTolerance && joinCorrectionCount < 3) {
       joinCorrectionCount++;
       const previousAllowAudioWrite = !!state._allowAudioTimeWrite;
       state._allowAudioTimeWrite = true;
-      try { setAudioTimeForPairSync(videoAt); } finally {
+      try { setAudioTimeForPairSync(target, { maskAudible: true }); } finally {
         state._allowAudioTimeWrite = previousAllowAudioWrite;
+      }
+      scheduleTry(perfProfile.lowEnd ? 42 : 20);
+      return;
+    }
+    if (!audio.seeking && joinedDrift > joinedTolerance && joinCorrectionCount < 2) {
+      joinCorrectionCount++;
+      const correctionTarget =
+        audioAt >= target - joinStartTolerance &&
+        audioAt <= target + joinCatchupTolerance
+          ? audioAt
+          : target;
+      if (Math.abs(videoAt - correctionTarget) > joinStartTolerance) {
+        state._isMicroSeek = true;
+        try { vn.currentTime = correctionTarget; } catch { }
+        try { if (videoEl && videoEl !== vn) videoEl.currentTime = correctionTarget; } catch { }
+        scheduleMicroSeekClear(180);
+      } else {
+        const previousAllowAudioWrite = !!state._allowAudioTimeWrite;
+        state._allowAudioTimeWrite = true;
+        try { setAudioTimeForPairSync(correctionTarget, { maskAudible: true }); } finally {
+          state._allowAudioTimeWrite = previousAllowAudioWrite;
+        }
       }
       scheduleTry(perfProfile.lowEnd ? 44 : 22);
       return;
@@ -9786,6 +10009,7 @@ function markUserPauseIntent(ms = USER_PAUSE_INTENT_FAST_MS) {
   state.pairSyncPendingTarget = NaN;
   try { clearPairSyncTimer(); } catch { }
   try { clearInitialPairAudioGate(); } catch { }
+  try { clearResumePairAudioGate(); } catch { }
   try { BackgroundAudioSentinel.stop(0); } catch { }
   const txnMs = Math.max(USER_TOGGLE_TXN_FAST_MS, Math.min(intentMs, 1200));
   VisibilityGuard.onUserPause();
@@ -9944,10 +10168,13 @@ function markUserPlayIntent(ms = USER_PLAY_INTENT_FAST_MS, opts = {}) {
   }
   state.playSessionId = (state.playSessionId || 0) + 1;
   if (!coordinateInitialCoupledStart && coupledMode && audio) {
+    try { armResumePairAudioGate("user-resume"); } catch { }
+  }
+  if (!coordinateInitialCoupledStart && coupledMode && audio) {
     armPairSyncConvergence(
       "user-resume-observe",
-      2200,
-      { reset: true, audioMaster: false, allowAudibleCorrection: true, delay: 55 }
+      3000,
+      { reset: true, audioMaster: false, allowAudibleCorrection: true, delay: 32, observeMs: 900 }
     );
   }
   state.startupPlaySettleUntil = now() + STARTUP_SETTLE_MS;
@@ -10002,8 +10229,19 @@ function markUserPlayIntent(ms = USER_PLAY_INTENT_FAST_MS, opts = {}) {
       !nearZeroSeekAuthorized(targetTime) &&
       !state.restarting &&
       !isLoopDesired();
-      if (isFinite(targetTime) && !wouldRestartNearZero && Math.abs(currentAt - targetTime) > 0.8) {
-        try { audio.currentTime = targetTime; } catch { }
+      const resumeGateAlign = resumePairAudioGateActive();
+      const immediateAlignThreshold = resumeGateAlign ? PAIR_SYNC_GOOD_DRIFT_SEC : 0.8;
+      if (isFinite(targetTime) && !wouldRestartNearZero &&
+        Math.abs(currentAt - targetTime) > immediateAlignThreshold) {
+        try {
+          state._allowAudioTimeWrite = true;
+          audio.currentTime = targetTime;
+          if (resumeGateAlign) {
+            noteResumePairSyncTimeWrite(targetTime);
+            state.resumePairAudioAlignAt = now();
+          }
+        } catch { }
+        finally { state._allowAudioTimeWrite = false; }
       }
       try { updateAudioGainImmediate(true); } catch { }
       try {
@@ -11107,6 +11345,11 @@ function setAudioPlaybackVolume(target, reason = "", opts = {}) {
     setAudioVolumeSynced(0);
     return;
   }
+  if (resumePairAudioGateActive() && !muted && cleanTarget > 0.005) {
+    setAudioMutedSynced(false);
+    setAudioVolumeSynced(0);
+    return;
+  }
   const smooth = opts.smooth === true || shouldSmoothAudioGainUpdate(true, cleanTarget, muted, reason);
   if (muted || cleanTarget <= 0.005) {
     try { cancelActiveFade(); } catch { }
@@ -11184,6 +11427,11 @@ async function doVolumeFade(targetVol, ms = AUDIO_SAFE_FADE_DURATION_MS) {
     try { setAudioMutedSynced(false); setAudioVolumeSynced(0); } catch { }
     return;
   }
+  if (resumePairAudioGateActive() && !playerMutedFromVideo() && clamp01(targetVol) > 0.005) {
+    cancelActiveFade();
+    try { setAudioMutedSynced(false); setAudioVolumeSynced(0); } catch { }
+    return;
+  }
   cancelActiveFade(false); // cancel previous animation but keep audioFading=true
   const from = clamp01(audio.volume);
   const target = clamp01(targetVol);
@@ -11251,6 +11499,10 @@ function updateAudioGainImmediate(force) {
   if (!force && state.audioFading) return;
   if (!force && NotMakePlayBackFixingNoticable.isActive()) return;
   if (initialPairAudioGateActive() && !playerMutedFromVideo()) {
+    try { setAudioMutedSynced(false); setAudioVolumeSynced(0); } catch { }
+    return;
+  }
+  if (resumePairAudioGateActive() && !playerMutedFromVideo()) {
     try { setAudioMutedSynced(false); setAudioVolumeSynced(0); } catch { }
     return;
   }
@@ -13151,7 +13403,8 @@ async function execProgrammaticAudioPlay(opts = {}) {
   if (!coupledMode || !audio || typeof audio.play !== "function") return false;
   const holdInitialPairSilent = initialCoupledPairPending() &&
     Number(state.initialPairAudioGateUntil || 0) > 0;
-  const holdAudioSilent = keepSilentUntilPlaying || holdInitialPairSilent;
+  const holdResumePairSilent = resumePairAudioGateActive();
+  const holdAudioSilent = keepSilentUntilPlaying || holdInitialPairSilent || holdResumePairSilent;
   if (state.seekAudioReleaseInFlight && !noVideoStart) return !audio.paused;
   if (_errorOverlayShown) return false;
   if (terminalEndPlaybackLocked(250) && !restartFromEndedGuardActive()) return false;
@@ -13357,7 +13610,7 @@ async function execProgrammaticAudioPlay(opts = {}) {
     try {
       await state.audioPlayInFlight;
     } catch {
-      if (holdAudioSilent && initialPairAudioGateActive()) {
+      if (holdAudioSilent && (initialPairAudioGateActive() || resumePairAudioGateActive())) {
         try { setAudioVolumeSynced(0); } catch { }
       } else {
         updateAudioGainImmediate();
@@ -13386,6 +13639,9 @@ async function execProgrammaticAudioPlay(opts = {}) {
       _audioPlaybackRescueCount = 0;
       if (inSeekKickWindow) {
         state._seekAudioPlayedSeekId = state.seekId;
+      }
+      if (resumePairAudioGateActive()) {
+        try { settleResumePairBeforeAudible(false); } catch { }
       }
     }
     return !audio.paused;
@@ -16080,7 +16336,19 @@ async function playTogether(opts = {}) {
       userToggleTxnActive();
       let earlyUserVideoKick = null;
       if (recentDirectToggle && getVideoPaused()) {
-        try { earlyUserVideoKick = execProgrammaticVideoPlay({ force: true, minGapMs: 0 }); } catch { }
+        if (coupledMode && audio && audio.paused && canStartAudioAt(vtStart) &&
+          !shouldBlockNewAudioStart()) {
+          try {
+            armResumePairAudioGate("play-together-direct-pair");
+            alignPausedAudioBeforeResume(vtStart, "play-together-direct-pair");
+            if (MakeAudioVideoSimultaneousStartAPI({ force: true, squelchMs: 120 })) {
+              earlyUserVideoKick = Promise.resolve(true);
+            }
+          } catch { earlyUserVideoKick = null; }
+        }
+        if (!earlyUserVideoKick) {
+          try { earlyUserVideoKick = execProgrammaticVideoPlay({ force: true, minGapMs: 0 }); } catch { }
+        }
         const _ptGenuineTabReturn = shouldTreatUpcomingPlayAsFreshForegroundStart() ||
         inBgReturnGrace() || isTabReturnImmune();
         if (_ptGenuineTabReturn) {
@@ -21674,6 +21942,10 @@ function bindCommonMediaEvents() {
     state.audioPausedSince = 0;
     clearMediaSessionForcedPause();
     markMediaAction("play");
+    if (coupledMode && audio && audio.paused) {
+      try { armResumePairAudioGate("video-play-user-resume"); } catch { }
+      try { alignPausedAudioBeforeResume(getVideoCurrentTimeSafe(0), "video-play-user-resume"); } catch { }
+    }
     startForegroundUserPlayRetry();
     setFastSync(1500);
     forceUnmuteForPlaybackIfAllowed();
@@ -21728,6 +22000,10 @@ function bindCommonMediaEvents() {
             }
             state.tabReturnImmuneUntil = Math.max(state.tabReturnImmuneUntil, now() + 2000);
             markMediaAction("play");
+            if (coupledMode && audio && audio.paused && hasExplicitUserPlay) {
+              try { armResumePairAudioGate("video-play-explicit-resume"); } catch { }
+              try { alignPausedAudioBeforeResume(getVideoCurrentTimeSafe(0), "video-play-explicit-resume"); } catch { }
+            }
             setFastSync(1500);
             forceUnmuteForPlaybackIfAllowed();
             updateAudioGainImmediate();
