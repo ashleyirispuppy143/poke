@@ -74,7 +74,9 @@ app.get("/policies/privacy", (req, res) => {
 app.get("/policies/code-of-conduct", (req, res) => {
   renderTemplate(res, req, "coc.ejs");
 });
-
+app.get("/pride", (req, res) => {
+  renderTemplate(res, req, "pride.ejs");
+});
 app.get("/policies", (req, res) => {
   renderTemplate(res, req, "terms.ejs");
 });
