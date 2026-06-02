@@ -883,18 +883,23 @@ function normalizeTrending(input) {
 
 function computeTrendingEntry(entry, nowMs) {
   const cleanTitle = cleanPageTitle(entry.title || "")
-  const genreInfo = getTrendingGenreInfo(cleanTitle, {
-    categoryId: entry.categoryId || entry.videoCategoryId,
-    category: entry.category,
-    genre: entry.genre,
-    videoGenre: entry.videoGenre,
-    tags: entry.tags,
-    genreTags: entry.genreTags,
-    videoGenreTags: entry.videoGenreTags,
-    videoTags: entry.videoTags
-  })
   
-  const category = genreInfo.category
+  // Don't heavily re-calculate genre strings if the entry already has one.
+  let category = entry.category
+  if (!category || category === "uncategorized") {
+      const genreInfo = getTrendingGenreInfo(cleanTitle, {
+        categoryId: entry.categoryId || entry.videoCategoryId,
+        category: entry.category,
+        genre: entry.genre,
+        videoGenre: entry.videoGenre,
+        tags: entry.tags,
+        genreTags: entry.genreTags,
+        videoGenreTags: entry.videoGenreTags,
+        videoTags: entry.videoTags
+      })
+      category = genreInfo.category
+  }
+  
   const buckets = entry.buckets && typeof entry.buckets === "object" ? entry.buckets : {}
   let recentViews = 0
   let weightedViews = 0
@@ -927,8 +932,8 @@ function computeTrendingEntry(entry, nowMs) {
     id: entry.id,
     title: cleanTitle,
     category,
-    categorySource: entry.categorySource || genreInfo.source,
-    categoryConfidence: Number(entry.categoryConfidence || genreInfo.confidence) || genreInfo.confidence,
+    categorySource: entry.categorySource,
+    categoryConfidence: Number(entry.categoryConfidence) || 0,
     totalViews,
     recentViews,
     score,
@@ -1941,8 +1946,7 @@ module.exports = function (app, config, renderTemplate) {
       videoGenreTags: body.videoGenreTags,
       videoTags: body.videoTags
     })
-    
-    invalidateApiCaches()
+
     scheduleTelemetrySave(false)
     scheduleTrendingSave(false)
 
@@ -2737,4 +2741,3 @@ module.exports = function (app, config, renderTemplate) {
 
     return renderTelemetryHomePage(res)
   })
-}
