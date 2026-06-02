@@ -279,7 +279,7 @@ async function atomicWriteJson(filePath, data) {
           await fsp.copyFile(filePath, backupPath)
           lastBackupAtByFile.set(filePath, now)
         } catch (error) {
-          console.error("Could not create JSON backup for", filePath, error)
+          console.error("Could not create JSON backup for.", filePath, error)
         }
       }
 
