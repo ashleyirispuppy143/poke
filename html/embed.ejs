@@ -1789,8 +1789,8 @@
                         <button class="tab-btn-<%- v %> active" data-tab="video">Video+Audio</button>
                         <button class="tab-btn-<%- v %>" data-tab="audio">Audio Only</button>
                     </div>
-                    <div class="preview-box-<%- v %>">
-                        <iframe id="preview-iframe-<%- v %>" src="/embed/<%- v %>" allowfullscreen></iframe>
+                    <div class="preview-box-<%- v %>" id="iframe-container-<%- v %>">
+                        <iframe src="/embed/<%- v %>" allowfullscreen></iframe>
                     </div>
                 </section>
 
@@ -1826,9 +1826,8 @@
 
             <script>
                 const tabs = document.querySelectorAll('.tab-btn-<%- v %>');
-                const iframe = document.getElementById('preview-iframe-<%- v %>');
                 const textarea = document.querySelector('.embed-textarea-<%- v %>');
-                const previewBox = document.querySelector('.preview-box-<%- v %>');
+                const previewBox = document.getElementById('iframe-container-<%- v %>');
 
                 tabs.forEach(tab => {
                     tab.addEventListener('click', () => {
@@ -1836,14 +1835,14 @@
                         tab.classList.add('active');
 
                         if (tab.dataset.tab === 'audio') {
-                            iframe.src = '/embed/<%- v %>?type=audio&t=' + Date.now();
                             previewBox.style.aspectRatio = 'auto';
                             previewBox.style.height = '60px';
+                            previewBox.innerHTML = `<iframe src="/embed/<%- v %>?type=audio" allowfullscreen></iframe>`;
                             textarea.value = `<iframe src="https://<%= actualHost %>/embed/<%- v %>?type=audio" width="100%" height="60" frameborder="0" style="border-radius: 16px;" referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
                         } else {
-                            iframe.src = '/embed/<%- v %>?type=video&t=' + Date.now();
                             previewBox.style.aspectRatio = '16 / 9';
                             previewBox.style.height = 'auto';
+                            previewBox.innerHTML = `<iframe src="/embed/<%- v %>" allowfullscreen></iframe>`;
                             textarea.value = `<iframe src="https://<%= actualHost %>/embed/<%- v %>" width="560" height="315" frameborder="0" style="border-radius: 16px;" forcequality="" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`;
                         }
                     });
@@ -1989,13 +1988,19 @@
                     // --- Init URL Params Check ---
                     const urlParams = new URLSearchParams(window.location.search);
                     let forcedQuality = urlParams.get('forcequality') || document.body.getAttribute('data-forcequality');
-                    let playerType = urlParams.get('type') || document.body.getAttribute('data-type');
+                    
+                    let playerType = urlParams.get('type');
+                    if (!playerType && document.body.hasAttribute('data-type')) {
+                        playerType = document.body.getAttribute('data-type');
+                    }
+                    
                     try {
                         if (window.frameElement) {
                             if (window.frameElement.hasAttribute('forcequality')) forcedQuality = window.frameElement.getAttribute('forcequality') || forcedQuality;
                             if (window.frameElement.hasAttribute('type')) playerType = window.frameElement.getAttribute('type') || playerType;
                         }
                     } catch(e) {}
+                    
                     const isAudioOnlyMode = playerType === 'audio';
                     let skipInitPlay = false;
 
@@ -2040,7 +2045,6 @@
                                     <button type="button" class="end-btn-secondary-<%- v %> restart-btn-<%- v %>">Restart Video</button>
                                 </div>
                             `;
-                            wrapper.appendChild(endOverlay);
                             
                             const statsOverlayWrapper = document.createElement('div');
                             statsOverlayWrapper.className = 'stats-overlay-<%- v %>';
@@ -2261,6 +2265,7 @@
 
                             wrapper.appendChild(audio);
                             wrapper.appendChild(video);
+                            wrapper.appendChild(endOverlay);
                             wrapper.appendChild(statsOverlayWrapper);
                             wrapper.appendChild(controls);
 
