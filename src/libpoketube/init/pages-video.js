@@ -208,6 +208,7 @@ app.get("/embed/:v", async function (req, res) {
   const v = req.params.v;
   const hostname = req.hostname;
   const showHow = req.query.showHow;
+  const type = req.query.type;
 
   let engagement = null;
   let VideoError = null;
@@ -224,6 +225,7 @@ app.get("/embed/:v", async function (req, res) {
       v,
       hostname,
       engagement,
+      type,
       showHow,
       VideoError,
       media_proxy,
@@ -249,6 +251,7 @@ app.get("/embed/:v", async function (req, res) {
         showHow,
         VideoError,
         media_proxy,
+        type,
         vidurl,
       });
     }
@@ -268,6 +271,7 @@ app.get("/embed/:v", async function (req, res) {
     VideoError,
     media_proxy,
     vidurl,
+    type,
   });
 });
 
