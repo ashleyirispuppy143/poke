@@ -143,9 +143,6 @@
         }
         .audio-play-btn-<%- v %>:hover { transform: scale(1.1); }
         .audio-play-btn-<%- v %> svg { width: 24px; height: 24px; fill: currentColor; }
-        .audio-progress-<%- v %> { flex: 1; height: 6px; background: rgba(255,255,255,0.2); border-radius: 3px; position: relative; cursor: pointer; transition: height 0.1s; }
-        .audio-progress-<%- v %>:hover { height: 8px; }
-        .audio-progress-fill-<%- v %> { position: absolute; left: 0; top: 0; height: 100%; background: #ffabcc; border-radius: 3px; width: 0%; pointer-events: none; }
         .audio-time-<%- v %> { color: #fff; font-size: 13px; font-variant-numeric: tabular-nums; flex-shrink: 0; font-weight: 500; font-family: "PokeTube Flex", Arial, sans-serif; min-width: 80px; text-align: center; }
         .audio-extra-btn-<%- v %> { background: transparent; border: none; color: #fff; cursor: pointer; width: 22px; height: 22px; padding: 0; opacity: 0.7; transition: opacity 0.2s, color 0.2s; flex-shrink: 0; display: flex; align-items: center; justify-content: center; position: relative; }
         .audio-extra-btn-<%- v %>:hover { opacity: 1; }
@@ -1652,14 +1649,9 @@
     <script>
         let _failsBotCheck = false;
         try {
-            if (navigator.webdriver) _failsBotCheck = true;
-            if (window.navigator.webdriver) _failsBotCheck = true;
-            if (window.document.documentElement.getAttribute("webdriver") !== null) _failsBotCheck = true;
-            if (/bot|crawler|spider|crawling|wget|curl|headless|puppeteer|playwright/i.test(navigator.userAgent || '')) _failsBotCheck = true;
-            if (window.callPhantom || window._phantom || window.__nightmare) _failsBotCheck = true;
-            if (typeof document.createElement !== 'function') _failsBotCheck = true;
-            if (typeof window.requestAnimationFrame !== 'function') _failsBotCheck = true;
-            if (navigator.languages === "") _failsBotCheck = true;
+            if (window.self !== window.top && (window.innerWidth < 10 || window.innerHeight < 10)) {
+                _failsBotCheck = true;
+            }
         } catch(e) { 
             _failsBotCheck = true; 
         }
@@ -1775,7 +1767,7 @@
         <div class="audio-wrapper-<%- v %>">
             <a href="#" class="audio-start-link-<%- v %> player-link-<%- v %>">
                 <div class="audio-play-btn-<%- v %>">
-                    <svg viewBox="0 0 24 24"><polygon points="8,5 8,19 19,12" /></svg>
+                    <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8,5 8,19 19,12" /></svg>
                 </div>
                 <span style="font-weight: 500; font-size: 14px;">Click to play audio</span>
                 <img src="/css/logo-poke.svg" class="audio-logo-<%- v %>" style="margin-left: auto;">
@@ -1793,6 +1785,8 @@
                 const pauseIcon = 'M6 19h4V5H6v14zm8-14v14h4V5h-4z';
                 const speedIcon = 'M10 8v8l6-4-6-4zm2-6C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z';
                 const loopIcon = 'M7 7h11v3l4-4-4-4v3H5v6h2V7zm10 10H6v-3l-4 4 4 4v-3h13v-6h-2v4z';
+                const volIcon = 'M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z';
+                const muteIcon = 'M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z';
 
                 const _enc = '<%= encodedVidUrl %>';
                 const _vidBase = _enc.split('-').filter(Boolean).map(c => String.fromCharCode(parseInt(c, 16))).join('');
@@ -1831,13 +1825,18 @@
                     controls.style.gap = '12px';
 
                     controls.innerHTML = `
-                        <button class="audio-play-btn-<%- v %> play-pause-btn" type="button"><svg><path class="play-path" d="${pauseIcon}"/></svg></button>
+                        <div class="toast-indicator-<%- v %> audio-toast" style="left: 50%; transform: translateX(-50%); text-align: center;"></div>
+                        <button class="audio-play-btn-<%- v %> play-pause-btn" type="button"><svg viewBox="0 0 24 24" fill="currentColor"><path class="play-path" d="${pauseIcon}"/></svg></button>
+                        <button class="audio-extra-btn-<%- v %> mute-btn" type="button" title="Mute/Unmute"><svg viewBox="0 0 24 24" fill="currentColor"><path class="mute-path" d="${volIcon}"/></svg></button>
                         <div class="audio-time-<%- v %> time-display">0:00 / 0:00</div>
-                        <div class="audio-progress-<%- v %> progress-container">
-                            <div class="audio-progress-fill-<%- v %> progress-fill"></div>
+                        
+                        <div class="progress-container-<%- v %>" role="slider" aria-label="Seek" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0" style="flex: 1; margin: 0 12px;">
+                            <div class="progress-fill-<%- v %>"></div>
+                            <div class="progress-thumb-<%- v %>"></div>
                         </div>
-                        <button class="audio-extra-btn-<%- v %> audio-loop-btn" type="button" title="Loop"><svg><path d="${loopIcon}"/></svg></button>
-                        <button class="audio-extra-btn-<%- v %> audio-speed-btn" type="button" title="Speed"><svg><path d="${speedIcon}"/></svg></button>
+
+                        <button class="audio-extra-btn-<%- v %> audio-loop-btn" type="button" title="Loop"><svg viewBox="0 0 24 24" fill="currentColor"><path d="${loopIcon}"/></svg></button>
+                        <button class="audio-extra-btn-<%- v %> audio-speed-btn" type="button" title="Speed"><svg viewBox="0 0 24 24" fill="currentColor"><path d="${speedIcon}"/></svg></button>
                         <a href="/" target="_blank" rel="noopener noreferrer"><img src="/css/logo-poke.svg" class="audio-logo-<%- v %>"></a>
                     `;
 
@@ -1849,14 +1848,32 @@
 
                     const playBtn = controls.querySelector('.play-pause-btn');
                     const playPath = controls.querySelector('.play-path');
+                    const muteBtn = controls.querySelector('.mute-btn');
+                    const mutePath = controls.querySelector('.mute-path');
                     const timeEl = controls.querySelector('.time-display');
-                    const progContainer = controls.querySelector('.progress-container');
-                    const progFill = controls.querySelector('.progress-fill');
+                    const progContainer = controls.querySelector('.progress-container-<%- v %>');
+                    const progFill = controls.querySelector('.progress-fill-<%- v %>');
+                    const progThumb = controls.querySelector('.progress-thumb-<%- v %>');
                     const loopBtn = controls.querySelector('.audio-loop-btn');
                     const speedBtn = controls.querySelector('.audio-speed-btn');
+                    const toastEl = controls.querySelector('.toast-indicator-<%- v %>');
 
                     let isIntendedToPlay = true;
                     let retryCount = 0;
+                    let isScrubbing = false;
+
+                    let toastTimeout = null;
+                    function showToast(msg, duration = 3000) {
+                        if (!toastEl) return;
+                        toastEl.innerText = msg;
+                        toastEl.classList.add('is-visible');
+                        clearTimeout(toastTimeout);
+                        if (duration > 0) {
+                            toastTimeout = setTimeout(() => {
+                                toastEl.classList.remove('is-visible');
+                            }, duration);
+                        }
+                    }
 
                     function formatTime(s) {
                         if (!Number.isFinite(s)) return '0:00';
@@ -1867,12 +1884,46 @@
                     }
 
                     function updateTime() {
+                        if (isScrubbing) return;
                         const dur = audio.duration || 0;
                         const cur = audio.currentTime || 0;
                         timeEl.innerText = formatTime(cur) + ' / ' + formatTime(dur);
                         const p = dur ? (cur / dur) * 100 : 0;
                         progFill.style.width = p + '%';
+                        progThumb.style.left = p + '%';
                     }
+
+                    function seekFromEvent(e) {
+                        const dur = audio.duration;
+                        if (!dur) return;
+                        const r = progContainer.getBoundingClientRect();
+                        const p = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+                        audio.currentTime = p * dur;
+                        progFill.style.width = (p * 100) + '%';
+                        progThumb.style.left = (p * 100) + '%';
+                        timeEl.innerText = formatTime(p * dur) + ' / ' + formatTime(dur);
+                    }
+
+                    progContainer.addEventListener('pointerdown', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        isScrubbing = true;
+                        progContainer.classList.add('is-scrubbing-<%- v %>');
+                        progContainer.setPointerCapture(e.pointerId);
+                        seekFromEvent(e);
+                    });
+                    progContainer.addEventListener('pointermove', (e) => {
+                        if (!isScrubbing) return;
+                        e.preventDefault();
+                        seekFromEvent(e);
+                    });
+                    progContainer.addEventListener('pointerup', (e) => {
+                        if (!isScrubbing) return;
+                        e.preventDefault();
+                        isScrubbing = false;
+                        progContainer.classList.remove('is-scrubbing-<%- v %>');
+                        try { progContainer.releasePointerCapture(e.pointerId); } catch(err) {}
+                    });
 
                     function loadAudio(fallback = false) {
                         const nonce = Date.now() + '-' + retryCount;
@@ -1912,10 +1963,17 @@
                         }
                     });
 
-                    progContainer.addEventListener('click', (e) => {
-                        const r = progContainer.getBoundingClientRect();
-                        const p = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
-                        if (audio.duration) audio.currentTime = p * audio.duration;
+                    let lastVol = 1;
+                    muteBtn.addEventListener('click', () => {
+                        if (audio.muted || audio.volume === 0) {
+                            audio.muted = false;
+                            audio.volume = lastVol > 0 ? lastVol : 1;
+                            mutePath.setAttribute('d', volIcon);
+                        } else {
+                            lastVol = audio.volume;
+                            audio.muted = true;
+                            mutePath.setAttribute('d', muteIcon);
+                        }
                     });
 
                     let currentSpeed = 1;
@@ -1924,18 +1982,13 @@
                         let idx = cycle.indexOf(currentSpeed);
                         currentSpeed = cycle[(idx + 1) % cycle.length];
                         audio.playbackRate = currentSpeed;
-                        
-                        const toast = document.createElement('div');
-                        toast.innerText = currentSpeed + 'x';
-                        toast.style = 'position:absolute; top:-30px; left:50%; transform:translateX(-50%); background:#222; color:#fff; padding:4px 8px; border-radius:4px; font-size:12px; pointer-events:none; opacity:1; transition:opacity 0.3s; white-space:nowrap;';
-                        speedBtn.appendChild(toast);
-                        setTimeout(() => toast.style.opacity = '0', 1000);
-                        setTimeout(() => toast.remove(), 1300);
+                        showToast(`Speed: ${currentSpeed}x`, 1500);
                     });
 
                     loopBtn.addEventListener('click', () => {
                         audio.loop = !audio.loop;
                         loopBtn.style.color = audio.loop ? '#ffabcc' : '#fff';
+                        showToast(audio.loop ? 'Loop: On' : 'Loop: Off', 1500);
                     });
 
                     loadAudio();
@@ -2291,10 +2344,6 @@
                             </div>
                         `;
 
-                        if (logoLink) {
-                            logoLink.style.display = 'none';
-                        }
-
                         wrapper.appendChild(audio);
                         wrapper.appendChild(video);
                         wrapper.appendChild(endOverlay);
@@ -2474,7 +2523,6 @@
                                 isSwitchingQuality = true;
                                 showToast(`Switching to ${quality}...`, 0); 
                                 setBuffering(true);
-                                video.style.opacity = '0.01'; // Hide to prevent showing frame 0
                             }
                             
                             updateQualityUI();
@@ -3024,8 +3072,7 @@
                             }
                         });
 
-                        // Seeking logic (to detect manual seeks near the end to prevent early end screens)
-                        video.addEventListener('seeking', () => {
+                         video.addEventListener('seeking', () => {
                             if (getDuration() && (getDuration() - getCurrentTime() <= 20)) {
                                 hasSeekedNearEnd = true;
                                 isNaturalEnd = false;
