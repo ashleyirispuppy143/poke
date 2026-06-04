@@ -1389,19 +1389,19 @@
             flex: 1;
         }
         .video-wrapper-<%- v %>.audio-only-ui .logo-link-<%- v %> {
-            order: 3;
+            order: 5;
             margin: 0;
             position: static;
         }
         .video-wrapper-<%- v %>.audio-only-ui .logo-img-<%- v %> {
-            height: 24px;
+            height: 20px;
         }
         .video-wrapper-<%- v %>.audio-only-ui .top-right-group-<%- v %> {
             position: static;
             display: flex;
             flex-direction: row;
             align-items: center;
-            order: 3;
+            order: 4;
             gap: 4px;
         }
         .video-wrapper-<%- v %>.audio-only-ui .vol-group-<%- v %> {
@@ -1413,9 +1413,7 @@
         .video-wrapper-<%- v %>.audio-only-ui .link-circle-btn-<%- v %>,
         .video-wrapper-<%- v %>.audio-only-ui .more-videos-pill-<%- v %>,
         .video-wrapper-<%- v %>.audio-only-ui .chapter-title-<%- v %>,
-        .video-wrapper-<%- v %>.audio-only-ui .quality-row-<%- v %>,
-        .video-wrapper-<%- v %>.audio-only-ui .settings-btn-<%- v %>,
-        .video-wrapper-<%- v %>.audio-only-ui .vol-slider-wrap-<%- v %> {
+        .video-wrapper-<%- v %>.audio-only-ui .quality-row-<%- v %> {
             display: none !important;
         }
         .video-wrapper-<%- v %>.audio-only-ui .time-display-pill-<%- v %> {
@@ -1716,7 +1714,7 @@
             if (navigator.languages === "") _failsBotCheck = true;
             
             // Basic framing abuse check
-            if (window.self !== window.top && (window.innerWidth < 100 || window.innerHeight < 100)) {
+            if (window.self !== window.top && (window.innerWidth < 40 || window.innerHeight < 40)) {
                 _failsBotCheck = true;
             }
         } catch(e) { 
@@ -1765,7 +1763,7 @@
                         <button class="tab-btn-<%- v %>" data-tab="audio">Audio Only</button>
                     </div>
                     <div class="preview-box-<%- v %>">
-                        <iframe id="preview-iframe-<%- v %>" src="/embed/<%- v %>" allowfullscreen></iframe>
+                        <iframe id="preview-iframe-<%- v %>" src="/embed/<%- v %>?type=video" allowfullscreen></iframe>
                     </div>
                 </section>
 
@@ -1816,7 +1814,7 @@
                             previewBox.style.height = '60px';
                             textarea.value = `<iframe src="https://<%= actualHost %>/embed/<%- v %>?type=audio" width="100%" height="60" frameborder="0" style="border-radius: 16px;" referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
                         } else {
-                            iframe.src = '/embed/<%- v %>';
+                            iframe.src = '/embed/<%- v %>?type=video';
                             previewBox.style.aspectRatio = '16 / 9';
                             previewBox.style.height = 'auto';
                             textarea.value = `<iframe src="https://<%= actualHost %>/embed/<%- v %>" width="560" height="315" frameborder="0" style="border-radius: 16px;" forcequality="" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`;
@@ -1876,7 +1874,7 @@
                         if (navigator.languages === "") _failsBotCheck = true;
                         
                         // Basic framing abuse check
-                        if (window.self !== window.top && (window.innerWidth < 100 || window.innerHeight < 100)) {
+                        if (window.self !== window.top && (window.innerWidth < 40 || window.innerHeight < 40)) {
                             _failsBotCheck = true;
                         }
                     } catch(e) {
@@ -1970,12 +1968,19 @@
                     const urlParams = new URLSearchParams(window.location.search);
                     let forcedQuality = urlParams.get('forcequality') || document.body.getAttribute('data-forcequality');
                     let playerType = urlParams.get('type') || document.body.getAttribute('data-type');
+                    
+                    if (playerType === 'video') playerType = ''; // Normalize explicit video
+                    
                     try {
                         if (window.frameElement) {
                             if (window.frameElement.hasAttribute('forcequality')) forcedQuality = window.frameElement.getAttribute('forcequality') || forcedQuality;
-                            if (window.frameElement.hasAttribute('type')) playerType = window.frameElement.getAttribute('type') || playerType;
+                            if (window.frameElement.hasAttribute('type')) {
+                                const ft = window.frameElement.getAttribute('type');
+                                playerType = ft === 'video' ? '' : (ft || playerType);
+                            }
                         }
                     } catch(e) {}
+                    
                     const isAudioOnlyMode = playerType === 'audio';
                     let skipInitPlay = false;
 
@@ -2007,7 +2012,7 @@
 
                             const posterImg = playerLink.querySelector('.player-image-<%- v %>');
                             const posterSrc = posterImg ? posterImg.currentSrc || posterImg.src : '';
-                            if (posterSrc) {
+                            if (posterSrc && !isAudioOnlyMode) {
                                 video.poster = posterSrc;
                             }
                             
@@ -2218,7 +2223,7 @@
                                             <button class="more-videos-pill-<%- v %>" type="button" title="More videos">
                                                 <span>More videos</span>
                                                 <div class="more-videos-icon-wrapper-<%- v %>">
-                                                    ${posterSrc ? `<img src="${posterSrc.replace(/"/g, '&quot;')}" style="width: 100%; height: 100%; object-fit: cover;" alt="">` : `<svg viewBox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8 12.5v-9l6 4.5-6 4.5z"/></svg>`}
+                                                    ${posterSrc && !isAudioOnlyMode ? `<img src="${posterSrc.replace(/"/g, '&quot;')}" style="width: 100%; height: 100%; object-fit: cover;" alt="">` : `<svg viewBox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8 12.5v-9l6 4.5-6 4.5z"/></svg>`}
                                                 </div>
                                             </button>
                                             <a href="/" target="_blank" rel="noopener noreferrer" class="logo-link-<%- v %>">
@@ -2953,7 +2958,7 @@
                             // The Central Synchronization Loop
                             setInterval(() => {
                                 // Basic size abuse check
-                                if (window.innerWidth < 100 || window.innerHeight < 100) {
+                                if (window.innerWidth < 40 || window.innerHeight < 40) {
                                     if (isIntendedToPlay) pauseMedia();
                                 }
 
