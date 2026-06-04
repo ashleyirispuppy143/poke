@@ -1,5 +1,6 @@
 <% 
     const isShowHow = typeof showHow !== 'undefined' && (showHow === true || showHow === 'true');
+    const isAudioType = typeof type !== 'undefined' && type === 'audio';
 
     function formatCount(num) {
         if (num === null || num === undefined) return '0';
@@ -121,6 +122,7 @@
             box-sizing: border-box;
             padding: 0;
             background-color: #000;
+            overflow: hidden;
         }
 
         .player-link-<%- v %> {
@@ -250,7 +252,7 @@
             background-color: #000;
             z-index: 5;
             transition: opacity 0.2s ease;
-            pointer-events: none; /* Anti-abuse against default right clicks/controls */
+            pointer-events: none;
         }
         
         .custom-video-player-<%- v %>::-webkit-media-controls {
@@ -1329,6 +1331,46 @@
             transform: scale(1.05);
         }
 
+        /* --- Audio Only Mode Styles --- */
+        .video-wrapper-<%- v %>.audio-only-ui {
+            background-color: #111;
+        }
+        .video-wrapper-<%- v %>.audio-only-ui .custom-video-player-<%- v %> {
+            display: none !important;
+        }
+        .video-wrapper-<%- v %>.audio-only-ui .audio-bg-<%- v %> {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-size: cover;
+            background-position: center;
+            filter: blur(15px) brightness(0.4);
+            z-index: 1;
+        }
+        .video-wrapper-<%- v %>.audio-only-ui .audio-thumb-<%- v %> {
+            position: absolute;
+            top: 40%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: clamp(80px, 20vmin, 160px);
+            height: clamp(80px, 20vmin, 160px);
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            background-size: cover;
+            background-position: center;
+            z-index: 2;
+        }
+        .video-wrapper-<%- v %>.audio-only-ui .custom-controls-<%- v %> {
+            opacity: 1 !important;
+            pointer-events: auto !important;
+            background: transparent;
+        }
+        .video-wrapper-<%- v %>.audio-only-ui .fs-group-<%- v %>,
+        .video-wrapper-<%- v %>.audio-only-ui .quality-row-<%- v %> {
+            display: none !important;
+        }
+        .video-wrapper-<%- v %>.audio-only-ui .center-play-overlay-<%- v %> {
+            top: 40%;
+        }
+
         @media (max-width: 560px) {
             .top-right-group-<%- v %> {
                 top: 10px;
@@ -1452,6 +1494,30 @@
             color: #f1f1f1;
         }
 
+        .tabs-container-<%- v %> {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 12px;
+        }
+
+        .tab-btn-<%- v %> {
+            background: transparent;
+            color: #aaa;
+            border: none;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            padding: 8px 16px;
+            border-radius: 8px;
+            transition: all 0.2s;
+            font-family: "PokeTube Flex", Arial, sans-serif;
+        }
+
+        .tab-btn-<%- v %>:hover { color: #fff; background: rgba(255,255,255,0.05); }
+        .tab-btn-<%- v %>.active { color: #fff; background: #272727; border: 1px solid #444; }
+
         .preview-box-<%- v %> {
             width: 100%;
             aspect-ratio: 16 / 9;
@@ -1460,6 +1526,7 @@
             overflow: hidden;
             border: 1px solid #272727;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            transition: height 0.3s ease, aspect-ratio 0.3s ease;
         }
 
         .preview-box-<%- v %> iframe {
@@ -1581,7 +1648,7 @@
             padding: 2px 6px;
             border-radius: 4px;
         }
-    </style></head><body class="<%= isShowHow ? 'mode-showhow' : 'mode-video' %>" data-forcequality="<%= typeof forcequality !== 'undefined' ? forcequality : '' %>">
+    </style></head><body class="<%= isShowHow ? 'mode-showhow' : 'mode-video' %>" data-forcequality="<%= typeof forcequality !== 'undefined' ? forcequality : '' %>" data-type="<%= isAudioType ? 'audio' : '' %>">
     
     <% if (!isShowHow && (typeof VideoError === 'undefined' || !VideoError)) { %>
     <script>
@@ -1641,8 +1708,12 @@
 
                 <section class="preview-section-<%- v %>">
                     <h2 class="section-header-<%- v %>">Live Preview</h2>
+                    <div class="tabs-container-<%- v %>">
+                        <button class="tab-btn-<%- v %> active" data-tab="video">Video+Audio</button>
+                        <button class="tab-btn-<%- v %>" data-tab="audio">Audio Only</button>
+                    </div>
                     <div class="preview-box-<%- v %>">
-                        <iframe src="/embed/<%- v %>" allowfullscreen></iframe>
+                        <iframe id="preview-iframe-<%- v %>" src="/embed/<%- v %>" allowfullscreen></iframe>
                     </div>
                 </section>
 
@@ -1664,9 +1735,10 @@
                         
                         <strong>Customizing the code</strong>
                         <ul>
-                            <li><code>width</code> & <code>height</code>: Controls player size. Accepts numbers for pixels (e.g., <code>560</code>) or percentages (e.g., <code>100%</code>).</li>
+                            <li><code>width</code> & <code>height</code>: Controls player size. Accepts numbers for pixels (e.g., <code>560</code>) or percentages (e.g., <code>100%</code>). Audio mode works best at ~160 height.</li>
                             <li><code>border-radius</code>: Modify the <code>style="border-radius: 16px;"</code> snippet to change how rounded the corners are.</li>
                             <li><code>forcequality</code>: Optionally force the playback quality by setting this to <code>360p</code> or <code>720p</code>.</li>
+                            <li><code>type</code>: Set to <code>audio</code> to utilize the Audio-Only minimalist player using m4a/140 itag playback.</li>
                             <li><code>referrerpolicy</code>: Required for the video to play, as playback is disabled for requests without a referer to prevent bot abuse.</li>
                             <li><code>frameborder</code>: Set to <code>0</code> (no border) or <code>1</code> (shows a solid border).</li>
                         </ul>
@@ -1674,6 +1746,32 @@
                 </section>
 
             </main>
+
+            <script>
+                const tabs = document.querySelectorAll('.tab-btn-<%- v %>');
+                const iframe = document.getElementById('preview-iframe-<%- v %>');
+                const textarea = document.querySelector('.embed-textarea-<%- v %>');
+                const previewBox = document.querySelector('.preview-box-<%- v %>');
+
+                tabs.forEach(tab => {
+                    tab.addEventListener('click', () => {
+                        tabs.forEach(t => t.classList.remove('active'));
+                        tab.classList.add('active');
+
+                        if (tab.dataset.tab === 'audio') {
+                            iframe.src = '/embed/<%- v %>?type=audio';
+                            previewBox.style.aspectRatio = 'auto';
+                            previewBox.style.height = '160px';
+                            textarea.value = `<iframe src="https://<%= actualHost %>/embed/<%- v %>?type=audio" width="100%" height="160" frameborder="0" style="border-radius: 16px;" referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+                        } else {
+                            iframe.src = '/embed/<%- v %>';
+                            previewBox.style.aspectRatio = '16 / 9';
+                            previewBox.style.height = 'auto';
+                            textarea.value = `<iframe src="https://<%= actualHost %>/embed/<%- v %>" width="560" height="315" frameborder="0" style="border-radius: 16px;" forcequality="" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`;
+                        }
+                    });
+                });
+            </script>
 
         <% } else { %>
             <div class="video-wrapper-<%- v %>">
@@ -1816,9 +1914,22 @@
                         return retryNonce ? baseUrl + '&retry=' + encodeURIComponent(retryNonce) : baseUrl;
                     }
 
+                    // --- Init URL Params Check ---
+                    const urlParams = new URLSearchParams(window.location.search);
+                    let forcedQuality = urlParams.get('forcequality') || document.body.getAttribute('data-forcequality');
+                    let playerType = urlParams.get('type') || document.body.getAttribute('data-type');
+                    try {
+                        if (window.frameElement) {
+                            if (window.frameElement.hasAttribute('forcequality')) forcedQuality = window.frameElement.getAttribute('forcequality') || forcedQuality;
+                            if (window.frameElement.hasAttribute('type')) playerType = window.frameElement.getAttribute('type') || playerType;
+                        }
+                    } catch(e) {}
+                    const isAudioOnlyMode = playerType === 'audio';
+                    let skipInitPlay = false;
+
                     if (playerLink && !document.body.classList.contains('mode-showhow')) {
                         playerLink.addEventListener('click', (e) => {
-                            e.preventDefault();
+                            if(e) e.preventDefault();
 
                             playerLink.style.display = 'none';
 
@@ -1990,20 +2101,20 @@
                                         <div class="embed-popup-header-<%- v %>">Customize</div>
                                         <div class="embed-input-group-<%- v %>">
                                             <label>Width</label>
-                                            <input type="text" class="embed-width-<%- v %>" value="560">
-                                            <span class="embed-error-<%- v %> width-error-<%- v %>" style="display:none; color:#ff4d4d; font-size:11px; margin-top:2px;">Numbers only</span>
+                                            <input type="text" class="embed-width-<%- v %>" value="100%">
+                                            <span class="embed-error-<%- v %> width-error-<%- v %>" style="display:none; color:#ff4d4d; font-size:11px; margin-top:2px;">Numbers or % only</span>
                                         </div>
                                         <div class="embed-input-group-<%- v %>">
                                             <label>Height</label>
-                                            <input type="text" class="embed-height-<%- v %>" value="315">
-                                            <span class="embed-error-<%- v %> height-error-<%- v %>" style="display:none; color:#ff4d4d; font-size:11px; margin-top:2px;">Numbers only</span>
+                                            <input type="text" class="embed-height-<%- v %>" value="${isAudioOnlyMode ? '160' : '315'}">
+                                            <span class="embed-error-<%- v %> height-error-<%- v %>" style="display:none; color:#ff4d4d; font-size:11px; margin-top:2px;">Numbers or % only</span>
                                         </div>
                                         <div class="embed-input-group-<%- v %>">
                                             <label>Border Radius (px) <span style="font-size: 10px; color: #888;">e.g. 16</span></label>
                                             <input type="text" class="embed-br-<%- v %>" value="16">
                                             <span class="embed-error-<%- v %> br-error-<%- v %>" style="display:none; color:#ff4d4d; font-size:11px; margin-top:2px;">Numbers only</span>
                                         </div>
-                                        <div class="embed-input-group-<%- v %>">
+                                        <div class="embed-input-group-<%- v %>" style="${isAudioOnlyMode ? 'display: none;' : ''}">
                                             <label>Force Quality</label>
                                             <select class="embed-forcequality-<%- v %>">
                                                 <option value="">None (Auto)</option>
@@ -2070,14 +2181,33 @@
                                 logoLink.style.display = 'none';
                             }
 
+                            if (isAudioOnlyMode) {
+                                wrapper.classList.add('audio-only-ui');
+                                const bg = document.createElement('div');
+                                bg.className = 'audio-bg-<%- v %>';
+                                if (posterSrc) bg.style.backgroundImage = `url(${posterSrc})`;
+                                
+                                const thumb = document.createElement('div');
+                                thumb.className = 'audio-thumb-<%- v %>';
+                                if (posterSrc) thumb.style.backgroundImage = `url(${posterSrc})`;
+                                
+                                wrapper.insertBefore(bg, controls);
+                                wrapper.insertBefore(thumb, controls);
+
+                                const centerPlay = controls.querySelector('.center-play-overlay-<%- v %>');
+                                if(centerPlay) {
+                                    centerPlay.style.top = '40%';
+                                }
+                            }
+
                             wrapper.insertBefore(audio, wrapper.firstChild);
                             wrapper.insertBefore(video, audio.nextSibling);
                             wrapper.appendChild(statsOverlayWrapper);
                             wrapper.appendChild(controls);
 
                             // --- Core Audio/Video Sync Controller ---
-                            let activeQuality = '360p'; 
-                            let isAutoQuality = true;
+                            let activeQuality = isAudioOnlyMode ? 'audio' : '360p'; 
+                            let isAutoQuality = !isAudioOnlyMode;
                             let is720pAvailable = true;
                             let isDualPlaying = false;
                             let isIntendedToPlay = true; 
@@ -2094,6 +2224,8 @@
                             let lastDragEndTime = 0;
 
                             function getPrimaryMedia() {
+                                if (activeQuality === 'audio') return audio;
+                                if (activeQuality === 'audio-fallback') return video;
                                 return isDualPlaying ? audio : video;
                             }
                             function getDuration() {
@@ -2103,8 +2235,14 @@
                                 return getPrimaryMedia().currentTime || 0;
                             }
                             function setCurrentTime(t) {
-                                video.currentTime = t;
-                                if (isDualPlaying) audio.currentTime = t;
+                                if (activeQuality === 'audio') {
+                                    audio.currentTime = t;
+                                } else if (activeQuality === 'audio-fallback') {
+                                    video.currentTime = t;
+                                } else {
+                                    video.currentTime = t;
+                                    if (isDualPlaying) audio.currentTime = t;
+                                }
                             }
                             
                             function updatePlayPauseUI() {
@@ -2125,7 +2263,11 @@
                                 isIntendedToPlay = true;
                                 hasTriggeredEnd = false;
                                 updatePlayPauseUI();
-                                if (isDualPlaying) {
+                                if (activeQuality === 'audio') {
+                                    audio.play().catch(()=>{});
+                                } else if (activeQuality === 'audio-fallback') {
+                                    video.play().catch(()=>{});
+                                } else if (isDualPlaying) {
                                     audio.play().catch(()=>{});
                                     video.play().catch(()=>{});
                                 } else {
@@ -2136,8 +2278,14 @@
                             function pauseMedia() {
                                 isIntendedToPlay = false;
                                 updatePlayPauseUI();
-                                video.pause();
-                                if (isDualPlaying) audio.pause();
+                                if (activeQuality === 'audio') {
+                                    audio.pause();
+                                } else if (activeQuality === 'audio-fallback') {
+                                    video.pause();
+                                } else {
+                                    video.pause();
+                                    if (isDualPlaying) audio.pause();
+                                }
                             }
 
                             function togglePlay() {
@@ -2172,7 +2320,13 @@
 
                             function setMediaVolume(v) {
                                 lastVolume = v;
-                                if (isDualPlaying) {
+                                if (activeQuality === 'audio') {
+                                    audio.volume = v;
+                                    audio.muted = (v === 0);
+                                } else if (activeQuality === 'audio-fallback') {
+                                    video.volume = v;
+                                    video.muted = (v === 0);
+                                } else if (isDualPlaying) {
                                     audio.volume = v;
                                     audio.muted = (v === 0);
                                     video.muted = true; // Video ALWAYS muted in dual mode
@@ -2203,6 +2357,7 @@
                             }
 
                             function updateQualityUI() {
+                                if (isAudioOnlyMode) return; // Hide/ignore quality in audio mode
                                 const qualityListItems = controls.querySelectorAll('.quality-list-item-<%- v %>');
                                 qualityListItems.forEach(item => {
                                     item.classList.remove('is-active');
@@ -2241,15 +2396,19 @@
                             function loadQuality(quality, timeToSeek = 0, nonce = null, silent = false) {
                                 activeQuality = quality;
                                 isDualPlaying = (quality === '720p');
+                                const isAudioMode = (quality === 'audio');
+                                const isAudioFallback = (quality === 'audio-fallback');
                                 
                                 pendingSeekTime = timeToSeek;
                                 isSeekingPending = true;
 
-                                if (!silent) {
+                                if (!silent && !isAudioMode && !isAudioFallback) {
                                     isSwitchingQuality = true;
                                     showToast(`Switching to ${quality}...`, 0); 
                                     setBuffering(true);
                                     video.style.opacity = '0.01'; // Hide to prevent showing frame 0
+                                } else if (!silent && isAudioFallback) {
+                                    setBuffering(true);
                                 }
                                 
                                 updateQualityUI();
@@ -2261,10 +2420,22 @@
                                     video.currentTime = timeToSeek;
                                     audio.currentTime = timeToSeek;
                                     audio.playbackRate = video.playbackRate;
-                                    if(isIntendedToPlay) {
+                                    if(isIntendedToPlay && !skipInitPlay) {
                                         audio.play().catch(()=>{});
                                         video.play().catch(()=>{});
                                     }
+                                } else if (isAudioMode) {
+                                    video.pause(); video.removeAttribute('src'); video.load();
+                                    audio.src = getVideoUrl(140, nonce);
+                                    audio.muted = (lastVolume === 0);
+                                    audio.currentTime = timeToSeek;
+                                    if (isIntendedToPlay && !skipInitPlay) audio.play().catch(()=>{});
+                                } else if (isAudioFallback) {
+                                    audio.pause(); audio.removeAttribute('src'); audio.load();
+                                    video.src = getVideoUrl(18, nonce);
+                                    video.muted = (lastVolume === 0);
+                                    video.currentTime = timeToSeek;
+                                    if (isIntendedToPlay && !skipInitPlay) video.play().catch(()=>{});
                                 } else {
                                     audio.pause();
                                     audio.removeAttribute('src'); 
@@ -2273,7 +2444,7 @@
                                     video.src = getVideoUrl(18, nonce);
                                     video.muted = (lastVolume === 0);
                                     video.currentTime = timeToSeek;
-                                    if(isIntendedToPlay) {
+                                    if(isIntendedToPlay && !skipInitPlay) {
                                         video.play().catch(()=>{});
                                     }
                                 }
@@ -2281,6 +2452,7 @@
                             }
 
                             function testAndUpgradeTo720p() {
+                                if (isAudioOnlyMode) return;
                                 const dummy = document.createElement('video');
                                 dummy.src = getVideoUrl(247);
                                 dummy.onloadedmetadata = () => {
@@ -2388,7 +2560,15 @@
                             }
 
                             function updateVolumeUI() {
-                                const effectiveVolume = isDualPlaying ? (audio.muted ? 0 : audio.volume) : (video.muted ? 0 : video.volume);
+                                let effectiveVolume;
+                                if (activeQuality === 'audio') {
+                                    effectiveVolume = audio.muted ? 0 : audio.volume;
+                                } else if (activeQuality === 'audio-fallback') {
+                                    effectiveVolume = video.muted ? 0 : video.volume;
+                                } else {
+                                    effectiveVolume = isDualPlaying ? (audio.muted ? 0 : audio.volume) : (video.muted ? 0 : video.volume);
+                                }
+                                
                                 const pct = effectiveVolume * 100;
                                 if(volFill) volFill.style.height = pct + '%';
                                 if(volThumb) volThumb.style.bottom = pct + '%';
@@ -2489,11 +2669,11 @@
                                         event.stopPropagation();
                                         retryCount = 0;
                                         errContainer.style.display = 'none';
-                                        wrapper.style.backgroundColor = '#000';
-                                        video.style.display = 'block';
+                                        if(!isAudioOnlyMode) wrapper.style.backgroundColor = '#000';
+                                        video.style.display = isAudioOnlyMode ? 'none' : 'block';
                                         controls.style.display = '';
                                         playerLink.style.display = 'none';
-                                        if (posterSrc) video.poster = posterSrc;
+                                        if (posterSrc && !isAudioOnlyMode) video.poster = posterSrc;
                                         
                                         loadQuality(activeQuality, getCurrentTime(), Date.now());
                                     });
@@ -2511,6 +2691,11 @@
                                         const qBtn = controls.querySelector('.quality-list-item-<%- v %>[data-quality="720p"]');
                                         if(qBtn) qBtn.style.display = 'none';
                                         loadQuality('360p', getCurrentTime(), null, true);
+                                        return;
+                                    } else if (activeQuality === 'audio') {
+                                        showToast("High-quality audio failed, falling back to basic stream", 3000);
+                                        retryCount = 0;
+                                        loadQuality('audio-fallback', getCurrentTime(), null, true);
                                         return;
                                     }
                                     showRuntimeError();
@@ -2566,8 +2751,10 @@
                                 clearTimeout(hideTimeout);
                                 hideTimeout = setTimeout(() => {
                                     if (!getPrimaryMedia().paused && !settingsPanel.classList.contains('is-open-<%- v %>') && !speedPanel.classList.contains('is-open-<%- v %>') && !qualityPanel.classList.contains('is-open-<%- v %>') && !embedPanel.classList.contains('is-open-<%- v %>') && !volGroup.classList.contains('is-volume-open-<%- v %>')) {
-                                        controls.style.opacity = '0';
-                                        wrapper.style.cursor = 'none';
+                                        if(!isAudioOnlyMode) {
+                                            controls.style.opacity = '0';
+                                            wrapper.style.cursor = 'none';
+                                        }
                                     }
                                 }, 2500);
                             }
@@ -2594,10 +2781,11 @@
                                 const hVal = embedHeight.value;
                                 const brVal = embedBR.value;
                                 
+                                const isNumOrPct = (v) => /^(\d+|\d+%)$/.test(v);
                                 const isNum = (v) => /^\d+$/.test(v);
                                 
-                                if(!isNum(wVal) && wVal !== '') { controls.querySelector('.width-error-<%- v %>').style.display='block'; embedWidth.style.borderColor='#ff4d4d'; hasError=true; } else { controls.querySelector('.width-error-<%- v %>').style.display='none'; embedWidth.style.borderColor=''; }
-                                if(!isNum(hVal) && hVal !== '') { controls.querySelector('.height-error-<%- v %>').style.display='block'; embedHeight.style.borderColor='#ff4d4d'; hasError=true; } else { controls.querySelector('.height-error-<%- v %>').style.display='none'; embedHeight.style.borderColor=''; }
+                                if(!isNumOrPct(wVal) && wVal !== '') { controls.querySelector('.width-error-<%- v %>').style.display='block'; embedWidth.style.borderColor='#ff4d4d'; hasError=true; } else { controls.querySelector('.width-error-<%- v %>').style.display='none'; embedWidth.style.borderColor=''; }
+                                if(!isNumOrPct(hVal) && hVal !== '') { controls.querySelector('.height-error-<%- v %>').style.display='block'; embedHeight.style.borderColor='#ff4d4d'; hasError=true; } else { controls.querySelector('.height-error-<%- v %>').style.display='none'; embedHeight.style.borderColor=''; }
                                 if(!isNum(brVal) && brVal !== '') { controls.querySelector('.br-error-<%- v %>').style.display='block'; embedBR.style.borderColor='#ff4d4d'; hasError=true; } else { controls.querySelector('.br-error-<%- v %>').style.display='none'; embedBR.style.borderColor=''; }
                                 
                                 if(hasError) {
@@ -2605,13 +2793,16 @@
                                     return;
                                 }
 
-                                const w = wVal || '560';
-                                const h = hVal || '315';
+                                const w = wVal || '100%';
+                                const h = hVal || (isAudioOnlyMode ? '160' : '315');
                                 const br = brVal ? `border-radius: ${brVal}px;` : 'border-radius: 0px;';
                                 const fqEl = controls.querySelector('.embed-forcequality-<%- v %>');
                                 const fq = fqEl ? fqEl.value : '';
-                                const srcUrl = `https://<%= actualHost %>/embed/<%- v %>${fq ? '?forcequality=' + fq : ''}`;
-                                const fqAttr = fq ? ` forcequality="${fq}"` : ' forcequality=""';
+                                
+                                const fqAttr = fq && !isAudioOnlyMode ? ` forcequality="${fq}"` : '';
+                                const qs = isAudioOnlyMode ? '?type=audio' : (fq ? '?forcequality=' + fq : '');
+                                const srcUrl = `https://<%= actualHost %>/embed/<%- v %>${qs}`;
+                                
                                 embedText.value = `<iframe src="${srcUrl}" width="${w}" height="${h}" frameborder="0" style="${br}"${fqAttr} referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`;
                             }
 
@@ -2647,8 +2838,8 @@
                                 } catch(e) {}
                                 
                                 const resStr = vW && vH ? `${vW}x${vH}` : '0x0';
-                                const optimalRes = isDualPlaying ? '1280x720@30' : '640x360@30';
-                                const codecStr = isDualPlaying ? 'avc1.4d401e (247) / mp4a.40.2 (140)' : 'avc1.42001E, mp4a.40.2 (18)';
+                                const optimalRes = isAudioOnlyMode ? 'Audio' : (isDualPlaying ? '1280x720@30' : '640x360@30');
+                                const codecStr = isAudioOnlyMode ? 'mp4a.40.2 (140)' : (isDualPlaying ? 'avc1.4d401e (247) / mp4a.40.2 (140)' : 'avc1.42001E, mp4a.40.2 (18)');
 
                                 statsContent.innerHTML = `
                                     <div class="stats-line-<%- v %>"><span class="stats-label-<%- v %>">Video ID / sCPN</span><span class="stats-value-<%- v %>">${vd} / ${sCPN}</span></div>
@@ -2665,14 +2856,18 @@
 
                             // --- Event Listeners Mapping ---
                             const bindMediaEvent = (evt, handler) => {
-                                video.addEventListener(evt, (e) => { if(!isDualPlaying || e.target === video) handler(e, video); });
-                                audio.addEventListener(evt, (e) => { if(isDualPlaying && e.target === audio) handler(e, audio); });
+                                video.addEventListener(evt, (e) => { if(getPrimaryMedia() === video || (isDualPlaying && e.target === video)) handler(e, video); });
+                                audio.addEventListener(evt, (e) => { if(getPrimaryMedia() === audio || (isDualPlaying && e.target === audio)) handler(e, audio); });
                             };
 
                             bindMediaEvent('loadedmetadata', () => {
                                 if (isSeekingPending) {
-                                    video.currentTime = pendingSeekTime;
-                                    if (isDualPlaying) audio.currentTime = pendingSeekTime;
+                                    if (activeQuality === 'audio') audio.currentTime = pendingSeekTime;
+                                    else if (activeQuality === 'audio-fallback') video.currentTime = pendingSeekTime;
+                                    else {
+                                        video.currentTime = pendingSeekTime;
+                                        if (isDualPlaying) audio.currentTime = pendingSeekTime;
+                                    }
                                     isSeekingPending = false;
                                 }
                                 updateTime();
@@ -2685,9 +2880,15 @@
                                 video.style.opacity = '1';
                                 setBuffering(false);
                             });
+                            audio.addEventListener('seeked', () => {
+                                if(activeQuality === 'audio') setBuffering(false);
+                            });
 
                             video.addEventListener('error', () => { setBuffering(false); queueRetry(); });
-                            audio.addEventListener('error', () => { if(isDualPlaying){ setBuffering(false); queueRetry(); } });
+                            audio.addEventListener('error', () => { 
+                                if(isDualPlaying){ setBuffering(false); queueRetry(); } 
+                                else if(activeQuality === 'audio') { setBuffering(false); queueRetry(); }
+                            });
 
                             function onEndedHandler() {
                                 if (hasTriggeredEnd || !isIntendedToPlay) return;
@@ -2697,12 +2898,14 @@
                                     if (diff > 1.0) return; // Prevent false trigger if only one track ended
                                 }
                                 
-                                if (isNaturalEnd && !hasSeekedNearEnd && (getDuration() >= 120) && !video.loop) {
+                                const lp = activeQuality === 'audio' ? audio.loop : video.loop;
+                                
+                                if (isNaturalEnd && !hasSeekedNearEnd && (getDuration() >= 120) && !lp) {
                                     hasTriggeredEnd = true;
                                     endOverlay.classList.add('is-visible-<%- v %>');
                                     controls.style.display = 'none';
                                     pauseMedia();
-                                } else if (video.loop) {
+                                } else if (lp) {
                                     setCurrentTime(0);
                                     playMedia();
                                 }
@@ -2724,7 +2927,8 @@
 
                                 // Failsafe manual end check
                                 if (getDuration() > 0 && getCurrentTime() >= getDuration() - 0.25) {
-                                    if (!hasTriggeredEnd && !video.loop) onEndedHandler();
+                                    const lp = activeQuality === 'audio' ? audio.loop : video.loop;
+                                    if (!hasTriggeredEnd && !lp) onEndedHandler();
                                 }
 
                                 if (isDualPlaying) {
@@ -2772,6 +2976,16 @@
                                         const atVideoEnd = video.duration > 0 && video.currentTime >= video.duration - 0.05;
                                         if (video.paused && !document.hidden && !atVideoEnd) video.play().catch(()=>{});
                                     }
+                                } else if (activeQuality === 'audio') {
+                                    if (audio.ended && !audio.loop) return;
+                                    if (audio.readyState < 3) {
+                                        setBuffering(true);
+                                        if (!audio.paused) audio.pause();
+                                    } else {
+                                        setBuffering(false);
+                                        const atAudioEnd = audio.duration > 0 && audio.currentTime >= audio.duration - 0.05;
+                                        if (audio.paused && !atAudioEnd) audio.play().catch(()=>{});
+                                    }
                                 } else {
                                     if (video.ended && !video.loop) return;
 
@@ -2811,7 +3025,7 @@
                                 }
                             });
                             audio.addEventListener('seeking', () => {
-                                if (isDualPlaying && getDuration() && (getDuration() - getCurrentTime() <= 20)) {
+                                if ((isDualPlaying || activeQuality === 'audio') && getDuration() && (getDuration() - getCurrentTime() <= 20)) {
                                     hasSeekedNearEnd = true;
                                     isNaturalEnd = false;
                                 }
@@ -3032,8 +3246,9 @@
 
                             loopRow.addEventListener('click', (event) => {
                                 event.stopPropagation();
-                                video.loop = !video.loop;
-                                loopValue.innerText = video.loop ? 'On' : 'Off';
+                                if (activeQuality === 'audio') audio.loop = !audio.loop;
+                                else video.loop = !video.loop;
+                                loopValue.innerText = (activeQuality === 'audio' ? audio.loop : video.loop) ? 'On' : 'Off';
                                 showControls();
                             });
 
@@ -3130,24 +3345,19 @@
                             });
                             wrapper.addEventListener('mouseleave', () => {
                                 if (!getPrimaryMedia().paused && !settingsPanel.classList.contains('is-open-<%- v %>') && !speedPanel.classList.contains('is-open-<%- v %>') && !qualityPanel.classList.contains('is-open-<%- v %>') && !embedPanel.classList.contains('is-open-<%- v %>') && !volGroup.classList.contains('is-volume-open-<%- v %>')) {
-                                    controls.style.opacity = '0';
+                                    if(!isAudioOnlyMode) {
+                                        controls.style.opacity = '0';
+                                    }
                                 }
                             });
-
-                            // --- Init Parsing ---
-                            const urlParams = new URLSearchParams(window.location.search);
-                            let forcedQuality = urlParams.get('forcequality') || document.body.getAttribute('data-forcequality');
-                            
-                            try {
-                                if (window.frameElement && window.frameElement.hasAttribute('forcequality')) {
-                                    forcedQuality = window.frameElement.getAttribute('forcequality') || forcedQuality;
-                                }
-                            } catch(e) {}
 
                             // --- Init Flow ---
                             setBuffering(true); 
                             
-                            if (forcedQuality === '720p') {
+                            if (isAudioOnlyMode) {
+                                isAutoQuality = false;
+                                loadQuality('audio', 0, null, true);
+                            } else if (forcedQuality === '720p') {
                                 isAutoQuality = false;
                                 loadQuality('720p', 0, null, true);
                                 testAndUpgradeTo720p();
@@ -3161,9 +3371,19 @@
                                 testAndUpgradeTo720p(); 
                             }
                             
-                            playMedia();
+                            if (!skipInitPlay) {
+                                playMedia();
+                            } else {
+                                updatePlayPauseUI();
+                                setBuffering(false);
+                            }
 
                         });
+                        
+                        if (isAudioOnlyMode) {
+                            skipInitPlay = true;
+                            playerLink.click();
+                        }
                     }
                 })();
             </script>
