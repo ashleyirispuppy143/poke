@@ -1338,6 +1338,9 @@
         .video-wrapper-<%- v %>.audio-only-ui .custom-video-player-<%- v %> {
             display: none !important;
         }
+        .video-wrapper-<%- v %>.audio-only-ui .player-image-<%- v %> { 
+            display: none !important; 
+        }
         .video-wrapper-<%- v %>.audio-only-ui .custom-controls-<%- v %> {
             opacity: 1 !important;
             pointer-events: auto !important;
@@ -1351,11 +1354,12 @@
         .video-wrapper-<%- v %>.audio-only-ui .center-play-overlay-<%- v %> {
             position: static;
             transform: none;
-            width: 36px;
-            height: 36px;
+            width: 40px;
+            height: 40px;
             background: transparent;
             order: 1;
             flex-shrink: 0;
+            margin-right: 4px;
         }
         .video-wrapper-<%- v %>.audio-only-ui .center-play-overlay-<%- v %> svg {
             width: 28px;
@@ -1364,6 +1368,7 @@
         .video-wrapper-<%- v %>.audio-only-ui .center-play-overlay-<%- v %>:hover {
             transform: scale(1.1);
             background: rgba(255,255,255,0.1);
+            border-radius: 50%;
         }
         .video-wrapper-<%- v %>.audio-only-ui .bottom-area-<%- v %> {
             position: static;
@@ -1389,31 +1394,56 @@
             flex: 1;
         }
         .video-wrapper-<%- v %>.audio-only-ui .logo-link-<%- v %> {
-            order: 5;
+            order: 3;
             margin: 0;
             position: static;
         }
         .video-wrapper-<%- v %>.audio-only-ui .logo-img-<%- v %> {
-            height: 20px;
+            height: 24px;
         }
         .video-wrapper-<%- v %>.audio-only-ui .top-right-group-<%- v %> {
             position: static;
             display: flex;
             flex-direction: row;
             align-items: center;
-            order: 4;
+            order: 3;
             gap: 4px;
         }
         .video-wrapper-<%- v %>.audio-only-ui .vol-group-<%- v %> {
             box-shadow: none;
             background: transparent;
         }
+        
+        /* Audio Extra Buttons */
+        .audio-extra-btn-<%- v %> {
+            display: none;
+            background: transparent;
+            border: none;
+            color: #fff;
+            cursor: pointer;
+            width: 24px;
+            height: 24px;
+            padding: 0;
+            opacity: 0.7;
+            transition: opacity 0.2s, color 0.2s;
+            margin-right: 8px;
+            order: 2; /* right before logo */
+        }
+        .audio-extra-btn-<%- v %>:hover { opacity: 1; }
+        .audio-extra-btn-<%- v %> svg { width: 100%; height: 100%; }
+        
+        .video-wrapper-<%- v %>.audio-only-ui .audio-extra-btn-<%- v %> {
+            display: block;
+        }
+
         /* Hide unusable components in tiny iframe */
         .video-wrapper-<%- v %>.audio-only-ui .fs-group-<%- v %>,
         .video-wrapper-<%- v %>.audio-only-ui .link-circle-btn-<%- v %>,
         .video-wrapper-<%- v %>.audio-only-ui .more-videos-pill-<%- v %>,
         .video-wrapper-<%- v %>.audio-only-ui .chapter-title-<%- v %>,
-        .video-wrapper-<%- v %>.audio-only-ui .quality-row-<%- v %> {
+        .video-wrapper-<%- v %>.audio-only-ui .quality-row-<%- v %>,
+        .video-wrapper-<%- v %>.audio-only-ui .settings-btn-<%- v %>,
+        .video-wrapper-<%- v %>.audio-only-ui .vol-slider-wrap-<%- v %> {
             display: none !important;
         }
         .video-wrapper-<%- v %>.audio-only-ui .time-display-pill-<%- v %> {
@@ -1546,27 +1576,29 @@
 
         .tabs-container-<%- v %> {
             display: flex;
-            gap: 12px;
-            margin-bottom: 20px;
+            gap: 24px;
+            margin-bottom: 24px;
             border-bottom: 1px solid #333;
-            padding-bottom: 12px;
+            padding-bottom: 0;
+            justify-content: center;
         }
 
         .tab-btn-<%- v %> {
             background: transparent;
             color: #aaa;
             border: none;
-            font-size: 15px;
+            font-size: 16px;
             font-weight: 500;
             cursor: pointer;
-            padding: 8px 16px;
-            border-radius: 8px;
+            padding: 12px 16px;
+            border-bottom: 3px solid transparent;
             transition: all 0.2s;
             font-family: "PokeTube Flex", Arial, sans-serif;
+            border-radius: 0;
         }
 
         .tab-btn-<%- v %>:hover { color: #fff; background: rgba(255,255,255,0.05); }
-        .tab-btn-<%- v %>.active { color: #fff; background: #272727; border: 1px solid #444; }
+        .tab-btn-<%- v %>.active { color: #fff; background: transparent; border-bottom-color: #ffabcc; }
 
         .preview-box-<%- v %> {
             width: 100%;
@@ -1712,11 +1744,6 @@
             if (typeof document.createElement !== 'function') _failsBotCheck = true;
             if (typeof window.requestAnimationFrame !== 'function') _failsBotCheck = true;
             if (navigator.languages === "") _failsBotCheck = true;
-            
-            // Basic framing abuse check
-            if (window.self !== window.top && (window.innerWidth < 40 || window.innerHeight < 40)) {
-                _failsBotCheck = true;
-            }
         } catch(e) { 
             _failsBotCheck = true; 
         }
@@ -1763,7 +1790,7 @@
                         <button class="tab-btn-<%- v %>" data-tab="audio">Audio Only</button>
                     </div>
                     <div class="preview-box-<%- v %>">
-                        <iframe id="preview-iframe-<%- v %>" src="/embed/<%- v %>?type=video" allowfullscreen></iframe>
+                        <iframe id="preview-iframe-<%- v %>" src="/embed/<%- v %>" allowfullscreen></iframe>
                     </div>
                 </section>
 
@@ -1809,12 +1836,12 @@
                         tab.classList.add('active');
 
                         if (tab.dataset.tab === 'audio') {
-                            iframe.src = '/embed/<%- v %>?type=audio';
+                            iframe.src = '/embed/<%- v %>?type=audio&t=' + Date.now();
                             previewBox.style.aspectRatio = 'auto';
                             previewBox.style.height = '60px';
                             textarea.value = `<iframe src="https://<%= actualHost %>/embed/<%- v %>?type=audio" width="100%" height="60" frameborder="0" style="border-radius: 16px;" referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
                         } else {
-                            iframe.src = '/embed/<%- v %>?type=video';
+                            iframe.src = '/embed/<%- v %>?type=video&t=' + Date.now();
                             previewBox.style.aspectRatio = '16 / 9';
                             previewBox.style.height = 'auto';
                             textarea.value = `<iframe src="https://<%= actualHost %>/embed/<%- v %>" width="560" height="315" frameborder="0" style="border-radius: 16px;" forcequality="" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`;
@@ -1872,11 +1899,6 @@
                         if (typeof document.createElement !== 'function') _failsBotCheck = true;
                         if (typeof window.requestAnimationFrame !== 'function') _failsBotCheck = true;
                         if (navigator.languages === "") _failsBotCheck = true;
-                        
-                        // Basic framing abuse check
-                        if (window.self !== window.top && (window.innerWidth < 40 || window.innerHeight < 40)) {
-                            _failsBotCheck = true;
-                        }
                     } catch(e) {
                         _failsBotCheck = true;
                     }
@@ -1968,19 +1990,12 @@
                     const urlParams = new URLSearchParams(window.location.search);
                     let forcedQuality = urlParams.get('forcequality') || document.body.getAttribute('data-forcequality');
                     let playerType = urlParams.get('type') || document.body.getAttribute('data-type');
-                    
-                    if (playerType === 'video') playerType = ''; // Normalize explicit video
-                    
                     try {
                         if (window.frameElement) {
                             if (window.frameElement.hasAttribute('forcequality')) forcedQuality = window.frameElement.getAttribute('forcequality') || forcedQuality;
-                            if (window.frameElement.hasAttribute('type')) {
-                                const ft = window.frameElement.getAttribute('type');
-                                playerType = ft === 'video' ? '' : (ft || playerType);
-                            }
+                            if (window.frameElement.hasAttribute('type')) playerType = window.frameElement.getAttribute('type') || playerType;
                         }
                     } catch(e) {}
-                    
                     const isAudioOnlyMode = playerType === 'audio';
                     let skipInitPlay = false;
 
@@ -2223,9 +2238,11 @@
                                             <button class="more-videos-pill-<%- v %>" type="button" title="More videos">
                                                 <span>More videos</span>
                                                 <div class="more-videos-icon-wrapper-<%- v %>">
-                                                    ${posterSrc && !isAudioOnlyMode ? `<img src="${posterSrc.replace(/"/g, '&quot;')}" style="width: 100%; height: 100%; object-fit: cover;" alt="">` : `<svg viewBox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8 12.5v-9l6 4.5-6 4.5z"/></svg>`}
+                                                    ${posterSrc ? `<img src="${posterSrc.replace(/"/g, '&quot;')}" style="width: 100%; height: 100%; object-fit: cover;" alt="">` : `<svg viewBox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8 12.5v-9l6 4.5-6 4.5z"/></svg>`}
                                                 </div>
                                             </button>
+                                            <button class="audio-extra-btn-<%- v %> audio-loop-btn-<%- v %>" type="button" title="Loop"><svg viewBox="0 0 24 24" fill="currentColor"><path d="${loopIcon}"/></svg></button>
+                                            <button class="audio-extra-btn-<%- v %> audio-speed-btn-<%- v %>" type="button" title="Speed"><svg viewBox="0 0 24 24" fill="currentColor"><path d="${speedIcon}"/></svg></button>
                                             <a href="/" target="_blank" rel="noopener noreferrer" class="logo-link-<%- v %>">
                                                 <img src="/css/logo-poke.svg" alt="Poke Logo" class="logo-img-<%- v %>">
                                             </a>
@@ -2574,6 +2591,8 @@
                             const restartBtn = endOverlay.querySelector('.restart-btn-<%- v %>');
                             
                             const linkBtn = controls.querySelector('.link-btn-<%- v %>');
+                            const audioLoopBtn = controls.querySelector('.audio-loop-btn-<%- v %>');
+                            const audioSpeedBtn = controls.querySelector('.audio-speed-btn-<%- v %>');
 
                             let showRemainingTime = false;
                             let retryCount = 0;
@@ -2957,11 +2976,6 @@
 
                             // The Central Synchronization Loop
                             setInterval(() => {
-                                // Basic size abuse check
-                                if (window.innerWidth < 40 || window.innerHeight < 40) {
-                                    if (isIntendedToPlay) pauseMedia();
-                                }
-
                                 if (!isIntendedToPlay) return; 
 
                                 const pm = getPrimaryMedia();
@@ -3153,6 +3167,30 @@
                                     togglePlay();
                                 }
                             });
+
+                            if(audioLoopBtn) {
+                                audioLoopBtn.addEventListener('click', (e) => {
+                                    e.stopPropagation();
+                                    if (activeQuality === 'audio') audio.loop = !audio.loop;
+                                    else video.loop = !video.loop;
+                                    const isLooping = activeQuality === 'audio' ? audio.loop : video.loop;
+                                    audioLoopBtn.style.color = isLooping ? '#ffabcc' : '#fff';
+                                    showToast(isLooping ? 'Loop: On' : 'Loop: Off', 1500);
+                                });
+                            }
+
+                            if(audioSpeedBtn) {
+                                audioSpeedBtn.addEventListener('click', (e) => {
+                                    e.stopPropagation();
+                                    const cycle = [0.5, 1, 1.25, 1.5, 2];
+                                    let current = parseFloat(speedSlider ? speedSlider.value : 1) || 1;
+                                    let idx = cycle.indexOf(current);
+                                    if(idx === -1) idx = 1;
+                                    let nextVal = cycle[(idx + 1) % cycle.length];
+                                    updateSpeedState(nextVal);
+                                    showToast(`Speed: ${nextVal}x`, 1500);
+                                });
+                            }
 
                             if(volSliderBg) {
                                 volSliderBg.addEventListener('pointerdown', (e) => {
