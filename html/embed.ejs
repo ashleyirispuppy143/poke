@@ -1333,42 +1333,94 @@
 
         /* --- Audio Only Mode Styles --- */
         .video-wrapper-<%- v %>.audio-only-ui {
-            background-color: #111;
+            background-color: #121212;
         }
         .video-wrapper-<%- v %>.audio-only-ui .custom-video-player-<%- v %> {
             display: none !important;
-        }
-        .video-wrapper-<%- v %>.audio-only-ui .audio-bg-<%- v %> {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background-size: cover;
-            background-position: center;
-            filter: blur(15px) brightness(0.4);
-            z-index: 1;
-        }
-        .video-wrapper-<%- v %>.audio-only-ui .audio-thumb-<%- v %> {
-            position: absolute;
-            top: 40%; left: 50%;
-            transform: translate(-50%, -50%);
-            width: clamp(80px, 20vmin, 160px);
-            height: clamp(80px, 20vmin, 160px);
-            border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            background-size: cover;
-            background-position: center;
-            z-index: 2;
         }
         .video-wrapper-<%- v %>.audio-only-ui .custom-controls-<%- v %> {
             opacity: 1 !important;
             pointer-events: auto !important;
             background: transparent;
-        }
-        .video-wrapper-<%- v %>.audio-only-ui .fs-group-<%- v %>,
-        .video-wrapper-<%- v %>.audio-only-ui .quality-row-<%- v %> {
-            display: none !important;
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            padding: 0 16px;
+            gap: 12px;
         }
         .video-wrapper-<%- v %>.audio-only-ui .center-play-overlay-<%- v %> {
-            top: 40%;
+            position: static;
+            transform: none;
+            width: 36px;
+            height: 36px;
+            background: transparent;
+            order: 1;
+            flex-shrink: 0;
+        }
+        .video-wrapper-<%- v %>.audio-only-ui .center-play-overlay-<%- v %> svg {
+            width: 28px;
+            height: 28px;
+        }
+        .video-wrapper-<%- v %>.audio-only-ui .center-play-overlay-<%- v %>:hover {
+            transform: scale(1.1);
+            background: rgba(255,255,255,0.1);
+        }
+        .video-wrapper-<%- v %>.audio-only-ui .bottom-area-<%- v %> {
+            position: static;
+            padding: 0;
+            background: none;
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            flex: 1;
+            order: 2;
+            gap: 12px;
+        }
+        .video-wrapper-<%- v %>.audio-only-ui .controls-row-top-<%- v %>,
+        .video-wrapper-<%- v %>.audio-only-ui .controls-row-bottom-<%- v %>,
+        .video-wrapper-<%- v %>.audio-only-ui .bottom-right-controls-<%- v %> {
+            display: contents;
+        }
+        .video-wrapper-<%- v %>.audio-only-ui .time-chapter-group-<%- v %> {
+            order: 1;
+        }
+        .video-wrapper-<%- v %>.audio-only-ui .progress-container-<%- v %> {
+            order: 2;
+            flex: 1;
+        }
+        .video-wrapper-<%- v %>.audio-only-ui .logo-link-<%- v %> {
+            order: 3;
+            margin: 0;
+            position: static;
+        }
+        .video-wrapper-<%- v %>.audio-only-ui .logo-img-<%- v %> {
+            height: 24px;
+        }
+        .video-wrapper-<%- v %>.audio-only-ui .top-right-group-<%- v %> {
+            position: static;
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            order: 3;
+            gap: 4px;
+        }
+        .video-wrapper-<%- v %>.audio-only-ui .vol-group-<%- v %> {
+            box-shadow: none;
+            background: transparent;
+        }
+        /* Hide unusable components in tiny iframe */
+        .video-wrapper-<%- v %>.audio-only-ui .fs-group-<%- v %>,
+        .video-wrapper-<%- v %>.audio-only-ui .link-circle-btn-<%- v %>,
+        .video-wrapper-<%- v %>.audio-only-ui .more-videos-pill-<%- v %>,
+        .video-wrapper-<%- v %>.audio-only-ui .chapter-title-<%- v %>,
+        .video-wrapper-<%- v %>.audio-only-ui .quality-row-<%- v %>,
+        .video-wrapper-<%- v %>.audio-only-ui .settings-btn-<%- v %>,
+        .video-wrapper-<%- v %>.audio-only-ui .vol-slider-wrap-<%- v %> {
+            display: none !important;
+        }
+        .video-wrapper-<%- v %>.audio-only-ui .time-display-pill-<%- v %> {
+            background: transparent;
+            padding: 0;
         }
 
         @media (max-width: 560px) {
@@ -1735,7 +1787,7 @@
                         
                         <strong>Customizing the code</strong>
                         <ul>
-                            <li><code>width</code> & <code>height</code>: Controls player size. Accepts numbers for pixels (e.g., <code>560</code>) or percentages (e.g., <code>100%</code>). Audio mode works best at ~160 height.</li>
+                            <li><code>width</code> & <code>height</code>: Controls player size. Accepts numbers for pixels (e.g., <code>560</code>) or percentages (e.g., <code>100%</code>). Audio mode works best at ~60 height.</li>
                             <li><code>border-radius</code>: Modify the <code>style="border-radius: 16px;"</code> snippet to change how rounded the corners are.</li>
                             <li><code>forcequality</code>: Optionally force the playback quality by setting this to <code>360p</code> or <code>720p</code>.</li>
                             <li><code>type</code>: Set to <code>audio</code> to utilize the Audio-Only minimalist player using m4a/140 itag playback.</li>
@@ -1761,8 +1813,8 @@
                         if (tab.dataset.tab === 'audio') {
                             iframe.src = '/embed/<%- v %>?type=audio';
                             previewBox.style.aspectRatio = 'auto';
-                            previewBox.style.height = '160px';
-                            textarea.value = `<iframe src="https://<%= actualHost %>/embed/<%- v %>?type=audio" width="100%" height="160" frameborder="0" style="border-radius: 16px;" referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+                            previewBox.style.height = '60px';
+                            textarea.value = `<iframe src="https://<%= actualHost %>/embed/<%- v %>?type=audio" width="100%" height="60" frameborder="0" style="border-radius: 16px;" referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
                         } else {
                             iframe.src = '/embed/<%- v %>';
                             previewBox.style.aspectRatio = '16 / 9';
@@ -2106,7 +2158,7 @@
                                         </div>
                                         <div class="embed-input-group-<%- v %>">
                                             <label>Height</label>
-                                            <input type="text" class="embed-height-<%- v %>" value="${isAudioOnlyMode ? '160' : '315'}">
+                                            <input type="text" class="embed-height-<%- v %>" value="${isAudioOnlyMode ? '60' : '315'}">
                                             <span class="embed-error-<%- v %> height-error-<%- v %>" style="display:none; color:#ff4d4d; font-size:11px; margin-top:2px;">Numbers or % only</span>
                                         </div>
                                         <div class="embed-input-group-<%- v %>">
@@ -2183,25 +2235,10 @@
 
                             if (isAudioOnlyMode) {
                                 wrapper.classList.add('audio-only-ui');
-                                const bg = document.createElement('div');
-                                bg.className = 'audio-bg-<%- v %>';
-                                if (posterSrc) bg.style.backgroundImage = `url(${posterSrc})`;
-                                
-                                const thumb = document.createElement('div');
-                                thumb.className = 'audio-thumb-<%- v %>';
-                                if (posterSrc) thumb.style.backgroundImage = `url(${posterSrc})`;
-                                
-                                wrapper.insertBefore(bg, controls);
-                                wrapper.insertBefore(thumb, controls);
-
-                                const centerPlay = controls.querySelector('.center-play-overlay-<%- v %>');
-                                if(centerPlay) {
-                                    centerPlay.style.top = '40%';
-                                }
                             }
 
-                            wrapper.insertBefore(audio, wrapper.firstChild);
-                            wrapper.insertBefore(video, audio.nextSibling);
+                            wrapper.appendChild(audio);
+                            wrapper.appendChild(video);
                             wrapper.appendChild(statsOverlayWrapper);
                             wrapper.appendChild(controls);
 
@@ -2794,7 +2831,7 @@
                                 }
 
                                 const w = wVal || '100%';
-                                const h = hVal || (isAudioOnlyMode ? '160' : '315');
+                                const h = hVal || (isAudioOnlyMode ? '60' : '315');
                                 const br = brVal ? `border-radius: ${brVal}px;` : 'border-radius: 0px;';
                                 const fqEl = controls.querySelector('.embed-forcequality-<%- v %>');
                                 const fq = fqEl ? fqEl.value : '';
