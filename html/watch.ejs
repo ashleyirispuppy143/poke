@@ -2652,9 +2652,16 @@ VideoData?.recommendedVideos.forEach(video => {
             <p style="margin: 0; padding: 0 0 5px 0; font-size: 1.1em; font-weight: 500; text-align: left;">Watch Next...</p>
             <hr style="border: none; border-top: 2px solid #555; margin: 0 0 10px 0;">
         </div>
+        <style>
+        .first-video {
+         margin-top: -30px;
+         margin-bottom: -15px;
+        }
+        </style>
+        
     <% } %>
 
-    <div class="fade-in video" data-channel="<%= x.authorId %>">
+    <div class="fade-in video first-video" data-channel="<%= x.authorId %>">
         <% if (!optout) { %>
             <a class="thumbnail" href="/watch?v=<%= x.videoId %>" style="background-image:url(<%- media_proxy_url %>/proxy?url=https://i.ytimg.com/vi/<%= x.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw);border-radius:9.5px" alt="<%= x.Title %>">
                 <span class="video-length"><%- turntomins(x.lengthSeconds) || "LIVE"%></span>
@@ -2699,8 +2706,8 @@ VideoData?.recommendedVideos.forEach(video => {
     </div>
 
     <% if (index === 0) { %>
-        <hr style="border: none; border-top: 2px solid #555; margin: 10px 0 15px 0; width: 100%;">
-    <% } %>
+<hr style="border: none; border-top: 2px solid #555; margin: 10px 0 -2px 0; width: 100%;">
+<% } %>
 <% }) %>
 
       
