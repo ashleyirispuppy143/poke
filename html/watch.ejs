@@ -2649,8 +2649,8 @@ VideoData?.recommendedVideos.forEach(video => {
 <% VideoData?.recommendedVideos.forEach((x, index) => { %>
     <% if (index === 0) { %>
         <div style="width: 100%; text-align: left; margin-bottom: 10px;">
-            <p style="margin: 0; padding: 0 0 5px 0; font-size: 1.1em; font-weight: 500; text-align: left;">Watch Next...</p>
-            <hr style="border: none; border-top: 2px solid #555; margin: 0 0 10px 0;">
+<p style="margin: 0; padding: 0 0 5px 0; font-size: 1.1em;  text-align: left;font-family: &quot;poketube flex&quot;;font-stretch: ultra-expanded;font-weight: 600;">Next To Watch [BETA!]</p>
+<hr style="border: none; border-top: 2px solid #555; margin: 0 0 10px 0;">
         </div>
         <style>
         .first-video {
@@ -2658,13 +2658,11 @@ VideoData?.recommendedVideos.forEach(video => {
          margin-bottom: -15px;
         }
         </style>
-
     <% } %>
     <% if (index === 0) { %>
     <div class="fade-in video first-video" data-channel="<%= x.authorId %>">
         <% } %>
     <% if (index !== 0) { %>
-
     <div class="fade-in video" data-channel="<%= x.authorId %>">
         <% } %>
         <% if (!optout) { %>
