@@ -2634,7 +2634,31 @@ Recommended Videos
 </div>   
                  <% } %>
                    
-                                
+                 <style>
+                 .watch-next-section {
+    width: 100%;
+}
+
+.watch-next-heading {
+    margin: 0 0 4px 0;
+    padding: 0 0 0 4px;
+    font-size: 15px;
+    font-weight: 500;
+    color: #fff;
+}
+
+.watch-next-separator {
+    width: 100%;
+    height: 3px;
+    margin: 4px 0 8px 0;
+    background: #ff1f3d;
+    border-radius: 999px;
+}
+
+.watch-next-first-video {
+    margin-bottom: 8px;
+}
+                 </style>
 <% if (!f) { %>
   
 <% if (VideoData.recommendedVideos) { %>
@@ -2646,53 +2670,127 @@ VideoData?.recommendedVideos.forEach(video => {
   }
 });
 %>
-<p>what to watch?</p>
-<% VideoData?.recommendedVideos.forEach(x => { %>
-    <div class="fade-in video" data-channel="<%= x.authorId %>">
-        <% if (!optout) { %>
-            <a class="thumbnail" href="/watch?v=<%= x.videoId %>" style="background-image:url(<%- media_proxy_url %>/proxy?url=https://i.ytimg.com/vi/<%= x.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw);border-radius:9.5px" alt="<%= x.Title %>">
-                <span class="video-length"><%- turntomins(x.lengthSeconds) || "LIVE"%></span>
+<%
+const recommendedVideos = VideoData?.recommendedVideos || [];
+const firstRecommendedVideo = recommendedVideos[0];
+const remainingRecommendedVideos = recommendedVideos.slice(1);
+%>
+
+<% if (firstRecommendedVideo) { %>
+    <div class="watch-next-section">
+        <p class="watch-next-heading">Watch Next...</p>
+
+        <div class="watch-next-separator"></div>
+
+        <div class="fade-in video watch-next-first-video" data-channel="<%= firstRecommendedVideo.authorId %>">
+            <% if (!optout) { %>
+                <a class="thumbnail" href="/watch?v=<%= firstRecommendedVideo.videoId %>" style="background-image:url(<%- media_proxy_url %>/proxy?url=https://i.ytimg.com/vi/<%= firstRecommendedVideo.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw);border-radius:9.5px" alt="<%= firstRecommendedVideo.Title %>">
+                    <span class="video-length"><%- turntomins(firstRecommendedVideo.lengthSeconds) || "LIVE" %></span>
+                </a>
             <% } %>
+
             <% if (optout) { %>
-                <a class="thumbnail" href="/watch?v=<%= x.videoId %>&m=f" style="background-image:url(<%- media_proxy_url %>/proxy?url=https://i.ytimg.com/vi/<%= x.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw);border-radius:9.5px" alt="<%= x.Title %>">
-                    <span class="video-length"><%- x.duration || "LIVE"%></span>
-                <% } %>
-            </a>
+                <a class="thumbnail" href="/watch?v=<%= firstRecommendedVideo.videoId %>&m=f" style="background-image:url(<%- media_proxy_url %>/proxy?url=https://i.ytimg.com/vi/<%= firstRecommendedVideo.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw);border-radius:9.5px" alt="<%= firstRecommendedVideo.Title %>">
+                    <span class="video-length"><%- firstRecommendedVideo.duration || "LIVE" %></span>
+                </a>
+            <% } %>
+
             <div class="info">
                 <% if (!optout) { %>
-                    <a class="max-lines-2 title" href="/watch?v=<%= x.videoId %>" style="font-stretch:ultra-expanded;font-weight:850" title="<%= x.title %>">
-                        <%= x.title %>
+                    <a class="max-lines-2 title" href="/watch?v=<%= firstRecommendedVideo.videoId %>" style="font-stretch:ultra-expanded;font-weight:850" title="<%= firstRecommendedVideo.title %>">
+                        <%= firstRecommendedVideo.title %>
                     </a>
                 <% } %>
+
                 <% if (optout) { %>
-                    <a class="max-lines-2 title" href="/watch?v=<%= x.videoId %>&m=f" style="font-stretch:100%;font-weight:800" title="<%= x.title %>">
-                        <%= x.title %>
+                    <a class="max-lines-2 title" href="/watch?v=<%= firstRecommendedVideo.videoId %>&m=f" style="font-stretch:100%;font-weight:800" title="<%= firstRecommendedVideo.title %>">
+                        <%= firstRecommendedVideo.title %>
                     </a>
                 <% } %>
+
                 <div>
-                    <a class="max-lines-2" href="/channel?id=<%= x.authorId %>@youtube.com" style="-webkit-line-clamp:1;width:12em;word-wrap:break-word">
+                    <a class="max-lines-2" href="/channel?id=<%= firstRecommendedVideo.authorId %>@youtube.com" style="-webkit-line-clamp:1;width:12em;word-wrap:break-word">
                         <span>
-                            <%= x.author %> 
-                            <% if (x?.authorVerified) { %>
-                                <% if (musicChannels.has(x.authorId)) { %>
+                            <%= firstRecommendedVideo.author %>
+
+                            <% if (firstRecommendedVideo?.authorVerified) { %>
+                                <% if (musicChannels.has(firstRecommendedVideo.authorId)) { %>
                                     <i class="fa-light fa-music-note" style="margin-left: 0em;" title="verified artist channel"></i>
                                 <% } else { %>
-                                    <i class="icon ion ion-md-checkmark-circle" style="margin-left: 0em;" title="verified channel"></i>     
+                                    <i class="icon ion ion-md-checkmark-circle" style="margin-left: 0em;" title="verified channel"></i>
                                 <% } %>
                             <% } %>
                         </span>
                     </a>
-<div class="video-views">
-  <viewcounttext style="margin-right: 6px;margin-left: 1px;">
-    <i class="fa-light fa-play"></i> <%= x.viewCountText %>
-  </viewcounttext>  
-  <%= x.publishedText %>  
-</div>
+
+                    <div class="video-views">
+                        <viewcounttext style="margin-right: 6px;margin-left: 1px;">
+                            <i class="fa-light fa-play"></i> <%= firstRecommendedVideo.viewCountText %>
+                        </viewcounttext>
+
+                        <%= firstRecommendedVideo.publishedText %>
+                    </div>
                 </div>
             </div>
         </div>
-<% }) %>
 
+        <div class="watch-next-separator"></div>
+    </div>
+<% } %>
+
+<% remainingRecommendedVideos.forEach(video => { %>
+    <div class="fade-in video" data-channel="<%= video.authorId %>">
+        <% if (!optout) { %>
+            <a class="thumbnail" href="/watch?v=<%= video.videoId %>" style="background-image:url(<%- media_proxy_url %>/proxy?url=https://i.ytimg.com/vi/<%= video.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw);border-radius:9.5px" alt="<%= video.Title %>">
+                <span class="video-length"><%- turntomins(video.lengthSeconds) || "LIVE" %></span>
+            </a>
+        <% } %>
+
+        <% if (optout) { %>
+            <a class="thumbnail" href="/watch?v=<%= video.videoId %>&m=f" style="background-image:url(<%- media_proxy_url %>/proxy?url=https://i.ytimg.com/vi/<%= video.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw);border-radius:9.5px" alt="<%= video.Title %>">
+                <span class="video-length"><%- video.duration || "LIVE" %></span>
+            </a>
+        <% } %>
+
+        <div class="info">
+            <% if (!optout) { %>
+                <a class="max-lines-2 title" href="/watch?v=<%= video.videoId %>" style="font-stretch:ultra-expanded;font-weight:850" title="<%= video.title %>">
+                    <%= video.title %>
+                </a>
+            <% } %>
+
+            <% if (optout) { %>
+                <a class="max-lines-2 title" href="/watch?v=<%= video.videoId %>&m=f" style="font-stretch:100%;font-weight:800" title="<%= video.title %>">
+                    <%= video.title %>
+                </a>
+            <% } %>
+
+            <div>
+                <a class="max-lines-2" href="/channel?id=<%= video.authorId %>@youtube.com" style="-webkit-line-clamp:1;width:12em;word-wrap:break-word">
+                    <span>
+                        <%= video.author %>
+
+                        <% if (video?.authorVerified) { %>
+                            <% if (musicChannels.has(video.authorId)) { %>
+                                <i class="fa-light fa-music-note" style="margin-left: 0em;" title="verified artist channel"></i>
+                            <% } else { %>
+                                <i class="icon ion ion-md-checkmark-circle" style="margin-left: 0em;" title="verified channel"></i>
+                            <% } %>
+                        <% } %>
+                    </span>
+                </a>
+
+                <div class="video-views">
+                    <viewcounttext style="margin-right: 6px;margin-left: 1px;">
+                        <i class="fa-light fa-play"></i> <%= video.viewCountText %>
+                    </viewcounttext>
+
+                    <%= video.publishedText %>
+                </div>
+            </div>
+        </div>
+    </div>
+<% }) %>
       
       
         <% } %>
