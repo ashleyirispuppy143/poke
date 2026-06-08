@@ -10259,6 +10259,8 @@ function releaseSeekAudioAfterVideoReady(reason = "") {
   let pairStartVideoTime = NaN;
   let pairStartFrameCount = NaN;
   let joinCorrectionCount = 0;
+  let pairStartRetryCount = 0;
+  let lastPairStartRetryAt = 0;
   let done = false;
   let timer = null;
   const cleanup = () => {
@@ -10525,14 +10527,25 @@ function releaseSeekAudioAfterVideoReady(reason = "") {
     }
     if (audio.paused || vn.paused) {
       const retryAge = now() - pairStartRequestedAt;
-      if (retryAge > (perfProfile.lowEnd ? 900 : 650)) {
-        if (audio.paused) {
-          audioPlayRequested = false;
-          audioPositioned = false;
+      const retryQuiet = now() - Number(lastPairStartRetryAt || 0);
+      if (retryAge > (perfProfile.lowEnd ? 1450 : 1050) && retryQuiet > (perfProfile.lowEnd ? 760 : 540)) {
+        pairStartRetryCount++;
+        lastPairStartRetryAt = now();
+        if (pairStartRetryCount <= (perfProfile.lowEnd ? 3 : 2)) {
+          if (audio.paused) {
+            audioPlayRequested = false;
+            audioPositioned = false;
+          }
+          if (vn.paused) videoPlayRequested = false;
+        } else {
+          state.seekResumeStableAttemptBlockUntil = Math.max(Number(state.seekResumeStableAttemptBlockUntil || 0), now() + (perfProfile.lowEnd ? 1600 : 1100));
+          if (now() < releaseDeadline) {
+            scheduleTry(perfProfile.lowEnd ? 220 : 150);
+            return;
+          }
         }
-        if (vn.paused) videoPlayRequested = false;
       }
-      if (now() < releaseDeadline) scheduleTry(perfProfile.lowEnd ? 42 : 20);
+      if (now() < releaseDeadline) scheduleTry(perfProfile.lowEnd ? 90 : 55);
       else abort();
       return;
     }
@@ -10737,6 +10750,92 @@ function seekResumeCommitActive(tailMs = 0) {
   return !!state.seekResumeCommitInFlight &&
   now() < (Number(state.seekResumeCommitUntil) || 0) + Math.max(0, Number(tailMs) || 0);
 }
+function seekResumeTargetSettledForPlayback(target = NaN, reason = "seek-resume") {
+  const t = Number(target);
+  if (!isFinite(t) || t < 0) return true;
+  const vn = (() => { try { return getVideoNode(); } catch { return null; } })();
+  if (!vn) return true;
+  const nowTs = now();
+  const videoTolerance = perfProfile.lowEnd ? 0.20 : 0.14;
+  const audioTolerance = perfProfile.lowEnd ? 0.16 : 0.10;
+  let videoAt = NaN;
+  let videoSeeking = false;
+  try {
+    videoAt = Number(vn.currentTime);
+    videoSeeking = !!vn.seeking;
+  } catch { }
+  if (videoSeeking) {
+    try { beginSeekDisplayAuthority(t, perfProfile.lowEnd ? 5200 : 4200); } catch { }
+    return false;
+  }
+  if (isFinite(videoAt) && Math.abs(videoAt - t) > videoTolerance) {
+    if ((nowTs - Number(state.seekResumeStableLastAlignAt || 0)) > (perfProfile.lowEnd ? 120 : 75)) {
+      state.seekResumeStableLastAlignAt = nowTs;
+      state._isMicroSeek = true;
+      try { vn.currentTime = t; } catch { }
+      try { if (videoEl && videoEl !== vn) videoEl.currentTime = t; } catch { }
+      try { beginSeekDisplayAuthority(t, perfProfile.lowEnd ? 5200 : 4200); } catch { }
+      try { scheduleMicroSeekClear(perfProfile.lowEnd ? 260 : 190); } catch { }
+    }
+    return false;
+  }
+  try {
+    if (!mediaHasCurrentDataAtTarget(vn, t, perfProfile.lowEnd ? 0.08 : 0.05)) {
+      try { beginSeekDisplayAuthority(t, perfProfile.lowEnd ? 5200 : 4200); } catch { }
+      return false;
+    }
+  } catch { }
+  if (coupledMode && audio) {
+    let audioAt = NaN;
+    let audioSeeking = false;
+    try {
+      audioAt = Number(audio.currentTime);
+      audioSeeking = !!audio.seeking;
+    } catch { }
+    if (audioSeeking) return false;
+    if (audio.paused && isFinite(audioAt) && Math.abs(audioAt - t) > audioTolerance) {
+      try { writeSeekAudioTargetSilently(t, String(reason || "seek-resume") + "-audio-land"); } catch { }
+      return false;
+    }
+    try {
+      if (audio.paused && !audioHasStrictSeekDataAtTarget(t, perfProfile.lowEnd ? 0.14 : 0.09)) return false;
+    } catch { }
+  }
+  return true;
+}
+function seekResumePlayAttemptAllowed(seekId = state.seekId, target = NaN, reason = "seek-resume") {
+  const t = now();
+  const id = Number(seekId || 0);
+  const sameId = Number(state.seekResumeStableAttemptSeekId) === id;
+  const nTarget = Number(target);
+  const previousTarget = Number(state.seekResumeStableAttemptTarget);
+  const sameTarget = !isFinite(nTarget) || !isFinite(previousTarget) || Math.abs(nTarget - previousTarget) < 0.24;
+  if (sameId && sameTarget && t < Number(state.seekResumeStableAttemptBlockUntil || 0)) return false;
+  if (!sameId || !sameTarget || t > Number(state.seekResumeStableAttemptWindowUntil || 0)) {
+    state.seekResumeStableAttemptCount = 0;
+    state.seekResumeStableAttemptWindowUntil = t + (perfProfile.lowEnd ? 3600 : 2600);
+  }
+  state.seekResumeStableAttemptCount = Number(state.seekResumeStableAttemptCount || 0) + 1;
+  state.seekResumeStableAttemptSeekId = id;
+  state.seekResumeStableAttemptTarget = isFinite(nTarget) ? nTarget : NaN;
+  state.seekResumeStableAttemptReason = String(reason || "seek-resume").slice(0, 48);
+  const count = Number(state.seekResumeStableAttemptCount || 0);
+  const baseGap = perfProfile.lowEnd ? 1100 : 820;
+  const extraGap = count > 1 ? (perfProfile.lowEnd ? 460 : 340) * Math.min(4, count - 1) : 0;
+  state.seekResumeStableAttemptBlockUntil = t + baseGap + extraGap;
+  return count <= (perfProfile.lowEnd ? 3 : 2);
+}
+function deferSeekResumeCommitUntilSettled(seekId, reason = "seek-resume", delayMs = 120) {
+  const delay = Math.max(perfProfile.lowEnd ? 170 : 95, Number(delayMs) || 0);
+  state.seekResumeCommitUntil = Math.max(Number(state.seekResumeCommitUntil || 0), now() + delay + 420);
+  setTimeout(() => {
+    if (seekId !== state.seekId) return;
+    if (!state.intendedPlaying || state.endedNaturally || state.restarting) return;
+    if (userPauseLockActive() || mediaSessionForcedPauseActive() || userPauseIntentActive()) return;
+    scheduleSeekResumeCommit(reason || "seek-resume-settled", 0, { allowDuringSeek: false });
+  }, delay);
+  return true;
+}
 function finishSeekResumeCommit(seekId, holdMs = 420) {
   state.seekResumeCommitLastAt = now();
   state.seekResumeCommitUntil = now() + Math.max(80, Number(holdMs) || 0);
@@ -10834,6 +10933,18 @@ function scheduleSeekResumeCommit(reason = "seek-resume", delayMs = 0, opts = {}
         beginSeekDisplayAuthority(resumeTarget, 12000);
         if (shouldResumeAfterSeek()) startSeekBufferWait(true);
         finishSeekResumeCommit(seekId, 360);
+        return;
+      }
+    }
+    if (seekOwnedResume && isFinite(resumeTarget) && resumeTarget >= 0) {
+      if (!seekResumeTargetSettledForPlayback(resumeTarget, reason || "seek-resume")) {
+        deferSeekResumeCommitUntilSettled(seekId, reason || "seek-resume-target-settle", state.seekBuffering ? (perfProfile.lowEnd ? 280 : 180) : (perfProfile.lowEnd ? 190 : 120));
+        finishSeekResumeCommit(seekId, perfProfile.lowEnd ? 620 : 440);
+        return;
+      }
+      if (!seekResumePlayAttemptAllowed(seekId, resumeTarget, reason || "seek-resume")) {
+        deferSeekResumeCommitUntilSettled(seekId, reason || "seek-resume-cooldown", perfProfile.lowEnd ? 460 : 320);
+        finishSeekResumeCommit(seekId, perfProfile.lowEnd ? 900 : 680);
         return;
       }
     }
@@ -11721,7 +11832,7 @@ const FemboiPlayerStableEngine = (() => {
       state.userPlayLockUntil = Math.max(Number(state.userPlayLockUntil || 0), now() + 2200);
       state.audioStartGraceUntil = Math.max(Number(state.audioStartGraceUntil || 0), now() + 1200);
       try { armSeekResumeIntent(6200); } catch { }
-      try { scheduleSeekResumeCommit("stable-seeked", 0, { allowDuringSeek: true }); } catch { }
+      try { scheduleSeekResumeCommit("stable-seeked", perfProfile.lowEnd ? 150 : 90, { allowDuringSeek: false }); } catch { }
       try {
         if (coupledMode && audio) {
           if (isFinite(settled) && settled >= 0) writeSeekAudioTargetSilently(settled, "stable-seeked-audio");
@@ -12517,6 +12628,12 @@ const FemboiEngine = (() => {
     state.femboiEngineHiddenAnchor = anchor;
     state.femboiEngineHiddenAnchorSource = audioAnchorValid ? "audio" : "player";
     state.femboiEngineHiddenAt = t;
+    state.femboiEngineHiddenWallAt = Date.now();
+    state.femboiEngineHiddenWasIntendedPlaying = !!state.intendedPlaying;
+    try {
+      const dur = Number(getVideoDurationForTerminalAudio());
+      state.femboiEngineHiddenDuration = isFinite(dur) && dur > 0 ? dur : NaN;
+    } catch { state.femboiEngineHiddenDuration = NaN; }
     try { KittyCollar.onBackgroundLeave(reason); } catch { }
     if (state.intendedPlaying) {
       state.femboiEngineReturnAnchor = anchor;
@@ -12549,14 +12666,43 @@ const FemboiEngine = (() => {
         !state.firstPlayCommitted ||
         !isFinite(vt) ||
         vt < 0.75);
-    const anchor = isFinite(explicitTarget) && explicitTarget >= 0
+    const hiddenAnchor = Number(state.femboiEngineHiddenAnchor);
+    const hiddenWallAt = Number(state.femboiEngineHiddenWallAt || 0);
+    const hiddenElapsed = hiddenWallAt > 0 ? Math.max(0, (Date.now() - hiddenWallAt) / 1000) : 0;
+    const hiddenDuration = Number(state.femboiEngineHiddenDuration);
+    const hiddenWasPlaying = !!state.femboiEngineHiddenWasIntendedPlaying || !!state.bgHiddenWasPlaying || !!state.resumeOnVisible;
+    const hiddenPredicted = (() => {
+      if (!isFinite(hiddenAnchor) || hiddenAnchor < 0) return NaN;
+      if (!hiddenWasPlaying) return hiddenAnchor;
+      const cappedAdvance = Math.min(hiddenElapsed, 180);
+      const raw = hiddenAnchor + Math.max(0, cappedAdvance);
+      return isFinite(hiddenDuration) && hiddenDuration > 0 ? Math.min(Math.max(0, hiddenDuration - 0.08), raw) : raw;
+    })();
+    let anchor = isFinite(explicitTarget) && explicitTarget >= 0
       ? explicitTarget
-      : (audioReturnPositionLooksValid
-        ? at
-        : readBestAnchor({ preferAudio: !!(coupledMode && audio && !audio.paused) }));
+      : NaN;
+    if (!isFinite(anchor)) {
+      if (audioReturnPositionLooksValid && (!isFinite(hiddenAnchor) || at >= hiddenAnchor - 0.30)) {
+        anchor = at;
+      } else if (isFinite(hiddenPredicted) && hiddenPredicted >= 0 && hiddenAnchorAge >= 0 && hiddenAnchorAge < 300000) {
+        anchor = hiddenPredicted;
+      } else {
+        anchor = readBestAnchor({ preferAudio: !!(coupledMode && audio && !audio.paused) });
+      }
+    }
+    if (isFinite(hiddenAnchor) && hiddenAnchor >= 0 && hiddenAnchorAge >= 0 && hiddenAnchorAge < 300000) {
+      const visibleVideoLooksStale = isFinite(vt) && vt < hiddenAnchor - 0.45;
+      const audioLooksStale = isFinite(at) && at < hiddenAnchor - 0.45 && (!audioReturnPositionLooksValid || audio.paused);
+      if ((visibleVideoLooksStale || audioLooksStale) && isFinite(hiddenPredicted) && hiddenPredicted >= 0) {
+        anchor = hiddenPredicted;
+      }
+    }
     state.femboiEngineReturnAnchor = anchor;
     state.kittyCollarAnchor = anchor;
     state.kittyCollarLeaveAt = now();
+    try { beginTransportPositionAuthority(anchor, reason || "foreground-return", perfProfile.lowEnd ? 4200 : 3200); } catch { }
+    try { beginSeekDisplayAuthority(anchor, perfProfile.lowEnd ? 4200 : 3200); } catch { }
+    try { holdSeekbarStableTarget(anchor, perfProfile.lowEnd ? 4200 : 3200); } catch { }
     begin("return", reason, anchor, RETURN_MS);
     try { clearAudioPauseLocks(); } catch { }
     try { clearBufferHold(); } catch { }
@@ -12779,7 +12925,7 @@ const noSpamManager = (() => {
       try { clearAudioPauseLocks(); } catch { }
       if (seekBusy()) {
         state.playRequestedDuringSeek = true;
-        scheduleSeekResumeCommit(reason, state.seekBuffering ? (perfProfile.lowEnd ? 260 : 170) : 70, { allowDuringSeek: true });
+        scheduleSeekResumeCommit(reason, state.seekBuffering ? (perfProfile.lowEnd ? 320 : 220) : (perfProfile.lowEnd ? 220 : 150), { allowDuringSeek: false });
         scheduleSync(perfProfile.lowEnd ? 140 : 90);
         return;
       }
@@ -12819,8 +12965,8 @@ const noSpamManager = (() => {
       if (seekBusy() || seekAudioHoldUntilVideoReadyActive() || state.seekAudioReleaseInFlight) {
         scheduleSeekResumeCommit(
           "no-spam-seek-pause-owner",
-          state.seekBuffering ? (perfProfile.lowEnd ? 260 : 180) : (perfProfile.lowEnd ? 110 : 70),
-          { allowDuringSeek: true }
+          state.seekBuffering ? (perfProfile.lowEnd ? 340 : 230) : (perfProfile.lowEnd ? 240 : 160),
+          { allowDuringSeek: false }
         );
         return true;
       }
@@ -20104,7 +20250,7 @@ function scheduleStablePlaybackRecovery(reason = "playback-recovery", opts = {})
     state.pendingSeekTarget != null;
   if (seekOwned) {
     state.bufferHoldIntendedPlaying = true;
-    if (scheduleSeekResumeCommit(reason || "stable-seek-recovery", 0, { allowDuringSeek: true })) return true;
+    if (scheduleSeekResumeCommit(reason || "stable-seek-recovery", perfProfile.lowEnd ? 220 : 140, { allowDuringSeek: false })) return true;
     if (shouldResumeAfterSeek()) return startSeekBufferWait(!!(coupledMode && audio));
     return false;
   }
@@ -20119,9 +20265,11 @@ function scheduleStablePlaybackRecovery(reason = "playback-recovery", opts = {})
       return true;
   }
   const t = now();
-  const minGap = perfProfile.lowEnd ? 180 : 100;
+  const minGap = mediaTransportStormGuardActive(300) ? (perfProfile.lowEnd ? 760 : 540) : (perfProfile.lowEnd ? 260 : 160);
   if ((t - Number(state.stablePlaybackRecoveryLastAt || 0)) < minGap) return true;
-  const delay = opts.immediate ? 0 : (perfProfile.lowEnd ? 70 : 35);
+  const delay = mediaTransportStormGuardActive(300)
+    ? (perfProfile.lowEnd ? 380 : 260)
+    : (opts.immediate ? 0 : (perfProfile.lowEnd ? 90 : 55));
   const dueAt = t + delay;
   if (state.stablePlaybackRecoveryTimer &&
     Number(state.stablePlaybackRecoveryDueAt || 0) <= dueAt) return true;
@@ -20136,7 +20284,7 @@ function scheduleStablePlaybackRecovery(reason = "playback-recovery", opts = {})
     if (state.seeking || state.seekBuffering || state.seekResumeInFlight ||
       state.seekAudioReleaseInFlight || seekAudioHoldUntilVideoReadyActive() ||
       seekPlaybackTransactionActive(900)) {
-      scheduleSeekResumeCommit(state.stablePlaybackRecoveryReason || reason, 0, { allowDuringSeek: true });
+      scheduleSeekResumeCommit(state.stablePlaybackRecoveryReason || reason, perfProfile.lowEnd ? 220 : 140, { allowDuringSeek: false });
       return;
     }
     state.stablePlaybackRecoveryLastAt = now();
