@@ -2658,10 +2658,15 @@ VideoData?.recommendedVideos.forEach(video => {
          margin-bottom: -15px;
         }
         </style>
-        
-    <% } %>
 
+    <% } %>
+    <% if (index === 0) { %>
     <div class="fade-in video first-video" data-channel="<%= x.authorId %>">
+        <% } %>
+    <% if (index !== 0) { %>
+
+    <div class="fade-in video" data-channel="<%= x.authorId %>">
+        <% } %>
         <% if (!optout) { %>
             <a class="thumbnail" href="/watch?v=<%= x.videoId %>" style="background-image:url(<%- media_proxy_url %>/proxy?url=https://i.ytimg.com/vi/<%= x.videoId %>/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLBy_x4UUHLNDZtJtH0PXeQGoRFTgw);border-radius:9.5px" alt="<%= x.Title %>">
                 <span class="video-length"><%- turntomins(x.lengthSeconds) || "LIVE"%></span>
