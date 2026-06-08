@@ -23,8 +23,6 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  * ///////////////////////////////////////////////////////////////////////////
  * "It takes a lot of hard work to make something simple." ~ Steve Jobs 
  */
-
-//////////////// THE PLAYER, START ////////////////////////
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -32084,6 +32082,8 @@ _on(window, "unhandledrejection", (e) => {
   });
 }, { passive: true });
 }, { once: true });
+
+//////////////// THE PLAYER, START ////////////////////////
 
 //////////////// THE PLAYER, END ////////////////////////
  
