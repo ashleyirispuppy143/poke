@@ -2659,6 +2659,10 @@ VideoData?.recommendedVideos.forEach(video => {
         }
         </style>
     <% } %>
+        <% if (index !== 0) { %>
+        <p style="margin: 0; padding: 0 0 5px 0; font-size: 1.1em;  text-align: left;font-family: &quot;poketube flex&quot;;font-stretch: ultra-expanded;font-weight: 600;">Other videos...</p>
+    <% } %>
+
     <% if (index === 0) { %>
     <div class="fade-in video first-video" data-channel="<%= x.authorId %>">
         <% } %>
