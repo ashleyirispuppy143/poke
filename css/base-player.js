@@ -1,6 +1,5 @@
 // in the beginning.... god made mrrprpmnaynayaynaynayanyuwuuuwmauwnwanwaumawp :p
  
-var versionclient = "youtube.player.web_20250917_22_RC00"
 
  /**
  * @license
