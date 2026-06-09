@@ -32806,6 +32806,311 @@ if (coupledMode && audio) {
     }
   }, 3000);
 }
+
+function installDeepTransportRootOwner20260609() {
+  if (state.deepTransportRootOwnerInstalled) return;
+  state.deepTransportRootOwnerInstalled = true;
+  const owner = {
+    wantPlaying: !!state.intendedPlaying,
+    wasPlayingDuringSeek: false,
+    recoveryUntil: 0,
+    flapShieldUntil: 0,
+    hiddenAt: 0,
+    hiddenVideoTime: 0,
+    hiddenAudioTime: 0,
+    targetTime: 0,
+    inFlight: false,
+    pendingTimer: 0,
+    lastAttemptAt: 0,
+    lastSuccessfulPlayAt: 0,
+    lastUserPauseAt: 0,
+    lastReadyNudgeAt: 0,
+    backgroundReturnUntil: 0
+  };
+  const vNode = () => {
+    try { return getVideoNode() || videoEl || (video && video.el && video.el().querySelector("video")); } catch { return videoEl || null; }
+  };
+  const mediaTime = (el) => {
+    try { const n = Number(el && el.currentTime); return Number.isFinite(n) ? n : 0; } catch { return 0; }
+  };
+  const setMediaTime = (el, t) => {
+    if (!el || !Number.isFinite(t) || t < 0) return;
+    try {
+      if (Math.abs((Number(el.currentTime) || 0) - t) > 0.18) el.currentTime = Math.max(0, t);
+    } catch { }
+  };
+  const readyStateOf = (el) => {
+    try { return Number(el && el.readyState || 0); } catch { return 0; }
+  };
+  const networkStateOf = (el) => {
+    try { return Number(el && el.networkState || 0); } catch { return 0; }
+  };
+  const bufferedAheadNative = (el, t) => {
+    try {
+      const b = el && el.buffered;
+      if (!b) return 0;
+      for (let i = 0; i < b.length; i++) {
+        const s = Number(b.start(i));
+        const e = Number(b.end(i));
+        if (t >= s - 0.05 && t <= e + 0.05) return Math.max(0, e - t);
+      }
+    } catch { }
+    return 0;
+  };
+  const isSeekingNow = () => {
+    try { if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return true; } catch { }
+    try { if (vNode() && vNode().seeking) return true; } catch { }
+    try { if (audio && audio.seeking) return true; } catch { }
+    return false;
+  };
+  const visibleNow = () => {
+    try { return document.visibilityState !== "hidden"; } catch { return true; }
+  };
+  const explicitPauseActiveDeep = () => {
+    try { if (userPauseLockActive && userPauseLockActive()) return true; } catch { }
+    try { if (userPauseIntentActive && userPauseIntentActive()) return true; } catch { }
+    try { if (mediaSessionForcedPauseActive && mediaSessionForcedPauseActive()) return true; } catch { }
+    return false;
+  };
+  const coupledAudioExpected = () => {
+    try { return !!(coupledMode && audio && typeof audio.play === "function" && !audio.error); } catch { return false; }
+  };
+  const mediaHasEnoughAt = (el, t, allowCurrentData) => {
+    if (!el) return false;
+    const rs = readyStateOf(el);
+    if (rs >= 3) return true;
+    if (allowCurrentData && rs >= 2 && bufferedAheadNative(el, t) > 0.025) return true;
+    return bufferedAheadNative(el, t) > (allowCurrentData ? 0.025 : 0.08);
+  };
+  const currentTarget = () => {
+    const node = vNode();
+    const vt = mediaTime(node);
+    const at = mediaTime(audio);
+    if (owner.targetTime > 0 && now() < owner.recoveryUntil) return owner.targetTime;
+    if (visibleNow()) return vt;
+    return Math.max(vt, at, owner.hiddenVideoTime || 0, owner.hiddenAudioTime || 0);
+  };
+  const bothReadyForPlay = () => {
+    const node = vNode();
+    const target = currentTarget();
+    const videoReady = mediaHasEnoughAt(node, target, true);
+    if (!videoReady) return false;
+    if (!coupledAudioExpected()) return true;
+    const audioReady = mediaHasEnoughAt(audio, target, true) || readyStateOf(audio) >= 2;
+    return audioReady;
+  };
+  const prepareLoading = (reason) => {
+    const node = vNode();
+    try { if (node) node.preload = "auto"; } catch { }
+    try { if (audio) audio.preload = "auto"; } catch { }
+    if (networkStateOf(node) === 0) { try { node.load(); } catch { } }
+    if (coupledAudioExpected() && networkStateOf(audio) === 0) { try { audio.load(); } catch { } }
+    try { state.strictBufferHold = false; } catch { }
+    try { state.videoStallAudioPaused = false; } catch { }
+    try { state.videoWaiting = false; } catch { }
+    try { clearAudioPauseLocks(); } catch { }
+    try { clearBufferHold(); } catch { }
+    owner.lastReadyNudgeAt = now();
+  };
+  const swallowTransientPause = (source) => {
+    if (!owner.wantPlaying) return false;
+    if (explicitPauseActiveDeep()) return false;
+    const recovering = now() < owner.recoveryUntil || now() < owner.flapShieldUntil || isSeekingNow();
+    if (!recovering) return false;
+    scheduleRootResume(source + "-pause-swallowed", 55);
+    return true;
+  };
+  const notePlayWanted = (reason) => {
+    owner.wantPlaying = true;
+    owner.recoveryUntil = Math.max(owner.recoveryUntil, now() + 18000);
+    owner.flapShieldUntil = Math.max(owner.flapShieldUntil, now() + 3600);
+    try { state.intendedPlaying = true; } catch { }
+    try { state.bufferHoldIntendedPlaying = true; } catch { }
+    try { state.userPlayUntil = Math.max(Number(state.userPlayUntil) || 0, now() + 18000); } catch { }
+    try { state.resumeOnVisible = true; } catch { }
+    scheduleRootResume(reason, 0);
+  };
+  const noteRealUserPause = (reason) => {
+    if (swallowTransientPause(reason)) return;
+    owner.wantPlaying = false;
+    owner.wasPlayingDuringSeek = false;
+    owner.recoveryUntil = 0;
+    owner.flapShieldUntil = 0;
+    owner.lastUserPauseAt = now();
+  };
+  const callNativePlay = (el) => {
+    if (!el || typeof el.play !== "function") return Promise.resolve(false);
+    try {
+      const p = el.play();
+      return Promise.resolve(p).then(() => true).catch(() => false);
+    } catch { return Promise.resolve(false); }
+  };
+  const callPlayerPlay = () => {
+    try {
+      const p = video && typeof video.play === "function" ? video.play() : null;
+      return Promise.resolve(p).then(() => true).catch(() => false);
+    } catch { return Promise.resolve(false); }
+  };
+  const playPairOnce = async (reason) => {
+    if (!owner.wantPlaying || explicitPauseActiveDeep()) return false;
+    const node = vNode();
+    if (!node) return false;
+    const target = currentTarget();
+    try { state.intendedPlaying = true; } catch { }
+    try { state.bufferHoldIntendedPlaying = true; } catch { }
+    try { clearAudioPauseLocks(); } catch { }
+    if (now() < owner.backgroundReturnUntil) {
+      setMediaTime(node, target);
+      if (coupledAudioExpected()) setMediaTime(audio, target);
+    }
+    if (!bothReadyForPlay()) {
+      prepareLoading(reason + "-buffer");
+      scheduleRootResume(reason + "-wait-ready", visibleNow() ? 140 : 320);
+      return false;
+    }
+    owner.flapShieldUntil = Math.max(owner.flapShieldUntil, now() + 2400);
+    try { state.isProgrammaticVideoPlay = true; } catch { }
+    try { state.isProgrammaticAudioPlay = true; } catch { }
+    const audioExpected = coupledAudioExpected();
+    const audioPromise = audioExpected ? callNativePlay(audio) : Promise.resolve(true);
+    const videoPromise = callNativePlay(node).then((ok) => ok || callPlayerPlay());
+    const result = await Promise.allSettled([audioPromise, videoPromise]);
+    const audioOk = !audioExpected || result[0].status === "fulfilled";
+    const videoOk = result[1].status === "fulfilled";
+    setTimeout(() => {
+      try { state.isProgrammaticVideoPlay = false; } catch { }
+      try { state.isProgrammaticAudioPlay = false; } catch { }
+    }, 350);
+    const nodePlaying = !!(node && !node.paused);
+    const audioPlaying = !audioExpected || !!(audio && !audio.paused);
+    if (nodePlaying && audioPlaying && audioOk && videoOk) {
+      owner.lastSuccessfulPlayAt = now();
+      owner.recoveryUntil = Math.max(owner.recoveryUntil, now() + 1200);
+      return true;
+    }
+    if (owner.wantPlaying && !explicitPauseActiveDeep()) scheduleRootResume(reason + "-verify", 180);
+    return nodePlaying || audioPlaying;
+  };
+  function scheduleRootResume(reason, delay) {
+    if (!owner.wantPlaying && reason !== "visibility-return") return;
+    const t = now();
+    if (delay <= 0 && owner.inFlight) return;
+    if (delay <= 0 && (t - owner.lastAttemptAt) < 90) delay = 90;
+    if (owner.pendingTimer) clearTimeout(owner.pendingTimer);
+    owner.pendingTimer = setTimeout(async () => {
+      owner.pendingTimer = 0;
+      if (!owner.wantPlaying || explicitPauseActiveDeep()) return;
+      if (owner.inFlight) {
+        scheduleRootResume(reason + "-join", 110);
+        return;
+      }
+      owner.inFlight = true;
+      owner.lastAttemptAt = now();
+      try { await playPairOnce(reason); }
+      finally { owner.inFlight = false; }
+    }, Math.max(0, Number(delay) || 0));
+  }
+  const seekStart = () => {
+    const node = vNode();
+    const wasPlaying = owner.wantPlaying || !!state.intendedPlaying || !!(node && !node.paused) || !!(audio && !audio.paused);
+    owner.wasPlayingDuringSeek = wasPlaying;
+    owner.targetTime = mediaTime(node);
+    if (wasPlaying) {
+      owner.wantPlaying = true;
+      owner.recoveryUntil = now() + 22000;
+      owner.flapShieldUntil = now() + 5200;
+      try { state.intendedPlaying = true; } catch { }
+      try { state.bufferHoldIntendedPlaying = true; } catch { }
+    }
+  };
+  const seekEnd = () => {
+    const node = vNode();
+    owner.targetTime = mediaTime(node);
+    if (owner.wasPlayingDuringSeek || owner.wantPlaying || state.intendedPlaying) {
+      notePlayWanted("deep-seeked");
+      scheduleRootResume("deep-seeked-fast", 0);
+      scheduleRootResume("deep-seeked-ready", 90);
+      scheduleRootResume("deep-seeked-late", 260);
+    }
+  };
+  const readyNudge = (reason) => {
+    if (!owner.wantPlaying && !state.intendedPlaying) return;
+    if (explicitPauseActiveDeep()) return;
+    const node = vNode();
+    const needsResume = !!(node && node.paused) || !!(coupledAudioExpected() && audio.paused);
+    if (needsResume || now() < owner.recoveryUntil || !bothReadyForPlay()) scheduleRootResume(reason, 0);
+  };
+  const hidden = () => {
+    const node = vNode();
+    owner.hiddenAt = now();
+    owner.hiddenVideoTime = mediaTime(node);
+    owner.hiddenAudioTime = mediaTime(audio);
+    owner.wantPlaying = owner.wantPlaying || !!state.intendedPlaying || !!(node && !node.paused) || !!(audio && !audio.paused);
+    if (owner.wantPlaying) {
+      owner.recoveryUntil = Math.max(owner.recoveryUntil, now() + 30000);
+      owner.flapShieldUntil = Math.max(owner.flapShieldUntil, now() + 5000);
+      try { state.resumeOnVisible = true; } catch { }
+      prepareLoading("hidden");
+      scheduleRootResume("hidden-continue", 180);
+    }
+  };
+  const visible = (reason) => {
+    const node = vNode();
+    if (owner.wantPlaying || state.resumeOnVisible || state.intendedPlaying) {
+      const target = Math.max(mediaTime(node), mediaTime(audio), owner.hiddenVideoTime || 0, owner.hiddenAudioTime || 0);
+      owner.targetTime = Number.isFinite(target) ? target : mediaTime(node);
+      owner.backgroundReturnUntil = now() + 4500;
+      owner.recoveryUntil = Math.max(owner.recoveryUntil, now() + 22000);
+      owner.flapShieldUntil = Math.max(owner.flapShieldUntil, now() + 4200);
+      try { state.intendedPlaying = true; } catch { }
+      try { state.resumeOnVisible = true; } catch { }
+      setMediaTime(node, owner.targetTime);
+      if (coupledAudioExpected()) setMediaTime(audio, owner.targetTime);
+      prepareLoading(reason);
+      scheduleRootResume(reason + "-now", 0);
+      scheduleRootResume(reason + "-ready", 130);
+      scheduleRootResume(reason + "-late", 420);
+    }
+  };
+  const installOn = (el, name, fn, opts) => {
+    try { if (el) _on(el, name, fn, opts || { passive: true }); } catch { try { if (el) el.addEventListener(name, fn, opts || { passive: true }); } catch { } }
+  };
+  const nodeAtInstall = vNode();
+  const mediaTargets = [nodeAtInstall, videoEl, audio].filter(Boolean);
+  for (const el of mediaTargets) {
+    installOn(el, "play", () => notePlayWanted("media-play"));
+    installOn(el, "playing", () => { owner.lastSuccessfulPlayAt = now(); readyNudge("media-playing"); });
+    installOn(el, "pause", () => noteRealUserPause("media-pause"));
+    installOn(el, "seeking", seekStart);
+    installOn(el, "seeked", seekEnd);
+    installOn(el, "waiting", () => { if (owner.wantPlaying || state.intendedPlaying) { prepareLoading("waiting"); scheduleRootResume("waiting", 220); } });
+    installOn(el, "canplay", () => readyNudge("canplay"));
+    installOn(el, "canplaythrough", () => readyNudge("canplaythrough"));
+    installOn(el, "loadeddata", () => readyNudge("loadeddata"));
+    installOn(el, "progress", () => readyNudge("progress"));
+    installOn(el, "timeupdate", () => { if (now() < owner.recoveryUntil) readyNudge("timeupdate"); });
+  }
+  installOn(document, "visibilitychange", () => {
+    if (document.visibilityState === "hidden") hidden();
+    else visible("visibility-return");
+  });
+  installOn(window, "pageshow", () => visible("pageshow"));
+  installOn(window, "focus", () => visible("focus"));
+  installOn(window, "online", () => readyNudge("online"));
+  setInterval(() => {
+    if (!owner.wantPlaying && !state.intendedPlaying) return;
+    if (explicitPauseActiveDeep()) return;
+    const node = vNode();
+    if (!node) return;
+    const stuckVideo = node.paused && readyStateOf(node) >= 2;
+    const stuckAudio = coupledAudioExpected() && audio.paused && readyStateOf(audio) >= 2;
+    const recovering = now() < owner.recoveryUntil || now() < owner.backgroundReturnUntil;
+    if (stuckVideo || stuckAudio || recovering) scheduleRootResume("deep-interval", stuckVideo || stuckAudio ? 0 : 240);
+  }, 450);
+  window.__pokeDeepTransportRootOwner = owner;
+}
+installDeepTransportRootOwner20260609();
+
 state.bgPlaybackAllowed = true;
 state.backgroundAutoplayTriggered = true;
 setTimeout(() => {
