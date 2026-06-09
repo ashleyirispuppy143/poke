@@ -25,90 +25,466 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
  
 //////////////// THE PLAYER, START ////////////////////////
-(() => {
-  if (window.__AOL_INITIALIZED) return;
-  window.__AOL_INITIALIZED = true;
 
-  console.log("[AOL] Initializing Architectural Override Layer for Ultimate Stability...");
+(function mediaPlaybackLifecycle() {
+  "use strict";
+  const root = typeof window !== "undefined" ? window : null;
+  const doc = typeof document !== "undefined" ? document : null;
+  if (!root || !doc || !root.HTMLMediaElement) return;
+  if (root.__mediaPlaybackLifecycleActive) return;
+  root.__mediaPlaybackLifecycleActive = true;
 
-  const _originalAEL = EventTarget.prototype.addEventListener;
-  const _originalPlay = HTMLMediaElement.prototype.play;
-  const _originalPause = HTMLMediaElement.prototype.pause;
-  
-  EventTarget.prototype.addEventListener = function(type, listener, options) {
-    if (type === 'visibilitychange') {
-      const wrapped = function(e) {
-        if (document.visibilityState === 'hidden') {
-          try {
-            Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
-            Object.defineProperty(document, 'hidden', { value: false, configurable: true });
-          } catch(err) {}
-        }
-        return listener.apply(this, arguments);
-      };
-      return _originalAEL.call(this, type, wrapped, options);
-    }
-    return _originalAEL.call(this, type, listener, options);
+  const Native = {
+    play: root.HTMLMediaElement.prototype.play,
+    pause: root.HTMLMediaElement.prototype.pause,
+    load: root.HTMLMediaElement.prototype.load
   };
 
-  const spamTracker = new WeakMap();
-  
-  function isSpam(mediaEl, action) {
-    const now = Date.now();
-    let state = spamTracker.get(mediaEl) || { lastAction: null, lastTime: 0, count: 0 };
-    
-    if (now - state.lastTime < 400) {
-      state.count++;
-    } else {
-      state.count = 1;
-    }
-    
-    state.lastAction = action;
-    state.lastTime = now;
-    spamTracker.set(mediaEl, state);
-    
-    if (state.count > 3) {
-      console.warn(`[AOL] Blocked spammy ${action}() call!`);
-      return true;
-    }
+  const state = {
+    wanted: false,
+    wantedBeforeSeek: false,
+    userPaused: false,
+    seeking: false,
+    buffering: false,
+    hidden: false,
+    hiddenAt: 0,
+    hiddenAnchor: 0,
+    hiddenAudioAnchor: 0,
+    hiddenWasWanted: false,
+    hiddenAdvanced: false,
+    lastUserInputAt: 0,
+    lastManualPauseAt: 0,
+    protectionUntil: 0,
+    startupUntil: performance.now() + 6500,
+    resumeBusy: false,
+    resumeTimer: 0,
+    resumeSerial: 0,
+    playLocks: new WeakMap(),
+    lastKnownTime: 0,
+    lastKnownAudioTime: 0,
+    lastTimeUpdateAt: 0,
+    lastVisibilityReturnAt: 0,
+    lastSeekAt: 0,
+    lastResumeAt: 0,
+    recentNativePause: new WeakMap(),
+    allowManualPauseUntil: 0
+  };
+
+  const now = () => {
+    try { return performance.now(); } catch { return Date.now(); }
+  };
+
+  const number = (value, fallback = 0) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  };
+
+  const clampTime = (el, value) => {
+    if (!el) return 0;
+    const duration = number(el.duration, 0);
+    let max = Number.isFinite(duration) && duration > 0 ? Math.max(0, duration - 0.08) : Number.POSITIVE_INFINITY;
+    return Math.max(0, Math.min(number(value, 0), max));
+  };
+
+  const mediaPair = () => {
+    const video = doc.getElementById("video") || doc.querySelector("video");
+    const audio = doc.getElementById("aud") || doc.querySelector("audio");
+    return { video, audio: audio && audio !== video ? audio : null };
+  };
+
+  const isPrimaryMedia = (el) => {
+    const pair = mediaPair();
+    return !!el && (el === pair.video || el === pair.audio);
+  };
+
+  const audioHasSource = (audio) => {
+    if (!audio) return false;
+    try {
+      if ((audio.currentSrc || "").trim()) return true;
+      if ((audio.getAttribute("src") || "").trim()) return true;
+      return !!audio.querySelector("source[src]");
+    } catch { return false; }
+  };
+
+  const bufferedAround = (el, time, before = 0.20, after = 0.55) => {
+    if (!el) return false;
+    try {
+      const ranges = el.buffered;
+      if (!ranges || !ranges.length) return el.readyState >= 3;
+      for (let i = 0; i < ranges.length; i++) {
+        if (time >= ranges.start(i) - before && time <= ranges.end(i) + after) return true;
+      }
+    } catch { }
+    return el.readyState >= 3;
+  };
+
+  const mediaReady = (el, target) => {
+    if (!el) return true;
+    if (el.ended) return false;
+    const t = Number.isFinite(target) ? target : number(el.currentTime, 0);
+    if (el.readyState >= 3) return true;
+    if (el.readyState >= 2 && bufferedAround(el, t, 0.35, 0.9)) return true;
     return false;
-  }
-
-  HTMLMediaElement.prototype.play = function() {
-    if (isSpam(this, 'play')) {
-      return Promise.resolve();
-    }
-    return _originalPlay.call(this);
   };
 
-  HTMLMediaElement.prototype.pause = function() {
-    if (isSpam(this, 'pause')) {
-      return; 
-    }
-    _originalPause.call(this);
+  const markProtection = (ms = 2600) => {
+    state.protectionUntil = Math.max(state.protectionUntil, now() + ms);
   };
 
-  window.addEventListener('click', (e) => {
-    const target = e.target;
-    if (target.closest && (target.closest('.vjs-play-control') || target.tagName === 'VIDEO')) {
-       window.__AOL_USER_INTENT = true;
-       console.log("[AOL] User intent registered.");
+  const inProtectedWindow = () => {
+    const t = now();
+    return t < state.protectionUntil || t < state.startupUntil || state.seeking || state.buffering || state.hidden || t - state.lastVisibilityReturnAt < 4500 || t - state.lastSeekAt < 4500;
+  };
+
+  const touchUserInput = () => {
+    state.lastUserInputAt = now();
+    state.allowManualPauseUntil = state.lastUserInputAt + 900;
+  };
+
+  const setWanted = (wanted) => {
+    state.wanted = !!wanted;
+    if (wanted) state.userPaused = false;
+  };
+
+  const safeSetTime = (el, time, tolerance = 0.30) => {
+    if (!el || !Number.isFinite(time)) return;
+    try {
+      const target = clampTime(el, time);
+      if (Math.abs(number(el.currentTime, 0) - target) > tolerance) el.currentTime = target;
+    } catch { }
+  };
+
+  const pauseOnlyWhenUserAsked = (el) => {
+    if (!el) return;
+    state.recentNativePause.set(el, now());
+    try { return Native.pause.call(el); } catch { }
+  };
+
+  const startOne = (el) => {
+    if (!el || el.ended) return Promise.resolve(false);
+    const existing = state.playLocks.get(el);
+    if (existing) return existing;
+    let p;
+    try {
+      p = Native.play.call(el);
+    } catch {
+      scheduleResume("play-threw", 180);
+      return Promise.resolve(false);
+    }
+    const done = Promise.resolve(p).then(() => true, () => {
+      scheduleResume("play-rejected", 260);
+      return false;
+    }).finally(() => state.playLocks.delete(el));
+    state.playLocks.set(el, done);
+    return done;
+  };
+
+  const alignAudioSoftly = (video, audio) => {
+    if (!video || !audio || !audioHasSource(audio)) return;
+    const vt = number(video.currentTime, 0);
+    const at = number(audio.currentTime, 0);
+    const drift = at - vt;
+    try {
+      if (Math.abs(drift) > 1.15) {
+        safeSetTime(audio, vt, 0.15);
+        audio.playbackRate = video.playbackRate || 1;
+      } else if (Math.abs(drift) > 0.22 && !audio.paused && !video.paused) {
+        const base = video.playbackRate || 1;
+        audio.playbackRate = Math.max(0.94, Math.min(1.06, base - drift * 0.045));
+      } else {
+        audio.playbackRate = video.playbackRate || 1;
+      }
+    } catch { }
+  };
+
+  const resumePair = (reason = "resume") => {
+    const pair = mediaPair();
+    const video = pair.video;
+    const audio = pair.audio;
+    if (!video || !state.wanted || state.userPaused) return Promise.resolve(false);
+
+    state.lastResumeAt = now();
+    markProtection(reason === "startup" ? 4600 : 3000);
+
+    const target = clampTime(video, number(video.currentTime, state.lastKnownTime));
+    if (audio && audioHasSource(audio)) safeSetTime(audio, target, reason === "visible" ? 0.18 : 0.45);
+
+    const videoReady = mediaReady(video, target);
+    const audioReady = !audio || !audioHasSource(audio) || mediaReady(audio, target);
+
+    if (!videoReady || !audioReady) {
+      state.buffering = true;
+      try { video.preload = "auto"; video.load?.(); } catch { }
+      try { if (audio && audioHasSource(audio)) { audio.preload = "auto"; audio.load?.(); } } catch { }
+      scheduleResume("waiting-for-data", 220);
+      return Promise.resolve(false);
+    }
+
+    state.buffering = false;
+    alignAudioSoftly(video, audio);
+
+    const starts = [];
+    starts.push(startOne(video));
+    if (audio && audioHasSource(audio) && !video.muted && Number(video.volume) > 0) starts.push(startOne(audio));
+    return Promise.all(starts).then(() => true, () => false);
+  };
+
+  const scheduleResume = (reason = "scheduled", delay = 80) => {
+    if (!state.wanted || state.userPaused) return;
+    const serial = ++state.resumeSerial;
+    clearTimeout(state.resumeTimer);
+    state.resumeTimer = setTimeout(() => {
+      if (serial !== state.resumeSerial) return;
+      if (state.resumeBusy) {
+        scheduleResume(reason + ":busy", 120);
+        return;
+      }
+      state.resumeBusy = true;
+      Promise.resolve(resumePair(reason)).finally(() => {
+        state.resumeBusy = false;
+        const pair = mediaPair();
+        if (state.wanted && !state.userPaused && pair.video && pair.video.paused && !pair.video.ended) {
+          scheduleResume(reason + ":still-paused", 240);
+        }
+      });
+    }, Math.max(0, delay));
+  };
+
+  const visibilityAnchor = () => {
+    const { video, audio } = mediaPair();
+    if (!video) return;
+    state.hiddenAt = now();
+    state.hidden = true;
+    state.hiddenAnchor = number(video.currentTime, state.lastKnownTime);
+    state.hiddenAudioAnchor = audio ? number(audio.currentTime, state.hiddenAnchor) : state.hiddenAnchor;
+    state.hiddenWasWanted = state.wanted || !video.paused;
+    state.hiddenAdvanced = false;
+    state.lastKnownTime = state.hiddenAnchor;
+    state.lastKnownAudioTime = state.hiddenAudioAnchor;
+    if (state.hiddenWasWanted) {
+      setWanted(true);
+      markProtection(9000);
+    }
+  };
+
+  const restoreVisibilityAnchor = (source) => {
+    const { video, audio } = mediaPair();
+    if (!video) return;
+    state.hidden = false;
+    state.lastVisibilityReturnAt = now();
+
+    if (!state.hiddenWasWanted && !state.wanted) return;
+    setWanted(true);
+    markProtection(6500);
+
+    const current = number(video.currentTime, 0);
+    const anchor = clampTime(video, state.hiddenAnchor || current);
+    const hiddenLong = now() - state.hiddenAt > 500;
+    const jumpedBack = current + 0.75 < anchor;
+    const jumpedForwardWeirdly = hiddenLong && !state.hiddenAdvanced && current > anchor + 1.75;
+    const nearZeroWrong = anchor > 2 && current < 0.75;
+    const shouldRestore = jumpedBack || jumpedForwardWeirdly || nearZeroWrong || (video.paused && Math.abs(current - anchor) > 0.55);
+
+    if (shouldRestore) {
+      safeSetTime(video, anchor, 0.10);
+      if (audio && audioHasSource(audio)) safeSetTime(audio, anchor, 0.10);
+    } else if (audio && audioHasSource(audio)) {
+      safeSetTime(audio, number(video.currentTime, anchor), 0.35);
+    }
+
+    scheduleResume(source || "visible", 35);
+    scheduleResume((source || "visible") + ":settle", 320);
+    scheduleResume((source || "visible") + ":final", 900);
+  };
+
+  const mediaEvent = (event) => {
+    const el = event.currentTarget;
+    const pair = mediaPair();
+    const video = pair.video;
+    const audio = pair.audio;
+    if (!isPrimaryMedia(el)) return;
+
+    if (event.type === "play") {
+      setWanted(true);
+      markProtection(number(el.currentTime, 0) < 1.5 ? 5200 : 2600);
+      scheduleResume("play-event", 65);
+      return;
+    }
+
+    if (event.type === "playing") {
+      setWanted(true);
+      state.buffering = false;
+      markProtection(1400);
+      alignAudioSoftly(video, audio);
+      return;
+    }
+
+    if (event.type === "pause") {
+      const t = now();
+      const fromInternal = Math.abs(t - number(state.recentNativePause.get(el), -99999)) < 350;
+      const userLikelyPaused = t < state.allowManualPauseUntil && !state.seeking && !state.hidden && t > state.startupUntil;
+      if (fromInternal || userLikelyPaused) {
+        state.userPaused = true;
+        state.wanted = false;
+        state.lastManualPauseAt = t;
+        return;
+      }
+      if (state.wanted && !state.userPaused) {
+        markProtection(2600);
+        scheduleResume("unexpected-pause", 90);
+      }
+      return;
+    }
+
+    if (event.type === "seeking") {
+      state.seeking = true;
+      state.lastSeekAt = now();
+      state.wantedBeforeSeek = state.wanted || (video && !video.paused);
+      if (state.wantedBeforeSeek) {
+        setWanted(true);
+        markProtection(5200);
+      }
+      return;
+    }
+
+    if (event.type === "seeked") {
+      state.seeking = false;
+      state.lastSeekAt = now();
+      if (state.wantedBeforeSeek || state.wanted) {
+        setWanted(true);
+        markProtection(4600);
+        if (video && audio && audioHasSource(audio)) safeSetTime(audio, number(video.currentTime, 0), 0.25);
+        scheduleResume("seeked", 35);
+        scheduleResume("seeked-settle", 260);
+      }
+      return;
+    }
+
+    if (event.type === "waiting" || event.type === "stalled") {
+      state.buffering = true;
+      if (state.wanted && !state.userPaused) {
+        markProtection(3200);
+        scheduleResume(event.type, 240);
+      }
+      return;
+    }
+
+    if (event.type === "canplay" || event.type === "canplaythrough" || event.type === "loadeddata" || event.type === "progress") {
+      if (state.wanted && !state.userPaused) {
+        state.buffering = false;
+        scheduleResume(event.type, 50);
+      }
+      return;
+    }
+
+    if (event.type === "timeupdate") {
+      const t = now();
+      if (el === video) {
+        const ct = number(video.currentTime, 0);
+        if (state.hidden && Math.abs(ct - state.hiddenAnchor) > 0.9) state.hiddenAdvanced = true;
+        state.lastKnownTime = ct;
+        state.lastTimeUpdateAt = t;
+      } else if (el === audio) {
+        state.lastKnownAudioTime = number(audio.currentTime, 0);
+      }
+      if (state.wanted && !state.userPaused && video && !video.paused) alignAudioSoftly(video, audio);
+    }
+  };
+
+  const bindMedia = () => {
+    const { video, audio } = mediaPair();
+    const events = ["play", "playing", "pause", "seeking", "seeked", "waiting", "stalled", "canplay", "canplaythrough", "loadeddata", "progress", "timeupdate"];
+    for (const el of [video, audio]) {
+      if (!el || el.__mediaPlaybackLifecycleBound) continue;
+      el.__mediaPlaybackLifecycleBound = true;
+      try { el.preload = "auto"; } catch { }
+      for (const name of events) el.addEventListener(name, mediaEvent, true);
+    }
+  };
+
+  root.HTMLMediaElement.prototype.play = function controlledPlay(...args) {
+    if (isPrimaryMedia(this)) {
+      setWanted(true);
+      markProtection(number(this.currentTime, 0) < 1.5 ? 5600 : 3200);
+      bindMedia();
+      scheduleResume("play-method", 30);
+    }
+    return startOne(this);
+  };
+
+  root.HTMLMediaElement.prototype.pause = function controlledPause(...args) {
+    if (isPrimaryMedia(this)) {
+      const t = now();
+      const manual = t < state.allowManualPauseUntil && !state.seeking && !state.hidden && t > state.startupUntil;
+      if (!manual && state.wanted && !state.userPaused && inProtectedWindow()) {
+        scheduleResume("pause-blocked", 80);
+        return undefined;
+      }
+      if (manual) {
+        state.userPaused = true;
+        state.wanted = false;
+        state.lastManualPauseAt = t;
+      }
+      state.recentNativePause.set(this, t);
+    }
+    try { return Native.pause.apply(this, args); } catch { return undefined; }
+  };
+
+  const lifecycleEvent = () => {
+    bindMedia();
+    if (doc.hidden || doc.visibilityState === "hidden") visibilityAnchor();
+    else restoreVisibilityAnchor("visibility-return");
+  };
+
+  doc.addEventListener("visibilitychange", lifecycleEvent, true);
+  root.addEventListener("pagehide", visibilityAnchor, true);
+  root.addEventListener("blur", () => {
+    const { video } = mediaPair();
+    if (video && (state.wanted || !video.paused)) visibilityAnchor();
+  }, true);
+  root.addEventListener("focus", () => restoreVisibilityAnchor("focus-return"), true);
+  root.addEventListener("pageshow", () => restoreVisibilityAnchor("pageshow"), true);
+
+  doc.addEventListener("pointerdown", touchUserInput, true);
+  doc.addEventListener("touchstart", touchUserInput, true);
+  doc.addEventListener("keydown", (event) => {
+    touchUserInput();
+    const key = String(event.key || "").toLowerCase();
+    if (key === " " || key === "k" || key === "media-play-pause") {
+      const { video } = mediaPair();
+      if (video && video.paused) {
+        setWanted(true);
+        markProtection(4200);
+        scheduleResume("keyboard-play", 20);
+      }
     }
   }, true);
 
-  const _originalSetCurrentTime = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'currentTime').set;
-  Object.defineProperty(HTMLMediaElement.prototype, 'currentTime', {
-    set: function(val) {
-      if (val === 0 && this.currentTime > 2 && !window.__AOL_USER_INTENT) {
-        console.warn("[AOL] Blocked rogue currentTime reset to 0.");
-        return;
-      }
-      _originalSetCurrentTime.call(this, val);
-    },
-    get: Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'currentTime').get
-  });
+  const startupKick = () => {
+    bindMedia();
+    const { video, audio } = mediaPair();
+    if (!video) return;
+    try { video.autoplay = false; video.removeAttribute("autoplay"); } catch { }
+    try { if (audio) { audio.autoplay = false; audio.removeAttribute("autoplay"); audio.preload = "auto"; } } catch { }
+    if (!video.paused || state.wanted) {
+      setWanted(true);
+      markProtection(6200);
+      scheduleResume("startup", 80);
+    }
+  };
 
+  if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", startupKick, { once: true, passive: true });
+  else startupKick();
+  root.addEventListener("load", startupKick, { once: true, passive: true });
+  setInterval(() => {
+    bindMedia();
+    const { video, audio } = mediaPair();
+    if (!video || !state.wanted || state.userPaused) return;
+    if (video.paused && !video.ended && !state.seeking) scheduleResume("heartbeat-paused", 60);
+    if (audio && audioHasSource(audio) && !video.paused) alignAudioSoftly(video, audio);
+  }, 850);
 })();
+
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -26533,7 +26909,6 @@ function setupUserPauseIntentDetection() {
       }, perfProfile.lowEnd ? 90 : 55);
     };
     const onClick = event => {
-      return; // STRICT FIX: Bypass custom click intercept to allow manual play/pause
       if (platform.mobile && now() < mobileTapSuppressClickUntil) {
         pendingTechTogglePausedState = null;
         try { event.preventDefault(); } catch { }
@@ -27141,7 +27516,6 @@ function bindCommonMediaEvents() {
     } catch { }
   });
   video.on("play", () => {
-    return; // STRICT FIX: Bypass start-of-video pause spam
     if (_errorOverlayShown || (PlayerErrorOverlay && PlayerErrorOverlay.isVisible && PlayerErrorOverlay.isVisible())) {
       forcePausePlaybackForErrorOverlay("video-play-while-overlay");
       return;
@@ -27515,7 +27889,6 @@ function bindCommonMediaEvents() {
       }
   });
   video.on("pause", () => {
-    return; // STRICT FIX: Bypass aggressive pause handler
     if (typeof stickyUserPlayPauseShieldActive === "function" &&
       stickyUserPlayPauseShieldActive("video-pause-event") &&
       !state.isProgrammaticVideoPause && !state._allowVideoPause) {
@@ -31867,7 +32240,6 @@ function setupVisibilityLifecycle() {
     }, { passive: true });
   } catch { }
   _on(document, "visibilitychange", () => {
-    return; // STRICT FIX: Let browser handle background tabs natively
     const newState = document.visibilityState;
     const transitionAt = now();
     const transitionUntil = transitionAt + VISIBILITY_TRANSITION_MS;
@@ -32892,1135 +33264,6 @@ if (coupledMode && audio) {
     }
   }, 3000);
 }
-
-function playbackTransportCoordinator() {
-  if (state.deepTransportRootOwnerInstalled) return;
-  state.deepTransportRootOwnerInstalled = true;
-  const owner = {
-    wantPlaying: !!state.intendedPlaying,
-    wasPlayingDuringSeek: false,
-    recoveryUntil: 0,
-    flapShieldUntil: 0,
-    hiddenAt: 0,
-    hiddenVideoTime: 0,
-    hiddenAudioTime: 0,
-    targetTime: 0,
-    inFlight: false,
-    pendingTimer: 0,
-    lastAttemptAt: 0,
-    lastSuccessfulPlayAt: 0,
-    lastUserPauseAt: 0,
-    lastReadyNudgeAt: 0,
-    backgroundReturnUntil: 0
-  };
-  const vNode = () => {
-    try { return getVideoNode() || videoEl || (video && video.el && video.el().querySelector("video")); } catch { return videoEl || null; }
-  };
-  const mediaTime = (el) => {
-    try { const n = Number(el && el.currentTime); return Number.isFinite(n) ? n : 0; } catch { return 0; }
-  };
-  const setMediaTime = (el, t) => {
-    if (!el || !Number.isFinite(t) || t < 0) return;
-    try {
-      if (Math.abs((Number(el.currentTime) || 0) - t) > 0.18) el.currentTime = Math.max(0, t);
-    } catch { }
-  };
-  const readyStateOf = (el) => {
-    try { return Number(el && el.readyState || 0); } catch { return 0; }
-  };
-  const networkStateOf = (el) => {
-    try { return Number(el && el.networkState || 0); } catch { return 0; }
-  };
-  const bufferedAheadNative = (el, t) => {
-    try {
-      const b = el && el.buffered;
-      if (!b) return 0;
-      for (let i = 0; i < b.length; i++) {
-        const s = Number(b.start(i));
-        const e = Number(b.end(i));
-        if (t >= s - 0.05 && t <= e + 0.05) return Math.max(0, e - t);
-      }
-    } catch { }
-    return 0;
-  };
-  const isSeekingNow = () => {
-    try { if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return true; } catch { }
-    try { if (vNode() && vNode().seeking) return true; } catch { }
-    try { if (audio && audio.seeking) return true; } catch { }
-    return false;
-  };
-  const visibleNow = () => {
-    try { return document.visibilityState !== "hidden"; } catch { return true; }
-  };
-  const explicitPauseActiveDeep = () => {
-    try { if (userPauseLockActive && userPauseLockActive()) return true; } catch { }
-    try { if (userPauseIntentActive && userPauseIntentActive()) return true; } catch { }
-    try { if (mediaSessionForcedPauseActive && mediaSessionForcedPauseActive()) return true; } catch { }
-    return false;
-  };
-  const coupledAudioExpected = () => {
-    try { return !!(coupledMode && audio && typeof audio.play === "function" && !audio.error); } catch { return false; }
-  };
-  const mediaHasEnoughAt = (el, t, allowCurrentData) => {
-    if (!el) return false;
-    const rs = readyStateOf(el);
-    if (rs >= 3) return true;
-    if (allowCurrentData && rs >= 2 && bufferedAheadNative(el, t) > 0.025) return true;
-    return bufferedAheadNative(el, t) > (allowCurrentData ? 0.025 : 0.08);
-  };
-  const currentTarget = () => {
-    const node = vNode();
-    const vt = mediaTime(node);
-    const at = mediaTime(audio);
-    if (owner.targetTime > 0 && now() < owner.recoveryUntil) return owner.targetTime;
-    if (visibleNow()) return vt;
-    return Math.max(vt, at, owner.hiddenVideoTime || 0, owner.hiddenAudioTime || 0);
-  };
-  const bothReadyForPlay = () => {
-    const node = vNode();
-    const target = currentTarget();
-    const videoReady = mediaHasEnoughAt(node, target, true);
-    if (!videoReady) return false;
-    if (!coupledAudioExpected()) return true;
-    const audioReady = mediaHasEnoughAt(audio, target, true) || readyStateOf(audio) >= 2;
-    return audioReady;
-  };
-  const prepareLoading = (reason) => {
-    const node = vNode();
-    try { if (node) node.preload = "auto"; } catch { }
-    try { if (audio) audio.preload = "auto"; } catch { }
-    if (networkStateOf(node) === 0) { try { node.load(); } catch { } }
-    if (coupledAudioExpected() && networkStateOf(audio) === 0) { try { audio.load(); } catch { } }
-    try { state.strictBufferHold = false; } catch { }
-    try { state.videoStallAudioPaused = false; } catch { }
-    try { state.videoWaiting = false; } catch { }
-    try { clearAudioPauseLocks(); } catch { }
-    try { clearBufferHold(); } catch { }
-    owner.lastReadyNudgeAt = now();
-  };
-  const swallowTransientPause = (source) => {
-    if (!owner.wantPlaying) return false;
-    if (explicitPauseActiveDeep()) return false;
-    const recovering = now() < owner.recoveryUntil || now() < owner.flapShieldUntil || isSeekingNow();
-    if (!recovering) return false;
-    scheduleRootResume(source + "-pause-swallowed", 55);
-    return true;
-  };
-  const notePlayWanted = (reason) => {
-    owner.wantPlaying = true;
-    owner.recoveryUntil = Math.max(owner.recoveryUntil, now() + 18000);
-    owner.flapShieldUntil = Math.max(owner.flapShieldUntil, now() + 3600);
-    try { state.intendedPlaying = true; } catch { }
-    try { state.bufferHoldIntendedPlaying = true; } catch { }
-    try { state.userPlayUntil = Math.max(Number(state.userPlayUntil) || 0, now() + 18000); } catch { }
-    try { state.resumeOnVisible = true; } catch { }
-    scheduleRootResume(reason, 0);
-  };
-  const noteRealUserPause = (reason) => {
-    if (swallowTransientPause(reason)) return;
-    owner.wantPlaying = false;
-    owner.wasPlayingDuringSeek = false;
-    owner.recoveryUntil = 0;
-    owner.flapShieldUntil = 0;
-    owner.lastUserPauseAt = now();
-  };
-  const callNativePlay = (el) => {
-    if (!el || typeof el.play !== "function") return Promise.resolve(false);
-    try {
-      const p = el.play();
-      return Promise.resolve(p).then(() => true).catch(() => false);
-    } catch { return Promise.resolve(false); }
-  };
-  const callPlayerPlay = () => {
-    try {
-      const p = video && typeof video.play === "function" ? video.play() : null;
-      return Promise.resolve(p).then(() => true).catch(() => false);
-    } catch { return Promise.resolve(false); }
-  };
-  const playPairOnce = async (reason) => {
-    if (!owner.wantPlaying || explicitPauseActiveDeep()) return false;
-    const node = vNode();
-    if (!node) return false;
-    const target = currentTarget();
-    try { state.intendedPlaying = true; } catch { }
-    try { state.bufferHoldIntendedPlaying = true; } catch { }
-    try { clearAudioPauseLocks(); } catch { }
-    if (now() < owner.backgroundReturnUntil) {
-      setMediaTime(node, target);
-      if (coupledAudioExpected()) setMediaTime(audio, target);
-    }
-    if (!bothReadyForPlay()) {
-      prepareLoading(reason + "-buffer");
-      scheduleRootResume(reason + "-wait-ready", visibleNow() ? 140 : 320);
-      return false;
-    }
-    owner.flapShieldUntil = Math.max(owner.flapShieldUntil, now() + 2400);
-    try { state.isProgrammaticVideoPlay = true; } catch { }
-    try { state.isProgrammaticAudioPlay = true; } catch { }
-    const audioExpected = coupledAudioExpected();
-    const audioPromise = audioExpected ? callNativePlay(audio) : Promise.resolve(true);
-    const videoPromise = callNativePlay(node).then((ok) => ok || callPlayerPlay());
-    const result = await Promise.allSettled([audioPromise, videoPromise]);
-    const audioOk = !audioExpected || result[0].status === "fulfilled";
-    const videoOk = result[1].status === "fulfilled";
-    setTimeout(() => {
-      try { state.isProgrammaticVideoPlay = false; } catch { }
-      try { state.isProgrammaticAudioPlay = false; } catch { }
-    }, 350);
-    const nodePlaying = !!(node && !node.paused);
-    const audioPlaying = !audioExpected || !!(audio && !audio.paused);
-    if (nodePlaying && audioPlaying && audioOk && videoOk) {
-      owner.lastSuccessfulPlayAt = now();
-      owner.recoveryUntil = Math.max(owner.recoveryUntil, now() + 1200);
-      return true;
-    }
-    if (owner.wantPlaying && !explicitPauseActiveDeep()) scheduleRootResume(reason + "-verify", 180);
-    return nodePlaying || audioPlaying;
-  };
-  function scheduleRootResume(reason, delay) {
-    if (!owner.wantPlaying && reason !== "visibility-return") return;
-    const t = now();
-    if (delay <= 0 && owner.inFlight) return;
-    if (delay <= 0 && (t - owner.lastAttemptAt) < 90) delay = 90;
-    if (owner.pendingTimer) clearTimeout(owner.pendingTimer);
-    owner.pendingTimer = setTimeout(async () => {
-      owner.pendingTimer = 0;
-      if (!owner.wantPlaying || explicitPauseActiveDeep()) return;
-      if (owner.inFlight) {
-        scheduleRootResume(reason + "-join", 110);
-        return;
-      }
-      owner.inFlight = true;
-      owner.lastAttemptAt = now();
-      try { await playPairOnce(reason); }
-      finally { owner.inFlight = false; }
-    }, Math.max(0, Number(delay) || 0));
-  }
-  const seekStart = () => {
-    const node = vNode();
-    const wasPlaying = owner.wantPlaying || !!state.intendedPlaying || !!(node && !node.paused) || !!(audio && !audio.paused);
-    owner.wasPlayingDuringSeek = wasPlaying;
-    owner.targetTime = mediaTime(node);
-    if (wasPlaying) {
-      owner.wantPlaying = true;
-      owner.recoveryUntil = now() + 22000;
-      owner.flapShieldUntil = now() + 5200;
-      try { state.intendedPlaying = true; } catch { }
-      try { state.bufferHoldIntendedPlaying = true; } catch { }
-    }
-  };
-  const seekEnd = () => {
-    const node = vNode();
-    owner.targetTime = mediaTime(node);
-    if (owner.wasPlayingDuringSeek || owner.wantPlaying || state.intendedPlaying) {
-      notePlayWanted("deep-seeked");
-      scheduleRootResume("deep-seeked-fast", 0);
-      scheduleRootResume("deep-seeked-ready", 90);
-      scheduleRootResume("deep-seeked-late", 260);
-    }
-  };
-  const readyNudge = (reason) => {
-    if (!owner.wantPlaying && !state.intendedPlaying) return;
-    if (explicitPauseActiveDeep()) return;
-    const node = vNode();
-    const needsResume = !!(node && node.paused) || !!(coupledAudioExpected() && audio.paused);
-    if (needsResume || now() < owner.recoveryUntil || !bothReadyForPlay()) scheduleRootResume(reason, 0);
-  };
-  const hidden = () => {
-    const node = vNode();
-    owner.hiddenAt = now();
-    owner.hiddenVideoTime = mediaTime(node);
-    owner.hiddenAudioTime = mediaTime(audio);
-    owner.wantPlaying = owner.wantPlaying || !!state.intendedPlaying || !!(node && !node.paused) || !!(audio && !audio.paused);
-    if (owner.wantPlaying) {
-      owner.recoveryUntil = Math.max(owner.recoveryUntil, now() + 30000);
-      owner.flapShieldUntil = Math.max(owner.flapShieldUntil, now() + 5000);
-      try { state.resumeOnVisible = true; } catch { }
-      prepareLoading("hidden");
-      scheduleRootResume("hidden-continue", 180);
-    }
-  };
-  const visible = (reason) => {
-    const node = vNode();
-    if (owner.wantPlaying || state.resumeOnVisible || state.intendedPlaying) {
-      const target = Math.max(mediaTime(node), mediaTime(audio), owner.hiddenVideoTime || 0, owner.hiddenAudioTime || 0);
-      owner.targetTime = Number.isFinite(target) ? target : mediaTime(node);
-      owner.backgroundReturnUntil = now() + 4500;
-      owner.recoveryUntil = Math.max(owner.recoveryUntil, now() + 22000);
-      owner.flapShieldUntil = Math.max(owner.flapShieldUntil, now() + 4200);
-      try { state.intendedPlaying = true; } catch { }
-      try { state.resumeOnVisible = true; } catch { }
-      setMediaTime(node, owner.targetTime);
-      if (coupledAudioExpected()) setMediaTime(audio, owner.targetTime);
-      prepareLoading(reason);
-      scheduleRootResume(reason + "-now", 0);
-      scheduleRootResume(reason + "-ready", 130);
-      scheduleRootResume(reason + "-late", 420);
-    }
-  };
-  const bindOn = (el, name, fn, opts) => {
-    try { if (el) _on(el, name, fn, opts || { passive: true }); } catch { try { if (el) el.addEventListener(name, fn, opts || { passive: true }); } catch { } }
-  };
-  const nodeAtInstall = vNode();
-  const mediaTargets = [nodeAtInstall, videoEl, audio].filter(Boolean);
-  for (const el of mediaTargets) {
-    bindOn(el, "play", () => notePlayWanted("media-play"));
-    bindOn(el, "playing", () => { owner.lastSuccessfulPlayAt = now(); readyNudge("media-playing"); });
-    bindOn(el, "pause", () => noteRealUserPause("media-pause"));
-    bindOn(el, "seeking", seekStart);
-    bindOn(el, "seeked", seekEnd);
-    bindOn(el, "waiting", () => { if (owner.wantPlaying || state.intendedPlaying) { prepareLoading("waiting"); scheduleRootResume("waiting", 220); } });
-    bindOn(el, "canplay", () => readyNudge("canplay"));
-    bindOn(el, "canplaythrough", () => readyNudge("canplaythrough"));
-    bindOn(el, "loadeddata", () => readyNudge("loadeddata"));
-    bindOn(el, "progress", () => readyNudge("progress"));
-    bindOn(el, "timeupdate", () => { if (now() < owner.recoveryUntil) readyNudge("timeupdate"); });
-  }
-  bindOn(document, "visibilitychange", () => {
-    if (document.visibilityState === "hidden") hidden();
-    else visible("visibility-return");
-  });
-  bindOn(window, "pageshow", () => visible("pageshow"));
-  bindOn(window, "focus", () => visible("focus"));
-  bindOn(window, "online", () => readyNudge("online"));
-  setInterval(() => {
-    if (!owner.wantPlaying && !state.intendedPlaying) return;
-    if (explicitPauseActiveDeep()) return;
-    const node = vNode();
-    if (!node) return;
-    const stuckVideo = node.paused && readyStateOf(node) >= 2;
-    const stuckAudio = coupledAudioExpected() && audio.paused && readyStateOf(audio) >= 2;
-    const recovering = now() < owner.recoveryUntil || now() < owner.backgroundReturnUntil;
-    if (stuckVideo || stuckAudio || recovering) scheduleRootResume("deep-interval", stuckVideo || stuckAudio ? 0 : 240);
-  }, 450);
-  window.__pokeDeepTransportRootOwner = owner;
-}
-playbackTransportCoordinator();
-
-function audioContinuitySmoother() {
-  if (state.audioCutSmootherInstalled) return;
-  state.audioCutSmootherInstalled = true;
-  const smoother = {
-    timer: 0,
-    lastTickAt: 0,
-    lastAudioTime: NaN,
-    lastVideoTime: NaN,
-    audioFrozenTicks: 0,
-    videoProgressTicks: 0,
-    softCorrectUntil: 0,
-    lastHardAlignAt: 0,
-    lastWakeAt: 0,
-    lastReadyAt: 0,
-    lastWaitingAt: 0,
-    lastStallAt: 0,
-    lastUserPauseAt: 0,
-    lastGoodAudioAt: 0,
-    lastGoodVideoAt: 0,
-    lastGoodAt: 0,
-    lastNudgeAt: 0,
-    inTick: false
-  };
-  const vNode = () => {
-    try { return getVideoNode() || videoEl || (video && video.el && video.el().querySelector("video")); } catch { return videoEl || null; }
-  };
-  const tnow = () => {
-    try { return now(); } catch { return performance.now(); }
-  };
-  const mediaTime = (el) => {
-    try { const n = Number(el && el.currentTime); return Number.isFinite(n) ? n : 0; } catch { return 0; }
-  };
-  const readyStateOf = (el) => {
-    try { return Number(el && el.readyState || 0); } catch { return 0; }
-  };
-  const bufferedAhead = (el, at) => {
-    try {
-      const ranges = el && el.buffered;
-      if (!ranges) return 0;
-      for (let i = 0; i < ranges.length; i++) {
-        const start = Number(ranges.start(i));
-        const end = Number(ranges.end(i));
-        if (at >= start - 0.08 && at <= end + 0.08) return Math.max(0, end - at);
-      }
-    } catch { }
-    return 0;
-  };
-  const expected = () => {
-    try { return !!(coupledMode && audio && typeof audio.play === "function" && !audio.error); } catch { return false; }
-  };
-  const playWanted = () => {
-    try { if (state.endedNaturally || state.restarting) return false; } catch { }
-    try { if (userPauseLockActive && userPauseLockActive()) return false; } catch { }
-    try { if (mediaSessionForcedPauseActive && mediaSessionForcedPauseActive()) return false; } catch { }
-    try { if (state.userPauseUntil && state.userPauseUntil > tnow()) return false; } catch { }
-    try { return !!(state.intendedPlaying || state.bufferHoldIntendedPlaying || state.resumeOnVisible); } catch { return false; }
-  };
-  const setAudioRate = (rate, reason) => {
-    if (!expected()) return;
-    const base = (() => { try { return Number(video.playbackRate && video.playbackRate()) || 1; } catch { return 1; } })();
-    const clamped = Math.max(0.92, Math.min(1.08, Number(rate) || base || 1));
-    try {
-      if (Math.abs((Number(audio.playbackRate) || 1) - clamped) > 0.004) audio.playbackRate = clamped;
-    } catch { }
-    smoother.softCorrectUntil = Math.max(smoother.softCorrectUntil, tnow() + 900);
-  };
-  const resetAudioRate = (reason) => {
-    if (!expected()) return;
-    try {
-      if (typeof syncAudioPlaybackRateToVideo === "function") syncAudioPlaybackRateToVideo(reason || "audio-cut-smoother-reset", { force: true });
-      else {
-        const base = Number(video && video.playbackRate && video.playbackRate()) || 1;
-        if (Math.abs((Number(audio.playbackRate) || 1) - base) > 0.004) audio.playbackRate = base;
-      }
-    } catch { }
-  };
-  const nudgePreload = (reason) => {
-    if (!expected()) return;
-    const n = tnow();
-    if ((n - smoother.lastNudgeAt) < 800) return;
-    smoother.lastNudgeAt = n;
-    try { audio.preload = "auto"; } catch { }
-    try {
-      if (audio.networkState === 0 && readyStateOf(audio) < 1) audio.load();
-    } catch { }
-  };
-  const wakeAudio = (reason, forceAlign) => {
-    if (!expected() || !playWanted()) return;
-    const n = tnow();
-    if ((n - smoother.lastWakeAt) < 260) return;
-    smoother.lastWakeAt = n;
-    try { clearAudioPauseLocks(); } catch { }
-    try { state.audioPauseUntil = 0; } catch { }
-    try { state.audioEventsSquelchedUntil = Math.max(Number(state.audioEventsSquelchedUntil) || 0, n + 260); } catch { }
-    const node = vNode();
-    const vt = mediaTime(node);
-    const at = mediaTime(audio);
-    const drift = vt - at;
-    if (forceAlign && Number.isFinite(drift) && Math.abs(drift) > 0.55 && (n - smoother.lastHardAlignAt) > 1400) {
-      smoother.lastHardAlignAt = n;
-      try {
-        if (typeof alignPausedAudioBeforeResume === "function") alignPausedAudioBeforeResume(vt, "audio-cut-smoother-" + reason);
-        else audio.currentTime = Math.max(0, vt);
-      } catch { }
-    }
-    try {
-      if (typeof execProgrammaticAudioPlay === "function") {
-        execProgrammaticAudioPlay({ squelchMs: 420, force: true, minGapMs: 0 }).catch(() => { });
-      } else {
-        const p = audio.play();
-        if (p && typeof p.catch === "function") p.catch(() => { });
-      }
-    } catch { }
-  };
-  const softSync = (reason) => {
-    if (!expected() || !playWanted()) return;
-    const node = vNode();
-    if (!node || node.paused || audio.paused) return;
-    const n = tnow();
-    const vt = mediaTime(node);
-    const at = mediaTime(audio);
-    const drift = vt - at;
-    const abs = Math.abs(drift);
-    if (!Number.isFinite(drift)) return;
-    if (abs < 0.16) {
-      if (n < smoother.softCorrectUntil || Math.abs((Number(audio.playbackRate) || 1) - 1) > 0.006) resetAudioRate("audio-cut-smoother-stable");
-      return;
-    }
-    if (abs <= 0.95) {
-      const base = (() => { try { return Number(video.playbackRate && video.playbackRate()) || 1; } catch { return 1; } })();
-      const correction = Math.max(-0.065, Math.min(0.065, drift * 0.045));
-      setAudioRate(base + correction, reason);
-      return;
-    }
-    if (abs <= 1.55 && bufferedAhead(audio, at) > 0.18 && readyStateOf(audio) >= 2) {
-      const base = (() => { try { return Number(video.playbackRate && video.playbackRate()) || 1; } catch { return 1; } })();
-      const correction = Math.max(-0.085, Math.min(0.085, drift * 0.055));
-      setAudioRate(base + correction, reason + "-wide");
-      return;
-    }
-    if (abs > 1.55 && (n - smoother.lastHardAlignAt) > 1800 && !state.seeking && !state.seekBuffering) {
-      smoother.lastHardAlignAt = n;
-      try {
-        if (typeof safeSetAudioTime === "function") safeSetAudioTime(vt);
-        else audio.currentTime = Math.max(0, vt);
-      } catch { }
-      wakeAudio(reason + "-hard-align", false);
-    }
-  };
-  const tick = () => {
-    smoother.timer = 0;
-    if (smoother.inTick) { schedule(400); return; }
-    smoother.inTick = true;
-    try {
-      if (!expected()) return;
-      const n = tnow();
-      const node = vNode();
-      const visible = (() => { try { return document.visibilityState !== "hidden"; } catch { return true; } })();
-      if (!node || !playWanted()) {
-        smoother.audioFrozenTicks = 0;
-        smoother.videoProgressTicks = 0;
-        return;
-      }
-      const vt = mediaTime(node);
-      const at = mediaTime(audio);
-      const vPaused = !!node.paused;
-      const aPaused = !!audio.paused;
-      const vMoved = Number.isFinite(smoother.lastVideoTime) && vt > smoother.lastVideoTime + 0.035;
-      const aMoved = Number.isFinite(smoother.lastAudioTime) && at > smoother.lastAudioTime + 0.025;
-      if (vMoved) smoother.videoProgressTicks++; else smoother.videoProgressTicks = Math.max(0, smoother.videoProgressTicks - 1);
-      if (!aPaused && !aMoved && smoother.videoProgressTicks >= 2) smoother.audioFrozenTicks++;
-      else if (aMoved) smoother.audioFrozenTicks = 0;
-      if (readyStateOf(audio) >= 2) smoother.lastReadyAt = n;
-      if (!aPaused && aMoved) {
-        smoother.lastGoodAudioAt = at;
-        smoother.lastGoodVideoAt = vt;
-        smoother.lastGoodAt = n;
-      }
-      if (!vPaused && aPaused && readyStateOf(audio) >= 2 && bufferedAhead(audio, at) > 0.05) {
-        wakeAudio("paused-while-video-playing", Math.abs(vt - at) > 0.55);
-      }
-      if (!vPaused && !aPaused) {
-        if (smoother.audioFrozenTicks >= (visible ? 3 : 5)) {
-          const starving = readyStateOf(audio) < 2 || bufferedAhead(audio, at) < 0.04;
-          if (starving) {
-            nudgePreload("frozen-starving");
-          } else {
-            wakeAudio("frozen-decoder", Math.abs(vt - at) > 0.75);
-          }
-          smoother.audioFrozenTicks = 0;
-        } else {
-          softSync("tick");
-        }
-      }
-      smoother.lastAudioTime = at;
-      smoother.lastVideoTime = vt;
-      smoother.lastTickAt = n;
-    } finally {
-      smoother.inTick = false;
-      schedule();
-    }
-  };
-  const schedule = (delay) => {
-    if (smoother.timer) return;
-    if (!expected()) return;
-    const visible = (() => { try { return document.visibilityState !== "hidden"; } catch { return true; } })();
-    const active = playWanted();
-    const base = visible ? (active ? 360 : 1200) : (active ? 1200 : 2500);
-    smoother.timer = setTimeout(tick, Math.max(120, Number(delay) || base));
-  };
-  const readyEvent = (reason) => {
-    smoother.lastReadyAt = tnow();
-    if (!playWanted()) return;
-    nudgePreload(reason);
-    wakeAudio(reason, false);
-    schedule(140);
-  };
-  const waitEvent = (reason) => {
-    smoother.lastWaitingAt = tnow();
-    nudgePreload(reason);
-    schedule(260);
-  };
-  const stallEvent = (reason) => {
-    smoother.lastStallAt = tnow();
-    nudgePreload(reason);
-    schedule(220);
-  };
-  const bindOn = (el, name, fn, opts) => {
-    try { if (el) _on(el, name, fn, opts || { passive: true }); } catch { try { if (el) el.addEventListener(name, fn, opts || { passive: true }); } catch { } }
-  };
-  if (expected()) {
-    for (const ev of ["canplay", "canplaythrough", "loadeddata", "playing", "timeupdate", "progress"]) bindOn(audio, ev, () => readyEvent("audio-" + ev));
-    for (const ev of ["waiting", "stalled", "suspend", "emptied"]) bindOn(audio, ev, () => waitEvent("audio-" + ev));
-    bindOn(audio, "pause", () => {
-      if (playWanted() && !state.seeking && !state.seekBuffering) {
-        wakeAudio("audio-pause-event", Math.abs(mediaTime(vNode()) - mediaTime(audio)) > 0.55);
-      }
-    });
-    bindOn(audio, "ratechange", () => {
-      if (tnow() < smoother.softCorrectUntil) return;
-      if (playWanted()) setTimeout(() => resetAudioRate("audio-cut-smoother-ratechange"), 80);
-    });
-    const node = vNode();
-    for (const ev of ["canplay", "loadeddata", "progress", "playing", "timeupdate", "seeked"]) bindOn(node, ev, () => readyEvent("video-" + ev));
-    for (const ev of ["waiting", "stalled"]) bindOn(node, ev, () => stallEvent("video-" + ev));
-    bindOn(document, "visibilitychange", () => {
-      if (document.visibilityState === "visible") readyEvent("visible");
-      else schedule(1000);
-    });
-    bindOn(window, "focus", () => readyEvent("focus"));
-    schedule(250);
-  }
-  window.__pokeAudioCutSmoother = smoother;
-}
-audioContinuitySmoother();
-
-
-
-function tabTimelineContinuityGuard() {
-  if (window.__tabTimelineContinuityGuardInstalled) return;
-  window.__tabTimelineContinuityGuardInstalled = true;
-  const ctl = {
-    hiddenAnchor: NaN,
-    hiddenAudioAnchor: NaN,
-    hiddenAt: 0,
-    hiddenWanted: false,
-    hiddenPaused: true,
-    hiddenSerial: 0,
-    returnAnchor: NaN,
-    returnUntil: 0,
-    returnSerial: 0,
-    pauseGuardUntil: 0,
-    noSpamUntil: 0,
-    resumeTimer: null,
-    resumeDueAt: 0,
-    resumeInFlight: false,
-    resumeSerial: 0,
-    videoPlayInFlight: null,
-    audioPlayInFlight: null,
-    lastVideoPlayAt: 0,
-    lastAudioPlayAt: 0,
-    lastResumeAt: 0,
-    lastEventAction: "",
-    eventBurstAt: 0,
-    eventBurstCount: 0,
-    humanPauseUntil: 0,
-    humanPlayUntil: 0,
-    seekWanted: false,
-    seekStartedAt: 0,
-    seekTarget: NaN,
-    waitSince: 0,
-    readySince: 0
-  };
-  const clock = () => {
-    try { return performance.now(); } catch { return Date.now(); }
-  };
-  const finite = (v) => Number.isFinite(Number(v));
-  const clampTime = (v, dur = NaN) => {
-    let t = Number(v);
-    if (!Number.isFinite(t) || t < 0) t = 0;
-    if (Number.isFinite(Number(dur)) && Number(dur) > 0) t = Math.min(t, Math.max(0, Number(dur) - 0.05));
-    return t;
-  };
-  const primaryVideo = () => {
-    try {
-      const n = typeof getVideoNode === "function" ? getVideoNode() : null;
-      if (n && typeof n.play === "function") return n;
-    } catch { }
-    try { if (videoEl && typeof videoEl.play === "function") return videoEl; } catch { }
-    try { return document.getElementById("video"); } catch { }
-    return null;
-  };
-  const mediaTime = (el) => {
-    try {
-      const t = Number(el && el.currentTime);
-      if (Number.isFinite(t)) return t;
-    } catch { }
-    return NaN;
-  };
-  const mediaDuration = (el) => {
-    try {
-      const d = Number(el && el.duration);
-      if (Number.isFinite(d) && d > 0) return d;
-    } catch { }
-    try {
-      if (video && typeof video.duration === "function") {
-        const d = Number(video.duration());
-        if (Number.isFinite(d) && d > 0) return d;
-      }
-    } catch { }
-    return NaN;
-  };
-  const readyState = (el) => {
-    try { return Number(el && el.readyState) || 0; } catch { return 0; }
-  };
-  const bufferedAheadLocal = (el, at = NaN) => {
-    if (!el) return 0;
-    const t = Number.isFinite(Number(at)) ? Number(at) : mediaTime(el);
-    try {
-      if (typeof bufferedAhead === "function") return Number(bufferedAhead(el, t)) || 0;
-    } catch { }
-    try {
-      const b = el.buffered;
-      if (!b) return 0;
-      for (let i = 0; i < b.length; i++) {
-        const s = Number(b.start(i));
-        const e = Number(b.end(i));
-        if (t >= s - 0.12 && t <= e + 0.04) return Math.max(0, e - Math.max(t, s));
-      }
-    } catch { }
-    return 0;
-  };
-  const isEndedAtTail = (el = primaryVideo()) => {
-    try { if (state.endedNaturally) return true; } catch { }
-    const t = mediaTime(el);
-    const d = mediaDuration(el);
-    return Number.isFinite(t) && Number.isFinite(d) && d > 0 && t >= d - 0.18;
-  };
-  const playWanted = () => {
-    const t = clock();
-    try {
-      if (state.intendedPlaying || state.bufferHoldIntendedPlaying || state.resumeOnVisible || state.playRequestedDuringSeek) return true;
-      if (Number(state.userPlayUntil || 0) > t || Number(state.userPlayLockUntil || 0) > t) return true;
-      if (Number(state.seekResumeWantedUntil || 0) > t || Number(state.postSeekAutoplayUntil || 0) > t) return true;
-      if (Number(state.foregroundReturnUserPlayUntil || 0) > t || Number(state.userPlayLockUntil || 0) > t) return true;
-    } catch { }
-    const v = primaryVideo();
-    try { if (v && !v.paused && !isEndedAtTail(v)) return true; } catch { }
-    return false;
-  };
-  const recentHumanPause = () => {
-    const t = clock();
-    try {
-      if (Number(state.userPauseUntil || 0) > t || Number(state.userPauseLockUntil || 0) > t) return true;
-      if (Number(state.userPauseIntentPresetAt || 0) > t - 1300) return true;
-      if (state.userGesturePauseIntent && Number(state.lastUserActionTime || 0) > t - 1500) return true;
-    } catch { }
-    return ctl.humanPauseUntil > t;
-  };
-  const setPlayIntent = (reason = "play") => {
-    const t = clock();
-    try {
-      state.intendedPlaying = true;
-      state.bufferHoldIntendedPlaying = true;
-      state.resumeOnVisible = true;
-      state.playRequestedDuringSeek = true;
-      state.userPlayUntil = Math.max(Number(state.userPlayUntil || 0), t + 120000);
-      state.userPlayLockUntil = Math.max(Number(state.userPlayLockUntil || 0), t + 120000);
-      state.pauseEventGuardUntil = Math.max(Number(state.pauseEventGuardUntil || 0), t + 7000);
-      state.noSpamUntil = Math.max(Number(state.noSpamUntil || 0), t + 7000);
-      state.noSpamReason = reason;
-      state.mediaTransportStormUntil = Math.max(Number(state.mediaTransportStormUntil || 0), t + 7000);
-      state.mediaTransportStormReason = reason;
-    } catch { }
-  };
-  const guardPause = (reason = "guard", ms = 6500) => {
-    const until = clock() + Math.max(900, Number(ms) || 6500);
-    ctl.pauseGuardUntil = Math.max(ctl.pauseGuardUntil, until);
-    ctl.noSpamUntil = Math.max(ctl.noSpamUntil, until);
-    try {
-      state.pauseEventGuardUntil = Math.max(Number(state.pauseEventGuardUntil || 0), until);
-      state.mediaForcedPauseUntil = Math.max(Number(state.mediaForcedPauseUntil || 0), until);
-      state.noSpamUntil = Math.max(Number(state.noSpamUntil || 0), until);
-      state.noSpamReason = reason;
-      state.mediaTransportStormUntil = Math.max(Number(state.mediaTransportStormUntil || 0), until);
-      state.mediaTransportStormReason = reason;
-      state.chromiumPauseGuardUntil = Math.max(Number(state.chromiumPauseGuardUntil || 0), until);
-      state.chromiumAutoPauseBlockedUntil = Math.max(Number(state.chromiumAutoPauseBlockedUntil || 0), until);
-      state.mediaSessionPauseBlockedUntil = Math.max(Number(state.mediaSessionPauseBlockedUntil || 0), until);
-    } catch { }
-  };
-  const inGuard = () => {
-    const t = clock();
-    return ctl.pauseGuardUntil > t || ctl.noSpamUntil > t || (() => {
-      try {
-        return Number(state.pauseEventGuardUntil || 0) > t ||
-          Number(state.noSpamUntil || 0) > t ||
-          Number(state.mediaTransportStormUntil || 0) > t ||
-          Number(state.chromiumPauseGuardUntil || 0) > t ||
-          Number(state.mediaSessionPauseBlockedUntil || 0) > t;
-      } catch { return false; }
-    })();
-  };
-  const shouldBlockPause = (el, reason = "pause") => {
-    if (!el || isEndedAtTail(el) || recentHumanPause()) return false;
-    if (!playWanted()) return false;
-    if (reason === "human") return false;
-    const t = clock();
-    try {
-      if (document.visibilityState === "hidden" || document.visibilityState === "visible") {
-        if (inGuard() || ctl.seekWanted || ctl.returnUntil > t || ctl.waitSince > 0) return true;
-      }
-    } catch { }
-    return false;
-  };
-  const setCurrent = (el, target, force = false) => {
-    if (!el || !Number.isFinite(Number(target))) return false;
-    const dur = mediaDuration(el);
-    const t = clampTime(target, dur);
-    const cur = mediaTime(el);
-    if (!force && Number.isFinite(cur) && Math.abs(cur - t) < 0.075) return true;
-    try { el.currentTime = t; return true; } catch { return false; }
-  };
-  const audioExpected = () => {
-    try { return !!(audio && (audio.src || audio.currentSrc || audio.querySelector?.("source")?.src)); } catch { }
-    return !!audio;
-  };
-  const mediaPlayable = (el, target = NaN) => {
-    if (!el) return false;
-    const t = Number.isFinite(Number(target)) ? Number(target) : mediaTime(el);
-    if (readyState(el) >= 3) return true;
-    if (readyState(el) >= 2 && bufferedAheadLocal(el, t) > 0.08) return true;
-    return false;
-  };
-  const primeMedia = (el) => {
-    if (!el) return;
-    try { el.preload = "auto"; } catch { }
-    try {
-      const s = el.getAttribute?.("src") || el.currentSrc || el.querySelector?.("source")?.getAttribute?.("src") || "";
-      if (s && readyState(el) === 0 && typeof el.load === "function") el.load();
-    } catch { }
-  };
-  const playNativeSingle = (el, kind, reason = "play") => {
-    if (!el || typeof el.play !== "function") return null;
-    if (isEndedAtTail(el)) return null;
-    const t = clock();
-    const key = kind === "audio" ? "audioPlayInFlight" : "videoPlayInFlight";
-    const lastKey = kind === "audio" ? "lastAudioPlayAt" : "lastVideoPlayAt";
-    if (ctl[key] && t - ctl[lastKey] < 1100) return ctl[key];
-    if (t - ctl[lastKey] < 180 && !el.paused) return null;
-    ctl[lastKey] = t;
-    setPlayIntent(reason);
-    guardPause(reason, 5200);
-    try {
-      const p = HTMLMediaElement.prototype.play.call(el);
-      ctl[key] = p && typeof p.finally === "function" ? p.finally(() => { ctl[key] = null; }) : null;
-      if (p && typeof p.catch === "function") p.catch(() => { scheduleResume(reason + "-retry", 260); });
-      return p;
-    } catch {
-      ctl[key] = null;
-      scheduleResume(reason + "-throw-retry", 260);
-    }
-    return null;
-  };
-  const alignPairTo = (target, reason = "align", force = false) => {
-    if (!Number.isFinite(Number(target))) return;
-    const v = primaryVideo();
-    const t = clampTime(target, mediaDuration(v));
-    if (v) setCurrent(v, t, force);
-    if (audioExpected()) {
-      try {
-        const at = mediaTime(audio);
-        const drift = Number.isFinite(at) ? Math.abs(at - t) : Infinity;
-        if (force || drift > 0.32 || (audio.paused && drift > 0.14)) setCurrent(audio, t, force || drift > 0.42);
-      } catch { }
-    }
-    try {
-      state.transportPositionTarget = t;
-      state.transportPositionUntil = Math.max(Number(state.transportPositionUntil || 0), clock() + 4500);
-      state.explicitSeekTarget = t;
-      state.explicitSeekUntil = Math.max(Number(state.explicitSeekUntil || 0), clock() + 3500);
-      state.returnAlignLastTarget = t;
-      state.returnAlignSettledUntil = Math.max(Number(state.returnAlignSettledUntil || 0), clock() + 2600);
-    } catch { }
-  };
-  const readyPair = (target = NaN) => {
-    const v = primaryVideo();
-    if (!v) return false;
-    const t = Number.isFinite(Number(target)) ? Number(target) : mediaTime(v);
-    if (!mediaPlayable(v, t)) return false;
-    if (audioExpected()) {
-      if (!mediaPlayable(audio, Number.isFinite(t) ? t : mediaTime(audio))) return false;
-    }
-    return true;
-  };
-  function doResume(reason = "resume", target = NaN, opts = {}) {
-    if (ctl.resumeInFlight) return false;
-    if (!playWanted() || recentHumanPause()) return false;
-    const v = primaryVideo();
-    if (!v || isEndedAtTail(v)) return false;
-    ctl.resumeInFlight = true;
-    const t = clock();
-    ctl.lastResumeAt = t;
-    setPlayIntent(reason);
-    guardPause(reason, 6400);
-    try {
-      const chosen = Number.isFinite(Number(target)) ? Number(target) : (Number.isFinite(Number(ctl.returnAnchor)) && ctl.returnUntil > t ? ctl.returnAnchor : mediaTime(v));
-      if (Number.isFinite(chosen)) alignPairTo(chosen, reason, !!opts.forceAlign);
-      primeMedia(v);
-      if (audioExpected()) primeMedia(audio);
-      const usable = readyPair(chosen);
-      if (!usable) {
-        scheduleResume(reason + "-wait", 280);
-        return true;
-      }
-      if (audioExpected()) playNativeSingle(audio, "audio", reason + "-audio");
-      playNativeSingle(v, "video", reason + "-video");
-      if (video && typeof video.play === "function") {
-        try {
-          const p = video.play();
-          if (p && typeof p.catch === "function") p.catch(() => { });
-        } catch { }
-      }
-      setTimeout(() => {
-        try {
-          const vv = primaryVideo();
-          if (playWanted() && vv && vv.paused && !recentHumanPause() && !isEndedAtTail(vv)) scheduleResume(reason + "-verify", 0);
-        } catch { }
-      }, 220);
-      setTimeout(() => {
-        try {
-          if (audioExpected() && playWanted() && audio.paused && !recentHumanPause() && readyPair(mediaTime(primaryVideo()))) scheduleResume(reason + "-audio-verify", 0);
-        } catch { }
-      }, 360);
-      return true;
-    } finally {
-      ctl.resumeInFlight = false;
-    }
-  }
-  function scheduleResume(reason = "resume", delayMs = 0, target = NaN, opts = {}) {
-    if (!playWanted() || recentHumanPause()) return false;
-    const t = clock();
-    const due = t + Math.max(0, Number(delayMs) || 0);
-    if (ctl.resumeTimer && ctl.resumeDueAt <= due + 45) return true;
-    if (ctl.resumeTimer) {
-      clearTimeout(ctl.resumeTimer);
-      ctl.resumeTimer = null;
-    }
-    const serial = ++ctl.resumeSerial;
-    ctl.resumeDueAt = due;
-    ctl.resumeTimer = setTimeout(() => {
-      if (serial !== ctl.resumeSerial) return;
-      ctl.resumeTimer = null;
-      ctl.resumeDueAt = 0;
-      doResume(reason, target, opts);
-    }, Math.max(0, due - clock()));
-    return true;
-  }
-  const chooseReturnTarget = () => {
-    const v = primaryVideo();
-    const cur = mediaTime(v);
-    const anchor = Number(ctl.hiddenAnchor);
-    if (!Number.isFinite(anchor)) return cur;
-    const elapsed = Math.max(0, (clock() - Number(ctl.hiddenAt || clock())) / 1000);
-    const hardMax = anchor + Math.max(4, elapsed * 1.35 + 2.5);
-    if (!Number.isFinite(cur)) return anchor;
-    if (ctl.hiddenPaused) return anchor;
-    if (cur < anchor - 0.28) return anchor;
-    if (cur > hardMax) return anchor;
-    if (audioExpected()) {
-      const at = mediaTime(audio);
-      if (Number.isFinite(at) && Math.abs(at - cur) > 2.25 && Math.abs(at - anchor) < Math.abs(cur - anchor)) return anchor;
-    }
-    return cur;
-  };
-  const rememberHidden = (reason = "hidden") => {
-    const v = primaryVideo();
-    const t = clock();
-    ctl.hiddenAnchor = mediaTime(v);
-    ctl.hiddenAudioAnchor = mediaTime(audio);
-    ctl.hiddenAt = t;
-    ctl.hiddenWanted = playWanted() || !!(v && !v.paused);
-    ctl.hiddenPaused = !!(v && v.paused);
-    ctl.hiddenSerial++;
-    if (ctl.hiddenWanted) {
-      setPlayIntent(reason);
-      guardPause(reason, 9000);
-      try {
-        state.visibilityHiddenAt = t;
-        state.resumeOnVisible = true;
-        state.bgHiddenSince = t;
-        state.bgHiddenBaseVT = Number.isFinite(ctl.hiddenAnchor) ? ctl.hiddenAnchor : Number(state.bgHiddenBaseVT || 0);
-        state.bgHiddenBaseAT = Number.isFinite(ctl.hiddenAudioAnchor) ? ctl.hiddenAudioAnchor : Number(state.bgHiddenBaseAT || 0);
-        state.bgHiddenWasPlaying = true;
-      } catch { }
-    }
-  };
-  const handleReturn = (reason = "visible") => {
-    const t = clock();
-    const v = primaryVideo();
-    if (!v) return;
-    const wanted = ctl.hiddenWanted || playWanted() || !!(v && !v.paused);
-    const target = chooseReturnTarget();
-    if (Number.isFinite(target)) {
-      ctl.returnAnchor = target;
-      ctl.returnUntil = t + 9000;
-      ctl.returnSerial++;
-      alignPairTo(target, reason, true);
-    }
-    if (wanted) {
-      setPlayIntent(reason);
-      guardPause(reason, 9000);
-      for (const delay of [0, 70, 180, 420, 900, 1600, 2800]) scheduleResume(reason + "-resume", delay, target, { forceAlign: delay < 250 });
-    }
-  };
-  const recordTransportEvent = (kind, action) => {
-    const t = clock();
-    if (ctl.lastEventAction && ctl.lastEventAction !== action && t - ctl.lastEventAt < 900) {
-      if (t - ctl.eventBurstAt > 2200) {
-        ctl.eventBurstAt = t;
-        ctl.eventBurstCount = 0;
-      }
-      ctl.eventBurstCount++;
-    } else if (t - ctl.lastEventAt > 1100) {
-      ctl.eventBurstAt = t;
-      ctl.eventBurstCount = 0;
-    }
-    ctl.lastEventAction = action;
-    ctl.lastEventKind = kind;
-    ctl.lastEventAt = t;
-    if (ctl.eventBurstCount >= 4 && playWanted() && !recentHumanPause()) {
-      guardPause("play-pause-flap", 8500);
-      scheduleResume("play-pause-flap", 90, Number.isFinite(ctl.returnAnchor) && ctl.returnUntil > t ? ctl.returnAnchor : mediaTime(primaryVideo()), { forceAlign: false });
-    }
-  };
-  const bindElementPauseGuard = (el, kind) => {
-    if (!el || el.__transportPauseGuardInstalled) return;
-    try {
-      const nativePause = el.pause.bind(el);
-      el.pause = function guardedNativePause(...args) {
-        if (shouldBlockPause(el, kind + "-method")) {
-          guardPause(kind + "-method", 6500);
-          scheduleResume(kind + "-blocked-pause", 120, Number.isFinite(ctl.returnAnchor) && ctl.returnUntil > clock() ? ctl.returnAnchor : mediaTime(primaryVideo()), { forceAlign: false });
-          return undefined;
-        }
-        return nativePause(...args);
-      };
-      Object.defineProperty(el, "__transportPauseGuardInstalled", { value: true, configurable: true });
-    } catch { }
-  };
-  const bindVideoJsPauseGuard = () => {
-    try {
-      if (!video || video.__transportPauseGuardInstalled || typeof video.pause !== "function") return;
-      const nativePause = video.pause.bind(video);
-      video.pause = function guardedVideoJsPause(...args) {
-        const v = primaryVideo();
-        if (v && shouldBlockPause(v, "videojs-method")) {
-          guardPause("videojs-method", 6500);
-          scheduleResume("videojs-blocked-pause", 120, mediaTime(v), { forceAlign: false });
-          return video;
-        }
-        return nativePause(...args);
-      };
-      Object.defineProperty(video, "__transportPauseGuardInstalled", { value: true, configurable: true });
-    } catch { }
-  };
-  const onHumanControlIntent = (ev) => {
-    try {
-      const v = primaryVideo();
-      const target = ev && ev.target;
-      const pathHit = !!(target && target.closest && target.closest(".vjs-play-control,.vjs-big-play-button,.vjs-control-bar,video"));
-      if (!pathHit) return;
-      if (v && v.paused) {
-        ctl.humanPlayUntil = clock() + 2500;
-        setPlayIntent("human-control-play");
-        guardPause("human-control-play", 7000);
-      } else {
-        ctl.humanPauseUntil = clock() + 1500;
-      }
-    } catch { }
-  };
-  const onKeyIntent = (ev) => {
-    try {
-      const k = String(ev.key || "").toLowerCase();
-      if (k !== " " && k !== "k" && k !== "mediaPlayPause".toLowerCase()) return;
-      const v = primaryVideo();
-      if (v && v.paused) {
-        ctl.humanPlayUntil = clock() + 2500;
-        setPlayIntent("human-key-play");
-        guardPause("human-key-play", 7000);
-      } else {
-        ctl.humanPauseUntil = clock() + 1500;
-      }
-    } catch { }
-  };
-  const bindMedia = (el, kind) => {
-    if (!el || el.__transportEventGuardBound) return;
-    bindElementPauseGuard(el, kind);
-    const onPlayish = (ev) => {
-      recordTransportEvent(kind + ":" + ev.type, "play");
-      setPlayIntent(kind + "-" + ev.type);
-      if (ev.type === "playing") {
-        ctl.waitSince = 0;
-        ctl.readySince = clock();
-      }
-    };
-    const onPause = (ev) => {
-      recordTransportEvent(kind + ":pause", "pause");
-      if (shouldBlockPause(el, kind + "-pause-event")) {
-        guardPause(kind + "-pause-event", 7200);
-        scheduleResume(kind + "-pause-event", 90, Number.isFinite(ctl.returnAnchor) && ctl.returnUntil > clock() ? ctl.returnAnchor : mediaTime(primaryVideo()), { forceAlign: false });
-      }
-    };
-    const onWaiting = (ev) => {
-      ctl.waitSince = clock();
-      recordTransportEvent(kind + ":" + ev.type, "wait");
-      if (playWanted() && !recentHumanPause()) {
-        guardPause(kind + "-" + ev.type, 5200);
-        primeMedia(el);
-        scheduleResume(kind + "-" + ev.type, 320, mediaTime(primaryVideo()), { forceAlign: false });
-      }
-    };
-    const onReady = (ev) => {
-      ctl.readySince = clock();
-      if (playWanted() && !recentHumanPause()) scheduleResume(kind + "-" + ev.type, 80, Number.isFinite(ctl.returnAnchor) && ctl.returnUntil > clock() ? ctl.returnAnchor : mediaTime(primaryVideo()), { forceAlign: false });
-    };
-    const onSeeking = () => {
-      if (playWanted() || !el.paused) {
-        ctl.seekWanted = true;
-        ctl.seekStartedAt = clock();
-        ctl.seekTarget = mediaTime(primaryVideo());
-        setPlayIntent(kind + "-seeking");
-        guardPause(kind + "-seeking", 9000);
-      }
-    };
-    const onSeeked = () => {
-      if (ctl.seekWanted || playWanted()) {
-        ctl.seekWanted = false;
-        ctl.seekTarget = mediaTime(primaryVideo());
-        setPlayIntent(kind + "-seeked");
-        guardPause(kind + "-seeked", 8500);
-        scheduleResume(kind + "-seeked", 0, ctl.seekTarget, { forceAlign: false });
-        scheduleResume(kind + "-seeked-follow", 180, ctl.seekTarget, { forceAlign: false });
-      }
-    };
-    for (const ev of ["play", "playing"]) _on(el, ev, onPlayish, { passive: true, capture: true });
-    _on(el, "pause", onPause, { passive: true, capture: true });
-    for (const ev of ["waiting", "stalled", "suspend"]) _on(el, ev, onWaiting, { passive: true, capture: true });
-    for (const ev of ["canplay", "canplaythrough", "loadeddata", "loadedmetadata", "progress", "timeupdate"]) _on(el, ev, onReady, { passive: true });
-    _on(el, "seeking", onSeeking, { passive: true, capture: true });
-    _on(el, "seeked", onSeeked, { passive: true, capture: true });
-    try { Object.defineProperty(el, "__transportEventGuardBound", { value: true, configurable: true }); } catch { }
-  };
-  const bindAll = () => {
-    bindMedia(primaryVideo(), "video");
-    bindMedia(videoEl, "video-el");
-    if (audio) bindMedia(audio, "audio");
-    bindVideoJsPauseGuard();
-  };
-  bindAll();
-  _on(document, "pointerdown", onHumanControlIntent, { passive: true, capture: true });
-  _on(document, "click", onHumanControlIntent, { passive: true, capture: true });
-  _on(document, "keydown", onKeyIntent, { passive: true, capture: true });
-  _on(document, "visibilitychange", () => {
-    bindAll();
-    if (document.visibilityState === "hidden") rememberHidden("visibility-hidden");
-    else handleReturn("visibility-visible");
-  }, { passive: true, capture: true });
-  _on(window, "blur", () => {
-    try { if (document.visibilityState === "hidden") rememberHidden("window-blur-hidden"); } catch { }
-  }, { passive: true, capture: true });
-  _on(window, "focus", () => {
-    bindAll();
-    handleReturn("window-focus");
-  }, { passive: true, capture: true });
-  _on(window, "pageshow", () => {
-    bindAll();
-    handleReturn("pageshow");
-  }, { passive: true, capture: true });
-  _on(window, "pagehide", () => rememberHidden("pagehide"), { passive: true, capture: true });
-  const heartbeat = () => {
-    try {
-      bindAll();
-      const v = primaryVideo();
-      const t = clock();
-      if (playWanted() && !recentHumanPause() && v && v.paused && !isEndedAtTail(v)) {
-        if (document.visibilityState === "visible" || ctl.returnUntil > t || inGuard()) scheduleResume("heartbeat-paused", 0, Number.isFinite(ctl.returnAnchor) && ctl.returnUntil > t ? ctl.returnAnchor : mediaTime(v), { forceAlign: false });
-      }
-      if (playWanted() && audioExpected() && audio.paused && !recentHumanPause() && readyPair(mediaTime(v))) scheduleResume("heartbeat-audio-paused", 0, mediaTime(v), { forceAlign: false });
-      if (ctl.returnUntil > t && Number.isFinite(ctl.returnAnchor)) {
-        const cur = mediaTime(v);
-        if (Number.isFinite(cur) && Math.abs(cur - ctl.returnAnchor) > 1.8 && !isEndedAtTail(v)) {
-          alignPairTo(ctl.returnAnchor, "heartbeat-return-realign", true);
-          scheduleResume("heartbeat-return-realign", 0, ctl.returnAnchor, { forceAlign: false });
-        }
-      }
-    } catch { }
-    setTimeout(heartbeat, document.visibilityState === "hidden" ? 1200 : 450);
-  };
-  setTimeout(heartbeat, 350);
-  window.__pokeTabReturnContinuityNoFlapState = ctl;
-}
-tabTimelineContinuityGuard();
-
 state.bgPlaybackAllowed = true;
 state.backgroundAutoplayTriggered = true;
 setTimeout(() => {
@@ -34607,566 +33850,6 @@ window.__test_audio_not_playing = window.__test_audio_loop_indictaor;
     } catch { }
     try { return _originalScheduleSeekResumeCommit(reason, delayMs, opts); } catch { return true; }
   };
-
-
-function tabSwitchPlaybackStabilizer() {
-  if (state.tabSwitchPlaybackStabilizerActive) return;
-  state.tabSwitchPlaybackStabilizerActive = true;
-  const ctl = {
-    wantsPlayback: !!state.intendedPlaying,
-    startupGuardUntil: 0,
-    pauseGuardUntil: 0,
-    visibilityGuardUntil: 0,
-    seekGuardUntil: 0,
-    bufferGuardUntil: 0,
-    humanPauseUntil: 0,
-    humanGestureUntil: 0,
-    lastHiddenAt: 0,
-    lastHiddenVideoTime: NaN,
-    lastHiddenAudioTime: NaN,
-    lastVisibleAt: 0,
-    lastBlurAt: 0,
-    lastSeekAt: 0,
-    lastStableVideoTime: NaN,
-    lastStableAudioTime: NaN,
-    lastStableAt: 0,
-    targetTime: NaN,
-    seekWasPlaying: false,
-    resumeTimer: 0,
-    resumeInFlight: false,
-    readyWaitBoundUntil: 0,
-    lastResumeAttemptAt: 0,
-    lastPlayEventAt: 0,
-    lastPauseEventAt: 0,
-    pauseStormCount: 0,
-    eventGuardedUntil: 0,
-    boundTargets: new WeakSet()
-  };
-  const clock = () => {
-    try { return performance.now(); } catch { return Date.now(); }
-  };
-  const extend = (key, ms) => {
-    const n = clock() + Math.max(0, Number(ms) || 0);
-    ctl[key] = Math.max(Number(ctl[key]) || 0, n);
-    return ctl[key];
-  };
-  const videoNode = () => {
-    try { return getVideoNode() || videoEl || (video && video.el && video.el().querySelector("video")); } catch { return videoEl || null; }
-  };
-  const audioNode = () => {
-    try { return coupledMode && audio && typeof audio.play === "function" && !audio.error ? audio : null; } catch { return null; }
-  };
-  const finite = (v) => Number.isFinite(Number(v));
-  const mediaTime = (el) => {
-    try { const v = Number(el && el.currentTime); return Number.isFinite(v) ? v : 0; } catch { return 0; }
-  };
-  const mediaDuration = (el) => {
-    try { const d = Number(el && el.duration); return Number.isFinite(d) && d > 0 ? d : NaN; } catch { return NaN; }
-  };
-  const clampTime = (value, el) => {
-    let t = Math.max(0, Number(value) || 0);
-    const d = mediaDuration(el || videoNode());
-    if (Number.isFinite(d) && d > 0.4) t = Math.min(t, d - 0.18);
-    return Math.max(0, t);
-  };
-  const bufferedAhead = (el, at) => {
-    if (!el) return 0;
-    const t = Number.isFinite(Number(at)) ? Number(at) : mediaTime(el);
-    try {
-      const ranges = el.buffered;
-      if (!ranges) return 0;
-      for (let i = 0; i < ranges.length; i++) {
-        const s = Number(ranges.start(i));
-        const e = Number(ranges.end(i));
-        if (t >= s - 0.18 && t <= e + 0.18) return Math.max(0, e - t);
-      }
-    } catch { }
-    return 0;
-  };
-  const readyState = (el) => {
-    try { return Number(el && el.readyState || 0); } catch { return 0; }
-  };
-  const networkState = (el) => {
-    try { return Number(el && el.networkState || 0); } catch { return 0; }
-  };
-  const visible = () => {
-    try { return document.visibilityState !== "hidden"; } catch { return true; }
-  };
-  const explicitPauseActive = () => {
-    try { if (userPauseLockActive && userPauseLockActive()) return true; } catch { }
-    try { if (explicitUserPauseIntentActive && explicitUserPauseIntentActive()) return true; } catch { }
-    try { if (mediaSessionForcedPauseActive && mediaSessionForcedPauseActive()) return true; } catch { }
-    return false;
-  };
-  const mediaIsPlaying = (el) => {
-    try { return !!(el && !el.paused && !el.ended); } catch { return false; }
-  };
-  const pairPlaying = () => mediaIsPlaying(videoNode()) || mediaIsPlaying(audioNode());
-  const playbackWanted = () => {
-    if (explicitPauseActive()) return false;
-    if (ctl.wantsPlayback) return true;
-    try { if (state.intendedPlaying || state.bufferHoldIntendedPlaying || state.resumeOnVisible) return true; } catch { }
-    try { if ((Number(state.userPlayUntil) || 0) > clock()) return true; } catch { }
-    return pairPlaying();
-  };
-  const rememberPlaybackIntent = (reason = "playback") => {
-    ctl.wantsPlayback = true;
-    try { state.intendedPlaying = true; } catch { }
-    try { state.bufferHoldIntendedPlaying = true; } catch { }
-    try { state.resumeOnVisible = true; } catch { }
-    try { state.userPlayUntil = Math.max(Number(state.userPlayUntil) || 0, clock() + 24000); } catch { }
-    extend("eventGuardedUntil", perfProfile.lowEnd ? 7800 : 5600);
-    if (reason.includes("tab") || reason.includes("visible") || reason.includes("focus")) extend("visibilityGuardUntil", perfProfile.lowEnd ? 14000 : 10000);
-    if (reason.includes("seek")) extend("seekGuardUntil", perfProfile.lowEnd ? 12000 : 8500);
-    if (reason.includes("start")) extend("startupGuardUntil", perfProfile.lowEnd ? 11000 : 8500);
-  };
-  const clearPlaybackIntentForHumanPause = () => {
-    ctl.wantsPlayback = false;
-    ctl.seekWasPlaying = false;
-    ctl.resumeInFlight = false;
-    try { state.intendedPlaying = false; } catch { }
-    try { state.bufferHoldIntendedPlaying = false; } catch { }
-    try { state.resumeOnVisible = false; } catch { }
-  };
-  const protectFromStorm = (reason = "transport", ms = 5600) => {
-    const scaled = Math.max(0, Number(ms) || 0) * (perfProfile.veryLowEnd ? 1.45 : (perfProfile.lowEnd ? 1.22 : 1));
-    extend("pauseGuardUntil", scaled);
-    extend("eventGuardedUntil", Math.max(2200, scaled * 0.72));
-    if (reason.includes("tab") || reason.includes("visibility") || reason.includes("focus") || reason.includes("page")) extend("visibilityGuardUntil", Math.max(5200, scaled));
-    if (reason.includes("seek")) extend("seekGuardUntil", Math.max(5200, scaled));
-    if (reason.includes("waiting") || reason.includes("buffer") || reason.includes("canplay") || reason.includes("loaded")) extend("bufferGuardUntil", Math.max(2600, scaled * 0.62));
-  };
-  const humanPauseAllowed = () => clock() < ctl.humanPauseUntil;
-  const shouldBlockPause = (reason = "pause") => {
-    if (!playbackWanted()) return false;
-    if (explicitPauseActive()) return false;
-    if (humanPauseAllowed()) return false;
-    const n = clock();
-    if (!visible()) return true;
-    if (n < ctl.pauseGuardUntil || n < ctl.visibilityGuardUntil || n < ctl.seekGuardUntil || n < ctl.bufferGuardUntil || n < ctl.startupGuardUntil || n < ctl.eventGuardedUntil) return true;
-    if ((n - ctl.lastVisibleAt) < 3400 || (n - ctl.lastBlurAt) < 2800 || (n - ctl.lastSeekAt) < 4200) return true;
-    return false;
-  };
-  const setMediaTime = (el, target, threshold = 0.28) => {
-    if (!el || !Number.isFinite(Number(target))) return false;
-    const t = clampTime(target, el);
-    try {
-      if (Math.abs(mediaTime(el) - t) > threshold) {
-        el.currentTime = t;
-        return true;
-      }
-    } catch { }
-    return false;
-  };
-  const primeMedia = (el) => {
-    if (!el) return;
-    try { el.preload = "auto"; } catch { }
-    try { if (networkState(el) === 0) el.load(); } catch { }
-  };
-  const mediaReadyAt = (el, target, relaxed = false) => {
-    if (!el) return false;
-    const rs = readyState(el);
-    if (rs >= 3) return true;
-    if (relaxed && rs >= 2 && bufferedAhead(el, target) > 0.03) return true;
-    return bufferedAhead(el, target) > (relaxed ? 0.06 : 0.14);
-  };
-  const pairReadyAt = (target) => {
-    const v = videoNode();
-    const a = audioNode();
-    if (!mediaReadyAt(v, target, true)) return false;
-    if (!a) return true;
-    return mediaReadyAt(a, target, true) || readyState(a) >= 2;
-  };
-  const chooseTarget = () => {
-    const v = videoNode();
-    const a = audioNode();
-    if (Number.isFinite(Number(ctl.targetTime)) && clock() < ctl.eventGuardedUntil + 1200) return clampTime(ctl.targetTime, v);
-    const vt = mediaTime(v);
-    const at = mediaTime(a);
-    if (Number.isFinite(ctl.lastHiddenVideoTime) && clock() - ctl.lastVisibleAt < 5200) {
-      const hiddenBase = Math.max(Number(ctl.lastHiddenVideoTime) || 0, Number(ctl.lastHiddenAudioTime) || 0);
-      const hiddenFor = ctl.lastHiddenAt ? Math.max(0, (clock() - ctl.lastHiddenAt) / 1000) : 0;
-      const current = Math.max(vt, at, hiddenBase);
-      if (playbackWanted() && hiddenFor > 0.35 && hiddenFor < 28 && current < hiddenBase + Math.max(0, hiddenFor - 0.85)) {
-        return clampTime(hiddenBase + hiddenFor, v);
-      }
-      return clampTime(current, v);
-    }
-    return clampTime(Math.max(vt, at, Number(ctl.lastStableVideoTime) || 0, Number(ctl.lastStableAudioTime) || 0), v);
-  };
-  const bindReadyResume = (reason = "ready") => {
-    const until = clock() + 9000;
-    if (ctl.readyWaitBoundUntil > clock()) {
-      ctl.readyWaitBoundUntil = Math.max(ctl.readyWaitBoundUntil, until);
-      return;
-    }
-    ctl.readyWaitBoundUntil = until;
-    const events = ["canplay", "canplaythrough", "loadeddata", "loadedmetadata", "progress", "playing", "timeupdate", "seeked"];
-    const bind = (el, label) => {
-      if (!el) return;
-      for (const ev of events) {
-        const fn = () => {
-          if (clock() > ctl.readyWaitBoundUntil) return;
-          if (playbackWanted()) scheduleResume(label + "-" + ev, ev === "timeupdate" ? 120 : 0, { force: ev !== "timeupdate" });
-        };
-        try { el.addEventListener(ev, fn, { passive: true, once: true }); } catch { }
-      }
-    };
-    bind(videoNode(), "video-ready");
-    bind(audioNode(), "audio-ready");
-  };
-  const nativePlay = (el) => {
-    if (!el || typeof el.play !== "function") return Promise.resolve(false);
-    try {
-      const p = el.play();
-      return Promise.resolve(p).then(() => true).catch(() => false);
-    } catch { return Promise.resolve(false); }
-  };
-  async function resumePair(reason = "resume", opts = {}) {
-    if (!playbackWanted()) return false;
-    if (explicitPauseActive()) return false;
-    const n = clock();
-    if (ctl.resumeInFlight && !opts.force) return false;
-    ctl.resumeInFlight = true;
-    ctl.lastResumeAttemptAt = n;
-    protectFromStorm(reason, opts.force ? 7200 : 5200);
-    rememberPlaybackIntent(reason);
-    const v = videoNode();
-    const a = audioNode();
-    if (!v) {
-      ctl.resumeInFlight = false;
-      return false;
-    }
-    const target = chooseTarget();
-    ctl.targetTime = target;
-    if (opts.restore !== false && (clock() < ctl.visibilityGuardUntil || clock() < ctl.seekGuardUntil || opts.force)) {
-      setMediaTime(v, target, opts.force ? 0.20 : 0.34);
-      if (a) setMediaTime(a, target, opts.force ? 0.28 : 0.42);
-    }
-    primeMedia(v);
-    primeMedia(a);
-    try { clearAudioPauseLocks(); } catch { }
-    try { clearBufferHold(); } catch { }
-    try { state.strictBufferHold = false; } catch { }
-    try { state.videoStallAudioPaused = false; } catch { }
-    if (!pairReadyAt(target)) {
-      bindReadyResume(reason + "-buffer");
-      ctl.resumeInFlight = false;
-      scheduleResume(reason + "-buffer-wait", visible() ? 240 : 520, { force: false, restore: false });
-      return false;
-    }
-    let results = [];
-    try { state.isProgrammaticVideoPlay = true; } catch { }
-    try { state.isProgrammaticAudioPlay = true; } catch { }
-    try {
-      const audioPromise = a ? nativePlay(a) : Promise.resolve(true);
-      const videoPromise = nativePlay(v).then((ok) => {
-        if (ok) return true;
-        try {
-          const p = video && typeof video.play === "function" ? video.play() : null;
-          return Promise.resolve(p).then(() => true).catch(() => false);
-        } catch { return false; }
-      });
-      results = await Promise.allSettled([audioPromise, videoPromise]);
-    } finally {
-      setTimeout(() => {
-        try { state.isProgrammaticVideoPlay = false; } catch { }
-        try { state.isProgrammaticAudioPlay = false; } catch { }
-      }, 420);
-      ctl.resumeInFlight = false;
-    }
-    const videoRunning = mediaIsPlaying(v);
-    const audioRunning = !a || mediaIsPlaying(a) || readyState(a) < 2;
-    if (videoRunning || audioRunning) {
-      ctl.lastStableVideoTime = mediaTime(v);
-      ctl.lastStableAudioTime = mediaTime(a);
-      ctl.lastStableAt = clock();
-      return true;
-    }
-    if (playbackWanted()) {
-      bindReadyResume(reason + "-verify");
-      scheduleResume(reason + "-verify", 220, { force: false, restore: false });
-    }
-    return results.some((r) => r.status === "fulfilled" && r.value === true);
-  }
-  function scheduleResume(reason = "resume", delayMs = 0, opts = {}) {
-    if (!playbackWanted()) return false;
-    const n = clock();
-    let delay = Math.max(0, Number(delayMs) || 0);
-    if (!opts.force && (n - ctl.lastResumeAttemptAt) < 130) delay = Math.max(delay, 130 - (n - ctl.lastResumeAttemptAt));
-    if (ctl.resumeTimer) clearTimeout(ctl.resumeTimer);
-    ctl.resumeTimer = setTimeout(() => {
-      ctl.resumeTimer = 0;
-      resumePair(reason, opts).catch(() => { ctl.resumeInFlight = false; });
-    }, delay);
-    return true;
-  }
-  const noteHumanControl = (ev) => {
-    const target = ev && ev.target;
-    let text = "";
-    try { text = String((target && target.className) || "") + " " + String(target && target.getAttribute && (target.getAttribute("aria-label") || target.getAttribute("title") || "")); } catch { }
-    const lower = text.toLowerCase();
-    const isSeekish = lower.includes("seek") || lower.includes("progress") || lower.includes("slider") || lower.includes("scrub") || lower.includes("time-tooltip");
-    const isPauseish = lower.includes("pause") || lower.includes("play-control") || lower.includes("big-play-button") || lower.includes("vjs-play") || lower.includes("video-js") || lower.includes("vjs-tech");
-    ctl.humanGestureUntil = clock() + 1300;
-    if (!isSeekish && isPauseish && pairPlaying()) ctl.humanPauseUntil = clock() + 1200;
-    if (isSeekish && playbackWanted()) {
-      rememberPlaybackIntent("human-seek");
-      protectFromStorm("human-seek", 7200);
-    }
-  };
-  const noteKeyControl = (ev) => {
-    const k = String(ev && (ev.key || ev.code) || "").toLowerCase();
-    if (k === " " || k === "space" || k === "spacebar" || k === "k" || k === "mediaplaypause") {
-      ctl.humanGestureUntil = clock() + 1400;
-      if (pairPlaying()) ctl.humanPauseUntil = clock() + 1200;
-      else rememberPlaybackIntent("human-key-play");
-    }
-  };
-  const wrapElement = (el, label) => {
-    if (!el || ctl.boundTargets.has(el)) return;
-    ctl.boundTargets.add(el);
-    try {
-      if (typeof el.pause === "function" && !el.__smoothTabPauseGuarded) {
-        const pauseNative = el.pause.bind(el);
-        el.__smoothTabPauseGuarded = true;
-        el.pause = function smoothTabPauseGuard(...args) {
-          if (shouldBlockPause(label + "-pause-call")) {
-            rememberPlaybackIntent(label + "-blocked-pause");
-            protectFromStorm(label + "-blocked-pause", 6200);
-            scheduleResume(label + "-blocked-pause-resume", 90, { force: false, restore: false });
-            return;
-          }
-          return pauseNative(...args);
-        };
-      }
-    } catch { }
-    try {
-      if (typeof el.play === "function" && !el.__smoothTabPlayGuarded) {
-        const playNative = el.play.bind(el);
-        el.__smoothTabPlayGuarded = true;
-        el.play = function smoothTabPlayGuard(...args) {
-          rememberPlaybackIntent(label + "-play-call");
-          protectFromStorm(label + "-play-call", 3600);
-          try { return playNative(...args); } catch (err) { throw err; }
-        };
-      }
-    } catch { }
-    const onPlay = () => {
-      ctl.lastPlayEventAt = clock();
-      rememberPlaybackIntent(label + "-play-event");
-      protectFromStorm(label + "-play-event", 3200);
-    };
-    const onPlaying = () => {
-      ctl.lastStableVideoTime = mediaTime(videoNode());
-      ctl.lastStableAudioTime = mediaTime(audioNode());
-      ctl.lastStableAt = clock();
-      protectFromStorm(label + "-playing", 1600);
-    };
-    const onPause = () => {
-      const n = clock();
-      if ((n - ctl.lastPauseEventAt) < 950) ctl.pauseStormCount += 1;
-      else ctl.pauseStormCount = 1;
-      ctl.lastPauseEventAt = n;
-      if (shouldBlockPause(label + "-pause-event") || ctl.pauseStormCount >= 2) {
-        rememberPlaybackIntent(label + "-pause-event-blocked");
-        protectFromStorm(label + "-pause-storm", ctl.pauseStormCount >= 2 ? 9800 : 6200);
-        scheduleResume(label + "-pause-event-resume", ctl.pauseStormCount >= 2 ? 180 : 80, { force: ctl.pauseStormCount >= 2, restore: false });
-        return;
-      }
-      if (humanPauseAllowed() || explicitPauseActive()) clearPlaybackIntentForHumanPause();
-    };
-    const onWaiting = () => {
-      if (playbackWanted()) {
-        rememberPlaybackIntent(label + "-waiting");
-        protectFromStorm(label + "-waiting-buffer", 5200);
-        primeMedia(el);
-        bindReadyResume(label + "-waiting");
-        scheduleResume(label + "-waiting", 260, { force: false, restore: false });
-      }
-    };
-    const onReady = (ev) => {
-      if (playbackWanted()) {
-        rememberPlaybackIntent(label + "-" + ev.type);
-        protectFromStorm(label + "-ready", 2200);
-        scheduleResume(label + "-ready", ev.type === "timeupdate" ? 120 : 0, { force: false, restore: false });
-      }
-    };
-    const onSeeking = () => {
-      ctl.lastSeekAt = clock();
-      ctl.seekWasPlaying = playbackWanted() || pairPlaying();
-      ctl.targetTime = mediaTime(videoNode());
-      if (ctl.seekWasPlaying) {
-        rememberPlaybackIntent(label + "-seeking");
-        protectFromStorm(label + "-seeking", 9800);
-      }
-    };
-    const onSeeked = () => {
-      ctl.lastSeekAt = clock();
-      ctl.targetTime = mediaTime(videoNode());
-      if (ctl.seekWasPlaying || playbackWanted()) {
-        rememberPlaybackIntent(label + "-seeked");
-        protectFromStorm(label + "-seeked", 9800);
-        bindReadyResume(label + "-seeked");
-        scheduleResume(label + "-seeked-now", 0, { force: true });
-        scheduleResume(label + "-seeked-check", 260, { force: true, restore: false });
-      }
-    };
-    try { el.addEventListener("play", onPlay, { passive: true }); } catch { }
-    try { el.addEventListener("playing", onPlaying, { passive: true }); } catch { }
-    try { el.addEventListener("pause", onPause, { passive: true }); } catch { }
-    try { el.addEventListener("waiting", onWaiting, { passive: true }); } catch { }
-    try { el.addEventListener("stalled", onWaiting, { passive: true }); } catch { }
-    try { el.addEventListener("seeking", onSeeking, { passive: true }); } catch { }
-    try { el.addEventListener("seeked", onSeeked, { passive: true }); } catch { }
-    for (const ev of ["canplay", "canplaythrough", "loadeddata", "loadedmetadata", "progress", "playing", "timeupdate"]) {
-      try { el.addEventListener(ev, onReady, { passive: true }); } catch { }
-    }
-  };
-  const wrapPlayer = () => {
-    try {
-      if (video && typeof video.pause === "function" && !video.__smoothTabPauseGuarded) {
-        const pausePlayer = video.pause.bind(video);
-        video.__smoothTabPauseGuarded = true;
-        video.pause = function smoothTabVideoJsPauseGuard(...args) {
-          if (shouldBlockPause("videojs-pause-call")) {
-            rememberPlaybackIntent("videojs-pause-blocked");
-            protectFromStorm("videojs-pause-blocked", 6800);
-            scheduleResume("videojs-pause-blocked-resume", 80, { force: false, restore: false });
-            return video;
-          }
-          return pausePlayer(...args);
-        };
-      }
-    } catch { }
-    try {
-      if (video && typeof video.play === "function" && !video.__smoothTabPlayGuarded) {
-        const playPlayer = video.play.bind(video);
-        video.__smoothTabPlayGuarded = true;
-        video.play = function smoothTabVideoJsPlayGuard(...args) {
-          rememberPlaybackIntent("videojs-play-call");
-          protectFromStorm("videojs-play-call", 3600);
-          return playPlayer(...args);
-        };
-      }
-    } catch { }
-  };
-  const bindCurrentTargets = () => {
-    wrapPlayer();
-    wrapElement(videoEl, "videoEl");
-    wrapElement(videoNode(), "videoNode");
-    wrapElement(audio, "audio");
-  };
-  const rememberHiddenAnchor = (reason = "hidden") => {
-    const v = videoNode();
-    const a = audioNode();
-    ctl.lastHiddenAt = clock();
-    ctl.lastHiddenVideoTime = mediaTime(v);
-    ctl.lastHiddenAudioTime = mediaTime(a);
-    if (playbackWanted() || pairPlaying()) rememberPlaybackIntent(reason);
-    protectFromStorm(reason, perfProfile.lowEnd ? 15000 : 11000);
-    primeMedia(v);
-    primeMedia(a);
-  };
-  const visibleAgain = (reason = "visible") => {
-    ctl.lastVisibleAt = clock();
-    bindCurrentTargets();
-    if (!playbackWanted()) return;
-    rememberPlaybackIntent(reason);
-    protectFromStorm(reason, perfProfile.lowEnd ? 16000 : 12000);
-    const target = chooseTarget();
-    ctl.targetTime = target;
-    setMediaTime(videoNode(), target, 0.24);
-    if (audioNode()) setMediaTime(audioNode(), target, 0.36);
-    bindReadyResume(reason);
-    scheduleResume(reason + "-immediate", 0, { force: true });
-    scheduleResume(reason + "-settle", perfProfile.lowEnd ? 520 : 280, { force: true, restore: false });
-    scheduleResume(reason + "-late-check", perfProfile.lowEnd ? 1250 : 760, { force: false, restore: false });
-  };
-  try { document.addEventListener("pointerdown", noteHumanControl, { passive: true, capture: true }); } catch { }
-  try { document.addEventListener("touchstart", noteHumanControl, { passive: true, capture: true }); } catch { }
-  try { document.addEventListener("keydown", noteKeyControl, { passive: true, capture: true }); } catch { }
-  try {
-    document.addEventListener("visibilitychange", () => {
-      if (visible()) visibleAgain("tab-visible");
-      else rememberHiddenAnchor("tab-hidden");
-    }, { passive: true });
-  } catch { }
-  try { window.addEventListener("blur", () => { ctl.lastBlurAt = clock(); rememberHiddenAnchor("window-blur"); }, { passive: true }); } catch { }
-  try { window.addEventListener("focus", () => visibleAgain("window-focus"), { passive: true }); } catch { }
-  try { window.addEventListener("pageshow", () => visibleAgain("pageshow"), { passive: true }); } catch { }
-  try { window.addEventListener("pagehide", () => rememberHiddenAnchor("pagehide"), { passive: true }); } catch { }
-  try { document.addEventListener("resume", () => visibleAgain("document-resume"), { passive: true }); } catch { }
-  try { document.addEventListener("freeze", () => rememberHiddenAnchor("document-freeze"), { passive: true }); } catch { }
-  bindCurrentTargets();
-  setInterval(bindCurrentTargets, perfProfile.lowEnd ? 1200 : 800);
-  setInterval(() => {
-    if (!playbackWanted()) return;
-    const v = videoNode();
-    const a = audioNode();
-    if (!v) return;
-    const n = clock();
-    if (mediaIsPlaying(v) || mediaIsPlaying(a)) {
-      ctl.lastStableVideoTime = mediaTime(v);
-      ctl.lastStableAudioTime = mediaTime(a);
-      ctl.lastStableAt = n;
-      return;
-    }
-    if (n < ctl.pauseGuardUntil || n < ctl.visibilityGuardUntil || n < ctl.seekGuardUntil || n < ctl.bufferGuardUntil || n < ctl.startupGuardUntil || state.resumeOnVisible) {
-      bindReadyResume("heartbeat");
-      scheduleResume("heartbeat", 0, { force: false, restore: false });
-    }
-  }, perfProfile.lowEnd ? 900 : 560);
-  const originalPauseBlocker = shouldBlockProgrammaticPauseForTransportStorm;
-  shouldBlockProgrammaticPauseForTransportStorm = function() {
-    try { if (shouldBlockPause("shared-pause-blocker")) return true; } catch { }
-    try { return originalPauseBlocker(); } catch { return false; }
-  };
-  const originalStormResume = scheduleMediaTransportStormResume;
-  scheduleMediaTransportStormResume = function(reason = "media-event-storm-resume", delayMs = 90) {
-    try {
-      if (playbackWanted()) {
-        rememberPlaybackIntent(reason);
-        protectFromStorm(reason, 7600);
-        scheduleResume(reason, Math.min(Math.max(0, Number(delayMs) || 0), 180), { force: false, restore: false });
-        return true;
-      }
-    } catch { }
-    try { return originalStormResume(reason, delayMs); } catch { return false; }
-  };
-  const originalPostSeek = schedulePostSeekAutoplay;
-  schedulePostSeekAutoplay = function(reason = "post-seek-autoplay", delayMs = 0) {
-    try {
-      rememberPlaybackIntent(reason);
-      protectFromStorm(reason, 9800);
-      scheduleResume(reason, Math.min(Math.max(0, Number(delayMs) || 0), 140), { force: true });
-      return true;
-    } catch { }
-    try { return originalPostSeek(reason, delayMs); } catch { return true; }
-  };
-  const originalSeekCommit = scheduleSeekResumeCommit;
-  scheduleSeekResumeCommit = function(reason = "seek-resume", delayMs = 0, opts = {}) {
-    try {
-      rememberPlaybackIntent(reason);
-      protectFromStorm(reason, 9800);
-      scheduleResume(reason, Math.min(Math.max(0, Number(delayMs) || 0), 140), { force: true });
-      return true;
-    } catch { }
-    try { return originalSeekCommit(reason, delayMs, opts); } catch { return true; }
-  };
-  try {
-    if (managedStartupAutoplay) {
-      rememberPlaybackIntent("startup-autoplay");
-      protectFromStorm("startup-autoplay", perfProfile.lowEnd ? 13000 : 9800);
-      bindReadyResume("startup-autoplay");
-      scheduleResume("startup-autoplay", 0, { force: true });
-      scheduleResume("startup-autoplay-settle", perfProfile.lowEnd ? 720 : 360, { force: true, restore: false });
-    }
-  } catch { }
-  window.__tabSwitchPlaybackStabilizer = ctl;
-}
-tabSwitchPlaybackStabilizer();
-
 const _crashReportBase = "https://codeberg.org/ashleyirispuppy/poke/issues/new?template=issue_template%2fplayer-bug.yml";
 function _handlePlayerCrash(errorMsg, source, stack, crashInfo = {}) {
   if (_globalErrorCaught || _errorOverlayShown) return;
