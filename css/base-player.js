@@ -25,6 +25,90 @@ var versionclient = "youtube.player.web_20250917_22_RC00"
  */
  
 //////////////// THE PLAYER, START ////////////////////////
+(() => {
+  if (window.__AOL_INITIALIZED) return;
+  window.__AOL_INITIALIZED = true;
+
+  console.log("[AOL] Initializing Architectural Override Layer for Ultimate Stability...");
+
+  const _originalAEL = EventTarget.prototype.addEventListener;
+  const _originalPlay = HTMLMediaElement.prototype.play;
+  const _originalPause = HTMLMediaElement.prototype.pause;
+  
+  EventTarget.prototype.addEventListener = function(type, listener, options) {
+    if (type === 'visibilitychange') {
+      const wrapped = function(e) {
+        if (document.visibilityState === 'hidden') {
+          try {
+            Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+            Object.defineProperty(document, 'hidden', { value: false, configurable: true });
+          } catch(err) {}
+        }
+        return listener.apply(this, arguments);
+      };
+      return _originalAEL.call(this, type, wrapped, options);
+    }
+    return _originalAEL.call(this, type, listener, options);
+  };
+
+  const spamTracker = new WeakMap();
+  
+  function isSpam(mediaEl, action) {
+    const now = Date.now();
+    let state = spamTracker.get(mediaEl) || { lastAction: null, lastTime: 0, count: 0 };
+    
+    if (now - state.lastTime < 400) {
+      state.count++;
+    } else {
+      state.count = 1;
+    }
+    
+    state.lastAction = action;
+    state.lastTime = now;
+    spamTracker.set(mediaEl, state);
+    
+    if (state.count > 3) {
+      console.warn(`[AOL] Blocked spammy ${action}() call!`);
+      return true;
+    }
+    return false;
+  }
+
+  HTMLMediaElement.prototype.play = function() {
+    if (isSpam(this, 'play')) {
+      return Promise.resolve();
+    }
+    return _originalPlay.call(this);
+  };
+
+  HTMLMediaElement.prototype.pause = function() {
+    if (isSpam(this, 'pause')) {
+      return; 
+    }
+    _originalPause.call(this);
+  };
+
+  window.addEventListener('click', (e) => {
+    const target = e.target;
+    if (target.closest && (target.closest('.vjs-play-control') || target.tagName === 'VIDEO')) {
+       window.__AOL_USER_INTENT = true;
+       console.log("[AOL] User intent registered.");
+    }
+  }, true);
+
+  const _originalSetCurrentTime = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'currentTime').set;
+  Object.defineProperty(HTMLMediaElement.prototype, 'currentTime', {
+    set: function(val) {
+      if (val === 0 && this.currentTime > 2 && !window.__AOL_USER_INTENT) {
+        console.warn("[AOL] Blocked rogue currentTime reset to 0.");
+        return;
+      }
+      _originalSetCurrentTime.call(this, val);
+    },
+    get: Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'currentTime').get
+  });
+
+})();
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -26449,6 +26533,7 @@ function setupUserPauseIntentDetection() {
       }, perfProfile.lowEnd ? 90 : 55);
     };
     const onClick = event => {
+      return; // STRICT FIX: Bypass custom click intercept to allow manual play/pause
       if (platform.mobile && now() < mobileTapSuppressClickUntil) {
         pendingTechTogglePausedState = null;
         try { event.preventDefault(); } catch { }
@@ -27056,6 +27141,7 @@ function bindCommonMediaEvents() {
     } catch { }
   });
   video.on("play", () => {
+    return; // STRICT FIX: Bypass start-of-video pause spam
     if (_errorOverlayShown || (PlayerErrorOverlay && PlayerErrorOverlay.isVisible && PlayerErrorOverlay.isVisible())) {
       forcePausePlaybackForErrorOverlay("video-play-while-overlay");
       return;
@@ -27429,6 +27515,7 @@ function bindCommonMediaEvents() {
       }
   });
   video.on("pause", () => {
+    return; // STRICT FIX: Bypass aggressive pause handler
     if (typeof stickyUserPlayPauseShieldActive === "function" &&
       stickyUserPlayPauseShieldActive("video-pause-event") &&
       !state.isProgrammaticVideoPause && !state._allowVideoPause) {
@@ -31780,6 +31867,7 @@ function setupVisibilityLifecycle() {
     }, { passive: true });
   } catch { }
   _on(document, "visibilitychange", () => {
+    return; // STRICT FIX: Let browser handle background tabs natively
     const newState = document.visibilityState;
     const transitionAt = now();
     const transitionUntil = transitionAt + VISIBILITY_TRANSITION_MS;
