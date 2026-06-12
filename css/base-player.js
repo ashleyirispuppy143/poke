@@ -653,563 +653,566 @@ document.addEventListener("DOMContentLoaded", () => {
     isProgrammaticAudioPlay: false,
     isProgrammaticAudioPause: false,
     _allowAudioPause: false, // DONTLETBROWSERPAUSEUS pass-through flag (legit programmatic pause)
-_seekAudioPlayedSeekId: -1, // per-seek dedup (set by exec path on first play)
-userPlayLockUntil: 0, // user clicked play — block ALL non-user pauses until this ts
-_allowVideoPause: false, // pass-through flag for legit programmatic video pauses
-_playLockCounterPlayLastAt: 0, // debounce for counter-play recovery
-audioEventsSquelchedUntil: 0,
-audioPlayInFlight: null,
-videoPlayInFlight: null,
-audioPlayInFlightSession: -1,
-videoPlayInFlightSession: -1,
-audioPlayInFlightStartedAt: 0,
-videoPlayInFlightStartedAt: 0,
-videoPlayUntil: 0,
-audioPlayGeneration: 0,
-audioPlayUntil: 0,
-audioPauseUntil: 0,
-startupAudioHoldUntil: 0,
-userPauseUntil: 0,
-userPauseLockUntil: 0,
-userPlayUntil: 0,
-mediaForcedPauseUntil: 0,
-pauseEventGuardUntil: 0,
-mediaPlayTxnUntil: 0,
-mediaPauseTxnUntil: 0,
-mediaLockUntil: 0,
-hiddenMediaPlayUntil: 0,
-chromiumAudioStartLockUntil: 0,
-chromiumPauseGuardUntil: 0,
-chromiumBgSettlingUntil: 0,
-lastMediaAction: "",
-lastMediaActionTs: 0,
-syncTimer: null,
-syncScheduledAt: 0,
-fastSyncUntil: 0,
-bgResumeRetryTimer: null,
-resumeAfterBufferTimer: null,
-mediaSessionActionSerial: 0,
-mediaSessionPlayPendingUntil: 0,
-mediaSessionPlayPendingSerial: 0,
-mediaSessionSeekTarget: null,
-mediaSessionSeekUntil: 0,
-mediaSessionPausedPosition: NaN,
-mediaSessionPausedAt: 0,
-mediaSessionResumeAlignUntil: 0,
-transportPositionTarget: NaN,
-transportPositionUntil: 0,
-transportPositionReason: "",
-transportPositionSerial: 0,
-transportPositionCommitted: false,
-transportPositionSettledAt: 0,
-mediaPositionNextAt: 0,
-mediaSessionEnsureNextAt: 0,
-hiddenAudioNativeResumeBurstAt: 0,
-hiddenInstantResumeAt: 0,
-hiddenInstantResumeCount: 0,
-hiddenInstantResumeResetAt: 0,
-hiddenAudioPauseShieldAt: 0,
-hiddenAudioPauseShieldCount: 0,
-hiddenAudioPauseShieldResetAt: 0,
-hiddenAudioNoSeekRetryAt: 0,
-hiddenAudioNoSeekRetryTimers: [],
-hiddenAudioShieldKickTimer: null,
-bgKeepaliveHotUntil: 0,
-lastHiddenTimelineTarget: 0,
-lastHiddenTimelineTargetAt: 0,
-bgHiddenSince: 0,
-bgHiddenBaseVT: 0,
-bgHiddenBaseAT: 0,
-bgHiddenBaseRate: 1,
-bgHiddenWasPlaying: false,
-resumeOnVisible: false,
-bgAutoResumeSuppressed: false,
-bgCatchUpCooldownUntil: 0,
-bgResumeInFlight: false,
-seekResumeInFlight: false,
-seekResumeStartedAt: 0,
-seekTransportLockUntil: 0,
-seekTransportPauseIssued: false,
-seekTransportPlayIssued: false,
-seekTransportLastPauseAt: 0,
-seekTransportLastPlayAt: 0,
-seekPlaybackTxnUntil: 0,
-seekPlaybackTxnSeekId: -1,
-seekPlaybackTxnTarget: NaN,
-seekPlaybackTxnWantedPlaying: false,
-seekPlaybackTxnAudioPlayAt: 0,
-seekPlaybackTxnVideoPlayAt: 0,
-seekPlaybackTxnAudioPauseAt: 0,
-seekPlaybackTxnVideoPauseAt: 0,
-seekResumeCommitInFlight: false,
-seekResumeCommitSeekId: -1,
-seekResumeCommitUntil: 0,
-seekResumeCommitDueAt: 0,
-seekResumeCommitTimer: null,
-seekResumeCommitLastAt: 0,
-seekCommitSerial: 0,
-seekCommitActive: false,
-seekCommitSeekId: -1,
-seekCommitTarget: NaN,
-seekCommitWantedPlaying: false,
-seekCommitRestart: false,
-seekCommitPhase: "",
-seekCommitStartIssued: false,
+    _seekAudioPlayedSeekId: -1, // per-seek dedup (set by exec path on first play)
+    userPlayLockUntil: 0, // user clicked play — block ALL non-user pauses until this ts
+    _allowVideoPause: false, // pass-through flag for legit programmatic video pauses
+    _playLockCounterPlayLastAt: 0, // debounce for counter-play recovery
+    audioEventsSquelchedUntil: 0,
+    audioPlayInFlight: null,
+    videoPlayInFlight: null,
+    audioPlayInFlightSession: -1,
+    videoPlayInFlightSession: -1,
+    audioPlayInFlightStartedAt: 0,
+    videoPlayInFlightStartedAt: 0,
+    videoPlayUntil: 0,
+    audioPlayGeneration: 0,
+    audioPlayUntil: 0,
+    audioPauseUntil: 0,
+    startupAudioHoldUntil: 0,
+    userPauseUntil: 0,
+    userPauseLockUntil: 0,
+    userPlayUntil: 0,
+    mediaForcedPauseUntil: 0,
+    pauseEventGuardUntil: 0,
+    mediaPlayTxnUntil: 0,
+    mediaPauseTxnUntil: 0,
+    mediaLockUntil: 0,
+    hiddenMediaPlayUntil: 0,
+    chromiumAudioStartLockUntil: 0,
+    chromiumPauseGuardUntil: 0,
+    chromiumBgSettlingUntil: 0,
+    lastMediaAction: "",
+    lastMediaActionTs: 0,
+    syncTimer: null,
+    syncScheduledAt: 0,
+    fastSyncUntil: 0,
+    bgResumeRetryTimer: null,
+    resumeAfterBufferTimer: null,
+    mediaSessionActionSerial: 0,
+    mediaSessionPlayPendingUntil: 0,
+    mediaSessionPlayPendingSerial: 0,
+    mediaSessionSeekTarget: null,
+    mediaSessionSeekUntil: 0,
+    mediaSessionPausedPosition: NaN,
+    mediaSessionPausedAt: 0,
+    mediaSessionResumeAlignUntil: 0,
+    transportPositionTarget: NaN,
+    transportPositionUntil: 0,
+    transportPositionReason: "",
+    transportPositionSerial: 0,
+    transportPositionCommitted: false,
+    transportPositionSettledAt: 0,
+    mediaPositionNextAt: 0,
+    mediaSessionEnsureNextAt: 0,
+    hiddenAudioNativeResumeBurstAt: 0,
+    hiddenInstantResumeAt: 0,
+    hiddenInstantResumeCount: 0,
+    hiddenInstantResumeResetAt: 0,
+    hiddenAudioPauseShieldAt: 0,
+    hiddenAudioPauseShieldCount: 0,
+    hiddenAudioPauseShieldResetAt: 0,
+    hiddenAudioNoSeekRetryAt: 0,
+    hiddenAudioNoSeekRetryTimers: [],
+    hiddenAudioShieldKickTimer: null,
+    bgKeepaliveHotUntil: 0,
+    lastHiddenTimelineTarget: 0,
+    lastHiddenTimelineTargetAt: 0,
+    bgHiddenSince: 0,
+    bgHiddenBaseVT: 0,
+    bgHiddenBaseAT: 0,
+    bgHiddenBaseRate: 1,
+    bgHiddenWasPlaying: false,
+    resumeOnVisible: false,
+    bgAutoResumeSuppressed: false,
+    bgCatchUpCooldownUntil: 0,
+    bgResumeInFlight: false,
+    seekResumeInFlight: false,
+    seekResumeStartedAt: 0,
+    seekTransportLockUntil: 0,
+    seekTransportPauseIssued: false,
+    seekTransportPlayIssued: false,
+    seekTransportLastPauseAt: 0,
+    seekTransportLastPlayAt: 0,
+    seekPlaybackTxnUntil: 0,
+    seekPlaybackTxnSeekId: -1,
+    seekPlaybackTxnTarget: NaN,
+    seekPlaybackTxnWantedPlaying: false,
+    seekPlaybackTxnAudioPlayAt: 0,
+    seekPlaybackTxnVideoPlayAt: 0,
+    seekPlaybackTxnAudioPauseAt: 0,
+    seekPlaybackTxnVideoPauseAt: 0,
+    seekResumeCommitInFlight: false,
+    seekResumeCommitSeekId: -1,
+    seekResumeCommitUntil: 0,
+    seekResumeCommitDueAt: 0,
+    seekResumeCommitTimer: null,
+    seekResumeCommitLastAt: 0,
+    seekCommitSerial: 0,
+    seekCommitActive: false,
+    seekCommitSeekId: -1,
+    seekCommitTarget: NaN,
+    seekCommitWantedPlaying: false,
+    seekCommitRestart: false,
+    seekCommitPhase: "",
+    seekCommitStartIssued: false,
     seekCommitStartIssuedAt: 0,
     seekCommitStartedAt: 0,
     seekCommitLastReadyAt: 0,
     seekCommitLastAlignAt: 0,
     seekCommitLastJoinKickAt: 0,
     seekCommitAttempts: 0,
-seekCommitCorrected: false,
-seekCommitCorrectionUntil: 0,
-seekCommitTimer: null,
-stablePlaybackRecoveryTimer: null,
-stablePlaybackRecoveryDueAt: 0,
-stablePlaybackRecoveryLastAt: 0,
-stablePlaybackRecoveryReason: "",
-seekDisplayTarget: NaN,
-seekDisplayTargetUntil: 0,
-seekbarStableTarget: NaN,
-seekbarStableUntil: 0,
-seekDragActive: false,
-seekDragTarget: NaN,
-seekDragCommitAt: 0,
-seekFinalizeTimer: null,
-seekWatchdogTimer: null,
-lastAT: 0,
-audioLastProgressTs: 0,
-lastVT: 0,
-lastVTts: 0,
-monotonicVideoTime: NaN,
-monotonicVideoTimeAt: 0,
-monotonicVideoRestoreAt: 0,
-monotonicVideoRestoreCount: 0,
-audioKickCooldownUntil: 0,
-hardPauseVerifySerial: 0,
-hardPauseVerifyTimer: null,
-atomicPairPauseAt: 0,
-atomicPairPauseTarget: NaN,
-atomicPairPauseReleaseTimer: null,
-startupPrimeStartedAt: performance.now(),
-                          lastKnownGoodVT: 0,
-                          lastKnownGoodVTts: 0,
-                          startupAutoplayRetryTimer: null,
-                          startupAutoplayRetryCount: 0,
-                          driftStableFrames: 0,
-                          lastDrift: 0,
-                          bgTransitionInProgress: false,
-                          selectedPlaybackRate: 1,
-                          normalAudioDriftHardCorrectAt: 0,
-                          normalAudioDriftSoftCorrectAt: 0,
-                          normalAudioDriftSoftInFlight: false,
-                          normalAudioDriftSoftSerial: 0,
-                          normalAudioDriftSoftLastTarget: NaN,
-                          syncConvergenceCount: 0,
-                          lastSyncDrift: 0,
-                          backgroundPauseBlocked: false,
-                          mediaControlPending: false,
-                          initialSyncComplete: false,
-                          audioPopPreventUntil: 0,
-                          audioFading: false,
-                          audioFadeTarget: 1,
-                          audioLastPlayPauseTs: 0,
-                          initialSyncDone: false,
-                          bufferHoldIntendedPlaying: false,
-                          mediaSessionInitiatedPlay: false,
-                          hiddenPlayRequestUntil: 0,
-                          hiddenVideoBootstrapUntil: 0,
-                          foregroundResumeBoostUntil: 0,
-                            seamlessReturnUntil: 0,
-                            seamlessReturnReason: "",
-                            seamlessReturnTimer: null,
-                            pendingSeekTarget: null,
-                            explicitSeekTarget: null,
-                            explicitSeekUntil: 0,
-                            explicitSeekCorrectionCount: 0,
-                            explicitSeekLastWriteAt: 0,
-                            explicitSeekLastWriteTarget: NaN,
-                            nearZeroSeekAuthorizedUntil: 0,
-                            playRequestedDuringSeek: false,
-                            seekCompleted: false,
-                            seekKickAudioAllowedUntil: 0,
-                            seekAudioKickAt: 0,
-                            seekAudioMustStartUntil: 0,
-                            seekAudioHoldUntilVideoReadyUntil: 0,
-                            seekAudioHoldSeekId: -1,
-                            seekAudioHoldPollTimer: null,
-                            seekAudioReleaseInFlight: false,
-                            seekAudioReleaseSeekId: -1,
-                            seekAudioReleaseNativePlayAllowed: false,
-                            seekPairBarrierUiAt: 0,
-                            seekResumeWantedUntil: 0,
-                            seekStabilizeUntil: 0,
-                            audioVolumeBeforePause: 1,
-                            stateChangeCooldownUntil: 0,
-                            audioFadeCompleteUntil: 0,
-                            chromiumBgPauseBlockedUntil: 0,
-                            tabVisibilityChangeUntil: 0,
-                            audioGainSmoothUntil: 0,
-                            chromiumBgPauseBlockedUntilExtended: 0,
-                            visibilityTransitionActive: false,
-                            visibilityTransitionUntil: 0,
-                            lastVisibilityState: "visible",
-                            previousVisibilityState: "visible",
-                            bgPauseSuppressionCount: 0,
-                            bgPauseSuppressionResetAt: 0,
-                            mediaSessionPauseBlockedUntil: 0,
-                            rapidToggleDetected: false,
-                            rapidToggleUntil: 0,
-                            altTabTransitionActive: false,
-                            altTabTransitionUntil: 0,
-                            lastFocusLoss: 0,
-                            focusLossCount: 0,
-                            focusLossResetAt: 0,
-                            chromiumAutoPauseBlockedUntil: 0,
-                            chromiumPauseEventSuppressedUntil: 0,
-                            lastPauseEventTs: 0,
-                            pauseEventCount: 0,
-                            pauseEventResetAt: 0,
-                            visibilityStableUntil: 0,
-                            focusStableUntil: 0,
-                            mediaSessionOverrideActive: false,
-                            audioVolumeLocked: false,
-                            audioSafeMuteUntil: 0,
-                            seekAudioSyncPending: false,
-                            seekAudioSyncTime: 0,
-                            seekAudioSyncUntil: 0,
-                            bgPlaybackAllowed: true,
-                            startupBgRetryCount: 0,
-                            bgPlayAttempted: false,
-                            audioVolumeBeforeTimeChange: 1,
-                            audioZeroVolumeConfirmed: false,
-                            rapidPlayPauseCount: 0,
-                            rapidPlayPauseResetAt: 0,
-                            userToggleTxnUntil: 0,
-                            userToggleExpectedPlay: null,
-                            playPauseTxnUntil: 0,
-                            playPauseTxnSerial: 0,
-                            playPauseTxnExpectedPlay: null,
-                            playPauseTxnStartedAt: 0,
-                            playPauseTxnReason: "",
-                            playPauseTxnPosition: NaN,
-                            playPauseTxnVideoPlayAt: 0,
-                            playPauseTxnAudioPlayAt: 0,
-                            playPauseTxnVideoPauseAt: 0,
-                            playPauseTxnAudioPauseAt: 0,
-                            playPauseTxnTimelineBlockUntil: 0,
-                            mediaTransportStormUntil: 0,
-                            mediaTransportStormReason: "",
-                            mediaTransportStormLastEventKind: "",
-                            mediaTransportStormLastEventAction: "",
-                            mediaTransportStormLastEventAt: 0,
-                            mediaTransportStormEventBurstStart: 0,
-                            mediaTransportStormEventCount: 0,
-                            mediaTransportStormVideoPlayAt: 0,
-                            mediaTransportStormAudioPlayAt: 0,
-                            mediaTransportStormResumeTimer: null,
-                            femboiStableMode: "",
-                            femboiStableReason: "",
-                            femboiStableUntil: 0,
-                            femboiStableStartedAt: 0,
-                            femboiStableSerial: 0,
-                            femboiStableAnchor: NaN,
-                            femboiStableVerifyTimer: null,
-                            femboiStableVerifyDueAt: 0,
-                            femboiStableLastEventKind: "",
-                            femboiStableLastEventAction: "",
-                            femboiStableLastEventAt: 0,
-                            femboiStableEventBurstAt: 0,
-                            femboiStableEventCount: 0,
-                            femboiStableLastUserSeekAt: 0,
-                            femboiStableSeekTarget: NaN,
-                            femboiStableSeekUntil: 0,
-                            femboiStableBlockedSeekAt: 0,
-                            femboiStableBlockedSeekCount: 0,
-                            femboiEngineMode: "",
-                            femboiEngineReason: "",
-                            femboiEngineUntil: 0,
-                            femboiEngineStartedAt: 0,
-                            femboiEngineSerial: 0,
-                            femboiEngineTarget: NaN,
-                            femboiEngineVerifyTimer: null,
-                            femboiEngineVerifyDueAt: 0,
-                            femboiEngineLastStartAt: 0,
-                            femboiEnginePairStartUntil: 0,
-                            femboiEnginePairStartTarget: NaN,
-                            femboiEngineLastMediaEventKind: "",
-                            femboiEngineLastMediaEventAction: "",
-                            femboiEngineLastMediaEventAt: 0,
-                            femboiEngineMediaEventBurstAt: 0,
-                            femboiEngineMediaEventCount: 0,
-                            femboiEngineReturnAnchor: NaN,
-                            femboiEngineReturnUntil: 0,
-                            femboiEngineReturnSerial: 0,
-                            femboiEngineHiddenAnchor: NaN,
-                            femboiEngineHiddenAnchorSource: "",
-                            femboiEngineHiddenAt: 0,
-                            femboiEngineLastSeekTarget: NaN,
-                            femboiEngineSeekUntil: 0,
-                            kittyCollarAnchor: NaN,
-                            kittyCollarLeaveAt: 0,
-                            kittyCollarReturnAt: 0,
-                            kittyCollarWarmUntil: 0,
-                            kittyCollarPlayAfterReturnUntil: 0,
-                            kittyCollarLastPrimeAt: 0,
-                            kittyCollarWasPausedOnLeave: false,
-                            maidCleanerLastSweepAt: 0,
-                            maidCleanerSweepCount: 0,
-                            noSpamMode: "",
-                            noSpamReason: "",
-                            noSpamUntil: 0,
-                            noSpamTarget: NaN,
-                            noSpamExpectedPlaying: false,
-                            noSpamSeekSerial: 0,
-                            noSpamLastEventKind: "",
-                            noSpamLastEventAction: "",
-                            noSpamLastEventAt: 0,
-                            noSpamEventBurstAt: 0,
-                            noSpamEventCount: 0,
-                            noSpamSuppressedPauseCount: 0,
-                            noSpamResumeTimer: null,
-                            noSpamResumeDueAt: 0,
-                            noSpamLastResumeAt: 0,
-                            noSpamLastArmAt: 0,
-                            noSpamResumeIssuedSerial: -1,
-                            noSpamResumeHoldUntil: 0,
-                            noSpamSeekedAt: 0,
-                            audioPlayAttemptCount: 0,
-                            audioPlayAttemptResetAt: 0,
-                            backgroundAutoplayTriggered: false,
-                            audioStartupPlayAttempted: false,
-                            audioStartupPlayRetries: 0,
-                            audioForcePlayTimer: null,
-                            wakeupTimer: null,
-                            startupZeroed: false,
-                            startupZeroGuardReady: false,
-                            startupZeroSuppressedUntil: (() => {
-                              try { return Number(window.__playerStartupZeroSuppressedUntil) || 0; } catch { return 0; }
-                            })(),
-                          startupPlaySettleUntil: 0,
-                          startupPlaySettled: false,
-                          startupKickAttempts: 0,
-                          userGesturePauseIntent: false,
-                          pageFullyLoaded: document.readyState === "complete",
-                          bgAudioStartQueued: false,
-                          bbtabRetryTimer: null,
-                          bbtabRetryRafId: null,
-                          bbtabRetryCount: 0,
-                          bbtabAudioSyncTimer: null,
-                          bbtabVideoConfirmedAt: 0,
-                          bbtabAudioSyncDone: false,
-                          bbtabAudioFallbackDone: false,
-                          lastUserActionTime: 0,
-                          lastUserToggleType: "",
-                          lastUserToggleAt: 0,
-                          loopPreventionCooldownUntil: 0,
-                          seekCooldownUntil: 0,
-                          playerVolumeReady: false,
-                          playerVolume: 0.5,
-                          playerMuted: false,
-                          volumeSaveScheduled: false,
-                          volumeSaveTimer: null,
-                          volumeSavePendingVolume: 0.5,
-                          volumeSavePendingMuted: false,
-                          lastStoredVolumeApplyAt: 0,
-                           lastBgReturnAt: 0,
-                           lastVisibleReturnHandledAt: 0,
-                           foregroundReturnTimelineSource: "",
-                           foregroundReturnTimelineTarget: NaN,
-                           foregroundReturnTimelineCapturedAt: 0,
-                           foregroundReturnTimelineUntil: 0,
-                           foregroundReturnTimelineReason: "",
-                           foregroundReturnTimelineSerial: 0,
-                           returnAlignLastAt: 0,
-                           returnAlignLastTarget: NaN,
-                          returnAlignSettledUntil: 0,
-                          returnAlignVerifyTimer: null,
-                          returnAlignSerial: 0,
-                          lastSeekStartHandledAt: 0,
-                          lastSeekStartHandledTarget: NaN,
-                          seekStartCoalesceCount: 0,
-                          tabReturnGen: 0,
-                          tabReturnImmuneUntil: 0,
-                          tabReturnAudioMuted: false,
-                          tabReturnSettleTimer: null,
-                          visibilityHiddenAt: 0,
-                          longTabReturnUntil: 0,
-                          longTabReturnEpoch: 0,
-                          longTabReturnHiddenMs: 0,
-                          longTabReturnLastAt: 0,
-                          longTabReturnKickTimer: null,
-                          longTabReturnRecoverySession: 0,
-                          longTabReturnPauseCounterLastAt: 0,
-                          foregroundReturnUserPlayUntil: 0,
-                            freshForegroundVideoFirstUntil: 0,
-                            freshForegroundVideoFirstArmedAt: 0,
-                            freshForegroundVideoFirstBaseVT: 0,
-                            freshForegroundVideoFirstBaseFrames: NaN,
-                            returnVisualSyncGuardSerial: 0,
-                            returnVisualSyncGuardTimers: [],
-                            bgSuppressionSessionCount: 0,
-                            heartbeatTimer: null,
-                            lastHeartbeatAt: 0,
-                            videoStallSince: 0,
-                            audioStallSince: 0,
-                            stallRecoveryUntil: 0,
-                            networkOnline: typeof navigator.onLine === "boolean" ? navigator.onLine : true,
-                            networkRecoverUntil: 0,
-                            audioContextUnlocked: false,
-                            mediaErrorCount: 0,
-                            mediaErrorCooldownUntil: 0,
-                            lastConsistencyCheckAt: 0,
-                            consistencyCheckPendingPlayUntil: 0,
-                            bgSilentTimeSyncing: false,
-                            bgSilentTimeSyncTimer: null,
-                            bgSilentLastSyncAt: 0,
-                            bufferHoldSince: 0,
-                            videoStallAudioPaused: false,
-                            stallAudioPausedSince: 0,
-                            lastStallWatchdogAt: 0,
-                            stallAudioResumeHoldUntil: 0,
-                            foregroundBufferAudioHoldUntil: 0,
-                              audioWaiting: false,
-                              audioStallVideoPaused: false,
-                              audioBufferConfirmTimer: null,
-                              audioBufferConfirmSerial: 0,
-                              _stallVideoPauseTimer: null,
-                              audioPausedSince: 0,
-                              audioStartGraceUntil: 0,
-                              seekTargetTime: 0,
-                              seekResolvedTime: NaN,
-                              videoSyncRetryTs: 0,
-                              userPauseIntentPresetAt: 0,
-                              userPlayIntentPresetAt: 0,
-                              userSeekIntentUntil: 0,
-                              _stallAudioPauseTimer: null,
-                              seekBuffering: false,
-                              seekBufferResumeTimer: null,
-                              _allowAudioTimeWrite: false,
-                              _isMicroSeek: false,
-                              _playPauseTransitionUntil: 0,
-                              _lastSyncBackstopAt: 0,
-                              _seekPreVolume: null,
-                              _seekPostTimers: [],
-                              _seekSpinnerAudioCleanup: null,
-                              _pauseSavedPosition: -1,
-                              _pauseSavedAt: 0,
-                              endedNaturally: false,
-                              endedAt: 0,
-                              endedLockUntil: 0,
-                              terminalAudioEndedUntil: 0,
-                              terminalEndPositionLockedUntil: 0,
-                              restartFromEndedUntil: 0,
-                              _wakeupRetryTimers: [],
-                              _foregroundUserPlayRetryTimers: [],
-                              _transitionDriftTimers: [],
-                              lastTransitionDriftRepairAt: 0,
-                              lastVideoPlayingAt: 0,
-                              _syncTabReturnKickDone: false,
-                              _hiddenAudioNativeKickAt: 0,
-                              _simulStartInFlight: false,
-                              _simulStartLastAt: 0,
-                              _simulStartCount: 0,
-                              _startupCoordinatedPlayUntil: 0,
-                              _startupPairVerifyTimer: null,
-                              _startupLockstepTarget: NaN,
-                              _startupLockstepTargetAt: 0,
-                              _startupLockstepIssuedAt: 0,
-                              pairSyncUntil: 0,
-                              pairSyncReason: "",
-                              pairSyncAudioMaster: false,
-                              pairSyncCorrectionCount: 0,
-                              pairSyncLastWriteAt: 0,
-                              pairSyncStartedAt: 0,
-                              pairSyncStableSamples: 0,
-                              pairSyncTimer: null,
-                              pairSyncAllowAudibleCorrection: false,
-                              pairSyncCorrectionInFlight: false,
-                              pairSyncObserveUntil: 0,
-                              pairSyncAudibleCorrectionAfter: 0,
-                              pairSyncWritePendingUntil: 0,
-                              pairSyncPendingTarget: NaN,
-                              initialPairAudioGateUntil: 0,
-                              initialPairAudioGateTimer: null,
-                              initialPairAudioGateSession: 0,
-                              initialPairAudioAlignAt: 0,
-                              resumePairAudioGateUntil: 0,
-                              resumePairAudioGateTimer: null,
-                              resumePairAudioGateSession: 0,
-                              resumePairAudioGateIssuedAt: 0,
-                              resumePairAudioAlignAt: 0,
-                              resumeAudioMasterInFlight: false,
-                              resumeAudioMasterLastAt: 0,
-                              resumeAudioMasterTimers: [],
-                              resumeStrictPairSyncUntil: 0,
-                              measuredPairDriftCount: 0,
-                              measuredPairDriftSign: 0,
-                              measuredPairDriftLast: 0,
-                              measuredPairDriftCorrectAt: 0,
-                              measuredPairDriftSampleAt: 0,
-                              _allowPairSyncAudioWrite: false,
-                              _bgLastPlayKickAt: 0,
-                              hiddenAudioExclusiveMode: false,
-                              hiddenAudioExclusiveNeededUntil: 0,
-                              hiddenAudioExclusiveVideoPausedAt: 0,
-                              hiddenAudioExclusiveReason: "",
-                              hiddenAudioPauseDetectedAt: 0,
-                              hiddenAudioPauseMediaAt: 0,
-                              hiddenAudioPauseDetectCount: 0,
-                              hiddenAudioPauseDetectResetAt: 0,
-                              hiddenAudioExclusiveReturnAt: 0,
-                              hiddenAudioExclusiveLastEnsureAt: 0,
-                              hiddenAudioMasterReturnUntil: 0,
-                              hiddenAudioMasterReturnAudioAt: 0,
-                              hiddenAudioMasterCatchupAt: 0,
-                              hiddenNonLoopTailSeenAt: 0,
-                              hiddenNonLoopTailMediaAt: 0,
-                              hiddenNonLoopTailDuration: 0,
-                              hiddenNonLoopTerminalLockUntil: 0,
-                              smoothForegroundReturnUntil: 0,
-                              smoothForegroundReturnSerial: 0,
-                              smoothForegroundReturnTimer: null,
-                              smoothForegroundReturnFrameTimer: null,
-                              smoothForegroundReturnCleanup: null,
-                              smoothForegroundReturnLastTarget: 0,
-                              smoothForegroundReturnStartedAt: 0,
-                              smoothForegroundReturnVisualQuietUntil: 0,
-                              smoothForegroundReturnVisualQuietTimer: null,
-                              smoothForegroundReturnVisualQuietStyle: false,
-                              hiddenNonLoopTailCheckAt: 0,
-                              _playCommitGuardUntil: 0,
-                              _playCommitWatchdogTimer: null,
-                              _playCommitWatchdogSession: 0,
-                              _playCommitLastKickAt: 0,
-                              coupledPlayCommitSerial: 0,
-                              coupledPlayCommitSession: -1,
-                              coupledPlayCommitUntil: 0,
-                              coupledPlayCommitReason: "",
-                              coupledPlayCommitAttempt: 0,
-                              coupledPlayCommitLastAttemptAt: 0,
-                              coupledPlayCommitLastJoinAt: 0,
-                              coupledPlayCommitVerifyTimer: null,
-                              coupledPlayCommitRetryTimer: null,
-                              coupledPlayCommitHolding: false,
-                              playbackFailureCheckTimer: null,
-                              playbackFailureCheckSession: -1,
-                              playbackFailureToastTimer: null,
-                              playbackFailureToastMessage: "",
-                              playbackFailureToastAt: 0,
-                              lastPlaybackStartFailureKind: "",
-                              lastPlaybackStartFailureName: "",
-                              lastPlaybackStartFailureMessage: "",
-                              lastPlaybackStartFailureAt: 0,
-                              playCommitResumeAnchor: NaN,
-                              playCommitResumeAnchorAt: 0,
-                              playCommitResumeAnchorSession: -1,
-                              _microSeekClearTimer: null,
-                              playPauseAnchorAlignUntil: 0
-  };
+    seekCommitCorrected: false,
+    seekCommitCorrectionUntil: 0,
+    seekCommitTimer: null,
+    stablePlaybackRecoveryTimer: null,
+    stablePlaybackRecoveryDueAt: 0,
+    stablePlaybackRecoveryLastAt: 0,
+    stablePlaybackRecoveryReason: "",
+    seekDisplayTarget: NaN,
+    seekDisplayTargetUntil: 0,
+    seekbarStableTarget: NaN,
+    seekbarStableUntil: 0,
+    seekDragActive: false,
+    seekDragTarget: NaN,
+    seekDragCommitAt: 0,
+    seekFinalizeTimer: null,
+    seekWatchdogTimer: null,
+    lastAT: 0,
+    audioLastProgressTs: 0,
+    lastVT: 0,
+    lastVTts: 0,
+    monotonicVideoTime: NaN,
+    monotonicVideoTimeAt: 0,
+    monotonicVideoRestoreAt: 0,
+    monotonicVideoRestoreCount: 0,
+    audioKickCooldownUntil: 0,
+    hardPauseVerifySerial: 0,
+    hardPauseVerifyTimer: null,
+    atomicPairPauseAt: 0,
+    atomicPairPauseTarget: NaN,
+    atomicPairPauseReleaseTimer: null,
+    startupPrimeStartedAt: performance.now(),
+    lastKnownGoodVT: 0,
+    lastKnownGoodVTts: 0,
+    startupAutoplayRetryTimer: null,
+    startupAutoplayRetryCount: 0,
+    driftStableFrames: 0,
+    lastDrift: 0,
+    bgTransitionInProgress: false,
+    selectedPlaybackRate: 1,
+    normalAudioDriftHardCorrectAt: 0,
+    normalAudioDriftSoftCorrectAt: 0,
+    normalAudioDriftSoftInFlight: false,
+    normalAudioDriftSoftSerial: 0,
+    normalAudioDriftSoftLastTarget: NaN,
+    syncConvergenceCount: 0,
+    lastSyncDrift: 0,
+    backgroundPauseBlocked: false,
+    mediaControlPending: false,
+    initialSyncComplete: false,
+    audioPopPreventUntil: 0,
+    audioFading: false,
+    audioFadeTarget: 1,
+    audioLastPlayPauseTs: 0,
+    initialSyncDone: false,
+    bufferHoldIntendedPlaying: false,
+    mediaSessionInitiatedPlay: false,
+    hiddenPlayRequestUntil: 0,
+    hiddenVideoBootstrapUntil: 0,
+    foregroundResumeBoostUntil: 0,
+    seamlessReturnUntil: 0,
+    seamlessReturnReason: "",
+    seamlessReturnTimer: null,
+    pendingSeekTarget: null,
+    explicitSeekTarget: null,
+    explicitSeekUntil: 0,
+    explicitSeekCorrectionCount: 0,
+    explicitSeekLastWriteAt: 0,
+    explicitSeekLastWriteTarget: NaN,
+    nearZeroSeekAuthorizedUntil: 0,
+    playRequestedDuringSeek: false,
+    seekCompleted: false,
+    seekKickAudioAllowedUntil: 0,
+    seekAudioKickAt: 0,
+    seekAudioMustStartUntil: 0,
+    seekAudioHoldUntilVideoReadyUntil: 0,
+    seekAudioHoldSeekId: -1,
+    seekAudioHoldPollTimer: null,
+    seekAudioReleaseInFlight: false,
+    seekAudioReleaseSeekId: -1,
+    seekAudioReleaseNativePlayAllowed: false,
+    seekPairBarrierUiAt: 0,
+    seekResumeWantedUntil: 0,
+    seekStabilizeUntil: 0,
+    audioVolumeBeforePause: 1,
+    stateChangeCooldownUntil: 0,
+    audioFadeCompleteUntil: 0,
+    chromiumBgPauseBlockedUntil: 0,
+    tabVisibilityChangeUntil: 0,
+    audioGainSmoothUntil: 0,
+    chromiumBgPauseBlockedUntilExtended: 0,
+    visibilityTransitionActive: false,
+    visibilityTransitionUntil: 0,
+    lastVisibilityState: "visible",
+    previousVisibilityState: "visible",
+    bgPauseSuppressionCount: 0,
+    bgPauseSuppressionResetAt: 0,
+    mediaSessionPauseBlockedUntil: 0,
+    rapidToggleDetected: false,
+    rapidToggleUntil: 0,
+    altTabTransitionActive: false,
+    altTabTransitionUntil: 0,
+    lastFocusLoss: 0,
+    focusLossCount: 0,
+    focusLossResetAt: 0,
+    chromiumAutoPauseBlockedUntil: 0,
+    chromiumPauseEventSuppressedUntil: 0,
+    lastPauseEventTs: 0,
+    pauseEventCount: 0,
+    pauseEventResetAt: 0,
+    visibilityStableUntil: 0,
+    focusStableUntil: 0,
+    mediaSessionOverrideActive: false,
+    audioVolumeLocked: false,
+    audioSafeMuteUntil: 0,
+    seekAudioSyncPending: false,
+    seekAudioSyncTime: 0,
+    seekAudioSyncUntil: 0,
+    bgPlaybackAllowed: true,
+    startupBgRetryCount: 0,
+    bgPlayAttempted: false,
+    audioVolumeBeforeTimeChange: 1,
+    audioZeroVolumeConfirmed: false,
+    rapidPlayPauseCount: 0,
+    rapidPlayPauseResetAt: 0,
+    userToggleTxnUntil: 0,
+    userToggleExpectedPlay: null,
+    playPauseTxnUntil: 0,
+    playPauseTxnSerial: 0,
+    playPauseTxnExpectedPlay: null,
+    playPauseTxnStartedAt: 0,
+    playPauseTxnReason: "",
+    playPauseTxnPosition: NaN,
+    playPauseTxnVideoPlayAt: 0,
+    playPauseTxnAudioPlayAt: 0,
+    playPauseTxnVideoPauseAt: 0,
+    playPauseTxnAudioPauseAt: 0,
+    playPauseTxnTimelineBlockUntil: 0,
+    mediaTransportStormUntil: 0,
+    mediaTransportStormReason: "",
+    mediaTransportStormLastEventKind: "",
+    mediaTransportStormLastEventAction: "",
+    mediaTransportStormLastEventAt: 0,
+    mediaTransportStormEventBurstStart: 0,
+    mediaTransportStormEventCount: 0,
+    mediaTransportStormVideoPlayAt: 0,
+    mediaTransportStormAudioPlayAt: 0,
+    mediaTransportStormResumeTimer: null,
+    femboiStableMode: "",
+    femboiStableReason: "",
+    femboiStableUntil: 0,
+    femboiStableStartedAt: 0,
+    femboiStableSerial: 0,
+    femboiStableAnchor: NaN,
+    femboiStableVerifyTimer: null,
+    femboiStableVerifyDueAt: 0,
+    femboiStableLastEventKind: "",
+    femboiStableLastEventAction: "",
+    femboiStableLastEventAt: 0,
+    femboiStableEventBurstAt: 0,
+    femboiStableEventCount: 0,
+    femboiStableLastUserSeekAt: 0,
+    femboiStableSeekTarget: NaN,
+    femboiStableSeekUntil: 0,
+    femboiStableBlockedSeekAt: 0,
+    femboiStableBlockedSeekCount: 0,
+    femboiEngineMode: "",
+    femboiEngineReason: "",
+    femboiEngineUntil: 0,
+    femboiEngineStartedAt: 0,
+    femboiEngineSerial: 0,
+    femboiEngineTarget: NaN,
+    femboiEngineVerifyTimer: null,
+    femboiEngineVerifyDueAt: 0,
+    femboiEngineLastStartAt: 0,
+    femboiEnginePairStartUntil: 0,
+    femboiEnginePairStartTarget: NaN,
+    femboiEngineLastMediaEventKind: "",
+    femboiEngineLastMediaEventAction: "",
+    femboiEngineLastMediaEventAt: 0,
+    femboiEngineMediaEventBurstAt: 0,
+    femboiEngineMediaEventCount: 0,
+    femboiEngineReturnAnchor: NaN,
+    femboiEngineReturnUntil: 0,
+    femboiEngineReturnSerial: 0,
+    femboiEngineHiddenAnchor: NaN,
+    femboiEngineHiddenAnchorSource: "",
+    femboiEngineHiddenAt: 0,
+    femboiEngineLastSeekTarget: NaN,
+    femboiEngineSeekUntil: 0,
+    kittyCollarAnchor: NaN,
+    kittyCollarLeaveAt: 0,
+    kittyCollarReturnAt: 0,
+    kittyCollarWarmUntil: 0,
+    kittyCollarPlayAfterReturnUntil: 0,
+    kittyCollarLastPrimeAt: 0,
+    kittyCollarWasPausedOnLeave: false,
+    maidCleanerLastSweepAt: 0,
+    maidCleanerSweepCount: 0,
+    noSpamMode: "",
+    noSpamReason: "",
+    noSpamUntil: 0,
+    noSpamTarget: NaN,
+    noSpamExpectedPlaying: false,
+    noSpamSeekSerial: 0,
+    noSpamLastEventKind: "",
+    noSpamLastEventAction: "",
+    noSpamLastEventAt: 0,
+    noSpamEventBurstAt: 0,
+    noSpamEventCount: 0,
+    noSpamSuppressedPauseCount: 0,
+    noSpamResumeTimer: null,
+    noSpamResumeDueAt: 0,
+    noSpamLastResumeAt: 0,
+    noSpamLastArmAt: 0,
+    noSpamResumeIssuedSerial: -1,
+    noSpamResumeHoldUntil: 0,
+    noSpamSeekedAt: 0,
+    audioPlayAttemptCount: 0,
+    audioPlayAttemptResetAt: 0,
+    backgroundAutoplayTriggered: false,
+    audioStartupPlayAttempted: false,
+    audioStartupPlayRetries: 0,
+    audioForcePlayTimer: null,
+    wakeupTimer: null,
+    startupZeroed: false,
+    startupZeroGuardReady: false,
+    startupZeroSuppressedUntil: (() => {
+        try { return Number(window.__playerStartupZeroSuppressedUntil) || 0; } catch { return 0; }
+    })(),
+    startupPlaySettleUntil: 0,
+    startupPlaySettled: false,
+    startupKickAttempts: 0,
+    userGesturePauseIntent: false,
+    pageFullyLoaded: document.readyState === "complete",
+    bgAudioStartQueued: false,
+    bbtabRetryTimer: null,
+    bbtabRetryRafId: null,
+    bbtabRetryCount: 0,
+    bbtabAudioSyncTimer: null,
+    bbtabVideoConfirmedAt: 0,
+    bbtabAudioSyncDone: false,
+    bbtabAudioFallbackDone: false,
+    lastUserActionTime: 0,
+    lastUserToggleType: "",
+    lastUserToggleAt: 0,
+    loopPreventionCooldownUntil: 0,
+    seekCooldownUntil: 0,
+    playerVolumeReady: false,
+    playerVolume: 0.5,
+    playerMuted: false,
+    volumeSaveScheduled: false,
+    volumeSaveTimer: null,
+    volumeSavePendingVolume: 0.5,
+    volumeSavePendingMuted: false,
+    lastStoredVolumeApplyAt: 0,
+    lastBgReturnAt: 0,
+    lastVisibleReturnHandledAt: 0,
+    foregroundReturnTimelineSource: "",
+    foregroundReturnTimelineTarget: NaN,
+    foregroundReturnTimelineCapturedAt: 0,
+    foregroundReturnTimelineUntil: 0,
+    foregroundReturnTimelineReason: "",
+    foregroundReturnTimelineSerial: 0,
+    returnAlignLastAt: 0,
+    returnAlignLastTarget: NaN,
+    returnAlignSettledUntil: 0,
+    returnAlignVerifyTimer: null,
+    returnAlignSerial: 0,
+    lastSeekStartHandledAt: 0,
+    lastSeekStartHandledTarget: NaN,
+    seekStartCoalesceCount: 0,
+    tabReturnGen: 0,
+    tabReturnImmuneUntil: 0,
+    tabReturnAudioMuted: false,
+    tabReturnSettleTimer: null,
+    visibilityHiddenAt: 0,
+    longTabReturnUntil: 0,
+    longTabReturnEpoch: 0,
+    longTabReturnHiddenMs: 0,
+    longTabReturnLastAt: 0,
+    longTabReturnKickTimer: null,
+    longTabReturnRecoverySession: 0,
+    longTabReturnPauseCounterLastAt: 0,
+    foregroundReturnUserPlayUntil: 0,
+    freshForegroundVideoFirstUntil: 0,
+    freshForegroundVideoFirstArmedAt: 0,
+    freshForegroundVideoFirstBaseVT: 0,
+    freshForegroundVideoFirstBaseFrames: NaN,
+    returnVisualSyncGuardSerial: 0,
+    returnVisualSyncGuardTimers: [],
+    bgSuppressionSessionCount: 0,
+    heartbeatTimer: null,
+    lastHeartbeatAt: 0,
+    videoStallSince: 0,
+    audioStallSince: 0,
+    stallRecoveryUntil: 0,
+    networkOnline: typeof navigator.onLine === "boolean" ? navigator.onLine : true,
+    networkRecoverUntil: 0,
+    audioContextUnlocked: false,
+    mediaErrorCount: 0,
+    mediaErrorCooldownUntil: 0,
+    lastConsistencyCheckAt: 0,
+    consistencyCheckPendingPlayUntil: 0,
+    bgSilentTimeSyncing: false,
+    bgSilentTimeSyncTimer: null,
+    bgSilentLastSyncAt: 0,
+    bufferHoldSince: 0,
+    videoStallAudioPaused: false,
+    stallAudioPausedSince: 0,
+    lastStallWatchdogAt: 0,
+    stallAudioResumeHoldUntil: 0,
+    foregroundBufferAudioHoldUntil: 0,
+    audioWaiting: false,
+    audioStallVideoPaused: false,
+    audioBufferConfirmTimer: null,
+    audioBufferConfirmSerial: 0,
+    _stallVideoPauseTimer: null,
+    audioPausedSince: 0,
+    audioStartGraceUntil: 0,
+    seekTargetTime: 0,
+    seekResolvedTime: NaN,
+    videoSyncRetryTs: 0,
+    userPauseIntentPresetAt: 0,
+    userPlayIntentPresetAt: 0,
+    userSeekIntentUntil: 0,
+    _stallAudioPauseTimer: null,
+    seekBuffering: false,
+    seekBufferResumeTimer: null,
+    _allowAudioTimeWrite: false,
+    _isMicroSeek: false,
+    _playPauseTransitionUntil: 0,
+    _lastSyncBackstopAt: 0,
+    _seekPreVolume: null,
+    _seekPostTimers: [],
+    _seekSpinnerAudioCleanup: null,
+    _pauseSavedPosition: -1,
+    _pauseSavedAt: 0,
+    endedNaturally: false,
+    endedAt: 0,
+    endedLockUntil: 0,
+    terminalAudioEndedUntil: 0,
+    terminalEndPositionLockedUntil: 0,
+    restartFromEndedUntil: 0,
+    _wakeupRetryTimers: [],
+    _foregroundUserPlayRetryTimers: [],
+    _transitionDriftTimers: [],
+    lastTransitionDriftRepairAt: 0,
+    lastVideoPlayingAt: 0,
+    _syncTabReturnKickDone: false,
+    _hiddenAudioNativeKickAt: 0,
+    _simulStartInFlight: false,
+    _simulStartLastAt: 0,
+    _simulStartCount: 0,
+    _startupCoordinatedPlayUntil: 0,
+    _startupPairVerifyTimer: null,
+    _startupLockstepTarget: NaN,
+    _startupLockstepTargetAt: 0,
+    _startupLockstepIssuedAt: 0,
+    _startupLockstepFrameCount: NaN,
+    _startupLockstepAudioTime: NaN,
+    _startupAudioWaitStartedAt: 0,
+    pairSyncUntil: 0,
+    pairSyncReason: "",
+    pairSyncAudioMaster: false,
+    pairSyncCorrectionCount: 0,
+    pairSyncLastWriteAt: 0,
+    pairSyncStartedAt: 0,
+    pairSyncStableSamples: 0,
+    pairSyncTimer: null,
+    pairSyncAllowAudibleCorrection: false,
+    pairSyncCorrectionInFlight: false,
+    pairSyncObserveUntil: 0,
+    pairSyncAudibleCorrectionAfter: 0,
+    pairSyncWritePendingUntil: 0,
+    pairSyncPendingTarget: NaN,
+    initialPairAudioGateUntil: 0,
+    initialPairAudioGateTimer: null,
+    initialPairAudioGateSession: 0,
+    initialPairAudioAlignAt: 0,
+    resumePairAudioGateUntil: 0,
+    resumePairAudioGateTimer: null,
+    resumePairAudioGateSession: 0,
+    resumePairAudioGateIssuedAt: 0,
+    resumePairAudioAlignAt: 0,
+    resumeAudioMasterInFlight: false,
+    resumeAudioMasterLastAt: 0,
+    resumeAudioMasterTimers: [],
+    resumeStrictPairSyncUntil: 0,
+    measuredPairDriftCount: 0,
+    measuredPairDriftSign: 0,
+    measuredPairDriftLast: 0,
+    measuredPairDriftCorrectAt: 0,
+    measuredPairDriftSampleAt: 0,
+    _allowPairSyncAudioWrite: false,
+    _bgLastPlayKickAt: 0,
+    hiddenAudioExclusiveMode: false,
+    hiddenAudioExclusiveNeededUntil: 0,
+    hiddenAudioExclusiveVideoPausedAt: 0,
+    hiddenAudioExclusiveReason: "",
+    hiddenAudioPauseDetectedAt: 0,
+    hiddenAudioPauseMediaAt: 0,
+    hiddenAudioPauseDetectCount: 0,
+    hiddenAudioPauseDetectResetAt: 0,
+    hiddenAudioExclusiveReturnAt: 0,
+    hiddenAudioExclusiveLastEnsureAt: 0,
+    hiddenAudioMasterReturnUntil: 0,
+    hiddenAudioMasterReturnAudioAt: 0,
+    hiddenAudioMasterCatchupAt: 0,
+    hiddenNonLoopTailSeenAt: 0,
+    hiddenNonLoopTailMediaAt: 0,
+    hiddenNonLoopTailDuration: 0,
+    hiddenNonLoopTerminalLockUntil: 0,
+    smoothForegroundReturnUntil: 0,
+    smoothForegroundReturnSerial: 0,
+    smoothForegroundReturnTimer: null,
+    smoothForegroundReturnFrameTimer: null,
+    smoothForegroundReturnCleanup: null,
+    smoothForegroundReturnLastTarget: 0,
+    smoothForegroundReturnStartedAt: 0,
+    smoothForegroundReturnVisualQuietUntil: 0,
+    smoothForegroundReturnVisualQuietTimer: null,
+    smoothForegroundReturnVisualQuietStyle: false,
+    hiddenNonLoopTailCheckAt: 0,
+    _playCommitGuardUntil: 0,
+    _playCommitWatchdogTimer: null,
+    _playCommitWatchdogSession: 0,
+    _playCommitLastKickAt: 0,
+    coupledPlayCommitSerial: 0,
+    coupledPlayCommitSession: -1,
+    coupledPlayCommitUntil: 0,
+    coupledPlayCommitReason: "",
+    coupledPlayCommitAttempt: 0,
+    coupledPlayCommitLastAttemptAt: 0,
+    coupledPlayCommitLastJoinAt: 0,
+    coupledPlayCommitVerifyTimer: null,
+    coupledPlayCommitRetryTimer: null,
+    coupledPlayCommitHolding: false,
+    playbackFailureCheckTimer: null,
+    playbackFailureCheckSession: -1,
+    playbackFailureToastTimer: null,
+    playbackFailureToastMessage: "",
+    playbackFailureToastAt: 0,
+    lastPlaybackStartFailureKind: "",
+    lastPlaybackStartFailureName: "",
+    lastPlaybackStartFailureMessage: "",
+    lastPlaybackStartFailureAt: 0,
+    playCommitResumeAnchor: NaN,
+    playCommitResumeAnchorAt: 0,
+    playCommitResumeAnchorSession: -1,
+    _microSeekClearTimer: null,
+    playPauseAnchorAlignUntil: 0
+};
   const PLAY_PAUSE_MICRO_SEEK_BLOCK_MS = 300;
   const MICRO_SEEK_TOGGLE_SUPPRESS_MS = 400;
   const LONG_TAB_RETURN_MIN_HIDDEN_MS = perfProfile.lowEnd ? 10000 : (perfProfile.mobile ? 9000 : 8000);
@@ -6652,6 +6655,29 @@ startupPrimeStartedAt: performance.now(),
       state.startupAutoplayRetryTimer = null;
     }
   }
+  function startupPairHasClockEvidence(vn, vt, at, target, issuedAt) {
+    if (!initialCoupledPairPending()) return true;
+    if (!vn || !audio || vn.paused || audio.paused) return false;
+    const startAt = isFinite(Number(target)) && Number(target) >= 0 ? Number(target) : 0;
+    const issued = Number(issuedAt) || 0;
+    if (issued <= 0) return false;
+    const age = now() - issued;
+    const minAdvance = perfProfile.lowEnd ? 0.016 : (perfProfile.mobile ? 0.012 : 0.008);
+    const frameCount = Number(state._startupLockstepFrameCount);
+    const videoAdvanced =
+      videoStartEvidenceSince(vn, startAt, frameCount, issued) ||
+      (isFinite(Number(vt)) && Number(vt) > startAt + minAdvance);
+    const audioAdvanced =
+      isFinite(Number(at)) &&
+      Number(at) > startAt + minAdvance;
+    if (videoAdvanced && audioAdvanced) return true;
+    if (age < (perfProfile.lowEnd ? 900 : 650)) return false;
+    const vReady = Number(vn.readyState || 0) >= HAVE_FUTURE_DATA &&
+      mediaHasCurrentDataAtTarget(vn, isFinite(Number(vt)) ? Number(vt) : startAt, 0.02);
+    const aReady = Number(audio.readyState || 0) >= HAVE_FUTURE_DATA &&
+      mediaHasCurrentDataAtTarget(audio, isFinite(Number(at)) ? Number(at) : startAt, 0.02);
+    return (videoAdvanced && aReady) || (audioAdvanced && vReady);
+  }
   function commitStartupFromActivePlayback(opts = {}) {
     const vn = getVideoNode();
     const videoPlaying = !!(vn && !vn.paused);
@@ -6676,6 +6702,7 @@ startupPrimeStartedAt: performance.now(),
           const maxAdvance = elapsed + (perfProfile.lowEnd ? 0.20 : 0.12);
           if (vt < target - 0.045 || at < target - 0.045 ||
             vt > target + maxAdvance || at > target + maxAdvance) return false;
+          if (!startupPairHasClockEvidence(vn, vt, at, target, issuedAt)) return false;
         }
       }
     } catch {
@@ -6706,6 +6733,8 @@ startupPrimeStartedAt: performance.now(),
     state._startupLockstepTarget = NaN;
     state._startupLockstepTargetAt = 0;
     state._startupLockstepIssuedAt = 0;
+    state._startupLockstepFrameCount = NaN;
+    state._startupLockstepAudioTime = NaN;
     clearStartupPairVerifyTimer();
     clearStartupAutoplayRetryTimer();
     state.startupAutoplayRetryCount = 0;
@@ -6747,6 +6776,8 @@ startupPrimeStartedAt: performance.now(),
     state._startupLockstepTarget = NaN;
     state._startupLockstepTargetAt = 0;
     state._startupLockstepIssuedAt = 0;
+    state._startupLockstepFrameCount = NaN;
+    state._startupLockstepAudioTime = NaN;
     clearStartupPairVerifyTimer();
     suppressStartupZero(Math.max(15000, (opts && opts.suppressMs) || 0));
     clearStartupAutoplayRetryTimer();
@@ -6755,6 +6786,15 @@ startupPrimeStartedAt: performance.now(),
   }
   function adoptHiddenStartupTimeline(reason = "hidden-startup") {
     if (!initialCoupledPairPending() || !coupledMode || !audio || !state.intendedPlaying) return NaN;
+    if (!state.firstPlayCommitted) {
+      try { cancelActiveFade(); setAudioVolumeSynced(0); } catch { }
+      state.resumeOnVisible = true;
+      state.startupPrimed = true;
+      state.startupPhase = true;
+      state.startupKickDone = false;
+      scheduleStartupAutoplayRetry();
+      return NaN;
+    }
     let at = NaN;
     try { at = Number(audio.currentTime); } catch { }
     if (!isFinite(at) || at <= 0.05 || (audio.paused && !state.audioEverStarted)) return NaN;
@@ -10822,9 +10862,24 @@ startupPrimeStartedAt: performance.now(),
                 state.seekAudioMustStartUntil = Math.max(state.seekAudioMustStartUntil, pairStartRequestedAt + 1800);
                 settleTransportPositionAuthority(startJoinTarget, "seek-pair-join", 900);
 
-                // Start both clocks in the same task. Audio stays silent until both media
-                // elements report a running clock, so there is no audible partial start.
+                // Start both clocks in the same task. Prefer the visual clock first;
+                // audio stays silent until both media elements report a running clock,
+                // so there is no audible audio-only seek resume.
                 const starts = [];
+                if (requestVideoStart) {
+                  videoPlayRequested = true;
+                  starts.push(Promise.resolve(execProgrammaticVideoPlay({
+                    force: true,
+                      minGapMs: 0,
+                      noAudioStart: true,
+                      seekPairJoin: true,
+                      seekOwner: true
+                  })).then(started => {
+                    if (started === false && vn.paused) videoPlayRequested = false;
+                  }).catch(() => {
+                    if (vn.paused) videoPlayRequested = false;
+                  }));
+                }
                 if (requestAudioStart) {
                   audioPlayRequested = true;
                   starts.push(Promise.resolve(execProgrammaticAudioPlay({
@@ -10845,20 +10900,6 @@ startupPrimeStartedAt: performance.now(),
                       audioPlayRequested = false;
                       audioPositioned = false;
                     }
-                  }));
-                }
-                if (requestVideoStart) {
-                  videoPlayRequested = true;
-                  starts.push(Promise.resolve(execProgrammaticVideoPlay({
-                    force: true,
-                      minGapMs: 0,
-                      noAudioStart: true,
-                      seekPairJoin: true,
-                      seekOwner: true
-                  })).then(started => {
-                    if (started === false && vn.paused) videoPlayRequested = false;
-                  }).catch(() => {
-                    if (vn.paused) videoPlayRequested = false;
                   }));
                 }
                 Promise.allSettled(starts).then(() => scheduleTry(0));
@@ -11231,8 +11272,19 @@ startupPrimeStartedAt: performance.now(),
         !audioSeeking &&
         mediaHasCurrentDataAtTarget(audio, target, perfProfile.lowEnd ? 0.18 : 0.12)
       );
-      if (videoReady || audioReady) state.seekCommitLastReadyAt = now();
-      return videoReady && audioReady && !videoSeeking && !audioSeeking;
+    if (videoReady || audioReady) state.seekCommitLastReadyAt = now();
+    return videoReady && audioReady && !videoSeeking && !audioSeeking;
+  }
+    function startPairThroughSeekBarrier(serial, target) {
+      if (!coupledMode || !audio) return false;
+      armSeekAudioHoldUntilVideoReady(state.seekId, perfProfile.lowEnd ? 9000 : 7000);
+      writeSeekAudioTargetSilently(target, "seek-commit-pair-target");
+      if (releaseSeekAudioAfterVideoReady("seek-commit-pair-start")) {
+        scheduleStartVerification(serial, target, perfProfile.lowEnd ? 190 : 115);
+        return true;
+      }
+      scheduleStartVerification(serial, target, perfProfile.lowEnd ? 260 : 150);
+      return seekAudioHoldUntilVideoReadyActive();
     }
     function alignPausedPair(target) {
       const vn = getVideoNode();
@@ -11363,6 +11415,10 @@ startupPrimeStartedAt: performance.now(),
     }
     function joinMissingSeekTrack(serial, target, videoRunning, audioRunning) {
       if (serial !== Number(state.seekCommitSerial || 0) || !active()) return false;
+      if (coupledMode && audio && seekAudioHoldUntilVideoReadyActive()) {
+        releaseSeekAudioAfterVideoReady("seek-commit-join-barrier");
+        return true;
+      }
       const t = now();
       const minGap = perfProfile.lowEnd ? 220 : 130;
       if ((t - Number(state.seekCommitLastJoinKickAt || 0)) < minGap) return false;
@@ -11425,6 +11481,11 @@ startupPrimeStartedAt: performance.now(),
     }
     function verifyStart(serial, target) {
       if (serial !== Number(state.seekCommitSerial || 0) || !active()) return;
+      if (coupledMode && audio && seekAudioHoldUntilVideoReadyActive()) {
+        releaseSeekAudioAfterVideoReady("seek-commit-verify-barrier");
+        scheduleStartVerification(serial, target, perfProfile.lowEnd ? 260 : 150);
+        return;
+      }
       const vn = getVideoNode();
       const videoRunning = !!(vn && !vn.paused);
       const audioRunning = !coupledMode || !audio || !audio.paused;
@@ -11443,6 +11504,13 @@ startupPrimeStartedAt: performance.now(),
       joinMissingSeekTrack(serial, target, videoRunning, audioRunning);
       if (startAge > (perfProfile.lowEnd ? 5000 : 3800) &&
         Number(state.seekCommitAttempts || 0) >= 3) {
+        try { detachStaleMediaPlayFlights(state.playSessionId); } catch { }
+        if (coupledMode && audio && targetReady(target)) {
+          state.seekCommitStartIssued = false;
+          state.seekCommitStartIssuedAt = 0;
+          startPair(target);
+          return;
+        }
         try { armPlaybackFailureDiagnostic(state.playSessionId); } catch { }
       }
       try { setSeekBufferingUIVisible(true); } catch { }
@@ -11468,37 +11536,12 @@ startupPrimeStartedAt: performance.now(),
       state.seeking = false;
       state.seekBuffering = false;
       state.strictBufferHold = false;
-      clearSeekAudioHoldUntilVideoReady();
       clearBufferHold();
       try { setSeekBufferingUIVisible(!!wasBuffering); } catch { }
       alignPausedPair(target);
       let issued = false;
       if (coupledMode && audio) {
-        try {
-          const videoPlay = execProgrammaticVideoPlay({
-            force: true,
-            minGapMs: 0,
-            noAudioStart: true,
-            seekPairJoin: true,
-            seekOwner: true,
-            seekCommitOwner: true
-          });
-          const audioPlay = execProgrammaticAudioPlay({
-            force: true,
-            minGapMs: 0,
-            squelchMs: 80,
-            keepSilentUntilPlaying: true,
-            noVideoStart: true,
-            seekPairJoin: true,
-            seekOwner: true,
-            seekCommitOwner: true
-          });
-          issued = true;
-          Promise.allSettled([videoPlay, audioPlay]).then(() => {
-            if (serial !== Number(state.seekCommitSerial || 0) || !active()) return;
-            verifyStart(serial, target);
-          });
-        } catch { issued = false; }
+        try { issued = startPairThroughSeekBarrier(serial, target); } catch { issued = false; }
       } else {
         try {
           const p = execProgrammaticVideoPlay({
@@ -17032,13 +17075,39 @@ startupPrimeStartedAt: performance.now(),
     const vn = getVideoNode();
     if (!vn || !audio) return { ready: false, videoReady: false, audioReady: false, vn };
     const t = Number(target);
+    const seekPairHoldActive = !!(
+      coupledMode &&
+      audio &&
+      state.intendedPlaying &&
+      !state.endedNaturally &&
+      !state.restarting &&
+      state.seekAudioHoldSeekId === state.seekId &&
+      (
+        (state.seekAudioReleaseInFlight && state.seekAudioReleaseSeekId === state.seekId) ||
+        Number(state.seekAudioHoldUntilVideoReadyUntil || 0) > now()
+      )
+    );
+    const strictTarget =
+      !state.firstPlayCommitted ||
+      state.strictBufferHold ||
+      state.seeking ||
+      state.seekBuffering ||
+      state.seekResumeInFlight ||
+      seekPairHoldActive ||
+      seekPlaybackTransactionActive(900) ||
+      transportPositionAuthorityActive() ||
+      userSeekIntentActive() ||
+      state.pendingSeekTarget != null;
+    const lead = strictTarget
+      ? (perfProfile.lowEnd ? 0.12 : 0.08)
+      : (perfProfile.lowEnd ? 0.08 : 0.04);
     const videoReady = isFinite(t) && t >= 0 && (
-      mediaHasCurrentDataAtTarget(vn, t, perfProfile.lowEnd ? 0.08 : 0.04) ||
-      canPlayAt(vn, t)
+      mediaHasCurrentDataAtTarget(vn, t, lead) ||
+      (!strictTarget && canPlayAt(vn, t))
     );
     const audioReady = isFinite(t) && t >= 0 && (
-      mediaHasCurrentDataAtTarget(audio, t, perfProfile.lowEnd ? 0.08 : 0.04) ||
-      canPlayAt(audio, t)
+      mediaHasCurrentDataAtTarget(audio, t, lead) ||
+      (!strictTarget && canPlayAt(audio, t))
     );
     return { ready: videoReady && audioReady, videoReady, audioReady, vn };
   }
@@ -24085,9 +24154,13 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     const vRS = Number(vNode.readyState || 0);
     if (vRS < HAVE_CURRENT_DATA) return false;
     const ars = Number(audio && audio.readyState || 0);
-    const startupAhead = document.visibilityState === "hidden" ? 0.02 : 0.04;
+    const startupAhead = document.visibilityState === "hidden"
+      ? (perfProfile.lowEnd ? 0.06 : 0.045)
+      : (perfProfile.lowEnd ? 0.08 : 0.055);
     const pairCanAdvance =
     ars >= HAVE_CURRENT_DATA &&
+    mediaHasCurrentDataAtTarget(vNode, startAt, Math.min(0.04, startupAhead)) &&
+    mediaHasCurrentDataAtTarget(audio, startAt, Math.min(0.04, startupAhead)) &&
     canPlaySmoothAt(vNode, startAt, startupAhead) &&
     canPlaySmoothAt(audio, startAt, startupAhead);
     if (pairCanAdvance) {
@@ -24115,6 +24188,16 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     const issued = kickStartupLockstepPlayback();
     scheduleSync(0);
     if (commitStartupFromActivePlayback()) return true;
+    if (issued) {
+      try { cancelActiveFade(); setAudioVolumeSynced(0); } catch { }
+      state.startupKickDone = false;
+      state._startupCoordinatedPlayUntil = Math.max(
+        Number(state._startupCoordinatedPlayUntil || 0),
+        now() + 1600
+      );
+      verifyCoordinatedStartupPair();
+      scheduleStartupAutoplayRetry();
+    }
     return issued || (!getVideoPaused() && !audio.paused);
   }
   function tryNonCoupledStartupAutoplayKick() {
@@ -24213,7 +24296,9 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       if (audioRunning && !videoRunning) {
         try { setAudioVolumeSynced(hidden ? targetVolFromVideo() : 0); } catch { }
         if (hidden) {
-          adoptHiddenStartupTimeline("startup-hidden-audio-master");
+          try { cancelActiveFade(); setAudioVolumeSynced(0); } catch { }
+          state.startupKickDone = false;
+          scheduleStartupAutoplayRetry();
         } else if (!videoReady) {
           holdVisibleCoupledPairForBuffer("startup-video-buffering", {
             target: startupTarget,
@@ -24380,6 +24465,10 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     );
     state._startupCoordinatedPlayUntil = now() + 1200;
     state._startupLockstepIssuedAt = now();
+    state._startupLockstepFrameCount = getVideoPresentedFrameCount(vNode);
+    state._startupLockstepAudioTime = (() => {
+      try { return Number(audio.currentTime) || target; } catch { return target; }
+    })();
     const issued = MakeAudioVideoSimultaneousStartAPI({ force: true, squelchMs: 140 });
     if (issued) verifyCoordinatedStartupPair();
     else state._startupCoordinatedPlayUntil = 0;
