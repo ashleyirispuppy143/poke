@@ -137,8 +137,10 @@
     return (ipToLong(ip) & mask) === (ipToLong(subnet) & mask);
   }
 
+  // Fast-path IP cleanup (Avoids Regex allocation)
   function cleanIP(ip) {
-    return String(ip || "").replace("::ffff:", "");
+    const str = String(ip || "");
+    return str.startsWith("::ffff:") ? str.substring(7) : str;
   }
 
   function isCloudflareIP(ip) {
@@ -412,13 +414,13 @@
       return "anon-" + crypto.createHash("sha256").update(ip + guardSalt).digest("hex").slice(0, 8);
     }
 
-     let isGuardActive = false;
+    let isGuardActive = false;
     let consecutiveCriticalSpikes = 0; // The strike system for false positives
 
-     const eldHistogram = monitorEventLoopDelay({ resolution: 20 });
+    const eldHistogram = monitorEventLoopDelay({ resolution: 20 });
     eldHistogram.enable();
 
-     const resourceConfig = {
+    const resourceConfig = {
       system: {
         sampleMs: 1000,
 
@@ -495,23 +497,27 @@
       }
     };
 
-    const KNOWN_BOT_PATTERNS = [
-      /googlebot/i, /bingbot/i, /slurp/i, /duckduckbot/i,
-      /baiduspider/i, /yandexbot/i, /sogou/i, /exabot/i,
-      /facebot/i, /ia_archiver/i, /archive\.org_bot/i,
-      /qwantify/i, /seznambot/i, /mojeekbot/i,
-      /petalsearch/i, /applebot/i,
-      /discordbot/i, /telegrambot/i, /twitterbot/i,
-      /whatsapp/i, /slackbot/i, /linkedinbot/i,
-      /mastodon/i, /pleroma/i, /misskey/i, /akkoma/i,
-      /lemmy/i, /kbin/i, /pixelfed/i, /gotosocial/i,
-      /uptimerobot/i, /pingdom/i, /statuscake/i,
-      /site24x7/i, /hetrixtools/i, /freshping/i,
-      /cloudflare/i, /cloudfront/i, /fastly/i,
-      /feedfetcher/i, /feedly/i, /newsblur/i,
-      /tiny\s?tiny\s?rss/i, /miniflux/i,
-      /researchscan/i, /censys/i, /semrush/i, /ahrefs/i,
-    ];
+    const BOT_MEGA_REGEX = /googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot|sogou|exabot|facebot|ia_archiver|archive\.org_bot|qwantify|seznambot|mojeekbot|petalsearch|applebot|discordbot|telegrambot|twitterbot|whatsapp|slackbot|linkedinbot|mastodon|pleroma|misskey|akkoma|lemmy|kbin|pixelfed|gotosocial|uptimerobot|pingdom|statuscake|site24x7|hetrixtools|freshping|cloudflare|cloudfront|fastly|feedfetcher|feedly|newsblur|tiny\s?tiny\s?rss|miniflux|researchscan|censys|semrush|ahrefs/i;
+
+    const REGEX_OBJ_ID = /[a-f0-9]{24}/g;
+    const REGEX_HEX = /[a-f0-9]{32,}/g;
+    const REGEX_UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/g;
+    const REGEX_NUM = /\/\d{3,}(?=\/|$)/g;
+    const REGEX_ID = /\/[a-z0-9_-]{11}(?=\/|$)/g;
+
+    const EXACT_STATUS_ROUTES = new Set([
+      "/robots.txt", "/favicon.ico", "/_pokeresource/stats", 
+      "/_poketraffic/stats", "/_pokestopskids/stats", "/_pokeoverload/stats", 
+      "/health", "/traffic"
+    ]);
+
+    const EXACT_IGNORED_ROUTES = new Set([
+      "/api/nexus", "/api/stats", "/health", "/traffic"
+    ]);
+
+    const EXACT_PAGE_ROUTES = new Set([
+      "/", "/home", "/watch", "/search", "/hashtag"
+    ]);
 
     const GUARD_MESSAGES = [
       "Server is busy. Please retry shortly.",
@@ -678,44 +684,41 @@
     }
 
     function getRequestPath(req) {
+      if (req._parsed_path_cache) return req._parsed_path_cache;
       const url = req.originalUrl || req.url || "/";
-      return (url.split("?")[0] || "/").toLowerCase();
+      const qIdx = url.indexOf("?");
+      const p = (qIdx === -1 ? url : url.substring(0, qIdx)).toLowerCase();
+      req._parsed_path_cache = p;
+      return p;
     }
 
     function isAvatarRoutePath(pathname) {
-      const path = String(pathname || "/").toLowerCase();
-      return path === "/avatars" || path.startsWith("/avatars/");
+      return pathname === "/avatars" || pathname.startsWith("/avatars/");
     }
 
+    // O(1) SET LOOKUP
     function isIgnoredRoute(req) {
       const path = getRequestPath(req);
-      return isAvatarRoutePath(path) ||
-             path === "/api/nexus" || 
-             path === "/api/stats" || 
-             path === "/health" ||
-             path === "/traffic" ||
-             path.startsWith("/static/") || 
-             path.startsWith("/css/");
+      if (EXACT_IGNORED_ROUTES.has(path)) return true;
+      if (path.startsWith("/static/") || path.startsWith("/css/")) return true;
+      return isAvatarRoutePath(path);
     }
 
     function normalizePathname(pathname) {
-      const p = String(pathname || "/").toLowerCase();
+      if (pathname.startsWith('/avatars/')) return '/avatars/';
+      if (pathname.startsWith('/vi/')) return '/vi/';
+      if (pathname.startsWith('/ggpht/')) return '/ggpht/';
+      if (pathname.startsWith('/sb/')) return '/sb/';
+      if (pathname.startsWith('/storyboard')) return '/storyboard';
+      if (pathname.startsWith('/videoplayback')) return '/videoplayback';
+      if (pathname.startsWith('/hashtag/')) return '/hashtag/';
       
-      // Smart Route Truncation to keep lists clean
-      if (p.startsWith('/avatars/')) return '/avatars/';
-      if (p.startsWith('/vi/')) return '/vi/';
-      if (p.startsWith('/ggpht/')) return '/ggpht/';
-      if (p.startsWith('/sb/')) return '/sb/';
-      if (p.startsWith('/storyboard')) return '/storyboard';
-      if (p.startsWith('/videoplayback')) return '/videoplayback';
-      if (p.startsWith('/hashtag/')) return '/hashtag/';
-      
-      return p
-        .replace(/[a-f0-9]{24}/gi, ":objectId")
-        .replace(/[a-f0-9]{32,}/gi, ":hex")
-        .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi, ":uuid")
-        .replace(/\/\d{3,}(?=\/|$)/g, "/:number")
-        .replace(/\/[A-Za-z0-9_-]{11}(?=\/|$)/g, "/:id");
+      return pathname
+        .replace(REGEX_OBJ_ID, ":objectId")
+        .replace(REGEX_HEX, ":hex")
+        .replace(REGEX_UUID, ":uuid")
+        .replace(REGEX_NUM, "/:number")
+        .replace(REGEX_ID, "/:id");
     }
 
     function getRequestKey(req) {
@@ -757,7 +760,7 @@
 
     function isKnownBot(ua) {
       if (!ua) return false;
-      return KNOWN_BOT_PATTERNS.some(pattern => pattern.test(ua));
+      return BOT_MEGA_REGEX.test(ua);
     }
 
     function isSafeMethod(req) {
@@ -766,23 +769,16 @@
 
     function isStaticRequest(req) {
       const pathname = getRequestPath(req);
-      if (/^\/(css|js|img|font|static|favicon\.ico|manifest\.json|robots\.txt)(\/|$)/i.test(pathname)) return true;
-      return /\.(css|js|mjs|png|jpg|jpeg|webp|gif|svg|ico|woff|woff2|ttf|otf|map|txt)$/i.test(pathname);
+      if (pathname.startsWith("/css/") || pathname.startsWith("/js/") || pathname.startsWith("/img/") || pathname.startsWith("/font/") || pathname.startsWith("/static/")) return true;
+      if (pathname === "/favicon.ico" || pathname === "/manifest.json" || pathname === "/robots.txt") return true;
+      return /\.(css|js|mjs|png|jpg|jpeg|webp|gif|svg|ico|woff|woff2|ttf|otf|map|txt)$/.test(pathname);
     }
 
+    // O(1) SET LOOKUP
     function isStatusRequest(req) {
       const pathname = getRequestPath(req);
-      return (
-        pathname === "/robots.txt" ||
-        pathname === "/favicon.ico" ||
-        pathname === "/_pokeresource/stats" ||
-        pathname === "/_poketraffic/stats" ||
-        pathname === "/_pokestopskids/stats" ||
-        pathname === "/_pokeoverload/stats" ||
-        pathname === "/health" ||
-        pathname === "/traffic" ||
-        pathname.startsWith("/health/")
-      );
+      if (EXACT_STATUS_ROUTES.has(pathname)) return true;
+      return pathname.startsWith("/health/");
     }
 
     function isHeavyRequest(req) {
@@ -814,6 +810,7 @@
       return false;
     }
 
+    // O(1) SET LOOKUP Optimization
     function isPageNavigation(req) {
       const pathname = getRequestPath(req);
       const accept = String(req.headers.accept || "").toLowerCase();
@@ -822,9 +819,9 @@
 
       if (!isSafeMethod(req)) return false;
       if (isStaticRequest(req) || isHeavyRequest(req) || isBackgroundRequest(req)) return false;
+      
+      if (EXACT_PAGE_ROUTES.has(pathname)) return true;
       if (
-        pathname === "/" || pathname === "/home" || pathname === "/watch" ||
-        pathname === "/search" || pathname === "/hashtag" ||
         pathname.startsWith("/watch/") || pathname.startsWith("/search/") ||
         pathname.startsWith("/channel/") || pathname.startsWith("/user/") ||
         pathname.startsWith("/playlist")
@@ -846,7 +843,7 @@
 
     function getKindCost(kind, req) {
       let cost = resourceConfig.requestCost[kind] || resourceConfig.requestCost.other;
-      const ua = String(req.headers["user-agent"] || "");
+      const ua = req.headers["user-agent"];
       if (isKnownBot(ua)) cost = cost * 0.5;
       const rawIP = cleanIP(req.socket.remoteAddress || "");
       if (isCloudflareIP(rawIP)) cost = cost * 0.85;
@@ -894,9 +891,8 @@
       }
     }
 
-    function getClientState(req) {
+    function getClientState(req, now) {
       const key = getClientKey(req);
-      const now = Date.now();
       let client = clientStates.get(key);
 
       if (client) {
@@ -935,10 +931,10 @@
       return client;
     }
 
-    function rememberClientRequest(req, client, kind, cost) {
-      const now = Date.now();
+    function rememberClientRequest(req, client, kind, cost, now) {
       client.lastSeen = now;
-      client.trustedBot = isKnownBot(String(req.headers["user-agent"] || "").slice(0, 160));
+      const ua = req.headers["user-agent"];
+      client.trustedBot = isKnownBot(ua ? String(ua).substring(0, 160) : "");
 
       const sec = Math.floor(now / 1000);
       if (client.currentSec !== sec) {
@@ -955,10 +951,8 @@
       if (kind === "page") client.current.page++;
     }
 
-    function rememberDecision(client, decision) {
-      const now = Date.now();
+    function rememberDecision(client, decision, now) {
       updateClientWindow(client, now);
-
       if (decision === "reject") client.current.rejects++;
       if (decision === "page-soft-pass") client.current.softPass++;
     }
@@ -1002,8 +996,7 @@
       );
     }
 
-    function applyClientCooldown(client, reason) {
-      const now = Date.now();
+    function applyClientCooldown(client, reason, now) {
       client.cooldownLevel++;
       client.lastCooldownAt = now;
 
@@ -1204,8 +1197,7 @@
       console.error(msg);
     }
 
-    function logReject(req, client, kind, reason, status) {
-      const now = Date.now();
+    function logReject(req, client, kind, reason, status, now) {
       if (now - lastRejectLogAt < resourceConfig.logging.rejectCooldownMs) return;
       lastRejectLogAt = now;
 
@@ -1246,8 +1238,8 @@
       return resourceConfig.admission.retryAfterHealthyAbuseSeconds;
     }
 
-    function sendGuardReject(req, res, client, kind, options) {
-      rememberDecision(client, "reject");
+    function sendGuardReject(req, res, client, kind, options, now) {
+      rememberDecision(client, "reject", now);
 
       const status = options.status || 503;
       const retryAfter = options.retryAfter || resourceConfig.admission.retryAfterStressedSeconds;
@@ -1259,7 +1251,7 @@
       else if (resourceState.state === "stressed") guardStats.rejectedStressed++;
       else guardStats.rejectedWarm++;
 
-      logReject(req, client, kind, reason, status);
+      logReject(req, client, kind, reason, status, now);
 
       res.set("Retry-After", String(retryAfter));
       res.set("Cache-Control", "no-store");
@@ -1283,9 +1275,8 @@
       setResourceHeaders(res, decision || "allow");
     }
 
-    function getAdmissionDecision(req, client, kind) {
+    function getAdmissionDecision(req, client, kind, now) {
       const state = resourceState.state;
-      const now = Date.now();
       
       // Fast bypass for healthy state
       if (state === "healthy") return { action: "allow", reason: "healthy" };
@@ -1406,16 +1397,17 @@
       if (!isGuardActive) return next();
       if (isIgnoredRoute(req)) return next();
 
+      const now = Date.now();
       const kind = classifyRequest(req);
       const cost = getKindCost(kind, req);
-      const client = getClientState(req);
+      const client = getClientState(req, now);
 
-      rememberClientRequest(req, client, kind, cost);
+      rememberClientRequest(req, client, kind, cost, now);
 
       currentSecondRequests++;
       incrementMapCount(currentSecondKindCounts, kind);
 
-      const decision = getAdmissionDecision(req, client, kind);
+      const decision = getAdmissionDecision(req, client, kind, now);
 
       if (decision.action === "allow") {
         allowRequest(res, kind, decision.reason);
@@ -1423,26 +1415,26 @@
       }
 
       if (decision.action === "allow-soft-page") {
-        rememberDecision(client, "page-soft-pass");
+        rememberDecision(client, "page-soft-pass", now);
         allowRequest(res, kind, decision.reason);
         return next();
       }
 
       if (decision.action === "cooldown-reject") {
-        applyClientCooldown(client, decision.reason);
-        return sendGuardReject(req, res, client, kind, decision);
+        applyClientCooldown(client, decision.reason, now);
+        return sendGuardReject(req, res, client, kind, decision, now);
       }
 
       if (
         decision.action === "reject" &&
         (decision.reason === "stressed-expensive-shed" || decision.reason === "critical-shed") &&
         (kind === "heavy" || kind === "background") &&
-        getMetric(client, "heavy", Date.now()) >= getHeavyLimit(resourceState.state)
+        getMetric(client, "heavy", now) >= getHeavyLimit(resourceState.state)
       ) {
-        applyClientCooldown(client, decision.reason);
+        applyClientCooldown(client, decision.reason, now);
       }
 
-      return sendGuardReject(req, res, client, kind, decision);
+      return sendGuardReject(req, res, client, kind, decision, now);
     }
 
     function cleanupClients() {
