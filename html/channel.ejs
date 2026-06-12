@@ -804,33 +804,34 @@ function authorVerifiedChecker3000() {
   <!-- Handle the error here, if it occurs -->
   <p>Error: <%= error.message %></p>
 <% } %>
-
 <div class="subscribe-dropdown-wrapper" style="position: relative; display: inline-block;">
   
   <div class="subscribe-button" style="display: inline-flex; align-items: center; padding: 0; overflow: hidden; cursor: pointer; text-decoration: none;">
 
-    <a id="sub" class="needs-js" style="padding: 10px 16px; color: inherit; text-decoration: none; font-weight: 500; font-family: sans-serif; white-space: nowrap;">
+    <a id="sub" class="needs-js" style="padding: 10px 16px; color: #0f0f0f; text-decoration: none; font-weight: 500; font-family: 'Roboto', Arial, sans-serif; font-size: 14px; white-space: nowrap;">
       Subscribe
     </a>
 
-    <div style="width: 1px; height: 18px; background-color: currentColor; opacity: 0.2;"></div>
+    <div style="width: 1px; height: 18px; background-color: #0f0f0f; opacity: 0.15;"></div>
 
     <div onclick="toggleRssDropdown(event)" style="padding: 10px 12px; display: flex; align-items: center; justify-content: center;">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="#0f0f0f">
         <path d="M7 10l5 5 5-5z"></path>
       </svg>
     </div>
     
   </div>
 
-  <div id="rssDropdownMenu" style="display: none; position: absolute; right: 0; top: 100%; margin-top: 6px; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); min-width: 130px; z-index: 50;">
-    <a href="/feeds/videos.xml?channel_id=<%=ID%>" style="display: flex; align-items: center; gap: 8px; padding: 12px 16px; color: #0f0f0f; text-decoration: none; font-size: 14px; font-family: sans-serif; white-space: nowrap;" onmouseover="this.style.backgroundColor='rgba(0,0,0,0.05)'" onmouseout="this.style.backgroundColor='transparent'">
+  <div id="rssDropdownMenu" style="display: none; position: absolute; right: 0; top: 100%; margin-top: 8px; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); min-width: 160px; z-index: 50; overflow: hidden; border: 1px solid rgba(0,0,0,0.05);">
+    
+    <a href="/feeds/videos.xml?channel_id=<%=ID%>" style="display: flex; align-items: center; gap: 12px; padding: 10px 16px; color: #0f0f0f; text-decoration: none; font-size: 14px; font-family: 'Roboto', Arial, sans-serif; white-space: nowrap; transition: background-color 0.2s ease;" onmouseover="this.style.backgroundColor='rgba(0,0,0,0.05)'" onmouseout="this.style.backgroundColor='transparent'">
       
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="#0f0f0f">
         <path d="M6.18 15.64a2.18 2.18 0 0 1 2.18 2.18C8.36 19 7.38 20 6.18 20C5 20 4 19 4 17.82a2.18 2.18 0 0 1 2.18-2.18M4 11.08c3.38 0 6.12 2.74 6.12 6.12h2.5c0-4.76-3.86-8.62-8.62-8.62v2.5m0-5.58c6.47 0 11.7 5.23 11.7 11.7h2.5C18.2 9.07 12.13 3 4 3v2.5z"/>
       </svg>
       RSS Feed
     </a>
+    
   </div>
 
 </div>
@@ -855,7 +856,7 @@ function authorVerifiedChecker3000() {
       dropdown.style.display = "none";
     }
   }
-</script> 
+</script>
         </p>
   
  			</div>
