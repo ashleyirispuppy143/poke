@@ -755,7 +755,7 @@ height: 100%;
   <img
     src="/avatars/<%= cinv?.authorThumbnails[5].url.replace('https://yt3.googleusercontent.com/', '') %>"
     alt="Channel Avatar"
-    style="border: 1px solid gray; border-radius: 50%;"
+    style="border-radius: 50%;"
   >
 </a>
 
@@ -769,7 +769,7 @@ function authorVerifiedChecker3000() {
 %>
  
 
-			<div class="name" style="border-radius: 12px;padding: 17px;height: 7em;margin-left: 4em;margin-top: 7px;gap: 3px;">
+			<div class="name" style="border-radius: 12px;padding: 17px;height: 7em;margin-left: 3.4em;margin-top: 7px;gap: 3px;">
 				<p style="font-family:PokeTube Flex,sans-serif;font-weight:1000;font-stretch: ultra-expanded;margin-top: 16px;margin-bottom: 15px;"><%=cinv?.author%>
           
 <% if (authorVerifiedChecker3000()) { %>
@@ -799,7 +799,7 @@ function authorVerifiedChecker3000() {
  
 <% try { %>
 <a href="/channel?id=<%=ID%>&tab=about&legacy=true" id="popup-trigger" style=" color: #fff !important;">
-<%- getFirstLine(cinv.description).substring(0, 80) + "..." || "See More from this channel..." %>
+<%- getFirstLine(cinv.description).substring(0, 97) + "...more" || "See More from this channel..." %>
 <% } catch (error) { %>
   <!-- Handle the error here, if it occurs -->
   <p>Error: <%= error.message %></p>
