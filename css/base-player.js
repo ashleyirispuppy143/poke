@@ -9888,6 +9888,21 @@ startupPrimeStartedAt: performance.now(),
     }
     return NaN;
   }
+  function clearPauseResumeAnchorsForPlayingPosition(target = NaN) {
+    const position = Number(target);
+    state._pauseSavedPosition = -1;
+    state._pauseSavedAt = 0;
+    state.mediaSessionPausedPosition = NaN;
+    state.mediaSessionPausedAt = 0;
+    state.mediaSessionResumeAlignUntil = 0;
+    state.atomicPairPauseTarget = NaN;
+    if (isFinite(position) && position >= 0) {
+      state.playPauseTxnPosition = position;
+      state.kittyCollarAnchor = position;
+      state.kittyCollarLeaveAt = now();
+    }
+    try { releasePlayCommitResumeAnchor({ preserveSaved: true }); } catch { }
+  }
   function rememberExplicitSeekTarget(t, ms = 5200) {
     const target = Number(t);
     if (!isFinite(target) || target < 0) return false;
@@ -9902,8 +9917,21 @@ startupPrimeStartedAt: performance.now(),
     state.seekResolvedTime = NaN;
     state.lastKnownGoodVT = target;
     state.lastKnownGoodVTts = now();
-    state._pauseSavedPosition = target;
-    state._pauseSavedAt = now();
+    state.playPauseTxnPosition = target;
+    state.atomicPairPauseTarget = NaN;
+    state.kittyCollarAnchor = target;
+    state.kittyCollarLeaveAt = now();
+    const seekWillRemainPaused =
+    !state.intendedPlaying &&
+    !state.seekWantedPlaying &&
+    !seekResumeIntentActive();
+    if (seekWillRemainPaused) {
+      try { releasePlayCommitResumeAnchor({ preserveSaved: true }); } catch { }
+      state._pauseSavedPosition = target;
+      state._pauseSavedAt = now();
+    } else {
+      clearPauseResumeAnchorsForPlayingPosition(target);
+    }
     try { beginSeekDisplayAuthority(target, Math.max(ms, 5200)); } catch { }
     return true;
   }
@@ -11272,6 +11300,7 @@ startupPrimeStartedAt: performance.now(),
       state.pendingSeekTarget = null;
       state.mediaSessionSeekTarget = null;
       state.mediaSessionSeekUntil = 0;
+      clearPauseResumeAnchorsForPlayingPosition(target);
       state.restarting = false;
       state.restartFromEndedUntil = 0;
       state.videoWaiting = false;
@@ -12058,6 +12087,12 @@ startupPrimeStartedAt: performance.now(),
     isFinite(saved) &&
     saved >= 0 &&
     (now() - Number(state._pauseSavedAt || 0)) < 300000;
+    const savedPauseAuthorityActive =
+    savedFresh &&
+    (!state.intendedPlaying ||
+    userPauseIntentActive() ||
+    userPauseLockActive() ||
+    mediaSessionForcedPauseActive());
     const explicitTarget = (() => {
       try { return Number(getActiveExplicitSeekTarget()); } catch { return NaN; }
     })();
@@ -12071,8 +12106,8 @@ startupPrimeStartedAt: performance.now(),
       isFinite(committingAnchor) && committingAnchor >= 0) {
       return committingAnchor;
       }
-      const pausedResumeAnchorOwnsTimeline =
-      savedFresh &&
+    const pausedResumeAnchorOwnsTimeline =
+      savedPauseAuthorityActive &&
       !state.restarting &&
       !state.endedNaturally &&
       !state.seeking &&
@@ -12082,8 +12117,8 @@ startupPrimeStartedAt: performance.now(),
       !userSeekIntentActive() &&
       getVideoPaused() &&
       (!coupledMode || !audio || audio.paused);
-      if (pausedResumeAnchorOwnsTimeline) return saved;
-      let liveVt = NaN;
+    if (pausedResumeAnchorOwnsTimeline) return saved;
+    let liveVt = NaN;
     try {
       if (document.visibilityState === "visible" && isWindowFocused()) {
         const vn = getVideoNode();
@@ -12096,7 +12131,7 @@ startupPrimeStartedAt: performance.now(),
     if (isFinite(liveVt) && liveVt >= 0) {
       const liveLooksReset =
       liveVt < 0.35 &&
-      savedFresh &&
+      savedPauseAuthorityActive &&
       saved > 0.8 &&
       !nearZeroSeekAuthorized(liveVt) &&
       !userSeekIntentActive() &&
@@ -12109,7 +12144,7 @@ startupPrimeStartedAt: performance.now(),
       const externalAnchor = getExternalMediaPauseAnchorPosition();
       if (isFinite(externalAnchor) && externalAnchor >= 0) return externalAnchor;
     } catch { }
-    if (savedFresh) return saved;
+    if (savedPauseAuthorityActive) return saved;
     const fb = Number(fallback);
     return isFinite(fb) && fb >= 0 ? fb : 0;
   }
@@ -12169,10 +12204,23 @@ startupPrimeStartedAt: performance.now(),
     if (userPauseLockActive() || mediaSessionForcedPauseActive()) return false;
     const vn = getVideoNode();
     if (!vn) return false;
-    const target = Number(vn.currentTime);
+    const commitAnchor = Number(state.playCommitResumeAnchor);
+    const target = playCommitResumeAnchorActive() && isFinite(commitAnchor) && commitAnchor >= 0
+    ? commitAnchor
+    : Number(vn.currentTime);
     if (!isFinite(target) || target < 0) return false;
     const tolerance = Math.max(RESUME_STRICT_GOOD_DRIFT_SEC, PAIR_SYNC_GOOD_DRIFT_SEC);
     let changed = false;
+    try {
+      const vt = Number(vn.currentTime);
+      if (vn.paused && (!isFinite(vt) || Math.abs(vt - target) > tolerance)) {
+        state._isMicroSeek = true;
+        vn.currentTime = target;
+        if (videoEl && videoEl !== vn) videoEl.currentTime = target;
+        scheduleMicroSeekClear(220);
+        changed = true;
+      }
+    } catch { }
     try {
       const at = Number(audio.currentTime);
       if (audio.paused && (!isFinite(at) || Math.abs(at - target) > tolerance)) {
@@ -13834,6 +13882,7 @@ startupPrimeStartedAt: performance.now(),
       try { setAudioVolumeSynced(0); } catch { }
       try { if (!audio.paused) safePauseElement(audio); } catch { }
     }
+    try { reconcilePausedPairClock(`${reason}-exact-anchor`, 0.004, target); } catch { }
     state.atomicPairPauseTarget = target;
     state.playPauseTxnPosition = target;
     state._pauseSavedPosition = target;
@@ -14054,7 +14103,15 @@ startupPrimeStartedAt: performance.now(),
     if (!coordinateInitialCoupledStart) {
       state.pairSyncUntil = 0;
       try { clearPairSyncTimer(); } catch { }
-      try { preAlignPausedPairForResume(); } catch { }
+      try {
+        const exactResumeAnchor = Number(requestedResumeAnchor);
+        const pairPaused = getVideoPaused() && (!coupledMode || !audio || audio.paused);
+        if (pairPaused && isFinite(exactResumeAnchor) && exactResumeAnchor >= 0) {
+          reconcilePausedPairClock("user-play-exact-anchor", 0.004, exactResumeAnchor);
+        } else {
+          preAlignPausedPairForResume();
+        }
+      } catch { }
     }
     state.intendedPlaying = true;
     state.bufferHoldIntendedPlaying = true;
@@ -23709,6 +23766,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       state.audioPauseUntil = 0;
     }
     if (initialCoupledPairPending()) {
+      clearPauseResumeAnchorsForPlayingPosition(vt2);
       state.intendedPlaying = true;
       state.bufferHoldIntendedPlaying = true;
       state.startupPrimed = true;
@@ -23745,6 +23803,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     state.audioFadeCompleteUntil = 0;
     cancelActiveFade();
     const pairTarget = isFinite(vt2) ? vt2 : getVideoCurrentTimeSafe(0);
+    clearPauseResumeAnchorsForPlayingPosition(pairTarget);
     settleTransportPositionAuthority(pairTarget, "seek-finalize", 2600);
     if (audio && isFinite(pairTarget)) {
       state._allowAudioTimeWrite = true;
