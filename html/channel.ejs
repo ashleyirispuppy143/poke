@@ -716,14 +716,14 @@ height: 100%;
         <% } %>
     <% } %>
     <% if (!bannerFound) { %>
-        <img src="/static/shapes-dark.png" style="height: 30em; object-fit: cover; pointer-events: none;" id="default_banner">
+        <img src="/static/shapes-dark.png" style="object-fit: contain; pointer-events: none;" id="default_banner">
     <% } %>
 <% } else { %>
-    <img src="/static/shapes-dark.png" style="height: 30em; object-fit: cover; pointer-events: none;" id="default_banner">
+    <img src="/static/shapes-dark.png" style="object-fit: contain; pointer-events: none;" id="default_banner">
 <% } %>
 
 
-<div class="channel-info" style="margin-bottom: 3em;margin-left:2em;margin-top: -11em;">
+<div class="channel-info" style="margin-bottom: 3em;margin-left:2em;margin-top: 0em;">
 <a
   href="/avatars/<%= cinv?.authorThumbnails[5].url.replace('https://yt3.googleusercontent.com/', '') %>"
   class="avatar"
@@ -767,21 +767,9 @@ function authorVerifiedChecker3000() {
 }
 
 %>
+ 
 
-<% if (authorVerifiedChecker3000()) { %>
-                <style>
-
-                              .name {
-              border:solid 1px #df80ff;
-                }  
-                
-                </style>
-
-        
-                
-                                               <% } %>
-
-			<div class="name" style="background: #333;border-radius: 12px;padding: 17px;height: 7em;margin-left: 4em;margin-top: 7px;gap: 3px;">
+			<div class="name" style="border-radius: 12px;padding: 17px;height: 7em;margin-left: 4em;margin-top: 7px;gap: 3px;">
 				<p style="font-family:PokeTube Flex,sans-serif;font-weight:1000;font-stretch: ultra-expanded;margin-top: 16px;margin-bottom: 15px;"><%=cinv?.author%>
           
 <% if (authorVerifiedChecker3000()) { %>
@@ -811,7 +799,7 @@ function authorVerifiedChecker3000() {
  
 <% try { %>
 <a href="/channel?id=<%=ID%>&tab=about&legacy=true" id="popup-trigger" style=" color: #fff !important;">
-<%- getFirstLine(cinv.description).substring(0, 41) + "..." || "See More from this channel..." %>
+<%- getFirstLine(cinv.description).substring(0, 80) + "..." || "See More from this channel..." %>
 <% } catch (error) { %>
   <!-- Handle the error here, if it occurs -->
   <p>Error: <%= error.message %></p>
