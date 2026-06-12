@@ -11035,6 +11035,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const until = now() + Math.max(0, Number(ms) || 0);
     state.seekResumeWantedUntil = Math.max(state.seekResumeWantedUntil, until);
   }
+  function seekResumeIntentActive(extraMs = 0) {
+    const t = now();
+    const tail = Math.max(0, Number(extraMs) || 0);
+    if (state.seekIntentLatchedPlaying &&
+      t < Number(state.seekIntentLatchedUntil || 0) + tail) return true;
+    if (state.seekPlaybackTxnSeekId === state.seekId &&
+      state.seekPlaybackTxnWantedPlaying &&
+      t < Number(state.seekPlaybackTxnUntil || 0) + tail) return true;
+    if (state.seekWantedPlaying) return true;
+    return t < Number(state.seekResumeWantedUntil || 0) + tail;
+  }
   function latchSeekPlaybackIntent(wantedPlaying, ms = 45000) {
     if (!wantedPlaying) return false;
     state.seekIntentLatchedPlaying = true;
@@ -11100,10 +11111,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (state.restarting || state.endedNaturally) return false;
     if (mediaSessionForcedPauseActive() || userPauseLockActive() || userPauseIntentActive()) return false;
     if (state.userPauseIntentPresetAt > 0 && (now() - state.userPauseIntentPresetAt) < 2200) return false;
-    if (state.seekIntentLatchedPlaying && now() < Number(state.seekIntentLatchedUntil || 0)) return true;
-    if (state.seekPlaybackTxnSeekId === state.seekId && state.seekPlaybackTxnWantedPlaying) return true;
-    if (state.seekWantedPlaying) return true;
-    return now() < state.seekResumeWantedUntil;
+    return seekResumeIntentActive();
   }
   function seekStabilizeActive(tailMs = 0) {
     const tail = Math.max(0, Number(tailMs) || 0);
@@ -11203,7 +11211,34 @@ document.addEventListener("DOMContentLoaded", () => {
       state.seekCommitTimer = setTimeout(() => {
         state.seekCommitTimer = null;
         if (serial !== Number(state.seekCommitSerial || 0)) return;
-        tryCommit();
+        try {
+          tryCommit();
+        } catch (error) {
+          if (serial !== Number(state.seekCommitSerial || 0) || !state.seekCommitActive) return;
+          state.seekCommitPhase = "retry-after-handler-error";
+          state.seekCommitStartIssued = false;
+          state.seekCommitStartIssuedAt = 0;
+          state.seekCommitAttempts = Number(state.seekCommitAttempts || 0) + 1;
+          try { console.error("Seek playback commit failed; retrying.", error); } catch { }
+          if (state.seekCommitAttempts >= 4) {
+            try { armPlaybackFailureDiagnostic(state.playSessionId); } catch { }
+          }
+          if (state.seekCommitAttempts >= 8) {
+            const wantedPlaying = !!state.seekCommitWantedPlaying;
+            cancel("handler-error-recovery");
+            if (wantedPlaying && state.intendedPlaying) {
+              try {
+                scheduleStablePlaybackRecovery("seek-handler-error-recovery", {
+                  immediate: true
+                });
+              } catch { }
+            }
+            return;
+          }
+          schedule(state.seekCommitAttempts >= 4
+            ? (perfProfile.lowEnd ? 900 : 650)
+            : (perfProfile.lowEnd ? 260 : 140));
+        }
       }, Math.max(0, Number(delay) || 0));
       return true;
     }
@@ -17184,6 +17219,16 @@ document.addEventListener("DOMContentLoaded", () => {
       const explicit = Number(getActiveExplicitSeekTarget());
       if (isFinite(explicit) && explicit >= 0) return explicit;
     } catch { }
+    try {
+      if (transportPositionAuthorityActive()) {
+        const committed = Number(state.transportPositionTarget);
+        if (isFinite(committed) && committed >= 0) return committed;
+      }
+    } catch { }
+    if (seekResumeIntentActive(900)) {
+      const seekTarget = Number(state.seekTargetTime);
+      if (isFinite(seekTarget) && seekTarget >= 0) return seekTarget;
+    }
     try {
       const vn = getVideoNode();
       const liveVideoTime = Number(vn?.currentTime);
@@ -30323,7 +30368,17 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             if (isFinite(seekTime) && seekTime >= 0 &&
               (_stPendingValid || _stUserSeekIntent)) {
               beginTransportPositionAuthority(seekTime, _stMediaSessionSeek ? "media-session-seek" : "seek", 5600);
-            rememberExplicitSeekTarget(seekTime, 7000);
+              try {
+                rememberExplicitSeekTarget(seekTime, 7000);
+              } catch (error) {
+                // Keep the transport transaction alive even if a display/anchor
+                // helper fails; the committed seek target still owns playback.
+                state.explicitSeekTarget = seekTime;
+                state.explicitSeekUntil = now() + 7000;
+                state.seekTargetTime = seekTime;
+                beginSeekDisplayAuthority(seekTime, 7000);
+                try { console.error("Seek target bookkeeping failed; continuing seek.", error); } catch { }
+              }
               }
               if (_stAbortPhantom) {
                 try {
