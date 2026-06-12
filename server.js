@@ -1476,8 +1476,18 @@
       return { tracked: clientStates.size, active, cooldown, noisy };
     }
 
+    // TTL Cache for getResourceStats to prevent heavy Map sorting on high API traffic
+    let cachedStats = null;
+    let cachedStatsTime = 0;
+    const STATS_TTL_MS = 1500; // 1.5 seconds
+
     function getResourceStats() {
-      return {
+      const now = Date.now();
+      if (cachedStats && now - cachedStatsTime < STATS_TTL_MS) {
+        return cachedStats;
+      }
+
+      cachedStats = {
         guard: "PokeResourceGuard V4 FastMode",
         state: resourceState,
         clients: countClientStates(),
@@ -1498,6 +1508,9 @@
           request_cost: resourceConfig.requestCost
         }
       };
+      
+      cachedStatsTime = now;
+      return cachedStats;
     }
 
     function sendResourceStats(req, res) {
@@ -1507,8 +1520,7 @@
       res.json(getResourceStats());
     }
 
-    function getHealthCss() {
-      return `
+    const HEALTH_CSS = `
 @font-face {
   font-family: "PokeTube Flex";
   src: url("/static/robotoflex.ttf");
@@ -1771,7 +1783,6 @@ summary{
   .route-count{align-self:flex-end}
 }
 `;
-    }
 
     function formatRouteCount(c) {
       if (c === 67) return '67 <span style="font-size:0.85em; color:#aaa; font-weight:normal;">(really)</span>';
@@ -1799,9 +1810,18 @@ summary{
       }).join("");
     }
 
+    // TTL Cache for Health Page HTML
+    let cachedHealthHtml = null;
+    let cachedHealthTime = 0;
+
     function sendAntiddosPage(req, res) {
       if (!isGuardActive) {
         return res.status(503).send("Poke is waking up the guard, please refresh in a moment.");
+      }
+
+      const now = Date.now();
+      if (cachedHealthHtml && now - cachedHealthTime < STATS_TTL_MS) {
+        return res.send(cachedHealthHtml);
       }
       
       const stats = getResourceStats();
@@ -1809,7 +1829,7 @@ summary{
         stats.state.state === "warm" ? "orange" :
         stats.state.state === "stressed" ? "orange" : "red";
 
-      res.send(`<!DOCTYPE html>
+      cachedHealthHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1817,7 +1837,7 @@ summary{
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" href="/favicon.ico">
 <style>
-${getHealthCss()}
+${HEALTH_CSS}
 </style>
 </head>
 <body>
@@ -1957,18 +1977,30 @@ document.addEventListener("DOMContentLoaded", function() {
 </script>
 
 </body>
-</html>`);
+</html>`;
+      
+      cachedHealthTime = now;
+      res.send(cachedHealthHtml);
     }
+
+    // TTL Cache for Traffic Page HTML
+    let cachedTrafficHtml = null;
+    let cachedTrafficTime = 0;
 
     function sendTrafficPage(req, res) {
       if (!isGuardActive) {
         return res.status(503).send("Poke is waking up the guard, please refresh in a moment.");
       }
 
+      const now = Date.now();
+      if (cachedTrafficHtml && now - cachedTrafficTime < STATS_TTL_MS) {
+        return res.send(cachedTrafficHtml);
+      }
+
       const stats = getResourceStats();
       const routesHtml = renderRouteList(stats.active_requests.all_time_top_routes);
 
-      res.send(`<!DOCTYPE html>
+      cachedTrafficHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1976,7 +2008,7 @@ document.addEventListener("DOMContentLoaded", function() {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" href="/favicon.ico">
 <style>
-${getHealthCss()}
+${HEALTH_CSS}
 </style>
 </head>
 <body>
@@ -2077,7 +2109,10 @@ document.addEventListener("DOMContentLoaded", function() {
 </script>
 
 </body>
-</html>`);
+</html>`;
+      
+      cachedTrafficTime = now;
+      res.send(cachedTrafficHtml);
     }
 
     app.use(requestActivityTracker);
@@ -2143,7 +2178,7 @@ document.addEventListener("DOMContentLoaded", function() {
       .replace(/-->/g, "--&gt;")
       .replace(/\r?\n/g, " ");
 
-    res.write("\n<!-- POKE-render error: " + safeRenderErrorMessage + " -->");
+    res.write("\n");
     return res.end();
   } catch (writeErr) {
     console.error("[POKE-render] could not write render error after headers were sent:", writeErr.message);
