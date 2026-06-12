@@ -11401,12 +11401,25 @@ document.addEventListener("DOMContentLoaded", () => {
     function holdPair() {
       const serial = Number(state.seekCommitSerial || 0);
       const vn = getVideoNode();
+      try { cancelActiveFade(); } catch { }
+      try { if (coupledMode && audio) setAudioVolumeSynced(0); } catch { }
+      const preservePendingPlay =
+      !!state.seekCommitWantedPlaying &&
+      !!state.intendedPlaying &&
+      !userPauseLockActive() &&
+      !mediaSessionForcedPauseActive() &&
+      !userPauseIntentActive() &&
+      !userToggleExpectingPause();
+      if (preservePendingPlay) {
+        // A seek or data shortage already suspends frame/sample delivery. Keeping
+        // the media elements unpaused preserves their pending play requests so
+        // the browser can resume immediately when the destination is decoded.
+        return;
+      }
       state._allowVideoPause = true;
       state._allowAudioPause = true;
       state.isProgrammaticVideoPause = true;
       state.isProgrammaticAudioPause = true;
-      try { cancelActiveFade(); } catch { }
-      try { if (coupledMode && audio) setAudioVolumeSynced(0); } catch { }
       try {
         const nativePause = HTMLMediaElement.prototype.pause;
         if (vn && !vn.paused) nativePause.call(vn);
@@ -17146,13 +17159,19 @@ document.addEventListener("DOMContentLoaded", () => {
     const status = visibleCoupledBufferStatus(opts.target, opts);
     if (!status.active || !status.shouldHold) return false;
     const t = now();
+    // Keep the starved element's play request pending. Pausing an element that
+    // fired "waiting" cancels the browser's automatic resume and can interrupt
+    // an unresolved play() promise. Only stop the healthy counterpart when it
+    // would otherwise run ahead.
+    const pauseVideoForAudio = status.audioBlocked && !status.videoBlocked;
+    const pauseAudioForVideo = status.videoBlocked && !status.audioBlocked;
     const alreadyHeld =
     state.strictBufferHold &&
     (state.strictBufferReason === "video-buffer" ||
     state.strictBufferReason === "audio-buffer" ||
     state.strictBufferReason === "coupled-buffer") &&
-    status.vn.paused &&
-    audio.paused;
+    (!pauseVideoForAudio || status.vn.paused) &&
+    (!pauseAudioForVideo || audio.paused);
     state.bufferHoldIntendedPlaying = true;
     state.strictBufferHold = true;
     state.strictBufferReason = status.videoBlocked && status.audioBlocked
@@ -17176,21 +17195,31 @@ document.addEventListener("DOMContentLoaded", () => {
       state.audioStallVideoPaused = true;
     }
     if (!alreadyHeld) {
-      state._allowVideoPause = true;
-      state._allowAudioPause = true;
-      state.isProgrammaticVideoPause = true;
-      state.isProgrammaticAudioPause = true;
       state.audioPlayGeneration++;
       try { clearBufferReadyPlaybackKickBurst(); } catch { }
       try { cancelActiveFade(); setAudioVolumeSynced(0); } catch { }
+      if (pauseVideoForAudio) {
+        state._allowVideoPause = true;
+        state.isProgrammaticVideoPause = true;
+      }
+      if (pauseAudioForVideo) {
+        state._allowAudioPause = true;
+        state.isProgrammaticAudioPause = true;
+      }
       try {
         const nativePause = HTMLMediaElement.prototype.pause;
-        if (!status.vn.paused) nativePause.call(status.vn);
-        if (videoEl && videoEl !== status.vn && !videoEl.paused) nativePause.call(videoEl);
-        if (!audio.paused) nativePause.call(audio);
+        if (pauseVideoForAudio && !status.vn.paused) nativePause.call(status.vn);
+        if (pauseVideoForAudio && videoEl && videoEl !== status.vn && !videoEl.paused) {
+          nativePause.call(videoEl);
+        }
+        if (pauseAudioForVideo && !audio.paused) nativePause.call(audio);
       } catch {
-        try { if (!status.vn.paused) safePauseElement(status.vn); } catch { }
-        try { if (!audio.paused) safePauseElement(audio); } catch { }
+        try {
+          if (pauseVideoForAudio && !status.vn.paused) safePauseElement(status.vn);
+        } catch { }
+        try {
+          if (pauseAudioForVideo && !audio.paused) safePauseElement(audio);
+        } catch { }
       }
       setTimeout(() => {
         state._allowVideoPause = false;
@@ -17439,14 +17468,11 @@ document.addEventListener("DOMContentLoaded", () => {
       try { if (vn !== videoEl) safePauseElement(vn); } catch { }
       setTimeout(() => { state.isProgrammaticVideoPause = false; }, 220);
     }
-    if (!audio.paused) {
-      state.isProgrammaticAudioPause = true;
-      state.audioPlayGeneration++;
-      try { squelchAudioEvents(240); } catch { }
-      try { cancelActiveFade(); setAudioVolumeSynced(0); } catch { }
-      try { safePauseElement(audio); } catch { }
-      setTimeout(() => { state.isProgrammaticAudioPause = false; }, 240);
-    }
+    // The audio element is the starved track. Leave its play request pending so
+    // "playing" can fire as soon as more samples arrive; keep it silent while
+    // the video counterpart is held.
+    try { squelchAudioEvents(240); } catch { }
+    try { cancelActiveFade(); setAudioVolumeSynced(0); } catch { }
     if (alreadyHeld) return true;
     if (initialCoupledPairPending()) {
       state._startupCoordinatedPlayUntil = 0;
@@ -23642,41 +23668,15 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
   }
   function _patchEl(el) {
     if (!el || _spinnerPatchedEls.has(el)) return;
-    if (typeof el.addEventListener !== "function") return;
-    const _reassert = function () {
-      if (!_spinnerLockEngaged) return;
-      try { if (!el.paused) el.pause(); } catch { }
-    };
-    try {
-      _on(el, "play", _reassert, { passive: true });
-      _on(el, "playing", _reassert, { passive: true });
-      _on(el, "ratechange", function () {
-        if (!_spinnerLockEngaged) return;
-        try {
-          const cur = Number(el.playbackRate);
-          if (cur > 0) el[_SPINNER_LOCK_KEY] = cur;
-        } catch { }
-      }, { passive: true });
-    } catch { }
+    // The spinner is presentation only. It must never install a listener that
+    // turns a successful play/playing event back into pause().
     _spinnerPatchedEls.add(el);
   }
   function _engageLock() {
-    if (_spinnerLockEngaged) return;
-    _spinnerLockEngaged = true;
-    _spinnerLockEngagedAt = now();
-    if (_progFlagClearTimer) { clearTimeout(_progFlagClearTimer); _progFlagClearTimer = null; }
-    try { state.isProgrammaticVideoPause = true; } catch { }
-    const els = _allVideoElsToLock();
-    for (let i = 0; i < els.length; i++) {
-      const el = els[i];
-      _patchEl(el);
-      try {
-        const r = Number(el.playbackRate);
-        if (r > 0) el[_SPINNER_LOCK_KEY] = r;
-      } catch { }
-      try { if (!el.paused) el.pause(); } catch { }
-    }
-    _scheduleSpinnerLockFailSafe();
+    // Buffering and seeking are represented by readyState/seeking plus the UI.
+    // Pausing here used to cancel pending play() calls and create a play/pause
+    // feedback loop with the recovery controllers.
+    if (_spinnerLockEngaged) _releaseLock();
   }
   function _releaseLock() {
     if (!_spinnerLockEngaged) return;
@@ -23714,11 +23714,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     }
   }
   function _evaluateSpinnerLock() {
-    if (document.visibilityState === "hidden" && !_spinnerLockEngaged) return;
-    if (!_spinnerLockEngaged && !state.intendedPlaying && !state.seeking && !state.seekBuffering) return;
-    const want = _spinnerLockActive();
-    if (want === _spinnerLockEngaged) return;
-    if (want) _engageLock(); else _releaseLock();
+    if (_spinnerLockEngaged) _releaseLock();
   }
   let _spinnerLockPollInterval = null;
   let _spinnerLockFailSafeTimer = null;
