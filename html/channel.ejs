@@ -804,11 +804,22 @@ function authorVerifiedChecker3000() {
   <!-- Handle the error here, if it occurs -->
   <p>Error: <%= error.message %></p>
 <% } %>
-<div class="subscribe-dropdown-wrapper" style="position: relative; display: inline-block;">
+<noscript>
+  <a href="/feeds/videos.xml?channel_id=<%=ID%>" class="subscribe-button" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; color: #0f0f0f; text-decoration: none; font-weight: 500; font-family: 'Roboto', Arial, sans-serif; font-size: 14px; white-space: nowrap; max-width: 10em; box-sizing: border-box;">
+    
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="#0f0f0f">
+      <path d="M6.18 15.64a2.18 2.18 0 0 1 2.18 2.18C8.36 19 7.38 20 6.18 20C5 20 4 19 4 17.82a2.18 2.18 0 0 1 2.18-2.18M4 11.08c3.38 0 6.12 2.74 6.12 6.12h2.5c0-4.76-3.86-8.62-8.62-8.62v2.5m0-5.58c6.47 0 11.7 5.23 11.7 11.7h2.5C18.2 9.07 12.13 3 4 3v2.5z"/>
+    </svg>
+    RSS Feed
+
+  </a>
+</noscript>
+
+<div id="js-subscribe-wrapper" class="subscribe-dropdown-wrapper" style="position: relative; display: none;">
   
   <div class="subscribe-button" style="display: inline-flex; align-items: center; padding: 0; overflow: hidden; cursor: pointer; text-decoration: none; position: relative; z-index: 51;">
 
-    <a id="sub" class="needs-js" style="padding: 10px 16px; color: #0f0f0f; text-decoration: none; font-weight: 500; font-family: 'Roboto', Arial, sans-serif; font-size: 14px; white-space: nowrap;">
+    <a id="sub" style="padding: 10px 16px; color: #0f0f0f; text-decoration: none; font-weight: 500; font-family: 'Roboto', Arial, sans-serif; font-size: 14px; white-space: nowrap;">
       Subscribe
     </a>
 
@@ -822,10 +833,9 @@ function authorVerifiedChecker3000() {
     
   </div>
 
-  <div id="rssDropdownMenu" style="display: none; position: absolute; left: 0; top: 100%; margin-top: 0; background-color: #ffffff; border-radius: 0 0 20px 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); width: 100%; box-sizing: border-box; z-index: 50; border: 1px solid rgba(0,0,0,0.05); border-top: none;">
+  <div id="rssDropdownMenu" style="display: none; position: absolute; left: 0; top: 100%; margin-top: -14px; padding-top: 14px; background-color: #ffffff; border-radius: 0 0 20px 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); width: 100%; max-width: 10em; box-sizing: border-box; z-index: 50; border: 1px solid rgba(0,0,0,0.05); border-top: none;">
     
     <a href="/feeds/videos.xml?channel_id=<%=ID%>" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px; color: #0f0f0f; text-decoration: none; font-size: 14px; font-weight: 500; font-family: 'Roboto', Arial, sans-serif; white-space: nowrap; transition: background-color 0.2s ease; border-radius: inherit; width: 100%; box-sizing: border-box;" onmouseover="this.style.backgroundColor='rgba(0,0,0,0.05)'" onmouseout="this.style.backgroundColor='transparent'">
-      
       <svg width="18" height="18" viewBox="0 0 24 24" fill="#0f0f0f">
         <path d="M6.18 15.64a2.18 2.18 0 0 1 2.18 2.18C8.36 19 7.38 20 6.18 20C5 20 4 19 4 17.82a2.18 2.18 0 0 1 2.18-2.18M4 11.08c3.38 0 6.12 2.74 6.12 6.12h2.5c0-4.76-3.86-8.62-8.62-8.62v2.5m0-5.58c6.47 0 11.7 5.23 11.7 11.7h2.5C18.2 9.07 12.13 3 4 3v2.5z"/>
       </svg>
@@ -837,6 +847,8 @@ function authorVerifiedChecker3000() {
 </div>
 
 <script>
+  document.getElementById("js-subscribe-wrapper").style.display = "inline-block";
+
   function toggleRssDropdown(event) {
     event.stopPropagation(); 
     var dropdown = document.getElementById("rssDropdownMenu");
