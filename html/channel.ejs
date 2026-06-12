@@ -710,7 +710,7 @@ height: 100%;
     <% let bannerFound = false; %>
     <% for (let i = 0; i < cinv.authorBanners.length; i++) { %>
         <% if (cinv.authorBanners[i]?.url) { %>
-            <img src="<%- media_proxy_url %>/proxy?url=<%= cinv.authorBanners[i].url %>" style="height: 30em; object-fit: cover; pointer-events: none;" id="banner_ID_<%= i %>">
+            <img src="<%- media_proxy_url %>/proxy?url=<%= cinv.authorBanners[i].url %>" style="object-fit: contain; pointer-events: none;" id="banner_ID_<%= i %>">
             <% bannerFound = true; %>
             <% break; %>
         <% } %>
