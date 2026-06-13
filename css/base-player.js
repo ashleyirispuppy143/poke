@@ -14922,6 +14922,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const intentMs = Math.max(350, Number(ms) || USER_PAUSE_INTENT_FAST_MS);
     setAuthoritativeTransportIntent(false, "user-pause");
     cancelPlaybackFailureDiagnostic(true);
+    try { clearPlaybackIntentLivenessWatchdog(); } catch { }
+    try {
+      clearHiddenInitialAudioStartTimeout();
+      _hiddenInitialAudioStartInFlight = false;
+    } catch { }
     clearForegroundReturnTimelineAuthority("user-pause");
     try {
       if (!SeekPlaybackCommitController.onUserPause("user-pause")) {
@@ -15072,6 +15077,7 @@ document.addEventListener("DOMContentLoaded", () => {
       scheduleSync(perfProfile.lowEnd ? 100 : 60);
       updateMediaSessionPlaybackState();
       armPlaybackFailureDiagnostic(state.playSessionId);
+      try { armPlaybackIntentLivenessWatchdog("user-play-deduped", { immediate: true }); } catch { }
       return;
     }
     noteUserToggle("play");
@@ -15265,6 +15271,7 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         }
         armPlaybackFailureDiagnostic(state.playSessionId);
+        try { armPlaybackIntentLivenessWatchdog("user-play", { immediate: true }); } catch { }
   }
   function userPauseIntentActive() { return now() < state.userPauseUntil; }
   function userPauseLockActive() { return now() < state.userPauseLockUntil; }
@@ -25782,13 +25789,149 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     if (!state._startupAudioWaitStartedAt) state._startupAudioWaitStartedAt = now();
     return false;
   }
+  let _hiddenInitialAudioStartInFlight = false;
+  let _hiddenInitialAudioStartLastAt = 0;
+  let _hiddenInitialAudioStartTimeout = null;
+  function clearHiddenInitialAudioStartTimeout() {
+    if (_hiddenInitialAudioStartTimeout) {
+      clearTimeout(_hiddenInitialAudioStartTimeout);
+      _hiddenInitialAudioStartTimeout = null;
+    }
+  }
+  function commitHiddenInitialAudioStartup(reason = "hidden-initial-audio") {
+    if (!coupledMode || !audio || document.visibilityState !== "hidden") return false;
+    if (!initialCoupledPairPending() || audio.paused || state.endedNaturally ||
+      state.restarting || !state.intendedPlaying) return false;
+    if (userPauseLockActive() || mediaSessionForcedPauseActive() ||
+      userPauseIntentActive() || userToggleExpectingPause()) return false;
+    const at = (() => {
+      try {
+        const value = Number(audio.currentTime);
+        return isFinite(value) && value >= 0 ? value : 0;
+      } catch { return 0; }
+    })();
+    state.firstPlayCommitted = true;
+    state.initialCoupledPairCommitted = true;
+    state.audioEverStarted = true;
+    state.startupPrimed = true;
+    state.startupKickDone = true;
+    state.startupKickInFlight = false;
+    state.startupPhase = false;
+    state.startupPlaySettled = true;
+    state.bufferHoldIntendedPlaying = true;
+    state.resumeOnVisible = true;
+    state.bgHiddenWasPlaying = true;
+    state._startupCoordinatedPlayUntil = 0;
+    state._startupLockstepTarget = NaN;
+    state._startupLockstepTargetAt = 0;
+    state._startupLockstepIssuedAt = 0;
+    state._startupAudioWaitStartedAt = 0;
+    state.lastHiddenTimelineTarget = Math.max(
+      Number(state.lastHiddenTimelineTarget || 0) || 0,
+      at
+    );
+    state.lastHiddenTimelineTargetAt = now();
+    state.lastKnownGoodVT = Math.max(Number(state.lastKnownGoodVT || 0) || 0, at);
+    state.lastKnownGoodVTts = now();
+    clearHiddenInitialAudioStartTimeout();
+    _hiddenInitialAudioStartInFlight = false;
+    suppressStartupZero(45000);
+    try { clearInitialPairAudioGate(); } catch { }
+    try { clearStartupPairVerifyTimer(); } catch { }
+    try { clearStartupAutoplayRetryTimer(); } catch { }
+    try { clearBufferHold(); } catch { }
+    try { setAudioPlaybackVolume(targetVolFromVideo(), reason, { smooth: false }); } catch { }
+    try { updateAudioGainImmediate(true); } catch { }
+    try { noteBackgroundEntry(); } catch { }
+    try { enterHiddenAudioExclusiveMode(reason, { proactive: true }); } catch { }
+    try { startBgAudioKeepalive(); } catch { }
+    try { BackgroundAudioSentinel.start(reason); } catch { }
+    try { refreshHiddenAudioMediaSession(reason); } catch { }
+    try { updateMediaSessionPlaybackState(); } catch { }
+    try {
+      if (!_playbackIntentLivenessStartedAt) {
+        armPlaybackIntentLivenessWatchdog(reason, { immediate: false });
+      }
+    } catch { }
+    return true;
+  }
+  function tryHiddenInitialAudioStartup(reason = "hidden-initial-audio") {
+    if (!coupledMode || !audio || document.visibilityState !== "hidden") return false;
+    if (!initialCoupledPairPending() || state.endedNaturally || state.restarting) return false;
+    if (state.firstPlayCommitted && !state.intendedPlaying) return false;
+    if (!state.intendedPlaying && !wantsStartupAutoplay()) return false;
+    if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
+    if (userPauseLockActive() || mediaSessionForcedPauseActive() ||
+      userPauseIntentActive() || userToggleExpectingPause()) return false;
+    if (!audio.paused) return commitHiddenInitialAudioStartup(reason);
+    if (_hiddenInitialAudioStartInFlight) return true;
+    const attemptAt = now();
+    if ((attemptAt - _hiddenInitialAudioStartLastAt) < 180) return true;
+    _hiddenInitialAudioStartLastAt = attemptAt;
+    _hiddenInitialAudioStartInFlight = true;
+    state.intendedPlaying = true;
+    state.bufferHoldIntendedPlaying = true;
+    state.resumeOnVisible = true;
+    state.bgHiddenWasPlaying = true;
+    state.startupPrimed = true;
+    state.startupKickDone = false;
+    state._startupCoordinatedPlayUntil = Math.max(
+      Number(state._startupCoordinatedPlayUntil || 0),
+      attemptAt + 2400
+    );
+    try {
+      if (audio.preload !== "auto") audio.preload = "auto";
+      if (Number(audio.networkState || 0) === 0 && typeof audio.load === "function") audio.load();
+    } catch { }
+    try { clearAudioPauseLocks(); } catch { }
+    try { cancelActiveFade(); } catch { }
+    try {
+      const muted = playerMutedFromVideo();
+      setAudioMutedSynced(muted);
+      setAudioVolumeSynced(muted ? 0 : targetVolFromVideo());
+    } catch { }
+    let playResult = null;
+    try {
+      playResult = HTMLMediaElement.prototype.play.call(audio);
+    } catch {
+      _hiddenInitialAudioStartInFlight = false;
+      scheduleStartupAutoplayRetry();
+      return false;
+    }
+    clearHiddenInitialAudioStartTimeout();
+    _hiddenInitialAudioStartTimeout = setTimeout(() => {
+      _hiddenInitialAudioStartTimeout = null;
+      if (!_hiddenInitialAudioStartInFlight) return;
+      if (commitHiddenInitialAudioStartup(`${reason}-pending-timeout`)) return;
+      _hiddenInitialAudioStartInFlight = false;
+      scheduleStartupAutoplayRetry();
+      try {
+        armPlaybackIntentLivenessWatchdog(`${reason}-pending-timeout`, {
+          immediate: true
+        });
+      } catch { }
+    }, perfProfile.lowEnd ? 3200 : 2400);
+    Promise.resolve(playResult).then(() => {
+      if (!commitHiddenInitialAudioStartup(reason)) scheduleStartupAutoplayRetry();
+    }, err => {
+      try { notePlaybackStartFailure("audio", err); } catch { }
+      scheduleStartupAutoplayRetry();
+    }).finally(() => {
+      clearHiddenInitialAudioStartTimeout();
+      _hiddenInitialAudioStartInFlight = false;
+    });
+    return true;
+  }
   function tryHiddenStartupAutoplayKick() {
     if (!coupledMode || !audio) return false;
     if (document.visibilityState !== "hidden") return false;
     if (state.endedNaturally || state.restarting) return false;
+    if (state.firstPlayCommitted && !state.intendedPlaying) return false;
     if (!wantsStartupAutoplay() && !state.intendedPlaying) return false;
     if (mediaSessionForcedPauseActive() || userPauseLockActive()) return false;
-    if (!bothReadyForStartupKick()) return false;
+    if (!bothReadyForStartupKick()) {
+      return tryHiddenInitialAudioStartup("hidden-startup-audio-first");
+    }
     state.intendedPlaying = true;
     state.bufferHoldIntendedPlaying = true;
     state.resumeOnVisible = true;
@@ -25809,6 +25952,8 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       );
       verifyCoordinatedStartupPair();
       scheduleStartupAutoplayRetry();
+    } else {
+      return tryHiddenInitialAudioStartup("hidden-startup-lockstep-fallback");
     }
     return issued || (!getVideoPaused() && !audio.paused);
   }
@@ -25931,6 +26076,9 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         now() + 1400
       );
       if (audioRunning && !videoRunning) {
+        if (hidden && commitHiddenInitialAudioStartup("hidden-startup-video-throttled")) {
+          return;
+        }
         try { cancelActiveFade(); setAudioVolumeSynced(0); } catch { }
         if (!videoReady) {
           holdUnpairedStartupTrack("startup-video-not-ready");
@@ -25978,6 +26126,9 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       } else if (!videoRunning && !audioRunning) {
         state.startupKickInFlight = false;
         state.startupKickDone = false;
+        if (hidden && tryHiddenInitialAudioStartup("hidden-startup-pair-paused")) {
+          return;
+        }
         scheduleStartupAutoplayRetry();
       }
       if (initialCoupledPairPending() && state.intendedPlaying &&
@@ -26113,7 +26264,9 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
   }
   function scheduleStartupAutoplayKick() {
     if (!coupledMode) return;
+    try { armPlaybackIntentLivenessWatchdog("startup-kick"); } catch { }
     if (state.startupKickInFlight || !initialCoupledPairPending()) return;
+    if (state.firstPlayCommitted && !state.intendedPlaying) return;
     if (!state.startupPrimed) {
       if (wantsStartupAutoplay() || state.intendedPlaying) {
         state.startupPrimed = true;
@@ -26179,7 +26332,9 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     }, 0);
   }
   function scheduleStartupAutoplayRetry() {
+    try { armPlaybackIntentLivenessWatchdog("startup-retry"); } catch { }
     if (state.startupKickInFlight || !initialCoupledPairPending()) return;
+    if (state.firstPlayCommitted && !state.intendedPlaying) return;
     if (!state.intendedPlaying && !wantsStartupAutoplay()) return;
     if (mediaSessionForcedPauseActive() || userPauseLockActive()) return;
     try {
@@ -26266,6 +26421,238 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       }
     }, delay);
   }
+  let _playbackIntentLivenessTimer = null;
+  let _playbackIntentLivenessSerial = 0;
+  let _playbackIntentLivenessStartedAt = 0;
+  let _playbackIntentLivenessAttempt = 0;
+  let _playbackIntentLivenessLastKickAt = 0;
+  let _playbackIntentLivenessVideoTime = NaN;
+  let _playbackIntentLivenessAudioTime = NaN;
+  function clearPlaybackIntentLivenessWatchdog() {
+    _playbackIntentLivenessSerial++;
+    if (_playbackIntentLivenessTimer) {
+      clearTimeout(_playbackIntentLivenessTimer);
+      _playbackIntentLivenessTimer = null;
+    }
+    _playbackIntentLivenessStartedAt = 0;
+    _playbackIntentLivenessAttempt = 0;
+    _playbackIntentLivenessLastKickAt = 0;
+    _playbackIntentLivenessVideoTime = NaN;
+    _playbackIntentLivenessAudioTime = NaN;
+  }
+  function playbackIntentStillWantsStart() {
+    if (_errorOverlayShown || state.endedNaturally || state.restarting) return false;
+    if (userPauseLockActive() || mediaSessionForcedPauseActive() ||
+      userPauseIntentActive() || userToggleExpectingPause() ||
+      authoritativeTransportPauseActive()) return false;
+    return !!(state.intendedPlaying ||
+      (!state.firstPlayCommitted && wantsStartupAutoplay()) ||
+      userPlayIntentActive() || userToggleExpectingPlay());
+  }
+  function armPlaybackIntentLivenessWatchdog(reason = "playback-intent", opts = {}) {
+    if (!playbackIntentStillWantsStart()) return false;
+    if (_playbackIntentLivenessTimer) {
+      if (opts.immediate !== true) return true;
+      clearTimeout(_playbackIntentLivenessTimer);
+      _playbackIntentLivenessTimer = null;
+    }
+    if (!_playbackIntentLivenessStartedAt) {
+      _playbackIntentLivenessStartedAt = now();
+      _playbackIntentLivenessAttempt = 0;
+      _playbackIntentLivenessVideoTime = NaN;
+      _playbackIntentLivenessAudioTime = NaN;
+    }
+    const serial = _playbackIntentLivenessSerial;
+    const scheduleNext = delay => {
+      if (serial !== _playbackIntentLivenessSerial ||
+        !playbackIntentStillWantsStart()) return;
+      _playbackIntentLivenessTimer = setTimeout(tick, Math.max(45, Number(delay) || 0));
+    };
+    const tick = () => {
+      _playbackIntentLivenessTimer = null;
+      if (serial !== _playbackIntentLivenessSerial ||
+        !playbackIntentStillWantsStart()) {
+        clearPlaybackIntentLivenessWatchdog();
+        return;
+      }
+      if (state.seeking || state.seekBuffering || state.seekResumeInFlight ||
+        state.pendingSeekTarget != null || userSeekIntentActive()) {
+        scheduleNext(perfProfile.lowEnd ? 500 : 300);
+        return;
+      }
+      state.intendedPlaying = true;
+      state.bufferHoldIntendedPlaying = true;
+      const hidden = document.visibilityState === "hidden";
+      const vn = getVideoNode();
+      let vt = NaN;
+      let at = NaN;
+      try { vt = Number(vn?.currentTime); } catch { }
+      try { at = coupledMode && audio ? Number(audio.currentTime) : vt; } catch { }
+      const hadVideoBaseline = isFinite(_playbackIntentLivenessVideoTime);
+      const hadAudioBaseline = !coupledMode || !audio ||
+        isFinite(_playbackIntentLivenessAudioTime);
+      const videoMoved =
+        isFinite(vt) && hadVideoBaseline &&
+        vt > _playbackIntentLivenessVideoTime + 0.006;
+      const audioMoved =
+        !coupledMode || !audio ||
+        (isFinite(at) && hadAudioBaseline &&
+          at > _playbackIntentLivenessAudioTime + 0.006);
+      _playbackIntentLivenessVideoTime = vt;
+      _playbackIntentLivenessAudioTime = at;
+      const videoRunning = !!(vn && !vn.paused);
+      const audioRunning = !coupledMode || !audio || !audio.paused;
+      const healthy = hidden && coupledMode && audio
+        ? audioRunning && audioMoved
+        : videoRunning && audioRunning && videoMoved && audioMoved;
+      if (healthy) {
+        clearPlaybackIntentLivenessWatchdog();
+        return;
+      }
+      const runningWithoutBaseline = hidden && coupledMode && audio
+        ? audioRunning && !hadAudioBaseline
+        : videoRunning && audioRunning &&
+          (!hadVideoBaseline || !hadAudioBaseline);
+      if (runningWithoutBaseline) {
+        scheduleNext(perfProfile.lowEnd ? 420 : 280);
+        return;
+      }
+
+      const t = now();
+      const kickGap = hidden
+        ? (perfProfile.lowEnd ? 900 : 600)
+        : (perfProfile.lowEnd ? 650 : 420);
+      const mayKick = (t - _playbackIntentLivenessLastKickAt) >= kickGap;
+      if (mayKick) {
+        _playbackIntentLivenessLastKickAt = t;
+        _playbackIntentLivenessAttempt++;
+        try { clearStalePlaybackStartBlockers(reason); } catch { }
+        try { detachStaleMediaPlayFlights(state.playSessionId); } catch { }
+        if (hidden) {
+          state.resumeOnVisible = true;
+          state.bgHiddenWasPlaying = true;
+          try { noteBackgroundEntry(); } catch { }
+          if (initialCoupledPairPending()) {
+            if (!tryHiddenStartupAutoplayKick()) {
+              tryHiddenInitialAudioStartup(`${reason}-hidden-initial`);
+            }
+          } else if (coupledMode && audio) {
+            try { startBgAudioKeepalive(); } catch { }
+            try { enterHiddenAudioExclusiveMode(`${reason}-hidden`, { proactive: true }); } catch { }
+            if (!audioRunning || !audioMoved) {
+              try {
+                hiddenAudioNoSeekResume(`${reason}-hidden-audio`, {
+                  retry: true,
+                  force: true
+                });
+              } catch { }
+              try {
+                kickHiddenCoupledBootstrap({
+                  kickAudio: true,
+                  forceVideo: false,
+                  bootstrapMs: 100,
+                  allowAudioDuringVideoLead: true,
+                  urgentAudio: true,
+                  noAudioSeek: true,
+                  syncVideo: false,
+                  ignoreVideoBuffering: true
+                });
+              } catch { }
+            }
+          } else if (vn && vn.paused) {
+            try {
+              const p = execProgrammaticVideoPlay({ force: true, minGapMs: 0 });
+              if (p && typeof p.catch === "function") p.catch(() => { });
+            } catch { }
+          }
+        } else if (initialCoupledPairPending()) {
+          state.startupPrimed = true;
+          state.startupKickDone = false;
+          state.startupKickInFlight = false;
+          if (!kickStartupLockstepPlayback()) scheduleStartupAutoplayRetry();
+        } else if (coupledMode && audio) {
+          try {
+            if (!recoverMissingCoupledPlaybackTrack(`${reason}-visible-track`)) {
+              requestCoupledPlaybackCommit(`${reason}-visible-pair`, {
+                force: true,
+                retry: true
+              });
+              MakeAudioVideoSimultaneousStartAPI({
+                force: true,
+                squelchMs: 70,
+                nativePlayOwner: true
+              });
+            }
+          } catch { }
+          try {
+            scheduleStablePlaybackRecovery(`${reason}-visible`, { immediate: true });
+          } catch { }
+          try {
+            armPlayablePairLivenessRecovery("playback", NaN, {
+              delay: perfProfile.lowEnd ? 180 : 100,
+              maxAge: perfProfile.lowEnd ? 7000 : 5200
+            });
+          } catch { }
+        } else if (vn && (!videoRunning || !videoMoved)) {
+          try {
+            const p = execProgrammaticVideoPlay({ force: true, minGapMs: 0 });
+            if (p && typeof p.catch === "function") p.catch(() => { });
+          } catch { }
+        }
+      }
+      const age = now() - _playbackIntentLivenessStartedAt;
+      const delays = hidden
+        ? [120, 280, 650, 1200, 2200, 3500]
+        : [80, 180, 420, 850, 1600, 2800];
+      const delay = age > 15000
+        ? (hidden ? 4500 : 3200)
+        : delays[Math.min(_playbackIntentLivenessAttempt, delays.length - 1)];
+      scheduleNext(delay);
+    };
+    scheduleNext(opts.immediate === false ? (perfProfile.lowEnd ? 220 : 140) : 0);
+    return true;
+  }
+  function bindPlaybackIntentLivenessSignals() {
+    const signal = event => {
+      if (!playbackIntentStillWantsStart()) return;
+      const immediate = event?.type === "pause" ||
+        event?.type === "canplay" ||
+        event?.type === "canplaythrough" ||
+        event?.type === "loadeddata";
+      armPlaybackIntentLivenessWatchdog(
+        `media-${String(event?.type || "signal")}`,
+        { immediate }
+      );
+    };
+    const events = ["play", "playing", "pause", "loadeddata", "canplay",
+      "canplaythrough", "waiting", "stalled", "emptied"];
+    try {
+      if (videoEl) for (const eventName of events) {
+        _on(videoEl, eventName, signal, { passive: true });
+      }
+    } catch { }
+    try {
+      const vn = getVideoNode();
+      if (vn && vn !== videoEl) for (const eventName of events) {
+        _on(vn, eventName, signal, { passive: true });
+      }
+    } catch { }
+    try {
+      if (coupledMode && audio) for (const eventName of events) {
+        _on(audio, eventName, signal, { passive: true });
+      }
+    } catch { }
+    try {
+      _on(document, "visibilitychange", () => {
+        if (playbackIntentStillWantsStart()) {
+          armPlaybackIntentLivenessWatchdog("visibility-playback-intent", {
+            immediate: true
+          });
+        }
+      }, { passive: true });
+    } catch { }
+  }
+  bindPlaybackIntentLivenessSignals();
   function ensureStartupAutoplayAfterReady(reason = "startup-ready") {
     if (!wantsStartupAutoplay() || state.firstPlayCommitted ||
       state.endedNaturally || state.restarting || _errorOverlayShown) return false;
@@ -34328,6 +34715,11 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     try { clearSeekBuffering(); } catch { }
     try { forceClearSeekBufferingUI(); } catch { }
     try { clearStartupAutoplayRetryTimer(); } catch { }
+    try { clearPlaybackIntentLivenessWatchdog(); } catch { }
+    try {
+      clearHiddenInitialAudioStartTimeout();
+      _hiddenInitialAudioStartInFlight = false;
+    } catch { }
     try { clearAudioForcePlayTimer(); } catch { }
     try { clearStartupPairVerifyTimer(); state._startupCoordinatedPlayUntil = 0; } catch { }
     try {
