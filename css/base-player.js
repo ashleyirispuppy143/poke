@@ -4983,8 +4983,11 @@ document.addEventListener("DOMContentLoaded", () => {
     })();
     const BufferHealthMonitor = (() => {
       const WINDOW = 8;
-      const _vBuf = new Array(WINDOW).fill(0);
-      const _aBuf = new Array(WINDOW).fill(0);
+      // Unknown samples must stay unknown. Prefilling this window with zeroes
+      // made a cold start look starved until every slot had been replaced,
+      // which could take 30+ seconds on the relaxed heartbeat cadence.
+      const _vBuf = new Array(WINDOW).fill(NaN);
+      const _aBuf = new Array(WINDOW).fill(NaN);
       let _idx = 0;
       let _videoScore = 100;
       let _audioScore = 100;
@@ -5014,9 +5017,22 @@ document.addEventListener("DOMContentLoaded", () => {
           return best;
         } catch { return 0; }
       }
+      function _orderedSamples(samples) {
+        const available = Math.min(_idx, WINDOW);
+        const ordered = [];
+        for (let offset = available - 1; offset >= 0; offset--) {
+          const index = (_idx - 1 - offset + WINDOW) % WINDOW;
+          const value = Number(samples[index]);
+          if (isFinite(value) && value >= 0) ordered.push(value);
+        }
+        return ordered;
+      }
       function _scoreFromSamples(samples) {
-        const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
-        const recent = samples.slice(-3).reduce((a, b) => a + b, 0) / 3;
+        const valid = _orderedSamples(samples);
+        if (!valid.length) return 100;
+        const recentSamples = valid.slice(-Math.min(3, valid.length));
+        const avg = valid.reduce((a, b) => a + b, 0) / valid.length;
+        const recent = recentSamples.reduce((a, b) => a + b, 0) / recentSamples.length;
         const avgScore = Math.min(100, avg * 20);
         const recentScore = Math.min(100, recent * 20);
         return Math.round(avgScore * 0.4 + recentScore * 0.6);
@@ -5033,10 +5049,18 @@ document.addEventListener("DOMContentLoaded", () => {
       function getVideoScore() { return _videoScore; }
       function getAudioScore() { return _audioScore; }
       function getCombinedScore() { return Math.min(_videoScore, coupledMode ? _audioScore : 100); }
+      function hasConfidence() {
+        const needed = perfProfile.lowEnd ? 2 : 3;
+        return _orderedSamples(_vBuf).length >= needed &&
+          (!coupledMode || _orderedSamples(_aBuf).length >= needed);
+      }
       function isHealthy() { return getCombinedScore() >= 40; }
       function getVideoAheadSec() { return _vBuf[(_idx - 1 + WINDOW) % WINDOW]; }
       function getAudioAheadSec() { return _aBuf[(_idx - 1 + WINDOW) % WINDOW]; }
-      return { tick, getVideoScore, getAudioScore, getCombinedScore, isHealthy, getVideoAheadSec, getAudioAheadSec };
+      return {
+        tick, getVideoScore, getAudioScore, getCombinedScore, hasConfidence,
+        isHealthy, getVideoAheadSec, getAudioAheadSec
+      };
     })();
     const DriftSupervisor = (() => {
       const HISTORY_LEN = 12;
@@ -5549,7 +5573,9 @@ document.addEventListener("DOMContentLoaded", () => {
       function compute() {
         let score = 100;
         const bufScore = BufferHealthMonitor.getCombinedScore();
-        score -= (100 - bufScore) * 0.30;
+        if (BufferHealthMonitor.hasConfidence()) {
+          score -= (100 - bufScore) * 0.30;
+        }
         const driftMs = DriftSupervisor.getDriftMs();
         if (driftMs > 200) score -= 10;
         if (driftMs > 500) score -= 15;
@@ -5565,6 +5591,16 @@ document.addEventListener("DOMContentLoaded", () => {
         _scoreAt = _now();
         return _score;
       }
+      function needsIntervention() {
+        if (NetworkRecoveryHandler.isOffline()) return true;
+        if (PositionFreezeDetector.isFrozen()) return true;
+        if (ReadyStateWatcher.hasVideoRsDrop() || ReadyStateWatcher.hasAudioRsDrop()) return true;
+        if (AudioSilenceGuard.isDetectedSilent()) return true;
+        if (DriftSupervisor.isDriftCritical() || DriftSupervisor.isDriftRunaway()) return true;
+        if (state.videoWaiting || state.audioWaiting ||
+          state.videoStallAudioPaused || state.audioStallVideoPaused) return true;
+        return false;
+      }
       function tick() {
         compute();
         _maybeIntervene();
@@ -5573,6 +5609,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if ((_now() - _lastInterventionAt) < INTERVENTION_COOLDOWN) return;
         if (!state.intendedPlaying || state.seeking || state.syncing) return;
         if (document.visibilityState === "hidden") return;
+        // A low buffered-ahead estimate is not something a sync loop can fix.
+        // Wait for a real clock, ready-state, drift, or stall failure before
+        // spending CPU or touching playback during a cold decoder start.
+        if (!needsIntervention()) return;
         if (_score < 20) {
           _interventions++;
           _lastInterventionAt = _now();
@@ -5589,7 +5629,10 @@ document.addEventListener("DOMContentLoaded", () => {
       function getInterventions() { return _interventions; }
       function isHealthy() { return _score >= 60; }
       function isCritical() { return _score < 20; }
-      return { tick, getScore, getLastScore, getInterventions, isHealthy, isCritical };
+      return {
+        tick, getScore, getLastScore, getInterventions,
+        isHealthy, isCritical, needsIntervention
+      };
     })();
     const MicroSyncScheduler = (() => {
       let _lastFireAt = 0;
@@ -5603,9 +5646,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!state.intendedPlaying) return;
         const score = HealthScoreTracker.getScore();
         const drift = DriftSupervisor.getDriftMs();
+        const actionableProblem = HealthScoreTracker.needsIntervention();
         let interval = HEALTHY_INTERVAL_MS;
-        if (drift > 300 || score < 40) interval = DRIFT_INTERVAL_MS;
-        if (score < 20) interval = CRITICAL_INTERVAL_MS;
+        if (drift > 300 || (actionableProblem && score < 40)) interval = DRIFT_INTERVAL_MS;
+        if (actionableProblem && score < 20) interval = CRITICAL_INTERVAL_MS;
         if (_now() < _fastUntil) interval = Math.min(interval, DRIFT_INTERVAL_MS);
         if ((_now() - _lastFireAt) >= interval) {
           _lastFireAt = _now();
@@ -25693,6 +25737,79 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     if (state._mediumPlayPauseStormCount < 6) return false;
     return enterMediumPlayPauseStormQuiet(kind);
   }
+  const STARTUP_SMOOTH_BUFFER_SEC = perfProfile.veryLowEnd
+    ? 1.8
+    : (perfProfile.lowEnd ? 1.4 : (perfProfile.mobile ? 1.25 : 1.0));
+  const STARTUP_SMOOTH_FALLBACK_SEC = perfProfile.lowEnd ? 0.35 : 0.25;
+  const STARTUP_SMOOTH_MAX_WAIT_MS = perfProfile.veryLowEnd
+    ? 8000
+    : (perfProfile.lowEnd ? 6500 : (perfProfile.mobile ? 5800 : 4800));
+  function rawBufferedAheadAt(media, target) {
+    if (!media || !isFinite(Number(target))) return 0;
+    const t = Math.max(0, Number(target));
+    try {
+      const ranges = media.buffered;
+      let bestAhead = 0;
+      for (let i = 0; ranges && i < ranges.length; i++) {
+        const start = Number(ranges.start(i));
+        const end = Number(ranges.end(i));
+        if (!isFinite(start) || !isFinite(end) || end < start) continue;
+        // Allow a small encoder/timestamp offset at the range start without
+        // adding that tolerance to the amount of media actually buffered.
+        if (t >= start - 0.10 && t <= end + 0.025) {
+          bestAhead = Math.max(bestAhead, Math.max(0, end - t));
+        }
+      }
+      return bestAhead;
+    } catch {
+      return 0;
+    }
+  }
+  function managedVisibleAutoplayNeedsSmoothStart() {
+    if (!wantsStartupAutoplay() || state.firstPlayCommitted) return false;
+    if (document.visibilityState !== "visible") return false;
+    return !userWantsPlayNow(2400) && !directUserToggleActive(1600);
+  }
+  function primeStartupTrackBuffer(media) {
+    if (!media) return;
+    try {
+      if (media.preload !== "auto") media.preload = "auto";
+      // load() resets an active media pipeline, so only use it for an empty one.
+      if (Number(media.networkState || 0) === 0 && typeof media.load === "function") {
+        media.load();
+      }
+    } catch { }
+  }
+  function startupTrackHasSmoothBuffer(media, target, requiredAhead, allowFallback) {
+    if (!media || !isFinite(Number(target))) return false;
+    const t = Math.max(0, Number(target));
+    try {
+      if (media.error || media.seeking) return false;
+      const readyState = Number(media.readyState || 0);
+      const duration = Number(media.duration || 0);
+      const remaining = isFinite(duration) && duration > 0
+        ? Math.max(0, duration - t)
+        : Infinity;
+      const rawAhead = rawBufferedAheadAt(media, t);
+      if (remaining <= 0.2) {
+        return readyState >= HAVE_CURRENT_DATA && (rawAhead > 0 || !!media.ended);
+      }
+      const needed = isFinite(remaining)
+        ? Math.min(Math.max(0, Number(requiredAhead) || 0), remaining)
+        : Math.max(0, Number(requiredAhead) || 0);
+      if (readyState >= HAVE_FUTURE_DATA && rawAhead >= needed) return true;
+      if (!allowFallback) return false;
+      const fallbackNeeded = isFinite(remaining)
+        ? Math.min(STARTUP_SMOOTH_FALLBACK_SEC, remaining)
+        : STARTUP_SMOOTH_FALLBACK_SEC;
+      if (readyState >= HAVE_FUTURE_DATA && rawAhead >= fallbackNeeded) return true;
+      // Some native/MSE pipelines expose no useful range despite claiming they
+      // can play through. Trust that claim only after the bounded prebuffer wait.
+      return readyState >= HAVE_ENOUGH_DATA;
+    } catch {
+      return false;
+    }
+  }
   function startupBufferReadyLoose() {
     if (!coupledMode) return true;
     const t0 = Number(video.currentTime()) || 0;
@@ -25774,6 +25891,26 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     const startAt = getStartupLockstepTarget(vNode);
     if (!alignStartupPairAtTarget(startAt, vNode)) {
       if (!state._startupAudioWaitStartedAt) state._startupAudioWaitStartedAt = now();
+      return false;
+    }
+    if (managedVisibleAutoplayNeedsSmoothStart()) {
+      if (!state._startupAudioWaitStartedAt) state._startupAudioWaitStartedAt = now();
+      primeStartupTrackBuffer(vNode);
+      primeStartupTrackBuffer(audio);
+      const waitAge = now() - state._startupAudioWaitStartedAt;
+      const playbackRate = Math.max(
+        1,
+        Math.min(2, Number(vNode.playbackRate || audio.playbackRate || 1) || 1)
+      );
+      const requiredAhead = STARTUP_SMOOTH_BUFFER_SEC * playbackRate;
+      const allowFallback = waitAge >= STARTUP_SMOOTH_MAX_WAIT_MS;
+      const pairHasSmoothStart =
+        startupTrackHasSmoothBuffer(vNode, startAt, requiredAhead, allowFallback) &&
+        startupTrackHasSmoothBuffer(audio, startAt, requiredAhead, allowFallback);
+      if (pairHasSmoothStart) {
+        state._startupAudioWaitStartedAt = 0;
+        return true;
+      }
       return false;
     }
     const startupAhead = document.visibilityState === "hidden"
@@ -26332,7 +26469,6 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     }, 0);
   }
   function scheduleStartupAutoplayRetry() {
-    try { armPlaybackIntentLivenessWatchdog("startup-retry"); } catch { }
     if (state.startupKickInFlight || !initialCoupledPairPending()) return;
     if (state.firstPlayCommitted && !state.intendedPlaying) return;
     if (!state.intendedPlaying && !wantsStartupAutoplay()) return;
@@ -26347,7 +26483,16 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         }
       }
     } catch { }
-    clearStartupAutoplayRetryTimer();
+    if (state.startupAutoplayRetryTimer) {
+      // Loading events arrive in bursts. Do not let each event cancel the
+      // existing retry and move autoplay farther into the future.
+      if (document.visibilityState === "visible" && bothReadyForStartupKick()) {
+        clearStartupAutoplayRetryTimer();
+        scheduleStartupAutoplayKick();
+      }
+      return;
+    }
+    try { armPlaybackIntentLivenessWatchdog("startup-retry"); } catch { }
     const count = state.startupAutoplayRetryCount;
     const retrySaturated = count >= 40;
     const delays = [80, 150, 300, 500, 800, 1200, 1500, 2000, 2500, 3000, 3000, 3000, 3000, 3000];
@@ -26519,6 +26664,32 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       }
 
       const t = now();
+      const livenessAge = t - _playbackIntentLivenessStartedAt;
+      const allRequiredTracksRunning = hidden && coupledMode && audio
+        ? audioRunning
+        : videoRunning && audioRunning;
+      let waitingForColdDecoderData = false;
+      try {
+        const videoReadyState = Number(vn?.readyState || 0);
+        const audioReadyState = coupledMode && audio
+          ? Number(audio.readyState || 0)
+          : HAVE_FUTURE_DATA;
+        waitingForColdDecoderData =
+          videoReadyState < HAVE_FUTURE_DATA ||
+          audioReadyState < HAVE_CURRENT_DATA;
+      } catch { }
+      if (allRequiredTracksRunning && !videoMoved && !audioMoved &&
+        (!state.firstPlayCommitted || startupSettleActive() || waitingForColdDecoderData)) {
+        const decoderGrace = waitingForColdDecoderData
+          ? (perfProfile.lowEnd ? 2600 : 1900)
+          : (perfProfile.lowEnd ? 1800 : 1200);
+        if (livenessAge < decoderGrace) {
+          // play() has already taken effect. Give the first decoded frame and
+          // audio sample time to arrive before starting any recovery machinery.
+          scheduleNext(perfProfile.lowEnd ? 520 : 340);
+          return;
+        }
+      }
       const kickGap = hidden
         ? (perfProfile.lowEnd ? 900 : 600)
         : (perfProfile.lowEnd ? 650 : 420);
@@ -27449,6 +27620,11 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     else if (state._isMicroSeek) _bufSkipReason = "microseek";
     else if (isTabReturnImmune() || inBgReturnGrace()) _bufSkipReason = "tabreturn";
     else if (state.startupPhase && !state.firstPlayCommitted) _bufSkipReason = "startup";
+    else if (startupSettleActive() &&
+      !state.videoWaiting && !state.audioWaiting &&
+      !state.videoStallAudioPaused && !state.audioStallVideoPaused) {
+      _bufSkipReason = "startup-settle";
+    }
     if (_bufSkipReason) {
       _bufMonStallFrames = 0;
       _bufMonLastVT = -1;
