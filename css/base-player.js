@@ -7252,7 +7252,35 @@ document.addEventListener("DOMContentLoaded", () => {
     if (state.foregroundReturnTimelineSource === "seek" && !seekOwnsTimeline) {
       state.foregroundReturnTimelineSource = "video";
     }
-    const target = Number(state.foregroundReturnTimelineTarget);
+    let target = Number(state.foregroundReturnTimelineTarget);
+    if (isFinite(target) && target >= 0 && state.foregroundReturnTimelineSource !== "seek") {
+      let live = target;
+      try {
+        const vn = getVideoNode();
+        const vt = Number(vn?.currentTime);
+        if (isFinite(vt) && vt >= 0) live = Math.max(live, vt);
+      } catch { }
+      if (state.foregroundReturnTimelineSource === "audio") {
+        try {
+          const at = Number(audio?.currentTime);
+          if (isFinite(at) && at >= 0 &&
+            (!audio.paused || foregroundReturnTransportWantsPlayback())) {
+            live = Math.max(live, at);
+          }
+        } catch { }
+      }
+      const dur = getPlayerDisplayDuration();
+      if (isFinite(dur) && dur > 0) live = Math.min(live, dur);
+      if (live > target + 0.001) {
+        target = live;
+        state.foregroundReturnTimelineTarget = live;
+        state.lastHiddenTimelineTarget = Math.max(
+          Number(state.lastHiddenTimelineTarget || 0) || 0,
+          live
+        );
+        state.lastHiddenTimelineTargetAt = now();
+      }
+    }
     if (isFinite(target) && target >= 0) return target;
     const fb = Number(fallback);
     return isFinite(fb) && fb >= 0 ? fb : NaN;
@@ -7358,8 +7386,7 @@ document.addEventListener("DOMContentLoaded", () => {
     state.lastHiddenTimelineTargetAt = t;
     try {
       resetPlayerDisplayTimelineClamp(target);
-      queuePlayerTimeDisplayUpdate();
-      syncPlayerSeekbarToDisplayTime(NaN, target);
+      paintPlayerTimelineImmediately(target);
     } catch { }
     return target;
   }
@@ -7890,6 +7917,24 @@ document.addEventListener("DOMContentLoaded", () => {
     playerSeekbarTimerId = null;
     try { syncPlayerSeekbarToDisplayTime(dur, cur); } catch { }
   }
+  function paintPlayerTimelineImmediately(targetHint = NaN) {
+    if (!playerUiUpdateUsefulNow()) return false;
+    try { if (playerTimeDisplayRafId) cancelAnimationFrame(playerTimeDisplayRafId); } catch { }
+    try { if (playerTimeDisplayTimerId) clearTimeout(playerTimeDisplayTimerId); } catch { }
+    try { if (playerSeekbarRafId) cancelAnimationFrame(playerSeekbarRafId); } catch { }
+    try { if (playerSeekbarTimerId) clearTimeout(playerSeekbarTimerId); } catch { }
+    playerTimeDisplayRafId = 0;
+    playerTimeDisplayTimerId = null;
+    playerSeekbarRafId = 0;
+    playerSeekbarTimerId = null;
+    playerTimeDisplayQueued = false;
+    playerSeekbarSyncQueued = false;
+    const target = Number(targetHint);
+    if (isFinite(target) && target >= 0) resetPlayerDisplayTimelineClamp(target);
+    updatePlayerTimeDisplay();
+    ensurePlayerTimelineRefresh();
+    return true;
+  }
   function refreshPlayerSeekbarElementCache(rootHint = null, force = false) {
     const root = rootHint || (() => { try { return video.el(); } catch { return videoEl?.parentElement || null; } })();
     const t = now();
@@ -8191,7 +8236,14 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
           }
           refreshPlayerSeekbarElementCache(null, true);
-          onPlayerTimelineSignal();
+          let returnTarget = NaN;
+          try {
+            returnTarget = captureForegroundReturnTimeline("ui-visibility-return", {
+              reuse: false,
+              ms: 3200
+            });
+          } catch { }
+          paintPlayerTimelineImmediately(returnTarget);
         }, { passive: true });
       } catch { }
     }
