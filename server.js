@@ -23,32 +23,49 @@ const os = require("os");
 const numCPUs = os.cpus().length;
 const ENABLE_CLUSTER = numCPUs >= 3;
 
-const WORKER_COUNT = Math.max(1, numCPUs - 1);
-
+// Global Log Prefixing
 const logPrefix = ENABLE_CLUSTER 
   ? (cluster.isPrimary ? "[Primary]" : `[Worker ${cluster.worker.id}]`) 
   : "[Server]";
 
-['log', 'error', 'warn', 'info'].forEach(method => {
+let isBooting = true;
+setTimeout(() => { isBooting = false; }, 10000);
+
+['log', 'info'].forEach(method => {
+  const original = console[method];
+  console[method] = (...args) => {
+    if (ENABLE_CLUSTER && cluster.isWorker && cluster.worker.id !== 1 && isBooting) return;
+    original(logPrefix, ...args);
+  };
+});
+
+['error', 'warn'].forEach(method => {
   const original = console[method];
   console[method] = (...args) => original(logPrefix, ...args);
 });
 
 if (ENABLE_CLUSTER && cluster.isPrimary) {
   console.log(`Booting manager on PID ${process.pid}`);
-  console.log(`Detected ${numCPUs} cores. Spawning ${WORKER_COUNT} workers to reserve system overhead...`);
+  console.log(`Detected ${numCPUs} cores. Spawning workers across all available threads...`);
 
-  for (let i = 0; i < WORKER_COUNT; i++) {
+  for (let i = 0; i < numCPUs; i++) {
     cluster.fork();
   }
 
-  cluster.on("exit", (worker, code, signal) => {
-    console.error(`Worker ${worker.process.pid} terminated (Code: ${code}). Respawning new instance...`);
+  cluster.on("disconnect", (worker) => {
+    console.warn(`Worker ${worker.process.pid} disconnected for load shedding. Spawning seamless replacement...`);
     cluster.fork();
   });
 
-} else {
+   cluster.on("exit", (worker, code, signal) => {
+    if (!worker.exitedAfterDisconnect) {
+      console.error(`Worker ${worker.process.pid} died unexpectedly (Code: ${code}). Respawning...`);
+      cluster.fork();
+    }
+  });
 
+} else {
+ 
   (async function () {
 
     const {
@@ -73,28 +90,29 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
     (function GlobalServerOptimizer() {
       process.on('uncaughtException', (err) => {
         if (err.code === 'ECONNRESET' || err.code === 'EPIPE' || err.code === 'ETIMEDOUT') return;
-        console.error('[OPTIMIZER] Uncaught Exception caught safely:', err.message);
+        console.error('[GLOBAL OPTIMIZER] Uncaught Exception safely caught:', err.message);
       });
-      
       process.on('unhandledRejection', (reason) => {
-        console.error('[OPTIMIZER] Unhandled Rejection caught safely:', reason);
+        console.error('[GLOBAL OPTIMIZER] Unhandled Rejection safely caught:', reason);
       });
 
+      // Memory Garbage Collection
       setInterval(() => {
         const memMb = process.memoryUsage().heapUsed / 1024 / 1024;
         if (memMb > 450 && typeof global.gc === 'function') {
-          console.error(`[OPTIMIZER] Memory threshold reached (${memMb.toFixed(1)}MB). Forcing Garbage Collection.`);
+          console.error(`[GLOBAL OPTIMIZER] Memory high at ${memMb.toFixed(1)}MB. Running Garbage Collection...`);
           global.gc();
         }
       }, 45000).unref();
 
-       const CPU_HISTORY_SIZE = 5;
-      const cpuHistory = [];
-      let lastCpu = process.cpuUsage();
+       let lastCpu = process.cpuUsage();
       let lastCheck = Date.now();
-      let consecutiveCriticalSpikes = 0;
+      let cpuStrikes = 0;
+      let isDisconnecting = false;
 
       setInterval(() => {
+        if (isDisconnecting || !cluster.isWorker) return;
+
         const now = Date.now();
         const diffCpu = process.cpuUsage(lastCpu);
         const diffTimeMs = now - lastCheck;
@@ -102,51 +120,48 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
         const totalCpuMs = (diffCpu.user + diffCpu.system) / 1000;
         const cpuPercent = (totalCpuMs / diffTimeMs) * 100;
 
-        cpuHistory.push(cpuPercent);
-        if (cpuHistory.length > CPU_HISTORY_SIZE) {
-          cpuHistory.shift();
-        }
-
-        const avgCpu = cpuHistory.reduce((a, b) => a + b, 0) / cpuHistory.length;
-
-         if (cpuPercent > 95) {
-          consecutiveCriticalSpikes++;
-          if (consecutiveCriticalSpikes >= 2) {
-            console.error(`[CRITICAL] Worker ${process.pid} exceeded 95% CPU threshold. Terminating to preserve system stability.`);
-            process.exit(1);
+        if (cpuPercent >= 85) {
+          cpuStrikes++;
+          if (cpuStrikes >= 3) { 
+            console.warn(`[CPU SENTINEL] Worker ${process.pid} sustained ${cpuPercent.toFixed(1)}% CPU. Initiating graceful replacement.`);
+            isDisconnecting = true;
+            
+             cluster.worker.disconnect();
+            
+             setTimeout(() => {
+              console.error(`[CPU SENTINEL] Worker ${process.pid} failsafe termination triggered.`);
+              process.exit(1);
+            }, 15000).unref();
           }
         } else {
-          consecutiveCriticalSpikes = 0;
-        }
-
-         if (cpuHistory.length === CPU_HISTORY_SIZE && avgCpu > 85) {
-          console.error(`[CRITICAL] Worker ${process.pid} sustained ${avgCpu.toFixed(1)}% CPU usage. Terminating to preserve system stability.`);
-          process.exit(1);
-        } else if (avgCpu > 75) {
-          console.warn(`[WARNING] Worker CPU usage elevated: ${avgCpu.toFixed(1)}% average.`);
+          cpuStrikes = Math.max(0, cpuStrikes - 1);
         }
 
         lastCpu = process.cpuUsage();
         lastCheck = now;
-      }, 2000).unref();
+      }, 500).unref();
 
     })();
 
     if (!ENABLE_CLUSTER || cluster.worker.id === 1) {
       fs.readFile("ascii_txt.txt", "utf8", (err, data) => {
         if (err) {
-          console.error("Error reading ascii file:", err);
+          console.error("Error reading the file:", err);
           return;
         }
         console.log("\n" + data);
       });
     }
 
-    initlog("Loading initialization sequence...");
+    initlog("Loading. everything... ever....");
     initlog(
       `[Welcome] Welcome To Poke, where you can LIBERATE THE WEB! - :3 ` +
-        `Running Node ${process.version} - V8 v${process.versions.v8} - ` +
-        `${process.platform.replace("linux", "GNU/Linux")} ${process.arch} Server - libpt ${version}`
+        `Running ` +
+        `Node ${process.version} - V8 v${
+          process.versions.v8
+        } -  ${process.platform.replace("linux", "GNU/Linux")} ${
+          process.arch
+        } Server - libpt ${version}`
     );
 
     const {
