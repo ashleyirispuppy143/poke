@@ -87,8 +87,7 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
         }
       }, 45000).unref();
 
-      // CPU Sentinel - Kills the worker if it uses > 80% CPU for 15 seconds to prevent VPS bans
-      let lastCpu = process.cpuUsage();
+       let lastCpu = process.cpuUsage();
       let lastCheck = Date.now();
       let cpuStrikes = 0;
 
@@ -106,8 +105,8 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
           console.warn(`[CPU SENTINEL] Worker CPU hot at ${cpuPercent.toFixed(1)}% (Strike ${cpuStrikes}/3)`);
           
           if (cpuStrikes >= 3) {
-            console.error(`[CPU SENTINEL] Worker exceeded 80% CPU for too long. Going *puf* to protect the VPS account!`);
-            process.exit(1); // Master will automatically catch this and spawn a fresh, healthy worker
+            console.error(`[CPU SENTINEL] Worker exceeded 80% CPU for 6 seconds.`);
+            process.exit(1); 
           }
         } else {
           cpuStrikes = Math.max(0, cpuStrikes - 1); // Slowly forgive false-alarms
@@ -115,7 +114,7 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
 
         lastCpu = process.cpuUsage();
         lastCheck = now;
-      }, 5000).unref(); // Check every 5 seconds
+      }, 2000).unref(); // Check every 2 seconds (was 5 seconds)
 
     })();
 
