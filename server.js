@@ -19,24 +19,35 @@
 
 const cluster = require("cluster");
 const os = require("os");
- 
-if (cluster.isPrimary) {
-  const numCPUs = os.cpus().length;
-  console.log(`[POKE-cluster] Primary manager ${process.pid} is booting...`);
-  console.log(`[POKE-cluster] Scaling up! Spawning ${numCPUs} independent workers across all CPU cores...`);
 
-  // Fork a worker for every CPU core available
+const numCPUs = os.cpus().length;
+const ENABLE_CLUSTER = numCPUs >= 3;
+
+// Global Log Prefixing
+const logPrefix = ENABLE_CLUSTER 
+  ? (cluster.isPrimary ? "[Primary]" : `[Worker ${cluster.worker.id}]`) 
+  : "[Server]";
+
+['log', 'error', 'warn', 'info'].forEach(method => {
+  const original = console[method];
+  console[method] = (...args) => original(logPrefix, ...args);
+});
+
+if (ENABLE_CLUSTER && cluster.isPrimary) {
+  console.log(`Booting manager on PID ${process.pid}`);
+  console.log(`Detected ${numCPUs} cores. Spawning workers...`);
+
   for (let i = 0; i < numCPUs; i++) {
     cluster.fork();
   }
 
-   cluster.on("exit", (worker, code, signal) => {
-    console.error(`[POKE-cluster] Worker ${worker.process.pid} died (Code: ${code}). Respawning immediately to maintain scale...`);
+  cluster.on("exit", (worker, code, signal) => {
+    console.error(`Worker ${worker.process.pid} died (Code: ${code}). Respawning...`);
     cluster.fork();
   });
 
 } else {
- 
+
   (async function () {
 
     const {
@@ -58,42 +69,67 @@ if (cluster.isPrimary) {
     const config = require("./config.json");
     const u = await media_proxy();
 
-    // --- GLOBAL SERVER OPTIMIZER ---
-    // Actively manages memory, clears hanging promises, and frees up dead sockets globally
     (function GlobalServerOptimizer() {
-      // 1. Prevent memory leaks from dangling unhandled promises or broken pipes
       process.on('uncaughtException', (err) => {
-        if (err.code === 'ECONNRESET' || err.code === 'EPIPE' || err.code === 'ETIMEDOUT') return; // Ignore standard background socket drops
-        console.error('[GLOBAL OPTIMIZER] Uncaught Exception safely caught to prevent crash:', err.message);
+        if (err.code === 'ECONNRESET' || err.code === 'EPIPE' || err.code === 'ETIMEDOUT') return;
+        console.error('[GLOBAL OPTIMIZER] Uncaught Exception safely caught:', err.message);
       });
       process.on('unhandledRejection', (reason) => {
-        console.error('[GLOBAL OPTIMIZER] Unhandled Rejection safely caught to prevent leak:', reason);
+        console.error('[GLOBAL OPTIMIZER] Unhandled Rejection safely caught:', reason);
       });
 
-      // 2. Periodic Garbage Collection Check
-      // (Run node with `node --expose-gc index.js` to enable this aggressive memory freeing)
+      // Memory Garbage Collection
       setInterval(() => {
         const memMb = process.memoryUsage().heapUsed / 1024 / 1024;
         if (memMb > 450 && typeof global.gc === 'function') {
-          console.error(`[GLOBAL OPTIMIZER] Memory high at ${memMb.toFixed(1)}MB on worker ${process.pid}. Running aggressive Garbage Collection...`);
+          console.error(`[GLOBAL OPTIMIZER] Memory high at ${memMb.toFixed(1)}MB. Running Garbage Collection...`);
           global.gc();
         }
       }, 45000).unref();
-    })();
-    // -------------------------------
 
-    // Only let the first worker print the ASCII art so it doesn't spam the console 4+ times
-    if (cluster.worker.id === 1) {
+      // CPU Sentinel - Kills the worker if it uses > 80% CPU for 15 seconds to prevent VPS bans
+      let lastCpu = process.cpuUsage();
+      let lastCheck = Date.now();
+      let cpuStrikes = 0;
+
+      setInterval(() => {
+        const now = Date.now();
+        const diffCpu = process.cpuUsage(lastCpu);
+        const diffTimeMs = now - lastCheck;
+
+        // Convert CPU time (microseconds) to milliseconds and calculate percentage
+        const totalCpuMs = (diffCpu.user + diffCpu.system) / 1000;
+        const cpuPercent = (totalCpuMs / diffTimeMs) * 100;
+
+        if (cpuPercent > 80) {
+          cpuStrikes++;
+          console.warn(`[CPU SENTINEL] Worker CPU hot at ${cpuPercent.toFixed(1)}% (Strike ${cpuStrikes}/3)`);
+          
+          if (cpuStrikes >= 3) {
+            console.error(`[CPU SENTINEL] Worker exceeded 80% CPU for too long. Going *puf* to protect the VPS account!`);
+            process.exit(1); // Master will automatically catch this and spawn a fresh, healthy worker
+          }
+        } else {
+          cpuStrikes = Math.max(0, cpuStrikes - 1); // Slowly forgive false-alarms
+        }
+
+        lastCpu = process.cpuUsage();
+        lastCheck = now;
+      }, 5000).unref(); // Check every 5 seconds
+
+    })();
+
+    if (!ENABLE_CLUSTER || cluster.worker.id === 1) {
       fs.readFile("ascii_txt.txt", "utf8", (err, data) => {
         if (err) {
           console.error("Error reading the file:", err);
           return;
         }
-        console.log(data);
+        console.log("\n" + data);
       });
     }
 
-    initlog(`Worker ${process.pid} Loading. everything... ever....`);
+    initlog("Loading. everything... ever....");
     initlog(
       `[Welcome] Welcome To Poke, where you can LIBERATE THE WEB! - :3 ` +
         `Running ` +
@@ -101,7 +137,7 @@ if (cluster.isPrimary) {
           process.versions.v8
         } -  ${process.platform.replace("linux", "GNU/Linux")} ${
           process.arch
-        } Server - libpt ${version} (Worker ${process.pid})`
+        } Server - libpt ${version}`
     );
 
     const {
@@ -114,7 +150,7 @@ if (cluster.isPrimary) {
       getRandomArbitrary,
     } = require("./src/libpoketube/ptutils/libpt-coreutils.js");
     const { ieBlockMiddleware } = require("./src/libpoketube/ptutils/ie-blocker.js");
-    initlog(`Worker ${process.pid} Loaded libpt-coreutils and ieBlockMiddleware`);
+    initlog("Loaded libpt-coreutils and ieBlockMiddleware");
 
     const templateDir = modules.path.resolve(
       `${process.cwd()}${modules.path.sep}html`
@@ -124,8 +160,6 @@ if (cluster.isPrimary) {
 
     var app = modules.express();
 
-    // --- AGGRESSIVE SOCKET FREEING ---
-    // Drops hanging requests that clients abandoned to free up active server limits
     app.use((req, res, next) => {
       req.setTimeout(25000, () => {
         req.socket.destroy();
@@ -135,7 +169,6 @@ if (cluster.isPrimary) {
       });
       next();
     });
-    // ---------------------------------
 
     const CLOUDFLARE_V4 = [
       "173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22",
@@ -158,7 +191,6 @@ if (cluster.isPrimary) {
       return (ipToLong(ip) & mask) === (ipToLong(subnet) & mask);
     }
 
-    // Fast-path IP cleanup (Avoids Regex allocation)
     function cleanIP(ip) {
       const str = String(ip || "");
       return str.startsWith("::ffff:") ? str.substring(7) : str;
@@ -188,9 +220,6 @@ if (cluster.isPrimary) {
       );
     }
 
-    /*
-     * poke trust proxy auto-config
-     */
     (function configureTrustProxy() {
       const path = require("path");
       const dotenvPath = path.resolve(process.cwd(), ".env");
@@ -400,7 +429,6 @@ if (cluster.isPrimary) {
           (hasXRealIp ? 2 : 0) +
           (hasXAmznTraceId ? 3 : 0);
 
-        // Relaxed to trust valid proxy headers even if IP is not recognized (fixes Docker/Custom Proxy IP blanket bans)
         if (headerScore >= 3) {
           app.set("trust proxy", true);
           initlog("[POKE-trust-proxy] confirmed proxy on first request (score: " + headerScore + ")");
@@ -428,7 +456,6 @@ if (cluster.isPrimary) {
     (function PokeResourceGuard() {
       const { monitorEventLoopDelay, performance } = require("perf_hooks");
       
-      // Privacy Setup
       const guardSalt = crypto.randomBytes(16).toString("hex");
       function anonymizeIP(ip) {
         if (!ip) return "unknown";
@@ -436,7 +463,7 @@ if (cluster.isPrimary) {
       }
 
       let isGuardActive = false;
-      let consecutiveCriticalSpikes = 0; // The strike system for false positives
+      let consecutiveCriticalSpikes = 0;
 
       const eldHistogram = monitorEventLoopDelay({ resolution: 20 });
       eldHistogram.enable();
@@ -444,78 +471,24 @@ if (cluster.isPrimary) {
       const resourceConfig = {
         system: {
           sampleMs: 1000,
-
-          eventLoop: {
-              warmMs: 1000,     // Ignores event loop delays under 1 full second
-              stressedMs: 3000,
-              criticalMs: 5000
-          },
-
-           warmCpuRatio: 10.00,
-          stressedCpuRatio: 15.00,
-          criticalCpuRatio: 20.00,
-
-          warmRssRatio: 0.95,
-          stressedRssRatio: 0.98,
-          criticalRssRatio: 0.99,
-
-          warmHeapRatio: 0.90,
-          stressedHeapRatio: 0.95,
-          criticalHeapRatio: 0.98
+          eventLoop: { warmMs: 1000, stressedMs: 3000, criticalMs: 5000 },
+          warmCpuRatio: 10.00, stressedCpuRatio: 15.00, criticalCpuRatio: 20.00,
+          warmRssRatio: 0.95, stressedRssRatio: 0.98, criticalRssRatio: 0.99,
+          warmHeapRatio: 0.90, stressedHeapRatio: 0.95, criticalHeapRatio: 0.98
         },
-
         client: {
-          windowMs: 30000,
-          maxClientStates: 75000,
-          cleanupMs: 60000,
-
-          absoluteRequestsPerSecond: 1000, 
-          absoluteRequestsPerWindow: 10000,
-          absoluteCostPerWindow: 30000,
-
-          noisyRequestsWarm: 2000,
-          noisyCostWarm: 6000,
-
-          noisyRequestsStressed: 1000,
-          noisyCostStressed: 4000,
-
-          noisyRequestsCritical: 500,
-          noisyCostCritical: 2000,
-
+          windowMs: 30000, maxClientStates: 75000, cleanupMs: 60000,
+          absoluteRequestsPerSecond: 1000, absoluteRequestsPerWindow: 10000, absoluteCostPerWindow: 30000,
+          noisyRequestsWarm: 2000, noisyCostWarm: 6000,
+          noisyRequestsStressed: 1000, noisyCostStressed: 4000,
+          noisyRequestsCritical: 500, noisyCostCritical: 2000,
           pageSoftPassesPerWindow: 200,
-
-          maxHeavyRequestsWarm: 1000, 
-          maxHeavyRequestsStressed: 500,   
-          maxHeavyRequestsCritical: 200,
-
-          cooldownBaseMs: 5000, // Reduced base penalty
-          cooldownMaxMs: 60000,
-          cooldownDecayMs: 30000
+          maxHeavyRequestsWarm: 1000, maxHeavyRequestsStressed: 500, maxHeavyRequestsCritical: 200,
+          cooldownBaseMs: 5000, cooldownMaxMs: 60000, cooldownDecayMs: 30000
         },
-
-        requestCost: {
-          status: 0.01,
-          static: 0.05,
-          page: 0.5,
-          other: 1,
-          background: 2,
-          heavy: 3 
-        },
-
-        admission: {
-          retryAfterHealthyAbuseSeconds: 10,
-          retryAfterWarmSeconds: 8,
-          retryAfterStressedSeconds: 5,
-          retryAfterCriticalSeconds: 3
-        },
-
-        logging: {
-          stateCooldownMs: 30000,
-          rejectCooldownMs: 5000,
-          slowRequestMs: 5000,
-          maxRecentSlow: 30,
-          maxTopRoutes: 12
-        }
+        requestCost: { status: 0.01, static: 0.05, page: 0.5, other: 1, background: 2, heavy: 3 },
+        admission: { retryAfterHealthyAbuseSeconds: 10, retryAfterWarmSeconds: 8, retryAfterStressedSeconds: 5, retryAfterCriticalSeconds: 3 },
+        logging: { stateCooldownMs: 30000, rejectCooldownMs: 5000, slowRequestMs: 5000, maxRecentSlow: 30, maxTopRoutes: 12 }
       };
 
       const BOT_MEGA_REGEX = /googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot|sogou|exabot|facebot|ia_archiver|archive\.org_bot|qwantify|seznambot|mojeekbot|petalsearch|applebot|discordbot|telegrambot|twitterbot|whatsapp|slackbot|linkedinbot|mastodon|pleroma|misskey|akkoma|lemmy|kbin|pixelfed|gotosocial|uptimerobot|pingdom|statuscake|site24x7|hetrixtools|freshping|cloudflare|cloudfront|fastly|feedfetcher|feedly|newsblur|tiny\s?tiny\s?rss|miniflux|researchscan|censys|semrush|ahrefs/i;
@@ -526,19 +499,9 @@ if (cluster.isPrimary) {
       const REGEX_NUM = /\/\d{3,}(?=\/|$)/g;
       const REGEX_ID = /\/[a-z0-9_-]{11}(?=\/|$)/g;
 
-      const EXACT_STATUS_ROUTES = new Set([
-        "/robots.txt", "/favicon.ico", "/_pokeresource/stats", 
-        "/_poketraffic/stats", "/_pokestopskids/stats", "/_pokeoverload/stats", 
-        "/health", "/traffic"
-      ]);
-
-      const EXACT_IGNORED_ROUTES = new Set([
-        "/api/nexus", "/api/stats", "/health", "/traffic"
-      ]);
-
-      const EXACT_PAGE_ROUTES = new Set([
-        "/", "/home", "/watch", "/search", "/hashtag"
-      ]);
+      const EXACT_STATUS_ROUTES = new Set(["/robots.txt", "/favicon.ico", "/_pokeresource/stats", "/_poketraffic/stats", "/_pokestopskids/stats", "/_pokeoverload/stats", "/health", "/traffic"]);
+      const EXACT_IGNORED_ROUTES = new Set(["/api/nexus", "/api/stats", "/health", "/traffic"]);
+      const EXACT_PAGE_ROUTES = new Set(["/", "/home", "/watch", "/search", "/hashtag"]);
 
       const GUARD_MESSAGES = [
         "Server is busy. Please retry shortly.",
@@ -548,41 +511,11 @@ if (cluster.isPrimary) {
       ];
 
       let resourceState = {
-        state: "healthy",
-        score: 0,
-        since: Date.now(),
-        sampledAt: Date.now(),
-        reason: "startup",
-        eventLoop: {
-          p99Ms: 0,
-          meanMs: 0
-        },
-        cpu: {
-          ratio: 0,
-          percent: 0,
-          userMs: 0,
-          systemMs: 0,
-          totalMs: 0,
-          elapsedMs: 0
-        },
-        memory: {
-          rssMb: 0,
-          heapUsedMb: 0,
-          heapTotalMb: 0,
-          externalMb: 0,
-          arrayBuffersMb: 0,
-          rssRatio: 0,
-          heapRatio: 0,
-          effectiveTotalMb: 0,
-          systemFreeMb: 0,
-          systemTotalMb: 0,
-          constrainedMb: 0
-        },
-        requests: {
-          rps: 0,
-          active: 0,
-          kinds: {}
-        },
+        state: "healthy", score: 0, since: Date.now(), sampledAt: Date.now(), reason: "startup",
+        eventLoop: { p99Ms: 0, meanMs: 0 },
+        cpu: { ratio: 0, percent: 0, userMs: 0, systemMs: 0, totalMs: 0, elapsedMs: 0 },
+        memory: { rssMb: 0, heapUsedMb: 0, heapTotalMb: 0, externalMb: 0, arrayBuffersMb: 0, rssRatio: 0, heapRatio: 0, effectiveTotalMb: 0, systemFreeMb: 0, systemTotalMb: 0, constrainedMb: 0 },
+        requests: { rps: 0, active: 0, kinds: {} },
         pressureReasons: []
       };
 
@@ -592,7 +525,6 @@ if (cluster.isPrimary) {
       let currentSecondKindCounts = new Map();
       let currentSecondRouteCounts = new Map();
       
-      // Persistent Data Setup (Only the Primary Worker saves to avoid write collisions)
       let allTimeRouteCounts = new Map();
       let totalGlobalRequests = 0;
       let trackingStartTime = Date.now();
@@ -603,15 +535,11 @@ if (cluster.isPrimary) {
           const fileData = fs.readFileSync(STATS_FILE_PATH, 'utf8');
           const parsedData = JSON.parse(fileData);
           totalGlobalRequests = parsedData.totalRequests || 0;
-          if (parsedData.trackingStartTime) {
-            trackingStartTime = parsedData.trackingStartTime;
-          }
+          if (parsedData.trackingStartTime) trackingStartTime = parsedData.trackingStartTime;
           if (parsedData.routes) {
-            for (const [key, val] of Object.entries(parsedData.routes)) {
-              allTimeRouteCounts.set(key, val);
-            }
+            for (const [key, val] of Object.entries(parsedData.routes)) allTimeRouteCounts.set(key, val);
           }
-          if (cluster.worker.id === 1) {
+          if (!ENABLE_CLUSTER || cluster.worker.id === 1) {
             initlog(`[POKE-resource] Loaded previous traffic stats: ${totalGlobalRequests} total global requests.`);
           }
         }
@@ -619,18 +547,15 @@ if (cluster.isPrimary) {
         console.error("[POKE-resource] Could not load popularpaths.json:", err.message);
       }
 
-      // Interval extended to 60s to prevent CPU spiking. Only worker 1 writes to file.
       setInterval(() => {
         if (allTimeRouteCounts.size > 5000) {
           const sorted = Array.from(allTimeRouteCounts.entries()).sort((a,b) => b[1] - a[1]);
           allTimeRouteCounts = new Map(sorted.slice(0, 4000));
         }
 
-        if (cluster.worker.id === 1) {
+        if (!ENABLE_CLUSTER || cluster.worker.id === 1) {
           const routesObj = {};
-          for (const [k, v] of allTimeRouteCounts.entries()) {
-            routesObj[k] = v;
-          }
+          for (const [k, v] of allTimeRouteCounts.entries()) routesObj[k] = v;
           const outData = { trackingStartTime, totalRequests: totalGlobalRequests, routes: routesObj };
           fs.writeFile(STATS_FILE_PATH, JSON.stringify(outData, null, 2), (err) => {
             if (err) console.error("[POKE-resource] Failed to save popularpaths.json:", err.message);
@@ -645,53 +570,25 @@ if (cluster.isPrimary) {
       const activeRequests = new Map();
       const activeRequestCounts = new Map();
       const recentSlowRequests = [];
-      
-      // JS Maps preserve insertion order. We use this to do O(1) LRU eviction.
       const clientStates = new Map(); 
 
       const guardStats = {
-        allowedHealthy: 0,
-        allowedWarm: 0,
-        allowedStressed: 0,
-        allowedCritical: 0,
-        allowedStatus: 0,
-        allowedStatic: 0,
-        allowedPage: 0,
-        allowedHeavy: 0,
-        rejectedAbuse: 0,
-        rejectedCooldown: 0,
-        rejectedWarm: 0,
-        rejectedStressed: 0,
-        rejectedCritical: 0,
+        allowedHealthy: 0, allowedWarm: 0, allowedStressed: 0, allowedCritical: 0,
+        allowedStatus: 0, allowedStatic: 0, allowedPage: 0, allowedHeavy: 0,
+        rejectedAbuse: 0, rejectedCooldown: 0, rejectedWarm: 0, rejectedStressed: 0, rejectedCritical: 0,
         cooldownsIssued: 0
       };
 
-      function bytesToMb(bytes) {
-        return Math.round(bytes / 1024 / 1024);
-      }
-
-      function roundMs(value) {
-        if (!Number.isFinite(value)) return 0;
-        return Math.round(value * 100) / 100;
-      }
-
-      function roundRatio(value) {
-        if (!Number.isFinite(value)) return 0;
-        return Math.round(value * 10000) / 10000;
-      }
-
-      function formatPercent(value) {
-        if (!Number.isFinite(value)) return "0%";
-        return (value * 100).toFixed(2) + "%";
-      }
+      function bytesToMb(bytes) { return Math.round(bytes / 1024 / 1024); }
+      function roundMs(value) { return !Number.isFinite(value) ? 0 : Math.round(value * 100) / 100; }
+      function roundRatio(value) { return !Number.isFinite(value) ? 0 : Math.round(value * 10000) / 10000; }
+      function formatPercent(value) { return !Number.isFinite(value) ? "0%" : (value * 100).toFixed(2) + "%"; }
 
       function getEffectiveMemoryLimit() {
         if (typeof process.constrainedMemory === "function") {
           try {
             const constrained = process.constrainedMemory();
-            if (Number.isFinite(constrained) && constrained > 0) {
-              return constrained;
-            }
+            if (Number.isFinite(constrained) && constrained > 0) return constrained;
           } catch {}
         }
         return os.totalmem();
@@ -701,9 +598,7 @@ if (cluster.isPrimary) {
         if (typeof process.constrainedMemory !== "function") return 0;
         try {
           const constrained = process.constrainedMemory();
-          if (Number.isFinite(constrained) && constrained > 0) {
-            return bytesToMb(constrained);
-          }
+          if (Number.isFinite(constrained) && constrained > 0) return bytesToMb(constrained);
         } catch {}
         return 0;
       }
@@ -717,11 +612,8 @@ if (cluster.isPrimary) {
         return p;
       }
 
-      function isAvatarRoutePath(pathname) {
-        return pathname === "/avatars" || pathname.startsWith("/avatars/");
-      }
+      function isAvatarRoutePath(pathname) { return pathname === "/avatars" || pathname.startsWith("/avatars/"); }
 
-      // O(1) SET LOOKUP
       function isIgnoredRoute(req) {
         const path = getRequestPath(req);
         if (EXACT_IGNORED_ROUTES.has(path)) return true;
@@ -746,51 +638,29 @@ if (cluster.isPrimary) {
           .replace(REGEX_ID, "/:id");
       }
 
-      function getRequestKey(req) {
-        return req.method + " " + normalizePathname(getRequestPath(req));
-      }
+      function getRequestKey(req) { return req.method + " " + normalizePathname(getRequestPath(req)); }
 
-      function incrementMapCount(map, key, amount) {
-        map.set(key, (map.get(key) || 0) + (amount || 1));
-      }
+      function incrementMapCount(map, key, amount) { map.set(key, (map.get(key) || 0) + (amount || 1)); }
 
       function decrementMapCount(map, key) {
         const nextValue = (map.get(key) || 0) - 1;
-        if (nextValue <= 0) {
-          map.delete(key);
-          return;
-        }
+        if (nextValue <= 0) { map.delete(key); return; }
         map.set(key, nextValue);
       }
 
       function getTopMapEntries(map, limit) {
-        return Array.from(map.entries())
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, limit)
-          .map(entry => ({ key: entry[0], count: entry[1] }));
+        return Array.from(map.entries()).sort((a, b) => b[1] - a[1]).slice(0, limit).map(entry => ({ key: entry[0], count: entry[1] }));
       }
 
       function getActiveRequestSummary(limit) {
         const now = Date.now();
         return Array.from(activeRequests.values())
-          .map(req => ({
-              id: req.id,
-              key: req.key,
-              kind: req.kind,
-              ageMs: now - req.startedAt
-          }))
-          .sort((a, b) => b.ageMs - a.ageMs)
-          .slice(0, limit);
+          .map(req => ({ id: req.id, key: req.key, kind: req.kind, ageMs: now - req.startedAt }))
+          .sort((a, b) => b.ageMs - a.ageMs).slice(0, limit);
       }
 
-      function isKnownBot(ua) {
-        if (!ua) return false;
-        return BOT_MEGA_REGEX.test(ua);
-      }
-
-      function isSafeMethod(req) {
-        return req.method === "GET" || req.method === "HEAD";
-      }
+      function isKnownBot(ua) { return !ua ? false : BOT_MEGA_REGEX.test(ua); }
+      function isSafeMethod(req) { return req.method === "GET" || req.method === "HEAD"; }
 
       function isStaticRequest(req) {
         const pathname = getRequestPath(req);
@@ -799,7 +669,6 @@ if (cluster.isPrimary) {
         return /\.(css|js|mjs|png|jpg|jpeg|webp|gif|svg|ico|woff|woff2|ttf|otf|map|txt)$/.test(pathname);
       }
 
-      // O(1) SET LOOKUP Optimization
       function isStatusRequest(req) {
         const pathname = getRequestPath(req);
         if (EXACT_STATUS_ROUTES.has(pathname)) return true;
@@ -811,16 +680,9 @@ if (cluster.isPrimary) {
         if (!isSafeMethod(req)) return true;
         if (isAvatarRoutePath(pathname)) return false;
         return (
-          pathname.startsWith("/api/") ||
-          pathname.startsWith("/proxy/") ||
-          pathname.startsWith("/videoplayback") ||
-          pathname.startsWith("/vi/") ||
-          pathname.startsWith("/ggpht/") ||
-          pathname.startsWith("/storyboard") ||
-          pathname.startsWith("/sb/") ||
-          pathname.startsWith("/manifest") ||
-          pathname.startsWith("/channel_uploads") ||
-          pathname.startsWith("/music")
+          pathname.startsWith("/api/") || pathname.startsWith("/proxy/") || pathname.startsWith("/videoplayback") ||
+          pathname.startsWith("/vi/") || pathname.startsWith("/ggpht/") || pathname.startsWith("/storyboard") ||
+          pathname.startsWith("/sb/") || pathname.startsWith("/manifest") || pathname.startsWith("/channel_uploads") || pathname.startsWith("/music")
         );
       }
 
@@ -828,14 +690,12 @@ if (cluster.isPrimary) {
         const accept = String(req.headers.accept || "").toLowerCase();
         const secFetchDest = String(req.headers["sec-fetch-dest"] || "").toLowerCase();
         const secFetchMode = String(req.headers["sec-fetch-mode"] || "").toLowerCase();
-
         if (!isSafeMethod(req)) return true;
         if (accept.includes("application/json") && !accept.includes("text/html")) return true;
         if (secFetchDest === "empty" && secFetchMode === "cors") return true;
         return false;
       }
 
-      // O(1) SET LOOKUP Optimization
       function isPageNavigation(req) {
         const pathname = getRequestPath(req);
         const accept = String(req.headers.accept || "").toLowerCase();
@@ -846,12 +706,7 @@ if (cluster.isPrimary) {
         if (isStaticRequest(req) || isHeavyRequest(req) || isBackgroundRequest(req)) return false;
         
         if (EXACT_PAGE_ROUTES.has(pathname)) return true;
-        if (
-          pathname.startsWith("/watch/") || pathname.startsWith("/search/") ||
-          pathname.startsWith("/channel/") || pathname.startsWith("/user/") ||
-          pathname.startsWith("/playlist")
-        ) return true;
-
+        if (pathname.startsWith("/watch/") || pathname.startsWith("/search/") || pathname.startsWith("/channel/") || pathname.startsWith("/user/") || pathname.startsWith("/playlist")) return true;
         if (accept.includes("text/html")) return true;
         if (secFetchDest === "document" || secFetchMode === "navigate") return true;
         return false;
@@ -868,18 +723,13 @@ if (cluster.isPrimary) {
 
       function getKindCost(kind, req) {
         let cost = resourceConfig.requestCost[kind] || resourceConfig.requestCost.other;
-        const ua = req.headers["user-agent"];
-        if (isKnownBot(ua)) cost = cost * 0.5;
-        const rawIP = cleanIP(req.socket.remoteAddress || "");
-        if (isCloudflareIP(rawIP)) cost = cost * 0.85;
+        if (isKnownBot(req.headers["user-agent"])) cost = cost * 0.5;
+        if (isCloudflareIP(cleanIP(req.socket.remoteAddress || ""))) cost = cost * 0.85;
         return cost;
       }
 
-      function getClientKey(req) {
-        return cleanIP(req.ip || req.socket.remoteAddress || "unknown");
-      }
+      function getClientKey(req) { return cleanIP(req.ip || req.socket.remoteAddress || "unknown"); }
 
-      // O(1) Sliding Window Helper function
       function updateClientWindow(client, now) {
         const WINDOW_MS = resourceConfig.client.windowMs;
         const currentStart = Math.floor(now / WINDOW_MS) * WINDOW_MS;
@@ -905,8 +755,6 @@ if (cluster.isPrimary) {
 
       function evictClientStateIfNeeded() {
         if (clientStates.size >= resourceConfig.client.maxClientStates) {
-          // True O(1) LRU eviction via Map insertion order.
-          // Drops the oldest 10% instantly without iterating the whole map.
           const keysToEvict = Math.max(1, Math.floor(resourceConfig.client.maxClientStates * 0.1));
           let evicted = 0;
           for (const oldKey of clientStates.keys()) {
@@ -921,23 +769,13 @@ if (cluster.isPrimary) {
         let client = clientStates.get(key);
 
         if (client) {
-          // LRU Cache trick: delete and re-insert to move it to the end (freshest)
           clientStates.delete(key);
           clientStates.set(key, client);
         } else {
           evictClientStateIfNeeded();
           client = {
-            key,
-            firstSeen: now,
-            lastSeen: now,
-            cooldownUntil: 0,
-            cooldownLevel: 0,
-            lastCooldownAt: 0,
-            trustedBot: false,
-            currentSec: Math.floor(now / 1000),
-            currentSecCount: 0,
-            
-            // Sliding window counters (Zero Arrays)
+            key, firstSeen: now, lastSeen: now, cooldownUntil: 0, cooldownLevel: 0, lastCooldownAt: 0,
+            trustedBot: false, currentSec: Math.floor(now / 1000), currentSecCount: 0,
             windowStart: Math.floor(now / resourceConfig.client.windowMs) * resourceConfig.client.windowMs,
             current: { total: 0, cost: 0, heavy: 0, page: 0, rejects: 0, softPass: 0 },
             previous: { total: 0, cost: 0, heavy: 0, page: 0, rejects: 0, softPass: 0 }
@@ -946,9 +784,7 @@ if (cluster.isPrimary) {
         }
 
         client.lastSeen = now;
-        if (client.cooldownUntil > 0 && client.cooldownUntil <= now) {
-          client.cooldownUntil = 0;
-        }
+        if (client.cooldownUntil > 0 && client.cooldownUntil <= now) client.cooldownUntil = 0;
         if (client.cooldownLevel > 0 && now - client.lastCooldownAt > resourceConfig.client.cooldownDecayMs) {
           client.cooldownLevel = Math.max(0, client.cooldownLevel - 1);
           client.lastCooldownAt = now;
@@ -983,13 +819,7 @@ if (cluster.isPrimary) {
       }
 
       function getClientPressure(client, now) {
-        return (
-          getMetric(client, "total", now) +
-          (client.currentSecCount * 3) +
-          (getMetric(client, "heavy", now) * 4) +
-          (getMetric(client, "rejects", now) * 8) +
-          getMetric(client, "cost", now)
-        );
+        return (getMetric(client, "total", now) + (client.currentSecCount * 3) + (getMetric(client, "heavy", now) * 4) + (getMetric(client, "rejects", now) * 8) + getMetric(client, "cost", now));
       }
 
       function getNoisyLimits(state) {
@@ -1005,31 +835,19 @@ if (cluster.isPrimary) {
       }
 
       function clientIsAbsoluteAbuse(client, now) {
-        return (
-          client.currentSecCount >= resourceConfig.client.absoluteRequestsPerSecond ||
-          getMetric(client, "total", now) >= resourceConfig.client.absoluteRequestsPerWindow ||
-          getMetric(client, "cost", now) >= resourceConfig.client.absoluteCostPerWindow
-        );
+        return (client.currentSecCount >= resourceConfig.client.absoluteRequestsPerSecond || getMetric(client, "total", now) >= resourceConfig.client.absoluteRequestsPerWindow || getMetric(client, "cost", now) >= resourceConfig.client.absoluteCostPerWindow);
       }
 
       function clientIsNoisy(client, state, now) {
         const limits = getNoisyLimits(state);
-        return (
-          getMetric(client, "total", now) >= limits.requests ||
-          getMetric(client, "cost", now) >= limits.cost ||
-          getClientPressure(client, now) >= limits.cost * 1.5
-        );
+        return (getMetric(client, "total", now) >= limits.requests || getMetric(client, "cost", now) >= limits.cost || getClientPressure(client, now) >= limits.cost * 1.5);
       }
 
       function applyClientCooldown(client, reason, now) {
         client.cooldownLevel++;
         client.lastCooldownAt = now;
 
-        const cooldownMs = Math.min(
-          resourceConfig.client.cooldownMaxMs,
-          resourceConfig.client.cooldownBaseMs * Math.pow(2, Math.max(0, client.cooldownLevel - 1))
-        );
-
+        const cooldownMs = Math.min(resourceConfig.client.cooldownMaxMs, resourceConfig.client.cooldownBaseMs * Math.pow(2, Math.max(0, client.cooldownLevel - 1)));
         client.cooldownUntil = now + cooldownMs;
         guardStats.cooldownsIssued++;
 
@@ -1060,16 +878,11 @@ if (cluster.isPrimary) {
         lastCpuUsage = newCpuUsage;
         lastSampleAt = currentPerf;
 
-        // cpuUsage returns microseconds, so divide by 1000 to get Ms
         const cpuUserMs = cpuDelta.user / 1000;
         const cpuSystemMs = cpuDelta.system / 1000;
         const cpuTotalMs = cpuUserMs + cpuSystemMs;
-        
-        // Node's libuv thread pool uses multiple cores for networking.
-        // So CPU Ratio CAN easily go above 1.0. This is normal.
         const cpuRatio = cpuTotalMs / elapsedMs;
 
-        // Extract Event Loop Delay Metrics
         const eldP99 = eldHistogram.percentile(99) / 1e6;
         const eldMean = eldHistogram.mean / 1e6;
         eldHistogram.reset();
@@ -1080,65 +893,30 @@ if (cluster.isPrimary) {
         const heapRatio = effectiveTotal > 0 ? memory.heapUsed / effectiveTotal : 0;
 
         const kinds = {};
-        for (const [kind, count] of currentSecondKindCounts) {
-          kinds[kind] = count;
-        }
+        for (const [kind, count] of currentSecondKindCounts) kinds[kind] = count;
 
         const snapshot = {
-          state: resourceState.state,
-          score: resourceState.score,
-          since: resourceState.since,
-          sampledAt: now,
-          reason: reason || "interval",
-          eventLoop: {
-              p99Ms: roundMs(eldP99),
-              meanMs: roundMs(eldMean)
-          },
-          cpu: {
-            ratio: roundRatio(cpuRatio),
-            percent: roundRatio(cpuRatio * 100),
-            userMs: roundMs(cpuUserMs),
-            systemMs: roundMs(cpuSystemMs),
-            totalMs: roundMs(cpuTotalMs),
-            elapsedMs: roundMs(elapsedMs)
-          },
+          state: resourceState.state, score: resourceState.score, since: resourceState.since, sampledAt: now, reason: reason || "interval",
+          eventLoop: { p99Ms: roundMs(eldP99), meanMs: roundMs(eldMean) },
+          cpu: { ratio: roundRatio(cpuRatio), percent: roundRatio(cpuRatio * 100), userMs: roundMs(cpuUserMs), systemMs: roundMs(cpuSystemMs), totalMs: roundMs(cpuTotalMs), elapsedMs: roundMs(elapsedMs) },
           memory: {
-            rssMb: bytesToMb(memory.rss),
-            heapUsedMb: bytesToMb(memory.heapUsed),
-            heapTotalMb: bytesToMb(memory.heapTotal),
-            externalMb: bytesToMb(memory.external),
-            arrayBuffersMb: bytesToMb(memory.arrayBuffers || 0),
-            rssRatio: roundRatio(rssRatio),
-            heapRatio: roundRatio(heapRatio),
-            effectiveTotalMb: bytesToMb(effectiveTotal),
-            systemFreeMb: bytesToMb(os.freemem()),
-            systemTotalMb: bytesToMb(os.totalmem()),
-            constrainedMb: getConstrainedMemoryMb()
+            rssMb: bytesToMb(memory.rss), heapUsedMb: bytesToMb(memory.heapUsed), heapTotalMb: bytesToMb(memory.heapTotal),
+            externalMb: bytesToMb(memory.external), arrayBuffersMb: bytesToMb(memory.arrayBuffers || 0), rssRatio: roundRatio(rssRatio),
+            heapRatio: roundRatio(heapRatio), effectiveTotalMb: bytesToMb(effectiveTotal), systemFreeMb: bytesToMb(os.freemem()), systemTotalMb: bytesToMb(os.totalmem()), constrainedMb: getConstrainedMemoryMb()
           },
-          requests: {
-            rps: currentSecondRequests,
-            active: activeRequests.size,
-            kinds
-          },
-          topRoutes: getTopMapEntries(currentSecondRouteCounts, resourceConfig.logging.maxTopRoutes),
-          pressureReasons: []
+          requests: { rps: currentSecondRequests, active: activeRequests.size, kinds },
+          topRoutes: getTopMapEntries(currentSecondRouteCounts, resourceConfig.logging.maxTopRoutes), pressureReasons: []
         };
 
         const pressure = classifyResourcePressure(snapshot);
         snapshot.state = pressure.state;
         snapshot.score = pressure.score;
         snapshot.pressureReasons = pressure.reasons;
-
-        if (snapshot.state !== resourceState.state) {
-          snapshot.since = now;
-        } else {
-          snapshot.since = resourceState.since;
-        }
+        snapshot.since = snapshot.state !== resourceState.state ? now : resourceState.since;
 
         const shouldLog = now - lastStateLogAt >= resourceConfig.logging.stateCooldownMs;
 
         resourceState = snapshot;
-        
         currentSecondRequests = 0;
         currentSecondKindCounts = new Map();
         currentSecondRouteCounts = new Map();
@@ -1156,21 +934,9 @@ if (cluster.isPrimary) {
         let hasCritical = false;
 
         function addPressure(name, value, warm, stressed, critical, unit) {
-          if (value >= critical) {
-            score += 4;
-            hasCritical = true;
-            reasons.push(name + "=" + value + unit + " critical>=" + critical + unit);
-            return;
-          }
-          if (value >= stressed) {
-            score += 2;
-            reasons.push(name + "=" + value + unit + " stressed>=" + stressed + unit);
-            return;
-          }
-          if (value >= warm) {
-            score += 1;
-            reasons.push(name + "=" + value + unit + " warm>=" + warm + unit);
-          }
+          if (value >= critical) { score += 4; hasCritical = true; reasons.push(name + "=" + value + unit + " critical>=" + critical + unit); return; }
+          if (value >= stressed) { score += 2; reasons.push(name + "=" + value + unit + " stressed>=" + stressed + unit); return; }
+          if (value >= warm) { score += 1; reasons.push(name + "=" + value + unit + " warm>=" + warm + unit); }
         }
 
         addPressure("eventLoop", snapshot.eventLoop.p99Ms, cfg.eventLoop.warmMs, cfg.eventLoop.stressedMs, cfg.eventLoop.criticalMs, "ms");
@@ -1178,13 +944,7 @@ if (cluster.isPrimary) {
         addPressure("rssMemory", snapshot.memory.rssRatio, cfg.warmRssRatio, cfg.stressedRssRatio, cfg.criticalRssRatio, "");
         addPressure("heapMemory", snapshot.memory.heapRatio, cfg.warmHeapRatio, cfg.stressedHeapRatio, cfg.criticalHeapRatio, "");
 
-        // STRIKE SYSTEM: Forgiving check that prevents the server from shedding instantly.
-        // Must hit critical score 5 times consecutively.
-        if (hasCritical || score >= 7) {
-          consecutiveCriticalSpikes++;
-        } else {
-          consecutiveCriticalSpikes = Math.max(0, consecutiveCriticalSpikes - 1);
-        }
+        if (hasCritical || score >= 7) consecutiveCriticalSpikes++; else consecutiveCriticalSpikes = Math.max(0, consecutiveCriticalSpikes - 1);
 
         if (consecutiveCriticalSpikes >= 5) return { state: "critical", score, reasons };
         if (score >= 4 || consecutiveCriticalSpikes > 0) return { state: "stressed", score, reasons };
@@ -1194,31 +954,19 @@ if (cluster.isPrimary) {
 
       function logResourceState() {
         if (resourceState.state === "healthy") {
-          console.error(`[POKE-resource] healthy on worker ${process.pid}`);
+          console.error(`[POKE-resource] healthy`);
           return;
         }
-        
-        let msg = `[POKE-resource] not healthy (${resourceState.state}) on worker ${process.pid}`;
+        let msg = `[POKE-resource] not healthy (${resourceState.state})`;
         const details = [];
-        
-        if (resourceState.pressureReasons && resourceState.pressureReasons.length > 0) {
-          details.push("System Limits Reached: " + resourceState.pressureReasons.join(", "));
-        }
-        
+        if (resourceState.pressureReasons && resourceState.pressureReasons.length > 0) details.push("System Limits Reached: " + resourceState.pressureReasons.join(", "));
         if (resourceState.topRoutes && resourceState.topRoutes.length > 0) {
           const topRoute = resourceState.topRoutes[0];
-          if (topRoute.count > 15) { 
-            details.push("Too many requests in " + topRoute.key + " right now (" + topRoute.count + " requests in one second)");
-          }
-          
+          if (topRoute.count > 15) details.push("Too many requests in " + topRoute.key + " right now (" + topRoute.count + " requests in one second)");
           const topPaths = resourceState.topRoutes.slice(0, 4).map(r => r.count + "x " + r.key).join(", ");
           details.push("Heavy paths right now: [" + topPaths + "]");
         }
-
-        if (details.length > 0) {
-          msg += " -> Reasons: " + details.join(" | ");
-        }
-        
+        if (details.length > 0) msg += " -> Reasons: " + details.join(" | ");
         console.error(msg);
       }
 
@@ -1226,35 +974,19 @@ if (cluster.isPrimary) {
         if (now - lastRejectLogAt < resourceConfig.logging.rejectCooldownMs) return;
         lastRejectLogAt = now;
 
-        // Anonymize logging completely, exclude sensitive metadata
         console.error(
           "[POKE-resource] rejected " +
           JSON.stringify({
             reason, status, state: resourceState.state, score: resourceState.score,
             kind, ip: anonymizeIP(client.key),
-            client: {
-              requests: Math.round(getMetric(client, "total", now)),
-              oneSecondRequests: client.currentSecCount,
-              heavyRequests: Math.round(getMetric(client, "heavy", now)),
-              pageRequests: Math.round(getMetric(client, "page", now)),
-              rejects: Math.round(getMetric(client, "rejects", now)),
-              cost: Math.round(getMetric(client, "cost", now) * 100) / 100,
-              pressure: Math.round(getClientPressure(client, now) * 100) / 100,
-              cooldownUntil: client.cooldownUntil
-            },
+            client: { requests: Math.round(getMetric(client, "total", now)), oneSecondRequests: client.currentSecCount, heavyRequests: Math.round(getMetric(client, "heavy", now)), pageRequests: Math.round(getMetric(client, "page", now)), rejects: Math.round(getMetric(client, "rejects", now)), cost: Math.round(getMetric(client, "cost", now) * 100) / 100, pressure: Math.round(getClientPressure(client, now) * 100) / 100, cooldownUntil: client.cooldownUntil },
             system: { eventLoop: resourceState.eventLoop, cpu: resourceState.cpu, memory: resourceState.memory }
           })
         );
       }
 
-      function getRandomGuardMessage() {
-        return GUARD_MESSAGES[Math.floor(Math.random() * GUARD_MESSAGES.length)];
-      }
-
-      function setResourceHeaders(res, decision) {
-        res.set("X-Poke-Resource-Guard", resourceState.state);
-        res.set("X-Poke-Resource-Decision", decision);
-      }
+      function getRandomGuardMessage() { return GUARD_MESSAGES[Math.floor(Math.random() * GUARD_MESSAGES.length)]; }
+      function setResourceHeaders(res, decision) { res.set("X-Poke-Resource-Guard", resourceState.state); res.set("X-Poke-Resource-Decision", decision); }
 
       function getRetryAfterForState(state) {
         if (state === "critical") return resourceConfig.admission.retryAfterCriticalSeconds;
@@ -1265,7 +997,6 @@ if (cluster.isPrimary) {
 
       function sendGuardReject(req, res, client, kind, options, now) {
         rememberDecision(client, "reject", now);
-
         const status = options.status || 503;
         const retryAfter = options.retryAfter || resourceConfig.admission.retryAfterStressedSeconds;
         const reason = options.reason || "resource-pressure";
@@ -1278,11 +1009,7 @@ if (cluster.isPrimary) {
 
         logReject(req, client, kind, reason, status, now);
 
-        res.set("Retry-After", String(retryAfter));
-        res.set("Cache-Control", "no-store");
-        res.set("Connection", "close");
-        res.set("X-Poke-Resource-Guard", resourceState.state);
-        res.set("X-Poke-Resource-Reason", reason);
+        res.set("Retry-After", String(retryAfter)); res.set("Cache-Control", "no-store"); res.set("Connection", "close"); res.set("X-Poke-Resource-Guard", resourceState.state); res.set("X-Poke-Resource-Reason", reason);
         return res.status(status).send(options.message || getRandomGuardMessage());
       }
 
@@ -1291,78 +1018,40 @@ if (cluster.isPrimary) {
         if (resourceState.state === "warm") guardStats.allowedWarm++;
         if (resourceState.state === "stressed") guardStats.allowedStressed++;
         if (resourceState.state === "critical") guardStats.allowedCritical++;
-
         if (kind === "status") guardStats.allowedStatus++;
         if (kind === "static") guardStats.allowedStatic++;
         if (kind === "page") guardStats.allowedPage++;
         if (kind === "heavy" || kind === "background") guardStats.allowedHeavy++;
-
         setResourceHeaders(res, decision || "allow");
       }
 
       function getAdmissionDecision(req, client, kind, now) {
         const state = resourceState.state;
-        
-        // Fast bypass for healthy state
         if (state === "healthy") return { action: "allow", reason: "healthy" };
 
         const noisy = clientIsNoisy(client, state, now);
         const absoluteAbuse = clientIsAbsoluteAbuse(client, now);
 
-        if (client.cooldownUntil > now) {
-          return {
-            action: "reject", reason: "client-cooldown", status: 429,
-            retryAfter: Math.ceil((client.cooldownUntil - now) / 1000),
-            message: "Too many expensive requests. Please retry shortly."
-          };
-        }
-
-        if (absoluteAbuse) {
-          return {
-            action: "cooldown-reject", reason: "absolute-abuse", status: 429,
-            retryAfter: resourceConfig.admission.retryAfterHealthyAbuseSeconds,
-            message: "Too many requests. Please slow down a bit."
-          };
-        }
+        if (client.cooldownUntil > now) return { action: "reject", reason: "client-cooldown", status: 429, retryAfter: Math.ceil((client.cooldownUntil - now) / 1000), message: "Too many expensive requests. Please retry shortly." };
+        if (absoluteAbuse) return { action: "cooldown-reject", reason: "absolute-abuse", status: 429, retryAfter: resourceConfig.admission.retryAfterHealthyAbuseSeconds, message: "Too many requests. Please slow down a bit." };
 
         if (kind === "status") return { action: "allow", reason: "status-pass" };
         if (kind === "static") return { action: "allow", reason: "static-pass" };
 
         if (state === "warm") {
-          if ((kind === "heavy" || kind === "background") && noisy && getMetric(client, "heavy", now) > getHeavyLimit(state)) {
-            return {
-              action: "reject", reason: "warm-noisy-expensive-client", status: 429,
-              retryAfter: getRetryAfterForState(state),
-              message: "Too many expensive requests. Please retry shortly."
-            };
-          }
+          if ((kind === "heavy" || kind === "background") && noisy && getMetric(client, "heavy", now) > getHeavyLimit(state)) return { action: "reject", reason: "warm-noisy-expensive-client", status: 429, retryAfter: getRetryAfterForState(state), message: "Too many expensive requests. Please retry shortly." };
           return { action: "allow", reason: "warm-pass" };
         }
 
-        if (state === "stressed") {
-          // The user explicitly requested that when 'stressed', the server
-          // does nothing to restrict traffic and just allows it as normal,
-          // relying only on the interval logs to indicate the stressed state.
-          return { action: "allow", reason: "stressed-pass-as-normal" };
-        }
+        if (state === "stressed") return { action: "allow", reason: "stressed-pass-as-normal" };
 
         if (state === "critical") {
           if (kind === "page") {
-            if (!noisy && getMetric(client, "softPass", now) < resourceConfig.client.pageSoftPassesPerWindow) {
-              return { action: "allow-soft-page", reason: "critical-page-soft-pass" };
-            }
-            return {
-              action: "reject", reason: "critical-noisy-page-client", status: 503,
-              retryAfter: getRetryAfterForState(state), message: "Server is under heavy load. Please retry shortly."
-            };
+            if (!noisy && getMetric(client, "softPass", now) < resourceConfig.client.pageSoftPassesPerWindow) return { action: "allow-soft-page", reason: "critical-page-soft-pass" };
+            return { action: "reject", reason: "critical-noisy-page-client", status: 503, retryAfter: getRetryAfterForState(state), message: "Server is under heavy load. Please retry shortly." };
           }
-
           if (kind === "other" && !noisy) return { action: "allow", reason: "critical-small-other-pass" };
-          
-          return {
-            action: "reject", reason: "critical-shed", status: 503,
-            retryAfter: getRetryAfterForState(state), message: "Server is under heavy load. Please retry shortly."
-          };
+          return { action: "reject", reason: "critical-shed", status: 503, retryAfter: getRetryAfterForState(state), message: "Server is under heavy load. Please retry shortly." };
         }
 
         return { action: "allow", reason: "default-pass" };
@@ -1379,7 +1068,6 @@ if (cluster.isPrimary) {
 
         activeRequests.set(id, { id, key, kind, startedAt });
         
-        // Do not pollute route counters with status endpoints
         if (!isStatusRequest(req)) {
           totalGlobalRequests++;
           incrementMapCount(activeRequestCounts, key);
@@ -1393,25 +1081,19 @@ if (cluster.isPrimary) {
 
           if (activeRequests.has(id)) {
             activeRequests.delete(id);
-            if (!isStatusRequest(req)) {
-              decrementMapCount(activeRequestCounts, key);
-            }
+            if (!isStatusRequest(req)) decrementMapCount(activeRequestCounts, key);
           }
 
           if (durationMs >= resourceConfig.logging.slowRequestMs) {
             recentSlowRequests.push({ key, kind, statusCode: res.statusCode, durationMs });
-            while (recentSlowRequests.length > resourceConfig.logging.maxRecentSlow) {
-              recentSlowRequests.shift();
-            }
+            while (recentSlowRequests.length > resourceConfig.logging.maxRecentSlow) recentSlowRequests.shift();
           }
         });
 
         res.on("close", function () {
           if (activeRequests.has(id)) {
             activeRequests.delete(id);
-            if (!isStatusRequest(req)) {
-              decrementMapCount(activeRequestCounts, key);
-            }
+            if (!isStatusRequest(req)) decrementMapCount(activeRequestCounts, key);
           }
         });
 
@@ -1434,28 +1116,11 @@ if (cluster.isPrimary) {
 
         const decision = getAdmissionDecision(req, client, kind, now);
 
-        if (decision.action === "allow") {
-          allowRequest(res, kind, decision.reason);
-          return next();
-        }
+        if (decision.action === "allow") { allowRequest(res, kind, decision.reason); return next(); }
+        if (decision.action === "allow-soft-page") { rememberDecision(client, "page-soft-pass", now); allowRequest(res, kind, decision.reason); return next(); }
+        if (decision.action === "cooldown-reject") { applyClientCooldown(client, decision.reason, now); return sendGuardReject(req, res, client, kind, decision, now); }
 
-        if (decision.action === "allow-soft-page") {
-          rememberDecision(client, "page-soft-pass", now);
-          allowRequest(res, kind, decision.reason);
-          return next();
-        }
-
-        if (decision.action === "cooldown-reject") {
-          applyClientCooldown(client, decision.reason, now);
-          return sendGuardReject(req, res, client, kind, decision, now);
-        }
-
-        if (
-          decision.action === "reject" &&
-          (decision.reason === "stressed-expensive-shed" || decision.reason === "critical-shed") &&
-          (kind === "heavy" || kind === "background") &&
-          getMetric(client, "heavy", now) >= getHeavyLimit(resourceState.state)
-        ) {
+        if (decision.action === "reject" && (decision.reason === "stressed-expensive-shed" || decision.reason === "critical-shed") && (kind === "heavy" || kind === "background") && getMetric(client, "heavy", now) >= getHeavyLimit(resourceState.state)) {
           applyClientCooldown(client, decision.reason, now);
         }
 
@@ -1465,65 +1130,40 @@ if (cluster.isPrimary) {
       function cleanupClients() {
         const now = Date.now();
         const maxAge = resourceConfig.client.windowMs * 3;
-
         for (const [key, client] of clientStates) {
-          if (
-            getMetric(client, "total", now) === 0 &&
-            client.currentSecCount === 0 &&
-            client.cooldownUntil <= now &&
-            now - client.lastSeen > maxAge
-          ) {
-            clientStates.delete(key);
-          }
+          if (getMetric(client, "total", now) === 0 && client.currentSecCount === 0 && client.cooldownUntil <= now && now - client.lastSeen > maxAge) clientStates.delete(key);
         }
       }
 
       function countClientStates() {
         const now = Date.now();
-        let active = 0;
-        let cooldown = 0;
-        let noisy = 0;
-
+        let active = 0, cooldown = 0, noisy = 0;
         for (const [, client] of clientStates) {
           if (getMetric(client, "total", now) > 0) active++;
           if (client.cooldownUntil > now) cooldown++;
           if (clientIsNoisy(client, resourceState.state, now)) noisy++;
         }
-
         return { tracked: clientStates.size, active, cooldown, noisy };
       }
 
-      // TTL Cache for getResourceStats to prevent heavy Map sorting on high API traffic
       let cachedStats = null;
       let cachedStatsTime = 0;
-      const STATS_TTL_MS = 1500; // 1.5 seconds
+      const STATS_TTL_MS = 1500;
 
       function getResourceStats() {
         const now = Date.now();
-        if (cachedStats && now - cachedStatsTime < STATS_TTL_MS) {
-          return cachedStats;
-        }
+        if (cachedStats && now - cachedStatsTime < STATS_TTL_MS) return cachedStats;
 
         cachedStats = {
-          guard: "PokeResourceGuard V4 FastMode",
-          state: resourceState,
-          clients: countClientStates(),
+          guard: "PokeResourceGuard V4 FastMode", state: resourceState, clients: countClientStates(),
           active_requests: {
-            total: activeRequests.size,
-            total_global_requests: totalGlobalRequests,
-            tracking_start_time: trackingStartTime,
+            total: activeRequests.size, total_global_requests: totalGlobalRequests, tracking_start_time: trackingStartTime,
             by_route: getTopMapEntries(currentSecondRouteCounts, resourceConfig.logging.maxTopRoutes),
             all_time_top_routes: getTopMapEntries(allTimeRouteCounts, 12),
             oldest: getActiveRequestSummary(resourceConfig.logging.maxTopRoutes),
             recent_slow: recentSlowRequests.slice(-resourceConfig.logging.maxRecentSlow).reverse()
           },
-          stats: guardStats,
-          config: {
-            system: resourceConfig.system,
-            client: resourceConfig.client,
-            admission: resourceConfig.admission,
-            request_cost: resourceConfig.requestCost
-          }
+          stats: guardStats, config: { system: resourceConfig.system, client: resourceConfig.client, admission: resourceConfig.admission, request_cost: resourceConfig.requestCost }
         };
         
         cachedStatsTime = now;
@@ -1531,274 +1171,39 @@ if (cluster.isPrimary) {
       }
 
       function sendResourceStats(req, res) {
-        if (!isGuardActive) {
-          return res.status(503).json({ message: "Guard is initializing, please wait..." });
-        }
+        if (!isGuardActive) return res.status(503).json({ message: "Guard is initializing, please wait..." });
         res.json(getResourceStats());
       }
 
       const HEALTH_CSS = `
-@font-face {
-  font-family: "PokeTube Flex";
-  src: url("/static/robotoflex.ttf");
-  font-style: normal;
-  font-stretch: 1% 800%;
-  font-display: swap;
-}
-:root{color-scheme:dark}
-body{
-  color:#fff;
-  background:#1c1b22;
-  margin:0;
-  font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
-}
-a{color:#0ab7f0;text-decoration:none;transition:color 0.2s;}
-a:hover{color:#00c0ff;text-decoration:underline;}
-.app{max-width:1100px;margin:0 auto;padding:24px;}
-h1,h2,h3,.tab-btn,.hero-label,.route-rank{
-  font-family:"PokeTube Flex",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
-}
-h1,h2{
-  font-stretch:extra-expanded;
-  letter-spacing:-0.5px;
-}
-h1{
-  font-weight:900;
-  font-size:2.2rem;
-  margin-top:0;
-  margin-bottom:4px;
-}
-h2{
-  margin-top:32px;
-  border-bottom:1px solid rgba(255,255,255,0.1);
-  padding-bottom:8px;
-}
-p,li,code,pre{
-  line-height:1.6;
-}
-hr{
-  border:0;
-  border-top:1px solid rgba(255,255,255,0.1);
-  margin:32px 0;
-}
-.logo{
-  float:right;
-  margin:.3em 0 1em 2em;
-  max-width:130px;
-}
-.header-container{
-  display:flex;
-  justify-content:space-between;
-  align-items:flex-end;
-  flex-wrap:wrap;
-  margin-bottom:24px;
-  gap:16px;
-}
-.tabs{
-  display:inline-flex;
-  background:#15141a;
-  border-radius:24px;
-  padding:4px;
-  border:1px solid rgba(255,255,255,0.05);
-  flex-wrap:wrap;
-  gap:2px;
-}
-.tab-btn{
-  background:transparent;
-  color:#aaa;
-  border:none;
-  padding:8px 20px;
-  border-radius:20px;
-  cursor:pointer;
-  font-weight:700;
-  font-size:0.95rem;
-  transition:all 0.3s ease;
-  outline:none;
-  display:inline-block;
-  line-height:1.2;
-}
-.tab-btn:hover:not(.active){
-  color:#fff;
-  text-decoration:none;
-}
-.tab-btn.active{
-  background:#0ab7f0;
-  color:#1c1b22;
-  box-shadow:0 2px 8px rgba(10,183,240,0.3);
-}
-.hero-stat{
-  padding:16px 0 32px 0;
-  text-align:center;
-}
-.hero-label{
-  font-size:1.1rem;
-  color:#aaa;
-  margin-top:8px;
-  text-transform:uppercase;
-  letter-spacing:2px;
-}
-.hero-num{
-  font-size:4rem;
-  font-weight:900;
-  color:#0ab7f0;
-  margin:10px 0;
-  line-height:1;
-}
-.privacy-badge{
-  display:inline-flex;
-  align-items:center;
-  color:#4caf50;
-  padding:6px 12px;
-  border-radius:10px;
-  font-size:0.9rem;
-  font-weight:bold;
-  margin-bottom:16px;
-}
-.stat-grid{
-  display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(180px,1fr));
-  gap:16px;
-  margin-top:16px;
-}
-.stat-box{
-  background:#2a2930;
-  border-radius:12px;
-  padding:16px;
-  margin:0;
-  display:flex;
-  flex-direction:column;
-  justify-content:center;
-  align-items:flex-start;
-  border:1px solid rgba(255,255,255,0.05);
-}
-.stat-num{
-  font-size:1.6rem;
-  color:#0ab7f0;
-  display:block;
-  font-weight:bold;
-  text-transform:capitalize;
-}
-.stat-label{
-  font-size:.9rem;
-  color:#aaa;
-  display:block;
-  margin-top:4px;
-}
-.green{color:#4caf50}
-.orange{color:#ff9800}
-.red{color:#f44336}
-code,pre{
-  background:#2a2930;
-  padding:2px 6px;
-  border-radius:4px;
-}
-pre{
-  overflow:auto;
-  padding:14px;
-  border:1px solid #333;
-}
-.banner{
-  padding:16px 20px;
-  border-radius:12px;
-  background:#2a2930;
-  border:1px solid rgba(255,255,255,0.05);
-  transition:border-left 0.3s ease;
-}
-.banner.green{border-left:5px solid #4caf50}
-.banner.orange{border-left:5px solid #ff9800}
-.banner.red{border-left:5px solid #f44336}
-.small{
-  color:#bbb;
-  font-size:.95rem;
-  font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
-}
-.explanation{
-  font-size:1.05rem;
-  color:#ddd;
-  background:#2a2930;
-  padding:20px;
-  border-radius:12px;
-  border-left:4px solid #0ab7f0;
-  margin-bottom:24px;
-}
-summary{
-  font-size:1.2rem;
-  cursor:pointer;
-  color:#0ab7f0;
-  user-select:none;
-  margin-bottom:12px;
-  font-weight:bold;
-  transition:color 0.2s;
-  font-family:"PokeTube Flex",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
-}
-.route-list{
-  display:flex;
-  flex-direction:column;
-  gap:12px;
-  margin-top:16px;
-}
-.route-item{
-  background:#25242b;
-  border-radius:12px;
-  padding:16px 20px;
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  border:1px solid rgba(255,255,255,0.05);
-  position:relative;
-  overflow:hidden;
-}
-.route-bar{
-  position:absolute;
-  left:0;
-  top:0;
-  bottom:0;
-  background:linear-gradient(90deg,rgba(10,183,240,0.05) 0%,rgba(10,183,240,0.15) 100%);
-  z-index:1;
-  transition:width 0.6s cubic-bezier(0.22,1,0.36,1);
-}
-.route-info{
-  display:flex;
-  align-items:center;
-  gap:12px;
-  z-index:2;
-}
-.route-rank{
-  font-size:0.85rem;
-  font-weight:900;
-  color:#1c1b22;
-  background:#0ab7f0;
-  width:28px;
-  height:28px;
-  border-radius:50%;
-  display:flex;
-  justify-content:center;
-  align-items:center;
-}
-.route-name{
-  font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
-  font-size:1.05rem;
-  color:#eee;
-  padding:4px 8px;
-  border-radius:6px;
-  background:rgba(255,255,255,0.05);
-  letter-spacing:-0.2px;
-}
-.route-count{
-  font-size:1.15rem;
-  font-weight:900;
-  color:#fff;
-  z-index:2;
-  background:rgba(0,0,0,0.3);
-  padding:6px 14px;
-  border-radius:20px;
-  border:1px solid rgba(255,255,255,0.1);
-}
-@media (max-width:640px){
-  .hero-num{font-size:3rem}
-  .route-item{align-items:flex-start;gap:12px;flex-direction:column}
-  .route-count{align-self:flex-end}
-}
+@font-face { font-family: "PokeTube Flex"; src: url("/static/robotoflex.ttf"); font-style: normal; font-stretch: 1% 800%; font-display: swap; }
+:root{color-scheme:dark} body{color:#fff;background:#1c1b22;margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;}
+a{color:#0ab7f0;text-decoration:none;transition:color 0.2s;} a:hover{color:#00c0ff;text-decoration:underline;}
+.app{max-width:1100px;margin:0 auto;padding:24px;} h1,h2,h3,.tab-btn,.hero-label,.route-rank{font-family:"PokeTube Flex",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;}
+h1,h2{font-stretch:extra-expanded;letter-spacing:-0.5px;} h1{font-weight:900;font-size:2.2rem;margin-top:0;margin-bottom:4px;}
+h2{margin-top:32px;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:8px;} p,li,code,pre{line-height:1.6;}
+hr{border:0;border-top:1px solid rgba(255,255,255,0.1);margin:32px 0;} .logo{float:right;margin:.3em 0 1em 2em;max-width:130px;}
+.header-container{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;margin-bottom:24px;gap:16px;}
+.tabs{display:inline-flex;background:#15141a;border-radius:24px;padding:4px;border:1px solid rgba(255,255,255,0.05);flex-wrap:wrap;gap:2px;}
+.tab-btn{background:transparent;color:#aaa;border:none;padding:8px 20px;border-radius:20px;cursor:pointer;font-weight:700;font-size:0.95rem;transition:all 0.3s ease;outline:none;display:inline-block;line-height:1.2;}
+.tab-btn:hover:not(.active){color:#fff;text-decoration:none;} .tab-btn.active{background:#0ab7f0;color:#1c1b22;box-shadow:0 2px 8px rgba(10,183,240,0.3);}
+.hero-stat{padding:16px 0 32px 0;text-align:center;} .hero-label{font-size:1.1rem;color:#aaa;margin-top:8px;text-transform:uppercase;letter-spacing:2px;}
+.hero-num{font-size:4rem;font-weight:900;color:#0ab7f0;margin:10px 0;line-height:1;} .privacy-badge{display:inline-flex;align-items:center;color:#4caf50;padding:6px 12px;border-radius:10px;font-size:0.9rem;font-weight:bold;margin-bottom:16px;}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;margin-top:16px;}
+.stat-box{background:#2a2930;border-radius:12px;padding:16px;margin:0;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;border:1px solid rgba(255,255,255,0.05);}
+.stat-num{font-size:1.6rem;color:#0ab7f0;display:block;font-weight:bold;text-transform:capitalize;} .stat-label{font-size:.9rem;color:#aaa;display:block;margin-top:4px;}
+.green{color:#4caf50} .orange{color:#ff9800} .red{color:#f44336} code,pre{background:#2a2930;padding:2px 6px;border-radius:4px;}
+pre{overflow:auto;padding:14px;border:1px solid #333;} .banner{padding:16px 20px;border-radius:12px;background:#2a2930;border:1px solid rgba(255,255,255,0.05);transition:border-left 0.3s ease;}
+.banner.green{border-left:5px solid #4caf50} .banner.orange{border-left:5px solid #ff9800} .banner.red{border-left:5px solid #f44336}
+.small{color:#bbb;font-size:.95rem;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;}
+.explanation{font-size:1.05rem;color:#ddd;background:#2a2930;padding:20px;border-radius:12px;border-left:4px solid #0ab7f0;margin-bottom:24px;}
+summary{font-size:1.2rem;cursor:pointer;color:#0ab7f0;user-select:none;margin-bottom:12px;font-weight:bold;transition:color 0.2s;font-family:"PokeTube Flex",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;}
+.route-list{display:flex;flex-direction:column;gap:12px;margin-top:16px;} .route-item{background:#25242b;border-radius:12px;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;border:1px solid rgba(255,255,255,0.05);position:relative;overflow:hidden;}
+.route-bar{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,rgba(10,183,240,0.05) 0%,rgba(10,183,240,0.15) 100%);z-index:1;transition:width 0.6s cubic-bezier(0.22,1,0.36,1);}
+.route-info{display:flex;align-items:center;gap:12px;z-index:2;} .route-rank{font-size:0.85rem;font-weight:900;color:#1c1b22;background:#0ab7f0;width:28px;height:28px;border-radius:50%;display:flex;justify-content:center;align-items:center;}
+.route-name{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:1.05rem;color:#eee;padding:4px 8px;border-radius:6px;background:rgba(255,255,255,0.05);letter-spacing:-0.2px;}
+.route-count{font-size:1.15rem;font-weight:900;color:#fff;z-index:2;background:rgba(0,0,0,0.3);padding:6px 14px;border-radius:20px;border:1px solid rgba(255,255,255,0.1);}
+@media (max-width:640px){.hero-num{font-size:3rem} .route-item{align-items:flex-start;gap:12px;flex-direction:column} .route-count{align-self:flex-end}}
 `;
 
       function formatRouteCount(c) {
@@ -1809,325 +1214,42 @@ summary{
       }
 
       function renderRouteList(topRoutes) {
-        if (!topRoutes || topRoutes.length === 0) {
-          return `<div class="route-item" style="justify-content:center;color:#aaa;">Nothing big yet, Poke is still gathering cozy little traffic stats.</div>`;
-        }
-
+        if (!topRoutes || topRoutes.length === 0) return `<div class="route-item" style="justify-content:center;color:#aaa;">Nothing big yet, Poke is still gathering cozy little traffic stats.</div>`;
         const maxCount = Math.max(1, topRoutes[0].count || 1);
         return topRoutes.map((r, i) => {
           const pct = ((r.count || 0) / maxCount) * 100;
-          return `<div class="route-item">
-            <div class="route-bar" style="width: ${pct}%"></div>
-            <div class="route-info">
-              <span class="route-rank">#${i + 1}</span>
-              <span class="route-name">${String(r.key || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span>
-            </div>
-            <span class="route-count">${formatRouteCount(r.count)}</span>
-          </div>`;
+          return `<div class="route-item"><div class="route-bar" style="width: ${pct}%"></div><div class="route-info"><span class="route-rank">#${i + 1}</span><span class="route-name">${String(r.key || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span></div><span class="route-count">${formatRouteCount(r.count)}</span></div>`;
         }).join("");
       }
 
-      // TTL Cache for Health Page HTML
       let cachedHealthHtml = null;
       let cachedHealthTime = 0;
 
       function sendAntiddosPage(req, res) {
-        if (!isGuardActive) {
-          return res.status(503).send("Poke is waking up the guard, please refresh in a moment.");
-        }
-
+        if (!isGuardActive) return res.status(503).send("Poke is waking up the guard, please refresh in a moment.");
         const now = Date.now();
-        if (cachedHealthHtml && now - cachedHealthTime < STATS_TTL_MS) {
-          return res.send(cachedHealthHtml);
-        }
+        if (cachedHealthHtml && now - cachedHealthTime < STATS_TTL_MS) return res.send(cachedHealthHtml);
         
         const stats = getResourceStats();
-        const stateClass = stats.state.state === "healthy" ? "green" :
-          stats.state.state === "warm" ? "orange" :
-          stats.state.state === "stressed" ? "orange" : "red";
+        const stateClass = stats.state.state === "healthy" ? "green" : stats.state.state === "warm" ? "orange" : stats.state.state === "stressed" ? "orange" : "red";
 
-        cachedHealthHtml = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<title>Poke Server Health</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="icon" href="/favicon.ico">
-<style>
-${HEALTH_CSS}
-</style>
-</head>
-<body>
-<div class="app">
-
-<noscript>
-  <div class="banner orange" style="margin-bottom:24px;">
-    <b>JavaScript is disabled:</b> this is a static little snapshot of Poke's server mood. Refresh the page whenever you want fresh numbers.
-  </div>
-</noscript>
-
-<img class="logo" src="/css/logo-poke.svg" alt="Poke logo">
-
-<div class="header-container">
-  <div>
-    <h1>Poke Server Health</h1>
-    <p class="small" style="margin-top:0;">Live server Health!!!</p>
-  </div>
-  <div class="tabs">
-    <a class="tab-btn active" href="/health">Server Vitals</a>
-    <a class="tab-btn" href="/traffic">Requests</a>
-    <a class="tab-btn" href="/api/stats?view=gui">Anonymous Stats</a>
-  </div>
-</div>
-
-<div id="banner-container" class="banner ${stateClass}">
-  <b>Current Status:</b> <span id="banner-state" class="${stateClass}" style="font-size:1.2rem;text-transform:capitalize;">${stats.state.state}</span>
-  <br>
-  <span id="banner-subtext" class="small" style="display:inline-block;margin-top:8px;">
-    Load Score: ${stats.state.score} &bull; Process Delay: ${stats.state.eventLoop.p99Ms}ms &bull; CPU: ${stats.state.cpu.percent}% &bull; Memory: ${formatPercent(stats.state.memory.rssRatio)}
-  </span>
-</div>
-
-<h2>What is this page?</h2>
-<div class="explanation">
-  This is Poke checking in on itself so everything stays fast and comfy. It watches CPU, memory, request pressure, and process delay in real time, then uses that info to keep the site feeling smooth. <br><br>
-  If traffic suddenly gets wild, Poke gently shields the server and tries to keep normal video watching flowing first. Basically, this page is the little heartbeat monitor for the whole instance!!
-</div>
-
-<h2>Live Server Vitals!!</h2>
-<div class="stat-grid">
-  <div class="stat-box">
-    <span id="stat-state" class="stat-num ${stateClass}">${stats.state.state}</span>
-    <span class="stat-label">Health Mood</span>
-  </div>
-  <div class="stat-box">
-    <span id="stat-p99" class="stat-num">${stats.state.eventLoop.p99Ms}ms</span>
-    <span class="stat-label">Process Delay</span>
-  </div>
-  <div class="stat-box">
-    <span id="stat-cpu" class="stat-num">${stats.state.cpu.percent}%</span>
-    <span class="stat-label">CPU Busy Level</span>
-  </div>
-  <div class="stat-box">
-    <span id="stat-rss" class="stat-num">${stats.state.memory.rssMb}MB</span>
-    <span class="stat-label">Memory Used</span>
-  </div>
-  <div class="stat-box">
-    <span id="stat-rps" class="stat-num">${stats.state.requests.rps}</span>
-    <span class="stat-label">Requests Right Now</span>
-  </div>
-  <div class="stat-box">
-    <span id="stat-tracked" class="stat-num">${stats.clients.tracked}</span>
-    <span class="stat-label">Active Visitors</span>
-  </div>
-  <div class="stat-box">
-    <span id="stat-cooldown" class="stat-num">${stats.clients.cooldown}</span>
-    <span class="stat-label">Noisy Clients Cooling Down</span>
-  </div>
-  <div class="stat-box">
-    <span id="stat-score" class="stat-num">${stats.state.score}</span>
-    <span class="stat-label">Pressure Score</span>
-  </div>
-</div>
-
-<hr>
-
-<details>
-  <summary>View Nerdy Stats, Raw Data, and APIs</summary>
-  
-  <h3>Why Poke feels this way</h3>
-  <pre id="pre-reasons">${stats.state.pressureReasons.length ? stats.state.pressureReasons.join("\n") : "No pressure reasons right now. Poke is feeling good."}</pre>
-
-  <h3>Request Mix This Second</h3>
-  <pre id="pre-mix">${JSON.stringify(stats.state.requests.kinds, null, 2)}</pre>
-
-  <h3>API Endpoints</h3>
-  <p>
-    Want the raw numbers too? They live at:
-    <code><a href="/_pokeresource/stats">/_pokeresource/stats</a></code>
-  </p>
-</details>
-
-<hr>
-<p class="small">powered by poke. <a href="/">go back to watching videos</a></p>
-</div>
-
-<script>
-document.addEventListener("DOMContentLoaded", function() {
-  const fetchStats = async function() {
-    try {
-      const res = await fetch("/_pokeresource/stats");
-      if (!res.ok) return;
-      const data = await res.json();
-      
-      const state = data.state.state;
-      let stateClass = "green";
-      if (state === "warm" || state === "stressed") stateClass = "orange";
-      if (state === "critical") stateClass = "red";
-
-      document.getElementById("banner-container").className = "banner " + stateClass;
-      document.getElementById("banner-state").className = stateClass;
-      document.getElementById("banner-state").innerText = state;
-      
-      const rssRatio = (data.state.memory.rssRatio * 100).toFixed(2) + "%";
-      document.getElementById("banner-subtext").innerHTML =
-        "Load Score: " + data.state.score + " &bull; Process Delay: " + data.state.eventLoop.p99Ms + "ms &bull; CPU: " + data.state.cpu.percent + "% &bull; Memory: " + rssRatio;
-      
-      document.getElementById("stat-state").className = "stat-num " + stateClass;
-      document.getElementById("stat-state").innerText = state;
-      document.getElementById("stat-p99").innerText = data.state.eventLoop.p99Ms + "ms";
-      document.getElementById("stat-cpu").innerText = data.state.cpu.percent + "%";
-      document.getElementById("stat-rss").innerText = data.state.memory.rssMb + "MB";
-      document.getElementById("stat-rps").innerText = data.state.requests.rps;
-      document.getElementById("stat-tracked").innerText = data.clients.tracked;
-      document.getElementById("stat-cooldown").innerText = data.clients.cooldown;
-      document.getElementById("stat-score").innerText = data.state.score;
-      document.getElementById("pre-reasons").innerText = data.state.pressureReasons.length ? data.state.pressureReasons.join("\\n") : "No pressure reasons right now. Poke is feeling good.";
-      document.getElementById("pre-mix").innerText = JSON.stringify(data.state.requests.kinds, null, 2);
-    } catch (err) {
-      // Quiet fail if network disconnects temporarily
-    }
-  };
-
-  setInterval(fetchStats, 1000);
-});
-</script>
-
-</body>
-</html>`;
-        
+        cachedHealthHtml = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Poke Server Health</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="/favicon.ico"><style>${HEALTH_CSS}</style></head><body><div class="app"><noscript><div class="banner orange" style="margin-bottom:24px;"><b>JavaScript is disabled:</b> this is a static little snapshot of Poke's server mood. Refresh the page whenever you want fresh numbers.</div></noscript><img class="logo" src="/css/logo-poke.svg" alt="Poke logo"><div class="header-container"><div><h1>Poke Server Health</h1><p class="small" style="margin-top:0;">Live server Health!!!</p></div><div class="tabs"><a class="tab-btn active" href="/health">Server Vitals</a><a class="tab-btn" href="/traffic">Requests</a><a class="tab-btn" href="/api/stats?view=gui">Anonymous Stats</a></div></div><div id="banner-container" class="banner ${stateClass}"><b>Current Status:</b> <span id="banner-state" class="${stateClass}" style="font-size:1.2rem;text-transform:capitalize;">${stats.state.state}</span><br><span id="banner-subtext" class="small" style="display:inline-block;margin-top:8px;">Load Score: ${stats.state.score} &bull; Process Delay: ${stats.state.eventLoop.p99Ms}ms &bull; CPU: ${stats.state.cpu.percent}% &bull; Memory: ${formatPercent(stats.state.memory.rssRatio)}</span></div><h2>What is this page?</h2><div class="explanation">This is Poke checking in on itself so everything stays fast and comfy. It watches CPU, memory, request pressure, and process delay in real time, then uses that info to keep the site feeling smooth. <br><br>If traffic suddenly gets wild, Poke gently shields the server and tries to keep normal video watching flowing first. Basically, this page is the little heartbeat monitor for the whole instance!!</div><h2>Live Server Vitals!!</h2><div class="stat-grid"><div class="stat-box"><span id="stat-state" class="stat-num ${stateClass}">${stats.state.state}</span><span class="stat-label">Health Mood</span></div><div class="stat-box"><span id="stat-p99" class="stat-num">${stats.state.eventLoop.p99Ms}ms</span><span class="stat-label">Process Delay</span></div><div class="stat-box"><span id="stat-cpu" class="stat-num">${stats.state.cpu.percent}%</span><span class="stat-label">CPU Busy Level</span></div><div class="stat-box"><span id="stat-rss" class="stat-num">${stats.state.memory.rssMb}MB</span><span class="stat-label">Memory Used</span></div><div class="stat-box"><span id="stat-rps" class="stat-num">${stats.state.requests.rps}</span><span class="stat-label">Requests Right Now</span></div><div class="stat-box"><span id="stat-tracked" class="stat-num">${stats.clients.tracked}</span><span class="stat-label">Active Visitors</span></div><div class="stat-box"><span id="stat-cooldown" class="stat-num">${stats.clients.cooldown}</span><span class="stat-label">Noisy Clients Cooling Down</span></div><div class="stat-box"><span id="stat-score" class="stat-num">${stats.state.score}</span><span class="stat-label">Pressure Score</span></div></div><hr><details><summary>View Nerdy Stats, Raw Data, and APIs</summary><h3>Why Poke feels this way</h3><pre id="pre-reasons">${stats.state.pressureReasons.length ? stats.state.pressureReasons.join("\n") : "No pressure reasons right now. Poke is feeling good."}</pre><h3>Request Mix This Second</h3><pre id="pre-mix">${JSON.stringify(stats.state.requests.kinds, null, 2)}</pre><h3>API Endpoints</h3><p>Want the raw numbers too? They live at: <code><a href="/_pokeresource/stats">/_pokeresource/stats</a></code></p></details><hr><p class="small">powered by poke. <a href="/">go back to watching videos</a></p></div><script>document.addEventListener("DOMContentLoaded", function() { const fetchStats = async function() { try { const res = await fetch("/_pokeresource/stats"); if (!res.ok) return; const data = await res.json(); const state = data.state.state; let stateClass = "green"; if (state === "warm" || state === "stressed") stateClass = "orange"; if (state === "critical") stateClass = "red"; document.getElementById("banner-container").className = "banner " + stateClass; document.getElementById("banner-state").className = stateClass; document.getElementById("banner-state").innerText = state; const rssRatio = (data.state.memory.rssRatio * 100).toFixed(2) + "%"; document.getElementById("banner-subtext").innerHTML = "Load Score: " + data.state.score + " &bull; Process Delay: " + data.state.eventLoop.p99Ms + "ms &bull; CPU: " + data.state.cpu.percent + "% &bull; Memory: " + rssRatio; document.getElementById("stat-state").className = "stat-num " + stateClass; document.getElementById("stat-state").innerText = state; document.getElementById("stat-p99").innerText = data.state.eventLoop.p99Ms + "ms"; document.getElementById("stat-cpu").innerText = data.state.cpu.percent + "%"; document.getElementById("stat-rss").innerText = data.state.memory.rssMb + "MB"; document.getElementById("stat-rps").innerText = data.state.requests.rps; document.getElementById("stat-tracked").innerText = data.clients.tracked; document.getElementById("stat-cooldown").innerText = data.clients.cooldown; document.getElementById("stat-score").innerText = data.state.score; document.getElementById("pre-reasons").innerText = data.state.pressureReasons.length ? data.state.pressureReasons.join("\\n") : "No pressure reasons right now. Poke is feeling good."; document.getElementById("pre-mix").innerText = JSON.stringify(data.state.requests.kinds, null, 2); } catch (err) {} }; setInterval(fetchStats, 1000); });</script></body></html>`;
         cachedHealthTime = now;
         res.send(cachedHealthHtml);
       }
 
-      // TTL Cache for Traffic Page HTML
       let cachedTrafficHtml = null;
       let cachedTrafficTime = 0;
 
       function sendTrafficPage(req, res) {
-        if (!isGuardActive) {
-          return res.status(503).send("Poke is waking up the guard, please refresh in a moment.");
-        }
-
+        if (!isGuardActive) return res.status(503).send("Poke is waking up the guard, please refresh in a moment.");
         const now = Date.now();
-        if (cachedTrafficHtml && now - cachedTrafficTime < STATS_TTL_MS) {
-          return res.send(cachedTrafficHtml);
-        }
+        if (cachedTrafficHtml && now - cachedTrafficTime < STATS_TTL_MS) return res.send(cachedTrafficHtml);
 
         const stats = getResourceStats();
         const routesHtml = renderRouteList(stats.active_requests.all_time_top_routes);
 
-        cachedTrafficHtml = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<title>Poke Traffic Stats</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="icon" href="/favicon.ico">
-<style>
-${HEALTH_CSS}
-</style>
-</head>
-<body>
-<div class="app">
-
-<noscript>
-  <div class="banner orange" style="margin-bottom:24px;">
-    <b>JavaScript is disabled:</b> this is a static snapshot of Poke's anonymous traffic stats. Refresh whenever you want the newest totals! 
-  </div>
-</noscript>
-
-<img class="logo" src="/css/logo-poke.svg" alt="Poke logo">
-
-<div class="header-container">
-  <div>
-    <h1>Poke Traffic Stats</h1>
-    <p class="small" style="margin-top:0;">ALLLL off the popular paths!!</p>
-  </div>
-  <div class="tabs">
-    <a class="tab-btn" href="/health">Server Vitals</a>
-    <a class="tab-btn active" href="/traffic">Requests</a>
-    <a class="tab-btn" href="/api/stats?view=gui">Anonymous Stats</a>
-  </div>
-</div>
-
-<div class="hero-stat">
-  <div class="privacy-badge">
-    <svg style="width:16px;height:16px;margin-right:6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-    100% Anonymous & Private
-  </div>
-  <div class="hero-label">Total Global Requests Processed</div>
-  <div id="hero-total" class="hero-num">
-    ${stats.active_requests.total_global_requests.toLocaleString()}
-  </div>
-  <div class="small" style="color:#888;font-size:1rem;">
-    Poke started counting these anonymous totals on: <span id="tracking-start">${new Date(stats.active_requests.tracking_start_time).toLocaleDateString()}</span>
-  </div>
-</div>
-
-<h2>Most Popular Destinations!!</h2>
-<p class="small">The most heavily trafficked areas of Poke calculated since records began!!</p>
-<div id="route-list-container" class="route-list">
-  ${routesHtml}
-</div>
-
-<hr>
-<p class="small">powered by poke. <a href="/health">view server health</a> or <a href="/">go back to watching videos</a></p>
-</div>
-
-<script>
-document.addEventListener("DOMContentLoaded", function() {
-  const formatRouteCount = function(c) {
-    if (c === 67) return '67 <span style="font-size:0.85em; color:#aaa; font-weight:normal;">(really)</span>';
-    if (c === 69) return '69 <span style="font-size:0.85em; color:#aaa; font-weight:normal;">(haha nice)</span>';
-    if (c === 420) return '<span style="color:#4caf50;">420 <span style="font-size:0.85em; font-weight:normal;">(some weed everyday!)</span></span>';
-    return Number(c || 0).toLocaleString();
-  };
-
-  const escapeHtml = function(value) {
-    return String(value || "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-  };
-
-  const fetchStats = async function() {
-    try {
-      const res = await fetch("/_pokeresource/stats");
-      if (!res.ok) return;
-      const data = await res.json();
-
-      document.getElementById("hero-total").innerText = data.active_requests.total_global_requests.toLocaleString();
-      document.getElementById("tracking-start").innerText = new Date(data.active_requests.tracking_start_time).toLocaleDateString();
-
-      const topRoutes = data.active_requests.all_time_top_routes;
-      if (topRoutes && topRoutes.length > 0) {
-        const maxCount = topRoutes[0].count || 1;
-        const routeHtml = topRoutes.map(function(r, i) {
-          const pct = ((r.count || 0) / maxCount) * 100;
-          return '<div class="route-item">' +
-            '<div class="route-bar" style="width: ' + pct + '%"></div>' +
-            '<div class="route-info">' +
-              '<span class="route-rank">#' + (i + 1) + '</span>' +
-              '<span class="route-name">' + escapeHtml(r.key) + '</span>' +
-            '</div>' +
-            '<span class="route-count">' + formatRouteCount(r.count) + '</span>' +
-          '</div>';
-        }).join("");
-        document.getElementById("route-list-container").innerHTML = routeHtml;
-      }
-    } catch (err) {
-      // Quiet fail if network disconnects temporarily
-    }
-  };
-
-  setInterval(fetchStats, 1000);
-});
-</script>
-
-</body>
-</html>`;
-        
+        cachedTrafficHtml = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Poke Traffic Stats</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="/favicon.ico"><style>${HEALTH_CSS}</style></head><body><div class="app"><noscript><div class="banner orange" style="margin-bottom:24px;"><b>JavaScript is disabled:</b> this is a static snapshot of Poke's anonymous traffic stats. Refresh whenever you want the newest totals! </div></noscript><img class="logo" src="/css/logo-poke.svg" alt="Poke logo"><div class="header-container"><div><h1>Poke Traffic Stats</h1><p class="small" style="margin-top:0;">ALLLL off the popular paths!!</p></div><div class="tabs"><a class="tab-btn" href="/health">Server Vitals</a><a class="tab-btn active" href="/traffic">Requests</a><a class="tab-btn" href="/api/stats?view=gui">Anonymous Stats</a></div></div><div class="hero-stat"><div class="privacy-badge"><svg style="width:16px;height:16px;margin-right:6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>100% Anonymous & Private</div><div class="hero-label">Total Global Requests Processed</div><div id="hero-total" class="hero-num">${stats.active_requests.total_global_requests.toLocaleString()}</div><div class="small" style="color:#888;font-size:1rem;">Poke started counting these anonymous totals on: <span id="tracking-start">${new Date(stats.active_requests.tracking_start_time).toLocaleDateString()}</span></div></div><h2>Most Popular Destinations!!</h2><p class="small">The most heavily trafficked areas of Poke calculated since records began!!</p><div id="route-list-container" class="route-list">${routesHtml}</div><hr><p class="small">powered by poke. <a href="/health">view server health</a> or <a href="/">go back to watching videos</a></p></div><script>document.addEventListener("DOMContentLoaded", function() { const formatRouteCount = function(c) { if (c === 67) return '67 <span style="font-size:0.85em; color:#aaa; font-weight:normal;">(really)</span>'; if (c === 69) return '69 <span style="font-size:0.85em; color:#aaa; font-weight:normal;">(haha nice)</span>'; if (c === 420) return '<span style="color:#4caf50;">420 <span style="font-size:0.85em; font-weight:normal;">(some weed everyday!)</span></span>'; return Number(c || 0).toLocaleString(); }; const escapeHtml = function(value) { return String(value || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }; const fetchStats = async function() { try { const res = await fetch("/_pokeresource/stats"); if (!res.ok) return; const data = await res.json(); document.getElementById("hero-total").innerText = data.active_requests.total_global_requests.toLocaleString(); document.getElementById("tracking-start").innerText = new Date(data.active_requests.tracking_start_time).toLocaleDateString(); const topRoutes = data.active_requests.all_time_top_routes; if (topRoutes && topRoutes.length > 0) { const maxCount = topRoutes[0].count || 1; const routeHtml = topRoutes.map(function(r, i) { const pct = ((r.count || 0) / maxCount) * 100; return '<div class="route-item">' + '<div class="route-bar" style="width: ' + pct + '%"></div>' + '<div class="route-info">' + '<span class="route-rank">#' + (i + 1) + '</span>' + '<span class="route-name">' + escapeHtml(r.key) + '</span>' + '</div>' + '<span class="route-count">' + formatRouteCount(r.count) + '</span>' + '</div>'; }).join(""); document.getElementById("route-list-container").innerHTML = routeHtml; } } catch (err) {} }; setInterval(fetchStats, 1000); });</script></body></html>`;
         cachedTrafficTime = now;
         res.send(cachedTrafficHtml);
       }
@@ -2143,10 +1265,9 @@ document.addEventListener("DOMContentLoaded", function() {
       app.get("/traffic", sendTrafficPage);
       app.get("/_antiddos*", (req, res) => res.redirect("/health"));
 
-      // 30-Millisecond Delayed Initialization
       setTimeout(() => {
         isGuardActive = true;
-        initlog(`[PokeResourceGuard] is now ACTIVE on worker ${process.pid} after 30ms boot delay.`);
+        initlog(`[PokeResourceGuard] is now ACTIVE after 30ms boot delay.`);
         sampleCpuAndMemory("startup");
 
         const sampleTimer = setInterval(function () {
@@ -2166,10 +1287,10 @@ document.addEventListener("DOMContentLoaded", function() {
     })();
 
     app.use(ieBlockMiddleware);
-    initlog(`Worker ${process.pid} Loaded express.js`);
+    initlog("Loaded express.js");
 
     app.engine("html", require("ejs").renderFile);
-    initlog(`Worker ${process.pid} Loaded EJS`);
+    initlog("Loaded EJS");
     app.use(modules.express.urlencoded({ extended: true }));
     app.use(modules.useragent.express());
     app.use(modules.express.json());
@@ -2181,38 +1302,24 @@ document.addEventListener("DOMContentLoaded", function() {
         if (err) {
           console.error("[POKE-render] error on", template, ":", err.message);
 
-          if (res.destroyed) {
-            return;
+          if (res.destroyed) return;
+          if (res.writableEnded) return;
+
+          if (res.headersSent) {
+            try {
+              res.write("\n");
+              return res.end();
+            } catch (writeErr) {
+              console.error("[POKE-render] could not write render error after headers were sent:", writeErr.message);
+              return;
+            }
           }
-
-          if (res.writableEnded) {
-            return;
-          }
-
-         if (res.headersSent) {
-   try {
-     const safeRenderErrorMessage = String(err && err.message ? err.message : err)
-       .replace(/-->/g, "--&gt;")
-       .replace(/\r?\n/g, " ");
-
-     res.write("\n");
-     return res.end();
-   } catch (writeErr) {
-     console.error("[POKE-render] could not write render error after headers were sent:", writeErr.message);
-     return;
-   }
- }
 
           return res.status(500).send("Internal server error");
         }
 
-        if (res.destroyed) {
-          return;
-        }
-
-        if (res.writableEnded) {
-          return;
-        }
+        if (res.destroyed) return;
+        if (res.writableEnded) return;
 
         if (res.headersSent) {
           try {
@@ -2228,13 +1335,13 @@ document.addEventListener("DOMContentLoaded", function() {
       });
     };
 
-    initlog(`Worker ${process.pid} inited anti ddos`);
+    initlog("inited anti ddos");
 
     const initPokeTube = function () {
       sinit(app, config, renderTemplate);
-      initlog(`Worker ${process.pid} inited super init`);
+      initlog("inited super init");
       init(app);
-      initlog(`Worker ${process.pid} inited app`);
+      initlog("inited app");
     };
 
     try {
@@ -2247,7 +1354,6 @@ document.addEventListener("DOMContentLoaded", function() {
           );
         }
         res.header("secure-poketube-instance", "1");
-
         res.header("Permissions-Policy", "interest-cohort=()");
         res.header("software-name", "poke");
         next();
@@ -2255,46 +1361,26 @@ document.addEventListener("DOMContentLoaded", function() {
 
       app.use(function (request, response, next) {
         if (config.enablealwayshttps && !request.secure) {
-          if (
-            !/^https:/i.test(
-              request.headers["x-forwarded-proto"] || request.protocol
-            )
-          ) {
-            return response.redirect(
-              "https://" + request.headers.host + request.url
-            );
+          if (!/^https:/i.test(request.headers["x-forwarded-proto"] || request.protocol)) {
+            return response.redirect("https://" + request.headers.host + request.url);
           }
         }
-
         next();
       });
 
       app.use(function (req, res, next) {
-        res.header(
-          "X-PokeTube-Youtube-Client-Name",
-          innertube.innertube.CONTEXT_CLIENT.INNERTUBE_CONTEXT_CLIENT_NAME
-        );
-        res.header(
-          "Hey-there",
-          "Do u wanna help poke? join us :3 https://codeberg.org/ashleyirispuppy/poke"
-        );
-        res.header(
-          "X-PokeTube-Youtube-Client-Version",
-          innertube.innertube.CLIENT.clientVersion
-        );
-        res.header(
-          "X-PokeTube-Client-name",
-          innertube.innertube.CLIENT.projectClientName
-        );
+        res.header("X-PokeTube-Youtube-Client-Name", innertube.innertube.CONTEXT_CLIENT.INNERTUBE_CONTEXT_CLIENT_NAME);
+        res.header("Hey-there", "Do u wanna help poke? join us :3 https://codeberg.org/ashleyirispuppy/poke");
+        res.header("X-PokeTube-Youtube-Client-Version", innertube.innertube.CLIENT.clientVersion);
+        res.header("X-PokeTube-Client-name", innertube.innertube.CLIENT.projectClientName);
         res.header("X-PokeTube-Speeder", "3 seconds no cache, 280ms w/cache");
         res.header("X-HOSTNAME", req.hostname);
+        
         if (req.url.match(/^\/(css|js|img|font)\/.+/)) {
-          res.setHeader(
-            "Cache-Control",
-            "public, max-age=" + config.cacher_max_age
-          );
+          res.setHeader("Cache-Control", "public, max-age=" + config.cacher_max_age);
           res.setHeader("poketube-cacher", "STATIC_FILES");
         }
+        
         const a = 890;
         if (!req.url.match(/^\/(css|js|img|font)\/.+/)) {
           res.setHeader("Cache-Control", "public, max-age=" + a);
@@ -2303,9 +1389,9 @@ document.addEventListener("DOMContentLoaded", function() {
         next();
       });
 
-      initlog(`[OK] Load headers on worker ${process.pid}`);
+      initlog("[OK] Load headers");
     } catch {
-      initlog(`[FAILED] load headers on worker ${process.pid}`);
+      initlog("[FAILED] load headers");
     }
 
     try {
@@ -2313,9 +1399,9 @@ document.addEventListener("DOMContentLoaded", function() {
         res.sendFile(__dirname + "/robots.txt");
       });
 
-      initlog(`[OK] Load robots.txt on worker ${process.pid}`);
+      initlog("[OK] Load robots.txt");
     } catch {
-      initlog(`[FAILED] load robots.txt on worker ${process.pid}`);
+      initlog("[FAILED] load robots.txt");
     }
 
     initPokeTube();
@@ -2333,16 +1419,11 @@ document.addEventListener("DOMContentLoaded", function() {
         console.error(err.stack);
       }
 
-      if (res.destroyed || res.writableEnded) {
-        return;
-      }
-
-      if (res.headersSent) {
-        return next(err);
-      }
+      if (res.destroyed || res.writableEnded) return;
+      if (res.headersSent) return next(err);
 
       res.status(500).send("Something went wrong. Please try again.");
     });
   })();
 
-}  
+}
