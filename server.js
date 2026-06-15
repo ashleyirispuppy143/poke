@@ -1,5 +1,4 @@
 /*
-
    Poke is an Free/Libre youtube front-end. this is our main file.
   
    Copyright (C) 2021-2026 Poke (https://codeberg.org/ashleyirispuppy/poke)
@@ -17,1502 +16,1528 @@
    You should have received a copy of the GNU General Public License
    along with this program. If not, see https://www.gnu.org/licenses/.
  */
-(async function () {
 
-  const {
-    fetcher,
-    core,
-    wiki,
-    musicInfo,
-    modules,
-    version,
-    initlog,
-    init,
-  } = require("./src/libpoketube/libpoketube-initsys.js");
-  const media_proxy = require("./src/libpoketube/libpoketube-video.js");
-  const { sinit } = require("./src/libpoketube/init/superinit.js");
-  const innertube = require("./src/libpoketube/libpoketube-youtubei-objects.json");
-  const fs = require("fs");
-  const os = require("os");
-  const net = require("net");
-  const crypto = require("crypto");
-  const config = require("./config.json");
-  const u = await media_proxy();
+const cluster = require("cluster");
+const os = require("os");
+ 
+if (cluster.isPrimary) {
+  const numCPUs = os.cpus().length;
+  console.log(`[POKE-cluster] Primary manager ${process.pid} is booting...`);
+  console.log(`[POKE-cluster] Scaling up! Spawning ${numCPUs} independent workers across all CPU cores...`);
 
-  // --- GLOBAL SERVER OPTIMIZER ---
-  // Actively manages memory, clears hanging promises, and frees up dead sockets globally
-  (function GlobalServerOptimizer() {
-    // 1. Prevent memory leaks from dangling unhandled promises or broken pipes
-    process.on('uncaughtException', (err) => {
-      if (err.code === 'ECONNRESET' || err.code === 'EPIPE' || err.code === 'ETIMEDOUT') return; // Ignore standard background socket drops
-      console.error('[GLOBAL OPTIMIZER] Uncaught Exception safely caught to prevent crash:', err.message);
-    });
-    process.on('unhandledRejection', (reason) => {
-      console.error('[GLOBAL OPTIMIZER] Unhandled Rejection safely caught to prevent leak:', reason);
-    });
+  // Fork a worker for every CPU core available
+  for (let i = 0; i < numCPUs; i++) {
+    cluster.fork();
+  }
 
-    // 2. Periodic Garbage Collection Check
-    // (Run node with `node --expose-gc index.js` to enable this aggressive memory freeing)
-    setInterval(() => {
-      const memMb = process.memoryUsage().heapUsed / 1024 / 1024;
-      if (memMb > 450 && typeof global.gc === 'function') {
-        console.error(`[GLOBAL OPTIMIZER] Memory high at ${memMb.toFixed(1)}MB. Running aggressive Garbage Collection to free server resources...`);
-        global.gc();
-      }
-    }, 45000).unref();
-  })();
-  // -------------------------------
-
-  fs.readFile("ascii_txt.txt", "utf8", (err, data) => {
-    if (err) {
-      console.error("Error reading the file:", err);
-      return;
-    }
-
-    console.log(data);
+   cluster.on("exit", (worker, code, signal) => {
+    console.error(`[POKE-cluster] Worker ${worker.process.pid} died (Code: ${code}). Respawning immediately to maintain scale...`);
+    cluster.fork();
   });
 
-  initlog("Loading. everything... ever....");
-  initlog(
-    "[Welcome] Welcome To Poke, where you can LIBERATE THE WEB! - :3 " +
-      "Running " +
-      `Node ${process.version} - V8 v${
-        process.versions.v8
-      } -  ${process.platform.replace("linux", "GNU/Linux")} ${
-        process.arch
-      } Server - libpt ${version}`
-  );
+} else {
+ 
+  (async function () {
 
-  const {
-    IsJsonString,
-    convert,
-    getFirstLine,
-    capitalizeFirstLetter,
-    turntomins,
-    getRandomInt,
-    getRandomArbitrary,
-  } = require("./src/libpoketube/ptutils/libpt-coreutils.js");
-  const { ieBlockMiddleware } = require("./src/libpoketube/ptutils/ie-blocker.js");
-  initlog("Loaded libpt-coreutils and ieBlockMiddleware");
+    const {
+      fetcher,
+      core,
+      wiki,
+      musicInfo,
+      modules,
+      version,
+      initlog,
+      init,
+    } = require("./src/libpoketube/libpoketube-initsys.js");
+    const media_proxy = require("./src/libpoketube/libpoketube-video.js");
+    const { sinit } = require("./src/libpoketube/init/superinit.js");
+    const innertube = require("./src/libpoketube/libpoketube-youtubei-objects.json");
+    const fs = require("fs");
+    const net = require("net");
+    const crypto = require("crypto");
+    const config = require("./config.json");
+    const u = await media_proxy();
 
-  const templateDir = modules.path.resolve(
-    `${process.cwd()}${modules.path.sep}html`
-  );
+    // --- GLOBAL SERVER OPTIMIZER ---
+    // Actively manages memory, clears hanging promises, and frees up dead sockets globally
+    (function GlobalServerOptimizer() {
+      // 1. Prevent memory leaks from dangling unhandled promises or broken pipes
+      process.on('uncaughtException', (err) => {
+        if (err.code === 'ECONNRESET' || err.code === 'EPIPE' || err.code === 'ETIMEDOUT') return; // Ignore standard background socket drops
+        console.error('[GLOBAL OPTIMIZER] Uncaught Exception safely caught to prevent crash:', err.message);
+      });
+      process.on('unhandledRejection', (reason) => {
+        console.error('[GLOBAL OPTIMIZER] Unhandled Rejection safely caught to prevent leak:', reason);
+      });
 
-  const sha384 = modules.hash;
+      // 2. Periodic Garbage Collection Check
+      // (Run node with `node --expose-gc index.js` to enable this aggressive memory freeing)
+      setInterval(() => {
+        const memMb = process.memoryUsage().heapUsed / 1024 / 1024;
+        if (memMb > 450 && typeof global.gc === 'function') {
+          console.error(`[GLOBAL OPTIMIZER] Memory high at ${memMb.toFixed(1)}MB on worker ${process.pid}. Running aggressive Garbage Collection...`);
+          global.gc();
+        }
+      }, 45000).unref();
+    })();
+    // -------------------------------
 
-  var app = modules.express();
-
-  // --- AGGRESSIVE SOCKET FREEING ---
-  // Drops hanging requests that clients abandoned to free up active server limits
-  app.use((req, res, next) => {
-    req.setTimeout(25000, () => {
-      req.socket.destroy();
-    });
-    res.setTimeout(25000, () => {
-      res.socket.destroy();
-    });
-    next();
-  });
-  // ---------------------------------
-
-  const CLOUDFLARE_V4 = [
-    "173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22",
-    "103.31.4.0/22", "141.101.64.0/18", "108.162.192.0/18",
-    "190.93.240.0/20", "188.114.96.0/20", "197.234.240.0/22",
-    "198.41.128.0/17", "162.158.0.0/15", "104.16.0.0/13",
-    "104.24.0.0/14", "172.64.0.0/13", "131.0.72.0/22",
-  ];
-
-  function ipToLong(ip) {
-    return ip.split(".").reduce((acc, oct) => (acc << 8) + parseInt(oct, 10), 0) >>> 0;
-  }
-
-  function cidrContains(cidr, ip) {
-    if (!net.isIPv4(ip)) return false;
-    const [subnet, bits] = cidr.split("/");
-    const parsedBits = parseInt(bits, 10);
-    if (!Number.isFinite(parsedBits) || parsedBits < 0 || parsedBits > 32) return false;
-    const mask = parsedBits === 0 ? 0 : ~(2 ** (32 - parsedBits) - 1) >>> 0;
-    return (ipToLong(ip) & mask) === (ipToLong(subnet) & mask);
-  }
-
-  // Fast-path IP cleanup (Avoids Regex allocation)
-  function cleanIP(ip) {
-    const str = String(ip || "");
-    return str.startsWith("::ffff:") ? str.substring(7) : str;
-  }
-
-  function isCloudflareIP(ip) {
-    const clean = cleanIP(ip);
-    if (!net.isIPv4(clean)) return false;
-    return CLOUDFLARE_V4.some(cidr => cidrContains(cidr, clean));
-  }
-
-  function isPrivateIP(ip) {
-    const clean = cleanIP(ip);
-
-    if (net.isIPv6(clean)) {
-      return /^(::1|fe80:|fc00:|fd00:)/i.test(clean);
+    // Only let the first worker print the ASCII art so it doesn't spam the console 4+ times
+    if (cluster.worker.id === 1) {
+      fs.readFile("ascii_txt.txt", "utf8", (err, data) => {
+        if (err) {
+          console.error("Error reading the file:", err);
+          return;
+        }
+        console.log(data);
+      });
     }
 
-    if (!net.isIPv4(clean)) return false;
-
-    return (
-      cidrContains("10.0.0.0/8", clean) ||
-      cidrContains("172.16.0.0/12", clean) ||
-      cidrContains("192.168.0.0/16", clean) ||
-      cidrContains("127.0.0.0/8", clean) ||
-      cidrContains("169.254.0.0/16", clean)
+    initlog(`Worker ${process.pid} Loading. everything... ever....`);
+    initlog(
+      `[Welcome] Welcome To Poke, where you can LIBERATE THE WEB! - :3 ` +
+        `Running ` +
+        `Node ${process.version} - V8 v${
+          process.versions.v8
+        } -  ${process.platform.replace("linux", "GNU/Linux")} ${
+          process.arch
+        } Server - libpt ${version} (Worker ${process.pid})`
     );
-  }
 
-  /*
-   * poke trust proxy auto-config
-   */
-  (function configureTrustProxy() {
-    const path = require("path");
-    const dotenvPath = path.resolve(process.cwd(), ".env");
+    const {
+      IsJsonString,
+      convert,
+      getFirstLine,
+      capitalizeFirstLetter,
+      turntomins,
+      getRandomInt,
+      getRandomArbitrary,
+    } = require("./src/libpoketube/ptutils/libpt-coreutils.js");
+    const { ieBlockMiddleware } = require("./src/libpoketube/ptutils/ie-blocker.js");
+    initlog(`Worker ${process.pid} Loaded libpt-coreutils and ieBlockMiddleware`);
 
-    try {
-      fs.accessSync(dotenvPath, fs.constants.F_OK);
-      try {
-        require("dotenv").config({ path: dotenvPath });
-        initlog("[POKE-trust-proxy] found .env, loaded it");
-      } catch (e) {
-        initlog("[POKE-trust-proxy] .env exists but no dotenv package, parsing manually");
-        try {
-          const raw = fs.readFileSync(dotenvPath, "utf8");
-          for (const line of raw.split("\n")) {
-            const trimmed = line.trim();
-            if (!trimmed || trimmed.startsWith("#")) continue;
-            const eq = trimmed.indexOf("=");
-            if (eq === -1) continue;
-            const key = trimmed.slice(0, eq).trim();
-            let val = trimmed.slice(eq + 1).trim();
-            if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-              val = val.slice(1, -1);
-            }
-            if (!process.env[key]) process.env[key] = val;
-          }
-          initlog("[POKE-trust-proxy] .env parsed ok");
-        } catch (readErr) {
-          initlog("[POKE-trust-proxy] couldnt read .env: " + readErr.message);
-        }
-      }
-    } catch {
-      initlog("[POKE-trust-proxy] no .env file, thats fine");
-    }
+    const templateDir = modules.path.resolve(
+      `${process.cwd()}${modules.path.sep}html`
+    );
 
-    function detectEnvSignals() {
-      const signals = {
-        "DYNO": "Heroku",
-        "FLY_APP_NAME": "Fly.io",
-        "RENDER_SERVICE_ID": "Render",
-        "RAILWAY_SERVICE_ID": "Railway",
-        "VERCEL": "Vercel",
-        "AWS_EXECUTION_ENV": "AWS Lambda/ECS",
-        "GAE_APPLICATION": "Google App Engine",
-        "K_SERVICE": "Cloud Run/Knative",
-        "WEBSITE_SITE_NAME": "Azure App Service",
-        "ECS_CONTAINER_METADATA_URI": "AWS ECS",
-        "ECS_CONTAINER_METADATA_URI_V4": "AWS ECS v4",
-        "KUBERNETES_SERVICE_HOST": "Kubernetes",
-        "CF_INSTANCE_IP": "Cloud Foundry",
-        "DOKKU_APP_TYPE": "Dokku",
-        "COOLIFY_APP_ID": "Coolify",
-        "CAPROVER_APP": "CapRover",
-      };
+    const sha384 = modules.hash;
 
-      const detected = [];
-      for (const [key, name] of Object.entries(signals)) {
-        if (process.env[key]) detected.push({ key, name, value: process.env[key] });
-      }
-      return detected;
-    }
+    var app = modules.express();
 
-    function detectFilesystemSignals() {
-      const signals = [];
-      const checks = [
-        { path: "/.dockerenv", name: "Docker" },
-        { path: "/run/.containerenv", name: "Podman" },
-        { path: "/var/run/secrets/kubernetes.io", name: "Kubernetes" },
-      ];
-
-      for (const { path, name } of checks) {
-        try {
-          fs.accessSync(path, fs.constants.F_OK);
-          signals.push({ path, name });
-        } catch {}
-      }
-
-      try {
-        const cgroup = fs.readFileSync("/proc/1/cgroup", "utf8");
-        const patterns = [
-          [/docker/i, "Docker"],
-          [/kubepods/i, "Kubernetes"],
-          [/containerd/i, "containerd"],
-          [/lxc/i, "LXC"],
-          [/podman/i, "Podman"],
-        ];
-        for (const [re, name] of patterns) {
-          if (re.test(cgroup)) signals.push({ path: "/proc/1/cgroup", name });
-        }
-      } catch {}
-
-      try {
-        const container = fs.readFileSync("/run/systemd/container", "utf8").trim();
-        if (container) signals.push({ path: "/run/systemd/container", name: container });
-      } catch {}
-
-      return signals;
-    }
-
-    function detectNetworkSignals() {
-      const signals = [];
-      const ifaces = os.networkInterfaces();
-      const containerIfacePattern = /^(docker|br-|veth|cali|flannel|cni|wg|tun|tap|tailscale|podman)/;
-
-      for (const [name] of Object.entries(ifaces)) {
-        if (containerIfacePattern.test(name)) {
-          signals.push({ iface: name, type: "container-interface" });
-        }
-      }
-      return signals;
-    }
-
-    function logProxyHeaders(req) {
-      const interesting = [
-        "x-forwarded-for", "x-forwarded-proto", "x-forwarded-host",
-        "x-real-ip", "via", "cf-ray", "cf-connecting-ip",
-        "fly-request-id", "x-amzn-trace-id",
-      ];
-      const found = interesting.filter(h => req.headers[h]);
-      if (found.length) {
-        initlog("[POKE-trust-proxy] headers we saw: " + found.join(", "));
-      }
-    }
-
-    function checkUserOverride() {
-      const val = (process.env.TRUST_PROXY || "").toLowerCase().trim();
-      if (!val) return null;
-
-      if (val === "true" || val === "1" || val === "yes") return "force-on";
-      if (val === "false" || val === "0" || val === "no") return "force-off";
-
-      const num = parseInt(val, 10);
-      if (!isNaN(num) && num > 0) return num;
-
-      return val;
-    }
-
-    const override = checkUserOverride();
-
-    if (override === "force-off") {
-      app.set("trust proxy", false);
-      initlog("[POKE-trust-proxy] force-disabled via TRUST_PROXY=false");
-      return;
-    }
-
-    if (override === "force-on") {
-      app.set("trust proxy", true);
-      initlog("[POKE-trust-proxy] force-enabled via TRUST_PROXY=true");
-      return;
-    }
-
-    if (typeof override === "number") {
-      app.set("trust proxy", override);
-      initlog("[POKE-trust-proxy] hop count set via TRUST_PROXY=" + override);
-      return;
-    }
-
-    if (typeof override === "string") {
-      app.set("trust proxy", override);
-      initlog("[POKE-trust-proxy] custom trust proxy value set via TRUST_PROXY=" + override);
-      return;
-    }
-
-    const envSignals = detectEnvSignals();
-    const fsSignals = detectFilesystemSignals();
-    const netSignals = detectNetworkSignals();
-
-    const totalConfidence =
-      envSignals.length * 3 +
-      fsSignals.length * 2 +
-      netSignals.length * 1;
-
-    if (envSignals.length) initlog("[POKE-trust-proxy] env: " + envSignals.map(s => s.name).join(", "));
-    if (fsSignals.length) initlog("[POKE-trust-proxy] fs: " + fsSignals.map(s => s.name).join(", "));
-    if (netSignals.length) initlog("[POKE-trust-proxy] net: " + netSignals.map(s => `${s.iface}(${s.type})`).join(", "));
-    initlog("[POKE-trust-proxy] confidence: " + totalConfidence);
-
-    if (totalConfidence >= 2) {
-      app.set("trust proxy", true);
-      initlog("[POKE-trust-proxy] auto-enabled (confidence: " + totalConfidence + ")");
-      return;
-    }
-
-    initlog("[POKE-trust-proxy] not sure yet, will check on first request");
-
-    let probeComplete = false;
-
-    app.use(function pokeProxyProbe(req, res, next) {
-      if (probeComplete) return next();
-      probeComplete = true;
-
-      const hasForwardedFor = !!req.headers["x-forwarded-for"];
-      const hasForwardedProto = !!req.headers["x-forwarded-proto"];
-      const hasForwardedHost = !!req.headers["x-forwarded-host"];
-      const hasVia = !!req.headers["via"];
-      const hasCfRay = !!req.headers["cf-ray"];
-      const hasFlyReqId = !!req.headers["fly-request-id"];
-      const hasXRealIp = !!req.headers["x-real-ip"];
-      const hasXAmznTraceId = !!req.headers["x-amzn-trace-id"];
-
-      const headerScore =
-        (hasForwardedFor ? 3 : 0) +
-        (hasForwardedProto ? 2 : 0) +
-        (hasForwardedHost ? 1 : 0) +
-        (hasVia ? 2 : 0) +
-        (hasCfRay ? 3 : 0) +
-        (hasFlyReqId ? 3 : 0) +
-        (hasXRealIp ? 2 : 0) +
-        (hasXAmznTraceId ? 3 : 0);
-
-      // Relaxed to trust valid proxy headers even if IP is not recognized (fixes Docker/Custom Proxy IP blanket bans)
-      if (headerScore >= 3) {
-        app.set("trust proxy", true);
-        initlog("[POKE-trust-proxy] confirmed proxy on first request (score: " + headerScore + ")");
-        logProxyHeaders(req);
-      } else {
-        app.set("trust proxy", false);
-        initlog("[POKE-trust-proxy] no proxy headers, disabled");
-      }
-
+    // --- AGGRESSIVE SOCKET FREEING ---
+    // Drops hanging requests that clients abandoned to free up active server limits
+    app.use((req, res, next) => {
+      req.setTimeout(25000, () => {
+        req.socket.destroy();
+      });
+      res.setTimeout(25000, () => {
+        res.socket.destroy();
+      });
       next();
     });
+    // ---------------------------------
 
-    setInterval(() => {
-      const freshEnv = detectEnvSignals();
-      const freshFs = detectFilesystemSignals();
-      const freshScore = freshEnv.length * 3 + freshFs.length * 2;
-
-      if (freshScore >= 2 && !probeComplete) {
-        app.set("trust proxy", true);
-        initlog("[POKE-trust-proxy] periodic re-check found proxy (score: " + freshScore + ")");
-      }
-    }, 60_000).unref();
-  })();
- 
-  (function PokeResourceGuard() {
-    const { monitorEventLoopDelay, performance } = require("perf_hooks");
-    
-    // Privacy Setup
-    const guardSalt = crypto.randomBytes(16).toString("hex");
-    function anonymizeIP(ip) {
-      if (!ip) return "unknown";
-      return "anon-" + crypto.createHash("sha256").update(ip + guardSalt).digest("hex").slice(0, 8);
-    }
-
-    let isGuardActive = false;
-    let consecutiveCriticalSpikes = 0; // The strike system for false positives
-
-    const eldHistogram = monitorEventLoopDelay({ resolution: 20 });
-    eldHistogram.enable();
-
-    const resourceConfig = {
-      system: {
-        sampleMs: 1000,
-
-        eventLoop: {
-            warmMs: 1000,     // Ignores event loop delays under 1 full second
-            stressedMs: 3000,
-            criticalMs: 5000
-        },
-
-         warmCpuRatio: 10.00,
-        stressedCpuRatio: 15.00,
-        criticalCpuRatio: 20.00,
-
-        warmRssRatio: 0.95,
-        stressedRssRatio: 0.98,
-        criticalRssRatio: 0.99,
-
-        warmHeapRatio: 0.90,
-        stressedHeapRatio: 0.95,
-        criticalHeapRatio: 0.98
-      },
-
-      client: {
-        windowMs: 30000,
-        maxClientStates: 75000,
-        cleanupMs: 60000,
-
-        absoluteRequestsPerSecond: 1000, 
-        absoluteRequestsPerWindow: 10000,
-        absoluteCostPerWindow: 30000,
-
-        noisyRequestsWarm: 2000,
-        noisyCostWarm: 6000,
-
-        noisyRequestsStressed: 1000,
-        noisyCostStressed: 4000,
-
-        noisyRequestsCritical: 500,
-        noisyCostCritical: 2000,
-
-        pageSoftPassesPerWindow: 200,
-
-        maxHeavyRequestsWarm: 1000, 
-        maxHeavyRequestsStressed: 500,   
-        maxHeavyRequestsCritical: 200,
-
-        cooldownBaseMs: 5000, // Reduced base penalty
-        cooldownMaxMs: 60000,
-        cooldownDecayMs: 30000
-      },
-
-      requestCost: {
-        status: 0.01,
-        static: 0.05,
-        page: 0.5,
-        other: 1,
-        background: 2,
-        heavy: 3 
-      },
-
-      admission: {
-        retryAfterHealthyAbuseSeconds: 10,
-        retryAfterWarmSeconds: 8,
-        retryAfterStressedSeconds: 5,
-        retryAfterCriticalSeconds: 3
-      },
-
-      logging: {
-        stateCooldownMs: 30000,
-        rejectCooldownMs: 5000,
-        slowRequestMs: 5000,
-        maxRecentSlow: 30,
-        maxTopRoutes: 12
-      }
-    };
-
-    const BOT_MEGA_REGEX = /googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot|sogou|exabot|facebot|ia_archiver|archive\.org_bot|qwantify|seznambot|mojeekbot|petalsearch|applebot|discordbot|telegrambot|twitterbot|whatsapp|slackbot|linkedinbot|mastodon|pleroma|misskey|akkoma|lemmy|kbin|pixelfed|gotosocial|uptimerobot|pingdom|statuscake|site24x7|hetrixtools|freshping|cloudflare|cloudfront|fastly|feedfetcher|feedly|newsblur|tiny\s?tiny\s?rss|miniflux|researchscan|censys|semrush|ahrefs/i;
-
-    const REGEX_OBJ_ID = /[a-f0-9]{24}/g;
-    const REGEX_HEX = /[a-f0-9]{32,}/g;
-    const REGEX_UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/g;
-    const REGEX_NUM = /\/\d{3,}(?=\/|$)/g;
-    const REGEX_ID = /\/[a-z0-9_-]{11}(?=\/|$)/g;
-
-    const EXACT_STATUS_ROUTES = new Set([
-      "/robots.txt", "/favicon.ico", "/_pokeresource/stats", 
-      "/_poketraffic/stats", "/_pokestopskids/stats", "/_pokeoverload/stats", 
-      "/health", "/traffic"
-    ]);
-
-    const EXACT_IGNORED_ROUTES = new Set([
-      "/api/nexus", "/api/stats", "/health", "/traffic"
-    ]);
-
-    const EXACT_PAGE_ROUTES = new Set([
-      "/", "/home", "/watch", "/search", "/hashtag"
-    ]);
-
-    const GUARD_MESSAGES = [
-      "Server is busy. Please retry shortly.",
-      "Poke is protecting itself from heavy traffic. Please retry shortly.",
-      "Too many expensive requests right now. Please slow down a bit.",
-      "The server is under pressure. Please try again in a moment."
+    const CLOUDFLARE_V4 = [
+      "173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22",
+      "103.31.4.0/22", "141.101.64.0/18", "108.162.192.0/18",
+      "190.93.240.0/20", "188.114.96.0/20", "197.234.240.0/22",
+      "198.41.128.0/17", "162.158.0.0/15", "104.16.0.0/13",
+      "104.24.0.0/14", "172.64.0.0/13", "131.0.72.0/22",
     ];
 
-    let resourceState = {
-      state: "healthy",
-      score: 0,
-      since: Date.now(),
-      sampledAt: Date.now(),
-      reason: "startup",
-      eventLoop: {
-        p99Ms: 0,
-        meanMs: 0
-      },
-      cpu: {
-        ratio: 0,
-        percent: 0,
-        userMs: 0,
-        systemMs: 0,
-        totalMs: 0,
-        elapsedMs: 0
-      },
-      memory: {
-        rssMb: 0,
-        heapUsedMb: 0,
-        heapTotalMb: 0,
-        externalMb: 0,
-        arrayBuffersMb: 0,
-        rssRatio: 0,
-        heapRatio: 0,
-        effectiveTotalMb: 0,
-        systemFreeMb: 0,
-        systemTotalMb: 0,
-        constrainedMb: 0
-      },
-      requests: {
-        rps: 0,
-        active: 0,
-        kinds: {}
-      },
-      pressureReasons: []
-    };
+    function ipToLong(ip) {
+      return ip.split(".").reduce((acc, oct) => (acc << 8) + parseInt(oct, 10), 0) >>> 0;
+    }
 
-    let lastStateLogAt = 0;
-    let lastRejectLogAt = 0;
-    let currentSecondRequests = 0;
-    let currentSecondKindCounts = new Map();
-    let currentSecondRouteCounts = new Map();
-    
-    // Persistent Data Setup
-    let allTimeRouteCounts = new Map();
-    let totalGlobalRequests = 0;
-    let trackingStartTime = Date.now();
-    const STATS_FILE_PATH = 'popularpaths.json';
+    function cidrContains(cidr, ip) {
+      if (!net.isIPv4(ip)) return false;
+      const [subnet, bits] = cidr.split("/");
+      const parsedBits = parseInt(bits, 10);
+      if (!Number.isFinite(parsedBits) || parsedBits < 0 || parsedBits > 32) return false;
+      const mask = parsedBits === 0 ? 0 : ~(2 ** (32 - parsedBits) - 1) >>> 0;
+      return (ipToLong(ip) & mask) === (ipToLong(subnet) & mask);
+    }
 
-    try {
-      if (fs.existsSync(STATS_FILE_PATH)) {
-        const fileData = fs.readFileSync(STATS_FILE_PATH, 'utf8');
-        const parsedData = JSON.parse(fileData);
-        totalGlobalRequests = parsedData.totalRequests || 0;
-        if (parsedData.trackingStartTime) {
-          trackingStartTime = parsedData.trackingStartTime;
-        }
-        if (parsedData.routes) {
-          for (const [key, val] of Object.entries(parsedData.routes)) {
-            allTimeRouteCounts.set(key, val);
+    // Fast-path IP cleanup (Avoids Regex allocation)
+    function cleanIP(ip) {
+      const str = String(ip || "");
+      return str.startsWith("::ffff:") ? str.substring(7) : str;
+    }
+
+    function isCloudflareIP(ip) {
+      const clean = cleanIP(ip);
+      if (!net.isIPv4(clean)) return false;
+      return CLOUDFLARE_V4.some(cidr => cidrContains(cidr, clean));
+    }
+
+    function isPrivateIP(ip) {
+      const clean = cleanIP(ip);
+
+      if (net.isIPv6(clean)) {
+        return /^(::1|fe80:|fc00:|fd00:)/i.test(clean);
+      }
+
+      if (!net.isIPv4(clean)) return false;
+
+      return (
+        cidrContains("10.0.0.0/8", clean) ||
+        cidrContains("172.16.0.0/12", clean) ||
+        cidrContains("192.168.0.0/16", clean) ||
+        cidrContains("127.0.0.0/8", clean) ||
+        cidrContains("169.254.0.0/16", clean)
+      );
+    }
+
+    /*
+     * poke trust proxy auto-config
+     */
+    (function configureTrustProxy() {
+      const path = require("path");
+      const dotenvPath = path.resolve(process.cwd(), ".env");
+
+      try {
+        fs.accessSync(dotenvPath, fs.constants.F_OK);
+        try {
+          require("dotenv").config({ path: dotenvPath });
+          initlog("[POKE-trust-proxy] found .env, loaded it");
+        } catch (e) {
+          initlog("[POKE-trust-proxy] .env exists but no dotenv package, parsing manually");
+          try {
+            const raw = fs.readFileSync(dotenvPath, "utf8");
+            for (const line of raw.split("\n")) {
+              const trimmed = line.trim();
+              if (!trimmed || trimmed.startsWith("#")) continue;
+              const eq = trimmed.indexOf("=");
+              if (eq === -1) continue;
+              const key = trimmed.slice(0, eq).trim();
+              let val = trimmed.slice(eq + 1).trim();
+              if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+                val = val.slice(1, -1);
+              }
+              if (!process.env[key]) process.env[key] = val;
+            }
+            initlog("[POKE-trust-proxy] .env parsed ok");
+          } catch (readErr) {
+            initlog("[POKE-trust-proxy] couldnt read .env: " + readErr.message);
           }
         }
-        initlog(`[POKE-resource] Loaded previous traffic stats: ${totalGlobalRequests} total global requests.`);
-      }
-    } catch (err) {
-      console.error("[POKE-resource] Could not load popularpaths.json:", err.message);
-    }
-
-    // Interval extended to 60s to prevent CPU spiking from sorting arrays
-    setInterval(() => {
-      if (allTimeRouteCounts.size > 5000) {
-        const sorted = Array.from(allTimeRouteCounts.entries()).sort((a,b) => b[1] - a[1]);
-        allTimeRouteCounts = new Map(sorted.slice(0, 4000));
+      } catch {
+        initlog("[POKE-trust-proxy] no .env file, thats fine");
       }
 
-      const routesObj = {};
-      for (const [k, v] of allTimeRouteCounts.entries()) {
-        routesObj[k] = v;
+      function detectEnvSignals() {
+        const signals = {
+          "DYNO": "Heroku",
+          "FLY_APP_NAME": "Fly.io",
+          "RENDER_SERVICE_ID": "Render",
+          "RAILWAY_SERVICE_ID": "Railway",
+          "VERCEL": "Vercel",
+          "AWS_EXECUTION_ENV": "AWS Lambda/ECS",
+          "GAE_APPLICATION": "Google App Engine",
+          "K_SERVICE": "Cloud Run/Knative",
+          "WEBSITE_SITE_NAME": "Azure App Service",
+          "ECS_CONTAINER_METADATA_URI": "AWS ECS",
+          "ECS_CONTAINER_METADATA_URI_V4": "AWS ECS v4",
+          "KUBERNETES_SERVICE_HOST": "Kubernetes",
+          "CF_INSTANCE_IP": "Cloud Foundry",
+          "DOKKU_APP_TYPE": "Dokku",
+          "COOLIFY_APP_ID": "Coolify",
+          "CAPROVER_APP": "CapRover",
+        };
+
+        const detected = [];
+        for (const [key, name] of Object.entries(signals)) {
+          if (process.env[key]) detected.push({ key, name, value: process.env[key] });
+        }
+        return detected;
       }
-      const outData = { trackingStartTime, totalRequests: totalGlobalRequests, routes: routesObj };
-      fs.writeFile(STATS_FILE_PATH, JSON.stringify(outData, null, 2), (err) => {
-        if (err) console.error("[POKE-resource] Failed to save popularpaths.json:", err.message);
-      });
-    }, 60000).unref();
 
-    let lastSampleAt = performance.now();
-    let lastCpuUsage = process.cpuUsage();
+      function detectFilesystemSignals() {
+        const signals = [];
+        const checks = [
+          { path: "/.dockerenv", name: "Docker" },
+          { path: "/run/.containerenv", name: "Podman" },
+          { path: "/var/run/secrets/kubernetes.io", name: "Kubernetes" },
+        ];
 
-    let requestSequence = 0;
-    const activeRequests = new Map();
-    const activeRequestCounts = new Map();
-    const recentSlowRequests = [];
-    
-    // JS Maps preserve insertion order. We use this to do O(1) LRU eviction.
-    const clientStates = new Map(); 
+        for (const { path, name } of checks) {
+          try {
+            fs.accessSync(path, fs.constants.F_OK);
+            signals.push({ path, name });
+          } catch {}
+        }
 
-    const guardStats = {
-      allowedHealthy: 0,
-      allowedWarm: 0,
-      allowedStressed: 0,
-      allowedCritical: 0,
-      allowedStatus: 0,
-      allowedStatic: 0,
-      allowedPage: 0,
-      allowedHeavy: 0,
-      rejectedAbuse: 0,
-      rejectedCooldown: 0,
-      rejectedWarm: 0,
-      rejectedStressed: 0,
-      rejectedCritical: 0,
-      cooldownsIssued: 0
-    };
-
-    function bytesToMb(bytes) {
-      return Math.round(bytes / 1024 / 1024);
-    }
-
-    function roundMs(value) {
-      if (!Number.isFinite(value)) return 0;
-      return Math.round(value * 100) / 100;
-    }
-
-    function roundRatio(value) {
-      if (!Number.isFinite(value)) return 0;
-      return Math.round(value * 10000) / 10000;
-    }
-
-    function formatPercent(value) {
-      if (!Number.isFinite(value)) return "0%";
-      return (value * 100).toFixed(2) + "%";
-    }
-
-    function getEffectiveMemoryLimit() {
-      if (typeof process.constrainedMemory === "function") {
         try {
-          const constrained = process.constrainedMemory();
-          if (Number.isFinite(constrained) && constrained > 0) {
-            return constrained;
+          const cgroup = fs.readFileSync("/proc/1/cgroup", "utf8");
+          const patterns = [
+            [/docker/i, "Docker"],
+            [/kubepods/i, "Kubernetes"],
+            [/containerd/i, "containerd"],
+            [/lxc/i, "LXC"],
+            [/podman/i, "Podman"],
+          ];
+          for (const [re, name] of patterns) {
+            if (re.test(cgroup)) signals.push({ path: "/proc/1/cgroup", name });
           }
         } catch {}
+
+        try {
+          const container = fs.readFileSync("/run/systemd/container", "utf8").trim();
+          if (container) signals.push({ path: "/run/systemd/container", name: container });
+        } catch {}
+
+        return signals;
       }
-      return os.totalmem();
-    }
 
-    function getConstrainedMemoryMb() {
-      if (typeof process.constrainedMemory !== "function") return 0;
-      try {
-        const constrained = process.constrainedMemory();
-        if (Number.isFinite(constrained) && constrained > 0) {
-          return bytesToMb(constrained);
+      function detectNetworkSignals() {
+        const signals = [];
+        const ifaces = os.networkInterfaces();
+        const containerIfacePattern = /^(docker|br-|veth|cali|flannel|cni|wg|tun|tap|tailscale|podman)/;
+
+        for (const [name] of Object.entries(ifaces)) {
+          if (containerIfacePattern.test(name)) {
+            signals.push({ iface: name, type: "container-interface" });
+          }
         }
-      } catch {}
-      return 0;
-    }
+        return signals;
+      }
 
-    function getRequestPath(req) {
-      if (req._parsed_path_cache) return req._parsed_path_cache;
-      const url = req.originalUrl || req.url || "/";
-      const qIdx = url.indexOf("?");
-      const p = (qIdx === -1 ? url : url.substring(0, qIdx)).toLowerCase();
-      req._parsed_path_cache = p;
-      return p;
-    }
+      function logProxyHeaders(req) {
+        const interesting = [
+          "x-forwarded-for", "x-forwarded-proto", "x-forwarded-host",
+          "x-real-ip", "via", "cf-ray", "cf-connecting-ip",
+          "fly-request-id", "x-amzn-trace-id",
+        ];
+        const found = interesting.filter(h => req.headers[h]);
+        if (found.length) {
+          initlog("[POKE-trust-proxy] headers we saw: " + found.join(", "));
+        }
+      }
 
-    function isAvatarRoutePath(pathname) {
-      return pathname === "/avatars" || pathname.startsWith("/avatars/");
-    }
+      function checkUserOverride() {
+        const val = (process.env.TRUST_PROXY || "").toLowerCase().trim();
+        if (!val) return null;
 
-    // O(1) SET LOOKUP
-    function isIgnoredRoute(req) {
-      const path = getRequestPath(req);
-      if (EXACT_IGNORED_ROUTES.has(path)) return true;
-      if (path.startsWith("/static/") || path.startsWith("/css/")) return true;
-      return isAvatarRoutePath(path);
-    }
+        if (val === "true" || val === "1" || val === "yes") return "force-on";
+        if (val === "false" || val === "0" || val === "no") return "force-off";
 
-    function normalizePathname(pathname) {
-      if (pathname.startsWith('/avatars/')) return '/avatars/';
-      if (pathname.startsWith('/vi/')) return '/vi/';
-      if (pathname.startsWith('/ggpht/')) return '/ggpht/';
-      if (pathname.startsWith('/sb/')) return '/sb/';
-      if (pathname.startsWith('/storyboard')) return '/storyboard';
-      if (pathname.startsWith('/videoplayback')) return '/videoplayback';
-      if (pathname.startsWith('/hashtag/')) return '/hashtag/';
-      
-      return pathname
-        .replace(REGEX_OBJ_ID, ":objectId")
-        .replace(REGEX_HEX, ":hex")
-        .replace(REGEX_UUID, ":uuid")
-        .replace(REGEX_NUM, "/:number")
-        .replace(REGEX_ID, "/:id");
-    }
+        const num = parseInt(val, 10);
+        if (!isNaN(num) && num > 0) return num;
 
-    function getRequestKey(req) {
-      return req.method + " " + normalizePathname(getRequestPath(req));
-    }
+        return val;
+      }
 
-    function incrementMapCount(map, key, amount) {
-      map.set(key, (map.get(key) || 0) + (amount || 1));
-    }
+      const override = checkUserOverride();
 
-    function decrementMapCount(map, key) {
-      const nextValue = (map.get(key) || 0) - 1;
-      if (nextValue <= 0) {
-        map.delete(key);
+      if (override === "force-off") {
+        app.set("trust proxy", false);
+        initlog("[POKE-trust-proxy] force-disabled via TRUST_PROXY=false");
         return;
       }
-      map.set(key, nextValue);
-    }
 
-    function getTopMapEntries(map, limit) {
-      return Array.from(map.entries())
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, limit)
-        .map(entry => ({ key: entry[0], count: entry[1] }));
-    }
+      if (override === "force-on") {
+        app.set("trust proxy", true);
+        initlog("[POKE-trust-proxy] force-enabled via TRUST_PROXY=true");
+        return;
+      }
 
-    function getActiveRequestSummary(limit) {
-      const now = Date.now();
-      return Array.from(activeRequests.values())
-        .map(req => ({
-            id: req.id,
-            key: req.key,
-            kind: req.kind,
-            ageMs: now - req.startedAt
-        }))
-        .sort((a, b) => b.ageMs - a.ageMs)
-        .slice(0, limit);
-    }
+      if (typeof override === "number") {
+        app.set("trust proxy", override);
+        initlog("[POKE-trust-proxy] hop count set via TRUST_PROXY=" + override);
+        return;
+      }
 
-    function isKnownBot(ua) {
-      if (!ua) return false;
-      return BOT_MEGA_REGEX.test(ua);
-    }
+      if (typeof override === "string") {
+        app.set("trust proxy", override);
+        initlog("[POKE-trust-proxy] custom trust proxy value set via TRUST_PROXY=" + override);
+        return;
+      }
 
-    function isSafeMethod(req) {
-      return req.method === "GET" || req.method === "HEAD";
-    }
+      const envSignals = detectEnvSignals();
+      const fsSignals = detectFilesystemSignals();
+      const netSignals = detectNetworkSignals();
 
-    function isStaticRequest(req) {
-      const pathname = getRequestPath(req);
-      if (pathname.startsWith("/css/") || pathname.startsWith("/js/") || pathname.startsWith("/img/") || pathname.startsWith("/font/") || pathname.startsWith("/static/")) return true;
-      if (pathname === "/favicon.ico" || pathname === "/manifest.json" || pathname === "/robots.txt") return true;
-      return /\.(css|js|mjs|png|jpg|jpeg|webp|gif|svg|ico|woff|woff2|ttf|otf|map|txt)$/.test(pathname);
-    }
+      const totalConfidence =
+        envSignals.length * 3 +
+        fsSignals.length * 2 +
+        netSignals.length * 1;
 
-    // O(1) SET LOOKUP
-    function isStatusRequest(req) {
-      const pathname = getRequestPath(req);
-      if (EXACT_STATUS_ROUTES.has(pathname)) return true;
-      return pathname.startsWith("/health/");
-    }
+      if (envSignals.length) initlog("[POKE-trust-proxy] env: " + envSignals.map(s => s.name).join(", "));
+      if (fsSignals.length) initlog("[POKE-trust-proxy] fs: " + fsSignals.map(s => s.name).join(", "));
+      if (netSignals.length) initlog("[POKE-trust-proxy] net: " + netSignals.map(s => `${s.iface}(${s.type})`).join(", "));
+      initlog("[POKE-trust-proxy] confidence: " + totalConfidence);
 
-    function isHeavyRequest(req) {
-      const pathname = getRequestPath(req);
-      if (!isSafeMethod(req)) return true;
-      if (isAvatarRoutePath(pathname)) return false;
-      return (
-        pathname.startsWith("/api/") ||
-        pathname.startsWith("/proxy/") ||
-        pathname.startsWith("/videoplayback") ||
-        pathname.startsWith("/vi/") ||
-        pathname.startsWith("/ggpht/") ||
-        pathname.startsWith("/storyboard") ||
-        pathname.startsWith("/sb/") ||
-        pathname.startsWith("/manifest") ||
-        pathname.startsWith("/channel_uploads") ||
-        pathname.startsWith("/music")
-      );
-    }
+      if (totalConfidence >= 2) {
+        app.set("trust proxy", true);
+        initlog("[POKE-trust-proxy] auto-enabled (confidence: " + totalConfidence + ")");
+        return;
+      }
 
-    function isBackgroundRequest(req) {
-      const accept = String(req.headers.accept || "").toLowerCase();
-      const secFetchDest = String(req.headers["sec-fetch-dest"] || "").toLowerCase();
-      const secFetchMode = String(req.headers["sec-fetch-mode"] || "").toLowerCase();
+      initlog("[POKE-trust-proxy] not sure yet, will check on first request");
 
-      if (!isSafeMethod(req)) return true;
-      if (accept.includes("application/json") && !accept.includes("text/html")) return true;
-      if (secFetchDest === "empty" && secFetchMode === "cors") return true;
-      return false;
-    }
+      let probeComplete = false;
 
-    // O(1) SET LOOKUP Optimization
-    function isPageNavigation(req) {
-      const pathname = getRequestPath(req);
-      const accept = String(req.headers.accept || "").toLowerCase();
-      const secFetchDest = String(req.headers["sec-fetch-dest"] || "").toLowerCase();
-      const secFetchMode = String(req.headers["sec-fetch-mode"] || "").toLowerCase();
+      app.use(function pokeProxyProbe(req, res, next) {
+        if (probeComplete) return next();
+        probeComplete = true;
 
-      if (!isSafeMethod(req)) return false;
-      if (isStaticRequest(req) || isHeavyRequest(req) || isBackgroundRequest(req)) return false;
-      
-      if (EXACT_PAGE_ROUTES.has(pathname)) return true;
-      if (
-        pathname.startsWith("/watch/") || pathname.startsWith("/search/") ||
-        pathname.startsWith("/channel/") || pathname.startsWith("/user/") ||
-        pathname.startsWith("/playlist")
-      ) return true;
+        const hasForwardedFor = !!req.headers["x-forwarded-for"];
+        const hasForwardedProto = !!req.headers["x-forwarded-proto"];
+        const hasForwardedHost = !!req.headers["x-forwarded-host"];
+        const hasVia = !!req.headers["via"];
+        const hasCfRay = !!req.headers["cf-ray"];
+        const hasFlyReqId = !!req.headers["fly-request-id"];
+        const hasXRealIp = !!req.headers["x-real-ip"];
+        const hasXAmznTraceId = !!req.headers["x-amzn-trace-id"];
 
-      if (accept.includes("text/html")) return true;
-      if (secFetchDest === "document" || secFetchMode === "navigate") return true;
-      return false;
-    }
+        const headerScore =
+          (hasForwardedFor ? 3 : 0) +
+          (hasForwardedProto ? 2 : 0) +
+          (hasForwardedHost ? 1 : 0) +
+          (hasVia ? 2 : 0) +
+          (hasCfRay ? 3 : 0) +
+          (hasFlyReqId ? 3 : 0) +
+          (hasXRealIp ? 2 : 0) +
+          (hasXAmznTraceId ? 3 : 0);
 
-    function classifyRequest(req) {
-      if (isStatusRequest(req)) return "status";
-      if (isStaticRequest(req)) return "static";
-      if (isHeavyRequest(req)) return "heavy";
-      if (isBackgroundRequest(req)) return "background";
-      if (isPageNavigation(req)) return "page";
-      return "other";
-    }
-
-    function getKindCost(kind, req) {
-      let cost = resourceConfig.requestCost[kind] || resourceConfig.requestCost.other;
-      const ua = req.headers["user-agent"];
-      if (isKnownBot(ua)) cost = cost * 0.5;
-      const rawIP = cleanIP(req.socket.remoteAddress || "");
-      if (isCloudflareIP(rawIP)) cost = cost * 0.85;
-      return cost;
-    }
-
-    function getClientKey(req) {
-      return cleanIP(req.ip || req.socket.remoteAddress || "unknown");
-    }
-
-    // O(1) Sliding Window Helper function
-    function updateClientWindow(client, now) {
-      const WINDOW_MS = resourceConfig.client.windowMs;
-      const currentStart = Math.floor(now / WINDOW_MS) * WINDOW_MS;
-
-      if (client.windowStart !== currentStart) {
-        const diff = currentStart - client.windowStart;
-        if (diff === WINDOW_MS) {
-          client.previous = { ...client.current };
+        // Relaxed to trust valid proxy headers even if IP is not recognized (fixes Docker/Custom Proxy IP blanket bans)
+        if (headerScore >= 3) {
+          app.set("trust proxy", true);
+          initlog("[POKE-trust-proxy] confirmed proxy on first request (score: " + headerScore + ")");
+          logProxyHeaders(req);
         } else {
-          client.previous = { total: 0, cost: 0, heavy: 0, page: 0, rejects: 0, softPass: 0 };
+          app.set("trust proxy", false);
+          initlog("[POKE-trust-proxy] no proxy headers, disabled");
         }
-        client.current = { total: 0, cost: 0, heavy: 0, page: 0, rejects: 0, softPass: 0 };
-        client.windowStart = currentStart;
-      }
-    }
 
-    function getMetric(client, metric, now) {
-      updateClientWindow(client, now);
-      const WINDOW_MS = resourceConfig.client.windowMs;
-      const weight = Math.max(0, 1 - ((now - client.windowStart) / WINDOW_MS));
-      return client.current[metric] + (client.previous[metric] * weight);
-    }
+        next();
+      });
 
-    function evictClientStateIfNeeded() {
-      if (clientStates.size >= resourceConfig.client.maxClientStates) {
-        // True O(1) LRU eviction via Map insertion order.
-        // Drops the oldest 10% instantly without iterating the whole map.
-        const keysToEvict = Math.max(1, Math.floor(resourceConfig.client.maxClientStates * 0.1));
-        let evicted = 0;
-        for (const oldKey of clientStates.keys()) {
-          clientStates.delete(oldKey);
-          if (++evicted >= keysToEvict) break;
+      setInterval(() => {
+        const freshEnv = detectEnvSignals();
+        const freshFs = detectFilesystemSignals();
+        const freshScore = freshEnv.length * 3 + freshFs.length * 2;
+
+        if (freshScore >= 2 && !probeComplete) {
+          app.set("trust proxy", true);
+          initlog("[POKE-trust-proxy] periodic re-check found proxy (score: " + freshScore + ")");
         }
-      }
-    }
+      }, 60_000).unref();
+    })();
 
-    function getClientState(req, now) {
-      const key = getClientKey(req);
-      let client = clientStates.get(key);
-
-      if (client) {
-        // LRU Cache trick: delete and re-insert to move it to the end (freshest)
-        clientStates.delete(key);
-        clientStates.set(key, client);
-      } else {
-        evictClientStateIfNeeded();
-        client = {
-          key,
-          firstSeen: now,
-          lastSeen: now,
-          cooldownUntil: 0,
-          cooldownLevel: 0,
-          lastCooldownAt: 0,
-          trustedBot: false,
-          currentSec: Math.floor(now / 1000),
-          currentSecCount: 0,
-          
-          // Sliding window counters (Zero Arrays)
-          windowStart: Math.floor(now / resourceConfig.client.windowMs) * resourceConfig.client.windowMs,
-          current: { total: 0, cost: 0, heavy: 0, page: 0, rejects: 0, softPass: 0 },
-          previous: { total: 0, cost: 0, heavy: 0, page: 0, rejects: 0, softPass: 0 }
-        };
-        clientStates.set(key, client);
-      }
-
-      client.lastSeen = now;
-      if (client.cooldownUntil > 0 && client.cooldownUntil <= now) {
-        client.cooldownUntil = 0;
-      }
-      if (client.cooldownLevel > 0 && now - client.lastCooldownAt > resourceConfig.client.cooldownDecayMs) {
-        client.cooldownLevel = Math.max(0, client.cooldownLevel - 1);
-        client.lastCooldownAt = now;
-      }
-      return client;
-    }
-
-    function rememberClientRequest(req, client, kind, cost, now) {
-      client.lastSeen = now;
-      const ua = req.headers["user-agent"];
-      client.trustedBot = isKnownBot(ua ? String(ua).substring(0, 160) : "");
-
-      const sec = Math.floor(now / 1000);
-      if (client.currentSec !== sec) {
-          client.currentSec = sec;
-          client.currentSecCount = 0;
-      }
-      client.currentSecCount++;
-
-      updateClientWindow(client, now);
-      client.current.total++;
-      client.current.cost += cost;
-
-      if (kind === "heavy" || kind === "background") client.current.heavy++;
-      if (kind === "page") client.current.page++;
-    }
-
-    function rememberDecision(client, decision, now) {
-      updateClientWindow(client, now);
-      if (decision === "reject") client.current.rejects++;
-      if (decision === "page-soft-pass") client.current.softPass++;
-    }
-
-    function getClientPressure(client, now) {
-      return (
-        getMetric(client, "total", now) +
-        (client.currentSecCount * 3) +
-        (getMetric(client, "heavy", now) * 4) +
-        (getMetric(client, "rejects", now) * 8) +
-        getMetric(client, "cost", now)
-      );
-    }
-
-    function getNoisyLimits(state) {
-      if (state === "critical") return { requests: resourceConfig.client.noisyRequestsCritical, cost: resourceConfig.client.noisyCostCritical };
-      if (state === "stressed") return { requests: resourceConfig.client.noisyRequestsStressed, cost: resourceConfig.client.noisyCostStressed };
-      return { requests: resourceConfig.client.noisyRequestsWarm, cost: resourceConfig.client.noisyCostWarm };
-    }
-
-    function getHeavyLimit(state) {
-      if (state === "critical") return resourceConfig.client.maxHeavyRequestsCritical;
-      if (state === "stressed") return resourceConfig.client.maxHeavyRequestsStressed;
-      return resourceConfig.client.maxHeavyRequestsWarm;
-    }
-
-    function clientIsAbsoluteAbuse(client, now) {
-      return (
-        client.currentSecCount >= resourceConfig.client.absoluteRequestsPerSecond ||
-        getMetric(client, "total", now) >= resourceConfig.client.absoluteRequestsPerWindow ||
-        getMetric(client, "cost", now) >= resourceConfig.client.absoluteCostPerWindow
-      );
-    }
-
-    function clientIsNoisy(client, state, now) {
-      const limits = getNoisyLimits(state);
-      return (
-        getMetric(client, "total", now) >= limits.requests ||
-        getMetric(client, "cost", now) >= limits.cost ||
-        getClientPressure(client, now) >= limits.cost * 1.5
-      );
-    }
-
-    function applyClientCooldown(client, reason, now) {
-      client.cooldownLevel++;
-      client.lastCooldownAt = now;
-
-      const cooldownMs = Math.min(
-        resourceConfig.client.cooldownMaxMs,
-        resourceConfig.client.cooldownBaseMs * Math.pow(2, Math.max(0, client.cooldownLevel - 1))
-      );
-
-      client.cooldownUntil = now + cooldownMs;
-      guardStats.cooldownsIssued++;
-
-      console.error(
-        "[POKE-resource] client cooldown " +
-        JSON.stringify({
-          reason, cooldownMs, cooldownLevel: client.cooldownLevel,
-          client: {
-            ip: anonymizeIP(client.key),
-            requests: Math.round(getMetric(client, "total", now)),
-            oneSecondRequests: client.currentSecCount,
-            heavyRequests: Math.round(getMetric(client, "heavy", now)),
-            rejects: Math.round(getMetric(client, "rejects", now)),
-            cost: Math.round(getMetric(client, "cost", now) * 100) / 100,
-            pressure: Math.round(getClientPressure(client, now) * 100) / 100
-          }
-        })
-      );
-    }
-
-    function sampleCpuAndMemory(reason) {
-      const now = Date.now();
-      const currentPerf = performance.now();
-      const elapsedMs = Math.max(1, currentPerf - lastSampleAt);
-
-      const newCpuUsage = process.cpuUsage();
-      const cpuDelta = process.cpuUsage(lastCpuUsage);
-      lastCpuUsage = newCpuUsage;
-      lastSampleAt = currentPerf;
-
-      // cpuUsage returns microseconds, so divide by 1000 to get Ms
-      const cpuUserMs = cpuDelta.user / 1000;
-      const cpuSystemMs = cpuDelta.system / 1000;
-      const cpuTotalMs = cpuUserMs + cpuSystemMs;
+    (function PokeResourceGuard() {
+      const { monitorEventLoopDelay, performance } = require("perf_hooks");
       
-      // Node's libuv thread pool uses multiple cores for networking.
-      // So CPU Ratio CAN easily go above 1.0. This is normal.
-      const cpuRatio = cpuTotalMs / elapsedMs;
-
-      // Extract Event Loop Delay Metrics
-      const eldP99 = eldHistogram.percentile(99) / 1e6;
-      const eldMean = eldHistogram.mean / 1e6;
-      eldHistogram.reset();
-
-      const memory = process.memoryUsage();
-      const effectiveTotal = getEffectiveMemoryLimit();
-      const rssRatio = effectiveTotal > 0 ? memory.rss / effectiveTotal : 0;
-      const heapRatio = effectiveTotal > 0 ? memory.heapUsed / effectiveTotal : 0;
-
-      const kinds = {};
-      for (const [kind, count] of currentSecondKindCounts) {
-        kinds[kind] = count;
+      // Privacy Setup
+      const guardSalt = crypto.randomBytes(16).toString("hex");
+      function anonymizeIP(ip) {
+        if (!ip) return "unknown";
+        return "anon-" + crypto.createHash("sha256").update(ip + guardSalt).digest("hex").slice(0, 8);
       }
 
-      const snapshot = {
-        state: resourceState.state,
-        score: resourceState.score,
-        since: resourceState.since,
-        sampledAt: now,
-        reason: reason || "interval",
+      let isGuardActive = false;
+      let consecutiveCriticalSpikes = 0; // The strike system for false positives
+
+      const eldHistogram = monitorEventLoopDelay({ resolution: 20 });
+      eldHistogram.enable();
+
+      const resourceConfig = {
+        system: {
+          sampleMs: 1000,
+
+          eventLoop: {
+              warmMs: 1000,     // Ignores event loop delays under 1 full second
+              stressedMs: 3000,
+              criticalMs: 5000
+          },
+
+           warmCpuRatio: 10.00,
+          stressedCpuRatio: 15.00,
+          criticalCpuRatio: 20.00,
+
+          warmRssRatio: 0.95,
+          stressedRssRatio: 0.98,
+          criticalRssRatio: 0.99,
+
+          warmHeapRatio: 0.90,
+          stressedHeapRatio: 0.95,
+          criticalHeapRatio: 0.98
+        },
+
+        client: {
+          windowMs: 30000,
+          maxClientStates: 75000,
+          cleanupMs: 60000,
+
+          absoluteRequestsPerSecond: 1000, 
+          absoluteRequestsPerWindow: 10000,
+          absoluteCostPerWindow: 30000,
+
+          noisyRequestsWarm: 2000,
+          noisyCostWarm: 6000,
+
+          noisyRequestsStressed: 1000,
+          noisyCostStressed: 4000,
+
+          noisyRequestsCritical: 500,
+          noisyCostCritical: 2000,
+
+          pageSoftPassesPerWindow: 200,
+
+          maxHeavyRequestsWarm: 1000, 
+          maxHeavyRequestsStressed: 500,   
+          maxHeavyRequestsCritical: 200,
+
+          cooldownBaseMs: 5000, // Reduced base penalty
+          cooldownMaxMs: 60000,
+          cooldownDecayMs: 30000
+        },
+
+        requestCost: {
+          status: 0.01,
+          static: 0.05,
+          page: 0.5,
+          other: 1,
+          background: 2,
+          heavy: 3 
+        },
+
+        admission: {
+          retryAfterHealthyAbuseSeconds: 10,
+          retryAfterWarmSeconds: 8,
+          retryAfterStressedSeconds: 5,
+          retryAfterCriticalSeconds: 3
+        },
+
+        logging: {
+          stateCooldownMs: 30000,
+          rejectCooldownMs: 5000,
+          slowRequestMs: 5000,
+          maxRecentSlow: 30,
+          maxTopRoutes: 12
+        }
+      };
+
+      const BOT_MEGA_REGEX = /googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot|sogou|exabot|facebot|ia_archiver|archive\.org_bot|qwantify|seznambot|mojeekbot|petalsearch|applebot|discordbot|telegrambot|twitterbot|whatsapp|slackbot|linkedinbot|mastodon|pleroma|misskey|akkoma|lemmy|kbin|pixelfed|gotosocial|uptimerobot|pingdom|statuscake|site24x7|hetrixtools|freshping|cloudflare|cloudfront|fastly|feedfetcher|feedly|newsblur|tiny\s?tiny\s?rss|miniflux|researchscan|censys|semrush|ahrefs/i;
+
+      const REGEX_OBJ_ID = /[a-f0-9]{24}/g;
+      const REGEX_HEX = /[a-f0-9]{32,}/g;
+      const REGEX_UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/g;
+      const REGEX_NUM = /\/\d{3,}(?=\/|$)/g;
+      const REGEX_ID = /\/[a-z0-9_-]{11}(?=\/|$)/g;
+
+      const EXACT_STATUS_ROUTES = new Set([
+        "/robots.txt", "/favicon.ico", "/_pokeresource/stats", 
+        "/_poketraffic/stats", "/_pokestopskids/stats", "/_pokeoverload/stats", 
+        "/health", "/traffic"
+      ]);
+
+      const EXACT_IGNORED_ROUTES = new Set([
+        "/api/nexus", "/api/stats", "/health", "/traffic"
+      ]);
+
+      const EXACT_PAGE_ROUTES = new Set([
+        "/", "/home", "/watch", "/search", "/hashtag"
+      ]);
+
+      const GUARD_MESSAGES = [
+        "Server is busy. Please retry shortly.",
+        "Poke is protecting itself from heavy traffic. Please retry shortly.",
+        "Too many expensive requests right now. Please slow down a bit.",
+        "The server is under pressure. Please try again in a moment."
+      ];
+
+      let resourceState = {
+        state: "healthy",
+        score: 0,
+        since: Date.now(),
+        sampledAt: Date.now(),
+        reason: "startup",
         eventLoop: {
-            p99Ms: roundMs(eldP99),
-            meanMs: roundMs(eldMean)
+          p99Ms: 0,
+          meanMs: 0
         },
         cpu: {
-          ratio: roundRatio(cpuRatio),
-          percent: roundRatio(cpuRatio * 100),
-          userMs: roundMs(cpuUserMs),
-          systemMs: roundMs(cpuSystemMs),
-          totalMs: roundMs(cpuTotalMs),
-          elapsedMs: roundMs(elapsedMs)
+          ratio: 0,
+          percent: 0,
+          userMs: 0,
+          systemMs: 0,
+          totalMs: 0,
+          elapsedMs: 0
         },
         memory: {
-          rssMb: bytesToMb(memory.rss),
-          heapUsedMb: bytesToMb(memory.heapUsed),
-          heapTotalMb: bytesToMb(memory.heapTotal),
-          externalMb: bytesToMb(memory.external),
-          arrayBuffersMb: bytesToMb(memory.arrayBuffers || 0),
-          rssRatio: roundRatio(rssRatio),
-          heapRatio: roundRatio(heapRatio),
-          effectiveTotalMb: bytesToMb(effectiveTotal),
-          systemFreeMb: bytesToMb(os.freemem()),
-          systemTotalMb: bytesToMb(os.totalmem()),
-          constrainedMb: getConstrainedMemoryMb()
+          rssMb: 0,
+          heapUsedMb: 0,
+          heapTotalMb: 0,
+          externalMb: 0,
+          arrayBuffersMb: 0,
+          rssRatio: 0,
+          heapRatio: 0,
+          effectiveTotalMb: 0,
+          systemFreeMb: 0,
+          systemTotalMb: 0,
+          constrainedMb: 0
         },
         requests: {
-          rps: currentSecondRequests,
-          active: activeRequests.size,
-          kinds
+          rps: 0,
+          active: 0,
+          kinds: {}
         },
-        topRoutes: getTopMapEntries(currentSecondRouteCounts, resourceConfig.logging.maxTopRoutes),
         pressureReasons: []
       };
 
-      const pressure = classifyResourcePressure(snapshot);
-      snapshot.state = pressure.state;
-      snapshot.score = pressure.score;
-      snapshot.pressureReasons = pressure.reasons;
-
-      if (snapshot.state !== resourceState.state) {
-        snapshot.since = now;
-      } else {
-        snapshot.since = resourceState.since;
-      }
-
-      const shouldLog = now - lastStateLogAt >= resourceConfig.logging.stateCooldownMs;
-
-      resourceState = snapshot;
+      let lastStateLogAt = 0;
+      let lastRejectLogAt = 0;
+      let currentSecondRequests = 0;
+      let currentSecondKindCounts = new Map();
+      let currentSecondRouteCounts = new Map();
       
-      currentSecondRequests = 0;
-      currentSecondKindCounts = new Map();
-      currentSecondRouteCounts = new Map();
+      // Persistent Data Setup (Only the Primary Worker saves to avoid write collisions)
+      let allTimeRouteCounts = new Map();
+      let totalGlobalRequests = 0;
+      let trackingStartTime = Date.now();
+      const STATS_FILE_PATH = 'popularpaths.json';
 
-      if (shouldLog) {
-        lastStateLogAt = now;
-        logResourceState();
+      try {
+        if (fs.existsSync(STATS_FILE_PATH)) {
+          const fileData = fs.readFileSync(STATS_FILE_PATH, 'utf8');
+          const parsedData = JSON.parse(fileData);
+          totalGlobalRequests = parsedData.totalRequests || 0;
+          if (parsedData.trackingStartTime) {
+            trackingStartTime = parsedData.trackingStartTime;
+          }
+          if (parsedData.routes) {
+            for (const [key, val] of Object.entries(parsedData.routes)) {
+              allTimeRouteCounts.set(key, val);
+            }
+          }
+          if (cluster.worker.id === 1) {
+            initlog(`[POKE-resource] Loaded previous traffic stats: ${totalGlobalRequests} total global requests.`);
+          }
+        }
+      } catch (err) {
+        console.error("[POKE-resource] Could not load popularpaths.json:", err.message);
       }
-    }
 
-    function classifyResourcePressure(snapshot) {
-      const cfg = resourceConfig.system;
-      const reasons = [];
-      let score = 0;
-      let hasCritical = false;
+      // Interval extended to 60s to prevent CPU spiking. Only worker 1 writes to file.
+      setInterval(() => {
+        if (allTimeRouteCounts.size > 5000) {
+          const sorted = Array.from(allTimeRouteCounts.entries()).sort((a,b) => b[1] - a[1]);
+          allTimeRouteCounts = new Map(sorted.slice(0, 4000));
+        }
 
-      function addPressure(name, value, warm, stressed, critical, unit) {
-        if (value >= critical) {
-          score += 4;
-          hasCritical = true;
-          reasons.push(name + "=" + value + unit + " critical>=" + critical + unit);
+        if (cluster.worker.id === 1) {
+          const routesObj = {};
+          for (const [k, v] of allTimeRouteCounts.entries()) {
+            routesObj[k] = v;
+          }
+          const outData = { trackingStartTime, totalRequests: totalGlobalRequests, routes: routesObj };
+          fs.writeFile(STATS_FILE_PATH, JSON.stringify(outData, null, 2), (err) => {
+            if (err) console.error("[POKE-resource] Failed to save popularpaths.json:", err.message);
+          });
+        }
+      }, 60000).unref();
+
+      let lastSampleAt = performance.now();
+      let lastCpuUsage = process.cpuUsage();
+
+      let requestSequence = 0;
+      const activeRequests = new Map();
+      const activeRequestCounts = new Map();
+      const recentSlowRequests = [];
+      
+      // JS Maps preserve insertion order. We use this to do O(1) LRU eviction.
+      const clientStates = new Map(); 
+
+      const guardStats = {
+        allowedHealthy: 0,
+        allowedWarm: 0,
+        allowedStressed: 0,
+        allowedCritical: 0,
+        allowedStatus: 0,
+        allowedStatic: 0,
+        allowedPage: 0,
+        allowedHeavy: 0,
+        rejectedAbuse: 0,
+        rejectedCooldown: 0,
+        rejectedWarm: 0,
+        rejectedStressed: 0,
+        rejectedCritical: 0,
+        cooldownsIssued: 0
+      };
+
+      function bytesToMb(bytes) {
+        return Math.round(bytes / 1024 / 1024);
+      }
+
+      function roundMs(value) {
+        if (!Number.isFinite(value)) return 0;
+        return Math.round(value * 100) / 100;
+      }
+
+      function roundRatio(value) {
+        if (!Number.isFinite(value)) return 0;
+        return Math.round(value * 10000) / 10000;
+      }
+
+      function formatPercent(value) {
+        if (!Number.isFinite(value)) return "0%";
+        return (value * 100).toFixed(2) + "%";
+      }
+
+      function getEffectiveMemoryLimit() {
+        if (typeof process.constrainedMemory === "function") {
+          try {
+            const constrained = process.constrainedMemory();
+            if (Number.isFinite(constrained) && constrained > 0) {
+              return constrained;
+            }
+          } catch {}
+        }
+        return os.totalmem();
+      }
+
+      function getConstrainedMemoryMb() {
+        if (typeof process.constrainedMemory !== "function") return 0;
+        try {
+          const constrained = process.constrainedMemory();
+          if (Number.isFinite(constrained) && constrained > 0) {
+            return bytesToMb(constrained);
+          }
+        } catch {}
+        return 0;
+      }
+
+      function getRequestPath(req) {
+        if (req._parsed_path_cache) return req._parsed_path_cache;
+        const url = req.originalUrl || req.url || "/";
+        const qIdx = url.indexOf("?");
+        const p = (qIdx === -1 ? url : url.substring(0, qIdx)).toLowerCase();
+        req._parsed_path_cache = p;
+        return p;
+      }
+
+      function isAvatarRoutePath(pathname) {
+        return pathname === "/avatars" || pathname.startsWith("/avatars/");
+      }
+
+      // O(1) SET LOOKUP
+      function isIgnoredRoute(req) {
+        const path = getRequestPath(req);
+        if (EXACT_IGNORED_ROUTES.has(path)) return true;
+        if (path.startsWith("/static/") || path.startsWith("/css/")) return true;
+        return isAvatarRoutePath(path);
+      }
+
+      function normalizePathname(pathname) {
+        if (pathname.startsWith('/avatars/')) return '/avatars/';
+        if (pathname.startsWith('/vi/')) return '/vi/';
+        if (pathname.startsWith('/ggpht/')) return '/ggpht/';
+        if (pathname.startsWith('/sb/')) return '/sb/';
+        if (pathname.startsWith('/storyboard')) return '/storyboard';
+        if (pathname.startsWith('/videoplayback')) return '/videoplayback';
+        if (pathname.startsWith('/hashtag/')) return '/hashtag/';
+        
+        return pathname
+          .replace(REGEX_OBJ_ID, ":objectId")
+          .replace(REGEX_HEX, ":hex")
+          .replace(REGEX_UUID, ":uuid")
+          .replace(REGEX_NUM, "/:number")
+          .replace(REGEX_ID, "/:id");
+      }
+
+      function getRequestKey(req) {
+        return req.method + " " + normalizePathname(getRequestPath(req));
+      }
+
+      function incrementMapCount(map, key, amount) {
+        map.set(key, (map.get(key) || 0) + (amount || 1));
+      }
+
+      function decrementMapCount(map, key) {
+        const nextValue = (map.get(key) || 0) - 1;
+        if (nextValue <= 0) {
+          map.delete(key);
           return;
         }
-        if (value >= stressed) {
-          score += 2;
-          reasons.push(name + "=" + value + unit + " stressed>=" + stressed + unit);
+        map.set(key, nextValue);
+      }
+
+      function getTopMapEntries(map, limit) {
+        return Array.from(map.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, limit)
+          .map(entry => ({ key: entry[0], count: entry[1] }));
+      }
+
+      function getActiveRequestSummary(limit) {
+        const now = Date.now();
+        return Array.from(activeRequests.values())
+          .map(req => ({
+              id: req.id,
+              key: req.key,
+              kind: req.kind,
+              ageMs: now - req.startedAt
+          }))
+          .sort((a, b) => b.ageMs - a.ageMs)
+          .slice(0, limit);
+      }
+
+      function isKnownBot(ua) {
+        if (!ua) return false;
+        return BOT_MEGA_REGEX.test(ua);
+      }
+
+      function isSafeMethod(req) {
+        return req.method === "GET" || req.method === "HEAD";
+      }
+
+      function isStaticRequest(req) {
+        const pathname = getRequestPath(req);
+        if (pathname.startsWith("/css/") || pathname.startsWith("/js/") || pathname.startsWith("/img/") || pathname.startsWith("/font/") || pathname.startsWith("/static/")) return true;
+        if (pathname === "/favicon.ico" || pathname === "/manifest.json" || pathname === "/robots.txt") return true;
+        return /\.(css|js|mjs|png|jpg|jpeg|webp|gif|svg|ico|woff|woff2|ttf|otf|map|txt)$/.test(pathname);
+      }
+
+      // O(1) SET LOOKUP Optimization
+      function isStatusRequest(req) {
+        const pathname = getRequestPath(req);
+        if (EXACT_STATUS_ROUTES.has(pathname)) return true;
+        return pathname.startsWith("/health/");
+      }
+
+      function isHeavyRequest(req) {
+        const pathname = getRequestPath(req);
+        if (!isSafeMethod(req)) return true;
+        if (isAvatarRoutePath(pathname)) return false;
+        return (
+          pathname.startsWith("/api/") ||
+          pathname.startsWith("/proxy/") ||
+          pathname.startsWith("/videoplayback") ||
+          pathname.startsWith("/vi/") ||
+          pathname.startsWith("/ggpht/") ||
+          pathname.startsWith("/storyboard") ||
+          pathname.startsWith("/sb/") ||
+          pathname.startsWith("/manifest") ||
+          pathname.startsWith("/channel_uploads") ||
+          pathname.startsWith("/music")
+        );
+      }
+
+      function isBackgroundRequest(req) {
+        const accept = String(req.headers.accept || "").toLowerCase();
+        const secFetchDest = String(req.headers["sec-fetch-dest"] || "").toLowerCase();
+        const secFetchMode = String(req.headers["sec-fetch-mode"] || "").toLowerCase();
+
+        if (!isSafeMethod(req)) return true;
+        if (accept.includes("application/json") && !accept.includes("text/html")) return true;
+        if (secFetchDest === "empty" && secFetchMode === "cors") return true;
+        return false;
+      }
+
+      // O(1) SET LOOKUP Optimization
+      function isPageNavigation(req) {
+        const pathname = getRequestPath(req);
+        const accept = String(req.headers.accept || "").toLowerCase();
+        const secFetchDest = String(req.headers["sec-fetch-dest"] || "").toLowerCase();
+        const secFetchMode = String(req.headers["sec-fetch-mode"] || "").toLowerCase();
+
+        if (!isSafeMethod(req)) return false;
+        if (isStaticRequest(req) || isHeavyRequest(req) || isBackgroundRequest(req)) return false;
+        
+        if (EXACT_PAGE_ROUTES.has(pathname)) return true;
+        if (
+          pathname.startsWith("/watch/") || pathname.startsWith("/search/") ||
+          pathname.startsWith("/channel/") || pathname.startsWith("/user/") ||
+          pathname.startsWith("/playlist")
+        ) return true;
+
+        if (accept.includes("text/html")) return true;
+        if (secFetchDest === "document" || secFetchMode === "navigate") return true;
+        return false;
+      }
+
+      function classifyRequest(req) {
+        if (isStatusRequest(req)) return "status";
+        if (isStaticRequest(req)) return "static";
+        if (isHeavyRequest(req)) return "heavy";
+        if (isBackgroundRequest(req)) return "background";
+        if (isPageNavigation(req)) return "page";
+        return "other";
+      }
+
+      function getKindCost(kind, req) {
+        let cost = resourceConfig.requestCost[kind] || resourceConfig.requestCost.other;
+        const ua = req.headers["user-agent"];
+        if (isKnownBot(ua)) cost = cost * 0.5;
+        const rawIP = cleanIP(req.socket.remoteAddress || "");
+        if (isCloudflareIP(rawIP)) cost = cost * 0.85;
+        return cost;
+      }
+
+      function getClientKey(req) {
+        return cleanIP(req.ip || req.socket.remoteAddress || "unknown");
+      }
+
+      // O(1) Sliding Window Helper function
+      function updateClientWindow(client, now) {
+        const WINDOW_MS = resourceConfig.client.windowMs;
+        const currentStart = Math.floor(now / WINDOW_MS) * WINDOW_MS;
+
+        if (client.windowStart !== currentStart) {
+          const diff = currentStart - client.windowStart;
+          if (diff === WINDOW_MS) {
+            client.previous = { ...client.current };
+          } else {
+            client.previous = { total: 0, cost: 0, heavy: 0, page: 0, rejects: 0, softPass: 0 };
+          }
+          client.current = { total: 0, cost: 0, heavy: 0, page: 0, rejects: 0, softPass: 0 };
+          client.windowStart = currentStart;
+        }
+      }
+
+      function getMetric(client, metric, now) {
+        updateClientWindow(client, now);
+        const WINDOW_MS = resourceConfig.client.windowMs;
+        const weight = Math.max(0, 1 - ((now - client.windowStart) / WINDOW_MS));
+        return client.current[metric] + (client.previous[metric] * weight);
+      }
+
+      function evictClientStateIfNeeded() {
+        if (clientStates.size >= resourceConfig.client.maxClientStates) {
+          // True O(1) LRU eviction via Map insertion order.
+          // Drops the oldest 10% instantly without iterating the whole map.
+          const keysToEvict = Math.max(1, Math.floor(resourceConfig.client.maxClientStates * 0.1));
+          let evicted = 0;
+          for (const oldKey of clientStates.keys()) {
+            clientStates.delete(oldKey);
+            if (++evicted >= keysToEvict) break;
+          }
+        }
+      }
+
+      function getClientState(req, now) {
+        const key = getClientKey(req);
+        let client = clientStates.get(key);
+
+        if (client) {
+          // LRU Cache trick: delete and re-insert to move it to the end (freshest)
+          clientStates.delete(key);
+          clientStates.set(key, client);
+        } else {
+          evictClientStateIfNeeded();
+          client = {
+            key,
+            firstSeen: now,
+            lastSeen: now,
+            cooldownUntil: 0,
+            cooldownLevel: 0,
+            lastCooldownAt: 0,
+            trustedBot: false,
+            currentSec: Math.floor(now / 1000),
+            currentSecCount: 0,
+            
+            // Sliding window counters (Zero Arrays)
+            windowStart: Math.floor(now / resourceConfig.client.windowMs) * resourceConfig.client.windowMs,
+            current: { total: 0, cost: 0, heavy: 0, page: 0, rejects: 0, softPass: 0 },
+            previous: { total: 0, cost: 0, heavy: 0, page: 0, rejects: 0, softPass: 0 }
+          };
+          clientStates.set(key, client);
+        }
+
+        client.lastSeen = now;
+        if (client.cooldownUntil > 0 && client.cooldownUntil <= now) {
+          client.cooldownUntil = 0;
+        }
+        if (client.cooldownLevel > 0 && now - client.lastCooldownAt > resourceConfig.client.cooldownDecayMs) {
+          client.cooldownLevel = Math.max(0, client.cooldownLevel - 1);
+          client.lastCooldownAt = now;
+        }
+        return client;
+      }
+
+      function rememberClientRequest(req, client, kind, cost, now) {
+        client.lastSeen = now;
+        const ua = req.headers["user-agent"];
+        client.trustedBot = isKnownBot(ua ? String(ua).substring(0, 160) : "");
+
+        const sec = Math.floor(now / 1000);
+        if (client.currentSec !== sec) {
+            client.currentSec = sec;
+            client.currentSecCount = 0;
+        }
+        client.currentSecCount++;
+
+        updateClientWindow(client, now);
+        client.current.total++;
+        client.current.cost += cost;
+
+        if (kind === "heavy" || kind === "background") client.current.heavy++;
+        if (kind === "page") client.current.page++;
+      }
+
+      function rememberDecision(client, decision, now) {
+        updateClientWindow(client, now);
+        if (decision === "reject") client.current.rejects++;
+        if (decision === "page-soft-pass") client.current.softPass++;
+      }
+
+      function getClientPressure(client, now) {
+        return (
+          getMetric(client, "total", now) +
+          (client.currentSecCount * 3) +
+          (getMetric(client, "heavy", now) * 4) +
+          (getMetric(client, "rejects", now) * 8) +
+          getMetric(client, "cost", now)
+        );
+      }
+
+      function getNoisyLimits(state) {
+        if (state === "critical") return { requests: resourceConfig.client.noisyRequestsCritical, cost: resourceConfig.client.noisyCostCritical };
+        if (state === "stressed") return { requests: resourceConfig.client.noisyRequestsStressed, cost: resourceConfig.client.noisyCostStressed };
+        return { requests: resourceConfig.client.noisyRequestsWarm, cost: resourceConfig.client.noisyCostWarm };
+      }
+
+      function getHeavyLimit(state) {
+        if (state === "critical") return resourceConfig.client.maxHeavyRequestsCritical;
+        if (state === "stressed") return resourceConfig.client.maxHeavyRequestsStressed;
+        return resourceConfig.client.maxHeavyRequestsWarm;
+      }
+
+      function clientIsAbsoluteAbuse(client, now) {
+        return (
+          client.currentSecCount >= resourceConfig.client.absoluteRequestsPerSecond ||
+          getMetric(client, "total", now) >= resourceConfig.client.absoluteRequestsPerWindow ||
+          getMetric(client, "cost", now) >= resourceConfig.client.absoluteCostPerWindow
+        );
+      }
+
+      function clientIsNoisy(client, state, now) {
+        const limits = getNoisyLimits(state);
+        return (
+          getMetric(client, "total", now) >= limits.requests ||
+          getMetric(client, "cost", now) >= limits.cost ||
+          getClientPressure(client, now) >= limits.cost * 1.5
+        );
+      }
+
+      function applyClientCooldown(client, reason, now) {
+        client.cooldownLevel++;
+        client.lastCooldownAt = now;
+
+        const cooldownMs = Math.min(
+          resourceConfig.client.cooldownMaxMs,
+          resourceConfig.client.cooldownBaseMs * Math.pow(2, Math.max(0, client.cooldownLevel - 1))
+        );
+
+        client.cooldownUntil = now + cooldownMs;
+        guardStats.cooldownsIssued++;
+
+        console.error(
+          "[POKE-resource] client cooldown " +
+          JSON.stringify({
+            reason, cooldownMs, cooldownLevel: client.cooldownLevel,
+            client: {
+              ip: anonymizeIP(client.key),
+              requests: Math.round(getMetric(client, "total", now)),
+              oneSecondRequests: client.currentSecCount,
+              heavyRequests: Math.round(getMetric(client, "heavy", now)),
+              rejects: Math.round(getMetric(client, "rejects", now)),
+              cost: Math.round(getMetric(client, "cost", now) * 100) / 100,
+              pressure: Math.round(getClientPressure(client, now) * 100) / 100
+            }
+          })
+        );
+      }
+
+      function sampleCpuAndMemory(reason) {
+        const now = Date.now();
+        const currentPerf = performance.now();
+        const elapsedMs = Math.max(1, currentPerf - lastSampleAt);
+
+        const newCpuUsage = process.cpuUsage();
+        const cpuDelta = process.cpuUsage(lastCpuUsage);
+        lastCpuUsage = newCpuUsage;
+        lastSampleAt = currentPerf;
+
+        // cpuUsage returns microseconds, so divide by 1000 to get Ms
+        const cpuUserMs = cpuDelta.user / 1000;
+        const cpuSystemMs = cpuDelta.system / 1000;
+        const cpuTotalMs = cpuUserMs + cpuSystemMs;
+        
+        // Node's libuv thread pool uses multiple cores for networking.
+        // So CPU Ratio CAN easily go above 1.0. This is normal.
+        const cpuRatio = cpuTotalMs / elapsedMs;
+
+        // Extract Event Loop Delay Metrics
+        const eldP99 = eldHistogram.percentile(99) / 1e6;
+        const eldMean = eldHistogram.mean / 1e6;
+        eldHistogram.reset();
+
+        const memory = process.memoryUsage();
+        const effectiveTotal = getEffectiveMemoryLimit();
+        const rssRatio = effectiveTotal > 0 ? memory.rss / effectiveTotal : 0;
+        const heapRatio = effectiveTotal > 0 ? memory.heapUsed / effectiveTotal : 0;
+
+        const kinds = {};
+        for (const [kind, count] of currentSecondKindCounts) {
+          kinds[kind] = count;
+        }
+
+        const snapshot = {
+          state: resourceState.state,
+          score: resourceState.score,
+          since: resourceState.since,
+          sampledAt: now,
+          reason: reason || "interval",
+          eventLoop: {
+              p99Ms: roundMs(eldP99),
+              meanMs: roundMs(eldMean)
+          },
+          cpu: {
+            ratio: roundRatio(cpuRatio),
+            percent: roundRatio(cpuRatio * 100),
+            userMs: roundMs(cpuUserMs),
+            systemMs: roundMs(cpuSystemMs),
+            totalMs: roundMs(cpuTotalMs),
+            elapsedMs: roundMs(elapsedMs)
+          },
+          memory: {
+            rssMb: bytesToMb(memory.rss),
+            heapUsedMb: bytesToMb(memory.heapUsed),
+            heapTotalMb: bytesToMb(memory.heapTotal),
+            externalMb: bytesToMb(memory.external),
+            arrayBuffersMb: bytesToMb(memory.arrayBuffers || 0),
+            rssRatio: roundRatio(rssRatio),
+            heapRatio: roundRatio(heapRatio),
+            effectiveTotalMb: bytesToMb(effectiveTotal),
+            systemFreeMb: bytesToMb(os.freemem()),
+            systemTotalMb: bytesToMb(os.totalmem()),
+            constrainedMb: getConstrainedMemoryMb()
+          },
+          requests: {
+            rps: currentSecondRequests,
+            active: activeRequests.size,
+            kinds
+          },
+          topRoutes: getTopMapEntries(currentSecondRouteCounts, resourceConfig.logging.maxTopRoutes),
+          pressureReasons: []
+        };
+
+        const pressure = classifyResourcePressure(snapshot);
+        snapshot.state = pressure.state;
+        snapshot.score = pressure.score;
+        snapshot.pressureReasons = pressure.reasons;
+
+        if (snapshot.state !== resourceState.state) {
+          snapshot.since = now;
+        } else {
+          snapshot.since = resourceState.since;
+        }
+
+        const shouldLog = now - lastStateLogAt >= resourceConfig.logging.stateCooldownMs;
+
+        resourceState = snapshot;
+        
+        currentSecondRequests = 0;
+        currentSecondKindCounts = new Map();
+        currentSecondRouteCounts = new Map();
+
+        if (shouldLog) {
+          lastStateLogAt = now;
+          logResourceState();
+        }
+      }
+
+      function classifyResourcePressure(snapshot) {
+        const cfg = resourceConfig.system;
+        const reasons = [];
+        let score = 0;
+        let hasCritical = false;
+
+        function addPressure(name, value, warm, stressed, critical, unit) {
+          if (value >= critical) {
+            score += 4;
+            hasCritical = true;
+            reasons.push(name + "=" + value + unit + " critical>=" + critical + unit);
+            return;
+          }
+          if (value >= stressed) {
+            score += 2;
+            reasons.push(name + "=" + value + unit + " stressed>=" + stressed + unit);
+            return;
+          }
+          if (value >= warm) {
+            score += 1;
+            reasons.push(name + "=" + value + unit + " warm>=" + warm + unit);
+          }
+        }
+
+        addPressure("eventLoop", snapshot.eventLoop.p99Ms, cfg.eventLoop.warmMs, cfg.eventLoop.stressedMs, cfg.eventLoop.criticalMs, "ms");
+        addPressure("cpu", snapshot.cpu.ratio, cfg.warmCpuRatio, cfg.stressedCpuRatio, cfg.criticalCpuRatio, "");
+        addPressure("rssMemory", snapshot.memory.rssRatio, cfg.warmRssRatio, cfg.stressedRssRatio, cfg.criticalRssRatio, "");
+        addPressure("heapMemory", snapshot.memory.heapRatio, cfg.warmHeapRatio, cfg.stressedHeapRatio, cfg.criticalHeapRatio, "");
+
+        // STRIKE SYSTEM: Forgiving check that prevents the server from shedding instantly.
+        // Must hit critical score 5 times consecutively.
+        if (hasCritical || score >= 7) {
+          consecutiveCriticalSpikes++;
+        } else {
+          consecutiveCriticalSpikes = Math.max(0, consecutiveCriticalSpikes - 1);
+        }
+
+        if (consecutiveCriticalSpikes >= 5) return { state: "critical", score, reasons };
+        if (score >= 4 || consecutiveCriticalSpikes > 0) return { state: "stressed", score, reasons };
+        if (score >= 2) return { state: "warm", score, reasons };
+        return { state: "healthy", score, reasons };
+      }
+
+      function logResourceState() {
+        if (resourceState.state === "healthy") {
+          console.error(`[POKE-resource] healthy on worker ${process.pid}`);
           return;
-        }
-        if (value >= warm) {
-          score += 1;
-          reasons.push(name + "=" + value + unit + " warm>=" + warm + unit);
-        }
-      }
-
-      addPressure("eventLoop", snapshot.eventLoop.p99Ms, cfg.eventLoop.warmMs, cfg.eventLoop.stressedMs, cfg.eventLoop.criticalMs, "ms");
-      addPressure("cpu", snapshot.cpu.ratio, cfg.warmCpuRatio, cfg.stressedCpuRatio, cfg.criticalCpuRatio, "");
-      addPressure("rssMemory", snapshot.memory.rssRatio, cfg.warmRssRatio, cfg.stressedRssRatio, cfg.criticalRssRatio, "");
-      addPressure("heapMemory", snapshot.memory.heapRatio, cfg.warmHeapRatio, cfg.stressedHeapRatio, cfg.criticalHeapRatio, "");
-
-      // STRIKE SYSTEM: Forgiving check that prevents the server from shedding instantly.
-      // Must hit critical score 5 times consecutively.
-      if (hasCritical || score >= 7) {
-        consecutiveCriticalSpikes++;
-      } else {
-        consecutiveCriticalSpikes = Math.max(0, consecutiveCriticalSpikes - 1);
-      }
-
-      if (consecutiveCriticalSpikes >= 5) return { state: "critical", score, reasons };
-      if (score >= 4 || consecutiveCriticalSpikes > 0) return { state: "stressed", score, reasons };
-      if (score >= 2) return { state: "warm", score, reasons };
-      return { state: "healthy", score, reasons };
-    }
-
-    function logResourceState() {
-      if (resourceState.state === "healthy") {
-        console.error("[POKE-resource] healthy");
-        return;
-      }
-      
-      let msg = "[POKE-resource] not healthy (" + resourceState.state + ")";
-      const details = [];
-      
-      if (resourceState.pressureReasons && resourceState.pressureReasons.length > 0) {
-        details.push("System Limits Reached: " + resourceState.pressureReasons.join(", "));
-      }
-      
-      if (resourceState.topRoutes && resourceState.topRoutes.length > 0) {
-        const topRoute = resourceState.topRoutes[0];
-        if (topRoute.count > 15) { 
-          details.push("Too many requests in " + topRoute.key + " right now (" + topRoute.count + " requests in one second)");
         }
         
-        const topPaths = resourceState.topRoutes.slice(0, 4).map(r => r.count + "x " + r.key).join(", ");
-        details.push("Heavy paths right now: [" + topPaths + "]");
+        let msg = `[POKE-resource] not healthy (${resourceState.state}) on worker ${process.pid}`;
+        const details = [];
+        
+        if (resourceState.pressureReasons && resourceState.pressureReasons.length > 0) {
+          details.push("System Limits Reached: " + resourceState.pressureReasons.join(", "));
+        }
+        
+        if (resourceState.topRoutes && resourceState.topRoutes.length > 0) {
+          const topRoute = resourceState.topRoutes[0];
+          if (topRoute.count > 15) { 
+            details.push("Too many requests in " + topRoute.key + " right now (" + topRoute.count + " requests in one second)");
+          }
+          
+          const topPaths = resourceState.topRoutes.slice(0, 4).map(r => r.count + "x " + r.key).join(", ");
+          details.push("Heavy paths right now: [" + topPaths + "]");
+        }
+
+        if (details.length > 0) {
+          msg += " -> Reasons: " + details.join(" | ");
+        }
+        
+        console.error(msg);
       }
 
-      if (details.length > 0) {
-        msg += " -> Reasons: " + details.join(" | ");
-      }
-      
-      console.error(msg);
-    }
+      function logReject(req, client, kind, reason, status, now) {
+        if (now - lastRejectLogAt < resourceConfig.logging.rejectCooldownMs) return;
+        lastRejectLogAt = now;
 
-    function logReject(req, client, kind, reason, status, now) {
-      if (now - lastRejectLogAt < resourceConfig.logging.rejectCooldownMs) return;
-      lastRejectLogAt = now;
-
-      // Anonymize logging completely, exclude sensitive metadata
-      console.error(
-        "[POKE-resource] rejected " +
-        JSON.stringify({
-          reason, status, state: resourceState.state, score: resourceState.score,
-          kind, ip: anonymizeIP(client.key),
-          client: {
-            requests: Math.round(getMetric(client, "total", now)),
-            oneSecondRequests: client.currentSecCount,
-            heavyRequests: Math.round(getMetric(client, "heavy", now)),
-            pageRequests: Math.round(getMetric(client, "page", now)),
-            rejects: Math.round(getMetric(client, "rejects", now)),
-            cost: Math.round(getMetric(client, "cost", now) * 100) / 100,
-            pressure: Math.round(getClientPressure(client, now) * 100) / 100,
-            cooldownUntil: client.cooldownUntil
-          },
-          system: { eventLoop: resourceState.eventLoop, cpu: resourceState.cpu, memory: resourceState.memory }
-        })
-      );
-    }
-
-    function getRandomGuardMessage() {
-      return GUARD_MESSAGES[Math.floor(Math.random() * GUARD_MESSAGES.length)];
-    }
-
-    function setResourceHeaders(res, decision) {
-      res.set("X-Poke-Resource-Guard", resourceState.state);
-      res.set("X-Poke-Resource-Decision", decision);
-    }
-
-    function getRetryAfterForState(state) {
-      if (state === "critical") return resourceConfig.admission.retryAfterCriticalSeconds;
-      if (state === "stressed") return resourceConfig.admission.retryAfterStressedSeconds;
-      if (state === "warm") return resourceConfig.admission.retryAfterWarmSeconds;
-      return resourceConfig.admission.retryAfterHealthyAbuseSeconds;
-    }
-
-    function sendGuardReject(req, res, client, kind, options, now) {
-      rememberDecision(client, "reject", now);
-
-      const status = options.status || 503;
-      const retryAfter = options.retryAfter || resourceConfig.admission.retryAfterStressedSeconds;
-      const reason = options.reason || "resource-pressure";
-
-      if (reason === "client-cooldown") guardStats.rejectedCooldown++;
-      else if (reason === "absolute-abuse") guardStats.rejectedAbuse++;
-      else if (resourceState.state === "critical") guardStats.rejectedCritical++;
-      else if (resourceState.state === "stressed") guardStats.rejectedStressed++;
-      else guardStats.rejectedWarm++;
-
-      logReject(req, client, kind, reason, status, now);
-
-      res.set("Retry-After", String(retryAfter));
-      res.set("Cache-Control", "no-store");
-      res.set("Connection", "close");
-      res.set("X-Poke-Resource-Guard", resourceState.state);
-      res.set("X-Poke-Resource-Reason", reason);
-      return res.status(status).send(options.message || getRandomGuardMessage());
-    }
-
-    function allowRequest(res, kind, decision) {
-      if (resourceState.state === "healthy") guardStats.allowedHealthy++;
-      if (resourceState.state === "warm") guardStats.allowedWarm++;
-      if (resourceState.state === "stressed") guardStats.allowedStressed++;
-      if (resourceState.state === "critical") guardStats.allowedCritical++;
-
-      if (kind === "status") guardStats.allowedStatus++;
-      if (kind === "static") guardStats.allowedStatic++;
-      if (kind === "page") guardStats.allowedPage++;
-      if (kind === "heavy" || kind === "background") guardStats.allowedHeavy++;
-
-      setResourceHeaders(res, decision || "allow");
-    }
-
-    function getAdmissionDecision(req, client, kind, now) {
-      const state = resourceState.state;
-      
-      // Fast bypass for healthy state
-      if (state === "healthy") return { action: "allow", reason: "healthy" };
-
-      const noisy = clientIsNoisy(client, state, now);
-      const absoluteAbuse = clientIsAbsoluteAbuse(client, now);
-
-      if (client.cooldownUntil > now) {
-        return {
-          action: "reject", reason: "client-cooldown", status: 429,
-          retryAfter: Math.ceil((client.cooldownUntil - now) / 1000),
-          message: "Too many expensive requests. Please retry shortly."
-        };
+        // Anonymize logging completely, exclude sensitive metadata
+        console.error(
+          "[POKE-resource] rejected " +
+          JSON.stringify({
+            reason, status, state: resourceState.state, score: resourceState.score,
+            kind, ip: anonymizeIP(client.key),
+            client: {
+              requests: Math.round(getMetric(client, "total", now)),
+              oneSecondRequests: client.currentSecCount,
+              heavyRequests: Math.round(getMetric(client, "heavy", now)),
+              pageRequests: Math.round(getMetric(client, "page", now)),
+              rejects: Math.round(getMetric(client, "rejects", now)),
+              cost: Math.round(getMetric(client, "cost", now) * 100) / 100,
+              pressure: Math.round(getClientPressure(client, now) * 100) / 100,
+              cooldownUntil: client.cooldownUntil
+            },
+            system: { eventLoop: resourceState.eventLoop, cpu: resourceState.cpu, memory: resourceState.memory }
+          })
+        );
       }
 
-      if (absoluteAbuse) {
-        return {
-          action: "cooldown-reject", reason: "absolute-abuse", status: 429,
-          retryAfter: resourceConfig.admission.retryAfterHealthyAbuseSeconds,
-          message: "Too many requests. Please slow down a bit."
-        };
+      function getRandomGuardMessage() {
+        return GUARD_MESSAGES[Math.floor(Math.random() * GUARD_MESSAGES.length)];
       }
 
-      if (kind === "status") return { action: "allow", reason: "status-pass" };
-      if (kind === "static") return { action: "allow", reason: "static-pass" };
+      function setResourceHeaders(res, decision) {
+        res.set("X-Poke-Resource-Guard", resourceState.state);
+        res.set("X-Poke-Resource-Decision", decision);
+      }
 
-      if (state === "warm") {
-        if ((kind === "heavy" || kind === "background") && noisy && getMetric(client, "heavy", now) > getHeavyLimit(state)) {
+      function getRetryAfterForState(state) {
+        if (state === "critical") return resourceConfig.admission.retryAfterCriticalSeconds;
+        if (state === "stressed") return resourceConfig.admission.retryAfterStressedSeconds;
+        if (state === "warm") return resourceConfig.admission.retryAfterWarmSeconds;
+        return resourceConfig.admission.retryAfterHealthyAbuseSeconds;
+      }
+
+      function sendGuardReject(req, res, client, kind, options, now) {
+        rememberDecision(client, "reject", now);
+
+        const status = options.status || 503;
+        const retryAfter = options.retryAfter || resourceConfig.admission.retryAfterStressedSeconds;
+        const reason = options.reason || "resource-pressure";
+
+        if (reason === "client-cooldown") guardStats.rejectedCooldown++;
+        else if (reason === "absolute-abuse") guardStats.rejectedAbuse++;
+        else if (resourceState.state === "critical") guardStats.rejectedCritical++;
+        else if (resourceState.state === "stressed") guardStats.rejectedStressed++;
+        else guardStats.rejectedWarm++;
+
+        logReject(req, client, kind, reason, status, now);
+
+        res.set("Retry-After", String(retryAfter));
+        res.set("Cache-Control", "no-store");
+        res.set("Connection", "close");
+        res.set("X-Poke-Resource-Guard", resourceState.state);
+        res.set("X-Poke-Resource-Reason", reason);
+        return res.status(status).send(options.message || getRandomGuardMessage());
+      }
+
+      function allowRequest(res, kind, decision) {
+        if (resourceState.state === "healthy") guardStats.allowedHealthy++;
+        if (resourceState.state === "warm") guardStats.allowedWarm++;
+        if (resourceState.state === "stressed") guardStats.allowedStressed++;
+        if (resourceState.state === "critical") guardStats.allowedCritical++;
+
+        if (kind === "status") guardStats.allowedStatus++;
+        if (kind === "static") guardStats.allowedStatic++;
+        if (kind === "page") guardStats.allowedPage++;
+        if (kind === "heavy" || kind === "background") guardStats.allowedHeavy++;
+
+        setResourceHeaders(res, decision || "allow");
+      }
+
+      function getAdmissionDecision(req, client, kind, now) {
+        const state = resourceState.state;
+        
+        // Fast bypass for healthy state
+        if (state === "healthy") return { action: "allow", reason: "healthy" };
+
+        const noisy = clientIsNoisy(client, state, now);
+        const absoluteAbuse = clientIsAbsoluteAbuse(client, now);
+
+        if (client.cooldownUntil > now) {
           return {
-            action: "reject", reason: "warm-noisy-expensive-client", status: 429,
-            retryAfter: getRetryAfterForState(state),
+            action: "reject", reason: "client-cooldown", status: 429,
+            retryAfter: Math.ceil((client.cooldownUntil - now) / 1000),
             message: "Too many expensive requests. Please retry shortly."
           };
         }
-        return { action: "allow", reason: "warm-pass" };
-      }
 
-      if (state === "stressed") {
-        // The user explicitly requested that when 'stressed', the server
-        // does nothing to restrict traffic and just allows it as normal,
-        // relying only on the interval logs to indicate the stressed state.
-        return { action: "allow", reason: "stressed-pass-as-normal" };
-      }
-
-      if (state === "critical") {
-        if (kind === "page") {
-          if (!noisy && getMetric(client, "softPass", now) < resourceConfig.client.pageSoftPassesPerWindow) {
-            return { action: "allow-soft-page", reason: "critical-page-soft-pass" };
-          }
+        if (absoluteAbuse) {
           return {
-            action: "reject", reason: "critical-noisy-page-client", status: 503,
+            action: "cooldown-reject", reason: "absolute-abuse", status: 429,
+            retryAfter: resourceConfig.admission.retryAfterHealthyAbuseSeconds,
+            message: "Too many requests. Please slow down a bit."
+          };
+        }
+
+        if (kind === "status") return { action: "allow", reason: "status-pass" };
+        if (kind === "static") return { action: "allow", reason: "static-pass" };
+
+        if (state === "warm") {
+          if ((kind === "heavy" || kind === "background") && noisy && getMetric(client, "heavy", now) > getHeavyLimit(state)) {
+            return {
+              action: "reject", reason: "warm-noisy-expensive-client", status: 429,
+              retryAfter: getRetryAfterForState(state),
+              message: "Too many expensive requests. Please retry shortly."
+            };
+          }
+          return { action: "allow", reason: "warm-pass" };
+        }
+
+        if (state === "stressed") {
+          // The user explicitly requested that when 'stressed', the server
+          // does nothing to restrict traffic and just allows it as normal,
+          // relying only on the interval logs to indicate the stressed state.
+          return { action: "allow", reason: "stressed-pass-as-normal" };
+        }
+
+        if (state === "critical") {
+          if (kind === "page") {
+            if (!noisy && getMetric(client, "softPass", now) < resourceConfig.client.pageSoftPassesPerWindow) {
+              return { action: "allow-soft-page", reason: "critical-page-soft-pass" };
+            }
+            return {
+              action: "reject", reason: "critical-noisy-page-client", status: 503,
+              retryAfter: getRetryAfterForState(state), message: "Server is under heavy load. Please retry shortly."
+            };
+          }
+
+          if (kind === "other" && !noisy) return { action: "allow", reason: "critical-small-other-pass" };
+          
+          return {
+            action: "reject", reason: "critical-shed", status: 503,
             retryAfter: getRetryAfterForState(state), message: "Server is under heavy load. Please retry shortly."
           };
         }
 
-        if (kind === "other" && !noisy) return { action: "allow", reason: "critical-small-other-pass" };
+        return { action: "allow", reason: "default-pass" };
+      }
+
+      function requestActivityTracker(req, res, next) {
+        if (!isGuardActive) return next();
+        if (isIgnoredRoute(req)) return next();
+
+        const id = ++requestSequence;
+        const key = getRequestKey(req);
+        const kind = classifyRequest(req);
+        const startedAt = Date.now();
+
+        activeRequests.set(id, { id, key, kind, startedAt });
         
-        return {
-          action: "reject", reason: "critical-shed", status: 503,
-          retryAfter: getRetryAfterForState(state), message: "Server is under heavy load. Please retry shortly."
-        };
-      }
-
-      return { action: "allow", reason: "default-pass" };
-    }
-
-    function requestActivityTracker(req, res, next) {
-      if (!isGuardActive) return next();
-      if (isIgnoredRoute(req)) return next();
-
-      const id = ++requestSequence;
-      const key = getRequestKey(req);
-      const kind = classifyRequest(req);
-      const startedAt = Date.now();
-
-      activeRequests.set(id, { id, key, kind, startedAt });
-      
-      // Do not pollute route counters with status endpoints
-      if (!isStatusRequest(req)) {
-        totalGlobalRequests++;
-        incrementMapCount(activeRequestCounts, key);
-        incrementMapCount(currentSecondRouteCounts, key);
-        incrementMapCount(allTimeRouteCounts, key);
-      }
-
-      res.on("finish", function () {
-        const finishedAt = Date.now();
-        const durationMs = finishedAt - startedAt;
-
-        if (activeRequests.has(id)) {
-          activeRequests.delete(id);
-          if (!isStatusRequest(req)) {
-            decrementMapCount(activeRequestCounts, key);
-          }
+        // Do not pollute route counters with status endpoints
+        if (!isStatusRequest(req)) {
+          totalGlobalRequests++;
+          incrementMapCount(activeRequestCounts, key);
+          incrementMapCount(currentSecondRouteCounts, key);
+          incrementMapCount(allTimeRouteCounts, key);
         }
 
-        if (durationMs >= resourceConfig.logging.slowRequestMs) {
-          recentSlowRequests.push({ key, kind, statusCode: res.statusCode, durationMs });
-          while (recentSlowRequests.length > resourceConfig.logging.maxRecentSlow) {
-            recentSlowRequests.shift();
+        res.on("finish", function () {
+          const finishedAt = Date.now();
+          const durationMs = finishedAt - startedAt;
+
+          if (activeRequests.has(id)) {
+            activeRequests.delete(id);
+            if (!isStatusRequest(req)) {
+              decrementMapCount(activeRequestCounts, key);
+            }
           }
-        }
-      });
 
-      res.on("close", function () {
-        if (activeRequests.has(id)) {
-          activeRequests.delete(id);
-          if (!isStatusRequest(req)) {
-            decrementMapCount(activeRequestCounts, key);
+          if (durationMs >= resourceConfig.logging.slowRequestMs) {
+            recentSlowRequests.push({ key, kind, statusCode: res.statusCode, durationMs });
+            while (recentSlowRequests.length > resourceConfig.logging.maxRecentSlow) {
+              recentSlowRequests.shift();
+            }
           }
-        }
-      });
+        });
 
-      next();
-    }
+        res.on("close", function () {
+          if (activeRequests.has(id)) {
+            activeRequests.delete(id);
+            if (!isStatusRequest(req)) {
+              decrementMapCount(activeRequestCounts, key);
+            }
+          }
+        });
 
-    function resourceAdmissionMiddleware(req, res, next) {
-      if (!isGuardActive) return next();
-      if (isIgnoredRoute(req)) return next();
-
-      const now = Date.now();
-      const kind = classifyRequest(req);
-      const cost = getKindCost(kind, req);
-      const client = getClientState(req, now);
-
-      rememberClientRequest(req, client, kind, cost, now);
-
-      currentSecondRequests++;
-      incrementMapCount(currentSecondKindCounts, kind);
-
-      const decision = getAdmissionDecision(req, client, kind, now);
-
-      if (decision.action === "allow") {
-        allowRequest(res, kind, decision.reason);
-        return next();
+        next();
       }
 
-      if (decision.action === "allow-soft-page") {
-        rememberDecision(client, "page-soft-pass", now);
-        allowRequest(res, kind, decision.reason);
-        return next();
-      }
+      function resourceAdmissionMiddleware(req, res, next) {
+        if (!isGuardActive) return next();
+        if (isIgnoredRoute(req)) return next();
 
-      if (decision.action === "cooldown-reject") {
-        applyClientCooldown(client, decision.reason, now);
+        const now = Date.now();
+        const kind = classifyRequest(req);
+        const cost = getKindCost(kind, req);
+        const client = getClientState(req, now);
+
+        rememberClientRequest(req, client, kind, cost, now);
+
+        currentSecondRequests++;
+        incrementMapCount(currentSecondKindCounts, kind);
+
+        const decision = getAdmissionDecision(req, client, kind, now);
+
+        if (decision.action === "allow") {
+          allowRequest(res, kind, decision.reason);
+          return next();
+        }
+
+        if (decision.action === "allow-soft-page") {
+          rememberDecision(client, "page-soft-pass", now);
+          allowRequest(res, kind, decision.reason);
+          return next();
+        }
+
+        if (decision.action === "cooldown-reject") {
+          applyClientCooldown(client, decision.reason, now);
+          return sendGuardReject(req, res, client, kind, decision, now);
+        }
+
+        if (
+          decision.action === "reject" &&
+          (decision.reason === "stressed-expensive-shed" || decision.reason === "critical-shed") &&
+          (kind === "heavy" || kind === "background") &&
+          getMetric(client, "heavy", now) >= getHeavyLimit(resourceState.state)
+        ) {
+          applyClientCooldown(client, decision.reason, now);
+        }
+
         return sendGuardReject(req, res, client, kind, decision, now);
       }
 
-      if (
-        decision.action === "reject" &&
-        (decision.reason === "stressed-expensive-shed" || decision.reason === "critical-shed") &&
-        (kind === "heavy" || kind === "background") &&
-        getMetric(client, "heavy", now) >= getHeavyLimit(resourceState.state)
-      ) {
-        applyClientCooldown(client, decision.reason, now);
-      }
+      function cleanupClients() {
+        const now = Date.now();
+        const maxAge = resourceConfig.client.windowMs * 3;
 
-      return sendGuardReject(req, res, client, kind, decision, now);
-    }
-
-    function cleanupClients() {
-      const now = Date.now();
-      const maxAge = resourceConfig.client.windowMs * 3;
-
-      for (const [key, client] of clientStates) {
-        if (
-          getMetric(client, "total", now) === 0 &&
-          client.currentSecCount === 0 &&
-          client.cooldownUntil <= now &&
-          now - client.lastSeen > maxAge
-        ) {
-          clientStates.delete(key);
+        for (const [key, client] of clientStates) {
+          if (
+            getMetric(client, "total", now) === 0 &&
+            client.currentSecCount === 0 &&
+            client.cooldownUntil <= now &&
+            now - client.lastSeen > maxAge
+          ) {
+            clientStates.delete(key);
+          }
         }
       }
-    }
 
-    function countClientStates() {
-      const now = Date.now();
-      let active = 0;
-      let cooldown = 0;
-      let noisy = 0;
+      function countClientStates() {
+        const now = Date.now();
+        let active = 0;
+        let cooldown = 0;
+        let noisy = 0;
 
-      for (const [, client] of clientStates) {
-        if (getMetric(client, "total", now) > 0) active++;
-        if (client.cooldownUntil > now) cooldown++;
-        if (clientIsNoisy(client, resourceState.state, now)) noisy++;
+        for (const [, client] of clientStates) {
+          if (getMetric(client, "total", now) > 0) active++;
+          if (client.cooldownUntil > now) cooldown++;
+          if (clientIsNoisy(client, resourceState.state, now)) noisy++;
+        }
+
+        return { tracked: clientStates.size, active, cooldown, noisy };
       }
 
-      return { tracked: clientStates.size, active, cooldown, noisy };
-    }
+      // TTL Cache for getResourceStats to prevent heavy Map sorting on high API traffic
+      let cachedStats = null;
+      let cachedStatsTime = 0;
+      const STATS_TTL_MS = 1500; // 1.5 seconds
 
-    // TTL Cache for getResourceStats to prevent heavy Map sorting on high API traffic
-    let cachedStats = null;
-    let cachedStatsTime = 0;
-    const STATS_TTL_MS = 1500; // 1.5 seconds
+      function getResourceStats() {
+        const now = Date.now();
+        if (cachedStats && now - cachedStatsTime < STATS_TTL_MS) {
+          return cachedStats;
+        }
 
-    function getResourceStats() {
-      const now = Date.now();
-      if (cachedStats && now - cachedStatsTime < STATS_TTL_MS) {
+        cachedStats = {
+          guard: "PokeResourceGuard V4 FastMode",
+          state: resourceState,
+          clients: countClientStates(),
+          active_requests: {
+            total: activeRequests.size,
+            total_global_requests: totalGlobalRequests,
+            tracking_start_time: trackingStartTime,
+            by_route: getTopMapEntries(currentSecondRouteCounts, resourceConfig.logging.maxTopRoutes),
+            all_time_top_routes: getTopMapEntries(allTimeRouteCounts, 12),
+            oldest: getActiveRequestSummary(resourceConfig.logging.maxTopRoutes),
+            recent_slow: recentSlowRequests.slice(-resourceConfig.logging.maxRecentSlow).reverse()
+          },
+          stats: guardStats,
+          config: {
+            system: resourceConfig.system,
+            client: resourceConfig.client,
+            admission: resourceConfig.admission,
+            request_cost: resourceConfig.requestCost
+          }
+        };
+        
+        cachedStatsTime = now;
         return cachedStats;
       }
 
-      cachedStats = {
-        guard: "PokeResourceGuard V4 FastMode",
-        state: resourceState,
-        clients: countClientStates(),
-        active_requests: {
-          total: activeRequests.size,
-          total_global_requests: totalGlobalRequests,
-          tracking_start_time: trackingStartTime,
-          by_route: getTopMapEntries(currentSecondRouteCounts, resourceConfig.logging.maxTopRoutes),
-          all_time_top_routes: getTopMapEntries(allTimeRouteCounts, 12),
-          oldest: getActiveRequestSummary(resourceConfig.logging.maxTopRoutes),
-          recent_slow: recentSlowRequests.slice(-resourceConfig.logging.maxRecentSlow).reverse()
-        },
-        stats: guardStats,
-        config: {
-          system: resourceConfig.system,
-          client: resourceConfig.client,
-          admission: resourceConfig.admission,
-          request_cost: resourceConfig.requestCost
+      function sendResourceStats(req, res) {
+        if (!isGuardActive) {
+          return res.status(503).json({ message: "Guard is initializing, please wait..." });
         }
-      };
-      
-      cachedStatsTime = now;
-      return cachedStats;
-    }
-
-    function sendResourceStats(req, res) {
-      if (!isGuardActive) {
-        return res.status(503).json({ message: "Guard is initializing, please wait..." });
+        res.json(getResourceStats());
       }
-      res.json(getResourceStats());
-    }
 
-    const HEALTH_CSS = `
+      const HEALTH_CSS = `
 @font-face {
   font-family: "PokeTube Flex";
   src: url("/static/robotoflex.ttf");
@@ -1776,52 +1801,52 @@ summary{
 }
 `;
 
-    function formatRouteCount(c) {
-      if (c === 67) return '67 <span style="font-size:0.85em; color:#aaa; font-weight:normal;">(really)</span>';
-      if (c === 69) return '69 <span style="font-size:0.85em; color:#aaa; font-weight:normal;">(haha nice)</span>';
-      if (c === 420) return '<span style="color:#4caf50;">420 <span style="font-size:0.85em; font-weight:normal;">(some weed everyday!)</span></span>';
-      return Number(c || 0).toLocaleString();
-    }
-
-    function renderRouteList(topRoutes) {
-      if (!topRoutes || topRoutes.length === 0) {
-        return `<div class="route-item" style="justify-content:center;color:#aaa;">Nothing big yet, Poke is still gathering cozy little traffic stats.</div>`;
+      function formatRouteCount(c) {
+        if (c === 67) return '67 <span style="font-size:0.85em; color:#aaa; font-weight:normal;">(really)</span>';
+        if (c === 69) return '69 <span style="font-size:0.85em; color:#aaa; font-weight:normal;">(haha nice)</span>';
+        if (c === 420) return '<span style="color:#4caf50;">420 <span style="font-size:0.85em; font-weight:normal;">(some weed everyday!)</span></span>';
+        return Number(c || 0).toLocaleString();
       }
 
-      const maxCount = Math.max(1, topRoutes[0].count || 1);
-      return topRoutes.map((r, i) => {
-        const pct = ((r.count || 0) / maxCount) * 100;
-        return `<div class="route-item">
-          <div class="route-bar" style="width: ${pct}%"></div>
-          <div class="route-info">
-            <span class="route-rank">#${i + 1}</span>
-            <span class="route-name">${String(r.key || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span>
-          </div>
-          <span class="route-count">${formatRouteCount(r.count)}</span>
-        </div>`;
-      }).join("");
-    }
+      function renderRouteList(topRoutes) {
+        if (!topRoutes || topRoutes.length === 0) {
+          return `<div class="route-item" style="justify-content:center;color:#aaa;">Nothing big yet, Poke is still gathering cozy little traffic stats.</div>`;
+        }
 
-    // TTL Cache for Health Page HTML
-    let cachedHealthHtml = null;
-    let cachedHealthTime = 0;
-
-    function sendAntiddosPage(req, res) {
-      if (!isGuardActive) {
-        return res.status(503).send("Poke is waking up the guard, please refresh in a moment.");
+        const maxCount = Math.max(1, topRoutes[0].count || 1);
+        return topRoutes.map((r, i) => {
+          const pct = ((r.count || 0) / maxCount) * 100;
+          return `<div class="route-item">
+            <div class="route-bar" style="width: ${pct}%"></div>
+            <div class="route-info">
+              <span class="route-rank">#${i + 1}</span>
+              <span class="route-name">${String(r.key || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span>
+            </div>
+            <span class="route-count">${formatRouteCount(r.count)}</span>
+          </div>`;
+        }).join("");
       }
 
-      const now = Date.now();
-      if (cachedHealthHtml && now - cachedHealthTime < STATS_TTL_MS) {
-        return res.send(cachedHealthHtml);
-      }
-      
-      const stats = getResourceStats();
-      const stateClass = stats.state.state === "healthy" ? "green" :
-        stats.state.state === "warm" ? "orange" :
-        stats.state.state === "stressed" ? "orange" : "red";
+      // TTL Cache for Health Page HTML
+      let cachedHealthHtml = null;
+      let cachedHealthTime = 0;
 
-      cachedHealthHtml = `<!DOCTYPE html>
+      function sendAntiddosPage(req, res) {
+        if (!isGuardActive) {
+          return res.status(503).send("Poke is waking up the guard, please refresh in a moment.");
+        }
+
+        const now = Date.now();
+        if (cachedHealthHtml && now - cachedHealthTime < STATS_TTL_MS) {
+          return res.send(cachedHealthHtml);
+        }
+        
+        const stats = getResourceStats();
+        const stateClass = stats.state.state === "healthy" ? "green" :
+          stats.state.state === "warm" ? "orange" :
+          stats.state.state === "stressed" ? "orange" : "red";
+
+        cachedHealthHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1970,29 +1995,29 @@ document.addEventListener("DOMContentLoaded", function() {
 
 </body>
 </html>`;
-      
-      cachedHealthTime = now;
-      res.send(cachedHealthHtml);
-    }
-
-    // TTL Cache for Traffic Page HTML
-    let cachedTrafficHtml = null;
-    let cachedTrafficTime = 0;
-
-    function sendTrafficPage(req, res) {
-      if (!isGuardActive) {
-        return res.status(503).send("Poke is waking up the guard, please refresh in a moment.");
+        
+        cachedHealthTime = now;
+        res.send(cachedHealthHtml);
       }
 
-      const now = Date.now();
-      if (cachedTrafficHtml && now - cachedTrafficTime < STATS_TTL_MS) {
-        return res.send(cachedTrafficHtml);
-      }
+      // TTL Cache for Traffic Page HTML
+      let cachedTrafficHtml = null;
+      let cachedTrafficTime = 0;
 
-      const stats = getResourceStats();
-      const routesHtml = renderRouteList(stats.active_requests.all_time_top_routes);
+      function sendTrafficPage(req, res) {
+        if (!isGuardActive) {
+          return res.status(503).send("Poke is waking up the guard, please refresh in a moment.");
+        }
 
-      cachedTrafficHtml = `<!DOCTYPE html>
+        const now = Date.now();
+        if (cachedTrafficHtml && now - cachedTrafficTime < STATS_TTL_MS) {
+          return res.send(cachedTrafficHtml);
+        }
+
+        const stats = getResourceStats();
+        const routesHtml = renderRouteList(stats.active_requests.all_time_top_routes);
+
+        cachedTrafficHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2102,59 +2127,84 @@ document.addEventListener("DOMContentLoaded", function() {
 
 </body>
 </html>`;
-      
-      cachedTrafficTime = now;
-      res.send(cachedTrafficHtml);
-    }
+        
+        cachedTrafficTime = now;
+        res.send(cachedTrafficHtml);
+      }
 
-    app.use(requestActivityTracker);
-    app.use(resourceAdmissionMiddleware);
+      app.use(requestActivityTracker);
+      app.use(resourceAdmissionMiddleware);
 
-    app.get("/_pokeresource/stats", sendResourceStats);
-    app.get("/_poketraffic/stats", sendResourceStats);
-    app.get("/_pokestopskids/stats", sendResourceStats);
-    app.get("/_pokeoverload/stats", sendResourceStats);
-    app.get("/health", sendAntiddosPage);
-    app.get("/traffic", sendTrafficPage);
-    app.get("/_antiddos*", (req, res) => res.redirect("/health"));
+      app.get("/_pokeresource/stats", sendResourceStats);
+      app.get("/_poketraffic/stats", sendResourceStats);
+      app.get("/_pokestopskids/stats", sendResourceStats);
+      app.get("/_pokeoverload/stats", sendResourceStats);
+      app.get("/health", sendAntiddosPage);
+      app.get("/traffic", sendTrafficPage);
+      app.get("/_antiddos*", (req, res) => res.redirect("/health"));
 
-    // 30-Millisecond Delayed Initialization
-    setTimeout(() => {
-      isGuardActive = true;
-      initlog("[PokeResourceGuard] is now ACTIVE after 30ms boot delay.");
-      sampleCpuAndMemory("startup");
+      // 30-Millisecond Delayed Initialization
+      setTimeout(() => {
+        isGuardActive = true;
+        initlog(`[PokeResourceGuard] is now ACTIVE on worker ${process.pid} after 30ms boot delay.`);
+        sampleCpuAndMemory("startup");
 
-      const sampleTimer = setInterval(function () {
-        sampleCpuAndMemory("interval");
-      }, resourceConfig.system.sampleMs);
-      sampleTimer.unref();
+        const sampleTimer = setInterval(function () {
+          sampleCpuAndMemory("interval");
+        }, resourceConfig.system.sampleMs);
+        sampleTimer.unref();
 
-      const cleanupTimer = setInterval(cleanupClients, resourceConfig.client.cleanupMs);
-      cleanupTimer.unref();
-      
-      initlog(
-        "[PokeResourceGuard] loaded - EventLoop/CPU/memory optimized shedder, " +
-        "EL p99 warm/stressed/critical: " + resourceConfig.system.eventLoop.warmMs + "/" + resourceConfig.system.eventLoop.stressedMs + "/" + resourceConfig.system.eventLoop.criticalMs
-      );
-    }, 30);
+        const cleanupTimer = setInterval(cleanupClients, resourceConfig.client.cleanupMs);
+        cleanupTimer.unref();
+        
+        initlog(
+          `[PokeResourceGuard] loaded - EventLoop/CPU/memory optimized shedder, ` +
+          `EL p99 warm/stressed/critical: ` + resourceConfig.system.eventLoop.warmMs + `/` + resourceConfig.system.eventLoop.stressedMs + `/` + resourceConfig.system.eventLoop.criticalMs
+        );
+      }, 30);
 
-  })();
+    })();
 
-  app.use(ieBlockMiddleware);
-  initlog("Loaded express.js");
+    app.use(ieBlockMiddleware);
+    initlog(`Worker ${process.pid} Loaded express.js`);
 
-  app.engine("html", require("ejs").renderFile);
-  initlog("Loaded EJS");
-  app.use(modules.express.urlencoded({ extended: true }));
-  app.use(modules.useragent.express());
-  app.use(modules.express.json());
+    app.engine("html", require("ejs").renderFile);
+    initlog(`Worker ${process.pid} Loaded EJS`);
+    app.use(modules.express.urlencoded({ extended: true }));
+    app.use(modules.useragent.express());
+    app.use(modules.express.json());
 
-  const renderTemplate = async (res, req, template, data = {}) => {
-    const templatePath = modules.path.resolve(`${templateDir}${modules.path.sep}${template}`);
+    const renderTemplate = async (res, req, template, data = {}) => {
+      const templatePath = modules.path.resolve(`${templateDir}${modules.path.sep}${template}`);
 
-    res.render(templatePath, Object.assign(data), function (err, html) {
-      if (err) {
-        console.error("[POKE-render] error on", template, ":", err.message);
+      res.render(templatePath, Object.assign(data), function (err, html) {
+        if (err) {
+          console.error("[POKE-render] error on", template, ":", err.message);
+
+          if (res.destroyed) {
+            return;
+          }
+
+          if (res.writableEnded) {
+            return;
+          }
+
+         if (res.headersSent) {
+   try {
+     const safeRenderErrorMessage = String(err && err.message ? err.message : err)
+       .replace(/-->/g, "--&gt;")
+       .replace(/\r?\n/g, " ");
+
+     res.write("\n");
+     return res.end();
+   } catch (writeErr) {
+     console.error("[POKE-render] could not write render error after headers were sent:", writeErr.message);
+     return;
+   }
+ }
+
+          return res.status(500).send("Internal server error");
+        }
 
         if (res.destroyed) {
           return;
@@ -2164,158 +2214,135 @@ document.addEventListener("DOMContentLoaded", function() {
           return;
         }
 
-       if (res.headersSent) {
-  try {
-    const safeRenderErrorMessage = String(err && err.message ? err.message : err)
-      .replace(/-->/g, "--&gt;")
-      .replace(/\r?\n/g, " ");
+        if (res.headersSent) {
+          try {
+            res.write(html);
+            return res.end();
+          } catch (writeErr) {
+            console.error("[POKE-render] could not write rendered html after headers were sent:", writeErr.message);
+            return;
+          }
+        }
 
-    res.write("\n");
-    return res.end();
-  } catch (writeErr) {
-    console.error("[POKE-render] could not write render error after headers were sent:", writeErr.message);
-    return;
-  }
-}
+        return res.send(html);
+      });
+    };
 
-        return res.status(500).send("Internal server error");
+    initlog(`Worker ${process.pid} inited anti ddos`);
+
+    const initPokeTube = function () {
+      sinit(app, config, renderTemplate);
+      initlog(`Worker ${process.pid} inited super init`);
+      init(app);
+      initlog(`Worker ${process.pid} inited app`);
+    };
+
+    try {
+      app.use(function (req, res, next) {
+        res.header("Access-Control-Allow-Origin", "*");
+        if (req.secure) {
+          res.header(
+            "Strict-Transport-Security",
+            "max-age=31536000; includeSubDomains; preload"
+          );
+        }
+        res.header("secure-poketube-instance", "1");
+
+        res.header("Permissions-Policy", "interest-cohort=()");
+        res.header("software-name", "poke");
+        next();
+      });
+
+      app.use(function (request, response, next) {
+        if (config.enablealwayshttps && !request.secure) {
+          if (
+            !/^https:/i.test(
+              request.headers["x-forwarded-proto"] || request.protocol
+            )
+          ) {
+            return response.redirect(
+              "https://" + request.headers.host + request.url
+            );
+          }
+        }
+
+        next();
+      });
+
+      app.use(function (req, res, next) {
+        res.header(
+          "X-PokeTube-Youtube-Client-Name",
+          innertube.innertube.CONTEXT_CLIENT.INNERTUBE_CONTEXT_CLIENT_NAME
+        );
+        res.header(
+          "Hey-there",
+          "Do u wanna help poke? join us :3 https://codeberg.org/ashleyirispuppy/poke"
+        );
+        res.header(
+          "X-PokeTube-Youtube-Client-Version",
+          innertube.innertube.CLIENT.clientVersion
+        );
+        res.header(
+          "X-PokeTube-Client-name",
+          innertube.innertube.CLIENT.projectClientName
+        );
+        res.header("X-PokeTube-Speeder", "3 seconds no cache, 280ms w/cache");
+        res.header("X-HOSTNAME", req.hostname);
+        if (req.url.match(/^\/(css|js|img|font)\/.+/)) {
+          res.setHeader(
+            "Cache-Control",
+            "public, max-age=" + config.cacher_max_age
+          );
+          res.setHeader("poketube-cacher", "STATIC_FILES");
+        }
+        const a = 890;
+        if (!req.url.match(/^\/(css|js|img|font)\/.+/)) {
+          res.setHeader("Cache-Control", "public, max-age=" + a);
+          res.setHeader("poketube-cacher", "PAGE");
+        }
+        next();
+      });
+
+      initlog(`[OK] Load headers on worker ${process.pid}`);
+    } catch {
+      initlog(`[FAILED] load headers on worker ${process.pid}`);
+    }
+
+    try {
+      app.get("/robots.txt", (req, res) => {
+        res.sendFile(__dirname + "/robots.txt");
+      });
+
+      initlog(`[OK] Load robots.txt on worker ${process.pid}`);
+    } catch {
+      initlog(`[FAILED] load robots.txt on worker ${process.pid}`);
+    }
+
+    initPokeTube();
+
+    app.use(function pokeErrorHandler(err, req, res, next) {
+       if (err.code === 'ECONNRESET' || err.code === 'ECONNABORTED' || err.code === 'EPIPE' || err.code === 'UND_ERR_CONNECT_TIMEOUT') {
+         if (!res.headersSent) {
+            res.status(500).end();
+         }
+         return;
       }
 
-      if (res.destroyed) {
-        return;
+      console.error("[POKE-error]", req.method, req.originalUrl, ":", err.message);
+      if (process.env.NODE_ENV !== "production") {
+        console.error(err.stack);
       }
 
-      if (res.writableEnded) {
+      if (res.destroyed || res.writableEnded) {
         return;
       }
 
       if (res.headersSent) {
-        try {
-          res.write(html);
-          return res.end();
-        } catch (writeErr) {
-          console.error("[POKE-render] could not write rendered html after headers were sent:", writeErr.message);
-          return;
-        }
+        return next(err);
       }
 
-      return res.send(html);
+      res.status(500).send("Something went wrong. Please try again.");
     });
-  };
+  })();
 
-  initlog("inited anti ddos");
-
-  const initPokeTube = function () {
-    sinit(app, config, renderTemplate);
-    initlog("inited super init");
-    init(app);
-    initlog("inited app");
-  };
-
-  try {
-    app.use(function (req, res, next) {
-      res.header("Access-Control-Allow-Origin", "*");
-      if (req.secure) {
-        res.header(
-          "Strict-Transport-Security",
-          "max-age=31536000; includeSubDomains; preload"
-        );
-      }
-      res.header("secure-poketube-instance", "1");
-
-      res.header("Permissions-Policy", "interest-cohort=()");
-      res.header("software-name", "poke");
-      next();
-    });
-
-    app.use(function (request, response, next) {
-      if (config.enablealwayshttps && !request.secure) {
-        if (
-          !/^https:/i.test(
-            request.headers["x-forwarded-proto"] || request.protocol
-          )
-        ) {
-          return response.redirect(
-            "https://" + request.headers.host + request.url
-          );
-        }
-      }
-
-      next();
-    });
-
-    app.use(function (req, res, next) {
-      res.header(
-        "X-PokeTube-Youtube-Client-Name",
-        innertube.innertube.CONTEXT_CLIENT.INNERTUBE_CONTEXT_CLIENT_NAME
-      );
-      res.header(
-        "Hey-there",
-        "Do u wanna help poke? join us :3 https://codeberg.org/ashleyirispuppy/poke"
-      );
-      res.header(
-        "X-PokeTube-Youtube-Client-Version",
-        innertube.innertube.CLIENT.clientVersion
-      );
-      res.header(
-        "X-PokeTube-Client-name",
-        innertube.innertube.CLIENT.projectClientName
-      );
-      res.header("X-PokeTube-Speeder", "3 seconds no cache, 280ms w/cache");
-      res.header("X-HOSTNAME", req.hostname);
-      if (req.url.match(/^\/(css|js|img|font)\/.+/)) {
-        res.setHeader(
-          "Cache-Control",
-          "public, max-age=" + config.cacher_max_age
-        );
-        res.setHeader("poketube-cacher", "STATIC_FILES");
-      }
-      const a = 890;
-      if (!req.url.match(/^\/(css|js|img|font)\/.+/)) {
-        res.setHeader("Cache-Control", "public, max-age=" + a);
-        res.setHeader("poketube-cacher", "PAGE");
-      }
-      next();
-    });
-
-    initlog("[OK] Load headers");
-  } catch {
-    initlog("[FAILED] load headers");
-  }
-
-  try {
-    app.get("/robots.txt", (req, res) => {
-      res.sendFile(__dirname + "/robots.txt");
-    });
-
-    initlog("[OK] Load robots.txt");
-  } catch {
-    initlog("[FAILED] load robots.txt");
-  }
-
-  initPokeTube();
-
-  app.use(function pokeErrorHandler(err, req, res, next) {
-     if (err.code === 'ECONNRESET' || err.code === 'ECONNABORTED' || err.code === 'EPIPE' || err.code === 'UND_ERR_CONNECT_TIMEOUT') {
-       if (!res.headersSent) {
-          res.status(500).end();
-       }
-       return;
-    }
-
-    console.error("[POKE-error]", req.method, req.originalUrl, ":", err.message);
-    if (process.env.NODE_ENV !== "production") {
-      console.error(err.stack);
-    }
-
-    if (res.destroyed || res.writableEnded) {
-      return;
-    }
-
-    if (res.headersSent) {
-      return next(err);
-    }
-
-    res.status(500).send("Something went wrong. Please try again.");
-  });
-})();
+}  
