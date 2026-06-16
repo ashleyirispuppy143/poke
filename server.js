@@ -61,7 +61,7 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
   const clusterStats = { workers: {} };
   const activeWorkers = new Set();
   const sheddingWorkers = new Set();
-  let isShedding = false;  
+  let isShedding = false; // Hard lock to prevent fork bombs
 
   for (let i = 0; i < numCPUs; i++) {
     const w = cluster.fork();
@@ -73,15 +73,21 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
       clusterStats.workers[worker.id] = msg.data;
     } else if (msg && msg.type === 'shed_load' && !sheddingWorkers.has(worker.id)) {
       
+      // HARD CAP: Refuse to shed if we are already doing a hand-off or have too many workers
       if (isShedding || activeWorkers.size > numCPUs) {
          console.warn(`[Primary] Ignored shed request from Worker ${worker.process.pid} (Global cap reached).`);
          return;
       }
 
+      if (msg.nodeCount) {
+         console.info(`[Primary] OS reports ${msg.nodeCount} active node processes right now.`);
+      }
+
       isShedding = true;
       sheddingWorkers.add(worker.id);
-      console.warn(`[Primary] Worker ${worker.process.pid} is overloaded. Spawning seamless replacement...`);
+      console.warn(`[Primary] Worker ${worker.process.pid} crossed OS CPU limit. Spawning seamless replacement...`);
 
+      // Spawn replacement BEFORE killing the old one to avoid dropped connections
       const newWorker = cluster.fork();
       activeWorkers.add(newWorker.id);
 
@@ -149,6 +155,7 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
     const net = require("net");
     const crypto = require("crypto");
     const config = require("./config.json");
+    const { exec } = require("child_process");
     const u = await media_proxy();
 
     let globalClusterStats = { workers: {} };
@@ -183,56 +190,59 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
       }, 45000).unref();
 
       const { performance } = require("perf_hooks");
-      let lastCpuUsage = process.cpuUsage();
-      let lastSampleTime = process.hrtime.bigint(); // 100% accurate htop-style timing
+      let lastKnownOSCpu = 0;
       let isDisconnecting = false;
 
+      // OS-LEVEL CPU & WORKER SENTINEL
       setInterval(() => {
         if (isDisconnecting || !cluster.isWorker) return;
 
-        // Give the worker 5 seconds to boot and load modules before checking CPU.
-        if (process.uptime() < 5) {
-          lastCpuUsage = process.cpuUsage();
-          lastSampleTime = process.hrtime.bigint();
-          return;
-        }
+        // Give the worker 5 seconds to boot and load modules before monitoring
+        if (process.uptime() < 5) return;
 
-        const currentSampleTime = process.hrtime.bigint();
-        const currentCpuUsage = process.cpuUsage();
+        exec('ps aux | grep node | grep -v grep', (err, stdout) => {
+          if (err || !stdout) return;
 
-        const diffUser = currentCpuUsage.user - lastCpuUsage.user;
-        const diffSystem = currentCpuUsage.system - lastCpuUsage.system;
-        const totalUs = diffUser + diffSystem;
+          const lines = stdout.split('\n').filter(l => l.trim().length > 0);
+          const totalNodeProcesses = lines.length;
 
-        const elapsedNs = currentSampleTime - lastSampleTime;
-        const elapsedUs = Number(elapsedNs / 1000n);
+          // Find the exact line for this specific worker PID
+          const myLine = lines.find(l => {
+            const parts = l.trim().split(/\s+/);
+            return parts[1] === String(process.pid);
+          });
 
-        // Calculate the specific worker's CPU percentage over the exact elapsed time
-        const cpuPercent = (totalUs / elapsedUs) * 100;
- 
-        if (cpuPercent >= 85.0) {
-          console.warn(`[CPU SENTINEL] Worker ${process.pid} (Shard) CPU hit ${cpuPercent.toFixed(1)}%. Initiating seamless replacement.`);
-          isDisconnecting = true;
-          
-          // Request new worker directly from primary to seamlessly steal traffic
-          if (process.send) {
-            process.send({ type: 'shed_load' });
+          if (myLine) {
+            const parts = myLine.trim().split(/\s+/);
+            const cpuPercent = parseFloat(parts[2]); // %CPU is the 3rd column in ps aux
+            
+            lastKnownOSCpu = cpuPercent;
+
+            // STRICT 20% CPU CAP
+            if (cpuPercent > 20.0) {
+              console.warn(`[OS SENTINEL] Worker ${process.pid} (Shard) hit ${cpuPercent.toFixed(1)}% OS CPU (Limit: 20%). Initiating seamless replacement.`);
+              isDisconnecting = true;
+              
+              // Request new worker directly from primary
+              if (process.send) {
+                process.send({ type: 'shed_load', nodeCount: totalNodeProcesses });
+              }
+              
+              // Fail-safe cleanup mechanism if primary is heavily overloaded
+              setTimeout(() => {
+                try { cluster.worker.disconnect(); } catch (err) {}
+                setTimeout(() => {
+                  console.error(`[OS SENTINEL] Worker ${process.pid} completely cleaned up via fail-safe.`);
+                  process.exit(0);
+                }, 3000).unref();
+              }, 8000).unref();
+            }
           }
-          
-          // Fail-safe cleanup mechanism if primary is heavily overloaded
-          setTimeout(() => {
-            try { cluster.worker.disconnect(); } catch (err) {}
-            setTimeout(() => {
-              console.error(`[CPU SENTINEL] Worker ${process.pid} completely cleaned up via fail-safe.`);
-              process.exit(0);
-            }, 3000).unref();
-          }, 8000).unref();
-          
-        } else {
-          lastCpuUsage = currentCpuUsage;
-          lastSampleTime = currentSampleTime;
-        }
-      }, 1500).unref(); // 1.5s interval aligns perfectly with htop/top standard sampling rate
+        });
+      }, 1500).unref(); // 1.5s aligns perfectly with standard ps/htop refresh rates
+
+      // Attach lastKnownOSCpu to a global property so the health page can fetch it natively
+      global.getWorkerOSCpu = () => lastKnownOSCpu;
 
     })();
 
@@ -1013,7 +1023,10 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
         const snapshot = {
           state: resourceState.state, score: resourceState.score, since: resourceState.since, sampledAt: now, reason: reason || "interval",
           eventLoop: { p99Ms: roundMs(eldP99), meanMs: roundMs(eldMean) },
-          cpu: { ratio: roundRatio(cpuRatio), percent: roundMs(cpuPercent) },
+          
+          // MAP DIRECTLY TO OS CPU
+          cpu: { ratio: roundRatio(cpuRatio), percent: global.getWorkerOSCpu ? global.getWorkerOSCpu() : 0 },
+          
           memory: {
             rssMb: bytesToMb(memory.rss), heapUsedMb: bytesToMb(memory.heapUsed), heapTotalMb: bytesToMb(memory.heapTotal),
             externalMb: bytesToMb(memory.external), arrayBuffersMb: bytesToMb(memory.arrayBuffers || 0), rssRatio: roundRatio(rssRatio),
