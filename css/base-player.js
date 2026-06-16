@@ -251,21 +251,21 @@ document.addEventListener("DOMContentLoaded", () => {
     if (coupledMode && audio && el !== audio &&
       typeof audioBufferHoldBlocksVideoStart === "function" &&
       audioBufferHoldBlocksVideoStart()) {
-      pauseCoupledPairForAudioBuffer("safe-video-play-during-audio-buffer");
-    return null;
-      }
-      if (initialCoupledPairPending() && !startupCoordinatedPlayActive()) {
-        state.startupPrimed = true;
-        state.startupKickDone = false;
-        if (!kickStartupLockstepPlayback()) scheduleStartupAutoplayRetry();
-        return null;
-      }
-      try {
-        const p = el.play();
-        if (p && typeof p.catch === "function") p.catch(() => { });
-        return p;
-      } catch { }
+      holdCoupledVideoStartUntilAudioReady(getVideoCurrentTimeSafe(0), "safe-video-play-audio-prebuffer");
       return null;
+    }
+    if (initialCoupledPairPending() && !startupCoordinatedPlayActive()) {
+      state.startupPrimed = true;
+      state.startupKickDone = false;
+      if (!kickStartupLockstepPlayback()) scheduleStartupAutoplayRetry();
+      return null;
+    }
+    try {
+      const p = el.play();
+      if (p && typeof p.catch === "function") p.catch(() => { });
+      return p;
+    } catch { }
+    return null;
   }
   function safePauseElement(el) {
     if (!el || typeof el.pause !== "function") return false;
@@ -12020,21 +12020,6 @@ document.addEventListener("DOMContentLoaded", () => {
       try { setAudioMutedSynced(true); setAudioVolumeSynced(0); } catch { }
       let issued = false;
       try {
-        const videoPlay = execProgrammaticVideoPlay({
-          force: true,
-          minGapMs: 0,
-          noAudioStart: true,
-          seekPairJoin: true,
-          seekOwner: true,
-          seekCommitOwner: true,
-          nativePlayOwner: true
-        });
-        if (videoPlay && typeof videoPlay.catch === "function") {
-          videoPlay.catch(() => { });
-        }
-        issued = true;
-      } catch { }
-      try {
         const audioPlay = execProgrammaticAudioPlay({
           force: true,
           minGapMs: 0,
@@ -12048,6 +12033,21 @@ document.addEventListener("DOMContentLoaded", () => {
         });
         if (audioPlay && typeof audioPlay.catch === "function") {
           audioPlay.catch(() => { });
+        }
+        issued = true;
+      } catch { }
+      try {
+        const videoPlay = execProgrammaticVideoPlay({
+          force: true,
+          minGapMs: 0,
+          noAudioStart: true,
+          seekPairJoin: true,
+          seekOwner: true,
+          seekCommitOwner: true,
+          nativePlayOwner: true
+        });
+        if (videoPlay && typeof videoPlay.catch === "function") {
+          videoPlay.catch(() => { });
         }
         issued = true;
       } catch { }
@@ -12611,8 +12611,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const audioReadyForStart = !coupledMode || !audio ||
           audioReadyForSeekCommitStartAt(target);
         if (!mustRemainPaused && targetLanded(target) && audioReadyForStart) {
-          // Only issue play once the coupled audio target has real data; otherwise
-          // the video clock can advance during an audio wait and resume desynced.
+          // Seek resume uses the seek-specific gate. Waiting for the stricter
+          // startup prebuffer here can leave both media elements paused forever.
           state.strictBufferHold = false;
           clearBufferHold();
           if (!state.seekCommitStartIssued) startPair(target);
@@ -17927,6 +17927,85 @@ document.addEventListener("DOMContentLoaded", () => {
       return false;
     }
   }
+  function coupledAudioVideoStartLead(strict = false) {
+    const floor = strict
+      ? STRICT_BUFFER_AHEAD_SEC
+      : (perfProfile.lowEnd ? 0.22 : (perfProfile.mobile ? 0.18 : 0.16));
+    return Math.max(coupledAudioStartLead(true), floor);
+  }
+  function audioReadyToLetVideoStartAt(t, opts = {}) {
+    if (!coupledMode || !audio) return true;
+    const target = Number(t);
+    if (!isFinite(target) || target < 0) return false;
+    try {
+      if (!audio.paused && tabReturnAudioMasterActive(3600)) return true;
+    } catch { }
+    const strict = !!(opts && opts.strict);
+    const requiredLead = Math.max(
+      0.05,
+      Number(opts && opts.lead) || coupledAudioVideoStartLead(strict)
+    );
+    try {
+      if (audio.error || audio.seeking) return false;
+      const duration = Number(audio.duration || 0);
+      const remaining = isFinite(duration) && duration > 0 ? Math.max(0, duration - target) : Infinity;
+      if (remaining <= 0.18 && Number(audio.readyState || 0) >= HAVE_CURRENT_DATA) {
+        return mediaHasCurrentDataAtTarget(audio, target, 0.02);
+      }
+      if (Number(audio.readyState || 0) < HAVE_FUTURE_DATA) return false;
+      return mediaHasStrictSeekDataAtTarget(audio, target, requiredLead) ||
+        hasFuturePlaybackDataAt(audio, target, requiredLead) ||
+        canPlaySmoothAt(audio, target, requiredLead);
+    } catch {
+      return false;
+    }
+  }
+  function holdCoupledVideoStartUntilAudioReady(target = NaN, reason = "audio-prebuffer") {
+    if (!coupledMode || !audio) return false;
+    const t = now();
+    const startAt = isFinite(Number(target)) && Number(target) >= 0
+      ? Number(target)
+      : getVideoCurrentTimeSafe(0);
+    state.audioWaiting = true;
+    state.audioStallSince = state.audioStallSince || t;
+    state.audioStallVideoPaused = true;
+    state.bufferHoldIntendedPlaying = !!state.intendedPlaying;
+    state.strictBufferHold = true;
+    state.strictBufferReason = "audio-buffer";
+    state.bufferHoldSince = state.bufferHoldSince || t;
+    state.coupledBufferBarrierAt = t;
+    state.coupledBufferBarrierReason = String(reason || "audio-prebuffer").slice(0, 64);
+    try { primeStartupTrackBuffer(audio); } catch { }
+    try {
+      const vn = getVideoNode();
+      if (vn && !vn.paused) {
+        state.isProgrammaticVideoPause = true;
+        const nativePause = HTMLMediaElement.prototype.pause;
+        nativePause.call(vn);
+        if (videoEl && videoEl !== vn && !videoEl.paused) nativePause.call(videoEl);
+        setTimeout(() => { state.isProgrammaticVideoPause = false; }, 220);
+      }
+    } catch { }
+    try { setSeekBufferingUIVisible(true); } catch { }
+    try { armResumeAfterBuffer(12000); } catch { }
+    if (initialCoupledPairPending()) {
+      state.startupPrimed = true;
+      state.startupKickDone = false;
+      scheduleStartupAutoplayRetry();
+    } else {
+      try {
+        if (!coupledPlaybackCommitActive(0)) {
+          requestCoupledPlaybackCommit(reason || "audio-prebuffer", { force: true, retry: true });
+        } else {
+          scheduleCoupledPlaybackCommitRetry(
+            Number(state.coupledPlayCommitSerial || 0),
+            perfProfile.lowEnd ? 700 : 480
+          );
+        }
+      } catch { }
+    }
+    return true;
+  }
   function audioReadyForSeekCommitStartAt(t) {
     if (!coupledMode || !audio) return true;
     const target = Number(t);
@@ -18117,8 +18196,10 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     const videoReady = immediate.videoReady ||
       mediaCanBeginPlaybackAtTarget(vn, vt, 0.04);
-    const audioReady = immediate.audioReady ||
-      audioReadyForCoupledStartAt(vt, coupledAudioStartLead(false));
+    const audioReady = audioMaster || audioReadyToLetVideoStartAt(vt, {
+      strict: !!(state.strictBufferHold || state.audioWaiting || state.audioStallVideoPaused),
+      reason: "visible-coupled-buffer"
+    });
     const videoBlocked = !videoReady;
     const audioBlocked = !audioReady;
     return {
@@ -18388,7 +18469,10 @@ document.addEventListener("DOMContentLoaded", () => {
       try { return Number(video.currentTime()) || Number(audio.currentTime) || 0; } catch { return Number(audio.currentTime) || 0; }
     })();
     const aRS = Number(audio.readyState || 0);
-    const audioReady = audioReadyForCoupledStartAt(targetTime, coupledAudioStartLead(false));
+    const audioReady = audioReadyToLetVideoStartAt(targetTime, {
+      strict: !!state.audioWaiting,
+      reason: "coupled-audio-buffer-check"
+    });
     if (state.audioWaiting && !audioReady) return true;
     const audioStallAge = state.audioStallSince ? (now() - state.audioStallSince) : 0;
     if (audioStallAge > 250 && !audioReady && aRS < HAVE_FUTURE_DATA) return true;
@@ -18403,10 +18487,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const heldAt = isFinite(Number(target))
     ? Number(target)
     : (() => { try { return Number(video.currentTime()) || Number(audio.currentTime) || 0; } catch { return 0; } })();
-    return audioReadyForCoupledStartAt(heldAt, coupledAudioStartLead(true));
+    return audioReadyToLetVideoStartAt(heldAt, { strict: true, reason: "audio-buffer-release" });
   }
   function audioBufferHoldBlocksVideoStart() {
-    return audioBufferPairHoldActive() && !audioReadyToReleasePairHold(getVideoCurrentTimeSafe(0));
+    if (!coupledMode || !audio) return false;
+    if (tabReturnAudioMasterActive(3600)) return false;
+    const startAt = coupledPlaybackTarget(getVideoCurrentTimeSafe(0));
+    return !audioReadyToLetVideoStartAt(startAt, {
+      strict: true,
+      reason: "video-start-audio-prebuffer"
+    });
   }
   function clearAudioBufferConfirmation() {
     if (state.audioBufferConfirmTimer) {
@@ -18796,11 +18886,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const lead = strictTarget
       ? (perfProfile.lowEnd ? 0.12 : 0.08)
       : (perfProfile.lowEnd ? 0.08 : 0.04);
+    const audioLead = strictTarget
+      ? coupledAudioVideoStartLead(true)
+      : coupledAudioVideoStartLead(false);
     const immediate = coupledPairPlayableSnapshot(t, {
       tolerance: strictTarget
         ? (perfProfile.lowEnd ? 0.26 : 0.20)
         : 0.14,
-      audioLead: lead
+      audioLead
     });
     const videoReady = isFinite(t) && t >= 0 && (
       immediate.videoReady ||
@@ -18809,7 +18902,11 @@ document.addEventListener("DOMContentLoaded", () => {
       (!strictTarget && canPlaySmoothAt(vn, t, lead))
     );
     const audioReady = isFinite(t) && t >= 0 &&
-      (immediate.audioReady || audioReadyForCoupledStartAt(t, lead));
+      audioReadyToLetVideoStartAt(t, {
+        strict: strictTarget,
+        lead: audioLead,
+        reason: "pair-commit-audio-prebuffer"
+      });
     let videoAtTarget = true;
     let audioAtTarget = true;
     try {
@@ -19962,6 +20059,29 @@ document.addEventListener("DOMContentLoaded", () => {
       !startupCoordinatedPlayActive()) {
       try { enterHiddenAudioExclusiveMode("blocked-hidden-video-play"); } catch { }
       return Promise.resolve();
+    }
+    if (!seekPairJoin && coupledMode && audio && state.intendedPlaying &&
+      !state.hiddenAudioExclusiveMode) {
+      const gateVideoNode = getVideoNode();
+      const videoAlreadyRunning = !!(gateVideoNode && !gateVideoNode.paused);
+      if (!videoAlreadyRunning) {
+        const gateTarget = coupledPlaybackTarget(getVideoCurrentTimeSafe(0));
+        const strictAudioGate = !!(
+          force ||
+          nativePlayOwner ||
+          !state.firstPlayCommitted ||
+          state.strictBufferHold ||
+          state.audioWaiting ||
+          state.audioStallVideoPaused
+        );
+        if (!audioReadyToLetVideoStartAt(gateTarget, {
+          strict: strictAudioGate,
+          reason: "programmatic-video-play"
+        })) {
+          holdCoupledVideoStartUntilAudioReady(gateTarget, "programmatic-video-play-audio-prebuffer");
+          return Promise.resolve(false);
+        }
+      }
     }
     try {
       const _playVt = Number(getVideoNode()?.currentTime);
@@ -26426,11 +26546,15 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       return false;
     }
     const startupAhead = document.visibilityState === "hidden"
-      ? (perfProfile.lowEnd ? 0.06 : 0.045)
-      : (perfProfile.lowEnd ? 0.08 : 0.055);
+      ? Math.max(coupledAudioVideoStartLead(false), perfProfile.lowEnd ? 0.08 : 0.06)
+      : Math.max(coupledAudioVideoStartLead(true), perfProfile.lowEnd ? 0.12 : 0.09);
     const pairCanAdvance =
       hasFuturePlaybackDataAt(vNode, startAt, startupAhead) &&
-      hasFuturePlaybackDataAt(audio, startAt, startupAhead);
+      audioReadyToLetVideoStartAt(startAt, {
+        strict: true,
+        lead: startupAhead,
+        reason: "startup-lockstep-audio-prebuffer"
+      });
     if (pairCanAdvance) {
       state._startupAudioWaitStartedAt = 0;
       return true;
@@ -34179,9 +34303,13 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       } else {
         const audioOwnsBufferHold = audioBufferPairHoldActive() || state.strictBufferReason === "audio-buffer";
         const requiredAudioAhead = audioOwnsBufferHold
-        ? Math.max(coupledAudioStartLead(true), Number(minAhead) || 0)
-        : Math.max(coupledAudioStartLead(false), Math.min(0.14, Number(minAhead) || 0.08));
-        audioReady = audioReadyForCoupledStartAt(vt, requiredAudioAhead);
+        ? Math.max(coupledAudioVideoStartLead(true), Number(minAhead) || 0)
+        : Math.max(coupledAudioVideoStartLead(false), Math.min(0.18, Number(minAhead) || 0.08));
+        audioReady = audioReadyToLetVideoStartAt(vt, {
+          strict: audioOwnsBufferHold || seekOwned,
+          lead: requiredAudioAhead,
+          reason: "buffer-resume-audio-prebuffer"
+        });
       }
     }
     if (!videoReady || !audioReady) {
@@ -34190,7 +34318,6 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         audioLead: seekOwned ? coupledAudioStartLead(true) : coupledAudioStartLead(false)
       });
       if (!videoReady && immediate.videoReady) videoReady = true;
-      if (!audioReady && immediate.audioReady) audioReady = true;
     }
     return { ready: videoReady && audioReady, videoReady, audioReady, vn, vt, vRS, vAhead };
   }
