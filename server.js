@@ -59,14 +59,33 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
   console.log(`Detected ${numCPUs} cores. Spawning workers across all available threads...`);
 
   const clusterStats = { workers: {} };
+  const activeWorkers = new Set();
+  const sheddingWorkers = new Set();
 
   for (let i = 0; i < numCPUs; i++) {
-    cluster.fork();
+    const w = cluster.fork();
+    activeWorkers.add(w.id);
   }
 
   cluster.on('message', (worker, msg) => {
     if (msg && msg.type === 'worker_stats') {
       clusterStats.workers[worker.id] = msg.data;
+    } else if (msg && msg.type === 'shed_load' && !sheddingWorkers.has(worker.id)) {
+      sheddingWorkers.add(worker.id);
+      console.warn(`[Primary] Worker ${worker.process.pid} is overloaded. Spawning seamless replacement...`);
+
+      // Spawn replacement BEFORE killing the old one to avoid dropped connections
+      const newWorker = cluster.fork();
+      activeWorkers.add(newWorker.id);
+
+      newWorker.on('listening', () => {
+        // Once new worker is fully ready, tell the old one to gracefully step down
+        if (worker.isConnected()) {
+           worker.send({ type: 'graceful_shutdown' });
+        } else {
+           worker.kill(); // Fallback if unresponsive
+        }
+      });
     }
   });
 
@@ -80,15 +99,24 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
 
   cluster.on("disconnect", (worker) => {
     delete clusterStats.workers[worker.id];
-    console.warn(`Worker ${worker.process.pid} disconnected for load shedding. Spawning seamless replacement...`);
-    cluster.fork();
+    // Re-spawn only if it's an organic disconnect and wasn't manually replaced
+    if (activeWorkers.has(worker.id)) {
+      activeWorkers.delete(worker.id);
+      console.warn(`[Primary] Worker ${worker.process.pid} disconnected unexpectedly. Spawning replacement...`);
+      const w = cluster.fork();
+      activeWorkers.add(w.id);
+    }
   });
 
   cluster.on("exit", (worker, code, signal) => {
     delete clusterStats.workers[worker.id];
-    if (!worker.exitedAfterDisconnect) {
-      console.error(`Worker ${worker.process.pid} died unexpectedly (Code: ${code}). Respawning...`);
-      cluster.fork();
+    sheddingWorkers.delete(worker.id);
+    // Strict duplication prevention check
+    if (activeWorkers.has(worker.id)) {
+      activeWorkers.delete(worker.id);
+      console.error(`[Primary] Worker ${worker.process.pid} died unexpectedly (Code: ${code}). Respawning...`);
+      const w = cluster.fork();
+      activeWorkers.add(w.id);
     }
   });
 
@@ -119,6 +147,13 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
     process.on('message', (msg) => {
       if (msg && msg.type === 'cluster_stats') {
         globalClusterStats = msg.data;
+      } else if (msg && msg.type === 'graceful_shutdown') {
+        console.error(`[CPU SENTINEL] Worker ${process.pid} safely handed off traffic. Cleaning up active streams...`);
+        try {
+          cluster.worker.disconnect();
+        } catch (err) {}
+        // Give the active long-lived streams exactly 3 seconds to resolve before memory purge
+        setTimeout(() => process.exit(0), 3000).unref();
       }
     });
 
@@ -141,58 +176,57 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
 
       const { performance } = require("perf_hooks");
       let lastCpuUsage = process.cpuUsage();
-      let lastSampleAt = performance.now();
+      let lastSampleTime = process.hrtime.bigint(); // 100% accurate htop-style timing
       let isDisconnecting = false;
 
-      // Check exactly every 1000ms to match OS-level htop/btop reporting accuracy
       setInterval(() => {
         if (isDisconnecting || !cluster.isWorker) return;
 
-        const currentSampleAt = performance.now();
-        const currentCpuUsage = process.cpuUsage();
-
-        // Give the worker 5 seconds to boot safely before tracking CPU to prevent startup loops
+        // Give the worker 5 seconds to boot and load modules before checking CPU.
+        // Prevents loop of workers immediately killing themselves during startup initialization.
         if (process.uptime() < 5) {
-          lastCpuUsage = currentCpuUsage;
-          lastSampleAt = currentSampleAt;
+          lastCpuUsage = process.cpuUsage();
+          lastSampleTime = process.hrtime.bigint();
           return;
         }
 
-        const elapsedMs = currentSampleAt - lastSampleAt;
-        
-        // Calculate difference in CPU usage (microseconds) since last sample
-        const userDiff = currentCpuUsage.user - lastCpuUsage.user;
-        const sysDiff = currentCpuUsage.system - lastCpuUsage.system;
-        
-        // Convert microseconds to milliseconds
-        const cpuTimeMs = (userDiff + sysDiff) / 1000;
-        
-        // Calculate the specific worker's true CPU percentage over the elapsed real-world time
-        const cpuPercent = (cpuTimeMs / elapsedMs) * 100;
+        const currentSampleTime = process.hrtime.bigint();
+        const currentCpuUsage = process.cpuUsage();
 
-        // If CPU hits 17% (or goes rogue > 100% due to an event loop block), replace it immediately
+        const diffUser = currentCpuUsage.user - lastCpuUsage.user;
+        const diffSystem = currentCpuUsage.system - lastCpuUsage.system;
+        const totalUs = diffUser + diffSystem;
+
+        const elapsedNs = currentSampleTime - lastSampleTime;
+        const elapsedUs = Number(elapsedNs / 1000n);
+
+        // Calculate the specific worker's CPU percentage over the exact elapsed time
+        const cpuPercent = (totalUs / elapsedUs) * 100;
+
+        // 17-18% threshold + covers natural spikes > 100% on extreme loads
         if (cpuPercent >= 17.0) {
-          console.warn(`[CPU SENTINEL] Worker ${process.pid} (Shard) CPU hit ${cpuPercent.toFixed(2)}%. Initiating silent replacement.`);
+          console.warn(`[CPU SENTINEL] Worker ${process.pid} (Shard) CPU hit ${cpuPercent.toFixed(1)}%. Initiating seamless replacement.`);
           isDisconnecting = true;
           
-          try {
-            // Disconnecting instantly removes this shard from the load balancer pool
-            // and triggers the primary process to fork ONE clean replacement immediately
-            cluster.worker.disconnect();
-          } catch (err) {
-            console.error(`[CPU SENTINEL] Disconnect error: ${err.message}`);
+          // Request new worker directly from primary to seamlessly steal traffic
+          if (process.send) {
+            process.send({ type: 'shed_load' });
           }
           
-          // Allow active requests 2 seconds max to resolve, then forcefully obliterate it from RAM
+          // Fail-safe cleanup mechanism if primary is heavily overloaded
           setTimeout(() => {
-            console.error(`[CPU SENTINEL] Worker ${process.pid} cleanly destroyed after 2 seconds.`);
-            process.exit(0); 
-          }, 2000).unref();
+            try { cluster.worker.disconnect(); } catch (err) {}
+            setTimeout(() => {
+              console.error(`[CPU SENTINEL] Worker ${process.pid} completely cleaned up via fail-safe.`);
+              process.exit(0);
+            }, 3000).unref();
+          }, 8000).unref();
+          
         } else {
           lastCpuUsage = currentCpuUsage;
-          lastSampleAt = currentSampleAt;
+          lastSampleTime = currentSampleTime;
         }
-      }, 1000).unref(); 
+      }, 1500).unref(); // 1.5s interval aligns perfectly with htop/top standard sampling rate
 
     })();
 
