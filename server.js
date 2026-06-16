@@ -79,13 +79,9 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
          return;
       }
 
-      if (msg.nodeCount) {
-         console.info(`[Primary] OS reports ${msg.nodeCount} active node processes right now.`);
-      }
-
       isShedding = true;
       sheddingWorkers.add(worker.id);
-      console.warn(`[Primary] Worker ${worker.process.pid} crossed OS CPU limit. Spawning seamless replacement...`);
+      console.warn(`[Primary] Worker ${worker.process.pid} hit 100.0% CPU. Spawning seamless replacement...`);
 
       // Spawn replacement BEFORE killing the old one to avoid dropped connections
       const newWorker = cluster.fork();
@@ -163,7 +159,7 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
       if (msg && msg.type === 'cluster_stats') {
         globalClusterStats = msg.data;
       } else if (msg && msg.type === 'graceful_shutdown') {
-        console.error(`[CPU SENTINEL] Worker ${process.pid} safely handed off traffic. Cleaning up active streams...`);
+        console.error(`[SENTINEL] Worker ${process.pid} safely handed off traffic. Annihilating stream footprint...`);
         try {
           cluster.worker.disconnect();
         } catch (err) {}
@@ -190,58 +186,95 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
       }, 45000).unref();
 
       const { performance } = require("perf_hooks");
+      let lastCpuUsage = process.cpuUsage();
+      let lastSampleTime = process.hrtime.bigint(); 
       let lastKnownOSCpu = 0;
       let isDisconnecting = false;
 
-      // OS-LEVEL CPU & WORKER SENTINEL
+      // ULTIMATE OS-LEVEL CPU SENTINEL (Top -> PS -> OS Fallback)
       setInterval(() => {
         if (isDisconnecting || !cluster.isWorker) return;
 
-        // Give the worker 5 seconds to boot and load modules before monitoring
-        if (process.uptime() < 5) return;
+        // Give the worker 5 seconds to boot before monitoring
+        if (process.uptime() < 5) {
+          lastCpuUsage = process.cpuUsage();
+          lastSampleTime = process.hrtime.bigint();
+          return;
+        }
 
-        exec('ps aux | grep node | grep -v grep', (err, stdout) => {
-          if (err || !stdout) return;
+        const pid = process.pid;
 
-          const lines = stdout.split('\n').filter(l => l.trim().length > 0);
-          const totalNodeProcesses = lines.length;
+        // 1. First attempt: Use `top` (batch mode, single iteration)
+        exec(`top -b -n 1 -p ${pid}`, (errTop, stdoutTop) => {
+          let cpuPercent = null;
 
-          // Find the exact line for this specific worker PID
-          const myLine = lines.find(l => {
-            const parts = l.trim().split(/\s+/);
-            return parts[1] === String(process.pid);
-          });
-
-          if (myLine) {
-            const parts = myLine.trim().split(/\s+/);
-            const cpuPercent = parseFloat(parts[2]); // %CPU is the 3rd column in ps aux
-            
-            lastKnownOSCpu = cpuPercent;
-
-            // STRICT 20% CPU CAP
-            if (cpuPercent > 20.0) {
-              console.warn(`[OS SENTINEL] Worker ${process.pid} (Shard) hit ${cpuPercent.toFixed(1)}% OS CPU (Limit: 20%). Initiating seamless replacement.`);
-              isDisconnecting = true;
-              
-              // Request new worker directly from primary
-              if (process.send) {
-                process.send({ type: 'shed_load', nodeCount: totalNodeProcesses });
-              }
-              
-              // Fail-safe cleanup mechanism if primary is heavily overloaded
-              setTimeout(() => {
-                try { cluster.worker.disconnect(); } catch (err) {}
-                setTimeout(() => {
-                  console.error(`[OS SENTINEL] Worker ${process.pid} completely cleaned up via fail-safe.`);
-                  process.exit(0);
-                }, 3000).unref();
-              }, 8000).unref();
+          if (!errTop && stdoutTop) {
+            const lines = stdoutTop.split('\n');
+            const dataLine = lines.find(l => l.includes(String(pid)) && l.includes('node'));
+            if (dataLine) {
+              const parts = dataLine.trim().split(/\s+/);
+              // In top output, %CPU is generally the 9th column (index 8)
+              const parsed = parseFloat(parts[8]);
+              if (!isNaN(parsed)) cpuPercent = parsed;
             }
           }
-        });
-      }, 1500).unref(); // 1.5s aligns perfectly with standard ps/htop refresh rates
 
-      // Attach lastKnownOSCpu to a global property so the health page can fetch it natively
+          // 2. Second attempt: `top` failed/not available, fallback to `ps aux`
+          if (cpuPercent === null) {
+            exec(`ps aux | grep ${pid} | grep -v grep`, (errPs, stdoutPs) => {
+              if (!errPs && stdoutPs) {
+                const parts = stdoutPs.trim().split(/\s+/);
+                const parsed = parseFloat(parts[2]); // %CPU is 3rd column in ps aux
+                if (!isNaN(parsed)) cpuPercent = parsed;
+              }
+              evaluateCpu(cpuPercent);
+            });
+          } else {
+            evaluateCpu(cpuPercent);
+          }
+        });
+
+        function evaluateCpu(osCpu) {
+          // 3. Absolute Fallback: Both shell commands failed. Use internal Node API.
+          if (osCpu === null) {
+            const currentSampleTime = process.hrtime.bigint();
+            const currentCpuUsage = process.cpuUsage();
+
+            const diffUser = currentCpuUsage.user - lastCpuUsage.user;
+            const diffSystem = currentCpuUsage.system - lastCpuUsage.system;
+            const totalUs = diffUser + diffSystem;
+
+            const elapsedNs = currentSampleTime - lastSampleTime;
+            const elapsedUs = Number(elapsedNs / 1000n);
+
+            osCpu = (totalUs / elapsedUs) * 100;
+
+            lastCpuUsage = currentCpuUsage;
+            lastSampleTime = currentSampleTime;
+          }
+
+          lastKnownOSCpu = osCpu;
+
+          // ANNIHILATION THRESHOLD: > 100.0%
+          if (osCpu >= 100.0) {
+            console.warn(`[SENTINEL] Worker ${pid} hit ${osCpu.toFixed(1)}% CPU. Initiating complete replacement.`);
+            isDisconnecting = true;
+            
+            if (process.send) {
+              process.send({ type: 'shed_load' });
+            }
+            
+            setTimeout(() => {
+              try { cluster.worker.disconnect(); } catch (err) {}
+              setTimeout(() => {
+                console.error(`[SENTINEL] Worker ${pid} forcibly annihilated via fail-safe.`);
+                process.exit(0);
+              }, 3000).unref();
+            }, 8000).unref();
+          }
+        }
+      }, 1500).unref(); 
+
       global.getWorkerOSCpu = () => lastKnownOSCpu;
 
     })();
