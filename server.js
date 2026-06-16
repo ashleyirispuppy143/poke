@@ -1,4 +1,5 @@
- /*
+
+/*
    Poke is an Free/Libre youtube front-end. this is our main file.
   
    Copyright (C) 2021-2026 Poke (https://codeberg.org/ashleyirispuppy/poke)
@@ -150,9 +151,9 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
         const currentSampleAt = performance.now();
         const currentCpuUsage = process.cpuUsage();
 
-        // Give the worker 15 seconds to boot and load modules before checking CPU.
+        // Give the worker 3 seconds to boot and load modules before checking CPU.
         // This crucially prevents an infinite loop of new workers immediately killing themselves during heavy startup initialization!
-        if (process.uptime() < 15) {
+        if (process.uptime() < 3) {
           lastCpuUsage = currentCpuUsage;
           lastSampleAt = currentSampleAt;
           return;
