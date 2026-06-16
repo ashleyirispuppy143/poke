@@ -28,8 +28,8 @@ const logPrefix = ENABLE_CLUSTER
   ? (cluster.isPrimary ? "[Primary]" : `[Worker ${cluster.worker.id}]`) 
   : "[Server]";
 
-let isBooting = true;
-setTimeout(() => { isBooting = false; }, 15000);
+ let isBooting = true;
+setTimeout(() => { isBooting = false; }, 10000);
 
 ['log', 'info'].forEach(method => {
   const original = console[method];
@@ -44,20 +44,38 @@ setTimeout(() => { isBooting = false; }, 15000);
   console[method] = (...args) => original(logPrefix, ...args);
 });
 
-if (ENABLE_CLUSTER && cluster.isPrimary) {
+ if (ENABLE_CLUSTER && cluster.isPrimary) {
   console.log(`Booting manager on PID ${process.pid}`);
   console.log(`Detected ${numCPUs} cores. Spawning workers across all available threads...`);
+
+   const clusterStats = { workers: {} };
 
   for (let i = 0; i < numCPUs; i++) {
     cluster.fork();
   }
 
+  cluster.on('message', (worker, msg) => {
+    if (msg && msg.type === 'worker_stats') {
+      clusterStats.workers[worker.id] = msg.data;
+    }
+  });
+
+   setInterval(() => {
+    for (const id in cluster.workers) {
+      if (cluster.workers[id].isConnected()) {
+        cluster.workers[id].send({ type: 'cluster_stats', data: clusterStats });
+      }
+    }
+  }, 1000).unref();
+
    cluster.on("disconnect", (worker) => {
+    delete clusterStats.workers[worker.id];
     console.warn(`Worker ${worker.process.pid} disconnected for load shedding. Spawning seamless replacement...`);
     cluster.fork();
   });
 
    cluster.on("exit", (worker, code, signal) => {
+    delete clusterStats.workers[worker.id];
     if (!worker.exitedAfterDisconnect) {
       console.error(`Worker ${worker.process.pid} died unexpectedly (Code: ${code}). Respawning...`);
       cluster.fork();
@@ -87,6 +105,14 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
     const config = require("./config.json");
     const u = await media_proxy();
 
+    // Store global cluster state locally for the /health dashboard
+    let globalClusterStats = { workers: {} };
+    process.on('message', (msg) => {
+      if (msg && msg.type === 'cluster_stats') {
+        globalClusterStats = msg.data;
+      }
+    });
+
     (function GlobalServerOptimizer() {
       process.on('uncaughtException', (err) => {
         if (err.code === 'ECONNRESET' || err.code === 'EPIPE' || err.code === 'ETIMEDOUT') return;
@@ -105,7 +131,7 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
         }
       }, 45000).unref();
 
-       let lastCpu = process.cpuUsage();
+      let lastCpu = process.cpuUsage();
       let lastCheck = Date.now();
       let cpuStrikes = 0;
       let isDisconnecting = false;
@@ -131,7 +157,7 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
              setTimeout(() => {
               console.error(`[CPU SENTINEL] Worker ${process.pid} failsafe termination triggered.`);
               process.exit(1);
-            }, 15000).unref();
+            }, 8000).unref();
           }
         } else {
           cpuStrikes = Math.max(0, cpuStrikes - 1);
@@ -139,7 +165,7 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
 
         lastCpu = process.cpuUsage();
         lastCheck = now;
-      }, 500).unref();
+      }, 400).unref();
 
     })();
 
@@ -495,8 +521,9 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
       const resourceConfig = {
         system: {
           sampleMs: 1000,
+          // Ultra-Strict Predictive Yield Limits
           eventLoop: { warmMs: 200, stressedMs: 500, criticalMs: 1000 },
-          warmCpuRatio: 0.65, stressedCpuRatio: 0.75, criticalCpuRatio: 0.80,
+          warmCpuRatio: 0.60, stressedCpuRatio: 0.70, criticalCpuRatio: 0.75, // Guard activates aggressively before 80%
           warmRssRatio: 0.85, stressedRssRatio: 0.90, criticalRssRatio: 0.95,
           warmHeapRatio: 0.80, stressedHeapRatio: 0.85, criticalHeapRatio: 0.90
         },
@@ -945,6 +972,20 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
         currentSecondKindCounts = new Map();
         currentSecondRouteCounts = new Map();
 
+        // Send IPC metrics to master for the global Cluster Vitals dashboard
+        if (process.send) {
+          process.send({
+            type: 'worker_stats',
+            data: {
+              pid: process.pid,
+              cpu: snapshot.cpu.percent,
+              mem: snapshot.memory.rssMb,
+              active: snapshot.requests.active,
+              state: snapshot.state
+            }
+          });
+        }
+
         if (shouldLog) {
           lastStateLogAt = now;
           logResourceState();
@@ -970,7 +1011,7 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
 
         if (hasCritical || score >= 7) consecutiveCriticalSpikes++; else consecutiveCriticalSpikes = Math.max(0, consecutiveCriticalSpikes - 1);
 
-        if (consecutiveCriticalSpikes >= 3) return { state: "critical", score, reasons };
+        if (consecutiveCriticalSpikes >= 5) return { state: "critical", score, reasons };
         if (score >= 4 || consecutiveCriticalSpikes > 0) return { state: "stressed", score, reasons };
         if (score >= 2) return { state: "warm", score, reasons };
         return { state: "healthy", score, reasons };
@@ -1180,6 +1221,7 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
 
         cachedStats = {
           guard: "PokeResourceGuard V4 FastMode", state: resourceState, clients: countClientStates(),
+          cluster_stats: globalClusterStats,
           active_requests: {
             total: activeRequests.size, total_global_requests: totalGlobalRequests, tracking_start_time: trackingStartTime,
             by_route: getTopMapEntries(currentSecondRouteCounts, resourceConfig.logging.maxTopRoutes),
@@ -1257,7 +1299,33 @@ summary{font-size:1.2rem;cursor:pointer;color:#0ab7f0;user-select:none;margin-bo
         const stats = getResourceStats();
         const stateClass = stats.state.state === "healthy" ? "green" : stats.state.state === "warm" ? "orange" : stats.state.state === "stressed" ? "orange" : "red";
 
-        cachedHealthHtml = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Poke Server Health</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="/favicon.ico"><style>${HEALTH_CSS}</style></head><body><div class="app"><noscript><div class="banner orange" style="margin-bottom:24px;"><b>JavaScript is disabled:</b> this is a static little snapshot of Poke's server mood. Refresh the page whenever you want fresh numbers.</div></noscript><img class="logo" src="/css/logo-poke.svg" alt="Poke logo"><div class="header-container"><div><h1>Poke Server Health</h1><p class="small" style="margin-top:0;">Live server Health!!!</p></div><div class="tabs"><a class="tab-btn active" href="/health">Server Vitals</a><a class="tab-btn" href="/traffic">Requests</a><a class="tab-btn" href="/api/stats?view=gui">Anonymous Stats</a></div></div><div id="banner-container" class="banner ${stateClass}"><b>Current Status:</b> <span id="banner-state" class="${stateClass}" style="font-size:1.2rem;text-transform:capitalize;">${stats.state.state}</span><br><span id="banner-subtext" class="small" style="display:inline-block;margin-top:8px;">Load Score: ${stats.state.score} &bull; Process Delay: ${stats.state.eventLoop.p99Ms}ms &bull; CPU: ${stats.state.cpu.percent}% &bull; Memory: ${formatPercent(stats.state.memory.rssRatio)}</span></div><h2>What is this page?</h2><div class="explanation">This is Poke checking in on itself so everything stays fast and comfy. It watches CPU, memory, request pressure, and process delay in real time, then uses that info to keep the site feeling smooth. <br><br>If traffic suddenly gets wild, Poke gently shields the server and tries to keep normal video watching flowing first. Basically, this page is the little heartbeat monitor for the whole instance!!</div><h2>Live Server Vitals!!</h2><div class="stat-grid"><div class="stat-box"><span id="stat-state" class="stat-num ${stateClass}">${stats.state.state}</span><span class="stat-label">Health Mood</span></div><div class="stat-box"><span id="stat-p99" class="stat-num">${stats.state.eventLoop.p99Ms}ms</span><span class="stat-label">Process Delay</span></div><div class="stat-box"><span id="stat-cpu" class="stat-num">${stats.state.cpu.percent}%</span><span class="stat-label">CPU Busy Level</span></div><div class="stat-box"><span id="stat-rss" class="stat-num">${stats.state.memory.rssMb}MB</span><span class="stat-label">Memory Used</span></div><div class="stat-box"><span id="stat-rps" class="stat-num">${stats.state.requests.rps}</span><span class="stat-label">Requests Right Now</span></div><div class="stat-box"><span id="stat-tracked" class="stat-num">${stats.clients.tracked}</span><span class="stat-label">Active Visitors</span></div><div class="stat-box"><span id="stat-cooldown" class="stat-num">${stats.clients.cooldown}</span><span class="stat-label">Noisy Clients Cooling Down</span></div><div class="stat-box"><span id="stat-score" class="stat-num">${stats.state.score}</span><span class="stat-label">Pressure Score</span></div></div><hr><details><summary>View Nerdy Stats, Raw Data, and APIs</summary><h3>Why Poke feels this way</h3><pre id="pre-reasons">${stats.state.pressureReasons.length ? stats.state.pressureReasons.join("\n") : "No pressure reasons right now. Poke is feeling good."}</pre><h3>Request Mix This Second</h3><pre id="pre-mix">${JSON.stringify(stats.state.requests.kinds, null, 2)}</pre><h3>API Endpoints</h3><p>Want the raw numbers too? They live at: <code><a href="/_pokeresource/stats">/_pokeresource/stats</a></code></p></details><hr><p class="small">powered by poke. <a href="/">go back to watching videos</a></p></div><script>document.addEventListener("DOMContentLoaded", function() { const fetchStats = async function() { try { const res = await fetch("/_pokeresource/stats"); if (!res.ok) return; const data = await res.json(); const state = data.state.state; let stateClass = "green"; if (state === "warm" || state === "stressed") stateClass = "orange"; if (state === "critical") stateClass = "red"; document.getElementById("banner-container").className = "banner " + stateClass; document.getElementById("banner-state").className = stateClass; document.getElementById("banner-state").innerText = state; const rssRatio = (data.state.memory.rssRatio * 100).toFixed(2) + "%"; document.getElementById("banner-subtext").innerHTML = "Load Score: " + data.state.score + " &bull; Process Delay: " + data.state.eventLoop.p99Ms + "ms &bull; CPU: " + data.state.cpu.percent + "% &bull; Memory: " + rssRatio; document.getElementById("stat-state").className = "stat-num " + stateClass; document.getElementById("stat-state").innerText = state; document.getElementById("stat-p99").innerText = data.state.eventLoop.p99Ms + "ms"; document.getElementById("stat-cpu").innerText = data.state.cpu.percent + "%"; document.getElementById("stat-rss").innerText = data.state.memory.rssMb + "MB"; document.getElementById("stat-rps").innerText = data.state.requests.rps; document.getElementById("stat-tracked").innerText = data.clients.tracked; document.getElementById("stat-cooldown").innerText = data.clients.cooldown; document.getElementById("stat-score").innerText = data.state.score; document.getElementById("pre-reasons").innerText = data.state.pressureReasons.length ? data.state.pressureReasons.join("\\n") : "No pressure reasons right now. Poke is feeling good."; document.getElementById("pre-mix").innerText = JSON.stringify(data.state.requests.kinds, null, 2); } catch (err) {} }; setInterval(fetchStats, 1000); });</script></body></html>`;
+        cachedHealthHtml = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Poke Server Health</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="/favicon.ico"><style>${HEALTH_CSS}</style></head><body><div class="app"><noscript><div class="banner orange" style="margin-bottom:24px;"><b>JavaScript is disabled:</b> this is a static little snapshot of Poke's server mood. Refresh the page whenever you want fresh numbers.</div></noscript><img class="logo" src="/css/logo-poke.svg" alt="Poke logo"><div class="header-container"><div><h1>Poke Server Health</h1><p class="small" style="margin-top:0;">Live server Health!!!</p></div><div class="tabs"><a class="tab-btn active" href="/health">Server Vitals</a><a class="tab-btn" href="/traffic">Requests</a><a class="tab-btn" href="/api/stats?view=gui">Anonymous Stats</a></div></div><div id="banner-container" class="banner ${stateClass}"><b>Current Status:</b> <span id="banner-state" class="${stateClass}" style="font-size:1.2rem;text-transform:capitalize;">${stats.state.state}</span><br><span id="banner-subtext" class="small" style="display:inline-block;margin-top:8px;">Load Score: ${stats.state.score} &bull; Process Delay: ${stats.state.eventLoop.p99Ms}ms &bull; CPU: ${stats.state.cpu.percent}% &bull; Memory: ${formatPercent(stats.state.memory.rssRatio)}</span></div><h2>What is this page?</h2><div class="explanation">This is Poke checking in on itself so everything stays fast and comfy. It watches CPU, memory, request pressure, and process delay in real time, then uses that info to keep the site feeling smooth. <br><br>If traffic suddenly gets wild, Poke gently shields the server and tries to keep normal video watching flowing first. Basically, this page is the little heartbeat monitor for the whole instance!!</div>
+
+<h2>Live Server Vitals!! <span class="small">(This Worker)</span></h2>
+<div class="stat-grid"><div class="stat-box"><span id="stat-state" class="stat-num ${stateClass}">${stats.state.state}</span><span class="stat-label">Health Mood</span></div><div class="stat-box"><span id="stat-p99" class="stat-num">${stats.state.eventLoop.p99Ms}ms</span><span class="stat-label">Process Delay</span></div><div class="stat-box"><span id="stat-cpu" class="stat-num">${stats.state.cpu.percent}%</span><span class="stat-label">CPU Busy Level</span></div><div class="stat-box"><span id="stat-rss" class="stat-num">${stats.state.memory.rssMb}MB</span><span class="stat-label">Memory Used</span></div><div class="stat-box"><span id="stat-rps" class="stat-num">${stats.state.requests.rps}</span><span class="stat-label">Requests Right Now</span></div><div class="stat-box"><span id="stat-tracked" class="stat-num">${stats.clients.tracked}</span><span class="stat-label">Active Visitors</span></div><div class="stat-box"><span id="stat-cooldown" class="stat-num">${stats.clients.cooldown}</span><span class="stat-label">Noisy Clients Cooling Down</span></div><div class="stat-box"><span id="stat-score" class="stat-num">${stats.state.score}</span><span class="stat-label">Pressure Score</span></div></div>
+
+<h2>Cluster Vitals!! <span class="small">(All Cores)</span></h2>
+<div id="cluster-grid" class="stat-grid"></div>
+
+<hr><details><summary>View Nerdy Stats, Raw Data, and APIs</summary><h3>Why Poke feels this way</h3><pre id="pre-reasons">${stats.state.pressureReasons.length ? stats.state.pressureReasons.join("\n") : "No pressure reasons right now. Poke is feeling good."}</pre><h3>Request Mix This Second</h3><pre id="pre-mix">${JSON.stringify(stats.state.requests.kinds, null, 2)}</pre><h3>API Endpoints</h3><p>Want the raw numbers too? They live at: <code><a href="/_pokeresource/stats">/_pokeresource/stats</a></code></p></details><hr><p class="small">powered by poke. <a href="/">go back to watching videos</a></p></div><script>document.addEventListener("DOMContentLoaded", function() { const fetchStats = async function() { try { const res = await fetch("/_pokeresource/stats"); if (!res.ok) return; const data = await res.json(); const state = data.state.state; let stateClass = "green"; if (state === "warm" || state === "stressed") stateClass = "orange"; if (state === "critical") stateClass = "red"; document.getElementById("banner-container").className = "banner " + stateClass; document.getElementById("banner-state").className = stateClass; document.getElementById("banner-state").innerText = state; const rssRatio = (data.state.memory.rssRatio * 100).toFixed(2) + "%"; document.getElementById("banner-subtext").innerHTML = "Load Score: " + data.state.score + " &bull; Process Delay: " + data.state.eventLoop.p99Ms + "ms &bull; CPU: " + data.state.cpu.percent + "% &bull; Memory: " + rssRatio; document.getElementById("stat-state").className = "stat-num " + stateClass; document.getElementById("stat-state").innerText = state; document.getElementById("stat-p99").innerText = data.state.eventLoop.p99Ms + "ms"; document.getElementById("stat-cpu").innerText = data.state.cpu.percent + "%"; document.getElementById("stat-rss").innerText = data.state.memory.rssMb + "MB"; document.getElementById("stat-rps").innerText = data.state.requests.rps; document.getElementById("stat-tracked").innerText = data.clients.tracked; document.getElementById("stat-cooldown").innerText = data.clients.cooldown; document.getElementById("stat-score").innerText = data.state.score; document.getElementById("pre-reasons").innerText = data.state.pressureReasons.length ? data.state.pressureReasons.join("\\n") : "No pressure reasons right now. Poke is feeling good."; document.getElementById("pre-mix").innerText = JSON.stringify(data.state.requests.kinds, null, 2); 
+        
+        const cStats = data.cluster_stats;
+        if (cStats && cStats.workers) {
+           let clusterHtml = '';
+           for (const [id, w] of Object.entries(cStats.workers)) {
+              let wColor = '#4caf50';
+              if (w.state === 'warm' || w.state === 'stressed') wColor = '#ff9800';
+              if (w.state === 'critical') wColor = '#f44336';
+              clusterHtml += '<div class="stat-box" style="border-left: 4px solid ' + wColor + ';">' +
+                 '<span class="stat-num" style="color:' + wColor + ';">' + Number(w.cpu).toFixed(1) + '%</span>' +
+                 '<span class="stat-label">Worker ' + id + ' (PID ' + w.pid + ')</span>' +
+                 '<span class="small" style="color:#aaa;margin-top:4px;">Mem: ' + w.mem + 'MB | Active: ' + w.active + ' | State: ' + w.state + '</span>' +
+              '</div>';
+           }
+           document.getElementById("cluster-grid").innerHTML = clusterHtml;
+        }
+
+        } catch (err) {} }; setInterval(fetchStats, 1000); });</script></body></html>`;
         cachedHealthTime = now;
         res.send(cachedHealthHtml);
       }
