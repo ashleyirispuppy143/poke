@@ -73,24 +73,21 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
       clusterStats.workers[worker.id] = msg.data;
     } else if (msg && msg.type === 'shed_load' && !sheddingWorkers.has(worker.id)) {
       
-      // HARD CAP: Refuse to shed if we are already doing a hand-off or have too many workers
-      if (isShedding || activeWorkers.size > numCPUs) {
+       if (isShedding || activeWorkers.size > numCPUs) {
          console.warn(`[Primary] Ignored shed request from Worker ${worker.process.pid} (Global cap reached).`);
          return;
       }
 
       isShedding = true;
       sheddingWorkers.add(worker.id);
-      console.warn(`[Primary] Worker ${worker.process.pid} hit 100.0% CPU. Spawning seamless replacement...`);
+      console.warn(`[Primary] Worker ${worker.process.pid} crossed CPU limit. Spawning seamless replacement...`);
 
-      // Spawn replacement BEFORE killing the old one to avoid dropped connections
-      const newWorker = cluster.fork();
+       const newWorker = cluster.fork();
       activeWorkers.add(newWorker.id);
 
       newWorker.on('listening', () => {
-        isShedding = false; // Unlock shedding once new worker is taking traffic
-        // Once new worker is fully ready, tell the old one to gracefully step down
-        if (worker.isConnected()) {
+        isShedding = false;  
+         if (worker.isConnected()) {
            worker.send({ type: 'graceful_shutdown' });
         } else {
            worker.kill(); // Fallback if unresponsive
@@ -109,8 +106,7 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
 
   cluster.on("disconnect", (worker) => {
     delete clusterStats.workers[worker.id];
-    // Re-spawn only if it's an organic disconnect and wasn't manually replaced
-    if (activeWorkers.has(worker.id)) {
+     if (activeWorkers.has(worker.id)) {
       activeWorkers.delete(worker.id);
       console.warn(`[Primary] Worker ${worker.process.pid} disconnected unexpectedly. Spawning replacement...`);
       const w = cluster.fork();
@@ -121,8 +117,7 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
   cluster.on("exit", (worker, code, signal) => {
     delete clusterStats.workers[worker.id];
     sheddingWorkers.delete(worker.id);
-    // Strict duplication prevention check
-    if (activeWorkers.has(worker.id)) {
+     if (activeWorkers.has(worker.id)) {
       activeWorkers.delete(worker.id);
       console.error(`[Primary] Worker ${worker.process.pid} died unexpectedly (Code: ${code}). Respawning...`);
       const w = cluster.fork();
@@ -151,7 +146,6 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
     const net = require("net");
     const crypto = require("crypto");
     const config = require("./config.json");
-    const { exec } = require("child_process");
     const u = await media_proxy();
 
     let globalClusterStats = { workers: {} };
@@ -159,12 +153,11 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
       if (msg && msg.type === 'cluster_stats') {
         globalClusterStats = msg.data;
       } else if (msg && msg.type === 'graceful_shutdown') {
-        console.error(`[SENTINEL] Worker ${process.pid} safely handed off traffic. Annihilating stream footprint...`);
+        console.error(`[CPU SENTINEL] Worker ${process.pid} safely handed off traffic. Cleaning up active streams...`);
         try {
           cluster.worker.disconnect();
         } catch (err) {}
-        // Give the active long-lived streams exactly 3 seconds to resolve before memory purge
-        setTimeout(() => process.exit(0), 3000).unref();
+         setTimeout(() => process.exit(0), 3000).unref();
       }
     });
 
@@ -188,94 +181,54 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
       const { performance } = require("perf_hooks");
       let lastCpuUsage = process.cpuUsage();
       let lastSampleTime = process.hrtime.bigint(); 
-      let lastKnownOSCpu = 0;
+      let lastKnownCpu = 0;
       let isDisconnecting = false;
 
-      // ULTIMATE OS-LEVEL CPU SENTINEL (Top -> PS -> OS Fallback)
-      setInterval(() => {
+       setInterval(() => {
         if (isDisconnecting || !cluster.isWorker) return;
 
-        // Give the worker 5 seconds to boot before monitoring
-        if (process.uptime() < 5) {
+         if (process.uptime() < 5) {
           lastCpuUsage = process.cpuUsage();
           lastSampleTime = process.hrtime.bigint();
           return;
         }
 
-        const pid = process.pid;
+        const currentSampleTime = process.hrtime.bigint();
+        const currentCpuUsage = process.cpuUsage();
 
-        // 1. First attempt: Use `top` (batch mode, single iteration)
-        exec(`top -b -n 1 -p ${pid}`, (errTop, stdoutTop) => {
-          let cpuPercent = null;
+        const diffUser = currentCpuUsage.user - lastCpuUsage.user;
+        const diffSystem = currentCpuUsage.system - lastCpuUsage.system;
+        const totalUs = diffUser + diffSystem;
 
-          if (!errTop && stdoutTop) {
-            const lines = stdoutTop.split('\n');
-            const dataLine = lines.find(l => l.includes(String(pid)) && l.includes('node'));
-            if (dataLine) {
-              const parts = dataLine.trim().split(/\s+/);
-              // In top output, %CPU is generally the 9th column (index 8)
-              const parsed = parseFloat(parts[8]);
-              if (!isNaN(parsed)) cpuPercent = parsed;
-            }
+        const elapsedNs = currentSampleTime - lastSampleTime;
+        const elapsedUs = Number(elapsedNs / 1000n);
+
+         const cpuPercent = (totalUs / elapsedUs) * 100;
+        lastKnownCpu = cpuPercent;
+
+         if (cpuPercent > 20.0) {
+          console.warn(`[SENTINEL] Worker ${process.pid} (Shard) hit ${cpuPercent.toFixed(1)}% CPU (Limit: 20%). Initiating seamless replacement.`);
+          isDisconnecting = true;
+          
+          if (process.send) {
+            process.send({ type: 'shed_load' });
           }
-
-          // 2. Second attempt: `top` failed/not available, fallback to `ps aux`
-          if (cpuPercent === null) {
-            exec(`ps aux | grep ${pid} | grep -v grep`, (errPs, stdoutPs) => {
-              if (!errPs && stdoutPs) {
-                const parts = stdoutPs.trim().split(/\s+/);
-                const parsed = parseFloat(parts[2]); // %CPU is 3rd column in ps aux
-                if (!isNaN(parsed)) cpuPercent = parsed;
-              }
-              evaluateCpu(cpuPercent);
-            });
-          } else {
-            evaluateCpu(cpuPercent);
-          }
-        });
-
-        function evaluateCpu(osCpu) {
-          // 3. Absolute Fallback: Both shell commands failed. Use internal Node API.
-          if (osCpu === null) {
-            const currentSampleTime = process.hrtime.bigint();
-            const currentCpuUsage = process.cpuUsage();
-
-            const diffUser = currentCpuUsage.user - lastCpuUsage.user;
-            const diffSystem = currentCpuUsage.system - lastCpuUsage.system;
-            const totalUs = diffUser + diffSystem;
-
-            const elapsedNs = currentSampleTime - lastSampleTime;
-            const elapsedUs = Number(elapsedNs / 1000n);
-
-            osCpu = (totalUs / elapsedUs) * 100;
-
-            lastCpuUsage = currentCpuUsage;
-            lastSampleTime = currentSampleTime;
-          }
-
-          lastKnownOSCpu = osCpu;
-
-          // ANNIHILATION THRESHOLD: > 100.0%
-          if (osCpu >= 100.0) {
-            console.warn(`[SENTINEL] Worker ${pid} hit ${osCpu.toFixed(1)}% CPU. Initiating complete replacement.`);
-            isDisconnecting = true;
-            
-            if (process.send) {
-              process.send({ type: 'shed_load' });
-            }
-            
+          
+          setTimeout(() => {
+            try { cluster.worker.disconnect(); } catch (err) {}
             setTimeout(() => {
-              try { cluster.worker.disconnect(); } catch (err) {}
-              setTimeout(() => {
-                console.error(`[SENTINEL] Worker ${pid} forcibly annihilated via fail-safe.`);
-                process.exit(0);
-              }, 3000).unref();
-            }, 8000).unref();
-          }
+              console.error(`[SENTINEL] Worker ${process.pid} completely cleaned up via fail-safe.`);
+              process.exit(0);
+            }, 3000).unref();
+          }, 8000).unref();
         }
+
+        lastCpuUsage = currentCpuUsage;
+        lastSampleTime = currentSampleTime;
+        
       }, 1500).unref(); 
 
-      global.getWorkerOSCpu = () => lastKnownOSCpu;
+      global.getWorkerOSCpu = () => lastKnownCpu;
 
     })();
 
@@ -1057,7 +1010,7 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
           state: resourceState.state, score: resourceState.score, since: resourceState.since, sampledAt: now, reason: reason || "interval",
           eventLoop: { p99Ms: roundMs(eldP99), meanMs: roundMs(eldMean) },
           
-          // MAP DIRECTLY TO OS CPU
+          // MAP DIRECTLY TO INTERNAL OS CPU
           cpu: { ratio: roundRatio(cpuRatio), percent: global.getWorkerOSCpu ? global.getWorkerOSCpu() : 0 },
           
           memory: {
