@@ -1,4 +1,4 @@
-/*
+ /*
    Poke is an Free/Libre youtube front-end. this is our main file.
   
    Copyright (C) 2021-2026 Poke (https://codeberg.org/ashleyirispuppy/poke)
@@ -142,43 +142,55 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
       const { performance } = require("perf_hooks");
       let lastCpuUsage = process.cpuUsage();
       let lastSampleAt = performance.now();
-      let cpuStrikes = 0;
       let isDisconnecting = false;
 
       setInterval(() => {
         if (isDisconnecting || !cluster.isWorker) return;
 
         const currentSampleAt = performance.now();
-        const elapsedMs = currentSampleAt - lastSampleAt;
-        const currentCpuUsage = process.cpuUsage(lastCpuUsage);
+        const currentCpuUsage = process.cpuUsage();
 
-        // Convert microseconds to milliseconds and calculate percentage against elapsed time
-        const cpuTimeMs = (currentCpuUsage.user + currentCpuUsage.system) / 1000;
-        const cpuPercent = (cpuTimeMs / elapsedMs) * 100;
-
-        if (cpuPercent >= 17.5) {
-          cpuStrikes++;
-          const strikeLimit = 2; // Allow 2 consecutive checks to filter out micro-spikes
-          if (cpuStrikes >= strikeLimit) { 
-            console.warn(`[CPU SENTINEL] Worker ${process.pid} (Shard) CPU hit ${cpuPercent.toFixed(1)}%. Initiating seamless replacement.`);
-            isDisconnecting = true;
-            
-            // Disconnecting routes new traffic to other shards immediately & triggers primary to seamlessly fork a replacement
-            cluster.worker.disconnect();
-            
-            // Allow active requests 2 seconds max to resolve, then completely clean it to prevent duplicates
-            setTimeout(() => {
-              console.error(`[CPU SENTINEL] Worker ${process.pid} completely cleaned up after 2 seconds.`);
-              process.exit(1);
-            }, 2000).unref();
-          }
-        } else {
-          cpuStrikes = Math.max(0, cpuStrikes - 1);
+        // Give the worker 15 seconds to boot and load modules before checking CPU.
+        // This crucially prevents an infinite loop of new workers immediately killing themselves during heavy startup initialization!
+        if (process.uptime() < 15) {
+          lastCpuUsage = currentCpuUsage;
+          lastSampleAt = currentSampleAt;
+          return;
         }
 
-        lastCpuUsage = process.cpuUsage();
-        lastSampleAt = currentSampleAt;
-      }, 1000).unref();
+        const elapsedMs = currentSampleAt - lastSampleAt;
+        
+        // Calculate difference in CPU usage (microseconds) since last sample
+        const userDiff = currentCpuUsage.user - lastCpuUsage.user;
+        const sysDiff = currentCpuUsage.system - lastCpuUsage.system;
+        
+        // Convert microseconds to milliseconds
+        const cpuTimeMs = (userDiff + sysDiff) / 1000;
+        
+        // Calculate the specific worker's CPU percentage over the elapsed time
+        const cpuPercent = (cpuTimeMs / elapsedMs) * 100;
+
+        if (cpuPercent >= 17.0) {
+          console.warn(`[CPU SENTINEL] Worker ${process.pid} (Shard) CPU hit ${cpuPercent.toFixed(1)}%. Initiating seamless replacement.`);
+          isDisconnecting = true;
+          
+          try {
+            // Disconnecting silently routes new traffic to other healthy shards & triggers primary to seamlessly fork ONE replacement
+            cluster.worker.disconnect();
+          } catch (err) {
+            console.error(`[CPU SENTINEL] Disconnect error: ${err.message}`);
+          }
+          
+          // Allow active requests 2 seconds max to resolve, then forcefully obliterate it from RAM to prevent duplicate buildup
+          setTimeout(() => {
+            console.error(`[CPU SENTINEL] Worker ${process.pid} completely cleaned up after 2 seconds.`);
+            process.exit(0);
+          }, 2000).unref();
+        } else {
+          lastCpuUsage = currentCpuUsage;
+          lastSampleAt = currentSampleAt;
+        }
+      }, 1500).unref(); // 1.5s interval aligns perfectly with htop/top standard sampling rate
 
     })();
 
