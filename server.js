@@ -29,7 +29,7 @@ const logPrefix = ENABLE_CLUSTER
   : "[Server]";
 
 let isBooting = true;
-setTimeout(() => { isBooting = false; }, 10000);
+setTimeout(() => { isBooting = false; }, 15000);
 
 ['log', 'info'].forEach(method => {
   const original = console[method];
@@ -52,7 +52,7 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
     cluster.fork();
   }
 
-  cluster.on("disconnect", (worker) => {
+   cluster.on("disconnect", (worker) => {
     console.warn(`Worker ${worker.process.pid} disconnected for load shedding. Spawning seamless replacement...`);
     cluster.fork();
   });
@@ -120,9 +120,9 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
         const totalCpuMs = (diffCpu.user + diffCpu.system) / 1000;
         const cpuPercent = (totalCpuMs / diffTimeMs) * 100;
 
-        if (cpuPercent >= 85) {
+        if (cpuPercent >= 80) {
           cpuStrikes++;
-          if (cpuStrikes >= 3) { 
+          if (cpuStrikes >= 2) {  
             console.warn(`[CPU SENTINEL] Worker ${process.pid} sustained ${cpuPercent.toFixed(1)}% CPU. Initiating graceful replacement.`);
             isDisconnecting = true;
             
@@ -495,10 +495,10 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
       const resourceConfig = {
         system: {
           sampleMs: 1000,
-          eventLoop: { warmMs: 1000, stressedMs: 3000, criticalMs: 5000 },
-          warmCpuRatio: 10.00, stressedCpuRatio: 15.00, criticalCpuRatio: 20.00,
-          warmRssRatio: 0.95, stressedRssRatio: 0.98, criticalRssRatio: 0.99,
-          warmHeapRatio: 0.90, stressedHeapRatio: 0.95, criticalHeapRatio: 0.98
+          eventLoop: { warmMs: 200, stressedMs: 500, criticalMs: 1000 },
+          warmCpuRatio: 0.65, stressedCpuRatio: 0.75, criticalCpuRatio: 0.80,
+          warmRssRatio: 0.85, stressedRssRatio: 0.90, criticalRssRatio: 0.95,
+          warmHeapRatio: 0.80, stressedHeapRatio: 0.85, criticalHeapRatio: 0.90
         },
         client: {
           windowMs: 30000, maxClientStates: 75000, cleanupMs: 60000,
@@ -970,7 +970,7 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
 
         if (hasCritical || score >= 7) consecutiveCriticalSpikes++; else consecutiveCriticalSpikes = Math.max(0, consecutiveCriticalSpikes - 1);
 
-        if (consecutiveCriticalSpikes >= 5) return { state: "critical", score, reasons };
+        if (consecutiveCriticalSpikes >= 3) return { state: "critical", score, reasons };
         if (score >= 4 || consecutiveCriticalSpikes > 0) return { state: "stressed", score, reasons };
         if (score >= 2) return { state: "warm", score, reasons };
         return { state: "healthy", score, reasons };
