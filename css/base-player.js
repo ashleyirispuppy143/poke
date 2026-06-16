@@ -10564,6 +10564,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (reason) state.transportPositionReason = String(reason).slice(0, 48);
     state.transportPositionCommitted = true;
     state.transportPositionSettledAt = now();
+    if (/seek|resume|commit|play/i.test(String(reason || ""))) {
+      try { pinMonotonicVideoProgress(position, reason || "transport-position"); } catch { }
+    }
     return true;
   }
   function transportPositionAuthorityActive() {
@@ -10613,6 +10616,7 @@ document.addEventListener("DOMContentLoaded", () => {
       now() + 350
     );
     const landed = Number(observed);
+    try { pinMonotonicVideoProgress(isFinite(landed) && landed >= 0 ? Math.max(value, landed) : value, "seek-landed"); } catch { }
     resetPlayerDisplayTimelineClamp(isFinite(landed) && landed >= 0 ? landed : value);
     try {
       syncPlayerSeekbarToDisplayTime(NaN, value);
@@ -12143,9 +12147,18 @@ document.addEventListener("DOMContentLoaded", () => {
       try { setSeekBufferingUIVisible(false); } catch { }
       try { clearPlayablePairLivenessRecovery(); } catch { }
       try { clearOneShotSilentPairRestart("seek-commit-playing"); } catch { }
+      try { pinMonotonicVideoProgress(target, "seek-commit-playing"); } catch { }
       try { armAudioPopGuard("seek-commit-release", 180); } catch { }
       try { setAudioPlaybackVolume(targetVolFromVideo(), "seek-commit-playing"); } catch { }
       try { forceUnmuteForPlaybackIfAllowed(); } catch { }
+      try {
+        armPairSyncConvergence("seek-commit-playing", perfProfile.lowEnd ? 3200 : 2400, {
+          reset: true,
+          audioMaster: false,
+          allowAudibleCorrection: true,
+          delay: perfProfile.lowEnd ? 140 : 85
+        });
+      } catch { }
       settleTransportPositionAuthority(target, "seek-commit-playing", 900);
       state.seekDisplayTargetUntil = Math.min(
         Number(state.seekDisplayTargetUntil || 0),
@@ -17976,6 +17989,27 @@ document.addEventListener("DOMContentLoaded", () => {
     state.coupledBufferBarrierAt = t;
     state.coupledBufferBarrierReason = String(reason || "audio-prebuffer").slice(0, 64);
     try { primeStartupTrackBuffer(audio); } catch { }
+    let previousAllowForAudioPrebuffer = !!state._allowAudioTimeWrite;
+    let previousPairAllowForAudioPrebuffer = !!state._allowPairSyncAudioWrite;
+    try {
+      if (audio.paused && !audio.seeking) {
+        const at = Number(audio.currentTime);
+        if (!isFinite(at) || Math.abs(at - startAt) > Math.max(0.035, PAIR_SYNC_GOOD_DRIFT_SEC)) {
+          previousAllowForAudioPrebuffer = !!state._allowAudioTimeWrite;
+          previousPairAllowForAudioPrebuffer = !!state._allowPairSyncAudioWrite;
+          state._allowAudioTimeWrite = true;
+          state._allowPairSyncAudioWrite = true;
+          try { audio.currentTime = startAt; } finally {
+            state._allowPairSyncAudioWrite = previousPairAllowForAudioPrebuffer;
+            state._allowAudioTimeWrite = previousAllowForAudioPrebuffer;
+          }
+          notePairSyncTimeWrite(startAt);
+        }
+      }
+    } catch {
+      state._allowAudioTimeWrite = previousAllowForAudioPrebuffer;
+      state._allowPairSyncAudioWrite = previousPairAllowForAudioPrebuffer;
+    }
     try {
       const vn = getVideoNode();
       if (vn && !vn.paused) {
@@ -19487,6 +19521,18 @@ document.addEventListener("DOMContentLoaded", () => {
     state.monotonicVideoRestoreAt = 0;
     state.monotonicVideoRestoreCount = 0;
   }
+  function pinMonotonicVideoProgress(value, reason = "") {
+    const vt = Number(value);
+    if (!isFinite(vt) || vt < 0) return false;
+    const current = Number(state.monotonicVideoTime);
+    state.monotonicVideoTime = isFinite(current) ? Math.max(current, vt) : vt;
+    state.monotonicVideoTimeAt = now();
+    const lastGood = Number(state.lastKnownGoodVT);
+    state.lastKnownGoodVT = isFinite(lastGood) ? Math.max(lastGood, vt) : vt;
+    state.lastKnownGoodVTts = now();
+    if (reason) state.monotonicVideoReason = String(reason || "").slice(0, 48);
+    return true;
+  }
   function explicitVideoTimelineChangeActive() {
     return !!(
       state.restarting ||
@@ -19544,6 +19590,31 @@ document.addEventListener("DOMContentLoaded", () => {
       (t - Number(state.lastKnownGoodVTts || 0)) < 5000) values.push(lastGood);
     return values.length ? Math.max(...values) : (isFinite(fb) ? fb : 0);
   }
+  function getProtectedVideoTimelineFloor(fallback = NaN) {
+    const t = now();
+    const values = [];
+    const fb = Number(fallback);
+    if (isFinite(fb) && fb >= 0) values.push(fb);
+    const committedTarget = Number(state.seekTimelineCommittedTarget);
+    if (isFinite(committedTarget) && committedTarget >= 0 &&
+      Number(state.seekTimelineCommittedSeekId) === Number(state.seekId) &&
+      (t - Number(state.seekTimelineCommittedAt || 0)) < 10000) {
+      values.push(committedTarget);
+    }
+    const transportTarget = Number(state.transportPositionTarget);
+    if (isFinite(transportTarget) && transportTarget >= 0 &&
+      state.transportPositionCommitted &&
+      (t - Number(state.transportPositionSettledAt || 0)) < 8000 &&
+      /seek|resume|commit|play/i.test(String(state.transportPositionReason || ""))) {
+      values.push(transportTarget);
+    }
+    const displayTarget = Number(state.seekDisplayTarget);
+    if (isFinite(displayTarget) && displayTarget >= 0 &&
+      t < Number(state.seekDisplayTargetUntil || 0)) {
+      values.push(displayTarget);
+    }
+    return getMonotonicVideoAnchor(values.length ? Math.max(...values) : fb);
+  }
   function noteMonotonicVideoProgress(value) {
     const vt = Number(value);
     if (!isFinite(vt) || vt < 0 || !healthyForegroundMonotonicPlayback()) return false;
@@ -19562,9 +19633,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (explicitVideoTimelineWriteAllowed(next)) return false;
     if (opts && opts.force === true && opts.explicitTimelineChange === true) return false;
     const fallback = isFinite(currentTime) ? currentTime : next;
-    const anchor = healthyForegroundMonotonicPlayback()
-      ? getMonotonicVideoAnchor(fallback)
-      : fallback;
+    const anchor = getProtectedVideoTimelineFloor(fallback);
     const tolerance = Math.max(0.08, Number(opts.tolerance) || 0.10);
     return next < anchor - tolerance;
   }
@@ -19594,7 +19663,7 @@ document.addEventListener("DOMContentLoaded", () => {
           (transportPositionAuthorityActive() &&
             Math.abs(Number(state.transportPositionTarget) - target) <= 0.12);
           if (!explicitWrite && isFinite(target) && isFinite(current)) {
-            const anchor = getMonotonicVideoAnchor(current);
+            const anchor = getProtectedVideoTimelineFloor(current);
             const backward = target < anchor - 0.12;
             if (backward && (state.firstPlayCommitted || startupAlreadyRunning) &&
               !state.restarting && !isLoopDesired()) {
