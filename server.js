@@ -125,18 +125,33 @@ function roundNumber(value, digits) {
   return Math.round(value * multiplier) / multiplier;
 }
 
+function getDefaultWorkerCount(parallelism) {
+  if (parallelism <= 1) return 1;
+  if (parallelism === 2) return 1;
+  return Math.max(1, Math.min(4, parallelism - 1));
+}
+
 const effectiveParallelism = getEffectiveParallelism();
-const desiredWorkerCount = parsePositiveInteger(
-  process.env.POKE_WORKERS || process.env.WEB_CONCURRENCY,
-  effectiveParallelism
+const defaultWorkerCount = getDefaultWorkerCount(effectiveParallelism);
+const desiredWorkerCount = Math.max(
+  1,
+  Math.min(
+    effectiveParallelism,
+    parsePositiveInteger(process.env.POKE_WORKERS || process.env.WEB_CONCURRENCY, defaultWorkerCount)
+  )
 );
 const enableCluster = desiredWorkerCount >= 2 && !parseBooleanOff(process.env.POKE_CLUSTER);
-const workerCpuSoftLimitPercent = parsePositiveNumber(process.env.POKE_WORKER_CPU_SOFT_LIMIT, 85);
-const workerCpuReplaceLimitPercent = parsePositiveNumber(process.env.POKE_WORKER_CPU_REPLACE_LIMIT, 92);
-const workerCpuSustainedMs = parsePositiveInteger(process.env.POKE_WORKER_CPU_SUSTAINED_MS, 30000);
-const workerReplacementCooldownMs = parsePositiveInteger(process.env.POKE_WORKER_REPLACEMENT_COOLDOWN_MS, 120000);
+
+const hostCpuTargetPercent = parsePositiveNumber(process.env.POKE_HOST_CPU_TARGET, 62);
+const hostCpuSoftLimitPercent = parsePositiveNumber(process.env.POKE_HOST_CPU_SOFT_LIMIT, 70);
+const hostCpuHardLimitPercent = parsePositiveNumber(process.env.POKE_HOST_CPU_HARD_LIMIT, 82);
+const hostCpuPanicLimitPercent = parsePositiveNumber(process.env.POKE_HOST_CPU_PANIC_LIMIT, 92);
+
+const workerCpuSoftLimitPercent = parsePositiveNumber(process.env.POKE_WORKER_CPU_SOFT_LIMIT, 78);
+const workerCpuHardLimitPercent = parsePositiveNumber(process.env.POKE_WORKER_CPU_HARD_LIMIT, 90);
+const workerCpuSustainedMs = parsePositiveInteger(process.env.POKE_WORKER_CPU_SUSTAINED_MS, 45000);
+const workerPressureLogCooldownMs = parsePositiveInteger(process.env.POKE_WORKER_PRESSURE_LOG_COOLDOWN_MS, 60000);
 const workerGracefulTimeoutMs = parsePositiveInteger(process.env.POKE_WORKER_GRACEFUL_TIMEOUT_MS, 10000);
-const workerStartupGraceMs = parsePositiveInteger(process.env.POKE_WORKER_STARTUP_GRACE_MS, 15000);
 
 const logPrefix = enableCluster
   ? (cluster.isPrimary ? "[Primary]" : `[Worker ${cluster.worker.id}]`)
@@ -171,7 +186,8 @@ if (enableCluster && cluster.isPrimary) {
 
   console.log(`Booting manager on PID ${process.pid}`);
   console.log(`Detected ${getAvailableParallelism()} available threads, ${effectiveParallelism} effective parallel slots, starting ${desiredWorkerCount} workers.`);
-  console.log(`Worker CPU policy: soft=${workerCpuSoftLimitPercent}%, replace=${workerCpuReplaceLimitPercent}%, sustained=${workerCpuSustainedMs}ms, cooldown=${workerReplacementCooldownMs}ms.`);
+  console.log(`CPU policy: host target=${hostCpuTargetPercent}%, soft=${hostCpuSoftLimitPercent}%, hard=${hostCpuHardLimitPercent}%, panic=${hostCpuPanicLimitPercent}%.`);
+  console.log(`Worker policy: soft=${workerCpuSoftLimitPercent}%, hard=${workerCpuHardLimitPercent}%, sustained=${workerCpuSustainedMs}ms. Workers are throttled, not recycled, during CPU pressure.`);
 
   const clusterStats = {
     workers: {},
@@ -181,14 +197,17 @@ if (enableCluster && cluster.isPrimary) {
       effectiveParallelism,
       availableParallelism: getAvailableParallelism(),
       cgroupCpuQuota: getCgroupCpuQuota(),
-      replacementCooldownMs: workerReplacementCooldownMs
+      pressureLogCooldownMs: workerPressureLogCooldownMs,
+      hostCpuTargetPercent,
+      hostCpuSoftLimitPercent,
+      hostCpuHardLimitPercent,
+      hostCpuPanicLimitPercent
     }
   };
 
   const workerStateById = new Map();
   const drainingWorkerIds = new Set();
-  let lastReplacementAt = 0;
-  let isReplacementInProgress = false;
+  let lastPressureLogAt = 0;
   let lastPrimaryCpuSnapshot = getGlobalCpuSnapshot();
   let primaryHostCpuPercent = 0;
 
@@ -281,77 +300,29 @@ if (enableCluster && cluster.isPrimary) {
 
   function handleWorkerPressure(worker, data) {
     const now = Date.now();
-    const workerState = workerStateById.get(worker.id);
-    const workerAgeMs = workerState ? now - workerState.bornAt : Number.POSITIVE_INFINITY;
     const processCpuEwma = Number(data && data.processCpuPercentEwma) || 0;
-    const eventLoopP99Ms = Number(data && data.eventLoopP99Ms) || 0;
+    const eventLoopLagMs = Number(data && (data.eventLoopLagMs || data.eventLoopP99Ms)) || 0;
     const eventLoopUtilization = Number(data && data.eventLoopUtilization) || 0;
 
     if (drainingWorkerIds.has(worker.id)) return;
 
-    if (workerAgeMs < workerStartupGraceMs) {
-      console.warn(`Ignored CPU pressure from Worker ${worker.process.pid}; worker is still in startup grace (${workerAgeMs}ms).`);
-      return;
-    }
+    clusterStats.workers[worker.id] = Object.assign({}, clusterStats.workers[worker.id] || {}, {
+      cpuPressure: {
+        processCpuEwma: roundNumber(processCpuEwma, 2),
+        eventLoopLagMs: roundNumber(eventLoopLagMs, 2),
+        eventLoopUtilization: roundNumber(eventLoopUtilization, 4),
+        reportedAt: now
+      }
+    });
 
-    if (isReplacementInProgress) {
-      console.warn(`Ignored CPU pressure from Worker ${worker.process.pid}; replacement already in progress.`);
-      return;
-    }
-
-    if (now - lastReplacementAt < workerReplacementCooldownMs) {
-      console.warn(`Ignored CPU pressure from Worker ${worker.process.pid}; replacement cooldown active.`);
-      return;
-    }
-
-    if (getNonDrainingWorkers().length > desiredWorkerCount) {
-      console.warn(`Ignored CPU pressure from Worker ${worker.process.pid}; spare worker already exists.`);
-      return;
-    }
-
-    if (primaryHostCpuPercent >= 92) {
-      console.warn(`Ignored CPU pressure from Worker ${worker.process.pid}; host CPU is already ${primaryHostCpuPercent.toFixed(1)}%, replacing a worker would add more pressure.`);
-      return;
-    }
-
-    if (processCpuEwma < workerCpuReplaceLimitPercent && eventLoopP99Ms < 250 && eventLoopUtilization < 0.96) {
-      console.warn(`Ignored CPU pressure from Worker ${worker.process.pid}; not enough sustained process/event-loop pressure.`);
-      return;
-    }
-
-    isReplacementInProgress = true;
-    lastReplacementAt = now;
+    if (now - lastPressureLogAt < workerPressureLogCooldownMs) return;
+    lastPressureLogAt = now;
 
     console.warn(
-      `Worker ${worker.process.pid} reported sustained CPU pressure ` +
-      `(cpuEwma=${processCpuEwma.toFixed(1)}%, eventLoopP99=${eventLoopP99Ms.toFixed(1)}ms, elu=${eventLoopUtilization.toFixed(3)}). ` +
-      `Starting replacement before graceful retirement.`
+      `Worker ${worker.process.pid} reported sustained pressure ` +
+      `(cpuEwma=${processCpuEwma.toFixed(1)}%, lag=${eventLoopLagMs.toFixed(1)}ms, elu=${eventLoopUtilization.toFixed(3)}). ` +
+      `Keeping the worker alive and letting the resource guard shed heavy/background requests first.`
     );
-
-    const replacementWorker = forkWorker(`replace-worker-${worker.id}`);
-
-    const replacementReadyTimer = setTimeout(() => {
-      console.warn(`Replacement worker for ${worker.process.pid} did not emit listening quickly; retiring old worker anyway.`);
-      disconnectWorkerGracefully(worker, "sustained-cpu-pressure-timeout");
-      isReplacementInProgress = false;
-    }, workerGracefulTimeoutMs);
-
-    replacementReadyTimer.unref();
-
-    replacementWorker.once("listening", () => {
-      clearTimeout(replacementReadyTimer);
-      disconnectWorkerGracefully(worker, "sustained-cpu-pressure");
-      setTimeout(() => {
-        isReplacementInProgress = false;
-        keepDesiredWorkerCount();
-      }, 1000).unref();
-    });
-
-    replacementWorker.once("exit", () => {
-      clearTimeout(replacementReadyTimer);
-      isReplacementInProgress = false;
-      keepDesiredWorkerCount();
-    });
   }
 
   for (let workerIndex = 0; workerIndex < desiredWorkerCount; workerIndex++) {
@@ -381,8 +352,12 @@ if (enableCluster && cluster.isPrimary) {
     clusterStats.primary.liveWorkerCount = getLiveWorkers().length;
     clusterStats.primary.nonDrainingWorkerCount = getNonDrainingWorkers().length;
     clusterStats.primary.drainingWorkerCount = drainingWorkerIds.size;
-    clusterStats.primary.replacementInProgress = isReplacementInProgress;
-    clusterStats.primary.lastReplacementAt = lastReplacementAt;
+    clusterStats.primary.cpuState =
+      primaryHostCpuPercent >= hostCpuPanicLimitPercent ? "panic" :
+      primaryHostCpuPercent >= hostCpuHardLimitPercent ? "critical" :
+      primaryHostCpuPercent >= hostCpuSoftLimitPercent ? "stressed" :
+      primaryHostCpuPercent >= hostCpuTargetPercent ? "warm" :
+      "healthy";
 
     for (const worker of getLiveWorkers()) {
       sendToWorker(worker, { type: "cluster_stats", data: clusterStats });
@@ -480,9 +455,22 @@ if (enableCluster && cluster.isPrimary) {
         }
       }, 45000).unref();
 
-      const { monitorEventLoopDelay, performance } = require("node:perf_hooks");
-      const eventLoopDelayHistogram = monitorEventLoopDelay({ resolution: 20 });
-      eventLoopDelayHistogram.enable();
+      const { performance } = require("node:perf_hooks");
+
+      let eventLoopLagMs = 0;
+      let eventLoopLagEwmaMs = 0;
+      let previousLoopCheckAt = performance.now();
+
+      const eventLoopLagTimer = setInterval(() => {
+        const now = performance.now();
+        const expectedDelayMs = 1000;
+        const driftMs = Math.max(0, now - previousLoopCheckAt - expectedDelayMs);
+        previousLoopCheckAt = now;
+        eventLoopLagMs = driftMs;
+        eventLoopLagEwmaMs = smoothValue(eventLoopLagEwmaMs, driftMs, 0.2);
+      }, 1000);
+
+      eventLoopLagTimer.unref();
 
       let previousCpuUsage = process.cpuUsage();
       let previousSampleTime = process.hrtime.bigint();
@@ -524,8 +512,7 @@ if (enableCluster && cluster.isPrimary) {
         hostCpuPercent = calculateGlobalCpuPercent(previousHostCpuSnapshot, currentHostCpuSnapshot);
         previousHostCpuSnapshot = currentHostCpuSnapshot;
 
-        eventLoopP99Ms = eventLoopDelayHistogram.percentile(99) / 1e6;
-        eventLoopDelayHistogram.reset();
+        eventLoopP99Ms = eventLoopLagEwmaMs;
 
         if (typeof performance.eventLoopUtilization === "function" && previousEventLoopUtilization) {
           const nextEventLoopUtilization = performance.eventLoopUtilization(previousEventLoopUtilization);
@@ -535,7 +522,7 @@ if (enableCluster && cluster.isPrimary) {
 
         const now = Date.now();
         const hasHighCpu = processCpuPercentEwma >= workerCpuSoftLimitPercent;
-        const hasHardCpu = processCpuPercentEwma >= workerCpuReplaceLimitPercent;
+        const hasHardCpu = processCpuPercentEwma >= workerCpuHardLimitPercent;
         const hasEventLoopPressure = eventLoopP99Ms >= 250 || eventLoopUtilization >= 0.96;
         const hasSustainedPressure = hasHighCpu && (hasHardCpu || hasEventLoopPressure);
 
@@ -553,7 +540,7 @@ if (enableCluster && cluster.isPrimary) {
           process.send &&
           !isWorkerDraining &&
           sustainedMs >= workerCpuSustainedMs &&
-          now - lastPressureMessageAt >= workerReplacementCooldownMs
+          now - lastPressureMessageAt >= workerPressureLogCooldownMs
         ) {
           lastPressureMessageAt = now;
 
@@ -572,6 +559,8 @@ if (enableCluster && cluster.isPrimary) {
               processCpuPercentEwma: roundNumber(processCpuPercentEwma, 2),
               hostCpuPercent: roundNumber(hostCpuPercent, 2),
               eventLoopP99Ms: roundNumber(eventLoopP99Ms, 2),
+              eventLoopLagMs: roundNumber(eventLoopLagMs, 2),
+              eventLoopLagEwmaMs: roundNumber(eventLoopLagEwmaMs, 2),
               eventLoopUtilization: roundNumber(eventLoopUtilization, 4),
               sustainedMs
             }
@@ -586,6 +575,8 @@ if (enableCluster && cluster.isPrimary) {
         processCpuPercentEwma: roundNumber(processCpuPercentEwma, 2),
         hostCpuPercent: roundNumber(hostCpuPercent, 2),
         eventLoopP99Ms: roundNumber(eventLoopP99Ms, 2),
+        eventLoopLagMs: roundNumber(eventLoopLagMs, 2),
+        eventLoopLagEwmaMs: roundNumber(eventLoopLagEwmaMs, 2),
         eventLoopUtilization: roundNumber(eventLoopUtilization, 4),
         sustainedCpuPressureMs: sustainedCpuPressureSince ? Date.now() - sustainedCpuPressureSince : 0,
         isDraining: isWorkerDraining
@@ -957,7 +948,7 @@ if (enableCluster && cluster.isPrimary) {
     })();
 
     (function pokeResourceGuard() {
-      const { monitorEventLoopDelay, performance } = require("node:perf_hooks");
+      const { performance } = require("node:perf_hooks");
 
       const guardSalt = crypto.randomBytes(16).toString("hex");
 
@@ -969,16 +960,13 @@ if (enableCluster && cluster.isPrimary) {
       let isGuardActive = false;
       let consecutiveCriticalSpikes = 0;
 
-      const eventLoopDelayHistogram = monitorEventLoopDelay({ resolution: 20 });
-      eventLoopDelayHistogram.enable();
-
       const resourceConfig = {
         system: {
-          sampleMs: 1000,
-          eventLoop: { warmMs: 200, stressedMs: 500, criticalMs: 1000 },
-          warmCpuRatio: 0.60,
-          stressedCpuRatio: 0.70,
-          criticalCpuRatio: 0.75,
+          sampleMs: 2000,
+          eventLoop: { warmMs: 80, stressedMs: 180, criticalMs: 400 },
+          warmCpuRatio: hostCpuTargetPercent / 100,
+          stressedCpuRatio: hostCpuSoftLimitPercent / 100,
+          criticalCpuRatio: hostCpuHardLimitPercent / 100,
           warmRssRatio: 0.85,
           stressedRssRatio: 0.90,
           criticalRssRatio: 0.95,
@@ -993,16 +981,16 @@ if (enableCluster && cluster.isPrimary) {
           absoluteRequestsPerSecond: 1000,
           absoluteRequestsPerWindow: 10000,
           absoluteCostPerWindow: 30000,
-          noisyRequestsWarm: 2000,
-          noisyCostWarm: 6000,
-          noisyRequestsStressed: 1000,
-          noisyCostStressed: 4000,
-          noisyRequestsCritical: 500,
-          noisyCostCritical: 2000,
-          pageSoftPassesPerWindow: 200,
-          maxHeavyRequestsWarm: 1000,
-          maxHeavyRequestsStressed: 500,
-          maxHeavyRequestsCritical: 200,
+          noisyRequestsWarm: 1200,
+          noisyCostWarm: 3500,
+          noisyRequestsStressed: 650,
+          noisyCostStressed: 2000,
+          noisyRequestsCritical: 250,
+          noisyCostCritical: 900,
+          pageSoftPassesPerWindow: 300,
+          maxHeavyRequestsWarm: 450,
+          maxHeavyRequestsStressed: 180,
+          maxHeavyRequestsCritical: 60,
           cooldownBaseMs: 5000,
           cooldownMaxMs: 60000,
           cooldownDecayMs: 30000
@@ -1615,24 +1603,26 @@ if (enableCluster && cluster.isPrimary) {
         lastSampleCpu = currentSampleCpu;
         lastSampleAt = currentPerf;
 
-        const eventLoopP99 = eventLoopDelayHistogram.percentile(99) / 1e6;
-        const eventLoopMean = eventLoopDelayHistogram.mean / 1e6;
-        eventLoopDelayHistogram.reset();
-
-        const memory = process.memoryUsage();
-        const effectiveTotal = getEffectiveMemoryLimit();
-        const rssRatio = effectiveTotal > 0 ? memory.rss / effectiveTotal : 0;
-        const heapRatio = effectiveTotal > 0 ? memory.heapUsed / effectiveTotal : 0;
         const workerCpuMetrics = typeof global.getWorkerCpuMetrics === "function"
           ? global.getWorkerCpuMetrics()
           : {
               processCpuPercent: 0,
               processCpuPercentEwma: 0,
               hostCpuPercent,
-              eventLoopP99Ms: eventLoopP99,
+              eventLoopP99Ms: 0,
+              eventLoopLagMs: 0,
+              eventLoopLagEwmaMs: 0,
               eventLoopUtilization: 0,
               sustainedCpuPressureMs: 0
             };
+
+        const eventLoopP99 = workerCpuMetrics.eventLoopLagEwmaMs || workerCpuMetrics.eventLoopP99Ms || 0;
+        const eventLoopMean = workerCpuMetrics.eventLoopLagMs || eventLoopP99;
+
+        const memory = process.memoryUsage();
+        const effectiveTotal = getEffectiveMemoryLimit();
+        const rssRatio = effectiveTotal > 0 ? memory.rss / effectiveTotal : 0;
+        const heapRatio = effectiveTotal > 0 ? memory.heapUsed / effectiveTotal : 0;
 
         const kinds = {};
 
@@ -1934,7 +1924,19 @@ if (enableCluster && cluster.isPrimary) {
           return { action: "allow", reason: "warm-pass" };
         }
 
-        if (state === "stressed") return { action: "allow", reason: "stressed-pass-as-normal" };
+        if (state === "stressed") {
+          if ((kind === "heavy" || kind === "background") && (noisy || getMetric(client, "heavy", now) > getHeavyLimit(state))) {
+            return {
+              action: "reject",
+              reason: "stressed-heavy-shed",
+              status: 429,
+              retryAfter: getRetryAfterForState(state),
+              message: "Server is protecting response time. Please retry shortly."
+            };
+          }
+
+          return { action: "allow", reason: "stressed-light-pass" };
+        }
 
         if (state === "critical") {
           if (kind === "page") {
@@ -1968,6 +1970,16 @@ if (enableCluster && cluster.isPrimary) {
       function requestActivityTracker(req, res, next) {
         if (!isGuardActive) return next();
         if (isIgnoredRoute(req)) return next();
+
+        if (resourceState.state === "healthy") {
+          if (!isStatusRequest(req)) {
+            totalGlobalRequests++;
+            currentSecondRequests++;
+            incrementMapCount(currentSecondKindCounts, "fast");
+          }
+
+          return next();
+        }
 
         const id = ++requestSequence;
         const key = getRequestKey(req);
@@ -2017,6 +2029,12 @@ if (enableCluster && cluster.isPrimary) {
         if (!isGuardActive) return next();
         if (isIgnoredRoute(req)) return next();
 
+        if (resourceState.state === "healthy") {
+          res.set("X-Poke-Resource-Guard", "healthy");
+          res.set("X-Poke-Resource-Decision", "fast-path");
+          return next();
+        }
+
         const now = Date.now();
         const kind = classifyRequest(req);
         const cost = getKindCost(kind, req);
@@ -2047,7 +2065,7 @@ if (enableCluster && cluster.isPrimary) {
 
         if (
           decision.action === "reject" &&
-          (decision.reason === "stressed-expensive-shed" || decision.reason === "critical-shed") &&
+          (decision.reason === "stressed-heavy-shed" || decision.reason === "stressed-expensive-shed" || decision.reason === "critical-shed") &&
           (kind === "heavy" || kind === "background") &&
           getMetric(client, "heavy", now) >= getHeavyLimit(resourceState.state)
         ) {
