@@ -23,12 +23,11 @@ const os = require("os");
 const numCPUs = os.cpus().length;
 const ENABLE_CLUSTER = numCPUs >= 3;
 
-// Global Log Prefixing
 const logPrefix = ENABLE_CLUSTER 
   ? (cluster.isPrimary ? "[Primary]" : `[Worker ${cluster.worker.id}]`) 
   : "[Server]";
 
- let isBooting = true;
+let isBooting = true;
 setTimeout(() => { isBooting = false; }, 10000);
 
 ['log', 'info'].forEach(method => {
@@ -44,11 +43,36 @@ setTimeout(() => { isBooting = false; }, 10000);
   console[method] = (...args) => original(logPrefix, ...args);
 });
 
- if (ENABLE_CLUSTER && cluster.isPrimary) {
+function getSystemCpus() {
+  return os.cpus().map(core => {
+    let total = 0;
+    for (const type in core.times) total += core.times[type];
+    return { idle: core.times.idle, total };
+  });
+}
+
+function getMaxCoreCpuPercent(lastCpus) {
+  const currentCpus = getSystemCpus();
+  let maxPercent = 0;
+  if (lastCpus) {
+    for (let i = 0; i < currentCpus.length; i++) {
+      if (!lastCpus[i]) continue;
+      const idleDelta = currentCpus[i].idle - lastCpus[i].idle;
+      const totalDelta = currentCpus[i].total - lastCpus[i].total;
+      if (totalDelta > 0) {
+        const percent = 100 - (100 * idleDelta / totalDelta);
+        if (percent > maxPercent) maxPercent = percent;
+      }
+    }
+  }
+  return { maxPercent, cpus: currentCpus };
+}
+
+if (ENABLE_CLUSTER && cluster.isPrimary) {
   console.log(`Booting manager on PID ${process.pid}`);
   console.log(`Detected ${numCPUs} cores. Spawning workers across all available threads...`);
 
-   const clusterStats = { workers: {} };
+  const clusterStats = { workers: {} };
 
   for (let i = 0; i < numCPUs; i++) {
     cluster.fork();
@@ -60,7 +84,15 @@ setTimeout(() => { isBooting = false; }, 10000);
     }
   });
 
-   setInterval(() => {
+  setInterval(() => {
+    const activeWorkers = Object.values(cluster.workers).filter(w => w.isConnected() && !w.isDead());
+    if (activeWorkers.length > numCPUs) {
+      const excess = activeWorkers.length - numCPUs;
+      for(let i = 0; i < excess; i++) {
+        activeWorkers[i].disconnect();
+      }
+    }
+
     for (const id in cluster.workers) {
       if (cluster.workers[id].isConnected()) {
         cluster.workers[id].send({ type: 'cluster_stats', data: clusterStats });
@@ -68,22 +100,20 @@ setTimeout(() => { isBooting = false; }, 10000);
     }
   }, 1000).unref();
 
-   cluster.on("disconnect", (worker) => {
+  cluster.on("disconnect", (worker) => {
     delete clusterStats.workers[worker.id];
-    console.warn(`Worker ${worker.process.pid} disconnected for load shedding. Spawning seamless replacement...`);
     cluster.fork();
   });
 
-   cluster.on("exit", (worker, code, signal) => {
+  cluster.on("exit", (worker, code, signal) => {
     delete clusterStats.workers[worker.id];
     if (!worker.exitedAfterDisconnect) {
-      console.error(`Worker ${worker.process.pid} died unexpectedly (Code: ${code}). Respawning...`);
       cluster.fork();
     }
   });
 
 } else {
- 
+
   (async function () {
 
     const {
@@ -105,7 +135,6 @@ setTimeout(() => { isBooting = false; }, 10000);
     const config = require("./config.json");
     const u = await media_proxy();
 
-    // Store global cluster state locally for the /health dashboard
     let globalClusterStats = { workers: {} };
     process.on('message', (msg) => {
       if (msg && msg.type === 'cluster_stats') {
@@ -116,65 +145,46 @@ setTimeout(() => { isBooting = false; }, 10000);
     (function GlobalServerOptimizer() {
       process.on('uncaughtException', (err) => {
         if (err.code === 'ECONNRESET' || err.code === 'EPIPE' || err.code === 'ETIMEDOUT') return;
-        console.error('[GLOBAL OPTIMIZER] Uncaught Exception safely caught:', err.message);
       });
       process.on('unhandledRejection', (reason) => {
-        console.error('[GLOBAL OPTIMIZER] Unhandled Rejection safely caught:', reason);
       });
 
-      // Memory Garbage Collection
       setInterval(() => {
         const memMb = process.memoryUsage().heapUsed / 1024 / 1024;
         if (memMb > 450 && typeof global.gc === 'function') {
-          console.error(`[GLOBAL OPTIMIZER] Memory high at ${memMb.toFixed(1)}MB. Running Garbage Collection...`);
           global.gc();
         }
       }, 45000).unref();
 
-      let lastCpu = process.cpuUsage();
-      let lastCheck = Date.now();
+      let lastSysCpus = getSystemCpus();
       let cpuStrikes = 0;
       let isDisconnecting = false;
 
       setInterval(() => {
         if (isDisconnecting || !cluster.isWorker) return;
 
-        const now = Date.now();
-        const diffCpu = process.cpuUsage(lastCpu);
-        const diffTimeMs = now - lastCheck;
+        const cpuStat = getMaxCoreCpuPercent(lastSysCpus);
+        lastSysCpus = cpuStat.cpus;
 
-        const totalCpuMs = (diffCpu.user + diffCpu.system) / 1000;
-        const cpuPercent = (totalCpuMs / diffTimeMs) * 100;
-
-        if (cpuPercent >= 80) {
+        if (cpuStat.maxPercent >= 80) {
           cpuStrikes++;
-          if (cpuStrikes >= 2) {  
-            console.warn(`[CPU SENTINEL] Worker ${process.pid} sustained ${cpuPercent.toFixed(1)}% CPU. Initiating graceful replacement.`);
+          if (cpuStrikes >= 2) { 
             isDisconnecting = true;
-            
-             cluster.worker.disconnect();
-            
-             setTimeout(() => {
-              console.error(`[CPU SENTINEL] Worker ${process.pid} failsafe termination triggered.`);
+            cluster.worker.disconnect();
+            setTimeout(() => {
               process.exit(1);
             }, 8000).unref();
           }
         } else {
           cpuStrikes = Math.max(0, cpuStrikes - 1);
         }
-
-        lastCpu = process.cpuUsage();
-        lastCheck = now;
       }, 400).unref();
 
     })();
 
     if (!ENABLE_CLUSTER || cluster.worker.id === 1) {
       fs.readFile("ascii_txt.txt", "utf8", (err, data) => {
-        if (err) {
-          console.error("Error reading the file:", err);
-          return;
-        }
+        if (err) return;
         console.log("\n" + data);
       });
     }
@@ -278,9 +288,7 @@ setTimeout(() => { isBooting = false; }, 10000);
         fs.accessSync(dotenvPath, fs.constants.F_OK);
         try {
           require("dotenv").config({ path: dotenvPath });
-          initlog("[POKE-trust-proxy] found .env, loaded it");
         } catch (e) {
-          initlog("[POKE-trust-proxy] .env exists but no dotenv package, parsing manually");
           try {
             const raw = fs.readFileSync(dotenvPath, "utf8");
             for (const line of raw.split("\n")) {
@@ -295,14 +303,9 @@ setTimeout(() => { isBooting = false; }, 10000);
               }
               if (!process.env[key]) process.env[key] = val;
             }
-            initlog("[POKE-trust-proxy] .env parsed ok");
-          } catch (readErr) {
-            initlog("[POKE-trust-proxy] couldnt read .env: " + readErr.message);
-          }
+          } catch (readErr) {}
         }
-      } catch {
-        initlog("[POKE-trust-proxy] no .env file, thats fine");
-      }
+      } catch {}
 
       function detectEnvSignals() {
         const signals = {
@@ -388,9 +391,6 @@ setTimeout(() => { isBooting = false; }, 10000);
           "fly-request-id", "x-amzn-trace-id",
         ];
         const found = interesting.filter(h => req.headers[h]);
-        if (found.length) {
-          initlog("[POKE-trust-proxy] headers we saw: " + found.join(", "));
-        }
       }
 
       function checkUserOverride() {
@@ -410,25 +410,21 @@ setTimeout(() => { isBooting = false; }, 10000);
 
       if (override === "force-off") {
         app.set("trust proxy", false);
-        initlog("[POKE-trust-proxy] force-disabled via TRUST_PROXY=false");
         return;
       }
 
       if (override === "force-on") {
         app.set("trust proxy", true);
-        initlog("[POKE-trust-proxy] force-enabled via TRUST_PROXY=true");
         return;
       }
 
       if (typeof override === "number") {
         app.set("trust proxy", override);
-        initlog("[POKE-trust-proxy] hop count set via TRUST_PROXY=" + override);
         return;
       }
 
       if (typeof override === "string") {
         app.set("trust proxy", override);
-        initlog("[POKE-trust-proxy] custom trust proxy value set via TRUST_PROXY=" + override);
         return;
       }
 
@@ -441,18 +437,10 @@ setTimeout(() => { isBooting = false; }, 10000);
         fsSignals.length * 2 +
         netSignals.length * 1;
 
-      if (envSignals.length) initlog("[POKE-trust-proxy] env: " + envSignals.map(s => s.name).join(", "));
-      if (fsSignals.length) initlog("[POKE-trust-proxy] fs: " + fsSignals.map(s => s.name).join(", "));
-      if (netSignals.length) initlog("[POKE-trust-proxy] net: " + netSignals.map(s => `${s.iface}(${s.type})`).join(", "));
-      initlog("[POKE-trust-proxy] confidence: " + totalConfidence);
-
       if (totalConfidence >= 2) {
         app.set("trust proxy", true);
-        initlog("[POKE-trust-proxy] auto-enabled (confidence: " + totalConfidence + ")");
         return;
       }
-
-      initlog("[POKE-trust-proxy] not sure yet, will check on first request");
 
       let probeComplete = false;
 
@@ -481,11 +469,9 @@ setTimeout(() => { isBooting = false; }, 10000);
 
         if (headerScore >= 3) {
           app.set("trust proxy", true);
-          initlog("[POKE-trust-proxy] confirmed proxy on first request (score: " + headerScore + ")");
           logProxyHeaders(req);
         } else {
           app.set("trust proxy", false);
-          initlog("[POKE-trust-proxy] no proxy headers, disabled");
         }
 
         next();
@@ -498,7 +484,6 @@ setTimeout(() => { isBooting = false; }, 10000);
 
         if (freshScore >= 2 && !probeComplete) {
           app.set("trust proxy", true);
-          initlog("[POKE-trust-proxy] periodic re-check found proxy (score: " + freshScore + ")");
         }
       }, 60_000).unref();
     })();
@@ -521,9 +506,8 @@ setTimeout(() => { isBooting = false; }, 10000);
       const resourceConfig = {
         system: {
           sampleMs: 1000,
-          // Ultra-Strict Predictive Yield Limits
           eventLoop: { warmMs: 200, stressedMs: 500, criticalMs: 1000 },
-          warmCpuRatio: 0.60, stressedCpuRatio: 0.70, criticalCpuRatio: 0.75, // Guard activates aggressively before 80%
+          warmCpuRatio: 0.60, stressedCpuRatio: 0.70, criticalCpuRatio: 0.75,
           warmRssRatio: 0.85, stressedRssRatio: 0.90, criticalRssRatio: 0.95,
           warmHeapRatio: 0.80, stressedHeapRatio: 0.85, criticalHeapRatio: 0.90
         },
@@ -590,12 +574,8 @@ setTimeout(() => { isBooting = false; }, 10000);
           if (parsedData.routes) {
             for (const [key, val] of Object.entries(parsedData.routes)) allTimeRouteCounts.set(key, val);
           }
-          if (!ENABLE_CLUSTER || cluster.worker.id === 1) {
-            initlog(`[POKE-resource] Loaded previous traffic stats: ${totalGlobalRequests} total global requests.`);
-          }
         }
       } catch (err) {
-        console.error("[POKE-resource] Could not load popularpaths.json:", err.message);
       }
 
       setInterval(() => {
@@ -609,13 +589,11 @@ setTimeout(() => { isBooting = false; }, 10000);
           for (const [k, v] of allTimeRouteCounts.entries()) routesObj[k] = v;
           const outData = { trackingStartTime, totalRequests: totalGlobalRequests, routes: routesObj };
           fs.writeFile(STATS_FILE_PATH, JSON.stringify(outData, null, 2), (err) => {
-            if (err) console.error("[POKE-resource] Failed to save popularpaths.json:", err.message);
           });
         }
       }, 60000).unref();
 
-      let lastSampleAt = performance.now();
-      let lastCpuUsage = process.cpuUsage();
+      let lastSampleCpus = getSystemCpus();
 
       let requestSequence = 0;
       const activeRequests = new Map();
@@ -901,38 +879,14 @@ setTimeout(() => { isBooting = false; }, 10000);
         const cooldownMs = Math.min(resourceConfig.client.cooldownMaxMs, resourceConfig.client.cooldownBaseMs * Math.pow(2, Math.max(0, client.cooldownLevel - 1)));
         client.cooldownUntil = now + cooldownMs;
         guardStats.cooldownsIssued++;
-
-        console.error(
-          "[POKE-resource] client cooldown " +
-          JSON.stringify({
-            reason, cooldownMs, cooldownLevel: client.cooldownLevel,
-            client: {
-              ip: anonymizeIP(client.key),
-              requests: Math.round(getMetric(client, "total", now)),
-              oneSecondRequests: client.currentSecCount,
-              heavyRequests: Math.round(getMetric(client, "heavy", now)),
-              rejects: Math.round(getMetric(client, "rejects", now)),
-              cost: Math.round(getMetric(client, "cost", now) * 100) / 100,
-              pressure: Math.round(getClientPressure(client, now) * 100) / 100
-            }
-          })
-        );
       }
 
       function sampleCpuAndMemory(reason) {
         const now = Date.now();
-        const currentPerf = performance.now();
-        const elapsedMs = Math.max(1, currentPerf - lastSampleAt);
 
-        const newCpuUsage = process.cpuUsage();
-        const cpuDelta = process.cpuUsage(lastCpuUsage);
-        lastCpuUsage = newCpuUsage;
-        lastSampleAt = currentPerf;
-
-        const cpuUserMs = cpuDelta.user / 1000;
-        const cpuSystemMs = cpuDelta.system / 1000;
-        const cpuTotalMs = cpuUserMs + cpuSystemMs;
-        const cpuRatio = cpuTotalMs / elapsedMs;
+        const coreStat = getMaxCoreCpuPercent(lastSampleCpus);
+        lastSampleCpus = coreStat.cpus;
+        const cpuRatio = coreStat.maxPercent / 100;
 
         const eldP99 = eldHistogram.percentile(99) / 1e6;
         const eldMean = eldHistogram.mean / 1e6;
@@ -949,7 +903,7 @@ setTimeout(() => { isBooting = false; }, 10000);
         const snapshot = {
           state: resourceState.state, score: resourceState.score, since: resourceState.since, sampledAt: now, reason: reason || "interval",
           eventLoop: { p99Ms: roundMs(eldP99), meanMs: roundMs(eldMean) },
-          cpu: { ratio: roundRatio(cpuRatio), percent: roundRatio(cpuRatio * 100), userMs: roundMs(cpuUserMs), systemMs: roundMs(cpuSystemMs), totalMs: roundMs(cpuTotalMs), elapsedMs: roundMs(elapsedMs) },
+          cpu: { ratio: roundRatio(cpuRatio), percent: roundMs(coreStat.maxPercent) },
           memory: {
             rssMb: bytesToMb(memory.rss), heapUsedMb: bytesToMb(memory.heapUsed), heapTotalMb: bytesToMb(memory.heapTotal),
             externalMb: bytesToMb(memory.external), arrayBuffersMb: bytesToMb(memory.arrayBuffers || 0), rssRatio: roundRatio(rssRatio),
@@ -965,14 +919,11 @@ setTimeout(() => { isBooting = false; }, 10000);
         snapshot.pressureReasons = pressure.reasons;
         snapshot.since = snapshot.state !== resourceState.state ? now : resourceState.since;
 
-        const shouldLog = now - lastStateLogAt >= resourceConfig.logging.stateCooldownMs;
-
         resourceState = snapshot;
         currentSecondRequests = 0;
         currentSecondKindCounts = new Map();
         currentSecondRouteCounts = new Map();
 
-        // Send IPC metrics to master for the global Cluster Vitals dashboard
         if (process.send) {
           process.send({
             type: 'worker_stats',
@@ -984,11 +935,6 @@ setTimeout(() => { isBooting = false; }, 10000);
               state: snapshot.state
             }
           });
-        }
-
-        if (shouldLog) {
-          lastStateLogAt = now;
-          logResourceState();
         }
       }
 
@@ -1011,43 +957,10 @@ setTimeout(() => { isBooting = false; }, 10000);
 
         if (hasCritical || score >= 7) consecutiveCriticalSpikes++; else consecutiveCriticalSpikes = Math.max(0, consecutiveCriticalSpikes - 1);
 
-        if (consecutiveCriticalSpikes >= 5) return { state: "critical", score, reasons };
+        if (consecutiveCriticalSpikes >= 3) return { state: "critical", score, reasons };
         if (score >= 4 || consecutiveCriticalSpikes > 0) return { state: "stressed", score, reasons };
         if (score >= 2) return { state: "warm", score, reasons };
         return { state: "healthy", score, reasons };
-      }
-
-      function logResourceState() {
-        if (resourceState.state === "healthy") {
-          console.error(`[POKE-resource] healthy`);
-          return;
-        }
-        let msg = `[POKE-resource] not healthy (${resourceState.state})`;
-        const details = [];
-        if (resourceState.pressureReasons && resourceState.pressureReasons.length > 0) details.push("System Limits Reached: " + resourceState.pressureReasons.join(", "));
-        if (resourceState.topRoutes && resourceState.topRoutes.length > 0) {
-          const topRoute = resourceState.topRoutes[0];
-          if (topRoute.count > 15) details.push("Too many requests in " + topRoute.key + " right now (" + topRoute.count + " requests in one second)");
-          const topPaths = resourceState.topRoutes.slice(0, 4).map(r => r.count + "x " + r.key).join(", ");
-          details.push("Heavy paths right now: [" + topPaths + "]");
-        }
-        if (details.length > 0) msg += " -> Reasons: " + details.join(" | ");
-        console.error(msg);
-      }
-
-      function logReject(req, client, kind, reason, status, now) {
-        if (now - lastRejectLogAt < resourceConfig.logging.rejectCooldownMs) return;
-        lastRejectLogAt = now;
-
-        console.error(
-          "[POKE-resource] rejected " +
-          JSON.stringify({
-            reason, status, state: resourceState.state, score: resourceState.score,
-            kind, ip: anonymizeIP(client.key),
-            client: { requests: Math.round(getMetric(client, "total", now)), oneSecondRequests: client.currentSecCount, heavyRequests: Math.round(getMetric(client, "heavy", now)), pageRequests: Math.round(getMetric(client, "page", now)), rejects: Math.round(getMetric(client, "rejects", now)), cost: Math.round(getMetric(client, "cost", now) * 100) / 100, pressure: Math.round(getClientPressure(client, now) * 100) / 100, cooldownUntil: client.cooldownUntil },
-            system: { eventLoop: resourceState.eventLoop, cpu: resourceState.cpu, memory: resourceState.memory }
-          })
-        );
       }
 
       function getRandomGuardMessage() { return GUARD_MESSAGES[Math.floor(Math.random() * GUARD_MESSAGES.length)]; }
@@ -1071,8 +984,6 @@ setTimeout(() => { isBooting = false; }, 10000);
         else if (resourceState.state === "critical") guardStats.rejectedCritical++;
         else if (resourceState.state === "stressed") guardStats.rejectedStressed++;
         else guardStats.rejectedWarm++;
-
-        logReject(req, client, kind, reason, status, now);
 
         res.set("Retry-After", String(retryAfter)); res.set("Cache-Control", "no-store"); res.set("Connection", "close"); res.set("X-Poke-Resource-Guard", resourceState.state); res.set("X-Poke-Resource-Reason", reason);
         return res.status(status).send(options.message || getRandomGuardMessage());
@@ -1299,15 +1210,15 @@ summary{font-size:1.2rem;cursor:pointer;color:#0ab7f0;user-select:none;margin-bo
         const stats = getResourceStats();
         const stateClass = stats.state.state === "healthy" ? "green" : stats.state.state === "warm" ? "orange" : stats.state.state === "stressed" ? "orange" : "red";
 
-        cachedHealthHtml = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Poke Server Health</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="/favicon.ico"><style>${HEALTH_CSS}</style></head><body><div class="app"><noscript><div class="banner orange" style="margin-bottom:24px;"><b>JavaScript is disabled:</b> this is a static little snapshot of Poke's server mood. Refresh the page whenever you want fresh numbers.</div></noscript><img class="logo" src="/css/logo-poke.svg" alt="Poke logo"><div class="header-container"><div><h1>Poke Server Health</h1><p class="small" style="margin-top:0;">Live server Health!!!</p></div><div class="tabs"><a class="tab-btn active" href="/health">Server Vitals</a><a class="tab-btn" href="/traffic">Requests</a><a class="tab-btn" href="/api/stats?view=gui">Anonymous Stats</a></div></div><div id="banner-container" class="banner ${stateClass}"><b>Current Status:</b> <span id="banner-state" class="${stateClass}" style="font-size:1.2rem;text-transform:capitalize;">${stats.state.state}</span><br><span id="banner-subtext" class="small" style="display:inline-block;margin-top:8px;">Load Score: ${stats.state.score} &bull; Process Delay: ${stats.state.eventLoop.p99Ms}ms &bull; CPU: ${stats.state.cpu.percent}% &bull; Memory: ${formatPercent(stats.state.memory.rssRatio)}</span></div><h2>What is this page?</h2><div class="explanation">This is Poke checking in on itself so everything stays fast and comfy. It watches CPU, memory, request pressure, and process delay in real time, then uses that info to keep the site feeling smooth. <br><br>If traffic suddenly gets wild, Poke gently shields the server and tries to keep normal video watching flowing first. Basically, this page is the little heartbeat monitor for the whole instance!!</div>
+        cachedHealthHtml = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Poke Server Health</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="/favicon.ico"><style>${HEALTH_CSS}</style></head><body><div class="app"><noscript><div class="banner orange" style="margin-bottom:24px;"><b>JavaScript is disabled:</b> this is a static little snapshot of Poke's server mood. Refresh the page whenever you want fresh numbers.</div></noscript><img class="logo" src="/css/logo-poke.svg" alt="Poke logo"><div class="header-container"><div><h1>Poke Server Health</h1><p class="small" style="margin-top:0;">Live server Health!!!</p></div><div class="tabs"><a class="tab-btn active" href="/health">Server Vitals</a><a class="tab-btn" href="/traffic">Requests</a><a class="tab-btn" href="/api/stats?view=gui">Anonymous Stats</a></div></div><div id="banner-container" class="banner ${stateClass}"><b>Current Status:</b> <span id="banner-state" class="${stateClass}" style="font-size:1.2rem;text-transform:capitalize;">${stats.state.state}</span><br><span id="banner-subtext" class="small" style="display:inline-block;margin-top:8px;">Load Score: ${stats.state.score} &bull; Process Delay: ${stats.state.eventLoop.p99Ms}ms &bull; System CPU: ${stats.state.cpu.percent}% &bull; Memory: ${formatPercent(stats.state.memory.rssRatio)}</span></div><h2>What is this page?</h2><div class="explanation">This is Poke checking in on itself so everything stays fast and comfy. It watches CPU, memory, request pressure, and process delay in real time, then uses that info to keep the site feeling smooth. <br><br>If traffic suddenly gets wild, Poke gently shields the server and tries to keep normal video watching flowing first. Basically, this page is the little heartbeat monitor for the whole instance!!</div>
 
 <h2>Live Server Vitals!! <span class="small">(This Worker)</span></h2>
-<div class="stat-grid"><div class="stat-box"><span id="stat-state" class="stat-num ${stateClass}">${stats.state.state}</span><span class="stat-label">Health Mood</span></div><div class="stat-box"><span id="stat-p99" class="stat-num">${stats.state.eventLoop.p99Ms}ms</span><span class="stat-label">Process Delay</span></div><div class="stat-box"><span id="stat-cpu" class="stat-num">${stats.state.cpu.percent}%</span><span class="stat-label">CPU Busy Level</span></div><div class="stat-box"><span id="stat-rss" class="stat-num">${stats.state.memory.rssMb}MB</span><span class="stat-label">Memory Used</span></div><div class="stat-box"><span id="stat-rps" class="stat-num">${stats.state.requests.rps}</span><span class="stat-label">Requests Right Now</span></div><div class="stat-box"><span id="stat-tracked" class="stat-num">${stats.clients.tracked}</span><span class="stat-label">Active Visitors</span></div><div class="stat-box"><span id="stat-cooldown" class="stat-num">${stats.clients.cooldown}</span><span class="stat-label">Noisy Clients Cooling Down</span></div><div class="stat-box"><span id="stat-score" class="stat-num">${stats.state.score}</span><span class="stat-label">Pressure Score</span></div></div>
+<div class="stat-grid"><div class="stat-box"><span id="stat-state" class="stat-num ${stateClass}">${stats.state.state}</span><span class="stat-label">Health Mood</span></div><div class="stat-box"><span id="stat-p99" class="stat-num">${stats.state.eventLoop.p99Ms}ms</span><span class="stat-label">Process Delay</span></div><div class="stat-box"><span id="stat-cpu" class="stat-num">${stats.state.cpu.percent}%</span><span class="stat-label">System CPU Peak</span></div><div class="stat-box"><span id="stat-rss" class="stat-num">${stats.state.memory.rssMb}MB</span><span class="stat-label">Memory Used</span></div><div class="stat-box"><span id="stat-rps" class="stat-num">${stats.state.requests.rps}</span><span class="stat-label">Requests Right Now</span></div><div class="stat-box"><span id="stat-tracked" class="stat-num">${stats.clients.tracked}</span><span class="stat-label">Active Visitors</span></div><div class="stat-box"><span id="stat-cooldown" class="stat-num">${stats.clients.cooldown}</span><span class="stat-label">Noisy Clients Cooling Down</span></div><div class="stat-box"><span id="stat-score" class="stat-num">${stats.state.score}</span><span class="stat-label">Pressure Score</span></div></div>
 
 <h2>Cluster Vitals!! <span class="small">(All Cores)</span></h2>
 <div id="cluster-grid" class="stat-grid"></div>
 
-<hr><details><summary>View Nerdy Stats, Raw Data, and APIs</summary><h3>Why Poke feels this way</h3><pre id="pre-reasons">${stats.state.pressureReasons.length ? stats.state.pressureReasons.join("\n") : "No pressure reasons right now. Poke is feeling good."}</pre><h3>Request Mix This Second</h3><pre id="pre-mix">${JSON.stringify(stats.state.requests.kinds, null, 2)}</pre><h3>API Endpoints</h3><p>Want the raw numbers too? They live at: <code><a href="/_pokeresource/stats">/_pokeresource/stats</a></code></p></details><hr><p class="small">powered by poke. <a href="/">go back to watching videos</a></p></div><script>document.addEventListener("DOMContentLoaded", function() { const fetchStats = async function() { try { const res = await fetch("/_pokeresource/stats"); if (!res.ok) return; const data = await res.json(); const state = data.state.state; let stateClass = "green"; if (state === "warm" || state === "stressed") stateClass = "orange"; if (state === "critical") stateClass = "red"; document.getElementById("banner-container").className = "banner " + stateClass; document.getElementById("banner-state").className = stateClass; document.getElementById("banner-state").innerText = state; const rssRatio = (data.state.memory.rssRatio * 100).toFixed(2) + "%"; document.getElementById("banner-subtext").innerHTML = "Load Score: " + data.state.score + " &bull; Process Delay: " + data.state.eventLoop.p99Ms + "ms &bull; CPU: " + data.state.cpu.percent + "% &bull; Memory: " + rssRatio; document.getElementById("stat-state").className = "stat-num " + stateClass; document.getElementById("stat-state").innerText = state; document.getElementById("stat-p99").innerText = data.state.eventLoop.p99Ms + "ms"; document.getElementById("stat-cpu").innerText = data.state.cpu.percent + "%"; document.getElementById("stat-rss").innerText = data.state.memory.rssMb + "MB"; document.getElementById("stat-rps").innerText = data.state.requests.rps; document.getElementById("stat-tracked").innerText = data.clients.tracked; document.getElementById("stat-cooldown").innerText = data.clients.cooldown; document.getElementById("stat-score").innerText = data.state.score; document.getElementById("pre-reasons").innerText = data.state.pressureReasons.length ? data.state.pressureReasons.join("\\n") : "No pressure reasons right now. Poke is feeling good."; document.getElementById("pre-mix").innerText = JSON.stringify(data.state.requests.kinds, null, 2); 
+<hr><details><summary>View Nerdy Stats, Raw Data, and APIs</summary><h3>Why Poke feels this way</h3><pre id="pre-reasons">${stats.state.pressureReasons.length ? stats.state.pressureReasons.join("\n") : "No pressure reasons right now. Poke is feeling good."}</pre><h3>Request Mix This Second</h3><pre id="pre-mix">${JSON.stringify(stats.state.requests.kinds, null, 2)}</pre><h3>API Endpoints</h3><p>Want the raw numbers too? They live at: <code><a href="/_pokeresource/stats">/_pokeresource/stats</a></code></p></details><hr><p class="small">powered by poke. <a href="/">go back to watching videos</a></p></div><script>document.addEventListener("DOMContentLoaded", function() { const fetchStats = async function() { try { const res = await fetch("/_pokeresource/stats"); if (!res.ok) return; const data = await res.json(); const state = data.state.state; let stateClass = "green"; if (state === "warm" || state === "stressed") stateClass = "orange"; if (state === "critical") stateClass = "red"; document.getElementById("banner-container").className = "banner " + stateClass; document.getElementById("banner-state").className = stateClass; document.getElementById("banner-state").innerText = state; const rssRatio = (data.state.memory.rssRatio * 100).toFixed(2) + "%"; document.getElementById("banner-subtext").innerHTML = "Load Score: " + data.state.score + " &bull; Process Delay: " + data.state.eventLoop.p99Ms + "ms &bull; System CPU: " + data.state.cpu.percent + "% &bull; Memory: " + rssRatio; document.getElementById("stat-state").className = "stat-num " + stateClass; document.getElementById("stat-state").innerText = state; document.getElementById("stat-p99").innerText = data.state.eventLoop.p99Ms + "ms"; document.getElementById("stat-cpu").innerText = data.state.cpu.percent + "%"; document.getElementById("stat-rss").innerText = data.state.memory.rssMb + "MB"; document.getElementById("stat-rps").innerText = data.state.requests.rps; document.getElementById("stat-tracked").innerText = data.clients.tracked; document.getElementById("stat-cooldown").innerText = data.clients.cooldown; document.getElementById("stat-score").innerText = data.state.score; document.getElementById("pre-reasons").innerText = data.state.pressureReasons.length ? data.state.pressureReasons.join("\\n") : "No pressure reasons right now. Poke is feeling good."; document.getElementById("pre-mix").innerText = JSON.stringify(data.state.requests.kinds, null, 2); 
         
         const cStats = data.cluster_stats;
         if (cStats && cStats.workers) {
@@ -1369,11 +1280,6 @@ summary{font-size:1.2rem;cursor:pointer;color:#0ab7f0;user-select:none;margin-bo
 
         const cleanupTimer = setInterval(cleanupClients, resourceConfig.client.cleanupMs);
         cleanupTimer.unref();
-        
-        initlog(
-          `[PokeResourceGuard] loaded - EventLoop/CPU/memory optimized shedder, ` +
-          `EL p99 warm/stressed/critical: ` + resourceConfig.system.eventLoop.warmMs + `/` + resourceConfig.system.eventLoop.stressedMs + `/` + resourceConfig.system.eventLoop.criticalMs
-        );
       }, 30);
 
     })();
@@ -1392,8 +1298,6 @@ summary{font-size:1.2rem;cursor:pointer;color:#0ab7f0;user-select:none;margin-bo
 
       res.render(templatePath, Object.assign(data), function (err, html) {
         if (err) {
-          console.error("[POKE-render] error on", template, ":", err.message);
-
           if (res.destroyed) return;
           if (res.writableEnded) return;
 
@@ -1402,11 +1306,9 @@ summary{font-size:1.2rem;cursor:pointer;color:#0ab7f0;user-select:none;margin-bo
               res.write("\n");
               return res.end();
             } catch (writeErr) {
-              console.error("[POKE-render] could not write render error after headers were sent:", writeErr.message);
               return;
             }
           }
-
           return res.status(500).send("Internal server error");
         }
 
@@ -1418,11 +1320,9 @@ summary{font-size:1.2rem;cursor:pointer;color:#0ab7f0;user-select:none;margin-bo
             res.write(html);
             return res.end();
           } catch (writeErr) {
-            console.error("[POKE-render] could not write rendered html after headers were sent:", writeErr.message);
             return;
           }
         }
-
         return res.send(html);
       });
     };
@@ -1440,10 +1340,7 @@ summary{font-size:1.2rem;cursor:pointer;color:#0ab7f0;user-select:none;margin-bo
       app.use(function (req, res, next) {
         res.header("Access-Control-Allow-Origin", "*");
         if (req.secure) {
-          res.header(
-            "Strict-Transport-Security",
-            "max-age=31536000; includeSubDomains; preload"
-          );
+          res.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
         }
         res.header("secure-poketube-instance", "1");
         res.header("Permissions-Policy", "interest-cohort=()");
@@ -1480,7 +1377,6 @@ summary{font-size:1.2rem;cursor:pointer;color:#0ab7f0;user-select:none;margin-bo
         }
         next();
       });
-
       initlog("[OK] Load headers");
     } catch {
       initlog("[FAILED] load headers");
@@ -1490,7 +1386,6 @@ summary{font-size:1.2rem;cursor:pointer;color:#0ab7f0;user-select:none;margin-bo
       app.get("/robots.txt", (req, res) => {
         res.sendFile(__dirname + "/robots.txt");
       });
-
       initlog("[OK] Load robots.txt");
     } catch {
       initlog("[FAILED] load robots.txt");
@@ -1505,15 +1400,11 @@ summary{font-size:1.2rem;cursor:pointer;color:#0ab7f0;user-select:none;margin-bo
          }
          return;
       }
-
-      console.error("[POKE-error]", req.method, req.originalUrl, ":", err.message);
       if (process.env.NODE_ENV !== "production") {
         console.error(err.stack);
       }
-
       if (res.destroyed || res.writableEnded) return;
       if (res.headersSent) return next(err);
-
       res.status(500).send("Something went wrong. Please try again.");
     });
   })();
