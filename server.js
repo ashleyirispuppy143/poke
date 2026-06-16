@@ -61,6 +61,7 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
   const clusterStats = { workers: {} };
   const activeWorkers = new Set();
   const sheddingWorkers = new Set();
+  let isShedding = false;  
 
   for (let i = 0; i < numCPUs; i++) {
     const w = cluster.fork();
@@ -71,14 +72,21 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
     if (msg && msg.type === 'worker_stats') {
       clusterStats.workers[worker.id] = msg.data;
     } else if (msg && msg.type === 'shed_load' && !sheddingWorkers.has(worker.id)) {
+      
+      if (isShedding || activeWorkers.size > numCPUs) {
+         console.warn(`[Primary] Ignored shed request from Worker ${worker.process.pid} (Global cap reached).`);
+         return;
+      }
+
+      isShedding = true;
       sheddingWorkers.add(worker.id);
       console.warn(`[Primary] Worker ${worker.process.pid} is overloaded. Spawning seamless replacement...`);
 
-      // Spawn replacement BEFORE killing the old one to avoid dropped connections
       const newWorker = cluster.fork();
       activeWorkers.add(newWorker.id);
 
       newWorker.on('listening', () => {
+        isShedding = false; // Unlock shedding once new worker is taking traffic
         // Once new worker is fully ready, tell the old one to gracefully step down
         if (worker.isConnected()) {
            worker.send({ type: 'graceful_shutdown' });
@@ -183,7 +191,6 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
         if (isDisconnecting || !cluster.isWorker) return;
 
         // Give the worker 5 seconds to boot and load modules before checking CPU.
-        // Prevents loop of workers immediately killing themselves during startup initialization.
         if (process.uptime() < 5) {
           lastCpuUsage = process.cpuUsage();
           lastSampleTime = process.hrtime.bigint();
@@ -202,9 +209,8 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
 
         // Calculate the specific worker's CPU percentage over the exact elapsed time
         const cpuPercent = (totalUs / elapsedUs) * 100;
-
-        // 17-18% threshold + covers natural spikes > 100% on extreme loads
-        if (cpuPercent >= 17.0) {
+ 
+        if (cpuPercent >= 85.0) {
           console.warn(`[CPU SENTINEL] Worker ${process.pid} (Shard) CPU hit ${cpuPercent.toFixed(1)}%. Initiating seamless replacement.`);
           isDisconnecting = true;
           
