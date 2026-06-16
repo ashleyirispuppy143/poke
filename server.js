@@ -6,7 +6,7 @@
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation, either version 3 of the License, or
-   (at your option) any later version.
+   (at your option) any later version. 
     
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -139,38 +139,46 @@ if (ENABLE_CLUSTER && cluster.isPrimary) {
         }
       }, 45000).unref();
 
-      let lastGlobalCpu = getGlobalCpu();
+      const { performance } = require("perf_hooks");
+      let lastCpuUsage = process.cpuUsage();
+      let lastSampleAt = performance.now();
       let cpuStrikes = 0;
       let isDisconnecting = false;
 
       setInterval(() => {
         if (isDisconnecting || !cluster.isWorker) return;
 
-        const currentCpu = getGlobalCpu();
-        const idleDiff = currentCpu.idle - lastGlobalCpu.idle;
-        const totalDiff = currentCpu.total - lastGlobalCpu.total;
-        const cpuPercent = totalDiff === 0 ? 0 : 100 - (100 * idleDiff / totalDiff);
+        const currentSampleAt = performance.now();
+        const elapsedMs = currentSampleAt - lastSampleAt;
+        const currentCpuUsage = process.cpuUsage(lastCpuUsage);
 
-        if (cpuPercent >= 80) {
+        // Convert microseconds to milliseconds and calculate percentage against elapsed time
+        const cpuTimeMs = (currentCpuUsage.user + currentCpuUsage.system) / 1000;
+        const cpuPercent = (cpuTimeMs / elapsedMs) * 100;
+
+        if (cpuPercent >= 17.5) {
           cpuStrikes++;
-          const strikeLimit = 2 + (cluster.worker.id % 3); 
+          const strikeLimit = 2; // Allow 2 consecutive checks to filter out micro-spikes
           if (cpuStrikes >= strikeLimit) { 
-            console.warn(`[CPU SENTINEL] Global OS CPU hit ${cpuPercent.toFixed(1)}%. Initiating graceful staggered replacement.`);
+            console.warn(`[CPU SENTINEL] Worker ${process.pid} (Shard) CPU hit ${cpuPercent.toFixed(1)}%. Initiating seamless replacement.`);
             isDisconnecting = true;
             
+            // Disconnecting routes new traffic to other shards immediately & triggers primary to seamlessly fork a replacement
             cluster.worker.disconnect();
             
+            // Allow active requests 2 seconds max to resolve, then completely clean it to prevent duplicates
             setTimeout(() => {
-              console.error(`[CPU SENTINEL] Worker ${process.pid} failsafe termination triggered.`);
+              console.error(`[CPU SENTINEL] Worker ${process.pid} completely cleaned up after 2 seconds.`);
               process.exit(1);
-            }, 8000).unref();
+            }, 2000).unref();
           }
         } else {
           cpuStrikes = Math.max(0, cpuStrikes - 1);
         }
 
-        lastGlobalCpu = currentCpu;
-      }, 400).unref();
+        lastCpuUsage = process.cpuUsage();
+        lastSampleAt = currentSampleAt;
+      }, 1000).unref();
 
     })();
 
