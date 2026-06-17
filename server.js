@@ -125,22 +125,18 @@ function roundNumber(value, digits) {
   return Math.round(value * multiplier) / multiplier;
 }
 
-function getDefaultWorkerCount(parallelism) {
-  if (parallelism <= 1) return 1;
-  if (parallelism === 2) return 1;
-  return Math.max(1, Math.min(4, parallelism - 1));
-}
-
 const effectiveParallelism = getEffectiveParallelism();
-const defaultWorkerCount = getDefaultWorkerCount(effectiveParallelism);
-const desiredWorkerCount = Math.max(
-  1,
+const minDesiredWorkers = Math.max(1, Math.min(3, effectiveParallelism));
+const maxAllowedWorkers = Math.max(1, Math.min(6, effectiveParallelism));
+
+let desiredWorkerCount = Math.max(
+  minDesiredWorkers,
   Math.min(
-    effectiveParallelism,
-    parsePositiveInteger(process.env.POKE_WORKERS || process.env.WEB_CONCURRENCY, defaultWorkerCount)
+    maxAllowedWorkers,
+    parsePositiveInteger(process.env.POKE_WORKERS || process.env.WEB_CONCURRENCY, minDesiredWorkers)
   )
 );
-const enableCluster = desiredWorkerCount >= 2 && !parseBooleanOff(process.env.POKE_CLUSTER);
+const enableCluster = maxAllowedWorkers >= 2 && !parseBooleanOff(process.env.POKE_CLUSTER);
 
 const hostCpuTargetPercent = parsePositiveNumber(process.env.POKE_HOST_CPU_TARGET, 62);
 const hostCpuSoftLimitPercent = parsePositiveNumber(process.env.POKE_HOST_CPU_SOFT_LIMIT, 70);
@@ -185,7 +181,8 @@ if (enableCluster && cluster.isPrimary) {
   }
 
   console.log(`Booting manager on PID ${process.pid}`);
-  console.log(`Detected ${getAvailableParallelism()} available threads, ${effectiveParallelism} effective parallel slots, starting ${desiredWorkerCount} workers.`);
+  console.log(`Detected ${getAvailableParallelism()} available threads, ${effectiveParallelism} effective parallel slots.`);
+  console.log(`Auto-scaler active: Starting with ${desiredWorkerCount} workers (Min: ${minDesiredWorkers}, Max: ${maxAllowedWorkers}).`);
   console.log(`CPU policy: host target=${hostCpuTargetPercent}%, soft=${hostCpuSoftLimitPercent}%, hard=${hostCpuHardLimitPercent}%, panic=${hostCpuPanicLimitPercent}%.`);
   console.log(`Worker policy: soft=${workerCpuSoftLimitPercent}%, hard=${workerCpuHardLimitPercent}%, sustained=${workerCpuSustainedMs}ms. Workers are throttled, not recycled, during CPU pressure.`);
 
@@ -210,6 +207,9 @@ if (enableCluster && cluster.isPrimary) {
   let lastPressureLogAt = 0;
   let lastPrimaryCpuSnapshot = getGlobalCpuSnapshot();
   let primaryHostCpuPercent = 0;
+  
+  let lastScaleAt = Date.now();
+  const scaleCooldownMs = 15000; // wait 15 seconds between scaling events to prevent thrashing
 
   function getLiveWorkers() {
     return Object.values(cluster.workers || {}).filter(Boolean);
@@ -348,6 +348,7 @@ if (enableCluster && cluster.isPrimary) {
     primaryHostCpuPercent = calculateGlobalCpuPercent(lastPrimaryCpuSnapshot, currentPrimaryCpuSnapshot);
     lastPrimaryCpuSnapshot = currentPrimaryCpuSnapshot;
 
+    clusterStats.primary.desiredWorkerCount = desiredWorkerCount;
     clusterStats.primary.hostCpuPercent = roundNumber(primaryHostCpuPercent, 2);
     clusterStats.primary.liveWorkerCount = getLiveWorkers().length;
     clusterStats.primary.nonDrainingWorkerCount = getNonDrainingWorkers().length;
@@ -358,6 +359,38 @@ if (enableCluster && cluster.isPrimary) {
       primaryHostCpuPercent >= hostCpuSoftLimitPercent ? "stressed" :
       primaryHostCpuPercent >= hostCpuTargetPercent ? "warm" :
       "healthy";
+
+     const now = Date.now();
+    let totalActiveRequests = 0;
+    let stressedWorkers = 0;
+
+    for (const wStats of Object.values(clusterStats.workers)) {
+      if (!wStats) continue;
+      totalActiveRequests += (wStats.active || 0);
+      if (wStats.state === "stressed" || wStats.state === "critical") stressedWorkers++;
+    }
+
+    const liveWorkerCount = getLiveWorkers().length;
+    const avgActive = liveWorkerCount > 0 ? totalActiveRequests / liveWorkerCount : 0;
+
+    if (now - lastScaleAt > scaleCooldownMs) {
+      // Scale UP if High average requests, workers feeling pressure, or host is feeling pressure
+      if ((avgActive > 40 || stressedWorkers > 0 || clusterStats.primary.cpuState === "stressed" || clusterStats.primary.cpuState === "critical") && desiredWorkerCount < maxAllowedWorkers) {
+        console.log(`[Primary] High load detected (avg active reqs: ${avgActive.toFixed(1)}, stressed workers: ${stressedWorkers}). Scaling UP workers from ${desiredWorkerCount} to ${desiredWorkerCount + 1}.`);
+        desiredWorkerCount++;
+        keepDesiredWorkerCount();
+        lastScaleAt = now;
+      }
+       else if (avgActive < 10 && stressedWorkers === 0 && clusterStats.primary.cpuState === "healthy" && desiredWorkerCount > minDesiredWorkers) {
+        console.log(`[Primary] Load is quiet (avg active reqs: ${avgActive.toFixed(1)}). Scaling DOWN workers from ${desiredWorkerCount} to ${desiredWorkerCount - 1}.`);
+        desiredWorkerCount--;
+        const nonDraining = getNonDrainingWorkers();
+        if (nonDraining.length > desiredWorkerCount) {
+          disconnectWorkerGracefully(nonDraining[nonDraining.length - 1], "scale-down");
+        }
+        lastScaleAt = now;
+      }
+    }
 
     for (const worker of getLiveWorkers()) {
       sendToWorker(worker, { type: "cluster_stats", data: clusterStats });
