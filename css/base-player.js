@@ -4290,6 +4290,19 @@ document.addEventListener("DOMContentLoaded", () => {
     let target = seekCommitOwner
       ? Number(state.seekCommitTarget)
       : Number(vn.currentTime);
+    if (seekCommitOwner && coupledMode && audio && !audio.paused) {
+      try {
+        const audioTime = Number(audio.currentTime);
+        const issuedAt = Number(state.seekCommitStartIssuedAt || 0);
+        const elapsed = issuedAt > 0 ? Math.max(0, (now() - issuedAt) / 1000) : 0;
+        const forwardAllowance = Math.min(12, Math.max(0.45, elapsed * 1.6 + 0.35));
+        if (isFinite(audioTime) &&
+          audioTime >= target - 0.12 &&
+          audioTime <= target + forwardAllowance) {
+          target = audioTime;
+        }
+      } catch { }
+    }
     if (!seekCommitOwner && postSeekPlaybackLockActive()) {
       const protectedTarget = getProtectedPostSeekRecoveryTarget();
       if (isFinite(protectedTarget) && protectedTarget >= 0) target = protectedTarget;
@@ -8683,12 +8696,21 @@ document.addEventListener("DOMContentLoaded", () => {
     if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return true;
     if (state.restarting) return true;
     if (state.endedNaturally) return false;
-    try { if (isLoopDesired()) return true; } catch { }
     if (state.pendingSeekTarget != null || userSeekIntentActive()) return true;
-    if (!state.intendedPlaying) return true;
+    // Loop preference alone is not timeline authority. Treating every
+    // backwards sample as valid whenever loop was enabled caused the seekbar
+    // and timestamp to jump during ordinary playback.
+    try {
+      if (isLoopDesired() &&
+        (restartFromEndedGuardActive() || playerTimelineExplicitNearZeroActive())) {
+        return true;
+      }
+    } catch { }
+    if (!state.intendedPlaying) return false;
     if (getVideoPaused()) {
-      if (!coupledMode || !audio || audio.paused) return true;
-      if (userPauseLockActive() || mediaSessionForcedPauseActive()) return true;
+      // Pausing freezes the visible clock; it does not authorize an old native
+      // sample to move the controls backwards. Explicit paused seeks were
+      // already accepted by the seek-authority checks above.
       return false;
     }
     const t = Number(raw);
@@ -8726,8 +8748,7 @@ document.addEventListener("DOMContentLoaded", () => {
       !restartFromEndedGuardActive() &&
       !nearZeroSeekAuthorized(value) &&
       state.pendingSeekTarget == null &&
-      !userSeekIntentActive() &&
-      !isLoopDesired();
+      !userSeekIntentActive();
       if (terminalTailHold) return playerDisplayLastTime;
     } catch { }
     if (playerDisplayTimelineRegressionAllowed(value, dur)) {
@@ -8735,13 +8756,16 @@ document.addEventListener("DOMContentLoaded", () => {
       playerDisplayLastTimeAt = ts;
       return value;
     }
-    // Allow regression during return alignment settling -- the sync engine has
-    // intentionally set a new position, so holding the old high-water mark causes jitter.
+    // Return alignment can produce a tiny decode-boundary correction, but it
+    // must not expose a stale multi-frame sample as a visible backward jump.
     try {
       if (returnAlignmentSettlingActive(200) || smoothForegroundReturnActive(200)) {
-        playerDisplayLastTime = value;
-        playerDisplayLastTimeAt = ts;
-        return value;
+        if (value >= playerDisplayLastTime - 0.10) {
+          playerDisplayLastTime = Math.max(value, playerDisplayLastTime);
+          playerDisplayLastTimeAt = ts;
+          return playerDisplayLastTime;
+        }
+        return playerDisplayLastTime;
       }
     } catch { }
     const transitionHold = (() => {
@@ -13217,7 +13241,11 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!allowStartedAdvance || !state.seekCommitStartIssued ||
         Number(state.seekCommitStartIssuedAt || 0) <= 0) return false;
       const elapsed = Math.max(0, (now() - Number(state.seekCommitStartIssuedAt || 0)) / 1000);
-      const forwardAllowance = Math.min(1.5, Math.max(tol, elapsed * 1.35 + 0.16));
+      // Once play has been issued, a healthy clock may advance several seconds
+      // while the compositor or the other split track is still joining. A
+      // fixed 1.5s cap misclassified that real progress as a failed seek and
+      // sent the pair backwards to the original destination.
+      const forwardAllowance = Math.min(12, Math.max(tol, elapsed * 1.6 + 0.35));
       return observed >= destination - tol && observed <= destination + forwardAllowance;
     }
     function reserveSeekVideoStartAttempt(reason = "seek-video-start") {
@@ -13451,9 +13479,12 @@ document.addEventListener("DOMContentLoaded", () => {
       });
       const videoReady = !videoSeeking && videoAtTarget && (immediate.videoReady ||
         mediaImmediatelyPlayableAt(vn, target, targetTolerance) ||
-        mediaCanBeginPlaybackAtTarget(vn, target, 0.025));
+        mediaCanBeginPlaybackAtTarget(vn, target, 0.025) ||
+        mediaCanAttemptPlaybackAtTarget(vn, target, targetTolerance));
       const audioReady = !coupledMode || !audio || (!audioSeeking && audioAtTarget &&
-        (immediate.audioReady || audioReadyForSeekCommitStartAt(target)));
+        (immediate.audioReady ||
+          audioReadyForSeekCommitStartAt(target) ||
+          mediaCanAttemptPlaybackAtTarget(audio, target, targetTolerance + 0.06)));
       if (videoReady) state.seekCommitVideoLanded = true;
       if (audioReady) state.seekCommitAudioLanded = true;
       if (videoReady || audioReady) state.seekCommitLastReadyAt = now();
@@ -13502,7 +13533,12 @@ document.addEventListener("DOMContentLoaded", () => {
       const readyBeforeAudioRetarget = audioReadyForSeekCommitStartAt(target);
       writeSeekAudioTargetSilently(target, "seek-commit-pair-target");
       const readyAfterAudioRetarget = audioReadyForSeekCommitStartAt(target);
-      if (!readyBeforeAudioRetarget && !readyAfterAudioRetarget) {
+      const audioCanAttempt = mediaCanAttemptPlaybackAtTarget(
+        audio,
+        target,
+        perfProfile.lowEnd ? 0.26 : 0.20
+      );
+      if (!readyBeforeAudioRetarget && !readyAfterAudioRetarget && !audioCanAttempt) {
         state.seekCommitPhase = "waiting-audio-retarget";
         state.seekBuffering = true;
         state.bufferHoldIntendedPlaying = true;
@@ -14019,6 +14055,33 @@ document.addEventListener("DOMContentLoaded", () => {
               !vn?.seeking &&
               (!coupledMode || !audio || !audio.seeking);
           } catch { }
+          const visualOnlyStall =
+            pairDecodable &&
+            coupledMode &&
+            audio &&
+            audioProgressed &&
+            !videoProgressed;
+          const visualOnlyHardRearmMs =
+            perfProfile.lowEnd ? 4800 : (perfProfile.mobile ? 4200 : 3600);
+          if (visualOnlyStall && progressAge < visualOnlyHardRearmMs) {
+            // Audio is already the healthy continuous clock. Restarting the
+            // whole pair here caused the random audible cuts. Wake only the
+            // video decoder/compositor and keep audio uninterrupted.
+            try { forceClearSeekBufferingUI(); } catch { }
+            try {
+              MakeVideoNotFreezeAfterPlaybackAfterAltTabHapenns.forceVisualRecovery(
+                "seek-commit-visual-only-stall",
+                { seekCommitOwner: true }
+              );
+            } catch { }
+            try { VideoCompositorFlushManager.arm({ observe: true }); } catch { }
+            scheduleStartVerification(
+              serial,
+              target,
+              perfProfile.lowEnd ? 280 : 180
+            );
+            return;
+          }
           const sustainedStallMs = perfProfile.lowEnd ? 1500 : (perfProfile.mobile ? 1350 : 1200);
           if (pairDecodable && progressAge < sustainedStallMs) {
             try { forceClearSeekBufferingUI(); } catch { }
@@ -14031,7 +14094,10 @@ document.addEventListener("DOMContentLoaded", () => {
             state.seekCommitLastProgressKickAt = now();
             reassertSeekPlayWithoutRestart(serial, target);
           }
-          if (progressAge > (perfProfile.lowEnd ? 2200 : 1600) &&
+          const hardRearmAfter = visualOnlyStall
+            ? visualOnlyHardRearmMs
+            : (perfProfile.lowEnd ? 2200 : 1600);
+          if (progressAge > hardRearmAfter &&
             hardRearmFrozenSeekPair(serial, target)) {
             return;
           }
@@ -14173,6 +14239,20 @@ document.addEventListener("DOMContentLoaded", () => {
       userPauseIntentActive() ||
       userToggleExpectingPause();
       if (!targetReady(target)) {
+        const attemptablePair = coupledPairCanAttemptPlaybackAt(target, {
+          tolerance: perfProfile.lowEnd ? 0.28 : 0.22
+        });
+        if (!mustRemainPaused && attemptablePair.ready) {
+          // A decoded current frame/sample is enough to issue play(). Waiting
+          // for a future-data range can deadlock because play() is itself what
+          // prompts some browsers to continue filling the pipeline.
+          state.seekBuffering = false;
+          state.strictBufferHold = false;
+          try { clearBufferHold(); } catch { }
+          try { forceClearSeekBufferingUI(); } catch { }
+          startPair(target);
+          return true;
+        }
         state.seekCommitPhase = "buffering";
         state.seekBuffering = true;
         state.strictBufferHold = true;
@@ -14180,7 +14260,12 @@ document.addEventListener("DOMContentLoaded", () => {
         state.bufferHoldIntendedPlaying = !mustRemainPaused;
         beginSeekDisplayAuthority(target, 30000);
         const audioReadyForStart = !coupledMode || !audio ||
-          audioReadyForSeekCommitStartAt(target);
+          audioReadyForSeekCommitStartAt(target) ||
+          mediaCanAttemptPlaybackAtTarget(
+            audio,
+            target,
+            perfProfile.lowEnd ? 0.28 : 0.22
+          );
         if (!mustRemainPaused && targetLanded(target) && audioReadyForStart) {
           // Seek resume uses the seek-specific gate. Waiting for the stricter
           // startup prebuffer here can leave both media elements paused forever.
@@ -14595,6 +14680,19 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
       if (videoRunning && audioRunning && delay < 1000) return;
+      if (videoRunning && audioRunning && audioProgressed && !videoProgressed) {
+        // Preserve healthy audio and recover only the frozen visual pipeline.
+        // Pair-wide pause/restart here was the source of audible dropouts after
+        // otherwise successful seeks.
+        try { forceClearSeekBufferingUI(); } catch { }
+        try {
+          MakeVideoNotFreezeAfterPlaybackAfterAltTabHapenns.forceVisualRecovery(
+            `${reason}-visual-only-continuity`
+          );
+        } catch { }
+        try { VideoCompositorFlushManager.arm({ observe: true }); } catch { }
+        return;
+      }
       state.intendedPlaying = true;
       state.bufferHoldIntendedPlaying = true;
       if (SeekPlaybackCommitController.active()) {
@@ -20051,6 +20149,35 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {
       return false;
     }
+  }
+  function mediaCanAttemptPlaybackAtTarget(media, target, tolerance = 0.24) {
+    if (!media) return false;
+    const pos = Number(target);
+    if (!isFinite(pos) || pos < 0) return false;
+    try {
+      if (media.error || media.ended || media.seeking) return false;
+      const current = Number(media.currentTime);
+      const readyState = Number(media.readyState || 0);
+      if (readyState < HAVE_CURRENT_DATA || !isFinite(current)) return false;
+      return Math.abs(current - pos) <= Math.max(0.10, Number(tolerance) || 0.24);
+    } catch {
+      return false;
+    }
+  }
+  function coupledPairCanAttemptPlaybackAt(target, opts = {}) {
+    const vn = getVideoNode();
+    const position = Number(target);
+    const tolerance = Math.max(0.10, Number(opts.tolerance) || 0.24);
+    const videoReady = mediaCanAttemptPlaybackAtTarget(vn, position, tolerance);
+    const audioReady = !coupledMode || !audio ||
+      mediaCanAttemptPlaybackAtTarget(audio, position, tolerance + 0.06);
+    return {
+      ready: !!vn && videoReady && audioReady,
+      videoReady,
+      audioReady,
+      vn,
+      target: position
+    };
   }
   function coupledPairPlayableSnapshot(target, opts = {}) {
     const vn = getVideoNode();
@@ -26838,7 +26965,10 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     const videoReady = mediaImmediatelyPlayableAt(vn, target, tolerance);
     const audioReady = !coupledMode || !audio ||
       mediaImmediatelyPlayableAt(audio, target, tolerance + 0.05);
-    if (!clearlyAdvancing && (!videoReady || !audioReady)) return false;
+    const attemptable = coupledPairCanAttemptPlaybackAt(target, {
+      tolerance: tolerance + 0.06
+    });
+    if (!clearlyAdvancing && !attemptable.ready && (!videoReady || !audioReady)) return false;
 
     state.videoWaiting = false;
     state.audioWaiting = false;
@@ -33783,6 +33913,43 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       if (!state.intendedPlaying || state.restarting) return;
       if (!state.firstPlayCommitted) return;
       if (!state.startupPrimed || state.startupKickInFlight || (state.startupPhase && !state.firstPlayCommitted)) return;
+      const _waitAttemptable = (() => {
+        if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
+        try {
+          return coupledPairCanAttemptPlaybackAt(
+            getVideoCurrentTimeSafe(0),
+            { tolerance: perfProfile.lowEnd ? 0.30 : 0.24 }
+          ).ready;
+        } catch {
+          return false;
+        }
+      })();
+      if (_waitAttemptable) {
+        // HAVE_CURRENT_DATA on both landed tracks means play() can be retried
+        // immediately. Do not leave Video.js in a waiting state that only a
+        // manual pause/play gesture clears.
+        state.videoWaiting = false;
+        state.videoStallSince = 0;
+        state.videoStallAudioPaused = false;
+        state.stallAudioPausedSince = 0;
+        state.stallAudioResumeHoldUntil = 0;
+        state.strictBufferHold = false;
+        try { clearBufferHold(); } catch { }
+        try { forceClearSeekBufferingUI(); } catch { }
+        try {
+          scheduleBufferReadyPlaybackKick("waiting-decodable-pair", {
+            immediate: true,
+            force: true
+          });
+        } catch { }
+        try {
+          armPlayablePairLivenessRecovery("playback", NaN, {
+            delay: perfProfile.lowEnd ? 180 : 100,
+            maxAge: perfProfile.lowEnd ? 6500 : 5000
+          });
+        } catch { }
+        return;
+      }
       if (holdVisibleCoupledPairForBuffer("video-waiting", { videoBlocked: true })) {
         scheduleSync(120);
         return;
@@ -35878,7 +36045,13 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       forceUnmuteForPlaybackIfAllowed();
       updateAudioGainImmediate();
       updateMediaSessionPlaybackState();
-      try { await ensureUnmutedIfNotUserMuted(); } catch { }
+      // Do not delay the coordinated restart on an async volume restoration.
+      // The active play permission and decoder state are freshest at ended;
+      // start transport immediately and restore gain alongside it.
+      try {
+        const unmute = ensureUnmutedIfNotUserMuted();
+        if (unmute && typeof unmute.catch === "function") unmute.catch(() => { });
+      } catch { }
       state.restarting = false;
       restartHandedToController = SeekPlaybackCommitController.restart(0);
       if (!restartHandedToController) {
@@ -36983,6 +37156,30 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         : pausedOrSplit
         ? (perfProfile.lowEnd ? 260 : 150)
         : (perfProfile.lowEnd ? 620 : 380);
+      const progressFreshMs = perfProfile.lowEnd ? 900 : 650;
+      const audioContinuingWithoutVideo =
+        videoRunning &&
+        audioRunning &&
+        lastAudioMoveAt > 0 &&
+        (t - lastAudioMoveAt) < progressFreshMs &&
+        (!lastVideoMoveAt || (t - lastVideoMoveAt) >= progressFreshMs);
+      if (readyAge >= recoveryDelay && audioContinuingWithoutVideo) {
+        // The audio clock is healthy, so never tear down the whole pair merely
+        // because the visual compositor stopped presenting frames. A visual-
+        // only wakeup avoids the audible cut caused by pair-wide restarts.
+        try { forceClearSeekBufferingUI(); } catch { }
+        try {
+          MakeVideoNotFreezeAfterPlaybackAfterAltTabHapenns.forceVisualRecovery(
+            `${recoveryKind}-liveness-visual-only`
+          );
+        } catch { }
+        try { VideoCompositorFlushManager.arm({ observe: true }); } catch { }
+        lastRecoveryRequestAt = t;
+        readySince = t;
+        lastVideoMoveAt = 0;
+        scheduleNext(perfProfile.lowEnd ? 420 : 260);
+        return;
+      }
       const restartActive =
         state.oneShotPairRestartInFlight ||
         state.oneShotPairRestartKey === key;
