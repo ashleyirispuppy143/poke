@@ -51,6 +51,10 @@ try {
       "").trim();
       if (_earlyAudioSrc) _earlyAudio.load();
     } catch { }
+    // Hidden tabs heavily throttle timers. Start the native audio request in
+    // the initial page task so an allowed autoplay is not deferred until the
+    // user foregrounds the tab. The managed player adopts this running clock
+    // once it initializes.
     const _earlyHiddenAudioStart = () => {
       try {
         if (document.visibilityState !== "hidden" || !_earlyAudio.paused) return;
@@ -1323,11 +1327,16 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const vn = getVideoNode();
       if (!vn || vn.paused) return false;
-      if (!coupledMode || !audio) return true;
       if (document.visibilityState === "hidden" && state.hiddenAudioExclusiveMode) {
-        return !audio.paused;
+        return !audio.paused &&
+          PlaybackProgressEvidence.audioProgressRecent(
+            perfProfile.lowEnd ? 2600 : 1900
+          );
       }
-      return !audio.paused;
+      return PlaybackProgressEvidence.pairProgressing({
+        maxAge: perfProfile.lowEnd ? 2400 : 1700,
+        allowHiddenAudioOnly: true
+      });
     } catch {
       return false;
     }
@@ -2504,7 +2513,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return false;
   }
   function shouldKeepHiddenAudioAlive() {
-    if (!platform.chromiumOnlyBrowser || !coupledMode || !audio) return false;
+    if (!coupledMode || !audio) return false;
     if (document.visibilityState !== "hidden") return false;
     if (!state.intendedPlaying || state.endedNaturally || state.restarting) return false;
     if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
@@ -2702,9 +2711,10 @@ document.addEventListener("DOMContentLoaded", () => {
   function hiddenAudioPauseShieldActive() {
     if (!shouldKeepHiddenAudioAlive()) return false;
     if (state.isProgrammaticAudioPause || state._allowAudioPause ||
-      state.seeking || state.seekBuffering || state.seekResumeInFlight ||
-      state.audioStallVideoPaused || state.videoStallAudioPaused ||
-      state.strictBufferHold) return false;
+      state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
+    if (document.visibilityState !== "hidden" &&
+      (state.audioStallVideoPaused || state.videoStallAudioPaused ||
+      state.strictBufferHold)) return false;
     if (hiddenNonLoopTerminalEndLikely("hidden-audio-pause-shield")) {
       forceNonLoopTerminalEnd("hidden-audio-pause-shield");
       return false;
@@ -5661,6 +5671,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (ReadyStateWatcher.hasAudioRsDrop()) score -= 10;
         if (NetworkRecoveryHandler.isOffline()) score -= 20;
         if (AudioSilenceGuard.isDetectedSilent()) score -= 20;
+        if (PlaybackProgressEvidence.pairStalledFor(
+          perfProfile.lowEnd ? 3600 : 2800
+        )) score -= 45;
         _lastScore = _score;
         _score = Math.max(0, Math.min(100, Math.round(score)));
         _scoreAt = _now();
@@ -5674,6 +5687,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (DriftSupervisor.isDriftCritical() || DriftSupervisor.isDriftRunaway()) return true;
         if (state.videoWaiting || state.audioWaiting ||
           state.videoStallAudioPaused || state.audioStallVideoPaused) return true;
+        if (PlaybackProgressEvidence.pairStalledFor(
+          perfProfile.lowEnd ? 3600 : 2800
+        )) return true;
         return false;
       }
       function tick() {
@@ -5702,7 +5718,14 @@ document.addEventListener("DOMContentLoaded", () => {
       function getScore() { return _score; }
       function getLastScore() { return _lastScore; }
       function getInterventions() { return _interventions; }
-      function isHealthy() { return _score >= 60; }
+      function isHealthy() {
+        if (_score < 60) return false;
+        if (!state.intendedPlaying || state.endedNaturally) return true;
+        return PlaybackProgressEvidence.pairProgressing({
+          maxAge: perfProfile.lowEnd ? 2600 : 1900,
+          allowHiddenAudioOnly: true
+        });
+      }
       function isCritical() { return _score < 20; }
       return {
         tick, getScore, getLastScore, getInterventions,
@@ -5829,6 +5852,214 @@ document.addEventListener("DOMContentLoaded", () => {
   const HAVE_CURRENT_DATA = 2;
   const HAVE_FUTURE_DATA = 3;
   const HAVE_ENOUGH_DATA = 4;
+  // paused=false and readyState>=HAVE_CURRENT_DATA only describe transport
+  // state. They do not prove that a decoded frame/sample is advancing. Keep a
+  // single progress authority so recovery code cannot declare a frozen pair
+  // healthy and shut itself down.
+  const PlaybackProgressEvidence = (() => {
+    let videoNode = null;
+    let videoTime = NaN;
+    let audioTime = NaN;
+    let videoFrames = NaN;
+    let videoProgressAt = 0;
+    let audioProgressAt = 0;
+    let videoEvidenceStartedAt = performance.now();
+    let audioEvidenceStartedAt = performance.now();
+    let seekEpochAt = 0;
+    let seekEpochId = -1;
+    const VIDEO_STEP = perfProfile.lowEnd ? 0.012 : 0.006;
+    const AUDIO_STEP = perfProfile.lowEnd ? 0.012 : 0.006;
+
+    function clockNow() {
+      try { return performance.now(); } catch { return Date.now(); }
+    }
+    function nativeSeekInFlight(vn) {
+      try {
+        return !!(vn?.seeking || (coupledMode && audio && audio.seeking));
+      } catch {
+        return false;
+      }
+    }
+    function resetForSeek(target = NaN, seekId = state.seekId) {
+      const t = clockNow();
+      const owned = Number(target);
+      videoNode = getVideoNode();
+      videoTime = isFinite(owned) && owned >= 0
+        ? owned
+        : (() => { try { return Number(videoNode?.currentTime); } catch { return NaN; } })();
+      audioTime = isFinite(owned) && owned >= 0
+        ? owned
+        : (() => { try { return coupledMode && audio ? Number(audio.currentTime) : videoTime; } catch { return NaN; } })();
+      videoFrames = getVideoPresentedFrameCount(videoNode);
+      videoProgressAt = 0;
+      audioProgressAt = 0;
+      videoEvidenceStartedAt = t;
+      audioEvidenceStartedAt = t;
+      seekEpochAt = t;
+      seekEpochId = Number(seekId);
+    }
+    function sample() {
+      const t = clockNow();
+      const vn = getVideoNode();
+      if (vn !== videoNode) {
+        videoNode = vn;
+        videoTime = NaN;
+        videoFrames = NaN;
+        videoEvidenceStartedAt = t;
+      }
+      let vt = NaN;
+      let at = NaN;
+      let frames = NaN;
+      try { vt = Number(vn?.currentTime); } catch { }
+      try { at = coupledMode && audio ? Number(audio.currentTime) : vt; } catch { }
+      frames = getVideoPresentedFrameCount(vn);
+      const positioning =
+        nativeSeekInFlight(vn) ||
+        (
+          state.seekCommitActive &&
+          !state.seekCommitStartIssued
+        );
+
+      if (isFinite(vt)) {
+        const delta = isFinite(videoTime) ? vt - videoTime : NaN;
+        const frameAdvanced =
+          isFinite(frames) &&
+          isFinite(videoFrames) &&
+          frames > videoFrames + 0.5;
+        if (!positioning && (
+          (isFinite(delta) && delta > VIDEO_STEP) ||
+          frameAdvanced
+        )) {
+          videoProgressAt = t;
+          videoTime = vt;
+        } else if (isFinite(delta) && Math.abs(delta) > 0.75) {
+          videoEvidenceStartedAt = t;
+          videoTime = vt;
+        } else if (!isFinite(videoTime)) {
+          videoTime = vt;
+        }
+      }
+      if (isFinite(frames)) videoFrames = frames;
+
+      if (isFinite(at)) {
+        const delta = isFinite(audioTime) ? at - audioTime : NaN;
+        if (!positioning && isFinite(delta) && delta > AUDIO_STEP) {
+          audioProgressAt = t;
+          audioTime = at;
+        } else if (isFinite(delta) && Math.abs(delta) > 0.75) {
+          audioEvidenceStartedAt = t;
+          audioTime = at;
+        } else if (!isFinite(audioTime)) {
+          audioTime = at;
+        }
+      }
+      return t;
+    }
+    function recent(progressAt, maxAge, since) {
+      const t = sample();
+      const minimum = Math.max(0, Number(since) || 0);
+      return progressAt > 0 &&
+        progressAt >= minimum &&
+        (t - progressAt) <= Math.max(80, Number(maxAge) || 0);
+    }
+    function videoProgressRecent(maxAge = 1600, since = 0) {
+      sample();
+      return recent(videoProgressAt, maxAge, since);
+    }
+    function audioProgressRecent(maxAge = 1600, since = 0) {
+      if (!coupledMode || !audio) return true;
+      sample();
+      return recent(audioProgressAt, maxAge, since);
+    }
+    function pairProgressing(opts = {}) {
+      const t = sample();
+      const maxAge = Math.max(120, Number(opts.maxAge) || 1600);
+      const since = Math.max(0, Number(opts.since) || 0);
+      const vn = getVideoNode();
+      if (!state.intendedPlaying) return false;
+      const audioOk = audioProgressAt > 0 &&
+        audioProgressAt >= since &&
+        (t - audioProgressAt) <= maxAge;
+      if (opts.allowHiddenAudioOnly === true &&
+        document.visibilityState === "hidden" &&
+        coupledMode && audio) return !audio.paused && audioOk;
+      if (!vn || vn.paused) return false;
+      const videoOk = videoProgressAt > 0 &&
+        videoProgressAt >= since &&
+        (t - videoProgressAt) <= maxAge;
+      if (!coupledMode || !audio) return videoOk;
+      if (audio.paused) return false;
+      return videoOk && audioOk;
+    }
+    function playbackAttemptFloor() {
+      return Math.max(
+        seekEpochAt,
+        Number(state.playPauseTxnStartedAt || 0),
+        Number(state.lastUserToggleAt || 0),
+        Number(state.coupledPlayCommitIssuedAt || 0),
+        Number(state.seekCommitStartIssuedAt || 0),
+        Number(state.seekResumeStartedAt || 0)
+      );
+    }
+    function videoStalledFor(ms = 1200) {
+      const t = sample();
+      const threshold = Math.max(400, Number(ms) || 0);
+      const reference = Math.max(
+        videoProgressAt,
+        videoEvidenceStartedAt,
+        playbackAttemptFloor()
+      );
+      return reference > 0 && (t - reference) >= threshold;
+    }
+    function audioStalledFor(ms = 1200) {
+      if (!coupledMode || !audio) return false;
+      const t = sample();
+      const threshold = Math.max(400, Number(ms) || 0);
+      const reference = Math.max(
+        audioProgressAt,
+        audioEvidenceStartedAt,
+        playbackAttemptFloor()
+      );
+      return reference > 0 && (t - reference) >= threshold;
+    }
+    function pairStalledFor(ms = 2200) {
+      const threshold = Math.max(600, Number(ms) || 0);
+      const vn = getVideoNode();
+      if (!state.intendedPlaying || !vn || vn.paused) return false;
+      if (document.visibilityState === "hidden" && coupledMode && audio) {
+        return !audio.paused && audioStalledFor(threshold);
+      }
+      if (coupledMode && audio && audio.paused) return false;
+      return videoStalledFor(threshold) &&
+        (!coupledMode || !audio || audioStalledFor(threshold));
+    }
+    function currentSeekEpochId() { return seekEpochId; }
+
+    try {
+      const signal = () => { sample(); };
+      const bind = el => {
+        if (!el) return;
+        for (const type of ["timeupdate", "playing", "seeked", "loadeddata"]) {
+          _on(el, type, signal, { passive: true });
+        }
+      };
+      bind(getVideoNode());
+      if (videoEl && videoEl !== getVideoNode()) bind(videoEl);
+      if (coupledMode && audio) bind(audio);
+    } catch { }
+    sample();
+    return {
+      sample,
+      resetForSeek,
+      videoProgressRecent,
+      audioProgressRecent,
+      pairProgressing,
+      videoStalledFor,
+      audioStalledFor,
+      pairStalledFor,
+      currentSeekEpochId
+    };
+  })();
   const STRICT_BUFFER_AHEAD_SEC = 0.25;
   const MICRO_DRIFT = 0.15;  // was 0.08 — too sensitive, caused constant rate changes
   const GENTLE_DRIFT_TRIGGER_SEC = perfProfile.lowEnd ? 0.11 : (perfProfile.mobile ? 0.085 : 0.075);
@@ -7968,9 +8199,24 @@ document.addEventListener("DOMContentLoaded", () => {
         state.resumeOnVisible ||
         liveAudio >= liveVideo - Math.max(0.25, tolerance)
       );
-    const liveTimeline = audioCanOwnSeekTimeline
-      ? (isFinite(liveVideo) ? Math.max(liveVideo, liveAudio) : liveAudio)
-      : liveVideo;
+    const videoAtDestination =
+      isFinite(target) &&
+      isFinite(liveVideo) &&
+      Math.abs(liveVideo - target) <= tolerance;
+    const audioAtDestination =
+      isFinite(target) &&
+      isFinite(liveAudio) &&
+      Math.abs(liveAudio - target) <= tolerance + 0.06;
+    let liveTimeline = NaN;
+    if (isFinite(target)) {
+      // Never choose Math.max(video,audio) during a seek. One element can still
+      // expose its pre-seek clock for an event turn, which made backward seeks
+      // flash the old timestamp and seekbar position.
+      if (videoAtDestination) liveTimeline = liveVideo;
+      else if (audioAtDestination && audioCanOwnSeekTimeline) liveTimeline = liveAudio;
+    } else {
+      liveTimeline = audioCanOwnSeekTimeline ? liveAudio : liveVideo;
+    }
     const committedTarget = Number(state.seekTimelineCommittedTarget);
     const committed =
       Number(state.seekTimelineCommittedSeekId) === Number(state.seekId) &&
@@ -7978,11 +8224,23 @@ document.addEventListener("DOMContentLoaded", () => {
       (!isFinite(target) || Math.abs(committedTarget - target) <= Math.max(0.35, tolerance));
     const observedAtDestination =
       isFinite(target) &&
-      isFinite(liveTimeline) &&
-      Math.abs(liveTimeline - target) <= tolerance;
+      (
+        videoAtDestination ||
+        (audioCanOwnSeekTimeline && audioAtDestination)
+      );
+    const progressingAfterSeek = PlaybackProgressEvidence.pairProgressing({
+      since: Math.max(
+        Number(state._seekStartedAt || 0),
+        Number(state.seekTimelineCommittedAt || 0),
+        Number(state.seekResumeStartedAt || 0)
+      ),
+      maxAge: perfProfile.lowEnd ? 1800 : 1200,
+      allowHiddenAudioOnly: true
+    });
     const completedAndProgressing =
       state.seekCompleted &&
       !nativeSeeking &&
+      progressingAfterSeek &&
       isFinite(target) &&
       isFinite(liveTimeline) &&
       liveTimeline >= target - tolerance &&
@@ -10169,8 +10427,18 @@ document.addEventListener("DOMContentLoaded", () => {
     if (vRS >= HAVE_FUTURE_DATA) return false;
     const stallAge = state.videoStallSince ? (now() - state.videoStallSince) : 0;
     if (now() < state.audioStartGraceUntil && stallAge < 900) return false;
-    const requiredAge = Math.max(260, Number(minAgeMs) || 0);
+    // A single waiting event or a short readyState dip is not a stall. Browser
+    // decoders can legitimately hold the last frame while fetching/decoding.
+    // Require sustained absence of clock/frame progress before muting audio.
+    const requiredAge = Math.max(
+      perfProfile.lowEnd ? 1500 : (perfProfile.mobile ? 1250 : 1000),
+      Number(minAgeMs) || 0
+    );
     if (stallAge < requiredAge) return false;
+    if (PlaybackProgressEvidence.videoProgressRecent(
+      Math.min(requiredAge, perfProfile.lowEnd ? 1100 : 800)
+    )) return false;
+    if (!PlaybackProgressEvidence.videoStalledFor(requiredAge)) return false;
     const vt = (() => { try { return Number(vNode?.currentTime); } catch { return NaN; } })();
     const lastVt = Number(state.lastVT);
     const clockFrozen =
@@ -10182,7 +10450,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const bufferedDry =
       isFinite(vt) &&
       bufferedAhead(vNode, vt) < 0.025;
-    return clockFrozen || bufferedDry;
+    return vRS < HAVE_FUTURE_DATA && (clockFrozen || bufferedDry);
   }
   function isForegroundVideoActuallyBuffering() {
     if (!coupledMode || !audio) return false;
@@ -10294,6 +10562,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if ((state.seekResumeInFlight && !verifiedBufferEvent) || state.seeking || state.seekBuffering) return false;
     if (playCommitGuardActive() && !verifiedBufferEvent) return false;
     if ((userWantsPlayNow(800) || directUserToggleActive(800)) && !verifiedBufferEvent) return false;
+    if (!isConfirmedForegroundVideoStall(
+      perfProfile.lowEnd ? 1500 : (perfProfile.mobile ? 1250 : 1000)
+    )) return false;
     _lastStallKillAt = nowMs;
     _lastGlobalAudioKillAt = nowMs;
     const holdUntil = nowMs + Math.max(0, Number(holdMs) || 0);
@@ -11374,6 +11645,16 @@ document.addEventListener("DOMContentLoaded", () => {
       seekAudioHoldUntilVideoReadyActive()) return false;
     const vn = getVideoNode();
     if (!vn || vn.paused || Number(vn.readyState || 0) < HAVE_CURRENT_DATA) return false;
+    const progressSince = Math.max(
+      Number(state.seekResumeStartedAt || 0),
+      Number(state.seekTimelineCommittedAt || 0),
+      Number(state.seekPlaybackTxnAudioPlayAt || 0),
+      Number(state.seekPlaybackTxnVideoPlayAt || 0)
+    );
+    if (!PlaybackProgressEvidence.pairProgressing({
+      since: progressSince,
+      maxAge: perfProfile.lowEnd ? 1800 : 1200
+    })) return false;
     if (!coupledMode || !audio) return true;
     if (audio.paused || Number(audio.readyState || 0) < HAVE_CURRENT_DATA) return false;
     try {
@@ -13109,6 +13390,7 @@ document.addEventListener("DOMContentLoaded", () => {
       state.seekCompleted = false;
       state.pendingSeekTarget = t;
       state.seeking = true;
+      try { PlaybackProgressEvidence.resetForSeek(t, id); } catch { }
       rebaseMonotonicVideoProgress(
         t,
         restart ? "restart-commit-begin" : "seek-commit-begin"
@@ -16280,6 +16562,10 @@ document.addEventListener("DOMContentLoaded", () => {
       (state.resumeOnVisible || state.bgHiddenWasPlaying || state.intendedPlaying || hiddenPlayPendingActive())) {
       return false;
       }
+      if (!PlaybackProgressEvidence.pairProgressing({
+        since: Number(state.lastBgReturnAt || 0),
+        maxAge: perfProfile.lowEnd ? 1900 : 1300
+      })) return false;
       return true;
   }
   function foregroundRecoveryActive(tailMs = 0) {
@@ -16366,6 +16652,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const vn = getVideoNode();
     const vrs = vn ? Number(vn.readyState || 0) : 0;
     if (vrs < HAVE_CURRENT_DATA) return false;
+    if (!PlaybackProgressEvidence.pairProgressing({
+      maxAge: perfProfile.lowEnd ? 2400 : 1800
+    })) return false;
     return true;
   }
   function stableHealthyPlaybackForLongCpuCadence() {
@@ -17283,6 +17572,27 @@ document.addEventListener("DOMContentLoaded", () => {
     if (userPauseLockActive() || mediaSessionForcedPauseActive() ||
       userPauseIntentActive() || userToggleExpectingPause()) return true;
     if (playerMutedFromVideo() || state.userMutedVideo) return true;
+    const hiddenContinuityRequired =
+      document.visibilityState === "hidden" &&
+      state.intendedPlaying &&
+      !state.endedNaturally &&
+      !state.restarting &&
+      !userPauseLockActive() &&
+      !mediaSessionForcedPauseActive() &&
+      !userPauseIntentActive() &&
+      !userToggleExpectingPause();
+    if (hiddenContinuityRequired) {
+      // In the background the external audio clock is authoritative. Stale
+      // foreground waiting/buffer flags must never authorize a silent second.
+      if (initialCoupledPairPending() ||
+        initialPairAudioGateActive() ||
+        state.seeking ||
+        state.seekBuffering ||
+        state.seekResumeInFlight ||
+        state.seekAudioReleaseInFlight ||
+        seekAudioHoldUntilVideoReadyActive()) return true;
+      return false;
+    }
     const recentProgrammaticPause =
       state.isProgrammaticAudioPause &&
       now() < Math.max(
@@ -18775,6 +19085,20 @@ document.addEventListener("DOMContentLoaded", () => {
     const effectiveAudioBlocked = !!status.audioBlocked && !audioMasterHold;
     const effectiveVideoBlocked = !!status.videoBlocked;
     if (!effectiveAudioBlocked && !effectiveVideoBlocked) return false;
+    if (effectiveVideoBlocked && !effectiveAudioBlocked &&
+      audio && !audio.paused && !audioMasterHold) {
+      // Do not turn a transient decoder/network hiccup into an audible cut.
+      // Keep the continuous audio clock alive until the video clock/frame has
+      // actually failed to advance for the confirmed-stall window.
+      state.videoWaiting = true;
+      state.videoStallSince = state.videoStallSince || t;
+      if (!isConfirmedForegroundVideoStall(
+        perfProfile.lowEnd ? 1500 : (perfProfile.mobile ? 1250 : 1000)
+      )) {
+        try { armResumeAfterBuffer(12000); } catch { }
+        return false;
+      }
+    }
     const pauseVideoForAudio = effectiveAudioBlocked;
     const pauseAudioForVideo = effectiveVideoBlocked && !audioMasterHold;
     const alreadyHeld =
@@ -21492,6 +21816,14 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     const at = Number(audio.currentTime) || 0;
     if (!isFinite(vt) || !isFinite(at) || Math.abs(at - vt) > 0.18) return false;
     if (state.seekResumeStartedAt > 0 && (now() - state.seekResumeStartedAt) < 140) return false;
+    const progressSince = Math.max(
+      Number(state.seekResumeStartedAt || 0),
+      Number(state.seekTimelineCommittedAt || 0)
+    );
+    if (!PlaybackProgressEvidence.pairProgressing({
+      since: progressSince,
+      maxAge: perfProfile.lowEnd ? 1800 : 1200
+    })) return false;
     state.seekResumeInFlight = false;
     state.seekResumeStartedAt = 0;
     state.seekKickAudioAllowedUntil = 0;
@@ -32187,7 +32519,6 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         armResumeAfterBuffer(12000);
       }
       if (_waitRS < HAVE_FUTURE_DATA && coupledMode && audio && !audio.paused) {
-        armForegroundBufferAudioHold(Math.max(MIN_STALL_AUDIO_RESUME_MS, 600));
         state._stallAudioPauseTimer = setTimeout(() => {
           state._stallAudioPauseTimer = null;
           if (!coupledMode || !audio || audio.paused) return;
@@ -32511,7 +32842,11 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                     !state.seekResumeInFlight &&
                     state.seekAudioMustStartUntil <= now() &&
                     state.seekKickAudioAllowedUntil <= now();
-                    if (_shouldGatePlayingAudioKick && !videoReadyForAudioResume(_vtNow)) {
+                    if (_shouldGatePlayingAudioKick &&
+                      !videoReadyForAudioResume(_vtNow) &&
+                      isConfirmedForegroundVideoStall(
+                        perfProfile.lowEnd ? 1500 : (perfProfile.mobile ? 1250 : 1000)
+                      )) {
                       armForegroundBufferAudioHold(Math.max(MIN_STALL_AUDIO_RESUME_MS, 500));
                       state.videoWaiting = true;
                       state.videoStallSince = state.videoStallSince || now();
@@ -33131,7 +33466,10 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                           }
                           if (!getVideoPaused() && state.intendedPlaying) {
                             const _apVt = (() => { try { return Number(video.currentTime()) || 0; } catch { return 0; } })();
-                            if (!videoReadyForAudioResume(_apVt)) {
+                            if (!videoReadyForAudioResume(_apVt) &&
+                              isConfirmedForegroundVideoStall(
+                                perfProfile.lowEnd ? 1500 : (perfProfile.mobile ? 1250 : 1000)
+                              )) {
                               armForegroundBufferAudioHold(Math.max(MIN_STALL_AUDIO_RESUME_MS, 500));
                               state.videoWaiting = true;
                               state.videoStallSince = state.videoStallSince || now();
@@ -33385,7 +33723,6 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                 scheduleBufferReadyPlaybackKick("video-canplay", { immediate: true });
               }
             } else {
-              armForegroundBufferAudioHold(Math.max(MIN_STALL_AUDIO_RESUME_MS, 500));
               state.videoWaiting = true;
               state.videoStallSince = state.videoStallSince || now();
             }
@@ -34212,6 +34549,10 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     if (state.strictBufferHold) return false;
     if ((state.videoWaiting || state.videoStallAudioPaused) && vrs < HAVE_FUTURE_DATA) return false;
     if (coupledMode && (!audio || audio.paused)) return false;
+    if (!PlaybackProgressEvidence.pairProgressing({
+      since: Number(state.lastBgReturnAt || 0),
+      maxAge: perfProfile.lowEnd ? 1900 : 1300
+    })) return false;
     if (coupledMode && audio && !foregroundReturnTimelineRepairRequired()) return true;
     if (coupledMode && audio && !audio.paused) {
       try {
