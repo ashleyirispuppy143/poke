@@ -597,6 +597,8 @@ document.addEventListener("DOMContentLoaded", () => {
         onFullscreenChange();
   });
   const _globalListeners = [];
+  const _deferredInitTimers = [];
+  const _mediaErrorProbeTimers = [];
   let _lastTrackedListenerPruneAt = 0;
   let _trackedListenersDisposed = false;
   function _listenerCapture(opts) {
@@ -855,6 +857,10 @@ document.addEventListener("DOMContentLoaded", () => {
     seekRenderedAudioGateSeekId: -1,
     seekRenderedAudioGateIssuedAt: 0,
     seekRenderedAudioGateTimer: null,
+    postSeekPlaybackLockUntil: 0,
+    postSeekPlaybackLockSeekId: -1,
+    postSeekPlaybackLockTarget: NaN,
+    postSeekPlaybackLockTransportSerial: -1,
     stablePlaybackRecoveryTimer: null,
     stablePlaybackRecoveryDueAt: 0,
     stablePlaybackRecoveryLastAt: 0,
@@ -7426,9 +7432,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const age = now() - issued;
     const minAdvance = perfProfile.lowEnd ? 0.016 : (perfProfile.mobile ? 0.012 : 0.008);
     const frameCount = Number(state._startupLockstepFrameCount);
+    const renderedFrameAuthority = (() => {
+      try { return VideoCompositorFlushManager.usesRenderedFrameAuthority(vn); } catch { return false; }
+    })();
     const videoAdvanced =
       videoStartEvidenceSince(vn, startAt, frameCount, issued) ||
-      (isFinite(Number(vt)) && Number(vt) > startAt + minAdvance);
+      (!renderedFrameAuthority &&
+        isFinite(Number(vt)) && Number(vt) > startAt + minAdvance);
     const audioAdvanced =
       isFinite(Number(at)) &&
       Number(at) > startAt + minAdvance;
@@ -7440,6 +7450,7 @@ document.addEventListener("DOMContentLoaded", () => {
       isFinite(Number(at)) ? Number(at) : startAt,
       coupledAudioStartLead(true)
     );
+    if (renderedFrameAuthority) return videoAdvanced && (audioAdvanced || aReady);
     return (videoAdvanced && aReady) || (audioAdvanced && vReady);
   }
   function commitStartupFromActivePlayback(opts = {}) {
@@ -8060,6 +8071,13 @@ document.addEventListener("DOMContentLoaded", () => {
     state.foregroundReturnTimelineCapturedAt = 0;
     state.foregroundReturnTimelineUntil = 0;
     state.foregroundReturnTimelineReason = String(reason || "").slice(0, 48);
+    // Any delayed tab-return alignment belongs to the authority being cleared.
+    // Invalidating it here prevents an old visibility task from moving the
+    // timeline after a newer play, pause, or seek command.
+    state.foregroundReturnTimelineSerial =
+      Number(state.foregroundReturnTimelineSerial || 0) + 1;
+    state.returnAlignSerial = Number(state.returnAlignSerial || 0) + 1;
+    try { clearReturnAlignmentVerifyTimer(); } catch { }
   }
   function claimForegroundReturnOwner(reason = "", at = now(), windowMs = 1200) {
     const t = Number(at) || now();
@@ -8211,6 +8229,19 @@ document.addEventListener("DOMContentLoaded", () => {
       clearCompetingReturnAnchorsForLiveAudio(target);
     } else if (!(isFinite(target) && target >= 0)) {
       target = isFinite(vt) && vt >= 0 ? vt : (isFinite(at) && at >= 0 ? at : 0);
+    }
+    if (source !== "seek" && state.intendedPlaying) {
+      // Returning to a tab is not a seek. A stale suspended clock must never
+      // replace the furthest trusted playback position and jump backwards.
+      const returnFloor = Math.max(
+        0,
+        isFinite(hiddenTimelineTarget) ? hiddenTimelineTarget : 0,
+        isFinite(Number(state.lastKnownGoodVT)) ? Number(state.lastKnownGoodVT) : 0,
+        isFinite(Number(state.monotonicVideoTime)) ? Number(state.monotonicVideoTime) : 0
+      );
+      target = Math.max(Number(target) || 0, returnFloor);
+      const duration = getPlayerDisplayDuration();
+      if (isFinite(duration) && duration > 0) target = Math.min(target, duration);
     }
     const duration = Math.max(1200, Math.min(3200, Number(opts.ms) || 2600));
     state.foregroundReturnTimelineSource = source;
@@ -10086,7 +10117,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return transportMediaActuallyRunning();
   }
   function transportMediaActuallyRunning() {
-    if (state.endedNaturally || state.restarting) return false;
+    if (state.endedNaturally) return false;
     let videoPlaying = false;
     let audioPlaying = false;
     try { videoPlaying = !getVideoPaused(); } catch { }
@@ -13221,7 +13252,8 @@ document.addEventListener("DOMContentLoaded", () => {
         finally { state._allowAudioTimeWrite = previous; }
       }
     }
-    function finishPaused(target) {
+  function finishPaused(target) {
+      clearPostSeekPlaybackLock();
       clearAsyncWork();
       holdPair();
       state.seeking = false;
@@ -13266,6 +13298,7 @@ document.addEventListener("DOMContentLoaded", () => {
       state.seekCompleted = true;
       state.seekTargetTime = target;
       state.seekResolvedTime = target;
+      armPostSeekPlaybackLock(target, perfProfile.lowEnd ? 4200 : 3200);
       state.pendingSeekTarget = null;
       state.mediaSessionSeekTarget = null;
       state.mediaSessionSeekUntil = 0;
@@ -13836,6 +13869,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return true;
       }
       cancel("superseded");
+      clearPostSeekPlaybackLock();
       clearSeekResumeCommitTimer();
       state.seekResumeCommitInFlight = false;
       state.seekResumeCommitSeekId = -1;
@@ -14039,17 +14073,48 @@ document.addEventListener("DOMContentLoaded", () => {
   function postSeekPlaybackStillWanted() {
     if (authoritativeTransportPauseActive()) return false;
     if (state.endedNaturally || state.restarting || _errorOverlayShown) return false;
+    if (nativeVideoEnded() || terminalEndFallbackShouldFire()) return false;
     if (userPauseLockActive() || mediaSessionForcedPauseActive() ||
       userPauseIntentActive() || userToggleExpectingPause()) return false;
     if (state.transportIntentKnown) return !!state.transportIntentPlaying;
     return !!(state.intendedPlaying || state.seekWantedPlaying ||
       requiredSeekResumeActive() || seekResumeIntentActive());
   }
+  function clearPostSeekPlaybackLock() {
+    state.postSeekPlaybackLockUntil = 0;
+    state.postSeekPlaybackLockSeekId = -1;
+    state.postSeekPlaybackLockTarget = NaN;
+    state.postSeekPlaybackLockTransportSerial = -1;
+  }
+  function armPostSeekPlaybackLock(target = NaN, ms = 3200) {
+    const value = Number(target);
+    state.postSeekPlaybackLockUntil = now() + Math.max(900, Number(ms) || 0);
+    state.postSeekPlaybackLockSeekId = Number(state.seekId || 0);
+    state.postSeekPlaybackLockTarget =
+      isFinite(value) && value >= 0 ? value : getVideoCurrentTimeSafe(0);
+    state.postSeekPlaybackLockTransportSerial =
+      Number(state.transportIntentSerial || 0);
+  }
+  function postSeekPlaybackLockActive() {
+    if (now() >= Number(state.postSeekPlaybackLockUntil || 0)) {
+      clearPostSeekPlaybackLock();
+      return false;
+    }
+    if (Number(state.postSeekPlaybackLockSeekId) !== Number(state.seekId || 0) ||
+      Number(state.postSeekPlaybackLockTransportSerial) !==
+      Number(state.transportIntentSerial || 0) ||
+      !postSeekPlaybackStillWanted()) {
+      clearPostSeekPlaybackLock();
+      return false;
+    }
+    return true;
+  }
   function armPostSeekContinuityWatchdog(reason = "seeked") {
     if (!postSeekPlaybackStillWanted()) return false;
     clearPostSeekContinuityTimers();
     const serial = _postSeekContinuitySerial;
     const seekId = Number(state.seekId || 0);
+    const transportSerial = Number(state.transportIntentSerial || 0);
     const initialVn = getVideoNode();
     const baselineVideoTime = (() => {
       try { return Number(initialVn?.currentTime); } catch { return NaN; }
@@ -14061,7 +14126,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const baselineCapturedAt = now();
     const retryDelays = [0, 120, 420, 1100, 2600, 5200];
     const attempt = (delay = 0) => {
-      if (serial !== _postSeekContinuitySerial || seekId !== Number(state.seekId || 0)) return;
+      if (serial !== _postSeekContinuitySerial ||
+        seekId !== Number(state.seekId || 0) ||
+        transportSerial !== Number(state.transportIntentSerial || 0)) return;
       if (!postSeekPlaybackStillWanted()) return;
       const vn = getVideoNode();
       const videoRunning = !!(vn && !vn.paused);
@@ -14168,6 +14235,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!foregroundReturnContinuityWanted()) return false;
     clearForegroundReturnContinuityTimers();
     const serial = _foregroundReturnContinuitySerial;
+    const transportSerial = Number(state.transportIntentSerial || 0);
+    const startedAt = now();
     const fallbackTarget = (() => {
       try {
         if (coupledMode && audio) {
@@ -14180,10 +14249,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const returnTarget = foregroundReturnTimelineAuthorityActive(800)
       ? getForegroundReturnTimelineTarget(fallbackTarget)
       : captureForegroundReturnTimeline(reason, { ms: 2600 });
+    const returnTimelineSerial = Number(state.foregroundReturnTimelineSerial || 0);
     let alignmentIssued = false;
     const retryDelays = [0, 120, 420, 1100, 2600, 5200];
-    const attempt = () => {
-      if (serial !== _foregroundReturnContinuitySerial) return;
+    const attempt = (attemptIndex = 0) => {
+      if (serial !== _foregroundReturnContinuitySerial ||
+        transportSerial !== Number(state.transportIntentSerial || 0) ||
+        returnTimelineSerial !== Number(state.foregroundReturnTimelineSerial || 0)) return;
       if (document.visibilityState !== "visible" || !foregroundReturnContinuityWanted()) return;
       if (state.seeking || state.seekBuffering || state.seekResumeInFlight ||
         state.pendingSeekTarget != null || userSeekIntentActive()) return;
@@ -14206,10 +14278,24 @@ document.addEventListener("DOMContentLoaded", () => {
       const videoRunning = !vn.paused;
       const audioRunning = !coupledMode || !audio || !audio.paused;
       if (videoRunning && audioRunning) {
-        if (!isFinite(returnTarget) || !isFinite(vt) || vt >= returnTarget - 0.10) {
-          clearForegroundReturnTimelineAuthority("return-running");
+        const pairProgressing = PlaybackProgressEvidence.pairProgressing({
+          since: startedAt,
+          maxAge: perfProfile.lowEnd ? 2200 : 1500
+        });
+        if (pairProgressing) {
+          if (!isFinite(returnTarget) || !isFinite(vt) || vt >= returnTarget - 0.10) {
+            clearForegroundReturnTimelineAuthority("return-running");
+          }
+          clearForegroundReturnContinuityTimers();
+          return;
         }
-        clearForegroundReturnContinuityTimers();
+        try { VideoCompositorFlushManager.arm({ observe: true }); } catch { }
+        if (attemptIndex >= 2) {
+          scheduleStablePlaybackRecovery(`${reason}-running-without-frames`, {
+            immediate: true,
+            forceVisualRecovery: true
+          });
+        }
         return;
       }
       if (!videoRunning) {
@@ -14227,10 +14313,10 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch { }
       }
     };
-    retryDelays.forEach(delay => {
+    retryDelays.forEach((delay, attemptIndex) => {
       const timer = setTimeout(() => {
         _foregroundReturnContinuityTimers.delete(timer);
-        attempt();
+        attempt(attemptIndex);
       }, delay);
       _foregroundReturnContinuityTimers.add(timer);
     });
@@ -14268,6 +14354,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return true;
       }
       const seekId = state.seekId;
+      const transportSerial = Number(state.transportIntentSerial || 0);
       const dueAt = now() + Math.max(0, Number(delayMs) || 0);
       if (state.seekResumeCommitTimer && state.seekResumeCommitSeekId === seekId &&
         Number(state.seekResumeCommitDueAt || 0) <= dueAt + 20) return true;
@@ -14281,7 +14368,9 @@ document.addEventListener("DOMContentLoaded", () => {
     state.seekResumeCommitTimer = setTimeout(() => {
       state.seekResumeCommitTimer = null;
       state.seekResumeCommitDueAt = 0;
-      if (seekId !== state.seekId || !state.intendedPlaying || state.endedNaturally || state.restarting) {
+      if (seekId !== state.seekId ||
+        transportSerial !== Number(state.transportIntentSerial || 0) ||
+        !state.intendedPlaying || state.endedNaturally || state.restarting) {
         if (state.seekResumeCommitSeekId === seekId) state.seekResumeCommitInFlight = false;
         return;
       }
@@ -20169,6 +20258,9 @@ document.addEventListener("DOMContentLoaded", () => {
       at = Number(audio.currentTime);
     } catch { }
     const minAdvance = perfProfile.lowEnd ? 0.016 : 0.008;
+    const renderedFrameAuthority = (() => {
+      try { return VideoCompositorFlushManager.usesRenderedFrameAuthority(vn); } catch { return false; }
+    })();
     const videoAdvanced =
       videoStartEvidenceSince(
         vn,
@@ -20177,6 +20269,7 @@ document.addEventListener("DOMContentLoaded", () => {
         issuedAt
       ) ||
       (
+        !renderedFrameAuthority &&
         isFinite(vt) &&
         isFinite(Number(state.coupledPlayCommitVideoTime)) &&
         vt > Number(state.coupledPlayCommitVideoTime) + minAdvance
@@ -24808,6 +24901,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     try { clearInitialPairAudioGate(); } catch { }
     clearSeekAudioReadyKick();
     try { clearSeekAudioHoldUntilVideoReady(); } catch { }
+    try { clearPostSeekPlaybackLock(); } catch { }
     clearPostSeekAudioWatchdog();
     clearPostSeekPlaybackRecoveryTimers();
     clearStablePlaybackRecovery();
@@ -28727,11 +28821,9 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         if (!hiddenRetryStarted) scheduleStartupAutoplayRetry();
         return;
       }
-      const hasLooseBuffer = startupBufferReadyLoose();
-      if (!hasLooseBuffer) {
-        scheduleStartupAutoplayRetry();
-        return;
-      }
+      // bothReadyForStartupKick() owns the bounded smooth-buffer wait and its
+      // readyState fallback. A second strict range check here used to make that
+      // fallback unreachable on browsers that expose sparse buffered ranges.
       if (!bothReadyForStartupKick()) {
         scheduleStartupAutoplayRetry();
         return;
@@ -28862,9 +28954,24 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       _playbackIntentLivenessAudioTime = at;
       const videoRunning = !!(vn && !vn.paused);
       const audioRunning = !coupledMode || !audio || !audio.paused;
+      const renderedFrameAuthority = (() => {
+        try {
+          return !hidden &&
+            VideoCompositorFlushManager.usesRenderedFrameAuthority(vn);
+        } catch { return false; }
+      })();
+      if (renderedFrameAuthority && videoRunning) {
+        try { VideoCompositorFlushManager.arm({ observe: true }); } catch { }
+      }
+      const visualVideoMoved = renderedFrameAuthority
+        ? PlaybackProgressEvidence.visualProgressRecent(
+          perfProfile.lowEnd ? 2200 : 1500,
+          _playbackIntentLivenessStartedAt
+        )
+        : videoMoved;
       const healthy = hidden && coupledMode && audio
         ? audioRunning && audioMoved
-        : videoRunning && audioRunning && videoMoved && audioMoved;
+        : videoRunning && audioRunning && visualVideoMoved && audioMoved;
       if (healthy) {
         clearPlaybackIntentLivenessWatchdog();
         return;
@@ -28872,7 +28979,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       const runningWithoutBaseline = hidden && coupledMode && audio
         ? audioRunning && !hadAudioBaseline
         : videoRunning && audioRunning &&
-          (!hadVideoBaseline || !hadAudioBaseline);
+          ((!renderedFrameAuthority && !hadVideoBaseline) || !hadAudioBaseline);
       if (runningWithoutBaseline) {
         scheduleNext(perfProfile.lowEnd ? 420 : 280);
         return;
@@ -31005,6 +31112,8 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                             stackTrace: isBug ? _stack : undefined
     });
   }
+  let _playerOriginalFetch = null;
+  let _playerFetchWrapper = null;
   function setupMediaErrorHandlers() {
     const onVideoError = (e) => {
       const errObj = videoEl.error || (e && e.target && e.target.error);
@@ -31139,9 +31248,10 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     }, 5000);
     state._corsCheckStartedAt = now();
     try {
-      const _origFetch = window.fetch;
-      window.fetch = function (url, opts) {
-        return _origFetch.apply(this, arguments).then(resp => {
+      if (!_playerFetchWrapper && typeof window.fetch === "function") {
+        _playerOriginalFetch = window.fetch;
+        _playerFetchWrapper = function (url, opts) {
+          return _playerOriginalFetch.apply(this, arguments).then(resp => {
           if (resp && !resp.ok && resp.status >= 500) {
             const urlStr = String(typeof url === "string" ? url : (url && url.url) || "");
             if (urlStr.includes("videoplayback") || urlStr.includes("googlevideo") ||
@@ -31167,12 +31277,19 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             }
             }
             throw err;
-        });
-      };
+          });
+        };
+        window.fetch = _playerFetchWrapper;
+      }
     } catch { }
     probeExistingMediaError("handler-attach");
     [80, 350, 1000, 2500, 5000].forEach(delay => {
-      setTimeout(() => { probeExistingMediaError("delayed-" + delay); }, delay);
+      const timer = setTimeout(() => {
+        const index = _mediaErrorProbeTimers.indexOf(timer);
+        if (index !== -1) _mediaErrorProbeTimers.splice(index, 1);
+        probeExistingMediaError("delayed-" + delay);
+      }, delay);
+      _mediaErrorProbeTimers.push(timer);
     });
     _on(window, "online", () => {
       state.networkOnline = true;
@@ -32500,6 +32617,12 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         updateMediaSessionPlaybackState();
         return;
       }
+      if (postSeekPlaybackLockActive()) {
+        schedulePostSeekPlaybackRecovery("post-seek-video-pause");
+        scheduleStablePlaybackRecovery("post-seek-video-pause", { immediate: true });
+        updateMediaSessionPlaybackState();
+        return;
+      }
       if (coupledMode && audio && state.intendedPlaying &&
         document.visibilityState === "visible" && isWindowFocused() &&
         !playPauseTxnExpectsPause(900) && !pairedUserPauseSettledRecently(300) &&
@@ -33751,6 +33874,14 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           return;
         }
         if (internalPauseEventOwned("audio")) {
+          updateMediaSessionPlaybackState();
+          return;
+        }
+        if (postSeekPlaybackLockActive()) {
+          try { event?.stopImmediatePropagation?.(); } catch { }
+          try { event?.stopPropagation?.(); } catch { }
+          schedulePostSeekPlaybackRecovery("post-seek-audio-pause");
+          scheduleStablePlaybackRecovery("post-seek-audio-pause", { immediate: true });
           updateMediaSessionPlaybackState();
           return;
         }
@@ -36899,6 +37030,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     clearPostSeekPlaybackRecoveryTimers();
     const seekId = state.seekId;
     const playSession = state.playSessionId;
+    const transportSerial = Number(state.transportIntentSerial || 0);
     const armAudioWindow = () => {
       if (!coupledMode || !audio || seekAudioHoldUntilVideoReadyActive()) return;
       const tNow = now();
@@ -36906,7 +37038,9 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       state.seekKickAudioAllowedUntil = Math.max(state.seekKickAudioAllowedUntil, tNow + 1800);
     };
     const kick = (label) => {
-      if (seekId !== state.seekId || playSession !== state.playSessionId) return;
+      if (seekId !== state.seekId ||
+        playSession !== state.playSessionId ||
+        transportSerial !== Number(state.transportIntentSerial || 0)) return;
       if (!state.intendedPlaying || state.endedNaturally || state.restarting) return;
       if (userPauseLockActive() || mediaSessionForcedPauseActive()) return;
       const pairAlreadyHealthy = !state.seeking && !state.seekBuffering &&
@@ -37205,6 +37339,13 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     try { clearSeekBuffering(); } catch { }
     try { forceClearSeekBufferingUI(); } catch { }
     try { clearStartupAutoplayRetryTimer(); } catch { }
+    try { clearInitialLoadingUi(true); } catch { }
+    try {
+      for (const timer of _deferredInitTimers) clearTimeout(timer);
+      _deferredInitTimers.length = 0;
+      for (const timer of _mediaErrorProbeTimers) clearTimeout(timer);
+      _mediaErrorProbeTimers.length = 0;
+    } catch { }
     try { clearPlaybackIntentLivenessWatchdog(); } catch { }
     try {
       clearHiddenInitialAudioStartTimeout();
@@ -37278,6 +37419,14 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     try { if (state._endedKillHardStop) { clearTimeout(state._endedKillHardStop); state._endedKillHardStop = null; } } catch { }
     try { if (state._corsCheckInterval) { clearInterval(state._corsCheckInterval); state._corsCheckInterval = null; } } catch { }
     try { if (_timelineRepairFlagTimer) { clearTimeout(_timelineRepairFlagTimer); _timelineRepairFlagTimer = null; } } catch { }
+    try {
+      if (_playerFetchWrapper && _playerOriginalFetch &&
+        window.fetch === _playerFetchWrapper) {
+        window.fetch = _playerOriginalFetch;
+      }
+      _playerFetchWrapper = null;
+      _playerOriginalFetch = null;
+    } catch { }
     try { if (playerTimeDisplaySaveTimer) saveTimeDisplayMode(true); } catch { }
     try { cancelPlayerUiUpdateWork({ dropCache: true }); } catch { }
     try { clearSeekPostTimers(); } catch { }
@@ -38385,11 +38534,14 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
   } catch {}
   // Deferred retries in case the player/metadata isn't ready at call time
   [1000, 3000, 6000, 12000].forEach(delay => {
-    setTimeout(() => {
+    const timer = setTimeout(() => {
+      const index = _deferredInitTimers.indexOf(timer);
+      if (index !== -1) _deferredInitTimers.splice(index, 1);
       try { ensureMediaSessionSetup(); } catch {}
       try { updateMediaSessionPlaybackState(); } catch {}
       try { updateMediaSessionPositionNow(NaN, "deferred-init", 0); } catch {}
     }, delay);
+    _deferredInitTimers.push(timer);
   });
   bindCommonMediaEvents();
   if (!coupledMode) {
