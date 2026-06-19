@@ -954,6 +954,10 @@ document.addEventListener("DOMContentLoaded", () => {
     hardPairGateTarget: NaN,
     hardPairGateStartedAt: 0,
     hardPairGateReason: "",
+    hardPairGateSavedVolume: NaN,
+    hardPairGateVideoTime: NaN,
+    hardPairGateAudioTime: NaN,
+    hardPairGateFrameCount: NaN,
     seekTimelineCommittedSeekId: -1,
     seekTimelineCommittedTarget: NaN,
     seekTimelineCommittedAt: 0,
@@ -6584,14 +6588,68 @@ document.addEventListener("DOMContentLoaded", () => {
       currentSeekEpochId
     };
   })();
+  function resetHardPairTransitionGateState() {
+    state.hardPairGateActive = false;
+    state.hardPairGateOwner = "";
+    state.hardPairGateTarget = NaN;
+    state.hardPairGateStartedAt = 0;
+    state.hardPairGateReason = "";
+    state.hardPairGateSavedVolume = NaN;
+    state.hardPairGateVideoTime = NaN;
+    state.hardPairGateAudioTime = NaN;
+    state.hardPairGateFrameCount = NaN;
+  }
+  function hardPairTransitionHasLiveProgress() {
+    if (!state.hardPairGateActive || !coupledMode || !audio) return false;
+    const vn = getVideoNode();
+    if (!vn || vn.paused || audio.paused || vn.seeking || audio.seeking) return false;
+    const startedAt = Number(state.hardPairGateStartedAt || 0);
+    if (startedAt <= 0 || (now() - startedAt) < (perfProfile.lowEnd ? 150 : 90)) return false;
+    let vt = NaN;
+    let at = NaN;
+    let frames = NaN;
+    try { vt = Number(vn.currentTime); } catch { }
+    try { at = Number(audio.currentTime); } catch { }
+    try { frames = getVideoPresentedFrameCount(vn); } catch { }
+    const baseVt = Number(state.hardPairGateVideoTime);
+    const baseAt = Number(state.hardPairGateAudioTime);
+    const baseFrames = Number(state.hardPairGateFrameCount);
+    const videoClockMoved =
+      isFinite(vt) && isFinite(baseVt) && vt > baseVt + (perfProfile.lowEnd ? 0.012 : 0.006);
+    const audioClockMoved =
+      isFinite(at) && isFinite(baseAt) && at > baseAt + (perfProfile.lowEnd ? 0.012 : 0.006);
+    const frameMoved =
+      isFinite(frames) && isFinite(baseFrames) && frames > baseFrames;
+    const evidenceMoved = PlaybackProgressEvidence.pairProgressing({
+      since: startedAt,
+      maxAge: perfProfile.lowEnd ? 2200 : 1500,
+      allowHiddenAudioOnly: document.visibilityState === "hidden"
+    });
+    const visibleVisualReady =
+      document.visibilityState !== "visible" ||
+      !VideoCompositorFlushManager.usesRenderedFrameAuthority(vn) ||
+      frameMoved ||
+      PlaybackProgressEvidence.visualProgressRecent(
+        perfProfile.lowEnd ? 2200 : 1500,
+        startedAt
+      );
+    return visibleVisualReady &&
+      ((videoClockMoved && audioClockMoved) || evidenceMoved);
+  }
   function hardPairTransitionGateActive() {
-    return !!(
-      coupledMode &&
-      audio &&
-      state.hardPairGateActive &&
-      state.intendedPlaying &&
-      !state.endedNaturally
-    );
+    if (!state.hardPairGateActive) return false;
+    if (!coupledMode || !audio || !state.intendedPlaying || state.endedNaturally) {
+      resetHardPairTransitionGateState();
+      return false;
+    }
+    if (hardPairTransitionHasLiveProgress()) {
+      clearHardPairTransitionGate(state.hardPairGateOwner, true, {
+        restore: true,
+        reason: "paired-progress"
+      });
+      return false;
+    }
+    return true;
   }
   function hardPairTransitionTarget(fallback = NaN) {
     const owned = Number(state.hardPairGateTarget);
@@ -6605,9 +6663,15 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!hardPairTransitionGateActive() || !audio) return false;
     try { cancelActiveFade(); } catch { }
     try {
+      const saved = Number(state.hardPairGateSavedVolume);
+      const desired = isFinite(saved) && saved > 0.005
+        ? clamp01(saved)
+        : clamp01(targetVolFromVideo());
       _syncingAudioVolumeFromVideo = true;
       audio.muted = true;
-      audio.volume = 0;
+      if (desired > 0.005 && Math.abs((Number(audio.volume) || 0) - desired) > 0.01) {
+        audio.volume = desired;
+      }
     } catch { }
     _syncingAudioVolumeFromVideo = false;
     return true;
@@ -6618,32 +6682,78 @@ document.addEventListener("DOMContentLoaded", () => {
     if (state.hardPairGateActive && state.hardPairGateOwner === "seek" &&
       gateOwner !== "seek") return true;
     const value = Number(target);
+    const previousTarget = Number(state.hardPairGateTarget);
+    const continuingSameGate =
+      state.hardPairGateActive &&
+      state.hardPairGateOwner === gateOwner &&
+      (
+        gateOwner !== "seek" ||
+        (
+          isFinite(previousTarget) &&
+          isFinite(value) &&
+          Math.abs(previousTarget - value) <= 0.35
+        )
+      );
     state.hardPairGateActive = true;
     state.hardPairGateOwner = gateOwner;
-    state.hardPairGateTarget = isFinite(value) && value >= 0
-      ? value
-      : hardPairTransitionTarget(getVideoCurrentTimeSafe(0));
-    state.hardPairGateStartedAt = now();
+    if (!continuingSameGate) {
+      state.hardPairGateTarget = isFinite(value) && value >= 0
+        ? value
+        : hardPairTransitionTarget(getVideoCurrentTimeSafe(0));
+      state.hardPairGateStartedAt = now();
+      const vn = getVideoNode();
+      try { state.hardPairGateVideoTime = Number(vn?.currentTime); } catch { state.hardPairGateVideoTime = NaN; }
+      try { state.hardPairGateAudioTime = Number(audio.currentTime); } catch { state.hardPairGateAudioTime = NaN; }
+      try { state.hardPairGateFrameCount = getVideoPresentedFrameCount(vn); } catch { state.hardPairGateFrameCount = NaN; }
+      try {
+        const liveVolume = clamp01(Number(audio.volume) || 0);
+        const desiredVolume = clamp01(targetVolFromVideo());
+        state.hardPairGateSavedVolume = liveVolume > 0.005 ? liveVolume : desiredVolume;
+      } catch { state.hardPairGateSavedVolume = NaN; }
+    }
     state.hardPairGateReason = String(reason || "paired-transition").slice(0, 64);
     enforceHardPairTransitionSilence();
-    try {
-      resetPlayerDisplayTimelineClamp(state.hardPairGateTarget);
-      holdSeekbarStableTarget(state.hardPairGateTarget, 12000);
-    } catch { }
+    if (!continuingSameGate) {
+      try {
+        resetPlayerDisplayTimelineClamp(state.hardPairGateTarget);
+        holdSeekbarStableTarget(state.hardPairGateTarget, 12000);
+      } catch { }
+    }
     return true;
   }
-  function clearHardPairTransitionGate(owner = "", force = false) {
+  function clearHardPairTransitionGate(owner = "", force = false, opts = {}) {
     if (!state.hardPairGateActive) return true;
     const requestedOwner = String(owner || "");
     if (!force && requestedOwner &&
       state.hardPairGateOwner && requestedOwner !== state.hardPairGateOwner) {
       return false;
     }
-    state.hardPairGateActive = false;
-    state.hardPairGateOwner = "";
-    state.hardPairGateTarget = NaN;
-    state.hardPairGateStartedAt = 0;
-    state.hardPairGateReason = "";
+    const savedVolume = Number(state.hardPairGateSavedVolume);
+    resetHardPairTransitionGateState();
+    if (opts.restore !== false) {
+      try {
+        queueMicrotask(() => {
+          if (!coupledMode || !audio || state.hardPairGateActive ||
+            !state.intendedPlaying || state.endedNaturally || state.restarting ||
+            userPauseLockActive() || mediaSessionForcedPauseActive() ||
+            playerMutedFromVideo() || initialPairAudioGateActive() ||
+            resumePairAudioGateActive() || state.seekAudioReleaseInFlight ||
+            seekAudioHoldUntilVideoReadyActive()) return;
+          const vn = getVideoNode();
+          const pairRunning = !!(vn && !vn.paused && !audio.paused);
+          const hiddenAudioRunning =
+            document.visibilityState === "hidden" && !audio.paused;
+          if (!pairRunning && !hiddenAudioRunning) return;
+          const target = isFinite(savedVolume) && savedVolume > 0.005
+            ? savedVolume
+            : targetVolFromVideo();
+          setAudioPlaybackVolume(target, opts.reason || "hard-pair-gate-release", {
+            immediate: true,
+            cancelFade: true
+          });
+        });
+      } catch { }
+    }
     return true;
   }
   try {
@@ -8178,8 +8288,9 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
   function getRawVideoTimelineTime() {
-    // Read the native media clock first. Video.js can briefly report zero while
-    // its tech is being replaced or while seek state is propagating.
+    // currentTime is the playback-position authority for the controls. Rendered
+    // frame metadata is health evidence, not a UI clock: callbacks can arrive
+    // later than the advancing media timeline and otherwise pin the seekbar.
     try {
       if (document.visibilityState === "visible") {
         const vn = getVideoNode();
@@ -8198,6 +8309,8 @@ document.addEventListener("DOMContentLoaded", () => {
         if (renderedFrameMayOwnTimeline) {
           try { VideoCompositorFlushManager.arm({ observe: true }); } catch { }
         }
+        const nativeTime = Number(vn?.currentTime);
+        if (isFinite(nativeTime) && nativeTime >= 0) return nativeTime;
         const renderedTime = renderedFrameMayOwnTimeline
           ? Number(
             VideoCompositorFlushManager.getLastFrameMediaTime(
@@ -8206,28 +8319,7 @@ document.addEventListener("DOMContentLoaded", () => {
             )
           )
           : NaN;
-        const nativeTime = Number(vn?.currentTime);
-        const renderedMatchesNative =
-          isFinite(renderedTime) &&
-          renderedTime >= 0 &&
-          isFinite(nativeTime) &&
-          Math.abs(renderedTime - nativeTime) <=
-            (perfProfile.lowEnd ? 0.85 : 0.55);
-        if (renderedMatchesNative) return renderedTime;
-        if (renderedFrameMayOwnTimeline &&
-          state.intendedPlaying &&
-          VideoCompositorFlushManager.usesRenderedFrameAuthority(vn) &&
-          Number(VideoCompositorFlushManager.getLastFrameAt()) > 0) {
-          const lastPresentedTime = Number(
-            VideoCompositorFlushManager.getLastFrameMediaTime(Infinity, vn)
-          );
-          if (isFinite(lastPresentedTime) && lastPresentedTime >= 0 &&
-            isFinite(nativeTime) &&
-            Math.abs(lastPresentedTime - nativeTime) <=
-              (perfProfile.lowEnd ? 0.85 : 0.55)) {
-            return lastPresentedTime;
-          }
-        }
+        if (isFinite(renderedTime) && renderedTime >= 0) return renderedTime;
       }
     } catch { }
     const samples = [];
@@ -9285,9 +9377,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const audioPaused = !coupledMode || !audio || !!audio.paused;
     const bothPaused = videoPaused && audioPaused;
     const transportNotWanted = !state.intendedPlaying;
+    const lastDisplayed = Number(playerDisplayLastTime);
+    const liveVideoClockAdvanced =
+      !videoPaused &&
+      isFinite(value) &&
+      isFinite(lastDisplayed) &&
+      value > lastDisplayed + 0.006;
     const pairStalled =
       state.intendedPlaying &&
       !bothPaused &&
+      !liveVideoClockAdvanced &&
       PlaybackProgressEvidence.videoStalledFor(perfProfile.lowEnd ? 1000 : 700) &&
       (!coupledMode || !audio ||
         audioPaused ||
@@ -19301,9 +19400,10 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   function setAudioVolumeSynced(vol) {
     if (!audio) return;
-    const value = hardPairTransitionGateActive() && Number(vol) > 0
-      ? 0
-      : clamp01(vol);
+    const value = clamp01(vol);
+    if (state.hardPairGateActive && value > 0.005) {
+      state.hardPairGateSavedVolume = value;
+    }
     _syncingAudioVolumeFromVideo = true;
     try { audio.volume = value; } catch { }
     _syncingAudioVolumeFromVideo = false;
@@ -21162,6 +21262,18 @@ document.addEventListener("DOMContentLoaded", () => {
       vn
     };
   }
+  function visibleCoupledPairActivelyProgressing(maxAge = 1100) {
+    if (!coupledMode || !audio || !state.intendedPlaying ||
+      document.visibilityState !== "visible" || !isWindowFocused()) return false;
+    const vn = getVideoNode();
+    if (!vn || vn.paused || audio.paused || vn.seeking || audio.seeking) return false;
+    if (Number(vn.readyState || 0) < HAVE_CURRENT_DATA ||
+      Number(audio.readyState || 0) < HAVE_CURRENT_DATA) return false;
+    return PlaybackProgressEvidence.pairProgressing({
+      maxAge: Math.max(500, Number(maxAge) || 0),
+      allowHiddenAudioOnly: false
+    });
+  }
   function holdVisibleCoupledPairForBuffer(reason = "coupled-buffer", opts = {}) {
     if (postSeekPlaybackLockActive() && postSeekPlaybackStillWanted()) {
       // The browser already owns a pending/running post-seek play request.
@@ -21171,6 +21283,16 @@ document.addEventListener("DOMContentLoaded", () => {
         seekId: state.seekId,
         delay: perfProfile.lowEnd ? 180 : 100
       }); } catch { }
+      return false;
+    }
+    if (visibleCoupledPairActivelyProgressing(perfProfile.lowEnd ? 1700 : 1100)) {
+      try {
+        clearStaleCoupledBufferStateIfReady(
+          getVideoCurrentTimeSafe(0),
+          `${reason || "coupled-buffer"}-live-pair`
+        );
+      } catch { }
+      try { repairUnexpectedAudioCut(`${reason || "coupled-buffer"}-live-pair`, true); } catch { }
       return false;
     }
     const status = visibleCoupledBufferStatus(opts.target, opts);
