@@ -24,7 +24,7 @@
  */
  
 //////////////// THE PLAYER, START ////////////////////////
- try {
+try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -20650,7 +20650,6 @@ startupPrimeStartedAt: performance.now(),
   let _audioNotPlayingMonitorTimer = null;
   let _audioNotPlayingLastAt = 0;
   let _audioNotPlayingLastSampleAt = 0;
-  let _audioNotPlayingHealAt = 0;
   function getLoopedIndicatorEl() {
     let el = null;
     try { el = document.getElementById("loopedIndicator"); } catch { }
@@ -20748,28 +20747,7 @@ startupPrimeStartedAt: performance.now(),
       _audioNotPlayingSilentSince = tNow;
       return;
     }
-    const silentFor = tNow - _audioNotPlayingSilentSince;
-    // Before merely warning, try to HEAL the audio — this performs the same
-    // recovery a manual play/pause does (unmute, restore volume, re-commit the
-    // coupled pair). It is the convergence backstop for audio that stays silent
-    // after a SEEK / LOOP / RESTART / play-pause because its dedicated resume gate
-    // (releaseSeekAudioAfterVideoReady, SeekPlaybackCommitController, etc.) never
-    // released it. shouldWatchForSilentAudio() already proved the pair should be
-    // audibly playing (visible, focused, intendedPlaying, video running, not
-    // seeking, not user-muted), and repairUnexpectedAudioCut adds its own
-    // in-flight + active-owner guards, so this can only fire when audio is
-    // genuinely, wrongly silent. The monitor's own ≥650ms cadence plus the
-    // per-attempt cooldown below keep it from ever spinning.
-    const AUDIO_HEAL_AFTER_MS = perfProfile.lowEnd ? 1100 : 700;
-    const AUDIO_HEAL_COOLDOWN_MS = perfProfile.lowEnd ? 1400 : 1000;
-    if (silentFor >= AUDIO_HEAL_AFTER_MS &&
-        (tNow - _audioNotPlayingHealAt) >= AUDIO_HEAL_COOLDOWN_MS) {
-      _audioNotPlayingHealAt = tNow;
-      try {
-        if (repairUnexpectedAudioCut("audio-not-playing-monitor-heal", true)) return;
-      } catch { }
-    }
-    if (silentFor < AUDIO_NOT_PLAYING_WARNING_MS) return;
+    if ((tNow - _audioNotPlayingSilentSince) < AUDIO_NOT_PLAYING_WARNING_MS) return;
     showAudioNotPlayingWarning();
   }
   function startAudioNotPlayingMonitor() {
@@ -33251,6 +33229,286 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     _bufMonStopped = true;
     if (_bufMonTimer) { clearTimeout(_bufMonTimer); _bufMonTimer = null; }
   }
+  // ---------------------------------------------------------------------------
+  // Stuck-state recovery watchdog.
+  //
+  // This player coordinates a separate <audio> and <video> with a large number
+  // of "authority"/guard subsystems (seek-display authority, buffer holds,
+  // stall pauses, return transitions, etc). Each of those is time-bounded, but
+  // when a seek or a play/pause commit does not land, several of them can stay
+  // latched at once. The visible result is exactly the family of bugs users hit:
+  // the UI clock / seekbar freezes (or shows 0:00), the spinner stays up while
+  // media is actually fine, and playback (or just audio) never resumes after a
+  // seek or a buffer.
+  //
+  // The existing heartbeat already tries to recover, but it runs on long,
+  // heavily-gated cadences and bails early in many branches. This watchdog is a
+  // small, independent safety net: it runs on a steady cadence, acts ONLY on
+  // strong, unambiguous evidence, and otherwise does nothing. It never forces
+  // playback when the user paused, when media data is not ready, or during a
+  // seek / return transition.
+  let _recoveryWatchdogTimer = null;
+  let _recoveryLastVt = NaN;
+  let _recoveryLastAt = NaN;
+  let _recoveryLastLivePos = NaN;
+  let _recoveryBothPausedSince = 0;
+  let _recoveryAudioPausedSince = 0;
+  function _recoveryInActiveSeek() {
+    try {
+      return !!(state.seeking || state.seekBuffering || state.seekResumeInFlight ||
+        state.seekDragActive || state.pendingSeekTarget != null ||
+        state.seekAudioReleaseInFlight || userSeekIntentActive() ||
+        seekAudioHoldUntilVideoReadyActive());
+    } catch { return true; }
+  }
+  function _recoveryInTransition() {
+    try {
+      if (state.restarting || state.syncing) return true;
+      if (inBgReturnGrace() || isTabReturnImmune()) return true;
+      if (returnSmoothingActive(0) || smoothForegroundReturnActive(0) ||
+        returnAlignmentSettlingActive(0)) return true;
+      if (isVisibilityTransitionActive() || isAltTabTransitionActive()) return true;
+      if (hardPairTransitionGateActive()) return true;
+      if (SeekPlaybackCommitController.active()) return true;
+    } catch { return true; }
+    return false;
+  }
+  function _recoveryUserWantsPaused() {
+    try {
+      return !!(userPauseLockActive() || mediaSessionForcedPauseActive() ||
+        userPauseIntentActive() || userToggleExpectingPause());
+    } catch { return true; }
+  }
+  function _recoveryTick() {
+    _recoveryWatchdogTimer = null;
+    let healthy = false;
+    try {
+      if (document.visibilityState !== "visible" || !isWindowFocused()) {
+        _recoveryLastVt = NaN;
+        _recoveryLastAt = NaN;
+        _recoveryBothPausedSince = 0;
+        _recoveryAudioPausedSince = 0;
+        return;
+      }
+      if (_errorOverlayShown) return;
+
+      const t = now();
+      const vn = getVideoNode();
+      const vt = (() => { try { return vn ? Number(vn.currentTime) : NaN; } catch { return NaN; } })();
+      const at = (() => { try { return (coupledMode && audio) ? Number(audio.currentTime) : NaN; } catch { return NaN; } })();
+      const vPaused = !vn || !!vn.paused;
+      const aPaused = (coupledMode && audio) ? !!audio.paused : true;
+      const bothPaused = vPaused && (!coupledMode || aPaused);
+      const vReady = (() => { try { return vn ? Number(vn.readyState || 0) : 0; } catch { return 0; } })();
+      const aReady = (() => { try { return (coupledMode && audio) ? Number(audio.readyState || 0) : HAVE_ENOUGH_DATA; } catch { return 0; } })();
+      const vAdvanced = isFinite(vt) && isFinite(_recoveryLastVt) && vt > _recoveryLastVt + 0.01;
+      const aAdvanced = isFinite(at) && isFinite(_recoveryLastAt) && at > _recoveryLastAt + 0.01;
+      const inSeek = _recoveryInActiveSeek();
+      const inTransition = _recoveryInTransition();
+
+      // (0) Stale-seek escape. The legacy stale-seek timeout is 30s, so a seek
+      //     whose finalize path latched leaves the player "buffering forever".
+      //     If the requested position is actually playable but the seek has been
+      //     pending far longer than a normal seek, force it to finalize. Gated on
+      //     real readiness so a genuinely slow network is left to keep buffering.
+      if ((state.seeking || state.seekBuffering) && Number(state._seekStartedAt) > 0 &&
+        !state.seekDragActive) {
+        const seekAge = performance.now() - Number(state._seekStartedAt);
+        if (seekAge > 6000) {
+          let targetReady = false;
+          try {
+            const tgt = getAuthoritativeSeekTarget(isFinite(vt) ? vt : 0);
+            targetReady = !!seekTargetMediaReady(
+              tgt, coupledMode, perfProfile.lowEnd ? 0.16 : 0.11
+            ).ready;
+          } catch { targetReady = false; }
+          if (targetReady) {
+            try { forceClearSeekBufferingUI(); } catch { }
+            try { scheduleSeekFinalize(0, state.seekId); } catch { }
+          }
+        }
+      }
+
+      // (1) Release a stuck seek-display authority. When we are no longer
+      //     seeking, this just delegates to the player's own progress check,
+      //     which clears the pinned UI target once playback has moved past it.
+      if (!inSeek && seekDisplayAuthorityActive()) {
+        try { clearSeekDisplayAuthorityIfProgressed(); } catch { }
+      }
+
+      // (2) Clear a false spinner / stale stall flags while both tracks are
+      //     demonstrably advancing. readyState and waiting events frequently lag
+      //     behind real decoded progress, which leaves the buffer icon up on
+      //     perfectly healthy playback.
+      const pairProgressing =
+        !vPaused && (!coupledMode || !aPaused) &&
+        (vAdvanced || (coupledMode ? aAdvanced : vAdvanced));
+      if (!inSeek && pairProgressing) {
+        try {
+          if (state.videoWaiting || state.audioWaiting || state.videoStallAudioPaused ||
+            state.audioStallVideoPaused || _bufferGuardSpinnerOn) {
+            state.videoWaiting = false;
+            state.audioWaiting = false;
+            state.videoStallAudioPaused = false;
+            state.audioStallVideoPaused = false;
+            state.stallAudioPausedSince = 0;
+            state.stallAudioResumeHoldUntil = 0;
+            state.videoStallSince = 0;
+            clearForegroundBufferAudioHold();
+            forceClearSeekBufferingUI();
+          }
+        } catch { }
+      }
+
+      // (3) Un-freeze the UI clock. If the controls are pinned well behind the
+      //     real, advancing playback clock (the "stuck at 0:00 / not updating"
+      //     case) snap the display forward to the live position. Forward-only:
+      //     this can never cause a visible backward jump.
+      if (!inSeek && !inTransition && state.firstPlayCommitted) {
+        const liveClock = (!vPaused && isFinite(vt) && vt >= 0)
+          ? vt
+          : ((coupledMode && audio && !aPaused && isFinite(at) && at >= 0) ? at : NaN);
+        if (isFinite(liveClock) && (vAdvanced || aAdvanced) &&
+          liveClock > Number(playerDisplayLastTime || 0) + 1.0) {
+          try {
+            resetPlayerDisplayTimelineClamp(liveClock);
+            paintPlayerTimelineImmediately(liveClock);
+          } catch { }
+        }
+      }
+
+      // Never treat a track that has simply reached the natural end of a
+      // non-looping video as "stuck" — resuming it would replay the tail and
+      // look like the player restarting itself.
+      let nearEnd = false;
+      try {
+        if (terminalEndPlaybackLocked(0) || nativeVideoEnded() ||
+          (coupledMode && audio && audio.ended)) {
+          nearEnd = true;
+        } else {
+          const liveForEnd = isFinite(vt) ? vt : at;
+          nearEnd = mediaNearNaturalEnd(vn, isFinite(liveForEnd) ? liveForEnd : 0, 0.6);
+        }
+      } catch { nearEnd = false; }
+
+      const shouldPlay =
+        state.intendedPlaying &&
+        state.firstPlayCommitted &&
+        !state.startupKickInFlight &&
+        !state.endedNaturally &&
+        !nearEnd &&
+        !inSeek &&
+        !inTransition &&
+        !_recoveryUserWantsPaused();
+
+      // (4) Both tracks idle while we intend to play, the user did not pause,
+      //     and the media has enough buffered data to run: resume. Requires the
+      //     condition to persist so we never fight a momentary, legitimate hold.
+      if (shouldPlay && bothPaused) {
+        const haveData = vReady >= HAVE_FUTURE_DATA &&
+          (!coupledMode || aReady >= HAVE_FUTURE_DATA);
+        if (!_recoveryBothPausedSince) _recoveryBothPausedSince = t;
+        if (haveData && (t - _recoveryBothPausedSince) >= 1200) {
+          _recoveryBothPausedSince = 0;
+          try {
+            state.strictBufferHold = false;
+            state.videoWaiting = false;
+            state.videoStallAudioPaused = false;
+            state.stallAudioPausedSince = 0;
+            state.stallAudioResumeHoldUntil = 0;
+            clearBufferHold();
+            clearForegroundBufferAudioHold();
+            forceClearSeekBufferingUI();
+          } catch { }
+          try { playTogether({ skipBufferGate: true }).catch(() => { }); } catch { }
+        }
+      } else {
+        _recoveryBothPausedSince = 0;
+      }
+
+      // (5) Video is running but audio is stuck silent with data ready (the
+      //     "audio doesn't play after seeking" case). Drop the audio-pause
+      //     locks and make it play.
+      if (shouldPlay && coupledMode && audio && !vPaused && aPaused) {
+        if (!_recoveryAudioPausedSince) _recoveryAudioPausedSince = t;
+        if (aReady >= HAVE_CURRENT_DATA && (t - _recoveryAudioPausedSince) >= 900) {
+          _recoveryAudioPausedSince = 0;
+          try {
+            state.videoStallAudioPaused = false;
+            state.stallAudioPausedSince = 0;
+            state.stallAudioResumeHoldUntil = 0;
+            state.audioPauseUntil = 0;
+            clearForegroundBufferAudioHold();
+          } catch { }
+          try { enforceAudioPlayback(false); } catch { }
+        }
+      } else {
+        _recoveryAudioPausedSince = 0;
+      }
+
+      // (6) Self-rewind / repeating-section guard. During steady, user-idle
+      //     playback the live clock should only move forward. A meaningful
+      //     backward jump with no active seek/transition means a stale latched
+      //     seek/return target is re-asserting an old position — the cause of
+      //     "rewinds itself a few seconds" and "repeats the same section". Drop
+      //     those stale anchors so it stops recurring. We never issue a seek of
+      //     our own; the user simply continues from where playback landed.
+      const livePos =
+        (!vPaused && isFinite(vt) && vt >= 0) ? vt
+        : ((coupledMode && audio && !aPaused && isFinite(at) && at >= 0) ? at : NaN);
+      if (state.firstPlayCommitted && state.intendedPlaying &&
+        !inSeek && !inTransition && !_recoveryUserWantsPaused() &&
+        !nearEnd && !managedLoopRestartTransitionActive() &&
+        (t - Number(state.lastUserActionTime || 0)) > 2000 &&
+        isFinite(livePos) && isFinite(_recoveryLastLivePos) &&
+        livePos < _recoveryLastLivePos - 1.2) {
+        try {
+          state.explicitSeekTarget = null;
+          state.explicitSeekUntil = 0;
+          state.explicitSeekCorrectionCount = 0;
+          state.mediaSessionSeekTarget = NaN;
+          state.mediaSessionSeekUntil = 0;
+          state.transportPositionTarget = NaN;
+          state.transportPositionUntil = 0;
+          state.transportPositionCommitted = false;
+          state.seekDisplayTarget = NaN;
+          state.seekDisplayTargetUntil = 0;
+          state.pendingSeekTarget = null;
+          clearSeekbarStableTarget();
+          clearForegroundReturnTimelineAuthority("recovery-self-rewind");
+          // Re-anchor the trusted timeline to where playback actually is so the
+          // backward-write guards protect the new position instead of yanking
+          // back toward the stale one.
+          state.lastKnownGoodVT = livePos;
+          state.lastKnownGoodVTts = t;
+          state.monotonicVideoTime = livePos;
+          state.monotonicVideoTimeAt = t;
+          resetPlayerDisplayTimelineClamp(livePos);
+          paintPlayerTimelineImmediately(livePos);
+        } catch { }
+      }
+      _recoveryLastLivePos = isFinite(livePos) ? livePos : _recoveryLastLivePos;
+
+      _recoveryLastVt = vt;
+      _recoveryLastAt = at;
+      healthy =
+        !bothPaused &&
+        !inSeek &&
+        (vAdvanced || aAdvanced) &&
+        !state.videoWaiting &&
+        !state.videoStallAudioPaused &&
+        !state.strictBufferHold &&
+        !_bufferGuardSpinnerOn;
+    } catch { }
+    finally {
+      const delay = healthy ? 1500 : 600;
+      _recoveryWatchdogTimer = setTimeout(_recoveryTick, delay);
+    }
+  }
+  function installStuckPlaybackRecovery() {
+    if (_recoveryWatchdogTimer) return;
+    _recoveryWatchdogTimer = setTimeout(_recoveryTick, 1200);
+  }
   function setupHeartbeat() {
     state.lastHeartbeatAt = now();
     const beat = () => {
@@ -34572,11 +34830,13 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         if (!rect || !isFinite(clientX) || !isFinite(dur) || dur <= 0 || rect.width <= 0) return NaN;
         const rawRatio = (clientX - rect.left) / rect.width;
         const ratio = Math.max(0, Math.min(1, rawRatio));
-        // The final physical pixels are the exact-end target. Requiring the
-        // pointer's floating-point ratio to equal precisely 1 made the true
-        // duration practically unreachable on scaled/mobile layouts.
-        const endHitSlop = Math.max(10, Math.min(18, rect.width * 0.012));
-        if (clientX >= rect.right - endHitSlop || rawRatio >= 0.99) return dur;
+        // Only the final physical pixels are the exact-end target. A pixel slop
+        // keeps the true duration reachable on scaled/mobile layouts. A
+        // percentage snap (e.g. rawRatio >= 0.99) must NOT be used: on a long
+        // video 1% is tens of seconds, which made the whole tail of the video
+        // impossible to seek into — it all jumped to the end.
+        const endHitSlop = Math.max(8, Math.min(14, rect.width * 0.006));
+        if (clientX >= rect.right - endHitSlop) return dur;
         const target = ratio * dur;
         return target;
       } catch { return NaN; }
@@ -41947,6 +42207,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
   setupMediaErrorHandlers();
   setupHeartbeat();
   startBufferMonitor();
+  try { installStuckPlaybackRecovery(); } catch { }
   if (coupledMode) {
     try {
       audio.preload = "auto";
