@@ -119,6 +119,109 @@ document.addEventListener("DOMContentLoaded", () => {
                           destroy: null
   };
   window[PLAYER_RUNTIME_KEY] = runtimeRecord;
+  (function installCpuStormGovernor() {
+    try {
+      if (window.__playerCpuGovernorInstalled) return;
+      window.__playerCpuGovernorInstalled = true;
+      const _setTimeout = window.setTimeout.bind(window);
+      const _setInterval = window.setInterval.bind(window);
+      const _qmt = (typeof window.queueMicrotask === "function")
+        ? window.queueMicrotask.bind(window)
+        : (fn) => { Promise.resolve().then(fn); };
+      const WINDOW_MS = 1000;
+      const STORM_ON = 300;   // schedules/sec to enter storm mode (well above normal ~100/s peak)
+      const STORM_OFF = 120;  // schedules/sec to leave storm mode
+      const MIN_GAP_MS = 4;   // during storm, space schedules ≥4ms apart (~250/s cap)
+      let winStart = performance.now();
+      let winCount = 0;
+      let stormMode = false;
+      let nextSlot = 0;
+      let stormEntries = 0;
+      const report = Object.create(null);
+      window.__playerStormReport = report;
+      window.__playerStormReportTop = () =>
+        Object.keys(report).map(k => [k, report[k]]).sort((a, b) => b[1] - a[1]).slice(0, 12);
+      function captureSite() {
+        try {
+          const stack = (new Error().stack || "").split("\n");
+          for (let i = 2; i < stack.length && i < 16; i++) {
+            const line = stack[i];
+            if (line &&
+                line.indexOf("installCpuStormGovernor") === -1 &&
+                line.indexOf("governedDelay") === -1 &&
+                line.indexOf("captureSite") === -1) {
+              return line.trim().replace(/^at\s+/, "").slice(0, 200);
+            }
+          }
+        } catch { }
+        return "unknown";
+      }
+      function roll(now) {
+        if (now - winStart >= WINDOW_MS) {
+          const rate = winCount * 1000 / (now - winStart);
+          if (!stormMode && rate > STORM_ON) {
+            stormMode = true;
+            stormEntries++;
+            report.__stormCount = stormEntries;
+            report.__lastRate = Math.round(rate);
+            try { window.__playerStormActive = true; } catch { }
+          } else if (stormMode && rate < STORM_OFF) {
+            stormMode = false;
+            try { window.__playerStormActive = false; } catch { }
+          }
+          winStart = now;
+          winCount = 0;
+        }
+      }
+      function governedDelay(requested) {
+        const now = performance.now();
+        winCount++;
+        roll(now);
+        let delay = Math.max(0, Number(requested) || 0);
+        if (stormMode) {
+          if ((winCount & 15) === 0) {
+            const s = captureSite();
+            report[s] = (report[s] || 0) + 16;
+          }
+          const slot = Math.max(now, nextSlot);
+          const stretch = slot - now;
+          nextSlot = slot + MIN_GAP_MS;
+          if (stretch > delay) delay = stretch;
+        }
+        return delay;
+      }
+      window.setTimeout = function (fn, delay) {
+        if (typeof fn !== "function") return _setTimeout.apply(window, arguments);
+        const rest = arguments.length > 2 ? Array.prototype.slice.call(arguments, 2) : null;
+        const d = governedDelay(delay);
+        return rest ? _setTimeout.apply(window, [fn, d].concat(rest)) : _setTimeout(fn, d);
+      };
+      window.setInterval = function (fn, delay) {
+        if (typeof fn !== "function") return _setInterval.apply(window, arguments);
+        winCount++; roll(performance.now());
+        let d = Math.max(0, Number(delay) || 0);
+        if (d < 16) d = 16; // nothing here legitimately needs a sub-16ms interval
+        const rest = arguments.length > 2 ? Array.prototype.slice.call(arguments, 2) : null;
+        return rest ? _setInterval.apply(window, [fn, d].concat(rest)) : _setInterval(fn, d);
+      };
+      window.queueMicrotask = function (fn) {
+        if (typeof fn !== "function") return _qmt(fn);
+        const now = performance.now();
+        winCount++; roll(now);
+        if (stormMode) {
+          if ((winCount & 15) === 0) {
+            const s = captureSite();
+            report[s] = (report[s] || 0) + 16;
+          }
+          const slot = Math.max(now, nextSlot);
+          nextSlot = slot + MIN_GAP_MS;
+          _setTimeout(fn, Math.max(0, slot - now));
+          return;
+        }
+        return _qmt(fn);
+      };
+    } catch { }
+  })();
   const managedStartupAutoplay = true; // preserves the previous player option through the coordinated starter
   const video = videojs("video", {
     controls: true,
