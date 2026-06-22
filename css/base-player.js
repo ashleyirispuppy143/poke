@@ -42140,6 +42140,13 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     _targetVolCacheAt = 0;
     updateAudioGainImmediate(true);
     saveVolume(_hiddenVolumeChange || state.seeking || state.seekBuffering || state.restarting);
+    // A volume change can make Video.js repaint its own progress bar/time to the
+    // raw (possibly 0) video clock and stomp our manual timeline. Reclaim it.
+    // (paint refreshes the element cache itself, so no forced refresh here.)
+    if (!_hiddenVolumeChange) {
+      try { forcePlayerTimelinePaint("volume-change", NaN, { invalidate: true }); } catch { }
+      try { queuePlayerTimeDisplayUpdate(); } catch { }
+    }
   });
   if (coupledMode) {
     try {
@@ -42332,6 +42339,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     let stuckBufferSince = 0;
     let audioMutedSince = 0;
     let videoPausedSince = 0;
+    let restartStuckSince = 0;
     // Recovery for "video plays but audio/bar is stuck after a seek". Clears the
     // seek latches, rejoins audio to the live clock, and repaints the UI.
     const forceResumeAudioAndUnfreeze = (liveVt, reason) => {
@@ -42520,6 +42528,88 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         } else videoAliveSince = 0;
         const videoTrulyLive = !!videoAliveSince && (t - videoAliveSince) >= 250;
 
+        // Stuck restart: after a loop/replay the audio runs but the video never
+        // starts and the spinner stays up forever (video left at the ended frame
+        // with its play() going nowhere). Wait long enough that a normal restart
+        // has finished, then reset the video to the audio position and play it.
+        // This runs even while a restart "owns" the transport, since the whole
+        // problem is that the restart never completes.
+        {
+          let restartActive = false;
+          try {
+            restartActive = !!state.restarting ||
+              restartFromEndedGuardActive() ||
+              (SeekPlaybackCommitController.activeRestart && SeekPlaybackCommitController.activeRestart());
+          } catch { restartActive = false; }
+          const audioRunning = coupledMode && audio && !audio.paused &&
+            (audioAdvancing || Number(audio.currentTime) > 0.25);
+          const videoStuck = vn && vn.paused;
+          if (restartActive && intended && audioRunning && videoStuck &&
+            !hidden && !state.seekDragActive &&
+            (typeof userPauseLockActive !== "function" || !userPauseLockActive())) {
+            needFast = true;
+            if (!restartStuckSince) restartStuckSince = t;
+            else if ((t - restartStuckSince) > 2500) {
+              restartStuckSince = 0;
+              try { SeekPlaybackCommitController.cancel("supervisor-restart-stuck", { preserveSeekState: false }); } catch { }
+              try {
+                state.restarting = false;
+                state.restartFromEndedUntil = 0;
+                state.endedNaturally = false;
+                state.seeking = false;
+                state.seekBuffering = false;
+                state.seekResumeInFlight = false;
+                state.strictBufferHold = false;
+                state.videoWaiting = false;
+              } catch { }
+              try { if (typeof clearBufferHold === "function") clearBufferHold(); } catch { }
+              try { state.hardPairGateActive = false; } catch { }
+              try { if (coupledMode && audio && audio.muted) audio.muted = false; } catch { }
+              // Put the video at the audio's position (this also clears its ended
+              // state) and start it.
+              try {
+                const at = Number(audio.currentTime);
+                const pos = isFiniteNum(at) && at >= 0 ? at : 0;
+                state._allowUnexpectedVideoTimeRestore = true;
+                if (vn) vn.currentTime = pos;
+                if (videoEl && videoEl !== vn) videoEl.currentTime = pos;
+                state._allowUnexpectedVideoTimeRestore = false;
+              } catch { state._allowUnexpectedVideoTimeRestore = false; }
+              try {
+                if (vn) {
+                  const vp = HTMLMediaElement.prototype.play.call(vn);
+                  if (vp && typeof vp.catch === "function") vp.catch(() => { });
+                }
+              } catch { }
+              try { if (typeof forceClearSeekBufferingUI === "function") forceClearSeekBufferingUI(); } catch { }
+              try { if (typeof forcePlayerTimelinePaint === "function") forcePlayerTimelinePaint("supervisor-restart-stuck", Number(audio?.currentTime) || 0, { invalidate: true }); } catch { }
+            }
+          } else restartStuckSince = 0;
+        }
+
+        // Fast unmute: if the audio clock is genuinely advancing but the element
+        // is still muted (and the user didn't mute), the seek already resolved
+        // and the pop-guard just never lifted. Safe to unmute right away — runs
+        // even mid-commit because advancing audio means there's nothing to guard.
+        if (coupledMode && audio && audio.muted && audioAdvancing &&
+          intended && committed && !hidden &&
+          !state.userMutedAudio && !state.userMutedVideo &&
+          !(typeof getVideoMutedState === "function" && getVideoMutedState()) &&
+          !(typeof playerMutedFromVideo === "function" && playerMutedFromVideo())) {
+          try { state.hardPairGateActive = false; } catch { }
+          try {
+            if (typeof clearHardPairTransitionGate === "function") {
+              clearHardPairTransitionGate(state.hardPairGateOwner || "", true, { restore: false });
+            }
+          } catch { }
+          try { audio.muted = false; } catch { }
+          try {
+            if (typeof setAudioPlaybackVolume === "function") {
+              setAudioPlaybackVolume(targetVolFromVideo(), "supervisor-fast-unmute", { immediate: true, cancelFade: true });
+            }
+          } catch { }
+        }
+
         // Stay out of the way while the commit controller owns the transport.
         // It has its own retry/backstop, and if we clear its latches under it it
         // reads the pair as stalled and re-seeks (the old "pauses itself and
@@ -42546,6 +42636,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           stalledPlayIntentSince = 0; stuckBufferSince = 0;
           audioMutedSince = 0; videoPausedSince = 0;
           lastFrozenBarText = ""; lastForwardTime = -1; lastForwardAt = 0;
+          // restartStuckSince is handled by its own detector above this gate.
           supervisorTimer = setTimeout(supervisorTick, TICK_ACTIVE_MS);
           return;
         }
@@ -42747,7 +42838,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             const looksBuffering = !!(state.seekBuffering || state.strictBufferHold || state.videoWaiting || state.audioWaiting);
             if (looksBuffering && intended && committed && !hidden) {
               if (!bufferingForeverSince) bufferingForeverSince = t;
-              else if ((t - bufferingForeverSince) > 6000 && (t - lastSupervisorHealAt) > 1500) {
+              else if ((t - bufferingForeverSince) > 3500 && (t - lastSupervisorHealAt) > 1500) {
                 const audioReady = !coupledMode || !audio || Number(audio.readyState || 0) >= 2;
                 const videoReady = !vn || Number(vn.readyState || 0) >= 2;
                 if (audioReady && videoReady) {
