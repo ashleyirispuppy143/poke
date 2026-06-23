@@ -10021,9 +10021,12 @@ startupPrimeStartedAt: performance.now(),
       playerTimelineRefreshBurstTimers.push(timer);
       return true;
     }
+    // Fewer paints per burst — 7 was overkill and made every transition (start,
+    // tab return, seek, play/pause) noticeably heavier. The regular timeupdate
+    // loop fills the gaps; these just smooth the settle.
     const defaultDelays = perfProfile.lowEnd
-    ? [0, 80, 180, 360, 720, 1200, 1800]
-    : [0, 45, 120, 260, 520, 900, 1400];
+    ? [0, 200, 650, 1500]
+    : [0, 120, 420, 1000];
     const delays = Array.isArray(opts.delays) && opts.delays.length ? opts.delays : defaultDelays;
     const firstTarget = Number(targetHint);
     delays.forEach((delay, index) => {
@@ -13121,6 +13124,17 @@ startupPrimeStartedAt: performance.now(),
     try { const vn = getVideoNode(); if (vn) vn.preload = "auto"; } catch { }
     try { if (coupledMode && audio) audio.preload = "auto"; } catch { }
     if (coupledMode && audio) primeAudioForManagedRestart(0, "manual-ended-restart");
+    // Take the video off its ended frame right now so the replay can't start
+    // from the last frame (the "restart doesn't actually start from 00:00" bug).
+    try {
+      const _rvn = getVideoNode();
+      state._allowUnexpectedVideoTimeRestore = true;
+      state._isMicroSeek = true;
+      if (_rvn && Number(_rvn.currentTime) > 0.05) _rvn.currentTime = 0;
+      if (videoEl && videoEl !== _rvn && Number(videoEl.currentTime) > 0.05) videoEl.currentTime = 0;
+      state._allowUnexpectedVideoTimeRestore = false;
+      try { scheduleMicroSeekClear(300); } catch { }
+    } catch { state._allowUnexpectedVideoTimeRestore = false; }
     state.playSessionId = Number(state.playSessionId || 0) + 1;
     try { detachStaleMediaPlayFlights(state.playSessionId); } catch { }
     const accepted = SeekPlaybackCommitController.restart(0);
@@ -42137,6 +42151,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       }, delay);
     });
   }
+  let _volumeTimelineRefreshTimer = null;
   video.on("volumechange", () => {
     const _hiddenVolumeChange = document.visibilityState === "hidden";
     if (state.audioFading && !_applyingPlayerVolumeSnapshot && !audioPopGuardActive(160)) cancelActiveFade();
@@ -42152,12 +42167,17 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     _targetVolCacheAt = 0;
     updateAudioGainImmediate(true);
     saveVolume(_hiddenVolumeChange || state.seeking || state.seekBuffering || state.restarting);
-    // A volume change can make Video.js repaint its own progress bar/time to the
-    // raw (possibly 0) video clock and stomp our manual timeline. Reclaim it.
-    // (paint refreshes the element cache itself, so no forced refresh here.)
-    if (!_hiddenVolumeChange) {
-      try { forcePlayerTimelinePaint("volume-change", NaN, { invalidate: true }); } catch { }
-      try { queuePlayerTimeDisplayUpdate(); } catch { }
+    // A volume change can briefly knock the manual timeline off its value. Do a
+    // single repaint AFTER the volume settles (a slider drag fires many events)
+    // so we don't repaint per-event — that flickered the time display and spiked
+    // CPU. Coalescing also means the bar never visibly moves on a volume change.
+    if (!_hiddenVolumeChange && !_volumeTimelineRefreshTimer) {
+      _volumeTimelineRefreshTimer = setTimeout(() => {
+        _volumeTimelineRefreshTimer = null;
+        if (!playerUiUpdateUsefulNow()) return;
+        try { forcePlayerTimelinePaint("volume-settled", NaN, { invalidate: false }); } catch { }
+        try { queuePlayerTimeDisplayUpdate(); } catch { }
+      }, 220);
     }
   });
   if (coupledMode) {
@@ -42323,8 +42343,8 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
   // both tracks paused while ready) and nudge it back to playing. Stays out of
   // the way while a seek/restart is actually in progress.
   (function installPlayerSymptomSupervisor() {
-    const TICK_ACTIVE_MS = perfProfile.lowEnd ? 600 : 380;
-    const TICK_IDLE_MS = perfProfile.lowEnd ? 2200 : 1500;
+    const TICK_ACTIVE_MS = perfProfile.lowEnd ? 700 : 480;
+    const TICK_IDLE_MS = perfProfile.lowEnd ? 3000 : 2000;
     let supervisorTimer = null;
     let lastForwardTime = -1;
     let lastForwardAt = 0;
@@ -42478,15 +42498,18 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       } catch { return false; }
     };
     const isFiniteNum = (v) => typeof v === "number" && isFinite(v);
+    let _timeDispEl = null;
     const getCurrentTimeDisplayText = () => {
       try {
-        const root = video?.el?.() || videoEl?.parentElement || null;
-        if (!root) return "";
-        const disp = root.querySelector(".vjs-current-time-display") ||
-        root.querySelector(".vjs-time-display .vjs-current-time-display") ||
-        root.querySelector(".vjs-current-time .vjs-current-time-display");
-        if (!disp) return "";
-        return (disp.textContent || "").trim();
+        if (!_timeDispEl || _timeDispEl.isConnected === false) {
+          const root = video?.el?.() || videoEl?.parentElement || null;
+          if (!root) return "";
+          _timeDispEl = root.querySelector(".vjs-current-time-display") ||
+          root.querySelector(".vjs-time-display .vjs-current-time-display") ||
+          root.querySelector(".vjs-current-time .vjs-current-time-display");
+        }
+        if (!_timeDispEl) return "";
+        return (_timeDispEl.textContent || "").trim();
       } catch { return ""; }
     };
     const looksLikeZeroDisplay = (txt) => {
@@ -42557,13 +42580,15 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           } catch { restartActive = false; }
           const audioRunning = coupledMode && audio && !audio.paused &&
             (audioAdvancing || Number(audio.currentTime) > 0.25);
-          const videoStuck = vn && vn.paused;
+          // Stuck = video paused OR frozen on the ended frame (paused===false
+          // but not advancing) while the audio replays.
+          const videoStuck = vn && (vn.paused || !videoAdvancing);
           if (restartActive && intended && audioRunning && videoStuck &&
             !hidden && !state.seekDragActive &&
             (typeof userPauseLockActive !== "function" || !userPauseLockActive())) {
             needFast = true;
             if (!restartStuckSince) restartStuckSince = t;
-            else if ((t - restartStuckSince) > 2500) {
+            else if ((t - restartStuckSince) > 1500) {
               restartStuckSince = 0;
               try { SeekPlaybackCommitController.cancel("supervisor-restart-stuck", { preserveSeekState: false }); } catch { }
               try {
@@ -42579,24 +42604,46 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
               try { if (typeof clearBufferHold === "function") clearBufferHold(); } catch { }
               try { state.hardPairGateActive = false; } catch { }
               try { if (coupledMode && audio && audio.muted) audio.muted = false; } catch { }
-              // Put the video at the audio's position (this also clears its ended
-              // state) and start it.
-              try {
+              // Restore to the restart's intended target, not wherever the audio
+              // has drifted to. A from-ended restart wants 0:00 — if we synced the
+              // video to the audio's advanced position the replay would start
+              // mid-way. For a near-zero restart, snap BOTH tracks back to it.
+              let restartPos = (() => {
+                const st = Number(state.seekTargetTime);
+                const sct = Number(state.seekCommitTarget);
+                if (isFiniteNum(st) && st >= 0 && st < 1.0) return st;
+                if (isFiniteNum(sct) && sct >= 0 && sct < 1.0) return sct;
                 const at = Number(audio.currentTime);
-                const pos = isFiniteNum(at) && at >= 0 ? at : 0;
+                return isFiniteNum(at) && at >= 0 ? at : 0;
+              })();
+              try {
                 state._allowUnexpectedVideoTimeRestore = true;
-                if (vn) vn.currentTime = pos;
-                if (videoEl && videoEl !== vn) videoEl.currentTime = pos;
+                if (vn) vn.currentTime = restartPos;
+                if (videoEl && videoEl !== vn) videoEl.currentTime = restartPos;
                 state._allowUnexpectedVideoTimeRestore = false;
               } catch { state._allowUnexpectedVideoTimeRestore = false; }
+              // If we snapped back to a near-zero restart, bring the audio with it
+              // so the pair replays together from the start.
+              try {
+                if (restartPos < 1.0 && coupledMode && audio &&
+                  Math.abs(Number(audio.currentTime) - restartPos) > 0.3) {
+                  state._allowAudioTimeWrite = true;
+                  audio.currentTime = restartPos;
+                  state._allowAudioTimeWrite = false;
+                }
+              } catch { state._allowAudioTimeWrite = false; }
               try {
                 if (vn) {
                   const vp = HTMLMediaElement.prototype.play.call(vn);
                   if (vp && typeof vp.catch === "function") vp.catch(() => { });
                 }
+                if (coupledMode && audio && audio.paused) {
+                  const ap = HTMLMediaElement.prototype.play.call(audio);
+                  if (ap && typeof ap.catch === "function") ap.catch(() => { });
+                }
               } catch { }
               try { if (typeof forceClearSeekBufferingUI === "function") forceClearSeekBufferingUI(); } catch { }
-              try { if (typeof forcePlayerTimelinePaint === "function") forcePlayerTimelinePaint("supervisor-restart-stuck", Number(audio?.currentTime) || 0, { invalidate: true }); } catch { }
+              try { if (typeof forcePlayerTimelinePaint === "function") forcePlayerTimelinePaint("supervisor-restart-stuck", restartPos, { invalidate: true }); } catch { }
             }
           } else restartStuckSince = 0;
         }
@@ -42634,8 +42681,10 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             SeekPlaybackCommitController.activeRestart();
         } catch { commitActive = false; }
         if (commitActive) commitLastActiveAt = t;
+        // Grace after the controller goes idle so its pair-sync settle isn't
+        // disturbed — kept short so a slow seek's audio gets nudged sooner.
         const commitOwnsTransport = commitActive ||
-          (commitLastActiveAt > 0 && (t - commitLastActiveAt) < 2500);
+          (commitLastActiveAt > 0 && (t - commitLastActiveAt) < 1500);
         // Only back off for things that actively fight us: the commit
         // controller, a live drag, or a restart. Not the userSeekIntent window
         // or the passive seek latches — that's when the stuck hold lingers.
@@ -42854,24 +42903,30 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           }
         } else { frozenBarSince = 0; lastFrozenBarText = ""; }
 
-        // Display still pinned to a finished seek's target while the live clock
-        // has clearly moved past it — the "bar/time updates really late after a
-        // seek" case. Release it as soon as the live position is provably ahead.
+        // Seekbar/time pinned to the seek target after the seek already landed —
+        // the "bar/time update late after seeking" case. Release the pin the
+        // moment the seeked media has reached the target and is advancing, even
+        // if a seek flag is still (stalely) set. We confirm the media actually
+        // landed (clock at/just past the target, not the old far-away position),
+        // so this never fires mid-seek or on a backward seek's stale clock.
         try {
           const dispTarget = Number(state.seekDisplayTarget);
           const dispActive = isFiniteNum(dispTarget) && dispTarget >= 0 &&
             t < Number(state.seekDisplayTargetUntil || 0);
-          if (dispActive && intended && !state.seekDragActive && !state.seeking &&
-            !state.seekBuffering && !state.seekResumeInFlight && state.pendingSeekTarget == null &&
+          if (dispActive && intended && !state.seekDragActive && !nativeSeeking &&
             (videoTrulyLive || audioAdvancing)) {
-            const liveNow = (audioAdvancing && audio) ? Number(audio.currentTime) : vt;
-            if (isFiniteNum(liveNow) && liveNow > dispTarget + 0.4) {
+            const liveNow = (coupledMode && audio && audioAdvancing)
+              ? Number(audio.currentTime) : vt;
+            const landedAndAdvancing = isFiniteNum(liveNow) &&
+              liveNow >= dispTarget - 0.4 && liveNow <= dispTarget + 3.0;
+            if (landedAndAdvancing) {
               state.seekDisplayTarget = NaN;
               state.seekDisplayTargetUntil = 0;
               state.seekbarStableTarget = NaN;
               state.seekbarStableUntil = 0;
               try { if (typeof forcePlayerTimelinePaint === "function") forcePlayerTimelinePaint("supervisor-stale-seek-display", liveNow, { invalidate: true }); } catch { }
               try { if (typeof ensurePlayerTimelineRefresh === "function") ensurePlayerTimelineRefresh(); } catch { }
+              needFast = true;
             }
           }
         } catch { }
