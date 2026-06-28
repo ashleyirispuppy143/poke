@@ -1,22 +1,22 @@
 <!--
-    This Source Code Form is subject to the terms of the GNU General Public License:
-   
-    Copyright (C) 2021-2025 PokeTube Of Poke Project, a part of The Poke Project Initiative (initiative.poketube.fun) 
-    source code :https://codeberg.org/ashleyirispuppy/poke
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program. If not, see https://www.gnu.org/licenses/.
--->
+	    This Source Code Form is subject to the terms of the GNU General Public License:
+	   
+	    Copyright (C) 2021-2025 PokeTube Of Poke Project, a part of The Poke Project Initiative (initiative.poketube.fun) 
+	    source code :https://codeberg.org/ashleyirispuppy/poke
+	
+	    This program is free software: you can redistribute it and/or modify
+	    it under the terms of the GNU General Public License as published by
+	    the Free Software Foundation, either version 3 of the License, or
+	    (at your option) any later version.
+	
+	    This program is distributed in the hope that it will be useful,
+	    but WITHOUT ANY WARRANTY; without even the implied warranty of
+	    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	    GNU General Public License for more details.
+	
+	    You should have received a copy of the GNU General Public License
+	    along with this program. If not, see https://www.gnu.org/licenses/.
+	-->
 <%
   const playlist = typeof p !== "undefined" && p !== null && typeof p === "object" ? p : null;
   const hasPlaylist = playlist !== null;
@@ -35,7 +35,9 @@
 
   let firstVideoId = null;
 
-  if (playlistThumbnail && playlistThumbnail.includes("/vi/")) {
+  if (playlistVideos && playlistVideos.length > 0 && playlistVideos[0].videoId) {
+    firstVideoId = playlistVideos[0].videoId;
+  } else if (playlistThumbnail && playlistThumbnail.includes("/vi/")) {
     firstVideoId = playlistThumbnail.split("/vi/")[1].split("/")[0];
   }
 %>
@@ -49,7 +51,9 @@
     <meta name="viewport" content="width=device-1200px, initial-scale=1.0, shrink-to-fit=yes, viewport-fit=cover">
     <meta content="Poke - <%- playlistTitle %>" property=og:title>
     <meta content="<%- playlistDescription %>" property=twitter:description>
-    <% if (playlistThumbnail) { %>
+    <% if (firstVideoId) { %>
+    <meta content="<%- proxyBase %>https://i.ytimg.com/vi/<%- firstVideoId %>/hqdefault.jpg" property="og:image" />
+    <% } else if (playlistThumbnail) { %>
     <meta content="<%- proxyBase %><%- playlistThumbnail %>" property="og:image" />
     <% } %>
     <meta content=summary_large_image name=twitter:card>
@@ -186,7 +190,7 @@ font-family:Ubuntu
   top:0;
 }
 
-<% if (playlistThumbnail) { %>
+<% if (firstVideoId) { %>
 .playlist-info::before {
   content: '';
   position: absolute;
@@ -198,7 +202,22 @@ font-family:Ubuntu
   filter: blur(53px);
   backdrop-filter: blur(157px);
   z-index: -1;
-  background-image: url(<%- proxyBase %><%- playlistThumbnail %>?sqp=-oaymwEWCKgBEF5IWvKriqkDCQgBFQAAiEIYAQ==&rs=AOn4CLA9kTQiXKs92q5RXRPYMkL6jKhNJQsqp=-oaymwEXCNACELwBSFryq4qpAwkIARUAAIhCGAE=&amp;rs=AOn4CLCLG7gzsIdtlp7ugZJH8YaAHX5bIw&amp;days_since_epoch=19755);
+  background-image: url('<%- proxyBase %>https://i.ytimg.com/vi/<%- firstVideoId %>/hqdefault.jpg');
+  margin-left: 82px;
+}
+<% } else if (playlistThumbnail) { %>
+.playlist-info::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 13em;
+  height: 447px;
+  background-size: cover;
+  filter: blur(53px);
+  backdrop-filter: blur(157px);
+  z-index: -1;
+  background-image: url('<%- proxyBase %><%- playlistThumbnail %>');
   margin-left: 82px;
 }
 <% } %>
@@ -261,11 +280,10 @@ font-family:Ubuntu
 <% if (hasPlaylist) { %>
 <div class="playlist-page" style="margin-left: auto;margin-right: auto;width: 56em;">
 <div class="playlist-info" style="max-height: fit-content;border-radius: 1em;">
-            <% if (!playlistMixId && playlistThumbnail) { %>  
-		<a href="/watch?v=<%= firstVideoId || '' %>" class="thumbnail" style="background-image: url('<%- proxyBase %><%- playlistThumbnail %>sqp=-oaymwEXCNACELwBSFryq4qpAwkIARUAAIhCGAE=&amp;rs=AOn4CLCLG7gzsIdtlp7ugZJH8YaAHX5bIw&amp;days_since_epoch=19755');border-radius: 13px;border: 1px solid #ff0064">
+      <% if (!playlistMixId && firstVideoId) { %>  
+		<a href="/watch?v=<%- firstVideoId %>" class="thumbnail" style="background-image: url('<%- proxyBase %>https://i.ytimg.com/vi/<%- firstVideoId %>/hqdefault.jpg');border-radius: 13px;border: 1px solid #ff0064">
         <span class="hover-text">Watch :3</span>
 		</a>	
-    
       <% } %>
 
 		<p class="title"><%- playlistTitle %> </p>
