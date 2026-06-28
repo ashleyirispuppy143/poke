@@ -43,9 +43,6 @@ app.get("/terms-of-service", (req, res) => {
   res.redirect(301, "/policies/code-of-conduct");
 });
   
-app.get("/ribbon", (req, res) => {
-  res.redirect(301, "https://apnews.com/article/turkey-school-gunfire-9ba3a4a9512bf7b4c36b19077b53f705");
-});
 
 const tosRedirects = [
   "/tos",
@@ -320,10 +317,7 @@ app.get("/playlist", async function (req, res) {
   if (!req.query.list) return res.redirect("/");
   if (req.useragent && req.useragent.isMobile) return res.redirect("/");
 
-  let mediaproxy = config.media_proxy;
-  if (req.useragent && req.useragent.source && req.useragent.source.includes("Pardus")) {
-    mediaproxy = "https://media-proxy.ashley0143.xyz";
-  }
+  const mediaproxy = config.media_proxy;
 
   let p = null;
   let lastError = null;
@@ -351,11 +345,20 @@ app.get("/playlist", async function (req, res) {
       if (p) break;
     } catch (error) {
       lastError = error;
+      
+       if (error.message === "HTTP 404") {
+        break;
+      }
+      
       attempts++;
     }
   }
 
   if (!p) {
+     if (lastError && lastError.message === "HTTP 404") {
+      return res.redirect("/home");
+    }
+
     const errorStack = lastError ? (lastError.stack || lastError.message || String(lastError)) : "Failed to load playlist after retries.";
     const htmlErrorPage = `
       <!DOCTYPE html>
