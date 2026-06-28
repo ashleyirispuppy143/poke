@@ -17,7 +17,7 @@
 	    You should have received a copy of the GNU General Public License
 	    along with this program. If not, see https://www.gnu.org/licenses/.
 	-->
-<%
+ <%
   const playlist = typeof p !== "undefined" && p !== null && typeof p === "object" ? p : null;
   const hasPlaylist = playlist !== null;
 
@@ -40,6 +40,12 @@
   } else if (playlistThumbnail && playlistThumbnail.includes("/vi/")) {
     firstVideoId = playlistThumbnail.split("/vi/")[1].split("/")[0];
   }
+
+  // Dynamically calculate max-height and overflow based on description length 
+  // so long descriptions don't break the sticky layout
+  const descLength = playlistDescription.length;
+  const dynamicMaxHeight = descLength > 200 ? '90vh' : 'fit-content';
+  const dynamicOverflow = descLength > 200 ? 'auto' : 'visible';
 %>
 <!DOCTYPE html>
 <html style="background:#000000">
@@ -279,7 +285,7 @@ font-family:Ubuntu
 
 <% if (hasPlaylist) { %>
 <div class="playlist-page" style="margin-left: auto;margin-right: auto;width: 56em;">
-<div class="playlist-info" style="max-height: fit-content;border-radius: 1em;">
+<div class="playlist-info" style="max-height: <%- dynamicMaxHeight %>; overflow-y: <%- dynamicOverflow %>; border-radius: 1em;">
       <% if (!playlistMixId && firstVideoId) { %>  
 		<a href="/watch?v=<%- firstVideoId %>" class="thumbnail" style="background-image: url('<%- proxyBase %>https://i.ytimg.com/vi/<%- firstVideoId %>/hqdefault.jpg');border-radius: 13px;border: 1px solid #ff0064">
         <span class="hover-text">Watch :3</span>
