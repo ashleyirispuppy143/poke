@@ -4563,9 +4563,12 @@ startupPrimeStartedAt: performance.now(),
   let _tabReturnMicroSeekDone = false;
   let _preHideTime = -1;        // video.currentTime captured on visibilitychange→hidden
   let _wasPlayingBeforeHide = false;
-  const WATCHDOG_MS = perfProfile.lowEnd ? 700 : 400;
+  const WATCHDOG_MS = perfProfile.lowEnd ? 800 : 500;
   const STALL_KICK_COOLDOWN_MS = 350;
-  const RAF_SKIP_INTERVAL_MS = perfProfile.lowEnd ? 260 : 140;
+  // Frame-monitor sample interval while aggressively watching. 140ms was ~7x a
+  // second of freeze-detection work during play; 220ms still catches a freeze
+  // within ~1s and noticeably cuts the transition CPU.
+  const RAF_SKIP_INTERVAL_MS = perfProfile.lowEnd ? 320 : 220;
   let _lastKickAt = 0;
   let _lastBigTickAt = 0;
   let _frozenFrames = 0;
@@ -8181,18 +8184,28 @@ startupPrimeStartedAt: performance.now(),
       if (vt > 0.05 || at > 0.05) suppressStartupZero(20000);
       if (initialCoupledPairPending()) {
         if (!startupCoordinatedPlayActive()) return false;
-        const openingDrift = Math.abs(vt - at);
-        // Do not commit a visibly desynchronized first frame. The audio output is
-        // still gated, so settleInitialPairBeforeAudible() can align it silently.
-        if (openingDrift > STARTUP_INITIAL_MAX_DRIFT_SEC) return false;
         const target = Number(state._startupLockstepTarget);
         const issuedAt = Number(state._startupLockstepIssuedAt || 0);
-        if (isFinite(target) && issuedAt > 0) {
-          const elapsed = Math.max(0, now() - issuedAt) / 1000;
-          const maxAdvance = elapsed + (perfProfile.lowEnd ? 0.20 : 0.12);
-          if (vt < target - 0.045 || at < target - 0.045 ||
-            vt > target + maxAdvance || at > target + maxAdvance) return false;
-          if (!startupPairHasClockEvidence(vn, vt, at, target, issuedAt)) return false;
+        // If the pair has been playing and advancing for a while, commit even if
+        // the opening drift is still a bit large. Staying uncommitted keeps the
+        // startup-zero logic active, which is what makes playback start late and
+        // look like it jumps back to 0.
+        const startupStuckLong = issuedAt > 0 &&
+          (now() - issuedAt) > (perfProfile.lowEnd ? 3500 : 2500);
+        const pairAdvancing = (vt > 0.5 && at > 0.5) ||
+          startupPairHasClockEvidence(vn, vt, at, target, issuedAt);
+        if (!(startupStuckLong && pairAdvancing)) {
+          const openingDrift = Math.abs(vt - at);
+          // Do not commit a visibly desynchronized first frame. The audio output is
+          // still gated, so settleInitialPairBeforeAudible() can align it silently.
+          if (openingDrift > STARTUP_INITIAL_MAX_DRIFT_SEC) return false;
+          if (isFinite(target) && issuedAt > 0) {
+            const elapsed = Math.max(0, now() - issuedAt) / 1000;
+            const maxAdvance = elapsed + (perfProfile.lowEnd ? 0.20 : 0.12);
+            if (vt < target - 0.045 || at < target - 0.045 ||
+              vt > target + maxAdvance || at > target + maxAdvance) return false;
+            if (!startupPairHasClockEvidence(vn, vt, at, target, issuedAt)) return false;
+          }
         }
       }
     } catch {
@@ -9731,26 +9744,29 @@ startupPrimeStartedAt: performance.now(),
     }
     try {
       const vn = getVideoNode();
-      // Coupled mode: the audio is the master and is never seeked, so it's the
-      // smoothest clock and matches what's heard. Prefer it for the display when
-      // it's playing so video drift doesn't show in the bar.
+      // Coupled mode: prefer the audio clock for the bar when it's playing and
+      // agrees with the video (audio is the smooth master, so this avoids video
+      // micro-blips). When they disagree the audio has briefly diverged during a
+      // transition; trusting it would jump the bar to a wrong spot, so fall
+      // through to the stable path.
       const at0 = (() => { try { return Number(audio.currentTime); } catch { return NaN; } })();
+      const audioVideoAgree = isFinite(at0) && isFinite(vt) &&
+        Math.abs(at0 - vt) < 0.35;
       const audioClockHealthy =
       document.visibilityState === "visible" &&
       isWindowFocused() &&
       audio && !audio.paused && !audio.seeking &&
       Number(audio.readyState || 0) >= HAVE_CURRENT_DATA &&
       isFinite(at0) && at0 >= 0 && state.audioEverStarted &&
+      audioVideoAgree &&
+      !vn?.seeking &&
       !state.seeking && !state.seekBuffering && !state.seekResumeInFlight &&
-      !state.restarting &&
+      !state.restarting && state.pendingSeekTarget == null &&
+      !userSeekIntentActive() &&
       !foregroundReturnTimelineAuthorityActive() &&
       !returnSmoothingActive(0) &&
       !inBgReturnGrace();
       if (audioClockHealthy) {
-        if (Math.abs(Number(playerDisplayLastTime || 0) - at0) >
-          (perfProfile.lowEnd ? 0.9 : 0.6)) {
-          resetPlayerDisplayTimelineClamp(at0);
-        }
         return stabilizePlayerDisplayTime(clamp(at0), dur);
       }
       const visibleVideoClockOwnsUi =
@@ -10405,13 +10421,17 @@ startupPrimeStartedAt: performance.now(),
         playerTimelineLastImmediatePaintAt = t;
         const reason = eventType ? "timeline-" + eventType : "timeline-urgent";
         const target = resolveImmediatePlayerTimelineTarget(NaN, reason);
+        // During startup the loading events fire in a flurry; a multi-paint
+        // burst on each is wasteful while the bar is just at the start. One paint
+        // is enough until first play commits.
         const needsBurst =
-        eventType === "seeking" ||
+        state.firstPlayCommitted &&
+        (eventType === "seeking" ||
         eventType === "seeked" ||
         eventType === "playing" ||
         eventType === "loadeddata" ||
         eventType === "loadedmetadata" ||
-        eventType === "durationchange";
+        eventType === "durationchange");
         if (needsBurst) {
           schedulePlayerTimelineRefreshBurst(reason, target, {
             invalidate: true,
@@ -16108,6 +16128,10 @@ startupPrimeStartedAt: performance.now(),
     function pauseLeadingAudio(reason = "video-buffering") {
       if (!coupledMode || !audio || audio.paused ||
         document.visibilityState === "hidden") return false;
+      // Don't stop the audio for a video stall during startup — the pair is
+      // still being coordinated and pausing it here is heard as a cut at start.
+      if (!state.firstPlayCommitted || state.startupPhase ||
+        now() < Number(state.startupPlaySettleUntil || 0)) return false;
       // Ignore a spurious "waiting": if the video still has data buffered ahead
       // it isn't really starving, so don't stop the audio for it.
       try {
@@ -26015,7 +26039,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     ) {
       delay = 850;
     } else if (fastSyncActive() || state.syncing || state.videoWaiting || state.strictBufferHold) {
-      delay = 250;
+      delay = perfProfile.lowEnd ? 450 : 360;
     } else if (state.intendedPlaying) {
       const _syncTailActive = mediaNearNaturalEnd(
         getVideoNode(),
@@ -28257,6 +28281,12 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         suppressStartupZero(20000);
         return false;
       }
+      // Don't zero a playing audio track that's already advanced; that's heard
+      // as the audio jumping back to 0 during early playback.
+      if (coupledMode && audio && !audio.paused && Number(audio.currentTime) > 0.5) {
+        suppressStartupZero(20000);
+        return false;
+      }
     } catch { }
     if (state.pendingSeekTarget != null || userSeekIntentActive() ||
       state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
@@ -28606,7 +28636,10 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       if (initialCoupledPairPending() && wantsStartupAutoplay()) {
         forceZeroBeforeFirstPlay();
       }
+      const _audioPlayingAhead = coupledMode && audio && !audio.paused &&
+        Number(audio.currentTime) > 0.5;
       if (!state.firstPlayCommitted && !startupZeroSuppressed() && getVideoPaused() && !state.startupZeroed &&
+        !_audioPlayingAhead &&
         state.pendingSeekTarget == null && !userSeekIntentActive() && !state.seeking) {
         const _preVt = getVideoCurrentTimeSafe(0);
       if (_preVt > 0.5) {
@@ -30983,11 +31016,14 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             resume();
             return;
           }
+          // Poll cadence for the seek buffer-ready wait. The early phase was
+          // 40-70ms (15-25x/sec) which spiked CPU on every seek; 90-110ms still
+          // lands the seek promptly.
           const nextDelay = age < 450
-          ? (fastUserSeek ? 40 : 70)
+          ? (fastUserSeek ? 90 : 110)
           : (age < 2200
-          ? (perfProfile.lowEnd ? 120 : 85)
-          : (age < 6500 ? 180 : 400));
+          ? (perfProfile.lowEnd ? 150 : 120)
+          : (age < 6500 ? 220 : 450));
           pollTimer = setTimeout(pollReady, nextDelay);
           state.seekBufferResumeTimer = pollTimer;
         };
@@ -32365,6 +32401,12 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           ? audioRunning && audioMoved
           : videoRunning && audioRunning && visualVideoMoved && audioMoved;
           if (healthy) {
+            // Playback is confirmed live, so commit the startup if it hasn't
+            // yet. Leaving it uncommitted keeps the startup-zero logic armed,
+            // which makes the player jump back toward 0 during early playback.
+            if (!hidden && (initialCoupledPairPending() || !state.firstPlayCommitted)) {
+              try { commitStartupFromActivePlayback(); } catch { }
+            }
             clearPlaybackIntentLivenessWatchdog();
             return;
           }
@@ -42498,6 +42540,8 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     let lastVideoRekickAt = 0;
     let fgHealthySince = 0;
     let commitStuckSince = 0;
+    let seekAudioLateSince = 0;
+    let lastSeekAudioNudgeAt = 0;
     // Recovery for "video plays but audio/bar is stuck after a seek". Clears the
     // seek latches, rejoins audio to the live clock, and repaints the UI.
     const forceResumeAudioAndUnfreeze = (liveVt, reason) => {
@@ -42827,21 +42871,54 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         const commitOwnsTransport = commitActive ||
           (commitLastActiveAt > 0 && (t - commitLastActiveAt) < 1500);
 
-        // Commit controller stuck on a buffer hold while the media is ready
-        // (both paused, future data on both, no native seek). A working
-        // controller starts within ~2.5s, so this only catches a real stall.
+        // Audio late after seek: the controller has the video advancing but the
+        // audio is still paused with data ready. Just play the audio (no latch
+        // changes, so the controller isn't disturbed). Shaves the wait without
+        // the full reset's grace delay.
+        const audioNearVideo = (() => {
+          try {
+            const a = Number(audio && audio.currentTime);
+            return isFiniteNum(a) && isFiniteNum(vt) && Math.abs(a - vt) < 0.5;
+          } catch { return false; }
+        })();
+        if (coupledMode && audio && intended && committed && !hidden && !userHeldPaused &&
+          !state.seekDragActive && audioAdvancing === false && audio.paused &&
+          videoAdvancing && audioNearVideo &&
+          Number(audio.readyState || 0) >= 2 &&
+          !audio.seeking &&
+          !(typeof playerMutedFromVideo === "function" && playerMutedFromVideo())) {
+          if (!seekAudioLateSince) seekAudioLateSince = t;
+          else if ((t - seekAudioLateSince) > 500 && (t - lastSeekAudioNudgeAt) > 700) {
+            seekAudioLateSince = 0;
+            lastSeekAudioNudgeAt = t;
+            try { if (audio.muted && !state.userMutedAudio && !state.userMutedVideo) audio.muted = false; } catch { }
+            try {
+              const ap = HTMLMediaElement.prototype.play.call(audio);
+              if (ap && typeof ap.catch === "function") ap.catch(() => { });
+            } catch { }
+          }
+          needFast = true;
+        } else seekAudioLateSince = 0;
+
+        // Commit controller stuck on a buffer hold while the media actually has
+        // data to play (both paused, buffered ahead, no native seek). A working
+        // controller starts within ~2.2s, so this only catches a real stall.
         {
-          const vRSg = vn ? Number(vn.readyState || 0) : 0;
-          const aRSg = (coupledMode && audio) ? Number(audio.readyState || 0) : 4;
           let seekingG = false;
           try { seekingG = !!(vn && vn.seeking) || !!(coupledMode && audio && audio.seeking); } catch { }
           const bothPausedG = vPaused && (!coupledMode || !audio || audio.paused);
+          let atG = NaN;
+          try { atG = (coupledMode && audio) ? Number(audio.currentTime) : NaN; } catch { }
+          const vDataG = !vn || (isFiniteNum(vt) &&
+            (bufferedAhead(vn, vt) > 0.4 || Number(vn.readyState || 0) >= 3));
+          const aDataG = !coupledMode || !audio || (isFiniteNum(atG) &&
+            (bufferedAhead(audio, atG) > 0.4 || Number(audio.readyState || 0) >= 3));
           if (commitActive && intended && committed && !hidden && !userHeldPaused &&
             !state.seekDragActive && !state.restarting && !seekingG &&
-            bothPausedG && vRSg >= 3 && aRSg >= 3) {
+            bothPausedG && vDataG && aDataG) {
             needFast = true;
             if (!commitStuckSince) commitStuckSince = t;
-            else if ((t - commitStuckSince) > 2500 && (t - lastForcedResumeAt) > 1500) {
+            else if ((t - commitStuckSince) > 2200 && (t - lastForcedResumeAt) > 1500) {
               commitStuckSince = 0;
               forceResumeAudioAndUnfreeze(vt, "supervisor-commit-stuck-buffer");
             }
