@@ -3192,6 +3192,14 @@ startupPrimeStartedAt: performance.now(),
     return;
       }
       if (initialCoupledPairPending()) {
+        // If audio is already playing, commit the startup instead of re-kicking.
+        // The kick re-aligns audio back to the start, so re-kicking every tick
+        // replays the opening over and over.
+        if (audio && !audio.paused && document.visibilityState === "hidden" &&
+          Number(audio.currentTime) > 0.4 &&
+          commitHiddenInitialAudioStartup("bg-keepalive-audio-running")) {
+          return;
+        }
         state.startupPrimed = true;
         state.startupKickDone = false;
         if (!kickStartupLockstepPlayback()) scheduleStartupAutoplayRetry();
@@ -4477,6 +4485,41 @@ startupPrimeStartedAt: performance.now(),
       return true;
     }
     _ordinaryPlayWakeDecoderResetCount++;
+    // First reset is gentle: seek the video to the audio position while it keeps
+    // playing, which re-decodes the frozen frame without a visible pause. The
+    // pause/play reset below is the fallback.
+    if (_ordinaryPlayWakeDecoderResetCount === 1) {
+      try {
+        let nudge = Number(vn.currentTime);
+        if (coupledMode && audio && !audio.paused) {
+          const at = Number(audio.currentTime);
+          if (isFinite(at) && at >= 0 && isFinite(nudge) && at >= nudge - 0.12 && at <= nudge + 3.0) {
+            nudge = at;
+          }
+        }
+        if (isFinite(nudge) && nudge >= 0) {
+          const dur = Number(vn.duration);
+          if (isFinite(dur) && dur > 0) nudge = Math.min(nudge + 0.001, Math.max(0, dur - 0.01));
+          state._isMicroSeek = true;
+          state._allowUnexpectedVideoTimeRestore = true;
+          vn.currentTime = nudge;
+          if (videoEl && videoEl !== vn) videoEl.currentTime = nudge;
+          state._allowUnexpectedVideoTimeRestore = false;
+          try { scheduleMicroSeekClear(perfProfile.lowEnd ? 320 : 220); } catch { }
+        }
+      } catch { state._allowUnexpectedVideoTimeRestore = false; }
+      try { VideoCompositorFlushManager.arm({ observe: true }); } catch { }
+      issueNativePlay();
+      _ordinaryPlayWakeStartedAt = now();
+      try { _ordinaryPlayWakeVideoTime = Number(vn.currentTime); } catch { }
+      try { _ordinaryPlayWakeFrames = getVideoPresentedFrameCount(vn); } catch { }
+      _ordinaryPlayWakeAttempt = 0;
+      _ordinaryPlayWakeTimer = setTimeout(() => {
+        _ordinaryPlayWakeTimer = null;
+        recoverOrdinaryPlayVisualStall(`${reason}-nudge-verify`);
+      }, perfProfile.lowEnd ? 520 : 340);
+      return true;
+    }
     // A manual pause/play works because it resets the video decoder. Perform
     // that reset once, internally, without seeking or interrupting the audio
     // timeline. Programmatic flags prevent pause handlers from treating it as
@@ -8963,7 +9006,7 @@ startupPrimeStartedAt: performance.now(),
       const duration = getPlayerDisplayDuration();
       if (isFinite(duration) && duration > 0) target = Math.min(Math.max(0, target), duration);
     }
-    const duration = Math.max(1200, Math.min(3200, Number(opts.ms) || 2600));
+    const duration = Math.max(900, Math.min(2200, Number(opts.ms) || 1800));
     state.foregroundReturnTimelineSource = source;
     state.foregroundReturnTimelineTarget = target;
     state.foregroundReturnTimelineCapturedAt = t;
@@ -10165,7 +10208,9 @@ startupPrimeStartedAt: performance.now(),
         state.restarting ||
         terminalEndPlaybackLocked(100) ||
         (isFinite(domPercent) && Math.abs(domPercent - percent) > 1.4);
-        const transition = jumpyUpdate ? "none" : "width 180ms linear";
+        // Match the steady-playback refresh interval so the bar glides between
+        // updates instead of stepping.
+        const transition = jumpyUpdate ? "none" : (perfProfile.lowEnd ? "width 460ms linear" : "width 320ms linear");
         const width = percent.toFixed(3) + "%";
         if (playerSeekbarRoot) {
           playerSeekbarRoot.classList.add("vjs-player-timeline-owned");
@@ -10265,7 +10310,10 @@ startupPrimeStartedAt: performance.now(),
     ? (perfProfile.lowEnd ? 170 : 120)
     : (!state.firstPlayCommitted || state.startupKickInFlight)
     ? (perfProfile.lowEnd ? 180 : 125)
-    : (perfProfile.lowEnd ? 180 : 100);
+    // Steady playback: update a few times a second and let the CSS width
+    // transition interpolate the bar. 100ms was 10 updates/sec for no visible
+    // gain.
+    : (perfProfile.lowEnd ? 450 : 300);
     playerTimelineRefreshTimerId = setTimeout(tick, delay);
   }
   function maybeRequestPromptSyncFromTimelineSignal(eventType = "") {
@@ -10323,7 +10371,12 @@ startupPrimeStartedAt: performance.now(),
     try { maybeRequestPromptSyncFromTimelineSignal(eventType); } catch { }
     if (urgent) {
       const t = now();
-      if (eventType !== "timeupdate" || (t - playerTimelineLastImmediatePaintAt) > 80) {
+      // Tight throttle during an actual seek; looser when the urgency is just a
+      // return/fast-sync window, so a tab return doesn't paint ~12x a second.
+      const activeSeekUrgent = state.seeking || state.seekBuffering ||
+        state.seekResumeInFlight || state.seekDragActive;
+      const tuThrottle = activeSeekUrgent ? 80 : 240;
+      if (eventType !== "timeupdate" || (t - playerTimelineLastImmediatePaintAt) > tuThrottle) {
         playerTimelineLastImmediatePaintAt = t;
         const reason = eventType ? "timeline-" + eventType : "timeline-urgent";
         const target = resolveImmediatePlayerTimelineTarget(NaN, reason);
@@ -10476,7 +10529,7 @@ startupPrimeStartedAt: performance.now(),
           try {
             returnTarget = captureForegroundReturnTimeline("ui-visibility-return", {
               reuse: false,
-              ms: 3200
+              ms: 1800
             });
           } catch { }
           // Set the clamp baseline to the return position so the no-backward
@@ -15318,7 +15371,7 @@ startupPrimeStartedAt: performance.now(),
       // Completion backstop: verifyStart reschedules itself while waiting for the
       // audio track to join, which could otherwise run forever (audio silent,
       // bar frozen, CPU burning). Once the video has played and advanced long
-      // enough, finalize anyway — finishPlaying re-joins audio and clears the
+      // enough, finalize anyway. finishPlaying re-joins audio and clears the
       // seek latches.
       try {
         const _commitAge = Number(state.seekCommitStartedAt || 0) > 0
@@ -15955,6 +16008,7 @@ startupPrimeStartedAt: performance.now(),
     let videoBaselineAt = 0;
     let lastTimelinePaintAt = 0;
     let lastPairKickAt = 0;
+    let lastProgressSignalAt = 0;
 
     function playbackWanted() {
       if (_errorOverlayShown || state.endedNaturally ||
@@ -16029,6 +16083,12 @@ startupPrimeStartedAt: performance.now(),
     function pauseLeadingAudio(reason = "video-buffering") {
       if (!coupledMode || !audio || audio.paused ||
         document.visibilityState === "hidden") return false;
+      // Ignore a spurious "waiting": if the video still has data buffered ahead
+      // it isn't really starving, so don't stop the audio for it.
+      try {
+        const vn = getVideoNode();
+        if (vn && !vn.seeking && Number(vn.readyState || 0) >= HAVE_FUTURE_DATA) return false;
+      } catch { }
       try { cancelActiveFade(); preserveAudioGainWhileSilent(reason); } catch { }
       state._allowAudioPause = true;
       state.isProgrammaticAudioPause = true;
@@ -16196,6 +16256,20 @@ startupPrimeStartedAt: performance.now(),
         pauseLeadingAudio(`unified-${type}`);
         schedule(`unified-${type}`, perfProfile.lowEnd ? 320 : 180);
         return;
+      }
+      if (type === "progress") {
+        // While both tracks already run, progress is just download noise — throttle
+        // it hard to save CPU on large files. If a track is missing, let it kick
+        // the reconcile immediately so audio isn't started late.
+        const pairRunning = vn && !vn.paused &&
+          (!coupledMode || !audio || !audio.paused);
+        if (pairRunning) {
+          const tp = now();
+          if ((tp - lastProgressSignalAt) < (perfProfile.lowEnd ? 1500 : 1000)) return;
+          lastProgressSignalAt = tp;
+          schedule("unified-video-progress", perfProfile.lowEnd ? 600 : 400);
+          return;
+        }
       }
       if (type === "play" || type === "playing" || type === "seeked" ||
         type === "loadeddata" || type === "canplay") {
@@ -31498,7 +31572,10 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       wrotePosition = true;
     }
     const at = (() => { try { return Number(audio.currentTime) || 0; } catch { return NaN; } })();
-    if (!isFinite(at) || Math.abs(at - startAt) > alignmentTolerance) {
+    // Don't pull a playing audio that's already ahead back to the start; that's
+    // what replayed the opening on a background start.
+    const audioPlayingAhead = !audio.paused && isFinite(at) && at > startAt + 0.4;
+    if (!audioPlayingAhead && (!isFinite(at) || Math.abs(at - startAt) > alignmentTolerance)) {
       state._allowAudioTimeWrite = true;
       try { audio.currentTime = startAt; } catch { }
       state._allowAudioTimeWrite = false;
@@ -35135,7 +35212,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           return 0;
         })();
         const offset = 10;
-        // Don't land exactly on the duration — that triggers the end handler.
+        // Don't land exactly on the duration (that triggers the end handler).
         // Cap just below it so a forward seek plays the tail instead.
         const forwardCap = dur > 0 ? Math.max(0, dur - 0.25) : Infinity;
         const target = code === "MediaSeekForward"
@@ -42396,6 +42473,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     let videoFrozenSince = 0;
     let lastVideoRekickAt = 0;
     let fgHealthySince = 0;
+    let commitStuckSince = 0;
     // Recovery for "video plays but audio/bar is stuck after a seek". Clears the
     // seek latches, rejoins audio to the live clock, and repaints the UI.
     const forceResumeAudioAndUnfreeze = (liveVt, reason) => {
@@ -42724,6 +42802,28 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         // Short settle after the controller goes idle.
         const commitOwnsTransport = commitActive ||
           (commitLastActiveAt > 0 && (t - commitLastActiveAt) < 1500);
+
+        // Commit controller stuck on a buffer hold while the media is ready
+        // (both paused, future data on both, no native seek). A working
+        // controller starts within ~2.5s, so this only catches a real stall.
+        {
+          const vRSg = vn ? Number(vn.readyState || 0) : 0;
+          const aRSg = (coupledMode && audio) ? Number(audio.readyState || 0) : 4;
+          let seekingG = false;
+          try { seekingG = !!(vn && vn.seeking) || !!(coupledMode && audio && audio.seeking); } catch { }
+          const bothPausedG = vPaused && (!coupledMode || !audio || audio.paused);
+          if (commitActive && intended && committed && !hidden && !userHeldPaused &&
+            !state.seekDragActive && !state.restarting && !seekingG &&
+            bothPausedG && vRSg >= 3 && aRSg >= 3) {
+            needFast = true;
+            if (!commitStuckSince) commitStuckSince = t;
+            else if ((t - commitStuckSince) > 2500 && (t - lastForcedResumeAt) > 1500) {
+              commitStuckSince = 0;
+              forceResumeAudioAndUnfreeze(vt, "supervisor-commit-stuck-buffer");
+            }
+          } else commitStuckSince = 0;
+        }
+
         // Back off only for a live drag or restart, not the passive seek latches.
         const hardDriven =
           !!state.seekDragActive ||
@@ -43061,8 +43161,9 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
 
           // Detect a self-rewinding/repeating section. Observe only (writing
           // currentTime here fights the player's own sync); if it's clearly
-          // looping, clear the latches driving it.
-          if (isFiniteNum(vt) && vt >= 0 && !vPaused && !inSeek && intended &&
+          // looping, clear the latches driving it. Skip while hidden, where the
+          // throttled clock samples are unreliable.
+          if (isFiniteNum(vt) && vt >= 0 && !vPaused && !inSeek && intended && !hidden &&
             !managedLoopRestartTransitionActive?.() &&
             (Number(state.userSeekIntentUntil) || 0) < t) {
             if (lastForwardTime > 0.5 && vt < lastForwardTime - 1.5 &&
@@ -43106,14 +43207,19 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             lastForwardAt = 0;
           }
 
-            if (intended && committed && !inSeek && !state.endedNaturally && !hidden &&
+            // Both paused while we want to play, no buffer state showing. Fire
+            // even with a stuck seek flag set if the media is ready and not
+            // natively seeking.
+            if (intended && committed && !state.endedNaturally && !hidden &&
+              !state.seekDragActive &&
+              (!inSeek || (vRS >= 2 && aRS >= 2 && !nativeSeeking)) &&
               (Number(state.userPauseUntil) || 0) < t &&
               (typeof userPauseLockActive !== "function" || !userPauseLockActive())) {
               const vNotMoving = vPaused;
             const aNotMoving = coupledMode && audio && audio.paused;
             if (vNotMoving && (!coupledMode || aNotMoving)) {
               if (!stalledPlayIntentSince) stalledPlayIntentSince = t;
-              else if ((t - stalledPlayIntentSince) > 1200 && (t - lastForcedResumeAt) > 800) {
+              else if ((t - stalledPlayIntentSince) > 1000 && (t - lastForcedResumeAt) > 800) {
                 stalledPlayIntentSince = 0;
                 lastSupervisorHealAt = t;
                 // Both paused while we want to play and the media is fine. Run
@@ -43140,6 +43246,76 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     // Allow tests to disable the supervisor.
     window.__playerStopSupervisor = () => {
       if (supervisorTimer) { try { clearTimeout(supervisorTimer); } catch { } supervisorTimer = null; }
+    };
+  })();
+
+  // Long-video stability maintainer. Audio/video drift apart slowly over a long
+  // video; left alone it crosses the big-drift threshold where the correction
+  // hard-seeks the audio (a cut). This keeps drift small with gentle playback-
+  // rate nudges. Long videos only, healthy playback only, and it touches nothing
+  // but playbackRate so it can't cause a cut or jump itself.
+  (function installLongVideoStabilityMaintainer() {
+    if (!coupledMode || !audio) return;
+    const TICK_MS = perfProfile.lowEnd ? 1400 : 1000;
+    // Drift accumulates on anything long-ish, not just the 40-min isLongVideo
+    // cutoff, so use a lower bar here (8 min).
+    const DRIFT_MAINTAIN_MIN_SEC = 480;
+    let timer = null;
+    let convergedStreak = 0;
+    const healthyForDrift = () => {
+      try {
+        const dur = (typeof getPlaybackDurationCached === "function")
+          ? Number(getPlaybackDurationCached()) : NaN;
+        if (!(isFinite(dur) && dur >= DRIFT_MAINTAIN_MIN_SEC)) return false;
+        if (!state.intendedPlaying || !state.firstPlayCommitted) return false;
+        if (state.endedNaturally || state.restarting) return false;
+        if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
+        if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
+        if (state.seekDragActive || (state.pendingSeekTarget != null)) return false;
+        if (typeof userSeekIntentActive === "function" && userSeekIntentActive()) return false;
+        if (typeof SeekPlaybackCommitController !== "undefined" &&
+          SeekPlaybackCommitController.active && SeekPlaybackCommitController.active()) return false;
+        if (typeof inBgReturnGrace === "function" && inBgReturnGrace()) return false;
+        if (typeof returnSmoothingActive === "function" && returnSmoothingActive(0)) return false;
+        const vn = getVideoNode();
+        if (!vn || vn.paused || audio.paused) return false;
+        return true;
+      } catch { return false; }
+    };
+    const tick = () => {
+      timer = null;
+      let active = false;
+      try {
+        if (healthyForDrift() &&
+          (typeof normalPlaybackAudioDriftCorrectionAllowed !== "function" ||
+          normalPlaybackAudioDriftCorrectionAllowed())) {
+          const vn = getVideoNode();
+          const vt = Number(vn && vn.currentTime);
+          const at = Number(audio.currentTime);
+          if (isFinite(vt) && isFinite(at) && vt > 0) {
+            active = true;
+            const drift = at - vt;
+            const abs = Math.abs(drift);
+            // Correct early, well below the hard threshold. Ignore very large
+            // values — those belong to the seek/return paths, not steady drift.
+            if (abs > 0.12 && abs < 2.0) {
+              convergedStreak = 0;
+              try { state.driftStableFrames = Math.max(3, Number(state.driftStableFrames || 0)); } catch { }
+              try { applyGentleAudioDriftRateCorrection(drift); } catch { }
+            } else if (abs <= 0.05) {
+              convergedStreak++;
+              if (convergedStreak >= 2) {
+                try { if (typeof resetAudioPlaybackRate === "function") resetAudioPlaybackRate(); } catch { }
+              }
+            }
+          }
+        }
+      } catch { }
+      timer = setTimeout(tick, active ? TICK_MS : TICK_MS * 2);
+    };
+    timer = setTimeout(tick, 2000);
+    window.__playerStopLongVideoStability = () => {
+      if (timer) { try { clearTimeout(timer); } catch { } timer = null; }
     };
   })();
   const _crashReportBase = "https://codeberg.org/ashleyirispuppy/poke/issues/new?template=issue_template%2fplayer-bug.yml";
