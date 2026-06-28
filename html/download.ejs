@@ -1,22 +1,21 @@
 <!--
-  This Source Code Form is subject to the terms of the GNU General Public License:
-
-  Copyright (C) 2021-2026 poke (https://codeberg.org/ashleyirispuppy/poke)
-
-  This program is free software: you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
-
-  You should have received a copy of the GNU General Public License
-  along with this program. If not, see https://www.gnu.org/licenses/.
--->
-<!DOCTYPE html>
+	  This Source Code Form is subject to the terms of the GNU General Public License:
+	
+	  Copyright (C) 2021-2026 poke (https://codeberg.org/ashleyirispuppy/poke)
+	
+	  This program is free software: you can redistribute it and/or modify
+	  it under the terms of the GNU General Public License as published by
+	  the Free Software Foundation, either version 3 of the License, or
+	  (at your option) any later version.
+	
+	  This program is distributed in the hope that it will be useful,
+	  but WITHOUT ANY WARRANTY; without even the implied warranty of
+	  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	  GNU General Public License for more details.
+	
+	  You should have received a copy of the GNU General Public License
+	  along with this program. If not, see https://www.gnu.org/licenses/.
+	--><!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -33,7 +32,8 @@
   
   <style>
     :root {
-       --brand: <%= color %>;
+      /* Palette */
+      --brand: <%= color %>;
       --bg-main: #0f0f0f;
       --bg-card: #272727;
       --bg-hover: #3f3f3f;
@@ -102,6 +102,7 @@
     }
     .icon-btn:hover { background: var(--bg-card); }
 
+    /* --- Main Layout --- */
     .container {
       max-width: 1600px;
       margin: 0 auto;
@@ -125,14 +126,51 @@
 
     /* --- Player / Thumbnail Area --- */
     .player-wrap {
+      position: relative;
+      display: block;
       width: 100%;
+      max-height: 65vh; /* Restricts the massive sizing on large screens */
       aspect-ratio: 16/9;
       background: #000;
       border-radius: var(--radius-lg);
       overflow: hidden;
       margin-bottom: 16px;
+      cursor: pointer;
     }
-    .player-thumb { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .player-thumb { 
+      width: 100%; 
+      height: 100%; 
+      object-fit: contain; /* Ensures the whole thumbnail fits nicely */
+      display: block; 
+      transition: opacity 0.2s ease;
+    }
+    .player-wrap:hover .player-thumb {
+      opacity: 0.7;
+    }
+
+    /* Hover Play Button Overlay */
+    .play-overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.9);
+      width: 68px;
+      height: 48px;
+      background-color: rgba(33, 33, 33, 0.8);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 24px;
+      opacity: 0;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .player-wrap:hover .play-overlay {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+      background-color: #f00; /* Classic Play Red */
+    }
 
     /* --- Video Info --- */
     .video-title {
@@ -184,6 +222,7 @@
       gap: 8px;
     }
 
+    /* --- Format Chips --- */
     .chip {
       display: flex; align-items: center; justify-content: space-between;
       padding: 8px 12px;
@@ -311,10 +350,13 @@
   </header>
 
   <main class="container">
-        <div class="yt-primary">
-      <figure class="player-wrap">
+    <div class="yt-primary">
+            <a href="/watch?v=<%= v %>" class="player-wrap" aria-label="Play Video">
         <img class="player-thumb" src="/vi/<%= v %>/maxresdefault.jpg" alt="Video thumbnail" loading="eager" />
-      </figure>
+        <div class="play-overlay">
+          <i class="fa-solid fa-play"></i>
+        </div>
+      </a>
 
       <h1 class="video-title">Download Media</h1>
       
@@ -403,7 +445,7 @@ ffmpeg -i videoplayback.webm -i audio.webm -c copy -map 0:v:0 -map 1:a:0 output.
       </section>
     </div>
 
-        <div class="yt-secondary">
+    <div class="yt-secondary">
       <section class="section">
         <h2 id="muxed"><span><i class="fa-light fa-film-canister"></i> Muxed Formats</span></h2>
         <p class="helper">youtube only gives one muxed format. <a href="https://github.com/iv-org/invidious/issues/4759">they removed HD muxed video.</a></p>
