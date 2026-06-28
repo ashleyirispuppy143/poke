@@ -4485,25 +4485,28 @@ startupPrimeStartedAt: performance.now(),
       return true;
     }
     _ordinaryPlayWakeDecoderResetCount++;
-    // First reset is gentle: seek the video to the audio position while it keeps
-    // playing, which re-decodes the frozen frame without a visible pause. The
-    // pause/play reset below is the fallback.
+    // First reset is gentle: re-decode the frozen frame without a pause. Only
+    // move the position if the video is meaningfully behind the audio; for small
+    // drift just re-issue play (no position change), so a tab return doesn't
+    // skip when the video was actually fine.
     if (_ordinaryPlayWakeDecoderResetCount === 1) {
       try {
-        let nudge = Number(vn.currentTime);
+        const cur = Number(vn.currentTime);
+        let target = NaN;
         if (coupledMode && audio && !audio.paused) {
           const at = Number(audio.currentTime);
-          if (isFinite(at) && at >= 0 && isFinite(nudge) && at >= nudge - 0.12 && at <= nudge + 3.0) {
-            nudge = at;
+          // Only catch up if the video is clearly behind (>0.4s); never rewind.
+          if (isFinite(at) && isFinite(cur) && at > cur + 0.4 && at <= cur + 8.0) {
+            target = at;
           }
         }
-        if (isFinite(nudge) && nudge >= 0) {
+        if (isFinite(target) && target >= 0) {
           const dur = Number(vn.duration);
-          if (isFinite(dur) && dur > 0) nudge = Math.min(nudge + 0.001, Math.max(0, dur - 0.01));
+          if (isFinite(dur) && dur > 0) target = Math.min(target, Math.max(0, dur - 0.01));
           state._isMicroSeek = true;
           state._allowUnexpectedVideoTimeRestore = true;
-          vn.currentTime = nudge;
-          if (videoEl && videoEl !== vn) videoEl.currentTime = nudge;
+          vn.currentTime = target;
+          if (videoEl && videoEl !== vn) videoEl.currentTime = target;
           state._allowUnexpectedVideoTimeRestore = false;
           try { scheduleMicroSeekClear(perfProfile.lowEnd ? 320 : 220); } catch { }
         }
@@ -9728,6 +9731,28 @@ startupPrimeStartedAt: performance.now(),
     }
     try {
       const vn = getVideoNode();
+      // Coupled mode: the audio is the master and is never seeked, so it's the
+      // smoothest clock and matches what's heard. Prefer it for the display when
+      // it's playing so video drift doesn't show in the bar.
+      const at0 = (() => { try { return Number(audio.currentTime); } catch { return NaN; } })();
+      const audioClockHealthy =
+      document.visibilityState === "visible" &&
+      isWindowFocused() &&
+      audio && !audio.paused && !audio.seeking &&
+      Number(audio.readyState || 0) >= HAVE_CURRENT_DATA &&
+      isFinite(at0) && at0 >= 0 && state.audioEverStarted &&
+      !state.seeking && !state.seekBuffering && !state.seekResumeInFlight &&
+      !state.restarting &&
+      !foregroundReturnTimelineAuthorityActive() &&
+      !returnSmoothingActive(0) &&
+      !inBgReturnGrace();
+      if (audioClockHealthy) {
+        if (Math.abs(Number(playerDisplayLastTime || 0) - at0) >
+          (perfProfile.lowEnd ? 0.9 : 0.6)) {
+          resetPlayerDisplayTimelineClamp(at0);
+        }
+        return stabilizePlayerDisplayTime(clamp(at0), dur);
+      }
       const visibleVideoClockOwnsUi =
       document.visibilityState === "visible" &&
       isWindowFocused() &&
@@ -21593,37 +21618,36 @@ startupPrimeStartedAt: performance.now(),
     state.syncConvergenceCount = 0;
     state.lastSyncDrift = 0;
   }
+  let _lastVideoDriftReanchorAt = 0;
   function applyGentleAudioDriftRateCorrection(drift) {
+    // Drift is handled by prevention (keeping both tracks playing), not nudges.
+    // No rate change, and we only re-anchor the muted video as a last resort for
+    // large, clearly-out-of-sync drift, rarely, so it isn't a constant
+    // correction. Small drift is left alone (imperceptible).
     if (!normalPlaybackAudioDriftCorrectionAllowed()) return false;
-    const d = Number(drift);
-    const abs = Math.abs(d);
-    if (!isFinite(d) || abs < GENTLE_DRIFT_TRIGGER_SEC || abs > 3.0) return false;
-    if ((state.driftStableFrames || 0) < 3) return false;
-    const selected = getSelectedPlaybackRateFromVideo();
-    if (!isFinite(selected) || selected <= 0) return false;
-    // Positive drift means video is ahead, so audio receives a small speed-up.
-    // Correct without muting or seeking audible audio. Larger persistent drift
-    // gets a bounded temporary rate nudge instead of the old fade-to-zero cut.
-    const maxNudge = abs > 1.5 ? 0.08 : (abs > 0.42 ? 0.055 : 0.025);
-    const relativeNudge = Math.max(-maxNudge, Math.min(maxNudge, d * 0.09));
-    const corrected = Math.max(
-      PLAYBACK_RATE_MIN,
-      Math.min(PLAYBACK_RATE_MAX, selected * (1 + relativeNudge))
-    );
-    state.normalAudioRateCorrectionTarget = corrected;
-    state.normalAudioRateCorrectionUntil = now() +
-    (abs > 0.42 ? (perfProfile.lowEnd ? 4200 : 3200) : (perfProfile.lowEnd ? 2200 : 1700));
+    const vn = getVideoNode();
+    if (!vn || vn.paused || audio.paused) return false;
+    try { if (vn.seeking || audio.seeking) return false; } catch { }
+    let vt = NaN, at = NaN;
+    try { vt = Number(vn.currentTime); at = Number(audio.currentTime); } catch { return false; }
+    if (!isFinite(vt) || !isFinite(at)) return false;
+    const abs = Math.abs(at - vt);
+    if (abs < 0.6 || abs > 2.5) return false;
+    const t = now();
+    if ((t - _lastVideoDriftReanchorAt) < (perfProfile.lowEnd ? 5000 : 4000)) return false;
+    if (Number(vn.readyState || 0) < HAVE_FUTURE_DATA && !canPlaySmoothAt(vn, at, 0.05)) return false;
+    _lastVideoDriftReanchorAt = t;
+    const prevRestore = !!state._allowUnexpectedVideoTimeRestore;
+    state._isMicroSeek = true;
+    state._allowUnexpectedVideoTimeRestore = true;
     try {
-      _normalizingPlaybackRates = true;
-      audio.playbackRate = corrected;
-      return true;
-    } catch {
-      state.normalAudioRateCorrectionUntil = 0;
-      state.normalAudioRateCorrectionTarget = NaN;
-      return false;
-    } finally {
-      _normalizingPlaybackRates = false;
+      vn.currentTime = at;
+      if (videoEl && videoEl !== vn) videoEl.currentTime = at;
+    } catch { } finally {
+      state._allowUnexpectedVideoTimeRestore = prevRestore;
     }
+    try { scheduleMicroSeekClear(perfProfile.lowEnd ? 320 : 220); } catch { }
+    return true;
   }
   function enforcePlaybackRateSync() {
     if (!coupledMode || !audio) return;
@@ -42848,23 +42872,28 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           (typeof isAltTabTransitionActive === "function" && isAltTabTransitionActive()) ||
           (typeof inBgReturnGrace === "function" && inBgReturnGrace());
 
-        // Both tracks paused with the buffer hold/spinner on, but the media is
-        // decodable here. Only fire when data is present (readyState >= 2) so a
-        // real buffering wait isn't cut short.
+        // Playback isn't progressing but there's buffered data to play (the
+        // buffered-ahead check is more reliable than readyState). Only fires when
+        // nothing is moving; a spinner during real progress is left to the
+        // spinner heal below.
         const vRS = vn ? Number(vn.readyState || 0) : 0;
         const aRS = (coupledMode && audio) ? Number(audio.readyState || 0) : 4;
         let nativeSeeking = false;
         try { nativeSeeking = !!(vn && vn.seeking) || !!(coupledMode && audio && audio.seeking); } catch { }
-        const heldByBuffer =
-          !!state.seekBuffering || !!state.strictBufferHold ||
-          ((typeof bufferGuardSpinnerActive === "function") && bufferGuardSpinnerActive());
-        const bothPaused = vPaused && (!coupledMode || !audio || audio.paused);
+        const notProgressing = !videoAdvancing && !audioAdvancing;
+        let atNow = NaN;
+        try { atNow = (coupledMode && audio) ? Number(audio.currentTime) : NaN; } catch { }
+        const videoHasData = !vn ||
+          (isFiniteNum(vt) && (bufferedAhead(vn, vt) > 0.4 || vRS >= 3));
+        const audioHasData = !coupledMode || !audio ||
+          (isFiniteNum(atNow) && (bufferedAhead(audio, atNow) > 0.4 || aRS >= 3));
+        const playableData = videoHasData && audioHasData;
         if (intended && committed && !hidden && !userHeldPaused && !nativeSeeking &&
           !state.endedNaturally && !inStartupOrTransition &&
-          heldByBuffer && bothPaused && vRS >= 2 && aRS >= 2) {
+          notProgressing && playableData) {
           needFast = true;
           if (!stuckBufferSince) stuckBufferSince = t;
-          else if ((t - stuckBufferSince) > 700 && (t - lastForcedResumeAt) > 800) {
+          else if ((t - stuckBufferSince) > 900 && (t - lastForcedResumeAt) > 800) {
             stuckBufferSince = 0;
             forceResumeAudioAndUnfreeze(vt, "supervisor-stuck-buffer-hold");
           }
@@ -43249,20 +43278,18 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     };
   })();
 
-  // Long-video stability maintainer. Audio/video drift apart slowly over a long
-  // video; left alone it crosses the big-drift threshold where the correction
-  // hard-seeks the audio (a cut). This keeps drift small with gentle playback-
-  // rate nudges. Long videos only, healthy playback only, and it touches nothing
-  // but playbackRate so it can't cause a cut or jump itself.
+  // Long-video stability maintainer. Drift is handled by prevention, not nudges:
+  // the main drift source is one track briefly pausing/stalling while the other
+  // keeps playing, so this keeps both tracks running by resuming whichever one
+  // stopped (a plain play, not a pause/play cycle). It also keeps preload warm.
+  // Only rare, large, clearly-out-of-sync drift falls back to a correction.
   (function installLongVideoStabilityMaintainer() {
     if (!coupledMode || !audio) return;
-    const TICK_MS = perfProfile.lowEnd ? 1400 : 1000;
-    // Drift accumulates on anything long-ish, not just the 40-min isLongVideo
-    // cutoff, so use a lower bar here (8 min).
+    const TICK_MS = perfProfile.lowEnd ? 900 : 650;
+    const IDLE_MS = perfProfile.lowEnd ? 2200 : 1600;
     const DRIFT_MAINTAIN_MIN_SEC = 480;
     let timer = null;
-    let convergedStreak = 0;
-    const healthyForDrift = () => {
+    const wantsPlay = () => {
       try {
         const dur = (typeof getPlaybackDurationCached === "function")
           ? Number(getPlaybackDurationCached()) : NaN;
@@ -43273,12 +43300,15 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
         if (state.seekDragActive || (state.pendingSeekTarget != null)) return false;
         if (typeof userSeekIntentActive === "function" && userSeekIntentActive()) return false;
+        if (typeof userPauseLockActive === "function" && userPauseLockActive()) return false;
+        if (typeof userPauseIntentActive === "function" && userPauseIntentActive()) return false;
+        if (typeof mediaSessionForcedPauseActive === "function" && mediaSessionForcedPauseActive()) return false;
+        if (typeof userToggleExpectingPause === "function" && userToggleExpectingPause()) return false;
+        if ((Number(state.userPauseUntil) || 0) > now()) return false;
         if (typeof SeekPlaybackCommitController !== "undefined" &&
           SeekPlaybackCommitController.active && SeekPlaybackCommitController.active()) return false;
         if (typeof inBgReturnGrace === "function" && inBgReturnGrace()) return false;
         if (typeof returnSmoothingActive === "function" && returnSmoothingActive(0)) return false;
-        const vn = getVideoNode();
-        if (!vn || vn.paused || audio.paused) return false;
         return true;
       } catch { return false; }
     };
@@ -43286,34 +43316,50 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       timer = null;
       let active = false;
       try {
-        if (healthyForDrift() &&
-          (typeof normalPlaybackAudioDriftCorrectionAllowed !== "function" ||
-          normalPlaybackAudioDriftCorrectionAllowed())) {
+        if (wantsPlay()) {
           const vn = getVideoNode();
-          const vt = Number(vn && vn.currentTime);
-          const at = Number(audio.currentTime);
-          if (isFinite(vt) && isFinite(at) && vt > 0) {
+          const vPausedNow = !!(vn && vn.paused);
+          const aPausedNow = !!audio.paused;
+          // Keep preload warm so a buffering hiccup doesn't stall a track.
+          try { if (vn && vn.preload !== "auto") vn.preload = "auto"; } catch { }
+          try { if (audio.preload !== "auto") audio.preload = "auto"; } catch { }
+          // Prevention: a track that stops while the other plays is exactly how
+          // drift builds. Resume whichever stopped (plain play, no seek/rate).
+          if ((vPausedNow || aPausedNow) && !(vPausedNow && aPausedNow)) {
             active = true;
-            const drift = at - vt;
-            const abs = Math.abs(drift);
-            // Correct early, well below the hard threshold. Ignore very large
-            // values — those belong to the seek/return paths, not steady drift.
-            if (abs > 0.12 && abs < 2.0) {
-              convergedStreak = 0;
-              try { state.driftStableFrames = Math.max(3, Number(state.driftStableFrames || 0)); } catch { }
-              try { applyGentleAudioDriftRateCorrection(drift); } catch { }
-            } else if (abs <= 0.05) {
-              convergedStreak++;
-              if (convergedStreak >= 2) {
-                try { if (typeof resetAudioPlaybackRate === "function") resetAudioPlaybackRate(); } catch { }
+            try {
+              if (vPausedNow && vn && Number(vn.readyState || 0) >= HAVE_CURRENT_DATA && !vn.seeking) {
+                const vp = HTMLMediaElement.prototype.play.call(vn);
+                if (vp && typeof vp.catch === "function") vp.catch(() => { });
+              }
+            } catch { }
+            try {
+              if (aPausedNow && Number(audio.readyState || 0) >= HAVE_CURRENT_DATA && !audio.seeking &&
+                !(typeof playerMutedFromVideo === "function" && playerMutedFromVideo())) {
+                const ap = HTMLMediaElement.prototype.play.call(audio);
+                if (ap && typeof ap.catch === "function") ap.catch(() => { });
+              }
+            } catch { }
+          } else if (!vPausedNow && !aPausedNow &&
+            (typeof normalPlaybackAudioDriftCorrectionAllowed !== "function" ||
+            normalPlaybackAudioDriftCorrectionAllowed())) {
+            const vt = Number(vn && vn.currentTime);
+            const at = Number(audio.currentTime);
+            if (isFinite(vt) && isFinite(at) && vt > 0) {
+              const abs = Math.abs(at - vt);
+              // Backstop only: large, clearly-out-of-sync drift. The reanchor's
+              // own threshold/rate-limit keeps this rare.
+              if (abs > 0.6 && abs < 2.5) {
+                active = true;
+                try { applyGentleAudioDriftRateCorrection(at - vt); } catch { }
               }
             }
           }
         }
       } catch { }
-      timer = setTimeout(tick, active ? TICK_MS : TICK_MS * 2);
+      timer = setTimeout(tick, active ? TICK_MS : IDLE_MS);
     };
-    timer = setTimeout(tick, 2000);
+    timer = setTimeout(tick, 1500);
     window.__playerStopLongVideoStability = () => {
       if (timer) { try { clearTimeout(timer); } catch { } timer = null; }
     };
