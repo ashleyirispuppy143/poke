@@ -16,6 +16,7 @@
 	  You should have received a copy of the GNU General Public License
 	  along with this program. If not, see https://www.gnu.org/licenses/.
 	--><!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -129,9 +130,8 @@
       position: relative;
       display: block;
       width: 100%;
-      max-height: 65vh; /* Restricts the massive sizing on large screens */
       aspect-ratio: 16/9;
-      background: #000;
+      background: transparent;
       border-radius: var(--radius-lg);
       overflow: hidden;
       margin-bottom: 16px;
@@ -140,36 +140,43 @@
     .player-thumb { 
       width: 100%; 
       height: 100%; 
-      object-fit: contain; /* Ensures the whole thumbnail fits nicely */
+      object-fit: cover; 
       display: block; 
-      transition: opacity 0.2s ease;
+      transition: opacity 0.2s ease, transform 0.3s ease;
     }
     .player-wrap:hover .player-thumb {
-      opacity: 0.7;
+      opacity: 0.8;
+      transform: scale(1.02);
     }
 
-    /* Hover Play Button Overlay */
+    /* Hover Play Button Overlay - Blurred Circle */
     .play-overlay {
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%) scale(0.9);
-      width: 68px;
-      height: 48px;
-      background-color: rgba(33, 33, 33, 0.8);
-      border-radius: 12px;
+      width: 72px;
+      height: 72px;
+      background-color: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
       color: #fff;
-      font-size: 24px;
+      font-size: 26px;
       opacity: 0;
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      /* Nudge the play icon slightly right to look centered visually */
+      padding-left: 4px; 
     }
     .player-wrap:hover .play-overlay {
       opacity: 1;
       transform: translate(-50%, -50%) scale(1);
-      background-color: #f00; /* Classic Play Red */
+      background-color: rgba(0, 0, 0, 0.6);
+      border-color: rgba(255, 255, 255, 0.4);
     }
 
     /* --- Video Info --- */
@@ -351,7 +358,7 @@
 
   <main class="container">
     <div class="yt-primary">
-            <a href="/watch?v=<%= v %>" class="player-wrap" aria-label="Play Video">
+      <a href="/watch?v=<%= v %>" class="player-wrap" aria-label="Play Video">
         <img class="player-thumb" src="/vi/<%= v %>/maxresdefault.jpg" alt="Video thumbnail" loading="eager" />
         <div class="play-overlay">
           <i class="fa-solid fa-play"></i>
@@ -361,7 +368,7 @@
       <h1 class="video-title">Download Media</h1>
       
       <div class="video-meta">
-        <div class="subtitle">ID: <code><%= v %></code> — <a href="/watch?v=<%= v %>">Open watch page</a></div>
+        <div class="subtitle">ID: <code><%= v %></code></div>
       </div>
 
       <div class="description-box">
