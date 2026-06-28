@@ -1,21 +1,3 @@
-<!--
-	  This Source Code Form is subject to the terms of the GNU General Public License:
-	
-	  Copyright (C) 2021-2026 poke (https://codeberg.org/ashleyirispuppy/poke)
-	
-	  This program is free software: you can redistribute it and/or modify
-	  it under the terms of the GNU General Public License as published by
-	  the Free Software Foundation, either version 3 of the License, or
-	  (at your option) any later version.
-	
-	  This program is distributed in the hope that it will be useful,
-	  but WITHOUT ANY WARRANTY; without even the implied warranty of
-	  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-	  GNU General Public License for more details.
-	
-	  You should have received a copy of the GNU General Public License
-	  along with this program. If not, see https://www.gnu.org/licenses/.
--->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -33,7 +15,6 @@
   
   <style>
     :root {
-      /* Palette */
       --brand: <%= color %>;
       --bg-main: #0f0f0f;
       --bg-card: #272727;
@@ -45,7 +26,6 @@
       --text-link: #3ea6ff;
       --text-inverse: #0f0f0f;
       
-      /* Layout */
       --radius-lg: 12px;
       --radius-md: 8px;
       --radius-pill: 18px;
@@ -60,7 +40,6 @@
       font-display: swap;
     }
 
-    /* --- Base --- */
     *, *::before, *::after { box-sizing: border-box; }
     
     body {
@@ -72,7 +51,6 @@
       line-height: 1.5;
     }
 
-    /* Scrollbar */
     ::-webkit-scrollbar { width: 10px; }
     ::-webkit-scrollbar-track { background: var(--bg-main); }
     ::-webkit-scrollbar-thumb { background: #717171; border-radius: 8px; border: 2px solid var(--bg-main); }
@@ -80,7 +58,6 @@
 
     a { color: inherit; text-decoration: none; transition: 0.2s; }
     
-    /* --- Topbar --- */
     .topbar {
       position: sticky; top: 0; z-index: 100;
       display: flex; align-items: center; justify-content: space-between;
@@ -103,7 +80,6 @@
     }
     .icon-btn:hover { background: var(--bg-card); }
 
-    /* --- Main Layout --- */
     .container {
       max-width: 1600px;
       margin: 0 auto;
@@ -125,7 +101,6 @@
     .yt-primary { flex: 1; min-width: 0; }
     .yt-secondary { width: 400px; flex-shrink: 0; }
 
-    /* --- Player / Thumbnail Area --- */
     .player-wrap {
       position: relative;
       display: block;
@@ -149,7 +124,6 @@
       transform: scale(1.02);
     }
 
-    /* Hover Play Button Overlay - Blurred Circle */
     .play-overlay {
       position: absolute;
       top: 50%;
@@ -169,7 +143,6 @@
       font-size: 26px;
       opacity: 0;
       transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-      /* Nudge the play icon slightly right to look centered visually */
       padding-left: 4px; 
     }
     .player-wrap:hover .play-overlay {
@@ -179,7 +152,6 @@
       border-color: rgba(255, 255, 255, 0.4);
     }
 
-    /* --- Video Info --- */
     .video-title {
       font-size: 20px;
       font-weight: 700;
@@ -205,7 +177,6 @@
     .description-box p { margin: 0 0 8px; }
     .description-box p:last-child { margin: 0; }
 
-    /* --- Formats Section (Sidebar) --- */
     .section { margin-bottom: 24px; }
     .section h2 {
       font-size: 16px;
@@ -229,7 +200,6 @@
       gap: 8px;
     }
 
-    /* --- Format Chips --- */
     .chip {
       display: flex; align-items: center; justify-content: space-between;
       padding: 8px 12px;
@@ -243,7 +213,6 @@
     .chip .label { font-weight: 500; font-size: 14px; color: var(--text-primary); }
     .chip .hint { font-size: 12px; color: var(--text-secondary); }
 
-    /* Download Button (Primary Pill) */
     .btn {
       display: inline-flex; align-items: center; gap: 6px;
       height: 32px; padding: 0 16px;
@@ -268,7 +237,6 @@
       background: var(--bg-hover);
     }
 
-    /* Alert Box */
     .alert {
       display: flex; align-items: center; gap: 12px;
       margin: 0 0 24px;
@@ -281,7 +249,6 @@
     }
     .alert::before { content: "\f05a"; font-family: "Font Awesome 6 Pro"; font-weight: 900; font-size: 16px; }
 
-    /* --- Mux (How To) Section - Standard display (fallback when no JS) --- */
     .mux-section {
       margin-top: 16px;
       padding-top: 24px;
@@ -336,7 +303,6 @@
       display: flex; justify-content: space-between; align-items: center;
     }
 
-    /* Terminal Look for Code */
     .terminal-window {
       padding: 16px;
       font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
@@ -347,6 +313,13 @@
       display: flex; flex-direction: column; gap: 12px;
     }
     
+    .terminal-window code {
+      font-family: inherit;
+      color: #aaaaaa;
+      background: transparent;
+      padding: 0;
+    }
+
     .kbd {
       display: block;
       color: #3ea6ff;
@@ -355,7 +328,6 @@
       background: transparent; border: none; padding: 0;
     }
     
-    /* Copy Button Styled */
     .copy-action {
       align-self: flex-start;
       margin-top: auto;
@@ -372,9 +344,8 @@
     }
     .copy-action:hover { background: rgba(255,255,255,0.2); }
     
-    /* --- Mux Modal Overrides (Activated by JS) --- */
     .mux-modal-overlay {
-      display: none; /* Controlled by JS active class */
+      display: none; 
       position: fixed;
       top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(0, 0, 0, 0.75);
@@ -440,7 +411,6 @@
       padding: 24px;
     }
 
-    /* Screen Reader Utilities */
     .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
   </style>
 </head>
@@ -480,20 +450,18 @@
         <span>if a download fails try another container (MP4 vs WEBM) or a different quality :D</span>
       </div>
 
-      <!-- Button injected via JS to open modal. Hidden by default for noscript fallback -->
-      <button id="open-mux-modal" class="btn btn-secondary" style="display: none; margin-bottom: 24px;">
-        <i class="fa-light fa-layer-group"></i> How to Combine (Mux) Video & Audio
-      </button>
-
-      <!-- Standard Inline Display (Becomes modal body if JS is enabled) -->
       <section id="mux-content-section" class="mux-section" aria-labelledby="combine">
         <h2 id="combine" style="margin:0 0 12px; font-size: 20px; font-weight: 700;">Combining Video & Audio (Muxing)</h2>
         
         <div class="mux-intro">
           <h3><i class="fa-light fa-circle-info"></i> What is Muxing?</h3>
           <p>To provide you with the absolute highest qualities (like 1080p, 1440p, and 4K), YouTube separates the video track from the audio track. If you download a "Video Only" file, it won't have any sound.</p>
-          <p><strong>Muxing</strong> (multiplexing) is simply stitching the separate video and audio files back together into a single playable file, <em>without</em> losing any quality or re-encoding. Download your Video, download your Audio, and use a tool like <strong>FFmpeg</strong> below!</p>
+          <p><strong>Muxing</strong> (multiplexing) is simply stitching the separate video and audio files back together into a single playable file, <em>without</em> losing any quality or re-encoding.</p>
         </div>
+
+        <p class="helper" style="font-size: 14px; margin-bottom: 0;">
+          <strong>Pro Tip:</strong> To make the commands below super easy to copy and paste, rename your downloaded files to exactly <code>video.mp4</code> (or <code>video.webm</code>) and <code>audio.m4a</code> (or <code>audio.webm</code>) and place them in the same folder!
+        </p>
 
         <div class="mux-rows">
           <div class="mux-item">
@@ -501,9 +469,9 @@
               <span><i class="fab fa-linux"></i> FFmpeg — MP4 Output</span>
             </div>
             <div class="terminal-window">
-              <span class="helper" style="font-size:11px; margin:0">Use this when your video is MP4 (H.264) and audio is M4A/AAC.</span>
-              <code class="kbd" data-code="ffmpeg -i video.mp4 -i videoplayback.m4a -c copy -map 0:v:0 -map 1:a:0 output.mp4">
-                ffmpeg -i video.mp4 -i videoplayback.m4a -c copy -map 0:v:0 -map 1:a:0 output.mp4
+              <span class="helper" style="font-size:11px; margin:0">Use this when your video is <strong>MP4</strong> and audio is <strong>M4A</strong>.</span>
+              <code class="kbd" data-code="ffmpeg -i video.mp4 -i audio.m4a -c copy final.mp4">
+                ffmpeg -i video.mp4 -i audio.m4a -c copy final.mp4
               </code>
               <button class="copy-action" data-target="prev"><i class="fa-light fa-copy"></i> Copy Command</button>
             </div>
@@ -514,9 +482,9 @@
               <span><i class="fab fa-linux"></i> FFmpeg — WEBM Output</span>
             </div>
             <div class="terminal-window">
-              <span class="helper" style="font-size:11px; margin:0">Use this when both tracks are WEBM (VP9/AV1 + Opus).</span>
-              <code class="kbd" data-code="ffmpeg -i videoplayback.webm -i audio.webm -c copy -map 0:v:0 -map 1:a:0 output.webm">
-                ffmpeg -i videoplayback.webm -i audio.webm -c copy -map 0:v:0 -map 1:a:0 output.webm
+              <span class="helper" style="font-size:11px; margin:0">Use this when both tracks are <strong>WEBM</strong>.</span>
+              <code class="kbd" data-code="ffmpeg -i video.webm -i audio.webm -c copy final.webm">
+                ffmpeg -i video.webm -i audio.webm -c copy final.webm
               </code>
               <button class="copy-action" data-target="prev"><i class="fa-light fa-copy"></i> Copy Command</button>
             </div>
@@ -527,9 +495,9 @@
               <span><i class="fa-light fa-file-video"></i> FFmpeg — Mixed / MKV</span>
             </div>
             <div class="terminal-window">
-              <span class="helper" style="font-size:11px; margin:0">Containers differ? (e.g., WEBM Video + M4A Audio). Mux to MKV for best compatibility!</span>
-              <code class="kbd" data-code="ffmpeg -i videoplayback.webm -i videoplayback.m4a -c copy -map 0:v:0 -map 1:a:0 output.mkv">
-                ffmpeg -i videoplayback.webm -i videoplayback.m4a -c copy -map 0:v:0 -map 1:a:0 output.mkv
+              <span class="helper" style="font-size:11px; margin:0">Containers differ? (e.g. <strong>WEBM</strong> Video + <strong>M4A</strong> Audio). Use MKV format!</span>
+              <code class="kbd" data-code="ffmpeg -i video.webm -i audio.m4a -c copy final.mkv">
+                ffmpeg -i video.webm -i audio.m4a -c copy final.mkv
               </code>
               <button class="copy-action" data-target="prev"><i class="fa-light fa-copy"></i> Copy Command</button>
             </div>
@@ -538,7 +506,7 @@
           <div class="mux-item">
             <div class="mux-header"><span><i class="fab fa-windows"></i> Windows Setup</span></div>
             <div class="terminal-window">
-              <pre class="kbd" style="white-space: pre-wrap;">1) Download FFmpeg and add it to your system PATH.
+              <pre class="kbd" style="white-space: pre-wrap; color: #aaaaaa;">1) Download FFmpeg and add it to your system PATH.
 2) Place your video and audio files in the same folder.
 3) Open Terminal/Command Prompt in that folder and run one of the commands above.</pre>
             </div>
@@ -547,21 +515,20 @@
           <div class="mux-item">
             <div class="mux-header"><span><i class="fab fa-apple"></i> macOS / Linux Setup</span></div>
             <div class="terminal-window">
-              <pre class="kbd" style="white-space: pre-wrap;"># Install ffmpeg via Homebrew (macOS) or APT (Linux)
+              <pre class="kbd" style="white-space: pre-wrap; color: #aaaaaa;"># Install ffmpeg via Homebrew (macOS) or APT (Linux)
 brew install ffmpeg  # macOS
 sudo apt install ffmpeg # Ubuntu/Debian
 
-# Then run the command:
-ffmpeg -i video.mp4 -i audio.m4a -c copy output.mp4</pre>
+# Navigate to your download folder and run the command!</pre>
             </div>
           </div>
 
           <div class="mux-item">
             <div class="mux-header"><span><i class="fab fa-android"></i> Android (Termux)</span></div>
             <div class="terminal-window">
-              <pre class="kbd" style="white-space: pre-wrap;">pkg install ffmpeg
+              <pre class="kbd" style="white-space: pre-wrap; color: #aaaaaa;">pkg install ffmpeg
 cd /sdcard/Download
-ffmpeg -i videoplayback.webm -i audio.webm -c copy -map 0:v:0 -map 1:a:0 output.webm</pre>
+# Then run the ffmpeg command!</pre>
             </div>
           </div>
         </div>
@@ -607,7 +574,9 @@ ffmpeg -i videoplayback.webm -i audio.webm -c copy -map 0:v:0 -map 1:a:0 output.
 
       <section class="section">
         <h2 id="videoonly"><span><i class="fa-light fa-video-slash"></i> Video Only</span></h2>
-        <p class="helper" style="margin-bottom:12px">No audio!! You may need to mux with an audio track :c</p>
+        <p class="helper" style="margin-bottom:12px">
+          No audio!! You will need to merge this with an audio track. <a href="#mux-content-section" id="open-mux-modal" style="font-weight: 600;">Learn how <i class="fa-solid fa-arrow-right" style="font-size: 10px;"></i></a>
+        </p>
         <div class="grid-2col">
           <article class="chip" tabindex="0">
             <div class="meta"><span class="label">144p — MP4</span></div>
@@ -665,17 +634,12 @@ ffmpeg -i videoplayback.webm -i audio.webm -c copy -map 0:v:0 -map 1:a:0 output.
   <script src="/css/custom-css.js?v=54"></script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      // --- Modal Setup Logic ---
       const muxSection = document.getElementById('mux-content-section');
-      const openBtn = document.getElementById('open-mux-modal');
+      const openLink = document.getElementById('open-mux-modal');
       
-      // Upgrade layout if JS is enabled
-      if (muxSection && openBtn) {
-        // Swap default inline look to trigger button
+      if (muxSection && openLink) {
         muxSection.style.display = 'none';
-        openBtn.style.display = 'inline-flex';
 
-        // Construct YouTube-style modal structure dynamically
         const overlay = document.createElement('div');
         overlay.className = 'mux-modal-overlay';
         
@@ -685,7 +649,7 @@ ffmpeg -i videoplayback.webm -i audio.webm -c copy -map 0:v:0 -map 1:a:0 output.
         const modalHeader = document.createElement('div');
         modalHeader.className = 'mux-modal-header';
         modalHeader.innerHTML = `
-          <h2><i class="fa-light fa-layer-group"></i> How to Mux Video & Audio</h2>
+          <h2><i class="fa-light fa-layer-group"></i> How to Combine Video & Audio</h2>
         `;
         
         const closeBtn = document.createElement('button');
@@ -697,12 +661,11 @@ ffmpeg -i videoplayback.webm -i audio.webm -c copy -map 0:v:0 -map 1:a:0 output.
         const modalBody = document.createElement('div');
         modalBody.className = 'mux-modal-body';
 
-        // Migrate content into the modal body smoothly
         muxSection.style.display = 'block'; 
         muxSection.style.borderTop = 'none';
         muxSection.style.paddingTop = '0';
         muxSection.style.marginTop = '0';
-        muxSection.querySelector('h2#combine').style.display = 'none'; // Hide redundant heading
+        muxSection.querySelector('h2#combine').style.display = 'none';
         
         modalBody.appendChild(muxSection);
         modal.appendChild(modalHeader);
@@ -710,13 +673,12 @@ ffmpeg -i videoplayback.webm -i audio.webm -c copy -map 0:v:0 -map 1:a:0 output.
         overlay.appendChild(modal);
         document.body.appendChild(overlay);
 
-        // Open Modal Event
-        openBtn.addEventListener('click', () => {
+        openLink.addEventListener('click', (e) => {
+          e.preventDefault(); 
           overlay.classList.add('active');
-          document.body.style.overflow = 'hidden'; // Stop background scrolling
+          document.body.style.overflow = 'hidden'; 
         });
 
-        // Close Modal Logic
         const closeModal = () => {
           overlay.classList.remove('active');
           document.body.style.overflow = '';
@@ -731,7 +693,6 @@ ffmpeg -i videoplayback.webm -i audio.webm -c copy -map 0:v:0 -map 1:a:0 output.
         });
       }
 
-      // --- Accessible Click on Chips ---
       document.querySelectorAll('.chip').forEach(chip => {
         const btn = chip.querySelector('.btn');
         if(!btn) return;
@@ -747,7 +708,6 @@ ffmpeg -i videoplayback.webm -i audio.webm -c copy -map 0:v:0 -map 1:a:0 output.
         });
       });
 
-      // --- Copy Functionality ---
       const toClipboard = async (text, el) => {
         try {
           await navigator.clipboard.writeText(text);
@@ -766,7 +726,6 @@ ffmpeg -i videoplayback.webm -i audio.webm -c copy -map 0:v:0 -map 1:a:0 output.
         }
       };
 
-      // Attaches to all copy buttons (works whether inside the DOM or moved into modal)
       document.querySelectorAll('.copy-action').forEach(btn => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
