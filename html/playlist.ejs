@@ -17,7 +17,7 @@
 	    You should have received a copy of the GNU General Public License
 	    along with this program. If not, see https://www.gnu.org/licenses/.
 	-->
- <%
+<%
   const playlist = typeof p !== "undefined" && p !== null && typeof p === "object" ? p : null;
   const hasPlaylist = playlist !== null;
 
@@ -41,10 +41,13 @@
     firstVideoId = playlistThumbnail.split("/vi/")[1].split("/")[0];
   }
 
+  // Check if a valid description exists
+  const hasDescription = playlistDescription && playlistDescription.trim().length > 0;
+  
   // Dynamically calculate max-height and overflow based on description length 
-  // so long descriptions don't break the sticky layout
-  const descLength = playlistDescription.length;
-  const dynamicMaxHeight = descLength > 200 ? '90vh' : 'fit-content';
+  // Bounding the max-height to the viewport ensures the sticky layout and internal scrolling function correctly
+  const descLength = hasDescription ? playlistDescription.length : 0;
+  const dynamicMaxHeight = descLength > 200 ? 'calc(100vh - 2em)' : 'fit-content';
   const dynamicOverflow = descLength > 200 ? 'auto' : 'visible';
 %>
 <!DOCTYPE html>
@@ -297,7 +300,12 @@ font-family:Ubuntu
 		<span class="info"><%- playlistVideoCount %> videos • <%- playlistViewCount %> views  • by <%- playlistAuthor %> </span>
 	  <% } %>
 
-      <span class="description"><%- playlistDescription %></span>
+      <% if (hasDescription) { %>
+        <span class="description"><%- playlistDescription %></span>
+      <% } else { %>
+        <span class="description" style="color: #aaa; font-style: italic; display: block; margin-top: 1em;">No description provided for this playlist.</span>
+      <% } %>
+      
 		<div class="channel-info">
 		 
 		</div>
