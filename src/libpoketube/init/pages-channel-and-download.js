@@ -163,10 +163,10 @@ const searchCache = new Map();
       }
     }
 
-    if (query && query.startsWith("!") && query.length > 2) {
-      return res.redirect("https://lite.duckduckgo.com/lite/?q=" + query);
-    }
-
+  if (query && query.length > 2 && /(?:^|\s)![^\s]+/.test(query)) {
+  return res.redirect("https://lite.duckduckgo.com/lite/?q=" + encodeURIComponent(query));
+}  
+    
     if (query && query.startsWith("Hey ChatGPT,") && query.length > 2) {
       return res.redirect("https://chatgpt.com/?q=" + query + "- sent using pokeAI features");
     }
