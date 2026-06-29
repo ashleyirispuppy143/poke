@@ -3425,8 +3425,7 @@ G.init();
 
 
 <% if (game === "minesweeper") { %>
- 
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -3691,7 +3690,6 @@ G.init();
   </div>
 </div>
 
-<!-- Settings -->
 <div class="mbg" id="mod-set">
   <div class="mbox">
     <h3>⚙️ Game Settings</h3>
@@ -3716,7 +3714,6 @@ G.init();
   </div>
 </div>
 
-<!-- Help -->
 <div class="mbg" id="mod-help">
   <div class="mbox">
     <h3>How to Play</h3>
@@ -3747,6 +3744,10 @@ class MS{
     this.GOV=document.getElementById('gov');
     this.fm=false;this.strict=false;this.diff='medium';
     this.lt=null;this.lf=false;this.best={easy:null,medium:null,hard:null};
+    
+    this.revealTimeouts = [];
+    this.goTimeout = null;
+
     this.bind();this.init('medium');
   }
 
@@ -3796,6 +3797,11 @@ class MS{
   }
 
   init(d){
+    // Clear any leftover animation timeouts from the previous game
+    if(this.revealTimeouts) this.revealTimeouts.forEach(clearTimeout);
+    this.revealTimeouts = [];
+    if(this.goTimeout) clearTimeout(this.goTimeout);
+
     if(d)this.diff=d;
     const D={easy:[9,9,10],medium:[16,16,40],hard:[16,30,99]};
     [this.rows,this.cols,this.mines]=D[this.diff];
@@ -3901,13 +3907,27 @@ class MS{
       this.F.textContent='😵';sfx('lose');
       this.BW.classList.add('shake');setTimeout(()=>this.BW.classList.remove('shake'),400);
       const mi=this.cells.map((c,i)=>c.m?i:-1).filter(x=>x>=0);
-      mi.forEach((m,k)=>{setTimeout(()=>{const el=this.G.children[m];if(m===hit)el.classList.add('mine-hit');else el.classList.add('mine-show');el.classList.add('o');if(!this.cells[m].f)el.textContent='💣'},k*20)});
+      
+       mi.forEach((m,k)=>{
+        this.revealTimeouts.push(
+          setTimeout(()=>{
+            const el=this.G.children[m];
+            if(!el) return; // Prevent errors if grid was destroyed
+            if(m===hit) el.classList.add('mine-hit');
+            else el.classList.add('mine-show');
+            el.classList.add('o');
+            if(!this.cells[m].f) el.textContent='💣';
+          }, k*20)
+        );
+      });
+      
       this.cells.forEach((c,i)=>{if(!c.m&&c.f){const el=this.G.children[i];el.classList.add('wrong-flag','o');el.textContent='✕';el.style.color='var(--danger)';el.style.fontWeight='900'}});
       if(wf){document.getElementById('ge').textContent='🚩';document.getElementById('gt').textContent='Wrong Flag!';document.getElementById('gs').textContent="That cell wasn't a mine"}
       else{document.getElementById('ge').textContent='💥';document.getElementById('gt').textContent='Game Over';document.getElementById('gs').textContent='You hit a mine'}
       document.getElementById('gt').style.color='var(--danger)';
     }
-    setTimeout(()=>this.GOV.classList.add('show'),won?400:600);
+    
+     this.goTimeout = setTimeout(()=>this.GOV.classList.add('show'),won?400:600);
   }
 }
 
@@ -3916,7 +3936,7 @@ function doConfetti(){const cv=document.getElementById('confetti'),cx=cv.getCont
 new MS();
 </script>
 </body>
-</html> 
+</html>
 
 <% } %>
 
