@@ -16162,7 +16162,9 @@ startupPrimeStartedAt: performance.now(),
         at = Number(audio.currentTime);
       } catch { }
       if (!isFinite(vt) || vt < 0) return false;
-      if (isFinite(at) && Math.abs(at - vt) <= tolerance) return true;
+      // Forward-only: only catch a behind audio up to the video. Never rewind
+      // the master audio to a behind video; that replays the section.
+      if (isFinite(at) && vt <= at + tolerance) return true;
       const previousAllow = !!state._allowAudioTimeWrite;
       const previousPairAllow = !!state._allowPairSyncAudioWrite;
       state._allowAudioTimeWrite = true;
@@ -21655,8 +21657,10 @@ startupPrimeStartedAt: performance.now(),
     let vt = NaN, at = NaN;
     try { vt = Number(vn.currentTime); at = Number(audio.currentTime); } catch { return false; }
     if (!isFinite(vt) || !isFinite(at)) return false;
-    const abs = Math.abs(at - vt);
-    if (abs < 0.6 || abs > 2.5) return false;
+    // Forward-only. Only catch a behind video up to audio. Seeking video back
+    // to a behind audio replays the section.
+    const ahead = at - vt;
+    if (ahead < 0.6 || ahead > 2.5) return false;
     const t = now();
     if ((t - _lastVideoDriftReanchorAt) < (perfProfile.lowEnd ? 5000 : 4000)) return false;
     if (Number(vn.readyState || 0) < HAVE_FUTURE_DATA && !canPlaySmoothAt(vn, at, 0.05)) return false;
@@ -24202,6 +24206,39 @@ startupPrimeStartedAt: performance.now(),
     const tolerance = Math.max(0.08, Number(opts.tolerance) || 0.10);
     return next < anchor - tolerance;
   }
+  // Pure forward playback with no seek, return, or transition in progress.
+  // Deliberately ignores the transient _isMicroSeek/_allowUnexpectedVideoTimeRestore
+  // flags, since those are set by the automatic write being policed.
+  function steadyCommittedForegroundPlayback() {
+    if (!state.firstPlayCommitted || !state.intendedPlaying) return false;
+    if (state.restarting || state.endedNaturally) return false;
+    if (state.seeking || state.seekBuffering || state.seekResumeInFlight ||
+      state.seekDragActive || state.pendingSeekTarget != null) return false;
+    if (userSeekIntentActive() || restartFromEndedGuardActive() ||
+      managedLoopRestartTransitionActive()) return false;
+    if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
+    if (isVisibilityTransitionActive() || isAltTabTransitionActive() || inBgReturnGrace()) return false;
+    if (state.bgSilentTimeSyncing || state.bgResumeInFlight || state.resumeOnVisible) return false;
+    if (foregroundRecoveryActive(500) || returnSmoothingActive(500) ||
+      smoothForegroundReturnActive(500) || hiddenPlayPendingActive()) return false;
+    const vn = getVideoNode();
+    if (!vn || vn.paused) return false;
+    return true;
+  }
+  // The video timeline is monotonic during steady playback. Any automatic
+  // restore/microseek write below the confirmed floor is a self-induced replay,
+  // so block it on the first occurrence. Real seeks and restarts set seek flags
+  // (steadyCommittedForegroundPlayback returns false) and pass through.
+  function autoBackwardSeekBlocked(target, current) {
+    if (!isFinite(target)) return false;
+    if (state.seeking || state.seekResumeInFlight || state.pendingSeekTarget != null ||
+      state.seekDragActive) return false;
+    if (!(state._allowUnexpectedVideoTimeRestore || state._isMicroSeek)) return false;
+    const floor = getProtectedVideoTimelineFloor(isFinite(current) ? current : target);
+    if (!isFinite(floor) || target >= floor - 0.25) return false;
+    if (now() < Number(state.autoBackwardSeekBreakUntil || 0)) return true;
+    return steadyCommittedForegroundPlayback();
+  }
   const _videoCurrentTimeDescriptor =
   Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "currentTime");
   function installVideoTimelineWriteGuard(el) {
@@ -24279,6 +24316,13 @@ startupPrimeStartedAt: performance.now(),
                 state.blockedVideoTimelineWriteTarget = target;
                 return;
                   }
+              }
+              if (autoBackwardSeekBlocked(target, current)) {
+                state.blockedVideoTimelineWriteCount =
+                Number(state.blockedVideoTimelineWriteCount || 0) + 1;
+                state.blockedVideoTimelineWriteAt = now();
+                state.blockedVideoTimelineWriteTarget = target;
+                return;
               }
               _videoCurrentTimeDescriptor.set.call(el, value);
         }
@@ -43272,18 +43316,20 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           if (isFiniteNum(vt) && vt >= 0 && !vPaused && !inSeek && intended && !hidden &&
             !managedLoopRestartTransitionActive?.() &&
             (Number(state.userSeekIntentUntil) || 0) < t) {
-            if (lastForwardTime > 0.5 && vt < lastForwardTime - 1.5 &&
-              (t - lastForwardAt) < 2000) {
+            if (lastForwardTime > 0.5 && vt < lastForwardTime - 0.8 &&
+              (t - lastForwardAt) < 2500) {
               if (!recentRewindFirstAt || (t - recentRewindFirstAt) > 8000) {
                 recentRewindFirstAt = t;
                 recentRewindCount = 1;
               } else {
                 recentRewindCount++;
               }
-              // Looping confirmed: clear the latches that re-seek it back.
+              // Looping confirmed: block automatic backward writes and clear the
+              // latches that re-seek it back.
               if (recentRewindCount >= 2) {
                 recentRewindCount = 0;
                 recentRewindFirstAt = 0;
+                state.autoBackwardSeekBreakUntil = t + 6000;
                 try {
                   if (state.pendingSeekTarget != null) state.pendingSeekTarget = null;
                   state.seekResumeInFlight = false;
