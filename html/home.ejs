@@ -80,21 +80,22 @@
   }
 
   var GAME_RULES = [
-    { id: "Minecraft", genre: "Sandbox", category: "Survival Crafting", triggers: ["minecraft", "mcpe", "minecraft pe", "minecraft pocket edition", "minecraft bedrock", "minecraft java", "bedrock edition", "hypixel", "herobrine", "minecrafter", "minecraft but"] },
+    { id: "Minecraft", genre: "Sandbox", category: "Survival Crafting", triggers: ["minecraft", "mcpe", "minecraft pe", "minecraft pocket edition", "minecraft bedrock", "minecraft java", "bedrock edition", "hypixel", "herobrine", "minecrafter", "minecraft but", "rlcraft"] },
     { id: "Roblox", genre: "Sandbox", category: "Platform Games", triggers: ["roblox", "blox fruits", "bloxfruits", "brookhaven", "adopt me", "doors roblox", "pet simulator", "dress to impress", "murder mystery 2", "mm2 roblox", "blade ball", "roblox story", "roblox edit"] },
-    { id: "Fortnite", genre: "Battle Royale", category: "Action Games", triggers: ["fortnite", "fortnite battle royale", "fncs", "fortnite creative", "lego fortnite", "fortnite festival", "fortnite item shop", "fortnite update"] },
+    { id: "Fortnite", genre: "Battle Royale", category: "Action Games", triggers: ["fortnite", "fortnite battle royale", "fncs", "fortnite creative", "lego fortnite", "fortnite festival", "fortnite item shop", "fortnite update", "fortnite og"] },
     { id: "Grand Theft Auto", genre: "Action Adventure", category: "Open World", triggers: ["gta v", "gta 5", "gta online", "grand theft auto", "gta", "gta vi", "gta 6", "san andreas", "vice city", "fivem", "gta rp"] },
     { id: "Valorant", genre: "Tactical Shooter", category: "FPS", triggers: ["valorant", "vct", "valorant champions", "valorant ranked", "valorant highlights", "val line-ups"] },
-    { id: "Call of Duty", genre: "Shooter", category: "FPS", triggers: ["call of duty", "cod", "warzone", "modern warfare", "black ops", "mw3", "mw2", "cod mobile", "call of duty mobile", "warzone loadout"] },
-    { id: "Counter-Strike 2", genre: "Tactical Shooter", category: "FPS", triggers: ["cs:go", "csgo", "cs2", "counter-strike", "counter strike", "counter-strike 2", "counter strike 2", "cs2 highlights", "cs2 premier"] },
-    { id: "League of Legends", genre: "MOBA", category: "Strategy Games", triggers: ["league of legends", "lol esports", "league ranked", "summoner's rift", "wild rift", "lcs", "lec"] },
+    { id: "Call of Duty", genre: "Shooter", category: "FPS", triggers: ["call of duty", "cod", "warzone", "modern warfare", "black ops", "mw3", "mw2", "bo6", "cod mobile", "call of duty mobile", "warzone loadout"] },
+    { id: "Counter-Strike 2", genre: "Tactical Shooter", category: "FPS", triggers: ["cs:go", "csgo", "cs2", "counter-strike", "counter strike", "counter-strike 2", "counter strike 2", "cs2 highlights", "cs2 premier", "s1mple"] },
+    { id: "League of Legends", genre: "MOBA", category: "Strategy Games", triggers: ["league of legends", "lol esports", "league ranked", "summoner's rift", "wild rift", "lcs", "lec", "t1 faker"] },
+    { id: "Deadlock", genre: "MOBA Shooter", category: "Action Games", triggers: ["deadlock", "deadlock valve", "deadlock gameplay", "deadlock build"] },
     { id: "Clash of Clans", genre: "Strategy", category: "Mobile Strategy", triggers: ["clash of clans", "coc", "town hall 16", "town hall 15", "builder base", "clan wars"] },
-    { id: "Genshin Impact", genre: "Action RPG", category: "Gacha Games", triggers: ["genshin impact", "genshin", "hoyoverse genshin", "spiral abyss", "primogems"] },
-    { id: "Elden Ring", genre: "Action RPG", category: "Soulslike", triggers: ["elden ring", "shadow of the erdtree", "malenia", "lands between", "elden ring build"] },
+    { id: "Genshin Impact", genre: "Action RPG", category: "Gacha Games", triggers: ["genshin impact", "genshin", "hoyoverse genshin", "spiral abyss", "primogems", "natlan", "fontaine"] },
+    { id: "Elden Ring", genre: "Action RPG", category: "Soulslike", triggers: ["elden ring", "shadow of the erdtree", "malenia", "lands between", "elden ring build", "margit"] },
     { id: "Helldivers 2", genre: "Co-op Shooter", category: "Action Games", triggers: ["helldivers", "helldivers 2", "super earth", "automatons", "terminids"] },
-    { id: "Five Nights at Freddy's", genre: "Horror", category: "Horror Games", triggers: ["fnaf", "five nights at freddy", "five nights at freddy's", "freddy fazbear", "security breach", "help wanted", "fnaf lore"] },
-    { id: "The Legend of Zelda", genre: "Action Adventure", category: "Adventure Games", triggers: ["zelda", "tears of the kingdom", "breath of the wild", "ocarina of time", "majora's mask", "totk", "botw"] },
-    { id: "Pokemon", genre: "RPG", category: "Creature Collecting", triggers: ["pokemon", "pokémon", "pokemon scarlet", "pokemon violet", "pokemon go", "pokemon unite", "nuzlocke", "shiny hunting"] },
+    { id: "Five Nights at Freddy's", genre: "Horror", category: "Horror Games", triggers: ["fnaf", "five nights at freddy", "five nights at freddy's", "freddy fazbear", "security breach", "help wanted", "fnaf lore", "into the pit"] },
+    { id: "The Legend of Zelda", genre: "Action Adventure", category: "Adventure Games", triggers: ["zelda", "tears of the kingdom", "breath of the wild", "ocarina of time", "majora's mask", "totk", "botw", "echoes of wisdom"] },
+    { id: "Pokemon", genre: "RPG", category: "Creature Collecting", triggers: ["pokemon", "pokémon", "pokemon scarlet", "pokemon violet", "pokemon go", "pokemon unite", "nuzlocke", "shiny hunting", "pokemon legends"] },
     { id: "Super Mario", genre: "Platformer", category: "Platform Games", triggers: ["super mario", "mario kart", "mario bros", "mario wonder", "mario odyssey", "mario party", "mario maker"] },
     { id: "Apex Legends", genre: "Battle Royale", category: "FPS", triggers: ["apex legends", "apex ranked", "apex season", "algs"] },
     { id: "Overwatch 2", genre: "Hero Shooter", category: "FPS", triggers: ["overwatch", "overwatch 2", "ow2", "overwatch league"] },
@@ -103,7 +104,7 @@
     { id: "Brawl Stars", genre: "Action", category: "Mobile Action", triggers: ["brawl stars", "brawlstars", "supercell brawl", "brawl pass"] },
     { id: "Clash Royale", genre: "Card Battler", category: "Mobile Strategy", triggers: ["clash royale", "clashroyale", "royale arena", "clash royale deck"] },
     { id: "The Sims", genre: "Life Simulation", category: "Simulation", triggers: ["the sims", "sims 4", "sims 3", "sims 2", "sims cc", "sims 4 build"] },
-    { id: "Cyberpunk 2077", genre: "Action RPG", category: "Open World", triggers: ["cyberpunk 2077", "cyberpunk", "phantom liberty", "night city"] },
+    { id: "Cyberpunk 2077", genre: "Action RPG", category: "Open World", triggers: ["cyberpunk 2077", "cyberpunk", "phantom liberty", "night city", "david martinez"] },
     { id: "World of Warcraft", genre: "MMORPG", category: "RPG", triggers: ["world of warcraft", "wow classic", "dragonflight", "war within", "azeroth", "wow raid"] },
     { id: "Among Us", genre: "Social Deduction", category: "Party Games", triggers: ["among us", "impostor", "imposter among us", "crewmate"] },
     { id: "Fall Guys", genre: "Party Royale", category: "Party Games", triggers: ["fall guys", "fallguys", "ultimate knockout"] },
@@ -111,7 +112,7 @@
     { id: "Dota 2", genre: "MOBA", category: "Strategy Games", triggers: ["dota 2", "dota2", "the international dota", "ti dota"] },
     { id: "Team Fortress 2", genre: "Hero Shooter", category: "FPS", triggers: ["team fortress 2", "tf2", "tf2 spy", "tf2 medic"] },
     { id: "Destiny 2", genre: "Looter Shooter", category: "FPS", triggers: ["destiny 2", "destiny raid", "final shape destiny"] },
-    { id: "Warframe", genre: "Looter Shooter", category: "Action Games", triggers: ["warframe", "tenno", "warframe build"] },
+    { id: "Warframe", genre: "Looter Shooter", category: "Action Games", triggers: ["warframe", "tenno", "warframe build", "warframe 1999"] },
     { id: "Rainbow Six Siege", genre: "Tactical Shooter", category: "FPS", triggers: ["rainbow six siege", "r6 siege", "r6s", "siege ranked", "jynxzi"] },
     { id: "PUBG", genre: "Battle Royale", category: "FPS", triggers: ["pubg", "pubg mobile", "playerunknown", "battlegrounds mobile"] },
     { id: "Free Fire", genre: "Battle Royale", category: "Mobile Action", triggers: ["free fire", "garena free fire", "freefire"] },
@@ -120,7 +121,7 @@
     { id: "Honor of Kings", genre: "MOBA", category: "Mobile Strategy", triggers: ["honor of kings", "hok game", "王者荣耀"] },
     { id: "Honkai Star Rail", genre: "Turn-Based RPG", category: "Gacha Games", triggers: ["honkai star rail", "star rail", "hsr build", "penacony"] },
     { id: "Honkai Impact 3rd", genre: "Action RPG", category: "Gacha Games", triggers: ["honkai impact", "honkai impact 3rd", "hi3"] },
-    { id: "Zenless Zone Zero", genre: "Action RPG", category: "Gacha Games", triggers: ["zenless zone zero", "zzz hoyoverse", "new eridu"] },
+    { id: "Zenless Zone Zero", genre: "Action RPG", category: "Gacha Games", triggers: ["zenless zone zero", "zzz hoyoverse", "new eridu", "jane doe zzz"] },
     { id: "Wuthering Waves", genre: "Action RPG", category: "Gacha Games", triggers: ["wuthering waves", "wuwa", "kuro games"] },
     { id: "Arknights", genre: "Tower Defense", category: "Gacha Games", triggers: ["arknights", "rhodes island", "arknights operator"] },
     { id: "Blue Archive", genre: "Tactical RPG", category: "Gacha Games", triggers: ["blue archive", "kivotos", "blue archive global"] },
@@ -128,22 +129,22 @@
     { id: "Azur Lane", genre: "Side-Scrolling Shooter", category: "Gacha Games", triggers: ["azur lane", "azurlane", "shipgirl"] },
     { id: "Girls' Frontline", genre: "Tactical RPG", category: "Gacha Games", triggers: ["girls frontline", "girls' frontline", "gfl"] },
     { id: "Fate Grand Order", genre: "Turn-Based RPG", category: "Gacha Games", triggers: ["fate grand order", "fgo", "fate go"] },
-    { id: "Monster Hunter", genre: "Action RPG", category: "Action Games", triggers: ["monster hunter", "monster hunter world", "monster hunter rise", "mh wilds", "monster hunter wilds"] },
-    { id: "Final Fantasy", genre: "RPG", category: "JRPG", triggers: ["final fantasy", "ffxiv", "ff14", "ff7 rebirth", "final fantasy vii", "final fantasy 14"] },
-    { id: "Dragon Quest", genre: "RPG", category: "JRPG", triggers: ["dragon quest", "dq11", "dragon quest xi"] },
+    { id: "Monster Hunter", genre: "Action RPG", category: "Action Games", triggers: ["monster hunter", "monster hunter world", "monster hunter rise", "mh wilds", "monster hunter wilds", "mhgu"] },
+    { id: "Final Fantasy", genre: "RPG", category: "JRPG", triggers: ["final fantasy", "ffxiv", "ff14", "ff7 rebirth", "final fantasy vii", "final fantasy 14", "dawntrail"] },
+    { id: "Dragon Quest", genre: "RPG", category: "JRPG", triggers: ["dragon quest", "dq11", "dragon quest xi", "dq3"] },
     { id: "Persona", genre: "RPG", category: "JRPG", triggers: ["persona 5", "persona 4", "persona 3", "persona reload", "p5r"] },
     { id: "Shin Megami Tensei", genre: "RPG", category: "JRPG", triggers: ["shin megami tensei", "smt v", "smt 5", "smtvv"] },
     { id: "Fire Emblem", genre: "Tactical RPG", category: "Strategy Games", triggers: ["fire emblem", "three houses", "fire emblem engage"] },
     { id: "Xenoblade Chronicles", genre: "Action RPG", category: "JRPG", triggers: ["xenoblade", "xenoblade chronicles", "xenoblade 3"] },
-    { id: "Kingdom Hearts", genre: "Action RPG", category: "JRPG", triggers: ["kingdom hearts", "kh3", "kingdom hearts 3"] },
+    { id: "Kingdom Hearts", genre: "Action RPG", category: "JRPG", triggers: ["kingdom hearts", "kh3", "kingdom hearts 3", "kh4"] },
     { id: "NieR", genre: "Action RPG", category: "JRPG", triggers: ["nier automata", "nier replicant", "nier"] },
-    { id: "Yakuza", genre: "Action Adventure", category: "Story Games", triggers: ["yakuza", "like a dragon", "ryu ga gotoku", "infinite wealth"] },
-    { id: "Tekken", genre: "Fighting", category: "Fighting Games", triggers: ["tekken", "tekken 8", "tekken 7"] },
+    { id: "Yakuza", genre: "Action Adventure", category: "Story Games", triggers: ["yakuza", "like a dragon", "ryu ga gotoku", "infinite wealth", "majima"] },
+    { id: "Tekken", genre: "Fighting", category: "Fighting Games", triggers: ["tekken", "tekken 8", "tekken 7", "kazuya"] },
     { id: "Street Fighter", genre: "Fighting", category: "Fighting Games", triggers: ["street fighter", "street fighter 6", "sf6"] },
-    { id: "Mortal Kombat", genre: "Fighting", category: "Fighting Games", triggers: ["mortal kombat", "mk1", "mk11"] },
+    { id: "Mortal Kombat", genre: "Fighting", category: "Fighting Games", triggers: ["mortal kombat", "mk1", "mk11", "fatality"] },
     { id: "Super Smash Bros", genre: "Platform Fighter", category: "Fighting Games", triggers: ["super smash bros", "smash ultimate", "ssbu", "melee smash"] },
     { id: "Guilty Gear", genre: "Fighting", category: "Fighting Games", triggers: ["guilty gear", "guilty gear strive", "ggst"] },
-    { id: "Dragon Ball FighterZ", genre: "Fighting", category: "Fighting Games", triggers: ["dragon ball fighterz", "dbfz"] },
+    { id: "Dragon Ball FighterZ", genre: "Fighting", category: "Fighting Games", triggers: ["dragon ball fighterz", "dbfz", "sparking zero"] },
     { id: "EA Sports FC", genre: "Sports", category: "Sports Games", triggers: ["ea sports fc", "fc 24", "fc 25", "fifa 23", "fifa 22", "ultimate team"] },
     { id: "NBA 2K", genre: "Sports", category: "Sports Games", triggers: ["nba 2k", "nba2k", "mycareer 2k", "myteam 2k"] },
     { id: "Madden NFL", genre: "Sports", category: "Sports Games", triggers: ["madden nfl", "madden 25", "madden 24", "mut madden"] },
@@ -154,36 +155,37 @@
     { id: "Gran Turismo", genre: "Racing", category: "Racing Games", triggers: ["gran turismo", "gt7", "gran turismo 7"] },
     { id: "Need for Speed", genre: "Racing", category: "Racing Games", triggers: ["need for speed", "nfs unbound", "nfs heat"] },
     { id: "Assetto Corsa", genre: "Racing Simulation", category: "Racing Games", triggers: ["assetto corsa", "assetto corsa competizione", "acc racing"] },
+    { id: "BeamNG.drive", genre: "Driving Simulation", category: "Simulation", triggers: ["beamng", "beamng.drive", "beamng drive crashes"] },
     { id: "F1", genre: "Racing", category: "Racing Games", triggers: ["f1 24", "f1 23", "formula 1 game", "f1 manager"] },
     { id: "iRacing", genre: "Racing Simulation", category: "Racing Games", triggers: ["iracing", "i racing"] },
     { id: "The Crew", genre: "Racing", category: "Racing Games", triggers: ["the crew motorfest", "the crew 2"] },
-    { id: "Stardew Valley", genre: "Farming Simulation", category: "Cozy Games", triggers: ["stardew valley", "stardew", "pelican town"] },
+    { id: "Stardew Valley", genre: "Farming Simulation", category: "Cozy Games", triggers: ["stardew valley", "stardew", "pelican town", "stardew 1.6"] },
     { id: "Animal Crossing", genre: "Life Simulation", category: "Cozy Games", triggers: ["animal crossing", "new horizons", "acnh"] },
     { id: "Harvest Moon", genre: "Farming Simulation", category: "Cozy Games", triggers: ["harvest moon", "story of seasons"] },
     { id: "Palworld", genre: "Survival Crafting", category: "Survival Crafting", triggers: ["palworld", "paldeck", "pal sphere"] },
     { id: "ARK", genre: "Survival Crafting", category: "Survival Crafting", triggers: ["ark survival", "ark ascended", "ark evolved", "ark survival ascended"] },
-    { id: "Rust", genre: "Survival", category: "Survival Crafting", triggers: ["rust game", "rust wipe", "rust base", "rust raid"] },
+    { id: "Rust", genre: "Survival", category: "Survival Crafting", triggers: ["rust game", "rust wipe", "rust base", "rust raid", "rust console"] },
     { id: "DayZ", genre: "Survival", category: "Survival Crafting", triggers: ["dayz", "day z"] },
     { id: "The Forest", genre: "Survival Horror", category: "Survival Crafting", triggers: ["the forest game", "sons of the forest"] },
     { id: "Valheim", genre: "Survival Crafting", category: "Survival Crafting", triggers: ["valheim", "valheim ashlands"] },
     { id: "Subnautica", genre: "Survival Adventure", category: "Survival Crafting", triggers: ["subnautica", "below zero subnautica"] },
     { id: "Don't Starve", genre: "Survival", category: "Survival Crafting", triggers: ["don't starve", "dont starve", "dst game", "don't starve together"] },
-    { id: "No Man's Sky", genre: "Survival Adventure", category: "Open World", triggers: ["no man's sky", "no mans sky", "nms game"] },
-    { id: "Sea of Thieves", genre: "Adventure", category: "Open World", triggers: ["sea of thieves", "sot game", "pirate legend"] },
-    { id: "Red Dead Redemption", genre: "Action Adventure", category: "Open World", triggers: ["red dead redemption", "rdr2", "red dead online"] },
+    { id: "No Man's Sky", genre: "Survival Adventure", category: "Open World", triggers: ["no man's sky", "no mans sky", "nms game", "nms worlds"] },
+    { id: "Sea of Thieves", genre: "Adventure", category: "Open World", triggers: ["sea of thieves", "sot game", "pirate legend", "sea of thieves season"] },
+    { id: "Red Dead Redemption", genre: "Action Adventure", category: "Open World", triggers: ["red dead redemption", "rdr2", "red dead online", "arthur morgan"] },
     { id: "Assassin's Creed", genre: "Action Adventure", category: "Open World", triggers: ["assassin's creed", "assassins creed", "ac valhalla", "ac mirage", "ac shadows"] },
     { id: "Far Cry", genre: "Action Adventure", category: "Open World", triggers: ["far cry", "far cry 6", "far cry 5"] },
     { id: "Watch Dogs", genre: "Action Adventure", category: "Open World", triggers: ["watch dogs", "watchdogs", "watch dogs legion"] },
-    { id: "The Witcher", genre: "Action RPG", category: "Open World", triggers: ["the witcher", "witcher 3", "wild hunt"] },
-    { id: "Baldur's Gate 3", genre: "CRPG", category: "RPG", triggers: ["baldur's gate 3", "baldurs gate 3", "bg3"] },
-    { id: "Diablo", genre: "Action RPG", category: "RPG", triggers: ["diablo 4", "diablo iv", "diablo immortal", "diablo 3"] },
-    { id: "Path of Exile", genre: "Action RPG", category: "RPG", triggers: ["path of exile", "poe 2", "path of exile 2"] },
-    { id: "Skyrim", genre: "RPG", category: "Open World", triggers: ["skyrim", "elder scrolls v", "tes v"] },
+    { id: "The Witcher", genre: "Action RPG", category: "Open World", triggers: ["the witcher", "witcher 3", "wild hunt", "geralt"] },
+    { id: "Baldur's Gate 3", genre: "CRPG", category: "RPG", triggers: ["baldur's gate 3", "baldurs gate 3", "bg3", "astarion", "larian studios"] },
+    { id: "Diablo", genre: "Action RPG", category: "RPG", triggers: ["diablo 4", "diablo iv", "diablo immortal", "diablo 3", "vessel of hatred"] },
+    { id: "Path of Exile", genre: "Action RPG", category: "RPG", triggers: ["path of exile", "poe 2", "path of exile 2", "poe build"] },
+    { id: "Skyrim", genre: "RPG", category: "Open World", triggers: ["skyrim", "elder scrolls v", "tes v", "skyrim mods"] },
     { id: "Fallout", genre: "RPG", category: "Open World", triggers: ["fallout", "fallout 4", "fallout 76", "new vegas"] },
-    { id: "Starfield", genre: "RPG", category: "Open World", triggers: ["starfield", "starfield gameplay"] },
+    { id: "Starfield", genre: "RPG", category: "Open World", triggers: ["starfield", "starfield gameplay", "shattered space"] },
     { id: "Mass Effect", genre: "Action RPG", category: "Story Games", triggers: ["mass effect", "mass effect legendary"] },
     { id: "Dragon Age", genre: "RPG", category: "Story Games", triggers: ["dragon age", "veilguard", "inquisition"] },
-    { id: "Hades", genre: "Roguelike", category: "Indie Games", triggers: ["hades", "hades 2", "hades ii"] },
+    { id: "Hades", genre: "Roguelike", category: "Indie Games", triggers: ["hades", "hades 2", "hades ii", "zagreus"] },
     { id: "Dead Cells", genre: "Roguelike", category: "Indie Games", triggers: ["dead cells", "deadcells"] },
     { id: "The Binding of Isaac", genre: "Roguelike", category: "Indie Games", triggers: ["binding of isaac", "isaac repentance"] },
     { id: "Slay the Spire", genre: "Deckbuilder", category: "Indie Games", triggers: ["slay the spire", "sts game"] },
@@ -200,16 +202,16 @@
     { id: "Disco Elysium", genre: "CRPG", category: "Story Games", triggers: ["disco elysium", "harry du bois"] },
     { id: "Papers Please", genre: "Simulation", category: "Indie Games", triggers: ["papers please", "arstotzka"] },
     { id: "RimWorld", genre: "Colony Simulation", category: "Simulation", triggers: ["rimworld", "rim world"] },
-    { id: "Factorio", genre: "Automation", category: "Simulation", triggers: ["factorio", "factory must grow"] },
+    { id: "Factorio", genre: "Automation", category: "Simulation", triggers: ["factorio", "factory must grow", "space age factorio"] },
     { id: "Satisfactory", genre: "Automation", category: "Simulation", triggers: ["satisfactory game", "satisfactory factory"] },
     { id: "Cities Skylines", genre: "City Builder", category: "Simulation", triggers: ["cities skylines", "cities skylines 2", "city skylines"] },
     { id: "Planet Zoo", genre: "Management Simulation", category: "Simulation", triggers: ["planet zoo", "planet zoo habitat"] },
     { id: "Planet Coaster", genre: "Management Simulation", category: "Simulation", triggers: ["planet coaster", "planet coaster 2"] },
     { id: "Two Point Hospital", genre: "Management Simulation", category: "Simulation", triggers: ["two point hospital", "two point campus"] },
     { id: "Football Manager", genre: "Sports Management", category: "Simulation", triggers: ["football manager", "fm24", "fm25", "fm 2024", "fm 2025"] },
-    { id: "Euro Truck Simulator", genre: "Driving Simulation", category: "Simulation", triggers: ["euro truck simulator", "ets2", "american truck simulator", "ats truck"] },
+    { id: "Euro Truck Simulator", genre: "Driving Simulation", category: "Simulation", triggers: ["euro truck simulator", "ets2", "american truck simulator", "ats truck", "promods"] },
     { id: "Microsoft Flight Simulator", genre: "Flight Simulation", category: "Simulation", triggers: ["microsoft flight simulator", "msfs", "flight simulator 2024"] },
-    { id: "Kerbal Space Program", genre: "Space Simulation", category: "Simulation", triggers: ["kerbal space program", "ksp2", "ksp game"] },
+    { id: "Kerbal Space Program", genre: "Space Simulation", category: "Simulation", triggers: ["kerbal space program", "ksp2", "ksp game", "jebediah kerman"] },
     { id: "Civilization", genre: "4X Strategy", category: "Strategy Games", triggers: ["civilization vi", "civilization 6", "civ 6", "civ vi", "civilization vii", "civ 7"] },
     { id: "Age of Empires", genre: "RTS", category: "Strategy Games", triggers: ["age of empires", "aoe2", "aoe4", "age of empires 4"] },
     { id: "StarCraft", genre: "RTS", category: "Strategy Games", triggers: ["starcraft", "starcraft 2", "sc2"] },
@@ -217,7 +219,7 @@
     { id: "Total War", genre: "Grand Strategy", category: "Strategy Games", triggers: ["total war", "warhammer total war", "total war warhammer", "rome total war"] },
     { id: "Crusader Kings", genre: "Grand Strategy", category: "Strategy Games", triggers: ["crusader kings", "ck3", "crusader kings 3"] },
     { id: "Europa Universalis", genre: "Grand Strategy", category: "Strategy Games", triggers: ["europa universalis", "eu4", "europa universalis 4"] },
-    { id: "Hearts of Iron", genre: "Grand Strategy", category: "Strategy Games", triggers: ["hearts of iron", "hoi4", "hearts of iron 4"] },
+    { id: "Hearts of Iron", genre: "Grand Strategy", category: "Strategy Games", triggers: ["hearts of iron", "hoi4", "hearts of iron 4", "kaiserreich"] },
     { id: "Stellaris", genre: "Grand Strategy", category: "Strategy Games", triggers: ["stellaris", "stellaris build"] },
     { id: "XCOM", genre: "Tactical Strategy", category: "Strategy Games", triggers: ["xcom", "xcom 2", "enemy unknown"] },
     { id: "Plants vs Zombies", genre: "Tower Defense", category: "Strategy Games", triggers: ["plants vs zombies", "pvz", "garden warfare"] },
@@ -233,14 +235,16 @@
     { id: "The Walking Dead", genre: "Adventure", category: "Story Games", triggers: ["walking dead game", "telltale walking dead", "clementine walking dead"] },
     { id: "Detroit Become Human", genre: "Adventure", category: "Story Games", triggers: ["detroit become human", "connor detroit"] },
     { id: "Until Dawn", genre: "Horror Adventure", category: "Horror Games", triggers: ["until dawn", "the quarry game", "dark pictures anthology"] },
-    { id: "Resident Evil", genre: "Survival Horror", category: "Horror Games", triggers: ["resident evil", "re4 remake", "resident evil 4", "biohazard game"] },
-    { id: "Silent Hill", genre: "Survival Horror", category: "Horror Games", triggers: ["silent hill", "silent hill 2", "silent hill remake"] },
+    { id: "Resident Evil", genre: "Survival Horror", category: "Horror Games", triggers: ["resident evil", "re4 remake", "resident evil 4", "biohazard game", "resident evil village"] },
+    { id: "Silent Hill", genre: "Survival Horror", category: "Horror Games", triggers: ["silent hill", "silent hill 2", "silent hill remake", "pyramid head"] },
     { id: "Outlast", genre: "Horror", category: "Horror Games", triggers: ["outlast", "outlast trials"] },
-    { id: "Phasmophobia", genre: "Horror", category: "Horror Games", triggers: ["phasmophobia", "phasmo", "ghost hunting game"] },
-    { id: "Dead by Daylight", genre: "Asymmetric Horror", category: "Horror Games", triggers: ["dead by daylight", "dbd killer", "dbd survivor"] },
-    { id: "Lethal Company", genre: "Co-op Horror", category: "Horror Games", triggers: ["lethal company", "quota lethal company"] },
+    { id: "Phasmophobia", genre: "Horror", category: "Horror Games", triggers: ["phasmophobia", "phasmo", "ghost hunting game", "demonologist"] },
+    { id: "Dead by Daylight", genre: "Asymmetric Horror", category: "Horror Games", triggers: ["dead by daylight", "dbd killer", "dbd survivor", "dbd update"] },
+    { id: "Lethal Company", genre: "Co-op Horror", category: "Horror Games", triggers: ["lethal company", "quota lethal company", "great asset"] },
     { id: "Content Warning", genre: "Co-op Horror", category: "Horror Games", triggers: ["content warning game", "spooktube"] },
-    { id: "Poppy Playtime", genre: "Mascot Horror", category: "Horror Games", triggers: ["poppy playtime", "huggy wuggy", "mommy long legs"] },
+    { id: "Hunt Showdown", genre: "Extraction Shooter", category: "FPS", triggers: ["hunt showdown", "hunt: showdown", "crytek"] },
+    { id: "Dark and Darker", genre: "Extraction RPG", category: "Action Games", triggers: ["dark and darker", "ironmace"] },
+    { id: "Poppy Playtime", genre: "Mascot Horror", category: "Horror Games", triggers: ["poppy playtime", "huggy wuggy", "mommy long legs", "catnap"] },
     { id: "Garten of Banban", genre: "Mascot Horror", category: "Horror Games", triggers: ["garten of banban", "banban game"] },
     { id: "The Amazing Digital Circus", genre: "Mascot Media", category: "Animation Games", triggers: ["digital circus", "pomni", "caine digital circus"] },
     { id: "Friday Night Funkin", genre: "Rhythm", category: "Rhythm Games", triggers: ["friday night funkin", "fnf", "boyfriend fnf"] },
@@ -249,21 +253,25 @@
     { id: "Just Dance", genre: "Rhythm", category: "Rhythm Games", triggers: ["just dance", "just dance 2025", "just dance 2024"] },
     { id: "Project Sekai", genre: "Rhythm", category: "Rhythm Games", triggers: ["project sekai", "colorful stage", "pjsk"] },
     { id: "BanG Dream", genre: "Rhythm", category: "Rhythm Games", triggers: ["bang dream", "bandori"] },
-    { id: "Doom", genre: "FPS", category: "FPS", triggers: ["doom eternal", "doom 2016", "doom game"] },
+    { id: "Doom", genre: "FPS", category: "FPS", triggers: ["doom eternal", "doom 2016", "doom game", "doom the dark ages"] },
     { id: "Halo", genre: "FPS", category: "FPS", triggers: ["halo infinite", "halo reach", "master chief", "halo game"] },
     { id: "Battlefield", genre: "FPS", category: "FPS", triggers: ["battlefield 2042", "battlefield 5", "battlefield v", "bf2042"] },
-    { id: "Escape from Tarkov", genre: "Extraction Shooter", category: "FPS", triggers: ["escape from tarkov", "tarkov", "eft wipe"] },
+    { id: "Escape from Tarkov", genre: "Extraction Shooter", category: "FPS", triggers: ["escape from tarkov", "tarkov", "eft wipe", "tarkov arena"] },
     { id: "The Finals", genre: "Arena Shooter", category: "FPS", triggers: ["the finals game", "the finals ranked"] },
     { id: "Splatoon", genre: "Shooter", category: "Action Games", triggers: ["splatoon", "splatoon 3", "splatfest"] },
     { id: "Metroid", genre: "Metroidvania", category: "Adventure Games", triggers: ["metroid", "metroid dread", "metroid prime"] },
     { id: "Kirby", genre: "Platformer", category: "Platform Games", triggers: ["kirby", "forgotten land", "kirby game"] },
-    { id: "Sonic", genre: "Platformer", category: "Platform Games", triggers: ["sonic the hedgehog", "sonic frontiers", "sonic mania", "sonic game"] },
+    { id: "Sonic", genre: "Platformer", category: "Platform Games", triggers: ["sonic the hedgehog", "sonic frontiers", "sonic mania", "sonic game", "shadow generations"] },
     { id: "Crash Bandicoot", genre: "Platformer", category: "Platform Games", triggers: ["crash bandicoot", "crash team racing"] },
     { id: "Spyro", genre: "Platformer", category: "Platform Games", triggers: ["spyro", "spyro reignited"] },
     { id: "LittleBigPlanet", genre: "Platformer", category: "Platform Games", triggers: ["littlebigplanet", "little big planet", "sackboy"] },
     { id: "It Takes Two", genre: "Co-op Adventure", category: "Party Games", triggers: ["it takes two", "hazelight game"] },
     { id: "Unravel", genre: "Puzzle Platformer", category: "Indie Games", triggers: ["unravel two", "unravel game"] },
-    { id: "Rayman", genre: "Platformer", category: "Platform Games", triggers: ["rayman legends", "rayman origins", "rayman game"] }
+    { id: "Rayman", genre: "Platformer", category: "Platform Games", triggers: ["rayman legends", "rayman origins", "rayman game"] },
+    { id: "Garry's Mod", genre: "Sandbox", category: "Sandbox", triggers: ["garry's mod", "gmod", "g mod"] },
+    { id: "VRChat", genre: "Social VR", category: "Sandbox", triggers: ["vrchat", "vr chat"] },
+    { id: "World of Tanks", genre: "Vehicular Combat", category: "Action Games", triggers: ["world of tanks", "wot game"] },
+    { id: "War Thunder", genre: "Vehicular Combat", category: "Action Games", triggers: ["war thunder", "warthunder", "gaijin"] }
   ];
 
   var CATEGORY_FALLBACKS = [
@@ -503,6 +511,11 @@
 document.documentElement.className = document.documentElement.className.replace("no-js", "js");
 
 var savedLayout = localStorage.getItem("poke_layout");
+if (!savedLayout) {
+  savedLayout = "mix";
+  localStorage.setItem("poke_layout", "mix");
+}
+
 if (savedLayout === "classic") {
   document.documentElement.classList.add("layout-classic");
 }
@@ -585,8 +598,8 @@ button {
   cursor: pointer;
 }
 
-.mobile-top-bar, .mobile-search-form, .mobile-bottom-nav {
-  display: none;
+.mobile-top-bar, .mobile-search-form, .mobile-bottom-nav, .mobile-only {
+  display: none !important;
 }
 
 .no-js-only {
@@ -763,7 +776,10 @@ button {
 
 .hero-settings-btn {
   display: none;
-  margin-top: 32px;
+  position: fixed;
+  top: 16px;
+  right: 24px;
+  z-index: 1000;
   background: #f1f1f1;
   color: #0f0f0f;
   border: none;
@@ -788,7 +804,7 @@ button {
   font-size: 16px;
 }
 
-html.layout-nodiscover:not(.layout-mix) .hero-settings-btn {
+html.layout-nodiscover:not(.layout-mix):not(.layout-classic) .hero-settings-btn {
   display: inline-flex;
 }
 
@@ -798,11 +814,13 @@ html.layout-nodiscover body .page {
   justify-content: center;
   align-items: center;
   min-height: calc(100vh - 120px);
-  width: var(--container);
+  width: 100%;
+  max-width: var(--container);
 }
 
 html.layout-nodiscover body .page .hero {
   flex: 0 0 auto;
+  width: 100%;
 }
 
 .content {
@@ -822,6 +840,14 @@ html.layout-nodiscover body .page .hero {
 
 .header-text {
   display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+}
+
+.header-text-titles {
+  display: flex;
   flex-direction: column;
 }
 
@@ -839,6 +865,15 @@ html.layout-nodiscover body .page .hero {
   font-weight: 400;
   display: flex;
   align-items: center;
+}
+
+.hide-discover-link {
+  color: var(--ptc-accent);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  padding-bottom: 4px;
+  white-space: nowrap;
 }
 
 .header-tabs {
@@ -1877,7 +1912,7 @@ html.layout-nodiscover body .discover-wrap {
   }
 
   .mobile-top-bar {
-    display: flex;
+    display: flex !important;
     justify-content: space-between;
     align-items: center;
     padding: 0 16px;
@@ -1901,7 +1936,7 @@ html.layout-nodiscover body .discover-wrap {
   }
 
   .mobile-search-form {
-    display: none;
+    display: none !important;
     position: sticky;
     top: 48px;
     background: var(--ptc-bg);
@@ -1911,7 +1946,7 @@ html.layout-nodiscover body .discover-wrap {
   }
 
   #mobile-search-toggle:checked ~ .mobile-search-form {
-    display: flex;
+    display: flex !important;
   }
 
   .mobile-search-form input {
@@ -1934,7 +1969,7 @@ html.layout-nodiscover body .discover-wrap {
   }
 
   .chip-bar-wrapper.mobile-only {
-    display: flex;
+    display: flex !important;
     padding: 8px 16px;
     background: var(--ptc-bg);
     position: sticky;
@@ -2026,7 +2061,7 @@ html.layout-nodiscover body .discover-wrap {
   }
 
   .mobile-bottom-nav {
-    display: flex;
+    display: flex !important;
     justify-content: space-around;
     align-items: center;
     position: fixed;
@@ -2104,6 +2139,11 @@ html.layout-nodiscover body .discover-wrap {
 
   .library-dialog {
     align-self: center;
+  }
+  
+  html.layout-nodiscover:not(.layout-mix):not(.layout-classic) .hero-settings-btn {
+    top: 6px;
+    right: 16px;
   }
 }
 </style>
@@ -2229,6 +2269,10 @@ html.layout-nodiscover body .discover-wrap {
 </div>
 
 <div class="page">
+  <button type="button" class="hero-settings-btn" id="hero-settings-btn">
+    <i class="fa-solid fa-gear"></i> Settings
+  </button>
+
   <div class="hero">
     <div class="logo-wrap">
      <a href="/pride">
@@ -2259,18 +2303,17 @@ html.layout-nodiscover body .discover-wrap {
         <% } %>
       </div>
     </div>
-    
-    <button type="button" class="hero-settings-btn" id="hero-settings-btn">
-      <i class="fa-solid fa-gear"></i> Settings
-    </button>
   </div>
 
   <div class="content">
     <section class="discover-wrap">
       <div class="discover-header">
         <div class="header-text">
-          <h2 class="section-title">Poke Gaming</h2>
-          <p class="section-sub">discover epic gaming moments in poke!</p>
+          <div class="header-text-titles">
+            <h2 class="section-title">Poke Gaming</h2>
+            <p class="section-sub">discover epic gaming moments in poke!</p>
+          </div>
+          <a href="#" id="hide-discover-link" class="hide-discover-link">wanna hide discover?</a>
         </div>
       </div>
 
@@ -2393,7 +2436,7 @@ html.layout-nodiscover body .discover-wrap {
           <label style="display:block; margin-bottom: 8px; font-weight: 500;">Layout</label>
           <p style="font-size: 13px; color: var(--ptc-text-secondary); margin-bottom: 12px;">Hero is the big cute front page. Classic is for when ur like ok move, show me the videos. Mix em up keeps the big front page, but yeets the menu, Create, and My Poke up top too.</p>
 
-          <select id="setting-layout" style="width: 100%; max-width: 300px; padding: 10px; background: transparent; border: 1px solid var(--ptc-border); color: var(--ptc-text-primary); border-radius: 8px; font-size: 14px; outline: none;">
+          <select id="setting-layout" style="width: 100%; max-width: 300px; padding: 10px; background: transparent; border: 1px solid var(--ptc-border); color: var(--ptc-text-primary); border-radius: 8px; font-size: 14px; outline: none; transition: box-shadow 0.2s;">
             <optgroup label="Standard Modes" style="background: var(--ptc-bg);">
               <option value="hero">Hero (Default)</option>
               <option value="classic">Classic (No Hero)</option>
@@ -2626,6 +2669,7 @@ html.layout-nodiscover body .discover-wrap {
 
   var openSettingsBtn = document.getElementById("open-settings-btn");
   var heroSettingsBtn = document.getElementById("hero-settings-btn");
+  var hideDiscoverLink = document.getElementById("hide-discover-link");
   var saveSettingsBtn = document.getElementById("save-settings-btn");
   var settingsModalToggle = document.getElementById("settings-modal-toggle");
   var feedSettingControl = document.getElementById("setting-feed");
@@ -2675,7 +2719,7 @@ html.layout-nodiscover body .discover-wrap {
     var gameFeedsSetting = document.getElementById("setting-gamefeeds");
     var accentInput = document.getElementById("setting-accent");
 
-    if (layoutSetting) layoutSetting.value = localStorage.getItem("poke_layout") || "hero";
+    if (layoutSetting) layoutSetting.value = localStorage.getItem("poke_layout") || "mix";
     if (feedSetting) feedSetting.value = localStorage.getItem("poke_feed") || "gaming";
     if (gameFeedsSetting) gameFeedsSetting.value = localStorage.getItem("poke_gamefeeds") || "false";
     if (gameFeedsSetting && gameFeedsSetting.value === "true" && feedSetting) feedSetting.value = "gaming";
@@ -2696,6 +2740,22 @@ html.layout-nodiscover body .discover-wrap {
 
   if (heroSettingsBtn) {
     heroSettingsBtn.addEventListener("click", openSettingsHandler);
+  }
+
+  if (hideDiscoverLink) {
+    hideDiscoverLink.addEventListener("click", function(e) {
+      openSettingsHandler.call(this, e);
+      setTimeout(function() {
+        var layoutSel = document.getElementById("setting-layout");
+        if (layoutSel) {
+          layoutSel.focus();
+          layoutSel.style.boxShadow = "0 0 0 2px var(--ptc-accent)";
+          setTimeout(function() {
+            layoutSel.style.boxShadow = "none";
+          }, 2000);
+        }
+      }, 100);
+    });
   }
 
   var currentFeed = localStorage.getItem("poke_feed") || "gaming";
