@@ -650,6 +650,7 @@ button {
   justify-content: center;
   text-align: center;
   padding: 20px 0 40px;
+  width: 100%;
 }
 
 .logo-wrap {
@@ -787,7 +788,7 @@ button {
   font-size: 16px;
 }
 
-html.layout-nodiscover .hero-settings-btn {
+html.layout-nodiscover:not(.layout-mix) .hero-settings-btn {
   display: inline-flex;
 }
 
@@ -797,6 +798,11 @@ html.layout-nodiscover body .page {
   justify-content: center;
   align-items: center;
   min-height: calc(100vh - 120px);
+  width: var(--container);
+}
+
+html.layout-nodiscover body .page .hero {
+  flex: 0 0 auto;
 }
 
 .content {
@@ -1645,6 +1651,13 @@ html.layout-nodiscover body .discover-wrap {
 }
 
 @media (min-width: 561px) {
+  .mobile-top-bar,
+  .mobile-search-form,
+  .mobile-bottom-nav,
+  .mobile-only {
+    display: none !important;
+  }
+
   .desktop-sticky-nav {
     display: grid;
     grid-template-columns: minmax(170px, 1fr) minmax(260px, 600px) minmax(170px, 1fr);
