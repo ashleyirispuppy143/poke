@@ -16003,6 +16003,7 @@ startupPrimeStartedAt: performance.now(),
     let lastTimelinePaintAt = 0;
     let lastPairKickAt = 0;
     let lastProgressSignalAt = 0;
+    let lastTimeupdateSignalAt = 0;
     let stallConfirmTimer = null;
 
     function playbackWanted() {
@@ -16340,6 +16341,21 @@ startupPrimeStartedAt: performance.now(),
           if ((tp - lastProgressSignalAt) < (perfProfile.lowEnd ? 1500 : 1000)) return;
           lastProgressSignalAt = tp;
           schedule("unified-video-progress", perfProfile.lowEnd ? 600 : 400);
+          return;
+        }
+      }
+      if (type === "timeupdate") {
+        // The bar is painted by the 300ms timeline refresh loop, so a full
+        // reconcile on every timeupdate (~4x/sec) is redundant while both tracks
+        // run -- it was a big chunk of steady-state CPU. Throttle it hard. A
+        // missing/paused track skips this and reconciles immediately below.
+        const pairRunning = vn && !vn.paused &&
+          (!coupledMode || !audio || !audio.paused);
+        if (pairRunning) {
+          const tu = now();
+          if ((tu - lastTimeupdateSignalAt) < (perfProfile.lowEnd ? 1200 : 800)) return;
+          lastTimeupdateSignalAt = tu;
+          schedule("unified-video-timeupdate", perfProfile.lowEnd ? 500 : 350);
           return;
         }
       }
@@ -32191,7 +32207,9 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       setAudioVolumeSynced(muted ? 0 : targetVolFromVideo());
     } catch { }
     try { armInitialPairAudioGate(); } catch { }
-    state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 900);
+    // Give the freshly-started startup audio room to stabilize before any heal or
+    // the paired-track invariant can react to its first decode hiccup.
+    state.audioStartGraceUntil = Math.max(state.audioStartGraceUntil, now() + 1600);
     state.pairSyncAudibleCorrectionAfter = Math.max(
       Number(state.pairSyncAudibleCorrectionAfter || 0),
                                                     now() + PAIR_SYNC_OPENING_QUIET_MS
@@ -42808,6 +42826,23 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     const supervisorTick = () => {
       supervisorTimer = null;
       let needFast = false;
+      // CPU fast path: when playback is confirmed stable + healthy, nothing is
+      // transitioning, and no background flags are lingering, none of the heal
+      // checks below can do anything. Skip the whole heavy scan and re-arm at a
+      // relaxed cadence. This is the dominant steady-state CPU saver.
+      try {
+        const _ft = now();
+        if (typeof stableHealthyPlaybackForCpu === "function" &&
+          stableHealthyPlaybackForCpu() &&
+          !inSeekActivity() &&
+          document.visibilityState === "visible" &&
+          !state.bgHiddenWasPlaying && !state.resumeOnVisible && !state.bgResumeInFlight &&
+          (Number(state.tabReturnImmuneUntil) || 0) <= _ft &&
+          (Number(state.audioPauseUntil) || 0) <= _ft) {
+          supervisorTimer = setTimeout(supervisorTick, TICK_IDLE_MS + (perfProfile.lowEnd ? 1500 : 1000));
+          return;
+        }
+      } catch { }
       try {
         const t = now();
         const inSeek = inSeekActivity();
