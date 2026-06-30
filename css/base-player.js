@@ -30492,11 +30492,18 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
               forceAudioPlayNoMatterWhat().catch(() => { });
             }
           }
-          if (aAhead < BUFFER_AHEAD_PAUSE_SEC && aRS < HAVE_CURRENT_DATA && !_aHasBufferAtHead) {
-            if (!_enforceAudioLoadAt || (tNow - _enforceAudioLoadAt) > 1500) {
-              _enforceAudioLoadAt = tNow;
-              try { audio.load(); } catch { }
-            }
+          // audio.load() ABORTS the in-progress download, so reloading on every
+          // low-buffer tick keeps the audio starved forever on a slow network
+          // (the infinite reload + cutting + frozen-clock loop). Only reload when
+          // the fetch has genuinely stalled (networkState != LOADING), never while
+          // it is actively downloading, and at most once every 8s.
+          const _aNet = Number(audio.networkState || 0);
+          const _aFetchActive = _aNet === 2; // 2 = NETWORK_LOADING
+          if (aAhead < BUFFER_AHEAD_PAUSE_SEC && aRS < HAVE_CURRENT_DATA && !_aHasBufferAtHead &&
+            !_aFetchActive &&
+            (!_enforceAudioLoadAt || (tNow - _enforceAudioLoadAt) > 8000)) {
+            _enforceAudioLoadAt = tNow;
+            try { audio.load(); } catch { }
           }
         } catch { }
       }
