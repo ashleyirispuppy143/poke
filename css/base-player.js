@@ -24,7 +24,7 @@
  */
  
 //////////////// THE PLAYER, START ////////////////////////
- try {
+try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -2019,14 +2019,6 @@ startupPrimeStartedAt: performance.now(),
     return next >= target - tolerance &&
     next <= Math.min(target + forwardAllowance, liveCeiling);
   }
-  function startupVideoReadyToReleaseAudio(vNode = null) {
-    const vn = vNode || getVideoNode();
-    if (!vn || vn.paused) return false;
-    const rs = Number(vn.readyState || 0);
-    if (rs >= HAVE_CURRENT_DATA) return true;
-    const vt = Number(vn.currentTime) || 0;
-    return vt > 0.02 || startupZeroSuppressed();
-  }
   function startupAudioMayPlayNow(vNode = null) {
     try {
       if (hiddenNonLoopTerminalEndLikely("startup-audio-may-play")) {
@@ -2147,15 +2139,12 @@ startupPrimeStartedAt: performance.now(),
           return true;
         } catch { return false; }
       };
-      // Issue the visible track first. Audio still starts in the same task,
-      // but stays gated until the video clock/frame has actually advanced.
-      if (needAudio && needVideo) {
-        fired = playVideo() || fired;
-        fired = playAudio() || fired;
-      } else {
-        fired = playVideo() || fired;
-        fired = playAudio() || fired;
-      }
+      // Start the master audio first so it is buffered and running (still gated
+      // silent by the frame gate, so nothing is heard over a black first frame)
+      // and ready to be revealed the moment the video clock advances, instead of
+      // lagging behind the video.
+      fired = playAudio() || fired;
+      fired = playVideo() || fired;
     } finally {
       state._simulStartInFlight = false;
     }
@@ -9778,15 +9767,19 @@ startupPrimeStartedAt: performance.now(),
       // transition; trusting it would jump the bar to a wrong spot, so fall
       // through to the stable path.
       const at0 = (() => { try { return Number(audio.currentTime); } catch { return NaN; } })();
-      const audioVideoAgree = isFinite(at0) && isFinite(vt) &&
-        Math.abs(at0 - vt) < 0.35;
+      // Audio is the master clock, so keep the bar on it through ordinary A/V
+      // drift. Flipping to the video clock when they disagree is what jumps the
+      // bar by the drift amount (rewind/skip). Only distrust audio if it's
+      // wildly off, which means a real glitch, not normal drift.
+      const audioVideoSane = isFinite(at0) &&
+        (!isFinite(vt) || Math.abs(at0 - vt) < 10);
       const audioClockHealthy =
       document.visibilityState === "visible" &&
       isWindowFocused() &&
       audio && !audio.paused && !audio.seeking &&
       Number(audio.readyState || 0) >= HAVE_CURRENT_DATA &&
       isFinite(at0) && at0 >= 0 && state.audioEverStarted &&
-      audioVideoAgree &&
+      audioVideoSane &&
       !vn?.seeking &&
       !state.seeking && !state.seekBuffering && !state.seekResumeInFlight &&
       !state.restarting && state.pendingSeekTarget == null &&
@@ -11841,19 +11834,6 @@ startupPrimeStartedAt: performance.now(),
         if (state.playSessionId !== playSession) return;
         if (!state.intendedPlaying || state.restarting || state.seeking || state.seekBuffering) return;
         attemptTransitionDriftRepair({ threshold: 1.5, resumeIfPaused: true, allowSeekRecovery: false });
-      }, delay));
-    });
-  }
-  function armTransitionDriftSettleForSeek(seekId, playSession = state.playSessionId) {
-    if (!coupledMode || !audio) return;
-    clearTransitionDriftTimers();
-    [180, 650, 1350].forEach(delay => {
-      const tid = trackTransitionDriftTimer(setTimeout(() => {
-        untrackTransitionDriftTimer(tid);
-        if (state.seekId !== seekId || state.playSessionId !== playSession) return;
-        if (!state.intendedPlaying || state.restarting || state.seekBuffering) return;
-        if (!shouldResumeAfterSeek() && !state.playRequestedDuringSeek) return;
-        attemptTransitionDriftRepair({ threshold: 0.8, resumeIfPaused: true, allowSeekRecovery: true });
       }, delay));
     });
   }
@@ -21744,9 +21724,12 @@ startupPrimeStartedAt: performance.now(),
     // Forward-only. Only catch a behind video up to audio. Seeking video back
     // to a behind audio replays the section.
     const ahead = at - vt;
-    if (ahead < 0.6 || ahead > 2.5) return false;
+    // Only catch up on egregious desync, rarely. Each catch-up is a visible
+    // video jump, and the seekbar already follows the audio clock so the shown
+    // position stays right regardless. Small/medium lip-sync drift is left alone.
+    if (ahead < 1.2 || ahead > 2.5) return false;
     const t = now();
-    if ((t - _lastVideoDriftReanchorAt) < (perfProfile.lowEnd ? 5000 : 4000)) return false;
+    if ((t - _lastVideoDriftReanchorAt) < (perfProfile.lowEnd ? 11000 : 8000)) return false;
     if (Number(vn.readyState || 0) < HAVE_FUTURE_DATA && !canPlaySmoothAt(vn, at, 0.05)) return false;
     _lastVideoDriftReanchorAt = t;
     const prevRestore = !!state._allowUnexpectedVideoTimeRestore;
@@ -25576,14 +25559,6 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         state.isProgrammaticAudioPlay = false;
       }
     }
-  }
-  async function ensureUnmutedIfNotUserMuted() {
-    if (state.startupPhase) {
-      if (state.intendedPlaying) forceUnmuteForPlaybackIfAllowed();
-      updateAudioGainImmediate();
-      return;
-    }
-    await softUnmuteAudio(AUDIO_SAFE_FADE_DURATION_MS);
   }
   let _coupledBufferWaitCleanup = null;
   function clearResumeAfterBufferTimer() {
@@ -30278,18 +30253,6 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     _allVideoElsCacheAt = t;
     return out;
   }
-  function _patchEl(el) {
-    if (!el || _spinnerPatchedEls.has(el)) return;
-    // The spinner is presentation only. It must never install a listener that
-    // turns a successful play/playing event back into pause().
-    _spinnerPatchedEls.add(el);
-  }
-  function _engageLock() {
-    // Buffering and seeking are represented by readyState/seeking plus the UI.
-    // Pausing here used to cancel pending play() calls and create a play/pause
-    // feedback loop with the recovery controllers.
-    if (_spinnerLockEngaged) _releaseLock();
-  }
   function _releaseLock() {
     if (!_spinnerLockEngaged) return;
     _spinnerLockEngaged = false;
@@ -30324,9 +30287,6 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         } catch { }
       }
     }
-  }
-  function _evaluateSpinnerLock() {
-    if (_spinnerLockEngaged) _releaseLock();
   }
   let _spinnerLockPollInterval = null;
   let _spinnerLockFailSafeTimer = null;
@@ -31711,13 +31671,6 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     } catch {
       return false;
     }
-  }
-  function startupBufferReadyLoose() {
-    if (!coupledMode) return true;
-    const t0 = Number(video.currentTime()) || 0;
-    const vNode = getVideoNode();
-    return hasFuturePlaybackDataAt(vNode, t0, 0.04) &&
-    hasFuturePlaybackDataAt(audio, t0, 0.04);
   }
   function getStartupLockstepTarget(vNode = null) {
     const explicitTarget = (() => {
@@ -39026,10 +38979,12 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     const drift = at - vt;
     const driftAbs = Math.abs(drift);
     const minDrift = Math.max(
-      vn.paused ? 0.16 : (perfProfile.lowEnd ? 0.52 : 0.40),
+      vn.paused ? 0.16 : (perfProfile.lowEnd ? 0.44 : 0.30),
                               Number(opts.minDrift == null ? (perfProfile.lowEnd ? 0.32 : 0.22) : opts.minDrift)
     );
-    if (!vn.paused && !audio.paused && driftAbs < (perfProfile.lowEnd ? 0.92 : 0.74)) {
+    // A return desync above ~0.34s is audible/visible. Re-attach the video to
+    // the audio promptly instead of tolerating it and leaving a slow heal.
+    if (!vn.paused && !audio.paused && driftAbs < (perfProfile.lowEnd ? 0.50 : 0.34)) {
       state.returnAlignSettledUntil = Math.max(
         Number(state.returnAlignSettledUntil || 0),
                                                t + (perfProfile.lowEnd ? 900 : 650)
@@ -41533,6 +41488,37 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           }
           return;
         }
+        // Authoritative return resync: while hidden the video was paused at its
+        // old position and the audio (master) kept advancing. Re-attach the
+        // video to the live audio position and resume it now, before any other
+        // path runs, so it never plays from the stale position or waits out a
+        // slow heal. The visibility transition is active here, so the monotonic
+        // backward-seek guard already allows this write.
+        try {
+          if (state.intendedPlaying && coupledMode && audio && !audio.paused &&
+            !state.seeking && !state.seekBuffering && !state.seekResumeInFlight &&
+            !userSeekIntentActive() && !mediaSessionForcedPauseActive()) {
+            const _rvn = getVideoNode();
+            const _rat = Number(audio.currentTime);
+            if (_rvn && isFinite(_rat) && _rat >= 0) {
+              const _rvt = Number(_rvn.currentTime) || 0;
+              if (Math.abs(_rat - _rvt) > 0.18) {
+                state._isMicroSeek = true;
+                state._allowUnexpectedVideoTimeRestore = true;
+                try { _rvn.currentTime = _rat; } catch { }
+                try { if (videoEl && videoEl !== _rvn) videoEl.currentTime = _rat; } catch { }
+                state._allowUnexpectedVideoTimeRestore = false;
+                try { scheduleMicroSeekClear(perfProfile.lowEnd ? 320 : 220); } catch { }
+              }
+              if (_rvn.paused) {
+                try {
+                  const _rp = execProgrammaticVideoPlay({ force: true, minGapMs: 0, noAudioStart: true });
+                  if (_rp && typeof _rp.catch === "function") _rp.catch(() => { });
+                } catch { }
+              }
+            }
+          }
+        } catch { state._allowUnexpectedVideoTimeRestore = false; }
         let femboiReturnHandled = false;
         if (!_longTabReturn) {
           try { femboiReturnHandled = !!FemboiEngine.onForegroundReturn("visibility-return", { target: _returnTimelineTarget }); } catch { }
@@ -42679,7 +42665,9 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     let videoPausedSince = 0;
     let restartStuckSince = 0;
     let videoFrozenSince = 0;
+    let videoFrozenAtVt = NaN;
     let lastVideoRekickAt = 0;
+    let audioPausedWhileVideoSince = 0;
     let fgHealthySince = 0;
     let commitStuckSince = 0;
     let seekAudioLateSince = 0;
@@ -43197,8 +43185,13 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           audioAdvancing && vn && !vn.paused && !videoAdvancing &&
           Number(vn.readyState || 0) >= 3) {
           needFast = true;
-          if (!videoFrozenSince) videoFrozenSince = t;
-          else if ((t - videoFrozenSince) > 1500 && (t - lastVideoRekickAt) > 1500) {
+          if (!videoFrozenSince) { videoFrozenSince = t; videoFrozenAtVt = vt; }
+          else if ((t - videoFrozenSince) > 1500 && (t - lastVideoRekickAt) > 1500 &&
+            isFiniteNum(videoFrozenAtVt) && isFiniteNum(vt) &&
+            Math.abs(vt - videoFrozenAtVt) < 0.15) {
+            // Only re-seat if the video's own clock really didn't move over the
+            // window. If vt advanced, the decoder isn't parked; skip the re-seat
+            // so a healthy video is never hitched by a false positive.
             videoFrozenSince = 0;
             lastVideoRekickAt = t;
             try {
@@ -43229,6 +43222,40 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             try { if (typeof forceClearSeekBufferingUI === "function") forceClearSeekBufferingUI(); } catch { }
           }
         } else videoFrozenSince = 0;
+
+        // Audio paused while the video is genuinely advancing: audio should be
+        // playing too. Works during startup as well (Chromium can silently block
+        // the audio start), unlike the heal below which waits for commit.
+        if (coupledMode && audio && !hidden && !userHeldPaused &&
+          !state.endedNaturally && !state.restarting && !state.seekDragActive &&
+          !state.seeking && !state.seekBuffering && !state.seekResumeInFlight &&
+          !nativeSeeking && !audio.error && !playerMutedFromVideo() &&
+          vn && !vPaused && videoAdvancing && audio.paused &&
+          !(state.audioPlayInFlight && Number(state.audioPlayInFlightSession) === Number(state.playSessionId)) &&
+          Number(audio.readyState || 0) >= HAVE_CURRENT_DATA) {
+          needFast = true;
+          if (!audioPausedWhileVideoSince) audioPausedWhileVideoSince = t;
+          else if ((t - audioPausedWhileVideoSince) > 1200 && (t - lastForcedResumeAt) > 800) {
+            audioPausedWhileVideoSince = 0;
+            lastForcedResumeAt = t;
+            try {
+              const _avt = Number(vn.currentTime);
+              if (isFiniteNum(_avt) && Math.abs((Number(audio.currentTime) || 0) - _avt) > 0.2) {
+                state._allowAudioTimeWrite = true;
+                try { audio.currentTime = _avt; } catch { }
+                state._allowAudioTimeWrite = false;
+              }
+            } catch { state._allowAudioTimeWrite = false; }
+            try { cancelActiveFade(); } catch { }
+            try { setAudioPlaybackVolume(targetVolFromVideo(), "supervisor-audio-paused-while-video", { cancelFade: true }); } catch { }
+            try {
+              state.isProgrammaticAudioPlay = true;
+              const _ap = HTMLMediaElement.prototype.play.call(audio);
+              if (_ap && typeof _ap.catch === "function") _ap.catch(() => { });
+              setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 240);
+            } catch { state.isProgrammaticAudioPlay = false; }
+          }
+        } else audioPausedWhileVideoSince = 0;
 
         // Video playing but audio is dead/silent. Not gated on seek flags, since
         // those are what's stuck.
