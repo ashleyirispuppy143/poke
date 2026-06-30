@@ -2736,7 +2736,7 @@ startupPrimeStartedAt: performance.now(),
     return true;
   }
   function shouldUseHiddenAudioExclusiveMode() {
-    if (!platform.chromiumOnlyBrowser || !coupledMode || !audio) return false;
+    if (!coupledMode || !audio) return false;
     if (initialCoupledPairPending()) return false;
     if (document.visibilityState !== "hidden") return false;
     if (!state.intendedPlaying || state.endedNaturally || state.restarting) return false;
@@ -3285,12 +3285,13 @@ startupPrimeStartedAt: performance.now(),
     }
     const vn = getVideoNode();
     let hiddenAudioNoSeekAttempted = false;
-    if (!isVisible && platform.chromiumOnlyBrowser && coupledMode && audio && audio.paused && hiddenAudioPauseShieldActive()) {
+    if (!isVisible && coupledMode && audio && audio.paused && hiddenAudioPauseShieldActive()) {
       if (hiddenNonLoopTerminalEndLikely("keepalive-audio-paused")) {
         forceNonLoopTerminalEnd("keepalive-audio-paused");
         return;
       }
-      // Immediate native play from the worker tick - zero delay
+      // Immediate native play from the worker tick, every browser. Firefox
+      // suspends background audio too and needs the same fast replay.
       try { HTMLMediaElement.prototype.play.call(audio).catch(() => {}); } catch {}
       hiddenAudioNoSeekAttempted = hiddenAudioNoSeekResume("keepalive-audio-paused", { retry: true });
     }
@@ -3352,8 +3353,8 @@ startupPrimeStartedAt: performance.now(),
     _bgKeepaliveFailCount = 0;
     try { BackgroundAudioSentinel.start("keepalive-start"); } catch { }
     try {
-      const _bgTickMs = Math.max(80, Math.min(5000, Number(platform.chromiumOnlyBrowser ? (perfProfile.lowEnd ? 520 : 320) : (perfProfile.lowEnd ? 2400 : 1700)) || 500));
-      const _bgFallbackMs = Math.max(100, Math.min(5000, Number(platform.chromiumOnlyBrowser ? (perfProfile.lowEnd ? 700 : 420) : (perfProfile.lowEnd ? 2800 : 2000)) || 1000));
+      const _bgTickMs = Math.max(80, Math.min(5000, Number(platform.chromiumOnlyBrowser ? (perfProfile.lowEnd ? 520 : 320) : (perfProfile.lowEnd ? 900 : 600)) || 500));
+      const _bgFallbackMs = Math.max(100, Math.min(5000, Number(platform.chromiumOnlyBrowser ? (perfProfile.lowEnd ? 700 : 420) : (perfProfile.lowEnd ? 1100 : 800)) || 1000));
       const blob = new Blob(["setInterval(()=>postMessage(0)," + JSON.stringify(_bgTickMs) + ")"], { type: "application/javascript" });
       _bgWorkerUrl = URL.createObjectURL(blob);
       _bgWorker = new Worker(_bgWorkerUrl);
@@ -3365,7 +3366,7 @@ startupPrimeStartedAt: performance.now(),
         if (!_bgFallbackId) _bgFallbackId = setInterval(_bgKeepaliveTick, _bgFallbackMs);
       };
     } catch {
-      const _bgFallbackMs = Math.max(100, Math.min(5000, Number(platform.chromiumOnlyBrowser ? (perfProfile.lowEnd ? 700 : 420) : (perfProfile.lowEnd ? 2800 : 2000)) || 1000));
+      const _bgFallbackMs = Math.max(100, Math.min(5000, Number(platform.chromiumOnlyBrowser ? (perfProfile.lowEnd ? 700 : 420) : (perfProfile.lowEnd ? 1100 : 800)) || 1000));
       _bgFallbackId = setInterval(_bgKeepaliveTick, _bgFallbackMs);
     }
     // Immediate burst at startup to ensure fast first response
@@ -3598,6 +3599,24 @@ startupPrimeStartedAt: performance.now(),
       state.altTabTransitionActive ||
       state.bgTransitionInProgress;
       if (inImmunity || inTransition) return true;
+      // A genuinely-playing foreground video has no reason to pause on its own.
+      // Drop the spurious pause and counter-play. Mirrors the audio shield.
+      const tabHidden = (typeof document !== "undefined") && (document.visibilityState === "hidden");
+      const healthyForegroundVideo =
+      !tabHidden &&
+      document.visibilityState === "visible" &&
+      isWindowFocused() &&
+      !state.videoWaiting &&
+      !state.videoStallAudioPaused &&
+      !state.audioWaiting &&
+      !state.audioStallVideoPaused &&
+      !state.strictBufferHold &&
+      !state.seekResumeInFlight &&
+      !state.seekAudioReleaseInFlight &&
+      PlaybackProgressEvidence.videoProgressRecent(
+        perfProfile.lowEnd ? 1900 : 1300
+      );
+      if (healthyForegroundVideo) return true;
       return false;
     }
     function _scheduleCounterPlay(el) {
@@ -16054,6 +16073,7 @@ startupPrimeStartedAt: performance.now(),
     let lastTimelinePaintAt = 0;
     let lastPairKickAt = 0;
     let lastProgressSignalAt = 0;
+    let stallConfirmTimer = null;
 
     function playbackWanted() {
       if (_errorOverlayShown || state.endedNaturally ||
@@ -16070,6 +16090,39 @@ startupPrimeStartedAt: performance.now(),
       if (!timer) return;
       clearTimeout(timer);
       timer = null;
+    }
+
+    function clearStallConfirm() {
+      if (!stallConfirmTimer) return;
+      clearTimeout(stallConfirmTimer);
+      stallConfirmTimer = null;
+    }
+
+    // Video fires waiting/stalled often with data still buffered ahead. Cutting
+    // audio on the first one is heard as a dropout. Wait a short grace and only
+    // pause audio if the video genuinely stayed starved.
+    function scheduleStallAudioPauseConfirm(vn) {
+      if (stallConfirmTimer) return;
+      if (!coupledMode || !audio) return;
+      let startVt = NaN;
+      try { startVt = Number((vn || getVideoNode())?.currentTime); } catch { }
+      stallConfirmTimer = setTimeout(() => {
+        stallConfirmTimer = null;
+        if (document.visibilityState === "hidden" || !playbackWanted()) return;
+        const node = getVideoNode();
+        if (!node || node.paused || node.seeking) return;
+        if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return;
+        if (!audio || audio.paused) return;
+        let nowVt = NaN;
+        try { nowVt = Number(node.currentTime); } catch { }
+        const advanced = isFinite(nowVt) && isFinite(startVt) && (nowVt - startVt) > 0.02;
+        const rs = Number(node.readyState || 0);
+        if (advanced || rs >= HAVE_FUTURE_DATA) return;
+        let reallyBuffering = false;
+        try { reallyBuffering = isForegroundVideoActuallyBuffering(); } catch { }
+        if (!reallyBuffering && rs >= HAVE_CURRENT_DATA) return;
+        pauseLeadingAudio("unified-stall-confirmed");
+      }, perfProfile.lowEnd ? 380 : 300);
     }
 
     function setBaseline(vn = null) {
@@ -16257,12 +16310,11 @@ startupPrimeStartedAt: performance.now(),
       state.audioFadeCompleteUntil = 0;
       state.stateChangeCooldownUntil = 0;
       try {
-        setAudioMutedSynced(false);
+        // Let setAudioPlaybackVolume own the unmute so a post-stall reveal ramps
+        // instead of clicking. Don't pre-unmute here.
         setAudioPlaybackVolume(targetVolFromVideo(), reason, {
-          immediate: true,
           cancelFade: true
         });
-        audio.muted = false;
       } catch { }
       state.audioEverStarted = true;
       return !audio.paused && !audio.muted;
@@ -16304,7 +16356,7 @@ startupPrimeStartedAt: performance.now(),
       const vn = getVideoNode();
       if (type === "waiting" || type === "stalled") {
         setBaseline(vn);
-        pauseLeadingAudio(`unified-${type}`);
+        scheduleStallAudioPauseConfirm(vn);
         schedule(`unified-${type}`, perfProfile.lowEnd ? 320 : 180);
         return;
       }
@@ -16324,6 +16376,7 @@ startupPrimeStartedAt: performance.now(),
       }
       if (type === "play" || type === "playing" || type === "seeked" ||
         type === "loadeddata" || type === "canplay") {
+        if (type === "playing" || type === "play" || type === "seeked") clearStallConfirm();
         if (!isFinite(videoBaseline) || type === "play" || type === "seeked") {
           setBaseline(vn);
         }
@@ -16368,6 +16421,7 @@ startupPrimeStartedAt: performance.now(),
         _on(document, "visibilitychange", () => {
           serial++;
           clearTimer();
+          clearStallConfirm();
           setBaseline(getVideoNode());
           if (document.visibilityState === "visible") {
             schedule("unified-visible-return", 0);
@@ -20632,8 +20686,22 @@ startupPrimeStartedAt: performance.now(),
     }
     if (!smooth) {
       try { if (opts.cancelFade !== false) cancelActiveFade(); } catch { }
+      const startVol = Number(audio.volume) || 0;
+      const wasSilent = audio.muted || startVol <= 0.02;
+      // Revealing full gain instantly from a muted/silent state clicks. Ramp the
+      // silent->loud reveal over a few frames; it's imperceptibly short but
+      // removes the pop. Already-audible immediate sets stay instant.
+      if (wasSilent && cleanTarget > 0.05 &&
+        document.visibilityState === "visible" && !audio.paused) {
+        setAudioVolumeSynced(0);
+        setAudioMutedSynced(false);
+        state.userMutedAudio = false;
+        armAudioPopGuard(reason || "unmute-microramp", 220);
+        doVolumeFade(cleanTarget, perfProfile.lowEnd ? 70 : 55).catch(() => { });
+        return;
+      }
       setAudioMutedSynced(false);
-      if (Math.abs((Number(audio.volume) || 0) - cleanTarget) >= 0.01 || audio.muted) {
+      if (Math.abs(startVol - cleanTarget) >= 0.01 || audio.muted) {
         setAudioVolumeSynced(cleanTarget);
       }
       state.userMutedAudio = false;
@@ -21023,6 +21091,13 @@ startupPrimeStartedAt: performance.now(),
       _audioNotPlayingSilentSince = 0;
       clearAudioNotPlayingWarning();
       return;
+    }
+    // Running but silent with nothing muting it on purpose (shouldWatchForSilentAudio
+    // already excludes every deliberate-mute case). Unmute now instead of waiting
+    // out the warning window.
+    if (!audio.paused && !state.audioFading &&
+      (audio.muted || actualVol <= 0.01) && !playerMutedFromVideo()) {
+      try { forceUnmuteForPlaybackIfAllowed(); } catch { }
     }
     if (!_audioNotPlayingSilentSince) {
       _audioNotPlayingSilentSince = tNow;
@@ -29852,14 +29927,25 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     } else if (kind === "video-stalled") {
       state.videoWaiting = true;
       state.videoStallSince = state.videoStallSince || t;
-      state.videoStallAudioPaused = true;
-      pauseAudioForConfirmedVideoStall(
-        Math.max(MIN_STALL_AUDIO_RESUME_MS, 600),
-                                       {
-                                         verifiedBufferEvent: true,
-                                         confirmedLivenessMismatch: true
-                                       }
-      );
+      // If audio is healthy, let it own the stall instead of cutting it. The
+      // video catches up forward when it recovers. Only pause audio when audio
+      // itself can't continue.
+      if (healthyAudioCanOwnVisibleVideoStall()) {
+        state.videoStallAudioPaused = false;
+        state.stallAudioPausedSince = 0;
+        state.stallAudioResumeHoldUntil = 0;
+        try { armReturnAudioContinuity(perfProfile.lowEnd ? 15000 : 12000); } catch { }
+        try { armResumeAfterBuffer(12000); } catch { }
+      } else {
+        state.videoStallAudioPaused = true;
+        pauseAudioForConfirmedVideoStall(
+          Math.max(MIN_STALL_AUDIO_RESUME_MS, 600),
+          {
+            verifiedBufferEvent: true,
+            confirmedLivenessMismatch: true
+          }
+        );
+      }
       state.strictBufferReason = "video-liveness";
     } else {
       state.videoWaiting = true;
