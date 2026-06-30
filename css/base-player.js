@@ -24,7 +24,7 @@
  */
  
 //////////////// THE PLAYER, START ////////////////////////
-try {
+ try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -2339,6 +2339,7 @@ startupPrimeStartedAt: performance.now(),
     let _lastAudioTime = NaN;
     let _lastAudioMoveAt = 0;
     let _lastHealthyHiddenAudioAt = 0;
+    let _lastHeavyResumeAt = 0;
     const SENTINEL_GAIN = 0.0000008;
     function _makeContext() {
       if (_ctx && _ctx.state !== "closed") return _ctx;
@@ -2477,7 +2478,14 @@ startupPrimeStartedAt: performance.now(),
               markHiddenAudioPauseDetected(stalled ? "background-audio-clock-stall" : "background-audio-sentinel");
             }
           } catch { state.hiddenAudioPauseDetectedAt = t; }
-          try { hiddenAudioNoSeekResume(reason || "background-audio-sentinel", { retry: true }); } catch { }
+          // The native poke above already issued play(). Only escalate to the
+          // heavy resume (state reset + retry burst) for a real pause, and at
+          // most a few times a second, so flapping background audio isn't
+          // hammered into overlapping play() bursts.
+          if (audio.paused && (t - _lastHeavyResumeAt) > 700) {
+            _lastHeavyResumeAt = t;
+            try { hiddenAudioNoSeekResume(reason || "background-audio-sentinel", { retry: true }); } catch { }
+          }
         }
       }
       return true;
@@ -2525,6 +2533,7 @@ startupPrimeStartedAt: performance.now(),
       _lastAudioTime = NaN;
       _lastAudioMoveAt = 0;
       _lastHealthyHiddenAudioAt = 0;
+      _lastHeavyResumeAt = 0;
     }
     function destroy() {
       stop(0);
@@ -16281,11 +16290,10 @@ startupPrimeStartedAt: performance.now(),
     function releaseHealthyPair(vn, reason = "pair-reconcile") {
       if (!coupledMode || !audio || !vn || vn.paused || audio.paused ||
         !videoHasStarted(vn) || playerMutedFromVideo()) return false;
-      try { preserveAudioGainWhileSilent(`${reason}-final-align`); } catch { }
-      if (!alignAudioToVideo(vn, perfProfile.lowEnd ? 0.14 : 0.09)) {
-        schedule(`${reason}-align-settle`, perfProfile.lowEnd ? 130 : 70);
-        return false;
-      }
+      // Don't mute or seek the master audio here. This runs on every healthy
+      // reconcile; muting then unmuting (and seeking audio to a slightly-ahead
+      // video) chopped a track that was already playing fine. A/V drift is left
+      // to the video-side correction.
       state.videoWaiting = false;
       state.audioWaiting = false;
       state.videoStallAudioPaused = false;
@@ -16309,12 +16317,13 @@ startupPrimeStartedAt: performance.now(),
       state.audioEventsSquelchedUntil = 0;
       state.audioFadeCompleteUntil = 0;
       state.stateChangeCooldownUntil = 0;
+      // Only restore gain when the audio is actually muted or quiet (post-stall
+      // reveal). Leave an already-audible track untouched.
       try {
-        // Let setAudioPlaybackVolume own the unmute so a post-stall reveal ramps
-        // instead of clicking. Don't pre-unmute here.
-        setAudioPlaybackVolume(targetVolFromVideo(), reason, {
-          cancelFade: true
-        });
+        const targetVol = clamp01(targetVolFromVideo());
+        if (audio.muted || (Number(audio.volume) || 0) < targetVol - 0.02) {
+          setAudioPlaybackVolume(targetVol, reason, { cancelFade: true });
+        }
       } catch { }
       state.audioEverStarted = true;
       return !audio.paused && !audio.muted;
@@ -24296,6 +24305,9 @@ startupPrimeStartedAt: performance.now(),
     if (state.bgSilentTimeSyncing || state.bgResumeInFlight || state.resumeOnVisible) return false;
     if (foregroundRecoveryActive(500) || returnSmoothingActive(500) ||
       smoothForegroundReturnActive(500) || hiddenPlayPendingActive()) return false;
+    // Right after a play/pause toggle the pair is realigning, not steady. Let
+    // those alignment writes through so the video lands at the right position.
+    if (directUserToggleActive(900) || playPauseTransactionActive(650)) return false;
     const vn = getVideoNode();
     if (!vn || vn.paused) return false;
     return true;
