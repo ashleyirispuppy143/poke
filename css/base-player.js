@@ -4943,6 +4943,9 @@ startupPrimeStartedAt: performance.now(),
     }
     if (vRS < HAVE_CURRENT_DATA) {
       let _retryCount = 0;
+      // Clear any prior poll first; without this a repeated tab-return orphans
+      // the previous interval (it runs forever) and they pile up = CPU leak.
+      if (_tabReturnPollTimer) { try { clearInterval(_tabReturnPollTimer); } catch { } _tabReturnPollTimer = null; }
       _tabReturnPollTimer = setInterval(() => {
         _retryCount++;
         if (!state.intendedPlaying || state.endedNaturally || document.visibilityState !== "visible") {
@@ -12035,6 +12038,20 @@ startupPrimeStartedAt: performance.now(),
     if (PlaybackProgressEvidence.audioStalledFor(perfProfile.lowEnd ? 1500 : 1100)) {
       return false;
     }
+    // Strict coupling: audio may only keep playing through a PARKED decoder (the
+    // video has data buffered ahead and will re-decode in a moment). On a real
+    // video buffer (no future data), audio must NOT play on alone -- pause both
+    // and show the spinner so a track is never played without the other.
+    const _vn = getVideoNode();
+    const _vrs = _vn ? Number(_vn.readyState || 0) : 4;
+    if (_vrs < HAVE_FUTURE_DATA) {
+      let _videoHasDataAhead = false;
+      try {
+        const _at = Number(audio.currentTime);
+        _videoHasDataAhead = bufferedAhead(_vn, _at) > 0.25 || canPlaySmoothAt(_vn, _at, 0.2);
+      } catch { }
+      if (!_videoHasDataAhead) return false;
+    }
     return PlaybackProgressEvidence.audioProgressRecent(
       perfProfile.lowEnd ? 1800 : 1300
     );
@@ -15843,11 +15860,16 @@ startupPrimeStartedAt: performance.now(),
         explicitSeekTolerance(target),
                                  perfProfile.lowEnd ? 0.18 : 0.12
       );
+      // allowStartedAdvance=true: once play has been issued and the clock has
+      // moved FORWARD past the target, treat that as landed. Otherwise a `seeked`
+      // that fires mid-buffer after playback advanced is judged "not landed" and
+      // the pair is yanked back to the target -> it replays the same section over
+      // and over during the buffer. Forward progress is success, not failure.
       const landedAtDestination = seekTargetSampleMatches(
         target,
         value,
         tolerance,
-        false
+        true
       );
       if (!landedAtDestination) {
         const correctionCount = Number(state.seekCommitCorrectionCount || 0);
@@ -29457,18 +29479,9 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           VideoCompositorFlushManager.arm({ observe: true });
         }
       } catch { }
-      if (coupledMode && audio) {
-        try {
-          const vt = Number(vn.currentTime);
-          const at = Number(audio.currentTime);
-          if (!isFinite(vt) || !isFinite(at) ||
-            Math.abs(vt - at) > (perfProfile.lowEnd ? 1.35 : 1.0)) {
-            return false;
-            }
-        } catch {
-          return false;
-        }
-      }
+      // If both tracks are advancing, playback is fine and the spinner must be
+      // hidden. A/V drift is a sync matter, not buffering, so it must not raise
+      // the spinner (that was the "video plays fine but shows buffering" bug).
       _playbackClearlyAdvancingUntil = now() + (perfProfile.lowEnd ? 1900 : 1500);
       _clearVideoJsLoadingClasses(true);
       return true;
