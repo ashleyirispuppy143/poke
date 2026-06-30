@@ -2139,12 +2139,19 @@ startupPrimeStartedAt: performance.now(),
           return true;
         } catch { return false; }
       };
-      // Start the master audio first so it is buffered and running (still gated
-      // silent by the frame gate, so nothing is heard over a black first frame)
-      // and ready to be revealed the moment the video clock advances, instead of
-      // lagging behind the video.
-      fired = playAudio() || fired;
-      fired = playVideo() || fired;
+      // Only on the FIRST gated startup does the master audio lead: it is kept
+      // silent by the frame gate, so nothing is heard over a black first frame,
+      // and it's ready to be revealed the instant the video clock advances. On a
+      // restart/resume there is no such gate, so leading with audio is heard as
+      // "audio first, video late" — start the visible video first there.
+      const audioLeadsSilently = initialCoupledPairPending() || coordinatedStartupRelease;
+      if (audioLeadsSilently) {
+        fired = playAudio() || fired;
+        fired = playVideo() || fired;
+      } else {
+        fired = playVideo() || fired;
+        fired = playAudio() || fired;
+      }
     } finally {
       state._simulStartInFlight = false;
     }
@@ -6902,7 +6909,12 @@ startupPrimeStartedAt: performance.now(),
     const gateStartedAt = Number(state.hardPairGateStartedAt || 0);
     if (gateStartedAt > 0) {
       const gateAge = now() - gateStartedAt;
-      const gateMaxMs = (state.restarting || state.seekCommitActive)
+      // Restart waits longer for the video to re-decode frame 0 so the audio
+      // isn't revealed first (the real release is frame-based via releaseHealthyPair
+      // when the video presents). Seek keeps the shorter cap so audio isn't late.
+      const gateMaxMs = state.restarting
+        ? (perfProfile.lowEnd ? 5000 : 4000)
+        : state.seekCommitActive
         ? (perfProfile.lowEnd ? 2600 : 2000)
         : (perfProfile.lowEnd ? 1100 : 800);
       if (gateAge > gateMaxMs) {
@@ -9759,125 +9771,32 @@ startupPrimeStartedAt: performance.now(),
                                         dur
       );
     }
-    try {
-      const vn = getVideoNode();
-      // Coupled mode: prefer the audio clock for the bar when it's playing and
-      // agrees with the video (audio is the smooth master, so this avoids video
-      // micro-blips). When they disagree the audio has briefly diverged during a
-      // transition; trusting it would jump the bar to a wrong spot, so fall
-      // through to the stable path.
-      const at0 = (() => { try { return Number(audio.currentTime); } catch { return NaN; } })();
-      // Audio is the master clock, so keep the bar on it through ordinary A/V
-      // drift. Flipping to the video clock when they disagree is what jumps the
-      // bar by the drift amount (rewind/skip). Only distrust audio if it's
-      // wildly off, which means a real glitch, not normal drift.
-      const audioVideoSane = isFinite(at0) &&
-        (!isFinite(vt) || Math.abs(at0 - vt) < 10);
-      const audioClockHealthy =
-      document.visibilityState === "visible" &&
-      isWindowFocused() &&
-      audio && !audio.paused && !audio.seeking &&
-      Number(audio.readyState || 0) >= HAVE_CURRENT_DATA &&
-      isFinite(at0) && at0 >= 0 && state.audioEverStarted &&
-      audioVideoSane &&
-      !vn?.seeking &&
-      !state.seeking && !state.seekBuffering && !state.seekResumeInFlight &&
-      !state.restarting && state.pendingSeekTarget == null &&
-      !userSeekIntentActive() &&
-      !foregroundReturnTimelineAuthorityActive() &&
-      !returnSmoothingActive(0) &&
-      !inBgReturnGrace();
-      if (audioClockHealthy) {
-        return stabilizePlayerDisplayTime(clamp(at0), dur);
-      }
-      const visibleVideoClockOwnsUi =
-      document.visibilityState === "visible" &&
-      isWindowFocused() &&
-      vn &&
-      !vn.paused &&
-      !vn.seeking &&
-      Number(vn.readyState || 0) >= HAVE_CURRENT_DATA &&
-      !state.seeking &&
-      !state.seekBuffering &&
-      !state.seekResumeInFlight &&
-      !state.restarting &&
-      !foregroundReturnTimelineAuthorityActive() &&
-      !returnSmoothingActive(0) &&
-      !inBgReturnGrace();
-      if (visibleVideoClockOwnsUi && isFinite(vt) && vt >= 0) {
-        if (Math.abs(Number(playerDisplayLastTime || 0) - vt) >
-          (perfProfile.lowEnd ? 0.75 : 0.50)) {
-          resetPlayerDisplayTimelineClamp(vt);
-          }
-          return stabilizePlayerDisplayTime(clamp(vt), dur);
-      }
-    } catch { }
     const at = (() => { try { return Number(audio.currentTime); } catch { return NaN; } })();
-    const audioUsable =
-    isFinite(at) &&
-    at >= 0 &&
-    (state.audioEverStarted || !audio.paused || Number(audio.readyState || 0) >= HAVE_CURRENT_DATA);
-    if (!audioUsable) {
-      const displayVideo = clamp(vt);
-      return stabilizePlayerDisplayTime(
-        isFinite(displayVideo) ? displayVideo : playerDisplayLastTime,
-                                        dur
-      );
-    }
     try {
       if (terminalEndPlaybackLocked(200)) {
-        const terminal = dur > 0 ? dur : Math.max(isFinite(vt) ? vt : 0, at);
+        const terminal = dur > 0 ? dur : Math.max(isFinite(vt) ? vt : 0, isFinite(at) ? at : 0);
         resetPlayerDisplayTimelineClamp(terminal);
         return terminal;
       }
     } catch { }
-    const visibleForegroundStable =
-    document.visibilityState === "visible" &&
-    isWindowFocused() &&
-    !state.hiddenAudioExclusiveMode &&
-    !state.bgHiddenWasPlaying &&
-    !state.resumeOnVisible &&
-    !state.bgSilentTimeSyncing &&
-    !inBgReturnGrace() &&
-    !isTabReturnImmune();
-    if (visibleForegroundStable) {
-      const displayVideo = clamp(vt);
-      return stabilizePlayerDisplayTime(
-        isFinite(displayVideo) ? displayVideo : playerDisplayLastTime,
-                                        dur
-      );
-    }
-    // During a foreground return transition, pick one source (audio or video) and stick with it
-    // for the entire transition window. Re-evaluating every frame causes the seekbar to
-    // flip between audio and video positions, creating visible jitter.
-    const _returnTransitionActive = (() => {
-      try {
-        return foregroundReturnContextActive(0) ||
-        smoothForegroundReturnActive(0) ||
-        returnAlignmentSettlingActive(0) ||
-        inBgReturnGrace() ||
-        isTabReturnImmune();
-      } catch { return false; }
-    })();
-    if (_returnTransitionActive && !audio.paused && at > 0.05) {
-      // During return, always prefer audio as the single source of truth --
-      // audio was the active playback reference while hidden.
+    // Single source of truth. In coupled mode the master AUDIO clock drives the
+    // bar whenever it is the live clock, and we stay on it through ordinary A/V
+    // drift, brief micro-seeks, readyState dips, and visibility changes -- so the
+    // bar never flips to the video clock and jumps. The video clock is used only
+    // when there is no live audio clock (audio hasn't started, or it's paused
+    // while the video plays alone). Seeks, the foreground return, the terminal
+    // end, and the transition gate were all handled by the branches above.
+    const audioIsLiveClock =
+      isFinite(at) && at >= 0 &&
+      state.audioEverStarted &&
+      !audio.paused &&
+      Number(audio.readyState || 0) >= HAVE_METADATA;
+    if (audioIsLiveClock) {
       return stabilizePlayerDisplayTime(clamp(at), dur);
     }
-    const preferAudio =
-    document.visibilityState === "hidden" ||
-    state.hiddenAudioExclusiveMode ||
-    state.bgHiddenWasPlaying ||
-    state.resumeOnVisible ||
-    state.bgSilentTimeSyncing ||
-    inBgReturnGrace() ||
-    isTabReturnImmune() ||
-    (getVideoPaused() && !audio.paused) ||
-    ((state.videoWaiting || state.videoStallAudioPaused) && !audio.paused) ||
-    (!audio.paused && Math.abs(at - vt) > 0.45 && (at > vt || getVideoReadyState() < HAVE_CURRENT_DATA));
-    const selectedTime = clamp(preferAudio ? at : vt);
+    const displayVideo = clamp(isFinite(vt) ? vt : at);
     return stabilizePlayerDisplayTime(
-      isFinite(selectedTime) ? selectedTime : playerDisplayLastTime,
+      isFinite(displayVideo) ? displayVideo : playerDisplayLastTime,
                                       dur
     );
   }
@@ -16143,7 +16062,12 @@ startupPrimeStartedAt: performance.now(),
       if (!isFinite(vt) || vt < 0) return;
       lastTimelinePaintAt = t;
       try {
-        renderPlayerTimelineAtTime(vt, getPlayerDisplayDuration());
+        // Paint from the canonical display time (master audio when healthy), not
+        // the raw video clock. If the video decoder parks while audio plays, the
+        // video clock freezes but the bar must keep moving with the audio. The
+        // video still fires progress events while parked, which would otherwise
+        // pin the bar to the frozen video time through this path.
+        renderPlayerTimelineAtTime(NaN, getPlayerDisplayDuration());
         ensurePlayerTimelineRefresh();
       } catch { }
     }
@@ -16340,6 +16264,40 @@ startupPrimeStartedAt: performance.now(),
       return issued;
     }
 
+    // Video just resumed after a stall/buffer. The master audio kept advancing,
+    // so the video can be well behind (sometimes seconds, past the gentle drift
+    // catch-up range). Snap it up to the live audio position so the pair rejoins
+    // in sync, but only to a spot the video already has buffered, so it doesn't
+    // immediately re-buffer. Forward-only; never rewinds the video.
+    function catchVideoUpToAudioAfterStall(vn) {
+      if (!coupledMode || !audio || !vn || vn.paused || audio.paused) return;
+      if (!state.firstPlayCommitted || state.restarting || state.endedNaturally) return;
+      if (state.seeking || state.seekBuffering || state.seekResumeInFlight ||
+        state.pendingSeekTarget != null || userSeekIntentActive()) return;
+      if (isVisibilityTransitionActive() || isAltTabTransitionActive() ||
+        inBgReturnGrace() || startupSettleActive()) return;
+      let at = NaN, vt = NaN;
+      try { at = Number(audio.currentTime); vt = Number(vn.currentTime); } catch { return; }
+      if (!isFinite(at) || !isFinite(vt) || at - vt <= 0.5) return;
+      let target = at;
+      const dur = Number(vn.duration);
+      if (isFinite(dur) && dur > 0) target = Math.min(target, Math.max(0, dur - 0.05));
+      if (target <= vt + 0.1) return;
+      let buffered = false;
+      try { buffered = bufferedAhead(vn, target) > 0.03 || canPlaySmoothAt(vn, target, 0.05); } catch { }
+      if (!buffered) return;
+      const prevRestore = !!state._allowUnexpectedVideoTimeRestore;
+      state._isMicroSeek = true;
+      state._allowUnexpectedVideoTimeRestore = true;
+      try {
+        vn.currentTime = target;
+        if (videoEl && videoEl !== vn) videoEl.currentTime = target;
+      } catch { } finally {
+        state._allowUnexpectedVideoTimeRestore = prevRestore;
+      }
+      try { scheduleMicroSeekClear(perfProfile.lowEnd ? 320 : 220); } catch { }
+    }
+
     function onVideoSignal(event) {
       const type = String(event?.type || "");
       const vn = getVideoNode();
@@ -16366,6 +16324,7 @@ startupPrimeStartedAt: performance.now(),
       if (type === "play" || type === "playing" || type === "seeked" ||
         type === "loadeddata" || type === "canplay") {
         if (type === "playing" || type === "play" || type === "seeked") clearStallConfirm();
+        if (type === "playing" || type === "canplay") { try { catchVideoUpToAudioAfterStall(vn); } catch { } }
         if (!isFinite(videoBaseline) || type === "play" || type === "seeked") {
           setBaseline(vn);
         }
@@ -21531,7 +21490,6 @@ startupPrimeStartedAt: performance.now(),
                 const currentPos = Number(audio.currentTime) || 0;
               const hiddenNonUserAudioSync =
               document.visibilityState === "hidden" &&
-              platform.chromiumOnlyBrowser &&
               state.intendedPlaying &&
               state.firstPlayCommitted &&
               !state.restarting &&
@@ -21541,8 +21499,11 @@ startupPrimeStartedAt: performance.now(),
               !userSeekIntentActive() &&
               state.pendingSeekTarget == null &&
               !state._allowAudioTimeWrite;
+              // The master audio just plays in the background; never let an
+              // automatic sync seek it (either direction), on any browser. That
+              // was the "audio seeks to some other place in the background".
               if (hiddenNonUserAudioSync && currentPos > 0.05 &&
-                t > currentPos + 0.45 && !managedLoopRestartTransitionActive()) return;
+                Math.abs(t - currentPos) > 0.25 && !managedLoopRestartTransitionActive()) return;
         const transitionAudioMaster =
         !state._allowAudioTimeWrite &&
         state.firstPlayCommitted &&
@@ -24304,6 +24265,16 @@ startupPrimeStartedAt: performance.now(),
     if (state.seeking || state.seekResumeInFlight || state.pendingSeekTarget != null ||
       state.seekDragActive) return false;
     if (!(state._allowUnexpectedVideoTimeRestore || state._isMicroSeek)) return false;
+    // Never let an automatic write rewind the video below the live master audio.
+    // Audio is the truth; the video can only catch UP to it, never fall behind
+    // it on its own. This blocks the play/pause rewind even though the play/pause
+    // window is excluded from steady-playback below. User seeks move the audio
+    // too and are excluded above.
+    if (coupledMode && audio && !audio.paused && state.firstPlayCommitted &&
+      !state.restarting && !userSeekIntentActive()) {
+      const liveAt = Number(audio.currentTime);
+      if (isFinite(liveAt) && liveAt >= 0 && target < liveAt - 0.5) return true;
+    }
     const floor = getProtectedVideoTimelineFloor(isFinite(current) ? current : target);
     if (!isFinite(floor) || target >= floor - 0.25) return false;
     if (now() < Number(state.autoBackwardSeekBreakUntil || 0)) return true;
@@ -42666,6 +42637,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     let restartStuckSince = 0;
     let videoFrozenSince = 0;
     let videoFrozenAtVt = NaN;
+    let videoFrozenRekickCount = 0;
     let lastVideoRekickAt = 0;
     let audioPausedWhileVideoSince = 0;
     let fgHealthySince = 0;
@@ -43186,7 +43158,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           Number(vn.readyState || 0) >= 3) {
           needFast = true;
           if (!videoFrozenSince) { videoFrozenSince = t; videoFrozenAtVt = vt; }
-          else if ((t - videoFrozenSince) > 1500 && (t - lastVideoRekickAt) > 1500 &&
+          else if ((t - videoFrozenSince) > 600 && (t - lastVideoRekickAt) > 900 &&
             isFiniteNum(videoFrozenAtVt) && isFiniteNum(vt) &&
             Math.abs(vt - videoFrozenAtVt) < 0.15) {
             // Only re-seat if the video's own clock really didn't move over the
@@ -43194,6 +43166,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             // so a healthy video is never hitched by a false positive.
             videoFrozenSince = 0;
             lastVideoRekickAt = t;
+            videoFrozenRekickCount = (videoFrozenRekickCount || 0) + 1;
             try {
               state.seekBuffering = false;
               state.strictBufferHold = false;
@@ -43217,11 +43190,26 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
               if (vn.paused) {
                 const vp = HTMLMediaElement.prototype.play.call(vn);
                 if (vp && typeof vp.catch === "function") vp.catch(() => { });
+              } else if (videoFrozenRekickCount >= 2) {
+                // The re-seat alone didn't un-park it. Force a decoder reset by
+                // pausing and immediately replaying the VIDEO only; the audio is
+                // never touched. Same technique recoverOrdinaryPlayVisualStall uses.
+                state._allowVideoPause = true;
+                state.isProgrammaticVideoPause = true;
+                try { HTMLMediaElement.prototype.pause.call(vn); } catch { }
+                try {
+                  const vp2 = HTMLMediaElement.prototype.play.call(vn);
+                  if (vp2 && typeof vp2.catch === "function") vp2.catch(() => { });
+                } catch { }
+                setTimeout(() => {
+                  state._allowVideoPause = false;
+                  state.isProgrammaticVideoPause = false;
+                }, 220);
               }
-            } catch { }
+            } catch { state._allowVideoPause = false; state.isProgrammaticVideoPause = false; }
             try { if (typeof forceClearSeekBufferingUI === "function") forceClearSeekBufferingUI(); } catch { }
           }
-        } else videoFrozenSince = 0;
+        } else { videoFrozenSince = 0; if (videoAdvancing) videoFrozenRekickCount = 0; }
 
         // Audio paused while the video is genuinely advancing: audio should be
         // playing too. Works during startup as well (Chromium can silently block
@@ -43235,7 +43223,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           Number(audio.readyState || 0) >= HAVE_CURRENT_DATA) {
           needFast = true;
           if (!audioPausedWhileVideoSince) audioPausedWhileVideoSince = t;
-          else if ((t - audioPausedWhileVideoSince) > 1200 && (t - lastForcedResumeAt) > 800) {
+          else if ((t - audioPausedWhileVideoSince) > 800 && (t - lastForcedResumeAt) > 700) {
             audioPausedWhileVideoSince = 0;
             lastForcedResumeAt = t;
             try {
