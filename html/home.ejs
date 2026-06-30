@@ -502,12 +502,15 @@
 <script>
 document.documentElement.className = document.documentElement.className.replace("no-js", "js");
 
-if (localStorage.getItem("poke_layout") === "classic") {
+var savedLayout = localStorage.getItem("poke_layout");
+if (savedLayout === "classic") {
   document.documentElement.classList.add("layout-classic");
 }
-
-if (localStorage.getItem("poke_layout") === "mix") {
+if (savedLayout === "mix" || savedLayout === "mix-nodiscover") {
   document.documentElement.classList.add("layout-mix");
+}
+if (savedLayout === "hero-nodiscover" || savedLayout === "mix-nodiscover") {
+  document.documentElement.classList.add("layout-nodiscover");
 }
 
 var savedAccent = localStorage.getItem("poke_accent");
@@ -1578,6 +1581,10 @@ html.layout-mix body .hero {
   padding-top: 56px;
 }
 
+html.layout-nodiscover body .discover-wrap {
+  display: none !important;
+}
+
 @media (min-width: 861px) {
   .thumbnail-container {
     border-radius: 12px;
@@ -2331,9 +2338,15 @@ html.layout-mix body .hero {
           <p style="font-size: 13px; color: var(--ptc-text-secondary); margin-bottom: 12px;">Hero is the big cute front page. Classic is for when ur like ok move, show me the videos. Mix em up keeps the big front page, but yeets the menu, Create, and My Poke up top too.</p>
 
           <select id="setting-layout" style="width: 100%; max-width: 300px; padding: 10px; background: transparent; border: 1px solid var(--ptc-border); color: var(--ptc-text-primary); border-radius: 8px; font-size: 14px; outline: none;">
-            <option value="hero" style="background: var(--ptc-bg);">Hero (Default)</option>
-            <option value="classic" style="background: var(--ptc-bg);">Classic (No Hero)</option>
-            <option value="mix" style="background: var(--ptc-bg);">Mix em up!</option>
+            <optgroup label="Standard Modes" style="background: var(--ptc-bg);">
+              <option value="hero">Hero (Default)</option>
+              <option value="classic">Classic (No Hero)</option>
+              <option value="mix">Mix em up!</option>
+            </optgroup>
+            <optgroup label="No Discover Modes" style="background: var(--ptc-bg);">
+              <option value="hero-nodiscover">Hero (No Discover)</option>
+              <option value="mix-nodiscover">Mix em up! (No Discover)</option>
+            </optgroup>
           </select>
         </div>
 
@@ -2703,22 +2716,20 @@ html.layout-mix body .hero {
       localStorage.setItem("poke_gamefeeds", newGameFeeds);
       localStorage.setItem("poke_accent", newAccent);
 
+      document.documentElement.classList.remove("layout-classic", "layout-mix", "layout-nodiscover");
+
       if (newLayout === "classic") {
         document.documentElement.classList.add("layout-classic");
-        document.documentElement.classList.remove("layout-mix");
       } else if (newLayout === "mix") {
         document.documentElement.classList.add("layout-mix");
-        document.documentElement.classList.remove("layout-classic");
-
-        var stickyNavForMix = document.getElementById("desktop-sticky-nav");
-        if (stickyNavForMix && window.scrollY < 100) stickyNavForMix.classList.remove("visible");
-      } else {
-        document.documentElement.classList.remove("layout-classic");
-        document.documentElement.classList.remove("layout-mix");
-
-        var stickyNav = document.getElementById("desktop-sticky-nav");
-        if (stickyNav && window.scrollY < 100) stickyNav.classList.remove("visible");
+      } else if (newLayout === "mix-nodiscover") {
+        document.documentElement.classList.add("layout-mix", "layout-nodiscover");
+      } else if (newLayout === "hero-nodiscover") {
+        document.documentElement.classList.add("layout-nodiscover");
       }
+
+      var stickyNav = document.getElementById("desktop-sticky-nav");
+      if (stickyNav && window.scrollY < 100) stickyNav.classList.remove("visible");
 
       if (newGameFeeds === "true") {
         document.documentElement.classList.add("show-game-feeds");
