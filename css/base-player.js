@@ -12052,6 +12052,12 @@ startupPrimeStartedAt: performance.now(),
       } catch { }
       if (!_videoHasDataAhead) return false;
     }
+    // Audio may own a BRIEF parked-decoder stall (it recovers in ~0.6s via the
+    // re-seat), but if the video has stayed stalled longer than that it isn't
+    // recovering. Stop playing audio solo and couple to the video so it isn't
+    // "audio playing while the video is stuck buffering".
+    const _stallSince = Number(state.videoStallSince || 0);
+    if (_stallSince > 0 && (now() - _stallSince) > 1200) return false;
     return PlaybackProgressEvidence.audioProgressRecent(
       perfProfile.lowEnd ? 1800 : 1300
     );
@@ -16299,6 +16305,12 @@ startupPrimeStartedAt: performance.now(),
         state.pendingSeekTarget != null || userSeekIntentActive()) return;
       if (isVisibilityTransitionActive() || isAltTabTransitionActive() ||
         inBgReturnGrace() || startupSettleActive()) return;
+      // Don't catch up during a play/pause resume. Both tracks restart at the
+      // same saved spot; if the video is just a touch slower to wake than the
+      // audio, snapping it forward to the audio skips a section. The gentle
+      // pair-sync owns alignment there.
+      if (directUserToggleActive(900) || playPauseTransactionActive(800) ||
+        now() < Number(state._playPauseTransitionUntil || 0)) return;
       let at = NaN, vt = NaN;
       try { at = Number(audio.currentTime); vt = Number(vn.currentTime); } catch { return; }
       if (!isFinite(at) || !isFinite(vt) || at - vt <= 0.5) return;
@@ -24402,6 +24414,30 @@ startupPrimeStartedAt: performance.now(),
                 state.blockedVideoTimelineWriteAt = now();
                 state.blockedVideoTimelineWriteTarget = target;
                 return;
+              }
+              // Hard final floor against the random "rewinds a minute for no
+              // reason" jump: during committed coupled foreground playback with no
+              // seek/restart in progress, never let ANY write (even an explicitly
+              // allowed one carrying a stale target) move the video backward to
+              // more than a second below the live master audio. A genuine user
+              // seek sets the seek flags and moves the audio too, so it's exempt.
+              if (coupledMode && audio && !audio.paused &&
+                state.firstPlayCommitted && !state.restarting &&
+                !managedLoopRestartTransitionActive() &&
+                !state.seeking && !state.seekBuffering && !state.seekResumeInFlight &&
+                !state.seekCommitActive && state.pendingSeekTarget == null &&
+                !userSeekIntentActive() && !state._allowZeroSeek &&
+                document.visibilityState === "visible" &&
+                isFinite(current) && isFinite(target)) {
+                const _liveAt = Number(audio.currentTime);
+                if (isFinite(_liveAt) && _liveAt >= 0 &&
+                  target < current - 0.5 && target < _liveAt - 1.0) {
+                  state.blockedVideoTimelineWriteCount =
+                  Number(state.blockedVideoTimelineWriteCount || 0) + 1;
+                  state.blockedVideoTimelineWriteAt = now();
+                  state.blockedVideoTimelineWriteTarget = target;
+                  return;
+                }
               }
               _videoCurrentTimeDescriptor.set.call(el, value);
         }
@@ -41434,6 +41470,22 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       } catch { }
       if (newState === "visible") {
         const _hiddenMsForReturn = hiddenDurationForReturn(transitionAt);
+        // If the master audio already reached the end while we were hidden,
+        // finalize the terminal end now. Otherwise the heavy return logic tries
+        // to resume a finished track and the player never actually "ends".
+        try {
+          if (coupledMode && audio && !isLoopDesired() && state.intendedPlaying &&
+            !state.restarting && !userSeekIntentActive() && state.pendingSeekTarget == null) {
+            const _rad = Number(audio.duration);
+            const _rat = Number(audio.currentTime);
+            const _audioAtEnd = !!audio.ended ||
+              (isFinite(_rad) && _rad > 3 && isFinite(_rat) && _rat >= _rad - 0.25);
+            if (_audioAtEnd) {
+              forceNonLoopTerminalEnd("visibility-return-audio-ended");
+              return;
+            }
+          }
+        } catch { }
         const _ownsVisibilityReturn = claimForegroundReturnOwner("visibility-return", transitionAt);
         const _longTabReturn = beginLongTabReturnQuarantine("visibility-return", _hiddenMsForReturn);
         state.visibilityHiddenAt = 0;
@@ -41496,6 +41548,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         // path runs, so it never plays from the stale position or waits out a
         // slow heal. The visibility transition is active here, so the monotonic
         // backward-seek guard already allows this write.
+        let _resyncHandled = false;
         try {
           if (state.intendedPlaying && coupledMode && audio && !audio.paused &&
             !state.seeking && !state.seekBuffering && !state.seekResumeInFlight &&
@@ -41503,6 +41556,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             const _rvn = getVideoNode();
             const _rat = Number(audio.currentTime);
             if (_rvn && isFinite(_rat) && _rat >= 0) {
+              _resyncHandled = true;
               const _rvt = Number(_rvn.currentTime) || 0;
               if (Math.abs(_rat - _rvt) > 0.18) {
                 state._isMicroSeek = true;
@@ -41521,6 +41575,19 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             }
           }
         } catch { state._allowUnexpectedVideoTimeRestore = false; }
+        // The resync just re-attached and resumed the pair cleanly. For a normal
+        // (short) return that IS the whole job, so skip the pile of redundant
+        // recovery paths below: their extra seeks and pause/play cycles are what
+        // make the return visibly janky and the resume late. Long returns still
+        // fall through because the video has to buffer at the far-forward spot.
+        if (_resyncHandled && !_longTabReturn) {
+          try { armSeamlessReturnWindow("visibility-return-resync", 2200); } catch { }
+          try { armTabReturnVisibleFrameGuard("visibility-return-resync", 2600); } catch { }
+          try { quietSmoothForegroundReturnVisuals(perfProfile.lowEnd ? 1400 : 1100); } catch { }
+          setFastSync(700);
+          scheduleSync(0);
+          return;
+        }
         let femboiReturnHandled = false;
         if (!_longTabReturn) {
           try { femboiReturnHandled = !!FemboiEngine.onForegroundReturn("visibility-return", { target: _returnTimelineTarget }); } catch { }
