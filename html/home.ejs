@@ -760,6 +760,45 @@ button {
   color: var(--ptc-accent);
 }
 
+.hero-settings-btn {
+  display: none;
+  margin-top: 32px;
+  background: #f1f1f1;
+  color: #0f0f0f;
+  border: none;
+  border-radius: 18px;
+  padding: 0 16px;
+  height: 36px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+  transition: background-color 0.2s ease;
+}
+
+.hero-settings-btn:hover {
+  background: #d9d9d9;
+}
+
+.hero-settings-btn i {
+  font-size: 16px;
+}
+
+html.layout-nodiscover .hero-settings-btn {
+  display: inline-flex;
+}
+
+html.layout-nodiscover body .page {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: calc(100vh - 120px);
+}
+
 .content {
   margin-top: 16px;
 }
@@ -2207,6 +2246,10 @@ html.layout-nodiscover body .discover-wrap {
         <% } %>
       </div>
     </div>
+    
+    <button type="button" class="hero-settings-btn" id="hero-settings-btn">
+      <i class="fa-solid fa-gear"></i> Settings
+    </button>
   </div>
 
   <div class="content">
@@ -2569,6 +2612,7 @@ html.layout-nodiscover body .discover-wrap {
   });
 
   var openSettingsBtn = document.getElementById("open-settings-btn");
+  var heroSettingsBtn = document.getElementById("hero-settings-btn");
   var saveSettingsBtn = document.getElementById("save-settings-btn");
   var settingsModalToggle = document.getElementById("settings-modal-toggle");
   var feedSettingControl = document.getElementById("setting-feed");
@@ -2610,26 +2654,35 @@ html.layout-nodiscover body .discover-wrap {
     gameFeedsSettingControl.addEventListener("change", syncSettingsAvailability);
   }
 
-  if (openSettingsBtn) {
-    openSettingsBtn.addEventListener("click", function(e) {
-      e.preventDefault();
+  function openSettingsHandler(e) {
+    e.preventDefault();
 
-      var layoutSetting = document.getElementById("setting-layout");
-      var feedSetting = document.getElementById("setting-feed");
-      var gameFeedsSetting = document.getElementById("setting-gamefeeds");
-      var accentInput = document.getElementById("setting-accent");
+    var layoutSetting = document.getElementById("setting-layout");
+    var feedSetting = document.getElementById("setting-feed");
+    var gameFeedsSetting = document.getElementById("setting-gamefeeds");
+    var accentInput = document.getElementById("setting-accent");
 
-      if (layoutSetting) layoutSetting.value = localStorage.getItem("poke_layout") || "hero";
-      if (feedSetting) feedSetting.value = localStorage.getItem("poke_feed") || "gaming";
-      if (gameFeedsSetting) gameFeedsSetting.value = localStorage.getItem("poke_gamefeeds") || "false";
-      if (gameFeedsSetting && gameFeedsSetting.value === "true" && feedSetting) feedSetting.value = "gaming";
-      if (accentInput) accentInput.value = localStorage.getItem("poke_accent") || "#ffabcc";
+    if (layoutSetting) layoutSetting.value = localStorage.getItem("poke_layout") || "hero";
+    if (feedSetting) feedSetting.value = localStorage.getItem("poke_feed") || "gaming";
+    if (gameFeedsSetting) gameFeedsSetting.value = localStorage.getItem("poke_gamefeeds") || "false";
+    if (gameFeedsSetting && gameFeedsSetting.value === "true" && feedSetting) feedSetting.value = "gaming";
+    if (accentInput) accentInput.value = localStorage.getItem("poke_accent") || "#ffabcc";
 
-      syncSettingsAvailability();
+    syncSettingsAvailability();
 
-      settingsModalToggle.checked = true;
+    settingsModalToggle.checked = true;
+
+    if (this.id === "open-settings-btn" && sidebar && sidebar.classList.contains("visible")) {
       toggleSidebar();
-    });
+    }
+  }
+
+  if (openSettingsBtn) {
+    openSettingsBtn.addEventListener("click", openSettingsHandler);
+  }
+
+  if (heroSettingsBtn) {
+    heroSettingsBtn.addEventListener("click", openSettingsHandler);
   }
 
   var currentFeed = localStorage.getItem("poke_feed") || "gaming";
