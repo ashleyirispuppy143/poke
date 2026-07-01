@@ -7361,8 +7361,9 @@ startupPrimeStartedAt: performance.now(),
     }
     // Pair is running but the first frame hasn't presented yet. Hold the gate
     // a little longer so audio can't become audible before the picture moves;
-    // the rendered-frame callback releases it the moment a frame paints.
-    if (pairRunning && joinAge < (perfProfile.lowEnd ? 1250 : 900) &&
+    // the rendered-frame callback releases it the moment a frame paints. Kept
+    // short so a missed callback can only delay audio by ~half a second.
+    if (pairRunning && joinAge < (perfProfile.lowEnd ? 750 : 550) &&
       !videoStartEvidenceSince(
         vn,
         Number(state.resumePairVideoStartTime),
@@ -8289,7 +8290,16 @@ startupPrimeStartedAt: performance.now(),
       const at = coupledMode && audio ? (Number(audio.currentTime) || 0) : vt;
       if (vt > 0.05 || at > 0.05) suppressStartupZero(20000);
       if (initialCoupledPairPending()) {
-        if (!startupCoordinatedPlayActive()) return false;
+        if (!startupCoordinatedPlayActive()) {
+          // The pair can reach playing without a live coordinated window
+          // (native autoplay, a direct gesture play, or the verify chain
+          // dying). Refusing to commit then leaves the startup-zero logic
+          // armed: the clock shows 0:00, playback gets rewound, and nothing
+          // starts until a manual seek. Commit a genuinely live pair.
+          const uncoordinatedLive = vt > 0.8 && at > 0.8 &&
+          Math.abs(vt - at) <= Math.max(1.2, STARTUP_INITIAL_MAX_DRIFT_SEC * 2);
+          if (!uncoordinatedLive) return false;
+        } else {
         const target = Number(state._startupLockstepTarget);
         const issuedAt = Number(state._startupLockstepIssuedAt || 0);
         // If the pair has been playing and advancing for a while, commit even if
@@ -8312,6 +8322,7 @@ startupPrimeStartedAt: performance.now(),
               vt > target + maxAdvance || at > target + maxAdvance) return false;
             if (!startupPairHasClockEvidence(vn, vt, at, target, issuedAt)) return false;
           }
+        }
         }
       }
     } catch {
@@ -8572,6 +8583,8 @@ startupPrimeStartedAt: performance.now(),
   let playerSeekbarCacheAt = 0;
   let playerDisplayLastTime = 0;
   let playerDisplayLastTimeAt = 0;
+  let playerDisplayJumpPendingAt = 0;
+  let playerDisplayJumpPendingValue = NaN;
   let playerDisplayTransportFreezeTime = NaN;
   let playerDisplayTransportFreezeAt = 0;
   function loadTimeDisplayMode() {
@@ -9527,8 +9540,29 @@ startupPrimeStartedAt: performance.now(),
       const forwardAllowance =
       visibleAllowance + Math.min(12, elapsedSeconds * playbackRate * 1.8);
       if (value > playerDisplayLastTime + forwardAllowance) {
+        // The allowance caps at ~12s, so a persistent larger forward gap can
+        // never pass and the clock froze until the next seek. If every fresh
+        // sample keeps agreeing the timeline is far ahead, rebase to it.
+        if (playerDisplayJumpPendingAt > 0 &&
+          (ts - playerDisplayJumpPendingAt) > 1100 &&
+          isFinite(playerDisplayJumpPendingValue) &&
+          value >= playerDisplayJumpPendingValue - 0.25) {
+          playerDisplayJumpPendingAt = 0;
+          playerDisplayJumpPendingValue = NaN;
+          playerDisplayLastTime = value;
+          playerDisplayLastTimeAt = ts;
+          return value;
+        }
+        if (!playerDisplayJumpPendingAt ||
+          !isFinite(playerDisplayJumpPendingValue) ||
+          value < playerDisplayJumpPendingValue - 0.25) {
+          playerDisplayJumpPendingAt = ts;
+          playerDisplayJumpPendingValue = value;
+        }
         return playerDisplayLastTime;
       }
+      playerDisplayJumpPendingAt = 0;
+      playerDisplayJumpPendingValue = NaN;
     }
     // Return alignment can produce a tiny decode-boundary correction, but it
     // must not expose a stale multi-frame sample as a visible backward jump.
@@ -9775,7 +9809,33 @@ startupPrimeStartedAt: performance.now(),
       return liveVideo;
     }
     if (isFinite(target) && !observedAtDestination &&
-      !completedAndProgressing && !committedAndPlausible) return target;
+      !completedAndProgressing && !committedAndPlausible) {
+      // The landing can go unobserved when display reads are starved by other
+      // authorities while the clock passes through the narrow destination
+      // window; the target would then pin the controls behind live playback
+      // for as long as any seek flag lingers. If a live clock has clearly
+      // moved past the target and keeps advancing, follow it and adopt the
+      // destination as committed so later reads take the normal path.
+      const seekAge = seekEvidenceSince > 0 ? now() - seekEvidenceSince : Infinity;
+      let liveEscape = NaN;
+      if (seekAge > 2600 && !nativeSeeking) {
+        if (vn && !vn.paused && isFinite(liveVideo) &&
+          liveVideo > target + 0.3 && videoClockProgressing) {
+          liveEscape = liveVideo;
+        } else if (coupledMode && audio && !audio.paused && isFinite(liveAudio) &&
+          liveAudio > target + 0.3 && audioClockProgressing) {
+          liveEscape = liveAudio;
+        }
+      }
+      if (isFinite(liveEscape)) {
+        state.seekTimelineCommittedSeekId = Number(state.seekId);
+        state.seekTimelineCommittedTarget = target;
+        state.seekTimelineCommittedAt = now();
+        clearSeekbarStableTarget();
+        return liveEscape;
+      }
+      return target;
+    }
     if (isFinite(liveTimeline)) {
       clearSeekbarStableTarget();
       if (!nativeSeeking && isFinite(target) && liveTimeline >= target - tolerance) {
@@ -27815,7 +27875,13 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       // the audio clock by the return handler.
       if (document.visibilityState === "hidden" && coupledMode && audio) {
         const _hiddenAt = (() => { try { return Number(audio.currentTime) || 0; } catch { return 0; } })();
-        if (!hasFuturePlaybackDataAt(audio, _hiddenAt, 0.04)) return;
+        if (!hasFuturePlaybackDataAt(audio, _hiddenAt, 0.04)) {
+          // Keep the hidden element fetching; some browsers drop the download
+          // priority for background tabs and the buffer never refills alone.
+          try { if (audio.preload !== "auto") audio.preload = "auto"; } catch { }
+          try { BackgroundAudioSentinel.pulse("hidden-buffer-wait"); } catch { }
+          return;
+        }
         clearStaleCoupledBufferStateIfReady(_hiddenAt, "resume-after-buffer-hidden");
         clearBufferHold();
         clearForegroundBufferAudioHold();
@@ -27830,6 +27896,12 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           try { setSeekBufferingUIVisible(false); } catch { }
         }
         cleanup();
+        // Shield the play intent through an immediate tab return; the resume
+        // below is async and a paused pair must not read as a user pause.
+        state.foregroundResumeBoostUntil = Math.max(
+          Number(state.foregroundResumeBoostUntil || 0),
+                                                    now() + 4000
+        );
         try { hiddenAudioNoSeekResume("resume-after-buffer-hidden", { retry: true, force: true }); } catch { }
         try { updateMediaSessionPlaybackState(); } catch { }
         return;
@@ -27933,6 +28005,10 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                 state.seekBuffering = false;
                 try { setSeekBufferingUIVisible(false); } catch { }
               }
+              state.foregroundResumeBoostUntil = Math.max(
+                Number(state.foregroundResumeBoostUntil || 0),
+                                                          now() + 4000
+              );
               try { hiddenAudioNoSeekResume("resume-after-buffer-timeout-hidden", { retry: true, force: true }); } catch { }
               try { updateMediaSessionPlaybackState(); } catch { }
             } else {
@@ -39863,6 +39939,17 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           audioTime > lastAudioTime + 0.006;
           if (videoMoved) lastVideoMoveAt = t;
           if (audioMoved) lastAudioMoveAt = t;
+          // Clock samples freeze for a moment after a tab/window return even
+          // when frames are flowing. A recently presented frame is stronger
+          // evidence than the throttled clock; without this the monitor
+          // "recovered" healthy playback with a visible pause/replay.
+          if (!videoMoved) {
+            try {
+              if (VideoCompositorFlushManager.isFrameRecent(perfProfile.lowEnd ? 520 : 360)) {
+                lastVideoMoveAt = t;
+              }
+            } catch { }
+          }
           lastVideoTime = videoTime;
       lastAudioTime = audioTime;
       lastFrameCount = frameCount;
@@ -39921,11 +40008,21 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       }
       const readyAge = t - readySince;
       const pausedOrSplit = !videoRunning || !audioRunning;
-      const recoveryDelay = recoveryKind === "playback" && !pausedOrSplit
+      let recoveryDelay = recoveryKind === "playback" && !pausedOrSplit
       ? (perfProfile.lowEnd ? 1100 : 750)
       : pausedOrSplit
       ? (perfProfile.lowEnd ? 260 : 150)
       : (perfProfile.lowEnd ? 620 : 380);
+      // Right after a tab/window return the clocks and frame callbacks need a
+      // moment to wind back up; recovering during that window pauses/replays
+      // playback that was actually fine.
+      try {
+        if (!pausedOrSplit &&
+          (isVisibilityTransitionActive() || isTabReturnImmune() ||
+          foregroundReturnContextActive(900) || returnSmoothingActive(900))) {
+          recoveryDelay = Math.max(recoveryDelay, perfProfile.lowEnd ? 2000 : 1550);
+        }
+      } catch { }
       const progressFreshMs = perfProfile.lowEnd ? 900 : 650;
       const audioContinuingWithoutVideo =
       videoRunning &&
@@ -40242,7 +40339,14 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             try { preserveAudioGainWhileSilent("one-shot-pair-reassert"); } catch { }
             try { setSeekBufferingUIVisible(true); } catch { }
           }
+          const _restartAudioMaster = (() => {
+            try {
+              return tabReturnAudioMasterActive(3600) ||
+              backgroundReturnAudioMasterActive(restartAudioTime, 3600);
+            } catch { return false; }
+          })();
           if (opts.alignAudioToVideo === true &&
+            !_restartAudioMaster &&
             audio.paused &&
             isFinite(restartVideoTime) && restartVideoTime >= 0 &&
             (!isFinite(restartAudioTime) ||
