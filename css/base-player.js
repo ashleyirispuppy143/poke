@@ -13,9 +13,8 @@
  * <https://github.com/mozilla/vtt.js/blob/main/LICENSE>
  * /////////////////////////////////////////////////////////////////////////////////////
  * credits:
- * thanks stackoverflow, Claude Opus 4.6/4.7, Codex, w3c schools, mdn, myself and YOU! and more for help in the code for poke player.
+ * thanks stackoverflow, Claude Opus 4.6/4.7/4.8 and above, Codex, w3c schools, mdn, myself and YOU! and more for help in the code for poke player.
  * 100% puppy made code! 0 slop guarenteed!
- * also, legit fuck claude's weekly limit #antrophicdobetter #wokeai or something i have no idea,,,they are making claude have pronouns(???)
  * this works, 100%! no issues..at all!!
  * UNDER GPL 3-OR-LATER license, but i think video.js istelf is Apache 2.0, so basically this code, the players code is gpl3, u get wha we mean :3
  * gay!
@@ -24,6 +23,8 @@
  */
  
 //////////////// THE PLAYER, START ////////////////////////
+/* found bugs? report em! */
+
 try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
@@ -2139,11 +2140,9 @@ startupPrimeStartedAt: performance.now(),
           return true;
         } catch { return false; }
       };
-      // Only on the FIRST gated startup does the master audio lead: it is kept
-      // silent by the frame gate, so nothing is heard over a black first frame,
-      // and it's ready to be revealed the instant the video clock advances. On a
-      // restart/resume there is no such gate, so leading with audio is heard as
-      // "audio first, video late" — start the visible video first there.
+      // Audio leads only on the first gated startup, where the frame gate keeps
+      // it silent until the video advances. Restart/resume has no gate, so start
+      // the visible video first there instead.
       const audioLeadsSilently = initialCoupledPairPending() || coordinatedStartupRelease;
       if (audioLeadsSilently) {
         fired = playAudio() || fired;
@@ -2453,7 +2452,7 @@ startupPrimeStartedAt: performance.now(),
             stop(0);
             return false;
           }
-          // Skip native play poke if audio has ended or is at the tail -- prevents bg restart/loop
+          // Skip native play poke if audio has ended or is at the tail, prevents bg restart/loop
           const _pokeAudioDur = Number(audio.duration) || 0;
           const _pokeAudioAt = Number(audio.currentTime) || 0;
           const _pokeAudioEnded = audio.ended || (_pokeAudioDur > 3 && _pokeAudioAt >= _pokeAudioDur - 0.25);
@@ -5326,7 +5325,7 @@ startupPrimeStartedAt: performance.now(),
     let _lastUserPauseAt = 0;
     let _lastUserPlayAt = 0;
     let _pauseSerial = 0;       // incremented on every user pause, used to detect stale resumes
-    const INTENT_WINDOW_MS = 120000; // 2min -- effectively sticky until user plays again
+    const INTENT_WINDOW_MS = 120000; // 2min, sticky until user plays again
     function markUserPaused() {
       if (!isEnabled()) return;
       clearMediumPlayPauseStorm();
@@ -9784,13 +9783,9 @@ startupPrimeStartedAt: performance.now(),
         return terminal;
       }
     } catch { }
-    // Single source of truth. In coupled mode the master AUDIO clock drives the
-    // bar whenever it is the live clock, and we stay on it through ordinary A/V
-    // drift, brief micro-seeks, readyState dips, and visibility changes -- so the
-    // bar never flips to the video clock and jumps. The video clock is used only
-    // when there is no live audio clock (audio hasn't started, or it's paused
-    // while the video plays alone). Seeks, the foreground return, the terminal
-    // end, and the transition gate were all handled by the branches above.
+    // In coupled mode the audio clock drives the bar whenever it's live, so it
+    // stays put through drift instead of flipping to the video clock. Video clock
+    // only when there's no live audio. Seek/return/terminal/gate handled above.
     const audioIsLiveClock =
       isFinite(at) && at >= 0 &&
       state.audioEverStarted &&
@@ -12037,18 +12032,14 @@ startupPrimeStartedAt: performance.now(),
       mediaSessionForcedPauseActive()) return false;
     if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
     if (Number(audio.readyState || 0) < HAVE_CURRENT_DATA) return false;
-    // If the buffer icon is actually on screen for a sustained moment, the audio
-    // must not keep playing under it, no matter how the video buffered. A visible
-    // buffer icon means neither track plays.
+    // Don't keep audio playing under a visible buffer icon.
     if (_bufferGuardSpinnerOn && Number(_spinnerVisibleAt) > 0 &&
       (now() - Number(_spinnerVisibleAt)) > 450) return false;
     if (PlaybackProgressEvidence.audioStalledFor(perfProfile.lowEnd ? 1500 : 1100)) {
       return false;
     }
-    // Strict coupling: audio may only keep playing through a PARKED decoder (the
-    // video has data buffered ahead and will re-decode in a moment). On a real
-    // video buffer (no future data), audio must NOT play on alone -- pause both
-    // and show the spinner so a track is never played without the other.
+    // Audio may cover a parked decoder (data ahead, re-decodes soon) but not a
+    // real video buffer with no data.
     const _vn = getVideoNode();
     const _vrs = _vn ? Number(_vn.readyState || 0) : 4;
     if (_vrs < HAVE_FUTURE_DATA) {
@@ -12059,10 +12050,7 @@ startupPrimeStartedAt: performance.now(),
       } catch { }
       if (!_videoHasDataAhead) return false;
     }
-    // Audio may own a BRIEF parked-decoder stall (it recovers in ~0.6s via the
-    // re-seat), but if the video has stayed stalled longer than that it isn't
-    // recovering. Stop playing audio solo and couple to the video so it isn't
-    // "audio playing while the video is stuck buffering".
+    // A parked stall past ~0.6s isn't recovering; stop covering it.
     const _stallSince = Number(state.videoStallSince || 0);
     if (_stallSince > 0 && (now() - _stallSince) > 1200) return false;
     return PlaybackProgressEvidence.audioProgressRecent(
@@ -13998,11 +13986,8 @@ startupPrimeStartedAt: performance.now(),
       try { clearTimeout(state.seekRenderedAudioGateTimer); } catch { }
       state.seekRenderedAudioGateTimer = null;
     }
-    // Hard deadline so audio is NEVER left silent: the rendered-frame callback is
-    // unreliable and used to be the only thing that unmuted audio after a seek,
-    // which left the player playing video with no sound and a frozen seekbar
-    // until the user hit play/pause. After this window we make audio audible
-    // regardless and release the seek latches so the UI follows the live clock.
+    // Deadline so audio isn't left silent if the rendered-frame callback misses.
+    // After this window, make audio audible and release the seek latches.
     const gateDeadline = gateIssuedAt + (perfProfile.lowEnd ? 950 : 650);
     let attempts = 0;
     let fellBack = false;
@@ -16364,13 +16349,12 @@ startupPrimeStartedAt: performance.now(),
         }
       }
       if (type === "timeupdate") {
-        // The bar is painted by the 300ms timeline refresh loop, so a full
-        // reconcile on every timeupdate (~4x/sec) is redundant while both tracks
-        // run -- it was a big chunk of steady-state CPU. Throttle it hard. A
-        // missing/paused track skips this and reconciles immediately below.
         const pairRunning = vn && !vn.paused &&
           (!coupledMode || !audio || !audio.paused);
         if (pairRunning) {
+          // Paint the bar every timeupdate (cheap, self-throttled to ~80ms) so it
+          // stays live; only the heavy reconcile is throttled below for cpu.
+          try { paintLiveTimeline(vn, false); } catch { }
           const tu = now();
           if ((tu - lastTimeupdateSignalAt) < (perfProfile.lowEnd ? 1200 : 800)) return;
           lastTimeupdateSignalAt = tu;
@@ -16391,6 +16375,12 @@ startupPrimeStartedAt: performance.now(),
 
     function onAudioSignal(event) {
       const type = String(event?.type || "");
+      if (type === "timeupdate") {
+        // Keep the bar live off the master audio, so the display doesn't stall
+        // behind it when the video timeupdate stops during a freeze.
+        try { paintLiveTimeline(getVideoNode(), false); } catch { }
+        return;
+      }
       if (type === "waiting" || type === "stalled" || type === "pause" ||
         type === "canplay" || type === "playing") {
         schedule(`unified-audio-${type}`, type === "pause" ? 80 : 0);
@@ -16404,7 +16394,7 @@ startupPrimeStartedAt: performance.now(),
       ];
       const audioEvents = [
         "play", "playing", "pause", "waiting", "stalled", "canplay",
-        "loadeddata", "seeked", "progress"
+        "loadeddata", "seeked", "progress", "timeupdate"
       ];
       const vn = getVideoNode();
       try {
@@ -19400,6 +19390,18 @@ startupPrimeStartedAt: performance.now(),
       try { alignPausedPairForPlayToggle("user-play-toggle"); } catch { }
       try { armResumeStrictPairSync(12000); } catch { }
       try { armResumePairAudioGate("user-resume"); } catch { }
+      // Warm the video and its frame on resume so the picture doesn't wait on the
+      // commit cadence. Gated on both ready so the audio still joins.
+      try {
+        const _rvn = getVideoNode();
+        if (_rvn && _rvn.paused &&
+          Number(_rvn.readyState || 0) >= HAVE_FUTURE_DATA &&
+          Number(audio.readyState || 0) >= HAVE_FUTURE_DATA) {
+          const _p = execProgrammaticVideoPlay({ force: true, minGapMs: 0, noAudioStart: true });
+          if (_p && typeof _p.catch === "function") _p.catch(() => { });
+        }
+        try { VideoCompositorFlushManager.arm({ observe: true }); } catch { }
+      } catch { }
       if (!skipImmediateAudioKick) {
         try { startResumeAudioMasterPair("user-resume-audio-master"); } catch { }
       }
@@ -21557,8 +21559,7 @@ startupPrimeStartedAt: performance.now(),
               state.pendingSeekTarget == null &&
               !state._allowAudioTimeWrite;
               // The master audio just plays in the background; never let an
-              // automatic sync seek it (either direction), on any browser. That
-              // was the "audio seeks to some other place in the background".
+              // automatic sync seek it in either direction, on any browser.
               if (hiddenNonUserAudioSync && currentPos > 0.05 &&
                 Math.abs(t - currentPos) > 0.25 && !managedLoopRestartTransitionActive()) return;
         const transitionAudioMaster =
@@ -24422,19 +24423,17 @@ startupPrimeStartedAt: performance.now(),
                 state.blockedVideoTimelineWriteTarget = target;
                 return;
               }
-              // Hard final floor against the random "rewinds a minute for no
-              // reason" jump: during committed coupled foreground playback with no
-              // seek/restart in progress, never let ANY write (even an explicitly
-              // allowed one carrying a stale target) move the video backward to
-              // more than a second below the live master audio. A genuine user
-              // seek sets the seek flags and moves the audio too, so it's exempt.
+              // Final floor: with no seek/restart in progress, don't let any write
+              // move the video more than a second below the live master audio.
+              // Applies while hidden too, since nothing legitimately seeks the
+              // hidden video and a stale backward write there replays on return.
+              // A user seek sets the seek flags and moves the audio, so it's exempt.
               if (coupledMode && audio && !audio.paused &&
                 state.firstPlayCommitted && !state.restarting &&
                 !managedLoopRestartTransitionActive() &&
                 !state.seeking && !state.seekBuffering && !state.seekResumeInFlight &&
                 !state.seekCommitActive && state.pendingSeekTarget == null &&
                 !userSeekIntentActive() && !state._allowZeroSeek &&
-                document.visibilityState === "visible" &&
                 isFinite(current) && isFinite(target)) {
                 const _liveAt = Number(audio.currentTime);
                 if (isFinite(_liveAt) && _liveAt >= 0 &&
@@ -29540,7 +29539,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       } catch { }
       // If both tracks are advancing, playback is fine and the spinner must be
       // hidden. A/V drift is a sync matter, not buffering, so it must not raise
-      // the spinner (that was the "video plays fine but shows buffering" bug).
+      // the spinner.
       _playbackClearlyAdvancingUntil = now() + (perfProfile.lowEnd ? 1900 : 1500);
       _clearVideoJsLoadingClasses(true);
       return true;
@@ -30499,11 +30498,8 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
               forceAudioPlayNoMatterWhat().catch(() => { });
             }
           }
-          // audio.load() ABORTS the in-progress download, so reloading on every
-          // low-buffer tick keeps the audio starved forever on a slow network
-          // (the infinite reload + cutting + frozen-clock loop). Only reload when
-          // the fetch has genuinely stalled (networkState != LOADING), never while
-          // it is actively downloading, and at most once every 8s.
+          // load() aborts the in-progress download, so only reload when the fetch
+          // has stalled (not actively loading), at most once every 8s.
           const _aNet = Number(audio.networkState || 0);
           const _aFetchActive = _aNet === 2; // 2 = NETWORK_LOADING
           if (aAhead < BUFFER_AHEAD_PAUSE_SEC && aRS < HAVE_CURRENT_DATA && !_aHasBufferAtHead &&
@@ -41556,21 +41552,31 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           }
           return;
         }
-        // Authoritative return resync: while hidden the video was paused at its
-        // old position and the audio (master) kept advancing. Re-attach the
-        // video to the live audio position and resume it now, before any other
-        // path runs, so it never plays from the stale position or waits out a
-        // slow heal. The visibility transition is active here, so the monotonic
-        // backward-seek guard already allows this write.
+        // Re-attach the video to the master audio position and resume the pair,
+        // before any other path runs, so it never plays from the stale hidden
+        // spot. Resume the audio too if it got suspended while hidden. The
+        // visibility transition is active, so the backward-seek guard allows this.
         let _resyncHandled = false;
         try {
-          if (state.intendedPlaying && coupledMode && audio && !audio.paused &&
+          if (state.intendedPlaying && coupledMode && audio && !state.endedNaturally &&
             !state.seeking && !state.seekBuffering && !state.seekResumeInFlight &&
             !userSeekIntentActive() && !mediaSessionForcedPauseActive()) {
             const _rvn = getVideoNode();
-            const _rat = Number(audio.currentTime);
+            let _rat = Number(audio.currentTime);
+            const _capT = Number(_returnTimelineTarget);
+            if (!isFinite(_rat) || _rat < 0 || (_rat < 0.05 && isFinite(_capT) && _capT > 0.05)) {
+              _rat = _capT;
+            }
             if (_rvn && isFinite(_rat) && _rat >= 0) {
               _resyncHandled = true;
+              if (audio.paused) {
+                try {
+                  state.isProgrammaticAudioPlay = true;
+                  const _ap = HTMLMediaElement.prototype.play.call(audio);
+                  if (_ap && typeof _ap.catch === "function") _ap.catch(() => { });
+                  setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 240);
+                } catch { state.isProgrammaticAudioPlay = false; }
+              }
               const _rvt = Number(_rvn.currentTime) || 0;
               if (Math.abs(_rat - _rvt) > 0.18) {
                 state._isMicroSeek = true;
@@ -42758,8 +42764,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     let commitStuckSince = 0;
     let seekAudioLateSince = 0;
     let lastSeekAudioNudgeAt = 0;
-    // Recovery for "video plays but audio/bar is stuck after a seek". Clears the
-    // seek latches, rejoins audio to the live clock, and repaints the UI.
+    // Clears the seek latches, rejoins audio to the live clock, and repaints.
     const forceResumeAudioAndUnfreeze = (liveVt, reason) => {
       lastForcedResumeAt = now();
       lastSupervisorHealAt = now();
@@ -42909,14 +42914,17 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     const supervisorTick = () => {
       supervisorTimer = null;
       let needFast = false;
-      // CPU fast path: when playback is confirmed stable + healthy, nothing is
-      // transitioning, and no background flags are lingering, none of the heal
-      // checks below can do anything. Skip the whole heavy scan and re-arm at a
-      // relaxed cadence. This is the dominant steady-state CPU saver.
+      // CPU fast path: skip the heavy scan only when playback is confirmed stable
+      // and no buffer indicator is set. Any buffer flag or spinner means the
+      // coupling and false-buffer breaker below must run, so never skip then.
       try {
         const _ft = now();
+        const _anyBufferState = _bufferGuardSpinnerOn || state.strictBufferHold ||
+          state.seekBuffering || state.videoWaiting || state.audioWaiting ||
+          state.videoStallAudioPaused || state.audioStallVideoPaused;
         if (typeof stableHealthyPlaybackForCpu === "function" &&
           stableHealthyPlaybackForCpu() &&
+          !_anyBufferState &&
           !inSeekActivity() &&
           document.visibilityState === "visible" &&
           !state.bgHiddenWasPlaying && !state.resumeOnVisible && !state.bgResumeInFlight &&
@@ -43342,29 +43350,27 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           }
         } else { videoFrozenSince = 0; if (videoAdvancing) videoFrozenRekickCount = 0; }
 
-        // Buffer coupling: nothing plays under a buffer. Keyed on the native
-        // waiting flags (set straight off the media `waiting` events, so it catches
-        // the buffer icon no matter which layer raised it) plus a stalled-and-
-        // starved fallback. If one track is buffering while the other keeps playing,
-        // pause the other after a short sustain. The heals around this resume
-        // whichever was paused once the stuck track advances again, so they never
-        // play one-without-the-other. Parked decoders (data present, no waiting) are
-        // left to the re-seat above so a transient hitch never cuts the audio.
+        // If one track is buffering while the other plays, pause the other after a
+        // short sustain; the heals resume whichever was paused once the stuck one
+        // advances. Keyed on the waiting flag plus a stalled+starved fallback.
+        // Parked decoders are left to the re-seat so a hitch doesn't cut audio.
         {
-          // Require the clock to actually be stalled, so a stale waiting flag can
-          // never pause the other track while this one is genuinely advancing.
+          // Require the clock to be stalled so a stale waiting flag can't pause the
+          // other track while this one is advancing.
           const _vBuffering = vn && !vPaused && !videoAdvancing &&
             (!!state.videoWaiting || Number(vn.readyState || 0) < HAVE_FUTURE_DATA);
           const _aBuffering = coupledMode && audio && !audio.paused && !audioAdvancing &&
             (!!state.audioWaiting || Number(audio.readyState || 0) < HAVE_FUTURE_DATA);
+          // Skip every transition window (play/pause, seek settle, tab return). A
+          // warm-up `waiting` there is not a real buffer, and pausing over it
+          // churns the decoder and pauses the pair right when it should resume.
+          const _inReturnWindow = isVisibilityTransitionActive() ||
+            isAltTabTransitionActive() || isTabReturnImmune() || inBgReturnGrace() ||
+            foregroundReturnContextActive(0) || smoothForegroundReturnActive(0) ||
+            returnAlignmentSettlingActive(0);
           const _coupleReady = intended && committed && !hidden && !inSeek &&
             !userHeldPaused && !state.endedNaturally && !state.restarting &&
-            !state.seekDragActive && coupledMode && audio &&
-            // Not during a play/pause resume nor the post-seek settle window: a
-            // brief warm-up `waiting` there is not a real buffer. Pausing over it
-            // churns the decoder (lag after pause/play) and fights the seek resume
-            // into a play/pause/play/pause loop. The seek machinery holds the pair
-            // together during its own settle.
+            !state.seekDragActive && coupledMode && audio && !_inReturnWindow &&
             !directUserToggleActive(1000) && !playPauseTransactionActive(900) &&
             now() >= Number(state._playPauseTransitionUntil || 0) &&
             now() >= Number(state.seekStabilizeUntil || 0) &&
@@ -43540,26 +43546,25 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           } catch { stuckSpinnerSince = 0; }
 
           try {
-            // Stuck FALSE buffer: buffering is shown (or the pair is held) but
-            // nothing is advancing while the data is actually present. This is
-            // exactly what a manual play/pause fixes, so do it automatically. Keyed
-            // on real non-progress + data-present (not the raw flag) so a coupling
-            // flag flicker can't keep resetting the timer, and so it never fires on
-            // a genuine buffer (no data -> waits for the network). The coupling's
-            // pausing is untouched; this only makes the RESUME reliable.
-            const looksBuffering = !!(state.seekBuffering || state.strictBufferHold ||
+            // False-buffer breaker: buffering shown but the data is present. Reset
+            // whichever track is stuck, the way a manual play/pause does. Never
+            // fires without data, so a real buffer is left to the network and the
+            // coupling still owns pausing under a real buffer.
+            const _bufShown = !!(state.seekBuffering || state.strictBufferHold ||
               state.videoWaiting || state.audioWaiting || state.videoStallAudioPaused ||
               state.audioStallVideoPaused || _bufferGuardSpinnerOn);
-            const _pairNotAdvancing = !videoAdvancing &&
-              (!coupledMode || !audio || !audioAdvancing);
-            const _dataPresent = (!vn || Number(vn.readyState || 0) >= HAVE_CURRENT_DATA) &&
-              (!coupledMode || !audio || Number(audio.readyState || 0) >= HAVE_CURRENT_DATA);
-            if (looksBuffering && _pairNotAdvancing && _dataPresent &&
+            const _vDataOk = !vn || Number(vn.readyState || 0) >= HAVE_CURRENT_DATA;
+            const _aDataOk = !coupledMode || !audio || Number(audio.readyState || 0) >= HAVE_CURRENT_DATA;
+            const _vStuck = !!(vn && !vPaused && !videoAdvancing);
+            const _aStuck = !!(coupledMode && audio && !audio.paused && !audioAdvancing);
+            const _bothPaused = (!vn || vPaused) && (!coupledMode || !audio || audio.paused);
+            const _anyStuck = _vStuck || _aStuck || _bothPaused;
+            if (_bufShown && _anyStuck && _vDataOk && _aDataOk &&
               intended && committed && !hidden && !inSeek && !nativeSeeking &&
               !state.seekDragActive && (Number(state.userPauseUntil) || 0) < t &&
               (typeof userPauseLockActive !== "function" || !userPauseLockActive())) {
               if (!bufferingForeverSince) bufferingForeverSince = t;
-              else if ((t - bufferingForeverSince) > 1500 && (t - lastBufferForeverHealAt) > 2000) {
+              else if ((t - bufferingForeverSince) > 1300 && (t - lastBufferForeverHealAt) > 2000) {
                 bufferingForeverSince = 0;
                 lastBufferForeverHealAt = t;
                 lastSupervisorHealAt = t;
@@ -43568,15 +43573,78 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                 try { state.videoWaiting = false; state.audioWaiting = false; } catch { }
                 try { state.videoStallAudioPaused = false; state.audioStallVideoPaused = false; } catch { }
                 try { forceClearSeekBufferingUI(); } catch { }
-                // Full play/pause-equivalent reset so the pair actually resumes.
-                try {
-                  if (coupledMode && audio) {
-                    forceResumeAudioAndUnfreeze(vt, "supervisor-buffering-forever");
-                  } else if (typeof execProgrammaticVideoPlay === "function") {
-                    const p = execProgrammaticVideoPlay({ force: true, minGapMs: 0 });
-                    if (p && typeof p.catch === "function") p.catch(() => { });
+                const _fullReset = _bothPaused || (_vStuck && _aStuck) || !coupledMode || !audio;
+                if (_fullReset) {
+                  // Pause both, then replay both.
+                  try {
+                    state._allowVideoPause = true;
+                    state.isProgrammaticVideoPause = true;
+                    if (coupledMode && audio) state.isProgrammaticAudioPause = true;
+                    try { if (vn && !vn.paused) HTMLMediaElement.prototype.pause.call(vn); } catch { }
+                    try {
+                      if (coupledMode && audio && !audio.paused) {
+                        preserveAudioGainWhileSilent("false-buffer-reset");
+                        HTMLMediaElement.prototype.pause.call(audio);
+                      }
+                    } catch { }
+                    setTimeout(() => {
+                      state._allowVideoPause = false;
+                      state.isProgrammaticVideoPause = false;
+                      state.isProgrammaticAudioPause = false;
+                      try {
+                        if (coupledMode && audio) {
+                          forceResumeAudioAndUnfreeze(getVideoCurrentTimeSafe(vt), "false-buffer-reset");
+                        } else if (typeof execProgrammaticVideoPlay === "function") {
+                          const p = execProgrammaticVideoPlay({ force: true, minGapMs: 0 });
+                          if (p && typeof p.catch === "function") p.catch(() => { });
+                        }
+                      } catch { }
+                    }, 70);
+                  } catch {
+                    state._allowVideoPause = false;
+                    state.isProgrammaticVideoPause = false;
+                    state.isProgrammaticAudioPause = false;
                   }
-                } catch { }
+                } else if (_vStuck) {
+                  // Video stuck while audio plays: reset the video decoder only.
+                  try {
+                    state._allowVideoPause = true;
+                    state.isProgrammaticVideoPause = true;
+                    try { if (vn && !vn.paused) HTMLMediaElement.prototype.pause.call(vn); } catch { }
+                    setTimeout(() => {
+                      state._allowVideoPause = false;
+                      state.isProgrammaticVideoPause = false;
+                      try {
+                        const p = execProgrammaticVideoPlay({ force: true, minGapMs: 0, noAudioStart: true });
+                        if (p && typeof p.catch === "function") p.catch(() => { });
+                      } catch { }
+                    }, 60);
+                  } catch { state._allowVideoPause = false; state.isProgrammaticVideoPause = false; }
+                } else if (_aStuck) {
+                  // Audio stuck while video plays: reset the audio, rejoin to video.
+                  try {
+                    state.isProgrammaticAudioPause = true;
+                    try {
+                      if (audio && !audio.paused) {
+                        preserveAudioGainWhileSilent("false-buffer-audio-reset");
+                        HTMLMediaElement.prototype.pause.call(audio);
+                      }
+                    } catch { }
+                    setTimeout(() => {
+                      state.isProgrammaticAudioPause = false;
+                      try {
+                        const _avt2 = Number(getVideoNode()?.currentTime);
+                        if (isFiniteNum(_avt2) && _avt2 >= 0) {
+                          state._allowAudioTimeWrite = true;
+                          try { audio.currentTime = _avt2; } catch { }
+                          state._allowAudioTimeWrite = false;
+                        }
+                        const ap = HTMLMediaElement.prototype.play.call(audio);
+                        if (ap && typeof ap.catch === "function") ap.catch(() => { });
+                      } catch { state._allowAudioTimeWrite = false; }
+                    }, 60);
+                  } catch { state.isProgrammaticAudioPause = false; }
+                }
               }
               needFast = true;
             } else bufferingForeverSince = 0;
