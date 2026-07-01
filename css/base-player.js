@@ -8601,6 +8601,8 @@ startupPrimeStartedAt: performance.now(),
   let playerDisplayLastTimeAt = 0;
   let playerDisplayJumpPendingAt = 0;
   let playerDisplayJumpPendingValue = NaN;
+  let playerDisplayDropPendingAt = 0;
+  let playerDisplayDropPendingValue = NaN;
   let playerDisplayTransportFreezeTime = NaN;
   let playerDisplayTransportFreezeAt = 0;
   function loadTimeDisplayMode() {
@@ -9557,12 +9559,13 @@ startupPrimeStartedAt: performance.now(),
       visibleAllowance + Math.min(12, elapsedSeconds * playbackRate * 1.8);
       if (value > playerDisplayLastTime + forwardAllowance) {
         // The allowance caps at ~12s, so a persistent larger forward gap can
-        // never pass and the clock froze until the next seek. If every fresh
-        // sample keeps agreeing the timeline is far ahead, rebase to it.
+        // never pass and the clock froze until the next seek. Rebase only to
+        // an ADVANCING far-ahead clock; a wedged element can report one
+        // frozen bogus position for a while and must not win.
         if (playerDisplayJumpPendingAt > 0 &&
           (ts - playerDisplayJumpPendingAt) > 1100 &&
           isFinite(playerDisplayJumpPendingValue) &&
-          value >= playerDisplayJumpPendingValue - 0.25) {
+          value > playerDisplayJumpPendingValue + 0.04) {
           playerDisplayJumpPendingAt = 0;
           playerDisplayJumpPendingValue = NaN;
           playerDisplayLastTime = value;
@@ -9602,8 +9605,33 @@ startupPrimeStartedAt: performance.now(),
     if (playerDisplayLastTimeAt > 0 &&
       (ts - playerDisplayLastTimeAt) < holdMs &&
       value < playerDisplayLastTime - dropTolerance) {
+      // One bad forward sample can leave the display ahead of the real clock;
+      // this hold then shows the wrong position for seconds. Follow the real
+      // clock only when the lower samples are ADVANCING (a playing clock
+      // moves; an element in a transient reset sits frozen at 0) and never
+      // adopt a near-zero position from far into the video — restarts have
+      // their own authority path and a resetting element reads 0:00.
+      if (playerDisplayDropPendingAt > 0 &&
+        (ts - playerDisplayDropPendingAt) > 1400 &&
+        isFinite(playerDisplayDropPendingValue) &&
+        value > playerDisplayDropPendingValue + 0.04 &&
+        !(value < 1.2 && playerDisplayLastTime > 2)) {
+        playerDisplayDropPendingAt = 0;
+        playerDisplayDropPendingValue = NaN;
+        playerDisplayLastTime = value;
+        playerDisplayLastTimeAt = ts;
+        return value;
+      }
+      if (!playerDisplayDropPendingAt ||
+        !isFinite(playerDisplayDropPendingValue) ||
+        value < playerDisplayDropPendingValue - 0.3) {
+        playerDisplayDropPendingAt = ts;
+        playerDisplayDropPendingValue = value;
+      }
       return playerDisplayLastTime;
       }
+    playerDisplayDropPendingAt = 0;
+    playerDisplayDropPendingValue = NaN;
       if (value >= playerDisplayLastTime - 0.04) {
         playerDisplayLastTime = Math.max(playerDisplayLastTime, value);
         playerDisplayLastTimeAt = ts;
@@ -33494,6 +33522,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
   let _bufMonLastVT = -1;
   let _bufMonStallFrames = 0;        // tick count (100ms per tick) of frozen vt
   let _bufMonHoldClearTicks = 0;     // ticks the pair kept advancing under a latched hold
+  let _bufMonPausedHealthyTicks = 0; // ticks a ready pair sat paused under a latched hold
   let _bufMonConfirmedStallAt = 0;   // timestamp when we confirmed a real stall
   let _bufMonLastKillAt = 0;         // last time we killed audio — cooldown gate
   const BUF_MON_INTERVAL_MS = perfProfile.lowEnd ? 450 : (perfProfile.mobile ? 360 : 300);
@@ -33582,6 +33611,41 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         _bufMonStallFrames = 0;
         _bufMonLastVT = -1;
         _bufMonConfirmedStallAt = 0;
+      }
+      // Paused-pair backstop: playback is wanted, both elements sit paused
+      // with future data ready, and a hold flag is still latched. The spinner
+      // clear path refuses to hide while those flags are set and the
+      // heartbeat consistency check refuses to resume while they are set —
+      // a deadlock only a manual pause/play used to break. Clear and resume.
+      if (state.intendedPlaying && document.visibilityState !== "hidden" &&
+        vPausedBuf && audio.paused && state.firstPlayCommitted &&
+        vRSBuf >= HAVE_FUTURE_DATA && Number(audio.readyState || 0) >= HAVE_FUTURE_DATA &&
+        (state.strictBufferHold || state.videoWaiting || state.audioWaiting ||
+        state.videoStallAudioPaused || state.audioStallVideoPaused) &&
+        !state.seeking && !state.seekResumeInFlight && !state.restarting &&
+        !state.endedNaturally && state.pendingSeekTarget == null &&
+        !userPauseLockActive() && !mediaSessionForcedPauseActive() &&
+        !userPauseIntentActive() && !userToggleExpectingPause() &&
+        (nowMs - Number(state.lastUserActionTime || 0)) > 2500) {
+        _bufMonPausedHealthyTicks++;
+        if (_bufMonPausedHealthyTicks >= 3) {
+          _bufMonPausedHealthyTicks = 0;
+          state.videoWaiting = false;
+          state.videoStallSince = 0;
+          state.audioWaiting = false;
+          state.audioStallSince = 0;
+          state.audioStallVideoPaused = false;
+          state.videoStallAudioPaused = false;
+          state.stallAudioPausedSince = 0;
+          state.stallAudioResumeHoldUntil = 0;
+          clearBufferHold();
+          clearForegroundBufferAudioHold();
+          try { setSeekBufferingUIVisible(false); } catch { }
+          try { forceClearSeekBufferingUI(); } catch { }
+          playTogether({ skipBufferGate: true }).catch(() => { });
+        }
+      } else {
+        _bufMonPausedHealthyTicks = 0;
       }
       const _bufCanDoWork = !audio.paused &&
       document.visibilityState !== "hidden" &&
