@@ -4753,7 +4753,9 @@ startupPrimeStartedAt: performance.now(),
     const _aggressive = shouldUseAggressiveForegroundMonitoring();
     _scheduleSample(_aggressive
     ? RAF_SKIP_INTERVAL_MS
-    : (perfProfile.lowEnd ? scaleHealthyCpuDelay(900) : scaleHealthyCpuDelay(650)));
+    : (stableHealthyPlaybackForLongCpuCadence()
+      ? longHealthyCpuDelay(perfProfile.lowEnd ? 1600 : 1200)
+      : (perfProfile.lowEnd ? scaleHealthyCpuDelay(900) : scaleHealthyCpuDelay(650))));
     const _rafNow = now();
     if (_rafNow - _lastBigTickAt < RAF_SKIP_INTERVAL_MS) return;
     _lastBigTickAt = _rafNow;
@@ -12035,6 +12037,11 @@ startupPrimeStartedAt: performance.now(),
       mediaSessionForcedPauseActive()) return false;
     if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
     if (Number(audio.readyState || 0) < HAVE_CURRENT_DATA) return false;
+    // If the buffer icon is actually on screen for a sustained moment, the audio
+    // must not keep playing under it, no matter how the video buffered. A visible
+    // buffer icon means neither track plays.
+    if (_bufferGuardSpinnerOn && Number(_spinnerVisibleAt) > 0 &&
+      (now() - Number(_spinnerVisibleAt)) > 450) return false;
     if (PlaybackProgressEvidence.audioStalledFor(perfProfile.lowEnd ? 1500 : 1100)) {
       return false;
     }
@@ -42745,6 +42752,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     let videoFrozenRekickCount = 0;
     let lastVideoRekickAt = 0;
     let audioPausedWhileVideoSince = 0;
+    let bufferCoupleSince = 0;
     let fgHealthySince = 0;
     let commitStuckSince = 0;
     let seekAudioLateSince = 0;
@@ -43333,6 +43341,42 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           }
         } else { videoFrozenSince = 0; if (videoAdvancing) videoFrozenRekickCount = 0; }
 
+        // Buffer coupling: nothing plays under a buffer. Keyed on the native
+        // waiting flags (set straight off the media `waiting` events, so it catches
+        // the buffer icon no matter which layer raised it) plus a stalled-and-
+        // starved fallback. If one track is buffering while the other keeps playing,
+        // pause the other after a short sustain. The heals around this resume
+        // whichever was paused once the stuck track advances again, so they never
+        // play one-without-the-other. Parked decoders (data present, no waiting) are
+        // left to the re-seat above so a transient hitch never cuts the audio.
+        {
+          // Require the clock to actually be stalled, so a stale waiting flag can
+          // never pause the other track while this one is genuinely advancing.
+          const _vBuffering = vn && !vPaused && !videoAdvancing &&
+            (!!state.videoWaiting || Number(vn.readyState || 0) < HAVE_FUTURE_DATA);
+          const _aBuffering = coupledMode && audio && !audio.paused && !audioAdvancing &&
+            (!!state.audioWaiting || Number(audio.readyState || 0) < HAVE_FUTURE_DATA);
+          const _coupleReady = intended && committed && !hidden && !inSeek &&
+            !userHeldPaused && !state.endedNaturally && !state.restarting &&
+            !state.seekDragActive && coupledMode && audio &&
+            // Not during a play/pause resume: a brief warm-up `waiting` there is
+            // not a real buffer, and pausing/resuming over it churns the decoder
+            // right when it needs the main thread (the "lag after pause/play").
+            !directUserToggleActive(1000) && !playPauseTransactionActive(900) &&
+            now() >= Number(state._playPauseTransitionUntil || 0);
+          if (_coupleReady && (_vBuffering || _aBuffering)) {
+            needFast = true;
+            if (!bufferCoupleSince) bufferCoupleSince = t;
+            else if ((t - bufferCoupleSince) > 400) {
+              if (_vBuffering && !audio.paused) {
+                try { pauseAudioForConfirmedVideoStall("buffer-couple", { confirmedLivenessMismatch: true }); } catch { }
+              } else if (_aBuffering && vn && !vPaused) {
+                try { pauseCoupledPairForAudioBuffer("buffer-couple", true); } catch { }
+              }
+            }
+          } else bufferCoupleSince = 0;
+        }
+
         // Audio paused while the video is genuinely advancing: audio should be
         // playing too. Works during startup as well (Chromium can silently block
         // the audio start), unlike the heal below which waits for commit.
@@ -43345,7 +43389,11 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           Number(audio.readyState || 0) >= HAVE_CURRENT_DATA) {
           needFast = true;
           if (!audioPausedWhileVideoSince) audioPausedWhileVideoSince = t;
-          else if ((t - audioPausedWhileVideoSince) > 800 && (t - lastForcedResumeAt) > 700) {
+          // Resume fast when the audio was paused by the buffer coupling above
+          // (video just recovered) so it doesn't "come back late"; otherwise wait
+          // the normal beat before force-starting an unexpectedly paused audio.
+          else if ((t - audioPausedWhileVideoSince) > (state.videoStallAudioPaused ? 200 : 800) &&
+            (t - lastForcedResumeAt) > (state.videoStallAudioPaused ? 250 : 700)) {
             audioPausedWhileVideoSince = 0;
             lastForcedResumeAt = t;
             try {
