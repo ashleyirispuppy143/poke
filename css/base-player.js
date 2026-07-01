@@ -2078,6 +2078,19 @@ startupPrimeStartedAt: performance.now(),
     (!state.isProgrammaticAudioPlay || coordinatedStartupRelease) &&
     (!shouldBlockNewAudioStart() || coordinatedStartupRelease || opts.seekCommitOwner);
     if (!needVideo && !needAudio) return false;
+    // Foreground start of a fully-paused pair: hold audio silent until the video
+    // presents its first frame so neither track leads. Many callers reach here
+    // without arming a gate first, which let audio start audible before the
+    // picture. Arm it at this one chokepoint so every start is coordinated.
+    if (needVideo && needAudio && videoIsPaused && audioIsPaused &&
+      !opts.throughSeek && !opts.seekCommitOwner &&
+      !initialCoupledPairPending() && !coordinatedStartupRelease &&
+      document.visibilityState === "visible" &&
+      !resumePairAudioGateActive() && !initialPairAudioGateActive() &&
+      !playerMutedFromVideo()) {
+      try { armResumePairAudioGate("simul-start-coordinated"); } catch { }
+      try { keepResumePairAudioSilent(); } catch { }
+    }
     state._simulStartInFlight = true;
     state._simulStartLastAt = _nowSimul;
     state._simulStartCount = (state._simulStartCount | 0) + 1;
@@ -7409,6 +7422,33 @@ startupPrimeStartedAt: performance.now(),
       try { VideoCompositorFlushManager.arm(); } catch { }
       return false;
       }
+      // Audio is still silent here (the gate kept it muted). If it drifted from
+      // the video during the gated start, snap it to the just-presented frame now
+      // while it's inaudible, so picture and sound reveal at the same position.
+      // This is the only place a hard audio seek is free of a dropout.
+      try {
+        const _gatedReveal =
+        Number(state.initialPairAudioGateUntil || 0) > 0 ||
+        Number(state.resumePairAudioGateUntil || 0) > 0;
+        if (_gatedReveal && vn && !vn.paused && !audio.seeking &&
+          Number(audio.readyState || 0) >= HAVE_CURRENT_DATA) {
+          const _rvVt = Number(vn.currentTime);
+          const _rvAt = Number(audio.currentTime);
+          if (isFinite(_rvVt) && isFinite(_rvAt) && _rvVt >= 0 &&
+            Math.abs(_rvVt - _rvAt) > 0.08 && canPlaySmoothAt(audio, _rvVt, 0.05)) {
+            state._allowAudioTimeWrite = true;
+            state._allowPairSyncAudioWrite = true;
+            try { audio.currentTime = _rvVt; } finally {
+              state._allowPairSyncAudioWrite = false;
+              state._allowAudioTimeWrite = false;
+            }
+            try { notePairSyncTimeWrite(_rvVt); } catch { }
+          }
+        }
+      } catch {
+        state._allowPairSyncAudioWrite = false;
+        state._allowAudioTimeWrite = false;
+      }
       clearInitialPairAudioGate();
       clearResumePairAudioGate();
       try {
@@ -7572,6 +7612,9 @@ startupPrimeStartedAt: performance.now(),
     state.resumePairVideoStartFrames = getVideoPresentedFrameCount(vn);
     state.resumePairAudioGateUntil = now() + 280;
     keepResumePairAudioSilent();
+    // Reveal audio on the video's first presented frame rather than a poll tick,
+    // so sound and picture come back together on resume.
+    try { VideoCompositorFlushManager.arm({ observe: true }); } catch { }
     state.resumePairAudioGateTimer = setTimeout(() => {
       state.resumePairAudioGateTimer = null;
       if (state.resumePairAudioGateSession !== state.playSessionId) {
@@ -7756,6 +7799,10 @@ startupPrimeStartedAt: performance.now(),
       cancelActiveFade();
       preserveAudioGainWhileSilent("initial-pair-gate");
     } catch { }
+    // Arm the frame observer now so audio is revealed on the video's first
+    // presented frame (rendered-video-frame-release), not on a slow poll tick.
+    // That's what keeps the sound from lagging the picture at start.
+    try { VideoCompositorFlushManager.arm({ observe: true }); } catch { }
     state.initialPairAudioGateTimer = setTimeout(() => {
       state.initialPairAudioGateTimer = null;
       if (state.initialPairAudioGateSession !== state.playSessionId) {
@@ -14122,12 +14169,15 @@ startupPrimeStartedAt: performance.now(),
         }
         state.seekRenderedAudioGateTimer = setTimeout(
           verifyRenderedSeekFrame,
-          attempts < 3 ? (perfProfile.lowEnd ? 130 : 90) : (perfProfile.lowEnd ? 220 : 150)
+          attempts < 4 ? (perfProfile.lowEnd ? 90 : 55) : (perfProfile.lowEnd ? 160 : 110)
         );
     };
+    // Poll the rendered-frame check quickly so audio reveals close to the moment
+    // the seeked frame paints instead of a poll tick later. Still frame-gated, so
+    // audio never leads the picture; only the good-case latency shrinks.
     state.seekRenderedAudioGateTimer = setTimeout(
       verifyRenderedSeekFrame,
-      perfProfile.lowEnd ? 110 : 55
+      perfProfile.lowEnd ? 70 : 36
     );
     return true;
   }
@@ -28010,6 +28060,19 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     }
   }
   let _ncBufferWaitCleanup = null;
+  // Position to anchor a buffer resume on when no seek is active. Prefers the
+  // master audio clock while hidden (the video clock is throttled and stale
+  // there), otherwise the video clock.
+  function bufferResumeAnchorFallback(videoTime = NaN) {
+    const vt = isFinite(Number(videoTime)) && Number(videoTime) >= 0 ? Number(videoTime) : 0;
+    if (document.visibilityState === "hidden" && coupledMode && audio && !audio.paused) {
+      try {
+        const at = Number(audio.currentTime);
+        if (isFinite(at) && at >= 0 && (state.audioEverStarted || at > 0.05)) return at;
+      } catch { }
+    }
+    return vt;
+  }
   function armResumeAfterBuffer(timeoutMs = 9000) {
     if (inBgReturnGrace() || isTabReturnImmune()) {
       timeoutMs = Math.min(timeoutMs, 2000);
@@ -28118,9 +28181,11 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         }
       }
       const vtNow = Number(video.currentTime());
-      const checkTime = getAuthoritativeSeekTarget(
-        isFinite(vtNow) && vtNow >= 0 ? vtNow : 0
-      );
+      // While hidden the video clock is throttled and stale; the master audio is
+      // the true position. Anchor the resume on audio there so the buffer doesn't
+      // resume at the old video spot. A real seek target still wins.
+      const _bufAnchor = bufferResumeAnchorFallback(vtNow);
+      const checkTime = getAuthoritativeSeekTarget(_bufAnchor);
       const inBg = document.visibilityState === "hidden" || !isWindowFocused();
       const vNode = _arbVNode;
       const audioHoldReady = !audioBufferPairHoldActive() || audioReadyToReleasePairHold(checkTime);
@@ -28183,9 +28248,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             return;
           }
           const vtNow = Number(video.currentTime());
-          const checkTime = getAuthoritativeSeekTarget(
-            isFinite(vtNow) && vtNow >= 0 ? vtNow : 0
-          );
+          const checkTime = getAuthoritativeSeekTarget(bufferResumeAnchorFallback(vtNow));
           const inBg2 = document.visibilityState === "hidden" || !isWindowFocused();
           const videoNode = getVideoNode();
           const videoReady = inBg2
@@ -41639,6 +41702,24 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                 if (_rp && typeof _rp.catch === "function") _rp.catch(() => { });
               } catch { }
             }
+            // Pin the display to the master audio position on return (source audio
+            // live-tracks the audio clock), so the seekbar follows audio while the
+            // video catches up instead of sitting on the stale throttled video clock.
+            try {
+              const _durPin = getPlayerDisplayDuration();
+              const _pinT = (isFinite(_durPin) && _durPin > 0) ? Math.min(_rat, _durPin) : _rat;
+              state.foregroundReturnTimelineSource = "audio";
+              state.foregroundReturnTimelineTarget = _pinT;
+              state.foregroundReturnTimelineCapturedAt = now();
+              state.foregroundReturnTimelineUntil = now() + (_longTabReturn ? 4200 : 2600);
+              state.foregroundReturnTimelineSerial = Number(state.foregroundReturnTimelineSerial || 0) + 1;
+              state.lastHiddenTimelineTarget = _pinT;
+              state.lastHiddenTimelineTargetAt = now();
+              state.lastKnownGoodVT = Math.max(Number(state.lastKnownGoodVT || 0) || 0, _pinT);
+              state.lastKnownGoodVTts = now();
+              try { forcePlayerTimelinePaint("visibility-return-audio-master", _pinT, { invalidate: true }); } catch { }
+              try { ensurePlayerTimelineRefresh(); } catch { }
+            } catch { }
           }
             }
         } catch { state._allowUnexpectedVideoTimeRestore = false; }
