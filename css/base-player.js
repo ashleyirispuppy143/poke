@@ -8822,6 +8822,33 @@ startupPrimeStartedAt: performance.now(),
     try { paintPlayerTimelineImmediately(audioTime); } catch { }
     return true;
   }
+  // Clear a seek flag left set across a tab hide (a real seek finishes in <2s).
+  // While set it blocks the clean single-owner return resync and forces the whole
+  // recovery pile to run. Guarded so a seek the user is actively driving is safe.
+  function clearStaleSeekFlagsForReturn(reason = "", opts = {}) {
+    if (!coupledMode || !audio) return false;
+    const anySeekFlag = state.seeking || state.seekBuffering ||
+    state.seekResumeInFlight || state.seekAudioReleaseInFlight;
+    if (!anySeekFlag) return false;
+    // Never touch a seek the user is actually driving right now.
+    if (state.seekDragActive || state.pendingSeekTarget != null ||
+      userSeekIntentActive()) return false;
+    const minIdleMs = opts.minIdleMs == null ? 2000 : Number(opts.minIdleMs);
+    if ((now() - Number(state.lastUserActionTime || 0)) < minIdleMs) return false;
+    const seekStartedAt = Number(state._seekStartedAt || 0);
+    if (seekStartedAt > 0 && (now() - seekStartedAt) < 2500) return false;
+    try { SeekPlaybackCommitController.cancel(reason || "stale-return-seek", { preserveSeekState: false }); } catch { }
+    state.seeking = false;
+    state.seekBuffering = false;
+    state.seekResumeInFlight = false;
+    state.seekResumeStartedAt = 0;
+    state.seekAudioReleaseInFlight = false;
+    state.seekCompleted = true;
+    state._seekStartedAt = 0;
+    try { clearSeekAudioHoldUntilVideoReady(); } catch { }
+    try { clearSeekTransportLock(); } catch { }
+    return true;
+  }
   function foregroundReturnSeekOwnsTimeline() {
     if (state.seeking || state.seekBuffering || state.seekResumeInFlight ||
       state.seekAudioReleaseInFlight || state.pendingSeekTarget != null ||
@@ -41402,6 +41429,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           const returnTarget = captureForegroundReturnTimeline("pageshow", { reuse: !ownsReturn });
           try { schedulePlayerTimelineRefreshBurst("pageshow", returnTarget, { invalidate: true }); } catch { }
           try { exitHiddenAudioExclusiveMode("pageshow", { deferReturn: true }); } catch { }
+          try { clearStaleSeekFlagsForReturn("pageshow"); } catch { }
           if (!ownsReturn) {
             state.visibilityHiddenAt = 0;
             if (!lightSettleHealthyTabReturn("pageshow-duplicate")) {
@@ -41555,6 +41583,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             state.lastHiddenTimelineTargetAt = now();
           }
         } catch { }
+        try { clearStaleSeekFlagsForReturn("visibility-return"); } catch { }
         try {
           clearStaleSeekAuthorityForLiveAudio("visibility-return", {
             allowPausedAudio: true,
@@ -41977,6 +42006,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       const _focusReturnTarget = captureForegroundReturnTimeline("focus", { reuse: _recentVisibilityReturn });
       try { schedulePlayerTimelineRefreshBurst("focus", _focusReturnTarget, { invalidate: true }); } catch { }
       try { exitHiddenAudioExclusiveMode("focus", { deferReturn: true }); } catch { }
+      try { clearStaleSeekFlagsForReturn("focus-return"); } catch { }
       try {
         clearStaleSeekAuthorityForLiveAudio("focus-return", {
           allowPausedAudio: true,
