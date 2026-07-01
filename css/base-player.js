@@ -2462,7 +2462,14 @@ startupPrimeStartedAt: performance.now(),
           if (!audio.paused) state.hiddenAudioPauseDetectedAt = 0;
         }
         const stallMs = hot ? (perfProfile.lowEnd ? 140 : 90) : (perfProfile.lowEnd ? 420 : 260);
-        const stalled = _lastAudioMoveAt > 0 && (t - _lastAudioMoveAt) > stallMs;
+        // A clock frozen because the buffer ran dry is starvation, not a
+        // suspended element; its play request is already pending and data
+        // arrival resumes it. Poking play at it just re-stutters the last
+        // buffered sliver.
+        const starving = !audio.paused &&
+        Number(audio.readyState || 0) < HAVE_FUTURE_DATA;
+        const stalled = !starving &&
+        _lastAudioMoveAt > 0 && (t - _lastAudioMoveAt) > stallMs;
         if (!audio.paused && !stalled) _lastHealthyHiddenAudioAt = t;
         const pokeGap = audio.paused
         ? (hot ? 45 : 120)
@@ -3235,7 +3242,15 @@ startupPrimeStartedAt: performance.now(),
         return;
       }
       if (document.visibilityState === "hidden" && state.strictBufferHold) {
-        clearBufferHold();
+        // Only release a hold whose media is actually ready again. Blindly
+        // clearing it here erased the hold bookkeeping mid-rebuffer and let
+        // the keepalive churn play kicks against a starving element.
+        try {
+          clearStaleCoupledBufferStateIfReady(
+            Number(audio?.currentTime) || 0,
+            "bg-keepalive-hold"
+          );
+        } catch { }
       }
       if (document.visibilityState !== "hidden" && isWindowFocused() &&
         !isTabReturnImmune() && !inBgReturnGrace() &&
@@ -8294,9 +8309,10 @@ startupPrimeStartedAt: performance.now(),
           // The pair can reach playing without a live coordinated window
           // (native autoplay, a direct gesture play, or the verify chain
           // dying). Refusing to commit then leaves the startup-zero logic
-          // armed: the clock shows 0:00, playback gets rewound, and nothing
-          // starts until a manual seek. Commit a genuinely live pair.
-          const uncoordinatedLive = vt > 0.8 && at > 0.8 &&
+          // armed: the clock shows 0:00, playback gets rewound and audio cut
+          // over and over, and the committed position drifts further into the
+          // video the longer it churns. Commit a genuinely live pair early.
+          const uncoordinatedLive = vt > 0.45 && at > 0.45 &&
           Math.abs(vt - at) <= Math.max(1.2, STARTUP_INITIAL_MAX_DRIFT_SEC * 2);
           if (!uncoordinatedLive) return false;
         } else {
@@ -22714,7 +22730,13 @@ startupPrimeStartedAt: performance.now(),
       try { schedulePostSeekPlaybackRecovery(`${reason}-noninterrupting`); } catch { }
       return true;
     }
-    const audioMasterRelease = tabReturnAudioMasterActive(3600);
+    // Hidden playback is audio-owned: the paused video clock can be minutes
+    // behind the audible audio there. Releasing against the video clock
+    // yanked the audio backward and audibly replayed the same section after
+    // every background rebuffer.
+    const audioMasterRelease = tabReturnAudioMasterActive(3600) ||
+    document.visibilityState === "hidden" ||
+    state.hiddenAudioExclusiveMode;
     const heldAt = audioMasterRelease
     ? (() => {
       try { return Number(audio.currentTime); } catch { return getVideoCurrentTimeSafe(0); }
@@ -27878,8 +27900,9 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         if (!hasFuturePlaybackDataAt(audio, _hiddenAt, 0.04)) {
           // Keep the hidden element fetching; some browsers drop the download
           // priority for background tabs and the buffer never refills alone.
+          // No sentinel pulse here: poking play at a starving element just
+          // stutters the last buffered sliver.
           try { if (audio.preload !== "auto") audio.preload = "auto"; } catch { }
-          try { BackgroundAudioSentinel.pulse("hidden-buffer-wait"); } catch { }
           return;
         }
         clearStaleCoupledBufferStateIfReady(_hiddenAt, "resume-after-buffer-hidden");
@@ -30985,10 +31008,11 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                 if (_b.start(i) <= pos + 0.05 && _b.end(i) > _maxEnd) _maxEnd = _b.end(i);
               }
             } catch { }
-            // A decoded current frame plus a small forward cushion is enough to
-            // begin playback. Waiting for a large cushion here made long-video
-            // seeks sit idle even though both elements could already start.
-            if (_maxEnd < pos + (perfProfile.lowEnd ? 0.12 : 0.07)) return false;
+            // Enough forward cushion to survive the first seconds after the
+            // release. Releasing with a ~0.1s sliver replayed the stall dance
+            // on every long-video seek: play a moment, re-stall, re-hold.
+            // The maxWait fallback still bounds slow connections.
+            if (_maxEnd < pos + (perfProfile.lowEnd ? 0.9 : 0.6)) return false;
             return true;
           }
           if (!mediaHasCurrentDataAtTarget(audio, pos, perfProfile.lowEnd ? 0.08 : 0.04)) {
