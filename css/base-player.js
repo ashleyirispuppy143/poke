@@ -42728,6 +42728,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     let timeDisplayZeroSince = 0;
     let stalledPlayIntentSince = 0;
     let bufferingForeverSince = 0;
+    let lastBufferForeverHealAt = 0;
     let recentRewindCount = 0;
     let recentRewindFirstAt = 0;
     let lastSupervisorHealAt = 0;
@@ -43359,15 +43360,22 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           const _coupleReady = intended && committed && !hidden && !inSeek &&
             !userHeldPaused && !state.endedNaturally && !state.restarting &&
             !state.seekDragActive && coupledMode && audio &&
-            // Not during a play/pause resume: a brief warm-up `waiting` there is
-            // not a real buffer, and pausing/resuming over it churns the decoder
-            // right when it needs the main thread (the "lag after pause/play").
+            // Not during a play/pause resume nor the post-seek settle window: a
+            // brief warm-up `waiting` there is not a real buffer. Pausing over it
+            // churns the decoder (lag after pause/play) and fights the seek resume
+            // into a play/pause/play/pause loop. The seek machinery holds the pair
+            // together during its own settle.
             !directUserToggleActive(1000) && !playPauseTransactionActive(900) &&
-            now() >= Number(state._playPauseTransitionUntil || 0);
+            now() >= Number(state._playPauseTransitionUntil || 0) &&
+            now() >= Number(state.seekStabilizeUntil || 0) &&
+            now() >= Number(state.seekCooldownUntil || 0);
           if (_coupleReady && (_vBuffering || _aBuffering)) {
             needFast = true;
             if (!bufferCoupleSince) bufferCoupleSince = t;
-            else if ((t - bufferCoupleSince) > 400) {
+            // Never re-pause within 1.2s of a resume/heal, so a pause->resume can't
+            // ping-pong into an oscillation.
+            else if ((t - bufferCoupleSince) > 400 &&
+              (t - lastForcedResumeAt) > 1200 && (t - lastSupervisorHealAt) > 1200) {
               if (_vBuffering && !audio.paused) {
                 try { pauseAudioForConfirmedVideoStall("buffer-couple", { confirmedLivenessMismatch: true }); } catch { }
               } else if (_aBuffering && vn && !vPaused) {
@@ -43532,28 +43540,43 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           } catch { stuckSpinnerSince = 0; }
 
           try {
-            const looksBuffering = !!(state.seekBuffering || state.strictBufferHold || state.videoWaiting || state.audioWaiting);
-            if (looksBuffering && intended && committed && !hidden) {
+            // Stuck FALSE buffer: buffering is shown (or the pair is held) but
+            // nothing is advancing while the data is actually present. This is
+            // exactly what a manual play/pause fixes, so do it automatically. Keyed
+            // on real non-progress + data-present (not the raw flag) so a coupling
+            // flag flicker can't keep resetting the timer, and so it never fires on
+            // a genuine buffer (no data -> waits for the network). The coupling's
+            // pausing is untouched; this only makes the RESUME reliable.
+            const looksBuffering = !!(state.seekBuffering || state.strictBufferHold ||
+              state.videoWaiting || state.audioWaiting || state.videoStallAudioPaused ||
+              state.audioStallVideoPaused || _bufferGuardSpinnerOn);
+            const _pairNotAdvancing = !videoAdvancing &&
+              (!coupledMode || !audio || !audioAdvancing);
+            const _dataPresent = (!vn || Number(vn.readyState || 0) >= HAVE_CURRENT_DATA) &&
+              (!coupledMode || !audio || Number(audio.readyState || 0) >= HAVE_CURRENT_DATA);
+            if (looksBuffering && _pairNotAdvancing && _dataPresent &&
+              intended && committed && !hidden && !inSeek && !nativeSeeking &&
+              !state.seekDragActive && (Number(state.userPauseUntil) || 0) < t &&
+              (typeof userPauseLockActive !== "function" || !userPauseLockActive())) {
               if (!bufferingForeverSince) bufferingForeverSince = t;
-              else if ((t - bufferingForeverSince) > 3500 && (t - lastSupervisorHealAt) > 1500) {
-                const audioReady = !coupledMode || !audio || Number(audio.readyState || 0) >= 2;
-                const videoReady = !vn || Number(vn.readyState || 0) >= 2;
-                if (audioReady && videoReady) {
-                  bufferingForeverSince = 0;
-                  lastSupervisorHealAt = t;
-                  try { if (typeof clearBufferHold === "function") clearBufferHold(); } catch { }
-                  try { state.seekBuffering = false; state.strictBufferHold = false; } catch { }
-                  try { state.videoWaiting = false; state.audioWaiting = false; } catch { }
-                  try { forceClearSeekBufferingUI(); } catch { }
-                  try {
-                    if (coupledMode && audio && typeof requestCoupledPlaybackCommit === "function") {
-                      requestCoupledPlaybackCommit("supervisor-buffering-forever", { force: true, retry: true });
-                    } else if (typeof execProgrammaticVideoPlay === "function") {
-                      const p = execProgrammaticVideoPlay({ force: true, minGapMs: 0 });
-                      if (p && typeof p.catch === "function") p.catch(() => { });
-                    }
-                  } catch { }
-                }
+              else if ((t - bufferingForeverSince) > 1500 && (t - lastBufferForeverHealAt) > 2000) {
+                bufferingForeverSince = 0;
+                lastBufferForeverHealAt = t;
+                lastSupervisorHealAt = t;
+                try { if (typeof clearBufferHold === "function") clearBufferHold(); } catch { }
+                try { state.seekBuffering = false; state.strictBufferHold = false; } catch { }
+                try { state.videoWaiting = false; state.audioWaiting = false; } catch { }
+                try { state.videoStallAudioPaused = false; state.audioStallVideoPaused = false; } catch { }
+                try { forceClearSeekBufferingUI(); } catch { }
+                // Full play/pause-equivalent reset so the pair actually resumes.
+                try {
+                  if (coupledMode && audio) {
+                    forceResumeAudioAndUnfreeze(vt, "supervisor-buffering-forever");
+                  } else if (typeof execProgrammaticVideoPlay === "function") {
+                    const p = execProgrammaticVideoPlay({ force: true, minGapMs: 0 });
+                    if (p && typeof p.catch === "function") p.catch(() => { });
+                  }
+                } catch { }
               }
               needFast = true;
             } else bufferingForeverSince = 0;
