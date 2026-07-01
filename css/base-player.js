@@ -9184,12 +9184,16 @@ startupPrimeStartedAt: performance.now(),
       seekResumeCommitActive(650) ||
       seekAudioHoldUntilVideoReadyActive() ||
       state.seekAudioReleaseInFlight ||
-      now() < Number(state.seekAudioMustStartUntil || 0) ||
-      now() < Number(state.seekKickAudioAllowedUntil || 0) ||
       state.audioBufferConfirmTimer ||
       postSeekAudioWatchdogActive() ||
       pairSyncCorrectionPending() ||
       (userSeekIntentActive() && !staleLiveAudio)) return false;
+    // The audio-start grace windows protect the audio kick, not the timeline.
+    // Holding the display through them froze the seekbar and time for ~2s
+    // after every seek even though playback had already moved on.
+    if ((now() < Number(state.seekAudioMustStartUntil || 0) ||
+      now() < Number(state.seekKickAudioAllowedUntil || 0)) &&
+      !liveClockPassedTarget) return false;
     if (!seekDisplayAuthorityReleaseReady(value, margin) && !staleLiveAudio && !liveClockPassedTarget) return false;
     state.seekDisplayTarget = NaN;
     state.seekDisplayTargetUntil = 0;
@@ -27804,6 +27808,32 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         releaseSeekAudioAfterVideoReady("resume-after-buffer-seek-pair");
         return;
       }
+      // Hidden rebuffer: the master audio resumes on its own buffer at its own
+      // clock. The paused/throttled video cannot be required to have data at
+      // that position (it isn't fetching there), and waiting on it left
+      // background buffering stuck until tab return. The video is seated at
+      // the audio clock by the return handler.
+      if (document.visibilityState === "hidden" && coupledMode && audio) {
+        const _hiddenAt = (() => { try { return Number(audio.currentTime) || 0; } catch { return 0; } })();
+        if (!hasFuturePlaybackDataAt(audio, _hiddenAt, 0.04)) return;
+        clearStaleCoupledBufferStateIfReady(_hiddenAt, "resume-after-buffer-hidden");
+        clearBufferHold();
+        clearForegroundBufferAudioHold();
+        state.audioWaiting = false;
+        state.audioStallVideoPaused = false;
+        state.audioStallSince = 0;
+        state.videoStallAudioPaused = false;
+        state.stallAudioPausedSince = 0;
+        state.stallAudioResumeHoldUntil = 0;
+        if (!state.seeking) {
+          state.seekBuffering = false;
+          try { setSeekBufferingUIVisible(false); } catch { }
+        }
+        cleanup();
+        try { hiddenAudioNoSeekResume("resume-after-buffer-hidden", { retry: true, force: true }); } catch { }
+        try { updateMediaSessionPlaybackState(); } catch { }
+        return;
+      }
       const _arbVNode = getVideoNode();
       const _arbRS = _arbVNode ? Number(_arbVNode.readyState || 0) : 0;
       if (state.videoWaiting && _arbRS >= HAVE_FUTURE_DATA && !isForegroundVideoActuallyBuffering()) {
@@ -27885,6 +27915,29 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             enforceSeekPairBarrier("resume-after-buffer-timeout-seek-pair");
             releaseSeekAudioAfterVideoReady("resume-after-buffer-timeout-seek-pair");
             armResumeAfterBuffer(timeoutMs);
+            return;
+          }
+          if (document.visibilityState === "hidden" && coupledMode && audio) {
+            const _hiddenAt2 = (() => { try { return Number(audio.currentTime) || 0; } catch { return 0; } })();
+            if (hasFuturePlaybackDataAt(audio, _hiddenAt2, 0.04)) {
+              clearStaleCoupledBufferStateIfReady(_hiddenAt2, "resume-after-buffer-timeout-hidden");
+              clearBufferHold();
+              clearForegroundBufferAudioHold();
+              state.audioWaiting = false;
+              state.audioStallVideoPaused = false;
+              state.audioStallSince = 0;
+              state.videoStallAudioPaused = false;
+              state.stallAudioPausedSince = 0;
+              state.stallAudioResumeHoldUntil = 0;
+              if (!state.seeking) {
+                state.seekBuffering = false;
+                try { setSeekBufferingUIVisible(false); } catch { }
+              }
+              try { hiddenAudioNoSeekResume("resume-after-buffer-timeout-hidden", { retry: true, force: true }); } catch { }
+              try { updateMediaSessionPlaybackState(); } catch { }
+            } else {
+              armResumeAfterBuffer(timeoutMs);
+            }
             return;
           }
           const vtNow = Number(video.currentTime());
@@ -30707,7 +30760,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           }, 2600);
           return;
         }
-        if (forCoupled && platform.chromiumOnlyBrowser && document.visibilityState === "hidden" &&
+        if (forCoupled && document.visibilityState === "hidden" &&
           state.hiddenAudioExclusiveMode) {
           state.seekResumeInFlight = false;
         state.seekCompleted = true;
@@ -30830,6 +30883,13 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           }, 2600);
       };
       const bothTracksReady = () => {
+        // Hidden exclusive mode plays audio only; the paused video is not
+        // fetching, so requiring its buffer here stranded hidden seeks until
+        // tab return. Audio readiness at the target is the whole gate there.
+        if (forCoupled && audio && document.visibilityState === "hidden" &&
+          state.hiddenAudioExclusiveMode) {
+          return mediaHasCurrentDataAtTarget(audio, seekPos, perfProfile.lowEnd ? 0.08 : 0.04);
+        }
         const immediate = coupledPairPlayableSnapshot(seekPos, {
           tolerance: perfProfile.lowEnd ? 0.26 : 0.20
         });
@@ -33333,6 +33393,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
   let _bufMonTimer = null;
   let _bufMonLastVT = -1;
   let _bufMonStallFrames = 0;        // tick count (100ms per tick) of frozen vt
+  let _bufMonHoldClearTicks = 0;     // ticks the pair kept advancing under a latched hold
   let _bufMonConfirmedStallAt = 0;   // timestamp when we confirmed a real stall
   let _bufMonLastKillAt = 0;         // last time we killed audio — cooldown gate
   const BUF_MON_INTERVAL_MS = perfProfile.lowEnd ? 450 : (perfProfile.mobile ? 360 : 300);
@@ -33367,6 +33428,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       const vPausedBuf = vNodeBuf ? !!vNodeBuf.paused : getVideoPaused();
       if (state.intendedPlaying && !vPausedBuf && document.visibilityState !== "hidden") {
         const vt = vNodeBuf ? (Number(vNodeBuf.currentTime) || 0) : 0;
+        const _bufPrevVT = _bufMonLastVT;
         if (vt > 0 && vt === _bufMonLastVT) {
           _bufMonStallFrames++;
           if (_bufMonStallFrames >= BUF_MON_STALL_TICKS && vRSBuf < HAVE_FUTURE_DATA &&
@@ -33383,6 +33445,39 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           _bufMonConfirmedStallAt = 0;
         }
         _bufMonLastVT = vt;
+        // Stale hold supervisor: the pair keeps advancing with future data
+        // while a buffer/seek hold or the spinner is still latched. The hold
+        // lost the race with an out-of-band resume; clear it instead of
+        // showing a spinner over playing media until the user toggles pause.
+        const _holdLatched = state.seekBuffering || state.strictBufferHold ||
+        state.videoWaiting || state.audioWaiting || state.videoStallAudioPaused;
+        const _pairAdvancing = _bufPrevVT >= 0 && vt > _bufPrevVT + 0.15 &&
+        audio && !audio.paused && vNodeBuf && !vNodeBuf.seeking && !audio.seeking &&
+        vRSBuf >= HAVE_FUTURE_DATA && Number(audio.readyState || 0) >= HAVE_FUTURE_DATA;
+        if (_holdLatched && _pairAdvancing && !state.seeking &&
+          !state.seekResumeInFlight && state.pendingSeekTarget == null &&
+          !state.restarting) {
+          _bufMonHoldClearTicks++;
+          if (_bufMonHoldClearTicks >= 2) {
+            _bufMonHoldClearTicks = 0;
+            state.seekBuffering = false;
+            state.videoWaiting = false;
+            state.videoStallSince = 0;
+            state.audioWaiting = false;
+            state.audioStallSince = 0;
+            state.audioStallVideoPaused = false;
+            state.videoStallAudioPaused = false;
+            state.stallAudioPausedSince = 0;
+            state.stallAudioResumeHoldUntil = 0;
+            clearBufferHold();
+            clearForegroundBufferAudioHold();
+            try { setSeekBufferingUIVisible(false); } catch { }
+            try { forceClearSeekBufferingUI(); } catch { }
+            try { forceUnmuteForPlaybackIfAllowed(); } catch { }
+          }
+        } else {
+          _bufMonHoldClearTicks = 0;
+        }
       } else {
         _bufMonStallFrames = 0;
         _bufMonLastVT = -1;
@@ -33556,6 +33651,25 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                   playTogether({ skipBufferGate: true }).catch(() => { });
                   }
                   }
+                // A wedged seek-buffer wait blocks the backstop above and the
+                // consistency check below; nothing else can resume the pair
+                // then. Release it after a bound and kick playback directly.
+                const _hbSeekBufAge = state.bufferHoldSince
+                ? (nowTs - state.bufferHoldSince)
+                : (state._seekStartedAt > 0 ? (performance.now() - state._seekStartedAt) : 0);
+                if (state.seekBuffering && !state.seeking &&
+                  _hbSeekBufAge > 12000 &&
+                  !state.seekResumeInFlight && !state.seekAudioReleaseInFlight) {
+                  state.seekBuffering = false;
+                  state.strictBufferHold = false;
+                  clearBufferHold();
+                  try { setSeekBufferingUIVisible(false); } catch { }
+                  try { forceClearSeekBufferingUI(); } catch { }
+                  if (state.intendedPlaying && !state.endedNaturally &&
+                    !userPauseLockActive() && !mediaSessionForcedPauseActive()) {
+                    playTogether({ skipBufferGate: true }).catch(() => { });
+                  }
+                }
             }
             if (!coupledMode && MediumQualityManager.intentPaused && state.firstPlayCommitted) {
               if (!getVideoPaused()) { execProgrammaticVideoPause(); }
@@ -38378,7 +38492,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                   if (shouldResumeAfterSeek() && !state.endedNaturally) {
                     state.intendedPlaying = true;
                     state.bufferHoldIntendedPlaying = true;
-                    if (platform.chromiumOnlyBrowser && document.visibilityState === "hidden" &&
+                    if (document.visibilityState === "hidden" &&
                       state.hiddenAudioExclusiveMode) {
                       if (!audioHasStrictSeekDataAtTarget(settledSeekTarget, perfProfile.lowEnd ? 0.12 : 0.08)) {
                         armSeekAudioHoldUntilVideoReady(state.seekId, 15000);
