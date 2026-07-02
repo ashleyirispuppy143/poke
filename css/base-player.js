@@ -14363,6 +14363,10 @@ startupPrimeStartedAt: performance.now(),
       state.seekCommitVideoLanded = false;
       state.seekCommitAudioLanded = false;
       state.seekCommitLastPlayReassertAt = 0;
+      state.seekCommitBufferingSince = 0;
+      state.seekCommitAudioReviveAt = 0;
+      state.seekCommitAudioBufferedMark = -1;
+      state.seekCommitAudioStalledSince = 0;
       if (opts.clearRestart !== false) state.seekCommitRestart = false;
       state._allowVideoPause = false;
       state._allowAudioPause = false;
@@ -14527,11 +14531,19 @@ startupPrimeStartedAt: performance.now(),
         if (vn.error || vn.seeking || Number(vn.readyState || 0) < HAVE_METADATA) {
           return false;
         }
-        if (coupledMode && audio &&
-          (audio.error || audio.seeking ||
-          Number(audio.readyState || 0) < HAVE_METADATA)) {
-          return false;
+        if (coupledMode && audio) {
+          if (audio.error) return false;
+          // A far-offset audio seek can stay in `seeking` with no data ever
+          // arriving. After a beat of buffering, that stuck flag must not
+          // block the probe: play() itself is what unsticks some browsers.
+          const stuckAudioSeekOk =
+          Number(state.seekCommitBufferingSince || 0) > 0 &&
+          (now() - Number(state.seekCommitBufferingSince || 0)) > 3000;
+          if ((audio.seeking || Number(audio.readyState || 0) < HAVE_METADATA) &&
+            !stuckAudioSeekOk) {
+            return false;
           }
+        }
       } catch {
         return false;
       }
@@ -14571,8 +14583,13 @@ startupPrimeStartedAt: performance.now(),
         target,
         perfProfile.lowEnd ? 0.26 : 0.20
       );
+      // A long-wedged audio fetch must not block the start forever; past the
+      // escape window the video starts and the audio joins when data lands.
+      const audioBarrierEscape =
+      Number(state.seekCommitBufferingSince || 0) > 0 &&
+      (now() - Number(state.seekCommitBufferingSince || 0)) > 8500;
       if (!readyBeforeAudioRetarget && !readyAfterAudioRetarget &&
-        !audioCanAttempt) {
+        !audioCanAttempt && !audioBarrierEscape) {
         state.seekCommitPhase = "waiting-audio-retarget";
       state.seekBuffering = true;
       state.bufferHoldIntendedPlaying = true;
@@ -15468,6 +15485,8 @@ startupPrimeStartedAt: performance.now(),
       state.seekCommitStartIssued = true;
       state.seekCommitStartIssuedAt = now();
       state.seekCommitPhase = "starting";
+      state.seekCommitAudioStalledSince = 0;
+      state.seekCommitAudioReviveAt = 0;
       state.seekResumeInFlight = true;
       state.seekResumeStartedAt = now();
       state.seekBuffering = false;
@@ -15555,6 +15574,77 @@ startupPrimeStartedAt: performance.now(),
         state.strictBufferReason = "seek-commit";
         state.bufferHoldIntendedPlaying = !mustRemainPaused;
         beginSeekDisplayAuthority(target, 30000);
+        // Far seeks on very long files can wedge the audio fetch: the element
+        // reports seeking forever and no data ever arrives at the target, so
+        // this loop would otherwise wait unbounded. Track buffered progress
+        // and actively revive a stalled fetch.
+        const bufNow = now();
+        if (!state.seekCommitBufferingSince) {
+          state.seekCommitBufferingSince = bufNow;
+          state.seekCommitAudioReviveAt = 0;
+          state.seekCommitAudioBufferedMark = -1;
+          state.seekCommitAudioStalledSince = 0;
+        }
+        if (coupledMode && audio) {
+          let audioAheadNow = -1;
+          try { audioAheadNow = bufferAheadAt(audio, target); } catch { audioAheadNow = -1; }
+          if (audioAheadNow > Number(state.seekCommitAudioBufferedMark) + 0.02) {
+            state.seekCommitAudioBufferedMark = audioAheadNow;
+            state.seekCommitAudioStalledSince = 0;
+          } else if (!state.seekCommitAudioStalledSince) {
+            state.seekCommitAudioStalledSince = bufNow;
+          }
+          const audioFetchStalled =
+          state.seekCommitAudioStalledSince > 0 &&
+          (bufNow - state.seekCommitAudioStalledSince) > 3500;
+          if (audioFetchStalled &&
+            (bufNow - Number(state.seekCommitAudioReviveAt || 0)) > 4000) {
+            state.seekCommitAudioReviveAt = bufNow;
+            // A fresh currentTime write re-issues the range request; a silent
+            // play() probe raises the browser's fetch priority for the element.
+            try {
+              const prevA = !!state._allowAudioTimeWrite;
+              const prevP = !!state._allowPairSyncAudioWrite;
+              state._allowAudioTimeWrite = true;
+              state._allowPairSyncAudioWrite = true;
+              try {
+                if (audio.preload !== "auto") audio.preload = "auto";
+                audio.currentTime = target;
+              } finally {
+                state._allowPairSyncAudioWrite = prevP;
+                state._allowAudioTimeWrite = prevA;
+              }
+            } catch { }
+            if (!mustRemainPaused) {
+              try {
+                cancelActiveFade();
+                preserveAudioGainWhileSilent("seek-audio-revive");
+                const rp = HTMLMediaElement.prototype.play.call(audio);
+                if (rp && typeof rp.catch === "function") rp.catch(() => { });
+              } catch { }
+            }
+          }
+        }
+        // Bounded escape: once the destination video can play, a long audio
+        // fetch must not hold the whole pair hostage. Start the video; the
+        // audio joins as soon as its data lands.
+        if (!mustRemainPaused &&
+          (bufNow - state.seekCommitBufferingSince) > 9000 &&
+          targetLanded(target)) {
+          const vnEsc = getVideoNode();
+          let vnEscReady = false;
+          try {
+            vnEscReady = !!vnEsc && !vnEsc.seeking && !vnEsc.error &&
+            Number(vnEsc.readyState || 0) >= HAVE_CURRENT_DATA;
+          } catch { }
+          if (vnEscReady) {
+            state.seekBuffering = false;
+            state.strictBufferHold = false;
+            try { clearBufferHold(); } catch { }
+            startPair(target);
+            return true;
+          }
+        }
         const audioReadyForStart = !coupledMode || !audio ||
         audioReadyForSeekCommitStartAt(target) ||
         mediaCanAttemptPlaybackAtTarget(
@@ -15677,6 +15767,10 @@ startupPrimeStartedAt: performance.now(),
         state.seekCommitCorrectionUntil = 0;
         state.seekCommitVideoLanded = false;
         state.seekCommitAudioLanded = !coupledMode || !audio;
+        state.seekCommitBufferingSince = 0;
+        state.seekCommitAudioReviveAt = 0;
+        state.seekCommitAudioBufferedMark = -1;
+        state.seekCommitAudioStalledSince = 0;
         state.seekTimelineCommittedSeekId = -1;
         state.seekTimelineCommittedTarget = NaN;
         state.seekTimelineCommittedAt = 0;
@@ -17189,7 +17283,24 @@ startupPrimeStartedAt: performance.now(),
           perfProfile.lowEnd ? 2200 : 1500
         )
       );
-      if (videoAdvancing) return vt;
+      if (videoAdvancing) {
+        // In coupled mode the audio clock is what the user actually heard; a
+        // lagging or leading video clock here resumed the pair a few seconds
+        // off after a plain pause/play.
+        try {
+          if (coupledMode && audio && !audio.paused) {
+            const anchorAt = Number(audio.currentTime);
+            if (isFinite(anchorAt) && anchorAt >= 0 &&
+              Math.abs(anchorAt - vt) > 0.25 &&
+              PlaybackProgressEvidence.audioProgressRecent(
+                perfProfile.lowEnd ? 1900 : 1300
+              )) {
+              return anchorAt;
+            }
+          }
+        } catch { }
+        return vt;
+      }
         }
     } catch { }
     const returnTarget = getForegroundReturnTimelineTarget(NaN);
@@ -17240,6 +17351,18 @@ startupPrimeStartedAt: performance.now(),
         if (isFinite(vt) && vt >= 0) liveVt = vt;
         const vjsTime = Number(video.currentTime());
         if (!isFinite(liveVt) && isFinite(vjsTime) && vjsTime >= 0) liveVt = vjsTime;
+        // Running audio is the heard clock; prefer it over a diverged video
+        // clock for the same reason as the primary branch above.
+        if (coupledMode && audio && !audio.paused) {
+          const liveAt = Number(audio.currentTime);
+          if (isFinite(liveAt) && liveAt >= 0 && isFinite(liveVt) &&
+            Math.abs(liveAt - liveVt) > 0.25 &&
+            PlaybackProgressEvidence.audioProgressRecent(
+              perfProfile.lowEnd ? 1900 : 1300
+            )) {
+            liveVt = liveAt;
+          }
+        }
       }
     } catch { }
     if (isFinite(liveVt) && liveVt >= 0) {
@@ -22902,7 +23025,18 @@ startupPrimeStartedAt: performance.now(),
     })()
     : getVideoCurrentTimeSafe(0);
     if (!audioMasterRelease &&
-      !audioReadyForCoupledStartAt(heldAt, coupledAudioStartLead(true))) return false;
+      !audioReadyForCoupledStartAt(heldAt, coupledAudioStartLead(true))) {
+      // Strict-lead standoff: some browsers stop fetching for a paused element
+      // just short of the required lead, which froze the pair forever. After a
+      // long hold, decodable data at the position is enough to release.
+      const heldFor = Number(state.bufferHoldSince || 0) > 0
+      ? now() - Number(state.bufferHoldSince || 0)
+      : 0;
+      const relaxedReady = heldFor > 6000 &&
+      Number(audio.readyState || 0) >= HAVE_CURRENT_DATA &&
+      !audio.seeking;
+      if (!relaxedReady) return false;
+    }
     const vn = getVideoNode();
     if (audioMasterRelease) {
       try { writeResumeVideoToAudioTime(heldAt, "audio-buffer-release-audio-master"); } catch { }
