@@ -4844,7 +4844,10 @@ startupPrimeStartedAt: performance.now(),
           }
         }
       } else if (vRS >= HAVE_FUTURE_DATA && bufAhead > 0.12 &&
-        !state.strictBufferHold && !state.seekResumeInFlight) {
+        !state.strictBufferHold &&
+        (!state.seekResumeInFlight ||
+        (Number(state.seekResumeStartedAt || 0) > 0 &&
+        (_rafNow - Number(state.seekResumeStartedAt || 0)) > 1600))) {
         _frozenFrames++;
       if (!_frozenSince) _frozenSince = _rafNow;
       const frozenFor = _rafNow - _frozenSince;
@@ -33415,7 +33418,30 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                           const absDrift = Math.abs(drift);
                           const activeBigDrift = inBgDrift ? BIG_DRIFT_BACKGROUND : BIG_DRIFT;
                           const legacyTimelineRepairAllowed = !automaticTimelineMutationBlocked();
-                          if (absDrift > activeBigDrift) {
+                          // A parked video clock (running flag, no frame/clock
+                          // progress) must never pull the advancing audio
+                          // backward. That audibly replayed content and then
+                          // fought the visual-freeze recovery, which seats the
+                          // video forward at the audio clock: the visible
+                          // forward/rewind teleporting. Wake the video instead.
+                          const _syncParkedVideo = drift < -0.35 &&
+                          document.visibilityState === "visible" &&
+                          !PlaybackProgressEvidence.videoProgressRecent(perfProfile.lowEnd ? 1700 : 1200, 0) &&
+                          (() => {
+                            try {
+                              const _pkVn = getVideoNode();
+                              return !!_pkVn && !_pkVn.paused && !_pkVn.seeking;
+                            } catch { return false; }
+                          })();
+                          if (_syncParkedVideo) {
+                            try { VideoCompositorFlushManager.arm({ observe: true }); } catch { }
+                            if (absDrift > activeBigDrift) {
+                              scheduleStablePlaybackRecovery("sync-video-clock-parked", {
+                                immediate: true,
+                                forceVisualRecovery: true
+                              });
+                            }
+                          } else if (absDrift > activeBigDrift) {
                             if (legacyTimelineRepairAllowed) {
                               resetAudioPlaybackRate();
                               await quietSeekAudio(vt);
@@ -38743,6 +38769,17 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                             const _finVRS = _finVN ? Number(_finVN.readyState || 0) : 0;
                             if (_finVRS < HAVE_FUTURE_DATA) return;
                             if (_finVN && _finVN.paused) return;
+                            // Audio ahead of a video whose clock is not
+                            // advancing = parked decoder. Snapping audio back
+                            // audibly replays content; wake the video instead.
+                            if (_finDrift > 1.5 &&
+                              !PlaybackProgressEvidence.videoProgressRecent(perfProfile.lowEnd ? 1700 : 1200, 0)) {
+                              scheduleStablePlaybackRecovery("post-seek-video-clock-parked", {
+                                immediate: true,
+                                forceVisualRecovery: true
+                              });
+                              return;
+                            }
                             if (Math.abs(_finDrift) > 1.5) {
                               if (!setAudioTimeForPairSync(_finVt, { maskAudible: true })) {
                                 state._allowAudioTimeWrite = true;
