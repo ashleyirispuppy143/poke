@@ -11539,6 +11539,9 @@ startupPrimeStartedAt: performance.now(),
   }
   function enforceAuthoritativeTransportPause(reason = "") {
     if (!authoritativeTransportPauseActive()) return false;
+    // A restart/replay in flight owns the transport; a stale pause latch from
+    // the previous ended/pause state must not kill the new playback.
+    if (state.restarting || restartFromEndedGuardActive()) return false;
     state.intendedPlaying = false;
     state.bufferHoldIntendedPlaying = false;
     state.resumeOnVisible = false;
@@ -13416,6 +13419,7 @@ startupPrimeStartedAt: performance.now(),
     holdSeekbarStableTarget(0, 3200);
     state.intendedPlaying = true;
     state.bufferHoldIntendedPlaying = true;
+    setAuthoritativeTransportIntent(true, "manual-ended-restart");
     state.videoWaiting = false;
     state.audioWaiting = false;
     state.videoStallAudioPaused = false;
@@ -15841,6 +15845,7 @@ startupPrimeStartedAt: performance.now(),
       state.seekCommitWantedPlaying = true;
       state.intendedPlaying = true;
       state.bufferHoldIntendedPlaying = true;
+      setAuthoritativeTransportIntent(true, reason || "seek-commit-user-play");
       state.seekCommitPhase = String(reason || "user-play").slice(0, 48);
       latchSeekPlaybackIntent(true, 45000);
       armRequiredSeekResume(state.seekCommitSeekId);
@@ -21650,6 +21655,68 @@ startupPrimeStartedAt: performance.now(),
   function enforcePlaybackRateSync() {
     if (!coupledMode || !audio) return;
     try { syncAudioPlaybackRateToVideo("sync"); } catch { }
+  }
+  // Playback-rate authority. The player itself never changes speed; the only
+  // legitimate source of a new rate is the user (a change shortly after a user
+  // action). Anything else — PiP transitions, extensions, browser quirks —
+  // gets snapped back, otherwise the stuck rate silently manufactures A/V
+  // drift forever and every drift heal downstream fires on it.
+  let _pipRateGuardUntil = 0;
+  function approvedPlaybackRate() {
+    const r = Number(state.userSelectedPlaybackRate);
+    return isFinite(r) && r >= PLAYBACK_RATE_MIN && r <= PLAYBACK_RATE_MAX ? r : 1;
+  }
+  function assertApprovedPlaybackRate(reason = "rate-guard") {
+    const want = approvedPlaybackRate();
+    try {
+      _normalizingPlaybackRates = true;
+      const vn = getVideoNode();
+      if (vn && Math.abs((Number(vn.playbackRate) || 0) - want) > 0.001) {
+        vn.playbackRate = want;
+      }
+      if (videoEl && videoEl !== vn &&
+        Math.abs((Number(videoEl.playbackRate) || 0) - want) > 0.001) {
+        videoEl.playbackRate = want;
+      }
+      try {
+        if (typeof video.playbackRate === "function") {
+          const cur = Number(video.playbackRate());
+          if (isFinite(cur) && Math.abs(cur - want) > 0.001) video.playbackRate(want);
+        }
+      } catch { }
+      if (coupledMode && audio &&
+        Math.abs((Number(audio.playbackRate) || 0) - want) > 0.001) {
+        audio.playbackRate = want;
+      }
+      state.selectedPlaybackRate = want;
+    } catch { } finally {
+      _normalizingPlaybackRates = false;
+    }
+  }
+  function notePipTransitionForRateGuard(kind = "pip") {
+    _pipRateGuardUntil = now() + 4000;
+    assertApprovedPlaybackRate(kind + "-rate-restore");
+    setTimeout(() => { try { assertApprovedPlaybackRate(kind + "-rate-restore-late"); } catch { } }, 260);
+    setTimeout(() => { try { assertApprovedPlaybackRate(kind + "-rate-restore-settle"); } catch { } }, 1100);
+  }
+  function handleObservedRateChange() {
+    if (_normalizingPlaybackRates) return;
+    let live = NaN;
+    try { live = Number(getVideoNode()?.playbackRate); } catch { }
+    if (!isFinite(live)) { try { live = Number(videoEl?.playbackRate); } catch { } }
+    if (!isFinite(live) || live <= 0) {
+      assertApprovedPlaybackRate("rate-invalid");
+      return;
+    }
+    const userRecent = (now() - Number(state.lastUserActionTime || 0)) < 2500;
+    const pipWindow = now() < _pipRateGuardUntil;
+    if (userRecent && !pipWindow) {
+      const normalized = normalizeSelectedPlaybackRate(live);
+      state.userSelectedPlaybackRate = isFinite(normalized) ? normalized : 1;
+      state.selectedPlaybackRate = state.userSelectedPlaybackRate;
+    } else if (Math.abs(live - approvedPlaybackRate()) > 0.02) {
+      assertApprovedPlaybackRate(pipWindow ? "pip-unauthorized-rate" : "unauthorized-rate");
+    }
   }
   function normalPlaybackAudioDriftCorrectionAllowed() {
     if (!coupledMode || !audio) return false;
@@ -31947,6 +32014,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     _hiddenInitialAudioStartInFlight = true;
     state.intendedPlaying = true;
     state.bufferHoldIntendedPlaying = true;
+    setAuthoritativeTransportIntent(true, "hidden-initial-audio-startup");
     state.resumeOnVisible = true;
     state.bgHiddenWasPlaying = true;
     state.startupPrimed = true;
@@ -32051,6 +32119,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     }
     state.intendedPlaying = true;
     state.bufferHoldIntendedPlaying = true;
+    setAuthoritativeTransportIntent(true, "hidden-startup-autoplay");
     state.resumeOnVisible = true;
     state.bgHiddenWasPlaying = true;
     state.startupPrimed = true;
@@ -32390,6 +32459,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         clearMediaSessionForcedPause();
         state.intendedPlaying = true;
         state.bufferHoldIntendedPlaying = true;
+        setAuthoritativeTransportIntent(true, "startup-autoplay");
         clearBufferHold();
         state.tabReturnImmuneUntil = Math.max(state.tabReturnImmuneUntil, now() + 2000);
         updateMediaSessionPlaybackState();
@@ -36096,14 +36166,31 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
   }
   function bindCommonMediaEvents() {
     video.on("ratechange", () => {
-      if (!coupledMode) return;
       if (_normalizingPlaybackRates) return;
+      try { handleObservedRateChange(); } catch { }
+      if (!coupledMode) return;
       try {
         syncAudioPlaybackRateToVideo("video-ratechange", { force: true });
         state.driftStableFrames = 0;
         state.lastDrift = 0;
       } catch { }
     });
+    try {
+      const _pipTargets = [];
+      try { if (videoEl) _pipTargets.push(videoEl); } catch { }
+      try {
+        const _pipVn = getVideoNode();
+        if (_pipVn && _pipTargets.indexOf(_pipVn) === -1) _pipTargets.push(_pipVn);
+      } catch { }
+      for (const _pipEl of _pipTargets) {
+        _on(_pipEl, "enterpictureinpicture", () => {
+          try { notePipTransitionForRateGuard("pip-enter"); } catch { }
+        }, { passive: true });
+        _on(_pipEl, "leavepictureinpicture", () => {
+          try { notePipTransitionForRateGuard("pip-leave"); } catch { }
+        }, { passive: true });
+      }
+    } catch { }
     video.on("play", () => {
       if (_errorOverlayShown || (PlayerErrorOverlay && PlayerErrorOverlay.isVisible && PlayerErrorOverlay.isVisible())) {
         forcePausePlaybackForErrorOverlay("video-play-while-overlay");
@@ -43090,6 +43177,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     let blackFrameLastCount = NaN;
     let lastBlackFrameKickAt = 0;
     let blackFrameKickCount = 0;
+    let rateWrongSince = 0;
     // Clears the seek latches, rejoins audio to the live clock, and repaints.
     const forceResumeAudioAndUnfreeze = (liveVt, reason) => {
       lastForcedResumeAt = now();
@@ -43291,6 +43379,29 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         (typeof mediaSessionForcedPauseActive === "function" && mediaSessionForcedPauseActive()) ||
         (typeof userToggleExpectingPause === "function" && userToggleExpectingPause()) ||
         ((Number(state.userPauseUntil) || 0) > t);
+
+        // Playback-rate sentinel: a rate nothing user-driven selected silently
+        // manufactures A/V drift and every drift symptom downstream. Snap it
+        // back after a short confirmation.
+        try {
+          const _approvedRate = approvedPlaybackRate();
+          let _liveRate = NaN;
+          try { _liveRate = Number(vn?.playbackRate); } catch { }
+          let _liveAudioRate = NaN;
+          try { _liveAudioRate = coupledMode && audio ? Number(audio.playbackRate) : _approvedRate; } catch { }
+          const _rateOff =
+          (isFiniteNum(_liveRate) && Math.abs(_liveRate - _approvedRate) > 0.02) ||
+          (isFiniteNum(_liveAudioRate) && Math.abs(_liveAudioRate - _approvedRate) > 0.02);
+          const _userRecent = (t - Number(state.lastUserActionTime || 0)) < 2500;
+          if (_rateOff && !_userRecent && !_normalizingPlaybackRates) {
+            needFast = true;
+            if (!rateWrongSince) rateWrongSince = t;
+            else if ((t - rateWrongSince) > 700) {
+              rateWrongSince = 0;
+              assertApprovedPlaybackRate("supervisor-rate-sentinel");
+            }
+          } else rateWrongSince = 0;
+        } catch { rateWrongSince = 0; }
 
         // Sample whether each track's clock is actually advancing.
         let videoAdvancing = false;
@@ -43616,7 +43727,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                 // Audio advancing but the video element is paused. Play the video.
                 if (coupledMode && audio && intended && committed && !hidden &&
                   !userHeldPaused && !state.endedNaturally && !state.restarting &&
-                  !state.seekDragActive &&
+                  !state.seekDragActive && !authoritativeTransportPauseActive() &&
                   (!inStartupOrTransition || returnGraceOnlyTransition) &&
                   audioAdvancing && vn && vn.paused) {
                   needFast = true;
@@ -43804,6 +43915,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                       !state.endedNaturally && !state.restarting && !state.seekDragActive &&
                       !state.seeking && !state.seekBuffering && !state.seekResumeInFlight &&
                       !nativeSeeking && !audio.error && !playerMutedFromVideo() &&
+                      !authoritativeTransportPauseActive() &&
                       vn && !vPaused && videoAdvancing && audio.paused &&
                       !(state.audioPlayInFlight && Number(state.audioPlayInFlightSession) === Number(state.playSessionId)) &&
                       Number(audio.readyState || 0) >= HAVE_CURRENT_DATA) {
@@ -43944,7 +44056,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                           })();
                           if (coupledMode && audio && !hidden && !userHeldPaused &&
                             !state.endedNaturally && !state.seekDragActive && !audio.error &&
-                            !_audioTrackFinished &&
+                            !_audioTrackFinished && !authoritativeTransportPauseActive() &&
                             !playerMutedFromVideo() && !state.userMutedVideo && !state.userMutedAudio &&
                             state.intendedPlaying && vn && !vPaused && videoAdvancing) {
                             let deadTargetVol = 1;
@@ -44027,6 +44139,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                             })();
                             if (_bufShown && _anyStuck && _vDataOk && _aDataOk &&
                               intended && committed && !hidden && !state.endedNaturally &&
+                              !(_bothPaused && authoritativeTransportPauseActive()) &&
                               (!inSeek || _seekStuckLong) && !nativeSeeking &&
                               !state.seekDragActive && (Number(state.userPauseUntil) || 0) < t &&
                               (typeof userPauseLockActive !== "function" || !userPauseLockActive())) {
@@ -44214,6 +44327,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                               // natively seeking.
                               if (intended && committed && !state.endedNaturally && !hidden &&
                                 !state.seekDragActive &&
+                                !authoritativeTransportPauseActive() &&
                                 (!inSeek || (vRS >= 2 && aRS >= 2 && !nativeSeeking)) &&
                                 (Number(state.userPauseUntil) || 0) < t &&
                                 (typeof userPauseLockActive !== "function" || !userPauseLockActive())) {
