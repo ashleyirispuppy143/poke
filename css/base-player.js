@@ -6982,7 +6982,7 @@ startupPrimeStartedAt: performance.now(),
       // isn't revealed first (the real release is frame-based via releaseHealthyPair
       // when the video presents). Seek keeps the shorter cap so audio isn't late.
       const gateMaxMs = state.restarting
-      ? (perfProfile.lowEnd ? 5000 : 4000)
+      ? (perfProfile.lowEnd ? 3200 : 2600)
       : state.seekCommitActive
       ? (perfProfile.lowEnd ? 2600 : 2000)
       : (perfProfile.lowEnd ? 1100 : 800);
@@ -31991,12 +31991,53 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       if (!commitHiddenInitialAudioStartup(reason)) scheduleStartupAutoplayRetry();
     }, err => {
       try { notePlaybackStartFailure("audio", err); } catch { }
+      // The browser refused an audible hidden start (autoplay policy). The
+      // coupled video track carries no sound, so it is allowed to start; get
+      // the picture and the timeline running now and keep retrying the audio.
+      try { tryHiddenVideoOnlyAutoplayFallback(reason + "-video-fallback"); } catch { }
       scheduleStartupAutoplayRetry();
     }).finally(() => {
       clearHiddenInitialAudioStartTimeout();
       _hiddenInitialAudioStartInFlight = false;
     });
     return true;
+  }
+  let _hiddenVideoOnlyFallbackAt = 0;
+  function tryHiddenVideoOnlyAutoplayFallback(reason = "hidden-autoplay-video-fallback") {
+    if (document.visibilityState !== "hidden") return false;
+    if (state.endedNaturally || state.restarting) return false;
+    if (userPauseLockActive() || mediaSessionForcedPauseActive() ||
+      userPauseIntentActive() || userToggleExpectingPause()) return false;
+    if (!state.intendedPlaying && !wantsStartupAutoplay()) return false;
+    const t = now();
+    if ((t - _hiddenVideoOnlyFallbackAt) < 1500) return true;
+    _hiddenVideoOnlyFallbackAt = t;
+    const vn = getVideoNode();
+    if (!vn || !vn.paused) return false;
+    try {
+      if (vn.preload !== "auto") vn.preload = "auto";
+      if (Number(vn.networkState || 0) === 0 && typeof vn.load === "function") vn.load();
+    } catch { }
+    try {
+      state.isProgrammaticVideoPlay = true;
+      state.resumeOnVisible = true;
+      state.bgHiddenWasPlaying = true;
+      const p = HTMLMediaElement.prototype.play.call(vn);
+      if (p && typeof p.then === "function") {
+        p.then(() => {
+          try { noteBackgroundEntry(); } catch { }
+          scheduleStartupAutoplayRetry();
+        }, () => { }).finally(() => {
+          setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 220);
+        });
+      } else {
+        setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 220);
+      }
+      return true;
+    } catch {
+      state.isProgrammaticVideoPlay = false;
+      return false;
+    }
   }
   function tryHiddenStartupAutoplayKick() {
     if (!coupledMode || !audio) return false;
@@ -33546,7 +33587,23 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                               });
                             }
                           } else if (absDrift > activeBigDrift) {
-                            if (legacyTimelineRepairAllowed) {
+                            if (drift < 0 && legacyTimelineRepairAllowed) {
+                              // Video fell far behind the audible clock. Rewinding the
+                              // audio to a lagging video clock replays content the user
+                              // already heard; seat the video forward at the audio
+                              // position instead.
+                              try {
+                                const _fwdVn = getVideoNode();
+                                if (_fwdVn && !_fwdVn.seeking && isFinite(at) && at >= 0) {
+                                  state._isMicroSeek = true;
+                                  _fwdVn.currentTime = at;
+                                  if (videoEl && videoEl !== _fwdVn) videoEl.currentTime = at;
+                                  scheduleMicroSeekClear(280);
+                                  state.driftStableFrames = 0;
+                                  setFastSync(1600);
+                                }
+                              } catch { }
+                            } else if (legacyTimelineRepairAllowed) {
                               resetAudioPlaybackRate();
                               await quietSeekAudio(vt);
                               resetAudioPlaybackRate();
@@ -40878,6 +40935,33 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           });
         }
         return;
+        }
+        // Hidden: the buffer refilled while the tab was in background. Resume
+        // right now with the hidden (audio-master) machinery instead of waiting
+        // for the user to come back to the tab.
+        if (coupledMode && audio && document.visibilityState === "hidden") {
+          state.bgKeepaliveHotUntil = Math.max(
+            Number(state.bgKeepaliveHotUntil || 0), now() + 2500);
+          try { startBgAudioKeepalive(); } catch { }
+          if (audio.paused) {
+            try {
+              hiddenAudioNoSeekResume(
+                (reason ? reason + "-hidden" : "buffer-ready-hidden"),
+                { retry: true, force: true }
+              );
+            } catch { }
+          }
+          if (!state.hiddenAudioExclusiveMode) {
+            try {
+              kickHiddenCoupledBootstrap({
+                kickAudio: true,
+                urgentAudio: true,
+                noAudioSeek: true,
+                syncVideo: false
+              });
+            } catch { }
+          }
+          return;
         }
         if (isReturnPlaybackKickReason(reason)) {
           armSeamlessReturnWindow(reason || "buffer-ready-return", 1800);
