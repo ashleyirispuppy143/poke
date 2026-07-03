@@ -9847,6 +9847,15 @@ startupPrimeStartedAt: performance.now(),
       else if (audioAtDestination && audioCanOwnSeekTimeline) liveTimeline = liveAudio;
       else if (destinationWasCommitted && !nativeSeeking && videoPlausiblyProgressed) liveTimeline = liveVideo;
       else if (destinationWasCommitted && !nativeSeeking && audioCanOwnSeekTimeline && audioPlausiblyProgressed) liveTimeline = liveAudio;
+      // Unobserved landing: the clock passed through the narrow destination
+      // window between UI reads, so nothing above matched, yet a live clock is
+      // now sitting in the plausible forward zone [target-tol, target+allowance]
+      // and actively advancing. That is a real landing we missed — follow it
+      // immediately instead of pinning the bar to the stale requested target.
+      // Backward-seek pre-land safety: the old position sits far above the
+      // allowance, so it can't satisfy videoPlausiblyProgressed.
+      else if (!nativeSeeking && videoPlausiblyProgressed && videoClockProgressing) liveTimeline = liveVideo;
+      else if (!nativeSeeking && audioCanOwnSeekTimeline && audioPlausiblyProgressed && audioClockProgressing) liveTimeline = liveAudio;
     } else {
       liveTimeline = audioCanOwnSeekTimeline ? liveAudio : liveVideo;
     }
@@ -9921,12 +9930,12 @@ startupPrimeStartedAt: performance.now(),
       // destination as committed so later reads take the normal path.
       const seekAge = seekEvidenceSince > 0 ? now() - seekEvidenceSince : Infinity;
       let liveEscape = NaN;
-      if (seekAge > 2600 && !nativeSeeking) {
+      if (seekAge > 900 && !nativeSeeking) {
         if (vn && !vn.paused && isFinite(liveVideo) &&
-          liveVideo > target + 0.3 && videoClockProgressing) {
+          liveVideo > target + 0.15 && videoClockProgressing) {
           liveEscape = liveVideo;
         } else if (coupledMode && audio && !audio.paused && isFinite(liveAudio) &&
-          liveAudio > target + 0.3 && audioClockProgressing) {
+          liveAudio > target + 0.15 && audioClockProgressing) {
           liveEscape = liveAudio;
         }
       }
@@ -10015,10 +10024,30 @@ startupPrimeStartedAt: performance.now(),
       return dur > 0 ? Math.min(t, dur) : t;
     };
     if (hardPairTransitionGateActive()) {
-      return stabilizePlayerDisplayTime(
-        clamp(hardPairTransitionTarget(playerDisplayLastTime)),
-                                        dur
-      );
+      const gateTarget = clamp(hardPairTransitionTarget(playerDisplayLastTime));
+      // The gate briefly holds a stable target through a play/pause or seek
+      // transition, but if the real clock has already moved past it and is
+      // advancing, showing the frozen target reads as the wrong position.
+      // Follow the live clock once it's clearly landed and progressing.
+      try {
+        const gvn = getVideoNode();
+        const gvt = gvn ? Number(gvn.currentTime) : NaN;
+        const gat = coupledMode && audio ? Number(audio.currentTime) : NaN;
+        const liveGate = coupledMode && audio &&
+        isFinite(gat) && !audio.paused && state.audioEverStarted
+        ? gat
+        : (gvn && !gvn.paused ? gvt : NaN);
+        if (isFinite(gateTarget) && isFinite(liveGate) &&
+          liveGate > gateTarget + 0.12 && liveGate < gateTarget + 12 &&
+          PlaybackProgressEvidence.pairProgressing({
+            since: Number(state.hardPairGateStartedAt || 0),
+            maxAge: perfProfile.lowEnd ? 1400 : 1000,
+            allowHiddenAudioOnly: document.visibilityState === "hidden"
+          })) {
+          return stabilizePlayerDisplayTime(clamp(liveGate), dur);
+        }
+      } catch { }
+      return stabilizePlayerDisplayTime(gateTarget, dur);
     }
     try {
       const seekTime = getSeekTransactionDisplayTime(dur);
@@ -15676,7 +15705,7 @@ startupPrimeStartedAt: performance.now(),
         // stays silent-gated and joins the moment its data lands. The short
         // grace keeps ordinary near-buffer seeks starting as a pair.
         if (!mustRemainPaused &&
-          (bufNow - state.seekCommitBufferingSince) > 700 &&
+          (bufNow - state.seekCommitBufferingSince) > 250 &&
           targetLanded(target)) {
           const vnEsc = getVideoNode();
           let vnEscReady = false;
@@ -19776,8 +19805,14 @@ startupPrimeStartedAt: performance.now(),
     state.audioPlayUntil = 0;
     state.audioEventsSquelchedUntil = 0;
     state.isProgrammaticAudioPause = false;
+    // Already mid-seek from a prior tick: retargeting again here restarts the
+    // fetch before it lands, which on a slow connection can prevent the audio
+    // from ever actually starting in the background. Let the in-flight seek
+    // finish; its own seeked/canplay event resumes the join.
+    const audioAlreadySeeking = (() => { try { return !!audio.seeking; } catch { return false; } })();
     const hiddenNoAudioSeek = !!(
       noAudioSeek ||
+      audioAlreadySeeking ||
       hiddenBackgroundAudioTimelineWriteBlocked(targetTime, atNow)
     );
     if (!hiddenNoAudioSeek && isFinite(targetTime) && targetTime >= 0) {
@@ -23626,7 +23661,14 @@ startupPrimeStartedAt: performance.now(),
     let target = Number(vn.currentTime);
     if (!isFinite(target) || target < 0) target = coupledPlaybackTarget(0);
     if (vRunning && !aRunning) {
-      try { if (audio.seeking) return false; } catch { }
+      // audio.seeking here almost always means WE just wrote its currentTime
+      // to catch up to the running video (below, or on a prior call). That is
+      // progress, not failure: the caller (requestCoupledPlaybackCommit) reads
+      // a `false` return as "join impossible" and, after ~750ms of that, PAUSES
+      // the still-healthy running video to hold the pair — freezing playback
+      // for no reason and forcing a restart. Report success instead so the
+      // caller keeps waiting for the audio's own seeked/canplay to complete it.
+      try { if (audio.seeking) return true; } catch { }
       const audioCanJoin =
       mediaCanAttemptPlaybackAtTarget(
         audio,
@@ -23634,7 +23676,12 @@ startupPrimeStartedAt: performance.now(),
         perfProfile.lowEnd ? 0.24 : 0.18
       ) ||
       audioReadyForCoupledStartAt(target, coupledAudioStartLead(false));
-      if (!audioCanJoin) return false;
+      // The video is genuinely playing (video-first seek): it has advanced past
+      // where the audio buffered, so audio has no data at the video position and
+      // audioCanJoin is false. Returning here left the audio silent forever.
+      // Instead seek the audio to the video position and issue play() anyway —
+      // the pending play raises fetch priority and auto-starts the instant that
+      // region loads. Rate-limited by coupledPlayCommitLastJoinAt above.
       try {
         const at = Number(audio.currentTime);
         if (!isFinite(at) || Math.abs(at - target) >
@@ -23650,6 +23697,9 @@ startupPrimeStartedAt: performance.now(),
         notePairSyncTimeWrite(target);
           }
       } catch { }
+      if (!audioCanJoin && audio.paused && typeof audio.preload === "string") {
+        try { if (audio.preload !== "auto") audio.preload = "auto"; } catch { }
+      }
       try { clearHardPairTransitionGate("pair", false, { restore: false }); } catch { }
       try {
         forceUnmuteForPlaybackIfAllowed();
@@ -23688,6 +23738,12 @@ startupPrimeStartedAt: performance.now(),
       return true;
     }
     if (!vRunning && aRunning) {
+      // Mirror of the audio-seeking guard above: if the video is already mid
+      // network-seek (from this same join on a prior tick), retargeting
+      // currentTime again restarts that seek and can extend a frozen frame
+      // indefinitely. Let the in-flight seek land; its own seeked/canplay
+      // handlers finish the join.
+      try { if (vn.seeking) return true; } catch { }
       const audioTarget = Number(audio.currentTime);
       if (isFinite(audioTarget) && audioTarget >= 0) {
         let aligned = false;
