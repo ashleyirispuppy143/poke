@@ -583,6 +583,12 @@ document.addEventListener("DOMContentLoaded", () => {
     try { audio.preload = "none"; } catch { }
     try { if (!audio.paused) audio.pause(); } catch { }
   }
+  // The audio track must start fetching as early as the video does; the lazy
+  // default left it cold until first play, which was heard as the audio
+  // buffer lagging the video at startup and after seeks.
+  if (coupledMode && audio) {
+    try { if (audio.preload !== "auto") audio.preload = "auto"; } catch { }
+  }
   try { installManagedLoopPreferenceObserver(videoEl); } catch { }
   try { installManagedLoopPreferenceObserver(audio); } catch { }
   try { syncLoopPreferenceToMedia(); } catch { }
@@ -14540,7 +14546,7 @@ startupPrimeStartedAt: performance.now(),
           // block the probe: play() itself is what unsticks some browsers.
           const stuckAudioSeekOk =
           Number(state.seekCommitBufferingSince || 0) > 0 &&
-          (now() - Number(state.seekCommitBufferingSince || 0)) > 3000;
+          (now() - Number(state.seekCommitBufferingSince || 0)) > 1800;
           if ((audio.seeking || Number(audio.readyState || 0) < HAVE_METADATA) &&
             !stuckAudioSeekOk) {
             return false;
@@ -14589,7 +14595,7 @@ startupPrimeStartedAt: performance.now(),
       // escape window the video starts and the audio joins when data lands.
       const audioBarrierEscape =
       Number(state.seekCommitBufferingSince || 0) > 0 &&
-      (now() - Number(state.seekCommitBufferingSince || 0)) > 8500;
+      (now() - Number(state.seekCommitBufferingSince || 0)) > 4500;
       if (!readyBeforeAudioRetarget && !readyAfterAudioRetarget &&
         !audioCanAttempt && !audioBarrierEscape) {
         state.seekCommitPhase = "waiting-audio-retarget";
@@ -15606,9 +15612,9 @@ startupPrimeStartedAt: performance.now(),
           }
           const audioFetchStalled =
           state.seekCommitAudioStalledSince > 0 &&
-          (bufNow - state.seekCommitAudioStalledSince) > 3500;
+          (bufNow - state.seekCommitAudioStalledSince) > 2200;
           if (audioFetchStalled &&
-            (bufNow - Number(state.seekCommitAudioReviveAt || 0)) > 4000) {
+            (bufNow - Number(state.seekCommitAudioReviveAt || 0)) > 3000) {
             state.seekCommitAudioReviveAt = bufNow;
             // A fresh currentTime write re-issues the range request; a silent
             // play() probe raises the browser's fetch priority for the element.
@@ -15639,7 +15645,7 @@ startupPrimeStartedAt: performance.now(),
         // fetch must not hold the whole pair hostage. Start the video; the
         // audio joins as soon as its data lands.
         if (!mustRemainPaused &&
-          (bufNow - state.seekCommitBufferingSince) > 9000 &&
+          (bufNow - state.seekCommitBufferingSince) > 5000 &&
           targetLanded(target)) {
           const vnEsc = getVideoNode();
           let vnEscReady = false;
@@ -15682,7 +15688,11 @@ startupPrimeStartedAt: performance.now(),
           (coupledMode && audio && !audio.paused)
         );
         if (pairNeedsHold) {
-          holdPair({ forcePause: coupledMode && audio && !audioReadyForStart });
+          // Never force-pause the starved audio here: paused elements get
+          // deprioritized fetching, which made the audio buffer crawl exactly
+          // when it needed to fill fastest. It is already silent via the gain
+          // hold, and a pending play request keeps the download priority high.
+          holdPair();
         }
         if ((now() - Number(state.seekCommitLastAlignAt || 0)) >
           (perfProfile.lowEnd ? 900 : 650)) {
@@ -24453,6 +24463,19 @@ startupPrimeStartedAt: performance.now(),
     const anchor = getMonotonicVideoAnchor(vt);
     if (vt < anchor - 0.12) return false;
     if (!isFinite(Number(state.monotonicVideoTime)) || vt >= Number(state.monotonicVideoTime) - 0.03) {
+      // Spike rejection: a single bogus forward read (decoder mid-transition)
+      // must not poison the anchor, or every honest sample after it looks
+      // "backward" and the restore teleports the video forward to the spike.
+      const prev = Number(state.monotonicVideoTime);
+      const prevAt = Number(state.monotonicVideoTimeAt || 0);
+      if (isFinite(prev) && prev >= 0 && prevAt > 0) {
+        const elapsedSec = Math.max(0, (now() - prevAt) / 1000);
+        const rate = (() => {
+          try { return Math.max(1, Number(getVideoNode()?.playbackRate) || 1); } catch { return 1; }
+        })();
+        const plausibleAdvance = elapsedSec * rate * 1.8 + 1.5;
+        if (vt > prev + plausibleAdvance) return false;
+      }
       state.monotonicVideoTime = Math.max(vt, Number(state.monotonicVideoTime) || 0);
       state.monotonicVideoTimeAt = now();
     }
@@ -24647,6 +24670,21 @@ startupPrimeStartedAt: performance.now(),
     const anchor = getMonotonicVideoAnchor(observed);
     if (!isFinite(anchor) || anchor < 0 || observed >= anchor - 0.12) return false;
     const t = now();
+    // A transient backward read during a decoder hiccup self-corrects within a
+    // frame; restoring on the first sample was itself seen as a random jump.
+    // Require the regression to persist across two samples before writing.
+    const firstSeenAt = Number(state._monoRegressFirstAt || 0);
+    const firstSeenVal = Number(state._monoRegressFirstVal);
+    const sameRegression = firstSeenAt > 0 && (t - firstSeenAt) < 1500 &&
+    isFinite(firstSeenVal) && Math.abs(observed - firstSeenVal) < 2.5;
+    if (!sameRegression) {
+      state._monoRegressFirstAt = t;
+      state._monoRegressFirstVal = observed;
+      return true;
+    }
+    if ((t - firstSeenAt) < 160) return true;
+    state._monoRegressFirstAt = 0;
+    state._monoRegressFirstVal = NaN;
     if (t - Number(state.monotonicVideoRestoreAt || 0) < 90) return true;
     state.monotonicVideoRestoreAt = t;
     state.monotonicVideoRestoreCount = Number(state.monotonicVideoRestoreCount || 0) + 1;
@@ -32133,6 +32171,12 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       return true;
     }
     if (!state._startupAudioWaitStartedAt) state._startupAudioWaitStartedAt = now();
+    // The kick was refused because a track has no data yet. Waiting passively
+    // is what made the first play presses look dead: browsers deprioritize
+    // fetching for paused elements. Prime both pipelines now so the retry
+    // finds data instead of refusing again.
+    primeStartupTrackBuffer(vNode);
+    primeStartupTrackBuffer(audio);
     return false;
   }
   let _hiddenInitialAudioStartInFlight = false;
