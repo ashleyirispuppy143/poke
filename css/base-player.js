@@ -15082,7 +15082,15 @@ startupPrimeStartedAt: performance.now(),
         mediaSessionForcedPauseActive() || userPauseIntentActive() ||
         userToggleExpectingPause()) return false;
       const t = now();
-      const count = Number(state.seekCommitHardRearmCount || 0);
+      let count = Number(state.seekCommitHardRearmCount || 0);
+      // Replenish the hard-rearm budget slowly. On far seeks in long videos the
+      // burst burns out while data is still downloading; once data lands much
+      // later, a spent budget left the decoder parked until a manual play/pause.
+      if (count >= 4 &&
+        (t - Number(state.seekCommitLastHardRearmAt || 0)) > 8000) {
+        state.seekCommitHardRearmCount = 1;
+        count = 1;
+      }
       if (count >= 4) {
         if (!state.seekCommitRestart || state.seekCommitRestartReloaded) return false;
         state.seekCommitRestartReloaded = true;
@@ -43312,6 +43320,8 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     let lastBlackFrameKickAt = 0;
     let blackFrameKickCount = 0;
     let rateWrongSince = 0;
+    let ncParkedSince = 0;
+    let ncParkedKickAt = 0;
     // Clears the seek latches, rejoins audio to the live clock, and repaints.
     const forceResumeAudioAndUnfreeze = (liveVt, reason) => {
       lastForcedResumeAt = now();
@@ -43945,6 +43955,40 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                     }
                     } else { videoFrozenSince = 0; if (videoAdvancing) videoFrozenRekickCount = 0; }
 
+                    // Non-coupled parked decoder: element playing, clock frozen, data
+                    // present, and no buffer flag set — none of the coupled heals see
+                    // it, so the bar sat frozen forever. Reset the decoder.
+                    if (!coupledMode && intended && committed && !hidden &&
+                      !userHeldPaused && !state.endedNaturally && !state.restarting &&
+                      !state.seekDragActive && !nativeSeeking &&
+                      (!inStartupOrTransition || returnGraceOnlyTransition) &&
+                      vn && !vPaused && !videoAdvancing &&
+                      Number(vn.readyState || 0) >= 3) {
+                      needFast = true;
+                      if (!ncParkedSince) ncParkedSince = t;
+                      else if ((t - ncParkedSince) > 1200 && (t - ncParkedKickAt) > 3000) {
+                        ncParkedSince = 0;
+                        ncParkedKickAt = t;
+                        try {
+                          state._allowVideoPause = true;
+                          state.isProgrammaticVideoPause = true;
+                          try { HTMLMediaElement.prototype.pause.call(vn); } catch { }
+                          try {
+                            const ncp = HTMLMediaElement.prototype.play.call(vn);
+                            if (ncp && typeof ncp.catch === "function") ncp.catch(() => { });
+                          } catch { }
+                          setTimeout(() => {
+                            state._allowVideoPause = false;
+                            state.isProgrammaticVideoPause = false;
+                          }, 220);
+                        } catch {
+                          state._allowVideoPause = false;
+                          state.isProgrammaticVideoPause = false;
+                        }
+                        try { if (typeof forceClearSeekBufferingUI === "function") forceClearSeekBufferingUI(); } catch { }
+                      }
+                    } else ncParkedSince = 0;
+
                     // Pitch-black playback: the video clock advances but the decoder
                     // presents no frames at all. Reset the video track only.
                     if (!hidden && intended && vn && !vPaused && videoAdvancing &&
@@ -44462,7 +44506,12 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                               if (intended && committed && !state.endedNaturally && !hidden &&
                                 !state.seekDragActive &&
                                 !authoritativeTransportPauseActive() &&
-                                (!inSeek || (vRS >= 2 && aRS >= 2 && !nativeSeeking)) &&
+                                // Without decodable data a forced resume just plays a beat and
+                                // stalls again; that resume/pause ping-pong was audible and
+                                // visible. Leave a genuinely starved pair to the buffer-ready
+                                // machinery, which resumes on canplay.
+                                vRS >= 2 && (!coupledMode || !audio || aRS >= 2) &&
+                                !nativeSeeking &&
                                 (Number(state.userPauseUntil) || 0) < t &&
                                 (typeof userPauseLockActive !== "function" || !userPauseLockActive())) {
                                 const vNotMoving = vPaused;
