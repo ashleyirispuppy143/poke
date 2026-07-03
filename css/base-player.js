@@ -1749,101 +1749,29 @@ startupPrimeStartedAt: performance.now(),
   if (audio && typeof audio.play === "function") {
     _origAudioPlay = audio.play.bind(audio);
     audio.play = function () {
-      if (state.seekAudioReleaseInFlight && !state.seekAudioReleaseNativePlayAllowed) return Promise.resolve();
-      if (seekAudioHoldUntilVideoReadyActive() && !state.seekAudioReleaseInFlight) return Promise.resolve();
+      // Minimal wrapper. Play the audio. The only hard blocks are the natural
+      // end and the very first coordinated start (so audio and video begin
+      // together). No stall/buffer/seek/hold gates: those silently no-op'd the
+      // audio and left it dead. The lockstep enforcer owns pausing the pair
+      // when a track genuinely cannot play.
       if (terminalAudioStartBlocked()) return Promise.resolve();
-      if (Number(audio.currentTime) >= (Number(audio.duration) || 0) - 0.2 && audio.duration > 0 && !isLoopDesired()) {
+      if (Number(audio.currentTime) >= (Number(audio.duration) || 0) - 0.2 &&
+        audio.duration > 0 && !isLoopDesired()) {
         return Promise.resolve();
       }
+      // First coordinated start: route through the lockstep start so the pair
+      // begins together. If it can't run yet, retry and still let audio play.
       if (initialCoupledPairPending() && !startupCoordinatedPlayActive()) {
         state.startupPrimed = true;
         state.startupKickDone = false;
-        if (!state._simulStartInFlight && bothReadyForStartupKick()) kickStartupLockstepPlayback();
-        else scheduleStartupAutoplayRetry();
-        return Promise.resolve();
-      }
-      if (document.visibilityState === "hidden") {
-        if (hiddenBootstrapNeedsVideoLead() && !startupCoordinatedPlayActive()) {
-          kickHiddenCoupledBootstrap({ kickAudio: false });
+        if (!state._simulStartInFlight && bothReadyForStartupKick()) {
+          kickStartupLockstepPlayback();
           return Promise.resolve();
         }
-        if (isVideoBufferingForCoupledPlayback({ allowHiddenBootstrap: true, allowSeekKick: true })) {
-          return Promise.resolve();
-        }
-        return _origAudioPlay();
-      }
-      const _gateVNode = getVideoNode();
-      const _gateRS = _gateVNode ? Number(_gateVNode.readyState || 0) : 4;
-      const _gateVisible = document.visibilityState === "visible";
-      const inSeekKickWindow = now() < state.seekKickAudioAllowedUntil;
-      // Let audio play only when BOTH tracks can genuinely play (future data,
-      // not just a decoded frame) and the user wants playback. Requiring the
-      // video to be playable too stops audio from playing while the video is
-      // still buffering. Native seeking of either element defers.
-      const _pairCanPlay = _gateRS >= HAVE_FUTURE_DATA &&
-      Number(audio.readyState || 0) >= HAVE_FUTURE_DATA;
-      const _audioReallyReady = _gateVisible && state.firstPlayCommitted &&
-      state.intendedPlaying && _pairCanPlay &&
-      !userPauseLockActive() && !userPauseIntentActive() &&
-      !mediaSessionForcedPauseActive() && !authoritativeTransportPauseActive() &&
-      !terminalAudioStartBlocked() &&
-      (!_gateVNode || (!_gateVNode.seeking && !_gateVNode.paused)) && !audio.seeking &&
-      !seekAudioHoldUntilVideoReadyActive();
-      if (_audioReallyReady) return _origAudioPlay();
-      if ((state.seeking || state.seekBuffering) && !inSeekKickWindow) return Promise.resolve();
-      if (!state.firstPlayCommitted && state.intendedPlaying) {
-        if (startupAudioMayPlayNow(_gateVNode)) return _origAudioPlay();
-        if (!state.startupKickInFlight && !state.startupKickDone) {
-          try { scheduleStartupAutoplayKick(); } catch { }
-        }
+        scheduleStartupAutoplayRetry();
         return Promise.resolve();
       }
-      if (startupSettleActive() && state.intendedPlaying &&
-        !userPauseLockActive() && !mediaSessionForcedPauseActive()) {
-        if (!isVideoBufferingForCoupledPlayback({ allowSeekKick: true })) return _origAudioPlay();
-        return Promise.resolve();
-        }
-        if (_gateVisible && state.firstPlayCommitted && !inSeekKickWindow && !playCommitGuardActive()) {
-          const _stallConfirmed = state.videoWaiting || state.videoStallAudioPaused;
-          const _stallSustained = state.videoStallAudioPaused ||
-          (state.videoWaiting && state.videoStallSince > 0 && (now() - state.videoStallSince) > 400);
-          if (_stallSustained && _gateRS < HAVE_FUTURE_DATA) {
-            return Promise.resolve();
-          }
-          const _staleHold = state.stallAudioResumeHoldUntil > 0 &&
-          (now() - state.stallAudioResumeHoldUntil + 400) > 4000;
-          if ((_stallConfirmed && _gateRS >= HAVE_FUTURE_DATA && !isForegroundVideoActuallyBuffering()) || _staleHold) {
-            state.videoWaiting = false;
-            state.videoStallSince = 0;
-            state.videoStallAudioPaused = false;
-            state.stallAudioPausedSince = 0;
-            state.stallAudioResumeHoldUntil = 0;
-          }
-          if (now() < state.stallAudioResumeHoldUntil && _gateRS < HAVE_FUTURE_DATA) {
-            return Promise.resolve();
-          }
-          if (state.strictBufferHold && _gateRS < HAVE_FUTURE_DATA && !state.isProgrammaticAudioPlay) {
-            return Promise.resolve();
-          }
-        }
-        const _gateStallAge = state.stallAudioPausedSince ? (now() - state.stallAudioPausedSince) : 0;
-        if (_gateStallAge > 2000 && _gateRS >= HAVE_FUTURE_DATA) {
-          state.videoStallAudioPaused = false;
-          state.stallAudioResumeHoldUntil = 0;
-          state.stallAudioPausedSince = 0;
-          state.videoWaiting = false;
-          state.videoStallSince = 0;
-          clearForegroundBufferAudioHold();
-        }
-        if (shouldBlockLeadingAudioForForegroundPlay()) return Promise.resolve();
-        if (shouldHoldAudioForForegroundStall({ allowRecovery: true })) return Promise.resolve();
-        if ((isTabReturnImmune() || NotMakePlayBackFixingNoticable.isActive()) &&
-          _gateRS >= HAVE_FUTURE_DATA && !state.videoWaiting && !state.videoStallAudioPaused) {
-          return _origAudioPlay();
-          }
-          if (_gateRS >= HAVE_FUTURE_DATA) return _origAudioPlay();
-          if (inSeekKickWindow && _gateRS >= HAVE_CURRENT_DATA) return _origAudioPlay();
-          return Promise.resolve();
+      return _origAudioPlay();
     };
   }
   if (isNativeMediaElement(audio)) {
@@ -3578,9 +3506,6 @@ startupPrimeStartedAt: performance.now(),
         if (explicitPauseBlocksPlayKick()) return Promise.resolve();
         if (SeekPlaybackCommitController.active()) {
           SeekPlaybackCommitController.kick("wrapped-native-play");
-          return Promise.resolve();
-        }
-        if (seekAudioHoldUntilVideoReadyActive() && !state.seekAudioReleaseInFlight) {
           return Promise.resolve();
         }
         if (initialCoupledPairPending() && !startupCoordinatedPlayActive()) {
@@ -43859,7 +43784,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           const lsSeekActive = state.seekDragActive || lsNativeSeeking ||
           (typeof userSeekIntentActive === "function" && userSeekIntentActive()) ||
           (Number(state._seekStartedAt || 0) > 0 &&
-          (performance.now() - Number(state._seekStartedAt || 0)) < 600);
+          (performance.now() - Number(state._seekStartedAt || 0)) < 250);
           const lockstepEligible2 =
           coupledMode && audio && intended && committed && !hidden &&
           !userHeldPaused && !authoritativeTransportPauseActive() &&
@@ -44006,7 +43931,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
               Number(audio.readyState || 0) >= HAVE_CURRENT_DATA) {
               needFast = true;
               if (!lockstepParkedSince) lockstepParkedSince = t;
-              else if ((t - lockstepParkedSince) > 800 && (t - lastLockstepParkAt) > 1500) {
+              else if ((t - lockstepParkedSince) > 550 && (t - lastLockstepParkAt) > 1500) {
                 lockstepParkedSince = 0;
                 lastLockstepParkAt = t;
                 try {
@@ -44360,7 +44285,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                     Number(vn.readyState || 0) >= 3) {
                     needFast = true;
                   if (!videoFrozenSince) { videoFrozenSince = t; videoFrozenAtVt = vt; }
-                  else if ((t - videoFrozenSince) > (returnGraceOnlyTransition ? 750 : 600) &&
+                  else if ((t - videoFrozenSince) > (returnGraceOnlyTransition ? 600 : 450) &&
                     (t - lastVideoRekickAt) > 900 &&
                     isFiniteNum(videoFrozenAtVt) && isFiniteNum(vt) &&
                     Math.abs(vt - videoFrozenAtVt) < 0.15) {
