@@ -583,12 +583,14 @@ document.addEventListener("DOMContentLoaded", () => {
     try { audio.preload = "none"; } catch { }
     try { if (!audio.paused) audio.pause(); } catch { }
   }
-  // The audio track must start fetching as early as the video does; the lazy
-  // default left it cold until first play, which was heard as the audio
-  // buffer lagging the video at startup and after seeks.
+  // Both tracks must start fetching immediately. The lazy default leaves an
+  // element cold until first play, so a paused pair never buffers, never
+  // becomes ready, and startup deadlocks in forever-buffering.
   if (coupledMode && audio) {
     try { if (audio.preload !== "auto") audio.preload = "auto"; } catch { }
   }
+  try { if (videoEl && videoEl.preload !== "auto") videoEl.preload = "auto"; } catch { }
+  try { const _vnInit = getVideoNode(); if (_vnInit && _vnInit.preload !== "auto") _vnInit.preload = "auto"; } catch { }
   try { installManagedLoopPreferenceObserver(videoEl); } catch { }
   try { installManagedLoopPreferenceObserver(audio); } catch { }
   try { syncLoopPreferenceToMedia(); } catch { }
@@ -3503,10 +3505,17 @@ startupPrimeStartedAt: performance.now(),
       const origPlay = el.play.bind(el);
       _origPlay.set(el, origPlay);
       el.play = function () {
+        // Minimal wrapper. Play unless the user explicitly paused or the video
+        // finished. No seek/stall/storm gates: those silently no-op'd the play
+        // and left a black screen. First coordinated start routes through the
+        // lockstep start so audio and video begin together.
         if (explicitPauseBlocksPlayKick()) return Promise.resolve();
-        if (SeekPlaybackCommitController.active()) {
-          SeekPlaybackCommitController.kick("wrapped-native-play");
+        if (state.endedNaturally && !state.restarting && !isLoopDesired()) {
           return Promise.resolve();
+        }
+        const userDrivenPlay = userWantsPlayNow(2400) || userToggleExpectingPlay() || userPlayIntentActive();
+        if (userDrivenPlay && restartFromEndedGuardActive() && !isLoopDesired()) {
+          try { prepareRestartFromEndedPlayback(true); } catch { }
         }
         if (initialCoupledPairPending() && !startupCoordinatedPlayActive()) {
           if (state.intendedPlaying || wantsStartupAutoplay()) {
@@ -3518,40 +3527,11 @@ startupPrimeStartedAt: performance.now(),
           }
           return Promise.resolve();
         }
-        if (!el.paused) {
-          _stormCount.set(el, 0);
-          _stormWindowStart.set(el, performance.now());
-          return Promise.resolve();
-        }
+        if (!el.paused) return Promise.resolve();
         const t = performance.now();
-        const userDrivenPlay = userWantsPlayNow(2400) || userToggleExpectingPlay() || userPlayIntentActive();
-        if (userDrivenPlay && restartFromEndedGuardActive() && !isLoopDesired()) {
-          try { prepareRestartFromEndedPlayback(true); } catch { }
-          if (SeekPlaybackCommitController.active()) return Promise.resolve();
-        }
-        if (state.endedNaturally && !state.restarting && !isLoopDesired()) {
-          return Promise.resolve();
-        }
-        const suppressedUntil = _stormSuppressUntil.get(el) || 0;
-        if (!userDrivenPlay && t < suppressedUntil) {
-          return _playPromises.get(el) || Promise.resolve();
-        }
+        // Light dedup so an identical burst does not double-fire play().
         const last = _lastPlayAt.get(el) || 0;
         if (t - last < DEDUP_MS) {
-          return _playPromises.get(el) || Promise.resolve();
-        }
-        let stormStart = _stormWindowStart.get(el) || 0;
-        let stormCount = _stormCount.get(el) || 0;
-        if (!stormStart || (t - stormStart) > STORM_WINDOW_MS) {
-          stormStart = t;
-          stormCount = 0;
-        }
-        stormCount++;
-        _stormWindowStart.set(el, stormStart);
-        _stormCount.set(el, stormCount);
-        if (!userDrivenPlay && stormCount > STORM_MAX_ATTEMPTS) {
-          _stormSuppressUntil.set(el, t + STORM_SUPPRESS_MS);
-          _lastPlayAt.set(el, t);
           return _playPromises.get(el) || Promise.resolve();
         }
         _lastPlayAt.set(el, t);
@@ -32031,11 +32011,11 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     return enterMediumPlayPauseStormQuiet(kind);
   }
   const STARTUP_SMOOTH_BUFFER_SEC = perfProfile.veryLowEnd
-  ? 1.0
-  : (perfProfile.lowEnd ? 0.8 : (perfProfile.mobile ? 0.7 : 0.55));
+  ? 0.35
+  : (perfProfile.lowEnd ? 0.3 : (perfProfile.mobile ? 0.22 : 0.15));
   const STARTUP_SMOOTH_MAX_WAIT_MS = perfProfile.veryLowEnd
-  ? 3200
-  : (perfProfile.lowEnd ? 2800 : (perfProfile.mobile ? 2400 : 1900));
+  ? 1200
+  : (perfProfile.lowEnd ? 1000 : (perfProfile.mobile ? 800 : 600));
   function rawBufferedAheadAt(media, target) {
     if (!media || !isFinite(Number(target))) return 0;
     const t = Math.max(0, Number(target));
@@ -43815,7 +43795,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
               needFast = true;
               lockstepReadySince = 0;
               if (!lockstepStarveSince) lockstepStarveSince = t;
-              else if ((t - lockstepStarveSince) > 900 && (t - lastLockstepActAt) > 600) {
+              else if ((t - lockstepStarveSince) > 500 && (t - lastLockstepActAt) > 600) {
                 lastLockstepActAt = t;
                 lockstepStarveSince = 0;
                 try {
@@ -43849,32 +43829,55 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
               else if ((t - lockstepReadySince) > 200 && (t - lastLockstepActAt) > 500) {
                 lastLockstepActAt = t;
                 lockstepReadySince = 0;
-                // Align to the furthest-forward clock so neither track is ever
-                // seeked backward on resume. Seeking a track back to a behind
-                // position is what replayed the same section during buffering.
-                // Only move a track that is genuinely behind the anchor.
+                // Pick the anchor. Audio is the master clock, so when it is the
+                // running track use its position and only move the video to it -
+                // never move the audio (that both replays a section and, on tab
+                // return where the video clock ran ahead speculatively while
+                // hidden, lands the pair at the wrong spot). When only the video
+                // runs, use its clock. When both are paused, use the furthest
+                // forward so nothing is seeked backward.
                 try {
                   const vNow = isFiniteNum(vt) ? vt : (Number(vn.currentTime) || 0);
                   const aNow = isFiniteNum(at) ? at : (Number(audio.currentTime) || 0);
-                  let anchor = Math.max(isFiniteNum(vNow) ? vNow : 0, isFiniteNum(aNow) ? aNow : 0);
-                  // Spike guard: a bad clock sample cannot fling the pair forward.
-                  const behindClock = Math.min(
-                    isFiniteNum(vNow) ? vNow : anchor,
-                    isFiniteNum(aNow) ? aNow : anchor
-                  );
-                  if (anchor > behindClock + 4) anchor = behindClock;
-                  if (isFiniteNum(anchor) && anchor >= 0) {
-                    if (vn.paused && (Number(vn.currentTime) || 0) < anchor - 0.20) {
+                  const audioIsClock = !audio.paused && isFiniteNum(aNow) && aNow >= 0;
+                  const videoIsClock = !vn.paused && isFiniteNum(vNow) && vNow >= 0;
+                  if (audioIsClock) {
+                    // Master audio owns the position: seat the paused video to it.
+                    if (vn.paused && Math.abs((Number(vn.currentTime) || 0) - aNow) > 0.20) {
                       state._isMicroSeek = true;
                       state._allowUnexpectedVideoTimeRestore = true;
-                      vn.currentTime = anchor;
-                      if (videoEl && videoEl !== vn) videoEl.currentTime = anchor;
+                      vn.currentTime = aNow;
+                      if (videoEl && videoEl !== vn) videoEl.currentTime = aNow;
                       state._allowUnexpectedVideoTimeRestore = false;
                       try { scheduleMicroSeekClear(240); } catch { }
                     }
-                    if (audio.paused && (Number(audio.currentTime) || 0) < anchor - 0.20) {
+                  } else if (videoIsClock) {
+                    // Only the video runs: bring the paused audio to it.
+                    if (audio.paused && Math.abs((Number(audio.currentTime) || 0) - vNow) > 0.20) {
                       state._allowAudioTimeWrite = true;
-                      try { audio.currentTime = anchor; } finally { state._allowAudioTimeWrite = false; }
+                      try { audio.currentTime = vNow; } finally { state._allowAudioTimeWrite = false; }
+                    }
+                  } else {
+                    // Both paused: align to furthest forward, never backward.
+                    let anchor = Math.max(isFiniteNum(vNow) ? vNow : 0, isFiniteNum(aNow) ? aNow : 0);
+                    const behindClock = Math.min(
+                      isFiniteNum(vNow) ? vNow : anchor,
+                      isFiniteNum(aNow) ? aNow : anchor
+                    );
+                    if (anchor > behindClock + 4) anchor = behindClock;
+                    if (isFiniteNum(anchor) && anchor >= 0) {
+                      if ((Number(vn.currentTime) || 0) < anchor - 0.20) {
+                        state._isMicroSeek = true;
+                        state._allowUnexpectedVideoTimeRestore = true;
+                        vn.currentTime = anchor;
+                        if (videoEl && videoEl !== vn) videoEl.currentTime = anchor;
+                        state._allowUnexpectedVideoTimeRestore = false;
+                        try { scheduleMicroSeekClear(240); } catch { }
+                      }
+                      if ((Number(audio.currentTime) || 0) < anchor - 0.20) {
+                        state._allowAudioTimeWrite = true;
+                        try { audio.currentTime = anchor; } finally { state._allowAudioTimeWrite = false; }
+                      }
                     }
                   }
                 } catch { state._allowUnexpectedVideoTimeRestore = false; state._allowAudioTimeWrite = false; }
@@ -44387,8 +44390,8 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                           blackFrameKickCount = 0;
                         } else {
                           if (!blackFrameSince) blackFrameSince = t;
-                          else if ((t - blackFrameSince) > 2200 && (t - lastBlackFrameKickAt) > 6000 &&
-                            blackFrameKickCount < 3) {
+                          else if ((t - blackFrameSince) > 1000 && (t - lastBlackFrameKickAt) > 2500 &&
+                            blackFrameKickCount < 6) {
                             blackFrameKickCount++;
                             blackFrameSince = 0;
                             lastBlackFrameKickAt = t;
@@ -44962,10 +44965,12 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                               } else stalledPlayIntentSince = 0;
                                 } else stalledPlayIntentSince = 0;
 
-                        // Startup backstop. The commit path can wedge and leave
-                        // the player never starting at all. If we want to play,
-                        // have not committed, both tracks have data, and nothing
-                        // is starting after a few seconds, force both natively.
+                        // Startup backstop for the forever-buffering deadlock: a
+                        // paused element fetches slowly, so it never reaches
+                        // "ready", so startup never fires, so it stays paused.
+                        // Break it by force-playing both natively - playing is
+                        // what forces the browser to fetch and it starts the
+                        // instant data lands. Deliberately does NOT wait for data.
                         try {
                           const wantStart = !committed && !hidden &&
                           !state.endedNaturally && !state.restarting &&
@@ -44977,12 +44982,10 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                           (typeof wantsStartupAutoplay === "function" && wantsStartupAutoplay()));
                           const pairPaused = (!vn || vn.paused) &&
                           (!coupledMode || !audio || audio.paused);
-                          const pairHasData = vn && Number(vn.readyState || 0) >= HAVE_CURRENT_DATA &&
-                          (!coupledMode || !audio || Number(audio.readyState || 0) >= HAVE_CURRENT_DATA);
-                          if (wantStart && pairPaused && pairHasData) {
+                          if (wantStart && pairPaused && vn) {
                             needFast = true;
                             if (!startupStuckSince) startupStuckSince = t;
-                            else if ((t - startupStuckSince) > 2500 && (t - lastStartupForceAt) > 2500) {
+                            else if ((t - startupStuckSince) > 1000 && (t - lastStartupForceAt) > 1800) {
                               startupStuckSince = 0;
                               lastStartupForceAt = t;
                               try { state.intendedPlaying = true; state.bufferHoldIntendedPlaying = true; } catch { }
@@ -44991,7 +44994,11 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                               try {
                                 state.strictBufferHold = false; state.seekBuffering = false;
                                 state.videoWaiting = false; state.audioWaiting = false;
+                                state.audioStallVideoPaused = false; state.videoStallAudioPaused = false;
                               } catch { }
+                              // Fetch aggressively so the forced play has data to reach.
+                              try { if (vn.preload !== "auto") vn.preload = "auto"; } catch { }
+                              try { if (coupledMode && audio && audio.preload !== "auto") audio.preload = "auto"; } catch { }
                               try {
                                 state.isProgrammaticVideoPlay = true;
                                 const vp = HTMLMediaElement.prototype.play.call(vn);
@@ -45000,11 +45007,6 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                               } catch { state.isProgrammaticVideoPlay = false; }
                               try {
                                 if (coupledMode && audio && audio.paused && !playerMutedFromVideo()) {
-                                  const avt = Number(vn.currentTime);
-                                  if (isFiniteNum(avt) && Math.abs((Number(audio.currentTime) || 0) - avt) > 0.2) {
-                                    state._allowAudioTimeWrite = true;
-                                    try { audio.currentTime = avt; } finally { state._allowAudioTimeWrite = false; }
-                                  }
                                   setAudioPlaybackVolume(targetVolFromVideo(), "supervisor-startup-force", { cancelFade: true });
                                   setAudioMutedSynced(false);
                                   state.isProgrammaticAudioPlay = true;
