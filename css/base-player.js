@@ -14622,9 +14622,12 @@ startupPrimeStartedAt: performance.now(),
       );
       // A long-wedged audio fetch must not block the start forever; past the
       // escape window the video starts and the audio joins when data lands.
+      // Last resort only: start the pair-through-barrier without waiting for
+      // audio just if it has been wedged for several seconds. Normally the
+      // commit loop waits for both tracks and starts them together.
       const audioBarrierEscape =
       Number(state.seekCommitBufferingSince || 0) > 0 &&
-      (now() - Number(state.seekCommitBufferingSince || 0)) > 700;
+      (now() - Number(state.seekCommitBufferingSince || 0)) > 6000;
       if (!readyBeforeAudioRetarget && !readyAfterAudioRetarget &&
         !audioCanAttempt && !audioBarrierEscape) {
         state.seekCommitPhase = "waiting-audio-retarget";
@@ -15672,27 +15675,23 @@ startupPrimeStartedAt: performance.now(),
           if (audioFetchStalled &&
             (bufNow - Number(state.seekCommitAudioReviveAt || 0)) > 3000) {
             state.seekCommitAudioReviveAt = bufNow;
-            // A fresh currentTime write re-issues the range request; a silent
-            // play() probe raises the browser's fetch priority for the element.
-            try {
-              const prevA = !!state._allowAudioTimeWrite;
-              const prevP = !!state._allowPairSyncAudioWrite;
-              state._allowAudioTimeWrite = true;
-              state._allowPairSyncAudioWrite = true;
+            // Re-issue the range request by rewriting currentTime. Deliberately
+            // no play() probe here: starting the audio alone during the pair-wait
+            // is exactly the "audio plays without video" artifact. preload=auto
+            // keeps the fetch going; the pair starts together once ready.
+            if (!audio.seeking) {
               try {
-                if (audio.preload !== "auto") audio.preload = "auto";
-                audio.currentTime = target;
-              } finally {
-                state._allowPairSyncAudioWrite = prevP;
-                state._allowAudioTimeWrite = prevA;
-              }
-            } catch { }
-            if (!mustRemainPaused) {
-              try {
-                cancelActiveFade();
-                preserveAudioGainWhileSilent("seek-audio-revive");
-                const rp = HTMLMediaElement.prototype.play.call(audio);
-                if (rp && typeof rp.catch === "function") rp.catch(() => { });
+                const prevA = !!state._allowAudioTimeWrite;
+                const prevP = !!state._allowPairSyncAudioWrite;
+                state._allowAudioTimeWrite = true;
+                state._allowPairSyncAudioWrite = true;
+                try {
+                  if (audio.preload !== "auto") audio.preload = "auto";
+                  audio.currentTime = target;
+                } finally {
+                  state._allowPairSyncAudioWrite = prevP;
+                  state._allowAudioTimeWrite = prevA;
+                }
               } catch { }
             }
           }
@@ -15700,12 +15699,19 @@ startupPrimeStartedAt: performance.now(),
         // Bounded escape: once the destination video can play, a long audio
         // fetch must not hold the whole pair hostage. Start the video; the
         // audio joins as soon as its data lands.
-        // Video-first start: once the destination video can play, go. Waiting
-        // for the slower audio fetch is what made seeks feel slow; the audio
-        // stays silent-gated and joins the moment its data lands. The short
-        // grace keeps ordinary near-buffer seeks starting as a pair.
-        if (!mustRemainPaused &&
-          (bufNow - state.seekCommitBufferingSince) > 250 &&
+        // Video-first is now a LAST RESORT, not the fast path. Letting the video
+        // run ahead while the audio buffered behind it (and then chased) looked
+        // broken: a spinner over playing video, audio never catching up, the bar
+        // out of step. The normal path below waits for both tracks and starts
+        // them together. Only if the audio fetch is genuinely wedged for several
+        // seconds while the video is ready do we start the video alone to avoid
+        // an indefinite hang.
+        const audioFetchWedged =
+        coupledMode && audio &&
+        Number(state.seekCommitAudioStalledSince || 0) > 0 &&
+        (bufNow - Number(state.seekCommitAudioStalledSince || 0)) > 6000;
+        if (!mustRemainPaused && audioFetchWedged &&
+          (bufNow - state.seekCommitBufferingSince) > 6000 &&
           targetLanded(target)) {
           const vnEsc = getVideoNode();
           let vnEscReady = false;
@@ -15748,11 +15754,12 @@ startupPrimeStartedAt: performance.now(),
           (coupledMode && audio && !audio.paused)
         );
         if (pairNeedsHold) {
-          // Never force-pause the starved audio here: paused elements get
-          // deprioritized fetching, which made the audio buffer crawl exactly
-          // when it needed to fill fastest. It is already silent via the gain
-          // hold, and a pending play request keeps the download priority high.
-          holdPair();
+          // Wait as a PAIR: force both tracks paused so the video can never run
+          // ahead of a still-buffering audio (that produced "video plays with a
+          // buffer icon, audio catching up"). The audio keeps loading via
+          // preload=auto plus the periodic range re-request in the revive block
+          // above; both start together once ready.
+          holdPair({ forcePause: true });
         }
         if ((now() - Number(state.seekCommitLastAlignAt || 0)) >
           (perfProfile.lowEnd ? 900 : 650)) {
@@ -43778,6 +43785,17 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           if (!videoAliveSince) videoAliveSince = t;
         } else videoAliveSince = 0;
         const videoTrulyLive = !!videoAliveSince && (t - videoAliveSince) >= 250;
+
+        // Belt-and-suspenders for the timeline paint loop: it stops itself the
+        // moment nothing is playing (e.g. the brief pause between seek and
+        // resume) and only restarts if some other path re-arms it. If that
+        // re-arm is missed the bar freezes even though playback resumed. Any
+        // live clock here re-arms it unconditionally.
+        try {
+          if (!hidden && ((vn && !vPaused) || (coupledMode && audio && !audio.paused))) {
+            if (typeof ensurePlayerTimelineRefresh === "function") ensurePlayerTimelineRefresh();
+          }
+        } catch { }
 
         // After foreground playback has been healthy a few seconds, shut down the
         // background keepalive worker and tab-return-immune flags if they linger.
