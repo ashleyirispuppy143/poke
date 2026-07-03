@@ -1776,6 +1776,20 @@ startupPrimeStartedAt: performance.now(),
       const _gateRS = _gateVNode ? Number(_gateVNode.readyState || 0) : 4;
       const _gateVisible = document.visibilityState === "visible";
       const inSeekKickWindow = now() < state.seekKickAudioAllowedUntil;
+      // Once both tracks have data and the user wants playback, let the audio
+      // play instead of silently no-op'ing on a stale seek/buffer flag. This is
+      // the main path that left audio dead after a seek. Native seeking of the
+      // element itself still defers (writing currentTime mid-seek aborts it).
+      const _pairHasData = _gateRS >= HAVE_CURRENT_DATA &&
+      Number(audio.readyState || 0) >= HAVE_CURRENT_DATA;
+      const _audioReallyReady = _gateVisible && state.firstPlayCommitted &&
+      state.intendedPlaying && _pairHasData &&
+      !userPauseLockActive() && !userPauseIntentActive() &&
+      !mediaSessionForcedPauseActive() && !authoritativeTransportPauseActive() &&
+      !terminalAudioStartBlocked() &&
+      (!_gateVNode || !_gateVNode.seeking) && !audio.seeking &&
+      !seekAudioHoldUntilVideoReadyActive();
+      if (_audioReallyReady) return _origAudioPlay();
       if ((state.seeking || state.seekBuffering) && !inSeekKickWindow) return Promise.resolve();
       if (!state.firstPlayCommitted && state.intendedPlaying) {
         if (startupAudioMayPlayNow(_gateVNode)) return _origAudioPlay();
@@ -43791,12 +43805,10 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           }
         } catch { }
 
-        // ===================== AUTHORITATIVE LOCKSTEP =====================
-        // The one rule that fixes the unbuffered-region breakage: the two tracks
-        // play together or not at all. Never one alone. If either can't play,
-        // BOTH pause + spinner; when both can play again, BOTH resume — with no
-        // manual pause/play needed. Runs before the piecemeal heals below so it
-        // owns the both-or-neither decision.
+        // Lockstep. Both tracks play together or neither does. If either cannot
+        // play, pause both and show the spinner. When both can play, resume both.
+        // No manual play/pause needed. Runs before the piecemeal heals so it owns
+        // the both or neither decision.
         let lockstepOwnsPair = false;
         try {
           const lsInTransition =
@@ -43811,11 +43823,19 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             try { return !!(vn && vn.seeking) || !!(coupledMode && audio && audio.seeking); }
             catch { return false; }
           })();
+          // Block only during an active native seek/drag or the first moment of a
+          // seek. Do NOT block on the lingering seekResumeInFlight/seekBuffering
+          // flags: those are exactly what get stuck and leave the audio silent.
+          // Once the elements have landed and aren't seeking, lockstep takes over
+          // and plays both natively, bypassing the stuck gates.
+          const lsSeekActive = state.seekDragActive || lsNativeSeeking ||
+          (typeof userSeekIntentActive === "function" && userSeekIntentActive()) ||
+          (Number(state._seekStartedAt || 0) > 0 &&
+          (performance.now() - Number(state._seekStartedAt || 0)) < 600);
           const lockstepEligible2 =
           coupledMode && audio && intended && committed && !hidden &&
           !userHeldPaused && !authoritativeTransportPauseActive() &&
-          !state.endedNaturally && !state.restarting && !state.seekDragActive &&
-          !inSeek && !lsNativeSeeking && !lsInTransition &&
+          !state.endedNaturally && !state.restarting && !lsSeekActive && !lsInTransition &&
           !state.coupledPlayCommitHolding &&
           !directUserToggleActive(700) && !playPauseTransactionActive(700) &&
           now() >= Number(state._playPauseTransitionUntil || 0);
@@ -43836,8 +43856,8 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             const eitherStarving = !vCanPlay || !aCanPlay;
 
             if (eitherStarving && (vPlaying || aPlaying)) {
-              // One track starving while something is still playing → pull BOTH
-              // down together after a short confirm and raise the spinner.
+              // One track starved while the other still plays. Pause both after a
+              // short confirm and show the spinner.
               needFast = true;
               lockstepReadySince = 0;
               if (!lockstepStarveSince) lockstepStarveSince = t;
@@ -43866,9 +43886,9 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                 try { setSeekBufferingUIVisible(true); } catch { }
               }
             } else if (bothCanPlay && (!vPlaying || !aPlaying)) {
-              // Both playable but one (or both) paused → resume BOTH together.
-              // This is the automatic recovery that removes the "frozen until you
-              // pause/play" behavior.
+              // Both can play but one or both are paused. Resume both together.
+              // This is the auto recovery that removes the frozen until you
+              // pause/play behavior.
               needFast = true;
               lockstepStarveSince = 0;
               if (!lockstepReadySince) lockstepReadySince = t;
@@ -43897,11 +43917,19 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                 } catch { state._allowUnexpectedVideoTimeRestore = false; state._allowAudioTimeWrite = false; }
                 try { cancelActiveFade(); } catch { }
                 try { clearBufferHold(); } catch { }
+                // Clear every stale hold/gate so the native play below is not
+                // silently no-op'd by the audio.play wrapper.
                 try {
                   state.videoWaiting = false; state.audioWaiting = false;
                   state.videoStallAudioPaused = false; state.audioStallVideoPaused = false;
                   state.strictBufferHold = false; state.seekBuffering = false;
+                  state.seekResumeInFlight = false; state.seekAudioReleaseInFlight = false;
+                  state.stallAudioResumeHoldUntil = 0; state.stallAudioPausedSince = 0;
+                  state.audioPauseUntil = 0; state.audioPlayUntil = 0;
+                  state.seekKickAudioAllowedUntil = 0; state.seekAudioMustStartUntil = 0;
                 } catch { }
+                try { if (typeof clearSeekAudioHoldUntilVideoReady === "function") clearSeekAudioHoldUntilVideoReady(); } catch { }
+                try { if (typeof clearHardPairTransitionGate === "function") { state.hardPairGateActive = false; clearHardPairTransitionGate(state.hardPairGateOwner || "", true, { restore: false }); } } catch { }
                 try {
                   if (vn.paused) {
                     state.isProgrammaticVideoPlay = true;
@@ -43936,7 +43964,6 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             lockstepReadySince = 0;
           }
         } catch { }
-        // =================== END AUTHORITATIVE LOCKSTEP ===================
 
         // After foreground playback has been healthy a few seconds, shut down the
         // background keepalive worker and tab-return-immune flags if they linger.
