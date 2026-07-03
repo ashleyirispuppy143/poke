@@ -1776,18 +1776,18 @@ startupPrimeStartedAt: performance.now(),
       const _gateRS = _gateVNode ? Number(_gateVNode.readyState || 0) : 4;
       const _gateVisible = document.visibilityState === "visible";
       const inSeekKickWindow = now() < state.seekKickAudioAllowedUntil;
-      // Once both tracks have data and the user wants playback, let the audio
-      // play instead of silently no-op'ing on a stale seek/buffer flag. This is
-      // the main path that left audio dead after a seek. Native seeking of the
-      // element itself still defers (writing currentTime mid-seek aborts it).
-      const _pairHasData = _gateRS >= HAVE_CURRENT_DATA &&
-      Number(audio.readyState || 0) >= HAVE_CURRENT_DATA;
+      // Let audio play only when BOTH tracks can genuinely play (future data,
+      // not just a decoded frame) and the user wants playback. Requiring the
+      // video to be playable too stops audio from playing while the video is
+      // still buffering. Native seeking of either element defers.
+      const _pairCanPlay = _gateRS >= HAVE_FUTURE_DATA &&
+      Number(audio.readyState || 0) >= HAVE_FUTURE_DATA;
       const _audioReallyReady = _gateVisible && state.firstPlayCommitted &&
-      state.intendedPlaying && _pairHasData &&
+      state.intendedPlaying && _pairCanPlay &&
       !userPauseLockActive() && !userPauseIntentActive() &&
       !mediaSessionForcedPauseActive() && !authoritativeTransportPauseActive() &&
       !terminalAudioStartBlocked() &&
-      (!_gateVNode || !_gateVNode.seeking) && !audio.seeking &&
+      (!_gateVNode || (!_gateVNode.seeking && !_gateVNode.paused)) && !audio.seeking &&
       !seekAudioHoldUntilVideoReadyActive();
       if (_audioReallyReady) return _origAudioPlay();
       if ((state.seeking || state.seekBuffering) && !inSeekKickWindow) return Promise.resolve();
@@ -3250,6 +3250,7 @@ startupPrimeStartedAt: performance.now(),
     const tickNow = now();
     if (!state.intendedPlaying ||
       state.endedNaturally ||
+      authoritativeTransportPauseActive() ||
       MakeSureUnintentionalLoopDoesntEverHappenAtALLManager.shouldBlockAutoRestart() ||
       userPauseLockActive() ||
       mediaSessionForcedPauseActive()) {
@@ -22526,12 +22527,19 @@ startupPrimeStartedAt: performance.now(),
         if (!isFinite(current) || Math.abs(current - pos) > Math.max(0.08, tolerance)) {
           return false;
         }
-        if (readyState < HAVE_CURRENT_DATA) return false;
+        // Check the actual buffered data BEFORE trusting the readyState number.
+        // Browsers routinely leave readyState behind the buffered TimeRanges
+        // after a seek, so a low readyState with data present must not read as
+        // "cannot play" - that was the code refusing to play already-buffered
+        // sections.
         if (readyState >= HAVE_FUTURE_DATA) return true;
         if (mediaHasCurrentDataAtTarget(media, pos, 0.012)) return true;
         if (timeInBuffered(media, pos) && bufferedAhead(media, pos) >= 0.008) return true;
         const duration = Number(media.duration || 0);
-      return isFinite(duration) && duration > 0 && pos >= duration - 0.16;
+        if (isFinite(duration) && duration > 0 && pos >= duration - 0.16) return true;
+        // currentTime is at the target and its frame/sample is decoded.
+        if (readyState >= HAVE_CURRENT_DATA) return true;
+        return false;
     } catch {
       return false;
     }
@@ -22548,8 +22556,14 @@ startupPrimeStartedAt: performance.now(),
         !managedRestartEndedMediaCanAttempt(media, pos, current, readyState))) {
         return false;
         }
-        if (readyState < HAVE_CURRENT_DATA || !isFinite(current)) return false;
-        return Math.abs(current - pos) <= Math.max(0.10, Number(tolerance) || 0.24);
+        if (!isFinite(current)) return false;
+        if (Math.abs(current - pos) > Math.max(0.10, Number(tolerance) || 0.24)) return false;
+        if (readyState >= HAVE_CURRENT_DATA) return true;
+        // readyState can lag the buffered ranges after a seek; if the data at
+        // the position is actually buffered, it can play.
+        if (mediaHasCurrentDataAtTarget(media, pos, 0.012)) return true;
+        if (timeInBuffered(media, pos) && bufferedAhead(media, pos) >= 0.008) return true;
+        return false;
     } catch {
       return false;
     }
@@ -28400,7 +28414,11 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       try { clearStalePlaybackStartBlockers("resume-after-buffer-check"); } catch { }
       if (state.syncing && Number(state.syncingStartedAt || 0) > 0 &&
         (now() - Number(state.syncingStartedAt || 0)) < 1200) return;
-      if (mediaSessionForcedPauseActive() || userPauseLockActive()) {
+      // The persistent pause latch outlives the short user-pause-lock window.
+      // Without it, a buffer-end that arrives after the user paused (often while
+      // backgrounded) resumed playback on its own.
+      if (mediaSessionForcedPauseActive() || userPauseLockActive() ||
+        authoritativeTransportPauseActive() || !state.intendedPlaying) {
         cleanup(); return;
       }
       if (coupledMode && audio && seekAudioPairBarrierArmed()) {
@@ -28522,7 +28540,8 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       state.resumeAfterBufferTimer = setTimeout(() => {
         cleanup();
         state.resumeAfterBufferTimer = null;
-        if (state.intendedPlaying && !state.restarting && !state.seeking && !userPauseLockActive()) {
+        if (state.intendedPlaying && !state.restarting && !state.seeking &&
+          !userPauseLockActive() && !authoritativeTransportPauseActive()) {
           if (coupledMode && audio && seekAudioPairBarrierArmed()) {
             enforceSeekPairBarrier("resume-after-buffer-timeout-seek-pair");
             releaseSeekAudioAfterVideoReady("resume-after-buffer-timeout-seek-pair");
@@ -32349,6 +32368,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     if (!initialCoupledPairPending() || state.endedNaturally || state.restarting) return false;
     if (state.firstPlayCommitted && !state.intendedPlaying) return false;
     if (!state.intendedPlaying && !wantsStartupAutoplay()) return false;
+    if (authoritativeTransportPauseActive()) return false;
     if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
     if (userPauseLockActive() || mediaSessionForcedPauseActive() ||
       userPauseIntentActive() || userToggleExpectingPause()) return false;
@@ -32459,6 +32479,8 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     if (state.endedNaturally || state.restarting) return false;
     if (state.firstPlayCommitted && !state.intendedPlaying) return false;
     if (!wantsStartupAutoplay() && !state.intendedPlaying) return false;
+    // Never start behind the user's back once they have paused.
+    if (authoritativeTransportPauseActive()) return false;
     if (mediaSessionForcedPauseActive() || userPauseLockActive()) return false;
     if (!bothReadyForStartupKick()) {
       return tryHiddenInitialAudioStartup("hidden-startup-audio-first");
@@ -43523,6 +43545,8 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     let lockstepStarveSince = 0;
     let lockstepReadySince = 0;
     let lastLockstepActAt = 0;
+    let lockstepParkedSince = 0;
+    let lastLockstepParkAt = 0;
     let bufferCoupleSince = 0;
     let fgHealthySince = 0;
     let commitStuckSince = 0;
@@ -43811,13 +43835,15 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         // the both or neither decision.
         let lockstepOwnsPair = false;
         try {
+          // Only the hard transitions block lockstep. The bg-return grace is
+          // deliberately NOT here: return-while-buffering is exactly when the
+          // pair drifts into a one-plays-one-buffers state, so lockstep should
+          // run then. Only the brief active return recovery is excluded.
           const lsInTransition =
           (typeof initialCoupledPairPending === "function" && initialCoupledPairPending()) ||
           (typeof startupSettleActive === "function" && startupSettleActive()) ||
           (typeof isVisibilityTransitionActive === "function" && isVisibilityTransitionActive()) ||
           (typeof isAltTabTransitionActive === "function" && isAltTabTransitionActive()) ||
-          (typeof inBgReturnGrace === "function" && inBgReturnGrace()) ||
-          (typeof smoothForegroundReturnActive === "function" && smoothForegroundReturnActive(0)) ||
           (typeof NotMakePlayBackFixingNoticable !== "undefined" && NotMakePlayBackFixingNoticable.isRecovering && NotMakePlayBackFixingNoticable.isRecovering());
           const lsNativeSeeking = (() => {
             try { return !!(vn && vn.seeking) || !!(coupledMode && audio && audio.seeking); }
@@ -43895,13 +43921,22 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
               else if ((t - lockstepReadySince) > 200 && (t - lastLockstepActAt) > 500) {
                 lastLockstepActAt = t;
                 lockstepReadySince = 0;
-                // Align the pair before resuming so they start from one spot.
+                // Align to the furthest-forward clock so neither track is ever
+                // seeked backward on resume. Seeking a track back to a behind
+                // position is what replayed the same section during buffering.
+                // Only move a track that is genuinely behind the anchor.
                 try {
-                  const anchor = isFiniteNum(at) && aPlaying ? at
-                  : (isFiniteNum(vt) && vPlaying ? vt
-                  : (isFiniteNum(at) ? at : vt));
+                  const vNow = isFiniteNum(vt) ? vt : (Number(vn.currentTime) || 0);
+                  const aNow = isFiniteNum(at) ? at : (Number(audio.currentTime) || 0);
+                  let anchor = Math.max(isFiniteNum(vNow) ? vNow : 0, isFiniteNum(aNow) ? aNow : 0);
+                  // Spike guard: a bad clock sample cannot fling the pair forward.
+                  const behindClock = Math.min(
+                    isFiniteNum(vNow) ? vNow : anchor,
+                    isFiniteNum(aNow) ? aNow : anchor
+                  );
+                  if (anchor > behindClock + 4) anchor = behindClock;
                   if (isFiniteNum(anchor) && anchor >= 0) {
-                    if (vn.paused && Math.abs((Number(vn.currentTime) || 0) - anchor) > 0.20) {
+                    if (vn.paused && (Number(vn.currentTime) || 0) < anchor - 0.20) {
                       state._isMicroSeek = true;
                       state._allowUnexpectedVideoTimeRestore = true;
                       vn.currentTime = anchor;
@@ -43909,7 +43944,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                       state._allowUnexpectedVideoTimeRestore = false;
                       try { scheduleMicroSeekClear(240); } catch { }
                     }
-                    if (audio.paused && Math.abs((Number(audio.currentTime) || 0) - anchor) > 0.20) {
+                    if (audio.paused && (Number(audio.currentTime) || 0) < anchor - 0.20) {
                       state._allowAudioTimeWrite = true;
                       try { audio.currentTime = anchor; } finally { state._allowAudioTimeWrite = false; }
                     }
@@ -43952,16 +43987,46 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
               }
             } else {
               // Healthy (both playing, both can play) or both already paused and
-              // starving — nothing to reconcile.
+              // starving. Nothing to reconcile.
               lockstepStarveSince = 0;
               lockstepReadySince = 0;
               if (bothCanPlay && vPlaying && aPlaying && _bufferGuardSpinnerOn) {
                 try { forceClearSeekBufferingUI(); } catch { }
               }
             }
+
+            // Parked pair: both elements report playing and have data, but
+            // neither clock is advancing. A static frozen frame after a seek.
+            // Reset the video decoder (pause and replay) and rejoin.
+            if (vPlaying && aPlaying && !videoAdvancing && !audioAdvancing &&
+              Number(vn.readyState || 0) >= HAVE_CURRENT_DATA &&
+              Number(audio.readyState || 0) >= HAVE_CURRENT_DATA) {
+              needFast = true;
+              if (!lockstepParkedSince) lockstepParkedSince = t;
+              else if ((t - lockstepParkedSince) > 800 && (t - lastLockstepParkAt) > 1500) {
+                lockstepParkedSince = 0;
+                lastLockstepParkAt = t;
+                try {
+                  state._allowVideoPause = true;
+                  state.isProgrammaticVideoPause = true;
+                  HTMLMediaElement.prototype.pause.call(vn);
+                  const vp = HTMLMediaElement.prototype.play.call(vn);
+                  if (vp && typeof vp.catch === "function") vp.catch(() => { });
+                  setTimeout(() => {
+                    state._allowVideoPause = false;
+                    state.isProgrammaticVideoPause = false;
+                  }, 220);
+                } catch {
+                  state._allowVideoPause = false;
+                  state.isProgrammaticVideoPause = false;
+                }
+                try { VideoCompositorFlushManager.arm({ observe: true }); } catch { }
+              }
+            } else lockstepParkedSince = 0;
           } else {
             lockstepStarveSince = 0;
             lockstepReadySince = 0;
+            lockstepParkedSince = 0;
           }
         } catch { }
 
