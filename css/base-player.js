@@ -43547,6 +43547,8 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     let lastLockstepActAt = 0;
     let lockstepParkedSince = 0;
     let lastLockstepParkAt = 0;
+    let startupStuckSince = 0;
+    let lastStartupForceAt = 0;
     let bufferCoupleSince = 0;
     let fgHealthySince = 0;
     let commitStuckSince = 0;
@@ -43882,12 +43884,13 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             const eitherStarving = !vCanPlay || !aCanPlay;
 
             if (eitherStarving && (vPlaying || aPlaying)) {
-              // One track starved while the other still plays. Pause both after a
-              // short confirm and show the spinner.
+              // One track starved while the other still plays. Confirm over a
+              // long window so a brief decode hiccup does not cut healthy audio;
+              // only a real sustained buffer stall couples the pair down.
               needFast = true;
               lockstepReadySince = 0;
               if (!lockstepStarveSince) lockstepStarveSince = t;
-              else if ((t - lockstepStarveSince) > 350 && (t - lastLockstepActAt) > 500) {
+              else if ((t - lockstepStarveSince) > 900 && (t - lastLockstepActAt) > 600) {
                 lastLockstepActAt = t;
                 lockstepStarveSince = 0;
                 try {
@@ -45033,6 +45036,62 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                                 needFast = true;
                               } else stalledPlayIntentSince = 0;
                                 } else stalledPlayIntentSince = 0;
+
+                        // Startup backstop. The commit path can wedge and leave
+                        // the player never starting at all. If we want to play,
+                        // have not committed, both tracks have data, and nothing
+                        // is starting after a few seconds, force both natively.
+                        try {
+                          const wantStart = !committed && !hidden &&
+                          !state.endedNaturally && !state.restarting &&
+                          !state.seekDragActive && !nativeSeeking &&
+                          !authoritativeTransportPauseActive() &&
+                          !userHeldPaused &&
+                          (typeof userPauseLockActive !== "function" || !userPauseLockActive()) &&
+                          (state.intendedPlaying ||
+                          (typeof wantsStartupAutoplay === "function" && wantsStartupAutoplay()));
+                          const pairPaused = (!vn || vn.paused) &&
+                          (!coupledMode || !audio || audio.paused);
+                          const pairHasData = vn && Number(vn.readyState || 0) >= HAVE_CURRENT_DATA &&
+                          (!coupledMode || !audio || Number(audio.readyState || 0) >= HAVE_CURRENT_DATA);
+                          if (wantStart && pairPaused && pairHasData) {
+                            needFast = true;
+                            if (!startupStuckSince) startupStuckSince = t;
+                            else if ((t - startupStuckSince) > 2500 && (t - lastStartupForceAt) > 2500) {
+                              startupStuckSince = 0;
+                              lastStartupForceAt = t;
+                              try { state.intendedPlaying = true; state.bufferHoldIntendedPlaying = true; } catch { }
+                              try { if (typeof setAuthoritativeTransportIntent === "function") setAuthoritativeTransportIntent(true, "supervisor-startup-force"); } catch { }
+                              try { if (typeof clearBufferHold === "function") clearBufferHold(); } catch { }
+                              try {
+                                state.strictBufferHold = false; state.seekBuffering = false;
+                                state.videoWaiting = false; state.audioWaiting = false;
+                              } catch { }
+                              try {
+                                state.isProgrammaticVideoPlay = true;
+                                const vp = HTMLMediaElement.prototype.play.call(vn);
+                                if (vp && typeof vp.catch === "function") vp.catch(() => { });
+                                setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 240);
+                              } catch { state.isProgrammaticVideoPlay = false; }
+                              try {
+                                if (coupledMode && audio && audio.paused && !playerMutedFromVideo()) {
+                                  const avt = Number(vn.currentTime);
+                                  if (isFiniteNum(avt) && Math.abs((Number(audio.currentTime) || 0) - avt) > 0.2) {
+                                    state._allowAudioTimeWrite = true;
+                                    try { audio.currentTime = avt; } finally { state._allowAudioTimeWrite = false; }
+                                  }
+                                  setAudioPlaybackVolume(targetVolFromVideo(), "supervisor-startup-force", { cancelFade: true });
+                                  setAudioMutedSynced(false);
+                                  state.isProgrammaticAudioPlay = true;
+                                  const ap = HTMLMediaElement.prototype.play.call(audio);
+                                  if (ap && typeof ap.catch === "function") ap.catch(() => { });
+                                  setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 240);
+                                }
+                              } catch { state.isProgrammaticAudioPlay = false; }
+                              try { if (typeof commitStartupFromActivePlayback === "function") commitStartupFromActivePlayback(); } catch { }
+                            }
+                          } else startupStuckSince = 0;
+                        } catch { startupStuckSince = 0; }
 
       } catch { }
       supervisorTimer = setTimeout(supervisorTick, needFast ? TICK_ACTIVE_MS : TICK_IDLE_MS);
