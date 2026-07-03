@@ -13,8 +13,9 @@
  * <https://github.com/mozilla/vtt.js/blob/main/LICENSE>
  * /////////////////////////////////////////////////////////////////////////////////////
  * credits:
- * thanks stackoverflow, Claude Opus 4.6/4.7/4.8 and above, Codex, w3c schools, mdn, myself and YOU! and more for help in the code for poke player.
+ * thanks stackoverflow, Claude Opus 4.6/4.7/4.8, fable 5 and above, Codex, w3c schools, mdn, myself and YOU! and more for help in the code for poke player.
  * 100% puppy made code! 0 slop guarenteed!
+ * works amazing :3
  * this works, 100%! no issues..at all!!
  * UNDER GPL 3-OR-LATER license, but i think video.js istelf is Apache 2.0, so basically this code, the players code is gpl3, u get wha we mean :3
  * gay!
@@ -3890,7 +3891,7 @@ startupPrimeStartedAt: performance.now(),
     const _retAPlaying = !coupledMode || (audio && !audio.paused);
     if (_retVPlaying && _retAPlaying && state.firstPlayCommitted) {
       try { updateAudioGainImmediate(true); } catch { }
-      try { VideoCompositorFlushManager.arm(); } catch { }
+      try { VideoCompositorFlushManager.arm({ observe: true }); } catch { }
       setFastSync(400);
       scheduleSync(0);
       _goIdle();
@@ -3958,6 +3959,7 @@ startupPrimeStartedAt: performance.now(),
     const vn = getVideoNode();
     if (!vn) return;
     if (coupledMode && audio) {
+      try { VideoCompositorFlushManager.arm({ observe: true }); } catch { }
       scheduleBufferReadyPlaybackKick("tab-return-clean-pair", { immediate: true, force: true });
       setFastSync(700);
       scheduleSync(0);
@@ -19145,6 +19147,7 @@ startupPrimeStartedAt: performance.now(),
   }
   function markUserPauseIntent(ms = USER_PAUSE_INTENT_FAST_MS) {
     const intentMs = Math.max(350, Number(ms) || USER_PAUSE_INTENT_FAST_MS);
+    try { if (typeof videoCatchupActive === "function" && videoCatchupActive()) endVideoCatchup("user-pause"); } catch { }
     setAuthoritativeTransportIntent(false, "user-pause");
     cancelPlaybackFailureDiagnostic(true);
     try { clearPlaybackIntentLivenessWatchdog(); } catch { }
@@ -21739,6 +21742,10 @@ startupPrimeStartedAt: performance.now(),
     }
   }
   function resetAudioPlaybackRate() {
+    // A catch-up glide holds the video fast and audio pinned. End it first so
+    // this reset restores the video to the approved rate instead of syncing
+    // audio up to a still-boosted video (an audible pitch jump).
+    try { if (typeof videoCatchupActive === "function" && videoCatchupActive()) endVideoCatchup("reset-audio-rate"); } catch { }
     state.normalAudioRateCorrectionUntil = 0;
     state.normalAudioRateCorrectionTarget = NaN;
     try { syncAudioPlaybackRateToVideo("reset", { force: true }); } catch { }
@@ -21748,40 +21755,91 @@ startupPrimeStartedAt: performance.now(),
     state.lastSyncDrift = 0;
   }
   let _lastVideoDriftReanchorAt = 0;
-  function applyGentleAudioDriftRateCorrection(drift) {
-    // Drift is handled by prevention (keeping both tracks playing), not nudges.
-    // No rate change, and we only re-anchor the muted video as a last resort for
-    // large, clearly-out-of-sync drift, rarely, so it isn't a constant
-    // correction. Small drift is left alone (imperceptible).
-    if (!normalPlaybackAudioDriftCorrectionAllowed()) return false;
+  // Smooth video catch-up. In coupled mode the video track is muted (sound is
+  // the separate audio element), so speeding the video's decode a few percent
+  // glides it back into sync imperceptibly instead of the old hard seek that
+  // was seen as a random forward jump. Only ever touches the VIDEO rate; audio
+  // is pinned at the approved rate so nothing pitch-shifts. Multiple independent
+  // restore paths guarantee it can never stick fast (that would be the speed bug).
+  let _videoCatchupUntil = 0;
+  let _videoCatchupRestoreTimer = null;
+  function videoCatchupActive() { return now() < _videoCatchupUntil; }
+  function endVideoCatchup(reason = "video-catchup-end") {
+    _videoCatchupUntil = 0;
+    if (_videoCatchupRestoreTimer) {
+      try { clearTimeout(_videoCatchupRestoreTimer); } catch { }
+      _videoCatchupRestoreTimer = null;
+    }
+    try { assertApprovedPlaybackRate(reason); } catch { }
+    try {
+      state.normalAudioRateCorrectionUntil = 0;
+      state.normalAudioRateCorrectionTarget = NaN;
+    } catch { }
+  }
+  function beginSmoothVideoCatchup(ahead) {
     const vn = getVideoNode();
-    if (!vn || vn.paused || audio.paused) return false;
+    if (!vn || vn.paused) return false;
+    const approved = approvedPlaybackRate();
+    // Pin audio at the approved rate for the window so the video nudge (which
+    // propagates through the ratechange->audio-sync path) can't speed the sound.
+    try {
+      state.normalAudioRateCorrectionTarget = approved;
+      state.normalAudioRateCorrectionUntil = now() + 5000;
+      if (coupledMode && audio) {
+        _normalizingPlaybackRates = true;
+        if (Math.abs((Number(audio.playbackRate) || 0) - approved) > 0.001) {
+          audio.playbackRate = approved;
+        }
+      }
+    } catch { } finally { _normalizingPlaybackRates = false; }
+    const boost = Math.min(0.12, Math.max(0.05, ahead * 0.08));
+    const rate = approved * (1 + boost);
+    try {
+      _normalizingPlaybackRates = true;
+      vn.playbackRate = rate;
+      if (videoEl && videoEl !== vn) videoEl.playbackRate = rate;
+    } catch { } finally { _normalizingPlaybackRates = false; }
+    // Estimated glide time to close the gap, capped. Backstop restore in case
+    // the completion check never runs (tab hidden, decoder hiccup, etc).
+    const windowMs = Math.min(5000, Math.max(1400, (ahead / Math.max(0.02, boost)) * 1000));
+    _videoCatchupUntil = now() + windowMs;
+    if (_videoCatchupRestoreTimer) { try { clearTimeout(_videoCatchupRestoreTimer); } catch { } }
+    _videoCatchupRestoreTimer = setTimeout(() => {
+      _videoCatchupRestoreTimer = null;
+      endVideoCatchup("video-catchup-timeout");
+    }, windowMs + 250);
+    return true;
+  }
+  function applyGentleAudioDriftRateCorrection(drift) {
+    if (!normalPlaybackAudioDriftCorrectionAllowed()) {
+      if (videoCatchupActive()) endVideoCatchup("catchup-context-lost");
+      return false;
+    }
+    const vn = getVideoNode();
+    if (!vn || vn.paused || audio.paused) {
+      if (videoCatchupActive()) endVideoCatchup("catchup-track-paused");
+      return false;
+    }
     try { if (vn.seeking || audio.seeking) return false; } catch { }
     let vt = NaN, at = NaN;
     try { vt = Number(vn.currentTime); at = Number(audio.currentTime); } catch { return false; }
     if (!isFinite(vt) || !isFinite(at)) return false;
-    // Forward-only. Only catch a behind video up to audio. Seeking video back
-    // to a behind audio replays the section.
     const ahead = at - vt;
-    // Only catch up on egregious desync, rarely. Each catch-up is a visible
-    // video jump, and the seekbar already follows the audio clock so the shown
-    // position stays right regardless. Small/medium lip-sync drift is left alone.
-    if (ahead < 1.2 || ahead > 2.5) return false;
+    // A glide is in progress: end it once the video has caught up (or overshot).
+    if (videoCatchupActive()) {
+      if (ahead <= 0.10) endVideoCatchup("video-catchup-converged");
+      return true;
+    }
+    // Forward-only. A behind video glides up to audio; seeking video back to a
+    // behind audio would replay the section. The bar follows the audio clock,
+    // so the shown position stays correct throughout the glide. Below ~0.5s is
+    // imperceptible lip-sync and left alone.
+    if (ahead < 0.5 || ahead > 2.5) return false;
     const t = now();
-    if ((t - _lastVideoDriftReanchorAt) < (perfProfile.lowEnd ? 11000 : 8000)) return false;
+    if ((t - _lastVideoDriftReanchorAt) < (perfProfile.lowEnd ? 4000 : 2600)) return false;
     if (Number(vn.readyState || 0) < HAVE_FUTURE_DATA && !canPlaySmoothAt(vn, at, 0.05)) return false;
     _lastVideoDriftReanchorAt = t;
-    const prevRestore = !!state._allowUnexpectedVideoTimeRestore;
-    state._isMicroSeek = true;
-    state._allowUnexpectedVideoTimeRestore = true;
-    try {
-      vn.currentTime = at;
-      if (videoEl && videoEl !== vn) videoEl.currentTime = at;
-    } catch { } finally {
-      state._allowUnexpectedVideoTimeRestore = prevRestore;
-    }
-    try { scheduleMicroSeekClear(perfProfile.lowEnd ? 320 : 220); } catch { }
-    return true;
+    return beginSmoothVideoCatchup(ahead);
   }
   function enforcePlaybackRateSync() {
     if (!coupledMode || !audio) return;
@@ -21832,6 +21890,8 @@ startupPrimeStartedAt: performance.now(),
   }
   function handleObservedRateChange() {
     if (_normalizingPlaybackRates) return;
+    // A smooth catch-up glide legitimately runs the video a few percent fast.
+    if (typeof videoCatchupActive === "function" && videoCatchupActive()) return;
     let live = NaN;
     try { live = Number(getVideoNode()?.playbackRate); } catch { }
     if (!isFinite(live)) { try { live = Number(videoEl?.playbackRate); } catch { } }
@@ -26053,6 +26113,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     }
     state.seekStartCoalesceCount = (Number(state.seekStartCoalesceCount) || 0) + 1;
     state._seekStartedAt = performance.now();
+    try { if (typeof videoCatchupActive === "function" && videoCatchupActive()) endVideoCatchup("seek-start"); } catch { }
     state.seekCooldownUntil = Math.max(state.seekCooldownUntil || 0, t + 700);
     state.seekStabilizeUntil = Math.max(state.seekStabilizeUntil || 0, t + (state.seekWantedPlaying || state.intendedPlaying ? 1400 : 500));
     if (state.seekWantedPlaying || state.intendedPlaying) armSeekResumeIntent(4500);
@@ -36311,6 +36372,13 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       if (_normalizingPlaybackRates) return;
       try { handleObservedRateChange(); } catch { }
       if (!coupledMode) return;
+      // During a smooth catch-up the video is intentionally a few percent fast.
+      // Force-syncing audio to that boosted rate would pitch-shift the sound, so
+      // keep audio at the pinned approved rate instead.
+      if (typeof videoCatchupActive === "function" && videoCatchupActive()) {
+        try { syncAudioPlaybackRateToVideo("video-ratechange-catchup"); } catch { }
+        return;
+      }
       try {
         syncAudioPlaybackRateToVideo("video-ratechange", { force: true });
         state.driftStableFrames = 0;
@@ -43315,6 +43383,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     let seekAudioLateSince = 0;
     let lastSeekAudioNudgeAt = 0;
     let audioDeadHardSince = 0;
+    let audioStrandedSince = 0;
     let blackFrameSince = 0;
     let blackFrameLastCount = NaN;
     let lastBlackFrameKickAt = 0;
@@ -43529,12 +43598,15 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         // back after a short confirmation.
         try {
           const _approvedRate = approvedPlaybackRate();
+          const _catchupOn = typeof videoCatchupActive === "function" && videoCatchupActive();
           let _liveRate = NaN;
           try { _liveRate = Number(vn?.playbackRate); } catch { }
           let _liveAudioRate = NaN;
           try { _liveAudioRate = coupledMode && audio ? Number(audio.playbackRate) : _approvedRate; } catch { }
+          // During a catch-up glide the video is intentionally fast; only the
+          // audio rate must stay pinned, so ignore the video rate then.
           const _rateOff =
-          (isFiniteNum(_liveRate) && Math.abs(_liveRate - _approvedRate) > 0.02) ||
+          (!_catchupOn && isFiniteNum(_liveRate) && Math.abs(_liveRate - _approvedRate) > 0.02) ||
           (isFiniteNum(_liveAudioRate) && Math.abs(_liveAudioRate - _approvedRate) > 0.02);
           const _userRecent = (t - Number(state.lastUserActionTime || 0)) < 2500;
           if (_rateOff && !_userRecent && !_normalizingPlaybackRates) {
@@ -43876,7 +43948,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                   audioAdvancing && vn && vn.paused) {
                   needFast = true;
                 if (!videoPausedSince) videoPausedSince = t;
-                else if ((t - videoPausedSince) > (returnGraceOnlyTransition ? 1100 : 500)) {
+                else if ((t - videoPausedSince) > (returnGraceOnlyTransition ? 750 : 500)) {
                   videoPausedSince = 0;
                   try { state.strictBufferHold = false; state.seekBuffering = false; } catch { }
                   try { if (typeof clearBufferHold === "function") clearBufferHold(); } catch { }
@@ -43901,7 +43973,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                     Number(vn.readyState || 0) >= 3) {
                     needFast = true;
                   if (!videoFrozenSince) { videoFrozenSince = t; videoFrozenAtVt = vt; }
-                  else if ((t - videoFrozenSince) > (returnGraceOnlyTransition ? 1100 : 600) &&
+                  else if ((t - videoFrozenSince) > (returnGraceOnlyTransition ? 750 : 600) &&
                     (t - lastVideoRekickAt) > 900 &&
                     isFiniteNum(videoFrozenAtVt) && isFiniteNum(vt) &&
                     Math.abs(vt - videoFrozenAtVt) < 0.15) {
@@ -44255,6 +44327,44 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                             }
                           } else audioDeadHardSince = 0;
                             } else audioDeadHardSince = 0;
+
+                          // Audio stranded after a seek settled. Unlike audio-dead-hard this
+                          // does NOT require the video to be advancing — on a far seek the
+                          // video is often parked too, and the paired heals that need one
+                          // track alive can't rejoin the audio. Fires only once the seek
+                          // machinery is fully done and the audio actually has data to play.
+                          {
+                            const _seekDone = !state.seeking && !state.seekBuffering &&
+                            !state.seekResumeInFlight && !state.seekAudioReleaseInFlight &&
+                            state.pendingSeekTarget == null &&
+                            !(typeof userSeekIntentActive === "function" && userSeekIntentActive()) &&
+                            !(typeof seekAudioHoldUntilVideoReadyActive === "function" && seekAudioHoldUntilVideoReadyActive()) &&
+                            !(typeof SeekPlaybackCommitController !== "undefined" && SeekPlaybackCommitController.active && SeekPlaybackCommitController.active());
+                            const _audioHasData = coupledMode && audio &&
+                            Number(audio.readyState || 0) >= HAVE_CURRENT_DATA && !audio.seeking;
+                            const _audioSilent = coupledMode && audio &&
+                            (audio.paused || (!audioAdvancing &&
+                            (t - Math.max(aSampleAt, lastForcedResumeAt)) > 900));
+                            if (coupledMode && audio && intended && committed && !hidden &&
+                              !userHeldPaused && !state.endedNaturally && !state.restarting &&
+                              !state.seekDragActive && !audio.error && !_audioTrackFinished &&
+                              !authoritativeTransportPauseActive() && !playerMutedFromVideo() &&
+                              !state.userMutedVideo && !state.userMutedAudio &&
+                              vn && !vPaused && _seekDone && _audioHasData && _audioSilent) {
+                              needFast = true;
+                              if (!audioStrandedSince) audioStrandedSince = t;
+                              else if ((t - audioStrandedSince) > 3000 && (t - lastForcedResumeAt) > 1500) {
+                                audioStrandedSince = 0;
+                                try { if (typeof clearSeekAudioHoldUntilVideoReady === "function") clearSeekAudioHoldUntilVideoReady(); } catch { }
+                                try { state.seekAudioReleaseInFlight = false; } catch { }
+                                try { state.hardPairGateActive = false; } catch { }
+                                forceResumeAudioAndUnfreeze(
+                                  (typeof getVideoCurrentTimeSafe === "function") ? getVideoCurrentTimeSafe(vt) : vt,
+                                  "supervisor-audio-stranded-post-seek"
+                                );
+                              }
+                            } else audioStrandedSince = 0;
+                          }
 
                           // Spinner showing while the pair is healthy. Use liveness evidence so
                           // a stuck seek flag can't keep it up.
