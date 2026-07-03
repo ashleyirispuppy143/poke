@@ -15613,84 +15613,6 @@ startupPrimeStartedAt: performance.now(),
       }
       scheduleStartVerification(serial, target, perfProfile.lowEnd ? 280 : 170);
     }
-    // AUDIO-LED reveal. The audio is already playing (driven silently during the
-    // buffer wait for fast fetch); seat the video at the audio's live position,
-    // start it, and finish — so the picture joins the sound. The video never
-    // leads or plays without the audio.
-    function revealVideoAtRunningAudio(at) {
-      const target = Number(at);
-      const vn = getVideoNode();
-      if (!vn || !isFinite(target) || target < 0) {
-        finishPlaying(Number(state.seekCommitTarget) || 0);
-        return;
-      }
-      try {
-        if (Math.abs((Number(vn.currentTime) || 0) - target) > 0.12) {
-          state._isMicroSeek = true;
-          state._allowUnexpectedVideoTimeRestore = true;
-          vn.currentTime = target;
-          if (videoEl && videoEl !== vn) videoEl.currentTime = target;
-          state._allowUnexpectedVideoTimeRestore = false;
-          try { scheduleMicroSeekClear(perfProfile.lowEnd ? 320 : 240); } catch { }
-        }
-      } catch { state._allowUnexpectedVideoTimeRestore = false; }
-      try {
-        state.isProgrammaticVideoPlay = true;
-        VisibilityGuard.onPlayCalled();
-        const vp = HTMLMediaElement.prototype.play.call(vn);
-        if (vp && typeof vp.catch === "function") vp.catch(() => { });
-        setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 240);
-      } catch { state.isProgrammaticVideoPlay = false; }
-      try { VideoCompositorFlushManager.arm({ observe: true }); } catch { }
-      finishPlaying(target);
-    }
-    // Drive the audio to load and start during a seek wait WITHOUT making it
-    // audible or letting the video move. A playing element fetches at top
-    // priority — this is what stops the audio "coming back very late".
-    function driveSeekAudioLead(target) {
-      if (!coupledMode || !audio) return;
-      // Keep the video pinned/paused at the target: it must never run ahead of
-      // (or without) the audio.
-      try {
-        const vn = getVideoNode();
-        if (vn && !vn.paused) {
-          state._allowVideoPause = true;
-          state.isProgrammaticVideoPause = true;
-          HTMLMediaElement.prototype.pause.call(vn);
-          if (videoEl && videoEl !== vn && !videoEl.paused) HTMLMediaElement.prototype.pause.call(videoEl);
-          setTimeout(() => {
-            state._allowVideoPause = false;
-            state.isProgrammaticVideoPause = false;
-          }, 220);
-        }
-      } catch { state._allowVideoPause = false; state.isProgrammaticVideoPause = false; }
-      // Start the audio silently so its download is prioritized and it begins
-      // the instant data lands.
-      try {
-        if (audio.paused && !audio.seeking) {
-          const at = Number(audio.currentTime);
-          if (!isFinite(at) || Math.abs(at - target) > 0.5) {
-            const pA = !!state._allowAudioTimeWrite;
-            const pP = !!state._allowPairSyncAudioWrite;
-            state._allowAudioTimeWrite = true;
-            state._allowPairSyncAudioWrite = true;
-            try {
-              if (audio.preload !== "auto") audio.preload = "auto";
-              audio.currentTime = target;
-            } finally {
-              state._allowPairSyncAudioWrite = pP;
-              state._allowAudioTimeWrite = pA;
-            }
-          }
-          cancelActiveFade();
-          preserveAudioGainWhileSilent("seek-audio-lead-fetch");
-          state.isProgrammaticAudioPlay = true;
-          const ap = HTMLMediaElement.prototype.play.call(audio);
-          if (ap && typeof ap.catch === "function") ap.catch(() => { });
-          setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 220);
-        }
-      } catch { state.isProgrammaticAudioPlay = false; }
-    }
     function tryCommit() {
       if (!active()) return false;
       const target = Number(state.seekCommitTarget);
@@ -15781,67 +15703,15 @@ startupPrimeStartedAt: performance.now(),
             }
           }
         }
-        // Bounded escape: once the destination video can play, a long audio
-        // fetch must not hold the whole pair hostage. Start the video; the
-        // audio joins as soon as its data lands.
-        // Video-first is now a LAST RESORT, not the fast path. Letting the video
-        // run ahead while the audio buffered behind it (and then chased) looked
-        // broken: a spinner over playing video, audio never catching up, the bar
-        // out of step. The normal path below waits for both tracks and starts
-        // them together. Only if the audio fetch is genuinely wedged for several
-        // seconds while the video is ready do we start the video alone to avoid
-        // an indefinite hang.
-        const audioFetchWedged =
-        coupledMode && audio &&
-        Number(state.seekCommitAudioStalledSince || 0) > 0 &&
-        (bufNow - Number(state.seekCommitAudioStalledSince || 0)) > 6000;
-        if (!mustRemainPaused && audioFetchWedged &&
-          (bufNow - state.seekCommitBufferingSince) > 6000 &&
-          targetLanded(target)) {
-          const vnEsc = getVideoNode();
-          let vnEscReady = false;
-          try {
-            vnEscReady = !!vnEsc && !vnEsc.seeking && !vnEsc.error &&
-            Number(vnEsc.readyState || 0) >= HAVE_CURRENT_DATA;
-          } catch { }
-          if (vnEscReady) {
-            state.seekBuffering = false;
-            state.strictBufferHold = false;
-            try { clearBufferHold(); } catch { }
-            startPair(target);
-            return true;
-          }
-        }
-        // AUDIO-LED resume (coupled). Video must never play before/without audio,
-        // and a paused audio element fetches slowly (that was "audio comes back
-        // very late"). So drive the audio to play silently now (top fetch
-        // priority, starts ASAP) while the video stays pinned at the target.
-        // The moment the audio is actually running and the video can render at
-        // the audio's live position, seat the video there and reveal — pair
-        // running together, audio-led, video never ahead.
-        if (!mustRemainPaused && coupledMode && audio) {
-          let audioLiveAt = NaN;
-          try { audioLiveAt = !audio.paused ? Number(audio.currentTime) : NaN; } catch { }
-          const audioLive = isFinite(audioLiveAt) && audioLiveAt >= 0 &&
-          Number(audio.readyState || 0) >= HAVE_CURRENT_DATA && !audio.seeking;
-          const vnLed = getVideoNode();
-          const videoCanRenderAtAudio = audioLive && vnLed && !vnLed.error &&
-          (mediaImmediatelyPlayableAt(vnLed, audioLiveAt, perfProfile.lowEnd ? 0.34 : 0.26) ||
-          mediaCanAttemptPlaybackAtTarget(vnLed, audioLiveAt, perfProfile.lowEnd ? 0.34 : 0.26));
-          if (videoCanRenderAtAudio) {
-            state.seekBuffering = false;
-            state.strictBufferHold = false;
-            try { clearBufferHold(); } catch { }
-            revealVideoAtRunningAudio(audioLiveAt);
-            return true;
-          }
-          driveSeekAudioLead(target);
-          try { setSeekBufferingUIVisible(true); } catch { }
-          if (!listeners.length) installReadyListeners();
-          schedule(perfProfile.lowEnd ? 300 : 190);
-          return true;
-        }
-        // Non-coupled (or must-remain-paused): both-ready start, else simple hold.
+        // (No video-first escape. Strict lockstep: both tracks start together
+        // or neither does. If the audio genuinely can't load, the spinner stays
+        // up — the honest state — rather than playing video alone.)
+        // STRICT LOCKSTEP resume. Both tracks start together only when BOTH can
+        // play at the target; until then BOTH stay paused with the spinner. No
+        // track ever plays alone (that produced "video/audio plays with a buffer
+        // icon while the other isn't playing"). preload=auto keeps both fetching
+        // while held. The audio, being paused, is primed for fetch priority by a
+        // brief muted probe that never becomes audible or advances alone.
         const audioReadyForStart = !coupledMode || !audio ||
         audioReadyForSeekCommitStartAt(target) ||
         mediaCanAttemptPlaybackAtTarget(
@@ -15849,7 +15719,16 @@ startupPrimeStartedAt: performance.now(),
           target,
           perfProfile.lowEnd ? 0.28 : 0.22
         );
-        if (!mustRemainPaused && targetLanded(target) && audioReadyForStart) {
+        const videoReadyForStart = (() => {
+          try {
+            const vnr = getVideoNode();
+            return !!vnr && !vnr.error &&
+            (mediaImmediatelyPlayableAt(vnr, target, perfProfile.lowEnd ? 0.28 : 0.22) ||
+            mediaCanAttemptPlaybackAtTarget(vnr, target, perfProfile.lowEnd ? 0.28 : 0.22));
+          } catch { return false; }
+        })();
+        if (!mustRemainPaused && targetLanded(target) &&
+          audioReadyForStart && videoReadyForStart) {
           state.strictBufferHold = false;
           clearBufferHold();
           if (!state.seekCommitStartIssued) startPair(target);
@@ -15860,6 +15739,7 @@ startupPrimeStartedAt: performance.now(),
           );
           return true;
         }
+        // Not both ready: hold BOTH paused (lockstep), keep both fetching.
         const vn = getVideoNode();
         const pairNeedsHold = !!(
           (vn && !vn.paused) ||
@@ -15869,6 +15749,8 @@ startupPrimeStartedAt: performance.now(),
         if (pairNeedsHold) {
           holdPair({ forcePause: true });
         }
+        try { if (coupledMode && audio && audio.preload !== "auto") audio.preload = "auto"; } catch { }
+        try { const vnp = getVideoNode(); if (vnp && vnp.preload !== "auto") vnp.preload = "auto"; } catch { }
         if ((now() - Number(state.seekCommitLastAlignAt || 0)) >
           (perfProfile.lowEnd ? 900 : 650)) {
           state.seekCommitLastAlignAt = now();
@@ -15876,7 +15758,7 @@ startupPrimeStartedAt: performance.now(),
           }
           try { setSeekBufferingUIVisible(true); } catch { }
           if (!listeners.length) installReadyListeners();
-          schedule(perfProfile.lowEnd ? 360 : 240);
+          schedule(perfProfile.lowEnd ? 300 : 200);
         return true;
       }
       if (mustRemainPaused) {
@@ -43624,6 +43506,9 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     let videoFrozenRekickCount = 0;
     let lastVideoRekickAt = 0;
     let audioPausedWhileVideoSince = 0;
+    let lockstepStarveSince = 0;
+    let lockstepReadySince = 0;
+    let lastLockstepActAt = 0;
     let bufferCoupleSince = 0;
     let fgHealthySince = 0;
     let commitStuckSince = 0;
@@ -43905,6 +43790,153 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             if (typeof ensurePlayerTimelineRefresh === "function") ensurePlayerTimelineRefresh();
           }
         } catch { }
+
+        // ===================== AUTHORITATIVE LOCKSTEP =====================
+        // The one rule that fixes the unbuffered-region breakage: the two tracks
+        // play together or not at all. Never one alone. If either can't play,
+        // BOTH pause + spinner; when both can play again, BOTH resume — with no
+        // manual pause/play needed. Runs before the piecemeal heals below so it
+        // owns the both-or-neither decision.
+        let lockstepOwnsPair = false;
+        try {
+          const lsInTransition =
+          (typeof initialCoupledPairPending === "function" && initialCoupledPairPending()) ||
+          (typeof startupSettleActive === "function" && startupSettleActive()) ||
+          (typeof isVisibilityTransitionActive === "function" && isVisibilityTransitionActive()) ||
+          (typeof isAltTabTransitionActive === "function" && isAltTabTransitionActive()) ||
+          (typeof inBgReturnGrace === "function" && inBgReturnGrace()) ||
+          (typeof smoothForegroundReturnActive === "function" && smoothForegroundReturnActive(0)) ||
+          (typeof NotMakePlayBackFixingNoticable !== "undefined" && NotMakePlayBackFixingNoticable.isRecovering && NotMakePlayBackFixingNoticable.isRecovering());
+          const lsNativeSeeking = (() => {
+            try { return !!(vn && vn.seeking) || !!(coupledMode && audio && audio.seeking); }
+            catch { return false; }
+          })();
+          const lockstepEligible2 =
+          coupledMode && audio && intended && committed && !hidden &&
+          !userHeldPaused && !authoritativeTransportPauseActive() &&
+          !state.endedNaturally && !state.restarting && !state.seekDragActive &&
+          !inSeek && !lsNativeSeeking && !lsInTransition &&
+          !state.coupledPlayCommitHolding &&
+          !directUserToggleActive(700) && !playPauseTransactionActive(700) &&
+          now() >= Number(state._playPauseTransitionUntil || 0);
+          lockstepOwnsPair = !!(lockstepEligible2 && vn);
+          if (lockstepEligible2 && vn) {
+            const at = (() => { try { return Number(audio.currentTime); } catch { return NaN; } })();
+            // "Can play right now" = decoder has future data, or the clock is
+            // demonstrably advancing, or there's a real buffered runway ahead.
+            const vAhead = (() => { try { return bufferAheadAt(vn, isFiniteNum(vt) ? vt : 0); } catch { return 0; } })();
+            const aAhead = (() => { try { return bufferAheadAt(audio, isFiniteNum(at) ? at : 0); } catch { return 0; } })();
+            const vCanPlay = Number(vn.readyState || 0) >= HAVE_FUTURE_DATA ||
+            videoAdvancing || vAhead > 0.5;
+            const aCanPlay = Number(audio.readyState || 0) >= HAVE_FUTURE_DATA ||
+            audioAdvancing || aAhead > 0.5;
+            const vPlaying = !vPaused;
+            const aPlaying = !audio.paused;
+            const bothCanPlay = vCanPlay && aCanPlay;
+            const eitherStarving = !vCanPlay || !aCanPlay;
+
+            if (eitherStarving && (vPlaying || aPlaying)) {
+              // One track starving while something is still playing → pull BOTH
+              // down together after a short confirm and raise the spinner.
+              needFast = true;
+              lockstepReadySince = 0;
+              if (!lockstepStarveSince) lockstepStarveSince = t;
+              else if ((t - lockstepStarveSince) > 350 && (t - lastLockstepActAt) > 500) {
+                lastLockstepActAt = t;
+                lockstepStarveSince = 0;
+                try {
+                  state._allowVideoPause = true;
+                  state._allowAudioPause = true;
+                  state.isProgrammaticVideoPause = true;
+                  state.isProgrammaticAudioPause = true;
+                  if (coupledMode && audio && !audio.paused) preserveAudioGainWhileSilent("lockstep-pause");
+                  if (vn && !vn.paused) HTMLMediaElement.prototype.pause.call(vn);
+                  if (videoEl && videoEl !== vn && !videoEl.paused) HTMLMediaElement.prototype.pause.call(videoEl);
+                  if (audio && !audio.paused) HTMLMediaElement.prototype.pause.call(audio);
+                  setTimeout(() => {
+                    state._allowVideoPause = false;
+                    state._allowAudioPause = false;
+                    state.isProgrammaticVideoPause = false;
+                    state.isProgrammaticAudioPause = false;
+                  }, 240);
+                } catch {
+                  state._allowVideoPause = false; state._allowAudioPause = false;
+                  state.isProgrammaticVideoPause = false; state.isProgrammaticAudioPause = false;
+                }
+                try { setSeekBufferingUIVisible(true); } catch { }
+              }
+            } else if (bothCanPlay && (!vPlaying || !aPlaying)) {
+              // Both playable but one (or both) paused → resume BOTH together.
+              // This is the automatic recovery that removes the "frozen until you
+              // pause/play" behavior.
+              needFast = true;
+              lockstepStarveSince = 0;
+              if (!lockstepReadySince) lockstepReadySince = t;
+              else if ((t - lockstepReadySince) > 200 && (t - lastLockstepActAt) > 500) {
+                lastLockstepActAt = t;
+                lockstepReadySince = 0;
+                // Align the pair before resuming so they start from one spot.
+                try {
+                  const anchor = isFiniteNum(at) && aPlaying ? at
+                  : (isFiniteNum(vt) && vPlaying ? vt
+                  : (isFiniteNum(at) ? at : vt));
+                  if (isFiniteNum(anchor) && anchor >= 0) {
+                    if (vn.paused && Math.abs((Number(vn.currentTime) || 0) - anchor) > 0.20) {
+                      state._isMicroSeek = true;
+                      state._allowUnexpectedVideoTimeRestore = true;
+                      vn.currentTime = anchor;
+                      if (videoEl && videoEl !== vn) videoEl.currentTime = anchor;
+                      state._allowUnexpectedVideoTimeRestore = false;
+                      try { scheduleMicroSeekClear(240); } catch { }
+                    }
+                    if (audio.paused && Math.abs((Number(audio.currentTime) || 0) - anchor) > 0.20) {
+                      state._allowAudioTimeWrite = true;
+                      try { audio.currentTime = anchor; } finally { state._allowAudioTimeWrite = false; }
+                    }
+                  }
+                } catch { state._allowUnexpectedVideoTimeRestore = false; state._allowAudioTimeWrite = false; }
+                try { cancelActiveFade(); } catch { }
+                try { clearBufferHold(); } catch { }
+                try {
+                  state.videoWaiting = false; state.audioWaiting = false;
+                  state.videoStallAudioPaused = false; state.audioStallVideoPaused = false;
+                  state.strictBufferHold = false; state.seekBuffering = false;
+                } catch { }
+                try {
+                  if (vn.paused) {
+                    state.isProgrammaticVideoPlay = true;
+                    const vp = HTMLMediaElement.prototype.play.call(vn);
+                    if (vp && typeof vp.catch === "function") vp.catch(() => { });
+                    setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 220);
+                  }
+                } catch { state.isProgrammaticVideoPlay = false; }
+                try {
+                  if (audio.paused && !playerMutedFromVideo()) {
+                    setAudioPlaybackVolume(targetVolFromVideo(), "lockstep-resume", { cancelFade: true });
+                    setAudioMutedSynced(false);
+                    state.isProgrammaticAudioPlay = true;
+                    const ap = HTMLMediaElement.prototype.play.call(audio);
+                    if (ap && typeof ap.catch === "function") ap.catch(() => { });
+                    setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 220);
+                  }
+                } catch { state.isProgrammaticAudioPlay = false; }
+                try { forceClearSeekBufferingUI(); } catch { }
+              }
+            } else {
+              // Healthy (both playing, both can play) or both already paused and
+              // starving — nothing to reconcile.
+              lockstepStarveSince = 0;
+              lockstepReadySince = 0;
+              if (bothCanPlay && vPlaying && aPlaying && _bufferGuardSpinnerOn) {
+                try { forceClearSeekBufferingUI(); } catch { }
+              }
+            }
+          } else {
+            lockstepStarveSince = 0;
+            lockstepReadySince = 0;
+          }
+        } catch { }
+        // =================== END AUTHORITATIVE LOCKSTEP ===================
 
         // After foreground playback has been healthy a few seconds, shut down the
         // background keepalive worker and tab-return-immune flags if they linger.
@@ -44199,7 +44231,9 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                 } else audioMutedSince = 0;
 
                 // Audio advancing but the video element is paused. Play the video.
-                if (coupledMode && audio && intended && committed && !hidden &&
+                // Skipped when lockstep owns the pair (it does both-or-neither).
+                if (!lockstepOwnsPair &&
+                  coupledMode && audio && intended && committed && !hidden &&
                   !userHeldPaused && !state.endedNaturally && !state.restarting &&
                   !state.seekDragActive && !authoritativeTransportPauseActive() &&
                   (!inStartupOrTransition || returnGraceOnlyTransition) &&
@@ -44393,7 +44427,8 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                       isAltTabTransitionActive() || isTabReturnImmune() || inBgReturnGrace() ||
                       foregroundReturnContextActive(0) || smoothForegroundReturnActive(0) ||
                         returnAlignmentSettlingActive(0);
-                      const _coupleReady = intended && committed && !hidden && !inSeek &&
+                      const _coupleReady = !lockstepOwnsPair &&
+                      intended && committed && !hidden && !inSeek &&
                       !userHeldPaused && !state.endedNaturally && !state.restarting &&
                       !state.seekDragActive && coupledMode && audio && !_inReturnWindow &&
                       !directUserToggleActive(1000) && !playPauseTransactionActive(900) &&
@@ -44419,7 +44454,8 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                     // Audio paused while the video is genuinely advancing: audio should be
                     // playing too. Works during startup as well (Chromium can silently block
                     // the audio start), unlike the heal below which waits for commit.
-                    if (coupledMode && audio && !hidden && !userHeldPaused &&
+                    if (!lockstepOwnsPair &&
+                      coupledMode && audio && !hidden && !userHeldPaused &&
                       !state.endedNaturally && !state.restarting && !state.seekDragActive &&
                       !state.seeking && !state.seekBuffering && !state.seekResumeInFlight &&
                       !nativeSeeking && !audio.error && !playerMutedFromVideo() &&
