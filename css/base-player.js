@@ -14595,7 +14595,7 @@ startupPrimeStartedAt: performance.now(),
       // escape window the video starts and the audio joins when data lands.
       const audioBarrierEscape =
       Number(state.seekCommitBufferingSince || 0) > 0 &&
-      (now() - Number(state.seekCommitBufferingSince || 0)) > 4500;
+      (now() - Number(state.seekCommitBufferingSince || 0)) > 700;
       if (!readyBeforeAudioRetarget && !readyAfterAudioRetarget &&
         !audioCanAttempt && !audioBarrierEscape) {
         state.seekCommitPhase = "waiting-audio-retarget";
@@ -14721,25 +14721,33 @@ startupPrimeStartedAt: performance.now(),
       state.audioFadeCompleteUntil = 0;
       state.stateChangeCooldownUntil = 0;
       try {
-        if (audio.paused && !audio.seeking) {
-          const vt = Number(vn.currentTime);
-          const at = Number(audio.currentTime);
-          if (isFinite(vt) && vt >= 0 &&
-            (!isFinite(at) || Math.abs(at - vt) >
-            (perfProfile.lowEnd ? 0.24 : 0.16))) {
-            const previousAllow = !!state._allowAudioTimeWrite;
-          const previousPairAllow = !!state._allowPairSyncAudioWrite;
-          state._allowAudioTimeWrite = true;
-          state._allowPairSyncAudioWrite = true;
-          try { audio.currentTime = vt; } finally {
-            state._allowPairSyncAudioWrite = previousPairAllow;
-            state._allowAudioTimeWrite = previousAllow;
-          }
+        if (audio.paused) {
+          // Only align the clock when the audio isn't mid-seek (a write there
+          // aborts its in-flight fetch). But ALWAYS issue the play(): a pending
+          // play on a still-seeking element makes the browser start the audio
+          // the instant its data arrives, and raises its fetch priority now.
+          // Skipping the play() while seeking left far-seek audio silent until
+          // a manual play/pause.
+          if (!audio.seeking) {
+            const vt = Number(vn.currentTime);
+            const at = Number(audio.currentTime);
+            if (isFinite(vt) && vt >= 0 &&
+              (!isFinite(at) || Math.abs(at - vt) >
+              (perfProfile.lowEnd ? 0.24 : 0.16))) {
+              const previousAllow = !!state._allowAudioTimeWrite;
+              const previousPairAllow = !!state._allowPairSyncAudioWrite;
+              state._allowAudioTimeWrite = true;
+              state._allowPairSyncAudioWrite = true;
+              try { audio.currentTime = vt; } finally {
+                state._allowPairSyncAudioWrite = previousPairAllow;
+                state._allowAudioTimeWrite = previousAllow;
+              }
             }
-            state.isProgrammaticAudioPlay = true;
-            const play = HTMLMediaElement.prototype.play.call(audio);
-            if (play && typeof play.catch === "function") play.catch(() => { });
-            setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 220);
+          }
+          state.isProgrammaticAudioPlay = true;
+          const play = HTMLMediaElement.prototype.play.call(audio);
+          if (play && typeof play.catch === "function") play.catch(() => { });
+          setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 220);
         }
       } catch { }
       try {
@@ -14758,8 +14766,8 @@ startupPrimeStartedAt: performance.now(),
     }
     function verifyCommittedSeekAudioRelease(seekId, playSession, reason = "") {
       const delays = perfProfile.lowEnd
-      ? [0, 120, 300, 650, 1100]
-      : [0, 70, 180, 420, 800];
+      ? [0, 120, 300, 650, 1100, 2200, 4200, 7000]
+      : [0, 70, 180, 420, 800, 1700, 3400, 6000];
       for (const delay of delays) {
         setTimeout(() => {
           if (Number(state.seekId) !== Number(seekId) ||
@@ -15388,7 +15396,11 @@ startupPrimeStartedAt: performance.now(),
           const sustainedStallMs = perfProfile.lowEnd ? 1500 : (perfProfile.mobile ? 1350 : 1200);
           const spinnerConfirmMs =
           perfProfile.lowEnd ? 650 : (perfProfile.mobile ? 520 : 420);
-          if (!pairDecodable || progressAge >= spinnerConfirmMs) {
+          if (videoProgressed && !audioProgressed) {
+            // Video-first playback is live; a spinner over a moving picture
+            // reads as a bug while the audio quietly joins.
+            try { setSeekBufferingUIVisible(false); } catch { }
+          } else if (!pairDecodable || progressAge >= spinnerConfirmMs) {
             try { setSeekBufferingUIVisible(true); } catch { }
           }
           const kickGap = perfProfile.lowEnd ? 1100 : 750;
@@ -15434,7 +15446,22 @@ startupPrimeStartedAt: performance.now(),
           );
           return;
         }
-        if (startAge > (perfProfile.lowEnd ? 3200 : 2400) &&
+        // A deliberate video-first start: the video is healthy and progressing
+        // while the audio simply has no data yet. Rearming the pair here would
+        // pause the running video and re-freeze the seek; keep joining instead.
+        const videoFirstInProgress = videoRunning && (() => {
+          try {
+            const cur = Number(vn.currentTime);
+            const base = Number(state.seekCommitStartVideoTime);
+            const videoMoving = isFinite(cur) &&
+            (!isFinite(base) || cur > base + 0.05);
+            const audioStarved = !!audio.seeking ||
+            Number(audio.readyState || 0) < HAVE_CURRENT_DATA;
+            return videoMoving && audioStarved && !audio.error;
+          } catch { return false; }
+        })();
+        if (!videoFirstInProgress &&
+          startAge > (perfProfile.lowEnd ? 3200 : 2400) &&
           rearmCommittedPair(
             serial,
             target,
@@ -15644,8 +15671,12 @@ startupPrimeStartedAt: performance.now(),
         // Bounded escape: once the destination video can play, a long audio
         // fetch must not hold the whole pair hostage. Start the video; the
         // audio joins as soon as its data lands.
+        // Video-first start: once the destination video can play, go. Waiting
+        // for the slower audio fetch is what made seeks feel slow; the audio
+        // stays silent-gated and joins the moment its data lands. The short
+        // grace keeps ordinary near-buffer seeks starting as a pair.
         if (!mustRemainPaused &&
-          (bufNow - state.seekCommitBufferingSince) > 5000 &&
+          (bufNow - state.seekCommitBufferingSince) > 700 &&
           targetLanded(target)) {
           const vnEsc = getVideoNode();
           let vnEscReady = false;
