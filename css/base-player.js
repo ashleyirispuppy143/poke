@@ -2608,6 +2608,11 @@ startupPrimeStartedAt: performance.now(),
     if (!coupledMode || !audio) return false;
     if (document.visibilityState !== "hidden") return false;
     if (!state.intendedPlaying || state.endedNaturally || state.restarting) return false;
+    // The user's last transport decision was PAUSE. Never let a background
+    // keepalive/resume start playback behind their back — that produced
+    // "playback randomly starts in the background, then pauses when you return"
+    // as the real paused intent reasserts on tab return.
+    if (authoritativeTransportPauseActive()) return false;
     if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
     if (userPauseLockActive() || mediaSessionForcedPauseActive()) return false;
     if (_errorOverlayShown) return false;
@@ -2696,6 +2701,7 @@ startupPrimeStartedAt: performance.now(),
     if (!coupledMode || !audio) return false;
     if (document.visibilityState !== "hidden") return false;
     if (!state.intendedPlaying || state.endedNaturally || state.restarting) return false;
+    if (authoritativeTransportPauseActive()) return false;
     if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
     if (userPauseLockActive() || mediaSessionForcedPauseActive()) return false;
     if (_errorOverlayShown) return false;
@@ -2733,6 +2739,7 @@ startupPrimeStartedAt: performance.now(),
   function hiddenBackgroundRecoveryNeeded(maxDrift = 0.24) {
     if (!coupledMode || !audio || document.visibilityState !== "hidden") return false;
     if (!state.intendedPlaying || state.endedNaturally || state.restarting) return false;
+    if (authoritativeTransportPauseActive()) return false;
     if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
     if (userPauseLockActive() || mediaSessionForcedPauseActive() || _errorOverlayShown) return false;
     try { noteNonLoopTailProgress("hidden-recovery-needed"); } catch { }
@@ -15606,6 +15613,84 @@ startupPrimeStartedAt: performance.now(),
       }
       scheduleStartVerification(serial, target, perfProfile.lowEnd ? 280 : 170);
     }
+    // AUDIO-LED reveal. The audio is already playing (driven silently during the
+    // buffer wait for fast fetch); seat the video at the audio's live position,
+    // start it, and finish — so the picture joins the sound. The video never
+    // leads or plays without the audio.
+    function revealVideoAtRunningAudio(at) {
+      const target = Number(at);
+      const vn = getVideoNode();
+      if (!vn || !isFinite(target) || target < 0) {
+        finishPlaying(Number(state.seekCommitTarget) || 0);
+        return;
+      }
+      try {
+        if (Math.abs((Number(vn.currentTime) || 0) - target) > 0.12) {
+          state._isMicroSeek = true;
+          state._allowUnexpectedVideoTimeRestore = true;
+          vn.currentTime = target;
+          if (videoEl && videoEl !== vn) videoEl.currentTime = target;
+          state._allowUnexpectedVideoTimeRestore = false;
+          try { scheduleMicroSeekClear(perfProfile.lowEnd ? 320 : 240); } catch { }
+        }
+      } catch { state._allowUnexpectedVideoTimeRestore = false; }
+      try {
+        state.isProgrammaticVideoPlay = true;
+        VisibilityGuard.onPlayCalled();
+        const vp = HTMLMediaElement.prototype.play.call(vn);
+        if (vp && typeof vp.catch === "function") vp.catch(() => { });
+        setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 240);
+      } catch { state.isProgrammaticVideoPlay = false; }
+      try { VideoCompositorFlushManager.arm({ observe: true }); } catch { }
+      finishPlaying(target);
+    }
+    // Drive the audio to load and start during a seek wait WITHOUT making it
+    // audible or letting the video move. A playing element fetches at top
+    // priority — this is what stops the audio "coming back very late".
+    function driveSeekAudioLead(target) {
+      if (!coupledMode || !audio) return;
+      // Keep the video pinned/paused at the target: it must never run ahead of
+      // (or without) the audio.
+      try {
+        const vn = getVideoNode();
+        if (vn && !vn.paused) {
+          state._allowVideoPause = true;
+          state.isProgrammaticVideoPause = true;
+          HTMLMediaElement.prototype.pause.call(vn);
+          if (videoEl && videoEl !== vn && !videoEl.paused) HTMLMediaElement.prototype.pause.call(videoEl);
+          setTimeout(() => {
+            state._allowVideoPause = false;
+            state.isProgrammaticVideoPause = false;
+          }, 220);
+        }
+      } catch { state._allowVideoPause = false; state.isProgrammaticVideoPause = false; }
+      // Start the audio silently so its download is prioritized and it begins
+      // the instant data lands.
+      try {
+        if (audio.paused && !audio.seeking) {
+          const at = Number(audio.currentTime);
+          if (!isFinite(at) || Math.abs(at - target) > 0.5) {
+            const pA = !!state._allowAudioTimeWrite;
+            const pP = !!state._allowPairSyncAudioWrite;
+            state._allowAudioTimeWrite = true;
+            state._allowPairSyncAudioWrite = true;
+            try {
+              if (audio.preload !== "auto") audio.preload = "auto";
+              audio.currentTime = target;
+            } finally {
+              state._allowPairSyncAudioWrite = pP;
+              state._allowAudioTimeWrite = pA;
+            }
+          }
+          cancelActiveFade();
+          preserveAudioGainWhileSilent("seek-audio-lead-fetch");
+          state.isProgrammaticAudioPlay = true;
+          const ap = HTMLMediaElement.prototype.play.call(audio);
+          if (ap && typeof ap.catch === "function") ap.catch(() => { });
+          setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 220);
+        }
+      } catch { state.isProgrammaticAudioPlay = false; }
+    }
     function tryCommit() {
       if (!active()) return false;
       const target = Number(state.seekCommitTarget);
@@ -15672,13 +15757,13 @@ startupPrimeStartedAt: performance.now(),
           const audioFetchStalled =
           state.seekCommitAudioStalledSince > 0 &&
           (bufNow - state.seekCommitAudioStalledSince) > 2200;
-          if (audioFetchStalled &&
+          // Only revive a PAUSED audio. The audio-led drive below keeps the
+          // audio playing for fast fetch; rewriting a playing audio's
+          // currentTime would re-trigger a seek and stutter it.
+          if (audioFetchStalled && audio.paused &&
             (bufNow - Number(state.seekCommitAudioReviveAt || 0)) > 3000) {
             state.seekCommitAudioReviveAt = bufNow;
-            // Re-issue the range request by rewriting currentTime. Deliberately
-            // no play() probe here: starting the audio alone during the pair-wait
-            // is exactly the "audio plays without video" artifact. preload=auto
-            // keeps the fetch going; the pair starts together once ready.
+            // Re-issue the range request by rewriting currentTime.
             if (!audio.seeking) {
               try {
                 const prevA = !!state._allowAudioTimeWrite;
@@ -15727,6 +15812,36 @@ startupPrimeStartedAt: performance.now(),
             return true;
           }
         }
+        // AUDIO-LED resume (coupled). Video must never play before/without audio,
+        // and a paused audio element fetches slowly (that was "audio comes back
+        // very late"). So drive the audio to play silently now (top fetch
+        // priority, starts ASAP) while the video stays pinned at the target.
+        // The moment the audio is actually running and the video can render at
+        // the audio's live position, seat the video there and reveal — pair
+        // running together, audio-led, video never ahead.
+        if (!mustRemainPaused && coupledMode && audio) {
+          let audioLiveAt = NaN;
+          try { audioLiveAt = !audio.paused ? Number(audio.currentTime) : NaN; } catch { }
+          const audioLive = isFinite(audioLiveAt) && audioLiveAt >= 0 &&
+          Number(audio.readyState || 0) >= HAVE_CURRENT_DATA && !audio.seeking;
+          const vnLed = getVideoNode();
+          const videoCanRenderAtAudio = audioLive && vnLed && !vnLed.error &&
+          (mediaImmediatelyPlayableAt(vnLed, audioLiveAt, perfProfile.lowEnd ? 0.34 : 0.26) ||
+          mediaCanAttemptPlaybackAtTarget(vnLed, audioLiveAt, perfProfile.lowEnd ? 0.34 : 0.26));
+          if (videoCanRenderAtAudio) {
+            state.seekBuffering = false;
+            state.strictBufferHold = false;
+            try { clearBufferHold(); } catch { }
+            revealVideoAtRunningAudio(audioLiveAt);
+            return true;
+          }
+          driveSeekAudioLead(target);
+          try { setSeekBufferingUIVisible(true); } catch { }
+          if (!listeners.length) installReadyListeners();
+          schedule(perfProfile.lowEnd ? 300 : 190);
+          return true;
+        }
+        // Non-coupled (or must-remain-paused): both-ready start, else simple hold.
         const audioReadyForStart = !coupledMode || !audio ||
         audioReadyForSeekCommitStartAt(target) ||
         mediaCanAttemptPlaybackAtTarget(
@@ -15735,8 +15850,6 @@ startupPrimeStartedAt: performance.now(),
           perfProfile.lowEnd ? 0.28 : 0.22
         );
         if (!mustRemainPaused && targetLanded(target) && audioReadyForStart) {
-          // Seek resume uses the seek-specific gate. Waiting for the stricter
-          // startup prebuffer here can leave both media elements paused forever.
           state.strictBufferHold = false;
           clearBufferHold();
           if (!state.seekCommitStartIssued) startPair(target);
@@ -15754,11 +15867,6 @@ startupPrimeStartedAt: performance.now(),
           (coupledMode && audio && !audio.paused)
         );
         if (pairNeedsHold) {
-          // Wait as a PAIR: force both tracks paused so the video can never run
-          // ahead of a still-buffering audio (that produced "video plays with a
-          // buffer icon, audio catching up"). The audio keeps loading via
-          // preload=auto plus the periodic range re-request in the revive block
-          // above; both start together once ready.
           holdPair({ forcePause: true });
         }
         if ((now() - Number(state.seekCommitLastAlignAt || 0)) >
@@ -19765,6 +19873,7 @@ startupPrimeStartedAt: performance.now(),
     }
     if (document.visibilityState !== "hidden") return false;
     if (!state.intendedPlaying || state.endedNaturally || state.restarting) return false;
+    if (authoritativeTransportPauseActive()) return false;
     if (state.seeking || state.seekBuffering || state.seekResumeInFlight) return false;
     if (userPauseLockActive() || mediaSessionForcedPauseActive()) return false;
     if (shouldUseHiddenAudioExclusiveMode()) {
