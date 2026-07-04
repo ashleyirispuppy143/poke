@@ -19579,6 +19579,10 @@ startupPrimeStartedAt: performance.now(),
       try { alignPausedPairForPlayToggle("user-play-toggle"); } catch { }
       try { armResumeStrictPairSync(12000); } catch { }
       try { armResumePairAudioGate("user-resume"); } catch { }
+      // Mark the resume so the supervisor's post-resume lip-sync lock can seat the
+      // muted video onto the audio master once both are advancing again (fixes
+      // "A/V not synced after play/pause until you play/pause a second time").
+      state.lastUserResumeAt = now();
       // Warm the video and its frame on resume so the picture doesn't wait on the
       // commit cadence. Gated on both ready so the audio still joins.
       try {
@@ -43721,6 +43725,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     let avDriftSince = 0;
     let avCatchupSince = 0;
     let lastAvCatchupAt = 0;
+    let lastResumeResyncAt = 0;
     let startupStuckSince = 0;
     let lastStartupForceAt = 0;
     let bufferCoupleSince = 0;
@@ -44592,6 +44597,47 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             } else avCatchupSince = 0;
           } else avCatchupSince = 0;
         } catch { avCatchupSince = 0; }
+
+        // Post-resume lip-sync lock. After a user play/pause resume the audio and
+        // video decoders restart with slightly different latency, leaving a small
+        // constant A/V offset that the normal drift heal (0.5s threshold) ignores
+        // and the ramp window suppresses - so it lingers until a SECOND play/pause
+        // re-seats the pair while paused. Within a short window after the resume,
+        // once BOTH are advancing again, seat the muted video onto the audio
+        // master so lip-sync locks the first time. Small, bounded, video-only (no
+        // bar move, no audio click); both directions since the offset can be
+        // either way. Fires a few times then stops once the pair is tight.
+        try {
+          const resumeSyncWindow = coupledMode && audio &&
+            Number(state.lastUserResumeAt || 0) > 0 &&
+            (t - Number(state.lastUserResumeAt || 0)) < 4000;
+          if (resumeSyncWindow && intended && committed && !hidden &&
+            !vPaused && !audio.paused && !userHeldPaused &&
+            !state.seeking && !state.seekBuffering && !state.seekResumeInFlight &&
+            !state.seekDragActive && state.pendingSeekTarget == null &&
+            !(vn && vn.seeking) && !(audio && audio.seeking) &&
+            videoAdvancing && audioAdvancing) {
+            const rAt = (() => { try { return Number(audio.currentTime); } catch { return NaN; } })();
+            const rVt = isFiniteNum(vt) ? vt : (() => { try { return Number(vn.currentTime) || 0; } catch { return 0; } })();
+            let rBuffered = false;
+            try { rBuffered = isFiniteNum(rAt) && bufferAheadAt(vn, rAt) > 0.05; } catch { rBuffered = false; }
+            if (isFiniteNum(rAt) && isFiniteNum(rVt) && rBuffered) {
+              const off = rVt - rAt; // + = video ahead, - = video behind
+              if (Math.abs(off) > 0.09 && Math.abs(off) < 3 && (t - lastResumeResyncAt) > 400) {
+                lastResumeResyncAt = t;
+                needFast = true;
+                try {
+                  state._isMicroSeek = true;
+                  state._allowUnexpectedVideoTimeRestore = true;
+                  vn.currentTime = rAt;
+                  if (videoEl && videoEl !== vn) videoEl.currentTime = rAt;
+                  state._allowUnexpectedVideoTimeRestore = false;
+                  try { scheduleMicroSeekClear(220); } catch { }
+                } catch { state._allowUnexpectedVideoTimeRestore = false; }
+              }
+            }
+          }
+        } catch { }
 
         // After foreground playback has been healthy a few seconds, shut down the
         // background keepalive worker and tab-return-immune flags if they linger.
