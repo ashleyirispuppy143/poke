@@ -10006,15 +10006,19 @@ startupPrimeStartedAt: performance.now(),
         return terminal;
       }
     } catch { }
-    // In coupled mode the audio clock drives the bar whenever it's live, so it
-    // stays put through drift instead of flipping to the video clock. Video clock
-    // only when there's no live audio. Seek/return/terminal/gate handled above.
-    const audioIsLiveClock =
+    // In coupled mode the audio is the master clock. Use it as the SINGLE
+    // display source whenever it is valid - playing or paused - so the bar never
+    // flips between the audio and video clocks (they differ during transitions,
+    // and flipping made the bar jump forward/back and look like a loop). The
+    // video clock is used only when there is no valid audio position, or when
+    // the video legitimately continues past the audio's end (video tail).
+    const audioValidClock =
+    coupledMode && audio &&
     isFinite(at) && at >= 0 &&
     state.audioEverStarted &&
-    !audio.paused &&
-    Number(audio.readyState || 0) >= HAVE_METADATA;
-    if (audioIsLiveClock) {
+    Number(audio.readyState || 0) >= HAVE_METADATA &&
+    !videoTailContinuesAfterAudioEnd();
+    if (audioValidClock) {
       // A near-zero read from an element reloading/reseating mid-playback is a
       // transient, not a real position. Don't flash 0:00 when we have a recent
       // good position well past the start and no restart/near-zero is expected.
@@ -10027,17 +10031,6 @@ startupPrimeStartedAt: performance.now(),
           return stabilizePlayerDisplayTime(clamp(lastGood), dur);
         }
       }
-      return stabilizePlayerDisplayTime(clamp(at), dur);
-    }
-    // Audio is paused (a buffer/stall hold, or the pair momentarily stopped).
-    // The audio clock is still the master position - the video clock can be
-    // ahead/behind it during a coupled buffer, so showing the video clock here
-    // was the "wrong time during buffering". Prefer the audio position when it
-    // is valid, unless the video is genuinely the running clock.
-    if (coupledMode && audio && isFinite(at) && at >= 0 &&
-      state.audioEverStarted && audio.paused &&
-      Number(audio.readyState || 0) >= HAVE_METADATA &&
-      (getVideoPaused() || !isFinite(vt))) {
       return stabilizePlayerDisplayTime(clamp(at), dur);
     }
     const displayVideo = clamp(isFinite(vt) ? vt : at);
@@ -28304,6 +28297,13 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     if (!state.intendedPlaying || state.restarting || state.seeking) return;
     if (mediaSessionForcedPauseActive()) return;
     if (_coupledBufferWaitCleanup && state.resumeAfterBufferTimer) return;
+    // A prior wait whose timer already fired but whose listeners were never torn
+    // down would otherwise leak its canplay/progress/playing listeners each time
+    // this re-arms. Tear down any lingering one first.
+    if (_coupledBufferWaitCleanup) {
+      try { _coupledBufferWaitCleanup(); } catch { }
+      _coupledBufferWaitCleanup = null;
+    }
     clearResumeAfterBufferTimer();
     state.bufferRecoveryEpoch = Number(state.bufferRecoveryEpoch || 0) + 1;
     const bufferRecoveryEpoch = state.bufferRecoveryEpoch;
@@ -36478,22 +36478,68 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         state.lastDrift = 0;
       } catch { }
     });
-    try {
-      const _pipTargets = [];
-      try { if (videoEl) _pipTargets.push(videoEl); } catch { }
+    // Picture-in-Picture is disabled entirely on this player. Disable it on the
+    // media elements, block the request API, remove the video.js control, and
+    // force-exit if anything (browser auto-PiP, an extension) still opens it.
+    function disablePictureInPictureEverywhere() {
+      const els = [];
+      try { if (videoEl) els.push(videoEl); } catch { }
       try {
         const _pipVn = getVideoNode();
-        if (_pipVn && _pipTargets.indexOf(_pipVn) === -1) _pipTargets.push(_pipVn);
+        if (_pipVn && els.indexOf(_pipVn) === -1) els.push(_pipVn);
       } catch { }
-      for (const _pipEl of _pipTargets) {
-        _on(_pipEl, "enterpictureinpicture", () => {
-          try { notePipTransitionForRateGuard("pip-enter"); } catch { }
-        }, { passive: true });
-        _on(_pipEl, "leavepictureinpicture", () => {
-          try { notePipTransitionForRateGuard("pip-leave"); } catch { }
-        }, { passive: true });
+      try {
+        const rootEl = video?.el?.();
+        const nested = rootEl && rootEl.querySelectorAll && rootEl.querySelectorAll("video");
+        if (nested) for (let i = 0; i < nested.length; i++) {
+          if (els.indexOf(nested[i]) === -1) els.push(nested[i]);
+        }
+      } catch { }
+      for (const el of els) {
+        try { el.disablePictureInPicture = true; } catch { }
+        try { el.setAttribute("disablePictureInPicture", ""); } catch { }
+        try {
+          if (typeof el.requestPictureInPicture === "function" && !el.__pipBlocked) {
+            el.requestPictureInPicture = function () {
+              return Promise.reject(new DOMException("Picture-in-Picture is disabled.", "NotAllowedError"));
+            };
+            el.__pipBlocked = true;
+          }
+        } catch { }
+        try {
+          if (!el.__pipExitGuard) {
+            _on(el, "enterpictureinpicture", () => {
+              try {
+                if (document.pictureInPictureElement && document.exitPictureInPicture) {
+                  document.exitPictureInPicture().catch(() => { });
+                }
+              } catch { }
+            }, { passive: true });
+            el.__pipExitGuard = true;
+          }
+        } catch { }
       }
-    } catch { }
+      // Remove the video.js PiP control button if the skin added one.
+      try {
+        const ct = video?.controlBar;
+        if (ct && typeof ct.getChild === "function") {
+          const pipToggle = ct.getChild("PictureInPictureToggle");
+          if (pipToggle && typeof ct.removeChild === "function") {
+            ct.removeChild(pipToggle);
+            if (typeof pipToggle.dispose === "function") pipToggle.dispose();
+          }
+        }
+      } catch { }
+      try {
+        const rootEl = video?.el?.();
+        const btn = rootEl && rootEl.querySelector && rootEl.querySelector(".vjs-picture-in-picture-control");
+        if (btn) btn.style.display = "none";
+      } catch { }
+    }
+    try { disablePictureInPictureEverywhere(); } catch { }
+    // The inner <video> can be replaced (source/quality switch); re-apply then.
+    try { _on(videoEl, "loadedmetadata", () => { try { disablePictureInPictureEverywhere(); } catch { } }, { passive: true }); } catch { }
+    try { if (typeof video.on === "function") video.on("loadstart", () => { try { disablePictureInPictureEverywhere(); } catch { } }); } catch { }
     video.on("play", () => {
       if (_errorOverlayShown || (PlayerErrorOverlay && PlayerErrorOverlay.isVisible && PlayerErrorOverlay.isVisible())) {
         forcePausePlaybackForErrorOverlay("video-play-while-overlay");
@@ -43498,6 +43544,8 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     let lastLockstepParkAt = 0;
     let audioParkedSince = 0;
     let lastAudioParkFixAt = 0;
+    let avDriftSince = 0;
+    let lastAvDriftFixAt = 0;
     let startupStuckSince = 0;
     let lastStartupForceAt = 0;
     let bufferCoupleSince = 0;
@@ -43511,6 +43559,11 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     let blackFrameLastCount = NaN;
     let lastBlackFrameKickAt = 0;
     let blackFrameKickCount = 0;
+    let freezeFrameCount = NaN;
+    let freezeFrameSince = 0;
+    let lastFreezeResetAt = 0;
+    let freezeResetCount = 0;
+    let freezeResetWindowAt = 0;
     let rateWrongSince = 0;
     let ncParkedSince = 0;
     let ncParkedKickAt = 0;
@@ -43811,11 +43864,15 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           (typeof userSeekIntentActive === "function" && userSeekIntentActive()) ||
           (Number(state._seekStartedAt || 0) > 0 &&
           (performance.now() - Number(state._seekStartedAt || 0)) < 250);
+          // A commit-hold that has lingered too long must not keep lockstep out,
+          // or a wedged hold leaves the pair stuck ("doesn't continue after seek").
+          const lsCommitHoldStale = !!state.coupledPlayCommitHolding &&
+          (t - Number(state.coupledPlayCommitStartedAt || 0)) > 2500;
           const lockstepEligible2 =
           coupledMode && audio && intended && committed && !hidden &&
           !userHeldPaused && !authoritativeTransportPauseActive() &&
           !state.endedNaturally && !state.restarting && !lsSeekActive && !lsInTransition &&
-          !state.coupledPlayCommitHolding &&
+          (!state.coupledPlayCommitHolding || lsCommitHoldStale) &&
           !directUserToggleActive(700) && !playPauseTransactionActive(700) &&
           now() >= Number(state._playPauseTransitionUntil || 0);
           lockstepOwnsPair = !!(lockstepEligible2 && vn);
@@ -43825,10 +43882,14 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             // demonstrably advancing, or there's a real buffered runway ahead.
             const vAhead = (() => { try { return bufferAheadAt(vn, isFiniteNum(vt) ? vt : 0); } catch { return 0; } })();
             const aAhead = (() => { try { return bufferAheadAt(audio, isFiniteNum(at) ? at : 0); } catch { return 0; } })();
+            // A track counts as "can play" (so the pair is NOT coupled down) with
+            // even a small buffer runway. This deliberately errs toward NOT
+            // pausing, so healthy playback with a tight buffer is never randomly
+            // cut. Only a genuinely near-empty, non-advancing track pauses the pair.
             const vCanPlay = Number(vn.readyState || 0) >= HAVE_FUTURE_DATA ||
-            videoAdvancing || vAhead > 0.5;
+            videoAdvancing || vAhead > 0.25;
             const aCanPlay = Number(audio.readyState || 0) >= HAVE_FUTURE_DATA ||
-            audioAdvancing || aAhead > 0.5;
+            audioAdvancing || aAhead > 0.25;
             const vPlaying = !vPaused;
             const aPlaying = !audio.paused;
             // Lenient "can start now" for the RESUME side: any decoded frame or a
@@ -43837,9 +43898,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             // data stuck in forever-buffering that only a manual play/pause fixed.
             const vCanStart = vCanPlay || Number(vn.readyState || 0) >= HAVE_CURRENT_DATA || vAhead > 0.05;
             const aCanStart = aCanPlay || Number(audio.readyState || 0) >= HAVE_CURRENT_DATA || aAhead > 0.05;
-            const bothCanPlay = vCanPlay && aCanPlay;
             const bothCanStart = vCanStart && aCanStart;
-            const eitherStarving = !vCanPlay || !aCanPlay;
             // Playback needs a moment to ramp after any seek/resume/user action;
             // its readyState and clock lag briefly. Pausing in that window cut
             // just-started playback and, with the resume that follows, churned
@@ -43855,19 +43914,19 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
               lastLockstepActAt
             );
             const lsRamping = lsRampSince > 0 && (t - lsRampSince) < 1300;
-            // Only a PLAYING track that cannot continue is "starving". A paused
-            // track is not starving (it just needs to be resumed) - treating it
-            // as starving pauses the healthy track instead of resuming the paused
-            // one. That distinction is what fixed the forever-buffering pair.
-            const vStarvingPlaying = vPlaying && !vCanPlay;
-            const aStarvingPlaying = aPlaying && !aCanPlay;
+            // The lockstep only PAUSES the pair when a playing track is genuinely
+            // empty - no decoded frame at all (readyState below current data) and
+            // not advancing. Such a track is already stalling natively, so pausing
+            // its partner reads as part of that stall, not a random pause. A track
+            // that still has a frame but is momentarily stuck is NOT paused here;
+            // the freeze catch-all resets it and the drift heal resyncs, with no
+            // pause. This is what stops the "randomly pauses during playback".
+            const vStarvingPlaying = vPlaying && !videoAdvancing &&
+            Number(vn.readyState || 0) < HAVE_CURRENT_DATA;
+            const aStarvingPlaying = aPlaying && !audioAdvancing &&
+            Number(audio.readyState || 0) < HAVE_CURRENT_DATA;
             const eitherPlayingStarving = vStarvingPlaying || aStarvingPlaying;
-            // A track with NO decoded frame at all (readyState below current
-            // data) is genuinely buffering, not ramping - couple immediately so
-            // audio never plays over a truly-buffering video, even in the ramp.
-            const genuinelyEmpty =
-            (vStarvingPlaying && Number(vn.readyState || 0) < HAVE_CURRENT_DATA) ||
-            (aStarvingPlaying && Number(audio.readyState || 0) < HAVE_CURRENT_DATA);
+            const genuinelyEmpty = eitherPlayingStarving;
 
             if (eitherPlayingStarving && (!lsRamping || genuinelyEmpty)) {
               // One track starved while the other still plays. Confirm over a
@@ -43876,7 +43935,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
               needFast = true;
               lockstepReadySince = 0;
               if (!lockstepStarveSince) lockstepStarveSince = t;
-              else if ((t - lockstepStarveSince) > 500 && (t - lastLockstepActAt) > 600) {
+              else if ((t - lockstepStarveSince) > 800 && (t - lastLockstepActAt) > 600) {
                 lastLockstepActAt = t;
                 lockstepStarveSince = 0;
                 try {
@@ -43907,7 +43966,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
               needFast = true;
               lockstepStarveSince = 0;
               if (!lockstepReadySince) lockstepReadySince = t;
-              else if ((t - lockstepReadySince) > 200 && (t - lastLockstepActAt) > 500) {
+              else if ((t - lockstepReadySince) > 150 && (t - lastLockstepActAt) > 500) {
                 lastLockstepActAt = t;
                 lockstepReadySince = 0;
                 // Pick the anchor. Audio is the master clock, so when it is the
@@ -43923,8 +43982,9 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                   const audioIsClock = !audio.paused && isFiniteNum(aNow) && aNow >= 0;
                   const videoIsClock = !vn.paused && isFiniteNum(vNow) && vNow >= 0;
                   if (audioIsClock) {
-                    // Master audio owns the position: seat the paused video to it.
-                    if (vn.paused && Math.abs((Number(vn.currentTime) || 0) - aNow) > 0.20) {
+                    // Master audio owns the position: seat the paused video to it,
+                    // tightly, so the pair starts in lip-sync after a seek.
+                    if (vn.paused && Math.abs((Number(vn.currentTime) || 0) - aNow) > 0.08) {
                       state._isMicroSeek = true;
                       state._allowUnexpectedVideoTimeRestore = true;
                       vn.currentTime = aNow;
@@ -43933,8 +43993,8 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                       try { scheduleMicroSeekClear(240); } catch { }
                     }
                   } else if (videoIsClock) {
-                    // Only the video runs: bring the paused audio to it.
-                    if (audio.paused && Math.abs((Number(audio.currentTime) || 0) - vNow) > 0.20) {
+                    // Only the video runs: bring the paused audio to it, tightly.
+                    if (audio.paused && Math.abs((Number(audio.currentTime) || 0) - vNow) > 0.08) {
                       state._allowAudioTimeWrite = true;
                       try { audio.currentTime = vNow; } finally { state._allowAudioTimeWrite = false; }
                     }
@@ -44049,6 +44109,72 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
               }
             } else lockstepParkedSince = 0;
 
+            // Catch-all freeze fix. The ground truth for "is the picture moving"
+            // is the presented-frame count. If it has not advanced for >1.2s while
+            // the video should be showing motion (not paused, has data, past the
+            // ramp), the decoder is frozen - black screen, parked, or a stuck
+            // frame, regardless of the audio. Reset it: pause, re-seat to the
+            // master (audio) position, replay. Capped so a truly frameless stream
+            // cannot loop it.
+            const _freezeHasRunway = (() => {
+              try { return bufferAheadAt(vn, isFiniteNum(vt) ? vt : (Number(vn.currentTime) || 0)) > 0.5; }
+              catch { return false; }
+            })();
+            if (!lsRamping && vn && !vPaused && intended && committed &&
+              Number(vn.readyState || 0) >= HAVE_CURRENT_DATA && _freezeHasRunway) {
+              let fc = NaN;
+              try { fc = Number(getVideoPresentedFrameCount(vn)); } catch { }
+              if (isFiniteNum(fc)) {
+                if (!isFiniteNum(freezeFrameCount) || fc > freezeFrameCount + 0.5) {
+                  freezeFrameCount = fc;
+                  freezeFrameSince = 0;
+                } else {
+                  if (!freezeFrameSince) freezeFrameSince = t;
+                  // Reset the reset-count window so a stream that genuinely can't
+                  // produce frames stops being poked after a few tries.
+                  if (t - freezeResetWindowAt > 15000) { freezeResetCount = 0; freezeResetWindowAt = t; }
+                  if ((t - freezeFrameSince) > 1200 && (t - lastFreezeResetAt) > 2000 &&
+                    freezeResetCount < 5) {
+                    freezeFrameSince = 0;
+                    lastFreezeResetAt = t;
+                    freezeResetCount++;
+                    needFast = true;
+                    const freezeFixAt = (coupledMode && audio && audioAdvancing &&
+                    isFiniteNum(at) && at >= 0) ? at
+                    : (isFiniteNum(vt) ? vt : Number(vn.currentTime) || 0);
+                    try {
+                      state._allowVideoPause = true;
+                      state.isProgrammaticVideoPause = true;
+                      HTMLMediaElement.prototype.pause.call(vn);
+                      if (isFiniteNum(freezeFixAt) && freezeFixAt >= 0 &&
+                        Math.abs((Number(vn.currentTime) || 0) - freezeFixAt) > 0.1) {
+                        state._isMicroSeek = true;
+                        state._allowUnexpectedVideoTimeRestore = true;
+                        vn.currentTime = freezeFixAt;
+                        if (videoEl && videoEl !== vn) videoEl.currentTime = freezeFixAt;
+                        state._allowUnexpectedVideoTimeRestore = false;
+                        try { scheduleMicroSeekClear(260); } catch { }
+                      }
+                      const fp = HTMLMediaElement.prototype.play.call(vn);
+                      if (fp && typeof fp.catch === "function") fp.catch(() => { });
+                      setTimeout(() => {
+                        state._allowVideoPause = false;
+                        state.isProgrammaticVideoPause = false;
+                      }, 220);
+                    } catch {
+                      state._allowVideoPause = false;
+                      state.isProgrammaticVideoPause = false;
+                      state._allowUnexpectedVideoTimeRestore = false;
+                    }
+                    try { VideoCompositorFlushManager.arm({ observe: true }); } catch { }
+                    try { forceClearSeekBufferingUI(); } catch { }
+                  } else {
+                    needFast = true;
+                  }
+                }
+              }
+            } else { freezeFrameSince = 0; freezeFrameCount = NaN; }
+
             // Parked audio: video advancing, audio "playing" with data but its
             // clock is stuck (silent). The pair-sync then pulls the video back to
             // the stuck audio, replaying the same section "until audio comes
@@ -44082,11 +44208,56 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                 } catch { state.isProgrammaticAudioPause = false; state._allowAudioTimeWrite = false; }
               }
             } else audioParkedSince = 0;
+
+            // A/V lip-sync convergence for both-playing drift. After a buffer
+            // refill or a tab return the pair can resume both playing but out of
+            // sync (the lockstep only aligns a track it resumes from paused).
+            // Seat the BEHIND track forward onto the AHEAD one - never move the
+            // ahead track backward (that would rewind/replay). Rate-limited so it
+            // does not churn; small drift is left to the smooth rate glide.
+            if (!lsRamping && vPlaying && aPlaying && videoAdvancing && audioAdvancing &&
+              isFiniteNum(vt) && isFiniteNum(at) && vt >= 0 && at >= 0) {
+              const avDrift = Math.abs(vt - at);
+              if (avDrift > 0.35) {
+                needFast = true;
+                if (!avDriftSince) avDriftSince = t;
+                else if ((t - avDriftSince) > 600 && (t - lastAvDriftFixAt) > 2500) {
+                  avDriftSince = 0;
+                  lastAvDriftFixAt = t;
+                  try {
+                    if (vt < at) {
+                      // Video behind: seat it forward onto the audio master.
+                      if (!vn.seeking) {
+                        state._isMicroSeek = true;
+                        state._allowUnexpectedVideoTimeRestore = true;
+                        vn.currentTime = at;
+                        if (videoEl && videoEl !== vn) videoEl.currentTime = at;
+                        state._allowUnexpectedVideoTimeRestore = false;
+                        try { scheduleMicroSeekClear(240); } catch { }
+                      }
+                    } else {
+                      // Audio behind: seat it forward onto the video. Never move
+                      // the video (ahead) backward.
+                      if (!audio.seeking) {
+                        state._allowAudioTimeWrite = true;
+                        try { audio.currentTime = vt; } finally { state._allowAudioTimeWrite = false; }
+                      }
+                    }
+                  } catch {
+                    state._allowUnexpectedVideoTimeRestore = false;
+                    state._allowAudioTimeWrite = false;
+                  }
+                }
+              } else avDriftSince = 0;
+            } else avDriftSince = 0;
           } else {
             lockstepStarveSince = 0;
             lockstepReadySince = 0;
             lockstepParkedSince = 0;
             audioParkedSince = 0;
+            avDriftSince = 0;
+            freezeFrameSince = 0;
+            freezeFrameCount = NaN;
           }
         } catch { }
 
