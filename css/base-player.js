@@ -7104,6 +7104,91 @@ startupPrimeStartedAt: performance.now(),
         _on(audio, "playing", enforceGate, { capture: true, passive: true });
     }
   } catch { }
+  // Source-level both-or-neither. The supervisor enforces this too, but only on
+  // its ~480ms tick, so a track that buffers first fires `playing` and LEADS for
+  // a beat before the supervisor catches it ("audio plays while the video
+  // buffers", and the mirror). Catch it the instant playback actually starts: if
+  // the partner genuinely can't play (real buffered runway, not a lagging
+  // readyState), pause this track back and show the buffer until the partner is
+  // ready. The audio play-kicks already honor shouldBlockNewAudioStart (true
+  // while the video buffers), so a held audio is not immediately re-kicked = no
+  // loop. Skipped when hidden (background audio-only is by design) and during the
+  // tab-return window (the catch-up seats the video forward there; a hold would
+  // be a jarring audio pause on return).
+  function pairLockstepReturnWindow() {
+    try {
+      const r = Number(state.lastBgReturnAt || 0);
+      if (r > 0 && (now() - r) < 2500) return true;
+      if (typeof inBgReturnGrace === "function" && inBgReturnGrace()) return true;
+      if (typeof smoothForegroundReturnActive === "function" && smoothForegroundReturnActive(0)) return true;
+      if (typeof isAltTabTransitionActive === "function" && isAltTabTransitionActive()) return true;
+      if (typeof isVisibilityTransitionActive === "function" && isVisibilityTransitionActive()) return true;
+    } catch { }
+    return false;
+  }
+  function partnerGenuinelyPlayableFor(which) {
+    try {
+      if (which === "audio") {
+        const vn = getVideoNode();
+        if (!vn) return true;
+        const vt = Number(vn.currentTime);
+        return trackGenuinelyPlayable(vn, isFinite(vt) ? vt : 0, false);
+      }
+      if (!coupledMode || !audio) return true;
+      const at = Number(audio.currentTime);
+      return trackGenuinelyPlayable(audio, isFinite(at) ? at : 0, false);
+    } catch { return true; }
+  }
+  function enforcePlayingLockstep(which) {
+    try {
+      if (!coupledMode || !audio) return;
+      if (initialCoupledPairPending()) return; // startup path owns the first start
+      if (!state.intendedPlaying || state.endedNaturally || state.restarting) return;
+      if (document.visibilityState === "hidden") return;
+      if (userPauseLockActive() || mediaSessionForcedPauseActive() ||
+        (typeof userPauseIntentActive === "function" && userPauseIntentActive())) return;
+      if (state.seekDragActive || state.seeking || state.seekBuffering) return;
+      if (pairLockstepReturnWindow()) return;
+      const vn = getVideoNode();
+      if (!vn) return;
+      if (partnerGenuinelyPlayableFor(which)) return;
+      if (which === "audio") {
+        if (audio.paused) return;
+        if (state.isProgrammaticVideoPause || state._allowVideoPause) return; // our own heal mid-flight
+        try {
+          state.isProgrammaticAudioPause = true;
+          state._allowAudioPause = true;
+          try { preserveAudioGainWhileSilent("pair-lockstep-hold"); } catch { }
+          HTMLMediaElement.prototype.pause.call(audio);
+          setTimeout(() => { state.isProgrammaticAudioPause = false; state._allowAudioPause = false; }, 180);
+        } catch { state.isProgrammaticAudioPause = false; state._allowAudioPause = false; }
+      } else {
+        if (vn.paused) return;
+        if (state.isProgrammaticAudioPause || state._allowAudioPause) return;
+        try {
+          state.isProgrammaticVideoPause = true;
+          state._allowVideoPause = true;
+          HTMLMediaElement.prototype.pause.call(vn);
+          if (videoEl && videoEl !== vn && !videoEl.paused) HTMLMediaElement.prototype.pause.call(videoEl);
+          setTimeout(() => { state.isProgrammaticVideoPause = false; state._allowVideoPause = false; }, 180);
+        } catch { state.isProgrammaticVideoPause = false; state._allowVideoPause = false; }
+      }
+      try { setSeekBufferingUIVisible(true); } catch { }
+    } catch { }
+  }
+  try {
+    if (coupledMode && audio) {
+      const onAudioPlayingLockstep = () => enforcePlayingLockstep("audio");
+      const onVideoPlayingLockstep = () => enforcePlayingLockstep("video");
+      _on(audio, "playing", onAudioPlayingLockstep, { capture: true, passive: true });
+      _on(audio, "play", onAudioPlayingLockstep, { capture: true, passive: true });
+      const _vnForLockstep = getVideoNode();
+      if (_vnForLockstep) {
+        _on(_vnForLockstep, "playing", onVideoPlayingLockstep, { capture: true, passive: true });
+        _on(_vnForLockstep, "play", onVideoPlayingLockstep, { capture: true, passive: true });
+      }
+    }
+  } catch { }
   const STRICT_BUFFER_AHEAD_SEC = 0.25;
   const MICRO_DRIFT = 0.15;  // was 0.08 — too sensitive, caused constant rate changes
   const GENTLE_DRIFT_TRIGGER_SEC = perfProfile.lowEnd ? 0.11 : (perfProfile.mobile ? 0.085 : 0.075);
