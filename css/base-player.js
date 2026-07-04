@@ -17042,15 +17042,21 @@ startupPrimeStartedAt: performance.now(),
             } finally { state._allowUnexpectedVideoTimeRestore = false; }
             try { scheduleMicroSeekClear(200); } catch { }
           } else if (runway > 0.1 && (t - lastResetAt) > 600) {
-            // Stuck but in position with data: reset the decoder (pause/replay in
-            // place) - the strongest wake, no position change. Fixes black/static.
+            // Stuck but in position with data: FORCE the frozen decoder to render
+            // with a tiny seek within the buffered range. A same-position pause/
+            // play does not make a suspended decoder present a new frame (that is
+            // why the freeze persisted until a manual gesture); a micro-seek does.
+            // No meaningful position change, so it doesn't move the shown time.
             lastResetAt = t;
-            state._allowVideoPause = true;
-            state.isProgrammaticVideoPause = true;
-            HTMLMediaElement.prototype.pause.call(vn);
-            const rp = HTMLMediaElement.prototype.play.call(vn);
-            if (rp && typeof rp.catch === "function") rp.catch(() => { });
-            setTimeout(() => { state._allowVideoPause = false; state.isProgrammaticVideoPause = false; }, 140);
+            const cur = Number(vn.currentTime) || 0;
+            const nudged = cur + 0.04;
+            state._isMicroSeek = true;
+            state._allowUnexpectedVideoTimeRestore = true;
+            try {
+              vn.currentTime = nudged;
+              if (videoEl && videoEl !== vn) videoEl.currentTime = nudged;
+            } finally { state._allowUnexpectedVideoTimeRestore = false; }
+            try { scheduleMicroSeekClear(200); } catch { }
           }
         }
         if (vn.paused && !state.isProgrammaticVideoPause) {
@@ -43876,6 +43882,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     let avCatchupSince = 0;
     let lastAvCatchupAt = 0;
     let lastResumeResyncAt = 0;
+    let audioGoneSince = 0;
     let startupStuckSince = 0;
     let lastStartupForceAt = 0;
     let bufferCoupleSince = 0;
@@ -44647,6 +44654,11 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                   // buffering but a play/pause proves it's fine".
                   freezeFrameCount = fc;
                   freezeFrameSince = 0;
+                  // The picture recovered - refresh the reset budget so a LATER
+                  // re-freeze gets a fresh set of attempts instead of being left
+                  // frozen for the rest of the 15s window ("same frame a LONG time").
+                  freezeResetCount = 0;
+                  freezeResetWindowAt = t;
                   try {
                     if (state.videoWaiting || state.audioWaiting || state.strictBufferHold ||
                       state.seekBuffering || state.videoStallAudioPaused || state.audioStallVideoPaused ||
@@ -44675,9 +44687,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                       HTMLMediaElement.prototype.pause.call(vn);
                       // Forward-only re-seat. Never move the video backward here:
                       // a backward jump onto a lagging audio clock is exactly the
-                      // "replays the same section over and over". If the target is
-                      // not clearly ahead, just pause/replay in place - that alone
-                      // un-sticks the decoder without moving the position.
+                      // "replays the same section over and over".
                       if (isFiniteNum(freezeFixAt) && freezeFixAt >= 0 &&
                         freezeFixAt > (Number(vn.currentTime) || 0) + 0.1) {
                         state._isMicroSeek = true;
@@ -44686,6 +44696,18 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                         if (videoEl && videoEl !== vn) videoEl.currentTime = freezeFixAt;
                         state._allowUnexpectedVideoTimeRestore = false;
                         try { scheduleMicroSeekClear(260); } catch { }
+                      } else {
+                        // Already in position: FORCE the frozen decoder to render a
+                        // frame with a tiny seek. A same-position pause/play does not
+                        // wake a suspended decoder (why the freeze persisted until a
+                        // manual gesture); a micro-seek does. No shown-position change.
+                        const _frzCur = Number(vn.currentTime) || 0;
+                        state._isMicroSeek = true;
+                        state._allowUnexpectedVideoTimeRestore = true;
+                        vn.currentTime = _frzCur + 0.04;
+                        if (videoEl && videoEl !== vn) videoEl.currentTime = _frzCur + 0.04;
+                        state._allowUnexpectedVideoTimeRestore = false;
+                        try { scheduleMicroSeekClear(200); } catch { }
                       }
                       const fp = HTMLMediaElement.prototype.play.call(vn);
                       if (fp && typeof fp.catch === "function") fp.catch(() => { });
@@ -44811,6 +44833,55 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             }
           }
         } catch { }
+
+        // Audio-gone backstop. Playback is intended and the VIDEO is genuinely
+        // healthy (frames advancing or full future data), but the audio is paused
+        // or silenced with nothing legitimately holding it - a stall pause that
+        // never got released, a stuck mute. Bring the audio back. Gated on a
+        // healthy video, so it never resurrects audio over a buffering video (the
+        // both-or-neither rule holds). Covers "audio just goes away and stays gone".
+        try {
+          const videoHealthyNow = vn && !vPaused &&
+            (videoAdvancing || Number(vn.readyState || 0) >= HAVE_FUTURE_DATA);
+          if (coupledMode && audio && intended && committed && !hidden &&
+            !userHeldPaused && !authoritativeTransportPauseActive() &&
+            !state.endedNaturally && !state.restarting &&
+            !state.seeking && !state.seekBuffering && !state.seekResumeInFlight &&
+            !state.seekDragActive && state.pendingSeekTarget == null &&
+            !(typeof userSeekIntentActive === "function" && userSeekIntentActive()) &&
+            videoHealthyNow && Number(audio.readyState || 0) >= HAVE_CURRENT_DATA &&
+            !playerMutedFromVideo() && !state.userMutedAudio && !state.userMutedVideo &&
+            clamp01(targetVolFromVideo()) > 0.05) {
+            const audioSilent = audio.paused || audio.muted || (Number(audio.volume) || 0) < 0.012;
+            if (audioSilent) {
+              needFast = true;
+              if (!audioGoneSince) audioGoneSince = t;
+              else if ((t - audioGoneSince) > 700) {
+                audioGoneSince = 0;
+                try {
+                  try { setAudioMutedSynced(false); } catch { }
+                  try { setAudioPlaybackVolume(targetVolFromVideo(), "audio-gone-backstop", { immediate: true, cancelFade: true }); } catch { }
+                  if (audio.paused) {
+                    // Align to the video (master position here) before resuming so
+                    // it rejoins in sync, not from a stale audio clock.
+                    try {
+                      const _vpos = Number(vn.currentTime);
+                      if (isFiniteNum(_vpos) && _vpos >= 0 &&
+                        Math.abs((Number(audio.currentTime) || 0) - _vpos) > 0.12) {
+                        state._allowAudioTimeWrite = true;
+                        try { audio.currentTime = _vpos; } finally { state._allowAudioTimeWrite = false; }
+                      }
+                    } catch { state._allowAudioTimeWrite = false; }
+                    state.isProgrammaticAudioPlay = true;
+                    const ap = HTMLMediaElement.prototype.play.call(audio);
+                    if (ap && typeof ap.catch === "function") ap.catch(() => { });
+                    setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 160);
+                  }
+                } catch { state.isProgrammaticAudioPlay = false; }
+              }
+            } else audioGoneSince = 0;
+          } else audioGoneSince = 0;
+        } catch { audioGoneSince = 0; }
 
         // After foreground playback has been healthy a few seconds, shut down the
         // background keepalive worker and tab-return-immune flags if they linger.
