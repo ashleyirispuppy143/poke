@@ -43955,12 +43955,18 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             const aStarvingPlaying = aPlaying && !audioAdvancing &&
             Number(audio.readyState || 0) < HAVE_CURRENT_DATA;
             const eitherPlayingStarving = vStarvingPlaying || aStarvingPlaying;
+            // A programmatic pause is one of our own heals (freeze reset, park
+            // reset) mid-flight - the element is briefly paused on purpose and
+            // will replay itself. Treating that transient as "dead" made lockstep
+            // couple the partner down = a random pause right after a freeze fix.
+            const midProgrammatic = !!(state.isProgrammaticVideoPause ||
+            state.isProgrammaticAudioPause || state._allowVideoPause);
             // Audio playing while the video is unplayable (paused with no decoded
             // frame), or vice versa: couple the playing one down so audio never
             // plays while the video isn't playable. Only when the other track
             // genuinely has no data (can't just be resumed).
-            const audioAloneOverDeadVideo = aPlaying && vPaused && !vCanStart;
-            const videoAloneOverDeadAudio = vPlaying && audio.paused && !aCanStart;
+            const audioAloneOverDeadVideo = aPlaying && vPaused && !vCanStart && !midProgrammatic;
+            const videoAloneOverDeadAudio = vPlaying && audio.paused && !aCanStart && !midProgrammatic;
             const pairMustCouplePause = eitherPlayingStarving ||
             audioAloneOverDeadVideo || videoAloneOverDeadAudio;
             const genuinelyEmpty = eitherPlayingStarving ||
@@ -44075,6 +44081,21 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                 } catch { }
                 try { if (typeof clearSeekAudioHoldUntilVideoReady === "function") clearSeekAudioHoldUntilVideoReady(); } catch { }
                 try { if (typeof clearHardPairTransitionGate === "function") { state.hardPairGateActive = false; clearHardPairTransitionGate(state.hardPairGateOwner || "", true, { restore: false }); } } catch { }
+                // Always kick the muted video first - playing it is what builds
+                // its buffer and gets it ready. But gate the AUDIO on the video
+                // being GENUINELY playable, not merely holding one decoded frame.
+                // vCanStart counts readyState==HAVE_CURRENT_DATA (a single frame,
+                // no runway) as startable so a paused-with-data pair isn't stranded
+                // - but starting the audio on that alone is exactly "audio plays
+                // while the video is still buffering". Require real forward data.
+                const videoActuallyBuffering = (() => {
+                  try {
+                    return !!state.videoWaiting && Number(vn.readyState || 0) < HAVE_FUTURE_DATA &&
+                      (typeof isForegroundVideoActuallyBuffering !== "function" || isForegroundVideoActuallyBuffering());
+                  } catch { return false; }
+                })();
+                const videoReadyForAudio = !videoActuallyBuffering &&
+                  (Number(vn.readyState || 0) >= HAVE_FUTURE_DATA || videoAdvancing || vAhead > 0.5);
                 try {
                   if (vn.paused) {
                     state.isProgrammaticVideoPlay = true;
@@ -44084,16 +44105,21 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                   }
                 } catch { state.isProgrammaticVideoPlay = false; }
                 try {
-                  if (audio.paused && !playerMutedFromVideo()) {
+                  if (audio.paused && !playerMutedFromVideo() && videoReadyForAudio) {
                     setAudioPlaybackVolume(targetVolFromVideo(), "lockstep-resume", { cancelFade: true });
                     setAudioMutedSynced(false);
                     state.isProgrammaticAudioPlay = true;
                     const ap = HTMLMediaElement.prototype.play.call(audio);
                     if (ap && typeof ap.catch === "function") ap.catch(() => { });
                     setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 220);
+                  } else if (audio.paused && !videoReadyForAudio) {
+                    // Video not genuinely ready yet: keep audio held and show the
+                    // buffering state so the pair stays honest (no audio-only lead).
+                    needFast = true;
+                    try { setSeekBufferingUIVisible(true); } catch { }
                   }
                 } catch { state.isProgrammaticAudioPlay = false; }
-                try { forceClearSeekBufferingUI(); } catch { }
+                if (videoReadyForAudio) { try { forceClearSeekBufferingUI(); } catch { } }
               }
             } else {
               // Healthy (both playing, both can play) or both already paused and
@@ -44169,72 +44195,6 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
               }
             } else lockstepParkedSince = 0;
 
-            // Catch-all freeze fix. The ground truth for "is the picture moving"
-            // is the presented-frame count. If it has not advanced for >1.2s while
-            // the video should be showing motion (not paused, has data, past the
-            // ramp), the decoder is frozen - black screen, parked, or a stuck
-            // frame, regardless of the audio. Reset it: pause, re-seat to the
-            // master (audio) position, replay. Capped so a truly frameless stream
-            // cannot loop it.
-            const _freezeHasRunway = (() => {
-              try { return bufferAheadAt(vn, isFiniteNum(vt) ? vt : (Number(vn.currentTime) || 0)) > 0.5; }
-              catch { return false; }
-            })();
-            if (!lsRamping && vn && !vPaused && intended && committed &&
-              Number(vn.readyState || 0) >= HAVE_CURRENT_DATA && _freezeHasRunway) {
-              let fc = NaN;
-              try { fc = Number(getVideoPresentedFrameCount(vn)); } catch { }
-              if (isFiniteNum(fc)) {
-                if (!isFiniteNum(freezeFrameCount) || fc > freezeFrameCount + 0.5) {
-                  freezeFrameCount = fc;
-                  freezeFrameSince = 0;
-                } else {
-                  if (!freezeFrameSince) freezeFrameSince = t;
-                  // Reset the reset-count window so a stream that genuinely can't
-                  // produce frames stops being poked after a few tries.
-                  if (t - freezeResetWindowAt > 15000) { freezeResetCount = 0; freezeResetWindowAt = t; }
-                  if ((t - freezeFrameSince) > 1200 && (t - lastFreezeResetAt) > 2000 &&
-                    freezeResetCount < 5) {
-                    freezeFrameSince = 0;
-                    lastFreezeResetAt = t;
-                    freezeResetCount++;
-                    needFast = true;
-                    const freezeFixAt = (coupledMode && audio && audioAdvancing &&
-                    isFiniteNum(at) && at >= 0) ? at
-                    : (isFiniteNum(vt) ? vt : Number(vn.currentTime) || 0);
-                    try {
-                      state._allowVideoPause = true;
-                      state.isProgrammaticVideoPause = true;
-                      HTMLMediaElement.prototype.pause.call(vn);
-                      if (isFiniteNum(freezeFixAt) && freezeFixAt >= 0 &&
-                        Math.abs((Number(vn.currentTime) || 0) - freezeFixAt) > 0.1) {
-                        state._isMicroSeek = true;
-                        state._allowUnexpectedVideoTimeRestore = true;
-                        vn.currentTime = freezeFixAt;
-                        if (videoEl && videoEl !== vn) videoEl.currentTime = freezeFixAt;
-                        state._allowUnexpectedVideoTimeRestore = false;
-                        try { scheduleMicroSeekClear(260); } catch { }
-                      }
-                      const fp = HTMLMediaElement.prototype.play.call(vn);
-                      if (fp && typeof fp.catch === "function") fp.catch(() => { });
-                      setTimeout(() => {
-                        state._allowVideoPause = false;
-                        state.isProgrammaticVideoPause = false;
-                      }, 220);
-                    } catch {
-                      state._allowVideoPause = false;
-                      state.isProgrammaticVideoPause = false;
-                      state._allowUnexpectedVideoTimeRestore = false;
-                    }
-                    try { VideoCompositorFlushManager.arm({ observe: true }); } catch { }
-                    try { forceClearSeekBufferingUI(); } catch { }
-                  } else {
-                    needFast = true;
-                  }
-                }
-              }
-            } else { freezeFrameSince = 0; freezeFrameCount = NaN; }
-
             // Parked audio: video advancing, audio "playing" with data but its
             // clock is stuck (silent). The pair-sync then pulls the video back to
             // the stuck audio, replaying the same section "until audio comes
@@ -44295,9 +44255,112 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             lockstepParkedSince = 0;
             audioParkedSince = 0;
             avDriftSince = 0;
-            freezeFrameSince = 0;
-            freezeFrameCount = NaN;
           }
+        } catch { }
+
+        // Freeze recovery + false-buffer clear. Runs on its OWN eligibility, NOT
+        // gated by the lockstep transition/return window. An alt-tab return is
+        // exactly when the video decoder freezes on a stuck frame, and the fix is
+        // a decoder reset - the same thing a manual play/pause does. It never
+        // pauses the pair, so it cannot cause the return play/pause storm. This
+        // heals "video freezes on alt-tab, fixed by play/pause" the moment it
+        // happens instead of waiting out the return window. The frames-advancing
+        // path also kills any false spinner during return.
+        try {
+          let freezeEligible = false;
+          try {
+            freezeEligible = !!(vn && intended && committed && !hidden && !vPaused &&
+              !userHeldPaused && !state.endedNaturally && !state.restarting &&
+              !state.seekDragActive &&
+              !(typeof userSeekIntentActive === "function" && userSeekIntentActive()) &&
+              !(vn && vn.seeking) && !(coupledMode && audio && audio.seeking) &&
+              !(typeof initialCoupledPairPending === "function" && initialCoupledPairPending()) &&
+              !(typeof startupSettleActive === "function" && startupSettleActive()));
+          } catch { freezeEligible = false; }
+          // Don't reset a decoder that just started/seeked; it hasn't had a beat
+          // to present its first frame yet. The return window is deliberately NOT
+          // in this ramp, so a genuine post-return freeze still gets fixed.
+          const frzRampSince = Math.max(
+            Number(state._seekStartedAt || 0),
+            Number(state.seekResumeStartedAt || 0),
+            Number(state.coupledPlayCommitIssuedAt || 0),
+            Number(state.lastUserActionTime || 0));
+          const frzRamping = frzRampSince > 0 && (t - frzRampSince) < 1300;
+          if (freezeEligible && !frzRamping) {
+            const frzVt = isFiniteNum(vt) ? vt : (() => { try { return Number(vn.currentTime) || 0; } catch { return 0; } })();
+            const frzAt = (() => { try { return coupledMode && audio ? Number(audio.currentTime) : NaN; } catch { return NaN; } })();
+            const frzHasRunway = (() => { try { return bufferAheadAt(vn, frzVt) > 0.5; } catch { return false; } })();
+            if (Number(vn.readyState || 0) >= HAVE_CURRENT_DATA && frzHasRunway) {
+              let fc = NaN;
+              try { fc = Number(getVideoPresentedFrameCount(vn)); } catch { }
+              if (isFiniteNum(fc)) {
+                if (!isFiniteNum(freezeFrameCount) || fc > freezeFrameCount + 0.5) {
+                  // Frames are visibly advancing = the video is genuinely healthy,
+                  // whatever the buffer flags say. Clear any stale spinner/buffer
+                  // UI, even during the return window. Accurate kill for "shows
+                  // buffering but a play/pause proves it's fine".
+                  freezeFrameCount = fc;
+                  freezeFrameSince = 0;
+                  try {
+                    if (state.videoWaiting || state.audioWaiting || state.strictBufferHold ||
+                      state.seekBuffering || state.videoStallAudioPaused || state.audioStallVideoPaused ||
+                      (typeof _bufferGuardSpinnerOn !== "undefined" && _bufferGuardSpinnerOn)) {
+                      state.videoWaiting = false; state.audioWaiting = false;
+                      state.strictBufferHold = false; state.seekBuffering = false;
+                      state.videoStallAudioPaused = false; state.audioStallVideoPaused = false;
+                      try { clearBufferHold(); } catch { }
+                      try { forceClearSeekBufferingUI(); } catch { }
+                    }
+                  } catch { }
+                } else {
+                  if (!freezeFrameSince) freezeFrameSince = t;
+                  if (t - freezeResetWindowAt > 15000) { freezeResetCount = 0; freezeResetWindowAt = t; }
+                  if ((t - freezeFrameSince) > 1200 && (t - lastFreezeResetAt) > 2000 &&
+                    freezeResetCount < 5) {
+                    freezeFrameSince = 0;
+                    lastFreezeResetAt = t;
+                    freezeResetCount++;
+                    needFast = true;
+                    const freezeFixAt = (coupledMode && audio && audioAdvancing &&
+                      isFiniteNum(frzAt) && frzAt >= 0) ? frzAt : frzVt;
+                    try {
+                      state._allowVideoPause = true;
+                      state.isProgrammaticVideoPause = true;
+                      HTMLMediaElement.prototype.pause.call(vn);
+                      // Forward-only re-seat. Never move the video backward here:
+                      // a backward jump onto a lagging audio clock is exactly the
+                      // "replays the same section over and over". If the target is
+                      // not clearly ahead, just pause/replay in place - that alone
+                      // un-sticks the decoder without moving the position.
+                      if (isFiniteNum(freezeFixAt) && freezeFixAt >= 0 &&
+                        freezeFixAt > (Number(vn.currentTime) || 0) + 0.1) {
+                        state._isMicroSeek = true;
+                        state._allowUnexpectedVideoTimeRestore = true;
+                        vn.currentTime = freezeFixAt;
+                        if (videoEl && videoEl !== vn) videoEl.currentTime = freezeFixAt;
+                        state._allowUnexpectedVideoTimeRestore = false;
+                        try { scheduleMicroSeekClear(260); } catch { }
+                      }
+                      const fp = HTMLMediaElement.prototype.play.call(vn);
+                      if (fp && typeof fp.catch === "function") fp.catch(() => { });
+                      setTimeout(() => {
+                        state._allowVideoPause = false;
+                        state.isProgrammaticVideoPause = false;
+                      }, 220);
+                    } catch {
+                      state._allowVideoPause = false;
+                      state.isProgrammaticVideoPause = false;
+                      state._allowUnexpectedVideoTimeRestore = false;
+                    }
+                    try { VideoCompositorFlushManager.arm({ observe: true }); } catch { }
+                    try { forceClearSeekBufferingUI(); } catch { }
+                  } else {
+                    needFast = true;
+                  }
+                }
+              }
+            } else { freezeFrameSince = 0; freezeFrameCount = NaN; }
+          } else { freezeFrameSince = 0; freezeFrameCount = NaN; }
         } catch { }
 
         // After foreground playback has been healthy a few seconds, shut down the
