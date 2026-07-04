@@ -16940,9 +16940,149 @@ startupPrimeStartedAt: performance.now(),
       userPauseIntentActive() || userToggleExpectingPause()) return false;
     return foregroundReturnTransportWantsPlayback();
   }
+  // Lightning tab-return recovery. Hidden tabs suspend the video decoder while
+  // the audio keepalive keeps advancing, so on return the video is frozen,
+  // behind, at a position it has no painted frame for (black/static). This drives
+  // it back HARD on a ~70ms poll: seat the video onto the LIVE audio master, make
+  // sure it is playing, wake a frozen decoder (pause/replay + compositor flush),
+  // and clear any wedged buffer flag - until the presented-frame count is
+  // actually advancing AND the video sits within a tight window of the audio.
+  // The master audio is never paused or moved (the bar never jumps). It runs the
+  // first pass synchronously on the visibility event for instant response, and
+  // self-terminates on success or after a hard cap.
+  const TabReturnFastRecovery = (() => {
+    let running = false;
+    let timerId = 0;
+    let startedAt = 0;
+    let lastKickAt = 0;
+    let lastSeatAt = 0;
+    let lastFrameCount = NaN;
+    let lastFrameAt = 0;
+    let lastResetAt = 0;
+    let successSince = 0;
+    function eligible() {
+      if (document.visibilityState !== "visible") return false;
+      if (!state.intendedPlaying || state.endedNaturally || state.restarting) return false;
+      if (userPauseLockActive() || mediaSessionForcedPauseActive() ||
+        (typeof userPauseIntentActive === "function" && userPauseIntentActive())) return false;
+      if (state.seekDragActive ||
+        (typeof userSeekIntentActive === "function" && userSeekIntentActive())) return false;
+      if (state.seeking || state.pendingSeekTarget != null) return false;
+      return true;
+    }
+    function stop() {
+      running = false;
+      if (timerId) { try { clearTimeout(timerId); } catch { } timerId = 0; }
+      startedAt = 0; lastKickAt = 0; lastSeatAt = 0; lastFrameCount = NaN; lastFrameAt = 0;
+      lastResetAt = 0; successSince = 0;
+    }
+    function schedule() { if (running) { try { timerId = setTimeout(tick, 70); } catch { } } }
+    function tick() {
+      if (!running) return;
+      const t = now();
+      if (!eligible() || (t - startedAt) > 6000) { stop(); return; }
+      const vn = getVideoNode();
+      if (!vn) { schedule(); return; }
+      let fc = NaN;
+      try { fc = Number(getVideoPresentedFrameCount(vn)); } catch { }
+      const framesAdvancing = isFiniteNum(fc) && isFiniteNum(lastFrameCount) && fc > lastFrameCount + 0.5;
+      if (!isFiniteNum(lastFrameCount) || (isFiniteNum(fc) && fc > lastFrameCount + 0.5)) {
+        lastFrameCount = fc; lastFrameAt = t;
+      }
+      const at = (coupledMode && audio)
+        ? (() => { try { return Number(audio.currentTime); } catch { return NaN; } })()
+        : (() => { try { return Number(vn.currentTime); } catch { return NaN; } })();
+      const vt = (() => { try { return Number(vn.currentTime); } catch { return NaN; } })();
+      const gap = (isFiniteNum(at) && isFiniteNum(vt)) ? (at - vt) : 0;
+      const inSync = Math.abs(gap) < 0.35;
+      // SUCCESS: picture is moving and lined up with the sound, and playing.
+      if (framesAdvancing && inSync && !vn.paused &&
+        (!coupledMode || !audio || !audio.paused)) {
+        if (!successSince) successSince = t;
+        if ((t - successSince) > 250) { stop(); return; }
+        schedule(); return;
+      }
+      successSince = 0;
+      if ((t - lastKickAt) < 110) { schedule(); return; }
+      lastKickAt = t;
+      let runway = 0;
+      try { runway = bufferAheadAt(vn, isFiniteNum(vt) ? vt : 0); } catch { }
+      try {
+        // Keep the master audio playing - never pause/move it.
+        if (coupledMode && audio && audio.paused && !playerMutedFromVideo() &&
+          !userPauseLockActive() && !mediaSessionForcedPauseActive()) {
+          try { setAudioMutedSynced(false); } catch { }
+          state.isProgrammaticAudioPlay = true;
+          const ap = HTMLMediaElement.prototype.play.call(audio);
+          if (ap && typeof ap.catch === "function") ap.catch(() => { });
+          setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 150);
+        }
+        if (coupledMode && audio && isFiniteNum(at) && at >= 0 && Math.abs(gap) > 0.30 &&
+          (t - lastSeatAt) > 500) {
+          // Seat the video onto the LIVE audio master (forward or a small
+          // correction). Cooldown 500ms so the decoder can actually land and
+          // buffer at the target instead of being re-seeked out from under itself.
+          lastSeatAt = t;
+          state._isMicroSeek = true;
+          state._allowUnexpectedVideoTimeRestore = true;
+          try {
+            vn.currentTime = at;
+            if (videoEl && videoEl !== vn) videoEl.currentTime = at;
+          } finally { state._allowUnexpectedVideoTimeRestore = false; }
+          try { scheduleMicroSeekClear(200); } catch { }
+        } else if (!framesAdvancing && (t - lastFrameAt) > 300 && runway > 0.1 &&
+          (t - lastResetAt) > 320) {
+          // In sync but the decoder is frozen with data present: reset it (the
+          // strongest wake) - pause then replay in place. Fixes black/static frame.
+          lastResetAt = t;
+          state._allowVideoPause = true;
+          state.isProgrammaticVideoPause = true;
+          HTMLMediaElement.prototype.pause.call(vn);
+          const rp = HTMLMediaElement.prototype.play.call(vn);
+          if (rp && typeof rp.catch === "function") rp.catch(() => { });
+          setTimeout(() => { state._allowVideoPause = false; state.isProgrammaticVideoPause = false; }, 140);
+        }
+        if (vn.paused && !state.isProgrammaticVideoPause) {
+          state.isProgrammaticVideoPlay = true;
+          const p = HTMLMediaElement.prototype.play.call(vn);
+          if (p && typeof p.catch === "function") p.catch(() => { });
+          setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 150);
+        }
+        try { VideoCompositorFlushManager.arm({ observe: true }); } catch { }
+      } catch {
+        state._allowUnexpectedVideoTimeRestore = false;
+        state.isProgrammaticVideoPlay = false;
+        state.isProgrammaticAudioPlay = false;
+        state._allowVideoPause = false;
+        state.isProgrammaticVideoPause = false;
+      }
+      schedule();
+    }
+    function start() {
+      if (!eligible()) return;
+      startedAt = now();
+      lastKickAt = 0; lastSeatAt = 0; lastFrameCount = NaN; lastFrameAt = 0; lastResetAt = 0; successSince = 0;
+      // Clear any wedged buffer/hold flag so nothing keeps the pair stuck in a
+      // forever-buffer that only a manual play/pause cleared.
+      try {
+        if (!state.seeking) {
+          state.videoWaiting = false;
+          state.strictBufferHold = false;
+          state.seekBuffering = false;
+          try { clearBufferHold(); } catch { }
+          try { forceClearSeekBufferingUI(); } catch { }
+        }
+      } catch { }
+      if (running) return;
+      running = true;
+      tick(); // run the first pass immediately for instant response
+    }
+    return { start, stop, isRunning: () => running };
+  })();
   function armForegroundReturnContinuityWatchdog(reason = "visibility-return") {
     if (document.visibilityState !== "visible") return false;
     if (!foregroundReturnContinuityWanted()) return false;
+    try { TabReturnFastRecovery.start(); } catch { }
     try { armReturnAudioContinuity(perfProfile.lowEnd ? 15000 : 12000); } catch { }
     clearForegroundReturnContinuityTimers();
     const serial = _foregroundReturnContinuitySerial;
@@ -17038,13 +17178,16 @@ startupPrimeStartedAt: performance.now(),
     _on(document, "visibilitychange", () => {
       if (document.visibilityState === "visible") {
         try { armReturnAudioContinuity(perfProfile.lowEnd ? 15000 : 12000); } catch { }
+        try { TabReturnFastRecovery.start(); } catch { } // instant, synchronous
         setTimeout(() => armForegroundReturnContinuityWatchdog("visibility-return"), 0);
       } else {
+        try { TabReturnFastRecovery.stop(); } catch { }
         clearForegroundReturnContinuityTimers();
       }
     }, { passive: true });
     _on(window, "pageshow", () => {
       if (document.visibilityState === "visible") {
+        try { TabReturnFastRecovery.start(); } catch { }
         setTimeout(() => armForegroundReturnContinuityWatchdog("pageshow-return"), 0);
       }
     }, { passive: true });
@@ -44092,6 +44235,21 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             const vReady = trackGenuinelyPlayable(vn, vPos, videoAdvancing);
             const aReady = trackGenuinelyPlayable(audio, aPos, audioAdvancing);
             const bothReady = vReady && aReady;
+            // Stale-hold escape. If the pair has sat held (both paused, not both
+            // ready) while BOTH still hold at least a decoded frame, start anyway
+            // after a moment - the play() itself pulls more data. Without this a
+            // track parked just under the runway threshold buffers FOREVER until a
+            // manual play/pause. Never relaxes when a track has literally no frame.
+            const bothHaveFrame = Number(vn.readyState || 0) >= HAVE_CURRENT_DATA &&
+            Number(audio.readyState || 0) >= HAVE_CURRENT_DATA;
+            if (!bothReady && vPaused && audio.paused && bothHaveFrame) {
+              if (!state._pairHoldSince) state._pairHoldSince = t;
+            } else {
+              state._pairHoldSince = 0;
+            }
+            const staleHoldEscape = !bothReady && bothHaveFrame &&
+            Number(state._pairHoldSince || 0) > 0 && (t - Number(state._pairHoldSince || 0)) > 2800;
+            const bothReadyEffective = bothReady || staleHoldEscape;
             // Playback needs a moment to ramp after any seek/resume/user action;
             // its readyState and clock lag briefly. Pausing in that window cut
             // just-started playback and, with the resume that follows, churned
@@ -44196,7 +44354,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
               needFast = true;
               lockstepStarveSince = 0;
               if (!lockstepReadySince) lockstepReadySince = t;
-              else if ((t - lockstepReadySince) > 150 && (t - lastLockstepActAt) > 500 && !bothReady) {
+              else if ((t - lockstepReadySince) > 150 && (t - lastLockstepActAt) > 500 && !bothReadyEffective) {
                 // Confirmed, but the pair is NOT both genuinely ready: start
                 // NEITHER track. Hold and show the buffer. Do not consume the act
                 // cooldown, so this re-checks quickly as the buffer fills. The
@@ -44557,6 +44715,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             !state.seeking && !state.seekBuffering && !state.seekResumeInFlight &&
             !(vn && vn.seeking) && !(audio && audio.seeking) &&
             state.pendingSeekTarget == null &&
+            !(typeof TabReturnFastRecovery !== "undefined" && TabReturnFastRecovery.isRunning()) &&
             !(typeof userSeekIntentActive === "function" && userSeekIntentActive());
           if (catchupEligible) {
             const cAt = (() => { try { return Number(audio.currentTime); } catch { return NaN; } })();
