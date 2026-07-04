@@ -1913,6 +1913,26 @@ startupPrimeStartedAt: performance.now(),
       isForegroundVideoActuallyBuffering()) return false;
     return true;
   }
+  // One authoritative readiness test, used everywhere the pair decides to start.
+  // "Genuinely playable" = the decoder holds at least the current frame AND has
+  // real forward data to keep going. Forward data is read off the buffered
+  // TimeRanges (which, unlike readyState, do NOT lag after a seek), so a
+  // paused-with-data pair is never called dead - yet a track holding a single
+  // frame with no runway (a buffering track) never counts as ready. A clock that
+  // is demonstrably advancing also qualifies. This is the "stupid accurate"
+  // gate: neither track starts until this is true for BOTH.
+  const GENUINE_RUNWAY_S = 0.5;
+  function trackGenuinelyPlayable(el, pos, advancing) {
+    if (!el) return true; // null / non-coupled element never gates the pair
+    const rs = Number(el.readyState || 0);
+    if (rs >= HAVE_FUTURE_DATA) return true;
+    if (rs < HAVE_CURRENT_DATA) return false; // not even the current frame
+    if (advancing) return true;
+    let ahead = 0;
+    try { ahead = bufferAheadAt(el, isFinite(pos) ? pos : (Number(el.currentTime) || 0)); }
+    catch { ahead = 0; }
+    return ahead >= GENUINE_RUNWAY_S;
+  }
   const _PLAY_LOCK_HOLD_MS = 350; // was 800→500→350 — shorter lock lets seek recovery retries fire faster
   let _videoPlayLockUntil = 0;
   function tryAcquireVideoPlayLock() {
@@ -15680,8 +15700,22 @@ startupPrimeStartedAt: performance.now(),
             mediaCanAttemptPlaybackAtTarget(vnr, target, perfProfile.lowEnd ? 0.28 : 0.22));
           } catch { return false; }
         })();
+        // Both "ready" predicates above accept as little as one decoded frame or
+        // an 8ms sliver of buffered data - which starts the pair with no real
+        // runway, so it immediately freezes and retries. Require a GENUINE runway
+        // (0.5s past the target, or the browser's own HAVE_FUTURE_DATA, or the
+        // near-end of the file where little is left to buffer) on BOTH tracks
+        // before starting. This is what makes the seek resume actually accurate.
+        const _seekDur = (() => {
+          try { return Number(((coupledMode && audio) ? audio : getVideoNode())?.duration || 0); }
+          catch { return 0; }
+        })();
+        const _seekNearEnd = isFinite(_seekDur) && _seekDur > 0 && target >= _seekDur - 0.6;
+        const bothGenuineRunway = _seekNearEnd ||
+          (trackGenuinelyPlayable(getVideoNode(), target, false) &&
+           trackGenuinelyPlayable((coupledMode && audio) ? audio : null, target, false));
         if (!mustRemainPaused && targetLanded(target) &&
-          audioReadyForStart && videoReadyForStart) {
+          audioReadyForStart && videoReadyForStart && bothGenuineRunway) {
           state.strictBufferHold = false;
           clearBufferHold();
           if (!state.seekCommitStartIssued) startPair(target);
@@ -43928,6 +43962,17 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             const vCanStart = vCanPlay || Number(vn.readyState || 0) >= HAVE_CURRENT_DATA || vAhead > 0.05;
             const aCanStart = aCanPlay || Number(audio.readyState || 0) >= HAVE_CURRENT_DATA || aAhead > 0.05;
             const bothCanStart = vCanStart && aCanStart;
+            // The strict, authoritative readiness (see trackGenuinelyPlayable):
+            // real forward runway, not just one decoded frame. Neither track is
+            // allowed to actually START unless BOTH pass this. bothCanStart above
+            // only decides whether the pair is worth re-examining; bothReady
+            // decides whether it may play. This split is what stops "audio starts
+            // while video buffers" and the mirror without stranding a lagging pair.
+            const vPos = isFiniteNum(vt) ? vt : ((() => { try { return Number(vn.currentTime) || 0; } catch { return 0; } })());
+            const aPos = isFiniteNum(at) ? at : ((() => { try { return Number(audio.currentTime) || 0; } catch { return 0; } })());
+            const vReady = trackGenuinelyPlayable(vn, vPos, videoAdvancing);
+            const aReady = trackGenuinelyPlayable(audio, aPos, audioAdvancing);
+            const bothReady = vReady && aReady;
             // Playback needs a moment to ramp after any seek/resume/user action;
             // its readyState and clock lag briefly. Pausing in that window cut
             // just-started playback and, with the resume that follows, churned
@@ -43967,8 +44012,21 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             // genuinely has no data (can't just be resumed).
             const audioAloneOverDeadVideo = aPlaying && vPaused && !vCanStart && !midProgrammatic;
             const videoAloneOverDeadAudio = vPlaying && audio.paused && !aCanStart && !midProgrammatic;
+            // One track genuinely playing while its partner is BUFFERING - has a
+            // frame at most, no runway, not advancing (trackGenuinelyPlayable
+            // false). Couple the playing one down so neither leads: this is the
+            // mid-playback "audio plays while video buffers" and its mirror
+            // "video plays while audio buffers". A merely frozen partner still has
+            // runway (vReady true) and is left to the freeze reset, not paused.
+            const audioOverBufferingVideo = aPlaying && !vReady && !midProgrammatic;
+            const videoOverBufferingAudio = vPlaying && !aReady && !midProgrammatic;
+            const partnerBuffering = audioOverBufferingVideo || videoOverBufferingAudio;
             const pairMustCouplePause = eitherPlayingStarving ||
-            audioAloneOverDeadVideo || videoAloneOverDeadAudio;
+            audioAloneOverDeadVideo || videoAloneOverDeadAudio || partnerBuffering;
+            // genuinelyEmpty lets the pause fire even inside the ramp window.
+            // Partner-buffering is deliberately NOT here: give the buffer the ramp
+            // to fill before coupling down, so a normal post-seek fill is not
+            // chopped into a pause/resume.
             const genuinelyEmpty = eitherPlayingStarving ||
             audioAloneOverDeadVideo || videoAloneOverDeadAudio;
 
@@ -44010,7 +44068,16 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
               needFast = true;
               lockstepStarveSince = 0;
               if (!lockstepReadySince) lockstepReadySince = t;
-              else if ((t - lockstepReadySince) > 150 && (t - lastLockstepActAt) > 500) {
+              else if ((t - lockstepReadySince) > 150 && (t - lastLockstepActAt) > 500 && !bothReady) {
+                // Confirmed, but the pair is NOT both genuinely ready: start
+                // NEITHER track. Hold and show the buffer. Do not consume the act
+                // cooldown, so this re-checks quickly as the buffer fills. The
+                // pause side above has already coupled down any track that ran
+                // ahead of a buffering partner, so nothing leads here.
+                lockstepReadySince = 0;
+                needFast = true;
+                try { setSeekBufferingUIVisible(true); } catch { }
+              } else if ((t - lockstepReadySince) > 150 && (t - lastLockstepActAt) > 500) {
                 lastLockstepActAt = t;
                 lockstepReadySince = 0;
                 // Pick the anchor. Audio is the master clock, so when it is the
@@ -44081,21 +44148,8 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                 } catch { }
                 try { if (typeof clearSeekAudioHoldUntilVideoReady === "function") clearSeekAudioHoldUntilVideoReady(); } catch { }
                 try { if (typeof clearHardPairTransitionGate === "function") { state.hardPairGateActive = false; clearHardPairTransitionGate(state.hardPairGateOwner || "", true, { restore: false }); } } catch { }
-                // Always kick the muted video first - playing it is what builds
-                // its buffer and gets it ready. But gate the AUDIO on the video
-                // being GENUINELY playable, not merely holding one decoded frame.
-                // vCanStart counts readyState==HAVE_CURRENT_DATA (a single frame,
-                // no runway) as startable so a paused-with-data pair isn't stranded
-                // - but starting the audio on that alone is exactly "audio plays
-                // while the video is still buffering". Require real forward data.
-                const videoActuallyBuffering = (() => {
-                  try {
-                    return !!state.videoWaiting && Number(vn.readyState || 0) < HAVE_FUTURE_DATA &&
-                      (typeof isForegroundVideoActuallyBuffering !== "function" || isForegroundVideoActuallyBuffering());
-                  } catch { return false; }
-                })();
-                const videoReadyForAudio = !videoActuallyBuffering &&
-                  (Number(vn.readyState || 0) >= HAVE_FUTURE_DATA || videoAdvancing || vAhead > 0.5);
+                // Reached only when BOTH tracks are genuinely ready (bothReady),
+                // so start them together - no track can lead over a buffering one.
                 try {
                   if (vn.paused) {
                     state.isProgrammaticVideoPlay = true;
@@ -44105,21 +44159,16 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                   }
                 } catch { state.isProgrammaticVideoPlay = false; }
                 try {
-                  if (audio.paused && !playerMutedFromVideo() && videoReadyForAudio) {
+                  if (audio.paused && !playerMutedFromVideo()) {
                     setAudioPlaybackVolume(targetVolFromVideo(), "lockstep-resume", { cancelFade: true });
                     setAudioMutedSynced(false);
                     state.isProgrammaticAudioPlay = true;
                     const ap = HTMLMediaElement.prototype.play.call(audio);
                     if (ap && typeof ap.catch === "function") ap.catch(() => { });
                     setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 220);
-                  } else if (audio.paused && !videoReadyForAudio) {
-                    // Video not genuinely ready yet: keep audio held and show the
-                    // buffering state so the pair stays honest (no audio-only lead).
-                    needFast = true;
-                    try { setSeekBufferingUIVisible(true); } catch { }
                   }
                 } catch { state.isProgrammaticAudioPlay = false; }
-                if (videoReadyForAudio) { try { forceClearSeekBufferingUI(); } catch { } }
+                try { forceClearSeekBufferingUI(); } catch { }
               }
             } else {
               // Healthy (both playing, both can play) or both already paused and
