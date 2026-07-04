@@ -43603,6 +43603,8 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     let audioParkedSince = 0;
     let lastAudioParkFixAt = 0;
     let avDriftSince = 0;
+    let avCatchupSince = 0;
+    let lastAvCatchupAt = 0;
     let startupStuckSince = 0;
     let lastStartupForceAt = 0;
     let bufferCoupleSince = 0;
@@ -44012,13 +44014,22 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             // genuinely has no data (can't just be resumed).
             const audioAloneOverDeadVideo = aPlaying && vPaused && !vCanStart && !midProgrammatic;
             const videoAloneOverDeadAudio = vPlaying && audio.paused && !aCanStart && !midProgrammatic;
+            // Video far BEHIND the audio master: not a shared stall, it's a
+            // catch-up (the classic tab-return case - the decoder was suspended
+            // while the audio keepalive advanced). The fix is to seat the video
+            // FORWARD onto the audio, NOT to pause the healthy master audio. So
+            // exclude the behind case from the couple-pause; the audio-master
+            // catch-up block below owns it. (Audio-behind is left in, because the
+            // audio position can't be moved to catch up without shifting the bar,
+            // so there the video is paused instead.)
+            const videoBehindAudio = isFiniteNum(vt) && isFiniteNum(at) && (at - vt) > 0.75;
             // One track genuinely playing while its partner is BUFFERING - has a
             // frame at most, no runway, not advancing (trackGenuinelyPlayable
             // false). Couple the playing one down so neither leads: this is the
             // mid-playback "audio plays while video buffers" and its mirror
             // "video plays while audio buffers". A merely frozen partner still has
             // runway (vReady true) and is left to the freeze reset, not paused.
-            const audioOverBufferingVideo = aPlaying && !vReady && !midProgrammatic;
+            const audioOverBufferingVideo = aPlaying && !vReady && !videoBehindAudio && !midProgrammatic;
             const videoOverBufferingAudio = vPlaying && !aReady && !midProgrammatic;
             const partnerBuffering = audioOverBufferingVideo || videoOverBufferingAudio;
             const pairMustCouplePause = eitherPlayingStarving ||
@@ -44411,6 +44422,60 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             } else { freezeFrameSince = 0; freezeFrameCount = NaN; }
           } else { freezeFrameSince = 0; freezeFrameCount = NaN; }
         } catch { }
+
+        // Audio-master video catch-up. A hidden tab suspends the video decoder
+        // (browser battery saver) while the audio keepalive keeps advancing, so
+        // on return the video is frozen far BEHIND the audio, at a position it has
+        // no frame for - and the one-shot return alignment lands it where the
+        // audio WAS, still behind, because the audio kept moving. Continuously
+        // seat the muted video FORWARD onto the LIVE audio clock so it seeks and
+        // buffers to the real position and catches up, while the audio (master)
+        // keeps playing untouched. Runs during the return window too. Forward-only,
+        // rate-limited; once the gap is small the drift heal finishes the sync.
+        // The bar follows the audio, so the shown position never jumps.
+        try {
+          const catchupEligible = coupledMode && audio && intended && committed && !hidden &&
+            !vPaused && !audio.paused && !userHeldPaused &&
+            !state.endedNaturally && !state.restarting && !state.seekDragActive &&
+            !state.seeking && !state.seekBuffering && !state.seekResumeInFlight &&
+            !(vn && vn.seeking) && !(audio && audio.seeking) &&
+            state.pendingSeekTarget == null &&
+            !(typeof userSeekIntentActive === "function" && userSeekIntentActive());
+          if (catchupEligible) {
+            const cAt = (() => { try { return Number(audio.currentTime); } catch { return NaN; } })();
+            const cVt = isFiniteNum(vt) ? vt : (() => { try { return Number(vn.currentTime) || 0; } catch { return 0; } })();
+            // Only chase a LIVE audio clock (advancing) - never seat the video to a
+            // stalled audio position (that is a different fault the park heal owns).
+            const gap = (audioAdvancing && isFiniteNum(cAt) && cAt >= 0 && isFiniteNum(cVt)) ? (cAt - cVt) : 0;
+            if (gap > 0.75) {
+              needFast = true;
+              if (!avCatchupSince) avCatchupSince = t;
+              else if ((t - avCatchupSince) > 300 && (t - lastAvCatchupAt) > 1400) {
+                avCatchupSince = 0;
+                lastAvCatchupAt = t;
+                try {
+                  state._isMicroSeek = true;
+                  state._allowUnexpectedVideoTimeRestore = true;
+                  vn.currentTime = cAt;
+                  if (videoEl && videoEl !== vn) videoEl.currentTime = cAt;
+                  state._allowUnexpectedVideoTimeRestore = false;
+                  try { scheduleMicroSeekClear(260); } catch { }
+                  // Keep the muted video actively decoding toward the new spot.
+                  if (vn.paused) {
+                    state.isProgrammaticVideoPlay = true;
+                    const vp = HTMLMediaElement.prototype.play.call(vn);
+                    if (vp && typeof vp.catch === "function") vp.catch(() => { });
+                    setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 200);
+                  }
+                } catch {
+                  state._allowUnexpectedVideoTimeRestore = false;
+                  state.isProgrammaticVideoPlay = false;
+                }
+                try { VideoCompositorFlushManager.arm({ observe: true }); } catch { }
+              }
+            } else avCatchupSince = 0;
+          } else avCatchupSince = 0;
+        } catch { avCatchupSince = 0; }
 
         // After foreground playback has been healthy a few seconds, shut down the
         // background keepalive worker and tab-return-immune flags if they linger.
