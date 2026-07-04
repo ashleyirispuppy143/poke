@@ -16940,16 +16940,49 @@ startupPrimeStartedAt: performance.now(),
       userPauseIntentActive() || userToggleExpectingPause()) return false;
     return foregroundReturnTransportWantsPlayback();
   }
+  // Frame-presentation tracker (the technique real players use). requestVideoFrame
+  // Callback fires exactly when the compositor paints a new frame, so it is the
+  // ground truth for "is the picture actually moving" - far more precise than
+  // polling a frame COUNT on a timer, and it is pure passive observation (it never
+  // touches the video). _videoPresentedAt = the last time a real frame painted.
+  // The recovery logic below uses it to leave a presenting video completely alone
+  // (no seeks, no nudges - that is what made catch-up stutter "frame by frame")
+  // and to detect a genuinely frozen decoder in a single frame-time.
+  const _rvfcArmed = (typeof WeakSet !== "undefined") ? new WeakSet() : null;
+  let _videoPresentedAt = 0;
+  let _videoPresentedFrames = 0;
+  function armVideoFramePresentationTracker() {
+    try {
+      const vn = getVideoNode();
+      if (!vn || typeof vn.requestVideoFrameCallback !== "function") return;
+      if (_rvfcArmed && _rvfcArmed.has(vn)) return;
+      if (_rvfcArmed) _rvfcArmed.add(vn);
+      const cb = () => {
+        _videoPresentedAt = now();
+        _videoPresentedFrames++;
+        try { vn.requestVideoFrameCallback(cb); } catch { }
+      };
+      try { vn.requestVideoFrameCallback(cb); } catch { }
+    } catch { }
+  }
+  function videoPresentingRecently(withinMs) {
+    // True if the compositor painted a real frame within the window. Falls back to
+    // the frame COUNT (polled) on browsers without requestVideoFrameCallback.
+    const w = Math.max(120, Number(withinMs) || 260);
+    if (_videoPresentedAt > 0) return (now() - _videoPresentedAt) < w;
+    return null; // rVFC not available / not yet armed -> caller uses count fallback
+  }
+
   // videoGenericPlaybackStableManager - the single owner of "the video wedged"
   // recovery. Every one of these is the same fault: the video decoder is frozen /
   // stuck on one frame / never started, while the audio (master) keeps going,
   // because the two elements buffer independently and at different times. Rather
   // than fight native buffering, this leaves the browser to buffer each track and
   // only steps in when the PICTURE has genuinely stopped moving while it should
-  // be playing - then drives it back on a ~70ms poll: keep the master audio
-  // playing, seat the video onto the LIVE audio position when it is far off, and
-  // FORCE a wedged decoder to present a frame with a tiny seek (pause/play does
-  // not wake a suspended decoder). Ground truth = the presented-frame count. It
+  // be playing. It keeps the master AUDIO playing (so the position stays correct
+  // and there is no audio gap), seats the video onto the audio position when it is
+  // far off, and FORCE-wakes a frozen decoder with a tiny seek (pause/play does
+  // not wake a suspended decoder). Frame presentation is read from rVFC. It
   // runs the first pass synchronously (on the visibility event or the moment a
   // freeze is detected) for instant response, self-terminates once the picture is
   // moving and roughly synced, and is RE-TRIGGERED by the supervisor on any
@@ -16965,7 +16998,6 @@ startupPrimeStartedAt: performance.now(),
     let lastFrameAt = 0;
     let lastResetAt = 0;
     let successSince = 0;
-    let audioHeldForBuffer = false;
     function eligible() {
       if (document.visibilityState !== "visible") return false;
       if (!state.intendedPlaying || state.endedNaturally || state.restarting) return false;
@@ -16980,7 +17012,7 @@ startupPrimeStartedAt: performance.now(),
       running = false;
       if (timerId) { try { clearTimeout(timerId); } catch { } timerId = 0; }
       startedAt = 0; lastKickAt = 0; lastSeatAt = 0; lastFrameCount = NaN; lastFrameAt = 0;
-      lastResetAt = 0; successSince = 0; audioHeldForBuffer = false;
+      lastResetAt = 0; successSince = 0;
     }
     function schedule() { if (running) { try { timerId = setTimeout(tick, 70); } catch { } } }
     function tick() {
@@ -16989,20 +17021,23 @@ startupPrimeStartedAt: performance.now(),
       if (!eligible() || (t - startedAt) > 6000) { stop(); return; }
       const vn = getVideoNode();
       if (!vn) { schedule(); return; }
+      // Ground truth for "the picture is moving": rVFC (exact compositor paints),
+      // falling back to the polled frame COUNT where rVFC is unavailable. A
+      // presenting video is RECOVERING; touching it (a seek/reset) flushes that
+      // progress = "one frame at a time". So once it presents we do NOTHING to it.
       let fc = NaN;
       try { fc = Number(getVideoPresentedFrameCount(vn)); } catch { }
       if (!isFiniteNum(lastFrameCount)) {
-        lastFrameCount = fc; // baseline only - do NOT treat init as a fresh frame
+        lastFrameCount = fc;
       } else if (isFiniteNum(fc) && fc > lastFrameCount + 0.5) {
-        lastFrameCount = fc; lastFrameAt = t; // a frame was actually presented
+        lastFrameCount = fc; lastFrameAt = t;
       }
-      // "Decoding" = the picture presented a frame very recently. A decoding video
-      // is RECOVERING; touching it (a seek or a reset) flushes that progress and
-      // is exactly what turned catch-up into "one frame at a time". So once it is
-      // decoding we do NOTHING to the video and hand the residual sync to the
-      // gentle supervisor drift heal.
-      const decodingRecently = lastFrameAt > 0 && (t - lastFrameAt) < 300;
-      const stuckFor = lastFrameAt > 0 ? (t - lastFrameAt) : (t - startedAt);
+      const _rvfc = videoPresentingRecently(300);
+      const decodingRecently = (_rvfc === null)
+        ? (lastFrameAt > 0 && (t - lastFrameAt) < 300)
+        : _rvfc;
+      const _lastPaintAt = (_videoPresentedAt > 0) ? Math.max(_videoPresentedAt, lastFrameAt) : lastFrameAt;
+      const stuckFor = _lastPaintAt > 0 ? (t - _lastPaintAt) : (t - startedAt);
       const at = (coupledMode && audio)
         ? (() => { try { return Number(audio.currentTime); } catch { return NaN; } })()
         : (() => { try { return Number(vn.currentTime); } catch { return NaN; } })();
@@ -17026,96 +17061,58 @@ startupPrimeStartedAt: performance.now(),
         ? at : (isFiniteNum(vt) ? vt : 0);
       let targetRunway = 0;
       try { targetRunway = bufferAheadAt(vn, targetPos); } catch { }
-      // BUFFERING = the picture is stopped and the video has NO data where it
-      // needs to be, so it will stay frozen until it fetches. WEDGED = it is
-      // stopped but the data IS there (decoder just needs a kick). Hysteresis on
-      // the runway (enter <0.15, stay until >0.4) so the audio hold can't flap on
-      // and off as the buffer trickles in.
-      const videoBuffering = !decodingRecently && stuckFor > 400 &&
-        (audioHeldForBuffer ? targetRunway < 0.4 : targetRunway < 0.15);
       try {
-        if (videoBuffering && coupledMode && audio) {
-          // COMBINED BUFFER: hold the AUDIO too so it can't run ahead of a frozen
-          // picture (the "video frozen while audio progresses as if nothing
-          // happened"). Show the spinner and let the video fetch at the target -
-          // the pair buffers together like one native element, then resumes
-          // together when the picture is back (handled by the success path above).
-          if (!audio.paused && !playerMutedFromVideo() &&
-            !userPauseLockActive() && !mediaSessionForcedPauseActive()) {
-            state.isProgrammaticAudioPause = true;
-            state._allowAudioPause = true;
-            try { preserveAudioGainWhileSilent("vgpsm-combined-buffer"); } catch { }
-            try { HTMLMediaElement.prototype.pause.call(audio); } catch { }
-            setTimeout(() => { state.isProgrammaticAudioPause = false; state._allowAudioPause = false; }, 160);
-          }
-          audioHeldForBuffer = true;
-          try { setSeekBufferingUIVisible(true); } catch { }
-          // Seat the video to the target so the fetch starts at the right spot.
-          if (isFiniteNum(targetPos) &&
-            Math.abs((Number(vn.currentTime) || 0) - targetPos) > 0.3 && (t - lastSeatAt) > 900) {
+        // Keep the master AUDIO playing throughout. This is what keeps the shown
+        // position correct (audio is the clock, never yanked to a stale video
+        // time = fixes "starts from the wrong position when the buffer ends") and
+        // avoids the audio gap. The video is driven back underneath it.
+        if (coupledMode && audio && audio.paused && !playerMutedFromVideo() &&
+          !userPauseLockActive() && !mediaSessionForcedPauseActive()) {
+          try { setAudioMutedSynced(false); } catch { }
+          state.isProgrammaticAudioPlay = true;
+          const ap = HTMLMediaElement.prototype.play.call(audio);
+          if (ap && typeof ap.catch === "function") ap.catch(() => { });
+          setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 150);
+        }
+        // Touch the video ONLY when it is genuinely not presenting (rVFC/frame
+        // count static). A presenting video - even a slow one just after a buffer -
+        // is left completely alone so it plays out smoothly instead of stuttering
+        // frame by frame under repeated seeks.
+        if (!decodingRecently && stuckFor > 350) {
+          if (coupledMode && audio && isFiniteNum(at) && at >= 0 && Math.abs(gap) > 0.5 &&
+            (t - lastSeatAt) > 900) {
+            // Off-position: seat onto the audio master ONCE (long cooldown). This
+            // both re-syncs and, landing on buffered data, wakes the decoder.
             lastSeatAt = t;
             state._isMicroSeek = true;
             state._allowUnexpectedVideoTimeRestore = true;
             try {
-              vn.currentTime = targetPos;
-              if (videoEl && videoEl !== vn) videoEl.currentTime = targetPos;
+              vn.currentTime = at;
+              if (videoEl && videoEl !== vn) videoEl.currentTime = at;
+            } finally { state._allowUnexpectedVideoTimeRestore = false; }
+            try { scheduleMicroSeekClear(200); } catch { }
+          } else if (targetRunway > 0.08 && (t - lastResetAt) > 600) {
+            // In position with data but frozen: FORCE the wedged decoder to render a
+            // frame with a tiny seek (pause/play does not wake a suspended decoder).
+            lastResetAt = t;
+            const cur = Number(vn.currentTime) || 0;
+            const nudged = cur + 0.04;
+            state._isMicroSeek = true;
+            state._allowUnexpectedVideoTimeRestore = true;
+            try {
+              vn.currentTime = nudged;
+              if (videoEl && videoEl !== vn) videoEl.currentTime = nudged;
             } finally { state._allowUnexpectedVideoTimeRestore = false; }
             try { scheduleMicroSeekClear(200); } catch { }
           }
-          if (vn.paused && !state.isProgrammaticVideoPause) {
-            state.isProgrammaticVideoPlay = true;
-            const p = HTMLMediaElement.prototype.play.call(vn);
-            if (p && typeof p.catch === "function") p.catch(() => { });
-            setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 150);
-          }
-        } else {
-          // WEDGED or decoding: the data is present. Keep the master audio playing
-          // (release any combined-buffer hold) and, if the picture is wedged, force
-          // it with a micro-seek.
-          audioHeldForBuffer = false;
-          if (coupledMode && audio && audio.paused && !playerMutedFromVideo() &&
-            !userPauseLockActive() && !mediaSessionForcedPauseActive()) {
-            try { setAudioMutedSynced(false); } catch { }
-            try { forceClearSeekBufferingUI(); } catch { }
-            state.isProgrammaticAudioPlay = true;
-            const ap = HTMLMediaElement.prototype.play.call(audio);
-            if (ap && typeof ap.catch === "function") ap.catch(() => { });
-            setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 150);
-          }
-          if (!decodingRecently && stuckFor > 350) {
-            if (coupledMode && audio && isFiniteNum(at) && at >= 0 && Math.abs(gap) > 0.5 &&
-              (t - lastSeatAt) > 900) {
-              // Stuck AND off-position but data is there: seat onto the audio master.
-              lastSeatAt = t;
-              state._isMicroSeek = true;
-              state._allowUnexpectedVideoTimeRestore = true;
-              try {
-                vn.currentTime = at;
-                if (videoEl && videoEl !== vn) videoEl.currentTime = at;
-              } finally { state._allowUnexpectedVideoTimeRestore = false; }
-              try { scheduleMicroSeekClear(200); } catch { }
-            } else if (targetRunway > 0.1 && (t - lastResetAt) > 600) {
-              // Stuck in position with data: FORCE the wedged decoder to render a
-              // frame with a tiny seek (pause/play does not wake a suspended
-              // decoder). No meaningful position change.
-              lastResetAt = t;
-              const cur = Number(vn.currentTime) || 0;
-              const nudged = cur + 0.04;
-              state._isMicroSeek = true;
-              state._allowUnexpectedVideoTimeRestore = true;
-              try {
-                vn.currentTime = nudged;
-                if (videoEl && videoEl !== vn) videoEl.currentTime = nudged;
-              } finally { state._allowUnexpectedVideoTimeRestore = false; }
-              try { scheduleMicroSeekClear(200); } catch { }
-            }
-          }
-          if (vn.paused && !state.isProgrammaticVideoPause) {
-            state.isProgrammaticVideoPlay = true;
-            const p = HTMLMediaElement.prototype.play.call(vn);
-            if (p && typeof p.catch === "function") p.catch(() => { });
-            setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 150);
-          }
+          // If it is buffering (no data at the target) there is nothing to force -
+          // native buffering owns it; just make sure the fetch is happening.
+        }
+        if (vn.paused && !state.isProgrammaticVideoPause) {
+          state.isProgrammaticVideoPlay = true;
+          const p = HTMLMediaElement.prototype.play.call(vn);
+          if (p && typeof p.catch === "function") p.catch(() => { });
+          setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 150);
         }
         try { VideoCompositorFlushManager.arm({ observe: true }); } catch { }
       } catch {
@@ -17134,6 +17131,7 @@ startupPrimeStartedAt: performance.now(),
       // supervisor re-triggers a fresh burst if the freeze is still there, so it
       // still never permanently gives up - just in bounded bursts.
       if (running) return;
+      try { armVideoFramePresentationTracker(); } catch { }
       startedAt = now();
       lastKickAt = 0; lastSeatAt = 0; lastFrameCount = NaN; lastFrameAt = 0; lastResetAt = 0; successSince = 0;
       // Clear any wedged buffer/hold flag so nothing keeps the pair stuck in a
@@ -37917,6 +37915,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       if (!state.seeking && !state.seekBuffering) scheduleSync(0);
     });
       video.on("playing", () => {
+        try { armVideoFramePresentationTracker(); } catch { }
         if (_errorOverlayShown || (PlayerErrorOverlay && PlayerErrorOverlay.isVisible && PlayerErrorOverlay.isVisible())) {
           forcePausePlaybackForErrorOverlay("video-playing-while-overlay");
           return;
