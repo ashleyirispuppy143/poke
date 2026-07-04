@@ -10343,10 +10343,12 @@ startupPrimeStartedAt: performance.now(),
     if (state.seeking || state.seekBuffering || state.seekResumeInFlight || state.restarting || userSeekIntentActive()) return true;
     if (seekDisplayAuthorityActive()) return true;
     if (state.endedNaturally || terminalEndPlaybackLocked(200)) return true;
-    // A split audio/video player must have one progress-bar writer. Leaving
-    // normal playback to Video.js but taking over during seeks made the two
-    // clocks race and briefly paint old positions.
-    return !!(coupledMode && audio);
+    // One progress-bar writer. Our manual paint uses the exact display time the
+    // clock text uses, so the bar and the text can never diverge (that was the
+    // "seekbar doesn't update but the time display does"). Own the bar for all
+    // committed playback in both modes; the native Video.js writer is only left
+    // in charge before the first play.
+    return state.firstPlayCommitted || !!(coupledMode && audio);
   }
   function syncPlayerSeekbarToDisplayTime(durHint = NaN, curHint = NaN) {
     playerSeekbarSyncQueued = false;
@@ -13400,6 +13402,21 @@ startupPrimeStartedAt: performance.now(),
     state.intendedPlaying = true;
     state.bufferHoldIntendedPlaying = true;
     setAuthoritativeTransportIntent(true, "manual-ended-restart");
+    // Clear the pause guards left over from the video ENDING - otherwise the
+    // commit sees a forced/user pause and finishes paused, so the restart needs
+    // a manual play press to actually start.
+    try { clearMediaSessionForcedPause(); } catch { }
+    try { if (typeof MediumQualityManager !== "undefined") MediumQualityManager.markUserPlayed(); } catch { }
+    state.userPauseUntil = 0;
+    state.userPauseLockUntil = 0;
+    state.userPauseIntentPresetAt = 0;
+    state.userGesturePauseIntent = false;
+    state.mediaSessionPauseBlockedUntil = 0;
+    if (platform.chromiumOnlyBrowser) {
+      state.chromiumAudioStartLockUntil = 0;
+      state.chromiumPauseGuardUntil = 0;
+      state.chromiumBgSettlingUntil = 0;
+    }
     state.videoWaiting = false;
     state.audioWaiting = false;
     state.videoStallAudioPaused = false;
@@ -36393,6 +36410,11 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           }
         }
         state.seekStabilizeUntil = Math.max(state.seekStabilizeUntil, now() + 5000);
+        // Drive the canonical video.js seek (what an in-page seekbar drag does)
+        // AND the raw element write. The video.js path fires the seek events that
+        // start the commit, so the position actually moves and sticks instead of
+        // being written then reverted.
+        try { if (typeof video.currentTime === "function") video.currentTime(target); } catch { }
         safeSetVideoTime(target, { force: true });
         if (coupledMode && audio) {
           try {
@@ -36478,10 +36500,11 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         state.lastDrift = 0;
       } catch { }
     });
-    // Picture-in-Picture is disabled entirely on this player. Disable it on the
-    // media elements, block the request API, remove the video.js control, and
-    // force-exit if anything (browser auto-PiP, an extension) still opens it.
+    // Picture-in-Picture is disabled in coupled mode (separate audio track -
+    // PiP would show video with no sound). It stays ENABLED in medium quality
+    // mode (!coupledMode, muxed single element that carries its own audio).
     function disablePictureInPictureEverywhere() {
+      if (!coupledMode) return; // medium quality mode: leave PiP enabled
       const els = [];
       try { if (videoEl) els.push(videoEl); } catch { }
       try {
@@ -43546,6 +43569,8 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     let lastAudioParkFixAt = 0;
     let avDriftSince = 0;
     let lastAvDriftFixAt = 0;
+    let unintendedPauseSince = 0;
+    let lastUnintendedPauseFixAt = 0;
     let startupStuckSince = 0;
     let lastStartupForceAt = 0;
     let bufferCoupleSince = 0;
@@ -43926,9 +43951,18 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             const aStarvingPlaying = aPlaying && !audioAdvancing &&
             Number(audio.readyState || 0) < HAVE_CURRENT_DATA;
             const eitherPlayingStarving = vStarvingPlaying || aStarvingPlaying;
-            const genuinelyEmpty = eitherPlayingStarving;
+            // Audio playing while the video is unplayable (paused with no decoded
+            // frame), or vice versa: couple the playing one down so audio never
+            // plays while the video isn't playable. Only when the other track
+            // genuinely has no data (can't just be resumed).
+            const audioAloneOverDeadVideo = aPlaying && vPaused && !vCanStart;
+            const videoAloneOverDeadAudio = vPlaying && audio.paused && !aCanStart;
+            const pairMustCouplePause = eitherPlayingStarving ||
+            audioAloneOverDeadVideo || videoAloneOverDeadAudio;
+            const genuinelyEmpty = eitherPlayingStarving ||
+            audioAloneOverDeadVideo || videoAloneOverDeadAudio;
 
-            if (eitherPlayingStarving && (!lsRamping || genuinelyEmpty)) {
+            if (pairMustCouplePause && (!lsRamping || genuinelyEmpty)) {
               // One track starved while the other still plays. Confirm over a
               // long window so a brief decode hiccup does not cut healthy audio;
               // only a real sustained buffer stall couples the pair down.
@@ -44250,12 +44284,76 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                 }
               } else avDriftSince = 0;
             } else avDriftSince = 0;
+
+            // Unintended-pause recovery. If a track is paused while the pair
+            // should be playing and it has data to play, and the plain lockstep
+            // resume above did not get it going, recover with an explicit
+            // pause/play toggle 0.5-1.5s after the pause (a toggle resets decoder
+            // state that a bare play() sometimes fails to restart).
+            const _unintendedPaused = (vPaused || audio.paused) &&
+            !(vPaused && audio.paused && !bothCanStart) &&
+            bothCanStart;
+            if (_unintendedPaused) {
+              needFast = true;
+              if (!unintendedPauseSince) unintendedPauseSince = t;
+              else if ((t - unintendedPauseSince) > 800 && (t - lastUnintendedPauseFixAt) > 2500) {
+                unintendedPauseSince = 0;
+                lastUnintendedPauseFixAt = t;
+                try {
+                  const toggleAt = (coupledMode && audio && audioAdvancing && isFiniteNum(at) && at >= 0)
+                  ? at : (isFiniteNum(vt) ? vt : (Number(vn.currentTime) || 0));
+                  state._allowVideoPause = true;
+                  state._allowAudioPause = true;
+                  state.isProgrammaticVideoPause = true;
+                  state.isProgrammaticAudioPause = true;
+                  if (coupledMode && audio) preserveAudioGainWhileSilent("unintended-pause-toggle");
+                  try { if (vn && !vn.paused) HTMLMediaElement.prototype.pause.call(vn); } catch { }
+                  try { if (coupledMode && audio && !audio.paused) HTMLMediaElement.prototype.pause.call(audio); } catch { }
+                  setTimeout(() => {
+                    try {
+                      state.isProgrammaticVideoPause = false; state.isProgrammaticAudioPause = false;
+                      state._allowVideoPause = false; state._allowAudioPause = false;
+                      state.videoWaiting = false; state.audioWaiting = false;
+                      state.videoStallAudioPaused = false; state.audioStallVideoPaused = false;
+                      state.strictBufferHold = false; state.seekBuffering = false;
+                      try { clearBufferHold(); } catch { }
+                      if (vn) {
+                        state.isProgrammaticVideoPlay = true;
+                        const vp = HTMLMediaElement.prototype.play.call(vn);
+                        if (vp && typeof vp.catch === "function") vp.catch(() => { });
+                        setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 200);
+                      }
+                      if (coupledMode && audio && !playerMutedFromVideo()) {
+                        if (isFiniteNum(toggleAt) && Math.abs((Number(audio.currentTime) || 0) - toggleAt) > 0.12) {
+                          state._allowAudioTimeWrite = true;
+                          try { audio.currentTime = toggleAt; } finally { state._allowAudioTimeWrite = false; }
+                        }
+                        setAudioPlaybackVolume(targetVolFromVideo(), "unintended-pause-toggle", { cancelFade: true });
+                        setAudioMutedSynced(false);
+                        state.isProgrammaticAudioPlay = true;
+                        const ap = HTMLMediaElement.prototype.play.call(audio);
+                        if (ap && typeof ap.catch === "function") ap.catch(() => { });
+                        setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 200);
+                      }
+                      try { forceClearSeekBufferingUI(); } catch { }
+                    } catch {
+                      state.isProgrammaticVideoPlay = false; state.isProgrammaticAudioPlay = false;
+                      state._allowAudioTimeWrite = false;
+                    }
+                  }, 140);
+                } catch {
+                  state._allowVideoPause = false; state._allowAudioPause = false;
+                  state.isProgrammaticVideoPause = false; state.isProgrammaticAudioPause = false;
+                }
+              }
+            } else unintendedPauseSince = 0;
           } else {
             lockstepStarveSince = 0;
             lockstepReadySince = 0;
             lockstepParkedSince = 0;
             audioParkedSince = 0;
             avDriftSince = 0;
+            unintendedPauseSince = 0;
             freezeFrameSince = 0;
             freezeFrameCount = NaN;
           }
