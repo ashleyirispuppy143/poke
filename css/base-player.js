@@ -16940,17 +16940,22 @@ startupPrimeStartedAt: performance.now(),
       userPauseIntentActive() || userToggleExpectingPause()) return false;
     return foregroundReturnTransportWantsPlayback();
   }
-  // Lightning tab-return recovery. Hidden tabs suspend the video decoder while
-  // the audio keepalive keeps advancing, so on return the video is frozen,
-  // behind, at a position it has no painted frame for (black/static). This drives
-  // it back HARD on a ~70ms poll: seat the video onto the LIVE audio master, make
-  // sure it is playing, wake a frozen decoder (pause/replay + compositor flush),
-  // and clear any wedged buffer flag - until the presented-frame count is
-  // actually advancing AND the video sits within a tight window of the audio.
-  // The master audio is never paused or moved (the bar never jumps). It runs the
-  // first pass synchronously on the visibility event for instant response, and
-  // self-terminates on success or after a hard cap.
-  const TabReturnFastRecovery = (() => {
+  // videoGenericPlaybackStableManager - the single owner of "the video wedged"
+  // recovery. Every one of these is the same fault: the video decoder is frozen /
+  // stuck on one frame / never started, while the audio (master) keeps going,
+  // because the two elements buffer independently and at different times. Rather
+  // than fight native buffering, this leaves the browser to buffer each track and
+  // only steps in when the PICTURE has genuinely stopped moving while it should
+  // be playing - then drives it back on a ~70ms poll: keep the master audio
+  // playing, seat the video onto the LIVE audio position when it is far off, and
+  // FORCE a wedged decoder to present a frame with a tiny seek (pause/play does
+  // not wake a suspended decoder). Ground truth = the presented-frame count. It
+  // runs the first pass synchronously (on the visibility event or the moment a
+  // freeze is detected) for instant response, self-terminates once the picture is
+  // moving and roughly synced, and is RE-TRIGGERED by the supervisor on any
+  // re-freeze so it never permanently gives up ("frozen forever until play/pause").
+  // The master audio is never paused or moved, so the shown position never jumps.
+  const videoGenericPlaybackStableManager = (() => {
     let running = false;
     let timerId = 0;
     let startedAt = 0;
@@ -17077,6 +17082,11 @@ startupPrimeStartedAt: performance.now(),
     }
     function start() {
       if (!eligible()) return;
+      // Already recovering: let the current 6s burst finish rather than resetting
+      // its window every tick (that would micro-seek in a tight loop forever). The
+      // supervisor re-triggers a fresh burst if the freeze is still there, so it
+      // still never permanently gives up - just in bounded bursts.
+      if (running) return;
       startedAt = now();
       lastKickAt = 0; lastSeatAt = 0; lastFrameCount = NaN; lastFrameAt = 0; lastResetAt = 0; successSince = 0;
       // Clear any wedged buffer/hold flag so nothing keeps the pair stuck in a
@@ -17090,7 +17100,6 @@ startupPrimeStartedAt: performance.now(),
           try { forceClearSeekBufferingUI(); } catch { }
         }
       } catch { }
-      if (running) return;
       running = true;
       tick(); // run the first pass immediately for instant response
     }
@@ -17099,7 +17108,7 @@ startupPrimeStartedAt: performance.now(),
   function armForegroundReturnContinuityWatchdog(reason = "visibility-return") {
     if (document.visibilityState !== "visible") return false;
     if (!foregroundReturnContinuityWanted()) return false;
-    try { TabReturnFastRecovery.start(); } catch { }
+    try { videoGenericPlaybackStableManager.start(); } catch { }
     try { armReturnAudioContinuity(perfProfile.lowEnd ? 15000 : 12000); } catch { }
     clearForegroundReturnContinuityTimers();
     const serial = _foregroundReturnContinuitySerial;
@@ -17195,16 +17204,16 @@ startupPrimeStartedAt: performance.now(),
     _on(document, "visibilitychange", () => {
       if (document.visibilityState === "visible") {
         try { armReturnAudioContinuity(perfProfile.lowEnd ? 15000 : 12000); } catch { }
-        try { TabReturnFastRecovery.start(); } catch { } // instant, synchronous
+        try { videoGenericPlaybackStableManager.start(); } catch { } // instant, synchronous
         setTimeout(() => armForegroundReturnContinuityWatchdog("visibility-return"), 0);
       } else {
-        try { TabReturnFastRecovery.stop(); } catch { }
+        try { videoGenericPlaybackStableManager.stop(); } catch { }
         clearForegroundReturnContinuityTimers();
       }
     }, { passive: true });
     _on(window, "pageshow", () => {
       if (document.visibilityState === "visible") {
-        try { TabReturnFastRecovery.start(); } catch { }
+        try { videoGenericPlaybackStableManager.start(); } catch { }
         setTimeout(() => armForegroundReturnContinuityWatchdog("pageshow-return"), 0);
       }
     }, { passive: true });
@@ -44671,59 +44680,14 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                     }
                   } catch { }
                 } else {
+                  // The picture has genuinely stopped moving while it should be
+                  // playing. Hand it to the single owner - it forces the decoder
+                  // with a micro-seek and, because we re-trigger it here every time
+                  // the freeze is still present, it never permanently gives up.
                   if (!freezeFrameSince) freezeFrameSince = t;
-                  if (t - freezeResetWindowAt > 15000) { freezeResetCount = 0; freezeResetWindowAt = t; }
-                  if ((t - freezeFrameSince) > 1200 && (t - lastFreezeResetAt) > 2000 &&
-                    freezeResetCount < 5) {
-                    freezeFrameSince = 0;
-                    lastFreezeResetAt = t;
-                    freezeResetCount++;
+                  if ((t - freezeFrameSince) > 800) {
                     needFast = true;
-                    const freezeFixAt = (coupledMode && audio && audioAdvancing &&
-                      isFiniteNum(frzAt) && frzAt >= 0) ? frzAt : frzVt;
-                    try {
-                      state._allowVideoPause = true;
-                      state.isProgrammaticVideoPause = true;
-                      HTMLMediaElement.prototype.pause.call(vn);
-                      // Forward-only re-seat. Never move the video backward here:
-                      // a backward jump onto a lagging audio clock is exactly the
-                      // "replays the same section over and over".
-                      if (isFiniteNum(freezeFixAt) && freezeFixAt >= 0 &&
-                        freezeFixAt > (Number(vn.currentTime) || 0) + 0.1) {
-                        state._isMicroSeek = true;
-                        state._allowUnexpectedVideoTimeRestore = true;
-                        vn.currentTime = freezeFixAt;
-                        if (videoEl && videoEl !== vn) videoEl.currentTime = freezeFixAt;
-                        state._allowUnexpectedVideoTimeRestore = false;
-                        try { scheduleMicroSeekClear(260); } catch { }
-                      } else {
-                        // Already in position: FORCE the frozen decoder to render a
-                        // frame with a tiny seek. A same-position pause/play does not
-                        // wake a suspended decoder (why the freeze persisted until a
-                        // manual gesture); a micro-seek does. No shown-position change.
-                        const _frzCur = Number(vn.currentTime) || 0;
-                        state._isMicroSeek = true;
-                        state._allowUnexpectedVideoTimeRestore = true;
-                        vn.currentTime = _frzCur + 0.04;
-                        if (videoEl && videoEl !== vn) videoEl.currentTime = _frzCur + 0.04;
-                        state._allowUnexpectedVideoTimeRestore = false;
-                        try { scheduleMicroSeekClear(200); } catch { }
-                      }
-                      const fp = HTMLMediaElement.prototype.play.call(vn);
-                      if (fp && typeof fp.catch === "function") fp.catch(() => { });
-                      setTimeout(() => {
-                        state._allowVideoPause = false;
-                        state.isProgrammaticVideoPause = false;
-                      }, 220);
-                    } catch {
-                      state._allowVideoPause = false;
-                      state.isProgrammaticVideoPause = false;
-                      state._allowUnexpectedVideoTimeRestore = false;
-                    }
-                    try { VideoCompositorFlushManager.arm({ observe: true }); } catch { }
-                    try { forceClearSeekBufferingUI(); } catch { }
-                  } else {
-                    needFast = true;
+                    try { videoGenericPlaybackStableManager.start(); } catch { }
                   }
                 }
               }
@@ -44748,7 +44712,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             !state.seeking && !state.seekBuffering && !state.seekResumeInFlight &&
             !(vn && vn.seeking) && !(audio && audio.seeking) &&
             state.pendingSeekTarget == null &&
-            !(typeof TabReturnFastRecovery !== "undefined" && TabReturnFastRecovery.isRunning()) &&
+            !(typeof videoGenericPlaybackStableManager !== "undefined" && videoGenericPlaybackStableManager.isRunning()) &&
             !(typeof userSeekIntentActive === "function" && userSeekIntentActive());
           if (catchupEligible) {
             const cAt = (() => { try { return Number(audio.currentTime); } catch { return NaN; } })();
