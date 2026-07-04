@@ -43484,6 +43484,8 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     let lastLockstepActAt = 0;
     let lockstepParkedSince = 0;
     let lastLockstepParkAt = 0;
+    let audioParkedSince = 0;
+    let lastAudioParkFixAt = 0;
     let startupStuckSince = 0;
     let lastStartupForceAt = 0;
     let bufferCoupleSince = 0;
@@ -43973,8 +43975,20 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
               // starving. Nothing to reconcile.
               lockstepStarveSince = 0;
               lockstepReadySince = 0;
-              if (bothCanPlay && vPlaying && aPlaying && _bufferGuardSpinnerOn) {
-                try { forceClearSeekBufferingUI(); } catch { }
+              // Both tracks actually advancing: there is no buffer, so clear any
+              // spinner/waiting state immediately. Kills the false-positive
+              // buffer icon over healthy playback.
+              if (vPlaying && aPlaying && videoAdvancing &&
+                (audioAdvancing || !coupledMode)) {
+                try {
+                  const rootEl = video?.el?.();
+                  if (rootEl && (rootEl.classList.contains("vjs-waiting") ||
+                    rootEl.classList.contains("vjs-seeking") ||
+                    rootEl.classList.contains("vjs-stalled"))) {
+                    rootEl.classList.remove("vjs-waiting", "vjs-seeking", "vjs-stalled");
+                  }
+                } catch { }
+                if (_bufferGuardSpinnerOn) { try { forceClearSeekBufferingUI(); } catch { } }
               }
             }
 
@@ -44007,10 +44021,45 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                 try { VideoCompositorFlushManager.arm({ observe: true }); } catch { }
               }
             } else lockstepParkedSince = 0;
+
+            // Parked audio: video advancing, audio "playing" with data but its
+            // clock is stuck (silent). The pair-sync then pulls the video back to
+            // the stuck audio, replaying the same section "until audio comes
+            // back". Fix the AUDIO instead - re-seat it FORWARD to the live video
+            // position and replay its decoder. Never rewind the video.
+            if (!lsRamping && vPlaying && videoAdvancing &&
+              !audio.paused && !audioAdvancing && !playerMutedFromVideo() &&
+              Number(audio.readyState || 0) >= HAVE_CURRENT_DATA &&
+              isFiniteNum(vt) && vt >= 0) {
+              needFast = true;
+              if (!audioParkedSince) audioParkedSince = t;
+              else if ((t - audioParkedSince) > 700 && (t - lastAudioParkFixAt) > 1500) {
+                audioParkedSince = 0;
+                lastAudioParkFixAt = t;
+                try {
+                  state.isProgrammaticAudioPause = true;
+                  preserveAudioGainWhileSilent("audio-parked-reset");
+                  HTMLMediaElement.prototype.pause.call(audio);
+                  // Seat audio forward to the video (video is ahead) - never back.
+                  const parkFixAt = Number(vn.currentTime);
+                  if (isFiniteNum(parkFixAt) && parkFixAt >= 0 &&
+                    (Number(audio.currentTime) || 0) < parkFixAt - 0.05) {
+                    state._allowAudioTimeWrite = true;
+                    try { audio.currentTime = parkFixAt; } finally { state._allowAudioTimeWrite = false; }
+                  }
+                  setAudioPlaybackVolume(targetVolFromVideo(), "audio-parked-reset", { cancelFade: true });
+                  setAudioMutedSynced(false);
+                  const ap = HTMLMediaElement.prototype.play.call(audio);
+                  if (ap && typeof ap.catch === "function") ap.catch(() => { });
+                  setTimeout(() => { state.isProgrammaticAudioPause = false; }, 220);
+                } catch { state.isProgrammaticAudioPause = false; state._allowAudioTimeWrite = false; }
+              }
+            } else audioParkedSince = 0;
           } else {
             lockstepStarveSince = 0;
             lockstepReadySince = 0;
             lockstepParkedSince = 0;
+            audioParkedSince = 0;
           }
         } catch { }
 
