@@ -16965,6 +16965,7 @@ startupPrimeStartedAt: performance.now(),
     let lastFrameAt = 0;
     let lastResetAt = 0;
     let successSince = 0;
+    let audioHeldForBuffer = false;
     function eligible() {
       if (document.visibilityState !== "visible") return false;
       if (!state.intendedPlaying || state.endedNaturally || state.restarting) return false;
@@ -16979,7 +16980,7 @@ startupPrimeStartedAt: performance.now(),
       running = false;
       if (timerId) { try { clearTimeout(timerId); } catch { } timerId = 0; }
       startedAt = 0; lastKickAt = 0; lastSeatAt = 0; lastFrameCount = NaN; lastFrameAt = 0;
-      lastResetAt = 0; successSince = 0;
+      lastResetAt = 0; successSince = 0; audioHeldForBuffer = false;
     }
     function schedule() { if (running) { try { timerId = setTimeout(tick, 70); } catch { } } }
     function tick() {
@@ -17019,56 +17020,102 @@ startupPrimeStartedAt: performance.now(),
       successSince = 0;
       if ((t - lastKickAt) < 110) { schedule(); return; }
       lastKickAt = t;
-      let runway = 0;
-      try { runway = bufferAheadAt(vn, isFiniteNum(vt) ? vt : 0); } catch { }
+      // Where does the video need to be? If it is far behind the audio master, the
+      // audio position; otherwise its own. Does it have DATA there?
+      const targetPos = (coupledMode && audio && isFiniteNum(at) && Math.abs(gap) > 0.5)
+        ? at : (isFiniteNum(vt) ? vt : 0);
+      let targetRunway = 0;
+      try { targetRunway = bufferAheadAt(vn, targetPos); } catch { }
+      // BUFFERING = the picture is stopped and the video has NO data where it
+      // needs to be, so it will stay frozen until it fetches. WEDGED = it is
+      // stopped but the data IS there (decoder just needs a kick). Hysteresis on
+      // the runway (enter <0.15, stay until >0.4) so the audio hold can't flap on
+      // and off as the buffer trickles in.
+      const videoBuffering = !decodingRecently && stuckFor > 400 &&
+        (audioHeldForBuffer ? targetRunway < 0.4 : targetRunway < 0.15);
       try {
-        // Keep the master audio playing - never pause/move it.
-        if (coupledMode && audio && audio.paused && !playerMutedFromVideo() &&
-          !userPauseLockActive() && !mediaSessionForcedPauseActive()) {
-          try { setAudioMutedSynced(false); } catch { }
-          state.isProgrammaticAudioPlay = true;
-          const ap = HTMLMediaElement.prototype.play.call(audio);
-          if (ap && typeof ap.catch === "function") ap.catch(() => { });
-          setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 150);
-        }
-        // Only touch the video POSITION or DECODER when it is genuinely STUCK (no
-        // presented frame for a beat). Never seat/reset a video that is decoding.
-        if (!decodingRecently && stuckFor > 350) {
-          if (coupledMode && audio && isFiniteNum(at) && at >= 0 && Math.abs(gap) > 0.5 &&
-            (t - lastSeatAt) > 900) {
-            // Stuck AND off-position: seat onto the audio master ONCE, long
-            // cooldown so it can land and build momentum instead of being re-seeked.
+        if (videoBuffering && coupledMode && audio) {
+          // COMBINED BUFFER: hold the AUDIO too so it can't run ahead of a frozen
+          // picture (the "video frozen while audio progresses as if nothing
+          // happened"). Show the spinner and let the video fetch at the target -
+          // the pair buffers together like one native element, then resumes
+          // together when the picture is back (handled by the success path above).
+          if (!audio.paused && !playerMutedFromVideo() &&
+            !userPauseLockActive() && !mediaSessionForcedPauseActive()) {
+            state.isProgrammaticAudioPause = true;
+            state._allowAudioPause = true;
+            try { preserveAudioGainWhileSilent("vgpsm-combined-buffer"); } catch { }
+            try { HTMLMediaElement.prototype.pause.call(audio); } catch { }
+            setTimeout(() => { state.isProgrammaticAudioPause = false; state._allowAudioPause = false; }, 160);
+          }
+          audioHeldForBuffer = true;
+          try { setSeekBufferingUIVisible(true); } catch { }
+          // Seat the video to the target so the fetch starts at the right spot.
+          if (isFiniteNum(targetPos) &&
+            Math.abs((Number(vn.currentTime) || 0) - targetPos) > 0.3 && (t - lastSeatAt) > 900) {
             lastSeatAt = t;
             state._isMicroSeek = true;
             state._allowUnexpectedVideoTimeRestore = true;
             try {
-              vn.currentTime = at;
-              if (videoEl && videoEl !== vn) videoEl.currentTime = at;
-            } finally { state._allowUnexpectedVideoTimeRestore = false; }
-            try { scheduleMicroSeekClear(200); } catch { }
-          } else if (runway > 0.1 && (t - lastResetAt) > 600) {
-            // Stuck but in position with data: FORCE the frozen decoder to render
-            // with a tiny seek within the buffered range. A same-position pause/
-            // play does not make a suspended decoder present a new frame (that is
-            // why the freeze persisted until a manual gesture); a micro-seek does.
-            // No meaningful position change, so it doesn't move the shown time.
-            lastResetAt = t;
-            const cur = Number(vn.currentTime) || 0;
-            const nudged = cur + 0.04;
-            state._isMicroSeek = true;
-            state._allowUnexpectedVideoTimeRestore = true;
-            try {
-              vn.currentTime = nudged;
-              if (videoEl && videoEl !== vn) videoEl.currentTime = nudged;
+              vn.currentTime = targetPos;
+              if (videoEl && videoEl !== vn) videoEl.currentTime = targetPos;
             } finally { state._allowUnexpectedVideoTimeRestore = false; }
             try { scheduleMicroSeekClear(200); } catch { }
           }
-        }
-        if (vn.paused && !state.isProgrammaticVideoPause) {
-          state.isProgrammaticVideoPlay = true;
-          const p = HTMLMediaElement.prototype.play.call(vn);
-          if (p && typeof p.catch === "function") p.catch(() => { });
-          setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 150);
+          if (vn.paused && !state.isProgrammaticVideoPause) {
+            state.isProgrammaticVideoPlay = true;
+            const p = HTMLMediaElement.prototype.play.call(vn);
+            if (p && typeof p.catch === "function") p.catch(() => { });
+            setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 150);
+          }
+        } else {
+          // WEDGED or decoding: the data is present. Keep the master audio playing
+          // (release any combined-buffer hold) and, if the picture is wedged, force
+          // it with a micro-seek.
+          audioHeldForBuffer = false;
+          if (coupledMode && audio && audio.paused && !playerMutedFromVideo() &&
+            !userPauseLockActive() && !mediaSessionForcedPauseActive()) {
+            try { setAudioMutedSynced(false); } catch { }
+            try { forceClearSeekBufferingUI(); } catch { }
+            state.isProgrammaticAudioPlay = true;
+            const ap = HTMLMediaElement.prototype.play.call(audio);
+            if (ap && typeof ap.catch === "function") ap.catch(() => { });
+            setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 150);
+          }
+          if (!decodingRecently && stuckFor > 350) {
+            if (coupledMode && audio && isFiniteNum(at) && at >= 0 && Math.abs(gap) > 0.5 &&
+              (t - lastSeatAt) > 900) {
+              // Stuck AND off-position but data is there: seat onto the audio master.
+              lastSeatAt = t;
+              state._isMicroSeek = true;
+              state._allowUnexpectedVideoTimeRestore = true;
+              try {
+                vn.currentTime = at;
+                if (videoEl && videoEl !== vn) videoEl.currentTime = at;
+              } finally { state._allowUnexpectedVideoTimeRestore = false; }
+              try { scheduleMicroSeekClear(200); } catch { }
+            } else if (targetRunway > 0.1 && (t - lastResetAt) > 600) {
+              // Stuck in position with data: FORCE the wedged decoder to render a
+              // frame with a tiny seek (pause/play does not wake a suspended
+              // decoder). No meaningful position change.
+              lastResetAt = t;
+              const cur = Number(vn.currentTime) || 0;
+              const nudged = cur + 0.04;
+              state._isMicroSeek = true;
+              state._allowUnexpectedVideoTimeRestore = true;
+              try {
+                vn.currentTime = nudged;
+                if (videoEl && videoEl !== vn) videoEl.currentTime = nudged;
+              } finally { state._allowUnexpectedVideoTimeRestore = false; }
+              try { scheduleMicroSeekClear(200); } catch { }
+            }
+          }
+          if (vn.paused && !state.isProgrammaticVideoPause) {
+            state.isProgrammaticVideoPlay = true;
+            const p = HTMLMediaElement.prototype.play.call(vn);
+            if (p && typeof p.catch === "function") p.catch(() => { });
+            setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 150);
+          }
         }
         try { VideoCompositorFlushManager.arm({ observe: true }); } catch { }
       } catch {
@@ -43892,6 +43939,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     let lastAvCatchupAt = 0;
     let lastResumeResyncAt = 0;
     let audioGoneSince = 0;
+    let videoFrozenVsAudioSince = 0;
     let startupStuckSince = 0;
     let lastStartupForceAt = 0;
     let bufferCoupleSince = 0;
@@ -44694,6 +44742,30 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             } else { freezeFrameSince = 0; freezeFrameCount = NaN; }
           } else { freezeFrameSince = 0; freezeFrameCount = NaN; }
         } catch { }
+
+        // Video frozen while the audio master runs AHEAD - the picture's clock is
+        // static while the sound keeps advancing ("video frozen, audio progresses
+        // as if nothing happened"). This covers the case the freeze block above
+        // does NOT: the video has to BUFFER (no data in place), so there's no data
+        // to force a frame from. Hand it to the manager, which HOLDS the audio so
+        // the pair buffers together (combined) instead of the audio running on. A
+        // crawling-but-advancing video keeps its clock moving, so it never trips.
+        try {
+          if (coupledMode && audio && intended && committed && !hidden &&
+            vn && !vPaused && !audio.paused && audioAdvancing && !videoAdvancing &&
+            !userHeldPaused && !authoritativeTransportPauseActive() &&
+            !state.endedNaturally && !state.restarting &&
+            !state.seekDragActive && !state.seeking && !state.seekBuffering &&
+            !state.seekResumeInFlight && !(vn && vn.seeking) && !(audio && audio.seeking) &&
+            state.pendingSeekTarget == null &&
+            !(typeof userSeekIntentActive === "function" && userSeekIntentActive())) {
+            if (!videoFrozenVsAudioSince) videoFrozenVsAudioSince = t;
+            else if ((t - videoFrozenVsAudioSince) > 650) {
+              needFast = true;
+              try { videoGenericPlaybackStableManager.start(); } catch { }
+            }
+          } else videoFrozenVsAudioSince = 0;
+        } catch { videoFrozenVsAudioSince = 0; }
 
         // Audio-master video catch-up. A hidden tab suspends the video decoder
         // (browser battery saver) while the audio keepalive keeps advancing, so
