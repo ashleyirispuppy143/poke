@@ -16985,19 +16985,28 @@ startupPrimeStartedAt: performance.now(),
       if (!vn) { schedule(); return; }
       let fc = NaN;
       try { fc = Number(getVideoPresentedFrameCount(vn)); } catch { }
-      const framesAdvancing = isFiniteNum(fc) && isFiniteNum(lastFrameCount) && fc > lastFrameCount + 0.5;
-      if (!isFiniteNum(lastFrameCount) || (isFiniteNum(fc) && fc > lastFrameCount + 0.5)) {
-        lastFrameCount = fc; lastFrameAt = t;
+      if (!isFiniteNum(lastFrameCount)) {
+        lastFrameCount = fc; // baseline only - do NOT treat init as a fresh frame
+      } else if (isFiniteNum(fc) && fc > lastFrameCount + 0.5) {
+        lastFrameCount = fc; lastFrameAt = t; // a frame was actually presented
       }
+      // "Decoding" = the picture presented a frame very recently. A decoding video
+      // is RECOVERING; touching it (a seek or a reset) flushes that progress and
+      // is exactly what turned catch-up into "one frame at a time". So once it is
+      // decoding we do NOTHING to the video and hand the residual sync to the
+      // gentle supervisor drift heal.
+      const decodingRecently = lastFrameAt > 0 && (t - lastFrameAt) < 300;
+      const stuckFor = lastFrameAt > 0 ? (t - lastFrameAt) : (t - startedAt);
       const at = (coupledMode && audio)
         ? (() => { try { return Number(audio.currentTime); } catch { return NaN; } })()
         : (() => { try { return Number(vn.currentTime); } catch { return NaN; } })();
       const vt = (() => { try { return Number(vn.currentTime); } catch { return NaN; } })();
       const gap = (isFiniteNum(at) && isFiniteNum(vt)) ? (at - vt) : 0;
-      const inSync = Math.abs(gap) < 0.35;
-      // SUCCESS: picture is moving and lined up with the sound, and playing.
-      if (framesAdvancing && inSync && !vn.paused &&
-        (!coupledMode || !audio || !audio.paused)) {
+      const audioPlaying = !coupledMode || !audio || !audio.paused;
+      // SUCCESS: the picture is moving and playing and not wildly off. Do not chase
+      // perfect lip-sync here - that is what caused the thrash. Hand the residual
+      // to the gentle drift heal.
+      if (decodingRecently && !vn.paused && audioPlaying && Math.abs(gap) < 1.2) {
         if (!successSince) successSince = t;
         if ((t - successSince) > 250) { stop(); return; }
         schedule(); return;
@@ -17017,30 +17026,32 @@ startupPrimeStartedAt: performance.now(),
           if (ap && typeof ap.catch === "function") ap.catch(() => { });
           setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 150);
         }
-        if (coupledMode && audio && isFiniteNum(at) && at >= 0 && Math.abs(gap) > 0.30 &&
-          (t - lastSeatAt) > 500) {
-          // Seat the video onto the LIVE audio master (forward or a small
-          // correction). Cooldown 500ms so the decoder can actually land and
-          // buffer at the target instead of being re-seeked out from under itself.
-          lastSeatAt = t;
-          state._isMicroSeek = true;
-          state._allowUnexpectedVideoTimeRestore = true;
-          try {
-            vn.currentTime = at;
-            if (videoEl && videoEl !== vn) videoEl.currentTime = at;
-          } finally { state._allowUnexpectedVideoTimeRestore = false; }
-          try { scheduleMicroSeekClear(200); } catch { }
-        } else if (!framesAdvancing && (t - lastFrameAt) > 300 && runway > 0.1 &&
-          (t - lastResetAt) > 320) {
-          // In sync but the decoder is frozen with data present: reset it (the
-          // strongest wake) - pause then replay in place. Fixes black/static frame.
-          lastResetAt = t;
-          state._allowVideoPause = true;
-          state.isProgrammaticVideoPause = true;
-          HTMLMediaElement.prototype.pause.call(vn);
-          const rp = HTMLMediaElement.prototype.play.call(vn);
-          if (rp && typeof rp.catch === "function") rp.catch(() => { });
-          setTimeout(() => { state._allowVideoPause = false; state.isProgrammaticVideoPause = false; }, 140);
+        // Only touch the video POSITION or DECODER when it is genuinely STUCK (no
+        // presented frame for a beat). Never seat/reset a video that is decoding.
+        if (!decodingRecently && stuckFor > 350) {
+          if (coupledMode && audio && isFiniteNum(at) && at >= 0 && Math.abs(gap) > 0.5 &&
+            (t - lastSeatAt) > 900) {
+            // Stuck AND off-position: seat onto the audio master ONCE, long
+            // cooldown so it can land and build momentum instead of being re-seeked.
+            lastSeatAt = t;
+            state._isMicroSeek = true;
+            state._allowUnexpectedVideoTimeRestore = true;
+            try {
+              vn.currentTime = at;
+              if (videoEl && videoEl !== vn) videoEl.currentTime = at;
+            } finally { state._allowUnexpectedVideoTimeRestore = false; }
+            try { scheduleMicroSeekClear(200); } catch { }
+          } else if (runway > 0.1 && (t - lastResetAt) > 600) {
+            // Stuck but in position with data: reset the decoder (pause/replay in
+            // place) - the strongest wake, no position change. Fixes black/static.
+            lastResetAt = t;
+            state._allowVideoPause = true;
+            state.isProgrammaticVideoPause = true;
+            HTMLMediaElement.prototype.pause.call(vn);
+            const rp = HTMLMediaElement.prototype.play.call(vn);
+            if (rp && typeof rp.catch === "function") rp.catch(() => { });
+            setTimeout(() => { state._allowVideoPause = false; state.isProgrammaticVideoPause = false; }, 140);
+          }
         }
         if (vn.paused && !state.isProgrammaticVideoPause) {
           state.isProgrammaticVideoPlay = true;
@@ -44723,7 +44734,12 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             // Only chase a LIVE audio clock (advancing) - never seat the video to a
             // stalled audio position (that is a different fault the park heal owns).
             const gap = (audioAdvancing && isFiniteNum(cAt) && cAt >= 0 && isFiniteNum(cVt)) ? (cAt - cVt) : 0;
-            if (gap > 0.75) {
+            // Only seat a STUCK (frozen, not advancing) video. A video whose clock
+            // is advancing - even a slow/crawling decode - is recovering on its
+            // own; seeking it flushes its decode progress and is exactly what made
+            // catch-up feel like "one frame at a time". A slightly-behind but
+            // advancing video is left to the gentle drift heal instead.
+            if (gap > 0.75 && !videoAdvancing) {
               needFast = true;
               if (!avCatchupSince) avCatchupSince = t;
               else if ((t - avCatchupSince) > 300 && (t - lastAvCatchupAt) > 1400) {
@@ -44778,7 +44794,9 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             try { rBuffered = isFiniteNum(rAt) && bufferAheadAt(vn, rAt) > 0.05; } catch { rBuffered = false; }
             if (isFiniteNum(rAt) && isFiniteNum(rVt) && rBuffered) {
               const off = rVt - rAt; // + = video ahead, - = video behind
-              if (Math.abs(off) > 0.09 && Math.abs(off) < 3 && (t - lastResumeResyncAt) > 400) {
+              // Rare, gentle correction only. A tight threshold + short cooldown
+              // meant repeatedly seeking an already-decoding video = micro-stutter.
+              if (Math.abs(off) > 0.18 && Math.abs(off) < 3 && (t - lastResumeResyncAt) > 900) {
                 lastResumeResyncAt = t;
                 needFast = true;
                 try {
