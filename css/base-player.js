@@ -21838,35 +21838,36 @@ startupPrimeStartedAt: performance.now(),
     return true;
   }
   function applyGentleAudioDriftRateCorrection(drift) {
-    if (!normalPlaybackAudioDriftCorrectionAllowed()) {
-      if (videoCatchupActive()) endVideoCatchup("catchup-context-lost");
-      return false;
-    }
+    // NO playback-rate change (the user rejects speed nudges). Re-anchor the
+    // muted VIDEO forward onto the audio master, rarely, for clear lip-sync
+    // drift. The bar follows the audio clock, so seating the video does not move
+    // the shown position; it only nudges the picture back into sync. Forward
+    // only - seeking the video back to a behind audio would replay a section.
+    if (!normalPlaybackAudioDriftCorrectionAllowed()) return false;
     const vn = getVideoNode();
-    if (!vn || vn.paused || audio.paused) {
-      if (videoCatchupActive()) endVideoCatchup("catchup-track-paused");
-      return false;
-    }
+    if (!vn || vn.paused || audio.paused) return false;
     try { if (vn.seeking || audio.seeking) return false; } catch { }
     let vt = NaN, at = NaN;
     try { vt = Number(vn.currentTime); at = Number(audio.currentTime); } catch { return false; }
     if (!isFinite(vt) || !isFinite(at)) return false;
-    const ahead = at - vt;
-    // A glide is in progress: end it once the video has caught up (or overshot).
-    if (videoCatchupActive()) {
-      if (ahead <= 0.10) endVideoCatchup("video-catchup-converged");
-      return true;
-    }
-    // Forward-only. A behind video glides up to audio; seeking video back to a
-    // behind audio would replay the section. The bar follows the audio clock,
-    // so the shown position stays correct throughout the glide. Below ~0.5s is
-    // imperceptible lip-sync and left alone.
+    const ahead = at - vt; // positive = video behind audio
+    // Below ~0.5s is imperceptible; above 2.5s is handled by the big-drift path.
     if (ahead < 0.5 || ahead > 2.5) return false;
     const t = now();
-    if ((t - _lastVideoDriftReanchorAt) < (perfProfile.lowEnd ? 4000 : 2600)) return false;
+    if ((t - _lastVideoDriftReanchorAt) < (perfProfile.lowEnd ? 6000 : 4000)) return false;
     if (Number(vn.readyState || 0) < HAVE_FUTURE_DATA && !canPlaySmoothAt(vn, at, 0.05)) return false;
     _lastVideoDriftReanchorAt = t;
-    return beginSmoothVideoCatchup(ahead);
+    const prevRestore = !!state._allowUnexpectedVideoTimeRestore;
+    state._isMicroSeek = true;
+    state._allowUnexpectedVideoTimeRestore = true;
+    try {
+      vn.currentTime = at;
+      if (videoEl && videoEl !== vn) videoEl.currentTime = at;
+    } catch { } finally {
+      state._allowUnexpectedVideoTimeRestore = prevRestore;
+    }
+    try { scheduleMicroSeekClear(perfProfile.lowEnd ? 320 : 220); } catch { }
+    return true;
   }
   function enforcePlaybackRateSync() {
     if (!coupledMode || !audio) return;
@@ -43568,9 +43569,6 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     let audioParkedSince = 0;
     let lastAudioParkFixAt = 0;
     let avDriftSince = 0;
-    let lastAvDriftFixAt = 0;
-    let unintendedPauseSince = 0;
-    let lastUnintendedPauseFixAt = 0;
     let startupStuckSince = 0;
     let lastStartupForceAt = 0;
     let bufferCoupleSince = 0;
@@ -43869,12 +43867,18 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           // Only the hard transitions block lockstep. The bg-return grace is
           // deliberately NOT here: return-while-buffering is exactly when the
           // pair drifts into a one-plays-one-buffers state, so lockstep should
-          // run then. Only the brief active return recovery is excluded.
+          // Stand down for the tab-return window too. On return the video clock
+          // is stale/throttled, so lockstep + the drift heals fight the dedicated
+          // return recovery and produced a play/pause storm and wrong positions.
+          // Let the return recovery own the first ~2.5s.
           const lsInTransition =
           (typeof initialCoupledPairPending === "function" && initialCoupledPairPending()) ||
           (typeof startupSettleActive === "function" && startupSettleActive()) ||
           (typeof isVisibilityTransitionActive === "function" && isVisibilityTransitionActive()) ||
           (typeof isAltTabTransitionActive === "function" && isAltTabTransitionActive()) ||
+          (Number(state.lastBgReturnAt || 0) > 0 && (t - Number(state.lastBgReturnAt || 0)) < 2500) ||
+          (typeof inBgReturnGrace === "function" && inBgReturnGrace()) ||
+          (typeof smoothForegroundReturnActive === "function" && smoothForegroundReturnActive(0)) ||
           (typeof NotMakePlayBackFixingNoticable !== "undefined" && NotMakePlayBackFixingNoticable.isRecovering && NotMakePlayBackFixingNoticable.isRecovering());
           const lsNativeSeeking = (() => {
             try { return !!(vn && vn.seeking) || !!(coupledMode && audio && audio.seeking); }
@@ -44096,9 +44100,11 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
               // starving. Nothing to reconcile.
               lockstepStarveSince = 0;
               lockstepReadySince = 0;
-              // Both tracks actually advancing: there is no buffer, so clear any
-              // spinner/waiting state immediately. Kills the false-positive
-              // buffer icon over healthy playback.
+              // Both tracks actually advancing: there is no buffer. Clear the
+              // spinner AND the stale buffer state flags that kept the icon up
+              // ("appears buffering but is healthy after play/pause"), and if the
+              // audio went silent while playing, restore its volume (alt-tab
+              // "audio disappears"). Data-free, forward-only, no rate change.
               if (vPlaying && aPlaying && videoAdvancing &&
                 (audioAdvancing || !coupledMode)) {
                 try {
@@ -44109,7 +44115,27 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                     rootEl.classList.remove("vjs-waiting", "vjs-seeking", "vjs-stalled");
                   }
                 } catch { }
+                try {
+                  if (state.videoWaiting || state.audioWaiting || state.strictBufferHold ||
+                    state.seekBuffering || state.videoStallAudioPaused || state.audioStallVideoPaused) {
+                    state.videoWaiting = false; state.audioWaiting = false;
+                    state.strictBufferHold = false; state.seekBuffering = false;
+                    state.videoStallAudioPaused = false; state.audioStallVideoPaused = false;
+                    try { clearBufferHold(); } catch { }
+                  }
+                } catch { }
                 if (_bufferGuardSpinnerOn) { try { forceClearSeekBufferingUI(); } catch { } }
+                // Audio playing but silenced (muted/gain ~0) with nothing muting
+                // it on purpose: restore it. Covers "audio disappears on return".
+                try {
+                  if (coupledMode && audio && !audio.paused && !playerMutedFromVideo() &&
+                    !state.userMutedVideo && !state.userMutedAudio &&
+                    (audio.muted || (Number(audio.volume) || 0) < 0.012) &&
+                    clamp01(targetVolFromVideo()) > 0.05) {
+                    setAudioMutedSynced(false);
+                    setAudioPlaybackVolume(targetVolFromVideo(), "lockstep-audio-restore", { immediate: true, cancelFade: true });
+                  }
+                } catch { }
               }
             }
 
@@ -44243,117 +44269,32 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
               }
             } else audioParkedSince = 0;
 
-            // A/V lip-sync convergence for both-playing drift. After a buffer
-            // refill or a tab return the pair can resume both playing but out of
-            // sync (the lockstep only aligns a track it resumes from paused).
-            // Seat the BEHIND track forward onto the AHEAD one - never move the
-            // ahead track backward (that would rewind/replay). Rate-limited so it
-            // does not churn; small drift is left to the smooth rate glide.
+            // A/V sync convergence WITHOUT a speed nudge and WITHOUT moving the
+            // shown position. When the muted video falls behind the audio master
+            // (after a buffer refill or tab return), seat the VIDEO forward onto
+            // the audio. The bar follows the audio, so the picture re-syncs but
+            // the shown position never jumps. Only video-behind; audio-behind is
+            // left alone (seeking the audio would move the bar = the old "seek to
+            // the future"). applyGentleAudioDriftRateCorrection now does the
+            // forward video seat and rate-limits itself (no playback-rate change).
             if (!lsRamping && vPlaying && aPlaying && videoAdvancing && audioAdvancing &&
               isFiniteNum(vt) && isFiniteNum(at) && vt >= 0 && at >= 0) {
-              const avDrift = Math.abs(vt - at);
-              if (avDrift > 0.35) {
+              const behind = at - vt; // positive = video behind audio
+              if (behind > 0.5 && behind < 2.5) {
                 needFast = true;
                 if (!avDriftSince) avDriftSince = t;
-                else if ((t - avDriftSince) > 600 && (t - lastAvDriftFixAt) > 2500) {
+                else if ((t - avDriftSince) > 1000) {
                   avDriftSince = 0;
-                  lastAvDriftFixAt = t;
-                  try {
-                    if (vt < at) {
-                      // Video behind: seat it forward onto the audio master.
-                      if (!vn.seeking) {
-                        state._isMicroSeek = true;
-                        state._allowUnexpectedVideoTimeRestore = true;
-                        vn.currentTime = at;
-                        if (videoEl && videoEl !== vn) videoEl.currentTime = at;
-                        state._allowUnexpectedVideoTimeRestore = false;
-                        try { scheduleMicroSeekClear(240); } catch { }
-                      }
-                    } else {
-                      // Audio behind: seat it forward onto the video. Never move
-                      // the video (ahead) backward.
-                      if (!audio.seeking) {
-                        state._allowAudioTimeWrite = true;
-                        try { audio.currentTime = vt; } finally { state._allowAudioTimeWrite = false; }
-                      }
-                    }
-                  } catch {
-                    state._allowUnexpectedVideoTimeRestore = false;
-                    state._allowAudioTimeWrite = false;
-                  }
+                  try { applyGentleAudioDriftRateCorrection(vt - at); } catch { }
                 }
               } else avDriftSince = 0;
             } else avDriftSince = 0;
-
-            // Unintended-pause recovery. If a track is paused while the pair
-            // should be playing and it has data to play, and the plain lockstep
-            // resume above did not get it going, recover with an explicit
-            // pause/play toggle 0.5-1.5s after the pause (a toggle resets decoder
-            // state that a bare play() sometimes fails to restart).
-            const _unintendedPaused = (vPaused || audio.paused) &&
-            !(vPaused && audio.paused && !bothCanStart) &&
-            bothCanStart;
-            if (_unintendedPaused) {
-              needFast = true;
-              if (!unintendedPauseSince) unintendedPauseSince = t;
-              else if ((t - unintendedPauseSince) > 800 && (t - lastUnintendedPauseFixAt) > 2500) {
-                unintendedPauseSince = 0;
-                lastUnintendedPauseFixAt = t;
-                try {
-                  const toggleAt = (coupledMode && audio && audioAdvancing && isFiniteNum(at) && at >= 0)
-                  ? at : (isFiniteNum(vt) ? vt : (Number(vn.currentTime) || 0));
-                  state._allowVideoPause = true;
-                  state._allowAudioPause = true;
-                  state.isProgrammaticVideoPause = true;
-                  state.isProgrammaticAudioPause = true;
-                  if (coupledMode && audio) preserveAudioGainWhileSilent("unintended-pause-toggle");
-                  try { if (vn && !vn.paused) HTMLMediaElement.prototype.pause.call(vn); } catch { }
-                  try { if (coupledMode && audio && !audio.paused) HTMLMediaElement.prototype.pause.call(audio); } catch { }
-                  setTimeout(() => {
-                    try {
-                      state.isProgrammaticVideoPause = false; state.isProgrammaticAudioPause = false;
-                      state._allowVideoPause = false; state._allowAudioPause = false;
-                      state.videoWaiting = false; state.audioWaiting = false;
-                      state.videoStallAudioPaused = false; state.audioStallVideoPaused = false;
-                      state.strictBufferHold = false; state.seekBuffering = false;
-                      try { clearBufferHold(); } catch { }
-                      if (vn) {
-                        state.isProgrammaticVideoPlay = true;
-                        const vp = HTMLMediaElement.prototype.play.call(vn);
-                        if (vp && typeof vp.catch === "function") vp.catch(() => { });
-                        setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 200);
-                      }
-                      if (coupledMode && audio && !playerMutedFromVideo()) {
-                        if (isFiniteNum(toggleAt) && Math.abs((Number(audio.currentTime) || 0) - toggleAt) > 0.12) {
-                          state._allowAudioTimeWrite = true;
-                          try { audio.currentTime = toggleAt; } finally { state._allowAudioTimeWrite = false; }
-                        }
-                        setAudioPlaybackVolume(targetVolFromVideo(), "unintended-pause-toggle", { cancelFade: true });
-                        setAudioMutedSynced(false);
-                        state.isProgrammaticAudioPlay = true;
-                        const ap = HTMLMediaElement.prototype.play.call(audio);
-                        if (ap && typeof ap.catch === "function") ap.catch(() => { });
-                        setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 200);
-                      }
-                      try { forceClearSeekBufferingUI(); } catch { }
-                    } catch {
-                      state.isProgrammaticVideoPlay = false; state.isProgrammaticAudioPlay = false;
-                      state._allowAudioTimeWrite = false;
-                    }
-                  }, 140);
-                } catch {
-                  state._allowVideoPause = false; state._allowAudioPause = false;
-                  state.isProgrammaticVideoPause = false; state.isProgrammaticAudioPause = false;
-                }
-              }
-            } else unintendedPauseSince = 0;
           } else {
             lockstepStarveSince = 0;
             lockstepReadySince = 0;
             lockstepParkedSince = 0;
             audioParkedSince = 0;
             avDriftSince = 0;
-            unintendedPauseSince = 0;
             freezeFrameSince = 0;
             freezeFrameCount = NaN;
           }
