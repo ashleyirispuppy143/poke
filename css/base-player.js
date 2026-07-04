@@ -7104,17 +7104,10 @@ startupPrimeStartedAt: performance.now(),
         _on(audio, "playing", enforceGate, { capture: true, passive: true });
     }
   } catch { }
-  // Source-level both-or-neither. The supervisor enforces this too, but only on
-  // its ~480ms tick, so a track that buffers first fires `playing` and LEADS for
-  // a beat before the supervisor catches it ("audio plays while the video
-  // buffers", and the mirror). Catch it the instant playback actually starts: if
-  // the partner genuinely can't play (real buffered runway, not a lagging
-  // readyState), pause this track back and show the buffer until the partner is
-  // ready. The audio play-kicks already honor shouldBlockNewAudioStart (true
-  // while the video buffers), so a held audio is not immediately re-kicked = no
-  // loop. Skipped when hidden (background audio-only is by design) and during the
-  // tab-return window (the catch-up seats the video forward there; a hold would
-  // be a jarring audio pause on return).
+  // Both-or-neither helpers. Enforcement lives on the real buffering signal (the
+  // `waiting` events, debounced) and in the supervisor - NOT on the play/playing
+  // event, which fires while two tracks are legitimately co-starting and would
+  // false-pause one of them into a stall.
   function pairLockstepReturnWindow() {
     try {
       const r = Number(state.lastBgReturnAt || 0);
@@ -7139,54 +7132,44 @@ startupPrimeStartedAt: performance.now(),
       return trackGenuinelyPlayable(audio, isFinite(at) ? at : 0, false);
     } catch { return true; }
   }
-  function enforcePlayingLockstep(which) {
+  // Video plays while the AUDIO buffers: pause the video back. (The mirror -
+  // audio over a buffering video - is owned by the video "waiting" handler.)
+  // Debounced off the audio "waiting" event so a co-start is never false-paused.
+  let _audioWaitingPauseVideoTimer = null;
+  function scheduleAudioBufferPauseVideo() {
     try {
-      if (!coupledMode || !audio) return;
-      if (initialCoupledPairPending()) return; // startup path owns the first start
-      if (!state.intendedPlaying || state.endedNaturally || state.restarting) return;
-      if (document.visibilityState === "hidden") return;
-      if (userPauseLockActive() || mediaSessionForcedPauseActive() ||
-        (typeof userPauseIntentActive === "function" && userPauseIntentActive())) return;
-      if (state.seekDragActive || state.seeking || state.seekBuffering) return;
-      if (pairLockstepReturnWindow()) return;
-      const vn = getVideoNode();
-      if (!vn) return;
-      if (partnerGenuinelyPlayableFor(which)) return;
-      if (which === "audio") {
-        if (audio.paused) return;
-        if (state.isProgrammaticVideoPause || state._allowVideoPause) return; // our own heal mid-flight
+      if (_audioWaitingPauseVideoTimer) return;
+      _audioWaitingPauseVideoTimer = setTimeout(() => {
+        _audioWaitingPauseVideoTimer = null;
         try {
-          state.isProgrammaticAudioPause = true;
-          state._allowAudioPause = true;
-          try { preserveAudioGainWhileSilent("pair-lockstep-hold"); } catch { }
-          HTMLMediaElement.prototype.pause.call(audio);
-          setTimeout(() => { state.isProgrammaticAudioPause = false; state._allowAudioPause = false; }, 180);
-        } catch { state.isProgrammaticAudioPause = false; state._allowAudioPause = false; }
-      } else {
-        if (vn.paused) return;
-        if (state.isProgrammaticAudioPause || state._allowAudioPause) return;
-        try {
+          if (!coupledMode || !audio) return;
+          if (!state.intendedPlaying || state.endedNaturally || state.restarting) return;
+          if (document.visibilityState === "hidden") return;
+          if (userPauseLockActive() || mediaSessionForcedPauseActive() ||
+            (typeof userPauseIntentActive === "function" && userPauseIntentActive())) return;
+          if (state.seekDragActive) return;
+          if (pairLockstepReturnWindow()) return;
+          const vn = getVideoNode();
+          if (!vn || vn.paused) return;
+          if (state.isProgrammaticAudioPause || state._allowAudioPause) return;
+          // Only if the audio genuinely still can't play (confirmed buffer).
+          if (partnerGenuinelyPlayableFor("video")) return;
           state.isProgrammaticVideoPause = true;
           state._allowVideoPause = true;
-          HTMLMediaElement.prototype.pause.call(vn);
-          if (videoEl && videoEl !== vn && !videoEl.paused) HTMLMediaElement.prototype.pause.call(videoEl);
-          setTimeout(() => { state.isProgrammaticVideoPause = false; state._allowVideoPause = false; }, 180);
-        } catch { state.isProgrammaticVideoPause = false; state._allowVideoPause = false; }
-      }
-      try { setSeekBufferingUIVisible(true); } catch { }
+          try {
+            HTMLMediaElement.prototype.pause.call(vn);
+            if (videoEl && videoEl !== vn && !videoEl.paused) HTMLMediaElement.prototype.pause.call(videoEl);
+          } catch { }
+          setTimeout(() => { state.isProgrammaticVideoPause = false; state._allowVideoPause = false; }, 160);
+          try { setSeekBufferingUIVisible(true); } catch { }
+        } catch { }
+      }, perfProfile.lowEnd ? 340 : 260);
     } catch { }
   }
   try {
     if (coupledMode && audio) {
-      const onAudioPlayingLockstep = () => enforcePlayingLockstep("audio");
-      const onVideoPlayingLockstep = () => enforcePlayingLockstep("video");
-      _on(audio, "playing", onAudioPlayingLockstep, { capture: true, passive: true });
-      _on(audio, "play", onAudioPlayingLockstep, { capture: true, passive: true });
-      const _vnForLockstep = getVideoNode();
-      if (_vnForLockstep) {
-        _on(_vnForLockstep, "playing", onVideoPlayingLockstep, { capture: true, passive: true });
-        _on(_vnForLockstep, "play", onVideoPlayingLockstep, { capture: true, passive: true });
-      }
+      _on(audio, "waiting", scheduleAudioBufferPauseVideo, { passive: true });
+      _on(audio, "stalled", scheduleAudioBufferPauseVideo, { passive: true });
     }
   } catch { }
   const STRICT_BUFFER_AHEAD_SEC = 0.25;
@@ -12384,9 +12367,11 @@ startupPrimeStartedAt: performance.now(),
       mediaSessionForcedPauseActive()) return false;
     if (document.visibilityState !== "visible" || !isWindowFocused()) return false;
     if (Number(audio.readyState || 0) < HAVE_CURRENT_DATA) return false;
-    // Don't keep audio playing under a visible buffer icon.
+    // Don't keep audio playing under a visible buffer icon. Tight: once the
+    // spinner is genuinely up the pair must be both-or-neither, so stop letting
+    // the audio ride the video stall almost immediately.
     if (_bufferGuardSpinnerOn && Number(_spinnerVisibleAt) > 0 &&
-      (now() - Number(_spinnerVisibleAt)) > 450) return false;
+      (now() - Number(_spinnerVisibleAt)) > 180) return false;
     if (PlaybackProgressEvidence.audioStalledFor(perfProfile.lowEnd ? 1500 : 1100)) {
       return false;
     }
@@ -12402,9 +12387,10 @@ startupPrimeStartedAt: performance.now(),
       } catch { }
       if (!_videoHasDataAhead) return false;
     }
-    // A parked stall past ~0.6s isn't recovering; stop covering it.
+    // A parked stall past ~0.5s isn't a brief re-decode; stop covering it so the
+    // pair stays both-or-neither instead of audio playing on over a stuck video.
     const _stallSince = Number(state.videoStallSince || 0);
-    if (_stallSince > 0 && (now() - _stallSince) > 1200) return false;
+    if (_stallSince > 0 && (now() - _stallSince) > 500) return false;
     return PlaybackProgressEvidence.audioProgressRecent(
       perfProfile.lowEnd ? 1800 : 1300
     );
@@ -37719,6 +37705,16 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           forcePausePlaybackForErrorOverlay("video-playing-while-overlay");
           return;
         }
+        // Video just resumed. If it came out of a buffer/stall, arm the post-resume
+        // lip-sync lock so the pair is re-tightened without needing a play/pause
+        // ("A/V not synced esp after a video buffer").
+        try {
+          if (coupledMode && audio && state.firstPlayCommitted &&
+            (state.videoWaiting || Number(state.videoStallSince || 0) > 0 ||
+              state.strictBufferHold || state.seekBuffering)) {
+            state.lastBufferRecoverAt = now();
+          }
+        } catch { }
         try { releasePairAudioOutput("video-playing-release", { requirePair: true }); } catch { }
         if (SeekPlaybackCommitController.onMediaEvent("playing")) return;
         maybeClearPlaybackFailureDiagnostic();
@@ -44609,8 +44605,8 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         // either way. Fires a few times then stops once the pair is tight.
         try {
           const resumeSyncWindow = coupledMode && audio &&
-            Number(state.lastUserResumeAt || 0) > 0 &&
-            (t - Number(state.lastUserResumeAt || 0)) < 4000;
+            ((Number(state.lastUserResumeAt || 0) > 0 && (t - Number(state.lastUserResumeAt || 0)) < 4000) ||
+             (Number(state.lastBufferRecoverAt || 0) > 0 && (t - Number(state.lastBufferRecoverAt || 0)) < 4000));
           if (resumeSyncWindow && intended && committed && !hidden &&
             !vPaused && !audio.paused && !userHeldPaused &&
             !state.seeking && !state.seekBuffering && !state.seekResumeInFlight &&
