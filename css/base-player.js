@@ -17319,6 +17319,12 @@ startupPrimeStartedAt: performance.now(),
       if (!isFinite(vt) && typeof video?.currentTime === "function") vt = Number(video.currentTime());
     } catch { }
     try { if (coupledMode && audio) at = Number(audio.currentTime); } catch { }
+    // Audio is the master clock in coupled mode - prefer it. The video clock can
+    // be stale (behind) after a tab return where the decoder was suspended, and
+    // storing that as the toggle position resumed the pair from the wrong (old)
+    // spot ("play/pause plays from the wrong position").
+    if (coupledMode && audio && isFinite(at) && at >= 0 &&
+      (state.audioEverStarted || Number(audio.readyState || 0) >= HAVE_CURRENT_DATA)) return at;
     if (isFinite(vt) && vt >= 0) return vt;
     if (isFinite(at) && at >= 0) return at;
     return NaN;
@@ -17365,6 +17371,21 @@ startupPrimeStartedAt: performance.now(),
         } catch { }
         return vt;
       }
+      // Video NOT advancing but the audio master IS (the classic tab-return: the
+      // decoder was suspended while the audio kept playing). The audio position
+      // is the truth - anchor to it so the resume does not jump to the frozen
+      // video's stale clock ("come back, play/pause, video frozen, wrong spot").
+      try {
+        if (coupledMode && audio && !audio.paused) {
+          const anchorAt = Number(audio.currentTime);
+          if (isFinite(anchorAt) && anchorAt >= 0 &&
+            PlaybackProgressEvidence.audioProgressRecent(
+              perfProfile.lowEnd ? 1900 : 1300
+            )) {
+            return anchorAt;
+          }
+        }
+      } catch { }
         }
     } catch { }
     const returnTarget = getForegroundReturnTimelineTarget(NaN);
@@ -17512,7 +17533,17 @@ startupPrimeStartedAt: performance.now(),
     commitAnchor >= 0 &&
     isFinite(liveVideoTime) &&
     Math.abs(commitAnchor - liveVideoTime) <= 0.14;
-    const target = anchorIsNearVideo ? commitAnchor : liveVideoTime;
+    // Anchor to the AUDIO master when it is a valid clock. Using the video clock
+    // here dragged the audio BACKWARD onto a stale/behind video position after a
+    // tab return - the pair then resumed from the wrong (old) spot, and only a
+    // second toggle (after the video had caught up) landed right. Prefer audio;
+    // fall back to the commit anchor / video clock only when audio is invalid.
+    const liveAudioTime = Number(audio.currentTime);
+    const audioMasterValid = isFinite(liveAudioTime) && liveAudioTime >= 0 &&
+    (state.audioEverStarted || Number(audio.readyState || 0) >= HAVE_CURRENT_DATA);
+    const target = audioMasterValid
+    ? liveAudioTime
+    : (anchorIsNearVideo ? commitAnchor : liveVideoTime);
     if (!isFinite(target) || target < 0) return false;
     const tolerance = Math.max(RESUME_STRICT_GOOD_DRIFT_SEC, PAIR_SYNC_GOOD_DRIFT_SEC);
     let changed = false;
