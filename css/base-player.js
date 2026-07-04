@@ -10029,6 +10029,17 @@ startupPrimeStartedAt: performance.now(),
       }
       return stabilizePlayerDisplayTime(clamp(at), dur);
     }
+    // Audio is paused (a buffer/stall hold, or the pair momentarily stopped).
+    // The audio clock is still the master position - the video clock can be
+    // ahead/behind it during a coupled buffer, so showing the video clock here
+    // was the "wrong time during buffering". Prefer the audio position when it
+    // is valid, unless the video is genuinely the running clock.
+    if (coupledMode && audio && isFinite(at) && at >= 0 &&
+      state.audioEverStarted && audio.paused &&
+      Number(audio.readyState || 0) >= HAVE_METADATA &&
+      (getVideoPaused() || !isFinite(vt))) {
+      return stabilizePlayerDisplayTime(clamp(at), dur);
+    }
     const displayVideo = clamp(isFinite(vt) ? vt : at);
     return stabilizePlayerDisplayTime(
       isFinite(displayVideo) ? displayVideo : playerDisplayLastTime,
@@ -38518,12 +38529,13 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           forcePausePlaybackForErrorOverlay("audio-playing-while-overlay");
           return;
         }
-        // The user's last decision was pause, yet some path started the audio
-        // (a background buffer-end resume slipping past a guard). Pause it right
-        // back. This is the catch-all for "paused while buffering, audio plays
-        // when the buffer ends until you return to the tab".
-        if ((authoritativeTransportPauseActive() || mediaSessionForcedPauseActive() ||
-          userPauseLockActive()) && !state.intendedPlaying &&
+        // The user's last decision was pause, yet a background buffer-end resume
+        // started the audio. Pause it back. Only enforce while hidden (that is
+        // the only place this leak happens) and never during a return transition
+        // - firing on return was pausing legitimately-resuming playback.
+        if (document.visibilityState === "hidden" &&
+          !inBgReturnGrace() && !isVisibilityTransitionActive() && !isAltTabTransitionActive() &&
+          authoritativeTransportPauseActive() && !state.intendedPlaying &&
           !userWantsPlayNow(1200) && !userToggleExpectingPlay()) {
           try { preserveAudioGainWhileSilent("paused-audio-autostart-block"); } catch { }
           try { state.isProgrammaticAudioPause = true; audio.pause(); } catch { }
@@ -43819,7 +43831,14 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             audioAdvancing || aAhead > 0.5;
             const vPlaying = !vPaused;
             const aPlaying = !audio.paused;
+            // Lenient "can start now" for the RESUME side: any decoded frame or a
+            // sliver of buffer is enough to begin (readyState can lag the buffered
+            // ranges). Using the strict can-play here left a paused pair that had
+            // data stuck in forever-buffering that only a manual play/pause fixed.
+            const vCanStart = vCanPlay || Number(vn.readyState || 0) >= HAVE_CURRENT_DATA || vAhead > 0.05;
+            const aCanStart = aCanPlay || Number(audio.readyState || 0) >= HAVE_CURRENT_DATA || aAhead > 0.05;
             const bothCanPlay = vCanPlay && aCanPlay;
+            const bothCanStart = vCanStart && aCanStart;
             const eitherStarving = !vCanPlay || !aCanPlay;
             // Playback needs a moment to ramp after any seek/resume/user action;
             // its readyState and clock lag briefly. Pausing in that window cut
@@ -43832,17 +43851,25 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
               Number(state.seekCommitStartIssuedAt || 0),
               Number(state.coupledPlayCommitIssuedAt || 0),
               Number(state.lastUserActionTime || 0),
+              Number(state.lastBgReturnAt || 0),
               lastLockstepActAt
             );
             const lsRamping = lsRampSince > 0 && (t - lsRampSince) < 1300;
+            // Only a PLAYING track that cannot continue is "starving". A paused
+            // track is not starving (it just needs to be resumed) - treating it
+            // as starving pauses the healthy track instead of resuming the paused
+            // one. That distinction is what fixed the forever-buffering pair.
+            const vStarvingPlaying = vPlaying && !vCanPlay;
+            const aStarvingPlaying = aPlaying && !aCanPlay;
+            const eitherPlayingStarving = vStarvingPlaying || aStarvingPlaying;
             // A track with NO decoded frame at all (readyState below current
             // data) is genuinely buffering, not ramping - couple immediately so
             // audio never plays over a truly-buffering video, even in the ramp.
             const genuinelyEmpty =
-            (!vCanPlay && Number(vn.readyState || 0) < HAVE_CURRENT_DATA) ||
-            (!aCanPlay && Number(audio.readyState || 0) < HAVE_CURRENT_DATA);
+            (vStarvingPlaying && Number(vn.readyState || 0) < HAVE_CURRENT_DATA) ||
+            (aStarvingPlaying && Number(audio.readyState || 0) < HAVE_CURRENT_DATA);
 
-            if (eitherStarving && (vPlaying || aPlaying) && (!lsRamping || genuinelyEmpty)) {
+            if (eitherPlayingStarving && (!lsRamping || genuinelyEmpty)) {
               // One track starved while the other still plays. Confirm over a
               // long window so a brief decode hiccup does not cut healthy audio;
               // only a real sustained buffer stall couples the pair down.
@@ -43873,10 +43900,10 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                 }
                 try { setSeekBufferingUIVisible(true); } catch { }
               }
-            } else if (bothCanPlay && (!vPlaying || !aPlaying)) {
-              // Both can play but one or both are paused. Resume both together.
-              // This is the auto recovery that removes the frozen until you
-              // pause/play behavior.
+            } else if (bothCanStart && (!vPlaying || !aPlaying)) {
+              // Both have data to start but one or both are paused. Resume both
+              // together. Uses the lenient can-start so a paused pair with data
+              // (readyState lagging) is not left in forever-buffering.
               needFast = true;
               lockstepStarveSince = 0;
               if (!lockstepReadySince) lockstepReadySince = t;
