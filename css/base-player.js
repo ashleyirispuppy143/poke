@@ -25,7 +25,7 @@
  
 //////////////// THE PLAYER, START ////////////////////////
 /* found bugs? report em! */
- try {
+try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -17047,6 +17047,7 @@ startupPrimeStartedAt: performance.now(),
       if (timerId) { try { clearTimeout(timerId); } catch { } timerId = 0; }
       startedAt = 0; lastKickAt = 0; lastSeatAt = 0; lastFrameCount = NaN; lastFrameAt = 0;
       lastResetAt = 0; successSince = 0; audioHeldForBuffer = false;
+      try { state.pairBufferAudioHoldUntil = 0; } catch { }
     }
     function schedule() { if (running) { try { timerId = setTimeout(tick, 70); } catch { } } }
     function tick() {
@@ -17109,6 +17110,9 @@ startupPrimeStartedAt: performance.now(),
           // its position (never moved), so nothing lands on a wrong spot; the
           // instant rVFC reports a real frame the success/else path resumes it, so
           // the pause is as short as physically possible.
+          // Authoritative hold flag: blocks the keepalive/lockstep from re-playing
+          // the audio underneath us (else it runs on over the frozen picture).
+          state.pairBufferAudioHoldUntil = t + 500;
           if (!audio.paused && !playerMutedFromVideo() &&
             !userPauseLockActive() && !mediaSessionForcedPauseActive()) {
             state.isProgrammaticAudioPause = true;
@@ -17141,6 +17145,7 @@ startupPrimeStartedAt: performance.now(),
           // any hold) and, if the picture is wedged, force it - never touch a
           // presenting one (that is what stuttered it "frame by frame").
           audioHeldForBuffer = false;
+          state.pairBufferAudioHoldUntil = 0;
           if (coupledMode && audio && audio.paused && !playerMutedFromVideo() &&
             !userPauseLockActive() && !mediaSessionForcedPauseActive()) {
             try { setAudioMutedSynced(false); } catch { }
@@ -23614,6 +23619,11 @@ startupPrimeStartedAt: performance.now(),
   }
   function shouldBlockNewAudioStart() {
     if (!coupledMode) return false;
+    // The stability manager is holding the audio because the video genuinely
+    // can't present yet (combined buffer). Nothing else may re-start the audio
+    // during that hold, or it runs on over a frozen picture (the keepalive/lockstep
+    // fighting the hold = "audio progresses even though the video isn't ready").
+    if (now() < Number(state.pairBufferAudioHoldUntil || 0)) return true;
     if (seekAudioHoldUntilVideoReadyActive()) return true;
     if (terminalAudioStartBlocked()) return true;
     if (state.seeking || state.seekBuffering) return true;
@@ -44006,6 +44016,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     let lastResumeResyncAt = 0;
     let audioGoneSince = 0;
     let videoFrozenVsAudioSince = 0;
+    let audioFrozenVsVideoSince = 0;
     let startupStuckSince = 0;
     let lastStartupForceAt = 0;
     let bufferCoupleSince = 0;
@@ -44832,6 +44843,41 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             }
           } else videoFrozenVsAudioSince = 0;
         } catch { videoFrozenVsAudioSince = 0; }
+
+        // MIRROR: the video is playing/advancing while the AUDIO has genuinely
+        // stalled (its clock is static, low readyState, no runway) - "video
+        // progresses even if audio is not ready". Pause the video so it can't run
+        // ahead of the silent audio; the lockstep resumes both together when the
+        // audio flows again. Confirmed over a window so a momentary sample gap
+        // during healthy playback never cuts the video.
+        try {
+          const _aAheadNow = (() => { try { return bufferAheadAt(audio, Number(audio.currentTime) || 0); } catch { return 999; } })();
+          const _audioStalled = coupledMode && audio && !audio.paused && !audioAdvancing &&
+            Number(audio.readyState || 0) < HAVE_FUTURE_DATA && _aAheadNow < 0.3;
+          if (_audioStalled && intended && committed && !hidden &&
+            vn && !vPaused && videoAdvancing &&
+            !userHeldPaused && !authoritativeTransportPauseActive() &&
+            !state.endedNaturally && !state.restarting &&
+            !state.seekDragActive && !state.seeking && !state.seekBuffering &&
+            !state.seekResumeInFlight && !(vn && vn.seeking) && !(audio && audio.seeking) &&
+            state.pendingSeekTarget == null &&
+            !state.isProgrammaticAudioPause && !state._allowAudioPause &&
+            !(typeof userSeekIntentActive === "function" && userSeekIntentActive())) {
+            if (!audioFrozenVsVideoSince) audioFrozenVsVideoSince = t;
+            else if ((t - audioFrozenVsVideoSince) > 500) {
+              audioFrozenVsVideoSince = 0;
+              needFast = true;
+              try {
+                state._allowVideoPause = true;
+                state.isProgrammaticVideoPause = true;
+                HTMLMediaElement.prototype.pause.call(vn);
+                if (videoEl && videoEl !== vn && !videoEl.paused) HTMLMediaElement.prototype.pause.call(videoEl);
+                setTimeout(() => { state._allowVideoPause = false; state.isProgrammaticVideoPause = false; }, 200);
+              } catch { state._allowVideoPause = false; state.isProgrammaticVideoPause = false; }
+              try { setSeekBufferingUIVisible(true); } catch { }
+            }
+          } else audioFrozenVsVideoSince = 0;
+        } catch { audioFrozenVsVideoSince = 0; }
 
         // Audio-master video catch-up. A hidden tab suspends the video decoder
         // (browser battery saver) while the audio keepalive keeps advancing, so
