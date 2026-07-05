@@ -3258,38 +3258,16 @@ startupPrimeStartedAt: performance.now(),
             try { refreshHiddenAudioMediaSession("bg-keepalive"); } catch { }
           }
           try { if (shouldUseHiddenAudioExclusiveMode()) enterHiddenAudioExclusiveMode("bg-keepalive-exclusive"); } catch { }
-          // Keep the paused background video's BUFFER aligned with the audio so
-          // the tab return doesn't hit a big fetch. The video is paused in the
-          // background (to avoid Chromium's both-playing battery pause), so its
-          // buffer otherwise stays stuck at the old position and on return it must
-          // fetch a long way = the freeze. Every few seconds, if the paused video
-          // has no data near the LIVE audio position, seat its currentTime just
-          // behind the audio so preload buffers the region we'll return to. It
-          // never plays, so it can't trip the background pause.
+          // Keep the video's forward buffer growing while hidden WITHOUT moving it
+          // (preload=auto lets a paused element keep fetching from where it sits).
+          // We do NOT seek the paused video in the background - that corrupted the
+          // position (seekbar fighting between two times) and replayed sections on
+          // return. The clean return recovery re-seats the video to the audio once,
+          // on return, when the position display is authoritative again.
           try {
-            if (coupledMode && audio && !audio.paused && state.intendedPlaying &&
-              !state.restarting && !state.seeking && !state.seekBuffering && !state.strictBufferHold) {
-              const vnBg = getVideoNode();
-              const aPosBg = Number(audio.currentTime);
-              if (vnBg && vnBg.paused && isFinite(aPosBg) && aPosBg >= 0 &&
-                (tickNow - Number(state._bgVideoPrebufferAt || 0)) > 5000) {
-                let vAheadBg = 0;
-                try { vAheadBg = bufferAheadAt(vnBg, aPosBg); } catch { }
-                if (vAheadBg < 1.0) {
-                  state._bgVideoPrebufferAt = tickNow;
-                  const seekTo = Math.max(0, aPosBg - 2);
-                  try {
-                    state._isMicroSeek = true;
-                    state._allowUnexpectedVideoTimeRestore = true;
-                    if (vnBg.preload !== "auto") vnBg.preload = "auto";
-                    vnBg.currentTime = seekTo;
-                    if (videoEl && videoEl !== vnBg) videoEl.currentTime = seekTo;
-                    state._allowUnexpectedVideoTimeRestore = false;
-                    try { scheduleMicroSeekClear(400); } catch { }
-                  } catch { state._allowUnexpectedVideoTimeRestore = false; }
-                }
-              }
-            }
+            const vnBg = getVideoNode();
+            if (vnBg && vnBg.preload !== "auto") vnBg.preload = "auto";
+            if (audio && audio.preload !== "auto") audio.preload = "auto";
           } catch { }
         }
         {
@@ -9132,16 +9110,20 @@ startupPrimeStartedAt: performance.now(),
         // In coupled mode the audio clock is what actually played while hidden;
         // the video clock can be stale or run ahead without presenting frames,
         // which is what made the bar/time land on the wrong spot on tab return.
-        // Prefer the live audio position whenever audio is the running clock.
+        // Use the audio position whenever it is valid - playing OR momentarily
+        // paused (a play/pause on return). Flipping to the behind video clock the
+        // instant the audio pauses is exactly the "seekbar fights between two
+        // positions (0:33 vs 0:22)". The video clock is a fallback only when there
+        // is no valid audio position at all.
         let usedAudio = false;
         if (coupledMode && audio) {
           try {
             const at = Number(audio.currentTime);
-            if (isFinite(at) && at >= 0 && !audio.paused &&
+            if (isFinite(at) && at >= 0 &&
               (state.audioEverStarted || Number(audio.readyState || 0) >= HAVE_CURRENT_DATA)) {
               live = at;
-            usedAudio = true;
-              }
+              usedAudio = true;
+            }
           } catch { }
         }
         if (!usedAudio) {
@@ -44854,7 +44836,15 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           const _aAheadNow = (() => { try { return bufferAheadAt(audio, Number(audio.currentTime) || 0); } catch { return 999; } })();
           const _audioStalled = coupledMode && audio && !audio.paused && !audioAdvancing &&
             Number(audio.readyState || 0) < HAVE_FUTURE_DATA && _aAheadNow < 0.3;
-          if (_audioStalled && intended && committed && !hidden &&
+          // Skip the whole return window: right after a return the audio clock is
+          // throttled/settling and momentarily reads as "stalled", so firing here
+          // pauses the video for no reason = the "video play/pauses on return"
+          // flicker. Let the return recovery own that window.
+          const _inReturnWin = (Number(state.lastBgReturnAt || 0) > 0 &&
+            (t - Number(state.lastBgReturnAt || 0)) < 3000) ||
+            (typeof inBgReturnGrace === "function" && inBgReturnGrace()) ||
+            (typeof smoothForegroundReturnActive === "function" && smoothForegroundReturnActive(0));
+          if (_audioStalled && !_inReturnWin && intended && committed && !hidden &&
             vn && !vPaused && videoAdvancing &&
             !userHeldPaused && !authoritativeTransportPauseActive() &&
             !state.endedNaturally && !state.restarting &&
