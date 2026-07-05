@@ -25,7 +25,7 @@
  
 //////////////// THE PLAYER, START ////////////////////////
 /* found bugs? report em! */
-try {
+ try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -3258,6 +3258,39 @@ startupPrimeStartedAt: performance.now(),
             try { refreshHiddenAudioMediaSession("bg-keepalive"); } catch { }
           }
           try { if (shouldUseHiddenAudioExclusiveMode()) enterHiddenAudioExclusiveMode("bg-keepalive-exclusive"); } catch { }
+          // Keep the paused background video's BUFFER aligned with the audio so
+          // the tab return doesn't hit a big fetch. The video is paused in the
+          // background (to avoid Chromium's both-playing battery pause), so its
+          // buffer otherwise stays stuck at the old position and on return it must
+          // fetch a long way = the freeze. Every few seconds, if the paused video
+          // has no data near the LIVE audio position, seat its currentTime just
+          // behind the audio so preload buffers the region we'll return to. It
+          // never plays, so it can't trip the background pause.
+          try {
+            if (coupledMode && audio && !audio.paused && state.intendedPlaying &&
+              !state.restarting && !state.seeking && !state.seekBuffering && !state.strictBufferHold) {
+              const vnBg = getVideoNode();
+              const aPosBg = Number(audio.currentTime);
+              if (vnBg && vnBg.paused && isFinite(aPosBg) && aPosBg >= 0 &&
+                (tickNow - Number(state._bgVideoPrebufferAt || 0)) > 5000) {
+                let vAheadBg = 0;
+                try { vAheadBg = bufferAheadAt(vnBg, aPosBg); } catch { }
+                if (vAheadBg < 1.0) {
+                  state._bgVideoPrebufferAt = tickNow;
+                  const seekTo = Math.max(0, aPosBg - 2);
+                  try {
+                    state._isMicroSeek = true;
+                    state._allowUnexpectedVideoTimeRestore = true;
+                    if (vnBg.preload !== "auto") vnBg.preload = "auto";
+                    vnBg.currentTime = seekTo;
+                    if (videoEl && videoEl !== vnBg) videoEl.currentTime = seekTo;
+                    state._allowUnexpectedVideoTimeRestore = false;
+                    try { scheduleMicroSeekClear(400); } catch { }
+                  } catch { state._allowUnexpectedVideoTimeRestore = false; }
+                }
+              }
+            }
+          } catch { }
         }
         {
           const blockedByTransition = state.restarting || state.strictBufferHold ||
@@ -16998,6 +17031,7 @@ startupPrimeStartedAt: performance.now(),
     let lastFrameAt = 0;
     let lastResetAt = 0;
     let successSince = 0;
+    let audioHeldForBuffer = false;
     function eligible() {
       if (document.visibilityState !== "visible") return false;
       if (!state.intendedPlaying || state.endedNaturally || state.restarting) return false;
@@ -17012,7 +17046,7 @@ startupPrimeStartedAt: performance.now(),
       running = false;
       if (timerId) { try { clearTimeout(timerId); } catch { } timerId = 0; }
       startedAt = 0; lastKickAt = 0; lastSeatAt = 0; lastFrameCount = NaN; lastFrameAt = 0;
-      lastResetAt = 0; successSince = 0;
+      lastResetAt = 0; successSince = 0; audioHeldForBuffer = false;
     }
     function schedule() { if (running) { try { timerId = setTimeout(tick, 70); } catch { } } }
     function tick() {
@@ -17061,58 +17095,91 @@ startupPrimeStartedAt: performance.now(),
         ? at : (isFiniteNum(vt) ? vt : 0);
       let targetRunway = 0;
       try { targetRunway = bufferAheadAt(vn, targetPos); } catch { }
+      // BUFFERING = not presenting AND no data where it needs to be, so there is
+      // nothing to force - it must fetch. WEDGED = not presenting but the data IS
+      // there (decoder just needs a kick). readyState is NOT trusted here - rVFC's
+      // actual frame presentation is. Hysteresis (enter <0.12, stay until >0.35).
+      const videoBuffering = !decodingRecently && stuckFor > 350 &&
+        (audioHeldForBuffer ? targetRunway < 0.35 : targetRunway < 0.12);
       try {
-        // Keep the master AUDIO playing throughout. This is what keeps the shown
-        // position correct (audio is the clock, never yanked to a stale video
-        // time = fixes "starts from the wrong position when the buffer ends") and
-        // avoids the audio gap. The video is driven back underneath it.
-        if (coupledMode && audio && audio.paused && !playerMutedFromVideo() &&
-          !userPauseLockActive() && !mediaSessionForcedPauseActive()) {
-          try { setAudioMutedSynced(false); } catch { }
-          state.isProgrammaticAudioPlay = true;
-          const ap = HTMLMediaElement.prototype.play.call(audio);
-          if (ap && typeof ap.catch === "function") ap.catch(() => { });
-          setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 150);
-        }
-        // Touch the video ONLY when it is genuinely not presenting (rVFC/frame
-        // count static). A presenting video - even a slow one just after a buffer -
-        // is left completely alone so it plays out smoothly instead of stuttering
-        // frame by frame under repeated seeks.
-        if (!decodingRecently && stuckFor > 350) {
-          if (coupledMode && audio && isFiniteNum(at) && at >= 0 && Math.abs(gap) > 0.5 &&
-            (t - lastSeatAt) > 900) {
-            // Off-position: seat onto the audio master ONCE (long cooldown). This
-            // both re-syncs and, landing on buffered data, wakes the decoder.
+        if (videoBuffering && coupledMode && audio) {
+          // GENUINE buffer: the picture literally cannot advance until data
+          // arrives. Both-or-neither = HOLD the audio too so it can't run on over a
+          // frozen picture ("audio plays but video not ready"). Held audio keeps
+          // its position (never moved), so nothing lands on a wrong spot; the
+          // instant rVFC reports a real frame the success/else path resumes it, so
+          // the pause is as short as physically possible.
+          if (!audio.paused && !playerMutedFromVideo() &&
+            !userPauseLockActive() && !mediaSessionForcedPauseActive()) {
+            state.isProgrammaticAudioPause = true;
+            state._allowAudioPause = true;
+            try { preserveAudioGainWhileSilent("vgpsm-combined-buffer"); } catch { }
+            try { HTMLMediaElement.prototype.pause.call(audio); } catch { }
+            setTimeout(() => { state.isProgrammaticAudioPause = false; state._allowAudioPause = false; }, 160);
+          }
+          audioHeldForBuffer = true;
+          try { setSeekBufferingUIVisible(true); } catch { }
+          if (isFiniteNum(targetPos) &&
+            Math.abs((Number(vn.currentTime) || 0) - targetPos) > 0.3 && (t - lastSeatAt) > 900) {
             lastSeatAt = t;
             state._isMicroSeek = true;
             state._allowUnexpectedVideoTimeRestore = true;
             try {
-              vn.currentTime = at;
-              if (videoEl && videoEl !== vn) videoEl.currentTime = at;
-            } finally { state._allowUnexpectedVideoTimeRestore = false; }
-            try { scheduleMicroSeekClear(200); } catch { }
-          } else if (targetRunway > 0.08 && (t - lastResetAt) > 600) {
-            // In position with data but frozen: FORCE the wedged decoder to render a
-            // frame with a tiny seek (pause/play does not wake a suspended decoder).
-            lastResetAt = t;
-            const cur = Number(vn.currentTime) || 0;
-            const nudged = cur + 0.04;
-            state._isMicroSeek = true;
-            state._allowUnexpectedVideoTimeRestore = true;
-            try {
-              vn.currentTime = nudged;
-              if (videoEl && videoEl !== vn) videoEl.currentTime = nudged;
+              vn.currentTime = targetPos;
+              if (videoEl && videoEl !== vn) videoEl.currentTime = targetPos;
             } finally { state._allowUnexpectedVideoTimeRestore = false; }
             try { scheduleMicroSeekClear(200); } catch { }
           }
-          // If it is buffering (no data at the target) there is nothing to force -
-          // native buffering owns it; just make sure the fetch is happening.
-        }
-        if (vn.paused && !state.isProgrammaticVideoPause) {
-          state.isProgrammaticVideoPlay = true;
-          const p = HTMLMediaElement.prototype.play.call(vn);
-          if (p && typeof p.catch === "function") p.catch(() => { });
-          setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 150);
+          if (vn.paused && !state.isProgrammaticVideoPause) {
+            state.isProgrammaticVideoPlay = true;
+            const p = HTMLMediaElement.prototype.play.call(vn);
+            if (p && typeof p.catch === "function") p.catch(() => { });
+            setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 150);
+          }
+        } else {
+          // WEDGED (data present) or decoding: keep the master audio playing (release
+          // any hold) and, if the picture is wedged, force it - never touch a
+          // presenting one (that is what stuttered it "frame by frame").
+          audioHeldForBuffer = false;
+          if (coupledMode && audio && audio.paused && !playerMutedFromVideo() &&
+            !userPauseLockActive() && !mediaSessionForcedPauseActive()) {
+            try { setAudioMutedSynced(false); } catch { }
+            try { forceClearSeekBufferingUI(); } catch { }
+            state.isProgrammaticAudioPlay = true;
+            const ap = HTMLMediaElement.prototype.play.call(audio);
+            if (ap && typeof ap.catch === "function") ap.catch(() => { });
+            setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 150);
+          }
+          if (!decodingRecently && stuckFor > 350) {
+            if (coupledMode && audio && isFiniteNum(at) && at >= 0 && Math.abs(gap) > 0.5 &&
+              (t - lastSeatAt) > 900) {
+              lastSeatAt = t;
+              state._isMicroSeek = true;
+              state._allowUnexpectedVideoTimeRestore = true;
+              try {
+                vn.currentTime = at;
+                if (videoEl && videoEl !== vn) videoEl.currentTime = at;
+              } finally { state._allowUnexpectedVideoTimeRestore = false; }
+              try { scheduleMicroSeekClear(200); } catch { }
+            } else if (targetRunway > 0.08 && (t - lastResetAt) > 600) {
+              lastResetAt = t;
+              const cur = Number(vn.currentTime) || 0;
+              const nudged = cur + 0.04;
+              state._isMicroSeek = true;
+              state._allowUnexpectedVideoTimeRestore = true;
+              try {
+                vn.currentTime = nudged;
+                if (videoEl && videoEl !== vn) videoEl.currentTime = nudged;
+              } finally { state._allowUnexpectedVideoTimeRestore = false; }
+              try { scheduleMicroSeekClear(200); } catch { }
+            }
+          }
+          if (vn.paused && !state.isProgrammaticVideoPause) {
+            state.isProgrammaticVideoPlay = true;
+            const p = HTMLMediaElement.prototype.play.call(vn);
+            if (p && typeof p.catch === "function") p.catch(() => { });
+            setTimeout(() => { state.isProgrammaticVideoPlay = false; }, 150);
+          }
         }
         try { VideoCompositorFlushManager.arm({ observe: true }); } catch { }
       } catch {
