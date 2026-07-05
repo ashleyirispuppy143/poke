@@ -7160,6 +7160,7 @@ startupPrimeStartedAt: performance.now(),
             (typeof userPauseIntentActive === "function" && userPauseIntentActive())) return;
           if (state.seekDragActive) return;
           if (pairLockstepReturnWindow()) return;
+          if (playbackStormBreakerActive()) return; // stand down during a storm
           const vn = getVideoNode();
           if (!vn || vn.paused) return;
           if (state.isProgrammaticAudioPause || state._allowAudioPause) return;
@@ -16955,6 +16956,43 @@ startupPrimeStartedAt: performance.now(),
       userPauseIntentActive() || userToggleExpectingPause()) return false;
     return foregroundReturnTransportWantsPlayback();
   }
+  // Anti-oscillation circuit breaker. During a transition (tab switch, background
+  // buffer that won't recover, return) the automatic heals can disagree and
+  // ping-pong the pair between play and pause, or seat the video backward = the
+  // "play pause play pause spam" and the replay of the same section. This watches
+  // the ACTUAL play/pause events on both elements; if they flip too many times in
+  // a short window and it isn't the user, it TRIPS a breaker that makes every
+  // automatic heal STAND DOWN for a few seconds so the media settles on its own.
+  // It self-clears. This is targeted at the storm only - not a global governor.
+  let _stormToggleTimes = [];
+  function notePlaybackToggle() {
+    try {
+      const t = now();
+      // User play/pause is legitimate - never let it trip the breaker.
+      if (typeof directUserToggleActive === "function" && directUserToggleActive(600)) return;
+      if ((t - Number(state.lastUserActionTime || 0)) < 600) return;
+      _stormToggleTimes.push(t);
+      _stormToggleTimes = _stormToggleTimes.filter(x => (t - x) < 2500);
+      if (_stormToggleTimes.length >= 6) {
+        state.playbackStormBreakerUntil = t + 4000;
+        _stormToggleTimes.length = 0;
+      }
+    } catch { }
+  }
+  function playbackStormBreakerActive() {
+    try { return now() < Number(state.playbackStormBreakerUntil || 0); } catch { return false; }
+  }
+  try {
+    if (coupledMode && audio) {
+      _on(audio, "play", notePlaybackToggle, { passive: true });
+      _on(audio, "pause", notePlaybackToggle, { passive: true });
+    }
+    const _vnStorm = getVideoNode();
+    if (_vnStorm) {
+      _on(_vnStorm, "play", notePlaybackToggle, { passive: true });
+      _on(_vnStorm, "pause", notePlaybackToggle, { passive: true });
+    }
+  } catch { }
   // Frame-presentation tracker (the technique real players use). requestVideoFrame
   // Callback fires exactly when the compositor paints a new frame, so it is the
   // ground truth for "is the picture actually moving" - far more precise than
@@ -17016,6 +17054,7 @@ startupPrimeStartedAt: performance.now(),
     let audioHeldForBuffer = false;
     function eligible() {
       if (document.visibilityState !== "visible") return false;
+      if (playbackStormBreakerActive()) return false; // stand down during a storm
       if (!state.intendedPlaying || state.endedNaturally || state.restarting) return false;
       if (userPauseLockActive() || mediaSessionForcedPauseActive() ||
         (typeof userPauseIntentActive === "function" && userPauseIntentActive())) return false;
@@ -44331,6 +44370,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           coupledMode && audio && intended && committed && !hidden &&
           !userHeldPaused && !authoritativeTransportPauseActive() &&
           !state.endedNaturally && !state.restarting && !lsSeekActive && !lsInTransition &&
+          !playbackStormBreakerActive() &&
           (!state.coupledPlayCommitHolding || lsCommitHoldStale) &&
           !directUserToggleActive(700) && !playPauseTransactionActive(700) &&
           now() >= Number(state._playPauseTransitionUntil || 0);
@@ -44811,6 +44851,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         // crawling-but-advancing video keeps its clock moving, so it never trips.
         try {
           if (coupledMode && audio && intended && committed && !hidden &&
+            !playbackStormBreakerActive() &&
             vn && !vPaused && !audio.paused && audioAdvancing && !videoAdvancing &&
             !userHeldPaused && !authoritativeTransportPauseActive() &&
             !state.endedNaturally && !state.restarting &&
@@ -44844,7 +44885,8 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
             (t - Number(state.lastBgReturnAt || 0)) < 3000) ||
             (typeof inBgReturnGrace === "function" && inBgReturnGrace()) ||
             (typeof smoothForegroundReturnActive === "function" && smoothForegroundReturnActive(0));
-          if (_audioStalled && !_inReturnWin && intended && committed && !hidden &&
+          if (_audioStalled && !_inReturnWin && !playbackStormBreakerActive() &&
+            intended && committed && !hidden &&
             vn && !vPaused && videoAdvancing &&
             !userHeldPaused && !authoritativeTransportPauseActive() &&
             !state.endedNaturally && !state.restarting &&
@@ -44881,6 +44923,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         // The bar follows the audio, so the shown position never jumps.
         try {
           const catchupEligible = coupledMode && audio && intended && committed && !hidden &&
+            !playbackStormBreakerActive() &&
             !vPaused && !audio.paused && !userHeldPaused &&
             !state.endedNaturally && !state.restarting && !state.seekDragActive &&
             !state.seeking && !state.seekBuffering && !state.seekResumeInFlight &&
