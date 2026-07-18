@@ -29005,7 +29005,10 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       const inBg = document.visibilityState === "hidden" || !isWindowFocused();
       const vNode = _arbVNode;
       const audioHoldReady = !audioBufferPairHoldActive() || audioReadyToReleasePairHold(checkTime);
-      const readyInfo = mediaReadyForBufferResume(0.04);
+      // Genuine runway, not a sliver. Resuming on 0.04s of data ran dry within
+      // a beat, re-stalled, and cycled the pair through play/pause with the bar
+      // jumping forward and snapping back on every dribble of arriving data.
+      const readyInfo = mediaReadyForBufferResume(GENUINE_RUNWAY_S);
       const ready = readyInfo.ready && audioHoldReady;
       if (!ready) return;
       clearStaleCoupledBufferStateIfReady(checkTime, "resume-after-buffer-ready");
