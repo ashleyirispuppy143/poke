@@ -17086,6 +17086,7 @@ startupPrimeStartedAt: performance.now(),
     let fetchMark = -1;
     let fetchMarkAt = 0;
     let lastFetchReviveAt = 0;
+    let heldAudioForPair = false;
     function eligible() {
       if (document.visibilityState !== "visible") return false;
       if (playbackStormBreakerActive()) return false; // stand down during a storm
@@ -17104,6 +17105,9 @@ startupPrimeStartedAt: performance.now(),
       lastResetAt = 0; successSince = 0;
       burstCapMs = 6000; longReturn = false; firstSeatDone = false;
       fetchMark = -1; fetchMarkAt = 0; lastFetchReviveAt = 0;
+      // A hold left behind at stop() stays under the standard stall flags, so
+      // the stall system's normal resume paths own the release.
+      heldAudioForPair = false;
     }
     function schedule() { if (running) { try { timerId = setTimeout(tick, 70); } catch { } } }
     function tick() {
@@ -17150,23 +17154,50 @@ startupPrimeStartedAt: performance.now(),
         ? at : (isFiniteNum(vt) ? vt : 0);
       let targetRunway = 0;
       try { targetRunway = bufferAheadAt(vn, targetPos); } catch { }
-      // Not presenting and no data at the target: a real buffer. The stall
-      // system owns the audio then; this loop must not force-play it.
-      const genuineVideoBuffer = !decodingRecently && stuckFor > 350 && targetRunway < 0.12;
+      // Not presenting and no data at the target: a real buffer. Hysteresis on
+      // the exit (0.5) so the hold below cannot flap while data trickles in.
+      const genuineVideoBuffer = !decodingRecently && stuckFor > 350 &&
+        (heldAudioForPair ? targetRunway < 0.5 : targetRunway < 0.12);
       try {
-        // Keep the master audio playing except during a real buffer or an
-        // active stall pause, which the stall system owns.
-        if (coupledMode && audio && audio.paused && !playerMutedFromVideo() &&
-          !genuineVideoBuffer && !state.videoStallAudioPaused &&
-          now() >= Number(state.stallAudioResumeHoldUntil || 0) &&
-          !userPauseLockActive() && !mediaSessionForcedPauseActive()) {
-          try { setAudioMutedSynced(false); } catch { }
-          state.isProgrammaticAudioPlay = true;
-          const ap = HTMLMediaElement.prototype.play.call(audio);
-          if (ap && typeof ap.catch === "function") ap.catch(() => { });
-          setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 150);
+        if (genuineVideoBuffer) {
+          // Hold the audio while the video genuinely buffers. Letting it play on
+          // moves the catch-up target further away every second, which lengthens
+          // the buffer itself. Held at its position via the stall flag, so every
+          // other system treats it as the standard stall pause; released below
+          // the moment the buffer resolves.
+          if (coupledMode && audio && !audio.paused && stuckFor > 700 &&
+            !playerMutedFromVideo() &&
+            !userPauseLockActive() && !mediaSessionForcedPauseActive()) {
+            heldAudioForPair = true;
+            state.videoStallAudioPaused = true;
+            state.stallAudioPausedSince = state.stallAudioPausedSince || t;
+            state.isProgrammaticAudioPause = true;
+            state._allowAudioPause = true;
+            try { preserveAudioGainWhileSilent("vgpsm-pair-hold"); } catch { }
+            try { HTMLMediaElement.prototype.pause.call(audio); } catch { }
+            setTimeout(() => { state.isProgrammaticAudioPause = false; state._allowAudioPause = false; }, 160);
+          }
+          try { setSeekBufferingUIVisible(true); } catch { }
+        } else {
+          // Buffer resolved: release the pair hold and let the audio run again.
+          if (heldAudioForPair) {
+            heldAudioForPair = false;
+            state.videoStallAudioPaused = false;
+            state.stallAudioPausedSince = 0;
+            state.stallAudioResumeHoldUntil = 0;
+            try { forceClearSeekBufferingUI(); } catch { }
+          }
+          if (coupledMode && audio && audio.paused && !playerMutedFromVideo() &&
+            !state.videoStallAudioPaused &&
+            now() >= Number(state.stallAudioResumeHoldUntil || 0) &&
+            !userPauseLockActive() && !mediaSessionForcedPauseActive()) {
+            try { setAudioMutedSynced(false); } catch { }
+            state.isProgrammaticAudioPlay = true;
+            const ap = HTMLMediaElement.prototype.play.call(audio);
+            if (ap && typeof ap.catch === "function") ap.catch(() => { });
+            setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 150);
+          }
         }
-        if (genuineVideoBuffer) { try { setSeekBufferingUIVisible(true); } catch { } }
         // Long return: the video is known to be far behind before any
         // confirmation window, so seat it on the very first pass. The seek also
         // starts the fetch at the right region immediately.
