@@ -25,7 +25,7 @@
  
 //////////////// THE PLAYER, START ////////////////////////
 /* found bugs? report em! */
- try {
+try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -3219,6 +3219,22 @@ startupPrimeStartedAt: performance.now(),
           state.startupPrimed = true;
         state.startupKickDone = false;
         if (!kickStartupLockstepPlayback()) scheduleStartupAutoplayRetry();
+        // Backstop: the gated startup kick can strand a hidden autoplay when a
+        // stale flag blocks it. If the audio has data but still is not playing
+        // after repeated ticks, play it natively; the commit path above takes
+        // over once it runs.
+        try {
+          if (document.visibilityState === "hidden" && audio && audio.paused &&
+            !playbackStormBreakerActive() &&
+            Number(audio.readyState || 0) >= HAVE_CURRENT_DATA &&
+            (tickNow - Number(state._bgStartupDirectPlayAt || 0)) > 4000) {
+            state._bgStartupDirectPlayAt = tickNow;
+            state.isProgrammaticAudioPlay = true;
+            const bp = HTMLMediaElement.prototype.play.call(audio);
+            if (bp && typeof bp.catch === "function") bp.catch(() => { });
+            setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 150);
+          }
+        } catch { state.isProgrammaticAudioPlay = false; }
         return;
       }
       if (document.visibilityState === "hidden" && state.strictBufferHold) {
@@ -8747,6 +8763,11 @@ startupPrimeStartedAt: performance.now(),
     }
     if (!isFinite(d) || d <= 0) {
       try { d = Number(videoEl?.duration) || 0; } catch { }
+    }
+    // Hidden autoplay can leave the video metadata unloaded while the audio is
+    // already playing; without this the display reads 0:00 for the duration.
+    if ((!isFinite(d) || d <= 0) && coupledMode && audio) {
+      try { d = Number(audio.duration) || 0; } catch { }
     }
     return isFinite(d) && d > 0 ? d : 0;
   }
@@ -17171,16 +17192,35 @@ startupPrimeStartedAt: performance.now(),
             (t - lastFetchReviveAt) > 3000 && !vn.seeking) {
             lastFetchReviveAt = t;
             fetchMarkAt = t;
-            try {
-              if (vn.preload !== "auto") vn.preload = "auto";
-              state._isMicroSeek = true;
-              state._allowUnexpectedVideoTimeRestore = true;
+            let bufCount = 0;
+            try { bufCount = vn.buffered ? vn.buffered.length : 0; } catch { }
+            if (Number(vn.readyState || 0) === 0 && bufCount === 0 && !vn.error) {
+              // Nothing was ever loaded (a start that spent its whole life
+              // hidden). load() restarts the resource fetch; there is no
+              // buffered data or decoder state to lose at readyState 0.
               try {
-                vn.currentTime = targetPos;
-                if (videoEl && videoEl !== vn) videoEl.currentTime = targetPos;
-              } finally { state._allowUnexpectedVideoTimeRestore = false; }
-              try { scheduleMicroSeekClear(200); } catch { }
-            } catch { state._allowUnexpectedVideoTimeRestore = false; }
+                if (vn.preload !== "auto") vn.preload = "auto";
+                vn.load();
+                state._isMicroSeek = true;
+                state._allowUnexpectedVideoTimeRestore = true;
+                try {
+                  vn.currentTime = targetPos;
+                  if (videoEl && videoEl !== vn) videoEl.currentTime = targetPos;
+                } finally { state._allowUnexpectedVideoTimeRestore = false; }
+                try { scheduleMicroSeekClear(300); } catch { }
+              } catch { state._allowUnexpectedVideoTimeRestore = false; }
+            } else {
+              try {
+                if (vn.preload !== "auto") vn.preload = "auto";
+                state._isMicroSeek = true;
+                state._allowUnexpectedVideoTimeRestore = true;
+                try {
+                  vn.currentTime = targetPos;
+                  if (videoEl && videoEl !== vn) videoEl.currentTime = targetPos;
+                } finally { state._allowUnexpectedVideoTimeRestore = false; }
+                try { scheduleMicroSeekClear(200); } catch { }
+              } catch { state._allowUnexpectedVideoTimeRestore = false; }
+            }
           }
         } else { fetchMark = -1; fetchMarkAt = 0; }
         if (!decodingRecently && stuckFor > 350) {
@@ -44063,6 +44103,8 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
     let lastForcedResumeAt = 0;
     let commitLastActiveAt = 0;
     let stuckBufferSince = 0;
+    let deepBufferSince = 0;
+    let lastDeepBufferFixAt = 0;
     let audioMutedSince = 0;
     let videoPausedSince = 0;
     let restartStuckSince = 0;
@@ -45312,6 +45354,49 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
               forceResumeAudioAndUnfreeze(vt, "supervisor-stuck-buffer-hold");
             }
               } else stuckBufferSince = 0;
+
+              // Deep buffer watchdog. Neither track progressing and data is NOT
+              // arriving: every other heal waits on a trigger that never comes,
+              // which is the minutes-long buffer. Re-issue the fetch on paused
+              // elements (currentTime rewrite; load() when nothing ever loaded)
+              // and hand the pair to the manager.
+              if (intended && committed && !hidden && !userHeldPaused && !nativeSeeking &&
+                !state.endedNaturally && !state.restarting && !inStartupOrTransition &&
+                !state.seekDragActive && state.pendingSeekTarget == null &&
+                notProgressing && !playableData &&
+                !(typeof playbackStormBreakerActive === "function" && playbackStormBreakerActive())) {
+                needFast = true;
+                if (!deepBufferSince) deepBufferSince = t;
+                else if ((t - deepBufferSince) > 6000 && (t - lastDeepBufferFixAt) > 8000) {
+                  deepBufferSince = 0;
+                  lastDeepBufferFixAt = t;
+                  const revivePos = isFiniteNum(atNow) && atNow > 0 ? atNow
+                    : (isFiniteNum(vt) ? vt : 0);
+                  try {
+                    if (vn && vn.paused && !vn.seeking && !vn.error) {
+                      let vBufCount = 0;
+                      try { vBufCount = vn.buffered ? vn.buffered.length : 0; } catch { }
+                      if (vn.preload !== "auto") vn.preload = "auto";
+                      if (Number(vn.readyState || 0) === 0 && vBufCount === 0) vn.load();
+                      state._isMicroSeek = true;
+                      state._allowUnexpectedVideoTimeRestore = true;
+                      try {
+                        vn.currentTime = revivePos;
+                        if (videoEl && videoEl !== vn) videoEl.currentTime = revivePos;
+                      } finally { state._allowUnexpectedVideoTimeRestore = false; }
+                      try { scheduleMicroSeekClear(300); } catch { }
+                    }
+                  } catch { state._allowUnexpectedVideoTimeRestore = false; }
+                  try {
+                    if (coupledMode && audio && audio.paused && !audio.seeking && !audio.error) {
+                      if (audio.preload !== "auto") audio.preload = "auto";
+                      state._allowAudioTimeWrite = true;
+                      try { audio.currentTime = revivePos; } finally { state._allowAudioTimeWrite = false; }
+                    }
+                  } catch { state._allowAudioTimeWrite = false; }
+                  try { videoGenericPlaybackStableManager.start(); } catch { }
+                }
+              } else deepBufferSince = 0;
 
               // Audio muted while it should be audible. Clear the gate first, then
               // unmute (the volumechange listener re-mutes while the gate is up).
