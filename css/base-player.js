@@ -25,7 +25,7 @@
  
 //////////////// THE PLAYER, START ////////////////////////
 /* found bugs? report em! */
-try {
+ try {
   if (typeof window.__playerStartupZeroSuppressedUntil !== "number") {
     window.__playerStartupZeroSuppressedUntil = 0;
   }
@@ -12494,10 +12494,8 @@ startupPrimeStartedAt: performance.now(),
       state._stallAudioPauseTimer = null;
     }
     try { _stallPauseAudioPos = Number(audio.currentTime) || -1; } catch { _stallPauseAudioPos = -1; }
-    // Freeze the seekbar/time at the paused-audio position for the buffer
-    // duration. During a buffer several display authorities disagree (held
-    // targets, video clock, audio clock) and the bar oscillated between them
-    // ("fights itself in a loop"). One held value, released on resume.
+    // Hold the seekbar at the paused-audio position for the buffer duration so
+    // the display authorities cannot oscillate. Released on resume.
     try {
       if (_stallPauseAudioPos >= 0) holdSeekbarStableTarget(_stallPauseAudioPos, 30000);
     } catch { }
@@ -15812,17 +15810,23 @@ startupPrimeStartedAt: performance.now(),
           catch { return 0; }
         })();
         const _seekNearEnd = isFinite(_seekDur) && _seekDur > 0 && target >= _seekDur - 0.6;
-        // HIDDEN = audio-only readiness. The background video decoder is
-        // suspended by the browser, so its readiness can never be met while
-        // hidden - requiring it stranded hidden starts forever ("doesn't
-        // autoplay until you come back to the tab"). The return recovery seats
-        // and wakes the video on foreground.
+        // Hidden startup only checks the audio: the browser suspends background
+        // video decode, so a video readiness requirement can never be met there.
         const _startHidden = document.visibilityState === "hidden";
-        const bothGenuineRunway = _seekNearEnd ||
+        // If the hold has run long and both elements have at least a decoded
+        // frame, start anyway; play() is what makes some browsers resume the
+        // fetch. Without this the hold can wait on a runway that never grows.
+        const _bufferHeldFor = state.seekCommitBufferingSince > 0
+          ? (bufNow - state.seekCommitBufferingSince) : 0;
+        const _staleBufferEscape = _bufferHeldFor > 8000 &&
+          Number(getVideoNode()?.readyState || 0) >= HAVE_CURRENT_DATA &&
+          (!coupledMode || !audio || Number(audio.readyState || 0) >= HAVE_CURRENT_DATA);
+        const bothGenuineRunway = _seekNearEnd || _staleBufferEscape ||
           ((_startHidden || trackGenuinelyPlayable(getVideoNode(), target, false)) &&
            trackGenuinelyPlayable((coupledMode && audio) ? audio : null, target, false));
         if (!mustRemainPaused && targetLanded(target) &&
-          (audioReadyForStart) && (_startHidden || videoReadyForStart) && bothGenuineRunway) {
+          (audioReadyForStart || _staleBufferEscape) &&
+          (_startHidden || videoReadyForStart || _staleBufferEscape) && bothGenuineRunway) {
           state.strictBufferHold = false;
           clearBufferHold();
           if (!state.seekCommitStartIssued) startPair(target);
@@ -16976,14 +16980,10 @@ startupPrimeStartedAt: performance.now(),
       userPauseIntentActive() || userToggleExpectingPause()) return false;
     return foregroundReturnTransportWantsPlayback();
   }
-  // Anti-oscillation circuit breaker. During a transition (tab switch, background
-  // buffer that won't recover, return) the automatic heals can disagree and
-  // ping-pong the pair between play and pause, or seat the video backward = the
-  // "play pause play pause spam" and the replay of the same section. This watches
-  // the ACTUAL play/pause events on both elements; if they flip too many times in
-  // a short window and it isn't the user, it TRIPS a breaker that makes every
-  // automatic heal STAND DOWN for a few seconds so the media settles on its own.
-  // It self-clears. This is targeted at the storm only - not a global governor.
+  // Circuit breaker for automatic play/pause oscillation. Counts non-user
+  // play/pause events on both elements; too many flips in a short window trips
+  // a few-second stand-down for every automatic heal so the media settles.
+  // Self-clears. Only trips on a detected storm, never during normal playback.
   let _stormToggleTimes = [];
   function notePlaybackToggle() {
     try {
@@ -17013,14 +17013,10 @@ startupPrimeStartedAt: performance.now(),
       _on(_vnStorm, "pause", notePlaybackToggle, { passive: true });
     }
   } catch { }
-  // Frame-presentation tracker (the technique real players use). requestVideoFrame
-  // Callback fires exactly when the compositor paints a new frame, so it is the
-  // ground truth for "is the picture actually moving" - far more precise than
-  // polling a frame COUNT on a timer, and it is pure passive observation (it never
-  // touches the video). _videoPresentedAt = the last time a real frame painted.
-  // The recovery logic below uses it to leave a presenting video completely alone
-  // (no seeks, no nudges - that is what made catch-up stutter "frame by frame")
-  // and to detect a genuinely frozen decoder in a single frame-time.
+  // Frame-presentation tracker. requestVideoFrameCallback fires when the
+  // compositor paints a frame, so it tells whether the picture is actually
+  // moving without touching the video. Recovery uses it to leave a presenting
+  // video alone and to detect a frozen decoder quickly.
   const _rvfcArmed = (typeof WeakSet !== "undefined") ? new WeakSet() : null;
   let _videoPresentedAt = 0;
   let _videoPresentedFrames = 0;
@@ -17046,21 +17042,13 @@ startupPrimeStartedAt: performance.now(),
     return null; // rVFC not available / not yet armed -> caller uses count fallback
   }
 
-  // videoGenericPlaybackStableManager - the single owner of "the video wedged"
-  // recovery. Every one of these is the same fault: the video decoder is frozen /
-  // stuck on one frame / never started, while the audio (master) keeps going,
-  // because the two elements buffer independently and at different times. Rather
-  // than fight native buffering, this leaves the browser to buffer each track and
-  // only steps in when the PICTURE has genuinely stopped moving while it should
-  // be playing. It keeps the master AUDIO playing (so the position stays correct
-  // and there is no audio gap), seats the video onto the audio position when it is
-  // far off, and FORCE-wakes a frozen decoder with a tiny seek (pause/play does
-  // not wake a suspended decoder). Frame presentation is read from rVFC. It
-  // runs the first pass synchronously (on the visibility event or the moment a
-  // freeze is detected) for instant response, self-terminates once the picture is
-  // moving and roughly synced, and is RE-TRIGGERED by the supervisor on any
-  // re-freeze so it never permanently gives up ("frozen forever until play/pause").
-  // The master audio is never paused or moved, so the shown position never jumps.
+  // videoGenericPlaybackStableManager: single owner of frozen-video recovery.
+  // Steps in only when the picture has stopped presenting while it should play.
+  // Keeps the master audio going, seats the video forward onto the audio when
+  // far off, and wakes a frozen decoder with a tiny seek (pause/play does not
+  // wake a suspended decoder). Runs its first pass synchronously on the
+  // visibility event, self-terminates once frames present, and is re-triggered
+  // by the supervisor while a freeze persists. Never pauses or moves the audio.
   const videoGenericPlaybackStableManager = (() => {
     let running = false;
     let timerId = 0;
@@ -17071,6 +17059,12 @@ startupPrimeStartedAt: performance.now(),
     let lastFrameAt = 0;
     let lastResetAt = 0;
     let successSince = 0;
+    let burstCapMs = 6000;
+    let longReturn = false;
+    let firstSeatDone = false;
+    let fetchMark = -1;
+    let fetchMarkAt = 0;
+    let lastFetchReviveAt = 0;
     function eligible() {
       if (document.visibilityState !== "visible") return false;
       if (playbackStormBreakerActive()) return false; // stand down during a storm
@@ -17087,12 +17081,14 @@ startupPrimeStartedAt: performance.now(),
       if (timerId) { try { clearTimeout(timerId); } catch { } timerId = 0; }
       startedAt = 0; lastKickAt = 0; lastSeatAt = 0; lastFrameCount = NaN; lastFrameAt = 0;
       lastResetAt = 0; successSince = 0;
+      burstCapMs = 6000; longReturn = false; firstSeatDone = false;
+      fetchMark = -1; fetchMarkAt = 0; lastFetchReviveAt = 0;
     }
     function schedule() { if (running) { try { timerId = setTimeout(tick, 70); } catch { } } }
     function tick() {
       if (!running) return;
       const t = now();
-      if (!eligible() || (t - startedAt) > 6000) { stop(); return; }
+      if (!eligible() || (t - startedAt) > burstCapMs) { stop(); return; }
       const vn = getVideoNode();
       if (!vn) { schedule(); return; }
       // Ground truth for "the picture is moving": rVFC (exact compositor paints),
@@ -17118,9 +17114,8 @@ startupPrimeStartedAt: performance.now(),
       const vt = (() => { try { return Number(vn.currentTime); } catch { return NaN; } })();
       const gap = (isFiniteNum(at) && isFiniteNum(vt)) ? (at - vt) : 0;
       const audioPlaying = !coupledMode || !audio || !audio.paused;
-      // SUCCESS: the picture is moving and playing and not wildly off. Do not chase
-      // perfect lip-sync here - that is what caused the thrash. Hand the residual
-      // to the gentle drift heal.
+      // Done once the picture is moving, playing, and roughly in sync. Residual
+      // lip-sync belongs to the gentle drift heal, not this loop.
       if (decodingRecently && !vn.paused && audioPlaying && Math.abs(gap) < 1.2) {
         if (!successSince) successSince = t;
         if ((t - successSince) > 250) { stop(); return; }
@@ -17129,23 +17124,17 @@ startupPrimeStartedAt: performance.now(),
       successSince = 0;
       if ((t - lastKickAt) < 110) { schedule(); return; }
       lastKickAt = t;
-      // Where does the video need to be? If it is far behind the audio master, the
-      // audio position; otherwise its own. Does it have DATA there?
+      // Target position: the audio clock when far behind it, else its own.
       const targetPos = (coupledMode && audio && isFiniteNum(at) && Math.abs(gap) > 0.5)
         ? at : (isFiniteNum(vt) ? vt : 0);
       let targetRunway = 0;
       try { targetRunway = bufferAheadAt(vn, targetPos); } catch { }
-      // Genuine video buffer = not presenting AND no data at the target. The
-      // dedicated stall system owns the audio then (it pauses it under the
-      // spinner and resumes it on canplay, one clean pause - no cycling). The
-      // manager must not fight it by force-playing the audio ("audio always
-      // plays during buffering"). Everywhere else the master audio plays.
+      // Not presenting and no data at the target: a real buffer. The stall
+      // system owns the audio then; this loop must not force-play it.
       const genuineVideoBuffer = !decodingRecently && stuckFor > 350 && targetRunway < 0.12;
       try {
-        // The master AUDIO plays throughout recovery - never paused or moved by
-        // the manager itself, so the position stays correct and the sound never
-        // chops. Exception: a genuine buffer (above) and an active stall pause,
-        // which the stall system owns.
+        // Keep the master audio playing except during a real buffer or an
+        // active stall pause, which the stall system owns.
         if (coupledMode && audio && audio.paused && !playerMutedFromVideo() &&
           !genuineVideoBuffer && !state.videoStallAudioPaused &&
           now() >= Number(state.stallAudioResumeHoldUntil || 0) &&
@@ -17157,11 +17146,48 @@ startupPrimeStartedAt: performance.now(),
           setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 150);
         }
         if (genuineVideoBuffer) { try { setSeekBufferingUIVisible(true); } catch { } }
+        // Long return: the video is known to be far behind before any
+        // confirmation window, so seat it on the very first pass. The seek also
+        // starts the fetch at the right region immediately.
+        if (longReturn && !firstSeatDone && coupledMode && audio &&
+          isFiniteNum(at) && at >= 0 && gap > 0.5) {
+          firstSeatDone = true;
+          lastSeatAt = t;
+          state._isMicroSeek = true;
+          state._allowUnexpectedVideoTimeRestore = true;
+          try {
+            vn.currentTime = at;
+            if (videoEl && videoEl !== vn) videoEl.currentTime = at;
+          } finally { state._allowUnexpectedVideoTimeRestore = false; }
+          try { scheduleMicroSeekClear(200); } catch { }
+        }
+        // Fetch reviver. During a real buffer, watch the buffered range at the
+        // target; if it stops growing the browser has dropped the range request
+        // (paused elements sometimes do). Rewriting currentTime re-issues it.
+        if (genuineVideoBuffer) {
+          if (targetRunway > fetchMark + 0.02) {
+            fetchMark = targetRunway; fetchMarkAt = t;
+          } else if (fetchMarkAt > 0 && (t - fetchMarkAt) > 2500 &&
+            (t - lastFetchReviveAt) > 3000 && !vn.seeking) {
+            lastFetchReviveAt = t;
+            fetchMarkAt = t;
+            try {
+              if (vn.preload !== "auto") vn.preload = "auto";
+              state._isMicroSeek = true;
+              state._allowUnexpectedVideoTimeRestore = true;
+              try {
+                vn.currentTime = targetPos;
+                if (videoEl && videoEl !== vn) videoEl.currentTime = targetPos;
+              } finally { state._allowUnexpectedVideoTimeRestore = false; }
+              try { scheduleMicroSeekClear(200); } catch { }
+            } catch { state._allowUnexpectedVideoTimeRestore = false; }
+          }
+        } else { fetchMark = -1; fetchMarkAt = 0; }
         if (!decodingRecently && stuckFor > 350) {
           if (coupledMode && audio && isFiniteNum(at) && at >= 0 && gap > 0.5 &&
             (t - lastSeatAt) > 900) {
-            // Behind the audio (forward-only; a video AHEAD of the audio is never
-            // pulled back - backward writes are what replayed sections).
+            // Forward-only seat onto the audio; a video ahead of the audio is
+            // never pulled back.
             lastSeatAt = t;
             state._isMicroSeek = true;
             state._allowUnexpectedVideoTimeRestore = true;
@@ -17188,10 +17214,8 @@ startupPrimeStartedAt: performance.now(),
           // fetch. The audio keeps playing meanwhile; when data lands the seat
           // above re-syncs the picture.
         }
-        // Re-play a paused video only when the AUDIO is genuinely playable too.
-        // Force-playing it while the audio buffers overrode the audio-buffer
-        // couple-pause = "video plays during audio buffering" (and fed the
-        // play/pause fight with that pauser).
+        // Re-play a paused video only when the audio is genuinely playable too,
+        // so this cannot override the audio-buffer couple-pause.
         const _audioGenuine = !coupledMode || !audio ||
           trackGenuinelyPlayable(audio, isFiniteNum(at) ? at : 0, false);
         if (vn.paused && !state.isProgrammaticVideoPause && _audioGenuine &&
@@ -17211,22 +17235,41 @@ startupPrimeStartedAt: performance.now(),
       }
       schedule();
     }
-    function start() {
+    function start(opts = {}) {
       if (!eligible()) return;
-      // Already recovering: let the current 6s burst finish rather than resetting
-      // its window every tick (that would micro-seek in a tight loop forever). The
-      // supervisor re-triggers a fresh burst if the freeze is still there, so it
-      // still never permanently gives up - just in bounded bursts.
+      // Already recovering: let the current burst finish rather than resetting
+      // its window every trigger. The supervisor re-triggers a fresh burst if
+      // the freeze is still there, so it never permanently gives up.
       if (running) return;
       try { armVideoFramePresentationTracker(); } catch { }
+      const hiddenFor = Math.max(0, Number(opts.hiddenForMs) || 0);
+      // Verify before touching anything. A healthy return needs zero
+      // intervention: frames painting, pair playing, roughly in sync.
+      try {
+        const hvn = getVideoNode();
+        const hAt = (coupledMode && audio) ? Number(audio.currentTime) : NaN;
+        const hVt = hvn ? Number(hvn.currentTime) : NaN;
+        const hGap = (isFinite(hAt) && isFinite(hVt)) ? Math.abs(hAt - hVt) : 0;
+        const hPainting = videoPresentingRecently(450) === true;
+        const hPlaying = hvn && !hvn.paused &&
+          (!coupledMode || !audio || !audio.paused);
+        if (hPainting && hPlaying && hGap < 0.5 && hiddenFor < 30000) return;
+      } catch { }
       startedAt = now();
       lastKickAt = 0; lastSeatAt = 0; lastFrameCount = NaN; lastFrameAt = 0; lastResetAt = 0; successSince = 0;
-      // Clear wedged HOLD flags so nothing keeps the pair stuck in a forever-
-      // buffer that only a manual play/pause cleared. videoWaiting is left
-      // alone: it is the stall system's live bookkeeping for "video is
-      // buffering", and erasing it here let the audio play through real buffers.
+      // A long absence means the video is far behind and likely evicted: allow
+      // an immediate first seat and a longer budget for the bigger re-fetch.
+      longReturn = hiddenFor > 30000 || !!opts.bfcacheRestore;
+      firstSeatDone = false;
+      burstCapMs = longReturn ? 15000 : 6000;
+      fetchMark = -1; fetchMarkAt = 0; lastFetchReviveAt = 0;
+      // Clear wedged hold flags so nothing keeps the pair stuck in a forever-
+      // buffer that only a manual play/pause cleared. Skipped for very short
+      // absences (a quick alt-tab must not disturb a legitimate mid-transition
+      // hold). videoWaiting is left alone: it is the stall system's live
+      // bookkeeping, and erasing it let the audio play through real buffers.
       try {
-        if (!state.seeking) {
+        if (!state.seeking && (hiddenFor === 0 || hiddenFor > 4000)) {
           state.strictBufferHold = false;
           state.seekBuffering = false;
           try { clearBufferHold(); } catch { }
@@ -17335,18 +17378,33 @@ startupPrimeStartedAt: performance.now(),
   try {
     _on(document, "visibilitychange", () => {
       if (document.visibilityState === "visible") {
+        const hiddenForMs = Number(state._vgpsHiddenAt || 0) > 0
+          ? now() - Number(state._vgpsHiddenAt || 0) : 0;
+        state._vgpsHiddenAt = 0;
         try { armReturnAudioContinuity(perfProfile.lowEnd ? 15000 : 12000); } catch { }
-        try { videoGenericPlaybackStableManager.start(); } catch { } // instant, synchronous
+        try { videoGenericPlaybackStableManager.start({ hiddenForMs }); } catch { }
         setTimeout(() => armForegroundReturnContinuityWatchdog("visibility-return"), 0);
       } else {
+        state._vgpsHiddenAt = now();
         try { videoGenericPlaybackStableManager.stop(); } catch { }
         clearForegroundReturnContinuityTimers();
       }
     }, { passive: true });
-    _on(window, "pageshow", () => {
+    _on(window, "pageshow", (ev) => {
       if (document.visibilityState === "visible") {
-        try { videoGenericPlaybackStableManager.start(); } catch { }
+        // A back/forward-cache restore resumes a frozen page snapshot; treat it
+        // like a long absence (decoder state and buffers are stale).
+        try { videoGenericPlaybackStableManager.start({ bfcacheRestore: !!(ev && ev.persisted) }); } catch { }
         setTimeout(() => armForegroundReturnContinuityWatchdog("pageshow-return"), 0);
+      }
+    }, { passive: true });
+    // Alt-tab between windows changes focus without a visibilitychange. The
+    // start() health probe makes this free when playback is healthy; the short
+    // hiddenForMs keeps it from clearing legitimate transition holds.
+    _on(window, "focus", () => {
+      if (document.visibilityState === "visible" && state.intendedPlaying &&
+        state.firstPlayCommitted) {
+        try { videoGenericPlaybackStableManager.start({ hiddenForMs: 1 }); } catch { }
       }
     }, { passive: true });
   } catch { }
@@ -44336,9 +44394,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           (Number(state.lastBgReturnAt || 0) > 0 && (t - Number(state.lastBgReturnAt || 0)) < 2500) ||
           (typeof inBgReturnGrace === "function" && inBgReturnGrace()) ||
           (typeof smoothForegroundReturnActive === "function" && smoothForegroundReturnActive(0)) ||
-          // While the stability manager owns the pair, lockstep stands down fully.
-          // It re-engaging after the 2.5s return window - while the manager was
-          // still recovering - was the two-actors fight behind the play/pause spam.
+          // Lockstep stands down fully while the stability manager owns the pair.
           (typeof videoGenericPlaybackStableManager !== "undefined" && videoGenericPlaybackStableManager.isRunning()) ||
           (typeof NotMakePlayBackFixingNoticable !== "undefined" && NotMakePlayBackFixingNoticable.isRecovering && NotMakePlayBackFixingNoticable.isRecovering());
           const lsNativeSeeking = (() => {
@@ -44562,12 +44618,9 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
                       try { audio.currentTime = vNow; } finally { state._allowAudioTimeWrite = false; }
                     }
                   } else {
-                    // Both paused: the AUDIO position is the anchor whenever it is
-                    // valid - it is the master clock and the position the user
-                    // actually heard. The old "snap to the behind clock when the
-                    // gap is >4s" rule seeked the AUDIO BACKWARD onto the stale
-                    // video clock after a long background stint = "rewinds to a
-                    // position it should not be on" + replays the same section.
+                    // Both paused: anchor to the audio position whenever valid.
+                    // Snapping to the behind clock here used to rewind the audio
+                    // onto a stale video clock after a long background stint.
                     let anchor = (isFiniteNum(aNow) && aNow >= 0 &&
                       (state.audioEverStarted || Number(audio.readyState || 0) >= HAVE_CURRENT_DATA))
                       ? aNow
@@ -44842,13 +44895,9 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           } else { freezeFrameSince = 0; freezeFrameCount = NaN; }
         } catch { }
 
-        // Video frozen while the audio master runs AHEAD - the picture's clock is
-        // static while the sound keeps advancing ("video frozen, audio progresses
-        // as if nothing happened"). This covers the case the freeze block above
-        // does NOT: the video has to BUFFER (no data in place), so there's no data
-        // to force a frame from. Hand it to the manager, which HOLDS the audio so
-        // the pair buffers together (combined) instead of the audio running on. A
-        // crawling-but-advancing video keeps its clock moving, so it never trips.
+        // Video clock static while the audio keeps advancing. Covers the no-data
+        // case the freeze block above skips; hand it to the manager. An advancing
+        // video, however slow, never trips this.
         try {
           if (coupledMode && audio && intended && committed && !hidden &&
             !playbackStormBreakerActive() &&
@@ -44867,11 +44916,8 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           } else videoFrozenVsAudioSince = 0;
         } catch { videoFrozenVsAudioSince = 0; }
 
-        // (The old "pause the video when the audio stalls" mirror lived here. It
-        // was a play/pause spam source: an audio clock that momentarily reads as
-        // stalled around transitions made it pause the video, another heal played
-        // it back, repeat. Removed - the lockstep's genuinely-empty couple-pause
-        // already covers a truly dead audio, with a much stricter test.)
+        // No pause-video-on-audio-stall heal here; it oscillated around
+        // transitions. The lockstep couple-pause covers a truly dead audio.
 
         // Audio-master video catch-up. A hidden tab suspends the video decoder
         // (browser battery saver) while the audio keepalive keeps advancing, so
@@ -44977,12 +45023,10 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           }
         } catch { }
 
-        // Audio-gone backstop. Playback is intended and the VIDEO is genuinely
-        // healthy (frames advancing or full future data), but the audio is paused
-        // or silenced with nothing legitimately holding it - a stall pause that
-        // never got released, a stuck mute. Bring the audio back. Gated on a
-        // healthy video, so it never resurrects audio over a buffering video (the
-        // both-or-neither rule holds). Covers "audio just goes away and stays gone".
+        // Audio-gone backstop. Video healthy but audio paused or silenced with
+        // nothing legitimately holding it (unreleased stall pause, stuck mute):
+        // restore it. Gated on a healthy video so it never resumes audio over a
+        // buffering video.
         try {
           const videoHealthyNow = vn && !vPaused &&
             (videoAdvancing || Number(vn.readyState || 0) >= HAVE_FUTURE_DATA);
