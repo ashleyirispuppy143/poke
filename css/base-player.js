@@ -28948,11 +28948,11 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
       // the audio clock by the return handler.
       if (document.visibilityState === "hidden" && coupledMode && audio) {
         const _hiddenAt = (() => { try { return Number(audio.currentTime) || 0; } catch { return 0; } })();
-        if (!hasFuturePlaybackDataAt(audio, _hiddenAt, 0.04)) {
+        // Real runway required. Resuming on a 0.04s sliver played the sliver,
+        // ran dry, re-paused, and repeated the same position over and over.
+        if (!hasFuturePlaybackDataAt(audio, _hiddenAt, GENUINE_RUNWAY_S)) {
           // Keep the hidden element fetching; some browsers drop the download
           // priority for background tabs and the buffer never refills alone.
-          // No sentinel pulse here: poking play at a starving element just
-          // stutters the last buffered sliver.
           try { if (audio.preload !== "auto") audio.preload = "auto"; } catch { }
           return;
         }
@@ -29069,7 +29069,7 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           }
           if (document.visibilityState === "hidden" && coupledMode && audio) {
             const _hiddenAt2 = (() => { try { return Number(audio.currentTime) || 0; } catch { return 0; } })();
-            if (hasFuturePlaybackDataAt(audio, _hiddenAt2, 0.04)) {
+            if (hasFuturePlaybackDataAt(audio, _hiddenAt2, GENUINE_RUNWAY_S)) {
               clearStaleCoupledBufferStateIfReady(_hiddenAt2, "resume-after-buffer-timeout-hidden");
               clearBufferHold();
               clearForegroundBufferAudioHold();
@@ -38139,6 +38139,50 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
           forcePausePlaybackForErrorOverlay("video-playing-while-overlay");
           return;
         }
+        // Verified audio joiner. The commit path below can be refused for
+        // seconds by a stale gate, leaving the video playing alone with the
+        // audio joining late (or never, after a seek). Verify shortly after the
+        // playing event: video still running, audio still paused, nothing
+        // legitimate holding it, audio has real runway; then join it natively,
+        // aligned to the video clock.
+        try {
+          if (coupledMode && audio && state.intendedPlaying &&
+            document.visibilityState === "visible" &&
+            (now() - Number(state._audioJoinVerifyAt || 0)) > 1000) {
+            state._audioJoinVerifyAt = now();
+            setTimeout(() => {
+              try {
+                if (!coupledMode || !audio || !audio.paused) return;
+                if (!state.intendedPlaying || state.endedNaturally || state.restarting) return;
+                if (document.visibilityState !== "visible") return;
+                const jvn = getVideoNode();
+                if (!jvn || jvn.paused || jvn.seeking) return;
+                if (state.seeking || state.seekBuffering || state.seekDragActive) return;
+                if (userPauseLockActive() || mediaSessionForcedPauseActive() ||
+                  (typeof userPauseIntentActive === "function" && userPauseIntentActive())) return;
+                if (playerMutedFromVideo()) return;
+                if (state.videoStallAudioPaused ||
+                  now() < Number(state.stallAudioResumeHoldUntil || 0)) return;
+                if (seekAudioHoldUntilVideoReadyActive() || state.seekAudioReleaseInFlight) return;
+                if (resumePairAudioGateActive() || initialPairAudioGateActive()) return;
+                if (typeof playbackStormBreakerActive === "function" && playbackStormBreakerActive()) return;
+                const jvt = Number(jvn.currentTime);
+                if (!isFinite(jvt) || jvt < 0) return;
+                if (!trackGenuinelyPlayable(audio, jvt, false)) return;
+                if (Math.abs((Number(audio.currentTime) || 0) - jvt) > 0.12) {
+                  state._allowAudioTimeWrite = true;
+                  try { audio.currentTime = jvt; } finally { state._allowAudioTimeWrite = false; }
+                }
+                try { setAudioMutedSynced(false); } catch { }
+                try { setAudioPlaybackVolume(targetVolFromVideo(), "audio-join-verify", { cancelFade: true }); } catch { }
+                state.isProgrammaticAudioPlay = true;
+                const jp = HTMLMediaElement.prototype.play.call(audio);
+                if (jp && typeof jp.catch === "function") jp.catch(() => { });
+                setTimeout(() => { state.isProgrammaticAudioPlay = false; }, 150);
+              } catch { state.isProgrammaticAudioPlay = false; state._allowAudioTimeWrite = false; }
+            }, 350);
+          }
+        } catch { }
         // Video just resumed. If it came out of a buffer/stall, arm the post-resume
         // lip-sync lock so the pair is re-tightened without needing a play/pause
         // ("A/V not synced esp after a video buffer").
@@ -44906,13 +44950,17 @@ if (coupledMode && audio && audio.paused && state.intendedPlaying &&
         try {
           let freezeEligible = false;
           try {
+            // startupSettleActive is deliberately NOT excluded: a decoder that
+            // comes up frozen at startup (clock running, no frames painting,
+            // audio and bar progressing) must still be woken. The wake is a
+            // micro-seek, not a pause, and frzRamping below protects a start
+            // that just has not painted yet.
             freezeEligible = !!(vn && intended && committed && !hidden && !vPaused &&
               !userHeldPaused && !state.endedNaturally && !state.restarting &&
               !state.seekDragActive &&
               !(typeof userSeekIntentActive === "function" && userSeekIntentActive()) &&
               !(vn && vn.seeking) && !(coupledMode && audio && audio.seeking) &&
-              !(typeof initialCoupledPairPending === "function" && initialCoupledPairPending()) &&
-              !(typeof startupSettleActive === "function" && startupSettleActive()));
+              !(typeof initialCoupledPairPending === "function" && initialCoupledPairPending()));
           } catch { freezeEligible = false; }
           // Don't reset a decoder that just started/seeked; it hasn't had a beat
           // to present its first frame yet. The return window is deliberately NOT
