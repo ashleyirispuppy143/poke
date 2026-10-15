@@ -165,6 +165,42 @@
           rootEl.appendChild(fallbackBar);
         }
 
+        var syncFullscreenTitleBarVisibility = function() {
+          if (!rootEl) return;
+          var isFs = Boolean(
+            (typeof player.isFullscreen === 'function' && player.isFullscreen()) ||
+            document.fullscreenElement ||
+            document.webkitFullscreenElement ||
+            rootEl.classList.contains('vjs-fullscreen')
+          );
+          var titleBars = rootEl.querySelectorAll('.vjs-title-bar, .vjs-title-bar-title, .vjs-title-bar-description');
+          for (var i = 0; i < titleBars.length; i++) {
+            var node = titleBars[i];
+            if (!isFs) {
+              node.style.setProperty('display', 'none', 'important');
+              node.style.setProperty('visibility', 'hidden', 'important');
+              node.style.setProperty('opacity', '0', 'important');
+            } else {
+              node.style.removeProperty('display');
+              node.style.removeProperty('visibility');
+              node.style.removeProperty('opacity');
+              if (node.classList.contains('vjs-title-bar-description') && !info.description) {
+                node.style.setProperty('display', 'none', 'important');
+              }
+            }
+          }
+        };
+
+        syncFullscreenTitleBarVisibility();
+        player.on('fullscreenchange', syncFullscreenTitleBarVisibility);
+        document.addEventListener('fullscreenchange', syncFullscreenTitleBarVisibility, false);
+        document.addEventListener('webkitfullscreenchange', syncFullscreenTitleBarVisibility, false);
+
+        player.on('dispose', function() {
+          document.removeEventListener('fullscreenchange', syncFullscreenTitleBarVisibility, false);
+          document.removeEventListener('webkitfullscreenchange', syncFullscreenTitleBarVisibility, false);
+        });
+
         var bar = player.controlBar;
         if (!bar) return;
 
@@ -1129,8 +1165,7 @@
     } else {
       initAlabasterPlayer();
     }
-  })(); 
-//////////////// THE PLAYER, END ////////////////////////
+  })();//////////////// THE PLAYER, END ////////////////////////
  
  (function () {
   'use strict';
