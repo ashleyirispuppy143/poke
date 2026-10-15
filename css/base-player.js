@@ -31,13 +31,13 @@
       minPlayBuffer: 0.1,
       minResumeBuffer: 0.25,
       endTolerance: 0.45,
-      alignThreshold: 0.05,
-      driftTolerance: 0.14,
-      maxDrift: 0.32,
+      alignThreshold: 0.1,
+      driftTolerance: 0.15,
+      maxDrift: 0.35,
       syncCooldownMs: 2200,
       watchdogMs: 700,
       tickMs: 80,
-      seekTimeoutMs: 140
+      seekTimeoutMs: 350
     };
 
     window.Alabaster = {
@@ -66,7 +66,7 @@
       },
       lockPitch: function(media) {
         var keys = ['preservesPitch', 'mozPreservesPitch', 'webkitPreservesPitch'];
-        for (var i = 0; i < length; i++) {
+        for (var i = 0; i < keys.length; i++) {
           if (keys[i] in media) media[keys[i]] = true;
         }
       },
@@ -691,11 +691,12 @@
             if (!nativeGetVPaused()) nativeVideoPause();
           });
 
-          state.cancelSeekWait = compat.onSeekSettled(audioEl, function() {
+          state.cancelSeekWait = compat.onSeekSettled(videoEl, function() {
             state.cancelSeekWait = null;
+            state.internalVideoSeeking = false;
             fireSimultaneousPlay();
           });
-          setAudioTimeInternally(vNow);
+          setVideoTimeInternally(aNow);
         }
 
         function syncPlaybackState() {
@@ -775,11 +776,20 @@
 
           var aNow = nativeGetATime();
           var vNow = nativeGetVTime();
+          var dest = state.seekTarget;
+
+          if (!state.alignAttempts) state.alignAttempts = 0;
+
+          if (Math.abs(aNow - dest) > 1.0 && state.alignAttempts < 1) {
+            state.alignAttempts++;
+            setAudioTimeInternally(dest);
+            return;
+          }
 
           if (!isVideoBypassed() && Math.abs(aNow - vNow) > config.alignThreshold) {
-            if (!state.alignAttempts || state.alignAttempts < 2) {
-              state.alignAttempts = (state.alignAttempts || 0) + 1;
-              setAudioTimeInternally(vNow);
+            if (state.alignAttempts < 3) {
+              state.alignAttempts++;
+              setVideoTimeInternally(aNow);
               return;
             }
           }
@@ -944,7 +954,7 @@
           var vNow = nativeGetVTime();
           var aNow = nativeGetATime();
           if (Math.abs(vNow - aNow) > config.alignThreshold) {
-            setAudioTimeInternally(vNow);
+            setVideoTimeInternally(aNow);
             state.lastCorrectionAt = compat.now();
           }
         });
@@ -1122,7 +1132,7 @@
           if ((state.driftCount >= 3 || currentDrift > config.maxDrift) && cooldownPassed) {
             state.driftCount = 0;
             state.lastCorrectionAt = compat.now();
-            setAudioTimeInternally(vNow);
+            setVideoTimeInternally(aNow);
           }
         }, config.tickMs);
 
