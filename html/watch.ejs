@@ -4335,7 +4335,7 @@ More Epic options owo~
             <div class="desc">
                    <h5 style="display: flex;margin-top: 7px;padding-top: 10px;"><div class="thumb">
 				<a href="/channel?id=<%- x.authorId%>" class="avatar" style="width: 40px;height: 40px;">
-					<img style="width: 50px;height: 50px;" loading="lazy" src="<%- media_proxy_url %>/proxy?url=<%= x.authorThumbnails[0].url.replace("https://yt3.ggpht.com/", "https://vid.puffyan.us/ggpht/") %>">
+					<img style="width: 50px;height: 50px;" loading="lazy" src="<%- media_proxy_url %>/proxy?url=<%= x.authorThumbnail.replace("https://yt3.ggpht.com/", "https://vid.puffyan.us/ggpht/") %>">
                                </a>
             </div>
                                                           <%  if (!x.authorIsChannelOwner) { %> 
