@@ -386,10 +386,19 @@ app.get("/api/getYoutubeUrl", async function (req, res) {
     try {
       let url = `${config.videourl}/companion/api/v1/captions/${id}?label=${l}`;
 
-      res.send("they are currently broken... see https://github.com/iv-org/invidious/issues/5571");
+       
+let f = await fetch(url, {
+        headers: headers, 
+      });
+
+      const body = await f.text();
+
+      res.send(body);
+
 
     } catch {}
   });
+
   
   app.get("/api/weather", async (req, res) => {
     try {
