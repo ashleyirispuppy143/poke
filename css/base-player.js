@@ -31,7 +31,7 @@
       minPlayBuffer: 0.1,
       minResumeBuffer: 0.25,
       endTolerance: 0.45,
-      alignThreshold: 0.015,
+      alignThreshold: 0.05,
       driftTolerance: 0.14,
       maxDrift: 0.32,
       syncCooldownMs: 2200,
@@ -774,16 +774,21 @@
           if ((!isVideoBypassed() && videoEl.seeking) || audioEl.seeking) return;
 
           var dest = state.seekTarget;
-          if (Math.abs(nativeGetATime() - dest) > 0.035) {
-            setAudioTimeInternally(dest);
-            return;
-          }
-          if (!isVideoBypassed() && Math.abs(nativeGetVTime() - dest) > 0.035) {
-            setVideoTimeInternally(dest);
+          var aNow = nativeGetATime();
+          var vNow = nativeGetVTime();
+
+          if (!isVideoBypassed() && Math.abs(aNow - vNow) > config.alignThreshold) {
+            var aDist = Math.abs(aNow - dest);
+            var vDist = Math.abs(vNow - dest);
+            if (aDist > vDist + 0.05) {
+              setAudioTimeInternally(vNow);
+            } else {
+              setVideoTimeInternally(aNow);
+            }
             return;
           }
 
-          state.savedMasterTime = dest;
+          state.savedMasterTime = aNow;
           state.userSeeking = false;
           state.internalVideoSeeking = false;
           state.driftCount = 0;
@@ -1143,30 +1148,8 @@
 
           var startAutoplayNow = function() {
             if (!state.wantPlaying) return;
-            if (videoEl.readyState >= 1 && audioEl.readyState >= 1) {
-              runInternal(function() {
-                var pV = nativeGetVPaused() ? nativeVideoPlay() : Promise.resolve();
-                var pA = nativeGetAPaused() ? nativeAudioPlay() : Promise.resolve();
-                if (window.Promise && pV && pA) {
-                  Promise.all([pV, pA]).then(function() {
-                    state.lastCorrectionAt = compat.now();
-                    shield.activate();
-                    player.addClass('vjs-playing');
-                    player.removeClass('vjs-paused');
-                    player.trigger('play');
-                    player.trigger('playing');
-                  }).catch(function(err) {
-                    if (err && err.name === 'NotAllowedError') {
-                      state.wantPlaying = false;
-                      setBufferSpinner(false);
-                      player.removeClass('vjs-playing');
-                      player.addClass('vjs-paused');
-                      freezeBothStreams();
-                      player.trigger('pause');
-                    }
-                  });
-                }
-              });
+            if (videoEl.readyState >= 2 && audioEl.readyState >= 2) {
+              startLockstepPlayback();
             } else {
               syncPlaybackState();
             }
