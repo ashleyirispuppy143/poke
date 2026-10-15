@@ -390,10 +390,8 @@ app.get("/api/getYoutubeUrl", async function (req, res) {
 let f = await fetch(url, {
         headers: headers, 
       });
-
-      const body = await f.text();
-
-      res.send(body);
+ 
+      res.send(f);
 
 
     } catch {}
