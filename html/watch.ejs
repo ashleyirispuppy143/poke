@@ -1256,11 +1256,13 @@ Offical Discord Server! :3
     <% } %>
   <% } %>
 
+<!--
    <% if (Array.isArray(VideoData.captions)) { %> 
     <% VideoData.captions.forEach(x => { %>
       <track src="/api/subtitles?v=<%=VideoData.videoId%>&h=<%= x.label %>" label="<%= x.label.replace("United States","Simplified - USA") %>" kind="subtitles">      
     <% }) %>   
   <% } %>
+   -->
    
 </video>
 
