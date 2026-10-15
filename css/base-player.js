@@ -322,7 +322,7 @@
         var lead = this.ahead(media);
         if (media.readyState >= 4) return true;
         if (media.readyState >= 3 && lead >= requiredLead * 0.5) return true;
-        return media.readyState >= 2 && lead >= requiredLead;
+        return media.readyState >= 2 && (lead >= requiredLead || media.currentTime < 0.15);
       }
     };
 
@@ -345,14 +345,13 @@
         (rawAudio && (rawAudio.autoplay || rawAudio.hasAttribute('autoplay')))
       );
 
-      rawVideo.autoplay = false;
-      rawVideo.removeAttribute('autoplay');
       if (rawAudio) {
         rawAudio.autoplay = false;
         rawAudio.removeAttribute('autoplay');
+        try { rawAudio.pause(); } catch (_) {}
       }
 
-      var player = window.videojs(rawVideo, { autoplay: false });
+      var player = window.videojs(rawVideo);
       if (!player) return;
 
       SetAlabasterUI(player);
@@ -397,9 +396,6 @@
         player.muted(false);
         compat.lockPitch(videoEl);
         compat.lockPitch(audioEl);
-
-        if (videoEl.readyState === 0) videoEl.load();
-        if (audioEl.readyState === 0) audioEl.load();
 
         var nativeVideoPlay = HTMLMediaElement.prototype.play.bind(videoEl);
         var nativeVideoPause = HTMLMediaElement.prototype.pause.bind(videoEl);
@@ -930,14 +926,14 @@
         var onDataBuffered = function() {
           if (!state.wantPlaying) return;
           if (state.userSeeking) return completeUserSeek();
-          if (state.cancelSeekWait || isInStartupGrace()) return;
+          if (state.cancelSeekWait) return;
           if (state.buffering || (!isVideoBypassed() && nativeGetVPaused()) || nativeGetAPaused()) {
             syncPlaybackState();
           }
         };
 
-        listen(videoEl, ['canplay', 'canplaythrough', 'playing', 'progress', 'loadeddata'], onDataBuffered, false);
-        listen(audioEl, ['canplay', 'canplaythrough', 'playing', 'progress', 'loadeddata'], onDataBuffered, false);
+        listen(videoEl, ['canplay', 'canplaythrough', 'playing', 'progress', 'loadeddata', 'loadedmetadata'], onDataBuffered, false);
+        listen(audioEl, ['canplay', 'canplaythrough', 'playing', 'progress', 'loadeddata', 'loadedmetadata'], onDataBuffered, false);
 
         player.on('volumechange', enforceRateAndVolume);
         player.on('ratechange', function() {
@@ -1062,8 +1058,8 @@
 
           if (isTabWaking() || isInStartupGrace()) {
             runInternal(function() {
-              if (nativeGetAPaused() && !audioEl.seeking) compat.safePlay(nativeAudioPlay);
-              if (nativeGetVPaused() && !videoEl.seeking) compat.safePlay(nativeVideoPlay);
+              if (nativeGetAPaused() && !audioEl.seeking && audioEl.readyState >= 2) compat.safePlay(nativeAudioPlay);
+              if (nativeGetVPaused() && !videoEl.seeking && videoEl.readyState >= 2) compat.safePlay(nativeVideoPlay);
             });
             return;
           }
@@ -1140,7 +1136,42 @@
           videoEl.muted = false;
           audioEl.muted = false;
           player.muted(false);
-          videoEl.play();
+          state.wantPlaying = true;
+          state.startupGraceUntil = compat.now() + 900;
+          player.addClass('vjs-playing');
+          player.removeClass('vjs-paused');
+
+          var startAutoplayNow = function() {
+            if (!state.wantPlaying) return;
+            if (videoEl.readyState >= 1 && audioEl.readyState >= 1) {
+              runInternal(function() {
+                var pV = nativeGetVPaused() ? nativeVideoPlay() : Promise.resolve();
+                var pA = nativeGetAPaused() ? nativeAudioPlay() : Promise.resolve();
+                if (window.Promise && pV && pA) {
+                  Promise.all([pV, pA]).then(function() {
+                    state.lastCorrectionAt = compat.now();
+                    shield.activate();
+                    player.addClass('vjs-playing');
+                    player.removeClass('vjs-paused');
+                    player.trigger('play');
+                    player.trigger('playing');
+                  }).catch(function(err) {
+                    if (err && err.name === 'NotAllowedError') {
+                      state.wantPlaying = false;
+                      setBufferSpinner(false);
+                      player.removeClass('vjs-playing');
+                      player.addClass('vjs-paused');
+                      freezeBothStreams();
+                      player.trigger('pause');
+                    }
+                  });
+                }
+              });
+            } else {
+              syncPlaybackState();
+            }
+          };
+          startAutoplayNow();
         }
 
         player.on('dispose', function() {
@@ -1165,8 +1196,8 @@
     } else {
       initAlabasterPlayer();
     }
-  })();//////////////// THE PLAYER, END ////////////////////////
- 
+  })();
+
  (function () {
   'use strict';
 
