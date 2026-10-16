@@ -75,6 +75,8 @@ window.SyncLevel = SyncLevel;
     onAudioOnlyChange: null,
     _showErrorUI: null,
     _hideErrorUI: null,
+    _showLoopedIndicator: null,
+    _hideLoopedIndicator: null,
     setAudioOnly: function(active) {
       this.audioOnly = Boolean(active);
       if (typeof this.onAudioOnlyChange === 'function') {
@@ -97,6 +99,9 @@ window.SyncLevel = SyncLevel;
       SyncLevel.error = null;
       if (typeof this._hideErrorUI === 'function') {
         this._hideErrorUI();
+      }
+      if (typeof this._hideLoopedIndicator === 'function') {
+        this._hideLoopedIndicator();
       }
       return 'Alabaster test error UI disabled';
     },
@@ -271,6 +276,29 @@ window.SyncLevel = SyncLevel;
         rootEl.appendChild(fallbackBar);
       }
 
+      var loopInd = document.getElementById('loopedIndicator');
+      if (loopInd) {
+        if (rootEl && loopInd.parentNode !== rootEl) {
+          rootEl.appendChild(loopInd);
+        }
+        loopInd.style.cssText = 'position:absolute;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(15,15,15,0.9);color:#fff;padding:14px 20px;border-radius:12px;z-index:40;display:none;align-items:center;flex-direction:column;font-family:"poketube flex","PokeTube Flex",-apple-system,sans-serif;font-size:13px;pointer-events:auto;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.08);';
+        loopInd.innerHTML = '';
+        var loopTitle = document.createElement('div');
+        loopTitle.style.cssText = 'font-weight:700;margin-bottom:6px;font-size:15px;letter-spacing:-0.2px;';
+        loopTitle.textContent = 'Experiencing interruptions?';
+        var loopSub = document.createElement('div');
+        loopSub.style.cssText = 'color:#bbb;max-width:280px;line-height:1.4;';
+        loopSub.textContent = 'The video is taking a long time to buffer. Try refreshing the page to fix this issue.';
+        loopInd.appendChild(loopTitle);
+        loopInd.appendChild(loopSub);
+        window.Alabaster._showLoopedIndicator = function() {
+          loopInd.style.display = 'flex';
+        };
+        window.Alabaster._hideLoopedIndicator = function() {
+          loopInd.style.display = 'none';
+        };
+      }
+
       if (rootEl && !rootEl.querySelector('.vjs-alabaster-error-overlay')) {
         var errOverlay = document.createElement('div');
         errOverlay.className = 'vjs-alabaster-error-overlay';
@@ -290,9 +318,12 @@ window.SyncLevel = SyncLevel;
         errSubText.style.cssText = 'font-size:clamp(13px, 1.6vw, 15px);font-weight:400;line-height:1.45;color:#aaaaaa;max-width:380px;margin:0;';
         errSubText.textContent = 'An error occurred while loading the media streams. Please try again later.';
 
+        var btnWrap = document.createElement('div');
+        btnWrap.style.cssText = 'display:flex;flex-direction:row;align-items:center;margin-top:8px;gap:12px;';
+
         var retryBtn = document.createElement('button');
         retryBtn.type = 'button';
-        retryBtn.style.cssText = 'margin-top:8px;padding:8px 18px;border-radius:999px;border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.1);color:#fff;font-size:13px;font-weight:600;cursor:pointer;transition:background 0.15s ease;';
+        retryBtn.style.cssText = 'padding:8px 18px;border-radius:999px;border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.1);color:#fff;font-size:13px;font-weight:600;cursor:pointer;transition:background 0.15s ease;';
         retryBtn.textContent = 'Retry';
         retryBtn.addEventListener('mouseenter', function() { retryBtn.style.background = 'rgba(255,255,255,0.2)'; });
         retryBtn.addEventListener('mouseleave', function() { retryBtn.style.background = 'rgba(255,255,255,0.1)'; });
@@ -308,9 +339,20 @@ window.SyncLevel = SyncLevel;
           }
         });
 
+        var reportBtn = document.createElement('a');
+        reportBtn.href = 'https://codeberg.org/ashleyirispuppy/poke/issues/new?template=issue_template%2fplayer-bug.yml';
+        reportBtn.target = '_blank';
+        reportBtn.style.cssText = 'padding:8px 18px;border-radius:999px;border:1px solid rgba(255,255,255,0.18);background:transparent;color:#fff;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block;transition:background 0.15s ease;';
+        reportBtn.textContent = 'Report the issue';
+        reportBtn.addEventListener('mouseenter', function() { reportBtn.style.background = 'rgba(255,255,255,0.1)'; });
+        reportBtn.addEventListener('mouseleave', function() { reportBtn.style.background = 'transparent'; });
+        
+        btnWrap.appendChild(retryBtn);
+        btnWrap.appendChild(reportBtn);
+
         leftCol.appendChild(errHeadline);
         leftCol.appendChild(errSubText);
-        leftCol.appendChild(retryBtn);
+        leftCol.appendChild(btnWrap);
 
         var rightCol = document.createElement('div');
         rightCol.style.cssText = 'flex:0 0 auto;display:flex;align-items:center;justify-content:center;margin:0 auto;';
@@ -323,6 +365,7 @@ window.SyncLevel = SyncLevel;
           '      <stop offset="100%" stop-color="#ff2a85"/>',
           '    </linearGradient>',
           '  </defs>',
+          '  <circle cx="90" cy="90" r="75" fill="rgba(255,255,255,0.06)"/>',
           '  <circle cx="90" cy="52" r="12" fill="url(#alabasterSimpleIGrad)"/>',
           '  <rect x="78" y="76" width="24" height="62" rx="12" fill="url(#alabasterSimpleIGrad)"/>',
           '</svg>'
@@ -505,9 +548,8 @@ window.SyncLevel = SyncLevel;
       var rState = media.readyState;
       if (rState < 2) return false;
       if (this.isNearEnd(media)) return true;
-      if (rState >= 4) return true;
+      if (rState >= 3) return true; 
       var lead = this.ahead(media);
-      if (rState >= 3 && lead >= requiredLead * 0.5) return true;
       if (rState >= 2 && (lead >= requiredLead || media.paused)) return true;
       return false;
     }
@@ -617,6 +659,7 @@ window.SyncLevel = SyncLevel;
         seekTarget: 0,
         savedMasterTime: 0,
         frozenDisplayTime: 0,
+        bufferStartTime: 0,
         buffering: false,
         launchingPlay: false,
         playGraceUntil: 0,
@@ -848,8 +891,13 @@ window.SyncLevel = SyncLevel;
         var next = Boolean(active);
         if (next && !state.buffering) {
           state.frozenDisplayTime = getAuthoritativeTime();
+          state.bufferStartTime = compat.now();
         } else if (!next) {
           state.frozenDisplayTime = 0;
+          state.bufferStartTime = 0;
+          if (window.Alabaster._hideLoopedIndicator) {
+             window.Alabaster._hideLoopedIndicator();
+          }
         }
         state.buffering = next;
         if (next) {
@@ -864,8 +912,16 @@ window.SyncLevel = SyncLevel;
         clearPendingWait();
         state.launchingPlay = false;
         runInternal(function() {
-          if (!nativeGetAPaused() && !audioEl.seeking) nativeAudioPause();
-          if (!nativeGetVPaused() && !videoEl.seeking) nativeVideoPause();
+          if (!nativeGetAPaused() && !audioEl.seeking) {
+            if (audioEl.readyState >= 2 || !state.wantPlaying) {
+              try { nativeAudioPause(); } catch(_) {}
+            }
+          }
+          if (!nativeGetVPaused() && !videoEl.seeking) {
+            if (videoEl.readyState >= 2 || !state.wantPlaying) {
+              try { nativeVideoPause(); } catch(_) {}
+            }
+          }
         });
       }
 
@@ -1085,7 +1141,8 @@ window.SyncLevel = SyncLevel;
                 if (navigator.mediaSession) navigator.mediaSession.playbackState = 'playing';
               }).catch(function(err) {
                 state.launchingPlay = false;
-                if (err && err.name === 'NotAllowedError') {
+                var errName = err && err.name;
+                if (errName === 'NotAllowedError') {
                   state.awaitingGestureUnlock = true;
                   state.initialAutoplay = false;
                   state.initialPlayShieldUntil = 0;
@@ -1096,6 +1153,7 @@ window.SyncLevel = SyncLevel;
                   freezeBothStreams();
                   player.trigger('pause');
                   if (navigator.mediaSession) navigator.mediaSession.playbackState = 'paused';
+                } else if (errName === 'AbortError') {
                 } else {
                   setBufferSpinner(true);
                   freezeBothStreams();
@@ -1156,7 +1214,7 @@ window.SyncLevel = SyncLevel;
         }
 
         if (isVideoBypassed()) {
-          if (state.initialAutoplay || audioEl.readyState >= 2) {
+          if (audioEl.readyState >= 2) {
             setBufferSpinner(false);
             clearWatchdog();
             enforceRateAndVolume();
@@ -1168,12 +1226,6 @@ window.SyncLevel = SyncLevel;
             freezeBothStreams();
             armNetworkWatchdog();
           }
-          return;
-        }
-
-        if (state.initialAutoplay && videoEl.readyState >= 2 && audioEl.readyState >= 2) {
-          clearWatchdog();
-          startLockstepPlayback();
           return;
         }
 
@@ -1551,6 +1603,14 @@ window.SyncLevel = SyncLevel;
       state.tickTimer = setInterval(function() {
         updateSyncTelemetry();
 
+        if (state.buffering && state.bufferStartTime > 0) {
+            var dur = videoEl.duration || audioEl.duration || 0;
+            var threshold = (dur > 0 && dur < 60) ? 7000 : 12000;
+            if (compat.now() - state.bufferStartTime > threshold && window.Alabaster._showLoopedIndicator) {
+                window.Alabaster._showLoopedIndicator();
+            }
+        }
+
         if (!state.wantPlaying) {
           if (!nativeGetVPaused()) pauseVideoOnly();
           if (!nativeGetAPaused()) runInternal(function() { nativeAudioPause(); });
@@ -1635,7 +1695,7 @@ window.SyncLevel = SyncLevel;
         state.prevVideoTime = vNow;
         state.prevAudioTime = aNow;
 
-        if (state.vFrozenTicks >= 4 || state.aFrozenTicks >= 4) {
+        if (state.vFrozenTicks >= 8 || state.aFrozenTicks >= 8) {
           state.vFrozenTicks = 0;
           state.aFrozenTicks = 0;
           setBufferSpinner(true);
@@ -1709,6 +1769,27 @@ window.SyncLevel = SyncLevel;
         state.initialPlayShieldUntil = compat.now() + 2600;
         player.addClass('vjs-playing');
         player.removeClass('vjs-paused');
+        
+        runInternal(function() {
+          var onErr = function(err) {
+            if (err && err.name === 'NotAllowedError') {
+              state.awaitingGestureUnlock = true;
+              state.initialAutoplay = false;
+              state.initialPlayShieldUntil = 0;
+              state.wantPlaying = false;
+              setBufferSpinner(false);
+              player.removeClass('vjs-playing');
+              player.addClass('vjs-paused');
+              freezeBothStreams();
+              player.trigger('pause');
+            }
+          };
+          var pA = nativeAudioPlay();
+          var pV = nativeVideoPlay();
+          if (pA && typeof pA.catch === 'function') pA.catch(onErr);
+          if (pV && typeof pV.catch === 'function') pV.catch(onErr);
+        });
+
         syncPlaybackState();
       }
 
@@ -1735,7 +1816,6 @@ window.SyncLevel = SyncLevel;
     initAlabasterPlayer();
   }
 })();
-
 (function () {
   'use strict';
 
