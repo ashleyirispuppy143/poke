@@ -21,7 +21,7 @@
  * ///////////////////////////////////////////////////////////////////////////
  * "It takes a lot of hard work to make something simple." ~ Steve Jobs 
  */
-const SyncLevel = {
+ const SyncLevel = {
   driftSeconds: 0,
   driftMs: 0,
   synced: true,
@@ -281,8 +281,8 @@ window.SyncLevel = SyncLevel;
         if (rootEl && loopInd.parentNode !== rootEl) {
           rootEl.appendChild(loopInd);
         }
-        loopInd.style.cssText = 'position:absolute;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(15,15,15,0.9);color:#fff;padding:14px 20px;border-radius:12px;z-index:40;display:none;align-items:center;flex-direction:column;font-family:"poketube flex","PokeTube Flex",-apple-system,sans-serif;font-size:13px;pointer-events:auto;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.08);max-width:42em;';
-        loopInd.innerHTML = '<span style="font-weight:700;margin-bottom:6px;font-size:15px;letter-spacing:-0.2px;">Experiencing interruptions?</span><span style="color:#bbb;line-height:1.4;">The video is taking a long time to buffer. Try refreshing the page to fix this issue.</span>';
+        loopInd.style.cssText = 'position:absolute;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(15,15,15,0.9);color:#fff;padding:14px 20px;border-radius:12px;z-index:40;display:none;align-items:center;flex-direction:column;font-family:"poketube flex","PokeTube Flex",-apple-system,sans-serif;font-size:13px;pointer-events:auto;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.08);width:42em;';
+        loopInd.innerHTML = '<span style="color:#bbb;line-height:1.4;">The video is taking a long time to buffer. Try refreshing the page to fix this issue.</span>';
         window.Alabaster._showLoopedIndicator = function() {
           loopInd.style.display = 'flex';
         };
@@ -517,21 +517,13 @@ window.SyncLevel = SyncLevel;
     aheadAt: function(media, targetTime) {
       var ranges = media.buffered;
       if (!ranges || ranges.length === 0) return 0;
-      var time = targetTime;
-      var ahead = 0;
+      var t = targetTime;
       for (var i = 0; i < ranges.length; i++) {
-        var start = ranges.start(i);
-        var end = ranges.end(i);
-        if (time >= start - 1.5 && time <= end) {
-          var actualStart = Math.max(start, time);
-          ahead += (end - actualStart);
-          time = end;
-        } else if (start > time && start - time <= 1.5) {
-          ahead += (end - start);
-          time = end;
+        if (t >= ranges.start(i) - 0.2 && t <= ranges.end(i)) {
+          return Math.max(0, ranges.end(i) - t);
         }
       }
-      return ahead;
+      return 0;
     },
     ahead: function(media, targetTime) {
       return this.aheadAt(media, targetTime !== undefined ? targetTime : media.currentTime);
@@ -543,12 +535,11 @@ window.SyncLevel = SyncLevel;
     canPlayCleanly: function(media, requiredLead) {
       if (media.seeking) return false;
       if (media.ended) return true;
-      var rState = media.readyState;
-      if (rState < 2) return false;
       if (this.isNearEnd(media)) return true;
-      if (rState >= 3) return true; 
+      if (media.readyState >= 4) return true;
       var lead = this.ahead(media);
-      if (lead >= requiredLead) return true;
+      if (media.readyState >= 3 && lead > 0.05) return true;
+      if (media.readyState >= 2 && lead >= requiredLead) return true;
       return false;
     }
   };
@@ -922,14 +913,10 @@ window.SyncLevel = SyncLevel;
         state.launchingPlay = false;
         runInternal(function() {
           if (!nativeGetAPaused() && !audioEl.seeking) {
-            if (audioEl.readyState >= 2 || !state.wantPlaying) {
-              try { nativeAudioPause(); } catch(_) {}
-            }
+            try { nativeAudioPause(); } catch(_) {}
           }
           if (!nativeGetVPaused() && !videoEl.seeking) {
-            if (videoEl.readyState >= 2 || !state.wantPlaying) {
-              try { nativeVideoPause(); } catch(_) {}
-            }
+            try { nativeVideoPause(); } catch(_) {}
           }
         });
       }
@@ -1341,6 +1328,8 @@ window.SyncLevel = SyncLevel;
         if (state.internalDepth > 0) return nativeVideoPlay();
         if (window.Alabaster.testErrorActive) window.Alabaster.DisableTestUI();
         state.wantPlaying = true;
+        state.userSeeking = false;
+        setBufferSpinner(false);
         shield.activate();
         updateMediaSessionMetadata();
         player.addClass('vjs-playing');
@@ -1582,15 +1571,15 @@ window.SyncLevel = SyncLevel;
           return;
         }
 
-        state.tabWakeUntil = compat.now() + 450;
+        state.tabWakeUntil = compat.now() + 200;
         var vNow = nativeGetVTime();
         var absWakeDrift = Math.abs(liveAudio - vNow);
 
         runInternal(function() {
           enforceRateAndVolume();
-          if (absWakeDrift > config.driftTolerance) {
+          if (absWakeDrift > 0.5) {
             state.internalVideoSeeking = true;
-            nativeSetVTime(liveAudio + 0.02);
+            nativeSetVTime(liveAudio);
           }
           if (nativeGetVPaused()) compat.safePlay(nativeVideoPlay);
         });
@@ -1614,16 +1603,15 @@ window.SyncLevel = SyncLevel;
 
         if (state.buffering && state.bufferStartTime > 0) {
             var dur = videoEl.duration || audioEl.duration || 0;
-            if (dur > 1200 && compat.now() - state.bufferStartTime > 120000 && window.Alabaster._showLoopedIndicator) {
+            if (dur > 1200 && compat.now() - state.bufferStartTime > 60000 && window.Alabaster._showLoopedIndicator) {
                 window.Alabaster._showLoopedIndicator();
             }
         }
 
         if (state.buffering && bufferPctEl) {
             var needed = getMinResumeBuffer();
-            var authTime = state.frozenDisplayTime || getAuthoritativeTime();
-            var aLead = bufferMonitor.ahead(audioEl, authTime);
-            var vLead = bufferMonitor.ahead(videoEl, authTime);
+            var aLead = bufferMonitor.ahead(audioEl, nativeGetATime());
+            var vLead = bufferMonitor.ahead(videoEl, nativeGetVTime());
             var minLead = isVideoBypassed() ? aLead : Math.min(aLead, vLead);
             var pct = Math.floor((minLead / needed) * 100);
             if (isNaN(pct) || !isFinite(pct) || pct < 0) pct = 0;
@@ -1839,8 +1827,6 @@ window.SyncLevel = SyncLevel;
     initAlabasterPlayer();
   }
 })();
-
-
 
 
 (function () {
