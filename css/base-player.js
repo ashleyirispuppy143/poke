@@ -21,7 +21,7 @@
  * ///////////////////////////////////////////////////////////////////////////
  * "It takes a lot of hard work to make something simple." ~ Steve Jobs 
  */
- const SyncLevel = {
+const SyncLevel = {
   driftSeconds: 0,
   driftMs: 0,
   synced: true,
@@ -278,10 +278,11 @@ window.SyncLevel = SyncLevel;
 
       var loopInd = document.getElementById('loopedIndicator');
       if (loopInd) {
-        loopInd.style.maxWidth = '42em';
-        loopInd.style.display = 'none';
-        loopInd.style.flexDirection = 'column';
-        loopInd.innerHTML = '<span style="font-weight:700;margin-bottom:6px;font-size:15px;">Experiencing interruptions?</span><span style="color:#bbb;line-height:1.4;">The video is taking a long time to buffer. Try refreshing the page to fix this issue.</span>';
+        if (rootEl && loopInd.parentNode !== rootEl) {
+          rootEl.appendChild(loopInd);
+        }
+        loopInd.style.cssText = 'position:absolute;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(15,15,15,0.9);color:#fff;padding:14px 20px;border-radius:12px;z-index:40;display:none;align-items:center;flex-direction:column;font-family:"poketube flex","PokeTube Flex",-apple-system,sans-serif;font-size:13px;pointer-events:auto;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.08);max-width:42em;';
+        loopInd.innerHTML = '<span style="font-weight:700;margin-bottom:6px;font-size:15px;letter-spacing:-0.2px;">Experiencing interruptions?</span><span style="color:#bbb;line-height:1.4;">The video is taking a long time to buffer. Try refreshing the page to fix this issue.</span>';
         window.Alabaster._showLoopedIndicator = function() {
           loopInd.style.display = 'flex';
         };
@@ -516,20 +517,24 @@ window.SyncLevel = SyncLevel;
     aheadAt: function(media, targetTime) {
       var ranges = media.buffered;
       if (!ranges || ranges.length === 0) return 0;
-      var maxAhead = 0;
+      var time = targetTime;
+      var ahead = 0;
       for (var i = 0; i < ranges.length; i++) {
         var start = ranges.start(i);
         var end = ranges.end(i);
-        if (targetTime >= start - 0.5 && targetTime <= end) {
-          maxAhead = Math.max(maxAhead, end - targetTime);
-        } else if (targetTime < start && start - targetTime <= 0.5) {
-          maxAhead = Math.max(maxAhead, end - start);
+        if (time >= start - 1.5 && time <= end) {
+          var actualStart = Math.max(start, time);
+          ahead += (end - actualStart);
+          time = end;
+        } else if (start > time && start - time <= 1.5) {
+          ahead += (end - start);
+          time = end;
         }
       }
-      return maxAhead;
+      return ahead;
     },
-    ahead: function(media) {
-      return this.aheadAt(media, media.currentTime);
+    ahead: function(media, targetTime) {
+      return this.aheadAt(media, targetTime !== undefined ? targetTime : media.currentTime);
     },
     isNearEnd: function(media) {
       var dur = media.duration;
@@ -541,9 +546,8 @@ window.SyncLevel = SyncLevel;
       var rState = media.readyState;
       if (rState < 2) return false;
       if (this.isNearEnd(media)) return true;
-      if (rState >= 4) return true;
+      if (rState >= 3) return true; 
       var lead = this.ahead(media);
-      if (rState >= 3 && lead > 0.05) return true;
       if (lead >= requiredLead) return true;
       return false;
     }
@@ -1610,16 +1614,16 @@ window.SyncLevel = SyncLevel;
 
         if (state.buffering && state.bufferStartTime > 0) {
             var dur = videoEl.duration || audioEl.duration || 0;
-            var threshold = (dur > 0 && dur < 60) ? 7000 : 12000;
-            if (compat.now() - state.bufferStartTime > threshold && window.Alabaster._showLoopedIndicator) {
+            if (dur > 1200 && compat.now() - state.bufferStartTime > 120000 && window.Alabaster._showLoopedIndicator) {
                 window.Alabaster._showLoopedIndicator();
             }
         }
 
         if (state.buffering && bufferPctEl) {
             var needed = getMinResumeBuffer();
-            var aLead = bufferMonitor.ahead(audioEl);
-            var vLead = bufferMonitor.ahead(videoEl);
+            var authTime = state.frozenDisplayTime || getAuthoritativeTime();
+            var aLead = bufferMonitor.ahead(audioEl, authTime);
+            var vLead = bufferMonitor.ahead(videoEl, authTime);
             var minLead = isVideoBypassed() ? aLead : Math.min(aLead, vLead);
             var pct = Math.floor((minLead / needed) * 100);
             if (isNaN(pct) || !isFinite(pct) || pct < 0) pct = 0;
@@ -1835,8 +1839,6 @@ window.SyncLevel = SyncLevel;
     initAlabasterPlayer();
   }
 })();
-
-
 
 
 
