@@ -278,9 +278,12 @@ window.SyncLevel = SyncLevel;
 
       var loopInd = document.getElementById('loopedIndicator');
       if (loopInd) {
-        loopInd.innerHTML = '<b>Experiencing interruptions?</b><br>The video is taking a long time to buffer. Try refreshing the page to fix this issue.';
+        loopInd.style.maxWidth = '42em';
+        loopInd.style.display = 'none';
+        loopInd.style.flexDirection = 'column';
+        loopInd.innerHTML = '<span style="font-weight:700;margin-bottom:6px;font-size:15px;">Experiencing interruptions?</span><span style="color:#bbb;line-height:1.4;">The video is taking a long time to buffer. Try refreshing the page to fix this issue.</span>';
         window.Alabaster._showLoopedIndicator = function() {
-          loopInd.style.display = 'block';
+          loopInd.style.display = 'flex';
         };
         window.Alabaster._hideLoopedIndicator = function() {
           loopInd.style.display = 'none';
@@ -512,16 +515,18 @@ window.SyncLevel = SyncLevel;
     },
     aheadAt: function(media, targetTime) {
       var ranges = media.buffered;
-      if (!ranges) return 0;
-      var slack = this.isLongMedia(media) ? 0.3 : 0.1;
-      for (var i = 0, len = ranges.length; i < len; i++) {
+      if (!ranges || ranges.length === 0) return 0;
+      var maxAhead = 0;
+      for (var i = 0; i < ranges.length; i++) {
         var start = ranges.start(i);
         var end = ranges.end(i);
-        if (targetTime >= start - slack && targetTime <= end + 0.05) {
-          return Math.max(0, end - targetTime);
+        if (targetTime >= start - 0.5 && targetTime <= end) {
+          maxAhead = Math.max(maxAhead, end - targetTime);
+        } else if (targetTime < start && start - targetTime <= 0.5) {
+          maxAhead = Math.max(maxAhead, end - start);
         }
       }
-      return 0;
+      return maxAhead;
     },
     ahead: function(media) {
       return this.aheadAt(media, media.currentTime);
@@ -536,9 +541,10 @@ window.SyncLevel = SyncLevel;
       var rState = media.readyState;
       if (rState < 2) return false;
       if (this.isNearEnd(media)) return true;
-      if (rState >= 3) return true; 
+      if (rState >= 4) return true;
       var lead = this.ahead(media);
-      if (rState >= 2 && (lead >= requiredLead || media.paused)) return true;
+      if (rState >= 3 && lead > 0.05) return true;
+      if (lead >= requiredLead) return true;
       return false;
     }
   };
@@ -1829,7 +1835,6 @@ window.SyncLevel = SyncLevel;
     initAlabasterPlayer();
   }
 })();
-
 
 
 
