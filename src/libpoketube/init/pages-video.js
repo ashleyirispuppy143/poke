@@ -594,8 +594,6 @@ app.get("/embed/:v", async function (req, res) {
           );
         }
 
-        // REMOVED the 404.ejs redirect block so it correctly falls through to watch.ejs!
-
         var uaos = req.useragent.os;
         const browser = req.useragent.browser;
         const IsOldWindows =
