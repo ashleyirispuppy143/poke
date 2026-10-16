@@ -23,7 +23,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 <title>PokeWeather</title>
-<meta name="theme-color" content="#090d16" />
+<meta name="theme-color" content="#121212" />
 <meta name="color-scheme" content="dark light" />
 <meta content="PokeWeather" property="og:title">
 <meta content="View Weather info :3c" property="twitter:description">
@@ -31,30 +31,30 @@
 <meta content="summary_large_image" name="twitter:card">
 <style>
 :root {
-  --bg: #090d16;
-  --surface: #111827;
-  --surface-hover: #1f2937;
-  --surface-sub: #0d131f;
-  --border: #1e293b;
-  --text: #f8fafc;
-  --text-muted: #94a3b8;
-  --accent: #38bdf8;
-  --accent-dim: rgba(56, 189, 248, 0.12);
-  --radius: 12px;
-  --radius-sm: 8px;
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, Helvetica, Arial, sans-serif;
+  --bg: #121212;
+  --surface: #1a1a1a;
+  --surface-hover: #242424;
+  --surface-sub: #151515;
+  --border: #2a2a2a;
+  --text: #ededed;
+  --text-muted: #888888;
+  --accent: #d97706;
+  --rain: #4a90e2;
+  --radius: 6px;
+  --radius-sm: 4px;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 [data-theme="light"] {
-  --bg: #f1f5f9;
+  --bg: #f6f5f2;
   --surface: #ffffff;
-  --surface-hover: #f8fafc;
-  --surface-sub: #f8fafc;
-  --border: #e2e8f0;
-  --text: #0f172a;
-  --text-muted: #64748b;
-  --accent: #0284c7;
-  --accent-dim: rgba(2, 132, 199, 0.1);
+  --surface-hover: #f0efe9;
+  --surface-sub: #faf9f6;
+  --border: #e0ded8;
+  --text: #141413;
+  --text-muted: #666560;
+  --accent: #c2410c;
+  --rain: #2563eb;
 }
 
 * {
@@ -76,14 +76,14 @@ header {
   position: sticky;
   top: 0;
   z-index: 50;
-  background-color: var(--bg);
+  background-color: var(--surface);
   border-bottom: 1px solid var(--border);
 }
 
 .header-inner {
-  max-width: 1200px;
+  max-width: 1160px;
   margin: 0 auto;
-  padding: 12px 20px;
+  padding: 10px 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -98,40 +98,23 @@ header {
 }
 
 .brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
   font-weight: 700;
-  font-size: 16px;
+  font-size: 15px;
   letter-spacing: -0.02em;
   color: var(--text);
   text-decoration: none;
 }
 
-.brand-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  background-color: var(--accent-dim);
-  color: var(--accent);
-  display: grid;
-  place-items: center;
-  font-size: 15px;
-}
-
 .divider {
   width: 1px;
-  height: 20px;
+  height: 16px;
   background-color: var(--border);
 }
 
 .loc-badge {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 600;
+  font-weight: 500;
   font-size: 14px;
-  color: var(--text);
+  color: var(--text-muted);
   max-width: 260px;
   white-space: nowrap;
   overflow: hidden;
@@ -140,7 +123,7 @@ header {
 
 .search-wrap {
   flex: 1;
-  max-width: 440px;
+  max-width: 420px;
   min-width: 240px;
   position: relative;
 }
@@ -148,15 +131,14 @@ header {
 .search-form {
   display: flex;
   align-items: center;
-  background-color: var(--surface);
+  background-color: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 2px;
-  transition: border-color 0.15s;
+  padding: 1px;
 }
 
 .search-form:focus-within {
-  border-color: var(--accent);
+  border-color: var(--text-muted);
 }
 
 .search-form input[type="search"] {
@@ -164,8 +146,8 @@ header {
   background: transparent;
   border: none;
   color: var(--text);
-  padding: 8px 12px;
-  font-size: 14px;
+  padding: 7px 10px;
+  font-size: 13px;
   outline: none;
   width: 100%;
 }
@@ -178,15 +160,14 @@ header {
   background: transparent;
   border: none;
   color: var(--text-muted);
-  padding: 6px 10px;
-  border-radius: 6px;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  transition: color 0.15s, background-color 0.15s;
 }
 
 .icon-btn:hover {
@@ -196,13 +177,13 @@ header {
 
 .suggest {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 4px);
   left: 0;
   right: 0;
   background-color: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
   display: none;
   z-index: 100;
   max-height: 280px;
@@ -213,7 +194,7 @@ header {
   display: block;
   width: 100%;
   text-align: left;
-  padding: 10px 14px;
+  padding: 9px 12px;
   border: none;
   border-bottom: 1px solid var(--border);
   background: transparent;
@@ -233,23 +214,22 @@ header {
 .controls {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .btn {
-  background-color: var(--surface);
+  background-color: var(--bg);
   border: 1px solid var(--border);
   color: var(--text);
-  padding: 7px 12px;
+  padding: 6px 11px;
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  transition: background-color 0.15s, border-color 0.15s;
 }
 
 .btn:hover {
@@ -257,31 +237,33 @@ header {
 }
 
 .container {
-  max-width: 1200px;
-  margin: 24px auto;
+  max-width: 1160px;
+  margin: 20px auto;
   padding: 0 20px;
 }
 
 .dashboard {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
-  gap: 20px;
+  gap: 16px;
 }
 
 .card {
   background-color: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 20px;
+  padding: 18px 20px;
 }
 
 .card-header {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   color: var(--text-muted);
-  margin: 0 0 16px 0;
+  margin: 0 0 14px 0;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -291,17 +273,17 @@ header {
   grid-column: span 12;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
 .col-side {
   grid-column: span 12;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
-@media (min-width: 960px) {
+@media (min-width: 920px) {
   .col-main {
     grid-column: span 8;
   }
@@ -314,12 +296,12 @@ header {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 24px;
+  gap: 20px;
 }
 
 .hero-primary {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 16px;
@@ -328,18 +310,18 @@ header {
 .temp-display {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
 }
 
 .big-icon {
-  font-size: 56px;
+  font-size: 44px;
   line-height: 1;
 }
 
 .temp-value {
-  font-size: 64px;
+  font-size: 56px;
   font-weight: 700;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.03em;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
@@ -347,25 +329,29 @@ header {
 .condition-meta {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   text-align: right;
 }
 
 .condition-desc {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--text);
 }
 
 .condition-sub {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  gap: 1px;
+  background-color: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
 }
 
 @media (min-width: 640px) {
@@ -376,81 +362,78 @@ header {
 
 .metric-item {
   background-color: var(--surface-sub);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
   padding: 12px 14px;
 }
 
 .metric-label {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-muted);
-  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
   margin-bottom: 4px;
 }
 
 .metric-val {
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
 .hourly-scroll {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   overflow-x: auto;
-  padding-bottom: 12px;
+  padding-bottom: 10px;
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }
 
 .hourly-scroll::-webkit-scrollbar {
-  height: 6px;
+  height: 5px;
 }
 
 .hourly-scroll::-webkit-scrollbar-thumb {
   background-color: var(--border);
-  border-radius: 3px;
 }
 
 .hour-item {
-  min-width: 72px;
+  min-width: 68px;
   flex: 0 0 auto;
   background-color: var(--surface-sub);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 12px 8px;
+  padding: 10px 6px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-variant-numeric: tabular-nums;
 }
 
 .hour-time {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-muted);
-  font-weight: 500;
 }
 
 .hour-icon {
-  font-size: 22px;
+  font-size: 20px;
   line-height: 1;
 }
 
 .hour-temp {
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .hour-pop {
   font-size: 11px;
-  font-weight: 600;
-  color: var(--accent);
+  font-weight: 500;
+  color: var(--rain);
 }
 
 .chart-wrap {
-  margin-top: 12px;
-  height: 120px;
+  margin-top: 10px;
+  height: 110px;
   width: 100%;
   position: relative;
 }
@@ -468,10 +451,10 @@ canvas {
 
 .day-row {
   display: grid;
-  grid-template-columns: 1.1fr 36px 1.2fr 0.9fr;
+  grid-template-columns: 1.1fr 32px 1.2fr 0.9fr;
   align-items: center;
   gap: 8px;
-  padding: 12px 0;
+  padding: 10px 0;
   border-bottom: 1px solid var(--border);
   font-variant-numeric: tabular-nums;
 }
@@ -491,7 +474,7 @@ canvas {
 }
 
 .day-icon {
-  font-size: 20px;
+  font-size: 18px;
   text-align: center;
 }
 
@@ -507,29 +490,29 @@ canvas {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .day-hi {
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .day-lo {
   color: var(--text-muted);
-  min-width: 28px;
+  min-width: 26px;
   text-align: right;
 }
 
 footer {
-  max-width: 1200px;
-  margin: 40px auto 20px;
-  padding: 20px;
+  max-width: 1160px;
+  margin: 32px auto 20px;
+  padding: 16px 20px;
   border-top: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
   align-items: center;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 12px;
   flex-wrap: wrap;
   gap: 12px;
 }
@@ -537,11 +520,11 @@ footer {
 footer a {
   color: var(--text-muted);
   text-decoration: none;
-  transition: color 0.15s;
 }
 
 footer a:hover {
   color: var(--text);
+  text-decoration: underline;
 }
 
 .hidden {
@@ -549,7 +532,7 @@ footer a:hover {
 }
 
 .loading {
-  opacity: 0.6;
+  opacity: 0.5;
   pointer-events: none;
 }
 
@@ -574,27 +557,24 @@ main {
   <header>
     <div class="header-inner">
       <div class="brand-area">
-        <a href="/weather" class="brand">
-          <div class="brand-icon" aria-hidden="true">☁️</div>
-          <span>PokeWeather</span>
-        </a>
+        <a href="/weather" class="brand">PokeWeather</a>
         <div class="divider"></div>
         <div class="loc-badge" id="locChip"><%= (ssr && ssr.name) || 'Select Location' %></div>
       </div>
 
       <div class="search-wrap">
         <form class="search-form" role="search" aria-label="Search location" action="/weather" method="GET" id="searchForm">
-          <input id="q" name="q" type="search" placeholder="Search city, postal code, or lat,lon..." autocomplete="off" />
+          <input id="q" name="q" type="search" placeholder="City, postal code, or lat,lon..." autocomplete="off" />
           <input type="hidden" name="units" id="unitsHidden" value="<%= (ssr && ssr.units) || 'metric' %>"/>
-          <button id="btnGeo" class="icon-btn" type="button" title="Use current location">📍</button>
-          <button id="btnSearch" class="icon-btn" type="submit" title="Search">Search</button>
+          <button id="btnGeo" class="icon-btn" type="button" title="Use current location">Locate</button>
+          <button id="btnSearch" class="icon-btn" type="submit" title="Search">Go</button>
         </form>
         <div id="suggest" class="suggest" role="listbox" aria-label="Suggestions"></div>
       </div>
 
       <div class="controls">
         <button id="btnUnits" class="btn" title="Toggle °C/°F">°C</button>
-        <button id="btnTheme" class="btn" title="Toggle theme">🌗</button>
+        <button id="btnTheme" class="btn" title="Toggle theme">Theme</button>
         <button id="btnInstall" class="btn hidden" title="Install App">Install</button>
         <a class="btn" href="#" id="btnShare" title="Share Forecast">Share</a>
       </div>
@@ -678,16 +658,16 @@ main {
             <div class="metric-item"><div class="metric-label">Wind</div><div class="metric-val" id="currWind">—</div></div>
             <div class="metric-item"><div class="metric-label">Humidity</div><div class="metric-val" id="currHum">—</div></div>
             <div class="metric-item"><div class="metric-label">Pressure</div><div class="metric-val" id="currPress">—</div></div>
-            <div class="metric-item"><div class="metric-label">Precip (Next Hr)</div><div class="metric-val" id="pop">—</div></div>
+            <div class="metric-item"><div class="metric-label">Precip (1h)</div><div class="metric-val" id="pop">—</div></div>
             <div class="metric-item"><div class="metric-label">Sunrise</div><div class="metric-val" id="sunrise">—</div></div>
             <div class="metric-item"><div class="metric-label">Sunset</div><div class="metric-val" id="sunset">—</div></div>
-            <div class="metric-item"><div class="metric-label">Max UV Index</div><div class="metric-val" id="uv">—</div></div>
-            <div class="metric-item"><div class="metric-label">Visibility / Mode</div><div class="metric-val" id="dayMode">—</div></div>
+            <div class="metric-item"><div class="metric-label">Max UV</div><div class="metric-val" id="uv">—</div></div>
+            <div class="metric-item"><div class="metric-label">Cycle</div><div class="metric-val" id="dayMode">—</div></div>
           </div>
         </article>
 
         <section id="hourly" class="card">
-          <h3 class="card-header">Hourly Forecast (24h)</h3>
+          <h3 class="card-header">24-Hour Outlook</h3>
           <div id="hours" class="hourly-scroll" aria-label="Hourly forecast"></div>
           <div class="chart-wrap">
             <canvas id="chart" aria-label="Temperature trend chart" role="img"></canvas>
@@ -708,7 +688,7 @@ main {
     <div>PokeWeather</div>
     <div style="display:flex;gap:16px;">
       <a href="/privacy">Privacy Policy</a>
-      <a href="https://open-meteo.com/" target="_blank" rel="noopener">Weather data by Open-Meteo</a>
+      <a href="https://open-meteo.com/" target="_blank" rel="noopener">Data: Open-Meteo</a>
     </div>
   </footer>
     
@@ -860,7 +840,7 @@ main {
     $('#sunrise').textContent = fmtTime(daily.sunrise[0]);
     $('#sunset').textContent = fmtTime(daily.sunset[0]);
     $('#uv').textContent = (daily.uv_index_max?.[0] ?? '—');
-    $('#dayMode').textContent = c.is_day ? 'Daytime' : 'Nighttime';
+    $('#dayMode').textContent = c.is_day ? 'Day' : 'Night';
 
     const nowIndex = hourly.time.findIndex(t => Date.parse(t) > Date.now());
     const popNext = hourly.precipitation_probability?.[nowIndex] ?? hourly.precipitation_probability?.[0] ?? null;
@@ -909,8 +889,8 @@ main {
 
     const min = Math.min(...ys);
     const max = Math.max(...ys);
-    const padX = 16;
-    const padY = 20;
+    const padX = 12;
+    const padY = 18;
     const xstep = (cw - 2 * padX) / Math.max(1, ys.length - 1);
     const ymap = v => {
       if (max === min) return ch / 2;
@@ -920,24 +900,20 @@ main {
 
     ctx.clearRect(0, 0, cw, ch);
 
-    const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#38bdf8';
+    const style = getComputedStyle(document.documentElement);
+    const accent = style.getPropertyValue('--accent').trim() || '#d97706';
+    const borderCol = style.getPropertyValue('--border').trim() || '#2a2a2a';
 
-    const grad = ctx.createLinearGradient(0, padY, 0, ch);
-    grad.addColorStop(0, 'rgba(56, 189, 248, 0.2)');
-    grad.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
-
+    ctx.strokeStyle = borderCol;
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(padX, ymap(ys[0]));
-    for (let i = 1; i < ys.length; i++) {
-      ctx.lineTo(padX + i * xstep, ymap(ys[i]));
-    }
-    ctx.lineTo(padX + (ys.length - 1) * xstep, ch);
-    ctx.lineTo(padX, ch);
-    ctx.closePath();
-    ctx.fillStyle = grad;
-    ctx.fill();
+    ctx.moveTo(padX, padY);
+    ctx.lineTo(cw - padX, padY);
+    ctx.moveTo(padX, ch - padY);
+    ctx.lineTo(cw - padX, ch - padY);
+    ctx.stroke();
 
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1.75;
     ctx.strokeStyle = accent;
     ctx.beginPath();
     ctx.moveTo(padX, ymap(ys[0]));
@@ -949,7 +925,7 @@ main {
     ctx.fillStyle = accent;
     ys.forEach((v, i) => {
       ctx.beginPath();
-      ctx.arc(padX + i * xstep, ymap(v), 3, 0, Math.PI * 2);
+      ctx.arc(padX + i * xstep, ymap(v), 2.5, 0, Math.PI * 2);
       ctx.fill();
     });
   }
