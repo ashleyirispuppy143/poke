@@ -1185,9 +1185,6 @@ footer a:hover {
   display: none;
 }
 
-body.no-js .ssr { display: block !important; }
-body.no-js main, body.no-js .js-only { display: none !important; }
-
 main {
   display: block;
 }
@@ -1341,7 +1338,12 @@ main {
 <noscript>
   <style>
     .ssr { display: block !important; }
-    main, .js-only { display: none !important; }
+    main { display: none !important; }
+    .no-js-hidden { display: none !important; }
+    @media (max-width: 768px) {
+      .desktop-search { display: block !important; flex: 1 1 100%; margin-top: 10px; }
+      .hamburger-btn { display: none !important; }
+    }
   </style>
 </noscript>
 </head>
@@ -1364,47 +1366,44 @@ main {
         <form class="search-form" role="search" aria-label="Search location" action="/weather" method="GET" id="searchForm">
           <input id="q" name="q" type="search" placeholder="Add city, place, or coordinates..." autocomplete="off" />
           <input type="hidden" name="units" id="unitsHidden" value="<%= (ssr && ssr.units) || 'metric' %>"/>
-          <button id="btnGeo" class="pill-btn js-only" type="button" title="Use current location">Locate</button>
+          <button id="btnGeo" class="pill-btn no-js-hidden" type="button" title="Use current location">Locate</button>
           <button id="btnSearch" class="pill-btn" type="submit" title="Add Location">Add</button>
         </form>
         <div id="suggest" class="suggest" role="listbox" aria-label="Suggestions"></div>
       </div>
 
-      <div class="controls desktop-controls js-only">
-        <button id="btnUnits" class="btn" title="Toggle °C/°F">°C</button>
+      <div class="controls desktop-controls">
+        <form id="unitForm" action="/weather" method="GET" style="display: none;">
+          <input type="hidden" name="q" value="<%= (ssr && ssr.name) || '' %>" />
+          <input type="hidden" name="units" value="<%= (ssr && ssr.units === 'metric') ? 'imperial' : 'metric' %>" />
+        </form>
+        <button form="unitForm" id="btnUnits" class="btn" title="Toggle °C/°F" type="submit"><%= (ssr && ssr.units === 'imperial') ? '°F' : '°C' %></button>
         <button id="btnTimeFormat" class="btn" title="Toggle 12h/24h">24h</button>
         <button id="btnTheme" class="btn" title="Toggle theme">Theme</button>
-        <button id="btnAnon" class="btn" title="Toggle Anonymous Mode">Anon Mode</button>
         <button id="btnInstall" class="btn hidden" title="Install App">Install</button>
         <a class="btn" href="#" id="btnShare" title="Share Forecast">Share</a>
       </div>
-      
-      <noscript>
-        <div class="controls desktop-controls">
-          <a href="?units=metric" class="btn">°C</a>
-          <a href="?units=imperial" class="btn">°F</a>
-        </div>
-      </noscript>
 
-      <button id="btnHamburger" class="hamburger-btn js-only" type="button" aria-label="Open menu and locations">
+      <button id="btnHamburger" class="hamburger-btn" type="button" aria-label="Open menu and locations">
         <svg viewBox="0 0 24 24"><path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z"/></svg>
       </button>
     </div>
 
-    <div id="desktopLocationsBar" class="desktop-loc-bar-wrap js-only" role="tablist" aria-label="Saved Locations"></div>
+    <div id="desktopLocationsBar" class="desktop-loc-bar-wrap" role="tablist" aria-label="Saved Locations"></div>
   </header>
 
-  <div id="drawerBackdrop" class="drawer-backdrop js-only"></div>
+  <div id="drawerBackdrop" class="drawer-backdrop"></div>
 
-  <aside id="mobileDrawer" class="mobile-drawer js-only" aria-label="Locations and Settings">
+  <aside id="mobileDrawer" class="mobile-drawer" aria-label="Locations and Settings">
     <div class="drawer-top">
       <span class="drawer-title">Locations</span>
       <button id="btnCloseDrawer" class="pill-btn" type="button">Close</button>
     </div>
 
     <div class="search-wrap drawer-search-wrap">
-      <form class="search-form" role="search" id="mobileSearchForm">
-        <input id="mobileSearchInput" type="search" placeholder="Add city or place..." autocomplete="off" />
+      <form class="search-form" role="search" id="mobileSearchForm" action="/weather" method="GET">
+        <input id="mobileSearchInput" name="q" type="search" placeholder="Add city or place..." autocomplete="off" />
+        <input type="hidden" name="units" value="<%= (ssr && ssr.units) || 'metric' %>"/>
         <button class="pill-btn" type="submit">Add</button>
       </form>
       <div id="mobileSuggest" class="suggest" role="listbox" aria-label="Mobile Search Suggestions"></div>
@@ -1419,10 +1418,9 @@ main {
     </div>
 
     <div class="drawer-controls">
-      <button id="btnMobileUnits" class="btn" type="button">°C</button>
+      <button form="unitForm" id="btnMobileUnits" class="btn" type="submit"><%= (ssr && ssr.units === 'imperial') ? '°F' : '°C' %></button>
       <button id="btnMobileTimeFormat" class="btn" type="button">24h</button>
       <button id="btnMobileTheme" class="btn" type="button">Theme</button>
-      <button id="btnMobileAnon" class="btn" type="button">Anon Mode</button>
       <button id="btnMobileShare" class="btn" type="button">Share</button>
     </div>
   </aside>
@@ -1431,7 +1429,7 @@ main {
     <div class="dashboard">
       <div class="col-main">
         <article class="card hero-card" aria-live="polite">
-          <div class="card-header">Current Weather - <%= (ssr && ssr.name) || 'Choose a location' %></div>
+          <div class="card-header">Current Weather - <%= (ssr && ssr.name) || 'Unknown' %></div>
           <% if (ssr && ssr.current) { %>
             <div class="hero-primary">
               <div class="temp-display">
@@ -1562,7 +1560,7 @@ main {
     </div>
   </main>
 
-  <nav id="locationDotsBar" class="location-dots-bar js-only" aria-label="Saved Locations Pagination"></nav>
+  <nav id="locationDotsBar" class="location-dots-bar" aria-label="Saved Locations Pagination"></nav>
 
   <footer>
     <div>PokeWeather</div>
@@ -1571,7 +1569,7 @@ main {
       <a href="https://open-meteo.com/" target="_blank" rel="noopener">Data: Open-Meteo</a>
     </div>
   </footer>
-    
+   
   <script>
 <!--//--><![CDATA[//><!--
 /**
@@ -1617,7 +1615,6 @@ main {
 
   const storedUnits = JSON.parse(localStorage.getItem('pokeweather:units') || '{}');
   const storedTimeFormat = localStorage.getItem(TIME_FORMAT_STORAGE_KEY) || '24h';
-  let isAnonymousMode = localStorage.getItem('pokeweather:anon') === 'true';
 
   const appState = {
     lat: null,
@@ -1631,7 +1628,6 @@ main {
 
   let latestWeatherData = null;
   let latestChartSeries = null;
-  let currentFetchController = null;
 
   let insightTimerId = null;
   let insightCurrentPage = 0;
@@ -1645,8 +1641,6 @@ main {
   const mobileTimeFormatButton = selectElement('#btnMobileTimeFormat');
   const themeButton = selectElement('#btnTheme');
   const mobileThemeButton = selectElement('#btnMobileTheme');
-  const anonButton = selectElement('#btnAnon');
-  const mobileAnonButton = selectElement('#btnMobileAnon');
   const geoButton = selectElement('#btnGeo');
   const shareButton = selectElement('#btnShare');
   const mobileShareButton = selectElement('#btnMobileShare');
@@ -2220,7 +2214,7 @@ main {
         appState.locations = [{
           lat: 40.7128,
           lon: -74.006,
-          name: isAnonymousMode ? 'My Location' : 'Current Location',
+          name: 'Current Location',
           isCurrent: true
         }];
       }
@@ -2229,7 +2223,7 @@ main {
       appState.locations = [{
         lat: 40.7128,
         lon: -74.006,
-        name: isAnonymousMode ? 'My Location' : 'Current Location',
+        name: 'Current Location',
         isCurrent: true
       }];
       appState.activeIndex = 0;
@@ -2399,17 +2393,11 @@ main {
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
-        let resolvedPlaceName = 'My Location';
-
-        if (!isAnonymousMode) {
-          const fetchedName = await fetchReverseLocationName(latitude, longitude);
-          resolvedPlaceName = fetchedName || 'Current Location';
-        }
-
+        const resolvedPlaceName = await fetchReverseLocationName(latitude, longitude);
         appState.locations[0] = {
           lat: latitude,
           lon: longitude,
-          name: resolvedPlaceName,
+          name: resolvedPlaceName || 'Current Location',
           isCurrent: true
         };
         saveLocationsToStorage();
@@ -2427,10 +2415,8 @@ main {
 
   function updateLocationHeading(name) {
     const cleanText = name || 'Unknown Location';
-    const locChip = selectElement('#locChip');
-    const mobileLocTitle = selectElement('#mobileLocTitle');
-    if (locChip) locChip.textContent = cleanText;
-    if (mobileLocTitle) mobileLocTitle.textContent = cleanText;
+    selectElement('#locChip').textContent = cleanText;
+    selectElement('#mobileLocTitle').textContent = cleanText;
 
     const isDefaultLocation = appState.activeIndex === 0;
     const tagElement = selectElement('#mobileLocTag');
@@ -2446,8 +2432,8 @@ main {
 
   function syncUnitControls() {
     const unitLabel = appState.units === 'metric' ? '°C' : '°F';
-    if (unitsButton) unitsButton.textContent = unitLabel;
-    if (mobileUnitsButton) mobileUnitsButton.textContent = unitLabel;
+    unitsButton.textContent = unitLabel;
+    mobileUnitsButton.textContent = unitLabel;
 
     if (hiddenUnitsInput) {
       hiddenUnitsInput.value = appState.units === 'metric' ? 'metric' : 'imperial';
@@ -2460,19 +2446,13 @@ main {
 
   function syncTimeFormatControls() {
     const formatLabel = appState.timeFormat === '12h' ? '12h' : '24h';
-    if (timeFormatButton) timeFormatButton.textContent = formatLabel;
-    if (mobileTimeFormatButton) mobileTimeFormatButton.textContent = formatLabel;
+    timeFormatButton.textContent = formatLabel;
+    mobileTimeFormatButton.textContent = formatLabel;
     localStorage.setItem(TIME_FORMAT_STORAGE_KEY, appState.timeFormat);
 
     if (latestWeatherData) {
       renderWeatherDashboard(latestWeatherData);
     }
-  }
-
-  function syncAnonControls() {
-    const txt = isAnonymousMode ? 'Anon: On' : 'Anon: Off';
-    if (anonButton) anonButton.textContent = txt;
-    if (mobileAnonButton) mobileAnonButton.textContent = txt;
   }
 
   async function loadWeatherForCoordinates(lat, lon, providedName) {
@@ -2514,26 +2494,18 @@ main {
     requestUrl.searchParams.set('windspeed_unit', windSpeedUnit);
 
     const currentCard = selectElement('.current');
-    if (currentCard) currentCard.classList.add('loading');
-
-    if (currentFetchController) {
-      currentFetchController.abort();
-    }
-    currentFetchController = new AbortController();
-    const signal = currentFetchController.signal;
+    currentCard.classList.add('loading');
 
     try {
-      let response = await fetch(requestUrl.toString(), { signal });
+      let response = await fetch(requestUrl.toString());
       if (!response.ok) {
         const directOpenMeteoUrl = new URL('https://api.open-meteo.com/v1/forecast');
         directOpenMeteoUrl.search = requestUrl.searchParams.toString();
-        response = await fetch(directOpenMeteoUrl.toString(), { signal });
+        response = await fetch(directOpenMeteoUrl.toString());
       }
       if (!response.ok) throw new Error('Failed to load weather data');
 
       const weatherData = await response.json();
-      if (signal.aborted) return;
-
       localStorage.setItem('pokeweather:last', JSON.stringify({
         when: Date.now(),
         state: {
@@ -2545,8 +2517,7 @@ main {
         data: weatherData
       }));
       renderWeatherDashboard(weatherData);
-    } catch (err) {
-      if (err.name === 'AbortError') return;
+    } catch {
       const cachedPayload = JSON.parse(localStorage.getItem('pokeweather:last') || 'null');
       if (cachedPayload && cachedPayload.data) {
         renderWeatherDashboard(cachedPayload.data);
@@ -2554,7 +2525,7 @@ main {
         alert('Could not load weather data.');
       }
     } finally {
-      if (currentCard) currentCard.classList.remove('loading');
+      currentCard.classList.remove('loading');
     }
   }
 
@@ -2575,19 +2546,17 @@ main {
       heroSkyElement.setAttribute('data-sky', skyVariant);
     }
 
-    const setContent = (id, text) => { const el = selectElement(id); if(el) el.textContent = text; };
-
-    setContent('#currIcon', getWeatherIcon(current.weather_code, isDaytime));
-    setContent('#currTemp', formatNumber(current.temperature_2m, '°'));
-    setContent('#currDesc', getWeatherDescription(current.weather_code));
-    setContent('#currFeels', formatNumber(current.apparent_temperature, '°'));
-    setContent('#currWind', `${formatNumber(current.wind_speed_10m)} ${windUnitLabel} (${current.wind_direction_10m ?? '-'}°)`);
-    setContent('#currHum', formatNumber(current.relative_humidity_2m, '%'));
-    setContent('#currPress', formatNumber(current.pressure_msl, ' hPa'));
-    setContent('#sunrise', formatClockTime(daily.sunrise[0]));
-    setContent('#sunset', formatClockTime(daily.sunset[0]));
-    setContent('#uv', daily.uv_index_max?.[0] ?? '-');
-    setContent('#dayMode', isDaytime ? 'Day' : 'Night');
+    selectElement('#currIcon').textContent = getWeatherIcon(current.weather_code, isDaytime);
+    selectElement('#currTemp').textContent = formatNumber(current.temperature_2m, '°');
+    selectElement('#currDesc').textContent = getWeatherDescription(current.weather_code);
+    selectElement('#currFeels').textContent = formatNumber(current.apparent_temperature, '°');
+    selectElement('#currWind').textContent = `${formatNumber(current.wind_speed_10m)} ${windUnitLabel} (${current.wind_direction_10m ?? '-'}°)`;
+    selectElement('#currHum').textContent = formatNumber(current.relative_humidity_2m, '%');
+    selectElement('#currPress').textContent = formatNumber(current.pressure_msl, ' hPa');
+    selectElement('#sunrise').textContent = formatClockTime(daily.sunrise[0]);
+    selectElement('#sunset').textContent = formatClockTime(daily.sunset[0]);
+    selectElement('#uv').textContent = daily.uv_index_max?.[0] ?? '-';
+    selectElement('#dayMode').textContent = isDaytime ? 'Day' : 'Night';
 
     const localTimeElement = selectElement('#currLocalTime');
     if (localTimeElement) {
@@ -2603,75 +2572,73 @@ main {
 
     const upcomingHourIndex = hourly.time.findIndex((timeValue) => Date.parse(timeValue) > Date.now());
     const nextHourPrecip = hourly.precipitation_probability?.[upcomingHourIndex] ?? hourly.precipitation_probability?.[0] ?? null;
-    setContent('#pop', nextHourPrecip === null ? '-' : `${nextHourPrecip}%`);
+    selectElement('#pop').textContent = nextHourPrecip === null ? '-' : `${nextHourPrecip}%`;
 
     const hourlyContainer = selectElement('#hours');
-    if (hourlyContainer) {
-      hourlyContainer.innerHTML = '';
-      const sliceStart = upcomingHourIndex > 0 ? upcomingHourIndex - 1 : 0;
-      const sliceEnd = Math.min(sliceStart + 24, hourly.time.length);
+    hourlyContainer.innerHTML = '';
+    const sliceStart = upcomingHourIndex > 0 ? upcomingHourIndex - 1 : 0;
+    const sliceEnd = Math.min(sliceStart + 24, hourly.time.length);
 
-      const summaryText = buildOutlookSummaryText(weatherData, sliceStart);
-      setContent('#outlookSummary', summaryText);
-      setContent('#desktopOutlookSummary', summaryText);
+    const summaryText = buildOutlookSummaryText(weatherData, sliceStart);
+    const mobileSummaryElement = selectElement('#outlookSummary');
+    const desktopSummaryElement = selectElement('#desktopOutlookSummary');
+    if (mobileSummaryElement) mobileSummaryElement.textContent = summaryText;
+    if (desktopSummaryElement) desktopSummaryElement.textContent = summaryText;
 
-      renderMobileInsightsCarousel(weatherData, sliceStart);
+    renderMobileInsightsCarousel(weatherData, sliceStart);
 
-      for (let index = sliceStart; index < sliceEnd; index++) {
-        const hourCard = document.createElement('div');
-        hourCard.className = 'hour-item';
-        const timeLabel = formatClockTime(hourly.time[index]);
-        const iconLabel = getWeatherIcon(hourly.weather_code[index], true);
-        const tempLabel = formatNumber(hourly.temperature_2m[index], '°');
-        const precipLabel = hourly.precipitation_probability?.[index] ?? 0;
+    for (let index = sliceStart; index < sliceEnd; index++) {
+      const hourCard = document.createElement('div');
+      hourCard.className = 'hour-item';
+      const timeLabel = formatClockTime(hourly.time[index]);
+      const iconLabel = getWeatherIcon(hourly.weather_code[index], true);
+      const tempLabel = formatNumber(hourly.temperature_2m[index], '°');
+      const precipLabel = hourly.precipitation_probability?.[index] ?? 0;
 
-        hourCard.innerHTML = `
-          <div class="hour-time">${timeLabel}</div>
-          <div class="hour-icon">${iconLabel}</div>
-          <div class="hour-temp">${tempLabel}</div>
-          <div class="hour-pop">${precipLabel}%</div>
-        `;
-        hourlyContainer.appendChild(hourCard);
-      }
-
-      latestChartSeries = {
-        times: hourly.time.slice(sliceStart, sliceEnd).map((timeValue) => new Date(timeValue)),
-        temps: hourly.temperature_2m.slice(sliceStart, sliceEnd)
-      };
-      drawTemperatureChart(selectElement('#chart'), latestChartSeries.times, latestChartSeries.temps);
+      hourCard.innerHTML = `
+        <div class="hour-time">${timeLabel}</div>
+        <div class="hour-icon">${iconLabel}</div>
+        <div class="hour-temp">${tempLabel}</div>
+        <div class="hour-pop">${precipLabel}%</div>
+    `;
+      hourlyContainer.appendChild(hourCard);
     }
 
+    latestChartSeries = {
+      times: hourly.time.slice(sliceStart, sliceEnd).map((timeValue) => new Date(timeValue)),
+      temps: hourly.temperature_2m.slice(sliceStart, sliceEnd)
+    };
+    drawTemperatureChart(selectElement('#chart'), latestChartSeries.times, latestChartSeries.temps);
+
     const dailyContainer = selectElement('#days');
-    if (dailyContainer) {
-      dailyContainer.innerHTML = '';
+    dailyContainer.innerHTML = '';
 
-      for (let index = 0; index < daily.time.length; index++) {
-        const dayRow = document.createElement('div');
-        dayRow.className = 'day-row';
-        const dayTitle = index === 0 ? 'Today' : formatShortDate(daily.time[index]);
-        const maxTemp = formatNumber(daily.temperature_2m_max[index], '°');
-        const minTemp = formatNumber(daily.temperature_2m_min[index], '°');
-        const conditionIcon = getWeatherIcon(daily.weather_code[index], true);
-        const conditionText = getWeatherDescription(daily.weather_code[index]);
+    for (let index = 0; index < daily.time.length; index++) {
+      const dayRow = document.createElement('div');
+      dayRow.className = 'day-row';
+      const dayTitle = index === 0 ? 'Today' : formatShortDate(daily.time[index]);
+      const maxTemp = formatNumber(daily.temperature_2m_max[index], '°');
+      const minTemp = formatNumber(daily.temperature_2m_min[index], '°');
+      const conditionIcon = getWeatherIcon(daily.weather_code[index], true);
+      const conditionText = getWeatherDescription(daily.weather_code[index]);
 
-        dayRow.innerHTML = `
-          <div class="day-name">${dayTitle}</div>
-          <div class="day-icon">${conditionIcon}</div>
-          <div class="day-cond">${conditionText}</div>
-          <div class="day-temps">
-            <span class="day-hi">${maxTemp}</span>
-            <span class="day-lo">${minTemp}</span>
-          </div>
-        `;
-        dailyContainer.appendChild(dayRow);
-      }
+      dayRow.innerHTML = `
+        <div class="day-name">${dayTitle}</div>
+        <div class="day-icon">${conditionIcon}</div>
+        <div class="day-cond">${conditionText}</div>
+        <div class="day-temps">
+          <span class="day-hi">${maxTemp}</span>
+          <span class="day-lo">${minTemp}</span>
+        </div>
+      `;
+      dailyContainer.appendChild(dayRow);
     }
 
     requestAnimationFrame(updateMobileSkyHeight);
   }
 
   function drawTemperatureChart(canvas, timeValues, tempValues) {
-    if (!canvas || !tempValues || tempValues.length === 0) return;
+    if (!tempValues || tempValues.length === 0) return;
 
     const context = canvas.getContext('2d');
     const pixelRatio = window.devicePixelRatio || 1;
@@ -2730,27 +2697,27 @@ main {
   }
 
   function openMobileDrawer() {
-    if(mobileDrawer) mobileDrawer.classList.add('open');
-    if(drawerBackdrop) drawerBackdrop.classList.add('open');
+    mobileDrawer.classList.add('open');
+    drawerBackdrop.classList.add('open');
   }
 
   function closeMobileDrawer() {
-    if(mobileDrawer) mobileDrawer.classList.remove('open');
-    if(drawerBackdrop) drawerBackdrop.classList.remove('open');
-    if(mobileSuggestionsBox) mobileSuggestionsBox.style.display = 'none';
+    mobileDrawer.classList.remove('open');
+    drawerBackdrop.classList.remove('open');
+    mobileSuggestionsBox.style.display = 'none';
   }
 
   function handlePlaceSelection(placeItem, isFromMobileDrawer) {
-    if(suggestionsBox) suggestionsBox.style.display = 'none';
-    if(mobileSuggestionsBox) mobileSuggestionsBox.style.display = 'none';
+    suggestionsBox.style.display = 'none';
+    mobileSuggestionsBox.style.display = 'none';
     const formattedName = formatPlaceLabel(placeItem.display_name, 2);
 
     if (isFromMobileDrawer) {
-      if(mobileSearchInput) mobileSearchInput.value = '';
+      mobileSearchInput.value = '';
       addOrSelectSavedLocation(placeItem.lat, placeItem.lon, formattedName);
       closeMobileDrawer();
     } else {
-      if(searchInput) searchInput.value = '';
+      searchInput.value = '';
       addOrSelectSavedLocation(placeItem.lat, placeItem.lon, formattedName);
     }
   }
@@ -2759,8 +2726,8 @@ main {
     const queryValue = inputElement.value.trim();
     if (!queryValue) return;
 
-    if(suggestionsBox) suggestionsBox.style.display = 'none';
-    if(mobileSuggestionsBox) mobileSuggestionsBox.style.display = 'none';
+    suggestionsBox.style.display = 'none';
+    mobileSuggestionsBox.style.display = 'none';
 
     const coordinateMatch = queryValue.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
     if (coordinateMatch) {
@@ -2785,7 +2752,6 @@ main {
   }
 
   function bindAutocompleteInput(inputElement, dropdownElement, isMobileDrawer) {
-    if (!inputElement || !dropdownElement) return;
     inputElement.addEventListener('input', createDebouncedFunction(async (event) => {
       const inputText = event.target.value.trim();
       if (!inputText) {
@@ -2840,13 +2806,6 @@ main {
   function toggleTimeFormatPreference() {
     appState.timeFormat = appState.timeFormat === '24h' ? '12h' : '24h';
     syncTimeFormatControls();
-  }
-
-  function toggleAnonPreference() {
-    isAnonymousMode = !isAnonymousMode;
-    localStorage.setItem('pokeweather:anon', isAnonymousMode.toString());
-    syncAnonControls();
-    refreshDefaultCurrentLocation(true);
   }
 
   async function triggerShareForecast(event) {
@@ -2909,33 +2868,32 @@ main {
     updateMobileSkyHeight();
   });
 
-  if(unitsButton) unitsButton.addEventListener('click', () => {
+  unitsButton.addEventListener('click', (e) => {
+    e.preventDefault();
     appState.units = appState.units === 'metric' ? 'imperial' : 'metric';
     syncUnitControls();
   });
 
-  if(mobileUnitsButton) mobileUnitsButton.addEventListener('click', () => {
+  mobileUnitsButton.addEventListener('click', (e) => {
+    e.preventDefault();
     appState.units = appState.units === 'metric' ? 'imperial' : 'metric';
     syncUnitControls();
   });
 
-  if(timeFormatButton) timeFormatButton.addEventListener('click', toggleTimeFormatPreference);
-  if(mobileTimeFormatButton) mobileTimeFormatButton.addEventListener('click', toggleTimeFormatPreference);
+  timeFormatButton.addEventListener('click', toggleTimeFormatPreference);
+  mobileTimeFormatButton.addEventListener('click', toggleTimeFormatPreference);
 
-  if(themeButton) themeButton.addEventListener('click', toggleThemePreference);
-  if(mobileThemeButton) mobileThemeButton.addEventListener('click', toggleThemePreference);
+  themeButton.addEventListener('click', toggleThemePreference);
+  mobileThemeButton.addEventListener('click', toggleThemePreference);
 
-  if(anonButton) anonButton.addEventListener('click', toggleAnonPreference);
-  if(mobileAnonButton) mobileAnonButton.addEventListener('click', toggleAnonPreference);
+  shareButton.addEventListener('click', triggerShareForecast);
+  mobileShareButton.addEventListener('click', triggerShareForecast);
 
-  if(shareButton) shareButton.addEventListener('click', triggerShareForecast);
-  if(mobileShareButton) mobileShareButton.addEventListener('click', triggerShareForecast);
+  hamburgerButton.addEventListener('click', openMobileDrawer);
+  closeDrawerButton.addEventListener('click', closeMobileDrawer);
+  drawerBackdrop.addEventListener('click', closeMobileDrawer);
 
-  if(hamburgerButton) hamburgerButton.addEventListener('click', openMobileDrawer);
-  if(closeDrawerButton) closeDrawerButton.addEventListener('click', closeMobileDrawer);
-  if(drawerBackdrop) drawerBackdrop.addEventListener('click', closeMobileDrawer);
-
-  if(geoButton) geoButton.addEventListener('click', () => {
+  geoButton.addEventListener('click', () => {
     appState.activeIndex = 0;
     saveLocationsToStorage();
     renderLocationNavigation();
@@ -2947,17 +2905,17 @@ main {
 
   document.addEventListener('click', (event) => {
     if (!event.target.closest('.search-wrap')) {
-      if(suggestionsBox) suggestionsBox.style.display = 'none';
-      if(mobileSuggestionsBox) mobileSuggestionsBox.style.display = 'none';
+      suggestionsBox.style.display = 'none';
+      mobileSuggestionsBox.style.display = 'none';
     }
   });
 
-  if(searchForm) searchForm.addEventListener('submit', (event) => {
+  searchForm.addEventListener('submit', (event) => {
     event.preventDefault();
     executeLocationSearch(searchInput, false);
   });
 
-  if(mobileSearchForm) mobileSearchForm.addEventListener('submit', (event) => {
+  mobileSearchForm.addEventListener('submit', (event) => {
     event.preventDefault();
     executeLocationSearch(mobileSearchInput, true);
   });
@@ -2968,9 +2926,16 @@ main {
       document.documentElement.setAttribute('data-theme', 'light');
     }
 
-    syncUnitControls();
-    syncTimeFormatControls();
-    syncAnonControls();
+    const initialUnitText = appState.units === 'metric' ? '°C' : '°F';
+    unitsButton.textContent = initialUnitText;
+    mobileUnitsButton.textContent = initialUnitText;
+    if (hiddenUnitsInput) {
+      hiddenUnitsInput.value = appState.units;
+    }
+
+    const initialTimeFormatText = appState.timeFormat === '12h' ? '12h' : '24h';
+    timeFormatButton.textContent = initialTimeFormatText;
+    mobileTimeFormatButton.textContent = initialTimeFormatText;
 
     loadStoredLocations();
     setupMobileSwipeGesture();
@@ -2991,7 +2956,7 @@ main {
       appState.locations[0] = {
         lat: window.__SSR__.lat,
         lon: window.__SSR__.lon,
-        name: window.__SSR__.name || (isAnonymousMode ? 'My Location' : 'Current Location'),
+        name: window.__SSR__.name || 'Current Location',
         isCurrent: true
       };
       saveLocationsToStorage();
