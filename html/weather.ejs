@@ -306,6 +306,14 @@ header {
   position: relative;
 }
 
+.drawer-search-wrap {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  position: relative;
+}
+
 .search-form {
   display: flex;
   align-items: center;
@@ -355,15 +363,15 @@ header {
 
 .suggest {
   position: absolute;
-  top: calc(100% + 8px);
+  top: calc(100% + 6px);
   left: 0;
   right: 0;
   background-color: var(--md-surface-high);
   border-radius: var(--radius-lg);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.38);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
   display: none;
-  z-index: 100;
-  max-height: 280px;
+  z-index: 120;
+  max-height: 260px;
   overflow-y: auto;
   padding: 6px;
 }
@@ -396,7 +404,7 @@ header {
   background-color: var(--md-surface-high);
   border: none;
   color: var(--md-text);
-  padding: 9px 16px;
+  padding: 9px 15px;
   border-radius: var(--radius-pill);
   font-size: 13px;
   font-weight: 600;
@@ -456,6 +464,7 @@ header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex: 0 0 auto;
 }
 
 .drawer-title {
@@ -537,10 +546,11 @@ header {
 
 .drawer-controls {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
   margin-top: auto;
   padding-top: 12px;
+  flex: 0 0 auto;
 }
 
 .container {
@@ -621,12 +631,19 @@ header {
 
 .mobile-loc-tag {
   display: none;
-  font-size: 12px;
-  font-weight: 600;
-  opacity: 0.85;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
   background: rgba(0, 0, 0, 0.25);
-  padding: 4px 12px;
-  border-radius: var(--radius-pill);
+  border-radius: 50%;
+  color: var(--md-text);
+}
+
+.mobile-loc-tag svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
 }
 
 .temp-display {
@@ -664,6 +681,13 @@ header {
 .condition-sub {
   font-size: 14px;
   color: var(--md-text-muted);
+}
+
+.local-time-sub {
+  font-size: 13px;
+  color: var(--md-text-muted);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.9;
 }
 
 .metrics-grid {
@@ -934,7 +958,7 @@ main {
   }
 
   .mobile-loc-tag {
-    display: inline-block;
+    display: inline-flex;
   }
 
   .temp-display {
@@ -1000,6 +1024,7 @@ main {
 
       <div class="controls desktop-controls">
         <button id="btnUnits" class="btn" title="Toggle °C/°F">°C</button>
+        <button id="btnTimeFormat" class="btn" title="Toggle 12h/24h">24h</button>
         <button id="btnTheme" class="btn" title="Toggle theme">Theme</button>
         <button id="btnInstall" class="btn hidden" title="Install App">Install</button>
         <a class="btn" href="#" id="btnShare" title="Share Forecast">Share</a>
@@ -1019,7 +1044,7 @@ main {
       <button id="btnCloseDrawer" class="pill-btn" type="button">Close</button>
     </div>
 
-    <div class="search-wrap" style="min-width:100%;max-width:100%;">
+    <div class="search-wrap drawer-search-wrap">
       <form class="search-form" role="search" id="mobileSearchForm">
         <input id="mobileSearchInput" type="search" placeholder="Add city or place..." autocomplete="off" />
         <button class="pill-btn" type="submit">Add</button>
@@ -1037,6 +1062,7 @@ main {
 
     <div class="drawer-controls">
       <button id="btnMobileUnits" class="btn" type="button">°C</button>
+      <button id="btnMobileTimeFormat" class="btn" type="button">24h</button>
       <button id="btnMobileTheme" class="btn" type="button">Theme</button>
       <button id="btnMobileShare" class="btn" type="button">Share</button>
     </div>
@@ -1106,7 +1132,9 @@ main {
             <span id="currFeelHeader"></span>
           </div>
           <div class="hero-primary">
-            <div class="mobile-loc-tag" id="mobileLocTag">Current Location</div>
+            <div class="mobile-loc-tag" id="mobileLocTag" title="Default Location">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+            </div>
             <div class="mobile-loc-title" id="mobileLocTitle">Select Location</div>
             <div class="temp-display">
               <div class="big-icon" id="currIcon">—</div>
@@ -1115,6 +1143,7 @@ main {
             <div class="condition-meta">
               <div class="condition-desc" id="currDesc">—</div>
               <div class="condition-sub">Feels like <span id="currFeels">—</span></div>
+              <div class="local-time-sub hidden" id="currLocalTime"></div>
             </div>
           </div>
           <div class="metrics-grid">
@@ -1198,21 +1227,28 @@ main {
   const MAX_LOCATIONS = 10;
   const LOCATIONS_STORAGE_KEY = 'pokeweather:locations';
   const ACTIVE_INDEX_STORAGE_KEY = 'pokeweather:activeIndex';
+  const TIME_FORMAT_STORAGE_KEY = 'pokeweather:timeFormat';
 
   const storedUnits = JSON.parse(localStorage.getItem('pokeweather:units') || '{}');
+  const storedTimeFormat = localStorage.getItem(TIME_FORMAT_STORAGE_KEY) || '24h';
+
   const appState = {
     lat: null,
     lon: null,
     name: null,
     units: storedUnits.units || '<%= (ssr && ssr.units) || "metric" %>',
+    timeFormat: storedTimeFormat === '12h' ? '12h' : '24h',
     locations: [],
     activeIndex: 0
   };
 
+  let latestWeatherData = null;
   let latestChartSeries = null;
 
   const unitsButton = selectElement('#btnUnits');
   const mobileUnitsButton = selectElement('#btnMobileUnits');
+  const timeFormatButton = selectElement('#btnTimeFormat');
+  const mobileTimeFormatButton = selectElement('#btnMobileTimeFormat');
   const themeButton = selectElement('#btnTheme');
   const mobileThemeButton = selectElement('#btnMobileTheme');
   const geoButton = selectElement('#btnGeo');
@@ -1234,7 +1270,6 @@ main {
   const drawerLocationsList = selectElement('#drawerLocationsList');
   const locCounter = selectElement('#locCounter');
   const locationDotsBar = selectElement('#locationDotsBar');
-  const mainSwipeContainer = selectElement('#mainSwipeContainer');
 
   const hiddenUnitsInput = selectElement('#unitsHidden');
   const mobileSkyElement = selectElement('#mobileSky');
@@ -1302,8 +1337,47 @@ main {
     return `${Math.round(value)}${suffix}`;
   }
 
+  function is12HourMode() {
+    return appState.timeFormat === '12h';
+  }
+
   function formatClockTime(isoString) {
-    return new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const use12Hr = is12HourMode();
+    return new Date(isoString).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: use12Hr,
+      hourCycle: use12Hr ? 'h12' : 'h23'
+    });
+  }
+
+  function formatLocationLocalTime(timezoneName, utcOffsetSeconds) {
+    const use12Hr = is12HourMode();
+    const formatOptions = {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: use12Hr,
+      hourCycle: use12Hr ? 'h12' : 'h23'
+    };
+
+    try {
+      if (timezoneName) {
+        return new Intl.DateTimeFormat([], {
+          ...formatOptions,
+          timeZone: timezoneName
+        }).format(new Date());
+      }
+    } catch {}
+
+    if (typeof utcOffsetSeconds === 'number') {
+      const shiftedDate = new Date(Date.now() + utcOffsetSeconds * 1000);
+      return new Intl.DateTimeFormat([], {
+        ...formatOptions,
+        timeZone: 'UTC'
+      }).format(shiftedDate);
+    }
+
+    return new Date().toLocaleTimeString([], formatOptions);
   }
 
   function formatShortDate(isoString) {
@@ -1411,7 +1485,7 @@ main {
 
       const subSpan = document.createElement('div');
       subSpan.className = 'drawer-loc-sub';
-      subSpan.textContent = index === 0 ? '📍 Default (Current Location)' : `${Number(locItem.lat).toFixed(2)}, ${Number(locItem.lon).toFixed(2)}`;
+      subSpan.textContent = index === 0 ? 'Default (Current Location)' : `${Number(locItem.lat).toFixed(2)}, ${Number(locItem.lon).toFixed(2)}`;
 
       infoBlock.appendChild(titleSpan);
       infoBlock.appendChild(subSpan);
@@ -1538,7 +1612,7 @@ main {
     selectElement('#mobileLocTitle').textContent = cleanText;
     const tagElement = selectElement('#mobileLocTag');
     if (tagElement) {
-      tagElement.textContent = appState.activeIndex === 0 ? '📍 Current Location' : `Saved Location (${appState.activeIndex + 1}/${appState.locations.length})`;
+      tagElement.classList.toggle('hidden', appState.activeIndex !== 0);
     }
   }
 
@@ -1553,6 +1627,17 @@ main {
     localStorage.setItem('pokeweather:units', JSON.stringify({ units: appState.units }));
     if (appState.lat !== null && appState.lon !== null) {
       loadWeatherForCoordinates(appState.lat, appState.lon, appState.name);
+    }
+  }
+
+  function syncTimeFormatControls() {
+    const formatLabel = appState.timeFormat === '12h' ? '12h' : '24h';
+    timeFormatButton.textContent = formatLabel;
+    mobileTimeFormatButton.textContent = formatLabel;
+    localStorage.setItem(TIME_FORMAT_STORAGE_KEY, appState.timeFormat);
+
+    if (latestWeatherData) {
+      renderWeatherDashboard(latestWeatherData);
     }
   }
 
@@ -1631,6 +1716,7 @@ main {
   }
 
   function renderWeatherDashboard(weatherData) {
+    latestWeatherData = weatherData;
     const current = weatherData.current;
     const daily = weatherData.daily;
     const hourly = weatherData.hourly;
@@ -1654,6 +1740,18 @@ main {
     selectElement('#uv').textContent = daily.uv_index_max?.[0] ?? '—';
     selectElement('#dayMode').textContent = isDaytime ? 'Day' : 'Night';
 
+    const localTimeElement = selectElement('#currLocalTime');
+    if (localTimeElement) {
+      if (appState.activeIndex > 0) {
+        const formattedLocal = formatLocationLocalTime(weatherData.timezone, weatherData.utc_offset_seconds);
+        localTimeElement.textContent = `Local time: ${formattedLocal}`;
+        localTimeElement.classList.remove('hidden');
+      } else {
+        localTimeElement.textContent = '';
+        localTimeElement.classList.add('hidden');
+      }
+    }
+
     const upcomingHourIndex = hourly.time.findIndex((timeValue) => Date.parse(timeValue) > Date.now());
     const nextHourPrecip = hourly.precipitation_probability?.[upcomingHourIndex] ?? hourly.precipitation_probability?.[0] ?? null;
     selectElement('#pop').textContent = nextHourPrecip === null ? '—' : `${nextHourPrecip}%`;
@@ -1666,7 +1764,7 @@ main {
     for (let index = sliceStart; index < sliceEnd; index++) {
       const hourCard = document.createElement('div');
       hourCard.className = 'hour-item';
-      const timeLabel = new Date(hourly.time[index]).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const timeLabel = formatClockTime(hourly.time[index]);
       const iconLabel = getWeatherIcon(hourly.weather_code[index], true);
       const tempLabel = formatNumber(hourly.temperature_2m[index], '°');
       const precipLabel = hourly.precipitation_probability?.[index] ?? 0;
@@ -1877,6 +1975,11 @@ main {
     }
   }
 
+  function toggleTimeFormatPreference() {
+    appState.timeFormat = appState.timeFormat === '24h' ? '12h' : '24h';
+    syncTimeFormatControls();
+  }
+
   async function triggerShareForecast(event) {
     if (event) event.preventDefault();
     const shareUrl = new URL(location.href);
@@ -1946,6 +2049,9 @@ main {
     syncUnitControls();
   });
 
+  timeFormatButton.addEventListener('click', toggleTimeFormatPreference);
+  mobileTimeFormatButton.addEventListener('click', toggleTimeFormatPreference);
+
   themeButton.addEventListener('click', toggleThemePreference);
   mobileThemeButton.addEventListener('click', toggleThemePreference);
 
@@ -1995,6 +2101,10 @@ main {
     if (hiddenUnitsInput) {
       hiddenUnitsInput.value = appState.units;
     }
+
+    const initialTimeFormatText = appState.timeFormat === '12h' ? '12h' : '24h';
+    timeFormatButton.textContent = initialTimeFormatText;
+    mobileTimeFormatButton.textContent = initialTimeFormatText;
 
     loadStoredLocations();
     setupMobileSwipeGesture();
