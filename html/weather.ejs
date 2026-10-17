@@ -42,6 +42,7 @@
   --md-text: #e2e2e9;
   --md-text-muted: #c4c6d0;
   --md-outline: #44474e;
+  --md-danger: #ffb4ab;
   --radius-xl: 28px;
   --radius-lg: 20px;
   --radius-pill: 999px;
@@ -61,6 +62,7 @@
   --md-text: #191c20;
   --md-text-muted: #44474e;
   --md-outline: #c4c6d0;
+  --md-danger: #ba1a1a;
 }
 
 * {
@@ -76,6 +78,7 @@ html, body {
   font-size: 15px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
 .mobile-sky {
@@ -275,6 +278,27 @@ header {
   text-overflow: ellipsis;
 }
 
+.hamburger-btn {
+  display: none;
+  background-color: color-mix(in srgb, var(--md-surface-high) 75%, transparent);
+  backdrop-filter: blur(12px);
+  border: none;
+  color: var(--md-text);
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.hamburger-btn svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+}
+
 .search-wrap {
   flex: 1;
   max-width: 460px;
@@ -339,7 +363,7 @@ header {
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.38);
   display: none;
   z-index: 100;
-  max-height: 300px;
+  max-height: 280px;
   overflow-y: auto;
   padding: 6px;
 }
@@ -380,6 +404,7 @@ header {
   text-decoration: none;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   transition: background-color 0.15s;
 }
@@ -388,12 +413,143 @@ header {
   background-color: var(--md-surface-highest);
 }
 
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  z-index: 90;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.drawer-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.mobile-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(88vw, 360px);
+  background-color: var(--md-surface);
+  z-index: 100;
+  transform: translateX(100%);
+  transition: transform 0.28s cubic-bezier(0.2, 0, 0, 1);
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  gap: 20px;
+  overflow-y: auto;
+  border-top-left-radius: var(--radius-xl);
+  border-bottom-left-radius: var(--radius-xl);
+}
+
+.mobile-drawer.open {
+  transform: translateX(0);
+}
+
+.drawer-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.drawer-title {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.drawer-section-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--md-text-muted);
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.drawer-locations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.drawer-loc-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background-color: var(--md-surface-high);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.drawer-loc-item.active {
+  background-color: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+  border-color: var(--md-primary);
+}
+
+.drawer-loc-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.drawer-loc-name {
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.drawer-loc-sub {
+  font-size: 11px;
+  opacity: 0.78;
+}
+
+.drawer-loc-remove {
+  background: transparent;
+  border: none;
+  color: var(--md-danger);
+  padding: 6px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.drawer-loc-remove:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.drawer-controls {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 12px;
+}
+
 .container {
   position: relative;
   z-index: 1;
   max-width: 1180px;
   margin: 20px auto;
   padding: 0 20px;
+  transition: transform 0.22s ease, opacity 0.22s ease;
 }
 
 .dashboard {
@@ -458,9 +614,19 @@ header {
 
 .mobile-loc-title {
   display: none;
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 700;
   letter-spacing: -0.02em;
+}
+
+.mobile-loc-tag {
+  display: none;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.85;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
 }
 
 .temp-display {
@@ -640,11 +806,50 @@ canvas {
   text-align: right;
 }
 
+.location-dots-bar {
+  display: none;
+  position: fixed;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 45;
+  background-color: color-mix(in srgb, var(--md-surface-high) 85%, transparent);
+  backdrop-filter: blur(16px);
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+}
+
+.loc-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: none;
+  padding: 0;
+  background-color: var(--md-text-muted);
+  opacity: 0.4;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.loc-dot.active {
+  width: 22px;
+  border-radius: var(--radius-pill);
+  background-color: var(--md-primary);
+  opacity: 1;
+}
+
+.loc-dot.gps-dot {
+  position: relative;
+}
+
 footer {
   position: relative;
   z-index: 1;
   max-width: 1180px;
-  margin: 36px auto 24px;
+  margin: 36px auto 64px;
   padding: 16px 24px;
   display: flex;
   justify-content: space-between;
@@ -691,8 +896,18 @@ main {
     backdrop-filter: none;
   }
 
+  .desktop-search,
+  .desktop-controls,
   .loc-badge {
     display: none;
+  }
+
+  .hamburger-btn {
+    display: inline-flex;
+  }
+
+  .location-dots-bar {
+    display: inline-flex;
   }
 
   .hero-card {
@@ -710,12 +925,16 @@ main {
     justify-content: center;
     align-items: center;
     text-align: center;
-    gap: 10px;
+    gap: 8px;
   }
 
   .mobile-loc-title {
     display: block;
     text-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+  }
+
+  .mobile-loc-tag {
+    display: inline-block;
   }
 
   .temp-display {
@@ -769,7 +988,7 @@ main {
         <div class="loc-badge" id="locChip"><%= (ssr && ssr.name) || 'Select Location' %></div>
       </div>
 
-      <div class="search-wrap">
+      <div class="search-wrap desktop-search">
         <form class="search-form" role="search" aria-label="Search location" action="/weather" method="GET" id="searchForm">
           <input id="q" name="q" type="search" placeholder="Search city, place, or coordinates..." autocomplete="off" />
           <input type="hidden" name="units" id="unitsHidden" value="<%= (ssr && ssr.units) || 'metric' %>"/>
@@ -779,14 +998,49 @@ main {
         <div id="suggest" class="suggest" role="listbox" aria-label="Suggestions"></div>
       </div>
 
-      <div class="controls">
+      <div class="controls desktop-controls">
         <button id="btnUnits" class="btn" title="Toggle °C/°F">°C</button>
         <button id="btnTheme" class="btn" title="Toggle theme">Theme</button>
         <button id="btnInstall" class="btn hidden" title="Install App">Install</button>
         <a class="btn" href="#" id="btnShare" title="Share Forecast">Share</a>
       </div>
+
+      <button id="btnHamburger" class="hamburger-btn" type="button" aria-label="Open menu and locations">
+        <svg viewBox="0 0 24 24"><path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z"/></svg>
+      </button>
     </div>
   </header>
+
+  <div id="drawerBackdrop" class="drawer-backdrop"></div>
+
+  <aside id="mobileDrawer" class="mobile-drawer" aria-label="Locations and Settings">
+    <div class="drawer-top">
+      <span class="drawer-title">Locations</span>
+      <button id="btnCloseDrawer" class="pill-btn" type="button">Close</button>
+    </div>
+
+    <div class="search-wrap" style="min-width:100%;max-width:100%;">
+      <form class="search-form" role="search" id="mobileSearchForm">
+        <input id="mobileSearchInput" type="search" placeholder="Add city or place..." autocomplete="off" />
+        <button class="pill-btn" type="submit">Add</button>
+      </form>
+      <div id="mobileSuggest" class="suggest" role="listbox" aria-label="Mobile Search Suggestions"></div>
+    </div>
+
+    <div>
+      <div class="drawer-section-label">
+        <span>Saved Locations</span>
+        <span id="locCounter">1 / 10</span>
+      </div>
+      <div id="drawerLocationsList" class="drawer-locations-list"></div>
+    </div>
+
+    <div class="drawer-controls">
+      <button id="btnMobileUnits" class="btn" type="button">°C</button>
+      <button id="btnMobileTheme" class="btn" type="button">Theme</button>
+      <button id="btnMobileShare" class="btn" type="button">Share</button>
+    </div>
+  </aside>
 
   <section class="ssr container">
     <div class="dashboard">
@@ -843,7 +1097,7 @@ main {
     </div>
   </section>
 
-  <main class="container">
+  <main id="mainSwipeContainer" class="container">
     <div class="dashboard">
       <div class="col-main">
         <article id="now" class="card hero-card current" aria-live="polite">
@@ -852,6 +1106,7 @@ main {
             <span id="currFeelHeader"></span>
           </div>
           <div class="hero-primary">
+            <div class="mobile-loc-tag" id="mobileLocTag">Current Location</div>
             <div class="mobile-loc-title" id="mobileLocTitle">Select Location</div>
             <div class="temp-display">
               <div class="big-icon" id="currIcon">—</div>
@@ -891,6 +1146,8 @@ main {
       </div>
     </div>
   </main>
+
+  <nav id="locationDotsBar" class="location-dots-bar" aria-label="Saved Locations Pagination"></nav>
 
   <footer>
     <div>PokeWeather</div>
@@ -938,23 +1195,47 @@ main {
 <script>
   const selectElement = (selector) => document.querySelector(selector);
 
+  const MAX_LOCATIONS = 10;
+  const LOCATIONS_STORAGE_KEY = 'pokeweather:locations';
+  const ACTIVE_INDEX_STORAGE_KEY = 'pokeweather:activeIndex';
+
   const storedUnits = JSON.parse(localStorage.getItem('pokeweather:units') || '{}');
   const appState = {
     lat: null,
     lon: null,
     name: null,
-    units: storedUnits.units || '<%= (ssr && ssr.units) || "metric" %>'
+    units: storedUnits.units || '<%= (ssr && ssr.units) || "metric" %>',
+    locations: [],
+    activeIndex: 0
   };
 
   let latestChartSeries = null;
 
   const unitsButton = selectElement('#btnUnits');
+  const mobileUnitsButton = selectElement('#btnMobileUnits');
   const themeButton = selectElement('#btnTheme');
+  const mobileThemeButton = selectElement('#btnMobileTheme');
   const geoButton = selectElement('#btnGeo');
   const shareButton = selectElement('#btnShare');
+  const mobileShareButton = selectElement('#btnMobileShare');
+
   const searchForm = selectElement('#searchForm');
   const searchInput = selectElement('#q');
   const suggestionsBox = selectElement('#suggest');
+
+  const mobileSearchForm = selectElement('#mobileSearchForm');
+  const mobileSearchInput = selectElement('#mobileSearchInput');
+  const mobileSuggestionsBox = selectElement('#mobileSuggest');
+
+  const hamburgerButton = selectElement('#btnHamburger');
+  const closeDrawerButton = selectElement('#btnCloseDrawer');
+  const mobileDrawer = selectElement('#mobileDrawer');
+  const drawerBackdrop = selectElement('#drawerBackdrop');
+  const drawerLocationsList = selectElement('#drawerLocationsList');
+  const locCounter = selectElement('#locCounter');
+  const locationDotsBar = selectElement('#locationDotsBar');
+  const mainSwipeContainer = selectElement('#mainSwipeContainer');
+
   const hiddenUnitsInput = selectElement('#unitsHidden');
   const mobileSkyElement = selectElement('#mobileSky');
 
@@ -1076,14 +1357,196 @@ main {
     }
   }
 
+  function loadStoredLocations() {
+    try {
+      const rawList = JSON.parse(localStorage.getItem(LOCATIONS_STORAGE_KEY) || '[]');
+      const savedIndex = Number(localStorage.getItem(ACTIVE_INDEX_STORAGE_KEY) || 0);
+      if (Array.isArray(rawList) && rawList.length > 0) {
+        appState.locations = rawList.slice(0, MAX_LOCATIONS);
+        appState.locations[0].isCurrent = true;
+      } else {
+        appState.locations = [{
+          lat: 40.7128,
+          lon: -74.006,
+          name: 'Current Location',
+          isCurrent: true
+        }];
+      }
+      appState.activeIndex = Math.min(Math.max(0, savedIndex), appState.locations.length - 1);
+    } catch {
+      appState.locations = [{
+        lat: 40.7128,
+        lon: -74.006,
+        name: 'Current Location',
+        isCurrent: true
+      }];
+      appState.activeIndex = 0;
+    }
+  }
+
+  function saveLocationsToStorage() {
+    try {
+      localStorage.setItem(LOCATIONS_STORAGE_KEY, JSON.stringify(appState.locations));
+      localStorage.setItem(ACTIVE_INDEX_STORAGE_KEY, String(appState.activeIndex));
+    } catch {}
+  }
+
+  function renderLocationDrawerAndDots() {
+    drawerLocationsList.innerHTML = '';
+    locationDotsBar.innerHTML = '';
+    locCounter.textContent = `${appState.locations.length} / ${MAX_LOCATIONS}`;
+
+    appState.locations.forEach((locItem, index) => {
+      const isSelected = index === appState.activeIndex;
+
+      const listRow = document.createElement('div');
+      listRow.className = `drawer-loc-item${isSelected ? ' active' : ''}`;
+
+      const infoBlock = document.createElement('div');
+      infoBlock.className = 'drawer-loc-info';
+
+      const titleSpan = document.createElement('div');
+      titleSpan.className = 'drawer-loc-name';
+      titleSpan.textContent = locItem.name || 'Unknown Location';
+
+      const subSpan = document.createElement('div');
+      subSpan.className = 'drawer-loc-sub';
+      subSpan.textContent = index === 0 ? '📍 Default (Current Location)' : `${Number(locItem.lat).toFixed(2)}, ${Number(locItem.lon).toFixed(2)}`;
+
+      infoBlock.appendChild(titleSpan);
+      infoBlock.appendChild(subSpan);
+      listRow.appendChild(infoBlock);
+
+      listRow.addEventListener('click', () => {
+        switchToLocationIndex(index);
+        closeMobileDrawer();
+      });
+
+      if (index > 0) {
+        const removeButton = document.createElement('button');
+        removeButton.type = 'button';
+        removeButton.className = 'drawer-loc-remove';
+        removeButton.textContent = 'Remove';
+        removeButton.addEventListener('click', (event) => {
+          event.stopPropagation();
+          removeLocationAtIndex(index);
+        });
+        listRow.appendChild(removeButton);
+      }
+
+      drawerLocationsList.appendChild(listRow);
+
+      const dotButton = document.createElement('button');
+      dotButton.type = 'button';
+      dotButton.className = `loc-dot${isSelected ? ' active' : ''}${index === 0 ? ' gps-dot' : ''}`;
+      dotButton.setAttribute('aria-label', `Switch to ${locItem.name}`);
+      dotButton.addEventListener('click', () => switchToLocationIndex(index));
+      locationDotsBar.appendChild(dotButton);
+    });
+  }
+
+  function addOrSelectSavedLocation(lat, lon, name) {
+    const numericLat = Number(lat);
+    const numericLon = Number(lon);
+
+    const existingIndex = appState.locations.findIndex((item, idx) => {
+      if (idx === 0) return false;
+      return Math.abs(item.lat - numericLat) < 0.02 && Math.abs(item.lon - numericLon) < 0.02;
+    });
+
+    if (existingIndex !== -1) {
+      switchToLocationIndex(existingIndex);
+      return;
+    }
+
+    if (appState.locations.length >= MAX_LOCATIONS) {
+      alert(`You can save up to ${MAX_LOCATIONS} locations. Remove one from the menu first.`);
+      return;
+    }
+
+    appState.locations.push({
+      lat: numericLat,
+      lon: numericLon,
+      name: name || `${numericLat.toFixed(2)}, ${numericLon.toFixed(2)}`,
+      isCurrent: false
+    });
+
+    appState.activeIndex = appState.locations.length - 1;
+    saveLocationsToStorage();
+    renderLocationDrawerAndDots();
+    loadWeatherForCoordinates(numericLat, numericLon, name);
+  }
+
+  function removeLocationAtIndex(indexToRemove) {
+    if (indexToRemove <= 0 || indexToRemove >= appState.locations.length) return;
+    appState.locations.splice(indexToRemove, 1);
+
+    if (appState.activeIndex >= appState.locations.length) {
+      appState.activeIndex = appState.locations.length - 1;
+    } else if (appState.activeIndex > indexToRemove) {
+      appState.activeIndex -= 1;
+    }
+
+    saveLocationsToStorage();
+    renderLocationDrawerAndDots();
+    const targetLocation = appState.locations[appState.activeIndex];
+    loadWeatherForCoordinates(targetLocation.lat, targetLocation.lon, targetLocation.name);
+  }
+
+  function switchToLocationIndex(targetIndex) {
+    if (targetIndex < 0 || targetIndex >= appState.locations.length) return;
+    appState.activeIndex = targetIndex;
+    saveLocationsToStorage();
+    renderLocationDrawerAndDots();
+
+    const targetLocation = appState.locations[targetIndex];
+    loadWeatherForCoordinates(targetLocation.lat, targetLocation.lon, targetLocation.name);
+  }
+
+  function refreshDefaultCurrentLocation(silentFallback = true) {
+    if (!navigator.geolocation) {
+      if (!silentFallback) alert('Geolocation is not supported by your browser.');
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        const resolvedPlaceName = await fetchReverseLocationName(latitude, longitude);
+        appState.locations[0] = {
+          lat: latitude,
+          lon: longitude,
+          name: resolvedPlaceName || 'Current Location',
+          isCurrent: true
+        };
+        saveLocationsToStorage();
+        renderLocationDrawerAndDots();
+
+        if (appState.activeIndex === 0) {
+          loadWeatherForCoordinates(latitude, longitude, appState.locations[0].name);
+        }
+      },
+      () => {
+        if (!silentFallback) alert('Location permission denied.');
+      }
+    );
+  }
+
   function updateLocationHeading(name) {
     const cleanText = name || 'Unknown Location';
     selectElement('#locChip').textContent = cleanText;
     selectElement('#mobileLocTitle').textContent = cleanText;
+    const tagElement = selectElement('#mobileLocTag');
+    if (tagElement) {
+      tagElement.textContent = appState.activeIndex === 0 ? '📍 Current Location' : `Saved Location (${appState.activeIndex + 1}/${appState.locations.length})`;
+    }
   }
 
   function syncUnitControls() {
-    unitsButton.textContent = appState.units === 'metric' ? '°C' : '°F';
+    const unitLabel = appState.units === 'metric' ? '°C' : '°F';
+    unitsButton.textContent = unitLabel;
+    mobileUnitsButton.textContent = unitLabel;
+
     if (hiddenUnitsInput) {
       hiddenUnitsInput.value = appState.units === 'metric' ? 'metric' : 'imperial';
     }
@@ -1107,6 +1570,14 @@ main {
     }
 
     appState.name = resolvedName;
+    if (appState.locations[appState.activeIndex]) {
+      appState.locations[appState.activeIndex].name = resolvedName;
+      appState.locations[appState.activeIndex].lat = numericLat;
+      appState.locations[appState.activeIndex].lon = numericLon;
+      saveLocationsToStorage();
+      renderLocationDrawerAndDots();
+    }
+
     updateLocationHeading(resolvedName);
 
     const temperatureUnit = appState.units === 'metric' ? 'celsius' : 'fahrenheit';
@@ -1138,7 +1609,12 @@ main {
       const weatherData = await response.json();
       localStorage.setItem('pokeweather:last', JSON.stringify({
         when: Date.now(),
-        state: appState,
+        state: {
+          lat: appState.lat,
+          lon: appState.lon,
+          name: appState.name,
+          units: appState.units
+        },
         data: weatherData
       }));
       renderWeatherDashboard(weatherData);
@@ -1294,44 +1770,82 @@ main {
     });
   }
 
-  function selectSuggestionItem(placeItem) {
-    suggestionsBox.style.display = 'none';
-    const formattedName = formatPlaceLabel(placeItem.display_name, 2);
-    searchInput.value = formattedName;
-    loadWeatherForCoordinates(placeItem.lat, placeItem.lon, formattedName);
+  function openMobileDrawer() {
+    mobileDrawer.classList.add('open');
+    drawerBackdrop.classList.add('open');
   }
 
-  async function executeLocationSearch() {
-    const queryValue = searchInput.value.trim();
+  function closeMobileDrawer() {
+    mobileDrawer.classList.remove('open');
+    drawerBackdrop.classList.remove('open');
+    mobileSuggestionsBox.style.display = 'none';
+  }
+
+  function handlePlaceSelection(placeItem, isFromMobileDrawer) {
+    suggestionsBox.style.display = 'none';
+    mobileSuggestionsBox.style.display = 'none';
+    const formattedName = formatPlaceLabel(placeItem.display_name, 2);
+
+    if (isFromMobileDrawer) {
+      mobileSearchInput.value = '';
+      addOrSelectSavedLocation(placeItem.lat, placeItem.lon, formattedName);
+      closeMobileDrawer();
+    } else {
+      searchInput.value = formattedName;
+      addOrSelectSavedLocation(placeItem.lat, placeItem.lon, formattedName);
+    }
+  }
+
+  async function executeLocationSearch(inputElement, isFromMobileDrawer) {
+    const queryValue = inputElement.value.trim();
     if (!queryValue) return;
 
     suggestionsBox.style.display = 'none';
+    mobileSuggestionsBox.style.display = 'none';
 
     const coordinateMatch = queryValue.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
     if (coordinateMatch) {
       const parsedLat = Number(coordinateMatch[1]);
       const parsedLon = Number(coordinateMatch[2]);
       const placeName = await fetchReverseLocationName(parsedLat, parsedLon);
-      loadWeatherForCoordinates(parsedLat, parsedLon, placeName);
+      addOrSelectSavedLocation(parsedLat, parsedLon, placeName);
+      if (isFromMobileDrawer) {
+        inputElement.value = '';
+        closeMobileDrawer();
+      }
       return;
     }
 
     const matchingPlaces = await fetchPlaceSuggestions(queryValue);
     if (matchingPlaces.length > 0) {
-      selectSuggestionItem(matchingPlaces[0]);
-      return;
-    }
-
-    if (window.__SSR_ROUTE__) {
-      const targetUnits = appState.units === 'metric' ? 'metric' : 'imperial';
-      const redirectUrl = new URL(window.__SSR_ROUTE__, location.origin);
-      redirectUrl.searchParams.set('q', queryValue);
-      redirectUrl.searchParams.set('units', targetUnits);
-      location.href = redirectUrl.toString();
+      handlePlaceSelection(matchingPlaces[0], isFromMobileDrawer);
       return;
     }
 
     alert('No matching locations found.');
+  }
+
+  function bindAutocompleteInput(inputElement, dropdownElement, isMobileDrawer) {
+    inputElement.addEventListener('input', createDebouncedFunction(async (event) => {
+      const inputText = event.target.value.trim();
+      if (!inputText) {
+        dropdownElement.style.display = 'none';
+        return;
+      }
+
+      const places = await fetchPlaceSuggestions(inputText);
+      dropdownElement.innerHTML = '';
+
+      places.forEach((placeItem) => {
+        const optionButton = document.createElement('button');
+        optionButton.type = 'button';
+        optionButton.textContent = formatPlaceLabel(placeItem.display_name, 3);
+        optionButton.addEventListener('click', () => handlePlaceSelection(placeItem, isMobileDrawer));
+        dropdownElement.appendChild(optionButton);
+      });
+
+      dropdownElement.style.display = places.length > 0 ? 'block' : 'none';
+    }, 260));
   }
 
   function createDebouncedFunction(callback, delayMs) {
@@ -1349,20 +1863,7 @@ main {
     document.documentElement.style.setProperty('--sky-opacity', calculatedOpacity.toFixed(3));
   }
 
-  window.addEventListener('scroll', handleMobileSkyScrollFade, { passive: true });
-
-  window.addEventListener('resize', () => {
-    if (latestChartSeries) {
-      drawTemperatureChart(selectElement('#chart'), latestChartSeries.times, latestChartSeries.temps);
-    }
-  });
-
-  unitsButton.addEventListener('click', () => {
-    appState.units = appState.units === 'metric' ? 'imperial' : 'metric';
-    syncUnitControls();
-  });
-
-  themeButton.addEventListener('click', () => {
+  function toggleThemePreference() {
     const isCurrentlyLight = document.documentElement.getAttribute('data-theme') === 'light';
     if (isCurrentlyLight) {
       document.documentElement.removeAttribute('data-theme');
@@ -1374,57 +1875,10 @@ main {
     if (latestChartSeries) {
       drawTemperatureChart(selectElement('#chart'), latestChartSeries.times, latestChartSeries.temps);
     }
-  });
+  }
 
-  geoButton.addEventListener('click', () => {
-    if (!navigator.geolocation) {
-      alert('Geolocation is not supported by your browser.');
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        const placeName = await fetchReverseLocationName(latitude, longitude);
-        loadWeatherForCoordinates(latitude, longitude, placeName);
-      },
-      () => alert('Location permission denied.')
-    );
-  });
-
-  searchInput.addEventListener('input', createDebouncedFunction(async (event) => {
-    const inputText = event.target.value.trim();
-    if (!inputText) {
-      suggestionsBox.style.display = 'none';
-      return;
-    }
-
-    const places = await fetchPlaceSuggestions(inputText);
-    suggestionsBox.innerHTML = '';
-
-    places.forEach((placeItem) => {
-      const optionButton = document.createElement('button');
-      optionButton.type = 'button';
-      optionButton.textContent = formatPlaceLabel(placeItem.display_name, 3);
-      optionButton.addEventListener('click', () => selectSuggestionItem(placeItem));
-      suggestionsBox.appendChild(optionButton);
-    });
-
-    suggestionsBox.style.display = places.length > 0 ? 'block' : 'none';
-  }, 260));
-
-  document.addEventListener('click', (event) => {
-    if (!event.target.closest('.search-wrap')) {
-      suggestionsBox.style.display = 'none';
-    }
-  });
-
-  searchForm.addEventListener('submit', (event) => {
-    event.preventDefault();
-    executeLocationSearch();
-  });
-
-  shareButton.addEventListener('click', async (event) => {
-    event.preventDefault();
+  async function triggerShareForecast(event) {
+    if (event) event.preventDefault();
     const shareUrl = new URL(location.href);
     if (appState.lat !== null && appState.lon !== null) {
       shareUrl.searchParams.set('lat', appState.lat);
@@ -1443,6 +1897,90 @@ main {
         alert('Forecast link copied to clipboard.');
       }
     } catch {}
+  }
+
+  function setupMobileSwipeGesture() {
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let startedInsideHorizontalScroll = false;
+
+    document.addEventListener('touchstart', (event) => {
+      if (event.touches.length !== 1) return;
+      startedInsideHorizontalScroll = Boolean(event.target.closest('.hourly-scroll, .mobile-drawer'));
+      touchStartX = event.touches[0].clientX;
+      touchStartY = event.touches[0].clientY;
+    }, { passive: true });
+
+    document.addEventListener('touchend', (event) => {
+      if (startedInsideHorizontalScroll || event.changedTouches.length !== 1) return;
+      if (window.innerWidth > 768 || appState.locations.length <= 1) return;
+
+      const deltaX = event.changedTouches[0].clientX - touchStartX;
+      const deltaY = event.changedTouches[0].clientY - touchStartY;
+
+      if (Math.abs(deltaX) > 65 && Math.abs(deltaX) > Math.abs(deltaY) * 1.4) {
+        if (deltaX < 0 && appState.activeIndex < appState.locations.length - 1) {
+          switchToLocationIndex(appState.activeIndex + 1);
+        } else if (deltaX > 0 && appState.activeIndex > 0) {
+          switchToLocationIndex(appState.activeIndex - 1);
+        }
+      }
+    }, { passive: true });
+  }
+
+  window.addEventListener('scroll', handleMobileSkyScrollFade, { passive: true });
+
+  window.addEventListener('resize', () => {
+    if (latestChartSeries) {
+      drawTemperatureChart(selectElement('#chart'), latestChartSeries.times, latestChartSeries.temps);
+    }
+  });
+
+  unitsButton.addEventListener('click', () => {
+    appState.units = appState.units === 'metric' ? 'imperial' : 'metric';
+    syncUnitControls();
+  });
+
+  mobileUnitsButton.addEventListener('click', () => {
+    appState.units = appState.units === 'metric' ? 'imperial' : 'metric';
+    syncUnitControls();
+  });
+
+  themeButton.addEventListener('click', toggleThemePreference);
+  mobileThemeButton.addEventListener('click', toggleThemePreference);
+
+  shareButton.addEventListener('click', triggerShareForecast);
+  mobileShareButton.addEventListener('click', triggerShareForecast);
+
+  hamburgerButton.addEventListener('click', openMobileDrawer);
+  closeDrawerButton.addEventListener('click', closeMobileDrawer);
+  drawerBackdrop.addEventListener('click', closeMobileDrawer);
+
+  geoButton.addEventListener('click', () => {
+    appState.activeIndex = 0;
+    saveLocationsToStorage();
+    renderLocationDrawerAndDots();
+    refreshDefaultCurrentLocation(false);
+  });
+
+  bindAutocompleteInput(searchInput, suggestionsBox, false);
+  bindAutocompleteInput(mobileSearchInput, mobileSuggestionsBox, true);
+
+  document.addEventListener('click', (event) => {
+    if (!event.target.closest('.search-wrap')) {
+      suggestionsBox.style.display = 'none';
+      mobileSuggestionsBox.style.display = 'none';
+    }
+  });
+
+  searchForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    executeLocationSearch(searchInput, false);
+  });
+
+  mobileSearchForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    executeLocationSearch(mobileSearchInput, true);
   });
 
   (function initializeApp() {
@@ -1451,44 +1989,41 @@ main {
       document.documentElement.setAttribute('data-theme', 'light');
     }
 
-    unitsButton.textContent = appState.units === 'metric' ? '°C' : '°F';
+    const initialUnitText = appState.units === 'metric' ? '°C' : '°F';
+    unitsButton.textContent = initialUnitText;
+    mobileUnitsButton.textContent = initialUnitText;
     if (hiddenUnitsInput) {
       hiddenUnitsInput.value = appState.units;
     }
 
-    if (window.__SSR__ && typeof window.__SSR__.lat === 'number' && typeof window.__SSR__.lon === 'number') {
-      loadWeatherForCoordinates(window.__SSR__.lat, window.__SSR__.lon, window.__SSR__.name);
-      return;
-    }
+    loadStoredLocations();
+    setupMobileSwipeGesture();
 
     const urlParams = new URLSearchParams(location.search);
     const paramLat = urlParams.get('lat');
     const paramLon = urlParams.get('lon');
     const paramName = urlParams.get('name');
+
     if (paramLat && paramLon) {
-      loadWeatherForCoordinates(Number(paramLat), Number(paramLon), paramName);
+      addOrSelectSavedLocation(Number(paramLat), Number(paramLon), paramName);
+      refreshDefaultCurrentLocation(true);
       return;
     }
 
-    const cachedSession = JSON.parse(localStorage.getItem('pokeweather:last') || 'null');
-    if (cachedSession && cachedSession.state) {
-      appState.units = cachedSession.state.units || appState.units;
-      unitsButton.textContent = appState.units === 'metric' ? '°C' : '°F';
-      if (hiddenUnitsInput) hiddenUnitsInput.value = appState.units;
-      loadWeatherForCoordinates(cachedSession.state.lat, cachedSession.state.lon, cachedSession.state.name);
-      return;
+    if (window.__SSR__ && typeof window.__SSR__.lat === 'number' && typeof window.__SSR__.lon === 'number') {
+      appState.locations[0] = {
+        lat: window.__SSR__.lat,
+        lon: window.__SSR__.lon,
+        name: window.__SSR__.name || 'Current Location',
+        isCurrent: true
+      };
+      saveLocationsToStorage();
     }
 
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const { latitude, longitude } = position.coords;
-          const placeName = await fetchReverseLocationName(latitude, longitude);
-          loadWeatherForCoordinates(latitude, longitude, placeName);
-        },
-        () => {}
-      );
-    }
+    renderLocationDrawerAndDots();
+    const initialLocation = appState.locations[appState.activeIndex] || appState.locations[0];
+    loadWeatherForCoordinates(initialLocation.lat, initialLocation.lon, initialLocation.name);
+    refreshDefaultCurrentLocation(true);
   })();
 </script>
 </body>
