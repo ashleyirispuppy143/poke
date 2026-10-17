@@ -48,6 +48,7 @@
   --radius-pill: 999px;
   --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --sky-opacity: 1;
+  --mobile-sky-height: 760px;
 }
 
 [data-theme="light"] {
@@ -81,73 +82,94 @@ html, body {
   overflow-x: hidden;
 }
 
-.mobile-sky {
-  display: none;
-  position: fixed;
+.sky-layer {
+  position: absolute;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity: var(--sky-opacity);
-  transition: background 0.6s ease;
+  transition: background 0.6s ease, opacity 0.25s ease;
   overflow: hidden;
 }
 
-.mobile-sky[data-sky="clear-day"] {
-  background: linear-gradient(180deg, #1b65c4 0%, #5899e2 55%, var(--md-bg) 100%);
+.mobile-sky {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--mobile-sky-height);
+  opacity: var(--sky-opacity);
+  mask-image: linear-gradient(180deg, #000 78%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, #000 78%, transparent 100%);
 }
 
-.mobile-sky[data-sky="clear-night"] {
-  background: linear-gradient(180deg, #070b19 0%, #162238 60%, var(--md-bg) 100%);
+.hero-sky {
+  border-radius: inherit;
 }
 
-.mobile-sky[data-sky="cloudy-day"] {
-  background: linear-gradient(180deg, #3d526b 0%, #637994 55%, var(--md-bg) 100%);
+.sky-layer[data-sky="clear-day"] {
+  background: linear-gradient(165deg, #1557b0 0%, #3b82f6 55%, #1e3a8a 100%);
 }
 
-.mobile-sky[data-sky="cloudy-night"] {
-  background: linear-gradient(180deg, #121824 0%, #242f40 60%, var(--md-bg) 100%);
+.sky-layer[data-sky="clear-night"] {
+  background: linear-gradient(165deg, #070b19 0%, #131f36 60%, #1e293b 100%);
 }
 
-.mobile-sky[data-sky="rain-day"],
-.mobile-sky[data-sky="rain-night"] {
-  background: linear-gradient(180deg, #182334 0%, #2b394f 55%, var(--md-bg) 100%);
+.sky-layer[data-sky="cloudy-day"] {
+  background: linear-gradient(165deg, #364961 0%, #566d87 55%, #2b394a 100%);
 }
 
-.mobile-sky[data-sky="snow-day"],
-.mobile-sky[data-sky="snow-night"] {
-  background: linear-gradient(180deg, #3a4b63 0%, #6b7d96 55%, var(--md-bg) 100%);
+.sky-layer[data-sky="cloudy-night"] {
+  background: linear-gradient(165deg, #111722 0%, #232e3f 60%, #161e2b 100%);
 }
 
-.mobile-sky[data-sky="storm-day"],
-.mobile-sky[data-sky="storm-night"] {
-  background: linear-gradient(180deg, #11101d 0%, #2a243b 60%, var(--md-bg) 100%);
+.sky-layer[data-sky="rain-day"],
+.sky-layer[data-sky="rain-night"] {
+  background: linear-gradient(165deg, #162030 0%, #27364b 55%, #151d2a 100%);
+}
+
+.sky-layer[data-sky="snow-day"],
+.sky-layer[data-sky="snow-night"] {
+  background: linear-gradient(165deg, #384961 0%, #61748f 55%, #2f3e52 100%);
+}
+
+.sky-layer[data-sky="storm-day"],
+.sky-layer[data-sky="storm-night"] {
+  background: linear-gradient(165deg, #11101d 0%, #29233a 60%, #151321 100%);
 }
 
 .sky-celestial {
   position: absolute;
-  top: 76px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 130px;
-  height: 130px;
+  top: 42px;
+  right: 12%;
+  width: 120px;
+  height: 120px;
   border-radius: 50%;
   transition: all 0.6s ease;
 }
 
-.mobile-sky[data-sky="clear-day"] .sky-celestial {
+.mobile-sky .sky-celestial {
+  top: 76px;
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  width: 130px;
+  height: 130px;
+}
+
+.sky-layer[data-sky="clear-day"] .sky-celestial {
   background: radial-gradient(circle, #fff5c0 0%, #fde047 45%, rgba(251, 191, 36, 0) 72%);
   box-shadow: 0 0 90px 30px rgba(253, 224, 71, 0.38);
 }
 
-.mobile-sky[data-sky="clear-night"] .sky-celestial {
-  width: 88px;
-  height: 88px;
-  top: 88px;
+.sky-layer[data-sky="clear-night"] .sky-celestial {
+  width: 84px;
+  height: 84px;
   background: radial-gradient(circle, #f8fafc 0%, #cbd5e1 65%, rgba(203, 213, 225, 0) 72%);
   box-shadow: 0 0 60px 16px rgba(226, 232, 240, 0.22);
 }
 
-.mobile-sky[data-sky="cloudy-day"] .sky-celestial {
+.sky-layer[data-sky="cloudy-day"] .sky-celestial {
   background: radial-gradient(circle, rgba(255, 255, 255, 0.65) 0%, rgba(226, 232, 240, 0) 70%);
   filter: blur(8px);
 }
@@ -166,14 +188,14 @@ html, body {
     radial-gradient(1.5px 1.5px at 62% 28%, #ffffff 100%, transparent);
 }
 
-.mobile-sky[data-sky="clear-night"] .sky-stars,
-.mobile-sky[data-sky="cloudy-night"] .sky-stars {
+.sky-layer[data-sky="clear-night"] .sky-stars,
+.sky-layer[data-sky="cloudy-night"] .sky-stars {
   opacity: 0.75;
 }
 
 .sky-clouds {
   position: absolute;
-  top: 60px;
+  top: 30px;
   left: -10%;
   right: -10%;
   height: 180px;
@@ -184,9 +206,9 @@ html, body {
     radial-gradient(ellipse 200px 65px at 70% 45%, rgba(255, 255, 255, 0.18), transparent 70%);
 }
 
-.mobile-sky[data-sky^="cloudy"] .sky-clouds,
-.mobile-sky[data-sky^="rain"] .sky-clouds,
-.mobile-sky[data-sky^="storm"] .sky-clouds {
+.sky-layer[data-sky^="cloudy"] .sky-clouds,
+.sky-layer[data-sky^="rain"] .sky-clouds,
+.sky-layer[data-sky^="storm"] .sky-clouds {
   opacity: 1;
 }
 
@@ -197,8 +219,8 @@ html, body {
   transition: opacity 0.5s ease;
 }
 
-.mobile-sky[data-sky^="rain"] .sky-precip,
-.mobile-sky[data-sky^="storm"] .sky-precip {
+.sky-layer[data-sky^="rain"] .sky-precip,
+.sky-layer[data-sky^="storm"] .sky-precip {
   opacity: 0.45;
   background-image: repeating-linear-gradient(
     105deg,
@@ -211,7 +233,7 @@ html, body {
   animation: rainfall 0.65s linear infinite;
 }
 
-.mobile-sky[data-sky^="snow"] .sky-precip {
+.sky-layer[data-sky^="snow"] .sky-precip {
   opacity: 0.65;
   background-image:
     radial-gradient(3px 3px at 20% 30%, #ffffff 90%, transparent),
@@ -236,18 +258,19 @@ header {
   position: sticky;
   top: 0;
   z-index: 50;
-  background-color: color-mix(in srgb, var(--md-bg) 82%, transparent);
-  backdrop-filter: blur(16px);
+  background-color: color-mix(in srgb, var(--md-bg) 84%, transparent);
+  backdrop-filter: blur(18px);
+  border-bottom: 1px solid color-mix(in srgb, var(--md-outline) 35%, transparent);
 }
 
 .header-inner {
-  max-width: 1180px;
+  max-width: 1240px;
   margin: 0 auto;
-  padding: 12px 20px;
+  padding: 12px 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 16px;
   flex-wrap: wrap;
 }
 
@@ -259,23 +282,10 @@ header {
 
 .brand {
   font-weight: 700;
-  font-size: 18px;
+  font-size: 19px;
   letter-spacing: -0.02em;
   color: var(--md-text);
   text-decoration: none;
-}
-
-.loc-badge {
-  background-color: var(--md-primary-container);
-  color: var(--md-on-primary-container);
-  padding: 6px 14px;
-  border-radius: var(--radius-pill);
-  font-weight: 600;
-  font-size: 13px;
-  max-width: 240px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .hamburger-btn {
@@ -301,7 +311,7 @@ header {
 
 .search-wrap {
   flex: 1;
-  max-width: 460px;
+  max-width: 480px;
   min-width: 240px;
   position: relative;
 }
@@ -419,6 +429,73 @@ header {
 
 .btn:hover {
   background-color: var(--md-surface-highest);
+}
+
+.desktop-loc-bar-wrap {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 24px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.desktop-loc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--md-surface);
+  color: var(--md-text-muted);
+  border: 1px solid color-mix(in srgb, var(--md-outline) 45%, transparent);
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.desktop-loc-chip:hover {
+  background-color: var(--md-surface-high);
+  color: var(--md-text);
+}
+
+.desktop-loc-chip.active {
+  background-color: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+  border-color: var(--md-primary);
+}
+
+.desktop-loc-chip svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+  flex-shrink: 0;
+}
+
+.desktop-loc-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: inherit;
+  opacity: 0.65;
+  cursor: pointer;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.desktop-loc-remove:hover {
+  opacity: 1;
+  background-color: rgba(0, 0, 0, 0.2);
 }
 
 .drawer-backdrop {
@@ -556,16 +633,17 @@ header {
 .container {
   position: relative;
   z-index: 1;
-  max-width: 1180px;
-  margin: 20px auto;
-  padding: 0 20px;
+  max-width: 1240px;
+  margin: 24px auto;
+  padding: 0 24px;
   transition: transform 0.22s ease, opacity 0.22s ease;
 }
 
 .dashboard {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
-  gap: 20px;
+  gap: 22px;
+  align-items: start;
 }
 
 .card {
@@ -577,9 +655,10 @@ header {
 .card-header {
   font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
   color: var(--md-text-muted);
-  margin: 0 0 18px 0;
+  margin: 0 0 16px 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -589,17 +668,17 @@ header {
   grid-column: span 12;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 22px;
 }
 
 .col-side {
   grid-column: span 12;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 22px;
 }
 
-@media (min-width: 940px) {
+@media (min-width: 960px) {
   .col-main {
     grid-column: span 8;
   }
@@ -609,17 +688,50 @@ header {
 }
 
 .hero-card {
+  position: relative;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 28px;
+  color: #f8fafc;
+  padding: 28px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.25);
+}
+
+.hero-card > *:not(.hero-sky) {
+  position: relative;
+  z-index: 1;
+}
+
+.hero-card .card-header {
+  color: rgba(248, 250, 252, 0.78);
+  margin-bottom: 0;
 }
 
 .hero-primary {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 20px;
+}
+
+.desktop-hero-loc {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 8px;
+  color: #ffffff;
+}
+
+.desktop-hero-loc svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+  opacity: 0.9;
 }
 
 .mobile-loc-title {
@@ -637,7 +749,7 @@ header {
   height: 32px;
   background: rgba(0, 0, 0, 0.25);
   border-radius: 50%;
-  color: var(--md-text);
+  color: #ffffff;
 }
 
 .mobile-loc-tag svg {
@@ -653,16 +765,17 @@ header {
 }
 
 .big-icon {
-  font-size: 56px;
+  font-size: 60px;
   line-height: 1;
 }
 
 .temp-value {
-  font-size: 72px;
+  font-size: 76px;
   font-weight: 700;
   letter-spacing: -0.04em;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+  color: #ffffff;
 }
 
 .condition-meta {
@@ -673,21 +786,20 @@ header {
 }
 
 .condition-desc {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 600;
-  color: var(--md-text);
+  color: #ffffff;
 }
 
 .condition-sub {
   font-size: 14px;
-  color: var(--md-text-muted);
+  color: rgba(248, 250, 252, 0.85);
 }
 
 .local-time-sub {
   font-size: 13px;
-  color: var(--md-text-muted);
+  color: rgba(248, 250, 252, 0.8);
   font-variant-numeric: tabular-nums;
-  opacity: 0.9;
 }
 
 .metrics-grid {
@@ -703,14 +815,16 @@ header {
 }
 
 .metric-item {
-  background-color: var(--md-surface-high);
+  background-color: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--radius-lg);
-  padding: 16px;
+  padding: 15px 16px;
 }
 
 .metric-label {
   font-size: 12px;
-  color: var(--md-text-muted);
+  color: rgba(248, 250, 252, 0.75);
   font-weight: 500;
   margin-bottom: 6px;
 }
@@ -718,7 +832,17 @@ header {
 .metric-val {
   font-size: 17px;
   font-weight: 700;
+  color: #ffffff;
   font-variant-numeric: tabular-nums;
+}
+
+.outlook-summary {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--md-text);
+  margin: 0 0 12px 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--md-outline) 40%, transparent);
 }
 
 .hourly-scroll {
@@ -781,7 +905,7 @@ canvas {
 .daily-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .day-row {
@@ -789,7 +913,7 @@ canvas {
   grid-template-columns: 1.1fr 36px 1.2fr 0.9fr;
   align-items: center;
   gap: 8px;
-  padding: 12px 16px;
+  padding: 14px 16px;
   background-color: var(--md-surface-high);
   border-radius: var(--radius-lg);
   font-variant-numeric: tabular-nums;
@@ -865,14 +989,10 @@ canvas {
   opacity: 1;
 }
 
-.loc-dot.gps-dot {
-  position: relative;
-}
-
 footer {
   position: relative;
   z-index: 1;
-  max-width: 1180px;
+  max-width: 1240px;
   margin: 36px auto 64px;
   padding: 16px 24px;
   display: flex;
@@ -915,14 +1035,20 @@ main {
     display: block;
   }
 
+  .hero-sky {
+    display: none;
+  }
+
   header {
     background-color: transparent;
     backdrop-filter: none;
+    border-bottom: none;
   }
 
   .desktop-search,
   .desktop-controls,
-  .loc-badge {
+  .desktop-loc-bar-wrap,
+  .desktop-hero-loc {
     display: none;
   }
 
@@ -934,9 +1060,22 @@ main {
     display: inline-flex;
   }
 
+  .container {
+    padding: 0 16px;
+    margin-top: 8px;
+  }
+
+  .col-main {
+    display: flex;
+    flex-direction: column;
+  }
+
   .hero-card {
     background: transparent;
-    padding: 8px 4px 16px;
+    box-shadow: none;
+    padding: 0;
+    gap: 16px;
+    overflow: visible;
   }
 
   .hero-card .card-header {
@@ -944,7 +1083,8 @@ main {
   }
 
   .hero-primary {
-    min-height: 46vh;
+    order: 1;
+    min-height: 38vh;
     flex-direction: column;
     justify-content: center;
     align-items: center;
@@ -952,8 +1092,39 @@ main {
     gap: 8px;
   }
 
+  #hourly {
+    order: 2;
+    background-color: rgba(17, 19, 24, 0.48);
+    backdrop-filter: blur(18px);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: #ffffff;
+  }
+
+  #hourly .card-header {
+    color: rgba(255, 255, 255, 0.78);
+  }
+
+  #hourly .outlook-summary {
+    color: #ffffff;
+    border-bottom-color: rgba(255, 255, 255, 0.16);
+  }
+
+  #hourly .hour-item {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+  }
+
+  #hourly .hour-time {
+    color: rgba(255, 255, 255, 0.78);
+  }
+
+  #metricsCard {
+    order: 3;
+  }
+
   .mobile-loc-title {
     display: block;
+    color: #ffffff;
     text-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
   }
 
@@ -981,10 +1152,18 @@ main {
     align-items: center;
   }
 
-  .metric-item,
-  .card:not(.hero-card) {
-    background-color: color-mix(in srgb, var(--md-surface) 88%, transparent);
-    backdrop-filter: blur(16px);
+  .metric-item {
+    background-color: var(--md-surface);
+    border: none;
+    backdrop-filter: none;
+  }
+
+  .metric-label {
+    color: var(--md-text-muted);
+  }
+
+  .metric-val {
+    color: var(--md-text);
   }
 }
 </style>
@@ -998,7 +1177,7 @@ main {
 </head>
 <body class="<%= ssr && ssr.forceNoJS ? 'no-js' : '' %>">
 
-  <div id="mobileSky" class="mobile-sky" data-sky="clear-day" aria-hidden="true">
+  <div id="mobileSky" class="sky-layer mobile-sky" data-sky="clear-day" aria-hidden="true">
     <div class="sky-stars"></div>
     <div class="sky-celestial"></div>
     <div class="sky-clouds"></div>
@@ -1009,15 +1188,14 @@ main {
     <div class="header-inner">
       <div class="brand-area">
         <a href="/weather" class="brand">PokeWeather</a>
-        <div class="loc-badge" id="locChip"><%= (ssr && ssr.name) || 'Select Location' %></div>
       </div>
 
       <div class="search-wrap desktop-search">
         <form class="search-form" role="search" aria-label="Search location" action="/weather" method="GET" id="searchForm">
-          <input id="q" name="q" type="search" placeholder="Search city, place, or coordinates..." autocomplete="off" />
+          <input id="q" name="q" type="search" placeholder="Add city, place, or coordinates..." autocomplete="off" />
           <input type="hidden" name="units" id="unitsHidden" value="<%= (ssr && ssr.units) || 'metric' %>"/>
           <button id="btnGeo" class="pill-btn" type="button" title="Use current location">Locate</button>
-          <button id="btnSearch" class="pill-btn" type="submit" title="Search">Search</button>
+          <button id="btnSearch" class="pill-btn" type="submit" title="Add Location">Add</button>
         </form>
         <div id="suggest" class="suggest" role="listbox" aria-label="Suggestions"></div>
       </div>
@@ -1034,6 +1212,8 @@ main {
         <svg viewBox="0 0 24 24"><path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z"/></svg>
       </button>
     </div>
+
+    <div id="desktopLocationsBar" class="desktop-loc-bar-wrap" role="tablist" aria-label="Saved Locations"></div>
   </header>
 
   <div id="drawerBackdrop" class="drawer-backdrop"></div>
@@ -1127,26 +1307,43 @@ main {
     <div class="dashboard">
       <div class="col-main">
         <article id="now" class="card hero-card current" aria-live="polite">
+          <div id="heroSky" class="sky-layer hero-sky" data-sky="clear-day" aria-hidden="true">
+            <div class="sky-stars"></div>
+            <div class="sky-celestial"></div>
+            <div class="sky-clouds"></div>
+            <div class="sky-precip"></div>
+          </div>
+
           <div class="card-header">
             <span>Current Conditions</span>
             <span id="currFeelHeader"></span>
           </div>
+
           <div class="hero-primary">
             <div class="mobile-loc-tag" id="mobileLocTag" title="Default Location">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
             </div>
             <div class="mobile-loc-title" id="mobileLocTitle">Select Location</div>
-            <div class="temp-display">
-              <div class="big-icon" id="currIcon">—</div>
-              <div class="temp-value" id="currTemp">—</div>
+
+            <div>
+              <div class="desktop-hero-loc" id="desktopHeroLoc">
+                <svg id="desktopHomeIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+                <span id="locChip"><%= (ssr && ssr.name) || 'Select Location' %></span>
+              </div>
+              <div class="temp-display">
+                <div class="big-icon" id="currIcon">—</div>
+                <div class="temp-value" id="currTemp">—</div>
+              </div>
             </div>
+
             <div class="condition-meta">
               <div class="condition-desc" id="currDesc">—</div>
               <div class="condition-sub">Feels like <span id="currFeels">—</span></div>
               <div class="local-time-sub hidden" id="currLocalTime"></div>
             </div>
           </div>
-          <div class="metrics-grid">
+
+          <div id="metricsCard" class="metrics-grid">
             <div class="metric-item"><div class="metric-label">Wind</div><div class="metric-val" id="currWind">—</div></div>
             <div class="metric-item"><div class="metric-label">Humidity</div><div class="metric-val" id="currHum">—</div></div>
             <div class="metric-item"><div class="metric-label">Pressure</div><div class="metric-val" id="currPress">—</div></div>
@@ -1159,6 +1356,7 @@ main {
         </article>
 
         <section id="hourly" class="card">
+          <div id="outlookSummary" class="outlook-summary">—</div>
           <h3 class="card-header">24-Hour Outlook</h3>
           <div id="hours" class="hourly-scroll" aria-label="Hourly forecast"></div>
           <div class="chart-wrap">
@@ -1268,11 +1466,13 @@ main {
   const mobileDrawer = selectElement('#mobileDrawer');
   const drawerBackdrop = selectElement('#drawerBackdrop');
   const drawerLocationsList = selectElement('#drawerLocationsList');
+  const desktopLocationsBar = selectElement('#desktopLocationsBar');
   const locCounter = selectElement('#locCounter');
   const locationDotsBar = selectElement('#locationDotsBar');
 
   const hiddenUnitsInput = selectElement('#unitsHidden');
   const mobileSkyElement = selectElement('#mobileSky');
+  const heroSkyElement = selectElement('#heroSky');
 
   const WEATHER_DESCRIPTIONS = {
     0: 'Clear sky',
@@ -1380,6 +1580,83 @@ main {
     return new Date().toLocaleTimeString([], formatOptions);
   }
 
+  function getLocationCurrentHour(timezoneName, utcOffsetSeconds) {
+    try {
+      if (timezoneName) {
+        const hourStr = new Intl.DateTimeFormat('en-US', {
+          hour: 'numeric',
+          hour12: false,
+          hourCycle: 'h23',
+          timeZone: timezoneName
+        }).format(new Date());
+        return Number(hourStr);
+      }
+    } catch {}
+
+    if (typeof utcOffsetSeconds === 'number') {
+      const shiftedDate = new Date(Date.now() + utcOffsetSeconds * 1000);
+      return shiftedDate.getUTCHours();
+    }
+
+    return new Date().getHours();
+  }
+
+  function buildOutlookSummaryText(weatherData, sliceStart) {
+    const daily = weatherData.daily;
+    const hourly = weatherData.hourly;
+    const current = weatherData.current;
+    const unitSymbol = appState.units === 'metric' ? '°C' : '°F';
+
+    const upcomingCodes = hourly.weather_code.slice(sliceStart, sliceStart + 12);
+    let summaryPhrase = 'Generally clear';
+
+    const hasStorm = upcomingCodes.some((code) => [95, 96, 99].includes(code));
+    const hasSnow = upcomingCodes.some((code) => [71, 73, 75, 77, 85, 86].includes(code));
+    const hasRain = upcomingCodes.some((code) => [51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(code));
+    const hasFog = upcomingCodes.some((code) => [45, 48].includes(code));
+    const cloudyCount = upcomingCodes.filter((code) => [2, 3].includes(code)).length;
+
+    if (hasStorm) {
+      summaryPhrase = 'Thunderstorms possible';
+    } else if (hasSnow) {
+      summaryPhrase = 'Snow expected';
+    } else if (hasRain) {
+      summaryPhrase = 'Showers likely';
+    } else if (hasFog) {
+      summaryPhrase = 'Foggy conditions';
+    } else if (cloudyCount >= 7) {
+      summaryPhrase = 'Mostly cloudy';
+    } else if (cloudyCount >= 3 || current.weather_code === 2) {
+      summaryPhrase = 'Partly cloudy';
+    }
+
+    const todayMax = Math.round(daily.temperature_2m_max?.[0] ?? current.temperature_2m);
+    const todayMin = Math.round(daily.temperature_2m_min?.[0] ?? current.temperature_2m);
+    const tomorrowMin = Math.round(daily.temperature_2m_min?.[1] ?? todayMin);
+
+    const localHour = getLocationCurrentHour(weatherData.timezone, weatherData.utc_offset_seconds);
+
+    if (localHour >= 5 && localHour < 12) {
+      return `${summaryPhrase}. Highs ${todayMax - 1} to ${todayMax + 1}${unitSymbol} and lows ${todayMin - 1} to ${todayMin + 1}${unitSymbol}.`;
+    }
+
+    if (localHour >= 12 && localHour < 18) {
+      return `${summaryPhrase}. High ${todayMax}${unitSymbol}, low ${tomorrowMin}${unitSymbol} tonight.`;
+    }
+
+    return `${summaryPhrase}. Low ${tomorrowMin}${unitSymbol}.`;
+  }
+
+  function updateMobileSkyHeight() {
+    if (window.innerWidth > 768) return;
+    const hourlySection = selectElement('#hourly');
+    if (!hourlySection) return;
+    const rect = hourlySection.getBoundingClientRect();
+    const scrollTop = window.scrollY || document.documentElement.scrollTop || 0;
+    const totalHeight = Math.max(480, Math.round(rect.bottom + scrollTop + 20));
+    document.documentElement.style.setProperty('--mobile-sky-height', `${totalHeight}px`);
+  }
+
   function formatShortDate(isoString) {
     return new Date(isoString).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
   }
@@ -1465,13 +1742,15 @@ main {
     } catch {}
   }
 
-  function renderLocationDrawerAndDots() {
+  function renderLocationNavigation() {
     drawerLocationsList.innerHTML = '';
     locationDotsBar.innerHTML = '';
+    desktopLocationsBar.innerHTML = '';
     locCounter.textContent = `${appState.locations.length} / ${MAX_LOCATIONS}`;
 
     appState.locations.forEach((locItem, index) => {
       const isSelected = index === appState.activeIndex;
+      const cleanLabel = locItem.name || 'Unknown Location';
 
       const listRow = document.createElement('div');
       listRow.className = `drawer-loc-item${isSelected ? ' active' : ''}`;
@@ -1481,7 +1760,7 @@ main {
 
       const titleSpan = document.createElement('div');
       titleSpan.className = 'drawer-loc-name';
-      titleSpan.textContent = locItem.name || 'Unknown Location';
+      titleSpan.textContent = cleanLabel;
 
       const subSpan = document.createElement('div');
       subSpan.className = 'drawer-loc-sub';
@@ -1512,10 +1791,42 @@ main {
 
       const dotButton = document.createElement('button');
       dotButton.type = 'button';
-      dotButton.className = `loc-dot${isSelected ? ' active' : ''}${index === 0 ? ' gps-dot' : ''}`;
-      dotButton.setAttribute('aria-label', `Switch to ${locItem.name}`);
+      dotButton.className = `loc-dot${isSelected ? ' active' : ''}`;
+      dotButton.setAttribute('aria-label', `Switch to ${cleanLabel}`);
       dotButton.addEventListener('click', () => switchToLocationIndex(index));
       locationDotsBar.appendChild(dotButton);
+
+      const desktopChip = document.createElement('div');
+      desktopChip.className = `desktop-loc-chip${isSelected ? ' active' : ''}`;
+      desktopChip.setAttribute('role', 'tab');
+      desktopChip.setAttribute('aria-selected', String(isSelected));
+
+      if (index === 0) {
+        const homeSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        homeSvg.setAttribute('viewBox', '0 0 24 24');
+        homeSvg.innerHTML = '<path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>';
+        desktopChip.appendChild(homeSvg);
+      }
+
+      const chipText = document.createElement('span');
+      chipText.textContent = cleanLabel;
+      desktopChip.appendChild(chipText);
+
+      if (index > 0) {
+        const chipRemoveBtn = document.createElement('button');
+        chipRemoveBtn.type = 'button';
+        chipRemoveBtn.className = 'desktop-loc-remove';
+        chipRemoveBtn.title = `Remove ${cleanLabel}`;
+        chipRemoveBtn.textContent = '×';
+        chipRemoveBtn.addEventListener('click', (event) => {
+          event.stopPropagation();
+          removeLocationAtIndex(index);
+        });
+        desktopChip.appendChild(chipRemoveBtn);
+      }
+
+      desktopChip.addEventListener('click', () => switchToLocationIndex(index));
+      desktopLocationsBar.appendChild(desktopChip);
     });
   }
 
@@ -1534,7 +1845,7 @@ main {
     }
 
     if (appState.locations.length >= MAX_LOCATIONS) {
-      alert(`You can save up to ${MAX_LOCATIONS} locations. Remove one from the menu first.`);
+      alert(`You can save up to ${MAX_LOCATIONS} locations. Remove one first.`);
       return;
     }
 
@@ -1547,7 +1858,7 @@ main {
 
     appState.activeIndex = appState.locations.length - 1;
     saveLocationsToStorage();
-    renderLocationDrawerAndDots();
+    renderLocationNavigation();
     loadWeatherForCoordinates(numericLat, numericLon, name);
   }
 
@@ -1562,7 +1873,7 @@ main {
     }
 
     saveLocationsToStorage();
-    renderLocationDrawerAndDots();
+    renderLocationNavigation();
     const targetLocation = appState.locations[appState.activeIndex];
     loadWeatherForCoordinates(targetLocation.lat, targetLocation.lon, targetLocation.name);
   }
@@ -1571,7 +1882,7 @@ main {
     if (targetIndex < 0 || targetIndex >= appState.locations.length) return;
     appState.activeIndex = targetIndex;
     saveLocationsToStorage();
-    renderLocationDrawerAndDots();
+    renderLocationNavigation();
 
     const targetLocation = appState.locations[targetIndex];
     loadWeatherForCoordinates(targetLocation.lat, targetLocation.lon, targetLocation.name);
@@ -1594,7 +1905,7 @@ main {
           isCurrent: true
         };
         saveLocationsToStorage();
-        renderLocationDrawerAndDots();
+        renderLocationNavigation();
 
         if (appState.activeIndex === 0) {
           loadWeatherForCoordinates(latitude, longitude, appState.locations[0].name);
@@ -1610,9 +1921,16 @@ main {
     const cleanText = name || 'Unknown Location';
     selectElement('#locChip').textContent = cleanText;
     selectElement('#mobileLocTitle').textContent = cleanText;
+
+    const isDefaultLocation = appState.activeIndex === 0;
     const tagElement = selectElement('#mobileLocTag');
     if (tagElement) {
-      tagElement.classList.toggle('hidden', appState.activeIndex !== 0);
+      tagElement.classList.toggle('hidden', !isDefaultLocation);
+    }
+
+    const desktopHomeIcon = selectElement('#desktopHomeIcon');
+    if (desktopHomeIcon) {
+      desktopHomeIcon.classList.toggle('hidden', !isDefaultLocation);
     }
   }
 
@@ -1660,7 +1978,7 @@ main {
       appState.locations[appState.activeIndex].lat = numericLat;
       appState.locations[appState.activeIndex].lon = numericLon;
       saveLocationsToStorage();
-      renderLocationDrawerAndDots();
+      renderLocationNavigation();
     }
 
     updateLocationHeading(resolvedName);
@@ -1723,9 +2041,13 @@ main {
 
     const isDaytime = Boolean(current.is_day);
     const windUnitLabel = appState.units === 'metric' ? 'km/h' : 'mph';
+    const skyVariant = getSkyVariant(current.weather_code, isDaytime);
 
     if (mobileSkyElement) {
-      mobileSkyElement.setAttribute('data-sky', getSkyVariant(current.weather_code, isDaytime));
+      mobileSkyElement.setAttribute('data-sky', skyVariant);
+    }
+    if (heroSkyElement) {
+      heroSkyElement.setAttribute('data-sky', skyVariant);
     }
 
     selectElement('#currIcon').textContent = getWeatherIcon(current.weather_code, isDaytime);
@@ -1760,6 +2082,11 @@ main {
     hourlyContainer.innerHTML = '';
     const sliceStart = upcomingHourIndex > 0 ? upcomingHourIndex - 1 : 0;
     const sliceEnd = Math.min(sliceStart + 24, hourly.time.length);
+
+    const outlookSummaryElement = selectElement('#outlookSummary');
+    if (outlookSummaryElement) {
+      outlookSummaryElement.textContent = buildOutlookSummaryText(weatherData, sliceStart);
+    }
 
     for (let index = sliceStart; index < sliceEnd; index++) {
       const hourCard = document.createElement('div');
@@ -1807,6 +2134,8 @@ main {
       `;
       dailyContainer.appendChild(dayRow);
     }
+
+    requestAnimationFrame(updateMobileSkyHeight);
   }
 
   function drawTemperatureChart(canvas, timeValues, tempValues) {
@@ -1889,7 +2218,7 @@ main {
       addOrSelectSavedLocation(placeItem.lat, placeItem.lon, formattedName);
       closeMobileDrawer();
     } else {
-      searchInput.value = formattedName;
+      searchInput.value = '';
       addOrSelectSavedLocation(placeItem.lat, placeItem.lon, formattedName);
     }
   }
@@ -1907,8 +2236,8 @@ main {
       const parsedLon = Number(coordinateMatch[2]);
       const placeName = await fetchReverseLocationName(parsedLat, parsedLon);
       addOrSelectSavedLocation(parsedLat, parsedLon, placeName);
+      inputElement.value = '';
       if (isFromMobileDrawer) {
-        inputElement.value = '';
         closeMobileDrawer();
       }
       return;
@@ -1956,7 +2285,7 @@ main {
 
   function handleMobileSkyScrollFade() {
     const scrollDistance = window.scrollY || document.documentElement.scrollTop || 0;
-    const fadeLimit = 280;
+    const fadeLimit = 340;
     const calculatedOpacity = Math.max(0, 1 - scrollDistance / fadeLimit);
     document.documentElement.style.setProperty('--sky-opacity', calculatedOpacity.toFixed(3));
   }
@@ -2037,6 +2366,7 @@ main {
     if (latestChartSeries) {
       drawTemperatureChart(selectElement('#chart'), latestChartSeries.times, latestChartSeries.temps);
     }
+    updateMobileSkyHeight();
   });
 
   unitsButton.addEventListener('click', () => {
@@ -2065,7 +2395,7 @@ main {
   geoButton.addEventListener('click', () => {
     appState.activeIndex = 0;
     saveLocationsToStorage();
-    renderLocationDrawerAndDots();
+    renderLocationNavigation();
     refreshDefaultCurrentLocation(false);
   });
 
@@ -2130,7 +2460,7 @@ main {
       saveLocationsToStorage();
     }
 
-    renderLocationDrawerAndDots();
+    renderLocationNavigation();
     const initialLocation = appState.locations[appState.activeIndex] || appState.locations[0];
     loadWeatherForCoordinates(initialLocation.lat, initialLocation.lon, initialLocation.name);
     refreshDefaultCurrentLocation(true);
