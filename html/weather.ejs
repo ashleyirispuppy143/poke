@@ -862,19 +862,27 @@ header {
   overflow: hidden;
   background-color: var(--md-surface);
   border-radius: var(--radius-xl);
-  padding: 18px 20px 14px;
+  padding: 18px 0 14px;
   user-select: none;
+}
+
+.insights-viewport {
+  width: 100%;
+  overflow: hidden;
 }
 
 .insights-track {
   display: flex;
+  width: 100%;
   transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform;
 }
 
 .insight-page {
+  width: 100%;
   min-width: 100%;
   flex: 0 0 100%;
+  padding: 0 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -907,25 +915,21 @@ header {
 .insight-right {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
   gap: 4px;
-  background-color: var(--md-surface-high);
-  border-radius: var(--radius-lg);
-  padding: 10px 14px;
-  min-width: 78px;
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
 }
 
 .insight-badge-val {
-  font-size: 22px;
+  font-size: 26px;
   font-weight: 700;
   color: var(--md-text);
   line-height: 1;
 }
 
 .insight-arrow {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 800;
   line-height: 1;
 }
@@ -944,6 +948,7 @@ header {
   align-items: center;
   gap: 6px;
   margin-top: 12px;
+  padding: 0 20px;
 }
 
 .insight-dot {
@@ -1529,7 +1534,9 @@ main {
         </section>
 
         <section id="mobileInsightsCard" class="mobile-insights-card" aria-label="Smart Weather Highlights">
-          <div id="insightsTrack" class="insights-track"></div>
+          <div class="insights-viewport">
+            <div id="insightsTrack" class="insights-track"></div>
+          </div>
           <div id="insightsDots" class="insight-dots"></div>
         </section>
       </div>
@@ -1868,16 +1875,16 @@ main {
     let tempComparisonText = 'Temperatures tomorrow will feel nearly identical to today.';
     let arrowDir = 'none';
     if (tempDelta >= bigShift) {
-      tempComparisonText = `Temperatures are much higher than today (${tomorrowMax}${unitSymbol} tomorrow).`;
+      tempComparisonText = 'Temperatures are much higher than today.';
       arrowDir = 'up';
     } else if (tempDelta >= modShift) {
-      tempComparisonText = `Temperatures are a little higher than today (${tomorrowMax}${unitSymbol} tomorrow).`;
+      tempComparisonText = 'Temperatures are a little higher than today.';
       arrowDir = 'up';
     } else if (tempDelta <= -bigShift) {
-      tempComparisonText = `Temperatures are much lower than today (${tomorrowMax}${unitSymbol} tomorrow).`;
+      tempComparisonText = 'Temperatures are much lower than today.';
       arrowDir = 'down';
     } else if (tempDelta <= -modShift) {
-      tempComparisonText = `Temperatures are a little lower than today (${tomorrowMax}${unitSymbol} tomorrow).`;
+      tempComparisonText = 'Temperatures are a little lower than today.';
       arrowDir = 'down';
     }
 
