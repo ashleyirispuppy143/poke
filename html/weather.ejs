@@ -214,44 +214,77 @@ html, body {
 
 .sky-precip {
   position: absolute;
-  inset: -40px 0 0 0;
+  inset: -120px -20% 0 -20%;
   opacity: 0;
   transition: opacity 0.5s ease;
+  pointer-events: none;
+}
+
+.sky-precip::before,
+.sky-precip::after {
+  content: "";
+  position: absolute;
+  inset: 0;
 }
 
 .sky-layer[data-sky^="rain"] .sky-precip,
 .sky-layer[data-sky^="storm"] .sky-precip {
-  opacity: 0.45;
-  background-image: repeating-linear-gradient(
-    105deg,
-    transparent 0px,
-    transparent 28px,
-    rgba(186, 230, 253, 0.45) 28px,
-    rgba(186, 230, 253, 0.45) 30px
-  );
-  background-size: 120px 120px;
-  animation: rainfall 0.65s linear infinite;
+  opacity: 0.75;
+  transform: rotate(13deg);
+}
+
+.sky-layer[data-sky^="rain"] .sky-precip::before,
+.sky-layer[data-sky^="storm"] .sky-precip::before {
+  background-image:
+    radial-gradient(1.5px 24px at 18px 34px, rgba(186, 230, 253, 0.65), transparent),
+    radial-gradient(1.5px 30px at 62px 105px, rgba(186, 230, 253, 0.55), transparent),
+    radial-gradient(1px 22px at 108px 52px, rgba(186, 230, 253, 0.6), transparent),
+    radial-gradient(1.5px 28px at 154px 145px, rgba(186, 230, 253, 0.5), transparent),
+    radial-gradient(1px 26px at 192px 88px, rgba(186, 230, 253, 0.62), transparent);
+  background-size: 210px 210px;
+  animation: smoothRainA 0.52s linear infinite;
+  will-change: background-position;
+}
+
+.sky-layer[data-sky^="rain"] .sky-precip::after,
+.sky-layer[data-sky^="storm"] .sky-precip::after {
+  background-image:
+    radial-gradient(1px 18px at 36px 70px, rgba(186, 230, 253, 0.42), transparent),
+    radial-gradient(1px 20px at 94px 18px, rgba(186, 230, 253, 0.36), transparent),
+    radial-gradient(1px 16px at 142px 112px, rgba(186, 230, 253, 0.4), transparent);
+  background-size: 160px 160px;
+  animation: smoothRainB 0.74s linear infinite;
+  will-change: background-position;
 }
 
 .sky-layer[data-sky^="snow"] .sky-precip {
-  opacity: 0.65;
-  background-image:
-    radial-gradient(3px 3px at 20% 30%, #ffffff 90%, transparent),
-    radial-gradient(4px 4px at 70% 10%, #ffffff 90%, transparent),
-    radial-gradient(2.5px 2.5px at 40% 70%, #ffffff 90%, transparent),
-    radial-gradient(3.5px 3.5px at 85% 55%, #ffffff 90%, transparent);
-  background-size: 160px 160px;
-  animation: snowfall 3.5s linear infinite;
+  opacity: 0.7;
 }
 
-@keyframes rainfall {
-  from { transform: translateY(0); }
-  to { transform: translateY(40px); }
+.sky-layer[data-sky^="snow"] .sky-precip::before {
+  background-image:
+    radial-gradient(3px 3px at 24px 36px, #ffffff 90%, transparent),
+    radial-gradient(4px 4px at 105px 18px, #ffffff 90%, transparent),
+    radial-gradient(2.5px 2.5px at 64px 115px, #ffffff 90%, transparent),
+    radial-gradient(3.5px 3.5px at 136px 85px, #ffffff 90%, transparent);
+  background-size: 160px 160px;
+  animation: snowfall 3.2s linear infinite;
+  will-change: background-position;
+}
+
+@keyframes smoothRainA {
+  from { background-position: 0 0; }
+  to { background-position: 0 210px; }
+}
+
+@keyframes smoothRainB {
+  from { background-position: 0 0; }
+  to { background-position: 0 160px; }
 }
 
 @keyframes snowfall {
-  from { transform: translateY(0); }
-  to { transform: translateY(160px); }
+  from { background-position: 0 0; }
+  to { background-position: 24px 160px; }
 }
 
 header {
@@ -692,7 +725,7 @@ header {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 22px;
   color: #f8fafc;
   padding: 28px;
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.25);
@@ -802,6 +835,136 @@ header {
   font-variant-numeric: tabular-nums;
 }
 
+.desktop-outlook-summary {
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(248, 250, 252, 0.94);
+  background-color: rgba(15, 23, 42, 0.34);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-lg);
+  padding: 12px 16px;
+}
+
+.mobile-outlook-summary {
+  display: none;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--md-text);
+  margin: 0 0 14px 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--md-outline) 40%, transparent);
+}
+
+.mobile-insights-card {
+  display: none;
+  position: relative;
+  overflow: hidden;
+  background-color: var(--md-surface);
+  border-radius: var(--radius-xl);
+  padding: 18px 20px 14px;
+  user-select: none;
+}
+
+.insights-track {
+  display: flex;
+  transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.insight-page {
+  min-width: 100%;
+  flex: 0 0 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.insight-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.insight-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--md-primary);
+}
+
+.insight-sub {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--md-text);
+  line-height: 1.35;
+}
+
+.insight-right {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background-color: var(--md-surface-high);
+  border-radius: var(--radius-lg);
+  padding: 10px 14px;
+  min-width: 78px;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.insight-badge-val {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--md-text);
+  line-height: 1;
+}
+
+.insight-arrow {
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.insight-arrow.up {
+  color: #fb923c;
+}
+
+.insight-arrow.down {
+  color: #38bdf8;
+}
+
+.insight-dots {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.insight-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: none;
+  padding: 0;
+  background-color: var(--md-text-muted);
+  opacity: 0.35;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.insight-dot.active {
+  width: 18px;
+  border-radius: var(--radius-pill);
+  background-color: var(--md-primary);
+  opacity: 1;
+}
+
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -834,15 +997,6 @@ header {
   font-weight: 700;
   color: #ffffff;
   font-variant-numeric: tabular-nums;
-}
-
-.outlook-summary {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--md-text);
-  margin: 0 0 12px 0;
-  padding-bottom: 12px;
-  border-bottom: 1px solid color-mix(in srgb, var(--md-outline) 40%, transparent);
 }
 
 .hourly-scroll {
@@ -1035,8 +1189,13 @@ main {
     display: block;
   }
 
-  .hero-sky {
-    display: none;
+  .hero-sky,
+  .desktop-outlook-summary {
+    display: none !important;
+  }
+
+  .mobile-outlook-summary {
+    display: block;
   }
 
   header {
@@ -1068,28 +1227,26 @@ main {
   .col-main {
     display: flex;
     flex-direction: column;
-  }
-
-  .hero-card {
-    background: transparent;
-    box-shadow: none;
-    padding: 0;
     gap: 16px;
-    overflow: visible;
   }
 
-  .hero-card .card-header {
+  #now.hero-card {
+    display: contents;
+  }
+
+  #now.hero-card > .card-header {
     display: none;
   }
 
   .hero-primary {
     order: 1;
-    min-height: 38vh;
+    min-height: 36vh;
     flex-direction: column;
     justify-content: center;
     align-items: center;
     text-align: center;
     gap: 8px;
+    padding: 8px 4px 12px;
   }
 
   #hourly {
@@ -1101,10 +1258,10 @@ main {
   }
 
   #hourly .card-header {
-    color: rgba(255, 255, 255, 0.78);
+    display: none;
   }
 
-  #hourly .outlook-summary {
+  #hourly .mobile-outlook-summary {
     color: #ffffff;
     border-bottom-color: rgba(255, 255, 255, 0.16);
   }
@@ -1118,8 +1275,13 @@ main {
     color: rgba(255, 255, 255, 0.78);
   }
 
-  #metricsCard {
+  #mobileInsightsCard {
+    display: block;
     order: 3;
+  }
+
+  #metricsCard {
+    order: 4;
   }
 
   .mobile-loc-title {
@@ -1343,6 +1505,8 @@ main {
             </div>
           </div>
 
+          <div id="desktopOutlookSummary" class="desktop-outlook-summary">—</div>
+
           <div id="metricsCard" class="metrics-grid">
             <div class="metric-item"><div class="metric-label">Wind</div><div class="metric-val" id="currWind">—</div></div>
             <div class="metric-item"><div class="metric-label">Humidity</div><div class="metric-val" id="currHum">—</div></div>
@@ -1356,12 +1520,17 @@ main {
         </article>
 
         <section id="hourly" class="card">
-          <div id="outlookSummary" class="outlook-summary">—</div>
+          <div id="outlookSummary" class="mobile-outlook-summary">—</div>
           <h3 class="card-header">24-Hour Outlook</h3>
           <div id="hours" class="hourly-scroll" aria-label="Hourly forecast"></div>
           <div class="chart-wrap">
             <canvas id="chart" aria-label="Temperature trend chart" role="img"></canvas>
           </div>
+        </section>
+
+        <section id="mobileInsightsCard" class="mobile-insights-card" aria-label="Smart Weather Highlights">
+          <div id="insightsTrack" class="insights-track"></div>
+          <div id="insightsDots" class="insight-dots"></div>
         </section>
       </div>
 
@@ -1442,6 +1611,12 @@ main {
 
   let latestWeatherData = null;
   let latestChartSeries = null;
+
+  let insightTimerId = null;
+  let insightCurrentPage = 0;
+  let insightTotalPages = 0;
+  let insightDirection = 1;
+  let insightUserPaused = false;
 
   const unitsButton = selectElement('#btnUnits');
   const mobileUnitsButton = selectElement('#btnMobileUnits');
@@ -1532,6 +1707,10 @@ main {
     return `clear-${timeSuffix}`;
   }
 
+  function isPrecipitationCode(code) {
+    return [51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 71, 73, 75, 77, 80, 81, 82, 85, 86, 95, 96, 99].includes(code);
+  }
+
   function formatNumber(value, suffix = '') {
     if (value === null || value === undefined || Number.isNaN(value)) return '—';
     return `${Math.round(value)}${suffix}`;
@@ -1607,44 +1786,343 @@ main {
     const current = weatherData.current;
     const unitSymbol = appState.units === 'metric' ? '°C' : '°F';
 
-    const upcomingCodes = hourly.weather_code.slice(sliceStart, sliceStart + 12);
-    let summaryPhrase = 'Generally clear';
+    const currentCode = current.weather_code;
+    const currentDesc = getWeatherDescription(currentCode);
+    const next12Codes = hourly.weather_code.slice(sliceStart, sliceStart + 12);
+    const next12Pops = (hourly.precipitation_probability || []).slice(sliceStart, sliceStart + 12);
 
-    const hasStorm = upcomingCodes.some((code) => [95, 96, 99].includes(code));
-    const hasSnow = upcomingCodes.some((code) => [71, 73, 75, 77, 85, 86].includes(code));
-    const hasRain = upcomingCodes.some((code) => [51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(code));
-    const hasFog = upcomingCodes.some((code) => [45, 48].includes(code));
-    const cloudyCount = upcomingCodes.filter((code) => [2, 3].includes(code)).length;
+    let conditionNarrative = '';
 
-    if (hasStorm) {
-      summaryPhrase = 'Thunderstorms possible';
-    } else if (hasSnow) {
-      summaryPhrase = 'Snow expected';
-    } else if (hasRain) {
-      summaryPhrase = 'Showers likely';
-    } else if (hasFog) {
-      summaryPhrase = 'Foggy conditions';
-    } else if (cloudyCount >= 7) {
-      summaryPhrase = 'Mostly cloudy';
-    } else if (cloudyCount >= 3 || current.weather_code === 2) {
-      summaryPhrase = 'Partly cloudy';
+    if (isPrecipitationCode(currentCode)) {
+      const dryOffset = next12Codes.findIndex((code, idx) => idx > 0 && !isPrecipitationCode(code));
+      if (dryOffset !== -1 && dryOffset <= 6) {
+        const clearTime = formatClockTime(hourly.time[sliceStart + dryOffset]);
+        conditionNarrative = `${currentDesc} right now, tapering off around ${clearTime}`;
+      } else {
+        conditionNarrative = `${currentDesc} continuing for the next several hours`;
+      }
+    } else {
+      const precipOffset = next12Codes.findIndex((code, idx) => idx > 0 && (isPrecipitationCode(code) || (next12Pops[idx] ?? 0) >= 60));
+      if (precipOffset !== -1 && precipOffset <= 8) {
+        const incomingCode = next12Codes[precipOffset];
+        const incomingName = isPrecipitationCode(incomingCode)
+          ? getWeatherDescription(incomingCode).toLowerCase()
+          : 'scattered showers';
+        const startTime = formatClockTime(hourly.time[sliceStart + precipOffset]);
+        conditionNarrative = `${currentDesc} now, with ${incomingName} expected around ${startTime}`;
+      } else {
+        const clearHours = next12Codes.filter((c) => c === 0 || c === 1).length;
+        const overcastHours = next12Codes.filter((c) => c === 3).length;
+        const partlyHours = next12Codes.filter((c) => c === 2).length;
+
+        if (currentCode === 0 && clearHours >= 9) {
+          conditionNarrative = 'Generally clear skies ahead';
+        } else if ((currentCode === 0 || currentCode === 1) && (partlyHours + overcastHours) >= 5) {
+          conditionNarrative = `${currentDesc} now, becoming cloudier later`;
+        } else if ((currentCode === 2 || currentCode === 3) && clearHours >= 6) {
+          conditionNarrative = `${currentDesc} now, clearing up later`;
+        } else if (overcastHours >= 8) {
+          conditionNarrative = 'Overcast skies continuing';
+        } else if (partlyHours >= 5) {
+          conditionNarrative = 'Partly cloudy throughout the outlook';
+        } else {
+          conditionNarrative = `${currentDesc} conditions continuing`;
+        }
+      }
     }
 
     const todayMax = Math.round(daily.temperature_2m_max?.[0] ?? current.temperature_2m);
     const todayMin = Math.round(daily.temperature_2m_min?.[0] ?? current.temperature_2m);
     const tomorrowMin = Math.round(daily.temperature_2m_min?.[1] ?? todayMin);
-
     const localHour = getLocationCurrentHour(weatherData.timezone, weatherData.utc_offset_seconds);
 
+    let tempClause = '';
     if (localHour >= 5 && localHour < 12) {
-      return `${summaryPhrase}. Highs ${todayMax - 1} to ${todayMax + 1}${unitSymbol} and lows ${todayMin - 1} to ${todayMin + 1}${unitSymbol}.`;
+      tempClause = `Highs ${todayMax - 1} to ${todayMax + 1}${unitSymbol} and lows ${todayMin - 1} to ${todayMin + 1}${unitSymbol}.`;
+    } else if (localHour >= 12 && localHour < 18) {
+      tempClause = `High ${todayMax}${unitSymbol}, low ${tomorrowMin}${unitSymbol} tonight.`;
+    } else {
+      tempClause = `Low ${tomorrowMin}${unitSymbol}.`;
     }
 
-    if (localHour >= 12 && localHour < 18) {
-      return `${summaryPhrase}. High ${todayMax}${unitSymbol}, low ${tomorrowMin}${unitSymbol} tonight.`;
+    return `${conditionNarrative}. ${tempClause}`;
+  }
+
+  function generateMobileSmartInsights(weatherData, sliceStart) {
+    const insights = [];
+    const current = weatherData.current;
+    const daily = weatherData.daily;
+    const hourly = weatherData.hourly;
+    const unitSymbol = appState.units === 'metric' ? '°C' : '°F';
+    const windLabel = appState.units === 'metric' ? 'km/h' : 'mph';
+
+    const todayMax = Math.round(daily.temperature_2m_max?.[0] ?? current.temperature_2m);
+    const tomorrowMax = Math.round(daily.temperature_2m_max?.[1] ?? todayMax);
+    const tempDelta = tomorrowMax - todayMax;
+    const absDelta = Math.abs(tempDelta);
+
+    const isImperial = appState.units === 'imperial';
+    const bigShift = isImperial ? 9 : 5;
+    const modShift = isImperial ? 4 : 2;
+
+    let tempComparisonText = 'Temperatures tomorrow will feel nearly identical to today.';
+    let arrowDir = 'none';
+    if (tempDelta >= bigShift) {
+      tempComparisonText = `Temperatures are much higher than today (${tomorrowMax}${unitSymbol} tomorrow).`;
+      arrowDir = 'up';
+    } else if (tempDelta >= modShift) {
+      tempComparisonText = `Temperatures are a little higher than today (${tomorrowMax}${unitSymbol} tomorrow).`;
+      arrowDir = 'up';
+    } else if (tempDelta <= -bigShift) {
+      tempComparisonText = `Temperatures are much lower than today (${tomorrowMax}${unitSymbol} tomorrow).`;
+      arrowDir = 'down';
+    } else if (tempDelta <= -modShift) {
+      tempComparisonText = `Temperatures are a little lower than today (${tomorrowMax}${unitSymbol} tomorrow).`;
+      arrowDir = 'down';
     }
 
-    return `${summaryPhrase}. Low ${tomorrowMin}${unitSymbol}.`;
+    insights.push({
+      title: "Tomorrow's temperature",
+      sub: tempComparisonText,
+      rightVal: `${absDelta}°`,
+      arrow: arrowDir
+    });
+
+    const next8Codes = hourly.weather_code.slice(sliceStart, sliceStart + 8);
+    const next8Pops = (hourly.precipitation_probability || []).slice(sliceStart, sliceStart + 8);
+    const maxNextPop = Math.max(0, ...next8Pops);
+
+    if (isPrecipitationCode(current.weather_code)) {
+      insights.push({
+        title: 'Grab an umbrella!',
+        sub: `${getWeatherDescription(current.weather_code)} is active and likely to continue nearby.`,
+        rightVal: '☂️',
+        arrow: 'none'
+      });
+    } else if (maxNextPop >= 50 || next8Codes.some((c) => isPrecipitationCode(c))) {
+      insights.push({
+        title: 'Grab an umbrella!',
+        sub: `Rain is likely in the coming hours (${maxNextPop}% peak chance).`,
+        rightVal: `${maxNextPop}%`,
+        arrow: 'none'
+      });
+    }
+
+    const localHour = getLocationCurrentHour(weatherData.timezone, weatherData.utc_offset_seconds);
+    const tomorrowCode = daily.weather_code?.[1] ?? 0;
+    const tomorrowSunrise = daily.sunrise?.[1] ? formatClockTime(daily.sunrise[1]) : formatClockTime(daily.sunrise[0]);
+
+    if ([0, 1, 2].includes(tomorrowCode) && (localHour >= 15 || localHour < 6)) {
+      insights.push({
+        title: "Don't miss tomorrow's sunrise",
+        sub: `Sunrise is at ${tomorrowSunrise} tomorrow with clear viewing conditions.`,
+        rightVal: '🌅',
+        arrow: 'none'
+      });
+    }
+
+    const todaySunset = daily.sunset?.[0] ? formatClockTime(daily.sunset[0]) : null;
+    if (todaySunset && Boolean(current.is_day) && localHour >= 12 && localHour <= 19 && [0, 1, 2].includes(current.weather_code)) {
+      insights.push({
+        title: "Tonight's sunset",
+        sub: `Golden hour ahead — sunset is at ${todaySunset} this evening.`,
+        rightVal: '🌇',
+        arrow: 'none'
+      });
+    }
+
+    const maxUvToday = daily.uv_index_max?.[0] ?? 0;
+    if (Boolean(current.is_day) && maxUvToday >= 6) {
+      insights.push({
+        title: 'High UV alert',
+        sub: `UV index reaches ${Math.round(maxUvToday)} today. Sun protection is recommended.`,
+        rightVal: `UV ${Math.round(maxUvToday)}`,
+        arrow: 'none'
+      });
+    }
+
+    const windThreshold = isImperial ? 18 : 28;
+    if (current.wind_speed_10m >= windThreshold) {
+      insights.push({
+        title: 'Breezy conditions',
+        sub: `Winds are gusting around ${Math.round(current.wind_speed_10m)} ${windLabel} right now.`,
+        rightVal: '💨',
+        arrow: 'none'
+      });
+    }
+
+    const warmThreshold = isImperial ? 68 : 20;
+    if (current.relative_humidity_2m >= 78 && current.temperature_2m >= warmThreshold) {
+      insights.push({
+        title: 'Muggy & humid',
+        sub: `Humidity is at ${Math.round(current.relative_humidity_2m)}%, making it feel warmer outside.`,
+        rightVal: `${Math.round(current.relative_humidity_2m)}%`,
+        arrow: 'none'
+      });
+    }
+
+    const freezeThreshold = isImperial ? 34 : 1;
+    const minNext12Temp = Math.min(...hourly.temperature_2m.slice(sliceStart, sliceStart + 12));
+    if (minNext12Temp <= freezeThreshold) {
+      insights.push({
+        title: 'Frost & freeze alert',
+        sub: `Temperatures dip to ${Math.round(minNext12Temp)}${unitSymbol}. Bundle up and watch for ice.`,
+        rightVal: '🥶',
+        arrow: 'none'
+      });
+    }
+
+    if (!current.is_day && [0, 1].includes(current.weather_code)) {
+      insights.push({
+        title: 'Great for stargazing',
+        sub: 'Clear night skies right now offer great visibility of the moon and stars.',
+        rightVal: '🌌',
+        arrow: 'none'
+      });
+    }
+
+    if (insights.length < 2 && todaySunset) {
+      insights.push({
+        title: 'Sun cycle',
+        sub: `Sunrise at ${formatClockTime(daily.sunrise[0])} • Sunset at ${todaySunset}.`,
+        rightVal: '☀️',
+        arrow: 'none'
+      });
+    }
+
+    return insights;
+  }
+
+  function renderMobileInsightsCarousel(weatherData, sliceStart) {
+    const track = selectElement('#insightsTrack');
+    const dotsContainer = selectElement('#insightsDots');
+    if (!track || !dotsContainer) return;
+
+    const pages = generateMobileSmartInsights(weatherData, sliceStart);
+    insightTotalPages = pages.length;
+    insightCurrentPage = 0;
+    insightDirection = 1;
+
+    track.innerHTML = '';
+    dotsContainer.innerHTML = '';
+
+    pages.forEach((item, index) => {
+      const pageEl = document.createElement('div');
+      pageEl.className = 'insight-page';
+
+      let arrowMarkup = '';
+      if (item.arrow === 'up') {
+        arrowMarkup = '<span class="insight-arrow up" aria-hidden="true">↑</span>';
+      } else if (item.arrow === 'down') {
+        arrowMarkup = '<span class="insight-arrow down" aria-hidden="true">↓</span>';
+      }
+
+      pageEl.innerHTML = `
+        <div class="insight-left">
+          <div class="insight-title">${item.title}</div>
+          <div class="insight-sub">${item.sub}</div>
+        </div>
+        <div class="insight-right">
+          <span class="insight-badge-val">${item.rightVal}</span>
+          ${arrowMarkup}
+        </div>
+      `;
+      track.appendChild(pageEl);
+
+      if (pages.length > 1) {
+        const dotBtn = document.createElement('button');
+        dotBtn.type = 'button';
+        dotBtn.className = `insight-dot${index === 0 ? ' active' : ''}`;
+        dotBtn.setAttribute('aria-label', `Highlight page ${index + 1}`);
+        dotBtn.addEventListener('click', (event) => {
+          event.stopPropagation();
+          insightUserPaused = true;
+          stopInsightAutoTimer();
+          goToInsightPage(index);
+        });
+        dotsContainer.appendChild(dotBtn);
+      }
+    });
+
+    dotsContainer.classList.toggle('hidden', pages.length <= 1);
+    goToInsightPage(0);
+
+    if (!insightUserPaused) {
+      startInsightAutoTimer();
+    }
+  }
+
+  function goToInsightPage(pageIndex) {
+    const track = selectElement('#insightsTrack');
+    const dotsContainer = selectElement('#insightsDots');
+    if (!track || insightTotalPages === 0) return;
+
+    insightCurrentPage = Math.max(0, Math.min(pageIndex, insightTotalPages - 1));
+    track.style.transform = `translateX(-${insightCurrentPage * 100}%)`;
+
+    if (dotsContainer) {
+      const dots = dotsContainer.querySelectorAll('.insight-dot');
+      dots.forEach((dot, idx) => {
+        dot.classList.toggle('active', idx === insightCurrentPage);
+      });
+    }
+  }
+
+  function stopInsightAutoTimer() {
+    if (insightTimerId) {
+      clearInterval(insightTimerId);
+      insightTimerId = null;
+    }
+  }
+
+  function startInsightAutoTimer() {
+    stopInsightAutoTimer();
+    if (insightTotalPages <= 1 || insightUserPaused) return;
+
+    insightTimerId = setInterval(() => {
+      if (insightUserPaused || insightTotalPages <= 1) return;
+      let nextIndex = insightCurrentPage + insightDirection;
+      if (nextIndex >= insightTotalPages) {
+        insightDirection = -1;
+        nextIndex = insightCurrentPage - 1;
+      } else if (nextIndex < 0) {
+        insightDirection = 1;
+        nextIndex = insightCurrentPage + 1;
+      }
+      goToInsightPage(nextIndex);
+    }, 3000);
+  }
+
+  function setupInsightsCardInteraction() {
+    const card = selectElement('#mobileInsightsCard');
+    if (!card) return;
+
+    let startX = 0;
+
+    card.addEventListener('click', () => {
+      insightUserPaused = true;
+      stopInsightAutoTimer();
+    });
+
+    card.addEventListener('touchstart', (event) => {
+      insightUserPaused = true;
+      stopInsightAutoTimer();
+      if (event.touches.length === 1) {
+        startX = event.touches[0].clientX;
+      }
+    }, { passive: true });
+
+    card.addEventListener('touchend', (event) => {
+      if (event.changedTouches.length !== 1 || insightTotalPages <= 1) return;
+      const diffX = event.changedTouches[0].clientX - startX;
+      if (Math.abs(diffX) > 40) {
+        if (diffX < 0 && insightCurrentPage < insightTotalPages - 1) {
+          goToInsightPage(insightCurrentPage + 1);
+        } else if (diffX > 0 && insightCurrentPage > 0) {
+          goToInsightPage(insightCurrentPage - 1);
+        }
+      }
+    }, { passive: true });
   }
 
   function updateMobileSkyHeight() {
@@ -1881,6 +2359,7 @@ main {
   function switchToLocationIndex(targetIndex) {
     if (targetIndex < 0 || targetIndex >= appState.locations.length) return;
     appState.activeIndex = targetIndex;
+    insightUserPaused = false;
     saveLocationsToStorage();
     renderLocationNavigation();
 
@@ -2083,10 +2562,13 @@ main {
     const sliceStart = upcomingHourIndex > 0 ? upcomingHourIndex - 1 : 0;
     const sliceEnd = Math.min(sliceStart + 24, hourly.time.length);
 
-    const outlookSummaryElement = selectElement('#outlookSummary');
-    if (outlookSummaryElement) {
-      outlookSummaryElement.textContent = buildOutlookSummaryText(weatherData, sliceStart);
-    }
+    const summaryText = buildOutlookSummaryText(weatherData, sliceStart);
+    const mobileSummaryElement = selectElement('#outlookSummary');
+    const desktopSummaryElement = selectElement('#desktopOutlookSummary');
+    if (mobileSummaryElement) mobileSummaryElement.textContent = summaryText;
+    if (desktopSummaryElement) desktopSummaryElement.textContent = summaryText;
+
+    renderMobileInsightsCarousel(weatherData, sliceStart);
 
     for (let index = sliceStart; index < sliceEnd; index++) {
       const hourCard = document.createElement('div');
@@ -2338,7 +2820,7 @@ main {
 
     document.addEventListener('touchstart', (event) => {
       if (event.touches.length !== 1) return;
-      startedInsideHorizontalScroll = Boolean(event.target.closest('.hourly-scroll, .mobile-drawer'));
+      startedInsideHorizontalScroll = Boolean(event.target.closest('.hourly-scroll, .mobile-drawer, .mobile-insights-card'));
       touchStartX = event.touches[0].clientX;
       touchStartY = event.touches[0].clientY;
     }, { passive: true });
@@ -2438,6 +2920,7 @@ main {
 
     loadStoredLocations();
     setupMobileSwipeGesture();
+    setupInsightsCardInteraction();
 
     const urlParams = new URLSearchParams(location.search);
     const paramLat = urlParams.get('lat');
