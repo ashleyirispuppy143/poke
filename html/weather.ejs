@@ -1339,6 +1339,7 @@ main {
   <style>
     .ssr { display: block !important; }
     main { display: none !important; }
+    .no-js-hidden { display: none !important; }
     @media (max-width: 768px) {
       .desktop-search { display: block !important; flex: 1 1 100%; margin-top: 10px; }
       .hamburger-btn { display: none !important; }
@@ -1365,14 +1366,18 @@ main {
         <form class="search-form" role="search" aria-label="Search location" action="/weather" method="GET" id="searchForm">
           <input id="q" name="q" type="search" placeholder="Add city, place, or coordinates..." autocomplete="off" />
           <input type="hidden" name="units" id="unitsHidden" value="<%= (ssr && ssr.units) || 'metric' %>"/>
-          <button id="btnGeo" class="pill-btn" type="button" title="Use current location">Locate</button>
+          <button id="btnGeo" class="pill-btn no-js-hidden" type="button" title="Use current location">Locate</button>
           <button id="btnSearch" class="pill-btn" type="submit" title="Add Location">Add</button>
         </form>
         <div id="suggest" class="suggest" role="listbox" aria-label="Suggestions"></div>
       </div>
 
       <div class="controls desktop-controls">
-        <button id="btnUnits" class="btn" title="Toggle °C/°F">°C</button>
+        <form id="unitForm" action="/weather" method="GET" style="display: none;">
+          <input type="hidden" name="q" value="<%= (ssr && ssr.name) || '' %>" />
+          <input type="hidden" name="units" value="<%= (ssr && ssr.units === 'metric') ? 'imperial' : 'metric' %>" />
+        </form>
+        <button form="unitForm" id="btnUnits" class="btn" title="Toggle °C/°F" type="submit"><%= (ssr && ssr.units === 'imperial') ? '°F' : '°C' %></button>
         <button id="btnTimeFormat" class="btn" title="Toggle 12h/24h">24h</button>
         <button id="btnTheme" class="btn" title="Toggle theme">Theme</button>
         <button id="btnInstall" class="btn hidden" title="Install App">Install</button>
@@ -1396,8 +1401,9 @@ main {
     </div>
 
     <div class="search-wrap drawer-search-wrap">
-      <form class="search-form" role="search" id="mobileSearchForm">
-        <input id="mobileSearchInput" type="search" placeholder="Add city or place..." autocomplete="off" />
+      <form class="search-form" role="search" id="mobileSearchForm" action="/weather" method="GET">
+        <input id="mobileSearchInput" name="q" type="search" placeholder="Add city or place..." autocomplete="off" />
+        <input type="hidden" name="units" value="<%= (ssr && ssr.units) || 'metric' %>"/>
         <button class="pill-btn" type="submit">Add</button>
       </form>
       <div id="mobileSuggest" class="suggest" role="listbox" aria-label="Mobile Search Suggestions"></div>
@@ -1412,7 +1418,7 @@ main {
     </div>
 
     <div class="drawer-controls">
-      <button id="btnMobileUnits" class="btn" type="button">°C</button>
+      <button form="unitForm" id="btnMobileUnits" class="btn" type="submit"><%= (ssr && ssr.units === 'imperial') ? '°F' : '°C' %></button>
       <button id="btnMobileTimeFormat" class="btn" type="button">24h</button>
       <button id="btnMobileTheme" class="btn" type="button">Theme</button>
       <button id="btnMobileShare" class="btn" type="button">Share</button>
@@ -2862,12 +2868,14 @@ main {
     updateMobileSkyHeight();
   });
 
-  unitsButton.addEventListener('click', () => {
+  unitsButton.addEventListener('click', (e) => {
+    e.preventDefault();
     appState.units = appState.units === 'metric' ? 'imperial' : 'metric';
     syncUnitControls();
   });
 
-  mobileUnitsButton.addEventListener('click', () => {
+  mobileUnitsButton.addEventListener('click', (e) => {
+    e.preventDefault();
     appState.units = appState.units === 'metric' ? 'imperial' : 'metric';
     syncUnitControls();
   });
