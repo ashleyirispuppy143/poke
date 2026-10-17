@@ -1339,6 +1339,10 @@ main {
   <style>
     .ssr { display: block !important; }
     main { display: none !important; }
+    @media (max-width: 768px) {
+      .desktop-search { display: block !important; flex: 1 1 100%; margin-top: 10px; }
+      .hamburger-btn { display: none !important; }
+    }
   </style>
 </noscript>
 </head>
@@ -1419,7 +1423,7 @@ main {
     <div class="dashboard">
       <div class="col-main">
         <article class="card hero-card" aria-live="polite">
-          <div class="card-header">Current Weather — <%= (ssr && ssr.name) || 'Unknown' %></div>
+          <div class="card-header">Current Weather - <%= (ssr && ssr.name) || 'Unknown' %></div>
           <% if (ssr && ssr.current) { %>
             <div class="hero-primary">
               <div class="temp-display">
@@ -1435,10 +1439,10 @@ main {
               <div class="metric-item"><div class="metric-label">Wind</div><div class="metric-val"><%= Math.round(ssr.current.wind_speed_10m) %> <%= ssr.windUnit %></div></div>
               <div class="metric-item"><div class="metric-label">Humidity</div><div class="metric-val"><%= Math.round(ssr.current.relative_humidity_2m) %>%</div></div>
               <div class="metric-item"><div class="metric-label">Pressure</div><div class="metric-val"><%= Math.round(ssr.current.pressure_msl) %> hPa</div></div>
-              <div class="metric-item"><div class="metric-label">Precip Prob</div><div class="metric-val"><%= ssr.popNext ?? '—' %>%</div></div>
+              <div class="metric-item"><div class="metric-label">Precip Prob</div><div class="metric-val"><%= ssr.popNext ?? '-' %>%</div></div>
               <div class="metric-item"><div class="metric-label">Sunrise</div><div class="metric-val"><%= ssr.sunriseLocal %></div></div>
               <div class="metric-item"><div class="metric-label">Sunset</div><div class="metric-val"><%= ssr.sunsetLocal %></div></div>
-              <div class="metric-item"><div class="metric-label">UV Index</div><div class="metric-val"><%= ssr.daily.uv_index_max?.[0] ?? '—' %></div></div>
+              <div class="metric-item"><div class="metric-label">UV Index</div><div class="metric-val"><%= ssr.daily.uv_index_max?.[0] ?? '-' %></div></div>
               <div class="metric-item"><div class="metric-label">Feels Like</div><div class="metric-val"><%= Math.round(ssr.current.apparent_temperature) %>°</div></div>
             </div>
           <% } else { %>
@@ -1498,34 +1502,34 @@ main {
                 <span id="locChip"><%= (ssr && ssr.name) || 'Select Location' %></span>
               </div>
               <div class="temp-display">
-                <div class="big-icon" id="currIcon">—</div>
-                <div class="temp-value" id="currTemp">—</div>
+                <div class="big-icon" id="currIcon">-</div>
+                <div class="temp-value" id="currTemp">-</div>
               </div>
             </div>
 
             <div class="condition-meta">
-              <div class="condition-desc" id="currDesc">—</div>
-              <div class="condition-sub">Feels like <span id="currFeels">—</span></div>
+              <div class="condition-desc" id="currDesc">-</div>
+              <div class="condition-sub">Feels like <span id="currFeels">-</span></div>
               <div class="local-time-sub hidden" id="currLocalTime"></div>
             </div>
           </div>
 
-          <div id="desktopOutlookSummary" class="desktop-outlook-summary">—</div>
+          <div id="desktopOutlookSummary" class="desktop-outlook-summary">-</div>
 
           <div id="metricsCard" class="metrics-grid">
-            <div class="metric-item"><div class="metric-label">Wind</div><div class="metric-val" id="currWind">—</div></div>
-            <div class="metric-item"><div class="metric-label">Humidity</div><div class="metric-val" id="currHum">—</div></div>
-            <div class="metric-item"><div class="metric-label">Pressure</div><div class="metric-val" id="currPress">—</div></div>
-            <div class="metric-item"><div class="metric-label">Precip (1h)</div><div class="metric-val" id="pop">—</div></div>
-            <div class="metric-item"><div class="metric-label">Sunrise</div><div class="metric-val" id="sunrise">—</div></div>
-            <div class="metric-item"><div class="metric-label">Sunset</div><div class="metric-val" id="sunset">—</div></div>
-            <div class="metric-item"><div class="metric-label">Max UV</div><div class="metric-val" id="uv">—</div></div>
-            <div class="metric-item"><div class="metric-label">Cycle</div><div class="metric-val" id="dayMode">—</div></div>
+            <div class="metric-item"><div class="metric-label">Wind</div><div class="metric-val" id="currWind">-</div></div>
+            <div class="metric-item"><div class="metric-label">Humidity</div><div class="metric-val" id="currHum">-</div></div>
+            <div class="metric-item"><div class="metric-label">Pressure</div><div class="metric-val" id="currPress">-</div></div>
+            <div class="metric-item"><div class="metric-label">Precip (1h)</div><div class="metric-val" id="pop">-</div></div>
+            <div class="metric-item"><div class="metric-label">Sunrise</div><div class="metric-val" id="sunrise">-</div></div>
+            <div class="metric-item"><div class="metric-label">Sunset</div><div class="metric-val" id="sunset">-</div></div>
+            <div class="metric-item"><div class="metric-label">Max UV</div><div class="metric-val" id="uv">-</div></div>
+            <div class="metric-item"><div class="metric-label">Cycle</div><div class="metric-val" id="dayMode">-</div></div>
           </div>
         </article>
 
         <section id="hourly" class="card">
-          <div id="outlookSummary" class="mobile-outlook-summary">—</div>
+          <div id="outlookSummary" class="mobile-outlook-summary">-</div>
           <h3 class="card-header">24-Hour Outlook</h3>
           <div id="hours" class="hourly-scroll" aria-label="Hourly forecast"></div>
           <div class="chart-wrap">
@@ -1559,7 +1563,7 @@ main {
       <a href="https://open-meteo.com/" target="_blank" rel="noopener">Data: Open-Meteo</a>
     </div>
   </footer>
-    
+   
   <script>
 <!--//--><![CDATA[//><!--
 /**
@@ -1688,7 +1692,7 @@ main {
   };
 
   function getWeatherDescription(code) {
-    return WEATHER_DESCRIPTIONS[code] || '—';
+    return WEATHER_DESCRIPTIONS[code] || '-';
   }
 
   function getWeatherIcon(code, isDay) {
@@ -1719,7 +1723,7 @@ main {
   }
 
   function formatNumber(value, suffix = '') {
-    if (value === null || value === undefined || Number.isNaN(value)) return '—';
+    if (value === null || value === undefined || Number.isNaN(value)) return '-';
     return `${Math.round(value)}${suffix}`;
   }
 
@@ -1932,7 +1936,7 @@ main {
     if (todaySunset && Boolean(current.is_day) && localHour >= 12 && localHour <= 19 && [0, 1, 2].includes(current.weather_code)) {
       insights.push({
         title: "Tonight's sunset",
-        sub: `Golden hour ahead — sunset is at ${todaySunset} this evening.`,
+        sub: `Golden hour ahead - sunset is at ${todaySunset} this evening.`,
         rightVal: '🌇',
         arrow: 'none'
       });
@@ -2540,12 +2544,12 @@ main {
     selectElement('#currTemp').textContent = formatNumber(current.temperature_2m, '°');
     selectElement('#currDesc').textContent = getWeatherDescription(current.weather_code);
     selectElement('#currFeels').textContent = formatNumber(current.apparent_temperature, '°');
-    selectElement('#currWind').textContent = `${formatNumber(current.wind_speed_10m)} ${windUnitLabel} (${current.wind_direction_10m ?? '—'}°)`;
+    selectElement('#currWind').textContent = `${formatNumber(current.wind_speed_10m)} ${windUnitLabel} (${current.wind_direction_10m ?? '-'}°)`;
     selectElement('#currHum').textContent = formatNumber(current.relative_humidity_2m, '%');
     selectElement('#currPress').textContent = formatNumber(current.pressure_msl, ' hPa');
     selectElement('#sunrise').textContent = formatClockTime(daily.sunrise[0]);
     selectElement('#sunset').textContent = formatClockTime(daily.sunset[0]);
-    selectElement('#uv').textContent = daily.uv_index_max?.[0] ?? '—';
+    selectElement('#uv').textContent = daily.uv_index_max?.[0] ?? '-';
     selectElement('#dayMode').textContent = isDaytime ? 'Day' : 'Night';
 
     const localTimeElement = selectElement('#currLocalTime');
@@ -2562,7 +2566,7 @@ main {
 
     const upcomingHourIndex = hourly.time.findIndex((timeValue) => Date.parse(timeValue) > Date.now());
     const nextHourPrecip = hourly.precipitation_probability?.[upcomingHourIndex] ?? hourly.precipitation_probability?.[0] ?? null;
-    selectElement('#pop').textContent = nextHourPrecip === null ? '—' : `${nextHourPrecip}%`;
+    selectElement('#pop').textContent = nextHourPrecip === null ? '-' : `${nextHourPrecip}%`;
 
     const hourlyContainer = selectElement('#hours');
     hourlyContainer.innerHTML = '';
@@ -2590,7 +2594,7 @@ main {
         <div class="hour-icon">${iconLabel}</div>
         <div class="hour-temp">${tempLabel}</div>
         <div class="hour-pop">${precipLabel}%</div>
-      `;
+    `;
       hourlyContainer.appendChild(hourCard);
     }
 
