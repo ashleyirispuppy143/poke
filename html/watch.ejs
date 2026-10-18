@@ -2939,21 +2939,19 @@ if (/[?&]autoplay=/.test(location.search)) {
  
 </script>
      <script>
- function toggleTheaterMode() {
+function toggleTheaterMode() {
     var videoPlayerContainer = document.querySelector('.video-player-container');
     var watchPage = document.querySelector('.watch-page');
-    var videoInfoPanel = document.querySelector('.video-info-panel');
 
     if (!videoPlayerContainer || !watchPage) return; 
 
     var isTheaterMode = videoPlayerContainer.classList.toggle('theatermodeon');
 
+    // Update the display style based on the new state
     if (isTheaterMode) {
         watchPage.style.display = 'grid';
-        if (videoInfoPanel) videoInfoPanel.style.marginTop = '4em';
     } else {
         watchPage.style.display = 'flex';
-        if (videoInfoPanel) videoInfoPanel.style.marginTop = '';
     }
 
     localStorage.setItem('theaterMode', isTheaterMode);
@@ -2963,18 +2961,15 @@ function checkTheaterMode() {
     var isTheaterMode = localStorage.getItem('theaterMode') === 'true';
     var videoPlayerContainer = document.querySelector('.video-player-container');
     var watchPage = document.querySelector('.watch-page');
-    var videoInfoPanel = document.querySelector('.video-info-panel');
 
     if (!videoPlayerContainer || !watchPage) return;
 
     if (isTheaterMode) {
         videoPlayerContainer.classList.add('theatermodeon');
         watchPage.style.display = 'grid';
-        if (videoInfoPanel) videoInfoPanel.style.marginTop = '4em';
     } else {
         videoPlayerContainer.classList.remove('theatermodeon');
         watchPage.style.display = 'flex';
-        if (videoInfoPanel) videoInfoPanel.style.marginTop = '';
     }
 }
 
