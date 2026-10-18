@@ -868,11 +868,17 @@ marquee {
   display:none;
 }
 
+/*
+
+its commented out because in some viewport heights, the hd/sd etc buttons didint work if you had theahter mode, and the video info bar overlapped with the buttons. 
+commented out until a proper fix is made
+
 @media screen and (max-height: 840px) {
   .theatermodeon {
     max-height: 10% !important;
   }
 }
+*/
 
 #video:target {
 object-fit:contain;
