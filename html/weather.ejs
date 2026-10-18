@@ -251,23 +251,42 @@
     }
     ssrInsights.push({ title: "Tomorrow's temperature", sub: cmpText, rightVal: absDelta + '°', arrow });
 
-    if (ssrAqiVal !== null) {
+    if (ssrAqiVal !== null && ssrAqiVal > 50) {
       ssrInsights.push({
-        title: ssrAqiVal <= 50 ? 'Clean air quality' : 'Air quality alert',
-        sub: ssrAqiVal <= 50
-          ? 'Air quality is low (' + ssrAqiVal + ' AQI) right now - great for outdoor activities.'
-          : 'AQI is ' + ssrAqiVal + ' (' + (ssrAq.aqiLabel || ssrAqiShort) + '). Sensitive groups should limit prolonged exertion.',
+        title: 'Air quality alert',
+        sub: 'AQI is ' + ssrAqiVal + ' (' + (ssrAq.aqiLabel || ssrAqiShort) + '). Sensitive groups should limit prolonged exertion.',
         rightVal: 'AQI ' + ssrAqiVal,
         arrow: 'none'
       });
     }
 
-    const activePollenItem = ssrTopPollens.find(p => p.active);
-    if (activePollenItem) {
+    const activePollensList = ssrTopPollens.filter(p => p.active);
+    if (activePollensList.length > 0) {
+      const names = activePollensList.map(p => p.name + ' (' + p.stage.toLowerCase() + ')').join(', ');
       ssrInsights.push({
         title: 'Pollen alert',
-        sub: activePollenItem.name + ' pollen is ' + activePollenItem.stage + ' right now.',
-        rightVal: '🌿 ' + activePollenItem.stage,
+        sub: 'Active pollen in the air right now: ' + names + '.',
+        rightVal: '🌿',
+        arrow: 'none'
+      });
+    } else if (ssrAq && ssrAq.pollenBreakdown) {
+      ssrInsights.push({
+        title: 'Pollen outlook',
+        sub: 'Pollen counts are minimal across your tracked allergens right now.',
+        rightVal: '🌿',
+        arrow: 'none'
+      });
+    }
+
+    const runMin = isImp ? 50 : 10;
+    const runMax = isImp ? 75 : 24;
+    const runWindMax = isImp ? 15 : 24;
+    const runGoodAir = !ssrAq || (ssrAq.usAqi ?? 0) <= 75;
+    if (!isSsrPrecip(ssrCurrent.weather_code) && ssrCurrent.temperature_2m >= runMin && ssrCurrent.temperature_2m <= runMax && (ssrCurrent.wind_speed_10m ?? 0) <= runWindMax && runGoodAir) {
+      ssrInsights.push({
+        title: 'Today is a good day for running',
+        sub: 'Mild temperatures, light winds, and clean air make conditions ideal for a run.',
+        rightVal: '🏃',
         arrow: 'none'
       });
     }
@@ -885,7 +904,9 @@ header {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%) scale(0.95);
-  width: min(92vw, 420px);
+  width: min(92vw, 440px);
+  max-height: 88vh;
+  overflow-y: auto;
   background-color: var(--md-surface);
   border: 1px solid color-mix(in srgb, var(--md-outline) 45%, transparent);
   border-radius: var(--radius-xl);
@@ -919,6 +940,15 @@ header {
   border-radius: var(--radius-lg);
 }
 
+.setting-row-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  background-color: var(--md-surface-high);
+  border-radius: var(--radius-lg);
+}
+
 .setting-info {
   display: flex;
   flex-direction: column;
@@ -934,6 +964,30 @@ header {
 .setting-desc {
   font-size: 11px;
   color: var(--md-text-muted);
+}
+
+.pollen-picker-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pollen-chip-btn {
+  background-color: var(--md-surface);
+  border: 1px solid color-mix(in srgb, var(--md-outline) 45%, transparent);
+  color: var(--md-text-muted);
+  padding: 6px 11px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pollen-chip-btn.active {
+  background-color: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+  border-color: var(--md-primary);
 }
 
 .mobile-drawer {
@@ -1357,7 +1411,7 @@ html[data-device="desktop"] .col-side {
 
 .metrics-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 12px;
 }
 
@@ -1384,7 +1438,6 @@ html[data-device="desktop"] .col-side {
 }
 
 .pollen-card {
-  grid-column: span 3;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1393,7 +1446,7 @@ html[data-device="desktop"] .col-side {
 .pollen-three-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  gap: 12px;
   text-align: center;
   align-items: center;
 }
@@ -1403,16 +1456,19 @@ html[data-device="desktop"] .col-side {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 5px;
+  padding: 10px 8px;
+  background-color: var(--md-surface-high);
+  border-radius: var(--radius-lg);
 }
 
 .pollen-leaf-icon {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
-  color: rgba(248, 250, 252, 0.55);
+  color: var(--md-text-muted);
   transition: fill 0.25s ease, color 0.25s ease, filter 0.25s ease;
 }
 
@@ -1427,21 +1483,20 @@ html[data-device="desktop"] .col-side {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: rgba(248, 250, 252, 0.75);
+  color: var(--md-text-muted);
 }
 
 .pollen-status {
   font-size: 13px;
   font-weight: 800;
-  color: #ffffff;
+  color: var(--md-text);
   letter-spacing: 0.02em;
 }
 
 .aqi-bar-card {
-  grid-column: 1 / -1;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .aqi-bar-top {
@@ -1449,6 +1504,7 @@ html[data-device="desktop"] .col-side {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .aqi-bar-title {
@@ -1457,10 +1513,20 @@ html[data-device="desktop"] .col-side {
   letter-spacing: -0.01em;
 }
 
+.aqi-pm-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--md-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .aqi-track {
   width: 100%;
   height: 12px;
-  background-color: rgba(255, 255, 255, 0.12);
+  background-color: var(--md-surface-high);
   border-radius: var(--radius-pill);
   overflow: hidden;
 }
@@ -1674,10 +1740,6 @@ html[data-device="tablet"] .metrics-grid {
   grid-template-columns: repeat(2, 1fr);
 }
 
-html[data-device="tablet"] .pollen-card {
-  grid-column: 1 / -1;
-}
-
 html[data-device="tablet"] #mobileInsightsCard {
   display: block;
 }
@@ -1786,8 +1848,12 @@ html[data-device="mobile"] #metricsCard {
   grid-template-columns: repeat(2, 1fr);
 }
 
-html[data-device="mobile"] .pollen-card {
-  grid-column: 1 / -1;
+html[data-device="mobile"] #pollenCard {
+  order: 5;
+}
+
+html[data-device="mobile"] #aqiBarCard {
+  order: 6;
 }
 
 html[data-device="mobile"] .mobile-loc-title {
@@ -1826,30 +1892,17 @@ html[data-device="mobile"] .metric-item {
   backdrop-filter: none;
 }
 
-html[data-device="mobile"] .metric-label,
-html[data-device="mobile"] .pollen-name {
+html[data-device="mobile"] .metric-label {
   color: var(--md-text-muted);
 }
 
-html[data-device="mobile"] .metric-val,
-html[data-device="mobile"] .pollen-status {
+html[data-device="mobile"] .metric-val {
   color: var(--md-text);
-}
-
-html[data-device="mobile"] .pollen-leaf-icon:not(.active) {
-  color: var(--md-text-muted);
-}
-
-html[data-device="mobile"] .aqi-track {
-  background-color: var(--md-surface-high);
 }
 
 @media (max-width: 768px) {
   .metrics-grid {
     grid-template-columns: repeat(2, 1fr);
-  }
-  .pollen-card {
-    grid-column: 1 / -1;
   }
 }
 </style>
@@ -1953,6 +2006,13 @@ html[data-device="mobile"] .aqi-track {
         </div>
         <button id="btnAnon" class="btn<%= ssrAnon ? ' active-toggle' : '' %>" type="button"><%= ssrAnon ? 'On' : 'Off' %></button>
       </div>
+      <div class="setting-row-col">
+        <div class="setting-info">
+          <div class="setting-name">Displayed Pollens (Select 3)</div>
+          <div class="setting-desc">Choose which 3 pollens appear on the Pollen card</div>
+        </div>
+        <div id="modalPollenPicker" class="pollen-picker-chips"></div>
+      </div>
     </div>
   </div>
 
@@ -2014,6 +2074,13 @@ html[data-device="mobile"] .aqi-track {
           </div>
           <button id="btnMobileAnon" class="btn<%= ssrAnon ? ' active-toggle' : '' %>" type="button"><%= ssrAnon ? 'On' : 'Off' %></button>
         </div>
+        <div class="setting-row-col">
+          <div class="setting-info">
+            <div class="setting-name">Displayed Pollens (Select 3)</div>
+            <div class="setting-desc">Customize your 3 tracked pollens</div>
+          </div>
+          <div id="drawerPollenPicker" class="pollen-picker-chips"></div>
+        </div>
         <button id="btnMobileShare" class="btn" type="button" style="width: 100%; margin-top: 4px;">Share Forecast</button>
       </div>
     </div>
@@ -2071,31 +2138,36 @@ html[data-device="mobile"] .aqi-track {
             <div class="metric-item"><div class="metric-label">Max UV</div><div class="metric-val" id="uv"><%= (ssrDaily && ssrDaily.uv_index_max?.[0] != null) ? ssrDaily.uv_index_max[0] : '-' %></div></div>
             <div class="metric-item"><div class="metric-label">Cycle</div><div class="metric-val" id="dayMode"><%= ssrCurrent ? (ssrIsDay ? 'Day' : 'Night') : '-' %></div></div>
             <div class="metric-item"><div class="metric-label">Ozone</div><div class="metric-val" id="currOzone"><%= (ssrAq && ssrAq.o3 != null) ? Math.round(ssrAq.o3) + ' µg/m³' : '-' %></div></div>
-
-            <div class="metric-item pollen-card" id="pollenCard">
-              <div class="pollen-three-grid">
-                <% for (let i = 0; i < ssrTopPollens.length; i++) { %>
-                  <div class="pollen-col">
-                    <svg id="pollenLeaf-<%= ssrTopPollens[i].key %>" class="pollen-leaf-icon<%= ssrTopPollens[i].active ? ' active' : '' %>" viewBox="0 0 24 24" aria-hidden="true">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66l.95-2.3c.48.17.98.3 1.34.3C19 20 22 3 22 3c-1 2-8 2.25-13 3.25S2 11.5 2 13.5s1.75 3.75 1.75 3.75C7 8 17 8 17 8Z"/>
-                    </svg>
-                    <div class="pollen-name"><%= ssrTopPollens[i].name %></div>
-                    <div class="pollen-status" id="pollenVal-<%= ssrTopPollens[i].key %>"><%= ssrTopPollens[i].stage %></div>
-                  </div>
-                <% } %>
-              </div>
-            </div>
-
-            <div class="metric-item aqi-bar-card" id="aqiBarCard">
-              <div class="aqi-bar-top">
-                <span id="currAqiText" class="aqi-bar-title" style="color: <%= ssrAqiColor %>;"><%= ssrAqiVal !== null ? `AQI(${ssrAqiShort})${ssrAqiVal}` : 'AQI(-)' %></span>
-              </div>
-              <div class="aqi-track" aria-hidden="true">
-                <div id="aqiFill" class="aqi-fill" style="width: <%= ssrAqiFillWidth %>%; background-color: <%= ssrAqiColor %>;"></div>
-              </div>
-            </div>
+            <div class="metric-item"><div class="metric-label">Dust</div><div class="metric-val" id="currDust"><%= (ssrAq && ssrAq.dust != null) ? Math.round(ssrAq.dust) + ' µg/m³' : '-' %></div></div>
           </div>
         </article>
+
+        <section id="pollenCard" class="card pollen-card" aria-label="Pollen Levels">
+          <div id="pollenGrid" class="pollen-three-grid">
+            <% for (let i = 0; i < ssrTopPollens.length; i++) { %>
+              <div class="pollen-col">
+                <svg class="pollen-leaf-icon<%= ssrTopPollens[i].active ? ' active' : '' %>" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66l.95-2.3c.48.17.98.3 1.34.3C19 20 22 3 22 3c-1 2-8 2.25-13 3.25S2 11.5 2 13.5s1.75 3.75 1.75 3.75C7 8 17 8 17 8Z"/>
+                </svg>
+                <div class="pollen-name"><%= ssrTopPollens[i].name %></div>
+                <div class="pollen-status"><%= ssrTopPollens[i].stage %></div>
+              </div>
+            <% } %>
+          </div>
+        </section>
+
+        <section id="aqiBarCard" class="card aqi-bar-card" aria-label="Air Quality Index">
+          <div class="aqi-bar-top">
+            <span id="currAqiText" class="aqi-bar-title" style="color: <%= ssrAqiColor %>;"><%= ssrAqiVal !== null ? `AQI(${ssrAqiShort})${ssrAqiVal}` : 'AQI(-)' %></span>
+            <div id="currAqiPm" class="aqi-pm-right">
+              <span>PM2.5: <%= (ssrAq && ssrAq.pm25 != null) ? Math.round(ssrAq.pm25) : '-' %></span>
+              <span>PM10: <%= (ssrAq && ssrAq.pm10 != null) ? Math.round(ssrAq.pm10) : '-' %></span>
+            </div>
+          </div>
+          <div class="aqi-track" aria-hidden="true">
+            <div id="aqiFill" class="aqi-fill" style="width: <%= ssrAqiFillWidth %>%; background-color: <%= ssrAqiColor %>;"></div>
+          </div>
+        </section>
 
         <section id="hourly" class="card">
           <div id="outlookSummary" class="mobile-outlook-summary"><%= ssrOutlookSummary %></div>
@@ -2222,12 +2294,33 @@ html[data-device="mobile"] .aqi-track {
   const ACTIVE_INDEX_STORAGE_KEY = 'pokeweather:activeIndex';
   const TIME_FORMAT_STORAGE_KEY = 'pokeweather:timeFormat';
   const ANON_MODE_STORAGE_KEY = 'pokeweather:anonymous';
+  const POLLEN_PREFS_STORAGE_KEY = 'pokeweather:pollenPrefs';
 
   const PIN_SVG_PATH = '<path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>';
+  const LEAF_SVG_PATH = '<path stroke-linecap="round" stroke-linejoin="round" d="M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66l.95-2.3c.48.17.98.3 1.34.3C19 20 22 3 22 3c-1 2-8 2.25-13 3.25S2 11.5 2 13.5s1.75 3.75 1.75 3.75C7 8 17 8 17 8Z"/>';
+
+  const AVAILABLE_POLLENS = [
+    { key: 'tree', label: 'Tree' },
+    { key: 'grass', label: 'Grass' },
+    { key: 'weed', label: 'Weed' },
+    { key: 'alder', label: 'Alder' },
+    { key: 'birch', label: 'Birch' },
+    { key: 'mugwort', label: 'Mugwort' },
+    { key: 'olive', label: 'Olive' },
+    { key: 'ragweed', label: 'Ragweed' }
+  ];
 
   const storedUnits = JSON.parse(localStorage.getItem('pokeweather:units') || '{}');
   const storedTimeFormat = localStorage.getItem(TIME_FORMAT_STORAGE_KEY) || '24h';
   const storedAnonMode = localStorage.getItem(ANON_MODE_STORAGE_KEY) === 'true';
+
+  let parsedPollenPrefs = ['tree', 'grass', 'weed'];
+  try {
+    const rawPollenPrefs = JSON.parse(localStorage.getItem(POLLEN_PREFS_STORAGE_KEY) || 'null');
+    if (Array.isArray(rawPollenPrefs) && rawPollenPrefs.length === 3) {
+      parsedPollenPrefs = rawPollenPrefs;
+    }
+  } catch {}
 
   const appState = {
     lat: null,
@@ -2236,6 +2329,7 @@ html[data-device="mobile"] .aqi-track {
     units: storedUnits.units || '<%= ssrUnits %>',
     timeFormat: storedTimeFormat === '12h' ? '12h' : '24h',
     anonymousMode: storedAnonMode,
+    pollenPrefs: parsedPollenPrefs,
     deviceMode: 'desktop',
     locations: [],
     activeIndex: 0
@@ -2416,17 +2510,57 @@ html[data-device="mobile"] .aqi-track {
     return 'V.HIGH';
   }
 
-  function getThreeImportantPollens(aqSummary) {
-    const pb = (aqSummary && aqSummary.pollenBreakdown) ? aqSummary.pollenBreakdown : {};
-    const treeVal = Math.max(Number(pb.birch ?? 0), Number(pb.alder ?? 0), Number(pb.olive ?? 0));
-    const grassVal = Number(pb.grass ?? 0);
-    const weedVal = Math.max(Number(pb.ragweed ?? 0), Number(pb.mugwort ?? 0));
+  function getPollenValueByKey(key, pb) {
+    if (!pb) return 0;
+    if (key === 'tree') return Math.max(Number(pb.birch ?? 0), Number(pb.alder ?? 0), Number(pb.olive ?? 0));
+    if (key === 'grass') return Number(pb.grass ?? 0);
+    if (key === 'weed') return Math.max(Number(pb.ragweed ?? 0), Number(pb.mugwort ?? 0));
+    return Number(pb[key] ?? 0);
+  }
 
-    return [
-      { key: 'tree', name: 'Tree', val: treeVal, stage: getPollenStageText(treeVal), active: treeVal > 0 },
-      { key: 'grass', name: 'Grass', val: grassVal, stage: getPollenStageText(grassVal), active: grassVal > 0 },
-      { key: 'weed', name: 'Weed', val: weedVal, stage: getPollenStageText(weedVal), active: weedVal > 0 }
-    ];
+  function getSelectedPollensData(aqSummary) {
+    const pb = (aqSummary && aqSummary.pollenBreakdown) ? aqSummary.pollenBreakdown : {};
+    const keys = (Array.isArray(appState.pollenPrefs) && appState.pollenPrefs.length === 3)
+      ? appState.pollenPrefs
+      : ['tree', 'grass', 'weed'];
+
+    return keys.map((key) => {
+      const meta = AVAILABLE_POLLENS.find((p) => p.key === key) || { key, label: key };
+      const val = getPollenValueByKey(key, pb);
+      return {
+        key: meta.key,
+        name: meta.label,
+        val,
+        stage: getPollenStageText(val),
+        active: val > 0
+      };
+    });
+  }
+
+  function renderPollenPreferencePickers() {
+    const containers = [selectElement('#modalPollenPicker'), selectElement('#drawerPollenPicker')].filter(Boolean);
+    containers.forEach((container) => {
+      container.innerHTML = '';
+      AVAILABLE_POLLENS.forEach((item) => {
+        const isSelected = appState.pollenPrefs.includes(item.key);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `pollen-chip-btn${isSelected ? ' active' : ''}`;
+        btn.textContent = item.label;
+        btn.addEventListener('click', () => {
+          if (appState.pollenPrefs.includes(item.key)) {
+            return;
+          }
+          appState.pollenPrefs = [...appState.pollenPrefs.slice(1), item.key];
+          localStorage.setItem(POLLEN_PREFS_STORAGE_KEY, JSON.stringify(appState.pollenPrefs));
+          renderPollenPreferencePickers();
+          if (latestWeatherData) {
+            renderWeatherDashboard(latestWeatherData, latestAirQualitySummary);
+          }
+        });
+        container.appendChild(btn);
+      });
+    });
   }
 
   async function fetchAirQualityForCoordinates(lat, lon) {
@@ -2463,15 +2597,29 @@ html[data-device="mobile"] .aqi-track {
         : '-';
     }
 
-    const pollens = getThreeImportantPollens(aqSummary);
-    pollens.forEach((p) => {
-      const leaf = selectElement(`#pollenLeaf-${p.key}`);
-      const status = selectElement(`#pollenVal-${p.key}`);
-      if (leaf) leaf.classList.toggle('active', p.active);
-      if (status) status.textContent = p.stage;
-    });
+    const dustEl = selectElement('#currDust');
+    if (dustEl) {
+      dustEl.textContent = (aqSummary && aqSummary.dust !== null && aqSummary.dust !== undefined)
+        ? `${Math.round(aqSummary.dust)} µg/m³`
+        : '-';
+    }
+
+    const pollenGridEl = selectElement('#pollenGrid');
+    if (pollenGridEl) {
+      const pollens = getSelectedPollensData(aqSummary);
+      pollenGridEl.innerHTML = pollens.map((p) => `
+        <div class="pollen-col">
+          <svg class="pollen-leaf-icon${p.active ? ' active' : ''}" viewBox="0 0 24 24" aria-hidden="true">
+            ${LEAF_SVG_PATH}
+          </svg>
+          <div class="pollen-name">${p.name}</div>
+          <div class="pollen-status">${p.stage}</div>
+        </div>
+      `).join('');
+    }
 
     const aqiTextEl = selectElement('#currAqiText');
+    const aqiPmEl = selectElement('#currAqiPm');
     const aqiFillEl = selectElement('#aqiFill');
 
     const aqiVal = (aqSummary && aqSummary.usAqi !== null && aqSummary.usAqi !== undefined)
@@ -2483,6 +2631,12 @@ html[data-device="mobile"] .aqi-track {
     if (aqiTextEl) {
       aqiTextEl.textContent = aqiVal !== null ? `AQI(${shortLabel})${aqiVal}` : 'AQI(-)';
       aqiTextEl.style.color = barColor;
+    }
+
+    if (aqiPmEl) {
+      const pm25Val = (aqSummary && aqSummary.pm25 !== null && aqSummary.pm25 !== undefined) ? Math.round(aqSummary.pm25) : '-';
+      const pm10Val = (aqSummary && aqSummary.pm10 !== null && aqSummary.pm10 !== undefined) ? Math.round(aqSummary.pm10) : '-';
+      aqiPmEl.innerHTML = `<span>PM2.5: ${pm25Val}</span><span>PM10: ${pm10Val}</span>`;
     }
 
     if (aqiFillEl) {
@@ -2780,14 +2934,7 @@ html[data-device="mobile"] .aqi-track {
     if (aqSummary && aqSummary.usAqi !== null && aqSummary.usAqi !== undefined) {
       const aqiVal = Math.round(aqSummary.usAqi);
       const shortCat = getAqiShortLabel(aqiVal);
-      if (aqiVal <= 50) {
-        insights.push({
-          title: 'Clean air quality',
-          sub: `Air quality is ${shortCat} (${aqiVal} AQI) right now - ideal for outdoor plans.`,
-          rightVal: `AQI ${aqiVal}`,
-          arrow: 'none'
-        });
-      } else {
+      if (aqiVal > 50) {
         insights.push({
           title: 'Air quality alert',
           sub: `Air quality is ${shortCat} (${aqiVal} AQI). Sensitive groups should limit prolonged outdoor exertion.`,
@@ -2797,21 +2944,23 @@ html[data-device="mobile"] .aqi-track {
       }
     }
 
-    const pollens = getThreeImportantPollens(aqSummary);
+    const pollens = getSelectedPollensData(aqSummary);
     const activePollens = pollens.filter((p) => p.active);
     if (activePollens.length > 0) {
       const topP = activePollens.reduce((a, b) => (b.val > a.val ? b : a), activePollens[0]);
+      const summaryNames = activePollens.map((p) => `${p.name} (${p.stage.toLowerCase()})`).join(', ');
       insights.push({
-        title: 'Pollen outlook',
-        sub: `${topP.name} pollen is ${topP.stage.toLowerCase()} right now.`,
-        rightVal: `🌿 ${topP.stage}`,
+        title: topP.val > 50 ? 'High pollen alert' : 'Pollen outlook',
+        sub: `Active allergens right now: ${summaryNames}.`,
+        rightVal: '🌿',
         arrow: 'none'
       });
     } else if (aqSummary && aqSummary.pollenBreakdown) {
+      const trackedNames = pollens.map((p) => p.name.toLowerCase()).join(', ');
       insights.push({
         title: 'Pollen outlook',
-        sub: 'Tree, grass, and weed pollen levels are none right now.',
-        rightVal: '🌿 NONE',
+        sub: `Tracked ${trackedNames} pollen counts are minimal right now - clear air for allergy sufferers.`,
+        rightVal: '🌿',
         arrow: 'none'
       });
     }
@@ -2819,6 +2968,29 @@ html[data-device="mobile"] .aqi-track {
     const next8Codes = hourly.weather_code.slice(sliceStart, sliceStart + 8);
     const next8Pops = (hourly.precipitation_probability || []).slice(sliceStart, sliceStart + 8);
     const maxNextPop = Math.max(0, ...next8Pops);
+
+    const minRunTemp = isImperial ? 50 : 10;
+    const maxRunTemp = isImperial ? 75 : 24;
+    const maxRunWind = isImperial ? 15 : 24;
+    const goodRunAir = !aqSummary || (aqSummary.usAqi ?? 0) <= 75;
+    const lowRunPollen = activePollens.every((p) => p.val <= 50);
+
+    if (
+      !isPrecipitationCode(current.weather_code) &&
+      maxNextPop < 35 &&
+      current.temperature_2m >= minRunTemp &&
+      current.temperature_2m <= maxRunTemp &&
+      current.wind_speed_10m <= maxRunWind &&
+      goodRunAir &&
+      lowRunPollen
+    ) {
+      insights.push({
+        title: 'Today is a good day for running',
+        sub: `Comfortable ${Math.round(current.temperature_2m)}${unitSymbol} weather, light winds, and clean air make it great for a run.`,
+        rightVal: '🏃',
+        arrow: 'none'
+      });
+    }
 
     if (isPrecipitationCode(current.weather_code)) {
       insights.push({
@@ -3988,6 +4160,7 @@ html[data-device="mobile"] .aqi-track {
     anonButton.classList.toggle('active-toggle', appState.anonymousMode);
     mobileAnonButton.classList.toggle('active-toggle', appState.anonymousMode);
 
+    renderPollenPreferencePickers();
     loadStoredLocations();
     setupMobileSwipeGesture();
     setupInsightsCardInteraction();
