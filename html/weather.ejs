@@ -1,4 +1,4 @@
-<!--
+ <!--
     This Source Code Form is subject to the terms of the GNU General Public License:
    
     Copyright (C) 2021-2025 PokeWeather Of Poke Project, a part of The Poke Project Initiative (initiative.poketube.fun) 
@@ -22,7 +22,6 @@
   const ssrCurrent = ssrSafe.current || null;
   const ssrDaily = ssrSafe.daily || null;
   const ssrHourly = ssrSafe.hourly || null;
-  const ssrAq = ssrSafe.airQuality || null;
   const ssrUnits = ssrSafe.units === 'imperial' ? 'imperial' : 'metric';
   const ssrTempSymbol = ssrUnits === 'imperial' ? '°F' : '°C';
   const ssrWindSymbol = ssrSafe.windUnit || (ssrUnits === 'imperial' ? 'mph' : 'km/h');
@@ -105,38 +104,6 @@
       hourCycle: use12 ? 'h12' : 'h23'
     });
   }
-
-  function getSsrAqiShortLevel(aqi) {
-    if (aqi === null || aqi === undefined) return 'Unknown';
-    if (aqi <= 50) return 'Low';
-    if (aqi <= 100) return 'Moderate';
-    if (aqi <= 150) return 'Sensitive';
-    if (aqi <= 200) return 'High';
-    if (aqi <= 300) return 'Very High';
-    return 'Hazardous';
-  }
-
-  function getSsrAqiColor(aqi) {
-    if (aqi === null || aqi === undefined) return '#a8c7fa';
-    if (aqi <= 50) return '#4ade80';
-    if (aqi <= 100) return '#facc15';
-    if (aqi <= 150) return '#fb923c';
-    if (aqi <= 200) return '#f87171';
-    if (aqi <= 300) return '#c084fc';
-    return '#be123c';
-  }
-
-  const ssrAqiVal = ssrAq && ssrAq.usAqi != null ? Math.round(ssrAq.usAqi) : null;
-  const ssrAqiShort = getSsrAqiShortLevel(ssrAqiVal);
-  const ssrAqiColor = getSsrAqiColor(ssrAqiVal);
-  const ssrAqiPercent = ssrAqiVal !== null ? Math.max(2, Math.min(98, Math.round((ssrAqiVal / 300) * 100))) : 0;
-
-  const ssrHasPollen = Boolean(ssrAq && ssrAq.maxPollen != null && ssrAq.maxPollen > 0);
-  const ssrPollenText = ssrAq
-    ? (ssrHasPollen
-        ? `${ssrAq.pollenLevel}${ssrAq.dominantPollen ? ' (' + ssrAq.dominantPollen + ')' : ''}`
-        : (ssrAq.pollenLevel === 'None' ? 'None' : 'Unavailable'))
-    : '-';
 
   const ssrIsDay = ssrCurrent ? Boolean(ssrCurrent.is_day ?? 1) : true;
   const ssrSkyVariant = ssrCurrent ? getSsrSky(ssrCurrent.weather_code, ssrIsDay) : 'clear-day';
@@ -238,33 +205,6 @@
     }
     ssrInsights.push({ title: "Tomorrow's temperature", sub: cmpText, rightVal: absDelta + '°', arrow });
 
-    if (ssrAqiVal !== null) {
-      if (ssrAqiVal <= 50) {
-        ssrInsights.push({
-          title: 'Clean air quality',
-          sub: 'Air quality is ' + ssrAqiShort.toLowerCase() + ' (' + ssrAqiVal + ' AQI) - ideal for outdoor activities.',
-          rightVal: 'AQI ' + ssrAqiVal,
-          arrow: 'none'
-        });
-      } else {
-        ssrInsights.push({
-          title: 'Air quality alert',
-          sub: 'AQI is ' + ssrAqiVal + ' (' + ssrAq.aqiLabel + '). Sensitive groups should limit prolonged exertion.',
-          rightVal: 'AQI ' + ssrAqiVal,
-          arrow: 'none'
-        });
-      }
-    }
-
-    if (ssrHasPollen) {
-      ssrInsights.push({
-        title: 'Pollen outlook',
-        sub: ssrAq.pollenLevel + ' pollen levels right now' + (ssrAq.dominantPollen ? ', mainly ' + ssrAq.dominantPollen + ' pollen.' : '.'),
-        rightVal: '🌿 ' + Math.round(ssrAq.maxPollen),
-        arrow: 'none'
-      });
-    }
-
     if (isSsrPrecip(ssrCurrent.weather_code)) {
       ssrInsights.push({
         title: 'Grab an umbrella!',
@@ -291,12 +231,11 @@
       });
     }
 
-    const goodStargazingAir = !ssrAq || ((ssrAq.usAqi ?? 0) <= 60 && (ssrAq.pm25 ?? 0) <= 20);
-    if (!ssrIsDay && [0, 1].includes(ssrCurrent.weather_code) && (ssrCurrent.relative_humidity_2m ?? 50) < 80 && goodStargazingAir) {
+    if (ssrSafe.sunriseLocal) {
       ssrInsights.push({
-        title: 'Great for stargazing',
-        sub: 'Clear skies and clean, low-haze air offer crisp visibility of the stars tonight.',
-        rightVal: '🌌',
+        title: "Don't miss tomorrow's sunrise",
+        sub: 'Sunrise is at ' + ssrSafe.sunriseLocal + ' with clear viewing conditions.',
+        rightVal: '🌅',
         arrow: 'none'
       });
     }
@@ -328,7 +267,6 @@
   --md-text-muted: #c4c6d0;
   --md-outline: #44474e;
   --md-danger: #ffb4ab;
-  --radius-circle: 44px;
   --radius-xl: 28px;
   --radius-lg: 20px;
   --radius-pill: 999px;
@@ -354,7 +292,7 @@
   --md-danger: #ba1a1a;
 }
 
-* {
+- {
   box-sizing: border-box;
 }
 
@@ -1342,7 +1280,7 @@ html[data-device="desktop"] .col-side {
 
 .metrics-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
 }
 
@@ -1366,105 +1304,6 @@ html[data-device="desktop"] .col-side {
   font-weight: 700;
   color: #ffffff;
   font-variant-numeric: tabular-nums;
-}
-
-.pollen-card {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-
-.pollen-top {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin-bottom: 6px;
-}
-
-.pollen-top .metric-label {
-  margin-bottom: 0;
-}
-
-.pollen-leaf-icon {
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-  fill: transparent;
-  stroke: currentColor;
-  stroke-width: 2;
-  color: rgba(248, 250, 252, 0.65);
-  transition: fill 0.25s ease, color 0.25s ease, filter 0.25s ease;
-}
-
-.pollen-leaf-icon.has-pollen {
-  fill: #4ade80;
-  color: #4ade80;
-  filter: drop-shadow(0 0 6px rgba(74, 222, 128, 0.45));
-}
-
-.aqi-bar-card {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.aqi-bar-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.aqi-title-group {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.aqi-dot-indicator {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background-color: #4ade80;
-  box-shadow: 0 0 10px currentColor;
-}
-
-.aqi-bar-title {
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.aqi-sub-pills {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 12px;
-  color: rgba(248, 250, 252, 0.78);
-  font-variant-numeric: tabular-nums;
-}
-
-.aqi-track {
-  position: relative;
-  height: 8px;
-  width: 100%;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(90deg, #4ade80 0%, #facc15 28%, #fb923c 52%, #f87171 74%, #c084fc 90%, #be123c 100%);
-}
-
-.aqi-thumb {
-  position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background-color: #ffffff;
-  border: 2px solid #0f172a;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
-  transition: left 0.4s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .hourly-scroll {
@@ -1648,58 +1487,90 @@ main {
   display: block;
 }
 
-html[data-device="mobile"] .mobile-sky,
-html[data-device="tablet"] .mobile-sky {
+html[data-device="tablet"] .container {
+  max-width: 1024px;
+  padding: 0 20px;
+}
+
+html[data-device="tablet"] .dashboard {
+  grid-template-columns: repeat(12, 1fr);
+  gap: 18px;
+}
+
+html[data-device="tablet"] .col-main {
+  grid-column: span 7;
+}
+
+html[data-device="tablet"] .col-side {
+  grid-column: span 5;
+}
+
+html[data-device="tablet"] .metrics-grid {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+html[data-device="tablet"] #mobileInsightsCard {
+  display: block;
+}
+
+html[data-device="tablet"] .location-dots-bar {
+  display: inline-flex;
+}
+
+html[data-device="mobile"] .mobile-sky {
   display: block;
 }
 
 html[data-device="mobile"] .hero-sky,
-html[data-device="mobile"] .desktop-outlook-summary,
-html[data-device="tablet"] .hero-sky,
-html[data-device="tablet"] .desktop-outlook-summary {
+html[data-device="mobile"] .desktop-outlook-summary {
   display: none !important;
 }
 
-html[data-device="mobile"] .mobile-outlook-summary,
-html[data-device="tablet"] .mobile-outlook-summary {
+html[data-device="mobile"] .mobile-outlook-summary {
   display: block;
+}
+
+html[data-device="mobile"] header {
+  background-color: transparent;
+  backdrop-filter: none;
+  border-bottom: none;
 }
 
 html[data-device="mobile"] .desktop-search,
 html[data-device="mobile"] .desktop-controls,
 html[data-device="mobile"] .desktop-loc-bar-wrap,
-html[data-device="mobile"] .desktop-hero-loc,
-html[data-device="tablet"] .desktop-search,
-html[data-device="tablet"] .desktop-controls,
-html[data-device="tablet"] .desktop-loc-bar-wrap,
-html[data-device="tablet"] .desktop-hero-loc {
+html[data-device="mobile"] .desktop-hero-loc {
   display: none;
 }
 
-html[data-device="mobile"] .location-dots-bar,
-html[data-device="tablet"] .location-dots-bar {
+html[data-device="mobile"] .hamburger-btn {
   display: inline-flex;
 }
 
-html[data-device="mobile"] .col-main,
-html[data-device="tablet"] .col-main {
+html[data-device="mobile"] .location-dots-bar {
+  display: inline-flex;
+}
+
+html[data-device="mobile"] .container {
+  padding: 0 16px;
+  margin-top: 8px;
+}
+
+html[data-device="mobile"] .col-main {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-html[data-device="mobile"] #now.hero-card,
-html[data-device="tablet"] #now.hero-card {
+html[data-device="mobile"] #now.hero-card {
   display: contents;
 }
 
-html[data-device="mobile"] #now.hero-card > .card-header,
-html[data-device="tablet"] #now.hero-card > .card-header {
+html[data-device="mobile"] #now.hero-card > .card-header {
   display: none;
 }
 
-html[data-device="mobile"] .hero-primary,
-html[data-device="tablet"] .hero-primary {
+html[data-device="mobile"] .hero-primary {
   order: 1;
   min-height: 36vh;
   flex-direction: column;
@@ -1710,8 +1581,7 @@ html[data-device="tablet"] .hero-primary {
   padding: 8px 4px 12px;
 }
 
-html[data-device="mobile"] #hourly,
-html[data-device="tablet"] #hourly {
+html[data-device="mobile"] #hourly {
   order: 2;
   background-color: rgba(17, 19, 24, 0.48);
   backdrop-filter: blur(18px);
@@ -1719,185 +1589,81 @@ html[data-device="tablet"] #hourly {
   color: #ffffff;
 }
 
-html[data-device="mobile"] #hourly .card-header,
-html[data-device="tablet"] #hourly .card-header {
+html[data-device="mobile"] #hourly .card-header {
   display: none;
 }
 
-html[data-device="mobile"] #hourly .mobile-outlook-summary,
-html[data-device="tablet"] #hourly .mobile-outlook-summary {
+html[data-device="mobile"] #hourly .mobile-outlook-summary {
   color: #ffffff;
   border-bottom-color: rgba(255, 255, 255, 0.16);
 }
 
-html[data-device="mobile"] #hourly .hour-item,
-html[data-device="tablet"] #hourly .hour-item {
+html[data-device="mobile"] #hourly .hour-item {
   background-color: rgba(255, 255, 255, 0.1);
   color: #ffffff;
 }
 
-html[data-device="mobile"] #hourly .hour-time,
-html[data-device="tablet"] #hourly .hour-time {
+html[data-device="mobile"] #hourly .hour-time {
   color: rgba(255, 255, 255, 0.78);
 }
 
-html[data-device="mobile"] #mobileInsightsCard,
-html[data-device="tablet"] #mobileInsightsCard {
+html[data-device="mobile"] #mobileInsightsCard {
   display: block;
   order: 3;
 }
 
-html[data-device="mobile"] #metricsCard,
-html[data-device="tablet"] #metricsCard {
+html[data-device="mobile"] #metricsCard {
   order: 4;
   grid-template-columns: repeat(2, 1fr);
 }
 
-html[data-device="mobile"] #pollenCard,
-html[data-device="tablet"] #pollenCard {
-  grid-column: 1 / -1;
-}
-
-html[data-device="mobile"] .mobile-loc-title,
-html[data-device="tablet"] .mobile-loc-title {
+html[data-device="mobile"] .mobile-loc-title {
   display: block;
   color: #ffffff;
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
 }
 
-html[data-device="mobile"] .mobile-loc-tag,
-html[data-device="tablet"] .mobile-loc-tag {
+html[data-device="mobile"] .mobile-loc-tag {
   display: inline-flex;
 }
 
-html[data-device="mobile"] .temp-display,
-html[data-device="tablet"] .temp-display {
+html[data-device="mobile"] .temp-display {
   flex-direction: column;
   justify-content: center;
   gap: 6px;
 }
 
-html[data-device="mobile"] #currIcon,
-html[data-device="tablet"] #currIcon {
+html[data-device="mobile"] #currIcon {
   display: none !important;
 }
 
-html[data-device="mobile"] .temp-value,
-html[data-device="tablet"] .temp-value {
+html[data-device="mobile"] .temp-value {
   font-size: 88px;
   text-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 }
 
-html[data-device="mobile"] .condition-meta,
-html[data-device="tablet"] .condition-meta {
+html[data-device="mobile"] .condition-meta {
   text-align: center;
   align-items: center;
 }
 
-html[data-device="mobile"] .metric-item,
-html[data-device="tablet"] .metric-item {
+html[data-device="mobile"] .metric-item {
   background-color: var(--md-surface);
   border: none;
   backdrop-filter: none;
 }
 
-html[data-device="mobile"] .metric-label,
-html[data-device="tablet"] .metric-label {
+html[data-device="mobile"] .metric-label {
   color: var(--md-text-muted);
 }
 
-html[data-device="mobile"] .metric-val,
-html[data-device="tablet"] .metric-val {
+html[data-device="mobile"] .metric-val {
   color: var(--md-text);
-}
-
-html[data-device="mobile"] .aqi-sub-pills,
-html[data-device="tablet"] .aqi-sub-pills {
-  color: var(--md-text-muted);
-}
-
-html[data-device="mobile"] .pollen-leaf-icon:not(.has-pollen),
-html[data-device="tablet"] .pollen-leaf-icon:not(.has-pollen) {
-  color: var(--md-text-muted);
-}
-
-html[data-device="mobile"] header {
-  background-color: transparent;
-  backdrop-filter: none;
-  border-bottom: none;
-}
-
-html[data-device="mobile"] .hamburger-btn {
-  display: inline-flex;
-}
-
-html[data-device="mobile"] .container {
-  padding: 0 16px;
-  margin-top: 8px;
-}
-
-html[data-device="tablet"] body {
-  display: grid;
-  grid-template-columns: 350px minmax(0, 1fr);
-  gap: 18px;
-  padding: 18px;
-  height: 100vh;
-  overflow: hidden;
-}
-
-html[data-device="tablet"] header,
-html[data-device="tablet"] .drawer-backdrop,
-html[data-device="tablet"] #btnCloseDrawer,
-html[data-device="tablet"] footer {
-  display: none !important;
-}
-
-html[data-device="tablet"] .mobile-drawer {
-  position: relative;
-  top: auto;
-  right: auto;
-  bottom: auto;
-  left: auto;
-  width: 100%;
-  height: 100%;
-  transform: none !important;
-  border-radius: var(--radius-circle);
-  border: 1px solid color-mix(in srgb, var(--md-outline) 40%, transparent);
-  z-index: 2;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.28);
-}
-
-html[data-device="tablet"] #mainSwipeContainer {
-  position: relative;
-  margin: 0;
-  max-width: none;
-  width: 100%;
-  height: 100%;
-  overflow-y: auto;
-  overflow-x: hidden;
-  border-radius: var(--radius-circle);
-  background-color: var(--md-bg);
-  border: 1px solid color-mix(in srgb, var(--md-outline) 40%, transparent);
-  padding: 20px 24px 80px;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.28);
-}
-
-html[data-device="tablet"] .dashboard > * {
-  position: relative;
-  z-index: 1;
-}
-
-html[data-device="tablet"] .location-dots-bar {
-  left: calc(350px + 18px + (100vw - 350px - 54px) / 2);
-  bottom: 30px;
 }
 
 @media (max-width: 768px) {
   .metrics-grid {
     grid-template-columns: repeat(2, 1fr);
-  }
-  #pollenCard {
-    grid-column: 1 / -1;
   }
 }
 </style>
@@ -1918,6 +1684,13 @@ html[data-device="tablet"] .location-dots-bar {
 </noscript>
 </head>
 <body class="<%= ssrSafe.forceNoJS ? 'no-js' : '' %>">
+
+  <div id="mobileSky" class="sky-layer mobile-sky" data-sky="<%= ssrSkyVariant %>" aria-hidden="true">
+    <div class="sky-stars"></div>
+    <div class="sky-celestial"></div>
+    <div class="sky-clouds"></div>
+    <div class="sky-precip"></div>
+  </div>
 
   <header>
     <div class="header-inner">
@@ -2001,7 +1774,7 @@ html[data-device="tablet"] .location-dots-bar {
 
   <aside id="mobileDrawer" class="mobile-drawer" aria-label="Locations and Settings">
     <div class="drawer-top">
-      <span class="drawer-title">PokeWeather</span>
+      <span class="drawer-title">Locations</span>
       <button id="btnCloseDrawer" class="pill-btn" type="button">Close</button>
     </div>
 
@@ -2061,13 +1834,6 @@ html[data-device="tablet"] .location-dots-bar {
   </aside>
 
   <main id="mainSwipeContainer" class="container">
-    <div id="mobileSky" class="sky-layer mobile-sky" data-sky="<%= ssrSkyVariant %>" aria-hidden="true">
-      <div class="sky-stars"></div>
-      <div class="sky-celestial"></div>
-      <div class="sky-clouds"></div>
-      <div class="sky-precip"></div>
-    </div>
-
     <div class="dashboard">
       <div class="col-main">
         <article id="now" class="card hero-card current" aria-live="polite">
@@ -2118,39 +1884,6 @@ html[data-device="tablet"] .location-dots-bar {
             <div class="metric-item"><div class="metric-label">Sunset</div><div class="metric-val" id="sunset"><%= ssrSafe.sunsetLocal || (ssrDaily && ssrDaily.sunset?.[0] ? formatSsrClock(ssrDaily.sunset[0]) : '-') %></div></div>
             <div class="metric-item"><div class="metric-label">Max UV</div><div class="metric-val" id="uv"><%= (ssrDaily && ssrDaily.uv_index_max?.[0] != null) ? ssrDaily.uv_index_max[0] : '-' %></div></div>
             <div class="metric-item"><div class="metric-label">Cycle</div><div class="metric-val" id="dayMode"><%= ssrCurrent ? (ssrIsDay ? 'Day' : 'Night') : '-' %></div></div>
-
-            <div class="metric-item pollen-card" id="pollenCard">
-              <div class="pollen-top">
-                <svg id="pollenLeafIcon" class="pollen-leaf-icon<%= ssrHasPollen ? ' has-pollen' : '' %>" viewBox="0 0 24 24" aria-hidden="true">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66l.95-2.3c.48.17.98.3 1.34.3C19 20 22 3 22 3c-1 2-8 2.25-13 3.25S2 11.5 2 13.5s1.75 3.75 1.75 3.75C7 8 17 8 17 8Z"/>
-                </svg>
-                <div class="metric-label">Pollen</div>
-              </div>
-              <div class="metric-val" id="currPollen"><%= ssrPollenText %></div>
-            </div>
-
-            <div class="metric-item aqi-bar-card" id="aqiBarCard">
-              <div class="aqi-bar-top">
-                <div class="aqi-title-group">
-                  <span id="aqiDot" class="aqi-dot-indicator" style="background-color: <%= ssrAqiColor %>; color: <%= ssrAqiColor %>;"></span>
-                  <span id="currAqiText" class="aqi-bar-title" style="color: <%= ssrAqiColor %>;"><%= ssrAqiVal !== null ? `AQI (${ssrAqiShort}) ${ssrAqiVal}` : 'AQI -' %></span>
-                </div>
-                <div class="aqi-sub-pills" id="currAqiSub">
-                  <% if (ssrAq && ssrAq.pm25 != null) { %>
-                    <span>PM2.5: <%= Math.round(ssrAq.pm25) %> µg/m³</span>
-                  <% } %>
-                  <% if (ssrAq && ssrAq.pm10 != null) { %>
-                    <span>PM10: <%= Math.round(ssrAq.pm10) %> µg/m³</span>
-                  <% } %>
-                  <% if (ssrAq && ssrAq.o3 != null) { %>
-                    <span>O₃: <%= Math.round(ssrAq.o3) %></span>
-                  <% } %>
-                </div>
-              </div>
-              <div class="aqi-track" aria-hidden="true">
-                <div id="aqiThumb" class="aqi-thumb" style="left: <%= ssrAqiPercent %>%;"></div>
-              </div>
-            </div>
           </div>
         </article>
 
@@ -2239,28 +1972,28 @@ html[data-device="tablet"] .location-dots-bar {
   <script>
 <!--//--><![CDATA[//><!--
 /**
- * @licstart The following is the entire license notice for the JavaScript
- * code in this page.
+- @licstart The following is the entire license notice for the JavaScript
+- code in this page.
  *
- *    Copyright (C) 2021-2025 PokeWeather Of Poke Project, a part of The Poke Project Initiative (initiative.poketube.fun)
- *    ( source code: https://codeberg.org/ashley/poke)
+-    Copyright (C) 2021-2025 PokeWeather Of Poke Project, a part of The Poke Project Initiative (initiative.poketube.fun)
+-    ( source code: https://codeberg.org/ashley/poke)
  *
- * The JavaScript code in this page is free software: you can redistribute
- * it and/or modify it under the terms of the GNU General Public License
- * (GNU GPL) as published by the Free Software Foundation, either version 3
- * of the License, or (at your option) any later version.  The code is
- * distributed WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU GPL
- * for more details.
+- The JavaScript code in this page is free software: you can redistribute
+- it and/or modify it under the terms of the GNU General Public License
+- (GNU GPL) as published by the Free Software Foundation, either version 3
+- of the License, or (at your option) any later version.  The code is
+- distributed WITHOUT ANY WARRANTY; without even the implied warranty of
+- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU GPL
+- for more details.
  *
- * As additional permission under GNU GPL version 3 section 7, you may
- * distribute non-source (e.g., minimized or compacted) forms of that code
- * without the copy of the GNU GPL normally required by section 4, provided
- * you include this license notice and a URL through which recipients can
- * access the Corresponding Source.
+- As additional permission under GNU GPL version 3 section 7, you may
+- distribute non-source (e.g., minimized or compacted) forms of that code
+- without the copy of the GNU GPL normally required by section 4, provided
+- you include this license notice and a URL through which recipients can
+- access the Corresponding Source.
  *
- * @licend The above is the entire license notice for the JavaScript code
- * in this page.
+- @licend The above is the entire license notice for the JavaScript code
+- in this page.
  */
 
 //--><!]]>
@@ -2274,6 +2007,7 @@ html[data-device="tablet"] .location-dots-bar {
 <script>
   const selectElement = (selector) => document.querySelector(selector);
 
+  const MAX_LOCATIONS = 10;
   const LOCATIONS_STORAGE_KEY = 'pokeweather:locations';
   const ACTIVE_INDEX_STORAGE_KEY = 'pokeweather:activeIndex';
   const TIME_FORMAT_STORAGE_KEY = 'pokeweather:timeFormat';
@@ -2297,12 +2031,7 @@ html[data-device="tablet"] .location-dots-bar {
     activeIndex: 0
   };
 
-  function getMaxLocations() {
-    return appState.deviceMode === 'tablet' ? 25 : 10;
-  }
-
   let latestWeatherData = null;
-  let latestAirQualitySummary = null;
   let latestChartSeries = null;
   let activeWeatherRequestId = 0;
 
@@ -2346,7 +2075,6 @@ html[data-device="tablet"] .location-dots-bar {
   const desktopLocationsBar = selectElement('#desktopLocationsBar');
   const locCounter = selectElement('#locCounter');
   const locationDotsBar = selectElement('#locationDotsBar');
-  const mainSwipeContainer = selectElement('#mainSwipeContainer');
 
   const hiddenUnitsInput = selectElement('#unitsHidden');
   const mobileSkyElement = selectElement('#mobileSky');
@@ -2404,194 +2132,8 @@ html[data-device="tablet"] .location-dots-bar {
 
   function applyDeviceMode() {
     const mode = detectDeviceMode();
-    const changed = appState.deviceMode !== mode;
     appState.deviceMode = mode;
     document.documentElement.setAttribute('data-device', mode);
-    if (changed && appState.locations.length > 0) {
-      renderLocationNavigation();
-    }
-  }
-
-  function summarizeClientAirQuality(aqData) {
-    if (!aqData) return null;
-    if (aqData.usAqi !== undefined && aqData.pollenLevel !== undefined) {
-      return aqData;
-    }
-    if (aqData.summary) {
-      return aqData.summary;
-    }
-    const cur = aqData.current;
-    if (!cur) return null;
-
-    const usAqi = cur.us_aqi ?? null;
-    const euAqi = cur.european_aqi ?? null;
-
-    let aqiLabel = 'Unknown';
-    if (usAqi !== null) {
-      if (usAqi <= 50) aqiLabel = 'Good';
-      else if (usAqi <= 100) aqiLabel = 'Moderate';
-      else if (usAqi <= 150) aqiLabel = 'Unhealthy for Sensitive Groups';
-      else if (usAqi <= 200) aqiLabel = 'Unhealthy';
-      else if (usAqi <= 300) aqiLabel = 'Very Unhealthy';
-      else aqiLabel = 'Hazardous';
-    }
-
-    const pollenTypes = [
-      { name: 'Alder', value: cur.alder_pollen ?? null },
-      { name: 'Birch', value: cur.birch_pollen ?? null },
-      { name: 'Grass', value: cur.grass_pollen ?? null },
-      { name: 'Mugwort', value: cur.mugwort_pollen ?? null },
-      { name: 'Olive', value: cur.olive_pollen ?? null },
-      { name: 'Ragweed', value: cur.ragweed_pollen ?? null }
-    ];
-
-    const validPollens = pollenTypes.filter((p) => p.value !== null && !Number.isNaN(Number(p.value)));
-    let maxPollen = null;
-    let dominantPollen = null;
-
-    if (validPollens.length > 0) {
-      dominantPollen = validPollens.reduce((max, item) => (item.value > max.value ? item : max), validPollens[0]);
-      maxPollen = dominantPollen.value;
-    }
-
-    let pollenLevel = 'Unavailable';
-    if (maxPollen !== null) {
-      if (maxPollen === 0) pollenLevel = 'None';
-      else if (maxPollen <= 10) pollenLevel = 'Low';
-      else if (maxPollen <= 50) pollenLevel = 'Moderate';
-      else if (maxPollen <= 200) pollenLevel = 'High';
-      else pollenLevel = 'Very High';
-    }
-
-    return {
-      usAqi,
-      euAqi,
-      aqiLabel,
-      pm25: cur.pm2_5 ?? null,
-      pm10: cur.pm10 ?? null,
-      no2: cur.nitrogen_dioxide ?? null,
-      o3: cur.ozone ?? null,
-      so2: cur.sulphur_dioxide ?? null,
-      co: cur.carbon_monoxide ?? null,
-      dust: cur.dust ?? null,
-      pollenLevel,
-      maxPollen,
-      dominantPollen: dominantPollen && dominantPollen.value > 0 ? dominantPollen.name : null
-    };
-  }
-
-  function getAqiShortCategory(aqi) {
-    if (aqi === null || aqi === undefined || Number.isNaN(aqi)) return 'Unknown';
-    if (aqi <= 50) return 'Low';
-    if (aqi <= 100) return 'Moderate';
-    if (aqi <= 150) return 'Sensitive';
-    if (aqi <= 200) return 'High';
-    if (aqi <= 300) return 'Very High';
-    return 'Hazardous';
-  }
-
-  function getAqiAccentColor(aqi) {
-    if (aqi === null || aqi === undefined || Number.isNaN(aqi)) return '#a8c7fa';
-    if (aqi <= 50) return '#4ade80';
-    if (aqi <= 100) return '#facc15';
-    if (aqi <= 150) return '#fb923c';
-    if (aqi <= 200) return '#f87171';
-    if (aqi <= 300) return '#c084fc';
-    return '#be123c';
-  }
-
-  async function fetchAirQualityForCoordinates(lat, lon) {
-    const proxyUrl = new URL('/api/air-quality', location.origin);
-    proxyUrl.searchParams.set('latitude', lat);
-    proxyUrl.searchParams.set('longitude', lon);
-
-    try {
-      let res = await fetch(proxyUrl.toString());
-      if (!res.ok) {
-        const directUrl = new URL('https://air-quality-api.open-meteo.com/v1/air-quality');
-        directUrl.searchParams.set('latitude', lat);
-        directUrl.searchParams.set('longitude', lon);
-        directUrl.searchParams.set(
-          'current',
-          'us_aqi,european_aqi,pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone,dust,uv_index,alder_pollen,birch_pollen,grass_pollen,mugwort_pollen,olive_pollen,ragweed_pollen'
-        );
-        directUrl.searchParams.set('timezone', 'auto');
-        res = await fetch(directUrl.toString());
-      }
-      if (!res.ok) return null;
-      const json = await res.json();
-      return summarizeClientAirQuality(json);
-    } catch {
-      return null;
-    }
-  }
-
-  function renderAirQualityAndPollenCards(aqSummary) {
-    const leafIcon = selectElement('#pollenLeafIcon');
-    const pollenValEl = selectElement('#currPollen');
-    const aqiTextEl = selectElement('#currAqiText');
-    const aqiDotEl = selectElement('#aqiDot');
-    const aqiSubEl = selectElement('#currAqiSub');
-    const aqiThumbEl = selectElement('#aqiThumb');
-
-    if (!aqSummary) {
-      if (leafIcon) leafIcon.classList.remove('has-pollen');
-      if (pollenValEl) pollenValEl.textContent = '-';
-      if (aqiTextEl) {
-        aqiTextEl.textContent = 'AQI -';
-        aqiTextEl.style.color = '';
-      }
-      if (aqiSubEl) aqiSubEl.innerHTML = '';
-      if (aqiThumbEl) aqiThumbEl.style.left = '0%';
-      return;
-    }
-
-    const hasPollen = aqSummary.maxPollen !== null && aqSummary.maxPollen !== undefined && Number(aqSummary.maxPollen) > 0;
-    if (leafIcon) {
-      leafIcon.classList.toggle('has-pollen', hasPollen);
-    }
-
-    if (pollenValEl) {
-      if (hasPollen) {
-        const domText = aqSummary.dominantPollen ? ` (${aqSummary.dominantPollen})` : '';
-        pollenValEl.textContent = `${aqSummary.pollenLevel}${domText}`;
-      } else {
-        pollenValEl.textContent = aqSummary.pollenLevel === 'None' ? 'None' : 'None detected';
-      }
-    }
-
-    const aqiNumber = aqSummary.usAqi !== null && aqSummary.usAqi !== undefined ? Math.round(aqSummary.usAqi) : null;
-    const shortCat = getAqiShortCategory(aqiNumber);
-    const aqiColor = getAqiAccentColor(aqiNumber);
-
-    if (aqiTextEl) {
-      aqiTextEl.textContent = aqiNumber !== null ? `AQI (${shortCat}) ${aqiNumber}` : 'AQI -';
-      aqiTextEl.style.color = aqiColor;
-    }
-
-    if (aqiDotEl) {
-      aqiDotEl.style.backgroundColor = aqiColor;
-      aqiDotEl.style.color = aqiColor;
-    }
-
-    if (aqiSubEl) {
-      const parts = [];
-      if (aqSummary.pm25 !== null && aqSummary.pm25 !== undefined) {
-        parts.push(`<span>PM2.5: ${Math.round(aqSummary.pm25)} µg/m³</span>`);
-      }
-      if (aqSummary.pm10 !== null && aqSummary.pm10 !== undefined) {
-        parts.push(`<span>PM10: ${Math.round(aqSummary.pm10)} µg/m³</span>`);
-      }
-      if (aqSummary.o3 !== null && aqSummary.o3 !== undefined) {
-        parts.push(`<span>O₃: ${Math.round(aqSummary.o3)}</span>`);
-      }
-      aqiSubEl.innerHTML = parts.join('');
-    }
-
-    if (aqiThumbEl) {
-      const pct = aqiNumber !== null ? Math.max(2, Math.min(98, (aqiNumber / 300) * 100)) : 2;
-      aqiThumbEl.style.left = `${pct.toFixed(1)}%`;
-    }
   }
 
   function getWeatherDescription(code) {
@@ -2839,7 +2381,7 @@ html[data-device="tablet"] .location-dots-bar {
     return `${conditionNarrative}. ${tempClause}`;
   }
 
-  function generateMobileSmartInsights(weatherData, sliceStart, aqSummary) {
+  function generateMobileSmartInsights(weatherData, sliceStart) {
     const insights = [];
     const current = weatherData.current;
     const daily = weatherData.daily;
@@ -2878,53 +2420,6 @@ html[data-device="tablet"] .location-dots-bar {
       rightVal: `${absDelta}°`,
       arrow: arrowDir
     });
-
-    if (aqSummary && aqSummary.usAqi !== null && aqSummary.usAqi !== undefined) {
-      const aqiVal = Math.round(aqSummary.usAqi);
-      const shortCat = getAqiShortCategory(aqiVal);
-      if (aqiVal <= 50) {
-        insights.push({
-          title: 'Clean air quality',
-          sub: `Air quality is ${shortCat.toLowerCase()} (${aqiVal} AQI) right now - great for outdoor activities.`,
-          rightVal: `AQI ${aqiVal}`,
-          arrow: 'none'
-        });
-      } else if (aqiVal <= 100) {
-        insights.push({
-          title: 'Moderate air quality',
-          sub: `Air quality is acceptable (${aqiVal} AQI), though unusually sensitive individuals should take note.`,
-          rightVal: `AQI ${aqiVal}`,
-          arrow: 'none'
-        });
-      } else {
-        insights.push({
-          title: 'Air quality alert',
-          sub: `Air quality is ${aqSummary.aqiLabel.toLowerCase()} (${aqiVal} AQI). Consider reducing prolonged outdoor exertion.`,
-          rightVal: `AQI ${aqiVal}`,
-          arrow: 'none'
-        });
-      }
-    }
-
-    if (aqSummary && aqSummary.maxPollen !== null && aqSummary.maxPollen !== undefined) {
-      const maxPollenVal = Number(aqSummary.maxPollen);
-      if (maxPollenVal > 0) {
-        const domType = aqSummary.dominantPollen ? `, led by ${aqSummary.dominantPollen} pollen` : '';
-        insights.push({
-          title: 'Pollen outlook',
-          sub: `${aqSummary.pollenLevel} pollen levels detected nearby${domType}.`,
-          rightVal: `🌿 ${Math.round(maxPollenVal)}`,
-          arrow: 'none'
-        });
-      } else if (aqSummary.pollenLevel === 'None') {
-        insights.push({
-          title: 'Pollen-free air',
-          sub: 'No significant airborne pollen grains detected in your area right now.',
-          rightVal: '🌿 0',
-          arrow: 'none'
-        });
-      }
-    }
 
     const next8Codes = hourly.weather_code.slice(sliceStart, sliceStart + 8);
     const next8Pops = (hourly.precipitation_probability || []).slice(sliceStart, sliceStart + 8);
@@ -3010,13 +2505,10 @@ html[data-device="tablet"] .location-dots-bar {
       });
     }
 
-    const isLowParticulates = !aqSummary || ((aqSummary.usAqi ?? 0) <= 60 && (aqSummary.pm25 ?? 0) <= 20 && (aqSummary.dust ?? 0) <= 25);
-    const isLowHumidityHaze = (current.relative_humidity_2m ?? 50) < 80;
-    if (!current.is_day && [0, 1].includes(current.weather_code) && isLowParticulates && isLowHumidityHaze) {
-      const aqiNote = aqSummary && aqSummary.usAqi != null ? ` (AQI ${Math.round(aqSummary.usAqi)})` : '';
+    if (!current.is_day && [0, 1].includes(current.weather_code)) {
       insights.push({
         title: 'Great for stargazing',
-        sub: `Clear night skies and low-haze air quality${aqiNote} offer crisp visibility of the stars.`,
+        sub: 'Clear night skies right now offer great visibility of the moon and stars.',
         rightVal: '🌌',
         arrow: 'none'
       });
@@ -3034,12 +2526,12 @@ html[data-device="tablet"] .location-dots-bar {
     return insights;
   }
 
-  function renderMobileInsightsCarousel(weatherData, sliceStart, aqSummary) {
+  function renderMobileInsightsCarousel(weatherData, sliceStart) {
     const track = selectElement('#insightsTrack');
     const dotsContainer = selectElement('#insightsDots');
     if (!track || !dotsContainer) return;
 
-    const pages = generateMobileSmartInsights(weatherData, sliceStart, aqSummary);
+    const pages = generateMobileSmartInsights(weatherData, sliceStart);
     insightTotalPages = pages.length;
     insightCurrentPage = 0;
     insightDirection = 1;
@@ -3167,19 +2659,9 @@ html[data-device="tablet"] .location-dots-bar {
   }
 
   function updateMobileSkyHeight() {
-    if (appState.deviceMode === 'desktop') return;
+    if (appState.deviceMode !== 'mobile') return;
     const hourlySection = selectElement('#hourly');
     if (!hourlySection) return;
-
-    if (appState.deviceMode === 'tablet' && mainSwipeContainer) {
-      const containerRect = mainSwipeContainer.getBoundingClientRect();
-      const hourlyRect = hourlySection.getBoundingClientRect();
-      const scrollTop = mainSwipeContainer.scrollTop || 0;
-      const totalHeight = Math.max(480, Math.round((hourlyRect.bottom - containerRect.top) + scrollTop + 20));
-      document.documentElement.style.setProperty('--mobile-sky-height', `${totalHeight}px`);
-      return;
-    }
-
     const rect = hourlySection.getBoundingClientRect();
     const scrollTop = window.scrollY || document.documentElement.scrollTop || 0;
     const totalHeight = Math.max(480, Math.round(rect.bottom + scrollTop + 20));
@@ -3238,12 +2720,11 @@ html[data-device="tablet"] .location-dots-bar {
   }
 
   function loadStoredLocations() {
-    const limit = getMaxLocations();
     try {
       const rawList = JSON.parse(localStorage.getItem(LOCATIONS_STORAGE_KEY) || '[]');
       const savedIndex = Number(localStorage.getItem(ACTIVE_INDEX_STORAGE_KEY) || 0);
       if (Array.isArray(rawList) && rawList.length > 0) {
-        appState.locations = rawList.slice(0, limit);
+        appState.locations = rawList.slice(0, MAX_LOCATIONS);
         appState.locations[0].isCurrent = true;
       } else {
         appState.locations = [{
@@ -3273,11 +2754,10 @@ html[data-device="tablet"] .location-dots-bar {
   }
 
   function renderLocationNavigation() {
-    const limit = getMaxLocations();
     drawerLocationsList.innerHTML = '';
     locationDotsBar.innerHTML = '';
     desktopLocationsBar.innerHTML = '';
-    locCounter.textContent = `${appState.locations.length} / ${limit}`;
+    locCounter.textContent = `${appState.locations.length} / ${MAX_LOCATIONS}`;
 
     appState.locations.forEach((locItem, index) => {
       const isSelected = index === appState.activeIndex;
@@ -3307,9 +2787,7 @@ html[data-device="tablet"] .location-dots-bar {
 
       listRow.addEventListener('click', () => {
         switchToLocationIndex(index);
-        if (appState.deviceMode === 'mobile') {
-          closeMobileDrawer();
-        }
+        closeMobileDrawer();
       });
 
       if (index > 0) {
@@ -3370,7 +2848,6 @@ html[data-device="tablet"] .location-dots-bar {
   function addOrSelectSavedLocation(lat, lon, name) {
     const numericLat = Number(lat);
     const numericLon = Number(lon);
-    const limit = getMaxLocations();
 
     const existingIndex = appState.locations.findIndex((item, idx) => {
       if (idx === 0) return false;
@@ -3385,8 +2862,8 @@ html[data-device="tablet"] .location-dots-bar {
       return;
     }
 
-    if (appState.locations.length >= limit) {
-      alert(`You can save up to ${limit} locations on this device. Remove one first.`);
+    if (appState.locations.length >= MAX_LOCATIONS) {
+      alert(`You can save up to ${MAX_LOCATIONS} locations. Remove one first.`);
       return;
     }
 
@@ -3516,7 +2993,7 @@ html[data-device="tablet"] .location-dots-bar {
     localStorage.setItem(TIME_FORMAT_STORAGE_KEY, appState.timeFormat);
 
     if (latestWeatherData) {
-      renderWeatherDashboard(latestWeatherData, latestAirQualitySummary);
+      renderWeatherDashboard(latestWeatherData);
     }
   }
 
@@ -3601,22 +3078,15 @@ html[data-device="tablet"] .location-dots-bar {
     currentCard.classList.add('loading');
 
     try {
-      const fetchWeatherPromise = (async () => {
-        let response = await fetch(requestUrl.toString());
-        if (!response.ok) {
-          const directOpenMeteoUrl = new URL('https://api.open-meteo.com/v1/forecast');
-          directOpenMeteoUrl.search = requestUrl.searchParams.toString();
-          response = await fetch(directOpenMeteoUrl.toString());
-        }
-        if (!response.ok) throw new Error('Failed to load weather data');
-        return response.json();
-      })();
+      let response = await fetch(requestUrl.toString());
+      if (!response.ok) {
+        const directOpenMeteoUrl = new URL('https://api.open-meteo.com/v1/forecast');
+        directOpenMeteoUrl.search = requestUrl.searchParams.toString();
+        response = await fetch(directOpenMeteoUrl.toString());
+      }
+      if (!response.ok) throw new Error('Failed to load weather data');
 
-      const [weatherData, aqSummary] = await Promise.all([
-        fetchWeatherPromise,
-        fetchAirQualityForCoordinates(numericLat, numericLon)
-      ]);
-
+      const weatherData = await response.json();
       if (requestId !== activeWeatherRequestId) return;
 
       localStorage.setItem('pokeweather:last', JSON.stringify({
@@ -3627,15 +3097,14 @@ html[data-device="tablet"] .location-dots-bar {
           name: appState.name,
           units: appState.units
         },
-        data: weatherData,
-        airQuality: aqSummary
+        data: weatherData
       }));
-      renderWeatherDashboard(weatherData, aqSummary);
+      renderWeatherDashboard(weatherData);
     } catch {
       if (requestId !== activeWeatherRequestId) return;
       const cachedPayload = JSON.parse(localStorage.getItem('pokeweather:last') || 'null');
       if (cachedPayload && cachedPayload.data) {
-        renderWeatherDashboard(cachedPayload.data, cachedPayload.airQuality || null);
+        renderWeatherDashboard(cachedPayload.data);
       }
     } finally {
       if (requestId === activeWeatherRequestId) {
@@ -3644,10 +3113,8 @@ html[data-device="tablet"] .location-dots-bar {
     }
   }
 
-  function renderWeatherDashboard(weatherData, aqSummary = latestAirQualitySummary) {
+  function renderWeatherDashboard(weatherData) {
     latestWeatherData = weatherData;
-    latestAirQualitySummary = aqSummary || summarizeClientAirQuality(weatherData.airQuality) || null;
-
     const current = weatherData.current;
     const daily = weatherData.daily;
     const hourly = weatherData.hourly;
@@ -3676,8 +3143,6 @@ html[data-device="tablet"] .location-dots-bar {
     selectElement('#sunset').textContent = formatClockTime(daily.sunset[0]);
     selectElement('#uv').textContent = daily.uv_index_max?.[0] ?? '-';
     selectElement('#dayMode').textContent = isDaytime ? 'Day' : 'Night';
-
-    renderAirQualityAndPollenCards(latestAirQualitySummary);
 
     const localTimeElement = selectElement('#currLocalTime');
     if (localTimeElement) {
@@ -3710,7 +3175,7 @@ html[data-device="tablet"] .location-dots-bar {
     if (mobileSummaryElement) mobileSummaryElement.textContent = summaryText;
     if (desktopSummaryElement) desktopSummaryElement.textContent = summaryText;
 
-    renderMobileInsightsCarousel(weatherData, sliceStart, latestAirQualitySummary);
+    renderMobileInsightsCarousel(weatherData, sliceStart);
 
     for (let index = sliceStart; index < sliceEnd; index++) {
       const hourCard = document.createElement('div');
@@ -3919,9 +3384,7 @@ html[data-device="tablet"] .location-dots-bar {
   }
 
   function handleMobileSkyScrollFade() {
-    const scrollDistance = appState.deviceMode === 'tablet' && mainSwipeContainer
-      ? mainSwipeContainer.scrollTop
-      : (window.scrollY || document.documentElement.scrollTop || 0);
+    const scrollDistance = window.scrollY || document.documentElement.scrollTop || 0;
     const fadeLimit = 340;
     const calculatedOpacity = Math.max(0, 1 - scrollDistance / fadeLimit);
     document.documentElement.style.setProperty('--sky-opacity', calculatedOpacity.toFixed(3));
@@ -4004,9 +3467,6 @@ html[data-device="tablet"] .location-dots-bar {
   }
 
   window.addEventListener('scroll', handleMobileSkyScrollFade, { passive: true });
-  if (mainSwipeContainer) {
-    mainSwipeContainer.addEventListener('scroll', handleMobileSkyScrollFade, { passive: true });
-  }
 
   window.addEventListener('resize', () => {
     applyDeviceMode();
@@ -4154,12 +3614,7 @@ html[data-device="tablet"] .location-dots-bar {
         appState.lon = activeLoc.lon;
         appState.name = activeLoc.name;
         updateLocationHeading(activeLoc.name);
-        renderWeatherDashboard(window.__SSR__, window.__SSR__.airQuality || null);
-        if (!window.__SSR__.airQuality) {
-          fetchAirQualityForCoordinates(activeLoc.lat, activeLoc.lon).then((aq) => {
-            if (aq) renderWeatherDashboard(window.__SSR__, aq);
-          });
-        }
+        renderWeatherDashboard(window.__SSR__);
         refreshDefaultCurrentLocation(true);
         return;
       }
