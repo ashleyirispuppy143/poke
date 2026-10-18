@@ -109,55 +109,85 @@ app.get("/143", (req, res) => {
 });
 
   
-// GET /weather — SSR + hydrates the same EJS for no-JS users.
-// Query options:
-//   ?q=Izmir            (free text place)
-//   ?lat=38.42&lon=27.14 (coordinates)
-//   ?units=metric|imperial
 app.get("/weather", async (req, res) => {
   try {
     const q = (req.query.q || "").trim();
-    const lat = req.query.lat ? Number(req.query.lat) : null;
-    const lon = req.query.lon ? Number(req.query.lon) : null;
-    const units = (req.query.units === "imperial") ? "imperial" : "metric";
+    const rawLat = req.query.lat !== undefined && req.query.lat !== "" ? Number(req.query.lat) : null;
+    const rawLon = req.query.lon !== undefined && req.query.lon !== "" ? Number(req.query.lon) : null;
+    const lat = rawLat !== null && !Number.isNaN(rawLat) ? rawLat : null;
+    const lon = rawLon !== null && !Number.isNaN(rawLon) ? rawLon : null;
+    const units = req.query.units === "imperial" ? "imperial" : "metric";
     const tempUnit = units === "metric" ? "celsius" : "fahrenheit";
     const windUnit = units === "metric" ? "kmh" : "mph";
+    const windUnitLabel = units === "metric" ? "km/h" : "mph";
+    const tf = req.query.tf === "12h" ? "12h" : "24h";
+    const anon = req.query.anon === "1" || req.query.anon === "true";
+    const theme = req.query.theme === "light" ? "light" : "dark";
 
-    // Resolve coordinates
+    const nominatimHeaders = {
+      "Accept-Language": req.headers["accept-language"] || "en",
+      "User-Agent": "PokeWeather/1.0 (https://initiative.poketube.fun)"
+    };
+
     let place = { name: null, lat: null, lon: null };
+
+    const coordMatch = q.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
+
     if (lat != null && lon != null) {
-      place = { name: `${lat.toFixed(3)}, ${lon.toFixed(3)}`, lat, lon };
-      // reverse geocode (best effort)
+      place = { name: (req.query.name || "").trim() || `${lat.toFixed(3)}, ${lon.toFixed(3)}`, lat, lon };
+      if (!req.query.name) {
+        try {
+          const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`, {
+            headers: nominatimHeaders
+          });
+          if (r.ok) {
+            const j = await r.json();
+            place.name = (j.display_name || "").split(",").slice(0, 2).map(s => s.trim()).join(", ") || place.name;
+          }
+        } catch {}
+      }
+    } else if (coordMatch) {
+      const parsedLat = Number(coordMatch[1]);
+      const parsedLon = Number(coordMatch[2]);
+      place = { name: `${parsedLat.toFixed(3)}, ${parsedLon.toFixed(3)}`, lat: parsedLat, lon: parsedLon };
       try {
-        const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`);
+        const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${parsedLat}&lon=${parsedLon}`, {
+          headers: nominatimHeaders
+        });
         if (r.ok) {
           const j = await r.json();
-          place.name = (j.display_name || "").split(",").slice(0,2).join(", ") || place.name;
+          place.name = (j.display_name || "").split(",").slice(0, 2).map(s => s.trim()).join(", ") || place.name;
         }
       } catch {}
     } else if (q) {
-      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&addressdetails=1&q=${encodeURIComponent(q)}`, { headers: { "Accept-Language": req.headers["accept-language"] || "en" }});
+      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&addressdetails=1&q=${encodeURIComponent(q)}`, {
+        headers: nominatimHeaders
+      });
       const arr = r.ok ? await r.json() : [];
-      if (!arr[0]) return renderTemplate(res, req, "weather.ejs", { ssr: { forceNoJS: true, name: "Not found" }});
+      if (!arr[0]) {
+        return renderTemplate(res, req, "weather.ejs", {
+          ssr: { forceNoJS: true, name: "Not found", units, tf, anon, theme }
+        });
+      }
       place = {
-        name: (arr[0].display_name || "").split(",").slice(0,2).join(", "),
+        name: (arr[0].display_name || "").split(",").slice(0, 2).map(s => s.trim()).join(", "),
         lat: Number(arr[0].lat),
         lon: Number(arr[0].lon)
       };
     } else {
-      // default: try to render minimal page with no data
-      return renderTemplate(res, req, "weather.ejs", { ssr: { forceNoJS: true, name: "Choose a location" }});
+      return renderTemplate(res, req, "weather.ejs", {
+        ssr: { forceNoJS: true, name: "Choose a location", units, tf, anon, theme }
+      });
     }
 
-    // Fetch Open-Meteo
     const url = new URL("https://api.open-meteo.com/v1/forecast");
     url.searchParams.set("latitude", place.lat);
     url.searchParams.set("longitude", place.lon);
-    url.searchParams.set("current","temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m,wind_direction_10m,pressure_msl");
-    url.searchParams.set("hourly","temperature_2m,apparent_temperature,precipitation_probability,precipitation,weather_code,wind_speed_10m");
-    url.searchParams.set("daily","weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max");
-    url.searchParams.set("timezone","auto");
-    url.searchParams.set("forecast_days","7");
+    url.searchParams.set("current", "temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m,wind_direction_10m,pressure_msl");
+    url.searchParams.set("hourly", "temperature_2m,apparent_temperature,precipitation_probability,precipitation,weather_code,wind_speed_10m");
+    url.searchParams.set("daily", "weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max");
+    url.searchParams.set("timezone", "auto");
+    url.searchParams.set("forecast_days", "7");
     url.searchParams.set("temperature_unit", tempUnit);
     url.searchParams.set("windspeed_unit", windUnit);
 
@@ -165,73 +195,84 @@ app.get("/weather", async (req, res) => {
     if (!wr.ok) throw new Error("weather fetch failed");
     const data = await wr.json();
 
-    // Helpers to map WMO codes for SSR
-    const codeText = (c)=>{
+    const codeText = (c) => {
       if ([0].includes(c)) return "Clear sky";
       if ([1].includes(c)) return "Mostly clear";
       if ([2].includes(c)) return "Partly cloudy";
       if ([3].includes(c)) return "Overcast";
-      if ([45,48].includes(c)) return "Fog";
-      if ([51,53,55].includes(c)) return "Drizzle";
-      if ([56,57].includes(c)) return "Freezing drizzle";
-      if ([61,63,65].includes(c)) return "Rain";
-      if ([66,67].includes(c)) return "Freezing rain";
-      if ([71,73,75].includes(c)) return "Snow";
+      if ([45, 48].includes(c)) return "Fog";
+      if ([51, 53, 55].includes(c)) return "Drizzle";
+      if ([56, 57].includes(c)) return "Freezing drizzle";
+      if ([61, 63, 65].includes(c)) return "Rain";
+      if ([66, 67].includes(c)) return "Freezing rain";
+      if ([71, 73, 75].includes(c)) return "Snow";
       if ([77].includes(c)) return "Snow grains";
-      if ([80,81,82].includes(c)) return "Showers";
-      if ([85,86].includes(c)) return "Snow showers";
+      if ([80, 81, 82].includes(c)) return "Showers";
+      if ([85, 86].includes(c)) return "Snow showers";
       if ([95].includes(c)) return "Thunderstorm";
-      if ([96,99].includes(c)) return "Storm & hail";
-      return "—";
+      if ([96, 99].includes(c)) return "Storm & hail";
+      return "-";
     };
-    const codeIcon = (c,isDay)=>{
-      if (c===0) return isDay ? "☀️" : "🌙";
-      if ([1,2].includes(c)) return isDay ? "🌤️" : "☁️";
+
+    const codeIcon = (c, isDay) => {
+      if (c === 0) return isDay ? "☀️" : "🌙";
+      if ([1, 2].includes(c)) return isDay ? "🌤️" : "☁️";
       if ([3].includes(c)) return "☁️";
-      if ([45,48].includes(c)) return "🌫️";
-      if ([51,53,55,80,81,82].includes(c)) return "🌦️";
-      if ([61,63,65].includes(c)) return "🌧️";
-      if ([66,67].includes(c)) return "🌧️❄️";
-      if ([71,73,75,77,85,86].includes(c)) return "❄️";
-      if ([95,96,99].includes(c)) return "⛈️";
+      if ([45, 48].includes(c)) return "🌫️";
+      if ([51, 53, 55, 80, 81, 82].includes(c)) return "🌦️";
+      if ([61, 63, 65].includes(c)) return "🌧️";
+      if ([66, 67].includes(c)) return "🌧️❄️";
+      if ([71, 73, 75, 77, 85, 86].includes(c)) return "❄️";
+      if ([95, 96, 99].includes(c)) return "⛈️";
       return "☁️";
     };
 
     const cur = data.current || {};
-    const daily = data.daily || { time:[] };
-    // Next-hour precip probability best-effort
+    const daily = data.daily || { time: [] };
+    const hourly = data.hourly || { time: [] };
+
     let popNext = null;
     try {
-      const idx = (data.hourly?.time||[]).findIndex(t => Date.parse(t) > Date.now());
-      popNext = data.hourly?.precipitation_probability?.[idx>=0?idx:0] ?? null;
+      const idx = (hourly.time || []).findIndex(t => Date.parse(t) > Date.now());
+      popNext = hourly.precipitation_probability?.[idx >= 0 ? idx : 0] ?? null;
     } catch {}
 
-    // Prepare SSR payload
+    const use12Hr = tf === "12h";
+    const timeOpts = { hour: "2-digit", minute: "2-digit", hour12: use12Hr, hourCycle: use12Hr ? "h12" : "h23" };
+
     const ssr = {
       forceNoJS: Boolean(req.query.nojs),
       name: place.name,
       lat: place.lat,
       lon: place.lon,
-      windUnit,
+      units,
+      windUnit: windUnitLabel,
+      tf,
+      anon,
+      theme,
+      timezone: data.timezone,
+      utc_offset_seconds: data.utc_offset_seconds,
       current: cur,
       daily: daily,
+      hourly: hourly,
       icon: codeIcon(cur.weather_code, cur.is_day),
       desc: codeText(cur.weather_code),
-      sunriseLocal: daily.sunrise ? new Date(daily.sunrise[0]).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : "—",
-      sunsetLocal: daily.sunset ? new Date(daily.sunset[0]).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : "—",
+      sunriseLocal: daily.sunrise?.[0] ? new Date(daily.sunrise[0]).toLocaleTimeString([], timeOpts) : "-",
+      sunsetLocal: daily.sunset?.[0] ? new Date(daily.sunset[0]).toLocaleTimeString([], timeOpts) : "-",
       popNext,
-      dailyIcons: (daily.weather_code||[]).map(c => codeIcon(c,1)),
-      dailyTexts: (daily.weather_code||[]).map(c => codeText(c)),
-      dailyLabels: (daily.time||[]).map(t => new Date(t).toLocaleDateString([], {weekday:'short',month:'short',day:'numeric'}))
+      dailyIcons: (daily.weather_code || []).map(c => codeIcon(c, 1)),
+      dailyTexts: (daily.weather_code || []).map(c => codeText(c)),
+      dailyLabels: (daily.time || []).map((t, i) => i === 0 ? "Today" : new Date(t).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }))
     };
 
-    // Render
     return renderTemplate(res, req, "weather.ejs", { ssr });
   } catch (err) {
-    return renderTemplate(res, req, "weather.ejs", { ssr:{ forceNoJS:true, name:"Error loading weather" } });
+    return renderTemplate(res, req, "weather.ejs", {
+      ssr: { forceNoJS: true, name: "Error loading weather" }
+    });
   }
 });
-
+  
 
   app.get("/rewind", function (req, res) {
     renderTemplate(res, req, "rewind.ejs");
