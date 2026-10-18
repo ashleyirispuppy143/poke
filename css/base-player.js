@@ -21,7 +21,7 @@
  * ///////////////////////////////////////////////////////////////////////////
  * "It takes a lot of hard work to make something simple." ~ Steve Jobs 
  */
- const SyncLevel = {
+const SyncLevel = {
   driftSeconds: 0,
   driftMs: 0,
   synced: true,
@@ -913,12 +913,13 @@ window.SyncLevel = SyncLevel;
           });
         } else {
           state.tabWakeUntil = compat.now() + 900;
-          var master = nativeGetATime();
-          snapVideoToAudioLive(master);
           if (state.wantPlaying) {
-            runInternal(function() {
-              if (nativeGetVPaused()) compat.safePlay(nativeVideoPlay);
-            });
+            syncPlaybackState();
+          } else {
+            var master = nativeGetATime();
+            if (Math.abs(nativeGetVTime() - master) > config.alignThreshold) {
+              setVideoTimeInternally(master);
+            }
           }
         }
       };
@@ -939,15 +940,26 @@ window.SyncLevel = SyncLevel;
       }
 
       if (rootEl) {
-        var playBtnEl = rootEl.querySelector('.vjs-play-control');
-        if (playBtnEl) {
-          listen(playBtnEl, ['pointerdown', 'touchstart', 'mousedown', 'click'], function(evt) {
-            if (!evt || !evt.isTrusted) return;
-            if (state.wantPlaying) {
-              markExplicitUserPause(evt);
+        listen(rootEl, ['pointerdown', 'touchstart', 'mousedown', 'click'], function(evt) {
+          if (!evt || !evt.isTrusted) return;
+          var path = evt.composedPath ? evt.composedPath() : [];
+          if (!path.length && evt.target) {
+            var curr = evt.target;
+            while (curr) {
+              path.push(curr);
+              curr = curr.parentNode;
             }
-          }, true);
-        }
+          }
+          for (var i = 0; i < path.length; i++) {
+            var el = path[i];
+            if (!el || !el.tagName) break;
+            var tag = el.tagName.toLowerCase();
+            if (tag === 'button' || (el.classList && el.classList.contains('vjs-control'))) {
+              if (state.wantPlaying) markExplicitUserPause(evt);
+              break;
+            }
+          }
+        }, true);
       }
 
       listen(document, 'keydown', function(evt) {
@@ -1364,7 +1376,7 @@ window.SyncLevel = SyncLevel;
           var waitMedia = videoEl.seeking ? videoEl : audioEl;
           state.cancelSeekWait = compat.onSeekSettled(waitMedia, function() {
             state.cancelSeekWait = null;
-            startLockstepPlayback();
+            syncPlaybackState();
           }, getSeekTimeout());
           return;
         }
@@ -1384,7 +1396,7 @@ window.SyncLevel = SyncLevel;
         state.cancelSeekWait = compat.onSeekSettled(videoEl, function() {
           state.cancelSeekWait = null;
           state.internalVideoSeeking = false;
-          fireSimultaneousPlay();
+          syncPlaybackState();
         }, getSeekTimeout());
         setVideoTimeInternally(aNow);
       }
@@ -1548,9 +1560,6 @@ window.SyncLevel = SyncLevel;
         }
         if (!videoEl.ended && !audioEl.ended && !videoEl.error && !audioEl.error) {
           if (isInStartupProtection() && !hasExplicitUserPauseIntent()) {
-            return;
-          }
-          if (!hasExplicitUserPauseIntent()) {
             return;
           }
         }
@@ -1796,24 +1805,9 @@ window.SyncLevel = SyncLevel;
         }
 
         state.tabWakeUntil = compat.now() + 900;
-        var vNow = nativeGetVTime();
-        var absWakeDrift = Math.abs(liveAudio - vNow);
-
-        runInternal(function() {
-          enforceRateAndVolume();
-          if (absWakeDrift > config.alignThreshold) {
-            snapVideoToAudioLive(liveAudio);
-          }
-          if (nativeGetVPaused()) {
-            compat.safePlay(nativeVideoPlay);
-          }
-          if (nativeGetAPaused() && audioEl.readyState >= 2) {
-            compat.safePlay(nativeAudioPlay);
-          }
-        });
-
         state.lastCorrectionAt = compat.now();
         shield.activate();
+        syncPlaybackState();
       };
 
       listen(document, 'visibilitychange', handleTabVisibility, false);
@@ -1871,7 +1865,7 @@ window.SyncLevel = SyncLevel;
         var aPaused = nativeGetAPaused();
         var liveAudio = nativeGetATime();
 
-        if (isTabWaking() || isLiveSnapping()) {
+        if (isLiveSnapping()) {
           if (vPaused && videoEl.readyState >= 2 && !videoEl.seeking) {
             runInternal(function() { compat.safePlay(nativeVideoPlay); });
           }
