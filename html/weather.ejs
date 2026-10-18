@@ -17,8 +17,232 @@
     You should have received a copy of the GNU General Public License
     along with this program. If not, see https://www.gnu.org/licenses/.
 -->
+<%
+  const ssrSafe = (typeof ssr !== 'undefined' && ssr) ? ssr : {};
+  const ssrCurrent = ssrSafe.current || null;
+  const ssrDaily = ssrSafe.daily || null;
+  const ssrHourly = ssrSafe.hourly || null;
+  const ssrUnits = ssrSafe.units === 'imperial' ? 'imperial' : 'metric';
+  const ssrTempSymbol = ssrUnits === 'imperial' ? '°F' : '°C';
+  const ssrWindSymbol = ssrSafe.windUnit || (ssrUnits === 'imperial' ? 'mph' : 'km/h');
+  const ssrAnon = Boolean(ssrSafe.anon);
+  const ssrTimeFormat = ssrSafe.tf === '12h' ? '12h' : '24h';
+  const ssrRawName = ssrSafe.name || 'Choose a location';
+  const ssrDisplayName = ssrAnon ? 'My Location' : ssrRawName;
+
+  const ssrWeatherMap = {
+    0: 'Clear sky',
+    1: 'Mostly clear',
+    2: 'Partly cloudy',
+    3: 'Overcast',
+    45: 'Fog',
+    48: 'Rime fog',
+    51: 'Light drizzle',
+    53: 'Drizzle',
+    55: 'Dense drizzle',
+    56: 'Freezing drizzle',
+    57: 'Heavy freezing drizzle',
+    61: 'Slight rain',
+    63: 'Rain',
+    65: 'Heavy rain',
+    66: 'Freezing rain',
+    67: 'Heavy freezing rain',
+    71: 'Slight snow',
+    73: 'Snow',
+    75: 'Heavy snow',
+    77: 'Snow grains',
+    80: 'Rain showers',
+    81: 'Moderate showers',
+    82: 'Heavy showers',
+    85: 'Snow showers',
+    86: 'Heavy snow showers',
+    95: 'Thunderstorm',
+    96: 'Storm with hail',
+    99: 'Severe hailstorm'
+  };
+
+  function getSsrDesc(code) {
+    return ssrWeatherMap[code] || '-';
+  }
+
+  function getSsrIcon(code, isDay) {
+    if (code === 0) return isDay ? '☀️' : '🌙';
+    if (code === 1 || code === 2) return isDay ? '🌤️' : '☁️';
+    if (code === 3) return '☁️';
+    if (code === 45 || code === 48) return '🌫️';
+    if ([51, 53, 55, 80, 81, 82].includes(code)) return '🌦️';
+    if ([61, 63, 65].includes(code)) return '🌧️';
+    if ([66, 67].includes(code)) return '🌧️❄️';
+    if ([71, 73, 75, 77, 85, 86].includes(code)) return '❄️';
+    if ([95, 96, 99].includes(code)) return '⛈️';
+    return '☁️';
+  }
+
+  function getSsrSky(code, isDay) {
+    const suffix = isDay ? 'day' : 'night';
+    if (code === 0 || code === 1) return 'clear-' + suffix;
+    if ([2, 3, 45, 48].includes(code)) return 'cloudy-' + suffix;
+    if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return 'rain-' + suffix;
+    if ([71, 73, 75, 77, 85, 86].includes(code)) return 'snow-' + suffix;
+    if ([95, 96, 99].includes(code)) return 'storm-' + suffix;
+    return 'clear-' + suffix;
+  }
+
+  function isSsrPrecip(code) {
+    return [51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 71, 73, 75, 77, 80, 81, 82, 85, 86, 95, 96, 99].includes(code);
+  }
+
+  function formatSsrClock(isoStr) {
+    if (!isoStr) return '-';
+    const d = new Date(isoStr);
+    if (Number.isNaN(d.getTime())) return String(isoStr);
+    const use12 = ssrTimeFormat === '12h';
+    return d.toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: use12,
+      hourCycle: use12 ? 'h12' : 'h23'
+    });
+  }
+
+  const ssrIsDay = ssrCurrent ? Boolean(ssrCurrent.is_day ?? 1) : true;
+  const ssrSkyVariant = ssrCurrent ? getSsrSky(ssrCurrent.weather_code, ssrIsDay) : 'clear-day';
+  const ssrHeroIcon = ssrSafe.icon || (ssrCurrent ? getSsrIcon(ssrCurrent.weather_code, ssrIsDay) : '-');
+  const ssrHeroDesc = ssrSafe.desc || (ssrCurrent ? getSsrDesc(ssrCurrent.weather_code) : '-');
+
+  let ssrSliceStart = 0;
+  if (ssrHourly && Array.isArray(ssrHourly.time)) {
+    const foundIdx = ssrHourly.time.findIndex((t) => Date.parse(t) > Date.now());
+    ssrSliceStart = foundIdx > 0 ? foundIdx - 1 : 0;
+  }
+  const ssrSliceEnd = (ssrHourly && Array.isArray(ssrHourly.time)) ? Math.min(ssrSliceStart + 24, ssrHourly.time.length) : 0;
+
+  let ssrOutlookSummary = '-';
+  if (ssrCurrent && ssrDaily) {
+    const currentCode = ssrCurrent.weather_code;
+    const currentDesc = getSsrDesc(currentCode);
+    const next12Codes = (ssrHourly && Array.isArray(ssrHourly.weather_code))
+      ? ssrHourly.weather_code.slice(ssrSliceStart, ssrSliceStart + 12)
+      : [currentCode];
+    const next12Pops = (ssrHourly && Array.isArray(ssrHourly.precipitation_probability))
+      ? ssrHourly.precipitation_probability.slice(ssrSliceStart, ssrSliceStart + 12)
+      : [];
+
+    let narrative = '';
+    if (isSsrPrecip(currentCode)) {
+      const dryOffset = next12Codes.findIndex((c, idx) => idx > 0 && !isSsrPrecip(c));
+      if (dryOffset !== -1 && dryOffset <= 6 && ssrHourly && ssrHourly.time) {
+        narrative = currentDesc + ' right now, tapering off around ' + formatSsrClock(ssrHourly.time[ssrSliceStart + dryOffset]);
+      } else {
+        narrative = currentDesc + ' continuing for the next several hours';
+      }
+    } else {
+      const precipOffset = next12Codes.findIndex((c, idx) => idx > 0 && (isSsrPrecip(c) || (next12Pops[idx] ?? 0) >= 60));
+      if (precipOffset !== -1 && precipOffset <= 8 && ssrHourly && ssrHourly.time) {
+        const incCode = next12Codes[precipOffset];
+        const incName = isSsrPrecip(incCode) ? getSsrDesc(incCode).toLowerCase() : 'scattered showers';
+        narrative = currentDesc + ' now, with ' + incName + ' expected around ' + formatSsrClock(ssrHourly.time[ssrSliceStart + precipOffset]);
+      } else {
+        const clearCount = next12Codes.filter((c) => c === 0 || c === 1).length;
+        const overcastCount = next12Codes.filter((c) => c === 3).length;
+        const partlyCount = next12Codes.filter((c) => c === 2).length;
+        if (currentCode === 0 && clearCount >= 9) {
+          narrative = 'Generally clear skies ahead';
+        } else if ((currentCode === 0 || currentCode === 1) && (partlyCount + overcastCount) >= 5) {
+          narrative = currentDesc + ' now, becoming cloudier later';
+        } else if ((currentCode === 2 || currentCode === 3) && clearCount >= 6) {
+          narrative = currentDesc + ' now, clearing up later';
+        } else if (overcastCount >= 8) {
+          narrative = 'Overcast skies continuing';
+        } else if (partlyCount >= 5) {
+          narrative = 'Partly cloudy throughout the outlook';
+        } else {
+          narrative = currentDesc + ' conditions continuing';
+        }
+      }
+    }
+
+    const tMax = Math.round(ssrDaily.temperature_2m_max?.[0] ?? ssrCurrent.temperature_2m);
+    const tMin = Math.round(ssrDaily.temperature_2m_min?.[0] ?? ssrCurrent.temperature_2m);
+    const tmwMin = Math.round(ssrDaily.temperature_2m_min?.[1] ?? tMin);
+    const currHr = new Date().getHours();
+
+    let tempPart = '';
+    if (currHr >= 5 && currHr < 12) {
+      tempPart = 'Highs ' + (tMax - 1) + ' to ' + (tMax + 1) + ssrTempSymbol + ' and lows ' + (tMin - 1) + ' to ' + (tMin + 1) + ssrTempSymbol + '.';
+    } else if (currHr >= 12 && currHr < 18) {
+      tempPart = 'High ' + tMax + ssrTempSymbol + ', low ' + tmwMin + ssrTempSymbol + ' tonight.';
+    } else {
+      tempPart = 'Low ' + tmwMin + ssrTempSymbol + '.';
+    }
+    ssrOutlookSummary = narrative + '. ' + tempPart;
+  }
+
+  const ssrInsights = [];
+  if (ssrCurrent && ssrDaily) {
+    const todayMax = Math.round(ssrDaily.temperature_2m_max?.[0] ?? ssrCurrent.temperature_2m);
+    const tmwMax = Math.round(ssrDaily.temperature_2m_max?.[1] ?? todayMax);
+    const delta = tmwMax - todayMax;
+    const absDelta = Math.abs(delta);
+    const isImp = ssrUnits === 'imperial';
+    const bigShift = isImp ? 9 : 5;
+    const modShift = isImp ? 4 : 2;
+
+    let cmpText = 'Temperatures tomorrow will feel nearly identical to today.';
+    let arrow = 'none';
+    if (delta >= bigShift) {
+      cmpText = 'Temperatures are much higher than today.';
+      arrow = 'up';
+    } else if (delta >= modShift) {
+      cmpText = 'Temperatures are a little higher than today.';
+      arrow = 'up';
+    } else if (delta <= -bigShift) {
+      cmpText = 'Temperatures are much lower than today.';
+      arrow = 'down';
+    } else if (delta <= -modShift) {
+      cmpText = 'Temperatures are a little lower than today.';
+      arrow = 'down';
+    }
+    ssrInsights.push({ title: "Tomorrow's temperature", sub: cmpText, rightVal: absDelta + '°', arrow });
+
+    if (isSsrPrecip(ssrCurrent.weather_code)) {
+      ssrInsights.push({
+        title: 'Grab an umbrella!',
+        sub: getSsrDesc(ssrCurrent.weather_code) + ' is active and likely to continue nearby.',
+        rightVal: '☂️',
+        arrow: 'none'
+      });
+    } else if ((ssrSafe.popNext ?? 0) >= 50) {
+      ssrInsights.push({
+        title: 'Grab an umbrella!',
+        sub: 'Rain is likely in the coming hours (' + ssrSafe.popNext + '% peak chance).',
+        rightVal: ssrSafe.popNext + '%',
+        arrow: 'none'
+      });
+    }
+
+    const uvMax = ssrDaily.uv_index_max?.[0] ?? 0;
+    if (ssrIsDay && uvMax >= 6) {
+      ssrInsights.push({
+        title: 'High UV alert',
+        sub: 'UV index reaches ' + Math.round(uvMax) + ' today. Sun protection is recommended.',
+        rightVal: 'UV ' + Math.round(uvMax),
+        arrow: 'none'
+      });
+    }
+
+    if (ssrSafe.sunriseLocal) {
+      ssrInsights.push({
+        title: "Don't miss tomorrow's sunrise",
+        sub: 'Sunrise is at ' + ssrSafe.sunriseLocal + ' with clear viewing conditions.',
+        rightVal: '🌅',
+        arrow: 'none'
+      });
+    }
+  }
+%>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="<%= ssrSafe.theme === 'light' ? 'light' : 'dark' %>">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
@@ -462,6 +686,11 @@ header {
 
 .btn:hover {
   background-color: var(--md-surface-highest);
+}
+
+.btn.active-toggle {
+  background-color: var(--md-primary-container);
+  color: var(--md-on-primary-container);
 }
 
 .desktop-loc-bar-wrap {
@@ -1181,10 +1410,6 @@ footer a:hover {
   pointer-events: none;
 }
 
-.ssr {
-  display: none;
-}
-
 main {
   display: block;
 }
@@ -1337,19 +1562,22 @@ main {
 
 <noscript>
   <style>
-    .ssr { display: block !important; }
-    main { display: none !important; }
     .no-js-hidden { display: none !important; }
+    .chart-wrap { display: none !important; }
     @media (max-width: 768px) {
       .desktop-search { display: block !important; flex: 1 1 100%; margin-top: 10px; }
+      .desktop-controls { display: flex !important; width: 100%; justify-content: flex-start; margin-top: 6px; }
       .hamburger-btn { display: none !important; }
+      .location-dots-bar { display: none !important; }
+      .insights-track { flex-direction: column !important; gap: 14px; }
+      .insight-dots { display: none !important; }
     }
   </style>
 </noscript>
 </head>
-<body class="<%= ssr && ssr.forceNoJS ? 'no-js' : '' %>">
+<body class="<%= ssrSafe.forceNoJS ? 'no-js' : '' %>">
 
-  <div id="mobileSky" class="sky-layer mobile-sky" data-sky="clear-day" aria-hidden="true">
+  <div id="mobileSky" class="sky-layer mobile-sky" data-sky="<%= ssrSkyVariant %>" aria-hidden="true">
     <div class="sky-stars"></div>
     <div class="sky-celestial"></div>
     <div class="sky-clouds"></div>
@@ -1364,24 +1592,29 @@ main {
 
       <div class="search-wrap desktop-search">
         <form class="search-form" role="search" aria-label="Search location" action="/weather" method="GET" id="searchForm">
-          <input id="q" name="q" type="search" placeholder="Add city, place, or coordinates..." autocomplete="off" />
-          <input type="hidden" name="units" id="unitsHidden" value="<%= (ssr && ssr.units) || 'metric' %>"/>
+          <input id="q" name="q" type="search" value="<%= (!ssrAnon && ssrSafe.name) ? ssrSafe.name : '' %>" placeholder="Search city, place, or coordinates..." autocomplete="off" />
+          <input type="hidden" name="units" id="unitsHidden" value="<%= ssrUnits %>"/>
           <button id="btnGeo" class="pill-btn no-js-hidden" type="button" title="Use current location">Locate</button>
-          <button id="btnSearch" class="pill-btn" type="submit" title="Add Location">Add</button>
+          <button id="btnSearch" class="pill-btn" type="submit" title="Search or Add Location">Search</button>
         </form>
         <div id="suggest" class="suggest" role="listbox" aria-label="Suggestions"></div>
       </div>
 
       <div class="controls desktop-controls">
         <form id="unitForm" action="/weather" method="GET" style="display: none;">
-          <input type="hidden" name="q" value="<%= (ssr && ssr.name) || '' %>" />
-          <input type="hidden" name="units" value="<%= (ssr && ssr.units === 'metric') ? 'imperial' : 'metric' %>" />
+          <input type="hidden" name="q" id="unitFormQ" value="<%= ssrSafe.name || '' %>" />
+          <% if (typeof ssrSafe.lat === 'number' && typeof ssrSafe.lon === 'number') { %>
+            <input type="hidden" name="lat" value="<%= ssrSafe.lat %>" />
+            <input type="hidden" name="lon" value="<%= ssrSafe.lon %>" />
+          <% } %>
+          <input type="hidden" name="units" value="<%= ssrUnits === 'metric' ? 'imperial' : 'metric' %>" />
         </form>
-        <button form="unitForm" id="btnUnits" class="btn" title="Toggle °C/°F" type="submit"><%= (ssr && ssr.units === 'imperial') ? '°F' : '°C' %></button>
-        <button id="btnTimeFormat" class="btn" title="Toggle 12h/24h">24h</button>
-        <button id="btnTheme" class="btn" title="Toggle theme">Theme</button>
-        <button id="btnInstall" class="btn hidden" title="Install App">Install</button>
-        <a class="btn" href="#" id="btnShare" title="Share Forecast">Share</a>
+        <button form="unitForm" id="btnUnits" class="btn" title="Toggle °C/°F" type="submit"><%= ssrTempSymbol %></button>
+        <button id="btnTimeFormat" class="btn no-js-hidden" title="Toggle 12h/24h" type="button"><%= ssrTimeFormat %></button>
+        <button id="btnAnon" class="btn no-js-hidden<%= ssrAnon ? ' active-toggle' : '' %>" title="Anonymous Mode (Mask default location as My Location)" type="button">Anon</button>
+        <button id="btnTheme" class="btn no-js-hidden" title="Toggle theme" type="button">Theme</button>
+        <button id="btnInstall" class="btn hidden" title="Install App" type="button">Install</button>
+        <a class="btn no-js-hidden" href="#" id="btnShare" title="Share Forecast">Share</a>
       </div>
 
       <button id="btnHamburger" class="hamburger-btn" type="button" aria-label="Open menu and locations">
@@ -1389,7 +1622,7 @@ main {
       </button>
     </div>
 
-    <div id="desktopLocationsBar" class="desktop-loc-bar-wrap" role="tablist" aria-label="Saved Locations"></div>
+    <div id="desktopLocationsBar" class="desktop-loc-bar-wrap no-js-hidden" role="tablist" aria-label="Saved Locations"></div>
   </header>
 
   <div id="drawerBackdrop" class="drawer-backdrop"></div>
@@ -1403,7 +1636,7 @@ main {
     <div class="search-wrap drawer-search-wrap">
       <form class="search-form" role="search" id="mobileSearchForm" action="/weather" method="GET">
         <input id="mobileSearchInput" name="q" type="search" placeholder="Add city or place..." autocomplete="off" />
-        <input type="hidden" name="units" value="<%= (ssr && ssr.units) || 'metric' %>"/>
+        <input type="hidden" name="units" value="<%= ssrUnits %>"/>
         <button class="pill-btn" type="submit">Add</button>
       </form>
       <div id="mobileSuggest" class="suggest" role="listbox" aria-label="Mobile Search Suggestions"></div>
@@ -1418,73 +1651,19 @@ main {
     </div>
 
     <div class="drawer-controls">
-      <button form="unitForm" id="btnMobileUnits" class="btn" type="submit"><%= (ssr && ssr.units === 'imperial') ? '°F' : '°C' %></button>
-      <button id="btnMobileTimeFormat" class="btn" type="button">24h</button>
+      <button form="unitForm" id="btnMobileUnits" class="btn" type="submit"><%= ssrTempSymbol %></button>
+      <button id="btnMobileTimeFormat" class="btn" type="button"><%= ssrTimeFormat %></button>
+      <button id="btnMobileAnon" class="btn<%= ssrAnon ? ' active-toggle' : '' %>" type="button">Anon</button>
       <button id="btnMobileTheme" class="btn" type="button">Theme</button>
-      <button id="btnMobileShare" class="btn" type="button">Share</button>
+      <button id="btnMobileShare" class="btn" type="button" style="grid-column: span 2;">Share</button>
     </div>
   </aside>
-
-  <section class="ssr container">
-    <div class="dashboard">
-      <div class="col-main">
-        <article class="card hero-card" aria-live="polite">
-          <div class="card-header">Current Weather - <%= (ssr && ssr.name) || 'Unknown' %></div>
-          <% if (ssr && ssr.current) { %>
-            <div class="hero-primary">
-              <div class="temp-display">
-                <div class="big-icon"><%= ssr.icon %></div>
-                <div class="temp-value"><%= Math.round(ssr.current.temperature_2m) %>°</div>
-              </div>
-              <div class="condition-meta">
-                <div class="condition-desc"><%= ssr.desc %></div>
-                <div class="condition-sub">Feels like <%= Math.round(ssr.current.apparent_temperature) %>°</div>
-              </div>
-            </div>
-            <div class="metrics-grid">
-              <div class="metric-item"><div class="metric-label">Wind</div><div class="metric-val"><%= Math.round(ssr.current.wind_speed_10m) %> <%= ssr.windUnit %></div></div>
-              <div class="metric-item"><div class="metric-label">Humidity</div><div class="metric-val"><%= Math.round(ssr.current.relative_humidity_2m) %>%</div></div>
-              <div class="metric-item"><div class="metric-label">Pressure</div><div class="metric-val"><%= Math.round(ssr.current.pressure_msl) %> hPa</div></div>
-              <div class="metric-item"><div class="metric-label">Precip Prob</div><div class="metric-val"><%= ssr.popNext ?? '-' %>%</div></div>
-              <div class="metric-item"><div class="metric-label">Sunrise</div><div class="metric-val"><%= ssr.sunriseLocal %></div></div>
-              <div class="metric-item"><div class="metric-label">Sunset</div><div class="metric-val"><%= ssr.sunsetLocal %></div></div>
-              <div class="metric-item"><div class="metric-label">UV Index</div><div class="metric-val"><%= ssr.daily.uv_index_max?.[0] ?? '-' %></div></div>
-              <div class="metric-item"><div class="metric-label">Feels Like</div><div class="metric-val"><%= Math.round(ssr.current.apparent_temperature) %>°</div></div>
-            </div>
-          <% } else { %>
-            <p style="color:var(--md-text-muted);margin:0;">No weather data available.</p>
-          <% } %>
-        </article>
-      </div>
-
-      <div class="col-side">
-        <article class="card">
-          <h3 class="card-header">7-Day Forecast</h3>
-          <% if (ssr && ssr.daily) { %>
-            <div class="daily-list">
-              <% for (let i=0; i<ssr.daily.time.length; i++) { %>
-                <div class="day-row">
-                  <div class="day-name"><%= ssr.dailyLabels[i] %></div>
-                  <div class="day-icon"><%= ssr.dailyIcons[i] %></div>
-                  <div class="day-cond"><%= ssr.dailyTexts[i] %></div>
-                  <div class="day-temps">
-                    <span class="day-hi"><%= Math.round(ssr.daily.temperature_2m_max[i]) %>°</span>
-                    <span class="day-lo"><%= Math.round(ssr.daily.temperature_2m_min[i]) %>°</span>
-                  </div>
-                </div>
-              <% } %>
-            </div>
-          <% } %>
-        </article>
-      </div>
-    </div>
-  </section>
 
   <main id="mainSwipeContainer" class="container">
     <div class="dashboard">
       <div class="col-main">
         <article id="now" class="card hero-card current" aria-live="polite">
-          <div id="heroSky" class="sky-layer hero-sky" data-sky="clear-day" aria-hidden="true">
+          <div id="heroSky" class="sky-layer hero-sky" data-sky="<%= ssrSkyVariant %>" aria-hidden="true">
             <div class="sky-stars"></div>
             <div class="sky-celestial"></div>
             <div class="sky-clouds"></div>
@@ -1500,44 +1679,55 @@ main {
             <div class="mobile-loc-tag" id="mobileLocTag" title="Default Location">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
             </div>
-            <div class="mobile-loc-title" id="mobileLocTitle">Select Location</div>
+            <div class="mobile-loc-title" id="mobileLocTitle"><%= ssrDisplayName %></div>
 
             <div>
               <div class="desktop-hero-loc" id="desktopHeroLoc">
                 <svg id="desktopHomeIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
-                <span id="locChip"><%= (ssr && ssr.name) || 'Select Location' %></span>
+                <span id="locChip"><%= ssrDisplayName %></span>
               </div>
               <div class="temp-display">
-                <div class="big-icon" id="currIcon">-</div>
-                <div class="temp-value" id="currTemp">-</div>
+                <div class="big-icon" id="currIcon"><%= ssrHeroIcon %></div>
+                <div class="temp-value" id="currTemp"><%= ssrCurrent ? Math.round(ssrCurrent.temperature_2m) + '°' : '-' %></div>
               </div>
             </div>
 
             <div class="condition-meta">
-              <div class="condition-desc" id="currDesc">-</div>
-              <div class="condition-sub">Feels like <span id="currFeels">-</span></div>
+              <div class="condition-desc" id="currDesc"><%= ssrHeroDesc %></div>
+              <div class="condition-sub">Feels like <span id="currFeels"><%= ssrCurrent ? Math.round(ssrCurrent.apparent_temperature) + '°' : '-' %></span></div>
               <div class="local-time-sub hidden" id="currLocalTime"></div>
             </div>
           </div>
 
-          <div id="desktopOutlookSummary" class="desktop-outlook-summary">-</div>
+          <div id="desktopOutlookSummary" class="desktop-outlook-summary"><%= ssrOutlookSummary %></div>
 
           <div id="metricsCard" class="metrics-grid">
-            <div class="metric-item"><div class="metric-label">Wind</div><div class="metric-val" id="currWind">-</div></div>
-            <div class="metric-item"><div class="metric-label">Humidity</div><div class="metric-val" id="currHum">-</div></div>
-            <div class="metric-item"><div class="metric-label">Pressure</div><div class="metric-val" id="currPress">-</div></div>
-            <div class="metric-item"><div class="metric-label">Precip (1h)</div><div class="metric-val" id="pop">-</div></div>
-            <div class="metric-item"><div class="metric-label">Sunrise</div><div class="metric-val" id="sunrise">-</div></div>
-            <div class="metric-item"><div class="metric-label">Sunset</div><div class="metric-val" id="sunset">-</div></div>
-            <div class="metric-item"><div class="metric-label">Max UV</div><div class="metric-val" id="uv">-</div></div>
-            <div class="metric-item"><div class="metric-label">Cycle</div><div class="metric-val" id="dayMode">-</div></div>
+            <div class="metric-item"><div class="metric-label">Wind</div><div class="metric-val" id="currWind"><%= ssrCurrent ? Math.round(ssrCurrent.wind_speed_10m) + ' ' + ssrWindSymbol : '-' %></div></div>
+            <div class="metric-item"><div class="metric-label">Humidity</div><div class="metric-val" id="currHum"><%= ssrCurrent ? Math.round(ssrCurrent.relative_humidity_2m) + '%' : '-' %></div></div>
+            <div class="metric-item"><div class="metric-label">Pressure</div><div class="metric-val" id="currPress"><%= ssrCurrent ? Math.round(ssrCurrent.pressure_msl) + ' hPa' : '-' %></div></div>
+            <div class="metric-item"><div class="metric-label">Precip (1h)</div><div class="metric-val" id="pop"><%= ssrSafe.popNext != null ? ssrSafe.popNext + '%' : '-' %></div></div>
+            <div class="metric-item"><div class="metric-label">Sunrise</div><div class="metric-val" id="sunrise"><%= ssrSafe.sunriseLocal || (ssrDaily && ssrDaily.sunrise?.[0] ? formatSsrClock(ssrDaily.sunrise[0]) : '-') %></div></div>
+            <div class="metric-item"><div class="metric-label">Sunset</div><div class="metric-val" id="sunset"><%= ssrSafe.sunsetLocal || (ssrDaily && ssrDaily.sunset?.[0] ? formatSsrClock(ssrDaily.sunset[0]) : '-') %></div></div>
+            <div class="metric-item"><div class="metric-label">Max UV</div><div class="metric-val" id="uv"><%= (ssrDaily && ssrDaily.uv_index_max?.[0] != null) ? ssrDaily.uv_index_max[0] : '-' %></div></div>
+            <div class="metric-item"><div class="metric-label">Cycle</div><div class="metric-val" id="dayMode"><%= ssrCurrent ? (ssrIsDay ? 'Day' : 'Night') : '-' %></div></div>
           </div>
         </article>
 
         <section id="hourly" class="card">
-          <div id="outlookSummary" class="mobile-outlook-summary">-</div>
+          <div id="outlookSummary" class="mobile-outlook-summary"><%= ssrOutlookSummary %></div>
           <h3 class="card-header">24-Hour Outlook</h3>
-          <div id="hours" class="hourly-scroll" aria-label="Hourly forecast"></div>
+          <div id="hours" class="hourly-scroll" aria-label="Hourly forecast">
+            <% if (ssrHourly && Array.isArray(ssrHourly.time)) { %>
+              <% for (let i = ssrSliceStart; i < ssrSliceEnd; i++) { %>
+                <div class="hour-item">
+                  <div class="hour-time"><%= formatSsrClock(ssrHourly.time[i]) %></div>
+                  <div class="hour-icon"><%= getSsrIcon(ssrHourly.weather_code?.[i] ?? 0, true) %></div>
+                  <div class="hour-temp"><%= Math.round(ssrHourly.temperature_2m?.[i] ?? 0) %>°</div>
+                  <div class="hour-pop"><%= ssrHourly.precipitation_probability?.[i] ?? 0 %>%</div>
+                </div>
+              <% } %>
+            <% } %>
+          </div>
           <div class="chart-wrap">
             <canvas id="chart" aria-label="Temperature trend chart" role="img"></canvas>
           </div>
@@ -1545,16 +1735,51 @@ main {
 
         <section id="mobileInsightsCard" class="mobile-insights-card" aria-label="Smart Weather Highlights">
           <div class="insights-viewport">
-            <div id="insightsTrack" class="insights-track"></div>
+            <div id="insightsTrack" class="insights-track">
+              <% for (let i = 0; i < ssrInsights.length; i++) { %>
+                <div class="insight-page">
+                  <div class="insight-left">
+                    <div class="insight-title"><%= ssrInsights[i].title %></div>
+                    <div class="insight-sub"><%= ssrInsights[i].sub %></div>
+                  </div>
+                  <div class="insight-right">
+                    <span class="insight-badge-val"><%= ssrInsights[i].rightVal %></span>
+                    <% if (ssrInsights[i].arrow === 'up') { %>
+                      <span class="insight-arrow up" aria-hidden="true">↑</span>
+                    <% } else if (ssrInsights[i].arrow === 'down') { %>
+                      <span class="insight-arrow down" aria-hidden="true">↓</span>
+                    <% } %>
+                  </div>
+                </div>
+              <% } %>
+            </div>
           </div>
-          <div id="insightsDots" class="insight-dots"></div>
+          <div id="insightsDots" class="insight-dots<%= ssrInsights.length <= 1 ? ' hidden' : '' %>">
+            <% for (let i = 0; i < ssrInsights.length; i++) { %>
+              <button type="button" class="insight-dot<%= i === 0 ? ' active' : '' %>" aria-label="Highlight page <%= i + 1 %>"></button>
+            <% } %>
+          </div>
         </section>
       </div>
 
       <div class="col-side">
         <section id="daily" class="card">
           <h3 class="card-header">7-Day Forecast</h3>
-          <div id="days" class="daily-list"></div>
+          <div id="days" class="daily-list">
+            <% if (ssrDaily && Array.isArray(ssrDaily.time)) { %>
+              <% for (let i = 0; i < ssrDaily.time.length; i++) { %>
+                <div class="day-row">
+                  <div class="day-name"><%= (ssrSafe.dailyLabels && ssrSafe.dailyLabels[i]) ? ssrSafe.dailyLabels[i] : (i === 0 ? 'Today' : ssrDaily.time[i]) %></div>
+                  <div class="day-icon"><%= (ssrSafe.dailyIcons && ssrSafe.dailyIcons[i]) ? ssrSafe.dailyIcons[i] : getSsrIcon(ssrDaily.weather_code?.[i] ?? 0, true) %></div>
+                  <div class="day-cond"><%= (ssrSafe.dailyTexts && ssrSafe.dailyTexts[i]) ? ssrSafe.dailyTexts[i] : getSsrDesc(ssrDaily.weather_code?.[i] ?? 0) %></div>
+                  <div class="day-temps">
+                    <span class="day-hi"><%= Math.round(ssrDaily.temperature_2m_max?.[i] ?? 0) %>°</span>
+                    <span class="day-lo"><%= Math.round(ssrDaily.temperature_2m_min?.[i] ?? 0) %>°</span>
+                  </div>
+                </div>
+              <% } %>
+            <% } %>
+          </div>
         </section>
       </div>
     </div>
@@ -1601,7 +1826,7 @@ main {
 </script>
 
 <script>
-  window.__SSR__ = <%- JSON.stringify(ssr || {}) %>;
+  window.__SSR__ = <%- JSON.stringify(ssrSafe) %>;
   window.__SSR_ROUTE__ = "/weather";
 </script>
 
@@ -1612,22 +1837,26 @@ main {
   const LOCATIONS_STORAGE_KEY = 'pokeweather:locations';
   const ACTIVE_INDEX_STORAGE_KEY = 'pokeweather:activeIndex';
   const TIME_FORMAT_STORAGE_KEY = 'pokeweather:timeFormat';
+  const ANON_MODE_STORAGE_KEY = 'pokeweather:anonymous';
 
   const storedUnits = JSON.parse(localStorage.getItem('pokeweather:units') || '{}');
   const storedTimeFormat = localStorage.getItem(TIME_FORMAT_STORAGE_KEY) || '24h';
+  const storedAnonMode = localStorage.getItem(ANON_MODE_STORAGE_KEY) === 'true';
 
   const appState = {
     lat: null,
     lon: null,
     name: null,
-    units: storedUnits.units || '<%= (ssr && ssr.units) || "metric" %>',
+    units: storedUnits.units || '<%= ssrUnits %>',
     timeFormat: storedTimeFormat === '12h' ? '12h' : '24h',
+    anonymousMode: storedAnonMode,
     locations: [],
     activeIndex: 0
   };
 
   let latestWeatherData = null;
   let latestChartSeries = null;
+  let activeWeatherRequestId = 0;
 
   let insightTimerId = null;
   let insightCurrentPage = 0;
@@ -1639,6 +1868,8 @@ main {
   const mobileUnitsButton = selectElement('#btnMobileUnits');
   const timeFormatButton = selectElement('#btnTimeFormat');
   const mobileTimeFormatButton = selectElement('#btnMobileTimeFormat');
+  const anonButton = selectElement('#btnAnon');
+  const mobileAnonButton = selectElement('#btnMobileAnon');
   const themeButton = selectElement('#btnTheme');
   const mobileThemeButton = selectElement('#btnMobileTheme');
   const geoButton = selectElement('#btnGeo');
@@ -1738,6 +1969,7 @@ main {
   }
 
   function formatClockTime(isoString) {
+    if (!isoString) return '-';
     const use12Hr = is12HourMode();
     return new Date(isoString).toLocaleTimeString([], {
       hour: '2-digit',
@@ -1795,6 +2027,13 @@ main {
     }
 
     return new Date().getHours();
+  }
+
+  function getEffectiveLocationLabel(index, rawName) {
+    if (index === 0 && appState.anonymousMode) {
+      return 'My Location';
+    }
+    return rawName || 'Unknown Location';
   }
 
   function buildOutlookSummaryText(weatherData, sliceStart) {
@@ -2214,7 +2453,7 @@ main {
         appState.locations = [{
           lat: 40.7128,
           lon: -74.006,
-          name: 'Current Location',
+          name: 'My Location',
           isCurrent: true
         }];
       }
@@ -2223,7 +2462,7 @@ main {
       appState.locations = [{
         lat: 40.7128,
         lon: -74.006,
-        name: 'Current Location',
+        name: 'My Location',
         isCurrent: true
       }];
       appState.activeIndex = 0;
@@ -2245,7 +2484,7 @@ main {
 
     appState.locations.forEach((locItem, index) => {
       const isSelected = index === appState.activeIndex;
-      const cleanLabel = locItem.name || 'Unknown Location';
+      const cleanLabel = getEffectiveLocationLabel(index, locItem.name);
 
       const listRow = document.createElement('div');
       listRow.className = `drawer-loc-item${isSelected ? ' active' : ''}`;
@@ -2259,7 +2498,11 @@ main {
 
       const subSpan = document.createElement('div');
       subSpan.className = 'drawer-loc-sub';
-      subSpan.textContent = index === 0 ? 'Default (Current Location)' : `${Number(locItem.lat).toFixed(2)}, ${Number(locItem.lon).toFixed(2)}`;
+      if (index === 0) {
+        subSpan.textContent = appState.anonymousMode ? 'Anonymous Home Location' : 'Default (Current Location)';
+      } else {
+        subSpan.textContent = `${Number(locItem.lat).toFixed(2)}, ${Number(locItem.lon).toFixed(2)}`;
+      }
 
       infoBlock.appendChild(titleSpan);
       infoBlock.appendChild(subSpan);
@@ -2335,6 +2578,9 @@ main {
     });
 
     if (existingIndex !== -1) {
+      if (name && !isCoordinateLabel(name)) {
+        appState.locations[existingIndex].name = name;
+      }
       switchToLocationIndex(existingIndex);
       return;
     }
@@ -2344,6 +2590,7 @@ main {
       return;
     }
 
+    const newIndex = appState.locations.length;
     appState.locations.push({
       lat: numericLat,
       lon: numericLon,
@@ -2351,10 +2598,10 @@ main {
       isCurrent: false
     });
 
-    appState.activeIndex = appState.locations.length - 1;
+    appState.activeIndex = newIndex;
     saveLocationsToStorage();
     renderLocationNavigation();
-    loadWeatherForCoordinates(numericLat, numericLon, name);
+    loadWeatherForCoordinates(numericLat, numericLon, name, newIndex);
   }
 
   function removeLocationAtIndex(indexToRemove) {
@@ -2370,7 +2617,7 @@ main {
     saveLocationsToStorage();
     renderLocationNavigation();
     const targetLocation = appState.locations[appState.activeIndex];
-    loadWeatherForCoordinates(targetLocation.lat, targetLocation.lon, targetLocation.name);
+    loadWeatherForCoordinates(targetLocation.lat, targetLocation.lon, targetLocation.name, appState.activeIndex);
   }
 
   function switchToLocationIndex(targetIndex) {
@@ -2381,7 +2628,8 @@ main {
     renderLocationNavigation();
 
     const targetLocation = appState.locations[targetIndex];
-    loadWeatherForCoordinates(targetLocation.lat, targetLocation.lon, targetLocation.name);
+    updateLocationHeading(targetLocation.name);
+    loadWeatherForCoordinates(targetLocation.lat, targetLocation.lon, targetLocation.name, targetIndex);
   }
 
   function refreshDefaultCurrentLocation(silentFallback = true) {
@@ -2393,18 +2641,31 @@ main {
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
-        const resolvedPlaceName = await fetchReverseLocationName(latitude, longitude);
-        appState.locations[0] = {
-          lat: latitude,
-          lon: longitude,
-          name: resolvedPlaceName || 'Current Location',
-          isCurrent: true
-        };
-        saveLocationsToStorage();
-        renderLocationNavigation();
+        appState.locations[0].lat = latitude;
+        appState.locations[0].lon = longitude;
+        appState.locations[0].isCurrent = true;
 
         if (appState.activeIndex === 0) {
-          loadWeatherForCoordinates(latitude, longitude, appState.locations[0].name);
+          loadWeatherForCoordinates(latitude, longitude, appState.locations[0].name, 0);
+        }
+
+        if (!appState.anonymousMode) {
+          const resolvedPlaceName = await fetchReverseLocationName(latitude, longitude);
+          if (resolvedPlaceName) {
+            appState.locations[0].name = resolvedPlaceName;
+            saveLocationsToStorage();
+            renderLocationNavigation();
+            if (appState.activeIndex === 0) {
+              updateLocationHeading(resolvedPlaceName);
+            }
+          }
+        } else {
+          appState.locations[0].name = 'My Location';
+          saveLocationsToStorage();
+          renderLocationNavigation();
+          if (appState.activeIndex === 0) {
+            updateLocationHeading('My Location');
+          }
         }
       },
       () => {
@@ -2413,10 +2674,13 @@ main {
     );
   }
 
-  function updateLocationHeading(name) {
-    const cleanText = name || 'Unknown Location';
-    selectElement('#locChip').textContent = cleanText;
-    selectElement('#mobileLocTitle').textContent = cleanText;
+  function updateLocationHeading(rawName) {
+    const effectiveText = getEffectiveLocationLabel(appState.activeIndex, rawName);
+    selectElement('#locChip').textContent = effectiveText;
+    selectElement('#mobileLocTitle').textContent = effectiveText;
+
+    const unitFormQ = selectElement('#unitFormQ');
+    if (unitFormQ) unitFormQ.value = effectiveText;
 
     const isDefaultLocation = appState.activeIndex === 0;
     const tagElement = selectElement('#mobileLocTag');
@@ -2440,7 +2704,7 @@ main {
     }
     localStorage.setItem('pokeweather:units', JSON.stringify({ units: appState.units }));
     if (appState.lat !== null && appState.lon !== null) {
-      loadWeatherForCoordinates(appState.lat, appState.lon, appState.name);
+      loadWeatherForCoordinates(appState.lat, appState.lon, appState.name, appState.activeIndex);
     }
   }
 
@@ -2455,29 +2719,65 @@ main {
     }
   }
 
-  async function loadWeatherForCoordinates(lat, lon, providedName) {
+  function syncAnonymousControls() {
+    anonButton.classList.toggle('active-toggle', appState.anonymousMode);
+    mobileAnonButton.classList.toggle('active-toggle', appState.anonymousMode);
+    localStorage.setItem(ANON_MODE_STORAGE_KEY, String(appState.anonymousMode));
+
+    if (!appState.anonymousMode && appState.locations[0] && (appState.locations[0].name === 'My Location' || isCoordinateLabel(appState.locations[0].name))) {
+      fetchReverseLocationName(appState.locations[0].lat, appState.locations[0].lon).then((resolved) => {
+        if (resolved) {
+          appState.locations[0].name = resolved;
+          saveLocationsToStorage();
+          renderLocationNavigation();
+          if (appState.activeIndex === 0) updateLocationHeading(resolved);
+        }
+      });
+    }
+
+    renderLocationNavigation();
+    const currentLoc = appState.locations[appState.activeIndex];
+    if (currentLoc) {
+      updateLocationHeading(currentLoc.name);
+    }
+  }
+
+  async function loadWeatherForCoordinates(lat, lon, providedName, targetLocationIndex = appState.activeIndex) {
+    const requestId = ++activeWeatherRequestId;
     const numericLat = Number(lat);
     const numericLon = Number(lon);
     appState.lat = numericLat;
     appState.lon = numericLon;
 
-    let resolvedName = providedName || appState.name;
-    if (!resolvedName || isCoordinateLabel(resolvedName)) {
-      updateLocationHeading('Locating...');
-      const lookedUpName = await fetchReverseLocationName(numericLat, numericLon);
-      resolvedName = lookedUpName || `${numericLat.toFixed(2)}, ${numericLon.toFixed(2)}`;
-    }
+    const initialName = providedName || appState.locations[targetLocationIndex]?.name || `${numericLat.toFixed(2)}, ${numericLon.toFixed(2)}`;
+    appState.name = initialName;
 
-    appState.name = resolvedName;
-    if (appState.locations[appState.activeIndex]) {
-      appState.locations[appState.activeIndex].name = resolvedName;
-      appState.locations[appState.activeIndex].lat = numericLat;
-      appState.locations[appState.activeIndex].lon = numericLon;
+    if (appState.locations[targetLocationIndex]) {
+      appState.locations[targetLocationIndex].lat = numericLat;
+      appState.locations[targetLocationIndex].lon = numericLon;
+      appState.locations[targetLocationIndex].name = initialName;
       saveLocationsToStorage();
       renderLocationNavigation();
     }
 
-    updateLocationHeading(resolvedName);
+    if (appState.activeIndex === targetLocationIndex) {
+      updateLocationHeading(initialName);
+    }
+
+    if ((!providedName || isCoordinateLabel(providedName)) && !(targetLocationIndex === 0 && appState.anonymousMode)) {
+      fetchReverseLocationName(numericLat, numericLon).then((lookedUpName) => {
+        if (!lookedUpName) return;
+        if (appState.locations[targetLocationIndex]) {
+          appState.locations[targetLocationIndex].name = lookedUpName;
+          saveLocationsToStorage();
+          renderLocationNavigation();
+        }
+        if (requestId === activeWeatherRequestId && appState.activeIndex === targetLocationIndex) {
+          appState.name = lookedUpName;
+          updateLocationHeading(lookedUpName);
+        }
+      });
+    }
 
     const temperatureUnit = appState.units === 'metric' ? 'celsius' : 'fahrenheit';
     const windSpeedUnit = appState.units === 'metric' ? 'kmh' : 'mph';
@@ -2506,6 +2806,8 @@ main {
       if (!response.ok) throw new Error('Failed to load weather data');
 
       const weatherData = await response.json();
+      if (requestId !== activeWeatherRequestId) return;
+
       localStorage.setItem('pokeweather:last', JSON.stringify({
         when: Date.now(),
         state: {
@@ -2518,14 +2820,15 @@ main {
       }));
       renderWeatherDashboard(weatherData);
     } catch {
+      if (requestId !== activeWeatherRequestId) return;
       const cachedPayload = JSON.parse(localStorage.getItem('pokeweather:last') || 'null');
       if (cachedPayload && cachedPayload.data) {
         renderWeatherDashboard(cachedPayload.data);
-      } else {
-        alert('Could not load weather data.');
       }
     } finally {
-      currentCard.classList.remove('loading');
+      if (requestId === activeWeatherRequestId) {
+        currentCard.classList.remove('loading');
+      }
     }
   }
 
@@ -2600,7 +2903,7 @@ main {
         <div class="hour-icon">${iconLabel}</div>
         <div class="hour-temp">${tempLabel}</div>
         <div class="hour-pop">${precipLabel}%</div>
-    `;
+      `;
       hourlyContainer.appendChild(hourCard);
     }
 
@@ -2644,6 +2947,7 @@ main {
     const pixelRatio = window.devicePixelRatio || 1;
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
+    if (!width || !height) return;
 
     canvas.width = width * pixelRatio;
     canvas.height = height * pixelRatio;
@@ -2792,7 +3096,7 @@ main {
   function toggleThemePreference() {
     const isCurrentlyLight = document.documentElement.getAttribute('data-theme') === 'light';
     if (isCurrentlyLight) {
-      document.documentElement.removeAttribute('data-theme');
+      document.documentElement.setAttribute('data-theme', 'dark');
       localStorage.setItem('pokeweather:theme', 'dark');
     } else {
       document.documentElement.setAttribute('data-theme', 'light');
@@ -2808,19 +3112,25 @@ main {
     syncTimeFormatControls();
   }
 
+  function toggleAnonymousModePreference() {
+    appState.anonymousMode = !appState.anonymousMode;
+    syncAnonymousControls();
+  }
+
   async function triggerShareForecast(event) {
     if (event) event.preventDefault();
     const shareUrl = new URL(location.href);
-    if (appState.lat !== null && appState.lon !== null) {
+    const effectiveName = getEffectiveLocationLabel(appState.activeIndex, appState.name);
+    if (appState.lat !== null && appState.lon !== null && !(appState.activeIndex === 0 && appState.anonymousMode)) {
       shareUrl.searchParams.set('lat', appState.lat);
       shareUrl.searchParams.set('lon', appState.lon);
-      shareUrl.searchParams.set('name', appState.name);
+      shareUrl.searchParams.set('name', effectiveName);
     }
     try {
       if (navigator.share) {
         await navigator.share({
           title: 'PokeWeather',
-          text: `${appState.name || 'Weather'}: ${selectElement('#currTemp').textContent} ${selectElement('#currDesc').textContent}`,
+          text: `${effectiveName}: ${selectElement('#currTemp').textContent} ${selectElement('#currDesc').textContent}`,
           url: shareUrl.toString()
         });
       } else {
@@ -2883,6 +3193,9 @@ main {
   timeFormatButton.addEventListener('click', toggleTimeFormatPreference);
   mobileTimeFormatButton.addEventListener('click', toggleTimeFormatPreference);
 
+  anonButton.addEventListener('click', toggleAnonymousModePreference);
+  mobileAnonButton.addEventListener('click', toggleAnonymousModePreference);
+
   themeButton.addEventListener('click', toggleThemePreference);
   mobileThemeButton.addEventListener('click', toggleThemePreference);
 
@@ -2937,6 +3250,9 @@ main {
     timeFormatButton.textContent = initialTimeFormatText;
     mobileTimeFormatButton.textContent = initialTimeFormatText;
 
+    anonButton.classList.toggle('active-toggle', appState.anonymousMode);
+    mobileAnonButton.classList.toggle('active-toggle', appState.anonymousMode);
+
     loadStoredLocations();
     setupMobileSwipeGesture();
     setupInsightsCardInteraction();
@@ -2945,6 +3261,7 @@ main {
     const paramLat = urlParams.get('lat');
     const paramLon = urlParams.get('lon');
     const paramName = urlParams.get('name');
+    const paramQuery = urlParams.get('q');
 
     if (paramLat && paramLon) {
       addOrSelectSavedLocation(Number(paramLat), Number(paramLon), paramName);
@@ -2953,18 +3270,47 @@ main {
     }
 
     if (window.__SSR__ && typeof window.__SSR__.lat === 'number' && typeof window.__SSR__.lon === 'number') {
-      appState.locations[0] = {
-        lat: window.__SSR__.lat,
-        lon: window.__SSR__.lon,
-        name: window.__SSR__.name || 'Current Location',
-        isCurrent: true
-      };
-      saveLocationsToStorage();
+      if (paramQuery) {
+        addOrSelectSavedLocation(window.__SSR__.lat, window.__SSR__.lon, window.__SSR__.name || paramQuery);
+      } else {
+        appState.locations[0] = {
+          lat: window.__SSR__.lat,
+          lon: window.__SSR__.lon,
+          name: window.__SSR__.name || 'My Location',
+          isCurrent: true
+        };
+        saveLocationsToStorage();
+        renderLocationNavigation();
+      }
+
+      if (window.__SSR__.current && window.__SSR__.daily && window.__SSR__.hourly) {
+        const activeLoc = appState.locations[appState.activeIndex] || appState.locations[0];
+        appState.lat = activeLoc.lat;
+        appState.lon = activeLoc.lon;
+        appState.name = activeLoc.name;
+        updateLocationHeading(activeLoc.name);
+        renderWeatherDashboard(window.__SSR__);
+        refreshDefaultCurrentLocation(true);
+        return;
+      }
+    }
+
+    if (paramQuery) {
+      fetchPlaceSuggestions(paramQuery).then((matches) => {
+        if (matches.length > 0) {
+          const best = matches[0];
+          const label = formatPlaceLabel(best.display_name, 2);
+          addOrSelectSavedLocation(best.lat, best.lon, label);
+        }
+      });
+      refreshDefaultCurrentLocation(true);
+      return;
     }
 
     renderLocationNavigation();
     const initialLocation = appState.locations[appState.activeIndex] || appState.locations[0];
-    loadWeatherForCoordinates(initialLocation.lat, initialLocation.lon, initialLocation.name);
+    updateLocationHeading(initialLocation.name);
+    loadWeatherForCoordinates(initialLocation.lat, initialLocation.lon, initialLocation.name, appState.activeIndex);
     refreshDefaultCurrentLocation(true);
   })();
 </script>
