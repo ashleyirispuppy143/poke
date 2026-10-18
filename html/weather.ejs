@@ -242,7 +242,7 @@
   }
 %>
 <!DOCTYPE html>
-<html lang="en" data-theme="<%= ssrSafe.theme === 'light' ? 'light' : 'dark' %>">
+<html lang="en" data-theme="<%= ssrSafe.theme === 'light' ? 'light' : 'dark' %>" data-device="desktop">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
@@ -273,6 +273,8 @@
   --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --sky-opacity: 1;
   --mobile-sky-height: 760px;
+  --sun-x: 50%;
+  --sun-y: 86px;
 }
 
 [data-theme="light"] {
@@ -332,11 +334,11 @@ html, body {
 }
 
 .sky-layer[data-sky="clear-day"] {
-  background: linear-gradient(165deg, #1557b0 0%, #3b82f6 55%, #1e3a8a 100%);
+  background: linear-gradient(165deg, #0d47a1 0%, #2563eb 52%, #60a5fa 100%);
 }
 
 .sky-layer[data-sky="clear-night"] {
-  background: linear-gradient(165deg, #070b19 0%, #131f36 60%, #1e293b 100%);
+  background: linear-gradient(165deg, #050814 0%, #101b33 60%, #1e293b 100%);
 }
 
 .sky-layer[data-sky="cloudy-day"] {
@@ -364,38 +366,61 @@ html, body {
 
 .sky-celestial {
   position: absolute;
-  top: 42px;
+  top: 40px;
   right: 12%;
-  width: 120px;
-  height: 120px;
+  width: 96px;
+  height: 96px;
   border-radius: 50%;
-  transition: all 0.6s ease;
+  transition: left 0.8s cubic-bezier(0.22, 1, 0.36, 1), top 0.8s cubic-bezier(0.22, 1, 0.36, 1), background 0.6s ease, box-shadow 0.6s ease;
 }
 
 .mobile-sky .sky-celestial {
-  top: 76px;
-  left: 50%;
+  top: var(--sun-y);
+  left: var(--sun-x);
   right: auto;
-  transform: translateX(-50%);
-  width: 130px;
-  height: 130px;
+  transform: translate(-50%, -50%);
+  width: 92px;
+  height: 92px;
 }
 
 .sky-layer[data-sky="clear-day"] .sky-celestial {
-  background: radial-gradient(circle, #fff5c0 0%, #fde047 45%, rgba(251, 191, 36, 0) 72%);
-  box-shadow: 0 0 90px 30px rgba(253, 224, 71, 0.38);
+  background: radial-gradient(circle, #ffffff 0%, #fef08a 38%, #f59e0b 68%, rgba(245, 158, 11, 0) 76%);
+  box-shadow:
+    0 0 36px 12px rgba(254, 240, 138, 0.65),
+    0 0 90px 38px rgba(251, 191, 36, 0.38),
+    0 0 160px 70px rgba(245, 158, 11, 0.22);
+  animation: solarPulse 5s ease-in-out infinite alternate;
 }
 
 .sky-layer[data-sky="clear-night"] .sky-celestial {
-  width: 84px;
-  height: 84px;
-  background: radial-gradient(circle, #f8fafc 0%, #cbd5e1 65%, rgba(203, 213, 225, 0) 72%);
-  box-shadow: 0 0 60px 16px rgba(226, 232, 240, 0.22);
+  width: 72px;
+  height: 72px;
+  background: radial-gradient(circle at 35% 35%, #ffffff 0%, #e2e8f0 55%, #94a3b8 85%, rgba(148, 163, 184, 0) 90%);
+  box-shadow:
+    0 0 40px 10px rgba(226, 232, 240, 0.3),
+    0 0 90px 28px rgba(148, 163, 184, 0.16);
 }
 
 .sky-layer[data-sky="cloudy-day"] .sky-celestial {
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.65) 0%, rgba(226, 232, 240, 0) 70%);
-  filter: blur(8px);
+  background: radial-gradient(circle, #fef9c3 0%, rgba(253, 224, 71, 0.45) 55%, rgba(226, 232, 240, 0) 74%);
+  box-shadow: 0 0 70px 24px rgba(254, 240, 138, 0.25);
+  filter: blur(4px);
+}
+
+.sky-layer[data-sky^="rain"] .sky-celestial,
+.sky-layer[data-sky^="storm"] .sky-celestial,
+.sky-layer[data-sky^="snow"] .sky-celestial {
+  opacity: 0.18;
+  filter: blur(12px);
+}
+
+@keyframes solarPulse {
+  from { transform: translate(-50%, -50%) scale(0.97); }
+  to { transform: translate(-50%, -50%) scale(1.04); }
+}
+
+.hero-sky .sky-celestial {
+  animation: none;
 }
 
 .sky-stars {
@@ -760,7 +785,8 @@ header {
   background-color: rgba(0, 0, 0, 0.2);
 }
 
-.drawer-backdrop {
+.drawer-backdrop,
+.settings-backdrop {
   position: fixed;
   inset: 0;
   background-color: rgba(0, 0, 0, 0.55);
@@ -771,9 +797,66 @@ header {
   transition: opacity 0.25s ease;
 }
 
-.drawer-backdrop.open {
+.drawer-backdrop.open,
+.settings-backdrop.open {
   opacity: 1;
   pointer-events: auto;
+}
+
+.settings-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.95);
+  width: min(92vw, 420px);
+  background-color: var(--md-surface);
+  border: 1px solid color-mix(in srgb, var(--md-outline) 45%, transparent);
+  border-radius: var(--radius-xl);
+  padding: 24px;
+  z-index: 110;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+.settings-modal.open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background-color: var(--md-surface-high);
+  border-radius: var(--radius-lg);
+}
+
+.setting-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.setting-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--md-text);
+}
+
+.setting-desc {
+  font-size: 11px;
+  color: var(--md-text-muted);
 }
 
 .mobile-drawer {
@@ -883,12 +966,9 @@ header {
   background-color: rgba(255, 255, 255, 0.08);
 }
 
-.drawer-controls {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
+.drawer-settings-section {
   margin-top: auto;
-  padding-top: 12px;
+  padding-top: 8px;
   flex: 0 0 auto;
 }
 
@@ -940,13 +1020,12 @@ header {
   gap: 22px;
 }
 
-@media (min-width: 960px) {
-  .col-main {
-    grid-column: span 8;
-  }
-  .col-side {
-    grid-column: span 4;
-  }
+html[data-device="desktop"] .col-main {
+  grid-column: span 8;
+}
+
+html[data-device="desktop"] .col-side {
+  grid-column: span 4;
 }
 
 .hero-card {
@@ -1201,14 +1280,8 @@ header {
 
 .metrics-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
-}
-
-@media (min-width: 640px) {
-  .metrics-grid {
-    grid-template-columns: repeat(4, 1fr);
-  }
 }
 
 .metric-item {
@@ -1414,148 +1487,183 @@ main {
   display: block;
 }
 
+html[data-device="tablet"] .container {
+  max-width: 1024px;
+  padding: 0 20px;
+}
+
+html[data-device="tablet"] .dashboard {
+  grid-template-columns: repeat(12, 1fr);
+  gap: 18px;
+}
+
+html[data-device="tablet"] .col-main {
+  grid-column: span 7;
+}
+
+html[data-device="tablet"] .col-side {
+  grid-column: span 5;
+}
+
+html[data-device="tablet"] .metrics-grid {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+html[data-device="tablet"] #mobileInsightsCard {
+  display: block;
+}
+
+html[data-device="tablet"] .location-dots-bar {
+  display: inline-flex;
+}
+
+html[data-device="mobile"] .mobile-sky {
+  display: block;
+}
+
+html[data-device="mobile"] .hero-sky,
+html[data-device="mobile"] .desktop-outlook-summary {
+  display: none !important;
+}
+
+html[data-device="mobile"] .mobile-outlook-summary {
+  display: block;
+}
+
+html[data-device="mobile"] header {
+  background-color: transparent;
+  backdrop-filter: none;
+  border-bottom: none;
+}
+
+html[data-device="mobile"] .desktop-search,
+html[data-device="mobile"] .desktop-controls,
+html[data-device="mobile"] .desktop-loc-bar-wrap,
+html[data-device="mobile"] .desktop-hero-loc {
+  display: none;
+}
+
+html[data-device="mobile"] .hamburger-btn {
+  display: inline-flex;
+}
+
+html[data-device="mobile"] .location-dots-bar {
+  display: inline-flex;
+}
+
+html[data-device="mobile"] .container {
+  padding: 0 16px;
+  margin-top: 8px;
+}
+
+html[data-device="mobile"] .col-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+html[data-device="mobile"] #now.hero-card {
+  display: contents;
+}
+
+html[data-device="mobile"] #now.hero-card > .card-header {
+  display: none;
+}
+
+html[data-device="mobile"] .hero-primary {
+  order: 1;
+  min-height: 36vh;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  padding: 8px 4px 12px;
+}
+
+html[data-device="mobile"] #hourly {
+  order: 2;
+  background-color: rgba(17, 19, 24, 0.48);
+  backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
+
+html[data-device="mobile"] #hourly .card-header {
+  display: none;
+}
+
+html[data-device="mobile"] #hourly .mobile-outlook-summary {
+  color: #ffffff;
+  border-bottom-color: rgba(255, 255, 255, 0.16);
+}
+
+html[data-device="mobile"] #hourly .hour-item {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+html[data-device="mobile"] #hourly .hour-time {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+html[data-device="mobile"] #mobileInsightsCard {
+  display: block;
+  order: 3;
+}
+
+html[data-device="mobile"] #metricsCard {
+  order: 4;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+html[data-device="mobile"] .mobile-loc-title {
+  display: block;
+  color: #ffffff;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+}
+
+html[data-device="mobile"] .mobile-loc-tag {
+  display: inline-flex;
+}
+
+html[data-device="mobile"] .temp-display {
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+}
+
+html[data-device="mobile"] #currIcon {
+  display: none !important;
+}
+
+html[data-device="mobile"] .temp-value {
+  font-size: 88px;
+  text-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+html[data-device="mobile"] .condition-meta {
+  text-align: center;
+  align-items: center;
+}
+
+html[data-device="mobile"] .metric-item {
+  background-color: var(--md-surface);
+  border: none;
+  backdrop-filter: none;
+}
+
+html[data-device="mobile"] .metric-label {
+  color: var(--md-text-muted);
+}
+
+html[data-device="mobile"] .metric-val {
+  color: var(--md-text);
+}
+
 @media (max-width: 768px) {
-  .mobile-sky {
-    display: block;
-  }
-
-  .hero-sky,
-  .desktop-outlook-summary {
-    display: none !important;
-  }
-
-  .mobile-outlook-summary {
-    display: block;
-  }
-
-  header {
-    background-color: transparent;
-    backdrop-filter: none;
-    border-bottom: none;
-  }
-
-  .desktop-search,
-  .desktop-controls,
-  .desktop-loc-bar-wrap,
-  .desktop-hero-loc {
-    display: none;
-  }
-
-  .hamburger-btn {
-    display: inline-flex;
-  }
-
-  .location-dots-bar {
-    display: inline-flex;
-  }
-
-  .container {
-    padding: 0 16px;
-    margin-top: 8px;
-  }
-
-  .col-main {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  #now.hero-card {
-    display: contents;
-  }
-
-  #now.hero-card > .card-header {
-    display: none;
-  }
-
-  .hero-primary {
-    order: 1;
-    min-height: 36vh;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    text-align: center;
-    gap: 8px;
-    padding: 8px 4px 12px;
-  }
-
-  #hourly {
-    order: 2;
-    background-color: rgba(17, 19, 24, 0.48);
-    backdrop-filter: blur(18px);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    color: #ffffff;
-  }
-
-  #hourly .card-header {
-    display: none;
-  }
-
-  #hourly .mobile-outlook-summary {
-    color: #ffffff;
-    border-bottom-color: rgba(255, 255, 255, 0.16);
-  }
-
-  #hourly .hour-item {
-    background-color: rgba(255, 255, 255, 0.1);
-    color: #ffffff;
-  }
-
-  #hourly .hour-time {
-    color: rgba(255, 255, 255, 0.78);
-  }
-
-  #mobileInsightsCard {
-    display: block;
-    order: 3;
-  }
-
-  #metricsCard {
-    order: 4;
-  }
-
-  .mobile-loc-title {
-    display: block;
-    color: #ffffff;
-    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
-  }
-
-  .mobile-loc-tag {
-    display: inline-flex;
-  }
-
-  .temp-display {
-    flex-direction: column;
-    justify-content: center;
-    gap: 6px;
-  }
-
-  .big-icon {
-    font-size: 64px;
-  }
-
-  .temp-value {
-    font-size: 88px;
-    text-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-  }
-
-  .condition-meta {
-    text-align: center;
-    align-items: center;
-  }
-
-  .metric-item {
-    background-color: var(--md-surface);
-    border: none;
-    backdrop-filter: none;
-  }
-
-  .metric-label {
-    color: var(--md-text-muted);
-  }
-
-  .metric-val {
-    color: var(--md-text);
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 </style>
@@ -1610,9 +1718,7 @@ main {
           <input type="hidden" name="units" value="<%= ssrUnits === 'metric' ? 'imperial' : 'metric' %>" />
         </form>
         <button form="unitForm" id="btnUnits" class="btn" title="Toggle °C/°F" type="submit"><%= ssrTempSymbol %></button>
-        <button id="btnTimeFormat" class="btn no-js-hidden" title="Toggle 12h/24h" type="button"><%= ssrTimeFormat %></button>
-        <button id="btnAnon" class="btn no-js-hidden<%= ssrAnon ? ' active-toggle' : '' %>" title="Anonymous Mode (Mask default location as My Location)" type="button">Anon</button>
-        <button id="btnTheme" class="btn no-js-hidden" title="Toggle theme" type="button">Theme</button>
+        <button id="btnSettings" class="btn no-js-hidden" title="General Settings" type="button">Settings</button>
         <button id="btnInstall" class="btn hidden" title="Install App" type="button">Install</button>
         <a class="btn no-js-hidden" href="#" id="btnShare" title="Share Forecast">Share</a>
       </div>
@@ -1624,6 +1730,45 @@ main {
 
     <div id="desktopLocationsBar" class="desktop-loc-bar-wrap no-js-hidden" role="tablist" aria-label="Saved Locations"></div>
   </header>
+
+  <div id="settingsBackdrop" class="settings-backdrop"></div>
+
+  <div id="settingsModal" class="settings-modal" role="dialog" aria-labelledby="settingsModalTitle">
+    <div class="drawer-top" style="margin-bottom: 16px;">
+      <span id="settingsModalTitle" class="drawer-title">General Settings</span>
+      <button id="btnCloseSettings" class="pill-btn" type="button">Close</button>
+    </div>
+    <div class="settings-list">
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-name">Temperature Units</div>
+          <div class="setting-desc">Switch between Metric (°C) and Imperial (°F)</div>
+        </div>
+        <button id="btnModalUnits" class="btn" type="button"><%= ssrTempSymbol %></button>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-name">Time Format</div>
+          <div class="setting-desc">24-hour or 12-hour clock display</div>
+        </div>
+        <button id="btnTimeFormat" class="btn" type="button"><%= ssrTimeFormat %></button>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-name">Appearance</div>
+          <div class="setting-desc">Toggle dark or light color scheme</div>
+        </div>
+        <button id="btnTheme" class="btn" type="button">Theme</button>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-name">Anonymous Mode</div>
+          <div class="setting-desc">Mask default location as "My Location"</div>
+        </div>
+        <button id="btnAnon" class="btn<%= ssrAnon ? ' active-toggle' : '' %>" type="button"><%= ssrAnon ? 'On' : 'Off' %></button>
+      </div>
+    </div>
+  </div>
 
   <div id="drawerBackdrop" class="drawer-backdrop"></div>
 
@@ -1650,12 +1795,41 @@ main {
       <div id="drawerLocationsList" class="drawer-locations-list"></div>
     </div>
 
-    <div class="drawer-controls">
-      <button form="unitForm" id="btnMobileUnits" class="btn" type="submit"><%= ssrTempSymbol %></button>
-      <button id="btnMobileTimeFormat" class="btn" type="button"><%= ssrTimeFormat %></button>
-      <button id="btnMobileAnon" class="btn<%= ssrAnon ? ' active-toggle' : '' %>" type="button">Anon</button>
-      <button id="btnMobileTheme" class="btn" type="button">Theme</button>
-      <button id="btnMobileShare" class="btn" type="button" style="grid-column: span 2;">Share</button>
+    <div class="drawer-settings-section">
+      <div class="drawer-section-label">
+        <span>General Settings</span>
+      </div>
+      <div class="settings-list">
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Temperature Units</div>
+            <div class="setting-desc">Metric or Imperial</div>
+          </div>
+          <button form="unitForm" id="btnMobileUnits" class="btn" type="submit"><%= ssrTempSymbol %></button>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Time Format</div>
+            <div class="setting-desc">24-hour or 12-hour</div>
+          </div>
+          <button id="btnMobileTimeFormat" class="btn" type="button"><%= ssrTimeFormat %></button>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Appearance</div>
+            <div class="setting-desc">Dark or Light theme</div>
+          </div>
+          <button id="btnMobileTheme" class="btn" type="button">Theme</button>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Anonymous Mode</div>
+            <div class="setting-desc">Show "My Location"</div>
+          </div>
+          <button id="btnMobileAnon" class="btn<%= ssrAnon ? ' active-toggle' : '' %>" type="button"><%= ssrAnon ? 'On' : 'Off' %></button>
+        </div>
+        <button id="btnMobileShare" class="btn" type="button" style="width: 100%; margin-top: 4px;">Share Forecast</button>
+      </div>
     </div>
   </aside>
 
@@ -1676,14 +1850,14 @@ main {
           </div>
 
           <div class="hero-primary">
-            <div class="mobile-loc-tag" id="mobileLocTag" title="Default Location">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+            <div class="mobile-loc-tag" id="mobileLocTag" title="Current Location">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
             </div>
             <div class="mobile-loc-title" id="mobileLocTitle"><%= ssrDisplayName %></div>
 
             <div>
               <div class="desktop-hero-loc" id="desktopHeroLoc">
-                <svg id="desktopHomeIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+                <svg id="desktopHomeIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
                 <span id="locChip"><%= ssrDisplayName %></span>
               </div>
               <div class="temp-display">
@@ -1839,6 +2013,8 @@ main {
   const TIME_FORMAT_STORAGE_KEY = 'pokeweather:timeFormat';
   const ANON_MODE_STORAGE_KEY = 'pokeweather:anonymous';
 
+  const PIN_SVG_PATH = '<path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>';
+
   const storedUnits = JSON.parse(localStorage.getItem('pokeweather:units') || '{}');
   const storedTimeFormat = localStorage.getItem(TIME_FORMAT_STORAGE_KEY) || '24h';
   const storedAnonMode = localStorage.getItem(ANON_MODE_STORAGE_KEY) === 'true';
@@ -1850,6 +2026,7 @@ main {
     units: storedUnits.units || '<%= ssrUnits %>',
     timeFormat: storedTimeFormat === '12h' ? '12h' : '24h',
     anonymousMode: storedAnonMode,
+    deviceMode: 'desktop',
     locations: [],
     activeIndex: 0
   };
@@ -1865,6 +2042,7 @@ main {
   let insightUserPaused = false;
 
   const unitsButton = selectElement('#btnUnits');
+  const modalUnitsButton = selectElement('#btnModalUnits');
   const mobileUnitsButton = selectElement('#btnMobileUnits');
   const timeFormatButton = selectElement('#btnTimeFormat');
   const mobileTimeFormatButton = selectElement('#btnMobileTimeFormat');
@@ -1875,6 +2053,11 @@ main {
   const geoButton = selectElement('#btnGeo');
   const shareButton = selectElement('#btnShare');
   const mobileShareButton = selectElement('#btnMobileShare');
+
+  const settingsButton = selectElement('#btnSettings');
+  const closeSettingsButton = selectElement('#btnCloseSettings');
+  const settingsModal = selectElement('#settingsModal');
+  const settingsBackdrop = selectElement('#settingsBackdrop');
 
   const searchForm = selectElement('#searchForm');
   const searchInput = selectElement('#q');
@@ -1928,6 +2111,31 @@ main {
     99: 'Severe hailstorm'
   };
 
+  function detectDeviceMode() {
+    const ua = navigator.userAgent || '';
+    const hasTouch = navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
+    const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+    const shortSide = Math.min(window.screen.width, window.screen.height, window.innerWidth || 9999);
+    const viewportWidth = window.innerWidth;
+
+    const isPhoneUA = /Android.*Mobile|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+    const isTabletUA = /iPad|Android(?!.*Mobile)|Tablet|PlayBook|Silk/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+    if (isPhoneUA || ((hasTouch || coarsePointer) && shortSide < 600) || viewportWidth < 600) {
+      return 'mobile';
+    }
+    if (isTabletUA || ((hasTouch || coarsePointer) && shortSide >= 600 && shortSide <= 1024) || (viewportWidth >= 600 && viewportWidth <= 1024)) {
+      return 'tablet';
+    }
+    return 'desktop';
+  }
+
+  function applyDeviceMode() {
+    const mode = detectDeviceMode();
+    appState.deviceMode = mode;
+    document.documentElement.setAttribute('data-device', mode);
+  }
+
   function getWeatherDescription(code) {
     return WEATHER_DESCRIPTIONS[code] || '-';
   }
@@ -1979,6 +2187,23 @@ main {
     });
   }
 
+  function isSameTimezoneAsUser(timezoneName, utcOffsetSeconds) {
+    try {
+      const userZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (timezoneName && userZone && timezoneName === userZone) {
+        return true;
+      }
+    } catch {}
+
+    if (typeof utcOffsetSeconds === 'number') {
+      const userOffsetSeconds = -new Date().getTimezoneOffset() * 60;
+      if (Math.abs(userOffsetSeconds - utcOffsetSeconds) < 60) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   function formatLocationLocalTime(timezoneName, utcOffsetSeconds) {
     const use12Hr = is12HourMode();
     const formatOptions = {
@@ -2008,25 +2233,77 @@ main {
     return new Date().toLocaleTimeString([], formatOptions);
   }
 
-  function getLocationCurrentHour(timezoneName, utcOffsetSeconds) {
+  function getLocationTimeParts(timezoneName, utcOffsetSeconds) {
     try {
       if (timezoneName) {
-        const hourStr = new Intl.DateTimeFormat('en-US', {
+        const parts = new Intl.DateTimeFormat('en-US', {
           hour: 'numeric',
+          minute: 'numeric',
           hour12: false,
           hourCycle: 'h23',
           timeZone: timezoneName
-        }).format(new Date());
-        return Number(hourStr);
+        }).formatToParts(new Date());
+        const hr = Number(parts.find((p) => p.type === 'hour')?.value || 0);
+        const min = Number(parts.find((p) => p.type === 'minute')?.value || 0);
+        return { hour: hr, minute: min, totalMinutes: hr * 60 + min };
       }
     } catch {}
 
     if (typeof utcOffsetSeconds === 'number') {
       const shiftedDate = new Date(Date.now() + utcOffsetSeconds * 1000);
-      return shiftedDate.getUTCHours();
+      const hr = shiftedDate.getUTCHours();
+      const min = shiftedDate.getUTCMinutes();
+      return { hour: hr, minute: min, totalMinutes: hr * 60 + min };
     }
 
-    return new Date().getHours();
+    const now = new Date();
+    return { hour: now.getHours(), minute: now.getMinutes(), totalMinutes: now.getHours() * 60 + now.getMinutes() };
+  }
+
+  function parseIsoClockMinutes(isoString) {
+    if (!isoString) return null;
+    const match = String(isoString).match(/T(\d{2}):(\d{2})/);
+    if (match) {
+      return Number(match[1]) * 60 + Number(match[2]);
+    }
+    const d = new Date(isoString);
+    if (!Number.isNaN(d.getTime())) {
+      return d.getHours() * 60 + d.getMinutes();
+    }
+    return null;
+  }
+
+  function updateCelestialPosition(weatherData) {
+    if (!weatherData || !weatherData.daily) return;
+    const { totalMinutes } = getLocationTimeParts(weatherData.timezone, weatherData.utc_offset_seconds);
+    const sunriseMins = parseIsoClockMinutes(weatherData.daily.sunrise?.[0]) ?? 360;
+    const sunsetMins = parseIsoClockMinutes(weatherData.daily.sunset?.[0]) ?? 1080;
+    const isDay = Boolean(weatherData.current?.is_day);
+
+    let progress = 0.5;
+    if (isDay && sunsetMins > sunriseMins) {
+      progress = (totalMinutes - sunriseMins) / (sunsetMins - sunriseMins);
+    } else {
+      const nightDuration = (1440 - sunsetMins) + sunriseMins;
+      const elapsedNight = totalMinutes >= sunsetMins
+        ? (totalMinutes - sunsetMins)
+        : (1440 - sunsetMins + totalMinutes);
+      if (nightDuration > 0) {
+        progress = elapsedNight / nightDuration;
+      }
+    }
+
+    const clamped = Math.max(0.04, Math.min(0.96, progress));
+    const xPercent = 14 + clamped * 72;
+    const arcHeight = Math.sin(clamped * Math.PI);
+    const yPixels = Math.round(168 - arcHeight * 104);
+
+    document.documentElement.style.setProperty('--sun-x', `${xPercent.toFixed(1)}%`);
+    document.documentElement.style.setProperty('--sun-y', `${yPixels}px`);
+  }
+
+  function getLocationCurrentHour(timezoneName, utcOffsetSeconds) {
+    return getLocationTimeParts(timezoneName, utcOffsetSeconds).hour;
   }
 
   function getEffectiveLocationLabel(index, rawName) {
@@ -2382,7 +2659,7 @@ main {
   }
 
   function updateMobileSkyHeight() {
-    if (window.innerWidth > 768) return;
+    if (appState.deviceMode !== 'mobile') return;
     const hourlySection = selectElement('#hourly');
     if (!hourlySection) return;
     const rect = hourlySection.getBoundingClientRect();
@@ -2499,7 +2776,7 @@ main {
       const subSpan = document.createElement('div');
       subSpan.className = 'drawer-loc-sub';
       if (index === 0) {
-        subSpan.textContent = appState.anonymousMode ? 'Anonymous Home Location' : 'Default (Current Location)';
+        subSpan.textContent = appState.anonymousMode ? 'Anonymous Pin Location' : 'Default (Current Location)';
       } else {
         subSpan.textContent = `${Number(locItem.lat).toFixed(2)}, ${Number(locItem.lon).toFixed(2)}`;
       }
@@ -2540,10 +2817,10 @@ main {
       desktopChip.setAttribute('aria-selected', String(isSelected));
 
       if (index === 0) {
-        const homeSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        homeSvg.setAttribute('viewBox', '0 0 24 24');
-        homeSvg.innerHTML = '<path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>';
-        desktopChip.appendChild(homeSvg);
+        const pinSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        pinSvg.setAttribute('viewBox', '0 0 24 24');
+        pinSvg.innerHTML = PIN_SVG_PATH;
+        desktopChip.appendChild(pinSvg);
       }
 
       const chipText = document.createElement('span');
@@ -2697,6 +2974,7 @@ main {
   function syncUnitControls() {
     const unitLabel = appState.units === 'metric' ? '°C' : '°F';
     unitsButton.textContent = unitLabel;
+    if (modalUnitsButton) modalUnitsButton.textContent = unitLabel;
     mobileUnitsButton.textContent = unitLabel;
 
     if (hiddenUnitsInput) {
@@ -2720,6 +2998,9 @@ main {
   }
 
   function syncAnonymousControls() {
+    const statusText = appState.anonymousMode ? 'On' : 'Off';
+    anonButton.textContent = statusText;
+    mobileAnonButton.textContent = statusText;
     anonButton.classList.toggle('active-toggle', appState.anonymousMode);
     mobileAnonButton.classList.toggle('active-toggle', appState.anonymousMode);
     localStorage.setItem(ANON_MODE_STORAGE_KEY, String(appState.anonymousMode));
@@ -2849,6 +3130,8 @@ main {
       heroSkyElement.setAttribute('data-sky', skyVariant);
     }
 
+    updateCelestialPosition(weatherData);
+
     selectElement('#currIcon').textContent = getWeatherIcon(current.weather_code, isDaytime);
     selectElement('#currTemp').textContent = formatNumber(current.temperature_2m, '°');
     selectElement('#currDesc').textContent = getWeatherDescription(current.weather_code);
@@ -2864,8 +3147,12 @@ main {
     const localTimeElement = selectElement('#currLocalTime');
     if (localTimeElement) {
       if (appState.activeIndex > 0) {
-        const formattedLocal = formatLocationLocalTime(weatherData.timezone, weatherData.utc_offset_seconds);
-        localTimeElement.textContent = `Local time: ${formattedLocal}`;
+        if (isSameTimezoneAsUser(weatherData.timezone, weatherData.utc_offset_seconds)) {
+          localTimeElement.textContent = 'Same timezone';
+        } else {
+          const formattedLocal = formatLocationLocalTime(weatherData.timezone, weatherData.utc_offset_seconds);
+          localTimeElement.textContent = `Local time: ${formattedLocal}`;
+        }
         localTimeElement.classList.remove('hidden');
       } else {
         localTimeElement.textContent = '';
@@ -3011,6 +3298,16 @@ main {
     mobileSuggestionsBox.style.display = 'none';
   }
 
+  function openSettingsModal() {
+    settingsModal.classList.add('open');
+    settingsBackdrop.classList.add('open');
+  }
+
+  function closeSettingsModal() {
+    settingsModal.classList.remove('open');
+    settingsBackdrop.classList.remove('open');
+  }
+
   function handlePlaceSelection(placeItem, isFromMobileDrawer) {
     suggestionsBox.style.display = 'none';
     mobileSuggestionsBox.style.display = 'none';
@@ -3147,14 +3444,14 @@ main {
 
     document.addEventListener('touchstart', (event) => {
       if (event.touches.length !== 1) return;
-      startedInsideHorizontalScroll = Boolean(event.target.closest('.hourly-scroll, .mobile-drawer, .mobile-insights-card'));
+      startedInsideHorizontalScroll = Boolean(event.target.closest('.hourly-scroll, .mobile-drawer, .mobile-insights-card, .settings-modal'));
       touchStartX = event.touches[0].clientX;
       touchStartY = event.touches[0].clientY;
     }, { passive: true });
 
     document.addEventListener('touchend', (event) => {
       if (startedInsideHorizontalScroll || event.changedTouches.length !== 1) return;
-      if (window.innerWidth > 768 || appState.locations.length <= 1) return;
+      if (appState.deviceMode === 'desktop' || appState.locations.length <= 1) return;
 
       const deltaX = event.changedTouches[0].clientX - touchStartX;
       const deltaY = event.changedTouches[0].clientY - touchStartY;
@@ -3172,10 +3469,21 @@ main {
   window.addEventListener('scroll', handleMobileSkyScrollFade, { passive: true });
 
   window.addEventListener('resize', () => {
+    applyDeviceMode();
     if (latestChartSeries) {
       drawTemperatureChart(selectElement('#chart'), latestChartSeries.times, latestChartSeries.temps);
     }
     updateMobileSkyHeight();
+  });
+
+  window.addEventListener('orientationchange', () => {
+    setTimeout(() => {
+      applyDeviceMode();
+      updateMobileSkyHeight();
+      if (latestChartSeries) {
+        drawTemperatureChart(selectElement('#chart'), latestChartSeries.times, latestChartSeries.temps);
+      }
+    }, 120);
   });
 
   unitsButton.addEventListener('click', (e) => {
@@ -3183,6 +3491,13 @@ main {
     appState.units = appState.units === 'metric' ? 'imperial' : 'metric';
     syncUnitControls();
   });
+
+  if (modalUnitsButton) {
+    modalUnitsButton.addEventListener('click', () => {
+      appState.units = appState.units === 'metric' ? 'imperial' : 'metric';
+      syncUnitControls();
+    });
+  }
 
   mobileUnitsButton.addEventListener('click', (e) => {
     e.preventDefault();
@@ -3205,6 +3520,10 @@ main {
   hamburgerButton.addEventListener('click', openMobileDrawer);
   closeDrawerButton.addEventListener('click', closeMobileDrawer);
   drawerBackdrop.addEventListener('click', closeMobileDrawer);
+
+  if (settingsButton) settingsButton.addEventListener('click', openSettingsModal);
+  if (closeSettingsButton) closeSettingsButton.addEventListener('click', closeSettingsModal);
+  if (settingsBackdrop) settingsBackdrop.addEventListener('click', closeSettingsModal);
 
   geoButton.addEventListener('click', () => {
     appState.activeIndex = 0;
@@ -3234,6 +3553,8 @@ main {
   });
 
   (function initializeApp() {
+    applyDeviceMode();
+
     const savedTheme = localStorage.getItem('pokeweather:theme');
     if (savedTheme === 'light') {
       document.documentElement.setAttribute('data-theme', 'light');
@@ -3241,6 +3562,7 @@ main {
 
     const initialUnitText = appState.units === 'metric' ? '°C' : '°F';
     unitsButton.textContent = initialUnitText;
+    if (modalUnitsButton) modalUnitsButton.textContent = initialUnitText;
     mobileUnitsButton.textContent = initialUnitText;
     if (hiddenUnitsInput) {
       hiddenUnitsInput.value = appState.units;
@@ -3250,6 +3572,9 @@ main {
     timeFormatButton.textContent = initialTimeFormatText;
     mobileTimeFormatButton.textContent = initialTimeFormatText;
 
+    const anonText = appState.anonymousMode ? 'On' : 'Off';
+    anonButton.textContent = anonText;
+    mobileAnonButton.textContent = anonText;
     anonButton.classList.toggle('active-toggle', appState.anonymousMode);
     mobileAnonButton.classList.toggle('active-toggle', appState.anonymousMode);
 
