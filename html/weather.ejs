@@ -267,7 +267,6 @@
   --md-text-muted: #c4c6d0;
   --md-outline: #44474e;
   --md-danger: #ffb4ab;
-  --radius-circle: 44px;
   --radius-xl: 28px;
   --radius-lg: 20px;
   --radius-pill: 999px;
@@ -1488,58 +1487,90 @@ main {
   display: block;
 }
 
-html[data-device="mobile"] .mobile-sky,
-html[data-device="tablet"] .mobile-sky {
+html[data-device="tablet"] .container {
+  max-width: 1024px;
+  padding: 0 20px;
+}
+
+html[data-device="tablet"] .dashboard {
+  grid-template-columns: repeat(12, 1fr);
+  gap: 18px;
+}
+
+html[data-device="tablet"] .col-main {
+  grid-column: span 7;
+}
+
+html[data-device="tablet"] .col-side {
+  grid-column: span 5;
+}
+
+html[data-device="tablet"] .metrics-grid {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+html[data-device="tablet"] #mobileInsightsCard {
+  display: block;
+}
+
+html[data-device="tablet"] .location-dots-bar {
+  display: inline-flex;
+}
+
+html[data-device="mobile"] .mobile-sky {
   display: block;
 }
 
 html[data-device="mobile"] .hero-sky,
-html[data-device="mobile"] .desktop-outlook-summary,
-html[data-device="tablet"] .hero-sky,
-html[data-device="tablet"] .desktop-outlook-summary {
+html[data-device="mobile"] .desktop-outlook-summary {
   display: none !important;
 }
 
-html[data-device="mobile"] .mobile-outlook-summary,
-html[data-device="tablet"] .mobile-outlook-summary {
+html[data-device="mobile"] .mobile-outlook-summary {
   display: block;
+}
+
+html[data-device="mobile"] header {
+  background-color: transparent;
+  backdrop-filter: none;
+  border-bottom: none;
 }
 
 html[data-device="mobile"] .desktop-search,
 html[data-device="mobile"] .desktop-controls,
 html[data-device="mobile"] .desktop-loc-bar-wrap,
-html[data-device="mobile"] .desktop-hero-loc,
-html[data-device="tablet"] .desktop-search,
-html[data-device="tablet"] .desktop-controls,
-html[data-device="tablet"] .desktop-loc-bar-wrap,
-html[data-device="tablet"] .desktop-hero-loc {
+html[data-device="mobile"] .desktop-hero-loc {
   display: none;
 }
 
-html[data-device="mobile"] .location-dots-bar,
-html[data-device="tablet"] .location-dots-bar {
+html[data-device="mobile"] .hamburger-btn {
   display: inline-flex;
 }
 
-html[data-device="mobile"] .col-main,
-html[data-device="tablet"] .col-main {
+html[data-device="mobile"] .location-dots-bar {
+  display: inline-flex;
+}
+
+html[data-device="mobile"] .container {
+  padding: 0 16px;
+  margin-top: 8px;
+}
+
+html[data-device="mobile"] .col-main {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-html[data-device="mobile"] #now.hero-card,
-html[data-device="tablet"] #now.hero-card {
+html[data-device="mobile"] #now.hero-card {
   display: contents;
 }
 
-html[data-device="mobile"] #now.hero-card > .card-header,
-html[data-device="tablet"] #now.hero-card > .card-header {
+html[data-device="mobile"] #now.hero-card > .card-header {
   display: none;
 }
 
-html[data-device="mobile"] .hero-primary,
-html[data-device="tablet"] .hero-primary {
+html[data-device="mobile"] .hero-primary {
   order: 1;
   min-height: 36vh;
   flex-direction: column;
@@ -1550,8 +1581,7 @@ html[data-device="tablet"] .hero-primary {
   padding: 8px 4px 12px;
 }
 
-html[data-device="mobile"] #hourly,
-html[data-device="tablet"] #hourly {
+html[data-device="mobile"] #hourly {
   order: 2;
   background-color: rgba(17, 19, 24, 0.48);
   backdrop-filter: blur(18px);
@@ -1559,162 +1589,76 @@ html[data-device="tablet"] #hourly {
   color: #ffffff;
 }
 
-html[data-device="mobile"] #hourly .card-header,
-html[data-device="tablet"] #hourly .card-header {
+html[data-device="mobile"] #hourly .card-header {
   display: none;
 }
 
-html[data-device="mobile"] #hourly .mobile-outlook-summary,
-html[data-device="tablet"] #hourly .mobile-outlook-summary {
+html[data-device="mobile"] #hourly .mobile-outlook-summary {
   color: #ffffff;
   border-bottom-color: rgba(255, 255, 255, 0.16);
 }
 
-html[data-device="mobile"] #hourly .hour-item,
-html[data-device="tablet"] #hourly .hour-item {
+html[data-device="mobile"] #hourly .hour-item {
   background-color: rgba(255, 255, 255, 0.1);
   color: #ffffff;
 }
 
-html[data-device="mobile"] #hourly .hour-time,
-html[data-device="tablet"] #hourly .hour-time {
+html[data-device="mobile"] #hourly .hour-time {
   color: rgba(255, 255, 255, 0.78);
 }
 
-html[data-device="mobile"] #mobileInsightsCard,
-html[data-device="tablet"] #mobileInsightsCard {
+html[data-device="mobile"] #mobileInsightsCard {
   display: block;
   order: 3;
 }
 
-html[data-device="mobile"] #metricsCard,
-html[data-device="tablet"] #metricsCard {
+html[data-device="mobile"] #metricsCard {
   order: 4;
   grid-template-columns: repeat(2, 1fr);
 }
 
-html[data-device="mobile"] .mobile-loc-title,
-html[data-device="tablet"] .mobile-loc-title {
+html[data-device="mobile"] .mobile-loc-title {
   display: block;
   color: #ffffff;
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
 }
 
-html[data-device="mobile"] .mobile-loc-tag,
-html[data-device="tablet"] .mobile-loc-tag {
+html[data-device="mobile"] .mobile-loc-tag {
   display: inline-flex;
 }
 
-html[data-device="mobile"] .temp-display,
-html[data-device="tablet"] .temp-display {
+html[data-device="mobile"] .temp-display {
   flex-direction: column;
   justify-content: center;
   gap: 6px;
 }
 
-html[data-device="mobile"] #currIcon,
-html[data-device="tablet"] #currIcon {
+html[data-device="mobile"] #currIcon {
   display: none !important;
 }
 
-html[data-device="mobile"] .temp-value,
-html[data-device="tablet"] .temp-value {
+html[data-device="mobile"] .temp-value {
   font-size: 88px;
   text-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 }
 
-html[data-device="mobile"] .condition-meta,
-html[data-device="tablet"] .condition-meta {
+html[data-device="mobile"] .condition-meta {
   text-align: center;
   align-items: center;
 }
 
-html[data-device="mobile"] .metric-item,
-html[data-device="tablet"] .metric-item {
+html[data-device="mobile"] .metric-item {
   background-color: var(--md-surface);
   border: none;
   backdrop-filter: none;
 }
 
-html[data-device="mobile"] .metric-label,
-html[data-device="tablet"] .metric-label {
+html[data-device="mobile"] .metric-label {
   color: var(--md-text-muted);
 }
 
-html[data-device="mobile"] .metric-val,
-html[data-device="tablet"] .metric-val {
+html[data-device="mobile"] .metric-val {
   color: var(--md-text);
-}
-
-html[data-device="mobile"] header {
-  background-color: transparent;
-  backdrop-filter: none;
-  border-bottom: none;
-}
-
-html[data-device="mobile"] .hamburger-btn {
-  display: inline-flex;
-}
-
-html[data-device="mobile"] .container {
-  padding: 0 16px;
-  margin-top: 8px;
-}
-
-html[data-device="tablet"] body {
-  display: grid;
-  grid-template-columns: 350px minmax(0, 1fr);
-  gap: 18px;
-  padding: 18px;
-  height: 100vh;
-  overflow: hidden;
-}
-
-html[data-device="tablet"] header,
-html[data-device="tablet"] .drawer-backdrop,
-html[data-device="tablet"] #btnCloseDrawer,
-html[data-device="tablet"] footer {
-  display: none !important;
-}
-
-html[data-device="tablet"] .mobile-drawer {
-  position: relative;
-  top: auto;
-  right: auto;
-  bottom: auto;
-  left: auto;
-  width: 100%;
-  height: 100%;
-  transform: none !important;
-  border-radius: var(--radius-circle);
-  border: 1px solid color-mix(in srgb, var(--md-outline) 40%, transparent);
-  z-index: 2;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.28);
-}
-
-html[data-device="tablet"] #mainSwipeContainer {
-  position: relative;
-  margin: 0;
-  max-width: none;
-  width: 100%;
-  height: 100%;
-  overflow-y: auto;
-  overflow-x: hidden;
-  border-radius: var(--radius-circle);
-  background-color: var(--md-bg);
-  border: 1px solid color-mix(in srgb, var(--md-outline) 40%, transparent);
-  padding: 20px 24px 80px;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.28);
-}
-
-html[data-device="tablet"] .dashboard > * {
-  position: relative;
-  z-index: 1;
-}
-
-html[data-device="tablet"] .location-dots-bar {
-  left: calc(350px + 18px + (100vw - 350px - 54px) / 2);
-  bottom: 30px;
 }
 
 @media (max-width: 768px) {
@@ -1740,6 +1684,13 @@ html[data-device="tablet"] .location-dots-bar {
 </noscript>
 </head>
 <body class="<%= ssrSafe.forceNoJS ? 'no-js' : '' %>">
+
+  <div id="mobileSky" class="sky-layer mobile-sky" data-sky="<%= ssrSkyVariant %>" aria-hidden="true">
+    <div class="sky-stars"></div>
+    <div class="sky-celestial"></div>
+    <div class="sky-clouds"></div>
+    <div class="sky-precip"></div>
+  </div>
 
   <header>
     <div class="header-inner">
@@ -1823,7 +1774,7 @@ html[data-device="tablet"] .location-dots-bar {
 
   <aside id="mobileDrawer" class="mobile-drawer" aria-label="Locations and Settings">
     <div class="drawer-top">
-      <span class="drawer-title">PokeWeather</span>
+      <span class="drawer-title">Locations</span>
       <button id="btnCloseDrawer" class="pill-btn" type="button">Close</button>
     </div>
 
@@ -1883,13 +1834,6 @@ html[data-device="tablet"] .location-dots-bar {
   </aside>
 
   <main id="mainSwipeContainer" class="container">
-    <div id="mobileSky" class="sky-layer mobile-sky" data-sky="<%= ssrSkyVariant %>" aria-hidden="true">
-      <div class="sky-stars"></div>
-      <div class="sky-celestial"></div>
-      <div class="sky-clouds"></div>
-      <div class="sky-precip"></div>
-    </div>
-
     <div class="dashboard">
       <div class="col-main">
         <article id="now" class="card hero-card current" aria-live="polite">
@@ -2063,6 +2007,7 @@ html[data-device="tablet"] .location-dots-bar {
 <script>
   const selectElement = (selector) => document.querySelector(selector);
 
+  const MAX_LOCATIONS = 10;
   const LOCATIONS_STORAGE_KEY = 'pokeweather:locations';
   const ACTIVE_INDEX_STORAGE_KEY = 'pokeweather:activeIndex';
   const TIME_FORMAT_STORAGE_KEY = 'pokeweather:timeFormat';
@@ -2085,10 +2030,6 @@ html[data-device="tablet"] .location-dots-bar {
     locations: [],
     activeIndex: 0
   };
-
-  function getMaxLocations() {
-    return appState.deviceMode === 'tablet' ? 25 : 10;
-  }
 
   let latestWeatherData = null;
   let latestChartSeries = null;
@@ -2134,7 +2075,6 @@ html[data-device="tablet"] .location-dots-bar {
   const desktopLocationsBar = selectElement('#desktopLocationsBar');
   const locCounter = selectElement('#locCounter');
   const locationDotsBar = selectElement('#locationDotsBar');
-  const mainSwipeContainer = selectElement('#mainSwipeContainer');
 
   const hiddenUnitsInput = selectElement('#unitsHidden');
   const mobileSkyElement = selectElement('#mobileSky');
@@ -2192,12 +2132,8 @@ html[data-device="tablet"] .location-dots-bar {
 
   function applyDeviceMode() {
     const mode = detectDeviceMode();
-    const changed = appState.deviceMode !== mode;
     appState.deviceMode = mode;
     document.documentElement.setAttribute('data-device', mode);
-    if (changed && appState.locations.length > 0) {
-      renderLocationNavigation();
-    }
   }
 
   function getWeatherDescription(code) {
@@ -2723,19 +2659,9 @@ html[data-device="tablet"] .location-dots-bar {
   }
 
   function updateMobileSkyHeight() {
-    if (appState.deviceMode === 'desktop') return;
+    if (appState.deviceMode !== 'mobile') return;
     const hourlySection = selectElement('#hourly');
     if (!hourlySection) return;
-
-    if (appState.deviceMode === 'tablet' && mainSwipeContainer) {
-      const containerRect = mainSwipeContainer.getBoundingClientRect();
-      const hourlyRect = hourlySection.getBoundingClientRect();
-      const scrollTop = mainSwipeContainer.scrollTop || 0;
-      const totalHeight = Math.max(480, Math.round((hourlyRect.bottom - containerRect.top) + scrollTop + 20));
-      document.documentElement.style.setProperty('--mobile-sky-height', `${totalHeight}px`);
-      return;
-    }
-
     const rect = hourlySection.getBoundingClientRect();
     const scrollTop = window.scrollY || document.documentElement.scrollTop || 0;
     const totalHeight = Math.max(480, Math.round(rect.bottom + scrollTop + 20));
@@ -2794,12 +2720,11 @@ html[data-device="tablet"] .location-dots-bar {
   }
 
   function loadStoredLocations() {
-    const limit = getMaxLocations();
     try {
       const rawList = JSON.parse(localStorage.getItem(LOCATIONS_STORAGE_KEY) || '[]');
       const savedIndex = Number(localStorage.getItem(ACTIVE_INDEX_STORAGE_KEY) || 0);
       if (Array.isArray(rawList) && rawList.length > 0) {
-        appState.locations = rawList.slice(0, limit);
+        appState.locations = rawList.slice(0, MAX_LOCATIONS);
         appState.locations[0].isCurrent = true;
       } else {
         appState.locations = [{
@@ -2829,11 +2754,10 @@ html[data-device="tablet"] .location-dots-bar {
   }
 
   function renderLocationNavigation() {
-    const limit = getMaxLocations();
     drawerLocationsList.innerHTML = '';
     locationDotsBar.innerHTML = '';
     desktopLocationsBar.innerHTML = '';
-    locCounter.textContent = `${appState.locations.length} / ${limit}`;
+    locCounter.textContent = `${appState.locations.length} / ${MAX_LOCATIONS}`;
 
     appState.locations.forEach((locItem, index) => {
       const isSelected = index === appState.activeIndex;
@@ -2863,9 +2787,7 @@ html[data-device="tablet"] .location-dots-bar {
 
       listRow.addEventListener('click', () => {
         switchToLocationIndex(index);
-        if (appState.deviceMode === 'mobile') {
-          closeMobileDrawer();
-        }
+        closeMobileDrawer();
       });
 
       if (index > 0) {
@@ -2926,7 +2848,6 @@ html[data-device="tablet"] .location-dots-bar {
   function addOrSelectSavedLocation(lat, lon, name) {
     const numericLat = Number(lat);
     const numericLon = Number(lon);
-    const limit = getMaxLocations();
 
     const existingIndex = appState.locations.findIndex((item, idx) => {
       if (idx === 0) return false;
@@ -2941,8 +2862,8 @@ html[data-device="tablet"] .location-dots-bar {
       return;
     }
 
-    if (appState.locations.length >= limit) {
-      alert(`You can save up to ${limit} locations on this device. Remove one first.`);
+    if (appState.locations.length >= MAX_LOCATIONS) {
+      alert(`You can save up to ${MAX_LOCATIONS} locations. Remove one first.`);
       return;
     }
 
@@ -3463,9 +3384,7 @@ html[data-device="tablet"] .location-dots-bar {
   }
 
   function handleMobileSkyScrollFade() {
-    const scrollDistance = appState.deviceMode === 'tablet' && mainSwipeContainer
-      ? mainSwipeContainer.scrollTop
-      : (window.scrollY || document.documentElement.scrollTop || 0);
+    const scrollDistance = window.scrollY || document.documentElement.scrollTop || 0;
     const fadeLimit = 340;
     const calculatedOpacity = Math.max(0, 1 - scrollDistance / fadeLimit);
     document.documentElement.style.setProperty('--sky-opacity', calculatedOpacity.toFixed(3));
@@ -3548,9 +3467,6 @@ html[data-device="tablet"] .location-dots-bar {
   }
 
   window.addEventListener('scroll', handleMobileSkyScrollFade, { passive: true });
-  if (mainSwipeContainer) {
-    mainSwipeContainer.addEventListener('scroll', handleMobileSkyScrollFade, { passive: true });
-  }
 
   window.addEventListener('resize', () => {
     applyDeviceMode();
