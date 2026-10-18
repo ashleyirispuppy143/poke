@@ -109,6 +109,111 @@ app.get("/143", (req, res) => {
 });
 
   
+function formatAirQualitySummary(aqData) {
+  if (!aqData || !aqData.current) return null;
+  const cur = aqData.current;
+
+  const usAqi = cur.us_aqi ?? null;
+  const euAqi = cur.european_aqi ?? null;
+
+  let aqiLabel = "Unknown";
+  if (usAqi !== null) {
+    if (usAqi <= 50) aqiLabel = "Good";
+    else if (usAqi <= 100) aqiLabel = "Moderate";
+    else if (usAqi <= 150) aqiLabel = "Unhealthy for Sensitive Groups";
+    else if (usAqi <= 200) aqiLabel = "Unhealthy";
+    else if (usAqi <= 300) aqiLabel = "Very Unhealthy";
+    else aqiLabel = "Hazardous";
+  }
+
+  const pollenTypes = [
+    { key: "alder_pollen", name: "Alder", value: cur.alder_pollen ?? null },
+    { key: "birch_pollen", name: "Birch", value: cur.birch_pollen ?? null },
+    { key: "grass_pollen", name: "Grass", value: cur.grass_pollen ?? null },
+    { key: "mugwort_pollen", name: "Mugwort", value: cur.mugwort_pollen ?? null },
+    { key: "olive_pollen", name: "Olive", value: cur.olive_pollen ?? null },
+    { key: "ragweed_pollen", name: "Ragweed", value: cur.ragweed_pollen ?? null }
+  ];
+
+  const validPollens = pollenTypes.filter(p => p.value !== null && !Number.isNaN(Number(p.value)));
+  let maxPollen = null;
+  let dominantPollen = null;
+
+  if (validPollens.length > 0) {
+    dominantPollen = validPollens.reduce((max, item) => (item.value > max.value ? item : max), validPollens[0]);
+    maxPollen = dominantPollen.value;
+  }
+
+  let pollenLevel = "Unavailable";
+  if (maxPollen !== null) {
+    if (maxPollen === 0) pollenLevel = "None";
+    else if (maxPollen <= 10) pollenLevel = "Low";
+    else if (maxPollen <= 50) pollenLevel = "Moderate";
+    else if (maxPollen <= 200) pollenLevel = "High";
+    else pollenLevel = "Very High";
+  }
+
+  return {
+    usAqi,
+    euAqi,
+    aqiLabel,
+    pm25: cur.pm2_5 ?? null,
+    pm10: cur.pm10 ?? null,
+    no2: cur.nitrogen_dioxide ?? null,
+    o3: cur.ozone ?? null,
+    so2: cur.sulphur_dioxide ?? null,
+    co: cur.carbon_monoxide ?? null,
+    dust: cur.dust ?? null,
+    pollenLevel,
+    maxPollen,
+    dominantPollen: dominantPollen && dominantPollen.value > 0 ? dominantPollen.name : null,
+    pollenBreakdown: {
+      alder: cur.alder_pollen ?? null,
+      birch: cur.birch_pollen ?? null,
+      grass: cur.grass_pollen ?? null,
+      mugwort: cur.mugwort_pollen ?? null,
+      olive: cur.olive_pollen ?? null,
+      ragweed: cur.ragweed_pollen ?? null
+    },
+    hourly: aqData.hourly || null
+  };
+}
+
+app.get("/api/air-quality", async (req, res) => {
+  try {
+    const lat = req.query.latitude ?? req.query.lat;
+    const lon = req.query.longitude ?? req.query.lon;
+    if (lat === undefined || lon === undefined) {
+      return res.status(400).json({ error: "Missing latitude or longitude" });
+    }
+
+    const aqUrl = new URL("https://air-quality-api.open-meteo.com/v1/air-quality");
+    aqUrl.searchParams.set("latitude", lat);
+    aqUrl.searchParams.set("longitude", lon);
+    aqUrl.searchParams.set(
+      "current",
+      "us_aqi,european_aqi,pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone,dust,uv_index,alder_pollen,birch_pollen,grass_pollen,mugwort_pollen,olive_pollen,ragweed_pollen"
+    );
+    aqUrl.searchParams.set(
+      "hourly",
+      "us_aqi,european_aqi,pm2_5,pm10,alder_pollen,birch_pollen,grass_pollen,mugwort_pollen,olive_pollen,ragweed_pollen"
+    );
+    aqUrl.searchParams.set("timezone", "auto");
+    aqUrl.searchParams.set("forecast_days", "3");
+
+    const r = await fetch(aqUrl.toString());
+    if (!r.ok) throw new Error("air quality fetch failed");
+    const rawAq = await r.json();
+
+    return res.json({
+      ...rawAq,
+      summary: formatAirQualitySummary(rawAq)
+    });
+  } catch (err) {
+    return res.status(502).json({ error: "Failed to fetch air quality data" });
+  }
+});
+
 app.get("/weather", async (req, res) => {
   try {
     const q = (req.query.q || "").trim();
@@ -191,9 +296,35 @@ app.get("/weather", async (req, res) => {
     url.searchParams.set("temperature_unit", tempUnit);
     url.searchParams.set("windspeed_unit", windUnit);
 
-    const wr = await fetch(url.toString());
+    const aqUrl = new URL("https://air-quality-api.open-meteo.com/v1/air-quality");
+    aqUrl.searchParams.set("latitude", place.lat);
+    aqUrl.searchParams.set("longitude", place.lon);
+    aqUrl.searchParams.set(
+      "current",
+      "us_aqi,european_aqi,pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone,dust,uv_index,alder_pollen,birch_pollen,grass_pollen,mugwort_pollen,olive_pollen,ragweed_pollen"
+    );
+    aqUrl.searchParams.set(
+      "hourly",
+      "us_aqi,european_aqi,pm2_5,pm10,alder_pollen,birch_pollen,grass_pollen,mugwort_pollen,olive_pollen,ragweed_pollen"
+    );
+    aqUrl.searchParams.set("timezone", "auto");
+    aqUrl.searchParams.set("forecast_days", "3");
+
+    const [wr, aqr] = await Promise.all([
+      fetch(url.toString()),
+      fetch(aqUrl.toString()).catch(() => null)
+    ]);
+
     if (!wr.ok) throw new Error("weather fetch failed");
     const data = await wr.json();
+
+    let airQuality = null;
+    if (aqr && aqr.ok) {
+      try {
+        const aqJson = await aqr.json();
+        airQuality = formatAirQualitySummary(aqJson);
+      } catch {}
+    }
 
     const codeText = (c) => {
       if ([0].includes(c)) return "Clear sky";
@@ -255,6 +386,7 @@ app.get("/weather", async (req, res) => {
       current: cur,
       daily: daily,
       hourly: hourly,
+      airQuality,
       icon: codeIcon(cur.weather_code, cur.is_day),
       desc: codeText(cur.weather_code),
       sunriseLocal: daily.sunrise?.[0] ? new Date(daily.sunrise[0]).toLocaleTimeString([], timeOpts) : "-",
