@@ -21,6 +21,7 @@
  * ///////////////////////////////////////////////////////////////////////////
  * "It takes a lot of hard work to make something simple." ~ Steve Jobs 
  */
+
 const SyncLevel = {
   driftSeconds: 0,
   driftMs: 0,
@@ -542,7 +543,7 @@ window.SyncLevel = SyncLevel;
       if (media.seeking) return false;
       if (media.ended) return true;
       var rState = media.readyState;
-      if (rState < 2) return false;
+      if (rState < 3) return false; 
       if (this.isNearEnd(media)) return true;
       var lead = this.ahead(media);
       if (rState >= 4 && lead >= requiredLead * 0.6) return true;
@@ -554,8 +555,7 @@ window.SyncLevel = SyncLevel;
         dynamicLead = Math.max(0.12, requiredLead * 0.45);
       }
 
-      if (rState >= 3 && lead >= dynamicLead) return true;
-      if (rState >= 2 && lead >= Math.max(dynamicLead, 0.15)) return true;
+      if (lead >= dynamicLead) return true;
       return false;
     }
   };
@@ -1280,7 +1280,7 @@ window.SyncLevel = SyncLevel;
         var fireSimultaneousPlay = function() {
           if (currentSeq !== state.sequence || !state.wantPlaying || state.userSeeking) return;
 
-          if (!isVideoBypassed() && (videoEl.readyState < 2 || videoEl.seeking || audioEl.readyState < 2 || audioEl.seeking)) {
+           if (!isVideoBypassed() && (videoEl.readyState < 3 || videoEl.seeking || audioEl.readyState < 3 || audioEl.seeking)) {
             setBufferSpinner(true);
             freezeBothStreams();
             armNetworkWatchdog();
@@ -1298,13 +1298,21 @@ window.SyncLevel = SyncLevel;
           runInternal(function() {
             enforceRateAndVolume();
 
+             if (!isVideoBypassed() && !videoEl.seeking && !audioEl.seeking) {
+              var aSync = nativeGetATime();
+              var vSync = nativeGetVTime();
+              if (Math.abs(vSync - aSync) > 0.03) {
+                nativeSetVTime(aSync);
+              }
+            }
+
             var pV = nativeGetVPaused() ? nativeVideoPlay() : Promise.resolve();
             var pA = nativeGetAPaused() ? nativeAudioPlay() : Promise.resolve();
 
             var launchTimer = setTimeout(function() {
               if (currentSeq === state.sequence && state.launchingPlay) {
                 state.launchingPlay = false;
-                if (nativeGetVPaused() || videoEl.seeking || videoEl.readyState < 2) {
+                if (!isVideoBypassed() && (nativeGetVPaused() || videoEl.seeking || videoEl.readyState < 3 || audioEl.readyState < 3)) {
                   freezeBothStreams();
                 }
                 syncPlaybackState();
@@ -1316,7 +1324,7 @@ window.SyncLevel = SyncLevel;
                 if (currentSeq === state.sequence) {
                   clearTimeout(launchTimer);
                   state.launchingPlay = false;
-                  if (!isVideoBypassed() && (nativeGetVPaused() || videoEl.seeking || videoEl.readyState < 2)) {
+                  if (!isVideoBypassed() && (nativeGetVPaused() || videoEl.seeking || videoEl.readyState < 3 || audioEl.readyState < 3)) {
                     setBufferSpinner(true);
                     freezeBothStreams();
                     armNetworkWatchdog();
@@ -1918,8 +1926,8 @@ window.SyncLevel = SyncLevel;
         var vAhead = bufferMonitor.ahead(videoEl);
         var aAhead = bufferMonitor.ahead(audioEl);
 
-        var videoStarved = !bufferMonitor.isNearEnd(videoEl) && (videoEl.readyState < 2 || videoEl.seeking || (videoEl.readyState < 3 && vAhead < 0.02));
-        var audioStarved = !bufferMonitor.isNearEnd(audioEl) && (audioEl.readyState < 2 || audioEl.seeking || (audioEl.readyState < 3 && aAhead < 0.02));
+        var videoStarved = !bufferMonitor.isNearEnd(videoEl) && (videoEl.readyState < 3 || videoEl.seeking || vAhead < 0.02);
+        var audioStarved = !bufferMonitor.isNearEnd(audioEl) && (audioEl.readyState < 3 || audioEl.seeking || aAhead < 0.02);
 
         if (videoStarved || audioStarved) {
           setBufferSpinner(true);
@@ -1938,24 +1946,26 @@ window.SyncLevel = SyncLevel;
         var vNow = nativeGetVTime();
         var aNow = liveAudio;
 
-        if (!isInPlayGrace()) {
-          var vNotMoving = !videoEl.ended && Math.abs(vNow - state.prevVideoTime) < 0.0005;
-          var aNotMoving = !audioEl.ended && Math.abs(aNow - state.prevAudioTime) < 0.0005;
+        var inGrace = isInPlayGrace();
+        var vNotMoving = !videoEl.ended && Math.abs(vNow - state.prevVideoTime) < 0.0005;
+        var aNotMoving = !audioEl.ended && Math.abs(aNow - state.prevAudioTime) < 0.0005;
 
-          if (vNotMoving) {
-            if (!state.vStallSince) state.vStallSince = now;
-          } else {
-            state.vStallSince = 0;
-          }
+        if (vNotMoving) {
+          if (!state.vStallSince) state.vStallSince = now;
+        } else {
+          state.vStallSince = 0;
+        }
 
-          if (aNotMoving) {
-            if (!state.aStallSince) state.aStallSince = now;
-          } else {
-            state.aStallSince = 0;
-          }
+        if (aNotMoving) {
+          if (!state.aStallSince) state.aStallSince = now;
+        } else {
+          state.aStallSince = 0;
+        }
 
-          var vStalledDur = state.vStallSince ? (now - state.vStallSince) : 0;
-          var aStalledDur = state.aStallSince ? (now - state.aStallSince) : 0;
+        var vStalledDur = state.vStallSince ? (now - state.vStallSince) : 0;
+        var aStalledDur = state.aStallSince ? (now - state.aStallSince) : 0;
+
+        if (!inGrace) {
           var stallLimitMs = isHeavyStream() ? 750 : 500;
 
           if (vStalledDur >= 220 && vAhead < 0.15) {
@@ -1975,8 +1985,16 @@ window.SyncLevel = SyncLevel;
             return;
           }
         } else {
-          state.vStallSince = 0;
-          state.aStallSince = 0;
+          var graceStallLimitMs = isHeavyStream() ? 1200 : 800;
+          if ((vStalledDur >= graceStallLimitMs && !vPaused) || 
+              (aStalledDur >= graceStallLimitMs && !aPaused)) {
+            state.vStallSince = 0;
+            state.aStallSince = 0;
+            setBufferSpinner(true);
+            freezeBothStreams();
+            armNetworkWatchdog();
+            return;
+          }
         }
 
         state.prevVideoTime = vNow;
@@ -2004,11 +2022,22 @@ window.SyncLevel = SyncLevel;
         var cooldownPassed = (now - state.lastCorrectionAt) > config.syncCooldownMs;
         var hardLimit = getHardSeekDriftThreshold();
 
-        if ((state.driftCount >= 5 || absDrift >= hardLimit) && cooldownPassed && !isInPlayGrace()) {
+        var shouldCorrect = false;
+        if (inGrace) {
+          if (absDrift >= hardLimit * 1.2) {
+            shouldCorrect = true;
+          }
+        } else {
+          if ((state.driftCount >= 5 || absDrift >= hardLimit) && cooldownPassed) {
+            shouldCorrect = true;
+          }
+        }
+
+        if (shouldCorrect) {
           state.driftCount = 0;
           state.lastCorrectionAt = now;
 
-          if (bufferMonitor.isTimeBuffered(videoEl, aNow, 0.25) && absDrift < hardLimit) {
+          if (bufferMonitor.isTimeBuffered(videoEl, aNow, 0.25) && absDrift < hardLimit && !inGrace) {
             snapVideoToAudioLive(aNow);
             return;
           }
