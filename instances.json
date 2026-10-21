@@ -4,7 +4,6 @@
     {
       "uri": "https://poketube.fun",
       "CLOUDFLARE": false,
-      "piwik": true,
       "proxy": true,
       "official": true,
       "DEFAULT": true,
