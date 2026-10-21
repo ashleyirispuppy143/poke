@@ -1,28 +1,38 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<html lang="en"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pokepad</title>
-    <meta property="og:title" content="PokePad">
+  <meta property="og:title" content="PokePad">
   <meta property="og:description" content="E2EE notepad">
   <meta property="og:image" content="https://cdn.glitch.global/d68d17bb-f2c0-4bc3-993f-50902734f652/aa70111e-5bcd-4379-8b23-332a33012b78.image.png?v=1701898829884">
   <meta property="og:type" content="website">
+  <link rel="preconnect" href="https://fonts.bunny.net">
+  <link href="https://fonts.bunny.net/css?family=roboto:400,500,700|roboto-mono:400,500&amp;display=swap" rel="stylesheet">
   <style>
-    /* Root colors */
     :root {
-      --bg: #0f0f17;
-      --container-bg: rgba(30, 30, 47, 0.6);
-      --surface: rgba(20, 20, 35, 0.4);
-      --text: #e0e0e0;
-      --accent: #8a2be2;
-      --border: #444458;
-      --btn-bg: rgba(60, 60, 80, 0.7);
-      --btn-hover: rgba(70, 70, 100, 0.8);
-      --error: #f66;
-      --success: #8f8;
-      --tab-hover: rgba(100, 100, 120, 0.8);
-      --tab-active-bg: rgba(10, 10, 15, 0.9);
+      --md-sys-color-background: #141218;
+      --md-sys-color-surface: #141218;
+      --md-sys-color-surface-container-lowest: #0f0d13;
+      --md-sys-color-surface-container-low: #1d1b20;
+      --md-sys-color-surface-container: #211f26;
+      --md-sys-color-surface-container-high: #2b2930;
+      --md-sys-color-surface-container-highest: #36343b;
+      --md-sys-color-primary: #ffabcc;
+      --md-sys-color-on-primary: #541133;
+      --md-sys-color-primary-container: #70294a;
+      --md-sys-color-on-primary-container: #ffd8e6;
+      --md-sys-color-secondary-container: #4a4458;
+      --md-sys-color-on-secondary-container: #e8def8;
+      --md-sys-color-on-surface: #e6e1e5;
+      --md-sys-color-on-surface-variant: #cac4d0;
+      --md-sys-color-outline: #938f99;
+      --md-sys-color-outline-variant: #49454f;
+      --md-sys-color-error: #f2b8b5;
+      --md-sys-color-on-error: #601410;
+      --md-sys-color-inverse-surface: #e6e1e5;
+      --md-sys-color-inverse-on-surface: #322f35;
+      --md-sys-color-inverse-primary: #8c4162;
     }
 
     * {
@@ -30,366 +40,1005 @@
       margin: 0;
       padding: 0;
     }
+
     body {
-      min-height: 100vh;
-      background: var(--bg);
-      color: var(--text);
-      font-family: Arial, sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 1rem;
-    }
-     #container {
-      width: 100%;
-      max-width: 900px;
-      background: var(--container-bg);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      backdrop-filter: blur(12px);
+      height: 100vh;
+      background-color: var(--md-sys-color-background);
+      color: var(--md-sys-color-on-surface);
+      font-family: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
-      position: relative;
+      -webkit-font-smoothing: antialiased;
     }
 
-     header {
+    .svg-icon {
+      width: 20px;
+      height: 20px;
+      fill: currentColor;
+      display: inline-block;
+      vertical-align: middle;
+      flex-shrink: 0;
+      user-select: none;
+    }
+
+    #appShell {
+      display: flex;
+      flex-direction: column;
       width: 100%;
-      background: var(--surface);
-      backdrop-filter: blur(8px);
+      height: 100%;
+      max-width: 1280px;
+      margin: 0 auto;
+      background-color: var(--md-sys-color-surface);
+      border-left: 1px solid var(--md-sys-color-outline-variant);
+      border-right: 1px solid var(--md-sys-color-outline-variant);
+    }
+
+    @media (max-width: 1280px) {
+      #appShell {
+        border-left: none;
+        border-right: none;
+      }
+    }
+
+    header {
+      min-height: 64px;
+      background-color: var(--md-sys-color-surface-container-low);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0.75rem 1rem;
-      border-bottom: 1px solid var(--border);
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
+      flex-shrink: 0;
+      gap: 12px;
     }
-    header .title {
-      font-size: 1.5rem;
-      color: var(--accent);
+
+    .app-brand {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
+      gap: 12px;
+      color: var(--md-sys-color-on-surface);
+      font-size: 22px;
+      font-weight: 500;
+      letter-spacing: 0;
     }
-    header .title svg {
+
+    .app-brand .brand-icon {
+      color: var(--md-sys-color-primary);
       width: 24px;
       height: 24px;
-      fill: var(--accent);
-    }
-    header .e2ee {
-      font-size: 0.9rem;
-      padding: 0.25rem 0.5rem;
-      background: var(--btn-bg);
-      border-radius: 4px;
-      border: 1px solid var(--border);
-      cursor: pointer;
     }
 
-     #e2eePopup {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: var(--container-bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      backdrop-filter: blur(12px);
-      padding: 1rem;
-      max-width: 300px;
-      display: none;
-      z-index: 10;
-    }
-    #e2eePopup p {
-      font-size: 0.9rem;
-      margin-bottom: 0.75rem;
-    }
-    #e2eePopup button {
-      background: var(--accent);
-      border: none;
-      border-radius: 4px;
-      color: #fff;
-      padding: 0.5rem 1rem;
-      cursor: pointer;
-      font-size: 0.9rem;
-    }
-
-     #tabBar {
-      display: flex;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      overflow-x: auto;
-      white-space: nowrap;
-    }
-    .tab {
+    .header-actions {
       display: flex;
       align-items: center;
-      padding: 0.5rem 0.75rem;
-      cursor: pointer;
-      user-select: none;
-      font-size: 0.95rem;
-      border-right: 1px solid var(--border);
-      color: var(--text);
-      background: var(--surface);
-      transition: background 0.2s, color 0.2s;
-      position: relative;
-      flex-shrink: 0;
-    }
-    .tab:hover {
-      background: var(--tab-hover);
-    }
-    .tab.active {
-      background: var(--tab-active-bg);
-      color: var(--accent);
-      border-bottom: 2px solid var(--accent);
-    }
-    .tab .title-text {
-      margin-right: 0.5rem;
-    }
-    .tab .icon-btn {
-      background: transparent;
-      border: none;
-      color: var(--text);
-      cursor: pointer;
-      padding: 0;
-      margin-left: 0.25rem;
-      display: flex;
-      align-items: center;
-    }
-    .tab .icon-btn:hover {
-      color: var(--accent);
-    }
-    .tab[data-dragging="true"] {
-      opacity: 0.5;
-    }
-
-     #editor {
-      flex: 1;
-      background: rgba(20, 20, 35, 0.3);
-      backdrop-filter: blur(8px);
-      padding: 1rem;
-      overflow-y: auto;
-      min-height: 300px;
-      color: var(--text);
-    }
-    #editor:empty:before {
-      content: attr(data-placeholder);
-      color: #888;
-    }
-    #editor:focus {
-      outline: 2px solid var(--accent);
-    }
-
-     #toolbar {
-      display: flex;
+      gap: 8px;
       flex-wrap: wrap;
-      gap: 0.5rem;
-      padding: 0.75rem 1rem;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
     }
-    .tool-btn {
-      background: var(--btn-bg);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      color: var(--text);
-      padding: 0.5rem;
-      cursor: pointer;
-      font-size: 0.9rem;
-      transition: background 0.2s;
-      display: flex;
+
+    .md-btn {
+      height: 40px;
+      padding: 0 16px;
+      border-radius: 999px;
+      font-family: 'Roboto', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      letter-spacing: 0.1px;
+      display: inline-flex;
       align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      border: none;
+      transition: background-color 0.15s ease, box-shadow 0.15s ease;
+      white-space: nowrap;
+      user-select: none;
     }
-    .tool-btn svg {
+
+    .md-btn .svg-icon {
       width: 18px;
       height: 18px;
-      fill: var(--text);
-      margin-right: 0.3rem;
-    }
-    .tool-btn:hover {
-      background: var(--btn-hover);
+      margin-left: -2px;
     }
 
-     #controls {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      padding: 0.75rem 1rem;
-      background: var(--surface);
-      border-top: 1px solid var(--border);
+    .md-btn-filled {
+      background-color: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
     }
-    #controls input[type="password"] {
-      flex: 1;
-      padding: 0.5rem;
-      font-size: 1rem;
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      background: rgba(20, 20, 35, 0.6);
-      color: var(--text);
+    .md-btn-filled:hover {
+      background-color: #ffb8d4;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     }
-    #controls .action-btn {
-      background: var(--btn-bg);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      color: var(--text);
-      padding: 0.5rem 1rem;
+
+    .md-btn-tonal {
+      background-color: var(--md-sys-color-secondary-container);
+      color: var(--md-sys-color-on-secondary-container);
+    }
+    .md-btn-tonal:hover {
+      background-color: #564f65;
+    }
+
+    .md-btn-outlined {
+      background-color: transparent;
+      color: var(--md-sys-color-primary);
+      border: 1px solid var(--md-sys-color-outline);
+    }
+    .md-btn-outlined:hover {
+      background-color: rgba(255, 171, 204, 0.08);
+    }
+
+    .md-btn-text {
+      background-color: transparent;
+      color: var(--md-sys-color-primary);
+      padding: 0 12px;
+    }
+    .md-btn-text:hover {
+      background-color: rgba(255, 171, 204, 0.08);
+    }
+
+    .e2ee-trigger {
+      height: 36px;
+      padding: 0 14px;
+      border-radius: 999px;
+      font-family: 'Roboto', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--md-sys-color-on-surface-variant);
+      background-color: var(--md-sys-color-surface-container-high);
+      border: 1px solid var(--md-sys-color-outline-variant);
       cursor: pointer;
-      font-size: 0.95rem;
-      transition: background 0.2s;
-    }
-    #controls .action-btn:hover {
-      background: var(--btn-hover);
-    }
-    #message {
-      padding: 0.5rem 1rem;
-      font-size: 0.9rem;
-      min-height: 1.2em;
-    }
-    #message.error {
-      color: var(--error);
-    }
-    #message.success {
-      color: var(--success);
+      display: inline-flex;
+      align-items: center;
+      transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+      user-select: none;
     }
 
-     #fileInput {
+    .e2ee-trigger:hover {
+      background-color: var(--md-sys-color-surface-container-highest);
+      color: var(--md-sys-color-primary);
+      border-color: var(--md-sys-color-primary);
+    }
+
+    .md-icon-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 999px;
+      border: none;
+      background: transparent;
+      color: var(--md-sys-color-on-surface-variant);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background-color 0.15s ease, color 0.15s ease;
+      flex-shrink: 0;
+    }
+    .md-icon-btn:hover {
+      background-color: rgba(230, 225, 229, 0.08);
+      color: var(--md-sys-color-on-surface);
+    }
+
+    #tabBarContainer {
+      display: flex;
+      align-items: center;
+      background-color: var(--md-sys-color-surface-container-low);
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
+      padding: 8px 12px;
+      flex-shrink: 0;
+      gap: 6px;
+    }
+
+    #tabBar {
+      display: flex;
+      align-items: center;
+      overflow-x: auto;
+      scrollbar-width: none;
+      flex: 1;
+      gap: 8px;
+    }
+    #tabBar::-webkit-scrollbar {
       display: none;
+    }
+
+    .tab {
+      display: inline-flex;
+      align-items: center;
+      height: 40px;
+      padding: 0 16px;
+      border-radius: 999px;
+      cursor: pointer;
+      user-select: none;
+      font-size: 14px;
+      font-weight: 500;
+      letter-spacing: 0.1px;
+      color: var(--md-sys-color-on-surface-variant);
+      background-color: var(--md-sys-color-surface-container);
+      border: 1px solid transparent;
+      position: relative;
+      flex-shrink: 0;
+      gap: 8px;
+      transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+    }
+
+    .tab:hover {
+      background-color: var(--md-sys-color-surface-container-high);
+      color: var(--md-sys-color-on-surface);
+    }
+
+    .tab.active {
+      color: var(--md-sys-color-on-primary-container);
+      background-color: var(--md-sys-color-primary-container);
+      border-color: rgba(255, 171, 204, 0.35);
+    }
+
+    .tab .title-text {
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .tab .tab-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      opacity: 0.7;
+      transition: opacity 0.15s ease;
+      margin-right: -4px;
+    }
+
+    .tab:hover .tab-actions,
+    .tab.active .tab-actions {
+      opacity: 1;
+    }
+
+    .tab .icon-btn {
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      background: transparent;
+      border: none;
+      color: inherit;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.15s;
+    }
+
+    .tab .icon-btn .svg-icon {
+      width: 15px;
+      height: 15px;
+    }
+
+    .tab .icon-btn:hover {
+      background-color: rgba(255, 255, 255, 0.14);
+    }
+
+    .tab[data-dragging="true"] {
+      opacity: 0.4;
+    }
+
+    .tab-rename-input {
+      font-family: 'Roboto', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      background: var(--md-sys-color-surface-container-highest);
+      color: var(--md-sys-color-on-surface);
+      border: 1px solid var(--md-sys-color-primary);
+      border-radius: 999px;
+      padding: 2px 10px;
+      width: 130px;
+      outline: none;
+    }
+
+    #toolbar {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 6px 12px;
+      background-color: var(--md-sys-color-surface-container);
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
+      flex-shrink: 0;
+    }
+
+    .toolbar-divider {
+      width: 1px;
+      height: 20px;
+      background-color: var(--md-sys-color-outline-variant);
+      margin: 0 4px;
+    }
+
+    .tool-btn {
+      width: 36px;
+      height: 36px;
+      background: transparent;
+      border: none;
+      border-radius: 10px;
+      color: var(--md-sys-color-on-surface-variant);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.15s ease, color 0.15s ease;
+      position: relative;
+    }
+
+    .tool-btn:hover {
+      background-color: rgba(230, 225, 229, 0.08);
+      color: var(--md-sys-color-on-surface);
+    }
+
+    .tool-btn:active {
+      background-color: rgba(255, 171, 204, 0.16);
+      color: var(--md-sys-color-primary);
+    }
+
+    .color-indicator {
+      position: absolute;
+      bottom: 5px;
+      width: 14px;
+      height: 3px;
+      border-radius: 1.5px;
+      background-color: var(--md-sys-color-primary);
+    }
+
+    #workspaceMain {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      position: relative;
+      background-color: var(--md-sys-color-surface);
+    }
+
+    #lineGutter {
+      width: 56px;
+      background-color: var(--md-sys-color-surface-container-lowest);
+      border-right: 1px solid var(--md-sys-color-outline-variant);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      user-select: none;
+    }
+
+    #lineGutter.closed {
+      display: none;
+    }
+
+    .gutter-header {
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 6px 0 10px;
+      border-bottom: 1px solid rgba(73, 69, 79, 0.4);
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--md-sys-color-outline);
+    }
+
+    .gutter-close-btn {
+      width: 20px;
+      height: 20px;
+      border-radius: 999px;
+      border: none;
+      background: transparent;
+      color: var(--md-sys-color-outline);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.15s ease, color 0.15s ease;
+    }
+
+    .gutter-close-btn:hover {
+      background-color: rgba(255, 171, 204, 0.12);
+      color: var(--md-sys-color-primary);
+    }
+
+    .gutter-close-btn .svg-icon {
+      width: 14px;
+      height: 14px;
+    }
+
+    #lineNumbersList {
+      flex: 1;
+      overflow: hidden;
+      padding: 48px 10px 24px 0;
+      text-align: right;
+      font-family: 'Roboto Mono', monospace;
+      font-size: 14px;
+      line-height: 25.6px;
+      color: var(--md-sys-color-outline);
+    }
+
+    .line-num {
+      height: 25.6px;
+      display: block;
+    }
+
+    #editor {
+      flex: 1;
+      background-color: var(--md-sys-color-surface);
+      padding: 48px 32px 24px 28px;
+      overflow-y: auto;
+      color: var(--md-sys-color-on-surface);
+      font-size: 16px;
+      line-height: 25.6px;
+      letter-spacing: 0.15px;
+      outline: none;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    #editor:empty:before {
+      content: attr(data-placeholder);
+      color: var(--md-sys-color-outline);
+      pointer-events: none;
+    }
+
+    #editor a {
+      color: var(--md-sys-color-primary);
+      text-decoration: underline;
+    }
+
+    #editor ul, #editor ol {
+      padding-left: 24px;
+      margin: 4px 0;
+    }
+
+    #statusBar {
+      height: 36px;
+      background-color: var(--md-sys-color-surface-container-low);
+      border-top: 1px solid var(--md-sys-color-outline-variant);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      font-size: 12px;
+      color: var(--md-sys-color-on-surface-variant);
+      flex-shrink: 0;
+      user-select: none;
+    }
+
+    .status-left, .status-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .status-icon-btn {
+      width: 28px;
+      height: 28px;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--md-sys-color-on-surface-variant);
+      border-radius: 999px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    }
+
+    .status-icon-btn .svg-icon {
+      width: 16px;
+      height: 16px;
+    }
+
+    .status-icon-btn:hover {
+      background-color: rgba(255, 171, 204, 0.12);
+      color: var(--md-sys-color-primary);
+    }
+
+    .status-icon-btn.active {
+      background-color: var(--md-sys-color-primary-container);
+      color: var(--md-sys-color-on-primary-container);
+      border-color: rgba(255, 171, 204, 0.35);
+    }
+
+    .scrim {
+      position: fixed;
+      inset: 0;
+      background-color: rgba(0, 0, 0, 0.65);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 16px;
+    }
+
+    .scrim.open {
+      display: flex;
+    }
+
+    .md-dialog {
+      background-color: var(--md-sys-color-surface-container-high);
+      border-radius: 28px;
+      padding: 24px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 11px 15px -7px rgba(0,0,0,0.4),
+                  0 24px 38px 3px rgba(0,0,0,0.28),
+                  0 9px 46px 8px rgba(0,0,0,0.24);
+      display: flex;
+      flex-direction: column;
+      animation: dialogEnter 0.18s cubic-bezier(0.2, 0, 0, 1);
+    }
+
+    @keyframes dialogEnter {
+      from {
+        opacity: 0;
+        transform: scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    .dialog-icon {
+      color: var(--md-sys-color-primary);
+      margin-bottom: 16px;
+      display: flex;
+      justify-content: center;
+    }
+    .dialog-icon .svg-icon {
+      width: 28px;
+      height: 28px;
+    }
+
+    .dialog-title {
+      font-size: 22px;
+      font-weight: 500;
+      color: var(--md-sys-color-on-surface);
+      margin-bottom: 8px;
+      text-align: center;
+    }
+
+    .dialog-subtitle {
+      font-size: 14px;
+      line-height: 20px;
+      color: var(--md-sys-color-on-surface-variant);
+      margin-bottom: 20px;
+      text-align: center;
+      word-break: break-word;
+    }
+
+    .md-field-wrapper {
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 8px;
+    }
+
+    .md-outlined-field {
+      position: relative;
+      display: flex;
+      align-items: center;
+      border: 1px solid var(--md-sys-color-outline);
+      border-radius: 12px;
+      background-color: transparent;
+      height: 56px;
+      padding: 0 8px 0 16px;
+      transition: border-color 0.15s ease;
+    }
+
+    .md-outlined-field:focus-within {
+      border-color: var(--md-sys-color-primary);
+      border-width: 2px;
+      padding: 0 7px 0 15px;
+    }
+
+    .md-outlined-field.error {
+      border-color: var(--md-sys-color-error);
+    }
+
+    .md-outlined-field label {
+      position: absolute;
+      top: -9px;
+      left: 12px;
+      background-color: var(--md-sys-color-surface-container-high);
+      padding: 0 4px;
+      font-size: 12px;
+      color: var(--md-sys-color-on-surface-variant);
+      pointer-events: none;
+      transition: color 0.15s ease;
+    }
+
+    .md-outlined-field:focus-within label {
+      color: var(--md-sys-color-primary);
+    }
+
+    .md-outlined-field.error label {
+      color: var(--md-sys-color-error);
+    }
+
+    .md-outlined-field input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--md-sys-color-on-surface);
+      font-family: 'Roboto', sans-serif;
+      font-size: 15px;
+      width: 100%;
+    }
+
+    .md-field-error {
+      font-size: 12px;
+      color: var(--md-sys-color-error);
+      min-height: 20px;
+      padding: 4px 12px 0;
+    }
+
+    .suggest-key-row {
+      display: none;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 2px;
+      margin-bottom: 4px;
+      gap: 8px;
+    }
+
+    .suggest-key-row.visible {
+      display: flex;
+    }
+
+    .dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    #e2eePopup {
+      background-color: var(--md-sys-color-surface-container-high);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 24px;
+      padding: 24px;
+      max-width: 380px;
+      width: 100%;
+      box-shadow: 0 11px 15px -7px rgba(0,0,0,0.4),
+                  0 24px 38px 3px rgba(0,0,0,0.28);
+      animation: dialogEnter 0.18s cubic-bezier(0.2, 0, 0, 1);
+    }
+
+    #e2eePopup p {
+      font-size: 14px;
+      line-height: 20px;
+      color: var(--md-sys-color-on-surface-variant);
+      margin-bottom: 14px;
+    }
+
+    #e2eePopup p strong {
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--md-sys-color-on-surface);
+    }
+
+    #e2eePopup .popup-footer {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 8px;
+    }
+
+    #snackbar {
+      position: fixed;
+      bottom: 48px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background-color: var(--md-sys-color-inverse-surface);
+      color: var(--md-sys-color-inverse-on-surface);
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 14px;
+      letter-spacing: 0.25px;
+      box-shadow: 0 3px 5px -1px rgba(0,0,0,0.3),
+                  0 6px 10px 0 rgba(0,0,0,0.22),
+                  0 1px 18px 0 rgba(0,0,0,0.18);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 280px;
+      max-width: 540px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      z-index: 2000;
+    }
+
+    #snackbar.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+      pointer-events: auto;
+    }
+
+    #snackbar.error {
+      background-color: var(--md-sys-color-error);
+      color: var(--md-sys-color-on-error);
+      font-weight: 500;
+    }
+
+    #fileInput {
+      display: none;
+    }
+
+    @media (max-width: 720px) {
+      header {
+        padding: 10px 12px;
+        flex-wrap: wrap;
+      }
+      #editor {
+        padding: 36px 16px 20px 16px;
+      }
+      #lineNumbersList {
+        padding: 36px 10px 20px 0;
+      }
+      .btn-label-hide-sm {
+        display: none;
+      }
+      .md-btn .svg-icon {
+        margin-left: 0;
+      }
     }
   </style>
 </head>
 <body>
-  <div id="container">
-    <!-- Header with icon and E2EE label -->
+  <div id="appShell">
     <header>
-      <div class="title">
-        <!-- Lock SVG -->
-        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 2C9.238 2 7 4.238 7 7v3H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-1V7c0-2.762-2.238-5-5-5zm-3 5c0-1.654 1.346-3 3-3s3 1.346 3 3v3H9V7zm-1 5h8v7H8v-7z"/>
+      <div class="app-brand">
+        <svg class="svg-icon brand-icon" viewBox="0 0 24 24">
+          <path d="M12 2C9.238 2 7 4.238 7 7v3H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-1V7c0-2.762-2.238-5-5-5zm-3 5c0-1.654 1.346-3 3-3s3 1.346 3 3v3H9V7zm-1 5h8v7H8v-7z"></path>
         </svg>
-        Pokepad
+        <span>Pokepad!</span>
       </div>
-      <div class="e2ee" id="e2eeLabel">End-to-End Encrypted</div>
+
+      <div class="header-actions">
+        <button class="e2ee-trigger" id="e2eeLabel" type="button">End-to-End Encrypted</button>
+        <button class="md-btn md-btn-outlined" id="uploadBtn" type="button" title="Upload and decrypt a .json note file">
+          <svg class="svg-icon" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11zM8 15.01l1.41 1.41L11 14.84V19h2v-4.16l1.59 1.59L16 15.01 12.01 11 8 15.01z"></path></svg>
+          <span>Upload File</span>
+        </button>
+        <button class="md-btn md-btn-tonal" id="loadBtn" type="button" title="Decrypt notes saved in browser storage">
+          <svg class="svg-icon" viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z"></path></svg>
+          <span class="btn-label-hide-sm">Decrypt &amp; Load</span>
+        </button>
+        <button class="md-btn md-btn-filled" id="saveBtn" type="button" title="Encrypt and download your notes">
+          <svg class="svg-icon" viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6zm9 14H6V10h12v10zm-6-3c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z"></path></svg>
+          <span>Download Encrypted</span>
+        </button>
+        <input type="file" id="fileInput" accept=".json">
+      </div>
     </header>
 
-    <!-- E2EE Info Popup -->
+    <div id="tabBarContainer">
+      <div id="tabBar" role="tablist"><div class="tab active" role="tab" aria-selected="true" draggable="true" data-id="0"><span class="title-text">Note 1</span><div class="tab-actions"><button type="button" class="icon-btn" title="Rename tab"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"></path></svg></button><button type="button" class="icon-btn" title="Close tab"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path></svg></button></div></div></div>
+      <button class="md-icon-btn" id="addTabBtn" type="button" title="Add new tab" aria-label="Add new tab">
+        <svg class="svg-icon" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"></path></svg>
+      </button>
+    </div>
+
+    <div id="toolbar" role="toolbar" aria-label="Formatting options">
+      <button class="tool-btn" data-cmd="bold" type="button" title="Bold (Ctrl+B)">
+        <svg class="svg-icon" viewBox="0 0 24 24"><path d="M15.6 10.79c.97-.67 1.65-1.77 1.65-2.79 0-2.26-1.75-4-4-4H7v14h7.04c2.09 0 3.71-1.7 3.71-3.79 0-1.52-.86-2.82-2.15-3.42zM10 6.5h3c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5h-3v-3zm3.5 9H10v-3h3.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5z"></path></svg>
+      </button>
+      <button class="tool-btn" data-cmd="italic" type="button" title="Italic (Ctrl+I)">
+        <svg class="svg-icon" viewBox="0 0 24 24"><path d="M10 4v3h2.21l-3.42 8H6v3h8v-3h-2.21l3.42-8H18V4z"></path></svg>
+      </button>
+      <button class="tool-btn" data-cmd="underline" type="button" title="Underline (Ctrl+U)">
+        <svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 17c3.31 0 6-2.69 6-6V3h-2.5v8c0 1.93-1.57 3.5-3.5 3.5S8.5 12.93 8.5 11V3H6v8c0 3.31 2.69 6 6 6zm-7 2v2h14v-2H5z"></path></svg>
+      </button>
+      <button class="tool-btn" data-cmd="strikeThrough" type="button" title="Strikethrough">
+        <svg class="svg-icon" viewBox="0 0 24 24"><path d="M10 19h4v-3h-4v3zM5 4v3h5v3h4V7h5V4H5zM3 14h18v-2H3v2z"></path></svg>
+      </button>
+
+      <div class="toolbar-divider"></div>
+
+      <button class="tool-btn" data-cmd="insertUnorderedList" type="button" title="Bulleted list">
+        <svg class="svg-icon" viewBox="0 0 24 24"><path d="M4 10.5c-.83 0-1.5.67-1.5 1.5s.67 1.5 1.5 1.5 1.5-.67 1.5-1.5-.67-1.5-1.5-1.5zm0-6c-.83 0-1.5.67-1.5 1.5S3.17 7.5 4 7.5 5.5 6.83 5.5 6 4.83 4.5 4 4.5zm0 12c-.83 0-1.5.68-1.5 1.5s.68 1.5 1.5 1.5 1.5-.68 1.5-1.5-.67-1.5-1.5-1.5zM7 19h14v-2H7v2zm0-6h14v-2H7v2zm0-8v2h14V5H7z"></path></svg>
+      </button>
+      <button class="tool-btn" data-cmd="insertOrderedList" type="button" title="Numbered list">
+        <svg class="svg-icon" viewBox="0 0 24 24"><path d="M2 17h2v.5H3v1h1v.5H2v1h3v-4H2v1zm1-9h1V4H2v1h1v3zm-1 3h1.8L2 13.1v.9h3v-1H3.2L5 10.9V10H2v1zm5-6v2h14V5H7zm0 14h14v-2H7v2zm0-6h14v-2H7v2z"></path></svg>
+      </button>
+
+      <div class="toolbar-divider"></div>
+
+      <button class="tool-btn" data-cmd="justifyLeft" type="button" title="Align left">
+        <svg class="svg-icon" viewBox="0 0 24 24"><path d="M15 15H3v2h12v-2zm0-8H3v2h12V7zM3 13h18v-2H3v2zm0 8h18v-2H3v2zM3 3v2h18V3H3z"></path></svg>
+      </button>
+      <button class="tool-btn" data-cmd="justifyCenter" type="button" title="Align center">
+        <svg class="svg-icon" viewBox="0 0 24 24"><path d="M7 15v2h10v-2H7zm-4 6h18v-2H3v2zm0-8h18v-2H3v2zm4-6v2h10V7H7zM3 3v2h18V3H3z"></path></svg>
+      </button>
+      <button class="tool-btn" data-cmd="justifyRight" type="button" title="Align right">
+        <svg class="svg-icon" viewBox="0 0 24 24"><path d="M3 21h18v-2H3v2zm6-4h12v-2H9v2zm-6-4h18v-2H3v2zm6-4h12V7H9v2zM3 3v2h18V3H3z"></path></svg>
+      </button>
+
+      <div class="toolbar-divider"></div>
+
+      <button class="tool-btn" id="colorPickerBtn" type="button" title="Text color">
+        <svg class="svg-icon" viewBox="0 0 24 24"><path d="M11 2L5.5 16h2.25l1.12-3h6.25l1.12 3h2.25L13 2h-2zm-1.38 9L12 4.67 14.38 11H9.62z"></path></svg>
+        <span class="color-indicator" id="colorIndicator"></span>
+      </button>
+      <input type="color" id="colorPicker" value="#ffabcc" style="display:none">
+
+      <button class="tool-btn" id="insertLinkBtn" type="button" title="Insert link">
+        <svg class="svg-icon" viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"></path></svg>
+      </button>
+      <button class="tool-btn" data-cmd="unlink" type="button" title="Remove link">
+        <svg class="svg-icon" viewBox="0 0 24 24"><path d="M17 7h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1 0 1.43-.98 2.63-2.31 2.98l1.46 1.46C20.88 15.61 22 13.95 22 12c0-2.76-2.24-5-5-5zm-1 4h-2.19l2 2H16v-2zM2 4.27l3.11 3.11C3.29 8.12 2 9.91 2 12c0 2.76 2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1 0-1.59 1.21-2.9 2.76-3.07L8.73 11H8v2h2.73L13 15.27V17h1.73l4.01 4L20 19.74 3.27 3 2 4.27z"></path></svg>
+      </button>
+    </div>
+
+    <div id="workspaceMain">
+      <div id="lineGutter" class="">
+        <div class="gutter-header">
+          <span>#</span>
+          <button type="button" class="gutter-close-btn" id="closeGutterBtn" title="Hide line numbers">
+            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path></svg>
+          </button>
+        </div>
+        <div id="lineNumbersList"><span class="line-num">1</span></div>
+      </div>
+
+      <div id="editor" contenteditable="true" spellcheck="false" data-placeholder="type ur secrets here..."><br></div>
+    </div>
+
+    <footer id="statusBar">
+      <div class="status-left">
+        <button type="button" class="status-icon-btn active" id="toggleGutterStatusBtn" title="Toggle line numbers" aria-label="Toggle line numbers" aria-pressed="true">
+          <svg class="svg-icon" viewBox="0 0 24 24"><path d="M2 17h2v.5H3v1h1v.5H2v1h3v-4H2v1zm1-9h1V4H2v1h1v3zm-1 3h1.8L2 13.1v.9h3v-1H3.2L5 10.9V10H2v1zm5-6v2h14V5H7zm0 14h14v-2H7v2zm0-6h14v-2H7v2z"></path></svg>
+        </button>
+        <span id="lineCountDisplay">1 line</span>
+      </div>
+      <div class="status-right">
+        <span id="wordCountDisplay">0 words</span>
+        <span id="charCountDisplay">0 characters</span>
+      </div>
+    </footer>
+  </div>
+
+  <div class="scrim" id="passwordModalScrim" role="dialog" aria-modal="true" aria-labelledby="passwordModalTitle">
+    <div class="md-dialog">
+      <div class="dialog-icon" id="passwordModalIconWrap">
+        <svg class="svg-icon" viewBox="0 0 24 24"><path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"></path></svg>
+      </div>
+      <h2 class="dialog-title" id="passwordModalTitle">Enter Password</h2>
+      <p class="dialog-subtitle" id="passwordModalSubtitle">Enter your password to continue!!!</p>
+
+      <div class="md-field-wrapper">
+        <div class="md-outlined-field" id="passwordFieldBox">
+          <label for="modalPasswordInput">Password</label>
+          <input type="password" id="modalPasswordInput" placeholder="Enter password" autocomplete="current-password">
+          <button type="button" class="md-icon-btn" id="copyPasswordBtn" title="Copy password" tabindex="-1" style="display: none;">
+            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"></path></svg>
+          </button>
+          <button type="button" class="md-icon-btn" id="togglePasswordVisBtn" title="Show/Hide password" tabindex="-1">
+            <svg class="svg-icon" id="togglePasswordVisIcon" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"></path></svg>
+          </button>
+        </div>
+        <div class="md-field-error" id="passwordModalError"></div>
+
+        <div class="suggest-key-row" id="suggestKeyRow">
+          <button type="button" class="md-btn md-btn-tonal" id="suggestKeyBtn" style="height: 34px; font-size: 13px; padding: 0 14px;">
+            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M19 9l1.25-2.75L23 5l-2.75-1.25L19 1l-1.25 2.75L15 5l2.75 1.25L19 9zm-7.5.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5L17 12l-5.5-2.5zM19 15l-1.25 2.75L15 19l2.75 1.25L19 23l1.25-2.75L23 19l-2.75-1.25L19 15z"></path></svg>
+            <span>Suggest Encryption Key</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="dialog-actions">
+        <button type="button" class="md-btn md-btn-text" id="passwordModalCancelBtn">I dont wanna</button>
+        <button type="button" class="md-btn md-btn-filled" id="passwordModalConfirmBtn">Yse!</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="scrim" id="linkModalScrim" role="dialog" aria-modal="true" aria-labelledby="linkModalTitle">
+    <div class="md-dialog">
+      <div class="dialog-icon">
+        <svg class="svg-icon" viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"></path></svg>
+      </div>
+      <h2 class="dialog-title" id="linkModalTitle">Insert Link</h2>
+      <p class="dialog-subtitle">Enter the destination URL for the selected text!</p>
+
+      <div class="md-field-wrapper">
+        <div class="md-outlined-field">
+          <label for="modalLinkInput">URL</label>
+          <input type="url" id="modalLinkInput" value="https://" placeholder="https://example.com">
+        </div>
+      </div>
+
+      <div class="dialog-actions">
+        <button type="button" class="md-btn md-btn-text" id="linkModalCancelBtn">Cancel</button>
+        <button type="button" class="md-btn md-btn-filled" id="linkModalConfirmBtn">Insert</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="scrim" id="e2eeModalScrim" role="dialog" aria-modal="true">
     <div id="e2eePopup">
       <p><strong>End-to-End Encryption (E2EE)</strong></p>
       <p>All notes are encrypted locally before being saved. Only you (and anyone you share your password with) can decrypt and read your notes. No unencrypted data ever leaves your browser.</p>
-      <button id="e2eeCloseBtn">Close</button>
+      <div class="popup-footer">
+        <button type="button" class="md-btn md-btn-filled" id="e2eeCloseBtn">Close</button>
+      </div>
     </div>
-
-    <!-- Tab bar -->
-    <div id="tabBar"></div>
-
-    <!-- Formatting toolbar -->
-    <div id="toolbar">
-      <!-- Bold -->
-      <button class="tool-btn" data-cmd="bold" title="Bold (Ctrl+B)">
-        <svg viewBox="0 0 24 24"><path d="M15.6 10.79c.75-.54 1.4-1.31 1.85-2.18.46-.87.7-1.86.7-2.93 0-1.07-.24-2.06-.7-2.93-.46-.87-1.1-1.64-1.85-2.18-.81-.59-1.77-.89-2.77-.89h-5v16h5c1 0 1.96-.3 2.77-.89.75-.54 1.4-1.31 1.85-2.18.46-.87.7-1.86.7-2.93 0-1.07-.24-2.06-.7-2.93zM11 4h1.5c.74 0 1.44.26 2 .72.56.46 1.01 1.11 1.28 1.8.27.69.42 1.45.42 2.22 0 .77-.15 1.53-.42 2.22-.27.69-.72 1.34-1.28 1.8-.56.46-1.26.72-2 .72h-1.5V4zm1.5 12H11c-.74 0-1.44-.26-2-.72-.56-.46-1.01-1.11-1.28-1.8-.27-.69-.42-1.45-.42-2.22 0-.77.15-1.53.42-2.22.27-.69.72-1.34 1.28-1.8.56-.46 1.26-.72 2-.72h1.5v9z"/></svg>
-        <span>Bold</span>
-      </button>
-      <!-- Italic -->
-      <button class="tool-btn" data-cmd="italic" title="Italic (Ctrl+I)">
-        <svg viewBox="0 0 24 24"><path d="M10 4v3h2.21l-3.42 10H6v3h8v-3h-2.21l3.42-10H18V4z"/></svg>
-        <span>Italic</span>
-      </button>
-      <!-- Underline -->
-      <button class="tool-btn" data-cmd="underline" title="Underline (Ctrl+U)">
-        <svg viewBox="0 0 24 24"><path d="M12 17c3.31 0 6-2.69 6-6V4h-2v7c0 2.21-1.79 4-4 4s-4-1.79-4-4V4H6v7c0 3.31 2.69 6 6 6zm-5 2v2h10v-2H7z"/></svg>
-        <span>Underline</span>
-      </button>
-      <!-- Strikethrough -->
-      <button class="tool-btn" data-cmd="strikeThrough" title="Strikethrough">
-        <svg viewBox="0 0 24 24"><path d="M10 19v-2H5.41L9 13.41 7.59 12 2 17.59V19h8zm4 0h8v-2h-5.59L15 13.41 13.59 12 8 17.59V19h6zM21 11h-8V9h8v2z"/></svg>
-        <span>Strike</span>
-      </button>
-      <!-- Unordered List -->
-      <button class="tool-btn" data-cmd="insertUnorderedList" title="Bullet List">
-        <svg viewBox="0 0 24 24"><path d="M4 10.5c.83 0 1.5-.67 1.5-1.5S4.83 7.5 4 7.5 2.5 8.17 2.5 9 3.17 10.5 4 10.5zm0 5c.83 0 1.5-.67 1.5-1.5S4.83 12.5 4 12.5 2.5 13.17 2.5 14 3.17 15.5 4 15.5zm0 5c.83 0 1.5-.67 1.5-1.5S4.83 17.5 4 17.5 2.5 18.17 2.5 19 3.17 20.5 4 20.5zM7 9h14v2H7V9zm0 5h14v2H7v-2zm0 5h14v2H7v-2z"/></svg>
-        <span>Bullets</span>
-      </button>
-      <!-- Ordered List -->
-      <button class="tool-btn" data-cmd="insertOrderedList" title="Numbered List">
-        <svg viewBox="0 0 24 24"><path d="M4 10h2v1H4v2h2v1H4v2h4v-1H6v-2h2v-1H4v-2zm0-4h4v1H6v2h2v1H4v2h4v1H4v2h6v-1H6v-2h2v-1H4v-2zm0 10h12v-1H4v-2h2v-1H4v-2h4v-1H4V6h6V5H4v2h4v1H4v2h4v1H4v2z"/></svg>
-        <span>Numbers</span>
-      </button>
-      <!-- Align Left -->
-      <button class="tool-btn" data-cmd="justifyLeft" title="Align Left">
-        <svg viewBox="0 0 24 24"><path d="M3 5h18v2H3V5zm0 4h12v2H3V9zm0 4h18v2H3v-2zm0 4h12v2H3v-2z"/></svg>
-        <span>Left</span>
-      </button>
-      <!-- Align Center -->
-      <button class="tool-btn" data-cmd="justifyCenter" title="Align Center">
-        <svg viewBox="0 0 24 24"><path d="M3 5h18v2H3V5zm3 4h12v2H6V9zm3 4h18v2H9v-2zm3 4h12v2H12v-2z"/></svg>
-        <span>Center</span>
-      </button>
-      <!-- Align Right -->
-      <button class="tool-btn" data-cmd="justifyRight" title="Align Right">
-        <svg viewBox="0 0 24 24"><path d="M3 5h18v2H3V5zm6 4h12v2H9V9zm6 4h18v2H15v-2zm6 4h12v2h-12v-2z"/></svg>
-        <span>Right</span>
-      </button>
-      <!-- Text Color -->
-      <button class="tool-btn" id="colorPickerBtn" title="Text Color">
-        <svg viewBox="0 0 24 24"><path d="M15.55 14.52L9.48 4.5H7.03l6.07 10.02c.18.3.28.64.28 1 0 1.1-.9 2-2 2s-2-.9-2-2H7c0 1.66 1.34 3 3 3s3-1.34 3-3c0-.61-.22-1.17-.58-1.6zM12 2C8.13 2 5 5.13 5 9c0 1.66.58 3.18 1.55 4.38L12 22l5.45-8.62C18.42 12.18 19 10.66 19 9c0-3.87-3.13-7-7-7z"/></svg>
-        <span>Color</span>
-      </button>
-      <input type="color" id="colorPicker" style="display:none" />
-      <!-- Insert Link -->
-      <button class="tool-btn" data-cmd="createLink" title="Insert Link">
-        <svg viewBox="0 0 24 24"><path d="M3.9 12c0-1.17.44-2.27 1.24-3.06l3.34-3.34c1.65-1.65 4.33-1.65 5.98 0 1.65 1.65 1.65 4.33 0 5.98l-1.06 1.06-1.41-1.41 1.06-1.06c.88-.88.88-2.31 0-3.19-.88-.88-2.31-.88-3.19 0l-3.34 3.34c-.88.88-.88 2.31 0 3.19.88.88 2.31.88 3.19 0l1.06-1.06 1.41 1.41-1.06 1.06c-1.65 1.65-4.33 1.65-5.98 0C4.34 14.27 3.9 13.17 3.9 12zm16.2 0c0 1.17-.44 2.27-1.24 3.06l-3.34 3.34c-1.65 1.65-4.33 1.65-5.98 0-1.65-1.65-1.65-4.33 0-5.98l1.06-1.06 1.41 1.41-1.06 1.06c-.88.88-.88 2.31 0 3.19.88.88 2.31.88 3.19 0l3.34-3.34c.88-.88.88-2.31 0-3.19-.88-.88-2.31-.88-3.19 0l-1.06 1.06-1.41-1.41 1.06-1.06c1.65-1.65 4.33-1.65 5.98 0 1.65 1.65 1.65 4.33 0 5.98z"/></svg>
-        <span>Link</span>
-      </button>
-      <!-- Unlink -->
-      <button class="tool-btn" data-cmd="unlink" title="Remove Link">
-        <svg viewBox="0 0 24 24"><path d="M12.71 11.29l-1.42 1.42L10 11.42l-1.29 1.29-1.42-1.42L8.58 10 7.29 8.71l1.42-1.42L10 8.58l1.29-1.29 1.42 1.42L11.42 10l1.29 1.29zM17.65 6.35l-1.41 1.41 1.41 1.41L19.06 7.76l-1.41-1.41zm-11.3 11.3l-1.41 1.41 1.41 1.41 1.41-1.41-1.41-1.41z"/></svg>
-        <span>Unlink</span>
-      </button>
-    </div>
-
-    <div id="editor" contenteditable="true" spellcheck="false" data-placeholder="Type your notes here..."></div>
-
-    <div id="controls">
-      <input type="password" id="password" placeholder="Password" />
-      <button class="action-btn" id="saveBtn">Download&nbsp;Encrypted</button>
-      <button class="action-btn" id="loadBtn">Decrypt&nbsp;&amp;&nbsp;Load</button>
-      <button class="action-btn" id="uploadBtn">Upload&nbsp;Encrypted&nbsp;File</button>
-      <input type="file" id="fileInput" accept=".json" />
-    </div>
-
-    <div id="message"></div>
   </div>
+
+  <div id="snackbar" role="status" aria-live="polite"></div>
 
   <script>
     let notes = [];
     let currentTabId = null;
     let tabCounter = 0;
     let dragSrcId = null;
+    let savedSelectionRange = null;
+
+    let currentModalAction = null;
+    let pendingUploadData = null;
+    let pendingUploadFileName = '';
+    let snackbarTimeout = null;
 
     const STORAGE_KEY = 'pokepadEncrypted';
     const PLAIN_KEY = 'pokepadPlain';
+
     const tabBar = document.getElementById('tabBar');
+    const addTabBtn = document.getElementById('addTabBtn');
     const editor = document.getElementById('editor');
-    const passwordInput = document.getElementById('password');
     const saveBtn = document.getElementById('saveBtn');
     const loadBtn = document.getElementById('loadBtn');
     const uploadBtn = document.getElementById('uploadBtn');
     const fileInput = document.getElementById('fileInput');
-    const messageDiv = document.getElementById('message');
-    const toolbarButtons = document.querySelectorAll('#toolbar .tool-btn');
-    const e2eeLabel = document.getElementById('e2eeLabel');
-    const e2eePopup = document.getElementById('e2eePopup');
-    const e2eeCloseBtn = document.getElementById('e2eeCloseBtn');
+    const snackbar = document.getElementById('snackbar');
+    const toolbarButtons = document.querySelectorAll('#toolbar .tool-btn[data-cmd]');
     const colorPicker = document.getElementById('colorPicker');
     const colorPickerBtn = document.getElementById('colorPickerBtn');
+    const colorIndicator = document.getElementById('colorIndicator');
 
-    // On load: attempt to load plain data so tabs persist
+    const lineGutter = document.getElementById('lineGutter');
+    const lineNumbersList = document.getElementById('lineNumbersList');
+    const closeGutterBtn = document.getElementById('closeGutterBtn');
+    const toggleGutterStatusBtn = document.getElementById('toggleGutterStatusBtn');
+    const lineCountDisplay = document.getElementById('lineCountDisplay');
+    const wordCountDisplay = document.getElementById('wordCountDisplay');
+    const charCountDisplay = document.getElementById('charCountDisplay');
+
+    const e2eeLabel = document.getElementById('e2eeLabel');
+    const e2eeModalScrim = document.getElementById('e2eeModalScrim');
+    const e2eeCloseBtn = document.getElementById('e2eeCloseBtn');
+
+    const passwordModalScrim = document.getElementById('passwordModalScrim');
+    const passwordModalTitle = document.getElementById('passwordModalTitle');
+    const passwordModalSubtitle = document.getElementById('passwordModalSubtitle');
+    const passwordFieldBox = document.getElementById('passwordFieldBox');
+    const modalPasswordInput = document.getElementById('modalPasswordInput');
+    const togglePasswordVisBtn = document.getElementById('togglePasswordVisBtn');
+    const togglePasswordVisIcon = document.getElementById('togglePasswordVisIcon');
+    const copyPasswordBtn = document.getElementById('copyPasswordBtn');
+    const suggestKeyRow = document.getElementById('suggestKeyRow');
+    const suggestKeyBtn = document.getElementById('suggestKeyBtn');
+    const passwordModalError = document.getElementById('passwordModalError');
+    const passwordModalCancelBtn = document.getElementById('passwordModalCancelBtn');
+    const passwordModalConfirmBtn = document.getElementById('passwordModalConfirmBtn');
+
+    const insertLinkBtn = document.getElementById('insertLinkBtn');
+    const linkModalScrim = document.getElementById('linkModalScrim');
+    const modalLinkInput = document.getElementById('modalLinkInput');
+    const linkModalCancelBtn = document.getElementById('linkModalCancelBtn');
+    const linkModalConfirmBtn = document.getElementById('linkModalConfirmBtn');
+
+    const EYE_OPEN_PATH = 'M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z';
+    const EYE_OFF_PATH = 'M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z';
+
     window.addEventListener('DOMContentLoaded', () => {
       const storedPlain = localStorage.getItem(PLAIN_KEY);
       if (storedPlain) {
         try {
           const parsedPlain = JSON.parse(storedPlain);
-          if (parsedPlain.notes && Array.isArray(parsedPlain.notes)) {
+          if (parsedPlain.notes && Array.isArray(parsedPlain.notes) && parsedPlain.notes.length > 0) {
             notes = parsedPlain.notes;
-            tabCounter = notes.length ? Math.max(...notes.map(n => n.id)) + 1 : 0;
+            tabCounter = Math.max(...notes.map(n => n.id)) + 1;
             currentTabId = parsedPlain.currentTabId != null
               ? parsedPlain.currentTabId
               : notes[0]?.id;
@@ -398,13 +1047,69 @@
               const curr = notes.find(n => n.id === currentTabId);
               editor.innerHTML = curr ? curr.content : '';
             }
+            updateMetricsAndLines();
+            setInterval(savePlain, 10000);
             return;
           }
         } catch {}
       }
-      // If no plain data, create default tab
       createNewTab();
+      updateMetricsAndLines();
       setInterval(savePlain, 10000);
+    });
+
+    function updateMetricsAndLines() {
+      const rawText = (editor.innerText || '').replace(/\r\n/g, '\n');
+      const normalized = rawText.replace(/\n$/, '');
+
+      const trimmed = normalized.trim();
+      const words = trimmed ? trimmed.split(/\s+/).length : 0;
+      const chars = normalized.replace(/\n/g, '').length;
+
+      let totalLines = 1;
+      const hasBlockChildren = editor.querySelector('div, p, li, br, h1, h2, h3, h4, h5, h6, blockquote, pre') !== null;
+
+      if (normalized.length === 0 && !hasBlockChildren) {
+        totalLines = 1;
+      } else if (normalized.length > 0) {
+        totalLines = Math.max(1, normalized.split('\n').length);
+      } else {
+        const brCount = editor.querySelectorAll('br').length;
+        const blockCount = editor.querySelectorAll('div, p, li').length;
+        totalLines = Math.max(1, blockCount || brCount);
+      }
+
+      wordCountDisplay.textContent = `${words} ${words === 1 ? 'word' : 'words'}`;
+      charCountDisplay.textContent = `${chars} ${chars === 1 ? 'character' : 'characters'}`;
+      lineCountDisplay.textContent = `${totalLines} ${totalLines === 1 ? 'line' : 'lines'}`;
+
+      let gutterHtml = '';
+      for (let i = 1; i <= totalLines; i++) {
+        gutterHtml += `<span class="line-num">${i}</span>`;
+      }
+      lineNumbersList.innerHTML = gutterHtml;
+      lineNumbersList.scrollTop = editor.scrollTop;
+    }
+
+    editor.addEventListener('scroll', () => {
+      lineNumbersList.scrollTop = editor.scrollTop;
+    });
+
+    window.addEventListener('resize', updateMetricsAndLines);
+
+    closeGutterBtn.addEventListener('click', () => {
+      lineGutter.classList.add('closed');
+      toggleGutterStatusBtn.classList.remove('active');
+      toggleGutterStatusBtn.setAttribute('aria-pressed', 'false');
+    });
+
+    toggleGutterStatusBtn.addEventListener('click', () => {
+      const isClosed = lineGutter.classList.toggle('closed');
+      toggleGutterStatusBtn.classList.toggle('active', !isClosed);
+      toggleGutterStatusBtn.setAttribute('aria-pressed', (!isClosed).toString());
+      if (!isClosed) {
+        updateMetricsAndLines();
+      }
     });
 
     function createNewTab(name = null, content = '') {
@@ -416,41 +1121,55 @@
       savePlain();
     }
 
+    addTabBtn.addEventListener('click', () => createNewTab());
+
     function renderTabs() {
       tabBar.innerHTML = '';
       notes.forEach((note) => {
         const tabEl = document.createElement('div');
         tabEl.className = 'tab' + (note.id === currentTabId ? ' active' : '');
+        tabEl.setAttribute('role', 'tab');
+        tabEl.setAttribute('aria-selected', note.id === currentTabId ? 'true' : 'false');
         tabEl.setAttribute('draggable', 'true');
         tabEl.dataset.id = note.id;
 
         const titleSpan = document.createElement('span');
         titleSpan.className = 'title-text';
         titleSpan.textContent = note.name;
+        titleSpan.addEventListener('dblclick', (e) => {
+          e.stopPropagation();
+          promptRename(note.id, titleSpan);
+        });
         tabEl.appendChild(titleSpan);
 
-        const renameBtn = document.createElement('span');
+        const actionsWrap = document.createElement('div');
+        actionsWrap.className = 'tab-actions';
+
+        const renameBtn = document.createElement('button');
+        renameBtn.type = 'button';
         renameBtn.className = 'icon-btn';
-        renameBtn.textContent = '✎';
+        renameBtn.innerHTML = '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
         renameBtn.title = 'Rename tab';
         renameBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           promptRename(note.id, titleSpan);
         });
-        tabEl.appendChild(renameBtn);
+        actionsWrap.appendChild(renameBtn);
 
-        const closeBtn = document.createElement('span');
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
         closeBtn.className = 'icon-btn';
-        closeBtn.textContent = '×';
+        closeBtn.innerHTML = '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
         closeBtn.title = 'Close tab';
         closeBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           closeTab(note.id);
         });
-        tabEl.appendChild(closeBtn);
+        actionsWrap.appendChild(closeBtn);
+
+        tabEl.appendChild(actionsWrap);
 
         tabEl.addEventListener('click', () => switchToTab(note.id));
-
         tabEl.addEventListener('dragstart', tabDragStart);
         tabEl.addEventListener('dragover', tabDragOver);
         tabEl.addEventListener('drop', tabDrop);
@@ -458,13 +1177,6 @@
 
         tabBar.appendChild(tabEl);
       });
-
-      const newTabEl = document.createElement('div');
-      newTabEl.className = 'tab';
-      newTabEl.textContent = '+';
-      newTabEl.title = 'Add new tab';
-      newTabEl.addEventListener('click', () => createNewTab());
-      tabBar.appendChild(newTabEl);
     }
 
     function switchToTab(id) {
@@ -476,7 +1188,7 @@
       const nextNote = notes.find(n => n.id === id);
       editor.innerHTML = nextNote ? nextNote.content : '';
       renderTabs();
-      clearMessage();
+      updateMetricsAndLines();
       editor.focus();
       savePlain();
     }
@@ -486,24 +1198,26 @@
       if (!note) return;
       const input = document.createElement('input');
       input.type = 'text';
+      input.className = 'tab-rename-input';
       input.value = note.name;
-      input.style.fontSize = '0.95rem';
-      input.style.background = 'rgba(20,20,35,0.6)';
-      input.style.color = 'var(--text)';
-      input.style.border = '1px solid var(--border)';
-      input.style.borderRadius = '4px';
-      input.style.padding = '2px 4px';
       titleSpan.replaceWith(input);
       input.focus();
       input.select();
-      input.addEventListener('blur', () => {
+
+      const commitRename = () => {
         const newName = input.value.trim();
         if (newName) note.name = newName;
         renderTabs();
         savePlain();
-      });
+      };
+
+      input.addEventListener('blur', commitRename);
       input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') input.blur();
+        if (e.key === 'Escape') {
+          input.value = note.name;
+          input.blur();
+        }
       });
     }
 
@@ -531,29 +1245,33 @@
       dragSrcId = Number(e.currentTarget.dataset.id);
       e.currentTarget.dataset.dragging = 'true';
     }
+
     function tabDragOver(e) {
       e.preventDefault();
       const targetId = Number(e.currentTarget.dataset.id);
       if (dragSrcId === targetId) return;
       const srcIndex = notes.findIndex(n => n.id === dragSrcId);
       const tgtIndex = notes.findIndex(n => n.id === targetId);
+      if (srcIndex === -1 || tgtIndex === -1) return;
       notes.splice(tgtIndex, 0, notes.splice(srcIndex, 1)[0]);
       renderTabs();
     }
+
     function tabDrop(e) {
       e.stopPropagation();
       savePlain();
     }
+
     function tabDragEnd(e) {
       delete e.currentTarget.dataset.dragging;
     }
 
-    // Save editor changes
     editor.addEventListener('input', () => {
       if (currentTabId !== null) {
         const note = notes.find(n => n.id === currentTabId);
         if (note) note.content = editor.innerHTML;
       }
+      updateMetricsAndLines();
       savePlain();
     });
 
@@ -641,134 +1359,277 @@
       }
     }
 
-    saveBtn.addEventListener('click', async () => {
-      clearMessage();
-      const pw = passwordInput.value;
-      if (!pw) {
-        showMessage('Please enter a password before downloading.', 'error');
-        return;
+    function applyDecryptedNotes(parsed) {
+      notes = parsed.notes.map(n => ({ id: n.id, name: n.name, content: n.content }));
+      tabCounter = notes.length ? Math.max(...notes.map(n => n.id)) + 1 : 0;
+      currentTabId = parsed.currentTabId != null ? parsed.currentTabId : (notes[0]?.id);
+      renderTabs();
+      if (currentTabId != null) {
+        const curr = notes.find(n => n.id === currentTabId);
+        editor.innerHTML = curr ? curr.content : '';
+      } else if (notes[0]) {
+        currentTabId = notes[0].id;
+        editor.innerHTML = notes[0].content;
       }
-      if (currentTabId !== null) {
-        const currentNote = notes.find(n => n.id === currentTabId);
-        if (currentNote) currentNote.content = editor.innerHTML;
-      }
+      updateMetricsAndLines();
       savePlain();
-      const payload = { notes, currentTabId };
-      const jsonString = JSON.stringify(payload);
+    }
+
+    function generateStrongKey() {
+      const charset = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*';
+      const values = new Uint32Array(24);
+      crypto.getRandomValues(values);
+      let result = '';
+      for (let i = 0; i < 24; i++) {
+        if (i > 0 && i % 6 === 0) result += '-';
+        result += charset[values[i] % charset.length];
+      }
+      return result;
+    }
+
+    function copyTextToClipboard(text) {
+      const tempInput = document.createElement('textarea');
+      tempInput.value = text;
+      tempInput.style.position = 'fixed';
+      tempInput.style.opacity = '0';
+      document.body.appendChild(tempInput);
+      tempInput.select();
       try {
-        const encrypted = await encryptData(jsonString, pw);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(encrypted));
-        const downloadObj = JSON.stringify(encrypted);
-        const blob = new Blob([downloadObj], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        const timestamp = new Date().toISOString().slice(0,19).replace(/[:T]/g, '-');
-        a.download = `pokepad_${timestamp}.json`;
-        a.href = url;
-        a.click();
-        URL.revokeObjectURL(url);
-        showMessage('Encrypted file ready to download.', 'success');
+        document.execCommand('copy');
+        showSnackbar('Encryption key copied to clipboard.', 'success');
       } catch {
-        showMessage('Error during encryption. Try again.', 'error');
+        showSnackbar('Could not copy automatically.', 'error');
+      }
+      document.body.removeChild(tempInput);
+    }
+
+    function openPasswordModal({ mode, title, subtitle, confirmText }) {
+      currentModalAction = mode;
+      passwordModalTitle.textContent = title;
+      passwordModalSubtitle.textContent = subtitle;
+      passwordModalConfirmBtn.textContent = confirmText;
+
+      modalPasswordInput.value = '';
+      modalPasswordInput.type = 'password';
+      togglePasswordVisIcon.innerHTML = `<path d="${EYE_OPEN_PATH}"/>`;
+      copyPasswordBtn.style.display = 'none';
+      clearModalError();
+
+      if (mode === 'download') {
+        suggestKeyRow.classList.add('visible');
+      } else {
+        suggestKeyRow.classList.remove('visible');
+      }
+
+      passwordModalScrim.classList.add('open');
+      setTimeout(() => modalPasswordInput.focus(), 50);
+    }
+
+    function closePasswordModal() {
+      passwordModalScrim.classList.remove('open');
+      currentModalAction = null;
+      pendingUploadData = null;
+      pendingUploadFileName = '';
+      modalPasswordInput.value = '';
+      clearModalError();
+    }
+
+    function setModalError(msg) {
+      passwordFieldBox.classList.add('error');
+      passwordModalError.textContent = msg;
+    }
+
+    function clearModalError() {
+      passwordFieldBox.classList.remove('error');
+      passwordModalError.textContent = '';
+    }
+
+    modalPasswordInput.addEventListener('input', () => {
+      clearModalError();
+      copyPasswordBtn.style.display = modalPasswordInput.value ? 'inline-flex' : 'none';
+    });
+
+    suggestKeyBtn.addEventListener('click', () => {
+      const suggested = generateStrongKey();
+      modalPasswordInput.value = suggested;
+      modalPasswordInput.type = 'text';
+      togglePasswordVisIcon.innerHTML = `<path d="${EYE_OFF_PATH}"/>`;
+      copyPasswordBtn.style.display = 'inline-flex';
+      clearModalError();
+      copyTextToClipboard(suggested);
+      modalPasswordInput.focus();
+    });
+
+    copyPasswordBtn.addEventListener('click', () => {
+      if (modalPasswordInput.value) {
+        copyTextToClipboard(modalPasswordInput.value);
       }
     });
 
-    uploadBtn.addEventListener('click', () => { clearMessage(); fileInput.click(); });
+    togglePasswordVisBtn.addEventListener('click', () => {
+      const isPw = modalPasswordInput.type === 'password';
+      modalPasswordInput.type = isPw ? 'text' : 'password';
+      togglePasswordVisIcon.innerHTML = `<path d="${isPw ? EYE_OFF_PATH : EYE_OPEN_PATH}"/>`;
+      modalPasswordInput.focus();
+    });
+
+    passwordModalCancelBtn.addEventListener('click', closePasswordModal);
+
+    passwordModalScrim.addEventListener('click', (e) => {
+      if (e.target === passwordModalScrim) closePasswordModal();
+    });
+
+    modalPasswordInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handlePasswordModalSubmit();
+      } else if (e.key === 'Escape') {
+        closePasswordModal();
+      }
+    });
+
+    passwordModalConfirmBtn.addEventListener('click', handlePasswordModalSubmit);
+
+    async function handlePasswordModalSubmit() {
+      const pw = modalPasswordInput.value;
+      if (!pw) {
+        setModalError('Please enter a password.');
+        modalPasswordInput.focus();
+        return;
+      }
+
+      if (currentModalAction === 'upload') {
+        try {
+          const decryptedText = await decryptData(pendingUploadData, pw);
+          const parsed = JSON.parse(decryptedText);
+          if (!parsed.notes || !Array.isArray(parsed.notes)) {
+            setModalError('Decrypted file does not contain valid Notes :c');
+            return;
+          }
+          applyDecryptedNotes(parsed);
+          closePasswordModal();
+          showSnackbar('Decryption successful! Ur Notes are loaded', 'success');
+        } catch {
+          setModalError('Incorrect password or corrupted file. Please try again.');
+          modalPasswordInput.select();
+        }
+      } else if (currentModalAction === 'download') {
+        if (currentTabId !== null) {
+          const currentNote = notes.find(n => n.id === currentTabId);
+          if (currentNote) currentNote.content = editor.innerHTML;
+        }
+        savePlain();
+        const payload = { notes, currentTabId };
+        const jsonString = JSON.stringify(payload);
+        try {
+          const encrypted = await encryptData(jsonString, pw);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(encrypted));
+          const downloadObj = JSON.stringify(encrypted);
+          const blob = new Blob([downloadObj], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+          a.download = `pokepad_${timestamp}.json`;
+          a.href = url;
+          a.click();
+          URL.revokeObjectURL(url);
+          closePasswordModal();
+          showSnackbar('Encrypted file ready to download!! yippe', 'success');
+        } catch {
+          setModalError('Error during encryption...... sad');
+        }
+      } else if (currentModalAction === 'loadLocal') {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (!stored) {
+          closePasswordModal();
+          showSnackbar('No locally stored data found!', 'error');
+          return;
+        }
+        try {
+          const encryptedObj = JSON.parse(stored);
+          const decryptedText = await decryptData(encryptedObj, pw);
+          const parsed = JSON.parse(decryptedText);
+          if (!parsed.notes || !Array.isArray(parsed.notes)) {
+            setModalError('Invalid local data format.');
+            return;
+          }
+          applyDecryptedNotes(parsed);
+          closePasswordModal();
+          showSnackbar('Decryption successful!!!!!!!!! Notes loaded from localStorage.', 'success');
+        } catch {
+          setModalError('Decryption failed or data corrupted :c');
+          modalPasswordInput.select();
+        }
+      }
+    }
+
+    uploadBtn.addEventListener('click', () => {
+      fileInput.click();
+    });
 
     fileInput.addEventListener('change', () => {
       const file = fileInput.files[0];
       if (!file) return;
+      const fileName = file.name;
       const reader = new FileReader();
-      reader.onload = async (e) => {
-        clearMessage();
-        const pw = passwordInput.value;
-        if (!pw) {
-          showMessage('Enter password to decrypt uploaded file.', 'error');
-          return;
-        }
+      reader.onload = (e) => {
         try {
           const encryptedObj = JSON.parse(e.target.result);
-          const decryptedText = await decryptData(encryptedObj, pw);
-          const parsed = JSON.parse(decryptedText);
-          if (!parsed.notes || !Array.isArray(parsed.notes)) {
-            showMessage('Invalid file format.', 'error');
+          if (!encryptedObj.salt || !encryptedObj.iv || !encryptedObj.data) {
+            showSnackbar('Invalid file format.', 'error');
             return;
           }
-          notes = parsed.notes.map(n => ({ id: n.id, name: n.name, content: n.content }));
-          tabCounter = notes.length ? Math.max(...notes.map(n => n.id)) + 1 : 0;
-          currentTabId = parsed.currentTabId != null ? parsed.currentTabId : (notes[0]?.id);
-          renderTabs();
-          if (currentTabId != null) {
-            const curr = notes.find(n => n.id === currentTabId);
-            editor.innerHTML = curr ? curr.content : '';
-          } else if (notes[0]) {
-            currentTabId = notes[0].id;
-            editor.innerHTML = notes[0].content;
-          }
-          savePlain();
-          showMessage('Decryption successful! Notes loaded.', 'success');
+          pendingUploadData = encryptedObj;
+          pendingUploadFileName = fileName;
+          openPasswordModal({
+            mode: 'upload',
+            title: 'Decrypt Uploaded File',
+            subtitle: `Enter ur password to decrypt "${fileName}".`,
+            confirmText: 'Decrypt'
+          });
         } catch {
-          showMessage('Failed to decrypt or parse file.', 'error');
+          showSnackbar('Failed to parse file! :c', 'error');
         }
       };
       reader.readAsText(file);
       fileInput.value = '';
     });
 
-    loadBtn.addEventListener('click', async () => {
-      clearMessage();
-      const pw = passwordInput.value;
-      if (!pw) {
-        showMessage('Enter password to decrypt stored data.', 'error');
-        return;
-      }
+    saveBtn.addEventListener('click', () => {
+      openPasswordModal({
+        mode: 'download',
+        title: 'Download Encrypted',
+        subtitle: 'Enter a password or suggest a key to encrypt your notes! Make sure to pick a good one :>',
+        confirmText: 'Encrypt & Download'
+      });
+    });
+
+    loadBtn.addEventListener('click', () => {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (!stored) {
-        showMessage('No locally stored data found.', 'error');
+        showSnackbar('No locally stored data found.', 'error');
         return;
       }
-      try {
-        const encryptedObj = JSON.parse(stored);
-        const decryptedText = await decryptData(encryptedObj, pw);
-        const parsed = JSON.parse(decryptedText);
-        if (!parsed.notes || !Array.isArray(parsed.notes)) {
-          showMessage('Invalid local data format.', 'error');
-          return;
-        }
-        notes = parsed.notes.map(n => ({ id: n.id, name: n.name, content: n.content }));
-        tabCounter = notes.length ? Math.max(...notes.map(n => n.id)) + 1 : 0;
-        currentTabId = parsed.currentTabId != null ? parsed.currentTabId : (notes[0]?.id);
-        renderTabs();
-        if (currentTabId != null) {
-          const curr = notes.find(n => n.id === currentTabId);
-          editor.innerHTML = curr ? curr.content : '';
-        } else if (notes[0]) {
-          currentTabId = notes[0].id;
-          editor.innerHTML = notes[0].content;
-        }
-        showMessage('Decryption successful! Notes loaded from localStorage.', 'success');
-        savePlain();
-      } catch {
-        showMessage('Decryption failed or data corrupted.', 'error');
-      }
+      openPasswordModal({
+        mode: 'loadLocal',
+        title: 'Decrypt & Load',
+        subtitle: 'Enter password to decrypt stored data!',
+        confirmText: 'Decrypt'
+      });
     });
 
-     window.addEventListener('keydown', (e) => {
+    window.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        showMessage('PokePad autosaves :3 ', 'success');
+        savePlain();
+        showSnackbar('PokePad autosaves :3 ', 'success');
       }
     });
 
-     toolbarButtons.forEach(btn => {
+    toolbarButtons.forEach(btn => {
       const cmd = btn.getAttribute('data-cmd');
       btn.addEventListener('click', () => {
-        if (cmd === 'createLink') {
-          const url = prompt('Enter the URL:', 'https://');
-          if (url) document.execCommand(cmd, false, url);
-        } else {
-          document.execCommand(cmd, false, null);
-        }
+        document.execCommand(cmd, false, null);
         editor.focus();
       });
     });
@@ -776,29 +1637,80 @@
     colorPickerBtn.addEventListener('click', () => {
       colorPicker.click();
     });
+
     colorPicker.addEventListener('input', () => {
+      colorIndicator.style.backgroundColor = colorPicker.value;
       document.execCommand('foreColor', false, colorPicker.value);
       editor.focus();
     });
 
-     e2eeLabel.addEventListener('click', () => {
-      e2eePopup.style.display = 'block';
-    });
-    e2eeCloseBtn.addEventListener('click', () => {
-      e2eePopup.style.display = 'none';
+    insertLinkBtn.addEventListener('click', () => {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        savedSelectionRange = sel.getRangeAt(0).cloneRange();
+      }
+      modalLinkInput.value = 'https://';
+      linkModalScrim.classList.add('open');
+      setTimeout(() => {
+        modalLinkInput.focus();
+        modalLinkInput.select();
+      }, 50);
     });
 
-     function showMessage(text, type) {
-      messageDiv.textContent = text;
-      messageDiv.className = type;
-      setTimeout(() => {
-        if (messageDiv.textContent === text) clearMessage();
+    function closeLinkModal() {
+      linkModalScrim.classList.remove('open');
+      savedSelectionRange = null;
+    }
+
+    function confirmInsertLink() {
+      const url = modalLinkInput.value.trim();
+      linkModalScrim.classList.remove('open');
+      editor.focus();
+      if (savedSelectionRange) {
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(savedSelectionRange);
+      }
+      if (url && url !== 'https://') {
+        document.execCommand('createLink', false, url);
+      }
+      savedSelectionRange = null;
+    }
+
+    linkModalCancelBtn.addEventListener('click', closeLinkModal);
+    linkModalConfirmBtn.addEventListener('click', confirmInsertLink);
+    linkModalScrim.addEventListener('click', (e) => {
+      if (e.target === linkModalScrim) closeLinkModal();
+    });
+    modalLinkInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        confirmInsertLink();
+      } else if (e.key === 'Escape') {
+        closeLinkModal();
+      }
+    });
+
+    e2eeLabel.addEventListener('click', () => {
+      e2eeModalScrim.classList.add('open');
+    });
+
+    e2eeCloseBtn.addEventListener('click', () => {
+      e2eeModalScrim.classList.remove('open');
+    });
+
+    e2eeModalScrim.addEventListener('click', (e) => {
+      if (e.target === e2eeModalScrim) e2eeModalScrim.classList.remove('open');
+    });
+
+    function showSnackbar(text, type = 'info') {
+      if (snackbarTimeout) clearTimeout(snackbarTimeout);
+      snackbar.textContent = text;
+      snackbar.className = 'show' + (type === 'error' ? ' error' : '');
+      snackbarTimeout = setTimeout(() => {
+        snackbar.className = '';
       }, 4000);
     }
-    function clearMessage() {
-      messageDiv.textContent = '';
-      messageDiv.className = '';
-    }
   </script>
-</body>
-</html>
+
+</body></html>
