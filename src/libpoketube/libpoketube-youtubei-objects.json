@@ -2,17 +2,17 @@
   "innertube": {
     "innertubeApiVersion": "v1",
     "pokevidious": "20.26",
-    "innertubeContextClientVersion": "2.20250909.02.00",
+    "innertubeContextClientVersion": "2.20260722.01.00",
     "youtubei": "https://www.youtube.com/youtubei/v1/",
-    "PAGE_BUILD_LABEL": "youtube.desktop.web_20250909_02_RC00",
+    "PAGE_BUILD_LABEL": "youtube.desktop.web_20260722_01_RC00",
     "CLIENT": {
       "clientName": "WEB",
       "projectClientName": "PokeVidious",
-      "clientVersion": "2.20250909.02.00"
+      "clientVersion": "2.20260722.01.00"
     },
     "CONTEXT_CLIENT": {
       "INNERTUBE_CONTEXT_CLIENT_NAME": "1",
-      "INNERTUBE_CONTEXT_CLIENT_VERSION": "2.20250909.02.00",
+      "INNERTUBE_CONTEXT_CLIENT_VERSION": "2.20260722.01.00",
       "INNERTUBE_CONTEXT_GL": "US",
       "INNERTUBE_CONTEXT_HL": "en"
     },
@@ -76,50 +76,50 @@
     "IOS": {
       "NAME": "iOS",
       "VERSION": "20.11.6",
-      "USER_AGENT": "com.google.ios.youtube/20.11.6 (iPhone10,4; U; CPU iOS 16_7_7 like Mac OS X)",
-      "DEVICE_MODEL": "iPhone10,4",
-      "OS_NAME": "iOS",
-      "OS_VERSION": "16.7.7.20H330",
+      "USER_AGENT": "com.google.ios.youtube/20.11.6 (iPhone14,5; U; CPU iOS 18_5 like Mac OS X;)",
+      "DEVICE_MODEL": "iPhone14,5",
+      "OS_NAME": "iPhone",
+      "OS_VERSION": "18.5.0.22F76",
       "API_KEY": "AIzaSyB-63vPrdThhKuerbB2N_l7Kwwcxj6yUAc",
       "API_VERSION": "v1"
     },
     "WEB": {
       "NAME": "WEB",
-      "VERSION": "2.20250909.02.00",
+      "VERSION": "2.20260722.01.00",
       "API_KEY": "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
       "API_VERSION": "v1",
       "STATIC_VISITOR_ID": "6zpwvWUNAco",
-      "PAGE_BUILD_LABEL": "youtube.desktop.web_20250909_02_RC00"
+      "PAGE_BUILD_LABEL": "youtube.desktop.web_20260722_01_RC00"
     },
     "MWEB": {
       "NAME": "MWEB",
-      "VERSION": "2.20250909.02.00",
+      "VERSION": "2.20260722.01.00",
       "API_VERSION": "v1"
     },
     "WEB_KIDS": {
       "NAME": "WEB_KIDS",
-      "VERSION": "2.20250909.02.00",
+      "VERSION": "2.20260722.01.00",
       "API_KEY": "AIzaSyBbZV_fZ3an51sF-mvs5w37OqqbsTOzwtU",
       "API_VERSION": "v1"
     },
     "YTMUSIC": {
       "NAME": "WEB_REMIX",
-      "VERSION": "2.20250909.02.00",
+      "VERSION": "2.20260722.01.00",
       "API_KEY": "AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30",
       "API_VERSION": "v1"
     },
     "WEB_CREATOR": {
       "NAME": "WEB_CREATOR",
-      "VERSION": "2.20250909.02.00",
+      "VERSION": "2.20260722.01.00",
       "API_KEY": "AIzaSyBUPetSUmoZL-OhlxA7wSac5XinrygCqMo",
       "API_VERSION": "v1",
       "STATIC_VISITOR_ID": "6zpwvWUNAco"
     },
     "ANDROID": {
       "NAME": "ANDROID",
-      "VERSION": "21.03.36",
-      "SDK_VERSION": 36,
-      "USER_AGENT": "com.google.android.youtube/21.03.36(Linux; U; Android 16; en_US; SM-S908E Build/TP1A.220624.014) gzip",
+      "VERSION": "21.29.366",
+      "SDK_VERSION": 33,
+      "USER_AGENT": "com.google.android.youtube/21.29.366 (Linux; U; Android 16; en_US; SM-S908E Build/TP1A.220624.014) gzip",
       "API_KEY": "AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w",
       "API_VERSION": "v1"
     },
@@ -137,7 +137,7 @@
     },
     "TV": {
       "NAME": "TVHTML5",
-      "VERSION": "7.20250219.14.00",
+      "VERSION": "2.20260722.01.00",
       "USER_AGENT": "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version",
       "API_KEY": "AIzaSyDCU8hByM-4DrUqRUYnGn-3llEO78bcxq8",
       "API_VERSION": "v1"
@@ -152,7 +152,7 @@
     },
     "WEB_EMBEDDED": {
       "NAME": "WEB_EMBEDDED_PLAYER",
-      "VERSION": "2.20250909.02.00",
+      "VERSION": "2.20260722.01.00",
       "API_KEY": "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
       "API_VERSION": "v1",
       "STATIC_VISITOR_ID": "6zpwvWUNAco"
