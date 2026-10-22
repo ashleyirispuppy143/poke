@@ -21,7 +21,7 @@
  * ///////////////////////////////////////////////////////////////////////////
  * "It takes a lot of hard work to make something simple." ~ Steve Jobs 
  */
- const SyncLevel = {
+const SyncLevel = {
   driftSeconds: 0,
   driftMs: 0,
   synced: true,
@@ -186,46 +186,56 @@ window.SyncLevel = SyncLevel;
       }
       return mins + ':' + padSecs;
     },
-    onSeekSettled: function(media, callback, timeoutMs, getTimeFn) {
+    onSeekSettled: function(media, callback, timeoutMs, getTimeFn, targetTime) {
       var finished = false;
       var timer = 0;
+      var settleTick = 0;
       var readTime = typeof getTimeFn === 'function' ? getTimeFn : function() { return media.currentTime; };
+      var isSettledNow = function() {
+        if (media.seeking) return false;
+        var cur = readTime();
+        if (targetTime !== undefined && isFinite(targetTime) && media.duration && isFinite(media.duration)) {
+          if (Math.abs(cur - targetTime) > 0.35 && bufferMonitor.ahead(media, targetTime) < 0.15) {
+            return false;
+          }
+        }
+        return media.readyState >= 3 || (media.readyState >= 2 && bufferMonitor.ahead(media, cur) >= 0.15);
+      };
       var check = function() {
         if (finished) return;
-        if (!media.seeking && (media.readyState >= 3 || (media.readyState >= 2 && bufferMonitor.ahead(media, readTime()) >= 0.15))) {
+        if (isSettledNow()) {
           done();
         }
+      };
+      var cleanup = function() {
+        clearTimeout(timer);
+        clearTimeout(settleTick);
+        media.removeEventListener('seeked', check, false);
+        media.removeEventListener('canplay', check, false);
+        media.removeEventListener('canplaythrough', check, false);
+        media.removeEventListener('loadeddata', check, false);
+        media.removeEventListener('progress', check, false);
       };
       var done = function() {
         if (finished) return;
         finished = true;
-        clearTimeout(timer);
-        media.removeEventListener('seeked', check, false);
-        media.removeEventListener('canplay', check, false);
-        media.removeEventListener('canplaythrough', check, false);
-        media.removeEventListener('loadeddata', check, false);
-        media.removeEventListener('progress', check, false);
+        cleanup();
         callback();
       };
-      if (!media.seeking && (media.readyState >= 3 || (media.readyState >= 2 && bufferMonitor.ahead(media, readTime()) >= 0.15))) {
-        done();
-        return function() {};
+      if (isSettledNow()) {
+        settleTick = setTimeout(done, 25);
+      } else {
+        timer = setTimeout(done, timeoutMs || config.seekTimeoutMs);
+        media.addEventListener('seeked', check, false);
+        media.addEventListener('canplay', check, false);
+        media.addEventListener('canplaythrough', check, false);
+        media.addEventListener('loadeddata', check, false);
+        media.addEventListener('progress', check, false);
       }
-      timer = setTimeout(done, timeoutMs || config.seekTimeoutMs);
-      media.addEventListener('seeked', check, false);
-      media.addEventListener('canplay', check, false);
-      media.addEventListener('canplaythrough', check, false);
-      media.addEventListener('loadeddata', check, false);
-      media.addEventListener('progress', check, false);
       return function() {
         if (finished) return;
         finished = true;
-        clearTimeout(timer);
-        media.removeEventListener('seeked', check, false);
-        media.removeEventListener('canplay', check, false);
-        media.removeEventListener('canplaythrough', check, false);
-        media.removeEventListener('loadeddata', check, false);
-        media.removeEventListener('progress', check, false);
+        cleanup();
       };
     }
   };
@@ -727,6 +737,8 @@ window.SyncLevel = SyncLevel;
         userSeeking: false,
         internalVideoSeeking: false,
         internalAudioSeeking: false,
+        syncingState: false,
+        handlingEnded: false,
         liveSnapUntil: 0,
         seekTarget: 0,
         savedMasterTime: 0,
@@ -890,7 +902,7 @@ window.SyncLevel = SyncLevel;
       function setVideoTimeInternally(seconds) {
         state.internalVideoSeeking = true;
         runInternal(function() {
-          nativeSetVTime(seconds);
+          try { nativeSetVTime(seconds); } catch (_) {}
         });
       }
 
@@ -898,7 +910,7 @@ window.SyncLevel = SyncLevel;
         state.internalVideoSeeking = true;
         state.liveSnapUntil = compat.now() + 380;
         runInternal(function() {
-          nativeSetVTime(targetSeconds);
+          try { nativeSetVTime(targetSeconds); } catch (_) {}
         });
       }
 
@@ -906,7 +918,7 @@ window.SyncLevel = SyncLevel;
         state.internalAudioSeeking = true;
         state.savedMasterTime = seconds;
         runInternal(function() {
-          nativeSetATime(seconds);
+          try { nativeSetATime(seconds); } catch (_) {}
         });
       }
 
@@ -924,6 +936,24 @@ window.SyncLevel = SyncLevel;
             try { nativeAudioPause(); } catch (_) {}
           }
         });
+      }
+
+      function seekVideoAndWait(targetSeconds, callback) {
+        setVideoTimeInternally(targetSeconds);
+        state.cancelSeekWait = compat.onSeekSettled(videoEl, function() {
+          state.cancelSeekWait = null;
+          state.internalVideoSeeking = false;
+          callback();
+        }, getSeekTimeout(), nativeGetVTime, targetSeconds);
+      }
+
+      function seekAudioAndWait(targetSeconds, callback) {
+        setAudioTimeInternally(targetSeconds);
+        state.cancelSeekWait = compat.onSeekSettled(audioEl, function() {
+          state.cancelSeekWait = null;
+          state.internalAudioSeeking = false;
+          callback();
+        }, getSeekTimeout(), nativeGetATime, targetSeconds);
       }
 
       function waitVideoSettled(callback) {
@@ -945,7 +975,9 @@ window.SyncLevel = SyncLevel;
         freezeBothStreams({ alignToAnchor: true });
         shield.deactivate();
         markPlayerPausedUI(player);
-        player.trigger('pause');
+        runInternal(function() {
+          player.trigger('pause');
+        });
         if (navigator.mediaSession) navigator.mediaSession.playbackState = 'paused';
       }
 
@@ -969,6 +1001,7 @@ window.SyncLevel = SyncLevel;
           configurable: true,
           enumerable: true,
           get: function() {
+            if (state.internalDepth > 0) return nativeGetVTime();
             if (state.userSeeking) return state.seekTarget;
             if (state.buffering && state.frozenDisplayTime > 0) return state.frozenDisplayTime;
             var master = getMasterAnchorTime();
@@ -1099,8 +1132,9 @@ window.SyncLevel = SyncLevel;
 
       function clearPendingWait() {
         if (state.cancelSeekWait) {
-          state.cancelSeekWait();
+          var cancel = state.cancelSeekWait;
           state.cancelSeekWait = null;
+          cancel();
         }
       }
 
@@ -1344,12 +1378,9 @@ window.SyncLevel = SyncLevel;
           } else {
             freezeBothStreams();
             setBufferSpinner(true);
-            state.cancelSeekWait = waitVideoSettled(function() {
-              state.cancelSeekWait = null;
-              state.internalVideoSeeking = false;
+            seekVideoAndWait(aNow, function() {
               syncPlaybackState();
             });
-            setVideoTimeInternally(aNow);
           }
         }
       }
@@ -1381,8 +1412,10 @@ window.SyncLevel = SyncLevel;
                   updateMediaSessionMetadata();
                   updateMediaSessionPosition();
                   markPlayerStartedUI(player);
-                  player.trigger('play');
-                  player.trigger('playing');
+                  runInternal(function() {
+                    player.trigger('play');
+                    player.trigger('playing');
+                  });
                   if (navigator.mediaSession) navigator.mediaSession.playbackState = 'playing';
                 }).catch(function(err) {
                   if (err && err.name === 'NotAllowedError') {
@@ -1423,8 +1456,10 @@ window.SyncLevel = SyncLevel;
                   updateMediaSessionMetadata();
                   updateMediaSessionPosition();
                   markPlayerStartedUI(player);
-                  player.trigger('play');
-                  player.trigger('playing');
+                  runInternal(function() {
+                    player.trigger('play');
+                    player.trigger('playing');
+                  });
                   if (navigator.mediaSession) navigator.mediaSession.playbackState = 'playing';
                 }).catch(function(err) {
                   if (err && err.name === 'NotAllowedError') {
@@ -1449,12 +1484,9 @@ window.SyncLevel = SyncLevel;
         if (masterAnchor > 0.05 && Math.abs(aCurNow - masterAnchor) > 0.15 && !audioEl.seeking) {
           freezeBothStreams();
           setBufferSpinner(true);
-          state.cancelSeekWait = waitAudioSettled(function() {
-            state.cancelSeekWait = null;
-            state.internalAudioSeeking = false;
+          seekAudioAndWait(masterAnchor, function() {
             syncPlaybackState();
           });
-          setAudioTimeInternally(masterAnchor);
           return;
         }
 
@@ -1462,12 +1494,9 @@ window.SyncLevel = SyncLevel;
         if (Math.abs(vCurNow - targetSyncTime) > config.maxStartDesyncSec) {
           freezeBothStreams();
           setBufferSpinner(true);
-          state.cancelSeekWait = waitVideoSettled(function() {
-            state.cancelSeekWait = null;
-            state.internalVideoSeeking = false;
+          seekVideoAndWait(targetSyncTime, function() {
             syncPlaybackState();
           });
-          setVideoTimeInternally(targetSyncTime);
           return;
         }
 
@@ -1503,12 +1532,9 @@ window.SyncLevel = SyncLevel;
             } else {
               freezeBothStreams();
               setBufferSpinner(true);
-              state.cancelSeekWait = waitVideoSettled(function() {
-                state.cancelSeekWait = null;
-                state.internalVideoSeeking = false;
+              seekVideoAndWait(liveAudioNow, function() {
                 startLockstepPlayback();
               });
-              setVideoTimeInternally(liveAudioNow);
               state.lastCorrectionAt = compat.now();
               return;
             }
@@ -1519,8 +1545,10 @@ window.SyncLevel = SyncLevel;
           clearWatchdog();
           shield.activate();
           markPlayerStartedUI(player);
-          player.trigger('play');
-          player.trigger('playing');
+          runInternal(function() {
+            player.trigger('play');
+            player.trigger('playing');
+          });
           if (navigator.mediaSession) navigator.mediaSession.playbackState = 'playing';
           return;
         }
@@ -1545,12 +1573,9 @@ window.SyncLevel = SyncLevel;
           if (!isVideoBypassed() && !state.hidden && Math.abs(preV - preA) > config.maxStartDesyncSec) {
             freezeBothStreams();
             setBufferSpinner(true);
-            state.cancelSeekWait = waitVideoSettled(function() {
-              state.cancelSeekWait = null;
-              state.internalVideoSeeking = false;
+            seekVideoAndWait(preA, function() {
               syncPlaybackState();
             });
-            setVideoTimeInternally(preA);
             return;
           }
 
@@ -1598,12 +1623,9 @@ window.SyncLevel = SyncLevel;
                     } else {
                       freezeBothStreams();
                       setBufferSpinner(true);
-                      state.cancelSeekWait = waitVideoSettled(function() {
-                        state.cancelSeekWait = null;
-                        state.internalVideoSeeking = false;
+                      seekVideoAndWait(postPlayA, function() {
                         syncPlaybackState();
                       });
-                      setVideoTimeInternally(postPlayA);
                       return;
                     }
                   }
@@ -1624,8 +1646,10 @@ window.SyncLevel = SyncLevel;
                   updateMediaSessionMetadata();
                   updateMediaSessionPosition();
                   markPlayerStartedUI(player);
-                  player.trigger('play');
-                  player.trigger('playing');
+                  runInternal(function() {
+                    player.trigger('play');
+                    player.trigger('playing');
+                  });
                   if (navigator.mediaSession) navigator.mediaSession.playbackState = 'playing';
                 }
               }).catch(function(err) {
@@ -1655,81 +1679,89 @@ window.SyncLevel = SyncLevel;
       }
 
       function syncPlaybackState() {
-        if (!state.wantPlaying) {
-          setBufferSpinner(false);
-          clearWatchdog();
-          freezeBothStreams({ alignToAnchor: true });
-          shield.deactivate();
-          return;
-        }
-
-        if (isPlaybackCompleted()) {
-          onStreamEnded();
-          return;
-        }
-
-        if (state.userSeeking) {
-          setBufferSpinner(true);
-          freezeBothStreams();
-          armNetworkWatchdog();
-          return;
-        }
-
-        var timeBuf = state.buffering ? (compat.now() - state.bufferStartTime) : 0;
-        var neededLead = state.buffering ? getMinResumeBuffer() : getMinPlayBuffer();
-
-        if (isVideoBypassed()) {
-          if (bufferMonitor.canPlayCleanly(audioEl, neededLead, timeBuf, nativeGetATime())) {
-            state.isFrozen = false;
+        if (state.syncingState) return;
+        state.syncingState = true;
+        try {
+          if (!state.wantPlaying) {
             setBufferSpinner(false);
             clearWatchdog();
-            enforceRateAndVolume();
-            if (nativeGetAPaused() && !audioEl.seeking && !audioEl.ended) {
-              runInternal(function() {
-                var pA = nativeAudioPlay();
-                if (pA && typeof pA.then === 'function') {
-                  pA.then(function() {
-                    state.hasStartedPlayback = true;
-                    updateMediaSessionMetadata();
-                    updateMediaSessionPosition();
-                    markPlayerStartedUI(player);
-                    player.trigger('play');
-                    player.trigger('playing');
-                    if (navigator.mediaSession) navigator.mediaSession.playbackState = 'playing';
-                  }).catch(function(err) {
-                    if (err && err.name === 'NotAllowedError') {
-                      applyBlockedAutoplayPauseState();
-                    }
-                  });
-                }
-              });
-            } else if (!nativeGetAPaused()) {
-              state.hasStartedPlayback = true;
-              markPlayerStartedUI(player);
-              if (navigator.mediaSession) navigator.mediaSession.playbackState = 'playing';
-            }
-          } else {
+            freezeBothStreams({ alignToAnchor: true });
+            shield.deactivate();
+            return;
+          }
+
+          if (isPlaybackCompleted()) {
+            onStreamEnded();
+            return;
+          }
+
+          if (state.userSeeking) {
             setBufferSpinner(true);
             freezeBothStreams();
             armNetworkWatchdog();
+            return;
           }
-          return;
+
+          var timeBuf = state.buffering ? (compat.now() - state.bufferStartTime) : 0;
+          var neededLead = state.buffering ? getMinResumeBuffer() : getMinPlayBuffer();
+
+          if (isVideoBypassed()) {
+            if (bufferMonitor.canPlayCleanly(audioEl, neededLead, timeBuf, nativeGetATime())) {
+              state.isFrozen = false;
+              setBufferSpinner(false);
+              clearWatchdog();
+              enforceRateAndVolume();
+              if (nativeGetAPaused() && !audioEl.seeking && !audioEl.ended) {
+                runInternal(function() {
+                  var pA = nativeAudioPlay();
+                  if (pA && typeof pA.then === 'function') {
+                    pA.then(function() {
+                      state.hasStartedPlayback = true;
+                      updateMediaSessionMetadata();
+                      updateMediaSessionPosition();
+                      markPlayerStartedUI(player);
+                      runInternal(function() {
+                        player.trigger('play');
+                        player.trigger('playing');
+                      });
+                      if (navigator.mediaSession) navigator.mediaSession.playbackState = 'playing';
+                    }).catch(function(err) {
+                      if (err && err.name === 'NotAllowedError') {
+                        applyBlockedAutoplayPauseState();
+                      }
+                    });
+                  }
+                });
+              } else if (!nativeGetAPaused()) {
+                state.hasStartedPlayback = true;
+                markPlayerStartedUI(player);
+                if (navigator.mediaSession) navigator.mediaSession.playbackState = 'playing';
+              }
+            } else {
+              setBufferSpinner(true);
+              freezeBothStreams();
+              armNetworkWatchdog();
+            }
+            return;
+          }
+
+          var audioReady = bufferMonitor.canPlayCleanly(audioEl, neededLead, timeBuf, nativeGetATime());
+          var videoReady = (state.hidden && state.hasStartedPlayback) || bufferMonitor.canPlayCleanly(videoEl, neededLead, timeBuf, nativeGetVTime());
+
+          if (!audioReady || !videoReady) {
+            setBufferSpinner(true);
+            freezeBothStreams();
+            armNetworkWatchdog();
+            return;
+          }
+
+          clearWatchdog();
+          state.vStallSince = 0;
+          state.aStallSince = 0;
+          startLockstepPlayback();
+        } finally {
+          state.syncingState = false;
         }
-
-        var audioReady = bufferMonitor.canPlayCleanly(audioEl, neededLead, timeBuf, nativeGetATime());
-        var videoReady = (state.hidden && state.hasStartedPlayback) || bufferMonitor.canPlayCleanly(videoEl, neededLead, timeBuf, nativeGetVTime());
-
-        if (!audioReady || !videoReady) {
-          setBufferSpinner(true);
-          freezeBothStreams();
-          armNetworkWatchdog();
-          return;
-        }
-
-        clearWatchdog();
-        state.vStallSince = 0;
-        state.aStallSince = 0;
-        startLockstepPlayback();
       }
 
       function beginExternalUserSeek(targetTime) {
@@ -1752,10 +1784,10 @@ window.SyncLevel = SyncLevel;
         runInternal(function() {
           if (!isVideoBypassed() && !state.hidden) {
             state.internalVideoSeeking = true;
-            nativeSetVTime(clamped);
+            try { nativeSetVTime(clamped); } catch (_) {}
           }
           state.internalAudioSeeking = true;
-          nativeSetATime(clamped);
+          try { nativeSetATime(clamped); } catch (_) {}
         });
 
         armNetworkWatchdog();
@@ -1793,7 +1825,7 @@ window.SyncLevel = SyncLevel;
         }
 
         var finalAnchor = Math.abs(aNow - dest) <= 1.8 ? aNow : dest;
-        if (!isVideoBypassed() && !state.hidden && Math.abs(vNow - finalAnchor) > config.maxStartDesyncSec) {
+        if (!isVideoBypassed() && !state.hidden && Math.abs(vNow - finalAnchor) > config.maxStartDesyncSec && timeSinceSeek < maxWait) {
           setVideoTimeInternally(finalAnchor);
           armNetworkWatchdog();
           return;
@@ -1837,7 +1869,9 @@ window.SyncLevel = SyncLevel;
         updateMediaSessionMetadata();
         updateMediaSessionPosition();
         markPlayerStartedUI(player);
-        player.trigger('play');
+        runInternal(function() {
+          player.trigger('play');
+        });
         if (navigator.mediaSession) navigator.mediaSession.playbackState = 'playing';
         syncPlaybackState();
         return window.Promise ? Promise.resolve() : undefined;
@@ -1860,7 +1894,9 @@ window.SyncLevel = SyncLevel;
         var master = getAuthoritativeTime();
         syncPlaybackState();
         markPlayerPausedUI(player);
-        player.trigger('pause');
+        runInternal(function() {
+          player.trigger('pause');
+        });
         updateMediaSessionPosition();
         if (navigator.mediaSession) navigator.mediaSession.playbackState = 'paused';
         if (!window.Alabaster.audioOnly && !state.hidden && !isPlaybackCompleted() && Math.abs(nativeGetVTime() - master) > config.alignThreshold) {
@@ -2011,7 +2047,9 @@ window.SyncLevel = SyncLevel;
         }
         updateMediaSessionPosition();
         if (isVideoBypassed() || state.hidden) {
-          player.trigger('timeupdate');
+          runInternal(function() {
+            player.trigger('timeupdate');
+          });
           if (isPlaybackCompleted()) {
             onStreamEnded();
           }
@@ -2072,41 +2110,49 @@ window.SyncLevel = SyncLevel;
       });
 
       var onStreamEnded = function() {
-        var loopEnabled = Boolean(player.loop() || videoEl.loop || videoEl.hasAttribute('loop'));
-        clearPendingWait();
-        clearWatchdog();
-        setBufferSpinner(false);
-        state.userSeeking = false;
-        state.internalVideoSeeking = false;
-        state.internalAudioSeeking = false;
-        state.launchingPlay = false;
+        if (state.handlingEnded) return;
+        state.handlingEnded = true;
+        try {
+          var loopEnabled = Boolean(player.loop() || videoEl.loop || videoEl.hasAttribute('loop'));
+          clearPendingWait();
+          clearWatchdog();
+          setBufferSpinner(false);
+          state.userSeeking = false;
+          state.internalVideoSeeking = false;
+          state.internalAudioSeeking = false;
+          state.launchingPlay = false;
 
-        if (!loopEnabled) {
-          state.wantPlaying = false;
-          state.savedMasterTime = 0;
-          freezeBothStreams({ alignToAnchor: false });
-          shield.deactivate();
-          var endDur = videoEl.duration || audioEl.duration || 0;
-          if (endDur > 0 && isFinite(endDur) && !window.Alabaster.audioOnly) {
+          if (!loopEnabled) {
+            state.wantPlaying = false;
+            state.savedMasterTime = 0;
+            freezeBothStreams({ alignToAnchor: false });
+            shield.deactivate();
+            var endDur = videoEl.duration || audioEl.duration || 0;
+            if (endDur > 0 && isFinite(endDur) && !window.Alabaster.audioOnly) {
+              runInternal(function() {
+                if (Math.abs(nativeGetVTime() - endDur) > 0.1) {
+                  state.internalVideoSeeking = true;
+                  try { nativeSetVTime(endDur); } catch (_) {}
+                }
+              });
+            }
+            markPlayerPausedUI(player);
+            player.addClass('vjs-ended');
             runInternal(function() {
-              if (Math.abs(nativeGetVTime() - endDur) > 0.1) {
-                state.internalVideoSeeking = true;
-                try { nativeSetVTime(endDur); } catch (_) {}
-              }
+              player.trigger('pause');
+              player.trigger('ended');
             });
+            if (navigator.mediaSession) navigator.mediaSession.playbackState = 'none';
+            return;
           }
-          markPlayerPausedUI(player);
-          player.addClass('vjs-ended');
-          player.trigger('pause');
-          player.trigger('ended');
-          if (navigator.mediaSession) navigator.mediaSession.playbackState = 'none';
-          return;
+          state.wantPlaying = true;
+          state.savedMasterTime = 0;
+          setAudioTimeInternally(0);
+          setVideoTimeInternally(0);
+          syncPlaybackState();
+        } finally {
+          state.handlingEnded = false;
         }
-        state.wantPlaying = true;
-        state.savedMasterTime = 0;
-        setAudioTimeInternally(0);
-        setVideoTimeInternally(0);
-        syncPlaybackState();
       };
 
       listen(videoEl, 'ended', onStreamEnded, false);
@@ -2175,12 +2221,9 @@ window.SyncLevel = SyncLevel;
           }
           freezeBothStreams();
           setBufferSpinner(true);
-          state.cancelSeekWait = waitVideoSettled(function() {
-            state.cancelSeekWait = null;
-            state.internalVideoSeeking = false;
+          seekVideoAndWait(master, function() {
             syncPlaybackState();
           });
-          setVideoTimeInternally(master);
           return;
         }
 
@@ -2459,12 +2502,9 @@ window.SyncLevel = SyncLevel;
 
           freezeBothStreams();
           setBufferSpinner(true);
-          state.cancelSeekWait = waitVideoSettled(function() {
-            state.cancelSeekWait = null;
-            state.internalVideoSeeking = false;
+          seekVideoAndWait(aNow, function() {
             syncPlaybackState();
           });
-          setVideoTimeInternally(aNow);
         }
       }, config.tickMs);
 
