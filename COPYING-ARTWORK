@@ -1,29 +1,37 @@
 POKE ARTWORK AND LOGO LICENSE AGREEMENT
 
-All official "Poke" logos, designs, emblems, and associated artwork (collectively, the "Artwork") are subject to the following conditional licensing terms based on the manner of your use:
+Copyright (c) Poke. All rights reserved, subject to the permissions granted below.
 
-1. UNMODIFIED DEMONSTRATIVE USE 
+Everyone is permitted to copy and distribute verbatim copies of this license document, but changing or modifying the text of this license is strictly prohibited.
 
-To the extent that you use, reproduce, display, or distribute the Artwork verbatim and without modification for demonstrative, informational, or promotional purposes (including, without limitation, displaying the Artwork on a website, application, or within other media to reference or link to Poke), such use is governed by the Creative Commons CC0 1.0 Universal Public Domain Dedication. Under these specific conditions, the copyright holders waive all copyright and related rights in the unmodified Artwork to the fullest extent permitted by law.
+All official "Poke" logos, designs, emblems, and associated artwork (collectively, the "Artwork") are licensed to you under the following terms and conditions:
 
-The full legal text of the CC0 1.0 Universal dedication is incorporated herein by reference and can be accessed at:
+1. DEFINITIONS
+(a) "Demonstrative, Informational, or Promotional Purpose" means any use intended to identify, reference, link to, discuss, review, or showcase Poke, its software, or its community (such as displaying the Artwork on a website, within an application directory, in documentation, or in media and blog posts).
 
-https://creativecommons.org/publicdomain/zero/1.0/legalcode.txt
+(b) "Modification" (or "Derivative Work") means any alteration to the visual appearance or structural composition of the Artwork. This includes, without limitation, changing colors, cropping, distorting proportions, adding or removing visual elements, applying filters, or combining the Artwork with other graphics or text. Simple technical conversions (such as changing file formats between PNG, SVG, or WebP) or scaling and resizing the Artwork while strictly maintaining its original proportions do not constitute a Modification.
 
-2. MODIFICATIONS AND DERIVATIVE WORKS  
+(c) "Share-Alike" means the legal requirement that any Derivative Work you distribute or publicly display must be licensed to the public under the exact same terms and conditions as this Agreement. You may not apply additional legal terms, commercial restrictions, or technological measures (such as DRM) that legally or practically restrict others from exercising the rights granted by this License on your Derivative Work.
+    
+2. UNMODIFIED USE
+Permission is hereby granted, free of charge, to any person or entity to use, copy, reproduce, publicly display, and distribute the Artwork in its original, unmodified form for any Demonstrative, Informational, or Promotional Purpose. For any such unmodified use, you are not required to provide attribution, credit, or copyright notices.
 
-If you alter, remix, transform, edit, or otherwise build upon the Artwork to create derivative works, and subsequently distribute, publicly display, or commercialize such modified versions, the CC0 1.0 dedication above shall not apply. Instead, your right to modify the Artwork and distribute such derivative works is strictly granted under the terms and conditions of the Creative Commons Attribution-ShareAlike 4.0 International Public License (CC BY-SA 4.0). 
+3. MODIFIED USE AND DERIVATIVE WORKS
 
-Under the CC BY-SA 4.0 license, you are required to:
+Permission is hereby granted, free of charge, to alter, remix, edit, or otherwise build upon the Artwork to create Modified versions ("Derivative Works") and to distribute or publicly display such Derivative Works, strictly subject to the following conditions:
 
-(a) Give appropriate credit to Poke, provide a link to the license, and clearly indicate that changes were made to the original Artwork; and
+(a) Attribution: You must give clear and reasonable credit to "Poke" as the creator of the original Artwork and explicitly state that the Artwork has been modified from its original form.
 
-(b) Distribute your contributions and modified versions under the exact same license (CC BY-SA 4.0) as the original.
+(b) Share-Alike: You must distribute and license your Derivative Works under the exact same terms and conditions as this License, ensuring that any downstream recipients enjoy the same rights and restrictions as defined in Section 1(c).
 
-The full legal text of the CC BY-SA 4.0 license is incorporated herein by reference and can be accessed at:
+(c) No Endorsement: You may not use the Artwork or any Derivative Works in a way that suggests Poke endorses you or your use without prior written permission.
 
-https://creativecommons.org/licenses/by-sa/4.0/legalcode.txt
+(d) Licensor Exemption: As the original copyright holder, Poke reserves the unrestricted right to update, redesign, alter, or replace the Artwork at any time. Any such official updates or redesigns by Poke constitute new original Artwork rather than Derivative Works under this License, and Poke is under no obligation to provide self-attribution, modification notices, or adhere to the restrictions of Section 3 when modifying or releasing its own Artwork.
 
-3. NO WARRANTY AND LIMITATION OF LIABILITY
+4. RETROACTIVE GRANT AND APPLICATION
+
+The rights, permissions, and licenses granted herein shall apply both prospectively and retroactively to the initial date of creation, commit, or publication of the Artwork. This Agreement expressly governs all Artwork currently or previously contained within this repository or associated official distributions, regardless of whether such files were committed, uploaded, or distributed prior to the adoption and execution of this License. Poke hereby waives and covenants not to assert any claim of copyright infringement against any person or entity for any prior use, reproduction, or distribution of the Artwork that occurred before the implementation of this License, provided that such prior acts complied with the terms and conditions set forth herein.
+
+5. NO WARRANTY AND LIMITATION OF LIABILITY
 
 THE ARTWORK IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE ARTWORK OR THE USE OR OTHER DEALINGS IN THE ARTWORK.
