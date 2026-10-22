@@ -50,7 +50,7 @@ class InnerTubePokeVidious {
     this.cache = {};
   }
 
-  getRandomNumber(){
+  getRandomNumber() {
       return 4
   }
   
