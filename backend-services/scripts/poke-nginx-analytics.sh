@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # poke-nginx-analytics — IPv4/IPv6 traffic analyzer for Nginx access logs.
-# Author: Ashley Iris — https://ashley0143.xyz
+# Author: Ashley Iris — https://ashleyirispup.cat
 # Copyright (C) 2025 Poke Initiative
 #
 # This is free software: you can redistribute it and/or modify it
@@ -20,9 +20,7 @@ SCRIPT_NAME="poke-nginx-analytics.sh"
 # DISCLAIMER:
 # This tool reads your existing local Nginx access logs and prints
 # aggregate counts to your terminal. It makes no network requests,
-# stores nothing, and sends nothing anywhere. Optional flags let you
-# ignore bot traffic and anonymize IPs in summaries. In other words:
-# this is not “data collection” — it’s a local, read-only report.
+# stores nothing, and sends nothing anywhere. 
  
 # --------------------------- Defaults ---------------------------
 
@@ -48,7 +46,7 @@ SHOW_LOADING_DEFAULT="1"                 # show “Loading …” spinner for lo
 print_license() {
   cat <<'LIC'
 poke-nginx-analytics — IPv4/IPv6 traffic analyzer for Nginx access logs.
-Author: Ashley Iris — https://ashley0143.xyz
+Author: Ashley Iris — https://ashleyirispup.cat
 Copyright (C) 2025 Poke Initiative
 
 This program is free software: you can redistribute it and/or modify it under
