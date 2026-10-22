@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="/css/yt-ukraine.svg?v=3" />
     <style>
-         @font-face {
+        @font-face {
             font-family: "PokeTube Flex";
             src: url("/static/robotoflex.ttf");
             font-style: normal;
@@ -84,13 +84,13 @@
         }
 
         .error-title {
-            font-size: 56px;
+            font-size: 84px;
             font-weight: 800;
-            line-height: 1.05;
-            margin-bottom: 16px;
+            line-height: 0.95;
+            margin-bottom: 20px;
             color: var(--text-primary);
-            font-stretch: 150%; 
-            font-variation-settings: "wdth" 150; 
+            font-stretch: 300%; 
+            font-variation-settings: "wdth" 300; 
         }
 
         .error-message {
@@ -100,7 +100,6 @@
             line-height: 1.5;
         }
 
-        /* YouTube-style Search Bar */
         .search-bar {
             display: flex;
             align-items: center;
@@ -187,67 +186,88 @@
             -webkit-user-drag: none; 
         }
 
-        #arcade-overlay {
+         #game-overlay {
             display: none;
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(15, 15, 15, 0.95);
-            backdrop-filter: blur(5px);
+            background: rgba(0, 0, 0, 0.8);
             z-index: 1000;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             opacity: 0;
-            transition: opacity 0.4s;
+            transition: opacity 0.3s ease;
         }
 
-        #arcade-overlay.active {
+        #game-overlay.active {
             opacity: 1;
         }
 
-        .arcade-cabinet {
-            position: relative;
+        .game-modal {
             width: 90%;
             max-width: 800px;
             height: 70vh;
-            background: #000;
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
             border-radius: 12px;
+            display: flex;
+            flex-direction: column;
             overflow: hidden;
-            border: 1px solid var(--border-color);
-            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+            box-shadow: 0 24px 48px rgba(0,0,0,0.5);
+            position: relative;
         }
 
-        .arcade-screen {
-            width: 100%;
-            height: 100%;
-            border: none;
+        .game-modal::before {
+            content: '';
             display: block;
+            width: 100%;
+            height: 3px;
+            background-color: var(--accent-color);
         }
 
-        .close-fab {
-            margin-top: 24px;
-            width: 56px;
-            height: 56px;
-            border-radius: 50%;
-            background-color: var(--search-btn-bg);
+        .game-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .game-title {
+            font-size: 16px;
+            font-weight: 500;
             color: var(--text-primary);
-            border: 1px solid var(--border-color);
+        }
+
+        .close-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 20px;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 24px;
-            transition: all 0.2s;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            transition: background-color 0.2s, color 0.2s;
         }
 
-        .close-fab:hover {
+        .close-btn:hover {
             background-color: var(--search-btn-hover);
             color: var(--accent-color);
-            border-color: var(--accent-color);
-            transform: scale(1.05);
+        }
+
+        .game-screen {
+            flex: 1;
+            width: 100%;
+            border: none;
+            background-color: #000;
+            display: block;
         }
 
         @media (max-width: 768px) {
@@ -259,6 +279,10 @@
 
             .error-content {
                 align-items: center;
+            }
+
+            .error-title {
+                font-size: 64px;
             }
 
             .error-mascot {
@@ -289,11 +313,11 @@
                 Try searching for something else to get back on track!
             </p>
 
-             <form action="/search" method="GET" class="search-bar">
+            <form action="/search" method="GET" class="search-bar">
                 <div class="search-input-container">
                     <input 
                         type="text" 
-                        name="q" 
+                        name="query" 
                         class="search-input" 
                         placeholder="search poke for something else..."
                         autocomplete="off"
@@ -311,23 +335,26 @@
             </div>
         </div>
 
-         <div class="error-mascot">
+        <div class="error-mascot">
             <img src="/static/poke-mascot-new.webp?v=2" alt="Poke Mascot">
         </div>
 
     </div>
 
-    <div id="arcade-overlay">
-        <div class="arcade-cabinet">
-            <iframe id="game-frame" class="arcade-screen" src="" frameborder="0"></iframe>
+    <div id="game-overlay">
+        <div class="game-modal">
+            <div class="game-header">
+                <span class="game-title">poke arcade!</span>
+                <button id="close-game-btn" class="close-btn" aria-label="Close">✕</button>
+            </div>
+            <iframe id="game-frame" class="game-screen" src="" frameborder="0"></iframe>
         </div>
-        <button id="close-game-btn" class="close-fab" title="Close Game">✕</button>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             const trigger = document.getElementById('secret-trigger');
-            const overlay = document.getElementById('arcade-overlay');
+            const overlay = document.getElementById('game-overlay');
             const closeBtn = document.getElementById('close-game-btn');
             const gameFrame = document.getElementById('game-frame');
             
@@ -335,7 +362,7 @@
             let clickCount = 0;
             let clickTimer = null;
 
-             trigger.addEventListener('click', function(e) {
+            trigger.addEventListener('click', function(e) {
                 e.preventDefault(); 
                 clickCount++;
 
@@ -364,8 +391,8 @@
                 overlay.classList.remove('active');
                 setTimeout(() => {
                     overlay.style.display = 'none';
-                    gameFrame.src = "";  
-                }, 400); 
+                    gameFrame.src = ""; 
+                }, 300); 
             });
         });
     </script>
