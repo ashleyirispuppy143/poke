@@ -73,7 +73,7 @@ PV
 usage() {
   cat <<USAGE
 $SCRIPT_NAME v$VERSION — IPv4/IPv6 traffic analyzer for Nginx access logs
-Author: Ashley Iris — https://ashley0143.xyz
+Author: https://ashleyirispup.cat
 
 Usage:
   $SCRIPT_NAME <subcommand> [options]
