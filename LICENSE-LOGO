@@ -7,21 +7,24 @@ Everyone is permitted to copy and distribute verbatim copies of this license doc
 All official "Poke" logos, designs, emblems, and associated artwork (collectively, the "Artwork") are licensed to you under the following terms and conditions:
 
 1. DEFINITIONS
+
 (a) "Demonstrative, Informational, or Promotional Purpose" means any use intended to identify, reference, link to, discuss, review, or showcase Poke, its software, or its community (such as displaying the Artwork on a website, within an application directory, in documentation, or in media and blog posts).
 
-(b) "Modification" (or "Derivative Work") means any alteration to the visual appearance or structural composition of the Artwork. This includes, without limitation, changing colors, cropping, distorting proportions, adding or removing visual elements, applying filters, or combining the Artwork with other graphics or text. Simple technical conversions (such as changing file formats between PNG, SVG, or WebP) or scaling and resizing the Artwork while strictly maintaining its original proportions do not constitute a Modification.
+(b) "Modification" (or "Derivative Work") means any alteration to the visual appearance or structural composition of the Artwork. This includes, without limitation, changing colors, distorting proportions, cropping, adding or removing visual elements, applying filters, or combining the Artwork with other graphics or text. Simple technical conversions (such as changing file formats between PNG, SVG, or WebP) or scaling and resizing the Artwork while strictly maintaining its original proportions do not constitute a Modification.
 
-(c) "Share-Alike" means the legal requirement that any Derivative Work you distribute or publicly display must be licensed to the public under the exact same terms and conditions as this Agreement. You may not apply additional legal terms, commercial restrictions, or effective technological measures that legally or practically restrict others from exercising the rights granted by this License on your Derivative Work.
-    
+(c) "Compatible License" means the Creative Commons Attribution-ShareAlike 4.0 International Public License (CC BY-SA 4.0) or any later version of that license.
+
 2. UNMODIFIED USE
+
 Permission is hereby granted, free of charge, to any person or entity to use, copy, reproduce, publicly display, and distribute the Artwork in its original, unmodified form for any Demonstrative, Informational, or Promotional Purpose. For any such unmodified use, you are not required to provide attribution, credit, or copyright notices.
 
 3. MODIFIED USE AND DERIVATIVE WORKS
+
 Permission is hereby granted, free of charge, to alter, remix, edit, or otherwise build upon the Artwork to create Modified versions ("Derivative Works") and to distribute or publicly display such Derivative Works, strictly subject to the following conditions:
 
 (a) Attribution: You must give clear and reasonable credit to "Poke" as the creator of the original Artwork and explicitly state that the Artwork has been modified from its original form.
 
-(b) Share-Alike: You must distribute and license your Derivative Works under the exact same terms and conditions as this License, ensuring that any downstream recipients enjoy the same rights and restrictions as defined in Section 1(c).
+(b) Share-Alike: If you distribute or publicly display a Derivative Work, you must apply an Adapter's License to your Derivative Work, which must be either: (i) this License, or (ii) a Compatible License. You may not offer or impose any additional or different terms or conditions on, or apply any effective technological measures to, the Derivative Work that restrict the exercise of the rights granted under the Adapter's License.
 
 (c) No Endorsement: You may not use the Artwork or any Derivative Works in a way that suggests Poke endorses you or your use without prior written permission.
 
