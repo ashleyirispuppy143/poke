@@ -50,6 +50,10 @@ class InnerTubePokeVidious {
     this.cache = {};
   }
 
+  getRandomNumber(){
+      return 4
+  }
+  
   loadBlockedVideos() {
     try {
       if (fs.existsSync(this.blockedFile)) {
