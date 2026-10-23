@@ -277,7 +277,7 @@
       ssrInsights.push({
         title: 'Sea & surf outlook',
         sub: (ssrMarine.seaStateLabel || 'Coastal') + ' seas with ' + Number(ssrMarine.waveHeight).toFixed(1) + ' ' + ssrWaveSymbol + ' waves' + sstPart + '.',
-        rightVal: '🌊',
+        rightVal: Number(ssrMarine.waveHeight).toFixed(1) + ' ' + ssrWaveSymbol,
         arrow: 'none'
       });
     }
@@ -402,6 +402,7 @@
   --mobile-sky-height: 760px;
   --sun-x: 50%;
   --sun-y: 86px;
+  --wave-speed-mult: 1;
 }
 
 [data-theme="light"] {
@@ -1468,6 +1469,7 @@ html[data-device="desktop"] .col-side {
   font-variant-numeric: tabular-nums;
 }
 
+/* ==================== SEA & MARINE ANIMATED SCENE ==================== */
 .sea-card {
   display: flex;
   flex-direction: column;
@@ -1477,67 +1479,277 @@ html[data-device="desktop"] .col-side {
 }
 
 .sea-hero-banner {
+  position: relative;
+  overflow: hidden;
+  min-height: 186px;
+  padding: 24px 26px;
+  border-radius: var(--radius-xl);
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 16px;
-  padding: 18px 20px;
-  border-radius: var(--radius-lg);
-  background: linear-gradient(135deg, rgba(14, 116, 144, 0.32) 0%, rgba(29, 78, 216, 0.22) 100%);
-  border: 1px solid color-mix(in srgb, var(--md-primary) 28%, transparent);
+  gap: 18px;
+  color: #ffffff;
+  background: linear-gradient(180deg, #075985 0%, #0284c7 46%, #0369a1 72%, #082f49 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 12px 28px rgba(2, 12, 27, 0.32);
+  isolation: isolate;
+  transition: background 0.6s ease;
+}
+
+.sea-hero-banner[data-sea-time="night"] {
+  background: linear-gradient(180deg, #060d1f 0%, #0f2447 48%, #0c3559 74%, #06152d 100%);
+}
+
+.sea-scene {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.sea-sky-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 65% 58% at 50% 34%, rgba(254, 240, 138, 0.28) 0%, rgba(56, 189, 248, 0.12) 55%, transparent 80%);
+  transition: opacity 0.6s ease;
+}
+
+.sea-hero-banner[data-sea-time="night"] .sea-sky-glow {
+  background: radial-gradient(ellipse 60% 55% at 50% 32%, rgba(186, 230, 253, 0.16) 0%, rgba(30, 58, 138, 0.12) 55%, transparent 80%);
+}
+
+.sea-stars {
+  position: absolute;
+  inset: 0 0 45% 0;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  background-image:
+    radial-gradient(1.5px 1.5px at 14% 24%, rgba(255, 255, 255, 0.9) 100%, transparent),
+    radial-gradient(1px 1px at 28% 15%, rgba(255, 255, 255, 0.75) 100%, transparent),
+    radial-gradient(1.5px 1.5px at 68% 18%, rgba(255, 255, 255, 0.85) 100%, transparent),
+    radial-gradient(1px 1px at 84% 28%, rgba(255, 255, 255, 0.75) 100%, transparent),
+    radial-gradient(1.5px 1.5px at 42% 12%, rgba(255, 255, 255, 0.8) 100%, transparent);
+}
+
+.sea-hero-banner[data-sea-time="night"] .sea-stars {
+  opacity: 0.85;
+}
+
+.sea-sun {
+  position: absolute;
+  top: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffffff 0%, #fef08a 42%, #f59e0b 78%, rgba(245, 158, 11, 0) 100%);
+  box-shadow:
+    0 0 28px 8px rgba(254, 240, 138, 0.6),
+    0 0 68px 24px rgba(251, 191, 36, 0.35);
+  animation: seaSunFloat 5.5s ease-in-out infinite alternate;
+  transition: all 0.6s ease;
+}
+
+.sea-hero-banner[data-sea-time="night"] .sea-sun {
+  width: 44px;
+  height: 44px;
+  top: 24px;
+  background: radial-gradient(circle at 35% 35%, #ffffff 0%, #e2e8f0 62%, #94a3b8 92%, rgba(148, 163, 184, 0) 100%);
+  box-shadow:
+    0 0 24px 6px rgba(226, 232, 240, 0.35),
+    0 0 54px 18px rgba(148, 163, 184, 0.2);
+}
+
+@keyframes seaSunFloat {
+  from { transform: translate(-50%, 0px) scale(0.98); }
+  to { transform: translate(-50%, -4px) scale(1.03); }
+}
+
+.sea-horizon-haze {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 44%;
+  height: 28px;
+  background: linear-gradient(180deg, transparent 0%, rgba(254, 249, 195, 0.22) 65%, rgba(186, 230, 253, 0.28) 100%);
+  pointer-events: none;
+}
+
+.sea-hero-banner[data-sea-time="night"] .sea-horizon-haze {
+  background: linear-gradient(180deg, transparent 0%, rgba(148, 163, 184, 0.1) 65%, rgba(56, 189, 248, 0.14) 100%);
+}
+
+.sea-shimmer {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  width: 140px;
+  height: 68px;
+  z-index: 2;
+  opacity: 0.65;
+  background:
+    radial-gradient(ellipse 46px 3px at 50% 12%, rgba(254, 249, 195, 0.85), transparent 75%),
+    radial-gradient(ellipse 38px 3px at 50% 28%, rgba(254, 240, 138, 0.65), transparent 75%),
+    radial-gradient(ellipse 56px 3.5px at 50% 46%, rgba(254, 240, 138, 0.5), transparent 75%),
+    radial-gradient(ellipse 30px 2.5px at 50% 66%, rgba(255, 255, 255, 0.45), transparent 75%),
+    radial-gradient(ellipse 44px 3px at 50% 84%, rgba(255, 255, 255, 0.3), transparent 75%);
+  animation: seaShimmerPulse 3.6s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+.sea-hero-banner[data-sea-time="night"] .sea-shimmer {
+  opacity: 0.42;
+  filter: hue-rotate(155deg) brightness(1.1);
+}
+
+@keyframes seaShimmerPulse {
+  0% { transform: translateX(-50%) scaleX(0.92); opacity: 0.5; }
+  100% { transform: translateX(-50%) scaleX(1.08); opacity: 0.78; }
+}
+
+.sea-waves-wrap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 56%;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.sea-wave-svg {
+  position: absolute;
+  left: 0;
+  width: 200%;
+  height: 100%;
+  display: block;
+  will-change: transform;
+}
+
+.sea-wave-svg.wave-back {
+  bottom: 12px;
+  height: 92%;
+  fill: rgba(14, 165, 233, 0.42);
+  animation: seaWaveSlideLeft calc(15s / var(--wave-speed-mult, 1)) linear infinite,
+             seaWaveBob 4.2s ease-in-out infinite alternate;
+}
+
+.sea-wave-svg.wave-mid {
+  bottom: 4px;
+  height: 82%;
+  fill: rgba(2, 132, 199, 0.62);
+  animation: seaWaveSlideRight calc(10s / var(--wave-speed-mult, 1)) linear infinite,
+             seaWaveBob 3.3s ease-in-out infinite alternate-reverse;
+}
+
+.sea-wave-svg.wave-front {
+  bottom: -2px;
+  height: 70%;
+  fill: rgba(3, 105, 161, 0.86);
+  animation: seaWaveSlideLeft calc(6.8s / var(--wave-speed-mult, 1)) linear infinite;
+}
+
+.sea-hero-banner[data-sea-time="night"] .sea-wave-svg.wave-back {
+  fill: rgba(14, 116, 144, 0.36);
+}
+
+.sea-hero-banner[data-sea-time="night"] .sea-wave-svg.wave-mid {
+  fill: rgba(12, 74, 110, 0.58);
+}
+
+.sea-hero-banner[data-sea-time="night"] .sea-wave-svg.wave-front {
+  fill: rgba(8, 47, 73, 0.88);
+}
+
+.sea-deep-gradient {
+  position: absolute;
+  inset: 45% 0 0 0;
+  z-index: 2;
+  background: linear-gradient(180deg, transparent 0%, rgba(7, 29, 54, 0.58) 100%);
+  pointer-events: none;
+}
+
+@keyframes seaWaveSlideLeft {
+  0% { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(-50%, 0, 0); }
+}
+
+@keyframes seaWaveSlideRight {
+  0% { transform: translate3d(-50%, 0, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+
+@keyframes seaWaveBob {
+  0% { margin-bottom: -2px; }
+  100% { margin-bottom: 3px; }
+}
+
+.sea-hero-left,
+.sea-hero-right {
+  position: relative;
+  z-index: 3;
 }
 
 .sea-hero-left {
   display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.sea-wave-emoji {
-  font-size: 38px;
-  line-height: 1;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .sea-primary-stat {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .sea-wave-big {
-  font-size: 28px;
+  font-size: 38px;
   font-weight: 800;
-  color: var(--md-text);
-  line-height: 1.1;
+  color: #ffffff;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 14px rgba(3, 18, 38, 0.55);
 }
 
 .sea-state-sub {
   font-size: 13px;
   font-weight: 600;
-  color: var(--md-primary);
+  color: rgba(240, 249, 255, 0.92);
+  text-shadow: 0 1px 8px rgba(3, 18, 38, 0.55);
 }
 
 .sea-hero-right {
   text-align: right;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
+  background: rgba(7, 24, 48, 0.36);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  padding: 10px 15px;
+  border-radius: 16px;
 }
 
 .sea-sst-label {
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--md-text-muted);
+  letter-spacing: 0.05em;
+  color: rgba(224, 242, 254, 0.85);
 }
 
 .sea-sst-val {
   font-size: 24px;
   font-weight: 800;
-  color: var(--md-text);
+  color: #ffffff;
+  line-height: 1.1;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1577,6 +1789,17 @@ html[data-device="desktop"] .col-side {
   color: var(--md-text-muted);
   margin: 2px 0 -6px;
 }
+
+.hour-wave-svg {
+  width: 22px;
+  height: 16px;
+  stroke: var(--md-primary);
+  stroke-width: 2.2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* ===================================================================== */
 
 .pollen-card {
   display: flex;
@@ -1709,6 +1932,9 @@ html[data-device="desktop"] .col-side {
 .hour-icon {
   font-size: 22px;
   line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .hour-temp {
@@ -2299,9 +2525,28 @@ html[data-device="mobile"] .metric-val {
             <span id="seaStateBadge"><%= ssrHasSea && ssrMarine.seaStateLabel ? ssrMarine.seaStateLabel : 'Coastal' %></span>
           </h3>
 
-          <div class="sea-hero-banner">
+          <div class="sea-hero-banner" id="seaHeroBanner" data-sea-time="<%= ssrIsDay ? 'day' : 'night' %>">
+            <div class="sea-scene" aria-hidden="true">
+              <div class="sea-sky-glow"></div>
+              <div class="sea-stars"></div>
+              <div class="sea-sun"></div>
+              <div class="sea-horizon-haze"></div>
+              <div class="sea-waves-wrap">
+                <svg class="sea-wave-svg wave-back" viewBox="0 0 1440 120" preserveAspectRatio="none">
+                  <path d="M0,44 C180,84 360,4 540,44 C720,84 900,4 1080,44 C1260,84 1350,24 1440,44 L1440,120 L0,120 Z"></path>
+                </svg>
+                <svg class="sea-wave-svg wave-mid" viewBox="0 0 1440 120" preserveAspectRatio="none">
+                  <path d="M0,56 C160,16 320,96 480,56 C640,16 800,96 960,56 C1120,16 1280,96 1440,56 L1440,120 L0,120 Z"></path>
+                </svg>
+                <svg class="sea-wave-svg wave-front" viewBox="0 0 1440 120" preserveAspectRatio="none">
+                  <path d="M0,68 C120,98 240,38 360,68 C480,98 600,38 720,68 C840,98 960,38 1080,68 C1200,98 1320,38 1440,68 L1440,120 L0,120 Z"></path>
+                </svg>
+              </div>
+              <div class="sea-shimmer"></div>
+              <div class="sea-deep-gradient"></div>
+            </div>
+
             <div class="sea-hero-left">
-              <div class="sea-wave-emoji" aria-hidden="true">🌊</div>
               <div class="sea-primary-stat">
                 <div class="sea-wave-big" id="seaWaveHeight"><%= (ssrHasSea && ssrMarine.waveHeight != null) ? Number(ssrMarine.waveHeight).toFixed(1) + ' ' + ssrWaveSymbol : '-' %></div>
                 <div class="sea-state-sub" id="seaStateSub"><%= ssrHasSea && ssrMarine.seaStateLabel ? ssrMarine.seaStateLabel + ' • Significant Wave Height' : 'Significant Wave Height' %></div>
@@ -2346,7 +2591,11 @@ html[data-device="mobile"] .metric-val {
               <% for (let i = ssrMarineSliceStart; i < ssrMarineSliceEnd; i++) { %>
                 <div class="hour-item">
                   <div class="hour-time"><%= formatSsrClock(ssrMarine.hourly.time[i]) %></div>
-                  <div class="hour-icon">🌊</div>
+                  <div class="hour-icon" aria-hidden="true">
+                    <svg class="hour-wave-svg" viewBox="0 0 24 16">
+                      <path d="M2 6c2.5-3 5-3 7.5 0s5 3 7.5 0 3.5-2 5-1M2 12c2.5-3 5-3 7.5 0s5 3 7.5 0 3.5-2 5-1"/>
+                    </svg>
+                  </div>
                   <div class="hour-temp"><%= ssrMarine.hourly.wave_height?.[i] != null ? Number(ssrMarine.hourly.wave_height[i]).toFixed(1) + ssrWaveSymbol : '-' %></div>
                   <div class="hour-pop"><%= ssrMarine.hourly.sea_surface_temperature?.[i] != null ? Math.round(ssrMarine.hourly.sea_surface_temperature[i]) + '°' : (ssrMarine.hourly.wave_period?.[i] != null ? Math.round(ssrMarine.hourly.wave_period[i]) + 's' : '-') %></div>
                 </div>
@@ -2512,6 +2761,7 @@ html[data-device="mobile"] .metric-val {
 
   const PIN_SVG_PATH = '<path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>';
   const LEAF_SVG_PATH = '<path stroke-linecap="round" stroke-linejoin="round" d="M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66l.95-2.3c.48.17.98.3 1.34.3C19 20 22 3 22 3c-1 2-8 2.25-13 3.25S2 11.5 2 13.5s1.75 3.75 1.75 3.75C7 8 17 8 17 8Z"/>';
+  const WAVE_ICON_SVG = '<svg class="hour-wave-svg" viewBox="0 0 24 16"><path d="M2 6c2.5-3 5-3 7.5 0s5 3 7.5 0 3.5-2 5-1M2 12c2.5-3 5-3 7.5 0s5 3 7.5 0 3.5-2 5-1"/></svg>';
 
   const AVAILABLE_POLLENS = [
     { key: 'tree', label: 'Tree' },
@@ -2923,7 +3173,7 @@ html[data-device="mobile"] .metric-val {
     }
   }
 
-  function renderMarineSection(marineSummary) {
+  function renderMarineSection(marineSummary, isDaytime = true) {
     const seaCardEl = selectElement('#seaCard');
     if (!seaCardEl) return;
 
@@ -2933,6 +3183,15 @@ html[data-device="mobile"] .metric-val {
     }
 
     seaCardEl.classList.remove('hidden');
+
+    const seaHeroBanner = selectElement('#seaHeroBanner');
+    if (seaHeroBanner) {
+      seaHeroBanner.setAttribute('data-sea-time', isDaytime ? 'day' : 'night');
+      const rawWave = Number(marineSummary.waveHeight ?? 0.6);
+      const waveInMeters = appState.units === 'imperial' ? rawWave * 0.3048 : rawWave;
+      const speedMult = Math.max(0.7, Math.min(1.85, 0.78 + waveInMeters * 0.32));
+      seaHeroBanner.style.setProperty('--wave-speed-mult', speedMult.toFixed(2));
+    }
 
     const waveUnit = appState.units === 'imperial' ? 'ft' : 'm';
     const tempUnit = appState.units === 'imperial' ? '°F' : '°C';
@@ -3029,7 +3288,7 @@ html[data-device="mobile"] .metric-val {
 
         item.innerHTML = `
           <div class="hour-time">${timeStr}</div>
-          <div class="hour-icon">🌊</div>
+          <div class="hour-icon" aria-hidden="true">${WAVE_ICON_SVG}</div>
           <div class="hour-temp">${topStat}</div>
           <div class="hour-pop">${bottomStat}</div>
         `;
@@ -3388,7 +3647,7 @@ html[data-device="mobile"] .metric-val {
       insights.push({
         title: 'Sea & surf outlook',
         sub: `${marineSummary.seaStateLabel || 'Coastal'} seas with ${Number(marineSummary.waveHeight).toFixed(1)} ${waveLabel} waves${sstClause}.`,
-        rightVal: '🌊',
+        rightVal: `${Number(marineSummary.waveHeight).toFixed(1)} ${waveLabel}`,
         arrow: 'none'
       });
     }
@@ -4190,7 +4449,7 @@ html[data-device="mobile"] .metric-val {
     selectElement('#dayMode').textContent = isDaytime ? 'Day' : 'Night';
 
     renderAirQualityAndPollenCards(latestAirQualitySummary);
-    renderMarineSection(latestMarineSummary);
+    renderMarineSection(latestMarineSummary, isDaytime);
 
     const localTimeElement = selectElement('#currLocalTime');
     if (localTimeElement) {
