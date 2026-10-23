@@ -404,29 +404,7 @@ app.get("/weather", async (req, res) => {
     });
   }
 });
-
-/*
- app.get("/piano", function (req, res) {
-    res.redirect("/studio/piano")
-  });
-
-  app.get("/studio/piano", function (req, res) {
-    renderTemplate(res, req, "piano.ejs");
-  });
-
-  app.get("/studio/drums", function (req, res) {
-    renderTemplate(res, req, "drums.ejs");
-  });
-
-  app.get("/studio/strings", function (req, res) {
-    renderTemplate(res, req, "strings.ejs");
-  });
-
-   app.get("/studio", function (req, res) {
-    renderTemplate(res, req, "studio-landing.ejs");
-  });
-*/ 
-  
+ 
 app.get("/notepad", function (req, res) {
     renderTemplate(res, req, "pokepad.ejs");
   });
@@ -666,7 +644,9 @@ app.get("/css/:id", (req, res) => {
 
   if (!fs.existsSync(filePath)) {
     res.status(404);
-    renderTemplate(res, req, "404.ejs", {});
+    return renderTemplate(res, req, "404.ejs", {
+	isMobile:req.useragent?.isMobile,
+	});
     return;
   }
 
@@ -694,7 +674,9 @@ app.get("/game-hub", function (req, res) {
   var requestedGame = req.query.game;
 
   if (req.query.game && !gameslist.includes(requestedGame)) {
-    return renderTemplate(res, req, "404.ejs");
+  return renderTemplate(res, req, "404.ejs", {
+	          isMobile:req.useragent?.isMobile,
+	        });
   }
 
   renderTemplate(res, req, "gamehub.ejs", {
