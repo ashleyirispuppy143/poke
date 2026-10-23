@@ -519,6 +519,7 @@ const searchCache = new Map();
 
     let ID = req.query.id;
     if (!ID) {
+      res.status(404);
       return renderTemplate(res, req, "404.ejs", {
         isMobile: req.useragent?.isMobile,
       });
@@ -594,7 +595,8 @@ const searchCache = new Map();
         return sendRenderedResponse(cachedData);
       } catch (e) {
         if (e.message === "REQUEST_DROPPED") return res.status(499).send("Request dropped by server.");
-        if (e.message === "CHANNEL_NOT_FOUND") {
+        if (e.message === "CHANNEL_NOT_FOUND" || e.name === "AbortError") {
+          res.status(404);
           return renderTemplate(res, req, "404.ejs", {
             isMobile: req.useragent?.isMobile,
           });
@@ -783,6 +785,7 @@ const searchCache = new Map();
         return res.status(499).send("Request cancelled by server.");
       }
       if (error && (error.message === "CHANNEL_NOT_FOUND" || error.name === "AbortError")) {
+        res.status(404);
         return renderTemplate(res, req, "404.ejs", {
           isMobile: req.useragent?.isMobile,
         });
@@ -790,5 +793,7 @@ const searchCache = new Map();
       throw error;
     }
   });
+
+  
 
 };
