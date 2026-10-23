@@ -5720,7 +5720,7 @@ class PokeMatchGame {
     const refLevel = this.mode === 'adventure' ? this.level : this.maxUnlocked;
     const realm = this.getRealmInfo(refLevel);
     document.body.setAttribute('data-theme', realm.key);
-    document.getElementById('theme-badge').textContent = this.mode === 'forever' ? `Endless • ${realm.name.split(' (')[0]}` : realm.name;
+    document.getElementById('theme-badge').textContent = this.mode === 'forever' ? `Endless - ${realm.name.split(' (')[0]}` : realm.name;
   }
 
   buildPath() {
