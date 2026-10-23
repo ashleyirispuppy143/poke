@@ -107,7 +107,6 @@ app.get("/143", (req, res) => {
 
   return res.redirect(`/home`);
 });
-
   
 function formatAirQualitySummary(aqData) {
   if (!aqData || !aqData.current) return null;
@@ -179,6 +178,70 @@ function formatAirQualitySummary(aqData) {
   };
 }
 
+function formatMarineSummary(marineData, units = "metric") {
+  if (!marineData || !marineData.current) return null;
+  const cur = marineData.current;
+  const daily = marineData.daily || {};
+  const hourly = marineData.hourly || {};
+
+  const waveHeight = cur.wave_height ?? null;
+  const seaTemp = cur.sea_surface_temperature ?? null;
+  const swellHeight = cur.swell_wave_height ?? null;
+  const currentVelocity = cur.ocean_current_velocity ?? null;
+
+  const hasValidHourlyWave = Array.isArray(hourly.wave_height) && hourly.wave_height.some(v => v !== null && !Number.isNaN(Number(v)));
+  const hasSeaAccess =
+    (waveHeight !== null && !Number.isNaN(Number(waveHeight))) ||
+    (seaTemp !== null && !Number.isNaN(Number(seaTemp))) ||
+    (swellHeight !== null && !Number.isNaN(Number(swellHeight))) ||
+    hasValidHourlyWave;
+
+  if (!hasSeaAccess) {
+    return { hasSeaAccess: false };
+  }
+
+  const isImp = units === "imperial";
+  const waveHeightMeters = waveHeight !== null ? (isImp ? waveHeight * 0.3048 : waveHeight) : null;
+
+  let seaStateLabel = "Calm";
+  if (waveHeightMeters !== null) {
+    if (waveHeightMeters < 0.1) seaStateLabel = "Calm (Glassy)";
+    else if (waveHeightMeters < 0.5) seaStateLabel = "Smooth";
+    else if (waveHeightMeters < 1.25) seaStateLabel = "Slight";
+    else if (waveHeightMeters < 2.5) seaStateLabel = "Moderate";
+    else if (waveHeightMeters < 4.0) seaStateLabel = "Rough";
+    else if (waveHeightMeters < 6.0) seaStateLabel = "Very Rough";
+    else seaStateLabel = "High Seas";
+  }
+
+  return {
+    hasSeaAccess: true,
+    seaStateLabel,
+    waveHeight,
+    waveDirection: cur.wave_direction ?? null,
+    wavePeriod: cur.wave_period ?? null,
+    windWaveHeight: cur.wind_wave_height ?? null,
+    windWaveDirection: cur.wind_wave_direction ?? null,
+    windWavePeriod: cur.wind_wave_period ?? null,
+    swellWaveHeight: swellHeight,
+    swellWaveDirection: cur.swell_wave_direction ?? null,
+    swellWavePeriod: cur.swell_wave_period ?? null,
+    oceanCurrentVelocity: currentVelocity,
+    oceanCurrentDirection: cur.ocean_current_direction ?? null,
+    seaSurfaceTemperature: seaTemp,
+    dailyWaveMax: daily.wave_height_max?.[0] ?? null,
+    dailyDirectionDominant: daily.wave_direction_dominant?.[0] ?? null,
+    dailyPeriodMax: daily.wave_period_max?.[0] ?? null,
+    hourly: {
+      time: hourly.time || [],
+      wave_height: hourly.wave_height || [],
+      wave_direction: hourly.wave_direction || [],
+      wave_period: hourly.wave_period || [],
+      sea_surface_temperature: hourly.sea_surface_temperature || []
+    }
+  };
+}
+
 app.get("/api/air-quality", async (req, res) => {
   try {
     const lat = req.query.latitude ?? req.query.lat;
@@ -214,6 +277,53 @@ app.get("/api/air-quality", async (req, res) => {
   }
 });
 
+app.get("/api/marine", async (req, res) => {
+  try {
+    const lat = req.query.latitude ?? req.query.lat;
+    const lon = req.query.longitude ?? req.query.lon;
+    if (lat === undefined || lon === undefined) {
+      return res.status(400).json({ error: "Missing latitude or longitude" });
+    }
+
+    const units = req.query.units === "imperial" ? "imperial" : "metric";
+    const tempUnit = units === "imperial" ? "fahrenheit" : "celsius";
+    const lengthUnit = units === "imperial" ? "imperial" : "metric";
+
+    const marineUrl = new URL("https://marine-api.open-meteo.com/v1/marine");
+    marineUrl.searchParams.set("latitude", lat);
+    marineUrl.searchParams.set("longitude", lon);
+    marineUrl.searchParams.set(
+      "current",
+      "wave_height,wave_direction,wave_period,wind_wave_height,wind_wave_direction,wind_wave_period,swell_wave_height,swell_wave_direction,swell_wave_period,ocean_current_velocity,ocean_current_direction,sea_surface_temperature"
+    );
+    marineUrl.searchParams.set(
+      "hourly",
+      "wave_height,wave_direction,wave_period,swell_wave_height,ocean_current_velocity,sea_surface_temperature"
+    );
+    marineUrl.searchParams.set(
+      "daily",
+      "wave_height_max,wave_direction_dominant,wave_period_max,swell_wave_height_max"
+    );
+    marineUrl.searchParams.set("timezone", "auto");
+    marineUrl.searchParams.set("forecast_days", "7");
+    marineUrl.searchParams.set("temperature_unit", tempUnit);
+    marineUrl.searchParams.set("length_unit", lengthUnit);
+
+    const r = await fetch(marineUrl.toString());
+    if (!r.ok) {
+      return res.json({ summary: { hasSeaAccess: false } });
+    }
+    const rawMarine = await r.json();
+
+    return res.json({
+      ...rawMarine,
+      summary: formatMarineSummary(rawMarine, units)
+    });
+  } catch (err) {
+    return res.json({ summary: { hasSeaAccess: false } });
+  }
+});
+
 app.get("/weather", async (req, res) => {
   try {
     const q = (req.query.q || "").trim();
@@ -225,6 +335,7 @@ app.get("/weather", async (req, res) => {
     const tempUnit = units === "metric" ? "celsius" : "fahrenheit";
     const windUnit = units === "metric" ? "kmh" : "mph";
     const windUnitLabel = units === "metric" ? "km/h" : "mph";
+    const lengthUnit = units === "metric" ? "metric" : "imperial";
     const tf = req.query.tf === "12h" ? "12h" : "24h";
     const anon = req.query.anon === "1" || req.query.anon === "true";
     const theme = req.query.theme === "light" ? "light" : "dark";
@@ -310,9 +421,30 @@ app.get("/weather", async (req, res) => {
     aqUrl.searchParams.set("timezone", "auto");
     aqUrl.searchParams.set("forecast_days", "3");
 
-    const [wr, aqr] = await Promise.all([
+    const marineUrl = new URL("https://marine-api.open-meteo.com/v1/marine");
+    marineUrl.searchParams.set("latitude", place.lat);
+    marineUrl.searchParams.set("longitude", place.lon);
+    marineUrl.searchParams.set(
+      "current",
+      "wave_height,wave_direction,wave_period,wind_wave_height,wind_wave_direction,wind_wave_period,swell_wave_height,swell_wave_direction,swell_wave_period,ocean_current_velocity,ocean_current_direction,sea_surface_temperature"
+    );
+    marineUrl.searchParams.set(
+      "hourly",
+      "wave_height,wave_direction,wave_period,swell_wave_height,ocean_current_velocity,sea_surface_temperature"
+    );
+    marineUrl.searchParams.set(
+      "daily",
+      "wave_height_max,wave_direction_dominant,wave_period_max,swell_wave_height_max"
+    );
+    marineUrl.searchParams.set("timezone", "auto");
+    marineUrl.searchParams.set("forecast_days", "7");
+    marineUrl.searchParams.set("temperature_unit", tempUnit);
+    marineUrl.searchParams.set("length_unit", lengthUnit);
+
+    const [wr, aqr, mr] = await Promise.all([
       fetch(url.toString()),
-      fetch(aqUrl.toString()).catch(() => null)
+      fetch(aqUrl.toString()).catch(() => null),
+      fetch(marineUrl.toString()).catch(() => null)
     ]);
 
     if (!wr.ok) throw new Error("weather fetch failed");
@@ -323,6 +455,14 @@ app.get("/weather", async (req, res) => {
       try {
         const aqJson = await aqr.json();
         airQuality = formatAirQualitySummary(aqJson);
+      } catch {}
+    }
+
+    let marine = null;
+    if (mr && mr.ok) {
+      try {
+        const marineJson = await mr.json();
+        marine = formatMarineSummary(marineJson, units);
       } catch {}
     }
 
@@ -387,6 +527,7 @@ app.get("/weather", async (req, res) => {
       daily: daily,
       hourly: hourly,
       airQuality,
+      marine,
       icon: codeIcon(cur.weather_code, cur.is_day),
       desc: codeText(cur.weather_code),
       sunriseLocal: daily.sunrise?.[0] ? new Date(daily.sunrise[0]).toLocaleTimeString([], timeOpts) : "-",
@@ -404,7 +545,7 @@ app.get("/weather", async (req, res) => {
     });
   }
 });
- 
+  
 app.get("/notepad", function (req, res) {
     renderTemplate(res, req, "pokepad.ejs");
   });
