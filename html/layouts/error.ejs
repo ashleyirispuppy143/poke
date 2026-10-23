@@ -73,15 +73,19 @@
         .brand-logo {
             height: 48px;
             margin-bottom: 24px;
-            cursor: pointer;
             user-select: none;
             -webkit-user-drag: none;
+            <% if (typeof isMobile === 'undefined' || !isMobile) { %>
+            cursor: pointer;
             transition: transform 0.1s;
+            <% } %>
         }
-        
+
+        <% if (typeof isMobile === 'undefined' || !isMobile) { %>
         .brand-logo:active {
             transform: scale(0.95);
         }
+        <% } %>
 
         .error-title {
             font-size: 84px;
@@ -303,12 +307,12 @@
 <body>
 
     <div class="error-container">
-        
+
         <div class="error-content">
             <img src="/css/poke-logo-pride.svg?v=5" alt="poke logo" class="brand-logo" id="secret-trigger" title="poke">
-            
+
             <h1 class="error-title">wrong<br>turn?</h1>
-            
+
             <p class="error-message">
                 Welp, this is awkward... Looks like this page doesnt exist at all...
                 Try searching for something else to get back on track!
@@ -342,6 +346,7 @@
 
     </div>
 
+    <% if (typeof isMobile === 'undefined' || !isMobile) { %>
     <div id="game-overlay">
         <div class="game-modal">
             <div class="game-header">
@@ -358,7 +363,7 @@
             const overlay = document.getElementById('game-overlay');
             const closeBtn = document.getElementById('close-game-btn');
             const gameFrame = document.getElementById('game-frame');
-            
+
             const gameUrl = "/game-hub?game=snake";
             let clickCount = 0;
             let clickTimer = null;
@@ -397,5 +402,6 @@
             });
         });
     </script>
+    <% } %>
 </body>
 </html>
