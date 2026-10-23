@@ -70,16 +70,16 @@
   }
 
   function getSsrIcon(code, isDay) {
-    if (code === 0) return isDay ? '☀️' : '🌙';
-    if (code === 1 || code === 2) return isDay ? '🌤️' : '☁️';
-    if (code === 3) return '☁️';
-    if (code === 45 || code === 48) return '🌫️';
-    if ([51, 53, 55, 80, 81, 82].includes(code)) return '🌦️';
-    if ([61, 63, 65].includes(code)) return '🌧️';
-    if ([66, 67].includes(code)) return '🌧️❄️';
-    if ([71, 73, 75, 77, 85, 86].includes(code)) return '❄️';
-    if ([95, 96, 99].includes(code)) return '⛈️';
-    return '☁️';
+    if (code === 0) return isDay ? '<i class="fa-solid fa-sun" aria-hidden="true"></i>' : '<i class="fa-solid fa-moon" aria-hidden="true"></i>';
+    if (code === 1 || code === 2) return isDay ? '<i class="fa-solid fa-cloud-sun" aria-hidden="true"></i>' : '<i class="fa-solid fa-cloud-moon" aria-hidden="true"></i>';
+    if (code === 3) return '<i class="fa-solid fa-cloud" aria-hidden="true"></i>';
+    if (code === 45 || code === 48) return '<i class="fa-solid fa-smog" aria-hidden="true"></i>';
+    if ([51, 53, 55, 80, 81, 82].includes(code)) return isDay ? '<i class="fa-solid fa-cloud-sun-rain" aria-hidden="true"></i>' : '<i class="fa-solid fa-cloud-moon-rain" aria-hidden="true"></i>';
+    if ([61, 63, 65].includes(code)) return '<i class="fa-solid fa-cloud-showers-heavy" aria-hidden="true"></i>';
+    if ([66, 67].includes(code)) return '<i class="fa-solid fa-cloud-meatball" aria-hidden="true"></i>';
+    if ([71, 73, 75, 77, 85, 86].includes(code)) return '<i class="fa-solid fa-snowflake" aria-hidden="true"></i>';
+    if ([95, 96, 99].includes(code)) return '<i class="fa-solid fa-cloud-bolt" aria-hidden="true"></i>';
+    return '<i class="fa-solid fa-cloud" aria-hidden="true"></i>';
   }
 
   function getSsrSky(code, isDay) {
@@ -163,7 +163,7 @@
 
   const ssrIsDay = ssrCurrent ? Boolean(ssrCurrent.is_day ?? 1) : true;
   const ssrSkyVariant = ssrCurrent ? getSsrSky(ssrCurrent.weather_code, ssrIsDay) : 'clear-day';
-  const ssrHeroIcon = ssrSafe.icon || (ssrCurrent ? getSsrIcon(ssrCurrent.weather_code, ssrIsDay) : '-');
+  const ssrHeroIcon = ssrCurrent ? getSsrIcon(ssrCurrent.weather_code, ssrIsDay) : (ssrSafe.icon || '<i class="fa-solid fa-cloud" aria-hidden="true"></i>');
   const ssrHeroDesc = ssrSafe.desc || (ssrCurrent ? getSsrDesc(ssrCurrent.weather_code) : '-');
 
   let ssrSliceStart = 0;
@@ -306,14 +306,14 @@
       ssrInsights.push({
         title: 'Pollen alert',
         sub: 'Active pollen in the air right now: ' + names + '.',
-        rightVal: '🌿',
+        rightVal: '<i class="fa-solid fa-seedling" aria-hidden="true"></i>',
         arrow: 'none'
       });
     } else if (ssrAq && ssrAq.pollenBreakdown) {
       ssrInsights.push({
         title: 'Pollen outlook',
         sub: 'Pollen counts are minimal across your tracked allergens right now.',
-        rightVal: '🌿',
+        rightVal: '<i class="fa-solid fa-seedling" aria-hidden="true"></i>',
         arrow: 'none'
       });
     }
@@ -326,7 +326,7 @@
       ssrInsights.push({
         title: 'Today is a good day for running',
         sub: 'Mild temperatures, light winds, and clean air make conditions ideal for a run.',
-        rightVal: '🏃',
+        rightVal: '<i class="fa-solid fa-person-running" aria-hidden="true"></i>',
         arrow: 'none'
       });
     }
@@ -335,7 +335,7 @@
       ssrInsights.push({
         title: 'Grab an umbrella!',
         sub: getSsrDesc(ssrCurrent.weather_code) + ' is active and likely to continue nearby.',
-        rightVal: '☂️',
+        rightVal: '<i class="fa-solid fa-umbrella" aria-hidden="true"></i>',
         arrow: 'none'
       });
     } else if ((ssrSafe.popNext ?? 0) >= 50) {
@@ -362,7 +362,7 @@
       ssrInsights.push({
         title: 'Great for stargazing',
         sub: 'Clear night skies and clean air quality offer crisp visibility of the stars.',
-        rightVal: '🌌',
+        rightVal: '<i class="fa-solid fa-star" aria-hidden="true"></i>',
         arrow: 'none'
       });
     }
@@ -371,7 +371,7 @@
       ssrInsights.push({
         title: "Don't miss tomorrow's sunrise",
         sub: 'Sunrise is at ' + ssrSafe.sunriseLocal + ' with clear viewing conditions.',
-        rightVal: '🌅',
+        rightVal: '<i class="fa-solid fa-sun" aria-hidden="true"></i>',
         arrow: 'none'
       });
     }
@@ -389,6 +389,8 @@
 <meta content="View Weather info :3c" property="twitter:description">
 <meta content="/static/poke-weather.png" property="og:image" />
 <meta content="summary_large_image" name="twitter:card">
+<link href="https://p.poketube.fun/https://site-assets.fontawesome.com/releases/v6.1.1/css/all.css" rel=stylesheet>
+
 <style>
 :root {
   --md-bg: #111318;
@@ -1346,8 +1348,11 @@ html[data-view-mode="marine"] .col-side {
 }
 
 .big-icon {
-  font-size: 60px;
+  font-size: 56px;
   line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .temp-value {
@@ -1474,6 +1479,9 @@ html[data-view-mode="marine"] .col-side {
   font-weight: 700;
   color: var(--md-text);
   line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .insight-arrow {
@@ -1946,8 +1954,9 @@ html[data-device="mobile"][data-view-mode="marine"] #marineMobileOutlookSummary.
 }
 
 .hour-icon {
-  font-size: 22px;
+  font-size: 20px;
   line-height: 1;
+  min-height: 22px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2000,8 +2009,11 @@ canvas {
 }
 
 .day-icon {
-  font-size: 20px;
+  font-size: 18px;
   text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .day-cond {
@@ -2560,7 +2572,7 @@ html[data-device="mobile"] .metric-val {
                 <span id="locChip"><%= ssrDisplayName %></span>
               </div>
               <div class="temp-display">
-                <div class="big-icon" id="currIcon"><%= ssrHeroIcon %></div>
+                <div class="big-icon" id="currIcon"><%- ssrHeroIcon %></div>
                 <div class="temp-value" id="currTemp"><%= ssrCurrent ? Math.round(ssrCurrent.temperature_2m) + '°' : '-' %></div>
               </div>
             </div>
@@ -2662,7 +2674,7 @@ html[data-device="mobile"] .metric-val {
               <% for (let i = ssrSliceStart; i < ssrSliceEnd; i++) { %>
                 <div class="hour-item">
                   <div class="hour-time"><%= formatSsrClock(ssrHourly.time[i]) %></div>
-                  <div class="hour-icon"><%= getSsrIcon(ssrHourly.weather_code?.[i] ?? 0, true) %></div>
+                  <div class="hour-icon"><%- getSsrIcon(ssrHourly.weather_code?.[i] ?? 0, true) %></div>
                   <div class="hour-temp"><%= Math.round(ssrHourly.temperature_2m?.[i] ?? 0) %>°</div>
                   <div class="hour-pop"><%= ssrHourly.precipitation_probability?.[i] ?? 0 %>%</div>
                 </div>
@@ -2702,11 +2714,11 @@ html[data-device="mobile"] .metric-val {
                     <div class="insight-sub"><%= ssrInsights[i].sub %></div>
                   </div>
                   <div class="insight-right">
-                    <span class="insight-badge-val"><%= ssrInsights[i].rightVal %></span>
+                    <span class="insight-badge-val"><%- ssrInsights[i].rightVal %></span>
                     <% if (ssrInsights[i].arrow === 'up') { %>
-                      <span class="insight-arrow up" aria-hidden="true">↑</span>
+                      <span class="insight-arrow up" aria-hidden="true"><i class="fa-solid fa-arrow-up"></i></span>
                     <% } else if (ssrInsights[i].arrow === 'down') { %>
-                      <span class="insight-arrow down" aria-hidden="true">↓</span>
+                      <span class="insight-arrow down" aria-hidden="true"><i class="fa-solid fa-arrow-down"></i></span>
                     <% } %>
                   </div>
                 </div>
@@ -2729,7 +2741,7 @@ html[data-device="mobile"] .metric-val {
               <% for (let i = 0; i < ssrDaily.time.length; i++) { %>
                 <div class="day-row">
                   <div class="day-name"><%= (ssrSafe.dailyLabels && ssrSafe.dailyLabels[i]) ? ssrSafe.dailyLabels[i] : (i === 0 ? 'Today' : ssrDaily.time[i]) %></div>
-                  <div class="day-icon"><%= (ssrSafe.dailyIcons && ssrSafe.dailyIcons[i]) ? ssrSafe.dailyIcons[i] : getSsrIcon(ssrDaily.weather_code?.[i] ?? 0, true) %></div>
+                  <div class="day-icon"><%- getSsrIcon(ssrDaily.weather_code?.[i] ?? 0, true) %></div>
                   <div class="day-cond"><%= (ssrSafe.dailyTexts && ssrSafe.dailyTexts[i]) ? ssrSafe.dailyTexts[i] : getSsrDesc(ssrDaily.weather_code?.[i] ?? 0) %></div>
                   <div class="day-temps">
                     <span class="day-hi"><%= Math.round(ssrDaily.temperature_2m_max?.[i] ?? 0) %>°</span>
@@ -3507,16 +3519,16 @@ html[data-device="mobile"] .metric-val {
   }
 
   function getWeatherIcon(code, isDay) {
-    if (code === 0) return isDay ? '☀️' : '🌙';
-    if (code === 1 || code === 2) return isDay ? '🌤️' : '☁️';
-    if (code === 3) return '☁️';
-    if (code === 45 || code === 48) return '🌫️';
-    if ([51, 53, 55, 80, 81, 82].includes(code)) return '🌦️';
-    if ([61, 63, 65].includes(code)) return '🌧️';
-    if ([66, 67].includes(code)) return '🌧️❄️';
-    if ([71, 73, 75, 77, 85, 86].includes(code)) return '❄️';
-    if ([95, 96, 99].includes(code)) return '⛈️';
-    return '☁️';
+    if (code === 0) return isDay ? '<i class="fa-solid fa-sun" aria-hidden="true"></i>' : '<i class="fa-solid fa-moon" aria-hidden="true"></i>';
+    if (code === 1 || code === 2) return isDay ? '<i class="fa-solid fa-cloud-sun" aria-hidden="true"></i>' : '<i class="fa-solid fa-cloud-moon" aria-hidden="true"></i>';
+    if (code === 3) return '<i class="fa-solid fa-cloud" aria-hidden="true"></i>';
+    if (code === 45 || code === 48) return '<i class="fa-solid fa-smog" aria-hidden="true"></i>';
+    if ([51, 53, 55, 80, 81, 82].includes(code)) return isDay ? '<i class="fa-solid fa-cloud-sun-rain" aria-hidden="true"></i>' : '<i class="fa-solid fa-cloud-moon-rain" aria-hidden="true"></i>';
+    if ([61, 63, 65].includes(code)) return '<i class="fa-solid fa-cloud-showers-heavy" aria-hidden="true"></i>';
+    if ([66, 67].includes(code)) return '<i class="fa-solid fa-cloud-meatball" aria-hidden="true"></i>';
+    if ([71, 73, 75, 77, 85, 86].includes(code)) return '<i class="fa-solid fa-snowflake" aria-hidden="true"></i>';
+    if ([95, 96, 99].includes(code)) return '<i class="fa-solid fa-cloud-bolt" aria-hidden="true"></i>';
+    return '<i class="fa-solid fa-cloud" aria-hidden="true"></i>';
   }
 
   function getSkyVariant(code, isDay) {
@@ -3821,7 +3833,7 @@ html[data-device="mobile"] .metric-val {
       insights.push({
         title: topP.val > 50 ? 'High pollen alert' : 'Pollen outlook',
         sub: `Active allergens right now: ${summaryNames}.`,
-        rightVal: '🌿',
+        rightVal: '<i class="fa-solid fa-seedling" aria-hidden="true"></i>',
         arrow: 'none'
       });
     } else if (aqSummary && aqSummary.pollenBreakdown) {
@@ -3829,7 +3841,7 @@ html[data-device="mobile"] .metric-val {
       insights.push({
         title: 'Pollen outlook',
         sub: `Tracked ${trackedNames} pollen counts are minimal right now - clear air for allergy sufferers.`,
-        rightVal: '🌿',
+        rightVal: '<i class="fa-solid fa-seedling" aria-hidden="true"></i>',
         arrow: 'none'
       });
     }
@@ -3856,7 +3868,7 @@ html[data-device="mobile"] .metric-val {
       insights.push({
         title: 'Today is a good day for running',
         sub: `Comfortable ${Math.round(current.temperature_2m)}${unitSymbol} weather, light winds, and clean air make it great for a run.`,
-        rightVal: '🏃',
+        rightVal: '<i class="fa-solid fa-person-running" aria-hidden="true"></i>',
         arrow: 'none'
       });
     }
@@ -3865,7 +3877,7 @@ html[data-device="mobile"] .metric-val {
       insights.push({
         title: 'Grab an umbrella!',
         sub: `${getWeatherDescription(current.weather_code)} is active and likely to continue nearby.`,
-        rightVal: '☂️',
+        rightVal: '<i class="fa-solid fa-umbrella" aria-hidden="true"></i>',
         arrow: 'none'
       });
     } else if (maxNextPop >= 50 || next8Codes.some((c) => isPrecipitationCode(c))) {
@@ -3885,7 +3897,7 @@ html[data-device="mobile"] .metric-val {
       insights.push({
         title: "Don't miss tomorrow's sunrise",
         sub: `Sunrise is at ${tomorrowSunrise} tomorrow with clear viewing conditions.`,
-        rightVal: '🌅',
+        rightVal: '<i class="fa-solid fa-sun" aria-hidden="true"></i>',
         arrow: 'none'
       });
     }
@@ -3895,7 +3907,7 @@ html[data-device="mobile"] .metric-val {
       insights.push({
         title: "Tonight's sunset",
         sub: `Golden hour ahead - sunset is at ${todaySunset} this evening.`,
-        rightVal: '🌇',
+        rightVal: '<i class="fa-solid fa-cloud-sun" aria-hidden="true"></i>',
         arrow: 'none'
       });
     }
@@ -3915,7 +3927,7 @@ html[data-device="mobile"] .metric-val {
       insights.push({
         title: 'Breezy conditions',
         sub: `Winds are gusting around ${Math.round(current.wind_speed_10m)} ${windLabel} right now.`,
-        rightVal: '💨',
+        rightVal: '<i class="fa-solid fa-wind" aria-hidden="true"></i>',
         arrow: 'none'
       });
     }
@@ -3936,7 +3948,7 @@ html[data-device="mobile"] .metric-val {
       insights.push({
         title: 'Frost & freeze alert',
         sub: `Temperatures dip to ${Math.round(minNext12Temp)}${unitSymbol}. Bundle up and watch for ice.`,
-        rightVal: '🥶',
+        rightVal: '<i class="fa-solid fa-temperature-arrow-down" aria-hidden="true"></i>',
         arrow: 'none'
       });
     }
@@ -3948,7 +3960,7 @@ html[data-device="mobile"] .metric-val {
       insights.push({
         title: 'Great for stargazing',
         sub: `Clear night skies and clean air quality${aqiTag} offer sharp visibility of the stars.`,
-        rightVal: '🌌',
+        rightVal: '<i class="fa-solid fa-star" aria-hidden="true"></i>',
         arrow: 'none'
       });
     }
@@ -3957,7 +3969,7 @@ html[data-device="mobile"] .metric-val {
       insights.push({
         title: 'Sun cycle',
         sub: `Sunrise at ${formatClockTime(daily.sunrise[0])} • Sunset at ${todaySunset}.`,
-        rightVal: '☀️',
+        rightVal: '<i class="fa-solid fa-sun" aria-hidden="true"></i>',
         arrow: 'none'
       });
     }
@@ -3984,9 +3996,9 @@ html[data-device="mobile"] .metric-val {
 
       let arrowMarkup = '';
       if (item.arrow === 'up') {
-        arrowMarkup = '<span class="insight-arrow up" aria-hidden="true">↑</span>';
+        arrowMarkup = '<span class="insight-arrow up" aria-hidden="true"><i class="fa-solid fa-arrow-up"></i></span>';
       } else if (item.arrow === 'down') {
-        arrowMarkup = '<span class="insight-arrow down" aria-hidden="true">↓</span>';
+        arrowMarkup = '<span class="insight-arrow down" aria-hidden="true"><i class="fa-solid fa-arrow-down"></i></span>';
       }
 
       pageEl.innerHTML = `
@@ -4597,7 +4609,7 @@ html[data-device="mobile"] .metric-val {
 
     updateCelestialPosition(weatherData);
 
-    selectElement('#currIcon').textContent = getWeatherIcon(current.weather_code, isDaytime);
+    selectElement('#currIcon').innerHTML = getWeatherIcon(current.weather_code, isDaytime);
     selectElement('#currTemp').textContent = formatNumber(current.temperature_2m, '°');
     selectElement('#currDesc').textContent = getWeatherDescription(current.weather_code);
     selectElement('#currFeels').textContent = formatNumber(current.apparent_temperature, '°');
