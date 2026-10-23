@@ -167,9 +167,7 @@ const searchCache = new Map();
   return res.redirect("https://lite.duckduckgo.com/lite/?q=" + encodeURIComponent(query));
 }  
     
-    if (query && query.startsWith("Hey ChatGPT,") && query.length > 2) {
-      return res.redirect("https://chatgpt.com/?q=" + query + "- sent using pokeAI features");
-    }
+
 
     if (!query) {
       return res.redirect("/home");
