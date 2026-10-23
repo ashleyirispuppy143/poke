@@ -1259,6 +1259,14 @@ html[data-device="desktop"] .col-side {
   grid-column: span 4;
 }
 
+html[data-view-mode="marine"] .col-main {
+  grid-column: span 12 !important;
+}
+
+html[data-view-mode="marine"] .col-side {
+  display: none !important;
+}
+
 .hero-card {
   position: relative;
   overflow: hidden;
@@ -1792,7 +1800,8 @@ html[data-view-mode="marine"] .weather-only-block {
   display: none !important;
 }
 
-html[data-view-mode="marine"] .marine-only-block {
+html[data-view-mode="marine"] #seaHeroPrimary.marine-only-block,
+html[data-view-mode="marine"] #seaHours.marine-only-block {
   display: flex !important;
 }
 
@@ -1800,7 +1809,11 @@ html[data-view-mode="marine"] #marineMetricsCard.marine-only-block {
   display: grid !important;
 }
 
-html[data-view-mode="marine"] #desktopMarineOutlookSummary.marine-only-block {
+html:not([data-device="mobile"])[data-view-mode="marine"] #desktopMarineOutlookSummary.marine-only-block {
+  display: block !important;
+}
+
+html[data-device="mobile"][data-view-mode="marine"] #marineMobileOutlookSummary.marine-only-block {
   display: block !important;
 }
 
@@ -2110,7 +2123,7 @@ html[data-device="tablet"] .metrics-grid {
   grid-template-columns: repeat(2, 1fr);
 }
 
-html[data-device="tablet"] #mobileInsightsCard {
+html[data-device="tablet"]:not([data-view-mode="marine"]) #mobileInsightsCard {
   display: block;
 }
 
@@ -2224,7 +2237,7 @@ html[data-device="mobile"] #hourly .hour-time {
   color: rgba(255, 255, 255, 0.78);
 }
 
-html[data-device="mobile"] #mobileInsightsCard {
+html[data-device="mobile"]:not([data-view-mode="marine"]) #mobileInsightsCard {
   display: block;
   order: 3;
 }
@@ -2535,7 +2548,7 @@ html[data-device="mobile"] .metric-val {
             <span class="card-header card-header-label" id="currFeelHeader" style="min-width: 110px; text-align: right; justify-content: flex-end;"></span>
           </div>
 
-           <div class="hero-primary weather-only-block" id="weatherHeroPrimary">
+          <div class="hero-primary weather-only-block" id="weatherHeroPrimary">
             <div class="mobile-loc-tag" id="mobileLocTag" title="Current Location">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
             </div>
@@ -2559,7 +2572,7 @@ html[data-device="mobile"] .metric-val {
             </div>
           </div>
 
-           <div class="sea-hero-primary marine-only-block" id="seaHeroPrimary">
+          <div class="sea-hero-primary marine-only-block" id="seaHeroPrimary">
             <div class="mobile-loc-tag" id="mobileSeaLocTag" title="Current Location">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
             </div>
@@ -2571,13 +2584,13 @@ html[data-device="mobile"] .metric-val {
                 <span id="seaLocChip"><%= ssrDisplayName %></span>
               </div>
               <div class="temp-display">
-                <div class="temp-value" id="seaWaveHeight"><%= (ssrHasSea && ssrMarine.waveHeight != null) ? Number(ssrMarine.waveHeight).toFixed(1) + ' ' + ssrWaveSymbol : '-' %></div>
+                <div class="temp-value" id="seaSurfaceTemp"><%= (ssrHasSea && ssrMarine.seaSurfaceTemperature != null) ? Math.round(ssrMarine.seaSurfaceTemperature) + '°' : '-' %></div>
               </div>
             </div>
 
             <div class="condition-meta">
               <div class="condition-desc" id="seaStateBadge"><%= ssrHasSea && ssrMarine.seaStateLabel ? ssrMarine.seaStateLabel : 'Coastal' %></div>
-              <div class="condition-sub" id="seaStateSub">Water Temp <span id="seaSurfaceTemp"><%= (ssrHasSea && ssrMarine.seaSurfaceTemperature != null) ? Math.round(ssrMarine.seaSurfaceTemperature) + ssrTempSymbol : '-' %></span></div>
+              <div class="condition-sub" id="seaStateSub">Wave Height <span id="seaWaveHeight"><%= (ssrHasSea && ssrMarine.waveHeight != null) ? Number(ssrMarine.waveHeight).toFixed(1) + ' ' + ssrWaveSymbol : '-' %></span></div>
               <div class="local-time-sub hidden" id="seaCurrLocalTime"></div>
             </div>
           </div>
@@ -2585,7 +2598,7 @@ html[data-device="mobile"] .metric-val {
           <div id="desktopOutlookSummary" class="desktop-outlook-summary weather-only-block"><%= ssrOutlookSummary %></div>
           <div id="desktopMarineOutlookSummary" class="desktop-outlook-summary marine-only-block"><%= ssrMarineOutlookSummary %></div>
 
-           <div id="metricsCard" class="metrics-grid weather-only-block">
+          <div id="metricsCard" class="metrics-grid weather-only-block">
             <div class="metric-item"><div class="metric-label">Wind</div><div class="metric-val" id="currWind"><%= ssrCurrent ? Math.round(ssrCurrent.wind_speed_10m) + ' ' + ssrWindSymbol : '-' %></div></div>
             <div class="metric-item"><div class="metric-label">Humidity</div><div class="metric-val" id="currHum"><%= ssrCurrent ? Math.round(ssrCurrent.relative_humidity_2m) + '%' : '-' %></div></div>
             <div class="metric-item"><div class="metric-label">Pressure</div><div class="metric-val" id="currPress"><%= ssrCurrent ? Math.round(ssrCurrent.pressure_msl) + ' hPa' : '-' %></div></div>
@@ -2598,7 +2611,7 @@ html[data-device="mobile"] .metric-val {
             <div class="metric-item"><div class="metric-label">Dust</div><div class="metric-val" id="currDust"><%= (ssrAq && ssrAq.dust != null) ? Math.round(ssrAq.dust) + ' µg/m³' : '-' %></div></div>
           </div>
 
-           <div id="marineMetricsCard" class="metrics-grid marine-only-block">
+          <div id="marineMetricsCard" class="metrics-grid marine-only-block">
             <div class="metric-item"><div class="metric-label">Wave Period</div><div class="metric-val" id="seaWavePeriod"><%= (ssrHasSea && ssrMarine.wavePeriod != null) ? Math.round(ssrMarine.wavePeriod) + ' s' : '-' %></div></div>
             <div class="metric-item"><div class="metric-label">Wave Direction</div><div class="metric-val" id="seaWaveDir"><%= ssrHasSea ? getSsrCompass(ssrMarine.waveDirection) : '-' %></div></div>
             <div class="metric-item"><div class="metric-label">Swell Height</div><div class="metric-val" id="seaSwellHeight"><%= (ssrHasSea && ssrMarine.swellWaveHeight != null) ? Number(ssrMarine.swellWaveHeight).toFixed(1) + ' ' + ssrWaveSymbol : '-' %></div></div>
@@ -2612,7 +2625,7 @@ html[data-device="mobile"] .metric-val {
           </div>
         </article>
 
-        <section id="pollenCard" class="card pollen-card" aria-label="Pollen Levels">
+        <section id="pollenCard" class="card pollen-card weather-only-block" aria-label="Pollen Levels">
           <div id="pollenGrid" class="pollen-three-grid">
             <% for (let i = 0; i < ssrTopPollens.length; i++) { %>
               <div class="pollen-col">
@@ -2626,7 +2639,7 @@ html[data-device="mobile"] .metric-val {
           </div>
         </section>
 
-        <section id="aqiBarCard" class="card aqi-bar-card" aria-label="Air Quality Index">
+        <section id="aqiBarCard" class="card aqi-bar-card weather-only-block" aria-label="Air Quality Index">
           <div class="aqi-bar-top">
             <span id="currAqiText" class="aqi-bar-title" style="color: <%= ssrAqiColor %>;"><%= ssrAqiVal !== null ? `AQI(${ssrAqiShort})${ssrAqiVal}` : 'AQI(-)' %></span>
             <div id="currAqiPm" class="aqi-pm-right">
@@ -2679,7 +2692,7 @@ html[data-device="mobile"] .metric-val {
           </div>
         </section>
 
-        <section id="mobileInsightsCard" class="mobile-insights-card" aria-label="Smart Weather Highlights">
+        <section id="mobileInsightsCard" class="mobile-insights-card weather-only-block" aria-label="Smart Weather Highlights">
           <div class="insights-viewport">
             <div id="insightsTrack" class="insights-track">
               <% for (let i = 0; i < ssrInsights.length; i++) { %>
@@ -2708,7 +2721,7 @@ html[data-device="mobile"] .metric-val {
         </section>
       </div>
 
-      <div class="col-side">
+      <div class="col-side weather-only-block">
         <section id="daily" class="card">
           <h3 class="card-header">7-Day Forecast</h3>
           <div id="days" class="daily-list">
@@ -3303,7 +3316,6 @@ html[data-device="mobile"] .metric-val {
     document.documentElement.style.setProperty('--wave-speed-mult', speedMult.toFixed(2));
 
     const waveUnit = appState.units === 'imperial' ? 'ft' : 'm';
-    const tempUnit = appState.units === 'imperial' ? '°F' : '°C';
     const speedUnit = appState.units === 'imperial' ? 'mph' : 'km/h';
 
     const stateBadge = selectElement('#seaStateBadge');
@@ -3321,7 +3333,7 @@ html[data-device="mobile"] .metric-val {
     const sstEl = selectElement('#seaSurfaceTemp');
     if (sstEl) {
       sstEl.textContent = marineSummary.seaSurfaceTemperature !== null && marineSummary.seaSurfaceTemperature !== undefined
-        ? `${Math.round(marineSummary.seaSurfaceTemperature)}${tempUnit}`
+        ? `${Math.round(marineSummary.seaSurfaceTemperature)}°`
         : '-';
     }
 
