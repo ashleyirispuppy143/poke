@@ -51,120 +51,319 @@
   <title>Poke! Games Hub</title>
   <style>
     :root {
-      --bg: #1a1114;
-      --surface-1: #271a1f;
-      --surface-2: #332228;
-      --surface-3: #412b33;
+      --bg: #160e11;
+      --surface-1: #22161b;
+      --surface-2: #2e1e24;
+      --surface-3: #3c272f;
       --primary: #ffb0cd;
       --on-primary: #541d34;
       --primary-container: #70334b;
       --on-primary-container: #ffd8e4;
-      --text: #f0dee3;
-      --muted: #d6c2c7;
-      --outline: #524347;
+      --text: #f3dfe4;
+      --muted: #cfb8be;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; }
+    html, body { min-height: 100%; }
     body {
-      min-height: 100%;
       background: var(--bg);
       font-family: 'Roboto Flex', system-ui, -apple-system, sans-serif;
       color: var(--text);
       -webkit-font-smoothing: antialiased;
+      display: flex;
+      flex-direction: column;
     }
-    .emoji-bg {
-      position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: .035;
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(3.5rem, 1fr)); grid-auto-rows: 3.5rem;
-      font-size: 2rem; user-select: none; place-items: center;
+    .app-shell {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      min-height: 100vh;
+      max-width: 1440px;
+      width: 100%;
+      margin: 0 auto;
+      gap: 24px;
+      padding: 24px;
     }
-    @media (prefers-reduced-motion: no-preference) {
-      .emoji-bg span { animation: floaty 12s ease-in-out infinite alternate; }
-      @keyframes floaty { from { transform: translateY(0); } to { transform: translateY(-8px); } }
+    .nav-drawer {
+      background: var(--surface-1);
+      border-radius: 32px;
+      padding: 24px 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      height: calc(100vh - 48px);
+      position: sticky;
+      top: 24px;
     }
-    .wrapper {
-      position: relative; z-index: 1; max-width: 1080px; margin: 2.5rem auto; padding: 1.25rem;
+    .brand-box {
+      padding: 8px 16px 24px;
     }
-    .panel {
+    .brand-box h1 {
+      font-size: 1.65rem;
+      font-weight: 800;
+      color: var(--primary);
+      letter-spacing: -0.5px;
+      line-height: 1.15;
+    }
+    .nav-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 18px;
+      border-radius: 20px;
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      font-family: inherit;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .nav-item:hover {
+      background: var(--surface-2);
+      color: var(--text);
+    }
+    .nav-item.active {
+      background: var(--primary);
+      color: var(--on-primary);
+    }
+    .drawer-footer {
+      padding: 16px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--muted);
+      line-height: 1.4;
+      background: var(--surface-2);
+      border-radius: 20px;
+    }
+    .main-view {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      background: var(--surface-1);
+      padding: 16px 24px;
+      border-radius: 28px;
+    }
+    .search-box {
+      flex: 1;
+      max-width: 420px;
+      position: relative;
+    }
+    .search-box input {
+      width: 100%;
+      background: var(--surface-2);
+      border: none;
+      border-radius: 20px;
+      padding: 14px 20px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.95rem;
+      font-weight: 600;
+      outline: none;
+    }
+    .search-box input::placeholder { color: var(--muted); opacity: 0.7; }
+    .search-box input:focus { background: var(--surface-3); }
+
+    .spotlight-banner {
       background: var(--surface-1);
       border-radius: 36px;
-      padding: 2.25rem;
+      padding: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      flex-wrap: wrap;
     }
-    h1 {
-      font-size: 2.5rem; font-weight: 800; line-height: 1.15; text-align: center; margin-bottom: 2rem;
-      color: var(--primary); letter-spacing: -0.5px;
+    .spotlight-info {
+      max-width: 540px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
+    .spotlight-title {
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: var(--primary);
+      letter-spacing: -0.5px;
+    }
+    .spotlight-sub {
+      color: var(--muted);
+      font-size: 1rem;
+      line-height: 1.5;
+    }
+    .spotlight-actions {
+      display: flex;
+      gap: 12px;
+    }
+    .play-now-btn {
+      background: var(--primary);
+      color: var(--on-primary);
+      text-decoration: none;
+      padding: 16px 28px;
+      border-radius: 24px;
+      font-weight: 800;
+      font-size: 1rem;
+      transition: transform 0.15s ease, background 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .play-now-btn:hover { transform: scale(1.03); background: #ffc4da; }
+
     .game-container {
-      display: grid; gap: 1.25rem;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      display: grid;
+      gap: 18px;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     }
     .game {
-      position: relative; display: flex; flex-direction: column; gap: .6rem;
-      background: var(--surface-2); border-radius: 28px;
-      padding: 1.5rem; text-decoration: none; color: var(--text);
-      min-height: 175px;
-      transition: transform .2s cubic-bezier(0.2, 0, 0, 1), background .2s ease;
-      outline: none; overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 14px;
+      background: var(--surface-1);
+      border-radius: 32px;
+      padding: 24px;
+      text-decoration: none;
+      color: var(--text);
+      min-height: 210px;
+      transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1), background 0.2s ease;
+      outline: none;
+      overflow: hidden;
     }
-    .game:hover { transform: scale(1.02); background: var(--surface-3); }
+    .game:hover { transform: translateY(-4px); background: var(--surface-2); }
     .game:active { transform: scale(0.98); }
     .game:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
-    .row-top { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: 0.25rem; }
+    .row-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .icon {
-      font-size: 2rem; line-height: 1;
-      background: var(--surface-3); width: 56px; height: 56px;
-      border-radius: 20px; display: grid; place-items: center;
+      font-size: 2.2rem;
+      line-height: 1;
+      background: var(--surface-2);
+      width: 64px;
+      height: 64px;
+      border-radius: 22px;
+      display: grid;
+      place-items: center;
+      transition: background 0.2s ease;
     }
+    .game:hover .icon { background: var(--surface-3); }
     .info-btn {
-      height: 44px; width: 44px;
-      display: inline-grid; place-items: center;
-      background: var(--surface-3); border: none; border-radius: 22px;
-      color: var(--primary); cursor: pointer; flex: 0 0 auto; font-size: 1.1rem;
-      transition: background .15s ease, transform .1s ease;
+      height: 44px;
+      width: 44px;
+      display: inline-grid;
+      place-items: center;
+      background: var(--surface-2);
+      border: none;
+      border-radius: 18px;
+      color: var(--primary);
+      cursor: pointer;
+      font-size: 1.1rem;
+      transition: background 0.15s ease, transform 0.1s ease;
     }
     .info-btn:hover { background: var(--primary-container); color: var(--on-primary-container); }
-    .info-btn:active { transform: scale(.94); }
-    .info-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-    .title { font-size: 1.3rem; font-weight: 700; color: var(--text); }
-    .subtitle { color: var(--muted); font-size: .92rem; line-height: 1.45; }
+    .card-body { display: flex; flex-direction: column; gap: 6px; }
+    .title { font-size: 1.35rem; font-weight: 800; color: var(--text); }
+    .subtitle { color: var(--muted); font-size: 0.92rem; line-height: 1.45; }
+
     .info-modal {
-      position: absolute; inset: 0; background: rgba(26, 17, 20, 0.94);
-      display: flex; align-items: center; justify-content: center; padding: 1.25rem;
+      position: absolute;
+      inset: 0;
+      background: rgba(22, 14, 17, 0.96);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
       backdrop-filter: blur(8px);
+      z-index: 10;
     }
     .hidden { display: none !important; }
     .info-content {
-      background: var(--surface-2); border-radius: 24px;
-      padding: 1.25rem; width: 100%; max-height: 100%; overflow: auto;
-      font-size: .9rem; line-height: 1.5; color: var(--text);
+      background: var(--surface-2);
+      border-radius: 24px;
+      padding: 20px;
+      width: 100%;
+      font-size: 0.92rem;
+      line-height: 1.5;
+      color: var(--text);
     }
-    .close-row { display: flex; justify-content: flex-end; margin-top: 1rem; }
+    .close-row { display: flex; justify-content: flex-end; margin-top: 14px; }
     .close-info {
-      border: none; background: var(--primary); color: var(--on-primary);
-      padding: .6rem 1.2rem; font-family: inherit; font-weight: 700; font-size: 0.85rem;
-      border-radius: 18px; cursor: pointer;
+      border: none;
+      background: var(--primary);
+      color: var(--on-primary);
+      padding: 10px 18px;
+      font-family: inherit;
+      font-weight: 700;
+      font-size: 0.85rem;
+      border-radius: 16px;
+      cursor: pointer;
     }
-    .close-info:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-    @media (max-width: 480px) {
-      .panel { padding: 1.25rem; border-radius: 28px; }
-      h1 { font-size: 2rem; }
+
+    @media (max-width: 900px) {
+      .app-shell { grid-template-columns: 1fr; padding: 16px; }
+      .nav-drawer { height: auto; position: static; flex-direction: column; gap: 16px; }
+      .nav-list { flex-direction: row; flex-wrap: wrap; }
+      .nav-item { flex: 1 1 auto; justify-content: center; }
     }
   </style>
 </head>
 <body>
-  <div class="emoji-bg" aria-hidden="true"></div>
+  <div class="app-shell" role="region" aria-label="Poke Games Hub">
+    <aside class="nav-drawer">
+      <div>
+        <div class="brand-box">
+          <h1>Poke! Games Hub</h1>
+        </div>
+        <nav class="nav-list">
+          <button class="nav-item active" data-filter="all">All Games</button>
+          <button class="nav-item" data-filter="arcade">Arcade</button>
+          <button class="nav-item" data-filter="puzzle">Puzzle & Logic</button>
+        </nav>
+      </div>
+      <div class="drawer-footer">
+        copyleft 2026 poke project, not vibecoded
+      </div>
+    </aside>
 
-  <div class="wrapper">
-    <div class="panel" role="region" aria-label="Poke Games Hub">
-      <h1>Poke! Games Hub</h1>
+    <main class="main-view">
+      <header class="top-bar">
+        <div class="search-box">
+          <input type="text" id="gameSearch" placeholder="Search library..." aria-label="Search games" />
+        </div>
+      </header>
 
-      <div class="game-container">
-        <a class="game" data-game="snake" href="?game=snake" role="button" aria-label="Open Snake">
+      <section class="spotlight-banner">
+        <div class="spotlight-info">
+          <div class="spotlight-title">Forever Match 3</div>
+          <div class="spotlight-sub">Swap gems in endless mode until no moves remain, or play through the 50-stage adventure map with hard boss boards every 10 levels.</div>
+        </div>
+        <div class="spotlight-actions">
+          <a href="?game=match3" class="play-now-btn">💎 Play Match 3</a>
+        </div>
+      </section>
+
+      <div class="game-container" id="gameGrid">
+        <!-- Snake -->
+        <a class="game" data-game="snake" data-cat="arcade" href="?game=snake" role="button" aria-label="Open Snake">
           <div class="row-top">
             <div class="icon" aria-hidden="true">🐍</div>
             <button class="info-btn" type="button" aria-haspopup="dialog" aria-label="About Snake">ℹ️</button>
           </div>
-          <div class="title">Snake</div>
-          <div class="subtitle">Guide the snake, eat apples, don’t hit walls or yourself.</div>
+          <div class="card-body">
+            <div class="title">Snake</div>
+            <div class="subtitle">Guide the snake, eat apples, don’t hit walls or yourself.</div>
+          </div>
           <div class="info-modal hidden" role="dialog" aria-modal="true" aria-label="Snake info">
             <div class="info-content">
               <p><strong>Snake</strong> is a retro arcade classic. Eat food to grow; collisions end your run.</p>
@@ -173,13 +372,16 @@
           </div>
         </a>
 
-        <a class="game" data-game="tic-tac-toe" href="?game=tic-tac-toe" role="button" aria-label="Open Tic-Tac-Toe">
+        <!-- Tic-Tac-Toe -->
+        <a class="game" data-game="tic-tac-toe" data-cat="puzzle" href="?game=tic-tac-toe" role="button" aria-label="Open Tic-Tac-Toe">
           <div class="row-top">
             <div class="icon" aria-hidden="true">❌⭕</div>
             <button class="info-btn" type="button" aria-haspopup="dialog" aria-label="About Tic-Tac-Toe">ℹ️</button>
           </div>
-          <div class="title">Tic-Tac-Toe</div>
-          <div class="subtitle">Classic 3×3. Get three in a row before your opponent.</div>
+          <div class="card-body">
+            <div class="title">Tic-Tac-Toe</div>
+            <div class="subtitle">Classic 3×3. Get three in a row before your opponent.</div>
+          </div>
           <div class="info-modal hidden" role="dialog" aria-modal="true" aria-label="Tic-Tac-Toe info">
             <div class="info-content">
               <p><strong>Tic-Tac-Toe</strong> lets you play X vs O on a 3×3 grid. Play vs AI or a friend.</p>
@@ -188,13 +390,16 @@
           </div>
         </a>
 
-        <a class="game" data-game="sudoku" href="?game=sudoku" role="button" aria-label="Open Sudoku">
+        <!-- Sudoku -->
+        <a class="game" data-game="sudoku" data-cat="puzzle" href="?game=sudoku" role="button" aria-label="Open Sudoku">
           <div class="row-top">
             <div class="icon" aria-hidden="true">🧩</div>
             <button class="info-btn" type="button" aria-haspopup="dialog" aria-label="About Sudoku">ℹ️</button>
           </div>
-          <div class="title">Sudoku</div>
-          <div class="subtitle">Fill each row, column, and 3×3 box with digits 1–9.</div>
+          <div class="card-body">
+            <div class="title">Sudoku</div>
+            <div class="subtitle">Fill each row, column, and 3×3 box with digits 1–9.</div>
+          </div>
           <div class="info-modal hidden" role="dialog" aria-modal="true" aria-label="Sudoku info">
             <div class="info-content">
               <p><strong>Sudoku</strong> is a logic puzzle: each row/column/box must contain 1–9 exactly once.</p>
@@ -203,13 +408,16 @@
           </div>
         </a>
 
-        <a class="game" data-game="pong" href="?game=pong" role="button" aria-label="Open Ping-Pong">
+        <!-- Pong -->
+        <a class="game" data-game="pong" data-cat="arcade" href="?game=pong" role="button" aria-label="Open Ping-Pong">
           <div class="row-top">
             <div class="icon" aria-hidden="true">🏓</div>
             <button class="info-btn" type="button" aria-haspopup="dialog" aria-label="About Pong">ℹ️</button>
           </div>
-          <div class="title">Ping-Pong</div>
-          <div class="subtitle">Retro table tennis. Bounce the ball past the paddle.</div>
+          <div class="card-body">
+            <div class="title">Ping-Pong</div>
+            <div class="subtitle">Retro table tennis. Bounce the ball past the paddle.</div>
+          </div>
           <div class="info-modal hidden" role="dialog" aria-modal="true" aria-label="Pong info">
             <div class="info-content">
               <p><strong>Pong</strong> is the original table-tennis arcade game. Move, deflect, score.</p>
@@ -218,13 +426,16 @@
           </div>
         </a>
 
-        <a class="game" data-game="minesweeper" href="?game=minesweeper" role="button" aria-label="Open Minesweeper">
+        <!-- Minesweeper -->
+        <a class="game" data-game="minesweeper" data-cat="puzzle" href="?game=minesweeper" role="button" aria-label="Open Minesweeper">
           <div class="row-top">
             <div class="icon" aria-hidden="true">💣</div>
             <button class="info-btn" type="button" aria-haspopup="dialog" aria-label="About Minesweeper">ℹ️</button>
           </div>
-          <div class="title">Minesweeper</div>
-          <div class="subtitle">Use numbers to flag mines and clear the board.</div>
+          <div class="card-body">
+            <div class="title">Minesweeper</div>
+            <div class="subtitle">Use numbers to flag mines and clear the board.</div>
+          </div>
           <div class="info-modal hidden" role="dialog" aria-modal="true" aria-label="Minesweeper info">
             <div class="info-content">
               <p><strong>Minesweeper</strong> is deduction: numbers tell how many adjacent mines to avoid.</p>
@@ -233,13 +444,16 @@
           </div>
         </a>
 
-        <a class="game" data-game="breakout" href="?game=breakout" role="button" aria-label="Open Breakout">
+        <!-- Breakout -->
+        <a class="game" data-game="breakout" data-cat="arcade" href="?game=breakout" role="button" aria-label="Open Breakout">
           <div class="row-top">
             <div class="icon" aria-hidden="true">🧱</div>
             <button class="info-btn" type="button" aria-haspopup="dialog" aria-label="About Breakout">ℹ️</button>
           </div>
-          <div class="title">Breakout</div>
-          <div class="subtitle">Bust the bricks. Catch power-ups. Don’t drop the ball.</div>
+          <div class="card-body">
+            <div class="title">Breakout</div>
+            <div class="subtitle">Bust the bricks. Catch power-ups. Don’t drop the ball.</div>
+          </div>
           <div class="info-modal hidden" role="dialog" aria-modal="true" aria-label="Breakout info">
             <div class="info-content">
               <p><strong>Breakout</strong> challenges you to clear bricks with a bouncing ball and paddle.</p>
@@ -247,24 +461,58 @@
             </div>
           </div>
         </a>
+
+        <!-- Forever Match 3 -->
+        <a class="game" data-game="match3" data-cat="puzzle" href="?game=match3" role="button" aria-label="Open Forever Match 3">
+          <div class="row-top">
+            <div class="icon" aria-hidden="true">💎</div>
+            <button class="info-btn" type="button" aria-haspopup="dialog" aria-label="About Forever Match 3">ℹ️</button>
+          </div>
+          <div class="card-body">
+            <div class="title">Forever Match 3</div>
+            <div class="subtitle">Swap gems in endless mode or clear the 50-stage adventure path.</div>
+          </div>
+          <div class="info-modal hidden" role="dialog" aria-modal="true" aria-label="Forever Match 3 info">
+            <div class="info-content">
+              <p><strong>Forever Match 3</strong> includes an endless mode that runs until no moves remain, plus a 50-level map with hard stages every 10 levels.</p>
+              <div class="close-row"><button class="close-info" type="button">Close</button></div>
+            </div>
+          </div>
+        </a>
       </div>
-    </div>
+    </main>
   </div>
 
   <script>
-    (function initBG(){
-      const emojis=['🎮','🕹️','👾','🎧','🖥️','🎲','🏆','🎯','🔥','💥','🧩','⭐','⚔️','🛡️','🚀','🎉','🌟','⚡','💣'];
-      const bg=document.querySelector('.emoji-bg');
-      const cells = Math.min(220, Math.ceil((window.innerWidth*window.innerHeight)/(80*80)));
-      for(let i=0;i<cells;i++){
-        const s=document.createElement('span');
-        s.textContent = emojis[i % emojis.length];
-        bg.appendChild(s);
-      }
-    })();
-
-    (function initCards(){
+    (function initLibrary(){
       const cards = document.querySelectorAll('.game');
+      const navBtns = document.querySelectorAll('.nav-item');
+      const searchInput = document.getElementById('gameSearch');
+      let currentCat = 'all';
+
+      function filterGames() {
+        const q = searchInput.value.toLowerCase().trim();
+        cards.forEach(card => {
+          const cat = card.dataset.cat;
+          const title = card.querySelector('.title').textContent.toLowerCase();
+          const sub = card.querySelector('.subtitle').textContent.toLowerCase();
+          const matchCat = currentCat === 'all' || cat === currentCat;
+          const matchQ = !q || title.includes(q) || sub.includes(q);
+          card.style.display = (matchCat && matchQ) ? 'flex' : 'none';
+        });
+      }
+
+      navBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          navBtns.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          currentCat = btn.dataset.filter;
+          filterGames();
+        });
+      });
+
+      searchInput.addEventListener('input', filterGames);
+
       function openModal(modal){
         modal.classList.remove('hidden');
         modal.querySelector('.close-info')?.focus();
@@ -272,7 +520,8 @@
       function closeModal(modal){
         modal.classList.add('hidden');
       }
-      cards.forEach(card=>{
+
+      cards.forEach(card => {
         const infoBtn = card.querySelector('.info-btn');
         const modal  = card.querySelector('.info-modal');
         const closeBtn = card.querySelector('.close-info');
@@ -382,14 +631,13 @@
 
     .splash-text {
       position: absolute;
-      bottom: -12px;
-      right: -50px;
+      bottom: -10px;
+      right: -55px;
       color: #ffdf9e;
-      background: #573f00;
-      padding: 6px 12px;
-      border-radius: 14px;
-      font-size: 13px;
-      font-weight: 700;
+      background: transparent;
+      font-size: 15px;
+      font-weight: 800;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.85);
       transform: rotate(-14deg);
       animation: splashBounce 0.6s alternate infinite ease-in-out;
       white-space: nowrap;
@@ -459,7 +707,7 @@
     }
 
     .icon-btn {
-      font-size: 20px; cursor: pointer;
+      font-size: 18px; font-weight: 700; cursor: pointer;
       background: var(--surface-2); width: 48px; height: 48px;
       border-radius: 20px;
       transition: all 0.2s ease; display: flex; align-items: center; justify-content: center;
@@ -580,6 +828,7 @@
     <div id="scoreboard">Score: 0  High: 0  Level: 1</div>
 
     <div id="topRightControls" class="hidden">
+      <div id="debugBtn" class="icon-btn" title="Toggle Debug Info (D or F3)">🐛</div>
       <div id="openLevelBtn" class="icon-btn" title="Select Level">🎚️</div>
       <div id="settingsBtn" class="icon-btn" title="Settings">⚙️</div>
     </div>
@@ -708,30 +957,31 @@
   </div>
 
   <script>
-    const canvas         = document.getElementById('snakeCanvas'),
-          ctx            = canvas.getContext('2d'),
-          titleScreen    = document.getElementById('titleScreen'),
-          titleMenu      = document.getElementById('titleMenu'),
-          titlePrompt    = document.getElementById('titlePrompt'),
-          startPrompt    = document.getElementById('startPrompt'),
-          splashText     = document.getElementById('splashText'),
+    const canvas           = document.getElementById('snakeCanvas'),
+          ctx              = canvas.getContext('2d'),
+          titleScreen      = document.getElementById('titleScreen'),
+          titleMenu        = document.getElementById('titleMenu'),
+          titlePrompt      = document.getElementById('titlePrompt'),
+          startPrompt      = document.getElementById('startPrompt'),
+          splashText       = document.getElementById('splashText'),
           topRightControls = document.getElementById('topRightControls'),
-          gameOverScreen = document.getElementById('gameOverScreen'),
-          gameOverText   = document.getElementById('gameOverText'),
-          scoreboard     = document.getElementById('scoreboard'),
-          settingsBtn    = document.getElementById('settingsBtn'),
+          gameOverScreen   = document.getElementById('gameOverScreen'),
+          gameOverText     = document.getElementById('gameOverText'),
+          scoreboard       = document.getElementById('scoreboard'),
+          debugBtn         = document.getElementById('debugBtn'),
+          settingsBtn      = document.getElementById('settingsBtn'),
           btnSettingsTitle = document.getElementById('btnSettingsTitle'),
-          openLevelBtn   = document.getElementById('openLevelBtn'),
-          btnLevelTitle  = document.getElementById('btnLevelTitle'),
-          btnPlayTitle   = document.getElementById('btnPlayTitle'),
-          levelModal     = document.getElementById('levelModal'),
-          levelModalTitle= document.getElementById('levelModalTitle'),
-          closeLevelBtn  = document.getElementById('closeLevelModal'),
-          settingsModal  = document.getElementById('settingsModal'),
-          saveBtn        = document.getElementById('saveSettings'),
-          closeBtn       = document.getElementById('closeSettings'),
-          backToTitle    = document.getElementById('backToTitle'),
-          debugMenu      = document.getElementById('debugMenu');
+          openLevelBtn     = document.getElementById('openLevelBtn'),
+          btnLevelTitle    = document.getElementById('btnLevelTitle'),
+          btnPlayTitle     = document.getElementById('btnPlayTitle'),
+          levelModal       = document.getElementById('levelModal'),
+          levelModalTitle  = document.getElementById('levelModalTitle'),
+          closeLevelBtn    = document.getElementById('closeLevelModal'),
+          settingsModal    = document.getElementById('settingsModal'),
+          saveBtn          = document.getElementById('saveSettings'),
+          closeBtn         = document.getElementById('closeSettings'),
+          backToTitle      = document.getElementById('backToTitle'),
+          debugMenu        = document.getElementById('debugMenu');
 
     const splashes = [
       "100% bug free!",
@@ -767,6 +1017,13 @@
     let inputQueue = [];
     let lastProcessedDir = {x: 0, y: -1};
     let sharedAudioCtx = null;
+
+    function toggleDebug() {
+      debugMenu.style.display = debugMenu.style.display === 'block' ? 'none' : 'block';
+      if (state === 'playing') updateDebugMenu();
+    }
+
+    debugBtn.addEventListener('click', toggleDebug);
 
     function buildLevelGrid(isSandboxContext) {
       const grid = document.getElementById('levelGrid');
@@ -1042,7 +1299,7 @@
       const head = snake[0], tail = snake[snake.length-1],
             cols = canvas.width / 24, rows = canvas.height / 24,
             cells = cols * rows,
-            elapsedMs = Date.now() - startTime,
+            elapsedMs = hasStartedMoving ? (Date.now() - startTime) : 0,
             elapsedS = Math.floor(elapsedMs / 1000),
             avgRate = elapsedS > 0 ? (score / elapsedS).toFixed(2) : 'N/A',
             frameTime = fps > 0 ? (1000 / fps).toFixed(1) : 'N/A',
@@ -1234,8 +1491,8 @@
     }
 
     document.addEventListener('keydown', e => {
-      if(e.key === 'F3' || (e.key.toLowerCase() === 'd' && e.shiftKey)){
-        debugMenu.style.display = debugMenu.style.display === 'block' ? 'none' : 'block';
+      if(e.key === 'F3' || e.key.toLowerCase() === 'd'){
+        toggleDebug();
         return;
       }
 
@@ -1254,8 +1511,6 @@
         if (M[e.key]) {
           e.preventDefault();
           queueDirection({x: M[e.key][0], y: M[e.key][1]});
-        } else if (e.key.toLowerCase() === 'g') {
-          debugMenu.style.display = debugMenu.style.display === 'block' ? 'none' : 'block';
         }
       }
       else if (state === 'gameover' && e.key.toLowerCase() === 'r') {
@@ -1786,6 +2041,20 @@ class TicTacToe {
     return null;
   }
 
+  evaluateHeuristic(b, aiP, huP) {
+    let score = 0;
+    for (const combo of this.winCombos) {
+      let aiCount = 0, huCount = 0;
+      for (const idx of combo) {
+        if (b[idx] === aiP) aiCount++;
+        else if (b[idx] === huP) huCount++;
+      }
+      if (aiCount > 0 && huCount === 0) score += Math.pow(10, aiCount);
+      else if (huCount > 0 && aiCount === 0) score -= Math.pow(10, huCount);
+    }
+    return score;
+  }
+
   makeAiMove() {
     if (!this.gameActive) return;
     const moveIndex = this.computeBestMove([...this.board], this.settings.difficulty, this.aiPlayer, this.humanPlayer);
@@ -1818,7 +2087,7 @@ class TicTacToe {
       return empty[Math.floor(Math.random() * empty.length)];
     }
 
-    const maxDepth = this.settings.size === 3 ? 9 : 4;
+    const maxDepth = this.settings.size === 3 ? 9 : 3;
     let bestScore = -Infinity;
     let bestMoves = [empty[0]];
 
@@ -1838,8 +2107,9 @@ class TicTacToe {
 
   minimax(b, depth, isMax, aiP, huP, alpha, beta, maxDepth) {
     const win = this.findWinCombo(b);
-    if (win) return b[win[0]] === aiP ? (100 - depth) : (depth - 100);
-    if (!b.includes('') || depth >= maxDepth) return 0;
+    if (win) return b[win[0]] === aiP ? (10000 - depth) : (depth - 10000);
+    if (!b.includes('')) return 0;
+    if (depth >= maxDepth) return this.evaluateHeuristic(b, aiP, huP);
 
     if (isMax) {
       let best = -Infinity;
@@ -2163,7 +2433,7 @@ function confettiExplosion() {
     .action-row {
       display: flex;
       justify-content: center;
-      gap: 10px;
+      gap: 8px;
       flex-wrap: wrap;
     }
 
@@ -2173,14 +2443,15 @@ function confettiExplosion() {
       border: none;
       background: var(--board-bg);
       color: var(--text);
-      padding: 12px 18px;
-      font-size: 0.88rem;
+      padding: 12px 16px;
+      font-size: 0.85rem;
       cursor: pointer;
       border-radius: 20px;
-      transition: transform 0.12s ease, background 0.15s ease;
+      transition: transform 0.12s ease, background 0.15s ease, opacity 0.15s;
     }
-    .btn:hover { background: var(--highlight); }
+    .btn:hover:not(:disabled) { background: var(--highlight); }
     .btn.active { background: var(--primary); color: var(--on-primary); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
     .numpad {
       display: grid;
@@ -2288,6 +2559,7 @@ function confettiExplosion() {
     <div class="action-row">
       <button class="btn" id="btn-undo">⎌ Undo</button>
       <button class="btn" id="btn-note">✎ Note: OFF</button>
+      <button class="btn" id="btn-hint">💡 Hint (3)</button>
       <button class="btn" id="btn-erase">✕ Erase</button>
       <button class="btn" id="btn-new">New Game</button>
     </div>
@@ -2323,7 +2595,7 @@ function confettiExplosion() {
       <h2>HOW TO PLAY</h2>
       <p>1. Fill grid so every Row, Column, and 3x3 Box contains digits 1-9.</p>
       <p>2. Select a cell and use Number Keys or the Numpad.</p>
-      <p>3. Use 'Note' mode to write candidates.</p>
+      <p>3. Use 'Note' mode to write candidates, or 'Hint' up to 3 times per game.</p>
       <p>4. Use Arrow Keys to move.</p>
       <button class="btn active" style="width:100%; margin-top:8px;" onclick="document.getElementById('modal-help').style.display='none'">Got it!</button>
     </div>
@@ -2416,6 +2688,7 @@ class Game {
 
     this.selected = { r: -1, c: -1 };
     this.isNoteMode = false;
+    this.hintsRemaining = 3;
     this.timer = 0;
     this.timerInterval = null;
     this.difficulty = 'medium';
@@ -2424,6 +2697,7 @@ class Game {
     this.gridEl = document.getElementById('sudoku-grid');
     this.timerEl = document.getElementById('timer');
     this.noteBtn = document.getElementById('btn-note');
+    this.hintBtn = document.getElementById('btn-hint');
     this.numpadEl = document.getElementById('numpad');
 
     this.initNumpad();
@@ -2452,11 +2726,50 @@ class Game {
 
     this.notes = Array.from({length: 9}, () => Array.from({length: 9}, () => new Set()));
     this.history = [];
+    this.hintsRemaining = 3;
+    this.updateHintButton();
 
     this.selected = { r: 0, c: 0 };
     this.resetTimer();
     this.renderBoard();
     this.selectCell(0, 0);
+  }
+
+  updateHintButton() {
+    this.hintBtn.textContent = `💡 Hint (${this.hintsRemaining})`;
+    this.hintBtn.disabled = this.hintsRemaining <= 0;
+  }
+
+  useHint() {
+    if (this.hintsRemaining <= 0) return;
+
+    let targetR = this.selected.r;
+    let targetC = this.selected.c;
+
+    if (targetR === -1 || this.boardState[targetR][targetC] === this.solution[targetR][targetC]) {
+      const unfilled = [];
+      for (let r = 0; r < 9; r++) {
+        for (let c = 0; c < 9; c++) {
+          if (this.boardState[r][c] !== this.solution[r][c]) unfilled.push({ r, c });
+        }
+      }
+      if (unfilled.length === 0) return;
+      const pick = unfilled[Math.floor(Math.random() * unfilled.length)];
+      targetR = pick.r;
+      targetC = pick.c;
+    }
+
+    this.saveToHistory();
+    const correctNum = this.solution[targetR][targetC];
+    this.boardState[targetR][targetC] = correctNum;
+    this.notes[targetR][targetC].clear();
+    this.prunePeerNotes(targetR, targetC, correctNum);
+
+    this.hintsRemaining--;
+    this.updateHintButton();
+    this.renderBoard();
+    this.selectCell(targetR, targetC);
+    this.checkWin();
   }
 
   renderBoard() {
@@ -2676,11 +2989,13 @@ class Game {
       else if (['ArrowRight', 'd'].includes(e.key)) { e.preventDefault(); this.moveSelection(0, 1); }
       else if (['Backspace', 'Delete'].includes(e.key)) this.clearCell();
       else if (['n', 'N'].includes(e.key)) this.toggleNoteMode();
+      else if (['h', 'H'].includes(e.key)) this.useHint();
       else if (['u', 'U'].includes(e.key)) this.undo();
       else if (!isNaN(parseInt(e.key)) && e.key !== '0') this.handleInput(parseInt(e.key));
     });
 
     document.getElementById('btn-note').onclick = () => this.toggleNoteMode();
+    document.getElementById('btn-hint').onclick = () => this.useHint();
     document.getElementById('btn-undo').onclick = () => this.undo();
     document.getElementById('btn-erase').onclick = () => this.clearCell();
     document.getElementById('btn-new').onclick = () => this.startNewGame();
@@ -2756,7 +3071,7 @@ game.startNewGame();
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>POKE PONG 2</title>
+<title>POKE PONG</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
 <link href="https://fonts.bunny.net/css2?family=Roboto+Flex:opsz,wght@8..144,400..800&display=swap" rel="stylesheet">
 <style>
@@ -2879,7 +3194,7 @@ game.startNewGame();
   <div class="touch-zone right" id="tz-right"></div>
 
   <div id="ov-menu" class="ov">
-    <h1>POKE<br>PONG 2</h1>
+    <h1>POKE<br>PONG</h1>
     <div class="mg">
       <button id="btn-1p" style="background:var(--primary); color:var(--on-primary);">1 Player</button>
       <button id="btn-2p">2 Players</button>
@@ -2982,7 +3297,7 @@ const G = {
   ball: {}, p1: {}, p2: {},
   keys: {},
   touchY: { left: null, right: null },
-  particles: [], trails: [], shake: 0, freeze: 0,
+  particles: [], trails: [], shake: 0, freeze: 0, rally: 0,
 
   init() {
     this.cx = this.cv.getContext('2d');
@@ -3090,6 +3405,7 @@ const G = {
     b.y = this.H / 2;
     b.size = 8;
     b.speed = this.baseSpeed;
+    this.rally = 0;
 
     const angle = (Math.random() * 0.6 - 0.3);
     b.vx = dir * b.speed * Math.cos(angle);
@@ -3112,14 +3428,14 @@ const G = {
     if (this.state !== 'playing') return;
     if (this.freeze > 0) { this.freeze--; return; }
 
-    const pSpeed = 8;
+    const pSpeed = 8.5;
 
     if (this.keys['w'] || this.keys['W']) { this.p1.y -= pSpeed; this.touchY.left = null; }
     else if (this.keys['s'] || this.keys['S']) { this.p1.y += pSpeed; this.touchY.left = null; }
     else if (this.touchY.left !== null) {
       const center = this.p1.y + this.p1.h / 2;
       const diff = this.touchY.left - center;
-      this.p1.y += diff * 0.25;
+      this.p1.y += diff * 0.28;
     }
 
     if (this.mode === 'pvp') {
@@ -3128,7 +3444,7 @@ const G = {
       else if (this.touchY.right !== null) {
         const center = this.p2.y + this.p2.h / 2;
         const diff = this.touchY.right - center;
-        this.p2.y += diff * 0.25;
+        this.p2.y += diff * 0.28;
       }
     } else {
       this.aiUpdate();
@@ -3143,23 +3459,26 @@ const G = {
     this.p2.y = Math.max(0, Math.min(this.H - this.p2.h, this.p2.y));
 
     const b = this.ball;
-    b.x += b.vx;
-    b.y += b.vy;
+    const steps = 2;
+    for (let s = 0; s < steps; s++) {
+      b.x += b.vx / steps;
+      b.y += b.vy / steps;
 
-    if (b.y - b.size <= 0) {
-      b.y = b.size;
-      b.vy = Math.abs(b.vy);
-      this.spawnParticles(b.x, b.y, 5, this.accent);
-      SFX.play('wall');
-    } else if (b.y + b.size >= this.H) {
-      b.y = this.H - b.size;
-      b.vy = -Math.abs(b.vy);
-      this.spawnParticles(b.x, b.y, 5, this.accent);
-      SFX.play('wall');
+      if (b.y - b.size <= 0) {
+        b.y = b.size;
+        b.vy = Math.abs(b.vy);
+        this.spawnParticles(b.x, b.y, 5, this.accent);
+        SFX.play('wall');
+      } else if (b.y + b.size >= this.H) {
+        b.y = this.H - b.size;
+        b.vy = -Math.abs(b.vy);
+        this.spawnParticles(b.x, b.y, 5, this.accent);
+        SFX.play('wall');
+      }
+
+      this.checkPaddleHit(this.p1, 1);
+      this.checkPaddleHit(this.p2, -1);
     }
-
-    this.checkPaddleHit(this.p1, 1);
-    this.checkPaddleHit(this.p2, -1);
 
     if (b.x < -30) { this.p2.score++; this.onScore(-1); }
     else if (b.x > this.W + 30) { this.p1.score++; this.onScore(1); }
@@ -3194,6 +3513,7 @@ const G = {
       angle = Math.max(-maxAngle, Math.min(maxAngle, angle));
 
       b.speed = Math.min(b.speed + 0.4, this.baseSpeed + 8);
+      this.rally++;
 
       const isSmash = Math.abs(pad.vy) > 5 && Math.abs(clampedHit) > 0.3;
       if (isSmash) {
@@ -3222,7 +3542,7 @@ const G = {
     let speed, errorAmp, anticipation;
     if (this.diff === 'easy') { speed = 4.2; errorAmp = 45; anticipation = 0; }
     else if (this.diff === 'medium') { speed = 6.0; errorAmp = 18; anticipation = 0.5; }
-    else { speed = 8.0; errorAmp = 2; anticipation = 1; }
+    else { speed = 8.2; errorAmp = 2; anticipation = 1; }
 
     let targetY = this.H / 2;
     if (b.vx > 0) {
@@ -3359,22 +3679,22 @@ G.init();
   <link href="https://fonts.bunny.net/css2?family=Roboto+Flex:opsz,wght@8..144,400..800&family=Roboto+Mono:wght@700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #1a1114;
-      --surface: #271a1f;
-      --surface-2: #352329;
-      --surface-3: #442d35;
+      --bg: #160e11;
+      --surface: #22161b;
+      --surface-2: #2f1f26;
+      --surface-3: #3e2932;
       --primary: #ffb0cd;
       --on-primary: #541d34;
       --primary-container: #70334b;
       --on-primary-container: #ffd8e4;
-      --text: #f0dee3;
-      --text-dim: #d6c2c7;
+      --text: #f3dfe4;
+      --text-dim: #cfb8be;
       --danger: #ffb4ab;
       --win: #a6f2d1;
       --n1: #a8c7fa; --n2: #8cd9b3; --n3: #ffb4ab;
       --n4: #d0bcff; --n5: #ffb0cd; --n6: #7fd8eb;
       --n7: #f0dee3; --n8: #d6c2c7;
-      --cell: 32px;
+      --cell: 34px;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     html, body { height: 100%; overflow: hidden; touch-action: manipulation; }
@@ -3386,117 +3706,127 @@ G.init();
       user-select: none;
     }
 
-    .window {
+    .app-card {
       background: var(--surface);
       border-radius: 36px;
-      box-shadow: 0 24px 64px rgba(0,0,0,0.45);
+      box-shadow: 0 24px 64px rgba(0,0,0,0.5);
       overflow: hidden;
       max-width: 96vw; max-height: 96vh;
       display: flex; flex-direction: column;
+      padding: 20px;
+      gap: 14px;
     }
 
-    .titlebar {
-      display: flex; align-items: center; gap: 10px;
-      padding: 14px 20px 8px;
-      background: var(--surface);
-      flex-shrink: 0;
+    .top-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      flex-wrap: wrap;
     }
-    .titlebar-icon { font-size: 1.3rem; }
-    .titlebar-text { font-size: 1.15rem; font-weight: 800; color: var(--primary); flex: 1; }
-    .tb { width: 40px; height: 40px; border: none; border-radius: 16px; background: var(--surface-2); cursor: pointer; font-size: 1rem; display: flex; align-items: center; justify-content: center; color: var(--text); transition: background 0.15s; }
-    .tb:hover { background: var(--surface-3); }
+    .app-title {
+      font-size: 1.45rem; font-weight: 800; color: var(--primary);
+      letter-spacing: -0.5px;
+    }
+    .preset-bar {
+      display: flex; gap: 6px; background: var(--surface-2); padding: 5px; border-radius: 20px;
+    }
+    .preset-btn {
+      border: none; background: transparent; color: var(--text-dim);
+      font-family: inherit; font-size: 0.82rem; font-weight: 700;
+      padding: 8px 14px; border-radius: 15px; cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .preset-btn:hover { color: var(--text); }
+    .preset-btn.active { background: var(--primary); color: var(--on-primary); }
 
-    .menubar {
-      display: flex; gap: 6px; padding: 4px 16px 10px;
-      background: var(--surface); flex-shrink: 0;
+    .icon-actions { display: flex; gap: 8px; }
+    .tb {
+      width: 42px; height: 42px; border: none; border-radius: 16px;
+      background: var(--surface-2); cursor: pointer; font-size: 1.05rem;
+      display: grid; place-items: center; color: var(--text);
+      transition: background 0.15s, transform 0.1s;
     }
-    .mi { padding: 8px 14px; font-size: 0.85rem; font-weight: 700; cursor: pointer; border-radius: 16px; border: none; background: var(--surface-2); font-family: inherit; color: var(--text); position: relative; }
-    .mi:hover { background: var(--surface-3); }
-    .dd { display: none; position: absolute; top: 100%; left: 0; background: var(--surface-2); border-radius: 24px; box-shadow: 0 12px 32px rgba(0,0,0,0.45); min-width: 220px; z-index: 100; padding: 8px; margin-top: 6px; }
-    .dd.open { display: block; }
-    .di { display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-size: 0.85rem; font-weight: 600; cursor: pointer; border: none; border-radius: 16px; background: none; width: 100%; text-align: left; font-family: inherit; color: var(--text); }
-    .di:hover { background: var(--primary-container); color: var(--on-primary-container); }
-    .di .ck { width: 16px; text-align: center; font-size: 0.8rem; color: var(--primary); }
-    .dsep { height: 1px; background: var(--surface-3); margin: 6px 0; }
+    .tb:hover { background: var(--surface-3); transform: scale(1.04); }
 
-    .hud {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 8px 20px 14px; background: var(--surface);
-      flex-shrink: 0;
+    .stats-bar {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 12px;
+      background: var(--surface-2);
+      padding: 12px 18px;
+      border-radius: 24px;
     }
+    .stat-block {
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .stat-block.right { text-align: right; }
+    .stat-label { font-size: 0.72rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
     .led {
       font-family: 'Roboto Mono', monospace;
-      font-size: 1.4rem; font-weight: 700;
-      color: var(--primary); background: var(--surface-2);
-      padding: 8px 16px; min-width: 72px;
-      text-align: center;
-      border-radius: 18px;
-      line-height: 1;
+      font-size: 1.5rem; font-weight: 700;
+      color: var(--primary);
+      line-height: 1.1;
     }
     .face {
-      width: 48px; height: 48px;
-      background: var(--surface-2);
+      width: 52px; height: 52px;
+      background: var(--surface-3);
       border: none;
-      cursor: pointer; font-size: 1.4rem;
-      display: flex; align-items: center; justify-content: center; border-radius: 20px;
+      cursor: pointer; font-size: 1.5rem;
+      display: grid; place-items: center; border-radius: 20px;
       transition: transform 0.12s ease, background 0.15s ease;
     }
-    .face:hover { background: var(--surface-3); transform: scale(1.05); }
+    .face:hover { background: var(--primary-container); transform: scale(1.05); }
     .face:active { transform: scale(0.95); }
 
-    .bwrap { flex: 1; overflow: auto; display: flex; align-items: flex-start; justify-content: center; padding: 14px; background: var(--bg); margin: 0 14px; border-radius: 28px; position: relative; }
-    .bframe { background: transparent; flex-shrink: 0; }
-    #grid { display: grid; gap: 3px; line-height: 1; }
+    .bwrap {
+      flex: 1; overflow: auto; display: flex; align-items: flex-start; justify-content: center;
+      padding: 16px; background: var(--bg); border-radius: 28px; position: relative;
+    }
+    #grid { display: grid; gap: 4px; line-height: 1; }
 
     .c {
       width: var(--cell); height: var(--cell);
       background: var(--surface-3);
-      border-radius: 8px;
+      border-radius: 10px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 0.95rem; font-weight: 800; cursor: pointer; position: relative;
+      font-size: 1rem; font-weight: 800; cursor: pointer; position: relative;
       transition: transform 0.08s ease, background 0.12s ease;
     }
     .c:hover:not(.o):not(.go) { background: var(--primary-container); }
     .c:active:not(.o):not(.go) { transform: scale(0.92); }
-    .c.o { background: var(--surface); cursor: default; border-radius: 6px; }
-    .c.flagged { font-size: 0.9rem; background: var(--primary-container); }
+    .c.o { background: var(--surface); cursor: default; border-radius: 8px; }
+    .c.flagged { font-size: 0.95rem; background: var(--primary-container); }
     .c.mine-hit { background: #93000a !important; color: #ffdad6 !important; }
     .c.mine-show { background: var(--surface-2); }
     .c.wrong-flag { background: #690005; }
 
     .n1{color:var(--n1)}.n2{color:var(--n2)}.n3{color:var(--n3)}.n4{color:var(--n4)}.n5{color:var(--n5)}.n6{color:var(--n6)}.n7{color:var(--n7)}.n8{color:var(--n8)}
 
-    .sbar {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 12px 20px; background: var(--surface);
-      font-size: 0.8rem; font-weight: 600; color: var(--text-dim); flex-shrink: 0;
+    .bottom-bar {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
     }
-
-    .mob {
-      display: flex; gap: 8px; padding: 0 16px 16px; background: var(--surface);
-      flex-shrink: 0;
+    .mode-switch {
+      display: flex; gap: 8px; flex: 1;
     }
     .mb {
-      flex: 1; padding: 12px; border: none; border-radius: 20px; background: var(--surface-2);
-      cursor: pointer; font-family: inherit; font-size: 0.8rem; font-weight: 700;
-      color: var(--text-dim); display: flex; align-items: center; justify-content: center; gap: 6px;
-      transition: background 0.15s;
+      flex: 1; padding: 12px 16px; border: none; border-radius: 20px; background: var(--surface-2);
+      cursor: pointer; font-family: inherit; font-size: 0.88rem; font-weight: 700;
+      color: var(--text-dim); display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: background 0.15s, color 0.15s;
     }
     .mb:hover { background: var(--surface-3); }
     .mb.active { color: var(--on-primary); background: var(--primary); }
-    .mb .mi2 { font-size: 1.1rem; }
 
-    .mbg { display: none; position: fixed; inset: 0; background: rgba(26, 17, 20, 0.85); backdrop-filter: blur(12px); z-index: 200; align-items: center; justify-content: center; }
+    .mbg { display: none; position: fixed; inset: 0; background: rgba(22, 14, 17, 0.85); backdrop-filter: blur(12px); z-index: 200; align-items: center; justify-content: center; }
     .mbg.open { display: flex; }
     .mbox { background: var(--surface); border-radius: 36px; padding: 28px; width: 92%; max-width: 400px; box-shadow: 0 24px 64px rgba(0,0,0,0.5); }
-    .mbox h3 { font-size: 1.25rem; font-weight: 800; color: var(--primary); margin-bottom: 18px; }
+    .mbox h3 { font-size: 1.3rem; font-weight: 800; color: var(--primary); margin-bottom: 18px; }
     .mr { margin-bottom: 14px; }
     .mr label { display: block; font-size: 0.85rem; font-weight: 700; color: var(--text-dim); margin-bottom: 6px; }
     .mr select, .mr input[type="number"] { width: 100%; padding: 10px 14px; border: none; border-radius: 16px; font-family: inherit; font-size: 0.9rem; font-weight: 600; background: var(--surface-2); color: var(--text); outline: none; }
     .custom-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
     .trow { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; }
     .trow > div > span { font-size: 0.9rem; font-weight: 700; display: block; }
-    .tdesc { font-size: 0.75rem; color: var(--text-dim); margin-top: 2px; }
+    .tdesc { font-size: 0.78rem; color: var(--text-dim); margin-top: 2px; }
     .tsw { width: 46px; height: 26px; border-radius: 13px; background: var(--surface-3); border: none; cursor: pointer; position: relative; transition: background 0.2s; flex-shrink: 0; margin-left: 12px; }
     .tsw::after { content: ''; position: absolute; width: 20px; height: 20px; border-radius: 50%; background: var(--text); top: 3px; left: 3px; transition: transform 0.2s; }
     .tsw.on { background: var(--primary); }
@@ -3506,12 +3836,12 @@ G.init();
     .mbt-p { background: var(--primary); color: var(--on-primary); }
     .mbt-g { background: var(--surface-2); color: var(--text); }
 
-    .gov { position: absolute; inset: 0; background: rgba(26, 17, 20, 0.8); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: 10; opacity: 0; pointer-events: none; transition: opacity 0.25s; }
+    .gov { position: absolute; inset: 0; background: rgba(22, 14, 17, 0.82); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: 10; opacity: 0; pointer-events: none; transition: opacity 0.25s; }
     .gov.show { opacity: 1; pointer-events: auto; }
     .goc { background: var(--surface); border-radius: 32px; padding: 28px 36px; text-align: center; box-shadow: 0 16px 48px rgba(0,0,0,0.4); transform: scale(0.9); transition: transform 0.25s cubic-bezier(0.2, 0, 0, 1); }
     .gov.show .goc { transform: scale(1); }
     .go-e { font-size: 3rem; margin-bottom: 8px; }
-    .go-t { font-size: 1.3rem; font-weight: 800; margin-bottom: 4px; }
+    .go-t { font-size: 1.35rem; font-weight: 800; margin-bottom: 4px; }
     .go-s { font-size: 0.9rem; color: var(--text-dim); margin-bottom: 18px; }
     .go-b { padding: 12px 28px; border-radius: 20px; background: var(--primary); color: var(--on-primary); border: none; font-family: inherit; font-size: 0.9rem; font-weight: 700; cursor: pointer; }
 
@@ -3519,134 +3849,116 @@ G.init();
     .shake { animation: shake 0.3s ease-out; }
     @keyframes shake { 0%,100%{transform:translate(0)} 25%{transform:translate(-4px,2px)} 75%{transform:translate(4px,-2px)} }
 
-    @media(max-width:500px) {
+    @media(max-width:600px) {
       :root{--cell:28px}
-      .window{border-radius:0;max-width:100vw;max-height:100vh;width:100vw;height:100vh}
+      .app-card{border-radius:0;max-width:100vw;max-height:100vh;width:100vw;height:100vh;padding:14px;}
     }
   </style>
 </head>
 <body>
 <canvas id="confetti"></canvas>
-<div class="window">
+<div class="app-card">
 
-  <div class="titlebar">
-    <span class="titlebar-icon">💣</span>
-    <span class="titlebar-text">PokeMinesweeper</span>
-    <button class="tb" id="b-help" title="Help">❓</button>
-    <button class="tb" id="b-set" title="Settings">⚙️</button>
-  </div>
-
-  <div class="menubar">
-    <div style="position:relative">
-      <button class="mi" id="mg-btn">Game</button>
-      <div class="dd" id="mg">
-        <button class="di" id="mg-new"><span class="ck"></span>New Game</button>
-        <div class="dsep"></div>
-        <button class="di dif" data-d="easy"><span class="ck" id="ck-easy"></span>Beginner (9×9)</button>
-        <button class="di dif" data-d="medium"><span class="ck" id="ck-medium">✓</span>Intermediate (16×16)</button>
-        <button class="di dif" data-d="hard"><span class="ck" id="ck-hard"></span>Expert (30×16)</button>
-        <button class="di dif" data-d="custom"><span class="ck" id="ck-custom"></span>Custom Board</button>
-        <div class="dsep"></div>
-        <button class="di" id="mg-strict"><span class="ck" id="ck-strict"></span>Strict Flags</button>
-      </div>
+  <div class="top-row">
+    <div class="app-title">Minesweeper</div>
+    <div class="preset-bar">
+      <button class="preset-btn" data-d="easy">9×9</button>
+      <button class="preset-btn active" data-d="medium">16×16</button>
+      <button class="preset-btn" data-d="hard">30×16</button>
+      <button class="preset-btn" data-d="custom">Custom</button>
     </div>
-    <div style="position:relative">
-      <button class="mi" id="mh-btn">Help</button>
-      <div class="dd" id="mh">
-        <button class="di" id="mh-how"><span class="ck"></span>How to Play</button>
-      </div>
+    <div class="icon-actions">
+      <button class="tb" id="b-help" title="Rules">?</button>
+      <button class="tb" id="b-set" title="Options">⚙️</button>
     </div>
   </div>
 
-  <div class="hud">
-    <div class="led" id="l-mines">010</div>
-    <button class="face" id="face">🙂</button>
-    <div class="led" id="l-timer">000</div>
+  <div class="stats-bar">
+    <div class="stat-block">
+      <span class="stat-label">Mines Left</span>
+      <div class="led" id="l-mines">040</div>
+    </div>
+    <button class="face" id="face" title="Restart">🙂</button>
+    <div class="stat-block right">
+      <span class="stat-label">Time</span>
+      <div class="led" id="l-timer">000</div>
+    </div>
   </div>
 
   <div class="bwrap" id="bwrap">
-    <div class="bframe"><div id="grid"></div></div>
+    <div id="grid"></div>
     <div class="gov" id="gov">
       <div class="goc">
         <div class="go-e" id="ge">💥</div>
         <div class="go-t" id="gt">Game Over</div>
-        <div class="go-s" id="gs">You hit a mine</div>
+        <div class="go-s" id="gs">Stepped on a mine</div>
         <button class="go-b" id="gb">Play Again</button>
       </div>
     </div>
   </div>
 
-  <div class="sbar">
-    <div style="display:flex;gap:16px">
-      <span id="s-diff">Intermediate</span>
-      <span id="s-info">40 mines</span>
+  <div class="bottom-bar">
+    <div class="mode-switch">
+      <button class="mb active" id="m-dig">⛏️ Dig</button>
+      <button class="mb" id="m-flag">🚩 Flag</button>
+      <button class="mb" id="m-new">🔄 Reset</button>
     </div>
-    <span id="s-mode">Normal</span>
-  </div>
-
-  <div class="mob">
-    <button class="mb active" id="m-dig"><span class="mi2">⛏️</span>Dig</button>
-    <button class="mb" id="m-flag"><span class="mi2">🚩</span>Flag</button>
-    <button class="mb" id="m-new"><span class="mi2">🔄</span>New</button>
   </div>
 </div>
 
 <div class="mbg" id="mod-set">
   <div class="mbox">
-    <h3>⚙️ Game Settings</h3>
+    <h3>Options</h3>
     <div class="mr">
-      <label>Difficulty</label>
+      <label>Board Size</label>
       <select id="o-diff">
-        <option value="easy">Beginner — 9×9, 10 mines</option>
-        <option value="medium" selected>Intermediate — 16×16, 40 mines</option>
-        <option value="hard">Expert — 30×16, 99 mines</option>
-        <option value="custom">Custom Dimensions</option>
+        <option value="easy">9×9 (10 mines)</option>
+        <option value="medium" selected>16×16 (40 mines)</option>
+        <option value="hard">30×16 (99 mines)</option>
+        <option value="custom">Custom</option>
       </select>
       <div class="custom-grid" id="custom-inputs" style="display:none;">
-        <div><label>Cols</label><input type="number" id="c-cols" min="6" max="40" value="12"></div>
-        <div><label>Rows</label><input type="number" id="c-rows" min="6" max="30" value="12"></div>
+        <div><label>Width</label><input type="number" id="c-cols" min="6" max="40" value="12"></div>
+        <div><label>Height</label><input type="number" id="c-rows" min="6" max="30" value="12"></div>
         <div><label>Mines</label><input type="number" id="c-mines" min="1" max="300" value="24"></div>
       </div>
     </div>
     <div class="mr">
-      <label>Cell Scale</label>
+      <label>Tile Size</label>
       <select id="o-scale">
         <option value="auto" selected>Auto Fit</option>
-        <option value="26">Compact (26px)</option>
-        <option value="32">Comfortable (32px)</option>
-        <option value="38">Large (38px)</option>
+        <option value="26">Small</option>
+        <option value="32">Medium</option>
+        <option value="38">Large</option>
       </select>
     </div>
     <div class="mr">
       <div class="trow">
-        <div><span>Question Marks (?)</span><div class="tdesc">Cycle Flag → ? → Clear on right-click.</div></div>
+        <div><span>Question Marks</span><div class="tdesc">Right-click cycles through Flag, ?, and blank.</div></div>
         <button class="tsw" id="o-qmark"></button>
       </div>
       <div class="trow">
-        <div><span>Strict Flag Mode</span><div class="tdesc">Wrong flags instantly lose. Can't over-flag.</div></div>
+        <div><span>Strict Flags</span><div class="tdesc">Flagging a safe tile ends the game right away.</div></div>
         <button class="tsw" id="o-strict"></button>
       </div>
     </div>
     <div class="macts">
       <button class="mbt mbt-g" id="set-cancel">Cancel</button>
-      <button class="mbt mbt-p" id="set-save">New Game</button>
+      <button class="mbt mbt-p" id="set-save">Apply</button>
     </div>
   </div>
 </div>
 
 <div class="mbg" id="mod-help">
   <div class="mbox">
-    <h3>How to Play</h3>
-    <div style="font-size:0.9rem;line-height:1.65;color:var(--text-dim)">
-      <p><b>⛏️ Click</b> to dig. Numbers = adjacent mines.</p>
-      <p><b>🚩 Right-click</b> or long-press to flag.</p>
-      <p><b>💡 Chord:</b> Click a number whose flags match to auto-reveal neighbors.</p>
-      <p><b>🛡️ First click</b> is always safe.</p>
-      <hr style="border:none;border-top:1px solid var(--surface-3);margin:12px 0">
-      <p><b>⚠️ Strict Flag Mode:</b></p>
-      <p>Flagging a non-mine cell instantly loses. You can't place more flags than mines remain. Makes you think twice!</p>
+    <h3>Controls & Rules</h3>
+    <div style="font-size:0.92rem;line-height:1.65;color:var(--text-dim);display:flex;flex-direction:column;gap:8px;">
+      <p>Left-click a tile to uncover it. The number shows how many mines touch that tile.</p>
+      <p>Right-click (or hold on touchscreens) to place a flag on a suspected mine.</p>
+      <p>Click an uncovered number once you've flagged all its mines to open the rest of its neighbors at once.</p>
+      <p>Your first click is always safe.</p>
     </div>
-    <div class="macts"><button class="mbt mbt-p" id="help-close" style="flex:1">Got it</button></div>
+    <div class="macts"><button class="mbt mbt-p" id="help-close" style="flex:1">Close</button></div>
   </div>
 </div>
 
@@ -3679,19 +3991,20 @@ class MS{
     fb.onclick=()=>{this.fm=true;fb.classList.add('active');db.classList.remove('active')};
     document.getElementById('m-new').onclick=()=>this.init();
 
-    const mgb=document.getElementById('mg-btn'),mg=document.getElementById('mg');
-    const mhb=document.getElementById('mh-btn'),mh=document.getElementById('mh');
-    mgb.onclick=e=>{e.stopPropagation();mg.classList.toggle('open');mh.classList.remove('open')};
-    mhb.onclick=e=>{e.stopPropagation();mh.classList.toggle('open');mg.classList.remove('open')};
-    document.addEventListener('click',e=>{if(!e.target.closest('.menubar')){mg.classList.remove('open');mh.classList.remove('open')}});
-    document.getElementById('mg-new').onclick=()=>{this.init();mg.classList.remove('open')};
-    document.querySelectorAll('.dif').forEach(b=>{b.onclick=()=>{
-      const d=b.dataset.d;
-      if(d==='custom'){mg.classList.remove('open');document.getElementById('o-diff').value='custom';document.getElementById('custom-inputs').style.display='grid';this.om('mod-set');return;}
-      this.diff=d;document.getElementById('o-diff').value=this.diff;this.init(this.diff);mg.classList.remove('open');
-    }});
-    document.getElementById('mg-strict').onclick=()=>{this.strict=!this.strict;this.syncStrict();mg.classList.remove('open')};
-    document.getElementById('mh-how').onclick=()=>{this.om('mod-help');mh.classList.remove('open')};
+    document.querySelectorAll('.preset-btn').forEach(b=>{
+      b.onclick=()=>{
+        const d=b.dataset.d;
+        if(d==='custom'){
+          document.getElementById('o-diff').value='custom';
+          document.getElementById('custom-inputs').style.display='grid';
+          this.om('mod-set');
+          return;
+        }
+        this.diff=d;
+        document.getElementById('o-diff').value=d;
+        this.init(d);
+      };
+    });
 
     document.getElementById('o-diff').onchange=e=>{
       document.getElementById('custom-inputs').style.display=e.target.value==='custom'?'grid':'none';
@@ -3710,7 +4023,7 @@ class MS{
       }
       this.init(this.diff);this.cm('mod-set');
     };
-    document.getElementById('o-strict').onclick=e=>{e.currentTarget.classList.toggle('on');this.strict=e.currentTarget.classList.contains('on');this.syncStrict()};
+    document.getElementById('o-strict').onclick=e=>{e.currentTarget.classList.toggle('on');this.strict=e.currentTarget.classList.contains('on')};
     document.getElementById('o-qmark').onclick=e=>{e.currentTarget.classList.toggle('on');this.qmarks=e.currentTarget.classList.contains('on')};
 
     document.getElementById('b-help').onclick=()=>this.om('mod-help');
@@ -3722,12 +4035,6 @@ class MS{
   om(id){document.getElementById(id).classList.add('open')}
   cm(id){document.getElementById(id).classList.remove('open')}
 
-  syncStrict(){
-    document.getElementById('o-strict').classList.toggle('on',this.strict);
-    document.getElementById('ck-strict').textContent=this.strict?'✓':'';
-    document.getElementById('s-mode').textContent=this.strict?'Strict':'Normal';
-  }
-
   init(d){
     if(this.revealTimeouts) this.revealTimeouts.forEach(clearTimeout);
     this.revealTimeouts = [];
@@ -3736,15 +4043,15 @@ class MS{
     if(d)this.diff=d;
     const D={easy:[9,9,10],medium:[16,16,40],hard:[16,30,99],custom:[this.custom.rows,this.custom.cols,this.custom.mines]};
     [this.rows,this.cols,this.mines]=D[this.diff];
-    ['easy','medium','hard','custom'].forEach(k=>document.getElementById('ck-'+k).textContent=k===this.diff?'✓':'');
-    const lb={easy:'Beginner',medium:'Intermediate',hard:'Expert',custom:`Custom (${this.cols}×${this.rows})`};
-    document.getElementById('s-diff').textContent=lb[this.diff];
-    document.getElementById('s-info').textContent=this.mines+' mines';
 
-    let sz = 32;
+    document.querySelectorAll('.preset-btn').forEach(b=>{
+      b.classList.toggle('active', b.dataset.d === this.diff);
+    });
+
+    let sz = 34;
     if (this.scale === 'auto') {
-      const mW=window.innerWidth-60,mH=window.innerHeight-280;
-      sz=Math.max(22,Math.min(36,Math.floor(mW/this.cols),Math.floor(mH/this.rows)));
+      const mW=window.innerWidth-70,mH=window.innerHeight-260;
+      sz=Math.max(24,Math.min(38,Math.floor(mW/this.cols),Math.floor(mH/this.rows)));
     } else {
       sz = parseInt(this.scale, 10);
     }
@@ -3843,9 +4150,9 @@ class MS{
       this.cells.forEach((c,i)=>{if(c.m&&!c.f){this.G.children[i].textContent='🚩';this.G.children[i].classList.add('flagged')}});
       const b=this.best[this.diff],ib=b===null||this.sec<b;if(ib)this.best[this.diff]=this.sec;
       document.getElementById('ge').textContent='🏆';
-      document.getElementById('gt').textContent='You Win!';
+      document.getElementById('gt').textContent='Cleared!';
       document.getElementById('gt').style.color='var(--win)';
-      document.getElementById('gs').textContent=this.sec+'s'+(ib?' — New best!':b?' — Best: '+b+'s':'');
+      document.getElementById('gs').textContent=this.sec+'s'+(ib?' (New record)':b?' (Best: '+b+'s)':'');
     } else {
       this.F.textContent='😵';sfx('lose');
       this.BW.classList.add('shake');setTimeout(()=>this.BW.classList.remove('shake'),400);
@@ -3865,8 +4172,8 @@ class MS{
       });
 
       this.cells.forEach((c,i)=>{if(!c.m&&c.f){const el=this.G.children[i];el.classList.add('wrong-flag','o');el.textContent='✕';el.style.color='var(--danger)';el.style.fontWeight='900'}});
-      if(wf){document.getElementById('ge').textContent='🚩';document.getElementById('gt').textContent='Wrong Flag!';document.getElementById('gs').textContent="That cell wasn't a mine"}
-      else{document.getElementById('ge').textContent='💥';document.getElementById('gt').textContent='Game Over';document.getElementById('gs').textContent='You hit a mine'}
+      if(wf){document.getElementById('ge').textContent='🚩';document.getElementById('gt').textContent='Misflagged';document.getElementById('gs').textContent="That tile was safe"}
+      else{document.getElementById('ge').textContent='💥';document.getElementById('gt').textContent='Game Over';document.getElementById('gs').textContent='Stepped on a mine'}
       document.getElementById('gt').style.color='var(--danger)';
     }
 
@@ -3888,7 +4195,7 @@ new MS();
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>POKE BREAKOUT DELUXE</title>
+  <title>BREAKOUT</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
   <link href="https://fonts.bunny.net/css2?family=Roboto+Flex:opsz,wght@8..144,400..800&display=swap" rel="stylesheet">
   <style>
@@ -3931,7 +4238,7 @@ new MS();
 
     .hidden { opacity: 0; pointer-events: none; }
 
-    h1 { font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 800; color: var(--primary); margin-bottom: 2rem; letter-spacing: -1px; text-align: center; line-height: 1.15; }
+    h1 { font-size: clamp(2.4rem, 5vw, 3.6rem); font-weight: 800; color: var(--primary); margin-bottom: 2rem; letter-spacing: -1px; text-align: center; line-height: 1.15; }
 
     button {
       background: var(--primary); border: none;
@@ -3982,7 +4289,7 @@ new MS();
   <div id="msg-display">LEVEL 1</div>
 
   <div id="menu-start" class="ui-layer">
-    <h1>POKE<br>BREAKOUT ULTRA EDITION!</h1>
+    <h1>BREAKOUT</h1>
     <button onclick="Game.start()">START GAME</button>
   </div>
 
@@ -4084,9 +4391,12 @@ const Game = {
 
     window.addEventListener('mousemove', e => updatePaddle(e.clientX));
     this.canvas.addEventListener('touchmove', e => { e.preventDefault(); updatePaddle(e.touches[0].clientX); }, {passive: false});
+    this.canvas.addEventListener('mousedown', () => this.launchWaitingBalls());
+    this.canvas.addEventListener('touchstart', () => this.launchWaitingBalls(), {passive: true});
 
     window.addEventListener('keydown', e => {
       this.keys[e.key] = true;
+      if (e.code === 'Space') this.launchWaitingBalls();
       if (e.key === 'Escape') {
         if (this.state === 'playing') this.pause();
         else if (this.state === 'paused') this.resume();
@@ -4100,6 +4410,17 @@ const Game = {
     });
     document.getElementById('set-speed').addEventListener('input', e => this.baseSpeed = parseInt(e.target.value));
     document.getElementById('set-sfx').addEventListener('change', e => AudioEngine.enabled = e.target.checked);
+  },
+
+  launchWaitingBalls() {
+    if (this.state !== 'playing') return;
+    this.balls.forEach(b => {
+      if (b.held) {
+        b.held = false;
+        b.vx = (Math.random() - 0.5) * 4;
+        b.vy = -this.baseSpeed;
+      }
+    });
   },
 
   start() {
@@ -4173,10 +4494,13 @@ const Game = {
 
   resetBall() {
     this.balls = [{
-      x: this.width / 2, y: this.height - 90,
-      vx: (Math.random() > 0.5 ? 1 : -1) * this.baseSpeed,
-      vy: -this.baseSpeed,
-      r: 7, active: true
+      x: this.paddle.x + this.paddle.w / 2,
+      y: this.paddle.y - 8,
+      vx: 0,
+      vy: 0,
+      r: 7,
+      active: true,
+      held: true
     }];
   },
 
@@ -4221,6 +4545,12 @@ const Game = {
     this.balls.forEach(b => {
       if(!b.active) return;
       activeBalls++;
+
+      if (b.held) {
+        b.x = this.paddle.x + this.paddle.w / 2;
+        b.y = this.paddle.y - b.r - 1;
+        return;
+      }
 
       b.x += b.vx;
       b.y += b.vy;
@@ -4318,8 +4648,9 @@ const Game = {
   activatePowerup(type) {
     if(type === 'multi') {
       let base = this.balls.find(b => b.active) || this.balls[0];
-      this.balls.push({ ...base, vx: -base.vx, active: true });
-      this.balls.push({ ...base, vx: base.vx * 0.6, vy: -Math.abs(base.vy), active: true });
+      if (base.held) { base.held = false; base.vx = 3; base.vy = -this.baseSpeed; }
+      this.balls.push({ ...base, vx: -base.vx || -3, vy: -this.baseSpeed, active: true, held: false });
+      this.balls.push({ ...base, vx: (base.vx || 3) * 0.6, vy: -this.baseSpeed, active: true, held: false });
     } else if(type === 'wide') {
       this.paddle.w = Math.min(200, this.paddle.w + 40);
       setTimeout(() => this.paddle.w = Math.max(104, this.paddle.w - 40), 10000);
@@ -4432,6 +4763,756 @@ const Game = {
 };
 
 Game.init();
+</script>
+</body>
+</html>
+<% } %>
+
+
+<% if (game === "match3") { %>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>FOREVER MATCH 3</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+  <link href="https://fonts.bunny.net/css2?family=Roboto+Flex:opsz,wght@8..144,400..800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #160e11;
+      --surface-1: #22161b;
+      --surface-2: #2f1f26;
+      --surface-3: #3e2932;
+      --primary: #ffb0cd;
+      --on-primary: #541d34;
+      --primary-container: #70334b;
+      --on-primary-container: #ffd8e4;
+      --danger: #ffb4ab;
+      --on-danger: #690005;
+      --win: #a6f2d1;
+      --text: #f3dfe4;
+      --muted: #cfb8be;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; touch-action: manipulation; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Roboto Flex', system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .app-wrap {
+      width: 100%;
+      max-width: 1080px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface-1);
+      padding: 16px 24px;
+      border-radius: 28px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: var(--primary);
+    }
+
+    .mode-tabs {
+      display: flex;
+      gap: 8px;
+      background: var(--surface-2);
+      padding: 6px;
+      border-radius: 22px;
+    }
+
+    .tab-btn {
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      font-family: inherit;
+      font-weight: 700;
+      font-size: 0.9rem;
+      padding: 10px 18px;
+      border-radius: 16px;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .tab-btn.active {
+      background: var(--primary);
+      color: var(--on-primary);
+    }
+
+    .layout-grid {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+    .layout-grid.single {
+      grid-template-columns: 1fr;
+      max-width: 540px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .path-panel {
+      background: var(--surface-1);
+      border-radius: 32px;
+      padding: 20px;
+      height: 560px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .path-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 6px;
+    }
+    .path-header h2 {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: var(--primary);
+    }
+    .path-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 8px;
+      display: flex;
+      flex-direction: column-reverse;
+      gap: 18px;
+      position: relative;
+    }
+
+    .stage-row {
+      display: flex;
+      justify-content: center;
+      position: relative;
+    }
+    .stage-row:nth-child(4n+2) { transform: translateX(-44px); }
+    .stage-row:nth-child(4n+4) { transform: translateX(44px); }
+
+    .stage-node {
+      width: 60px;
+      height: 60px;
+      border-radius: 22px;
+      border: none;
+      background: var(--surface-2);
+      color: var(--muted);
+      font-family: inherit;
+      font-size: 1.05rem;
+      font-weight: 800;
+      cursor: not-allowed;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      transition: transform 0.15s ease, background 0.15s ease;
+    }
+    .stage-node.unlocked {
+      background: var(--surface-3);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .stage-node.unlocked:hover {
+      transform: scale(1.06);
+      background: var(--primary-container);
+    }
+    .stage-node.current {
+      background: var(--primary);
+      color: var(--on-primary);
+      transform: scale(1.1);
+    }
+    .stage-node.hard {
+      border: 3px solid var(--danger);
+    }
+    .stage-node.hard.current {
+      background: var(--danger);
+      color: var(--on-danger);
+    }
+    .hard-tag {
+      font-size: 0.6rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .board-panel {
+      background: var(--surface-1);
+      border-radius: 36px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      position: relative;
+    }
+
+    .hud-strip {
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .hud-card {
+      background: var(--surface-2);
+      padding: 12px 16px;
+      border-radius: 22px;
+      text-align: center;
+    }
+    .hud-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+    .hud-val {
+      font-size: 1.35rem;
+      font-weight: 800;
+      color: var(--primary);
+      margin-top: 2px;
+    }
+
+    .progress-track {
+      width: 100%;
+      height: 12px;
+      background: var(--surface-2);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--primary);
+      transition: width 0.25s ease;
+    }
+
+    #gem-grid {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 6px;
+      width: 100%;
+      max-width: 440px;
+      aspect-ratio: 1 / 1;
+      background: var(--bg);
+      padding: 12px;
+      border-radius: 28px;
+    }
+
+    .gem-cell {
+      background: var(--surface-2);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: clamp(1.3rem, 4vw, 1.85rem);
+      cursor: pointer;
+      transition: transform 0.15s cubic-bezier(0.2, 0, 0, 1), background 0.15s ease, opacity 0.15s ease;
+    }
+    .gem-cell:hover { background: var(--surface-3); }
+    .gem-cell.selected {
+      background: var(--primary);
+      transform: scale(1.08);
+    }
+    .gem-cell.clearing {
+      transform: scale(0.2);
+      opacity: 0;
+    }
+
+    .overlay-box {
+      position: absolute;
+      inset: 0;
+      background: rgba(22, 14, 17, 0.88);
+      backdrop-filter: blur(10px);
+      border-radius: 36px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 28px;
+      text-align: center;
+      z-index: 20;
+    }
+    .hidden { display: none !important; }
+    .overlay-box h3 {
+      font-size: 2rem;
+      font-weight: 800;
+      color: var(--primary);
+      margin-bottom: 8px;
+    }
+    .overlay-box p {
+      color: var(--muted);
+      margin-bottom: 20px;
+      font-size: 1rem;
+      font-weight: 600;
+    }
+    .action-btn {
+      background: var(--primary);
+      color: var(--on-primary);
+      border: none;
+      padding: 14px 28px;
+      border-radius: 22px;
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    @media (max-width: 820px) {
+      .layout-grid { grid-template-columns: 1fr; }
+      .path-panel { height: 220px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-wrap">
+    <header>
+      <h1>Forever Match 3</h1>
+      <div class="mode-tabs">
+        <button class="tab-btn active" id="tab-forever">Endless Mode</button>
+        <button class="tab-btn" id="tab-adventure">50-Level Map</button>
+      </div>
+    </header>
+
+    <div class="layout-grid single" id="main-layout">
+      <aside class="path-panel hidden" id="path-panel">
+        <div class="path-header">
+          <h2>Level Map</h2>
+          <span id="unlocked-label" style="font-size:0.85rem;font-weight:700;color:var(--muted);">1 / 50</span>
+        </div>
+        <div class="path-scroll" id="path-scroll"></div>
+      </aside>
+
+      <section class="board-panel">
+        <div class="hud-strip">
+          <div class="hud-card">
+            <div class="hud-label" id="lbl-left">Mode</div>
+            <div class="hud-val" id="val-left">Endless</div>
+          </div>
+          <div class="hud-card">
+            <div class="hud-label">Score</div>
+            <div class="hud-val" id="val-score">0</div>
+          </div>
+          <div class="hud-card">
+            <div class="hud-label" id="lbl-right">Possible Moves</div>
+            <div class="hud-val" id="val-right">0</div>
+          </div>
+        </div>
+
+        <div class="progress-track">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+
+        <div id="gem-grid"></div>
+
+        <div class="overlay-box hidden" id="end-overlay">
+          <h3 id="ov-title">No More Moves!</h3>
+          <p id="ov-desc">Final Score: 0</p>
+          <button class="action-btn" id="ov-btn">Play Again</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+<script>
+const AC = new (window.AudioContext || window.webkitAudioContext)();
+function playTone(freq, dur = 0.09, type = 'sine') {
+  try {
+    if (AC.state === 'suspended') AC.resume();
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, AC.currentTime);
+    g.gain.setValueAtTime(0.08, AC.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + dur);
+    o.connect(g).connect(AC.destination);
+    o.start();
+    o.stop(AC.currentTime + dur);
+  } catch (e) {}
+}
+
+const GEMS_ALL = ['🍓', '🍋', '🍇', '🫐', '🍏', '🍑', '💎'];
+
+class Match3Game {
+  constructor() {
+    this.size = 8;
+    this.mode = 'forever'; // 'forever' | 'adventure'
+    this.level = 1;
+    this.maxUnlocked = parseInt(localStorage.getItem('pokeMatch3Unlocked')) || 1;
+    this.bestForever = parseInt(localStorage.getItem('pokeMatch3Best')) || 0;
+
+    this.board = [];
+    this.selected = null;
+    this.busy = false;
+    this.score = 0;
+    this.targetScore = 1000;
+    this.movesLeft = 20;
+
+    this.gridEl = document.getElementById('gem-grid');
+    this.overlay = document.getElementById('end-overlay');
+
+    this.bindUI();
+    this.buildPath();
+    this.startForever();
+  }
+
+  bindUI() {
+    const tabForever = document.getElementById('tab-forever');
+    const tabAdv = document.getElementById('tab-adventure');
+    const pathPanel = document.getElementById('path-panel');
+    const layout = document.getElementById('main-layout');
+
+    tabForever.onclick = () => {
+      tabForever.classList.add('active');
+      tabAdv.classList.remove('active');
+      pathPanel.classList.add('hidden');
+      layout.classList.add('single');
+      this.startForever();
+    };
+
+    tabAdv.onclick = () => {
+      tabAdv.classList.add('active');
+      tabForever.classList.remove('active');
+      pathPanel.classList.remove('hidden');
+      layout.classList.remove('single');
+      this.startLevel(this.maxUnlocked);
+    };
+
+    document.getElementById('ov-btn').onclick = () => {
+      this.overlay.classList.add('hidden');
+      if (this.mode === 'forever') {
+        this.startForever();
+      } else {
+        if (this.wonLast) {
+          this.startLevel(Math.min(50, this.level + 1));
+        } else {
+          this.startLevel(this.level);
+        }
+      }
+    };
+  }
+
+  buildPath() {
+    const container = document.getElementById('path-scroll');
+    container.innerHTML = '';
+    document.getElementById('unlocked-label').textContent = `${this.maxUnlocked} / 50`;
+
+    for (let i = 1; i <= 50; i++) {
+      const row = document.createElement('div');
+      row.className = 'stage-row';
+
+      const btn = document.createElement('button');
+      const isHard = i % 10 === 0;
+      btn.className = 'stage-node' + (isHard ? ' hard' : '');
+      if (i <= this.maxUnlocked) btn.classList.add('unlocked');
+      if (i === this.level && this.mode === 'adventure') btn.classList.add('current');
+
+      btn.innerHTML = `<span>${i}</span>${isHard ? '<span class="hard-tag">HARD</span>' : ''}`;
+      if (i <= this.maxUnlocked) {
+        btn.onclick = () => this.startLevel(i);
+      }
+      row.appendChild(btn);
+      container.appendChild(row);
+    }
+  }
+
+  getGemPool() {
+    if (this.mode === 'forever') return GEMS_ALL.slice(0, 6);
+    const isHard = this.level % 10 === 0;
+    return GEMS_ALL.slice(0, isHard ? 7 : 6);
+  }
+
+  startForever() {
+    this.mode = 'forever';
+    this.score = 0;
+    this.selected = null;
+    this.busy = false;
+    this.overlay.classList.add('hidden');
+    this.generateInitialBoard();
+    this.render();
+    this.updateHUD();
+  }
+
+  startLevel(lvl) {
+    this.mode = 'adventure';
+    this.level = lvl;
+    this.score = 0;
+    this.selected = null;
+    this.busy = false;
+    this.wonLast = false;
+    this.overlay.classList.add('hidden');
+
+    const isHard = lvl % 10 === 0;
+    this.movesLeft = isHard ? 16 : Math.max(18, 25 - Math.floor(lvl / 12));
+    this.targetScore = isHard ? (1400 + lvl * 180) : (700 + lvl * 110);
+
+    this.buildPath();
+    this.generateInitialBoard();
+    this.render();
+    this.updateHUD();
+  }
+
+  generateInitialBoard() {
+    const pool = this.getGemPool();
+    do {
+      this.board = Array.from({ length: this.size }, () => Array(this.size).fill(''));
+      for (let r = 0; r < this.size; r++) {
+        for (let c = 0; c < this.size; c++) {
+          let g;
+          do {
+            g = pool[Math.floor(Math.random() * pool.length)];
+          } while (
+            (c >= 2 && this.board[r][c - 1] === g && this.board[r][c - 2] === g) ||
+            (r >= 2 && this.board[r - 1][c] === g && this.board[r - 2][c] === g)
+          );
+          this.board[r][c] = g;
+        }
+      }
+    } while (this.countValidMoves() === 0);
+  }
+
+  findMatches(b = this.board) {
+    const matched = new Set();
+    for (let r = 0; r < this.size; r++) {
+      let run = 1;
+      for (let c = 1; c <= this.size; c++) {
+        if (c < this.size && b[r][c] && b[r][c] === b[r][c - 1]) {
+          run++;
+        } else {
+          if (run >= 3) {
+            for (let k = c - run; k < c; k++) matched.add(`${r},${k}`);
+          }
+          run = 1;
+        }
+      }
+    }
+    for (let c = 0; c < this.size; c++) {
+      let run = 1;
+      for (let r = 1; r <= this.size; r++) {
+        if (r < this.size && b[r][c] && b[r][c] === b[r - 1][c]) {
+          run++;
+        } else {
+          if (run >= 3) {
+            for (let k = r - run; k < r; k++) matched.add(`${k},${c}`);
+          }
+          run = 1;
+        }
+      }
+    }
+    return matched;
+  }
+
+  countValidMoves() {
+    let moves = 0;
+    const copy = this.board.map(row => [...row]);
+    const swap = (r1, c1, r2, c2) => {
+      const tmp = copy[r1][c1];
+      copy[r1][c1] = copy[r2][c2];
+      copy[r2][c2] = tmp;
+    };
+
+    for (let r = 0; r < this.size; r++) {
+      for (let c = 0; c < this.size; c++) {
+        if (c + 1 < this.size) {
+          swap(r, c, r, c + 1);
+          if (this.findMatches(copy).size > 0) moves++;
+          swap(r, c, r, c + 1);
+        }
+        if (r + 1 < this.size) {
+          swap(r, c, r + 1, c);
+          if (this.findMatches(copy).size > 0) moves++;
+          swap(r, c, r + 1, c);
+        }
+      }
+    }
+    return moves;
+  }
+
+  render() {
+    this.gridEl.innerHTML = '';
+    for (let r = 0; r < this.size; r++) {
+      for (let c = 0; c < this.size; c++) {
+        const cell = document.createElement('div');
+        cell.className = 'gem-cell';
+        if (this.selected && this.selected.r === r && this.selected.c === c) {
+          cell.classList.add('selected');
+        }
+        cell.textContent = this.board[r][c];
+        cell.onclick = () => this.onCellClick(r, c);
+        this.gridEl.appendChild(cell);
+      }
+    }
+  }
+
+  onCellClick(r, c) {
+    if (this.busy) return;
+    if (!this.selected) {
+      this.selected = { r, c };
+      playTone(360, 0.05);
+      this.render();
+      return;
+    }
+
+    const dr = Math.abs(this.selected.r - r);
+    const dc = Math.abs(this.selected.c - c);
+
+    if (dr + dc === 1) {
+      this.attemptSwap(this.selected.r, this.selected.c, r, c);
+      this.selected = null;
+    } else {
+      this.selected = { r, c };
+      playTone(360, 0.05);
+      this.render();
+    }
+  }
+
+  async attemptSwap(r1, c1, r2, c2) {
+    this.busy = true;
+    this.swapCells(r1, c1, r2, c2);
+    this.render();
+
+    const matches = this.findMatches();
+    if (matches.size === 0) {
+      await new Promise(res => setTimeout(res, 180));
+      this.swapCells(r1, c1, r2, c2);
+      playTone(180, 0.12, 'sawtooth');
+      this.render();
+      this.busy = false;
+      return;
+    }
+
+    if (this.mode === 'adventure') {
+      this.movesLeft--;
+    }
+
+    let combo = 1;
+    while (true) {
+      const currentMatches = this.findMatches();
+      if (currentMatches.size === 0) break;
+
+      this.score += currentMatches.size * 30 * combo;
+      playTone(400 + combo * 90, 0.1, 'triangle');
+      combo++;
+
+      currentMatches.forEach(key => {
+        const [mr, mc] = key.split(',').map(Number);
+        const idx = mr * this.size + mc;
+        this.gridEl.children[idx]?.classList.add('clearing');
+      });
+
+      this.updateHUD();
+      await new Promise(res => setTimeout(res, 200));
+
+      currentMatches.forEach(key => {
+        const [mr, mc] = key.split(',').map(Number);
+        this.board[mr][mc] = null;
+      });
+
+      const pool = this.getGemPool();
+      for (let c = 0; c < this.size; c++) {
+        let writeRow = this.size - 1;
+        for (let r = this.size - 1; r >= 0; r--) {
+          if (this.board[r][c] !== null) {
+            this.board[writeRow][c] = this.board[r][c];
+            if (writeRow !== r) this.board[r][c] = null;
+            writeRow--;
+          }
+        }
+        for (let r = writeRow; r >= 0; r--) {
+          this.board[r][c] = pool[Math.floor(Math.random() * pool.length)];
+        }
+      }
+
+      this.render();
+      await new Promise(res => setTimeout(res, 160));
+    }
+
+    this.updateHUD();
+    this.checkEndState();
+    this.busy = false;
+  }
+
+  swapCells(r1, c1, r2, c2) {
+    const tmp = this.board[r1][c1];
+    this.board[r1][c1] = this.board[r2][c2];
+    this.board[r2][c2] = tmp;
+  }
+
+  updateHUD() {
+    const validMoves = this.countValidMoves();
+    document.getElementById('val-score').textContent = this.score;
+
+    if (this.mode === 'forever') {
+      if (this.score > this.bestForever) {
+        this.bestForever = this.score;
+        localStorage.setItem('pokeMatch3Best', this.bestForever);
+      }
+      document.getElementById('lbl-left').textContent = 'Best';
+      document.getElementById('val-left').textContent = this.bestForever;
+      document.getElementById('lbl-right').textContent = 'Possible Moves';
+      document.getElementById('val-right').textContent = validMoves;
+      document.getElementById('progress-fill').style.width = '100%';
+    } else {
+      const isHard = this.level % 10 === 0;
+      document.getElementById('lbl-left').textContent = isHard ? `Level ${this.level} (HARD)` : `Level ${this.level}`;
+      document.getElementById('val-left').textContent = `Goal: ${this.targetScore}`;
+      document.getElementById('lbl-right').textContent = 'Moves Left';
+      document.getElementById('val-right').textContent = this.movesLeft;
+      const pct = Math.min(100, Math.floor((this.score / this.targetScore) * 100));
+      document.getElementById('progress-fill').style.width = pct + '%';
+    }
+  }
+
+  checkEndState() {
+    const validMoves = this.countValidMoves();
+
+    if (this.mode === 'forever') {
+      if (validMoves === 0) {
+        document.getElementById('ov-title').textContent = 'No More Moves!';
+        document.getElementById('ov-desc').textContent = `Final Score: ${this.score}`;
+        document.getElementById('ov-btn').textContent = 'Play Again';
+        this.overlay.classList.remove('hidden');
+      }
+    } else {
+      if (this.score >= this.targetScore) {
+        this.wonLast = true;
+        if (this.level >= this.maxUnlocked && this.level < 50) {
+          this.maxUnlocked = this.level + 1;
+          localStorage.setItem('pokeMatch3Unlocked', this.maxUnlocked);
+          this.buildPath();
+        }
+        document.getElementById('ov-title').textContent = `Level ${this.level} Cleared!`;
+        document.getElementById('ov-desc').textContent = `Score: ${this.score}`;
+        document.getElementById('ov-btn').textContent = this.level < 50 ? 'Next Level' : 'Replay Level 50';
+        this.overlay.classList.remove('hidden');
+      } else if (this.movesLeft <= 0 || validMoves === 0) {
+        this.wonLast = false;
+        document.getElementById('ov-title').textContent = validMoves === 0 ? 'No More Moves!' : 'Out of Moves!';
+        document.getElementById('ov-desc').textContent = `Score: ${this.score} / ${this.targetScore}`;
+        document.getElementById('ov-btn').textContent = 'Try Again';
+        this.overlay.classList.remove('hidden');
+      }
+    }
+  }
+}
+
+new Match3Game();
 </script>
 </body>
 </html>
