@@ -367,6 +367,7 @@ module.exports = function (app, config, renderTemplate) {
         res.status(404);
         return renderTemplate(res, req, "404.ejs", {
           isOldWindows,
+          isMobile:req.useragent?.isMobile,
           random,
         });
       }
