@@ -83,7 +83,7 @@
             transform: scale(0.95);
         }
 
-         .error-title {
+        .error-title {
             font-size: 84px;
             font-weight: 1000;
             line-height: 0.95;
@@ -187,7 +187,7 @@
             -webkit-user-drag: none; 
         }
 
-         #game-overlay {
+        #game-overlay {
             display: none;
             position: fixed;
             top: 0;
@@ -314,11 +314,11 @@
                 Try searching for something else to get back on track!
             </p>
 
-            <form action="/search" method="GET" class="search-bar">
+            <form action="<%= (typeof isMobile !== 'undefined' && isMobile) ? '/app' : '/search' %>" method="GET" class="search-bar">
                 <div class="search-input-container">
                     <input 
                         type="text" 
-                        name="query" 
+                        name="<%= (typeof isMobile !== 'undefined' && isMobile) ? 'mobilesearch' : 'query' %>" 
                         class="search-input" 
                         placeholder="search poke for something else..."
                         autocomplete="off"
@@ -332,7 +332,7 @@
             </form>
 
             <div class="back-links">
-                <a href="/">Go to Homepage</a>
+                <a href="/home">Go to Homepage</a>
             </div>
         </div>
 
