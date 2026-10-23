@@ -179,7 +179,7 @@
     ssrMarineSliceStart = foundMIdx > 0 ? foundMIdx - 1 : 0;
   }
   const ssrMarineSliceEnd = (ssrHasSea && ssrMarine.hourly && Array.isArray(ssrMarine.hourly.time))
-    ? Math.min(ssrMarineSliceStart + 12, ssrMarine.hourly.time.length)
+    ? Math.min(ssrMarineSliceStart + 24, ssrMarine.hourly.time.length)
     : 0;
 
   let ssrOutlookSummary = '-';
@@ -241,6 +241,15 @@
       tempPart = 'Low ' + tmwMin + ssrTempSymbol + '.';
     }
     ssrOutlookSummary = narrative + '. ' + tempPart;
+  }
+
+  let ssrMarineOutlookSummary = 'No sea access at this location.';
+  if (ssrHasSea && ssrMarine) {
+    const seaState = ssrMarine.seaStateLabel || 'Coastal';
+    const wH = ssrMarine.waveHeight != null ? Number(ssrMarine.waveHeight).toFixed(1) + ' ' + ssrWaveSymbol : '-';
+    const maxW = ssrMarine.dailyWaveMax != null ? Number(ssrMarine.dailyWaveMax).toFixed(1) + ' ' + ssrWaveSymbol : wH;
+    const sstStr = ssrMarine.seaSurfaceTemperature != null ? 'Water temperature around ' + Math.round(ssrMarine.seaSurfaceTemperature) + ssrTempSymbol + '.' : '';
+    ssrMarineOutlookSummary = seaState + ' conditions right now with ' + wH + ' waves (peaking near ' + maxW + ' today). ' + sstStr;
   }
 
   const ssrInsights = [];
@@ -369,7 +378,7 @@
   }
 %>
 <!DOCTYPE html>
-<html lang="en" data-theme="<%= ssrSafe.theme === 'light' ? 'light' : 'dark' %>" data-device="desktop">
+<html lang="en" data-theme="<%= ssrSafe.theme === 'light' ? 'light' : 'dark' %>" data-device="desktop" data-view-mode="weather">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
@@ -441,11 +450,12 @@ html, body {
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  transition: background 0.6s ease, opacity 0.25s ease;
+  transition: background 0.6s ease, opacity 0.35s ease;
   overflow: hidden;
 }
 
-.mobile-sky {
+.mobile-sky,
+.mobile-sea-bg {
   display: none;
   position: absolute;
   top: 0;
@@ -455,6 +465,9 @@ html, body {
   opacity: var(--sky-opacity);
   mask-image: linear-gradient(180deg, #000 78%, transparent 100%);
   -webkit-mask-image: linear-gradient(180deg, #000 78%, transparent 100%);
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
 }
 
 .hero-sky {
@@ -662,6 +675,61 @@ html, body {
 @keyframes snowfall {
   from { background-position: 0 0; }
   to { background-position: 24px 160px; }
+}
+
+.hero-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  min-height: 38px;
+  gap: 12px;
+}
+
+.mode-pill-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background-color: #000000;
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  margin: 0 auto;
+  z-index: 5;
+}
+
+.mode-pill-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.68);
+  padding: 6px 16px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease, opacity 0.2s ease, transform 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.mode-pill-btn:hover:not(.disabled-sea) {
+  color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.mode-pill-btn.active {
+  background-color: #ffffff;
+  color: #000000;
+  box-shadow: 0 2px 10px rgba(255, 255, 255, 0.25);
+}
+
+.mode-pill-btn.disabled-sea {
+  opacity: 0.42;
+  cursor: not-allowed;
 }
 
 header {
@@ -1198,13 +1266,13 @@ html[data-device="desktop"] .col-side {
   flex-direction: column;
   gap: 22px;
   color: #f8fafc;
-  padding: 28px;
+  padding: 24px 28px 28px;
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.25);
 }
 
-.hero-card > *:not(.hero-sky) {
+.hero-card > *:not(.hero-sky):not(.hero-sea-scene) {
   position: relative;
-  z-index: 1;
+  z-index: 2;
 }
 
 .hero-card .card-header {
@@ -1212,7 +1280,8 @@ html[data-device="desktop"] .col-side {
   margin-bottom: 0;
 }
 
-.hero-primary {
+.hero-primary,
+.sea-hero-primary {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
@@ -1469,56 +1538,45 @@ html[data-device="desktop"] .col-side {
   font-variant-numeric: tabular-nums;
 }
 
-/* ==================== SEA & MARINE ANIMATED SCENE ==================== */
-.sea-card {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  position: relative;
-  overflow: hidden;
-}
-
-.sea-hero-banner {
-  position: relative;
-  overflow: hidden;
-  min-height: 186px;
-  padding: 24px 26px;
-  border-radius: var(--radius-xl);
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 18px;
-  color: #ffffff;
+.hero-sea-scene,
+.mobile-sea-bg {
   background: linear-gradient(180deg, #075985 0%, #0284c7 46%, #0369a1 72%, #082f49 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    0 12px 28px rgba(2, 12, 27, 0.32);
-  isolation: isolate;
-  transition: background 0.6s ease;
+  transition: opacity 0.35s ease, background 0.6s ease;
 }
 
-.sea-hero-banner[data-sea-time="night"] {
-  background: linear-gradient(180deg, #060d1f 0%, #0f2447 48%, #0c3559 74%, #06152d 100%);
-}
-
-.sea-scene {
+.hero-sea-scene {
   position: absolute;
   inset: 0;
   z-index: 0;
+  border-radius: inherit;
   pointer-events: none;
   overflow: hidden;
+  opacity: 0;
+}
+
+.hero-sea-scene[data-sea-time="night"],
+.mobile-sea-bg[data-sea-time="night"] {
+  background: linear-gradient(180deg, #060d1f 0%, #0f2447 48%, #0c3559 74%, #06152d 100%);
+}
+
+html[data-view-mode="marine"] .hero-sea-scene {
+  opacity: 1;
+}
+
+html[data-view-mode="marine"] .hero-sky {
+  opacity: 0;
 }
 
 .sea-sky-glow {
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse 65% 58% at 50% 34%, rgba(254, 240, 138, 0.28) 0%, rgba(56, 189, 248, 0.12) 55%, transparent 80%);
+  background: radial-gradient(ellipse 65% 58% at 50% 28%, rgba(254, 240, 138, 0.28) 0%, rgba(56, 189, 248, 0.12) 55%, transparent 80%);
   transition: opacity 0.6s ease;
 }
 
-.sea-hero-banner[data-sea-time="night"] .sea-sky-glow {
-  background: radial-gradient(ellipse 60% 55% at 50% 32%, rgba(186, 230, 253, 0.16) 0%, rgba(30, 58, 138, 0.12) 55%, transparent 80%);
+.hero-sea-scene[data-sea-time="night"] .sea-sky-glow,
+.mobile-sea-bg[data-sea-time="night"] .sea-sky-glow {
+  background: radial-gradient(ellipse 60% 55% at 50% 28%, rgba(186, 230, 253, 0.16) 0%, rgba(30, 58, 138, 0.12) 55%, transparent 80%);
 }
 
 .sea-stars {
@@ -1534,17 +1592,17 @@ html[data-device="desktop"] .col-side {
     radial-gradient(1.5px 1.5px at 42% 12%, rgba(255, 255, 255, 0.8) 100%, transparent);
 }
 
-.sea-hero-banner[data-sea-time="night"] .sea-stars {
+.hero-sea-scene[data-sea-time="night"] .sea-stars,
+.mobile-sea-bg[data-sea-time="night"] .sea-stars {
   opacity: 0.85;
 }
 
 .sea-sun {
   position: absolute;
-  top: 22px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 54px;
-  height: 54px;
+  top: 56px;
+  right: 14%;
+  width: 68px;
+  height: 68px;
   border-radius: 50%;
   background: radial-gradient(circle, #ffffff 0%, #fef08a 42%, #f59e0b 78%, rgba(245, 158, 11, 0) 100%);
   box-shadow:
@@ -1554,10 +1612,17 @@ html[data-device="desktop"] .col-side {
   transition: all 0.6s ease;
 }
 
-.sea-hero-banner[data-sea-time="night"] .sea-sun {
-  width: 44px;
-  height: 44px;
-  top: 24px;
+.mobile-sea-bg .sea-sun {
+  top: 84px;
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+}
+
+.hero-sea-scene[data-sea-time="night"] .sea-sun,
+.mobile-sea-bg[data-sea-time="night"] .sea-sun {
+  width: 54px;
+  height: 54px;
   background: radial-gradient(circle at 35% 35%, #ffffff 0%, #e2e8f0 62%, #94a3b8 92%, rgba(148, 163, 184, 0) 100%);
   box-shadow:
     0 0 24px 6px rgba(226, 232, 240, 0.35),
@@ -1565,8 +1630,17 @@ html[data-device="desktop"] .col-side {
 }
 
 @keyframes seaSunFloat {
+  from { transform: translateY(0px) scale(0.98); }
+  to { transform: translateY(-5px) scale(1.03); }
+}
+
+.mobile-sea-bg .sea-sun {
+  animation: seaSunFloatMobile 5.5s ease-in-out infinite alternate;
+}
+
+@keyframes seaSunFloatMobile {
   from { transform: translate(-50%, 0px) scale(0.98); }
-  to { transform: translate(-50%, -4px) scale(1.03); }
+  to { transform: translate(-50%, -5px) scale(1.03); }
 }
 
 .sea-horizon-haze {
@@ -1574,22 +1648,22 @@ html[data-device="desktop"] .col-side {
   left: 0;
   right: 0;
   bottom: 44%;
-  height: 28px;
+  height: 32px;
   background: linear-gradient(180deg, transparent 0%, rgba(254, 249, 195, 0.22) 65%, rgba(186, 230, 253, 0.28) 100%);
   pointer-events: none;
 }
 
-.sea-hero-banner[data-sea-time="night"] .sea-horizon-haze {
+.hero-sea-scene[data-sea-time="night"] .sea-horizon-haze,
+.mobile-sea-bg[data-sea-time="night"] .sea-horizon-haze {
   background: linear-gradient(180deg, transparent 0%, rgba(148, 163, 184, 0.1) 65%, rgba(56, 189, 248, 0.14) 100%);
 }
 
 .sea-shimmer {
   position: absolute;
-  left: 50%;
-  bottom: 10px;
-  transform: translateX(-50%);
-  width: 140px;
-  height: 68px;
+  right: 11%;
+  bottom: 16%;
+  width: 150px;
+  height: 90px;
   z-index: 2;
   opacity: 0.65;
   background:
@@ -1602,14 +1676,22 @@ html[data-device="desktop"] .col-side {
   pointer-events: none;
 }
 
-.sea-hero-banner[data-sea-time="night"] .sea-shimmer {
+.mobile-sea-bg .sea-shimmer {
+  right: auto;
+  left: 50%;
+  bottom: 34%;
+  transform: translateX(-50%);
+}
+
+.hero-sea-scene[data-sea-time="night"] .sea-shimmer,
+.mobile-sea-bg[data-sea-time="night"] .sea-shimmer {
   opacity: 0.42;
   filter: hue-rotate(155deg) brightness(1.1);
 }
 
 @keyframes seaShimmerPulse {
-  0% { transform: translateX(-50%) scaleX(0.92); opacity: 0.5; }
-  100% { transform: translateX(-50%) scaleX(1.08); opacity: 0.78; }
+  0% { opacity: 0.48; }
+  100% { opacity: 0.8; }
 }
 
 .sea-waves-wrap {
@@ -1617,7 +1699,7 @@ html[data-device="desktop"] .col-side {
   left: 0;
   right: 0;
   bottom: 0;
-  height: 56%;
+  height: 52%;
   z-index: 1;
   overflow: hidden;
 }
@@ -1632,7 +1714,7 @@ html[data-device="desktop"] .col-side {
 }
 
 .sea-wave-svg.wave-back {
-  bottom: 12px;
+  bottom: 14px;
   height: 92%;
   fill: rgba(14, 165, 233, 0.42);
   animation: seaWaveSlideLeft calc(15s / var(--wave-speed-mult, 1)) linear infinite,
@@ -1640,7 +1722,7 @@ html[data-device="desktop"] .col-side {
 }
 
 .sea-wave-svg.wave-mid {
-  bottom: 4px;
+  bottom: 5px;
   height: 82%;
   fill: rgba(2, 132, 199, 0.62);
   animation: seaWaveSlideRight calc(10s / var(--wave-speed-mult, 1)) linear infinite,
@@ -1649,28 +1731,31 @@ html[data-device="desktop"] .col-side {
 
 .sea-wave-svg.wave-front {
   bottom: -2px;
-  height: 70%;
+  height: 72%;
   fill: rgba(3, 105, 161, 0.86);
   animation: seaWaveSlideLeft calc(6.8s / var(--wave-speed-mult, 1)) linear infinite;
 }
 
-.sea-hero-banner[data-sea-time="night"] .sea-wave-svg.wave-back {
+.hero-sea-scene[data-sea-time="night"] .sea-wave-svg.wave-back,
+.mobile-sea-bg[data-sea-time="night"] .sea-wave-svg.wave-back {
   fill: rgba(14, 116, 144, 0.36);
 }
 
-.sea-hero-banner[data-sea-time="night"] .sea-wave-svg.wave-mid {
+.hero-sea-scene[data-sea-time="night"] .sea-wave-svg.wave-mid,
+.mobile-sea-bg[data-sea-time="night"] .sea-wave-svg.wave-mid {
   fill: rgba(12, 74, 110, 0.58);
 }
 
-.sea-hero-banner[data-sea-time="night"] .sea-wave-svg.wave-front {
+.hero-sea-scene[data-sea-time="night"] .sea-wave-svg.wave-front,
+.mobile-sea-bg[data-sea-time="night"] .sea-wave-svg.wave-front {
   fill: rgba(8, 47, 73, 0.88);
 }
 
 .sea-deep-gradient {
   position: absolute;
-  inset: 45% 0 0 0;
+  inset: 42% 0 0 0;
   z-index: 2;
-  background: linear-gradient(180deg, transparent 0%, rgba(7, 29, 54, 0.58) 100%);
+  background: linear-gradient(180deg, transparent 0%, rgba(7, 29, 54, 0.62) 100%);
   pointer-events: none;
 }
 
@@ -1689,107 +1774,6 @@ html[data-device="desktop"] .col-side {
   100% { margin-bottom: 3px; }
 }
 
-.sea-hero-left,
-.sea-hero-right {
-  position: relative;
-  z-index: 3;
-}
-
-.sea-hero-left {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.sea-primary-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.sea-wave-big {
-  font-size: 38px;
-  font-weight: 800;
-  color: #ffffff;
-  line-height: 1.05;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-  text-shadow: 0 2px 14px rgba(3, 18, 38, 0.55);
-}
-
-.sea-state-sub {
-  font-size: 13px;
-  font-weight: 600;
-  color: rgba(240, 249, 255, 0.92);
-  text-shadow: 0 1px 8px rgba(3, 18, 38, 0.55);
-}
-
-.sea-hero-right {
-  text-align: right;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  background: rgba(7, 24, 48, 0.36);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  padding: 10px 15px;
-  border-radius: 16px;
-}
-
-.sea-sst-label {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: rgba(224, 242, 254, 0.85);
-}
-
-.sea-sst-val {
-  font-size: 24px;
-  font-weight: 800;
-  color: #ffffff;
-  line-height: 1.1;
-  font-variant-numeric: tabular-nums;
-}
-
-.sea-metrics-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-}
-
-.sea-metric-box {
-  background-color: var(--md-surface-high);
-  border-radius: var(--radius-lg);
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.sea-metric-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--md-text-muted);
-}
-
-.sea-metric-val {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--md-text);
-  font-variant-numeric: tabular-nums;
-}
-
-.sea-sub-header {
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--md-text-muted);
-  margin: 2px 0 -6px;
-}
-
 .hour-wave-svg {
   width: 22px;
   height: 16px;
@@ -1799,7 +1783,26 @@ html[data-device="desktop"] .col-side {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-/* ===================================================================== */
+
+.marine-only-block {
+  display: none !important;
+}
+
+html[data-view-mode="marine"] .weather-only-block {
+  display: none !important;
+}
+
+html[data-view-mode="marine"] .marine-only-block {
+  display: flex !important;
+}
+
+html[data-view-mode="marine"] #marineMetricsCard.marine-only-block {
+  display: grid !important;
+}
+
+html[data-view-mode="marine"] #desktopMarineOutlookSummary.marine-only-block {
+  display: block !important;
+}
 
 .pollen-card {
   display: flex;
@@ -2103,8 +2106,7 @@ html[data-device="tablet"] .col-side {
   grid-column: span 5;
 }
 
-html[data-device="tablet"] .metrics-grid,
-html[data-device="tablet"] .sea-metrics-grid {
+html[data-device="tablet"] .metrics-grid {
   grid-template-columns: repeat(2, 1fr);
 }
 
@@ -2120,7 +2122,16 @@ html[data-device="mobile"] .mobile-sky {
   display: block;
 }
 
+html[data-device="mobile"][data-view-mode="marine"] .mobile-sky {
+  display: none;
+}
+
+html[data-device="mobile"][data-view-mode="marine"] .mobile-sea-bg {
+  display: block;
+}
+
 html[data-device="mobile"] .hero-sky,
+html[data-device="mobile"] .hero-sea-scene,
 html[data-device="mobile"] .desktop-outlook-summary {
   display: none !important;
 }
@@ -2152,7 +2163,7 @@ html[data-device="mobile"] .location-dots-bar {
 
 html[data-device="mobile"] .container {
   padding: 0 16px;
-  margin-top: 8px;
+  margin-top: 4px;
 }
 
 html[data-device="mobile"] .col-main {
@@ -2165,13 +2176,20 @@ html[data-device="mobile"] #now.hero-card {
   display: contents;
 }
 
-html[data-device="mobile"] #now.hero-card > .card-header {
+html[data-device="mobile"] .hero-top-bar {
+  order: 0;
+  justify-content: center;
+  margin-bottom: -4px;
+}
+
+html[data-device="mobile"] .hero-top-bar .card-header-label {
   display: none;
 }
 
-html[data-device="mobile"] .hero-primary {
+html[data-device="mobile"] .hero-primary,
+html[data-device="mobile"] .sea-hero-primary {
   order: 1;
-  min-height: 36vh;
+  min-height: 35vh;
   flex-direction: column;
   justify-content: center;
   align-items: center;
@@ -2211,25 +2229,18 @@ html[data-device="mobile"] #mobileInsightsCard {
   order: 3;
 }
 
-html[data-device="mobile"] #metricsCard {
+html[data-device="mobile"] #metricsCard,
+html[data-device="mobile"] #marineMetricsCard {
   order: 4;
   grid-template-columns: repeat(2, 1fr);
 }
 
-html[data-device="mobile"] #seaCard {
+html[data-device="mobile"] #pollenCard {
   order: 5;
 }
 
-html[data-device="mobile"] .sea-metrics-grid {
-  grid-template-columns: repeat(2, 1fr);
-}
-
-html[data-device="mobile"] #pollenCard {
-  order: 6;
-}
-
 html[data-device="mobile"] #aqiBarCard {
-  order: 7;
+  order: 6;
 }
 
 html[data-device="mobile"] .mobile-loc-title {
@@ -2253,7 +2264,7 @@ html[data-device="mobile"] #currIcon {
 }
 
 html[data-device="mobile"] .temp-value {
-  font-size: 88px;
+  font-size: 84px;
   text-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 }
 
@@ -2277,8 +2288,7 @@ html[data-device="mobile"] .metric-val {
 }
 
 @media (max-width: 768px) {
-  .metrics-grid,
-  .sea-metrics-grid {
+  .metrics-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 }
@@ -2306,6 +2316,26 @@ html[data-device="mobile"] .metric-val {
     <div class="sky-celestial"></div>
     <div class="sky-clouds"></div>
     <div class="sky-precip"></div>
+  </div>
+
+  <div id="mobileSeaBg" class="mobile-sea-bg" data-sea-time="<%= ssrIsDay ? 'day' : 'night' %>" aria-hidden="true">
+    <div class="sea-sky-glow"></div>
+    <div class="sea-stars"></div>
+    <div class="sea-sun"></div>
+    <div class="sea-horizon-haze"></div>
+    <div class="sea-waves-wrap">
+      <svg class="sea-wave-svg wave-back" viewBox="0 0 1440 120" preserveAspectRatio="none">
+        <path d="M0,44 C180,84 360,4 540,44 C720,84 900,4 1080,44 C1260,84 1350,24 1440,44 L1440,120 L0,120 Z"></path>
+      </svg>
+      <svg class="sea-wave-svg wave-mid" viewBox="0 0 1440 120" preserveAspectRatio="none">
+        <path d="M0,56 C160,16 320,96 480,56 C640,16 800,96 960,56 C1120,16 1280,96 1440,56 L1440,120 L0,120 Z"></path>
+      </svg>
+      <svg class="sea-wave-svg wave-front" viewBox="0 0 1440 120" preserveAspectRatio="none">
+        <path d="M0,68 C120,98 240,38 360,68 C480,98 600,38 720,68 C840,98 960,38 1080,68 C1200,98 1320,38 1440,68 L1440,120 L0,120 Z"></path>
+      </svg>
+    </div>
+    <div class="sea-shimmer"></div>
+    <div class="sea-deep-gradient"></div>
   </div>
 
   <header>
@@ -2474,12 +2504,38 @@ html[data-device="mobile"] .metric-val {
             <div class="sky-precip"></div>
           </div>
 
-          <div class="card-header">
-            <span>Current Conditions</span>
-            <span id="currFeelHeader"></span>
+          <div id="heroSeaScene" class="hero-sea-scene" data-sea-time="<%= ssrIsDay ? 'day' : 'night' %>" aria-hidden="true">
+            <div class="sea-sky-glow"></div>
+            <div class="sea-stars"></div>
+            <div class="sea-sun"></div>
+            <div class="sea-horizon-haze"></div>
+            <div class="sea-waves-wrap">
+              <svg class="sea-wave-svg wave-back" viewBox="0 0 1440 120" preserveAspectRatio="none">
+                <path d="M0,44 C180,84 360,4 540,44 C720,84 900,4 1080,44 C1260,84 1350,24 1440,44 L1440,120 L0,120 Z"></path>
+              </svg>
+              <svg class="sea-wave-svg wave-mid" viewBox="0 0 1440 120" preserveAspectRatio="none">
+                <path d="M0,56 C160,16 320,96 480,56 C640,16 800,96 960,56 C1120,16 1280,96 1440,56 L1440,120 L0,120 Z"></path>
+              </svg>
+              <svg class="sea-wave-svg wave-front" viewBox="0 0 1440 120" preserveAspectRatio="none">
+                <path d="M0,68 C120,98 240,38 360,68 C480,98 600,38 720,68 C840,98 960,38 1080,68 C1200,98 1320,38 1440,68 L1440,120 L0,120 Z"></path>
+              </svg>
+            </div>
+            <div class="sea-shimmer"></div>
+            <div class="sea-deep-gradient"></div>
           </div>
 
-          <div class="hero-primary">
+          <div class="hero-top-bar">
+            <span class="card-header card-header-label" id="heroCardTitle">Current Conditions</span>
+
+            <div class="mode-pill-tabs no-js-hidden" id="viewModeTabs" role="tablist" aria-label="Forecast Mode">
+              <button type="button" id="tabBtnWeather" class="mode-pill-btn active" role="tab" aria-selected="true">Atmosphere</button>
+              <button type="button" id="tabBtnMarine" class="mode-pill-btn<%= ssrHasSea ? '' : ' disabled-sea' %>" role="tab" aria-selected="false" title="<%= ssrHasSea ? 'Switch to Marine & Sea conditions' : 'Area has no sea access' %>">Marine & Sea</button>
+            </div>
+
+            <span class="card-header card-header-label" id="currFeelHeader" style="min-width: 110px; text-align: right; justify-content: flex-end;"></span>
+          </div>
+
+           <div class="hero-primary weather-only-block" id="weatherHeroPrimary">
             <div class="mobile-loc-tag" id="mobileLocTag" title="Current Location">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
             </div>
@@ -2503,9 +2559,33 @@ html[data-device="mobile"] .metric-val {
             </div>
           </div>
 
-          <div id="desktopOutlookSummary" class="desktop-outlook-summary"><%= ssrOutlookSummary %></div>
+           <div class="sea-hero-primary marine-only-block" id="seaHeroPrimary">
+            <div class="mobile-loc-tag" id="mobileSeaLocTag" title="Current Location">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+            </div>
+            <div class="mobile-loc-title" id="mobileSeaLocTitle"><%= ssrDisplayName %></div>
 
-          <div id="metricsCard" class="metrics-grid">
+            <div>
+              <div class="desktop-hero-loc">
+                <svg id="desktopSeaHomeIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+                <span id="seaLocChip"><%= ssrDisplayName %></span>
+              </div>
+              <div class="temp-display">
+                <div class="temp-value" id="seaWaveHeight"><%= (ssrHasSea && ssrMarine.waveHeight != null) ? Number(ssrMarine.waveHeight).toFixed(1) + ' ' + ssrWaveSymbol : '-' %></div>
+              </div>
+            </div>
+
+            <div class="condition-meta">
+              <div class="condition-desc" id="seaStateBadge"><%= ssrHasSea && ssrMarine.seaStateLabel ? ssrMarine.seaStateLabel : 'Coastal' %></div>
+              <div class="condition-sub" id="seaStateSub">Water Temp <span id="seaSurfaceTemp"><%= (ssrHasSea && ssrMarine.seaSurfaceTemperature != null) ? Math.round(ssrMarine.seaSurfaceTemperature) + ssrTempSymbol : '-' %></span></div>
+              <div class="local-time-sub hidden" id="seaCurrLocalTime"></div>
+            </div>
+          </div>
+
+          <div id="desktopOutlookSummary" class="desktop-outlook-summary weather-only-block"><%= ssrOutlookSummary %></div>
+          <div id="desktopMarineOutlookSummary" class="desktop-outlook-summary marine-only-block"><%= ssrMarineOutlookSummary %></div>
+
+           <div id="metricsCard" class="metrics-grid weather-only-block">
             <div class="metric-item"><div class="metric-label">Wind</div><div class="metric-val" id="currWind"><%= ssrCurrent ? Math.round(ssrCurrent.wind_speed_10m) + ' ' + ssrWindSymbol : '-' %></div></div>
             <div class="metric-item"><div class="metric-label">Humidity</div><div class="metric-val" id="currHum"><%= ssrCurrent ? Math.round(ssrCurrent.relative_humidity_2m) + '%' : '-' %></div></div>
             <div class="metric-item"><div class="metric-label">Pressure</div><div class="metric-val" id="currPress"><%= ssrCurrent ? Math.round(ssrCurrent.pressure_msl) + ' hPa' : '-' %></div></div>
@@ -2517,92 +2597,20 @@ html[data-device="mobile"] .metric-val {
             <div class="metric-item"><div class="metric-label">Ozone</div><div class="metric-val" id="currOzone"><%= (ssrAq && ssrAq.o3 != null) ? Math.round(ssrAq.o3) + ' µg/m³' : '-' %></div></div>
             <div class="metric-item"><div class="metric-label">Dust</div><div class="metric-val" id="currDust"><%= (ssrAq && ssrAq.dust != null) ? Math.round(ssrAq.dust) + ' µg/m³' : '-' %></div></div>
           </div>
+
+           <div id="marineMetricsCard" class="metrics-grid marine-only-block">
+            <div class="metric-item"><div class="metric-label">Wave Period</div><div class="metric-val" id="seaWavePeriod"><%= (ssrHasSea && ssrMarine.wavePeriod != null) ? Math.round(ssrMarine.wavePeriod) + ' s' : '-' %></div></div>
+            <div class="metric-item"><div class="metric-label">Wave Direction</div><div class="metric-val" id="seaWaveDir"><%= ssrHasSea ? getSsrCompass(ssrMarine.waveDirection) : '-' %></div></div>
+            <div class="metric-item"><div class="metric-label">Swell Height</div><div class="metric-val" id="seaSwellHeight"><%= (ssrHasSea && ssrMarine.swellWaveHeight != null) ? Number(ssrMarine.swellWaveHeight).toFixed(1) + ' ' + ssrWaveSymbol : '-' %></div></div>
+            <div class="metric-item"><div class="metric-label">Swell Period</div><div class="metric-val" id="seaSwellPeriod"><%= (ssrHasSea && ssrMarine.swellWavePeriod != null) ? Math.round(ssrMarine.swellWavePeriod) + ' s' : '-' %></div></div>
+            <div class="metric-item"><div class="metric-label">Swell Direction</div><div class="metric-val" id="seaSwellDir"><%= ssrHasSea ? getSsrCompass(ssrMarine.swellWaveDirection) : '-' %></div></div>
+            <div class="metric-item"><div class="metric-label">Wind Wave</div><div class="metric-val" id="seaWindWave"><%= (ssrHasSea && ssrMarine.windWaveHeight != null) ? Number(ssrMarine.windWaveHeight).toFixed(1) + ' ' + ssrWaveSymbol : '-' %></div></div>
+            <div class="metric-item"><div class="metric-label">Ocean Current</div><div class="metric-val" id="seaCurrentVel"><%= (ssrHasSea && ssrMarine.oceanCurrentVelocity != null) ? Number(ssrMarine.oceanCurrentVelocity).toFixed(1) + ' ' + ssrWindSymbol : '-' %></div></div>
+            <div class="metric-item"><div class="metric-label">Current Dir</div><div class="metric-val" id="seaCurrentDir"><%= ssrHasSea ? getSsrCompass(ssrMarine.oceanCurrentDirection) : '-' %></div></div>
+            <div class="metric-item"><div class="metric-label">Max Wave Today</div><div class="metric-val" id="seaDailyMaxWave"><%= (ssrHasSea && ssrMarine.dailyWaveMax != null) ? Number(ssrMarine.dailyWaveMax).toFixed(1) + ' ' + ssrWaveSymbol : '-' %></div></div>
+            <div class="metric-item"><div class="metric-label">Surface Wind</div><div class="metric-val" id="seaSurfaceWind"><%= ssrCurrent ? Math.round(ssrCurrent.wind_speed_10m) + ' ' + ssrWindSymbol : '-' %></div></div>
+          </div>
         </article>
-
-        <section id="seaCard" class="card sea-card<%= ssrHasSea ? '' : ' hidden' %>" aria-label="Sea and Marine Conditions">
-          <h3 class="card-header">
-            <span>Sea & Marine Conditions</span>
-            <span id="seaStateBadge"><%= ssrHasSea && ssrMarine.seaStateLabel ? ssrMarine.seaStateLabel : 'Coastal' %></span>
-          </h3>
-
-          <div class="sea-hero-banner" id="seaHeroBanner" data-sea-time="<%= ssrIsDay ? 'day' : 'night' %>">
-            <div class="sea-scene" aria-hidden="true">
-              <div class="sea-sky-glow"></div>
-              <div class="sea-stars"></div>
-              <div class="sea-sun"></div>
-              <div class="sea-horizon-haze"></div>
-              <div class="sea-waves-wrap">
-                <svg class="sea-wave-svg wave-back" viewBox="0 0 1440 120" preserveAspectRatio="none">
-                  <path d="M0,44 C180,84 360,4 540,44 C720,84 900,4 1080,44 C1260,84 1350,24 1440,44 L1440,120 L0,120 Z"></path>
-                </svg>
-                <svg class="sea-wave-svg wave-mid" viewBox="0 0 1440 120" preserveAspectRatio="none">
-                  <path d="M0,56 C160,16 320,96 480,56 C640,16 800,96 960,56 C1120,16 1280,96 1440,56 L1440,120 L0,120 Z"></path>
-                </svg>
-                <svg class="sea-wave-svg wave-front" viewBox="0 0 1440 120" preserveAspectRatio="none">
-                  <path d="M0,68 C120,98 240,38 360,68 C480,98 600,38 720,68 C840,98 960,38 1080,68 C1200,98 1320,38 1440,68 L1440,120 L0,120 Z"></path>
-                </svg>
-              </div>
-              <div class="sea-shimmer"></div>
-              <div class="sea-deep-gradient"></div>
-            </div>
-
-            <div class="sea-hero-left">
-              <div class="sea-primary-stat">
-                <div class="sea-wave-big" id="seaWaveHeight"><%= (ssrHasSea && ssrMarine.waveHeight != null) ? Number(ssrMarine.waveHeight).toFixed(1) + ' ' + ssrWaveSymbol : '-' %></div>
-                <div class="sea-state-sub" id="seaStateSub"><%= ssrHasSea && ssrMarine.seaStateLabel ? ssrMarine.seaStateLabel + ' • Significant Wave Height' : 'Significant Wave Height' %></div>
-              </div>
-            </div>
-            <div class="sea-hero-right">
-              <div class="sea-sst-label">Sea Surface Temp</div>
-              <div class="sea-sst-val" id="seaSurfaceTemp"><%= (ssrHasSea && ssrMarine.seaSurfaceTemperature != null) ? Math.round(ssrMarine.seaSurfaceTemperature) + ssrTempSymbol : '-' %></div>
-            </div>
-          </div>
-
-          <div class="sea-metrics-grid">
-            <div class="sea-metric-box">
-              <div class="sea-metric-label">Wave Period</div>
-              <div class="sea-metric-val" id="seaWavePeriod"><%= (ssrHasSea && ssrMarine.wavePeriod != null) ? Math.round(ssrMarine.wavePeriod) + ' s' : '-' %></div>
-            </div>
-            <div class="sea-metric-box">
-              <div class="sea-metric-label">Wave Direction</div>
-              <div class="sea-metric-val" id="seaWaveDir"><%= ssrHasSea ? getSsrCompass(ssrMarine.waveDirection) : '-' %></div>
-            </div>
-            <div class="sea-metric-box">
-              <div class="sea-metric-label">Swell Height</div>
-              <div class="sea-metric-val" id="seaSwellHeight"><%= (ssrHasSea && ssrMarine.swellWaveHeight != null) ? Number(ssrMarine.swellWaveHeight).toFixed(1) + ' ' + ssrWaveSymbol : '-' %></div>
-            </div>
-            <div class="sea-metric-box">
-              <div class="sea-metric-label">Swell Period</div>
-              <div class="sea-metric-val" id="seaSwellPeriod"><%= (ssrHasSea && ssrMarine.swellWavePeriod != null) ? Math.round(ssrMarine.swellWavePeriod) + ' s' : '-' %></div>
-            </div>
-            <div class="sea-metric-box">
-              <div class="sea-metric-label">Ocean Current</div>
-              <div class="sea-metric-val" id="seaCurrentVel"><%= (ssrHasSea && ssrMarine.oceanCurrentVelocity != null) ? Number(ssrMarine.oceanCurrentVelocity).toFixed(1) + ' ' + ssrWindSymbol : '-' %></div>
-            </div>
-            <div class="sea-metric-box">
-              <div class="sea-metric-label">Max Wave Today</div>
-              <div class="sea-metric-val" id="seaDailyMaxWave"><%= (ssrHasSea && ssrMarine.dailyWaveMax != null) ? Number(ssrMarine.dailyWaveMax).toFixed(1) + ' ' + ssrWaveSymbol : '-' %></div>
-            </div>
-          </div>
-
-          <div class="sea-sub-header">Hourly Wave & Water Outlook</div>
-          <div id="seaHours" class="hourly-scroll" aria-label="Hourly marine forecast">
-            <% if (ssrHasSea && ssrMarine.hourly && Array.isArray(ssrMarine.hourly.time)) { %>
-              <% for (let i = ssrMarineSliceStart; i < ssrMarineSliceEnd; i++) { %>
-                <div class="hour-item">
-                  <div class="hour-time"><%= formatSsrClock(ssrMarine.hourly.time[i]) %></div>
-                  <div class="hour-icon" aria-hidden="true">
-                    <svg class="hour-wave-svg" viewBox="0 0 24 16">
-                      <path d="M2 6c2.5-3 5-3 7.5 0s5 3 7.5 0 3.5-2 5-1M2 12c2.5-3 5-3 7.5 0s5 3 7.5 0 3.5-2 5-1"/>
-                    </svg>
-                  </div>
-                  <div class="hour-temp"><%= ssrMarine.hourly.wave_height?.[i] != null ? Number(ssrMarine.hourly.wave_height[i]).toFixed(1) + ssrWaveSymbol : '-' %></div>
-                  <div class="hour-pop"><%= ssrMarine.hourly.sea_surface_temperature?.[i] != null ? Math.round(ssrMarine.hourly.sea_surface_temperature[i]) + '°' : (ssrMarine.hourly.wave_period?.[i] != null ? Math.round(ssrMarine.hourly.wave_period[i]) + 's' : '-') %></div>
-                </div>
-              <% } %>
-            <% } %>
-          </div>
-        </section>
 
         <section id="pollenCard" class="card pollen-card" aria-label="Pollen Levels">
           <div id="pollenGrid" class="pollen-three-grid">
@@ -2632,9 +2640,11 @@ html[data-device="mobile"] .metric-val {
         </section>
 
         <section id="hourly" class="card">
-          <div id="outlookSummary" class="mobile-outlook-summary"><%= ssrOutlookSummary %></div>
-          <h3 class="card-header">24-Hour Outlook</h3>
-          <div id="hours" class="hourly-scroll" aria-label="Hourly forecast">
+          <div id="outlookSummary" class="mobile-outlook-summary weather-only-block"><%= ssrOutlookSummary %></div>
+          <div id="marineMobileOutlookSummary" class="mobile-outlook-summary marine-only-block"><%= ssrMarineOutlookSummary %></div>
+          <h3 class="card-header" id="hourlyCardHeader">24-Hour Outlook</h3>
+
+          <div id="hours" class="hourly-scroll weather-only-block" aria-label="Hourly forecast">
             <% if (ssrHourly && Array.isArray(ssrHourly.time)) { %>
               <% for (let i = ssrSliceStart; i < ssrSliceEnd; i++) { %>
                 <div class="hour-item">
@@ -2646,8 +2656,26 @@ html[data-device="mobile"] .metric-val {
               <% } %>
             <% } %>
           </div>
+
+          <div id="seaHours" class="hourly-scroll marine-only-block" aria-label="Hourly marine forecast">
+            <% if (ssrHasSea && ssrMarine.hourly && Array.isArray(ssrMarine.hourly.time)) { %>
+              <% for (let i = ssrMarineSliceStart; i < ssrMarineSliceEnd; i++) { %>
+                <div class="hour-item">
+                  <div class="hour-time"><%= formatSsrClock(ssrMarine.hourly.time[i]) %></div>
+                  <div class="hour-icon" aria-hidden="true">
+                    <svg class="hour-wave-svg" viewBox="0 0 24 16">
+                      <path d="M2 6c2.5-3 5-3 7.5 0s5 3 7.5 0 3.5-2 5-1M2 12c2.5-3 5-3 7.5 0s5 3 7.5 0 3.5-2 5-1"/>
+                    </svg>
+                  </div>
+                  <div class="hour-temp"><%= ssrMarine.hourly.wave_height?.[i] != null ? Number(ssrMarine.hourly.wave_height[i]).toFixed(1) + ssrWaveSymbol : '-' %></div>
+                  <div class="hour-pop"><%= ssrMarine.hourly.sea_surface_temperature?.[i] != null ? Math.round(ssrMarine.hourly.sea_surface_temperature[i]) + '°' : (ssrMarine.hourly.wave_period?.[i] != null ? Math.round(ssrMarine.hourly.wave_period[i]) + 's' : '-') %></div>
+                </div>
+              <% } %>
+            <% } %>
+          </div>
+
           <div class="chart-wrap">
-            <canvas id="chart" aria-label="Temperature trend chart" role="img"></canvas>
+            <canvas id="chart" aria-label="24-Hour trend chart" role="img"></canvas>
           </div>
         </section>
 
@@ -2795,6 +2823,8 @@ html[data-device="mobile"] .metric-val {
     anonymousMode: storedAnonMode,
     pollenPrefs: parsedPollenPrefs,
     deviceMode: 'desktop',
+    viewMode: 'weather',
+    hasSeaAccess: <%= ssrHasSea ? 'true' : 'false' %>,
     locations: [],
     activeIndex: 0
   };
@@ -2803,6 +2833,7 @@ html[data-device="mobile"] .metric-val {
   let latestAirQualitySummary = null;
   let latestMarineSummary = null;
   let latestChartSeries = null;
+  let latestMarineChartSeries = null;
   let activeWeatherRequestId = 0;
 
   let insightTimerId = null;
@@ -2823,6 +2854,9 @@ html[data-device="mobile"] .metric-val {
   const geoButton = selectElement('#btnGeo');
   const shareButton = selectElement('#btnShare');
   const mobileShareButton = selectElement('#btnMobileShare');
+
+  const tabBtnWeather = selectElement('#tabBtnWeather');
+  const tabBtnMarine = selectElement('#tabBtnMarine');
 
   const settingsButton = selectElement('#btnSettings');
   const closeSettingsButton = selectElement('#btnCloseSettings');
@@ -2848,7 +2882,9 @@ html[data-device="mobile"] .metric-val {
 
   const hiddenUnitsInput = selectElement('#unitsHidden');
   const mobileSkyElement = selectElement('#mobileSky');
+  const mobileSeaBgElement = selectElement('#mobileSeaBg');
   const heroSkyElement = selectElement('#heroSky');
+  const heroSeaSceneElement = selectElement('#heroSeaScene');
 
   const WEATHER_DESCRIPTIONS = {
     0: 'Clear sky',
@@ -2904,6 +2940,59 @@ html[data-device="mobile"] .metric-val {
     const mode = detectDeviceMode();
     appState.deviceMode = mode;
     document.documentElement.setAttribute('data-device', mode);
+  }
+
+  function setViewMode(mode) {
+    if (mode === 'marine' && !appState.hasSeaAccess) {
+      return;
+    }
+    appState.viewMode = mode === 'marine' ? 'marine' : 'weather';
+    document.documentElement.setAttribute('data-view-mode', appState.viewMode);
+
+    if (tabBtnWeather && tabBtnMarine) {
+      const isMarine = appState.viewMode === 'marine';
+      tabBtnWeather.classList.toggle('active', !isMarine);
+      tabBtnWeather.setAttribute('aria-selected', String(!isMarine));
+      tabBtnMarine.classList.toggle('active', isMarine);
+      tabBtnMarine.setAttribute('aria-selected', String(isMarine));
+    }
+
+    const heroTitle = selectElement('#heroCardTitle');
+    if (heroTitle) {
+      heroTitle.textContent = appState.viewMode === 'marine' ? 'Sea & Marine Conditions' : 'Current Conditions';
+    }
+
+    const hourlyHeader = selectElement('#hourlyCardHeader');
+    if (hourlyHeader) {
+      hourlyHeader.textContent = appState.viewMode === 'marine' ? '24-Hour Wave & Water Outlook' : '24-Hour Outlook';
+    }
+
+    redrawActiveChart();
+    requestAnimationFrame(updateMobileSkyHeight);
+  }
+
+  function syncMarineTabState(hasSea) {
+    appState.hasSeaAccess = Boolean(hasSea);
+    if (tabBtnMarine) {
+      tabBtnMarine.classList.toggle('disabled-sea', !appState.hasSeaAccess);
+      tabBtnMarine.setAttribute(
+        'title',
+        appState.hasSeaAccess ? 'Switch to Marine & Sea conditions' : 'Area has no sea access'
+      );
+    }
+    if (!appState.hasSeaAccess && appState.viewMode === 'marine') {
+      setViewMode('weather');
+    }
+  }
+
+  function redrawActiveChart() {
+    const canvas = selectElement('#chart');
+    if (!canvas) return;
+    if (appState.viewMode === 'marine' && latestMarineChartSeries && latestMarineChartSeries.values.length > 0) {
+      drawTemperatureChart(canvas, latestMarineChartSeries.times, latestMarineChartSeries.values);
+    } else if (latestChartSeries && latestChartSeries.temps.length > 0) {
+      drawTemperatureChart(canvas, latestChartSeries.times, latestChartSeries.temps);
+    }
   }
 
   function formatCompassDirection(deg) {
@@ -3173,25 +3262,45 @@ html[data-device="mobile"] .metric-val {
     }
   }
 
-  function renderMarineSection(marineSummary, isDaytime = true) {
-    const seaCardEl = selectElement('#seaCard');
-    if (!seaCardEl) return;
-
+  function buildMarineOutlookSummaryText(marineSummary) {
     if (!marineSummary || !marineSummary.hasSeaAccess) {
-      seaCardEl.classList.add('hidden');
+      return 'Area has no sea access.';
+    }
+    const waveUnit = appState.units === 'imperial' ? 'ft' : 'm';
+    const tempUnit = appState.units === 'imperial' ? '°F' : '°C';
+    const state = marineSummary.seaStateLabel || 'Coastal';
+    const wh = marineSummary.waveHeight !== null && marineSummary.waveHeight !== undefined
+      ? `${Number(marineSummary.waveHeight).toFixed(1)} ${waveUnit}`
+      : '-';
+    const maxW = marineSummary.dailyWaveMax !== null && marineSummary.dailyWaveMax !== undefined
+      ? `${Number(marineSummary.dailyWaveMax).toFixed(1)} ${waveUnit}`
+      : wh;
+    const sstClause = marineSummary.seaSurfaceTemperature !== null && marineSummary.seaSurfaceTemperature !== undefined
+      ? ` Water temperature around ${Math.round(marineSummary.seaSurfaceTemperature)}${tempUnit}.`
+      : '';
+    return `${state} conditions right now with ${wh} waves (peaking near ${maxW} today).${sstClause}`;
+  }
+
+  function renderMarineSection(marineSummary, weatherData, isDaytime = true) {
+    const hasSea = Boolean(marineSummary && marineSummary.hasSeaAccess);
+    syncMarineTabState(hasSea);
+
+    if (heroSeaSceneElement) {
+      heroSeaSceneElement.setAttribute('data-sea-time', isDaytime ? 'day' : 'night');
+    }
+    if (mobileSeaBgElement) {
+      mobileSeaBgElement.setAttribute('data-sea-time', isDaytime ? 'day' : 'night');
+    }
+
+    if (!hasSea) {
+      latestMarineChartSeries = null;
       return;
     }
 
-    seaCardEl.classList.remove('hidden');
-
-    const seaHeroBanner = selectElement('#seaHeroBanner');
-    if (seaHeroBanner) {
-      seaHeroBanner.setAttribute('data-sea-time', isDaytime ? 'day' : 'night');
-      const rawWave = Number(marineSummary.waveHeight ?? 0.6);
-      const waveInMeters = appState.units === 'imperial' ? rawWave * 0.3048 : rawWave;
-      const speedMult = Math.max(0.7, Math.min(1.85, 0.78 + waveInMeters * 0.32));
-      seaHeroBanner.style.setProperty('--wave-speed-mult', speedMult.toFixed(2));
-    }
+    const rawWave = Number(marineSummary.waveHeight ?? 0.6);
+    const waveInMeters = appState.units === 'imperial' ? rawWave * 0.3048 : rawWave;
+    const speedMult = Math.max(0.7, Math.min(1.85, 0.78 + waveInMeters * 0.32));
+    document.documentElement.style.setProperty('--wave-speed-mult', speedMult.toFixed(2));
 
     const waveUnit = appState.units === 'imperial' ? 'ft' : 'm';
     const tempUnit = appState.units === 'imperial' ? '°F' : '°C';
@@ -3209,19 +3318,18 @@ html[data-device="mobile"] .metric-val {
         : '-';
     }
 
-    const stateSubEl = selectElement('#seaStateSub');
-    if (stateSubEl) {
-      stateSubEl.textContent = marineSummary.seaStateLabel
-        ? `${marineSummary.seaStateLabel} • Significant Wave Height`
-        : 'Significant Wave Height';
-    }
-
     const sstEl = selectElement('#seaSurfaceTemp');
     if (sstEl) {
       sstEl.textContent = marineSummary.seaSurfaceTemperature !== null && marineSummary.seaSurfaceTemperature !== undefined
         ? `${Math.round(marineSummary.seaSurfaceTemperature)}${tempUnit}`
         : '-';
     }
+
+    const marineSummaryStr = buildMarineOutlookSummaryText(marineSummary);
+    const desktopMarineSummaryEl = selectElement('#desktopMarineOutlookSummary');
+    const mobileMarineSummaryEl = selectElement('#marineMobileOutlookSummary');
+    if (desktopMarineSummaryEl) desktopMarineSummaryEl.textContent = marineSummaryStr;
+    if (mobileMarineSummaryEl) mobileMarineSummaryEl.textContent = marineSummaryStr;
 
     const wavePeriodEl = selectElement('#seaWavePeriod');
     if (wavePeriodEl) {
@@ -3249,11 +3357,28 @@ html[data-device="mobile"] .metric-val {
         : '-';
     }
 
+    const swellDirEl = selectElement('#seaSwellDir');
+    if (swellDirEl) {
+      swellDirEl.textContent = formatCompassDirection(marineSummary.swellWaveDirection);
+    }
+
+    const windWaveEl = selectElement('#seaWindWave');
+    if (windWaveEl) {
+      windWaveEl.textContent = marineSummary.windWaveHeight !== null && marineSummary.windWaveHeight !== undefined
+        ? `${Number(marineSummary.windWaveHeight).toFixed(1)} ${waveUnit}`
+        : '-';
+    }
+
     const currentVelEl = selectElement('#seaCurrentVel');
     if (currentVelEl) {
       currentVelEl.textContent = marineSummary.oceanCurrentVelocity !== null && marineSummary.oceanCurrentVelocity !== undefined
         ? `${Number(marineSummary.oceanCurrentVelocity).toFixed(1)} ${speedUnit}`
         : '-';
+    }
+
+    const currentDirEl = selectElement('#seaCurrentDir');
+    if (currentDirEl) {
+      currentDirEl.textContent = formatCompassDirection(marineSummary.oceanCurrentDirection);
     }
 
     const maxWaveEl = selectElement('#seaDailyMaxWave');
@@ -3263,13 +3388,18 @@ html[data-device="mobile"] .metric-val {
         : '-';
     }
 
+    const seaWindEl = selectElement('#seaSurfaceWind');
+    if (seaWindEl && weatherData && weatherData.current) {
+      seaWindEl.textContent = `${formatNumber(weatherData.current.wind_speed_10m)} ${speedUnit}`;
+    }
+
     const seaHoursEl = selectElement('#seaHours');
     if (seaHoursEl && marineSummary.hourly && Array.isArray(marineSummary.hourly.time)) {
       seaHoursEl.innerHTML = '';
       const hTimes = marineSummary.hourly.time;
       const upcomingIdx = hTimes.findIndex((t) => Date.parse(t) > Date.now());
       const startIdx = upcomingIdx > 0 ? upcomingIdx - 1 : 0;
-      const endIdx = Math.min(startIdx + 12, hTimes.length);
+      const endIdx = Math.min(startIdx + 24, hTimes.length);
 
       for (let i = startIdx; i < endIdx; i++) {
         const item = document.createElement('div');
@@ -3294,6 +3424,12 @@ html[data-device="mobile"] .metric-val {
         `;
         seaHoursEl.appendChild(item);
       }
+
+      const rawWaveSlice = (marineSummary.hourly.wave_height || []).slice(startIdx, endIdx).map((v) => Number(v ?? 0));
+      latestMarineChartSeries = {
+        times: hTimes.slice(startIdx, endIdx).map((t) => new Date(t)),
+        values: rawWaveSlice
+      };
     }
   }
 
@@ -4247,6 +4383,11 @@ html[data-device="mobile"] .metric-val {
     selectElement('#locChip').textContent = effectiveText;
     selectElement('#mobileLocTitle').textContent = effectiveText;
 
+    const seaLocChip = selectElement('#seaLocChip');
+    if (seaLocChip) seaLocChip.textContent = effectiveText;
+    const mobileSeaLocTitle = selectElement('#mobileSeaLocTitle');
+    if (mobileSeaLocTitle) mobileSeaLocTitle.textContent = effectiveText;
+
     const unitFormQ = selectElement('#unitFormQ');
     if (unitFormQ) unitFormQ.value = effectiveText;
 
@@ -4255,10 +4396,18 @@ html[data-device="mobile"] .metric-val {
     if (tagElement) {
       tagElement.classList.toggle('hidden', !isDefaultLocation);
     }
+    const seaTagElement = selectElement('#mobileSeaLocTag');
+    if (seaTagElement) {
+      seaTagElement.classList.toggle('hidden', !isDefaultLocation);
+    }
 
     const desktopHomeIcon = selectElement('#desktopHomeIcon');
     if (desktopHomeIcon) {
       desktopHomeIcon.classList.toggle('hidden', !isDefaultLocation);
+    }
+    const desktopSeaHomeIcon = selectElement('#desktopSeaHomeIcon');
+    if (desktopSeaHomeIcon) {
+      desktopSeaHomeIcon.classList.toggle('hidden', !isDefaultLocation);
     }
   }
 
@@ -4449,21 +4598,28 @@ html[data-device="mobile"] .metric-val {
     selectElement('#dayMode').textContent = isDaytime ? 'Day' : 'Night';
 
     renderAirQualityAndPollenCards(latestAirQualitySummary);
-    renderMarineSection(latestMarineSummary, isDaytime);
+    renderMarineSection(latestMarineSummary, weatherData, isDaytime);
 
     const localTimeElement = selectElement('#currLocalTime');
+    const seaLocalTimeElement = selectElement('#seaCurrLocalTime');
     if (localTimeElement) {
       if (appState.activeIndex > 0) {
-        if (isSameTimezoneAsUser(weatherData.timezone, weatherData.utc_offset_seconds)) {
-          localTimeElement.textContent = 'Same timezone';
-        } else {
-          const formattedLocal = formatLocationLocalTime(weatherData.timezone, weatherData.utc_offset_seconds);
-          localTimeElement.textContent = `Local time: ${formattedLocal}`;
-        }
+        const txt = isSameTimezoneAsUser(weatherData.timezone, weatherData.utc_offset_seconds)
+          ? 'Same timezone'
+          : `Local time: ${formatLocationLocalTime(weatherData.timezone, weatherData.utc_offset_seconds)}`;
+        localTimeElement.textContent = txt;
         localTimeElement.classList.remove('hidden');
+        if (seaLocalTimeElement) {
+          seaLocalTimeElement.textContent = txt;
+          seaLocalTimeElement.classList.remove('hidden');
+        }
       } else {
         localTimeElement.textContent = '';
         localTimeElement.classList.add('hidden');
+        if (seaLocalTimeElement) {
+          seaLocalTimeElement.textContent = '';
+          seaLocalTimeElement.classList.add('hidden');
+        }
       }
     }
 
@@ -4505,7 +4661,7 @@ html[data-device="mobile"] .metric-val {
       times: hourly.time.slice(sliceStart, sliceEnd).map((timeValue) => new Date(timeValue)),
       temps: hourly.temperature_2m.slice(sliceStart, sliceEnd)
     };
-    drawTemperatureChart(selectElement('#chart'), latestChartSeries.times, latestChartSeries.temps);
+    redrawActiveChart();
 
     const dailyContainer = selectElement('#days');
     dailyContainer.innerHTML = '';
@@ -4706,9 +4862,7 @@ html[data-device="mobile"] .metric-val {
       document.documentElement.setAttribute('data-theme', 'light');
       localStorage.setItem('pokeweather:theme', 'light');
     }
-    if (latestChartSeries) {
-      drawTemperatureChart(selectElement('#chart'), latestChartSeries.times, latestChartSeries.temps);
-    }
+    redrawActiveChart();
   }
 
   function toggleTimeFormatPreference() {
@@ -4751,7 +4905,7 @@ html[data-device="mobile"] .metric-val {
 
     document.addEventListener('touchstart', (event) => {
       if (event.touches.length !== 1) return;
-      startedInsideHorizontalScroll = Boolean(event.target.closest('.hourly-scroll, .mobile-drawer, .mobile-insights-card, .settings-modal'));
+      startedInsideHorizontalScroll = Boolean(event.target.closest('.hourly-scroll, .mobile-drawer, .mobile-insights-card, .settings-modal, .mode-pill-tabs'));
       touchStartX = event.touches[0].clientX;
       touchStartY = event.touches[0].clientY;
     }, { passive: true });
@@ -4777,9 +4931,7 @@ html[data-device="mobile"] .metric-val {
 
   window.addEventListener('resize', () => {
     applyDeviceMode();
-    if (latestChartSeries) {
-      drawTemperatureChart(selectElement('#chart'), latestChartSeries.times, latestChartSeries.temps);
-    }
+    redrawActiveChart();
     updateMobileSkyHeight();
   });
 
@@ -4787,11 +4939,20 @@ html[data-device="mobile"] .metric-val {
     setTimeout(() => {
       applyDeviceMode();
       updateMobileSkyHeight();
-      if (latestChartSeries) {
-        drawTemperatureChart(selectElement('#chart'), latestChartSeries.times, latestChartSeries.temps);
-      }
+      redrawActiveChart();
     }, 120);
   });
+
+  if (tabBtnWeather) {
+    tabBtnWeather.addEventListener('click', () => setViewMode('weather'));
+  }
+
+  if (tabBtnMarine) {
+    tabBtnMarine.addEventListener('click', () => {
+      if (!appState.hasSeaAccess) return;
+      setViewMode('marine');
+    });
+  }
 
   unitsButton.addEventListener('click', (e) => {
     e.preventDefault();
