@@ -459,8 +459,8 @@ const searchCache = new Map();
       });
     }
   });
-
-  function channelurlfixer(text) {
+  
+ function channelurlfixer(text) {
     const regex = /<a\s+href="\/channel\/([^"]+)"/g;
     const updatedDescription = text.replace(regex, '<a href="/channel?id=$1"');
     return updatedDescription;
@@ -519,9 +519,9 @@ const searchCache = new Map();
 
     let ID = req.query.id;
     if (!ID) {
-    return renderTemplate(res, req, "404.ejs", {
-	          isMobile:req.useragent?.isMobile,
-	 });
+      return renderTemplate(res, req, "404.ejs", {
+        isMobile: req.useragent?.isMobile,
+      });
     }
 
     if (ID.endsWith("@youtube.com")) {
@@ -594,10 +594,18 @@ const searchCache = new Map();
         return sendRenderedResponse(cachedData);
       } catch (e) {
         if (e.message === "REQUEST_DROPPED") return res.status(499).send("Request dropped by server.");
+        if (e.message === "CHANNEL_NOT_FOUND") {
+          return renderTemplate(res, req, "404.ejs", {
+            isMobile: req.useragent?.isMobile,
+          });
+        }
       }
     }
 
     const fetchChannelData = async () => {
+      const abortController = new AbortController();
+      const { signal } = abortController;
+
       async function fetchChannelPublishedJSON(id) {
         if (fetchFailureCache.has(id) && (Date.now() - fetchFailureCache.get(id)) < FETCH_FAILURE_TTL) {
           return { ID: id, published: " " };
@@ -606,7 +614,10 @@ const searchCache = new Map();
         try {
           if (currentEpoch !== requestEpoch) throw new Error("REQUEST_DROPPED");
           const url = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(id)}&g=${serverGeneration}`;
-          const response = await fetch(url, { headers: { accept: "application/atom+xml" } });
+          const response = await fetch(url, {
+            headers: { accept: "application/atom+xml" },
+            signal
+          });
 
           if (currentEpoch !== requestEpoch) throw new Error("REQUEST_DROPPED");
 
@@ -640,22 +651,47 @@ const searchCache = new Map();
             }).format(date)
           };
         } catch (e) {
-          if (e.message === "REQUEST_DROPPED") throw e;
+          if (e.message === "REQUEST_DROPPED" || e.name === "AbortError") throw e;
           fetchFailureCache.set(id, Date.now());
           return { ID: id, published: " " };
         }
       }
 
-      const getChannelData = async (url) => {
+      const getChannelData = async (url, haltOnFailure = false) => {
         try {
           if (currentEpoch !== requestEpoch) throw new Error("REQUEST_DROPPED");
-          const response = await fetch(url, { headers: { "User-Agent": config.useragent } });
+          const response = await fetch(url, {
+            headers: { "User-Agent": config.useragent },
+            signal
+          });
           if (currentEpoch !== requestEpoch) throw new Error("REQUEST_DROPPED");
-          if (!response.ok) return null;
+
           const txt = await response.text();
+
+          if (haltOnFailure) {
+            const parsed = getJson(txt);
+            if (
+              response.status === 500 ||
+              txt.includes("Could not get channel info.") ||
+              parsed?.error === "Could not get channel info."
+            ) {
+              abortController.abort();
+              throw new Error("CHANNEL_NOT_FOUND");
+            }
+            if (!response.ok) return null;
+            return parsed;
+          }
+
+          if (!response.ok) return null;
           return getJson(txt);
         } catch (e) {
-          if (e.message === "REQUEST_DROPPED") throw e;
+          if (
+            e.message === "REQUEST_DROPPED" ||
+            e.message === "CHANNEL_NOT_FOUND" ||
+            e.name === "AbortError"
+          ) {
+            throw e;
+          }
           return null;
         }
       };
@@ -675,7 +711,7 @@ const searchCache = new Map();
         cinv
       ] = await Promise.all([
         fetchChannelPublishedJSON(ID),
-        getChannelData(channelINVUrl)
+        getChannelData(channelINVUrl, true)
       ]);
 
       const bannedchannels = [];
@@ -716,7 +752,7 @@ const searchCache = new Map();
           stream,
           c
         ] = await Promise.all([
-          hasTab("videos") ? getChannelData(channelUrl) : " ",
+          hasTab("videos") ? getChannelData(channelUrl, true) : " ",
           hasTab("shorts") ? getChannelData(shortsUrl) : " ",
           hasTab("playlists", "playlist") ? getChannelData(PlaylistUrl) : " ",
           hasTab("releases", "release") ? getChannelData(releasesUrl) : " ",
@@ -745,6 +781,11 @@ const searchCache = new Map();
       activeRequests.delete(cacheKey);
       if (error && error.message === "REQUEST_DROPPED") {
         return res.status(499).send("Request cancelled by server.");
+      }
+      if (error && (error.message === "CHANNEL_NOT_FOUND" || error.name === "AbortError")) {
+        return renderTemplate(res, req, "404.ejs", {
+          isMobile: req.useragent?.isMobile,
+        });
       }
       throw error;
     }
