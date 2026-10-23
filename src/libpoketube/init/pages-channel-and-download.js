@@ -516,13 +516,12 @@ const searchCache = new Map();
     const fetch = undiciFetch;
 
     let media_proxy = config.media_proxy;
-    if (req.useragent?.source?.includes("Pardus")) {
-      media_proxy = "https://media-proxy.ashley0143.xyz";
-    }
 
     let ID = req.query.id;
     if (!ID) {
-      return renderTemplate(res, req, "404.ejs");
+    return renderTemplate(res, req, "404.ejs", {
+	          isMobile:req.useragent?.isMobile,
+	 });
     }
 
     if (ID.endsWith("@youtube.com")) {
