@@ -23,9 +23,12 @@
   const ssrDaily = ssrSafe.daily || null;
   const ssrHourly = ssrSafe.hourly || null;
   const ssrAq = ssrSafe.airQuality || null;
+  const ssrMarine = ssrSafe.marine || null;
+  const ssrHasSea = Boolean(ssrMarine && ssrMarine.hasSeaAccess);
   const ssrUnits = ssrSafe.units === 'imperial' ? 'imperial' : 'metric';
   const ssrTempSymbol = ssrUnits === 'imperial' ? '°F' : '°C';
   const ssrWindSymbol = ssrSafe.windUnit || (ssrUnits === 'imperial' ? 'mph' : 'km/h');
+  const ssrWaveSymbol = ssrUnits === 'imperial' ? 'ft' : 'm';
   const ssrAnon = Boolean(ssrSafe.anon);
   const ssrTimeFormat = ssrSafe.tf === '12h' ? '12h' : '24h';
   const ssrRawName = ssrSafe.name || 'Choose a location';
@@ -106,6 +109,13 @@
     });
   }
 
+  function getSsrCompass(deg) {
+    if (deg === null || deg === undefined || Number.isNaN(Number(deg))) return '-';
+    const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    const idx = Math.round(((Number(deg) % 360) + 360) % 360 / 45) % 8;
+    return dirs[idx] + ' (' + Math.round(deg) + '°)';
+  }
+
   function getSsrAqiShort(aqi) {
     if (aqi === null || aqi === undefined) return 'low';
     if (aqi <= 50) return 'low';
@@ -162,6 +172,15 @@
     ssrSliceStart = foundIdx > 0 ? foundIdx - 1 : 0;
   }
   const ssrSliceEnd = (ssrHourly && Array.isArray(ssrHourly.time)) ? Math.min(ssrSliceStart + 24, ssrHourly.time.length) : 0;
+
+  let ssrMarineSliceStart = 0;
+  if (ssrHasSea && ssrMarine.hourly && Array.isArray(ssrMarine.hourly.time)) {
+    const foundMIdx = ssrMarine.hourly.time.findIndex((t) => Date.parse(t) > Date.now());
+    ssrMarineSliceStart = foundMIdx > 0 ? foundMIdx - 1 : 0;
+  }
+  const ssrMarineSliceEnd = (ssrHasSea && ssrMarine.hourly && Array.isArray(ssrMarine.hourly.time))
+    ? Math.min(ssrMarineSliceStart + 12, ssrMarine.hourly.time.length)
+    : 0;
 
   let ssrOutlookSummary = '-';
   if (ssrCurrent && ssrDaily) {
@@ -250,6 +269,18 @@
       arrow = 'down';
     }
     ssrInsights.push({ title: "Tomorrow's temperature", sub: cmpText, rightVal: absDelta + '°', arrow });
+
+    if (ssrHasSea && ssrMarine.waveHeight != null) {
+      const sstPart = ssrMarine.seaSurfaceTemperature != null
+        ? ' • Water temp ' + Math.round(ssrMarine.seaSurfaceTemperature) + ssrTempSymbol
+        : '';
+      ssrInsights.push({
+        title: 'Sea & surf outlook',
+        sub: (ssrMarine.seaStateLabel || 'Coastal') + ' seas with ' + Number(ssrMarine.waveHeight).toFixed(1) + ' ' + ssrWaveSymbol + ' waves' + sstPart + '.',
+        rightVal: '🌊',
+        arrow: 'none'
+      });
+    }
 
     if (ssrAqiVal !== null && ssrAqiVal > 50) {
       ssrInsights.push({
@@ -1437,6 +1468,116 @@ html[data-device="desktop"] .col-side {
   font-variant-numeric: tabular-nums;
 }
 
+.sea-card {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  position: relative;
+  overflow: hidden;
+}
+
+.sea-hero-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 18px 20px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, rgba(14, 116, 144, 0.32) 0%, rgba(29, 78, 216, 0.22) 100%);
+  border: 1px solid color-mix(in srgb, var(--md-primary) 28%, transparent);
+}
+
+.sea-hero-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.sea-wave-emoji {
+  font-size: 38px;
+  line-height: 1;
+}
+
+.sea-primary-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sea-wave-big {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--md-text);
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.sea-state-sub {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--md-primary);
+}
+
+.sea-hero-right {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sea-sst-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--md-text-muted);
+}
+
+.sea-sst-val {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--md-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.sea-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.sea-metric-box {
+  background-color: var(--md-surface-high);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sea-metric-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--md-text-muted);
+}
+
+.sea-metric-val {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--md-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.sea-sub-header {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--md-text-muted);
+  margin: 2px 0 -6px;
+}
+
 .pollen-card {
   display: flex;
   flex-direction: column;
@@ -1736,7 +1877,8 @@ html[data-device="tablet"] .col-side {
   grid-column: span 5;
 }
 
-html[data-device="tablet"] .metrics-grid {
+html[data-device="tablet"] .metrics-grid,
+html[data-device="tablet"] .sea-metrics-grid {
   grid-template-columns: repeat(2, 1fr);
 }
 
@@ -1848,12 +1990,20 @@ html[data-device="mobile"] #metricsCard {
   grid-template-columns: repeat(2, 1fr);
 }
 
-html[data-device="mobile"] #pollenCard {
+html[data-device="mobile"] #seaCard {
   order: 5;
 }
 
-html[data-device="mobile"] #aqiBarCard {
+html[data-device="mobile"] .sea-metrics-grid {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+html[data-device="mobile"] #pollenCard {
   order: 6;
+}
+
+html[data-device="mobile"] #aqiBarCard {
+  order: 7;
 }
 
 html[data-device="mobile"] .mobile-loc-title {
@@ -1901,7 +2051,8 @@ html[data-device="mobile"] .metric-val {
 }
 
 @media (max-width: 768px) {
-  .metrics-grid {
+  .metrics-grid,
+  .sea-metrics-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 }
@@ -2142,6 +2293,68 @@ html[data-device="mobile"] .metric-val {
           </div>
         </article>
 
+        <section id="seaCard" class="card sea-card<%= ssrHasSea ? '' : ' hidden' %>" aria-label="Sea and Marine Conditions">
+          <h3 class="card-header">
+            <span>Sea & Marine Conditions</span>
+            <span id="seaStateBadge"><%= ssrHasSea && ssrMarine.seaStateLabel ? ssrMarine.seaStateLabel : 'Coastal' %></span>
+          </h3>
+
+          <div class="sea-hero-banner">
+            <div class="sea-hero-left">
+              <div class="sea-wave-emoji" aria-hidden="true">🌊</div>
+              <div class="sea-primary-stat">
+                <div class="sea-wave-big" id="seaWaveHeight"><%= (ssrHasSea && ssrMarine.waveHeight != null) ? Number(ssrMarine.waveHeight).toFixed(1) + ' ' + ssrWaveSymbol : '-' %></div>
+                <div class="sea-state-sub" id="seaStateSub"><%= ssrHasSea && ssrMarine.seaStateLabel ? ssrMarine.seaStateLabel + ' • Significant Wave Height' : 'Significant Wave Height' %></div>
+              </div>
+            </div>
+            <div class="sea-hero-right">
+              <div class="sea-sst-label">Sea Surface Temp</div>
+              <div class="sea-sst-val" id="seaSurfaceTemp"><%= (ssrHasSea && ssrMarine.seaSurfaceTemperature != null) ? Math.round(ssrMarine.seaSurfaceTemperature) + ssrTempSymbol : '-' %></div>
+            </div>
+          </div>
+
+          <div class="sea-metrics-grid">
+            <div class="sea-metric-box">
+              <div class="sea-metric-label">Wave Period</div>
+              <div class="sea-metric-val" id="seaWavePeriod"><%= (ssrHasSea && ssrMarine.wavePeriod != null) ? Math.round(ssrMarine.wavePeriod) + ' s' : '-' %></div>
+            </div>
+            <div class="sea-metric-box">
+              <div class="sea-metric-label">Wave Direction</div>
+              <div class="sea-metric-val" id="seaWaveDir"><%= ssrHasSea ? getSsrCompass(ssrMarine.waveDirection) : '-' %></div>
+            </div>
+            <div class="sea-metric-box">
+              <div class="sea-metric-label">Swell Height</div>
+              <div class="sea-metric-val" id="seaSwellHeight"><%= (ssrHasSea && ssrMarine.swellWaveHeight != null) ? Number(ssrMarine.swellWaveHeight).toFixed(1) + ' ' + ssrWaveSymbol : '-' %></div>
+            </div>
+            <div class="sea-metric-box">
+              <div class="sea-metric-label">Swell Period</div>
+              <div class="sea-metric-val" id="seaSwellPeriod"><%= (ssrHasSea && ssrMarine.swellWavePeriod != null) ? Math.round(ssrMarine.swellWavePeriod) + ' s' : '-' %></div>
+            </div>
+            <div class="sea-metric-box">
+              <div class="sea-metric-label">Ocean Current</div>
+              <div class="sea-metric-val" id="seaCurrentVel"><%= (ssrHasSea && ssrMarine.oceanCurrentVelocity != null) ? Number(ssrMarine.oceanCurrentVelocity).toFixed(1) + ' ' + ssrWindSymbol : '-' %></div>
+            </div>
+            <div class="sea-metric-box">
+              <div class="sea-metric-label">Max Wave Today</div>
+              <div class="sea-metric-val" id="seaDailyMaxWave"><%= (ssrHasSea && ssrMarine.dailyWaveMax != null) ? Number(ssrMarine.dailyWaveMax).toFixed(1) + ' ' + ssrWaveSymbol : '-' %></div>
+            </div>
+          </div>
+
+          <div class="sea-sub-header">Hourly Wave & Water Outlook</div>
+          <div id="seaHours" class="hourly-scroll" aria-label="Hourly marine forecast">
+            <% if (ssrHasSea && ssrMarine.hourly && Array.isArray(ssrMarine.hourly.time)) { %>
+              <% for (let i = ssrMarineSliceStart; i < ssrMarineSliceEnd; i++) { %>
+                <div class="hour-item">
+                  <div class="hour-time"><%= formatSsrClock(ssrMarine.hourly.time[i]) %></div>
+                  <div class="hour-icon">🌊</div>
+                  <div class="hour-temp"><%= ssrMarine.hourly.wave_height?.[i] != null ? Number(ssrMarine.hourly.wave_height[i]).toFixed(1) + ssrWaveSymbol : '-' %></div>
+                  <div class="hour-pop"><%= ssrMarine.hourly.sea_surface_temperature?.[i] != null ? Math.round(ssrMarine.hourly.sea_surface_temperature[i]) + '°' : (ssrMarine.hourly.wave_period?.[i] != null ? Math.round(ssrMarine.hourly.wave_period[i]) + 's' : '-') %></div>
+                </div>
+              <% } %>
+            <% } %>
+          </div>
+        </section>
+
         <section id="pollenCard" class="card pollen-card" aria-label="Pollen Levels">
           <div id="pollenGrid" class="pollen-three-grid">
             <% for (let i = 0; i < ssrTopPollens.length; i++) { %>
@@ -2258,8 +2471,8 @@ html[data-device="mobile"] .metric-val {
  * @licstart The following is the entire license notice for the JavaScript
  * code in this page.
  *
- *    Copyright (C) 2021-2025 PokeWeather Of Poke Project, a part of The Poke Project Initiative (initiative.poketube.fun)
- *    ( source code: https://codeberg.org/ashley/poke)
+ *   Copyright (C) 2021-2025 PokeWeather Of Poke Project, a part of The Poke Project Initiative (initiative.poketube.fun)
+ *   ( source code: https://codeberg.org/ashley/poke)
  *
  * The JavaScript code in this page is free software: you can redistribute
  * it and/or modify it under the terms of the GNU General Public License
@@ -2338,6 +2551,7 @@ html[data-device="mobile"] .metric-val {
 
   let latestWeatherData = null;
   let latestAirQualitySummary = null;
+  let latestMarineSummary = null;
   let latestChartSeries = null;
   let activeWeatherRequestId = 0;
 
@@ -2442,6 +2656,14 @@ html[data-device="mobile"] .metric-val {
     document.documentElement.setAttribute('data-device', mode);
   }
 
+  function formatCompassDirection(deg) {
+    if (deg === null || deg === undefined || Number.isNaN(Number(deg))) return '-';
+    const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    const normalized = ((Number(deg) % 360) + 360) % 360;
+    const idx = Math.round(normalized / 45) % 8;
+    return `${directions[idx]} (${Math.round(normalized)}°)`;
+  }
+
   function summarizeClientAirQuality(aqData) {
     if (!aqData) return null;
     if (aqData.usAqi !== undefined && aqData.pollenBreakdown !== undefined) {
@@ -2478,6 +2700,79 @@ html[data-device="mobile"] .metric-val {
         mugwort: cur.mugwort_pollen ?? null,
         olive: cur.olive_pollen ?? null,
         ragweed: cur.ragweed_pollen ?? null
+      }
+    };
+  }
+
+  function summarizeClientMarine(marineData) {
+    if (!marineData) return null;
+    if (typeof marineData.hasSeaAccess === 'boolean') {
+      return marineData;
+    }
+    if (marineData.summary && typeof marineData.summary.hasSeaAccess === 'boolean') {
+      return marineData.summary;
+    }
+
+    const cur = marineData.current;
+    if (!cur) return { hasSeaAccess: false };
+
+    const daily = marineData.daily || {};
+    const hourly = marineData.hourly || {};
+
+    const waveHeight = cur.wave_height ?? null;
+    const seaTemp = cur.sea_surface_temperature ?? null;
+    const swellHeight = cur.swell_wave_height ?? null;
+    const currentVelocity = cur.ocean_current_velocity ?? null;
+
+    const hasValidHourlyWave = Array.isArray(hourly.wave_height) && hourly.wave_height.some((v) => v !== null && !Number.isNaN(Number(v)));
+    const hasSeaAccess =
+      (waveHeight !== null && !Number.isNaN(Number(waveHeight))) ||
+      (seaTemp !== null && !Number.isNaN(Number(seaTemp))) ||
+      (swellHeight !== null && !Number.isNaN(Number(swellHeight))) ||
+      hasValidHourlyWave;
+
+    if (!hasSeaAccess) {
+      return { hasSeaAccess: false };
+    }
+
+    const isImp = appState.units === 'imperial';
+    const waveMeters = waveHeight !== null ? (isImp ? waveHeight * 0.3048 : waveHeight) : null;
+
+    let seaStateLabel = 'Calm';
+    if (waveMeters !== null) {
+      if (waveMeters < 0.1) seaStateLabel = 'Calm (Glassy)';
+      else if (waveMeters < 0.5) seaStateLabel = 'Smooth';
+      else if (waveMeters < 1.25) seaStateLabel = 'Slight';
+      else if (waveMeters < 2.5) seaStateLabel = 'Moderate';
+      else if (waveMeters < 4.0) seaStateLabel = 'Rough';
+      else if (waveMeters < 6.0) seaStateLabel = 'Very Rough';
+      else seaStateLabel = 'High Seas';
+    }
+
+    return {
+      hasSeaAccess: true,
+      seaStateLabel,
+      waveHeight,
+      waveDirection: cur.wave_direction ?? null,
+      wavePeriod: cur.wave_period ?? null,
+      windWaveHeight: cur.wind_wave_height ?? null,
+      windWaveDirection: cur.wind_wave_direction ?? null,
+      windWavePeriod: cur.wind_wave_period ?? null,
+      swellWaveHeight: swellHeight,
+      swellWaveDirection: cur.swell_wave_direction ?? null,
+      swellWavePeriod: cur.swell_wave_period ?? null,
+      oceanCurrentVelocity: currentVelocity,
+      oceanCurrentDirection: cur.ocean_current_direction ?? null,
+      seaSurfaceTemperature: seaTemp,
+      dailyWaveMax: daily.wave_height_max?.[0] ?? null,
+      dailyDirectionDominant: daily.wave_direction_dominant?.[0] ?? null,
+      dailyPeriodMax: daily.wave_period_max?.[0] ?? null,
+      hourly: {
+        time: hourly.time || [],
+        wave_height: hourly.wave_height || [],
+        wave_direction: hourly.wave_direction || [],
+        wave_period: hourly.wave_period || [],
+        sea_surface_temperature: hourly.sea_surface_temperature || []
       }
     };
   }
@@ -2556,7 +2851,7 @@ html[data-device="mobile"] .metric-val {
           localStorage.setItem(POLLEN_PREFS_STORAGE_KEY, JSON.stringify(appState.pollenPrefs));
           renderPollenPreferencePickers();
           if (latestWeatherData) {
-            renderWeatherDashboard(latestWeatherData, latestAirQualitySummary);
+            renderWeatherDashboard(latestWeatherData, latestAirQualitySummary, latestMarineSummary);
           }
         });
         container.appendChild(btn);
@@ -2587,6 +2882,159 @@ html[data-device="mobile"] .metric-val {
       return summarizeClientAirQuality(json);
     } catch {
       return null;
+    }
+  }
+
+  async function fetchMarineForCoordinates(lat, lon) {
+    const proxyUrl = new URL('/api/marine', location.origin);
+    proxyUrl.searchParams.set('latitude', lat);
+    proxyUrl.searchParams.set('longitude', lon);
+    proxyUrl.searchParams.set('units', appState.units);
+
+    try {
+      let res = await fetch(proxyUrl.toString());
+      if (!res.ok) {
+        const directUrl = new URL('https://marine-api.open-meteo.com/v1/marine');
+        directUrl.searchParams.set('latitude', lat);
+        directUrl.searchParams.set('longitude', lon);
+        directUrl.searchParams.set(
+          'current',
+          'wave_height,wave_direction,wave_period,wind_wave_height,wind_wave_direction,wind_wave_period,swell_wave_height,swell_wave_direction,swell_wave_period,ocean_current_velocity,ocean_current_direction,sea_surface_temperature'
+        );
+        directUrl.searchParams.set(
+          'hourly',
+          'wave_height,wave_direction,wave_period,swell_wave_height,ocean_current_velocity,sea_surface_temperature'
+        );
+        directUrl.searchParams.set(
+          'daily',
+          'wave_height_max,wave_direction_dominant,wave_period_max,swell_wave_height_max'
+        );
+        directUrl.searchParams.set('timezone', 'auto');
+        directUrl.searchParams.set('forecast_days', '7');
+        directUrl.searchParams.set('temperature_unit', appState.units === 'imperial' ? 'fahrenheit' : 'celsius');
+        directUrl.searchParams.set('length_unit', appState.units === 'imperial' ? 'imperial' : 'metric');
+        res = await fetch(directUrl.toString());
+      }
+      if (!res.ok) return { hasSeaAccess: false };
+      const json = await res.json();
+      return summarizeClientMarine(json);
+    } catch {
+      return { hasSeaAccess: false };
+    }
+  }
+
+  function renderMarineSection(marineSummary) {
+    const seaCardEl = selectElement('#seaCard');
+    if (!seaCardEl) return;
+
+    if (!marineSummary || !marineSummary.hasSeaAccess) {
+      seaCardEl.classList.add('hidden');
+      return;
+    }
+
+    seaCardEl.classList.remove('hidden');
+
+    const waveUnit = appState.units === 'imperial' ? 'ft' : 'm';
+    const tempUnit = appState.units === 'imperial' ? '°F' : '°C';
+    const speedUnit = appState.units === 'imperial' ? 'mph' : 'km/h';
+
+    const stateBadge = selectElement('#seaStateBadge');
+    if (stateBadge) {
+      stateBadge.textContent = marineSummary.seaStateLabel || 'Coastal';
+    }
+
+    const waveHeightEl = selectElement('#seaWaveHeight');
+    if (waveHeightEl) {
+      waveHeightEl.textContent = marineSummary.waveHeight !== null && marineSummary.waveHeight !== undefined
+        ? `${Number(marineSummary.waveHeight).toFixed(1)} ${waveUnit}`
+        : '-';
+    }
+
+    const stateSubEl = selectElement('#seaStateSub');
+    if (stateSubEl) {
+      stateSubEl.textContent = marineSummary.seaStateLabel
+        ? `${marineSummary.seaStateLabel} • Significant Wave Height`
+        : 'Significant Wave Height';
+    }
+
+    const sstEl = selectElement('#seaSurfaceTemp');
+    if (sstEl) {
+      sstEl.textContent = marineSummary.seaSurfaceTemperature !== null && marineSummary.seaSurfaceTemperature !== undefined
+        ? `${Math.round(marineSummary.seaSurfaceTemperature)}${tempUnit}`
+        : '-';
+    }
+
+    const wavePeriodEl = selectElement('#seaWavePeriod');
+    if (wavePeriodEl) {
+      wavePeriodEl.textContent = marineSummary.wavePeriod !== null && marineSummary.wavePeriod !== undefined
+        ? `${Math.round(marineSummary.wavePeriod)} s`
+        : '-';
+    }
+
+    const waveDirEl = selectElement('#seaWaveDir');
+    if (waveDirEl) {
+      waveDirEl.textContent = formatCompassDirection(marineSummary.waveDirection);
+    }
+
+    const swellHeightEl = selectElement('#seaSwellHeight');
+    if (swellHeightEl) {
+      swellHeightEl.textContent = marineSummary.swellWaveHeight !== null && marineSummary.swellWaveHeight !== undefined
+        ? `${Number(marineSummary.swellWaveHeight).toFixed(1)} ${waveUnit}`
+        : '-';
+    }
+
+    const swellPeriodEl = selectElement('#seaSwellPeriod');
+    if (swellPeriodEl) {
+      swellPeriodEl.textContent = marineSummary.swellWavePeriod !== null && marineSummary.swellWavePeriod !== undefined
+        ? `${Math.round(marineSummary.swellWavePeriod)} s`
+        : '-';
+    }
+
+    const currentVelEl = selectElement('#seaCurrentVel');
+    if (currentVelEl) {
+      currentVelEl.textContent = marineSummary.oceanCurrentVelocity !== null && marineSummary.oceanCurrentVelocity !== undefined
+        ? `${Number(marineSummary.oceanCurrentVelocity).toFixed(1)} ${speedUnit}`
+        : '-';
+    }
+
+    const maxWaveEl = selectElement('#seaDailyMaxWave');
+    if (maxWaveEl) {
+      maxWaveEl.textContent = marineSummary.dailyWaveMax !== null && marineSummary.dailyWaveMax !== undefined
+        ? `${Number(marineSummary.dailyWaveMax).toFixed(1)} ${waveUnit}`
+        : '-';
+    }
+
+    const seaHoursEl = selectElement('#seaHours');
+    if (seaHoursEl && marineSummary.hourly && Array.isArray(marineSummary.hourly.time)) {
+      seaHoursEl.innerHTML = '';
+      const hTimes = marineSummary.hourly.time;
+      const upcomingIdx = hTimes.findIndex((t) => Date.parse(t) > Date.now());
+      const startIdx = upcomingIdx > 0 ? upcomingIdx - 1 : 0;
+      const endIdx = Math.min(startIdx + 12, hTimes.length);
+
+      for (let i = startIdx; i < endIdx; i++) {
+        const item = document.createElement('div');
+        item.className = 'hour-item';
+        const timeStr = formatClockTime(hTimes[i]);
+        const wHeight = marineSummary.hourly.wave_height?.[i];
+        const sstVal = marineSummary.hourly.sea_surface_temperature?.[i];
+        const wPeriod = marineSummary.hourly.wave_period?.[i];
+
+        const topStat = wHeight !== null && wHeight !== undefined
+          ? `${Number(wHeight).toFixed(1)}${waveUnit}`
+          : '-';
+        const bottomStat = sstVal !== null && sstVal !== undefined
+          ? `${Math.round(sstVal)}°`
+          : (wPeriod !== null && wPeriod !== undefined ? `${Math.round(wPeriod)}s` : '-');
+
+        item.innerHTML = `
+          <div class="hour-time">${timeStr}</div>
+          <div class="hour-icon">🌊</div>
+          <div class="hour-temp">${topStat}</div>
+          <div class="hour-pop">${bottomStat}</div>
+        `;
+        seaHoursEl.appendChild(item);
+      }
     }
   }
 
@@ -2892,13 +3340,14 @@ html[data-device="mobile"] .metric-val {
     return `${conditionNarrative}. ${tempClause}`;
   }
 
-  function generateMobileSmartInsights(weatherData, sliceStart, aqSummary) {
+  function generateMobileSmartInsights(weatherData, sliceStart, aqSummary, marineSummary) {
     const insights = [];
     const current = weatherData.current;
     const daily = weatherData.daily;
     const hourly = weatherData.hourly;
     const unitSymbol = appState.units === 'metric' ? '°C' : '°F';
     const windLabel = appState.units === 'metric' ? 'km/h' : 'mph';
+    const waveLabel = appState.units === 'imperial' ? 'ft' : 'm';
 
     const todayMax = Math.round(daily.temperature_2m_max?.[0] ?? current.temperature_2m);
     const tomorrowMax = Math.round(daily.temperature_2m_max?.[1] ?? todayMax);
@@ -2931,6 +3380,18 @@ html[data-device="mobile"] .metric-val {
       rightVal: `${absDelta}°`,
       arrow: arrowDir
     });
+
+    if (marineSummary && marineSummary.hasSeaAccess && marineSummary.waveHeight !== null && marineSummary.waveHeight !== undefined) {
+      const sstClause = marineSummary.seaSurfaceTemperature !== null && marineSummary.seaSurfaceTemperature !== undefined
+        ? ` • Water temp ${Math.round(marineSummary.seaSurfaceTemperature)}${unitSymbol}`
+        : '';
+      insights.push({
+        title: 'Sea & surf outlook',
+        sub: `${marineSummary.seaStateLabel || 'Coastal'} seas with ${Number(marineSummary.waveHeight).toFixed(1)} ${waveLabel} waves${sstClause}.`,
+        rightVal: '🌊',
+        arrow: 'none'
+      });
+    }
 
     if (aqSummary && aqSummary.usAqi !== null && aqSummary.usAqi !== undefined) {
       const aqiVal = Math.round(aqSummary.usAqi);
@@ -3097,12 +3558,12 @@ html[data-device="mobile"] .metric-val {
     return insights;
   }
 
-  function renderMobileInsightsCarousel(weatherData, sliceStart, aqSummary) {
+  function renderMobileInsightsCarousel(weatherData, sliceStart, aqSummary, marineSummary) {
     const track = selectElement('#insightsTrack');
     const dotsContainer = selectElement('#insightsDots');
     if (!track || !dotsContainer) return;
 
-    const pages = generateMobileSmartInsights(weatherData, sliceStart, aqSummary);
+    const pages = generateMobileSmartInsights(weatherData, sliceStart, aqSummary, marineSummary);
     insightTotalPages = pages.length;
     insightCurrentPage = 0;
     insightDirection = 1;
@@ -3564,7 +4025,7 @@ html[data-device="mobile"] .metric-val {
     localStorage.setItem(TIME_FORMAT_STORAGE_KEY, appState.timeFormat);
 
     if (latestWeatherData) {
-      renderWeatherDashboard(latestWeatherData, latestAirQualitySummary);
+      renderWeatherDashboard(latestWeatherData, latestAirQualitySummary, latestMarineSummary);
     }
   }
 
@@ -3660,9 +4121,10 @@ html[data-device="mobile"] .metric-val {
         return response.json();
       })();
 
-      const [weatherData, aqSummary] = await Promise.all([
+      const [weatherData, aqSummary, marineSummary] = await Promise.all([
         fetchWeatherPromise,
-        fetchAirQualityForCoordinates(numericLat, numericLon)
+        fetchAirQualityForCoordinates(numericLat, numericLon),
+        fetchMarineForCoordinates(numericLat, numericLon)
       ]);
 
       if (requestId !== activeWeatherRequestId) return;
@@ -3676,14 +4138,15 @@ html[data-device="mobile"] .metric-val {
           units: appState.units
         },
         data: weatherData,
-        airQuality: aqSummary
+        airQuality: aqSummary,
+        marine: marineSummary
       }));
-      renderWeatherDashboard(weatherData, aqSummary);
+      renderWeatherDashboard(weatherData, aqSummary, marineSummary);
     } catch {
       if (requestId !== activeWeatherRequestId) return;
       const cachedPayload = JSON.parse(localStorage.getItem('pokeweather:last') || 'null');
       if (cachedPayload && cachedPayload.data) {
-        renderWeatherDashboard(cachedPayload.data, cachedPayload.airQuality || null);
+        renderWeatherDashboard(cachedPayload.data, cachedPayload.airQuality || null, cachedPayload.marine || null);
       }
     } finally {
       if (requestId === activeWeatherRequestId) {
@@ -3692,9 +4155,10 @@ html[data-device="mobile"] .metric-val {
     }
   }
 
-  function renderWeatherDashboard(weatherData, aqSummary = latestAirQualitySummary) {
+  function renderWeatherDashboard(weatherData, aqSummary = latestAirQualitySummary, marineSummary = latestMarineSummary) {
     latestWeatherData = weatherData;
     latestAirQualitySummary = aqSummary || summarizeClientAirQuality(weatherData.airQuality) || null;
+    latestMarineSummary = marineSummary || summarizeClientMarine(weatherData.marine) || null;
 
     const current = weatherData.current;
     const daily = weatherData.daily;
@@ -3726,6 +4190,7 @@ html[data-device="mobile"] .metric-val {
     selectElement('#dayMode').textContent = isDaytime ? 'Day' : 'Night';
 
     renderAirQualityAndPollenCards(latestAirQualitySummary);
+    renderMarineSection(latestMarineSummary);
 
     const localTimeElement = selectElement('#currLocalTime');
     if (localTimeElement) {
@@ -3758,7 +4223,7 @@ html[data-device="mobile"] .metric-val {
     if (mobileSummaryElement) mobileSummaryElement.textContent = summaryText;
     if (desktopSummaryElement) desktopSummaryElement.textContent = summaryText;
 
-    renderMobileInsightsCarousel(weatherData, sliceStart, latestAirQualitySummary);
+    renderMobileInsightsCarousel(weatherData, sliceStart, latestAirQualitySummary, latestMarineSummary);
 
     for (let index = sliceStart; index < sliceEnd; index++) {
       const hourCard = document.createElement('div');
@@ -4198,10 +4663,15 @@ html[data-device="mobile"] .metric-val {
         appState.lon = activeLoc.lon;
         appState.name = activeLoc.name;
         updateLocationHeading(activeLoc.name);
-        renderWeatherDashboard(window.__SSR__, window.__SSR__.airQuality || null);
+        renderWeatherDashboard(window.__SSR__, window.__SSR__.airQuality || null, window.__SSR__.marine || null);
         if (!window.__SSR__.airQuality) {
           fetchAirQualityForCoordinates(activeLoc.lat, activeLoc.lon).then((aq) => {
-            if (aq) renderWeatherDashboard(window.__SSR__, aq);
+            if (aq) renderWeatherDashboard(window.__SSR__, aq, latestMarineSummary);
+          });
+        }
+        if (!window.__SSR__.marine) {
+          fetchMarineForCoordinates(activeLoc.lat, activeLoc.lon).then((marine) => {
+            if (marine) renderWeatherDashboard(window.__SSR__, latestAirQualitySummary, marine);
           });
         }
         refreshDefaultCurrentLocation(true);
