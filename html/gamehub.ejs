@@ -5431,7 +5431,7 @@ Game.init();
 <head>
   <meta charset="UTF-8">
   <title>poke!match</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover">
   <style>
     @font-face {
       font-family: "PokeTube Flex";
@@ -5509,18 +5509,28 @@ Game.init();
       --muted: #c4b5d6;
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; touch-action: manipulation; }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
 
     body {
       background: var(--bg);
       color: var(--text);
       font-family: "PokeTube Flex", system-ui, -apple-system, sans-serif;
       min-height: 100vh;
+      min-height: 100dvh;
       display: flex;
       flex-direction: column;
       align-items: center;
       padding: 20px;
       transition: background 0.35s ease, color 0.35s ease;
+      overflow-x: hidden;
     }
 
     .app-wrap {
@@ -5531,7 +5541,7 @@ Game.init();
       gap: 20px;
     }
 
-    header {
+    header.desktop-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -5591,6 +5601,48 @@ Game.init();
       color: var(--on-primary);
     }
 
+    .mobile-topbar {
+      display: none;
+      width: 100%;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .map-drawer-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--primary-container);
+      color: var(--on-primary-container);
+      border: none;
+      padding: 10px 14px;
+      border-radius: 20px;
+      font-family: inherit;
+      font-size: 0.82rem;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+      transition: transform 0.12s ease;
+    }
+    .map-drawer-btn:active {
+      transform: scale(0.95);
+    }
+
+    .mobile-mode-pill {
+      display: flex;
+      background: var(--surface-2);
+      padding: 4px;
+      border-radius: 20px;
+      gap: 4px;
+      margin-left: auto;
+    }
+    .mobile-mode-pill .tab-btn {
+      padding: 7px 13px;
+      font-size: 0.78rem;
+      border-radius: 16px;
+    }
+
     .layout-grid {
       display: grid;
       grid-template-columns: 320px 1fr;
@@ -5604,6 +5656,21 @@ Game.init();
       width: 100%;
     }
 
+    .drawer-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(6px);
+      z-index: 90;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+    }
+    .drawer-backdrop.open {
+      display: block;
+      opacity: 1;
+    }
+
     .path-panel {
       background: var(--surface-1);
       border-radius: 32px;
@@ -5612,6 +5679,7 @@ Game.init();
       display: flex;
       flex-direction: column;
       gap: 12px;
+      z-index: 100;
     }
     .path-header {
       display: flex;
@@ -5624,6 +5692,20 @@ Game.init();
       font-weight: 800;
       color: var(--primary);
     }
+    .close-drawer-btn {
+      display: none;
+      background: var(--surface-3);
+      color: var(--text);
+      border: none;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      font-size: 1.1rem;
+      font-weight: 800;
+      cursor: pointer;
+      align-items: center;
+      justify-content: center;
+    }
     .path-scroll {
       flex: 1;
       overflow-y: auto;
@@ -5632,6 +5714,7 @@ Game.init();
       flex-direction: column-reverse;
       gap: 16px;
       position: relative;
+      scroll-behavior: smooth;
     }
 
     .realm-divider {
@@ -5685,7 +5768,8 @@ Game.init();
     .stage-node.current {
       background: var(--primary);
       color: var(--on-primary);
-      transform: scale(1.1);
+      transform: scale(1.12);
+      box-shadow: 0 0 16px var(--primary);
     }
     .stage-node.hard {
       border: 3px solid var(--danger);
@@ -5700,6 +5784,7 @@ Game.init();
       letter-spacing: 0.5px;
     }
 
+    /* Main Game Board Panel */
     .board-panel {
       background: var(--surface-1);
       border-radius: 36px;
@@ -5709,6 +5794,7 @@ Game.init();
       align-items: center;
       gap: 14px;
       position: relative;
+      width: 100%;
     }
 
     .hud-strip {
@@ -5719,18 +5805,22 @@ Game.init();
     }
     .hud-card {
       background: var(--surface-2);
-      padding: 12px 16px;
+      padding: 12px 14px;
       border-radius: 22px;
       text-align: center;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
     }
     .hud-label {
-      font-size: 0.72rem;
+      font-size: 0.7rem;
       font-weight: 700;
       color: var(--muted);
       text-transform: uppercase;
+      letter-spacing: 0.4px;
     }
     .hud-val {
-      font-size: 1.3rem;
+      font-size: 1.25rem;
       font-weight: 800;
       color: var(--primary);
       margin-top: 2px;
@@ -5740,14 +5830,15 @@ Game.init();
       width: 100%;
       height: 12px;
       background: var(--surface-2);
-      border-radius: 6px;
+      border-radius: 99px;
       overflow: hidden;
     }
     .progress-fill {
       height: 100%;
       width: 0%;
       background: var(--primary);
-      transition: width 0.25s ease;
+      border-radius: 99px;
+      transition: width 0.28s cubic-bezier(0.2, 0, 0, 1);
     }
 
     #gem-grid {
@@ -5760,6 +5851,7 @@ Game.init();
       background: var(--bg);
       padding: 12px;
       border-radius: 28px;
+      touch-action: none;
     }
 
     .gem-cell {
@@ -5768,10 +5860,10 @@ Game.init();
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: clamp(1.25rem, 3.8vw, 1.8rem);
+      font-size: clamp(1.2rem, 4.2vw, 1.8rem);
       cursor: pointer;
       position: relative;
-      transition: transform 0.15s cubic-bezier(0.2, 0, 0, 1), background 0.15s ease, opacity 0.15s ease;
+      transition: transform 0.15s cubic-bezier(0.2, 0, 0, 1), background 0.15s ease, opacity 0.18s ease, box-shadow 0.15s ease;
     }
     .gem-cell:hover { background: var(--surface-3); }
     .gem-cell.selected {
@@ -5780,8 +5872,22 @@ Game.init();
       transform: scale(1.08);
       z-index: 2;
     }
+
+    .gem-cell.match-highlight {
+      background: var(--primary) !important;
+      color: var(--on-primary) !important;
+      box-shadow: 0 0 18px var(--primary), inset 0 0 0 3px #ffffff;
+      transform: scale(1.12);
+      z-index: 5;
+      animation: matchFlash 0.26s ease-in-out infinite alternate;
+    }
+    @keyframes matchFlash {
+      from { filter: brightness(1.05); transform: scale(1.06); }
+      to   { filter: brightness(1.35); transform: scale(1.14); }
+    }
+
     .gem-cell.clearing {
-      transform: scale(0.15);
+      transform: scale(0.1);
       opacity: 0;
     }
     .gem-cell.hint-glow {
@@ -5802,7 +5908,7 @@ Game.init();
       position: absolute;
       bottom: 2px;
       right: 3px;
-      font-size: 0.68rem;
+      font-size: 0.65rem;
       line-height: 1;
       background: rgba(0, 0, 0, 0.65);
       padding: 2px 4px;
@@ -5821,7 +5927,7 @@ Game.init();
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       font-weight: 700;
       color: var(--muted);
       padding: 0 4px;
@@ -5891,7 +5997,7 @@ Game.init();
     .overlay-box {
       position: absolute;
       inset: 0;
-      background: rgba(22, 14, 17, 0.9);
+      background: rgba(22, 14, 17, 0.92);
       backdrop-filter: blur(10px);
       border-radius: 36px;
       display: flex;
@@ -5911,9 +6017,18 @@ Game.init();
     }
     .overlay-box p {
       color: var(--muted);
-      margin-bottom: 20px;
+      margin-bottom: 12px;
       font-size: 1rem;
       font-weight: 600;
+    }
+    .reward-pill {
+      background: var(--primary-container);
+      color: var(--on-primary-container);
+      padding: 8px 16px;
+      border-radius: 16px;
+      font-size: 0.82rem;
+      font-weight: 800;
+      margin-bottom: 18px;
     }
     .action-btn {
       background: var(--primary);
@@ -5925,18 +6040,127 @@ Game.init();
       font-size: 1rem;
       font-weight: 800;
       cursor: pointer;
+    } 
+    
+    body.is-mobile {
+      padding: 8px 10px env(safe-area-inset-bottom, 10px);
+      justify-content: flex-start;
     }
 
-    @media (max-width: 820px) {
-      .layout-grid { grid-template-columns: 1fr; }
-      .path-panel { height: 240px; }
+    body.is-mobile .app-wrap {
+      gap: 8px;
+      height: 100%;
+      max-width: 480px;
+    }
+
+    body.is-mobile header.desktop-header {
+      display: none !important;
+    }
+
+    body.is-mobile .mobile-topbar {
+      display: flex;
+    }
+
+    body.is-mobile .layout-grid {
+      grid-template-columns: 1fr !important;
+      gap: 0;
+      width: 100%;
+    }
+
+    body.is-mobile .path-panel {
+      position: fixed;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: min(84vw, 320px);
+      height: 100dvh;
+      border-radius: 0 32px 32px 0;
+      padding: 20px 16px;
+      box-shadow: 12px 0 36px rgba(0, 0, 0, 0.6);
+      transform: translateX(-105%);
+      transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1);
+      display: flex !important; /* stays in DOM for slide animation */
+    }
+
+    body.is-mobile .path-panel.drawer-open {
+      transform: translateX(0);
+    }
+
+    body.is-mobile .close-drawer-btn {
+      display: inline-flex;
+    }
+
+    body.is-mobile .board-panel {
+      padding: 12px;
+      border-radius: 28px;
+      gap: 10px;
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+    }
+
+    body.is-mobile .hud-strip {
+      gap: 6px;
+    }
+
+    body.is-mobile .hud-card {
+      padding: 8px 6px;
+      border-radius: 18px;
+    }
+
+    body.is-mobile .hud-label {
+      font-size: 0.62rem;
+    }
+
+    body.is-mobile .hud-val {
+      font-size: 1.05rem;
+    }
+
+    body.is-mobile .progress-track {
+      height: 10px;
+    }
+
+    body.is-mobile #gem-grid {
+      padding: 8px;
+      gap: 4px;
+      border-radius: 22px;
+      max-width: 100%;
+    }
+
+    body.is-mobile .gem-cell {
+      border-radius: 12px;
+      font-size: clamp(1.3rem, 6.2vw, 1.85rem);
+    }
+
+    body.is-mobile .boosters-bar {
+      gap: 5px;
+    }
+
+    body.is-mobile .booster-btn {
+      padding: 6px 2px;
+      border-radius: 15px;
+    }
+
+    body.is-mobile .b-icon {
+      font-size: 1.15rem;
+    }
+
+    body.is-mobile .b-name {
+      font-size: 0.56rem;
+    }
+
+    body.is-mobile .powerup-legend {
+      padding: 7px 10px;
+      font-size: 0.64rem;
+      border-radius: 14px;
+      justify-content: space-around;
     }
   </style>
 </head>
 <body data-theme="ocean">
 
+  <div class="drawer-backdrop" id="drawer-backdrop"></div>
+
   <div class="app-wrap">
-    <header>
+    <header class="desktop-header">
       <div class="brand-title">
         <h1>poke!match</h1>
         <span class="theme-badge" id="theme-badge">Ocean Abyss</span>
@@ -5947,11 +6171,25 @@ Game.init();
       </div>
     </header>
 
+    <div class="mobile-topbar" id="mobile-topbar">
+      <button class="map-drawer-btn hidden" id="btn-open-map">
+        <span>🗺️</span>
+        <span id="mobile-realm-label">Map</span>
+      </button>
+      <div class="mobile-mode-pill">
+        <button class="tab-btn" id="mob-tab-forever">Endless</button>
+        <button class="tab-btn" id="mob-tab-adventure">100-Level</button>
+      </div>
+    </div>
+
     <div class="layout-grid single" id="main-layout">
       <aside class="path-panel hidden" id="path-panel">
         <div class="path-header">
-          <h2>Realm Map</h2>
-          <span id="unlocked-label" style="font-size:0.85rem;font-weight:700;color:var(--muted);">1 / 100</span>
+          <div>
+            <h2>Realm Map</h2>
+            <span id="unlocked-label" style="font-size:0.78rem;font-weight:700;color:var(--muted);">1 / 100 Unlocked</span>
+          </div>
+          <button class="close-drawer-btn" id="btn-close-map" aria-label="Close Realm Map">✕</button>
         </div>
         <div class="path-scroll" id="path-scroll"></div>
       </aside>
@@ -5978,10 +6216,10 @@ Game.init();
 
         <div id="gem-grid"></div>
 
-        <div class="boosters-wrap">
+        <div class="boosters-wrap" id="boosters-wrap">
           <div class="boosters-header">
-            <span>BOOSTERS (Unlock every 15 levels)</span>
-            <span id="booster-status">Select a booster to use</span>
+            <span>BOOSTERS (+1 per level beat!)</span>
+            <span id="booster-status">Tap a booster to use</span>
           </div>
           <div class="boosters-bar" id="boosters-bar"></div>
         </div>
@@ -5997,6 +6235,7 @@ Game.init();
         <div class="overlay-box hidden" id="end-overlay">
           <h3 id="ov-title">No More Moves!</h3>
           <p id="ov-desc">Final Score: 0</p>
+          <div class="reward-pill hidden" id="ov-reward">🎁 +1 Charge to all unlocked boosters!</div>
           <button class="action-btn" id="ov-btn">Play Again</button>
         </div>
       </section>
@@ -6019,6 +6258,15 @@ function playTone(freq, dur = 0.09, type = 'sine') {
   } catch (e) {}
 }
 
+
+function checkIsMobile() {
+  const uaMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
+  const iPadOS = (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const coarsePointer = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+  const narrowScreen = window.innerWidth <= 820;
+  return Boolean(uaMobile || iPadOS || (coarsePointer && narrowScreen) || narrowScreen);
+}
+
 const RELICS_ALL = ['🔮', '⚗️', '🧭', '🧿', '⏳', '🗝️', '👑'];
 
 const POWERUP_BADGES = {
@@ -6030,12 +6278,12 @@ const POWERUP_BADGES = {
 };
 
 const BOOSTER_DEFS = [
-  { id: 'hammer',  name: 'Smash',   icon: '🔨', unlockLvl: 15, needsTarget: true,  desc: 'Click any relic to shatter it' },
+  { id: 'hammer',  name: 'Smash',   icon: '🔨', unlockLvl: 15, needsTarget: true,  desc: 'Tap any relic to shatter it' },
   { id: 'shuffle', name: 'Shuffle', icon: '🔀', unlockLvl: 30, needsTarget: false, desc: 'Rearrange all relics on the board' },
-  { id: 'rowzap',  name: 'Row Zap', icon: '⚡', unlockLvl: 45, needsTarget: true,  desc: 'Click a relic to clear its entire row' },
-  { id: 'colzap',  name: 'Col Zap', icon: '🔱', unlockLvl: 60, needsTarget: true,  desc: 'Click a relic to clear its entire column' },
-  { id: 'nova',    name: 'Nova',    icon: '💥', unlockLvl: 75, needsTarget: true,  desc: 'Click a relic to blast a 3×3 area' },
-  { id: 'purge',   name: 'Purge',   icon: '🌈', unlockLvl: 90, needsTarget: true,  desc: 'Click a relic to clear all matching relics' }
+  { id: 'rowzap',  name: 'Row Zap', icon: '⚡', unlockLvl: 45, needsTarget: true,  desc: 'Tap a relic to clear its entire row' },
+  { id: 'colzap',  name: 'Col Zap', icon: '🔱', unlockLvl: 60, needsTarget: true,  desc: 'Tap a relic to clear its entire column' },
+  { id: 'nova',    name: 'Nova',    icon: '💥', unlockLvl: 75, needsTarget: true,  desc: 'Tap a relic to blast a 3×3 area' },
+  { id: 'purge',   name: 'Purge',   icon: '🌈', unlockLvl: 90, needsTarget: true,  desc: 'Tap a relic to clear all matching relics' }
 ];
 
 class PokeMatchGame {
@@ -6055,11 +6303,15 @@ class PokeMatchGame {
     this.targetScore = 1000;
     this.movesLeft = 20;
     this.hintTimer = null;
-    this.boosterCharges = {};
+    this.touchStartPos = null;
 
     this.gridEl = document.getElementById('gem-grid');
     this.overlay = document.getElementById('end-overlay');
+    this.pathPanel = document.getElementById('path-panel');
+    this.drawerBackdrop = document.getElementById('drawer-backdrop');
 
+    this.loadSavedBoosters();
+    this.syncMobileState();
     this.bindUI();
     this.buildPath();
 
@@ -6072,35 +6324,117 @@ class PokeMatchGame {
     }
   }
 
+  syncMobileState() {
+    this.isMobile = checkIsMobile();
+    document.body.classList.toggle('is-mobile', this.isMobile);
+    if (!this.isMobile) {
+      this.closeMobileDrawer();
+    }
+  }
+
+  openMobileDrawer() {
+    this.pathPanel.classList.add('drawer-open');
+    this.drawerBackdrop.classList.add('open');
+    setTimeout(() => {
+      const curr = this.pathPanel.querySelector('.stage-node.current');
+      if (curr) curr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 80);
+  }
+
+  closeMobileDrawer() {
+    this.pathPanel.classList.remove('drawer-open');
+    this.drawerBackdrop.classList.remove('open');
+  }
+
+  loadSavedBoosters() {
+    let saved = {};
+    try {
+      saved = JSON.parse(localStorage.getItem('pokeMatchBoosterInv') || '{}');
+    } catch (e) {
+      saved = {};
+    }
+    this.boosterCharges = {};
+    BOOSTER_DEFS.forEach(b => {
+      if (this.maxUnlocked >= b.unlockLvl) {
+        // Ensure unlocked boosters start with at least 1 if never initialized
+        this.boosterCharges[b.id] = typeof saved[b.id] === 'number' ? saved[b.id] : 1;
+      } else {
+        this.boosterCharges[b.id] = 0;
+      }
+    });
+    this.saveBoosters();
+  }
+
+  saveBoosters() {
+    localStorage.setItem('pokeMatchBoosterInv', JSON.stringify(this.boosterCharges));
+  }
+
+  rewardUnlockedBoosters() {
+    let rewardedAny = false;
+    BOOSTER_DEFS.forEach(b => {
+      if (this.maxUnlocked >= b.unlockLvl) {
+        this.boosterCharges[b.id] = (this.boosterCharges[b.id] || 0) + 1;
+        rewardedAny = true;
+      }
+    });
+    this.saveBoosters();
+    return rewardedAny;
+  }
+
   switchTabUI(mode) {
     const tabForever = document.getElementById('tab-forever');
     const tabAdv = document.getElementById('tab-adventure');
-    const pathPanel = document.getElementById('path-panel');
+    const mobForever = document.getElementById('mob-tab-forever');
+    const mobAdv = document.getElementById('mob-tab-adventure');
     const layout = document.getElementById('main-layout');
+    const boostersWrap = document.getElementById('boosters-wrap');
+    const btnOpenMap = document.getElementById('btn-open-map');
 
     if (mode === 'forever') {
       tabForever.classList.add('active');
       tabAdv.classList.remove('active');
-      pathPanel.classList.add('hidden');
+      mobForever.classList.add('active');
+      mobAdv.classList.remove('active');
+
+      this.pathPanel.classList.add('hidden');
       layout.classList.add('single');
+      boostersWrap.classList.add('hidden'); 
+      btnOpenMap.classList.add('hidden');
+      this.closeMobileDrawer();
     } else {
       tabAdv.classList.add('active');
       tabForever.classList.remove('active');
-      pathPanel.classList.remove('hidden');
+      mobAdv.classList.add('active');
+      mobForever.classList.remove('active');
+
+      this.pathPanel.classList.remove('hidden');
       layout.classList.remove('single');
+      boostersWrap.classList.remove('hidden'); 
+      btnOpenMap.classList.remove('hidden');
     }
   }
 
   bindUI() {
-    document.getElementById('tab-forever').onclick = () => {
+    window.addEventListener('resize', () => this.syncMobileState());
+    window.addEventListener('orientationchange', () => this.syncMobileState());
+
+    const goForever = () => {
       this.switchTabUI('forever');
       this.startForever();
     };
-
-    document.getElementById('tab-adventure').onclick = () => {
+    const goAdventure = () => {
       this.switchTabUI('adventure');
       this.startLevel(this.level || this.maxUnlocked);
     };
+
+    document.getElementById('tab-forever').onclick = goForever;
+    document.getElementById('mob-tab-forever').onclick = goForever;
+    document.getElementById('tab-adventure').onclick = goAdventure;
+    document.getElementById('mob-tab-adventure').onclick = goAdventure;
+
+    document.getElementById('btn-open-map').onclick = () => this.openMobileDrawer();
+    document.getElementById('btn-close-map').onclick = () => this.closeMobileDrawer();
+    this.drawerBackdrop.onclick = () => this.closeMobileDrawer();
 
     document.getElementById('ov-btn').onclick = () => {
       this.overlay.classList.add('hidden');
@@ -6125,23 +6459,24 @@ class PokeMatchGame {
   }
 
   getRealmInfo(lvl) {
-    if (lvl <= 25) return { key: 'ocean',  name: 'Ocean Abyss (1–25)' };
-    if (lvl <= 50) return { key: 'forest', name: 'Sylvan Wilds (26–50)' };
-    if (lvl <= 75) return { key: 'magma',  name: 'Magma Core (51–75)' };
-    return { key: 'astral', name: 'Astral Void (76–100)' };
+    if (lvl <= 25) return { key: 'ocean',  short: 'Ocean Abyss',  name: 'Ocean Abyss (1–25)' };
+    if (lvl <= 50) return { key: 'forest', short: 'Sylvan Wilds', name: 'Sylvan Wilds (26–50)' };
+    if (lvl <= 75) return { key: 'magma',  short: 'Magma Core',   name: 'Magma Core (51–75)' };
+    return { key: 'astral', short: 'Astral Void', name: 'Astral Void (76–100)' };
   }
 
   applyTheme() {
     const refLevel = this.mode === 'adventure' ? this.level : this.maxUnlocked;
     const realm = this.getRealmInfo(refLevel);
     document.body.setAttribute('data-theme', realm.key);
-    document.getElementById('theme-badge').textContent = this.mode === 'forever' ? `Endless - ${realm.name.split(' (')[0]}` : realm.name;
+    document.getElementById('theme-badge').textContent = this.mode === 'forever' ? `Endless - ${realm.short}` : realm.name;
+    document.getElementById('mobile-realm-label').textContent = `${realm.short} • Lv.${this.level}`;
   }
 
   buildPath() {
     const container = document.getElementById('path-scroll');
     container.innerHTML = '';
-    document.getElementById('unlocked-label').textContent = `${this.maxUnlocked} / 100`;
+    document.getElementById('unlocked-label').textContent = `${this.maxUnlocked} / 100 Unlocked`;
 
     for (let i = 1; i <= 100; i++) {
       if (i === 1 || i === 26 || i === 51 || i === 76) {
@@ -6162,7 +6497,10 @@ class PokeMatchGame {
 
       btn.innerHTML = `<span>${i}</span>${isHard ? '<span class="hard-tag">BOSS</span>' : ''}`;
       if (i <= this.maxUnlocked) {
-        btn.onclick = () => this.startLevel(i);
+        btn.onclick = () => {
+          this.closeMobileDrawer();
+          this.startLevel(i);
+        };
       }
       row.appendChild(btn);
       container.appendChild(row);
@@ -6171,10 +6509,12 @@ class PokeMatchGame {
 
   initBoosters() {
     this.activeBooster = null;
-    this.boosterCharges = {};
     BOOSTER_DEFS.forEach(b => {
-      this.boosterCharges[b.id] = this.maxUnlocked >= b.unlockLvl ? 1 : 0;
+      if (this.maxUnlocked >= b.unlockLvl && (this.boosterCharges[b.id] === undefined)) {
+        this.boosterCharges[b.id] = 1;
+      }
     });
+    this.saveBoosters();
     this.renderBoosters();
   }
 
@@ -6206,14 +6546,15 @@ class PokeMatchGame {
       const def = BOOSTER_DEFS.find(x => x.id === this.activeBooster);
       status.textContent = def ? def.desc : '';
     } else {
-      status.textContent = 'Select an unlocked booster to use';
+      status.textContent = 'Select an unlocked booster';
     }
   }
 
   onBoosterClick(def) {
-    if (this.busy) return;
+    if (this.busy || this.mode === 'forever') return;
     if (!def.needsTarget) {
-      this.boosterCharges[def.id]--;
+      this.boosterCharges[def.id] = Math.max(0, (this.boosterCharges[def.id] || 0) - 1);
+      this.saveBoosters();
       this.activeBooster = null;
       this.shuffleBoard();
       this.renderBoosters();
@@ -6252,7 +6593,8 @@ class PokeMatchGame {
   async executeTargetedBooster(id, r, c) {
     this.busy = true;
     this.clearHint();
-    this.boosterCharges[id]--;
+    this.boosterCharges[id] = Math.max(0, (this.boosterCharges[id] || 0) - 1);
+    this.saveBoosters();
     this.activeBooster = null;
     this.renderBoosters();
 
@@ -6297,10 +6639,10 @@ class PokeMatchGame {
     localStorage.setItem('pokeMatchMode', 'forever');
     this.score = 0;
     this.selected = null;
+    this.activeBooster = null;
     this.busy = false;
     this.overlay.classList.add('hidden');
     this.applyTheme();
-    this.initBoosters();
     this.generateInitialBoard();
     this.render();
     this.updateHUD();
@@ -6578,7 +6920,36 @@ class PokeMatchGame {
             cell.appendChild(badge);
           }
         }
-        cell.onclick = () => this.onCellClick(r, c);
+
+        // Pointer & Touch Swipe Gestures for smooth Mobile Candy-Crush feel
+        cell.onpointerdown = (e) => {
+          this.touchStartPos = { r, c, x: e.clientX, y: e.clientY };
+        };
+        cell.onpointerup = (e) => {
+          if (!this.touchStartPos) return;
+          const dx = e.clientX - this.touchStartPos.x;
+          const dy = e.clientY - this.touchStartPos.y;
+          const dist = Math.hypot(dx, dy);
+          const sr = this.touchStartPos.r;
+          const sc = this.touchStartPos.c;
+          this.touchStartPos = null;
+
+          if (dist > 24 && !this.activeBooster && !this.busy) {
+            let tr = sr, tc = sc;
+            if (Math.abs(dx) > Math.abs(dy)) {
+              tc += dx > 0 ? 1 : -1;
+            } else {
+              tr += dy > 0 ? 1 : -1;
+            }
+            if (tr >= 0 && tr < this.size && tc >= 0 && tc < this.size) {
+              this.selected = null;
+              this.attemptSwap(sr, sc, tr, tc);
+              return;
+            }
+          }
+          this.onCellClick(r, c);
+        };
+
         this.gridEl.appendChild(cell);
       }
     }
@@ -6622,14 +6993,28 @@ class PokeMatchGame {
       playTone(380 + combo * 85, 0.11, 'triangle');
       combo++;
 
+      // Step 1: Highlight matched / powerup-triggered tiles so player sees what is clearing
       toClear.forEach(key => {
         const [mr, mc] = key.split(',').map(Number);
         const idx = mr * this.size + mc;
-        this.gridEl.children[idx]?.classList.add('clearing');
+        this.gridEl.children[idx]?.classList.add('match-highlight');
       });
 
       this.updateHUD();
-      await new Promise(res => setTimeout(res, 210));
+      await new Promise(res => setTimeout(res, 270));
+
+      // Step 2: Shrink & fade out the highlighted tiles
+      toClear.forEach(key => {
+        const [mr, mc] = key.split(',').map(Number);
+        const idx = mr * this.size + mc;
+        const el = this.gridEl.children[idx];
+        if (el) {
+          el.classList.remove('match-highlight');
+          el.classList.add('clearing');
+        }
+      });
+
+      await new Promise(res => setTimeout(res, 190));
 
       toClear.forEach(key => {
         const [mr, mc] = key.split(',').map(Number);
@@ -6743,8 +7128,8 @@ class PokeMatchGame {
       document.getElementById('progress-fill').style.width = '100%';
     } else {
       const isHard = this.level % 10 === 0;
-      document.getElementById('lbl-left').textContent = isHard ? `Level ${this.level} (BOSS)` : `Level ${this.level}`;
-      document.getElementById('val-left').textContent = `Goal: ${this.targetScore}`;
+      document.getElementById('lbl-left').textContent = isHard ? `Lv.${this.level} (BOSS)` : `Level ${this.level}`;
+      document.getElementById('val-left').textContent = `${this.targetScore}`;
       document.getElementById('lbl-right').textContent = 'Moves Left';
       document.getElementById('val-right').textContent = this.movesLeft;
       const pct = Math.min(100, Math.floor((this.score / this.targetScore) * 100));
@@ -6754,6 +7139,8 @@ class PokeMatchGame {
 
   checkEndState() {
     const validMoves = this.countValidMoves();
+    const rewardEl = document.getElementById('ov-reward');
+    rewardEl.classList.add('hidden');
 
     if (this.mode === 'forever') {
       if (validMoves === 0) {
@@ -6770,9 +7157,15 @@ class PokeMatchGame {
         if (this.level >= this.maxUnlocked && this.level < 100) {
           this.maxUnlocked = this.level + 1;
           localStorage.setItem('pokeMatch3Unlocked', this.maxUnlocked);
-          this.buildPath();
-          this.renderBoosters();
         }
+        const gotBoosters = this.rewardUnlockedBoosters();
+        if (gotBoosters) {
+          rewardEl.classList.remove('hidden');
+        }
+
+        this.buildPath();
+        this.renderBoosters();
+
         document.getElementById('ov-title').textContent = `Level ${this.level} Cleared!`;
         document.getElementById('ov-desc').textContent = `Score: ${this.score}`;
         document.getElementById('ov-btn').textContent = this.level < 100 ? 'Next Level' : 'Replay Level 100';
