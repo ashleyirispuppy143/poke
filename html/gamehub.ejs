@@ -5426,7 +5426,7 @@ Game.init();
 
 
 <% if (game === "match3") { %>
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -5507,6 +5507,19 @@ Game.init();
       --on-primary-container: #eaddff;
       --text: #ede4f7;
       --muted: #c4b5d6;
+    }
+
+    body[data-theme="extras"] {
+      --bg: #190910;
+      --surface-1: #280f1a;
+      --surface-2: #381625;
+      --surface-3: #4c1f33;
+      --primary: #ff80ab;
+      --on-primary: #560027;
+      --primary-container: #7b0c3d;
+      --on-primary-container: #ffd9e4;
+      --text: #fce4ec;
+      --muted: #e1aebf;
     }
 
     * {
@@ -5680,12 +5693,111 @@ Game.init();
       flex-direction: column;
       gap: 12px;
       z-index: 100;
+      position: relative;
+      overflow: hidden;
     }
+
+    .realm-bg-anim {
+      display: none;
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+    .realm-orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(18px);
+      opacity: 0.28;
+      animation: floatRealmOrb 8s ease-in-out infinite alternate;
+    }
+    .realm-orb.o1 {
+      width: 170px;
+      height: 170px;
+      top: 8%;
+      left: -30px;
+      background: var(--primary);
+    }
+    .realm-orb.o2 {
+      width: 210px;
+      height: 210px;
+      bottom: 12%;
+      right: -50px;
+      background: var(--primary-container);
+      animation-duration: 11s;
+      animation-direction: alternate-reverse;
+    }
+    .realm-orb.o3 {
+      width: 120px;
+      height: 120px;
+      top: 46%;
+      left: 35%;
+      background: var(--primary);
+      opacity: 0.18;
+      animation-duration: 6.5s;
+    }
+    .realm-particles {
+      position: absolute;
+      inset: -100% 0 0 0;
+      background-image:
+        radial-gradient(circle at 20% 25%, var(--primary) 2px, transparent 3px),
+        radial-gradient(circle at 75% 45%, var(--on-primary-container) 2.5px, transparent 3.5px),
+        radial-gradient(circle at 40% 75%, var(--primary) 1.5px, transparent 2.5px),
+        radial-gradient(circle at 85% 85%, var(--primary) 2px, transparent 3px);
+      background-size: 180px 220px;
+      opacity: 0.32;
+      animation: realmStream 14s linear infinite;
+    }
+
+    body[data-theme="ocean"] .realm-particles {
+      animation: realmRise 12s linear infinite;
+    }
+    body[data-theme="forest"] .realm-particles {
+      animation: realmSway 10s ease-in-out infinite alternate;
+    }
+    body[data-theme="magma"] .realm-particles {
+      animation: realmRiseFast 7s linear infinite;
+      opacity: 0.45;
+    }
+    body[data-theme="astral"] .realm-particles {
+      animation: realmPulseSpin 16s linear infinite;
+      opacity: 0.4;
+    }
+    body[data-theme="extras"] .realm-particles {
+      animation: realmRiseFast 4.5s linear infinite;
+      opacity: 0.55;
+    }
+
+    @keyframes floatRealmOrb {
+      0% { transform: translate(0, 0) scale(0.92); }
+      100% { transform: translate(24px, -32px) scale(1.15); }
+    }
+    @keyframes realmRise {
+      0% { transform: translateY(35%); }
+      100% { transform: translateY(0%); }
+    }
+    @keyframes realmRiseFast {
+      0% { transform: translateY(45%) scale(1.05); }
+      100% { transform: translateY(0%) scale(0.95); }
+    }
+    @keyframes realmSway {
+      0% { transform: translate(-12px, 10%) rotate(-2deg); }
+      100% { transform: translate(12px, 28%) rotate(2deg); }
+    }
+    @keyframes realmPulseSpin {
+      0% { transform: translateY(15%) scale(0.96); opacity: 0.25; }
+      50% { transform: translateY(25%) scale(1.06); opacity: 0.5; }
+      100% { transform: translateY(15%) scale(0.96); opacity: 0.25; }
+    }
+
     .path-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       padding: 0 6px;
+      position: relative;
+      z-index: 2;
     }
     .path-header h2 {
       font-size: 1.15rem;
@@ -5715,6 +5827,7 @@ Game.init();
       gap: 16px;
       position: relative;
       scroll-behavior: smooth;
+      z-index: 2;
     }
 
     .realm-divider {
@@ -5728,6 +5841,12 @@ Game.init();
       text-transform: uppercase;
       letter-spacing: 0.8px;
       margin: 6px 0;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+    }
+    .realm-divider.extras-div {
+      background: var(--primary-container);
+      color: var(--on-primary-container);
+      border: 1px solid var(--primary);
     }
 
     .stage-row {
@@ -5774,17 +5893,19 @@ Game.init();
     .stage-node.hard {
       border: 3px solid var(--danger);
     }
+    .stage-node.extra-stage {
+      border: 2px dashed var(--primary);
+    }
     .stage-node.hard.current {
       background: var(--danger);
       color: var(--on-danger);
     }
     .hard-tag {
-      font-size: 0.56rem;
+      font-size: 0.54rem;
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
 
-    /* Main Game Board Panel */
     .board-panel {
       background: var(--surface-1);
       border-radius: 36px;
@@ -6040,17 +6161,17 @@ Game.init();
       font-size: 1rem;
       font-weight: 800;
       cursor: pointer;
-    } 
-    
+    }
+
     body.is-mobile {
-      padding: 8px 10px env(safe-area-inset-bottom, 10px);
+      padding: 10px 10px env(safe-area-inset-bottom, 12px);
       justify-content: flex-start;
     }
 
     body.is-mobile .app-wrap {
-      gap: 8px;
+      gap: 10px;
       height: 100%;
-      max-width: 480px;
+      max-width: 460px;
     }
 
     body.is-mobile header.desktop-header {
@@ -6059,6 +6180,7 @@ Game.init();
 
     body.is-mobile .mobile-topbar {
       display: flex;
+      padding: 2px 2px 0;
     }
 
     body.is-mobile .layout-grid {
@@ -6072,14 +6194,19 @@ Game.init();
       top: 0;
       left: 0;
       bottom: 0;
-      width: min(84vw, 320px);
+      width: min(85vw, 330px);
       height: 100dvh;
       border-radius: 0 32px 32px 0;
       padding: 20px 16px;
-      box-shadow: 12px 0 36px rgba(0, 0, 0, 0.6);
+      box-shadow: 16px 0 44px rgba(0, 0, 0, 0.72);
       transform: translateX(-105%);
-      transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1);
+      transition: transform 0.32s cubic-bezier(0.2, 0, 0, 1);
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
       display: flex !important; /* stays in DOM for slide animation */
+    }
+
+    body.is-mobile .realm-bg-anim {
+      display: block;
     }
 
     body.is-mobile .path-panel.drawer-open {
@@ -6091,52 +6218,92 @@ Game.init();
     }
 
     body.is-mobile .board-panel {
-      padding: 12px;
-      border-radius: 28px;
-      gap: 10px;
-      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+      padding: 14px 12px 16px;
+      border-radius: 34px;
+      gap: 11px;
+      background: linear-gradient(165deg, var(--surface-2) 0%, var(--surface-1) 60%, var(--bg) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 16px 38px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
     }
 
     body.is-mobile .hud-strip {
-      gap: 6px;
+      gap: 8px;
+      background: rgba(0, 0, 0, 0.22);
+      padding: 6px;
+      border-radius: 26px;
     }
 
     body.is-mobile .hud-card {
-      padding: 8px 6px;
-      border-radius: 18px;
+      padding: 9px 6px;
+      border-radius: 20px;
+      background: var(--surface-2);
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    }
+
+    body.is-mobile .hud-card:nth-child(2) {
+      background: var(--primary-container);
+    }
+    body.is-mobile .hud-card:nth-child(2) .hud-label {
+      color: var(--on-primary-container);
+      opacity: 0.85;
+    }
+    body.is-mobile .hud-card:nth-child(2) .hud-val {
+      color: var(--on-primary-container);
+      font-size: 1.2rem;
     }
 
     body.is-mobile .hud-label {
-      font-size: 0.62rem;
+      font-size: 0.6rem;
+      letter-spacing: 0.5px;
     }
 
     body.is-mobile .hud-val {
-      font-size: 1.05rem;
+      font-size: 1.06rem;
     }
 
     body.is-mobile .progress-track {
-      height: 10px;
+      height: 13px;
+      background: rgba(0, 0, 0, 0.38);
+      padding: 2px;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.45);
+    }
+
+    body.is-mobile .progress-fill {
+      box-shadow: 0 0 12px var(--primary);
     }
 
     body.is-mobile #gem-grid {
-      padding: 8px;
-      gap: 4px;
-      border-radius: 22px;
+      padding: 9px;
+      gap: 5px;
+      border-radius: 26px;
       max-width: 100%;
+      background: rgba(0, 0, 0, 0.4);
+      box-shadow: inset 0 4px 14px rgba(0, 0, 0, 0.55), 0 1px 0 rgba(255, 255, 255, 0.07);
     }
 
     body.is-mobile .gem-cell {
-      border-radius: 12px;
-      font-size: clamp(1.3rem, 6.2vw, 1.85rem);
+      border-radius: 14px;
+      font-size: clamp(1.25rem, 6vw, 1.8rem);
+      background: linear-gradient(145deg, var(--surface-3), var(--surface-2));
+      box-shadow: 0 3px 6px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    }
+
+    body.is-mobile .boosters-wrap {
+      background: rgba(0, 0, 0, 0.24);
+      padding: 8px 10px 10px;
+      border-radius: 24px;
+      gap: 6px;
     }
 
     body.is-mobile .boosters-bar {
-      gap: 5px;
+      gap: 6px;
     }
 
     body.is-mobile .booster-btn {
-      padding: 6px 2px;
-      border-radius: 15px;
+      padding: 7px 2px;
+      border-radius: 16px;
+      background: var(--surface-2);
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.06);
     }
 
     body.is-mobile .b-icon {
@@ -6144,13 +6311,14 @@ Game.init();
     }
 
     body.is-mobile .b-name {
-      font-size: 0.56rem;
+      font-size: 0.55rem;
     }
 
     body.is-mobile .powerup-legend {
-      padding: 7px 10px;
-      font-size: 0.64rem;
-      border-radius: 14px;
+      padding: 8px 10px;
+      font-size: 0.62rem;
+      border-radius: 16px;
+      background: rgba(0, 0, 0, 0.22);
       justify-content: space-around;
     }
   </style>
@@ -6167,7 +6335,7 @@ Game.init();
       </div>
       <div class="mode-tabs">
         <button class="tab-btn" id="tab-forever">Endless Mode</button>
-        <button class="tab-btn" id="tab-adventure">100-Level Map</button>
+        <button class="tab-btn" id="tab-adventure">Realm Map</button>
       </div>
     </header>
 
@@ -6178,12 +6346,18 @@ Game.init();
       </button>
       <div class="mobile-mode-pill">
         <button class="tab-btn" id="mob-tab-forever">Endless</button>
-        <button class="tab-btn" id="mob-tab-adventure">100-Level</button>
+        <button class="tab-btn" id="mob-tab-adventure">Adventure</button>
       </div>
     </div>
 
     <div class="layout-grid single" id="main-layout">
       <aside class="path-panel hidden" id="path-panel">
+        <div class="realm-bg-anim" aria-hidden="true">
+          <div class="realm-orb o1"></div>
+          <div class="realm-orb o2"></div>
+          <div class="realm-orb o3"></div>
+          <div class="realm-particles"></div>
+        </div>
         <div class="path-header">
           <div>
             <h2>Realm Map</h2>
@@ -6258,7 +6432,6 @@ function playTone(freq, dur = 0.09, type = 'sine') {
   } catch (e) {}
 }
 
-
 function checkIsMobile() {
   const uaMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
   const iPadOS = (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -6324,6 +6497,10 @@ class PokeMatchGame {
     }
   }
 
+  getTotalMaxLevels() {
+    return this.maxUnlocked > 100 ? 110 : 100;
+  }
+
   syncMobileState() {
     this.isMobile = checkIsMobile();
     document.body.classList.toggle('is-mobile', this.isMobile);
@@ -6356,7 +6533,6 @@ class PokeMatchGame {
     this.boosterCharges = {};
     BOOSTER_DEFS.forEach(b => {
       if (this.maxUnlocked >= b.unlockLvl) {
-        // Ensure unlocked boosters start with at least 1 if never initialized
         this.boosterCharges[b.id] = typeof saved[b.id] === 'number' ? saved[b.id] : 1;
       } else {
         this.boosterCharges[b.id] = 0;
@@ -6398,7 +6574,7 @@ class PokeMatchGame {
 
       this.pathPanel.classList.add('hidden');
       layout.classList.add('single');
-      boostersWrap.classList.add('hidden'); 
+      boostersWrap.classList.add('hidden');
       btnOpenMap.classList.add('hidden');
       this.closeMobileDrawer();
     } else {
@@ -6409,7 +6585,7 @@ class PokeMatchGame {
 
       this.pathPanel.classList.remove('hidden');
       layout.classList.remove('single');
-      boostersWrap.classList.remove('hidden'); 
+      boostersWrap.classList.remove('hidden');
       btnOpenMap.classList.remove('hidden');
     }
   }
@@ -6442,7 +6618,7 @@ class PokeMatchGame {
         this.startForever();
       } else {
         if (this.wonLast) {
-          this.startLevel(Math.min(100, this.level + 1));
+          this.startLevel(Math.min(110, this.level + 1));
         } else {
           this.startLevel(this.level);
         }
@@ -6459,10 +6635,11 @@ class PokeMatchGame {
   }
 
   getRealmInfo(lvl) {
-    if (lvl <= 25) return { key: 'ocean',  short: 'Ocean Abyss',  name: 'Ocean Abyss (1–25)' };
-    if (lvl <= 50) return { key: 'forest', short: 'Sylvan Wilds', name: 'Sylvan Wilds (26–50)' };
-    if (lvl <= 75) return { key: 'magma',  short: 'Magma Core',   name: 'Magma Core (51–75)' };
-    return { key: 'astral', short: 'Astral Void', name: 'Astral Void (76–100)' };
+    if (lvl <= 25) return { key: 'ocean',  short: 'Ocean Abyss',  name: 'Ocean Abyss (1-25)' };
+    if (lvl <= 50) return { key: 'forest', short: 'Sylvan Wilds', name: 'Sylvan Wilds (26-50)' };
+    if (lvl <= 75) return { key: 'magma',  short: 'Magma Core',   name: 'Magma Core (51-75)' };
+    if (lvl <= 100) return { key: 'astral', short: 'Astral Void', name: 'Astral Void (76-100)' };
+    return { key: 'extras', short: 'Extras', name: 'Crimson Eclipse - Extras (101-110)' };
   }
 
   applyTheme() {
@@ -6470,18 +6647,20 @@ class PokeMatchGame {
     const realm = this.getRealmInfo(refLevel);
     document.body.setAttribute('data-theme', realm.key);
     document.getElementById('theme-badge').textContent = this.mode === 'forever' ? `Endless - ${realm.short}` : realm.name;
-    document.getElementById('mobile-realm-label').textContent = `${realm.short} • Lv.${this.level}`;
+    const lvlTag = this.level > 100 ? `EX-${this.level - 100}` : `Lv.${this.level}`;
+    document.getElementById('mobile-realm-label').textContent = `${realm.short} - ${lvlTag}`;
   }
 
   buildPath() {
     const container = document.getElementById('path-scroll');
     container.innerHTML = '';
-    document.getElementById('unlocked-label').textContent = `${this.maxUnlocked} / 100 Unlocked`;
+    const totalCap = this.getTotalMaxLevels();
+    document.getElementById('unlocked-label').textContent = `${this.maxUnlocked} / ${totalCap} Unlocked`;
 
-    for (let i = 1; i <= 100; i++) {
-      if (i === 1 || i === 26 || i === 51 || i === 76) {
+    for (let i = 1; i <= totalCap; i++) {
+      if (i === 1 || i === 26 || i === 51 || i === 76 || i === 101) {
         const div = document.createElement('div');
-        div.className = 'realm-divider';
+        div.className = 'realm-divider' + (i === 101 ? ' extras-div' : '');
         div.textContent = this.getRealmInfo(i).name;
         container.appendChild(div);
       }
@@ -6490,12 +6669,14 @@ class PokeMatchGame {
       row.className = 'stage-row';
 
       const btn = document.createElement('button');
-      const isHard = i % 10 === 0;
-      btn.className = 'stage-node' + (isHard ? ' hard' : '');
+      const isExtra = i > 100;
+      const isHard = (i % 10 === 0) || isExtra;
+      btn.className = 'stage-node' + (isHard ? ' hard' : '') + (isExtra ? ' extra-stage' : '');
       if (i <= this.maxUnlocked) btn.classList.add('unlocked');
       if (i === this.level && this.mode === 'adventure') btn.classList.add('current');
 
-      btn.innerHTML = `<span>${i}</span>${isHard ? '<span class="hard-tag">BOSS</span>' : ''}`;
+      const tagText = isExtra ? 'EXTRA' : 'BOSS';
+      btn.innerHTML = `<span>${i}</span>${isHard ? `<span class="hard-tag">${tagText}</span>` : ''}`;
       if (i <= this.maxUnlocked) {
         btn.onclick = () => {
           this.closeMobileDrawer();
@@ -6630,8 +6811,8 @@ class PokeMatchGame {
 
   getRelicPool() {
     if (this.mode === 'forever') return RELICS_ALL.slice(0, 6);
-    const isHard = this.level % 10 === 0;
-    return RELICS_ALL.slice(0, isHard ? 7 : 6);
+    const isHardOrExtra = (this.level % 10 === 0) || (this.level > 100);
+    return RELICS_ALL.slice(0, isHardOrExtra ? 7 : 6);
   }
 
   startForever() {
@@ -6660,9 +6841,15 @@ class PokeMatchGame {
     this.wonLast = false;
     this.overlay.classList.add('hidden');
 
-    const isHard = lvl % 10 === 0;
-    this.movesLeft = isHard ? 16 : Math.max(16, 26 - Math.floor(lvl / 14));
-    this.targetScore = isHard ? (1400 + lvl * 160) : (700 + lvl * 105);
+    if (lvl > 100) {
+      const exIdx = lvl - 100;
+      this.movesLeft = exIdx === 10 ? 13 : 14;
+      this.targetScore = 11500 + exIdx * 850;
+    } else {
+      const isHard = lvl % 10 === 0;
+      this.movesLeft = isHard ? 16 : Math.max(16, 26 - Math.floor(lvl / 14));
+      this.targetScore = isHard ? (1400 + lvl * 160) : (700 + lvl * 105);
+    }
 
     this.applyTheme();
     this.initBoosters();
@@ -6921,7 +7108,6 @@ class PokeMatchGame {
           }
         }
 
-        // Pointer & Touch Swipe Gestures for smooth Mobile Candy-Crush feel
         cell.onpointerdown = (e) => {
           this.touchStartPos = { r, c, x: e.clientX, y: e.clientY };
         };
@@ -6989,11 +7175,16 @@ class PokeMatchGame {
     let toClear = this.expandPowerups(initialClearSet);
 
     while (toClear.size > 0) {
-      this.score += toClear.size * 35 * combo;
+      const isEarlyLevel = this.mode === 'adventure' && this.level <= 10;
+      const basePts = isEarlyLevel ? 24 : 32;
+      const comboMult = isEarlyLevel
+        ? Math.min(2.0, 1 + (combo - 1) * 0.25)
+        : Math.min(3.5, 1 + (combo - 1) * 0.55);
+
+      this.score += Math.round(toClear.size * basePts * comboMult);
       playTone(380 + combo * 85, 0.11, 'triangle');
       combo++;
 
-      // Step 1: Highlight matched / powerup-triggered tiles so player sees what is clearing
       toClear.forEach(key => {
         const [mr, mc] = key.split(',').map(Number);
         const idx = mr * this.size + mc;
@@ -7003,7 +7194,6 @@ class PokeMatchGame {
       this.updateHUD();
       await new Promise(res => setTimeout(res, 270));
 
-      // Step 2: Shrink & fade out the highlighted tiles
       toClear.forEach(key => {
         const [mr, mc] = key.split(',').map(Number);
         const idx = mr * this.size + mc;
@@ -7127,8 +7317,13 @@ class PokeMatchGame {
       document.getElementById('val-right').textContent = validMoves;
       document.getElementById('progress-fill').style.width = '100%';
     } else {
+      const isExtra = this.level > 100;
       const isHard = this.level % 10 === 0;
-      document.getElementById('lbl-left').textContent = isHard ? `Lv.${this.level} (BOSS)` : `Level ${this.level}`;
+      if (isExtra) {
+        document.getElementById('lbl-left').textContent = `Extra ${this.level - 100}`;
+      } else {
+        document.getElementById('lbl-left').textContent = isHard ? `Lv.${this.level} (BOSS)` : `Level ${this.level}`;
+      }
       document.getElementById('val-left').textContent = `${this.targetScore}`;
       document.getElementById('lbl-right').textContent = 'Moves Left';
       document.getElementById('val-right').textContent = this.movesLeft;
@@ -7154,21 +7349,27 @@ class PokeMatchGame {
       if (this.score >= this.targetScore) {
         this.clearHint();
         this.wonLast = true;
-        if (this.level >= this.maxUnlocked && this.level < 100) {
+        const justUnlockedExtras = (this.level === 100 && this.maxUnlocked === 100);
+        if (this.level >= this.maxUnlocked && this.level < 110) {
           this.maxUnlocked = this.level + 1;
           localStorage.setItem('pokeMatch3Unlocked', this.maxUnlocked);
         }
         const gotBoosters = this.rewardUnlockedBoosters();
-        if (gotBoosters) {
+        if (justUnlockedExtras) {
+          rewardEl.textContent = 'EXTRAS UNLOCKED (Lv. 101-110) + Booster Charges!';
+          rewardEl.classList.remove('hidden');
+        } else if (gotBoosters) {
+          rewardEl.textContent = '🎁 +1 Charge to all unlocked boosters!';
           rewardEl.classList.remove('hidden');
         }
 
         this.buildPath();
         this.renderBoosters();
 
-        document.getElementById('ov-title').textContent = `Level ${this.level} Cleared!`;
+        const titleText = this.level > 100 ? `Extra ${this.level - 100} Cleared!` : `Level ${this.level} Cleared!`;
+        document.getElementById('ov-title').textContent = titleText;
         document.getElementById('ov-desc').textContent = `Score: ${this.score}`;
-        document.getElementById('ov-btn').textContent = this.level < 100 ? 'Next Level' : 'Replay Level 100';
+        document.getElementById('ov-btn').textContent = this.level < 110 ? (justUnlockedExtras ? 'Enter Extras (101)' : 'Next Level') : 'Replay Extra 10';
         this.overlay.classList.remove('hidden');
       } else if (this.movesLeft <= 0 || validMoves === 0) {
         this.clearHint();
