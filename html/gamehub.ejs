@@ -5458,6 +5458,19 @@ Game.init();
       --muted: #cfb8be;
     }
 
+    body[data-theme="zen"] {
+      --bg: #0c1514;
+      --surface-1: #132220;
+      --surface-2: #1b302d;
+      --surface-3: #24403c;
+      --primary: #80cbc4;
+      --on-primary: #003733;
+      --primary-container: #00504a;
+      --on-primary-container: #a7ffeb;
+      --text: #e0f2f1;
+      --muted: #9dbdba;
+    }
+
     body[data-theme="ocean"] {
       --bg: #0b151e;
       --surface-1: #122230;
@@ -5651,8 +5664,8 @@ Game.init();
       margin-left: auto;
     }
     .mobile-mode-pill .tab-btn {
-      padding: 7px 13px;
-      font-size: 0.78rem;
+      padding: 7px 11px;
+      font-size: 0.75rem;
       border-radius: 16px;
     }
 
@@ -5685,10 +5698,10 @@ Game.init();
     }
 
     .path-panel {
-      --map-bg: #07131c;
-      --map-surf: rgba(16, 38, 54, 0.78);
+      --map-bg: #04131e;
+      --map-surf: rgba(12, 42, 62, 0.78);
       --map-accent: #7fd8eb;
-      --map-glow: #005f73;
+      --map-glow: #007791;
       background: var(--map-bg);
       border-radius: 32px;
       padding: 20px;
@@ -5703,32 +5716,32 @@ Game.init();
     }
 
     .path-panel[data-map-realm="ocean"] {
-      --map-bg: #04131e;
-      --map-surf: rgba(12, 42, 62, 0.78);
+      --map-bg: #03101a;
+      --map-surf: rgba(10, 38, 58, 0.8);
       --map-accent: #7fd8eb;
       --map-glow: #007791;
     }
     .path-panel[data-map-realm="forest"] {
-      --map-bg: #09160b;
-      --map-surf: rgba(20, 44, 24, 0.78);
+      --map-bg: #071409;
+      --map-surf: rgba(18, 42, 22, 0.8);
       --map-accent: #9cd69d;
       --map-glow: #2a6632;
     }
     .path-panel[data-map-realm="magma"] {
-      --map-bg: #1e0703;
-      --map-surf: rgba(58, 18, 10, 0.82);
+      --map-bg: #1a0502;
+      --map-surf: rgba(54, 16, 8, 0.84);
       --map-accent: #ff9e7d;
       --map-glow: #d43800;
     }
     .path-panel[data-map-realm="astral"] {
-      --map-bg: #020104;
-      --map-surf: rgba(12, 8, 22, 0.88);
+      --map-bg: #020105;
+      --map-surf: rgba(14, 9, 26, 0.88);
       --map-accent: #a78bfa;
       --map-glow: #1b0938;
     }
     .path-panel[data-map-realm="extras"] {
-      --map-bg: #120207;
-      --map-surf: rgba(48, 10, 24, 0.85);
+      --map-bg: #110106;
+      --map-surf: rgba(46, 8, 22, 0.86);
       --map-accent: #ff80ab;
       --map-glow: #ad1457;
     }
@@ -5746,169 +5759,211 @@ Game.init();
       position: absolute;
       inset: 0;
       opacity: 0;
-      transition: opacity 0.55s ease;
+      transition: opacity 0.6s ease;
     }
 
     .path-panel[data-map-realm="ocean"] .bg-ocean {
       opacity: 1;
       background:
-        repeating-linear-gradient(
-          115deg,
-          rgba(127, 216, 235, 0.08) 0px,
-          rgba(127, 216, 235, 0.18) 28px,
-          transparent 28px,
-          transparent 72px
-        ),
-        radial-gradient(circle at 50% 0%, rgba(0, 180, 216, 0.35), transparent 70%);
+        radial-gradient(circle at 50% -10%, rgba(0, 229, 255, 0.35), transparent 65%),
+        repeating-linear-gradient(108deg, rgba(127, 216, 235, 0.05) 0px, rgba(127, 216, 235, 0.16) 22px, transparent 22px, transparent 64px);
       background-size: 200% 200%;
-      animation: oceanCaustics 9s ease-in-out infinite alternate;
+      animation: oceanWaveRays 8s ease-in-out infinite alternate;
+    }
+    .path-panel[data-map-realm="ocean"] .bg-ocean::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at 30% 80%, rgba(0, 180, 216, 0.24) 0%, transparent 45%),
+        repeating-radial-gradient(circle at 50% 95%, transparent 0, transparent 28px, rgba(127, 216, 235, 0.07) 30px, transparent 32px);
+      animation: oceanSonar 6s linear infinite;
     }
     .path-panel[data-map-realm="ocean"] .bg-ocean::after {
       content: "";
       position: absolute;
       inset: -100% 0 0 0;
       background-image:
-        radial-gradient(circle at 18% 25%, transparent 5px, rgba(184, 234, 255, 0.55) 6px, transparent 7.5px),
-        radial-gradient(circle at 76% 52%, transparent 8px, rgba(127, 216, 235, 0.45) 9.5px, transparent 11px),
-        radial-gradient(circle at 42% 82%, transparent 4px, rgba(184, 234, 255, 0.5) 5px, transparent 6.5px),
-        radial-gradient(circle at 86% 18%, transparent 6px, rgba(127, 216, 235, 0.4) 7px, transparent 8.5px);
-      background-size: 160px 220px;
-      animation: bubblesRise 10s linear infinite;
+        radial-gradient(circle at 16% 20%, transparent 4px, rgba(184, 234, 255, 0.65) 5px, transparent 6.5px),
+        radial-gradient(circle at 78% 48%, transparent 7px, rgba(127, 216, 235, 0.5) 8.5px, transparent 10px),
+        radial-gradient(circle at 38% 75%, #00e5ff 2px, transparent 4px),
+        radial-gradient(circle at 84% 15%, transparent 5px, rgba(127, 216, 235, 0.45) 6px, transparent 7.5px),
+        radial-gradient(circle at 55% 60%, #80deea 2.5px, transparent 5px);
+      background-size: 150px 210px;
+      animation: bubblesRise 9s linear infinite;
     }
 
     .path-panel[data-map-realm="forest"] .bg-forest {
       opacity: 1;
       background:
-        linear-gradient(135deg, rgba(188, 242, 188, 0.16) 0%, transparent 45%),
-        linear-gradient(150deg, transparent 25%, rgba(156, 214, 157, 0.12) 50%, transparent 75%),
-        radial-gradient(circle at 20% 85%, rgba(46, 125, 50, 0.35), transparent 60%);
-      animation: forestCanopy 7s ease-in-out infinite alternate;
+        conic-gradient(from 140deg at 10% 0%, transparent 0deg, rgba(188, 242, 188, 0.14) 22deg, transparent 45deg, rgba(156, 214, 157, 0.1) 68deg, transparent 95deg),
+        radial-gradient(circle at 50% 95%, rgba(27, 94, 32, 0.45), transparent 65%);
+      animation: forestSunbeams 6s ease-in-out infinite alternate;
+    }
+    .path-panel[data-map-realm="forest"] .bg-forest::before {
+      content: "";
+      position: absolute;
+      inset: -60% -20%;
+      background-image:
+        radial-gradient(ellipse 8px 4px at 22% 30%, rgba(129, 199, 132, 0.55) 70%, transparent 100%),
+        radial-gradient(ellipse 10px 5px at 68% 70%, rgba(165, 214, 167, 0.45) 70%, transparent 100%),
+        radial-gradient(ellipse 7px 3.5px at 45% 55%, rgba(200, 230, 201, 0.5) 70%, transparent 100%);
+      background-size: 190px 190px;
+      animation: fallingLeaves 11s linear infinite;
     }
     .path-panel[data-map-realm="forest"] .bg-forest::after {
       content: "";
       position: absolute;
-      inset: -50% -20%;
+      inset: -40% -20%;
       background-image:
-        radial-gradient(circle at 25% 30%, #e6ee9c 3px, rgba(156, 214, 157, 0.4) 6px, transparent 10px),
-        radial-gradient(circle at 70% 65%, #dce775 2.5px, rgba(156, 214, 157, 0.35) 5px, transparent 9px),
-        radial-gradient(circle at 50% 20%, #a5d6a7 3.5px, transparent 7px),
-        radial-gradient(circle at 82% 40%, #fff59d 2px, transparent 6px);
-      background-size: 180px 180px;
-      animation: fireflyDrift 8s ease-in-out infinite alternate;
+        radial-gradient(circle at 28% 35%, #f0f4c3 2.5px, rgba(156, 214, 157, 0.5) 6px, transparent 11px),
+        radial-gradient(circle at 74% 62%, #dce775 3px, rgba(156, 214, 157, 0.4) 7px, transparent 12px),
+        radial-gradient(circle at 52% 18%, #fff59d 2px, rgba(129, 199, 132, 0.4) 5px, transparent 9px);
+      background-size: 170px 170px;
+      animation: fireflySwirl 7s ease-in-out infinite alternate;
     }
 
     .path-panel[data-map-realm="magma"] .bg-magma {
       opacity: 1;
       background:
-        radial-gradient(ellipse at 50% 105%, #ff5722 0%, #b71c1c 42%, transparent 78%),
-        repeating-linear-gradient(
-          0deg,
-          rgba(255, 87, 34, 0.14) 0px,
-          transparent 18px,
-          rgba(255, 152, 0, 0.1) 36px
-        );
-      animation: magmaPulse 3.2s ease-in-out infinite alternate;
+        radial-gradient(ellipse at 50% 105%, #ff6d00 0%, #dd2c00 38%, #3e0500 72%, transparent 95%),
+        repeating-linear-gradient(-25deg, transparent 0px, transparent 28px, rgba(255, 87, 34, 0.16) 30px, rgba(255, 193, 7, 0.22) 32px, transparent 35px);
+      animation: magmaConvection 2.8s ease-in-out infinite alternate;
+    }
+    .path-panel[data-map-realm="magma"] .bg-magma::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at 20% 90%, rgba(255, 152, 0, 0.35), transparent 40%),
+        radial-gradient(circle at 80% 85%, rgba(255, 61, 0, 0.4), transparent 45%);
+      animation: lavaPlume 4s ease-in-out infinite alternate-reverse;
     }
     .path-panel[data-map-realm="magma"] .bg-magma::after {
       content: "";
       position: absolute;
       inset: -100% 0 0 0;
       background-image:
-        radial-gradient(circle at 20% 35%, #ffeb3b 2.5px, #ff5722 4px, transparent 6px),
-        radial-gradient(circle at 65% 60%, #ff9800 3px, #d84315 5px, transparent 7px),
-        radial-gradient(circle at 40% 85%, #ffcc80 2px, transparent 4px),
-        radial-gradient(circle at 85% 25%, #ff5722 3.5px, transparent 6px);
-      background-size: 140px 190px;
-      animation: embersShoot 4.2s linear infinite;
+        radial-gradient(circle at 18% 32%, #ffff00 2px, #ff3d00 4.5px, transparent 6.5px),
+        radial-gradient(circle at 66% 58%, #ffab00 2.5px, #dd2c00 5px, transparent 7px),
+        radial-gradient(circle at 42% 82%, #ffd180 2px, transparent 4px),
+        radial-gradient(circle at 84% 22%, #ff6d00 3px, transparent 5.5px);
+      background-size: 130px 180px;
+      animation: embersShoot 3.6s linear infinite;
     }
 
     .path-panel[data-map-realm="astral"] .bg-astral {
       opacity: 1;
       background:
-        radial-gradient(circle at 50% 42%, #000000 0%, #05020a 35%, rgba(0, 0, 0, 0.96) 100%);
+        radial-gradient(circle at 50% 42%, #000000 0%, #06020d 38%, #000000 100%);
     }
     .path-panel[data-map-realm="astral"] .bg-astral::before {
       content: "";
       position: absolute;
-      width: 150px;
-      height: 150px;
-      top: 34%;
-      left: calc(50% - 75px);
+      width: 170px;
+      height: 170px;
+      top: calc(42% - 85px);
+      left: calc(50% - 85px);
       border-radius: 50%;
-      background: #000000;
-      box-shadow:
-        0 0 40px #4c1d95,
-        0 0 80px #2e1065,
-        inset 0 0 28px #a855f7;
-      animation: voidSingularity 5s ease-in-out infinite alternate;
+      background:
+        radial-gradient(circle, #000000 44%, #581c87 52%, #a855f7 56%, transparent 72%),
+        conic-gradient(from 0deg, transparent, rgba(168, 85, 247, 0.55), transparent 45%, rgba(192, 132, 252, 0.5), transparent);
+      box-shadow: 0 0 50px #3b0764, inset 0 0 30px #000000;
+      animation: astralVortexSpin 9s linear infinite;
     }
     .path-panel[data-map-realm="astral"] .bg-astral::after {
       content: "";
       position: absolute;
       inset: 0;
-      background: radial-gradient(circle at 50% 42%, transparent 15%, rgba(0, 0, 0, 0.88) 70%, #000000 100%);
+      background-image:
+        radial-gradient(circle at 15% 18%, rgba(216, 180, 254, 0.7) 1px, transparent 2.5px),
+        radial-gradient(circle at 82% 26%, rgba(255, 255, 255, 0.6) 1.5px, transparent 3px),
+        radial-gradient(circle at 28% 76%, rgba(192, 132, 252, 0.65) 1px, transparent 2.5px),
+        radial-gradient(circle at 76% 84%, rgba(255, 255, 255, 0.5) 1px, transparent 2.5px),
+        radial-gradient(circle at 50% 42%, transparent 18%, rgba(0, 0, 0, 0.88) 72%, #000000 100%);
+      animation: voidStarTwinkle 4s ease-in-out infinite alternate;
     }
 
     .path-panel[data-map-realm="extras"] .bg-extras {
       opacity: 1;
       background:
-        radial-gradient(circle at 50% 18%, rgba(255, 23, 68, 0.35), transparent 62%),
-        linear-gradient(180deg, #1a0208 0%, #0d0104 100%);
+        radial-gradient(circle at 50% 20%, rgba(255, 23, 68, 0.4), transparent 60%),
+        repeating-conic-gradient(from 0deg at 50% 20%, rgba(255, 23, 68, 0.08) 0deg 10deg, transparent 10deg 20deg),
+        linear-gradient(180deg, #1a0208 0%, #090003 100%);
     }
     .path-panel[data-map-realm="extras"] .bg-extras::before {
       content: "";
       position: absolute;
-      width: 120px;
-      height: 120px;
-      top: 10%;
-      left: calc(50% - 60px);
+      width: 116px;
+      height: 116px;
+      top: 11%;
+      left: calc(50% - 58px);
       border-radius: 50%;
-      background: #070002;
+      background: #050001;
       box-shadow:
         0 0 0 4px #ff1744,
-        0 0 32px #ff4081,
-        0 0 65px #880e4f;
-      animation: eclipseCorona 3.5s ease-in-out infinite alternate;
+        0 0 35px #ff4081,
+        0 0 70px #880e4f;
+      animation: eclipseCorona 3s ease-in-out infinite alternate;
     }
     .path-panel[data-map-realm="extras"] .bg-extras::after {
       content: "";
       position: absolute;
       inset: -100% 0 0 0;
       background-image:
-        radial-gradient(circle at 30% 25%, #ff80ab 2.5px, transparent 4px),
-        radial-gradient(circle at 75% 65%, #ff1744 3px, transparent 5px),
-        radial-gradient(circle at 50% 80%, #f50057 2px, transparent 4px);
-      background-size: 150px 180px;
-      animation: crimsonFall 6s linear infinite;
+        radial-gradient(ellipse 2px 9px at 26% 25%, #ff80ab 60%, transparent 100%),
+        radial-gradient(ellipse 2px 11px at 74% 62%, #ff1744 60%, transparent 100%),
+        radial-gradient(ellipse 2px 8px at 52% 80%, #f50057 60%, transparent 100%),
+        radial-gradient(ellipse 2px 10px at 14% 70%, #ff4081 60%, transparent 100%);
+      background-size: 140px 190px;
+      animation: crimsonFall 3.8s linear infinite;
     }
 
-    @keyframes oceanCaustics {
+    @keyframes oceanWaveRays {
       0% { background-position: 0% 0%; }
       100% { background-position: 100% 35%; }
+    }
+    @keyframes oceanSonar {
+      0% { transform: scale(0.95); opacity: 0.6; }
+      50% { transform: scale(1.08); opacity: 1; }
+      100% { transform: scale(0.95); opacity: 0.6; }
     }
     @keyframes bubblesRise {
       0% { transform: translateY(45%); }
       100% { transform: translateY(0%); }
     }
-    @keyframes forestCanopy {
-      0% { opacity: 0.78; transform: scale(1); }
-      100% { opacity: 1; transform: scale(1.06); }
+    @keyframes forestSunbeams {
+      0% { opacity: 0.72; transform: rotate(-2deg) scale(1); }
+      100% { opacity: 1; transform: rotate(2deg) scale(1.06); }
     }
-    @keyframes fireflyDrift {
-      0% { transform: translate(-16px, 12px) rotate(-3deg); }
-      100% { transform: translate(18px, -18px) rotate(3deg); }
+    @keyframes fallingLeaves {
+      0% { transform: translate(-15px, 0%) rotate(0deg); }
+      100% { transform: translate(20px, 33%) rotate(8deg); }
     }
-    @keyframes magmaPulse {
-      0% { filter: brightness(0.92); }
-      100% { filter: brightness(1.22); }
+    @keyframes fireflySwirl {
+      0% { transform: translate(-18px, 14px) scale(0.95); }
+      100% { transform: translate(18px, -16px) scale(1.08); }
+    }
+    @keyframes magmaConvection {
+      0% { filter: brightness(0.9); }
+      100% { filter: brightness(1.25); }
+    }
+    @keyframes lavaPlume {
+      0% { transform: translateY(10px) scale(0.94); opacity: 0.7; }
+      100% { transform: translateY(-12px) scale(1.1); opacity: 1; }
     }
     @keyframes embersShoot {
       0% { transform: translateY(48%); }
       100% { transform: translateY(0%); }
     }
-    @keyframes voidSingularity {
-      0% { transform: scale(0.86) rotate(0deg); }
-      100% { transform: scale(1.14) rotate(25deg); }
+    @keyframes astralVortexSpin {
+      0% { transform: rotate(0deg) scale(0.94); }
+      50% { transform: rotate(180deg) scale(1.06); }
+      100% { transform: rotate(360deg) scale(0.94); }
+    }
+    @keyframes voidStarTwinkle {
+      0% { opacity: 0.75; }
+      100% { opacity: 1; }
     }
     @keyframes eclipseCorona {
       0% { transform: scale(0.94); box-shadow: 0 0 0 3px #ff1744, 0 0 24px #ff4081, 0 0 50px #880e4f; }
@@ -5932,6 +5987,21 @@ Game.init();
       font-weight: 800;
       color: var(--map-accent);
       transition: color 0.4s ease;
+    }
+    .path-sub-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.74rem;
+      font-weight: 800;
+      color: var(--muted);
+    }
+    .total-stars-pill {
+      color: #ffd54f;
+      background: rgba(255, 213, 79, 0.14);
+      padding: 2px 8px;
+      border-radius: 99px;
+      border: 1px solid rgba(255, 213, 79, 0.35);
     }
     .path-header-actions {
       display: flex;
@@ -6010,8 +6080,8 @@ Game.init();
     .stage-row:nth-of-type(4n+4):not(.has-side-path) { transform: translateX(38px); }
 
     .stage-node {
-      width: 60px;
-      height: 62px;
+      width: 62px;
+      height: 64px;
       border-radius: 20px;
       border: none;
       background: rgba(255, 255, 255, 0.06);
@@ -6024,7 +6094,7 @@ Game.init();
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 1px;
+      gap: 2px;
       position: relative;
       backdrop-filter: blur(4px);
       transition: transform 0.15s ease, background 0.15s ease;
@@ -6034,6 +6104,10 @@ Game.init();
       color: var(--text);
       border: 1px solid rgba(255, 255, 255, 0.12);
       cursor: pointer;
+    }
+    .stage-node.unlocked.three-starred {
+      border-color: rgba(255, 213, 79, 0.55);
+      box-shadow: 0 0 10px rgba(255, 213, 79, 0.18);
     }
     .stage-node.unlocked:hover {
       transform: scale(1.06);
@@ -6056,21 +6130,30 @@ Game.init();
       color: var(--on-danger);
     }
     .hard-tag {
-      font-size: 0.5rem;
+      font-size: 0.48rem;
       text-transform: uppercase;
       letter-spacing: 0.4px;
       line-height: 1;
     }
     .node-stars {
-      font-size: 0.56rem;
+      display: flex;
+      gap: 1px;
+      font-size: 0.62rem;
       line-height: 1;
-      letter-spacing: 1px;
-      color: #ffd54f;
-      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
     }
-    .stage-node.current .node-stars {
+    .node-stars .s-on {
+      color: #ffd54f;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+    }
+    .node-stars .s-off {
+      color: rgba(255, 255, 255, 0.22);
+    }
+    .stage-node.current .node-stars .s-on {
       color: #1a1200;
       text-shadow: none;
+    }
+    .stage-node.current .node-stars .s-off {
+      color: rgba(0, 0, 0, 0.3);
     }
 
     .side-path-wrap {
@@ -6091,11 +6174,11 @@ Game.init();
       opacity: 0.7;
     }
     .stage-node.timed-node {
-      width: 54px;
-      height: 54px;
+      width: 56px;
+      height: 56px;
       border-radius: 18px;
       border: 2px dashed #ffd54f;
-      font-size: 0.78rem;
+      font-size: 0.76rem;
     }
     .stage-node.timed-node.unlocked {
       background: rgba(255, 213, 79, 0.14);
@@ -6148,6 +6231,41 @@ Game.init();
       margin-top: 2px;
     }
 
+    .boss-bar-wrap {
+      width: 100%;
+      max-width: 440px;
+      background: #14071c;
+      border: 2px solid var(--danger);
+      border-radius: 18px;
+      padding: 8px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      box-shadow: 0 0 18px rgba(255, 180, 171, 0.2);
+    }
+    .boss-bar-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.8rem;
+      font-weight: 800;
+      color: var(--danger);
+    }
+    .boss-hp-track {
+      width: 100%;
+      height: 12px;
+      background: rgba(0, 0, 0, 0.55);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .boss-hp-fill {
+      height: 100%;
+      width: 100%;
+      background: linear-gradient(90deg, #ff1744, #ff8a80);
+      border-radius: 99px;
+      transition: width 0.25s ease;
+    }
+
     .hazard-banner {
       width: 100%;
       max-width: 440px;
@@ -6160,6 +6278,35 @@ Game.init();
       text-align: center;
     }
 
+    .progress-wrap {
+      width: 100%;
+      max-width: 440px;
+      position: relative;
+      padding-top: 14px;
+    }
+    .star-markers {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 14px;
+      pointer-events: none;
+    }
+    .star-mark {
+      position: absolute;
+      transform: translateX(-50%);
+      font-size: 0.65rem;
+      font-weight: 800;
+      color: var(--muted);
+      opacity: 0.55;
+      transition: color 0.2s, opacity 0.2s, transform 0.2s;
+    }
+    .star-mark.reached {
+      color: #ffd54f;
+      opacity: 1;
+      transform: translateX(-50%) scale(1.15);
+      text-shadow: 0 0 6px rgba(255, 213, 79, 0.6);
+    }
     .progress-track {
       width: 100%;
       height: 10px;
@@ -6356,7 +6503,7 @@ Game.init();
       background: var(--surface-2);
       padding: 9px 12px;
       border-radius: 16px;
-      font-size: 0.7rem;
+      font-size: 0.68rem;
       font-weight: 700;
       color: var(--muted);
     }
@@ -6383,11 +6530,11 @@ Game.init();
       margin-bottom: 6px;
     }
     .ov-stars {
-      font-size: 2rem;
+      font-size: 2.2rem;
       color: #ffd54f;
       letter-spacing: 6px;
       margin-bottom: 8px;
-      text-shadow: 0 2px 10px rgba(255, 213, 79, 0.45);
+      text-shadow: 0 2px 12px rgba(255, 213, 79, 0.55);
     }
     .overlay-box p {
       color: var(--muted);
@@ -6579,7 +6726,7 @@ Game.init();
 
     body.is-mobile .powerup-legend {
       padding: 7px 8px;
-      font-size: 0.62rem;
+      font-size: 0.6rem;
       border-radius: 14px;
       justify-content: space-around;
     }
@@ -6604,7 +6751,8 @@ Game.init();
         <span class="theme-badge" id="theme-badge">Endless Mode</span>
       </div>
       <div class="mode-tabs">
-        <button class="tab-btn" id="tab-forever">Endless Mode</button>
+        <button class="tab-btn" id="tab-forever">Endless</button>
+        <button class="tab-btn" id="tab-zen">Zen Mode</button>
         <button class="tab-btn" id="tab-adventure">Realm Map</button>
       </div>
     </header>
@@ -6616,6 +6764,7 @@ Game.init();
       </button>
       <div class="mobile-mode-pill">
         <button class="tab-btn" id="mob-tab-forever">Endless</button>
+        <button class="tab-btn" id="mob-tab-zen">Zen</button>
         <button class="tab-btn" id="mob-tab-adventure">Adventure</button>
       </div>
     </div>
@@ -6632,7 +6781,10 @@ Game.init();
         <div class="path-header">
           <div>
             <h2 id="map-header-title">Ocean Abyss</h2>
-            <span id="unlocked-label" style="font-size:0.76rem;font-weight:700;color:var(--muted);">1 / 110 Unlocked</span>
+            <div class="path-sub-meta">
+              <span id="unlocked-label">1 / 110</span>
+              <span class="total-stars-pill" id="total-stars-label">★ 0</span>
+            </div>
           </div>
           <div class="path-header-actions">
             <button class="lore-btn" id="btn-read-lore" title="Read Realm Chronicle">📖 Lore</button>
@@ -6658,10 +6810,27 @@ Game.init();
           </div>
         </div>
 
+        <div class="boss-bar-wrap hidden" id="boss-bar-wrap">
+          <div class="boss-bar-top">
+            <span>👑 Final boss</span>
+            <span id="boss-hp-text">25000 / 25000</span>
+          </div>
+          <div class="boss-hp-track">
+            <div class="boss-hp-fill" id="boss-hp-fill"></div>
+          </div>
+        </div>
+
         <div class="hazard-banner hidden" id="hazard-banner"></div>
 
-        <div class="progress-track">
-          <div class="progress-fill" id="progress-fill"></div>
+        <div class="progress-wrap" id="progress-wrap">
+          <div class="star-markers hidden" id="star-markers">
+            <span class="star-mark" id="sm-1" style="left: 57%;">★</span>
+            <span class="star-mark" id="sm-2" style="left: 77%;">★★</span>
+            <span class="star-mark" id="sm-3" style="left: 98%;">★★★</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" id="progress-fill"></div>
+          </div>
         </div>
 
         <div id="gem-grid"></div>
@@ -6674,7 +6843,7 @@ Game.init();
           <div class="boosters-bar" id="boosters-bar"></div>
         </div>
 
-        <div class="powerup-legend">
+        <div class="powerup-legend" id="powerup-legend">
           <span>⚡4 Row: H-Beam</span>
           <span>🔱4 Col: V-Beam</span>
           <span>💥L/T: Nova</span>
@@ -6718,6 +6887,7 @@ function checkIsMobile() {
 }
 
 const ENDLESS_GEMS = ['💎', '🔶', '🔷', '🟣', '🟢', '⭐', '💠'];
+const ZEN_GEMS = ['🌸', '🍵', '🎋', '🪷', '🏮', '🎐', '🦢'];
 
 const REALM_GEMS = {
   ocean:  ['🐚', '🫧', '🪸', '🔱', '⚓', '🐬', '🦑'],
@@ -6727,20 +6897,58 @@ const REALM_GEMS = {
   extras: ['🩸', '🗡️', '⛓️', '🥀', '💀', '🕷️', '👑']
 };
 
+const GENERIC_POWERUPS = {
+  hbeam: { badge: '⚡', name: 'H-Beam' },
+  vbeam: { badge: '🔱', name: 'V-Beam' },
+  nova:  { badge: '💥', name: 'Nova' },
+  prism: { badge: '🌀', name: 'Prism' },
+  storm: { badge: '🌩️', name: 'Storm' }
+};
+
+const REALM_POWERUPS = {
+  ocean: {
+    hbeam: { badge: '🌊', name: 'Riptide' },
+    vbeam: { badge: '⛲', name: 'Geyser' },
+    nova:  { badge: '💣', name: 'Depth Charge' },
+    prism: { badge: '🫧', name: 'Whirlpool' },
+    storm: { badge: '⛈️', name: 'Maelstrom' }
+  },
+  forest: {
+    hbeam: { badge: '🏹', name: 'Thorn Shot' },
+    vbeam: { badge: '🎋', name: 'Vine Spire' },
+    nova:  { badge: '🌺', name: 'Spore Burst' },
+    prism: { badge: '🍄', name: 'Fairy Ring' },
+    storm: { badge: '🌪️', name: 'Wild Gale' }
+  },
+  magma: {
+    hbeam: { badge: '🔥', name: 'Magma Lance' },
+    vbeam: { badge: '🌋', name: 'Eruption' },
+    nova:  { badge: '☄️', name: 'Meteor' },
+    prism: { badge: '☀️', name: 'Solar Core' },
+    storm: { badge: '💥', name: 'Cataclysm' }
+  },
+  astral: {
+    hbeam: { badge: '☄️', name: 'Void Ray' },
+    vbeam: { badge: '📡', name: 'Pulsar' },
+    nova:  { badge: '💫', name: 'Supernova' },
+    prism: { badge: '🕳️', name: 'Singularity' },
+    storm: { badge: '🌌', name: 'Big Rip' }
+  },
+  extras: {
+    hbeam: { badge: '🗡️', name: 'Blood Slash' },
+    vbeam: { badge: '🩸', name: 'Crimson Pike' },
+    nova:  { badge: '💔', name: 'Heart Rend' },
+    prism: { badge: '👁️', name: 'Eclipse Eye' },
+    storm: { badge: '🌑', name: 'Oblivion' }
+  }
+};
+
 const HAZARD_INFO = {
   ocean:  { key: 'ice',     badge: '❄️', text: '❄️ Abyssal Ice: Match or clear adjacent tiles to shatter the ice shell!' },
   forest: { key: 'vine',    badge: '🌿', text: '🌿 Sylvan Briars: Rooted tiles cannot be swapped directly. Match or clear adjacent!' },
   magma:  { key: 'cinder',  badge: '🔥', text: '🔥 Molten Cinders: Clearing volatile cinders grants +120 bonus points!' },
   astral: { key: 'void',    badge: '🕳️', text: '🕳️ Void Corruption: Drains 90 pts if disturbed. Neutralize via matches!' },
   extras: { key: 'eclipse', badge: '🩸', text: '🩸 Eclipse Chains: Locked tiles that require 2 hits to break and spawn each turn!' }
-};
-
-const POWERUP_BADGES = {
-  hbeam: '⚡',
-  vbeam: '🔱',
-  nova: '💥',
-  prism: '🌀',
-  storm: '🌩️'
 };
 
 const BOOSTER_DEFS = [
@@ -6800,6 +7008,7 @@ class PokeMatchGame {
     this.size = 8;
     this.maxUnlocked = parseInt(localStorage.getItem('pokeMatch3Unlocked')) || 1;
     this.bestForever = parseInt(localStorage.getItem('pokeMatch3Best')) || 0;
+    this.zenScore = parseInt(localStorage.getItem('pokeMatchZenScore')) || 0;
     this.savedMode = localStorage.getItem('pokeMatchMode') || 'forever';
     this.level = parseInt(localStorage.getItem('pokeMatchLastLevel')) || this.maxUnlocked;
     if (this.level > this.maxUnlocked) this.level = this.maxUnlocked;
@@ -6813,10 +7022,13 @@ class PokeMatchGame {
     this.targetScore = 1000;
     this.movesLeft = 20;
     this.timeLeft = 60;
+    this.bossMaxHp = 25000;
+    this.bossHp = 25000;
     this.timerInterval = null;
     this.hintTimer = null;
     this.touchStartPos = null;
     this.currentMapScrollRealm = 'ocean';
+    this.debugPrevSnapshot = null;
 
     this.gridEl = document.getElementById('gem-grid');
     this.overlay = document.getElementById('end-overlay');
@@ -6838,10 +7050,38 @@ class PokeMatchGame {
       } else {
         this.startLevel(this.level, false);
       }
+    } else if (this.savedMode === 'zen') {
+      this.switchTabUI('zen');
+      this.startZen(false);
     } else {
       this.switchTabUI('forever');
       this.startForever(false);
     }
+  }
+
+  isFinalBossLevel() {
+    return this.mode === 'adventure' && this.level === 100 && !this.isTimedSideLevel;
+  }
+
+  getActivePowerupSet() {
+    if (this.mode === 'adventure') {
+      const rKey = this.getRealmInfo(this.level).key;
+      return REALM_POWERUPS[rKey] || GENERIC_POWERUPS;
+    }
+    return GENERIC_POWERUPS;
+  }
+
+  renderPowerupLegend() {
+    const pws = this.getActivePowerupSet();
+    const leg = document.getElementById('powerup-legend');
+    if (!leg) return;
+    leg.innerHTML = `
+      <span>${pws.hbeam.badge}4 Row: ${pws.hbeam.name}</span>
+      <span>${pws.vbeam.badge}4 Col: ${pws.vbeam.name}</span>
+      <span>${pws.nova.badge}L/T: ${pws.nova.name}</span>
+      <span>${pws.prism.badge}5 Line: ${pws.prism.name}</span>
+      <span>${pws.storm.badge}6+: ${pws.storm.name}</span>
+    `;
   }
 
   loadLevelStars() {
@@ -6865,7 +7105,12 @@ class PokeMatchGame {
     localStorage.setItem('pokeMatchStars', JSON.stringify(this.levelStars));
   }
 
+  getTotalStarsCount() {
+    return Object.values(this.levelStars).reduce((sum, v) => sum + (Number(v) || 0), 0);
+  }
+
   calculateStars(score, target) {
+    if (this.isFinalBossLevel()) return 3;
     if (score >= Math.round(target * 1.75)) return 3;
     if (score >= Math.round(target * 1.35)) return 2;
     if (score >= target) return 1;
@@ -6874,6 +7119,15 @@ class PokeMatchGame {
 
   formatStars(count) {
     return '★'.repeat(count) + '☆'.repeat(Math.max(0, 3 - count));
+  }
+
+  renderNodeStarsHTML(count) {
+    let html = '<span class="node-stars">';
+    for (let s = 1; s <= 3; s++) {
+      html += s <= count ? '<span class="s-on">★</span>' : '<span class="s-off">★</span>';
+    }
+    html += '</span>';
+    return html;
   }
 
   stopCountdown() {
@@ -6959,11 +7213,23 @@ class PokeMatchGame {
         score: this.score,
         board: this.board
       }));
+    } else if (this.mode === 'zen') {
+      localStorage.setItem('pokeMatchSavedZen', JSON.stringify({
+        score: this.score,
+        board: this.board
+      }));
     } else {
-      const outOfTurn = this.isTimedSideLevel ? (this.timeLeft <= 0) : (this.movesLeft <= 0);
-      if (this.score >= this.targetScore || outOfTurn || this.countValidMoves() === 0) {
-        localStorage.removeItem('pokeMatchSavedAdventure');
-        return;
+      if (this.isFinalBossLevel()) {
+        if (this.bossHp <= 0 || this.countValidMoves() === 0) {
+          localStorage.removeItem('pokeMatchSavedAdventure');
+          return;
+        }
+      } else {
+        const outOfTurn = this.isTimedSideLevel ? (this.timeLeft <= 0) : (this.movesLeft <= 0);
+        if (this.score >= this.targetScore || outOfTurn || this.countValidMoves() === 0) {
+          localStorage.removeItem('pokeMatchSavedAdventure');
+          return;
+        }
       }
       localStorage.setItem('pokeMatchSavedAdventure', JSON.stringify({
         level: this.level,
@@ -6971,6 +7237,7 @@ class PokeMatchGame {
         score: this.score,
         movesLeft: this.movesLeft,
         timeLeft: this.timeLeft,
+        bossHp: this.bossHp,
         targetScore: this.targetScore,
         board: this.board
       }));
@@ -6980,6 +7247,8 @@ class PokeMatchGame {
   clearSavedGameProgress(mode) {
     if (mode === 'forever') {
       localStorage.removeItem('pokeMatchSavedEndless');
+    } else if (mode === 'zen') {
+      localStorage.removeItem('pokeMatchSavedZen');
     } else {
       localStorage.removeItem('pokeMatchSavedAdventure');
     }
@@ -7084,33 +7353,36 @@ class PokeMatchGame {
 
   switchTabUI(mode) {
     const tabForever = document.getElementById('tab-forever');
+    const tabZen = document.getElementById('tab-zen');
     const tabAdv = document.getElementById('tab-adventure');
     const mobForever = document.getElementById('mob-tab-forever');
+    const mobZen = document.getElementById('mob-tab-zen');
     const mobAdv = document.getElementById('mob-tab-adventure');
     const layout = document.getElementById('main-layout');
     const boostersWrap = document.getElementById('boosters-wrap');
     const btnOpenMap = document.getElementById('btn-open-map');
     const hazardBanner = document.getElementById('hazard-banner');
+    const bossBarWrap = document.getElementById('boss-bar-wrap');
+    const starMarkers = document.getElementById('star-markers');
 
-    if (mode === 'forever') {
+    tabForever.classList.toggle('active', mode === 'forever');
+    tabZen.classList.toggle('active', mode === 'zen');
+    tabAdv.classList.toggle('active', mode === 'adventure');
+    mobForever.classList.toggle('active', mode === 'forever');
+    mobZen.classList.toggle('active', mode === 'zen');
+    mobAdv.classList.toggle('active', mode === 'adventure');
+
+    if (mode === 'forever' || mode === 'zen') {
       this.stopCountdown();
-      tabForever.classList.add('active');
-      tabAdv.classList.remove('active');
-      mobForever.classList.add('active');
-      mobAdv.classList.remove('active');
-
       this.pathPanel.classList.add('hidden');
       layout.classList.add('single');
       boostersWrap.classList.add('hidden');
       btnOpenMap.classList.add('hidden');
       hazardBanner.classList.add('hidden');
+      bossBarWrap.classList.add('hidden');
+      starMarkers.classList.add('hidden');
       this.closeMobileDrawer();
     } else {
-      tabAdv.classList.add('active');
-      tabForever.classList.remove('active');
-      mobAdv.classList.add('active');
-      mobForever.classList.remove('active');
-
       this.pathPanel.classList.remove('hidden');
       layout.classList.remove('single');
       boostersWrap.classList.remove('hidden');
@@ -7133,6 +7405,10 @@ class PokeMatchGame {
       this.switchTabUI('forever');
       this.startForever(false);
     };
+    const goZen = () => {
+      this.switchTabUI('zen');
+      this.startZen(false);
+    };
     const goAdventure = () => {
       this.switchTabUI('adventure');
       if (this.isTimedSideLevel) {
@@ -7144,6 +7420,8 @@ class PokeMatchGame {
 
     document.getElementById('tab-forever').onclick = goForever;
     document.getElementById('mob-tab-forever').onclick = goForever;
+    document.getElementById('tab-zen').onclick = goZen;
+    document.getElementById('mob-tab-zen').onclick = goZen;
     document.getElementById('tab-adventure').onclick = goAdventure;
     document.getElementById('mob-tab-adventure').onclick = goAdventure;
 
@@ -7166,6 +7444,8 @@ class PokeMatchGame {
       this.overlay.classList.add('hidden');
       if (this.mode === 'forever') {
         this.startForever(true);
+      } else if (this.mode === 'zen') {
+        this.startZen(true);
       } else if (this.isTimedSideLevel) {
         if (this.wonLast) {
           this.startLevel(Math.min(110, this.level + 1), false);
@@ -7199,10 +7479,27 @@ class PokeMatchGame {
   }
 
   applyTheme() {
+    this.renderPowerupLegend();
+    const bossBarWrap = document.getElementById('boss-bar-wrap');
+    const starMarkers = document.getElementById('star-markers');
+    const hazardBanner = document.getElementById('hazard-banner');
+
     if (this.mode === 'forever') {
       document.body.setAttribute('data-theme', 'endless');
       document.getElementById('theme-badge').textContent = 'Endless Mode';
-      document.getElementById('hazard-banner').classList.add('hidden');
+      hazardBanner.classList.add('hidden');
+      bossBarWrap.classList.add('hidden');
+      starMarkers.classList.add('hidden');
+      return;
+    }
+
+    if (this.mode === 'zen') {
+      document.body.setAttribute('data-theme', 'zen');
+      document.getElementById('theme-badge').textContent = 'Zen Mode';
+      hazardBanner.textContent = 'Zen Mode is Relaxing endless play. Deadlocked boards reshuffle automatically!';
+      hazardBanner.classList.remove('hidden');
+      bossBarWrap.classList.add('hidden');
+      starMarkers.classList.add('hidden');
       return;
     }
 
@@ -7219,16 +7516,24 @@ class PokeMatchGame {
       : (this.level > 100 ? `EX-${this.level - 100}` : `Lv.${this.level}`);
     document.getElementById('mobile-realm-label').textContent = `${realm.short} - ${lvlTag}`;
 
-    const hazardBanner = document.getElementById('hazard-banner');
-    if (this.isTimedSideLevel) {
-      hazardBanner.textContent = '⏱️ Timed Side-Trial: Beat the target score before the 60s clock runs out!';
-      hazardBanner.classList.remove('hidden');
-    } else if (this.shouldLevelHaveHazards(this.level)) {
-      const hz = HAZARD_INFO[realm.key];
-      hazardBanner.textContent = hz.text;
+    if (this.isFinalBossLevel()) {
+      bossBarWrap.classList.remove('hidden');
+      starMarkers.classList.add('hidden');
+      hazardBanner.textContent = '👑 Final boss: Infinite moves! Out-damage the boss regeneration & Void corruption!';
       hazardBanner.classList.remove('hidden');
     } else {
-      hazardBanner.classList.add('hidden');
+      bossBarWrap.classList.add('hidden');
+      starMarkers.classList.remove('hidden');
+      if (this.isTimedSideLevel) {
+        hazardBanner.textContent = '⏱️ Timed Side-Trial: Beat the target score before the 60s clock runs out!';
+        hazardBanner.classList.remove('hidden');
+      } else if (this.shouldLevelHaveHazards(this.level)) {
+        const hz = HAZARD_INFO[realm.key];
+        hazardBanner.textContent = hz.text;
+        hazardBanner.classList.remove('hidden');
+      } else {
+        hazardBanner.classList.add('hidden');
+      }
     }
   }
 
@@ -7240,7 +7545,8 @@ class PokeMatchGame {
     const container = document.getElementById('path-scroll');
     container.innerHTML = '';
     const totalCap = this.getTotalMaxLevels();
-    document.getElementById('unlocked-label').textContent = `${this.maxUnlocked} / ${totalCap} Unlocked`;
+    document.getElementById('unlocked-label').textContent = `${this.maxUnlocked} / ${totalCap}`;
+    document.getElementById('total-stars-label').textContent = `★ ${this.getTotalStarsCount()}`;
 
     for (let i = 1; i <= totalCap; i++) {
       if (i === 1 || i === 26 || i === 51 || i === 76 || i === 101) {
@@ -7257,14 +7563,17 @@ class PokeMatchGame {
       const btn = document.createElement('button');
       const isExtra = i > 100;
       const isHard = (i % 10 === 0) || isExtra;
-      btn.className = 'stage-node' + (isHard ? ' hard' : '') + (isExtra ? ' extra-stage' : '');
+      const starsEarned = this.levelStars[i] || 0;
+      btn.className = 'stage-node' +
+        (isHard ? ' hard' : '') +
+        (isExtra ? ' extra-stage' : '') +
+        (starsEarned === 3 ? ' three-starred' : '');
       btn.dataset.lvl = i;
       if (i <= this.maxUnlocked) btn.classList.add('unlocked');
       if (i === this.level && this.mode === 'adventure' && !this.isTimedSideLevel) btn.classList.add('current');
 
-      const starsEarned = this.levelStars[i] || 0;
-      const starsHtml = starsEarned > 0 ? `<span class="node-stars">${this.formatStars(starsEarned)}</span>` : '';
-      const tagText = isExtra ? 'EXTRA' : 'BOSS';
+      const starsHtml = i <= this.maxUnlocked ? this.renderNodeStarsHTML(starsEarned) : '';
+      const tagText = i === 100 ? '👑 BOSS' : (isExtra ? 'EXTRA' : 'BOSS');
       btn.innerHTML = `<span>${i}</span>${isHard ? `<span class="hard-tag">${tagText}</span>` : ''}${starsHtml}`;
 
       if (i <= this.maxUnlocked) {
@@ -7288,12 +7597,12 @@ class PokeMatchGame {
         const tKey = `T${i}`;
         const tStars = this.levelStars[tKey] || 0;
         const tUnlocked = i <= this.maxUnlocked;
-        tBtn.className = 'stage-node timed-node' + (tUnlocked ? ' unlocked' : '');
+        tBtn.className = 'stage-node timed-node' + (tUnlocked ? ' unlocked' : '') + (tStars === 3 ? ' three-starred' : '');
         if (this.mode === 'adventure' && this.isTimedSideLevel && this.level === i) {
           tBtn.classList.add('current');
         }
         tBtn.dataset.lvl = i;
-        const tStarsHtml = tStars > 0 ? `<span class="node-stars">${this.formatStars(tStars)}</span>` : '';
+        const tStarsHtml = tUnlocked ? this.renderNodeStarsHTML(tStars) : '';
         tBtn.innerHTML = `<span>⏱️${i}</span>${tStarsHtml}`;
 
         if (tUnlocked) {
@@ -7355,7 +7664,7 @@ class PokeMatchGame {
   }
 
   onBoosterClick(def) {
-    if (this.busy || this.mode === 'forever') return;
+    if (this.busy || this.mode !== 'adventure') return;
     if (!def.needsTarget) {
       this.boosterCharges[def.id] = Math.max(0, (this.boosterCharges[def.id] || 0) - 1);
       this.saveBoosters();
@@ -7444,6 +7753,9 @@ class PokeMatchGame {
     if (this.mode === 'forever') {
       return ENDLESS_GEMS.slice(0, 6);
     }
+    if (this.mode === 'zen') {
+      return ZEN_GEMS.slice(0, 6);
+    }
     const realmKey = this.getRealmInfo(this.level).key;
     const gems = REALM_GEMS[realmKey] || REALM_GEMS.ocean;
     const isHardOrExtra = (this.level % 10 === 0) || (this.level > 100);
@@ -7460,7 +7772,7 @@ class PokeMatchGame {
     const realmKey = this.getRealmInfo(this.level).key;
     const hzType = HAZARD_INFO[realmKey].key;
     const isBoss = (this.level % 10 === 0) || (this.level > 100);
-    const count = isBoss ? 8 : Math.min(6, 2 + Math.floor((this.level % 25) / 5));
+    const count = this.isFinalBossLevel() ? 10 : (isBoss ? 8 : Math.min(6, 2 + Math.floor((this.level % 25) / 5)));
 
     const coords = [];
     for (let r = 0; r < this.size; r++) {
@@ -7477,7 +7789,7 @@ class PokeMatchGame {
     for (const [r, c] of coords) {
       if (placed >= count) break;
       const prevHz = this.board[r][c].hz;
-      this.board[r][c].hz = hzType;
+      this.board[r][c].hz = this.isFinalBossLevel() && placed % 2 === 1 ? 'eclipse' : hzType;
       if (this.countValidMoves() >= 2) {
         placed++;
       } else {
@@ -7491,21 +7803,30 @@ class PokeMatchGame {
     const isBoss = (this.level % 10 === 0) || (this.level > 100);
     if (!isBoss) return;
 
+    if (this.isFinalBossLevel() && this.bossHp > 0) {
+      this.bossHp = Math.min(this.bossMaxHp, this.bossHp + 420);
+    }
+
     const realmKey = this.getRealmInfo(this.level).key;
-    const hzType = HAZARD_INFO[realmKey].key;
-    const candidates = [];
-    for (let r = 0; r < this.size; r++) {
-      for (let c = 0; c < this.size; c++) {
-        if (this.board[r][c] && !this.board[r][c].hz && !this.board[r][c].pw) {
-          candidates.push([r, c]);
+    const defaultHz = HAZARD_INFO[realmKey].key;
+    const spawnCount = this.isFinalBossLevel() ? 2 : 1;
+
+    for (let s = 0; s < spawnCount; s++) {
+      const candidates = [];
+      for (let r = 0; r < this.size; r++) {
+        for (let c = 0; c < this.size; c++) {
+          if (this.board[r][c] && !this.board[r][c].hz && !this.board[r][c].pw) {
+            candidates.push([r, c]);
+          }
         }
       }
-    }
-    if (candidates.length === 0) return;
-    const [tr, tc] = candidates[Math.floor(Math.random() * candidates.length)];
-    this.board[tr][tc].hz = hzType;
-    if (this.countValidMoves() === 0) {
-      this.board[tr][tc].hz = null;
+      if (candidates.length === 0) break;
+      const [tr, tc] = candidates[Math.floor(Math.random() * candidates.length)];
+      const chosenHz = this.isFinalBossLevel() && Math.random() < 0.45 ? 'eclipse' : defaultHz;
+      this.board[tr][tc].hz = chosenHz;
+      if (this.countValidMoves() === 0) {
+        this.board[tr][tc].hz = null;
+      }
     }
   }
 
@@ -7537,6 +7858,40 @@ class PokeMatchGame {
     }
 
     this.score = 0;
+    this.generateInitialBoard();
+    this.saveGameProgress();
+    this.render();
+    this.updateHUD();
+    this.resetHintTimer();
+  }
+
+  startZen(forceNew = false) {
+    this.stopCountdown();
+    this.mode = 'zen';
+    this.isTimedSideLevel = false;
+    localStorage.setItem('pokeMatchMode', 'zen');
+    this.selected = null;
+    this.activeBooster = null;
+    this.busy = false;
+    this.overlay.classList.add('hidden');
+    this.applyTheme();
+
+    if (!forceNew) {
+      try {
+        const saved = JSON.parse(localStorage.getItem('pokeMatchSavedZen') || 'null');
+        if (saved && this.isValidBoardData(saved.board)) {
+          this.board = saved.board;
+          this.score = saved.score || this.zenScore || 0;
+          if (this.countValidMoves() === 0) this.shuffleBoard();
+          this.render();
+          this.updateHUD();
+          this.resetHintTimer();
+          return;
+        }
+      } catch (e) {}
+    }
+
+    this.score = this.zenScore || 0;
     this.generateInitialBoard();
     this.saveGameProgress();
     this.render();
@@ -7614,7 +7969,12 @@ class PokeMatchGame {
     this.wonLast = false;
     this.overlay.classList.add('hidden');
 
-    if (lvl > 100) {
+    if (lvl === 100) {
+      this.bossMaxHp = 25000;
+      this.bossHp = 25000;
+      this.movesLeft = 999999;
+      this.targetScore = 25000;
+    } else if (lvl > 100) {
       const exIdx = lvl - 100;
       this.movesLeft = exIdx === 10 ? 13 : 14;
       this.targetScore = 11500 + exIdx * 850;
@@ -7644,7 +8004,11 @@ class PokeMatchGame {
           this.score = saved.score || 0;
           this.movesLeft = saved.movesLeft;
           this.targetScore = saved.targetScore || this.targetScore;
-          if (this.score < this.targetScore && this.countValidMoves() > 0) {
+          if (lvl === 100) {
+            this.bossHp = typeof saved.bossHp === 'number' ? saved.bossHp : this.bossMaxHp;
+          }
+          const stillActive = lvl === 100 ? (this.bossHp > 0) : (this.score < this.targetScore);
+          if (stillActive && this.countValidMoves() > 0) {
             this.render();
             this.updateHUD();
             this.resetHintTimer();
@@ -7893,6 +8257,8 @@ class PokeMatchGame {
   render() {
     this.gridEl.innerHTML = '';
     const hzBadgeLookup = { ice: '❄️', vine: '🌿', cinder: '🔥', void: '🕳️', eclipse: '🩸' };
+    const pwSet = this.getActivePowerupSet();
+
     for (let r = 0; r < this.size; r++) {
       for (let c = 0; c < this.size; c++) {
         const cell = document.createElement('div');
@@ -7914,7 +8280,7 @@ class PokeMatchGame {
             cell.setAttribute('data-pw', item.pw);
             const badge = document.createElement('span');
             badge.className = 'pw-badge';
-            badge.textContent = POWERUP_BADGES[item.pw] || '✨';
+            badge.textContent = pwSet[item.pw]?.badge || '✨';
             cell.appendChild(badge);
           }
         }
@@ -7997,7 +8363,12 @@ class PokeMatchGame {
         ? Math.min(2.0, 1 + (combo - 1) * 0.25)
         : Math.min(3.5, 1 + (combo - 1) * 0.55);
 
-      this.score += Math.round(toClear.size * basePts * comboMult);
+      const gained = Math.round(toClear.size * basePts * comboMult);
+      this.score += gained;
+      if (this.isFinalBossLevel()) {
+        this.bossHp = Math.max(0, this.bossHp - gained);
+      }
+
       playTone(380 + combo * 85, 0.11, 'triangle');
       combo++;
 
@@ -8041,8 +8412,10 @@ class PokeMatchGame {
         } else {
           if (cell.hz === 'cinder') {
             this.score += 120;
+            if (this.isFinalBossLevel()) this.bossHp = Math.max(0, this.bossHp - 120);
           } else if (cell.hz === 'void' && !fromBooster) {
             this.score = Math.max(0, this.score - 90);
+            if (this.isFinalBossLevel()) this.bossHp = Math.min(this.bossMaxHp, this.bossHp + 180);
           }
           actualDestroy.add(key);
           if (el) {
@@ -8124,7 +8497,7 @@ class PokeMatchGame {
       return;
     }
 
-    if (this.mode === 'adventure' && !this.isTimedSideLevel) {
+    if (this.mode === 'adventure' && !this.isTimedSideLevel && !this.isFinalBossLevel()) {
       this.movesLeft--;
     }
 
@@ -8174,26 +8547,50 @@ class PokeMatchGame {
       document.getElementById('lbl-right').textContent = 'Possible Moves';
       document.getElementById('val-right').textContent = validMoves;
       document.getElementById('progress-fill').style.width = '100%';
-    } else if (this.isTimedSideLevel) {
-      document.getElementById('lbl-left').textContent = `Timed ${this.level}T`;
-      document.getElementById('val-left').textContent = `${this.targetScore}`;
-      document.getElementById('lbl-right').textContent = 'Time Left';
-      document.getElementById('val-right').textContent = `${this.timeLeft}s`;
-      const pct = Math.min(100, Math.floor((this.score / this.targetScore) * 100));
-      document.getElementById('progress-fill').style.width = pct + '%';
-    } else {
-      const isExtra = this.level > 100;
-      const isHard = this.level % 10 === 0;
-      if (isExtra) {
-        document.getElementById('lbl-left').textContent = `Extra ${this.level - 100}`;
-      } else {
-        document.getElementById('lbl-left').textContent = isHard ? `Lv.${this.level} (BOSS)` : `Level ${this.level}`;
-      }
-      document.getElementById('val-left').textContent = `${this.targetScore}`;
+    } else if (this.mode === 'zen') {
+      this.zenScore = this.score;
+      localStorage.setItem('pokeMatchZenScore', this.zenScore);
+      document.getElementById('lbl-left').textContent = 'Mode';
+      document.getElementById('val-left').textContent = 'Zen';
+      document.getElementById('lbl-right').textContent = 'Flow';
+      document.getElementById('val-right').textContent = '∞';
+      document.getElementById('progress-fill').style.width = '100%';
+    } else if (this.isFinalBossLevel()) {
+      document.getElementById('lbl-left').textContent = 'Lv.100 (FINAL)';
+      document.getElementById('val-left').textContent = '👑 Boss';
       document.getElementById('lbl-right').textContent = 'Moves Left';
-      document.getElementById('val-right').textContent = this.movesLeft;
-      const pct = Math.min(100, Math.floor((this.score / this.targetScore) * 100));
+      document.getElementById('val-right').textContent = '∞';
+      const hpPct = Math.max(0, Math.min(100, Math.floor((this.bossHp / this.bossMaxHp) * 100)));
+      document.getElementById('boss-hp-text').textContent = `${this.bossHp} / ${this.bossMaxHp}`;
+      document.getElementById('boss-hp-fill').style.width = hpPct + '%';
+      document.getElementById('progress-fill').style.width = (100 - hpPct) + '%';
+    } else {
+      if (this.isTimedSideLevel) {
+        document.getElementById('lbl-left').textContent = `Timed ${this.level}T`;
+        document.getElementById('val-left').textContent = `${this.targetScore}`;
+        document.getElementById('lbl-right').textContent = 'Time Left';
+        document.getElementById('val-right').textContent = `${this.timeLeft}s`;
+      } else {
+        const isExtra = this.level > 100;
+        const isHard = this.level % 10 === 0;
+        if (isExtra) {
+          document.getElementById('lbl-left').textContent = `Extra ${this.level - 100}`;
+        } else {
+          document.getElementById('lbl-left').textContent = isHard ? `Lv.${this.level} (BOSS)` : `Level ${this.level}`;
+        }
+        document.getElementById('val-left').textContent = `${this.targetScore}`;
+        document.getElementById('lbl-right').textContent = 'Moves Left';
+        document.getElementById('val-right').textContent = this.movesLeft;
+      }
+
+      const maxStarScore = Math.round(this.targetScore * 1.75);
+      const pct = Math.min(100, Math.floor((this.score / maxStarScore) * 100));
       document.getElementById('progress-fill').style.width = pct + '%';
+
+      const sCount = this.calculateStars(this.score, this.targetScore);
+      document.getElementById('sm-1').classList.toggle('reached', sCount >= 1);
+      document.getElementById('sm-2').classList.toggle('reached', sCount >= 2);
+      document.getElementById('sm-3').classList.toggle('reached', sCount >= 3);
     }
   }
 
@@ -8204,6 +8601,13 @@ class PokeMatchGame {
     rewardEl.classList.add('hidden');
     starsEl.classList.add('hidden');
 
+    if (this.mode === 'zen') {
+      if (validMoves === 0) {
+        this.shuffleBoard();
+      }
+      return;
+    }
+
     if (this.mode === 'forever') {
       if (validMoves === 0) {
         this.clearHint();
@@ -8212,6 +8616,46 @@ class PokeMatchGame {
         document.getElementById('ov-desc').textContent = `Final Score: ${this.score}`;
         document.getElementById('ov-btn').textContent = 'Play Again';
         this.overlay.classList.remove('hidden');
+      }
+      return;
+    }
+
+    if (this.isFinalBossLevel()) {
+      if (this.bossHp <= 0) {
+        this.clearHint();
+        this.wonLast = true;
+        this.clearSavedGameProgress('adventure');
+
+        this.levelStars[100] = 3;
+        this.saveLevelStars();
+        starsEl.textContent = '★★★';
+        starsEl.classList.remove('hidden');
+
+        const prevMax = this.maxUnlocked;
+        const justUnlockedExtras = (this.maxUnlocked === 100);
+        if (this.maxUnlocked <= 100) {
+          this.maxUnlocked = 101;
+          localStorage.setItem('pokeMatch3Unlocked', this.maxUnlocked);
+        }
+
+        if (this.getRealmInfo(prevMax).key !== this.getRealmInfo(this.maxUnlocked).key) {
+          this.showStoryModal('extras');
+        }
+
+        this.rewardUnlockedBoosters(2);
+        rewardEl.textContent = '👑 FINAL BOSS DEFEATED! Extras Unlocked +2 Boosters!';
+        rewardEl.classList.remove('hidden');
+
+        this.buildPath();
+        this.renderBoosters();
+        this.updateLoreButtonState();
+
+        document.getElementById('ov-title').textContent = 'Final boss Defeated!';
+        document.getElementById('ov-desc').textContent = `Score: ${this.score}`;
+        document.getElementById('ov-btn').textContent = justUnlockedExtras ? 'Enter Extras (101)' : 'Next Level';
+        this.overlay.classList.remove('hidden');
+      } else if (validMoves === 0) {
+        this.shuffleBoard();
       }
       return;
     }
@@ -8246,7 +8690,6 @@ class PokeMatchGame {
       }
 
       const prevMax = this.maxUnlocked;
-      const justUnlockedExtras = (this.level === 100 && this.maxUnlocked === 100);
       if (this.level >= this.maxUnlocked && this.level < 110) {
         this.maxUnlocked = this.level + 1;
         localStorage.setItem('pokeMatch3Unlocked', this.maxUnlocked);
@@ -8259,10 +8702,7 @@ class PokeMatchGame {
       }
 
       const gotBoosters = this.rewardUnlockedBoosters(1);
-      if (justUnlockedExtras) {
-        rewardEl.textContent = 'EXTRAS UNLOCKED (Lv. 101-110) + Booster Charges!';
-        rewardEl.classList.remove('hidden');
-      } else if (gotBoosters) {
+      if (gotBoosters) {
         rewardEl.textContent = '🎁 +1 Charge to all unlocked boosters!';
         rewardEl.classList.remove('hidden');
       }
@@ -8274,7 +8714,7 @@ class PokeMatchGame {
       const titleText = this.level > 100 ? `Extra ${this.level - 100} Cleared!` : `Level ${this.level} Cleared!`;
       document.getElementById('ov-title').textContent = titleText;
       document.getElementById('ov-desc').textContent = `Score: ${this.score}`;
-      document.getElementById('ov-btn').textContent = this.level < 110 ? (justUnlockedExtras ? 'Enter Extras (101)' : 'Next Level') : 'Replay Extra 10';
+      document.getElementById('ov-btn').textContent = this.level < 110 ? 'Next Level' : 'Replay Extra 10';
       this.overlay.classList.remove('hidden');
     } else if ((this.isTimedSideLevel && this.timeLeft <= 0) || (!this.isTimedSideLevel && this.movesLeft <= 0) || validMoves === 0) {
       this.stopCountdown();
@@ -8293,11 +8733,64 @@ class PokeMatchGame {
       this.overlay.classList.remove('hidden');
     }
   }
+
+  debugTestBoss() {
+    if (!this.debugPrevSnapshot) {
+      this.debugPrevSnapshot = {
+        mode: this.mode,
+        level: this.level,
+        maxUnlocked: this.maxUnlocked,
+        isTimedSideLevel: this.isTimedSideLevel,
+        savedAdv: localStorage.getItem('pokeMatchSavedAdventure')
+      };
+    }
+    if (this.maxUnlocked < 100) {
+      this.maxUnlocked = 100;
+      localStorage.setItem('pokeMatch3Unlocked', 100);
+    }
+    this.switchTabUI('adventure');
+    this.startLevel(100, true);
+    console.log(' DebugTestBoss active: Jumped to Level 100 Final boss! Call DebugDoneTestBoss() to restore.');
+  }
+
+  debugDoneTestBoss() {
+    if (!this.debugPrevSnapshot) {
+      console.warn('No active DebugTestBoss snapshot found.');
+      return;
+    }
+    const snap = this.debugPrevSnapshot;
+    this.debugPrevSnapshot = null;
+    this.maxUnlocked = snap.maxUnlocked;
+    localStorage.setItem('pokeMatch3Unlocked', this.maxUnlocked);
+    if (snap.savedAdv) {
+      localStorage.setItem('pokeMatchSavedAdventure', snap.savedAdv);
+    } else {
+      localStorage.removeItem('pokeMatchSavedAdventure');
+    }
+
+    this.buildPath();
+    if (snap.mode === 'forever') {
+      this.switchTabUI('forever');
+      this.startForever(false);
+    } else if (snap.mode === 'zen') {
+      this.switchTabUI('zen');
+      this.startZen(false);
+    } else {
+      this.switchTabUI('adventure');
+      if (snap.isTimedSideLevel) {
+        this.startTimedLevel(snap.level, false);
+      } else {
+        this.startLevel(snap.level, false);
+      }
+    }
+    console.log(`✅ DebugDoneTestBoss complete: Restored to ${snap.mode} (Level ${snap.level}).`);
+  }
 }
 
-new PokeMatchGame();
+window.gameInstance = new PokeMatchGame();
+window.DebugTestBoss = () => window.gameInstance.debugTestBoss();
+window.DebugDoneTestBoss = () => window.gameInstance.debugDoneTestBoss();
 </script>
 </body>
 </html>
- 
  <% } %>
