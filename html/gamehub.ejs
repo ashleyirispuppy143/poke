@@ -5426,7 +5426,7 @@ Game.init();
 
 
 <% if (game === "match3") { %>
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -5441,7 +5441,8 @@ Game.init();
       font-display: swap;
     }
 
-    :root {
+    :root,
+    body[data-theme="endless"] {
       --bg: #160e11;
       --surface-1: #22161b;
       --surface-2: #2f1f26;
@@ -6002,26 +6003,28 @@ Game.init();
     .stage-row {
       display: flex;
       justify-content: center;
+      align-items: center;
       position: relative;
     }
-    .stage-row:nth-of-type(4n+2) { transform: translateX(-42px); }
-    .stage-row:nth-of-type(4n+4) { transform: translateX(42px); }
+    .stage-row:nth-of-type(4n+2):not(.has-side-path) { transform: translateX(-38px); }
+    .stage-row:nth-of-type(4n+4):not(.has-side-path) { transform: translateX(38px); }
 
     .stage-node {
-      width: 58px;
-      height: 58px;
+      width: 60px;
+      height: 62px;
       border-radius: 20px;
       border: none;
       background: rgba(255, 255, 255, 0.06);
       color: var(--muted);
       font-family: inherit;
-      font-size: 1rem;
+      font-size: 0.96rem;
       font-weight: 800;
       cursor: not-allowed;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
+      gap: 1px;
       position: relative;
       backdrop-filter: blur(4px);
       transition: transform 0.15s ease, background 0.15s ease;
@@ -6053,9 +6056,55 @@ Game.init();
       color: var(--on-danger);
     }
     .hard-tag {
-      font-size: 0.54rem;
+      font-size: 0.5rem;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.4px;
+      line-height: 1;
+    }
+    .node-stars {
+      font-size: 0.56rem;
+      line-height: 1;
+      letter-spacing: 1px;
+      color: #ffd54f;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
+    }
+    .stage-node.current .node-stars {
+      color: #1a1200;
+      text-shadow: none;
+    }
+
+    .side-path-wrap {
+      display: flex;
+      align-items: center;
+      margin-left: 6px;
+    }
+    .side-branch-line {
+      width: 22px;
+      height: 3px;
+      background: repeating-linear-gradient(
+        90deg,
+        var(--map-accent) 0px,
+        var(--map-accent) 4px,
+        transparent 4px,
+        transparent 8px
+      );
+      opacity: 0.7;
+    }
+    .stage-node.timed-node {
+      width: 54px;
+      height: 54px;
+      border-radius: 18px;
+      border: 2px dashed #ffd54f;
+      font-size: 0.78rem;
+    }
+    .stage-node.timed-node.unlocked {
+      background: rgba(255, 213, 79, 0.14);
+      color: #ffe082;
+    }
+    .stage-node.timed-node.current {
+      background: #ffd54f;
+      color: #261900;
+      box-shadow: 0 0 16px #ffd54f;
     }
 
     .board-panel {
@@ -6331,7 +6380,14 @@ Game.init();
       font-size: 2rem;
       font-weight: 800;
       color: var(--primary);
+      margin-bottom: 6px;
+    }
+    .ov-stars {
+      font-size: 2rem;
+      color: #ffd54f;
+      letter-spacing: 6px;
       margin-bottom: 8px;
+      text-shadow: 0 2px 10px rgba(255, 213, 79, 0.45);
     }
     .overlay-box p {
       color: var(--muted);
@@ -6529,7 +6585,7 @@ Game.init();
     }
   </style>
 </head>
-<body data-theme="ocean">
+<body data-theme="endless">
 
   <div class="drawer-backdrop" id="drawer-backdrop"></div>
 
@@ -6545,7 +6601,7 @@ Game.init();
     <header class="desktop-header">
       <div class="brand-title">
         <h1>poke!match</h1>
-        <span class="theme-badge" id="theme-badge">Ocean Abyss</span>
+        <span class="theme-badge" id="theme-badge">Endless Mode</span>
       </div>
       <div class="mode-tabs">
         <button class="tab-btn" id="tab-forever">Endless Mode</button>
@@ -6628,6 +6684,7 @@ Game.init();
 
         <div class="overlay-box hidden" id="end-overlay">
           <h3 id="ov-title">No More Moves!</h3>
+          <div class="ov-stars hidden" id="ov-stars">★★★</div>
           <p id="ov-desc">Final Score: 0</p>
           <div class="reward-pill hidden" id="ov-reward">🎁 +1 Charge to all unlocked boosters!</div>
           <button class="action-btn" id="ov-btn">Play Again</button>
@@ -6659,6 +6716,8 @@ function checkIsMobile() {
   const narrowScreen = window.innerWidth <= 820;
   return Boolean(uaMobile || iPadOS || (coarsePointer && narrowScreen) || narrowScreen);
 }
+
+const ENDLESS_GEMS = ['💎', '🔶', '🔷', '🟣', '🟢', '⭐', '💠'];
 
 const REALM_GEMS = {
   ocean:  ['🐚', '🫧', '🪸', '🔱', '⚓', '🐬', '🦑'],
@@ -6744,6 +6803,7 @@ class PokeMatchGame {
     this.savedMode = localStorage.getItem('pokeMatchMode') || 'forever';
     this.level = parseInt(localStorage.getItem('pokeMatchLastLevel')) || this.maxUnlocked;
     if (this.level > this.maxUnlocked) this.level = this.maxUnlocked;
+    this.isTimedSideLevel = localStorage.getItem('pokeMatchLastTimed') === '1';
 
     this.board = [];
     this.selected = null;
@@ -6752,6 +6812,8 @@ class PokeMatchGame {
     this.score = 0;
     this.targetScore = 1000;
     this.movesLeft = 20;
+    this.timeLeft = 60;
+    this.timerInterval = null;
     this.hintTimer = null;
     this.touchStartPos = null;
     this.currentMapScrollRealm = 'ocean';
@@ -6762,6 +6824,7 @@ class PokeMatchGame {
     this.pathScroll = document.getElementById('path-scroll');
     this.drawerBackdrop = document.getElementById('drawer-backdrop');
 
+    this.loadLevelStars();
     this.loadSeenStories();
     this.loadSavedBoosters();
     this.syncMobileState();
@@ -6770,11 +6833,74 @@ class PokeMatchGame {
 
     if (this.savedMode === 'adventure') {
       this.switchTabUI('adventure');
-      this.startLevel(this.level, false);
+      if (this.isTimedSideLevel && this.level % 14 === 0 && this.level <= this.maxUnlocked) {
+        this.startTimedLevel(this.level, false);
+      } else {
+        this.startLevel(this.level, false);
+      }
     } else {
       this.switchTabUI('forever');
       this.startForever(false);
     }
+  }
+
+  loadLevelStars() {
+    const raw = localStorage.getItem('pokeMatchStars');
+    if (!raw) {
+      this.levelStars = {};
+      for (let i = 1; i < this.maxUnlocked; i++) {
+        this.levelStars[i] = 3;
+      }
+      this.saveLevelStars();
+    } else {
+      try {
+        this.levelStars = JSON.parse(raw) || {};
+      } catch (e) {
+        this.levelStars = {};
+      }
+    }
+  }
+
+  saveLevelStars() {
+    localStorage.setItem('pokeMatchStars', JSON.stringify(this.levelStars));
+  }
+
+  calculateStars(score, target) {
+    if (score >= Math.round(target * 1.75)) return 3;
+    if (score >= Math.round(target * 1.35)) return 2;
+    if (score >= target) return 1;
+    return 0;
+  }
+
+  formatStars(count) {
+    return '★'.repeat(count) + '☆'.repeat(Math.max(0, 3 - count));
+  }
+
+  stopCountdown() {
+    if (this.timerInterval) {
+      clearInterval(this.timerInterval);
+      this.timerInterval = null;
+    }
+  }
+
+  startCountdown() {
+    this.stopCountdown();
+    this.timerInterval = setInterval(() => {
+      if (this.mode !== 'adventure' || !this.isTimedSideLevel) {
+        this.stopCountdown();
+        return;
+      }
+      if (!this.overlay.classList.contains('hidden') || !document.getElementById('story-modal').classList.contains('hidden')) {
+        return;
+      }
+      this.timeLeft = Math.max(0, this.timeLeft - 1);
+      this.updateHUD();
+      this.saveGameProgress();
+      if (this.timeLeft <= 0 && !this.busy) {
+        this.stopCountdown();
+        this.checkEndState();
+      }
+    }, 1000);
   }
 
   isRealmUnlocked(realmKey) {
@@ -6834,14 +6960,17 @@ class PokeMatchGame {
         board: this.board
       }));
     } else {
-      if (this.score >= this.targetScore || this.movesLeft <= 0 || this.countValidMoves() === 0) {
+      const outOfTurn = this.isTimedSideLevel ? (this.timeLeft <= 0) : (this.movesLeft <= 0);
+      if (this.score >= this.targetScore || outOfTurn || this.countValidMoves() === 0) {
         localStorage.removeItem('pokeMatchSavedAdventure');
         return;
       }
       localStorage.setItem('pokeMatchSavedAdventure', JSON.stringify({
         level: this.level,
+        isTimed: this.isTimedSideLevel,
         score: this.score,
         movesLeft: this.movesLeft,
+        timeLeft: this.timeLeft,
         targetScore: this.targetScore,
         board: this.board
       }));
@@ -6899,7 +7028,7 @@ class PokeMatchGame {
 
     let closestLvl = this.level || 1;
     let minDist = Infinity;
-    const nodes = scrollEl.querySelectorAll('.stage-node');
+    const nodes = scrollEl.querySelectorAll('.stage-node:not(.timed-node)');
     nodes.forEach(node => {
       const r = node.getBoundingClientRect();
       const nodeCenter = r.top + r.height * 0.5;
@@ -6941,11 +7070,11 @@ class PokeMatchGame {
     localStorage.setItem('pokeMatchBoosterInv', JSON.stringify(this.boosterCharges));
   }
 
-  rewardUnlockedBoosters() {
+  rewardUnlockedBoosters(amount = 1) {
     let rewardedAny = false;
     BOOSTER_DEFS.forEach(b => {
       if (this.maxUnlocked >= b.unlockLvl) {
-        this.boosterCharges[b.id] = (this.boosterCharges[b.id] || 0) + 1;
+        this.boosterCharges[b.id] = (this.boosterCharges[b.id] || 0) + amount;
         rewardedAny = true;
       }
     });
@@ -6964,6 +7093,7 @@ class PokeMatchGame {
     const hazardBanner = document.getElementById('hazard-banner');
 
     if (mode === 'forever') {
+      this.stopCountdown();
       tabForever.classList.add('active');
       tabAdv.classList.remove('active');
       mobForever.classList.add('active');
@@ -7005,7 +7135,11 @@ class PokeMatchGame {
     };
     const goAdventure = () => {
       this.switchTabUI('adventure');
-      this.startLevel(this.level || this.maxUnlocked, false);
+      if (this.isTimedSideLevel) {
+        this.startTimedLevel(this.level || 14, false);
+      } else {
+        this.startLevel(this.level || this.maxUnlocked, false);
+      }
     };
 
     document.getElementById('tab-forever').onclick = goForever;
@@ -7032,6 +7166,12 @@ class PokeMatchGame {
       this.overlay.classList.add('hidden');
       if (this.mode === 'forever') {
         this.startForever(true);
+      } else if (this.isTimedSideLevel) {
+        if (this.wonLast) {
+          this.startLevel(Math.min(110, this.level + 1), false);
+        } else {
+          this.startTimedLevel(this.level, true);
+        }
       } else {
         if (this.wonLast) {
           this.startLevel(Math.min(110, this.level + 1), true);
@@ -7059,19 +7199,31 @@ class PokeMatchGame {
   }
 
   applyTheme() {
-    const refLevel = this.mode === 'adventure' ? this.level : this.maxUnlocked;
-    const realm = this.getRealmInfo(refLevel);
+    if (this.mode === 'forever') {
+      document.body.setAttribute('data-theme', 'endless');
+      document.getElementById('theme-badge').textContent = 'Endless Mode';
+      document.getElementById('hazard-banner').classList.add('hidden');
+      return;
+    }
+
+    const realm = this.getRealmInfo(this.level);
     document.body.setAttribute('data-theme', realm.key);
     this.pathPanel.setAttribute('data-map-realm', realm.key);
     document.getElementById('map-header-title').textContent = realm.short;
     this.currentMapScrollRealm = realm.key;
     this.updateLoreButtonState();
-    document.getElementById('theme-badge').textContent = this.mode === 'forever' ? `Endless - ${realm.short}` : realm.name;
-    const lvlTag = this.level > 100 ? `EX-${this.level - 100}` : `Lv.${this.level}`;
+    document.getElementById('theme-badge').textContent = realm.name;
+
+    const lvlTag = this.isTimedSideLevel
+      ? `${this.level}T`
+      : (this.level > 100 ? `EX-${this.level - 100}` : `Lv.${this.level}`);
     document.getElementById('mobile-realm-label').textContent = `${realm.short} - ${lvlTag}`;
 
     const hazardBanner = document.getElementById('hazard-banner');
-    if (this.mode === 'adventure' && this.shouldLevelHaveHazards(this.level)) {
+    if (this.isTimedSideLevel) {
+      hazardBanner.textContent = '⏱️ Timed Side-Trial: Beat the target score before the 60s clock runs out!';
+      hazardBanner.classList.remove('hidden');
+    } else if (this.shouldLevelHaveHazards(this.level)) {
       const hz = HAZARD_INFO[realm.key];
       hazardBanner.textContent = hz.text;
       hazardBanner.classList.remove('hidden');
@@ -7098,8 +7250,9 @@ class PokeMatchGame {
         container.appendChild(div);
       }
 
+      const hasTimedSide = (i % 14 === 0) && (i <= 98);
       const row = document.createElement('div');
-      row.className = 'stage-row';
+      row.className = 'stage-row' + (hasTimedSide ? ' has-side-path' : '');
 
       const btn = document.createElement('button');
       const isExtra = i > 100;
@@ -7107,18 +7260,53 @@ class PokeMatchGame {
       btn.className = 'stage-node' + (isHard ? ' hard' : '') + (isExtra ? ' extra-stage' : '');
       btn.dataset.lvl = i;
       if (i <= this.maxUnlocked) btn.classList.add('unlocked');
-      if (i === this.level && this.mode === 'adventure') btn.classList.add('current');
+      if (i === this.level && this.mode === 'adventure' && !this.isTimedSideLevel) btn.classList.add('current');
 
+      const starsEarned = this.levelStars[i] || 0;
+      const starsHtml = starsEarned > 0 ? `<span class="node-stars">${this.formatStars(starsEarned)}</span>` : '';
       const tagText = isExtra ? 'EXTRA' : 'BOSS';
-      btn.innerHTML = `<span>${i}</span>${isHard ? `<span class="hard-tag">${tagText}</span>` : ''}`;
+      btn.innerHTML = `<span>${i}</span>${isHard ? `<span class="hard-tag">${tagText}</span>` : ''}${starsHtml}`;
+
       if (i <= this.maxUnlocked) {
         btn.onclick = () => {
           this.closeMobileDrawer();
-          const forceReset = (i !== this.level);
+          const forceReset = (i !== this.level || this.isTimedSideLevel);
           this.startLevel(i, forceReset);
         };
       }
       row.appendChild(btn);
+
+      if (hasTimedSide) {
+        const sideWrap = document.createElement('div');
+        sideWrap.className = 'side-path-wrap';
+
+        const line = document.createElement('div');
+        line.className = 'side-branch-line';
+        sideWrap.appendChild(line);
+
+        const tBtn = document.createElement('button');
+        const tKey = `T${i}`;
+        const tStars = this.levelStars[tKey] || 0;
+        const tUnlocked = i <= this.maxUnlocked;
+        tBtn.className = 'stage-node timed-node' + (tUnlocked ? ' unlocked' : '');
+        if (this.mode === 'adventure' && this.isTimedSideLevel && this.level === i) {
+          tBtn.classList.add('current');
+        }
+        tBtn.dataset.lvl = i;
+        const tStarsHtml = tStars > 0 ? `<span class="node-stars">${this.formatStars(tStars)}</span>` : '';
+        tBtn.innerHTML = `<span>⏱️${i}</span>${tStarsHtml}`;
+
+        if (tUnlocked) {
+          tBtn.onclick = () => {
+            this.closeMobileDrawer();
+            const forceReset = (!this.isTimedSideLevel || i !== this.level);
+            this.startTimedLevel(i, forceReset);
+          };
+        }
+        sideWrap.appendChild(tBtn);
+        row.appendChild(sideWrap);
+      }
+
       container.appendChild(row);
     }
   }
@@ -7253,10 +7441,11 @@ class PokeMatchGame {
   }
 
   getRelicPool() {
-    const refLevel = this.mode === 'adventure' ? this.level : this.maxUnlocked;
-    const realmKey = this.getRealmInfo(refLevel).key;
+    if (this.mode === 'forever') {
+      return ENDLESS_GEMS.slice(0, 6);
+    }
+    const realmKey = this.getRealmInfo(this.level).key;
     const gems = REALM_GEMS[realmKey] || REALM_GEMS.ocean;
-    if (this.mode === 'forever') return gems.slice(0, 6);
     const isHardOrExtra = (this.level % 10 === 0) || (this.level > 100);
     return gems.slice(0, isHardOrExtra ? 7 : 6);
   }
@@ -7321,7 +7510,9 @@ class PokeMatchGame {
   }
 
   startForever(forceNew = false) {
+    this.stopCountdown();
     this.mode = 'forever';
+    this.isTimedSideLevel = false;
     localStorage.setItem('pokeMatchMode', 'forever');
     this.selected = null;
     this.activeBooster = null;
@@ -7353,11 +7544,71 @@ class PokeMatchGame {
     this.resetHintTimer();
   }
 
+  startTimedLevel(baseLvl, forceNew = false) {
+    this.stopCountdown();
+    this.mode = 'adventure';
+    this.level = baseLvl;
+    this.isTimedSideLevel = true;
+    localStorage.setItem('pokeMatchMode', 'adventure');
+    localStorage.setItem('pokeMatchLastLevel', baseLvl);
+    localStorage.setItem('pokeMatchLastTimed', '1');
+    this.selected = null;
+    this.busy = false;
+    this.wonLast = false;
+    this.overlay.classList.add('hidden');
+
+    this.timeLeft = 60;
+    this.movesLeft = 999;
+    this.targetScore = 950 + baseLvl * 115;
+
+    this.applyTheme();
+    this.initBoosters();
+    this.buildPath();
+
+    if (!forceNew) {
+      try {
+        const saved = JSON.parse(localStorage.getItem('pokeMatchSavedAdventure') || 'null');
+        if (
+          saved &&
+          saved.level === baseLvl &&
+          saved.isTimed === true &&
+          typeof saved.timeLeft === 'number' &&
+          saved.timeLeft > 0 &&
+          this.isValidBoardData(saved.board)
+        ) {
+          this.board = saved.board;
+          this.score = saved.score || 0;
+          this.timeLeft = saved.timeLeft;
+          this.targetScore = saved.targetScore || this.targetScore;
+          if (this.score < this.targetScore && this.countValidMoves() > 0) {
+            this.render();
+            this.updateHUD();
+            this.startCountdown();
+            this.resetHintTimer();
+            return;
+          }
+        }
+      } catch (e) {}
+    }
+
+    this.score = 0;
+    this.generateInitialBoard();
+    this.seedInitialHazards();
+    this.saveGameProgress();
+    this.render();
+    this.updateHUD();
+    this.startCountdown();
+    this.resetHintTimer();
+  }
+
   startLevel(lvl, forceNew = false) {
+    this.stopCountdown();
     this.mode = 'adventure';
     this.level = lvl;
+    this.isTimedSideLevel = false;
     localStorage.setItem('pokeMatchMode', 'adventure');
     localStorage.setItem('pokeMatchLastLevel', lvl);
+    localStorage.setItem('pokeMatchLastTimed', '0');
     this.selected = null;
     this.busy = false;
     this.wonLast = false;
@@ -7384,6 +7635,7 @@ class PokeMatchGame {
         if (
           saved &&
           saved.level === lvl &&
+          !saved.isTimed &&
           typeof saved.movesLeft === 'number' &&
           saved.movesLeft > 0 &&
           this.isValidBoardData(saved.board)
@@ -7739,7 +7991,7 @@ class PokeMatchGame {
     let toClear = this.expandPowerups(initialClearSet);
 
     while (toClear.size > 0) {
-      const isEarlyLevel = this.mode === 'adventure' && this.level <= 10;
+      const isEarlyLevel = this.mode === 'adventure' && this.level <= 10 && !this.isTimedSideLevel;
       const basePts = isEarlyLevel ? 24 : 32;
       const comboMult = isEarlyLevel
         ? Math.min(2.0, 1 + (combo - 1) * 0.25)
@@ -7872,7 +8124,7 @@ class PokeMatchGame {
       return;
     }
 
-    if (this.mode === 'adventure') {
+    if (this.mode === 'adventure' && !this.isTimedSideLevel) {
       this.movesLeft--;
     }
 
@@ -7922,6 +8174,13 @@ class PokeMatchGame {
       document.getElementById('lbl-right').textContent = 'Possible Moves';
       document.getElementById('val-right').textContent = validMoves;
       document.getElementById('progress-fill').style.width = '100%';
+    } else if (this.isTimedSideLevel) {
+      document.getElementById('lbl-left').textContent = `Timed ${this.level}T`;
+      document.getElementById('val-left').textContent = `${this.targetScore}`;
+      document.getElementById('lbl-right').textContent = 'Time Left';
+      document.getElementById('val-right').textContent = `${this.timeLeft}s`;
+      const pct = Math.min(100, Math.floor((this.score / this.targetScore) * 100));
+      document.getElementById('progress-fill').style.width = pct + '%';
     } else {
       const isExtra = this.level > 100;
       const isHard = this.level % 10 === 0;
@@ -7941,7 +8200,9 @@ class PokeMatchGame {
   checkEndState() {
     const validMoves = this.countValidMoves();
     const rewardEl = document.getElementById('ov-reward');
+    const starsEl = document.getElementById('ov-stars');
     rewardEl.classList.add('hidden');
+    starsEl.classList.add('hidden');
 
     if (this.mode === 'forever') {
       if (validMoves === 0) {
@@ -7952,52 +8213,84 @@ class PokeMatchGame {
         document.getElementById('ov-btn').textContent = 'Play Again';
         this.overlay.classList.remove('hidden');
       }
-    } else {
-      if (this.score >= this.targetScore) {
-        this.clearHint();
-        this.wonLast = true;
-        this.clearSavedGameProgress('adventure');
+      return;
+    }
 
-        const prevMax = this.maxUnlocked;
-        const justUnlockedExtras = (this.level === 100 && this.maxUnlocked === 100);
-        if (this.level >= this.maxUnlocked && this.level < 110) {
-          this.maxUnlocked = this.level + 1;
-          localStorage.setItem('pokeMatch3Unlocked', this.maxUnlocked);
-        }
+    if (this.score >= this.targetScore) {
+      this.stopCountdown();
+      this.clearHint();
+      this.wonLast = true;
+      this.clearSavedGameProgress('adventure');
 
-        const prevRealm = this.getRealmInfo(prevMax).key;
-        const nextRealm = this.getRealmInfo(this.maxUnlocked).key;
-        if (nextRealm !== prevRealm) {
-          this.showStoryModal(nextRealm);
-        }
+      const earnedStars = this.calculateStars(this.score, this.targetScore);
+      const starKey = this.isTimedSideLevel ? `T${this.level}` : this.level;
+      this.levelStars[starKey] = Math.max(this.levelStars[starKey] || 0, earnedStars);
+      this.saveLevelStars();
 
-        const gotBoosters = this.rewardUnlockedBoosters();
-        if (justUnlockedExtras) {
-          rewardEl.textContent = 'EXTRAS UNLOCKED (Lv. 101-110) + Booster Charges!';
-          rewardEl.classList.remove('hidden');
-        } else if (gotBoosters) {
-          rewardEl.textContent = '🎁 +1 Charge to all unlocked boosters!';
+      starsEl.textContent = this.formatStars(earnedStars);
+      starsEl.classList.remove('hidden');
+
+      if (this.isTimedSideLevel) {
+        const gotBoosters = this.rewardUnlockedBoosters(2);
+        if (gotBoosters) {
+          rewardEl.textContent = '⏱️ TIMED TRIAL BONUS: +2 Charges to all unlocked boosters!';
           rewardEl.classList.remove('hidden');
         }
-
         this.buildPath();
         this.renderBoosters();
-        this.updateLoreButtonState();
-
-        const titleText = this.level > 100 ? `Extra ${this.level - 100} Cleared!` : `Level ${this.level} Cleared!`;
-        document.getElementById('ov-title').textContent = titleText;
+        document.getElementById('ov-title').textContent = `Timed Trial ${this.level}T Cleared!`;
         document.getElementById('ov-desc').textContent = `Score: ${this.score}`;
-        document.getElementById('ov-btn').textContent = this.level < 110 ? (justUnlockedExtras ? 'Enter Extras (101)' : 'Next Level') : 'Replay Extra 10';
+        document.getElementById('ov-btn').textContent = 'Return to Main Path';
         this.overlay.classList.remove('hidden');
-      } else if (this.movesLeft <= 0 || validMoves === 0) {
-        this.clearHint();
-        this.wonLast = false;
-        this.clearSavedGameProgress('adventure');
-        document.getElementById('ov-title').textContent = validMoves === 0 ? 'No More Moves!' : 'Out of Moves!';
-        document.getElementById('ov-desc').textContent = `Score: ${this.score} / ${this.targetScore}`;
-        document.getElementById('ov-btn').textContent = 'Try Again';
-        this.overlay.classList.remove('hidden');
+        return;
       }
+
+      const prevMax = this.maxUnlocked;
+      const justUnlockedExtras = (this.level === 100 && this.maxUnlocked === 100);
+      if (this.level >= this.maxUnlocked && this.level < 110) {
+        this.maxUnlocked = this.level + 1;
+        localStorage.setItem('pokeMatch3Unlocked', this.maxUnlocked);
+      }
+
+      const prevRealm = this.getRealmInfo(prevMax).key;
+      const nextRealm = this.getRealmInfo(this.maxUnlocked).key;
+      if (nextRealm !== prevRealm) {
+        this.showStoryModal(nextRealm);
+      }
+
+      const gotBoosters = this.rewardUnlockedBoosters(1);
+      if (justUnlockedExtras) {
+        rewardEl.textContent = 'EXTRAS UNLOCKED (Lv. 101-110) + Booster Charges!';
+        rewardEl.classList.remove('hidden');
+      } else if (gotBoosters) {
+        rewardEl.textContent = '🎁 +1 Charge to all unlocked boosters!';
+        rewardEl.classList.remove('hidden');
+      }
+
+      this.buildPath();
+      this.renderBoosters();
+      this.updateLoreButtonState();
+
+      const titleText = this.level > 100 ? `Extra ${this.level - 100} Cleared!` : `Level ${this.level} Cleared!`;
+      document.getElementById('ov-title').textContent = titleText;
+      document.getElementById('ov-desc').textContent = `Score: ${this.score}`;
+      document.getElementById('ov-btn').textContent = this.level < 110 ? (justUnlockedExtras ? 'Enter Extras (101)' : 'Next Level') : 'Replay Extra 10';
+      this.overlay.classList.remove('hidden');
+    } else if ((this.isTimedSideLevel && this.timeLeft <= 0) || (!this.isTimedSideLevel && this.movesLeft <= 0) || validMoves === 0) {
+      this.stopCountdown();
+      this.clearHint();
+      this.wonLast = false;
+      this.clearSavedGameProgress('adventure');
+      if (validMoves === 0) {
+        document.getElementById('ov-title').textContent = 'No More Moves!';
+      } else if (this.isTimedSideLevel) {
+        document.getElementById('ov-title').textContent = 'Time Up!';
+      } else {
+        document.getElementById('ov-title').textContent = 'Out of Moves!';
+      }
+      document.getElementById('ov-desc').textContent = `Score: ${this.score} / ${this.targetScore}`;
+      document.getElementById('ov-btn').textContent = 'Try Again';
+      this.overlay.classList.remove('hidden');
     }
   }
 }
@@ -8006,4 +8299,5 @@ new PokeMatchGame();
 </script>
 </body>
 </html>
-<% } %>
+ 
+ <% } %>
