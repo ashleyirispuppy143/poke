@@ -5426,7 +5426,7 @@ Game.init();
 
 
 <% if (game === "match3") { %>
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -5684,10 +5684,10 @@ Game.init();
     }
 
     .path-panel {
-      --map-bg: #0b1924;
-      --map-surf: rgba(20, 42, 60, 0.78);
+      --map-bg: #07131c;
+      --map-surf: rgba(16, 38, 54, 0.78);
       --map-accent: #7fd8eb;
-      --map-glow: #005b6e;
+      --map-glow: #005f73;
       background: var(--map-bg);
       border-radius: 32px;
       padding: 20px;
@@ -5702,22 +5702,22 @@ Game.init();
     }
 
     .path-panel[data-map-realm="ocean"] {
-      --map-bg: #07131c;
-      --map-surf: rgba(16, 38, 54, 0.78);
+      --map-bg: #04131e;
+      --map-surf: rgba(12, 42, 62, 0.78);
       --map-accent: #7fd8eb;
-      --map-glow: #005f73;
+      --map-glow: #007791;
     }
     .path-panel[data-map-realm="forest"] {
-      --map-bg: #0a140c;
-      --map-surf: rgba(22, 42, 26, 0.78);
+      --map-bg: #09160b;
+      --map-surf: rgba(20, 44, 24, 0.78);
       --map-accent: #9cd69d;
-      --map-glow: #1f5126;
+      --map-glow: #2a6632;
     }
     .path-panel[data-map-realm="magma"] {
-      --map-bg: #1c0905;
-      --map-surf: rgba(52, 20, 14, 0.82);
+      --map-bg: #1e0703;
+      --map-surf: rgba(58, 18, 10, 0.82);
       --map-accent: #ff9e7d;
-      --map-glow: #b52b00;
+      --map-glow: #d43800;
     }
     .path-panel[data-map-realm="astral"] {
       --map-bg: #020104;
@@ -5726,10 +5726,10 @@ Game.init();
       --map-glow: #1b0938;
     }
     .path-panel[data-map-realm="extras"] {
-      --map-bg: #14040a;
-      --map-surf: rgba(48, 12, 26, 0.85);
+      --map-bg: #120207;
+      --map-surf: rgba(48, 10, 24, 0.85);
       --map-accent: #ff80ab;
-      --map-glow: #880e4f;
+      --map-glow: #ad1457;
     }
 
     .realm-bg-anim {
@@ -5740,149 +5740,182 @@ Game.init();
       z-index: 0;
       overflow: hidden;
     }
-    .realm-orb {
-      position: absolute;
-      border-radius: 50%;
-      filter: blur(22px);
-      opacity: 0.34;
-      transition: background 0.6s ease, opacity 0.6s ease, box-shadow 0.6s ease;
-      animation: floatRealmOrb 8s ease-in-out infinite alternate;
-    }
-    .realm-orb.o1 {
-      width: 180px;
-      height: 180px;
-      top: 8%;
-      left: -35px;
-      background: var(--map-accent);
-    }
-    .realm-orb.o2 {
-      width: 220px;
-      height: 220px;
-      bottom: 10%;
-      right: -55px;
-      background: var(--map-glow);
-      animation-duration: 11s;
-      animation-direction: alternate-reverse;
-    }
-    .realm-orb.o3 {
-      width: 130px;
-      height: 130px;
-      top: 44%;
-      left: 30%;
-      background: var(--map-accent);
-      opacity: 0.2;
-      animation-duration: 6.5s;
-    }
 
-    .realm-particles {
-      position: absolute;
-      inset: -100% 0 0 0;
-      background-image:
-        radial-gradient(circle at 20% 25%, var(--map-accent) 2px, transparent 3px),
-        radial-gradient(circle at 75% 45%, #ffffff 1.5px, transparent 3px),
-        radial-gradient(circle at 40% 75%, var(--map-accent) 2px, transparent 3px),
-        radial-gradient(circle at 85% 85%, var(--map-accent) 2.5px, transparent 3.5px);
-      background-size: 170px 210px;
-      opacity: 0.35;
-      transition: opacity 0.5s ease;
-      animation: realmRise 12s linear infinite;
-    }
-
-    .void-vignette {
+    .bg-layer {
       position: absolute;
       inset: 0;
       opacity: 0;
-      transition: opacity 0.6s ease;
-      background:
-        radial-gradient(circle at 50% 45%, transparent 10%, rgba(0, 0, 0, 0.85) 68%, #000000 100%);
+      transition: opacity 0.55s ease;
     }
 
-    .path-panel[data-map-realm="ocean"] .realm-particles {
-      animation: realmRise 11s linear infinite;
-      opacity: 0.38;
-    }
-    .path-panel[data-map-realm="forest"] .realm-particles {
-      animation: realmSway 9s ease-in-out infinite alternate;
-      opacity: 0.42;
-    }
-    .path-panel[data-map-realm="magma"] .realm-orb.o1 {
-      background: #ff4500;
-      opacity: 0.5;
-    }
-    .path-panel[data-map-realm="magma"] .realm-orb.o2 {
-      background: #ff8800;
-      opacity: 0.45;
-    }
-    .path-panel[data-map-realm="magma"] .realm-particles {
-      background-image:
-        radial-gradient(circle at 22% 30%, #ff5722 3px, transparent 4.5px),
-        radial-gradient(circle at 70% 55%, #ffeb3b 2px, transparent 3.5px),
-        radial-gradient(circle at 45% 80%, #ff7043 2.5px, transparent 4px),
-        radial-gradient(circle at 82% 20%, #ff9800 3px, transparent 4.5px);
-      animation: realmRiseFast 5s linear infinite;
-      opacity: 0.65;
-    }
-    .path-panel[data-map-realm="astral"] .void-vignette {
+    .path-panel[data-map-realm="ocean"] .bg-ocean {
       opacity: 1;
-      animation: voidPulse 4s ease-in-out infinite alternate;
+      background:
+        repeating-linear-gradient(
+          115deg,
+          rgba(127, 216, 235, 0.08) 0px,
+          rgba(127, 216, 235, 0.18) 28px,
+          transparent 28px,
+          transparent 72px
+        ),
+        radial-gradient(circle at 50% 0%, rgba(0, 180, 216, 0.35), transparent 70%);
+      background-size: 200% 200%;
+      animation: oceanCaustics 9s ease-in-out infinite alternate;
     }
-    .path-panel[data-map-realm="astral"] .realm-orb.o1,
-    .path-panel[data-map-realm="astral"] .realm-orb.o2 {
-      background: #090414;
-      box-shadow: 0 0 60px #3b0764;
-      opacity: 0.75;
+    .path-panel[data-map-realm="ocean"] .bg-ocean::after {
+      content: "";
+      position: absolute;
+      inset: -100% 0 0 0;
+      background-image:
+        radial-gradient(circle at 18% 25%, transparent 5px, rgba(184, 234, 255, 0.55) 6px, transparent 7.5px),
+        radial-gradient(circle at 76% 52%, transparent 8px, rgba(127, 216, 235, 0.45) 9.5px, transparent 11px),
+        radial-gradient(circle at 42% 82%, transparent 4px, rgba(184, 234, 255, 0.5) 5px, transparent 6.5px),
+        radial-gradient(circle at 86% 18%, transparent 6px, rgba(127, 216, 235, 0.4) 7px, transparent 8.5px);
+      background-size: 160px 220px;
+      animation: bubblesRise 10s linear infinite;
     }
-    .path-panel[data-map-realm="astral"] .realm-orb.o3 {
+
+    .path-panel[data-map-realm="forest"] .bg-forest {
+      opacity: 1;
+      background:
+        linear-gradient(135deg, rgba(188, 242, 188, 0.16) 0%, transparent 45%),
+        linear-gradient(150deg, transparent 25%, rgba(156, 214, 157, 0.12) 50%, transparent 75%),
+        radial-gradient(circle at 20% 85%, rgba(46, 125, 50, 0.35), transparent 60%);
+      animation: forestCanopy 7s ease-in-out infinite alternate;
+    }
+    .path-panel[data-map-realm="forest"] .bg-forest::after {
+      content: "";
+      position: absolute;
+      inset: -50% -20%;
+      background-image:
+        radial-gradient(circle at 25% 30%, #e6ee9c 3px, rgba(156, 214, 157, 0.4) 6px, transparent 10px),
+        radial-gradient(circle at 70% 65%, #dce775 2.5px, rgba(156, 214, 157, 0.35) 5px, transparent 9px),
+        radial-gradient(circle at 50% 20%, #a5d6a7 3.5px, transparent 7px),
+        radial-gradient(circle at 82% 40%, #fff59d 2px, transparent 6px);
+      background-size: 180px 180px;
+      animation: fireflyDrift 8s ease-in-out infinite alternate;
+    }
+
+    .path-panel[data-map-realm="magma"] .bg-magma {
+      opacity: 1;
+      background:
+        radial-gradient(ellipse at 50% 105%, #ff5722 0%, #b71c1c 42%, transparent 78%),
+        repeating-linear-gradient(
+          0deg,
+          rgba(255, 87, 34, 0.14) 0px,
+          transparent 18px,
+          rgba(255, 152, 0, 0.1) 36px
+        );
+      animation: magmaPulse 3.2s ease-in-out infinite alternate;
+    }
+    .path-panel[data-map-realm="magma"] .bg-magma::after {
+      content: "";
+      position: absolute;
+      inset: -100% 0 0 0;
+      background-image:
+        radial-gradient(circle at 20% 35%, #ffeb3b 2.5px, #ff5722 4px, transparent 6px),
+        radial-gradient(circle at 65% 60%, #ff9800 3px, #d84315 5px, transparent 7px),
+        radial-gradient(circle at 40% 85%, #ffcc80 2px, transparent 4px),
+        radial-gradient(circle at 85% 25%, #ff5722 3.5px, transparent 6px);
+      background-size: 140px 190px;
+      animation: embersShoot 4.2s linear infinite;
+    }
+
+    .path-panel[data-map-realm="astral"] .bg-astral {
+      opacity: 1;
+      background:
+        radial-gradient(circle at 50% 42%, #000000 0%, #05020a 35%, rgba(0, 0, 0, 0.96) 100%);
+    }
+    .path-panel[data-map-realm="astral"] .bg-astral::before {
+      content: "";
+      position: absolute;
       width: 150px;
       height: 150px;
-      top: 40%;
-      left: 25%;
+      top: 34%;
+      left: calc(50% - 75px);
+      border-radius: 50%;
       background: #000000;
-      filter: blur(4px);
-      box-shadow: 0 0 35px #581c87, inset 0 0 25px #a855f7;
-      opacity: 0.85;
-      animation: voidEye 5s ease-in-out infinite alternate;
+      box-shadow:
+        0 0 40px #4c1d95,
+        0 0 80px #2e1065,
+        inset 0 0 28px #a855f7;
+      animation: voidSingularity 5s ease-in-out infinite alternate;
     }
-    .path-panel[data-map-realm="astral"] .realm-particles {
-      background-image:
-        radial-gradient(circle at 30% 40%, rgba(167, 139, 250, 0.45) 1px, transparent 2px),
-        radial-gradient(circle at 75% 70%, rgba(255, 255, 255, 0.25) 1px, transparent 2px);
-      animation: realmPulseSpin 18s linear infinite;
-      opacity: 0.22;
-    }
-    .path-panel[data-map-realm="extras"] .realm-particles {
-      animation: realmRiseFast 4s linear infinite;
-      opacity: 0.6;
+    .path-panel[data-map-realm="astral"] .bg-astral::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 50% 42%, transparent 15%, rgba(0, 0, 0, 0.88) 70%, #000000 100%);
     }
 
-    @keyframes floatRealmOrb {
-      0% { transform: translate(0, 0) scale(0.92); }
-      100% { transform: translate(24px, -32px) scale(1.15); }
+    .path-panel[data-map-realm="extras"] .bg-extras {
+      opacity: 1;
+      background:
+        radial-gradient(circle at 50% 18%, rgba(255, 23, 68, 0.35), transparent 62%),
+        linear-gradient(180deg, #1a0208 0%, #0d0104 100%);
     }
-    @keyframes realmRise {
-      0% { transform: translateY(35%); }
+    .path-panel[data-map-realm="extras"] .bg-extras::before {
+      content: "";
+      position: absolute;
+      width: 120px;
+      height: 120px;
+      top: 10%;
+      left: calc(50% - 60px);
+      border-radius: 50%;
+      background: #070002;
+      box-shadow:
+        0 0 0 4px #ff1744,
+        0 0 32px #ff4081,
+        0 0 65px #880e4f;
+      animation: eclipseCorona 3.5s ease-in-out infinite alternate;
+    }
+    .path-panel[data-map-realm="extras"] .bg-extras::after {
+      content: "";
+      position: absolute;
+      inset: -100% 0 0 0;
+      background-image:
+        radial-gradient(circle at 30% 25%, #ff80ab 2.5px, transparent 4px),
+        radial-gradient(circle at 75% 65%, #ff1744 3px, transparent 5px),
+        radial-gradient(circle at 50% 80%, #f50057 2px, transparent 4px);
+      background-size: 150px 180px;
+      animation: crimsonFall 6s linear infinite;
+    }
+
+    @keyframes oceanCaustics {
+      0% { background-position: 0% 0%; }
+      100% { background-position: 100% 35%; }
+    }
+    @keyframes bubblesRise {
+      0% { transform: translateY(45%); }
       100% { transform: translateY(0%); }
     }
-    @keyframes realmRiseFast {
-      0% { transform: translateY(45%) scale(1.05); }
-      100% { transform: translateY(0%) scale(0.95); }
+    @keyframes forestCanopy {
+      0% { opacity: 0.78; transform: scale(1); }
+      100% { opacity: 1; transform: scale(1.06); }
     }
-    @keyframes realmSway {
-      0% { transform: translate(-12px, 10%) rotate(-2deg); }
-      100% { transform: translate(12px, 28%) rotate(2deg); }
+    @keyframes fireflyDrift {
+      0% { transform: translate(-16px, 12px) rotate(-3deg); }
+      100% { transform: translate(18px, -18px) rotate(3deg); }
     }
-    @keyframes realmPulseSpin {
-      0% { transform: translateY(15%) scale(0.96); opacity: 0.15; }
-      50% { transform: translateY(25%) scale(1.06); opacity: 0.35; }
-      100% { transform: translateY(15%) scale(0.96); opacity: 0.15; }
+    @keyframes magmaPulse {
+      0% { filter: brightness(0.92); }
+      100% { filter: brightness(1.22); }
     }
-    @keyframes voidPulse {
-      0% { opacity: 0.82; }
-      100% { opacity: 1; }
+    @keyframes embersShoot {
+      0% { transform: translateY(48%); }
+      100% { transform: translateY(0%); }
     }
-    @keyframes voidEye {
-      0% { transform: scale(0.85) rotate(0deg); }
-      100% { transform: scale(1.12) rotate(18deg); }
+    @keyframes voidSingularity {
+      0% { transform: scale(0.86) rotate(0deg); }
+      100% { transform: scale(1.14) rotate(25deg); }
+    }
+    @keyframes eclipseCorona {
+      0% { transform: scale(0.94); box-shadow: 0 0 0 3px #ff1744, 0 0 24px #ff4081, 0 0 50px #880e4f; }
+      100% { transform: scale(1.06); box-shadow: 0 0 0 5px #ff80ab, 0 0 42px #ff1744, 0 0 80px #ad1457; }
+    }
+    @keyframes crimsonFall {
+      0% { transform: translateY(0%); }
+      100% { transform: translateY(45%); }
     }
 
     .path-header {
@@ -5914,6 +5947,11 @@ Game.init();
       font-size: 0.74rem;
       font-weight: 800;
       cursor: pointer;
+      transition: opacity 0.2s ease;
+    }
+    .lore-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
     }
     .close-drawer-btn {
       display: none;
@@ -6027,7 +6065,7 @@ Game.init();
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
       position: relative;
       width: 100%;
     }
@@ -6059,6 +6097,18 @@ Game.init();
       font-weight: 800;
       color: var(--primary);
       margin-top: 2px;
+    }
+
+    .hazard-banner {
+      width: 100%;
+      max-width: 440px;
+      background: var(--surface-2);
+      color: var(--primary);
+      padding: 6px 12px;
+      border-radius: 14px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-align: center;
     }
 
     .progress-track {
@@ -6106,6 +6156,39 @@ Game.init();
       color: var(--on-primary);
       transform: scale(1.08);
       z-index: 2;
+    }
+
+    .gem-cell[data-hz="ice"] {
+      background: rgba(127, 216, 235, 0.22);
+      box-shadow: inset 0 0 0 2.5px #7fd8eb;
+    }
+    .gem-cell[data-hz="vine"] {
+      background: rgba(156, 214, 157, 0.22);
+      box-shadow: inset 0 0 0 2.5px #81c784;
+    }
+    .gem-cell[data-hz="cinder"] {
+      background: rgba(255, 87, 34, 0.26);
+      box-shadow: inset 0 0 0 2.5px #ff7043;
+    }
+    .gem-cell[data-hz="void"] {
+      background: #05020a;
+      box-shadow: inset 0 0 0 2.5px #a855f7;
+    }
+    .gem-cell[data-hz="eclipse"] {
+      background: rgba(136, 14, 79, 0.45);
+      box-shadow: inset 0 0 0 2.5px #ff4081;
+    }
+
+    .hz-badge {
+      position: absolute;
+      top: 2px;
+      left: 3px;
+      font-size: 0.62rem;
+      line-height: 1;
+      background: rgba(0, 0, 0, 0.72);
+      padding: 2px 3px;
+      border-radius: 5px;
+      pointer-events: none;
     }
 
     .gem-cell.match-highlight {
@@ -6305,17 +6388,6 @@ Game.init();
       from { transform: translateY(16px) scale(0.95); opacity: 0; }
       to   { transform: translateY(0) scale(1); opacity: 1; }
     }
-    .story-kicker {
-      align-self: flex-start;
-      background: var(--primary-container);
-      color: var(--on-primary-container);
-      font-size: 0.7rem;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 0.9px;
-      padding: 5px 12px;
-      border-radius: 99px;
-    }
     .story-title {
       font-size: 1.5rem;
       font-weight: 800;
@@ -6411,6 +6483,11 @@ Game.init();
       font-size: 1.05rem;
     }
 
+    body.is-mobile .hazard-banner {
+      font-size: 0.65rem;
+      padding: 5px 8px;
+    }
+
     body.is-mobile .progress-track {
       height: 8px;
     }
@@ -6458,8 +6535,7 @@ Game.init();
 
   <div class="story-modal hidden" id="story-modal">
     <div class="story-card">
-      <span class="story-kicker" id="story-kicker">Chronicle Unlocked</span>
-      <h3 class="story-title" id="story-title">The Sunken Bell of Pelagos</h3>
+      <h3 class="story-title" id="story-title">The Drowned Bell of Pelagos</h3>
       <div class="story-body" id="story-body"></div>
       <button class="action-btn" id="story-close-btn">Continue Journey</button>
     </div>
@@ -6491,16 +6567,16 @@ Game.init();
     <div class="layout-grid single" id="main-layout">
       <aside class="path-panel hidden" id="path-panel" data-map-realm="ocean">
         <div class="realm-bg-anim" aria-hidden="true">
-          <div class="realm-orb o1"></div>
-          <div class="realm-orb o2"></div>
-          <div class="realm-orb o3"></div>
-          <div class="realm-particles"></div>
-          <div class="void-vignette"></div>
+          <div class="bg-layer bg-ocean"></div>
+          <div class="bg-layer bg-forest"></div>
+          <div class="bg-layer bg-magma"></div>
+          <div class="bg-layer bg-astral"></div>
+          <div class="bg-layer bg-extras"></div>
         </div>
         <div class="path-header">
           <div>
-            <h2 id="map-header-title">Realm Map</h2>
-            <span id="unlocked-label" style="font-size:0.76rem;font-weight:700;color:var(--muted);">1 / 100 Unlocked</span>
+            <h2 id="map-header-title">Ocean Abyss</h2>
+            <span id="unlocked-label" style="font-size:0.76rem;font-weight:700;color:var(--muted);">1 / 110 Unlocked</span>
           </div>
           <div class="path-header-actions">
             <button class="lore-btn" id="btn-read-lore" title="Read Realm Chronicle">📖 Lore</button>
@@ -6525,6 +6601,8 @@ Game.init();
             <div class="hud-val" id="val-right">0</div>
           </div>
         </div>
+
+        <div class="hazard-banner hidden" id="hazard-banner"></div>
 
         <div class="progress-track">
           <div class="progress-fill" id="progress-fill"></div>
@@ -6582,7 +6660,21 @@ function checkIsMobile() {
   return Boolean(uaMobile || iPadOS || (coarsePointer && narrowScreen) || narrowScreen);
 }
 
-const RELICS_ALL = ['🔮', '⚗️', '🧭', '🧿', '⏳', '🗝️', '👑'];
+const REALM_GEMS = {
+  ocean:  ['🐚', '🫧', '🪸', '🔱', '⚓', '🐬', '🦑'],
+  forest: ['🍃', '🍄', '🌰', '🦋', '🌸', '🦉', '🦌'],
+  magma:  ['🔥', '🌋', '☄️', '🧨', '⚱️', '🐉', '🐦‍🔥'],
+  astral: ['🔮', '🧿', '⏳', '🌙', '🪐', '👁️', '🌌'],
+  extras: ['🩸', '🗡️', '⛓️', '🥀', '💀', '🕷️', '👑']
+};
+
+const HAZARD_INFO = {
+  ocean:  { key: 'ice',     badge: '❄️', text: '❄️ Abyssal Ice: Match or clear adjacent tiles to shatter the ice shell!' },
+  forest: { key: 'vine',    badge: '🌿', text: '🌿 Sylvan Briars: Rooted tiles cannot be swapped directly. Match or clear adjacent!' },
+  magma:  { key: 'cinder',  badge: '🔥', text: '🔥 Molten Cinders: Clearing volatile cinders grants +120 bonus points!' },
+  astral: { key: 'void',    badge: '🕳️', text: '🕳️ Void Corruption: Drains 90 pts if disturbed. Neutralize via matches!' },
+  extras: { key: 'eclipse', badge: '🩸', text: '🩸 Eclipse Chains: Locked tiles that require 2 hits to break and spawn each turn!' }
+};
 
 const POWERUP_BADGES = {
   hbeam: '⚡',
@@ -6603,47 +6695,42 @@ const BOOSTER_DEFS = [
 
 const REALM_STORIES = {
   ocean: {
-    kicker: 'Chapter I • Ocean Abyss (Levels 1-25)',
-    title: 'The Drowned Bell of Pelagos',
+    title: 'The Drowned Bell of Pelagos (Levels 1-25)',
     paragraphs: [
-      'When the firmament fractured, the tujuh Relics of the Chronomancer did not scatter across the land—they sank. They fell through three leagues of freezing black water until they came to rest in the trench of Pelagos, where even the leviathans are born blind.',
+      'When the firmament fractured, the seven Relics of the Chronomancer did not scatter across the land; they sank. They fell through three leagues of freezing black water until they came to rest in the trench of Pelagos, where even the leviathans are born blind.',
       'Down here, the pressure crushes iron into paper, yet the relics still hum. Every alignment you forge sends a resonant chime through the brine, waking the sunken Causeway stone by stone.',
-      'Gather the compasses and phials from the silt. Something ancient is listening from theroots of the continent above—and the tide is beginning to pull upward.'
+      'Gather the shells and tridents from the silt. Something ancient is listening from the roots of the continent above, and the tide is beginning to pull upward.'
     ]
   },
   forest: {
-    kicker: 'Chapter II • Sylvan Wilds (Levels 26-50)',
-    title: 'Roots That Drink the Tide',
+    title: 'Roots That Drink the Tide (Levels 26-50)',
     paragraphs: [
       'You breach the surface expecting sky, but find only a ceiling of interlocking boughs. The Sylvan Wilds have grown directly over the continental shelf, their pale, colossal roots drinking the salt and memory of the trench you just climbed.',
       'The trees here do not mark time in seasons. Hollow-eyed wardens carved into the bark watch your hands as you sort the relics; they remember when the Crown and the Key were whole, before the world was split into layers.',
-      'Pollen drifts like warm snow, but the soil beneath your boots is unnaturally hot. The deeper into the timber you press, the more the roots char to cinders—pointing toward the furnace beneath the earth.'
+      'Pollen drifts like warm snow, but the soil beneath your boots is unnaturally hot. The deeper into the timber you press, the more the roots char to cinders, pointing toward the furnace beneath the earth.'
     ]
   },
   magma: {
-    kicker: 'Chapter III • Magma Core (Levels 51-75)',
-    title: 'The Anvil Beneath the Roots',
+    title: 'The Anvil Beneath the Roots (Levels 51-75)',
     paragraphs: [
-      'The petrified roots give way to basalt ribs and rivers of white-hot slag. This is the Magma Core—not a natural cavern, but a subterranean foundry where the Relics were originally cast in the first age of the world.',
+      'The petrified roots give way to basalt ribs and rivers of white-hot slag. This is the Magma Core, not a natural cavern, but a subterranean foundry where the Relics were originally cast in the first age of the world.',
       'Every breath tastes of copper and ash. The heat warps the air until the relics on the stone grid seem to writhe, eager to return to the crucibles that birthed them.',
-      'Yet the great forge-hammers arechained not to keep the fire in, but to hold the floor down. Beneath the deepest magma chamber, there is no bedrock at all—only a cold, devouring silence waiting for the crust to crack.'
+      'Yet the great forge-hammers are chained not to keep the fire in, but to hold the floor down. Beneath the deepest magma chamber, there is no bedrock at all, only a cold, devouring silence waiting for the crust to crack.'
     ]
   },
   astral: {
-    kicker: 'Chapter IV • Astral Void (Levels 76-100)',
-    title: 'Where the Stars Were Unmade',
+    title: 'Where the Stars Were Unmade (Levels 76-100)',
     paragraphs: [
       'You step through the bottom of the forge and gravity forgets your name. The heat vanishes instantly, replaced by a silence so absolute you can hear the blood hesitating in your veins.',
-      'The Astral Void is not empty space—it is the husk of what existed before light was invented. Dead constellations hang like tangled cobwebs in the dark, and from the center of the abyss, an unblinking singularity watches every move you make.',
+      'The Astral Void is not empty space; it is the husk of what existed before light was invented. Dead constellations hang like tangled cobwebs in the dark, and from the center of the abyss, an unblinking singularity watches every move you make.',
       'Do not linger between turns. In this darkness, hesitation lets the Void seep into the grid itself. Align the final seals, bind the fracture, or become another nameless echo drifting in the dark.'
     ]
   },
   extras: {
-    kicker: 'Final Chronicle • Crimson Eclipse (Extras 101-110)',
-    title: 'The Tenth Hour of the Eclipse',
+    title: 'The Tenth Hour of the Eclipse (Extras 101-110)',
     paragraphs: [
-      'The hundredth seal held for a single heartbeat—and then the singularity bled crimson. By binding all four realms together, you did not close the wound in the firmament; you woke the Architect slumbering inside it.',
-      'Time is folding back on itself. All seven relics now crowd the board at once, and the margin for error has burned away to almost nothing.',
+      'The hundredth seal held for a single heartbeat, and then the singularity bled crimson. By binding all four realms together, you did not close the wound in the firmament; you woke the Architect slumbering inside it.',
+      'Time is folding back on itself. All seven relics now crowd the board at once, bound in blood-chains, and the margin for error has burned away to almost nothing.',
       'Ten trials remain inside the Crimson Eclipse. Survive the collapse, prove your mastery over the complete heptad, and claim the throne at the end of time.'
     ]
   }
@@ -6690,6 +6777,20 @@ class PokeMatchGame {
     }
   }
 
+  isRealmUnlocked(realmKey) {
+    const minLvlMap = { ocean: 1, forest: 26, magma: 51, astral: 76, extras: 101 };
+    return this.maxUnlocked >= (minLvlMap[realmKey] || 1);
+  }
+
+  updateLoreButtonState() {
+    const btn = document.getElementById('btn-read-lore');
+    if (!btn) return;
+    const realmKey = this.currentMapScrollRealm || 'ocean';
+    const unlocked = this.isRealmUnlocked(realmKey);
+    btn.disabled = !unlocked;
+    btn.textContent = unlocked ? '📖 Lore' : '🔒 Lore';
+  }
+
   loadSeenStories() {
     try {
       this.seenStories = JSON.parse(localStorage.getItem('pokeMatchSeenStories') || '{}');
@@ -6703,10 +6804,10 @@ class PokeMatchGame {
     localStorage.setItem('pokeMatchSeenStories', JSON.stringify(this.seenStories));
   }
 
-  showStoryModal(realmKey, isNewUnlock = false) {
+  showStoryModal(realmKey) {
+    if (!this.isRealmUnlocked(realmKey)) return;
     const story = REALM_STORIES[realmKey];
     if (!story) return;
-    document.getElementById('story-kicker').textContent = isNewUnlock ? `✨ New Realm Unlocked • ${story.kicker}` : story.kicker;
     document.getElementById('story-title').textContent = story.title;
     const bodyEl = document.getElementById('story-body');
     bodyEl.innerHTML = story.paragraphs.map(p => `<p>${p}</p>`).join('');
@@ -6716,8 +6817,8 @@ class PokeMatchGame {
 
   maybeTriggerRealmStory(lvl) {
     const realm = this.getRealmInfo(lvl);
-    if (!this.seenStories[realm.key]) {
-      this.showStoryModal(realm.key, lvl > 1);
+    if (this.isRealmUnlocked(realm.key) && !this.seenStories[realm.key]) {
+      this.showStoryModal(realm.key);
     }
   }
 
@@ -6756,13 +6857,14 @@ class PokeMatchGame {
   }
 
   isValidBoardData(b) {
+    const validGems = new Set(this.getRelicPool());
     return Array.isArray(b) &&
       b.length === this.size &&
-      b.every(row => Array.isArray(row) && row.length === this.size && row.every(cell => cell && typeof cell.type === 'string'));
+      b.every(row => Array.isArray(row) && row.length === this.size && row.every(cell => cell && validGems.has(cell.type)));
   }
 
   getTotalMaxLevels() {
-    return this.maxUnlocked > 100 ? 110 : 100;
+    return 110;
   }
 
   syncMobileState() {
@@ -6814,6 +6916,7 @@ class PokeMatchGame {
       document.getElementById('map-header-title').textContent = realm.short;
       this.currentMapScrollRealm = realm.key;
     }
+    this.updateLoreButtonState();
   }
 
   loadSavedBoosters() {
@@ -6858,6 +6961,7 @@ class PokeMatchGame {
     const layout = document.getElementById('main-layout');
     const boostersWrap = document.getElementById('boosters-wrap');
     const btnOpenMap = document.getElementById('btn-open-map');
+    const hazardBanner = document.getElementById('hazard-banner');
 
     if (mode === 'forever') {
       tabForever.classList.add('active');
@@ -6869,6 +6973,7 @@ class PokeMatchGame {
       layout.classList.add('single');
       boostersWrap.classList.add('hidden');
       btnOpenMap.classList.add('hidden');
+      hazardBanner.classList.add('hidden');
       this.closeMobileDrawer();
     } else {
       tabAdv.classList.add('active');
@@ -6914,7 +7019,9 @@ class PokeMatchGame {
 
     document.getElementById('btn-read-lore').onclick = () => {
       const key = this.currentMapScrollRealm || this.getRealmInfo(this.level).key;
-      this.showStoryModal(key, false);
+      if (this.isRealmUnlocked(key)) {
+        this.showStoryModal(key);
+      }
     };
 
     document.getElementById('story-close-btn').onclick = () => {
@@ -6948,7 +7055,7 @@ class PokeMatchGame {
     if (lvl <= 50) return { key: 'forest', short: 'Sylvan Wilds', name: 'Sylvan Wilds (26-50)' };
     if (lvl <= 75) return { key: 'magma',  short: 'Magma Core',   name: 'Magma Core (51-75)' };
     if (lvl <= 100) return { key: 'astral', short: 'Astral Void', name: 'Astral Void (76-100)' };
-    return { key: 'extras', short: 'Extras', name: 'Crimson Eclipse - Extras (101-110)' };
+    return { key: 'extras', short: 'Crimson Eclipse', name: 'Crimson Eclipse - Extras (101-110)' };
   }
 
   applyTheme() {
@@ -6958,9 +7065,23 @@ class PokeMatchGame {
     this.pathPanel.setAttribute('data-map-realm', realm.key);
     document.getElementById('map-header-title').textContent = realm.short;
     this.currentMapScrollRealm = realm.key;
+    this.updateLoreButtonState();
     document.getElementById('theme-badge').textContent = this.mode === 'forever' ? `Endless - ${realm.short}` : realm.name;
     const lvlTag = this.level > 100 ? `EX-${this.level - 100}` : `Lv.${this.level}`;
     document.getElementById('mobile-realm-label').textContent = `${realm.short} - ${lvlTag}`;
+
+    const hazardBanner = document.getElementById('hazard-banner');
+    if (this.mode === 'adventure' && this.shouldLevelHaveHazards(this.level)) {
+      const hz = HAZARD_INFO[realm.key];
+      hazardBanner.textContent = hz.text;
+      hazardBanner.classList.remove('hidden');
+    } else {
+      hazardBanner.classList.add('hidden');
+    }
+  }
+
+  shouldLevelHaveHazards(lvl) {
+    return lvl >= 4;
   }
 
   buildPath() {
@@ -7060,24 +7181,30 @@ class PokeMatchGame {
   }
 
   shuffleBoard() {
-    const flat = [];
+    const movable = [];
     for (let r = 0; r < this.size; r++) {
       for (let c = 0; c < this.size; c++) {
-        flat.push(this.board[r][c]);
+        if (!this.isCellRooted(r, c)) {
+          movable.push(this.board[r][c]);
+        }
       }
     }
+    let attempts = 0;
     do {
-      for (let i = flat.length - 1; i > 0; i--) {
+      for (let i = movable.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        [flat[i], flat[j]] = [flat[j], flat[i]];
+        [movable[i], movable[j]] = [movable[j], movable[i]];
       }
       let k = 0;
       for (let r = 0; r < this.size; r++) {
         for (let c = 0; c < this.size; c++) {
-          this.board[r][c] = flat[k++];
+          if (!this.isCellRooted(r, c)) {
+            this.board[r][c] = movable[k++];
+          }
         }
       }
-    } while (this.findMatchGroups().length > 0 || this.countValidMoves() === 0);
+      attempts++;
+    } while ((this.findMatchGroups().length > 0 || this.countValidMoves() === 0) && attempts < 40);
 
     playTone(540, 0.14, 'triangle');
     this.render();
@@ -7117,7 +7244,7 @@ class PokeMatchGame {
       }
     }
 
-    await this.clearAndCascade(toClear, []);
+    await this.clearAndCascade(toClear, [], 1, true);
     this.updateHUD();
     this.saveGameProgress();
     this.checkEndState();
@@ -7126,9 +7253,71 @@ class PokeMatchGame {
   }
 
   getRelicPool() {
-    if (this.mode === 'forever') return RELICS_ALL.slice(0, 6);
+    const refLevel = this.mode === 'adventure' ? this.level : this.maxUnlocked;
+    const realmKey = this.getRealmInfo(refLevel).key;
+    const gems = REALM_GEMS[realmKey] || REALM_GEMS.ocean;
+    if (this.mode === 'forever') return gems.slice(0, 6);
     const isHardOrExtra = (this.level % 10 === 0) || (this.level > 100);
-    return RELICS_ALL.slice(0, isHardOrExtra ? 7 : 6);
+    return gems.slice(0, isHardOrExtra ? 7 : 6);
+  }
+
+  isCellRooted(r, c, b = this.board) {
+    const hz = b[r]?.[c]?.hz;
+    return hz === 'vine' || hz === 'eclipse';
+  }
+
+  seedInitialHazards() {
+    if (this.mode !== 'adventure' || !this.shouldLevelHaveHazards(this.level)) return;
+    const realmKey = this.getRealmInfo(this.level).key;
+    const hzType = HAZARD_INFO[realmKey].key;
+    const isBoss = (this.level % 10 === 0) || (this.level > 100);
+    const count = isBoss ? 8 : Math.min(6, 2 + Math.floor((this.level % 25) / 5));
+
+    const coords = [];
+    for (let r = 0; r < this.size; r++) {
+      for (let c = 0; c < this.size; c++) {
+        coords.push([r, c]);
+      }
+    }
+    for (let i = coords.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [coords[i], coords[j]] = [coords[j], coords[i]];
+    }
+
+    let placed = 0;
+    for (const [r, c] of coords) {
+      if (placed >= count) break;
+      const prevHz = this.board[r][c].hz;
+      this.board[r][c].hz = hzType;
+      if (this.countValidMoves() >= 2) {
+        placed++;
+      } else {
+        this.board[r][c].hz = prevHz;
+      }
+    }
+  }
+
+  applyBossTurnMechanic() {
+    if (this.mode !== 'adventure') return;
+    const isBoss = (this.level % 10 === 0) || (this.level > 100);
+    if (!isBoss) return;
+
+    const realmKey = this.getRealmInfo(this.level).key;
+    const hzType = HAZARD_INFO[realmKey].key;
+    const candidates = [];
+    for (let r = 0; r < this.size; r++) {
+      for (let c = 0; c < this.size; c++) {
+        if (this.board[r][c] && !this.board[r][c].hz && !this.board[r][c].pw) {
+          candidates.push([r, c]);
+        }
+      }
+    }
+    if (candidates.length === 0) return;
+    const [tr, tc] = candidates[Math.floor(Math.random() * candidates.length)];
+    this.board[tr][tc].hz = hzType;
+    if (this.countValidMoves() === 0) {
+      this.board[tr][tc].hz = null;
+    }
   }
 
   startForever(forceNew = false) {
@@ -7215,6 +7404,7 @@ class PokeMatchGame {
 
     this.score = 0;
     this.generateInitialBoard();
+    this.seedInitialHazards();
     this.saveGameProgress();
     this.render();
     this.updateHUD();
@@ -7234,7 +7424,7 @@ class PokeMatchGame {
             (c >= 2 && this.board[r][c - 1]?.type === g && this.board[r][c - 2]?.type === g) ||
             (r >= 2 && this.board[r - 1][c]?.type === g && this.board[r - 2][c]?.type === g)
           );
-          this.board[r][c] = { type: g, pw: null };
+          this.board[r][c] = { type: g, pw: null, hz: null };
         }
       }
     } while (this.countValidMoves() === 0);
@@ -7340,13 +7530,13 @@ class PokeMatchGame {
 
     for (let r = 0; r < this.size; r++) {
       for (let c = 0; c < this.size; c++) {
-        if (c + 1 < this.size) {
+        if (c + 1 < this.size && !this.isCellRooted(r, c, copy) && !this.isCellRooted(r, c + 1, copy)) {
           if (copy[r][c]?.pw && copy[r][c + 1]?.pw) return [{ r, c }, { r, c: c + 1 }];
           swap(r, c, r, c + 1);
           if (this.findMatchGroups(copy).length > 0) return [{ r, c }, { r, c: c + 1 }];
           swap(r, c, r, c + 1);
         }
-        if (r + 1 < this.size) {
+        if (r + 1 < this.size && !this.isCellRooted(r, c, copy) && !this.isCellRooted(r + 1, c, copy)) {
           if (copy[r][c]?.pw && copy[r + 1][c]?.pw) return [{ r, c }, { r: r + 1, c }];
           swap(r, c, r + 1, c);
           if (this.findMatchGroups(copy).length > 0) return [{ r, c }, { r: r + 1, c }];
@@ -7368,12 +7558,12 @@ class PokeMatchGame {
 
     for (let r = 0; r < this.size; r++) {
       for (let c = 0; c < this.size; c++) {
-        if (c + 1 < this.size) {
+        if (c + 1 < this.size && !this.isCellRooted(r, c, copy) && !this.isCellRooted(r, c + 1, copy)) {
           swap(r, c, r, c + 1);
           if (this.findMatchGroups(copy).length > 0 || (copy[r][c]?.pw && copy[r][c + 1]?.pw)) moves++;
           swap(r, c, r, c + 1);
         }
-        if (r + 1 < this.size) {
+        if (r + 1 < this.size && !this.isCellRooted(r, c, copy) && !this.isCellRooted(r + 1, c, copy)) {
           swap(r, c, r + 1, c);
           if (this.findMatchGroups(copy).length > 0 || (copy[r][c]?.pw && copy[r + 1][c]?.pw)) moves++;
           swap(r, c, r + 1, c);
@@ -7450,6 +7640,7 @@ class PokeMatchGame {
 
   render() {
     this.gridEl.innerHTML = '';
+    const hzBadgeLookup = { ice: '❄️', vine: '🌿', cinder: '🔥', void: '🕳️', eclipse: '🩸' };
     for (let r = 0; r < this.size; r++) {
       for (let c = 0; c < this.size; c++) {
         const cell = document.createElement('div');
@@ -7460,6 +7651,13 @@ class PokeMatchGame {
         const item = this.board[r][c];
         if (item) {
           cell.textContent = item.type;
+          if (item.hz) {
+            cell.setAttribute('data-hz', item.hz);
+            const hzb = document.createElement('span');
+            hzb.className = 'hz-badge';
+            hzb.textContent = hzBadgeLookup[item.hz] || '⚠️';
+            cell.appendChild(hzb);
+          }
           if (item.pw) {
             cell.setAttribute('data-pw', item.pw);
             const badge = document.createElement('span');
@@ -7511,6 +7709,11 @@ class PokeMatchGame {
       return;
     }
 
+    if (this.isCellRooted(r, c)) {
+      playTone(150, 0.1, 'sawtooth');
+      return;
+    }
+
     if (!this.selected) {
       this.selected = { r, c };
       playTone(360, 0.05);
@@ -7531,7 +7734,7 @@ class PokeMatchGame {
     }
   }
 
-  async clearAndCascade(initialClearSet, spawns = [], comboStart = 1) {
+  async clearAndCascade(initialClearSet, spawns = [], comboStart = 1, fromBooster = false) {
     let combo = comboStart;
     let toClear = this.expandPowerups(initialClearSet);
 
@@ -7546,34 +7749,66 @@ class PokeMatchGame {
       playTone(380 + combo * 85, 0.11, 'triangle');
       combo++;
 
+      const adjacentNeighbors = new Set();
       toClear.forEach(key => {
         const [mr, mc] = key.split(',').map(Number);
         const idx = mr * this.size + mc;
         this.gridEl.children[idx]?.classList.add('match-highlight');
+        [[mr - 1, mc], [mr + 1, mc], [mr, mc - 1], [mr, mc + 1]].forEach(([nr, nc]) => {
+          if (nr >= 0 && nr < this.size && nc >= 0 && nc < this.size && !toClear.has(`${nr},${nc}`)) {
+            adjacentNeighbors.add(`${nr},${nc}`);
+          }
+        });
+      });
+
+      adjacentNeighbors.forEach(nKey => {
+        const [nr, nc] = nKey.split(',').map(Number);
+        const cell = this.board[nr]?.[nc];
+        if (!cell || !cell.hz) return;
+        if (cell.hz === 'ice' || cell.hz === 'vine' || cell.hz === 'void') {
+          cell.hz = null;
+        } else if (cell.hz === 'eclipse') {
+          cell.hz = 'ice';
+        }
       });
 
       this.updateHUD();
       await new Promise(res => setTimeout(res, 270));
 
+      const actualDestroy = new Set();
       toClear.forEach(key => {
         const [mr, mc] = key.split(',').map(Number);
+        const cell = this.board[mr]?.[mc];
         const idx = mr * this.size + mc;
         const el = this.gridEl.children[idx];
-        if (el) {
-          el.classList.remove('match-highlight');
-          el.classList.add('clearing');
+        if (!cell) return;
+
+        if (!fromBooster && (cell.hz === 'ice' || cell.hz === 'eclipse')) {
+          cell.hz = cell.hz === 'eclipse' ? 'ice' : null;
+          if (el) el.classList.remove('match-highlight');
+        } else {
+          if (cell.hz === 'cinder') {
+            this.score += 120;
+          } else if (cell.hz === 'void' && !fromBooster) {
+            this.score = Math.max(0, this.score - 90);
+          }
+          actualDestroy.add(key);
+          if (el) {
+            el.classList.remove('match-highlight');
+            el.classList.add('clearing');
+          }
         }
       });
 
       await new Promise(res => setTimeout(res, 190));
 
-      toClear.forEach(key => {
+      actualDestroy.forEach(key => {
         const [mr, mc] = key.split(',').map(Number);
         this.board[mr][mc] = null;
       });
 
       spawns.forEach(sp => {
-        this.board[sp.r][sp.c] = { type: sp.type, pw: sp.pw };
+        this.board[sp.r][sp.c] = { type: sp.type, pw: sp.pw, hz: null };
       });
       spawns = [];
 
@@ -7590,7 +7825,8 @@ class PokeMatchGame {
         for (let r = writeRow; r >= 0; r--) {
           this.board[r][c] = {
             type: pool[Math.floor(Math.random() * pool.length)],
-            pw: null
+            pw: null,
+            hz: null
           };
         }
       }
@@ -7608,10 +7844,16 @@ class PokeMatchGame {
         g.cells.forEach(pos => toClear.add(`${pos.r},${pos.c}`));
       });
       toClear = this.expandPowerups(toClear);
+      fromBooster = false;
     }
   }
 
   async attemptSwap(r1, c1, r2, c2) {
+    if (this.isCellRooted(r1, c1) || this.isCellRooted(r2, c2)) {
+      playTone(150, 0.12, 'sawtooth');
+      return;
+    }
+
     this.busy = true;
     this.clearHint();
     this.swapCells(r1, c1, r2, c2);
@@ -7651,6 +7893,8 @@ class PokeMatchGame {
     });
 
     await this.clearAndCascade(initialClear, spawns);
+    this.applyBossTurnMechanic();
+    this.render();
     this.updateHUD();
     this.saveGameProgress();
     this.checkEndState();
@@ -7724,7 +7968,7 @@ class PokeMatchGame {
         const prevRealm = this.getRealmInfo(prevMax).key;
         const nextRealm = this.getRealmInfo(this.maxUnlocked).key;
         if (nextRealm !== prevRealm) {
-          this.showStoryModal(nextRealm, true);
+          this.showStoryModal(nextRealm);
         }
 
         const gotBoosters = this.rewardUnlockedBoosters();
@@ -7738,6 +7982,7 @@ class PokeMatchGame {
 
         this.buildPath();
         this.renderBoosters();
+        this.updateLoreButtonState();
 
         const titleText = this.level > 100 ? `Extra ${this.level - 100} Cleared!` : `Level ${this.level} Cleared!`;
         document.getElementById('ov-title').textContent = titleText;
