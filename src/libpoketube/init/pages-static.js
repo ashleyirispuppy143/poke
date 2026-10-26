@@ -688,7 +688,7 @@ app.get("/playlist", async function (req, res) {
 app.get("/gifs", async function (req, res) {
     const query = req.query.q || "";
     const pos = req.query.pos || "";
-    const mediaproxy = config.media_proxy;
+    const mediaproxy = `${config.media_proxy}/proxy?url=`;
     const API_KEY = "3Z0688EVWYKH";
     const LIMIT = 30;
     const searchAliases = { "yaoi": "boys kissing anime" };
