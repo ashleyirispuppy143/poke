@@ -685,6 +685,71 @@ app.get("/playlist", async function (req, res) {
     renderTemplate(res, req, "license.ejs");
   });
 
+app.get("/gifs", async function (req, res) {
+    const query = req.query.q || "";
+    const pos = req.query.pos || "";
+    const API_KEY = "3Z0688EVWYKH";
+    const LIMIT = 30;
+    const searchAliases = { "yaoi": "boys kissing anime" };
+    const apiQuery = searchAliases[query.toLowerCase().trim()] || query;
+    
+    let apiUrl = apiQuery 
+        ? `https://g.tenor.com/v1/search?q=${encodeURIComponent(apiQuery)}&key=${API_KEY}&limit=${LIMIT}` 
+        : `https://g.tenor.com/v1/trending?key=${API_KEY}&limit=${LIMIT}`;
+    
+    if (pos) apiUrl += `&pos=${pos}`;
+
+    try {
+        const [gifsRes, catsRes] = await Promise.all([
+            fetch(apiUrl),
+            fetch(`https://g.tenor.com/v1/categories?key=${API_KEY}`)
+        ]);
+        
+        const gifsData = await gifsRes.json();
+        const catsData = await catsRes.json();
+        
+        const results = gifsData.results || [];
+        const next = gifsData.next || "";
+        const categories = (catsData.tags || []).slice(0, 15).map(t => t.searchterm);
+
+        renderTemplate(res, req, "gifs.ejs", { p, mediaproxy, results, categories, query, next });
+    } catch (error) {
+        renderTemplate(res, req, "gifs.ejs", { p, mediaproxy, results: [], categories: [], query, next: "" });
+    }
+});
+
+app.get("/api/tenor", async function (req, res) {
+    try {
+        const endpoint = req.query.endpoint || "search";
+        const API_KEY = "3Z0688EVWYKH";
+        const searchAliases = { "yaoi": "boys kissing anime" };
+        
+        const url = new URL(`https://g.tenor.com/v1/${endpoint}`);
+        for (const [key, value] of Object.entries(req.query)) {
+            if (key !== "endpoint" && key !== "q") {
+                url.searchParams.append(key, value);
+            }
+        }
+        
+        if (req.query.q) {
+            const apiQuery = searchAliases[req.query.q.toLowerCase().trim()] || req.query.q;
+            url.searchParams.append("q", apiQuery);
+        }
+        
+        if (!url.searchParams.has("key")) {
+            url.searchParams.append("key", API_KEY);
+        }
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: "API Error" });
+    }
+});
+  
+
+
   app.get("/map", function (req, res) {
     renderTemplate(res, req, "map.ejs");
   });
