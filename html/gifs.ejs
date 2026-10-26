@@ -1330,9 +1330,9 @@ input::placeholder {
             if (e.target.id === 'gif-modal') closeModal();
         }
 
-        function copyDirectGifFromModal() {
+   function copyDirectGifFromModal() {
             if (!currentModalGif) return;
-            const url = MEDIA_PROXY + ((currentModalGif.media && currentModalGif.media[0] && currentModalGif.media[0].gif) ? currentModalGif.media[0].gif.url : currentModalGif.url);
+            const url = (currentModalGif.media && currentModalGif.media[0] && currentModalGif.media[0].gif) ? currentModalGif.media[0].gif.url : currentModalGif.url;
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(url).then(() => showToast("Copied GIF link!")).catch(() => fallbackCopy(url));
             } else fallbackCopy(url);
