@@ -1,4 +1,4 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -779,7 +779,7 @@ input::placeholder {
 }
 .metadata-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 10px;
 }
 .meta-card {
@@ -968,8 +968,7 @@ input::placeholder {
         <div id="categories-container">
             <div id="static-categories">
                 <a href="/gifs" class="chip <%= !query ? 'active' : '' %>" id="chip-trending">
-                    <svg class="svg-icon" viewBox="0 0 24 24"><path d="M16.85 10.39c.64 1.13.9 2.37.75 3.66-.23 1.95-1.35 3.59-3.08 4.44C13 19.16 11.39 19.46 9.8 19 8.24 18.55 7 17.5 6.38 16.03c-.63-1.5-.54-3.11.23-4.53.77-1.42 1.96-2.4 3.4-2.82l.46-.14-.24.41c-.4.71-.56 1.48-.48 2.22.06.6.3 1.16.7 1.63l.63.74.32-.9c.47-1.32 1.34-2.39 2.52-3.07.12-.07.25-.13.38-.19l-.39.11zM12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 14c-2.21 0-4-1.79-4-4 0-1.85 1.28-3.41 3-3.86v-.14c0 1.1.9 2 2 2 1.1 0 2-.9 2-2 1.72.45 3 2.01 3 3.86 0 2.21-1.79 4-4 4z"/></svg>
-                    Trending
+                    🔥 Trending
                 </a>
                 <div class="dropdown">
                     <div class="chip chip-pride <%= query && ['pride','lesbian','gay','transgender','bisexual','pansexual','asexual','non-binary','queer','lgbtq+'].includes(query.toLowerCase()) ? 'active' : '' %>">
@@ -1100,10 +1099,6 @@ input::placeholder {
                             <span class="meta-card-label"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-7-9h5V8h-5v2zm-5 5h5v-2H7v2z"/></svg>Dimensions</span>
                             <span class="meta-card-value" id="meta-dims">--</span>
                         </div>
-                        <div class="meta-card">
-                            <span class="meta-card-label"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7.5 11h-2v-1h2v1H10v-3h1.5v1h-1v1h1v1zm3-3H13v4h-1.5v-4h3v1zm3-1h-3v4h1.5v-1h1v-1h-1v-1h1.5v-1z"/></svg>Format</span>
-                            <span class="meta-card-value">GIF</span>
-                        </div>
                     </div>
                 </div>
                 <div>
@@ -1157,9 +1152,11 @@ input::placeholder {
                 history.pushState({ query }, '', url);
             }
 
+            const newTitle = query ? `Results for "${query}"` : 'Trending GIFs';
             document.getElementById('search_input').value = query;
             document.getElementById('nav_search_input').value = query;
-            document.getElementById('page-title').innerText = query ? `Results for "${query}"` : 'Trending GIFs';
+            document.getElementById('page-title').innerText = newTitle;
+            document.title = `PokeGif - ${newTitle}`;
             
             document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
             if (!query) document.getElementById('chip-trending').classList.add('active');
@@ -1261,7 +1258,9 @@ input::placeholder {
             currentSearchMode = "favs";
             document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
             document.getElementById('nav-fav-btn').classList.add('active');
-            document.getElementById('page-title').innerText = `Favorite GIFs (${favoriteGifs.length})`;
+            const newTitle = `Favorite GIFs (${favoriteGifs.length})`;
+            document.getElementById('page-title').innerText = newTitle;
+            document.title = `PokeGif - ${newTitle}`;
             
             const container = document.getElementById("gif_container");
             container.innerHTML = "";
